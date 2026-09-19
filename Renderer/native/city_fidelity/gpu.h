@@ -2,11 +2,6 @@
 #include "runtime.h"
 #include <memory>
 namespace c3x_renderer { namespace city_fidelity {
-struct Lighting {
-    std::vector<Light> lights;
-    struct Box {float low[4],high[4];};
-    std::vector<Box> blockers;
-};
 struct Gpu {
     Library library;
     std::vector<std::array<ID3D11ShaderResourceView*,7>> materials;

@@ -126,6 +126,17 @@ public:
         auto found=observations.find(id);
         return found!=observations.end() && found->second.seen==epoch?&found->second:nullptr;
     }
+    // A frame lease may read only observations while the render owner updates
+    // Record::compiled/compiled_views through attach(). Those are separate maps;
+    // begin/update/finish (and destruction) must wait for all readers to join.
+    class ObservationView {
+        CapturedScene const& scene;
+    public:
+        explicit ObservationView(CapturedScene const& owner):scene(owner){}
+        std::uint64_t key(int x,int y)const{return scene.key(x,y);}
+        Observation const* current(std::uint64_t id)const{return scene.current(id);}
+    };
+    ObservationView observation_view()const{return ObservationView(*this);}
     std::uint64_t appearance_revision(std::uint64_t id) const {
         auto observed=current(id);
         if(!observed || !(observed->occurrence.tile_flags&(C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_PREFETCH)))return 0;

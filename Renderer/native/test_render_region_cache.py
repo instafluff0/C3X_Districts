@@ -140,17 +140,17 @@ int main(){assert(eligible(false));assert(!eligible(true));}
 
     def test_support_ring_never_promotes_topology_only_or_uncaptured_inputs(self):
         source=(ROOT/"Renderer/native/c3x_renderer.cpp").read_text()
-        predicate="            if (prewarming ?"+source.split("            if (prewarming ?",1)[1].split("            if (cancelled())",1)[0]
+        predicate="auto selected_tile=[&]"+source.split("auto selected_tile=[&]",1)[1].split("        auto ground_observations=",1)[0]
         run_cpp(r'''
 #include "Renderer/native/c3x_renderer_api.h"
 #include <vector>
 #include <cassert>
 std::vector<unsigned> select(c3x_renderer_frame_v1 const& frame,int region_input_ring,bool prewarming=false,int prewarm_index=-1,bool offload_prefetch=false,bool guarded_prefetch=false){
  bool pickup_profile=true,batch_preparing=false;std::vector<unsigned> result;
- for(c3x_renderer_u32 index=0;index<frame.tile_count;++index){
-  auto const& tile=frame.tiles[index];
+ int prefetch_guard_tiles=guarded_prefetch?2:0;
 ''' + predicate + r'''
-  result.push_back(index);
+ for(c3x_renderer_u32 index=0;index<frame.tile_count;++index){
+  if(selected_tile(index))result.push_back(index);
  }return result;
 }
 int main(){

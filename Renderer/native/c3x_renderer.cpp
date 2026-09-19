@@ -24,6 +24,7 @@
 
 #include "c3x_renderer_api.h"
 #include "terrain_scene_runtime.h"
+#include "object_compiler.h"
 #include "animation_runtime.h"
 #include "benchmark_oracle.h"
 #include "environment_runtime.h"
@@ -72,13 +73,14 @@
 #include "source_fidelity/light_frame.h"
 #include "source_fidelity/terrain_compiler.h"
 #include "source_fidelity/cliff_compiler.h"
-#include "source_fidelity/prepared_ground.h"
+#include "source_fidelity/ground_preparation.h"
 #include "source_fidelity/surface_query_scratch.h"
 #include "environment_refresh/reflection.h"
 #include "unit_body_renderer.h"
 #include "render_core/unit_frame_preparation.h"
 #include "render_core/unit_instances.h"
 #include "city_fidelity/gpu.h"
+#include "city_fidelity/compiler.h"
 #include "city_fidelity/glow.h"
 #include "../lab/shared/natural/ground.h"
 #include "../lab/shared/natural/queries.h"
@@ -236,11 +238,7 @@ struct CachedVertexChunk {
     int source_tile_width=0;
 };
 
-struct PendingCityChunk {
-    std::vector<Vertex> vertices;
-    unsigned material=0;bool environment=false;float atlas[4]={};
-    std::shared_ptr<c3x_renderer::city_fidelity::Lighting> lighting;
-};
+using PendingCityChunk=c3x_renderer::city_fidelity::Chunk;
 
 // Own one immutable coast-cell occurrence. Raw lattice coordinates preserve
 // wrapped world/shadow coordinates; the viewport borrows references and anchors.
@@ -396,11 +394,7 @@ struct CachedGroundTile {
     c3x_renderer::fidelity::NaturalWorld::CellProof river_dependencies;
 };
 
-struct RiverNode {
-    int lattice_x, lattice_y;
-    unsigned degree;
-    bool touches_water;
-};
+using RiverNode=c3x_renderer::fidelity::GroundRiverNode;
 
 struct SceneTopology : c3x_renderer::render_core::CapturedScene {
     std::uint64_t signature = 0;
@@ -524,6 +518,7 @@ public:
     c3x_renderer::fidelity::Natural natural;
     c3x_renderer::fidelity::TerrainPreparation terrain_preparation;
     c3x_renderer::fidelity::GroundTask::Queue ground_preparation;
+    c3x_renderer::fidelity::GroundPreparation selected_ground_preparation;
     std::array<c3x_renderer::fidelity::TerrainCompileScratch,6> terrain_scratch;
     c3x_renderer::fidelity::TerrainCompileScratch foreground_terrain_scratch;
     // Cliff generation's own private copy of the ground/terrain query
@@ -6350,6 +6345,7 @@ public:
         unsigned requested_workers=!cpu_option[0]?(world_preparation?4u:2u):std::strcmp(cpu_option,"6")==0?6u:std::strcmp(cpu_option,"4")==0?4u:std::strcmp(cpu_option,"2")==0?2u:std::strcmp(cpu_option,"1")==0?1u:0u;
         if(cpu_terrain_workers!=requested_workers){terrain_preparation.clear();cpu_terrain_workers=requested_workers;}
         bool const cpu_terrain_enabled=cpu_terrain_workers && fidelity_profile && retained_world;
+        unsigned active_terrain_workers=cpu_terrain_workers;
         bool const animated_view=frame_has_resource_animation(frame);
         char sharing_control[8]={};
         // Civ III uses a 2:1 diamond; preserve the existing CPU projection for
@@ -6540,7 +6536,9 @@ public:
         // topology/asset replacement. River pages stay bounded at two.
         c3x_renderer::fidelity::SurfaceQueryScratch ground_compile_scratch;
         double ground_compile_ms=0,ground_join_ms=0;
-        unsigned ground_jobs=0;
+        unsigned ground_jobs=0,ground_batch_jobs=0,ground_batch_fallbacks=0;
+        double ground_schedule_ms=0;
+        c3x_renderer::fidelity::GroundPreparation::Statistics ground_batch_before=selected_ground_preparation.statistics();
         std::size_t ground_ready_peak=0;
         char ground_worker_option[8]={};
         bool ground_concurrent=pickup_profile && !(GetEnvironmentVariableA("C3X_RENDERER_GROUND_WORKERS",ground_worker_option,sizeof(ground_worker_option)) &&
@@ -6785,6 +6783,129 @@ public:
         trace.write("captured-scene",scene_detail,true);
         frame_topology_ms+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-topology_started).count();
         }
+        char prefetch_foreground_control[8]={};
+        bool const offload_prefetch=pickup_profile && !prewarming &&
+            GetEnvironmentVariableA("C3X_RENDERER_PREFETCH_FOREGROUND_CONTROL",
+                                   prefetch_foreground_control,sizeof(prefetch_foreground_control)) &&
+            (std::strcmp(prefetch_foreground_control,"1")==0 ||
+             std::strcmp(prefetch_foreground_control,"2")==0);
+        int const prefetch_guard_tiles=std::strcmp(prefetch_foreground_control,"2")==0?2:0;
+        auto select_river_nodes=[&](c3x_renderer_tile_v1 const& tile){
+            std::vector<RiverNode const*> local_river_nodes;
+            if (river_assets_ready && (tile.river_code & 170u) != 0) {
+                // The shader's source/junction/mouth responses vanish by 24 px.
+                // Include that radius plus the whole tile rectangle's diameter:
+                // if any point responds, its nearest node is closer than every
+                // omitted node at ALL vertices, preserving interpolation too.
+                c3x_renderer::RiverNodeWindow node_window(world_ground?96:frame.tile_width, world_ground?48:frame.tile_height);
+                for (RiverNode const & node : river_nodes)
+                    if (node_window.contains(node.lattice_x-tile.tile_x, node.lattice_y-tile.tile_y))
+                        local_river_nodes.push_back(&node);
+                std::sort(local_river_nodes.begin(), local_river_nodes.end(), [](auto a, auto b) {
+                    return a->lattice_y != b->lattice_y ? a->lattice_y < b->lattice_y : a->lattice_x < b->lattice_x;
+                });
+            }
+            return local_river_nodes;
+        };
+        auto river_context_for=[](auto const& nodes){
+            std::uint64_t river_context=1469598103934665603ull;
+            auto mix=[&](auto value){auto bytes=reinterpret_cast<std::uint8_t const*>(&value);
+                for(std::size_t i=0;i<sizeof(value);++i)river_context=(river_context^bytes[i])*1099511628211ull;};
+            for(auto node:nodes){mix(node->lattice_x);mix(node->lattice_y);mix(node->degree);mix(node->touches_water);}
+            return river_context;
+        };
+        auto compile_context_for=[&](c3x_renderer_tile_v1 const& tile,std::uint64_t river_context){
+            auto persistent_instance=topology_cache.retained(coordinate_key(tile.tile_x,tile.tile_y));
+            return std::array<std::uint64_t,20>{std::uint64_t(tile.tile_x),std::uint64_t(tile.tile_y),std::uint64_t(world_ground?0:content_view_width),std::uint64_t(world_ground?0:content_view_height),std::uint64_t(world_ground?96:frame.tile_width),std::uint64_t(world_ground?48:frame.tile_height),std::uint64_t(frame.world_width_tiles),std::uint64_t(frame.world_height_tiles),std::uint64_t(frame.world_wrap_x),std::uint64_t(frame.world_wrap_y),std::uint64_t(content_revision),std::uint64_t(device_generation),std::uint64_t(pickup_profile?0:frame.hour),std::uint64_t(pickup_profile?0:frame.season),(std::uint64_t(world_ground?0:base_ground_grid)<<32)|patch_detail.identity(),std::uint64_t(world_ground?0:draw_record_count<=512?0:draw_record_count<=768?1:draw_record_count<=2048?2:3),std::uint64_t(river_context),std::uint64_t(persistent_instance?persistent_instance->revision:0),std::uint64_t(c3x_renderer::render_core::render_core_revision),std::uint64_t(pickup_profile)};
+        };
+        auto selected_tile=[&](unsigned index){
+            auto const& tile=frame.tiles[index];
+            bool const guarded_prefetch=prefetch_guard_tiles!=0 &&
+                tile.anchor_x+frame.tile_width>=-prefetch_guard_tiles*frame.tile_width &&
+                tile.anchor_x<=frame.target_width+prefetch_guard_tiles*frame.tile_width &&
+                tile.anchor_y+frame.tile_height>=-prefetch_guard_tiles*frame.tile_height &&
+                tile.anchor_y<=frame.target_height+prefetch_guard_tiles*frame.tile_height;
+            if(prewarming ? ((tile.tile_flags&C3X_RENDERER_TILE_PREFETCH)==0 || (!batch_preparing && static_cast<int>(index)!=prewarm_index)) :
+                (tile.tile_flags & (C3X_RENDERER_TILE_RENDER |
+                    (pickup_profile && (!offload_prefetch || guarded_prefetch)?C3X_RENDERER_TILE_PREFETCH:0)))==0)return false;
+            if(!prewarming && pickup_profile && !(tile.tile_flags&C3X_RENDERER_TILE_RENDER)){
+                int mx=frame.tile_width*region_input_ring,my=frame.tile_height*region_input_ring;
+                if(tile.anchor_x+frame.tile_width < -mx || tile.anchor_x>frame.target_width+mx ||
+                   tile.anchor_y+frame.tile_height < -my || tile.anchor_y>frame.target_height+my)return false;
+            }
+            return true;
+        };
+        auto ground_observations=topology_cache.observation_view();
+        auto make_ground_job=[&](c3x_renderer_tile_v1 const& tile,std::vector<RiverNode const*> const& nodes){
+            c3x_renderer::fidelity::GroundPreparationInput job;
+            auto& input=job.compile;
+            input.tile=tile;input.world_ground=world_ground;input.pickup_profile=pickup_profile;input.fidelity_profile=fidelity_profile;
+            input.draw_marsh=marsh_assets_ready && tile.real_terrain_type==9;
+            input.river_assets_ready=river_assets_ready;input.retain_ground_grids=retain_ground_grids;
+            input.reuse_nested_ground_grids=reuse_nested_ground_grids;input.prewarming=prewarming;
+            input.ground=ground_type(tile);input.half_w=half_w;input.half_h=half_h;
+            input.uv_scale=.26f;input.relief_projection_scale=float(frame.tile_width)/224.f*.82f;
+            std::copy(key_light,key_light+3,input.key_light);
+            job.tile_width=frame.tile_width;job.tile_height=frame.tile_height;
+            job.world_width=frame.world_width_tiles;job.world_height=frame.world_height_tiles;
+            job.wrap_x=frame.world_wrap_x!=0;job.wrap_y=frame.world_wrap_y!=0;job.topology_revision=frame.world_topology_revision;
+            job.skip_flat_shore=skip_flat_shore;job.separate_natural_relief=separate_natural_relief;
+            job.nodes.reserve(nodes.size());for(auto node:nodes)job.nodes.push_back(*node);
+            c3x_renderer::render_core::ExactPointCache<c3x_renderer::render_core::ShoreSample> samples;
+            auto ignore=[](auto,auto){};
+            c3x_renderer::fidelity::SurfaceQueries<decltype(ignore),decltype(ignore)> queries(world_coast,samples,tile.tile_x,tile.tile_y,ignore,ignore,skip_flat_shore);
+            if(retain_center_shore){
+                try{job.center=center_shore_cache.get(world_coast,tile.tile_x,tile.tile_y,ignore,ignore);}
+                catch(...){job.center=queries.shore(queries.center_u,queries.center_v);}
+            }else job.center=queries.shore(queries.center_u,queries.center_v);
+            int relief=relief_type(tile);
+            if((relief==10 && !volcano_assets_ready) || relief<0 || relief>=c3x_renderer::terrain_type_count || !terrain_textures[relief].view)relief=-1;
+            input.tile_ground_grid=c3x_renderer::fidelity::ground_grid_detail(tile,relief,
+                dune_assets_ready && tile.real_terrain_type==0 && tile.terrain_type==0,pickup_profile,frame.tile_width,draw_record_count,
+                [&](int x,int y){return ground_observations.current(ground_observations.key(x,y));},
+                [&](int c,int r){return world_coast.world().tile(c,r);});
+            input.flat_grid=std::abs(job.center.distance)<1.5 && frame.tile_width>=96?16:8;
+            input.shadow_grid=frame.tile_width>=96 && draw_record_count<=512?16:8;
+            return job;
+        };
+        bool const ground_batch_enabled=ground_concurrent && fidelity_profile && world_ground;
+        std::vector<bool> ground_queued(frame.tile_count,false);
+        // This scope joins before the immutable observation/asset lease ends.
+        // attach() changes only the separate resident-handle map during adoption.
+        c3x_renderer::fidelity::GroundPreparationLease ground_batch_lease(selected_ground_preparation);
+        if(ground_batch_enabled){
+            auto schedule_started=std::chrono::steady_clock::now();
+            std::deque<c3x_renderer::fidelity::GroundPreparation::Job> jobs;
+            for(unsigned slot=0;slot<(batch_preparing?preparation_count:frame.tile_count);++slot){
+                unsigned index=batch_preparing?preparation_indices[slot]:slot;
+                if(index>=frame.tile_count)return false;
+                if(!selected_tile(index))continue;
+                if(cancelled())return false;
+                auto const& tile=frame.tiles[index];int ground=ground_type(tile);
+                if(ground<0 || ground>=c3x_renderer::terrain_type_count || !terrain_textures[ground].view)continue;
+                auto nodes=select_river_nodes(tile);
+                auto expected=compile_context_for(tile,river_context_for(nodes));
+                auto instance=topology_cache.retained(coordinate_key(tile.tile_x,tile.tile_y));
+                bool resident=false;
+                if(instance)for(auto handle:instance->compiled_views){
+                    auto cached=resident_content.resolve(handle);
+                    if(cached && cached->compile_context==expected && tile_content_valid(*cached,tile)){resident=true;break;}
+                }
+                if(resident)continue;
+                jobs.push_back({index,make_ground_job(tile,nodes)});ground_queued[index]=true;
+            }
+            ground_batch_jobs=unsigned(jobs.size());
+            // Share the existing preparation allowance while both systems have
+            // selected work; do not place two busy lanes on top of four terrain
+            // lanes. Explicit low-concurrency terrain controls remain usable.
+            if(!prewarming && ground_batch_jobs && cpu_terrain_workers>2)active_terrain_workers=cpu_terrain_workers-2;
+            ground_batch_lease.start(std::move(jobs),[this,ground_observations,foreground_pending](auto const& input,auto& scratch,auto const& stop){
+                auto cancelled=[&]{return stop.load(std::memory_order_relaxed) ||
+                    (foreground_pending && foreground_pending->load(std::memory_order_relaxed));};
+                return c3x_renderer::fidelity::compile_selected_ground(input,natural,world_coast,ground_observations,terrain_textures,scratch,cancelled);
+            });
+            ground_schedule_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-schedule_started).count();
+        }
         if(cpu_terrain_enabled && !prewarming){
             using Preparation=c3x_renderer::fidelity::TerrainPreparation;
             try {
@@ -6808,7 +6929,7 @@ public:
                     auto result=compile_terrain(input,terrain_scratch[worker],cancelled);
                     if(result && !attach_terrain_vertex_buffer(*result))result.reset();
                     return result;
-                },cpu_terrain_workers,std::move(needed),cpu_preparation_budget);
+                },active_terrain_workers,std::move(needed),cpu_preparation_budget);
                 terrain_preparation.resume();
             }catch(...){terrain_preparation.clear();}
         }
@@ -6834,79 +6955,16 @@ public:
             value *= 0x846ca68bu;
             return value ^ (value >> 16);
         };
-        auto append_object_shadow = [&](c3x_renderer::FeatureAsset const & asset,
-                                        float scale, float center_x, float center_y,
-                                        float ground_height_screen) {
-            if (pickup_profile) return;
-            float radius = 0.0f;
-            float feature_height = 0.0f;
-            for (c3x_renderer::FeatureSourceVertex const & vertex : asset.vertices) {
-                radius = std::max(radius, std::sqrt(
-                    vertex.position[0] * vertex.position[0] +
-                    vertex.position[1] * vertex.position[1]) * scale);
-                feature_height = std::max(feature_height, vertex.position[2] * scale);
-            }
-            float shadow_width = std::max(4.0f, radius * half_w * 0.65f);
-            float horizontal = std::sqrt(key_light[0] * key_light[0] +
-                                         key_light[1] * key_light[1]);
-            float cast_world_x = horizontal > 0.001f ? -key_light[0] / horizontal : 0.0f;
-            float cast_world_y = horizontal > 0.001f ? -key_light[1] / horizontal : 1.0f;
-            float cast_screen_x = cast_world_x - cast_world_y;
-            float cast_screen_y = (cast_world_x + cast_world_y) * half_h / half_w;
-            float cast_length = std::sqrt(cast_screen_x * cast_screen_x +
-                                          cast_screen_y * cast_screen_y);
-            if (cast_length > 0.001f) {
-                cast_screen_x /= cast_length;
-                cast_screen_y /= cast_length;
-            }
-            float height_shadow_length = feature_height * 150.0f *
-                (static_cast<float>(frame.tile_width) / 224.0f) * 0.72f;
-            float shadow_length = std::clamp(
-                std::max(shadow_width * 2.40f, height_shadow_length),
-                shadow_width * 2.55f, std::min(180.0f, shadow_width * 10.0f));
-            float perpendicular_x = -cast_screen_y;
-            float perpendicular_y = cast_screen_x;
-            float ground_base_screen_y = center_y + ground_height_screen;
-            auto make_shadow_vertex = [&](float screen_x, float screen_y, float u, float v) {
-                float projected_base_y = ground_base_screen_y + (screen_y - center_y);
-                float depth =
-                    projected_base_y + ground_height_screen * 0.75f;
-                return Vertex{
-                    ndc_x(screen_x), ndc_y(screen_y), depth, u, v, 1.0f,
-                    0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f,
-                    7.0f, 0.0f, 0.0f, 0.0f,
-                    0.0f, 0.0f, 0.0f, 0.0f,
-                    0.0f, 0.0f, 1.0f,
-                    1000.0f, 0.0f, 1000.0f, 0.0f, -1.0f};
-            };
-            float near_left_x = center_x - perpendicular_x * shadow_width * 0.42f;
-            float near_left_y = center_y - perpendicular_y * shadow_width * 0.42f;
-            float near_right_x = center_x + perpendicular_x * shadow_width * 0.42f;
-            float near_right_y = center_y + perpendicular_y * shadow_width * 0.42f;
-            float far_right_x = center_x + cast_screen_x * shadow_length +
-                                perpendicular_x * shadow_width * 0.72f;
-            float far_right_y = center_y + cast_screen_y * shadow_length +
-                                perpendicular_y * shadow_width * 0.72f;
-            float far_left_x = center_x + cast_screen_x * shadow_length -
-                               perpendicular_x * shadow_width * 0.72f;
-            float far_left_y = center_y + cast_screen_y * shadow_length -
-                               perpendicular_y * shadow_width * 0.72f;
-            Vertex near_left = make_shadow_vertex(near_left_x, near_left_y, 0.0f, 0.0f);
-            Vertex near_right = make_shadow_vertex(near_right_x, near_right_y, 1.0f, 0.0f);
-            Vertex far_right = make_shadow_vertex(far_right_x, far_right_y, 1.0f, 1.0f);
-            Vertex far_left = make_shadow_vertex(far_left_x, far_left_y, 0.0f, 1.0f);
-            Vertex triangles[] = {near_left, near_right, far_right,
-                                  near_left, far_right, far_left};
-            shadow_vertices.insert(shadow_vertices.end(),
-                                   std::begin(triangles), std::end(triangles));
+        c3x_renderer::objects::Projection object_projection;
+        object_projection.tile_width=frame.tile_width;object_projection.content_view_height=content_view_height;
+        object_projection.half_w=half_w;object_projection.half_h=half_h;
+        object_projection.pickup_profile=pickup_profile;object_projection.world_objects=world_objects;
+        std::copy(key_light,key_light+3,object_projection.key_light.begin());
+        c3x_renderer::objects::Surfaces object_output;
+        c3x_renderer::objects::Assets object_assets{{&bridge_bundle,&site_bundle,&mine_bundle,&farm_bundle,&city_bundle,&wall_bundle}};
+        auto append_object_shadow=[&](auto const& asset,float scale,float x,float y,float h){
+            c3x_renderer::objects::append_shadow(object_projection,asset,scale,x,y,h,shadow_vertices);
         };
-        char prefetch_foreground_control[8]={};
-        bool const offload_prefetch=pickup_profile && !prewarming &&
-            GetEnvironmentVariableA("C3X_RENDERER_PREFETCH_FOREGROUND_CONTROL",
-                                   prefetch_foreground_control,sizeof(prefetch_foreground_control)) &&
-            (std::strcmp(prefetch_foreground_control,"1")==0 ||
-             std::strcmp(prefetch_foreground_control,"2")==0);
-        int const prefetch_guard_tiles=std::strcmp(prefetch_foreground_control,"2")==0?2:0;
         // World compilation order is independent of occurrence/pass order.
         // Defer an active helper's tile once, doing other selected work first.
         // The bounded second pass joins any remaining producers; no polling,
@@ -6917,23 +6975,15 @@ public:
                 preparation_slot<frame.tile_count?preparation_slot:compiling_tiles[preparation_slot-frame.tile_count];
             if(index>=frame.tile_count)return false;
             c3x_renderer_tile_v1 const & tile = frame.tiles[index];
-            bool const guarded_prefetch=prefetch_guard_tiles!=0 &&
-                tile.anchor_x+frame.tile_width>=-prefetch_guard_tiles*frame.tile_width &&
-                tile.anchor_x<=frame.target_width+prefetch_guard_tiles*frame.tile_width &&
-                tile.anchor_y+frame.tile_height>=-prefetch_guard_tiles*frame.tile_height &&
-                tile.anchor_y<=frame.target_height+prefetch_guard_tiles*frame.tile_height;
-            if (prewarming ? ((tile.tile_flags&C3X_RENDERER_TILE_PREFETCH)==0 || (!batch_preparing && static_cast<int>(index) != prewarm_index)) :
-                (tile.tile_flags & (C3X_RENDERER_TILE_RENDER |
-                    (pickup_profile && (!offload_prefetch || guarded_prefetch) ? C3X_RENDERER_TILE_PREFETCH : 0))) == 0) continue;
-            if(!prewarming && pickup_profile && (tile.tile_flags&C3X_RENDERER_TILE_RENDER)==0) {
-                // Only currently captured full-appearance records are eligible.
-                // The optional wider ring stabilizes prepared region inputs;
-                // topology-only records and prior captures are never promoted.
-                int mx=frame.tile_width*region_input_ring,my=frame.tile_height*region_input_ring;
-                if(tile.anchor_x+frame.tile_width < -mx || tile.anchor_x>frame.target_width+mx ||
-                   tile.anchor_y+frame.tile_height < -my || tile.anchor_y>frame.target_height+my)continue;
-            }
+            if(!selected_tile(index))continue;
             if (cancelled()) return false;
+            if(active_terrain_workers<cpu_terrain_workers){
+                auto ground_work=selected_ground_preparation.statistics();
+                if(!ground_work.pending && !ground_work.active){
+                    terrain_preparation.expand_workers(cpu_terrain_workers);
+                    active_terrain_workers=cpu_terrain_workers;
+                }
+            }
             int ground = ground_type(tile);
             int relief = relief_type(tile);
             if (relief == 10 && !volcano_assets_ready)
@@ -6980,29 +7030,10 @@ public:
             if (farm_assets_ready &&
                 (tile.improvement_flags & C3X_RENDERER_IMPROVEMENT_IRRIGATION) != 0)
                 build_replacement[index] |= C3X_RENDERER_TILE_CUSTOM_FARM_REPLACED;
-            std::uint64_t river_context=1469598103934665603ull;
-            auto mix_river=[&](auto value){auto bytes=reinterpret_cast<std::uint8_t const*>(&value);
-                for(std::size_t i=0;i<sizeof(value);++i)river_context=(river_context^bytes[i])*1099511628211ull;};
-            std::vector<RiverNode const *> local_river_nodes;
-            if (river_assets_ready && (tile.river_code & 170u) != 0) {
-                // The shader's source/junction/mouth responses vanish by 24 px.
-                // Include that radius plus the whole tile rectangle's diameter:
-                // if any point responds, its nearest node is closer than every
-                // omitted node at ALL vertices, preserving interpolation too.
-                c3x_renderer::RiverNodeWindow node_window(world_ground?96:frame.tile_width, world_ground?48:frame.tile_height);
-                for (RiverNode const & node : river_nodes)
-                    if (node_window.contains(node.lattice_x-tile.tile_x, node.lattice_y-tile.tile_y))
-                        local_river_nodes.push_back(&node);
-                std::sort(local_river_nodes.begin(), local_river_nodes.end(), [](auto a, auto b) {
-                    return a->lattice_y != b->lattice_y ? a->lattice_y < b->lattice_y : a->lattice_x < b->lattice_x;
-                });
-                for (auto node : local_river_nodes) {
-                    mix_river(node->lattice_x); mix_river(node->lattice_y);
-                    mix_river(node->degree); mix_river(node->touches_water);
-                }
-            }
+            auto local_river_nodes=select_river_nodes(tile);
+            auto river_context=river_context_for(local_river_nodes);
             auto persistent_instance=topology_cache.retained(coordinate_key(tile.tile_x,tile.tile_y));
-            std::array<std::uint64_t,20> compile_context={std::uint64_t(tile.tile_x),std::uint64_t(tile.tile_y),std::uint64_t(world_ground?0:content_view_width),std::uint64_t(world_ground?0:content_view_height),std::uint64_t(world_ground?96:frame.tile_width),std::uint64_t(world_ground?48:frame.tile_height),std::uint64_t(frame.world_width_tiles),std::uint64_t(frame.world_height_tiles),std::uint64_t(frame.world_wrap_x),std::uint64_t(frame.world_wrap_y),std::uint64_t(content_revision),std::uint64_t(device_generation),std::uint64_t(pickup_profile?0:frame.hour),std::uint64_t(pickup_profile?0:frame.season),(std::uint64_t(world_ground?0:base_ground_grid)<<32)|patch_detail.identity(),std::uint64_t(world_ground?0:draw_record_count<=512?0:draw_record_count<=768?1:draw_record_count<=2048?2:3),std::uint64_t(river_context),std::uint64_t(persistent_instance?persistent_instance->revision:0),std::uint64_t(c3x_renderer::render_core::render_core_revision),std::uint64_t(pickup_profile)};
+            auto compile_context=compile_context_for(tile,river_context);
             if(retained_world && (!prewarming || world_preparation) && persistent_instance){
                 auto validation_begin=std::chrono::steady_clock::now();
                 CachedTileGeometry* ready=nullptr;
@@ -7075,34 +7106,8 @@ public:
             float ground_slot = static_cast<float>(ground);
             float surface_slot = static_cast<float>(draw_marsh ? 9 :
                 (relief >= 0 ? relief : ground));
-            int neighbor_coordinates[4][2] = {
-                {tile.tile_x - 1, tile.tile_y - 1}, {tile.tile_x + 1, tile.tile_y - 1},
-                {tile.tile_x + 1, tile.tile_y + 1}, {tile.tile_x - 1, tile.tile_y + 1}
-            };
-            bool relief_neighborhood = relief == 5 || relief == 6 || relief == 10 || draw_dunes;
-            for (int edge = 0; edge < 4; ++edge) {
-                auto found = topology_cache.current(observed_coordinate_key(
-                    neighbor_coordinates[edge][0], neighbor_coordinates[edge][1]));
-                relief_neighborhood = relief_neighborhood || (found != nullptr &&
-                    (found->relief == 5 || found->relief == 6 || found->relief == 10));
-            }
-            if (pickup_profile) {
-                int c = (tile.tile_x + tile.tile_y)/2, r = (tile.tile_x - tile.tile_y)/2;
-                for (int dy=-1;dy<=1;dy++) for (int dx=-1;dx<=1;dx++) {
-                    int real = world_lookup(c+dx,r+dy).real;
-                    relief_neighborhood = relief_neighborhood || real==5 || real==6 || real==10 || real==0;
-                }
-            }
-            // Keep close authored relief dense when the viewport contains only
-            // a few hundred tiles, then spend the same geometry budget across
-            // wider views.  Unbounded 24x24 patches can exhaust the 32-bit
-            // preview/game process and exceed D3D11's per-buffer size limit.
-            int const relief_grid = frame.tile_width >= 96 ?
-                (draw_record_count <= 512 ? 24 : (draw_record_count <= 768 ? 16 : 12)) :
-                (draw_record_count <= 2048 ? 12 : 8);
-            int const tile_ground_grid = pickup_profile ?
-                (relief_neighborhood ? (frame.tile_width>=96?24:12) : (frame.tile_width>=96?12:8)) :
-                relief_neighborhood ? relief_grid : base_ground_grid;
+            int const tile_ground_grid=c3x_renderer::fidelity::ground_grid_detail(tile,relief,draw_dunes,
+                pickup_profile,frame.tile_width,draw_record_count,topology_lookup,world_lookup);
             bool coast_detail=false;
             c3x_renderer::render_core::ShoreSample tile_center_shore{};
             if(pickup_profile){
@@ -7216,24 +7221,7 @@ public:
             auto ground_at_lattice = [&](int u, int v) { return ground_at(u + v, u - v); };
             auto relief_at_lattice = [&](int u, int v) { return neighborhood_at(u + v, u - v).relief; };
             auto periodic_surface_uv = [&](float world_u, float world_v, float frequency) {
-                float map_x = world_u + world_v - 1.0f;
-                float map_y = world_u - world_v;
-                float half_frequency = frequency * 0.5f;
-                float x_component = map_x * half_frequency;
-                float y_component = map_y * half_frequency;
-                if (frame.world_wrap_x != 0 && frame.world_width_tiles > 0) {
-                    float cycles = std::max(1.0f, std::round(frame.world_width_tiles * half_frequency));
-                    float canonical_map_x = static_cast<float>(canonical_component(
-                        tile.tile_x, frame.world_width_tiles, frame.world_wrap_x)) + map_x - tile.tile_x;
-                    x_component = cycles * canonical_map_x / static_cast<float>(frame.world_width_tiles);
-                }
-                if (frame.world_wrap_y != 0 && frame.world_height_tiles > 0) {
-                    float cycles = std::max(1.0f, std::round(frame.world_height_tiles * half_frequency));
-                    float canonical_map_y = static_cast<float>(canonical_component(
-                        tile.tile_y, frame.world_height_tiles, frame.world_wrap_y)) + map_y - tile.tile_y;
-                    y_component = cycles * canonical_map_y / static_cast<float>(frame.world_height_tiles);
-                }
-                return std::array<float, 2>{x_component + y_component, y_component - x_component};
+                return c3x_renderer::fidelity::ground_surface_uv(tile,frame,world_u,world_v,frequency);
             };
             auto river_segment_distance = [](float point_x, float point_y,
                                               float start_x, float start_y,
@@ -7883,159 +7871,22 @@ public:
                 ground_grid_cache_bytes-=retained_ground->second.bytes;ground_grid_cache.erase(retained_ground);
             }
             std::vector<CachedGroundGrid> pending_ground_grids;
-            auto append_feature_instance = [&](c3x_renderer::FeatureBundle const & bundle,
-                                               c3x_renderer::FeaturePlacement const & placement,
-                                               float local_u, float local_v, float rotation,
-                                               float scale, float material_offset,
-                                               float owner_code, bool cast_shadow,
-                                               std::vector<Vertex> & target) {
-                if (placement.asset_index >= bundle.assets.size())
-                    return;
-                c3x_renderer::FeatureAsset const & asset = bundle.assets[placement.asset_index];
-                float tile_world_u = static_cast<float>(tile.tile_x + tile.tile_y) * 0.5f;
-                float tile_world_v = static_cast<float>(tile.tile_x - tile.tile_y) * 0.5f;
-                std::array<float, 3> ground_sample = relief_at_world(
-                    tile_world_u + local_u, tile_world_v + (1.0f - local_v));
-                if(pickup_profile && &bundle==&site_bundle)
-                    ground_sample[0]=natural_height_at(
-                        tile_world_u+local_u,tile_world_v+1.f-local_v)-2.5f;
-                float center_x = left + half_w + (local_u - local_v) * half_w;
-                float center_y = top + (local_u + local_v) * half_h -
-                    ground_sample[0] * relief_projection_scale;
-                if (cast_shadow)
-                    append_object_shadow(asset, scale, center_x, center_y,
-                                         ground_sample[0] * relief_projection_scale);
-                float cosine = std::cos(rotation);
-                float sine = std::sin(rotation);
-                std::vector<Vertex> transformed(asset.vertices.size());
-                for (std::size_t vertex_index = 0; vertex_index < asset.vertices.size(); ++vertex_index) {
-                    c3x_renderer::FeatureSourceVertex const & source = asset.vertices[vertex_index];
-                    float local_x = (source.position[0] * cosine - source.position[1] * sine) * scale;
-                    float local_y = (source.position[0] * sine + source.position[1] * cosine) * scale;
-                    float local_z = source.position[2] * scale;
-                    float screen_x = center_x + (local_x - local_y) * half_w;
-                    float screen_y = center_y + (local_x + local_y) * half_h -
-                        local_z * 150.0f * feature_projection_scale;
-                    float normal_x = source.normal[0] * cosine - source.normal[1] * sine;
-                    float normal_y = source.normal[0] * sine + source.normal[1] * cosine;
-                    float ground_height_pixels = ground_sample[0] * relief_projection_scale;
-                    float base_ground_y = center_y + ground_height_pixels +
-                        (local_x + local_y) * half_h;
-                    float feature_height_tiles = local_z * 150.0f *
-                        (world_objects?128.f/224.f:feature_projection_scale) /
-                        (world_objects?128.f/224.f*.82f:relief_projection_scale);
-                    float depth =
-                        base_ground_y + ground_height_pixels * 0.75f +
-                        feature_height_tiles * 0.0012f * static_cast<float>(content_view_height);
-                    transformed[vertex_index] = Vertex{
-                        ndc_x(screen_x), ndc_y(screen_y), depth,
-                        source.uv[0], source.uv[1], 1.0f,
-                        normal_x, normal_y, source.normal[2],
-                        1.0f, 1.0f, 0.0f, 0.0f,
-                        0.0f, 0.0f,
-                        static_cast<float>(asset.texture_index) + material_offset + owner_code,
-                        0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
-                        0.0f, 0.0f, 1.0f,
-                        1000.0f, 0.0f, 1000.0f, 0.0f, -1.0f};
-                    if (pickup_profile) {
-                        auto & vertex = transformed[vertex_index];
-                        vertex.world_x = tile_world_u + local_u + local_x;
-                        vertex.world_y = tile_world_v + 1.0f - local_v - local_y;
-                        vertex.world_z = (ground_sample[0] + 2.5f + feature_height_tiles) / 112.0f;
-                        vertex.world_valid = 1.0f;
-                        if(world_objects){
-                            vertex.x=64.f+(local_u-local_v)*64.f+(local_x-local_y)*64.f;
-                            vertex.y=((local_u+local_v)*32.f-ground_sample[0]*(128.f/224.f*.82f))+(local_x+local_y)*32.f-local_z*150.f*(128.f/224.f);
-                            vertex.z=feature_height_tiles;
-                        }
-                        auto normal=c3x_renderer::lighting::object_normal(normal_x,normal_y,source.normal[2]);
-                        vertex.normal_x=normal[0];vertex.normal_y=normal[1];vertex.normal_z=normal[2];
-                    }
-                }
-                for (std::uint32_t source_index : asset.indices)
-                    target.push_back(transformed[source_index]);
+            object_projection.tile=tile;object_projection.left=left;object_projection.top=top;
+            object_projection.relief_projection_scale=relief_projection_scale;
+            object_projection.feature_projection_scale=feature_projection_scale;
+            auto append_feature_instance=[&](auto const& bundle,auto const& placement,float u,float v,float rotation,
+                    float scale,float material,float owner,bool shadow,std::vector<Vertex>& target){
+                c3x_renderer::objects::append_instance(object_projection,bundle,placement,u,v,rotation,scale,
+                    material,owner,shadow,&bundle==&site_bundle,relief_at_world,natural_height_at,target,shadow_vertices);
             };
-            auto append_route_segment = [&](float u0, float v0, float u1, float v1,
-                                            unsigned style, bool railroad) {
-                constexpr int subdivisions = 16;
-                float route_half_width = railroad ? 0.076f : 0.105f;
-                float atlas_half_width = railroad ? 0.058f : 0.075f;
-                float du = u1 - u0, dv = v1 - v0;
-                float original_length = std::sqrt(du * du + dv * dv);
-                if (original_length < 0.001f)
-                    return;
-                float direction_u = du / original_length;
-                float direction_v = dv / original_length;
-                float original_u0 = u0, original_v0 = v0;
-                float original_u1 = u1, original_v1 = v1;
-                u0 -= direction_u * 0.14f; v0 -= direction_v * 0.14f;
-                u1 += direction_u * 0.14f; v1 += direction_v * 0.14f;
-                du = u1 - u0; dv = v1 - v0;
-                float length = std::sqrt(du * du + dv * dv);
-                float perpendicular_u = -dv / length;
-                float perpendicular_v = du / length;
-                float atlas_dx = 1.0f;
-                float atlas_dy = 0.99021526f - 0.90606654f;
-                float atlas_length = std::sqrt(atlas_dx * atlas_dx + atlas_dy * atlas_dy);
-                float atlas_perpendicular_u = -atlas_dy / atlas_length;
-                float atlas_perpendicular_v = atlas_dx / atlas_length;
-                float wave_seed = std::fmod(std::fabs(
-                    original_u0 * 17.0f + original_v0 * 31.0f +
-                    original_u1 * 47.0f + original_v1 * 61.0f), 19.0f) / 19.0f;
-                float wave_phase = wave_seed * 6.28318530718f;
-                auto route_vertex = [&](float along, float across) {
-                    float source_along = (along * length - 0.14f) / original_length;
-                    float curve_t = std::clamp(source_along, 0.0f, 1.0f);
-                    float curve_envelope = std::sin(curve_t * 3.14159265359f);
-                    float curve_amplitude = railroad ? 0.028f : 0.042f;
-                    float road_wave = curve_envelope * curve_amplitude *
-                        (0.62f * std::sin(wave_phase) +
-                         0.38f * std::sin(curve_t * 6.28318530718f + wave_phase));
-                    float route_u = u0 + du * along + perpendicular_u *
-                        (route_half_width * across + road_wave);
-                    float route_v = v0 + dv * along + perpendicular_v *
-                        (route_half_width * across + road_wave);
-                    float atlas_u = atlas_dx * source_along +
-                        atlas_perpendicular_u * atlas_half_width * across;
-                    float atlas_v = 0.90606654f + atlas_dy * source_along +
-                        atlas_perpendicular_v * atlas_half_width * across;
-                    float tile_world_u = static_cast<float>(tile.tile_x + tile.tile_y) * 0.5f;
-                    float tile_world_v = static_cast<float>(tile.tile_x - tile.tile_y) * 0.5f;
-                    std::array<float, 3> ground_sample = relief_at_world(
-                        tile_world_u + route_u, tile_world_v + (1.0f - route_v));
-                    float ground_x = left + half_w + (route_u - route_v) * half_w;
-                    float ground_y = top + (route_u + route_v) * half_h;
-                    float h = ground_sample[0] * relief_projection_scale;
-                    float depth =
-                        ground_y + h * 0.75f;
-                    Vertex vertex{
-                        ndc_x(ground_x), ndc_y(ground_y - h), depth,
-                        atlas_u, atlas_v, 1.0f, 0.0f, 0.0f, 1.0f,
-                        across, curve_t, source_along, 0.90606654f + atlas_dy * source_along,
-                        11.0f, 0.0f, static_cast<float>(style), 0.0f,
-                        route_u, route_v, 0.0f, 0.0f,
-                        0.0f, 0.0f, 1.0f,
-                        1000.0f, 0.0f, 1000.0f, 0.0f, -1.0f};
-                    if (pickup_profile) {
-                        vertex.world_x = tile_world_u + route_u;
-                        vertex.world_y = tile_world_v + 1.0f - route_v;
-                        vertex.world_z = (ground_sample[0] + 2.5f) / 112.0f;
-                        vertex.world_valid = 1.0f;
-                        if(world_objects){vertex.x=64.f+(route_u-route_v)*64.f;
-                            vertex.y=(route_u+route_v)*32.f-ground_sample[0]*(128.f/224.f*.82f);vertex.z=0;}
-                    }
-                    return vertex;
-                };
-                for (int segment = 0; segment < subdivisions; ++segment) {
-                    float a0 = static_cast<float>(segment) / subdivisions;
-                    float a1 = static_cast<float>(segment + 1) / subdivisions;
-                    Vertex left0 = route_vertex(a0, -1.0f);
-                    Vertex right0 = route_vertex(a0, 1.0f);
-                    Vertex right1 = route_vertex(a1, 1.0f);
-                    Vertex left1 = route_vertex(a1, -1.0f);
-                    Vertex triangles[] = {left0, right0, right1, left0, right1, left1};
-                    route_vertices.insert(route_vertices.end(), std::begin(triangles), std::end(triangles));
+            auto adopt_objects=[&](c3x_renderer::objects::Surfaces& result){
+                std::vector<Vertex>* layers[]={&route_vertices,&feature_vertices,&city_vertices,&wall_vertices,&mine_vertices,&farm_vertices,&site_vertices};
+                for(unsigned layer=0;layer<c3x_renderer::objects::layer_count;++layer){
+                    auto& source=result.layers[layer];auto& target=*layers[layer];
+                    if(source.empty())continue;
+                    if(target.empty())target.swap(source);else {target.insert(target.end(),source.begin(),source.end());source.clear();}
                 }
+                shadow_vertices.insert(shadow_vertices.end(),result.shadows.begin(),result.shadows.end());result.shadows.clear();
             };
             // Match the standalone terrain stack exactly: a flat material
             // underlay, raised land, submerged bed, then transparent water.
@@ -8139,9 +7990,16 @@ public:
                     coordinate_key,pickup_source,pickup_dune,river_distance,relief_at_world,material_weights_for,
                     signed_shore_distance,periodic_surface_uv,ndc_x,ndc_y,ground_cancelled);
             };
-            // Declared after all captures; unwinding joins before their lifetimes
-            // end. One task/result maximum, no speculative work or next-frame lease.
-            c3x_renderer::fidelity::GroundTask ground_task(ground_preparation,compile_ground,
+            bool const batched_ground=ground_batch_enabled && (!world_ground || !shared_hit);
+            if(batched_ground && !ground_queued[index]){
+                if(!selected_ground_preparation.offer({index,make_ground_job(tile,local_river_nodes)},
+                        c3x_renderer::fidelity::GroundPreparation::job_limit,true))return false;
+                ground_queued[index]=true;++ground_batch_jobs;
+            }
+            // Compatibility/serial controls retain their original tile scope.
+            // Production selected jobs own their inputs and use the frame lease.
+            std::unique_ptr<c3x_renderer::fidelity::GroundTask> ground_task;
+            if(!batched_ground)ground_task=std::make_unique<c3x_renderer::fidelity::GroundTask>(ground_preparation,compile_ground,
                 ground_concurrent && (!world_ground || !shared_hit));
             // Legacy callbacks run synchronously and still observe through the
             // caller's maps. Capture those reads before later object queries.
@@ -8157,55 +8015,16 @@ public:
             if (cancelled()) return false;
             if(world_objects){if(shared_hit)++frame_world_object_hits;else ++frame_world_object_builds;}
             if(!world_objects || !shared_hit){
-            if (route_assets_ready && (tile.road_mask != 0 || tile.railroad_mask != 0)) {
-                constexpr int route_offsets[4][2] = {
-                    {1, -1}, {2, 0}, {1, 1}, {0, 2}
-                };
-                constexpr unsigned river_edge_bits[4] = {2u, 0u, 8u, 0u};
-                constexpr unsigned opposite_river_bits[4] = {32u, 0u, 128u, 0u};
-                float base_world_u = static_cast<float>(tile.tile_x + tile.tile_y) * 0.5f;
-                float base_world_v = static_cast<float>(tile.tile_x - tile.tile_y) * 0.5f;
-                for (int direction = 0; direction < 4; ++direction) {
-                    int neighbor_x = tile.tile_x + route_offsets[direction][0];
-                    int neighbor_y = tile.tile_y + route_offsets[direction][1];
-                    auto found = topology_cache.current(observed_coordinate_key(neighbor_x, neighbor_y));
-                    if (found == nullptr)
-                        continue;
-                    c3x_renderer_tile_v1 const & neighbor = found->occurrence;
-                    bool railroad = tile.railroad_mask != 0 && neighbor.railroad_mask != 0;
-                    bool road = tile.road_mask != 0 && neighbor.road_mask != 0;
-                    if (!railroad && !road)
-                        continue;
-                    float end_u = (static_cast<float>(neighbor_x + neighbor_y) * 0.5f + 0.5f) -
-                        base_world_u;
-                    float end_v = 1.0f - ((static_cast<float>(neighbor_x - neighbor_y) * 0.5f + 0.5f) -
-                        base_world_v);
-                    unsigned style = railroad ? 4u : static_cast<unsigned>(
-                        std::clamp(tile.route_style, 0, 3));
+            {
+                c3x_renderer::objects::Plan plan;
+                bool routes_enabled=true;
 #ifdef C3X_RENDERER_BENCHMARK_ORACLE
-                    if(diagnostic_routes!=2)
+                routes_enabled=diagnostic_routes!=2;
 #endif
-                    append_route_segment(0.5f, 0.5f, end_u, end_v, style, railroad);
-                    bool bridge = river_edge_bits[direction] != 0 &&
-                        (((tile.river_code & river_edge_bits[direction]) != 0) ||
-                         ((neighbor.river_code & opposite_river_bits[direction]) != 0));
-                    if (bridge) {
-                        char const * bridge_style = railroad ? "railroad" :
-                            (style >= 3u ? "modern" : (style >= 2u ? "industrial" : "medieval"));
-                        std::string group_name = std::string("bridge_") + bridge_style + "_normal";
-                        c3x_renderer::FeatureGroup const * bridge_group =
-                            c3x_renderer::find_feature_group(bridge_bundle, group_name.c_str());
-                        if (bridge_group != nullptr && !bridge_group->placements.empty()) {
-                            float rotation = std::atan2(end_v - 0.5f, end_u - 0.5f);
-                            c3x_renderer::FeaturePlacement const & placement =
-                                bridge_group->placements.front();
-                            append_feature_instance(bridge_bundle, placement,
-                                (0.5f + end_u) * 0.5f, (0.5f + end_v) * 0.5f,
-                                rotation, placement.scale, 13.0f, 0.0f, true,
-                                feature_vertices);
-                        }
-                    }
-                }
+                c3x_renderer::objects::select_routes(tile,object_assets,route_assets_ready,routes_enabled,
+                    [&](int x,int y){return topology_cache.current(observed_coordinate_key(x,y));},plan);
+                c3x_renderer::objects::compile(plan,object_projection,object_assets,relief_at_world,natural_height_at,object_output);
+                adopt_objects(object_output);
             }
             if (feature_assets_ready &&
                 (tile.real_terrain_type == 7 || tile.real_terrain_type == 8) &&
@@ -8524,150 +8343,12 @@ public:
                     }
                 }
             }
-            if(site_flags) {
-                for(unsigned kind=0;kind<2;++kind) {
-                    unsigned flag=kind?C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP:C3X_RENDERER_IMPROVEMENT_GOODY_HUT;
-                    if(!(site_flags&flag))continue;
-                    unsigned seed=c3x_renderer::stable_hash(tile.variant_seed ^
-                        (kind?unsigned(tile.barbarian_tribe_id)*0x9e3779b9u:0u));
-                    unsigned buckets[8]={0,1,2,0,1,2,0,1};
-                    std::string name=kind?"camp":"hut_"+std::to_string(buckets[seed%8]);
-                    auto group=c3x_renderer::find_feature_group(site_bundle,name.c_str());
-                    if(!group || group->placements.empty())return false;
-                    float rotation=float(seed%4)*1.57079632679f;
-                    for(auto const& placement:group->placements) {
-                        if(placement.asset_index>=site_bundle.assets.size())return false;
-                        append_feature_instance(site_bundle,placement,.5f,.5f,rotation,
-                            1.55f,21.f,.18f,false,site_vertices);
-                    }
-                }
-            }
-            if (mine_assets_ready && ground < 11 &&
-                (tile.improvement_flags & C3X_RENDERER_IMPROVEMENT_MINE) != 0) {
-                unsigned era = static_cast<unsigned>(std::clamp(tile.route_style, 0, 3));
-                unsigned family = era < 2u ? 0u : 1u;
-                unsigned variant = tile.variant_seed % 3u;
-                std::string group_name = "mine_" + std::to_string(family * 3u + variant);
-                c3x_renderer::FeatureGroup const * group =
-                    c3x_renderer::find_feature_group(mine_bundle, group_name.c_str());
-                if (group != nullptr && !group->placements.empty()) {
-                    float rotation = c3x_renderer::stable_random(
-                        static_cast<std::uint32_t>(tile.tile_x * 71 + tile.tile_y * 113) +
-                        era * 29u) * 0.48f - 0.24f;
-                    for (std::size_t part = 0; part < group->placements.size(); ++part) {
-                        c3x_renderer::FeaturePlacement const & placement =
-                            group->placements[part];
-                        if (placement.asset_index >= mine_bundle.assets.size())
-                            continue;
-                        c3x_renderer::FeatureAsset const & asset =
-                            mine_bundle.assets[placement.asset_index];
-                        unsigned emissive_code = 0u;
-                        std::size_t marker = asset.id.rfind(":e");
-                        if (marker != std::string::npos)
-                            emissive_code = static_cast<unsigned>(std::strtoul(
-                                asset.id.c_str() + marker + 2u, nullptr, 10));
-                        append_feature_instance(mine_bundle, placement,
-                            0.5f, 0.5f, rotation, placement.scale, 21.0f,
-                            0.01f * static_cast<float>(emissive_code + 1u),
-                            part == 0u, mine_vertices);
-                    }
-                }
-            }
-            if (farm_assets_ready && ground < 11 &&
-                (tile.improvement_flags & C3X_RENDERER_IMPROVEMENT_IRRIGATION) != 0) {
-                unsigned era = tile.route_style < 2 ? 0u :
-                    static_cast<unsigned>(std::clamp(tile.route_style - 1, 0, 2));
-                std::string group_name = "farm_" + std::to_string(era);
-                c3x_renderer::FeatureGroup const * group =
-                    c3x_renderer::find_feature_group(farm_bundle, group_name.c_str());
-                if (group == nullptr || group->placements.empty())
-                    return false;
-                unsigned connections = 0u;
-                for (unsigned bits = tile.irrigation_mask; bits != 0u; bits >>= 1u)
-                    connections += bits & 1u;
-                bool shadow_emitted = false;
-                for (c3x_renderer::FeaturePlacement const & placement : group->placements) {
-                    if (placement.asset_index >= farm_bundle.assets.size())
-                        return false;
-                    c3x_renderer::FeatureAsset const & asset =
-                        farm_bundle.assets[placement.asset_index];
-                    bool base_part = asset.id.find(":base:") != std::string::npos;
-                    bool building_part = asset.id.find(":building:") != std::string::npos;
-                    bool crop_part = asset.id.find(":crop:") != std::string::npos;
-                    bool include_base = base_part && connections < 4u &&
-                        c3x_renderer::stable_hash(
-                            static_cast<std::uint32_t>(tile.tile_x * 37 + tile.tile_y * 101)) % 5u == 0u;
-                    bool include_building = building_part &&
-                        c3x_renderer::stable_hash(
-                            static_cast<std::uint32_t>(tile.tile_x * 71 + tile.tile_y * 43)) % 7u == 0u;
-                    if (!crop_part && !include_base && !include_building)
-                        continue;
-                    float scale = crop_part ? 2.22f + 0.025f * static_cast<float>(connections) :
-                        (building_part ? 0.94f : 1.05f);
-                    unsigned emissive_code = 0u;
-                    std::size_t marker = asset.id.rfind(":e");
-                    if (marker != std::string::npos)
-                        emissive_code = static_cast<unsigned>(std::strtoul(
-                            asset.id.c_str() + marker + 2u, nullptr, 10));
-                    bool cast_shadow = building_part && !shadow_emitted;
-                    append_feature_instance(farm_bundle, placement, 0.5f, 0.5f, 0.0f,
-                        scale, 21.0f, 0.01f * static_cast<float>(emissive_code + 1u),
-                        cast_shadow, farm_vertices);
-                    shadow_emitted = shadow_emitted || cast_shadow;
-                }
-            }
-            if (city_assets_ready && tile.city_id >= 0 && ground < 11) {
-                constexpr char const * era_names[] = {
-                    "ancient", "medieval", "industrial", "modern"};
-                constexpr char const * wall_names[] = {
-                    "wall_ancient", "wall_medieval", "wall_industrial"};
-                constexpr unsigned counts[] = {4u, 7u, 11u};
-                constexpr float radii[] = {0.25f, 0.33f, 0.41f};
-                constexpr float size_scales[] = {0.92f, 1.00f, 1.08f};
-                constexpr float golden_angle = 2.39996322973f;
-                unsigned era = static_cast<unsigned>(std::clamp(tile.city_era, 0, 3));
-                unsigned size = static_cast<unsigned>(std::clamp(tile.city_size, 0, 2));
-                unsigned culture = static_cast<unsigned>(std::max(0, tile.city_culture_group));
-                unsigned owner = static_cast<unsigned>(std::max(0, tile.city_owner_id));
-                c3x_renderer::FeatureGroup const * group =
-                    c3x_renderer::find_feature_group(city_bundle, era_names[era]);
-                if (group != nullptr && !group->placements.empty()) {
-                    unsigned component_count = counts[size];
-                    for (unsigned slot = 0; slot < component_count; ++slot) {
-                        c3x_renderer::FeaturePlacement const & placement = group->placements[
-                            (culture + tile.variant_seed + slot) % group->placements.size()];
-                        float angle = static_cast<float>(slot) * golden_angle +
-                            c3x_renderer::stable_random(tile.variant_seed * 53u + culture * 19u) * 0.72f;
-                        float radius = slot == 0u ? 0.0f : radii[size] *
-                            std::sqrt(static_cast<float>(slot) /
-                                      static_cast<float>(component_count - 1u));
-                        float scale = placement.scale * size_scales[size] *
-                            (slot == 0u && (tile.city_flags & C3X_RENDERER_CITY_CAPITAL) != 0 ? 1.30f : 1.0f);
-                        append_feature_instance(city_bundle, placement,
-                            0.5f + std::cos(angle) * radius,
-                            0.5f + std::sin(angle) * radius * 0.78f,
-                            angle + 0.55f, scale, 29.0f,
-                            0.08f * static_cast<float>(owner + 1u), true, city_vertices);
-                    }
-                }
-                if ((tile.city_flags & C3X_RENDERER_CITY_WALLED) != 0) {
-                    c3x_renderer::FeatureGroup const * walls = c3x_renderer::find_feature_group(
-                        wall_bundle, wall_names[std::min(era, 2u)]);
-                    if (walls != nullptr && !walls->placements.empty()) {
-                        c3x_renderer::FeaturePlacement const & wall = walls->placements.front();
-                        constexpr float offsets[4][3] = {
-                            {-0.29f, 0.00f, 0.785398163f},
-                            {0.29f, 0.00f, 0.785398163f},
-                            {0.00f, -0.23f, -0.785398163f},
-                            {0.00f, 0.23f, -0.785398163f},
-                        };
-                        for (auto const & offset : offsets)
-                            append_feature_instance(wall_bundle, wall,
-                                0.5f + offset[0], 0.5f + offset[1], offset[2],
-                                wall.scale * (size == 0u ? 0.82f : 1.0f), 29.0f,
-                                0.08f * static_cast<float>(owner + 1u), true, wall_vertices);
-                    }
-                }
+            {
+                c3x_renderer::objects::Plan plan;
+                if(!c3x_renderer::objects::select_improvements(tile,object_assets,ground,site_flags,
+                        mine_assets_ready,farm_assets_ready,city_assets_ready,plan))return false;
+                c3x_renderer::objects::compile(plan,object_projection,object_assets,relief_at_world,natural_height_at,object_output);
+                adopt_objects(object_output);
             }
             QueryPerformanceCounter(&phase_end);feature_ticks+=phase_end.QuadPart-phase_time.QuadPart;phase_time=phase_end;
             if (pickup_profile && cliff_assets_ready && coast_detail) {
@@ -8800,7 +8481,13 @@ public:
             }
             QueryPerformanceCounter(&phase_end);terrain_prep_ticks+=phase_end.QuadPart-phase_time.QuadPart;phase_time=phase_end;
             auto ground_join_started=std::chrono::steady_clock::now();
-            auto prepared_ground=ground_task.take();
+            auto prepared_ground=batched_ground?selected_ground_preparation.take(index):ground_task->take();
+            if(batched_ground && !prepared_ground && !cancelled()){
+                // A rejected/evicted result is never published as complete.
+                // The exact compiler remains the bounded recovery path.
+                ++ground_batch_fallbacks;
+                std::atomic<bool> stop{false};prepared_ground=compile_ground(stop);
+            }
             ground_join_ms+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-ground_join_started).count();
             if(!prepared_ground || cancelled())return false;
             ground_compile_ms+=prepared_ground->compile_ms;
@@ -9127,14 +8814,24 @@ public:
             else append_tile_geometry(inserted->second, tile, animated_view);
             QueryPerformanceCounter(&phase_end);upload_ticks+=phase_end.QuadPart-phase_time.QuadPart;
         }
+        auto ground_drain_started=std::chrono::steady_clock::now();
+        ground_batch_lease.finish();
+        double ground_drain_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-ground_drain_started).count();
         if(pickup_profile && !prewarming) {
-            char detail[384];sprintf_s(detail,"built=%u reused=%u ground_ms=%.3f features_ms=%.3f cliffs_ms=%.3f terrain_prep_ms=%.3f upload_ms=%.3f bytes=%llu natural_hits=%u natural_bytes=%zu ground_grid_hits=%u ground_grid_bytes=%zu",
+            char detail[512];sprintf_s(detail,"built=%u reused=%u ground_ms=%.3f features_ms=%.3f cliffs_ms=%.3f terrain_prep_ms=%.3f upload_ms=%.3f bytes=%llu natural_hits=%u natural_bytes=%zu ground_grid_hits=%u ground_grid_bytes=%zu",
                 frame_tiles_built,frame_tiles_reused,trace.milliseconds(ground_ticks),trace.milliseconds(feature_ticks),
                 trace.milliseconds(cliff_ticks),trace.milliseconds(terrain_prep_ticks),trace.milliseconds(upload_ticks),static_cast<unsigned long long>(tile_geometry_cache_bytes),frame_natural_hits,natural_mesh_cache_bytes,frame_ground_grid_hits,ground_grid_cache_bytes);
             trace.write("mesh-phases",detail,true);
             sprintf_s(detail,"jobs=%u concurrent=%u compile_ms=%.3f join_ms=%.3f ready_peak_bytes=%zu",
                 ground_jobs,unsigned(ground_concurrent),ground_compile_ms,ground_join_ms,ground_ready_peak);
             trace.write("ground-preparation",detail,true);
+            auto ground_stats=selected_ground_preparation.statistics();
+            sprintf_s(detail,"scheduled=%u built=%llu consumed=%llu cancelled=%llu rejected=%llu evicted=%llu recovery=%u workers=%u schedule_ms=%.3f drain_ms=%.3f worker_ms=%.3f queue_peak_bytes=%zu",
+                ground_batch_jobs,ground_stats.built-ground_batch_before.built,ground_stats.consumed-ground_batch_before.consumed,
+                ground_stats.cancelled-ground_batch_before.cancelled,ground_stats.rejected-ground_batch_before.rejected,
+                ground_stats.evicted-ground_batch_before.evicted,ground_batch_fallbacks,ground_batch_enabled?2u:0u,
+                ground_schedule_ms,ground_drain_ms,ground_stats.cpu_ms-ground_batch_before.cpu_ms,ground_stats.peak_bytes);
+            trace.write("ground-selected",detail,true);
             sprintf_s(detail,"pixels=%u mountain_cells=%u rocky_cells=%u shared_layouts=%zu shared_index_bytes=%zu shared_index_reuses=%u",
                 patch_pixels,patch_detail.mountain,patch_detail.rocky_ground,terrain_patch_indices.size(),terrain_patch_index_bytes,frame_patch_index_reuses);
             trace.write("terrain-patches",detail,true);
@@ -9256,7 +8953,7 @@ public:
         frame_geometry_ticks = geometry_finished.QuadPart - started.QuadPart;
         if(cpu_terrain_enabled){auto stats=terrain_preparation.statistics();char detail[384];
             sprintf_s(detail,"workers=%u active_peak=%u built=%llu consumed=%llu cancelled=%llu rejected=%llu evicted=%llu invalidated=%llu ready_bytes=%zu peak_bytes=%zu pending=%zu cpu_ms=%.3f wait_ms=%.3f ready_cap=%zu",
-                cpu_terrain_workers,stats.active_peak,stats.built,stats.consumed,stats.cancelled,stats.rejected,stats.evicted,stats.invalidated,
+                active_terrain_workers,stats.active_peak,stats.built,stats.consumed,stats.cancelled,stats.rejected,stats.evicted,stats.invalidated,
                 stats.bytes,stats.peak_bytes,stats.pending,stats.cpu_ms,stats.wait_ms,cpu_preparation_budget);
             trace.write("cpu-content-preparation",detail,true);
         }

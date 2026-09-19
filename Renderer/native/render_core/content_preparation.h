@@ -25,6 +25,7 @@ public:
         std::uint64_t built=0,consumed=0,cancelled=0,rejected=0,evicted=0,invalidated=0;
         std::size_t bytes=0,peak_bytes=0,pending=0;
         unsigned active_peak=0;
+        unsigned active=0;
         double cpu_ms=0,wait_ms=0;
     };
     static constexpr std::size_t byte_limit=16u*1024u*1024u,job_limit=8192;
@@ -173,6 +174,17 @@ public:
         while(workers.size()<worker_limit){auto index=unsigned(workers.size());workers.emplace_back([this,index]{run(index);});}
         cancel=false;paused=false;wake.notify_all();
     }
+    // Return temporarily reserved lanes without revoking the immutable input
+    // lease, cancelling useful jobs or replacing the pending/ready queues.
+    void expand_workers(unsigned count){
+        std::lock_guard<std::mutex> lock(mutex);
+        if(count<1 || count>active.size())throw std::logic_error("CPU preparation worker limit");
+        if(count<=worker_limit || stopping)return;
+        worker_limit=count;
+        if(!paused && !pending.empty())
+            while(workers.size()<worker_limit){auto index=unsigned(workers.size());workers.emplace_back([this,index]{run(index);});}
+        wake.notify_all();
+    }
     // Append independently owned immutable inputs without revoking other readers.
     // Borrowed world-input callers continue using pause/configure/resume.
     bool offer(Job job,std::size_t limit,bool urgent=false) {
@@ -223,6 +235,6 @@ public:
         }
         return {};
     }
-    Statistics statistics(){std::lock_guard<std::mutex> lock(mutex);auto result=stats;result.pending=pending.size();return result;}
+    Statistics statistics(){std::lock_guard<std::mutex> lock(mutex);auto result=stats;result.pending=pending.size();result.active=unsigned(std::count(active.begin(),active.end(),true));return result;}
 };
 }}

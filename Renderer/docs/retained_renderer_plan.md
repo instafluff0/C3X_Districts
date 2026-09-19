@@ -188,85 +188,83 @@ move deferred wonders or Districts forward.
 
 ## Current evidence and implementation handoff
 
-**Milestone 1.2 is complete; 1.3 has a working production path.** One scoped
-preparation task per missing tile uses the existing `ContentPreparation`
-implementation. It has exclusive query/height/river scratch, owns its dependency
-records, copies river-node values, and holds cached grid storage. A frame-local
-compile lane reuses its bounded two river pages and allocation capacity across
-tiles; each tile resets point caches and the dependency recorder. Captured
-observations, world/coast topology and decoded assets are read-only until its
-enforced join. Every early return, cancellation and exception joins before
-captured locals can be destroyed; no ground job or scratch survives the frame.
-This settles topology lifetime without duplicating sampling formulas or
-broadening dependency footprints.
+**Milestones 1.2 and 1.3 are complete.** Production world-ground preparation now
+runs ahead across selected missing tiles. Jobs own tile/projection values and
+filtered river nodes; two private compile lanes reuse at most two river pages
+each. A frame-scoped lease keeps captured observations, world/coast topology and
+decoded assets immutable until all readers join. Resident-handle attachment uses
+a separate map. Cancellation, exceptions and early returns join before borrowed
+sources die; no ground job survives the frame.
 
-The production pickup path prepares exact packed meshes and bounds off the render
-owner while city/infrastructure, cliffs and natural terrain progress. Adoption
-merges private proofs and uses the existing immutable GPU upload owners without
-repacking. Ground grid admission preserves its original dependency union. Legacy
-analytic shadows preserve their combined terrain/object packing. No quality,
-visibility, overlay, capture, cache budget or native ownership changes.
-`C3X_RENDERER_GROUND_WORKERS=0` runs the same compiler synchronously for comparison.
-The ready queue is limited to one task/result and the existing 16 MiB ceiling.
-Raw meshes are released before publication. `ground-preparation` reports compile
-wall time (overlapping other work), join time and ready bytes separately.
+Workers publish exact packed meshes, bounds and dependency proofs through the
+existing `ContentPreparation` queue, capped at 16 MiB with refill backpressure.
+Adoption merges proofs and uses the original immutable GPU owners without
+repacking. The production path replaces tile-at-a-time borrowed closures;
+reduced/diagnostic paths retain their scoped compiler, and
+`C3X_RENDERER_GROUND_WORKERS=0` runs the same compiler synchronously. Selection,
+visibility, detail, wrapping, cache budgets, native composition and config-off
+contracts remain unchanged. No new patch symbols or injected changes are needed.
 
-A pre-existing cliff extraction bug was exposed by the complete workload: hill
-height queries used the private river wrapper's empty asset storage. They now
-read the loaded immutable `NaturalData`; query and river state remain private.
-The performance control includes the identical one-line correction. The original
-crashing control is preserved separately.
+Ground temporarily reserves two lanes from the ordinary natural-terrain allowance
+where available, then returns them without cancelling useful work or replacing
+queues. A fixed two-ground/two-terrain split slowed the complete scrolling workload
+(253.52 ms mean); returning the lanes reduced that to 233.91 ms. Running two ground
+lanes atop four terrain lanes measured 229.73 ms but increased ground contention.
+That small whole-request difference is inconclusive; retain the bounded reservation
+policy, with explicit low-concurrency controls preserved.
 
-**Validation and measured effect (2026-09-19):** x86 candidate build passed;
-full current-code integration ran 297 tests (295 passed, two skipped) and passed
-scrolling, reduced-zoom scrolling, wrapping and authoritative terrain-edit replays.
-Executable tests cover the real packed ground compiler, exact dependency proofs,
-cache leases, reused scratch, cancellation, exceptions and callback destruction.
-No injected source changed; no staging, installation or game launch occurred.
+**Validation (2026-09-19):** x86 candidate build and full current-code integration
+passed: 300 tests, 298 passed and two skipped, plus native scrolling, reduced zoom,
+wrapping and authoritative terrain-edit replays. Executable checks cover actual
+packed compiler/dependency parity at 64/128/160/192 widths, wrapping, river/marsh
+inputs, observation reads concurrent with resident attachment, queue backpressure,
+out-of-order demand, allocation failure, cancellation, unwind and lane return.
+No staging, installation or game launch occurred.
 
-The matched 1120×1192 fixture uses the preserved 100×100 scene, 963 visible tiles,
-eight units, native UI and final screen transfer. Each run records 384 complete
-requests: 64 per CPU/GPU route and workload. GPU-route request mean / p95 in ms:
+The matched 1120×1192 production fixture uses the preserved 100×100 scene,
+963 visible tiles, eight units, native UI and final screen transfer. Each run has
+384 complete requests, 64 per CPU/GPU route and workload. Fresh milestone-1.2
+control → final candidate GPU request mean / p95, milliseconds:
 
-| Workload | Repaired control | Candidate |
+| Workload | 1.2 control | 1.3 candidate |
 | --- | ---: | ---: |
-| Stationary animation | 11.31 / 22.31 | 10.46 / 19.85 |
-| Dense scrolling | 312.33 / 542.83 | 255.63 / 427.05 |
-| Local changes | 12.10 / 36.64 | 12.64 / 45.32 |
+| Stationary animation | 10.74 / 23.97 | 10.11 / 20.52 |
+| Dense scrolling | 271.01 / 468.89 | 233.91 / 360.86 |
+| Local changes | 11.59 / 33.19 | 11.90 / 31.57 |
 
-Dense-scroll mean request cost fell **18.2%**; mean desktop completion fell from
-322.34 to 266.45 ms. A separate matched pair with `--profile` repeated the direction:
-365.00 → 320.75 ms request (**12.1%**), 373.11 → 330.38 ms desktop completion.
-Do not mix instrumentation settings. Small stationary/local-change differences
-are inconclusive. Capture is outside timing; desktop completion is not physical
-scanout, and neither pair establishes live-game cadence.
+Dense-scroll mean request cost fell **13.7%**; mean desktop completion fell
+281.20 → 243.44 ms (**13.4%**). Small stationary/local-change differences are
+inconclusive. The worst scrolling request increased 545.56 → 782.90 ms; this does
+not establish a tail guarantee. Capture is outside timing; desktop completion is
+not physical scanout, and these replay results do not establish live-game cadence.
 
-In 62 correlated unprofiled GPU scrolling requests with missing content, foreground
-ground setup/join/admission fell 228.26 → 155.95 ms. Candidate compile wall time was
-174.77 ms and join time 154.70 ms: these overlap other work and must not be added.
-The gain includes bounded river-page reuse and moving exact packing onto the worker;
-it is not an isolated threading speedup. Remaining joins still dominate.
-The profiled candidate retained at least 1,069.6 MiB sampled contiguous free VA
-(control 1,178.1 MiB), above the 512 MiB requirement; samples do not establish
-transient peak allocation. Ready ground results peaked at 0.326 MiB overall
-(0.284 MiB in scrolling).
+Across 62 correlated GPU scrolling requests with missing content, foreground
+ground setup/join/admission fell 163.47 → 22.04 ms. Including the new 3.94 ms
+scheduling and 0.014 ms drain costs gives **25.99 ms, an 84.1% reduction**. Join
+alone fell 161.99 → 21.54 ms. Worker compile time (237.62 ms summed across jobs)
+overlaps other work and must not be added to foreground time. Natural-terrain wait
+and preparation is now more exposed (138.68 ms); whole-request acceptance remains
+open. Selected jobs were built and consumed without rejection, eviction or serial
+recovery. Ready ground results peaked at 8.53 MiB, below the 16 MiB ceiling.
 
-All four full-frame runs passed ownership/fallback checks and produced identical
-control bitmaps. Receipts verified source/DLL inputs throughout; all 3,324 generated
-asset files were rehashed unchanged. The local
-[comparison receipt](../native/build/ground-checkpoint/comparison.json) preserves
-full distributions, phase/memory samples, fixture/build identities and run paths.
-**Retain this implementation; milestone-1 performance acceptance remains open.**
+A separate profiled final-candidate run passed the complete workload and recorded
+1,239 address-space samples. Minimum contiguous free VA was **1,192.3 MiB**, above
+the 512 MiB requirement. Samples do not establish transient peak allocation;
+profiled timings are not mixed with the unprofiled comparison above.
 
-**Next unfinished responsibility:** finish milestone **1.3** by reducing the
-remaining ground joins. The current tile-scoped overlap is bounded and correct,
-but ground still exceeds the independent work available before adoption. Broader
-selected-content preparation needs owned per-job inputs and a frame-scoped source
-lease; do not merely add threads to closures borrowing tile locals. Milestone
-**1.4**, city/infrastructure extraction, follows that responsibility.
-GPU adoption beyond ground packing is still 1.5/1.6; whole milestone-1 performance
-acceptance remains open. Dynamic units/water and nonblocking camera publication
-remain milestones 2 and 3. Wonders/Districts remain deferred.
+The control and scheduling candidates passed complete-frame ownership/fallback
+checks and produced byte-identical control images. Receipts verified source/DLL
+inputs throughout; all 3,324 generated asset files were rehashed unchanged. The
+local [comparison receipt](../native/build/ground-batch-checkpoint/comparison.json)
+preserves distributions, phase/memory samples, build identities and run paths.
+Prior 1.2 evidence remains in Git and the preserved local control directory.
+
+**Next unfinished responsibility: 1.4, city/infrastructure extraction.** Isolate
+city and repeated improvement/object output, then identify shareable meshes and
+instances versus unique geometry. Consequential object preparation follows in
+1.5; remaining upload/adoption costs and whole milestone-1 acceptance remain 1.6.
+Dynamic units/water and nonblocking camera publication remain milestones 2 and 3.
+Wonders/Districts remain deferred.
 
 [Earlier controls, rejected approaches and extraction findings](history/ground_preparation_before_20260919.md)
 are preserved as evidence, not additional approval gates or work queues.

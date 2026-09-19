@@ -367,7 +367,7 @@ int main(){
         # cache-key lookup/admission logic around it is unmoved caller code.
         ground_compiler = (ROOT / "Renderer/native/source_fidelity/ground_compiler.h").read_text()
         retained = "struct CachedGroundGrid {" + ground_compiler.split("struct CachedGroundGrid {", 1)[1].split("struct GroundCompileInput", 1)[0]
-        ground_tile = "struct CachedGroundTile {" + source.split("struct CachedGroundTile {", 1)[1].split("struct RiverNode", 1)[0]
+        ground_tile = "struct CachedGroundTile {" + source.split("struct CachedGroundTile {", 1)[1].split("using RiverNode=", 1)[0]
         lookup = "auto ground_key=" + source.split("auto ground_key=", 1)[1].split("            auto append_feature_instance", 1)[0]
         admission = "if(!pending_ground_grids.empty()){\n" + source.split("if(!pending_ground_grids.empty()){\n", 1)[1].split("            QueryPerformanceCounter(&phase_end);ground_ticks", 1)[0]
         program = r'''
@@ -521,7 +521,7 @@ int main(){
         # must be merged into the shared maps the outer cache-persistence and
         # future cache-hit validity checks (river_dependencies/dependencies/
         # coast_dependencies/world_dependencies) actually read.
-        merge = source.split("auto prepared_ground=ground_task.take();", 1)[1].split("pending_ground_grids=", 1)[0]
+        merge = source.split("auto prepared_ground=batched_ground?", 1)[1].split("pending_ground_grids=", 1)[0]
         for field, shared_map in (("world", "world_dependencies"), ("coast", "coast_dependencies"),
                                   ("topology", "dependencies"), ("rivers", "river_dependencies")):
             self.assertIn(f"for(auto const& dependency:prepared_ground->{field}){shared_map}.emplace(", merge)
@@ -542,7 +542,7 @@ int main(){
         source = (ROOT / "Renderer/native/c3x_renderer.cpp").read_text()
         ground_compiler = (ROOT / "Renderer/native/source_fidelity/ground_compiler.h").read_text()
         retained = "struct CachedGroundGrid {" + ground_compiler.split("struct CachedGroundGrid {", 1)[1].split("struct GroundCompileInput", 1)[0]
-        ground_tile = "struct CachedGroundTile {" + source.split("struct CachedGroundTile {", 1)[1].split("struct RiverNode", 1)[0]
+        ground_tile = "struct CachedGroundTile {" + source.split("struct CachedGroundTile {", 1)[1].split("using RiverNode=", 1)[0]
         self.assertIn("std::shared_ptr<std::vector<CachedGroundGrid>> grids", ground_tile)
         program = r'''
 #include <array>

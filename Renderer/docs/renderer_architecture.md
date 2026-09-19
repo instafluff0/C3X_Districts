@@ -76,13 +76,21 @@ and shared-topology identity. Terrain preparation carries those records with its
 existing world/coast/river proofs; raw compiler vertices do not enter the ready
 queue. GPU adoption of prepared terrain validates dependencies and uploads
 immutable ranges without re-indexing or rediscovering bounds. Ground uses the same
-packed boundary with private query/dependency state and a cached-grid lease. Its
-current-tile task overlaps independent object construction. One exclusive,
-frame-local compile lane reuses at most two river pages, resetting point caches
-and dependency consumers per tile. A scope-enforced join precedes dependency
-adoption, topology mutation and any capture/asset destruction. This bounds
-borrowing without copying the world or changing the exact queried dependency set.
-Legacy analytic ground remains serial.
+packed boundary with private query/dependency state. Production world-ground jobs
+own tile/projection values and filtered river nodes, and run ahead across selected
+missing content on two compile lanes. Each lane reuses at most two river pages,
+resetting point caches and dependency consumers per tile. The existing 16 MiB
+ready queue applies refill backpressure; only actual adoption demand bypasses it.
+While selected ground is active, it reserves two lanes from the ordinary natural
+terrain allowance where available; completion returns those lanes without
+cancelling jobs or replacing the terrain queue. Explicit low-concurrency controls
+remain valid.
+A frame-scoped lease exposes immutable observations, coast and decoded assets;
+the render owner can attach resident handles in the separate instance map.
+Cancellation, exceptions and ordinary completion join before observation mutation
+or source destruction. No prepared ground job survives the frame. This preserves
+exact queried dependencies without copying the world. Reduced/diagnostic paths
+retain their scoped cached-grid compiler; legacy analytic ground remains serial.
 Other object meshes use the same CPU packer, but their assembly/packing still
 runs on the render owner.
 Compilation may finish available content before joining active helpers; final

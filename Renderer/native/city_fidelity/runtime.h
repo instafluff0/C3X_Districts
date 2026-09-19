@@ -23,6 +23,11 @@ struct Point { float x=0,y=0; };
 struct Model { float low[3]={},high[3]={}; std::vector<Point> hull; std::vector<Part> parts; };
 struct Light { float position[3],range,color[3],intensity,direction[3],owner; };
 static_assert(sizeof(Light)==48,"city light wire contract");
+struct Lighting {
+    std::vector<Light> lights;
+    struct Box {float low[4],high[4];};
+    std::vector<Box> blockers;
+};
 struct Instance {
     unsigned model=0,capital=0; float scale=1,yaw=0,offset[2]={},bounds[4]={};
     std::vector<Light> lights;
