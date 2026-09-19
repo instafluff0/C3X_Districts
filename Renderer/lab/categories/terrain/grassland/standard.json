@@ -17,7 +17,8 @@
     "Renderer/native/source_fidelity/prepare.py",
     "Renderer/native/source_fidelity/runtime.h",
     "Renderer/native/render_core/terrain_query.h",
-    "Renderer/tools/asset_compiler/generic_decal_compiler.py"
+    "Renderer/tools/asset_compiler/generic_decal_compiler.py",
+    "Renderer/native/world_preparation.h"
   ],
   "recipe": {
     "terrain": 2,

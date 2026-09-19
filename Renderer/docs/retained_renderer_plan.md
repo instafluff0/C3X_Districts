@@ -10,11 +10,11 @@ Full detail, authored animation and Civ III's gameplay/state authority remain
 unchanged. The zoom-owned map-overlay extension below is a planned rendering
 ownership change, not a second visibility, selection, or pathfinding system.
 
-**Active deliverable: milestone 1.** Its replacement static submission path is
-implemented and validated, including packed terrain preparation; its whole-request
-performance criterion remains open.
-Continue the missing-content responsibility identified below without another
-planning/approval gate. Milestones are connected outcomes, not promised short
+**Active deliverable: milestone 1.** Its replacement static submission and
+GPU-ready world preparation path is implemented and validated through 1.6. The
+remaining milestone-1 responsibility is the static visibility/fog/unseen pass
+defined below; complete its standalone/replay proof before closing the milestone.
+Continue that responsibility without another planning/approval gate. Milestones are connected outcomes, not promised short
 passes. [Architecture](renderer_architecture.md) owns the design;
 [validation](benchmark_workflow.md) owns measurement and acceptance.
 
@@ -22,12 +22,12 @@ passes. [Architecture](renderer_architecture.md) owns the design;
 
 | Original responsibility | Implemented foundation | Remaining responsibility |
 | --- | --- | --- |
-| Persistent world/instances | Camera-independent content, shared assets/forest meshes, revisioned units, packed terrain records, immutable mesh ranges/materials, bounded residency | Remove remaining foreground construction of missing content; broaden mesh sharing where useful |
-| Local validity | Captured appearance/dependency revisions, unit revision/despawn proofs | Preserve complete validity through migrated representations; refine authoritative change publication where useful |
+| Persistent world/instances | Camera-independent content, shared assets/forest meshes, revisioned units, GPU-ready ground/terrain/objects, immutable mesh ranges/materials, bounded residency | Nonblocking cold/invalidated views; broader sharing where measured |
+| Local validity | Captured appearance/dependency revisions, unit revision/despawn proofs | Explicit visibility dependency for the static fog pass; coherent authoritative change publication |
 | Spatial selection | World pass index and native/wrapped occurrences feed replacement static submissions directly | Collected dynamic/unit pass inputs |
 | Compatible passes | Compatible static layers, shared material bindings, batched occurrence parameters/uploads, forest instancing, exact native composition | Collected dynamic/unit execution; additional sharing guided by cost |
 | GPU reuse/output | Resident admitted map/poses, static color/depth, incremental finishing and native composition | Direct dynamic scene execution; reduce per-pose and full-map work where measured |
-| Async integration | Bounded content/pose/view preparation, selected-work urgency and independent visual timer | GPU-ready preparation for remaining objects; coherent general nonblocking camera/content publication |
+| Async integration | Bounded GPU-ready ground/terrain/object preparation with shared worker capacity, selected-work urgency and independent visual timer | Coherent general nonblocking camera/content publication |
 
 Independent frames use the existing HWND presenter without native redraw requests.
 Civ III's original gameplay timer is unchanged. Map animation still enters the
@@ -188,80 +188,84 @@ move deferred wonders or Districts forward.
 
 ## Current evidence and implementation handoff
 
-**Milestones 1.2–1.5 are complete; milestone-1 performance acceptance remains open.**
-`object_preparation.h` now prepares city bodies/ground/paving, bridges, routes,
-mines, farms, huts/camps, fallback buildings and walls on a bounded worker.
-It selects, constructs, packs and creates immutable vertex/index buffers;
-foreground adoption retains their ranges directly. Legacy/non-world profiles keep
-their existing path. Resources, forests and native overlays retain their owners.
-The representation remains exact retained meshes, not new source-mesh instancing.
+**1.6 static preparation/submission is complete; full milestone 1 still needs the
+static fog/unseen pass.** `world_preparation.h` replaces separate ground/object/
+terrain scheduling on the ordinary world path with one bounded selected-tile
+queue. Existing worker capacity is shared across tiles. Private query scratch
+survives requests; each job compiles ground, terrain and objects and creates one
+immutable GPU allocation. Adoption retains its exact ranges and dependencies.
+Shared grid indices and underlay ranges remain shared. Object packing preserves
+source indices instead of expanding triangles and hashing them again.
 
-Inputs own capture scalars and borrow immutable assets/observations under a frame
-lease. Query scratch is private; world/coast/river and absent route-neighbor proofs
-enter the existing cache. Lighting, materials, forest exclusions and fallback are
-preserved. Cancellation/error exits join all readers. Ready CPU/GPU/proof storage
-is capped at 16 MiB. Expanded-geometry preflight permits 32 MiB of estimated
-payload (container/packing overhead is additional); private river scratch permits
-two pages. One object lane shares the terrain allowance with ground; completion
-notifications return lanes without waiting for foreground progress. Callbacks are
-unregistered/joined before local owners disappear. `C3X_RENDERER_OBJECT_WORKERS=0`
-uses the same compiler synchronously; oversized/failed work uses that recovery path.
+The frame lease, cancellation joins, resident admission, materials, controls and
+per-component oversized/failure recovery remain intact. Ready CPU/GPU/proof storage
+uses the existing 64 MiB budget (16 MiB with world preparation disabled); each
+combined result is checked against 16 MiB before allocation. Active compilers and
+upload transients are additional. The faster path exposed an older pixel producer
+that omitted ground/object layers from shared world owners, losing city shadows;
+it now copies every world-owned layer. Shadow/region keys also distinguish mesh
+ranges within an owner. No new game patch, native ownership change or presenter.
 
-**Validation (2026-09-19):** current x86 candidate/full integration passed 309 tests
-(307 passed, two skipped), plus native scroll/reduced-zoom/wrap replays.
-Infrastructure checks passed 129 tests (128 passed, one skipped). Five paired
-images are byte-identical: city day/night at 128, city gameplay at 192, city at 64,
-and infrastructure at 160. Six city appearance edits each rebuild two tiles/reuse
-385 and exactly match fresh output, including neighboring forest exclusions.
-The established coastline edit with objects rebuilds 127/reuses 260 with zero
-pixel difference. All 3,324 asset files remain unchanged. No staging, installation,
-reference replacement, injected-code/patch change or live ownership expansion.
+**Validation (2026-09-19):** 310 full-suite tests (308 passed, two skipped), native
+scroll/reduced-zoom/wrap and a new city-retained-scroll replay passed. Six paired
+images are byte-identical: cities day/night at 128, cities at 64/160/192, and
+infrastructure at 160. Ground-serial, object-serial and cached-grid controls pass;
+the ground-serial replay exercises 171 prepared blocks and has zero changed pixels
+under the existing tolerance, absolute channel error 71 (not byte-identical).
+Six city edits each rebuild two tiles/reuse 385 and match fresh output exactly;
+the coastline edit rebuilds 127/reuses 260, also exact. All 3,324 asset files are
+unchanged. Candidate verification only: no staging, installation, reference
+replacement, injected-code change or live-game test.
 
-**Complete workload:** matched 1120×1192 runs include 963 visible tiles, eight
-units, native UI and final transfer; each arm has 384 requests, with identical
-profiling/budgets. Capture is outside timing; desktop completion is not scanout
-or live-game cadence. GPU request mean / p95, milliseconds:
+**Complete workload:** matched 1120×1192 runs include 963 selected tiles, eight
+units, native UI and final transfer; each arm has 384 requests across CPU/GPU
+stationary, scrolling and local-change routes. Capture is outside timing; desktop
+completion is not scanout or live-game cadence. Primary GPU request mean / p95, ms:
 
-| Fixture / workload | 1.4 control | 1.5 candidate |
+| Fixture / workload | Preserved 1.4 control | 1.6 candidate |
 | --- | ---: | ---: |
-| Mixed terrain + dense objects, stationary | 16.83 / 56.61 | 12.84 / 36.39 |
-| Mixed terrain + dense objects, scrolling | 293.91 / 410.18 | 333.49 / 464.41 |
-| Mixed terrain + dense objects, local changes | 17.73 / 46.91 | 21.02 / 65.97 |
-| Modern cities + infrastructure, stationary | 14.58 / 35.12 | 16.38 / 38.12 |
-| Modern cities + infrastructure, scrolling | 213.12 / 279.08 | 223.82 / 274.23 |
-| Modern cities + infrastructure, local changes | 24.35 / 72.44 | 22.57 / 47.78 |
+| Mixed terrain + dense objects, stationary | 16.12 / 43.34 | 16.55 / 49.92 |
+| Mixed terrain + dense objects, scrolling | 331.60 / 467.54 | 288.61 / 411.06 |
+| Mixed terrain + dense objects, local changes | 25.00 / 50.96 | 20.87 / 49.94 |
+| Modern cities + infrastructure, stationary | 15.14 / 40.98 | 20.54 / 56.15 |
+| Modern cities + infrastructure, scrolling | 209.67 / 255.98 | 148.94 / 169.43 |
+| Modern cities + infrastructure, local changes | 22.27 / 51.19 | 25.28 / 65.54 |
 
-**No overall speedup claim:** scrolling is 13.5% slower on mixed terrain and 5.0%
-slower with modern cities. Across 62 mixed scrolling misses, foreground feature
-work falls 20.64 → 11.33 ms and upload 29.67 → 27.60 ms, but terrain preparation/wait
-rises 101.79 → 139.05 ms. The modern fixture uses `--dense-city-case 0,3,1,1` and
-averages 25.16 rigid plus 7.74 ground/paving city parts per miss. Its upload falls
-47.82 → 10.07 ms and city assembly 3.73 → 0.19 ms; however, 89.56 ms of the 91.15 ms
-feature span waits for the producer, which supplies about 8.76 MB of GPU data.
-Mean desktop completion is 222.57 → 232.99 ms. Overlapping spans are not additive.
+Scrolling improves **13.0% mixed / 29.0% modern**; mean desktop completion improves
+341.32 → 298.39 / 219.43 → 159.87 ms. Whole-request results, not worker relocation
+alone, support the static submission result. Stationary/local tails vary; no
+universal frame-time improvement or frame-budget claim is made.
 
-Evidence changed scheduling: returning lanes only at foreground tile boundaries
-gave 357.82 ms mixed scrolling (serial prepared-object control: 325.61 ms).
-Producer-completion notifications reduced the final candidate to 333.49 ms without
-extra worker allowance. Repeated 1.4 controls were stable at 293.54 and 293.91 ms.
+A reverse-order modern-city repeat confirms scrolling at **207.01 → 151.36 ms**
+(p95 257.24 → 170.71). Stationary mean/p95 is 16.00/40.27 → 15.92/41.06;
+local changes are 20.77/50.96 → 21.30/58.90. Both stationary arms perform zero
+world builds and zero geometry work. Retain both pairs: the scrolling benefit is
+repeatable, while stationary/local timing does not establish a general speedup.
 
-Final candidate sampled contiguous free VA stayed above **1,015.6 MiB** on mixed
-terrain and **735.5 MiB** with modern cities, exceeding the 512 MiB gate; transient
-peaks are not established. Correlated scrolling had no object/ground rejection,
-eviction or recovery. Successful arms preserved recorded inputs and exact paired
-output. One modern-city attempt failed the native timer precheck before samples;
-its unchanged retry passed. The failed receipt is retained and excluded from timing.
+Across 62 mixed scrolling misses, foreground ground falls 15.18 → 0.40 ms,
+features 22.90 → 6.84 ms and upload 35.23 → 17.64 ms. Modern features fall
+33.47 → 1.88 ms and upload 47.02 → 8.64 ms. The new world join is outside those
+phase timers: 135.12 ms mixed / 16.82 ms modern. Worker component spans overlap;
+they are not additive CPU/GPU totals. The remaining mixed cost is principally
+terrain generation/join, with cliff/resource adapters retaining their owners.
 
-[Comparison receipts](../native/build/object-preparation-checkpoint/comparison.json),
-[pixel evidence](../native/build/object-preparation-checkpoint/visual-parity.json) and
-[validation details](../native/build/object-preparation-checkpoint/validation.json)
-retain identities, distributions, workload classifications, memory and failed/repeated
-attempts. The prior handoff and 1.4 DLL are preserved in the local control directory.
+All final/repeated arms pass, preserve recorded inputs and produce identical
+paired output. Candidate sampled contiguous free VA bottoms at **1,094.1 MiB**
+mixed and **533.6 MiB** modern across both runs: above the 512 MiB gate, but the
+modern margin is only 21.6 MiB. Transient peaks are not established; preserve the
+budget gate for future growth. Selected queues peak at 20.5 MiB mixed / 19.2 MiB
+modern with four workers and no rejection, eviction or recovery.
 
-**Next: 1.6.** Resolve the whole-request regressions before milestone-1 acceptance.
-Profile the critical path across object production/join, terrain preparation,
-ground/terrain index uploads and remaining adapters. Use measured need to choose
-shared preparation capacity or upload batching while preserving bounded memory,
-source leases, resident ownership and exact output. Re-run both complete workloads
-and their stationary/local-change cases. Dynamic units/water remain milestone 2,
-coherent nonblocking camera publication milestone 3, and wonders/Districts M9–M11.
+[Comparison receipts](../native/build/world-preparation-checkpoint/comparison.json),
+[pixel evidence](../native/build/world-preparation-checkpoint/visual-parity.json) and
+[validation details](../native/build/world-preparation-checkpoint/validation.json)
+retain input/DLL identities, full distributions, controls and failed diagnostic
+attempts. Earlier 1.5 evidence remains in Git and the preserved control snapshot.
+
+**Next: finish milestone 1's visibility dependency and static fog/unseen pass.**
+Consume captured visibility/fog state, prove revealed/fogged/unseen edges,
+clipping and wrapping at 128/160/192, and order coverage after objects but before
+tactical overlays. Keep native fog active until milestone 3's coherent publication
+and cutover. Then proceed to milestone 2's direct dynamic scene path, using
+shoreline waves as its first map-effect workload; general nonblocking camera
+publication remains milestone 3. Wonders and Districts remain M9–M11.

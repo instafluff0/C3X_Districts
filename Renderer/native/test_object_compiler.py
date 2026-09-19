@@ -9,6 +9,7 @@ class ObjectCompilerTests(unittest.TestCase):
 #include "Renderer/native/object_compiler.h"
 #include <cassert>
 #include <cstring>
+#include <cstring>
 #include <set>
 using namespace c3x_renderer;
 int main(){
@@ -46,6 +47,12 @@ int main(){
    auto height=[](float,float){return 7.5f;};objects::Surfaces out;
    objects::compile(composed,input,assets,relief,height,out);
    assert(reads==composed.instances.size() && out.shadows.empty());
+   objects::Surfaces indexed;objects::compile(composed,input,assets,relief,height,indexed,true);
+   for(unsigned layer=0;layer<objects::layer_count;++layer){
+    assert(indexed.indices[layer].size()==out.layers[layer].size());
+    for(unsigned i=0;i<indexed.indices[layer].size();++i)
+     assert(std::memcmp(&out.layers[layer][i],&indexed.layers[layer][indexed.indices[layer][i]],sizeof(objects::Vertex))==0);
+   }
    assert(out.layers[objects::wall_layer].size()==12);
    auto const& v=out.layers[objects::farm_layer].at(0);
    assert(v.u==.25f && v.v==.5f && v.world_valid==1 && v.world_z==7.5f/112);
@@ -80,6 +87,7 @@ int main(){
 #include "Renderer/native/object_preparation.h"
 #include "Renderer/native/render_core/captured_scene.h"
 #include <cassert>
+#include <cstring>
 using namespace c3x_renderer;
 void same(render_core::PreparedMesh const& a,render_core::PreparedMesh const& b){
  assert(a.vertices==b.vertices && a.indices==b.indices && a.bounds==b.bounds);
@@ -136,6 +144,7 @@ int main(){
         run_cpp(r'''
 #include "Renderer/native/render_core/content_preparation.h"
 #include <cassert>
+#include <cstring>
 using namespace c3x_renderer::render_core;
 struct Result {std::size_t bytes()const{return sizeof(*this);}};
 using Pool=ContentPreparation<unsigned,unsigned,Result>;
@@ -171,6 +180,7 @@ int main(){
 #include "Renderer/native/city_fidelity/compiler.h"
 #include "Renderer/lab/shared/natural/ground.h"
 #include <cassert>
+#include <cstring>
 #include <set>
 using namespace c3x_renderer;
 int main(){
@@ -199,6 +209,14 @@ int main(){
  for(int width:{64,128,160,192}){
   fidelity::GroundProjection project{10,12,float(width)/2,float(width)/4,float(width)/224*.82f,640};
   city_fidelity::Surfaces output;city_fidelity::compile(library,*selected,10,12,height,project,output);
+  city_fidelity::Surfaces indexed;city_fidelity::compile(library,*selected,10,12,height,project,indexed,city_fidelity::ContinueCompilation{},true);
+  assert(indexed.chunks.size()==output.chunks.size());
+  for(unsigned c=0;c<output.chunks.size();++c){
+   auto const& a=output.chunks[c];auto const& b=indexed.chunks[c];
+   assert(b.indices.size()==a.vertices.size() && b.vertices.size()==1 && b.indices.size()==3);
+   assert(a.material==b.material && a.environment==b.environment && a.terrain_conforming==b.terrain_conforming);
+   for(unsigned i=0;i<b.indices.size();++i)assert(std::memcmp(&a.vertices[i],&b.vertices[b.indices[i]],sizeof(fidelity::MapVertex))==0);
+  }
   assert(output.chunks.size()==3);auto const& paving=output.chunks[0];auto const& rigid=output.chunks[1];auto const& ground=output.chunks[2];
   assert(paving.terrain_conforming && paving.source_model==~0u && paving.atlas[0]==.8f);
   assert(!rigid.terrain_conforming && rigid.source_model==0 && rigid.source_part==0 && rigid.environment);

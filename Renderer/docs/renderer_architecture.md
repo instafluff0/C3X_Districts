@@ -72,68 +72,65 @@ forest instances additionally share source geometry. This does not require every
 object category to use the same mesh representation.
 
 CPU compilation ends at `PreparedMesh`: exact packed vertex/index bytes, bounds
-and shared-topology identity. Terrain preparation carries those records with its
-existing world/coast/river proofs; raw compiler vertices do not enter the ready
-queue. GPU adoption of prepared terrain validates dependencies and uploads
-immutable ranges without re-indexing or rediscovering bounds. Ground uses the same
-packed boundary with private query/dependency state. Production world-ground jobs
-own tile/projection values and filtered river nodes, and run ahead across selected
-missing content on two compile lanes. Each lane reuses at most two river pages,
-resetting point caches and dependency consumers per tile. The existing 16 MiB
-ready queue applies refill backpressure; only actual adoption demand bypasses it.
-While selected ground is active, it reserves two lanes from the ordinary natural
-terrain allowance where available; completion returns those lanes without
-cancelling jobs or replacing the terrain queue. Explicit low-concurrency controls
-remain valid.
-A frame-scoped lease exposes immutable observations, coast and decoded assets;
-the render owner can attach resident handles in the separate instance map.
-Cancellation, exceptions and ordinary completion join before observation mutation
-or source destruction. No prepared ground job survives the frame. This preserves
-exact queried dependencies without copying the world. Reduced/diagnostic paths
-retain their scoped cached-grid compiler; legacy analytic ground remains serial.
-City and infrastructure preparation uses the same CPU packer as terrain.
-`object_compiler.h` separates route and repeated-part selection from CPU geometry.
-Its plans contain pack-family/asset IDs, destination layers, placement, material
-and owner parameters. Its output owns layer vectors and legacy analytic shadows;
-adoption preserves existing pass order and immutable GPU owners. City compilation
-similarly returns owned material chunks, lighting/blockers, source model/part IDs
-and placements through `city_fidelity/compiler.h`. A legal composition suppresses
-discarded fallback-body construction; walls and constrained-site fallback remain.
+and shared-topology identity, accompanied by complete dependency proofs. The
+ordinary world path uses one selected-tile preparation queue for ground, natural
+terrain and city/infrastructure content. All configured lanes can prepare any
+selected tile; fixed per-category lane reservations no longer govern this path.
+Each job copies capture/projection values and river nodes, and borrows immutable
+observations, coast and decoded assets under a frame lease. It never reads game
+objects. Resident-handle attachment uses the separate mutable instance map.
+
+Each lane has private ground scratch and reuses the existing private terrain
+scratch sequentially for terrain and objects. Point caches and dependency
+consumers reset per tile; bounded river pages survive requests and reset on world,
+asset or device changes. Workers pack the tile's world-owned ranges into one
+immutable GPU allocation, so uploads for independent tiles can overlap. Shared
+grid indices remain shared; bed/water reuse the underlay ranges. Foreground
+adoption owns validation, admission, material binding and publication, retaining
+ranges without rebuilding indices or uploading these layers again. Remaining
+cliff/resource/legacy adapters keep their established owners and uploads.
+
+The queue uses the existing 64 MiB world-preparation allowance (16 MiB when that
+control is disabled), counting CPU payload, GPU bytes and proofs together. Its
+half-budget refill gate prevents producers from outrunning adoption. A worker
+rejects a combined result above 16 MiB before GPU allocation; compiler preflights
+and private two-page river caches also bound individual stages. Container growth,
+packing/upload transients and active jobs are additional to ready storage and
+must be checked against whole-process address-space measurements. Oversized or
+failed preparation recovers through the same compilers. Cancellation, exceptions
+and ordinary completion join all readers before the frame's borrowed sources or
+callbacks disappear; queued results do not survive the frame.
+
+`object_compiler.h` separates connectivity/part selection from CPU geometry.
+`city_fidelity/compiler.h` retains material chunks, lighting/blockers, source
+model/part identities and placements. Prepared objects preserve authored source
+indices, eliminating triangle expansion followed by vertex hashing. Routes keep
+their terrain-conforming strip compiler; a legal city suppresses discarded
+fallback-body construction while retaining walls and constrained-site fallback.
 
 | Object representation | Sharing boundary |
 | --- | --- |
 | City building bodies | Library model/part plus uniform placement; per-city lighting/blocker ownership remains separate |
-| Bridges, mines, farm parts, huts/camps, fallback cities and walls | Pack-family/asset plus placement/material parameters; retain exact grounding and layer order |
+| Bridges, mines, farm parts, huts/camps, fallback cities and walls | Pack-family/asset plus placement/material parameters; exact grounding and layer order |
 | Routes and railroads | Connectivity-selected, subdivided terrain-conforming strips; site-specific geometry |
 | City source ground and paving | Terrain-conforming vertices, atlas/coverage and ordered material chunks; site-specific geometry |
-| Resources and natural vegetation | Existing animated anchors/shared natural representations; not folded into a static object plan |
+| Resources and natural vegetation | Existing animated anchors/shared natural representations |
 
-`object_preparation.h` consumes these descriptions in the production retained
-world path. A frame-scoped lane owns its river, coast and height-query scratch,
-selects legal cities and connected infrastructure, constructs and packs meshes,
-and creates an immutable buffer containing both vertex and index ranges. Adoption
-retains that buffer directly; the render owner still controls admission, cache
-handles, material bindings, draw order and publication. Per-city lighting and
-blockers retain their existing ownership; forests use the same legal selector.
-The exact world/coast/river reads and absent route neighbors become resident
-invalidation proofs. Assets and observations stay immutable until every reader
-joins, including cancellation and exception exits. Ready results cannot survive
-the frame. The 16 MiB queue accounts for packed CPU data, GPU storage and proofs;
-estimated expanded geometry is checked against 32 MiB before generation
-(container growth and packing transients are additional),
-and each private river cache permits two pages. Oversized work recovers through
-the same foreground compiler. One object lane shares the existing
-terrain-worker allowance with the two ground lanes; completed lanes return to
-terrain from producer-completion notifications, even while the foreground is
-blocked compiling or joining another tile. Notifications use synchronized queue
-state and are unregistered/joined before local owners disappear; the source read
-lease stays intact. `C3X_RENDERER_OBJECT_WORKERS=0` uses the
-same compiler and GPU adoption synchronously. Frozen/legacy paths retain their
-existing analytic behavior. Rigid source instancing remains a possible later
-representation choice; the current implementation prepares exact retained meshes.
-Final occurrence/pass order remains native capture order. Helpers use only the
+Reduced/non-world profiles and explicit serial ground/object controls continue
+through their existing scoped preparation/adoption paths, using the same
+compilers. The current object representation remains retained transformed meshes;
+source-mesh instancing is a later option where it removes measured work. Final
+occurrence/pass order remains native capture order. Workers use only the
 thread-safe D3D device for immutable allocation, never the immediate context or
-native-game surfaces.
+native-game surfaces. Allocation boundaries remain residency/eviction boundaries;
+there is no cross-tile arena, fence scheme or second presenter.
+
+Every pixel producer, including the older screen-space block producer, borrows
+all layers stored in a world owner. A terrain-only suffix is no longer a valid
+ownership assumption. Shadow-page and region-image keys identify individual
+immutable buffer ranges as well as revision/material, so different parts of one
+owner cannot alias after culling. City scrolling has its own retained-versus-cold
+integration witness, including prepared pixel blocks and source shadows.
 
 Explicit passes name inputs, outputs and dependencies for static/dynamic geometry,
 shadows, reflections, water, finishing and composition. This is not a replacement

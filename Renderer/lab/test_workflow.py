@@ -425,6 +425,7 @@ class BehaviorWitnessTests(unittest.TestCase):
         self.assertEqual(names, ["resource-playback"])
         with patch.object(renderer, "affected", return_value=["grassland"]):
             self.assertIn("terrain-edit", [case[0] for case in renderer.integration_replay_cases("grassland")])
+            self.assertIn("city-retained-scroll", [case[0] for case in renderer.integration_replay_cases("cities")])
 
     def test_full_resource_check_preserves_the_exhaustive_sweep(self):
         with patch.object(renderer, "affected", return_value=["animation", "resources"]):

@@ -8,7 +8,8 @@
   "implementation": [
     "Renderer/native/c3x_renderer.cpp",
     "Renderer/native/terrain_scene_runtime.cpp",
-    "Renderer/native/object_compiler.h"
+    "Renderer/native/object_compiler.h",
+    "Renderer/native/world_preparation.h"
   ],
   "recipe": {
     "terrain": 2,

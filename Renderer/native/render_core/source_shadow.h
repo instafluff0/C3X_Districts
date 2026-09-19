@@ -243,6 +243,13 @@ public:
                 if(p[2]<key.first*6 || p[0]>(key.first+1)*6 || p[3]<key.second*6 || p[1]>(key.second+1)*6)continue;
                 result.indices.push_back(i);mix(casters[i].version);mix(casters[i].layer);mix(casters[i].index_format);
                 if(casters[i].binding!=0xffffffffu)mix(casters[i].binding);
+                // A world revision owns multiple same-material chunks. Page
+                // selection can exchange those chunks without changing their
+                // version/layer/material sequence; retain the actual draw ranges.
+                mix(casters[i].count);mix(casters[i].stride);
+                mix(casters[i].vertex_offset);mix(casters[i].index_offset);
+                mix(reinterpret_cast<std::uintptr_t>(casters[i].vertices));
+                mix(reinterpret_cast<std::uintptr_t>(casters[i].indices));
                 for(float f:casters[i].offset){std::uint32_t bits;std::memcpy(&bits,&f,4);mix(bits);}
             }
             return result;
@@ -261,6 +268,13 @@ public:
                 if(!reaches)continue;
                 result.indices.push_back(i);mix(casters[i].version);mix(casters[i].layer);mix(casters[i].index_format);
                 if(casters[i].binding!=0xffffffffu)mix(casters[i].binding);
+                // A world revision owns multiple same-material chunks. Page
+                // selection can exchange those chunks without changing their
+                // version/layer/material sequence; retain the actual draw ranges.
+                mix(casters[i].count);mix(casters[i].stride);
+                mix(casters[i].vertex_offset);mix(casters[i].index_offset);
+                mix(reinterpret_cast<std::uintptr_t>(casters[i].vertices));
+                mix(reinterpret_cast<std::uintptr_t>(casters[i].indices));
                 for(float f:casters[i].offset){std::uint32_t bits;std::memcpy(&bits,&f,4);mix(bits);}
             }
             return result;

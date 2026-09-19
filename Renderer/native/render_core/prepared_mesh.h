@@ -71,7 +71,7 @@ bool prepare_mesh(std::vector<Vertex> const& source,std::vector<unsigned> const*
                   MeshFormat format,PreparedMesh& destination,Cancelled stop){
     PreparedMesh result;
     if(stop())return false;
-    if(source.empty()){destination=std::move(result);return true;}
+    if(source.empty() || (topology && topology->empty())){destination=std::move(result);return true;}
     std::vector<unsigned> unique,indices;
     if(!topology){
         std::size_t capacity=1;while(capacity<source.size()*2u)capacity*=2u;

@@ -27,6 +27,7 @@ struct Route {float u0,v0,u1,v1;unsigned style;bool railroad;};
 struct Plan {std::vector<Instance> instances;std::vector<Route> routes;};
 struct Surfaces {
     std::array<std::vector<Vertex>,layer_count> layers;
+    std::array<std::vector<unsigned>,layer_count> indices;
     std::vector<Vertex> shadows;
 };
 struct Projection {
@@ -107,7 +108,7 @@ inline void append_shadow(Projection const& input,FeatureAsset const& asset,floa
 template<class Relief,class Height>
 void append_instance(Projection const& input,FeatureBundle const& bundle,FeaturePlacement const& placement,
         float local_u,float local_v,float rotation,float scale,float material_offset,float owner_code,bool cast_shadow,
-        bool site,Relief relief_at_world,Height natural_height_at,std::vector<Vertex>& target,std::vector<Vertex>& shadows){
+        bool site,Relief relief_at_world,Height natural_height_at,std::vector<Vertex>& target,std::vector<Vertex>& shadows,std::vector<unsigned>* topology=nullptr){
     auto const& tile=input.tile;
     float left=input.left,top=input.top,half_w=input.half_w,half_h=input.half_h;
     float relief_projection_scale=input.relief_projection_scale,feature_projection_scale=input.feature_projection_scale;
@@ -178,7 +179,11 @@ void append_instance(Projection const& input,FeatureBundle const& bundle,Feature
             vertex.normal_x=normal[0];vertex.normal_y=normal[1];vertex.normal_z=normal[2];
         }
     }
-    for (std::uint32_t source_index : asset.indices)
+    if(topology){
+        unsigned base=unsigned(target.size());
+        target.insert(target.end(),transformed.begin(),transformed.end());
+        for(auto index:asset.indices)topology->push_back(base+index);
+    }else for (std::uint32_t source_index : asset.indices)
         target.push_back(transformed[source_index]);
 }
 template<class Relief>
@@ -490,13 +495,13 @@ inline bool select_improvements(c3x_renderer_tile_v1 const& tile,Assets const& a
     return true;
 }
 template<class Relief,class Height>
-void compile(Plan const& plan,Projection const& input,Assets const& assets,Relief relief,Height height,Surfaces& output){
+void compile(Plan const& plan,Projection const& input,Assets const& assets,Relief relief,Height height,Surfaces& output,bool indexed=false){
     for(auto const& route:plan.routes)append_route(input,route,relief,output.layers[route_layer]);
     for(auto const& instance:plan.instances){
         FeaturePlacement placement{};placement.asset_index=instance.asset;
         append_instance(input,assets[instance.family],placement,instance.u,instance.v,instance.rotation,
             instance.scale,instance.material,instance.owner,instance.shadow,instance.family==site_family,
-            relief,height,output.layers[instance.layer],output.shadows);
+            relief,height,output.layers[instance.layer],output.shadows,indexed?&output.indices[instance.layer]:nullptr);
     }
 }
 }}

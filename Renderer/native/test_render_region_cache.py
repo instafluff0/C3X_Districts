@@ -387,6 +387,14 @@ int main(){
    check_receivers(occurrences,{{-11,7,125,91}},true);
    return result;};
  auto original=key();assert(key()==original);assert(prepared.receiver_hits>0);
+ // Material/version equality is not geometry equality inside a shared owner.
+ for(auto field:{&buffers[geometry_underlay][0].vertex_offset,&buffers[geometry_underlay][0].index_offset}){
+   ++*field;assert(key()!=original);--*field;assert(key()==original);
+ }
+ ID3D11Buffer vertex_buffer,index_buffer;
+ buffers[geometry_underlay][0].buffer=&vertex_buffer;assert(key()!=original);buffers[geometry_underlay][0].buffer=nullptr;
+ buffers[geometry_underlay][0].indices=&index_buffer;assert(key()!=original);buffers[geometry_underlay][0].indices=nullptr;
+ assert(key()==original);
  settings.depth_translation=1024;assert(key()!=original); // Common depth is part of raster validity.
  settings.depth_translation=0;assert(key()==original);
  Key diagnostic;std::vector<std::size_t> sections;

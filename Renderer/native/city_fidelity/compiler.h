@@ -8,6 +8,7 @@ namespace c3x_renderer { namespace city_fidelity {
 // Site queries remain dependency-recording callbacks under the caller's lease.
 struct Chunk {
     std::vector<fidelity::MapVertex> vertices;
+    std::vector<unsigned> indices;
     unsigned material=0;bool environment=false;float atlas[4]={};
     std::shared_ptr<Lighting> lighting;
     // Rigid parts may share this source mesh plus placement. Ground and paving
@@ -67,7 +68,7 @@ Composition const* select(Library const& library,c3x_renderer_tile_v1 const& rec
 struct ContinueCompilation {bool operator()()const{return false;}};
 template<class Height,class Project,class Stop=ContinueCompilation>
 bool compile(Library const& library,Composition const& selected,int nc,int nr,
-        Height height_natural,Project project_natural,Surfaces& output,Stop stop={}){
+        Height height_natural,Project project_natural,Surfaces& output,Stop stop={},bool indexed=false){
     auto composition=&selected;
     auto lighting=std::make_shared<Lighting>();
     lighting->blockers.reserve(composition->instances.size());
@@ -100,7 +101,8 @@ bool compile(Library const& library,Composition const& selected,int nc,int nr,
                 out.material_marsh=bitangent[0];out.authored_relief_height=bitangent[1];out.authored_relief_blend=bitangent[2];
                 out.base_terrain=material.ground?60.f:100.f+float(material.channels);transformed.push_back(out);
             }
-            chunk.vertices.reserve(p.indices.size());for(unsigned vertex_index:p.indices)chunk.vertices.push_back(transformed[vertex_index]);
+            if(indexed){chunk.vertices=std::move(transformed);chunk.indices.assign(p.indices.begin(),p.indices.end());}
+            else {chunk.vertices.reserve(p.indices.size());for(unsigned vertex_index:p.indices)chunk.vertices.push_back(transformed[vertex_index]);}
             output.chunks.push_back(std::move(chunk));
         }
     }
@@ -116,7 +118,8 @@ bool compile(Library const& library,Composition const& selected,int nc,int nr,
             out.u=x/p.period[0];out.v=y/p.period[1];out.base_terrain=62+v.coverage;
             transformed.push_back(out);
         }
-        for(unsigned vertex_index:p.indices)chunk.vertices.push_back(transformed[vertex_index]);
+        if(indexed){chunk.vertices=std::move(transformed);chunk.indices.assign(p.indices.begin(),p.indices.end());}
+        else for(unsigned vertex_index:p.indices)chunk.vertices.push_back(transformed[vertex_index]);
         // Paving precedes the source ground and bodies; depth is read-only.
         output.chunks.insert(output.chunks.begin(),std::move(chunk));
     }

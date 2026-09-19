@@ -630,6 +630,8 @@ def integration_replay_cases(category, *, full=False):
     terrain = {"grassland", "plains", "desert", "tundra", "floodplains", "transitions",
                "hills", "mountains", "volcanoes", "forests", "jungles", "shorelines", "seas-oceans",
                "rivers", "day-night", "shadows"}
+    if "cities" in selected:
+        cases.append(("city-retained-scroll", "replay", 128, (50, 50), 12))
     if "volcanoes" in selected:
         cases.append(("volcano-lifecycle", None, 128, (16, 16), 12))
     if "ocean-waves" in selected:
@@ -658,6 +660,8 @@ def integration_replays(category, *, full=False):
         print("Checking production behavior: " + name, flush=True)
         try:
             scene_category, scene_case = "grassland", "gameplay"
+            if name == "city-retained-scroll":
+                scene_category, scene_case = "cities", "gameplay"
             if name == "volcano-lifecycle":
                 scene_category, scene_case = "volcanoes", "lifecycle"
             if name.startswith("wave-"):

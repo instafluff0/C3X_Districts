@@ -156,6 +156,24 @@ int main(){
     casters[0].version=2;assert(Shadow::PreparedCasters::select(casters,box,{0,0}).hash!=hash);
     casters[0].version=1;casters[1].binding=17;assert(Shadow::PreparedCasters::select(casters,box,{0,0}).hash!=hash);
     casters[1].binding=0xffffffffu;casters[1].index_format=57;assert(Shadow::PreparedCasters::select(casters,box,{0,0}).hash!=hash);
+    casters[1].index_format=42;
+    // Same-owner/material chunks with distinct immutable ranges cannot reuse
+    // each other's shadow page, including narrowed receiver proof hashes.
+    std::vector<Shadow::Bounds> wide_receiver(1);for(unsigned axis=0;axis<3;++axis){wide_receiver[0].low[axis]=-100;wide_receiver[0].high[axis]=100;}
+    auto page=Shadow::PreparedCasters::select(casters,box,{0,0});
+    auto narrowed=Shadow::PreparedCasters::receiver_selection(page,casters,box,wide_receiver,basis).hash;
+    for(auto field:{&casters[1].count,&casters[1].stride,&casters[1].vertex_offset,&casters[1].index_offset}){
+        auto saved=*field;++*field;
+        assert(Shadow::PreparedCasters::select(casters,box,{0,0}).hash!=hash);
+        assert(Shadow::PreparedCasters::receiver_selection(page,casters,box,wide_receiver,basis).hash!=narrowed);
+        *field=saved;
+    }
+    for(auto field:{&casters[1].vertices,&casters[1].indices}){
+        *field=reinterpret_cast<void*>(std::uintptr_t(64));
+        assert(Shadow::PreparedCasters::select(casters,box,{0,0}).hash!=hash);
+        assert(Shadow::PreparedCasters::receiver_selection(page,casters,box,wide_receiver,basis).hash!=narrowed);
+        *field=nullptr;
+    }
     Shadow::PreparedCasters::Selection too_large;too_large.indices.resize(8u*1024u*1024u/sizeof(std::size_t)+1);
     assert(!prepared.admit({1,1},std::move(too_large)));assert(!too_large.indices.empty());
     assert(prepared.build(casters,basis));assert(!prepared.find({0,0}) && prepared.selection_bytes==0);

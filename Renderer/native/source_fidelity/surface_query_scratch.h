@@ -19,8 +19,13 @@ struct SurfaceQueryScratch {
     render_core::ExactPointCache<std::array<float,2>> height_samples;
     NaturalWorld rivers;
     std::size_t pickup_height_queries=0;
+    render_core::World dimensions{};
     SurfaceQueryScratch(){rivers.river_page_limit=2;}
     void bind(NaturalData const& natural,render_core::WorldTopology const& world,std::int64_t revision){
+        auto next=world.dimensions();
+        if(next.width!=dimensions.width || next.height!=dimensions.height ||
+           next.wrap_x!=dimensions.wrap_x || next.wrap_y!=dimensions.wrap_y)rivers.reset_world();
+        dimensions=next;
         rivers.borrowed_data=&natural;rivers.update_rivers(world,revision);
     }
     void reset_tile(){pickup_ground_samples.clear();height_samples.clear();}

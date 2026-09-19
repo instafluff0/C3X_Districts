@@ -521,7 +521,7 @@ int main(){
         # must be merged into the shared maps the outer cache-persistence and
         # future cache-hit validity checks (river_dependencies/dependencies/
         # coast_dependencies/world_dependencies) actually read.
-        merge = source.split("auto prepared_ground=batched_ground?", 1)[1].split("pending_ground_grids=", 1)[0]
+        merge = source.split("auto prepared_ground=", 1)[1].split("pending_ground_grids=", 1)[0]
         for field, shared_map in (("world", "world_dependencies"), ("coast", "coast_dependencies"),
                                   ("topology", "dependencies"), ("rivers", "river_dependencies")):
             self.assertIn(f"for(auto const& dependency:prepared_ground->{field}){shared_map}.emplace(", merge)
@@ -829,12 +829,15 @@ int main(){
  State s;Entry camera;camera.version=7;
  camera.tile_x=15;camera.tile_y=47;camera.buffers[0].push_back({1});
  Entry world;world.version=7;world.shared_natural=true;world.buffers[1].push_back({2});
+ world.buffers[0].push_back({3}); // Migrated ground/objects can precede natural terrain.
  s.tile_geometry_cache.emplace(42,std::move(camera));s.tile_geometry_cache.emplace(99,std::move(world));
  s.tile_geometry_cache.find(99)->second.binding=s.resident_content.bind(s.tile_geometry_cache.find(99)->second);
  s.tile_geometry_cache.find(42)->second.natural_content=s.tile_geometry_cache.find(99)->second.binding;
  s.pending_pixel_block.key.push_back({7,120,60});
  assert(s.prepare() && s.submissions==1 && !s.pixel_prepare_cursor);
- assert(s.buffers[0].size()==1 && s.buffers[1].size()==1 && s.buffers[2].empty());
+ assert(s.buffers[0].size()==2 && s.buffers[0][1].content().id==3);
+ assert(s.buffers[0][1].natural_projection[0]==1547 && s.buffers[0][1].translation_x==120);
+ assert(s.buffers[0].size()==2 && s.buffers[1].size()==1 && s.buffers[2].empty());
  assert(s.buffers[0][0].content().id==1 && !s.buffers[0][0].natural_projection[0]);
  assert(s.buffers[1][0].content().id==2 && s.buffers[1][0].natural_projection[0]==1547);
  assert(s.buffers[1][0].translation_x==120 && s.buffers[1][0].translation_y==60);
@@ -1213,6 +1216,8 @@ void check_index_width(std::size_t vertex_count) {
     assert(mesh.vertices.size()==vertex_count*sizeof(Vertex));
     for(unsigned i=0;i<indices.size();++i)assert(index_at(mesh,i)==indices[i]);
     indices.push_back(unsigned(vertex_count));assert(!prepare_mesh(vertices,&indices,format,mesh,[]{return false;}));
+    indices.clear();assert(prepare_mesh(vertices,&indices,format,mesh,[]{return false;}));
+    assert(mesh.empty() && mesh.index_count==0);
 }
 void check_formats(){
     std::vector<Vertex> vertices(3);float values[42];

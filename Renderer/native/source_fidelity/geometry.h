@@ -83,7 +83,7 @@ if(fidelity_profile) {
     if(cpu_terrain_enabled) {
         // Join only after independent city/forest assembly has used this read lease.
         auto input=terrain_compile_input(tile,frame,ground,skip_flat_shore,separate_natural_relief,index_natural_grids,retain_height_samples,world_objects);
-        auto prepared=terrain_preparation.take(input.key,true);
+        auto prepared=prepared_world?std::move(prepared_world->terrain):terrain_preparation.take(input.key,true);
         if(prepared && !terrain_result_valid(*prepared))prepared.reset();
         if(!prepared){
             prepared=compile_terrain(input,foreground_terrain_scratch,cancelled,false);

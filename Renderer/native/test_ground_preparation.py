@@ -155,6 +155,30 @@ int main(){
 }
 ''')
 
+    def test_persistent_query_pages_reset_on_dimensions_wrap_and_revision(self):
+        run_cpp(r'''
+#include "Renderer/native/source_fidelity/surface_query_scratch.h"
+#include <cassert>
+using namespace c3x_renderer;
+int main(){
+ fidelity::NaturalData assets;render_core::WorldCoast world;
+ std::vector<std::uint32_t> bits(512,2|(2<<8));
+ world.update({32,32,false,false},bits.data(),bits.size(),1);
+ fidelity::SurfaceQueryScratch scratch;scratch.bind(assets,world.world(),1);
+ scratch.rivers.river_page_entry(4,4);assert(scratch.rivers.river_pages.size()==1);
+ scratch.bind(assets,world.world(),1);assert(scratch.rivers.river_pages.size()==1);
+ // A new world may reuse the revision number; dimensions and wrapping still
+ // change the meaning of every river-page support/dependency index.
+ world.update({16,16,false,false},bits.data(),128,1);
+ scratch.bind(assets,world.world(),1);assert(scratch.rivers.river_pages.empty());
+ scratch.rivers.river_page_entry(4,4);
+ world.update({16,16,true,false},bits.data(),128,1);
+ scratch.bind(assets,world.world(),1);assert(scratch.rivers.river_pages.empty());
+ scratch.rivers.river_page_entry(4,4);scratch.bind(assets,world.world(),2);
+ assert(scratch.rivers.river_pages.empty() && scratch.rivers.borrowed_data==&assets);
+}
+''')
+
     def test_scope_joins_cancellation_errors_and_releases_captures(self):
         run_cpp(r'''
 #include "Renderer/native/render_core/scoped_preparation.h"

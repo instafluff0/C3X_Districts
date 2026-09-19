@@ -116,10 +116,10 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
             raw_bytes+=(part.indices.size()+part.vertices.size())*sizeof(Vertex);
     }
     if(stop() || (bounded && raw_bytes>32u*1024u*1024u))return {};
-    Surfaces surfaces;compile(plan,input.projection,assets,relief,height_natural,surfaces);
+    Surfaces surfaces;compile(plan,input.projection,assets,relief,height_natural,surfaces,true);
     for(unsigned layer=0;layer<layer_count;++layer){
         render_core::MeshFormat format;format.feature=layer!=route_layer;format.projection_kind=2;
-        if(!render_core::prepare_mesh(surfaces.layers[layer],nullptr,format,result->layers[layer].mesh,stop))return {};
+        if(!render_core::prepare_mesh(surfaces.layers[layer],layer==route_layer?nullptr:&surfaces.indices[layer],format,result->layers[layer].mesh,stop))return {};
         std::vector<Vertex>().swap(surfaces.layers[layer]);
         if(bounded && result->bytes()>Preparation::byte_limit/2)return {};
     }
@@ -127,13 +127,13 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
         city_fidelity::Surfaces city;
         GroundProjection projection{nc,nr,input.projection.half_w,input.projection.half_h,
             input.projection.relief_projection_scale,float(input.projection.content_view_height)};
-        if(!city_fidelity::compile(library,*composition,nc,nr,height_natural,projection,city,stop))return {};
+        if(!city_fidelity::compile(library,*composition,nc,nr,height_natural,projection,city,stop,true))return {};
         for(auto& chunk:city.chunks){
             PreparedPart part;part.material=chunk.material;part.environment=chunk.environment;
             part.terrain_conforming=chunk.terrain_conforming;part.lighting=chunk.lighting;
             std::copy(chunk.atlas,chunk.atlas+4,part.atlas.begin());
             render_core::MeshFormat format;format.projection_kind=4;
-            if(!render_core::prepare_mesh(chunk.vertices,nullptr,format,part.mesh,stop))return {};
+            if(!render_core::prepare_mesh(chunk.vertices,&chunk.indices,format,part.mesh,stop))return {};
             std::vector<Vertex>().swap(chunk.vertices);result->city.push_back(std::move(part));
             if(bounded && result->bytes()>Preparation::byte_limit/2)return {};
         }

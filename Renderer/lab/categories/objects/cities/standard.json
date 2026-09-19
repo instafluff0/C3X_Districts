@@ -20,7 +20,8 @@
     "Renderer/lab/shared/cities/facades.py",
     "Renderer/native/object_compiler.h",
     "Renderer/native/object_preparation.h",
-    "Renderer/native/city_fidelity/compiler.h"
+    "Renderer/native/city_fidelity/compiler.h",
+    "Renderer/native/world_preparation.h"
   ],
   "recipe": {
     "terrain": 2,

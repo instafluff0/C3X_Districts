@@ -85,6 +85,17 @@ bodies. It changes only the explicit stress fixture; match it in both arms.
 The `object-preparation` trace reports worker/join time, queued memory, rejected or
 evicted jobs, recovery and adopted GPU bytes. Its worker time overlaps terrain,
 ground and foreground work; do not add it to whole-request time.
+The ordinary world path reports `world-preparation`: selected/consumed jobs,
+rejection/eviction/recovery, lane count, ready CPU+GPU+proof peak, GPU upload bytes,
+worker span and foreground join. Per-component ground/terrain/object/upload spans
+are summed producer wall times; they overlap across lanes and include driver waits.
+The world join occurs before the tile-local `mesh-phases` timers, so that trace
+alone no longer includes every preparation wait. Correlate both with whole-request
+QPC boundaries. The former ground/object queue traces report zero scheduled jobs
+on this path; they still describe reduced/non-world and explicit serial controls.
+The existing total worker allowance is unchanged; the combined ready budget is
+64 MiB by default rather than adding separate ground/object queues to that budget.
+
 `FRAME_SAMPLE` QPC boundaries locate the corresponding aggregate renderer trace.
 `geometry_ms` includes content assembly, uploads and possible driver waits;
 `draw_ms` excludes later shared-scene composition and is not total GPU time.
