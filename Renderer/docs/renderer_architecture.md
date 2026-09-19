@@ -75,8 +75,16 @@ CPU compilation ends at `PreparedMesh`: exact packed vertex/index bytes, bounds
 and shared-topology identity. Terrain preparation carries those records with its
 existing world/coast/river proofs; raw compiler vertices do not enter the ready
 queue. GPU adoption of prepared terrain validates dependencies and uploads
-immutable ranges without re-indexing or rediscovering bounds. Other object meshes
-use the same CPU packer, but their assembly/packing still runs on the render owner.
+immutable ranges without re-indexing or rediscovering bounds. Ground uses the same
+packed boundary with private query/dependency state and a cached-grid lease. Its
+current-tile task overlaps independent object construction. One exclusive,
+frame-local compile lane reuses at most two river pages, resetting point caches
+and dependency consumers per tile. A scope-enforced join precedes dependency
+adoption, topology mutation and any capture/asset destruction. This bounds
+borrowing without copying the world or changing the exact queried dependency set.
+Legacy analytic ground remains serial.
+Other object meshes use the same CPU packer, but their assembly/packing still
+runs on the render owner.
 Compilation may finish available content before joining active helpers; final
 occurrence/pass order remains native capture order. Workers acquire neither GPU
 nor native-game ownership.

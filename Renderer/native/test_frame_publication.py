@@ -154,13 +154,21 @@ int main(){
 #include "Renderer/native/unit_animation_runtime.h"
 #include "Renderer/native/render_core/unit_frame_preparation.h"
 #include "Renderer/native/render_core/unit_playback.h"
+#include "Renderer/native/render_core/unit_instances.h"
 #include "Renderer/native/render_core/cliff_placement.h"
 #include "Renderer/native/prepared_view_area.h"
 #include "Renderer/native/gpu_frame_api.h"
 #include "Renderer/native/gpu_image_commands.h"
 #include "Renderer/native/render_core/scene_surface.h"
 #include <functional>
-using HDC=void*;using HWND=void*;
+using HDC=void*;using HWND=void*;using UINT_PTR=std::uintptr_t;
+using UINT=unsigned;using DWORD=unsigned long;
+constexpr unsigned GA_ROOT=2;
+bool IsWindowVisible(HWND){return false;}HWND GetForegroundWindow(){return nullptr;}
+HWND GetAncestor(HWND,unsigned){return nullptr;}
+void renderer_visual_timer(HWND,UINT,UINT_PTR,DWORD){}
+void KillTimer(HWND,UINT_PTR){assert(false);}
+UINT_PTR SetTimer(HWND,UINT_PTR,UINT,void(*)(HWND,UINT,UINT_PTR,DWORD)){assert(false);return 0;}
 struct RECT {int left,top,right,bottom;};
 // This fixture exercises the actual CPU/camera scheduler, not graphics. Native
 // GPU transport has separate Windows pixel tests. Fail if it enters these seams.
@@ -183,7 +191,15 @@ struct NativePresenter {
  int view(){return unexpected_gpu();}int retained(){return unexpected_gpu();}int buffer(){return unexpected_gpu();}
  int present(){assert(native_transfer_test);++native_transfers;return C3X_RENDERER_RESULT_OK;}void gpu_written(){unexpected_gpu();}
 };
+struct RetainedComposition {
+ struct Texture {ID3D11Texture2D* Get()const{unexpected_gpu();return nullptr;}explicit operator bool()const{return false;}};
+ using Sample=std::function<Texture(long long,long long)>;
+};
 struct Session {
+ bool visual_ready(){return false;}bool visual_active(){return false;}
+ std::uint64_t visual_bytes(){return 0;}std::size_t visual_nodes(){return 0;}void stop_visuals(){}
+ template<class... T> RetainedComposition::Texture snapshot_bgra(T...){unexpected_gpu();return {};}
+ template<class... T> int visual_frame(T...){return unexpected_gpu();}
  Session(Device*,Context*){unexpected_gpu();}
  c3x_renderer_i64 current_ticket(){return unexpected_gpu();}std::uint64_t upload_count(){return unexpected_gpu();}
  int map_image(){return unexpected_gpu();}int session_identity(){return unexpected_gpu();}
@@ -194,6 +210,7 @@ struct Session {
 };
 }
 struct LARGE_INTEGER {long long QuadPart=0;};
+void QueryPerformanceFrequency(LARGE_INTEGER* out){out->QuadPart=1000000000;}
 void QueryPerformanceCounter(LARGE_INTEGER* out){out->QuadPart=std::chrono::steady_clock::now().time_since_epoch().count();}
 bool ambient_mode=false,ahead_mode=false;
 std::atomic<unsigned> ahead_completed{0},ahead_consumed{0};
@@ -231,7 +248,8 @@ struct Bodies {
     void set_pose_ready_notification(std::function<void()>){ }
     bool resident_preparation_ready(c3x_renderer_unit_v1 const&){return unexpected_gpu();}
     template<class... T> unsigned prepare_resident(T&&...){return unexpected_gpu();}
-    struct ResidentPose {struct Texture {ID3D11Texture2D* Get()const{unexpected_gpu();return nullptr;}} texture;int width=0,height=0;bool prepared=false;} resident_pose;
+    struct ResidentPose {c3x_gpu_images::RetainedComposition::Texture texture;int width=0,height=0;bool prepared=false;} resident_pose;
+    std::uint64_t gpu_shadow_passes=0,gpu_shadow_input_bytes=0,cpu_shadow_upload_bytes=0;
     std::uint64_t output_readbacks=0,resident_pose_builds=0,resident_pose_hits=0;std::size_t resident_pose_bytes=0;
 
     struct Action {std::string name;bool loop=true,ambient=false;float duration=1;unsigned frames=31;};
@@ -375,7 +393,7 @@ int main(){
     assert(worker.camera_begin(f,last)==C3X_RENDERER_RESULT_PENDING);
     until([&]{return state.entered.load()>entered;});
     auto cancellations=state.cancelled.load();
-    c3x_renderer_unit_v1 unit={};unit.action=1;std::strcpy(unit.unit_key,"unit");state.unit_bodies.cached=true;
+    c3x_renderer_unit_v1 unit={};unit.struct_size=sizeof(unit);unit.action=1;std::strcpy(unit.unit_key,"unit");state.unit_bodies.cached=true;
     assert(worker.draw_unit(unit,reinterpret_cast<HDC>(1))==C3X_RENDERER_RESULT_OK);
     assert(state.cancelled.load()==cancellations && worker.camera_poll(last,out)==C3X_RENDERER_RESULT_PENDING);
     state.unit_bodies.cached=false;state.hold=false;

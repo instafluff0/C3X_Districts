@@ -188,583 +188,85 @@ move deferred wonders or Districts forward.
 
 ## Current evidence and implementation handoff
 
-**Completed:** terrain workers now return packed shader vertices, compact indices,
-bounds and existing world/coast/river proofs. The foreground raw-terrain handoff
-and duplicate packing are replaced. Shared-grid topology and immutable GPU ranges
-remain reusable; other object meshes use the same packer in the foreground.
-The render owner finishes independent content before joining active helpers, then
-assembles occurrences in native order. No new pool, timer, hooks or quality cuts.
+**Milestone 1.2 is complete; 1.3 has a working production path.** One scoped
+preparation task per missing tile uses the existing `ContentPreparation`
+implementation. It has exclusive query/height/river scratch, owns its dependency
+records, copies river-node values, and holds cached grid storage. A frame-local
+compile lane reuses its bounded two river pages and allocation capacity across
+tiles; each tile resets point caches and the dependency recorder. Captured
+observations, world/coast topology and decoded assets are read-only until its
+enforced join. Every early return, cancellation and exception joins before
+captured locals can be destroyed; no ground job or scratch survives the frame.
+This settles topology lifetime without duplicating sampling formulas or
+broadening dependency footprints.
 
-**Measured:** the full-detail 1120×1192 fixture includes map, eight units, native UI
-and final transfer, with capture outside timing. Two final candidate runs and two
-preserved-control runs each contain 64 GPU samples per workload:
+The production pickup path prepares exact packed meshes and bounds off the render
+owner while city/infrastructure, cliffs and natural terrain progress. Adoption
+merges private proofs and uses the existing immutable GPU upload owners without
+repacking. Ground grid admission preserves its original dependency union. Legacy
+analytic shadows preserve their combined terrain/object packing. No quality,
+visibility, overlay, capture, cache budget or native ownership changes.
+`C3X_RENDERER_GROUND_WORKERS=0` runs the same compiler synchronously for comparison.
+The ready queue is limited to one task/result and the existing 16 MiB ceiling.
+Raw meshes are released before publication. `ground-preparation` reports compile
+wall time (overlapping other work), join time and ready bytes separately.
 
-| Workload | Control means (ms) | Candidate means (ms) |
-| --- | --- | --- |
-| Stationary animation | 8.67, 9.23 | 9.39, 9.37 |
-| Dense scrolling | 41.58, 58.64 | 39.22, 42.36 |
-| Local change | 10.94, 11.31 | 10.27, 11.09 |
+A pre-existing cliff extraction bug was exposed by the complete workload: hill
+height queries used the private river wrapper's empty asset storage. They now
+read the loaded immutable `NaturalData`; query and river state remain private.
+The performance control includes the identical one-line correction. The original
+crashing control is preserved separately.
 
-Scrolling preparation averages 19.88–21.53 ms versus 22.89–32.55 ms. A comparable
-55-content trace eliminates repeated packing for 108 terrain meshes; helper wait
-falls from the first packed candidate's 7.91 ms to 0.05 ms after correction.
-Those spans overlap other work. The control's second run slowed sharply mid-run;
-**a reliable overall speedup is not established**. Idle/local changes are broadly
-unchanged. All connected receipts retain exact control pixels and native ownership.
-Sampled contiguous headroom remains at least 1.26 GiB in the final runs.
+**Validation and measured effect (2026-09-19):** x86 candidate build passed;
+full current-code integration ran 297 tests (295 passed, two skipped) and passed
+scrolling, reduced-zoom scrolling, wrapping and authoritative terrain-edit replays.
+Executable tests cover the real packed ground compiler, exact dependency proofs,
+cache leases, reused scratch, cancellation, exceptions and callback destruction.
+No injected source changed; no staging, installation or game launch occurred.
 
-**Next unfinished responsibility:** remove the remaining foreground ground/object
-assembly and adoption cost, using the completed packed-content boundary and actual
-cost attribution. Missing-content preparation still consumes about half a scrolling
-request; simply moving more work to helpers is insufficient. Preserve shared assets,
-local validity and native occurrence order, and keep milestone 1 acceptance open.
-Direct dynamic/unit scene execution remains milestone 2; general coherent
-nonblocking native camera publication remains 3. Do not start another output-helper
-or speculative-coverage detour.
+The matched 1120×1192 fixture uses the preserved 100×100 scene, 963 visible tiles,
+eight units, native UI and final screen transfer. Each run records 384 complete
+requests: 64 per CPU/GPU route and workload. GPU-route request mean / p95 in ms:
 
-The preserved performance-control DLL is
-`a251c38008c6d090be78799419d40b8225a5ae4da2e5b8b5466fc4e2fc413fbd`; its checkpoint
-had 289 passing tests and one platform skip. Current staging is recorded below.
-No game installation or launch was performed. Exact controls and verification are in
-[the packed-content checkpoint](history/gpu_ready_content_20260915.md).
-[Submission evidence](history/selected_submissions_20260915.md) and
-[earlier findings](history/retained_renderer_checkpoints_20260915.md) remain preserved.
+| Workload | Repaired control | Candidate |
+| --- | ---: | ---: |
+| Stationary animation | 11.31 / 22.31 | 10.46 / 19.85 |
+| Dense scrolling | 312.33 / 542.83 | 255.63 / 427.05 |
+| Local changes | 12.10 / 36.64 | 12.64 / 45.32 |
 
-### Current bug-repair checkpoint
+Dense-scroll mean request cost fell **18.2%**; mean desktop completion fell from
+322.34 to 266.45 ms. A separate matched pair with `--profile` repeated the direction:
+365.00 → 320.75 ms request (**12.1%**), 373.11 → 330.38 ms desktop completion.
+Do not mix instrumentation settings. Small stationary/local-change differences
+are inconclusive. Capture is outside timing; desktop completion is not physical
+scanout, and neither pair establishes live-game cadence.
 
-Live feedback confirms unit selection and the previous HUD fixes. The new black
-rectangles were reproduced: canceled camera work discarded draw inputs, but idle
-static-cache preparation cleared regions and certified them with no contributors.
-Abandoned views now retire their draw/raster validity together; background work
-requires complete inputs. Compiled world assets and published fronts remain owned.
-The old build fails the scrolling reproducer at step 2; the fix passes 40 steps
-across cancellation, both scroll axes, zoom and idle preparation.
+In 62 correlated unprofiled GPU scrolling requests with missing content, foreground
+ground setup/join/admission fell 228.26 → 155.95 ms. Candidate compile wall time was
+174.77 ms and join time 154.70 ms: these overlap other work and must not be added.
+The gain includes bounded river-page reuse and moving exact packing onto the worker;
+it is not an isolated threading speedup. Remaining joins still dominate.
+The profiled candidate retained at least 1,069.6 MiB sampled contiguous free VA
+(control 1,178.1 MiB), above the 512 MiB requirement; samples do not establish
+transient peak allocation. Ready ground results peaked at 0.326 MiB overall
+(0.284 MiB in scrolling).
 
-The latest screen-upload log is 16-bit data and describes **2240×1192**, correcting
-the earlier 1120×1192 interpretation. Native map residency was lost after startup,
-explaining the lack of independent animation frames. At the actual extent,
-map/screen/popup pairs exceed the old 64 MiB live-composition budget; the Session
-now has a measured 96 MiB ceiling. Other resource budgets and full detail remain
-unchanged. The maximum extent has no wider prepared donor: camera demand remains
-exact and synchronous there. General nonblocking publication is still unfinished.
+All four full-frame runs passed ownership/fallback checks and produced identical
+control bitmaps. Receipts verified source/DLL inputs throughout; all 3,324 generated
+asset files were rehashed unchanged. The local
+[comparison receipt](../native/build/ground-checkpoint/comparison.json) preserves
+full distributions, phase/memory samples, fixture/build identities and run paths.
+**Retain this implementation; milestone-1 performance acceptance remains open.**
 
-[Repair evidence and controls](history/resident_scroll_repair_20260915.md) preserve
-the reproduction, earlier unit/sampler fixes, complete delivery-route measurements
-and test limitations. At 2240×1192, 384 complete same-DLL requests average
-GPU/CPU 19.96/74.47 ms idle, 64.65/193.20 ms scrolling and 21.11/79.83 ms local
-edit; significant tails remain. This compares delivery routes, not live-game FPS.
-The final candidate passes exact native UI/camera/config-off ownership and 30
-independent frames with no native redraws (21.05 ms request mean). Sampled
-contiguous headroom is 1.18 GiB; no player memory setting is required.
+**Next unfinished responsibility:** finish milestone **1.3** by reducing the
+remaining ground joins. The current tile-scoped overlap is bounded and correct,
+but ground still exceeds the independent work available before adoption. Broader
+selected-content preparation needs owned per-job inputs and a frame-scoped source
+lease; do not merely add threads to closures borrowing tile locals. Milestone
+**1.4**, city/infrastructure extraction, follows that responsibility.
+GPU adoption beyond ground packing is still 1.5/1.6; whole milestone-1 performance
+acceptance remains open. Dynamic units/water and nonblocking camera publication
+remain milestones 2 and 3. Wonders/Districts remain deferred.
 
-Current staged DLL:
-`61440a6b13fd8773cd02033868258aa809c38999fe7cd729006154e3f6eb587a`.
-Ordinary `INSTALL.bat` uses it; rollback `7d598ac5…` is preserved. Live confirmation
-of this repair remains pending. Missing-content work remains milestone 1's next
-architectural responsibility; general nonblocking camera publication stays open.
-No new hooks, gameplay cadence changes, installation or game launch.
-
-### Worker-side GPU buffer creation checkpoint
-
-**Completed:** the three worker-prepared natural-terrain layers (terrain, decal,
-mountain) now have their GPU vertex buffer created on the same worker thread that
-packs them, not on the foreground render thread. `TerrainSurfaces` gained an
-opaque `std::shared_ptr<void>` buffer handle plus per-layer offsets so the
-platform-agnostic compiler header (verified bit-exact against the foreground path
-by a standalone Mac test) still never names a D3D11 type; the concrete
-`ID3D11Buffer` and its `CreateBuffer`/`Release` calls live only in the renderer
-source, behind a small `attach_terrain_vertex_buffer` step run right after
-compilation, in both the worker job and the foreground fallback. The device is
-created without `D3D11_CREATE_DEVICE_SINGLETHREADED`, so cross-thread
-`CreateBuffer` is spec-safe. Index-buffer handling (shared-grid reuse and the
-per-tile combined buffer for edge tiles) is unchanged; only vertex bytes for
-these three layers move off the foreground path.
-
-**Measured:** wall-clock `geometry_ms`/`request_ms` in the whole-frame benchmark
-swung 15–20% between repeated runs of the *same* binary on the Parallels VM, so
-that comparison was inconclusive at 64 samples. The deterministic,
-run-to-run-identical signal is foreground GPU upload bytes: across 63 dense-
-scrolling steps, the control DLL appended 2,428,414 bytes to the foreground
-upload accumulator (GPU-resident route) versus 798,450 bytes for the candidate —
-a **67% reduction**, reproduced exactly across two independent candidate runs.
-The same 67% reduction appears on the CPU-comparison route (4,856,828 → 1,596,900
-bytes). `python3 Renderer/renderer.py build`'s embedded tests and
-`python3 -m unittest Renderer.native.test_content_preparation` (including the
-worker/foreground parity test) both pass; the full native benchmark still passes
-every contract (exact pixels/ownership, immutable map, GPU/CPU fallback).
-
-**Next unfinished responsibility:** foreground ground/cliff/city generation and
-adoption remain the larger, previously-identified piece of "missing-content"
-scrolling cost — this change only removed buffer-creation cost for content
-already migrated to the worker. Wall-clock evidence was too noisy on this VM to
-confirm the byte-count win's effect on total request time; a lower-variance
-timing method (or more samples) would help before deciding whether to chase
-further buffer-creation offloads versus migrating ground-layer generation itself,
-which is still the bigger remaining foreground cost per the original diagnosis.
-
-### Deterministic phase-cost counter and revised diagnosis
-
-**Completed:** the existing per-frame phase timers (`ground_ms`, `features_ms`,
-`cliffs_ms`, `upload_ms`, already present and reported on the `mesh-phases` trace
-line, gated by `pickup_profile`) had a boundary bug: the natural-terrain
-worker-take/foreground-fallback step (`#include "source_fidelity/geometry.h"`,
-including this session's new `attach_terrain_vertex_buffer` call) sat inside the
-window measured as `cliffs_ms`, so cliff cost and natural-terrain-prep cost were
-silently summed together. A new counter, `terrain_prep_ms`, isolates natural-
-terrain worker-take/fallback from true cliff-placement cost by moving the
-`QueryPerformanceCounter` boundary to right after cliff generation ends instead
-of after natural-terrain prep ends. This is a two-line instrumentation change
-(`terrain_prep_ticks` accumulator + one relocated `QueryPerformanceCounter` call)
-with no behavioral effect on rendering; only the trace line gained a field.
-
-**Measured:** on the standard benchmark scene, aggregated over 151 full-build
-mesh-phases samples, the corrected per-phase share of total foreground tick
-budget is: **upload 49.4%, ground-layer generation 25.2%, natural-terrain-prep
-22.5%, features 2.9%, cliffs ~0%** (this scene has negligible cliff content, so
-the previously-observed "cliffs_ms regression" after the buffer-creation change
-was entirely counter contamination, not a real regression — confirmed cliff
-cost alone is 0.006 ms/frame, unaffected by that work).
-
-**Revised diagnosis:** GPU buffer creation (`upload_ms`) is the single largest
-remaining foreground-thread cost for ground/cliff/city content — bigger than
-their CPU vertex generation (`ground_ms` + `cliffs_ms` + `features_ms` ≈ 28%
-combined). This changes the shape of the next responsibility: migrating
-ground/cliff/city *generation* to a worker is the larger, riskier lift (that
-code is not behind a clean compiler boundary like natural terrain — it is
-tightly inlined with tile-flag/environment processing, city composition, forest
-instancing, and shared-layer/world-hit caching, all in one function), whereas
-extending the already-proven, already-thread-safe "create the `ID3D11Buffer` off
-the foreground thread" technique to these layers targets the *larger* cost with
-*less* architectural risk, since `ID3D11Device::CreateBuffer` is confirmed
-thread-safe and `cache_geometry_layer` already accepts a pre-created buffer
-handle. Because ground/cliff/city generation (unlike natural terrain) has no
-existing async prepare-ahead pipeline, this would take the form of a same-frame
-fork-join (parallelize this frame's buffer creations across worker threads,
-then join before drawing) rather than a speculative worker-queue like
-`terrain_preparation`/`ContentPreparation`.
-
-**Next unfinished responsibility:** implement the same-frame fork-join buffer
-creation for ground/cliff/city layers (the ~49%-share cost), re-measure with
-this same deterministic counter, and only then revisit whether migrating
-generation itself is still worthwhile. This is an evidence-driven change of
-plan from "migrate generation first" to "migrate buffer creation first" —
-authorization to proceed with the fork-join implementation was requested from
-the user before starting it, since it is new scope beyond what was already
-authorized this session.
-
-**Scoping finding (fork-join implementation):** a naive per-tile async dispatch
-of `mesh_uploads[owner].create(device,&allocation)` is unsafe as a quick patch.
-`compiled.buffers[layer]` (a `std::vector<CachedVertexChunk>` per layer) can
-receive multiple `push_back`s for the same tile — the city layer does this once
-per `city_chunks` part — so a raw pointer captured for deferred/async buffer
-assignment can dangle if the vector later reallocates for a subsequent part.
-Correctness requires index-based (not pointer-based) deferred writes, resolved
-only after a layer's vector is fully populated. Separately, `make_tile_cache_room`
-already protects any entry with `last_used == tile_geometry_epoch` (i.e. used
-this frame) from eviction, so same-frame deferral is not blocked by cache
-eviction races — that part is safe. A 1-tile-deep software-pipeline (kick off
-tile N's buffer creation asynchronously, overlap with tile N+1's CPU generation,
-join and insert tile N into the cache before returning) is the smallest change
-that captures the ~49%/~51% near-balance between upload and generation cost, but
-it still means restructuring the per-tile loop to hold one tile's finalized
-`compiled` entry back by one iteration — real surgery on a ~10,000-line hot path
-with no existing concurrency-specific test for this code (unlike
-`terrain_compiler.h`'s dedicated parity test). This was deliberately not
-implemented this session given that risk; it remains TBD, along with the
-ground/cliff/city generation-migration option this finding deprioritized (still
-worth revisiting later per the user's request — neither is abandoned, both are
-open follow-ups).
-
-### Within-tile concurrent buffer creation (shipped)
-
-**Completed:** for a tile whose geometry splits across both allocation owners
-(camera-specific layers plus shared/world content — the `mesh_uploads[0]`/
-`mesh_uploads[1]` split already in the per-tile buffer-creation step), the two
-independent `ImmutableMeshUpload::create` calls (each one `ID3D11Device::
-CreateBuffer`, confirmed thread-safe) now run concurrently on a `std::thread`
-instead of serially, then join before either buffer is used. This required no
-new headers (`<thread>` was already included), no change to per-tile cache
-insertion, cancellation, or error-contract ordering (a failure in either owner
-still fails the whole tile exactly as before, after both are guaranteed
-resolved), and no cross-iteration state — it is strictly a same-iteration,
-same-tile concurrency change, so it carries none of the cancellation/contract
-risk identified above for the cross-tile pipeline.
-
-**Measured:** on the standard benchmark scene (151 full-build mesh-phases
-samples), `upload_ms` mean dropped from 12.070 to 10.613 (~12%), and total
-foreground mesh-phase tick budget dropped from 3692.7 to 3521.2 (~4.6%). This
-scene has `natural_hits=0` (few/no dual-owner tiles), so the win here is
-modest and scene-dependent; scenes with more shared-natural tiles should see
-more. Full native benchmark passes every contract (exact pixels/ownership,
-immutable map, GPU/CPU fallback) both before and after — confirmed via
-`record_gpu_frame.py --benchmark` with byte-identical `control.bmp` semantics
-(`exact=1` on all four `GPU_FRAME` phases).
-
-**Next unfinished responsibility:** the cross-tile pipeline (buffer creation
-for tile N overlapped with CPU generation for tile N+1) remains the larger,
-not-yet-attempted opportunity — still TBD, still blocked on the
-cancellation/error-contract restructuring described above, not on tooling or
-authorization. The ground/cliff/city generation-to-worker migration (the
-original milestone-1 plan before this session's evidence reprioritized it) is
-also still TBD and not abandoned.
-
-### Ground/cliff generation: scoping and a first clean-boundary slice (cliffs)
-
-**Scoping finding (ground/land/bed/water is much larger than assumed):**
-before choosing a first "clean compiler boundary" extraction target, checked
-whether cliffs are structurally cleaner than ground, since cliffs' measured
-cost is scene-dependent (near-zero in the standard benchmark scene, which
-lacks meaningful coastline) while ground's 25%-of-budget cost is guaranteed
-and scene-independent. Found `append_ground_layer`/`make_ground_vertex`/
-`ground_point_at` pull in roughly 20 mutually-dependent closures (`ground_at_
-lattice`, `terrain_at_lattice`, `relief_at_lattice`, `center_material_weights`,
-`material_weights_for`, `water_family_depth`, `signed_shore_distance`,
-`periodic_surface_uv`, `river_edge_distance`, `river_distance`, `river_node_
-distance`, `relief_at_world`, `pickup_ground_at`/`pickup_height_at`, `cast_
-shadow_visibility`, plus the `ground_grid_cache`/`CachedGroundGrid` nested-LOD
-reuse system) — this is comparable in size to the *entire* natural-terrain
-migration, not a one-session slice. Attempting it now would trade a real risk
-of subtle correctness bugs for an unverifiable-in-one-pass change, which
-conflicts with "preserve contracts and controls." Deferred as its own
-properly-scoped future initiative (see below), not attempted this session.
-
-**Completed instead (bounded, verified):** cliff generation turned out to
-already be *mostly* clean — `render_core::cliff_placements()` (`render_core/
-cliff_placement.h`) was already a pure function taking every dependency
-(world lookup, height, shore distance, asset max-height, coast-cell observer,
-recipe selection, cancellation) as explicit parameters. The only actual gap
-was at the call site in `c3x_renderer.cpp`: it wrote cliff vertices directly
-into the frame-shared `cliff_vertices[asset]` arrays and cliff-specific coast
-reads directly into the frame-shared `coast_dependencies` map, via captured
-references — the same "mutate through a capture" pattern that made a hard
-cross-tile pipeline decision necessary elsewhere. Added `source_fidelity/
-cliff_compiler.h` (`CliffCompileInput`/`CliffSurfaces`/`compile_cliff_
-surfaces`), mirroring `terrain_compiler.h`'s shape: the same placement/
-transform logic now runs against an isolated per-tile `CliffSurfaces` result
-(vertices per asset bucket, plus the coast cells actually read), and the call
-site merges that result into the existing frame-shared structures afterward —
-same final data, same order, now via a value instead of a captured mutation.
-
-**Measured:** rebuilt (`python3 Renderer/renderer.py build`), reran the Mac
-parity suite (`test_content_preparation`, 4/4 pass, unaffected), and reran the
-full native benchmark (`record_gpu_frame.py --benchmark`) — all contracts
-PASS, `exact=1` on all four `GPU_FRAME` phases (byte-identical output
-preserved). `mesh-phases` aggregation (162 samples) shows `cliffs_ms` still
-~0.005ms mean and `ground_ms`/`terrain_prep_ms`/`upload_ms` within normal
-run-to-run noise of the prior measurement — expected, since this is a pure
-output-isolation refactor (same instructions, same thread, no concurrency
-added yet), not a performance change. The value here is risk reduction and a
-verified reusable template, not a measured speedup.
-
-**The generalized finding (applies to cliffs, ground, and city alike):**
-isolating a layer's *output* into a value type is necessary but not
-sufficient for worker/thread eligibility. `world_lookup`, `shore_sample_at`,
-and `natural_height_at` — shared by ground, cliff, and city generation within
-one tile iteration — all read through one per-tile `SurfaceQueries` instance
-and its backing `ExactPointCache`s (e.g. `shore_samples`), which are mutated
-on cache miss. Running any two of these layers concurrently today, even with
-isolated outputs, would race on that shared cache. `terrain_compiler.h`
-avoids this because it constructs its *own* `SurfaceQueries` against a
-private `TerrainCompileScratch` (independent `shores`/`pickup`/`heights`
-caches) for every compile call. Cliffs, ground, and city do not yet have that
-— they all still share the renderer's one per-tile instance. This is the
-single, reusable next-responsibility for all three: give each layer its own
-private scratch (mirroring `TerrainCompileScratch`), matching the two-step
-pattern natural terrain already proved (pure output first, then a private
-scratch that makes concurrent/worker execution actually safe).
-
-**Next unfinished responsibility (in priority order):**
-1. Give cliff generation its own private scratch (or confirm its per-call
-   query volume is low enough to bypass the shared cache entirely — cliffs
-   call `shore`/`height` only a handful of times per candidate, unlike
-   ground's per-vertex grid), then it becomes safe to run cliff generation on
-   a background thread concurrently with ground/city generation for the same
-   tile (same pattern as this session's within-tile buffer-creation win, but
-   for CPU generation instead of GPU upload). Needs a coastal-content
-   benchmark scene to measure, since the standard scene's `cliffs_ms≈0`.
-2. Ground/land/bed/water's own clean-boundary extraction remains a real,
-   large, separately-scoped future initiative — not started this session.
-   The ~20-closure dependency list above is the starting map for that work
-   whenever it is picked up; expect it to need its own multi-step plan (like
-   natural terrain's), not a single pass.
-3. City generation was not scoped this session; expect similar entanglement
-   to ground given it shares the same per-tile `queries`/dependency
-   accumulators — scope it before committing effort, using the same
-   "map the closures, measure before extracting" method used above.
-
-### Cliff private query scratch: built and verified; concurrency intentionally not added
-
-**Completed capability:** implemented item 1 above. Added `source_fidelity/
-surface_query_scratch.h` defining `SurfaceQueryScratch` — a private
-`ExactPointCache<ShoreSample>`, `ExactPointCache<GroundSample>`, `ExactPoint
-Cache<std::array<float,2>>`, and a `NaturalWorld` with `borrowed_data`
-pointing at the renderer's immutable natural payload (the exact isolation
-`TerrainCompileScratch` already proved: a second `NaturalWorld` instance
-shares the same underlying data but tracks its own `DependencyScope`
-consumer state, so two concurrent `DependencyScope`s never race on a shared
-`consumer` pointer — this was a real, confirmed race in the pre-existing
-shared path, not a hypothetical). Cliff generation's call site in
-`c3x_renderer.cpp` now builds its own `SurfaceQueries`/`ReliefSurface`/
-`river_distance`/`pickup_river`/`pickup_activity`/`natural_height_at`
-pipeline against this scratch — mirroring `emit_terrain_surfaces`'s own
-already-proven duplication of this exact shape, not a new abstraction —
-instead of reading through ground's shared `queries`/`pickup_surface`.
-Dependencies read through the private pipeline are recorded locally and
-merged into the frame-shared `world_dependencies`/`coast_dependencies` maps
-afterward, same pattern as the vertex output isolation from the prior slice.
-
-**Measured:** rebuilt, reran the Mac parity suite (4/4 pass), and reran the
-full native benchmark — all contracts PASS, `exact=1` on all four `GPU_FRAME`
-phases (byte-identical, confirming the private pipeline reproduces ground's
-shared-pipeline results exactly). `mesh-phases` aggregation (160 samples)
-shows `cliffs_ms` unchanged (~0.005ms mean, same as before this session's
-cliff work began) and other phases within normal noise — expected, since no
-concurrency was added yet.
-
-**Why the background-thread step was not taken:** `cliffs_ms` in the trace is
-already a per-frame aggregate (160 samples for ~759 tiles/frame, not one
-sample per tile), meaning ~0.005ms is the *entire frame's* cliff-generation
-cost, not a per-tile figure. Overlapping cliff generation with ground/feature
-generation on a background thread can save at most cliffs' own serial cost —
-it cannot exceed that regardless of how much of ground's ~6ms it overlaps
-with. That ceiling is structural: `cliff_placements()` only evaluates
-candidates at actual rocky-coastline cells, so its cost scales with
-coastline length, not grid resolution, unlike ground's per-vertex cost. Since
-the measured ceiling is ~0.005ms against a frame budget of tens of
-milliseconds, spending further effort on the thread-spawn/join and its
-correctness risk (join timing relative to cancellation, ensuring the private
-`SurfaceQueryScratch` object outlives the thread) is not justified by the
-achievable win. The private scratch itself remains valuable independent of
-this: it is now a proven, reusable isolation pattern for the next, actually
-consequential step below.
-
-**Next unfinished responsibility:** ground/land/bed/water's own clean-
-boundary extraction (priority 2 above) is the real remaining opportunity —
-guaranteed ~25%-of-budget cost, unlike cliffs' structurally-capped cost.
-`SurfaceQueryScratch` (this slice) and `emit_terrain_surfaces`'s already-
-proven duplication shape are now the concrete template for that work: ground
-would get its own instance of the same scratch (or a shared one, since
-ground and cliffs are not run concurrently with each other in the current
-per-tile structure) instead of building an isolation layer from scratch. City
-generation scoping (priority 3) remains untouched.
-
-### Ground scoping: a second, deeper blocker beyond the cliff/terrain pattern
-
-Before writing any ground extraction code, checked whether the cliff/terrain
-"give it a private scratch" pattern transfers directly. It does not, fully.
-Ground's neighborhood/material-weight closures (`neighborhood_at`, `ground_
-at_lattice`, `terrain_at_lattice`, `relief_at_lattice`) read `topology_cache`
-(`SceneTopology`, `render_core::CapturedScene`) — a per-frame-epoch cache
-that the *same* tile loop writes to (`topology_cache.update(tile,...)`) as it
-processes each tile serially, unlike terrain's neighbor lookup (`queries.
-natural_tile`), which reads immutable world data and is safe to read
-concurrently by construction.
-
-In steady state (unchanged topology across frames), every tile's neighbor
-observations are already marked "seen this epoch" during `CapturedScene::
-begin()`, before any tile's own generation runs this frame, so reads are
-order-independent. For newly-revealed tiles (first sight, e.g. scrolling into
-unexplored territory), no such retained observation exists yet, and the
-value returned depends on whether the tile whose data is being read has
-already had its own `update()` called earlier in *this frame's* processing
-order — a real, if bounded (falls back to a default ground/surface slot, not
-a crash), order dependency. Separately, and regardless of that logical
-question, `topology_cache` is a plain `std::unordered_map` mutated by
-`update()` on the main thread during the same loop a worker would need to
-read it from — a genuine data race if read concurrently, independent of
-whether the order-dependency above is judged acceptable.
-
-**Conclusion:** unlike cliffs, giving ground a private query scratch does not
-by itself make it worker-eligible; the topology_cache dependency is separate,
-additional scope (likely a pre-pass that fully populates per-tile topology
-before any tile's mesh generation begins, removing the interleaved
-accumulate-then-read pattern) that has not been designed. What remains
-low-risk and valuable regardless: isolating ground's *output* into a value
-type (mirroring cliffs' first slice — explicit dependency parameters, no
-captured-reference mutation, no execution-order change), without attempting
-concurrency, as a bounded first step whenever this is picked back up.
-
-**Next unfinished responsibility:** ground extraction was paused here, at the
-scoping stage, given the size of the newly-found topology_cache complication.
-Nothing was implemented for ground this session. When resumed, do the output-
-isolation-only slice first (bounded, verifiable byte-identical, no topology_
-cache redesign required), then treat the topology_cache ordering problem as
-its own explicitly-scoped design task before attempting worker eligibility.
-City generation scoping (priority 3) remains untouched and unstarted.
-
-### Ground output isolation: value-boundary slice completed
-
-**Completed capability:** implemented the output-isolation-only slice
-described above. Added `source_fidelity/ground_compiler.h` defining
-`GroundPoint`, `CachedGroundGrid`, `GroundCompileInput`, `GroundSurfaces`, and
-`compile_ground_surfaces(...)` — mirroring `cliff_compiler.h`/`terrain_
-compiler.h`'s shape. The six ground-family mesh layers (underlay, land, bed,
-water, river, terrain-shadow) are now produced by this function into a
-`GroundSurfaces` value that the caller adopts via `std::move`, instead of
-being emitted by mutating renderer-owned output vectors through the large
-inline closure previously in `c3x_renderer.cpp`. Execution order, sampling
-math, dependency behavior, cache behavior (including the still-unmoved
-`topology_cache`/admission/eviction logic, deliberately left in place per
-this slice's bounded scope), mesh ordering, and rendered bytes are all
-preserved exactly — no topology_cache redesign and no background execution
-were introduced, per this slice's explicit boundary. Also removed a leftover
-duplicate `river_node_distance` closure in `c3x_renderer.cpp` that had zero
-remaining call sites after the extraction (the header defines its own
-internal copy).
-
-**Measured:** rebuilt (`renderer.py build`, exit 0, all native modules/tests
-compile and pass) and reran the full cross-category regression sweep
-(`renderer.py integration grassland --full --renderer-only`, 291 tests).
-Fixed 11 Python "contract" tests that broke on stale assumptions about which
-file now contains moved code/strings (not on any behavior or byte
-difference) — 8 in `test_native_bridge_contract.py` (simple literal-string
-relocations) and 3 in `test_zoom_mesh_cache.py` (golden tests that extract
-and compile real code; these needed their extraction markers and mock
-harnesses reworked to match the new `input.*`/`destination.*`/
-`cached_grid_source` parameter shape). One remaining failure
-(`test_actual_worker_camera_supersession_and_takeover`) was confirmed
-pre-existing and unrelated: it fails identically with this session's changes
-stashed out, due to a local-macOS-clang-only gap compiling Windows-specific
-mocks in `environment_runtime.cpp`, never touching ground code. No speedup is
-claimed or expected from this slice, per its architecture-enabling mandate.
-
-**Next unfinished responsibility:** the topology_cache ordering problem
-(ground's neighborhood closures reading a same-frame, main-thread-mutated
-`std::unordered_map` with a real order dependency on newly-revealed tiles)
-remains the actual blocker to worker eligibility for ground, and still needs
-its own explicitly-scoped design task before that step can be attempted.
-City generation scoping (priority 3) remains untouched and unstarted.
-
-### Ground compile input made worker-safe (Milestone 1.2), corrected: per-job scratch, owned river-node snapshot, lease-safe cached grids — two lifetime concerns remain open
-
-An earlier pass at this milestone (superseded below) gave ground a private
-`SurfaceQueryScratch` but made it a *persistent renderer member* — one
-mutable object every ground compile would still read/write through, so two
-future ground jobs would race on its point caches and `NaturalWorld`
-river-page/consumer state. It also left the compile holding live references
-into `topology_cache.rivers` (via `local_river_nodes`' raw pointers),
-`world_coast`, and `ground_grid_cache`'s cached-grid storage, on the
-unproven assumption that "frozen for this frame's tile loop" is enough —
-it isn't, if a future async job outlives the frame in which the next
-capture rebuilds/mutates/evicts those containers. This was correctly
-rejected; the fixes below replace that section.
-
-**Completed capability — three concerns fixed, ground-scoped, no output
-change:**
-
-1. **Scratch is no longer a shared member.** `ground_query_scratch` was
-   removed as a persistent `c3x_renderer` field entirely (unlike `cliff_
-   query_scratch`, which stays a member because cliffs are not being
-   re-scoped here). It is now declared and `.bind(...)`-ed as a *local*
-   right at the ground call site, so every tile's compile gets a fresh
-   instance — there is no longer any shared object for two concurrent jobs
-   to race on. `SurfaceQueryScratch::bind()` is cheap (a pointer store plus
-   a conditional `river_pages.clear()` only when the topology revision
-   changed), so moving it from once-per-frame to once-per-tile has no
-   measurable cost.
-2. **River nodes are an owned per-job copy, not shared pointers.**
-   `local_river_nodes` (`std::vector<RiverNode const*>`) points into
-   `topology_cache.rivers`, which the per-frame topology pre-pass clears and
-   rebuilds whenever the world's topology signature changes — a real
-   dangling-pointer hazard for a job that outlives that rebuild. Ground now
-   copies the pointed-to `RiverNode` values (a small POD) into its own
-   `ground_river_node_values` vector immediately at the call site, and
-   builds `ground_river_nodes` as pointers into that *owned* copy —
-   preserving exact order/content while removing the dependency on
-   `topology_cache.rivers`'s lifetime.
-3. **Cached grids survive eviction of the tile that produced them.**
-   `CachedGroundTile::grids` changed from `std::vector<CachedGroundGrid>` to
-   `std::shared_ptr<std::vector<CachedGroundGrid>>`. The admission/eviction
-   logic can pick *any* map entry as its LRU victim and erase it, including
-   one a future in-flight job (from an earlier tile) might still be reading
-   via `cached_grid_source`. A job that captures a copy of the shared_ptr
-   before its tile's turn ends keeps the vector alive by refcount even after
-   the owning map entry is erased; this is proven directly (see tests
-   below), not just asserted.
-
-**Two lifetime concerns remain genuinely open, not fixed here — explicitly
-flagged, not fixed by omission:**
-
-- `topology_cache.current(key)` reads inside `ground_ground_at_lattice`/
-  `ground_observed_coordinate_key` are still live, synchronous reads into
-  the same `SceneTopology`/`CapturedScene` object the per-frame pre-pass
-  rebuilds. This is genuinely safe *within* one frame's tile loop (confirmed
-  by call order), but not across a hypothetical worker job that outlives a
-  frame boundary. Ground's own touched-key footprint is provably tiny
-  (~9 lattice keys, derived from `ground_point_at`'s coordinate formula),
-  but eagerly pre-snapshotting even that small bound was rejected: it would
-  either duplicate the formula elsewhere (drift risk if `ground_point_at`
-  ever changes) or capture a slightly padded superset, which would change
-  which keys land in the recorded dependency set — a violation of "preserve
-  exact dependency behavior."
-- `world_coast`/`NaturalWorld`'s underlying `WorldTopology` is still
-  mutated in place (not swapped) and read by reference throughout
-  `SurfaceQueries`/`NaturalWorld::river_page_entry`. Giving ground a private
-  `NaturalWorld` wrapper (item 1 above) fixes the *consumer/last_cell* race
-  ground's own scratch introduced, but the wrapper still holds
-  `river_world=&w`, a raw pointer into the same shared, main-thread-mutated
-  topology payload as everyone else's. `WorldCoast`/`CapturedScene` are not
-  ground-exclusive — cliffs, terrain, cities and features all read through
-  them too — so a fix here has a blast radius well beyond ground.
-
-Both gaps require the same kind of decision: either (a) a broader
-`CapturedScene`/`WorldCoast`/`NaturalWorld` generation-lease redesign
-(shared_ptr-swap-not-mutate, benefits every per-tile generator, larger and
-riskier), or (b) an interim, documented, *enforced* scheduling policy for
-Milestone 1.3 (worker jobs must be joined/completed before any
-topology-changing or world-changing rebuild proceeds, turning the rebuild
-into a synchronization barrier), deferring the full redesign to its own
-explicitly-scoped milestone. This was raised with the user as an explicit
-scope/authorization question at the end of this session; the user chose to
-review this doc first and decide in a follow-up session before either path
-is started. Nothing in this slice depends on that decision — it only gates
-starting Milestone 1.3's worker queue.
-
-**Why no shared mutable state remains in the three fixed areas:** the
-scratch is a fresh local per call (no member survives between tiles to
-race on); the river-node vector is a private owned copy captured before the
-call, independent of `topology_cache.rivers`'s later mutation; and the
-cached-grid vector's lifetime is now decoupled from its owning map entry's
-lifetime via reference counting, so eviction of the entry no longer implies
-destruction of the vector a job may still be reading.
-
-**Tests run and results:** `python3 Renderer/renderer.py build` — clean
-compile, no errors, after the `CachedGroundTile::grids` shared_ptr
-conversion and all call-site/admission-code updates it required.
-`python3 -m unittest Renderer.native.test_zoom_mesh_cache Renderer.native.
-test_world_view_submission` — 26 tests, all pass. This includes: the
-existing `test_retained_ground_dependencies_and_bounded_admission` (updated
-for the shared_ptr type), a strengthened `test_ground_compile_call_site_
-uses_private_scratch_not_shared_natural` (now also asserts, by source, that
-`ground_query_scratch` is declared locally at the call site and not as a
-persistent struct member, that `ground_river_node_values`/`ground_river_
-nodes` — not `local_river_nodes` — are what's passed to the compile, and
-that `CachedGroundTile::grids` is a `shared_ptr`), and a new executable
-test, `test_cached_ground_grids_shared_ptr_survives_map_entry_erasure`,
-which extracts the real `CachedGroundTile`/`CachedGroundGrid` struct
-definitions, inserts an entry into a real `unordered_map`, captures a copy
-of its `grids` shared_ptr (simulating a job holding a lease), erases the map
-entry (simulating a later tile's LRU eviction), and asserts the leased
-vector is still readable with unchanged content. `python3 Renderer/
-renderer.py integration grassland --full --renderer-only` — 294 tests, 293
-pass; the one failure (`test_actual_worker_camera_supersession_and_
-takeover`) reproduces identically with this session's changes `git stash`-ed
-out (a macOS-clang-vs-Windows-mock API gap in `environment_runtime.cpp`:
-`UINT_PTR`, `IsWindowVisible`, `QueryPerformanceFrequency`, etc. — unrelated
-to ground, not touched by this session). No byte difference in rendered
-output across terrain, river/coast, wrapping, cache-hit, cancellation, or
-zoom cases.
-
-**Next unfinished responsibility (blocker before Milestone 1.3):** the
-user's decision between the interim scheduling-policy contract and the
-broader generation-lease redesign, above — needed before a worker queue can
-be added safely, since both open lifetime concerns (topology_cache lattice
-reads, world_coast/NaturalWorld's underlying payload) would otherwise become
-real use-after-free/data-race risks the moment a ground job outlives a
-frame boundary. Once that's decided, Milestone 1.3 still separately needs
-its scheduling-granularity decision (ground dispatched to a worker on its
-own vs. the whole per-tile body moving together once cliffs/ground/features
-are all worker-safe) — unchanged from the prior note. Cliffs remain
-worker-safe from the earlier slice; ground is now worker-safe from this
-corrected slice *conditioned on* the pending lifetime-concern decision;
-city generation (priority 3) remains unscoped.
+[Earlier controls, rejected approaches and extraction findings](history/ground_preparation_before_20260919.md)
+are preserved as evidence, not additional approval gates or work queues.

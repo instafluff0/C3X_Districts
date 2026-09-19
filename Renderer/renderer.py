@@ -897,6 +897,7 @@ def run_tests(category=None, *, integration=False, full=False):
                         "Renderer.native.test_shared_mesh_instances",
                         "Renderer.native.test_frame_publication",
                         "Renderer.native.test_content_preparation",
+                        "Renderer.native.test_ground_preparation",
                         "Renderer.native.test_unit_pose_content",
                         "Renderer.native.test_unit_frame_preparation",
                         "Renderer.native.test_unit_pose_cache",

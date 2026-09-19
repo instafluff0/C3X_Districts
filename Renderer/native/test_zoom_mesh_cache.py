@@ -415,6 +415,13 @@ struct State {
    pending_ground_grids.push_back(std::move(grid));
    dependencies[9]=topology_cache.record.semantic;coast_dependencies[5]=world_coast.revision;world_dependencies[7]=world_coast.data.value;
   }else if(hit){assert(dependencies.at(9)==topology_cache.record.semantic);assert(coast_dependencies.at(5)==world_coast.revision);assert(world_dependencies.at(7)==world_coast.data.value);}
+  struct PreparedProof {
+   decltype(world_dependencies) world;
+   decltype(coast_dependencies) coast,topology;
+   decltype(river_dependencies) rivers;
+  } proof{world_dependencies,coast_dependencies,dependencies,river_dependencies};
+  PreparedProof ground_cache_proof;
+  auto prepared_ground=&proof;
 ''' + admission + r'''
   std::size_t sum=0;for(auto const& entry:ground_grid_cache)sum+=entry.second.bytes;
   assert(sum==ground_grid_cache_bytes && sum<=natural_mesh_cache_budget && ground_grid_cache.size()<=natural_mesh_cache_capacity);
@@ -471,7 +478,8 @@ int main(){
         signature = ground_compiler.split("void compile_ground_surfaces(", 1)[1].split(");", 1)[0]
         self.assertIn("NaturalWorld & natural", signature)
         self.assertNotIn("Natural & natural", signature)
-        call = "c3x_renderer::fidelity::compile_ground_surfaces(" + source.split(
+        pipeline = (ROOT / "Renderer/native/source_fidelity/prepared_ground.h").read_text()
+        call = "c3x_renderer::fidelity::compile_ground_surfaces(" + pipeline.split(
             "c3x_renderer::fidelity::compile_ground_surfaces(", 1)[1].split(");", 1)[0]
         self.assertIn("ground_query_scratch.rivers", call)
         self.assertIn("ground_relief_at_world", call)
@@ -489,11 +497,11 @@ int main(){
         # name, and that declaration must not also appear as a persistent
         # struct member anywhere in the file.
         pipeline_anchor = "Ground's own private query/height/river pipeline"
-        pipeline_block = source.split(pipeline_anchor, 1)[1].split(
+        pipeline_block = pipeline.split(pipeline_anchor, 1)[1].split(
             "c3x_renderer::fidelity::compile_ground_surfaces(", 1)[0]
-        self.assertIn("SurfaceQueryScratch ground_query_scratch;", pipeline_block)
+        self.assertIn("ground_query_scratch.reset_tile();", pipeline_block)
         self.assertNotRegex(
-            source.split(pipeline_anchor, 1)[0],
+            pipeline.split(pipeline_anchor, 1)[0],
             r"SurfaceQueryScratch\s+ground_query_scratch\s*;")
         # local_river_nodes holds pointers into topology_cache.rivers, which
         # is cleared/rebuilt whenever the frame's topology pre-pass reruns.
@@ -513,14 +521,11 @@ int main(){
         # must be merged into the shared maps the outer cache-persistence and
         # future cache-hit validity checks (river_dependencies/dependencies/
         # coast_dependencies/world_dependencies) actually read.
-        merge = source.split(call, 1)[1][:2000]
-        for private_map, shared_map in (
-            ("ground_world_dependencies", "world_dependencies"),
-            ("ground_coast_dependencies", "coast_dependencies"),
-            ("ground_topology_dependencies", "dependencies"),
-            ("ground_river_dependencies", "river_dependencies"),
-        ):
-            self.assertIn(f"for(auto const& dependency:{private_map}){shared_map}.emplace(", merge)
+        merge = source.split("auto prepared_ground=ground_task.take();", 1)[1].split("pending_ground_grids=", 1)[0]
+        for field, shared_map in (("world", "world_dependencies"), ("coast", "coast_dependencies"),
+                                  ("topology", "dependencies"), ("rivers", "river_dependencies")):
+            self.assertIn(f"for(auto const& dependency:prepared_ground->{field}){shared_map}.emplace(", merge)
+        self.assertIn("ground_grid_lease.get(), result->grid_hits", call)
 
     def test_cached_ground_grids_shared_ptr_survives_map_entry_erasure(self):
         # Milestone 1.2 correction: CachedGroundTile::grids must be a
