@@ -27728,6 +27728,30 @@ unload_custom_renderer ()
 	is->custom_renderer_max_map_pass_ticks = 0;
 }
 
+// Copy the existing native/C3X visibility decisions; the DLL never reads tiles.
+unsigned int
+capture_custom_renderer_visibility (Tile * tile, int viewer, int x, int y)
+{
+	unsigned int state = C3X_RENDERER_TILE_VISIBILITY_KNOWN;
+	if (is_online_game ()) *p_debug_mode_bits &= ~0xCu;
+	if (tile == NULL || tile == p_null_tile || viewer >= 32) return 0;
+	if (viewer <= 0 || ((*p_debug_mode_bits & 8) && ! is_online_game ()))
+		return state | C3X_RENDERER_TILE_EXPLORED | C3X_RENDERER_TILE_VISIBLE;
+	bool explored = is_explored (tile, leaders[viewer].ID);
+	bool visible;
+	City * spotlight = p_bic_data->Map.Renderer.spotlight_on_city;
+	if (spotlight != NULL) {
+		int ni = patch_Map_compute_ni_for_work_area (&p_bic_data->Map, __,
+			spotlight->Body.X, spotlight->Body.Y, x, y, 21);
+		visible = ni >= 0 && patch_City_controls_tile (spotlight, __, ni, false);
+	} else
+		visible = patch_Leader_is_tile_visible (&leaders[viewer], __, x, y) ||
+			(explored && (*p_debug_mode_bits & 1) && ! is_online_game ());
+	if (explored || visible) state |= C3X_RENDERER_TILE_EXPLORED;
+	if (visible) state |= C3X_RENDERER_TILE_VISIBLE;
+	return state;
+}
+
 // Capture/forwarding only. Civ III still chooses visibility, timing and HUD order.
 // The audited GOG inleads retain the original unit routine and its body arguments.
 bool
@@ -27800,6 +27824,9 @@ forward_custom_unit_body (Sprite * sprite, PCX_Image * background, PCX_Image * c
 		draw.body_x + sprite->Width * draw.projection_scale_milli / 1000,
 		draw.body_y + sprite->Height * draw.projection_scale_milli / 1000};
 	unsigned flags = C3X_RENDERER_UNIT_STATE_CAPTURED;
+	if (!(capture_custom_renderer_visibility (tile_at (display_unit->Body.X, display_unit->Body.Y),
+		p_main_screen_form->Player_CivID, display_unit->Body.X, display_unit->Body.Y) & C3X_RENDERER_TILE_VISIBLE))
+		flags |= C3X_RENDERER_UNIT_HIDDEN;
 	if (display_unit == p_main_screen_form->Current_Unit) flags |= C3X_RENDERER_UNIT_SELECTED;
 	// The resident path consumes native image identities before any CPU DC lease.
 	int submitted = translate_custom_renderer_native (C3X_NATIVE_UNIT_DRAW, image, underlay,
@@ -27834,6 +27861,16 @@ forward_custom_unit_body (Sprite * sprite, PCX_Image * background, PCX_Image * c
 void __fastcall
 patch_Unit_tick_anim (Unit * this, int edx, PCX_Image * canvas, int offset_x, int offset_y, bool status)
 {
+	// This native entry draws body, marker, cursor and status; it does not advance actions.
+	if (is->current_config.enable_custom_rendering &&
+	    !(capture_custom_renderer_visibility (tile_at (this->Body.X, this->Body.Y),
+		p_main_screen_form->Player_CivID, this->Body.X, this->Body.Y) & C3X_RENDERER_TILE_VISIBLE)) {
+		if (is->custom_renderer_unit_forget != NULL) {
+			is->custom_renderer_unit_forget (this->Body.ID);
+			if (Unit_has_ability (this, __, UTA_Army)) is->custom_renderer_unit_forget (this->Body.army_top_defender_id);
+		}
+		return;
+	}
 	Unit * previous_unit = is->custom_renderer_unit_context;
 	PCX_Image * previous_canvas = is->custom_renderer_unit_canvas;
 	is->custom_renderer_unit_context = NULL;
@@ -28078,13 +28115,14 @@ capture_custom_renderer_tile (int visible_to_civ_id, int pixel_x, int pixel_y,
 			record->territory_owner_id = tile->vtable->m38_Get_Territory_OwnerID (tile);
 			record->fog_status = tile->Body.FOWStatus;
 			record->tile_visibility = (unsigned int)tile->Body.Visibility;
+			record->tile_flags |= capture_custom_renderer_visibility (tile, visible_to_civ_id, tile_x, tile_y);
 				record->river_code = (unsigned int)(unsigned char)tile->vtable->m37_Get_River_Code (tile);
 				record->road_mask = tile->vtable->m25_Check_Roads (tile, __, visible_to_civ_id) ? 1u : 0u;
 				record->railroad_mask = tile->vtable->m23_Check_Railroads (tile, __, visible_to_civ_id) ? 1u : 0u;
 				record->route_style = ((visible_to_civ_id >= 0) && (visible_to_civ_id < 32)) ?
 					clamp (0, 3, leaders[visible_to_civ_id].Era) : 0;
 			if (topology_only) {
-				record->tile_flags = C3X_RENDERER_TILE_TOPOLOGY_HALO;
+				record->tile_flags |= C3X_RENDERER_TILE_TOPOLOGY_HALO;
 				return true;
 			}
 			if (record->real_terrain_type == SQ_Forest) record->feature_flags |= C3X_RENDERER_FEATURE_FOREST;
@@ -28294,6 +28332,7 @@ capture_custom_renderer_topology (int viewer, int visibility_mask)
 			}
 			if (prepare_appearance)
 				is->custom_renderer_tiles[is->custom_renderer_tile_count - 1].tile_flags =
+					(is->custom_renderer_tiles[is->custom_renderer_tile_count - 1].tile_flags & C3X_RENDERER_TILE_VISIBILITY_BITS) |
 					C3X_RENDERER_TILE_TOPOLOGY_HALO | C3X_RENDERER_TILE_PREFETCH;
 		}
 	}
@@ -28426,8 +28465,8 @@ capture_custom_renderer_world_topology ()
 				((unsigned int)(tile->Body.active_tile_effect != NULL) << 24);
 			int index = (y * map->Width + x) / 2;
 			if (observe_visibility) {
-				unsigned long long visibility = ((unsigned long long)(unsigned int)tile->Body.FOWStatus << 32) |
-					(unsigned int)tile->Body.Visibility;
+				unsigned long long visibility = ((unsigned long long)(unsigned int)tile->Body.Fog_Of_War << 32) |
+					(unsigned int)(tile->Body.FOWStatus | tile->Body.V3 | tile->Body.Visibility | tile->Body.field_D0_Visibility);
 				if (is->custom_renderer_world_visibility[index] != visibility) {
 					is->custom_renderer_world_visibility[index] = visibility;
 					visibility_modified++;
@@ -28787,6 +28826,14 @@ is_or_could_become_grassland (Tile * tile)
 	return sq_type == SQ_Grassland ||
 		(underlying_type == SQ_Grassland && (worker_job_id == WJ_Clean_Forest || worker_job_id == WJ_Clear_Swamp)) ||
 		tile->vtable->m72_Get_Pollution_Effect (tile) == SQ_Grassland;
+}
+
+// GOG 0x4C4EF0: the map fog pass, independent of tile-content drawing.
+void __fastcall
+patch_Map_Renderer_draw_fog (Map_Renderer * this, int edx, int viewer, PCX_Image * target, RECT * clip)
+{
+	if (is->current_config.enable_custom_rendering) return;
+	Map_Renderer_draw_fog (this, __, viewer, target, clip);
 }
 
 void __fastcall

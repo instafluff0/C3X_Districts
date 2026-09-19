@@ -40,7 +40,11 @@ public:
                  ActionName action_name,Selection& selected) {
         selected={};
         if(request.struct_size!=sizeof(request)||request.unit_key[63]||request.unit_id<0||
-           (flags&~3u)||!capacity)return false;
+           (flags&~7u)||!capacity)return false;
+        if(flags&C3X_RENDERER_UNIT_HIDDEN){
+            if(flags&C3X_RENDERER_UNIT_STATE_CAPTURED)forget(request.unit_id);
+            return false;
+        }
         ++captures;
         bool captured=(flags&C3X_RENDERER_UNIT_STATE_CAPTURED)!=0;
         if(captured && !(flags&C3X_RENDERER_UNIT_SELECTED) && request.action==8)request.action=1;

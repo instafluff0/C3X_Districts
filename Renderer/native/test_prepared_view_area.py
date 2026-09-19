@@ -105,6 +105,10 @@ int main(){
     auto role=tiles.front().tile_flags;tiles.front().tile_flags=C3X_RENDERER_TILE_TOPOLOGY_HALO;reject();tiles.front().tile_flags=role;
     world[4999]=3;reject();world[4999]=2; // unchanged revision is insufficient
     ++epochs.visibility_epoch;reject();--epochs.visibility_epoch;
+    tiles.front().fog_status=2;reject();tiles.front().fog_status=0;
+    for(auto bit:{C3X_RENDERER_TILE_VISIBILITY_KNOWN,C3X_RENDERER_TILE_EXPLORED,C3X_RENDERER_TILE_VISIBLE}){
+        tiles.front().tile_flags^=bit;reject();tiles.front().tile_flags^=bit;
+    }
     f.presentation_time_ticks=351;assert(area.project(f,epochs,result));
     assert(result.frame.presentation_time_ticks==100); // retain the honest old ambient sample, not an old camera
     f.presentation_time_ticks=100;

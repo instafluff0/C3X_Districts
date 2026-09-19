@@ -46,6 +46,9 @@ int main(){
  assert(world.sample(b,5200000,1000000,catalog,out,step) && out.action_cursor==0 && step==0);
  assert(capture(b,3));assert(world.sample(b,5300000,1000000,catalog,out,step));
  assert(world.sample(b,5400000,1000000,catalog,out,step) && out.action_cursor==3);
+ // Hidden authoritative state retires the unit, including its old animation selection.
+ old=b;assert(!capture(a,C3X_RENDERER_UNIT_STATE_CAPTURED|C3X_RENDERER_UNIT_HIDDEN));
+ assert(!world.sample(old,5400000,1000000,catalog,out,step));assert(capture(b,3));
  // Despawn, eviction, catalog reset and unsupported captures invalidate tokens.
  old=b;world.forget(10);assert(!world.sample(old,5500000,1000000,catalog,out,step));
  assert(capture(b,3) && b.revision!=old.revision);

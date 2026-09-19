@@ -1,5 +1,38 @@
 # Civ III patch dependency ledger
 
+## Map fog replacement (GOG, API 18)
+
+Explicit user authorization permits this new GOG CSV entry. The direct inlead
+`Map_Renderer_draw_fog` replaces `Map_Renderer::FUN_004c4ef0` at **0x4C4EF0**;
+Steam and PCGames.de remain **0x0 / unverified**. Its signature is
+`void (__fastcall *)(Map_Renderer *, int edx, int viewer, PCX_Image *, RECT *)`.
+The entry `83 EC 44 53 8B D9` is six complete bytes; `RET 0x0C` at `0x4C555D`
+confirms three stack arguments. `tools/audit_native_fog.py` verifies these bytes
+and the fog-sprite call at `0x4C5510` in the local GOG executable.
+
+Existing m19 capture supplies normalized visibility using C3X's existing
+`is_explored`, `patch_Leader_is_tile_visible`, city spotlight and debug rules.
+It cannot cleanly suppress the separate native fog pass. The new wrapper returns
+in custom mode and otherwise calls the original function with unchanged arguments.
+API 18 requires the matching DLL: final map output includes renderer fog, and
+capture/presentation failure retains the existing exclusive custom-map failure
+policy. Renderer-off uses native fog. No native fog is layered over custom output.
+The DLL owns coverage, feathering, clipping and final GPU/CPU output. No gameplay
+visibility, picking, unit HUD, labels, cursor or route ownership moves here.
+
+`required_user_action: []` for patch-table edits; the authorized row is present.
+Candidate verification does not stage/install either binary or launch the game.
+A matching renderer and injected build must be deployed together when authorized.
+
+The existing `Unit_tick_anim` inlead (GOG **0x5CBF50**) now returns before all
+map drawing when the captured unit tile is not visible. The decompiled routine
+owns body, civilization marker, cursor and status drawing, not native action
+advancement. The existing body forwarding export also carries `UNIT_HIDDEN` so
+the DLL retires cached selections and returns empty bounds. Native config-off
+forwarding is unchanged; no extra unit CSV entry is needed. Tests cover hidden
+whole-call suppression, scope restoration and CPU/GPU no-pixel results.
+`required_user_action: []`.
+
 ## Zoom input and specific map-UI hooks
 
 Selected-unit click repair changes only optional compatibility scheduling: no

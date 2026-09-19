@@ -32,6 +32,8 @@
 #include "renderer_trace.h"
 #include "gpu_frame_api.h"
 #include "gpu_composition_session.h"
+#include "gpu_visibility.h"
+#include "render_core/dynamic_scene_input.h"
 #include "gpu_native_presenter.h"
 #include "native_screen_bridge.h"
 #include "native_observation.h"
@@ -228,6 +230,7 @@ struct CachedVertexChunk {
     ID3D11Buffer * resource_instance = nullptr; // borrowed instance constants, dynamic pass only
     std::shared_ptr<std::vector<c3x_renderer::fidelity::MeshInstance> const> instances;
     float instance_material=40;
+    float visual_time=-1; // Optional wave sample; negative follows the visible clock.
     unsigned city_material=0xffffffffu;
     bool city_environment=false;
     float city_atlas[4]={};
@@ -271,7 +274,7 @@ struct ResourceAnimation {
 struct ResourceAnchor {
     unsigned asset = 0, seed = 0;
     float u = .5f, v = .5f, world_u = 0, world_v = 0, ground = 0;
-    int anchor_x = 0, anchor_y = 0;
+    int anchor_x = 0, anchor_y = 0, tile_x = 0, tile_y = 0;
 };
 struct ResourceBackdrop {
     int x=0,y=0;
@@ -447,6 +450,10 @@ public:
     D3D11_RECT selected_output={};
     bool selected_output_active=false,selected_output_changed=false;
     bool gpu_output_mode=false,cpu_output_stale=false;
+    bool visibility_pass=false;
+    c3x_renderer::GpuVisibility visibility_gpu;
+    c3x_renderer::render_core::VisibilityCoverage visibility_coverage;
+    std::vector<std::uint32_t> visibility_pixels;
     ID3D11Texture2D* gpu_map_texture=nullptr;
     bool gpu_map_valid=false;
     unsigned frame_output_readbacks=0;
@@ -741,7 +748,8 @@ public:
     std::vector<std::uint32_t> resource_pixels;
     std::uint64_t resource_pixel_signature = 0;
     c3x_renderer_i64 resource_pixel_clock = -1;
-    unsigned visible_resource_animations = 0, visible_wave_animations = 0;
+    unsigned visible_resource_animations = 0, visible_wave_animations = 0, moving_resources = 0;
+    float wave_time_seconds=0;
     bool wave_attempted=false,wave_ready=false;
     ID3D11PixelShader* wave_shader=nullptr;
     ID3D11Buffer* wave_frame=nullptr;
@@ -752,7 +760,8 @@ public:
     std::map<std::pair<int,int>,RetainedWaveCell> retained_wave_cells;
     std::uint64_t retained_wave_scope=0,retained_wave_epoch=0;
     unsigned wave_cells_built=0,wave_cells_reused=0;
-    unsigned ambient_count() const {return visible_resource_animations+visible_wave_animations;}
+    unsigned ambient_count() const {return moving_resources+visible_wave_animations;}
+    unsigned posed_count() const {return visible_resource_animations+unsigned(wave_chunks.size());}
     void reset_waves() {
         for(auto& c:wave_chunks){release(c.buffer);release(c.indices);}wave_chunks.clear();
         retained_wave_cells.clear();retained_wave_scope=retained_wave_epoch=0;
@@ -862,7 +871,7 @@ public:
         std::fill(resource_pixels.begin(),resource_pixels.end(),0);
         resource_pixel_signature = 0;
         resource_pixel_clock = -1;
-        visible_resource_animations = visible_wave_animations = 0;
+        moving_resources = visible_resource_animations = visible_wave_animations = 0;
         for(auto& chunk:wave_chunks){release(chunk.buffer);release(chunk.indices);}
         wave_chunks.clear();wave_signature=0;wave_upload_bytes=0;
         geometry_cache.clear();
@@ -964,7 +973,7 @@ public:
             release(buffer.shadow_vertices);
         }
         resource_buffers.clear(); resource_pixels.clear();
-        resource_pixel_signature = 0; resource_pixel_clock = -1; visible_resource_animations = 0;
+        resource_pixel_signature = 0; resource_pixel_clock = -1; moving_resources = visible_resource_animations = 0;
         for (auto & animation : resource_animations) {
             release(animation.view); release(animation.indices);release(animation.vertices);
         }
@@ -972,7 +981,7 @@ public:
 
     void reset() {
         material_views={};material_views_valid=false;
-        gpu_composition.reset();
+        gpu_composition.reset();visibility_gpu.reset();visibility_pixels.clear();
         terrain_preparation.clear();
         for(auto& scratch:terrain_scratch)scratch.reset();foreground_terrain_scratch.reset();
         for(auto& scratch:world_ground_scratch){scratch.rivers.reset_world();scratch.reset_tile();}
@@ -2483,6 +2492,13 @@ public:
             requested_surface=city_profile && std::strcmp(waves,"0")==0 && std::strcmp(reflections,"1")==0;
         }
         scene_surface_requested=requested_surface;
+        // API 18 capture owns fog. The off control exists only in benchmark builds.
+        visibility_pass=true;
+#ifdef C3X_RENDERER_BENCHMARK_ORACLE
+        char visibility_option[8]={};
+        if(GetEnvironmentVariableA("C3X_RENDERER_VISIBILITY_PASS",visibility_option,sizeof(visibility_option)))
+            visibility_pass=std::strcmp(visibility_option,"0")!=0;
+#endif
         if(requested_surface!=shared_scene_surface){reset_targets();clear_resource_backdrops();}
         shared_scene_surface=requested_surface;
         bool three_zoom_memory=c3x_renderer::NavigationOptions::retained(GetEnvironmentVariableA,"C3X_RENDERER_THREE_ZOOM_MEMORY");
@@ -3238,7 +3254,7 @@ public:
     }
 
     bool can_prepare_ambient() const {
-        return city_profile && shared_scene_surface && visible_resource_animations && !visible_wave_animations;
+        return city_profile && shared_scene_surface && moving_resources && !visible_wave_animations;
     }
 
     static c3x_renderer_i64 resource_clock(c3x_renderer_frame_v1 const & frame) {
@@ -3321,7 +3337,8 @@ public:
                 wave_geometry_bytes+=bytes;wave_upload_bytes+=bytes;++wave_cells_built;
             } else ++wave_cells_reused;
             auto const& owner=found->second.chunk;if(!owner.buffer)continue;
-            auto chunk=owner;
+            unsigned visibility=visibility_pass?visibility_coverage.state(c+r,c-r):2;if(!visibility)continue;
+            auto chunk=owner;chunk.visual_time=visibility==2?-1.f:0.f;
             // Cell-local vertices stay immutable. Visible occurrences provide
             // their authoritative screen transform through the existing buffer.
             chunk.translation_x=anchor->anchor_x+(c+r-anchor->tile_x)*int(hw)-dx;
@@ -3357,12 +3374,13 @@ public:
         std::size_t bytes=0;
         for(auto const& entry:cells){
             int c=entry.first.first,r=entry.first.second;
+            unsigned visibility=visibility_pass?visibility_coverage.state(c+r,c-r):2;if(!visibility)continue;
             auto identity=world_coast.world().index(c,r);if(identity==std::size_t(-1))continue;
             auto hash=c3x_renderer::stable_hash(unsigned(identity)*193u+71u);
             float seed=c3x_renderer::stable_random(hash),seed2=c3x_renderer::stable_random(hash+23u);
             auto ribbon=coastal_wave_ribbon(world_coast,c,r,.30f+.70f*seed);if(ribbon.empty())continue;
             std::vector<Vertex> vertices;vertices.reserve(ribbon.size());
-            CachedVertexChunk chunk;chunk.bounds={LONG_MAX,LONG_MAX,LONG_MIN,LONG_MIN};
+            CachedVertexChunk chunk;chunk.visual_time=visibility==2?-1.f:0.f;chunk.bounds={LONG_MAX,LONG_MAX,LONG_MIN,LONG_MIN};
             for(unsigned a=0;a<3;++a){chunk.world_bounds.low[a]=1e9f;chunk.world_bounds.high[a]=-1e9f;}
             for(auto const& point:ribbon){
                 float u=float(point.position.x)-cu,v=1-(float(point.position.y)-rv);
@@ -3396,14 +3414,15 @@ public:
 
     bool compose_resource_animations(c3x_renderer_frame_v1 const & frame) {
         resource_composite_ticks=0;
+        if(visibility_pass && !visibility_coverage.capture(frame))return false;
         if (!shared_scene_surface && !frame_has_resource_animation(frame)) {
-            visible_resource_animations=visible_wave_animations=0; resource_pixel_signature=0; return true;
+            moving_resources=visible_resource_animations=visible_wave_animations=0; resource_pixel_signature=0; return true;
         }
         auto clock=resource_clock(frame);
-        if (ambient_count() && resource_pixel_signature==cached_signature.complete &&
+        if (posed_count() && resource_pixel_signature==cached_signature.complete &&
             resource_pixel_clock==clock) return true;
         LARGE_INTEGER started={},finished={};QueryPerformanceCounter(&started);
-        visible_resource_animations=0;
+        visible_resource_animations=moving_resources=0;
         std::array<std::vector<CachedVertexChunk>,geometry_layer_count> buffers; // posed bodies only
         std::vector<D3D11_RECT> rectangles;
         using c3x_renderer::render_core::RasterRegionAxis;
@@ -3437,7 +3456,10 @@ public:
         for (auto const & anchor:resource_anchors) {
             if (anchor.asset>=resource_animations.size()) return false;
             auto & animation=resource_animations[anchor.asset];
-            double time=c3x_renderer::ambient_animation_time(ticks,frame.presentation_frequency,
+            unsigned visibility=visibility_pass?visibility_coverage.state(anchor.tile_x,anchor.tile_y):2;
+            if(!visibility)continue; // Never-explored objects contribute no body or shadow.
+            bool advances=visibility==2;
+            double time=c3x_renderer::ambient_animation_time(advances?ticks:0,frame.presentation_frequency,
                 animation.mesh.duration,anchor.seed);
             if(city_profile) {
                 c3x_renderer::AnimationPose pose;
@@ -3524,7 +3546,7 @@ public:
                 chunk.index_count=shadow_chunk.index_count=unsigned(animation.mesh.indices.size());
                 chunk.animation_texture=shadow_chunk.animation_texture=animation.view;
                 buffers[geometry_shadow].push_back(shadow_chunk);buffers[geometry_feature].push_back(chunk);
-                ++visible_resource_animations;continue;
+                ++visible_resource_animations;if(advances)++moving_resources;continue;
             }
             if (!c3x_renderer::sample_animation_mesh(animation.mesh,time,true,posed)) {
                 trace.write("animation-pose-failed",animation.name.c_str(),true);return false;
@@ -3638,13 +3660,14 @@ public:
             // it projects each complete card as an opaque black rectangle.
             shadow_chunk.animation_texture=animation.view;
             buffers[geometry_shadow].push_back(shadow_chunk);
-            buffers[geometry_feature].push_back(chunk);++visible_resource_animations;
+            buffers[geometry_feature].push_back(chunk);++visible_resource_animations;if(advances)++moving_resources;
         }
         if(!prepare_wave_chunks(frame))return false;
-        visible_wave_animations=unsigned(wave_chunks.size());
+        visible_wave_animations=unsigned(std::count_if(wave_chunks.begin(),wave_chunks.end(),[](auto const& chunk){return chunk.visual_time<0;}));
         buffers[geometry_wave]=wave_chunks;
-        if(visible_wave_animations){
-            float time[]={float(double(ticks)/std::max<c3x_renderer_i64>(1,frame.presentation_frequency)),0,0,0};
+        if(!wave_chunks.empty()){
+            wave_time_seconds=float(double(ticks)/std::max<c3x_renderer_i64>(1,frame.presentation_frequency));
+            float time[]={wave_time_seconds,0,0,0};
             context->UpdateSubresource(wave_frame,0,nullptr,time,0,0);
             for(auto const& chunk:wave_chunks){
                 int wave_dx=chunk.translation_x+dx,wave_dy=chunk.translation_y+dy;
@@ -3653,7 +3676,7 @@ public:
             }
         }
         if(shared_scene_surface) {
-            if(visible_wave_animations){trace.write("scene-surface-failed","waves outside bounded alternative",true);return false;}
+            if(!wave_chunks.empty()){trace.write("scene-surface-failed","waves outside bounded alternative",true);return false;}
             if(!compose_scene_surface(buffers))return false;
             resource_pixel_signature=cached_signature.complete;resource_pixel_clock=clock;
             QueryPerformanceCounter(&finished);resource_composite_ticks=finished.QuadPart-started.QuadPart;
@@ -3661,7 +3684,7 @@ public:
             trace.write("scene-composition",detail,true);
             return true;
         }
-        if (!ambient_count()) {resource_pixel_signature=0;return true;}
+        if (!posed_count()) {resource_pixel_signature=0;return true;}
         // All regions in this composition borrow the same pinned static
         // geometry and light basis, including their reflection passes.
         using Shadow=c3x_renderer::render_core::SourceShadow;
@@ -4314,16 +4337,17 @@ public:
             trace.write("output-completion-probe",detail,true);if(FAILED(hr))return false;
         }
 #endif
-        if(gpu_output_mode && !gpu_map_texture){
+        bool apply_visibility=visibility_pass && !visibility_coverage.tiles.empty();
+        if((gpu_output_mode || apply_visibility) && !gpu_map_texture){
             D3D11_TEXTURE2D_DESC d={};d.Width=width;d.Height=height;d.MipLevels=d.ArraySize=d.SampleDesc.Count=1;
-            d.Format=DXGI_FORMAT_B8G8R8A8_UNORM;d.BindFlags=D3D11_BIND_SHADER_RESOURCE;
+            d.Format=DXGI_FORMAT_B8G8R8A8_UNORM;d.BindFlags=D3D11_BIND_SHADER_RESOURCE|D3D11_BIND_RENDER_TARGET;
             if(FAILED(device->CreateTexture2D(&d,nullptr,&gpu_map_texture)))return false;
         }
         std::vector<D3D11_RECT> copies;
         // Scrolling remaps the retained physical image into the exact current
         // camera bitmap. Transfer is cheap; keep one full readback on view changes
         // rather than adding a staging atlas and CPU bitmap translation.
-        auto copy_damage=(gpu_output_mode || cpu_output_stale)?physical({view}):selected_output_active?physical({selected_view}):restored?finish_damage:std::vector<D3D11_RECT>{view};
+        auto copy_damage=(gpu_output_mode || apply_visibility || cpu_output_stale)?physical({view}):selected_output_active?physical({selected_view}):restored?finish_damage:std::vector<D3D11_RECT>{view};
         for(auto span:spans)for(auto damage:copy_damage){
             D3D11_RECT rect={std::max<LONG>(span.rect.left,damage.left),std::max<LONG>(span.rect.top,damage.top),
                              std::min<LONG>(span.rect.right,damage.right),std::min<LONG>(span.rect.bottom,damage.bottom)};
@@ -4331,8 +4355,17 @@ public:
                   std::min<LONG>(rect.right,span.x+width+4),std::min<LONG>(rect.bottom,span.y+height+4)};
             if(rect.left>=rect.right || rect.top>=rect.bottom)continue;
             D3D11_BOX box={UINT(rect.left),UINT(rect.top),0,UINT(rect.right),UINT(rect.bottom),1};
-            context->CopySubresourceRegion(gpu_output_mode?gpu_map_texture:readback_texture,0,rect.left-span.x-4,rect.top-span.y-4,0,glow.native,0,&box);
+            context->CopySubresourceRegion((gpu_output_mode || apply_visibility)?gpu_map_texture:readback_texture,0,rect.left-span.x-4,rect.top-span.y-4,0,glow.native,0,&box);
             copies.push_back({rect.left-span.x-4,rect.top-span.y-4,rect.right-span.x-4,rect.bottom-span.y-4});
+        }
+        if(apply_visibility){
+            LARGE_INTEGER coverage_begin={},end={};QueryPerformanceCounter(&coverage_begin);
+            if(!visibility_gpu.apply(device,context,gpu_map_texture,visibility_coverage))return false;
+            if(!gpu_output_mode){D3D11_BOX box={0,0,0,UINT(width),UINT(height),1};
+                context->CopySubresourceRegion(readback_texture,0,0,0,0,gpu_map_texture,0,&box);copies={{0,0,width,height}};}
+            QueryPerformanceCounter(&end);char detail[192];sprintf_s(detail,"tiles=%zu gpu=1 upload_bytes=%zu gpu_bytes=%zu submit_ms=%.3f",
+                visibility_coverage.tiles.size(),visibility_coverage.tiles.size()*sizeof(c3x_renderer::render_core::VisibilityCoverage::Tile),visibility_gpu.bytes(),trace.milliseconds(end.QuadPart-coverage_begin.QuadPart));
+            trace.write("visibility-pass",detail,true);
         }
         QueryPerformanceCounter(&finish_end);
         D3D11_MAPPED_SUBRESOURCE mapped={};
@@ -4408,7 +4441,15 @@ public:
                 center_shore_cache.hits,center_shore_cache.misses,center_shore_cache.bytes,center_shore_cache.entries.size());
             trace.write("center-shore-cache",detail,false);
         }
-        output.bgra_pixels = gpu_output_mode ? nullptr : ambient_count() && !shared_scene_surface ? resource_pixels.data() : pixels.data();
+        output.bgra_pixels = gpu_output_mode ? nullptr : posed_count() && !shared_scene_surface ? resource_pixels.data() : pixels.data();
+        if(visibility_pass && !shared_scene_surface){
+            LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
+            if(gpu_output_mode){if(!visibility_gpu.apply(device,context,gpu_map_texture,visibility_coverage))return false;}
+            else if(!visibility_coverage.tiles.empty()){visibility_coverage.apply(static_cast<std::uint32_t const*>(output.bgra_pixels),visibility_pixels);output.bgra_pixels=visibility_pixels.data();}
+            QueryPerformanceCounter(&end);char detail[256];sprintf_s(detail,"tiles=%zu gpu=%u gpu_bytes=%zu cpu_bytes=%zu submit_ms=%.3f",
+                visibility_coverage.tiles.size(),unsigned(gpu_output_mode),visibility_gpu.bytes(),visibility_pixels.capacity()*4,trace.milliseconds(end.QuadPart-begin.QuadPart));
+            trace.write("visibility-pass",detail,true);
+        }
         // Terrain is independent of retained native unit/effect animation.  A
         // cache hit must still report the current frame's animation demand so
         // Civ III keeps driving those overlay planes without rerendering the
@@ -4782,6 +4823,7 @@ public:
         if (record.tile_flags & C3X_RENDERER_TILE_RENDER)
             for (auto anchor : tile.resource_anchors) {
                 anchor.anchor_x += anchor_x; anchor.anchor_y += anchor_y;
+                anchor.tile_x=record.tile_x;anchor.tile_y=record.tile_y;
                 resource_anchors.push_back(anchor);
             }
         if (tile.byte_count != 0) geometry_footprints.push_back(tile_footprint(tile, record));
@@ -5234,6 +5276,8 @@ public:
                     context->VSSetConstantBuffers(2,1,&shadow_settings_buffer);
                     context->VSSetShader(layer==geometry_shadow?resource_shadow_vertex_shader:resource_body_vertex_shader,nullptr,0);
                 }
+                if(layer==geometry_wave){float wave_sample[]={chunk.content().visual_time<0?wave_time_seconds:chunk.content().visual_time,0,0,0};
+                    context->UpdateSubresource(wave_frame,0,nullptr,wave_sample,0,0);}
                 context->DrawIndexed(chunk.content().index_count, 0, 0);
                 ++frame_draw_calls;
                 if(chunk.content().resource_instance){
@@ -10532,6 +10576,12 @@ public:
         std::lock_guard<std::mutex> call_guard(call_mutex);
         std::unique_lock<std::mutex> lock(state_mutex);
         if(!renderer_state.unit_rendering_enabled)return C3X_RENDERER_RESULT_ERROR;
+        if(playback_flags&C3X_RENDERER_UNIT_HIDDEN){
+            if(!(playback_flags&C3X_RENDERER_UNIT_STATE_CAPTURED))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+            unit_instances.forget(request.unit_id);unit_pixels_queue.forget(request.unit_id);
+            if(bounds){bounds[0]=bounds[2]=request.body_x;bounds[1]=bounds[3]=request.body_y;}
+            return C3X_RENDERER_RESULT_OK;
+        }
         start_locked();
         auto const& catalog=renderer_state.unit_bodies.units;
         c3x_renderer::render_core::UnitInstances::Selection selection;
@@ -10716,7 +10766,8 @@ private:
     c3x_renderer_gpu_present_v1 gpu_present={};
     UINT_PTR visual_timer=0;bool visual_allowed=true;
     long long visual_ticks=0,visual_last=0,visual_frequency=0;
-    std::uint64_t visual_frames=0,visual_map_epoch=0,visual_map_samples=0,visual_unit_samples=0,visual_pose_changes=0;
+    std::uint64_t visual_frames=0,visual_map_samples=0,visual_unit_samples=0,visual_pose_changes=0;
+    c3x_renderer::render_core::DynamicSceneInputs dynamic_inputs;
     c3x_renderer::render_core::UnitInstances::Selection job_unit_selection;
     RendererState & renderer_state;
     LARGE_INTEGER job_timing_begin={},job_timing_rendered={},job_timing_published={};
@@ -11065,26 +11116,25 @@ private:
         // A native prepare is not a displayed-front replacement. Each retained
         // source owns its immutable capture until the compositor releases it.
         // Only renderer reset/configuration invalidates every source at once.
-        auto epoch=visual_map_epoch;
         // Native unit demand does not make the terrain animate. Preserve the
         // existing map sample rate; the visual presenter has its own cadence.
         if(gpu_metadata.visible_animation_count<=job_frame.visible_animation_count)return {};
         int x=gpu_publication.source_x,y=gpu_publication.source_y,w=gpu_metadata.width,h=gpu_metadata.height;
         if(input.target_width!=gpu_publication.resident.width||input.target_height!=gpu_publication.resident.height){input=job_frame;x=y=0;}
-        auto capture=std::make_shared<ProspectiveView>();
-        auto selected=std::make_shared<ProspectiveView>();
-        capture->frame=input;capture->tiles.assign(input.tiles,input.tiles+input.tile_count);
-        if(input.world_topology_count)capture->topology.assign(input.world_topology,input.world_topology+input.world_topology_count);
-        selected->frame=job_frame;selected->tiles=job_tiles;selected->topology=job_world_topology;
+        auto capture=dynamic_inputs.capture(input,job_camera_identity);
+        auto selected=dynamic_inputs.capture(job_frame,job_camera_identity);
+        char detail[192];sprintf_s(detail,"bytes=%zu peak=%zu captured=%llu rejected=%llu unit_records=%zu",
+            dynamic_inputs.bytes(),dynamic_inputs.peak,dynamic_inputs.captures,dynamic_inputs.rejected,unit_instances.size());
+        renderer_state.trace.write("dynamic-inputs",detail,true);
+        if(!capture || !selected)return {}; // Keep the coherent retained image; never sample partial inputs.
         auto* session=renderer_state.gpu_composition.get();
         Texture initial=session->snapshot_bgra(static_cast<ID3D11Texture2D*>(gpu_publication.resident.texture.get()),
             gpu_publication.source_x,gpu_publication.source_y,w,h);
         auto origin=visual_ticks,clock=RendererState::resource_clock(gpu_publication.frame);
-        return [this,epoch,capture,selected,origin,clock,x,y,w,h,last=std::move(initial)](long long ticks,long long frequency)mutable -> Texture{
-            if(epoch!=visual_map_epoch)return last;
-            auto frame=capture->frame,view=selected->frame;
-            frame.tiles=capture->tiles.data();frame.world_topology=capture->topology.data();view.tiles=selected->tiles.data();view.world_topology=selected->topology.data();
-            if(frequency>0)view.presentation_time_ticks+=static_cast<long long>(static_cast<long double>(std::max(0ll,ticks-origin))*view.presentation_frequency/frequency);
+        return [this,capture,selected,origin,clock,x,y,w,h,last=std::move(initial)](long long ticks,long long frequency)mutable -> Texture{
+            c3x_renderer_frame_v1 frame={},view={};
+            if(!capture->valid() || !selected->sample(ticks,frequency,origin,view))return last;
+            frame=capture->frame();
             auto next=RendererState::resource_clock(view);if(next==clock)return last;
             frame.presentation_time_ticks=view.presentation_time_ticks;frame.presentation_frequency=view.presentation_frequency;
             c3x_renderer_output_v1 out={C3X_RENDERER_API_VERSION,sizeof(out)};GpuOutputMode mode(renderer_state,true);
@@ -11565,7 +11615,7 @@ private:
             // Map and unit jobs borrow the device; only configuration/reset owns
             // native composition lifetimes. An ordinary CPU publication cannot
             // invalidate GPU UI/background handles held by the caller.
-            if(command==Command::configure_pack || command==Command::configure_definitions || command==Command::reset){++visual_map_epoch;renderer_state.gpu_composition.reset();}
+            if(command==Command::configure_pack || command==Command::configure_definitions || command==Command::reset){dynamic_inputs.invalidate();renderer_state.gpu_composition.reset();}
             if(command==Command::native_screen){
                 // Retain the transfer image with the presenter, not with a map
                 // ticket. Native UI-only transfers must not retire prepared maps.
@@ -12082,7 +12132,7 @@ extern "C" __declspec(dllexport) int c3x_renderer_unit_draw_expanded(
 extern "C" __declspec(dllexport) int c3x_renderer_unit_draw_playback(
     c3x_renderer_unit_v1 const* unit,void* destination_hdc,void* background_hdc,int* bounds,unsigned flags) {
     if(!unit || unit->struct_size!=sizeof(*unit) || unit->unit_key[63]!=0 || !destination_hdc || !background_hdc || !bounds ||
-       !(flags&C3X_RENDERER_UNIT_STATE_CAPTURED) || (flags&~3u))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+       !(flags&C3X_RENDERER_UNIT_STATE_CAPTURED) || (flags&~7u))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
     if(!renderer_worker)return C3X_RENDERER_RESULT_ERROR;
     return renderer_worker->draw_unit(*unit,static_cast<HDC>(destination_hdc),static_cast<HDC>(background_hdc),bounds,flags);
 }
@@ -12227,7 +12277,7 @@ extern "C" __declspec(dllexport) int c3x_renderer_native_image(int operation,voi
 extern "C" __declspec(dllexport) int c3x_renderer_gpu_unit(c3x_renderer_unit_v1 const* unit,c3x_renderer_gpu_unit_v1 const* target,int* bounds){
     if(!unit||unit->struct_size!=sizeof(*unit)||unit->unit_key[63]!=0||!target||target->struct_size!=sizeof(*target)||!bounds||
        target->ticket<=0||target->destination<=0||target->background<=0||target->detail<0||target->background_detail<0||
-       target->clip[0]>target->clip[2]||target->clip[1]>target->clip[3]||(target->playback_flags&~3u)||
+       target->clip[0]>target->clip[2]||target->clip[1]>target->clip[3]||(target->playback_flags&~7u)||
        unit->body_x<-32768||unit->body_x>32768||unit->body_y<-32768||unit->body_y>32768)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
     if(!renderer_worker)return C3X_RENDERER_RESULT_ERROR;
     try{return renderer_worker->draw_unit(*unit,nullptr,nullptr,bounds,target->playback_flags,target);}catch(...){return C3X_RENDERER_RESULT_ERROR;}

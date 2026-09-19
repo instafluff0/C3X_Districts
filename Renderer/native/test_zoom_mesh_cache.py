@@ -720,8 +720,8 @@ using GeometryDrawRecord=c3x_renderer::render_core::GeometryDrawRecord<CachedVer
 using GeometryDrawView=c3x_renderer::render_core::GeometryDrawView<CachedVertexChunk,geometry_layer_count>;
 using GeometryDrawReference=GeometryDrawView::Reference;
 
-struct c3x_renderer_tile_v1 {int tile_flags=1,anchor_x=0,anchor_y=0;};
-struct Anchor {int anchor_x=0,anchor_y=0;};
+struct c3x_renderer_tile_v1 {int tile_flags=1,anchor_x=0,anchor_y=0,tile_x=0,tile_y=0;};
+struct Anchor {int anchor_x=0,anchor_y=0,tile_x=0,tile_y=0;};
 struct CachedTileGeometry {
  bool prefetched=false,shared_natural=false;std::size_t byte_count=0;
  std::uint64_t last_used=0,animation_epoch=0;Handle binding,natural_content;
@@ -750,7 +750,7 @@ int main(){
  std::size_t copied_capacity=0;
  for(int i=0;i<4000;i++){
   auto old=state.geometry_vertex_buffers[0].capacity();
-  state.append_tile_geometry(tile,{1,i*2,40},true);
+  state.append_tile_geometry(tile,{1,i*2,40,i,3},true);
   if(state.geometry_vertex_buffers[0].capacity()!=old)copied_capacity+=old;
  }
  assert(copied_capacity<16000); // exact per-tile reserve is quadratic, ~8 million.
@@ -758,6 +758,7 @@ int main(){
  assert(tile.last_used==5 && owner.last_used==5 && owner.animation_epoch==5);
  assert(ground.references==1 && world.references==1 && indices.references==1);
  assert(state.resource_anchors.size()==4000 && state.resource_anchors.back().anchor_x==7999);
+ assert(state.resource_anchors.back().tile_x==3999 && state.resource_anchors.back().tile_y==3);
  assert(state.geometry_vertex_buffers[1].back().translation_x==7998);
  assert(state.geometry_vertex_buffers[1].back().natural_projection[0]==1 && !owner.buffers[1][0].natural_projection[0]);
  assert(state.geometry_vertex_buffers[1].back().source==&owner.buffers[1][0]);

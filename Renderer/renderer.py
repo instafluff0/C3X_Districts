@@ -461,7 +461,7 @@ def scene(category, case, destination, *, world_size=32):
 
 def native_render(category, case, hour, zoom, output, *, behavior=None, center=(16, 16), diagnostics=False, candidate=None, preview=None):
     from Renderer.lab.platform import run_native_fixture
-    if behavior not in (None, "replay", "edits", "animation", "units"):
+    if behavior not in (None, "replay", "edits", "animation", "units", "visibility"):
         raise ValueError("Unknown native behavior check")
     if category == "rivers" and center == (16, 16):
         # The paired views inspect opposite ends of the same watershed instead
@@ -488,7 +488,7 @@ def native_render(category, case, hour, zoom, output, *, behavior=None, center=(
         "C3X_RENDERER_PREVIEW_CITY": "0,3,1,1",
         "C3X_RENDERER_PREVIEW_REPLAY": "", "C3X_RENDERER_PREVIEW_MINIMAP": "",
         "C3X_RENDERER_PREVIEW_EDITS": "", "C3X_RENDERER_PREVIEW_ANIMATION": "",
-        "C3X_RENDERER_PREVIEW_UNITS": "", "C3X_RENDERER_PREVIEW_SEASON": "0",
+        "C3X_RENDERER_PREVIEW_UNITS": "", "C3X_RENDERER_PREVIEW_VISIBILITY": "", "C3X_RENDERER_PREVIEW_SEASON": "0",
         "C3X_RENDERER_UNIT_CASES": "", "C3X_RENDERER_UNIT_PACK": "",
         "C3X_RENDERER_PREVIEW_ACTIVE_VOLCANO": "1" if category == "volcanoes" and case == "active" else "",
         "C3X_RENDERER_FIDELITY_SHADOW_CONTROL": "", "C3X_RENDERER_REFLECTION_CONTROL": "",
@@ -581,6 +581,12 @@ def verify_behavior_output(behavior, output):
     """Require executed witnesses, not merely a successful process exit."""
     if "FAIL" in output:
         raise ValueError("Native behavior witness failed")
+    if behavior == "visibility":
+        if any(marker not in output for marker in (
+            "VISIBILITY reveal warm/cold exact: pass built=0 upload=0",
+            "VISIBILITY fogged motion: pass", "VISIBILITY revealed motion resumes: pass")):
+            raise ValueError("Incomplete visibility dependency witness")
+        return
     if behavior == "units":
         required = ["UNIT body matrix drawn=288 status=pass", "UNIT cached anchor translation: pass",
                     "UNIT repeated native cursor: pass", "UNIT retained terrain unchanged: pass",
@@ -890,6 +896,9 @@ def run_tests(category=None, *, integration=False, full=False):
                         "Renderer.definitions.test_rule_resolver", "Renderer.scenes.test_scene_contract",
                         "Renderer.native.test_native_bridge_contract",
                         "Renderer.native.test_native_view_identity",
+                        "Renderer.native.test_visibility",
+                        "Renderer.native.test_dynamic_scene_input",
+                        "Renderer.native.test_unit_instances",
                         "Renderer.native.test_native_visual_cadence",
                         "Renderer.native.test_native_ui_lifecycle",
                         "Renderer.native.test_native_gdi_completion",

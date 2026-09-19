@@ -14,7 +14,7 @@ typedef int32_t c3x_renderer_i32;
 typedef int64_t c3x_renderer_i64;
 #endif
 
-#define C3X_RENDERER_API_VERSION 17u
+#define C3X_RENDERER_API_VERSION 18u
 
 enum c3x_renderer_result {
     C3X_RENDERER_RESULT_ERROR = 0,
@@ -45,7 +45,13 @@ enum c3x_renderer_tile_flags {
     // A source-shadow profile may consume the necessary caster ring in foreground.
     C3X_RENDERER_TILE_PREFETCH = 8192u,
     C3X_RENDERER_TILE_CUSTOM_HUT_REPLACED = 16384u,
-    C3X_RENDERER_TILE_CUSTOM_CAMP_REPLACED = 32768u
+    C3X_RENDERER_TILE_CUSTOM_CAMP_REPLACED = 32768u,
+    // Copied viewer-specific presentation state, never geometry ownership.
+    // Missing KNOWN means the caller cannot authorize a renderer fog pass.
+    C3X_RENDERER_TILE_VISIBILITY_KNOWN = 65536u,
+    C3X_RENDERER_TILE_EXPLORED = 131072u,
+    C3X_RENDERER_TILE_VISIBLE = 262144u,
+    C3X_RENDERER_TILE_VISIBILITY_BITS = 458752u
 };
 
 enum c3x_renderer_invalidation_flags {
@@ -100,7 +106,8 @@ enum c3x_renderer_scheduler_state_flags {
 
 enum c3x_renderer_unit_playback_flags {
     C3X_RENDERER_UNIT_STATE_CAPTURED = 1u,
-    C3X_RENDERER_UNIT_SELECTED = 2u
+    C3X_RENDERER_UNIT_SELECTED = 2u,
+    C3X_RENDERER_UNIT_HIDDEN = 4u // Authoritative current visibility; retire body selection.
 };
 
 #pragma pack(push, 4)

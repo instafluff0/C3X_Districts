@@ -68,7 +68,18 @@ void gpu_unit_contract(WorkerClient& gpu,HMODULE module,c3x_renderer_gpu_frame_v
             gpu.readback(detail,actual.data(),actual.size());
             for(unsigned i=0;i<n;++i)if((actual[i]&0xffffff)!=(static_cast<unsigned*>(full.pixels)[i]&0xffffff)){std::fprintf(stderr,"unit detail mismatch format=%u phase=%u i=%u expected=%x actual=%x\n",format,phase,i,static_cast<unsigned*>(full.pixels)[i],actual[i]);verify(false,"GPU unit exact full-color composition");}
         }
+        // Authoritative fog hides the entire body on both GPU and CPU routes.
+        gpu.upload(d,17,words.data(),words.size());
+        c3x_renderer_gpu_unit_v1 hidden={sizeof(hidden),view.ticket,std::int64_t(d),std::int64_t(b),0,0,{0,0,int(w),int(h)},
+            C3X_RENDERER_UNIT_STATE_CAPTURED|C3X_RENDERER_UNIT_HIDDEN};int hidden_bounds[4]={};
+        verify(draw(&unit,&hidden,hidden_bounds)==1,"hidden unit GPU request");gpu.readback(d,actual.data(),actual.size());
+        verify(actual==words && hidden_bounds[0]==hidden_bounds[2] && hidden_bounds[1]==hidden_bounds[3],"hidden unit contributes no pixels or bounds");
+        auto playback=reinterpret_cast<c3x_renderer_unit_draw_playback_fn>(GetProcAddress(module,"c3x_renderer_unit_draw_playback"));
+        std::vector<unsigned short> original(static_cast<unsigned short*>(packed.pixels),static_cast<unsigned short*>(packed.pixels)+n);
+        verify(playback && playback(&unit,packed.dc,under.dc,hidden_bounds,hidden.playback_flags)==1,"hidden unit CPU request");GdiFlush();
+        verify(std::equal(original.begin(),original.end(),static_cast<unsigned short*>(packed.pixels)),"hidden unit CPU unchanged");
         for(auto id:{d,b,detail,bd,source})gpu.destroy(id);
     }
+    std::puts("PASS fogged units: GPU and CPU invisible, empty body bounds");
     std::puts("PASS GPU unit composition: native 555/565, full-color map, all alpha values, keyed/aliased underlays, optional color layers, clipping, cold/warm resident units across anchors/direction/time/zoom; zero background readback");
 }

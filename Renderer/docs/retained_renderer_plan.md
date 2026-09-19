@@ -10,21 +10,22 @@ Full detail, authored animation and Civ III's gameplay/state authority remain
 unchanged. The zoom-owned map-overlay extension below is a planned rendering
 ownership change, not a second visibility, selection, or pathfinding system.
 
-**Active deliverable: milestone 1.** Its replacement static submission and
-GPU-ready world preparation path is implemented and validated through 1.6. The
-remaining milestone-1 responsibility is the static visibility/fog/unseen pass
-defined below; complete its standalone/replay proof before closing the milestone.
-Continue that responsibility without another planning/approval gate. Milestones are connected outcomes, not promised short
-passes. [Architecture](renderer_architecture.md) owns the design;
-[validation](benchmark_workflow.md) owns measurement and acceptance.
+**Current technical checkpoint: 1.6 and 2.1 implemented.** The replacement
+static submission/preparation path now includes final fog/unseen coverage, and
+independent visual frames consume renderer-owned immutable dynamic inputs.
+Visual acceptance and the strategic live-game check remain pending; automated
+verification is not visual promotion. **Next architectural responsibility: 2.2,
+direct unit-pose rendering over resident map color/depth.** Milestones are connected
+outcomes, not promised short passes. [Architecture](renderer_architecture.md) owns
+the design; [validation](benchmark_workflow.md) owns measurement and acceptance.
 
 ## Current implementation and gaps
 
 | Original responsibility | Implemented foundation | Remaining responsibility |
 | --- | --- | --- |
 | Persistent world/instances | Camera-independent content, shared assets/forest meshes, revisioned units, GPU-ready ground/terrain/objects, immutable mesh ranges/materials, bounded residency | Nonblocking cold/invalidated views; broader sharing where measured |
-| Local validity | Captured appearance/dependency revisions, unit revision/despawn proofs | Explicit visibility dependency for the static fog pass; coherent authoritative change publication |
-| Spatial selection | World pass index and native/wrapped occurrences feed replacement static submissions directly | Collected dynamic/unit pass inputs |
+| Local validity | Captured appearance/visibility dependencies, immutable map inputs, unit revision/despawn/hidden proofs | Coherent general authoritative change publication |
+| Spatial selection | World pass index and native/wrapped occurrences feed replacement static submissions directly | Direct dynamic/unit execution inputs |
 | Compatible passes | Compatible static layers, shared material bindings, batched occurrence parameters/uploads, forest instancing, exact native composition | Collected dynamic/unit execution; additional sharing guided by cost |
 | GPU reuse/output | Resident admitted map/poses, static color/depth, incremental finishing and native composition | Direct dynamic scene execution; reduce per-pose and full-map work where measured |
 | Async integration | Bounded GPU-ready ground/terrain/object preparation with shared worker capacity, selected-work urgency and independent visual timer | Coherent general nonblocking camera/content publication |
@@ -71,6 +72,12 @@ source playback just to simplify batching.
 **Done:** idle animation does not rebuild world content or rediscover static
 submission state; animated-unit scaling avoids repeated independent setup/finish
 work where compatible. Verify frozen units, authored work loops and native actions.
+
+The requested substeps are: **2.1 immutable dynamic inputs** (implemented; see
+[contract](dynamic_scene_input_contract.md)); **2.2 direct unit poses**; **2.3 shadows,
+occlusion and composition**; **2.4 map effects**, shoreline waves first; **2.5 tactical
+overlays**; **2.6 scheduling/reuse**; **2.7 acceptance**. Existing optional wave tests
+are compatibility checks, not early enablement of 2.4.
 
 ## 3. Complete state publication and nonblocking camera updates
 
@@ -122,7 +129,7 @@ every frame, which it calls unacceptable. Shoreline waves are further along
 than the others — a full candidate already passed 207 integration tests and
 is pixel-identical to the current baseline when off (`ocean_wave_findings.md`,
 "Quieter shoreline spacing") — so it is not new design work, only enablement.
-**Use it as milestone 2's first real validation workload** (selectively
+**Use it as milestone 2.4's first real map-effect validation workload** (selectively
 redraw only the animated water band over reusable static color/depth) instead
 of a synthetic one; extend the same "animate only what changed" mechanism to
 open-water ripples and river flow once it is proven on shoreline waves.
@@ -151,14 +158,18 @@ viewer changes, selection, hover/targeting context, pathfinding, movement costs,
 route/turn semantics, picking, and gameplay; the renderer consumes copied
 visibility and tactical-overlay records and never reimplements those rules.
 
-**Milestone 1 — visibility data and static fog pass:** make captured per-tile
-visibility/fog/unseen state (already represented by the visible-scene
-`visibility_mask` and `fog_status`) an explicit dependency of the final map
-output. Add a renderer fog/unseen coverage pass after terrain/objects and before
+**Milestone 1 — visibility data and static fog pass:** API 18 captures normalized
+visibility/fog/unseen state from the native viewer rules as an explicit dependency
+of final output. The older `visibility_mask` is a traversal mask, and `fog_status`
+alone omits other native visibility fields. Renderer coverage follows terrain/objects and precedes
 tactical overlays, with correct map clipping, wrapping, and all 128/160/192 tile
-widths. Its standalone/replay tests must cover revealed, fogged, unseen, and
-visibility-edge tiles. Do not suppress Civ III's fog yet: live replacement waits
-for the atomic publication and invalidation contract in milestone 3.
+widths (and reduced 64). Its standalone/replay tests cover revealed, fogged,
+unseen and visibility-edge tiles. The user's explicit direct-hook authorization
+advances fog suppression into this checkpoint: API 18 uses the existing coherent
+synchronous map publication and exclusive custom-map failure contract. The wrapper
+returns in custom mode and calls native fog unchanged when off. This does not
+claim milestone 3's general nonblocking publication. Units under fog are omitted;
+explored resource/effect motion uses stable still samples.
 
 **Milestone 2 — direct tactical-overlay pass:** add a cheap dynamic pass for
 the selected-unit highlight/cursor and the already-computed route visualization.
@@ -171,12 +182,13 @@ hover/selection/path changes do not rebuild static terrain or unit content.
 
 **Milestone 3 — coherent live cutover:** publish pixels, camera/zoom transform,
 visibility epoch, tactical-overlay revision and overlay inputs as one compatible
-view identity. At the map composition boundary, suppress only the corresponding
-native fog/unseen, selected-unit, and route draws once the matching renderer
-output is ready; never show a new camera with old fog, a stale route, or duplicate
+view identity. Extend the existing fog publication contract to nonblocking views
+and suppress corresponding selected-unit and route draws only once matching renderer output
+is ready; never show a new camera with old fog, a stale route, or duplicate
 native/renderer marks. Visibility, selection, route cancellation, scroll/wrap,
-zoom, device recovery, config-off, and renderer-failure paths all retain their
-native fallback. Audit existing draw/capture seams before proposing any new patch
+zoom and device recovery retain coherent ownership. Config-off retains native
+rendering; custom-on map-plane failures preserve exclusive custom-map handling.
+Audit existing draw/capture seams before proposing any new patch
 symbol; this roadmap entry authorizes no speculative CSV change.
 
 **Still native unless separately extended:** unit health/activity/status and
@@ -188,84 +200,99 @@ move deferred wonders or Districts forward.
 
 ## Current evidence and implementation handoff
 
-**1.6 static preparation/submission is complete; full milestone 1 still needs the
-static fog/unseen pass.** `world_preparation.h` replaces separate ground/object/
-terrain scheduling on the ordinary world path with one bounded selected-tile
-queue. Existing worker capacity is shared across tiles. Private query scratch
-survives requests; each job compiles ground, terrain and objects and creates one
-immutable GPU allocation. Adoption retains its exact ranges and dependencies.
-Shared grid indices and underlay ranges remain shared. Object packing preserves
-source indices instead of expanding triangles and hashing them again.
+**1.6 and 2.1 are implemented and technically verified. Visual acceptance and the
+strategic live-game checkpoint remain pending.** Nothing was staged or installed,
+Civ III was not launched, and fixed reference images were not replaced.
 
-The frame lease, cancellation joins, resident admission, materials, controls and
-per-component oversized/failure recovery remain intact. Ready CPU/GPU/proof storage
-uses the existing 64 MiB budget (16 MiB with world preparation disabled); each
-combined result is checked against 16 MiB before allocation. Active compilers and
-upload transients are additional. The faster path exposed an older pixel producer
-that omitted ground/object layers from shared world owners, losing city shadows;
-it now copies every world-owned layer. Shadow/region keys also distinguish mesh
-ranges within an owner. No new game patch, native ownership change or presenter.
+The static world path uses one bounded selected-tile preparation queue and shared
+worker capacity for ground, terrain and objects. Jobs create immutable GPU mesh
+ranges; adoption retains those ranges and dependencies. Source indices replace
+triangle expansion and rehashing. Shared grid/underlay data, cancellation joins,
+local invalidation, controls and per-component failure recovery remain intact.
+Ready CPU/GPU/proof storage retains its 64 MiB budget (16 MiB when disabled), with
+16 MiB per combined result; active compilers and upload transients are additional.
 
-**Validation (2026-09-19):** 310 full-suite tests (308 passed, two skipped), native
-scroll/reduced-zoom/wrap and a new city-retained-scroll replay passed. Six paired
-images are byte-identical: cities day/night at 128, cities at 64/160/192, and
-infrastructure at 160. Ground-serial, object-serial and cached-grid controls pass;
-the ground-serial replay exercises 171 prepared blocks and has zero changed pixels
-under the existing tolerance, absolute channel error 71 (not byte-identical).
-Six city edits each rebuild two tiles/reuse 385 and match fresh output exactly;
-the coastline edit rebuilds 127/reuses 260, also exact. All 3,324 asset files are
-unchanged. Candidate verification only: no staging, installation, reference
-replacement, injected-code change or live-game test.
+API 18 adds normalized native visibility to output/view eligibility without making
+visibility part of geometry identity. Final map coverage blends soft black unseen
+edges and a half-opacity gray explored overlay after objects, before native units
+and tactical/UI draws. Raw retained color/depth remains reusable. GPU delivery
+uses the completed map texture without another readback. The authorized GOG fog
+inlead, `Map_Renderer_draw_fog` at **0x4C4EF0**, returns in custom mode and forwards
+unchanged when off. See [exact ABI/build support](civ3_patch_dependency_ledger.md).
+The existing `Unit_tick_anim` suppresses hidden bodies, markers, cursors and status;
+it does not advance/cancel actions. Hidden DLL selections are retired. Explored
+resources and optional waves use stable still samples and request no animation;
+visible instances resume authored motion. Gameplay state remains authoritative.
 
-**Complete workload:** matched 1120×1192 runs include 963 selected tiles, eight
-units, native UI and final transfer; each arm has 384 requests across CPU/GPU
-stationary, scrolling and local-change routes. Capture is outside timing; desktop
-completion is not scanout or live-game cadence. Primary GPU request mean / p95, ms:
+**2.1 replaces mutable visual-map `ProspectiveView` copies with const owned map
+records.** Resources, native anchors, visibility, topology, environment, clocks and
+publication identity travel together. Retained fronts own their inputs; reset and
+configuration invalidate sampling without prematurely releasing budget charges.
+Map admission is capped at **16 MiB**. Existing revisioned `UnitInstances` remains
+the unit/action owner; no parallel gameplay or animation-state owner was added.
+[Dynamic input contract](dynamic_scene_input_contract.md) records validity,
+clock, budget, failure and lifecycle rules.
 
-| Fixture / workload | Preserved 1.4 control | 1.6 candidate |
+**Verification:** 316 tests, **314 passed / two skipped**; approved injected compile;
+scrolling, reduced zoom, world wrap and retained-city replay all passed. Independent
+CPU/GPU fog equations agree within one channel level over **3,295,332 pixels** at
+64/128/160/192, including clipping, wrap and reset. All four city zoom replays keep
+fogged motion exact over three advancing samples and a cold reset. Reveal changes
+pixels with **zero geometry builds/uploads**; the GPU replay and optional wave
+fixture also prove resumed motion. Native GPU/CPU unit oracles prove hidden bodies
+leave pixels unchanged and return empty bounds. Actual native composition tests
+preserve UI ordering, ownership, config-off and explicit CPU barriers with zero
+execution readbacks on admitted GPU chains. Independent resource/unit/timer tests
+pass; immutable-input peak there is **1,599,024 bytes**, with zero rejected records.
+
+The full category receipt is `lab/out/integration/cities.json`. Fog evidence is in
+`native/build/visibility-checkpoint/` (`final-z*`, `waves-final`, byte audit and
+workload comparison); independent GPU proof is run `34e02af0027f42c6ade55945ee538cbb`.
+Failed diagnostic attempts are preserved: an off-screen resource fixture, stale
+upload revision, wave-control configuration mismatch, and extracted-test mocks.
+Their corrected proofs pass; they are not counted as successful initial runs.
+
+**Prior 1.6 complete comparison:** matched 1120×1192 workloads include 963 selected
+tiles, eight units, native UI and final transfer; 384 requests per arm. Versus the
+preserved 1.4 control, scrolling improved **13.0% mixed terrain / 29.0% modern cities**.
+A reverse-order modern repeat confirms **207.01 → 151.36 ms** request mean,
+**257.24 → 170.71 ms** p95. Stationary/local timing does not establish a general
+speedup. Sampled contiguous VA remained at least **1,094.1 MiB mixed / 533.6 MiB
+modern**; the narrow modern margin and unmeasured transient peaks remain limits.
+All 3,324 asset files were unchanged. Detailed comparisons and pixel/control proofs
+remain in `native/build/world-preparation-checkpoint/` and Git history.
+
+**Final API 18 + 2.1 workload:** the same 1120×1192 dense-modern fixture, eight
+units, native UI and final transfer; 384 timed CPU/GPU requests per variant,
+64 samples per route/workload. Both runs pass with unchanged source/DLL/assets
+identities. GPU whole-request mean / p95, milliseconds:
+
+| Workload | Fully visible | Visible + explored + unseen |
 | --- | ---: | ---: |
-| Mixed terrain + dense objects, stationary | 16.12 / 43.34 | 16.55 / 49.92 |
-| Mixed terrain + dense objects, scrolling | 331.60 / 467.54 | 288.61 / 411.06 |
-| Mixed terrain + dense objects, local changes | 25.00 / 50.96 | 20.87 / 49.94 |
-| Modern cities + infrastructure, stationary | 15.14 / 40.98 | 20.54 / 56.15 |
-| Modern cities + infrastructure, scrolling | 209.67 / 255.98 | 148.94 / 169.43 |
-| Modern cities + infrastructure, local changes | 22.27 / 51.19 | 25.28 / 65.54 |
+| Stationary animation | 13.61 / 34.90 | 13.38 / 20.55 |
+| Dense scrolling | 156.69 / 231.30 | 134.59 / 157.95 |
+| Local changes | 22.09 / 54.70 | 20.17 / 50.72 |
 
-Scrolling improves **13.0% mixed / 29.0% modern**; mean desktop completion improves
-341.32 → 298.39 / 219.43 → 159.87 ms. Whole-request results, not worker relocation
-alone, support the static submission result. Stationary/local tails vary; no
-universal frame-time improvement or frame-budget claim is made.
+Mean desktop completion is 21.77 / 166.95 / 31.72 ms fully visible and
+20.52 / 144.73 / 28.58 ms with fog, in the same workload order. Visibility changes
+the eligible motion workload; these variants do not isolate fog cost or establish
+an overall speedup. The visible scrolling tail varies versus the earlier 1.6
+repeat; no cadence/frame-budget acceptance is claimed. Capture remains outside
+timed requests; desktop completion is not scanout or live-game FPS.
 
-A reverse-order modern-city repeat confirms scrolling at **207.01 → 151.36 ms**
-(p95 257.24 → 170.71). Stationary mean/p95 is 16.00/40.27 → 15.92/41.06;
-local changes are 20.77/50.96 → 21.30/58.90. Both stationary arms perform zero
-world builds and zero geometry work. Retain both pairs: the scrolling benefit is
-repeatable, while stationary/local timing does not establish a general speedup.
+Immutable inputs peak at **2,791,024 bytes (2.66 MiB)**, with zero rejected records.
+The largest fog-record upload is **7,184 bytes**. Sampled minimum contiguous VA is
+**838.6 MiB fully visible / 994.9 MiB fogged**, above the 512 MiB floor; transient
+peaks remain unmeasured. The fully visible output skips the coverage draw/upload.
+Receipts: `4e85447d66ae4abd9e0dc0d5ea1868c1` (visible) and
+`c51c3da633c942ebbdf7dde4487a885c` (fogged), under `native/build/gpu-composition/`.
+[Combined measurements](../native/build/visibility-checkpoint/workload-comparison.json)
+retain both CPU/GPU distributions. The initial unconfirmed VM dispatch is preserved;
+Windows confirmed no running benchmark before the successful serial retry.
 
-Across 62 mixed scrolling misses, foreground ground falls 15.18 → 0.40 ms,
-features 22.90 → 6.84 ms and upload 35.23 → 17.64 ms. Modern features fall
-33.47 → 1.88 ms and upload 47.02 → 8.64 ms. The new world join is outside those
-phase timers: 135.12 ms mixed / 16.82 ms modern. Worker component spans overlap;
-they are not additive CPU/GPU totals. The remaining mixed cost is principally
-terrain generation/join, with cliff/resource adapters retaining their owners.
-
-All final/repeated arms pass, preserve recorded inputs and produce identical
-paired output. Candidate sampled contiguous free VA bottoms at **1,094.1 MiB**
-mixed and **533.6 MiB** modern across both runs: above the 512 MiB gate, but the
-modern margin is only 21.6 MiB. Transient peaks are not established; preserve the
-budget gate for future growth. Selected queues peak at 20.5 MiB mixed / 19.2 MiB
-modern with four workers and no rejection, eviction or recovery.
-
-[Comparison receipts](../native/build/world-preparation-checkpoint/comparison.json),
-[pixel evidence](../native/build/world-preparation-checkpoint/visual-parity.json) and
-[validation details](../native/build/world-preparation-checkpoint/validation.json)
-retain input/DLL identities, full distributions, controls and failed diagnostic
-attempts. Earlier 1.5 evidence remains in Git and the preserved control snapshot.
-
-**Next: finish milestone 1's visibility dependency and static fog/unseen pass.**
-Consume captured visibility/fog state, prove revealed/fogged/unseen edges,
-clipping and wrapping at 128/160/192, and order coverage after objects but before
-tactical overlays. Keep native fog active until milestone 3's coherent publication
-and cutover. Then proceed to milestone 2's direct dynamic scene path, using
-shoreline waves as its first map-effect workload; general nonblocking camera
-publication remains milestone 3. Wonders and Districts remain M9–M11.
+**Next: 2.2 direct unit-pose rendering over resident map color/depth.** Preserve
+visibility eligibility, native action cursors, frozen behavior, painter order,
+terrain occlusion and existing composition controls while replacing per-pose
+setup/finishing where compatible. Follow with 2.3 composition, then shoreline waves
+as 2.4's first map-effect workload. General coherent nonblocking publication remains
+milestone 3; wonders and Districts remain M9–M11.

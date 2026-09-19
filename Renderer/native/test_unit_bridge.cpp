@@ -24,10 +24,11 @@ struct Summary {int current_anim_type=2,queued_anim_type=0,direction_2=3,pixel_l
 struct Animation {struct {void* Flic_Info;Sprite sprite;} Frame_1;Animation_Info* Animation_Info;Summary summary;int field_FC=7;};
 struct Rect {int left=20,top=30,right=45,bottom=55;};
 using RECT=Rect;
-struct Unit {struct {Rect Rect;int ID=42,UnitTypeID=0;int army_top_defender_id=-1;Animation Animation;} Body;bool army=false,visible=true;};
+struct Unit {struct {Rect Rect;int ID=42,UnitTypeID=0,X=2,Y=4;int army_top_defender_id=-1;Animation Animation;} Body;bool army=false,visible=true;};
 struct UnitType {char Civilipedia_Entry[32]="PRTO_Archer";};
 struct Bic {int UnitTypeCount=1;UnitType* UnitTypes;bool is_zoomed_out=false;};
 struct State {Unit* custom_renderer_unit_context=nullptr;PCX_Image* custom_renderer_unit_canvas=nullptr;
+ c3x_renderer_unit_forget_fn custom_renderer_unit_forget=nullptr;
  c3x_renderer_unit_draw_background_fn custom_renderer_unit_draw=nullptr;
  c3x_renderer_unit_draw_playback_fn custom_renderer_unit_draw_playback=nullptr;
  c3x_renderer_unit_draw_expanded_fn custom_renderer_unit_draw_expanded=nullptr;int custom_renderer_init_state=1;
@@ -40,7 +41,7 @@ struct State {Unit* custom_renderer_unit_context=nullptr;PCX_Image* custom_rende
  c3x_renderer_visual_clock_fn custom_renderer_visual_clock=nullptr;
  LARGE_INTEGER custom_renderer_qpc_frequency={1000000},custom_renderer_animation_timestamp={},custom_renderer_animation_sample_at={};};
 constexpr int AT_DEFAULT=1,AT_PLANT=18,DNCM_OFF=0,SCM_OFF=0,CS_SUMMER=0,CS_SPRING=3,IS_OK=1,UTA_Army=1;
-struct Screen {Unit* Current_Unit=nullptr;} screen;Screen* p_main_screen_form=&screen;
+struct Screen {int Player_CivID=1;Unit* Current_Unit=nullptr;} screen;Screen* p_main_screen_form=&screen;
 unsigned playback_flags=0;
 State state;State* is=&state;Bic bic;Bic* p_bic_data=&bic;PCX_Color_Table fixture_palette;
 std::vector<int> calls;c3x_renderer_unit_v1 captured;bool success=true,fixture_reduced=false;int dc_count=0;PCX_Image* fixture_background=nullptr;JGL_Image* denied_dc=nullptr;
@@ -87,6 +88,9 @@ void __fastcall Unit_tick_anim(Unit*,int,PCX_Image*,int,int,bool);
 int translate_custom_renderer_native(int,JGL_Image*,void*,RECT*,RECT*,unsigned){return 0;}
 
 #define this self
+struct Tile{};Tile visibility_tile;bool tile_visible=true;
+Tile* tile_at(int,int){return &visibility_tile;}
+unsigned capture_custom_renderer_visibility(Tile*,int,int,int){return C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_EXPLORED|(tile_visible?C3X_RENDERER_TILE_VISIBLE:0);}
 #include "build/unit_bridge_capture.h"
 #undef this
 void __fastcall Unit_tick_anim(Unit* u,int,PCX_Image* canvas,int x,int y,bool status){
@@ -146,6 +150,7 @@ int main(){
  state.custom_renderer_unit_draw_expanded=nullptr;
  state.custom_renderer_unit_draw_playback=capture_playback;success=true;
  invoke();assert(playback_flags==C3X_RENDERER_UNIT_STATE_CAPTURED);
+ tile_visible=false;playback_flags=0;invoke();assert(playback_flags==0);tile_visible=true;
  screen.Current_Unit=&unit;invoke();assert(playback_flags==(C3X_RENDERER_UNIT_STATE_CAPTURED|C3X_RENDERER_UNIT_SELECTED));
  unit.army=true;Unit member=unit;member.army=false;member.Body.ID=84;member.Body.Rect={};army_member=&member;unit.Body.army_top_defender_id=84;
  invoke();assert(captured.unit_id==84 && playback_flags==(C3X_RENDERER_UNIT_STATE_CAPTURED|C3X_RENDERER_UNIT_SELECTED));

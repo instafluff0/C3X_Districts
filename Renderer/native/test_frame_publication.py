@@ -155,6 +155,7 @@ int main(){
 #include "Renderer/native/render_core/unit_frame_preparation.h"
 #include "Renderer/native/render_core/unit_playback.h"
 #include "Renderer/native/render_core/unit_instances.h"
+#include "Renderer/native/render_core/dynamic_scene_input.h"
 #include "Renderer/native/render_core/cliff_placement.h"
 #include "Renderer/native/prepared_view_area.h"
 #include "Renderer/native/gpu_frame_api.h"

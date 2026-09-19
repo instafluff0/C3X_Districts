@@ -27,6 +27,7 @@ def main():
     parser.add_argument('--dense-city-case',default='',help='Dense city culture,era,size,capital, for example 0,3,1,1; requires --dense-scene')
     parser.add_argument('--object-workers',choices=('0','1'),default='1',help='Use the identical object compiler on the foreground (0) or bounded worker (1)')
     parser.add_argument('--ground-workers',choices=('0','1'),default='1',help='Run the production ground compiler serially (0) or on its bounded worker (1)')
+    parser.add_argument("--visibility",action="store_true",help="Capture world-fixed visible, explored and unseen regions")
     parser.add_argument("--visual-only",action="store_true",help="Use production rendering settings and validate independent visual frames without the 384-request comparison")
     parser.add_argument("--scroll-coverage",action="store_true",help="Exercise fine scrolling and guard coverage against missing map pixels")
     args=parser.parse_args()
@@ -69,6 +70,7 @@ def main():
         'C3X_RENDERER_PREVIEW_OBJECTS':'1','C3X_RENDERER_PREVIEW_CITY':'0,3,1,1',
         'C3X_RENDERER_PREVIEW_DENSE_SCENE':'1' if args.dense_scene else '',
         'C3X_RENDERER_PREVIEW_DENSE_CITY_CASE':args.dense_city_case,
+        'C3X_RENDERER_PREVIEW_VISIBILITY':'1' if args.visibility else '',
         'C3X_RENDERER_PREVIEW_SESSION':'','C3X_RENDERER_PREVIEW_REPLAY':'','C3X_RENDERER_PREVIEW_ANIMATION':''}
     if args.benchmark or args.visual_only or args.scroll_coverage:
         # Match configure_custom_renderer_effects with the shipped cache enabled.

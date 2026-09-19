@@ -251,7 +251,7 @@ TerrainFrameSignature terrain_frame_signature(c3x_renderer_frame_v1 const & fram
                            static_cast<c3x_renderer_u32>(tile.city_culture_group),
                            static_cast<c3x_renderer_u32>(tile.city_era), tile.city_flags})
             hash_value(result.scene, value);
-        for (auto value : {tile.variant_seed, tile.tile_flags, tile.feature_flags,
+        for (auto value : {tile.variant_seed, tile.tile_flags & ~C3X_RENDERER_TILE_VISIBILITY_BITS, tile.feature_flags,
                            tile.improvement_flags, tile.irrigation_mask,
                            static_cast<c3x_renderer_u32>(tile.barbarian_tribe_id),
                            tile.has_effect, tile.river_code, tile.road_mask,
@@ -266,7 +266,7 @@ TerrainFrameSignature terrain_frame_signature(c3x_renderer_frame_v1 const & fram
             hash_value(result.geometry, value);
         hash_bytes(result.scene, tile.resource_name, sizeof(tile.resource_name));
         hash_bytes(result.geometry, tile.resource_name, sizeof(tile.resource_name));
-        hash_value(result.ownership, tile.tile_flags);
+        hash_value(result.ownership, tile.tile_flags & ~C3X_RENDERER_TILE_VISIBILITY_BITS);
         hash_value(result.ownership, tile.feature_flags);
     }
     if (frame.world_topology_count != 0) {

@@ -212,11 +212,17 @@ int main(){
 #include <cstddef>
 #define __fastcall
 constexpr int __=0,IS_OK=1;
-struct Unit{};struct PCX_Image{};
+struct Unit{struct {int X=2,Y=4,ID=7,army_top_defender_id=-1;}Body;};struct PCX_Image{};
+constexpr unsigned C3X_RENDERER_TILE_VISIBLE=1;constexpr int UTA_Army=1;
+struct Tile{};Tile tile;bool visible=true;Tile* tile_at(int,int){return &tile;}
+unsigned capture_custom_renderer_visibility(Tile*,int,int,int){return visible?C3X_RENDERER_TILE_VISIBLE:0;}
+bool Unit_has_ability(Unit*,int,int){return false;}
+struct Screen {int Player_CivID=1;} screen,*p_main_screen_form=&screen;
 Unit outer,inner;PCX_Image previous,canvas;
 struct State {
  Unit* custom_renderer_unit_context=&outer;PCX_Image* custom_renderer_unit_canvas=&previous;
  struct {bool enable_custom_rendering=true;} current_config;
+ void (*custom_renderer_unit_forget)(int)=nullptr;
  void* custom_renderer_unit_draw=&outer;int custom_renderer_init_state=IS_OK;
 } state,*is=&state;
 int calls=0;
@@ -228,6 +234,8 @@ void Unit_tick_anim(Unit* unit,int,PCX_Image* target,int x,int y,bool status){
 ''' + body + r'''
 int main(){
  patch_Unit_tick_anim(&inner,0,&canvas,-413,291,true);
+ assert(calls==1&&state.custom_renderer_unit_context==&outer&&state.custom_renderer_unit_canvas==&previous);
+ visible=false;patch_Unit_tick_anim(&inner,0,&canvas,-413,291,true);
  assert(calls==1&&state.custom_renderer_unit_context==&outer&&state.custom_renderer_unit_canvas==&previous);
  state.current_config.enable_custom_rendering=false;
  patch_Unit_tick_anim(&inner,0,&canvas,-413,291,true);

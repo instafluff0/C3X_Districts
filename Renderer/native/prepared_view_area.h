@@ -27,7 +27,8 @@ template<class Publication> struct PreparedViewArea {
             std::uint32_t(canonical(t.tile_y,input.world_height_tiles,input.world_wrap_y!=0));
     }
     static bool same_content(c3x_renderer_tile_v1 a,c3x_renderer_tile_v1 b) {
-        if(a.visibility_mask!=b.visibility_mask || a.tile_visibility!=b.tile_visibility)return false;
+        if(a.visibility_mask!=b.visibility_mask || a.tile_visibility!=b.tile_visibility || a.fog_status!=b.fog_status ||
+           ((a.tile_flags^b.tile_flags)&C3X_RENDERER_TILE_VISIBILITY_BITS))return false;
         a=render_core::CapturedScene::content(a);b=render_core::CapturedScene::content(b);
         return !std::memcmp(&a,&b,sizeof(a));
     }

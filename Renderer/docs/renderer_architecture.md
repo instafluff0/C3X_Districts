@@ -173,7 +173,7 @@ documents the implemented lifecycle and composition details.
 
 ## Firm contracts
 
-- Civ III owns gameplay, native screen anchors, visibility, fog, borders, labels,
+- Civ III owns gameplay, native screen anchors, visibility decisions, borders, labels,
   selection, UI, picking and action lifecycle. No second simulation or presenter.
 - Custom-on map units are 3D; native UI portraits and config-off remain native.
   Custom-on map-plane failure must not silently replay native terrain.
@@ -202,3 +202,7 @@ Retain GPU-ready descriptions as well as content: a normal frame should select
 and submit cheaply. D3D11 command lists, GPU deformation/skinning, broader pose
 batching and terrain synthesis are possible mechanisms, not prerequisites.
 Choose them from measured costs after the connected scene path exists.
+
+Map fog coverage consumes copied API 18 visibility in the final output pass; native
+fog forwards only with custom rendering off. Dynamic input lifetime and clocks
+follow [the immutable input contract](dynamic_scene_input_contract.md).

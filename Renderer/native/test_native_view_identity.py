@@ -68,7 +68,7 @@ Memory allocate(void* p,std::size_t bytes){largest_request=std::max(largest_requ
 #define malloc(bytes) allocate(nullptr,bytes)
 struct Tile;
 struct Vtable {int(*m49_Get_Square_RealType)(Tile*);int(*m50_Get_Square_BaseType)(Tile*);int(*m37_Get_River_Code)(Tile*);};
-struct Tile {Vtable* vtable;struct {int FOWStatus=0,Visibility=0;void* active_tile_effect=nullptr;}Body;int ground=2,base=2,river=0;};
+struct Tile {Vtable* vtable;struct {int FOWStatus=0,Visibility=0,Fog_Of_War=0,V3=0,field_D0_Visibility=0;void* active_tile_effect=nullptr;}Body;int ground=2,base=2,river=0;};
 Vtable vtable{[](Tile*t){return t->ground;},[](Tile*t){return t->base;},[](Tile*t){return t->river;}};
 struct MapData{int Width=4,Height=4;};using Map=MapData;
 struct Bic {MapData Map;} bic;Bic* p_bic_data=&bic;
@@ -120,7 +120,10 @@ int main(){
  tiles[7].Body.Visibility=1;assert(capture_custom_renderer_world_topology());
  assert(state.custom_renderer_world_topology_revision==topology && state.custom_renderer_visibility_revision==++visibility);
  tiles[7].Body.FOWStatus=0x12345678;assert(capture_custom_renderer_world_topology());
- assert(state.custom_renderer_visibility_revision==++visibility); // Both complete 32-bit native fields are observed.
+ assert(state.custom_renderer_visibility_revision==++visibility); // All sources of current visibility and explored state are observed.
+ tiles[6].Body.V3=8;assert(capture_custom_renderer_world_topology());assert(state.custom_renderer_visibility_revision==++visibility);
+ tiles[6].Body.field_D0_Visibility=16;assert(capture_custom_renderer_world_topology());assert(state.custom_renderer_visibility_revision==++visibility);
+ tiles[6].Body.Fog_Of_War=32;assert(capture_custom_renderer_world_topology());assert(state.custom_renderer_visibility_revision==++visibility);
  tiles[2].ground=4;assert(capture_custom_renderer_world_topology());
  assert(state.custom_renderer_world_topology_revision==++topology && state.custom_renderer_visibility_revision==visibility);
  assert(demand()==7 && modern_calls==1 && !legacy_calls && state.custom_renderer_map_epoch==1);

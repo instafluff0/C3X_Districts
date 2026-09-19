@@ -321,6 +321,7 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
     std::vector<std::array<int,2>> city_object_sites;
     char prepared_area_option[8]={};
     bool prepared_view_fixture=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_PREPARED_VIEW",prepared_area_option,sizeof(prepared_area_option))!=0;
+    int visibility_center_x=center_x,visibility_center_y=center_y;
     auto capture_view = [&]() {
     if(timing_enabled)QueryPerformanceCounter(&capture_begin);
     int center_raw_x = center_x * tile_width / 2;
@@ -357,6 +358,14 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
         if(pickup && (anchor_x+tile_width < -tile_width*(prepared_view_fixture?8:4) || anchor_x>target_width+tile_width*(prepared_view_fixture?8:4) ||
             anchor_y+tile_height < -tile_height*(prepared_view_fixture?8:4) || anchor_y>target_height+tile_height*(prepared_view_fixture?8:4)))
             tile.tile_flags=C3X_RENDERER_TILE_TOPOLOGY_HALO;
+        tile.tile_flags|=C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_EXPLORED|C3X_RENDERER_TILE_VISIBLE;
+        char visibility_fixture[8]={};
+        if(GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_VISIBILITY",visibility_fixture,sizeof(visibility_fixture))){
+            tile.tile_flags&=~(C3X_RENDERER_TILE_EXPLORED|C3X_RENDERER_TILE_VISIBLE);
+            int distance=(std::min)(std::abs(source.x-visibility_center_x),map_width-std::abs(source.x-visibility_center_x))+std::abs(source.y-visibility_center_y);
+            if(distance<9)tile.tile_flags|=C3X_RENDERER_TILE_EXPLORED;
+            if(distance<5)tile.tile_flags|=C3X_RENDERER_TILE_VISIBLE;
+        }
         tile.resource_id = tile.resource_class = tile.tile_building_id = tile.barbarian_tribe_id = -1;
         tile.city_id = tile.city_owner_id = tile.city_size = tile.city_culture_group = tile.city_era = -1;
         tile.unit_type_id = tile.unit_owner_id = tile.unit_class = tile.unit_state = tile.unit_damage = tile.unit_direction = -1;
@@ -474,7 +483,8 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
             map_width,map_height,tiles.size(),cities,roads,rails,improvements,resources);
     }
     c3x_renderer_frame_v1 frame = {};
-    frame.api_version = C3X_RENDERER_API_VERSION;
+    auto api_version=reinterpret_cast<c3x_renderer_get_api_version_fn>(GetProcAddress(module,"c3x_renderer_get_api_version"));
+    frame.api_version = api_version ? api_version() : C3X_RENDERER_API_VERSION;
     frame.struct_size = sizeof(frame);
     frame.target_width = target_width;
     frame.target_height = target_height;
@@ -741,6 +751,11 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
         return rocky?off==original:off!=original;
       };
       ok=verify_waves();SetEnvironmentVariableA("C3X_RENDERER_WAVES",nullptr);
+      // Restore the requested configuration after the disabled-effect control;
+      // later witnesses and their cold resets must exercise the same settings.
+      reset();
+      ok=ok && set_definitions(argv[2],argv[3],nullptr,custom_path)==C3X_RENDERER_RESULT_OK &&
+          render_checked(&frame,&output)==C3X_RENDERER_RESULT_OK;
       std::printf("%s coastal wave lifecycle: %s repeat, time-return, zoom-return, scroll/cold, disabled, cached terrain\n",ok?"PASS":"FAIL",wave_study);
     }
     char site_study[32]={};GetEnvironmentVariableA("C3X_LAB_OBJECT_STUDY",site_study,sizeof(site_study));
@@ -1813,11 +1828,11 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
         }
         if(site==tiles.size()){std::fputs("CONTENT_EDIT missing captured neighboring land sites\n",stderr);ok=false;}
         if(ok){
-            auto& city=tiles[site];city.tile_flags=C3X_RENDERER_TILE_RENDER;
+            auto& city=tiles[site];city.tile_flags|=C3X_RENDERER_TILE_RENDER;
             city.terrain_type=city.real_terrain_type=2;city.feature_flags=city.improvement_flags=city.irrigation_mask=city.river_code=city.has_effect=0;
             city.resource_id=city.resource_class=-1;city.resource_name[0]=0;city.city_id=901;city.city_owner_id=1;city.city_size=0;
             city.city_culture_group=0;city.city_era=0;city.city_flags=0;
-            auto& forest=tiles[forest_site];forest.tile_flags=C3X_RENDERER_TILE_RENDER;forest.terrain_type=2;forest.real_terrain_type=7;
+            auto& forest=tiles[forest_site];forest.tile_flags|=C3X_RENDERER_TILE_RENDER;forest.terrain_type=2;forest.real_terrain_type=7;
             forest.feature_flags|=C3X_RENDERER_FEATURE_FOREST;
             auto x=(forest.tile_x%map_width+map_width)%map_width;
             auto index=(std::size_t(forest.tile_y)*map_width+x)/2;
@@ -1994,6 +2009,43 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
             std::string path=std::string(argv[5])+".cold.bmp";write_bmp(path.c_str(),output);
             ok=changed<=warm.size()/4000 && error<=warm.size()/100;
         }
+    }
+    char visibility_test[8]={};
+    if(ok && GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_VISIBILITY",visibility_test,sizeof(visibility_test))){
+        auto animal=std::min_element(tiles.begin(),tiles.end(),[&](auto const& a,auto const& b){
+            auto distance=[&](auto const& t){return (t.tile_flags&C3X_RENDERER_TILE_RENDER)&&t.real_terrain_type<=4?
+                std::abs(t.anchor_x-frame.target_width/2)+std::abs(t.anchor_y-frame.target_height/2):INT_MAX;};return distance(a)<distance(b);});
+        if(animal!=tiles.end()){animal->resource_id=101;animal->resource_class=0;strcpy_s(animal->resource_name,"Cattle");}
+        for(auto& tile:tiles){tile.tile_flags|=C3X_RENDERER_TILE_EXPLORED;tile.tile_flags&=~C3X_RENDERER_TILE_VISIBLE;}
+        ok=render_checked(&frame,&output)==C3X_RENDERER_RESULT_OK && output.visible_animation_count==0 && !output.request_continuous_redraw;
+        auto frozen_start=static_cast<unsigned char const*>(output.bgra_pixels);
+        std::vector<unsigned char> frozen(frozen_start,frozen_start+output.stride_bytes*output.height);
+        for(int step=0;ok && step<3;++step){frame.presentation_time_ticks+=frame.presentation_frequency/3;
+            ok=render_checked(&frame,&output)==C3X_RENDERER_RESULT_OK && !output.geometry_tiles_built && !output.geometry_upload_bytes &&
+                !output.visible_animation_count && !std::memcmp(frozen.data(),output.bgra_pixels,frozen.size());}
+        reset();
+        ok=ok && set_definitions(argv[2],argv[3],nullptr,custom_path)==C3X_RENDERER_RESULT_OK && render_checked(&frame,&output)==C3X_RENDERER_RESULT_OK &&
+            !std::memcmp(frozen.data(),output.bgra_pixels,frozen.size());
+        std::printf("VISIBILITY fogged motion: %s frozen_frames=3 cold_exact=1 animations=%u\n",ok?"pass":"FAIL",output.visible_animation_count);
+        auto first=static_cast<unsigned char const*>(output.bgra_pixels);
+        std::vector<unsigned char> before(first,first+output.stride_bytes*output.height);
+        // Authoritative reveal only: anchors, geometry and object state stay fixed.
+        for(auto& tile:tiles)tile.tile_flags|=C3X_RENDERER_TILE_EXPLORED|C3X_RENDERER_TILE_VISIBLE;
+        ok=ok && render_checked(&frame,&output)==C3X_RENDERER_RESULT_OK;
+        unsigned built=output.geometry_tiles_built,upload=output.geometry_upload_bytes;
+        std::vector<unsigned char> warm;
+        if(ok){first=static_cast<unsigned char const*>(output.bgra_pixels);warm.assign(first,first+output.stride_bytes*output.height);}
+        ok=ok && !built && !upload && warm!=before;
+        if(ok){std::string revealed=std::string(argv[5])+".revealed.bmp";write_bmp(revealed.c_str(),output);}
+        reset();
+        ok=ok && set_definitions(argv[2],argv[3],nullptr,custom_path)==C3X_RENDERER_RESULT_OK && render_checked(&frame,&output)==C3X_RENDERER_RESULT_OK;
+        ok=ok && !std::memcmp(warm.data(),output.bgra_pixels,warm.size());
+        std::printf("VISIBILITY reveal warm/cold exact: %s built=%u upload=%u bytes=%zu\n",ok?"pass":"FAIL",built,upload,warm.size());
+        frame.presentation_time_ticks+=frame.presentation_frequency/3;
+        ok=ok && render_checked(&frame,&output)==C3X_RENDERER_RESULT_OK && output.visible_animation_count &&
+            !output.geometry_tiles_built && !output.geometry_upload_bytes &&
+            std::memcmp(warm.data(),output.bgra_pixels,warm.size())!=0;
+        std::printf("VISIBILITY revealed motion resumes: %s\n",ok?"pass":"FAIL");
     }
     char unit_test[8]={};
     if(ok && GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_UNITS",unit_test,sizeof(unit_test))) {

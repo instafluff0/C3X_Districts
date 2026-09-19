@@ -101,3 +101,31 @@ py -m Renderer.scenes.scene_contract scene.json --catalog catalog.json
 ```
 
 This path reads no Civ III process state and performs no model or texture payload loading. `--config-off` proves the replay path retains M2's no-access fallback behavior.
+
+## API 18 visibility coverage
+
+Every renderable tile carries `VISIBILITY_KNOWN`, plus `EXPLORED` and `VISIBLE`
+as resolved by the existing native/C3X viewer rules. Visible implies explored.
+Topology halo records may supply neighboring coverage but gain no object/draw
+ownership. Unknown neighbors are conservative black; unknown renderable state or
+conflicting wrapped copies rejects the output. The older `visibility_mask` is a
+native traversal/edge mask, not a viewer bitset. `fog_status` alone omits other
+native visibility fields and is not sufficient to resolve the three states.
+
+Visibility affects final map identity and prepared-view eligibility, while its
+normalized bits are excluded from geometry and replacement-ownership identities.
+Final coverage follows map objects/resources and precedes native units/tactical
+marks/UI. It blends black unseen coverage and a half-opacity neutral gray explored
+overlay with soft neighboring edges. Retained raw scene color/depth is unchanged.
+CPU compatibility produces separate covered pixels; shared CPU/GPU output uses
+the same GPU coverage pass. Config-off calls the original native fog function.
+API 18 capture and DLL must be deployed together.
+
+Unit visibility is a separate draw eligibility decision: units under fog/unseen
+coverage contribute no body, shadow, marker, cursor or status pixels. Existing
+`Unit_tick_anim` capture suppresses the whole hidden map draw, without advancing
+or cancelling native actions; the DLL also rejects retained hidden selections.
+Explored-but-not-visible resources and optional map effects use stable still
+samples and contribute no advancing-animation count. Revealed instances resume
+authored motion. See [dynamic inputs](dynamic_scene_input_contract.md) for ownership
+and lifecycle rules.
