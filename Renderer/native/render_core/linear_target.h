@@ -14,6 +14,12 @@ struct LinearTarget {
         release(resolved); release(color); width=height=0;
     }
     ~LinearTarget() { reset(); }
+    void swap(LinearTarget& other){
+        std::swap(color,other.color);std::swap(resolved,other.resolved);std::swap(depth_texture,other.depth_texture);
+        std::swap(target,other.target);std::swap(view,other.view);std::swap(samples,other.samples);
+        std::swap(depth_samples,other.depth_samples);std::swap(depth,other.depth);
+        std::swap(width,other.width);std::swap(height,other.height);
+    }
     bool ensure(ID3D11Device* device,UINT w,UINT h,bool sampleable=false,bool resolve=true) {
         if(target && width==w && height==h && (!sampleable || samples) && (!resolve || resolved)) return true;
         reset();
@@ -59,11 +65,16 @@ cbuffer Restore:register(b0){int4 move_extent;int4 metadata;int4 dirty[16];};
 float4 VS(uint id:SV_VertexID):SV_Position{float2 p=float2((id<<1)&2,id&2);return float4(p*float2(2,-2)+float2(-1,1),0,1);}
 struct Output{float4 color:SV_Target;float depth:SV_Depth;};
 Output PS(float4 position:SV_Position,uint sample:SV_SampleIndex){
- int2 destination=int2(position.xy),p=destination-move_extent.xy;
+ int2 destination=int2(position.xy),p=destination;
+ if(metadata.w!=0)p=p*2/metadata.w;
+ p-=move_extent.xy;
+ if(metadata.y!=0)p=(p%move_extent.zw+move_extent.zw)%move_extent.zw;
  bool valid=all(p>=0)&&all(p<move_extent.zw);
  for(int i=0;i<metadata.x;++i)if(all(destination>=dirty[i].xy*2)&&all(destination<dirty[i].zw*2))valid=false;
  Output result;result.color=valid?scene.Load(p,sample):float4(0,0,0,0);
- result.depth=valid?scene_depth.Load(p,sample):1;return result;
+ result.depth=valid?scene_depth.Load(p,sample):1;
+ if(metadata.z==1)result.depth=.5+.5*result.depth;
+ if(metadata.z==2&&result.depth>=.5)result.color=0;return result;
 })";
         auto compile=[&](char const* entry,char const* target,ID3DBlob** blob){
             ID3DBlob* errors=nullptr;HRESULT hr=D3DCompile(source,std::strlen(source),"scene_restore",nullptr,nullptr,
@@ -85,11 +96,11 @@ Output PS(float4 position:SV_Position,uint sample:SV_SampleIndex){
     bool draw(ID3D11DeviceContext* context,LinearTarget const& target,
               ID3D11ShaderResourceView* color,ID3D11ShaderResourceView* old_depth,
               int dx,int dy,std::vector<D3D11_RECT> const& dirty,
-              std::vector<D3D11_RECT> const* regions=nullptr,unsigned source_width=0,unsigned source_height=0){
+              std::vector<D3D11_RECT> const* regions=nullptr,unsigned source_width=0,unsigned source_height=0,bool circular=false,bool painter_depth=false,int sample_scale=0,bool unit_coverage=false){
         if(dirty.size()>16)return false;
         struct Constants{int move_extent[4],metadata[4];D3D11_RECT dirty[16];} values={};
         values.move_extent[0]=dx*2;values.move_extent[1]=dy*2;
-        values.move_extent[2]=int(source_width?source_width:target.width);values.move_extent[3]=int(source_height?source_height:target.height);values.metadata[0]=int(dirty.size());
+        values.move_extent[2]=int(source_width?source_width:target.width);values.move_extent[3]=int(source_height?source_height:target.height);values.metadata[0]=int(dirty.size());values.metadata[1]=circular?1:0;values.metadata[2]=unit_coverage?2:painter_depth?1:0;values.metadata[3]=sample_scale;
         std::copy(dirty.begin(),dirty.end(),values.dirty);context->UpdateSubresource(settings,0,nullptr,&values,0,0);
         context->OMSetRenderTargets(1,&target.target,target.depth);context->OMSetBlendState(nullptr,nullptr,0xffffffffu);
         context->OMSetDepthStencilState(depth,0);context->RSSetState(rasterizer);

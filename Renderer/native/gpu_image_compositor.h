@@ -13,18 +13,22 @@
 #include <algorithm>
 
 #include "gpu_image_display.h"
+#include "gpu_unit_scene.h"
+#include "unit_scene_surface.h"
 namespace c3x_gpu_images {
 using Microsoft::WRL::ComPtr;
 struct Counts {std::uint64_t uploads=0,upload_bytes=0,commands=0,snapshots=0,resident_bytes=0;};
 inline void checked(HRESULT hr){if(FAILED(hr))throw std::runtime_error("GPU image operation failed");}
 class Compositor {
     struct Image {Id id=0;unsigned width=0,height=0;Format format=Format::rgb555;std::uint64_t revision=0;bool cpu_current=false,read_only=false;
+        c3x_renderer::UnitSceneProvenance scene;
         ComPtr<ID3D11Texture2D> texture;ComPtr<ID3D11ShaderResourceView> read;ComPtr<ID3D11UnorderedAccessView> write;};
     struct Constants {int area[4],offset[2];unsigned mode,color;};
     ID3D11Device* device;ID3D11DeviceContext* context;
     std::array<Image,128> images={};Image scratch,detail_scratch;Id serial=0;
     ImageDisplay display_program;
     ComPtr<ID3D11ComputeShader> shader,import_shader,unit_shader,image_shader,blend_shader,lookup_shader;ComPtr<ID3D11Buffer> constants,image_constants;
+    c3x_renderer::GpuUnitScene unit_scene;
     Counts counters;std::uint64_t budget;
     Image* find(Id id){if(!id)return nullptr;for(auto& image:images)if(image.id==id)return &image;return nullptr;}
     static std::uint64_t bytes(Image const& image){return std::uint64_t(image.width)*image.height*4;}
@@ -40,7 +44,7 @@ class Compositor {
     static Rect selected(Command const& command,Image const& image){return {
         std::max({0,command.area.left,command.clip.left}),std::max({0,command.area.top,command.clip.top}),
         std::min({int(image.width),command.area.right,command.clip.right}),std::min({int(image.height),command.area.bottom,command.clip.bottom})};}
-    bool valid(Command const& command){
+    bool valid(Command const& command,Image* direct=nullptr){
         auto d=find(command.destination);if(!d||d->read_only)return false;
         if(command.area.left>command.area.right || command.area.top>command.area.bottom ||
            command.clip.left>command.clip.right || command.clip.top>command.clip.bottom)return false;
@@ -49,7 +53,7 @@ class Compositor {
         if(command.kind!=Kind::native_image&&!(command.kind==Kind::native_blend&&command.color==2)&&(command.source_width||command.source_height))return false;
         if(command.kind!=Kind::native_lookup&&command.program)return false;
         if(command.kind==Kind::fill||command.kind==Kind::invert)return d->format==Format::bgra32||command.color<=65535;
-        auto s=find(command.source);if(!s)return false;
+        auto s=direct?direct:find(command.source);if(!s)return false;
         if(command.kind==Kind::native_lookup){
             auto b=find(command.background),detail=find(command.detail),bd=find(command.background_detail),program=find(command.program);
             if(d->format==Format::bgra32||s==d||s->format!=Format::bgra32||s->width!=1024||(s->height!=1024&&(s->height!=128||command.color!=32||!command.program))||
@@ -105,8 +109,21 @@ class Compositor {
         auto y=std::int64_t(command.source_y)+r.top-command.area.top;
         return x>=0&&y>=0&&x+(r.right-r.left)<=s->width&&y+(r.bottom-r.top)<=s->height;
     }
-    void unit_over(Command const& op,Rect r){
-        if(!unit_shader){
+    void scene_write(Command const& op,Rect r){
+        auto d=find(op.destination),s=find(op.source),detail=find(op.detail),sd=find(op.background_detail);
+        int dx=op.source_x-op.area.left,dy=op.source_y-op.area.top;
+        bool copy=op.kind==Kind::copy||op.kind==Kind::quantize;
+        bool pair=op.kind==Kind::native_image&&op.color==65536&&
+            op.source_width==op.area.right-op.area.left&&op.source_height==op.area.bottom-op.area.top;
+        // An expanded native word has lost the full-color map identity. The
+        // paired detail copy, not that quantized surrogate, proves eligibility.
+        auto source=s?s->scene:c3x_renderer::UnitSceneProvenance{};
+        auto full=sd?sd->scene:c3x_renderer::UnitSceneProvenance{};
+        if(copy||pair)d->scene.copy(source,r,dx,dy);else d->scene.erase(r);
+        if(detail){if(pair)detail->scene.copy(full,r,dx,dy);else detail->scene.erase(r);}
+    }
+    void unit_over(Command const& op,Rect r,c3x_renderer::UnitSceneSample const* scene=nullptr){
+        if(!scene && !unit_shader){
             char const* source=R"(
 cbuffer Params:register(b0){int4 area;int2 offset;uint mode;uint color;};
 Texture2D<uint> body:register(t0);Texture2D<uint> native_below:register(t1);Texture2D<uint> native_ground:register(t2);
@@ -149,12 +166,13 @@ uint blend(uint source,uint below,uint alpha){
         context->CopySubresourceRegion(scratch.texture.Get(),0,0,0,0,d->texture.Get(),0,&box);++counters.snapshots;
         if(detail){context->CopySubresourceRegion(detail_scratch.texture.Get(),0,0,0,0,detail->texture.Get(),0,&box);++counters.snapshots;}
         auto ground=b==d?&scratch:b;auto full_ground=bd==detail?&detail_scratch:bd;
-        ID3D11ShaderResourceView* reads[5]={find(op.source)->read.Get(),scratch.read.Get(),ground->read.Get(),detail?detail_scratch.read.Get():nullptr,bd?full_ground->read.Get():nullptr};
+        ID3D11ShaderResourceView* reads[5]={scene?scene->body:find(op.source)->read.Get(),scratch.read.Get(),ground->read.Get(),detail?detail_scratch.read.Get():nullptr,bd?full_ground->read.Get():nullptr};
         ID3D11UnorderedAccessView* writes[2]={d->write.Get(),detail?detail->write.Get():nullptr};
         Constants p={{r.left,r.top,r.right,r.bottom},{int(std::int64_t(op.source_x)-op.area.left),int(std::int64_t(op.source_y)-op.area.top)},d->format==Format::rgb565?1u:0u,(detail?1u:0u)|(bd?2u:0u)|(b==d?4u:0u)|(bd&&bd==detail?8u:0u)};
         context->UpdateSubresource(constants.Get(),0,nullptr,&p,0,0);auto cb=constants.Get();context->CSSetConstantBuffers(0,1,&cb);
-        context->CSSetShaderResources(0,5,reads);context->CSSetUnorderedAccessViews(0,2,writes,nullptr);context->CSSetShader(unit_shader.Get(),nullptr,0);
-        context->Dispatch(unsigned(r.right-r.left+7)/8,unsigned(r.bottom-r.top+7)/8,1);unbind();
+        context->CSSetShaderResources(0,5,reads);context->CSSetUnorderedAccessViews(0,2,writes,nullptr);
+        if(scene)unit_scene.draw(device,context,*scene,unsigned(r.right-r.left),unsigned(r.bottom-r.top));
+        else {context->CSSetShader(unit_shader.Get(),nullptr,0);context->Dispatch(unsigned(r.right-r.left+7)/8,unsigned(r.bottom-r.top+7)/8,1);}unbind();
         d->cpu_current=false;if(detail)detail->cpu_current=false;++counters.commands;
     }
     void native_lookup(Command const& op,Rect r){
@@ -401,6 +419,10 @@ Texture2D<uint> input_image:register(t0);Texture2D<uint> text_curves:register(t1
             checked(device->CreateShaderResourceView(texture,nullptr,&next.read));next.id=++serial;counters.resident_bytes+=bytes(next);image=std::move(next);return image.id;
         }return 0;
     }
+    c3x_renderer::UnitSceneProvenance scene(Id id)const{
+        for(auto const& image:images)if(image.id==id)return image.scene;return {};
+    }
+    void scene(Id id,c3x_renderer::UnitSceneProvenance value){if(auto image=find(id))image->scene=std::move(value);}
     template<class Visit> void visit_images(Visit visit)const{
         for(auto const& image:images)if(image.id)visit(image.id,image.width,image.height,image.format,image.texture.Get());
     }
@@ -411,15 +433,21 @@ Texture2D<uint> input_image:register(t0);Texture2D<uint> text_curves:register(t1
         if(image->revision>revision)return false;
         if(image->format!=Format::bgra32)for(std::size_t n=0;n<count;++n)if(pixels[n]>65535)return false;
         unbind();context->UpdateSubresource(image->texture.Get(),0,nullptr,pixels,image->width*4,0);
-        image->revision=revision;image->cpu_current=true;++counters.uploads;counters.upload_bytes+=count*4;return true;
+        image->scene.parts.clear();image->revision=revision;image->cpu_current=true;++counters.uploads;counters.upload_bytes+=count*4;return true;
     }
     // Validate the entire transaction and reserve overlap scratch before any draw.
     // Rejection leaves the destination unchanged; hardware errors must invalidate
     // the caller's unpublished transaction, never publish a partially drawn image.
-    bool submit(Command const* commands,std::size_t count){
+    bool submit(Command const* commands,std::size_t count,c3x_renderer::UnitSceneSample const* scene=nullptr,std::array<int,4> const* footprint=nullptr){
         if(!commands||!count||count>2048)return false;
+        Image direct;
+        if(scene){
+            if(count!=1||commands->kind!=Kind::unit_over||commands->source||!scene->body||!scene->heights||
+               !scene->width||!scene->height||scene->width>1024||scene->height>1024)return false;
+            direct.format=Format::bgra32;direct.width=scene->width;direct.height=scene->height;
+        }
         unsigned width=0,height=0,detail_width=0,detail_height=0;
-        for(std::size_t n=0;n<count;++n){auto const& op=commands[n];if(!valid(op))return false;
+        for(std::size_t n=0;n<count;++n){auto const& op=commands[n];if(!valid(op,scene?&direct:nullptr))return false;
             if(op.kind==Kind::unit_over){
                 auto r=selected(op,*find(op.destination));if(r.left>=r.right||r.top>=r.bottom)continue;
                 width=std::max(width,unsigned(r.right-r.left));height=std::max(height,unsigned(r.bottom-r.top));
@@ -442,7 +470,13 @@ Texture2D<uint> input_image:register(t0);Texture2D<uint> text_curves:register(t1
         if(grow_detail){counters.resident_bytes+=bytes(next_detail)-bytes(detail_scratch);detail_scratch=std::move(next_detail);}
         for(std::size_t n=0;n<count;++n){auto const& op=commands[n];auto d=find(op.destination);auto r=selected(op,*d);
             if(r.left>=r.right||r.top>=r.bottom)continue;
-            if(op.kind==Kind::unit_over){unit_over(op,r);continue;}
+            auto changed=r;
+            auto coverage=scene?&scene->coverage:footprint;
+            if(op.kind==Kind::unit_over&&coverage&&(*coverage)[0]<(*coverage)[2]&&(*coverage)[1]<(*coverage)[3])
+                changed=c3x_renderer::UnitSceneProvenance::intersect(r,{op.area.left+(*coverage)[0],op.area.top+(*coverage)[1],
+                    op.area.left+(*coverage)[2],op.area.top+(*coverage)[3]});
+            scene_write(op,changed);
+            if(op.kind==Kind::unit_over){unit_over(op,r,scene);continue;}
             if(op.kind==Kind::native_image){native_image(op,r);continue;}
             if(op.kind==Kind::native_blend){native_blend(op,r);continue;}
             if(op.kind==Kind::native_lookup){native_lookup(op,r);continue;}
@@ -494,7 +528,7 @@ Texture2D<float4> input_image:register(t0);RWTexture2D<uint> output_image:regist
         Constants params={};params.offset[0]=x;params.offset[1]=y;
         context->UpdateSubresource(constants.Get(),0,nullptr,&params,0,0);auto cb=constants.Get();context->CSSetConstantBuffers(0,1,&cb);
         context->CSSetShader(import_shader.Get(),nullptr,0);context->Dispatch((destination->width+7)/8,(destination->height+7)/8,1);unbind();
-        destination->cpu_current=false;return true;
+        destination->scene.parts.clear();destination->cpu_current=false;return true;
     }
     bool display(Id id,ID3D11RenderTargetView* target,unsigned width,unsigned height,Rect area){
         auto image=find(id);if(!image||image->format!=Format::bgra32||image->width!=width||image->height!=height||!target)return false;

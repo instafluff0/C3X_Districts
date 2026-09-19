@@ -10,6 +10,9 @@ if(!performance_frames.empty()){
     LARGE_INTEGER counter_frequency={};QueryPerformanceFrequency(&counter_frequency);
     auto milliseconds=[&](long long ticks){return 1000.*double(ticks)/double(counter_frequency.QuadPart);};
     verify(SetWindowPos(window,HWND_TOPMOST,0,0,0,0,SWP_NOSIZE|SWP_NOACTIVATE)!=FALSE,"position whole-frame test window");
+    char count_option[16]={};GetEnvironmentVariableA("C3X_RENDERER_BENCHMARK_UNITS",count_option,sizeof(count_option));
+    int unit_count=count_option[0]?std::atoi(count_option):8;verify(unit_count>=1&&unit_count<=32,"bounded unit scaling count");
+    std::printf("FRAME_UNITS count=%d\n",unit_count);
     std::printf("FRAME_SCOPE width=%d height=%d desktop_width=%d desktop_height=%d capture=outside_timing detail=full control=same_DLL_CPU map_units_UI_final_transfer=inside_timing\n",w,h,GetSystemMetrics(SM_CXSCREEN),GetSystemMetrics(SM_CYSCREEN));
     JGLSprite hud_color={},hud_alpha={},lookup_sprite={},shadow_sprite={};auto jgl_base=reinterpret_cast<char*>(jgl);
     for(auto sprite:{&hud_color,&hud_alpha,&lookup_sprite,&shadow_sprite}){reinterpret_cast<JGLSprite*(__thiscall*)(JGLSprite*,void*)>(jgl_base+0x7e80)(sprite,nullptr);
@@ -69,9 +72,9 @@ if(!performance_frames.empty()){
             copy(live_images[0],screen_surface,full);QueryPerformanceCounter(&map_done);
             HDC body_dc=nullptr;
             if(!resident)body_dc=reinterpret_cast<HDC(__thiscall*)(JGL_Image*)>(screen_surface->vtable[10])(screen_surface);
-            for(int n=0;n<8;++n){auto actor=unit;actor.unit_id=800+n;actor.direction=1+n;actor.action_cursor=(captured.step/4+n)%16;
+            for(int n=0;n<unit_count;++n){auto actor=unit;actor.unit_id=800+n;actor.direction=1+n%8;actor.action_cursor=(captured.step/4+n)%16;
                 actor.presentation_frequency=requested.presentation_frequency;actor.presentation_time_ticks=requested.presentation_time_ticks;
-                actor.body_x=(n%4)*w/4;actor.body_y=(n/4)*h/2;int bounds[4]={};
+                actor.body_x=unit_count==1?w/2:(n%4)*w/4;actor.body_y=unit_count==1?h/2:(n/4)*h/((unit_count+3)/4);int bounds[4]={};
                 if(resident){int result=live(C3X_NATIVE_UNIT_DRAW,screen_surface,screen_surface,&actor,bounds,0);
                     if(result!=1)std::fprintf(stderr,"FRAME_UNIT_FAILURE workload=%d block=%d step=%d actor=%d result=%d lifetime=%d leases=%d,%d\n",workload,block,captured.step,n,result,
                         state.custom_renderer_native_lifetime(C3X_NATIVE_MAP,screen_surface,0),

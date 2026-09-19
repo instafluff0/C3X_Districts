@@ -45,6 +45,7 @@ int main(){
   float fade=std::clamp(float(std::min({x,y,input.width-1-x,input.height-1-y}))/3,0.f,1.f);
   unsigned expected=unsigned(255*lighting::c3x_dynamic_shadow_opacity*input.shadow_strength*fade*control->shadow.coverage((sx+sy)*.5f,(sy-sx)*.5f));
   assert(result->ground_shadow[std::size_t(y)*input.width+x]==expected);
+  if(expected)assert(x>=selected->coverage[0]&&y>=selected->coverage[1]&&x<selected->coverage[2]&&y<selected->coverage[3]);
  }
  auto turned=pool.take(2);assert(turned && turned->uploads!=control->uploads);
  pool.pause();assert(pool.statistics().built==2 && pool.statistics().active_peak<=2);

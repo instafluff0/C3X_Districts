@@ -27,6 +27,8 @@ def main():
     parser.add_argument('--dense-city-case',default='',help='Dense city culture,era,size,capital, for example 0,3,1,1; requires --dense-scene')
     parser.add_argument('--object-workers',choices=('0','1'),default='1',help='Use the identical object compiler on the foreground (0) or bounded worker (1)')
     parser.add_argument('--ground-workers',choices=('0','1'),default='1',help='Run the production ground compiler serially (0) or on its bounded worker (1)')
+    parser.add_argument("--unit-count",type=int,choices=(1,8,16,32),default=8,help="Unit count in the complete native-frame workload")
+    parser.add_argument("--unit-scene",choices=("0","1"),default="1",help="Ordered direct unit scene draws (1) or preserved resident-pose control (0)")
     parser.add_argument("--visibility",action="store_true",help="Capture world-fixed visible, explored and unseen regions")
     parser.add_argument("--visual-only",action="store_true",help="Use production rendering settings and validate independent visual frames without the 384-request comparison")
     parser.add_argument("--scroll-coverage",action="store_true",help="Exercise fine scrolling and guard coverage against missing map pixels")
@@ -71,6 +73,8 @@ def main():
         'C3X_RENDERER_PREVIEW_DENSE_SCENE':'1' if args.dense_scene else '',
         'C3X_RENDERER_PREVIEW_DENSE_CITY_CASE':args.dense_city_case,
         'C3X_RENDERER_PREVIEW_VISIBILITY':'1' if args.visibility else '',
+        'C3X_RENDERER_UNIT_SCENE_CONTROL':'1' if args.unit_scene=='0' else '',
+        'C3X_RENDERER_BENCHMARK_UNITS':str(args.unit_count),
         'C3X_RENDERER_PREVIEW_SESSION':'','C3X_RENDERER_PREVIEW_REPLAY':'','C3X_RENDERER_PREVIEW_ANIMATION':''}
     if args.benchmark or args.visual_only or args.scroll_coverage:
         # Match configure_custom_renderer_effects with the shipped cache enabled.
@@ -96,12 +100,28 @@ def main():
     passed=complete==[invocation,'0'] and unchanged and 'PASS resident map GPU worker:' in log and 'PASS native GPU worker transport:' in log and 'PASS native screen transfer:' in log and 'PASS live native screen:' in log and 'PASS production native map owner:' in log and ('PASS prepared GPU map adoption:' in log or (args.width>2224 and args.height>1176 and 'PASS bounded GPU map demand:' in log))
     receipt={'status':'pass' if passed else 'fail' if complete else 'unconfirmed','inputs':inputs,'inputs_unchanged':unchanged,'transport_returncode':process.returncode,'transport_output':process.stdout+process.stderr,'settings':settings,'scope':'production captured renderer map -> existing GPU worker -> packed composition; oracle readback explicit; actual native final presentation including CPU compatibility callback; no game speedup claim'}
     trace=(out/'renderer.log').read_text(errors='replace') if (out/'renderer.log').exists() else ''
-    resident_units=[line for line in trace.splitlines() if 'resident_pose=1' in line]
+    import re
+    dropped=sum(int(value) for value in re.findall(r'TRACE_BUFFER dropped=(\d+)',trace))
+    receipt['trace_coverage']={'dropped_lines':dropped,'complete':dropped==0}
+    resident_units=[line for line in trace.splitlines() if 'resident_pose=1' in line or 'direct_scene=1' in line]
     resident_proof=bool(resident_units) and any('cache_hit=0' in line for line in resident_units) and any('cache_hit=1' in line for line in resident_units) and all('body_readbacks=0 composition_uploads=0' in line for line in resident_units)
     receipt['resident_unit_proof']={'requests':len(resident_units),'cold_and_warm_without_body_readback_or_composition_upload':resident_proof}
     # The connected producer must finish real cold poses without the old CPU
     # round trip, not merely avoid reading its destination/background canvas.
     passed=passed and resident_proof
+    direct=[line for line in trace.splitlines() if 'stage=unit-scene ' in line]
+    if direct:
+        direct_proof=all('body_readbacks=0 composition_uploads=0' in line for line in direct)
+        receipt['direct_unit_scene_proof']={'requests':len(direct),'no_CPU_round_trip':direct_proof}
+        passed=passed and direct_proof
+        import re
+        map_draws=max((int(m.group(1)) for line in direct if (m:=re.search(r'\bmap_draws=(\d+)',line))),default=0)
+        region_peak=max((int(m.group(1)) for line in direct if (m:=re.search(r'\bregion_bytes=(\d+)',line))),default=0)
+        work_peak=max((int(m.group(1)) for line in direct if (m:=re.search(r'\bwork_bytes=(\d+)',line))),default=0)
+        receipt['direct_unit_scene_proof'].update(map_color_depth_draws=map_draws,maximum_reported_region_bytes=region_peak,maximum_reported_work_bytes=work_peak)
+        passed=passed and work_peak<=96*1024*1024
+        if args.unit_scene=='1' and not args.visibility and (args.benchmark or args.visual_only):
+            passed=passed and map_draws>0 and region_peak<=64*1024*1024
     receipt['status']='pass' if passed else 'fail' if complete else 'unconfirmed'
     if args.scroll_coverage:
         passed=complete==[invocation,'0'] and unchanged and 'PASS scroll coverage:' in log
@@ -128,6 +148,24 @@ def main():
                     if values:summary[key]={'mean':statistics.mean(values),'median':statistics.median(values),'p95':values[min(len(values)-1,int(len(values)*.95))],'max':max(values)}
                 groups.append(summary)
         receipt['whole_frame_comparison']={'groups':groups,'samples':samples,'parse_errors':parse_errors,'control':'same candidate DLL using native CPU publication, blit, units, JGL UI and native GDI final transfer','capture_outside_timing':True,'desktop_completion_is_not_physical_scanout':True}
+        if direct:
+            import bisect
+            fields=('map_draws','compatibility_builds','compatibility_hits','region_captures','region_evictions')
+            rows=[]
+            for line in direct:
+                values=dict(re.findall(r'(\w+)=(\d+)',line))
+                if 'qpc' in values:rows.append({key:int(value) for key,value in values.items()})
+            times=[row['qpc'] for row in rows];totals=dict.fromkeys(fields,0)
+            for sample in samples:
+                if sample['route']!='GPU':continue
+                a=bisect.bisect_left(times,int(sample['begin_qpc']))-1
+                b=bisect.bisect_right(times,int(sample['end_qpc']))-1
+                if b<0:continue
+                for field in fields:totals[field]+=rows[b].get(field,0)-(rows[a].get(field,0) if a>=0 else 0)
+            receipt['direct_unit_scene_proof']['timed_GPU_operations']=totals
+            receipt['direct_unit_scene_proof']['counter_totals_are_lower_bounds']=dropped>0
+            receipt['direct_unit_scene_proof']['timed_GPU_samples_with_counter_coverage']=sum(1 for sample in samples if sample['route']=='GPU' and times and (not dropped or int(sample['end_qpc'])<=times[-1]))
+            if args.unit_scene=='1' and not args.visibility:passed=passed and totals['map_draws']>0
         passed=passed and not parse_errors and len(samples)==384 and 'PASS whole native frame comparison:' in log
         receipt['status']='pass' if passed else 'fail' if complete else 'unconfirmed'
     if args.visual_only:

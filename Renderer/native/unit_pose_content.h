@@ -26,6 +26,7 @@ struct UnitPoseContent {
     std::vector<std::array<float,12>> shadow_triangles;
     std::array<float,16> ground_projection{};
     std::vector<std::vector<std::array<float,17>>> uploads;
+    std::array<int,4> coverage{}; // Conservative body plus filtered ground-shadow pixels.
     explicit UnitPoseContent(int extent,bool gpu=false):shadow(extent,!gpu){}
     std::size_t bytes() const {
         std::size_t size=sizeof(*this)+shadow_triangles.capacity()*sizeof(shadow_triangles[0])+ground_shadow.capacity()+shadow.heights.capacity()*sizeof(float)+uploads.capacity()*sizeof(uploads[0]);
@@ -164,6 +165,16 @@ struct UnitPoseCompiler {
                 }
             }
         }
+        float left=float(w),top=float(h),right=0,bottom=0;
+        auto include=[&](float x,float y){left=std::min(left,x);top=std::min(top,y);right=std::max(right,x);bottom=std::max(bottom,y);};
+        for(auto const& part:result->uploads)for(auto const& v:part)include((v[0]+1)*w*.5f,(1-v[1])*h*.5f);
+        // The 3x3 height filter reaches one cell beyond its stored domain.
+        // Extra cells and two pixels conservatively cover floor/MSAA rounding.
+        if(input.shadow_strength>0){float dx=shadow.width*2/shadow.extent,dy=shadow.height*2/shadow.extent;
+            for(float x:{shadow.left-dx,shadow.left+shadow.width+dx})for(float y:{shadow.top-dy,shadow.top+shadow.height+dy})
+                include(input.anchor_x+(x-y)*64*zoom,input.anchor_y+(x+y)*32*zoom);}
+        result->coverage={std::clamp(int(std::floor(left))-2,0,w),std::clamp(int(std::floor(top))-2,0,h),
+            std::clamp(int(std::ceil(right))+2,0,w),std::clamp(int(std::ceil(bottom))+2,0,h)};
         return result;
     }
 };

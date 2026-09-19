@@ -13,6 +13,15 @@ class RetainedComposition {
 public:
     using Texture=ComPtr<ID3D11Texture2D>;
     using Sample=std::function<Texture(long long,long long)>;
+    using Scene=c3x_renderer::UnitSceneProvenance;
+    using SceneSample=std::function<Scene()>;
+    struct Direct {
+        // Sample copied state once per frame, then execute against assembled
+        // resident underlays in native order. No finished unit source image.
+        bool animated=false;
+        std::function<std::uint64_t(long long,long long)> revision;
+        std::function<bool(Compositor&,Command const&)> draw;
+    };
 private:
     struct Node;
     struct Patch {Rect area;std::shared_ptr<Node> node;unsigned output=0;};
@@ -22,7 +31,7 @@ private:
         Picture inputs[6];Id original[6]={};
         Texture output[2];std::uint64_t bytes[2]={},revision=0,seen=0;
         std::vector<std::uint64_t> dependencies;
-        Sample sample;
+        Sample sample;Direct direct;Scene scenes[2];SceneSample scene_sample;
     };
     ID3D11Device* device;ID3D11DeviceContext* context;
     Compositor replay;
@@ -79,9 +88,11 @@ private:
         if(n->sample){
             auto sampled=n->sample(ticks,frequency);
             if(!sampled)throw std::runtime_error("retained visual selection retired");
+            if(n->scene_sample)n->scenes[0]=n->scene_sample();
             if(sampled.Get()!=n->output[0].Get()){output(*n,0,std::move(sampled));n->revision=++serial;}
         }else if(n->operation){
             std::vector<std::uint64_t> versions;
+            if(n->direct.revision)versions.push_back(n->direct.revision(ticks,frequency));
             for(auto const& p:n->inputs)for(auto const& patch:p.patches){evaluate(patch.node,ticks,frequency,depth+1);versions.push_back(patch.node->revision);}
             if(!n->output[0]||versions!=n->dependencies){
                 Id temporary[6]={};
@@ -106,9 +117,11 @@ private:
                     c.area={c.area.left-x,c.area.top-y,c.area.right-x,c.area.bottom-y};
                     c.clip={c.clip.left-x,c.clip.top-y,c.clip.right-x,c.clip.bottom-y};
                     Rect result={n->area.left-x,n->area.top-y,n->area.right-x,n->area.bottom-y};
-                    if(!replay.submit(&c,1))throw std::runtime_error("retained operation rejected");
+                    if(!(n->direct.draw?n->direct.draw(replay,c):replay.submit(&c,1)))throw std::runtime_error("retained operation rejected");
                     output(*n,0,crop(replay.texture(c.destination),result));
                     if(c.detail)output(*n,1,crop(replay.texture(c.detail),result));
+                    for(unsigned i=0;i<(c.detail?2u:1u);++i){n->scenes[i]={};n->scenes[i].copy(replay.scene(i?c.detail:c.destination),
+                        {0,0,result.right-result.left,result.bottom-result.top},result.left,result.top);}
                     n->dependencies=std::move(versions);n->revision=++serial;
                     if(!n->dynamic){for(auto& input:n->inputs)input={};n->dependencies.clear();n->operation=false;}
                 }catch(...){for(unsigned i=0;i<6;++i)if(temporary[i]&&std::find(temporary,temporary+i,temporary[i])==temporary+i)replay.destroy(temporary[i]);throw;}
@@ -127,7 +140,7 @@ private:
         if(readonly&&p.patches.size()==1){auto const& part=p.patches[0];auto a=part.area,b=part.node->area;
             if(a.left==0&&a.top==0&&a.right==int(p.width)&&a.bottom==int(p.height)&&a.left==b.left&&a.top==b.top&&a.right==b.right&&a.bottom==b.bottom&&
                region.left==0&&region.top==0&&region.right==int(p.width)&&region.bottom==int(p.height)&&part.node->output[part.output]){
-                auto id=replay.attach_source(part.node->output[part.output].Get(),p.format);if(id)return id;
+                auto id=replay.attach_source(part.node->output[part.output].Get(),p.format);if(id){replay.scene(id,part.node->scenes[part.output]);return id;}
             }
         }
         Id out=replay.create(region.right-region.left,region.bottom-region.top,p.format);if(!out)throw std::runtime_error("retained composition scratch budget");
@@ -138,6 +151,9 @@ private:
                 D3D11_BOX box={unsigned(area.left-part.node->area.left),unsigned(area.top-part.node->area.top),0,
                     unsigned(area.right-part.node->area.left),unsigned(area.bottom-part.node->area.top),1};
                 context->CopySubresourceRegion(replay.texture(out),0,area.left-region.left,area.top-region.top,0,source.Get(),0,&box);
+                auto proof=replay.scene(out);proof.copy(part.node->scenes[part.output],
+                    {area.left-region.left,area.top-region.top,area.right-region.left,area.bottom-region.top},
+                    region.left-part.node->area.left,region.top-part.node->area.top);replay.scene(out,std::move(proof));
             }
         }catch(...){replay.destroy(out);throw;}
         return out;
@@ -155,14 +171,14 @@ public:
     bool ready()const{return admitted&&front.width!=0;}
     void create(Id id,unsigned w,unsigned h,Format format){if(admitted)images[id]={w,h,format,{}};}
     void destroy(Id id){images.erase(id);} // committed versions retain their own source data
-    void source(Id id,ID3D11Texture2D* texture,Sample sample={},bool immutable=false){
+    void source(Id id,ID3D11Texture2D* texture,Sample sample={},bool immutable=false,Scene scene={},SceneSample scene_sample={}){
         if(!admitted)return;auto& p=images.at(id);auto n=node();n->area=extent(p);n->revision=++serial;
-        output(*n,0,(sample||immutable)?Texture(texture):crop(texture,n->area));n->dynamic=bool(sample);n->sample=std::move(sample);p.patches={{n->area,n,0}};
+        output(*n,0,(sample||immutable)?Texture(texture):crop(texture,n->area));n->dynamic=bool(sample);n->sample=std::move(sample);n->scenes[0]=std::move(scene);n->scene_sample=std::move(scene_sample);p.patches={{n->area,n,0}};
     }
-    void record(Command const& c){
+    void record(Command const& c,Direct direct={}){
         if(!admitted)return;auto target=images.find(c.destination);if(target==images.end())throw std::runtime_error("retained target missing");
         auto area=intersect(intersect(c.area,c.clip),extent(target->second));if(empty(area))return;
-        auto n=node();n->operation=true;n->area=area;n->command=c;n->command.clip=area;
+        auto n=node();n->operation=true;n->area=area;n->command=c;n->command.clip=area;n->direct=std::move(direct);n->dynamic=n->direct.animated;
         Id ids[6]={c.destination,c.source,c.background,c.detail,c.background_detail,c.program};
         bool opaque=c.kind==Kind::fill||c.kind==Kind::copy||c.kind==Kind::quantize||
             (c.kind==Kind::expand&&c.color==65536)||(c.kind==Kind::native_image&&c.color==65536);

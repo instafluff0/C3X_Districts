@@ -183,6 +183,13 @@ namespace c3x_native_images {
 struct ScreenSnapshot {RECT area{};int width=0,height=0;HWND window=nullptr;unsigned native_format=0;std::vector<unsigned short> pixels;};
 }
 bool native_transfer_test=false;unsigned native_transfers=0;
+#include "Renderer/native/render_core/scene_provenance.h"
+namespace c3x_renderer {
+struct UnitSceneRegion {struct {void* color=nullptr;} base;};
+struct UnitSceneSource {std::function<std::shared_ptr<UnitSceneRegion>(c3x_gpu_images::Rect)> capture;};
+using UnitSceneProvenance=render_core::SceneProvenance<UnitSceneSource,c3x_gpu_images::Rect>;
+}
+
 namespace c3x_gpu_images {
 struct NativePresenter {
  bool caller_thread(){return true;}void release_native(){}void reset(){}
@@ -192,7 +199,9 @@ struct NativePresenter {
  int view(){return unexpected_gpu();}int retained(){return unexpected_gpu();}int buffer(){return unexpected_gpu();}
  int present(){assert(native_transfer_test);++native_transfers;return C3X_RENDERER_RESULT_OK;}void gpu_written(){unexpected_gpu();}
 };
+struct Compositor {template<class... T> Id attach_source(T...){unexpected_gpu();return 0;} bool destroy(Id){return unexpected_gpu();}c3x_renderer::UnitSceneProvenance scene(Id){unexpected_gpu();return {};}template<class... T> bool submit(T...){return unexpected_gpu();}};
 struct RetainedComposition {
+ struct Direct {bool animated=false;std::function<std::uint64_t(long long,long long)> revision;std::function<bool(Compositor&,Command const&)> draw;};
  struct Texture {ID3D11Texture2D* Get()const{unexpected_gpu();return nullptr;}explicit operator bool()const{return false;}};
  using Sample=std::function<Texture(long long,long long)>;
 };
@@ -206,6 +215,7 @@ struct Session {
  int map_image(){return unexpected_gpu();}int session_identity(){return unexpected_gpu();}
  template<class... T> bool publish(T...){return unexpected_gpu();}
  template<class... T> int execute(T&&...){return unexpected_gpu();}
+ template<class... T> int draw_unit_scene(T...){return unexpected_gpu();}
  template<class... T> int compose_resident_unit(T...){return unexpected_gpu();}
  bool display_to(long long,std::uint64_t,int,int,int,int,int,Rect){return unexpected_gpu();}
 };
@@ -224,6 +234,7 @@ unsigned GetEnvironmentVariableA(char const* name,char* out,std::size_t){
 template<std::size_t N,class... T> void sprintf_s(char (&buffer)[N],char const* format,T... args){std::snprintf(buffer,N,format,args...);}
 #endif
 namespace c3x_renderer {
+struct UnitSceneSample {std::array<int,4> coverage;};
 struct Signature {std::uint64_t complete=0;};
 Signature terrain_frame_signature(c3x_renderer_frame_v1 const& f,long long,unsigned){
     return {std::uint64_t(f.presentation_time_ticks)+1};
@@ -241,6 +252,8 @@ std::atomic<bool> hold_unit_pixels{false},unit_pixels_entered{false};
 std::atomic<bool> check_demand_priority{false},demand_executed{false};
 std::atomic<unsigned> priority_preparations{0};
 struct Bodies {
+    template<class... T> bool scene_coverage(T&&...){return unexpected_gpu();}
+    bool direct_scene=false;std::uint64_t map_scene_draws=0;
     double payload_ms=0,pose_ms=0,submission_ms=0,readback_ms=0,output_ms=0;bool pose_content_hit=false;
     struct Stats {unsigned built=0,consumed=0,cancelled=0,evicted=0,rejected=0,active_peak=0;double cpu_ms=0,wait_ms=0;std::size_t bytes=0,peak_bytes=0;};
     Stats pose_preparation_statistics(){return {};}
@@ -268,11 +281,16 @@ struct Bodies {
     char const* failure_reason="";bool cache_hit=false,cached=false;std::size_t cache_bytes=0;unsigned keyed_pixels=0,cast_pixels=0;
     bool restore_cached(c3x_renderer_unit_v1 const&){cache_hit=cached;return cached;}
     std::size_t cached_pose_entries()const{return cached?1u:0u;}
-    template<class F> bool render(Device*,Context*,c3x_renderer_unit_v1 const&,F,void* =nullptr,unsigned=1,bool=false){demand_executed=true;return true;}
+    template<class F> bool render(Device*,Context*,c3x_renderer_unit_v1 const&,F,void* =nullptr,unsigned=1,bool=false,c3x_renderer::UnitSceneSample* =nullptr){demand_executed=true;return true;}
     bool blit(HDC,int,int,HDC){return true;}void reset_gpu(){}
 };
 struct D3D11_RECT {int left,top,right,bottom;};
 struct RendererState {
+    std::uint64_t unit_scene_captures=0,unit_scene_rejections=0,unit_scene_evictions=0;
+    struct {std::size_t bytes(){return 0;}} unit_scene_work;
+    std::shared_ptr<std::size_t> unit_scene_bytes=std::make_shared<std::size_t>(0);
+    std::shared_ptr<c3x_renderer::UnitSceneSource> unit_scene_source(){unexpected_gpu();return {};}
+    template<class... T> bool draw_scene_unit(T&&...){return unexpected_gpu();}
     struct Terrain {bool configured=false;std::vector<std::uint8_t> dds;};
     std::array<Terrain,14> terrain_textures;
     Trace trace;Bodies unit_bodies;bool unit_rendering_enabled=true,pickup_profile=false,cache_valid=false,profiling=false;

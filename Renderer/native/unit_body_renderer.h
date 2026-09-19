@@ -6,6 +6,8 @@
 #include "unit_shadow.h"
 #include "unit_pose_content.h"
 #include "gpu_unit_finish.h"
+#include "gpu_unit_scene.h"
+#include "unit_scene_surface.h"
 #include "gpu_unit_shadow.h"
 #include "environment_refresh/unit_shader.h"
 
@@ -17,8 +19,11 @@ class UnitBodyRenderer {
     struct PendingPose;
 public:
     struct PublishedPose {std::vector<std::uint32_t> pixels;int width=0,height=0;unsigned cast_pixels=0;bool prepared=false;};
-    struct ResidentPose {Microsoft::WRL::ComPtr<ID3D11Texture2D> texture;int width=0,height=0;bool prepared=false;};
+    struct ResidentPose {Microsoft::WRL::ComPtr<ID3D11Texture2D> texture;int width=0,height=0;bool prepared=false;std::array<int,4> coverage{};};
     ResidentPose resident_pose;
+    UnitSceneSample scene_sample;
+    bool direct_scene=true;
+    std::uint64_t map_scene_draws=0;
     std::size_t resident_pose_bytes=0;
     std::uint64_t resident_pose_builds=0,resident_pose_hits=0,output_readbacks=0;
     std::uint64_t gpu_shadow_passes=0,gpu_shadow_input_bytes=0,cpu_shadow_upload_bytes=0;
@@ -72,13 +77,13 @@ public:
     template<class T> void release(T*& p) { if(p) {p->Release();p=nullptr;} }
     void reset_gpu() {
         reset_pose_preparation();
-        resident_pose={};resident_cache.clear();resident_pose_bytes=0;gpu_finish.reset();gpu_shadow.reset();
+        scene_resolve.reset();resident_pose={};scene_sample={};resident_cache.clear();resident_pose_bytes=0;gpu_finish.reset();gpu_shadow.reset();
         for(auto & mesh:meshes) release(mesh.indices);
         for(auto & texture:textures) release(texture.view);
         release(vertex);release(pixel);release(layout);release(settings);release(beauty_frame);release(vertices);
         release(shadow_target);release(shadow_view);release(shadow_texture);
         for(auto & sampler:samplers)release(sampler);
-        release(raster);release(target);release(output);release(readback);
+        release(raster);release(output_view);release(target);release(output);release(readback);
         linear.reset();transfer.reset(); capacity=0; image_width=image_height=0;target_width=target_height=0;
         {std::lock_guard<std::recursive_mutex> guard(cache_mutex);cache.clear();cache_bytes=0;}pixels.clear();release(batch_readback);
     }
@@ -116,6 +121,7 @@ public:
         if(w<1 || h<1 || w>1024 || h>1024)return false;
         Key key={unsigned(found-units.begin()),int(action-found->actions.begin()),request.direction,
             pose_cursor,request.frame_count,w,h,scale_milli,request.hour,request.season,request.display_color_rgb};
+
         unsigned pose_memory=NavigationOptions::unit_pose_mib(GetEnvironmentVariableA);
         configure_pose_cache(pose_memory>=256,pose_memory==512);
         for(auto& saved:cache)if(saved.key==key) {
@@ -174,17 +180,26 @@ public:
     }
 
     template<class Prepare>
-    bool render(ID3D11Device* device,ID3D11DeviceContext* context,c3x_renderer_unit_v1 const & request,Prepare prepare,PendingPose* deferred=nullptr,unsigned predict=1,bool resident=false) {
+    bool scene_coverage(c3x_renderer_unit_v1 const& request,Prepare prepare,unsigned predict,std::array<int,4>& bounds){
+        PoseSelection selected;if(!select_pose(request,selected))return false;
+        for(auto const& saved:resident_cache)if(saved.key==selected.key){bounds=saved.pose.coverage;return true;}
+        if(!prepare(*selected.action))return false;
+        scene_prepared=prepare_pose_content(request,*selected.unit,*selected.action,selected.pose,selected.key,predict,false,true);
+        if(!scene_prepared)return false;scene_prepared_key=selected.key;bounds=scene_prepared->coverage;return true;
+    }
+
+    template<class Prepare>
+    bool render(ID3D11Device* device,ID3D11DeviceContext* context,c3x_renderer_unit_v1 const & request,Prepare prepare,PendingPose* deferred=nullptr,unsigned predict=1,bool resident=false,render_core::LinearTarget* destination=nullptr) {
         payload_ms=pose_ms=submission_ms=readback_ms=output_ms=0;
         LARGE_INTEGER stage_begin={},stage_end={},frequency={};QueryPerformanceFrequency(&frequency);QueryPerformanceCounter(&stage_begin);
         auto elapsed=[&](){QueryPerformanceCounter(&stage_end);double ms=1000.0*(stage_end.QuadPart-stage_begin.QuadPart)/frequency.QuadPart;stage_begin=stage_end;return ms;};
-        if(!resident&&restore_cached(request,predict))return true;
+        if(!resident&&!destination&&restore_cached(request,predict))return true;
         cache_hit=false;keyed_pixels=cast_pixels=0;failure_reason="invalid-request-or-device";
         PoseSelection selection;
         if(!device || !context || !select_pose(request,selection))return false;
         auto found=selection.unit;auto action=selection.action;auto const& pose=selection.pose;
         auto const& key=selection.key;int w=key.width,h=key.height;
-        if(resident){
+        if(resident && !destination){
             resident_pose={};
             for(auto& saved:resident_cache)if(saved.key==key){
                 saved.used=++resident_serial;resident_pose=saved.pose;if(!deferred)saved.pose.prepared=false;
@@ -197,7 +212,7 @@ public:
         failure_reason="animation-payload-load";
         if(!prepare(*action))return false;
         payload_ms=elapsed();
-        auto prepared=prepare_pose_content(request,*found,*action,pose,key,predict,resident&&deferred,resident);
+        auto prepared=resident&&scene_prepared&&scene_prepared_key==key?scene_prepared:prepare_pose_content(request,*found,*action,pose,key,predict,resident&&deferred,resident);
         if(!prepared){failure_reason="pose-content";return false;}
         pose_ms=elapsed();
         failure_reason="gpu-target-setup";
@@ -213,11 +228,17 @@ public:
             context->UpdateSubresource(shadow_texture,0,nullptr,prepared->shadow.heights.data(),prepared->shadow.extent*4,0);
             cpu_shadow_upload_bytes+=prepared->shadow.heights.size()*sizeof(float);
         }
-        float clear_color[4]={};context->OMSetRenderTargets(1,&linear.target,linear.depth);
-        context->ClearRenderTargetView(linear.target,clear_color);
-        context->ClearDepthStencilView(linear.depth,D3D11_CLEAR_DEPTH,1,0);
+        auto& attachment=destination?*destination:linear;
+        context->OMSetRenderTargets(1,&attachment.target,attachment.depth);
+        if(!destination){float clear_color[4]={};context->ClearRenderTargetView(attachment.target,clear_color);
+            context->ClearDepthStencilView(attachment.depth,D3D11_CLEAR_DEPTH,1,0);}
+        // Map regions carry the production 2x MSAA color and depth. Preserve
+        // native body painter order in the near depth band; shared receiver and
+        // terrain/unit occlusion membership is the following M2.3 responsibility.
+        D3D11_VIEWPORT vp=destination?D3D11_VIEWPORT{0,0,float(w*samples),float(h*samples),0,.5f}:
+            D3D11_VIEWPORT{0,0,float(w*samples),float(h*samples),0,1};
+        context->RSSetViewports(1,&vp);context->RSSetState(raster);
         context->OMSetBlendState(nullptr,nullptr,0xffffffffu);context->OMSetDepthStencilState(nullptr,0);
-        D3D11_VIEWPORT vp={0,0,float(w*samples),float(h*samples),0,1}; context->RSSetViewports(1,&vp);context->RSSetState(raster);
         context->IASetInputLayout(layout);context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         context->VSSetShader(vertex,nullptr,0);context->PSSetShader(pixel,nullptr,0);
         context->PSSetConstantBuffers(0,1,&settings);
@@ -290,14 +311,28 @@ public:
             context->DrawIndexed(UINT(mesh.animation->indices.size()),0,0);
         }
         ID3D11ShaderResourceView* empty[6]={};context->PSSetShaderResources(0,6,empty);
+        if(destination){
+            // Native presentation still needs a coverage-resolved contribution.
+            // Shader MSAA resolve differs from the production hardware resolve:
+            // preserve every HDR sample in existing bounded scratch, then use
+            // the same hardware resolve/display conversion as the CPU control.
+            // The geometry was drawn into map color/depth, not into this scratch.
+            if(!scene_resolve.ensure(device)||!scene_resolve.draw(context,linear,destination->samples,
+                destination->depth_samples,0,0,{},nullptr,0,0,false,false,0,true))return false;
+            ++map_scene_draws;
+        }
         failure_reason="gpu-body-transfer";
         transfer.draw(context,linear,target,environment.exposure,samples);
         context->OMSetRenderTargets(0,nullptr,nullptr);
+        if(destination){
+            scene_sample={output_view,shadow_view,prepared->ground_projection,unsigned(w),unsigned(h)};
+            image_width=w;image_height=h;failure_reason="none";output_ms=elapsed();return true;
+        }
         PendingPose pending;pending.key=key;pending.request=request;pending.pose=pose;
         pending.content=prepared;pending.shadow_strength=environment.shadow_strength;
         if(resident){
             failure_reason="gpu-body-finish";
-            resident_pose={gpu_finish.finish(device,context,output,unsigned(w),unsigned(h),shadow_view,prepared->ground_projection),w,h,deferred!=nullptr};
+            resident_pose={gpu_finish.finish(device,context,output,unsigned(w),unsigned(h),shadow_view,prepared->ground_projection),w,h,deferred!=nullptr,prepared->coverage};
             constexpr std::size_t budget=64u*1024u*1024u;auto bytes=std::size_t(w)*h*4;
             while(!resident_cache.empty()&&(resident_pose_bytes>budget-bytes||resident_cache.size()>=512)){
                 auto old=std::min_element(resident_cache.begin(),resident_cache.end(),[](auto const& a,auto const& b){return a.used<b.used;});
@@ -374,7 +409,10 @@ public:
         if(!GlobalMemoryStatusEx(&memory)||memory.ullAvailVirtual<608ull*1024*1024)return 0;
         unsigned built=0;
         for(unsigned n=0;n<count&&!demanded.load(std::memory_order_relaxed);++n){PendingPose pending;
-            if(render(device,context,requests[n],prepare,&pending,0,true)&&!cache_hit)++built;
+            if(direct_scene){PoseSelection selection;
+                if(select_pose(requests[n],selection) && prepare(*selection.action) &&
+                   prepare_pose_content(requests[n],*selection.unit,*selection.action,selection.pose,selection.key,0,true,true))++built;
+            }else if(render(device,context,requests[n],prepare,&pending,0,true)&&!cache_hit)++built;
         }
         return built;
     }
@@ -516,6 +554,8 @@ private:
             pose_cursor,pose_frames,w,h,scale_milli,request.hour,request.season,request.display_color_rgb};
         selection.unit=&*found;selection.action=&*action;selection.pose=pose;return true;
     }
+    Key scene_prepared_key{};
+    std::shared_ptr<UnitPoseContent const> scene_prepared;
     struct Cached {Key key;std::uint64_t used;std::vector<std::uint32_t> pixels;unsigned cast_pixels;bool prepared=false;};
     struct PendingPose {Key key{};c3x_renderer_unit_v1 request{};UnitAnimationPose pose{};
         std::shared_ptr<UnitPoseContent const> content;float shadow_strength=0;bool speculative=false;};
@@ -636,7 +676,7 @@ public:
     auto pose_preparation_statistics(){return pose_preparation.statistics();}
     std::size_t pose_retained_bytes() const{return retained_pose_bytes;}
     void release_pose_leases(){pose_preparation.clear();pose_preparation_configured=false;observed_poses.clear();}
-    void reset_pose_preparation(){release_pose_leases();retained_poses.clear();retained_pose_bytes=0;}
+    void reset_pose_preparation(){scene_prepared.reset();release_pose_leases();retained_poses.clear();retained_pose_bytes=0;}
 private:
 
     ID3D11VertexShader *vertex=nullptr;ID3D11PixelShader *pixel=nullptr;ID3D11InputLayout *layout=nullptr;
@@ -644,7 +684,8 @@ private:
     ID3D11SamplerState *samplers[4]={};ID3D11RasterizerState *raster=nullptr;
     ID3D11RenderTargetView* shadow_target=nullptr;
     int shadow_size=0;ID3D11Texture2D* shadow_texture=nullptr;ID3D11ShaderResourceView* shadow_view=nullptr;
-    render_core::LinearTarget linear;render_core::LinearOutput transfer;
+    render_core::LinearTarget linear;render_core::LinearOutput transfer;render_core::LinearRestore scene_resolve;
+    ID3D11ShaderResourceView* output_view=nullptr;
     ID3D11Texture2D *output=nullptr,*readback=nullptr;ID3D11RenderTargetView *target=nullptr;
     int target_width=0,target_height=0;
     HDC dc=nullptr;HBITMAP bitmap=nullptr;HGDIOBJ previous=nullptr;void* bits=nullptr;
@@ -703,11 +744,12 @@ private:
         }
         if(!linear.ensure(device,UINT(w*samples),UINT(h*samples)) || !transfer.ensure(device))return false;
         if(!target || target_width!=w || target_height!=h) {
-            release(target);release(output);release(readback);
+            release(output_view);release(target);release(output);release(readback);
             D3D11_TEXTURE2D_DESC d={};d.Width=UINT(w);d.Height=UINT(h);d.MipLevels=d.ArraySize=1;
             d.Format=DXGI_FORMAT_B8G8R8A8_UNORM;d.SampleDesc.Count=1;d.Usage=D3D11_USAGE_DEFAULT;d.BindFlags=D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE;
             HRESULT hr=device->CreateTexture2D(&d,nullptr,&output);
             if(SUCCEEDED(hr))hr=device->CreateRenderTargetView(output,nullptr,&target);
+            if(SUCCEEDED(hr))hr=device->CreateShaderResourceView(output,nullptr,&output_view);
             if(FAILED(hr)){release(target);return false;}target_width=w;target_height=h;
         }
         return true;

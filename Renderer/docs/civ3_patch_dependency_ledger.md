@@ -1,5 +1,15 @@
 # Civ III patch dependency ledger
 
+## Direct unit scene execution (2.2)
+
+DLL-only execution extends the existing `Unit_tick_anim`,
+`Sprite_draw_unit_body_normal`, `Sprite_draw_unit_body_reduced` and resident JGL
+image bridge.
+Copied inputs, native anchors, fog eligibility, UI scope and config-off forwarding
+retain their existing ABI and ownership. No new native suppression or patch-table
+entry is required. `required_user_action: []`. Candidate verification does not
+stage/install binaries or launch Civ III.
+
 ## Map fog replacement (GOG, API 18)
 
 Explicit user authorization permits this new GOG CSV entry. The direct inlead

@@ -13,13 +13,14 @@ public:
     Session(ID3D11Device* d,ID3D11DeviceContext* c):device(d),context(c),gpu(d,c,96u*1024u*1024u),layers(d,c){}
     // At 2240x1192 the map, screen and popup color pairs exceed 64 MiB.
     // Keep an explicit 96 MiB live-image ceiling; replay has its own budget.
-    bool publish(ID3D11Texture2D* texture,std::int64_t serial,int x=0,int y=0,int width=0,int height=0,RetainedComposition::Sample sample={}){
+    bool publish(ID3D11Texture2D* texture,std::int64_t serial,int x=0,int y=0,int width=0,int height=0,RetainedComposition::Sample sample={},RetainedComposition::Scene scene={},RetainedComposition::SceneSample scene_sample={}){
         if(!texture||serial<=ticket)return false;
         D3D11_TEXTURE2D_DESC d={};texture->GetDesc(&d);
         if(!width)width=int(d.Width);if(!height)height=int(d.Height);
         auto next=gpu.create(width,height,Format::bgra32);
         if(!next)return false;
         if(!gpu.import_bgra(next,texture,x,y)){gpu.destroy(next);return false;}
+        gpu.scene(next,scene);
         // Admission failure leaves the previous immutable map and UI handles
         // usable. Publish the new identity only after its import succeeds.
         if(map){layers.destroy(map);gpu.destroy(map);}map=next;
@@ -29,10 +30,10 @@ public:
             // subsequent map writes restore their dynamic dependencies.
             if(!layers.accepting()){
                 layers.clear();gpu.visit_images([&](Id id,unsigned w,unsigned h,Format format,ID3D11Texture2D* source){
-                    layers.create(id,w,h,format);layers.source(id,source);
+                    layers.create(id,w,h,format);layers.source(id,source,{},false,gpu.scene(id));
                 });
             }
-            layers.create(map,width,height,Format::bgra32);layers.source(map,gpu.texture(map),std::move(sample),true);}catch(std::exception const& e){OutputDebugStringA("[C3X renderer] retained admission: ");OutputDebugStringA(e.what());OutputDebugStringA("\n");layers.discard();}
+            layers.create(map,width,height,Format::bgra32);layers.source(map,gpu.texture(map),std::move(sample),true,std::move(scene),std::move(scene_sample));}catch(std::exception const& e){OutputDebugStringA("[C3X renderer] retained admission: ");OutputDebugStringA(e.what());OutputDebugStringA("\n");layers.discard();}
         ticket=serial;if(!identity)identity=serial;return true;
     }
     std::int64_t session_identity()const{return identity;}
@@ -56,6 +57,15 @@ public:
         Command draw={Kind::unit_over,Id(request.destination),resident_unit,{x,y,x+int(width),y+int(height)},
             {request.clip[0],request.clip[1],request.clip[2],request.clip[3]},0,0,0,Id(request.background),Id(request.detail),Id(request.background_detail)};
         bool ok=gpu.submit(&draw,1);if(ok)try{layers.record(draw);}catch(std::exception const& e){OutputDebugStringA("[C3X renderer] retained admission: ");OutputDebugStringA(e.what());OutputDebugStringA("\n");layers.discard();}
+        return ok?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    }
+    int draw_unit_scene(c3x_renderer_gpu_unit_v1 const& request,unsigned width,unsigned height,int x,int y,RetainedComposition::Direct operation){
+        if(request.ticket!=ticket)return C3X_RENDERER_RESULT_SUPERSEDED;
+        if(request.destination==std::int64_t(map)||request.detail==std::int64_t(map)||!operation.draw)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        Command draw={Kind::unit_over,Id(request.destination),0,{x,y,x+int(width),y+int(height)},
+            {request.clip[0],request.clip[1],request.clip[2],request.clip[3]},0,0,0,Id(request.background),Id(request.detail),Id(request.background_detail)};
+        bool ok=operation.draw(gpu,draw);
+        if(ok)try{layers.record(draw,std::move(operation));}catch(std::exception const& e){OutputDebugStringA(e.what());layers.discard();}
         return ok?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_BAD_ARGUMENT;
     }
     RetainedComposition::Texture snapshot_bgra(ID3D11Texture2D* source,int x,int y,unsigned w,unsigned h){return layers.snapshot_bgra(source,x,y,w,h);}

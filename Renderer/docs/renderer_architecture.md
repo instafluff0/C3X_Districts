@@ -139,6 +139,13 @@ projection and receiver dependencies. A frozen unit needs no future pose work;
 selected idle/work loops sample authored time, while directed action state remains
 Civ III's authority. Directed-motion interpolation is a separate integration task.
 
+The [direct unit scene contract](direct_unit_scene_contract.md) carries raw map
+color/depth provenance through native composition. Eligible unit geometry draws
+into bounded scene attachments; conversion scratch bridges the existing native
+formats without finished CPU poses. Intervening native content uses the retained
+GPU compatibility path. Shared world-depth occlusion and shadow receivers remain
+the next responsibility; current native painter order is preserved explicitly.
+
 Raster caches skip useful work but do not define world ownership or force the map
 into independently rebuilt mini-scenes. Choose viewport, regional or hybrid working
 surfaces from pass dependencies and the combined 32-bit memory budget. A raster
