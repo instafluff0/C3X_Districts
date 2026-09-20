@@ -19833,6 +19833,7 @@ translate_custom_renderer_native (int operation, JGL_Image * image, void * sourc
 		if (is->custom_renderer_native_image (C3X_NATIVE_IMAGE_DRAIN, NULL, NULL, NULL, NULL, 0) < 0) return -1;
 		is->custom_renderer_native_image = NULL;
 		is->custom_renderer_native_map = NULL;
+		is->custom_renderer_navigation = NULL;
 		return 0;
 	}
 	// Audited clip metadata only: its private HDC never exposes image pixels.
@@ -20375,6 +20376,7 @@ set_custom_renderer_native_hooks (bool enabled, JGL_Image * root)
 		if (is->custom_renderer_native_image (C3X_NATIVE_IMAGE_DRAIN, NULL, NULL, NULL, NULL, 0) < 0) return;
 		is->custom_renderer_native_image = NULL;
 		is->custom_renderer_native_map = NULL;
+		is->custom_renderer_navigation = NULL;
 	}
 	// Startup tracking remains read-only across scene/configuration unload.
 	if (is->custom_renderer_native_lifetime != NULL) return;
@@ -20488,6 +20490,7 @@ patch_unload_jgl_lib ()
 	is->custom_renderer_native_module = NULL;
 	is->custom_renderer_native_observe = NULL;
 	is->custom_renderer_native_map = NULL;
+	is->custom_renderer_navigation = NULL;
 	is->custom_renderer_native_probe_rejected = false;
 	if (module != NULL) FreeLibrary (module);
 	unload_jgl_lib ();
@@ -27712,6 +27715,7 @@ unload_custom_renderer ()
 	is->custom_renderer_prepare_view = NULL;
 	is->custom_renderer_nearby_preparing = false;
 	is->custom_renderer_camera_cancel = NULL;
+	is->custom_renderer_navigation = NULL;
 	is->custom_renderer_camera_ticket = 0;
 	is->custom_renderer_display_clock = 0;
 	is->custom_renderer_async_enabled = false;
@@ -28084,6 +28088,7 @@ ensure_custom_renderer_loaded ()
 				return false;
 			}
 			is->custom_renderer_init_state = IS_OK;
+			is->custom_renderer_navigation = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_native_navigation");
 			is->custom_renderer_export_requested = true;
 			log_custom_renderer_event ("load-done", C3X_RENDERER_RESULT_OK);
 			(*p_OutputDebugStringA) ("C3X: Loaded off-screen renderer.\n");
@@ -30549,37 +30554,26 @@ custom_renderer_same_projection (struct custom_renderer_native_view * a, struct 
 		a->native_width == b->native_width && a->translate_x == b->translate_x && a->translate_y == b->translate_y;
 }
 
-#ifdef Main_Screen_Form_move_camera
-void __fastcall
-patch_Main_Screen_Form_move_camera (Main_Screen_Form * this, int edx, int x, int y, int reason, bool update_bounds)
-{
-	// Native movement also drives animator/canvas state outside m71. Until the
-	// displayed/requested bridge certifies that complete boundary, every camera
-	// movement is an exact barrier. Stationary publication and CPU preparation
-	// remain asynchronous; never restore old camera fields after native input.
-	if (is->custom_renderer_camera_ticket != 0 && is->custom_renderer_camera_cancel != NULL)
-		is->custom_renderer_camera_cancel (is->custom_renderer_camera_ticket);
-	is->custom_renderer_camera_ticket = 0;
-	is->custom_renderer_display_valid = false;
-	Main_Screen_Form_move_camera (this, __, x, y, reason, update_bounds);
-}
-#endif
 
-void
-queue_custom_renderer_native_view (Map_Renderer * target, int viewer, struct custom_renderer_native_view * view)
+bool
+capture_custom_renderer_native_view (Map_Renderer * target, int viewer, struct custom_renderer_native_view * view, bool navigation)
 {
 	// One active request survives intervening calls. The next available slot
 	// captures the newest demand, so there is no stale FIFO or cancellation storm.
-	if (is->custom_renderer_nearby_preparing || is->custom_renderer_camera_ticket != 0 || ! is->custom_renderer_async_presented) return;
+	if (! navigation && (is->custom_renderer_nearby_preparing || is->custom_renderer_camera_ticket != 0 || ! is->custom_renderer_async_presented)) return false;
 	long long animation_quantum = is->custom_renderer_qpc_frequency.QuadPart / 15;
 	if (animation_quantum < 1) animation_quantum = 1;
-	if (view->camera_x == is->custom_renderer_display_view.camera_x &&
+	if (! navigation && view->camera_x == is->custom_renderer_display_view.camera_x &&
 	    view->camera_y == is->custom_renderer_display_view.camera_y &&
 	    (! is->custom_renderer_visible_animation_count || is->custom_renderer_display_clock / animation_quantum ==
-	     is->custom_renderer_animation_timestamp.QuadPart / animation_quantum)) return;
+	     is->custom_renderer_animation_timestamp.QuadPart / animation_quantum)) return false;
 	JGL_Image * image = ((PCX_Image *)target)->JGL.Image;
-	if (image == NULL) return;
+	if (image == NULL) return false;
+	bool queued = false;
+	if (navigation && is->custom_renderer_visual_clock != NULL)
+		is->custom_renderer_animation_timestamp.QuadPart = is->custom_renderer_visual_clock ();
 	RECT saved_clip = image->Clip_Rect;
+	image->Clip_Rect = image->Image_Rect;
 	is->custom_renderer_capture_only = true;
 	is->custom_renderer_tile_count = 0; is->custom_renderer_capture_failed = false;
 	// Call the existing authoritative traversal with only its first-pass flags.
@@ -30598,15 +30592,115 @@ queue_custom_renderer_native_view (Map_Renderer * target, int viewer, struct cus
 			request.identity.visibility_epoch = is->custom_renderer_visibility_revision;
 			request.identity.scene_epoch = frame.world_topology_revision;
 			long long ticket = 0;
-			if (is->custom_renderer_camera_begin (&request, &ticket) == C3X_RENDERER_RESULT_PENDING) {
+			if (navigation)
+				queued = is->custom_renderer_navigation (C3X_NAV_REQUEST, image, view, &request) == C3X_RENDERER_RESULT_PENDING;
+			else if (is->custom_renderer_camera_begin (&request, &ticket) == C3X_RENDERER_RESULT_PENDING) {
 				is->custom_renderer_camera_ticket = ticket;
 				is->custom_renderer_queued_view = *view;
+				queued = true;
 			}
 		}
 	}
 	is->custom_renderer_capture_only = false;
 	image->Clip_Rect = saved_clip;
+	return queued;
 }
+
+// This is precisely Animator::update's native early-return predicate. A pending
+// camera must never suppress a call that would advance gameplay/actions or UI.
+bool
+custom_renderer_animator_idle (Animator * animator)
+{
+    return ! p_main_screen_form->turn_end_flag && ! *(bool *)(animator->field_18E4 + 10) &&
+        animator->Units2_Count < 1 && ! *(bool *)(animator->field_18E4 + 0xD);
+}
+
+void
+apply_custom_renderer_native_view (struct custom_renderer_native_view * view)
+{
+    p_main_screen_form->camera_x = view->camera_x; p_main_screen_form->camera_y = view->camera_y;
+    p_main_screen_form->TileX_Min = view->min_x; p_main_screen_form->TileX_Max = view->max_x;
+    p_main_screen_form->TileY_Min = view->min_y; p_main_screen_form->TileY_Max = view->max_y;
+}
+
+#ifdef Main_Screen_Form_center_camera
+void __fastcall
+patch_Main_Screen_Form_center_camera (Main_Screen_Form * this, int edx, int x, int y, int reason, bool update_bounds, bool force)
+{
+    // Selection, animation and tile-centering commands retain immediate native
+    // movement, including callers that share the manual scrolling reason value.
+    bool prior = is->custom_renderer_camera_exact;
+    is->custom_renderer_camera_exact = true;
+    Main_Screen_Form_center_camera (this, __, x, y, reason, update_bounds, force);
+    is->custom_renderer_camera_exact = prior;
+}
+#endif
+
+#ifdef Main_Screen_Form_move_camera
+void __fastcall
+patch_Main_Screen_Form_move_camera (Main_Screen_Form * this, int edx, int x, int y, int reason, bool update_bounds)
+{
+    if (is->custom_renderer_camera_ticket != 0 && is->custom_renderer_camera_cancel != NULL)
+        is->custom_renderer_camera_cancel (is->custom_renderer_camera_ticket);
+    is->custom_renderer_camera_ticket = 0;
+    if (! is->current_config.enable_custom_rendering || ! is->custom_renderer_async_enabled ||
+        is->custom_renderer_navigation == NULL || is->custom_renderer_camera_exact) {
+        struct custom_renderer_native_view unused = {0};
+        if (is->custom_renderer_navigation != NULL)
+            is->custom_renderer_navigation (C3X_NAV_DISCARD, NULL, &unused, NULL);
+        is->custom_renderer_display_valid = false;
+        Main_Screen_Form_move_camera (this, __, x, y, reason, update_bounds);
+        return;
+    }
+    Map_Renderer * renderer = &p_bic_data->Map.Renderer;
+    struct custom_renderer_native_view displayed = custom_renderer_native_view (renderer);
+    bool defer = false;
+#ifdef Animator_update_display
+    defer = reason == 1 && ! update_bounds && this == p_main_screen_form &&
+        is->custom_renderer_display_valid && ! is->custom_renderer_draw_in_progress &&
+        is->custom_renderer_capture_world_topology && custom_renderer_zoom_enabled () &&
+        custom_renderer_same_projection (&displayed, &is->custom_renderer_display_view) &&
+        custom_renderer_animator_idle (&this->animator) && !(p_city_form->Base.Data.Status2 & 1);
+#endif
+    // Native selection/centering, clamping, wrapping and bounds remain authoritative.
+    Main_Screen_Form_move_camera (this, __, x, y, reason, update_bounds);
+    struct custom_renderer_native_view requested = custom_renderer_native_view (renderer);
+    if (defer && requested.camera_x == displayed.camera_x && requested.camera_y == displayed.camera_y) {
+        // Native clamping at a map edge must not turn a no-op into another frame.
+        is->custom_renderer_navigation (C3X_NAV_DISCARD, ((PCX_Image *)renderer)->JGL.Image, &requested, NULL);
+        return;
+    }
+    if (defer && capture_custom_renderer_native_view (renderer, this->Player_CivID, &requested, true)) {
+        // Restore before returning to any input/Animator code, not inside m71
+        // after native canvases have already consumed the new camera.
+        apply_custom_renderer_native_view (&displayed);
+        *(bool *)(this->animator.field_18E4 + 10) = false;
+    } else {
+        if (is->custom_renderer_navigation != NULL)
+            is->custom_renderer_navigation (C3X_NAV_DISCARD, ((PCX_Image *)renderer)->JGL.Image, &requested, NULL);
+        is->custom_renderer_display_valid = false;
+    }
+}
+#endif
+
+#ifdef Animator_update_display
+void __fastcall
+patch_Animator_update_display (Animator * this, int edx)
+{
+    if (this == &p_main_screen_form->animator && is->custom_renderer_navigation != NULL) {
+        Map_Renderer * renderer = &p_bic_data->Map.Renderer;
+        struct custom_renderer_native_view view = custom_renderer_native_view (renderer);
+        int action = is->current_config.enable_custom_rendering && custom_renderer_animator_idle (this) ?
+            C3X_NAV_POLL : C3X_NAV_BARRIER;
+        if (is->custom_renderer_navigation (action, ((PCX_Image *)renderer)->JGL.Image, &view, NULL) == C3X_RENDERER_RESULT_OK) {
+            apply_custom_renderer_native_view (&view);
+            *(bool *)(this->field_18E4 + 10) = true;
+        }
+    }
+    // Always run the native director; pending may only take its own early return.
+    Animator_update_display (this, __);
+}
+#endif
 
 void __fastcall
 patch_Map_Renderer_m71_Draw_Tiles (Map_Renderer * this, int edx, int param_1, int param_2, int param_3)
@@ -30714,7 +30808,8 @@ patch_Map_Renderer_m71_Draw_Tiles (Map_Renderer * this, int edx, int param_1, in
 	if (async_view) {
 		is->custom_renderer_display_valid = is->custom_renderer_async_presented;
 		if (is->custom_renderer_display_valid) is->custom_renderer_display_view = custom_renderer_native_view (this);
-		queue_custom_renderer_native_view (this, param_1, &requested_view);
+		if (is->custom_renderer_navigation == NULL)
+			capture_custom_renderer_native_view (this, param_1, &requested_view, false);
 	}
 	is->custom_renderer_async_drawing = false;
 	is->custom_renderer_frame_active = false;

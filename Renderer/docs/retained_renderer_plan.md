@@ -10,9 +10,10 @@ Full detail, authored animation and Civ III's gameplay/state authority remain
 unchanged. The zoom-owned map-overlay extension below is a planned rendering
 ownership change, not a second visibility, selection, or pathfinding system.
 
-**Current technical checkpoint: M3.5 native request/poll/commit is implemented
-at the production DLL/JGL boundary.** M1 and M2 automated acceptance
-remain complete. The injected camera/overlay/picking cutover remains unfinished (M3.6).
+**Current technical checkpoint: M3.6 guarded native camera/overlay/picking bridge
+implemented and automated acceptance passed.** M1 and M2 automated
+acceptance remain complete. Manual pans can defer coherently; native selection,
+actions, programmatic centering and projection changes retain exact behavior.
 Units stay above all map geometry. Native actions, visibility, controls and unit/UI
 ordering remain authoritative. Shore waves, water motion and reflections are on
 in every normal performance workload. The accepted water DLL remains staged;
@@ -20,115 +21,99 @@ the M2 optimizations and M3 candidate have not been staged, installed or run ins
 [Architecture](renderer_architecture.md) owns the design;
 [validation](benchmark_workflow.md) owns measurement and acceptance.
 
-## M3.5 current handoff
+## M3.6 current handoff
 
-M3.4 was committed and pushed as `ede35d95`. M3.5 candidate:
-`native/build/m35-notified/C3XRenderer.dll`, SHA-256
-`e4bc6f0b0a05dc6c7577a80c4c1e1af7c84aebed1d29045a9a8bae5d54af2f76`.
+M3.5 was committed on Mac and pushed from Windows as `cb1fc3d2`. The current
+candidate is `native/build/m36-release/C3XRenderer.dll`, SHA-256
+`c70625cff8a96e7280e0eb8f8f7f62b2e498bc6ffe507c571ba88a9ae80e359c`.
+The source closure matches the isolated `/W4 /WX` build.
 
-- The existing native composition owner now accepts copied camera requests and
-  polls M3.4's atomic view through `c3x_renderer_native_camera_request` /
-  `c3x_renderer_native_camera_poll`. Exact PREPARE and asynchronous adoption share
-  native image preparation and commit; no second compositor or presenter exists.
-- Worker completion posts a registered thread-message hint with its request ticket.
-  The caller still polls and validates; cancelled/stale notifications cannot grant
-  coverage. A bounded retry covers failed OS delivery. This removes the measured
-  sleep/timer quantization delay without spinning or changing timer resolution.
-- Pending polls do not wait for rendering, join optional preparation, flush native
-  commands, insert pixels or modify caller output. Busy publication gates return
-  pending. A successful ready poll still performs session import and native-image
-  admission; its cost is measured separately, not described as free.
-- Pending grants **zero coverage for the requested camera**. COMMIT is rejected
-  until successful adoption and caller ownership validation. The caller must defer
-  the whole map transaction; retained old pixels are not permission to advance
-  native overlays or picking. Unflushed native commands explicitly reject async
-  admission rather than hiding a flush/wait inside begin or poll.
-- Changed/cancelled requests, retired destinations, surface resizing and native
-  address reuse cannot adopt. Existing native lifetime notifications retire
-  pending owners, including before the first GPU map. Ambient ticks yield to
-  pending/ready-unadopted cameras instead of cancelling and joining their work.
-- No `injected_code.c`, `C3X.h` or patch-table changes are needed for this DLL
-  boundary. Existing hooks, game authority, suppression and configuration controls
-  remain unchanged; `required_user_action: []`.
+Completed capabilities:
 
-**Integration boundary:** the connected fixture calls these production exports,
-then actual JGL map copies, units, UI and final presentation. The live injected
-caller still uses exact PREPARE. Native `Animator::update` sets camera/erase/wrap
-state before m71; switching only its terrain call would mix views or move the
-wait into later unit/UI operations. M3.6 must coordinate the complete displayed
-transaction and picking before enabling that caller. This checkpoint does not
-claim a live nonblocking camera or an input-to-display speedup.
+- The DLL owns one copied requested native view plus comparison inputs, using the
+  existing bounded GPU camera queue and M3.5 native transaction owner. Identical
+  repeated pan demand keeps its ticket; native-clamped no-op moves queue no work.
+  Workers receive no game pointers.
+- Native movement computes clamping, wrapping and tile bounds. During eligible
+  manual pans the injected bridge restores the displayed camera before returning.
+  Native picking, unit culling, labels, selection/path anchors and grid therefore
+  see one camera. A ready view advances before Animator copies its canvases.
+- The native Animator always runs. Deferral is permitted only while its original
+  early-return predicate is true; gameplay, action or UI work takes the exact
+  requested destination. The 66 ms native timer is unchanged. Independent visual
+  animation remains in the DLL; native action progression is not suppressed.
+- Native `bring_tile_into_view` has a scoped exact-camera guard. Selecting a new
+  unit, animation centering, programmatic jumps and zoom preserve immediate
+  vanilla camera behavior, including mouse-selection callers that use reason 1.
+  Such movement supersedes a pending pan. Renderer-off camera calls forward
+  directly to native code.
+- Readiness alone cannot commit. Fresh ordered capture validates anchors, tiles,
+  visibility, topology, projection and epochs; changed input rejects prepared
+  coverage and renders the exact request. Only time/scheduling hints may differ,
+  and the actual sampled clock is preserved. Pending grants no new coverage.
+- Two GOG inleads (`Animator_update_display` and `Main_Screen_Form_center_camera`)
+  supply the early transaction boundary and centering scope. Their existing
+  callable definitions remain. [Signatures and addresses](civ3_patch_dependency_ledger.md)
+  are recorded; no additional user patch-table action is needed.
 
-Complete native workload: 1120×1192 dense coast, modern medium capitals, eight
-native units, 384 requests per DLL (64 per route/workload), plus 120 independent
-frames with 32 units. Shore waves, water motion and reflections remain on.
-GPU request mean / p95 (ms), preserved M3.4 control versus M3.5 notified polling:
+Verification: **319 tests passed / two existing skips**; final focused hook/owner
+checks and the approved injected smoke test pass. The real JGL acceptance receipt
+at `native/build/m36-identity-release/` passes all 16 cold pixel/coverage identity
+cases, native pending/commit/composition checks, fog, tactical and configuration-off
+compatibility. Eleven native requests exercised 45 pending polls and ten completion
+hints. All 30 independent visual intervals retained zero static-world, wave and
+reflection rebuild/upload work. Inputs stayed unchanged and runtime provenance
+and trace coverage passed. Initial failed iterations exposed missing initial owner
+admission and a fixture's omitted ABI metadata; both were corrected and rerun.
 
-| Workload | M3.4 | M3.5 |
+The matched 1120×1192 dense-coast workload passes at
+`native/build/m36-workload-normal/`: 384 timed native requests, eight native units,
+120 independent frames with 32 working units, tactical overlays, waves, water
+motion and reflections on. GPU profiling is off in both comparison runs.
+
+| Complete workload, mean / p95 ms | M3.5 control | M3.6 |
 | --- | ---: | ---: |
-| Stationary native demand | 13.32 / 21.68 | 13.31 / 18.22 |
-| Scrolling | 95.56 / 166.10 | 95.38 / 209.15 |
-| Local edit | 16.61 / 59.02 | 17.03 / 50.55 |
-| Independent 32-unit animation | 37.50 / 55.00 | 41.01 / 61.38 |
+| Native GPU stationary | 13.31 / 18.22 | 12.70 / 18.36 |
+| Native GPU scrolling | 95.38 / 209.15 | 93.80 / 167.15 |
+| Native GPU local edit | 17.03 / 50.55 | 17.92 / 58.01 |
+| Independent 32-unit visual request | 41.01 / 61.38 | 41.37 / 62.30 |
 
-This establishes near-equal native-request means with a responsive pending API,
-not a general rendering speedup. Scrolling p95 is worse despite a lower maximum
-(405.24 → 219.99 ms); the earlier long geometry tail is not proved eliminated.
-Animation mean is 9.4% higher in this pair, and desktop-completion mean is
-48.45 → 50.88 ms. A targeted fresh 120-frame M3.4 animation control measures 38.93 / 61.94 ms
-(mean / p95), 50.26 ms desktop mean, versus 41.01 / 61.38 ms and 50.88 ms
-for the candidate. The residual 5.4% request-mean difference remains disclosed;
-this does not establish an animation gain. Independent animation does not call
-the new native polling exports. Trace attribution shows ordinary dynamic submit
-work (6.25 → 6.66 ms against the earlier control), with unchanged static-work
-proofs; the unprofiled run does not isolate the remaining composition/driver cost.
-No unrelated animation rewrite is justified by these samples. The fresh control
-and interval proof are in `native/build/m35-animation-control/`.
+There is no broad throughput speedup claim. Local-edit mean is about 5.2% higher;
+independent animation is about 0.9% higher. Scroll maximum remains 237.01 ms;
+construction tails and live input latency are still unfinished responsibilities.
+For 192 timed native GPU requests, enqueue mean/p95/max is
+1.052/2.230/5.865 ms, per-request pending-poll maximum p95/max is
+0.055/0.143 ms, and ready adoption plus fresh-capture validation mean/p95/max is
+1.113/1.502/3.098 ms. First cold admission is separately **118.352 ms**. The fixture
+serviced 1,300 pending polls and 250 completion hints across 251 native requests.
 
-The first timed-retry experiment averaged 26.46 / 116.62 / 31.54 ms for stationary,
-scrolling and edits. Registered completion messages remove its avoidable timer
-quantization delay; no spin loop or timer-resolution change was introduced.
-Across 192 timed GPU requests, enqueue mean / p95 / maximum is
-1.119 / 2.266 / 16.454 ms. Per-request maximum pending-poll duration has
-0.037 ms p95 and 0.142 ms maximum. Ready adoption averages 1.012 ms,
-1.428 ms p95, 2.861 ms maximum. The separate first cold native admission takes
-123.23 ms and is disclosed setup work, not a bounded warm-poll claim.
-The full native run services 251 marker messages and 250 completion hints across
-251 requests / 1,290 pending polls; pending never grants coverage or commits.
+All 120 visual intervals retain zero authoritative scene adoption, static-world
+build/upload/draw, static-scene draw/readback, reflection build, wave build/upload,
+water upload and static-caster collection; material selections are reused. Scroll
+work is unchanged: 3,410 built / 56,296 reused / 5,094,936 uploaded bytes. The
+control bitmap is byte-exact with M3.5. Journal peak is 3,010,856 bytes; minimum
+sampled largest free address-space region is **788.44 MiB**, above the 512 MiB
+floor. Current runtime provenance, immutable inputs and complete trace coverage
+pass. Final injected source also passes its compile smoke test and focused hook
+checks, including no-op clamping; GPU identity receipt predates only that small
+capture-side no-op optimization.
 
-All 120 animation intervals preserve zero authority adoption, static-world
-builds/uploads/draws, static-scene draws/readbacks, reflection builds, wave
-builds/uploads, water uploads and static-caster collection. Material selections
-are reused. Scrolling builds/reuses/uploads remain exactly 3,410 / 56,296 /
-5,094,936 bytes, and the control bitmap is byte-exact to M3.4. The authority journal
-peaks at 3,010,856 bytes; minimum sampled contiguous address space is 684.88 MiB,
-above the 512 MiB floor. Samples do not bound transient allocation peaks.
+A separate profiler-on diagnostic at `native/build/m36-workload/` also passes
+correctness, but its 170.40 ms scrolling and 86.25 ms animation means are not
+compared with the profiler-off control. Keep these measurements distinct.
 
-Evidence: `native/build/m35-workload-notified/` and its workload summary;
-`m35-workload-release/` preserves the timed-retry experiment and
-`m34-native-final/` the earlier exact control. Timings include test-driver waiting,
-native unit/UI work and transfer; capture/setup are outside timing and desktop
-completion is not physical scanout. Runtime inputs match the build and remain
-unchanged; traces are complete. The final 16-case identity matrix passes exact independent cold pixels and
-replacement coverage; the connected 30-frame mixed-unit/fog/tactical witness
-also preserves all zero-static-work proofs. Its native path services 11 marker
-messages and ten completion hints across 44 pending polls. Evidence:
-`native/build/m35-identity-notified/`.
+Limits: asynchronous navigation currently covers idle manual pans. Native action,
+UI/image ownership, centering and projection barriers can still wait. Live retries
+use native Animator opportunities, not the fixture's completion-message waits.
+Native capture/traversal and live input-to-display latency are outside the JGL
+benchmark. A short pending poll is not evidence that whole navigation is faster.
+No staging, installation or live-game verification occurred.
 
-Verification: clean `/W4 /WX` Windows build; **319 tests passed / two existing
-skips**, plus eight focused publication/native-transaction tests. These execute
-held-worker polling, supersession, output immutability, pending commit rejection,
-retirement/address reuse, caller-thread lifetime handling and completion hints.
-No injected compilation is required because injected files are unchanged.
-No staging, installation or live-game claim.
-
-**Next unfinished responsibility: M3.6 coherent native overlays, interactions and
-picking, including the live caller cutover to this polling contract.** Use the
-existing movement, capture and JGL seams; keep any injected adapter small. The
-pending policy must apply to the complete native transaction. M3.7 owns full
-asynchronous recovery, M3.8 owns navigation/edit/lifecycle and live acceptance,
-and M4 owns a demonstrated sustained frame budget. The previous 405 ms geometry
-preparation tail is not eliminated by short pending polls.
+**Next unfinished responsibility: M3.7 asynchronous reset,
+reload, cancellation and failure recovery.** M3.8 must prove the complete live
+navigation/edit/lifecycle path, including native input-to-display and capture
+cost, message-pump delay, direct native UI barriers and memory headroom. Broad
+nonblocking zoom/centering and sustained frame-budget claims remain unproved.
 
 ## M2 automated acceptance checkpoint (preserved)
 
@@ -318,7 +303,7 @@ useful preparation across supersession without evicting the current working set.
 | 3.3 | Current-demand priority and bounded useful preparation | Implemented, measured, committed and pushed |
 | 3.4 | Atomic pixels, coverage, transform, occurrences and complete identity | Implemented; identity/pixel acceptance and handoff above |
 | 3.5 | Nonblocking native polling and honest pending-coverage policy | DLL/JGL transaction boundary implemented; measurements above |
-| 3.6 | Coherent overlays, interactions and picking | Next; includes live caller cutover |
+| 3.6 | Coherent overlays, interactions and picking | Guarded live bridge implemented; automated acceptance passed |
 | 3.7 | Cancellation, GPU reset, reload, configuration-off and failure recovery | Pending across the new async path |
 | 3.8 | Navigation/edit/lifecycle acceptance, memory and latency proof | Pending |
 

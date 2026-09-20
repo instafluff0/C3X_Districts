@@ -1697,14 +1697,6 @@ struct highlighted_city_radius_tile_info {
 	int highlight_level;
 };
 
-// Native projection values travel with a displayed camera ticket. These are
-// bridge state, never renderer-owned game pointers or a second camera controller.
-struct custom_renderer_native_view {
-	int camera_x, camera_y, min_x, max_x, min_y, max_y;
-	int width, height, tile_width, native_width;
-	long long translate_x, translate_y;
-};
-
 struct injected_state {
 	// ==========
 	// These fields are valid at any time in the injected code because they're set by the patcher {
@@ -2669,7 +2661,7 @@ struct district_button_image_set {
 	c3x_renderer_camera_cancel_fn custom_renderer_camera_cancel;
 	struct custom_renderer_native_view custom_renderer_display_view, custom_renderer_queued_view;
 	long long custom_renderer_camera_ticket, custom_renderer_display_clock;
-	bool custom_renderer_async_enabled, custom_renderer_display_valid;
+	bool custom_renderer_async_enabled, custom_renderer_display_valid, custom_renderer_camera_exact;
 	bool custom_renderer_async_drawing, custom_renderer_capture_only, custom_renderer_async_presented;
 	bool custom_renderer_timer_running;
 	c3x_renderer_blit_fn custom_renderer_blit;
@@ -2678,6 +2670,7 @@ struct district_button_image_set {
 	HMODULE custom_renderer_native_module;
 	c3x_renderer_native_image_fn custom_renderer_native_image;
 	c3x_renderer_native_map_view_fn custom_renderer_native_map;
+	c3x_renderer_native_navigation_fn custom_renderer_navigation;
 	void * custom_renderer_jgl_original[60], * custom_renderer_jgl_sprite_original, * custom_renderer_jgl_present_original;
 	void * custom_renderer_jgl_blend_original[10];
 	void ** custom_renderer_jgl_table, ** custom_renderer_jgl_sprite_table, ** custom_renderer_jgl_graph_table;

@@ -1,5 +1,50 @@
 # Civ III patch dependency ledger
 
+## M3.6 native navigation boundary
+
+`required_user_action: []`. The user explicitly authorized needed GOG patch-table
+entries. Added `Animator_update_display`, an **inlead** at GOG `0x004EEC40`, with
+signature `void (__fastcall *)(Animator *this, int edx)`. Steam/other build columns remain `0x0`; this adds no support claim for those
+executables. Without these inleads the bridge retains its exact path. The
+existing `Animator_update` callable definition remains available. The inlead
+allows polling before `Animator::update` copies camera/erase/wrap fields or clears
+unit canvases, then always forwards to the original function. The approved
+injected compile/injection smoke test verifies the GOG entry.
+
+Also added `Main_Screen_Form_center_camera`, an **inlead** for native
+`bring_tile_into_view`, GOG `0x004DF9E0`, signature
+`void (__fastcall *)(Main_Screen_Form *this, int edx, int x, int y, int reason,
+bool update_bounds, bool force)`. Both other columns are `0x0`. It keeps a single
+scoped injected boolean while forwarding the original arguments, preventing
+selection/centering calls that use reason 1 from entering the pan fast path.
+The existing `Main_Screen_Form_bring_tile_into_view` callable definition remains.
+Fallback: the original exact renderer path; no native map fallback.
+
+`Main_Screen_Form_move_camera` remains the only camera-normalization authority.
+Only manual scrolling (`reason == 1`, no forced bounds update, outside native tile-centering) can defer,
+and only when the native Animator would take its own early return. The original
+move computes the destination and bounds; a capture-only m21/m19 traversal copies
+the scene, and the bridge restores the displayed camera before returning. Native
+picking, culling and overlay anchors therefore continue to use that camera.
+Clamped no-op movements enqueue no capture or rendering.
+Selection centering, animation centering, programmatic jumps and zoom keep their
+native exact behavior and supersede a queued pan. No keyboard/input listener or
+replacement gameplay camera was added.
+
+The DLL `Navigation` owner copies the requested view and comparison inputs, uses
+the M3.5 request/poll owner, coalesces repeated identical demand, and offers the
+normalized native view only when ready. Native work starting while pending takes
+an exact barrier at the requested destination. The native director always runs;
+no action tick is omitted. Before m71 commits, a fresh complete capture validates
+ordered tiles, anchors, visibility, topology, projection and epochs. Changed input
+rejects prepared coverage and uses the existing exact renderer path. No native
+terrain fallback, new presenter or map readback is introduced.
+
+The existing native Animator cadence supplies retries. Completion thread messages
+remain hints; this patch adds neither a new native timer nor a callback from a
+worker into game code. The complete live navigation/reset/latency campaign remains
+M3.7/M3.8 work; fixture timing is not a live-game measurement.
+
 ## M3.5 native nonblocking transaction boundary
 
 DLL-only exports `c3x_renderer_native_camera_request` and
@@ -12,7 +57,7 @@ synchronous fallback. Ready adoption retains its measured session-import cost.
 No injected fields, native patch, signature or executable address changes are
 needed for this boundary: `required_user_action: []`.
 
-The live injected caller still uses exact PREPARE until M3.6 coordinates native
+At the M3.5 checkpoint, the live injected caller used exact PREPARE until M3.6 coordinated native
 Animator camera/erase/wrap state, overlays and picking. Do not replace only m19's
 render call: Animator::update has already changed its camera canvases before m71,
 and later unit/UI operations can otherwise join the pending worker or mix views.

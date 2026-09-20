@@ -15,6 +15,7 @@ class NativeCameraTransactionTests(unittest.TestCase):
 #include <memory>
 #include <stdexcept>
 #include "Renderer/native/gpu_frame_api.h"
+#include "Renderer/native/native_navigation.h"
 using DWORD=unsigned;
 DWORD caller_thread=1;
 DWORD GetCurrentThreadId(){return caller_thread;}
@@ -38,6 +39,7 @@ template<class Client> struct Adapter {
  bool insert_map(void*,Id,Rect,int,int,int,int){++inserts;return true;}
 };
 struct Owner {
+ c3x_native_images::Navigation navigation;
  DWORD thread=1;
  c3x_renderer_gpu_render_fn render=nullptr;
  c3x_renderer_gpu_images_fn images=nullptr;
@@ -108,5 +110,44 @@ int main(){
  owner.retire_image(C3X_NATIVE_IMAGE_REINIT,image);
  assert(owner.map(C3X_NATIVE_MAP_COMMIT,image,nullptr,nullptr)==C3X_RENDERER_RESULT_BAD_ARGUMENT);
 
+ // Navigation uses the same owner, pending rules and commit operation.
+ custom_renderer_native_view displayed{};displayed.width=640;displayed.height=480;displayed.tile_width=128;displayed.native_width=128;
+ auto target=displayed;target.camera_x=320;target.min_x=5;
+ c3x_renderer_tile_v1 tile{};frame.tiles=&tile;frame.tile_count=1;
+ unsigned topology[2]={1,2};frame.world_topology=topology;frame.world_topology_count=2;
+ ready=false;
+ assert(owner.navigate(C3X_NAV_REQUEST,image,target,&request)==C3X_RENDERER_RESULT_PENDING);
+ auto begun=next_ticket;frame.presentation_time_ticks+=10;
+ assert(owner.navigate(C3X_NAV_REQUEST,image,target,&request)==C3X_RENDERER_RESULT_PENDING && next_ticket==begun);
+ for(int n=0;n<20;++n)assert(owner.navigate(C3X_NAV_POLL,image,displayed,nullptr)==C3X_RENDERER_RESULT_PENDING&&displayed.camera_x==0);
+ ready=true;assert(owner.navigate(C3X_NAV_POLL,image,displayed,nullptr)==C3X_RENDERER_RESULT_OK && displayed.camera_x==320);
+ assert(owner.map(C3X_NATIVE_MAP_COMMIT,image,nullptr,nullptr)==C3X_RENDERER_RESULT_BAD_ARGUMENT); // Fresh capture is mandatory.
+ c3x_renderer_output_v1 output{};
+ assert(owner.map(C3X_NATIVE_MAP_PREPARE,image,&request,&output)==C3X_RENDERER_RESULT_OK&&output.clip_right==640);
+ assert(owner.map(C3X_NATIVE_MAP_COMMIT,image,nullptr,nullptr)==C3X_RENDERER_RESULT_OK);
+ // Lifecycle changes after polling still prohibit commit and prepared reuse.
+ assert(owner.navigate(C3X_NAV_REQUEST,image,target,&request)==C3X_RENDERER_RESULT_PENDING);
+ assert(owner.navigate(C3X_NAV_POLL,image,displayed,nullptr)==C3X_RENDERER_RESULT_OK);
+ owner.retire_image(C3X_NATIVE_DESTROY,image);assert(!owner.navigation.available());
+ assert(owner.map(C3X_NATIVE_MAP_COMMIT,image,nullptr,nullptr)==C3X_RENDERER_RESULT_BAD_ARGUMENT);
+ // Fresh capture checks include ordered anchors, visibility and topology.
+ int exact_calls=0;owner.render=[](c3x_renderer_camera_request_v1 const*,c3x_renderer_gpu_frame_v1*,c3x_renderer_output_v1*)->int{return C3X_RENDERER_RESULT_ERROR;};
+ for(int change=0;change<4;++change){
+  assert(owner.navigate(C3X_NAV_REQUEST,image,target,&request)==C3X_RENDERER_RESULT_PENDING);
+  assert(owner.navigate(C3X_NAV_POLL,image,displayed,nullptr)==C3X_RENDERER_RESULT_OK);
+  if(change==0)++tile.anchor_y;if(change==1)++tile.visibility_mask;
+  if(change==2)++topology[1];if(change==3)++request.identity.viewer_epoch;
+  assert(owner.map(C3X_NATIVE_MAP_PREPARE,image,&request,&output)==C3X_RENDERER_RESULT_ERROR);
+  assert(!owner.navigation.available()&&!owner.pending);++exact_calls;
+ }
+ assert(exact_calls==4);
+ // A native action barrier keeps the destination, but grants no ready pixels.
+ ready=false;target.camera_x=512;
+ assert(owner.navigate(C3X_NAV_REQUEST,image,target,&request)==C3X_RENDERER_RESULT_PENDING);
+ assert(owner.navigate(C3X_NAV_BARRIER,image,displayed,nullptr)==C3X_RENDERER_RESULT_OK&&displayed.camera_x==512);
+ assert(!owner.navigation.active()&&!owner.pending);
+ assert(owner.navigate(C3X_NAV_REQUEST,image,target,&request)==C3X_RENDERER_RESULT_PENDING);
+ displayed.tile_width=160;
+ assert(owner.navigate(C3X_NAV_POLL,image,displayed,nullptr)==C3X_RENDERER_RESULT_SUPERSEDED&&!owner.navigation.active());
 }
 ''')

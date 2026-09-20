@@ -135,8 +135,8 @@ latency separately from whole-frame timings and restores a clean session before
 the native workload. Pending polls must leave output untouched. Pair this with
 the held-render worker test; short observed timings alone cannot prove absence
 of a render wait. An OK poll still imports the completed map on the GPU owner,
-and the live native caller retains its exact-view barrier until the M3.6
-overlay/picking cutover. M3.5 adds the native transaction polling contract.
+and the M3.6 live caller retains exact barriers for directed native work,
+programmatic centering and projection changes.
 
 `FRAME_SAMPLE` QPC boundaries locate the corresponding aggregate renderer trace.
 `geometry_ms` includes content assembly, uploads and possible driver waits;
@@ -254,4 +254,17 @@ The ordinary whole-request/desktop measurements still include that completion
 wait, native units, UI and transfer. This prevents reporting a short enqueue as
 an end-to-end speedup. Match all effects/assets and keep the synchronous run as
 a control. These are real DLL/JGL transactions, not a live Animator/picking test;
-the injected camera cutover remains the M3.6 responsibility.
+the guarded injected camera cutover is described under M3.6 below; the complete
+live input-to-display acceptance remains M3.8.
+
+`record_gpu_frame --native-navigation` exercises the M3.6 DLL navigation owner
+through real JGL admission, pending polling, ready camera advancement, fresh
+capture validation and native PREPARE/COMMIT. It retains the existing composition,
+CPU compatibility and final-transfer oracles. The driver services completion
+hints; the injected bridge uses native Animator opportunities. These timings
+exclude live native capture and do not prove live input-to-display latency.
+Extracted hook tests separately verify unchanged pending camera/picking inputs,
+native early returns, action barriers, wrapped camera bounds and immediate native
+unit-selection centering. The production owner test changes anchors, visibility,
+topology and viewer scope between readiness and commit and rejects every stale
+prepared result. Both tests remain in the normal integration suite.

@@ -466,20 +466,35 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
         auto poll_native_camera=reinterpret_cast<c3x_renderer_native_camera_poll_fn>(GetProcAddress(renderer_module,"c3x_renderer_native_camera_poll"));
         auto native_camera_message=reinterpret_cast<c3x_renderer_native_camera_message_fn>(GetProcAddress(renderer_module,"c3x_renderer_native_camera_message"));
         unsigned ready_message=native_camera_message?native_camera_message():0;
+        auto navigate=reinterpret_cast<c3x_renderer_native_navigation_fn>(GetProcAddress(renderer_module,"c3x_renderer_native_navigation"));
+        bool navigation_test=GetEnvironmentVariableA("C3X_RENDERER_NATIVE_NAVIGATION_TEST",nullptr,0)!=0;
+        verify(!navigation_test||navigate,"native navigation export");
         bool native_camera_test=GetEnvironmentVariableA("C3X_RENDERER_NATIVE_CAMERA_TEST",nullptr,0)!=0;
         verify(exact_native_map && (!native_camera_test || (request_native_camera && poll_native_camera && ready_message)),"native camera exports");
         unsigned native_camera_requests=0,native_camera_pending=0,native_camera_messages=0,native_camera_wakes=0;
         auto native_map_view=[&](int action,void* image,c3x_renderer_camera_request_v1 const* request,c3x_renderer_camera_view_v1* output){
             if(!native_camera_test || action!=C3X_NATIVE_MAP_PREPARE)return exact_native_map(action,image,request,output);
             LARGE_INTEGER frequency={},started={},enqueued={},finished={};QueryPerformanceFrequency(&frequency);QueryPerformanceCounter(&started);
-            c3x_renderer_i64 ticket=0;int result=request_native_camera(image,request,&ticket);QueryPerformanceCounter(&enqueued);
+            custom_renderer_native_view current={};current.width=request->frame->target_width;current.height=request->frame->target_height;
+            current.tile_width=current.native_width=request->frame->tile_width;
+            auto target=current;target.camera_x=17;target.camera_y=-9;target.min_x=4;target.max_x=20;
+            c3x_renderer_i64 ticket=0;int result=navigation_test?navigate(C3X_NAV_REQUEST,image,&target,request):request_native_camera(image,request,&ticket);QueryPerformanceCounter(&enqueued);
             if(result!=C3X_RENDERER_RESULT_PENDING)return result;
             ++native_camera_requests;PostMessageA(window,WM_APP+61,0,0);
             c3x_renderer_gpu_camera_view_v1 view={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(view)};
             auto untouched=view;double maximum_poll=0,pending_maximum=0,ready_ms=0;unsigned pending_polls=0;auto deadline=GetTickCount64()+30000;
             while(result==C3X_RENDERER_RESULT_PENDING && GetTickCount64()<deadline){
                 LARGE_INTEGER before={},after={};QueryPerformanceCounter(&before);
-                result=poll_native_camera(image,ticket,&view);QueryPerformanceCounter(&after);
+                if(navigation_test){
+                    result=navigate(C3X_NAV_POLL,image,&current,nullptr);
+                    if(result==C3X_RENDERER_RESULT_PENDING)verify(!current.camera_x&&!current.camera_y,"pending native camera and picking remain displayed");
+                    if(result==C3X_RENDERER_RESULT_OK){
+                        verify(current.camera_x==17&&current.camera_y==-9&&current.min_x==4,"ready native view advances before overlays");
+                        view.camera.version=C3X_RENDERER_CAMERA_VIEW_VERSION;view.camera.struct_size=sizeof(view.camera);
+                        result=exact_native_map(C3X_NATIVE_MAP_PREPARE,image,request,&view.camera);
+                    }
+                }else result=poll_native_camera(image,ticket,&view);
+                QueryPerformanceCounter(&after);
                 double poll_ms=1000.*double(after.QuadPart-before.QuadPart)/double(frequency.QuadPart);
                 maximum_poll=std::max(maximum_poll,poll_ms);
                 if(result==C3X_RENDERER_RESULT_OK)ready_ms=poll_ms;
@@ -664,6 +679,7 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
         SelectObject(label_dc,previous_font);DeleteObject(label_font);
         for(auto image:live_images)reinterpret_cast<Destroy>(image->vtable[0])(image,1);
         screen_surface=canvases[1];screen_image=screen_surface;screen.JGL.Image=screen_surface;pcx.image=screen_surface;
+        if(navigation_test)std::printf("PASS native navigation: fresh_capture=1 deferred_camera=1 native_composition=1\n");
         if(native_camera_test){verify(native_camera_requests>0 && native_camera_pending>0 && native_camera_messages>0 && native_camera_wakes>0,"native async opportunities exercised");
             std::printf("PASS nonblocking native camera: requests=%u pending=%u messages=%u wakes=%u exact_composition=1 pending_coverage=0\n",native_camera_requests,native_camera_pending,native_camera_messages,native_camera_wakes);}
         std::puts("PASS production native map owner: prepare/validate/commit, cancelled ownership, unchanged CPU map, native copies, units, cached text, exact compiled final display, next-view session and reset handoff");

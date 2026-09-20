@@ -3,6 +3,7 @@
 #include "gpu_image_worker_client.h"
 #include <memory>
 #include "tactical_overlay.h"
+#include "native_navigation.h"
 #include <functional>
 namespace c3x_native_images {
 // Caller-thread owner for the native map/copy/save/display family. The existing
@@ -33,6 +34,7 @@ class CompositionOwner {
         if(!tactical)return 0;
         return adapter->draw_tactical([&](auto const& target){return tactical(capture,target);},frame.ticket,image)?1:0;
     }
+    Navigation navigation;
     void* pending=nullptr;Rect area={};int phase_x=0,phase_y=0;
     void check_thread(){if(GetCurrentThreadId()!=thread)throw std::runtime_error("native composition caller changed");}
     void release_window(){c3x_renderer_gpu_present_v1 r={sizeof(r)};r.action=2;
@@ -82,6 +84,11 @@ public:
         if(result==C3X_RENDERER_RESULT_OK){view=next;camera_ticket=0;camera_image=nullptr;}
         return result;
     }
+    int navigate(int action,void* image,custom_renderer_native_view& view,c3x_renderer_camera_request_v1 const* request){
+        check_thread();
+        if(action==C3X_NAV_REQUEST)return navigation.request(*this,image,view,*request);
+        return navigation.poll(*this,action,image,view);
+    }
     void retire_image(int operation,void* image){
         // Cross-thread observation invalidates admission in Lifetimes. It must
         // not mutate this caller-thread owner or throw across the C hook.
@@ -91,9 +98,9 @@ public:
         check_thread();
         if(!image || image==camera_image){
             if(camera_ticket&&camera_cancel)camera_cancel(camera_ticket);
-            camera_ticket=0;camera_image=nullptr;
+            camera_ticket=0;camera_image=nullptr;navigation.clear();
         }
-        if(!image || image==pending)pending=nullptr;
+        if(!image || image==pending){pending=nullptr;navigation.clear();}
     }
     void set_tactical(std::function<int(Tactical const&,c3x_renderer_gpu_unit_v1 const&)> draw){tactical=std::move(draw);}
     bool active()const{return adapter!=nullptr;}
@@ -104,13 +111,19 @@ public:
         check_thread();
         if(action==C3X_NATIVE_MAP_CANCEL){
             if(camera_ticket&&camera_cancel)camera_cancel(camera_ticket);
-            camera_ticket=0;camera_image=nullptr;pending=nullptr;return C3X_RENDERER_RESULT_OK;
+            camera_ticket=0;camera_image=nullptr;pending=nullptr;navigation.clear();return C3X_RENDERER_RESULT_OK;
         }
         if(action==C3X_NATIVE_MAP_COMMIT){
-            if(!pending||image!=pending||!adapter)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+            if(navigation.available()||!pending||image!=pending||!adapter)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
             pending=nullptr;
             if(!adapter->insert_map(image,Id(frame.map_image),area,area.left,area.top,phase_x,phase_y))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
             client->flush();return C3X_RENDERER_RESULT_OK;
+        }
+        if(action==C3X_NATIVE_MAP_PREPARE && request && request->frame && output && navigation.available()){
+            if(pending==image && eligible(image,*request->frame) && navigation.take(image,*request,*output))return C3X_RENDERER_RESULT_OK;
+            // Fresh authoritative capture changed while this view was pending.
+            // Reject its old coverage and use the established exact path.
+            pending=nullptr;navigation.clear();
         }
         if(action!=C3X_NATIVE_MAP_PREPARE||!request||!request->frame||!output||pending)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
         auto const& demand=*request->frame;
@@ -187,6 +200,6 @@ public:
         }
         return adapter->operation(op,image,source,from,to,color);
     }
-    void drain(){check_thread();if(camera_ticket&&camera_cancel)camera_cancel(camera_ticket);camera_ticket=0;camera_image=nullptr;pending=nullptr;if(client){client->flush();release_window();adapter->drain();adapter.reset();client.reset();}}
+    void drain(){check_thread();navigation.clear();if(camera_ticket&&camera_cancel)camera_cancel(camera_ticket);camera_ticket=0;camera_image=nullptr;pending=nullptr;if(client){client->flush();release_window();adapter->drain();adapter.reset();client.reset();}}
 };
 }

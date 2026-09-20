@@ -12,10 +12,15 @@ class NativeViewIdentityTests(unittest.TestCase):
         selection = source.split('char async_option[8] = {0};', 1)[1]
         selection = '#ifdef Main_Screen_Form_move_camera' + selection.split('#ifdef Main_Screen_Form_move_camera', 1)[1].split('#endif', 1)[0] + '#endif'
         run_cpp(r"""
+#include "Renderer/native/c3x_renderer_api.h"
 #include <cassert>
 #include <initializer_list>
 #include <cstring>
 struct State {
+ struct {bool enable_custom_rendering=true;} current_config;
+ bool custom_renderer_camera_exact=false;
+ c3x_renderer_native_navigation_fn custom_renderer_navigation=nullptr;
+ c3x_renderer_visual_clock_fn custom_renderer_visual_clock=nullptr;
  bool custom_renderer_async_enabled=false;
  void *custom_renderer_render_view=this, *custom_renderer_camera_begin=this,
       *custom_renderer_camera_poll=this, *custom_renderer_camera_present=this,
@@ -172,8 +177,6 @@ int main(){
 
     def test_current_camera_publication_and_request_only_capture(self):
         source = (ROOT / 'injected_code.c').read_text()
-        header = (ROOT / 'C3X.h').read_text()
-        view = 'struct custom_renderer_native_view {' + header.split('struct custom_renderer_native_view {', 1)[1].split('};', 1)[0] + '};'
         helpers = 'struct custom_renderer_native_view\ncustom_renderer_native_view' + source.split('struct custom_renderer_native_view\ncustom_renderer_native_view', 1)[1].split('void __fastcall\npatch_Map_Renderer_m71_Draw_Tiles', 1)[0]
         body = source.split('void __fastcall\npatch_Map_Renderer_m71_Draw_Tiles', 1)[1]
         start = '\tif (custom_renderer_zoom_enabled ()) sync_custom_renderer_zoom_to_native ();' + body.split('\tif (custom_renderer_zoom_enabled ()) sync_custom_renderer_zoom_to_native ();', 1)[1].split('\tis->custom_renderer_draw_in_progress = true;', 1)[0]
@@ -189,7 +192,7 @@ int main(){
 struct RECT {int left=0,top=0,right=2240,bottom=1192;};
 struct JGL_Image;
 struct ImageVtable {int(*m54_Get_Width)(JGL_Image*);int(*m55_Get_Height)(JGL_Image*);};
-struct JGL_Image {ImageVtable* vtable;RECT Clip_Rect;};
+struct JGL_Image {ImageVtable* vtable;RECT Clip_Rect,Image_Rect;};
 ImageVtable image_vtable{[](JGL_Image*){return 2240;},[](JGL_Image*){return 1192;}};
 JGL_Image image{&image_vtable};
 struct JGL {JGL_Image* Image=&image;};
@@ -200,11 +203,16 @@ struct PCX_Image {void* vtable;struct JGL JGL;};
 struct MapData {Map_Renderer Renderer;};
 struct Bic {MapData Map;bool is_zoomed_out=false;} bic;
 Bic* p_bic_data=&bic;
-struct Main_Screen_Form {int camera_x=0,camera_y=0,TileX_Min=0,TileX_Max=20,TileY_Min=0,TileY_Max=20;} screen;
+struct Animator {int fields[32]{};int* field_18E4=fields;int Units2_Count=0;};
+struct Main_Screen_Form {Animator animator;bool turn_end_flag=false;int Player_CivID=2;int camera_x=0,camera_y=0,TileX_Min=0,TileX_Max=20,TileY_Min=0,TileY_Max=20;} screen;
 Main_Screen_Form* p_main_screen_form=&screen;
 struct Clock {long long QuadPart=0;};
-''' + view + r'''
+
 struct State {
+ struct {bool enable_custom_rendering=true;} current_config;
+ bool custom_renderer_camera_exact=false;
+ c3x_renderer_native_navigation_fn custom_renderer_navigation=nullptr;
+ c3x_renderer_visual_clock_fn custom_renderer_visual_clock=nullptr;
  bool custom_renderer_async_enabled=true,custom_renderer_display_valid=false,custom_renderer_nearby_preparing=false;
  bool custom_renderer_draw_in_progress=false,custom_renderer_async_drawing=false,custom_renderer_async_presented=false;
  bool custom_renderer_capture_only=false,custom_renderer_capture_failed=false,custom_renderer_capture_world_topology=true;
@@ -275,7 +283,7 @@ int main(){
  state.custom_renderer_qpc_frequency.QuadPart=150;
  state.custom_renderer_visible_animation_count=1;
  state.custom_renderer_animation_timestamp.QuadPart=30;
- queue_custom_renderer_native_view(&bic.Map.Renderer,2,&state.custom_renderer_display_view);
+ capture_custom_renderer_native_view(&bic.Map.Renderer,2,&state.custom_renderer_display_view,false);
  assert(begins==1 && state.custom_renderer_camera_ticket && queued_x==672);
  // Movement cancels old ambient work even if it is never ready. Native bounds,
  // picking and unit culling immediately see the new native camera.
@@ -288,7 +296,7 @@ int main(){
  // A completed old ticket cannot rewrite the native animator's current camera.
  state.custom_renderer_visible_animation_count=1;
  state.custom_renderer_animation_timestamp.QuadPart+=30;
- queue_custom_renderer_native_view(&bic.Map.Renderer,2,&state.custom_renderer_display_view);
+ capture_custom_renderer_native_view(&bic.Map.Renderer,2,&state.custom_renderer_display_view,false);
  assert(state.custom_renderer_camera_ticket);
  native_move(&screen,0,704,64,1,false);poll_status=C3X_RENDERER_RESULT_OK;
  state.custom_renderer_visible_animation_count=0;
@@ -297,7 +305,7 @@ int main(){
  // Projection changes likewise reject a ready old-view publication.
  state.custom_renderer_visible_animation_count=1;
  state.custom_renderer_animation_timestamp.QuadPart+=30;
- queue_custom_renderer_native_view(&bic.Map.Renderer,2,&state.custom_renderer_display_view);
+ capture_custom_renderer_native_view(&bic.Map.Renderer,2,&state.custom_renderer_display_view,false);
  assert(state.custom_renderer_camera_ticket);
  state.custom_renderer_zoom_tile_width=144;state.custom_renderer_visible_animation_count=0;
  call();assert(cancels==3 && !state.custom_renderer_camera_ticket && displayed_x==704);
@@ -316,3 +324,64 @@ int main(){
 }
 '''
         run_cpp(program)
+        # Same extracted hooks with the live GOG Animator inlead enabled.
+        enabled = program.replace('#define Main_Screen_Form_move_camera native_move',
+                                  '#define Main_Screen_Form_move_camera native_move\n#define Animator_update_display native_animator\n#define Main_Screen_Form_center_camera native_center')
+        enabled = enabled.replace('struct Clock {', 'struct City {struct {struct {int Status2=0;}Data;}Base;} city;auto p_city_form=&city;\nstruct Clock {')
+        enabled = enabled.replace('unsigned captures=0', 'void native_center(Main_Screen_Form*,int,int,int,int,bool,bool);\nunsigned captures=0')
+        enabled = enabled.replace('void native_move(', 'unsigned native_calls=0,native_work=0;int overlay_x=0;\nvoid native_animator(Animator* a,int){++native_calls;if(screen.turn_end_flag || a->Units2_Count || a->fields[10] || a->fields[13]){++native_work;overlay_x=screen.camera_x;a->fields[10]=0;}}\nvoid native_move(')
+        enabled = enabled.replace('s->camera_x=(x%8192', 's->animator.fields[10]=1;s->camera_x=(x%8192')
+        enabled = enabled[:enabled.index('int main(){')]+r'''
+void native_center(Main_Screen_Form* s,int,int x,int y,int reason,bool bounds,bool){
+ assert(state.custom_renderer_camera_exact);patch_Main_Screen_Form_move_camera(s,0,x,y,reason,bounds);
+}
+struct custom_renderer_native_view desired{};bool nav_pending=false,nav_ready=false;unsigned barriers=0;
+int navigation(int action,void*,struct custom_renderer_native_view* v,c3x_renderer_camera_request_v1 const*){
+ if(action==C3X_NAV_REQUEST){desired=*v;nav_pending=true;return C3X_RENDERER_RESULT_PENDING;}
+ if(action==C3X_NAV_DISCARD){nav_pending=false;return C3X_RENDERER_RESULT_SUPERSEDED;}
+ if(!nav_pending)return C3X_RENDERER_RESULT_SUPERSEDED;
+ if(action==C3X_NAV_POLL&&!nav_ready)return C3X_RENDERER_RESULT_PENDING;
+ barriers+=action==C3X_NAV_BARRIER;*v=desired;nav_pending=false;return C3X_RENDERER_RESULT_OK;
+}
+int main(){
+ Vtable vt{reinterpret_cast<void*>(&capture)};bic.Map.Renderer.vtable=&vt;
+ state.custom_renderer_camera_begin=begin;state.custom_renderer_camera_poll=poll;state.custom_renderer_camera_cancel=cancel;
+ state.custom_renderer_navigation=navigation;state.custom_renderer_display_valid=true;
+ state.custom_renderer_display_view=custom_renderer_native_view(&bic.Map.Renderer);
+ unsigned no_op_captures=captures;
+ patch_Main_Screen_Form_move_camera(&screen,0,0,0,1,false);
+ assert(captures==no_op_captures&&!nav_pending&&state.custom_renderer_display_valid);
+ screen.animator.fields[10]=0; // The stub marks dirty even for a native no-op.
+ // The requested camera is normalized by native code, but input, unit culling,
+ // wrap canvases and picking still observe the displayed camera while pending.
+ patch_Main_Screen_Form_move_camera(&screen,0,96,64,1,false);
+ assert(nav_pending&&screen.camera_x==0&&screen.camera_y==0&&desired.camera_x==96&&desired.min_x==1);
+ for(int i=0;i<20;++i){patch_Animator_update_display(&screen.animator,0);assert(screen.camera_x==0&&overlay_x==0);}
+ assert(native_calls==20&&native_work==0); // Native early returns, never skipped calls.
+ nav_ready=true;patch_Animator_update_display(&screen.animator,0);
+ assert(screen.camera_x==96&&screen.camera_y==64&&screen.TileX_Min==1&&overlay_x==96&&native_work==1);
+ state.custom_renderer_display_view=custom_renderer_native_view(&bic.Map.Renderer);nav_ready=false;
+ // A native action starts while a later pan is pending: it advances once at the
+ // exact requested view, not at the old view and not after a postponed action.
+ patch_Main_Screen_Form_move_camera(&screen,0,160,96,1,false);screen.animator.Units2_Count=1;
+ patch_Animator_update_display(&screen.animator,0);
+ assert(barriers==1&&screen.camera_x==160&&overlay_x==160&&native_work==2);
+ screen.animator.Units2_Count=0;
+ state.custom_renderer_display_view=custom_renderer_native_view(&bic.Map.Renderer);
+ patch_Main_Screen_Form_move_camera(&screen,0,224,96,1,false);assert(nav_pending);
+ // Selecting a new unit/programmatic recenter supersedes the pending pan and
+ // preserves immediate vanilla movement. It is never delayed by this fast path.
+ patch_Main_Screen_Form_center_camera(&screen,0,1200,320,1,false,false);
+ assert(!state.custom_renderer_camera_exact);
+ assert(!nav_pending&&screen.camera_x==1200&&screen.camera_y==320&&!state.custom_renderer_display_valid);
+ patch_Animator_update_display(&screen.animator,0);assert(overlay_x==1200);
+ state.custom_renderer_display_valid=true;state.custom_renderer_display_view=custom_renderer_native_view(&bic.Map.Renderer);
+ patch_Main_Screen_Form_move_camera(&screen,0,8260,-32,1,false);assert(nav_pending&&desired.camera_x==68&&desired.camera_y==4064);
+ // Config-off keeps the queued native destination and resumes vanilla drawing.
+ state.current_config.enable_custom_rendering=false;patch_Animator_update_display(&screen.animator,0);
+ assert(!nav_pending&&screen.camera_x==68&&screen.camera_y==4064&&barriers==2);
+ unsigned before=captures;patch_Main_Screen_Form_move_camera(&screen,0,200,100,1,false);
+ assert(screen.camera_x==200&&captures==before);
+}
+'''
+        run_cpp(enabled)

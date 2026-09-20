@@ -26,6 +26,7 @@ def main(argv=None):
     parser.add_argument('--waves',choices=('0','1'),default='1',help='Enable the existing shoreline effect with identical controls in both comparison arms')
     parser.add_argument('--reflections',choices=('0','1'),default='1',help='Keep object reflections enabled; off is an explicit diagnostic control')
     parser.add_argument('--water-motion',choices=('0','1'),default='1',help='Advance open-water and river material normals on the retained scene')
+    parser.add_argument('--native-navigation',action='store_true',help='Exercise the live navigation coordinator and fresh-capture commit through the real native owner')
     parser.add_argument('--native-camera-requests',action='store_true',help='Use nonblocking production native map transactions; the test driver measures completion separately')
     parser.add_argument('--atomic-camera-views',action='store_true',help='Require the complete GPU publication identity transition and cold-pixel matrix')
     parser.add_argument('--camera-requests',action='store_true',help='Exercise replaceable GPU camera exports and retained front lifetime')
@@ -89,7 +90,7 @@ def main(argv=None):
     inputs.update(shader_record['inputs']);inputs.update(shader_record['outputs'])
     win=windows_root();target=win/out.relative_to(ROOT)
     settings={'C3X_RENDERER_GPU_JGL_TEST':str(win/jgl.relative_to(ROOT)),'C3X_RENDERER_VISUAL_PROFILE':'city-fidelity','C3X_RENDERER_SHARED_SCENE_SURFACE':'',
-        'C3X_RENDERER_WATER_COVERAGE':'','C3X_RENDERER_REFLECTION_CONTROL':'0' if args.reflections=='1' else '1','C3X_RENDERER_WAVES':args.waves,'C3X_RENDERER_WATER_MOTION':args.water_motion,'C3X_RENDERER_GPU_FRAME_TEST':'1','C3X_RENDERER_NATIVE_CAMERA_TEST':'1' if args.native_camera_requests else '', 'C3X_RENDERER_GPU_CAMERA_IDENTITY_TEST':'1' if args.atomic_camera_views else '', 'C3X_RENDERER_GPU_CAMERA_TEST':'1' if args.camera_requests else '','C3X_RENDERER_SCROLL_COVERAGE_TEST':'1' if args.scroll_coverage else '','C3X_RENDERER_NATIVE_FRAME_BENCHMARK':'1' if args.benchmark else '',
+        'C3X_RENDERER_WATER_COVERAGE':'','C3X_RENDERER_REFLECTION_CONTROL':'0' if args.reflections=='1' else '1','C3X_RENDERER_WAVES':args.waves,'C3X_RENDERER_WATER_MOTION':args.water_motion,'C3X_RENDERER_GPU_FRAME_TEST':'1','C3X_RENDERER_NATIVE_CAMERA_TEST':'1' if args.native_camera_requests or args.native_navigation else '', 'C3X_RENDERER_NATIVE_NAVIGATION_TEST':'1' if args.native_navigation else '', 'C3X_RENDERER_GPU_CAMERA_IDENTITY_TEST':'1' if args.atomic_camera_views else '', 'C3X_RENDERER_GPU_CAMERA_TEST':'1' if args.camera_requests else '','C3X_RENDERER_SCROLL_COVERAGE_TEST':'1' if args.scroll_coverage else '','C3X_RENDERER_NATIVE_FRAME_BENCHMARK':'1' if args.benchmark else '',
         'C3X_RENDERER_PROFILE':'1' if args.profile else '0','C3X_RENDERER_GROUND_WORKERS':args.ground_workers,'C3X_RENDERER_OBJECT_WORKERS':args.object_workers,
         'C3X_RENDERER_TRACE':'2','C3X_RENDERER_TRACE_MIB':'32','C3X_RENDERER_TRACE_BUFFERED':'1' if args.benchmark or args.visual_only else '', 'C3X_RENDERER_TRACE_FILE':str(target/'renderer.log'),
         'C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS':r'..\..\Renderer\custom.custom_rendering.txt',
@@ -125,16 +126,17 @@ def main(argv=None):
     log=(out/'test.log').read_text(errors='replace') if (out/'test.log').exists() else ''
     unchanged=all(digest(ROOT/p)==h for p,h in inputs.items())
     passed=complete==[invocation,'0'] and unchanged and 'PASS resident map GPU worker:' in log and 'PASS native GPU worker transport:' in log and 'PASS native screen transfer:' in log and 'PASS live native screen:' in log and 'PASS production native map owner:' in log and ('PASS prepared GPU map adoption:' in log or (args.width>2224 and args.height>1176 and 'PASS bounded GPU map demand:' in log))
-    if args.native_camera_requests:passed=passed and 'PASS nonblocking native camera:' in log
+    if args.native_navigation:passed=passed and 'PASS native navigation:' in log
+    if args.native_camera_requests or args.native_navigation:passed=passed and 'PASS nonblocking native camera:' in log
     if args.camera_requests:passed=passed and 'PASS replaceable GPU camera:' in log
     if args.atomic_camera_views:passed=passed and 'PASS atomic GPU identity transitions: cases=16 ' in log
     receipt={'status':'pass' if passed else 'fail' if complete else 'unconfirmed','inputs':inputs,'inputs_unchanged':unchanged,'transport_returncode':process.returncode,'transport_output':process.stdout+process.stderr,'settings':settings,'scope':'production captured renderer map -> existing GPU worker -> packed composition; oracle readback explicit; actual native final presentation including CPU compatibility callback; no game speedup claim'}
     trace=(out/'renderer.log').read_text(errors='replace') if (out/'renderer.log').exists() else ''
     import re
-    if args.native_camera_requests:
+    if args.native_camera_requests or args.native_navigation:
         receipt['native_camera_samples']=[{key:float(value) for key,value in re.findall(r'(\w+)=([0-9.]+)',line)}
             for line in log.splitlines() if line.startswith('NATIVE_CAMERA_SAMPLE ')]
-        receipt['native_camera_scope']='Pending polls exclude render waits; ready polls include session import/admission. Completion includes test-driver scheduling. Live camera/overlay/picking cutover is separate.'
+        receipt['native_camera_scope']='Pending polls exclude render waits; ready polls include session import/admission. Completion includes test-driver scheduling. The native fixture services completion hints; the live bridge retries through the unchanged native Animator cadence. This is not live-game latency.'
     dropped=sum(int(value) for value in re.findall(r'TRACE_BUFFER dropped=(\d+)',trace))
     receipt['binary_provenance']=binary_provenance
     receipt['trace_coverage']={'dropped_lines':dropped,'complete':dropped==0}

@@ -452,6 +452,19 @@ typedef int (*c3x_renderer_native_map_fn)(int action, void * image,
 
 /* Clock-aware resident publication. Separate export prevents older DLLs from
    returning metadata without the actual prepared sample time. */
+struct custom_renderer_native_view {
+	int camera_x, camera_y, min_x, max_x, min_y, max_y;
+	int width, height, tile_width, native_width;
+	long long translate_x, translate_y;
+};
+/* Caller-thread navigation. REQUEST copies a normalized native view and scene;
+   POLL changes view only once ready, BARRIER returns the pending destination for
+   an exact native redraw. DISCARD keeps the current native camera. No game
+   pointers or callbacks enter the worker. Pending retains the displayed camera. */
+enum { C3X_NAV_REQUEST=0, C3X_NAV_POLL=1, C3X_NAV_BARRIER=2, C3X_NAV_DISCARD=3 };
+typedef int (*c3x_renderer_native_navigation_fn)(int action, void * image,
+    struct custom_renderer_native_view * view, struct c3x_renderer_camera_request_v1 const * request);
+
 typedef int (*c3x_renderer_native_map_view_fn)(int action, void * image,
     struct c3x_renderer_camera_request_v1 const *, struct c3x_renderer_camera_view_v1 *);
 

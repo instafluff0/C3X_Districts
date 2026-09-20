@@ -235,9 +235,8 @@ adoption path; the old direct GPU render branch is removed. Optional GPU
 camera begin/poll exports expose the production path without changing existing
 ABI layouts. Begin and pending polls do not join active rendering. Successful
 polls still perform a bounded session import on the owner thread; native calls
-and foreground GPU operations remain serialized. This is not yet nonblocking
-native presentation. Preserve the exact native barrier until M3.4–3.6 provide
-atomic completed views and coherent overlays, visibility and picking.
+and foreground GPU operations remain serialized. The M3.6 caller below uses
+nonblocking polling only where the complete native transaction can defer; directed native work retains an exact barrier.
 
 M3.4 adds `c3x_renderer_gpu_camera_poll_view`, an optional atomic description of
 that same GPU adoption. Under the existing call/worker gates it returns the
@@ -259,8 +258,8 @@ occurrences: reordered overlapping graphics require fresh pixels even when their
 content is otherwise identical. Prepared pixels require exact occurrence
 coordinates as well as canonical content; wrapping does not by itself prove that
 world projection, material and postprocessing inputs are interchangeable.
-The exact native barrier remains until M3.5–3.6 advance native presentation,
-overlays and picking coherently.
+The native bridge below advances the complete camera/canvas transaction;
+partial terrain publication alone cannot establish coherent native output.
 
 M3.5 exposes that result through the existing native `CompositionOwner` with
 `c3x_renderer_native_camera_request` / `c3x_renderer_native_camera_poll`.
@@ -276,6 +275,30 @@ adoption still has a measured cost; the API does not promise a zero-duration cal
 The synchronous PREPARE entry shares the same native image preparation/commit
 owner and remains the explicit compatibility barrier.
 
+
+M3.6 adds a caller-thread `Navigation` owner inside `CompositionOwner`. Native
+`move_camera` computes/clamps/wraps manual pan intent, a capture-only traversal
+copies it, and the small injected adapter restores the displayed camera before
+returning. A new `Animator_update_display` inlead polls before native camera,
+erase and wrap canvases advance. Pending calls still run the native Animator;
+they can defer only while its own early-return predicate is true. If gameplay,
+UI or an action requires work, the queued destination takes the exact path.
+A scoped native tile-centering hook preserves immediate vanilla selection,
+action-centering and programmatic movement, including reason-1 centering calls.
+Zoom/projection changes also retain exact behavior.
+
+Native picking, culling, selection/path anchors, grid and native labels all read
+the same displayed native camera. No separate picking transform, input listener,
+worker game pointer or native animation scheduler is introduced. After readiness,
+a fresh complete capture must still match the queued ordered records, topology,
+visibility, projection and epochs before existing PREPARE/COMMIT may consume it.
+The comparison excludes only time/scheduling hints; the actual sampled clock
+remains attached to the pixels. Repeated equivalent pan requests keep their work;
+native-clamped no-op movement queues no capture or rendering.
+One copied comparison snapshot lives in the DLL until adoption or retirement.
+Retries use the existing native Animator cadence; this is not a claim that every
+camera operation is nonblocking or that native input-to-display is below 66 ms.
+
 Pending grants **no coverage for the requested view**. Output and native pixels
 remain unchanged; COMMIT is rejected until a successful poll and caller ownership
 validation. Old pixels are not certified for the new camera. The caller must defer
@@ -288,11 +311,11 @@ Ambient visual ticks yield to active camera work instead of cancelling and joini
 it to animate an older front.
 
 The connected native fixture exercises request/poll/validate/commit followed by
-real JGL units, UI, copies and presentation. The injected game still uses exact
-PREPARE: native Animator has already changed camera/erase/wrap state before m71.
-M3.6 must coordinate the whole displayed transaction and picking before switching
-that caller. An available DLL polling contract is not a live nonblocking-camera
-claim, and adding unused injected pointers would not complete that cutover.
+real JGL units, UI, copies and presentation. The injected bridge now polls before
+Animator updates its canvases. Existing m71 PREPARE consumes validated ready
+navigation, while incompatible captures and explicit native barriers render
+exactly. Extracted hook tests prove the call boundary and camera decisions;
+fixture success does not replace the M3.8 live-game acceptance checkpoint.
 
 The renderer now owns independent visual scheduling through the existing worker
 and presenter. It does not request Civ III redraws. Native camera, visibility,

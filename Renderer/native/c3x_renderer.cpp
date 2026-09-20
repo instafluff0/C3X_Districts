@@ -12987,6 +12987,18 @@ extern "C" __declspec(dllexport) int c3x_renderer_native_camera_poll(void* image
         return native_composition->poll_camera(image,ticket,*view);
     }catch(std::exception const& e){OutputDebugStringA(e.what());return C3X_RENDERER_RESULT_DEVICE_ERROR;}
 }
+extern "C" __declspec(dllexport) int c3x_renderer_native_navigation(int action,void* image,
+    custom_renderer_native_view* view,c3x_renderer_camera_request_v1 const* request){
+    c3x_renderer_output_v1 check={C3X_RENDERER_API_VERSION,sizeof(check)};
+    if(!view || action<C3X_NAV_REQUEST || action>C3X_NAV_DISCARD ||
+        (action==C3X_NAV_REQUEST && (!request || request->version!=C3X_RENDERER_CAMERA_VIEW_VERSION ||
+         request->struct_size!=sizeof(*request) || !valid_frame(request->frame,&check))))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    try{
+        if(action==C3X_NAV_REQUEST && !ensure_native_composition(image))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        if(!native_composition)return C3X_RENDERER_RESULT_SUPERSEDED;
+        return native_composition->navigate(action,image,*view,request);
+    }catch(std::exception const& e){OutputDebugStringA(e.what());return C3X_RENDERER_RESULT_DEVICE_ERROR;}
+}
 // The exact compatibility entry shares preparation/commit with nonblocking polls.
 extern "C" __declspec(dllexport) int c3x_renderer_native_map(int action,void* image,
     c3x_renderer_camera_request_v1 const* request,c3x_renderer_output_v1* output){
