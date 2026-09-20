@@ -283,6 +283,7 @@ void refresh_tile_animation_pcx_active_mask ();
 int pick_tile_animation_winner_for_tile (unsigned int * tile_mask);
 void unload_custom_renderer ();
 void settle_custom_renderer_navigation (int action);
+int capture_custom_renderer_world_page (struct c3x_renderer_world_page_v1 * page);
 bool parse_tile_animation_hour_list (struct string_slice const * value, unsigned int * out_mask);
 bool parse_tile_animation_season_list (struct string_slice const * value, unsigned int * out_mask);
 struct tile_animation_config * get_tile_animation_for_effect (int effect_id);
@@ -28100,6 +28101,10 @@ ensure_custom_renderer_loaded ()
 			}
 			is->custom_renderer_init_state = IS_OK;
 			is->custom_renderer_navigation = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_native_navigation");
+			c3x_renderer_set_world_capture_fn set_world_capture = (void *)(*p_GetProcAddress) (
+				is->custom_renderer_module, "c3x_renderer_set_world_capture");
+			if (set_world_capture != NULL)
+				log_custom_renderer_event ("world-capture-register", set_world_capture (capture_custom_renderer_world_page));
 			is->custom_renderer_export_requested = true;
 			log_custom_renderer_event ("load-done", C3X_RENDERER_RESULT_OK);
 			(*p_OutputDebugStringA) ("C3X: Loaded off-screen renderer.\n");
@@ -28118,32 +28123,9 @@ ensure_custom_renderer_loaded ()
 }
 
 bool
-capture_custom_renderer_tile (int visible_to_civ_id, int pixel_x, int pixel_y,
-	Map_Renderer * target, int visibility_mask, int tile_x, int tile_y, Tile * tile, bool topology_only)
+read_custom_renderer_tile (struct c3x_renderer_tile_v1 * record, int visible_to_civ_id,
+	int pixel_x, int pixel_y, int visibility_mask, int tile_x, int tile_y, Tile * tile, bool topology_only, bool capture_units)
 {
-	// A complete capture belongs to one authoritative native viewer.
-	if (is->custom_renderer_tile_count == 0) {
-		if (is->custom_renderer_viewer_epoch == 0 || is->custom_renderer_viewer_civ_id != visible_to_civ_id) {
-			is->custom_renderer_viewer_civ_id = visible_to_civ_id;
-			is->custom_renderer_viewer_epoch = is->custom_renderer_viewer_epoch < 0x7fffffffffffffffLL ?
-				is->custom_renderer_viewer_epoch + 1 : 1;
-		}
-	} else if (is->custom_renderer_viewer_civ_id != visible_to_civ_id) return false;
-	int const max_tiles = 8192;
-	if (is->custom_renderer_tile_count >= max_tiles)
-		return false;
-	if (is->custom_renderer_tile_count >= is->custom_renderer_tile_capacity) {
-		int new_capacity = (is->custom_renderer_tile_capacity == 0) ? 512 : 2 * is->custom_renderer_tile_capacity;
-		if (new_capacity > max_tiles)
-			new_capacity = max_tiles;
-		void * grown = realloc (is->custom_renderer_tiles, new_capacity * sizeof is->custom_renderer_tiles[0]);
-		if (grown == NULL)
-			return false;
-		is->custom_renderer_tiles = grown;
-		is->custom_renderer_tile_capacity = new_capacity;
-	}
-
-	struct c3x_renderer_tile_v1 * record = &is->custom_renderer_tiles[is->custom_renderer_tile_count++];
 	*record = (struct c3x_renderer_tile_v1){0};
 	record->tile_x = tile_x;
 	record->tile_y = tile_y;
@@ -28265,6 +28247,7 @@ capture_custom_renderer_tile (int visible_to_civ_id, int pixel_x, int pixel_y,
 				}
 			}
 
+			if (capture_units) {
 			struct unit_tile_iter unit_iter = uti_init (tile);
 			Unit * unit = unit_iter.unit;
 			if ((unit != NULL) && (unit->Body.Container_Unit < 0) &&
@@ -28288,6 +28271,7 @@ capture_custom_renderer_tile (int visible_to_civ_id, int pixel_x, int pixel_y,
 						strncpy (record->unit_era_name, p_bic_data->Eras[leader->Era].Name.S, sizeof record->unit_era_name);
 				}
 			}
+			}
 			record->city_owner[(sizeof record->city_owner) - 1] = '\0';
 			record->city_civilization[(sizeof record->city_civilization) - 1] = '\0';
 			record->city_era_name[(sizeof record->city_era_name) - 1] = '\0';
@@ -28300,11 +28284,77 @@ capture_custom_renderer_tile (int visible_to_civ_id, int pixel_x, int pixel_y,
 	} else
 		record->tile_flags |= C3X_RENDERER_TILE_VANILLA_BASE_CALL;
 
+	return true;
+}
+
+bool
+capture_custom_renderer_tile (int visible_to_civ_id, int pixel_x, int pixel_y,
+	Map_Renderer * target, int visibility_mask, int tile_x, int tile_y, Tile * tile, bool topology_only)
+{
+	// A complete capture belongs to one authoritative native viewer.
+	if (is->custom_renderer_tile_count == 0) {
+		if (is->custom_renderer_viewer_epoch == 0 || is->custom_renderer_viewer_civ_id != visible_to_civ_id) {
+			is->custom_renderer_viewer_civ_id = visible_to_civ_id;
+			is->custom_renderer_viewer_epoch = is->custom_renderer_viewer_epoch < 0x7fffffffffffffffLL ?
+				is->custom_renderer_viewer_epoch + 1 : 1;
+		}
+	} else if (is->custom_renderer_viewer_civ_id != visible_to_civ_id) return false;
+	int const max_tiles = 8192;
+	if (is->custom_renderer_tile_count >= max_tiles)
+		return false;
+	if (is->custom_renderer_tile_count >= is->custom_renderer_tile_capacity) {
+		int new_capacity = (is->custom_renderer_tile_capacity == 0) ? 512 : 2 * is->custom_renderer_tile_capacity;
+		if (new_capacity > max_tiles)
+			new_capacity = max_tiles;
+		void * grown = realloc (is->custom_renderer_tiles, new_capacity * sizeof is->custom_renderer_tiles[0]);
+		if (grown == NULL)
+			return false;
+		is->custom_renderer_tiles = grown;
+		is->custom_renderer_tile_capacity = new_capacity;
+	}
+
+	struct c3x_renderer_tile_v1 * record = &is->custom_renderer_tiles[is->custom_renderer_tile_count++];
+	if (! read_custom_renderer_tile (record, visible_to_civ_id, pixel_x, pixel_y, visibility_mask,
+		tile_x, tile_y, tile, topology_only, true)) return false;
+
 	if (is->custom_renderer_tile_count == 1) {
 		is->custom_renderer_target = target;
 		if (target != NULL) set_custom_renderer_native_probe (((PCX_Image *)target)->JGL.Image);
 	}
 	return true;
+}
+
+// The renderer owns paging, immutable storage and preparation. This callback
+// only reads current game values on the game thread, never a worker thread.
+int
+capture_custom_renderer_world_page (struct c3x_renderer_world_page_v1 * page)
+{
+	if (! is->current_config.enable_custom_rendering || is->custom_renderer_init_state != IS_OK ||
+	    is->custom_renderer_draw_in_progress || is->custom_renderer_frame_active ||
+	    is->custom_renderer_capture_only || ! is->custom_renderer_display_valid ||
+	    p_main_screen_form->is_now_loading_game ||
+	    p_main_screen_form->Player_CivID != is->custom_renderer_viewer_civ_id)
+		return C3X_RENDERER_RESULT_PENDING;
+	Map * map = &p_bic_data->Map;
+	if (page->identity.map_epoch != is->custom_renderer_map_epoch ||
+	    page->identity.viewer_epoch != is->custom_renderer_viewer_epoch ||
+	    page->frame.world_width_tiles != map->Width || page->frame.world_height_tiles != map->Height ||
+	    page->frame.world_topology_revision != is->custom_renderer_world_topology_revision)
+		return C3X_RENDERER_RESULT_SUPERSEDED;
+	unsigned int count = map->Width * map->Height / 2;
+	int mask = is->custom_renderer_tile_count > 0 ? is->custom_renderer_tiles[0].visibility_mask : 0;
+	page->count = 0;
+	for (unsigned int n = page->first; n < count && page->count < page->capacity; n++) {
+		int y = n / (map->Width / 2), x = 2 * (n % (map->Width / 2)) + (y & 1);
+		Tile * tile = tile_at (x, y);
+		if (tile == NULL || tile == p_null_tile) return C3X_RENDERER_RESULT_ERROR;
+		struct c3x_renderer_tile_v1 * record = &page->tiles[page->count++];
+		if (! read_custom_renderer_tile (record, is->custom_renderer_viewer_civ_id, 0, 0, mask,
+			x, y, tile, false, false)) return C3X_RENDERER_RESULT_ERROR;
+		record->tile_flags = (record->tile_flags & C3X_RENDERER_TILE_VISIBILITY_BITS) |
+			C3X_RENDERER_TILE_TOPOLOGY_HALO | C3X_RENDERER_TILE_PREFETCH;
+	}
+	return C3X_RENDERER_RESULT_OK;
 }
 
 // Capture a small authoritative neighborhood, not renderable/prewarmed art.

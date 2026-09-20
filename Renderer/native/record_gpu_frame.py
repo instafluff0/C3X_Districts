@@ -33,6 +33,7 @@ def main(argv=None):
     parser.add_argument('--camera-requests',action='store_true',help='Exercise replaceable GPU camera exports and retained front lifetime')
     parser.add_argument('--benchmark',action='store_true',help='Compare complete native CPU/GPU frame requests and desktop completion')
     parser.add_argument('--profile',action='store_true',help='Enable existing phase and address-space samples; match this setting in both comparison arms')
+    parser.add_argument('--world-readiness',action='store_true',help='Page the complete world through the production caller callback, prepare it independently of the route, and measure 100 distributed GPU requests')
     parser.add_argument('--dense-scene',action='store_true',help='Use the existing world-fixed dense city/infrastructure/resource fixture in both comparison arms')
     parser.add_argument('--dense-city-case',default='',help='Dense city culture,era,size,capital, for example 0,3,1,1; requires --dense-scene')
     parser.add_argument('--object-workers',choices=('0','1'),default='1',help='Use the identical object compiler on the foreground (0) or bounded worker (1)')
@@ -106,7 +107,8 @@ def main(argv=None):
         'C3X_RENDERER_VISUAL_UNITS':str(args.visual_units),'C3X_RENDERER_VISUAL_UNIT_CASE':args.visual_unit_case,
         'C3X_RENDERER_TACTICAL_PREVIEW':str(target/'tactical') if args.tactical else '',
         'C3X_RENDERER_PREVIEW_SESSION':'','C3X_RENDERER_PREVIEW_REPLAY':'','C3X_RENDERER_PREVIEW_ANIMATION':''}
-    if args.benchmark or args.visual_only or args.scroll_coverage:
+    settings['C3X_RENDERER_WORLD_READINESS_TEST']='1' if args.world_readiness else ''
+    if args.benchmark or args.visual_only or args.scroll_coverage or args.world_readiness:
         # Match configure_custom_renderer_effects with the shipped cache enabled.
         # These are harness settings, never a setup requirement for the player.
         settings.update({
@@ -218,6 +220,19 @@ def main(argv=None):
     if args.tactical:
         passed=passed and 'PASS tactical native composition:' in log
         receipt['tactical']={'capture':'actual native JGL line/text seams','previews':['tactical-route.bmp','tactical-grid.bmp'],'passed':passed}
+        receipt['status']='pass' if passed else 'fail'
+    if args.world_readiness:
+        import re,statistics
+        rows=[{key:float(value) for key,value in re.findall(r'(\w+)=([0-9.]+)',line)}
+              for line in log.splitlines() if line.startswith('WORLD_JUMP ')]
+        readiness=[{key:float(value) for key,value in re.findall(r'(\w+)=([0-9.]+)',line)}
+                   for line in log.splitlines() if line.startswith('WORLD_READINESS ')]
+        values=sorted(row['request_ms'] for row in rows)
+        receipt['world_readiness']={'preparation':readiness,'samples':rows,
+            'scope':'GPU request completion; CSV capture, native overlay composition and live trigger-to-display are excluded',
+            'zero_static_construction':bool(rows) and all(row['built']==0 and row['uploads']==0 for row in rows),
+            'latency':{'mean':statistics.mean(values),'p95':values[int(len(values)*.95)],'max':max(values)} if values else None}
+        passed=passed and len(rows)==100 and 'PASS world readiness workload:' in log
         receipt['status']='pass' if passed else 'fail'
     if passed:
         shutil.copy2(ROOT/'Renderer/native/build/gpu-composition/test_gpu_frame.exe',out/'test_gpu_frame.exe')

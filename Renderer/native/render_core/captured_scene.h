@@ -35,7 +35,8 @@ public:
 private:
     std::unordered_map<std::uint64_t,Record> records;
     std::unordered_map<std::uint64_t,Observation> observations;
-    std::uint64_t serial=0,epoch=0;
+    std::uint64_t serial=0,epoch=0,appearance_epoch=0;
+    std::size_t authoritative_records=0;
     int width=0,height=0;
     bool wrap_x=false,wrap_y=false,valid=false;
     bool published=false;
@@ -49,7 +50,7 @@ public:
         bool changed=!published || configuration!=config || map_epoch!=identity.map_epoch ||
             viewer_epoch!=identity.viewer_epoch || width!=frame.world_width_tiles || height!=frame.world_height_tiles ||
             wrap_x!=(frame.world_wrap_x!=0) || wrap_y!=(frame.world_wrap_y!=0);
-        if(changed){records.clear();observations.clear();valid=false;}
+        if(changed){records.clear();observations.clear();valid=false;authoritative_records=0;++appearance_epoch;}
         published=true;configuration=config;map_epoch=identity.map_epoch;viewer_epoch=identity.viewer_epoch;
         width=frame.world_width_tiles;height=frame.world_height_tiles;
         wrap_x=frame.world_wrap_x!=0;wrap_y=frame.world_wrap_y!=0;return changed;
@@ -66,6 +67,7 @@ public:
             if(serial==UINT64_MAX)return false;
             record.appearance=next;record.revision=++serial;record.compiled={};
             for(auto& variant:record.compiled_views)variant={};changed=true;
+            ++appearance_epoch;
         }
         auto flags=tile.tile_flags&C3X_RENDERER_TILE_VISIBILITY_BITS;
         if(!record.visibility_revision || record.visibility_flags!=flags || record.visibility_mask!=tile.visibility_mask ||
@@ -74,7 +76,8 @@ public:
             record.visibility_flags=flags;record.visibility_mask=tile.visibility_mask;
             record.tile_visibility=tile.tile_visibility;record.fog_status=tile.fog_status;record.visibility_revision=++serial;
         }
-        if(full)record.authoritative=true;return bytes()<=budget;
+        if(full && !record.authoritative){record.authoritative=true;++authoritative_records;}
+        return bytes()<=budget;
     }
     std::uint64_t key(int x,int y) const {
         auto canonical=[](int value,int extent,bool wraps){
@@ -204,6 +207,13 @@ public:
         auto found=records.find(id);return found==records.end()?nullptr:&found->second;
     }
     std::size_t size() const{return records.size();}
+    std::size_t authoritative_size() const{return authoritative_records;}
+    std::uint64_t appearance_sequence() const{return appearance_epoch;}
+    std::uint64_t observation_sequence() const{return epoch;}
+    bool matches_world(c3x_renderer_frame_v1 const& frame) const {
+        return width==frame.world_width_tiles && height==frame.world_height_tiles &&
+            wrap_x==(frame.world_wrap_x!=0) && wrap_y==(frame.world_wrap_y!=0);
+    }
     // Conservative tracked allocation estimate; allocator/driver residency is
     // reported separately. Record count and reserve requests stay within the cap;
     // the standard library determines the bucket count.

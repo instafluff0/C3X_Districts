@@ -280,6 +280,23 @@ struct c3x_renderer_camera_request_v1 {
     struct c3x_renderer_frame_v1 const * frame;
     struct c3x_renderer_camera_identity_v1 identity;
 };
+// Optional whole-world input producer. The DLL calls this only on its native
+// caller thread, in bounded pages between native transactions. The callback
+// copies values into DLL-owned storage; neither side retains game pointers.
+struct c3x_renderer_world_page_v1 {
+    c3x_renderer_u32 struct_size, first, capacity, count;
+    struct c3x_renderer_camera_identity_v1 identity;
+    struct c3x_renderer_frame_v1 frame;
+    struct c3x_renderer_tile_v1 * tiles;
+};
+typedef int (*c3x_renderer_world_capture_fn)(struct c3x_renderer_world_page_v1 *);
+typedef int (*c3x_renderer_set_world_capture_fn)(c3x_renderer_world_capture_fn);
+struct c3x_renderer_world_status_v1 {
+    c3x_renderer_u32 struct_size, total, authoritative, capture_cursor;
+    c3x_renderer_u32 regions, prepared_regions, unavailable_regions;
+    c3x_renderer_i64 capture_passes, appearance_sequence, preparation_sequence;
+};
+typedef int (*c3x_renderer_world_status_fn)(struct c3x_renderer_world_status_v1 *);
 struct c3x_renderer_camera_view_v1 {
     c3x_renderer_u32 version, struct_size;
     c3x_renderer_i64 ticket;

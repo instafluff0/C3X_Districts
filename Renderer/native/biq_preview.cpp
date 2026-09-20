@@ -322,6 +322,7 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
     char prepared_area_option[8]={};
     bool prepared_view_fixture=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_PREPARED_VIEW",prepared_area_option,sizeof(prepared_area_option))!=0;
     int visibility_center_x=center_x,visibility_center_y=center_y;
+    bool capture_whole_world=false;
     auto capture_view = [&]() {
     if(timing_enabled)QueryPerformanceCounter(&capture_begin);
     int center_raw_x = center_x * tile_width / 2;
@@ -331,12 +332,13 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
     std::vector<c3x_renderer_tile_v1> tiles;
     for (CsvTile const & source : source_tiles) {
       for (int wrap_copy = -1; wrap_copy <= 1; ++wrap_copy) {
+        if(capture_whole_world && wrap_copy!=0)continue;
         int render_x = source.x + wrap_copy * map_width;
         int anchor_x = render_x * tile_width / 2 + shift_x;
         int anchor_y = source.y * tile_height / 2 + shift_y;
         int margin=pickup?tile_width*(prepared_view_fixture?12:6):96,vertical=pickup?tile_height*(prepared_view_fixture?12:6):128;
-        if (anchor_x + tile_width < -margin || anchor_x > target_width + margin ||
-            anchor_y + tile_height < -vertical || anchor_y > target_height + vertical)
+        if (!capture_whole_world && (anchor_x + tile_width < -margin || anchor_x > target_width + margin ||
+            anchor_y + tile_height < -vertical || anchor_y > target_height + vertical))
             continue;
         c3x_renderer_tile_v1 tile = {};
         tile.tile_x = render_x;
@@ -909,6 +911,7 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
         std::printf("CAMERA memory available_virtual=%llu largest_free_region=%zu total_virtual=%llu\n",
             values.first,values.second,memory.ullTotalVirtual);
     };
+    #include "world_readiness_preview.h"
     #include "gpu_frame_preview.h"
     #include "prepared_view_preview.h"
     #include "retained_replay_preview.h"

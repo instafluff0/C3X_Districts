@@ -87,6 +87,8 @@
 #include "city_fidelity/gpu.h"
 #include "city_fidelity/compiler.h"
 #include "world_preparation.h"
+#include "render_core/world_input_capture.h"
+#include "render_core/world_preparation_region.h"
 #include "city_fidelity/glow.h"
 #include "../lab/shared/natural/ground.h"
 #include "../lab/shared/natural/queries.h"
@@ -5194,7 +5196,7 @@ public:
             valid=valid && shared && shared->shared_natural;
         }
         if(!valid)return false; // Residency may change within a frame.
-        if(tile_geometry_epoch && cached.validity_epoch==tile_geometry_epoch &&
+        if(topology_cache.observation_sequence() && cached.validity_epoch==topology_cache.observation_sequence() &&
            cached.validity_anchor_x==tile.anchor_x && cached.validity_anchor_y==tile.anchor_y)return cached.validity;
         // Source inputs are immutable during this frame's CPU read lease.
         // Preparation selection and view assembly share one complete proof.
@@ -5218,7 +5220,7 @@ public:
                     std::int64_t(dependency.second[1])*(cached.world_ground?shadow_tile_width:1)) valid = false;
         }
         cached.validity=valid && natural.valid(cached.river_dependencies);
-        cached.validity_epoch=tile_geometry_epoch;
+        cached.validity_epoch=topology_cache.observation_sequence();
         cached.validity_anchor_x=tile.anchor_x;cached.validity_anchor_y=tile.anchor_y;
         return cached.validity;
     }
@@ -7204,6 +7206,8 @@ public:
         };
         auto selected_tile=[&](unsigned index){
             auto const& tile=frame.tiles[index];
+            if(batch_preparing && std::find(preparation_indices,preparation_indices+preparation_count,index)==
+               preparation_indices+preparation_count)return false;
             bool const guarded_prefetch=prefetch_guard_tiles!=0 &&
                 tile.anchor_x+frame.tile_width>=-prefetch_guard_tiles*frame.tile_width &&
                 tile.anchor_x<=frame.target_width+prefetch_guard_tiles*frame.tile_width &&
@@ -7255,7 +7259,7 @@ public:
         c3x_renderer::objects::Assets object_assets{{&bridge_bundle,&site_bundle,&mine_bundle,&farm_bundle,&city_bundle,&wall_bundle}};
         bool const prepare_objects=fidelity_profile && world_objects;
         char object_control[8]={};
-        bool const object_worker=prepare_objects && !prewarming &&
+        bool const object_worker=prepare_objects && (!prewarming || world_preparation) &&
             !(GetEnvironmentVariableA("C3X_RENDERER_OBJECT_WORKERS",object_control,sizeof(object_control)) && std::strcmp(object_control,"0")==0);
         bool const world_batch_enabled=cpu_terrain_enabled && world_ground && retain_ground_grids && ground_concurrent && object_worker;
         auto& world_queue=world_preparation_queue;
@@ -10172,6 +10176,7 @@ struct CameraTerrainPreview {
 // camera/scene front while a newer clock tick is in flight; camera or captured
 // ownership changes still take over synchronously. No backlog is accumulated.
 void CALLBACK renderer_visual_timer(HWND,UINT,UINT_PTR,DWORD);
+void CALLBACK renderer_world_timer(HWND,UINT,UINT_PTR,DWORD);
 
 class RendererWorker {
 public:
@@ -10351,6 +10356,52 @@ public:
         return code;
     }
 
+    int set_world_capture(c3x_renderer_world_capture_fn callback){
+        std::lock_guard<std::mutex> calls(call_mutex);
+        if(world_timer){KillTimer(nullptr,world_timer);world_timer=0;}
+        world_capture=callback;world_capture_thread=GetCurrentThreadId();world_input.reset();
+        if(callback)world_timer=SetTimer(nullptr,0,33,renderer_world_timer);
+        return !callback || world_timer?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_ERROR;
+    }
+    int world_status(c3x_renderer_world_status_v1& status){
+        std::unique_lock<std::mutex> calls(call_mutex,std::try_to_lock);
+        if(!calls.owns_lock())return C3X_RENDERER_RESULT_PENDING;
+        std::unique_lock<std::mutex> lock(state_mutex,std::try_to_lock);
+        if(!lock.owns_lock())return C3X_RENDERER_RESULT_PENDING;
+        auto state=scene_changes.state();status={sizeof(status)};
+        if(!state)return C3X_RENDERER_RESULT_PENDING;
+        status.total=state->metadata.world_topology_count;status.authoritative=world_authoritative;
+        status.capture_cursor=world_input.cursor;status.capture_passes=c3x_renderer_i64(world_input.passes);
+        status.regions=c3x_renderer::render_core::WorldPreparationRegion::count(state->metadata);
+        status.prepared_regions=world_prepare_cursor;status.unavailable_regions=world_prepare_failed;
+        status.appearance_sequence=c3x_renderer_i64(world_appearance_sequence);
+        status.preparation_sequence=c3x_renderer_i64(world_prepare_sequence);
+        return C3X_RENDERER_RESULT_OK;
+    }
+    void capture_world_tick(UINT_PTR id){
+        if(!id || id!=world_timer || GetCurrentThreadId()!=world_capture_thread)return;
+        std::unique_lock<std::mutex> calls(call_mutex,std::try_to_lock);
+        if(!calls.owns_lock() || !world_capture || !running)return;
+        std::unique_lock<std::mutex> lock(state_mutex,std::try_to_lock);
+        if(!lock.owns_lock() || has_job || camera_pending || camera_active || camera_paused)return;
+        auto state=scene_changes.state();
+        if(!state || !state->topology || !state->metadata.world_topology_count ||
+           state->metadata.world_topology_count>c3x_renderer::render_core::CapturedScene::record_limit)return;
+        auto page=world_input.page(*state);
+        // Immutable scope/topology stay leased while the native caller copies.
+        // No renderer lock needed by the callback is held; it only reads Civ III.
+        lock.unlock();LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
+        int result=world_capture(&page);QueryPerformanceCounter(&end);
+        lock.lock();
+        bool accepted=result==C3X_RENDERER_RESULT_OK && world_input.accept(page,scene_changes);
+        if(accepted)wake.notify_one();
+        if(accepted && (!world_input.cursor || world_input.pages==1)){
+            char detail[224];sprintf_s(detail,"pages=%llu records=%llu passes=%llu coverage=%u total=%u capture_ms=%.3f",
+                world_input.pages,world_input.records,world_input.passes,world_input.cursor,
+                state->metadata.world_topology_count,renderer_state.trace.milliseconds(end.QuadPart-begin.QuadPart));
+            renderer_state.trace.write("world-input",detail,true);
+        }
+    }
     void stop_visual_timer(){if(visual_timer){KillTimer(nullptr,visual_timer);visual_timer=0;}}
     void advance_visual_clock(){
         LARGE_INTEGER now={},frequency={};QueryPerformanceCounter(&now);QueryPerformanceFrequency(&frequency);
@@ -11132,6 +11183,8 @@ public:
 
     void reset_and_stop() {
         std::unique_lock<std::mutex> call_guard(call_mutex);stop_visual_timer();
+        if(world_timer){KillTimer(nullptr,world_timer);world_timer=0;}
+        world_capture=nullptr;world_input.reset();
         std::unique_lock<std::mutex> lock(state_mutex);
         if (!running)
             return;
@@ -11203,6 +11256,13 @@ private:
     std::uint64_t visual_frames=0,visual_map_samples=0,visual_unit_samples=0,visual_pose_changes=0;
     c3x_renderer::render_core::DynamicSceneInputs dynamic_inputs;
     c3x_renderer::render_core::ScenePublication scene_changes;
+    c3x_renderer::render_core::WorldInputCapture world_input;
+    c3x_renderer_world_capture_fn world_capture=nullptr;
+    UINT_PTR world_timer=0;DWORD world_capture_thread=0;
+    std::uint64_t world_prepare_sequence=0;
+    std::uint64_t world_appearance_sequence=0;
+    unsigned world_authoritative=0;
+    unsigned world_prepare_cursor=0,world_prepare_failed=0;
     bool scene_changes_ok=true;
     c3x_renderer::render_core::UnitInstances::Selection job_unit_selection;
     RendererState & renderer_state;
@@ -11856,6 +11916,8 @@ private:
             // immutable while a render is running outside this gate.
             if(scene_changes.ready()){
                 bool changed=false;scene_changes_ok=scene_changes.apply(renderer_state.topology_cache,changed);
+                world_authoritative=unsigned(renderer_state.topology_cache.authoritative_size());
+                world_appearance_sequence=renderer_state.topology_cache.appearance_sequence();
                 if(changed)renderer_state.topology_cache.signature=0;
                 auto state=scene_changes.state();char detail[256];
                 std::snprintf(detail,sizeof(detail),"sequence=%llu configuration=%llu applied=%llu changed=%u ok=%u bytes=%zu peak_bytes=%zu tiles_reused=%llu",
@@ -12199,6 +12261,46 @@ private:
                 }
                 continue;
             }
+            if(!has_job && !stop_requested && !camera_pending && !camera_paused && scene_changes_ok &&
+               !(camera_gpu && camera_ready.resident.texture) && renderer_state.world_preparation && renderer_state.cache_valid){
+                auto state=scene_changes.state();auto const& scene=renderer_state.topology_cache;
+                if(state && state->topology && state->metadata.world_topology_count &&
+                   scene.authoritative_size()==state->metadata.world_topology_count){
+                    if(world_prepare_sequence!=scene.appearance_sequence()){
+                        world_prepare_sequence=scene.appearance_sequence();world_prepare_cursor=world_prepare_failed=0;
+                    }
+                    unsigned count=c3x_renderer::render_core::WorldPreparationRegion::count(state->metadata);
+                    if(world_prepare_cursor<count){
+                        if(wake.wait_for(lock,std::chrono::milliseconds(2),[this]{return has_job || camera_pending || stop_requested || scene_changes.ready();}))continue;
+                        auto frame=state->metadata;frame.world_topology=state->topology->data();
+                        auto sequence=world_prepare_sequence;auto region=world_prepare_cursor;
+                        foreground_pending.store(false,std::memory_order_relaxed);lock.unlock();
+                        LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
+                        bool ok=false;unsigned built=0,reused=0;
+                        try{
+                            c3x_renderer::render_core::WorldPreparationRegion input;
+                            if(input.build(scene,frame,region)){
+                                c3x_renderer_output_v1 unused{};
+                                // Nonzero signature forces the observation lease to
+                                // switch when visiting another preparation region.
+                                auto signature=c3x_renderer::terrain_frame_signature(input.frame,renderer_state.content_revision,renderer_state.device_generation).complete;
+                                GpuOutputMode mode(renderer_state,true);
+                                ok=renderer_state.render(input.frame,unused,int(input.selected.front()),&foreground_pending,
+                                    signature,input.selected.data(),unsigned(input.selected.size()),&frame);
+                                built=renderer_state.frame_tiles_built;reused=renderer_state.frame_tiles_reused;
+                            }
+                        }catch(...){ok=false;}
+                        QueryPerformanceCounter(&end);lock.lock();
+                        bool cancelled=foreground_pending.load(std::memory_order_relaxed);
+                        if(!cancelled){++world_prepare_cursor;if(!ok)++world_prepare_failed;}
+                        char detail[256];sprintf_s(detail,"sequence=%llu region=%u regions=%u ok=%u cancelled=%u built=%u reused=%u unavailable=%u geometry_bytes=%zu ms=%.3f",
+                            sequence,region,count,unsigned(ok),unsigned(cancelled),built,reused,world_prepare_failed,
+                            renderer_state.tile_geometry_cache_bytes,renderer_state.trace.milliseconds(end.QuadPart-begin.QuadPart));
+                        renderer_state.trace.write("world-region-prepared",detail,true);
+                        continue;
+                    }
+                }
+            }
             wake.wait(lock, [this] { return scene_changes.ready() || has_job || (camera_pending && !camera_paused) || (!camera_paused && (ahead_pending() || unit_preparation_pending())) || stop_requested; });
             if(scene_changes.ready())continue;
             if(!has_job && !stop_requested && !camera_paused && (camera_pending || ahead_pending() || unit_preparation_pending()))continue;
@@ -12487,6 +12589,10 @@ RendererWorker * renderer_worker = nullptr;
 void CALLBACK renderer_visual_timer(HWND,UINT,UINT_PTR id,DWORD){
     if(renderer_worker)renderer_worker->visual_timer_tick(id);
 }
+void CALLBACK renderer_world_timer(HWND,UINT,UINT_PTR id,DWORD){
+    try{if(renderer_worker)renderer_worker->capture_world_tick(id);}
+    catch(...){OutputDebugStringA("[C3X renderer] world capture page unavailable\n");}
+}
 extern "C" __declspec(dllexport) c3x_renderer_i64 c3x_renderer_visual_clock(){return renderer_worker?renderer_worker->visual_clock():0;}
 extern "C" __declspec(dllexport) int c3x_renderer_gpu_visual_status(c3x_renderer_visual_status_v1* out){
     if(!out||out->struct_size!=sizeof(*out))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
@@ -12500,6 +12606,15 @@ RendererWorker & get_renderer_worker() {
     if (renderer_worker == nullptr)
         renderer_worker = new RendererWorker(renderer);
     return *renderer_worker;
+}
+extern "C" __declspec(dllexport) int c3x_renderer_set_world_capture(c3x_renderer_world_capture_fn callback){
+    try{return get_renderer_worker().set_world_capture(callback);}
+    catch(...){return C3X_RENDERER_RESULT_ERROR;}
+}
+extern "C" __declspec(dllexport) int c3x_renderer_world_status(c3x_renderer_world_status_v1* status){
+    if(!status || status->struct_size!=sizeof(*status))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    try{return renderer_worker?renderer_worker->world_status(*status):C3X_RENDERER_RESULT_PENDING;}
+    catch(...){return C3X_RENDERER_RESULT_ERROR;}
 }
 
 void destroy_renderer_worker() {

@@ -225,6 +225,8 @@ int main(){
 #include "Renderer/native/render_core/unit_instances.h"
 #include "Renderer/native/render_core/dynamic_scene_input.h"
 #include "Renderer/native/render_core/scene_publication.h"
+#include "Renderer/native/render_core/world_input_capture.h"
+#include "Renderer/native/render_core/world_preparation_region.h"
 #include "Renderer/native/render_core/cliff_placement.h"
 #include "Renderer/native/prepared_view_area.h"
 #include "Renderer/native/gpu_frame_api.h"
@@ -245,6 +247,8 @@ constexpr unsigned GA_ROOT=2;
 bool IsWindowVisible(HWND){return false;}HWND GetForegroundWindow(){return nullptr;}
 HWND GetAncestor(HWND,unsigned){return nullptr;}
 void renderer_visual_timer(HWND,UINT,UINT_PTR,DWORD){}
+void renderer_world_timer(HWND,UINT,UINT_PTR,DWORD){}
+DWORD GetCurrentThreadId(){return 1;}
 void KillTimer(HWND,UINT_PTR){assert(false);}
 UINT_PTR SetTimer(HWND,UINT_PTR,UINT,void(*)(HWND,UINT,UINT_PTR,DWORD)){assert(false);return 0;}
 struct RECT {int left,top,right,bottom;};
@@ -373,7 +377,8 @@ struct RendererState {
     bool gpu_output_mode=false,gpu_map_valid=false,cpu_output_stale=false,scene_surface_requested=false,city_profile=false;
     ID3D11Texture2D* gpu_map_texture=nullptr;unsigned frame_output_readbacks=0;std::uint64_t gpu_serial=0;std::int64_t camera_serial=0;
     struct {bool enabled=false;} reflection;std::unique_ptr<c3x_gpu_images::Session> gpu_composition;
-    unsigned cache_hits=0,device_recoveries=0,frame_tiles_built=0,prepared_blocks=0,visible_resource_animations=0;
+    unsigned cache_hits=0,device_recoveries=0,frame_tiles_built=0,frame_tiles_reused=0,prepared_blocks=0,visible_resource_animations=0;
+    unsigned content_revision=1,device_generation=1;
     unsigned ambient_count() const {return visible_resource_animations;}
     bool can_prepare_ambient() const {return animate_pixels && visible_resource_animations;}
     std::size_t prefetched_geometry_bytes=0,tile_geometry_cache_bytes=0;

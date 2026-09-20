@@ -1,0 +1,83 @@
+"""Whole-world pages and compiler leases preserve authority and visibility."""
+import unittest
+from Renderer.native.native_cpp_test import run_cpp
+
+
+class WorldReadinessTests(unittest.TestCase):
+    def test_paging_backpressure_scope_and_remote_removal(self):
+        run_cpp(r'''
+#include "Renderer/native/render_core/world_input_capture.h"
+#include <cassert>
+using namespace c3x_renderer::render_core;
+int main(){
+ ScenePublication journal;CapturedScene scene;WorldInputCapture capture;
+ std::vector<unsigned> topology(800,2);
+ c3x_renderer_frame_v1 frame{};frame.world_width_tiles=40;frame.world_height_tiles=40;
+ frame.world_topology=topology.data();frame.world_topology_count=unsigned(topology.size());
+ c3x_renderer_camera_identity_v1 identity{1,1,1,1};
+ assert(journal.capture(frame,identity));bool changed=false;assert(journal.apply(scene,changed));
+ auto fill=[](c3x_renderer_world_page_v1& page){
+  page.count=std::min(page.capacity,page.frame.world_topology_count-page.first);
+  for(unsigned i=0;i<page.count;++i){auto n=page.first+i;auto& t=page.tiles[i];t={};
+   t.tile_y=int(n/20);t.tile_x=int(n%20)*2+(t.tile_y&1);t.city_id=int(n);t.resource_id=4;
+   t.tile_flags=C3X_RENDERER_TILE_PREFETCH|C3X_RENDERER_TILE_TOPOLOGY_HALO|C3X_RENDERER_TILE_VISIBILITY_KNOWN;
+  }
+ };
+ auto page=capture.page(*journal.state());fill(page);
+ ScenePublication full(128);assert(!capture.accept(page,full)&&capture.cursor==0);
+ ++page.tiles[0].tile_x;assert(!capture.accept(page,journal));--page.tiles[0].tile_x;
+ --page.count;assert(!capture.accept(page,journal));++page.count;
+ assert(capture.accept(page,journal));page.tiles[0].city_id=999;
+ assert(journal.apply(scene,changed)&&scene.retained(scene.key(0,0))->appearance.city_id==0);
+ while(!capture.passes){page=capture.page(*journal.state());fill(page);assert(capture.accept(page,journal));assert(journal.apply(scene,changed));}
+ assert(scene.authoritative_size()==800&&capture.pages==7&&capture.records==800);
+ assert(!(scene.retained(scene.key(0,0))->visibility_flags&C3X_RENDERER_TILE_EXPLORED));
+ auto sequence=scene.appearance_sequence();page=capture.page(*journal.state());fill(page);
+ assert(capture.accept(page,journal)&&journal.apply(scene,changed)&&!changed&&sequence==scene.appearance_sequence());
+ page=capture.page(*journal.state());fill(page);auto removed=scene.key(page.tiles[0].tile_x,page.tiles[0].tile_y);
+ page.tiles[0].city_id=page.tiles[0].resource_id=-1;
+ assert(capture.accept(page,journal)&&journal.apply(scene,changed)&&changed);
+ assert(scene.retained(removed)->appearance.city_id==-1&&scene.retained(removed)->appearance.resource_id==-1);
+ ++identity.viewer_epoch;assert(journal.capture(frame,identity)&&journal.apply(scene,changed));
+ page=capture.page(*journal.state());assert(page.first==0&&!capture.passes&&!scene.authoritative_size());
+ fill(page);assert(capture.accept(page,journal)&&journal.apply(scene,changed)&&scene.authoritative_size()==128);
+ journal.reset();assert(journal.capture(frame,identity));page=capture.page(*journal.state());assert(page.first==0);
+}
+''')
+
+    def test_regions_require_complete_authority_and_never_grant_pixels(self):
+        run_cpp(r'''
+#include "Renderer/native/render_core/world_preparation_region.h"
+#include <cassert>
+using namespace c3x_renderer::render_core;
+int main(){
+ CapturedScene scene;c3x_renderer_frame_v1 f{};f.world_width_tiles=f.world_height_tiles=40;
+ f.world_wrap_x=f.world_wrap_y=1;
+ f.tile_width=128;f.tile_height=64;f.target_width=1120;f.target_height=1192;
+ scene.publication_scope(f,{1,1,1,1},1);WorldPreparationRegion region;
+ assert(!region.build(scene,f,0));bool changed=false;
+ for(int y=0;y<40;++y)for(int x=y&1;x<40;x+=2){c3x_renderer_tile_v1 t{};t.tile_x=x;t.tile_y=y;
+  t.city_id=y*40+x;t.tile_flags=C3X_RENDERER_TILE_TOPOLOGY_HALO;assert(scene.publish(t,changed));}
+ assert(!scene.authoritative_size()&&!region.build(scene,f,0));
+ for(int y=0;y<40;++y)for(int x=y&1;x<40;x+=2){c3x_renderer_tile_v1 t{};t.tile_x=x;t.tile_y=y;
+  t.city_id=y*40+x;t.tile_flags=C3X_RENDERER_TILE_PREFETCH|C3X_RENDERER_TILE_VISIBILITY_KNOWN;
+  assert(scene.publish(t,changed));}
+ assert(scene.authoritative_size()==800);
+ for(unsigned n=0;n<region.count(f);++n){assert(region.build(scene,f,n));assert(region.selected.size()==32);
+  for(auto const&t:region.tiles){assert(t.city_id==t.tile_y*40+t.tile_x);
+   assert(!(t.tile_flags&(C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_EXPLORED|C3X_RENDERER_TILE_VISIBLE)));}
+ }
+ f.world_wrap_x=f.world_wrap_y=1;assert(region.build(scene,f,0));
+ assert(region.tiles.size()==512);bool wrapped=false;
+ for(auto const&t:region.tiles)if(t.tile_x>=28&&t.anchor_x<0)wrapped=true;
+ assert(wrapped);assert(!region.build(scene,f,region.count(f)));
+ // Compiler leases contain values, unaffected by later world publication.
+ assert(region.build(scene,f,0));auto old=region.tiles.front();auto next=old;next.city_id=-1;
+ assert(scene.publish(next,changed)&&region.tiles.front().city_id==old.city_id);
+ f.world_width_tiles=f.world_height_tiles=16;assert(!region.build(scene,f,0));
+}
+''')
+
+
+if __name__ == '__main__':
+    unittest.main()
