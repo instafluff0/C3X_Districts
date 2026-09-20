@@ -17,6 +17,7 @@ public:
         // Sample copied state once per frame, then execute against assembled
         // resident underlays in native order. No finished unit source image.
         bool animated=false;
+        std::uint64_t input_bytes=0; // immutable direct-pass payload, charged with retained outputs
         std::function<std::uint64_t(long long,long long)> revision;
         std::function<bool(Compositor&,Command const&)> draw;
     };
@@ -45,7 +46,7 @@ private:
     Rect extent(Picture const& p)const{return {0,0,int(p.width),int(p.height)};}
     std::shared_ptr<Node> node(){
         if(nodes>=32768)throw std::runtime_error("retained composition node budget");
-        ++nodes;return std::shared_ptr<Node>(new Node,[this](Node* p){resident_bytes-=p->bytes[0]+p->bytes[1];delete p;--nodes;});
+        ++nodes;return std::shared_ptr<Node>(new Node,[this](Node* p){resident_bytes-=p->bytes[0]+p->bytes[1]+p->direct.input_bytes;delete p;--nodes;});
     }
     void output(Node& n,unsigned index,Texture texture){
         D3D11_TEXTURE2D_DESC d={};if(texture)texture->GetDesc(&d);
@@ -171,7 +172,8 @@ public:
     void record(Command const& c,Direct direct={}){
         if(!admitted)return;auto target=images.find(c.destination);if(target==images.end())throw std::runtime_error("retained target missing");
         auto area=intersect(intersect(c.area,c.clip),extent(target->second));if(empty(area))return;
-        auto n=node();n->operation=true;n->area=area;n->command=c;n->command.clip=area;n->direct=std::move(direct);n->dynamic=n->direct.animated;
+        if(direct.input_bytes>resident_budget-resident_bytes)throw std::runtime_error("retained direct input budget");
+        auto n=node();resident_bytes+=direct.input_bytes;n->operation=true;n->area=area;n->command=c;n->command.clip=area;n->direct=std::move(direct);n->dynamic=n->direct.animated;
         Id ids[6]={c.destination,c.source,c.background,c.detail,c.background_detail,c.program};
         bool opaque=c.kind==Kind::fill||c.kind==Kind::copy||c.kind==Kind::quantize||
             (c.kind==Kind::expand&&c.color==65536)||(c.kind==Kind::native_image&&c.color==65536);

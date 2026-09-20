@@ -14,14 +14,16 @@ from Renderer.native.record_renderer_build import unit_inputs, DLL_UNITS
 def digest(path):return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def main():
+def main(argv=None):
     parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--out",type=Path,help="Explicit disposable output directory for category dispatch")
     parser.add_argument('--scene',type=Path,required=True)
     parser.add_argument('--dll',type=Path,default=Path('Renderer/native/build/candidate/C3XRenderer.dll'))
     parser.add_argument('--width',type=int,default=640)
     parser.add_argument('--height',type=int,default=480)
     parser.add_argument('--tile-width',type=int,choices=(64,128,160,192),default=128)
     parser.add_argument('--jgl',type=Path,default=Path('Renderer/native/build/gpu-composition/audit/jgl.dll'))
+    parser.add_argument('--waves',choices=('0','1'),default='0',help='Enable the existing shoreline effect with identical controls in both comparison arms')
     parser.add_argument('--benchmark',action='store_true',help='Compare complete native CPU/GPU frame requests and desktop completion')
     parser.add_argument('--profile',action='store_true',help='Enable existing phase and address-space samples; match this setting in both comparison arms')
     parser.add_argument('--dense-scene',action='store_true',help='Use the existing world-fixed dense city/infrastructure/resource fixture in both comparison arms')
@@ -31,9 +33,10 @@ def main():
     parser.add_argument("--unit-count",type=int,choices=(1,8,16,32),default=8,help="Unit count in the complete native-frame workload")
     parser.add_argument("--unit-scene",choices=("0","1"),default="1",help="Ordered direct unit scene draws (1) or preserved resident-pose control (0)")
     parser.add_argument("--visibility",action="store_true",help="Capture world-fixed visible, explored and unseen regions")
+    parser.add_argument("--tactical",action="store_true",help="Exercise native tactical capture and save actual connected display previews")
     parser.add_argument("--visual-only",action="store_true",help="Use production rendering settings and validate independent visual frames without the 384-request comparison")
     parser.add_argument("--scroll-coverage",action="store_true",help="Exercise fine scrolling and guard coverage against missing map pixels")
-    args=parser.parse_args()
+    args=parser.parse_args(argv)
     if args.dense_city_case:
         try:
             fields=tuple(int(value) for value in args.dense_city_case.split(','))
@@ -60,13 +63,13 @@ def main():
         if any(c in path.relative_to(ROOT).as_posix() for c in '\r\n"%&|<>^!'):parser.error('unsupported input path')
     if not(64<=args.width<=2240 and 64<=args.height<=1192):parser.error('unsupported extent')
     header=scene.read_text().splitlines()[0].split(',');cx=int(header[1])//2;cy=int(header[2])//2
-    invocation=uuid.uuid4().hex;out=ROOT/'Renderer/native/build/gpu-composition'/invocation;out.mkdir()
+    invocation=uuid.uuid4().hex;out=args.out.resolve() if args.out else ROOT/'Renderer/native/build/gpu-composition'/invocation;out.mkdir(parents=True,exist_ok=True)
     inputs={}
     for unit in DLL_UNITS:inputs.update(unit_inputs(unit))
     for path in (scene,dll,jgl,ROOT/'injected_code.c',ROOT/'C3X.h',ROOT/'civ_prog_objects.csv',*[ROOT/'Renderer/native'/n for n in ('gpu_frame_preview.h','native_frame_workload.h','native_frame_benchmark.h','test_native_screen.h','test_native_bootstrap.h','test_native_worker.cpp','test_gpu_unit_composition.h','test_native_image_adapter.cpp','test_native_observation.cpp','native_image_adapter.h','native_sprite_diagnostics.h','native_composition_owner.h','native_observation.h','gpu_image_worker_client.h','gpu_image_commands.h','color_quantization.h','test_gpu_frame_api.c','biq_preview.cpp','BUILD.bat','record_gpu_frame.py')]):inputs[path.relative_to(ROOT).as_posix()]=digest(path)
     win=windows_root();target=win/out.relative_to(ROOT)
-    settings={'C3X_RENDERER_GPU_JGL_TEST':str(win/jgl.relative_to(ROOT)),'C3X_RENDERER_VISUAL_PROFILE':'city-fidelity','C3X_RENDERER_SHARED_SCENE_SURFACE':'1',
-        'C3X_RENDERER_REFLECTION_CONTROL':'1','C3X_RENDERER_WAVES':'0','C3X_RENDERER_GPU_FRAME_TEST':'1','C3X_RENDERER_SCROLL_COVERAGE_TEST':'1' if args.scroll_coverage else '','C3X_RENDERER_NATIVE_FRAME_BENCHMARK':'1' if args.benchmark else '',
+    settings={'C3X_RENDERER_GPU_JGL_TEST':str(win/jgl.relative_to(ROOT)),'C3X_RENDERER_VISUAL_PROFILE':'city-fidelity','C3X_RENDERER_SHARED_SCENE_SURFACE':'',
+        'C3X_RENDERER_REFLECTION_CONTROL':'1','C3X_RENDERER_WAVES':args.waves,'C3X_RENDERER_GPU_FRAME_TEST':'1','C3X_RENDERER_SCROLL_COVERAGE_TEST':'1' if args.scroll_coverage else '','C3X_RENDERER_NATIVE_FRAME_BENCHMARK':'1' if args.benchmark else '',
         'C3X_RENDERER_PROFILE':'1' if args.profile else '0','C3X_RENDERER_GROUND_WORKERS':args.ground_workers,'C3X_RENDERER_OBJECT_WORKERS':args.object_workers,
         'C3X_RENDERER_TRACE':'2','C3X_RENDERER_TRACE_MIB':'32','C3X_RENDERER_TRACE_BUFFERED':'1' if args.benchmark or args.visual_only else '', 'C3X_RENDERER_TRACE_FILE':str(target/'renderer.log'),
         'C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS':r'..\..\Renderer\custom.custom_rendering.txt',
@@ -76,6 +79,7 @@ def main():
         'C3X_RENDERER_PREVIEW_VISIBILITY':'1' if args.visibility else '',
         'C3X_RENDERER_UNIT_SCENE_CONTROL':'1' if args.unit_scene=='0' else '',
         'C3X_RENDERER_BENCHMARK_UNITS':str(args.unit_count),
+        'C3X_RENDERER_TACTICAL_PREVIEW':str(target/'tactical') if args.tactical else '',
         'C3X_RENDERER_PREVIEW_SESSION':'','C3X_RENDERER_PREVIEW_REPLAY':'','C3X_RENDERER_PREVIEW_ANIMATION':''}
     if args.benchmark or args.visual_only or args.scroll_coverage:
         # Match configure_custom_renderer_effects with the shipped cache enabled.
@@ -171,10 +175,14 @@ def main():
             if args.unit_scene=='1' and not args.visibility:passed=passed and totals['map_draws']>0
         passed=passed and not parse_errors and len(samples)==384 and 'PASS whole native frame comparison:' in log
         receipt['status']='pass' if passed else 'fail' if complete else 'unconfirmed'
-    if args.visual_only:
+    if args.visual_only or args.benchmark:
         passed=passed and 'PASS independent resident frames:' in log and 'PASS visual timer transport:' in log
         receipt['status']='pass' if passed else 'fail' if complete else 'unconfirmed'
         receipt['visual_frames']=[line for line in log.splitlines() if line.startswith(('VISUAL_SAMPLE ','PASS independent resident frames:','PASS visual timer transport:'))]
+    if args.tactical:
+        passed=passed and 'PASS tactical native composition:' in log
+        receipt['tactical']={'capture':'actual native JGL line/text seams','previews':['tactical-route.bmp','tactical-grid.bmp'],'passed':passed}
+        receipt['status']='pass' if passed else 'fail'
     if passed:
         shutil.copy2(ROOT/'Renderer/native/build/gpu-composition/test_gpu_frame.exe',out/'test_gpu_frame.exe')
         shutil.copy2(dll,out/'C3XRenderer.dll')

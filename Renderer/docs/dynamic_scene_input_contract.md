@@ -53,10 +53,11 @@ before the captured sample. Tests mutate/free caller arrays, change resources an
 visibility, replace fronts, reset owners, exhaust budgets, and exercise authored
 unit loops, directed/frozen actions, despawn and reuse.
 
-The production retained map callback now consumes these const records instead of
-mutable `ProspectiveView` captures. Prospective camera preparation keeps its own
-existing owner. Next is **2.2 direct unit-pose rendering** over resident map color
-and depth, followed by 2.3 shadows/occlusion/composition. Map sampling still enters
-the existing render orchestration and units still finish separate poses. In 2.4,
-shoreline animation is the first real map-effect workload; 2.5 covers tactical
-overlays, 2.6 scheduling/reuse, and 2.7 milestone acceptance.
+The production retained map callback consumes these const records instead of
+mutable prospective-view captures. Direct unit execution and composition are
+implemented through 2.3; units retain the user's always-on-top map ordering.
+Milestone 2.4 now connects shoreline ribbons to the shared dynamic scene pass:
+visible waves use the captured clock, explored ribbons keep time zero, and hidden
+ribbons are omitted. The immutable map owner and native publication still prove
+which view can be sampled. General scheduling/reuse remains 2.6, tactical overlays
+2.5, and milestone acceptance 2.7.

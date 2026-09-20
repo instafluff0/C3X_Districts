@@ -151,6 +151,25 @@ Separate direct/compatibility scratch avoids route-switch reallocations. Oversiz
 canvases use bounded resident GPU poses. No CPU body roundtrip or second presenter
 is introduced; native unit/UI order, action and visibility authority remain intact.
 
+Shoreline effects now use the same shared dynamic pass and damage owner as resource
+bodies/shadows. Retained wave cells own immutable geometry; occurrences carry
+native projection and visible/frozen time. The pass restores the prior affected
+samples, draws shadow/foam/body contributions in order against scene depth, and
+finishes their union once. Time changes upload no terrain or ribbon geometry.
+The shared path admits waves when reflections are disabled; reflections retain
+the existing compatibility path and their configuration control. No extra HDR
+surface, presenter, native redraw loop or parallel effect scheduler is introduced.
+Optional absent/disabled wave assets retain ordinary water and request no wave
+animation. Open-water motion and river flow remain subsequent effect work.
+
+The tactical pass consumes native selection anchors, scoped route line/text draws
+and grid-setting/tile anchors as immutable primitives. It joins the same dynamic
+native composition history as unit bodies, preserving copy/erase, clipping and UI
+order. Analytic GPU coverage and one generic font atlas replace FLC cursor pixels
+and native red lines/turn text. Packed color conversion remains on the GPU. Input
+payloads share the retained-history budget; no second scene, input handler or
+pathfinder is introduced. See the [tactical contract](tactical_overlay_contract.md).
+
 Raster caches skip useful work but do not define world ownership or force the map
 into independently rebuilt mini-scenes. Choose viewport, regional or hybrid working
 surfaces from pass dependencies and the combined 32-bit memory budget. A raster

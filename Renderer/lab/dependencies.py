@@ -13,7 +13,7 @@ def consumers(entries):
         "coastal-waves": set(entries), "natural": set(entries), "hill-cliff": set(entries),
         "tile-sites": {"huts-camps", "goody-huts", "barbarian-camps", "shadows"} & entries.keys(),
         "cities": objects | ({"cities"} & entries.keys()),
-        "units": {"units", "animation", "shadows"} & entries.keys(),
+        "units": {"units", "animation", "shadows", "tactical-overlays"} & entries.keys(),
         "resources": objects | ({"resources", "animation", "huts-camps", "barbarian-camps"} & entries.keys()),
         "resource-animation": objects | ({"resources", "animation"} & entries.keys()),
     }

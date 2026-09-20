@@ -430,6 +430,16 @@ struct c3x_renderer_native_sprite_blend { void *alpha, *background, *palette; };
 /* Process-lifetime, read-only tracking. No scene/device/configuration required.
    VERIFY with null image establishes the owner; MAP queries eligibility. */
 typedef int (*c3x_renderer_native_lifetime_fn)(int operation, void * image, int context);
+/* Tactical draws join the existing native image transaction and copied history.
+   Ring inputs: x,y,tile width,animate. Route begin carries the exact native view;
+   route lines/text are captured only within that lexical draw scope. */
+enum { C3X_NATIVE_TACTICAL_RING = 117, C3X_NATIVE_TACTICAL_ROUTE_BEGIN = 118,
+       C3X_NATIVE_TACTICAL_ROUTE_END = 119, C3X_NATIVE_TACTICAL_TARGET = 120,
+       C3X_NATIVE_TACTICAL_GRID = 121, C3X_NATIVE_TACTICAL_CAPABLE = 122 };
+struct c3x_renderer_tactical_view_v1 {
+    int tile_width, native_tile_width;
+    c3x_renderer_i64 translate_x_fp, translate_y_fp;
+};
 typedef int (*c3x_renderer_native_image_fn)(int operation, void * image, void * source,
     void const * source_rect, void const * destination_rect, unsigned color);
 

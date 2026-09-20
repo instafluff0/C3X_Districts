@@ -636,6 +636,17 @@ public:
         if(result!=C3X_RENDERER_RESULT_BAD_ARGUMENT)throw std::runtime_error("GPU unit composition failed; native pixels cannot be published");
         cpu_ownership(*d);if(b!=d)cpu_ownership(*b);return false;
     }
+    template<class Draw> bool draw_tactical(Draw draw,std::int64_t ticket,void* target){
+        if(GetCurrentThreadId()!=thread)throw std::runtime_error("tactical adapter thread changed");
+        if(!admit(target))return false;auto d=find(target);
+        if(!full_color(*d))return false;
+        auto clip=rect(static_cast<char*>(target)+0x44);
+        c3x_renderer_gpu_unit_v1 request={sizeof(request),ticket,std::int64_t(d->gpu),std::int64_t(d->gpu),
+            std::int64_t(d->detail),std::int64_t(d->detail),{clip.left,clip.top,clip.right,clip.bottom},0};
+        gpu.flush();int result=draw(request);
+        if(result!=C3X_RENDERER_RESULT_OK)throw std::runtime_error("tactical composition failed");
+        d->dirty=true;++counters.translated;return true;
+    }
     Id display_image(void* p){
         if(GetCurrentThreadId()!=thread)throw std::runtime_error("native display adapter thread changed");
         auto d=find(p);return d&&d->owned&&full_color(*d)?d->detail:0;

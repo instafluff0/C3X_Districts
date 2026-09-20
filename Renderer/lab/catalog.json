@@ -25,6 +25,7 @@
     "huts-camps": "objects/huts-camps",
     "goody-huts": "objects/goody-huts",
     "barbarian-camps": "objects/barbarian-camps",
-    "ocean-waves": "water/ocean-waves"
+    "ocean-waves": "water/ocean-waves",
+    "tactical-overlays": "interface/tactical-overlays"
   }
 }

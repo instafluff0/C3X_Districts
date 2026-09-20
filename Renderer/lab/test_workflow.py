@@ -417,7 +417,7 @@ class BehaviorWitnessTests(unittest.TestCase):
             renderer.integration_replays("grassland")
             self.assertEqual(render.call_count, 1)
             self.assertEqual(render.call_args.args[:4], ("shorelines", "lowland", 12, 128))
-            self.assertEqual(render.call_args.kwargs, {"behavior": "edits", "center": (10, 18)})
+            self.assertEqual(render.call_args.kwargs, {"behavior": "edits", "center": (10, 18), "shared_surface": False})
 
     def test_focused_resource_check_runs_only_its_playback_witness(self):
         with patch.object(renderer, "affected", return_value=["animation", "resources"]):

@@ -74,7 +74,16 @@ runs with equivalent settings. Capture is outside that harness's timed requests;
 its receipt states this limit. Do not label the result complete input-to-display.
 `--dense-scene` enables the existing world-fixed city/infrastructure/resource
 stress fixture; match it in both arms when measuring missing-object construction.
-The ordinary fixture's few central objects can stay resident throughout scrolling.
+The ordinary fixture's few central objects can stay resident throughout scrolling. Use
+`--waves 1` with a coastal scene to exercise resident shoreline animation; the
+waves-off arm measures the added effect cost, not a visual-equivalent speedup.
+`scene-waves` reports visible/frozen occurrences, geometry/upload bytes and cell
+build/reuse counts. Correlate it with `shared-scene-surface` and frame QPC bounds
+to prove static submissions and ribbon uploads disappear on time-only updates.
+The independent `VISUAL_SAMPLE` intervals also carry QPC bounds and are retained
+in benchmark receipts. Report them separately: stationary native requests can
+reuse a held map and do not measure independent map animation cadence. The
+independent fixture has one selected unit, regardless of `--unit-count`.
 `--object-workers 0` runs the identical GPU-ready object compiler synchronously;
 keep source/DLL identity, budgets and instrumentation matched when using it as a
 scheduling control. Also measure a flat dense-city scene and verify nonzero legal
@@ -157,3 +166,20 @@ publication age, cancellation and useful prepared work; independent correctness,
 resource bounds and missing coverage; capability gained and measured effect.
 Update the roadmap's short status, not a new diary. Retain/reject/inconclusive
 classifications must distinguish structural progress from demonstrated speedup.
+
+## Tactical overlay evidence
+
+`record_gpu_frame --tactical --visual-only` exercises selected markers, copied
+native JGL route lines/turn text, grid on/off and exact erase/cancellation through
+an admitted native map. It records actual display previews and independent
+`tactical-execute` traces. `TACTICAL_VISUAL_SAMPLE` includes retained map/unit/UI
+replay, tactical drawing and presentation; desktop completion is separate.
+
+`--tactical --benchmark` adds grid, selection and route primitives inside every
+GPU whole-request interval (before units/UI). Both the 8- and 32-unit workloads
+contain one selection highlight and one route; only unit-body count changes.
+Compare against the same DLL with
+`--tactical` absent to measure added feature cost. The CPU benchmark arm keeps its
+existing output, so a tactical-enabled CPU/GPU ratio is not an equivalent-image
+speedup. Tactical packet preparation is included; authoritative gameplay route
+calculation remains outside this captured-input fixture.

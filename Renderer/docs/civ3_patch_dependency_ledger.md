@@ -1,5 +1,14 @@
 # Civ III patch dependency ledger
 
+## Shoreline scene effects (2.4)
+
+DLL-only shoreline execution consumes existing API 18 immutable map visibility,
+native anchors and captured presentation time. Existing map capture/composition
+and visual-frame hooks remain unchanged. No native suppression, ABI change or
+CSV entry is needed; `required_user_action: []`. The native waves/reflections
+configuration flags retain their current meaning. Candidate verification does
+not stage/install binaries or launch Civ III.
+
 ## Direct unit scene execution and composition (2.2–2.3)
 
 2.3 removes optional map-depth provenance and keeps units above all map geometry,
@@ -983,3 +992,24 @@ no staging, installation or game launch is authorized by the implementation.
 Incremental GPU finishing uses the same boundary, captured anchors and ordered
 output ownership. It adds no callback, redraw request, asynchronous publication
 mode or executable dependency. `required_user_action: []` for this continuation.
+
+## Milestone 2.5 — tactical draws (GOG)
+
+The user's explicit permission to add GOG functions applies to these concrete
+entries. Verified against the installed GOG executable and the reference source;
+other-build addresses remain zero/unverified. No executable address is inferred
+from another build. `TEST_INJECTED_CODE_COMPILE.bat` passes.
+
+| Symbol | Capability / signature | GOG address | Steam / other | Reason and fallback |
+| --- | --- | --- | --- | --- |
+| `Main_Screen_Form_update_in_go_to_mode` | inlead; `void (__fastcall *)(Main_Screen_Form*, int)` | `0x4E46C0` | `0 / 0` | Lexically capture existing native route line/text output; original pathfinding, turn arithmetic and action side effects still execute. Config-off or no admitted tactical owner calls original unchanged. |
+| `Main_Screen_Form_draw_route_cursor` | inlead; `void (__cdecl *)(int, int)` | `0x4E45E0` | `0 / 0` | Replace destination FLC with copied anchor semantics inside route scope. Config-off/no admitted owner calls original. |
+| `Map_Renderer_draw_grid` | repl vptr; `void (__fastcall *)(Map_Renderer*, int, PCX_Image*, int, int, int, int)` | slot `0x66A594`, target `0x4C5570` | `0 / 0` | Suppress native grid in custom mode; copied `MapGrid_Flag` and captured anchors drive the DLL pass. Config-off calls original. No input hook. |
+
+Existing dependencies: `Animator_draw_map_unit_cursor` call sites `0x5CC2B1` /
+`0x5CC7F8`, callable `Animator_draw_unit_cursor` `0x4F03E0`, native JGL line/text
+hooks, native map prepare/commit and image-lifetime tracking. Cursor eligibility
+is the existing GOG `Animator + 0x1914` bit 0; no selection rule is reconstructed.
+Required user action for patch registration: **none**; these GOG entries are in
+`civ_prog_objects.csv` under the earlier explicit authorization. Visual acceptance,
+staging and the strategic live-game check are separate from this compile proof.

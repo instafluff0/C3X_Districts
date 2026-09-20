@@ -13,6 +13,7 @@ if(!performance_frames.empty()){
     char count_option[16]={};GetEnvironmentVariableA("C3X_RENDERER_BENCHMARK_UNITS",count_option,sizeof(count_option));
     int unit_count=count_option[0]?std::atoi(count_option):8;verify(unit_count>=1&&unit_count<=32,"bounded unit scaling count");
     std::printf("FRAME_UNITS count=%d\n",unit_count);
+    std::printf("FRAME_TACTICAL GPU_only=%u scope=feature_cost_not_identical_CPU_visuals\n",GetEnvironmentVariableA("C3X_RENDERER_TACTICAL_PREVIEW",nullptr,0)?1u:0u);
     std::printf("FRAME_SCOPE width=%d height=%d desktop_width=%d desktop_height=%d capture=outside_timing detail=full control=same_DLL_CPU map_units_UI_final_transfer=inside_timing\n",w,h,GetSystemMetrics(SM_CXSCREEN),GetSystemMetrics(SM_CYSCREEN));
     JGLSprite hud_color={},hud_alpha={},lookup_sprite={},shadow_sprite={};auto jgl_base=reinterpret_cast<char*>(jgl);
     for(auto sprite:{&hud_color,&hud_alpha,&lookup_sprite,&shadow_sprite}){reinterpret_cast<JGLSprite*(__thiscall*)(JGLSprite*,void*)>(jgl_base+0x7e80)(sprite,nullptr);
@@ -70,6 +71,18 @@ if(!performance_frames.empty()){
                 reinterpret_cast<Release>(live_images[0]->vtable[11])(live_images[0],1);
             }
             copy(live_images[0],screen_surface,full);QueryPerformanceCounter(&map_done);
+            if(resident&&GetEnvironmentVariableA("C3X_RENDERER_TACTICAL_PREVIEW",nullptr,0)){
+                verify(live(C3X_NATIVE_TACTICAL_GRID,screen_surface,nullptr,&requested,nullptr,1)==1,"timed tactical grid");
+                int marker[4]={w*3/4,h/2,requested.tile_width,1};
+                verify(live(C3X_NATIVE_TACTICAL_RING,screen_surface,nullptr,marker,nullptr,0)==1,"timed selected marker");
+                c3x_renderer_tactical_view_v1 projection={requested.tile_width,requested.tile_width,0,0};
+                verify(live(C3X_NATIVE_TACTICAL_ROUTE_BEGIN,screen_surface,nullptr,&projection,nullptr,0)==1,"timed route capture");
+                int tx=w/4+(workload==2?captured.step%8*6:0),ty=h*2/3;RECT a={w*3/4,h/2,w/2,ty},b={w/2,ty,tx,ty};
+                verify(live(C3X_NATIVE_LINE,screen_surface,nullptr,&a,nullptr,0)==1&&live(C3X_NATIVE_LINE,screen_surface,nullptr,&b,nullptr,0)==1,"timed route segments");
+                int destination[2]={tx,ty};verify(live(C3X_NATIVE_TACTICAL_TARGET,screen_surface,nullptr,destination,nullptr,0)==1,"timed destination");
+                verify(live(C3X_NATIVE_TEXT,screen_surface,const_cast<char*>("2"),nullptr,nullptr,1)==1,"timed native turn count");
+                verify(live(C3X_NATIVE_TACTICAL_ROUTE_END,screen_surface,nullptr,nullptr,nullptr,0)==1,"timed route publish");
+            }
             HDC body_dc=nullptr;
             if(!resident)body_dc=reinterpret_cast<HDC(__thiscall*)(JGL_Image*)>(screen_surface->vtable[10])(screen_surface);
             for(int n=0;n<unit_count;++n){auto actor=unit;actor.unit_id=800+n;actor.direction=1+n%8;actor.action_cursor=(captured.step/4+n)%16;

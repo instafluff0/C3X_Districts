@@ -6,6 +6,21 @@ ocean normal map. The standalone experiment draws recovered crests through the
 current D3D11 water material, over the current terrain and submerged bed. It is
 an approval study, not a staged feature or a live-game verification.
 
+## Current architecture: milestone 2.4
+
+The resident scene path now supports the existing shoreline material directly.
+Wave cells feed the dynamic pass with resource shadows/bodies, reusing static
+color/depth and finishing the affected band. The old waves-on rejection and the
+automatic waves-off admission requirement are removed. Reflections retain their
+existing compatibility path; no reflection setting is silently disabled.
+
+Geometry, source-art interpretation, spacing, 15 Hz sampling, lighting and optional
+pack behavior are unchanged. Visible ribbons advance on the captured renderer
+clock, explored ribbons use the existing still sample, and hidden ones are omitted.
+No new native hook or API is needed. Current verification, costs and unfinished
+water responsibilities are recorded in the [roadmap](retained_renderer_plan.md).
+The historical recommendations/evidence below describe the earlier development.
+
 ## Recovered source evidence
 
 The installed `Base/ArtDefs/Wave.artdef` binds `WaveTest` in `Wave.blp` through
@@ -331,3 +346,55 @@ motion and verification receipts live under `lab/out/waves-spacing/`.
 Day/night Lab previews and the staged production evaluation DLL use the exact
 verified current-code candidate. `staging.json` records its identity and the
 previous-DLL backup. Fixed references are unchanged; Civ III was not launched.
+
+## Milestone 2.4 resident scene checkpoint
+
+**Verification:** 295 tests (**293 passed / two skipped**) and nine production
+replays, including beach/rocky/mixed shoreline lifecycles through both resident
+and compatibility paths. Repeat, cold, time return, zoom and wrap are exact in
+the resident fixtures; the existing compatibility reduced-scroll tolerance is
+unchanged. Connected native-screen fixtures pass at 64/128/160/192 and with fog:
+explored motion freezes, hidden effects do not animate and revealed motion resumes.
+Native UI, unit ordering, independent timer, ownership and output oracles pass.
+The [wave contact sheet](../native/build/map-effects-checkpoint/wave-contact.png)
+was inspected. All **16,102** asset/input files match the preceding checkpoint
+and remained unchanged across measurements.
+
+**Whole requests:** same final DLL, serial waves-off/on comparison, 1120×1192
+coast with dense modern cities, 8/32 units, native UI, final transfer and preparation.
+Each run contains 384 timed CPU/GPU requests, 64 per route/workload. GPU request
+mean / p95 in milliseconds:
+
+| Units / workload | Waves off | Waves on |
+| --- | ---: | ---: |
+| 8 / stationary native requests | 12.86 / 19.07 | 13.65 / 35.80 |
+| 8 / dense scrolling | 147.89 / 217.42 | 145.08 / 200.90 |
+| 8 / local changes | 15.24 / 37.06 | 19.35 / 62.64 |
+| 32 / stationary native requests | 20.03 / 47.37 | 21.71 / 47.43 |
+| 32 / dense scrolling | 147.20 / 195.29 | 146.81 / 198.58 |
+| 32 / local changes | 30.43 / 122.04 | 25.48 / 64.27 |
+
+This measures added effect cost, not a speedup between equivalent images. Native
+requests can reuse a held map; their stationary numbers are not independent map
+animation cadence. Independent animation is measured separately on the same dense map with one
+selected unit and retained UI. A final trace-correlated waves-off/on pair has
+30 complete visual frames per arm: request mean / p95 **63.81 / 70.30 ms** off,
+**65.23 / 75.23 ms** on; desktop means **70.87 / 73.31 ms**. All 30 waves-on
+intervals contain visible wave samples and zero static submissions, ribbon
+builds or ribbon uploads. The 8/32 labels above describe native-request workloads,
+not these one-unit independent frames. Earlier independent samples averaged
+69–76 ms; this existing map/composition cost remains material without waves.
+Capture and fixture setup are outside timing. Desktop completion is not physical
+scanout or live-game FPS; neither these averages nor the variable tails establish
+a frame-budget pass.
+
+The waves-on scene contains up to **19 visible ribbons**, charging at most **6.42
+MiB** of retained wave geometry here. Time-only replay updates perform zero terrain
+build/upload and zero ribbon upload; retained static submissions are zero.
+Sampled minimum contiguous VA is **1092.8 MiB / 922.8 MiB** for waves-on 8/32-unit
+runs, above the 512 MiB floor. Samples do not bound transient peaks.
+
+[Combined receipts](../native/build/map-effects-checkpoint/workload-comparison.json)
+retain identities, distributions, counters, visual-frame evidence and limits.
+`map-effects-checkpoint/integration.json` preserves full verification. Candidate
+SHA-256: `061da7584a9a7498d536c2d8ca4f1a00e64b913cc7583cd4e6b66ea2fd2c64c9`.

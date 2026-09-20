@@ -105,6 +105,11 @@ int test_retained_composition(){
         retained.record({Kind::unit_over,native,0,part,part,0,0,0,native,detail,detail},scene_pass);
         retained.commit(detail,full);retained.sample(1005,1000);assert(scene_draws==1);
         ++phase;retained.sample(1006,1000);assert(scene_draws==2);
+        // Large copied tactical payloads share the retained memory ceiling;
+        // rejected admission cannot alter the existing picture or byte charge.
+        auto charge=retained.bytes();RetainedComposition::Direct oversized;oversized.input_bytes=129ull*1024*1024;
+        bool rejected=false;try{retained.record({Kind::fill,native,0,full,full},oversized);}catch(...){rejected=true;}
+        assert(rejected&&retained.bytes()==charge);
         retained.clear();assert(!retained.ready()&&retained.bytes()==0&&retained.node_count()==0);
     }
     std::printf("PASS retained composition: %u exact GPU oracles, 120 independent clock frames, aliasing, paired 555/565/full color, UI versioning, partial publication, bounded overwrite and reset\n",checks);return 0;

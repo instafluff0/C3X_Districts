@@ -44,3 +44,6 @@ evidence rules. Update each in place rather than copying these responsibilities
 into handoffs. Put detailed timings in receipts and selected historical summaries.
 Remove obsolete instructions from active guides; retain only the evidence or
 contract that can still affect a decision. Do not append a new status diary.
+
+The [tactical overlay contract](tactical_overlay_contract.md) documents selected
+markers, copied native route/turn draws and the native-setting-driven grid.

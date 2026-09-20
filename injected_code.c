@@ -23752,8 +23752,60 @@ patch_Unit_draw_map_status (Unit * this, int edx, PCX_Image * canvas, int x, int
 void __fastcall
 patch_Animator_draw_map_unit_cursor (Animator * this, int edx, int x, int y)
 {
+	if (is->current_config.enable_custom_rendering && is->custom_renderer_native_image != NULL &&
+	    is->custom_renderer_native_image (C3X_NATIVE_TACTICAL_CAPABLE, NULL, NULL, NULL, NULL, 0) == 1) {
+		// Native cursor eligibility is Animator+0x1914 bit 0 (GOG).
+		if ((this->field_18E4[12] & 1) == 0 && is->custom_renderer_native_image != NULL) {
+			custom_renderer_zoom_transform_point (&x, &y);
+			int ring[4] = {x, y, custom_renderer_zoom_enabled () ? is->custom_renderer_zoom_tile_width :
+				(p_bic_data->is_zoomed_out ? 64 : 128), 1};
+			is->custom_renderer_native_image (C3X_NATIVE_TACTICAL_RING,
+				p_main_screen_form->Units_Control.Data.Canvas.JGL.Image, NULL, ring, NULL, 0);
+		}
+		return;
+	}
 	custom_renderer_zoom_transform_point (&x, &y);
 	Animator_draw_unit_cursor (this, __, x, y);
+}
+
+// The native function owns pathfinding, turn arithmetic and action side effects.
+// The DLL captures only its scoped line/text draws and publishes one copied pass.
+void __fastcall
+patch_Main_Screen_Form_update_in_go_to_mode (Main_Screen_Form * this, int edx)
+{
+	if (! is->current_config.enable_custom_rendering || is->custom_renderer_native_image == NULL ||
+	    is->custom_renderer_native_image (C3X_NATIVE_TACTICAL_CAPABLE, NULL, NULL, NULL, NULL, 0) != 1) {
+		Main_Screen_Form_update_in_go_to_mode (this, __);
+		return;
+	}
+	struct c3x_renderer_tactical_view_v1 view = {0};
+	view.native_tile_width = p_bic_data->is_zoomed_out ? 64 : 128;
+	view.tile_width = view.native_tile_width;
+	if (custom_renderer_zoom_transform_active ()) {
+		view.native_tile_width = is->custom_renderer_zoom_native_tile_width;
+		view.tile_width = is->custom_renderer_zoom_tile_width;
+		view.translate_x_fp = is->custom_renderer_zoom_translate_x_fp;
+		view.translate_y_fp = is->custom_renderer_zoom_translate_y_fp;
+	}
+	JGL_Image * target = this->Units_Control.Data.Canvas.JGL.Image;
+	is->custom_renderer_native_image (C3X_NATIVE_TACTICAL_ROUTE_BEGIN, target, NULL, &view, NULL, 0);
+	Main_Screen_Form_update_in_go_to_mode (this, __);
+	is->custom_renderer_native_image (C3X_NATIVE_TACTICAL_ROUTE_END, target, NULL, NULL, NULL, 0);
+}
+
+void __cdecl
+patch_Main_Screen_Form_draw_route_cursor (int x, int y)
+{
+	if (is->current_config.enable_custom_rendering && is->custom_renderer_native_image != NULL &&
+	    is->custom_renderer_native_image (C3X_NATIVE_TACTICAL_CAPABLE, NULL, NULL, NULL, NULL, 0) == 1) {
+		if (is->custom_renderer_native_image != NULL) {
+			int point[2] = {x, y};
+			is->custom_renderer_native_image (C3X_NATIVE_TACTICAL_TARGET,
+				p_main_screen_form->Units_Control.Data.Canvas.JGL.Image, NULL, point, NULL, 0);
+		}
+		return;
+	}
+	Main_Screen_Form_draw_route_cursor (x, y);
 }
 
 int __fastcall
@@ -28732,6 +28784,9 @@ composite_custom_renderer_frame ()
 		log_custom_renderer_event ("blit-start", C3X_RENDERER_RESULT_OK);
 	int result = gpu_map ? is->custom_renderer_native_map (C3X_NATIVE_MAP_COMMIT, image, NULL, NULL) :
 		is->custom_renderer_blit (&output, destination);
+	if (result == C3X_RENDERER_RESULT_OK && gpu_map && is->custom_renderer_native_image != NULL)
+		is->custom_renderer_native_image (C3X_NATIVE_TACTICAL_GRID, image, NULL, &frame, NULL,
+			p_bic_data->Map.Renderer.MapGrid_Flag != 0);
 	if (is->custom_renderer_presented_frames == 0)
 		log_custom_renderer_event ("blit-done", result);
 	QueryPerformanceCounter (&blit_finished);
@@ -28834,6 +28889,15 @@ patch_Map_Renderer_draw_fog (Map_Renderer * this, int edx, int viewer, PCX_Image
 {
 	if (is->current_config.enable_custom_rendering) return;
 	Map_Renderer_draw_fog (this, __, viewer, target, clip);
+}
+
+// Direct grid seam; native remains responsible for Ctrl+G and MapGrid_Flag.
+void __fastcall
+patch_Map_Renderer_draw_grid (Map_Renderer * this, int edx, PCX_Image * target,
+	int tile_x, int tile_y, int pixel_x, int pixel_y)
+{
+	if (is->current_config.enable_custom_rendering) return;
+	Map_Renderer_draw_grid (this, __, target, tile_x, tile_y, pixel_x, pixel_y);
 }
 
 void __fastcall

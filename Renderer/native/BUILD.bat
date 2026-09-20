@@ -26,6 +26,17 @@ if not exist "..\bin" mkdir "..\bin"
 if not exist "build" mkdir "build"
 if not exist "build\candidate" mkdir "build\candidate"
 
+if /i "%~1"=="tactical" (
+  if not exist "..\lab\out" mkdir "..\lab\out"
+  if not exist "..\lab\out\tactical-overlays" mkdir "..\lab\out\tactical-overlays"
+  if not exist "build\tactical" mkdir "build\tactical"
+  cl /nologo /std:c++17 /EHsc /O2 /W4 /WX /DC3X_TACTICAL_STANDALONE test_tactical_overlay.cpp /Fo:build\tactical\ /Fe:build\tactical\test.exe /link d3d11.lib d3dcompiler.lib gdi32.lib user32.lib
+  if errorlevel 1 exit /b 1
+  build\tactical\test.exe
+  if errorlevel 1 exit /b 1
+  exit /b 0
+)
+
 if /i "%~1"=="native-text" (
   if not exist "build\gpu-composition" mkdir "build\gpu-composition"
   cl /nologo /std:c++17 /EHsc /O2 /W4 /WX test_native_text.cpp /Fo:build\gpu-composition\ /Fe:build\gpu-composition\test_native_text.exe /link d3d11.lib d3dcompiler.lib gdi32.lib user32.lib

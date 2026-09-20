@@ -156,7 +156,8 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
     verify(screen_transfers==1&&owner.stats().readbacks==0,"one complete GPU transfer with no native map readback");
     verify(gpu.readback(owner.display_image(screen_surface),observed.data(),observed.size())&&observed==expected,"map/screen/save-restore family preserves full color exactly");
     RECT last_transfer=full;bool live_active=false,preserve_gdi_display=false;unsigned capture_number=0;
-    auto capture_display=[&](std::vector<unsigned> const& pixels){
+    auto capture_display=[&](std::vector<unsigned> const& pixels,std::vector<unsigned>* captured_pixels=nullptr){
+        if(captured_pixels)captured_pixels->resize(pixels.size());
         ++capture_number;
         auto dwm=LoadLibraryA("dwmapi.dll");verify(dwm!=nullptr,"desktop completion oracle");auto flush=reinterpret_cast<HRESULT(WINAPI*)()>(GetProcAddress(dwm,"DwmFlush"));
         verify(flush!=nullptr,"desktop completion function");
@@ -185,7 +186,8 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
             int cw=std::min(w-sx,sw),ch=std::min(h-sy,sh);
             verify(BitBlt(capture_dc,0,0,cw,ch,desktop,0,0,SRCCOPY)!=FALSE,"capture native final display");GdiFlush();
             for(int yy=0;yy<ch;++yy)for(int xx=0;xx<cw;++xx){auto i=std::size_t(yy+sy)*w+xx+sx;seen[i]=1;
-                if((static_cast<unsigned*>(bits)[std::size_t(yy)*w+xx]&0xffffff)!=(pixels[i]&0xffffff)){
+                if(captured_pixels)(*captured_pixels)[i]=0xff000000u|(static_cast<unsigned*>(bits)[std::size_t(yy)*w+xx]&0xffffff);
+                else if((static_cast<unsigned*>(bits)[std::size_t(yy)*w+xx]&0xffffff)!=(pixels[i]&0xffffff)){
                     if(!differences)std::fprintf(stderr,"display first mismatch capture=%u live=%u x=%d y=%d expected=%08x actual=%08x\n",capture_number,unsigned(live_active),xx+sx,yy+sy,pixels[i],static_cast<unsigned*>(bits)[std::size_t(yy)*w+xx]);++differences;mismatch.left=std::min(mismatch.left,LONG(xx+sx));mismatch.top=std::min(mismatch.top,LONG(yy+sy));
                     mismatch.right=std::max(mismatch.right,LONG(xx+sx+1));mismatch.bottom=std::max(mismatch.bottom,LONG(yy+sy+1));}}
         }
@@ -239,7 +241,8 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
             verify(GetPixel(desktop_dc,30,32)==RGB(0,255,0),"retained opaque UI unchanged over independent animation");
             double request_ms=1000.*double(b.QuadPart-a.QuadPart)/frequency.QuadPart,desktop_ms=1000.*double(visible.QuadPart-a.QuadPart)/frequency.QuadPart;
             visual_request_ms+=request_ms;visual_desktop_ms+=desktop_ms;
-            std::printf("VISUAL_SAMPLE result=%d request_ms=%.3f desktop_ms=%.3f\n",result,request_ms,desktop_ms);}
+            std::printf("VISUAL_SAMPLE result=%d request_ms=%.3f desktop_ms=%.3f begin_qpc=%lld end_qpc=%lld\n",
+                result,request_ms,desktop_ms,a.QuadPart,b.QuadPart);}
         ReleaseDC(nullptr,desktop_dc);FreeLibrary(desktop_library);
         QueryPerformanceCounter(&end);verify(status(&after)==1,"visual status after");
         verify(after.frames-before.frames>=15&&after.frames-before.frames<=30&&after.map_samples>before.map_samples&&after.unit_samples>before.unit_samples&&after.pose_changes>before.pose_changes,
@@ -512,6 +515,73 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
         reinterpret_cast<Release>(original_release)(resident_screen,1);verify(screen_untouched,"CPU UI transfer leaves resident screen CPU bytes untouched");
         screen_surface=resident_screen;last_transfer=full;expected=resident_expected;
         verify(live(C3X_NATIVE_IMAGE_PRESENT,screen_surface,graph,&full,nullptr,0)==1,"return to resident screen without rebuilding map");capture_display(expected);
+        char tactical_output[MAX_PATH]={};GetEnvironmentVariableA("C3X_RENDERER_TACTICAL_PREVIEW",tactical_output,sizeof(tactical_output));
+        if(tactical_output[0]){
+            verify(live(C3X_NATIVE_TACTICAL_CAPABLE,nullptr,nullptr,nullptr,nullptr,0)==1,"tactical capability on active native owner");
+            auto original_unit=unit;int cx=w*3/4,cy=h/2,tx=w/4,ty=h*2/3;
+            unit.body_x=cx-unit.sprite_width*unit.projection_scale_milli/2000;
+            unit.body_y=cy-unit.sprite_height*unit.projection_scale_milli/2000;
+            auto draw_body=[&]{int bounds[4]={};verify(live(C3X_NATIVE_UNIT_DRAW,screen_surface,screen_surface,&unit,bounds,1)==1,"tactical under-unit ordering");};
+            auto show=[&]{last_transfer=full;final_ui_drawn=false;patch_JGL_present_screen(&full);};
+            auto save_tactical=[&](char const* suffix,std::vector<unsigned> const& pixels){
+                auto name=std::string(tactical_output)+suffix;FILE* f=nullptr;verify(!fopen_s(&f,name.c_str(),"wb"),"tactical preview file");
+                BITMAPFILEHEADER a={};a.bfType=0x4d42;a.bfOffBits=sizeof(a)+sizeof(BITMAPINFOHEADER);a.bfSize=a.bfOffBits+w*h*4;
+                BITMAPINFOHEADER b={};b.biSize=sizeof(b);b.biWidth=w;b.biHeight=-h;b.biPlanes=1;b.biBitCount=32;
+                fwrite(&a,sizeof(a),1,f);fwrite(&b,sizeof(b),1,f);fwrite(pixels.data(),4,pixels.size(),f);fclose(f);
+            };
+            copy(live_images[0],screen_surface,full);draw_body();show();std::vector<unsigned> baseline;capture_display(expected,&baseline);
+            auto ring=[&]{int p[4]={cx,cy,live_frame.tile_width,1};verify(live(C3X_NATIVE_TACTICAL_RING,screen_surface,nullptr,p,nullptr,0)==1,"copied selected marker");};
+            copy(live_images[0],screen_surface,full);ring();draw_body();
+            c3x_renderer_tactical_view_v1 view={live_frame.tile_width,live_frame.tile_width,0,0};
+            verify(live(C3X_NATIVE_TACTICAL_ROUTE_BEGIN,screen_surface,nullptr,&view,nullptr,0)==1,"route lexical capture begin");
+            // These are the same actual native line/text hooks used by Civ III.
+            auto line=reinterpret_cast<int(__thiscall*)(JGL_Image*,int,int,int,int,int,int)>(screen_surface->vtable[25]);
+            verify(line(screen_surface,cx,cy,w/2,ty,int(0x80007c00u),1)==0&&line(screen_surface,w/2,ty,tx,ty,int(0x80007c00u),1)==0,"native route line capture");
+            int destination[2]={tx,ty};verify(live(C3X_NATIVE_TACTICAL_TARGET,screen_surface,nullptr,destination,nullptr,0)==1,"native destination capture");
+            verify(reinterpret_cast<int(__thiscall*)(JGL_Image*,int,int,char const*,int)>(screen_surface->vtable[46])(screen_surface,tx,ty,"2",1)==0,"native authoritative turn label capture");
+            verify(live(C3X_NATIVE_TACTICAL_ROUTE_END,screen_surface,nullptr,nullptr,nullptr,0)==1,"route batch publish");
+            show();std::vector<unsigned> marked;capture_display(expected,&marked);verify(marked!=baseline,"tactical GPU marks change display");save_tactical("-route.bmp",marked);
+            auto visual=reinterpret_cast<int(*)()>(GetProcAddress(renderer_module,"c3x_renderer_gpu_visual_frame"));
+            auto status=reinterpret_cast<int(*)(c3x_renderer_visual_status_v1*)>(GetProcAddress(renderer_module,"c3x_renderer_gpu_visual_status"));
+            c3x_renderer_visual_status_v1 before={sizeof(before)},after={sizeof(after)};verify(status(&before)==1,"tactical retained state");
+            live(C3X_NATIVE_VISUAL_POLICY,nullptr,nullptr,nullptr,nullptr,1);
+            auto initial_native_events=events.size();
+            SetWindowPos(window,HWND_TOPMOST,0,0,w,h,SWP_NOACTIVATE|SWP_SHOWWINDOW);
+            auto tactical_dwm=LoadLibraryA("dwmapi.dll");auto finish=reinterpret_cast<HRESULT(WINAPI*)()>(GetProcAddress(tactical_dwm,"DwmFlush"));
+            HDC desktop=GetDC(nullptr),capture_dc=CreateCompatibleDC(desktop);void* pixels=nullptr;
+            BITMAPINFO info={};info.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);info.bmiHeader.biWidth=w;info.bmiHeader.biHeight=-h;info.bmiHeader.biPlanes=1;info.bmiHeader.biBitCount=32;
+            auto bitmap=CreateDIBSection(capture_dc,&info,DIB_RGB_COLORS,&pixels,nullptr,0);auto previous=SelectObject(capture_dc,bitmap);
+            std::vector<unsigned> first_motion;bool moved=false;
+            LARGE_INTEGER tactical_frequency={};QueryPerformanceFrequency(&tactical_frequency);
+            for(unsigned n=0;n<12;++n){Sleep(80);LARGE_INTEGER start={},submitted={},done={};QueryPerformanceCounter(&start);
+                verify(visual()==1,"independent tactical frame");QueryPerformanceCounter(&submitted);verify(SUCCEEDED(finish()),"tactical desktop completion");QueryPerformanceCounter(&done);
+                std::printf("TACTICAL_VISUAL_SAMPLE request_ms=%.3f desktop_ms=%.3f begin_qpc=%lld end_qpc=%lld\n",
+                    1000.*double(submitted.QuadPart-start.QuadPart)/tactical_frequency.QuadPart,1000.*double(done.QuadPart-start.QuadPart)/tactical_frequency.QuadPart,start.QuadPart,submitted.QuadPart);
+                if(w<=GetSystemMetrics(SM_CXSCREEN)&&h<=GetSystemMetrics(SM_CYSCREEN)){
+                    verify(BitBlt(capture_dc,0,0,w,h,desktop,0,0,SRCCOPY)!=FALSE,"capture completed tactical frame");GdiFlush();
+                    std::vector<unsigned> movie(static_cast<unsigned*>(pixels),static_cast<unsigned*>(pixels)+w*h);
+                    if(first_motion.empty())first_motion=movie;
+                    // Compare just the selected marker's bottom arc/markers;
+                    // the frozen unit and map content cannot certify this motion.
+                    int left=std::max(0,cx-live_frame.tile_width/3),right=std::min(w,cx+live_frame.tile_width/3);
+                    int top=std::max(0,cy+live_frame.tile_height/4),bottom=std::min(h,cy+live_frame.tile_height/2);
+                    for(int y=top;y<bottom;++y)for(int x=left;x<right;++x)moved|=(first_motion[y*w+x]&0xffffff)!=(movie[y*w+x]&0xffffff);
+                    char suffix[40];sprintf_s(suffix,"-motion-%02u.bmp",n);save_tactical(suffix,movie);
+                }
+            }
+            SelectObject(capture_dc,previous);DeleteObject(bitmap);DeleteDC(capture_dc);ReleaseDC(nullptr,desktop);FreeLibrary(tactical_dwm);
+            verify(status(&after)==1&&after.frames-before.frames==12&&after.retained_bytes<=128ll*1024*1024,"bounded independent tactical history");
+            verify(events.size()==initial_native_events,"tactical animation makes no native draw calls");
+            if(w<=GetSystemMetrics(SM_CXSCREEN)&&h<=GetSystemMetrics(SM_CYSCREEN))verify(moved,"selected marker visibly rotates");
+            live(C3X_NATIVE_VISUAL_POLICY,nullptr,nullptr,nullptr,nullptr,0);
+            copy(live_images[0],screen_surface,full);draw_body();show();capture_display(baseline); // cancellation removes both histories exactly
+            copy(live_images[0],screen_surface,full);
+            verify(live(C3X_NATIVE_TACTICAL_GRID,screen_surface,nullptr,&live_frame,nullptr,1)==1,"native-setting grid draw");draw_body();show();
+            std::vector<unsigned> grid;capture_display(expected,&grid);verify(grid!=baseline,"grid visible");save_tactical("-grid.bmp",grid);
+            copy(live_images[0],screen_surface,full);verify(live(C3X_NATIVE_TACTICAL_GRID,screen_surface,nullptr,&live_frame,nullptr,0)==1,"grid off");draw_body();show();capture_display(baseline);
+            expected=baseline;unit=original_unit;
+            std::puts("PASS tactical native composition: scoped native route/turn capture, under-unit marker, clipped grid, exact cancellation/grid-off, no terrain or unit content rebuild");
+        }
         // Reset must drain before the renderer retires its image session, while
         // the native surfaces and final window still exist.
         reset();live_active=false;preserve_gdi_display=true;capture_display(expected);preserve_gdi_display=false;

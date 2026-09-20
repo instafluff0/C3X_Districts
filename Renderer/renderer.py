@@ -459,7 +459,7 @@ def scene(category, case, destination, *, world_size=32):
     destination.write_text(f"C3X_BIQ_TERRAIN_V3,{world_size},{world_size},{len(rows)}\n" + "\n".join(rows) + "\n")
 
 
-def native_render(category, case, hour, zoom, output, *, behavior=None, center=(16, 16), diagnostics=False, candidate=None, preview=None):
+def native_render(category, case, hour, zoom, output, *, behavior=None, center=(16, 16), diagnostics=False, candidate=None, preview=None, shared_surface=False):
     from Renderer.lab.platform import run_native_fixture
     if behavior not in (None, "replay", "edits", "animation", "units", "visibility"):
         raise ValueError("Unknown native behavior check")
@@ -473,12 +473,23 @@ def native_render(category, case, hour, zoom, output, *, behavior=None, center=(
         center = (18, 18)
     output.mkdir(parents=True, exist_ok=True)
     csv = output / "scene.csv"
-    scene(category, case, csv, world_size=100 if behavior else 32)
+    # The connected native fixture also verifies wider prepared camera coverage.
+    # Use its established 100x100 world so that witness is not bounded by the
+    # small visual-preview world's edges.
+    scene(category, case, csv, world_size=100 if behavior or category == "tactical-overlays" else 32)
     name = f"{case}-h{hour:02}-z{zoom}"
     image = output / (name + ".bmp")
     dll = candidate or ROOT / "Renderer/native/build/candidate/C3XRenderer.dll"
     if not dll.is_file():
         raise ValueError("Build the candidate DLL before native rendering")
+    if category == "tactical-overlays":
+        from Renderer.native.record_gpu_frame import main as native_tactical
+        probe = output / "native-composition"
+        if native_tactical(["--scene", str(csv), "--dll", str(dll), "--out", str(probe),
+                            "--tile-width", str(zoom), "--visual-only", "--tactical"]):
+            raise ValueError("Connected tactical overlay witness failed")
+        shutil.copy2(probe / ("tactical-grid.bmp" if case == "grid" else "tactical-route.bmp"), image)
+        return
     # Clear all diagnostic overrides that could otherwise change the scene.
     env = {
         "C3X_RENDERER_VISUAL_PROFILE": "", "C3X_RENDERER_TRACE": "0",
@@ -501,6 +512,13 @@ def native_render(category, case, hour, zoom, output, *, behavior=None, center=(
         "C3X_LAB_WAVE_STUDY": case if category == "ocean-waves" else "",
         "C3X_LAB_WATER_STUDY": "1" if case.startswith("water-") else "",
     }
+    # The same shoreline lifecycle must cover both native compatibility and
+    # resident scene composition; no alternate wave material or timing model.
+    env["C3X_RENDERER_SHARED_SCENE_SURFACE"] = "1" if shared_surface else "0"
+    if shared_surface:
+        env["C3X_RENDERER_REFLECTION_CONTROL"] = "1"
+        env["C3X_RENDERER_WORLD_REGIONS"] = "1"
+        env["C3X_RENDERER_WORLD_WAVES"] = "1"
     unit_sizing = category == "units" and case in ("sizing", "sizing-gameplay", "sizing-move")
     if unit_sizing:
         from Renderer.lab.studies.units.prepare import build as build_unit_study
@@ -640,8 +658,13 @@ def integration_replay_cases(category, *, full=False):
         cases.append(("city-retained-scroll", "replay", 128, (50, 50), 12))
     if "volcanoes" in selected:
         cases.append(("volcano-lifecycle", None, 128, (16, 16), 12))
+    if "tactical-overlays" in selected:
+        cases.append(("tactical-route", None, 128, (16, 16), 12))
     if "ocean-waves" in selected:
         cases.extend((("wave-beach", None, 128, (10, 18), 12), ("wave-rocky", None, 128, (10, 18), 12), ("wave-mixed", None, 64, (10, 18), 0)))
+        cases.extend((("wave-beach-scene", None, 128, (10, 18), 12),
+                      ("wave-rocky-scene", None, 160, (10, 18), 12),
+                      ("wave-mixed-scene", None, 192, (10, 18), 0)))
     if selected.intersection(terrain):
         cases.append(("terrain-edit", "edits", 128, (50, 50), 12))
     if selected.intersection(("resources", "animation")):
@@ -668,10 +691,12 @@ def integration_replays(category, *, full=False):
             scene_category, scene_case = "grassland", "gameplay"
             if name == "city-retained-scroll":
                 scene_category, scene_case = "cities", "gameplay"
+            if name == "tactical-route":
+                scene_category, scene_case = "tactical-overlays", "route"
             if name == "volcano-lifecycle":
                 scene_category, scene_case = "volcanoes", "lifecycle"
             if name.startswith("wave-"):
-                scene_category, scene_case = "ocean-waves", {"wave-beach":"beach", "wave-rocky":"rocky-control", "wave-mixed":"mixed"}[name]
+                scene_category, scene_case = "ocean-waves", {"wave-beach":"beach", "wave-rocky":"rocky-control", "wave-mixed":"mixed"}[name.removesuffix("-scene")]
             if name == "site-lifecycle":
                 scene_category, scene_case = (category if category in ("goody-huts", "barbarian-camps") else "huts-camps"), "gameplay"
             if behavior == "edits":
@@ -681,7 +706,8 @@ def integration_replays(category, *, full=False):
                 # warm/cold pixel assertions unchanged.
                 scene_category, scene_case, center = "shorelines", "lowland", (10, 18)
             native_render(scene_category, scene_case, hour, zoom,
-                          replay_root / name, behavior=behavior, center=center)
+                          replay_root / name, behavior=behavior, center=center,
+                          shared_surface=name.startswith("wave-") and name.endswith("-scene"))
             results.append({"name": name, "status": "pass"})
         except NativeFixturePending as error:
             results.append({"name": name, "status": "fail", "reason": str(error)})

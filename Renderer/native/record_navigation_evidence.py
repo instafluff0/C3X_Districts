@@ -133,7 +133,7 @@ def main(argv=None):
     parser.add_argument("--topology-edit-fixture", action="store_true", help="Distant/visible terrain edits and reversals against independent full redraws")
     parser.add_argument("--ambient-boundary", action="store_true", help="Use the existing caller-driven ambient render boundary witness")
     parser.add_argument("--local-region-revisions", action="store_true", help="Use contributor dependencies instead of global topology revision for retained regions")
-    parser.add_argument("--shared-scene-surface", action="store_true", help="Bounded complete shared-surface alternative; waves/reflections off")
+    parser.add_argument("--shared-scene-surface", action="store_true", help="Bounded complete shared scene with dynamic shoreline waves; reflections off")
     parser.add_argument("--automatic-scene-surface", action="store_true", help="Exercise automatic retained selection for an eligible production profile")
     parser.add_argument("--output-completion-probe", action="store_true", help="Serialize GPU scene/finish boundaries for attribution only; not performance evidence")
     parser.add_argument("--content-edit-fixture", action="store_true", help="Independent city/forest appearance edits with unchanged world topology; correctness witness")
@@ -204,8 +204,8 @@ def main(argv=None):
     parser.add_argument("--zoom-prepare-ms", type=int, choices=range(0,10001), default=0, metavar="0..10000", help="Caller opportunity for prospective zoom views; counted separately")
     parser.add_argument("--prepare-view-family", action="store_true", help="Exercise prospective zoom admission during native caller requests")
     args = parser.parse_args(argv)
-    if (args.shared_scene_surface or args.automatic_scene_surface) and (args.waves!="0" or not args.reflection_ablation):
-        parser.error("Shared scene surface requires waves and reflections disabled")
+    if (args.shared_scene_surface or args.automatic_scene_surface) and not args.reflection_ablation:
+        parser.error("Shared scene surface requires reflections disabled")
     if args.diagnostic_animation!="full" and (not args.prepared_resource_pass or args.waves!="0" or args.scenario!="scroll" or args.boundary_fixture):
         parser.error("Animation phase ablations require the explicit resource pass, waves off, scroll, and no correctness boundary fixture")
 

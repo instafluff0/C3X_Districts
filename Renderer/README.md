@@ -63,8 +63,10 @@ composition operations over them. Its own visual clock schedules intervening
 frames through the existing worker and HWND presenter, without requesting native
 map redraws. Native captures share that clock; gameplay and directed-action
 progress remain native. See [visual frame ownership](docs/visual_frame_ownership.md).
-The renderer owns map fog/unseen coverage from copied native visibility. Borders,
-labels, selection, unit HUD and UI retain their native ownership.
+The renderer owns map fog/unseen coverage from copied native visibility. Admitted
+map views also draw copied selection, route/turn-label and grid primitives through
+the [tactical pass](docs/tactical_overlay_contract.md). Borders, city labels, unit
+HUD and general UI retain native ownership.
 Config-off preserves the original path. Custom-on map-plane failure must not
 silently replay native terrain; custom-on map units are exclusively 3D, with explicit CPU 3D delivery at native
 ownership barriers. UI portraits and renderer-off units remain native.

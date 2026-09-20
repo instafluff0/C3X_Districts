@@ -160,6 +160,7 @@ int main(){
 #include "Renderer/native/prepared_view_area.h"
 #include "Renderer/native/gpu_frame_api.h"
 #include "Renderer/native/gpu_image_commands.h"
+#include "Renderer/native/tactical_overlay.h"
 #include "Renderer/native/render_core/scene_surface.h"
 #include <functional>
 using HDC=void*;using HWND=void*;using UINT_PTR=std::uintptr_t;
@@ -194,7 +195,7 @@ struct NativePresenter {
 };
 struct Compositor {template<class... T> Id attach_source(T...){unexpected_gpu();return 0;} bool destroy(Id){return unexpected_gpu();}template<class... T> bool submit(T...){return unexpected_gpu();}};
 struct RetainedComposition {
- struct Direct {bool animated=false;std::function<std::uint64_t(long long,long long)> revision;std::function<bool(Compositor&,Command const&)> draw;};
+ struct Direct {std::uint64_t input_bytes=0;bool animated=false;std::function<std::uint64_t(long long,long long)> revision;std::function<bool(Compositor&,Command const&)> draw;};
  struct Texture {ID3D11Texture2D* Get()const{unexpected_gpu();return nullptr;}explicit operator bool()const{return false;}};
  using Sample=std::function<Texture(long long,long long)>;
 };
@@ -208,7 +209,7 @@ struct Session {
  int map_image(){return unexpected_gpu();}int session_identity(){return unexpected_gpu();}
  template<class... T> bool publish(T...){return unexpected_gpu();}
  template<class... T> int execute(T&&...){return unexpected_gpu();}
- template<class... T> int draw_unit_scene(T...){return unexpected_gpu();}
+ template<class... T> int draw_dynamic(T...){return unexpected_gpu();}
  template<class... T> int compose_resident_unit(T...){return unexpected_gpu();}
  bool display_to(long long,std::uint64_t,int,int,int,int,int,Rect){return unexpected_gpu();}
 };
@@ -278,8 +279,10 @@ struct Bodies {
     template<class F> bool render(Device*,Context*,c3x_renderer_unit_v1 const&,F,void* =nullptr,unsigned=1,bool=false,c3x_renderer::UnitSceneSample* =nullptr){demand_executed=true;return true;}
     bool blit(HDC,int,int,HDC){return true;}void reset_gpu(){}
 };
+struct TacticalGPU {template<class... T> ID3D11Texture2D* packed(T&&...){unexpected_gpu();return nullptr;}};
 struct D3D11_RECT {int left,top,right,bottom;};
 struct RendererState {
+    TacticalGPU tactical_gpu;
     std::uint64_t unit_scene_rejections=0;
     struct {std::size_t bytes(){return 0;}} unit_scene_work;
     template<class... T> bool draw_scene_unit(T&&...){return unexpected_gpu();}

@@ -58,7 +58,7 @@ public:
         bool ok=gpu.submit(&draw,1);if(ok)try{layers.record(draw);}catch(std::exception const& e){OutputDebugStringA("[C3X renderer] retained admission: ");OutputDebugStringA(e.what());OutputDebugStringA("\n");layers.discard();}
         return ok?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_BAD_ARGUMENT;
     }
-    int draw_unit_scene(c3x_renderer_gpu_unit_v1 const& request,unsigned width,unsigned height,int x,int y,RetainedComposition::Direct operation){
+    int draw_dynamic(c3x_renderer_gpu_unit_v1 const& request,unsigned width,unsigned height,int x,int y,RetainedComposition::Direct operation){
         if(request.ticket!=ticket)return C3X_RENDERER_RESULT_SUPERSEDED;
         if(request.destination==std::int64_t(map)||request.detail==std::int64_t(map)||!operation.draw)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
         Command draw={Kind::unit_over,Id(request.destination),0,{x,y,x+int(width),y+int(height)},

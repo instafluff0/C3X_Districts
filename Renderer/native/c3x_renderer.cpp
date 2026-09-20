@@ -31,6 +31,7 @@
 #include "terrain_definition_runtime.h"
 #include "renderer_trace.h"
 #include "gpu_frame_api.h"
+#include "gpu_tactical_overlay.h"
 #include "gpu_composition_session.h"
 #include "gpu_visibility.h"
 #include "render_core/dynamic_scene_input.h"
@@ -458,6 +459,7 @@ public:
     bool gpu_map_valid=false;
     std::uint64_t unit_scene_rejections=0;
     c3x_renderer::render_core::LinearTarget unit_scene_work;
+    c3x_renderer::tactical::Gpu tactical_gpu;
     unsigned frame_output_readbacks=0;
     std::unique_ptr<c3x_gpu_images::Session> gpu_composition;
     std::int64_t gpu_serial=0;
@@ -983,7 +985,7 @@ public:
 
     void reset() {
         material_views={};material_views_valid=false;
-        gpu_composition.reset();visibility_gpu.reset();visibility_pixels.clear();
+        gpu_composition.reset();tactical_gpu=c3x_renderer::tactical::Gpu{};visibility_gpu.reset();visibility_pixels.clear();
         terrain_preparation.clear();
         for(auto& scratch:terrain_scratch)scratch.reset();foreground_terrain_scratch.reset();
         for(auto& scratch:world_ground_scratch){scratch.rivers.reset_world();scratch.reset_tile();}
@@ -2488,10 +2490,9 @@ public:
         bool explicit_surface=GetEnvironmentVariableA("C3X_RENDERER_SHARED_SCENE_SURFACE",control,sizeof(control))!=0;
         bool requested_surface=explicit_surface && std::strcmp(control,"1")==0;
         if(!explicit_surface){
-            char waves[8]={},reflections[8]={};
-            GetEnvironmentVariableA("C3X_RENDERER_WAVES",waves,sizeof(waves));
+            char reflections[8]={};
             GetEnvironmentVariableA("C3X_RENDERER_REFLECTION_CONTROL",reflections,sizeof(reflections));
-            requested_surface=city_profile && std::strcmp(waves,"0")==0 && std::strcmp(reflections,"1")==0;
+            requested_surface=city_profile && std::strcmp(reflections,"1")==0;
         }
         scene_surface_requested=requested_surface;
         // API 18 capture owns fog. The off control exists only in benchmark builds.
@@ -3679,7 +3680,6 @@ public:
             }
         }
         if(shared_scene_surface) {
-            if(!wave_chunks.empty()){trace.write("scene-surface-failed","waves outside bounded alternative",true);return false;}
             if(!compose_scene_surface(buffers))return false;
             resource_pixel_signature=cached_signature.complete;resource_pixel_clock=clock;
             QueryPerformanceCounter(&finished);resource_composite_ticks=finished.QuadPart-started.QuadPart;
@@ -4224,7 +4224,7 @@ public:
             context->ClearDepthStencilView(linear.depth,D3D11_CLEAR_DEPTH|D3D11_CLEAR_STENCIL,1,0);
         }
         std::vector<D3D11_RECT> dynamic_damage;
-        for(auto layer:{geometry_shadow,geometry_feature})for(auto item:dynamic[layer]){
+        for(auto layer:{geometry_shadow,geometry_wave,geometry_feature})for(auto item:dynamic[layer]){
             auto rect=item.bounds();int dx=item.translation_x()+int(settings.translation[0]),dy=item.translation_y()+int(settings.translation[1]);
             rect={std::max<LONG>(0,rect.left+dx-4),std::max<LONG>(0,rect.top+dy-4),
                   std::min<LONG>(w,rect.right+dx+4),std::min<LONG>(h,rect.bottom+dy+4)};
@@ -4305,7 +4305,7 @@ public:
             linear.depth_samples,0,0,{},&dynamic_damage))return false;
         scene_dynamic_damage=std::move(dynamic_damage);
         QueryPerformanceCounter(&static_end);
-        if(!submit(dynamic,{geometry_shadow,geometry_feature},true))return false;
+        if(!submit(dynamic,{geometry_shadow,geometry_wave,geometry_feature},true))return false;
         QueryPerformanceCounter(&dynamic_end);
         char selection_detail[192];sprintf_s(selection_detail,"indexed_candidates=%u scanned_candidates=%u selected_static=%u selected_dynamic=%u batches=%u world_records=%zu world_bytes=%zu instances_ready=%u",
             selection_candidates,selection_scans,selected_static,selected_dynamic,batches,topology_cache.size(),topology_cache.bytes(),frame_instances_ready);
@@ -4411,6 +4411,10 @@ public:
             trace.milliseconds(static_end.QuadPart-begin.QuadPart),trace.milliseconds(dynamic_end.QuadPart-static_end.QuadPart),
             trace.milliseconds(finish_end.QuadPart-dynamic_end.QuadPart),trace.milliseconds(ready.QuadPart-finish_end.QuadPart),trace.milliseconds(copied.QuadPart-ready.QuadPart));
         trace.write("shared-scene-surface",detail,true);memory_sample("shared-scene-complete");
+        sprintf_s(detail,"visible=%u frozen=%zu geometry_bytes=%zu upload_bytes=%zu cells_built=%u cells_reused=%u",
+            visible_wave_animations,wave_chunks.size()-visible_wave_animations,wave_geometry_bytes,wave_upload_bytes,
+            wave_cells_built,wave_cells_reused);
+        trace.write("scene-waves",detail,true);
         sprintf_s(detail,"content_uploads=%u setups=%llu layers=%llu draws=%llu parameter_updates=%llu bounds_tests=%llu parameter_uploads=%u parameter_records=%u issue_ms=%.3f selection_ms=%.3f execute_ms=%.3f prepared_meshes=%u foreground_meshes=%u prepared_vertex_bytes=%zu",
             frame_content_uploads,frame_pass_setups,frame_active_layers,frame_draw_calls,frame_parameter_updates,frame_bounds_tests,draw_parameters.uploads,draw_parameters.records,
             frame_geometry_issue_ms,frame_scene_select_ms,frame_scene_execute_ms,frame_prepared_meshes,frame_foreground_meshes,frame_prepared_vertex_bytes);
@@ -5477,6 +5481,17 @@ public:
         if(!diagnostic_animation)
 #endif
         if(!draw_cached_geometry(geometry_shadow,buffers,rectangles,settings,nullptr))return false;
+        // Shoreline foam uses the same retained scene depth and lighting as
+        // the static water. Only selected ribbons draw; terrain stays resident.
+        if(wave_ready && !buffers[geometry_wave].empty()){
+            context->PSSetShader(wave_shader,nullptr,0);
+            context->PSSetShaderResources(0,3,wave_views.data());
+            context->PSSetConstantBuffers(7,1,&wave_frame);
+            context->OMSetDepthStencilState(natural.decal_depth,0);
+            if(!draw_cached_geometry(geometry_wave,buffers,rectangles,settings,nullptr))return false;
+            context->OMSetDepthStencilState(depth_state,0);
+            context->PSSetShaderResources(0,3,compiled_material_views().data());
+        }
         ID3D11SamplerState* body_samplers[]={terrain_sampler,decal_sampler};
         context->PSSetSamplers(0,2,body_samplers);
         context->PSSetShaderResources(25,4,feature_texture_views.data());
@@ -10597,6 +10612,12 @@ public:
         // themselves or restore the retired instance's selection.
     }
 
+    int draw_tactical(c3x_renderer::tactical::Input const& capture,c3x_renderer_gpu_unit_v1 const& target){
+        std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);
+        start_locked();ForegroundCameraPause pause(*this,lock);
+        tactical_input=capture;tactical_target=target;advance_visual_clock();
+        return submit_locked(lock,Command::tactical);
+    }
     int draw_unit(c3x_renderer_unit_v1 const & request,HDC destination,HDC background=nullptr,int* bounds=nullptr,unsigned playback_flags=0,c3x_renderer_gpu_unit_v1 const* gpu_target=nullptr) {
         std::lock_guard<std::mutex> call_guard(call_mutex);
         std::unique_lock<std::mutex> lock(state_mutex);
@@ -10764,6 +10785,7 @@ private:
         gpu_render,
         gpu_images,
         gpu_unit,
+        tactical,
         gpu_present,
         visual_frame,
         native_screen,
@@ -10778,7 +10800,9 @@ private:
     c3x_renderer_output_v1 gpu_metadata={C3X_RENDERER_API_VERSION,sizeof(gpu_metadata)};
     std::vector<unsigned> gpu_replacements,gpu_fallbacks;
     c3x_renderer_gpu_images_v1 gpu_request={};
-    c3x_renderer_gpu_unit_v1 gpu_unit={};
+    c3x_renderer_gpu_unit_v1 gpu_unit={},tactical_target={};
+    c3x_renderer::tactical::Input tactical_input;
+
     bool unit_gpu_preparation=false;
     std::uint64_t gpu_unit_output_readbacks=0,gpu_unit_composition_uploads=0;
     c3x_renderer_gpu_result_v1 gpu_result={sizeof(gpu_result)};
@@ -11746,13 +11770,42 @@ private:
             }else if(command==Command::gpu_images){
                 gpu_result={sizeof(gpu_result)};gpu_readback.clear();
                 result=renderer_state.gpu_composition?renderer_state.gpu_composition->execute(gpu_request,gpu_commands,gpu_pixels,gpu_result,gpu_readback):C3X_RENDERER_RESULT_SUPERSEDED;
+            }else if(command==Command::tactical){
+                result=C3X_RENDERER_RESULT_SUPERSEDED;
+                auto* session=renderer_state.gpu_composition.get();
+                if(session&&session->current_ticket()==tactical_target.ticket){
+                    auto area=tactical_input.extent({tactical_target.clip[0],tactical_target.clip[1],tactical_target.clip[2],tactical_target.clip[3]});
+                    result=C3X_RENDERER_RESULT_OK;
+                    if(area[0]<area[2]&&area[1]<area[3]){
+                        auto capture=std::make_shared<c3x_renderer::tactical::Input>(std::move(tactical_input));
+                        auto seconds=std::make_shared<double>(double(visual_ticks)/double(std::max(1ll,visual_frequency)));
+                        c3x_gpu_images::RetainedComposition::Direct operation;operation.animated=capture->animated;
+                        operation.input_bytes=sizeof(*capture)+capture->primitives.capacity()*sizeof(c3x_renderer::tactical::Primitive)+sizeof(double);
+                        operation.revision=[seconds,animated=capture->animated](long long ticks,long long frequency){
+                            if(animated)*seconds=double(ticks)/double(std::max(1ll,frequency));
+                            return animated?std::uint64_t(ticks/std::max(1ll,frequency/30)):1u;
+                        };
+                        operation.draw=[this,capture,seconds,area](c3x_gpu_images::Compositor& target,c3x_gpu_images::Command const& command){
+                            auto texture=renderer_state.tactical_gpu.packed(renderer_state.device,renderer_state.context,*capture,area,*seconds);
+                            auto source=target.attach_source(texture);if(!source)return false;
+                            auto draw=command;draw.source=source;bool ok=target.submit(&draw,1);target.destroy(source);
+                            char line[160];sprintf_s(line,"primitives=%zu animated=%u independent=%u primitive_bytes=%zu result=%u",
+                                capture->primitives.size(),unsigned(capture->animated),unsigned(job_command==Command::visual_frame),
+                                capture->primitives.capacity()*sizeof(c3x_renderer::tactical::Primitive),unsigned(ok));
+                            renderer_state.trace.write("tactical-execute",line,true);return ok;
+                        };
+                        result=session->draw_dynamic(tactical_target,unsigned(area[2]-area[0]),unsigned(area[3]-area[1]),area[0],area[1],std::move(operation));
+                        char detail[192];sprintf_s(detail,"primitives=%zu animated=%u width=%d height=%d static_draws=0 geometry_builds=0 readbacks=0",
+                            capture->primitives.size(),unsigned(capture->animated),area[2]-area[0],area[3]-area[1]);renderer_state.trace.write("tactical-overlay",detail,true);
+                    }
+                }
             }else if(command==Command::gpu_unit){
                 result=C3X_RENDERER_RESULT_SUPERSEDED;gpu_unit_output_readbacks=gpu_unit_composition_uploads=0;
                 if(renderer_state.gpu_composition&&renderer_state.gpu_composition->current_ticket()==gpu_unit.ticket){
                     auto& body=renderer_state.unit_bodies;auto reads=body.output_readbacks,uploads=renderer_state.gpu_composition->upload_count();
                     if(body.direct_scene){
                         unsigned scale=job_unit.projection_scale_milli?job_unit.projection_scale_milli:(job_unit.reduced?500:1000);
-                        result=renderer_state.gpu_composition->draw_unit_scene(gpu_unit,job_unit.sprite_width*scale/1000,job_unit.sprite_height*scale/1000,
+                        result=renderer_state.gpu_composition->draw_dynamic(gpu_unit,job_unit.sprite_width*scale/1000,job_unit.sprite_height*scale/1000,
                             job_unit.body_x,job_unit.body_y,unit_scene_operation());
                     }else if(body.render(renderer_state.device,renderer_state.context,job_unit,[&](auto const& action){return renderer_state.prepare_unit_action(action);},nullptr,job_unit_predict,true)){
                         auto const& pose=body.resident_pose;result=renderer_state.gpu_composition->compose_resident_unit(gpu_unit,pose.texture.Get(),unsigned(pose.width),unsigned(pose.height),job_unit.body_x,job_unit.body_y,retain_visual_unit(pose.texture));
@@ -11885,12 +11938,12 @@ private:
                 output.prefetch_blocks_pending = renderer_state.pixel_work_pending();
                 output.prefetch_blocks_built = renderer_state.prepared_blocks;
                 output.pixel_block_cache_bytes = static_cast<unsigned>(renderer_state.pixel_blocks.bytes);
-            } else if(command!=Command::unit && command!=Command::native_screen && command!=Command::gpu_images && command!=Command::gpu_unit && command!=Command::gpu_present && command!=Command::visual_frame) {
+            } else if(command!=Command::unit && command!=Command::native_screen && command!=Command::gpu_images && command!=Command::gpu_unit && command!=Command::tactical && command!=Command::gpu_present && command!=Command::visual_frame) {
                 warm_order.clear(); warm_cursor = 0; warm_signature = 0;
                 warm_tiles.clear();
                 renderer_state.cancel_pixel_preparation();
             }
-            if(command!=Command::unit && command!=Command::native_screen && command!=Command::gpu_images && command!=Command::gpu_unit && command!=Command::gpu_present && command!=Command::visual_frame) {
+            if(command!=Command::unit && command!=Command::native_screen && command!=Command::gpu_images && command!=Command::gpu_unit && command!=Command::tactical && command!=Command::gpu_present && command!=Command::visual_frame) {
             if(command==Command::render && result==C3X_RENDERER_RESULT_OK){
                 if(rendered_area_ready){retain_view(rendered_area);nearby_presented=true;}
                 completed_phase_x=job_frame.tile_count?job_frame.tiles[0].anchor_x:0;
@@ -11926,7 +11979,7 @@ private:
                 char area_option[8]={};GetEnvironmentVariableA("C3X_RENDERER_PREPARED_VIEW",area_option,sizeof(area_option));
                 nearby_available=renderer_state.shared_scene_surface && std::strcmp(area_option,"0")!=0;
                 start_ahead();
-            }else if(command!=Command::unit && command!=Command::native_screen && command!=Command::gpu_images && command!=Command::gpu_unit && command!=Command::gpu_present && command!=Command::visual_frame){nearby.clear();retained_views.clear();prospective_views.clear();pending_refresh.reset();nearby_available=false;gpu_publication.clear();gpu_presentation=false;}
+            }else if(command!=Command::unit && command!=Command::native_screen && command!=Command::gpu_images && command!=Command::gpu_unit && command!=Command::tactical && command!=Command::gpu_present && command!=Command::visual_frame){nearby.clear();retained_views.clear();prospective_views.clear();pending_refresh.reset();nearby_available=false;gpu_publication.clear();gpu_presentation=false;}
             last_job_result=result;
             completed_job_sequence = sequence;
             job_command = Command::none;
@@ -12309,6 +12362,7 @@ extern "C" __declspec(dllexport) int c3x_renderer_gpu_present(c3x_renderer_gpu_p
 // exclusive owner; before that, completed CPU screens retain compatibility
 // presentation. A negative result denies CPU access after a failed barrier.
 extern "C" __declspec(dllexport) int c3x_renderer_native_image(int operation,void* image,void* source,void const* from,void const* to,unsigned color){
+    if(operation==C3X_NATIVE_TACTICAL_CAPABLE)return native_composition&&native_composition->active()?1:0;
     if(operation==C3X_NATIVE_VISUAL_POLICY)return renderer_worker?renderer_worker->visual_policy(color):0;
     if(operation==C3X_NATIVE_IMAGE_DRAIN){if(!drain_native_composition())return -1;}
     else if(native_composition&&native_composition->active()){
@@ -12389,6 +12443,7 @@ extern "C" __declspec(dllexport) int c3x_renderer_native_map(int action,void* im
         auto base=reinterpret_cast<char*>(jgl);
         native_composition=new c3x_native_images::CompositionOwner(c3x_renderer_gpu_render,c3x_renderer_gpu_images,c3x_renderer_gpu_present,
             c3x_renderer_gpu_unit,c3x_renderer_native_lifetime,base+0x1b70,base+0x1b90);
+        native_composition->set_tactical([](auto const& capture,auto const& target){return get_renderer_worker().draw_tactical(capture,target);});
     }
     return native_composition->map(action,image,request,output);
     }catch(std::exception const& e){OutputDebugStringA(e.what());return C3X_RENDERER_RESULT_DEVICE_ERROR;}

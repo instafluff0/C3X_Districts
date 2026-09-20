@@ -1,0 +1,44 @@
+{
+  "id": "tactical-overlays",
+  "title": "Selection, routes and tile grid",
+  "depends_on": [
+    "units"
+  ],
+  "implementation": [
+    "Renderer/native/tactical_overlay.h",
+    "Renderer/native/gpu_tactical_overlay.h",
+    "Renderer/native/native_composition_owner.h",
+    "Renderer/native/native_image_adapter.h",
+    "Renderer/native/c3x_renderer_api.h",
+    "Renderer/native/c3x_renderer.cpp"
+  ],
+  "recipe": {
+    "terrain": 2,
+    "feature": 2,
+    "objects": true,
+    "hours": [
+      12
+    ],
+    "zooms": [
+      64,
+      128,
+      160,
+      192
+    ],
+    "cases": [
+      "route",
+      "grid"
+    ]
+  },
+  "tests": [
+    "Renderer.native.test_tactical_overlay",
+    "Renderer.native.test_retained_composition"
+  ],
+  "references": {
+    "d3d11": []
+  },
+  "limitations": [
+    "Native semantic inputs remain authoritative; current connected previews use synthetic route inputs through the real JGL hooks.",
+    "Visual acceptance and live-game checkpoint remain pending."
+  ]
+}

@@ -2,6 +2,8 @@
 #include "native_image_adapter.h"
 #include "gpu_image_worker_client.h"
 #include <memory>
+#include "tactical_overlay.h"
+#include <functional>
 namespace c3x_native_images {
 // Caller-thread owner for the native map/copy/save/display family. The existing
 // renderer worker owns GPU work; this object never retains game request pointers.
@@ -16,6 +18,17 @@ class CompositionOwner {
     std::unique_ptr<c3x_gpu_images::WorkerClient> client;
     std::unique_ptr<Adapter<c3x_gpu_images::WorkerClient>> adapter;
     c3x_renderer_gpu_frame_v1 frame={sizeof(frame)};
+    using Tactical=c3x_renderer::tactical::Input;
+    std::function<int(Tactical const&,c3x_renderer_gpu_unit_v1 const&)> tactical;
+    Tactical route;void* route_image=nullptr;c3x_renderer_tactical_view_v1 route_view={};
+    std::array<float,2> destination={};std::string route_text;
+    float projected(int v,bool y)const{return float(double(v)*route_view.tile_width/route_view.native_tile_width+
+        double(y?route_view.translate_y_fp:route_view.translate_x_fp)/65536.);}
+    int tactical_draw(void* image,Tactical const& capture){
+        if(capture.primitives.empty())return 1;
+        if(!tactical)return 0;
+        return adapter->draw_tactical([&](auto const& target){return tactical(capture,target);},frame.ticket,image)?1:0;
+    }
     void* pending=nullptr;Rect area={};int phase_x=0,phase_y=0;
     void check_thread(){if(GetCurrentThreadId()!=thread)throw std::runtime_error("native composition caller changed");}
     void release_window(){c3x_renderer_gpu_present_v1 r={sizeof(r)};r.action=2;
@@ -24,6 +37,7 @@ class CompositionOwner {
 public:
     CompositionOwner(c3x_renderer_gpu_render_fn r,c3x_renderer_gpu_images_fn i,c3x_renderer_gpu_present_fn p,
         c3x_renderer_gpu_unit_fn u,c3x_renderer_native_lifetime_fn l,void* b,void* end):render(r),images(i),present(p),unit(u),lifetime(l),bits(b),release(end){}
+    void set_tactical(std::function<int(Tactical const&,c3x_renderer_gpu_unit_v1 const&)> draw){tactical=std::move(draw);}
     bool active()const{return adapter!=nullptr;}
     c3x_renderer_i64 sample_ticks()const{return frame.presentation_time_ticks;}
     // Native validation occurs between prepare and commit. Preparation never
@@ -58,6 +72,47 @@ public:
     }
     int operation(int op,void* image,void* source,void const* from,void const* to,unsigned color){
         check_thread();if(!adapter)return 0;
+        if(op==C3X_NATIVE_TACTICAL_ROUTE_BEGIN){
+            if(!from||route_image||!tactical)return 0;
+            route_view=*static_cast<c3x_renderer_tactical_view_v1 const*>(from);
+            if(route_view.native_tile_width<=0||route_view.tile_width<64||route_view.tile_width>192)return 0;
+            route={};route_text.clear();route_image=image;destination={};return 1;
+        }
+        if(route_image==image && op==C3X_NATIVE_LINE){
+            auto p=static_cast<int const*>(from);if(!p)throw std::runtime_error("route endpoints missing");
+            route.line(projected(p[0],false),projected(p[1],true),projected(p[2],false),projected(p[3],true));return 1;
+        }
+        if(route_image==image && op==C3X_NATIVE_TEXT){
+            if(!source||color>32)throw std::runtime_error("route text missing/oversized");
+            route_text.assign(static_cast<char const*>(source),color);return 1;
+        }
+        if(op==C3X_NATIVE_TACTICAL_TARGET){
+            if(!from||route_image!=image)return 0;auto p=static_cast<int const*>(from);
+            destination={projected(p[0],false),projected(p[1],true)};
+            route.ring(destination[0],destination[1],float(route_view.tile_width),false);return 1;
+        }
+        if(op==C3X_NATIVE_TACTICAL_ROUTE_END){
+            if(image!=route_image)return 0;route_image=nullptr;
+            if(!route_text.empty())route.label(destination[0],destination[1],route_text,std::max(18.f,float(route_view.tile_width)*.26f));
+            int result=tactical_draw(image,route);route={};route_text.clear();return result;
+        }
+        if(op==C3X_NATIVE_TACTICAL_RING){
+            if(!from)return 0;auto p=static_cast<int const*>(from);Tactical capture;
+            capture.ring(float(p[0]),float(p[1]),float(p[2]),p[3]!=0);return tactical_draw(image,capture);
+        }
+        if(op==C3X_NATIVE_TACTICAL_GRID){
+            if(!color)return 1;if(!from)return 0;
+            auto const& view=*static_cast<c3x_renderer_frame_v1 const*>(from);Tactical capture;
+            for(unsigned i=0;i<view.tile_count;++i){auto const& tile=view.tiles[i];
+                if(!(tile.tile_flags&C3X_RENDERER_TILE_RENDER)||((tile.tile_flags&C3X_RENDERER_TILE_VISIBILITY_KNOWN)&&!(tile.tile_flags&C3X_RENDERER_TILE_EXPLORED)))continue;
+                float x=float(tile.anchor_x),y=float(tile.anchor_y),w=float(view.tile_width),h=float(view.tile_height);
+                // Each native diamond owns its top two edges, so shared edges
+                // are drawn once. Hidden cells cannot introduce grid geometry.
+                capture.line(x,y+h*.5f,x+w*.5f,y,.9f,true);
+                capture.line(x+w*.5f,y,x+w,y+h*.5f,.9f,true);
+            }
+            return tactical_draw(image,capture);
+        }
         if(op==C3X_NATIVE_IMAGE_PRESENT){
             auto id=adapter->display_image(image);
             if(!id)return 0; // Caller uploads this CPU UI source into the same presenter.
