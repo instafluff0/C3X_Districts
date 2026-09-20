@@ -35,7 +35,9 @@ source-origin meshes must accompany this placement code.
 | Units | Pose-local self occlusion and a local ground footprint | Own pose; surrounding world field is not currently supplied by the native sprite API | Native action cursor and bounded sprite cache |
 | Retained native content, fog, labels and HUD | Native behavior | Native behavior | Civ III |
 
-The unit boundary is deliberate and explicit: these sprites cannot yet receive
+Milestone 2.3 retains this boundary with the user-selected always-on-top unit
+composition. Direct units keep pose-local shadows and full self-depth; they do not
+require raw map-depth captures. These units cannot receive
 a mountain's shadow or project onto arbitrary neighboring geometry. Adding that
 interaction requires captured receiver placement and environment revisions in
 the unit cache, plus dirty-region proofs. The subsequent hut/camp integration adds viewer-conditioned site capture in

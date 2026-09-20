@@ -13,14 +13,13 @@ public:
     Session(ID3D11Device* d,ID3D11DeviceContext* c):device(d),context(c),gpu(d,c,96u*1024u*1024u),layers(d,c){}
     // At 2240x1192 the map, screen and popup color pairs exceed 64 MiB.
     // Keep an explicit 96 MiB live-image ceiling; replay has its own budget.
-    bool publish(ID3D11Texture2D* texture,std::int64_t serial,int x=0,int y=0,int width=0,int height=0,RetainedComposition::Sample sample={},RetainedComposition::Scene scene={},RetainedComposition::SceneSample scene_sample={}){
+    bool publish(ID3D11Texture2D* texture,std::int64_t serial,int x=0,int y=0,int width=0,int height=0,RetainedComposition::Sample sample={}){
         if(!texture||serial<=ticket)return false;
         D3D11_TEXTURE2D_DESC d={};texture->GetDesc(&d);
         if(!width)width=int(d.Width);if(!height)height=int(d.Height);
         auto next=gpu.create(width,height,Format::bgra32);
         if(!next)return false;
         if(!gpu.import_bgra(next,texture,x,y)){gpu.destroy(next);return false;}
-        gpu.scene(next,scene);
         // Admission failure leaves the previous immutable map and UI handles
         // usable. Publish the new identity only after its import succeeds.
         if(map){layers.destroy(map);gpu.destroy(map);}map=next;
@@ -30,10 +29,10 @@ public:
             // subsequent map writes restore their dynamic dependencies.
             if(!layers.accepting()){
                 layers.clear();gpu.visit_images([&](Id id,unsigned w,unsigned h,Format format,ID3D11Texture2D* source){
-                    layers.create(id,w,h,format);layers.source(id,source,{},false,gpu.scene(id));
+                    layers.create(id,w,h,format);layers.source(id,source);
                 });
             }
-            layers.create(map,width,height,Format::bgra32);layers.source(map,gpu.texture(map),std::move(sample),true,std::move(scene),std::move(scene_sample));}catch(std::exception const& e){OutputDebugStringA("[C3X renderer] retained admission: ");OutputDebugStringA(e.what());OutputDebugStringA("\n");layers.discard();}
+            layers.create(map,width,height,Format::bgra32);layers.source(map,gpu.texture(map),std::move(sample),true);}catch(std::exception const& e){OutputDebugStringA("[C3X renderer] retained admission: ");OutputDebugStringA(e.what());OutputDebugStringA("\n");layers.discard();}
         ticket=serial;if(!identity)identity=serial;return true;
     }
     std::int64_t session_identity()const{return identity;}

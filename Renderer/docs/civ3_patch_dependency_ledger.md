@@ -1,7 +1,9 @@
 # Civ III patch dependency ledger
 
-## Direct unit scene execution (2.2)
+## Direct unit scene execution and composition (2.2–2.3)
 
+2.3 removes optional map-depth provenance and keeps units above all map geometry,
+with existing pose-local shadows and native composition. No ABI change is needed.
 DLL-only execution extends the existing `Unit_tick_anim`,
 `Sprite_draw_unit_body_normal`, `Sprite_draw_unit_body_reduced` and resident JGL
 image bridge.

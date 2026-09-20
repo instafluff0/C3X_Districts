@@ -10,11 +10,11 @@ Full detail, authored animation and Civ III's gameplay/state authority remain
 unchanged. The zoom-owned map-overlay extension below is a planned rendering
 ownership change, not a second visibility, selection, or pathfinding system.
 
-**Current technical checkpoint: 1.6, 2.1 and 2.2 implemented; the 2.2 regression
-has been substantially reduced by bounded GPU-input and allocation reuse.** The
-complete workload still costs more than the pre-2.2 pose-cache control; Milestone 2
-performance acceptance is not claimed. Visual acceptance and the strategic
-live-game check remain pending. **Next: 2.3, shadows, occlusion and composition.**
+**Current technical checkpoint: 1.6, 2.1 and 2.2 implemented; 2.3 implemented and verified.**
+The user's final policy keeps units above all map geometry. The direct path now
+removes map-depth capture/provenance instead of implementing terrain occlusion.
+Milestone 2 performance acceptance and the strategic live-game check remain open.
+**Next: 2.4, map effects beginning with shoreline waves.**
 [Architecture](renderer_architecture.md) owns the design;
 [validation](benchmark_workflow.md) owns measurement and acceptance.
 
@@ -26,13 +26,13 @@ live-game check remain pending. **Next: 2.3, shadows, occlusion and composition.
 | Local validity | Captured appearance/visibility dependencies, immutable map inputs, unit revision/despawn/hidden proofs | Coherent general authoritative change publication |
 | Spatial selection | World pass index and native/wrapped occurrences feed replacement static submissions directly | Direct dynamic/unit execution inputs |
 | Compatible passes | Compatible static layers, shared material bindings, batched occurrence parameters/uploads, forest instancing, exact native composition | Collected dynamic/unit execution; additional sharing guided by cost |
-| GPU reuse/output | Resident map color/depth, direct eligible unit geometry, incremental finishing and native composition | Shared dynamic occlusion/composition; reduce conversion, replay and full-map work |
+| GPU reuse/output | Resident map color/depth, direct eligible unit geometry, incremental finishing and native composition | Reduce dynamic conversion, replay and full-map work |
 | Async integration | Bounded GPU-ready ground/terrain/object preparation with shared worker capacity, selected-work urgency and independent visual timer | Coherent general nonblocking camera/content publication |
 
 Independent frames use the existing HWND presenter without native redraw requests.
 Civ III's original gameplay timer is unchanged. Map animation still enters the
-existing render orchestration. Eligible units use direct scene execution; native
-overlap or unavailable scene inputs retain GPU pose compatibility. The current
+existing render orchestration. Eligible units use direct scene execution; oversized
+native canvases retain bounded GPU pose compatibility. The current
 conversion and per-unit execution costs are not the cheap scene-frame endpoint.
 
 ## 1. Complete world → selected GPU submissions
@@ -63,8 +63,8 @@ Sample eligible animation state, collect required resource/unit poses, prepare
 missing content together and execute selected dynamic/shadow/finishing passes over
 valid static color/depth. Feed results into the existing native compositor. Until
 the explicit zoom-owned tactical-overlay cutover below, keep native overlays;
-replace the temporary unit-over-map ordering with shared terrain occlusion in
-2.3, preserve native UI ordering, and keep static UI reusable.
+keep units above all map geometry per the final user decision in 2.3, preserve
+native unit/UI ordering, and keep static UI reusable.
 
 Shared pose buffers, GPU deformation/skinning and grouped targets are candidates
 where they remove measured work. Do not force all units into one surface or alter
@@ -81,14 +81,14 @@ occlusion and composition**; **2.4 map effects**, shoreline waves first; **2.5 t
 overlays**; **2.6 scheduling/reuse**; **2.7 acceptance**. Existing optional wave tests
 are compatibility checks, not early enablement of 2.4.
 
-**2.3 required occlusion fix (user screenshot, 2026-09-19):** a unit on the tile
-behind a mountain or other tall foreground object currently draws over it. Correct
-unit-body occlusion using compatible world/scene depth and the actual foreground
-geometry, replacing 2.2's separate near/far depth bands. Tile order alone is
-insufficient for partial overlap. Verify units both behind and in front of relief,
-vegetation and other existing tall map objects, including movement across the
-occlusion boundary, animation, zoom, scrolling/wrap and fog. Keep unit HUD/cursor
-ownership separate. This is a 2.3 acceptance requirement, not deferred polish.
+**2.3 final scope (user reversal, 2026-09-19):** units always draw above map
+geometry, whether on, behind or in front of a mountain, forest or building. The
+previous terrain-occlusion requirement is withdrawn, including the intermediate
+same-tile exception. Keep existing pose-local shadows, native unit/UI order,
+actions, visibility and controls. Remove the unused map-depth coupling and verify
+exact body/native composition across overlap, movement, animation, zoom and fog.
+This does not add surrounding-world shadow receivers or arbitrary-geometry unit
+shadow casting. No deferred terrain-occlusion task is implied by this policy.
 
 ## 3. Complete state publication and nonblocking camera updates
 
@@ -226,84 +226,81 @@ move deferred wonders or Districts forward.
 
 ## Current evidence and implementation handoff
 
-**2.2 optimization pass implemented; performance acceptance remains open.**
-The pre-optimization checkpoint is `5c48ea46` (committed on Mac, pushed from
-Windows). Current improvements are in the working tree. Nothing was staged or
-installed; Civ III was not launched and reference images were not replaced.
+**2.3 complete under the user's final always-on-top policy.** Units draw above
+all map geometry, with native unit/UI ordering, pose-local shadows, full self-depth,
+authored actions, fog eligibility and quality controls intact. The earlier terrain
+occlusion implementation was withdrawn. Surrounding-world shadow reception and
+unit casting onto arbitrary geometry are not claimed.
 
-1.6's static submissions/fog and 2.1's immutable inputs remain intact: hidden units
-are suppressed, explored resources/effects freeze, and Civ III owns actions,
-visibility and anchors. The [dynamic input contract](dynamic_scene_input_contract.md)
-and [patch ledger](civ3_patch_dependency_ledger.md) retain those contracts.
-No injected/CSV changes; `required_user_action: []`.
+The optimized 2.2 checkpoint `cc550142` was committed on Mac and pushed through
+Windows before this work. 2.3 is a DLL-only working-tree change: no API, injected
+source or patch-table edits; `required_user_action: []`. Candidate verification
+did not stage/install binaries, launch Civ III or replace references.
 
-**Work eliminated:** eligible unit geometry still executes over resident map
-color/depth, without finished CPU/GPU pose caching or terrain resubmission. Its
-existing pose owner now reuses exact GPU vertices and shadow inputs under a
-**192 MiB** combined input allowance. Matching retired allocations are recycled.
-Raw map captures retain reusable idle allocations within their existing **64 MiB**
-budget; active leases cannot be overwritten. Restoration, extraction, hardware
-resolve and native composition follow the body/shadow footprint. Scene and
-compatibility conversion scratch are separate, eliminating route-switch resize
-churn. The native raster viewport and erase bounds stay unchanged; the shared
-working attachment remains **75 MiB** in this witness (96 MiB admission cap).
-A cropped raster viewport was rejected after the new oracle found a one-channel
-rounding difference. See the [direct scene contract](direct_unit_scene_contract.md).
+**Work eliminated:** no raw map color/depth capture, source-generation lease,
+provenance transport through native copies, or separate map/unit depth bands.
+The direct pass clears only its footprint, draws cached GPU pose inputs into a
+transparent attachment and uses existing exact native composition. The 64 MiB
+map-region cache and its retired tests are removed. GPU pose inputs remain capped
+at 192 MiB; the work attachment uses 75 MiB here (96 MiB cap). Oversized zoom
+canvases retain bounded GPU compatibility. Native raster coordinates and hardware
+MSAA resolve remain exact; no terrain resubmission or CPU unit roundtrip is added.
+See the [direct scene contract](direct_unit_scene_contract.md).
 
-**Verification:** **292 tests: 290 passed / two skipped**, plus all six production
-replays (scroll/reduced/wrap, resources, day/night units). Each unit replay covers
-288 body cases and 582 action/held-endpoint checks with unchanged terrain. Final
-visible/fogged independent frames and timer transport pass. The strengthened
-real-map oracle admits **all 128 cases directly** at 750/1000 projection, with exact
-555/565 and full-color pixels through clipping, placement, light/zoom changes,
-**56 GPU-input builds, 72 hits and 36 allocation reuses after eviction**. This
-post-measurement test strengthening uses the **same measured DLL**. Existing
-sample-scale, native ownership, config-off and CPU-barrier checks pass.
+**Verification:** 291 tests, **289 passed / two skipped**, plus all six production
+replays. Day/night each covers 288 body cases and 582 action/held-endpoint checks.
+There are 98,304 exact resolve comparisons, 126 retained-composition oracles and
+120 independent frames. Connected native-screen fixtures pass at 64/128/160/192
+and with fog, including nine mountain/forest/building placements, 128 direct
+555/565/full-color comparisons, native UI/partial transfer, timer transport,
+visibility freeze/reveal, ownership and CPU barriers. The
+[placement contact sheet](../native/build/unit-composition-checkpoint/placements.png)
+was inspected; its CPU-oracle images match the actual native output exactly.
 
-**Complete workload:** serial 1120×1192 dense-modern-city comparisons include map,
-8/32 units, native UI and final transfer. Each run has **384 timed CPU/GPU requests**,
-64 samples per route/workload. All source/DLL identities stayed fixed per run and
-**16,102 asset/input files** were unchanged across the final comparison. GPU whole
-request mean / p95, milliseconds (the regression column preserves the earlier
-checkpoint measurements; the other two columns are a fresh paired comparison):
+**Complete workload:** serial matched optimized-2.2 control and 2.3 candidate,
+1120×1192 dense modern cities, 8/32 units, native UI and final transfer. Each run
+contains 384 timed CPU/GPU requests, 64 per route/workload. All identities stayed
+fixed per run; all 16,102 asset/input files match the optimization baseline and
+remain unchanged. GPU whole-request mean / p95 in milliseconds:
 
-| Units / workload | Fresh pre-2.2 control | Recorded 2.2 regression | Optimized |
-| --- | ---: | ---: | ---: |
-| 8 / stationary animation | 13.92 / 37.29 | 26.27 / 78.13 | 18.32 / 44.04 |
-| 8 / dense scrolling | 145.26 / 170.49 | 164.68 / 197.71 | 153.20 / 182.11 |
-| 8 / local changes | 23.06 / 78.79 | 39.33 / 103.11 | 24.86 / 78.04 |
-| 32 / stationary animation | 19.30 / 52.77 | 67.50 / 158.21 | 23.89 / 55.14 |
-| 32 / dense scrolling | 150.70 / 180.57 | 222.36 / 326.02 | 160.36 / 188.52 |
-| 32 / local changes | 21.71 / 63.16 | 89.46 / 206.90 | 29.56 / 80.00 |
+| Units / workload | Optimized 2.2 control | 2.3 |
+| --- | ---: | ---: |
+| 8 / stationary animation | 14.94 / 26.36 | 13.97 / 37.95 |
+| 8 / dense scrolling | 157.68 / 206.31 | 156.05 / 194.69 |
+| 8 / local changes | 29.34 / 80.87 | 17.35 / 41.04 |
+| 32 / stationary animation | 27.69 / 72.87 | 19.50 / 45.26 |
+| 32 / dense scrolling | 166.90 / 202.72 | 165.88 / 278.13 |
+| 32 / local changes | 29.79 / 81.69 | 30.89 / 61.43 |
 
-At 32 units this removes **65% / 28% / 67%** of recorded request time, but still
-adds **4.6 / 9.7 / 7.8 ms** against the fresh control. Optimized mean desktop
-completion is **26.50 / 162.94 / 34.02 ms** at eight units and
-**32.74 / 171.02 / 37.95 ms** at 32. This is not scanout or live-game FPS.
-An earlier repetition of the same optimized DLL averaged **27.59 / 172.01 / 27.28 ms**;
-four consecutive slow map-preparation frames raised its scroll p95 to **344.66 ms**.
-Keep that variability visible; the final comparison does not establish a tail budget.
+The reverse-order 32-unit repeat measured control **27.91 / 174.02 / 38.42 ms**, candidate **22.12 / 164.73 / 25.63 ms**
+(stationary / scroll / local-change means). Its scroll p95 was 264.77 / 189.32 ms (control / candidate).
+Dense scrolling remains map-dominated. In the first pair, both binaries have
+slow map preparations at the same three scroll steps; an additional candidate
+map spike moves its p95 upward. Unit submission mean falls from 8.34/6.43/7.22
+to 3.81/4.33/4.16 ms, but local-change total mean rises slightly and desktop
+completion can vary. Phase intervals include submission/waits, not isolated GPU
+time. These results do not establish a tail budget, physical scanout or live FPS.
 
-All optimized traces are complete, including every timed GPU interval. Final
-32-unit intervals contain **3,360 direct draws**, **432 GPU-input builds / 2,928
-hits**, **1,406 idle-region reuses**, and 336 compatibility builds / 2,448 hits;
-no unit-body readbacks or composition uploads. Admission mix varies with raw
-source-generation availability; the earlier repetition had 4,928 direct draws.
-Peak charged GPU inputs are **186.1 MiB**, raw regions **64.0 MiB**. Sampled minimum
-contiguous VA is **624.7 MiB** in the final optimized 32-unit run, **592.4 MiB** in
-its repetition, and **595.9 MiB** across final controls, above the 512 MiB floor.
-Transient peaks between samples remain unmeasured. The old control's 8 MiB trace
-still truncates detailed 32-unit diagnostics; its 384 frame timings are complete.
+The first 32-unit candidate has **6,144 direct timed draws, 768 GPU-input builds /
+5,376 hits**, no compatibility draws, no map captures, no body readbacks and no
+composition uploads. All 192 timed GPU intervals have complete counter coverage.
+Peak input charge is 186.1 MiB and map-region charge is zero. Sampled minimum
+contiguous VA is **845.2 MiB at eight units / 654.1 MiB at 32**, above the 512 MiB
+floor. The expanded 32-unit control reaches **444.9 MiB**, below that floor;
+its successful pixel/timing run is not a memory acceptance pass. The reverse-order
+repeat samples 1001.9 MiB candidate / 632.8 MiB control; address-space layout and
+fragmentation vary between processes. Samples do not
+bound transient peaks. Enlarged visual fixtures still exercise GPU compatibility.
 
-[Combined receipts](../native/build/unit-scene-checkpoint/optimization/workload-comparison.json)
-preserve full distributions, run/binary identities, counters, rejected experiments,
-memory and trace limits. `lab/out/integration/units.json` holds full verification.
+[Combined receipts](../native/build/unit-composition-checkpoint/workload-comparison.json)
+preserve both pairs/repeats, identities, full distributions, counters and limits.
+`unit-composition-checkpoint/integration.json` preserves full verification;
+candidate SHA-256 is
+`2432744745feecefc7054da2ea782c1c4afd3d5fa0ecfd9636ca29d6f4485548`.
 
-**Next: 2.3 shadows, occlusion and composition.** Establish shared receiver/depth
-membership and compatible unit submissions, explicitly fixing units appearing
-over foreground mountains/tall objects. Replace the separate depth bands and
-reduce the remaining per-unit restore/draw/finish/composition work; retain the
-complete-workload control comparison and 512 MiB floor. Preserve native UI order,
-visibility and action authority. General scheduling/reuse remains 2.6, acceptance
-2.7; shoreline waves start 2.4, tactical overlays including native-setting-driven
-gridlines 2.5, nonblocking publication milestone 3, wonders/Districts M9–M11.
+**Next: 2.4 map effects, shoreline waves first.** Extend the renderer-owned dynamic
+input/pass lifecycle while preserving authoritative visibility, frozen explored
+content and complete-workload measurement. Tactical overlays and native-setting-
+driven gridlines remain 2.5 (no Ctrl+G listener), scheduling/reuse 2.6, milestone
+acceptance 2.7, nonblocking publication M3 and wonders/Districts M9–M11. Strategic
+live-game acceptance remains pending; 2.3 does not certify Milestone 2 performance.

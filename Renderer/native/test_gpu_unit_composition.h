@@ -11,6 +11,13 @@ struct UnitOracleDib {
     }
     ~UnitOracleDib(){if(previous)SelectObject(dc,previous);if(bitmap)DeleteObject(bitmap);if(dc)DeleteDC(dc);}
 };
+void write_unit_layer_witness(std::vector<unsigned> const& pixels,int w,int h,char const* name){
+    char path[32768]={};if(!GetEnvironmentVariableA("C3X_RENDERER_TRACE_FILE",path,sizeof(path)))return;
+    std::string file=std::string(path)+"."+name+".bmp";FILE* stream=nullptr;if(fopen_s(&stream,file.c_str(),"wb")||!stream)return;
+    BITMAPFILEHEADER head={};head.bfType=0x4d42;head.bfOffBits=sizeof(head)+sizeof(BITMAPINFOHEADER);head.bfSize=head.bfOffBits+unsigned(pixels.size()*4);
+    BITMAPINFOHEADER info={};info.biSize=sizeof(info);info.biWidth=w;info.biHeight=-h;info.biPlanes=1;info.biBitCount=32;info.biSizeImage=unsigned(pixels.size()*4);
+    fwrite(&head,sizeof(head),1,stream);fwrite(&info,sizeof(info),1,stream);fwrite(pixels.data(),4,pixels.size(),stream);fclose(stream);
+}
 void gpu_unit_contract(WorkerClient& gpu,HMODULE module,c3x_renderer_gpu_frame_v1 const& view,c3x_renderer_unit_v1 unit){
     auto draw=reinterpret_cast<c3x_renderer_gpu_unit_fn>(GetProcAddress(module,"c3x_renderer_gpu_unit"));
     auto native=reinterpret_cast<c3x_renderer_unit_draw_expanded_fn>(GetProcAddress(module,"c3x_renderer_unit_draw_expanded"));

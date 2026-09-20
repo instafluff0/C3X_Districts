@@ -10,6 +10,7 @@
 #include <cmath>
 #include "Renderer/native/gpu_image_compositor.h"
 #include "Renderer/native/gpu_unit_finish.h"
+#include "Renderer/native/render_core/linear_target.h"
 #pragma comment(lib,"d3d11.lib")
 #pragma comment(lib,"d3dcompiler.lib")
 using namespace c3x_gpu_images;
@@ -45,7 +46,7 @@ float4 PS(float4 p:SV_Position,uint sample:SV_SampleIndex):SV_Target{
         c3x_renderer::render_core::LinearTarget body,scene;
         assert(body.ensure(d.Get(),128*scale,128*scale,true));assert(scene.ensure(d.Get(),128*scale,128*scale,true));
         for(auto at:{&body,&scene}){
-            float background[4]={at==&body?0.f:1.f,0,0,at==&body?0.f:1.f};c->ClearRenderTargetView(at->target,background);c->ClearDepthStencilView(at->depth,D3D11_CLEAR_DEPTH,1,0);
+            float background[4]={};c->ClearRenderTargetView(at->target,background);c->ClearDepthStencilView(at->depth,D3D11_CLEAR_DEPTH,1,0);
             c->OMSetRenderTargets(1,&at->target,at->depth);c->OMSetDepthStencilState(nullptr,0);c->OMSetBlendState(nullptr,nullptr,0xffffffffu);
             D3D11_VIEWPORT vp={0,0,float(128*scale),float(128*scale),0,1};c->RSSetViewports(1,&vp);c->RSSetState(nullptr);
             c->VSSetShader(vs.Get(),nullptr,0);c->PSSetShader(ps.Get(),nullptr,0);c->IASetInputLayout(nullptr);c->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);c->Draw(3,0);
@@ -62,7 +63,7 @@ float4 PS(float4 p:SV_Position,uint sample:SV_SampleIndex):SV_Target{
         // hardware resolve. This must be exact, including partial coverage.
         c3x_renderer::render_core::LinearTarget contribution;assert(contribution.ensure(d.Get(),128*scale,128*scale));
         c3x_renderer::render_core::LinearRestore resolve;assert(resolve.ensure(d.Get()));
-        assert(resolve.draw(c.Get(),contribution,scene.samples,scene.depth_samples,0,0,{},nullptr,0,0,false,false,0,true));
+        assert(resolve.draw(c.Get(),contribution,scene.samples,scene.depth_samples,0,0,{},nullptr,0,0,false,false,0));
         transfer.draw(c.Get(),contribution,target.Get(),1,scale);c->OMSetRenderTargets(0,nullptr,nullptr);
         ComPtr<ID3D11ShaderResourceView> body_view;checked(d->CreateShaderResourceView(output.Get(),nullptr,&body_view));
         c3x_renderer::UnitSceneSample sample={body_view.Get(),height_view.Get(),ground,128,128};
@@ -71,31 +72,31 @@ float4 PS(float4 p:SV_Position,uint sample:SV_SampleIndex):SV_Target{
         auto expected=scene_read(d.Get(),c.Get(),gpu.texture(cd)),observed=scene_read(d.Get(),c.Get(),gpu.texture(ad));
         for(unsigned i=0;i<expected.size();++i){++total;if(expected[i]!=observed[i]){if(mismatches<8)std::printf("RESOLVE scale=%d pixel=%u expected=%x actual=%x\n",scale,i,expected[i],observed[i]);++mismatches;}}
         if(scale==2){
-            // Independently verify circular raw-map color AND depth transport.
-            // A far red backdrop must disappear after masking, while every
-            // covered HDR sample and its partial alpha retain exact bytes.
+            // Independently verify circular sample transport. Every covered
+            // HDR sample and its partial alpha must retain exact bytes.
             auto reference=scene_read(d.Get(),c.Get(),output.Get());
             c3x_renderer::render_core::LinearTarget shifted;
             assert(shifted.ensure(d.Get(),256,256,true,false));
             assert(resolve.draw(c.Get(),shifted,scene.samples,scene.depth_samples,13,-9,{},nullptr,256,256,true));
-            assert(resolve.draw(c.Get(),contribution,shifted.samples,shifted.depth_samples,0,0,{},nullptr,0,0,false,false,0,true));
+            assert(resolve.draw(c.Get(),contribution,shifted.samples,shifted.depth_samples,0,0,{},nullptr,0,0,false,false,0));
             transfer.draw(c.Get(),contribution,target.Get(),1,scale);c->OMSetRenderTargets(0,nullptr,nullptr);
             auto moved=scene_read(d.Get(),c.Get(),output.Get());
             for(int y=0;y<128;++y)for(int x=0;x<128;++x)assert(moved[y*128+x]==reference[((y+9)%128)*128+(x-13+128)%128]);
         }
     }
-    // Tight map regions restore at the native unit raster origin at every
-    // authored sample scale; outside samples cannot wrap into unrelated map.
+    // Unit scratch clears only its selected footprint, independent of map
+    // color/depth. Unrelated scratch remains untouched at every sample scale.
     for(int scale:{1,2,4})for(int offset:{-7,13}){
-        c3x_renderer::render_core::LinearTarget region,work;
-        assert(region.ensure(d.Get(),64,80,true,false));assert(work.ensure(d.Get(),128*scale,128*scale,true));
-        float green[4]={0,1,0,1};c->ClearRenderTargetView(region.target,green);c->ClearDepthStencilView(region.depth,D3D11_CLEAR_DEPTH,.25f,0);
+        c3x_renderer::render_core::LinearTarget work;
+        assert(work.ensure(d.Get(),128*scale,128*scale,true));
+        float green[4]={0,1,0,1};c->ClearRenderTargetView(work.target,green);c->ClearDepthStencilView(work.depth,D3D11_CLEAR_DEPTH,.25f,0);
         c3x_renderer::render_core::LinearRestore restore;assert(restore.ensure(d.Get()));
-        assert(restore.draw(c.Get(),work,region.samples,region.depth_samples,offset,offset,{},nullptr,64,80,false,true,scale));
+        D3D11_RECT clip={offset*scale,offset*scale,(offset+32)*scale,(offset+40)*scale};
+        assert(restore.draw(c.Get(),work,nullptr,nullptr,0,0,{},nullptr,work.width,work.height,false,true,0,&clip));
         c3x_renderer::render_core::LinearOutput transfer;assert(transfer.ensure(d.Get()));transfer.draw(c.Get(),work,target.Get(),1,scale);c->OMSetRenderTargets(0,nullptr,nullptr);
         auto pixels=scene_read(d.Get(),c.Get(),output.Get());
         for(int y=0;y<128;++y)for(int x=0;x<128;++x)
-            assert(bool(pixels[y*128+x]>>24)==(x>=offset&&x<offset+32&&y>=offset&&y<offset+40));
+            assert(bool(pixels[y*128+x]>>24)!=bool(x>=offset&&x<offset+32&&y>=offset&&y<offset+40));
     }
     std::printf("SCENE_RESOLVE pixels=%u mismatches=%u\n",total,mismatches);std::fflush(stdout);assert(!mismatches);return 0;
 }

@@ -7,7 +7,7 @@
 #include "unit_pose_content.h"
 #include "gpu_unit_finish.h"
 #include "gpu_unit_scene.h"
-#include "unit_scene_surface.h"
+#include "render_core/linear_target.h"
 #include "gpu_unit_shadow.h"
 #include "environment_refresh/unit_shader.h"
 
@@ -249,11 +249,9 @@ public:
         context->OMSetRenderTargets(1,&attachment.target,attachment.depth);
         if(!destination){float clear_color[4]={};context->ClearRenderTargetView(attachment.target,clear_color);
             context->ClearDepthStencilView(attachment.depth,D3D11_CLEAR_DEPTH,1,0);}
-        // Map regions carry the production 2x MSAA color and depth. Preserve
-        // native body painter order in the near depth band; shared receiver and
-        // terrain/unit occlusion membership is the following M2.3 responsibility.
-        D3D11_VIEWPORT vp=destination?D3D11_VIEWPORT{0,0,float(w*samples),float(h*samples),0,.5f}:
-            D3D11_VIEWPORT{0,0,float(w*samples),float(h*samples),0,1};
+        // Bodies retain their native painter order above the complete map.
+        // Native projection and self-depth match the CPU compatibility oracle.
+        D3D11_VIEWPORT vp={0,0,float(w*samples),float(h*samples),0,1};
         context->RSSetViewports(1,&vp);context->RSSetState(raster);
         D3D11_RECT clip=region?*region:D3D11_RECT{0,0,LONG(w*samples),LONG(h*samples)};context->RSSetScissorRects(1,&clip);
         context->OMSetBlendState(nullptr,nullptr,0xffffffffu);context->OMSetDepthStencilState(nullptr,0);
@@ -335,9 +333,9 @@ public:
             // Shader MSAA resolve differs from the production hardware resolve:
             // preserve every HDR sample in existing bounded scratch, then use
             // the same hardware resolve/display conversion as the CPU control.
-            // The geometry was drawn into map color/depth, not into this scratch.
+            // Only transparent unit contribution samples enter this scratch.
             if(!scene_resolve.ensure(device)||!scene_resolve.draw(context,linear,destination->samples,
-                destination->depth_samples,-clip.left,-clip.top,{},nullptr,destination->width,destination->height,false,false,0,true,nullptr,1))return false;
+                destination->depth_samples,-clip.left,-clip.top,{},nullptr,destination->width,destination->height,false,false,0,nullptr,1))return false;
             ++map_scene_draws;
         }
         failure_reason="gpu-body-transfer";

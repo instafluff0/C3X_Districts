@@ -20,6 +20,7 @@ def main():
     parser.add_argument('--dll',type=Path,default=Path('Renderer/native/build/candidate/C3XRenderer.dll'))
     parser.add_argument('--width',type=int,default=640)
     parser.add_argument('--height',type=int,default=480)
+    parser.add_argument('--tile-width',type=int,choices=(64,128,160,192),default=128)
     parser.add_argument('--jgl',type=Path,default=Path('Renderer/native/build/gpu-composition/audit/jgl.dll'))
     parser.add_argument('--benchmark',action='store_true',help='Compare complete native CPU/GPU frame requests and desktop completion')
     parser.add_argument('--profile',action='store_true',help='Enable existing phase and address-space samples; match this setting in both comparison arms')
@@ -86,7 +87,7 @@ def main():
             'C3X_RENDERER_REGION_INPUT_RING':'4','C3X_RENDERER_REGION_SIZE':'128',
             'C3X_RENDERER_REGION_METADATA_MIB':'96','C3X_RENDERER_WORLD_REGIONS_CONTROL':'0',
             'C3X_RENDERER_BOUNDED_POST':'0'})
-    command=f'build\\gpu-composition\\test_gpu_frame.exe "{win/dll.relative_to(ROOT)}" ..\\.. ..\\default.custom_rendering.txt "{win/scene.relative_to(ROOT)}" "{target/"control.bmp"}" {args.width} {args.height} {cx} {cy} 128 12'
+    command=f'build\\gpu-composition\\test_gpu_frame.exe "{win/dll.relative_to(ROOT)}" ..\\.. ..\\default.custom_rendering.txt "{win/scene.relative_to(ROOT)}" "{target/"control.bmp"}" {args.width} {args.height} {cx} {cy} {args.tile_width} 12'
     (out/'run.cmd').write_text('@echo off\nsetlocal\n'+f'pushd "{win/"Renderer/native"}"\n'
         +f'call BUILD.bat gpu-frame >"{target/"build.log"}" 2>&1\nif errorlevel 1 goto failed\n'
         +''.join(f'set "{k}={v}"\n' for k,v in settings.items())
@@ -120,7 +121,7 @@ def main():
         work_peak=max((int(m.group(1)) for line in direct if (m:=re.search(r'\bwork_bytes=(\d+)',line))),default=0)
         content_peak=max((int(m.group(1)) for line in direct if (m:=re.search(r'\bgpu_content_bytes=(\d+)',line))),default=0)
         passed=passed and content_peak<=192*1024*1024
-        receipt['direct_unit_scene_proof'].update(maximum_reported_gpu_content_bytes=content_peak,map_color_depth_draws=map_draws,maximum_reported_region_bytes=region_peak,maximum_reported_work_bytes=work_peak)
+        receipt['direct_unit_scene_proof'].update(maximum_reported_gpu_content_bytes=content_peak,direct_body_draws=map_draws,maximum_reported_region_bytes=region_peak,maximum_reported_work_bytes=work_peak)
         passed=passed and work_peak<=96*1024*1024
         if args.unit_scene=='1' and not args.visibility and (args.benchmark or args.visual_only):
             passed=passed and map_draws>0 and region_peak<=64*1024*1024

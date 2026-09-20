@@ -139,16 +139,17 @@ projection and receiver dependencies. A frozen unit needs no future pose work;
 selected idle/work loops sample authored time, while directed action state remains
 Civ III's authority. Directed-motion interpolation is a separate integration task.
 
-The [direct unit scene contract](direct_unit_scene_contract.md) carries raw map
-color/depth provenance through native composition. Eligible unit geometry draws
-into bounded scene attachments. Its existing pose-content owner reuses GPU vertex
-buffers and exact shadow inputs; matching allocations are recycled after their
-old identity retires. Region restoration, extraction and native composition follow
-the changed footprint while preserving the exact native raster coordinates.
-Separate scene/compatibility scratch avoids route-switch reallocations. This
-bridges the native formats without finished CPU poses. Intervening native content uses the retained
-GPU compatibility path. Shared world-depth occlusion and shadow receivers remain
-the next responsibility; current native painter order is preserved explicitly.
+The [direct unit scene contract](direct_unit_scene_contract.md) renders selected
+unit geometry into a bounded transparent attachment, then uses exact native
+composition above the map. This is the user's final ordering policy, including
+units behind tall neighboring map objects. Unit self-depth and pose-local shadows
+remain intact; map depth/provenance and per-unit map captures are no longer inputs.
+The existing pose owner reuses GPU vertices and shadow inputs, recycling matching
+allocations after their old identity retires. Clearing, extraction and composition
+follow the changed footprint while preserving exact native raster coordinates.
+Separate direct/compatibility scratch avoids route-switch reallocations. Oversized
+canvases use bounded resident GPU poses. No CPU body roundtrip or second presenter
+is introduced; native unit/UI order, action and visibility authority remain intact.
 
 Raster caches skip useful work but do not define world ownership or force the map
 into independently rebuilt mini-scenes. Choose viewport, regional or hybrid working

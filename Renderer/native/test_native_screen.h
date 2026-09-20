@@ -99,6 +99,7 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
     auto unit_cpu=reinterpret_cast<c3x_renderer_unit_draw_expanded_fn>(GetProcAddress(renderer_module,"c3x_renderer_unit_draw_expanded"));
     c3x_renderer_unit_v1 unit={};unit.struct_size=sizeof(unit);strcpy_s(unit.unit_key,"PRTO_Warrior");unit.unit_id=732;
     unit.action=1;unit.direction=3;unit.frame_count=16;unit.action_cursor=7;unit.sprite_width=unit.sprite_height=191;
+    unit.projection_scale_milli=demand.frame->tile_width*1000/128;
     unit.body_x=120;unit.body_y=160;unit.hour=12;unit.display_color_rgb=0x205bdd;unit.presentation_frequency=1000000;unit.presentation_time_ticks=1000000;
     {
         // Native animation also draws into separate packed scratch surfaces,
@@ -463,8 +464,13 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
         SetTextColor(label_dc,RGB(237,171,55));SetBkMode(label_dc,TRANSPARENT);SetTextAlign(label_dc,TA_LEFT|TA_TOP);
         c3x_native_text::State label_state; c3x_native_text::Raster label;
         verify(c3x_native_text::capture(label_dc,label_state)&&c3x_native_text::compile(label_dc,label_state,"Berlin: 6",9,label),"independent compiled label fixture");
-        for(int step=0;step<2;++step){
+        char const* placements[]={"mountain-behind","mountain-own","mountain-front","forest-behind","forest-own","forest-front","building-behind","building-own","building-front"};
+        for(int step=0;step<9;++step){
             if(step)for(auto& tile:live_tiles){tile.anchor_x-=13;tile.anchor_y+=7;}
+            int anchor_x=w/2+(step<3?-65:step<6?-192:45)*live_frame.tile_width/128-13*step;
+            int anchor_y=h/2+(step<6?(step%3==0?15:step%3==1?32:90):(step%3==0?-60:step%3==1?0:80))*live_frame.tile_width/128+7*step;
+            unit.body_x=anchor_x-unit.sprite_width*unit.projection_scale_milli/2000;
+            unit.body_y=anchor_y-unit.sprite_height*unit.projection_scale_milli/2000;
             c3x_renderer_output_v1 control={C3X_RENDERER_API_VERSION,sizeof(control)};
             verify(render_view(&live_request,&control)==C3X_RENDERER_RESULT_OK,"production native map independent CPU oracle");
             auto pixels=static_cast<unsigned const*>(control.bgra_pixels);expected.assign(pixels,pixels+std::size_t(w)*h);
@@ -479,6 +485,7 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
             verify(unit_cpu(&unit,unit_oracle.dc,unit_oracle.dc,expected_bounds)==C3X_RENDERER_RESULT_OK,"production owned unit CPU oracle");GdiFlush();
             verify(live(C3X_NATIVE_UNIT_DRAW,screen_surface,screen_surface,&unit,bounds,0)==1&&std::equal(bounds,bounds+4,expected_bounds),"production unit callback uses same map owner");
             for(unsigned n=0;n<expected.size();++n)expected[n]=static_cast<unsigned*>(unit_oracle.pixels)[n]|0xff000000u;
+            write_unit_layer_witness(expected,w,h,placements[step]);
             int label_x=63+step*17,label_y=39;
             verify(reinterpret_cast<int(__thiscall*)(JGL_Image*,int,int,char const*,int)>(screen_surface->vtable[46])(screen_surface,label_x,label_y,"Berlin: 6",9)==0,"actual native text hook");
             for(unsigned y=0;y<label.height;++y)for(unsigned x=0;x<label.width;++x){int dx=label_x+label.left+int(x),dy=label_y+label.top+int(y);

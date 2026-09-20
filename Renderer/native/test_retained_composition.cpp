@@ -93,15 +93,13 @@ int test_retained_composition(){
         retained.record(fill);retained.commit(final,full);retained.sample(1004,1000);assert(direct_draws==2);
         retained.clear();
         for(auto id:{map,native,detail})retained.create(id,w,h,id==native?format:Format::bgra32);
-        auto source=std::make_shared<c3x_renderer::UnitSceneSource>();
-        c3x_renderer::UnitSceneProvenance proof;proof.parts.push_back({full,source,10,20});
-        retained.source(map,live.texture(map),{},false,proof);
+        retained.source(map,live.texture(map));
         retained.record({Kind::quantize,native,map,full,full});
         retained.record({Kind::copy,detail,map,full,full});
         unsigned scene_draws=0;RetainedComposition::Direct scene_pass;scene_pass.animated=true;
         scene_pass.revision=[&](long long,long long){return phase;};
         scene_pass.draw=[&](Compositor& target,Command const& c){
-            auto p=target.scene(c.detail).select(c.area);assert(p.source==source&&p.x==15&&p.y==23);++scene_draws;
+            ++scene_draws; // Direct bodies need only the ordered native underlay.
             Command write={Kind::fill,c.detail,0,c.area,c.clip,0,0,0xff123456};return target.submit(&write,1);
         };
         retained.record({Kind::unit_over,native,0,part,part,0,0,0,native,detail,detail},scene_pass);

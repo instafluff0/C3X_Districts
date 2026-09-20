@@ -14,14 +14,12 @@
 
 #include "gpu_image_display.h"
 #include "gpu_unit_scene.h"
-#include "unit_scene_surface.h"
 namespace c3x_gpu_images {
 using Microsoft::WRL::ComPtr;
 struct Counts {std::uint64_t uploads=0,upload_bytes=0,commands=0,snapshots=0,resident_bytes=0;};
 inline void checked(HRESULT hr){if(FAILED(hr))throw std::runtime_error("GPU image operation failed");}
 class Compositor {
     struct Image {Id id=0;unsigned width=0,height=0;Format format=Format::rgb555;std::uint64_t revision=0;bool cpu_current=false,read_only=false;
-        c3x_renderer::UnitSceneProvenance scene;
         ComPtr<ID3D11Texture2D> texture;ComPtr<ID3D11ShaderResourceView> read;ComPtr<ID3D11UnorderedAccessView> write;};
     struct Constants {int area[4],offset[2];unsigned mode,color;};
     ID3D11Device* device;ID3D11DeviceContext* context;
@@ -108,19 +106,6 @@ class Compositor {
         auto x=std::int64_t(command.source_x)+r.left-command.area.left;
         auto y=std::int64_t(command.source_y)+r.top-command.area.top;
         return x>=0&&y>=0&&x+(r.right-r.left)<=s->width&&y+(r.bottom-r.top)<=s->height;
-    }
-    void scene_write(Command const& op,Rect r){
-        auto d=find(op.destination),s=find(op.source),detail=find(op.detail),sd=find(op.background_detail);
-        int dx=op.source_x-op.area.left,dy=op.source_y-op.area.top;
-        bool copy=op.kind==Kind::copy||op.kind==Kind::quantize;
-        bool pair=op.kind==Kind::native_image&&op.color==65536&&
-            op.source_width==op.area.right-op.area.left&&op.source_height==op.area.bottom-op.area.top;
-        // An expanded native word has lost the full-color map identity. The
-        // paired detail copy, not that quantized surrogate, proves eligibility.
-        auto source=s?s->scene:c3x_renderer::UnitSceneProvenance{};
-        auto full=sd?sd->scene:c3x_renderer::UnitSceneProvenance{};
-        if(copy||pair)d->scene.copy(source,r,dx,dy);else d->scene.erase(r);
-        if(detail){if(pair)detail->scene.copy(full,r,dx,dy);else detail->scene.erase(r);}
     }
     void unit_over(Command const& op,Rect r,c3x_renderer::UnitSceneSample const* scene=nullptr){
         if(!scene && !unit_shader){
@@ -419,10 +404,6 @@ Texture2D<uint> input_image:register(t0);Texture2D<uint> text_curves:register(t1
             checked(device->CreateShaderResourceView(texture,nullptr,&next.read));next.id=++serial;counters.resident_bytes+=bytes(next);image=std::move(next);return image.id;
         }return 0;
     }
-    c3x_renderer::UnitSceneProvenance scene(Id id)const{
-        for(auto const& image:images)if(image.id==id)return image.scene;return {};
-    }
-    void scene(Id id,c3x_renderer::UnitSceneProvenance value){if(auto image=find(id))image->scene=std::move(value);}
     template<class Visit> void visit_images(Visit visit)const{
         for(auto const& image:images)if(image.id)visit(image.id,image.width,image.height,image.format,image.texture.Get());
     }
@@ -433,7 +414,7 @@ Texture2D<uint> input_image:register(t0);Texture2D<uint> text_curves:register(t1
         if(image->revision>revision)return false;
         if(image->format!=Format::bgra32)for(std::size_t n=0;n<count;++n)if(pixels[n]>65535)return false;
         unbind();context->UpdateSubresource(image->texture.Get(),0,nullptr,pixels,image->width*4,0);
-        image->scene.parts.clear();image->revision=revision;image->cpu_current=true;++counters.uploads;counters.upload_bytes+=count*4;return true;
+        image->revision=revision;image->cpu_current=true;++counters.uploads;counters.upload_bytes+=count*4;return true;
     }
     // Validate the entire transaction and reserve overlap scratch before any draw.
     // Rejection leaves the destination unchanged; hardware errors must invalidate
@@ -473,9 +454,8 @@ Texture2D<uint> input_image:register(t0);Texture2D<uint> text_curves:register(t1
             auto changed=r;
             auto coverage=scene?&scene->coverage:footprint;
             if(op.kind==Kind::unit_over&&coverage&&(*coverage)[0]<(*coverage)[2]&&(*coverage)[1]<(*coverage)[3])
-                changed=c3x_renderer::UnitSceneProvenance::intersect(r,{op.area.left+(*coverage)[0],op.area.top+(*coverage)[1],
+                changed=intersection(r,{op.area.left+(*coverage)[0],op.area.top+(*coverage)[1],
                     op.area.left+(*coverage)[2],op.area.top+(*coverage)[3]});
-            scene_write(op,changed);
             if(op.kind==Kind::unit_over){if(changed.left<changed.right&&changed.top<changed.bottom)unit_over(op,changed,scene);continue;}
             if(op.kind==Kind::native_image){native_image(op,r);continue;}
             if(op.kind==Kind::native_blend){native_blend(op,r);continue;}
@@ -528,7 +508,7 @@ Texture2D<float4> input_image:register(t0);RWTexture2D<uint> output_image:regist
         Constants params={};params.offset[0]=x;params.offset[1]=y;
         context->UpdateSubresource(constants.Get(),0,nullptr,&params,0,0);auto cb=constants.Get();context->CSSetConstantBuffers(0,1,&cb);
         context->CSSetShader(import_shader.Get(),nullptr,0);context->Dispatch((destination->width+7)/8,(destination->height+7)/8,1);unbind();
-        destination->scene.parts.clear();destination->cpu_current=false;return true;
+        destination->cpu_current=false;return true;
     }
     bool display(Id id,ID3D11RenderTargetView* target,unsigned width,unsigned height,Rect area){
         auto image=find(id);if(!image||image->format!=Format::bgra32||image->width!=width||image->height!=height||!target)return false;

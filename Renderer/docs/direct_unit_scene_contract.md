@@ -6,29 +6,21 @@ visibility authority, screen anchors or presenter.
 
 ## Production path
 
-A published map carries an optional renderer-owned source for its raw HDR color
-and depth. Native map/detail copies propagate a bounded rectangular proof of that
-source and its coordinate translation. Other native drawing cuts the affected
-proof. A unit is eligible only when the clipped, conservative geometry-and-shadow
-coverage still belongs to one map source and coordinate translation. Empty canvas
-space does not remove provenance; the native erase canvas and clipping stay intact. Aliases and partial transfers use the before-image.
-Unknown provenance selects the resident compatibility route, never speculative
-replacement or a native 2D body.
+Milestone 2.3 follows the user's final composition decision: units draw above all
+map geometry, including a mountain or forest on a neighboring foreground tile.
+Native unit-to-unit and HUD/UI ordering remain authoritative. Terrain occlusion
+was explicitly withdrawn; tile coordinates do not determine unit/map ordering.
 
-The GPU owner captures only these required raw map rectangles while their exact source
-render generation remains valid. Captured color/depth survives subsequent camera
-preparation; a stale generation cannot produce a new capture. These optional
-inputs share a 64 MiB cache, including idle allocations. A region still leased by
-an operation cannot be overwritten. Idle captures reuse matching allocations;
-reclamation prefers idle storage before retiring a live optional attachment.
-Target/device resets invalidate these regions. Completed native-front pixels are
-owned separately. A later
-use must recapture from a valid generation or take the compatibility route.
-There is one shared working color/depth attachment, capped at 96 MiB and
-preserving each model's existing sample scale and MSAA. Oversized working sets
-or failed optional attachment admission use the compatibility path. No second full HDR viewport is retained.
+The GPU owner draws selected posed geometry into a transparent bounded attachment.
+It needs no raw map color/depth, source-generation lease or provenance transported
+through native image copies. Those superseded owners and the 64 MiB map-region
+capture cache have been removed. The existing compositor combines the contribution
+with the current native/full-color underlay in native command order.
+There is one shared working color/depth attachment, capped at 96 MiB and preserving
+each model's sample scale and MSAA. Oversized native canvases use the existing
+resident GPU compatibility path; this includes enlarged zoom when required.
 
-The unit pass restores and rasterizes only the selected footprint, preserving the
+The unit pass clears and rasterizes only the selected footprint, preserving the
 original native raster viewport. Moving that viewport to a cropped origin failed
 exact full-color parity by one channel level on the VM; it is not used. Extraction,
 hardware resolve and native composition cover the footprint rather than the erase
@@ -50,17 +42,11 @@ after their old cache identity retires, with updates ordered on the GPU owner.
 Failed optional admission draws from existing scratch. Reset/pack changes clear
 the cache. No finished direct-body image becomes a new cache owner.
 
-The current native painter-order rule is explicit: raw map depth occupies the far
-band and unit self-depth the near band. This preserves the preexisting body order;
-it is not shared world-space terrain/unit occlusion. Shadow receivers, overlapping
-unit composition and terrain/unit occlusion are milestone 2.3. The body materials,
-authored timing, owner colors, anchors and quality controls remain unchanged.
-
-Known visible limitation: units behind mountains or other tall foreground objects
-can appear on top (user report, 2026-09-19). Milestone 2.3 must replace the separate
-depth bands with compatible scene-depth occlusion and test front/behind and partial
-overlap through movement, animation and camera changes. Preserving 2.2's pixels
-must not turn this incorrect ordering into a permanent compatibility requirement.
+Unit self-depth uses its normal full range, independent of map depth. Existing
+pose-local self shadow and projected ground footprint retain their native
+composition. Units do not receive surrounding world shadows or cast onto arbitrary
+map geometry; no new receiver model is claimed. Body materials, authored timing,
+owner colors, anchors, visibility rules and quality controls remain unchanged.
 
 ## Retained frames and compatibility
 
@@ -71,17 +57,18 @@ composition. Native opaque writes retire covered operations. Directed/frozen pos
 follow captured native cursors; only eligible authored ambient loops advance.
 Retired selections cannot authorize a new draw.
 
-Intervening native drawing, overlap, unavailable raw samples or admission failure
-uses the established bounded GPU pose cache and exact native composition. Cached
-coverage avoids recompiling geometry merely to decide eligibility. This path remains necessary while native
-surfaces and ordered overlays participate. CPU access barriers retain explicit CPU
+Oversized working attachments or direct-execution admission failure use the
+established bounded GPU pose cache and exact native composition. Cached coverage
+avoids recompiling geometry merely to decide eligibility. This path remains
+necessary while native surfaces and ordered overlays participate. CPU access barriers retain explicit CPU
 3D delivery. Configuration-off and UI portraits retain their established behavior.
 `C3X_RENDERER_UNIT_SCENE_CONTROL=1` selects the preserved finished-resident-pose
 control for comparisons; it is not a required player setting.
 
 `unit-scene` reports direct draws, GPU-input builds/hits/allocation reuse, compatibility
-builds/hits, region captures/idle reuse/rejections/evictions, charged region and GPU-input
-bytes, finished-pose bytes, body readbacks and composition uploads. The standalone
+builds/hits, working-set rejections, charged working and GPU-input bytes (region bytes are
+zero; `map_draws` is the legacy trace name for direct body draws), finished-pose
+bytes, body readbacks and composition uploads. The standalone
 frame harness uses a bounded 32 MiB trace and reports dropped lines explicitly;
 `C3X_RENDERER_TRACE_MIB` overrides diagnostic capacity within 8–64 MiB. Complete workloads include map rendering, units, native UI
 and final transfer; isolated counts do not establish a speedup. Validation results

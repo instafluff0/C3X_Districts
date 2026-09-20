@@ -183,13 +183,6 @@ namespace c3x_native_images {
 struct ScreenSnapshot {RECT area{};int width=0,height=0;HWND window=nullptr;unsigned native_format=0;std::vector<unsigned short> pixels;};
 }
 bool native_transfer_test=false;unsigned native_transfers=0;
-#include "Renderer/native/render_core/scene_provenance.h"
-namespace c3x_renderer {
-struct UnitSceneRegion {struct {void* color=nullptr;} base;};
-struct UnitSceneSource {std::function<std::shared_ptr<UnitSceneRegion>(c3x_gpu_images::Rect)> capture;};
-using UnitSceneProvenance=render_core::SceneProvenance<UnitSceneSource,c3x_gpu_images::Rect>;
-}
-
 namespace c3x_gpu_images {
 struct NativePresenter {
  bool caller_thread(){return true;}void release_native(){}void reset(){}
@@ -199,7 +192,7 @@ struct NativePresenter {
  int view(){return unexpected_gpu();}int retained(){return unexpected_gpu();}int buffer(){return unexpected_gpu();}
  int present(){assert(native_transfer_test);++native_transfers;return C3X_RENDERER_RESULT_OK;}void gpu_written(){unexpected_gpu();}
 };
-struct Compositor {template<class... T> Id attach_source(T...){unexpected_gpu();return 0;} bool destroy(Id){return unexpected_gpu();}c3x_renderer::UnitSceneProvenance scene(Id){unexpected_gpu();return {};}template<class... T> bool submit(T...){return unexpected_gpu();}};
+struct Compositor {template<class... T> Id attach_source(T...){unexpected_gpu();return 0;} bool destroy(Id){return unexpected_gpu();}template<class... T> bool submit(T...){return unexpected_gpu();}};
 struct RetainedComposition {
  struct Direct {bool animated=false;std::function<std::uint64_t(long long,long long)> revision;std::function<bool(Compositor&,Command const&)> draw;};
  struct Texture {ID3D11Texture2D* Get()const{unexpected_gpu();return nullptr;}explicit operator bool()const{return false;}};
@@ -287,10 +280,8 @@ struct Bodies {
 };
 struct D3D11_RECT {int left,top,right,bottom;};
 struct RendererState {
-    std::uint64_t unit_scene_captures=0,unit_scene_reuses=0,unit_scene_rejections=0,unit_scene_evictions=0;
+    std::uint64_t unit_scene_rejections=0;
     struct {std::size_t bytes(){return 0;}} unit_scene_work;
-    std::shared_ptr<std::size_t> unit_scene_bytes=std::make_shared<std::size_t>(0);
-    std::shared_ptr<c3x_renderer::UnitSceneSource> unit_scene_source(){unexpected_gpu();return {};}
     template<class... T> bool draw_scene_unit(T&&...){return unexpected_gpu();}
     struct Terrain {bool configured=false;std::vector<std::uint8_t> dds;};
     std::array<Terrain,14> terrain_textures;

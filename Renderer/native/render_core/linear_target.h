@@ -73,8 +73,7 @@ Output PS(float4 position:SV_Position,uint sample:SV_SampleIndex){
  for(int i=0;i<metadata.x;++i)if(all(destination>=dirty[i].xy*2)&&all(destination<dirty[i].zw*2))valid=false;
  Output result;result.color=valid?scene.Load(p,sample):float4(0,0,0,0);
  result.depth=valid?scene_depth.Load(p,sample):1;
- if(metadata.z==1)result.depth=.5+.5*result.depth;
- if(metadata.z==2&&result.depth>=.5)result.color=0;return result;
+ if(metadata.z!=0){result.color=0;result.depth=1;}return result;
 })";
         auto compile=[&](char const* entry,char const* target,ID3DBlob** blob){
             ID3DBlob* errors=nullptr;HRESULT hr=D3DCompile(source,std::strlen(source),"scene_restore",nullptr,nullptr,
@@ -96,11 +95,11 @@ Output PS(float4 position:SV_Position,uint sample:SV_SampleIndex){
     bool draw(ID3D11DeviceContext* context,LinearTarget const& target,
               ID3D11ShaderResourceView* color,ID3D11ShaderResourceView* old_depth,
               int dx,int dy,std::vector<D3D11_RECT> const& dirty,
-              std::vector<D3D11_RECT> const* regions=nullptr,unsigned source_width=0,unsigned source_height=0,bool circular=false,bool painter_depth=false,int sample_scale=0,bool unit_coverage=false,D3D11_RECT const* clip=nullptr,int offset_scale=2){
+              std::vector<D3D11_RECT> const* regions=nullptr,unsigned source_width=0,unsigned source_height=0,bool circular=false,bool clear=false,int sample_scale=0,D3D11_RECT const* clip=nullptr,int offset_scale=2){
         if(dirty.size()>16)return false;
         struct Constants{int move_extent[4],metadata[4];D3D11_RECT dirty[16];} values={};
         values.move_extent[0]=dx*offset_scale;values.move_extent[1]=dy*offset_scale;
-        values.move_extent[2]=int(source_width?source_width:target.width);values.move_extent[3]=int(source_height?source_height:target.height);values.metadata[0]=int(dirty.size());values.metadata[1]=circular?1:0;values.metadata[2]=unit_coverage?2:painter_depth?1:0;values.metadata[3]=sample_scale;
+        values.move_extent[2]=int(source_width?source_width:target.width);values.move_extent[3]=int(source_height?source_height:target.height);values.metadata[0]=int(dirty.size());values.metadata[1]=circular?1:0;values.metadata[2]=clear?1:0;values.metadata[3]=sample_scale;
         std::copy(dirty.begin(),dirty.end(),values.dirty);context->UpdateSubresource(settings,0,nullptr,&values,0,0);
         context->OMSetRenderTargets(1,&target.target,target.depth);context->OMSetBlendState(nullptr,nullptr,0xffffffffu);
         context->OMSetDepthStencilState(depth,0);context->RSSetState(rasterizer);
