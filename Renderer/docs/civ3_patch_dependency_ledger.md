@@ -1,5 +1,18 @@
 # Civ III patch dependency ledger
 
+## M3.1 authoritative change publication
+
+The DLL copies/version-stamps existing map captures before replaceable camera
+work, then adopts coalesced changes into the existing retained world between jobs.
+Existing `Map_Renderer_m71_Draw_Tiles`, `Map_Renderer_m19_Draw_Tile_by_XY_and_Flags` and
+`Main_Screen_Form_move_camera` capture/camera boundaries remain authoritative;
+`Unit_tick_anim` and `Sprite_draw_unit_body_normal` / `_reduced` retain unit
+lifecycle capture. No native pointer enters the journal. Native suppression,
+configuration-off forwarding, picking and the synchronous camera barrier are
+unchanged. No ABI, injected source or executable-address change is required;
+`required_user_action: []`. Candidate verification does not stage, install or
+launch Civ III. Later M3 view/presentation work must preserve these contracts.
+
 ## M2.6 scheduling/reuse and M2.7 acceptance
 
 DLL-only retained material selections, collected pose preparation, shared body

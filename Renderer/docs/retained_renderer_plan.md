@@ -10,20 +10,88 @@ Full detail, authored animation and Civ III's gameplay/state authority remain
 unchanged. The zoom-owned map-overlay extension below is a planned rendering
 ownership change, not a second visibility, selection, or pathfinding system.
 
-**Current technical checkpoint: M2.6 scheduling/reuse and M2.7 automated acceptance
-are complete in the candidate.** M1 and M2.1–2.5 remain implemented.
+**Current technical checkpoint: M3.1 authoritative change publication is implemented
+and passes the complete native workload.** M1 and M2 automated acceptance remain
+complete. General nonblocking camera publication is still unfinished.
 Units stay above all map geometry. Native actions, visibility, controls and unit/UI
 ordering remain authoritative. Shore waves, water motion and reflections are on
 in every normal performance workload. The accepted water DLL remains staged;
-these DLL-only optimizations have not been staged, installed or run inside Civ III.
+the M2 optimizations and M3 candidate have not been staged, installed or run inside Civ III.
 [Architecture](renderer_architecture.md) owns the design;
 [validation](benchmark_workflow.md) owns measurement and acceptance.
 
-## M2.6 / M2.7 current handoff
+## M3.1 current handoff
+
+M2 commit `5d96597f` was pushed from Windows. Current M3.1 candidate:
+`native/build/m31-publication-reuse/C3XRenderer.dll`, SHA-256
+`c7810aa8c6f49ae7331aba9a7c175ed5d8f69ea24a2512344d4a2328cf44e074`.
+
+- Accepted native captures now publish copied, versioned authority before view
+  work. A bounded coalesced journal preserves edits through camera cancellation
+  and disjoint replacement; the existing retained world remains the content owner.
+- Full captures can remove objects; lightweight halos cannot erase omitted
+  content. Visibility revisions are separate from geometry. Old view sampling
+  cannot restore obsolete appearance or attach its meshes to newer revisions.
+  Map/viewer/configuration and device-reset recovery preserve lifecycle rules;
+  units retain the existing copied action/spawn/despawn owner.
+- Exact unchanged tile inputs and topology share their copied storage. Time and
+  identity still advance without rebuilding or adopting identical tile changes.
+  Admission is transactional and bounded to 16 MiB including staging. Failed
+  adoption suppresses new render output and preserves changes for a later retry.
+
+Complete native workload, dense coast at 1120×1192, all effects on, eight units,
+**384 requests per DLL**; independent animation adds **120 frames with 32 units**.
+Pushed M2 DLL versus final M3.1, GPU request mean / p95 (ms):
+
+| Workload | M2 control | M3.1 |
+| --- | --- | --- |
+| Stationary native demand | 12.16 / 16.23 | 11.71 / 16.23 |
+| Scrolling | 83.77 / 138.02 | 84.74 / 142.80 |
+| Local edit | 15.15 / 58.15 | 16.00 / 56.40 |
+| Independent 32-unit animation | 40.87 / 61.37 | 38.26 / 58.93 |
+
+The first implementation repeated tile-journal construction and measured 17.74 ms
+mean stationary demand; exact input reuse removes that cost. Final scrolling/edit
+means are 0.97 / 0.85 ms higher than the control, with mixed tails. This establishes
+correct durable publication while roughly preserving performance, not a general
+navigation gain or sustained-FPS claim. Animation desktop completion is
+50.52 → 49.35 ms; desktop completion is not physical scanout.
+
+All 120 animation intervals have zero authority-journal adoption, static-world
+builds/uploads, static-scene draws/readbacks, reflection builds, wave builds/uploads,
+water uploads and static-caster recollection. Material selections remain reused.
+The coastal control image is pixel-exact. Journal peak is **2.87 MiB**; sampled
+contiguous address-space headroom stays above **639 MiB**, not a transient bound.
+Receipts: `native/build/m31-native-control/` and `native/build/m31-native-reuse/`.
+
+Validation: `/W4 /WX` Windows candidate build; full dependency-selected suite
+**315 passed / two existing skips**, with its four Windows-only tests rerun with
+VM access; **18 focused tests** after the reuse refinement, including the actual
+worker's cancelled-edit/disjoint-view case, old-view isolation, exact reuse,
+failed-adoption recovery and device reset. Native composition/fallback,
+configuration-off and tactical controls pass. No injected source, ABI or native
+patch-table changes; `required_user_action: []`.
+
+Final candidate also passes 120 mixed-unit/fog frames (33.27 ms mean, 46.46 ms
+p95, all zero-static-work proofs), hidden/reveal and tactical lifecycle, wrapped
+reduced-zoom scrolling and local edits with exact cold parity. The 48-frame river
+witness preserves repeat/reset, fog freeze, reflection toggles and still-scroll
+parity; the separate still-water control retains the existing ten-pixel,
+one-channel-level rounding difference. Evidence: `native/build/m31-mixed8-reuse/`,
+`lab/out/integration/m31-{wrapped-scroll,local-edits,river-lifecycle}/` and the
+candidate's `integration-evidence.json` / `acceptance-summary.json`.
+
+**Next unfinished responsibility: M3.2 replaceable GPU camera requests**, followed
+by bounded preparation, atomic completed views and nonblocking native presentation
+with coherent fog, overlays and picking. The live native camera remains synchronous;
+its exact barrier must stay until those contracts are implemented. Cold jumps and
+strategic live-game acceptance remain pending.
+
+## M2 automated acceptance checkpoint (preserved)
 
 Candidate: `native/build/m26-unit-sharing-final/C3XRenderer.dll`, SHA-256
 `b7d2fad4213c1b75e51576a2687521f050784469f5494235953e013d4d319bf9`.
-Prior reflection/timer work was committed as `12d73104`; the user handles pushing.
+This checkpoint was committed as `5d96597f` and pushed before M3 work.
 
 Completed capabilities:
 
@@ -97,9 +165,9 @@ recur, but is not proved eliminated. Evidence: `native/build/m27-distant-final/`
 and `native/build/m27-distant-attribution/`. These completed-render/capture
 measurements include CPU delivery, not native presentation or physical scanout.
 
-**Next unfinished architectural responsibility: M3 coherent state publication and
-nonblocking camera/content updates**, including cold, evicted and invalidated
-views. Keep the current scene valid while useful work completes; never present
+**M2 boundary:** M3 owns coherent state publication and nonblocking camera/content
+updates, including cold, evicted and invalidated views; its current substep is
+recorded above. Keep the current scene valid while useful work completes; never present
 mismatched camera/visibility/picking. M4 owns a demonstrated cadence budget.
 Fast cold jumps, sustained 30/60 FPS and strategic live-game acceptance are not
 claimed by M2's independent-animation proof. No new native hook, ABI or patch-table
@@ -125,7 +193,7 @@ acceptance and staging of this optimization candidate remain pending.
 | Original responsibility | Implemented foundation | Remaining responsibility |
 | --- | --- | --- |
 | Persistent world/instances | Camera-independent content, shared assets/forest meshes, revisioned units, GPU-ready ground/terrain/objects, immutable mesh ranges/materials, bounded residency | Nonblocking cold/invalidated views; broader sharing where measured |
-| Local validity | Captured appearance/visibility dependencies, immutable map inputs, unit revision/despawn/hidden proofs | Coherent general authoritative change publication |
+| Local validity | Durable copied change publication, separate appearance/visibility revisions, immutable map inputs, unit revision/despawn/hidden proofs | Atomic completed-view eligibility through nonblocking native presentation |
 | Spatial selection | World pass index and native/wrapped occurrences feed replacement static submissions directly | Broader spatial sharing where measured |
 | Compatible passes | Compatible static layers, shared material bindings, batched occurrence parameters/uploads, forest instancing, collected poses/shared body contributions, exact native composition | Additional compatible sharing guided by measured cost |
 | GPU reuse/output | Resident map color/depth, direct eligible unit geometry, incremental finishing and native composition | Reduce dynamic conversion, replay and full-map work |
@@ -199,6 +267,17 @@ Publish copied authoritative changes and exact view eligibility; refine mutation
 hooks only where needed. Prioritize current missing content, then nearby reusable
 meshes/instances/pass inputs, then selected future views/animation pixels. Preserve
 useful preparation across supersession without evicting the current working set.
+
+| Substep | Responsibility | Status |
+| --- | --- | --- |
+| 3.1 | Durable copied/versioned authoritative changes and lifecycle | Implemented; current handoff above |
+| 3.2 | Replaceable exact camera requests independent of durable changes | Next; extend the production GPU path |
+| 3.3 | Current-demand priority and bounded useful preparation | Pending |
+| 3.4 | Atomic pixels, coverage, transform, occurrences and complete identity | Pending |
+| 3.5 | Nonblocking native polling and honest pending-coverage policy | Pending |
+| 3.6 | Coherent overlays, interactions and picking | Pending |
+| 3.7 | Cancellation, GPU reset, reload, configuration-off and failure recovery | Pending across the new async path |
+| 3.8 | Navigation/edit/lifecycle acceptance, memory and latency proof | Pending |
 
 **Done:** ordinary scrolling/zoom across useful coverage avoids synchronous
 construction barriers; cold, evicted and invalidated destinations have bounded,

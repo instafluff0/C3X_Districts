@@ -14,6 +14,10 @@ public:
     struct Record {
         c3x_renderer_tile_v1 appearance={};
         std::uint64_t revision=0;
+        bool authoritative=false;
+        std::uint64_t visibility_revision=0;
+        unsigned visibility_flags=0,visibility_mask=0,tile_visibility=0;
+        int fog_status=0;
         ContentHandle compiled;
         // Bounded projection variants borrow the same resident content owner.
         ContentHandle compiled_views[3]={};
@@ -34,7 +38,44 @@ private:
     std::uint64_t serial=0,epoch=0;
     int width=0,height=0;
     bool wrap_x=false,wrap_y=false,valid=false;
+    bool published=false;
+    std::uint64_t configuration=0;
+    c3x_renderer_i64 map_epoch=0,viewer_epoch=0;
 public:
+    // Called only by the render owner between jobs. Camera cancellation cannot
+    // discard these updates; selected observations remain a separate concern.
+    bool publication_scope(c3x_renderer_frame_v1 const& frame,
+            c3x_renderer_camera_identity_v1 const& identity,std::uint64_t config) {
+        bool changed=!published || configuration!=config || map_epoch!=identity.map_epoch ||
+            viewer_epoch!=identity.viewer_epoch || width!=frame.world_width_tiles || height!=frame.world_height_tiles ||
+            wrap_x!=(frame.world_wrap_x!=0) || wrap_y!=(frame.world_wrap_y!=0);
+        if(changed){records.clear();observations.clear();valid=false;}
+        published=true;configuration=config;map_epoch=identity.map_epoch;viewer_epoch=identity.viewer_epoch;
+        width=frame.world_width_tiles;height=frame.world_height_tiles;
+        wrap_x=frame.world_wrap_x!=0;wrap_y=frame.world_wrap_y!=0;return changed;
+    }
+    bool publish(c3x_renderer_tile_v1 const& tile,bool& changed) {
+        auto id=key(tile.tile_x,tile.tile_y);auto found=records.find(id);
+        if(found==records.end()){
+            if(records.size()==record_limit)return false;
+            found=records.try_emplace(id).first;
+        }
+        auto& record=found->second;auto next=content(tile);
+        bool full=(tile.tile_flags&(C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_PREFETCH))!=0;
+        if(full && (!record.revision || std::memcmp(&next,&record.appearance,sizeof(next)))){
+            if(serial==UINT64_MAX)return false;
+            record.appearance=next;record.revision=++serial;record.compiled={};
+            for(auto& variant:record.compiled_views)variant={};changed=true;
+        }
+        auto flags=tile.tile_flags&C3X_RENDERER_TILE_VISIBILITY_BITS;
+        if(!record.visibility_revision || record.visibility_flags!=flags || record.visibility_mask!=tile.visibility_mask ||
+            record.tile_visibility!=tile.tile_visibility || record.fog_status!=tile.fog_status){
+            if(serial==UINT64_MAX)return false;
+            record.visibility_flags=flags;record.visibility_mask=tile.visibility_mask;
+            record.tile_visibility=tile.tile_visibility;record.fog_status=tile.fog_status;record.visibility_revision=++serial;
+        }
+        if(full)record.authoritative=true;return bytes()<=budget;
+    }
     std::uint64_t key(int x,int y) const {
         auto canonical=[](int value,int extent,bool wraps){
             if(!wraps || extent<=0)return value;
@@ -67,7 +108,10 @@ public:
         valid=false;
         if(frame.tile_count>occurrence_limit || (frame.tile_count && !frame.tiles))return false;
         if(width!=frame.world_width_tiles || height!=frame.world_height_tiles ||
-           wrap_x!=(frame.world_wrap_x!=0) || wrap_y!=(frame.world_wrap_y!=0)){records.clear();observations.clear();}
+           wrap_x!=(frame.world_wrap_x!=0) || wrap_y!=(frame.world_wrap_y!=0)){
+            if(published)return false; // An old view cannot replace the published world.
+            records.clear();observations.clear();
+        }
         width=frame.world_width_tiles;height=frame.world_height_tiles;
         wrap_x=frame.world_wrap_x!=0;wrap_y=frame.world_wrap_y!=0;
         if(++epoch==0){observations.clear();++epoch;}
@@ -112,7 +156,7 @@ public:
         }
         if(full){
             auto& record=found->second;auto next=content(tile);
-            if(!record.revision || std::memcmp(&next,&record.appearance,sizeof(next))){
+            if(!record.authoritative && (!record.revision || std::memcmp(&next,&record.appearance,sizeof(next)))){
                 if(serial==~std::uint64_t(0))return false;
                 record.appearance=next;record.revision=++serial;record.compiled={};
                 for(auto& variant:record.compiled_views)variant={};
@@ -140,7 +184,8 @@ public:
     std::uint64_t appearance_revision(std::uint64_t id) const {
         auto observed=current(id);
         if(!observed || !(observed->occurrence.tile_flags&(C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_PREFETCH)))return 0;
-        auto record=retained(id);return record?record->revision:0;
+        auto record=retained(id);auto appearance=content(observed->occurrence);
+        return record && !std::memcmp(&appearance,&record->appearance,sizeof(appearance))?record->revision:0;
     }
     void attach(c3x_renderer_tile_v1 const& tile,ContentHandle handle) {
         if(!(tile.tile_flags&(C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_PREFETCH)))return;

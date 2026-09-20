@@ -37,6 +37,40 @@ bytes before release. Epoch exhaustion rejects further capture. The native
 publication owners still prove camera/view eligibility; this contract is not the
 milestone-3 general nonblocking publication change.
 
+M3.1 separates prospective authority from these displayed-frame leases.
+`render_core/scene_publication.h` copies accepted native map captures into a
+coalesced journal before their view requests enter the worker. Its monotonic
+sequence, configuration generation, map/viewer/visibility identity, immutable
+topology, environment and time survive camera replacement. Pending tile updates
+are keyed by canonical world identity; a newer disjoint view cannot discard an
+earlier edit. Full records can remove cities/resources. Lightweight halos update
+visibility without removing omitted object fields. Retained geometry revisions
+change only when normalized appearance changes; visibility has a separate revision.
+
+The render owner adopts the journal between jobs, before selecting further work.
+It is the only writer of persistent world records and their mesh handles. Older
+displayed inputs can still supply their own observations but cannot reverse newer
+authority or attach obsolete meshes. Existing unit capture/retirement remains the
+unit lifecycle authority; map/viewer/world-basis replacement also retires unit
+and dynamic-map selections. Configuration/reset advances the publication scope.
+
+The journal has a separate **16 MiB** budget including its transactional staging
+copy and conservative record/control overhead. It keeps at most the latest update
+per canonical tile and shares unchanged topology metadata. Exact copied tile
+inputs are also shared across unchanged captures; anchors are excluded and wrapped
+coordinates canonicalized for this authority comparison. Time/identity still advance, without allocating or
+adopting the same tile journal again. The last adopted batch remains available
+for device-reset recovery until different tile inputs replace it; pending changes
+are never cleared by that replacement. This is a bounded recent-capture lease,
+not an accumulating second world or event log. Capture rejection leaves accepted updates
+intact. Failed worker adoption retains the journal for retry after a later capture
+and prevents output publication; it neither spins nor terminates the worker.
+`scene-publication` reports sequence, configuration, adoption/change state,
+unchanged-tile reuse and tracked bytes. Whole-process address-space sampling
+remains the combined check.
+Neither this journal nor an old displayed lease grants new view/visibility
+eligibility. The existing synchronous native camera barrier is still required.
+
 Map inputs share a **16 MiB** admission budget, including vector capacity and
 record/control storage allowances. The maximum individual input is 8,192 tile
 records and 1,048,576 topology cells. Existing unit metadata remains bounded to

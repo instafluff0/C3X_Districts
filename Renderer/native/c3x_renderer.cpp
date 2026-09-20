@@ -53,6 +53,7 @@
 #include "render_core/terrain_query.h"
 #include "render_core/world_coast.h"
 #include "render_core/captured_scene.h"
+#include "render_core/scene_publication.h"
 #include "prepared_view_area.h"
 #include "render_core/geometry_draws.h"
 #include "render_core/draw_parameter_stream.h"
@@ -10193,6 +10194,7 @@ public:
     int render_gpu(c3x_renderer_camera_request_v1 const& request,c3x_renderer_gpu_frame_v1& view,c3x_renderer_output_v1& metadata){
         LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
         std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);
+        if(!publish_scene_capture(*request.frame,request.identity))return C3X_RENDERER_RESULT_ERROR;
         start_locked();drain_camera_locked(lock);advance_visual_clock();foreground_pending.store(true);
         if(!gpu_presentation){nearby.clear();retained_views.clear();gpu_publication.clear();}
         gpu_presentation=true;native_presentation=true;isolated_publication=true;camera_preview_enabled=false;
@@ -10389,6 +10391,7 @@ public:
         std::lock_guard<std::mutex> call_guard(call_mutex);
         std::unique_lock<std::mutex> lock(state_mutex);
         if(renderer_state.trace.buffered)QueryPerformanceCounter(&timing.locked);
+        if(!publish_scene_capture(frame,identity))return C3X_RENDERER_RESULT_ERROR;
         start_locked();
         if(gpu_presentation){
             drain_camera_locked(lock);gpu_presentation=false;gpu_publication.clear();
@@ -10526,6 +10529,7 @@ public:
                  same_camera_request(frame,identity,job_frame,job_camera_identity));
             if(same){ticket=camera_ticket;return C3X_RENDERER_RESULT_PENDING;}
         }
+        if(!publish_scene_capture(frame,identity))return C3X_RENDERER_RESULT_ERROR;
         return enqueue_camera_locked(frame,identity,ticket);
     }
 
@@ -11087,6 +11091,8 @@ private:
     long long visual_ticks=0,visual_last=0,visual_frequency=0;
     std::uint64_t visual_frames=0,visual_map_samples=0,visual_unit_samples=0,visual_pose_changes=0;
     c3x_renderer::render_core::DynamicSceneInputs dynamic_inputs;
+    c3x_renderer::render_core::ScenePublication scene_changes;
+    bool scene_changes_ok=true;
     c3x_renderer::render_core::UnitInstances::Selection job_unit_selection;
     RendererState & renderer_state;
     LARGE_INTEGER job_timing_begin={},job_timing_rendered={},job_timing_published={};
@@ -11225,6 +11231,17 @@ private:
     std::string job_scenario_path;
     std::string job_custom_path;
 
+    bool publish_scene_capture(c3x_renderer_frame_v1 const& frame,c3x_renderer_camera_identity_v1 const& identity){
+        auto prior=scene_changes.state();
+        if(!scene_changes.capture(frame,identity))return false;
+        if(prior && (prior->identity.map_epoch!=identity.map_epoch || prior->identity.viewer_epoch!=identity.viewer_epoch ||
+            prior->metadata.world_width_tiles!=frame.world_width_tiles || prior->metadata.world_height_tiles!=frame.world_height_tiles ||
+            prior->metadata.world_wrap_x!=frame.world_wrap_x || prior->metadata.world_wrap_y!=frame.world_wrap_y)){
+            dynamic_inputs.invalidate();unit_instances.clear();unit_pixels_queue.clear();
+        }
+        wake.notify_one();return true;
+    }
+
     void start_locked() {
         if (running)
             return;
@@ -11300,7 +11317,10 @@ private:
         if(command==Command::configure_pack || command==Command::configure_definitions || command==Command::reset){
             if(!gpu_presenter.caller_thread())return C3X_RENDERER_RESULT_BAD_ARGUMENT;gpu_presenter.release_native();native_screen_active=false;
         }
-        if(command==Command::configure_pack || command==Command::configure_definitions || command==Command::reset){unit_pixels_queue.clear();unit_instances.clear();unit_gpu_preparation=false;}
+        if(command==Command::configure_pack || command==Command::configure_definitions || command==Command::reset){
+            unit_pixels_queue.clear();unit_instances.clear();unit_gpu_preparation=false;
+            scene_changes.reset();scene_changes_ok=true;
+        }
         // Fresh demand supersedes unstarted prospective snapshots. The caller
         // registers the updated family after composition; completed views retain
         // their independent content proofs and are not discarded here.
@@ -11715,6 +11735,17 @@ private:
     void run() {
         std::unique_lock<std::mutex> lock(state_mutex);
         for (;;) {
+            // Adopt accepted content even when its camera ticket was cancelled.
+            // No frame helpers are active here; observations/mesh leases remain
+            // immutable while a render is running outside this gate.
+            if(scene_changes.ready()){
+                bool changed=false;scene_changes_ok=scene_changes.apply(renderer_state.topology_cache,changed);
+                if(changed)renderer_state.topology_cache.signature=0;
+                auto state=scene_changes.state();char detail[256];
+                std::snprintf(detail,sizeof(detail),"sequence=%llu configuration=%llu applied=%llu changed=%u ok=%u bytes=%zu peak_bytes=%zu tiles_reused=%llu",
+                    state->sequence,state->configuration,scene_changes.applied,unsigned(changed),unsigned(scene_changes_ok),scene_changes.bytes(),scene_changes.peak,scene_changes.tiles_reused);
+                renderer_state.trace.write("scene-publication",detail,true);
+            }
             // The next displayed map bucket is due before optional future unit
             // poses; the second ambient bucket can share the remaining window.
             if(!has_job && !stop_requested && !camera_paused && !camera_pending && unit_preparation_pending() &&
@@ -11771,7 +11802,7 @@ private:
                 lock.unlock();
                 c3x_renderer_output_v1 output={C3X_RENDERER_API_VERSION,sizeof(c3x_renderer_output_v1)};
                 int result=C3X_RENDERER_RESULT_ERROR;
-                if(camera_preview_enabled) {
+                if(camera_preview_enabled && scene_changes_ok) {
                     PublishedMapFrame preview;
                     bool available=false;
                     LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
@@ -11789,6 +11820,7 @@ private:
                     lock.unlock();
                 }
                 try {
+                    if(!scene_changes_ok)throw std::runtime_error("authoritative scene publication unavailable");
                     bool ok=false;
                     if(prepared_camera.output.bgra_pixels) {
                         // The existing ambient proof certifies identical full-detail
@@ -11960,7 +11992,8 @@ private:
                 }
                 continue;
             }
-            wake.wait(lock, [this] { return has_job || (camera_pending && !camera_paused) || (!camera_paused && (ahead_pending() || unit_preparation_pending())) || stop_requested; });
+            wake.wait(lock, [this] { return scene_changes.ready() || has_job || (camera_pending && !camera_paused) || (!camera_paused && (ahead_pending() || unit_preparation_pending())) || stop_requested; });
+            if(scene_changes.ready())continue;
             if(!has_job && !stop_requested && !camera_paused && (camera_pending || ahead_pending() || unit_preparation_pending()))continue;
             if (stop_requested && !has_job)
                 break;
@@ -11976,6 +12009,8 @@ private:
             PublishedMapFrame rendered_crop;
             bool rendered_area_ready=false;
             try {
+            if(!scene_changes_ok && (command==Command::render || command==Command::gpu_render))
+                throw std::runtime_error("authoritative scene publication unavailable");
             // Map and unit jobs borrow the device; only configuration/reset owns
             // native composition lifetimes. An ordinary CPU publication cannot
             // invalidate GPU UI/background handles held by the caller.

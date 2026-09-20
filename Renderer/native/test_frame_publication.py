@@ -156,6 +156,7 @@ int main(){
 #include "Renderer/native/render_core/unit_playback.h"
 #include "Renderer/native/render_core/unit_instances.h"
 #include "Renderer/native/render_core/dynamic_scene_input.h"
+#include "Renderer/native/render_core/scene_publication.h"
 #include "Renderer/native/render_core/cliff_placement.h"
 #include "Renderer/native/prepared_view_area.h"
 #include "Renderer/native/gpu_frame_api.h"
@@ -286,6 +287,7 @@ struct Bodies {
 struct TacticalGPU {template<class... T> ID3D11Texture2D* packed(T&&...){unexpected_gpu();return nullptr;}};
 struct D3D11_RECT {int left,top,right,bottom;};
 struct RendererState {
+    struct Scene : c3x_renderer::render_core::CapturedScene {std::uint64_t signature=0;} topology_cache;
     TacticalGPU tactical_gpu;
     std::uint64_t unit_scene_rejections=0;
     struct {std::size_t bytes(){return 0;}} unit_scene_work;
@@ -371,6 +373,27 @@ int main(){
     f.tile_count=1;f.tiles=&tile;f.world_topology=&topology;f.world_topology_count=1;
     f.presentation_time_ticks=1;
     c3x_renderer_output_v1 out={C3X_RENDERER_API_VERSION,sizeof(out)};
+    // Capture edits while a completed old view is held at publication. Replace
+    // and cancel their camera tickets before the worker can draw either one.
+    // A disjoint final view must still adopt both durable changes.
+    {
+        RendererState durable_state;RendererWorker durable(durable_state);
+        auto a=tile;a.tile_x=2;a.city_id=10;auto b=tile;b.tile_x=4;b.city_id=20;
+        auto capture=f;capture.tiles=&a;c3x_renderer_i64 first_capture=0,edited=0,final_capture=0;
+        hold_publication=true;auto copies=publication_entered.load();
+        assert(durable.camera_begin(capture,first_capture)==C3X_RENDERER_RESULT_PENDING);
+        until([&]{return publication_entered.load()>copies;});
+        a.city_id=-1;++capture.presentation_time_ticks;
+        assert(durable.camera_begin(capture,edited)==C3X_RENDERER_RESULT_PENDING);
+        assert(durable.camera_cancel(edited)==C3X_RENDERER_RESULT_OK);
+        capture.tiles=&b;++capture.presentation_time_ticks;
+        assert(durable.camera_begin(capture,final_capture)==C3X_RENDERER_RESULT_PENDING);
+        hold_publication=false;
+        until([&]{return durable.camera_poll(final_capture,out)==C3X_RENDERER_RESULT_OK;});
+        assert(durable_state.topology_cache.retained(durable_state.topology_cache.key(2,0))->appearance.city_id==-1);
+        assert(durable_state.topology_cache.retained(durable_state.topology_cache.key(4,0))->appearance.city_id==20);
+        assert(durable_state.entered==2); // cancelled edit was never a render job
+    }
     assert(worker.render(f,out)==C3X_RENDERER_RESULT_OK);
     c3x_renderer_i64 first=0,last=0;
     assert(worker.camera_begin(f,last)==C3X_RENDERER_RESULT_PENDING);

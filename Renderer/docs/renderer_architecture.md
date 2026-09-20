@@ -201,6 +201,19 @@ future pixels selectively. Existing queue boundaries and worker counts may chang
 when this removes duplication or waits; a generic job-system rewrite is not required.
 Bound queues, uploads and residency. More workers or CPU usage alone is not a win.
 
+M3.1 connects authoritative native captures to `ScenePublication`, a bounded,
+coalesced change journal inside the existing worker. Capture copies tile updates,
+visibility and immutable topology/environment/time metadata before enqueueing a
+view. The worker adopts accepted changes into the existing `CapturedScene`
+between jobs, including when the carrying camera request was cancelled. Full
+captures can remove objects; lightweight topology halos cannot. Historical view
+sampling updates observations without rolling back authoritative appearance or
+attaching old meshes to a newer revision. Configuration, map and viewer changes
+retire the previous scope. Unit spawn/action/despawn remains in `UnitInstances`.
+This replaces render-completion-driven world authority, not the native camera
+barrier: general replaceable GPU views and nonblocking native presentation remain
+the following M3 responsibilities.
+
 The renderer now owns independent visual scheduling through the existing worker
 and presenter. It does not request Civ III redraws. Native camera, visibility,
 action and UI changes still arrive through hooks/captures. General nonblocking
