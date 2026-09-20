@@ -701,19 +701,23 @@ int main(){
             "    void append_tile_geometry(", 1)[1].split("    c3x_renderer::fidelity::TerrainCompileInput terrain_compile_input(", 1)[0]
         program = r'''
 #include <array>
+#include "Renderer/native/render_core/water_coverage.h"
+#include "Renderer/native/render_core/world_topology.h"
 #include <cassert>
 #include <cstdint>
 #include "Renderer/native/render_core/resident_content.h"
 using Handle=c3x_renderer::render_core::ContentHandle;
 #include <unordered_map>
 #include <vector>
-constexpr int geometry_layer_count=2,C3X_RENDERER_TILE_RENDER=1;
+constexpr int geometry_layer_count=2,C3X_RENDERER_TILE_RENDER=1,C3X_RENDERER_TILE_VISIBLE=2;
+constexpr int geometry_water=2,geometry_river=3,geometry_shadow=4,geometry_route=5,geometry_feature=6,geometry_natural_terrain=7;
 struct Ref {int references=1;void AddRef(){++references;}void Release(){--references;}};
 struct CachedVertexChunk {
  CachedVertexChunk(Ref* b=nullptr,Ref* i=nullptr):buffer(b),indices(i){}
  CachedVertexChunk(CachedVertexChunk const&)=delete;
  CachedVertexChunk& operator=(CachedVertexChunk const&)=delete;
  CachedVertexChunk(CachedVertexChunk&&)=default;
+ struct {float low[3]={},high[3]={};} world_bounds;
  Ref *buffer=nullptr,*indices=nullptr;int translation_x=0,translation_y=0;struct {long left=0,top=0,right=0,bottom=0;} bounds;float natural_projection[4]={}; unsigned projection_kind=0;int source_tile_width=128;};
 #include "Renderer/native/render_core/geometry_draws.h"
 using GeometryDrawRecord=c3x_renderer::render_core::GeometryDrawRecord<CachedVertexChunk>;
@@ -729,6 +733,8 @@ struct CachedTileGeometry {
  std::array<std::vector<CachedVertexChunk>,geometry_layer_count> buffers;
 };
 struct State {
+ bool visibility_pass=true;
+ struct {c3x_renderer::render_core::WorldTopology value;auto const& world()const{return value;}} world_coast;
  std::size_t prefetched_geometry_bytes=20;std::uint64_t tile_geometry_epoch=5;
  std::unordered_map<int,CachedTileGeometry> tile_geometry_cache;
  c3x_renderer::render_core::ResidentContent<CachedTileGeometry> resident_content{4};

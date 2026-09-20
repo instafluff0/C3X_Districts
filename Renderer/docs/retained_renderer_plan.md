@@ -174,7 +174,10 @@ rasters, keeping the optical path out of stale world-image caches.
 
 Current candidate SHA-256:
 `3976b380f5ce0240b16c069e7f00118c8cc6643ffe3b40c22f7a8999f1782655`.
-The focused suite passes 125 tests / one skip. Day/night, fog/reveal, river
+The focused suite passes 125 tests / one skip. Integration covers 302 tests
+(300 pass / two skips after updating two extracted-source fixtures for the water
+fields; the repaired 26-test subset passes). Windows HDR, visibility and native
+CPU handoff checks pass. Day/night, fog/reveal, river
 playback, still-scroll/cold and wrapped-camera/cold witnesses pass. Repeat/fog and
 camera comparisons are exact; the independent split/static finish differs by
 one channel level at one pixel, within the existing rounding budget. Current
