@@ -505,6 +505,21 @@ int main(){
         assert(recreated.begin_gpu_camera(request,next)==C3X_RENDERER_RESULT_ERROR && next>replaced);
         assert(gpu_state.cancelled>=2);
     }
+    // Definition/pack reload joins held GPU work and retires every old ticket.
+    for(int reload=0;reload<2;++reload){
+        RendererState state;state.scene_surface_requested=state.city_profile=true;state.hold=true;
+        RendererWorker owner(state);c3x_renderer_camera_request_v1 request={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(request),&f,{1,2,3,4}};
+        c3x_renderer_i64 old=0,fresh=0;
+        assert(owner.begin_gpu_camera(request,old,17,901)==C3X_RENDERER_RESULT_PENDING);
+        until([&]{return state.entered.load()>0;});
+        assert((reload?owner.configure_pack(nullptr):owner.configure_definitions(nullptr,nullptr,nullptr,nullptr))==C3X_RENDERER_RESULT_OK);
+        c3x_renderer_gpu_camera_view_v1 view{};view.image.ticket=777;auto unchanged=view;
+        assert(owner.poll_gpu_camera_view(old,view)==C3X_RENDERER_RESULT_SUPERSEDED);
+        assert(!std::memcmp(&view,&unchanged,sizeof(view))&&state.cancelled>0);
+        assert(owner.begin_gpu_camera(request,fresh)==C3X_RENDERER_RESULT_PENDING&&fresh>old);
+        owner.reset_and_stop();
+        assert(owner.poll_gpu_camera_view(fresh,view)==C3X_RENDERER_RESULT_SUPERSEDED);
+    }
     assert(camera_notifications==0); // cancelled/superseded work sends no ready hint
     {
         RendererState notify_state;notify_state.scene_surface_requested=notify_state.city_profile=true;

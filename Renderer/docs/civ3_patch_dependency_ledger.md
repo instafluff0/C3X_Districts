@@ -1,5 +1,18 @@
 # Civ III patch dependency ledger
 
+## M3.7 asynchronous recovery
+
+`required_user_action: []`. No new CSV entries, signatures or addresses.
+Existing `Animator_update_display`, `Main_Screen_Form_move_camera`,
+`Main_Screen_Form_center_camera`, `Map_Renderer_m71_Draw_Tiles`, and audited JGL
+image hooks remain the boundaries. A shared injected dispatch helper settles an
+eligible pending camera before config-off native image access; scene unload
+cancels it. Viewer changes discard it. Unload/map drawing now honor failed DLL
+ownership barriers. Queue/copy/admission recovery and checked display draining
+remain in the DLL. Native Animator, selection centering and config-off arguments
+are unchanged. An irretrievable GPU-only native surface remains fail-closed;
+there is no stale CPU-pixel or custom-on native-terrain fallback.
+
 ## M3.6 native navigation boundary
 
 `required_user_action: []`. The user explicitly authorized needed GOG patch-table

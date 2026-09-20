@@ -22,7 +22,7 @@ DWORD GetCurrentThreadId(){return caller_thread;}
 using Id=unsigned long long;
 struct Rect {int left=0,top=0,right=0,bottom=0;};
 int creates=0,imports=0,inserts=0,flushes=0,polls=0,cancels=0;
-bool eligible_native=true,ready=false;
+bool eligible_native=true,ready=false,fail_begin=false,fail_poll=false,fail_adapter=false;
 long long next_ticket=0,worker_ticket=0;
 namespace c3x_gpu_images {
 struct WorkerClient {
@@ -34,7 +34,7 @@ struct WorkerClient {
 };
 }
 template<class Client> struct Adapter {
- Adapter(Client&,void*,void*,c3x_renderer_native_lifetime_fn){}
+ Adapter(Client&,void*,void*,c3x_renderer_native_lifetime_fn){if(fail_adapter)throw std::bad_alloc();}
  bool admit(void*){return true;}
  bool insert_map(void*,Id,Rect,int,int,int,int){++inserts;return true;}
 };
@@ -50,6 +50,7 @@ struct Owner {
  c3x_renderer_gpu_camera_poll_view_fn camera_poll=nullptr;
  c3x_renderer_camera_cancel_fn camera_cancel=nullptr;
  c3x_renderer_i64 camera_ticket=0;void* camera_image=nullptr;int camera_width=0,camera_height=0;
+ int route=0;void* route_image=nullptr;std::string route_text;
  void* bits=nullptr;void* release=nullptr;void* pending=nullptr;
  Rect area;int phase_x=0,phase_y=0;
  std::unique_ptr<c3x_gpu_images::WorkerClient> client;
@@ -59,9 +60,9 @@ struct Owner {
  static int field(void* p,unsigned offset){return *reinterpret_cast<int*>(static_cast<char*>(p)+offset);}
 ''' + methods.replace('CompositionOwner(', 'Owner(') + r'''
 };
-int begin(c3x_renderer_camera_request_v1 const*,long long* ticket){worker_ticket=*ticket=++next_ticket;return C3X_RENDERER_RESULT_PENDING;}
+int begin(c3x_renderer_camera_request_v1 const*,long long* ticket){if(fail_begin)throw std::bad_alloc();worker_ticket=*ticket=++next_ticket;return C3X_RENDERER_RESULT_PENDING;}
 int poll(long long ticket,c3x_renderer_gpu_camera_view_v1* out){
- ++polls;if(ticket!=worker_ticket)return C3X_RENDERER_RESULT_SUPERSEDED;
+ ++polls;if(fail_poll)throw std::bad_alloc();if(ticket!=worker_ticket)return C3X_RENDERER_RESULT_SUPERSEDED;
  if(!ready)return C3X_RENDERER_RESULT_PENDING;
  c3x_renderer_gpu_camera_view_v1 value={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(value)};
  value.image={sizeof(value)};value.image.ticket=ticket;value.image.session=1;value.image.map_image=123;
@@ -128,7 +129,9 @@ int main(){
  // Lifecycle changes after polling still prohibit commit and prepared reuse.
  assert(owner.navigate(C3X_NAV_REQUEST,image,target,&request)==C3X_RENDERER_RESULT_PENDING);
  assert(owner.navigate(C3X_NAV_POLL,image,displayed,nullptr)==C3X_RENDERER_RESULT_OK);
+ owner.route=7;owner.route_image=image;owner.route_text="old";
  owner.retire_image(C3X_NATIVE_DESTROY,image);assert(!owner.navigation.available());
+ assert(!owner.route&&!owner.route_image&&owner.route_text.empty());
  assert(owner.map(C3X_NATIVE_MAP_COMMIT,image,nullptr,nullptr)==C3X_RENDERER_RESULT_BAD_ARGUMENT);
  // Fresh capture checks include ordered anchors, visibility and topology.
  int exact_calls=0;owner.render=[](c3x_renderer_camera_request_v1 const*,c3x_renderer_gpu_frame_v1*,c3x_renderer_output_v1*)->int{return C3X_RENDERER_RESULT_ERROR;};
@@ -149,5 +152,94 @@ int main(){
  assert(owner.navigate(C3X_NAV_REQUEST,image,target,&request)==C3X_RENDERER_RESULT_PENDING);
  displayed.tile_width=160;
  assert(owner.navigate(C3X_NAV_POLL,image,displayed,nullptr)==C3X_RENDERER_RESULT_SUPERSEDED&&!owner.navigation.active());
+ displayed.tile_width=128;
+ // Lost lifetime (including cross-thread invalidation) also rejects barriers.
+ assert(owner.navigate(C3X_NAV_REQUEST,image,target,&request)==C3X_RENDERER_RESULT_PENDING);
+ eligible_native=false;displayed.camera_x=100;
+ assert(owner.navigate(C3X_NAV_BARRIER,image,displayed,nullptr)==C3X_RENDERER_RESULT_SUPERSEDED&&displayed.camera_x==100);
+ eligible_native=true;
+ // Exceptions retire unpublished input and recover the intended camera exactly.
+ assert(owner.navigate(C3X_NAV_REQUEST,image,target,&request)==C3X_RENDERER_RESULT_PENDING);
+ fail_begin=true;
+ try{owner.navigate(C3X_NAV_REQUEST,image,displayed,&request);assert(false);}catch(std::bad_alloc const&){}
+ assert(!owner.navigation.active()&&!owner.camera_ticket&&!owner.pending);fail_begin=false;
+ assert(owner.navigate(C3X_NAV_REQUEST,image,target,&request)==C3X_RENDERER_RESULT_PENDING);
+ fail_poll=true;
+ assert(owner.navigate(C3X_NAV_POLL,image,displayed,nullptr)==C3X_RENDERER_RESULT_OK&&displayed.camera_x==512);
+ assert(!owner.navigation.active()&&!owner.pending);fail_poll=false;
+ assert(owner.map(C3X_NATIVE_MAP_COMMIT,image,nullptr,nullptr)==C3X_RENDERER_RESULT_BAD_ARGUMENT);
+ // A partially constructed client must not survive failed adapter allocation.
+ Owner fresh(nullptr,nullptr,nullptr,nullptr,life,nullptr,nullptr);fresh.set_camera(begin,poll,cancel);
+ ready=true;fail_adapter=true;
+ assert(fresh.navigate(C3X_NAV_REQUEST,image,target,&request)==C3X_RENDERER_RESULT_PENDING);
+ assert(fresh.navigate(C3X_NAV_POLL,image,displayed,nullptr)==C3X_RENDERER_RESULT_OK);
+ assert(!fresh.client&&!fresh.adapter&&!fresh.pending&&!fresh.navigation.active());fail_adapter=false;
+ assert(fresh.navigate(C3X_NAV_REQUEST,image,target,&request)==C3X_RENDERER_RESULT_PENDING);
+ assert(fresh.navigate(C3X_NAV_POLL,image,displayed,nullptr)==C3X_RENDERER_RESULT_OK);
+ assert(fresh.map(C3X_NATIVE_MAP_PREPARE,image,&request,&output)==C3X_RENDERER_RESULT_OK);
+ assert(fresh.map(C3X_NATIVE_MAP_COMMIT,image,nullptr,nullptr)==C3X_RENDERER_RESULT_OK);
+}
+''')
+
+    def test_unload_and_shared_reset_barriers_do_not_fail_open(self):
+        injected=Path('injected_code.c').read_text()
+        unload='void unload_custom_renderer ()'+injected.split('void\nunload_custom_renderer ()',1)[1].split('\tis->custom_renderer_module = NULL;',1)[0]+'}'
+        renderer=Path('Renderer/native/c3x_renderer.cpp').read_text()
+        drain='bool drain_native_composition(){'+renderer.split('bool drain_native_composition(){',1)[1].split('\n}\n}',1)[0]+'\n}'
+        run_cpp(r'''
+#include <cassert>
+#include <stdexcept>
+#include "Renderer/native/gpu_frame_api.h"
+constexpr int IS_INIT_FAILED=2;
+bool fail=true;int drains=0,resets=0,frees=0,detaches=0,settled=-1;
+int image(int,void*,void*,void const*,void const*,unsigned){++drains;return fail?-1:0;}
+void reset(){++resets;}
+void FreeLibrary(void*){++frees;}
+void settle_custom_renderer_navigation(int action){settled=action;}
+void set_custom_renderer_native_probe(void*){++detaches;}
+struct State {
+ struct {bool enable_custom_rendering=false;}current_config;
+ int custom_renderer_init_state=1;
+ void* custom_renderer_module=this;
+ c3x_renderer_native_image_fn custom_renderer_native_image=image;
+ void (*custom_renderer_reset)()=reset;
+} state;auto is=&state;
+'''+unload+r'''
+struct Composition {void drain(){++drains;if(fail)throw std::runtime_error("blocked");}};
+struct Worker {int native_screen(void*){++resets;return fail?C3X_RENDERER_RESULT_ERROR:C3X_RENDERER_RESULT_OK;}};
+Composition* native_composition=nullptr;Worker worker;Worker* renderer_worker=&worker;
+void OutputDebugStringA(char const*){}
+'''+drain+r'''
+int main(){
+ unload_custom_renderer();assert(drains==1&&!resets&&!frees&&!detaches&&settled==C3X_NAV_BARRIER&&state.custom_renderer_init_state==IS_INIT_FAILED);
+ fail=false;unload_custom_renderer();assert(drains==2&&resets==1&&frees==1&&detaches==1);
+ state.current_config.enable_custom_rendering=true;unload_custom_renderer();assert(settled==C3X_NAV_DISCARD);
+ fail=true;native_composition=new Composition;
+ assert(!drain_native_composition()&&native_composition); // failed readback keeps owner alive
+ fail=false;assert(drain_native_composition()&&!native_composition);
+ fail=true;assert(!drain_native_composition()); // CPU-source-only display failure is not swallowed
+ fail=false;assert(drain_native_composition());
+}
+''')
+
+    def test_navigation_copy_failure_retires_worker_ticket(self):
+        run_cpp(r'''
+#include <cassert>
+#include <cstdlib>
+#include <new>
+#include "Renderer/native/native_navigation.h"
+bool fail_allocation=false;
+void* operator new(std::size_t n){if(fail_allocation){fail_allocation=false;throw std::bad_alloc();}auto p=std::malloc(n);if(!p)throw std::bad_alloc();return p;}
+void operator delete(void* p) noexcept{std::free(p);}
+struct Owner {
+ c3x_native_images::Navigation navigation;int cancellations=0;
+ int request_camera(void*,c3x_renderer_camera_request_v1 const&,long long& ticket){ticket=1;fail_allocation=true;return C3X_RENDERER_RESULT_PENDING;}
+ int map(int action,void*,void*,void*){assert(action==C3X_NATIVE_MAP_CANCEL);navigation.clear();++cancellations;return C3X_RENDERER_RESULT_OK;}
+};
+int main(){
+ Owner owner;c3x_renderer_tile_v1 tile{};c3x_renderer_frame_v1 frame{};frame.tiles=&tile;frame.tile_count=1;
+ c3x_renderer_camera_request_v1 request{};request.frame=&frame;custom_renderer_native_view view{};
+ try{owner.navigation.request(owner,&owner,view,request);assert(false);}catch(std::bad_alloc const&){}
+ assert(!owner.navigation.active()&&!owner.navigation.available()&&owner.cancellations==1);
 }
 ''')

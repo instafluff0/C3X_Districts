@@ -39,6 +39,8 @@ bool native_called=false;
 void __cdecl native_present(RECT*){native_called=true;}
 auto present_fn=&native_present;
 #define JGL_present_screen present_fn
+// The camera bridge itself is executed by test_native_view_identity.py.
+void settle_custom_renderer_navigation(int){}
 #include "build/native_probe_hooks.h"
 using Create=JGL_Image*(__thiscall*)(void*,void*,int);
 using Init=int(__thiscall*)(JGL_Image*,int,int,int,int);

@@ -38,18 +38,25 @@ public:
     template<class Owner> int request(Owner& owner,void* image,custom_renderer_native_view const& view,c3x_renderer_camera_request_v1 const& demand){
         if(active()&&!offered&&destination==image && !std::memcmp(&requested,&view,sizeof(view))&&matches(demand))
             return C3X_RENDERER_RESULT_PENDING; // Repeated edge-scroll demand must not starve the worker.
-        c3x_renderer_i64 next=0;
-        int result=owner.request_camera(image,demand,next);
-        if(result!=C3X_RENDERER_RESULT_PENDING)return result;
-        requested=view;captured=*demand.frame;identity=demand.identity;ticket=next;destination=image;offered=false;
-        tiles.clear();if(captured.tile_count)tiles.assign(captured.tiles,captured.tiles+captured.tile_count);
-        topology.clear();if(captured.world_topology_count)topology.assign(captured.world_topology,captured.world_topology+captured.world_topology_count);
-        captured.tiles=nullptr;captured.world_topology=nullptr;
-        return result;
+        try {
+            c3x_renderer_i64 next=0;
+            int result=owner.request_camera(image,demand,next);
+            if(result!=C3X_RENDERER_RESULT_PENDING)return result;
+            requested=view;captured=*demand.frame;identity=demand.identity;ticket=next;destination=image;offered=false;
+            tiles.clear();if(captured.tile_count)tiles.assign(captured.tiles,captured.tiles+captured.tile_count);
+            topology.clear();if(captured.world_topology_count)topology.assign(captured.world_topology,captured.world_topology+captured.world_topology_count);
+            captured.tiles=nullptr;captured.world_topology=nullptr;
+            return result;
+        }catch(...){
+            // A failed copy must not leave a ticket whose metadata describes
+            // incomplete vectors. The worker already owns its separate input.
+            owner.map(C3X_NATIVE_MAP_CANCEL,image,nullptr,nullptr);throw;
+        }
     }
+
     template<class Owner> int poll(Owner& owner,int action,void* image,custom_renderer_native_view& current){
         if(!active())return C3X_RENDERER_RESULT_SUPERSEDED;
-        if(action==C3X_NAV_DISCARD || image!=destination || !same_projection(current,requested)){
+        if(action==C3X_NAV_DISCARD || image!=destination || !same_projection(current,requested) || !owner.eligible(image,captured)){
             owner.map(C3X_NATIVE_MAP_CANCEL,image,nullptr,nullptr);return C3X_RENDERER_RESULT_SUPERSEDED;
         }
         auto next=requested;
@@ -58,7 +65,11 @@ public:
         }
         if(offered)return C3X_RENDERER_RESULT_SUPERSEDED;
         c3x_renderer_gpu_camera_view_v1 result={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(result)};
-        int code=owner.poll_camera(image,ticket,result);
+        int code=C3X_RENDERER_RESULT_DEVICE_ERROR;
+        try {code=owner.poll_camera(image,ticket,result);}catch(...){
+            // Allocation/import failure follows the same exact-redraw path as
+            // a rejected result. Never leave the caller polling a broken lease.
+        }
         if(code==C3X_RENDERER_RESULT_PENDING)return code;
         if(code==C3X_RENDERER_RESULT_OK){ready=result;offered=true;current=next;return code;}
         // Admission loss or supersession needs the exact native path at the

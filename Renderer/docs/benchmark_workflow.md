@@ -30,6 +30,23 @@ p99 from short runs. Detailed traces should be buffered outside timed work.
 Before claiming acceptance, verify full source/binary/assets identities before and
 after the run; quick metadata-only receipts remain provisional.
 
+## Async recovery witness
+
+`record_gpu_frame --native-recovery` adds cancellation, config-off camera handoff,
+reset while pending, and reset after readiness but before fresh-capture validation
+to the real JGL/GPU navigation fixture. Each retirement rejects stale COMMIT;
+a fresh authoritative request recreates and commits, and reset preserves the
+prior displayed pixels. Use this with `--atomic-camera-views` for the independent
+cold-pixel/coverage matrix. Keep the normal throughput run separate so recovery
+setup is not misreported as steady-state cost.
+
+The executable hook/owner tests inject copy, allocation, poll and readback/display
+handoff failures, plus viewer changes, retirement/address reuse and held-worker
+pack/definition reload. Failed ownership barriers must block DLL release and
+native drawing. These controlled failures do not emulate physical device removal
+with irretrievable GPU-only native surfaces; that remains a terminal ownership
+barrier, not a proven successful recovery. Live-game acceptance is separate.
+
 ## Meaningful checkpoints
 
 | Checkpoint | Evidence |

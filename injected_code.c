@@ -282,6 +282,7 @@ void rebuild_tile_animation_pcx_sprite_lookup ();
 void refresh_tile_animation_pcx_active_mask ();
 int pick_tile_animation_winner_for_tile (unsigned int * tile_mask);
 void unload_custom_renderer ();
+void settle_custom_renderer_navigation (int action);
 bool parse_tile_animation_hour_list (struct string_slice const * value, unsigned int * out_mask);
 bool parse_tile_animation_season_list (struct string_slice const * value, unsigned int * out_mask);
 struct tile_animation_config * get_tile_animation_for_effect (int effect_id);
@@ -19824,6 +19825,9 @@ custom_renderer_native_probe_on ()
 int
 translate_custom_renderer_native (int operation, JGL_Image * image, void * source, RECT * source_rect, RECT * destination_rect, unsigned color)
 {
+	// Config-off can first arrive through a native image call, before Animator.
+	if (! is->current_config.enable_custom_rendering)
+		settle_custom_renderer_navigation (C3X_NAV_BARRIER);
 	if (is->custom_renderer_native_lifetime != NULL)
 		is->custom_renderer_native_lifetime (operation, image, is->custom_renderer_native_operation);
 	// Surface admission comes from observed lifetime evidence and map demand.
@@ -27695,6 +27699,14 @@ log_custom_renderer_event (char const * stage, int result)
 void
 unload_custom_renderer ()
 {
+	settle_custom_renderer_navigation (is->current_config.enable_custom_rendering ? C3X_NAV_DISCARD : C3X_NAV_BARRIER);
+	// Keep hooks, module references and capture storage alive if GPU-only native
+	// pixels cannot be returned safely. A later call may retry the same barrier.
+	if (is->custom_renderer_native_image != NULL &&
+	    is->custom_renderer_native_image (C3X_NATIVE_IMAGE_DRAIN, NULL, NULL, NULL, NULL, 0) < 0) {
+		is->custom_renderer_init_state = IS_INIT_FAILED;
+		return;
+	}
 	set_custom_renderer_native_probe (NULL);
 	if ((is->custom_renderer_module != NULL) &&
 	    (is->custom_renderer_reset != NULL))
@@ -28082,8 +28094,7 @@ ensure_custom_renderer_loaded ()
 			log_custom_renderer_event ("definition-start", C3X_RENDERER_RESULT_OK);
 			if (is->custom_renderer_set_definition_paths (is->mod_rel_dir, default_path, scenario_path, custom_path) != C3X_RENDERER_RESULT_OK) {
 				log_custom_renderer_event ("definition-load", C3X_RENDERER_RESULT_ERROR);
-				FreeLibrary (is->custom_renderer_module);
-				is->custom_renderer_module = NULL;
+				unload_custom_renderer ();
 				is->custom_renderer_init_state = IS_INIT_FAILED;
 				return false;
 			}
@@ -30623,6 +30634,19 @@ apply_custom_renderer_native_view (struct custom_renderer_native_view * view)
     p_main_screen_form->TileY_Min = view->min_y; p_main_screen_form->TileY_Max = view->max_y;
 }
 
+void
+settle_custom_renderer_navigation (int action)
+{
+    if (is->custom_renderer_navigation == NULL) return;
+    Map_Renderer * renderer = &p_bic_data->Map.Renderer;
+    struct custom_renderer_native_view view = custom_renderer_native_view (renderer);
+    if (p_main_screen_form->Player_CivID != is->custom_renderer_viewer_civ_id) action = C3X_NAV_DISCARD;
+    if (is->custom_renderer_navigation (action, ((PCX_Image *)renderer)->JGL.Image, &view, NULL) == C3X_RENDERER_RESULT_OK) {
+        apply_custom_renderer_native_view (&view);
+        *(bool *)(p_main_screen_form->animator.field_18E4 + 10) = true;
+    }
+}
+
 #ifdef Main_Screen_Form_center_camera
 void __fastcall
 patch_Main_Screen_Form_center_camera (Main_Screen_Form * this, int edx, int x, int y, int reason, bool update_bounds, bool force)
@@ -30687,16 +30711,9 @@ patch_Main_Screen_Form_move_camera (Main_Screen_Form * this, int edx, int x, int
 void __fastcall
 patch_Animator_update_display (Animator * this, int edx)
 {
-    if (this == &p_main_screen_form->animator && is->custom_renderer_navigation != NULL) {
-        Map_Renderer * renderer = &p_bic_data->Map.Renderer;
-        struct custom_renderer_native_view view = custom_renderer_native_view (renderer);
-        int action = is->current_config.enable_custom_rendering && custom_renderer_animator_idle (this) ?
-            C3X_NAV_POLL : C3X_NAV_BARRIER;
-        if (is->custom_renderer_navigation (action, ((PCX_Image *)renderer)->JGL.Image, &view, NULL) == C3X_RENDERER_RESULT_OK) {
-            apply_custom_renderer_native_view (&view);
-            *(bool *)(this->field_18E4 + 10) = true;
-        }
-    }
+    if (this == &p_main_screen_form->animator)
+        settle_custom_renderer_navigation (is->current_config.enable_custom_rendering && custom_renderer_animator_idle (this) ?
+            C3X_NAV_POLL : C3X_NAV_BARRIER);
     // Always run the native director; pending may only take its own early return.
     Animator_update_display (this, __);
 }
@@ -30726,6 +30743,7 @@ patch_Map_Renderer_m71_Draw_Tiles (Map_Renderer * this, int edx, int param_1, in
 		if ((is->custom_renderer_module != NULL) || (is->custom_renderer_tiles != NULL) ||
 		    (is->custom_renderer_init_state != IS_UNINITED))
 			unload_custom_renderer ();
+		if (is->custom_renderer_native_image != NULL) return; // Failed ownership handoff: no stale native replay.
 		Map_Renderer_m71_Draw_Tiles (this, __, param_1, param_2, param_3);
 		return;
 	}

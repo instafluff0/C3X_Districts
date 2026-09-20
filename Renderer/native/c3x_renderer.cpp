@@ -12553,9 +12553,13 @@ bool valid_frame(c3x_renderer_frame_v1 const * frame, c3x_renderer_output_v1 con
 namespace {
 c3x_native_images::CompositionOwner* native_composition=nullptr;
 bool drain_native_composition(){
-    if(!native_composition)return true;
-    try {native_composition->drain();delete native_composition;native_composition=nullptr;return true;}
-    catch(std::exception const& e){OutputDebugStringA(e.what());return false;}
+    try {
+        if(native_composition){native_composition->drain();delete native_composition;native_composition=nullptr;}
+        // CPU-source presentation can exist without a CompositionOwner. Its
+        // retained window must also survive reset/reload/config-off exactly.
+        if(renderer_worker && renderer_worker->native_screen(nullptr)!=C3X_RENDERER_RESULT_OK)return false;
+        return true;
+    }catch(std::exception const& e){OutputDebugStringA(e.what());return false;}
 }
 }
 
@@ -12895,7 +12899,7 @@ extern "C" __declspec(dllexport) int c3x_renderer_native_image(int operation,voi
         catch(std::exception const& e){OutputDebugStringA(e.what());return -1;}
     }
     if(operation!=C3X_NATIVE_IMAGE_PRESENT && operation!=C3X_NATIVE_IMAGE_DRAIN)return 0;
-    if(operation==C3X_NATIVE_IMAGE_DRAIN){if(renderer_worker)try{renderer_worker->native_screen(nullptr);}catch(...){}return 0;}
+    if(operation==C3X_NATIVE_IMAGE_DRAIN)return 0; // The shared barrier already preserved the window.
     LARGE_INTEGER began={},captured={},ended={},frequency={};QueryPerformanceCounter(&began);captured=began;
     bool presented=false;std::uint64_t uploaded=0;
     try {

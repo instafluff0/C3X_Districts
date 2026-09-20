@@ -216,7 +216,7 @@ struct State {
  bool custom_renderer_async_enabled=true,custom_renderer_display_valid=false,custom_renderer_nearby_preparing=false;
  bool custom_renderer_draw_in_progress=false,custom_renderer_async_drawing=false,custom_renderer_async_presented=false;
  bool custom_renderer_capture_only=false,custom_renderer_capture_failed=false,custom_renderer_capture_world_topology=true;
- int custom_renderer_zoom_tile_width=128,custom_renderer_tile_count=0;
+ int custom_renderer_zoom_tile_width=128,custom_renderer_tile_count=0,custom_renderer_viewer_civ_id=2;
  long long custom_renderer_zoom_translate_x_fp=0,custom_renderer_zoom_translate_y_fp=0;
  long long custom_renderer_camera_ticket=0,custom_renderer_display_clock=0;
  long long custom_renderer_map_epoch=1,custom_renderer_viewer_epoch=2,custom_renderer_visibility_revision=3;
@@ -382,6 +382,18 @@ int main(){
  assert(!nav_pending&&screen.camera_x==68&&screen.camera_y==4064&&barriers==2);
  unsigned before=captures;patch_Main_Screen_Form_move_camera(&screen,0,200,100,1,false);
  assert(screen.camera_x==200&&captures==before);
+ // Config-off observed before Animator still settles the normalized intent.
+ state.current_config.enable_custom_rendering=true;state.custom_renderer_display_valid=true;
+ screen.animator.fields[10]=0;state.custom_renderer_display_view=custom_renderer_native_view(&bic.Map.Renderer);
+ patch_Main_Screen_Form_move_camera(&screen,0,300,100,1,false);assert(nav_pending);
+ state.current_config.enable_custom_rendering=false;settle_custom_renderer_navigation(C3X_NAV_BARRIER);
+ assert(!nav_pending&&screen.camera_x==300&&screen.animator.fields[10]);
+ // A viewer switch must not carry the previous viewer's requested camera.
+ state.current_config.enable_custom_rendering=true;screen.animator.fields[10]=0;
+ state.custom_renderer_display_view=custom_renderer_native_view(&bic.Map.Renderer);
+ patch_Main_Screen_Form_move_camera(&screen,0,400,100,1,false);assert(nav_pending);
+ ++screen.Player_CivID;nav_ready=true;patch_Animator_update_display(&screen.animator,0);
+ assert(!nav_pending&&screen.camera_x==300);
 }
 '''
         run_cpp(enabled)

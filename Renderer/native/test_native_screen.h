@@ -672,6 +672,36 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
             expected=baseline;unit=original_unit;
             std::puts("PASS tactical native composition: scoped native route/turn capture, under-unit marker, clipped grid, exact cancellation/grid-off, no terrain or unit content rebuild");
         }
+        if(GetEnvironmentVariableA("C3X_RENDERER_NATIVE_RECOVERY_TEST",nullptr,0)){
+            custom_renderer_native_view current={};current.width=w;current.height=h;
+            current.tile_width=current.native_width=live_frame.tile_width;
+            auto target=current;target.camera_x=57;target.min_x=3;
+            for(int recovery=0;recovery<4;++recovery){
+                current.camera_x=0;current.min_x=0;
+                verify(navigate(C3X_NAV_REQUEST,live_images[0],&target,&live_request)==C3X_RENDERER_RESULT_PENDING,"recovery begins copied native demand");
+                if(recovery==0){
+                    verify(navigate(C3X_NAV_DISCARD,live_images[0],&current,nullptr)==C3X_RENDERER_RESULT_SUPERSEDED&&!current.camera_x,"explicit cancellation keeps displayed camera");
+                }else if(recovery==1){
+                    verify(navigate(C3X_NAV_BARRIER,live_images[0],&current,nullptr)==C3X_RENDERER_RESULT_OK&&current.camera_x==57,"config-off barrier returns requested camera without coverage");
+                }else{
+                    if(recovery==3){
+                        int code=C3X_RENDERER_RESULT_PENDING;auto deadline=GetTickCount64()+30000;
+                        while(code==C3X_RENDERER_RESULT_PENDING&&GetTickCount64()<deadline){code=navigate(C3X_NAV_POLL,live_images[0],&current,nullptr);if(code==C3X_RENDERER_RESULT_PENDING)Sleep(1);}
+                        verify(code==C3X_RENDERER_RESULT_OK&&current.camera_x==57,"ready-but-unvalidated recovery point");
+                    }
+                    auto before=current;reset();
+                    verify(navigate(C3X_NAV_POLL,live_images[0],&current,nullptr)==C3X_RENDERER_RESULT_SUPERSEDED&&!std::memcmp(&before,&current,sizeof(current)),"reset cannot revive pending or ready camera");
+                    live_active=false;preserve_gdi_display=true;capture_display(expected);preserve_gdi_display=false;live_active=true;
+                }
+                verify(exact_native_map(C3X_NATIVE_MAP_COMMIT,live_images[0],nullptr,nullptr)==C3X_RENDERER_RESULT_BAD_ARGUMENT,"retired native transaction cannot commit");
+                // A fresh authoritative request recovers using the same native
+                // surfaces; worker tickets/sessions cannot alias the old view.
+                c3x_renderer_camera_view_v1 rebuilt={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(rebuilt)};
+                verify(exact_native_map(C3X_NATIVE_MAP_PREPARE,live_images[0],&live_request,&rebuilt)==C3X_RENDERER_RESULT_OK,"fresh capture recovers after retirement");
+                verify(exact_native_map(C3X_NATIVE_MAP_COMMIT,live_images[0],nullptr,nullptr)==C3X_RENDERER_RESULT_OK,"fresh recovery commit");
+            }
+            std::puts("PASS native async recovery: cases=4 cancellation=1 config_off_barrier=1 pending_reset=1 ready_reset=1 recreated=1 stale_commit=0");
+        }
         // Reset must drain before the renderer retires its image session, while
         // the native surfaces and final window still exist.
         reset();live_active=false;preserve_gdi_display=true;capture_display(expected);preserve_gdi_display=false;

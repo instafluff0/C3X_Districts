@@ -299,6 +299,26 @@ One copied comparison snapshot lives in the DLL until adoption or retirement.
 Retries use the existing native Animator cadence; this is not a claim that every
 camera operation is nonblocking or that native input-to-display is below 66 ms.
 
+M3.7 uses the same transaction for retirement and recovery. Failed input copies
+cancel their worker ticket before returning; failed poll/import/admission advances
+only the intended native camera and grants no coverage, forcing a fresh exact
+render. Allocation of the caller client/adapter is atomic. Lifetime, projection
+and viewer changes discard intent instead of applying it to a different scene.
+Configuration-off returns an eligible queued destination before the first native
+image operation or unload, even if Animator has not run yet. Reload discards it.
+
+Reset, pack/definition reload and config-off share a checked native/display
+handoff. They retire unpublished navigation and tactical capture before attempting
+to flush/read back owned native images and preserve the actual displayed window.
+This includes CPU-source presentation without a map composition owner. Failure
+keeps the necessary DLL references, hooks and ownership alive, and marks a failed
+scene unload unavailable; native map drawing
+cannot resume through stale CPU storage. A successful retry completes teardown,
+and only a fresh capture can publish after recreation. Recoverable allocation,
+cancellation and reset are distinct from physical device removal: if GPU-only
+native pixels are irretrievable, the established terminal barrier remains closed.
+It cannot promise lossless recovery without rebuilding those native surfaces.
+
 Pending grants **no coverage for the requested view**. Output and native pixels
 remain unchanged; COMMIT is rejected until a successful poll and caller ownership
 validation. Old pixels are not certified for the new camera. The caller must defer

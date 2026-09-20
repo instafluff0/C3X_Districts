@@ -40,6 +40,7 @@ class CompositionOwner {
     void release_window(){c3x_renderer_gpu_present_v1 r={sizeof(r)};r.action=2;
         if(present(&r)!=C3X_RENDERER_RESULT_OK)throw std::runtime_error("native display handoff failed");}
     static int field(void* p,unsigned offset){return *reinterpret_cast<int*>(static_cast<char*>(p)+offset);}
+public:
     bool eligible(void* image,c3x_renderer_frame_v1 const& demand){
         return lifetime(C3X_NATIVE_MAP,image,0) && field(image,0x24)==16 && !field(image,0x4c4) && !field(image,0x4c8) &&
             field(image,0x38)==demand.target_width && field(image,0x3c)==demand.target_height;
@@ -47,8 +48,9 @@ class CompositionOwner {
     int prepare_image(void* image,c3x_renderer_gpu_frame_v1 const& next,c3x_renderer_output_v1 const& output,int x,int y){
         if(client){if(next.ticket!=frame.ticket || next.session!=frame.session)client->advance(next);}
         else {
-            client=std::make_unique<c3x_gpu_images::WorkerClient>(images,next);
-            adapter=std::make_unique<Adapter<c3x_gpu_images::WorkerClient>>(*client,bits,release,lifetime);
+            auto next_client=std::make_unique<c3x_gpu_images::WorkerClient>(images,next);
+            auto next_adapter=std::make_unique<Adapter<c3x_gpu_images::WorkerClient>>(*next_client,bits,release,lifetime);
+            client=std::move(next_client);adapter=std::move(next_adapter);
         }
         frame=next;
         if(!adapter->admit(image))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
@@ -101,6 +103,7 @@ public:
             camera_ticket=0;camera_image=nullptr;navigation.clear();
         }
         if(!image || image==pending){pending=nullptr;navigation.clear();}
+        if(!image || image==route_image){route={};route_image=nullptr;route_text.clear();}
     }
     void set_tactical(std::function<int(Tactical const&,c3x_renderer_gpu_unit_v1 const&)> draw){tactical=std::move(draw);}
     bool active()const{return adapter!=nullptr;}
@@ -200,6 +203,13 @@ public:
         }
         return adapter->operation(op,image,source,from,to,color);
     }
-    void drain(){check_thread();navigation.clear();if(camera_ticket&&camera_cancel)camera_cancel(camera_ticket);camera_ticket=0;camera_image=nullptr;pending=nullptr;if(client){client->flush();release_window();adapter->drain();adapter.reset();client.reset();}}
+    void drain(){
+        check_thread();
+        // Retire all unpublished state even if preserving the native display
+        // fails. Retry may release ownership, never revive the cancelled view.
+        map(C3X_NATIVE_MAP_CANCEL,nullptr,nullptr,nullptr);
+        route={};route_image=nullptr;route_text.clear();
+        if(client){client->flush();release_window();adapter->drain();adapter.reset();client.reset();}
+    }
 };
 }
