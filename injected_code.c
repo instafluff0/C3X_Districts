@@ -20242,7 +20242,15 @@ patch_JGL_Graphsy_present (void * graph, int edx, RECT * rect)
         is->custom_renderer_native_image (C3X_NATIVE_VISUAL_POLICY, NULL, NULL, NULL, NULL, animate ? 1 : 0);
     }
 	if (translate_custom_renderer_native (C3X_NATIVE_IMAGE_PRESENT, image, graph, rect, NULL, 0)) return 0;
-	return ((int (__fastcall *) (void *, int, RECT *))is->custom_renderer_jgl_present_original) (graph, __, rect);
+	// JGL 0x3baa0 borrows/releases the screen DC inside this scalar-returning
+	// transfer. Keep startup/config-off presentation from looking like a game
+	// DC escape; the ordinary DC ownership barrier still runs before BitBlt.
+	bool observing = is->custom_renderer_native_lifetime != NULL && is->custom_renderer_probe_thread_id () == is->custom_renderer_probe_owner;
+	int previous = is->custom_renderer_native_operation;
+	if (observing) is->custom_renderer_native_operation = C3X_NATIVE_IMAGE_PRESENT;
+	int result = ((int (__fastcall *) (void *, int, RECT *))is->custom_renderer_jgl_present_original) (graph, __, rect);
+	if (observing) is->custom_renderer_native_operation = previous;
+	return result;
 }
 
 int __fastcall

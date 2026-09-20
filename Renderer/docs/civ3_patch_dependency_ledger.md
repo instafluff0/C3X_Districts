@@ -1,5 +1,27 @@
 # Civ III patch dependency ledger
 
+## Native startup screen-transfer ownership repair
+
+`required_user_action: []` for symbols/patch registration. Reuses
+`patch_JGL_Graphsy_present`, existing hash-verified JGL Graphsy slot 41 at RVA
+`0x3baa0`, with the same `int (__fastcall *)(void*, int, RECT*)` wrapper and
+`int (__thiscall *)(void*, RECT*)` original signature. No CSV entry, injected
+state, native drawing suppression or new hook is added. **Re-run `INSTALL.bat`**
+to install the changed wrapper along with the matching renderer DLL.
+
+Before configuration loads, original Graphsy presentation requests image slot 10
+at `0x3bab6`, binds the palette, calls `BitBlt` at `0x3bb4c`, releases slot 11 at
+`0x3bb58` and returns scalar zero at `0x3bb64`. The DC does not escape this body.
+The existing operation scope now identifies that private transfer; the DLL
+lifetime registry exempts only its caller-thread DC borrow. Pixel/bits escapes,
+unscoped DC access and foreign-thread access still invalidate evidence. This
+exception changes lifetime evidence only: the normal DC materialization barrier
+still executes before native drawing. The wrapper restores the previous scope.
+
+The old hook/DLL fails the new native-before-configuration startup assertion in
+`native/build/live-native-startup-negative/receipt.json`. The previous fixture
+exercised configured CPU snapshots only and missed this earlier native transfer.
+
 ## Native map-outline ownership repair
 
 `required_user_action: []` for symbols/patch-table entries. Reuses the existing

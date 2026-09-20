@@ -187,3 +187,57 @@ loss. No system compatibility settings were changed. No further manual capture
 is requested until the current evidence and automated reproduction are exhausted.
 M3.8 and the <33 ms p95 target remain unpassed. No live FPS improvement is claimed
 for the final-screen repair before another installed-game measurement.
+
+
+## Fullscreen follow-up: native startup transfer
+
+The next capture, `native/build/live-captures/20260920-225200-11158a/`, confirms
+**2240×1260** in the running game and the staged `f17edf16…` DLL. All **98/98**
+map composites use GPU composition with zero shared-scene readbacks. However,
+there are still **zero resident final presentations and zero independent visual
+frames**. The sampled CPU-screen counter reaches 480 transfers / **2.18 GB**
+uploaded. The gameplay presentation chain has 438 positive non-dropped display
+intervals: **95.85 ms mean / 233.34 ms p95 / 1433.35 ms max**, roughly **10.43
+updates/sec**. The capture's `analysis.json` preserves counts and definitions.
+There are no prepared-area events at this resolution; the earlier 766/768
+cancellation observation must not be attributed to this session.
+
+The private pixel-getter defect is gone, but eligibility is already lost before
+final map-to-screen adoption. The existing stack logger records only losses after
+map demand, so no revocation event does not establish a clean startup lifetime.
+The native regression now exercises **12 original, configuration-off Graphsy
+transfers followed by 12 configured CPU-screen transfers on the same image**,
+then resident map/screen composition. The previously staged implementation fails
+its first native startup admission assertion, reproducing an additional defect:
+original Graphsy's temporary DC borrow was incorrectly classified as a permanent
+game-code escape. This is a reproduced cause of lost eligibility, not yet proof
+that no other live startup path can lose it.
+
+The tiny existing Graphsy wrapper scopes this audited native operation, while the
+DLL permits only that private DC lease. CPU materialization barriers and public
+pixel/DC escapes remain intact. No quality setting, water effect or memory budget
+changes. This repair includes injected code and therefore requires `INSTALL.bat`
+once; replacing the DLL alone cannot fix the startup wrapper.
+
+Validation: `native/build/live-native-startup-fullscreen/receipt.json` passes the
+full **2240×1260** production replay, including all 24 startup transfers, unchanged
+CPU map/screen contents during resident composition, exact displayed RGB, units,
+text/outlines, fog/tactical controls, camera/reset and config-off recovery.
+`visual-analysis.json` covers all 100 selected-unit coast frames with water effects
+on: request **35.31 / 43.22 / 325.15 ms** mean/p95/max, desktop completion **45.05 /
+52.83 / 333.37 ms**, including startup. All intervals prove zero static-world
+builds/uploads, static-scene draws, reflection builds and water/wave geometry
+uploads. These controlled timings do not establish a live speedup. The sampled
+minimum contiguous free virtual-address region is about **724.5 MiB**, not a
+whole-game memory guarantee.
+
+The native lifetime regression passes in
+`native/build/gpu-composition/1609c233f4a94062806653d201b82fd7/receipt.json`,
+including explicit private-DC versus pixel/bits/unscoped-DC rejection.
+`native/build/live-native-startup-injected-compile.json` records the passing
+approved injection smoke test. The staged DLL SHA-256 is
+`6c73829c77e602e847d0a18dc1cd7d59262601d4d3b7f23240bc47c5f45471e4`;
+`native/build/live-native-startup-stage.json` preserves its validation and rollback.
+The user must run `INSTALL.bat` once, then `Renderer/CAPTURE_GAME.bat`; no game or
+installer was launched by the agent. Confirm resident final display in that live
+run before claiming the startup paths are fully covered or M3.8 acceptance met.

@@ -2,10 +2,11 @@
 
 ## One-click game capture
 
-The current final-screen/fullscreen repair changes only the DLL. If the September
-20 outline bridge is already installed, restart through this launcher without
-reinstalling. Older installations must run `INSTALL.bat` once for that native
-bridge; this launcher does not install it.
+The current native startup-transfer repair changes both the renderer DLL and the
+existing injected Graphsy wrapper. **Run `INSTALL.bat` once before the next
+capture**, even if the previous outline bridge is already installed. Replacing
+only the DLL leaves the early native transfer that revokes screen eligibility.
+This capture launcher does not install the bridge.
 
 In the Windows VM, close Civ III and double-click
 `Conquests\C3X_Districts\Renderer\CAPTURE_GAME.bat`. Approve the Windows PowerShell

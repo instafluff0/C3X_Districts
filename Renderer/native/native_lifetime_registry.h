@@ -26,7 +26,10 @@ public:
             // private leases. Their pointers/DCs do not escape to game callers.
             bool private_lease=context==C3X_NATIVE_COPY||context==C3X_NATIVE_FILL||
                 context==C3X_NATIVE_IMAGE_DRAW||context==C3X_NATIVE_SPRITE||
-                context==C3X_NATIVE_TEXT||context==C3X_NATIVE_IMAGE_CLIP||context==C3X_NATIVE_IMAGE_PALETTE||context==C3X_NATIVE_IMAGE_TEXT_STATE;
+                context==C3X_NATIVE_TEXT||context==C3X_NATIVE_IMAGE_CLIP||context==C3X_NATIVE_IMAGE_PALETTE||context==C3X_NATIVE_IMAGE_TEXT_STATE||
+                // Graphsy's final native transfer borrows only a DC, never a
+                // pixel pointer. This changes evidence, not CPU/GPU barriers.
+                (context==C3X_NATIVE_IMAGE_PRESENT&&operation==C3X_NATIVE_DC);
             if(thread!=owner||(!private_lease&&(operation==C3X_NATIVE_PIXEL||operation==C3X_NATIVE_BITS||operation==C3X_NATIVE_DC))){
                 if(revoked)*revoked=found->demanded;
                 *found={};

@@ -168,6 +168,16 @@ int main(int argc,char** argv){
         verify(reinterpret_cast<Init>(denied->vtable[1])(denied,32,32,16,1)==-1,"failed drain defers native reinitialization");
         verify(reinterpret_cast<Destroy>(denied->vtable[0])(denied,1)==denied,"failed drain defers destruction while owner retains image identity");
         state.custom_renderer_native_image=nullptr;reinterpret_cast<Destroy>(denied->vtable[0])(denied,1);
+        // Presentation may borrow a DC only, on the owning thread. Neither
+        // public pointers nor an unscoped/foreign DC acquire that exemption.
+        auto evidence=reinterpret_cast<void*>(std::uintptr_t(1));
+        for(int operation:{C3X_NATIVE_BITS,C3X_NATIVE_PIXEL,C3X_NATIVE_DC}){
+            verify(state.custom_renderer_native_lifetime(C3X_NATIVE_INIT,evidence,0)==1,"presentation evidence init");
+            bool retained=state.custom_renderer_native_lifetime(operation,evidence,C3X_NATIVE_IMAGE_PRESENT)!=0;
+            verify(retained==(operation==C3X_NATIVE_DC),"presentation exemption permits only private DC leases");
+            verify(!state.custom_renderer_native_lifetime(C3X_NATIVE_DC,evidence,0),"unscoped DC always revokes presentation evidence");
+            state.custom_renderer_native_lifetime(C3X_NATIVE_DESTROY,evidence,0);
+        }
         // Exhaustion cannot evict proof for an existing image or invent it for
         // the unrecorded extra object. Registry records never dereference IDs.
         for(unsigned i=1;i<=1024;++i)verify(state.custom_renderer_native_lifetime(C3X_NATIVE_INIT,reinterpret_cast<void*>(std::uintptr_t(i)),0)==1,"bounded registry admission");

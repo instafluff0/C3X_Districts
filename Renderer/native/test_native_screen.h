@@ -539,14 +539,18 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
         // hook here, permanently excluding that same screen from later copies.
         screen_surface=live_images[1];screen_image=screen_surface;screen.JGL.Image=screen_surface;pcx.image=screen_surface;
         for(int startup=0;startup<24;++startup){
+            // Before configuration loads, this is the original Graphsy GDI
+            // transfer; afterwards the same screen uses CPU/GPU compatibility.
+            state.current_config.enable_custom_rendering=startup>=12;
             auto links=screen_surface->Bits_Data_Links;events.clear();
             verify(patch_JGL_Graphsy_present(graph,0,&full)==0,"pre-map CPU menu presentation");
             verify(lifetime(C3X_NATIVE_MAP,screen_surface,0)&&screen_surface->Bits_Data_Links==links,
-                "private startup snapshots preserve eventual GPU screen admission and caller leases");
+                "native/configured startup preserves eventual GPU screen admission and caller leases");
             verify(std::none_of(events.begin(),events.end(),[](auto const& e){return e.operation==C3X_NATIVE_BITS||e.operation==C3X_NATIVE_PIXEL;}),
                 "private screen snapshot never becomes a public pixel escape");
+            verify(state.custom_renderer_native_operation==0,"startup transfer restores native operation scope");
         }
-        std::puts("PASS pre-map screen snapshots: private_copies=24 lifetime_preserved=24 public_pixel_access=0");
+        std::puts("PASS pre-map screen transfers: native=12 configured=12 lifetime_preserved=24 public_pixel_access=0");
         auto raw_unchanged=[&](){auto words=reinterpret_cast<unsigned short*(__thiscall*)(void*)>(original_bits)(live_images[0]);
             auto stride_words=*reinterpret_cast<int*>(reinterpret_cast<char*>(live_images[0])+0x40);bool same=words!=nullptr;
             if(words)for(int y=0;y<h;++y)for(int x=0;x<w;++x)same=same&&words[y*stride_words+x]==0x1234;

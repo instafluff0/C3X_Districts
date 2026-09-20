@@ -24,47 +24,51 @@ testing remain with the user. Performance acceptance is still pending.
 
 ## M3.8 current handoff — in progress
 
-**Final-screen ownership repair and fullscreen support staged; live acceptance
-pending.** The latest September 20 capture confirms the installed outline fix:
-114/114 map composites stay GPU resident with zero shared-scene readbacks. Final
-screens still used CPU snapshots, however; the gameplay display intervals average
-80.50 ms (12.42 updates/sec), p95 383.34 ms. Our own startup snapshot called the
-public pixel getter and permanently excluded the eventual screen from GPU
-admission. The DLL now makes that copy privately, preserving real CPU-access
-barriers. See [live findings](live_usage_findings_20260920.md) and the
-[patch ledger](civ3_patch_dependency_ledger.md).
+**Native startup transfer repair staged; live acceptance pending.** The latest
+fullscreen capture (September 20, `20260920-225200-11158a`) runs at **2240×1260**.
+All 98 map composites stay on the GPU with zero shared-scene readbacks, but final
+screens still use CPU snapshots: **zero resident final presentations / independent
+visual frames**, 2.18 GB sampled screen uploads. Gameplay display intervals average
+**95.85 ms** (10.43 updates/sec), p95 **233.34 ms**, max **1433.35 ms**. The previous
+private snapshot fix removed one startup escape; original Graphsy presentation
+before configuration loads still revoked screen eligibility through its temporary
+DC borrow. See [live findings](live_usage_findings_20260920.md).
 
 **Installable evaluation:** `bin/C3XRenderer.dll`, SHA-256
-`f17edf16895f7e839ef48a38eadffd0da4222cd746b0d98380dc1444dfe9d375`.
-This repair is DLL-only. The latest capture confirms the previous injected outline
-bridge is installed, so restart through `CAPTURE_GAME.bat`; no reinstall is needed.
-`native/build/live-screen-stage.json` records staging, validation and rollback.
-No game was launched or installed by the agent. The city-close ABI fix remains
-included, and no new native hooks or patch-table entries are needed.
+`6c73829c77e602e847d0a18dc1cd7d59262601d4d3b7f23240bc47c5f45471e4`.
+**Run `INSTALL.bat` once, then `Renderer/CAPTURE_GAME.bat`.** This fix changes the
+existing injected Graphsy wrapper as well as the DLL. It scopes the audited native
+transfer; the DLL exempts only its private caller-thread DC lease from lifetime
+revocation. Real CPU escapes, failed materialization barriers, native config-off
+behavior and foreign-thread rejection remain intact. No new hook, CSV entry or
+injected state is needed; the [patch ledger](civ3_patch_dependency_ledger.md)
+records the source audit. The city-close and outline fixes remain included.
+`native/build/live-native-startup-stage.json` records validation and rollback.
+No installer or game was launched by the agent.
 
-**Fullscreen validation passes at 2240×1260**, the VM's current desktop size.
-Scene/image/presentation bounds and the 2248×1268 lighting border now admit this
-extent. Memory budgets and full visual quality remain unchanged. The old DLL
-reproduces the startup eligibility failure; the final replay preserves eligibility
-through 24 CPU menu presentations, then verifies unchanged CPU map/screen storage
-and exact GPU-composed display pixels. Units/text, 144 empty line initializations,
-actual outlines, fog, selection/path/grid, camera cancellation/reset and config-off
-recovery pass. Five CPU bounds tests and fullscreen GPU image/unit operations
-also pass; receipts are linked in the live findings.
+**Fullscreen production replay passes at 2240×1260.** The old hook/DLL fails the
+new startup regression; the candidate preserves eligibility through 12 original
+config-off transfers and 12 configured CPU transfers on the same eventual screen.
+Subsequent GPU map/screen composition preserves unchanged CPU map storage and exact
+displayed pixels. Units/text, outlines, fog, selection/path/grid, asynchronous
+camera/reset and config-off recovery pass. The isolated native lifetime contract
+also verifies that the presentation exemption cannot admit public pixel/bits or
+unscoped DC access. `TEST_INJECTED_CODE_COMPILE.bat` passes.
 
-The final 100-frame fullscreen coast fixture with one selected unit and all water
-effects on measures **31.29 ms mean / 42.34 ms p95** per resident visual request,
-and **42.10 / 53.38 ms** through desktop completion, including the first sample.
-These are controlled fixture timings, not live gameplay FPS, an A/B speedup or
-arbitrary camera-jump acceptance. M3.8 and Standard <33 ms p95 remain open.
+The 100-frame fullscreen coast fixture with one selected unit and all water effects
+on measures **35.31 ms mean / 43.22 ms p95 / 325.15 ms max** per visual request,
+and **45.05 / 52.83 / 333.37 ms** through desktop completion, including startup.
+All 100 intervals show zero static-world builds/uploads, static-scene redraws,
+reflection builds and water/wave geometry uploads. These are fixture timings,
+not a live speedup or arbitrary navigation acceptance. Full quality and memory
+budgets are unchanged. M3.8 and Standard <33 ms p95 remain open.
 
-**Next responsibility:** confirm resident final-screen presentation and independent
-visual frames in the installed fullscreen game, then remove remaining camera and
-cancelled speculative work. The latest live capture cancelled 766/768 prepared
-areas, with 8.83 seconds of worker activity; that is not an additive UI stall total.
-Use the existing [one-click capture](live_usage_logging.md#one-click-game-capture);
-it needs no debugger or manual uploads. Full detail, waves, water motion and
-reflections stay on. The older `native_smoke` failure is not counted as passing.
+**Next responsibility:** confirm final-screen residency and independent visual
+frames in the installed fullscreen game, then reduce remaining measured camera
+and finishing costs. The newest capture has no prepared-area attempts at this
+maximum extent; the prior 766/768 cancellations belong to the older smaller-view
+capture. Use the existing [one-click capture](live_usage_logging.md#one-click-game-capture)
+without a debugger or manual uploads. Do not infer live residency from replay alone.
 
 Whole-world appearance enters through bounded caller-thread pages. Existing
 workers prepare canonical regions and wrapped occurrences independently of the
