@@ -3121,8 +3121,8 @@ Q6SceneOutput Q8_CITY_FEATURE_ENTRY(FeaturePixelInput p) {
  return q6_scene_output(float4(lit,1));
 }
 
-// The cached 168-byte native vertex retains every source channel. This is
-// deliberately distinct from the 48-byte legacy feature cache layout.
+// The cached 88-byte city vertex retains every consumed source channel. The
+// same semantics also accept the original 168-byte adapter input.
 struct NativeCityInput {
  float3 position:POSITION;float2 uv:TEXCOORD0;float3 normal:NORMAL;
  float2 ao:TEXCOORD1;float material:TEXCOORD2;

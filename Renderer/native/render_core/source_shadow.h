@@ -100,7 +100,7 @@ public:
             if(SUCCEEDED(hr))hr=create_instance_layout(device,code,&instance_layout);
             if(SUCCEEDED(hr)){
                 std::wstring rigid_path(path);auto rigid_slash=rigid_path.find_last_of(L"/\\");
-                rigid_path=rigid_path.substr(0,rigid_slash)+L"/../render_core/rigid_caster.hlsl";
+                rigid_path=rigid_path.substr(0,rigid_slash)+L"/../city_fidelity/rigid_caster.hlsl";
                 drop(code);drop(errors);
                 hr=compile_cached(rigid_path.c_str(),"VSSharedCaster","vs_5_0",&code,&errors);
                 if(errors)OutputDebugStringA(static_cast<char const*>(errors->GetBufferPointer()));

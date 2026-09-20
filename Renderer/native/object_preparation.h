@@ -21,9 +21,11 @@ struct PreparedPart {
     std::shared_ptr<city_fidelity::Lighting> lighting;
 };
 struct PreparedObjects {
+    struct Draw {unsigned layer=0,first=0,count=0,rigid=~0u;};
     std::array<PreparedPart,layer_count> layers;
     std::vector<PreparedPart> city;
     std::vector<PreparedRigid> rigid;
+    std::vector<Draw> draws;
     unsigned composition=~0u,instances=0,routes=0;
     std::shared_ptr<void> buffer;
     std::size_t gpu_bytes=0;
@@ -32,7 +34,7 @@ struct PreparedObjects {
     fidelity::NaturalWorld::CellProof rivers;
     std::size_t proof_bytes=0;
     std::size_t bytes()const {
-        std::size_t total=sizeof(*this)+city.capacity()*sizeof(PreparedPart)+rigid.capacity()*sizeof(PreparedRigid)+gpu_bytes+proof_bytes;
+        std::size_t total=sizeof(*this)+city.capacity()*sizeof(PreparedPart)+rigid.capacity()*sizeof(PreparedRigid)+draws.capacity()*sizeof(Draw)+gpu_bytes+proof_bytes;
         for(auto const& part:layers)total+=part.mesh.bytes();
         for(auto const& part:city)total+=part.mesh.bytes();
         if(!city.empty())total+=sizeof(city_fidelity::Lighting)+city.front().lighting->lights.capacity()*sizeof(city_fidelity::Light)+
@@ -120,12 +122,25 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
     if(stop() || (bounded && raw_bytes>32u*1024u*1024u))return {};
     Surfaces surfaces;
     if(input.shared_rigid){
+        std::vector<Instance> surfaces_only;
+        std::array<unsigned,layer_count> indices{};
         for(auto const& instance:plan.instances){
             if(stop())return {};
-            if(instance.asset<assets[instance.family].assets.size())
+            if(instance.asset>=assets[instance.family].assets.size())continue;
+            auto const& asset=assets[instance.family].assets[instance.asset];
+            if(asset.vertices.empty() || asset.indices.empty())continue;
+            if(shared_rigid_mesh(asset)){
+                result->draws.push_back({unsigned(instance.layer),0,0,unsigned(result->rigid.size())});
                 result->rigid.push_back(prepare_rigid(instance,input.projection,assets,relief,height_natural));
+            }else{
+                unsigned count=unsigned(asset.indices.size());
+                if(!result->draws.empty() && result->draws.back().layer==unsigned(instance.layer) && result->draws.back().rigid==~0u)
+                    result->draws.back().count+=count;
+                else result->draws.push_back({unsigned(instance.layer),indices[instance.layer],count,~0u});
+                indices[instance.layer]+=count;surfaces_only.push_back(instance);
+            }
         }
-        plan.instances.clear();
+        plan.instances=std::move(surfaces_only);
     }
     compile(plan,input.projection,assets,relief,height_natural,surfaces,true);
     for(unsigned layer=0;layer<layer_count;++layer){

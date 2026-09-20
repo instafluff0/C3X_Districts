@@ -83,6 +83,7 @@ class CustomZoomTests(unittest.TestCase):
 #include "Renderer/native/c3x_renderer_api.h"
 #define __fastcall
 #define __cdecl
+#define __stdcall
 constexpr int __=0;
 struct State {
  struct {bool enable_custom_rendering=false;} current_config;

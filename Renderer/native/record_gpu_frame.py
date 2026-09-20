@@ -36,6 +36,7 @@ def main(argv=None):
     parser.add_argument('--world-readiness-only',action='store_true',help='Run only the complete world-navigation workload and independent cold-pixel oracles')
     parser.add_argument('--world-readiness',action='store_true',help='Page the complete world through the production caller callback, prepare it independently of the route, and measure 100 distributed GPU requests')
     parser.add_argument('--world-geometry-mib',type=int,choices=(384,512,640,768),help='Isolated Huge-world residency budget control; leaves other budgets and detail unchanged')
+    parser.add_argument('--rigid-sources',choices=('0','1'),default='1',help='Shared rigid infrastructure geometry (1) or exact expanded compiler control (0)')
     parser.add_argument('--dense-scene',action='store_true',help='Use the existing world-fixed dense city/infrastructure/resource fixture in both comparison arms')
     parser.add_argument('--dense-city-case',default='',help='Dense city culture,era,size,capital, for example 0,3,1,1; requires --dense-scene')
     parser.add_argument('--object-workers',choices=('0','1'),default='1',help='Use the identical object compiler on the foreground (0) or bounded worker (1)')
@@ -84,6 +85,11 @@ def main(argv=None):
     build_path=dll.parent/'build-evidence.json'
     build_record=json.loads(build_path.read_text()) if build_path.exists() else {}
     build_sources={path:value for closure in build_record.get('unit_inputs',{}).values() for path,value in closure.items()}
+    if not build_record and dll==ROOT/'Renderer/native/build/candidate/C3XRenderer.dll':
+        build_path=ROOT/'Renderer/lab/.cache/native-build.json'
+        if build_path.exists():
+            build_record=json.loads(build_path.read_text())
+            if build_record.get('dll_sha256')==digest(dll):build_sources=build_record.get('inputs',{})
     binary_provenance={'build_receipt':build_path.relative_to(ROOT).as_posix() if build_record else None,
         'build_receipt_sha256':digest(build_path) if build_record else None,
         'current_runtime_matches_build':bool(build_sources) and all(build_sources.get(path)==value for path,value in inputs.items()),
@@ -113,6 +119,7 @@ def main(argv=None):
     settings['C3X_RENDERER_WORLD_READINESS_ONLY']='1' if args.world_readiness_only else ''
     settings['C3X_RENDERER_WORLD_READINESS_TEST']='1' if args.world_readiness else ''
     settings['C3X_RENDERER_WORLD_GEOMETRY_MIB']=str(args.world_geometry_mib) if args.world_geometry_mib else ''
+    settings['C3X_RENDERER_RIGID_SOURCES']=args.rigid_sources
     if args.benchmark or args.visual_only or args.scroll_coverage or args.world_readiness:
         # Match configure_custom_renderer_effects with the shipped cache enabled.
         # These are harness settings, never a setup requirement for the player.

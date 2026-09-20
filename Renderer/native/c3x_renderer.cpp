@@ -88,6 +88,7 @@
 #include "city_fidelity/compiler.h"
 #include "world_preparation.h"
 #include "world_backing_codec.h"
+#include "rigid_object_gpu.h"
 #include "render_core/compressed_world_store.h"
 #include "render_core/prepared_world_validity.h"
 #include "render_core/residency_candidates.h"
@@ -239,6 +240,7 @@ struct CachedVertexChunk {
     ID3D11Buffer * resource_instance = nullptr; // borrowed instance constants, dynamic pass only
     std::shared_ptr<std::vector<c3x_renderer::fidelity::MeshInstance> const> instances;
     float instance_material=40;
+    bool rigid_source=false;
     float visual_time=-1; // Optional wave sample; negative follows the visible clock.
     unsigned city_material=0xffffffffu;
     bool city_environment=false;
@@ -548,6 +550,7 @@ public:
     std::atomic<std::uint64_t> world_uploaded_bytes{0},world_uploads{0},world_compiles{0},world_restores{0};
     std::array<std::atomic<std::uint64_t>,4> world_upload_layers{};
     std::atomic<std::uint64_t> world_restore_microseconds{0};
+    c3x_renderer::objects::RigidSourceGpu rigid_sources;
     std::array<c3x_renderer::fidelity::TerrainCompileScratch,6> terrain_scratch;
     std::array<c3x_renderer::fidelity::SurfaceQueryScratch,6> world_ground_scratch;
     c3x_renderer::fidelity::TerrainCompileScratch foreground_terrain_scratch;
@@ -619,6 +622,10 @@ public:
         sprintf_s(detail,"phase=%s buffers=%zu allocation_bytes=%zu logical_bytes=%zu active_budget=%zu",
             phase,allocations.size(),allocation_bytes,tile_geometry_cache_bytes,tile_geometry_runtime_budget);
         trace.write("memory-world-buffers",detail,true);
+        sprintf_s(detail,"source_bytes=%zu source_allocations=%u instance_capacity=%zu",
+            rigid_sources.bytes,rigid_sources.allocations,rigid_sources.stream.buffer?
+                std::size_t(c3x_renderer::render_core::InstanceStream::limit)*sizeof(c3x_renderer::fidelity::MeshInstance):0);
+        trace.write("memory-rigid-sources",detail,true);
     }
     SceneTopology topology_cache;
     bool retained_world=true;
@@ -1053,7 +1060,7 @@ public:
         if (context != nullptr)
             context->ClearState();
         reset_targets();
-        world_coast.clear();center_shore_cache.clear(); geometry_world_revision = -1; source_shadow.clear(); natural.reset(); reflection.reset();cities.reset();city_glow.reset();
+        world_coast.clear();center_shore_cache.clear(); geometry_world_revision = -1; source_shadow.clear(); natural.reset(); reflection.reset();cities.reset();city_glow.reset();rigid_sources.clear();
         region_reflection.reset();region_glow.reset();
         for (TerrainTexture & texture : terrain_textures)
         {
@@ -4548,6 +4555,10 @@ public:
                 unsigned(tree_instances_enabled),natural.instance_mesh_bytes,natural.instance_stream.bytes,natural.instance_stream.uploads,
                 source_shadow.instance_stream.bytes,source_shadow.instance_stream.uploads,natural.instance_stream.discards,source_shadow.instance_stream.discards);
         trace.write("shared-mesh-instances",instance_detail,true);
+        sprintf_s(instance_detail,"source_bytes=%zu source_allocations=%u instance_bytes=%zu batches=%u discards=%u",
+            rigid_sources.bytes,rigid_sources.allocations,rigid_sources.stream.bytes,
+            rigid_sources.stream.uploads,rigid_sources.stream.discards);
+        trace.write("shared-rigid-instances",instance_detail,true);
 #ifdef C3X_RENDERER_BENCHMARK_ORACLE
         // Attribution only: explicit completion boundaries perturb overlap.
         // Never use these serialized durations as production speed evidence.
@@ -5517,6 +5528,17 @@ public:
         auto flush=[&](){
             if(selected.empty())return true;
             if(streamed && !draw_parameters.upload(parameters.data(),unsigned(selected.size())))return false;
+            std::vector<c3x_renderer::fidelity::MeshInstance> rigid_instances;
+            std::array<unsigned,Parameters::limit> rigid_offsets{};
+            for(unsigned i=0;i<selected.size();++i){auto const& chunk=selected[i];if(!chunk.content().rigid_source)continue;
+                if(!chunk.content().instances || chunk.content().instances->size()!=1)return false;
+                auto instance=chunk.content().instances->front();
+                std::copy(std::begin(chunk.natural_projection()),std::end(chunk.natural_projection()),instance.projection);
+                instance.view[0]=parameters[i].translation[0];instance.view[1]=parameters[i].translation[1];
+                instance.view[2]=parameters[i].depth_translation;instance.view[3]=chunk.content().instance_material;
+                rigid_offsets[i]=unsigned(rigid_instances.size());rigid_instances.push_back(instance);
+            }
+            if(!rigid_instances.empty() && !rigid_sources.stream.upload(device,context,rigid_instances))return false;
             auto issue=[&](GeometryDrawReference const& chunk,ViewportShaderSettings const& settings,unsigned index){
                 if(streamed)draw_parameters.bind(1,index);
                 else if(first || std::memcmp(&previous,&settings,sizeof(settings))!=0){
@@ -5526,6 +5548,22 @@ public:
                 UINT stride = chunk.content().vertex_stride, offset = chunk.content().vertex_offset;
                 context->IASetVertexBuffers(0, 1, &chunk.content().buffer, &stride, &offset);
                 context->IASetIndexBuffer(chunk.content().indices, chunk.content().index_format, chunk.content().index_offset);
+                if(chunk.content().rigid_source){
+                    context->IASetInputLayout(rigid_sources.layout);
+                    context->VSSetShader(rigid_sources.vertex[reflection_pass?1:0],nullptr,0);
+                    if(layer==geometry_city){
+                        context->PSSetShader(reflection_pass?reflection.ps[1]:feature_pixel_shader,nullptr,0);
+                        context->PSSetShaderResources(116,4,city_emissive_views.data());context->PSSetShaderResources(124,4,city_base_views.data());
+                        ID3D11SamplerState*samplers[]={terrain_sampler,decal_sampler};context->PSSetSamplers(0,2,samplers);
+                    }
+                    ID3D11Buffer* streams[]={chunk.content().buffer,rigid_sources.stream.buffer};
+                    UINT strides[]={32,64},offsets[]={chunk.content().vertex_offset,rigid_sources.stream.offset+rigid_offsets[index]*64};
+                    context->IASetVertexBuffers(0,2,streams,strides,offsets);
+                    context->DrawIndexedInstanced(chunk.content().index_count,1,0,0,0);++frame_draw_calls;
+                    context->IASetInputLayout(feature_input_layout);
+                    context->VSSetShader(reflection_pass?reflection.vs[1]:feature_vertex_shader,nullptr,0);
+                    return;
+                }
                 if(chunk.content().city_material!=0xffffffffu){
                     ID3D11SamplerState*samplers[]={natural_wrap,natural_clamp};context->PSSetSamplers(0,2,samplers);
                     context->OMSetBlendState(blend_state,nullptr,0xffffffffu);context->OMSetDepthStencilState(depth_state,0);
@@ -5621,6 +5659,7 @@ public:
                     c.index_format=chunk.content().index_format;
                     c.vertex_offset=chunk.content().vertex_offset;c.index_offset=chunk.content().index_offset;
                     c.instances=chunk.content().instances.get();c.instance_material=chunk.content().instance_material;
+                    c.rigid=chunk.content().rigid_source;
                     c.stride=chunk.content().vertex_stride;c.layer=layer;c.version=chunk.content().version;c.bounds=chunk.content().world_bounds;
                     if(chunk.content().city_material!=0xffffffffu)c.binding=10000+chunk.content().city_material;
                     c.offset[0]=float(wx*dims.width+wy*dims.height)*.5f;
@@ -6771,6 +6810,7 @@ public:
         if(tree_instances_enabled!=instance_mode){tree_instances_enabled=instance_mode;++content_revision;}
         natural.instance_stream.bytes=natural.instance_stream.uploads=natural.instance_stream.discards=0;
         source_shadow.instance_stream.bytes=source_shadow.instance_stream.uploads=source_shadow.instance_stream.discards=0;
+        rigid_sources.stream.bytes=rigid_sources.stream.uploads=rigid_sources.stream.discards=0;
         char nested_control[8]={};
         bool const reuse_nested_ground_grids=!(GetEnvironmentVariableA("C3X_RENDERER_NESTED_GRID_CONTROL",nested_control,sizeof(nested_control)) &&
             std::strcmp(nested_control,"1")==0);
@@ -7279,6 +7319,16 @@ public:
         bool const object_worker=prepare_objects && (!prewarming || world_preparation) &&
             !(GetEnvironmentVariableA("C3X_RENDERER_OBJECT_WORKERS",object_control,sizeof(object_control)) && std::strcmp(object_control,"0")==0);
         bool const world_batch_enabled=cpu_terrain_enabled && world_ground && retain_ground_grids && ground_concurrent && object_worker;
+        bool shared_rigid=world_batch_enabled && city_profile;
+#ifdef C3X_RENDERER_BENCHMARK_ORACLE
+        char rigid_control[8]={};
+        if(GetEnvironmentVariableA("C3X_RENDERER_RIGID_SOURCES",rigid_control,sizeof(rigid_control)) && std::strcmp(rigid_control,"0")==0)shared_rigid=false;
+#endif
+        if(shared_rigid){
+            auto bytes=rigid_sources.bytes;auto allocations=rigid_sources.allocations;
+            if(!rigid_sources.ensure(device,fidelity_root,object_assets))return false;
+            frame_upload_bytes+=rigid_sources.bytes-bytes;frame_content_uploads+=rigid_sources.allocations-allocations;
+        }
         // Beyond the nearby GPU working set, prepare all core tiles into the
         // bounded backing file without allocating GPU buffers or evicting the
         // displayed scene. Ordinary demands restore through the same compiler.
@@ -7351,6 +7401,7 @@ public:
             input.separate_relief=separate_natural_relief;input.retain_height=retain_height_samples;
             input.route_ready=route_assets_ready;input.mine_ready=mine_assets_ready;input.farm_ready=farm_assets_ready;
             input.city_ready=city_assets_ready;input.composition_ready=cities.ready;
+            input.shared_rigid=shared_rigid;
 #ifdef C3X_RENDERER_BENCHMARK_ORACLE
             input.routes_enabled=diagnostic_routes!=2;
 #endif
@@ -9299,7 +9350,62 @@ public:
                     }
                     unsigned const layers[]={geometry_route,geometry_feature,geometry_city,geometry_wall,geometry_mine,geometry_farm,geometry_site};
                     for(unsigned i=0;i<c3x_renderer::objects::layer_count;++i)if(layer==layers[i]){
-                        if(!adopt(prepared_objects->layers[i],2)){tile_geometry_cache_bytes-=compiled.byte_count;return false;}
+                        auto const& part=prepared_objects->layers[i];
+                        bool ordered=std::any_of(prepared_objects->draws.begin(),prepared_objects->draws.end(),[&](auto const& draw){return draw.layer==i;});
+                        if(!ordered && !adopt(part,2)){tile_geometry_cache_bytes-=compiled.byte_count;return false;}
+                        CachedVertexChunk surface;bool surface_cached=false;
+                        for(auto const& draw:prepared_objects->draws)if(draw.layer==i){
+                            if(draw.rigid==~0u){
+                                if(draw.first>part.mesh.index_count || draw.count>part.mesh.index_count-draw.first){
+                                    tile_geometry_cache_bytes-=compiled.byte_count;return false;}
+                                if(!surface_cached){
+                                    if(!adopt(part,2)){tile_geometry_cache_bytes-=compiled.byte_count;return false;}
+                                    surface=compiled.buffers[layer].back();surface_cached=true;
+                                }else{
+                                    if(!make_tile_cache_room(sizeof(CachedVertexChunk))){tile_geometry_cache_bytes-=compiled.byte_count;return false;}
+                                    compiled.buffers[layer].push_back(surface);
+                                    auto& range=compiled.buffers[layer].back();range.buffer->AddRef();range.indices->AddRef();
+                                    range.byte_count=sizeof(CachedVertexChunk);tile_geometry_cache_bytes+=range.byte_count;compiled.byte_count+=range.byte_count;
+                                }
+                                auto& range=compiled.buffers[layer].back();range.index_count=draw.count;
+                                range.index_offset=surface.index_offset+draw.first*part.mesh.index_stride;
+                                continue;
+                            }
+                            if(draw.rigid>=prepared_objects->rigid.size()){tile_geometry_cache_bytes-=compiled.byte_count;return false;}
+                            auto const& instance=prepared_objects->rigid[draw.rigid];
+                            if(instance.family>=rigid_sources.meshes.size() || instance.asset>=rigid_sources.meshes[instance.family].size()){
+                                tile_geometry_cache_bytes-=compiled.byte_count;return false;}
+                            auto const& source=rigid_sources.meshes[instance.family][instance.asset];
+                            if(!source.buffer){tile_geometry_cache_bytes-=compiled.byte_count;return false;}
+                            CachedVertexChunk chunk;chunk.projection_kind=2;chunk.source_tile_width=128;
+                            chunk.instances=std::make_shared<std::vector<c3x_renderer::fidelity::MeshInstance> const>(1,instance.instance);
+                            chunk.byte_count=sizeof(chunk)+sizeof(c3x_renderer::fidelity::MeshInstance);
+                            if(!make_tile_cache_room(chunk.byte_count)){tile_geometry_cache_bytes-=compiled.byte_count;return false;}
+                            chunk.rigid_source=true;chunk.instance_material=instance.material;
+                            chunk.bounds={instance.bounds[0],instance.bounds[1],instance.bounds[2],instance.bounds[3]};
+                            std::copy(instance.low.begin(),instance.low.end(),chunk.world_bounds.low);
+                            std::copy(instance.high.begin(),instance.high.end(),chunk.world_bounds.high);
+                            chunk.vertex_stride=32;chunk.index_count=source.count;chunk.index_offset=source.index_offset;
+                            // Shared source buffers do not identify a placement.
+                            // Retained pass/caster keys must distinguish every
+                            // instance, including repeats of one asset in a tile.
+                            chunk.version=++tile_geometry_version;
+                            compiled.buffers[layer].push_back(std::move(chunk));auto& retained=compiled.buffers[layer].back();
+                            retained.buffer=retained.indices=source.buffer;source.buffer->AddRef();source.buffer->AddRef();
+                            tile_geometry_cache_bytes+=retained.byte_count;compiled.byte_count+=retained.byte_count;
+                        }
+                        if(ordered && !compiled.buffers[layer].empty()){
+                            // Splitting a layer's mesh must not split its pass
+                            // membership: the original combined bounds decide
+                            // water ordering and shadow/reflection context.
+                            // Components keep their own screen culling bounds.
+                            auto bounds=compiled.buffers[layer].front().world_bounds;
+                            for(auto const& chunk:compiled.buffers[layer])for(unsigned axis=0;axis<3;++axis){
+                                bounds.low[axis]=std::min(bounds.low[axis],chunk.world_bounds.low[axis]);
+                                bounds.high[axis]=std::max(bounds.high[axis],chunk.world_bounds.high[axis]);
+                            }
+                            for(auto& chunk:compiled.buffers[layer])chunk.world_bounds=bounds;
+                        }
                     }
                 }
                 if(layer==geometry_city && !city_chunks.empty()){

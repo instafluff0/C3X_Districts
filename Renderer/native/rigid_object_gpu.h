@@ -1,5 +1,5 @@
 #pragma once
-#include "object_compiler.h"
+#include "rigid_object_instance.h"
 #include "render_core/instance_stream.h"
 
 namespace c3x_renderer { namespace objects {
@@ -20,7 +20,7 @@ public:
         if(vertex[1])return true;clear();
         auto fail=[&]{clear();return false;};
         try{
-            std::wstring path(root.begin(),root.end());path+=L"/Renderer/native/render_core/rigid_feature.hlsl";
+            std::wstring path(root.begin(),root.end());path+=L"/Renderer/native/city_fidelity/rigid_feature.hlsl";
             for(unsigned pass=0;pass<2;++pass){ID3DBlob* code=nullptr,*errors=nullptr;
                 auto hr=render_core::compile_cached(path.c_str(),pass?"VSSharedFeatureReflection":"VSSharedFeature","vs_5_0",&code,&errors);
                 if(errors){OutputDebugStringA(static_cast<char const*>(errors->GetBufferPointer()));drop(errors);}
@@ -31,7 +31,7 @@ public:
             for(unsigned family=0;family<family_count;++family){auto const& bundle=assets[Family(family)];
                 meshes[family].resize(bundle.assets.size());
                 for(unsigned index=0;index<bundle.assets.size();++index){auto const& asset=bundle.assets[index];auto& mesh=meshes[family][index];
-                    if(asset.vertices.empty() || asset.indices.empty())continue;
+                    if(!shared_rigid_mesh(asset))continue;
                     auto vertices=asset.vertices.size()*sizeof(FeatureSourceVertex),indices=asset.indices.size()*sizeof(unsigned);
                     auto size=vertices+indices;if(size>32u*1024u*1024u-bytes)return fail();
                     std::vector<unsigned char> data(size);

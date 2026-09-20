@@ -4,6 +4,15 @@
 #include <limits>
 
 namespace c3x_renderer { namespace objects {
+inline bool shared_rigid_mesh(FeatureAsset const& asset){
+    // Small flat surface/decal meshes retain their grouped packed path instead
+    // of turning each component into another draw. Preserve their exact floats.
+    // This is a geometry property, independent of pack origin or asset naming.
+    if(asset.vertices.empty() || asset.indices.empty())return false;
+    auto z=asset.vertices.front().position[2];
+    for(auto const& vertex:asset.vertices)if(vertex.position[2]!=z)return true;
+    return false;
+}
 // Copied placement of a rigid source asset. The source mesh belongs to the
 // immutable pack; the tile owns placement, material and exact culling bounds.
 struct PreparedRigid {

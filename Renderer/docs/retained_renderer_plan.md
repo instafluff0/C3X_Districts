@@ -16,12 +16,39 @@ acceptance remain complete. Manual pans can defer coherently; native selection,
 actions, programmatic centering and projection changes retain exact behavior.
 Units stay above all map geometry. Native actions, visibility, controls and unit/UI
 ordering remain authoritative. Shore waves, water motion and reflections are on
-in every normal performance workload. The accepted water DLL remains staged;
-the M2 optimizations and M3 candidate have not been staged, installed or run inside Civ III.
+in every normal performance workload. The tested M3.8 production DLL is now
+staged as a user-requested **evaluation build**; installation and live-game
+testing remain with the user. Performance acceptance is still pending.
 [Architecture](renderer_architecture.md) owns the design;
 [validation](benchmark_workflow.md) owns measurement and acceptance.
 
 ## M3.8 current handoff — in progress
+
+**Immediate live-game fix:** the city-close/worker-selection report exposed an
+incorrect route-cursor ABI. The GOG target at `0x004E45E0` uses callee cleanup
+(`RET 8`); the custom `__cdecl` wrapper left two coordinates on the caller stack.
+The wrapper and native fallback now use `__stdcall`, without a CSV edit or DLL
+change. The x86 negative control reproduces an eight-byte imbalance; the corrected
+wrapper passes 400 custom/config-off/fallback calls. Ten zoom/UI tests and the
+approved injected compile/injection smoke test pass. Re-run `INSTALL.bat` for
+the fixed bridge; the user's exact live-game sequence remains to be confirmed.
+See [the patch-ledger correction](civ3_patch_dependency_ledger.md#route-cursor-abi-crash-correction).
+
+**Playable evaluation checkpoint:** `bin/C3XRenderer.dll`, SHA-256
+`ea22ea53d835b0085de6c034a4ae4d2fa9e7bf9bec3545d497c0a4c6c8f17e74`.
+Production build, current-source identity, complete workload, atomic camera/
+recovery/fog/tactical checks and the approved injected compile smoke test passed.
+`native/build/m38-production-{workload,recovery,standard}/` retains the receipts.
+The Standard production run prepared all 247 regions, then completed 100 jumps
+at **205.26 / 230.53 / 276.13 ms mean / p95 / max**, with zero builds, uploads or
+readbacks and six exact cold-image oracles. Minimum contiguous VA was 1134.06 MiB.
+The complete workload's GPU request / desktop mean (p95) in milliseconds was:
+idle 16.79 (33.29) / 24.67 (49.40), scrolling 78.37 (129.75) / 87.69 (133.57),
+local edit 15.46 (42.94) / 21.02 (49.39). The separate 120-frame, 32-worker-unit
+visual run measured 35.63 (54.52) / 46.14 (67.38). All water effects were on.
+The prior DLL is preserved under `native/build/m38-evaluation-rollback/`.
+See [running the GPU evaluation](renderer_config_spec.md#running-the-current-gpu-evaluation-build).
+No installer or game was launched by the agent; this is not live-game acceptance.
 
 Whole-world appearance now enters through bounded caller-thread pages; the
 existing publication/world owners retain copied values. The existing workers
@@ -31,57 +58,46 @@ compiled meshes and dependency proofs across GPU eviction. Map/viewer/config
 scope retirement clears it. Workers never read native objects. Foreground
 adoption still validates proofs and owns GPU publication.
 
-The measured candidate is `native/build/m38-world-streaming/C3XRenderer.dll`;
-`native/build/m38-huge-streaming-proof/receipt.json` records its exact source and
-binary identity. At 1120×1192, full detail and all water effects on, the synthetic
-160×160 / 12,800-tile dense world prepared all 520 canonical/wrapped regions in
-29.656 s after a 1.937 s first GPU request. The 100 deterministic jumps (91 distinct)
-had **633.13 / 1030.10 / 1207.81 ms mean / p95 / max** through actual desktop
-completion. All 100 exceeded 100 ms. All six independent cold-image comparisons
-were byte-exact; minimum sampled contiguous VA headroom was **831.09 MiB**.
+City vertices now retain the same consumed float channels in 88 rather than
+168 bytes. Height-bearing rigid infrastructure references shared source buffers
+plus compact placements; flat and terrain-conforming pieces keep their ordered
+grouped geometry. Color, reflections and casters share the same placement math.
+The original combined layer bounds preserve water ordering and pass context;
+individual placement versions prevent same-asset instances from aliasing.
 
-Those jumps made **zero combined ground/terrain/city compiler calls**, but restored
-71,262 tile results and uploaded 10,002,132,138 bytes in aggregate. This proves
-compiled backing reuse, not resident-world navigation: allocation/upload/adoption,
-cliff/resource adapters and actual drawing remain real work. Backing held 16,640
-occurrences in 890,370,425 bytes. Large worlds use a 384 MiB GPU geometry working
-set within the existing upper cap; the full expanded world does not fit there.
-The previous fixture moved a few synthetic objects with the camera; this run
-fixes that and cannot be treated as a strictly matched speed comparison to it.
+The measured candidate is `native/build/m38-shared-world/C3XRenderer.dll`.
+At 1120×1192, full detail, dense world-fixed objects and all water effects on,
+each campaign completely prepared its declared world before 100 seeded jumps:
 
-The next candidate, `native/build/m38-memory-sweep/C3XRenderer.dll`, packs city
-vertices from 168 to 88 bytes with every consumed float channel unchanged. Its
-control bitmap matches the prior candidate exactly. The matched 100-jump Huge
-campaigns below all prepared 520 regions, made zero combined compiler calls and
-passed six exact cold-image checks; full detail and water effects remain on.
+| World / geometry cap | First GPU / additional preparation s | Desktop mean / p95 / max ms | Uploaded GB | Minimum contiguous VA MiB |
+| --- | ---: | ---: | ---: | ---: |
+| Standard, 5,000 tiles / 768 MiB | 1.906 / 10.594 | 201.28 / 233.62 / 307.20 | 0 | 1132.69 |
+| Huge, 12,800 tiles / 384 MiB | 1.953 / 24.843 | 428.60 / 691.12 / 775.11 | 3.71 | 903.47 |
 
-| Geometry working-set cap | Desktop mean / p95 / max ms | Uploaded GB | Minimum contiguous VA MiB |
-| --- | ---: | ---: | ---: |
-| 384 MiB | 611.93 / 995.45 / 1090.39 | 9.57 | 913.72 |
-| 512 MiB | 613.95 / 1062.70 / 1206.56 | 8.85 | 662.84 |
-| 640 MiB | 626.36 / 1046.42 / 1213.28 | 7.99 | 444.66 |
+Receipts: `native/build/m38-normal-shared-world/` and `m38-huge-shared384/`.
+Standard completed 247 regions; all 100 jumps needed **zero world builds,
+restores, static-geometry uploads or map readbacks**. Retained geometry occupied
+455.6 MiB, plus about 3 MiB shared sources and the bounded instance stream.
+Huge completed 520 regions and made zero combined world-compiler calls, but
+restored/re-uploaded prepared content. Six independent warm/cold image checks
+passed exactly in each campaign. Comparing the six Standard images with expanded
+geometry found only three differing pixels total (maximum RGB difference 4);
+the focused shadow-on/off controls matched exactly. The 28 affected rigid-object,
+object-compiler, backing and zoom-cache tests passed.
 
-Receipts: `native/build/m38-huge-compact384/`, `m38-huge-compact512/` and
-`m38-huge-compact640/`. These are single-run comparisons, not statistically
-established timing differences. Increasing capacity reduced uploads without a
-measured latency benefit; 640 MiB also failed the 512 MiB headroom floor. Keep
-384 MiB as the production Huge cap for now. The user permits a high-end-machine
-target provided the VM runs it; increases should earn their cost in measured
-workload results. Other cache and quality controls were identical.
+The prior compact expanded-geometry controls measured Standard 221.52 / 362.39 ms
+mean / p95 and Huge 611.93 / 995.45 ms with 9.57 GB uploaded. Source sharing
+removed roughly 61% of Huge upload volume in these single-run comparisons.
+An earlier expanded-geometry capacity sweep at 384/512/640 MiB reduced uploads
+without improving latency; 640 MiB also failed the 512 MiB VA headroom floor.
+Keep the current caps. Higher budgets require measured benefit on the VM.
 
-The 384 MiB streaming trace attributes 1.34 GB to ground, 1.35 GB to natural
-terrain, 6.08 GB to infrastructure and 0.63 GB to cities. Repeated infrastructure
-is the largest representation opportunity: all six source mine variants total
-1.30 MB, while each current transformed placement occupies 256–336 KB. Restore
-worker time totals 75.81 s across concurrent lanes and must not be added to
-end-to-end latency as if serial. Source sharing, not additional worker count or
-larger expanded-mesh budgets, is the next experiment.
-
-**Next unfinished responsibility:** reduce expanded-content residency/paging
-costs, then finish prompt native cutover for every camera trigger and the
-edit/lifecycle/complete-workload matrix. The <33 ms p95 target is unpassed. Fixture latency excludes
-native capture/overlays and actual game input. The accepted water DLL remains
-staged; no M3.8 candidate has been staged, installed or run inside Civ III.
+**Next unfinished responsibility:** make selection/submission and actual view
+rendering cheap now that Standard destinations are resident, finish prompt native
+cutover for every camera trigger, and complete edit/lifecycle/live-input evidence.
+The **Standard-map <33 ms p95 target is unpassed**; every measured jump above
+exceeded 100 ms. Fixture latency includes desktop completion but excludes Civ III
+input, native capture and overlays. Huge paging remains separately visible.
 
 ## M3.7 accepted handoff (preserved)
 
@@ -363,9 +379,12 @@ submission queue or a fast revisit does not prove arbitrary-destination readines
 
 ### 3.8 arbitrary-destination navigation
 
-**Supported-size target:** prioritize normal maps through nominal 160 × 160
-Huge maps (12,800 actual staggered tiles). The user explicitly accepts this as
-the upper acceptance envelope. A 332 × 332 / 55,112-tile case remains a limit
+**Latency acceptance:** the user accepts **<33 ms p95 on nominal 100 × 100
+Standard maps (5,000 actual staggered tiles)** as the performance win, with
+viewport, object density and hardware declared. Nominal 160 × 160 Huge maps
+(12,800 actual tiles) remain the supported-size/capacity target; disclose their
+latency separately without requiring the same 33 ms result. A 332 × 332 /
+55,112-tile case remains a limit
 probe, not a release requirement; do not increase residency budgets to pass it.
 Whole-world copied input alone measures about 8 MiB at 12,800 tiles and 35 MiB at
 55,112 tiles. Expanded geometry, worker allocations and driver address space
@@ -426,9 +445,10 @@ subset cannot certify navigation anywhere. Preserve full detail and all water
 effects, current budgets and at least 512 MiB sampled contiguous VA headroom.
 No LOD, placeholder frames or hidden-content exposure is authorized by this goal.
 
-**Latency objective:** under a declared map/viewport/hardware envelope, unchanged
-initialized-world navigation targets **<33 ms p95 from input or native camera
-decision to first correct coherent displayed frame**; <16.7 ms is the later
+**Latency objective:** on Standard maps under the declared viewport/density/hardware
+envelope, unchanged initialized-world navigation targets **<33 ms p95 from input
+or native camera decision to first correct coherent displayed frame**. Huge-map
+capacity and latency are reported separately; <16.7 ms is the later
 60 FPS objective. Report each camera-trigger class separately; rapid pans must
 not conceal slow selected-unit jumps. Report maximums and every
 >100 ms stall as well, so p95 cannot conceal a few slow regions. Both spatial

@@ -1,5 +1,25 @@
 # Civ III patch dependency ledger
 
+## Route-cursor ABI crash correction
+
+The live city-close/worker-selection report ended immediately after entering
+go-to preview. Machine-code inspection establishes that GOG `0x004E45E0` ends
+both branches with `RET 8` (`0x004E465C`, `0x004E46B3`); its caller supplies two
+coordinates and does not clean them up. The renderer replacement incorrectly
+used `__cdecl`, leaving eight bytes on the caller's stack even when it suppressed
+the native cursor. It now uses `void __stdcall (int x, int y)` and explicitly
+casts the original entry to the same ABI for configuration-off/native fallback.
+
+`required_user_action: []` for the working fix: it handles the existing patch-table
+type without editing the CSV. The table's `Main_Screen_Form_draw_route_cursor`
+declaration should subsequently be corrected from `void (__cdecl *)(int, int)`
+to **`void (__stdcall *)(int, int)`**; capability remains `inlead`, GOG address
+`0x004E45E0`, Steam/other `0x0` (unverified). No new symbol or address is needed.
+The explicit forwarding cast is safe with either table declaration. Re-run
+`INSTALL.bat` to replace the installed injected wrapper; a DLL replacement alone
+cannot repair the native calling convention. Actual crash-address attribution
+and live-game confirmation remain separate from this proven ABI defect.
+
 ## M3.8 whole-world input
 
 `required_user_action: []`. No new executable symbols, signatures or addresses.
@@ -11,6 +31,14 @@ Existing map/viewer/visibility and configuration scopes reject obsolete pages.
 The callback is registered at the existing renderer-load boundary and retired
 on unload. Builds without it retain demand capture. Native camera-cutover work
 is still unfinished; no speculative patch dependency is requested.
+
+Cutover audit: GOG Main Screen `m22` resolves through the installed executable's
+vtable to `0x004EE7A0`; it marks Animator dirty rather than drawing a fresh visual
+frame. Native `Animator::update` (`0x004EEC40`) also advances actions/FLC state,
+so invoking extra updates is not a safe visual-only completion boundary. The
+existing exact centering guard remains required until a draw-only native overlay
+refresh has been established. Shared rigid geometry and compressed backing are
+DLL-only changes and add no patch-table dependencies.
 
 ## M3.7 asynchronous recovery
 
@@ -1148,7 +1176,7 @@ from another build. `TEST_INJECTED_CODE_COMPILE.bat` passes.
 | Symbol | Capability / signature | GOG address | Steam / other | Reason and fallback |
 | --- | --- | --- | --- | --- |
 | `Main_Screen_Form_update_in_go_to_mode` | inlead; `void (__fastcall *)(Main_Screen_Form*, int)` | `0x4E46C0` | `0 / 0` | Lexically capture existing native route line/text output; original pathfinding, turn arithmetic and action side effects still execute. Config-off or no admitted tactical owner calls original unchanged. |
-| `Main_Screen_Form_draw_route_cursor` | inlead; `void (__cdecl *)(int, int)` | `0x4E45E0` | `0 / 0` | Replace destination FLC with copied anchor semantics inside route scope. Config-off/no admitted owner calls original. |
+| `Main_Screen_Form_draw_route_cursor` | inlead; `void (__stdcall *)(int, int)` | `0x4E45E0` | `0 / 0` | Replace destination FLC with copied anchor semantics inside route scope. Callee pops both arguments; see the ABI correction above for the existing CSV type. Config-off/no admitted owner calls original. |
 | `Map_Renderer_draw_grid` | repl vptr; `void (__fastcall *)(Map_Renderer*, int, PCX_Image*, int, int, int, int)` | slot `0x66A594`, target `0x4C5570` | `0 / 0` | Suppress native grid in custom mode; copied `MapGrid_Flag` and captured anchors drive the DLL pass. Config-off calls original. No input hook. |
 
 Existing dependencies: `Animator_draw_map_unit_cursor` call sites `0x5CC2B1` /

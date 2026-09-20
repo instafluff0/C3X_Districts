@@ -1,5 +1,38 @@
 # C3X Custom Rendering Configuration Contract
 
+## Running the current GPU evaluation build
+
+The GPU path is selected by `enable_custom_rendering`; there is no separate
+`render_gpu` configuration flag. For the normal full-effects workload, use these
+values in `custom.c3x_config.ini`:
+
+```ini
+enable_custom_rendering = true
+enable_custom_rendering_reflections = true
+enable_custom_rendering_waves = true
+enable_custom_rendering_cache = true
+enable_custom_rendering_zoom = true
+```
+
+With Civ III closed, run `INSTALL.bat` from the Windows installed game's
+`Conquests\C3X_Districts` directory, then launch Civ III normally. In the configured
+VM this directory links to the shared current checkout. Use that installed-game
+path so the injector resolves the executable and records the correct relative
+mod directory. `C3X_RENDERER_CIV3_CONQUESTS` configures a relocated game install.
+
+`INSTALL.bat` installs the injected bridge; it does **not** compile or stage the
+renderer. The bridge loads `Renderer\bin\C3XRenderer.dll`, whose current staged
+identity and validation are recorded in the [roadmap](retained_renderer_plan.md).
+The native GPU/JGL route and guarded asynchronous manual-pan path require no
+additional launcher. Reset any explicit `C3X_RENDERER_NATIVE_ASYNC=0` diagnostic
+override to use the default. Configuration changes require a game restart.
+
+An evaluation build permits a game test before performance acceptance. Standard
+maps carry the <33 ms p95 navigation objective; that target and prompt native
+cutover for all camera triggers remain unfinished. On the first test, exercise
+map loading, scrolling/distant jumps, selected-unit centering, fog and tactical
+overlays. Live-game correctness and latency are separate from automated fixtures.
+
 ## C3X map effects and cache switches
 
 The C3X configuration loader accepts these booleans in `custom.c3x_config.ini`

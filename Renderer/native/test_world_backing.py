@@ -57,10 +57,15 @@ int main(){
  light->blockers.push_back({{1,2,3,4},{5,6,7,8}});
  for(auto& p:o.city){p.mesh=mesh;p.material=42;p.environment=true;p.terrain_conforming=true;p.atlas={1,2,3,4};p.lighting=light;}
  o.composition=7;o.instances=11;o.routes=3;
+ o.rigid.resize(1);o.rigid[0].family=objects::mine_family;o.rigid[0].asset=2;o.rigid[0].layer=objects::mine_layer;
+ o.rigid[0].instance.place[7]=12.5f;o.rigid[0].bounds={1,2,3,4};o.rigid[0].material=21.18f;
+ o.draws={{objects::feature_layer,0,3,~0u},{objects::mine_layer,0,0,0}};
  auto bytes=WorldBackingCodec::encode(world);auto copied=WorldBackingCodec::decode(bytes);assert(copied);
  assert(copied->ground->meshes[0].vertices==mesh.vertices && copied->terrain->meshes[2].indices==mesh.indices);
  assert(copied->ground->world==g.world && copied->objects->coast==o.coast && copied->objects->topology==o.topology);
  assert(copied->ground->water_coverage && copied->objects->composition==7 && copied->objects->instances==11 && copied->objects->routes==3);
+ assert(copied->objects->rigid.size()==1 && !std::memcmp(&copied->objects->rigid[0],&o.rigid[0],sizeof(objects::PreparedRigid)));
+ assert(copied->objects->draws.size()==2 && copied->objects->draws[0].count==3 && copied->objects->draws[1].rigid==0);
  assert(copied->objects->city[1].lighting==copied->objects->city[0].lighting && copied->objects->city[0].lighting!=light);
  assert(copied->objects->city[1].lighting->lights[0].owner==9 && copied->objects->city[1].atlas==o.city[1].atlas);
  auto const& proof=copied->terrain->rivers.front();assert(proof.first==key && proof.second->values==cell->values);

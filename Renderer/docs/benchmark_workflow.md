@@ -141,8 +141,11 @@ against independent cold renders and exercise live overlays, fog, picking,
 selection, action centering, cancellation and config-off after every cutover.
 
 The target is <33 ms p95 from input or native camera decision to first correct
-coherent display for unchanged initialized-world navigation on the declared
-target setup; <16.7 ms is the later objective. Report mean, median, p95, maximum,
+coherent display for unchanged initialized-world navigation on nominal 100 × 100
+Standard maps (5,000 actual tiles), with viewport, density and target hardware
+declared. Huge maps (12,800 actual tiles) retain separate capacity/latency results;
+they need not meet 33 ms for the Standard-map performance win. The later objective
+is <16.7 ms. Report mean, median, p95, maximum,
 sample count and each >100 ms stall separately for each camera-trigger class.
 An aggregate dominated by fast manual pans cannot pass slow selected-unit jumps.
 Also report end-to-end results for normal first visits including every readiness
@@ -174,6 +177,18 @@ runs with equivalent settings. Capture is outside that harness's timed requests;
 its receipt states this limit. Do not label the result complete input-to-display.
 `--dense-scene` enables the existing world-fixed city/infrastructure/resource
 stress fixture; match it in both arms when measuring missing-object construction.
+
+`--world-readiness-only` runs bounded full-world capture and canonical preparation
+before 100 seeded distributed destinations, followed by six independent cold-image
+oracles. Preparation must finish the declared authority sequence and every region;
+a timeout or unavailable region fails the coverage claim. It saves each oracle
+image for comparison with the established expanded-geometry path. This fixture
+measures actual HWND/desktop completion but excludes Civ III input/capture/overlays.
+`--world-geometry-mib` is an isolated capacity control, not a new production default.
+`--rigid-sources 0` selects the expanded control in benchmark builds only. Report
+shared-source allocation, dynamic instance streams and restored static geometry
+separately: compiled backing reuse does not imply GPU residency.
+
 The ordinary fixture's few central objects can stay resident throughout scrolling. Use
 a coastal scene with the default `--waves 1 --reflections 1 --water-motion 1`
 to exercise resident water and shoreline animation. Effects-off arms measure

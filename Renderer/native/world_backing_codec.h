@@ -81,7 +81,7 @@ public:
     static std::vector<unsigned char> encode(PreparedWorld const& source){
         if(!source.ground || !source.terrain || !source.objects ||
            !source.ground->pending_grids.empty() || !source.ground->legacy_shadow.empty())return {};
-        Writer w;w.pod(std::uint32_t(2));
+        Writer w;w.pod(std::uint32_t(3));
         auto const& g=*source.ground;auto const& t=*source.terrain;auto const& o=*source.objects;
         for(auto const& m:g.meshes)write_mesh(w,m);
         w.pod(g.water_coverage);w.map(g.world);w.map(g.coast);w.map(g.topology);write_rivers(w,g.rivers);
@@ -89,6 +89,7 @@ public:
         w.map(t.world);w.map(t.coast);write_rivers(w,t.rivers);
         for(auto const& p:o.layers)write_part(w,p);
         w.vector(o.rigid);
+        w.vector(o.draws);
         w.pod(unsigned(o.city.size()));for(auto const& p:o.city)write_part(w,p);
         bool lighting=!o.city.empty() && bool(o.city.front().lighting);w.pod(lighting);
         if(lighting){w.vector(o.city.front().lighting->lights);w.vector(o.city.front().lighting->blockers);}
@@ -99,7 +100,7 @@ public:
     static std::unique_ptr<PreparedWorld> decode(std::vector<unsigned char> const& bytes){
         if(bytes.empty() || bytes.size()>limit)return {};
         try {
-            Reader r{bytes.data(),bytes.size()};unsigned version=0;r.pod(version);if(version!=2)return {};
+            Reader r{bytes.data(),bytes.size()};unsigned version=0;r.pod(version);if(version!=3)return {};
             auto result=std::make_unique<PreparedWorld>();
             result->ground=std::make_unique<fidelity::PreparedGround>();
             result->terrain=std::make_unique<fidelity::TerrainSurfaces>();
@@ -112,7 +113,13 @@ public:
             r.map(t.world);r.map(t.coast);t.rivers=read_rivers(r);
             for(auto& p:o.layers)read_part(r,p);
             r.vector(o.rigid);
+            r.vector(o.draws);
             for(auto const& instance:o.rigid)if(instance.family>=objects::family_count || instance.layer>=objects::layer_count)return {};
+            for(auto const& draw:o.draws){
+                if(draw.layer>=objects::layer_count)return {};
+                if(draw.rigid!=~0u){if(draw.rigid>=o.rigid.size() || o.rigid[draw.rigid].layer!=draw.layer)return {};}
+                else if(draw.first>o.layers[draw.layer].mesh.index_count || draw.count>o.layers[draw.layer].mesh.index_count-draw.first)return {};
+            }
             o.city.resize(r.count());for(auto& p:o.city)read_part(r,p);
             bool lighting=false;r.pod(lighting);
             if(lighting){auto light=std::make_shared<city_fidelity::Lighting>();r.vector(light->lights);r.vector(light->blockers);

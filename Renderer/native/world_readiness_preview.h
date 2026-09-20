@@ -43,7 +43,9 @@ if(GetEnvironmentVariableA("C3X_RENDERER_WORLD_READINESS_TEST",world_test_option
     std::printf("WORLD_READINESS total=%u authoritative=%u passes=%lld regions=%u attempted=%u unavailable=%u first_request_ms=%llu preparation_ms=%llu largest_free=%zu\n",
         state.total,state.authoritative,state.capture_passes,state.regions,state.prepared_regions,state.unavailable_regions,
         initial_ms,GetTickCount64()-start,std::size_t(memory.second));
-    if(!state.capture_passes || state.authoritative!=state.total){set_world(nullptr);return 1;}
+    if(!state.capture_passes || state.authoritative!=state.total ||
+       state.preparation_sequence!=state.appearance_sequence || state.prepared_regions!=state.regions ||
+       state.unavailable_regions){set_world(nullptr);return 1;}
     // No route-dependent warmup: the source paging/region policy above cannot
     // observe this seed or the destination sequence. Every first visit counts.
     int home_x=center_x,home_y=center_y;std::uint32_t random=0x38c3;
@@ -99,6 +101,7 @@ if(GetEnvironmentVariableA("C3X_RENDERER_WORLD_READINESS_TEST",world_test_option
     set_world(nullptr);world_records.clear();
     // Cold reference checks are outside the timed workload and use independent
     // world/device lifetimes. Readback is an explicit diagnostic oracle only.
+    unsigned oracle_index=0;
     for(auto const& oracle:oracles){
         world_reset();center_x=oracle.x;center_y=oracle.y;
         auto selected=capture_view();auto cold=frame;cold.tiles=selected.data();cold.tile_count=unsigned(selected.size());
@@ -111,6 +114,9 @@ if(GetEnvironmentVariableA("C3X_RENDERER_WORLD_READINESS_TEST",world_test_option
             differences+=delta!=0;maximum=(std::max)(maximum,delta);
         }
         std::printf("WORLD_ORACLE x=%d y=%d differing_channels=%u max_channel_delta=%u\n",center_x,center_y,differences,maximum);
+        world_output.width=image.width;world_output.height=image.height;world_output.stride_bytes=image.width*4;
+        world_output.bgra_pixels=pixels.data();
+        write_bmp((std::string(argv[5])+".world-"+std::to_string(oracle_index++)+".bmp").c_str(),world_output);
         if(maximum>1){ok=false;
             world_output.width=cold.target_width;world_output.height=cold.target_height;world_output.stride_bytes=cold.target_width*4;
             world_output.bgra_pixels=oracle.pixels.data();write_bmp((std::string(argv[5])+".world-prepared.bmp").c_str(),world_output);

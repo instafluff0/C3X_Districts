@@ -104,8 +104,8 @@ cbuffer CityMaterialFrame : register(b7) { float4 CityMaterialFlags; float4 City
 #define Q8_SETTLEMENT_GAIN 1
 #define Q8_SETTLEMENT_ATLAS CityAtlas
 '''+environment+'\n'+read(LAB/'shaders/objects/settlement_ground.hlsl')+'\n'+material+'''
-// The cached 168-byte native vertex retains every source channel. This is
-// deliberately distinct from the 48-byte legacy feature cache layout.
+// The cached 88-byte city vertex retains every consumed source channel. The
+// same semantics also accept the original 168-byte adapter input.
 struct NativeCityInput {
  float3 position:POSITION;float2 uv:TEXCOORD0;float3 normal:NORMAL;
  float2 ao:TEXCOORD1;float material:TEXCOORD2;
@@ -144,6 +144,13 @@ float4 PSNativeCityReflectionEmission(FeaturePixelInput p):SV_Target {
     source=world_projection(source,read)
     (HERE/'city.hlsl').write_text(source)
     (HERE/'feature.hlsl').write_text(source)
+    rigid_geometry=read(HERE.parent/'render_core/rigid_instance_geometry.hlsl')
+    rigid=read(HERE.parent/'render_core/rigid_feature.hlsl')
+    rigid=rigid.replace('#include "../city_fidelity/feature.hlsl"',source)
+    rigid=rigid.replace('#include "rigid_instance_geometry.hlsl"',rigid_geometry)
+    (HERE/'rigid_feature.hlsl').write_text(rigid)
+    rigid_caster=read(HERE.parent/'render_core/rigid_caster.hlsl')
+    (HERE/'rigid_caster.hlsl').write_text(rigid_caster.replace('#include "rigid_instance_geometry.hlsl"',rigid_geometry))
     hydro=read(HERE.parent/'environment_refresh/hydrology.hlsl')
     marker='float q6_receiver_visibility(PixelInput input,float3 normal,float legacy_shadow) {'
     assert hydro.count(marker)==1

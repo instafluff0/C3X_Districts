@@ -51,8 +51,10 @@ caller-thread adoption boundary promptly without depending solely on a 66 ms
 Animator opportunity. Preserve native action progression and centering semantics;
 do not solve visual latency by running extra gameplay updates. The target is
 <33 ms p95 from input or native camera decision to coherent display for each
-trigger class under a declared supported workload, with
-cold/evicted/edit costs and initialization time disclosed separately.
+trigger class on nominal 100 × 100 Standard maps (5,000 actual tiles), with
+viewport, density and hardware declared. Huge maps (12,800 actual tiles) remain
+a capacity target with separate latency results. Disclose cold/evicted/edit costs
+and initialization time separately.
 
 This is C3X's intended architecture, not a verified description of Civ VI's
 runtime. Installed ArtDef/package evidence establishes asset data, not Civ VI's
@@ -195,9 +197,13 @@ fallback-body construction while retaining walls and constrained-site fallback.
 
 Reduced/non-world profiles and explicit serial ground/object controls continue
 through their existing scoped preparation/adoption paths, using the same
-compilers. The current object representation remains retained transformed meshes;
-source-mesh instancing is a later option where it removes measured work. Final
-occurrence/pass order remains native capture order. Workers use only the
+compilers. Height-bearing rigid infrastructure now uses shared immutable source
+buffers and compact placement records; flat and terrain-conforming pieces retain
+their grouped transformed geometry. Color, reflection and source-caster shaders
+share the same placement math. Each placement has its own content version, while
+split pieces preserve their original combined layer's world bounds for water
+ordering and shadow/reflection context. Final occurrence/pass order remains
+native capture order. Workers use only the
 thread-safe D3D device for immutable allocation, never the immediate context or
 native-game surfaces. Allocation boundaries remain residency/eviction boundaries;
 there is no cross-tile arena, fence scheme or second presenter.

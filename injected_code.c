@@ -23801,7 +23801,7 @@ patch_Main_Screen_Form_update_in_go_to_mode (Main_Screen_Form * this, int edx)
 	is->custom_renderer_native_image (C3X_NATIVE_TACTICAL_ROUTE_END, target, NULL, NULL, NULL, 0);
 }
 
-void __cdecl
+void __stdcall
 patch_Main_Screen_Form_draw_route_cursor (int x, int y)
 {
 	if (is->current_config.enable_custom_rendering && is->custom_renderer_native_image != NULL &&
@@ -23813,7 +23813,9 @@ patch_Main_Screen_Form_draw_route_cursor (int x, int y)
 		}
 		return;
 	}
-	Main_Screen_Form_draw_route_cursor (x, y);
+	// GOG 0x4E45E0 returns with RET 8. Both our entry and native forwarding
+	// must pop the two arguments; the existing CSV declaration says cdecl.
+	((void (__stdcall *) (int, int))Main_Screen_Form_draw_route_cursor) (x, y);
 }
 
 int __fastcall

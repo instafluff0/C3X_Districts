@@ -315,7 +315,7 @@ int main(){
 namespace c3x_renderer {namespace render_core {struct SourceShadow {
  struct Bounds {float low[3]={1,2,3},high[3]={4,5,6};};
  struct Caster {int vertices=0,indices=0,count=0,index_format=0,stride=0;unsigned vertex_offset=0,index_offset=0;
-  void const* instances=nullptr;float instance_material=40;
+  void const* instances=nullptr;float instance_material=40;bool rigid=false;
   unsigned layer=0,version=0,binding=0;Bounds bounds;float offset[2]={};};
 };}}
 enum {geometry_land=1,geometry_feature=2,geometry_natural_decal=3,geometry_layer_count=5};
@@ -324,7 +324,7 @@ struct CachedVertexChunk {
  int translation_x=0,translation_y=0;float natural_projection[4]={}; unsigned projection_kind=0;int source_tile_width=128;
  struct {void const* value=nullptr;void const* get()const{return value;}} instances;float instance_material=40;
  int buffer=7,indices=8,index_count=9,index_format=16,vertex_stride=64;unsigned vertex_offset=128,index_offset=768;
- unsigned version=10,city_material=0xffffffffu;bool animation_texture=false;
+ unsigned version=10,city_material=0xffffffffu;bool animation_texture=false,rigid_source=false;
  c3x_renderer::render_core::SourceShadow::Bounds world_bounds;
 };
 #include "Renderer/native/render_core/geometry_draws.h"
