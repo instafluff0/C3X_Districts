@@ -228,8 +228,26 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
         verify(status(&ambient_after)==1&&ambient_after.map_samples>retained_before.map_samples&&
             ambient_after.unit_samples==retained_before.unit_samples,"unpublished replacement cannot freeze displayed resources");
         std::printf("PASS unpublished map replacement: displayed_map_samples=%lld\n",ambient_after.map_samples-retained_before.map_samples);
-        auto selected=unit;selected.unit_id=901;selected.action_cursor=0;int bounds[4]={};
-        verify(owner.draw_unit(unit_gpu,frame.ticket,selected,screen_surface,screen_surface,bounds,3),"publish selected unit once");
+        char visual_count_option[16]={},visual_case[16]={},visual_frames_option[16]={};
+        GetEnvironmentVariableA("C3X_RENDERER_VISUAL_FRAMES",visual_frames_option,sizeof(visual_frames_option));
+        unsigned visual_frames=visual_frames_option[0]?unsigned(std::max(30,std::min(240,std::atoi(visual_frames_option)))):30;
+        GetEnvironmentVariableA("C3X_RENDERER_VISUAL_UNITS",visual_count_option,sizeof(visual_count_option));
+        GetEnvironmentVariableA("C3X_RENDERER_VISUAL_UNIT_CASE",visual_case,sizeof(visual_case));
+        unsigned visual_count=std::max(1,std::min(32,std::atoi(visual_count_option)));
+        unsigned working=0,frozen=0,directed=0;
+        for(unsigned n=0;n<visual_count;++n){
+            auto selected=unit;selected.unit_id=901+int(n);selected.action_cursor=0;int bounds[4]={};
+            if(visual_count>1){unsigned columns=visual_count<=8?4:8,rows=(visual_count+columns-1)/columns;
+                selected.body_x=int(n%columns)*w/int(columns);selected.body_y=int(n/columns)*h/int(rows);
+                selected.direction=1+int(n%8);}
+            unsigned flags=C3X_RENDERER_UNIT_STATE_CAPTURED|(n==0?C3X_RENDERER_UNIT_SELECTED:0);
+            if(n && (!std::strcmp(visual_case,"work") || (!std::strcmp(visual_case,"mixed") && n%3==1))){
+                strcpy_s(selected.unit_key,"PRTO_Worker");selected.action=13;++working;
+            }else if(n && !std::strcmp(visual_case,"mixed") && n%3==2){selected.action=2;selected.action_cursor=7;++directed;}
+            else if(n)++frozen;
+            verify(owner.draw_unit(unit_gpu,frame.ticket,selected,screen_surface,screen_surface,bounds,flags),"publish captured visual unit once");
+        }
+        std::printf("VISUAL_WORKLOAD units=%u selected_idle=1 work=%u frozen_idle=%u native_action=%u\n",visual_count,working,frozen,directed);
         final_ui_drawn=false;patch_JGL_present_screen(&full);
         verify(live(C3X_NATIVE_VISUAL_POLICY,nullptr,nullptr,nullptr,nullptr,1)==1,"retained complete frame ready");
         c3x_renderer_visual_status_v1 before={sizeof(before)},after={sizeof(after)};verify(status(&before)==1,"visual status before");
@@ -240,7 +258,7 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
         verify(visual_desktop!=nullptr,"independent visual desktop boundary");
         SetWindowPos(window,HWND_TOPMOST,20,20,w,h,SWP_NOACTIVATE|SWP_SHOWWINDOW);
         auto desktop_dc=GetDC(nullptr);double visual_request_ms=0,visual_desktop_ms=0;
-        for(unsigned n=0;n<30;++n){Sleep(33);LARGE_INTEGER a={},b={};QueryPerformanceCounter(&a);
+        for(unsigned n=0;n<visual_frames;++n){Sleep(33);LARGE_INTEGER a={},b={};QueryPerformanceCounter(&a);
             int result=visual();verify(result==1||result==C3X_RENDERER_RESULT_PENDING,"independent completed GPU visual frame");QueryPerformanceCounter(&b);
             verify(SUCCEEDED(visual_desktop()),"independent visual desktop completion");LARGE_INTEGER visible={};QueryPerformanceCounter(&visible);
             verify(GetPixel(desktop_dc,30,32)==RGB(0,255,0),"retained opaque UI unchanged over independent animation");
@@ -250,12 +268,16 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
                 result,request_ms,desktop_ms,a.QuadPart,b.QuadPart);}
         ReleaseDC(nullptr,desktop_dc);FreeLibrary(desktop_library);
         QueryPerformanceCounter(&end);verify(status(&after)==1,"visual status after");
-        verify(after.frames-before.frames>=15&&after.frames-before.frames<=30&&after.map_samples>before.map_samples&&after.unit_samples>before.unit_samples&&after.pose_changes>before.pose_changes,
+        verify(after.frames-before.frames>=visual_frames/2&&after.frames-before.frames<=visual_frames&&after.map_samples>before.map_samples&&after.unit_samples>before.unit_samples&&after.pose_changes>before.pose_changes,
             "authored unit poses advance with no new native selection");
         verify(events.size()==native_events&&screen_transfers==transfers,"visual frames never call native drawing/transfer hooks");
         verify(after.retained_bytes<=128ll*1024*1024,"retained visual memory bound");
         auto prior_window=GetForegroundWindow();SetWindowPos(window,HWND_TOPMOST,20,20,w,h,SWP_SHOWWINDOW);
+        auto foreground_thread=GetWindowThreadProcessId(prior_window,nullptr),caller_thread=GetCurrentThreadId();
+        bool attached=foreground_thread && foreground_thread!=caller_thread && AttachThreadInput(caller_thread,foreground_thread,TRUE);
         SetForegroundWindow(window);SetFocus(window);
+        if(attached)AttachThreadInput(caller_thread,foreground_thread,FALSE);
+        verify(IsWindowVisible(window)&&GetForegroundWindow()==GetAncestor(window,GA_ROOT),"timer fixture owns visible foreground window");
         c3x_renderer_visual_status_v1 transported=after;
         LARGE_INTEGER deadline={};QueryPerformanceCounter(&deadline);deadline.QuadPart+=frequency.QuadPart*3;
         do{
@@ -278,7 +300,7 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
         std::printf("PASS independent resident frames: frames=%lld map_samples=%lld unit_samples=%lld pose_changes=%lld bytes=%lld nodes=%lld average_request_ms=%.3f average_desktop_ms=%.3f native_draw_calls=0\n",
             after.frames-before.frames,after.map_samples-before.map_samples,after.unit_samples-before.unit_samples,
             after.pose_changes-before.pose_changes,after.retained_bytes,after.nodes,
-            visual_request_ms/30.,visual_desktop_ms/30.);
+            visual_request_ms/visual_frames,visual_desktop_ms/visual_frames);
         copy(save,screen_surface,full);final_ui_drawn=false;patch_JGL_present_screen(&full);
         capture_display(expected);
         live(C3X_NATIVE_VISUAL_POLICY,nullptr,nullptr,nullptr,nullptr,1);

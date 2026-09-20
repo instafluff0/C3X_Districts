@@ -10,96 +10,115 @@ Full detail, authored animation and Civ III's gameplay/state authority remain
 unchanged. The zoom-owned map-overlay extension below is a planned rendering
 ownership change, not a second visibility, selection, or pathfinding system.
 
-**Current technical checkpoint: 1.6 and 2.1–2.3 implemented; 2.4 shoreline, open-water motion and river flow implemented; 2.5 tactical overlays technically verified in the candidate.**
-Units remain above all map geometry under the user's final policy. Selection, route
-and grid draw semantics now enter the existing retained GPU composition path.
-Water visual acceptance was granted on September 19; the exact candidate is staged.
-Milestone 2 performance acceptance and the strategic live-game check remain open. The return to 2.4 adds broad/fine ocean normal motion and
-connected directional river flow, with shared sun/moon glints. The visual
-refinement uses smaller, slow multidirectional ripples and concentrated light
-paths instead of broad drifting waves or ocean-wide sparkle. Current water
-verification and whole-workload evidence are recorded below.
-**Next architectural step: 2.6 scheduling/reuse.** Always enable shore waves,
-water motion and reflections for idle, scrolling and map-jump optimization.
-Resident reflections and shared reflected tree meshes now work in the 2.6
-candidate. Idle, scrolling and new-destination costs still miss the performance
-objective; see the current scheduling/reuse checkpoint below.
+**Current technical checkpoint: M2.6 scheduling/reuse and M2.7 automated acceptance
+are complete in the candidate.** M1 and M2.1–2.5 remain implemented.
+Units stay above all map geometry. Native actions, visibility, controls and unit/UI
+ordering remain authoritative. Shore waves, water motion and reflections are on
+in every normal performance workload. The accepted water DLL remains staged;
+these DLL-only optimizations have not been staged, installed or run inside Civ III.
 [Architecture](renderer_architecture.md) owns the design;
 [validation](benchmark_workflow.md) owns measurement and acceptance.
 
-## 2.6 scheduling/reuse — current checkpoint
+## M2.6 / M2.7 current handoff
 
-The accepted 2.4 DLL remains staged; its integration and fixture fixes were
-committed/pushed in `e4c3a572` and `ee25c29d`. The following 2.6 candidate is separate:
-`native/build/m26-final/C3XRenderer.dll`, SHA-256
-`582c1dc9316f4c3dea41f067f4340f70a45766440b113c36193dc8b9128ff3c2`.
-The final revision adds explicit reflection-toggle pixel invalidation; the
-384-request performance run below predates only that configuration fix.
+Candidate: `native/build/m26-unit-sharing-final/C3XRenderer.dll`, SHA-256
+`b7d2fad4213c1b75e51576a2687521f050784469f5494235953e013d4d319bf9`.
+Prior reflection/timer work was committed as `12d73104`; the user handles pushing.
 
-Reflections now join the resident scene/native GPU composition path. Unchanged
-camera/scene/light inputs reuse resolved mirror samples while water advances.
-Camera changes assemble a guarded image from world-aligned cells in the existing
-bounded dependency cache; mirror generation uses the existing small MSAA scratch.
-There is no second full-view multisampled reflection color/depth allocation, new
-presenter or native patch. Reflected trees now consume the same shared meshes and
-instance transforms as color/shadow passes. The compatibility path and effect
-switches remain available. A renderer timer callback disarms itself during its
-synchronous work and rearms afterward, preserving 33 ms cadence when affordable
-and at least 10 ms of message-pump opportunity after an overrun. Reassess this
-small guard when callbacks become nonblocking; M3 still owns asynchronous camera
-publication.
+Completed capabilities:
 
-Matched 640×480 river playback, 48 frames, all effects enabled (no shore-wave
-occurrences in this river view): accepted compatibility DLL **91.12 ms** mean;
-final resident/shared-tree candidate **10.91 ms**. Repeat,
-fog, reveal, reset and motion-off camera checks pass. The independent renderer
-paths differ at 1,309 pixels by at most four channel levels (mean absolute error
-0.00174/255); the full-view path retains the same materials/lighting. This is a
-focused replay comparison, not a whole-game speedup. Shared versus baked tree
-submission alone differs at 19 pixels by at most two channel levels. The final
-hot-toggle witness exactly matches cold reflection-off pixels and restores the
-original reflection-on image without relying on a device reset.
+- Independent frames retain material-pass selections and static shadow-caster
+  descriptors. Time changes no longer rediscover static submission state.
+  Borrowed mesh records retire with their owning scene; scene/view/light changes
+  invalidate the retained recipe.
+- Direct unit revisions are collected before map execution. Missing current poses
+  enter the existing bounded workers ahead of predictions; GPU execution preserves
+  native order. Identical unit body contributions share the existing 192 MiB GPU
+  content owner. Each occurrence still applies its own shadow, placement and
+  underlay blend; hidden/retired selections cannot authorize a cached pose.
+- Retained composition reuses owned result allocations and removes a duplicate
+  full-map copy. Opaque city bodies remain in static color/depth. Conservative dry
+  water rejection is enabled by default; mirror cells without water receivers are
+  omitted. User-facing effects and diagnostic controls remain available.
+- Resident reflections and shared reflected tree meshes remain enabled. The timer
+  rearms after synchronous work, retaining at least 10 ms for the message pump
+  after an overrun. Reassess that guard when M3 makes callbacks nonblocking.
 
-Complete 1120×1192 dense coastal/native workload, waves/reflections/water motion
-on, eight units: 384 requests, 64 per route/workload. Latest GPU mean / p95:
-stationary **11.27 / 13.95 ms**, scrolling **177.53 / 220.91 ms**, local edits
-**19.50 / 56.58 ms**. Thirty separate one-selected-unit visual frames average
-**71.96 / 81.88 ms** request mean / p95 and **80.95 ms** desktop completion.
-All 30 intervals have zero mirror-cell builds, static scene draws, water geometry
-uploads and wave uploads. Native ownership/composition, CPU fallback, prepared
-view adoption and timer checks pass. Sampled contiguous VA stays above **752.6
-MiB**; no dropped trace lines and full input identities unchanged. Receipt,
-distributions and per-interval proof: `native/build/m26-native-instances/`.
-The final configuration-fix candidate also passes the native `--visual-only`
-fixture (`native/build/m26-final-native/receipt.json`), with exact native ownership,
-CPU fallback and timer checks, unchanged inputs and no dropped trace lines.
-Its 30 visual samples average 64.75 ms request / 72.68 ms desktop completion;
-all have zero mirror builds, static draws and wave/water geometry uploads.
-This shorter warm run does not replace the 384-request comparison above.
-The preceding matched uninstanced candidate averaged 71.10 ms visual and 180.15
-ms scrolling; this small difference is inconclusive. Shared reflected meshes are
-a verified capability, not a claimed measured coastal speedup.
+Matched complete native workload, 1120×1192 dense coast, eight units, all effects
+on, **384 requests per DLL**, 64 per route/workload. Prior `m26-final` versus this
+candidate, GPU request mean / p95 (ms):
 
-Eight distinct new destinations on the retained 100×100 verification world,
-1120×1192, dense objects and all effects: **0.41–5.01 s** capture plus completed
-render, no fallback, inputs/source/binaries unchanged. This harness includes a
-CPU readback endpoint and does not measure native presentation. The 5.01 s jump
-includes **4.30 s waiting for GPU completion**, plus 580.8 ms reported geometry
-work; the stall is not attributed to CPU preparation alone. Evidence:
-`native/build/m26-distant-all-effects/`, including `slow-jump-attribution.json`.
+| Workload | Prior | Candidate |
+| --- | --- | --- |
+| Stationary native demand | 11.81 / 15.31 | 11.58 / 16.43 |
+| Scrolling | 93.62 / 143.27 | 91.98 / 166.19 |
+| Local edit | 16.63 / 65.28 | 21.23 / 71.49 |
+| Independent 32-unit animation, 120 frames | 48.08 / 68.95 | 40.54 / 62.08 |
 
-**Next unfinished responsibility:** make the combined dynamic scene cheaper and
-bound new-content preparation/completion stalls. Trace the cold GPU wait, then
-reduce measured water/forward/finishing and scene preparation costs without
-turning effects off. 2.6 and Milestone 2 performance acceptance remain unfinished;
-reflection reuse alone does not establish fast idle, scrolling or map jumping.
-The dependency-selected integration suite covers 303 tests (301 pass / two skips
-after repairing the extracted scheduler fixture and retrying a VM transport
-failure). GPU visibility, native CPU handoff, HDR reconstruction, exact edit and
-wrapped reduced-zoom/cold parity all pass. The additional 25 navigation fixture
-and analysis tests pass, including the current dense-city override. No injected
-source or patch table changed.
-Capture/setup are outside the native benchmark; desktop completion is not scanout.
+The **15.7% lower mean animation request** is the demonstrated gain. Desktop
+completion improves 55.12 → 50.57 ms. Scrolling improvement is inconclusive;
+local-edit mean and navigation tails regress in this pair. Do not describe this
+as a general navigation or frame-budget win. Earlier profiled 65–72 ms visual and
+177 ms scrolling numbers included expensive address-space diagnostics; they are
+not comparable to these unprofiled production timings.
+
+All 120 candidate animation intervals prove zero static-world builds/uploads,
+static-scene draws/readbacks, mirror builds, wave builds/uploads and water uploads;
+all reuse material selections without static-caster recollection. Of 3,840 unit
+occurrences, 2,445 reuse a body contribution (64% fewer body raster passes).
+Native pixel/erase-bounds, 555/565/full-color ownership, CPU fallback, timer,
+config-off drain/reenable and tactical cancellation checks pass. The coastal
+control image is pixel-exact to the prior DLL. Sampled contiguous address space
+stays above **749.6 MiB**; this is sampled headroom, not a transient allocation bound.
+Receipts and interval proofs: `native/build/m27-complete-{control,final}/`.
+
+The same all-visible workload measures **31.36 / 37.58 / 40.54 ms mean** at
+**1 / 8 / 32 units**, each over 120 frames (one selected idle unit, remaining units
+working). P95 is 41.45 / 51.43 / 62.08 ms. The added 31 units cost 9.18 ms in this
+repeated-worker fixture; differing unit assets/actions can have different scaling.
+All intervals preserve the zero-static-work proof. Additional receipts:
+`native/build/m27-scaling1/` and `native/build/m27-scaling8/`.
+
+The separate 120-frame eight-unit mixed/visibility run passes: one selected idle,
+three work loops, two frozen idle and two native-directed actions; 33.41 ms mean,
+46.77 ms p95. Fog freezes map animation, hidden units emit no pixels, reveal resumes
+motion, and route/selection/grid changes preserve static content.
+Evidence: `native/build/m27-mixed8/`; this different workload is not a scaling
+comparison against the 32-worker case.
+
+Eight new destinations still cost **0.38–1.74 s**, with no fallback. Initial scene
+preparation costs 4.61 s. Four existing world workers prepare current content;
+new terrain and foreground joins remain material costs. A separate serialized
+probe places 143–433 ms at even a one-pixel CPU readback after sub-millisecond
+scene/finish completion queries. On this VM those queries do not establish true
+physical GPU completion; the observed delay is at the readback synchronization
+boundary, not proof of cheap shader execution. The earlier 4.30 s wait did not
+recur, but is not proved eliminated. Evidence: `native/build/m27-distant-final/`
+and `native/build/m27-distant-attribution/`. These completed-render/capture
+measurements include CPU delivery, not native presentation or physical scanout.
+
+**Next unfinished architectural responsibility: M3 coherent state publication and
+nonblocking camera/content updates**, including cold, evicted and invalidated
+views. Keep the current scene valid while useful work completes; never present
+mismatched camera/visibility/picking. M4 owns a demonstrated cadence budget.
+Fast cold jumps, sustained 30/60 FPS and strategic live-game acceptance are not
+claimed by M2's independent-animation proof. No new native hook, ABI or patch-table
+entry is required.
+
+Verification: the full dependency-selected suite passes **313 tests / two skips**.
+The existing native composition, lifecycle and configuration controls pass in all
+five completed 120-frame receipts (480 current-candidate frames plus 120 historical
+control frames), including frozen/native action cases. Another 32 focused tests
+pass, including 126 exact native retained-composition oracles and 120 clock frames. Separate native water witnesses cover beach and rocky coasts,
+daylight/moonlight, 48-frame playback, fog/reveal, reset, reflection toggles,
+zoom return, wrapped reduced-zoom replay and authoritative local edits. Repeat,
+reset, reflection toggle, replay and edit comparisons are exact; the independent
+still-water control differs at ten pixels by one channel level, within its existing
+rounding contract. Disabling waves leaves water motion active; disabling both
+proves a still image. Evidence: `lab/out/integration/m27-{waves-final,rocky-final,
+river-lifecycle,wrapped-scroll,local-edits}/`. No renderer appearance, action/visibility
+contract, injected source or executable address changed. Strategic live-game
+acceptance and staging of this optimization candidate remain pending.
 
 ## Current implementation and gaps
 
@@ -107,16 +126,16 @@ Capture/setup are outside the native benchmark; desktop completion is not scanou
 | --- | --- | --- |
 | Persistent world/instances | Camera-independent content, shared assets/forest meshes, revisioned units, GPU-ready ground/terrain/objects, immutable mesh ranges/materials, bounded residency | Nonblocking cold/invalidated views; broader sharing where measured |
 | Local validity | Captured appearance/visibility dependencies, immutable map inputs, unit revision/despawn/hidden proofs | Coherent general authoritative change publication |
-| Spatial selection | World pass index and native/wrapped occurrences feed replacement static submissions directly | Direct dynamic/unit execution inputs |
-| Compatible passes | Compatible static layers, shared material bindings, batched occurrence parameters/uploads, forest instancing, exact native composition | Collected dynamic/unit execution; additional sharing guided by cost |
+| Spatial selection | World pass index and native/wrapped occurrences feed replacement static submissions directly | Broader spatial sharing where measured |
+| Compatible passes | Compatible static layers, shared material bindings, batched occurrence parameters/uploads, forest instancing, collected poses/shared body contributions, exact native composition | Additional compatible sharing guided by measured cost |
 | GPU reuse/output | Resident map color/depth, direct eligible unit geometry, incremental finishing and native composition | Reduce dynamic conversion, replay and full-map work |
 | Async integration | Bounded GPU-ready ground/terrain/object preparation with shared worker capacity, selected-work urgency and independent visual timer | Coherent general nonblocking camera/content publication |
 
 Independent frames use the existing HWND presenter without native redraw requests.
 Civ III's original gameplay timer is unchanged. Map animation still enters the
-existing render orchestration. Eligible units use direct scene execution; oversized
-native canvases retain bounded GPU pose compatibility. The current
-conversion and per-unit execution costs are not the cheap scene-frame endpoint.
+existing render orchestration. Eligible units use collected direct scene execution with shared body contributions;
+oversized native canvases retain bounded GPU pose compatibility. Further GPU work,
+finishing and publication costs remain for the explicit M3/M4 budgets.
 
 ## 1. Complete world → selected GPU submissions
 
@@ -232,10 +251,9 @@ needed. Fog freezes the material sample. Time-only frames reuse geometry and
 static color/depth; affected translucent forward layers retain their original
 order. Existing reflection compatibility remains supported.
 
-**Next unfinished responsibility:** 2.6 scheduling/reuse, followed by 2.7 combined
-acceptance. Water visuals are accepted and staged; the strategic live-game check
-remains pending. These are distinct from executable technical verification. Continue to
-measure the complete request, finishing/publication, memory and actual cadence.
+**Current follow-up:** see the M2.6/M2.7 handoff above for implementation and
+measured limits. Water visuals are accepted and staged; the strategic live-game
+check remains distinct from executable verification.
 
 **Current visual refinement:** smaller overlapping ocean ripples use three bounded
 CPU phases, with no dominant translating sheet. Sun/moon highlights form a
@@ -479,8 +497,7 @@ SHA-256: `6c3b4072c00ab51621b6e423575d2e4aa1f94b4eadf04cd83a21dedcd199fc16`.
 [selection motion excerpt](../lab/out/tactical-overlays/connected-motion.mp4) and
 [grid preview](../lab/out/tactical-overlays/connected-grid.png) await visual acceptance.
 
-**Next:** 2.6 scheduling/reuse, especially independent map/composition and dense
-scrolling cost. Complete the retained 2.4 open-water/river-flow responsibility
-before 2.7 acceptance. M3 owns general nonblocking publication; wonders/Districts
-remain M9–M11. Visual acceptance, staging and the strategic live-game checkpoint
-remain pending; 2.5 does not certify Milestone 2 performance.
+**Current follow-up:** the M2.6/M2.7 handoff above supersedes this historical
+2.5 checkpoint. M3 owns general nonblocking publication; wonders/Districts remain
+M9–M11. Tactical visual acceptance and the strategic live-game checkpoint remain
+separate from automated lifecycle and performance evidence.

@@ -249,6 +249,8 @@ std::atomic<bool> check_demand_priority{false},demand_executed{false};
 std::atomic<unsigned> priority_preparations{0};
 struct Bodies {
     template<class... T> bool scene_coverage(T&&...){return unexpected_gpu();}
+    template<class... T> void offer_scene_pose(T&&...){unexpected_gpu();}
+    std::uint64_t scene_body_reuses=0,scene_body_builds=0;
     bool direct_scene=false;std::uint64_t map_scene_draws=0,gpu_content_builds=0,gpu_content_hits=0,gpu_content_reuses=0;
     std::size_t gpu_content_bytes=0;
     double payload_ms=0,pose_ms=0,submission_ms=0,readback_ms=0,output_ms=0;bool pose_content_hit=false;

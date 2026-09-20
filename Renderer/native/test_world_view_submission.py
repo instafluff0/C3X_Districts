@@ -197,11 +197,15 @@ int main(){
     def test_production_batches_compatible_layers_and_splits_only_at_capacity(self):
         source=(ROOT/"Renderer/native/c3x_renderer.cpp").read_text()
         submit="    bool submit_scene_pass("+source.split("    bool submit_scene_pass(",1)[1].split("    std::vector<unsigned> water_scene_order()",1)[0]
+        retained="    struct MaterialSubmission {"+source.split("    struct MaterialSubmission {",1)[1].split("} material_submission;",1)[0]+"} material_submission;"
         run_cpp(r'''
 #include <algorithm>
 #include <cassert>
 #include <chrono>
 #include <set>
+#include <cstring>
+#include <cstdio>
+template<std::size_t N,class... T> int sprintf_s(char (&out)[N],char const* format,T... args){return std::snprintf(out,N,format,args...);}
 #include "Renderer/native/render_core/geometry_draws.h"
 #include "Renderer/native/render_core/scene_surface.h"
 #include "Renderer/native/render_core/region_contributor_index.h"
@@ -210,7 +214,7 @@ struct D3D11_RECT {int left,top,right,bottom;};
 struct ViewportShaderSettings {float translation[2]={};};
 namespace c3x_renderer {namespace render_core {
 struct SourceShadow {
- struct Caster{};struct PreparedCasters{};using Bounds=std::set<std::pair<int,int>>;
+ struct Caster{};struct PreparedCasters{std::vector<std::array<float,4>> bounds;bool build(std::vector<Caster> const&,int){return true;}};using Bounds=std::set<std::pair<int,int>>;
  static Bounds required_pages(std::vector<Bounds> const& inputs,int){Bounds out;for(auto const& in:inputs)out.insert(in.begin(),in.end());return out;}
 };
 struct LinearTarget {int target=0,depth=0;};
@@ -223,7 +227,10 @@ using Shadow=c3x_renderer::render_core::SourceShadow;
 struct State {
  int region_origin_x=0,region_origin_y=0,shadow_basis=0,geometry_shadow=3;bool retained_world=false;
  bool water_scene_active=false;
+ struct {std::uint64_t complete=1;} cached_signature;
+ struct {void write(char const*,char const*,bool){}} trace;
  GeometryDrawView::Records geometry_vertex_buffers;
+'''+retained+r'''
  c3x_renderer::render_core::RegionContributorIndex region_contributors;
  double frame_scene_execute_ms=0,frame_scene_select_ms=0;
  std::vector<int> issued;std::vector<std::size_t> page_counts;unsigned submissions=0;
@@ -255,6 +262,21 @@ int main(){
  unsigned a=0,b=0,c=0,d=0,e=0;
  assert(state.submit_scene_pass(inputs,{3},false,target,glow,settings,128,128,{{0,0,128,128}},a,b,c,d,e));
  assert(a==1 && state.issued==std::vector<int>{34} && state.page_counts.empty());
+ state=State{};state.water_scene_active=true;
+ state.geometry_vertex_buffers[3].push_back(GeometryDrawRecord(shadow));
+ state.geometry_vertex_buffers[3].back().water_dependent=true;
+ auto material=[&](bool reuse){
+  state.issued.clear();unsigned batches=0,selected=0,animated=0,candidates=0,scans=0;
+  assert(state.submit_scene_pass(state.geometry_vertex_buffers,{3},true,target,glow,settings,128,128,{{0,0,128,128}},batches,selected,animated,candidates,scans,true));
+  unsigned expected_batches=state.region_origin_x?2:1;
+  assert(state.issued==std::vector<int>(expected_batches,34) && batches==expected_batches && animated==expected_batches);
+  assert(reuse?scans==0:scans>0);
+ };
+ material(false);material(true); // Time-only frames reuse exact selected inputs.
+ ++state.cached_signature.complete;material(false);material(true);
+ settings.translation[0]=1;material(false);material(true);
+ state.region_origin_x=7;material(false);material(true);
+ state.material_submission={};material(false); // Source-view teardown retires borrowers.
 }
 ''')
 

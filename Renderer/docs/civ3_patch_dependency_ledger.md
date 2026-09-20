@@ -1,5 +1,15 @@
 # Civ III patch dependency ledger
 
+## M2.6 scheduling/reuse and M2.7 acceptance
+
+DLL-only retained material selections, collected pose preparation, shared body
+contributions and composition storage reuse consume the existing immutable inputs.
+The existing `Unit_tick_anim`, `Sprite_draw_unit_body_normal`,
+`Sprite_draw_unit_body_reduced` and native JGL composition hooks are unchanged.
+Visibility, native action cursors, underlay ordering and configuration-off behavior
+retain their current contracts. No ABI, injected code or patch-table change;
+`required_user_action: []`. Candidate verification does not install or launch Civ III.
+
 ## Water scene effects and retained reflections (2.4 / 2.6)
 
 DLL-only shoreline, open-water and directional-river execution consumes existing

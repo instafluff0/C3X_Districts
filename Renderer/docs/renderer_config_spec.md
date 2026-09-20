@@ -176,11 +176,12 @@ composition by default. `C3X_RENDERER_COMPOSITION_CASTERS_CONTROL=1` restores
 independent preparation for every region for matched timing/pixel comparisons.
 The existing bounds/selection budgets and geometry ownership are unchanged.
 
-`C3X_RENDERER_WATER_COVERAGE=1` is an opt-in standalone experiment. It omits
+Conservative water coverage is enabled by default. `C3X_RENDERER_WATER_COVERAGE=0`
+retains the unculled diagnostic control. Coverage rejection omits
 bed/water layers only when every uploaded flat-grid hydrology distance is
 safely positive, and skips reflection work in regions with no remaining water
 coverage. Shoreline, negative, uncertain and nonfinite samples retain the
-existing passes. This switch is off by default pending measured pixel parity.
+existing passes. The shader and visible water quality are unchanged.
 
 `C3X_RENDERER_WORLD_BACKDROPS=1` enables a separate animation-backdrop
 experiment when the world raster grid is also enabled. Regions retain their

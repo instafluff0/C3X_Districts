@@ -24,6 +24,7 @@ public:
     UnitSceneSample scene_sample;
     bool direct_scene=true;
     std::uint64_t map_scene_draws=0,gpu_content_builds=0,gpu_content_hits=0,gpu_content_reuses=0;
+    std::uint64_t scene_body_reuses=0,scene_body_builds=0;
     std::size_t gpu_content_bytes=0;
     int scene_output_width=0,scene_output_height=0,scene_output_scale=0;
     std::size_t resident_pose_bytes=0;
@@ -184,6 +185,30 @@ public:
     }
 
     template<class Prepare>
+    void offer_scene_pose(c3x_renderer_unit_v1 const& request,Prepare prepare){
+        auto workers=preparation_workers();if(!workers)return;
+        PoseSelection selected;if(!select_pose(request,selected))return;
+        for(auto const& saved:gpu_content)if(saved.key==selected.key)return;
+        for(auto const& saved:resident_cache)if(saved.key==selected.key)return;
+        auto key=content_key(selected.key,true);
+        for(auto const& saved:retained_poses)if(saved.key==key)return;
+        // Reuse the existing bounded pose queue, compiler and immutable mesh
+        // leases. Missing current samples take precedence over predictions.
+        try {
+            MEMORYSTATUSEX memory={};memory.dwLength=sizeof(memory);
+            if(!GlobalMemoryStatusEx(&memory) || memory.ullAvailVirtual<(512u+160u+24u*workers)*1024ull*1024ull)return;
+            if(!prepare(*selected.action))return;
+            auto input=pose_input(request,*selected.unit,*selected.action,selected.pose,selected.key);input.gpu_shadow=true;
+            if(!preparation_fits(input))return;
+            if(!pose_preparation_configured){
+                pose_preparation.configure({},UnitPoseCompiler{},workers,{},128u*1024u*1024u);
+                pose_preparation_configured=true;
+            }
+            pose_preparation.offer({key,std::move(input)},32,true);
+        }catch(...){} // Demanded draw retains synchronous compilation fallback.
+    }
+
+    template<class Prepare>
     bool scene_coverage(c3x_renderer_unit_v1 const& request,Prepare prepare,unsigned predict,std::array<int,4>& bounds){
         PoseSelection selected;if(!select_pose(request,selected))return false;
         for(auto const& saved:resident_cache)if(saved.key==selected.key){bounds=saved.pose.coverage;return true;}
@@ -191,6 +216,18 @@ public:
         if(!prepare(*selected.action))return false;
         scene_prepared=prepare_pose_content(request,*selected.unit,*selected.action,selected.pose,selected.key,predict,false,true);
         if(!scene_prepared)return false;scene_prepared_key=selected.key;bounds=scene_prepared->coverage;return true;
+    }
+
+    bool reuse_scene_body(c3x_renderer_unit_v1 const& request,int x,int y,int width,int height,UnitSceneSample& sample){
+        PoseSelection selection;if(!select_pose(request,selection))return false;
+        auto saved=find_gpu_content(selection.key);if(!saved||!saved->body_view)return false;
+        auto const& r=saved->body_bounds;
+        if(x<r[0]||y<r[1]||x+width>r[2]||y+height>r[3])return false;
+        sample={saved->body_view.Get(),saved->shadow_view.Get(),saved->content->ground_projection,
+            unsigned(selection.key.width),unsigned(selection.key.height),saved->content->coverage,{r[0],r[1]}};
+        image_width=selection.key.width;image_height=selection.key.height;
+        cache_hit=true;failure_reason="none";scene_sample=sample;
+        ++scene_body_reuses;return true;
     }
 
     template<class Prepare>
@@ -344,6 +381,33 @@ public:
         if(destination){
             scene_sample={output_view,pose_shadow,prepared->ground_projection,unsigned(w),unsigned(h)};
             scene_sample.origin={int(clip.left)/samples,int(clip.top)/samples};
+            if(ready){
+                unsigned bw=unsigned(clip.right-clip.left)/samples,bh=unsigned(clip.bottom-clip.top)/samples;
+                std::size_t bytes=std::size_t(bw)*bh*4;
+                // Share only the immutable body contribution. Native packing,
+                // pose-local shadow and underlay blending still execute per
+                // occurrence. Charge it to the existing GPU-content budget.
+                if(gpu_content_bytes-ready->body_bytes+bytes<=192u*1024u*1024u){
+                    D3D11_TEXTURE2D_DESC d={};if(ready->body)ready->body->GetDesc(&d);
+                    bool allocated=d.Width==bw&&d.Height==bh;
+                    if(!allocated){
+                        Microsoft::WRL::ComPtr<ID3D11Texture2D> texture;
+                        Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> view;
+                        output->GetDesc(&d);d.Width=bw;d.Height=bh;d.BindFlags=D3D11_BIND_SHADER_RESOURCE;
+                        if(SUCCEEDED(device->CreateTexture2D(&d,nullptr,&texture)) &&
+                           SUCCEEDED(device->CreateShaderResourceView(texture.Get(),nullptr,&view))){
+                            ready->body=std::move(texture);ready->body_view=std::move(view);allocated=true;
+                        }
+                    }
+                    if(allocated){
+                        D3D11_BOX box={0,0,0,bw,bh,1};context->CopySubresourceRegion(ready->body.Get(),0,0,0,0,output,0,&box);
+                        gpu_content_bytes=gpu_content_bytes-ready->body_bytes+bytes;
+                        ready->bytes=ready->bytes-ready->body_bytes+bytes;ready->body_bytes=bytes;
+                        ready->body_bounds={scene_sample.origin[0],scene_sample.origin[1],scene_sample.origin[0]+int(bw),scene_sample.origin[1]+int(bh)};
+                        ++scene_body_builds;
+                    }
+                }
+            }
             image_width=w;image_height=h;failure_reason="none";output_ms=elapsed();return true;
         }
         PendingPose pending;pending.key=key;pending.request=request;pending.pose=pose;
@@ -587,6 +651,9 @@ private:
         std::shared_ptr<UnitPoseContent const> content;
         Microsoft::WRL::ComPtr<ID3D11Texture2D> shadow;
         Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> shadow_view;
+        Microsoft::WRL::ComPtr<ID3D11Texture2D> body;
+        Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> body_view;
+        std::array<int,4> body_bounds{};std::size_t body_bytes=0;
         std::vector<Microsoft::WRL::ComPtr<ID3D11Buffer>> vertices;
     };
     std::vector<GpuContent> gpu_content;std::uint64_t gpu_content_serial=0;

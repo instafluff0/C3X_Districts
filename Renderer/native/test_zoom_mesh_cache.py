@@ -718,7 +718,7 @@ struct CachedVertexChunk {
  CachedVertexChunk& operator=(CachedVertexChunk const&)=delete;
  CachedVertexChunk(CachedVertexChunk&&)=default;
  struct {float low[3]={},high[3]={};} world_bounds;
- Ref *buffer=nullptr,*indices=nullptr;int translation_x=0,translation_y=0;struct {long left=0,top=0,right=0,bottom=0;} bounds;float natural_projection[4]={}; unsigned projection_kind=0;int source_tile_width=128;};
+ Ref *buffer=nullptr,*indices=nullptr;int translation_x=0,translation_y=0;struct {long left=0,top=0,right=0,bottom=0;} bounds;float natural_projection[4]={}; unsigned city_material=0xffffffffu,projection_kind=0;int source_tile_width=128;};
 #include "Renderer/native/render_core/geometry_draws.h"
 using GeometryDrawRecord=c3x_renderer::render_core::GeometryDrawRecord<CachedVertexChunk>;
 using GeometryDrawView=c3x_renderer::render_core::GeometryDrawView<CachedVertexChunk,geometry_layer_count>;
@@ -733,7 +733,8 @@ struct CachedTileGeometry {
  std::array<std::vector<CachedVertexChunk>,geometry_layer_count> buffers;
 };
 struct State {
- bool visibility_pass=true;
+ bool visibility_pass=true,city_profile=false;
+ struct {struct {struct Material{bool ground=false;};std::vector<Material> materials;} library;} cities;
  struct {c3x_renderer::render_core::WorldTopology value;auto const& world()const{return value;}} world_coast;
  std::size_t prefetched_geometry_bytes=20;std::uint64_t tile_geometry_epoch=5;
  std::unordered_map<int,CachedTileGeometry> tile_geometry_cache;
@@ -805,7 +806,7 @@ using Handle=c3x_renderer::render_core::ContentHandle;
 #include <unordered_map>
 #include <vector>
 constexpr int geometry_layer_count=3,geometry_natural_terrain=1;
-struct CachedVertexChunk {int id,translation_x=0,translation_y=0;struct {long left=0,top=0,right=0,bottom=0;} bounds;float natural_projection[4]={}; unsigned projection_kind=0;int source_tile_width=128;};
+struct CachedVertexChunk {int id,translation_x=0,translation_y=0;struct {long left=0,top=0,right=0,bottom=0;} bounds;float natural_projection[4]={}; unsigned city_material=0xffffffffu,projection_kind=0;int source_tile_width=128;};
 #include "Renderer/native/render_core/geometry_draws.h"
 using GeometryDrawRecord=c3x_renderer::render_core::GeometryDrawRecord<CachedVertexChunk>;
 using GeometryDrawView=c3x_renderer::render_core::GeometryDrawView<CachedVertexChunk,geometry_layer_count>;

@@ -293,7 +293,7 @@ def main(argv=None):
            "C3X_RENDERER_REGION_INPUT_RING": str(args.region_input_ring),
            "C3X_RENDERER_REGION_METADATA_MIB": str(args.region_metadata_mib),
            "C3X_RENDERER_WORLD_REGIONS_CONTROL": "1" if args.world_regions_control else "0",
-           "C3X_RENDERER_WATER_COVERAGE": "1" if args.water_coverage else "0",
+           "C3X_RENDERER_WATER_COVERAGE": "1" if args.water_coverage or args.production_defaults else "0",
            "C3X_RENDERER_WORLD_BACKDROPS": "1" if args.world_backdrops else "0",
            "C3X_RENDERER_BACKDROP_DEPENDENCIES": "1" if args.backdrop_dependencies else "0",
            "C3X_RENDERER_COMPOSITION_RECEIVER_INDEX": "1" if args.composition_receiver_index else "0",

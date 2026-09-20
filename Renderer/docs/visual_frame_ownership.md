@@ -24,7 +24,9 @@ Civ III to redraw, and no second presenter or window is introduced.
   history; transparent operations retain the affected underlay and exact native
   shader program. Final transfer seals only its actual rectangle, preserving the
   displayed version outside a partial transfer.
-- Replay evaluates reachable dependencies, binds immutable source textures and
+- Replay first collects direct pose revisions across the reachable graph, offering
+  current immutable pose jobs to the existing CPU pool. It then evaluates dependencies,
+  binds immutable source textures and
   uses cropped scratch for ordinary destination/underlay passes. Cross-position
   self-copy retains its full coordinate domain. Static results cache and release
   their recipes. Working native canvases are untouched by intervening frames.

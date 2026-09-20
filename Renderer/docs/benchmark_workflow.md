@@ -188,3 +188,30 @@ Compare against the same DLL with
 existing output, so a tactical-enabled CPU/GPU ratio is not an equivalent-image
 speedup. Tactical packet preparation is included; authoritative gameplay route
 calculation remains outside this captured-input fixture.
+
+## Milestone 2 combined animation acceptance
+
+`record_gpu_frame --visual-units 1|8|16|32 --visual-unit-case selected|work|mixed`
+sets the actual retained independent-frame workload. There is exactly one selected
+idle unit; `work` adds authored worker loops, while `mixed` adds frozen idle and
+captured native-action cases. This count is separate from `--unit-count`, which
+controls the complete native-demand benchmark. Use `--visual-frames 120` for
+percentile evidence. `--tactical` adds route/marker/grid lifecycle witnesses.
+
+Use production runs without `--profile` for cadence. Detailed profiling performs
+whole-process address-space walks at several boundaries; the measured overhead
+can be tens of milliseconds per frame. Keep separate profiled memory/attribution
+runs and do not call removal of diagnostic overhead a renderer speedup. The
+native fixture's explicit memory samples still report address-space headroom.
+
+`python3 -m Renderer.native.analyze_visual_frames <receipt-directory>` joins each
+visual request to its exact trace interval. Missing stages are unproved, not zero.
+It records static geometry/draw/caster work, mirror builds, water/wave uploads,
+material selection reuse and complete-receipt status. Historical DLL comparisons
+record their build receipt independently of the current harness source closure.
+Failed or incomplete fixture runs cannot establish acceptance.
+
+The shoreline lifecycle keeps water motion and reflections on during normal
+playback, zoom and scrolling. Its wave-off control compares the same time with
+only foam disabled; water still animates. A separate both-motion-off control
+proves the stopped image. Do not infer that disabling one effect stops another.

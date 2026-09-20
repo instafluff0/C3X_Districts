@@ -144,8 +144,11 @@ unit geometry into a bounded transparent attachment, then uses exact native
 composition above the map. This is the user's final ordering policy, including
 units behind tall neighboring map objects. Unit self-depth and pose-local shadows
 remain intact; map depth/provenance and per-unit map captures are no longer inputs.
-The existing pose owner reuses GPU vertices and shadow inputs, recycling matching
-allocations after their old identity retires. Clearing, extraction and composition
+The existing pose owner reuses GPU vertices, shadow inputs and cropped body
+contributions under its existing budget. Identical body samples need no second
+rasterization; each occurrence still receives its own native underlay composition.
+Replay collects current pose requirements before map execution so the existing CPU
+workers can prepare them together. Allocations recycle after their old identity retires. Clearing, extraction and composition
 follow the changed footprint while preserving exact native raster coordinates.
 Separate direct/compatibility scratch avoids route-switch reallocations. Oversized
 canvases use bounded resident GPU poses. No CPU body roundtrip or second presenter
@@ -159,7 +162,14 @@ finishes their union once. Time changes upload no terrain or ribbon geometry.
 The shared path admits waves and reflections together. Reflections retain a
 guarded resolved linear image; world-aligned mirror cells reuse the existing
 dependency cache and small MSAA scratch. Static mirror inputs do not depend on
-the water clock. Shared tree meshes feed mirror, color and shadow passes. The
+the water clock. Conservative uploaded-sample coverage rejects dry water/bed
+passes; mirror cells without a possible water receiver remain clear. Shared tree
+meshes feed mirror, color and shadow passes. Exact material batches and their
+static caster inputs survive time-only frames. Camera, selected rectangle, extent,
+lighting/content signature and source-view teardown invalidate those borrowed
+batches. Opaque city bodies stay in static color/depth; alpha ground layers remain
+in forward order. Retained native recipes reuse their own output allocations and
+import a map once, preserving distinct native versions and partial transfers. The
 compatibility path and configuration controls remain available; there is no
 second full-view MSAA reflection color/depth pair, presenter or effect scheduler.
 Optional absent/disabled wave assets retain ordinary water and request no wave

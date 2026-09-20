@@ -33,6 +33,9 @@ def main(argv=None):
     parser.add_argument('--object-workers',choices=('0','1'),default='1',help='Use the identical object compiler on the foreground (0) or bounded worker (1)')
     parser.add_argument('--ground-workers',choices=('0','1'),default='1',help='Run the production ground compiler serially (0) or on its bounded worker (1)')
     parser.add_argument("--unit-count",type=int,choices=(1,8,16,32),default=8,help="Unit count in the complete native-frame workload")
+    parser.add_argument("--visual-units",type=int,choices=(1,8,16,32),default=1,help="Actual retained units in independent visual frames")
+    parser.add_argument("--visual-frames",type=int,choices=range(30,241),default=30,help="Independent visual opportunities; use at least 100 for percentile acceptance")
+    parser.add_argument("--visual-unit-case",choices=("selected","work","mixed"),default="selected",help="One selected idle unit plus frozen idle, authored workers, or mixed frozen/work/native-action units")
     parser.add_argument("--unit-scene",choices=("0","1"),default="1",help="Ordered direct unit scene draws (1) or preserved resident-pose control (0)")
     parser.add_argument("--visibility",action="store_true",help="Capture world-fixed visible, explored and unseen regions")
     parser.add_argument("--tactical",action="store_true",help="Exercise native tactical capture and save actual connected display previews")
@@ -68,6 +71,13 @@ def main(argv=None):
     invocation=uuid.uuid4().hex;out=args.out.resolve() if args.out else ROOT/'Renderer/native/build/gpu-composition'/invocation;out.mkdir(parents=True,exist_ok=True)
     inputs={}
     for unit in DLL_UNITS:inputs.update(unit_inputs(unit))
+    build_path=dll.parent/'build-evidence.json'
+    build_record=json.loads(build_path.read_text()) if build_path.exists() else {}
+    build_sources={path:value for closure in build_record.get('unit_inputs',{}).values() for path,value in closure.items()}
+    binary_provenance={'build_receipt':build_path.relative_to(ROOT).as_posix() if build_record else None,
+        'build_receipt_sha256':digest(build_path) if build_record else None,
+        'current_runtime_matches_build':bool(build_sources) and all(build_sources.get(path)==value for path,value in inputs.items()),
+        'purpose':'Candidate or explicitly selected historical binary; harness inputs are recorded separately.'}
     for path in (scene,dll,jgl,ROOT/'injected_code.c',ROOT/'C3X.h',ROOT/'civ_prog_objects.csv',*[ROOT/'Renderer/native'/n for n in ('gpu_frame_preview.h','native_frame_workload.h','native_frame_benchmark.h','test_native_screen.h','test_native_bootstrap.h','test_native_worker.cpp','test_gpu_unit_composition.h','test_native_image_adapter.cpp','test_native_observation.cpp','native_image_adapter.h','native_sprite_diagnostics.h','native_composition_owner.h','native_observation.h','gpu_image_worker_client.h','gpu_image_commands.h','color_quantization.h','test_gpu_frame_api.c','biq_preview.cpp','BUILD.bat','record_gpu_frame.py')]):inputs[path.relative_to(ROOT).as_posix()]=digest(path)
     # Runtime HLSL is part of the result identity even when the DLL is unchanged.
     from Renderer.lab.preparation import require_current, receipt as shader_receipt
@@ -76,7 +86,7 @@ def main(argv=None):
     inputs.update(shader_record['inputs']);inputs.update(shader_record['outputs'])
     win=windows_root();target=win/out.relative_to(ROOT)
     settings={'C3X_RENDERER_GPU_JGL_TEST':str(win/jgl.relative_to(ROOT)),'C3X_RENDERER_VISUAL_PROFILE':'city-fidelity','C3X_RENDERER_SHARED_SCENE_SURFACE':'',
-        'C3X_RENDERER_REFLECTION_CONTROL':'0' if args.reflections=='1' else '1','C3X_RENDERER_WAVES':args.waves,'C3X_RENDERER_WATER_MOTION':args.water_motion,'C3X_RENDERER_GPU_FRAME_TEST':'1','C3X_RENDERER_SCROLL_COVERAGE_TEST':'1' if args.scroll_coverage else '','C3X_RENDERER_NATIVE_FRAME_BENCHMARK':'1' if args.benchmark else '',
+        'C3X_RENDERER_WATER_COVERAGE':'','C3X_RENDERER_REFLECTION_CONTROL':'0' if args.reflections=='1' else '1','C3X_RENDERER_WAVES':args.waves,'C3X_RENDERER_WATER_MOTION':args.water_motion,'C3X_RENDERER_GPU_FRAME_TEST':'1','C3X_RENDERER_SCROLL_COVERAGE_TEST':'1' if args.scroll_coverage else '','C3X_RENDERER_NATIVE_FRAME_BENCHMARK':'1' if args.benchmark else '',
         'C3X_RENDERER_PROFILE':'1' if args.profile else '0','C3X_RENDERER_GROUND_WORKERS':args.ground_workers,'C3X_RENDERER_OBJECT_WORKERS':args.object_workers,
         'C3X_RENDERER_TRACE':'2','C3X_RENDERER_TRACE_MIB':'32','C3X_RENDERER_TRACE_BUFFERED':'1' if args.benchmark or args.visual_only else '', 'C3X_RENDERER_TRACE_FILE':str(target/'renderer.log'),
         'C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS':r'..\..\Renderer\custom.custom_rendering.txt',
@@ -86,6 +96,8 @@ def main(argv=None):
         'C3X_RENDERER_PREVIEW_VISIBILITY':'1' if args.visibility else '',
         'C3X_RENDERER_UNIT_SCENE_CONTROL':'1' if args.unit_scene=='0' else '',
         'C3X_RENDERER_BENCHMARK_UNITS':str(args.unit_count),
+        'C3X_RENDERER_VISUAL_FRAMES':str(args.visual_frames),
+        'C3X_RENDERER_VISUAL_UNITS':str(args.visual_units),'C3X_RENDERER_VISUAL_UNIT_CASE':args.visual_unit_case,
         'C3X_RENDERER_TACTICAL_PREVIEW':str(target/'tactical') if args.tactical else '',
         'C3X_RENDERER_PREVIEW_SESSION':'','C3X_RENDERER_PREVIEW_REPLAY':'','C3X_RENDERER_PREVIEW_ANIMATION':''}
     if args.benchmark or args.visual_only or args.scroll_coverage:
@@ -105,7 +117,7 @@ def main(argv=None):
         +command+f' >"{target/"test.log"}" 2>&1\nif not "%errorlevel%"=="0" goto failed\n'
         +f'>"{target/"completion.txt"}" echo {invocation} 0\nexit /b 0\n:failed\n>"{target/"completion.txt"}" echo {invocation} 1\nexit /b 1\n')
     print(out.relative_to(ROOT),flush=True)
-    process=subprocess.run(['prlctl','exec',os.environ.get('C3X_RENDERER_VM','Windows 11'),'--current-user','cmd','/d','/s','/c',f'call "{target/"run.cmd"}"'],capture_output=True,text=True,timeout=900 if args.benchmark else 240)
+    process=subprocess.run(['prlctl','exec',os.environ.get('C3X_RENDERER_VM','Windows 11'),'--current-user','cmd','/d','/s','/c',f'call "{target/"run.cmd"}"'],capture_output=True,text=True,timeout=900 if args.benchmark else 480)
     complete=(out/'completion.txt').read_text().split() if (out/'completion.txt').exists() else []
     log=(out/'test.log').read_text(errors='replace') if (out/'test.log').exists() else ''
     unchanged=all(digest(ROOT/p)==h for p,h in inputs.items())
@@ -114,6 +126,7 @@ def main(argv=None):
     trace=(out/'renderer.log').read_text(errors='replace') if (out/'renderer.log').exists() else ''
     import re
     dropped=sum(int(value) for value in re.findall(r'TRACE_BUFFER dropped=(\d+)',trace))
+    receipt['binary_provenance']=binary_provenance
     receipt['trace_coverage']={'dropped_lines':dropped,'complete':dropped==0}
     resident_units=[line for line in trace.splitlines() if 'resident_pose=1' in line or 'direct_scene=1' in line]
     resident_proof=bool(resident_units) and any('cache_hit=0' in line for line in resident_units) and any('cache_hit=1' in line for line in resident_units) and all('body_readbacks=0 composition_uploads=0' in line for line in resident_units)
@@ -185,6 +198,7 @@ def main(argv=None):
     if args.visual_only or args.benchmark:
         passed=passed and 'PASS independent resident frames:' in log and 'PASS visual timer transport:' in log
         receipt['status']='pass' if passed else 'fail' if complete else 'unconfirmed'
+        receipt['visual_workload']={'units':args.visual_units,'case':args.visual_unit_case,'effects':{'waves':args.waves,'water_motion':args.water_motion,'reflections':args.reflections}}
         receipt['visual_frames']=[line for line in log.splitlines() if line.startswith(('VISUAL_SAMPLE ','PASS independent resident frames:','PASS visual timer transport:'))]
     if args.tactical:
         passed=passed and 'PASS tactical native composition:' in log

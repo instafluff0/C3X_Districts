@@ -111,6 +111,20 @@ int test_retained_composition(){
         bool rejected=false;try{retained.record({Kind::fill,native,0,full,full},oversized);}catch(...){rejected=true;}
         assert(rejected&&retained.bytes()==charge);
         retained.clear();assert(!retained.ready()&&retained.bytes()==0&&retained.node_count()==0);
+        retained.create(final,w,h,Format::bgra32);
+        unsigned collected=0,executed=0;
+        for(unsigned i=0;i<2;++i){
+            auto operation=procedural;
+            operation.revision=[&](long long,long long){++collected;return phase;};
+            operation.draw=[&](Compositor& target,Command const& input){
+                assert(collected==2);++executed;return target.submit(&input,1);};
+            auto write=fill;write.area=write.clip={int(i*w/2),0,int((i+1)*w/2),h};
+            retained.record(write,operation);
+        }
+        retained.commit(final,full);retained.sample(1007,1000);assert(collected==2&&executed==2);
+        collected=0;retained.sample(1008,1000);assert(collected==2&&executed==2);
+        collected=0;++phase;retained.sample(1009,1000);assert(collected==2&&executed==4);
+        retained.clear();assert(retained.bytes()==0&&retained.node_count()==0);
     }
     std::printf("PASS retained composition: %u exact GPU oracles, 120 independent clock frames, aliasing, paired 555/565/full color, UI versioning, partial publication, bounded overwrite and reset\n",checks);return 0;
 }

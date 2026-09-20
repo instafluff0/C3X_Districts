@@ -750,6 +750,8 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
     }
     char wave_study[32]={};GetEnvironmentVariableA("C3X_LAB_WAVE_STUDY",wave_study,sizeof(wave_study));
     if(ok && wave_study[0]) {
+      char water_control[16]={};GetEnvironmentVariableA("C3X_RENDERER_WATER_MOTION",water_control,sizeof(water_control));
+      bool moving_water=std::strcmp(water_control,"0")!=0;
       auto verify_waves=[&](){
         auto pixels=[&](){auto p=static_cast<unsigned char const*>(output.bgra_pixels);
             return std::vector<unsigned char>(p,p+output.stride_bytes*output.height);};
@@ -767,8 +769,9 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
             return exact?current==expected:maximum<=2 && changed<=current.size()/4000 && error<=current.size()/100;
         };
         bool rocky=std::strcmp(wave_study,"rocky-control")==0;
+        bool moving=!rocky || moving_water;
         auto original=pixels(),previous=original;
-        if(rocky?output.visible_animation_count!=0:output.visible_animation_count==0)return false;
+        if(moving?output.visible_animation_count==0:output.visible_animation_count!=0)return false;
         int saved_width=tile_width;
         for(int next:{saved_width==112?96:112,saved_width}){
             tile_width=next;tile_height=next/2;tiles=capture_view();
@@ -781,12 +784,12 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
             frame.presentation_time_ticks=second*frame.presentation_frequency;
             if(!render_wave() || output.geometry_tiles_built || output.geometry_upload_bytes)return false;
             auto current=pixels();changed+=current!=previous;previous=current;
-            if(rocky?output.request_continuous_redraw:!output.request_continuous_redraw)return false;
+            if(moving?!output.request_continuous_redraw:output.request_continuous_redraw)return false;
             std::printf("WAVE time=%d visible=%u terrain_built=%u terrain_upload=%u changed=%u\n",second,output.visible_animation_count,output.geometry_tiles_built,output.geometry_upload_bytes,changed);
             write_bmp((std::string(argv[5])+".wave-"+std::to_string(second)+".bmp").c_str(),output);
             if(!render_wave() || !compare("repeat",current))return false;
         }
-        if(rocky?changed!=0:changed==0)return false;
+        if(moving?changed==0:changed!=0)return false;
         frame.presentation_time_ticks=frame.presentation_frequency;
         if(!render_wave() || !compare("time-return",original))return false;
         char sequence_setting[16]={};
@@ -812,11 +815,22 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
         if(set_definitions(argv[2],argv[3],nullptr,custom_path)!=C3X_RENDERER_RESULT_OK || !render_wave() || !compare("scroll-cold",scrolled,false))return false;
         center_x=saved_center;tiles=capture_view();frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());
         SetEnvironmentVariableA("C3X_RENDERER_WAVES","0");reset();
-        if(set_definitions(argv[2],argv[3],nullptr,custom_path)!=C3X_RENDERER_RESULT_OK || !render_wave() || output.visible_animation_count || output.request_continuous_redraw)return false;
+        if(set_definitions(argv[2],argv[3],nullptr,custom_path)!=C3X_RENDERER_RESULT_OK || !render_wave())return false;
         auto off=pixels();write_bmp((std::string(argv[5])+".wave-off.bmp").c_str(),output);
-        return rocky?off==original:off!=original;
+        if(rocky?off!=original:off==original)return false;
+        // Wave configuration does not disable the independent water material.
+        if(moving_water && (!output.visible_animation_count || !output.request_continuous_redraw))return false;
+        SetEnvironmentVariableA("C3X_RENDERER_WATER_MOTION","0");reset();
+        if(set_definitions(argv[2],argv[3],nullptr,custom_path)!=C3X_RENDERER_RESULT_OK || !render_wave() ||
+            output.visible_animation_count || output.request_continuous_redraw)return false;
+        auto still=pixels();frame.presentation_time_ticks=7*frame.presentation_frequency;
+        if(!render_wave() || !compare("all-motion-off",still))return false;
+        frame.presentation_time_ticks=frame.presentation_frequency;
+        std::printf("WAVE controls: wave_off_preserves_water=%u both_off_still=1\n",unsigned(moving_water));
+        return true;
       };
       ok=verify_waves();SetEnvironmentVariableA("C3X_RENDERER_WAVES",nullptr);
+      SetEnvironmentVariableA("C3X_RENDERER_WATER_MOTION",water_control[0]?water_control:nullptr);
       // Restore the requested configuration after the disabled-effect control;
       // later witnesses and their cold resets must exercise the same settings.
       reset();

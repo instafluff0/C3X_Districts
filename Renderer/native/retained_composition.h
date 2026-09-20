@@ -28,7 +28,7 @@ private:
     struct Node {
         Rect area{};Command command{};bool operation=false,dynamic=false;
         Picture inputs[6];Id original[6]={};
-        Texture output[2];std::uint64_t bytes[2]={},revision=0,seen=0;
+        Texture output[2];std::uint64_t bytes[2]={},revision=0,seen=0,sampled=0,direct_revision=0;
         std::vector<std::uint64_t> dependencies;
         Sample sample;Direct direct;
     };
@@ -63,6 +63,17 @@ private:
         D3D11_BOX b={unsigned(r.left),unsigned(r.top),0,unsigned(r.right),unsigned(r.bottom),1};
         context->CopySubresourceRegion(out.Get(),0,0,0,0,source,0,&b);return out;
     }
+    void capture_output(Node& n,unsigned index,ID3D11Texture2D* source,Rect r){
+        // This node owns a versioned recipe, not a published texture handle.
+        // Re-evaluation changes that recipe's result in GPU order. Other native
+        // versions have distinct nodes, so matching storage can stay allocated.
+        D3D11_TEXTURE2D_DESC desc={};if(n.output[index])n.output[index]->GetDesc(&desc);
+        if(desc.Width!=unsigned(r.right-r.left)||desc.Height!=unsigned(r.bottom-r.top)){
+            output(n,index,crop(source,r));return;
+        }
+        D3D11_BOX box={unsigned(r.left),unsigned(r.top),0,unsigned(r.right),unsigned(r.bottom),1};
+        context->CopySubresourceRegion(n.output[index].Get(),0,0,0,0,source,0,&box);
+    }
     Picture read(Id id,Rect region){
         auto it=images.find(id);if(it==images.end())throw std::runtime_error("retained source missing");
         Picture out{it->second.width,it->second.height,it->second.format,{}};
@@ -81,6 +92,17 @@ private:
         if(next.size()>8192)throw std::runtime_error("retained composition region budget");
         image.patches=std::move(next);
     }
+    void collect(std::shared_ptr<Node> const& n,long long ticks,long long frequency,unsigned depth){
+        if(n->sampled==frame)return;
+        if(depth>256)throw std::runtime_error("retained composition dependency depth");
+        // Collect authoritative direct samples before any map rendering or pose
+        // joins. Revision callbacks may offer immutable CPU inputs to workers;
+        // actual GPU execution remains in the original native command order.
+        if(n->direct.revision)n->direct_revision=n->direct.revision(ticks,frequency);
+        for(auto const& input:n->inputs)for(auto const& patch:input.patches)
+            collect(patch.node,ticks,frequency,depth+1);
+        n->sampled=frame;
+    }
     void evaluate(std::shared_ptr<Node> const& n,long long ticks,long long frequency,unsigned depth){
         if(n->seen==frame)return;
         if(depth>256)throw std::runtime_error("retained composition dependency depth");
@@ -90,7 +112,7 @@ private:
             if(sampled.Get()!=n->output[0].Get()){output(*n,0,std::move(sampled));n->revision=++serial;}
         }else if(n->operation){
             std::vector<std::uint64_t> versions;
-            if(n->direct.revision)versions.push_back(n->direct.revision(ticks,frequency));
+            if(n->direct.revision)versions.push_back(n->direct_revision);
             for(auto const& p:n->inputs)for(auto const& patch:p.patches){evaluate(patch.node,ticks,frequency,depth+1);versions.push_back(patch.node->revision);}
             if(!n->output[0]||versions!=n->dependencies){
                 Id temporary[6]={};
@@ -116,8 +138,8 @@ private:
                     c.clip={c.clip.left-x,c.clip.top-y,c.clip.right-x,c.clip.bottom-y};
                     Rect result={n->area.left-x,n->area.top-y,n->area.right-x,n->area.bottom-y};
                     if(!(n->direct.draw?n->direct.draw(replay,c):replay.submit(&c,1)))throw std::runtime_error("retained operation rejected");
-                    output(*n,0,crop(replay.texture(c.destination),result));
-                    if(c.detail)output(*n,1,crop(replay.texture(c.detail),result));
+                    capture_output(*n,0,replay.texture(c.destination),result);
+                    if(c.detail)capture_output(*n,1,replay.texture(c.detail),result);
                     n->dependencies=std::move(versions);n->revision=++serial;
                     if(!n->dynamic){for(auto& input:n->inputs)input={};n->dependencies.clear();n->operation=false;}
                 }catch(...){for(unsigned i=0;i<6;++i)if(temporary[i]&&std::find(temporary,temporary+i,temporary[i])==temporary+i)replay.destroy(temporary[i]);throw;}
@@ -212,17 +234,20 @@ public:
     Texture snapshot_bgra(ID3D11Texture2D* source,int x,int y,unsigned w,unsigned h){
         auto image=replay.create(w,h,Format::bgra32);if(!image)throw std::runtime_error("retained map import budget");
         Texture result;
-        try{if(!replay.import_bgra(image,source,x,y))throw std::runtime_error("retained map import failed");result=crop(replay.texture(image),{0,0,int(w),int(h)});}
+        try{if(!replay.import_bgra(image,source,x,y))throw std::runtime_error("retained map import failed");result=replay.texture(image);}
         catch(...){replay.destroy(image);throw;}replay.destroy(image);return result;
     }
     Texture sample(long long ticks,long long frequency){
-        if(!ready())return {};++frame;auto image=assemble(front,ticks,frequency,0);
+        if(!ready())return {};++frame;
+        for(auto const& part:front.patches)collect(part.node,ticks,frequency,0);
+        auto image=assemble(front,ticks,frequency,0);
         auto result=crop(replay.texture(image),extent(front));replay.destroy(image);return result;
     }
     // Caller has supplied a completed native transfer. Rendering only touches
     // private scratch and the existing presenter's retained display.
     int draw(long long ticks,long long frequency,ID3D11RenderTargetView* target,ID3D11Texture2D* display,ID3D11Texture2D* buffer){
         if(!ready())return 0;++frame;
+        for(auto const& part:front.patches)collect(part.node,ticks,frequency,0);
         std::vector<std::uint64_t> versions;
         for(auto const& part:front.patches){evaluate(part.node,ticks,frequency,0);versions.push_back(part.node->revision);}
         if(drawn_revision==front_revision&&versions==drawn_dependencies)return 2; // no new source sample

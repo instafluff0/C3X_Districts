@@ -28,19 +28,29 @@ canvas. Scene conversion scratch grows within native bounds and is separate from
 compatibility scratch, avoiding allocation churn when the routes alternate.
 A sample-preserving extraction uses hardware MSAA resolve. Shader-only resolve failed exact parity on the VM and is
 not the production path. The final native-boundary pass combines the existing
-pose-local shadow directly into the resident native/full-color pair. It does not produce a finished CPU pose, cache a finished
-GPU pose, upload a composed unit image, or submit static terrain geometry.
+pose-local shadow directly into the resident native/full-color pair. It produces
+no CPU pose or composed-unit upload and submits no static terrain geometry.
 The map's finished full-color underlay remains authoritative for fog and native
 composition. Hidden unit inputs never enter either draw route.
 
 The existing unit pose owner also retains GPU-ready vertex buffers and exact
 R32 shadow inputs under the existing pose/projection/light/color key. Its 192 MiB
-allowance includes the retained CPU content leases, uploaded vertices and shadows.
-A hit skips shadow rasterization and geometry uploads; geometry still draws into
-the current occurrence's scene attachment. Matching allocations are recycled only
-after their old cache identity retires, with updates ordered on the GPU owner.
-Failed optional admission draws from existing scratch. Reset/pack changes clear
-the cache. No finished direct-body image becomes a new cache owner.
+allowance includes retained CPU content leases, vertices, shadows and optional
+cropped body contributions. The always-on-top policy makes body pixels independent
+of the map. A matching pose can reuse those pixels when their native-canvas bounds
+contain the requested footprint; otherwise it rasterizes normally. Native packing,
+pose-local ground shadow and underlay composition still execute separately for each
+occurrence. This is attached to the existing pose-content owner, not another cache
+or a retained native erase canvas. Admission cannot exceed the same 192 MiB cap;
+pressure or allocation failure retains the ordinary direct draw. Reset/pack changes
+clear every representation. Matching allocations recycle only after their old
+identity retires, with all GPU mutation serialized on the existing owner.
+
+Retained replay collects every reachable direct sample once before rendering the
+map or joining a pose job. Missing current poses enter the existing bounded CPU
+pool as required work, ahead of predictions. GPU execution then follows the original
+native order. Unit IDs and visibility revisions still authorize every occurrence;
+shared body pixels never authorize a hidden or retired unit.
 
 Unit self-depth uses its normal full range, independent of map depth. Existing
 pose-local self shadow and projected ground footprint retain their native
