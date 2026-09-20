@@ -205,7 +205,7 @@ void samples(FILE* f,char const* name,std::vector<double> values){
 int main(int argc,char** argv){
     if(argc!=6){std::fprintf(stderr,"usage: benchmark_gpu_composition MAP.bmp RESULTS.json WIDTH HEIGHT PRESENT\n");return 2;}
     try{
-        int width=std::stoi(argv[3]),height=std::stoi(argv[4]);require(width>=640&&height>=480&&width<=2240&&height<=1192,"Viewport budget");
+        int width=std::stoi(argv[3]),height=std::stoi(argv[4]);require(width>=640&&height>=480&&width<=2240&&height<=1260,"Viewport budget");
         bool present=std::stoi(argv[5])!=0;
         double start=now();Probe p(width,height,argv[1]);double setup=now()-start;
         std::printf("SETUP width=%d height=%d ms=%.3f adapter=%s\n",width,height,setup,p.adapter.c_str());std::fflush(stdout);

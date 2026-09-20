@@ -109,8 +109,8 @@ int main(){
 struct Rect {int left,top,right,bottom;};
 using namespace c3x_renderer::render_core;
 int main(){
- assert(scene_surface_extent(8,8) && scene_surface_extent(2240,1192));
- assert(!scene_surface_extent(2241,1192) && !scene_surface_extent(2240,1193));
+ assert(scene_surface_extent(8,8) && scene_surface_extent(2240,1260));
+ assert(!scene_surface_extent(2241,1260) && !scene_surface_extent(2240,1261));
  assert(!scene_surface_extent(0,480) && !scene_surface_extent(640,7));
  for(int width:{16,37,128})for(int height:{19,64})
  for(int ox:{-1000,-1,0,1,900})for(int oy:{-999,0,800}){
@@ -135,9 +135,12 @@ int main(){
  for(auto r:input)for(int y=std::max(0,r.top);y<std::min(27,r.bottom);++y)
   for(int x=std::max(0,r.left);x<std::min(37,r.right);++x)assert(coverage[y*37+x]);
  assert(scene_damage_union(0,27,input).empty());
- assert(scene_damage_union(2249,1200,input).empty());
- input.clear();for(int y=0;y<1200;y+=8)for(int x=(y/8)%2*8;x<2248;x+=16)input.push_back({x,y,x+1,y+1});
- result=scene_damage_union(2248,1200,input);assert(result.size()*sizeof(Rect)<340*1024);
+ assert(scene_damage_union(2249,1268,input).empty());
+ input.clear();for(int y=0;y<1268;y+=8)for(int x=(y/8)%2*8;x<2248;x+=16)input.push_back({x,y,x+1,y+1});
+ result=scene_damage_union(2248,1268,input);assert(!result.empty() && result.size()==input.size() && result.size()*sizeof(Rect)<360*1024);
+ assert(scene_damage_union(2248,1269,input).empty());
+ result=scene_damage_union(2248,1268,std::vector<Rect>{{0,0,2248,1268}});
+ assert(result.size()==1 && result[0].right==2248 && result[0].bottom==1268);
 }
 ''')
 

@@ -2,9 +2,10 @@
 #include "gpu_frame_api.h"
 #include <vector>
 namespace c3x_native_images {
-// Compatibility admission for images created before our hooks were installed.
-// Civ III remains their pixel owner. Snapshot the completed native screen at its
-// transfer boundary; never infer damage from pixel equality or retain a lease.
+// Snapshot a CPU-owned screen before map admission or after an ownership barrier.
+// A private copy must not turn a freshly observed screen into a public pointer
+// escape: it may join the GPU map family later. The caller returns any GPU-owned
+// image to CPU ownership first. No pointer or lease survives this copy.
 struct ScreenSnapshot {
     HWND window=nullptr;int width=0,height=0;RECT area={};
     unsigned native_format=1;
@@ -14,7 +15,7 @@ struct ScreenSnapshot {
         auto field=[&](unsigned offset){return *reinterpret_cast<int*>(static_cast<char*>(image)+offset);};
         if(field(0x24)!=16)return false;
         width=field(0x38);height=field(0x3c);
-        if(width<=0||height<=0||width>2240||height>1192)return false;
+        if(width<=0||height<=0||width>2240||height>1260)return false;
         auto dc=*reinterpret_cast<HDC*>(static_cast<char*>(graph)+0x138);
         window=WindowFromDC(dc);DWORD process=0;
         if(!window||GetWindowThreadProcessId(window,&process)!=GetCurrentThreadId()||process!=GetCurrentProcessId())return false;
@@ -33,16 +34,16 @@ struct ScreenSnapshot {
         }else if(dib.dsBmih.biCompression!=BI_RGB)return false;
         native_format=rgb565?2:1;
         unsigned pitch=(unsigned(width)+1)&~1u;pixels.resize(std::size_t(pitch)*height);GdiFlush();
-        // GetObject does not preserve JGL's logical row orientation. Borrow its
-        // native bits/stride instead, exactly as the existing image adapter does.
-        auto table=*static_cast<void***>(image);
-        auto bits=reinterpret_cast<unsigned short*(__thiscall*)(void*)>(table[4])(image);
+        // Audited JGL getter 0x1b70 returns exactly Bits_Data (+0x4c0), while
+        // incrementing a lease counter. Read that same logical base directly;
+        // invoking the public hook would incorrectly revoke lifetime evidence.
+        // GetObject's DIB base alone does not preserve native row orientation.
+        auto bits=*reinterpret_cast<unsigned short const* const*>(static_cast<char*>(image)+0x4c0);
         if(!bits)return false;
         int stride=field(0x40);
-        if(stride<width){reinterpret_cast<void(__thiscall*)(void*,int)>(table[9])(image,1);return false;}
+        if(stride<width)return false;
         for(int y=area.top;y<area.bottom;++y)
             std::memcpy(pixels.data()+std::size_t(y)*pitch+area.left,bits+std::size_t(y)*stride+area.left,(area.right-area.left)*2);
-        reinterpret_cast<void(__thiscall*)(void*,int)>(table[9])(image,1);
         return true;
     }
 };

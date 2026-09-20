@@ -27,7 +27,7 @@ def main():
     relative = source.relative_to(ROOT)
     if source.suffix.lower() != '.bmp' or not source.is_file():
         parser.error('map must be an existing BMP in the checkout')
-    if not (640 <= args.width <= 2240 and 480 <= args.height <= 1192):
+    if not (640 <= args.width <= 2240 and 480 <= args.height <= 1260):
         parser.error('viewport exceeds probe budget')
     # All command-tail values are controlled numbers/UUIDs or checked paths.
     if any(c in str(relative) for c in '\r\n"%&|<>^!'):

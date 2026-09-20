@@ -94,7 +94,7 @@ float4 pixel(V i):SV_Target{
 public:
     ID3D11Texture2D* draw(ID3D11Device* d,ID3D11DeviceContext* c,Input const& capture,std::array<int,4> area,double seconds){
         initialize(d);unsigned w=unsigned(area[2]-area[0]),h=unsigned(area[3]-area[1]);
-        if(!w||!h||w>2240||h>1192||capture.primitives.empty())throw std::runtime_error("tactical extent");
+        if(!w||!h||w>2240||h>1260||capture.primitives.empty())throw std::runtime_error("tactical extent");
         if(w!=width||h!=height){texture.Reset();target.Reset();color_view.Reset();packed_texture.Reset();packed_view.Reset();D3D11_TEXTURE2D_DESC td={};td.Width=w;td.Height=h;td.MipLevels=td.ArraySize=1;td.Format=DXGI_FORMAT_B8G8R8A8_UNORM;td.SampleDesc.Count=1;td.BindFlags=D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE;
             check(d->CreateTexture2D(&td,nullptr,&texture));check(d->CreateRenderTargetView(texture.Get(),nullptr,&target));width=w;height=h;}
         unsigned count=unsigned(capture.primitives.size());

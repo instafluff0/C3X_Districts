@@ -24,44 +24,47 @@ testing remain with the user. Performance acceptance is still pending.
 
 ## M3.8 current handoff — in progress
 
-**Native map-ownership repair staged; live acceptance pending.** The September 20
-captures confirmed hardware D3D11 but only 1/311, then 1/51, map composites stayed
-resident. The first loss was an unscoped public DC request after GPU composition.
-The native map-tail line initializer performs that request even with no colony
-outlines to draw. Existing OpenGL hooks now route resident targets to the DLL's
-GPU overlay pass, preserving native style and CPU/config-off barriers. No new
-patch-table entries are needed. See [live findings](live_usage_findings_20260920.md)
-and the [patch ledger](civ3_patch_dependency_ledger.md#native-map-outline-ownership-repair).
+**Final-screen ownership repair and fullscreen support staged; live acceptance
+pending.** The latest September 20 capture confirms the installed outline fix:
+114/114 map composites stay GPU resident with zero shared-scene readbacks. Final
+screens still used CPU snapshots, however; the gameplay display intervals average
+80.50 ms (12.42 updates/sec), p95 383.34 ms. Our own startup snapshot called the
+public pixel getter and permanently excluded the eventual screen from GPU
+admission. The DLL now makes that copy privately, preserving real CPU-access
+barriers. See [live findings](live_usage_findings_20260920.md) and the
+[patch ledger](civ3_patch_dependency_ledger.md).
 
 **Installable evaluation:** `bin/C3XRenderer.dll`, SHA-256
-`71b3b064413a5d35035e7bc6e40a81ef8c2dd644a2656cd10d9145d7e6baa827`.
-The user must **re-run `INSTALL.bat`** for the changed injected bridge; replacing
-only the DLL preserves the old DC request. `native/build/live-outline-stage.json`
-records staging and the preserved previous DLL. No game was launched or installed
-by the agent. The earlier city-close route-cursor ABI fix remains included.
+`f17edf16895f7e839ef48a38eadffd0da4222cd746b0d98380dc1444dfe9d375`.
+This repair is DLL-only. The latest capture confirms the previous injected outline
+bridge is installed, so restart through `CAPTURE_GAME.bat`; no reinstall is needed.
+`native/build/live-screen-stage.json` records staging, validation and rollback.
+No game was launched or installed by the agent. The city-close ABI fix remains
+included, and no new native hooks or patch-table entries are needed.
 
-Connected native/GPU checks retain the map through **144/144** empty line
-initializations, with CPU map storage untouched. Displayed outline color,
-opacity, width, GL/GDI+ dash spacing and clipping pass. Real DC escape still
-falls back; config-off mid-draw drains before native initialization. At the
-captured 1119×1192 extent, unit/text composition, fog, tactical overlays, camera
-retirement/reset and visibility replay pass. Final native context-default and
-fail-closed checks and the approved injected compile also pass. Receipts are
-linked in the live findings; the native EXE/GDI+ test endpoints are stand-ins,
-while JGL hooks and DLL/GPU composition execute their production code.
+**Fullscreen validation passes at 2240×1260**, the VM's current desktop size.
+Scene/image/presentation bounds and the 2248×1268 lighting border now admit this
+extent. Memory budgets and full visual quality remain unchanged. The old DLL
+reproduces the startup eligibility failure; the final replay preserves eligibility
+through 24 CPU menu presentations, then verifies unchanged CPU map/screen storage
+and exact GPU-composed display pixels. Units/text, 144 empty line initializations,
+actual outlines, fog, selection/path/grid, camera cancellation/reset and config-off
+recovery pass. Five CPU bounds tests and fullscreen GPU image/unit operations
+also pass; receipts are linked in the live findings.
 
-The 100-frame, full-resolution coast fixture with one selected unit and all water
-effects on measures **24.74 ms mean / 33.14 ms p95** per resident visual request,
-and **35.03 / 50.05 ms** through desktop completion, including the first sample.
-These are controlled fixture timings, not post-fix gameplay FPS, an A/B speedup,
-or arbitrary camera-jump acceptance. M3.8 and Standard <33 ms p95 remain open.
+The final 100-frame fullscreen coast fixture with one selected unit and all water
+effects on measures **31.29 ms mean / 42.34 ms p95** per resident visual request,
+and **42.10 / 53.38 ms** through desktop completion, including the first sample.
+These are controlled fixture timings, not live gameplay FPS, an A/B speedup or
+arbitrary camera-jump acceptance. M3.8 and Standard <33 ms p95 remain open.
 
-**Next responsibility:** verify resident composition survives the installed
-scroll/jump/selection/city/UI sequence, then measure and remove the remaining
-camera and cancelled speculative-preparation work. Use the existing
-[one-click capture](live_usage_logging.md#one-click-game-capture); it needs no
-debugger or manual uploads. Full detail, waves, water motion and reflections stay
-on. The older `native_smoke` failure is not counted as passing.
+**Next responsibility:** confirm resident final-screen presentation and independent
+visual frames in the installed fullscreen game, then remove remaining camera and
+cancelled speculative work. The latest live capture cancelled 766/768 prepared
+areas, with 8.83 seconds of worker activity; that is not an additive UI stall total.
+Use the existing [one-click capture](live_usage_logging.md#one-click-game-capture);
+it needs no debugger or manual uploads. Full detail, waves, water motion and
+reflections stay on. The older `native_smoke` failure is not counted as passing.
 
 Whole-world appearance enters through bounded caller-thread pages. Existing
 workers prepare canonical regions and wrapped occurrences independently of the

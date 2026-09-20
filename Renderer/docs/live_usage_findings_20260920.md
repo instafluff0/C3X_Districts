@@ -103,14 +103,87 @@ The approved final injected smoke test passes in
 `71b3b064413a5d35035e7bc6e40a81ef8c2dd644a2656cd10d9145d7e6baa827`.
 Re-run `INSTALL.bat` before the next capture. No installer or game was launched.
 
-Next: verify live residency after installing the corrected bridge, then measure
-remaining camera and speculative-preparation costs. A resident replay is not
-proof that every live UI/native sequence now stays resident or reaches the
-Standard-map latency target.
+## Installed bridge result and final-screen repair
+
+The third capture, `native/build/live-captures/20260920-222421-1a5c0e/`, uses
+the installed outline repair (`71b3b064…a827`). Both collectors finished and the
+game exited normally. All **114/114** map composites use `gpu_map=1`, there are
+zero ownership-revocation records, and all 63 shared-scene records have zero
+readbacks. The first repair is active. However, there are still **zero resident
+final-screen presentations**. The gameplay swap chain's 577 displayed intervals
+average **80.50 ms** (median **33.62**, p95 **383.34**, max **1,216.64**), or
+**12.42 updates/sec**, with 17 gaps above 500 ms. This shorter, different usage
+sequence is not a matched before/after speed comparison. Derived `analysis.json`
+records the source hashes and separates startup/UI presentation.
+
+The last cumulative CPU-screen sample reports **600 transfers / 1.37 GB uploaded**.
+At startup, surface 1 receives a public bits escape on its very first CPU menu
+presentation, before the map exists. Source and native replay identify the caller:
+our own `ScreenSnapshot::capture` invoked the public getter to make a private
+copy. This permanently excluded the eventual screen from GPU destination
+admission. Resident map-to-screen copies therefore fell back to CPU ownership.
+
+The DLL snapshot now copies JGL's audited logical pixel member directly on the
+caller thread, without public escape evidence or a retained pointer. The owner
+explicitly returns any GPU-owned source to CPU ownership before this fallback;
+real game access and failed barriers retain their previous behavior. No injected
+code or patch-table change is required. The negative-control replay in
+`native/build/live-screen-negative-control/` fails the new startup-admission
+assertion with the previously staged DLL, reproducing the live sequence.
+
+The corrected 1119×1192 replay in `native/build/live-screen-full-resolution/`
+passes all 24 startup copies without a public pixel escape, followed by resident
+map/screen composition with unchanged CPU map storage and exact displayed pixels.
+Units/text, outlines, fog, selection/path/grid, camera cancellation/reset and
+config-off recovery pass. Its 100 selected-unit coast frames with all water
+effects on average **26.45 ms** per visual request (p95 **34.47 ms**) and
+**36.73 ms** through desktop completion (p95 **50.13 ms**), including the first
+sample. These controlled fixture timings are not a live speedup measurement.
+
+The user then requested fullscreen validation. The VM reports **2240×1260** with
+no game process running; the prior capture was 1119×1192. GPU admission had a
+1192-pixel height ceiling. The DLL and replay bounds now allow 2240×1260 through
+scene, image, overlay and presentation paths, including matching prepared-view
+padding limits. The first fullscreen replay rejected the taller working area in
+the HDR and damage-region bounds; those now admit the matching 2248×1268 area
+including its border. Existing memory budgets remain unchanged. The five
+scene-bound and prepared-view CPU tests pass, including complete coverage at the
+new lower edge and rejection beyond the bound. Live fullscreen mode still needs its own capture;
+desktop dimensions alone do not prove a game's selected mode.
+
+The final fullscreen replay, `native/build/live-screen-fullscreen-final/receipt.json`,
+passes at **2240×1260**, including native final display, startup admission, units,
+outlines, fog/tactical overlays and camera/config-off recovery. Its 100 independent
+coast frames with one selected unit and all water effects on measure **31.29 ms
+mean / 42.34 ms p95 / 128.09 ms max** per request and **42.10 / 53.38 / 146.19 ms**
+through desktop completion, including the first sample. These are fixture timings,
+not gameplay FPS or input-to-display acceptance. The sampled minimum contiguous
+free virtual-address region was **858 MiB**; this is not a whole-game memory proof.
+
+The preliminary fullscreen replay in `live-screen-fullscreen-verified/` failed
+because two independent outline checks retained their full-screen temporary
+targets simultaneously. The fixture now restores/releases its completed saved
+image before creating the CPU-escape test target, preserving every pixel and
+fallback assertion without raising the production budget. The separate
+`live-screen-fullscreen-image-operations.json` proves full-size unit composition
+with exact pixels and 24,576 scratch bytes under its existing 64 MiB limit.
+
+Staging: `native/build/live-screen-stage.json`; DLL SHA-256
+`f17edf16895f7e839ef48a38eadffd0da4222cd746b0d98380dc1444dfe9d375`.
+The previous DLL is preserved. The installed outline bridge is already active in
+the latest capture, so **restart through `CAPTURE_GAME.bat`; no new `INSTALL.bat`
+run is needed**. No game or installer was launched by the agent.
+
+Remaining work includes speculative preparation: **766 of 768** attempts were
+cancelled, consuming **8.83 seconds** of worker activity (not additive UI stall
+time). Verify final-screen residency and independent visual presentation in the
+next installed-game capture before attributing their remaining cost. A resident
+replay is not proof that every live UI/native sequence stays resident or reaches
+the Standard-map latency target.
 
 The stream also reports Windows' fault-tolerant heap shim at startup. Its cost
 and capture overhead are unmeasured; neither explains away the observed route
 loss. No system compatibility settings were changed. No further manual capture
 is requested until the current evidence and automated reproduction are exhausted.
-M3.8 and the <33 ms p95 target remain unpassed. No post-fix live FPS improvement
-is claimed before another installed-game measurement.
+M3.8 and the <33 ms p95 target remain unpassed. No live FPS improvement is claimed
+for the final-screen repair before another installed-game measurement.

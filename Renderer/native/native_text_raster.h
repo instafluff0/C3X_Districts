@@ -52,7 +52,7 @@ inline bool compile(HDC source,State const& font_state,char const* text,unsigned
     if(!GetTextExtentPoint32A(source,text,int(count),&extent)||!GetTextMetricsA(source,&metrics)||extent.cx<0||metrics.tmHeight<1)return false;
     int margin=metrics.tmHeight+std::abs(metrics.tmOverhang);
     unsigned w=unsigned(extent.cx+2*margin),h=unsigned(metrics.tmHeight+2*margin);
-    if(!w||w>2240||!h||h>1192||std::uint64_t(w)*h>16384)return false;
+    if(!w||w>2240||!h||h>1260||std::uint64_t(w)*h>16384)return false;
     Dib full(w,h);if(!full.pixels)return false;
     auto font=GetCurrentObject(source,OBJ_FONT);setup(full.dc,font,font_state);
     unsigned size=w*h;

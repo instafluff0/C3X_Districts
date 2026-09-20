@@ -36,11 +36,11 @@ template<class Publication> struct PreparedViewArea {
         return !std::memcmp(&a,&b,sizeof(a));
     }
     bool prepare(c3x_renderer_frame_v1 const& source,c3x_renderer_camera_identity_v1 epochs) {
-        if(source.target_width<8 || source.target_height<8 || source.target_width>2240 || source.target_height>1192 ||
+        if(source.target_width<8 || source.target_height<8 || source.target_width>2240 || source.target_height>1260 ||
            !source.world_topology || !source.world_topology_count || source.world_topology_count>1024u*1024u || source.tile_count>8192 || !source.tile_count || !source.tiles)return false;
         viewport_width=source.target_width;viewport_height=source.target_height;
         pad_x=std::min(128,((2240-viewport_width)/16)*8);
-        pad_y=std::min(128,((1192-viewport_height)/16)*8);
+        pad_y=std::min(128,((1260-viewport_height)/16)*8);
         if(!pad_x && !pad_y)return false;
         input=source;identity=epochs;
         tiles.assign(source.tiles,source.tiles+source.tile_count);source_tiles=tiles;

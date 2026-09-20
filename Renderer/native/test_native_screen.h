@@ -534,6 +534,19 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
         JGL_Image* live_images[2];
         for(auto& image:live_images){image=create(graph,nullptr,1);verify(reinterpret_cast<Init>(image->vtable[1])(image,w,h,16,1)==0,"production native image init");
             verify(reinterpret_cast<Fill>(image->vtable[17])(image,&full,int(0x80001234u))==0,"production native pre-map contents");}
+        // Live startup presents CPU menus on the eventual game screen before
+        // any GPU map exists. The old private snapshot called the public bits
+        // hook here, permanently excluding that same screen from later copies.
+        screen_surface=live_images[1];screen_image=screen_surface;screen.JGL.Image=screen_surface;pcx.image=screen_surface;
+        for(int startup=0;startup<24;++startup){
+            auto links=screen_surface->Bits_Data_Links;events.clear();
+            verify(patch_JGL_Graphsy_present(graph,0,&full)==0,"pre-map CPU menu presentation");
+            verify(lifetime(C3X_NATIVE_MAP,screen_surface,0)&&screen_surface->Bits_Data_Links==links,
+                "private startup snapshots preserve eventual GPU screen admission and caller leases");
+            verify(std::none_of(events.begin(),events.end(),[](auto const& e){return e.operation==C3X_NATIVE_BITS||e.operation==C3X_NATIVE_PIXEL;}),
+                "private screen snapshot never becomes a public pixel escape");
+        }
+        std::puts("PASS pre-map screen snapshots: private_copies=24 lifetime_preserved=24 public_pixel_access=0");
         auto raw_unchanged=[&](){auto words=reinterpret_cast<unsigned short*(__thiscall*)(void*)>(original_bits)(live_images[0]);
             auto stride_words=*reinterpret_cast<int*>(reinterpret_cast<char*>(live_images[0])+0x40);bool same=words!=nullptr;
             if(words)for(int y=0;y<h;++y)for(int x=0;x<w;++x)same=same&&words[y*stride_words+x]==0x1234;
@@ -629,6 +642,10 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
             verify(at(112,150)==0&&at(117,150)==0x00f800&&at(112,170)==0x0000f8&&at(117,170)==0,
                 "GL factor-five and GDI+ width-scaled dash patterns");
             for(int y=100;y<190;++y)for(int x=200;x<240;++x)verify(at(x,y)==0,"native outline scissor survives GPU routing");
+            // The displayed-stroke oracle is complete. Retire its full-screen
+            // save before the independent escape test needs another target;
+            // retaining both would exceed the bounded live family at fullscreen.
+            copy(saved_lines,screen_surface,full);reinterpret_cast<Destroy>(saved_lines->vtable[0])(saved_lines,1);
             // CPU UI retargeting still invokes the original initializer. A
             // separate admitted scratch proves a genuine escape mid-scope
             // lazily initializes that backend and replays its style.
@@ -647,7 +664,6 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
             patch_OpenGLRenderer_draw_line(&context,0,3,3,20,3);
             verify(native_gdi_draws==1&&native_gdi_argb==0x80f80000&&native_gdi_width==3,"GDI+ fallback preserves captured style");
             state.current_config.draw_lines_using_gdi_plus=LDO_NEVER;reinterpret_cast<Destroy>(line_scratch->vtable[0])(line_scratch,1);
-            copy(saved_lines,screen_surface,full);reinterpret_cast<Destroy>(saved_lines->vtable[0])(saved_lines,1);
             verify(live(C3X_NATIVE_IMAGE_PRESENT,screen_surface,graph,&full,nullptr,0)==1,"restore GPU outline save");capture_display(expected);
             std::puts("PASS native outline bridge: empty_initializations=144 resident=144 GPU_strokes=4 native_DC=0 actual_clip_color_alpha_width_dash=1 CPU_escape_fallback=1");
         }

@@ -388,7 +388,7 @@ Texture2D<uint> input_image:register(t0);Texture2D<uint> text_curves:register(t1
     ~Compositor(){unbind();}
     Compositor(Compositor const&)=delete;Compositor& operator=(Compositor const&)=delete;
     Id create(unsigned width,unsigned height,Format format){
-        if((format!=Format::rgb555&&format!=Format::rgb565&&format!=Format::bgra32)||!width||!height||width>2240||height>1192||std::uint64_t(width)*height*4>budget-counters.resident_bytes)return 0;
+        if((format!=Format::rgb555&&format!=Format::rgb565&&format!=Format::bgra32)||!width||!height||width>2240||height>1260||std::uint64_t(width)*height*4>budget-counters.resident_bytes)return 0;
         for(auto& image:images)if(!image.id){Image next;make(next,width,height);next.id=++serial;next.format=format;
             unsigned zero[4]={};context->ClearUnorderedAccessViewUint(next.write.Get(),zero);
             counters.resident_bytes+=bytes(next);image=std::move(next);return image.id;}return 0;
@@ -399,7 +399,7 @@ Texture2D<uint> input_image:register(t0);Texture2D<uint> text_curves:register(t1
         if(!texture||(format!=Format::bgra32&&format!=Format::rgb555&&format!=Format::rgb565))return 0;D3D11_TEXTURE2D_DESC d={};texture->GetDesc(&d);
         ComPtr<ID3D11Device> owner;texture->GetDevice(&owner);
         if(owner.Get()!=device||d.Format!=DXGI_FORMAT_R32_UINT||d.SampleDesc.Count!=1||d.ArraySize!=1||d.MipLevels!=1||
-           !(d.BindFlags&D3D11_BIND_SHADER_RESOURCE)||!d.Width||!d.Height||d.Width>2240||d.Height>1192||std::uint64_t(d.Width)*d.Height*4>budget-counters.resident_bytes)return 0;
+           !(d.BindFlags&D3D11_BIND_SHADER_RESOURCE)||!d.Width||!d.Height||d.Width>2240||d.Height>1260||std::uint64_t(d.Width)*d.Height*4>budget-counters.resident_bytes)return 0;
         for(auto& image:images)if(!image.id){Image next;next.texture=texture;next.width=d.Width;next.height=d.Height;next.format=format;next.read_only=true;
             checked(device->CreateShaderResourceView(texture,nullptr,&next.read));next.id=++serial;counters.resident_bytes+=bytes(next);image=std::move(next);return image.id;
         }return 0;

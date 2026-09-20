@@ -196,7 +196,12 @@ public:
         }
         if(op==C3X_NATIVE_IMAGE_PRESENT){
             auto id=adapter->display_image(image);
-            if(!id)return 0; // Caller uploads this CPU UI source into the same presenter.
+            if(!id){
+                // Full-color allocation can fail even for an owned surface.
+                // Materialize it before the caller's private CPU snapshot;
+                // ordinary CPU UI sources simply pass through this barrier.
+                adapter->operation(C3X_NATIVE_BITS,image,nullptr,nullptr,nullptr,0);return 0;
+            }
             if(!source)throw std::runtime_error("native transfer has no Graphsy owner");
             auto dc=*reinterpret_cast<HDC*>(static_cast<char*>(source)+0x138);
             int width=field(image,0x38),height=field(image,0x3c);

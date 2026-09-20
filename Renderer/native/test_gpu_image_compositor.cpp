@@ -39,7 +39,7 @@ int main(int argc,char** argv){
             // A retained map plus packed/full-color native destination and
             // underlay fit the existing budget at the live map's dimensions.
             // One small unit must not require two additional full-size images.
-            constexpr unsigned w=2240,h=1192;Rect full_area={0,0,w,h},body_area={1000,476,1064,524};
+            constexpr unsigned w=2240,h=1260;Rect full_area={0,0,w,h},body_area={1000,476,1064,524};
             Compositor bounded(device.Get(),context.Get());
             auto map=bounded.create(w,h,Format::bgra32),d=bounded.create(w,h,Format::rgb555),b=bounded.create(w,h,Format::rgb555);
             auto detail=bounded.create(w,h,Format::bgra32),bd=bounded.create(w,h,Format::bgra32),body=bounded.create(64,48,Format::bgra32);
@@ -55,7 +55,7 @@ int main(int argc,char** argv){
             auto colors=read_gpu(device.Get(),context.Get(),bounded.texture(detail));
             for(unsigned y=0;y<h;++y)for(unsigned x=0;x<w;++x){bool hit=x>=1000&&x<1064&&y>=476&&y<524;
                 require(words[y*w+x]==(hit?0x7c00u:0x3e0u)&&colors[y*w+x]==(hit?0xffff0000u:0xff00ff00u),"live-size unit exact selected pixels");}
-            std::puts("PASS live-size unit: 2240x1192 map and native color pairs; 24576 scratch bytes, unchanged 64 MiB budget, exact pixels");
+            std::puts("PASS live-size unit: 2240x1260 map and native color pairs; 24576 scratch bytes, unchanged 64 MiB budget, exact pixels");
         }
         Compositor gpu(device.Get(),context.Get());Id images[3]={};constexpr unsigned width=64,height=48;
         RECT full={0,0,width,height};Rect area={0,0,width,height};

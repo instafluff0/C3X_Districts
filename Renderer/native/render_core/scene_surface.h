@@ -5,7 +5,7 @@
 
 namespace c3x_renderer { namespace render_core {
 inline bool scene_surface_extent(int width,int height) {
-    return width>=8 && height>=8 && width<=2240 && height<=1192;
+    return width>=8 && height>=8 && width<=2240 && height<=1260;
 }
 
 template<class Rect> struct SceneSpan {Rect rect;int x,y;};
@@ -26,11 +26,11 @@ template<class Rect> std::vector<SceneSpan<Rect>> scene_spans(
 }
 
 // Bounded union aligned with finishing workgroups. It owns scissors only, not
-// render targets or scene construction. At the 2248x1200 limit the grid is 42 KiB
-// and even a checkerboard requires less than 340 KiB of output rectangles.
+// render targets or scene construction. At the 2248x1268 limit the grid is 44 KiB
+// and even a checkerboard requires less than 360 KiB of output rectangles.
 template<class Rect> std::vector<Rect> scene_damage_union(
         int width,int height,std::vector<Rect> const& inputs) {
-    if(width<=0 || height<=0 || width>2248 || height>1200)return {};
+    if(width<=0 || height<=0 || width>2248 || height>1268)return {};
     constexpr int cell=8;
     int columns=(width+cell-1)/cell,rows=(height+cell-1)/cell;
     std::vector<unsigned char> occupied(std::size_t(columns)*rows);
@@ -63,7 +63,7 @@ template<class Rect> std::vector<Rect> scene_damage_union(
 // seam. Retained output uses the same workgroup origin/arithmetic as a full pass.
 template<class Rect> std::vector<Rect> scene_filter_damage(
         int width,int height,std::vector<Rect> const& inputs,int radius) {
-    if(width<=0 || height<=0 || width>2248 || height>1200 || radius<0 || radius>8)return {};
+    if(width<=0 || height<=0 || width>2248 || height>1268 || radius<0 || radius>8)return {};
     std::vector<Rect> support;
     for(auto r:inputs){
         if(r.left>=r.right || r.top>=r.bottom)continue;

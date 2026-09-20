@@ -14,7 +14,7 @@ struct Glow {
     bool ensure(ID3D11Device*device,std::string const&root,unsigned extent=136,unsigned height=0,bool sampleable=false){
         if(!height)height=extent;
         if(shader && linear.color && native_extent==extent && native_height==height && (!sampleable || linear.samples))return true;
-        if(extent<16 || height<16 || extent>2248 || height>1200)return false;
+        if(extent<16 || height<16 || extent>2248 || height>1268)return false;
         reset();native_extent=extent;native_height=height;
         std::wstring path(root.begin(),root.end());path+=L"/Renderer/native/city_fidelity/hdr_glow.hlsl";
         ID3DBlob*blob=nullptr,*errors=nullptr;

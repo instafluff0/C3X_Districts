@@ -2,8 +2,10 @@
 
 ## One-click game capture
 
-For the September 20 map-ownership repair, run `INSTALL.bat` once before capturing.
-The fix changes a native hook as well as the DLL; this launcher does not install it.
+The current final-screen/fullscreen repair changes only the DLL. If the September
+20 outline bridge is already installed, restart through this launcher without
+reinstalling. Older installations must run `INSTALL.bat` once for that native
+bridge; this launcher does not install it.
 
 In the Windows VM, close Civ III and double-click
 `Conquests\C3X_Districts\Renderer\CAPTURE_GAME.bat`. Approve the Windows PowerShell

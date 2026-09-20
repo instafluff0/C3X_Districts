@@ -83,7 +83,7 @@ def main(argv=None):
     scene=args.scene.resolve();dll=args.dll.resolve()
     for path in (scene,dll,jgl):
         if any(c in path.relative_to(ROOT).as_posix() for c in '\r\n"%&|<>^!'):parser.error('unsupported input path')
-    if not(64<=args.width<=2240 and 64<=args.height<=1192):parser.error('unsupported extent')
+    if not(64<=args.width<=2240 and 64<=args.height<=1260):parser.error('unsupported extent')
     header=scene.read_text().splitlines()[0].split(',');cx=int(header[1])//2;cy=int(header[2])//2
     invocation=uuid.uuid4().hex;out=args.out.resolve() if args.out else ROOT/'Renderer/native/build/gpu-composition'/invocation;out.mkdir(parents=True,exist_ok=True)
     inputs={}
@@ -151,7 +151,7 @@ def main(argv=None):
     complete=(out/'completion.txt').read_text().split() if (out/'completion.txt').exists() else []
     log=(out/'test.log').read_text(errors='replace') if (out/'test.log').exists() else ''
     unchanged=all(digest(ROOT/p)==h for p,h in inputs.items())
-    passed=complete==[invocation,'0'] and unchanged and 'PASS resident map GPU worker:' in log and 'PASS native GPU worker transport:' in log and 'PASS native screen transfer:' in log and 'PASS live native screen:' in log and 'PASS production native map owner:' in log and ('PASS prepared GPU map adoption:' in log or (args.width>2224 and args.height>1176 and 'PASS bounded GPU map demand:' in log))
+    passed=complete==[invocation,'0'] and unchanged and 'PASS resident map GPU worker:' in log and 'PASS native GPU worker transport:' in log and 'PASS native screen transfer:' in log and 'PASS live native screen:' in log and 'PASS production native map owner:' in log and ('PASS prepared GPU map adoption:' in log or (args.width>2224 and args.height>1244 and 'PASS bounded GPU map demand:' in log))
     if args.native_recovery:passed=passed and 'PASS native async recovery: cases=4 ' in log
     if args.native_navigation:passed=passed and 'PASS native navigation:' in log
     if args.native_camera_requests or args.native_navigation:passed=passed and 'PASS nonblocking native camera:' in log

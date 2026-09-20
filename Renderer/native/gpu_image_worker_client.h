@@ -45,7 +45,7 @@ public:
     }
     bool destroy(Id id){if(failed)return false;flush();run(request(C3X_GPU_DESTROY,id));return true;}
     bool upload(Id id,std::uint64_t revision,std::uint32_t const* pixels,std::size_t count){
-        if(count>2240u*1192u)return false;flush();auto r=request(C3X_GPU_UPLOAD,id);r.revision=std::int64_t(revision);r.pixels=pixels;r.pixel_count=unsigned(count);run(r);return true;
+        if(count>2240u*1260u)return false;flush();auto r=request(C3X_GPU_UPLOAD,id);r.revision=std::int64_t(revision);r.pixels=pixels;r.pixel_count=unsigned(count);run(r);return true;
     }
     bool submit(Command const* commands,std::size_t count){
         if(failed)throw std::runtime_error("GPU image session is no longer usable");
@@ -56,7 +56,7 @@ public:
         return true;
     }
     bool readback(Id id,std::uint32_t* pixels,std::size_t count){
-        if(!pixels||!count||count>2240u*1192u)return false;flush();auto r=request(C3X_GPU_READBACK,id);r.pixel_count=unsigned(count);run(r,pixels,unsigned(count));return result.pixel_count==count;
+        if(!pixels||!count||count>2240u*1260u)return false;flush();auto r=request(C3X_GPU_READBACK,id);r.pixel_count=unsigned(count);run(r,pixels,unsigned(count));return result.pixel_count==count;
     }
     c3x_renderer_gpu_result_v1 stats()const{return result;}
     std::uint64_t submitted_batches()const{return batches;}

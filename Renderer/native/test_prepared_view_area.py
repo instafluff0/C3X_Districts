@@ -133,7 +133,7 @@ int main(){
     tiles[0].unit_state=9;tiles[0].unit_direction=3;assert(area.project(f,epochs,result));
     for(auto& t:tiles)t.anchor_x-=256;reject();
     c3x_renderer::PreparedViewArea<PublishedMapFrame> unavailable;
-    f.target_width=2240;f.target_height=1192;assert(!unavailable.prepare(f,epochs));
+    f.target_width=2240;f.target_height=1260;assert(!unavailable.prepare(f,epochs));
     area.clear();assert(!area.map.output.bgra_pixels && area.bytes()==decltype(area){}.bytes());
 }
 ''')

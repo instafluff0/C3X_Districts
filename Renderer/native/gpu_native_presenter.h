@@ -62,7 +62,7 @@ public:
     }
     bool prepare(HWND hwnd,ID3D11Device* device,unsigned w,unsigned h,bool full){
         DWORD process=0;
-        if(!hwnd||!device||!w||!h||w>2240||h>1192||GetWindowThreadProcessId(hwnd,&process)!=GetCurrentThreadId()||process!=GetCurrentProcessId())return false;
+        if(!hwnd||!device||!w||!h||w>2240||h>1260||GetWindowThreadProcessId(hwnd,&process)!=GetCurrentThreadId()||process!=GetCurrentProcessId())return false;
         RECT client={};if(!GetClientRect(hwnd,&client)||client.right!=int(w)||client.bottom!=int(h))return false;
         if(matches(hwnd,device,w,h))return initialized||full;
         if(!full)return false;

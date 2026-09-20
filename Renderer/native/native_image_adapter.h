@@ -73,7 +73,7 @@ template<class Backend> class Adapter {
     Image* create(void* p,bool owned){
         if(!p||field(p,0x24)!=16)return nullptr;
         int w=field(p,0x38),h=field(p,0x3c),stride=field(p,0x40);
-        if(w<=0||h<=0||w>2240||h>1192||stride<w)return nullptr;
+        if(w<=0||h<=0||w>2240||h>1260||stride<w)return nullptr;
         // Derive format from the actual DIB; 16-bit alone does not distinguish 555/565.
         DIBSECTION dib={};auto bitmap=*reinterpret_cast<HBITMAP*>(static_cast<char*>(p)+0x4b4);
         if(GetObject(bitmap,sizeof dib,&dib)!=sizeof dib||dib.dsBm.bmBitsPixel!=16)return nullptr;
@@ -302,7 +302,7 @@ template<class Backend> class Adapter {
         std::uint64_t step_x=65536,step_y=65536;
         if(scaled||native_scale){
             float x=float(double(scale_x)/denominator),y=float(double(scale_y)/denominator);
-            if(double(w)*x>2240||double(h)*y>1192)return false;
+            if(double(w)*x>2240||double(h)*y>1260)return false;
             output_width=int(double(w)*x);output_height=int(double(h)*y);
             // Ordinary JGL indexed scaling starts one scaled source-pixel beyond
             // the supplied anchor and samples with truncated 16.16 increments.

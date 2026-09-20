@@ -437,6 +437,23 @@ binding through verified image slot 59 (`0x1ca0`) and palette-owner global RVA
 use the native private DC without treating palette binding as a pixel escape;
 other DC access still restores CPU ownership. Injected compilation passes.
 
+The completed CPU-screen snapshot now reads JGL's logical `Bits_Data` member
+(`+0x4c0`, stride `+0x40`) privately on the caller thread after `GdiFlush`.
+The audited core getter at DLL RVA `0x1b70` returns that exact member while
+incrementing `Bits_Data_Links`; calling its public hook for our own snapshot
+incorrectly marked the eventual game screen as permanently escaped at startup.
+No pointer survives the copy. The production composition owner explicitly
+materializes GPU contents before CPU snapshot fallback, including failure to
+allocate the optional full-color image; failed barriers deny access. Real game
+bits/DC requests retain their existing ownership barriers. This DLL-only repair
+reuses `patch_JGL_Graphsy_present`; no signature, hook, CSV entry or injected
+state changes are needed. `required_user_action: []`.
+
+Fullscreen 2240×1260 admission and its 2248×1268 lighting border are DLL bounds,
+not new native capabilities. The existing frame dimensions, image hooks and
+Graphsy transfer supply exact sizes; no injected changes or patch entries are
+needed. `required_user_action: []`.
+
 The existing `patch_JGL_Sprite_draw` now forwards typed sprite/palette/anchor
 arguments to the image adapter before native fallback. JGL sprite slot 17 remains
 RVA `0x8180`, signature `int (__thiscall *)(JGLSprite *, JGL_Image *, int x,

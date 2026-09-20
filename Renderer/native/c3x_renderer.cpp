@@ -11084,8 +11084,8 @@ public:
         char option[8]={};GetEnvironmentVariableA("C3X_RENDERER_PREPARED_VIEW",option,sizeof(option));
         if(!native_presentation || !nearby_available || std::strcmp(option,"0")==0 ||
            !frame.world_topology || !frame.world_topology_count || frame.world_topology_count>1024u*1024u || frame.tile_count>8192 || !frame.tile_count || !frame.tiles ||
-           frame.target_width>2240 || frame.target_height>1192 ||
-           (frame.target_width>2224 && frame.target_height>1176))return C3X_RENDERER_RESULT_ERROR;
+           frame.target_width>2240 || frame.target_height>1260 ||
+           (frame.target_width>2224 && frame.target_height>1244))return C3X_RENDERER_RESULT_ERROR;
         if(ahead_active || area_pending){
             // Caller-driven priority: do not let speculative zoom construction
             // starve the map the game is currently asking to animate.
@@ -11135,7 +11135,7 @@ public:
         std::lock_guard<std::mutex> call_guard(call_mutex);
         std::unique_lock<std::mutex> lock(state_mutex);
         auto const& frame=*request.frame;
-        if(!native_presentation || !nearby_available || frame.target_width>2240 || frame.target_height>1192 ||
+        if(!native_presentation || !nearby_available || frame.target_width>2240 || frame.target_height>1260 ||
            !frame.tile_count || frame.tile_count>8192 || !frame.world_topology_count || frame.world_topology_count>1024u*1024u)
             return C3X_RENDERER_RESULT_ERROR;
         auto matches=[&](auto const& f,auto const& id){return f.tile_width==frame.tile_width && f.tile_height==frame.tile_height &&
@@ -13160,7 +13160,7 @@ extern "C" __declspec(dllexport) int c3x_renderer_gpu_render(
     c3x_renderer_camera_request_v1 const* request,c3x_renderer_gpu_frame_v1* view,c3x_renderer_output_v1* metadata){
     if(!request||request->version!=C3X_RENDERER_CAMERA_VIEW_VERSION||request->struct_size!=sizeof(*request)||
        !view||view->struct_size!=sizeof(*view)||!valid_frame(request->frame,metadata)||
-       request->frame->target_width>2240||request->frame->target_height>1192)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+       request->frame->target_width>2240||request->frame->target_height>1260)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
     *view={sizeof(*view)};
     try{return get_renderer_worker().render_gpu(*request,*view,*metadata);}
     catch(...){return C3X_RENDERER_RESULT_ERROR;}
@@ -13169,7 +13169,7 @@ extern "C" __declspec(dllexport) int c3x_renderer_gpu_camera_begin(
     c3x_renderer_camera_request_v1 const* request,c3x_renderer_i64* ticket){
     c3x_renderer_output_v1 metadata={C3X_RENDERER_API_VERSION,sizeof(metadata)};
     if(!request||!ticket||request->version!=C3X_RENDERER_CAMERA_VIEW_VERSION||request->struct_size!=sizeof(*request)||
-       !valid_frame(request->frame,&metadata)||request->frame->target_width>2240||request->frame->target_height>1192)
+       !valid_frame(request->frame,&metadata)||request->frame->target_width>2240||request->frame->target_height>1260)
         return C3X_RENDERER_RESULT_BAD_ARGUMENT;
     try{return get_renderer_worker().begin_gpu_camera(*request,*ticket);}
     catch(...){return C3X_RENDERER_RESULT_ERROR;}
@@ -13190,7 +13190,7 @@ extern "C" __declspec(dllexport) int c3x_renderer_gpu_camera_poll_view(
 }
 extern "C" __declspec(dllexport) int c3x_renderer_gpu_images(
     c3x_renderer_gpu_images_v1 const* request,c3x_renderer_gpu_result_v1* result,unsigned* readback,unsigned capacity){
-    constexpr unsigned max_pixels=2240u*1192u;
+    constexpr unsigned max_pixels=2240u*1260u;
     if(!request||request->struct_size!=sizeof(*request)||!result||result->struct_size!=sizeof(*result)||
        request->ticket<=0||request->action<C3X_GPU_CREATE||request->action>C3X_GPU_READBACK||request->pixel_count>max_pixels||
        request->command_count>2048||(request->command_count&&!request->commands)||
@@ -13201,7 +13201,7 @@ extern "C" __declspec(dllexport) int c3x_renderer_gpu_images(
     if((create?(request->format<C3X_GPU_BGRA32||request->format>C3X_GPU_RGB565):request->format!=0)||
        (!upload && request->pixels)||(!upload && request->revision)||
        (!upload && !read && request->pixel_count)||(!submit && (request->commands||request->command_count||request->command_struct_size))||
-       (submit && (!request->command_count||request->command_struct_size!=sizeof(c3x_renderer_gpu_command_v1)))||(create?(request->width<=0||request->height<=0||request->width>2240||request->height>1192||request->image!=0):(request->width||request->height))||
+       (submit && (!request->command_count||request->command_struct_size!=sizeof(c3x_renderer_gpu_command_v1)))||(create?(request->width<=0||request->height<=0||request->width>2240||request->height>1260||request->image!=0):(request->width||request->height))||
        (!create && !submit && request->image<=0)||(read&&!request->pixel_count))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
     *result={sizeof(*result)};
     try{return get_renderer_worker().images_gpu(*request,*result,readback,capacity);}
@@ -13212,7 +13212,7 @@ extern "C" __declspec(dllexport) int c3x_renderer_gpu_images(
 // the complete retained display under the same serialized ownership boundary.
 extern "C" __declspec(dllexport) int c3x_renderer_gpu_present(c3x_renderer_gpu_present_v1 const* request){
     if(!request||request->struct_size!=sizeof(*request)||request->action<0||request->action>2)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
-    if(request->action==0&&(request->ticket<=0||request->image<=0||!request->window||request->width<=0||request->height<=0||request->width>2240||request->height>1192||
+    if(request->action==0&&(request->ticket<=0||request->image<=0||!request->window||request->width<=0||request->height<=0||request->width>2240||request->height>1260||
         request->area[0]>=request->area[2]||request->area[1]>=request->area[3]||request->area[0]>=request->width||request->area[1]>=request->height||request->area[2]<=0||request->area[3]<=0))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
     try{return get_renderer_worker().present_gpu(*request);}catch(...){return C3X_RENDERER_RESULT_ERROR;}
 }

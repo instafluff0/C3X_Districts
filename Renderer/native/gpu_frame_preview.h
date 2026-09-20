@@ -219,7 +219,7 @@ if(ok && !std::strcmp(gpu_frame_test,"1")) {
                 gpu_render(&request,&view,&meta)==C3X_RENDERER_RESULT_OK,"fresh session after native oracle"))break;map_expected=expected;
         }
 #endif
-        if(phase==0 && ok && (test_frame.target_width<=2224 || test_frame.target_height<=1176)){
+        if(phase==0 && ok && (test_frame.target_width<=2224 || test_frame.target_height<=1244)){
             auto prepare=reinterpret_cast<c3x_renderer_prepare_nearby_view_fn>(GetProcAddress(module,"c3x_renderer_prepare_nearby_view"));
             auto refresh=test_frame;auto refresh_tiles=test_tiles;
             for(auto& tile:refresh_tiles)tile.anchor_x-=80;
@@ -255,7 +255,7 @@ if(ok && !std::strcmp(gpu_frame_test,"1")) {
                 verify_gpu(gpu_render(&request,&view,&meta)==C3X_RENDERER_RESULT_OK,"restore exact GPU phase");
             }
         }
-        if(phase==0 && ok && test_frame.target_width>2224 && test_frame.target_height>1176){
+        if(phase==0 && ok && test_frame.target_width>2224 && test_frame.target_height>1244){
             // At the maximum working extent there is no room for a wider donor.
             // Demand must render the exact view, with an honest clock and no readback.
             auto refresh=test_frame;auto refresh_tiles=test_tiles;
