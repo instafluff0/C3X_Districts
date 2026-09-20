@@ -2169,6 +2169,21 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
 }
 
 int main(int argc,char** argv) {
+    // Harness-only VA reservation represents a co-resident game's footprint.
+    // Reserve separate chunks to avoid relying on one unusually large hole.
+    struct AddressPressure {
+        std::vector<void*> chunks;
+        ~AddressPressure(){for(auto chunk:chunks)VirtualFree(chunk,0,MEM_RELEASE);}
+    } pressure;
+    char reserve[16]={};GetEnvironmentVariableA("C3X_RENDERER_TEST_RESERVE_MIB",reserve,sizeof(reserve));
+    unsigned reserve_mib=unsigned(std::strtoul(reserve,nullptr,10));
+    if(reserve_mib>1536 || reserve_mib%64)return 2;
+    for(unsigned remaining=reserve_mib;remaining;remaining-=64){
+        auto chunk=VirtualAlloc(nullptr,64u*1024u*1024u,MEM_RESERVE,PAGE_NOACCESS);
+        if(!chunk){std::fprintf(stderr,"FAIL address pressure reservation\n");return 2;}
+        pressure.chunks.push_back(chunk);
+    }
+    std::printf("Address-space pressure: %u MiB reserved (not committed)\n",reserve_mib);
     char session_path[4*MAX_PATH]={};
     if(!GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_SESSION",session_path,sizeof(session_path)))
         return run_preview_case(argc,argv);

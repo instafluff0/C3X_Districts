@@ -10,61 +10,22 @@ class SceneSurfaceTests(unittest.TestCase):
         def method(signature):
             return "    " + signature + source.split(signature, 1)[1].split("\n    }", 1)[0] + "\n    }\n"
         run_cpp(r'''
-#include "Renderer/native/render_core/scene_guard.h"
+#include <cstdint>
 #include <cassert>
 struct Rect {int left,top,right,bottom;};
 struct State {
  bool cache_valid=true;
- int scene_guard_pad=8;unsigned contributors=12;
+ unsigned contributors=12;
  struct {bool valid=true;void clear(){valid=false;}} geometry_cache;
- struct {bool color=true;} scene_scratch;
- c3x_renderer::render_core::SceneGuard<Rect> scene_guard;
  std::uint64_t scene_static_signature=42,resource_pixel_signature=42;
  void clear_geometry_vertex_buffers(){contributors=0;}
 ''' + method("void discard_scene_view() {") + r'''
 };
 int main(){
- State s;assert(s.scene_guard.configure(64,48));
- s.scene_guard.commit(s.scene_guard.select({{8,8,56,40}}));
+ State s;
  s.discard_scene_view();
  assert(!s.cache_valid && !s.resource_pixel_signature); // no cache-hit path into discarded inputs
  assert(!s.contributors && !s.geometry_cache.valid && !s.scene_static_signature);
- assert(s.scene_guard.pending==s.scene_guard.dirty.size());
- s.geometry_cache.valid=true;s.cache_valid=true;s.contributors=12;
- assert(!s.scene_guard.select({{8,8,56,40}}).empty());
-}
-''')
-
-    def test_static_guard_coverage_and_sample_transfers(self):
-        run_cpp(r'''
-#include "Renderer/native/render_core/scene_guard.h"
-#include <cassert>
-struct Rect {int left,top,right,bottom;};
-using namespace c3x_renderer::render_core;
-int main(){
- SceneGuard<Rect> guard;assert(!guard.configure(5000,8));assert(guard.configure(53,37));
- auto original=guard.pending;auto visible=guard.select({{16,8,35,29}});assert(!visible.empty());
- guard.commit(visible);assert(guard.pending<original && guard.pending>0);
- assert(guard.select({{16,8,35,29}}).empty());
- while(guard.pending){auto batch=guard.select({},128);assert(!batch.empty());
-  unsigned area=0;for(auto r:batch)area+=(r.right-r.left)*(r.bottom-r.top);assert(area<=128);guard.commit(batch);}
- guard.invalidate({{0,0,1,1},{52,36,53,37}});assert(guard.pending==2);
- guard.invalidate_all();assert(guard.pending==original);guard.reset();assert(guard.pending==0);
- assert(guard.configure(1024,1024));auto bounded=guard.select({},128u*1024u);
- assert(bounded.size()==1 && bounded[0].bottom==128);guard.reset();
- for(int w:{16,37,128})for(int h:{19,64})for(int pad:{8,24})
- for(int x:{-123,0,1,999})for(int y:{-111,0,25}){
-  std::vector<unsigned> visits(w*h);
-  for(auto t:scene_guard_transfers<Rect>(w,h,pad,x,y,{{0,0,w,h}}))
-   for(int row=t.rect.top;row<t.rect.bottom;++row)for(int col=t.rect.left;col<t.rect.right;++col){
-    assert(++visits[row*w+col]==1);int sx=col-t.x,sy=row-t.y;
-    assert(sx>=0 && sx<w+pad*2 && sy>=0 && sy<h+pad*2);
-    auto mod=[](int a,int n){return (a%n+n)%n;};
-    int lx=mod(col+x,w),ly=mod(row+y,h);
-    assert(sx==mod(lx+pad-x,w+pad*2));assert(sy==mod(ly+pad-y,h+pad*2));
-   }
-  for(auto v:visits)assert(v==1);
- }
 }
 ''')
 

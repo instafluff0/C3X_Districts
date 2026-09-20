@@ -190,7 +190,10 @@ adoption; surrounding working-area content follows. Native occurrence/pass order
 is unchanged. A completed GPU camera awaiting adoption also retains priority over
 optional map and unit-pose preparation. Retained scene surfaces draw only the
 pixels needed by actual view damage; speculative off-screen guard drawing is
-retired because its driver submission could block new camera demand. Current
+retired because its driver submission could block new camera demand. Its padded
+color/depth storage is also retired: visible circular samples and the existing
+four-pixel finishing margin provide scrolling reuse, saving 224.77 MiB at
+2240×1260 without changing sampling or effects. Current
 demand must not acquire an unrelated speculative wait merely because its map
 assembly has just completed. Whole-world geometry preparation remains independent
 of the camera route.

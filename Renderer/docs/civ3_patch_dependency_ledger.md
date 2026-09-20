@@ -1,5 +1,20 @@
 # Civ III patch dependency ledger
 
+## Fullscreen retained-composition memory repair
+
+`required_user_action: []` for patch registration. This DLL-only continuation
+reuses the existing native image copy/save/restore hooks, Graphsy presentation,
+map prepare/commit and visual-frame exports. No signature, address, patch-table,
+injected state or additional hook changes. The installed startup transfer fix is
+confirmed by capture `20260920-230709-cb9049`; no reinstall is required for this
+continuation after that bridge is installed.
+
+Equal-coordinate/same-format replay copies now share immutable source patches.
+The live-image ceiling is 128 MiB, including fullscreen old/new map overlap;
+retained-history and replay-scratch ceilings stay at 128 MiB each. Failed replay
+history is discarded while the completed display is preserved. Native CPU-access
+barriers and fallback semantics remain unchanged.
+
 ## Native startup screen-transfer ownership repair
 
 `required_user_action: []` for symbols/patch registration. Reuses

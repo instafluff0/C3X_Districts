@@ -1,6 +1,6 @@
 #define NOMINMAX
 #include <windows.h>
-#include "retained_composition.h"
+#include "gpu_composition_session.h"
 #include <cassert>
 #include <cstdio>
 #pragma comment(lib,"d3d11.lib")
@@ -125,6 +125,59 @@ int test_retained_composition(){
         collected=0;retained.sample(1008,1000);assert(collected==2&&executed==2);
         collected=0;++phase;retained.sample(1009,1000);assert(collected==2&&executed==4);
         retained.clear();assert(retained.bytes()==0&&retained.node_count()==0);
+    }
+    // Native map/screen/save copies refer to immutable content versions. A
+    // fullscreen copy chain must not allocate one replay texture per transfer.
+    {
+        constexpr unsigned width=2240,height=1260;Rect bounds={0,0,width,height};
+        Compositor live(device.Get(),context.Get());RetainedComposition retained(device.Get(),context.Get());
+        auto map=live.create(width,height,Format::bgra32);assert(map);
+        std::vector<unsigned> pixels(width*height);
+        for(unsigned i=0;i<pixels.size();++i)pixels[i]=0xff000000u|(i&0xffffffu);
+        assert(live.upload(map,1,pixels.data(),pixels.size()));
+        retained.create(1,width,height,Format::bgra32);retained.source(1,live.texture(map),[&](long long,long long){return RetainedComposition::Texture(live.texture(map));});
+        for(Id id=2;id<=18;++id){retained.create(id,width,height,Format::bgra32);retained.record({Kind::copy,id,id-1,bounds,bounds});}
+        retained.commit(18,bounds);
+        RetainedComposition::Texture result;
+        try{result=retained.sample(1,1000);}catch(std::exception const& e){std::fprintf(stderr,"FAIL fullscreen copy chain: %s bytes=%llu nodes=%zu\n",e.what(),retained.bytes(),retained.node_count());throw;}
+        auto actual=retained_read(device.Get(),context.Get(),result.Get());assert(actual==pixels);
+        assert(retained.bytes()==std::uint64_t(width)*height*4&&retained.node_count()==1);
+        // Replacing the source image must not rewrite the completed front.
+        retained.record({Kind::fill,1,0,bounds,bounds,0,0,0xffabcdef});
+        assert(retained_read(device.Get(),context.Get(),retained.sample(2,1000).Get())==pixels);
+        retained.clear();assert(retained.bytes()==0&&retained.node_count()==0);
+        std::printf("PASS fullscreen retained copy chain: transfers=17 pixels=%u retained_bytes=%u nodes=1 immutable_front=1\n",width*height,width*height*4);
+    }
+    // Fullscreen native map, screen, saved UI and staging pairs remain alive
+    // while the next immutable map is published. Eight current canvases plus
+    // the temporary next map exceed the old 96 MiB live-image ceiling.
+    {
+        constexpr unsigned width=2240,height=1260;
+        D3D11_TEXTURE2D_DESC desc={};desc.Width=width;desc.Height=height;desc.MipLevels=desc.ArraySize=desc.SampleDesc.Count=1;
+        desc.Format=DXGI_FORMAT_B8G8R8A8_UNORM;desc.Usage=D3D11_USAGE_DEFAULT;desc.BindFlags=D3D11_BIND_SHADER_RESOURCE;
+        ComPtr<ID3D11Texture2D> source;checked(device->CreateTexture2D(&desc,nullptr,&source));
+        Session session(device.Get(),context.Get());assert(session.publish(source.Get(),1));
+        std::vector<Command> commands;std::vector<unsigned> pixels,output;std::vector<Id> canvases;
+        c3x_renderer_gpu_result_v1 result={};
+        for(unsigned i=0;i<7;++i){c3x_renderer_gpu_images_v1 request={};request.struct_size=sizeof(request);request.ticket=1;
+            request.action=C3X_GPU_CREATE;request.width=width;request.height=height;request.format=C3X_GPU_BGRA32;
+            assert(session.execute(request,commands,pixels,result,output)==C3X_RENDERER_RESULT_OK);canvases.push_back(Id(result.image));}
+        if(!session.publish(source.Get(),2)){std::fprintf(stderr,"FAIL fullscreen publication: old map plus seven native canvases\n");throw std::runtime_error("fullscreen map publication budget");}
+        // Headroom remains a hard limit. Rejection leaves the old map usable;
+        // releasing optional canvases lets the same publication retry succeed.
+        c3x_renderer_gpu_images_v1 allocate={};allocate.struct_size=sizeof(allocate);allocate.ticket=2;
+        allocate.action=C3X_GPU_CREATE;allocate.width=width;allocate.height=height;allocate.format=C3X_GPU_BGRA32;
+        std::vector<Id> optional;
+        for(unsigned i=0;i<3;++i){assert(session.execute(allocate,commands,pixels,result,output)==C3X_RENDERER_RESULT_OK);optional.push_back(Id(result.image));}
+        assert(session.execute(allocate,commands,pixels,result,output)==C3X_RENDERER_RESULT_BAD_ARGUMENT);
+        assert(!session.publish(source.Get(),3)&&session.current_ticket()==2);
+        for(auto canvas:optional){auto release=allocate;release.action=C3X_GPU_DESTROY;release.image=std::int64_t(canvas);
+            assert(session.execute(release,commands,pixels,result,output)==C3X_RENDERER_RESULT_OK);}
+        assert(session.publish(source.Get(),3));
+        for(auto canvas:canvases){c3x_renderer_gpu_images_v1 request={};request.struct_size=sizeof(request);request.ticket=3;
+            request.action=C3X_GPU_DESTROY;request.image=std::int64_t(canvas);assert(session.execute(request,commands,pixels,result,output)==C3X_RENDERER_RESULT_OK);}
+        assert(result.resident_bytes==std::int64_t(width)*height*4);
+        std::puts("PASS fullscreen publication: native_canvases=7 next_map=1 old_map_retired=1 no_CPU_fallback=1");
     }
     std::printf("PASS retained composition: %u exact GPU oracles, 120 independent clock frames, aliasing, paired 555/565/full color, UI versioning, partial publication, bounded overwrite and reset\n",checks);return 0;
 }

@@ -20,6 +20,9 @@ Civ III to redraw, and no second presenter or window is introduced.
   rectangles of a partial transfer; reset/configuration retires the whole session.
 - `RetainedComposition` stores ordered rectangular writes over versioned images.
   Copies reference immutable source versions, including native save/restore.
+  Equal-coordinate, same-format copies share those versioned patches directly;
+  they do not allocate or evaluate another full-screen replay texture. Shifted,
+  converted and procedural copies retain their ordered execution path.
   Dynamic leaves are resident map/pose textures. Opaque writes remove covered
   history; transparent operations retain the affected underlay and exact native
   shader program. Final transfer seals only its actual rectangle, preserving the
@@ -57,9 +60,12 @@ this is not a separate presentation thread capable of bypassing blocked gameplay
 
 A complete front must exist before autonomous rendering. CPU handoff, reset and
 window release stop visual delivery. Replay failure preserves the previous
-completed display and withdraws the front; native compatibility demand remains
+completed display and discards the failed recipe and its allocations; native compatibility demand remains
 available while no front is ready. History admission can restart at a fresh
-native map publication. Config-off retains the original native path.
+native map publication. This is recipe recovery on a healthy device, **not**
+recovery of authoritative native GPU pixels after device removal. A removed
+device cannot satisfy the CPU ownership barrier; never expose stale native pixels
+as a fallback. Config-off retains the original native path on a healthy device.
 
 Packed native unit scratch surfaces are valid GPU destinations even without an
 optional full-color layer. Unit blending snapshots only its selected rectangle;
@@ -75,9 +81,14 @@ under their existing owners; only optional compatibility animation waits for rel
 
 Retained texture accounting is capped at 128 MiB, nodes at 32,768 and rectangular
 patches at 8,192 per image. Separate replay scratch is capped at 128 MiB; the
-live composition owner is capped at 96 MiB so 2240×1192 map/screen/popup color
-pairs fit together. Generic compositor tests retain their 64 MiB ceiling. These are ceilings,
-not permanent allocations. Source snapshots and CPU recipe metadata retire with
+live composition owner is capped at 128 MiB, including the temporary overlap of
+old/new immutable maps with 2240×1260 map/screen/saved-UI canvases. The former
+96 MiB ceiling rejected that overlap. Generic compositor tests retain their 64 MiB ceiling. These are ceilings,
+not permanent allocations. Replay checks replacement capacity before allocating
+a new result and releases temporary image handles even when final sampling or
+display throws. Visible scene storage has no unused off-screen guard padding.
+Once-per-second `process-memory` records report whole-process available virtual
+memory without a VirtualQuery walk; failure records also report the device HRESULT. Source snapshots and CPU recipe metadata retire with
 their last owning version; shared map/pose textures use COM lifetime ownership.
 
 `test_retained_composition` compares replay against ordinary production GPU

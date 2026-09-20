@@ -10,15 +10,19 @@ class Session {
     Compositor gpu;RetainedComposition layers;Id map=0;std::int64_t ticket=0,identity=0;std::uint64_t readbacks=0;
     Id resident_unit=0;ID3D11Texture2D* resident_unit_texture=nullptr;
 public:
-    Session(ID3D11Device* d,ID3D11DeviceContext* c):device(d),context(c),gpu(d,c,96u*1024u*1024u),layers(d,c){}
-    // At 2240x1192 the map, screen and popup color pairs exceed 64 MiB.
-    // Keep an explicit 96 MiB live-image ceiling; replay has its own budget.
+    Session(ID3D11Device* d,ID3D11DeviceContext* c):device(d),context(c),gpu(d,c,128u*1024u*1024u),layers(d,c){}
+    // Fullscreen map/screen/save pairs plus UI and the next immutable map
+    // need more than 96 MiB at 2240x1260. Keep a bounded 128 MiB live-image
+    // ceiling, including publication overlap; replay has its separate budget.
     bool publish(ID3D11Texture2D* texture,std::int64_t serial,int x=0,int y=0,int width=0,int height=0,RetainedComposition::Sample sample={}){
         if(!texture||serial<=ticket)return false;
         D3D11_TEXTURE2D_DESC d={};texture->GetDesc(&d);
         if(!width)width=int(d.Width);if(!height)height=int(d.Height);
         auto next=gpu.create(width,height,Format::bgra32);
-        if(!next)return false;
+        if(!next){char message[224];auto counts=gpu.stats();
+            sprintf_s(message,"[C3X renderer] stage=map-publication-rejected reason=canvas-admission width=%d height=%d resident_bytes=%llu cap_bytes=%u\n",
+                width,height,counts.resident_bytes,128u*1024u*1024u);OutputDebugStringA(message);return false;}
+
         if(!gpu.import_bgra(next,texture,x,y)){gpu.destroy(next);return false;}
         // Admission failure leaves the previous immutable map and UI handles
         // usable. Publish the new identity only after its import succeeds.
@@ -75,7 +79,13 @@ public:
     void stop_visuals(){layers.uncommit();}
     int visual_frame(long long ticks,long long frequency,ID3D11RenderTargetView* target,ID3D11Texture2D* display,ID3D11Texture2D* buffer){
         try{return layers.draw(ticks,frequency,target,display,buffer);}catch(std::exception const& e){
-            OutputDebugStringA(e.what());OutputDebugStringA("\n");layers.uncommit();return false;}
+            // A failed recipe cannot produce a frame. Release its outputs now;
+            // the last completed display stays intact, and the next native map
+            // rebuilds retained history from authoritative current images.
+            MEMORYSTATUSEX memory={};memory.dwLength=sizeof(memory);GlobalMemoryStatusEx(&memory);
+            char status[224];sprintf_s(status,"[C3X renderer] stage=visual-failure-memory device_reason=0x%08lx available_virtual=%llu available_pagefile=%llu\n",
+                device->GetDeviceRemovedReason(),memory.ullAvailVirtual,memory.ullAvailPageFile);
+            OutputDebugStringA(status);OutputDebugStringA(e.what());OutputDebugStringA("\n");layers.discard();return false;}
     }
     int execute(c3x_renderer_gpu_images_v1 const& request,std::vector<Command> const& commands,
                 std::vector<unsigned> const& pixels,c3x_renderer_gpu_result_v1& result,std::vector<unsigned>& output){

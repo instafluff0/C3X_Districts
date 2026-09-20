@@ -62,7 +62,6 @@
 #include "render_core/resource_instances.h"
 #include "render_core/scene_depth.h"
 #include "render_core/scene_surface.h"
-#include "render_core/scene_guard.h"
 #include "render_core/coastal_waves.h"
 #include "render_core/relief_query.h"
 #include "render_core/exact_point_cache.h"
@@ -501,10 +500,6 @@ public:
     std::int64_t scene_static_depth_origin=0;
     bool scene_overlap=false;int scene_dx=0,scene_dy=0;
     std::vector<D3D11_RECT> scene_damage;
-    c3x_renderer::render_core::SceneGuard<D3D11_RECT> scene_guard;
-    c3x_renderer::render_core::RenderRegionKey scene_guard_context;
-    int scene_guard_pad=0;
-    std::uint64_t scene_guard_depth_origin=0;
     int scene_region_size=128;
     int scene_region_height=128;
     bool cull_empty_water=true;
@@ -596,7 +591,20 @@ public:
     std::size_t frame_prepared_vertex_bytes=0;
     unsigned frame_caster_preparations=0;
     std::size_t frame_post_lanes=0;
+    ULONGLONG last_memory_status=0;
     void memory_sample(char const* phase) {
+        // Constant-cost live telemetry includes the game's address space. The
+        // detailed VirtualQuery/buffer walk below remains profiling-only.
+        auto now=GetTickCount64();
+        if(now-last_memory_status>=1000){
+            MEMORYSTATUSEX memory={};memory.dwLength=sizeof(memory);
+            if(GlobalMemoryStatusEx(&memory)){
+                char status[192];sprintf_s(status,"phase=%s available_virtual=%llu available_physical=%llu available_pagefile=%llu",
+                    phase,memory.ullAvailVirtual,memory.ullAvailPhys,memory.ullAvailPageFile);
+                trace.write("process-memory",status,true);
+            }
+            last_memory_status=now;
+        }
         if(!profiling)return;
         auto sample=c3x_renderer::render_core::AddressSpaceSample::capture();
         std::size_t view_draw_bytes=sizeof(geometry_vertex_buffers);
@@ -989,7 +997,7 @@ public:
         scene_reflection_signature=0;scene_reflection_width=scene_reflection_height=0;
         release(scene_reflection_clear);release(scene_reflection_view);release(scene_reflection_texture);
         scene_restore.reset();
-        unit_scene_work.reset();scene_scratch.reset();scene_guard.reset();scene_guard_context.clear();scene_guard_pad=0;scene_dynamic_damage.clear();scene_static_signature=0;scene_overlap=false;scene_damage.clear();
+        unit_scene_work.reset();scene_scratch.reset();scene_dynamic_damage.clear();scene_static_signature=0;scene_overlap=false;scene_damage.clear();
         cancel_pixel_preparation();
         linear_frame.reset(); linear_block.reset(); reflection.linear.reset();region_reflection.linear.reset();region_glow.linear.reset();
         pixel_blocks.clear();
@@ -1010,7 +1018,7 @@ public:
     }
 
     void clear_resource_backdrops() {
-        unit_scene_work.reset();scene_scratch.reset();scene_guard.reset();scene_guard_context.clear();scene_guard_pad=0;scene_dynamic_damage.clear();scene_static_signature=0;scene_overlap=false;scene_damage.clear();
+        unit_scene_work.reset();scene_scratch.reset();scene_dynamic_damage.clear();scene_static_signature=0;scene_overlap=false;scene_damage.clear();
         for(auto & block:resource_backdrops){release(block.color);release(block.depth);}
         resource_backdrops.clear();resource_backdrop_epoch=0;resource_backdrop_bytes=0;
     }
@@ -4250,37 +4258,6 @@ public:
         return order;
     }
 
-    bool draw_scene_guard(std::vector<D3D11_RECT> const& rectangles) {
-        if(rectangles.empty())return true;
-        auto& glow=region_glow;
-        ViewportShaderSettings settings=geometry_viewport_settings;
-        settings.translation[0]+=4+scene_guard_pad;settings.translation[1]+=4+scene_guard_pad;
-        settings.inverse_size[0]=1.f/scene_guard.width;settings.inverse_size[1]=1.f/scene_guard.height;
-        if(scene_guard.pending==scene_guard.dirty.size()){
-            // No retained sample is valid. Clear the whole attachment directly
-            // instead of shading every MSAA sample just to write zero/depth-one.
-            // Only the successfully drawn rectangles become valid below.
-            float clear[4]={};context->ClearRenderTargetView(scene_scratch.target,clear);
-            context->ClearDepthStencilView(scene_scratch.depth,D3D11_CLEAR_DEPTH|D3D11_CLEAR_STENCIL,1,0);
-        }else for(auto rect:rectangles){std::vector<D3D11_RECT> one={rect};
-            if(!scene_restore.draw(context,scene_scratch,glow.linear.samples,glow.linear.depth_samples,0,0,one,&one))return false;
-        }
-        std::vector<c3x_renderer::city_fidelity::Lighting const*> lights;
-        for(auto const& item:geometry_vertex_buffers[geometry_city])if(item.content().city_lighting){
-            auto pointer=item.content().city_lighting.get();
-            if(std::find(lights.begin(),lights.end(),pointer)==lights.end())lights.push_back(pointer);
-        }
-        if(!cities.lights(context,lights))return false;
-        unsigned batches=0,selected=0,dynamic=0,candidates=0,scans=0;
-        if(!submit_scene_pass(geometry_vertex_buffers,static_scene_order(),false,scene_scratch,glow,settings,
-            unsigned(scene_guard.width),unsigned(scene_guard.height),rectangles,batches,selected,dynamic,candidates,scans))return false;
-        scene_guard.commit(rectangles);
-        std::size_t prepared_pixels=0;for(auto r:rectangles)prepared_pixels+=std::size_t(r.right-r.left)*(r.bottom-r.top);
-        char detail[224];sprintf_s(detail,"background=%u pixels=%zu selected=%u batches=%u pending_cells=%zu pad=%d target_bytes=%zu",
-            0u,prepared_pixels,selected,batches,scene_guard.pending,scene_guard_pad,scene_scratch.bytes());
-        trace.write("scene-guard-submit",detail,true);return true;
-    }
-
     bool draw_scene_unit(int region_width,int region_height,c3x_renderer_unit_v1 const& unit,unsigned predict,
                          c3x_renderer::UnitSceneSample& sample,int offset_x,int offset_y){
         auto& work=unit_scene_work;
@@ -4404,18 +4381,21 @@ public:
             ~Transaction(){if(!complete)signature=0;}
         } transaction{scene_static_signature};
         // One scene-linear working set, independent of raster cache cells.
+        // Retain only visible samples plus the finishing filter margin. The
+        // retired background guard consumed hundreds of MiB without making
+        // arbitrary destinations resident; camera damage already redraws exposed spans.
         // Sparse static backup: color/depth only; finishing targets belong to Glow.
         auto& glow=region_glow;
         unsigned w=unsigned(width)+8,h=unsigned(height)+8;
-        std::size_t target_bytes=std::size_t(w)*h*240u+std::size_t(w+scene_guard_pad*2)*(h+scene_guard_pad*2)*192u;
+        std::size_t target_bytes=std::size_t(w)*h*432u;
         if(!city_profile || !c3x_renderer::render_core::scene_surface_extent(width,height) ||
            target_bytes>(world_preparation?1408u:1152u)*1024u*1024u) {
             trace.write("scene-surface-failed","bounded scene view/target contract",true);return false;
         }
         if(glow.native_extent!=w || glow.native_height!=h || !glow.linear.color){
-            scene_scratch.reset();scene_guard.invalidate_all();scene_dynamic_damage.clear();scene_static_signature=0;scene_overlap=false;
+            scene_scratch.reset();scene_dynamic_damage.clear();scene_static_signature=0;scene_overlap=false;
         }
-        if(!glow.ensure(device,fidelity_root,w,h,true) || !scene_scratch.ensure(device,(w+scene_guard_pad*2)*2,(h+scene_guard_pad*2)*2,true,false) ||
+        if(!glow.ensure(device,fidelity_root,w,h,true) || !scene_scratch.ensure(device,w*2,h*2,true,false) ||
            !scene_restore.ensure(device))return false;
         if(!prepare_scene_reflection())return false;
         auto& linear=glow.linear;
@@ -4445,7 +4425,7 @@ public:
         // owns only the static samples underneath its animated damage. Restore
         // those samples before accepting camera damage or a new pose.
         context->OMSetRenderTargets(0,nullptr,nullptr);
-        if(!scene_guard_pad && (restored || translated)){
+        if(restored || translated){
             if(!scene_dynamic_damage.empty() && !scene_restore.draw(context,linear,scene_scratch.samples,
                 scene_scratch.depth_samples,0,0,{},&scene_dynamic_damage))return false;
             if(translated){
@@ -4456,7 +4436,7 @@ public:
                     if(!scene_restore.draw(context,linear,scene_scratch.samples,
                         scene_scratch.depth_samples,0,0,one,&one))return false;}
             }
-        }else if(!scene_guard_pad){
+        }else{
             float clear[4]={};context->ClearRenderTargetView(linear.target,clear);
             context->ClearDepthStencilView(linear.depth,D3D11_CLEAR_DEPTH|D3D11_CLEAR_STENCIL,1,0);
         }
@@ -4514,7 +4494,7 @@ public:
             return submit_scene_pass(inputs,order,dynamic_pass,linear,glow,settings,w,h,rectangles,
                 batches,selected_static,selected_dynamic,selection_candidates,selection_scans,material_pass);
         };
-        if(!scene_guard_pad && !restored){
+        if(!restored){
             std::vector<c3x_renderer::city_fidelity::Lighting const*> lights;
             for(auto const& item:geometry_vertex_buffers[geometry_city])if(item.content().city_lighting){
                 auto pointer=item.content().city_lighting.get();
@@ -4527,23 +4507,7 @@ public:
 
             scene_static_signature=cached_signature.complete;scene_static_depth_origin=scene_depth_origin;
         }
-        if(scene_guard_pad){
-            auto visible=c3x_renderer::render_core::scene_physical<D3D11_RECT>(scene_guard.width,scene_guard.height,
-                region_origin_x,region_origin_y,{{scene_guard_pad,scene_guard_pad,LONG(w)+scene_guard_pad,LONG(h)+scene_guard_pad}});
-            auto missing=scene_guard.select(visible);
-            if(!draw_scene_guard(missing))return false;
-            auto restore=scene_dynamic_damage;
-            if(!restored){auto changed=translated?physical(static_rectangles):std::vector<D3D11_RECT>{view};
-                restore.insert(restore.end(),changed.begin(),changed.end());}
-            restore=disjoint(restore);
-            for(auto transfer:c3x_renderer::render_core::scene_guard_transfers<D3D11_RECT>(int(w),int(h),scene_guard_pad,
-                region_origin_x,region_origin_y,restore)){
-                std::vector<D3D11_RECT> one={transfer.rect};
-                if(!scene_restore.draw(context,linear,scene_scratch.samples,scene_scratch.depth_samples,
-                    transfer.x,transfer.y,{},&one,scene_scratch.width,scene_scratch.height))return false;
-            }
-            scene_static_signature=cached_signature.complete;scene_static_depth_origin=scene_depth_origin;
-        }else if(!dynamic_damage.empty() && !scene_restore.draw(context,scene_scratch,linear.samples,
+        if(!dynamic_damage.empty() && !scene_restore.draw(context,scene_scratch,linear.samples,
             linear.depth_samples,0,0,{},&dynamic_damage))return false;
         scene_dynamic_damage=std::move(dynamic_damage);
         QueryPerformanceCounter(&static_end);
@@ -4833,7 +4797,6 @@ public:
         cache_valid=false;resource_pixel_signature=0;
         geometry_cache.clear();
         clear_geometry_vertex_buffers();
-        scene_guard.invalidate_all();
         scene_static_signature=0;
     }
 
@@ -6676,7 +6639,7 @@ public:
                 water_active=true;
                 if(!visibility_pass || (tile.tile_flags&C3X_RENDERER_TILE_VISIBLE))++visible_water_animations;
             }
-        if(water_active!=water_scene_active){scene_static_signature=0;scene_guard.invalidate_all();}
+        if(water_active!=water_scene_active){scene_static_signature=0;}
         water_scene_active=water_active;
         auto next_water_material=c3x_renderer::render_core::water_material_frame(frame);
         if(city_profile && !water_motion && std::memcmp(water_material.camera,next_water_material.camera,sizeof(water_material.camera))){
@@ -6685,7 +6648,7 @@ public:
             // Meshes/materials remain reusable; only completed pixels expire.
             cache_valid=false;viewport_cache.clear();viewport_cache_bytes=0;
             cancel_pixel_preparation();pixel_blocks.clear();render_regions.clear();
-            clear_resource_backdrops();scene_static_signature=0;scene_guard.invalidate_all();
+            clear_resource_backdrops();scene_static_signature=0;
         }
         water_material=next_water_material;
         ++trace.sequence;
@@ -9841,23 +9804,6 @@ public:
         trace.write("geometry-ready", frame_cache_path);
         if(cancelled())return false;
         memory_sample("geometry-ready");
-        if(shared_scene_surface && world_preparation){
-            int pad=256;unsigned w=unsigned(width)+8,h=unsigned(height)+8;
-            while(pad && std::size_t(w)*h*240u+std::size_t(w+pad*2)*(h+pad*2)*192u>1408u*1024u*1024u)pad-=32;
-            bool compatible=scene_guard_pad==pad && scene_guard_context==region_context &&
-                scene_guard_depth_origin==std::uint64_t(scene_depth_origin) && scene_static_signature==cached_signature.complete;
-            scene_guard_pad=pad;
-            if(!scene_guard.configure(int(w)+pad*2,int(h)+pad*2))return false;
-            auto previous=bitmap_footprints,current=current_footprints;
-            for(auto& f:previous){f.anchor_x+=pad+4;f.anchor_y+=pad+4;}
-            for(auto& f:current){f.anchor_x+=pad+4;f.anchor_y+=pad+4;}
-            int dx=0,dy=0;std::vector<c3x_renderer::PixelRect> damage;
-            if(compatible && c3x_renderer::scroll_damage(previous,current,scene_guard.width,scene_guard.height,dx,dy,damage,0)){
-                std::vector<D3D11_RECT> logical;for(auto r:damage)logical.push_back({r.left,r.top,r.right,r.bottom});
-                scene_guard.invalidate(c3x_renderer::render_core::scene_physical(scene_guard.width,scene_guard.height,region_origin_x,region_origin_y,logical));
-            }else scene_guard.invalidate_all();
-            scene_guard_context=region_context;scene_guard_depth_origin=std::uint64_t(scene_depth_origin);
-        }else if(scene_guard_pad){scene_guard_pad=0;scene_guard.reset();scene_guard_context.clear();scene_scratch.reset();scene_static_signature=0;}
         if(shared_scene_surface){
             scene_overlap=false;scene_damage.clear();
             std::vector<c3x_renderer::PixelRect> damage;
@@ -12734,6 +12680,11 @@ private:
                 result = C3X_RENDERER_RESULT_OK;
             }
             } catch (...) {
+                MEMORYSTATUSEX memory={};memory.dwLength=sizeof(memory);GlobalMemoryStatusEx(&memory);
+                char failure[192];sprintf_s(failure,"command=%u device_reason=0x%08lx available_virtual=%llu available_pagefile=%llu",
+                    unsigned(command),renderer_state.device?renderer_state.device->GetDeviceRemovedReason():S_OK,
+                    memory.ullAvailVirtual,memory.ullAvailPageFile);
+                renderer_state.trace.write("worker-failure-memory",failure,true);
                 if(command==Command::unit)renderer_state.unit_bodies.reset_gpu();
                 else if(command!=Command::native_screen && command!=Command::visual_frame)renderer_state.reset();
                 renderer_state.trace.write("worker-error", "resource allocation or runtime exception", true);

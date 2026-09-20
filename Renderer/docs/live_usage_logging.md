@@ -2,11 +2,11 @@
 
 ## One-click game capture
 
-The current native startup-transfer repair changes both the renderer DLL and the
-existing injected Graphsy wrapper. **Run `INSTALL.bat` once before the next
-capture**, even if the previous outline bridge is already installed. Replacing
-only the DLL leaves the early native transfer that revokes screen eligibility.
-This capture launcher does not install the bridge.
+The current fullscreen allocation-pressure repair is DLL-only. If the startup bridge
+used by capture `20260920-230709-cb9049` is installed, **restart through
+`CAPTURE_GAME.bat`; no reinstall is needed**. Older installations must run
+`INSTALL.bat` once for that existing Graphsy wrapper. This capture launcher does
+not install the bridge.
 
 In the Windows VM, close Civ III and double-click
 `Conquests\C3X_Districts\Renderer\CAPTURE_GAME.bat`. Approve the Windows PowerShell
@@ -22,7 +22,10 @@ export or upload is needed. Captures stop after at most 15 minutes.
 The launcher saves `renderer.log`, PresentMon `frames.csv`, collector errors and
 `session.json` under `Renderer/native/build/live-captures/<session>/`. Per-frame
 files are written to the VM's local temporary directory first, then copied to the
-shared checkout on exit. The session records the staged DLL hash and collector
+shared checkout on exit. `process-memory` records sample available process address
+space once per second; `visual-failure-memory` and `worker-failure-memory` preserve
+the device-removal HRESULT and available memory before cleanup. These do not
+enable expensive profiling. The session records the staged DLL hash and collector
 completion, not account names or save filenames. A failed setup leaves diagnostic
 files and does not terminate a running game. Closing the launcher prematurely can
 prevent the final copy; local temporary capture files remain recoverable.

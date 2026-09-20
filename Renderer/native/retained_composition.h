@@ -46,7 +46,7 @@ private:
     Rect extent(Picture const& p)const{return {0,0,int(p.width),int(p.height)};}
     std::shared_ptr<Node> node(){
         if(nodes>=32768)throw std::runtime_error("retained composition node budget");
-        ++nodes;return std::shared_ptr<Node>(new Node,[this](Node* p){resident_bytes-=p->bytes[0]+p->bytes[1]+p->direct.input_bytes;delete p;--nodes;});
+        auto value=new Node;++nodes;return std::shared_ptr<Node>(value,[this](Node* p){resident_bytes-=p->bytes[0]+p->bytes[1]+p->direct.input_bytes;delete p;--nodes;});
     }
     void output(Node& n,unsigned index,Texture texture){
         D3D11_TEXTURE2D_DESC d={};if(texture)texture->GetDesc(&d);
@@ -69,6 +69,10 @@ private:
         // versions have distinct nodes, so matching storage can stay allocated.
         D3D11_TEXTURE2D_DESC desc={};if(n.output[index])n.output[index]->GetDesc(&desc);
         if(desc.Width!=unsigned(r.right-r.left)||desc.Height!=unsigned(r.bottom-r.top)){
+            // Reject optional history before allocating another texture. A
+            // full budget must not transiently consume the game's remaining VA.
+            auto bytes=std::uint64_t(r.right-r.left)*(r.bottom-r.top)*4;
+            if(bytes>resident_budget-(resident_bytes-n.bytes[index]))throw std::runtime_error("retained composition texture budget");
             output(n,index,crop(source,r));return;
         }
         D3D11_BOX box={unsigned(r.left),unsigned(r.top),0,unsigned(r.right),unsigned(r.bottom),1};
@@ -80,7 +84,7 @@ private:
         for(auto const& patch:it->second.patches){auto r=intersect(region,patch.area);if(!empty(r))out.patches.push_back({r,patch.node,patch.output});}
         return out;
     }
-    void write(Picture& image,Rect region,std::shared_ptr<Node> const& value,unsigned output){region=intersect(region,extent(image));if(empty(region))return;
+    void replace(Picture& image,Rect region,std::vector<Patch> const& replacement){region=intersect(region,extent(image));if(empty(region))return;
         std::vector<Patch> next;
         for(auto const& p:image.patches){
             auto cut=intersect(region,p.area);if(empty(cut)){next.push_back(p);continue;}
@@ -88,9 +92,12 @@ private:
                 {p.area.left,cut.top,cut.left,cut.bottom},{cut.right,cut.top,p.area.right,cut.bottom}};
             for(auto r:pieces)if(!empty(r))next.push_back({r,p.node,p.output});
         }
-        next.push_back({region,value,output});
+        next.insert(next.end(),replacement.begin(),replacement.end());
         if(next.size()>8192)throw std::runtime_error("retained composition region budget");
         image.patches=std::move(next);
+    }
+    void write(Picture& image,Rect region,std::shared_ptr<Node> const& value,unsigned output){
+        region=intersect(region,extent(image));if(!empty(region))replace(image,region,{{region,value,output}});
     }
     void collect(std::shared_ptr<Node> const& n,long long ticks,long long frequency,unsigned depth){
         if(n->sampled==frame)return;
@@ -194,6 +201,15 @@ public:
     void record(Command const& c,Direct direct={}){
         if(!admitted)return;auto target=images.find(c.destination);if(target==images.end())throw std::runtime_error("retained target missing");
         auto area=intersect(intersect(c.area,c.clip),extent(target->second));if(empty(area))return;
+        // Equal-coordinate copies select an immutable source version. Keeping
+        // its patches shares both samples and outputs instead of allocating a
+        // full-canvas replay result for every map/screen/save transfer. Read
+        // before replacing, including self-copies; later source writes cannot
+        // alter this version. Shifted/converted/direct passes retain execution.
+        if(c.kind==Kind::copy&&!c.detail&&!direct.draw&&!direct.revision&&!direct.animated&&!direct.input_bytes&&
+           c.source_x==c.area.left&&c.source_y==c.area.top&&images.at(c.source).format==target->second.format){
+            auto selected=read(c.source,area);replace(target->second,area,selected.patches);return;
+        }
         if(direct.input_bytes>resident_budget-resident_bytes)throw std::runtime_error("retained direct input budget");
         auto n=node();resident_bytes+=direct.input_bytes;n->operation=true;n->area=area;n->command=c;n->command.clip=area;n->direct=std::move(direct);n->dynamic=n->direct.animated;
         Id ids[6]={c.destination,c.source,c.background,c.detail,c.background_detail,c.program};
@@ -241,7 +257,9 @@ public:
         if(!ready())return {};++frame;
         for(auto const& part:front.patches)collect(part.node,ticks,frequency,0);
         auto image=assemble(front,ticks,frequency,0);
-        auto result=crop(replay.texture(image),extent(front));replay.destroy(image);return result;
+        Texture result;
+        try{result=crop(replay.texture(image),extent(front));}
+        catch(...){replay.destroy(image);throw;}replay.destroy(image);return result;
     }
     // Caller has supplied a completed native transfer. Rendering only touches
     // private scratch and the existing presenter's retained display.
@@ -252,7 +270,9 @@ public:
         for(auto const& part:front.patches){evaluate(part.node,ticks,frequency,0);versions.push_back(part.node->revision);}
         if(drawn_revision==front_revision&&versions==drawn_dependencies)return 2; // no new source sample
         auto image=assemble(front,ticks,frequency,0);
-        bool ok=replay.display(image,target,front.width,front.height,extent(front));replay.destroy(image);
+        bool ok=false;
+        try{ok=replay.display(image,target,front.width,front.height,extent(front));}
+        catch(...){replay.destroy(image);throw;}replay.destroy(image);
         if(ok){context->CopyResource(buffer,display);context->Flush();drawn_revision=front_revision;drawn_dependencies=std::move(versions);}return ok?1:0;
     }
 };

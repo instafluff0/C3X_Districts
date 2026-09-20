@@ -241,3 +241,145 @@ approved injection smoke test. The staged DLL SHA-256 is
 The user must run `INSTALL.bat` once, then `Renderer/CAPTURE_GAME.bat`; no game or
 installer was launched by the agent. Confirm resident final display in that live
 run before claiming the startup paths are fully covered or M3.8 acceptance met.
+
+
+## Fullscreen follow-up: retained memory amplification
+
+Capture `native/build/live-captures/20260920-230709-cb9049/` confirms the previous
+startup fix: the sampled resident-present counter reaches **640**. However,
+the first two independent visual requests fail with **retained composition
+texture budget**, retaining roughly 118–119 MiB across 1,812–1,813 nodes. The next
+GPU map publication rejects with result 2; native fallback then requests a DC and
+revokes map eligibility. Only **2/293 map composites** remain on the resident
+map path. A resident final transfer alone therefore did not prove resident map
+rendering or independent animation.
+
+The gameplay chain records 1,002 positive non-dropped display intervals:
+**82.53 ms mean / 216.67 ms p95 / 4316.67 ms max**, about **12.12 updates/sec**.
+These mixed-play intervals are not an A/B speedup or input-latency measurement.
+The local `analysis.json` preserves counts and the distinction between observed
+failure and inferred capacity cause.
+
+Two automated fullscreen controls reproduce concrete capacity defects:
+
+- Retaining 17 unchanged full-screen copies reaches 124,185,600 bytes and fails
+  the 128 MiB recipe limit. Same-coordinate/same-format copies now share immutable
+  patches, preserving source versions and later partial writes. The exact-pixel
+  control passes with **11,289,600 bytes / one node**, including subsequent source
+  replacement. Shifted, converted and procedural operations keep their original
+  replay path. No retained-history or scratch budget is raised.
+- The old 96 MiB live-image ceiling rejects a new immutable map while the old map
+  and seven fullscreen native canvases remain alive. The live-image cap is now
+  **128 MiB (+32 MiB maximum)**, covering publication overlap. Its regression also
+  verifies hard-limit rejection, unchanged ticket on failure, release/retry and
+  retirement back to one map. The live trace does not record enough allocation
+  detail to prove this was its particular publication rejection; the new
+  `map-publication-rejected` record reports dimensions, resident bytes and cap.
+
+A visual replay exception now discards failed history immediately while retaining
+the last completed display. Fresh authoritative map publication can rebuild the
+recipe; it no longer keeps failed output allocations until later native writes.
+This continuation changes only the DLL, not the injected bridge or patch table.
+Full visual quality, waves and reflections remain enabled.
+
+Validation `native/build/retained-memory-regression.json` records the passing
+capacity/oracle controls and failing old-code logs. The full native replay in
+`native/build/live-retained-memory-fullscreen/receipt.json` passes at 2240×1260,
+including 24 extra map/screen save/restore copies before independent animation,
+exact GPU/native display pixels, fog/tactical overlays, camera/reset and config-off.
+Its 100 selected-unit coast frames, with all water effects on, retain **34,689,824
+bytes / 15 nodes**, versus the previous fixture's **68,558,624 / 26**. This is a
+measured representation saving, not a live-game FPS claim. Requests measure
+**33.21 / 41.00 / 104.56 ms** mean/p95/max; desktop completion **43.10 / 52.36 /
+112.17 ms**, including the first sample. All 100 intervals still prove zero
+static-world builds/uploads, static-scene redraws, reflection builds and water/wave
+uploads. The sampled largest free address region never falls below **830.81 MiB**;
+that is a fixture observation, not whole-game memory acceptance.
+
+The fullscreen eight-unit mixed capacity check in
+`native/build/live-retained-memory-mixed/receipt.json` also passes: one selected
+idle, three work loops, two frozen idles, two native actions, 30 independent frames,
+**39,463,080 retained bytes / 24 nodes**. Request mean/p95 **36.97 / 49.24 ms**;
+desktop mean/p95 **43.33 / 67.71 ms**. It is a shorter stress check, not 100-sample
+performance acceptance. All sampled static-work elimination checks pass.
+
+Staged DLL SHA-256:
+`d5a0fe93fddaa99c134e2387b9632aa4b94b9f9bb2196bb88bb24705c1b08bfb`.
+`native/build/retained-memory-stage.json` records current-source validation and
+rollback. The injected source hash is unchanged from the last installed bridge;
+**restart through `Renderer/CAPTURE_GAME.bat`; no reinstall is needed**. No game
+or installer was launched. Next live acceptance must show successful independent
+visual frames and continued resident **map** composition after publication, not
+just the resident final-screen counter. The Standard <33 ms p95 goal remains open.
+
+
+## Fullscreen freeze: allocation pressure and removed device
+
+Capture `20260920-232812-ce8053` used the preceding `d5a0fe93…` evaluation
+DLL. Resident map delivery survived through frame 11 and independent visuals
+advanced 13 times. At 37.12 seconds the process reports repeated **bad allocation**;
+at 37.19 seconds Direct3D removes the device. GPU upload and native display
+handoffs subsequently fail against the terminal session until exit. This is
+allocation failure followed by loss of authoritative GPU pixels, not evidence
+of a mouse handler deadlock. The installed executable is already x86
+large-address-aware. There is no crash dump or whole-process memory sample in
+this capture, so its exact exhausted resource is not established.
+
+The scene alone allocated **1,467,084,288 bytes** at 2240×1260. Removing the
+superseded off-screen guard and its padded color/depth storage reduces that to
+**1,231,400,448 bytes**, saving **235,683,840 bytes / 224.77 MiB**. The existing
+visible circular scene and sparse static backup now serve every view. Exposed
+scroll damage, content invalidation, the four-pixel finishing margin, full
+sampling quality and all water effects remain. The retired guard utility and
+its implementation-only test are removed; scrolling/filter/invalidation tests
+remain. Replay also releases temporary image handles on sampling/display
+exceptions, keeps node accounting correct when allocation throws, and checks
+replacement output capacity before allocating its texture.
+
+The standalone native harness can now reserve address space in 64 MiB chunks
+with `--reserve-address-mib`; this reserves **no physical RAM** and deliberately
+models a co-resident process footprint without claiming to reproduce Civ III's
+actual allocation layout. With a 1 GiB reservation, the old DLL fails to allocate
+the full-screen native display oracle. The initial corrected DLL passes the
+complete same-resolution mixed-unit/native UI workload with 100 independent
+frames (`native/build/freeze-fixed-pressure/receipt.json`). Its control image
+changes four of 2,822,400 pixels by at most one channel level. Scene allocation
+savings are measured, not an FPS claim. Minimum sampled available virtual space
+is only **93,876,224 bytes** under this deliberately severe fixture; this is a
+successful stress check, not generous whole-game headroom.
+
+That 100-frame check measures request **34.72 / 49.68 / 86.22 ms** mean/p95/max,
+with desktop completion **42.76 / 62.27 / 95.13 ms**. All measured intervals have
+zero static-world builds/uploads, static-scene redraws, reflection builds and
+water/wave uploads. The final candidate adds pre-allocation rejection and failure
+telemetry; its first 100-frame run completes the animation samples but fails the
+fixture's foreground-window prerequisite for the subsequent timer check. Keep
+that failed receipt; it is not end-to-end acceptance or a device-loss recurrence.
+
+Lightweight once-per-second `process-memory` samples now report whole-process
+available virtual, physical and pagefile memory without the profiling-only
+VirtualQuery/buffer walk. Worker and visual failure records include the removed
+device HRESULT before cleanup. Native composition still refuses stale CPU pixels
+when the GPU authority is lost. **General device-removal recovery is not added by
+this repair.** Its scope is reducing avoidable memory pressure and preserving
+bounded cleanup on recoverable recipe errors. Live stability, whole-game memory
+headroom and the Standard <33 ms p95 navigation goal remain open.
+
+
+Final candidate `34ae28b5…` passes the complete 30-frame 1 GiB pressure retry in
+`native/build/freeze-final-pressure-retry/receipt.json`, including real timer
+transport, native display pixels, fog/tactical controls, camera cancellation,
+reset and config-off. All 30 static-work elimination proofs pass. Request
+mean/p95 is 34.93/45.30 ms; desktop completion 42.20/51.68 ms. The earlier final
+run's foreground prerequisite failure remains preserved separately. This shorter
+retry is a correctness/capacity check, not a replacement 100-sample timing campaign.
+The focused contract suite passes 11 tests; the local executable byte audit is
+skipped because that Mac-side executable is absent. Injected code is unchanged.
+
+The exact candidate also passes all 40 fullscreen fine-pan, two-axis, zoom and
+cancellation coverage cases without missing strips
+(`native/build/freeze-scroll-fullscreen/receipt.json`). It is staged as
+`34ae28b52a1c03c9914d0ccea6e5601cd1d6eefc3ec6e3c7aa867e9a4a878c37`;
+`native/build/freeze-memory-stage.json` preserves rollback and runtime identity.
+Restart through `Renderer/CAPTURE_GAME.bat`; no reinstall is needed. Live-game
+stability remains pending. No installer or game was launched.

@@ -24,51 +24,44 @@ testing remain with the user. Performance acceptance is still pending.
 
 ## M3.8 current handoff — in progress
 
-**Native startup transfer repair staged; live acceptance pending.** The latest
-fullscreen capture (September 20, `20260920-225200-11158a`) runs at **2240×1260**.
-All 98 map composites stay on the GPU with zero shared-scene readbacks, but final
-screens still use CPU snapshots: **zero resident final presentations / independent
-visual frames**, 2.18 GB sampled screen uploads. Gameplay display intervals average
-**95.85 ms** (10.43 updates/sec), p95 **233.34 ms**, max **1433.35 ms**. The previous
-private snapshot fix removed one startup escape; original Graphsy presentation
-before configuration loads still revoked screen eligibility through its temporary
-DC borrow. See [live findings](live_usage_findings_20260920.md).
+**Fullscreen allocation-failure repair; live acceptance pending.** Capture
+`20260920-232812-ce8053` kept GPU map delivery active but reports allocation
+failures at 37.12 seconds, Direct3D device removal at 37.19, then failed native
+handoffs until exit. The executable is already large-address-aware. Exact live
+address-space exhaustion is not measured; this is not a demonstrated input
+handler deadlock. See [live findings](live_usage_findings_20260920.md).
 
-**Installable evaluation:** `bin/C3XRenderer.dll`, SHA-256
-`6c73829c77e602e847d0a18dc1cd7d59262601d4d3b7f23240bc47c5f45471e4`.
-**Run `INSTALL.bat` once, then `Renderer/CAPTURE_GAME.bat`.** This fix changes the
-existing injected Graphsy wrapper as well as the DLL. It scopes the audited native
-transfer; the DLL exempts only its private caller-thread DC lease from lifetime
-revocation. Real CPU escapes, failed materialization barriers, native config-off
-behavior and foreign-thread rejection remain intact. No new hook, CSV entry or
-injected state is needed; the [patch ledger](civ3_patch_dependency_ledger.md)
-records the source audit. The city-close and outline fixes remain included.
-`native/build/live-native-startup-stage.json` records validation and rollback.
-No installer or game was launched by the agent.
+Removed superseded off-screen guard storage. Visible circular scene reuse,
+scroll damage and finishing margins replace it at full quality. At 2240×1260,
+scene targets fall **1,467,084,288 → 1,231,400,448 bytes (224.77 MiB saved)**.
+The existing copy-sharing and 128 MiB live composition cap remain; this repair
+raises no budget. Replay exception cleanup and pre-allocation capacity checks
+reduce transient pressure. All shore waves, reflections and water motion stay on.
+Once-per-second whole-process memory samples and device-failure HRESULTs now
+make live resource pressure observable without expensive profiling.
 
-**Fullscreen production replay passes at 2240×1260.** The old hook/DLL fails the
-new startup regression; the candidate preserves eligibility through 12 original
-config-off transfers and 12 configured CPU transfers on the same eventual screen.
-Subsequent GPU map/screen composition preserves unchanged CPU map storage and exact
-displayed pixels. Units/text, outlines, fog, selection/path/grid, asynchronous
-camera/reset and config-off recovery pass. The isolated native lifetime contract
-also verifies that the presentation exemption cannot admit public pixel/bits or
-unscoped DC access. `TEST_INJECTED_CODE_COMPILE.bat` passes.
+A fullscreen harness with **1 GiB reserved address space** makes the old DLL fail
+native display allocation; the initial corrected DLL passes 100 mixed-unit
+visual frames and native UI/ownership/recovery checks. The control image differs
+at four pixels by at most one channel level. Request mean/p95 **34.72 / 49.68 ms**,
+desktop **42.76 / 62.27 ms**; all interval static-work elimination proofs pass.
+This is a severe memory-pressure fixture, not live FPS or input latency. Its
+minimum sampled free VA is 89.53 MiB. Receipts and final-build verification are
+in the linked findings. General device-removal recovery remains unfinished;
+never weaken GPU-to-CPU ownership barriers to manufacture fallback.
 
-The 100-frame fullscreen coast fixture with one selected unit and all water effects
-on measures **35.31 ms mean / 43.22 ms p95 / 325.15 ms max** per visual request,
-and **45.05 / 52.83 / 333.37 ms** through desktop completion, including startup.
-All 100 intervals show zero static-world builds/uploads, static-scene redraws,
-reflection builds and water/wave geometry uploads. These are fixture timings,
-not a live speedup or arbitrary navigation acceptance. Full quality and memory
-budgets are unchanged. M3.8 and Standard <33 ms p95 remain open.
+**Staged evaluation DLL:** `34ae28b52a1c03c9914d0ccea6e5601cd1d6eefc3ec6e3c7aa867e9a4a878c37`.
+`native/build/freeze-memory-stage.json` records source identity, rollback and
+final validation. The exact DLL passes the complete 30-frame pressure retry and
+40 fullscreen scrolling/zoom/cancellation cases. Restart through
+`Renderer/CAPTURE_GAME.bat`; no reinstall is needed.
 
-**Next responsibility:** confirm final-screen residency and independent visual
-frames in the installed fullscreen game, then reduce remaining measured camera
-and finishing costs. The newest capture has no prepared-area attempts at this
-maximum extent; the prior 766/768 cancellations belong to the older smaller-view
-capture. Use the existing [one-click capture](live_usage_logging.md#one-click-game-capture)
-without a debugger or manual uploads. Do not infer live residency from replay alone.
+**Next responsibility:** confirm live stability and memory headroom through
+startup, city UI, selection and map updates, then reduce measured camera and
+finishing costs toward Standard <33 ms p95. M3.8 remains open. The DLL is the only
+runtime delivery change; injected source and patch table remain unchanged. The
+existing [one-click capture](live_usage_logging.md#one-click-game-capture) collects
+the added diagnostics. No installer or game was launched by the agent.
 
 Whole-world appearance enters through bounded caller-thread pages. Existing
 workers prepare canonical regions and wrapped occurrences independently of the

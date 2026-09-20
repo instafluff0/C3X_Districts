@@ -207,6 +207,9 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
         auto status=reinterpret_cast<int(*)(c3x_renderer_visual_status_v1*)>(GetProcAddress(renderer_module,"c3x_renderer_gpu_visual_status"));
         if(visual&&status){
         copy(screen_surface,save,full);copy(scene,screen_surface,full);
+        // Repeated native save/restore transfers must retain shared versions,
+        // not one fullscreen texture per copy, before independent playback.
+        for(unsigned n=0;n<12;++n){copy(scene,screen_surface,full);copy(screen_surface,scene,full);}
         // Resource-only idle must not depend on an animated/selected unit.
         final_ui_drawn=false;patch_JGL_present_screen(&full);
         live(C3X_NATIVE_VISUAL_POLICY,nullptr,nullptr,nullptr,nullptr,1);

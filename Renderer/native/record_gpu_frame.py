@@ -20,6 +20,7 @@ def main(argv=None):
     parser.add_argument("--out",type=Path,help="Explicit disposable output directory for category dispatch")
     parser.add_argument('--scene',type=Path,required=True)
     parser.add_argument('--dll',type=Path,default=Path('Renderer/native/build/candidate/C3XRenderer.dll'))
+    parser.add_argument('--reserve-address-mib',type=int,choices=range(0,1537,64),default=0,help='Harness-only reservation simulating co-resident process address-space pressure')
     parser.add_argument('--width',type=int,default=640)
     parser.add_argument('--height',type=int,default=480)
     parser.add_argument('--tile-width',type=int,choices=(64,128,160,192),default=128)
@@ -126,6 +127,7 @@ def main(argv=None):
         'C3X_RENDERER_VISUAL_UNITS':str(args.visual_units),'C3X_RENDERER_VISUAL_UNIT_CASE':args.visual_unit_case,
         'C3X_RENDERER_TACTICAL_PREVIEW':str(target/'tactical') if args.tactical else '',
         'C3X_RENDERER_PREVIEW_SESSION':'','C3X_RENDERER_PREVIEW_REPLAY':'','C3X_RENDERER_PREVIEW_ANIMATION':''}
+    settings['C3X_RENDERER_TEST_RESERVE_MIB']=str(args.reserve_address_mib)
     settings['C3X_RENDERER_WORLD_READINESS_ONLY']='1' if args.world_readiness_only else ''
     settings['C3X_RENDERER_WORLD_READINESS_TEST']='1' if args.world_readiness else ''
     settings['C3X_RENDERER_WORLD_GEOMETRY_MIB']=str(args.world_geometry_mib) if args.world_geometry_mib else ''
@@ -193,7 +195,7 @@ def main(argv=None):
     if args.scroll_coverage:
         passed=complete==[invocation,'0'] and unchanged and 'PASS scroll coverage:' in log
         receipt['status']='pass' if passed else 'fail' if complete else 'unconfirmed'
-        receipt['scope']='fine-pan/zoom map coverage with idle guard preparation; missing pixels compared against a cold no-guard render; no native UI or performance claim'
+        receipt['scope']='fine-pan/zoom map coverage with cancelled requests and independent visual work; cold comparison only on missing-pixel failure; no native UI or performance claim'
     if args.benchmark:
         import re,statistics
         samples=[];parse_errors=[]

@@ -74,9 +74,9 @@ if(ok && !std::strcmp(gpu_frame_test,"1")) {
                 std::printf("SCROLL_COVERAGE cold_black_span=%d warm_black_span=%d\n",longest_black(cold),black);
                 return 1;
             }
-            Sleep(100); // Exercise the existing idle guard producer between demands.
+            Sleep(100); // Let independent visual work run between camera demands.
         }
-        std::puts("PASS scroll coverage: fine pans, two axes, zoom and idle guard preparation; no missing map strips");return 0;
+        std::puts("PASS scroll coverage: fine pans, two axes, zoom and independent visual work; no missing map strips");return 0;
     }
     for(int phase=0;phase<4 && ok;++phase){
         if(phase==1)test_frame.presentation_time_ticks+=test_frame.presentation_frequency/4;
