@@ -94,6 +94,68 @@ if(ok && !std::strcmp(gpu_frame_test,"1")) {
         if(!verify_gpu(gpu_render(&request,&view,&meta)==C3X_RENDERER_RESULT_OK,"GPU render")||
            !verify_gpu(!meta.bgra_pixels&&!view.map_readbacks&&view.width==test_frame.target_width&&view.height==test_frame.target_height,"GPU-only output")||
            !verify_gpu(meta.replacement_tile_count==ownership.size()&&std::equal(ownership.begin(),ownership.end(),meta.replacement_tile_flags),"native ownership parity"))break;
+        char camera_test[8]={};GetEnvironmentVariableA("C3X_RENDERER_GPU_CAMERA_TEST",camera_test,sizeof(camera_test));
+        if(phase==0 && !std::strcmp(camera_test,"1")){
+            auto begin=reinterpret_cast<c3x_renderer_gpu_camera_begin_fn>(GetProcAddress(module,"c3x_renderer_gpu_camera_begin"));
+            auto poll=reinterpret_cast<c3x_renderer_gpu_camera_poll_fn>(GetProcAddress(module,"c3x_renderer_gpu_camera_poll"));
+            auto cancel=reinterpret_cast<c3x_renderer_camera_cancel_fn>(GetProcAddress(module,"c3x_renderer_camera_cancel"));
+            if(!verify_gpu(begin && poll && cancel,"GPU camera exports"))break;
+            auto future=test_frame;auto future_tiles=test_tiles;future.tiles=future_tiles.data();
+            auto next=request;next.frame=&future;
+            c3x_renderer_i64 ticket=0,prior=0,duplicate=0;
+            LARGE_INTEGER frequency={},started={},ended={};QueryPerformanceFrequency(&frequency);
+            std::vector<double> submission_ms;
+            auto pending=view;pending.ticket=-77;
+            auto pending_meta=meta;pending_meta.width=-77;
+            auto invalid_meta=pending_meta;invalid_meta.api_version=0;
+            verify_gpu(poll(0,&pending,&invalid_meta)==C3X_RENDERER_RESULT_BAD_ARGUMENT && pending.ticket==-77,"GPU poll validates output ABI");
+            // Exact view/time/visibility identity, durable local edits and copied
+            // input lifetime all participate in the production request queue.
+            for(int step=0;step<64 && ok;++step){
+                for(std::size_t n=0;n<future_tiles.size();++n){future_tiles[n].anchor_x=test_tiles[n].anchor_x-step*3;future_tiles[n].anchor_y=test_tiles[n].anchor_y+step;}
+                future.presentation_time_ticks=test_frame.presentation_time_ticks+step*future.presentation_frequency/60;
+                next.identity.visibility_epoch=100+step;
+                QueryPerformanceCounter(&started);int code=begin(&next,&ticket);QueryPerformanceCounter(&ended);
+                submission_ms.push_back(double(ended.QuadPart-started.QuadPart)*1000/frequency.QuadPart);
+                verify_gpu(code==C3X_RENDERER_RESULT_PENDING && ticket>prior,"replace GPU camera demand");
+                if(prior)verify_gpu(poll(prior,&pending,&pending_meta)==C3X_RENDERER_RESULT_SUPERSEDED && pending.ticket==-77 && pending_meta.width==-77,"stale poll leaves output untouched");
+                verify_gpu(begin(&next,&duplicate)==C3X_RENDERER_RESULT_PENDING && duplicate==ticket,"identical GPU request retains ticket");
+                prior=ticket;
+            }
+            // Reading the adopted front is a real GPU operation and may pause
+            // assembly, but must not retire the pending request or change pixels.
+            verify_gpu(read(view.map_image)==C3X_RENDERER_RESULT_OK && actual==map_expected,"adopted front survives replacement demand");
+            auto frozen_tiles=future_tiles;future_tiles.clear();future_tiles.shrink_to_fit();future.tiles=nullptr;
+            int camera_result=C3X_RENDERER_RESULT_PENDING;auto deadline=GetTickCount64()+15000;
+            while(ok && camera_result==C3X_RENDERER_RESULT_PENDING && GetTickCount64()<deadline){
+                camera_result=poll(ticket,&pending,&pending_meta);if(camera_result==C3X_RENDERER_RESULT_PENDING){
+                    verify_gpu(pending.ticket==-77 && pending_meta.width==-77,"pending poll leaves output untouched");Sleep(1);
+                }
+            }
+            verify_gpu(camera_result==C3X_RENDERER_RESULT_OK && pending.ticket!=view.ticket && !pending.map_readbacks && !pending_meta.bgra_pixels,"latest copied camera adopted resident");
+            auto selected=pending;verify_gpu(poll(ticket,&pending,&pending_meta)==C3X_RENDERER_RESULT_OK && pending.ticket==selected.ticket && pending.map_image==selected.map_image,"repeated adoption stable");
+            view=selected;verify_gpu(read(view.map_image)==C3X_RENDERER_RESULT_OK,"latest camera pixel oracle");auto selected_pixels=actual;
+            future.tiles=frozen_tiles.data();std::vector<unsigned> reference;
+            verify_gpu(capture_reference(future,reference) && selected_pixels==reference,"copied latest camera equals independent render");
+            verify_gpu(gpu_render(&next,&view,&meta)==C3X_RENDERER_RESULT_OK,"restore resident camera after oracle");
+            auto kept=view;future.presentation_time_ticks+=future.presentation_frequency;next.identity.visibility_epoch++;
+            verify_gpu(begin(&next,&ticket)==C3X_RENDERER_RESULT_PENDING,"begin cancelled GPU camera");cancel(ticket);
+            verify_gpu(poll(ticket,&pending,&pending_meta)==C3X_RENDERER_RESULT_SUPERSEDED,"cancelled GPU camera cannot publish");
+            verify_gpu(read(kept.map_image)==C3X_RENDERER_RESULT_OK && actual==reference,"cancel preserves adopted front");
+            verify_gpu(begin(&next,&ticket)==C3X_RENDERER_RESULT_PENDING &&
+                gpu_render(&next,&view,&meta)==C3X_RENDERER_RESULT_OK &&
+                poll(ticket,&pending,&pending_meta)==C3X_RENDERER_RESULT_OK && pending.ticket==view.ticket && pending.map_image==view.map_image,
+                "synchronous GPU caller joins the queued request");
+            future.presentation_time_ticks+=future.presentation_frequency;
+            verify_gpu(begin(&next,&ticket)==C3X_RENDERER_RESULT_PENDING,"begin reset GPU camera");gpu_reset();
+            verify_gpu(poll(ticket,&pending,&pending_meta)==C3X_RENDERER_RESULT_SUPERSEDED,"reset retires GPU camera ticket");
+            std::sort(submission_ms.begin(),submission_ms.end());double total=0;for(double ms:submission_ms)total+=ms;
+            if(ok)std::printf("PASS replaceable GPU camera: requests=64 begin_mean_ms=%.3f begin_p95_ms=%.3f begin_max_ms=%.3f copied_inputs=1 stale_adoptions=0 retained_front=1\n",total/submission_ms.size(),submission_ms[60],submission_ms.back());
+            // Oracle readback is explicit; restore clean producer counters for
+            // the ordinary native contract and whole-workload measurements.
+            if(!verify_gpu(render(&test_frame,&control)==C3X_RENDERER_RESULT_OK && capture_reference(test_frame,expected) &&
+                gpu_render(&request,&view,&meta)==C3X_RENDERER_RESULT_OK,"fresh session after camera oracle"))break;map_expected=expected;
+        }
 #ifdef C3X_GPU_NATIVE_CONTRACT
         if(phase==0){char jgl_path[2048]={};GetEnvironmentVariableA("C3X_RENDERER_GPU_JGL_TEST",jgl_path,sizeof(jgl_path));
             std::vector<NativeFrameSample> performance_frames;

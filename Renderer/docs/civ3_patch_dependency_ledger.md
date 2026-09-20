@@ -1,5 +1,16 @@
 # Civ III patch dependency ledger
 
+## M3.2 replaceable resident GPU camera requests
+
+The production `c3x_renderer_gpu_render` DLL entry now joins the shared bounded
+camera queue and adopts its completed resident output. Optional DLL begin/poll
+exports expose replacement; no Civ III function or signature changes. Existing
+`Map_Renderer_m71_Draw_Tiles`, `Map_Renderer_m19_Draw_Tile_by_XY_and_Flags`,
+`Main_Screen_Form_move_camera` and native JGL composition boundaries still own
+capture and exact synchronous presentation. Supersession preserves durable scene
+changes and the adopted native map. No injected source or patch-table changes;
+`required_user_action: []`. Native nonblocking presentation remains M3.5 work.
+
 ## M3.1 authoritative change publication
 
 The DLL copies/version-stamps existing map captures before replaceable camera

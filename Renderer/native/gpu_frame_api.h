@@ -65,6 +65,17 @@ struct c3x_renderer_visual_status_v1 {
 };
 #pragma pack(pop)
 typedef int (*c3x_renderer_gpu_render_fn)(struct c3x_renderer_camera_request_v1 const*,struct c3x_renderer_gpu_frame_v1*,struct c3x_renderer_output_v1*);
+/* One active and one replaceable pending camera, sharing the CPU camera queue.
+   Begin copies exact inputs and returns without waiting for rendering. Duplicate
+   exact requests keep their ticket; different inputs supersede the old request.
+   Pending polls do not wait or change the native map. An OK poll adopts the
+   completed resident result on the GPU owner; this bounded import may wait for
+   foreground GPU work, but never renders the map. Repeated OK polls are stable.
+   Cancel uses c3x_renderer_camera_cancel. Camera tickets and adopted map tickets
+   are distinct. The synchronous gpu_render uses this same request/adoption path.
+   Native nonblocking presentation/overlay/picking cutover remains separate. */
+typedef int (*c3x_renderer_gpu_camera_begin_fn)(struct c3x_renderer_camera_request_v1 const*,c3x_renderer_i64* ticket);
+typedef int (*c3x_renderer_gpu_camera_poll_fn)(c3x_renderer_i64 ticket,struct c3x_renderer_gpu_frame_v1*,struct c3x_renderer_output_v1*);
 /* READBACK alone writes caller storage, after worker completion. Other calls
    require a null readback pointer/capacity. Native GPU composition does not read
    back implicitly; this explicit barrier supports CPU fallback and the oracle. */

@@ -10194,48 +10194,60 @@ public:
     int render_gpu(c3x_renderer_camera_request_v1 const& request,c3x_renderer_gpu_frame_v1& view,c3x_renderer_output_v1& metadata){
         LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
         std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);
-        if(!publish_scene_capture(*request.frame,request.identity))return C3X_RENDERER_RESULT_ERROR;
-        start_locked();drain_camera_locked(lock);advance_visual_clock();foreground_pending.store(true);
-        if(!gpu_presentation){nearby.clear();retained_views.clear();gpu_publication.clear();}
-        gpu_presentation=true;native_presentation=true;isolated_publication=true;camera_preview_enabled=false;
-        auto prior=*request.frame;prior.dirty_flags=gpu_publication.frame.dirty_flags;
-        prospective_view_allowed=!gpu_publication.has_image() || gpu_publication.matches_static_view(prior);
-        gpu_reused=false;nearby_presented=false;
-        if(nearby_available && nearby.map.resident.texture){
-            for(auto& area:retained_views)if(area->input.tile_width==request.frame->tile_width &&
-                area->project(*request.frame,request.identity,gpu_publication)){
-                nearby.swap(*area);gpu_reused=true;break;
-            }
-            auto const& center=nearby.center;
-            auto current=*request.frame;current.dirty_flags=center.frame.dirty_flags;
-            // Project performs complete fresh content/topology validation even
-            // when a newer selected sample already matches the exact camera.
-            PublishedMapFrame selected;
-            if(nearby.project(*request.frame,request.identity,selected)){
-                if(center.resident.texture && center.frame.presentation_time_ticks<=current.presentation_time_ticks &&
-                   center.frame.presentation_time_ticks>=selected.frame.presentation_time_ticks && center.matches_static_view(current))
-                    selected.capture(center.output,center.phase_x,center.phase_y,&center.frame,center.identity,&center.resident,center.source_x,center.source_y);
-                gpu_publication.swap(selected);gpu_reused=true;
-            }
-        }
-        nearby_presented=gpu_reused;
-        if(!gpu_reused)gpu_publication.clear();
-        job_frame=*request.frame;job_camera_identity=request.identity;
-        job_tiles.clear();job_world_topology.clear();
-        try {
-            if(job_frame.tile_count)job_tiles.assign(job_frame.tiles,job_frame.tiles+job_frame.tile_count);
-            if(job_frame.world_topology_count)job_world_topology.assign(job_frame.world_topology,job_frame.world_topology+job_frame.world_topology_count);
-        }catch(...){foreground_pending.store(false);wake.notify_one();return C3X_RENDERER_RESULT_ERROR;}
-        job_frame.tiles=job_tiles.data();job_frame.world_topology=job_world_topology.data();
-        int result=submit_locked(lock,Command::gpu_render);
-        view=gpu_view;metadata=gpu_metadata;QueryPerformanceCounter(&end);
+        c3x_renderer_i64 ticket=0;
+        int result=begin_gpu_camera_locked(request,ticket,true);
+        if(result!=C3X_RENDERER_RESULT_PENDING)return result;
+        completed.wait(lock,[this,ticket]{return camera_ticket!=ticket ||
+            (!camera_active && !camera_pending && camera_result!=C3X_RENDERER_RESULT_PENDING);});
+        result=adopt_gpu_camera_locked(lock,ticket,view,metadata);
+        QueryPerformanceCounter(&end);
         char detail[224];std::snprintf(detail,sizeof(detail),"result=%d prepared=%u request_ms=%.3f sample_ticks=%lld requested_ticks=%lld",
             result,view.prepared,renderer_state.trace.milliseconds(end.QuadPart-begin.QuadPart),view.presentation_time_ticks,request.frame->presentation_time_ticks);
         renderer_state.trace.write("gpu-map-request",detail,true);return result;
     }
+    int begin_gpu_camera(c3x_renderer_camera_request_v1 const& request,c3x_renderer_i64& ticket){
+        std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);
+        return begin_gpu_camera_locked(request,ticket);
+    }
+    int poll_gpu_camera(c3x_renderer_i64 ticket,c3x_renderer_gpu_frame_v1& view,c3x_renderer_output_v1& metadata){
+        std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);
+        return adopt_gpu_camera_locked(lock,ticket,view,metadata);
+    }
+private:
+    int begin_gpu_camera_locked(c3x_renderer_camera_request_v1 const& request,c3x_renderer_i64& ticket,bool fresh=false){
+        auto const& frame=*request.frame;
+        if(camera_gpu && camera_ticket>0 && (camera_result==C3X_RENDERER_RESULT_PENDING || camera_result==C3X_RENDERER_RESULT_OK)){
+            bool same=camera_pending?same_camera_request(frame,request.identity,camera_pending_frame,camera_pending_identity):
+                (job_camera_ticket==camera_ticket && !camera_cancelled.load(std::memory_order_relaxed) &&
+                 same_camera_request(frame,request.identity,job_frame,job_camera_identity));
+            if(same && (!fresh || gpu_camera_front_ticket!=camera_ticket)){ticket=camera_ticket;return C3X_RENDERER_RESULT_PENDING;}
+        }
+        if(!publish_scene_capture(frame,request.identity))return C3X_RENDERER_RESULT_ERROR;
+        advance_visual_clock();
+        return enqueue_camera_locked(frame,request.identity,ticket,true);
+    }
+    int adopt_gpu_camera_locked(std::unique_lock<std::mutex>& lock,c3x_renderer_i64 ticket,
+            c3x_renderer_gpu_frame_v1& view,c3x_renderer_output_v1& metadata){
+        if(ticket<=0 || ticket!=camera_ticket)return C3X_RENDERER_RESULT_SUPERSEDED;
+        if(!camera_gpu)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        if(camera_result!=C3X_RENDERER_RESULT_OK)return camera_result;
+        if(gpu_camera_front_ticket!=ticket){
+            if(!camera_ready.resident.texture)return C3X_RENDERER_RESULT_PENDING;
+            // Rendering is complete. Only this explicit adoption imports the
+            // selected image into the existing native composition session.
+            pause_ahead_locked(lock,true);
+            gpu_publication.swap(camera_ready);camera_ready.clear();
+            gpu_reused=camera_ready_prepared;nearby_presented=gpu_reused || camera_ready_area;
+            int result=submit_locked(lock,Command::gpu_render);
+            if(result!=C3X_RENDERER_RESULT_OK){camera_result=result;return result;}
+            gpu_camera_front_ticket=ticket;
+        }
+        view=gpu_view;metadata=gpu_metadata;return C3X_RENDERER_RESULT_OK;
+    }
+public:
     int images_gpu(c3x_renderer_gpu_images_v1 const& request,c3x_renderer_gpu_result_v1& result,unsigned* readback,unsigned capacity){
         std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);
-        start_locked();drain_camera_locked(lock,gpu_presentation);
+        start_locked();ForegroundCameraPause pause(*this,lock);
         gpu_request=request;gpu_pixels.clear();gpu_commands.clear();
         if(request.action==C3X_GPU_UPLOAD)gpu_pixels.assign(request.pixels,request.pixels+request.pixel_count);
         for(unsigned n=0;n<request.command_count;++n){auto const& c=request.commands[n];
@@ -10436,7 +10448,7 @@ public:
         // the camera interface. Join its existing owner rather than canceling
         // useful rendering and copying/submitting the same request again.
         // Legacy callers supply zero epochs; explicit native demand supplies its own.
-        bool adopt=camera_ticket>0 && !camera_paused &&
+        bool adopt=!camera_gpu && camera_ticket>0 && !camera_paused &&
             (camera_result==C3X_RENDERER_RESULT_PENDING || camera_result==C3X_RENDERER_RESULT_OK) &&
             (camera_pending?same_camera_request(frame,identity,camera_pending_frame,camera_pending_identity):
                 (job_camera_ticket==camera_ticket && !camera_cancelled.load(std::memory_order_relaxed) &&
@@ -10523,7 +10535,7 @@ public:
         // its ticket and ready publication instead of restarting useful work.
         // Compare complete inputs, including time, visibility, order and epochs;
         // no scene hash or old-camera image is sufficient for this decision.
-        if(camera_ticket>0 && (camera_result==C3X_RENDERER_RESULT_PENDING || camera_result==C3X_RENDERER_RESULT_OK)) {
+        if(!camera_gpu && camera_ticket>0 && (camera_result==C3X_RENDERER_RESULT_PENDING || camera_result==C3X_RENDERER_RESULT_OK)) {
             bool same=camera_pending?same_camera_request(frame,identity,camera_pending_frame,camera_pending_identity):
                 (job_camera_ticket==camera_ticket && !camera_cancelled.load(std::memory_order_relaxed) &&
                  same_camera_request(frame,identity,job_frame,job_camera_identity));
@@ -10545,7 +10557,7 @@ private:
 
     int enqueue_camera_locked(c3x_renderer_frame_v1 const& frame,
                               c3x_renderer_camera_identity_v1 const& identity,
-                              c3x_renderer_i64& ticket) {
+                              c3x_renderer_i64& ticket,bool gpu=false) {
         if(camera_ticket==INT64_MAX)return C3X_RENDERER_RESULT_ERROR;
         // Reject an unsupported publication before copying snapshots or asking
         // D3D for a target. Include worst-case fallback/replacement arrays.
@@ -10570,10 +10582,11 @@ private:
         // A native request inside the proven ambient horizon transfers that
         // producer's result into the camera queue. Do not cancel work it needs.
         // Incompatible scene/view/visibility still cancels the horizon normally.
-        if(!compatible_ahead(frame,identity)) {
+        if(gpu || !compatible_ahead(frame,identity)) {
             ahead_cancelled.store(true,std::memory_order_relaxed);ahead_requested=-1;
             for(auto& ready:ahead_ready)if(ready.output.bgra_pixels){++ahead_discarded;ready.clear();}
         }
+        camera_gpu=gpu;camera_ready_area=camera_ready_prepared=false;
         camera_pending_frame=frame;
         camera_pending_identity=identity;
         camera_pending_tiles.swap(tiles);camera_pending_topology.swap(topology);
@@ -10820,6 +10833,7 @@ private:
 
     int camera_poll_locked(c3x_renderer_i64 ticket,c3x_renderer_output_v1& output) {
         if(ticket<=0 || ticket!=camera_ticket)return C3X_RENDERER_RESULT_SUPERSEDED;
+        if(camera_gpu)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
         if(camera_result!=C3X_RENDERER_RESULT_OK && camera_result!=C3X_RENDERER_RESULT_PENDING)return camera_result;
         if(camera_ready.output.bgra_pixels) {
             bool stable=native_presentation && publication.matches_static_view(camera_ready.frame) &&
@@ -11180,6 +11194,8 @@ private:
     c3x_renderer_i64 camera_ticket=0,job_camera_ticket=0;
     int camera_result=C3X_RENDERER_RESULT_SUPERSEDED;
     bool camera_active=false,camera_pending=false,camera_paused=false;
+    bool camera_gpu=false,camera_ready_prepared=false,camera_ready_area=false;
+    c3x_renderer_i64 gpu_camera_front_ticket=0;
     std::atomic<bool> camera_cancelled{false};
     bool isolated_publication=false;
     int completed_phase_x=0,completed_phase_y=0;
@@ -11429,6 +11445,7 @@ private:
     }
 
     bool ahead_pending() const {
+        if(camera_gpu && camera_ready.resident.texture)return false;
         if(pending_refresh || !prospective_views.empty())return true;
         if(area_pending)return !ahead_cancelled.load(std::memory_order_relaxed);
         if(ahead_requested<0 || ahead_next<0 || ahead_next>ahead_requested+2 ||
@@ -11788,6 +11805,88 @@ private:
                 camera_pending_tiles.clear();camera_pending_topology.clear();
                 job_frame.tiles=job_tiles.empty()?nullptr:job_tiles.data();
                 job_frame.world_topology=job_world_topology.empty()?nullptr:job_world_topology.data();
+                if(camera_gpu){
+                    // Demand retires unstarted preparation; completed coverage
+                    // retains its independent proof. This worker owns active inputs.
+                    clear_ahead();prospective_views.clear();pending_refresh.reset();
+                    auto const gpu_ticket=ticket;
+                    PublishedMapFrame ready;
+                    bool reused=false;
+                    if(!gpu_presentation){nearby.clear();retained_views.clear();gpu_publication.clear();}
+                    gpu_presentation=true;native_presentation=true;isolated_publication=true;camera_preview_enabled=false;
+                    auto prior=job_frame;prior.dirty_flags=gpu_publication.frame.dirty_flags;
+                    prospective_view_allowed=!gpu_publication.has_image() || gpu_publication.matches_static_view(prior);
+                    try {if(nearby_available && nearby.map.resident.texture){
+                        for(auto& area:retained_views)if(area->input.tile_width==job_frame.tile_width &&
+                            area->project(job_frame,job_camera_identity,ready)){
+                            nearby.swap(*area);reused=true;break;
+                        }
+                        PublishedMapFrame selected;
+                        if(nearby.project(job_frame,job_camera_identity,selected)){
+                            auto const& center=nearby.center;auto current=job_frame;current.dirty_flags=center.frame.dirty_flags;
+                            if(center.resident.texture && center.frame.presentation_time_ticks<=current.presentation_time_ticks &&
+                               center.frame.presentation_time_ticks>=selected.frame.presentation_time_ticks && center.matches_static_view(current))
+                                selected.capture(center.output,center.phase_x,center.phase_y,&center.frame,center.identity,&center.resident,center.source_x,center.source_y);
+                            ready.swap(selected);reused=true;
+                        }
+                    }}catch(...){ready.clear();reused=false;}
+                    camera_pending=false;camera_active=true;camera_cancelled.store(false,std::memory_order_relaxed);
+                    warm_order.clear();warm_cursor=0;warm_signature=0;renderer_state.cancel_pixel_preparation();
+                    lock.unlock();
+                    int result=C3X_RENDERER_RESULT_ERROR;
+                    c3x_renderer::PreparedViewArea<PublishedMapFrame> area;
+                    bool area_ready=false;
+                    try {
+                        if(!scene_changes_ok)throw std::runtime_error("authoritative scene publication unavailable");
+                        bool supported=renderer_state.scene_surface_requested && renderer_state.city_profile &&
+                            c3x_renderer::render_core::scene_surface_extent(job_frame.target_width,job_frame.target_height);
+                        if(!supported)result=C3X_RENDERER_RESULT_BAD_ARGUMENT;
+                        else {
+                            GpuOutputMode mode(renderer_state,true);
+                            auto output=ready.output;bool complete=reused;
+                            if(reused){
+                                ready.output.geometry_tiles_built=ready.output.geometry_tiles_reused=ready.output.geometry_tiles_evicted=0;
+                                ready.output.geometry_upload_bytes=0;
+                                ready.output.geometry_ticks=ready.output.draw_ticks=ready.output.readback_ticks=ready.output.renderer_cpu_ticks=0;
+                                ready.output.frame_invalidation_flags=0;
+                            }else {
+                                output={C3X_RENDERER_API_VERSION,sizeof(output)};
+                                if(area.prepare(job_frame,job_camera_identity)){
+                                    PublishedMapFrame finished;
+                                    if(renderer_state.render(area.input,output,-1,&camera_cancelled,0,nullptr,0,&job_frame) &&
+                                       !camera_cancelled.load(std::memory_order_relaxed) &&
+                                       capture_gpu(finished,output,area.input,job_camera_identity) &&
+                                       area.finish(output,renderer_state.prepared_view_dependencies(),&finished) &&
+                                       area.project(job_frame,job_camera_identity,ready)){area_ready=true;complete=true;}
+                                }
+                                if(!complete && !camera_cancelled.load(std::memory_order_relaxed) &&
+                                   renderer_state.render(job_frame,output,-1,&camera_cancelled) && !camera_cancelled.load(std::memory_order_relaxed))
+                                    complete=capture_gpu(ready,output,job_frame,job_camera_identity);
+                            }
+                            result=complete?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_ERROR;
+                        }
+                    }catch(c3x_renderer::render_core::CliffPreparationCancelled const&){result=C3X_RENDERER_RESULT_SUPERSEDED;}
+                    catch(std::exception const& error){renderer_state.trace.write("camera-error",error.what(),true);}
+                    catch(...){renderer_state.trace.write("camera-error","GPU camera exception",true);}
+                    if(camera_cancelled.load(std::memory_order_relaxed) || result==C3X_RENDERER_RESULT_SUPERSEDED){
+                        renderer_state.discard_scene_view();result=C3X_RENDERER_RESULT_SUPERSEDED;
+                    }
+                    lock.lock();
+                    if(gpu_ticket==camera_ticket && camera_result==C3X_RENDERER_RESULT_PENDING && !camera_cancelled.load(std::memory_order_relaxed)){
+                        if(result==C3X_RENDERER_RESULT_OK){
+                            try {
+                                if(area_ready)retain_view(area);
+                                camera_ready.swap(ready);camera_ready_prepared=reused;camera_ready_area=area_ready||reused;
+                            }catch(...){result=C3X_RENDERER_RESULT_ERROR;}
+                        }
+                        camera_result=result;
+                    }
+                    char detail[192];std::snprintf(detail,sizeof(detail),"ticket=%lld current=%lld result=%d gpu=1 prepared=%u bytes=%zu",
+                        gpu_ticket,camera_ticket,result,unsigned(reused),ready.bytes()+camera_ready.bytes());
+                    renderer_state.trace.write("camera-complete",detail,true);
+                    camera_active=false;foreground_pending.store(camera_pending,std::memory_order_relaxed);completed.notify_all();
+                    lock.unlock();ready.clear();area.clear();lock.lock();continue;
+                }
                 PublishedMapFrame prepared_camera;
                 if(compatible_ahead(job_frame,job_camera_identity)) {
                     auto clock=RendererState::resource_clock(job_frame);
@@ -12022,38 +12121,13 @@ private:
                     ?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_ERROR;
             }else if(command==Command::gpu_render){
                 gpu_view={sizeof(gpu_view)};gpu_metadata={C3X_RENDERER_API_VERSION,sizeof(gpu_metadata)};
-                bool supported=renderer_state.scene_surface_requested&&renderer_state.city_profile&&
-                    c3x_renderer::render_core::scene_surface_extent(job_frame.target_width,job_frame.target_height);
-                if(!supported)result=C3X_RENDERER_RESULT_BAD_ARGUMENT;
-                else {
-                    GpuOutputMode mode(renderer_state,true);
-                    bool ready=gpu_reused;
-                    if(ready){
-                        gpu_metadata=gpu_publication.output;
-                        gpu_metadata.geometry_tiles_built=gpu_metadata.geometry_tiles_reused=gpu_metadata.geometry_tiles_evicted=0;
-                        gpu_metadata.geometry_upload_bytes=0;
-                        gpu_metadata.geometry_ticks=gpu_metadata.draw_ticks=gpu_metadata.readback_ticks=gpu_metadata.renderer_cpu_ticks=0;
-                        gpu_metadata.frame_invalidation_flags=0;
-                    }
-                    else {
-                        // Demand and preparation use the same full-detail working
-                        // extent. A first publication also establishes reusable
-                        // coverage, rather than immediately rebuilding it wider.
-                        if(rendered_area.prepare(job_frame,job_camera_identity)){
-                            PublishedMapFrame finished;
-                            if(renderer_state.render(rendered_area.input,gpu_metadata,-1,nullptr,0,nullptr,0,&job_frame) &&
-                               capture_gpu(finished,gpu_metadata,rendered_area.input,job_camera_identity) &&
-                               rendered_area.finish(gpu_metadata,renderer_state.prepared_view_dependencies(),&finished) &&
-                               rendered_area.project(job_frame,job_camera_identity,gpu_publication)){
-                                rendered_area_ready=true;ready=true;gpu_metadata=gpu_publication.output;
-                            }
-                        }
-                        if(!ready && renderer_state.render(job_frame,gpu_metadata))ready=capture_gpu(gpu_publication,gpu_metadata,job_frame,job_camera_identity);
-                    }
+                {
+                    bool ready=gpu_publication.resident.texture!=nullptr;
+                    gpu_metadata=gpu_publication.output;
                     if(ready){
                         if(!renderer_state.gpu_composition)renderer_state.gpu_composition=std::make_unique<c3x_gpu_images::Session>(renderer_state.device,renderer_state.context);
                         auto& session=*renderer_state.gpu_composition;
-                        auto map_sample=retain_visual_map(rendered_area_ready?rendered_area.input:(gpu_reused&&nearby.map.has_image()?nearby.input:job_frame));
+                        auto map_sample=retain_visual_map(camera_ready_area?nearby.input:job_frame);
                         if(session.publish(static_cast<ID3D11Texture2D*>(gpu_publication.resident.texture.get()),++renderer_state.gpu_serial,
                             gpu_publication.source_x,gpu_publication.source_y,gpu_metadata.width,gpu_metadata.height,std::move(map_sample))){
                             gpu_replacements=gpu_publication.replacements;gpu_fallbacks=gpu_publication.fallback;
@@ -12638,6 +12712,22 @@ extern "C" __declspec(dllexport) int c3x_renderer_gpu_render(
        request->frame->target_width>2240||request->frame->target_height>1192)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
     *view={sizeof(*view)};
     try{return get_renderer_worker().render_gpu(*request,*view,*metadata);}
+    catch(...){return C3X_RENDERER_RESULT_ERROR;}
+}
+extern "C" __declspec(dllexport) int c3x_renderer_gpu_camera_begin(
+    c3x_renderer_camera_request_v1 const* request,c3x_renderer_i64* ticket){
+    c3x_renderer_output_v1 metadata={C3X_RENDERER_API_VERSION,sizeof(metadata)};
+    if(!request||!ticket||request->version!=C3X_RENDERER_CAMERA_VIEW_VERSION||request->struct_size!=sizeof(*request)||
+       !valid_frame(request->frame,&metadata)||request->frame->target_width>2240||request->frame->target_height>1192)
+        return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    try{return get_renderer_worker().begin_gpu_camera(*request,*ticket);}
+    catch(...){return C3X_RENDERER_RESULT_ERROR;}
+}
+extern "C" __declspec(dllexport) int c3x_renderer_gpu_camera_poll(
+    c3x_renderer_i64 ticket,c3x_renderer_gpu_frame_v1* view,c3x_renderer_output_v1* metadata){
+    if(!view||view->struct_size!=sizeof(*view)||!metadata||metadata->api_version!=C3X_RENDERER_API_VERSION||
+       metadata->struct_size!=sizeof(*metadata))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    try{return renderer_worker?renderer_worker->poll_gpu_camera(ticket,*view,*metadata):C3X_RENDERER_RESULT_SUPERSEDED;}
     catch(...){return C3X_RENDERER_RESULT_ERROR;}
 }
 extern "C" __declspec(dllexport) int c3x_renderer_gpu_images(

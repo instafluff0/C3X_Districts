@@ -110,6 +110,16 @@ on this path; they still describe reduced/non-world and explicit serial controls
 The existing total worker allowance is unchanged; the combined ready budget is
 64 MiB by default rather than adding separate ground/object queues to that budget.
 
+`record_gpu_frame --camera-requests` additionally exercises the production GPU
+camera exports: 64 superseding exact requests, duplicate tickets, freed caller
+inputs, current-front reads during assembly, stable adoption, independent pixel
+parity, cancellation, synchronous joining and reset retirement. It records begin
+latency separately from whole-frame timings and restores a clean session before
+the native workload. Pending polls must leave output untouched. Pair this with
+the held-render worker test; short observed timings alone cannot prove absence
+of a render wait. An OK poll still imports the completed map on the GPU owner,
+and the native caller still uses the synchronous exact-view barrier until M3.5.
+
 `FRAME_SAMPLE` QPC boundaries locate the corresponding aggregate renderer trace.
 `geometry_ms` includes content assembly, uploads and possible driver waits;
 `draw_ms` excludes later shared-scene composition and is not total GPU time.

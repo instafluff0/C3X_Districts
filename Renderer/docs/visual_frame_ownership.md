@@ -24,6 +24,13 @@ Civ III to redraw, and no second presenter or window is introduced.
   history; transparent operations retain the affected underlay and exact native
   shader program. Final transfer seals only its actual rectangle, preserving the
   displayed version outside a partial transfer.
+- GPU camera assembly uses the existing one-active/one-pending camera queue.
+  Pending replacement owns copied inputs and a separate completed texture; it
+  cannot replace the adopted map until a successful poll or synchronous demand
+  adopts it. Native image work pauses/resumes assembly and preserves that
+  request. Cancellation retires prospective output without discarding durable
+  world changes. The existing synchronous native barrier remains until atomic
+  view publication and coherent overlays/picking are implemented in M3.4–3.6.
 - Replay first collects direct pose revisions across the reachable graph, offering
   current immutable pose jobs to the existing CPU pool. It then evaluates dependencies,
   binds immutable source textures and

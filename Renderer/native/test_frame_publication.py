@@ -394,6 +394,30 @@ int main(){
         assert(durable_state.topology_cache.retained(durable_state.topology_cache.key(4,0))->appearance.city_id==20);
         assert(durable_state.entered==2); // cancelled edit was never a render job
     }
+    // GPU camera uses the same replaceable queue. Hold the real render call
+    // before GPU capture to prove begin/pending-poll never join it, and cancel
+    // without touching the fake GPU or importing a native map.
+    {
+        RendererState gpu_state;gpu_state.scene_surface_requested=gpu_state.city_profile=true;gpu_state.hold=true;
+        RendererWorker gpu_worker(gpu_state);auto capture=f;auto owned=tile;owned.city_id=17;capture.tiles=&owned;
+        c3x_renderer_camera_request_v1 request{C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(request),&capture,{3,4,5,6}};
+        c3x_renderer_i64 active=0,duplicate=0,replaced=0;
+        assert(gpu_worker.begin_gpu_camera(request,active)==C3X_RENDERER_RESULT_PENDING);
+        until([&]{return gpu_state.entered.load()>0;});
+        assert(gpu_worker.begin_gpu_camera(request,duplicate)==C3X_RENDERER_RESULT_PENDING&&duplicate==active);
+        c3x_renderer_gpu_frame_v1 resident{sizeof(resident)};resident.ticket=777;
+        assert(gpu_worker.poll_gpu_camera(active,resident,out)==C3X_RENDERER_RESULT_PENDING&&resident.ticket==777);
+        assert(gpu_worker.camera_poll(active,out)==C3X_RENDERER_RESULT_BAD_ARGUMENT);
+        owned.city_id=-1;capture.presentation_time_ticks+=100;
+        assert(gpu_worker.begin_gpu_camera(request,replaced)==C3X_RENDERER_RESULT_PENDING&&replaced>active);
+        owned.city_id=999; // The queued edit owns its copy.
+        assert(gpu_worker.poll_gpu_camera(active,resident,out)==C3X_RENDERER_RESULT_SUPERSEDED&&resident.ticket==777);
+        until([&]{return gpu_state.entered.load()>=2;});
+        assert(gpu_worker.camera_cancel(replaced)==C3X_RENDERER_RESULT_OK);
+        gpu_worker.reset_and_stop();
+        assert(gpu_state.topology_cache.retained(gpu_state.topology_cache.key(tile.tile_x,tile.tile_y))->appearance.city_id==-1);
+        assert(gpu_state.cancelled>=2);
+    }
     assert(worker.render(f,out)==C3X_RENDERER_RESULT_OK);
     c3x_renderer_i64 first=0,last=0;
     assert(worker.camera_begin(f,last)==C3X_RENDERER_RESULT_PENDING);

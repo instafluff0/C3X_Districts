@@ -210,9 +210,23 @@ captures can remove objects; lightweight topology halos cannot. Historical view
 sampling updates observations without rolling back authoritative appearance or
 attaching old meshes to a newer revision. Configuration, map and viewer changes
 retire the previous scope. Unit spawn/action/despawn remains in `UnitInstances`.
-This replaces render-completion-driven world authority, not the native camera
-barrier: general replaceable GPU views and nonblocking native presentation remain
-the following M3 responsibilities.
+M3.2 extends the existing bounded camera queue to resident GPU output. Exact
+copied requests share one active and one replaceable pending slot with the CPU
+camera route. A changed request cancels obsolete assembly without cancelling
+accepted world changes. Duplicate requests retain their ticket; pending and
+superseded polls leave caller output untouched. Only explicit successful adoption
+imports the completed immutable texture into the native composition session.
+Adopted map tickets are distinct from request tickets. Native image operations
+can pause and resume assembly while retaining the currently adopted map.
+
+The existing synchronous `c3x_renderer_gpu_render` uses this same queue and
+adoption path; the old direct GPU render branch is removed. Optional GPU
+camera begin/poll exports expose the production path without changing existing
+ABI layouts. Begin and pending polls do not join active rendering. Successful
+polls still perform a bounded session import on the owner thread; native calls
+and foreground GPU operations remain serialized. This is not yet nonblocking
+native presentation. Preserve the exact native barrier until M3.4–3.6 provide
+atomic completed views and coherent overlays, visibility and picking.
 
 The renderer now owns independent visual scheduling through the existing worker
 and presenter. It does not request Civ III redraws. Native camera, visibility,
