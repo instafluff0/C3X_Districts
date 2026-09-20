@@ -267,6 +267,19 @@ int main(){
  for(unsigned i=0;i<Cache::entry_limit+1;++i){images.emplace_back();assert(cache.insert({i},&images.back(),0));}
  assert(cache.entries.size()==Cache::entry_limit && images.front().refs==0);
  cache.clear();for(auto const& image:images)assert(image.refs==0);
+ Image first,second;Image* recycled=nullptr;
+ assert(cache.insert({11},&first,128*mib) && cache.insert({12},&second,128*mib));
+ first.refs++; // Earlier queued commands retain their reference during reuse.
+ assert(cache.make_room({13},128*mib,&recycled));
+ assert(recycled==&first && first.refs==2 && !cache.find({11}));
+ assert(cache.gpu_bytes==128*mib && cache.find({12})==&second);
+ assert(cache.insert({13},recycled,128*mib));recycled=nullptr;
+ first.Release();assert(first.refs==1 && cache.find({13})==&first);
+ assert(!cache.make_room({},128*mib,&recycled) && !recycled);
+ // A differently sized victim cannot be handed to the new allocation.
+ assert(cache.make_room({14},192*mib,&recycled) && !recycled);
+ assert(first.refs==0 && second.refs==0 && cache.entries.empty());
+ cache.clear();
 }
 ''')
 

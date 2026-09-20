@@ -33,6 +33,8 @@ def main(argv=None):
     parser.add_argument('--camera-requests',action='store_true',help='Exercise replaceable GPU camera exports and retained front lifetime')
     parser.add_argument('--benchmark',action='store_true',help='Compare complete native CPU/GPU frame requests and desktop completion')
     parser.add_argument('--profile',action='store_true',help='Enable existing phase and address-space samples; match this setting in both comparison arms')
+    parser.add_argument('--completion-probe',action='store_true',help='Serialize GPU completion at existing scene/resolve/finish boundaries for attribution only; requires an oracle build and is not performance acceptance')
+    parser.add_argument('--half-pixels',action='store_true',help='Diagnostic-only half geometry coverage; retains full finishing and is never visual/performance acceptance')
     parser.add_argument('--world-readiness-only',action='store_true',help='Run only the complete world-navigation workload and independent cold-pixel oracles')
     parser.add_argument('--world-readiness',action='store_true',help='Page the complete world through the production caller callback, prepare it independently of the route, and measure 100 distributed GPU requests')
     parser.add_argument('--world-geometry-mib',type=int,choices=(384,512,640,768),help='Isolated Huge-world residency budget control; leaves other budgets and detail unchanged')
@@ -90,6 +92,8 @@ def main(argv=None):
         if build_path.exists():
             build_record=json.loads(build_path.read_text())
             if build_record.get('dll_sha256')==digest(dll):build_sources=build_record.get('inputs',{})
+    if (args.completion_probe or args.half_pixels) and (build_record.get('preview_only') or 'C3X_RENDERER_BENCHMARK_ORACLE' not in build_record.get('flags','')):
+        parser.error('diagnostic controls require a verified benchmark-oracle DLL')
     binary_provenance={'build_receipt':build_path.relative_to(ROOT).as_posix() if build_record else None,
         'build_receipt_sha256':digest(build_path) if build_record else None,
         'current_runtime_matches_build':bool(build_sources) and all(build_sources.get(path)==value for path,value in inputs.items()),
@@ -103,6 +107,8 @@ def main(argv=None):
     win=windows_root();target=win/out.relative_to(ROOT)
     settings={'C3X_RENDERER_GPU_JGL_TEST':str(win/jgl.relative_to(ROOT)),'C3X_RENDERER_VISUAL_PROFILE':'city-fidelity','C3X_RENDERER_SHARED_SCENE_SURFACE':'',
         'C3X_RENDERER_WATER_COVERAGE':'','C3X_RENDERER_REFLECTION_CONTROL':'0' if args.reflections=='1' else '1','C3X_RENDERER_WAVES':args.waves,'C3X_RENDERER_WATER_MOTION':args.water_motion,'C3X_RENDERER_GPU_FRAME_TEST':'1','C3X_RENDERER_NATIVE_CAMERA_TEST':'1' if args.native_camera_requests or args.native_navigation else '', 'C3X_RENDERER_NATIVE_NAVIGATION_TEST':'1' if args.native_navigation else '', 'C3X_RENDERER_NATIVE_RECOVERY_TEST':'1' if args.native_recovery else '', 'C3X_RENDERER_GPU_CAMERA_IDENTITY_TEST':'1' if args.atomic_camera_views else '', 'C3X_RENDERER_GPU_CAMERA_TEST':'1' if args.camera_requests else '','C3X_RENDERER_SCROLL_COVERAGE_TEST':'1' if args.scroll_coverage else '','C3X_RENDERER_NATIVE_FRAME_BENCHMARK':'1' if args.benchmark else '',
+        'C3X_RENDERER_OUTPUT_COMPLETION_PROBE':'1' if args.completion_probe else '0',
+        'C3X_RENDERER_DIAGNOSTIC_HALF_PIXELS':'1' if args.half_pixels else '0',
         'C3X_RENDERER_PROFILE':'1' if args.profile else '0','C3X_RENDERER_GROUND_WORKERS':args.ground_workers,'C3X_RENDERER_OBJECT_WORKERS':args.object_workers,
         'C3X_RENDERER_TRACE':'2','C3X_RENDERER_TRACE_MIB':'32','C3X_RENDERER_TRACE_BUFFERED':'1' if args.benchmark or args.visual_only or args.world_readiness else '', 'C3X_RENDERER_TRACE_FILE':str(target/'renderer.log'),
         'C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS':r'..\..\Renderer\custom.custom_rendering.txt',
@@ -156,6 +162,7 @@ def main(argv=None):
         receipt['native_camera_scope']='Pending polls exclude render waits; ready polls include session import/admission. Completion includes test-driver scheduling. The native fixture services completion hints; the live bridge retries through the unchanged native Animator cadence. This is not live-game latency.'
     dropped=sum(int(value) for value in re.findall(r'TRACE_BUFFER dropped=(\d+)',trace))
     receipt['binary_provenance']=binary_provenance
+    receipt['diagnostic_only']=bool(args.completion_probe or args.half_pixels)
     receipt['trace_coverage']={'dropped_lines':dropped,'complete':bool(trace) and dropped==0}
     resident_units=[line for line in trace.splitlines() if 'resident_pose=1' in line or 'direct_scene=1' in line]
     resident_proof=bool(resident_units) and any('cache_hit=0' in line for line in resident_units) and any('cache_hit=1' in line for line in resident_units) and all('body_readbacks=0 composition_uploads=0' in line for line in resident_units)

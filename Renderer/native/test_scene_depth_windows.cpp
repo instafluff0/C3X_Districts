@@ -65,7 +65,7 @@ int main(){
     context->VSSetConstantBuffers(1,1,&viewport_buffer);context->PSSetConstantBuffers(0,1,&color_buffer);
     UINT stride=48,offset=0;context->IASetVertexBuffers(0,1,&vertices,&stride,&offset);
     context->OMSetDepthStencilState(depth_state,0);context->RSSetState(rasterizer);
-    float world_depth_offset=0;bool streamed=false,packed_mesh=false,narrow_mesh=false;unsigned parameter_index=0;
+    float world_depth_offset=0;bool streamed=false,packed_mesh=false,narrow_mesh=false,short_parameters=false;unsigned parameter_index=0;
     c3x_renderer::render_core::DrawParameterStream parameters;
     auto view=[&](int top,int height,float depth_translation){
         float settings[12]={0,-float(top),depth_translation+world_depth_offset,0,1.f/128,1.f/height,128,0};
@@ -74,10 +74,12 @@ int main(){
             // Unused entries deliberately disagree. Exercise the final legal
             // range and DISCARD while previous commands still borrow the buffer.
             for(auto& record:batch)record[0]=10000;
-            unsigned index=std::array<unsigned,3>{0,17,255}[parameter_index++%3];
+            unsigned count=short_parameters?std::array<unsigned,4>{3,17,127,256}[parameter_index%4]:256;
+            unsigned index=short_parameters?count-1:std::array<unsigned,3>{0,17,255}[parameter_index%3];
+            ++parameter_index;
             std::memcpy(batch[index].data(),settings,sizeof(settings));
             assert(!parameters.upload(batch.data(),0) && !parameters.upload(batch.data(),257));
-            assert(parameters.upload(batch.data(),256));parameters.bind(1,index);
+            assert(parameters.upload(batch.data(),count));parameters.bind(1,index);
         }else{
             context->VSSetConstantBuffers(1,1,&viewport_buffer);
             context->UpdateSubresource(viewport_buffer,0,nullptr,settings,0,0);
@@ -149,6 +151,19 @@ int main(){
             assert(render(false,false,true)==coplanar && render(true,false,true)==coplanar);
         }
         assert(parameters.uploads>32 && parameters.records==parameters.uploads*256);
+        auto supported=parameters.no_overwrite;
+        for(bool append:{false,true}){
+            parameters.no_overwrite=append && supported;
+            short_parameters=true;
+            for(int repeat=0;repeat<12;++repeat){
+                world_depth_offset=repeat*128.f;
+                assert(render(false,false,false)==ordinary && render(true,false,false)==ordinary);
+                assert(render(false,false,true)==coplanar && render(true,false,true)==coplanar);
+            }
+        }
+        std::printf("PASS parameter append/wrap and DISCARD fallback: supported=%u uploads=%u discards=%u\n",
+            unsigned(supported),parameters.uploads,parameters.discards);
+        short_parameters=false;
         parameters.clear();assert(parameters.available(device,context));
         world_depth_offset=0;assert(render(true,false,false)==ordinary);
         std::puts("PASS selected parameter stream: exact color/depth, first/middle/last ranges, DISCARD lifetimes and reset");

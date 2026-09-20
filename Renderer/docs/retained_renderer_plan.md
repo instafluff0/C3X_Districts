@@ -24,80 +24,110 @@ testing remain with the user. Performance acceptance is still pending.
 
 ## M3.8 current handoff — in progress
 
-**Immediate live-game fix:** the city-close/worker-selection report exposed an
-incorrect route-cursor ABI. The GOG target at `0x004E45E0` uses callee cleanup
-(`RET 8`); the custom `__cdecl` wrapper left two coordinates on the caller stack.
-The wrapper and native fallback now use `__stdcall`, without a CSV edit or DLL
-change. The x86 negative control reproduces an eight-byte imbalance; the corrected
-wrapper passes 400 custom/config-off/fallback calls. Ten zoom/UI tests and the
-approved injected compile/injection smoke test pass. Re-run `INSTALL.bat` for
-the fixed bridge; the user's exact live-game sequence remains to be confirmed.
-See [the patch-ledger correction](civ3_patch_dependency_ledger.md#route-cursor-abi-crash-correction).
-
-**Playable evaluation checkpoint:** `bin/C3XRenderer.dll`, SHA-256
+**Playable evaluation remains unchanged:** `bin/C3XRenderer.dll`, SHA-256
 `ea22ea53d835b0085de6c034a4ae4d2fa9e7bf9bec3545d497c0a4c6c8f17e74`.
-Production build, current-source identity, complete workload, atomic camera/
-recovery/fog/tactical checks and the approved injected compile smoke test passed.
-`native/build/m38-production-{workload,recovery,standard}/` retains the receipts.
-The Standard production run prepared all 247 regions, then completed 100 jumps
-at **205.26 / 230.53 / 276.13 ms mean / p95 / max**, with zero builds, uploads or
-readbacks and six exact cold-image oracles. Minimum contiguous VA was 1134.06 MiB.
-The complete workload's GPU request / desktop mean (p95) in milliseconds was:
-idle 16.79 (33.29) / 24.67 (49.40), scrolling 78.37 (129.75) / 87.69 (133.57),
-local edit 15.46 (42.94) / 21.02 (49.39). The separate 120-frame, 32-worker-unit
-visual run measured 35.63 (54.52) / 46.14 (67.38). All water effects were on.
-The prior DLL is preserved under `native/build/m38-evaluation-rollback/`.
-See [running the GPU evaluation](renderer_config_spec.md#running-the-current-gpu-evaluation-build).
-No installer or game was launched by the agent; this is not live-game acceptance.
+The city-close route-cursor ABI fix is committed in `10c3f084`: the GOG wrapper
+and fallback now use the target's `RET 8` / `__stdcall` contract. The x86 negative
+control reproduces the former eight-byte stack imbalance; 400 corrected calls,
+ten zoom/UI tests and the approved injected smoke test passed. Re-run `INSTALL.bat`
+for that bridge fix; the exact live-game sequence remains unconfirmed. No game
+was launched by the agent. See [running the evaluation](renderer_config_spec.md#running-the-current-gpu-evaluation-build)
+and [the ABI correction](civ3_patch_dependency_ledger.md#route-cursor-abi-crash-correction).
 
-Whole-world appearance now enters through bounded caller-thread pages; the
-existing publication/world owners retain copied values. The existing workers
-prepare canonical regions and wrapped edge occurrences independently of the
-camera route. A bounded 1 GiB, delete-on-close compressed session file preserves
-compiled meshes and dependency proofs across GPU eviction. Map/viewer/config
-scope retirement clears it. Workers never read native objects. Foreground
-adoption still validates proofs and owns GPU publication.
+Whole-world appearance enters through bounded caller-thread pages. Existing
+workers prepare canonical regions and wrapped occurrences independently of the
+camera route, using immutable renderer-owned inputs. A bounded 1 GiB compressed
+session backing preserves compiled meshes/proofs across GPU eviction; lifecycle
+retirement clears it. Foreground adoption validates proofs before publication.
+Workers never read native pointers. City vertices retain their consumed channels
+in 88 rather than 168 bytes; rigid infrastructure shares source buffers and
+compact placements across color/reflection/shadow passes. Flat and conforming
+pieces preserve their original order and bounds. Normal geometry caps remain
+768 MiB for Standard and 384 MiB above 8,192 actual tiles.
 
-City vertices now retain the same consumed float channels in 88 rather than
-168 bytes. Height-bearing rigid infrastructure references shared source buffers
-plus compact placements; flat and terrain-conforming pieces keep their ordered
-grouped geometry. Color, reflections and casters share the same placement math.
-The original combined layer bounds preserve water ordering and pass context;
-individual placement versions prevent same-asset instances from aliasing.
+**Current isolated candidate:** `native/build/m38-parameter-append/C3XRenderer.dll`,
+SHA-256 `7cbbfe9d65eccb7af834ad0ef8afbb56175919fa879a114eb709266876ea2247`.
+It has not replaced the playable DLL. Optional off-screen guard drawing and its
+blocking driver flush are retired; visible damage still uses the retained scene.
+Fully invalid attachments use direct color/depth clears. Mirror cells use the
+existing conservative spatial index for ordered draw traversal while complete
+inputs still authorize shadows and lighting. Cache eviction transfers a compatible
+reflection texture to the next cell instead of creating another allocation. The
+same 256 MiB cache cap, exact dependency keys and ordered GPU copies apply.
+Draw constants append into unused ranges of the same 64 KiB allocation when
+supported, with DISCARD on wrap and the existing older-driver fallback.
 
-The measured candidate is `native/build/m38-shared-world/C3XRenderer.dll`.
-At 1120×1192, full detail, dense world-fixed objects and all water effects on,
-each campaign completely prepared its declared world before 100 seeded jumps:
+**Corrected timing evidence:** exclude `m38-standard-unprofiled` performance because
+the user was playing Civ III concurrently. Earlier `--profile` campaigns include
+costly in-request address-space walks/buffer enumeration and are diagnostic, not
+ordinary production latency. Subsequent runs closed the game, serialized GPU work
+and disabled profiling, at 1120×1192 with full detail and all water effects on.
+Each Standard campaign prepared all 5,000 tiles / 247 regions before 100 seeded
+jumps to 98 distinct destinations. No world builds, restores, geometry uploads or
+map readbacks occurred; all six independent cold-image comparisons passed.
 
-| World / geometry cap | First GPU / additional preparation s | Desktop mean / p95 / max ms | Uploaded GB | Minimum contiguous VA MiB |
-| --- | ---: | ---: | ---: | ---: |
-| Standard, 5,000 tiles / 768 MiB | 1.906 / 10.594 | 201.28 / 233.62 / 307.20 | 0 | 1132.69 |
-| Huge, 12,800 tiles / 384 MiB | 1.953 / 24.843 | 428.60 / 691.12 / 775.11 | 3.71 | 903.47 |
+| Clean Standard campaign | Request mean / p95 ms | Desktop mean / p95 / max ms |
+| --- | ---: | ---: |
+| Evaluation control (`m38-standard-clean-baseline`) | 144.32 / 534.02 | 171.61 / 540.56 / 644.37 |
+| Mirror-selection candidate (`m38-standard-selected-mirrors`) | 70.73 / 102.63 | 168.07 / 645.51 / 932.95 |
+| Same candidate, VM raised (`m38-standard-visible-vm`) | 71.36 / 131.34 | 199.34 / 814.50 / 1212.04 |
+| Current buffer-reuse candidate (`m38-standard-parameter-append`) | 73.00 / 127.94 | 202.63 / 696.84 / 1111.78 |
 
-Receipts: `native/build/m38-normal-shared-world/` and `m38-huge-shared384/`.
-Standard completed 247 regions; all 100 jumps needed **zero world builds,
-restores, static-geometry uploads or map readbacks**. Retained geometry occupied
-455.6 MiB, plus about 3 MiB shared sources and the bounded instance stream.
-Huge completed 520 regions and made zero combined world-compiler calls, but
-restored/re-uploaded prepared content. Six independent warm/cold image checks
-passed exactly in each campaign. Comparing the six Standard images with expanded
-geometry found only three differing pixels total (maximum RGB difference 4);
-the focused shadow-on/off controls matched exactly. The 28 affected rigid-object,
-object-compiler, backing and zoom-cache tests passed.
+**No overall speedup is established.** Removing optional submission and allocation
+churn shortened request handling, but long waits migrated into foreground drawing
+or presentation. Raising the VM did not remove them. Draw bounds tests fell from
+37,994 to 3,409 per jump; 3,644 mirror textures were recycled in the timed campaign.
+Those are eliminated-work measurements, not a latency win. Minimum contiguous VA
+was 1,121 MiB in the mirror-selection run. Six images also match the unchanged
+control byte-for-byte; full detail and visual acceptance remain intact. Buffer
+reuse reduces full-buffer discards from 64.85 to 12.58 per jump (81%), but does
+not establish a latency improvement. Its six saved images also match exactly;
+the native D3D test passes append, wrap, fallback, depth and in-flight lifetimes.
 
-The prior compact expanded-geometry controls measured Standard 221.52 / 362.39 ms
-mean / p95 and Huge 611.93 / 995.45 ms with 9.57 GB uploaded. Source sharing
-removed roughly 61% of Huge upload volume in these single-run comparisons.
-An earlier expanded-geometry capacity sweep at 384/512/640 MiB reduced uploads
-without improving latency; 640 MiB also failed the 512 MiB VA headroom floor.
-Keep the current caps. Higher budgets require measured benefit on the VM.
+A rejected adjacent-rigid batching experiment (`m38-standard-rigid-batches`)
+saved only 0.48 draws per jump out of about 2,639. Its six images remained exact,
+but desktop mean / p95 was 199.58 / 842.89 ms; the extra batching code was removed.
 
-**Next unfinished responsibility:** make selection/submission and actual view
-rendering cheap now that Standard destinations are resident, finish prompt native
-cutover for every camera trigger, and complete edit/lifecycle/live-input evidence.
-The **Standard-map <33 ms p95 target is unpassed**; every measured jump above
-exceeded 100 ms. Fixture latency includes desktop completion but excludes Civ III
-input, native capture and overlays. Huge paging remains separately visible.
+A viewport-sized scene experiment (`m38-standard-view-sized-scene`) reduced
+attachments and improved minimum contiguous VA to 1,208 MiB, but desktop mean /
+p95 was 210.00 / 760.00 ms. Three saved views differed from the control, including
+a maximum channel delta of 67. The off-screen margin removal was reverted.
+
+The existing completion probe is diagnostic only: GPU EVENT queries reported
+completion within fractions of a millisecond while a subsequent one-pixel readback
+waited hundreds of milliseconds. Do not infer pure GPU phase cost from those queries
+on this VM. A half-coverage diagnostic reduced desktop mean from 164.12 to 98.42 ms
+on the preceding texture-reuse candidate, implicating substantial pixel work; it
+is not a quality change, acceptance result or usable build. VM system RAM had ample
+headroom; the adapter reports 2 GiB, not a measured residency budget.
+
+The current complete workload (`m38-append-workload`) passed idle animation,
+scrolling, local edits, tactical overlays, native composition/fallback and 120
+independent opportunities with 32 working units. Desktop mean (p95) ms:
+idle 24.41 (34.71), scrolling 104.60 (166.67), edit 24.94 (50.55), unit frames
+49.04 (68.19). The clean evaluation control (`m38-clean-control-workload`) measured
+22.61 (33.57), 97.82 (165.73), 27.03 (50.02), and 50.91 (83.63), respectively.
+These mixed results do not establish a broad speedup. `m38-append-recovery`
+passes 16 atomic identity cases, four cancellation/config-off/reset/recreation
+cases, fog freezing/reveal and tactical controls. All three current receipts
+confirm unchanged source inputs. All 23 affected scene, worker, cache and native
+D3D depth/parameter tests pass. No injected sources changed in this segment.
+
+Huge capacity remains supported separately: the earlier profiling-enabled run
+prepared 12,800 tiles / 520 regions, made zero combined compiler calls, uploaded
+3.71 GB after eviction, and retained 903 MiB contiguous VA. Its timings must not
+be compared directly with these unprofiled Standard runs. Shared sources occupied
+about 3 MiB; Standard retained geometry occupied 455.6 MiB. Keep current budgets;
+raising prior expanded-geometry caps consumed address space without latency benefit.
+
+**Next unfinished responsibility:** reduce actual GPU pixel/pass work and establish
+reliable coherent-display latency, rather than moving waits between endpoints.
+Then finish prompt native cutover for every camera trigger and remaining
+edit/lifecycle/live-input evidence. **M3.8 and the Standard <33 ms p95 target remain
+unpassed.** Fixture timing excludes Civ III input, capture and native overlays;
+manual pans can defer, while selection/action/programmatic centering still preserves
+its exact native path. Do not advertise this candidate as faster or promote it
+based on shorter request handling alone.
 
 ## M3.7 accepted handoff (preserved)
 

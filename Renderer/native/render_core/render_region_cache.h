@@ -38,13 +38,19 @@ public:
         // Include retained capacity and a conservative map-node allowance.
         return key.capacity()*sizeof(key[0])+sizeof(Entry)+sizeof(RenderRegionKey)+64;
     }
-    bool make_room(RenderRegionKey const& key,std::size_t bytes){
+    // May transfer one evicted allocation to the caller for ordered reuse.
+    // Matching byte size is not format compatibility; the caller checks the
+    // resource description and releases any allocation it cannot reuse.
+    bool make_room(RenderRegionKey const& key,std::size_t bytes,Resource** recycled=nullptr){
         auto metadata=metadata_size(key);
         if(key.empty() || key.size()>key_words_limit || bytes>gpu_budget || metadata>metadata_limit)return false;
         while(!entries.empty() && (gpu_bytes+bytes>gpu_budget ||
               metadata_bytes+metadata>metadata_limit || entries.size()>=entry_limit)){
             auto oldest=std::min_element(entries.begin(),entries.end(),[](auto const& a,auto const& b){return a.second.age<b.second.age;});
             gpu_bytes-=oldest->second.gpu_bytes;metadata_bytes-=oldest->second.metadata_bytes;
+            if(recycled && !*recycled && oldest->second.gpu_bytes==bytes){
+                *recycled=oldest->second.image;oldest->second.image=nullptr;
+            }
             entries.erase(oldest);++evictions;
         }
         return gpu_bytes+bytes<=gpu_budget && metadata_bytes+metadata<=metadata_limit;

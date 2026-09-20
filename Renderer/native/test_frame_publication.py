@@ -393,12 +393,10 @@ struct RendererState {
     std::atomic<bool> hold{false};
     std::atomic<long long> hold_clock{-1};
     std::atomic<unsigned> target_clock_entries{0};
-    bool animate_pixels=false,fail_render=false,world_preparation=false,scene_guard_failed=false;
+    bool animate_pixels=false,fail_render=false,world_preparation=false;
     bool shared_scene_surface=false;
     std::vector<std::uint64_t> prepared_view_dependencies()const{return {};}
     bool throw_cancellation=false,throw_failure=false;
-    bool scene_guard_pending()const{return false;}
-    bool prepare_scene_guard(std::atomic<bool> const&){return true;}
     bool render(c3x_renderer_frame_v1 const& f,c3x_renderer_output_v1& out,int=-1,
                 std::atomic<bool> const* stop=nullptr,std::uint64_t=0,unsigned const* =nullptr,unsigned=0,c3x_renderer_frame_v1 const* =nullptr,D3D11_RECT const* =nullptr){
         ++entered;

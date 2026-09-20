@@ -24,7 +24,10 @@ explicitly. Broad CPU/GPU scene preparation and final pixel prefetch have differ
 costs; account for both, useful work surviving cancellation and publication age.
 
 Compare preserved control and candidate with equivalent state, serial GPU work and
-matched/alternated runs. No benchmark may overlap compilation or another GPU test.
+matched/alternated runs. Close Civ III before standalone timing and verify that
+its process and prior benchmark processes have exited. No benchmark may overlap
+compilation, live play or another GPU test; exclude overlapped performance
+results explicitly while retaining their correctness evidence.
 Report sample counts and variation; close results are inconclusive. Do not infer
 p99 from short runs. Detailed traces should be buffered outside timed work.
 Before claiming acceptance, verify full source/binary/assets identities before and
@@ -127,10 +130,17 @@ and counters:
   record sampling limits and retain the 512 MiB contiguous-headroom floor.
 
 Counters missing from current instrumentation are unmeasured, not zero. Normal
-production timing remains separate from costly profiling; preserve source/binary,
+production timing remains separate from costly profiling. `--profile` currently
+includes repeated address-space walks and resident-buffer enumeration inside
+requests; its latency is diagnostic, not ordinary production performance. Preserve source/binary,
 assets, clocks, memory limits and quality in comparisons. On this VM, rejected or
 unstable GPU timestamps cannot establish shader cost: use validated timing or
-bounded causal ablations and report uncertainty.
+bounded causal ablations and report uncertainty. `record_gpu_frame` exposes the
+existing `--completion-probe` and `--half-pixels` oracle controls explicitly;
+receipts mark them diagnostic-only and reject a production DLL without those
+controls. The latter changes coverage and cannot establish visual acceptance.
+On this VM an EVENT query can report readiness before a one-pixel readback stops
+waiting; neither query readiness nor short CPU submission proves completed pixels.
 
 Resident, unchanged destinations require zero static-world compilation,
 static-geometry allocation/upload, foreground content joins and map readback.

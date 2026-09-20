@@ -63,6 +63,13 @@ per-vertex data plus per-instance inputs through
 [DrawIndexedInstanced](https://learn.microsoft.com/en-us/windows/win32/api/d3d11/nf-d3d11-id3d11devicecontext-drawindexedinstanced);
 an API migration is not a prerequisite for that representation.
 
+The native presenter retains the blt-model swap chain because configuration-off
+and ownership barriers must restore Civ III's GDI drawing on the same HWND.
+Microsoft documents that [flip-model presentation disables ordinary GDI on that
+HWND even after destroying the swap chain](https://learn.microsoft.com/en-us/windows/win32/api/dxgi/ne-dxgi-dxgi_swap_effect).
+Changing the swap effect alone is therefore incompatible with this fallback
+contract; it is not an authorized performance shortcut.
+
 ## Ownership and data flow
 
 ```text
@@ -114,7 +121,11 @@ their existing asset/content owners. Changed meshes share an immutable allocatio
 within each residency owner; camera-specific and shared world content never share
 an allocation across independent eviction lifetimes. Selected occurrences retain
 their native projection. Adjacent pass layers share a submission while their
-receiver-shadow pages fit; draw parameters upload in bounded batches. Color,
+receiver-shadow pages fit; draw parameters upload in bounded batches. Their single
+64 KiB stream appends into untouched ranges when the driver supports
+[dynamic constant-buffer NO_OVERWRITE](https://learn.microsoft.com/en-us/windows/win32/api/d3d11/ne-d3d11-d3d11_map),
+discarding only on wrap. Unsupported drivers keep per-batch DISCARD. Offsets and
+sizes retain 256-byte alignment, and queued ranges are never overwritten. Color,
 reflection and shadow consumers use the same mesh ranges and established order.
 Unique terrain/city/infrastructure meshes remain valid retained representations;
 forest instances additionally share source geometry. This does not require every
@@ -177,8 +188,12 @@ Neither backing nor eviction candidates introduce a second render-world owner.
 Current captured occurrences take priority in compilation and foreground
 adoption; surrounding working-area content follows. Native occurrence/pass order
 is unchanged. A completed GPU camera awaiting adoption also retains priority over
-optional map, unit-pose and guard preparation. Current demand must not acquire an
-unrelated speculative wait merely because its map assembly has just completed.
+optional map and unit-pose preparation. Retained scene surfaces draw only the
+pixels needed by actual view damage; speculative off-screen guard drawing is
+retired because its driver submission could block new camera demand. Current
+demand must not acquire an unrelated speculative wait merely because its map
+assembly has just completed. Whole-world geometry preparation remains independent
+of the camera route.
 
 `object_compiler.h` separates connectivity/part selection from CPU geometry.
 `city_fidelity/compiler.h` retains material chunks, lighting/blockers, source
@@ -244,7 +259,13 @@ samples, draws shadow/foam/body contributions in order against scene depth, and
 finishes their union once. Time changes upload no terrain or ribbon geometry.
 The shared path admits waves and reflections together. Reflections retain a
 guarded resolved linear image; world-aligned mirror cells reuse the existing
-dependency cache and small MSAA scratch. Static mirror inputs do not depend on
+dependency cache and small MSAA scratch. Eviction can transfer one compatible
+texture allocation to the next cell after retiring its old dependency key; the
+caller validates the full descriptor and preserves same-context GPU ordering.
+Mirror draw traversal uses the existing conservative spatial index, retaining
+original occurrence order and complete shadow/lighting authorization. Fully
+invalid retained attachments use direct clears; partial damage preserves exact
+MSAA samples. Static mirror inputs do not depend on
 the water clock. Conservative uploaded-sample coverage rejects dry water/bed
 passes; mirror cells without a possible water receiver remain clear. Shared tree
 meshes feed mirror, color and shadow passes. Exact material batches and their

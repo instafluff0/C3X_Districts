@@ -503,7 +503,7 @@ public:
     std::vector<D3D11_RECT> scene_damage;
     c3x_renderer::render_core::SceneGuard<D3D11_RECT> scene_guard;
     c3x_renderer::render_core::RenderRegionKey scene_guard_context;
-    int scene_guard_pad=0;bool scene_guard_failed=false;
+    int scene_guard_pad=0;
     std::uint64_t scene_guard_depth_origin=0;
     int scene_region_size=128;
     int scene_region_height=128;
@@ -4237,13 +4237,19 @@ public:
         return order;
     }
 
-    bool draw_scene_guard(std::vector<D3D11_RECT> const& rectangles,bool background=false) {
+    bool draw_scene_guard(std::vector<D3D11_RECT> const& rectangles) {
         if(rectangles.empty())return true;
         auto& glow=region_glow;
         ViewportShaderSettings settings=geometry_viewport_settings;
         settings.translation[0]+=4+scene_guard_pad;settings.translation[1]+=4+scene_guard_pad;
         settings.inverse_size[0]=1.f/scene_guard.width;settings.inverse_size[1]=1.f/scene_guard.height;
-        for(auto rect:rectangles){std::vector<D3D11_RECT> one={rect};
+        if(scene_guard.pending==scene_guard.dirty.size()){
+            // No retained sample is valid. Clear the whole attachment directly
+            // instead of shading every MSAA sample just to write zero/depth-one.
+            // Only the successfully drawn rectangles become valid below.
+            float clear[4]={};context->ClearRenderTargetView(scene_scratch.target,clear);
+            context->ClearDepthStencilView(scene_scratch.depth,D3D11_CLEAR_DEPTH|D3D11_CLEAR_STENCIL,1,0);
+        }else for(auto rect:rectangles){std::vector<D3D11_RECT> one={rect};
             if(!scene_restore.draw(context,scene_scratch,glow.linear.samples,glow.linear.depth_samples,0,0,one,&one))return false;
         }
         std::vector<c3x_renderer::city_fidelity::Lighting const*> lights;
@@ -4258,26 +4264,8 @@ public:
         scene_guard.commit(rectangles);
         std::size_t prepared_pixels=0;for(auto r:rectangles)prepared_pixels+=std::size_t(r.right-r.left)*(r.bottom-r.top);
         char detail[224];sprintf_s(detail,"background=%u pixels=%zu selected=%u batches=%u pending_cells=%zu pad=%d target_bytes=%zu",
-            unsigned(background),prepared_pixels,selected,batches,scene_guard.pending,scene_guard_pad,scene_scratch.bytes());
+            0u,prepared_pixels,selected,batches,scene_guard.pending,scene_guard_pad,scene_scratch.bytes());
         trace.write("scene-guard-submit",detail,true);return true;
-    }
-
-    bool scene_guard_pending() const {
-        return world_preparation && shared_scene_surface && scene_guard_pad && !scene_guard_failed &&
-            scene_guard.pending && scene_scratch.color && cache_valid && geometry_cache.valid;
-    }
-    bool prepare_scene_guard(std::atomic<bool> const& cancelled) {
-        if(!scene_guard_pending() || cancelled.load(std::memory_order_relaxed))return true;
-        auto rectangles=scene_guard.select({},128u*1024u);
-        LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
-        bool ok=draw_scene_guard(rectangles,true);
-        if(!ok){scene_guard.invalidate_all();scene_guard_failed=true;}
-        // Submit to the existing GPU owner without readback or a completion wait.
-        // A later foreground request executes after these commands in order.
-        context->Flush();QueryPerformanceCounter(&end);
-        char detail[160];sprintf_s(detail,"ok=%u submit_ms=%.3f pending_cells=%zu readbacks=0",
-            unsigned(ok),trace.milliseconds(end.QuadPart-begin.QuadPart),scene_guard.pending);
-        trace.write("scene-guard-prepared",detail,true);return ok;
     }
 
     bool draw_scene_unit(int region_width,int region_height,c3x_renderer_unit_v1 const& unit,unsigned predict,
@@ -4315,7 +4303,8 @@ public:
                FAILED(device->CreateRenderTargetView(scene_reflection_texture,nullptr,&scene_reflection_clear)))return false;
             scene_reflection_width=w;scene_reflection_height=h;
         }
-        unsigned built=0,reused=0,unneeded=0;
+        unsigned built=0,reused=0,unneeded=0,allocations=0,recycled=0;
+        double allocation_ms=0;
         LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
         if(scene_reflection_signature!=cached_signature.complete){
             // Reuse the existing bounded mirror scratch and exact dependency
@@ -4361,10 +4350,23 @@ public:
                         std::size_t bytes=288u*288u*8u;
                         ID3D11Texture2D* saved=nullptr;
                         D3D11_TEXTURE2D_DESC desc={};reflection.linear.resolved->GetDesc(&desc);
-                        if(render_regions.make_room(key,bytes) && SUCCEEDED(device->CreateTexture2D(&desc,nullptr,&saved))){
-                            context->CopyResource(saved,reflection.linear.resolved);
-                            if(render_regions.insert(std::move(key),saved,bytes)){image=saved;saved=nullptr;}
+                        // Reuse a matching evicted allocation instead of creating
+                        // and destroying a GPU texture for every cold mirror cell.
+                        // Copies execute in order on this same immediate context;
+                        // the old dependency key is retired before pixels change.
+                        auto allocation_begin=std::chrono::steady_clock::now();
+                        if(render_regions.make_room(key,bytes,&saved)){
+                            if(saved){D3D11_TEXTURE2D_DESC old={};saved->GetDesc(&old);
+                                if(std::memcmp(&old,&desc,sizeof(desc)))release(saved);
+                                else ++recycled;
+                            }
+                            if(!saved && SUCCEEDED(device->CreateTexture2D(&desc,nullptr,&saved)))++allocations;
+                            if(saved){
+                                context->CopyResource(saved,reflection.linear.resolved);
+                                if(render_regions.insert(std::move(key),saved,bytes)){image=saved;saved=nullptr;}
+                            }
                         }
+                        allocation_ms+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-allocation_begin).count();
                         release(saved);
                     }
                 }
@@ -4377,8 +4379,8 @@ public:
             scene_reflection_signature=cached_signature.complete;
         }
         QueryPerformanceCounter(&end);
-        char detail[256];sprintf_s(detail,"built=%u reused=%u unneeded=%u atlas_bytes=%zu cache_bytes=%zu cache_metadata=%zu ms=%.3f",
-            built,reused,unneeded,std::size_t(w)*h*32,render_regions.gpu_bytes,render_regions.metadata_bytes,trace.milliseconds(end.QuadPart-begin.QuadPart));
+        char detail[320];sprintf_s(detail,"built=%u reused=%u unneeded=%u atlas_bytes=%zu cache_bytes=%zu cache_metadata=%zu ms=%.3f allocations=%u recycled=%u allocation_ms=%.3f",
+            built,reused,unneeded,std::size_t(w)*h*32,render_regions.gpu_bytes,render_regions.metadata_bytes,trace.milliseconds(end.QuadPart-begin.QuadPart),allocations,recycled,allocation_ms);
         trace.write("scene-reflection",detail,true);return true;
     }
 
@@ -4659,8 +4661,8 @@ public:
         trace.write("scene-waves",detail,true);
         sprintf_s(detail,"active=%u visible=%u time=%.3f geometry_upload_bytes=0",unsigned(water_scene_active),visible_water_animations,water_time_seconds);
         trace.write("scene-water",detail,true);
-        sprintf_s(detail,"content_uploads=%u setups=%llu layers=%llu draws=%llu parameter_updates=%llu bounds_tests=%llu parameter_uploads=%u parameter_records=%u issue_ms=%.3f selection_ms=%.3f execute_ms=%.3f prepared_meshes=%u foreground_meshes=%u prepared_vertex_bytes=%zu",
-            frame_content_uploads,frame_pass_setups,frame_active_layers,frame_draw_calls,frame_parameter_updates,frame_bounds_tests,draw_parameters.uploads,draw_parameters.records,
+        sprintf_s(detail,"content_uploads=%u setups=%llu layers=%llu draws=%llu parameter_updates=%llu bounds_tests=%llu parameter_uploads=%u parameter_records=%u parameter_discards=%u issue_ms=%.3f selection_ms=%.3f execute_ms=%.3f prepared_meshes=%u foreground_meshes=%u prepared_vertex_bytes=%zu",
+            frame_content_uploads,frame_pass_setups,frame_active_layers,frame_draw_calls,frame_parameter_updates,frame_bounds_tests,draw_parameters.uploads,draw_parameters.records,draw_parameters.discards,
             frame_geometry_issue_ms,frame_scene_select_ms,frame_scene_execute_ms,frame_prepared_meshes,frame_foreground_meshes,frame_prepared_vertex_bytes);
         trace.write("selected-pass-submission",detail,true);
         sprintf_s(detail,"incremental=%u resolve_pixels=%zu finish_rects=%zu readback_rects=%zu",
@@ -6004,6 +6006,24 @@ public:
                 return true;
             }
         }
+        GeometryDrawView::Records selected_draws;
+        GeometryDrawView draw_inputs=buffers;
+        if(reflection_pass && buffers.is(geometry_vertex_buffers) && rectangles.size()==1 &&
+           region_contributors.ready && region_contributors.tile_width==shadow_tile_width &&
+           region_contributors.reflection_height==reflection.height_pixels){
+            // Select once for this mirror cell, preserving original layer and
+            // occurrence order. Shadow proofs and lighting still use the complete
+            // input view; only geometry traversal borrows this conservative subset.
+            auto rect=rectangles.front();
+            std::vector<c3x_renderer::render_core::RegionContributorIndex::Item> candidates;
+            try {
+                if(query_region_inputs(1,rect.left-int(settings.translation[0]),rect.top-int(settings.translation[1]),
+                        rect.right-rect.left,rect.bottom-rect.top,candidates)){
+                    for(auto item:candidates)selected_draws[item.first].push_back(geometry_vertex_buffers[item.first][item.second]);
+                    draw_inputs=selected_draws;
+                }
+            }catch(...){draw_inputs=buffers;}
+        }
         auto draw = [&](GeometryLayer layer) {
             if(water_scene_active && require_linear_backdrop && !reflection_pass &&
                (layer==geometry_water || layer==geometry_river || layer==geometry_shadow || layer==geometry_route ||
@@ -6016,7 +6036,7 @@ public:
                 context->VSSetShader(active_reflection.vs[provider],nullptr,0);
                 context->PSSetShader(active_reflection.ps[provider],nullptr,0);
             }
-            return draw_cached_geometry(layer, buffers, rectangles, settings, cancellation,reflection_pass);
+            return draw_cached_geometry(layer, draw_inputs, rectangles, settings, cancellation,reflection_pass);
         };
         ID3D11RenderTargetView * destination = target;
         c3x_renderer::render_core::LinearTarget * linear = nullptr;
@@ -6101,7 +6121,7 @@ public:
             if(!cities.lights(context,active)){trace.write("city-composition-failed","facade block capacity; no truncation",true);return false;}
         }
 
-        auto pass=buffers.pass();
+        auto pass=draw_inputs.pass();
         if (pass.any()) {
             ++frame_pass_setups;frame_active_layers+=pass.count();
             bool base_pass=false,cliff_pass=false;
@@ -6660,7 +6680,7 @@ public:
         profiling=GetEnvironmentVariableA("C3X_RENDERER_PROFILE",profile_option,sizeof(profile_option)) &&
             std::strcmp(profile_option,"1")==0;
         frame_draw_calls=frame_parameter_updates=frame_bounds_tests=0;
-        draw_parameters.uploads=draw_parameters.records=0;frame_content_uploads=frame_prepared_meshes=frame_foreground_meshes=0;frame_prepared_vertex_bytes=0;
+        draw_parameters.uploads=draw_parameters.records=draw_parameters.discards=0;frame_content_uploads=frame_prepared_meshes=frame_foreground_meshes=0;frame_prepared_vertex_bytes=0;
         frame_pass_setups=frame_active_layers=0;
         frame_geometry_issue_ms=frame_scene_select_ms=frame_scene_execute_ms=0;
         frame_caster_preparations=0;frame_post_lanes=0;
@@ -9813,7 +9833,7 @@ public:
             while(pad && std::size_t(w)*h*240u+std::size_t(w+pad*2)*(h+pad*2)*192u>1408u*1024u*1024u)pad-=32;
             bool compatible=scene_guard_pad==pad && scene_guard_context==region_context &&
                 scene_guard_depth_origin==std::uint64_t(scene_depth_origin) && scene_static_signature==cached_signature.complete;
-            scene_guard_pad=pad;scene_guard_failed=false;
+            scene_guard_pad=pad;
             if(!scene_guard.configure(int(w)+pad*2,int(h)+pad*2))return false;
             auto previous=bitmap_footprints,current=current_footprints;
             for(auto& f:previous){f.anchor_x+=pad+4;f.anchor_y+=pad+4;}
@@ -12370,12 +12390,10 @@ private:
                 if(!has_job && !camera_pending && !stop_requested){unit_pixels_turn=true;prepare_ahead(lock);}
                 continue;
             }
-            if(!has_job && !stop_requested && !camera_paused && !camera_pending && !(camera_gpu && camera_ready.resident.texture) && renderer_state.scene_guard_pending()) {
-                if(wake.wait_for(lock,std::chrono::milliseconds(2),[this]{return has_job || camera_pending || stop_requested;}))continue;
-                lock.unlock();
-                try{renderer_state.prepare_scene_guard(foreground_pending);}catch(...){renderer_state.scene_guard_failed=true;}
-                lock.lock();continue;
-            }
+            // Scene pixels are produced only for actual view damage. Optional
+            // off-screen drawing (including its driver Flush) used this same
+            // owner and could block a new camera request for hundreds of ms.
+            // Whole-world content preparation below remains independent of views.
             if (!has_job && !stop_requested && !camera_paused && !(camera_gpu && camera_ready.resident.texture) && warm_cursor < warm_order.size()) {
                 // Yield between individual tiles. A foreground request wakes
                 // this delay and cancels CPU construction before GPU upload.

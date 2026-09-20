@@ -14,25 +14,24 @@ class SceneSurfaceTests(unittest.TestCase):
 #include <cassert>
 struct Rect {int left,top,right,bottom;};
 struct State {
- bool world_preparation=true,shared_scene_surface=true,scene_guard_failed=false,cache_valid=true;
+ bool cache_valid=true;
  int scene_guard_pad=8;unsigned contributors=12;
  struct {bool valid=true;void clear(){valid=false;}} geometry_cache;
  struct {bool color=true;} scene_scratch;
  c3x_renderer::render_core::SceneGuard<Rect> scene_guard;
  std::uint64_t scene_static_signature=42,resource_pixel_signature=42;
  void clear_geometry_vertex_buffers(){contributors=0;}
-''' + method("bool scene_guard_pending() const {") + method("void discard_scene_view() {") + r'''
+''' + method("void discard_scene_view() {") + r'''
 };
 int main(){
  State s;assert(s.scene_guard.configure(64,48));
  s.scene_guard.commit(s.scene_guard.select({{8,8,56,40}}));
- assert(s.scene_guard_pending());s.discard_scene_view();
+ s.discard_scene_view();
  assert(!s.cache_valid && !s.resource_pixel_signature); // no cache-hit path into discarded inputs
  assert(!s.contributors && !s.geometry_cache.valid && !s.scene_static_signature);
- assert(!s.scene_guard_pending()); // idle worker cannot commit an empty draw
  assert(s.scene_guard.pending==s.scene_guard.dirty.size());
  s.geometry_cache.valid=true;s.cache_valid=true;s.contributors=12;
- assert(s.scene_guard_pending() && !s.scene_guard.select({{8,8,56,40}}).empty());
+ assert(!s.scene_guard.select({{8,8,56,40}}).empty());
 }
 ''')
 
