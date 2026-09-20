@@ -303,6 +303,12 @@ void compile_ground_surfaces(GroundCompileInput const & input, c3x_renderer_fram
             static_cast<float>(point.shore.rocky), static_cast<float>(point.shore.depth),
             owner_material[0], owner_material[1], owner_material[2], owner_material[3]
         };
+        if(river_surface && input.fidelity_profile){
+            auto flow=natural.river_sample({(tile.tile_x+tile.tile_y)*.5+u,(tile.tile_x-tile.tile_y)*.5+1-v}).flow;
+            // Relief-owner XY is unused by the river material; carry its
+            // immutable world-space flow without enlarging the vertex layout.
+            vertex.relief_owner_u=float(flow.x);vertex.relief_owner_v=float(flow.y);
+        }
         if (input.world_ground) {
             float elevation=relief_sample[0]*(128.f/224.f*.82f),base=(u+v)*32.f;
             vertex.x=64.f+(u-v)*64.f;vertex.y=base-elevation;vertex.z=base+elevation*.75f;

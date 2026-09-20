@@ -3125,6 +3125,9 @@ cbuffer NativeReflectionFrame : register(b5) {
  float4 NativeReflection; // world-height to native pixels, depth metric, plane Z, enabled
  float4 NativeReflectionTarget; // internal extent XY, sampling guard XY
 };
+cbuffer NativeWaterFrame : register(b10) { float4 native_water_sample; };
+#undef Q3_WATER_TIME
+#define Q3_WATER_TIME native_water_sample.x
 
 #define Q3_NATURAL_WATER 1
 #define Q3_OBJECT_REFLECTION 1
@@ -3137,8 +3140,11 @@ cbuffer NativeReflectionFrame : register(b5) {
 #ifdef Q3_OBJECT_REFLECTION
 Texture2D q3_object_reflection_texture : register(t121);
 #endif
-// Static Lab experiment: periodic source-detail patches and view-dependent
-// reflection. This is a generic adaptation, not recovered Civ VI equations.
+// Generic world-coherent surface motion; geometry and source textures remain
+// immutable. The caller supplies a visible or frozen presentation sample.
+#ifndef Q3_WATER_TIME
+#define Q3_WATER_TIME 0.0
+#endif
 float q3_natural_hash(float2 cell) {
  float period=c3x_world_material.x*q3_source_repeat(.6);
  if(period>0)cell-=floor(cell/period)*period;
@@ -3153,17 +3159,24 @@ float3 q3_natural_normal(PixelInput input) {
  float2 world=q3_source_world(input)+Q3_NATURAL_COORD_SHIFT;
  float2 patch_uv=world*q3_source_repeat(.6);
  float2 warp=float2(q3_natural_noise(patch_uv),q3_natural_noise(patch_uv+float2(7,13)))-.5;
- float2 uv0=world*float2(q3_source_repeat(.36),q3_source_repeat(.48))+warp*.16;
- float2 uv1=world*float2(q3_source_repeat(.72),q3_source_repeat(.94))+warp*.12+float2(.27,.61);
+ float time=Q3_WATER_TIME;
+ float2 uv0=world*float2(q3_source_repeat(.36),q3_source_repeat(.48))+warp*.16+time*float2(.018,.011);
+ float2 uv1=world*float2(q3_source_repeat(.72),q3_source_repeat(.94))+warp*.12+float2(.27,.61)+time*float2(-.027,.019);
  float2 a=water_large_lean0_texture.Sample(material_sampler,uv0).rg*2-1;
  float2 b=water_small_lean0_texture.Sample(material_sampler,uv1).rg*2-1;
- float2 secondary_uv=float2(world.y,-world.x)*float2(q3_source_repeat(1.12),q3_source_repeat(1.46))+warp*.1;
+ float2 secondary_uv=float2(world.y,-world.x)*float2(q3_source_repeat(1.12),q3_source_repeat(1.46))+warp*.1+time*float2(.013,-.023);
  float2 c=water_small_secondary_lean0_texture.Sample(material_sampler,secondary_uv).rg*2-1;
  // Rotate the crossing detail slope vector back to the world basis too.
  c=float2(-c.y,c.x);
  // Broad calm lanes interrupt the source pattern without per-tile phases.
  float envelope=lerp(.16,1,smoothstep(.20,.78,warp.x+.5));
  float2 slope=(a*.40+b*.38+c*.22)*envelope;
+ // Two low-frequency slopes supply broad swell at the map camera's scale.
+ // Spatial frequencies close at the world seam; no mesh motion or extra maps.
+ float2 broad=float2(q3_source_repeat(.54),q3_source_repeat(.22));
+ float2 crossing=float2(q3_source_repeat(.31),-q3_source_repeat(.63));
+ slope+=(normalize(broad)*cos(dot(world,broad)*6.2831853-time*.95)*.055
+  +normalize(crossing)*cos(dot(world,crossing)*6.2831853-time*1.23)*.026)*lerp(.45,1,envelope);
  slope*=lerp(.20,1,smoothstep(.015,.32,input.hydrology_data.w));
  return normalize(float3(-slope,1));
 }
@@ -3197,7 +3210,7 @@ float4 q3_natural_water(PixelInput input) {
 #endif
  float2 world=q3_source_world(input)+Q3_NATURAL_COORD_SHIFT;
  float2 micro=water_small_lean0_texture.Sample(material_sampler,
-  world*float2(q3_source_repeat(3.4),q3_source_repeat(4.12))+float2(.71,.29)).rg*2-1;
+  world*float2(q3_source_repeat(3.4),q3_source_repeat(4.12))+float2(.71,.29)+Q3_WATER_TIME*float2(-.09,.07)).rg*2-1;
  float sparkle=lerp(.22,1,smoothstep(.025,.16,length(micro)));
  float3 sunhalf=normalize(view+environment_sun_direction);
  float3 moonhalf=normalize(view+environment_moon_direction);
@@ -3302,10 +3315,28 @@ float4 q3_water_material(PixelInput input) {
   float optical_depth=.10+.32*(1-smoothstep(0,5.5,max(0,distance_pixels)));
   float3 transmitted=bed*exp(-optical_depth*float3(8,4,2));
   float3 river=lerp(transmitted,float3(.018,.074,.090),1-exp(-optical_depth*4));
-  float2 lean=river_lean0_texture.Sample(material_sampler,
-    world*float2(q3_source_repeat(.92),q3_source_repeat(1.27))).rg*2-1;
+  float2 river_uv=world*float2(q3_source_repeat(.92),q3_source_repeat(1.27));
+  float2 lean=river_lean0_texture.Sample(material_sampler,river_uv).rg*2-1;
+#if defined(Q3_WATER_TIME)
+  // Bounded two-phase advection hides resets while following the retained
+  // channel tangent. Spatial phase variation avoids synchronized pulsing.
+  if(Q3_WATER_TIME>0 && dot(input.relief_material.xy,input.relief_material.xy)>.01){
+   float phase=frac(Q3_WATER_TIME*.20+sediment_noise);
+   float other=frac(phase+.5),weight=1-abs(phase*2-1);
+   float2 flow=input.relief_material.xy*.27*float2(q3_source_repeat(.92),q3_source_repeat(1.27));
+   float2 a=river_lean0_texture.Sample(material_sampler,river_uv-flow*phase).rg*2-1;
+   float2 b=river_lean0_texture.Sample(material_sampler,river_uv+float2(.37,.61)-flow*other).rg*2-1;
+   lean=lerp(b,a,weight);
+  }
+#endif
   float3 river_normal=normalize(float3(-lean*.24,1));
   float3 water_light=q6_receiver_illumination(input,river_normal,1,1);
+  float3 river_view=normalize(float3(0,-.52,.86));
+  float3 river_glint=(environment_sun_color*environment_sun_intensity*
+    pow(saturate(dot(river_normal,normalize(river_view+environment_sun_direction))),48)
+    +environment_moon_color*environment_moon_intensity*
+    pow(saturate(dot(river_normal,normalize(river_view+environment_moon_direction))),48))
+    *.022*environment_water_specular*q6_receiver_visibility(input,river_normal,1);
   // Shade the existing bank grain and authored gravel, not the river surface.
   float bank_height=grain*.35+material_grain*.38+(gravel_height-.5)*gravel*.40;
   float mean_grain=river_height_texture.SampleBias(material_sampler,uv,2).r;
@@ -3314,7 +3345,7 @@ float4 q3_water_material(PixelInput input) {
   shore*=lerp(1,cavity,.65);
   float3 bank_normal=q3_margin_normal(input,bank_height,.045);
   float3 bank_light=q6_receiver_illumination(input,bank_normal,1,1);
-  return float4(lerp(shore*bank_light,river*water_light,water),bank);
+  return float4(lerp(shore*bank_light,river*water_light+river_glint,water),bank);
 #elif defined(Q3_STATIC_OPTICS_V2)
   // Keep the captured curve and navigable width. The source river bed remains
   // visible through shallow edges; narrow damp banks replace the sandy outline.

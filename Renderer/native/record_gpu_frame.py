@@ -24,6 +24,7 @@ def main(argv=None):
     parser.add_argument('--tile-width',type=int,choices=(64,128,160,192),default=128)
     parser.add_argument('--jgl',type=Path,default=Path('Renderer/native/build/gpu-composition/audit/jgl.dll'))
     parser.add_argument('--waves',choices=('0','1'),default='0',help='Enable the existing shoreline effect with identical controls in both comparison arms')
+    parser.add_argument('--water-motion',choices=('0','1'),default='1',help='Advance open-water and river material normals on the retained scene')
     parser.add_argument('--benchmark',action='store_true',help='Compare complete native CPU/GPU frame requests and desktop completion')
     parser.add_argument('--profile',action='store_true',help='Enable existing phase and address-space samples; match this setting in both comparison arms')
     parser.add_argument('--dense-scene',action='store_true',help='Use the existing world-fixed dense city/infrastructure/resource fixture in both comparison arms')
@@ -67,9 +68,14 @@ def main(argv=None):
     inputs={}
     for unit in DLL_UNITS:inputs.update(unit_inputs(unit))
     for path in (scene,dll,jgl,ROOT/'injected_code.c',ROOT/'C3X.h',ROOT/'civ_prog_objects.csv',*[ROOT/'Renderer/native'/n for n in ('gpu_frame_preview.h','native_frame_workload.h','native_frame_benchmark.h','test_native_screen.h','test_native_bootstrap.h','test_native_worker.cpp','test_gpu_unit_composition.h','test_native_image_adapter.cpp','test_native_observation.cpp','native_image_adapter.h','native_sprite_diagnostics.h','native_composition_owner.h','native_observation.h','gpu_image_worker_client.h','gpu_image_commands.h','color_quantization.h','test_gpu_frame_api.c','biq_preview.cpp','BUILD.bat','record_gpu_frame.py')]):inputs[path.relative_to(ROOT).as_posix()]=digest(path)
+    # Runtime HLSL is part of the result identity even when the DLL is unchanged.
+    from Renderer.lab.preparation import require_current, receipt as shader_receipt
+    require_current(ROOT)
+    shader_record=shader_receipt(ROOT)
+    inputs.update(shader_record['inputs']);inputs.update(shader_record['outputs'])
     win=windows_root();target=win/out.relative_to(ROOT)
     settings={'C3X_RENDERER_GPU_JGL_TEST':str(win/jgl.relative_to(ROOT)),'C3X_RENDERER_VISUAL_PROFILE':'city-fidelity','C3X_RENDERER_SHARED_SCENE_SURFACE':'',
-        'C3X_RENDERER_REFLECTION_CONTROL':'1','C3X_RENDERER_WAVES':args.waves,'C3X_RENDERER_GPU_FRAME_TEST':'1','C3X_RENDERER_SCROLL_COVERAGE_TEST':'1' if args.scroll_coverage else '','C3X_RENDERER_NATIVE_FRAME_BENCHMARK':'1' if args.benchmark else '',
+        'C3X_RENDERER_REFLECTION_CONTROL':'1','C3X_RENDERER_WAVES':args.waves,'C3X_RENDERER_WATER_MOTION':args.water_motion,'C3X_RENDERER_GPU_FRAME_TEST':'1','C3X_RENDERER_SCROLL_COVERAGE_TEST':'1' if args.scroll_coverage else '','C3X_RENDERER_NATIVE_FRAME_BENCHMARK':'1' if args.benchmark else '',
         'C3X_RENDERER_PROFILE':'1' if args.profile else '0','C3X_RENDERER_GROUND_WORKERS':args.ground_workers,'C3X_RENDERER_OBJECT_WORKERS':args.object_workers,
         'C3X_RENDERER_TRACE':'2','C3X_RENDERER_TRACE_MIB':'32','C3X_RENDERER_TRACE_BUFFERED':'1' if args.benchmark or args.visual_only else '', 'C3X_RENDERER_TRACE_FILE':str(target/'renderer.log'),
         'C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS':r'..\..\Renderer\custom.custom_rendering.txt',

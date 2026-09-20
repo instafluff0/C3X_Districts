@@ -21,6 +21,45 @@ No new native hook or API is needed. Current verification, costs and unfinished
 water responsibilities are recorded in the [roadmap](retained_renderer_plan.md).
 The historical recommendations/evidence below describe the earlier development.
 
+## Open-water and river motion references
+
+The user-supplied `ocean.mov` (7.365 seconds at 60 fps) and `ocean.jpg`,
+`ocean2.jpg`, and `ocean3.jpg` are local visual references. The video shows broad
+swells, crossing fine ripples and smoothly changing highlights. Fifteen samples
+at half-second intervals were inspected; the disposable contact sheet lives at
+`Renderer/lab/out/water-motion/reference/ocean-motion-contact.png`. These images
+establish an appearance target, not evidence of Civ VI's shader implementation.
+
+Primary implementation references reviewed for the remaining M2.4 work:
+
+- Mark Finch's [GPU Gems water chapter](https://developer.nvidia.com/gpugems/gpugems/part-i-natural-effects/chapter-1-effective-water-simulation-physical-models)
+  separates broad waves from fine normal detail, derives slopes analytically,
+  and discusses depth attenuation and filtering undersampled waves.
+- Alex Vlachos's [Water Flow in Portal 2](https://cdn.akamai.steamstatic.com/apps/valve/2010/siggraph2010_vlachos_waterflow.pdf),
+  especially slides 23–39, uses two staggered distortion phases, spatial noise
+  and offsets to suppress resets, pulsing and repetition. Its flow field guides
+  normal-map motion. Valve's reported instruction/texture costs describe its
+  own implementation and hardware; they are not a C3X performance estimate.
+- Alex Tardif's [Water Walkthrough](https://alextardif.com/Water.html) covers
+  layered normals, specular highlights, Fresnel response and reflection
+  composition. The author identifies the artistic approximations and notes
+  limited visual return from screen-space reflections in his moving-water demo.
+
+**C3X adaptation to test, not completed capability:** advance existing generic
+normal layers in world coordinates, preserving wrapped seams and the shared
+sun/moon lighting. Begin with shading motion on retained geometry. Evaluate
+river flow against the existing curved corridor; a flow shader does not itself
+supply downstream direction or prove continuity across river-page boundaries.
+Keep flow inputs immutable until their dependencies change, and freeze samples
+under fog. Preserve the existing reflection control and compatibility path.
+
+Retained composition must preserve translucent layer order: simply painting
+animated water over a cached final scene can overwrite banks, shadows or object
+edges. Measure the complete ocean-heavy and river/city workloads, including
+restoration, finishing and delivery, with motion on/off. Check loop resets,
+zoom shimmer, day/night response and fog boundaries. These references change no
+runtime behavior; open-water motion and directional river flow remain unfinished.
+
 ## Recovered source evidence
 
 The installed `Base/ArtDefs/Wave.artdef` binds `WaveTest` in `Wave.blp` through

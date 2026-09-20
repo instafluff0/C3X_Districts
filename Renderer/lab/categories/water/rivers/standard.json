@@ -14,7 +14,11 @@
     "Renderer/native/source_fidelity/river_corridor.h",
     "Renderer/native/source_fidelity/geometry.h",
     "Renderer/lab/shared/natural/relief_mesh_body.h",
-    "Renderer/native/render_core/terrain_query.h"
+    "Renderer/native/render_core/terrain_query.h",
+    "Renderer/native/render_core/world_topology.h",
+    "Renderer/lab/shared/hydrology/river_corridor.h",
+    "Renderer/lab/shared/natural/world.h",
+    "Renderer/native/c3x_renderer.cpp"
   ],
   "recipe": {
     "terrain": 2,
@@ -34,7 +38,8 @@
   "tests": [
     "Renderer.lab.test_natural",
     "Renderer.native.source_fidelity.test_contract",
-    "Renderer.native.test_render_core"
+    "Renderer.native.test_render_core",
+    "Renderer.native.test_water_motion"
   ],
   "references": {
     "d3d11": [

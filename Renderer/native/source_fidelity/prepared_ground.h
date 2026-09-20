@@ -27,7 +27,7 @@ struct PreparedGround {
         size+=(world.size()+coast.size()+topology.size())*64+
             (world.bucket_count()+coast.bucket_count()+topology.bucket_count())*sizeof(void*);
         for(auto const& river:rivers)size+=sizeof(river)+64+sizeof(*river.second)+river.second->values.capacity()*sizeof(std::uint64_t)+
-            sizeof(NaturalWorld::PageInputs)+river.second->inputs->values.capacity()*sizeof(std::pair<std::size_t,std::uint32_t>);
+            sizeof(NaturalWorld::PageInputs)+river.second->inputs->flow.capacity()+river.second->inputs->values.capacity()*sizeof(std::pair<std::size_t,std::uint32_t>);
         return size;
     }
 };

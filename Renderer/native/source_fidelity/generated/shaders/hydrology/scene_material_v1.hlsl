@@ -254,10 +254,28 @@ float4 q3_water_material(PixelInput input) {
   float optical_depth=.10+.32*(1-smoothstep(0,5.5,max(0,distance_pixels)));
   float3 transmitted=bed*exp(-optical_depth*float3(8,4,2));
   float3 river=lerp(transmitted,float3(.018,.074,.090),1-exp(-optical_depth*4));
-  float2 lean=river_lean0_texture.Sample(material_sampler,
-    world*float2(q3_source_repeat(.92),q3_source_repeat(1.27))).rg*2-1;
+  float2 river_uv=world*float2(q3_source_repeat(.92),q3_source_repeat(1.27));
+  float2 lean=river_lean0_texture.Sample(material_sampler,river_uv).rg*2-1;
+#if defined(Q3_WATER_TIME)
+  // Bounded two-phase advection hides resets while following the retained
+  // channel tangent. Spatial phase variation avoids synchronized pulsing.
+  if(Q3_WATER_TIME>0 && dot(input.relief_material.xy,input.relief_material.xy)>.01){
+   float phase=frac(Q3_WATER_TIME*.20+sediment_noise);
+   float other=frac(phase+.5),weight=1-abs(phase*2-1);
+   float2 flow=input.relief_material.xy*.27*float2(q3_source_repeat(.92),q3_source_repeat(1.27));
+   float2 a=river_lean0_texture.Sample(material_sampler,river_uv-flow*phase).rg*2-1;
+   float2 b=river_lean0_texture.Sample(material_sampler,river_uv+float2(.37,.61)-flow*other).rg*2-1;
+   lean=lerp(b,a,weight);
+  }
+#endif
   float3 river_normal=normalize(float3(-lean*.24,1));
   float3 water_light=q6_receiver_illumination(input,river_normal,1,1);
+  float3 river_view=normalize(float3(0,-.52,.86));
+  float3 river_glint=(environment_sun_color*environment_sun_intensity*
+    pow(saturate(dot(river_normal,normalize(river_view+environment_sun_direction))),48)
+    +environment_moon_color*environment_moon_intensity*
+    pow(saturate(dot(river_normal,normalize(river_view+environment_moon_direction))),48))
+    *.022*environment_water_specular*q6_receiver_visibility(input,river_normal,1);
   // Shade the existing bank grain and authored gravel, not the river surface.
   float bank_height=grain*.35+material_grain*.38+(gravel_height-.5)*gravel*.40;
   float mean_grain=river_height_texture.SampleBias(material_sampler,uv,2).r;
@@ -266,7 +284,7 @@ float4 q3_water_material(PixelInput input) {
   shore*=lerp(1,cavity,.65);
   float3 bank_normal=q3_margin_normal(input,bank_height,.045);
   float3 bank_light=q6_receiver_illumination(input,bank_normal,1,1);
-  return float4(lerp(shore*bank_light,river*water_light,water),bank);
+  return float4(lerp(shore*bank_light,river*water_light+river_glint,water),bank);
 #elif defined(Q3_STATIC_OPTICS_V2)
   // Keep the captured curve and navigable width. The source river bed remains
   // visible through shallow edges; narrow damp banks replace the sandy outline.

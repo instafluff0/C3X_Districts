@@ -6,8 +6,11 @@
 #ifdef Q3_OBJECT_REFLECTION
 Texture2D q3_object_reflection_texture : register(t121);
 #endif
-// Static Lab experiment: periodic source-detail patches and view-dependent
-// reflection. This is a generic adaptation, not recovered Civ VI equations.
+// Generic world-coherent surface motion; geometry and source textures remain
+// immutable. The caller supplies a visible or frozen presentation sample.
+#ifndef Q3_WATER_TIME
+#define Q3_WATER_TIME 0.0
+#endif
 float q3_natural_hash(float2 cell) {
  float period=Q3_MATERIAL_WRAP_WIDTH*.5*q3_source_repeat(.6);
  if(period>0)cell-=floor(cell/period)*period;
@@ -22,17 +25,24 @@ float3 q3_natural_normal(PixelInput input) {
  float2 world=q3_source_world(input)+Q3_NATURAL_COORD_SHIFT;
  float2 patch_uv=world*q3_source_repeat(.6);
  float2 warp=float2(q3_natural_noise(patch_uv),q3_natural_noise(patch_uv+float2(7,13)))-.5;
- float2 uv0=world*float2(q3_source_repeat(.36),q3_source_repeat(.48))+warp*.16;
- float2 uv1=world*float2(q3_source_repeat(.72),q3_source_repeat(.94))+warp*.12+float2(.27,.61);
+ float time=Q3_WATER_TIME;
+ float2 uv0=world*float2(q3_source_repeat(.36),q3_source_repeat(.48))+warp*.16+time*float2(.018,.011);
+ float2 uv1=world*float2(q3_source_repeat(.72),q3_source_repeat(.94))+warp*.12+float2(.27,.61)+time*float2(-.027,.019);
  float2 a=water_large_lean0_texture.Sample(material_sampler,uv0).rg*2-1;
  float2 b=water_small_lean0_texture.Sample(material_sampler,uv1).rg*2-1;
- float2 secondary_uv=float2(world.y,-world.x)*float2(q3_source_repeat(1.12),q3_source_repeat(1.46))+warp*.1;
+ float2 secondary_uv=float2(world.y,-world.x)*float2(q3_source_repeat(1.12),q3_source_repeat(1.46))+warp*.1+time*float2(.013,-.023);
  float2 c=water_small_secondary_lean0_texture.Sample(material_sampler,secondary_uv).rg*2-1;
  // Rotate the crossing detail slope vector back to the world basis too.
  c=float2(-c.y,c.x);
  // Broad calm lanes interrupt the source pattern without per-tile phases.
  float envelope=lerp(.16,1,smoothstep(.20,.78,warp.x+.5));
  float2 slope=(a*.40+b*.38+c*.22)*envelope;
+ // Two low-frequency slopes supply broad swell at the map camera's scale.
+ // Spatial frequencies close at the world seam; no mesh motion or extra maps.
+ float2 broad=float2(q3_source_repeat(.54),q3_source_repeat(.22));
+ float2 crossing=float2(q3_source_repeat(.31),-q3_source_repeat(.63));
+ slope+=(normalize(broad)*cos(dot(world,broad)*6.2831853-time*.95)*.055
+  +normalize(crossing)*cos(dot(world,crossing)*6.2831853-time*1.23)*.026)*lerp(.45,1,envelope);
  slope*=lerp(.20,1,smoothstep(.015,.32,input.hydrology_data.w));
  return normalize(float3(-slope,1));
 }
@@ -65,7 +75,7 @@ float4 q3_natural_water(PixelInput input) {
 #endif
  float2 world=q3_source_world(input)+Q3_NATURAL_COORD_SHIFT;
  float2 micro=water_small_lean0_texture.Sample(material_sampler,
-  world*float2(q3_source_repeat(3.4),q3_source_repeat(4.12))+float2(.71,.29)).rg*2-1;
+  world*float2(q3_source_repeat(3.4),q3_source_repeat(4.12))+float2(.71,.29)+Q3_WATER_TIME*float2(-.09,.07)).rg*2-1;
  float sparkle=lerp(.22,1,smoothstep(.025,.16,length(micro)));
  float3 sunhalf=normalize(view+environment_sun_direction);
  float3 moonhalf=normalize(view+environment_moon_direction);

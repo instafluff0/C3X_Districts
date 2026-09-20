@@ -507,9 +507,11 @@ def native_render(category, case, hour, zoom, output, *, behavior=None, center=(
         "C3X_LAB_UNIT_STUDY": "shadows" if category == "shadows" else "1" if category in ("units", "animation") else "",
         "C3X_LAB_ACTION_CURSOR": "0" if category == "animation" and case.endswith("start") else "7",
         "C3X_LAB_OBJECT_STUDY": category if category in ("resources", "infrastructure", "shadows", "huts-camps", "goody-huts", "barbarian-camps") else "",
-        "C3X_RENDERER_WAVES": "",
+        "C3X_RENDERER_WAVES": "0" if category in ("seas-oceans", "rivers") else "",
         "C3X_LAB_VOLCANO_STUDY": "1" if category == "volcanoes" and case == "lifecycle" else "",
         "C3X_LAB_WAVE_STUDY": case if category == "ocean-waves" else "",
+        "C3X_RENDERER_WATER_MOTION": "1" if category in ("seas-oceans", "rivers") else "0",
+        "C3X_LAB_WATER_MOTION_STUDY": "1" if category in ("seas-oceans", "rivers") and shared_surface else "",
         "C3X_LAB_WATER_STUDY": "1" if case.startswith("water-") else "",
     }
     # The same shoreline lifecycle must cover both native compatibility and

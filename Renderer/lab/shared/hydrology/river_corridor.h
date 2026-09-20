@@ -5,10 +5,10 @@
 
 namespace river {
 using hydro::P;
-struct Edge { uint64_t id; P a,b; std::vector<P> points; double cost=0,original_cost=0; };
+struct Edge { uint64_t id; P a,b; std::vector<P> points; double cost=0,original_cost=0; int flow=0; };
 struct Terminal { P p; bool mouth; unsigned profile=0; double yaw=0; };
-struct Segment { P a,b; };
-struct Sample { double distance=1000, source=1000, mouth=1000; };
+struct Segment { P a,b,flow; };
+struct Sample { double distance=1000, source=1000, mouth=1000; P flow; };
 inline P screen(P p) { return {64*(p.x+p.y),32*(p.x-p.y)}; }
 inline P from_screen(P p) { return {p.x/128+p.y/64,p.x/128-p.y/64}; }
 inline double distance(P p,P a,P b) {
@@ -49,10 +49,11 @@ struct Corridor {
         return .22*(radii[i%radii.size()]*(1-fraction)+radii[(i+1)%radii.size()]*fraction);
     }
 
-    void insert(P a,P b) {
+    void insert(P a,P b,int direction=0) {
+        P tangent=(b-a)*(direction/std::max(1e-12,hydro::length(b-a)));
         for(int y=int(std::floor(std::min(a.y,b.y)-.65));y<=int(std::floor(std::max(a.y,b.y)+.65));++y)
         for(int x=int(std::floor(std::min(a.x,b.x)-.65));x<=int(std::floor(std::max(a.x,b.x)+.65));++x)
-            buckets[{x,y}].push_back({screen(a),screen(b)});
+            buckets[{x,y}].push_back({screen(a),screen(b),tangent});
     }
     bool affects(int c,int r) const { return buckets.count({c,r}) || terminal_buckets.count({c,r}); }
     bool bank_point(P near,double margin,double side,P& result) const {
@@ -73,8 +74,10 @@ struct Corridor {
         Sample result;
         auto key=std::make_pair(int(std::floor(p.x)),int(std::floor(p.y)));
         auto found=buckets.find(key);
-        if(found!=buckets.end())for(auto const& s:found->second)
-            result.distance=std::min(result.distance,distance(screen(p),s.a,s.b));
+        if(found!=buckets.end())for(auto const& s:found->second){
+            double d=distance(screen(p),s.a,s.b);
+            if(d<result.distance){result.distance=d;result.flow=s.flow;}
+        }
         auto nodes=terminal_buckets.find(key);
         if(nodes!=terminal_buckets.end())for(unsigned index:nodes->second) {
             auto const& t=terminals[index];
@@ -104,7 +107,10 @@ struct Corridor {
                 if(bit==32){a={double(t.c),double(t.r)};b={double(t.c+1),double(t.r)};}
                 if(bit==128){a={double(t.c),double(t.r)};b={double(t.c),double(t.r+1)};}
                 auto id=field.edge_id(a-P{.5,.5},b-P{.5,.5});
-                unique.emplace(id,Edge{id,a,b,{}});
+                unsigned slot=bit==2?0:bit==8?1:bit==32?2:3;
+                unsigned flow=(t.flow>>(slot*2))&3;
+                Edge edge{id,a,b,{}};edge.flow=flow==1?1:flow==2?-1:0;
+                unique.emplace(id,edge);
             }
         }
         for(auto const& item:unique)edges.push_back(item.second);
@@ -150,7 +156,7 @@ struct Corridor {
             }
             e.cost=best_score;
             for(int j=0;j<=32;++j)e.points.push_back(point(j/32.,best));
-            for(unsigned j=1;j<e.points.size();++j)insert(e.points[j-1],e.points[j]);
+            for(unsigned j=1;j<e.points.size();++j)insert(e.points[j-1],e.points[j],e.flow);
         }
         for(auto const& item:incident)if(item.second.size()==1) {
             P p{double(item.first.first),double(item.first.second)};
@@ -168,7 +174,7 @@ struct Corridor {
                 auto chosen=std::max_element(water.begin(),water.end(),[&](P a,P b){return hydro::dot(a-p,away)<hydro::dot(b-p,away);});
                 // The water-tile center lies beyond the optical shore, allowing
                 // the same corridor to cut through the beach and enter the sea.
-                insert(p,*chosen);
+                insert(p,*chosen,e.flow?1:0);
             }
             auto id=edges[item.second.front()].id;
             auto const& edge=edges[item.second.front()];

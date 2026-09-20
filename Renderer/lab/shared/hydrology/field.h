@@ -19,7 +19,7 @@ inline double sat(double x){return std::clamp(x,0.,1.);}
 inline double smooth(double a,double b,double x){x=sat((x-a)/(b-a));return x*x*(3-2*x);}
 inline uint32_t hash(uint32_t x){x^=x>>16;x*=0x7feb352du;x^=x>>15;x*=0x846ca68bu;return x^(x>>16);}
 inline int mod(int a,int b){return (a%b+b)%b;}
-struct Tile {int c=0,r=0,raw_x=0,raw_y=0,base=2,real=2;unsigned river=0;};
+struct Tile {int c=0,r=0,raw_x=0,raw_y=0,base=2,real=2;unsigned river=0,flow=0;};
 inline bool water(int base){return base>=11&&base<=13;}
 struct Segment {P a,b;double rocky=0;};
 struct River {uint64_t id=0;P a,b;std::vector<P> points;double width=.095;};

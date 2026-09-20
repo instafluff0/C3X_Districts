@@ -682,6 +682,48 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
     }
 #ifdef C3X_LAB_PREVIEW
     if(ok)ok=lab_verify_objects(frame,output);
+    char water_study[8]={};GetEnvironmentVariableA("C3X_LAB_WATER_MOTION_STUDY",water_study,sizeof(water_study));
+    if(ok && water_study[0]){
+        auto pixels=[&](){auto p=static_cast<unsigned char const*>(output.bgra_pixels);
+            return std::vector<unsigned char>(p,p+output.stride_bytes*output.height);};
+        auto draw=[&](){return render_checked(&frame,&output)==C3X_RENDERER_RESULT_OK && output.fallback_tile_count==0;};
+        auto save=[&](char const* suffix){return write_bmp((std::string(argv[5])+suffix).c_str(),output);};
+        auto initial=pixels(),previous=initial;unsigned changed=0;
+        LARGE_INTEGER frequency={};QueryPerformanceFrequency(&frequency);double total=0;
+        for(int sample=0;sample<48 && ok;++sample){
+            frame.presentation_time_ticks=frame.presentation_frequency+sample*frame.presentation_frequency/15;
+            LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);ok=draw();QueryPerformanceCounter(&end);
+            total+=double(end.QuadPart-begin.QuadPart)*1000/frequency.QuadPart;
+            ok=ok && output.visible_animation_count && !output.geometry_tiles_built && !output.geometry_upload_bytes;
+            auto current=pixels();changed+=current!=previous;previous=current;
+            char suffix[64];sprintf_s(suffix,".water-%03d.bmp",sample);ok=ok && save(suffix);
+        }
+        ok=ok && changed>=40;
+        frame.presentation_time_ticks=frame.presentation_frequency;
+        ok=ok && draw() && pixels()==initial;
+        reset();ok=ok && set_definitions(argv[2],argv[3],nullptr,custom_path)==C3X_RENDERER_RESULT_OK && draw() && pixels()==initial;
+        std::printf("WATER motion: %s changed=%u frames=48 mean_request_ms=%.3f repeat_cold_exact=1 terrain_upload_bytes=0\n",ok?"pass":"FAIL",changed,total/48);
+        auto saved_tiles=tiles;
+        for(auto& tile:tiles){tile.tile_flags|=C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_EXPLORED;tile.tile_flags&=~C3X_RENDERER_TILE_VISIBLE;}
+        ok=ok && draw();auto fog=pixels();ok=ok && save(".water-fog.bmp");
+        for(int second:{3,7,11}){frame.presentation_time_ticks=second*frame.presentation_frequency;
+            ok=ok && draw() && pixels()==fog && output.visible_animation_count==0;}
+        std::printf("WATER fog: %s frozen_frames=3\n",ok?"pass":"FAIL");
+        tiles=saved_tiles;frame.tiles=tiles.data();
+        frame.presentation_time_ticks=frame.presentation_frequency;
+        ok=ok && draw() && pixels()==initial;
+        // Time zero is the preserved still material. Compare independently
+        // against the unsplit static rendering route with motion disabled.
+        frame.presentation_time_ticks=0;ok=ok && draw();auto zero=pixels();
+        SetEnvironmentVariableA("C3X_RENDERER_WATER_MOTION","0");reset();
+        ok=ok && set_definitions(argv[2],argv[3],nullptr,custom_path)==C3X_RENDERER_RESULT_OK && draw() && pixels()==zero;
+        auto off=pixels();ok=ok && save(".water-off.bmp");frame.presentation_time_ticks=5*frame.presentation_frequency;
+        ok=ok && draw() && pixels()==off && !output.visible_animation_count;
+        std::printf("WATER control: %s zero_time_static_exact=1 disabled_still=1\n",ok?"pass":"FAIL");
+        SetEnvironmentVariableA("C3X_RENDERER_WATER_MOTION","1");reset();frame.presentation_time_ticks=frame.presentation_frequency;
+        ok=ok && set_definitions(argv[2],argv[3],nullptr,custom_path)==C3X_RENDERER_RESULT_OK && draw() && pixels()==initial;
+        std::printf("%s water material lifecycle\n",ok?"PASS":"FAIL");
+    }
     char wave_study[32]={};GetEnvironmentVariableA("C3X_LAB_WAVE_STUDY",wave_study,sizeof(wave_study));
     if(ok && wave_study[0]) {
       auto verify_waves=[&](){

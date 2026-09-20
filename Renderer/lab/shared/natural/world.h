@@ -14,11 +14,13 @@ struct NaturalWorld : NaturalData {
     using CellKey=std::array<int,4>; // source page, then sampled world cell
     struct PageInputs {
         std::vector<std::pair<std::size_t,std::uint32_t>> values;
+        std::vector<unsigned char> flow;
         render_core::WorldTopology const* checked_world=nullptr;
         std::int64_t checked_revision=-1;bool current=false;
         bool valid(render_core::WorldTopology const& world,std::int64_t revision){
             if(checked_world!=&world || checked_revision!=revision){
-                current=true;for(auto const& input:values)if(world.at(input.first)!=input.second){current=false;break;}
+                current=true;for(std::size_t i=0;i<values.size();++i){auto const& input=values[i];
+                    if(world.at(input.first)!=input.second || (i<flow.size() && world.river_flow(input.first)!=flow[i])){current=false;break;}}
                 checked_world=&world;checked_revision=revision;
             }return current;
         }
@@ -57,7 +59,7 @@ struct NaturalWorld : NaturalData {
         auto segments=field.buckets.find(key);values.push_back(segments!=field.buckets.end());
         values.push_back(segments==field.buckets.end()?0:segments->second.size());
         if(segments!=field.buckets.end())for(auto const& segment:segments->second){
-            real(segment.a.x);real(segment.a.y);real(segment.b.x);real(segment.b.y);
+            real(segment.a.x);real(segment.a.y);real(segment.b.x);real(segment.b.y);real(segment.flow.x);real(segment.flow.y);
         }
         // A separator carries the segment count; no ambiguous concatenations.
         auto nodes=field.terminal_buckets.find(key);
@@ -109,7 +111,7 @@ struct NaturalWorld : NaturalData {
         std::size_t bytes=proof.capacity()*sizeof(proof[0]);
         // Conservatively charge shared payload to each retaining cache entry.
         for(auto const& input:proof)bytes+=sizeof(*input.second)+input.second->values.capacity()*sizeof(std::uint64_t)+
-            sizeof(PageInputs)+input.second->inputs->values.capacity()*sizeof(std::pair<std::size_t,std::uint32_t>);
+            sizeof(PageInputs)+input.second->inputs->flow.capacity()+input.second->inputs->values.capacity()*sizeof(std::pair<std::size_t,std::uint32_t>);
         return bytes;
     }
     std::vector<RiverPage> river_pages;
@@ -139,7 +141,7 @@ struct NaturalWorld : NaturalData {
         for(int r=pr*8-4;r<pr*8+12;r++)for(int c=pc*8-4;c<pc*8+12;c++){
             auto bits=value(c,r);if(bits==0xffffffffu)continue;
             int rx=c+r,ry=c-r;if(dims.wrap_x)rx=render_core::mod(rx,dims.width);if(dims.wrap_y)ry=render_core::mod(ry,dims.height);
-            field.tiles[{c,r}]={c,r,rx,ry,int(bits&255),int((bits>>8)&255),unsigned((bits>>16)&255)};
+            field.tiles[{c,r}]={c,r,rx,ry,int(bits&255),int((bits>>8)&255),unsigned((bits>>16)&255),w.river_flow(w.index(c,r))};
         }
         auto lookup=[&](int c,int r){auto bits=value(c,r);int rx=c+r,ry=c-r;
             if(dims.wrap_x)rx=render_core::mod(rx,dims.width);if(dims.wrap_y)ry=render_core::mod(ry,dims.height);
@@ -147,6 +149,7 @@ struct NaturalWorld : NaturalData {
         page.field=std::make_shared<river::Corridor>();
         page.field->build(field,[&](double u,double v){return (borrowed_data?*borrowed_data:static_cast<NaturalData const&>(*this)).height(float(u),float(v),lookup);});
         page.cells->inputs->values.assign(inputs.begin(),inputs.end());
+        for(auto const& input:page.cells->inputs->values)page.cells->inputs->flow.push_back(static_cast<unsigned char>(w.river_flow(input.first)));
         river_pages.push_back(std::move(page));return river_pages.back();
     }
     river::Corridor const& river_page(double x,double y){auto& page=river_page_entry(x,y);

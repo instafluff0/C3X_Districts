@@ -464,6 +464,9 @@ cbuffer NativeReflectionFrame : register(b5) {
  float4 NativeReflection; // world-height to native pixels, depth metric, plane Z, enabled
  float4 NativeReflectionTarget; // internal extent XY, sampling guard XY
 };
+cbuffer NativeWaterFrame : register(b10) { float4 native_water_sample; };
+#undef Q3_WATER_TIME
+#define Q3_WATER_TIME native_water_sample.x
 
 P VSReflection(V input) {
  P o=VSNative(input);

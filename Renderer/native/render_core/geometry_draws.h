@@ -12,6 +12,8 @@ template<class Chunk> struct GeometryDrawRecord {
     decltype(((Chunk*)nullptr)->bounds) bounds={};
     int translation_x=0,translation_y=0;
     float natural_projection[4]={};
+    int tile_x=0,tile_y=0;
+    bool water_dependent=false,water_visible=true; // Per-occurrence visibility, never resident mesh state.
 
     GeometryDrawRecord()=default;
     GeometryDrawRecord(Chunk const& chunk):source(&chunk),bounds(chunk.bounds),
@@ -35,6 +37,8 @@ public:
         Reference(Chunk const& value):source(&value),occurrence(nullptr){}
         Reference(Record const& value):source(value.source),occurrence(&value){}
         Chunk const& content() const {return *source;}
+        bool water_visible() const {return !occurrence || occurrence->water_visible;}
+        bool water_dependent() const {return occurrence && occurrence->water_dependent;}
         auto const& bounds() const {return occurrence?occurrence->bounds:source->bounds;}
         int translation_x() const {return occurrence?occurrence->translation_x:source->translation_x;}
         int translation_y() const {return occurrence?occurrence->translation_y:source->translation_y;}

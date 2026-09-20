@@ -753,7 +753,10 @@ public:
     std::uint64_t resource_pixel_signature = 0;
     c3x_renderer_i64 resource_pixel_clock = -1;
     unsigned visible_resource_animations = 0, visible_wave_animations = 0, moving_resources = 0;
-    float wave_time_seconds=0;
+    float wave_time_seconds=0,water_time_seconds=0;
+    bool water_motion=true,water_scene_active=false;
+    unsigned visible_water_animations=0;
+    ID3D11Buffer* water_frame=nullptr;
     bool wave_attempted=false,wave_ready=false;
     ID3D11PixelShader* wave_shader=nullptr;
     ID3D11Buffer* wave_frame=nullptr;
@@ -764,8 +767,8 @@ public:
     std::map<std::pair<int,int>,RetainedWaveCell> retained_wave_cells;
     std::uint64_t retained_wave_scope=0,retained_wave_epoch=0;
     unsigned wave_cells_built=0,wave_cells_reused=0;
-    unsigned ambient_count() const {return moving_resources+visible_wave_animations;}
-    unsigned posed_count() const {return visible_resource_animations+unsigned(wave_chunks.size());}
+    unsigned ambient_count() const {return moving_resources+visible_wave_animations+visible_water_animations;}
+    unsigned posed_count() const {return visible_resource_animations+unsigned(wave_chunks.size())+unsigned(water_scene_active);}
     void reset_waves() {
         for(auto& c:wave_chunks){release(c.buffer);release(c.indices);}wave_chunks.clear();
         retained_wave_cells.clear();retained_wave_scope=retained_wave_epoch=0;
@@ -1083,7 +1086,7 @@ public:
         release(resource_shadow_shader);
         release(feature_vertex_shader);
         release(pixel_shader);
-        reset_waves();release(wave_shader);release(wave_frame);
+        reset_waves();release(wave_shader);release(wave_frame);release(water_frame);
         for(auto&view:wave_views)release(view);
         wave_attempted=wave_ready=false;
         release(vertex_shader);
@@ -1245,6 +1248,7 @@ public:
             else {hr=device->CreatePixelShader(blob->GetBufferPointer(),blob->GetBufferSize(),nullptr,&wave_shader);release(blob);}
             D3D11_BUFFER_DESC desc={};desc.ByteWidth=16;desc.Usage=D3D11_USAGE_DEFAULT;desc.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
             if(SUCCEEDED(hr))hr=device->CreateBuffer(&desc,nullptr,&wave_frame);
+            if(SUCCEEDED(hr))hr=device->CreateBuffer(&desc,nullptr,&water_frame);
         }
         D3D11_INPUT_ELEMENT_DESC elements[] = {
             {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
@@ -2504,6 +2508,7 @@ public:
 #endif
         if(requested_surface!=shared_scene_surface){reset_targets();clear_resource_backdrops();}
         shared_scene_surface=requested_surface;
+        water_motion=c3x_renderer::NavigationOptions::retained(GetEnvironmentVariableA,"C3X_RENDERER_WATER_MOTION");
         bool three_zoom_memory=c3x_renderer::NavigationOptions::retained(GetEnvironmentVariableA,"C3X_RENDERER_THREE_ZOOM_MEMORY");
         auto viewport_limit=three_zoom_memory?std::max(default_viewport_cache_budget,std::size_t(64u*1024u*1024u)):default_viewport_cache_budget;
         auto backdrop_limit=three_zoom_memory?std::size_t(832u*1024u*1024u):default_resource_backdrop_cache_budget;
@@ -3248,6 +3253,7 @@ public:
     }
 
     bool frame_has_resource_animation(c3x_renderer_frame_v1 const & frame) const {
+        if(water_scene_active)return true;
         if(wave_ready)for(unsigned i=0;i<frame.tile_count;++i)
             if((frame.tiles[i].tile_flags&C3X_RENDERER_TILE_RENDER) && frame.tiles[i].terrain_type>=11)return true;
         if (resource_animations.empty()) return false;
@@ -3258,7 +3264,7 @@ public:
     }
 
     bool can_prepare_ambient() const {
-        return city_profile && shared_scene_surface && moving_resources && !visible_wave_animations;
+        return city_profile && shared_scene_surface && moving_resources && !visible_wave_animations && !water_scene_active;
     }
 
     static c3x_renderer_i64 resource_clock(c3x_renderer_frame_v1 const & frame) {
@@ -3419,10 +3425,15 @@ public:
     bool compose_resource_animations(c3x_renderer_frame_v1 const & frame) {
         resource_composite_ticks=0;
         if(visibility_pass && !visibility_coverage.capture(frame))return false;
+        // Visibility is deliberately absent from geometry identities. Refresh
+        // occurrence samples without rebuilding/reuploading immutable meshes.
+        for(auto layer:{geometry_water,geometry_river})for(auto& item:geometry_vertex_buffers[layer])
+            item.water_visible=!visibility_pass || visibility_coverage.state(item.tile_x,item.tile_y)==2;
         if (!shared_scene_surface && !frame_has_resource_animation(frame)) {
             moving_resources=visible_resource_animations=visible_wave_animations=0; resource_pixel_signature=0; return true;
         }
         auto clock=resource_clock(frame);
+        water_time_seconds=float(double(frame.presentation_time_ticks)/std::max<c3x_renderer_i64>(1,frame.presentation_frequency));
         if (posed_count() && resource_pixel_signature==cached_signature.complete &&
             resource_pixel_clock==clock) return true;
         LARGE_INTEGER started={},finished={};QueryPerformanceCounter(&started);
@@ -3679,6 +3690,23 @@ public:
                 dirty(visible);
             }
         }
+        if(water_scene_active && !shared_scene_surface){
+            // The reflection/CPU compatibility route uses its existing cached
+            // linear prefix. Borrow retained forward layers above that prefix.
+            for(auto layer:water_scene_order()){
+                std::vector<CachedVertexChunk> retained;retained.reserve(geometry_vertex_buffers[layer].size());
+                for(auto const& item:geometry_vertex_buffers[layer]){
+                    auto chunk=item.content();chunk.bounds=item.bounds;
+                    chunk.translation_x=item.translation_x;chunk.translation_y=item.translation_y;
+                    std::copy(item.natural_projection,item.natural_projection+4,chunk.natural_projection);
+                    if(layer==geometry_water || layer==geometry_river)chunk.visual_time=item.water_visible?-1.f:0.f;
+                    D3D11_RECT visible={std::max<LONG>(0,chunk.bounds.left+chunk.translation_x+dx),std::max<LONG>(0,chunk.bounds.top+chunk.translation_y+dy),
+                        std::min<LONG>(width,chunk.bounds.right+chunk.translation_x+dx),std::min<LONG>(height,chunk.bounds.bottom+chunk.translation_y+dy)};
+                    dirty(visible);retained.push_back(std::move(chunk));
+                }
+                buffers[layer].insert(buffers[layer].begin(),retained.begin(),retained.end());
+            }
+        }
         if(shared_scene_surface) {
             if(!compose_scene_surface(buffers))return false;
             resource_pixel_signature=cached_signature.complete;resource_pixel_clock=clock;
@@ -3720,7 +3748,7 @@ public:
         unsigned backdrop_dependency_hits=0,backdrop_dependency_rejections=0;
         // Posed bodies and their projected shadows have one explicit binding
         // contract. Wave shading continues through its existing scene pass.
-        bool prepared_resource_pass=city_profile && !visible_wave_animations &&
+        bool prepared_resource_pass=city_profile && !visible_wave_animations && !water_scene_active &&
             c3x_renderer::NavigationOptions::enabled(GetEnvironmentVariableA,"C3X_RENDERER_PREPARED_RESOURCE_PASS");
         struct PreparedResourceRegion {
             ViewportShaderSettings settings;
@@ -4003,7 +4031,8 @@ public:
     bool submit_scene_pass(GeometryDrawView inputs,std::vector<unsigned> const& order,bool dynamic_pass,
             c3x_renderer::render_core::LinearTarget& target,c3x_renderer::city_fidelity::Glow& glow,
             ViewportShaderSettings const& settings,unsigned w,unsigned h,std::vector<D3D11_RECT> const& physical_rectangles,
-            unsigned& batches,unsigned& selected_static,unsigned& selected_dynamic,unsigned& selection_candidates,unsigned& selection_scans) {
+            unsigned& batches,unsigned& selected_static,unsigned& selected_dynamic,unsigned& selection_candidates,unsigned& selection_scans,
+            bool material_pass=false) {
         auto select_begin=std::chrono::steady_clock::now();double execute_ms=0;
         using Shadow=c3x_renderer::render_core::SourceShadow;
         std::vector<Shadow::Caster> casters;Shadow::PreparedCasters prepared;
@@ -4044,7 +4073,7 @@ public:
                 if(!GeometryDrawView(selected).pass().any())return true;
                 if(!pages.empty() && !prepare_receiver_shadows(geometry_vertex_buffers,pass_settings,{span.rect},false,casters,prepared_ptr,nullptr,&pages))return false;
                 auto execute_begin=std::chrono::steady_clock::now();
-                bool ok=dynamic_pass?submit_prepared_resource_region(selected,pass_settings,span.rect,&glow):
+                bool ok=dynamic_pass && !material_pass?submit_prepared_resource_region(selected,pass_settings,span.rect,&glow):
                     submit_geometry(selected,rectangles,pass_settings,target.target,target.depth,int(w),int(h),nullptr,
                         true,false,nullptr,false,&casters,prepared_ptr,128,0,0,false,true);
                 execute_ms+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-execute_begin).count();
@@ -4057,9 +4086,12 @@ public:
                 if(indexed)selection_candidates+=unsigned(count);else selection_scans+=unsigned(count);
                 for(std::size_t i=0;i<count;++i){
                     auto item=inputs[layer][indexed?(begin+i)->second:i];
+                    if(water_scene_active && inputs.is(geometry_vertex_buffers) &&
+                       ((!dynamic_pass && item.water_dependent()) || (material_pass && !item.water_dependent())))continue;
                     bool visible=false;for(auto const& rect:rectangles)visible=visible || chunk_intersects_region(item,pass_settings,rect,false);
                     if(!visible)continue;
                     GeometryDrawRecord record(item.content());
+                    record.water_visible=item.water_visible();record.water_dependent=item.water_dependent();
                     record.bounds=item.bounds();record.translation_x=item.translation_x();record.translation_y=item.translation_y();
                     std::copy(item.natural_projection(),item.natural_projection()+4,record.natural_projection);
                     receivers.clear();
@@ -4087,12 +4119,17 @@ public:
             return true;
     }
 
+    std::vector<unsigned> water_scene_order() const {
+        std::vector<unsigned> order={geometry_water,geometry_river,geometry_shadow,geometry_route};
+        for(unsigned i=0;i<cliff_bundle.assets.size();++i)order.push_back(geometry_cliff0+i);
+        for(auto layer:{geometry_feature,geometry_site,geometry_mine,geometry_farm,geometry_city,geometry_wall})order.push_back(layer);
+        return order;
+    }
     std::vector<unsigned> static_scene_order() const {
         std::vector<unsigned> order={geometry_underlay,geometry_land,geometry_natural_terrain,geometry_natural_mountain,geometry_natural_decal};
         for(unsigned layer=geometry_natural_forest0;layer<geometry_layer_count;++layer)order.push_back(layer);
-        for(auto layer:{geometry_bed,geometry_water,geometry_river,geometry_shadow,geometry_route})order.push_back(layer);
-        for(unsigned i=0;i<cliff_bundle.assets.size();++i)order.push_back(geometry_cliff0+i);
-        for(auto layer:{geometry_feature,geometry_site,geometry_mine,geometry_farm,geometry_city,geometry_wall})order.push_back(layer);
+        order.push_back(geometry_bed);
+        {auto tail=water_scene_order();order.insert(order.end(),tail.begin(),tail.end());}
         return order;
     }
 
@@ -4224,12 +4261,17 @@ public:
             context->ClearDepthStencilView(linear.depth,D3D11_CLEAR_DEPTH|D3D11_CLEAR_STENCIL,1,0);
         }
         std::vector<D3D11_RECT> dynamic_damage;
-        for(auto layer:{geometry_shadow,geometry_wave,geometry_feature})for(auto item:dynamic[layer]){
+        auto damage_for=[&](GeometryDrawView inputs,std::vector<unsigned> const& layers){
+        for(auto layer:layers)for(auto item:inputs[layer]){
+            if(inputs.is(geometry_vertex_buffers) && !item.water_dependent())continue;
             auto rect=item.bounds();int dx=item.translation_x()+int(settings.translation[0]),dy=item.translation_y()+int(settings.translation[1]);
             rect={std::max<LONG>(0,rect.left+dx-4),std::max<LONG>(0,rect.top+dy-4),
                   std::min<LONG>(w,rect.right+dx+4),std::min<LONG>(h,rect.bottom+dy+4)};
             if(rect.left<rect.right && rect.top<rect.bottom)dynamic_damage.push_back(rect);
         }
+        };
+        damage_for(dynamic,{geometry_shadow,geometry_wave,geometry_feature});
+        if(water_scene_active)damage_for(geometry_vertex_buffers,water_scene_order());
         // Union damage into disjoint scan bands; no duplicate translucent draws
         // or repeated finishing. These are scissors, never miniature scenes.
         auto disjoint=[&](std::vector<D3D11_RECT> const& inputs){
@@ -4267,10 +4309,10 @@ public:
         }
         // Preserve production layer/occurrence order. Batches change only when
         // selected receivers would exceed the existing 32 shadow-page slots.
-        auto submit=[&](GeometryDrawView inputs,std::vector<unsigned> const& order,bool dynamic_pass){
+        auto submit=[&](GeometryDrawView inputs,std::vector<unsigned> const& order,bool dynamic_pass,bool material_pass=false){
             auto rectangles=dynamic_pass?physical({selected_view}):physical(static_rectangles);
             return submit_scene_pass(inputs,order,dynamic_pass,linear,glow,settings,w,h,rectangles,
-                batches,selected_static,selected_dynamic,selection_candidates,selection_scans);
+                batches,selected_static,selected_dynamic,selection_candidates,selection_scans,material_pass);
         };
         if(!scene_guard_pad && !restored){
             std::vector<c3x_renderer::city_fidelity::Lighting const*> lights;
@@ -4305,6 +4347,17 @@ public:
             linear.depth_samples,0,0,{},&dynamic_damage))return false;
         scene_dynamic_damage=std::move(dynamic_damage);
         QueryPerformanceCounter(&static_end);
+        // Keep the forward material order: water is below banks, roads, static
+        // object alpha and posed bodies. Borrow retained meshes; never rebuild
+        // terrain to advance a material clock.
+        if(water_scene_active){
+            std::vector<c3x_renderer::city_fidelity::Lighting const*> lights;
+            for(auto const& item:geometry_vertex_buffers[geometry_city])if(item.content().city_lighting){
+                auto pointer=item.content().city_lighting.get();
+                if(std::find(lights.begin(),lights.end(),pointer)==lights.end())lights.push_back(pointer);
+            }
+            if(!cities.lights(context,lights) || !submit(geometry_vertex_buffers,water_scene_order(),true,true))return false;
+        }
         if(!submit(dynamic,{geometry_shadow,geometry_wave,geometry_feature},true))return false;
         QueryPerformanceCounter(&dynamic_end);
         char selection_detail[192];sprintf_s(selection_detail,"indexed_candidates=%u scanned_candidates=%u selected_static=%u selected_dynamic=%u batches=%u world_records=%zu world_bytes=%zu instances_ready=%u",
@@ -4415,6 +4468,8 @@ public:
             visible_wave_animations,wave_chunks.size()-visible_wave_animations,wave_geometry_bytes,wave_upload_bytes,
             wave_cells_built,wave_cells_reused);
         trace.write("scene-waves",detail,true);
+        sprintf_s(detail,"active=%u visible=%u time=%.3f geometry_upload_bytes=0",unsigned(water_scene_active),visible_water_animations,water_time_seconds);
+        trace.write("scene-water",detail,true);
         sprintf_s(detail,"content_uploads=%u setups=%llu layers=%llu draws=%llu parameter_updates=%llu bounds_tests=%llu parameter_uploads=%u parameter_records=%u issue_ms=%.3f selection_ms=%.3f execute_ms=%.3f prepared_meshes=%u foreground_meshes=%u prepared_vertex_bytes=%zu",
             frame_content_uploads,frame_pass_setups,frame_active_layers,frame_draw_calls,frame_parameter_updates,frame_bounds_tests,draw_parameters.uploads,draw_parameters.records,
             frame_geometry_issue_ms,frame_scene_select_ms,frame_scene_execute_ms,frame_prepared_meshes,frame_foreground_meshes,frame_prepared_vertex_bytes);
@@ -4866,6 +4921,11 @@ public:
             // a time copied the entire layer again for every visible tile.
             for (auto const& source_chunk : source.buffers[layer]) {
                 GeometryDrawRecord chunk(source_chunk);
+                chunk.water_dependent=layer==geometry_water || layer==geometry_river ||
+                    ((layer==geometry_shadow || layer==geometry_route || (layer>=geometry_feature && layer<geometry_natural_terrain)) &&
+                     c3x_renderer::render_core::water_under_projection(world_coast.world(),source_chunk.world_bounds));
+                chunk.tile_x=record.tile_x;chunk.tile_y=record.tile_y;
+                chunk.water_visible=!visibility_pass || (record.tile_flags&C3X_RENDERER_TILE_VISIBLE)!=0;
                 if(natural_world || source_chunk.projection_kind)chunk=project_natural_chunk(chunk,record);
                 chunk.translation_x = anchor_x - source.anchor_x;
                 chunk.translation_y = anchor_y - source.anchor_y;
@@ -5305,6 +5365,11 @@ public:
                     context->VSSetConstantBuffers(2,1,&shadow_settings_buffer);
                     context->VSSetShader(layer==geometry_shadow?resource_shadow_vertex_shader:resource_body_vertex_shader,nullptr,0);
                 }
+                if(environment_profile && (layer==geometry_water || layer==geometry_river)){
+                    float sample[]={water_scene_active && chunk.water_visible() && chunk.content().visual_time<0?water_time_seconds:0.f,0,0,0};
+                    context->UpdateSubresource(water_frame,0,nullptr,sample,0,0);
+                    context->PSSetConstantBuffers(10,1,&water_frame);
+                }
                 if(layer==geometry_wave){float wave_sample[]={chunk.content().visual_time<0?wave_time_seconds:chunk.content().visual_time,0,0,0};
                     context->UpdateSubresource(wave_frame,0,nullptr,wave_sample,0,0);}
                 context->DrawIndexed(chunk.content().index_count, 0, 0);
@@ -5709,6 +5774,9 @@ public:
             }
         }
         auto draw = [&](GeometryLayer layer) {
+            if(water_scene_active && require_linear_backdrop && !reflection_pass &&
+               (layer==geometry_water || layer==geometry_river || layer==geometry_shadow || layer==geometry_route ||
+                (layer>=geometry_feature && layer<geometry_natural_terrain)))return true;
             if(reflection_pass){
                 if(layer==geometry_underlay || layer==geometry_bed || layer==geometry_water ||
                     layer==geometry_river || layer==geometry_route || layer==geometry_shadow || layer==geometry_wave)return true;
@@ -5761,7 +5829,8 @@ public:
                 // bilinear sampling. Main-pass glow padding is already present.
                 for(auto const& rect:rectangles)reflected_rects.push_back(guarded_block_rectangle(rect,4,4,4,reflected_extent,reflected_height));
             }
-            if(!submit_geometry(buffers,reflected_rects,reflected,destination,depth,reflected_extent,reflected_height,
+            auto reflection_inputs=water_scene_active && accumulate && shadow_buffers_ptr?shadow_buffers_ptr:buffers;
+            if(!submit_geometry(reflection_inputs,reflected_rects,reflected,destination,depth,reflected_extent,reflected_height,
                 cancellation,false,true,shadow_buffers_ptr,true,shadow_casters_ptr,prepared_casters_ptr,region_size,grid_x,grid_y))return false;
         }
         {AnimationGpu::Pass gpu_phase(animation_gpu,context,AnimationGpu::receivers);
@@ -6326,6 +6395,15 @@ public:
             reset_targets();clear_resource_backdrops();shared_scene_surface=selected_surface;
         }
         if(gpu_output_mode && (!shared_scene_surface || !city_profile || reflection.enabled))return false;
+        bool water_active=false;visible_water_animations=0;
+        if(water_motion && city_profile)
+            for(unsigned i=0;i<frame.tile_count;++i){auto const& tile=frame.tiles[i];
+                if(!(tile.tile_flags&C3X_RENDERER_TILE_RENDER) || (tile.terrain_type<11 && !(tile.river_code&170u)))continue;
+                water_active=true;
+                if(!visibility_pass || (tile.tile_flags&C3X_RENDERER_TILE_VISIBLE))++visible_water_animations;
+            }
+        if(water_active!=water_scene_active){scene_static_signature=0;scene_guard.invalidate_all();}
+        water_scene_active=water_active;
         ++trace.sequence;
         char profile_option[8]={};
         profiling=GetEnvironmentVariableA("C3X_RENDERER_PROFILE",profile_option,sizeof(profile_option)) &&

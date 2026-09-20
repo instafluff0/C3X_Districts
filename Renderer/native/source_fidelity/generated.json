@@ -16,7 +16,7 @@
     },
     {
       "path": "generated/shaders/hydrology/scene_material_v1.hlsl",
-      "sha256": "5fb886d62d96502a150c1d862d750f4b4c956d47f92b6477f199dcf78bfb1cbb"
+      "sha256": "44528c0e962d9e0278893d3c36042af9776aa93508c93cd34e96b6c9783913fd"
     },
     {
       "path": "generated/shaders/hydrology/water_effects.hlsl",
@@ -24,7 +24,7 @@
     },
     {
       "path": "generated/shaders/hydrology/water_natural.hlsl",
-      "sha256": "5388f4863c286b0221ec5a4dd35d38164ac12e9b1cf552637d062f37396ace1a"
+      "sha256": "2da89e656ff89e70e45d9828f8a5454a9b1fcaf7fa17605d7e770f27516f737b"
     },
     {
       "path": "generated/shaders/lighting/city_environment.hlsl",
@@ -128,7 +128,7 @@
     },
     {
       "path": "hydrology.hlsl",
-      "sha256": "5574e475bcaa5f95c0f183554fb8b0939900f79e2fdf174fe66a995cc4562ba6"
+      "sha256": "413cd03152647e1cd14fea0e37305ab4e425107a930383837d12b79f5b3763db"
     }
   ]
 }
