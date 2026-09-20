@@ -9,6 +9,35 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class ZoomMeshTests(unittest.TestCase):
+    def test_city_packing_preserves_every_shader_channel(self):
+        from Renderer.native.native_cpp_test import run_cpp
+        run_cpp(r'''
+#include <array>
+#include <cmath>
+#include <cassert>
+#include "Renderer/native/render_core/prepared_mesh.h"
+using namespace c3x_renderer::render_core;
+int main(){
+ std::vector<Vertex> vertices(3);float fields[42];
+ for(unsigned i=0;i<42;++i)fields[i]=float(i)+.125f;
+ for(auto& vertex:vertices)std::memcpy(&vertex,fields,sizeof(vertex));
+ vertices[1].x=-17;vertices[2].world_z=12;
+ std::vector<unsigned> indices={2,0,1};MeshFormat format;format.city=true;format.projection_kind=4;
+ PreparedMesh mesh;assert(prepare_mesh(vertices,&indices,format,mesh,[]{return false;}));
+ assert(mesh.vertex_stride==88 && mesh.vertices.size()==264 && mesh.index_count==3);
+ // Independent source/D3D semantic offsets, covering color, emission,
+ // reflections and opacity casters without changing float bits.
+ unsigned const source_offsets[]={0,12,24,44,60,68,80,120,152};
+ unsigned const packed_offsets[]={0,12,20,32,40,44,56,68,80};
+ unsigned const bytes[]={12,8,12,8,4,12,12,12,8};
+ for(unsigned vertex=0;vertex<3;++vertex)for(unsigned field=0;field<9;++field)
+  assert(!std::memcmp(reinterpret_cast<char const*>(&vertices[vertex])+source_offsets[field],
+      mesh.vertices.data()+vertex*88+packed_offsets[field],bytes[field]));
+ assert(mesh.bounds[0]==-19 && mesh.world_low[2]==12 && mesh.world_high[2]==32.125f);
+ for(unsigned i=0;i<3;++i){unsigned short index=0;std::memcpy(&index,mesh.indices.data()+i*2,2);assert(index==indices[i]);}
+}
+''')
+
     def test_evidence_storage_preflight_keeps_reserve_before_output_creation(self):
         from unittest.mock import patch
         from types import SimpleNamespace
@@ -643,7 +672,7 @@ int main(){
         program = r'''
 #include <cassert>
 #include <cstdint>
-#include "Renderer/native/render_core/resident_content.h"
+#include "Renderer/native/render_core/residency_candidates.h"
 using Handle=c3x_renderer::render_core::ContentHandle;
 #include <unordered_map>
 #include <vector>
@@ -1114,14 +1143,15 @@ int main(){
 #include <cassert>
 #include <cstdio>
 #include <cstdint>
-#include "Renderer/native/render_core/resident_content.h"
+#include "Renderer/native/render_core/residency_candidates.h"
 using Handle=c3x_renderer::render_core::ContentHandle;
 #include <unordered_map>
 template<std::size_t N,class... A> int sprintf_s(char(&out)[N],char const*format,A...args){return std::snprintf(out,N,format,args...);}
 struct State {
-    struct Item {std::size_t byte_count;unsigned last_used;bool prefetched;int buffers=0;std::uint64_t animation_epoch=0;Handle binding;};
+    struct Item {std::size_t byte_count;unsigned last_used;bool prefetched;int buffers=0;std::uint64_t animation_epoch=0;Handle binding;int signature=0;};
     using CachedTileGeometry=Item;
     c3x_renderer::render_core::ResidentContent<Item> resident_content{2048};
+    c3x_renderer::render_core::ResidencyCandidates residency_candidates;
     unsigned viewport_cache_capacity=32;
     struct Trace {void write(char const*,char const*,bool){}} trace;
     std::unordered_map<int,Item> tile_geometry_cache;
@@ -1135,7 +1165,7 @@ struct State {
 };
 int main(){
  State s;s.tile_geometry_cache={{1,{10,1,true}},{2,{20,2,false}},{3,{30,3,false}}};
- for(auto& item:s.tile_geometry_cache)item.second.binding=s.resident_content.bind(item.second);
+ for(auto& item:s.tile_geometry_cache){item.second.signature=item.first;item.second.binding=s.resident_content.bind(item.second);}
  auto expired=s.tile_geometry_cache.at(1).binding;
  assert(s.make_tile_cache_room(10) && s.tile_geometry_cache.size()==3);
  assert(s.make_tile_cache_room(50) && s.tile_geometry_cache.size()==2);
@@ -1148,6 +1178,7 @@ int main(){
  assert(s.make_tile_cache_room(70) && s.tile_geometry_cache.size()==1);
  s.terrain_patch_index_bytes=10;assert(!s.make_tile_cache_room(70));assert(s.make_tile_cache_room(60));
  State favored;favored.tile_geometry_cache={{1,{10,1,true}},{2,{20,2,false}},{3,{30,3,false}}};
+ for(auto& item:favored.tile_geometry_cache){item.second.signature=item.first;item.second.binding=favored.resident_content.bind(item.second);}
  favored.tile_geometry_cache.at(1).animation_epoch=1;
  assert(favored.make_tile_cache_room(50));
  assert(favored.tile_geometry_cache.count(1) && !favored.tile_geometry_cache.count(2));
@@ -1156,6 +1187,7 @@ int main(){
  favored.tile_geometry_epoch=40;favored.tile_geometry_cache.at(3).last_used=40;
  assert(favored.make_tile_cache_room(70) && !favored.tile_geometry_cache.count(1));
  State bounded;bounded.tile_geometry_cache={{1,{10,1,true}},{2,{20,2,false}},{3,{30,3,false}}};
+ for(auto& item:bounded.tile_geometry_cache){item.second.signature=item.first;item.second.binding=bounded.resident_content.bind(item.second);}
  bounded.tile_geometry_cache.at(1).animation_epoch=1;
  bounded.tile_geometry_cache.at(2).animation_epoch=2;
  assert(bounded.make_tile_cache_room(70) && bounded.tile_geometry_cache.size()==1);

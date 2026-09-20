@@ -1,5 +1,6 @@
 #pragma once
 #include "captured_scene.h"
+#include <array>
 #include <vector>
 #include <unordered_set>
 
@@ -11,17 +12,35 @@ struct WorldPreparationRegion {
     c3x_renderer_frame_v1 frame{};
     std::vector<c3x_renderer_tile_v1> tiles;
     std::vector<unsigned> selected;
+    static int bands(int cells,int pixels,int tile,bool wrap){
+        if(!wrap || tile<=0)return 0;
+        return std::min((cells+extent-1)/extent,((pixels+tile-1)/tile+halo+extent-1)/extent);
+    }
     static unsigned count(c3x_renderer_frame_v1 const& f){
-        return unsigned((f.world_width_tiles+extent-1)/extent)*unsigned((f.world_height_tiles+extent-1)/extent);
+        return unsigned((f.world_width_tiles+extent-1)/extent+2*bands(f.world_width_tiles,f.target_width,f.tile_width,f.world_wrap_x!=0))*
+            unsigned((f.world_height_tiles+extent-1)/extent+2*bands(f.world_height_tiles,f.target_height,f.tile_height,f.world_wrap_y!=0));
+    }
+    static std::array<int,2> core(unsigned index,int cells,int band){
+        unsigned columns=unsigned((cells+extent-1)/extent);
+        if(index<columns)return {int(index)*extent,0};
+        index-=columns;
+        if(index<unsigned(band))return {int(index)*extent,cells};
+        return {int(columns-unsigned(band)+index-unsigned(band))*extent,-cells};
     }
     bool build(CapturedScene const& scene,c3x_renderer_frame_v1 const& source,unsigned region){
         tiles.clear();selected.clear();frame=source;
         if(!scene.matches_world(source) || source.world_width_tiles<=0 || source.world_height_tiles<=0 ||
            source.world_width_tiles>2048 || source.world_height_tiles>2048 || region>=count(source))return false;
-        int columns=(source.world_width_tiles+extent-1)/extent;
-        int left=int(region%unsigned(columns))*extent,top=int(region/unsigned(columns))*extent;
+        int horizontal=bands(source.world_width_tiles,source.target_width,source.tile_width,source.world_wrap_x!=0);
+        int vertical=bands(source.world_height_tiles,source.target_height,source.tile_height,source.world_wrap_y!=0);
+        unsigned columns=unsigned((source.world_width_tiles+extent-1)/extent+2*horizontal);
+        auto x_core=core(region%columns,source.world_width_tiles,horizontal);
+        auto y_core=core(region/columns,source.world_height_tiles,vertical);
+        int left=x_core[0],top=y_core[0];
         std::unordered_set<std::uint64_t> seen;
-        // Canonical cores and wrapped halo anchors preserve the native lattice.
+        // Canonical cores plus bounded edge occurrences cover native wrapping
+        // independently of navigation history. Halo coordinates stay unwrapped,
+        // matching the authoritative occurrence lattice around each core.
         // Ground and rigid geometry use world units; anchors only supply relative
         // neighbor placement, with the native viewport's projection/detail inputs.
         for(int y=top-halo;y<top+extent+halo;++y)for(int x=left-halo;x<left+extent+halo;++x){
@@ -36,7 +55,7 @@ struct WorldPreparationRegion {
             auto record=scene.retained(key);
             if(!record || !record->authoritative)return false;
             auto tile=record->appearance;
-            tile.tile_x=int(std::uint32_t(key>>32));tile.tile_y=int(std::uint32_t(key));
+            tile.tile_x=x+x_core[1];tile.tile_y=y+y_core[1];
             tile.anchor_x=(x-left)*source.tile_width/2;
             tile.anchor_y=(y-top)*source.tile_height/2;
             tile.visibility_mask=record->visibility_mask;tile.tile_visibility=record->tile_visibility;

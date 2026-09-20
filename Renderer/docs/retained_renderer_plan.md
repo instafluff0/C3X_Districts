@@ -21,7 +21,69 @@ the M2 optimizations and M3 candidate have not been staged, installed or run ins
 [Architecture](renderer_architecture.md) owns the design;
 [validation](benchmark_workflow.md) owns measurement and acceptance.
 
-## M3.7 current handoff
+## M3.8 current handoff — in progress
+
+Whole-world appearance now enters through bounded caller-thread pages; the
+existing publication/world owners retain copied values. The existing workers
+prepare canonical regions and wrapped edge occurrences independently of the
+camera route. A bounded 1 GiB, delete-on-close compressed session file preserves
+compiled meshes and dependency proofs across GPU eviction. Map/viewer/config
+scope retirement clears it. Workers never read native objects. Foreground
+adoption still validates proofs and owns GPU publication.
+
+The measured candidate is `native/build/m38-world-streaming/C3XRenderer.dll`;
+`native/build/m38-huge-streaming-proof/receipt.json` records its exact source and
+binary identity. At 1120×1192, full detail and all water effects on, the synthetic
+160×160 / 12,800-tile dense world prepared all 520 canonical/wrapped regions in
+29.656 s after a 1.937 s first GPU request. The 100 deterministic jumps (91 distinct)
+had **633.13 / 1030.10 / 1207.81 ms mean / p95 / max** through actual desktop
+completion. All 100 exceeded 100 ms. All six independent cold-image comparisons
+were byte-exact; minimum sampled contiguous VA headroom was **831.09 MiB**.
+
+Those jumps made **zero combined ground/terrain/city compiler calls**, but restored
+71,262 tile results and uploaded 10,002,132,138 bytes in aggregate. This proves
+compiled backing reuse, not resident-world navigation: allocation/upload/adoption,
+cliff/resource adapters and actual drawing remain real work. Backing held 16,640
+occurrences in 890,370,425 bytes. Large worlds use a 384 MiB GPU geometry working
+set within the existing upper cap; the full expanded world does not fit there.
+The previous fixture moved a few synthetic objects with the camera; this run
+fixes that and cannot be treated as a strictly matched speed comparison to it.
+
+The next candidate, `native/build/m38-memory-sweep/C3XRenderer.dll`, packs city
+vertices from 168 to 88 bytes with every consumed float channel unchanged. Its
+control bitmap matches the prior candidate exactly. The matched 100-jump Huge
+campaigns below all prepared 520 regions, made zero combined compiler calls and
+passed six exact cold-image checks; full detail and water effects remain on.
+
+| Geometry working-set cap | Desktop mean / p95 / max ms | Uploaded GB | Minimum contiguous VA MiB |
+| --- | ---: | ---: | ---: |
+| 384 MiB | 611.93 / 995.45 / 1090.39 | 9.57 | 913.72 |
+| 512 MiB | 613.95 / 1062.70 / 1206.56 | 8.85 | 662.84 |
+| 640 MiB | 626.36 / 1046.42 / 1213.28 | 7.99 | 444.66 |
+
+Receipts: `native/build/m38-huge-compact384/`, `m38-huge-compact512/` and
+`m38-huge-compact640/`. These are single-run comparisons, not statistically
+established timing differences. Increasing capacity reduced uploads without a
+measured latency benefit; 640 MiB also failed the 512 MiB headroom floor. Keep
+384 MiB as the production Huge cap for now. The user permits a high-end-machine
+target provided the VM runs it; increases should earn their cost in measured
+workload results. Other cache and quality controls were identical.
+
+The 384 MiB streaming trace attributes 1.34 GB to ground, 1.35 GB to natural
+terrain, 6.08 GB to infrastructure and 0.63 GB to cities. Repeated infrastructure
+is the largest representation opportunity: all six source mine variants total
+1.30 MB, while each current transformed placement occupies 256–336 KB. Restore
+worker time totals 75.81 s across concurrent lanes and must not be added to
+end-to-end latency as if serial. Source sharing, not additional worker count or
+larger expanded-mesh budgets, is the next experiment.
+
+**Next unfinished responsibility:** reduce expanded-content residency/paging
+costs, then finish prompt native cutover for every camera trigger and the
+edit/lifecycle/complete-workload matrix. The <33 ms p95 target is unpassed. Fixture latency excludes
+native capture/overlays and actual game input. The accepted water DLL remains
+staged; no M3.8 candidate has been staged, installed or run inside Civ III.
+
+## M3.7 accepted handoff (preserved)
 
 M3.6 is committed as `c7ac7699`. Current isolated candidate:
 `native/build/m37-final/C3XRenderer.dll`, SHA-256
@@ -291,7 +353,7 @@ useful preparation across supersession without evicting the current working set.
 | 3.5 | Nonblocking native polling and honest pending-coverage policy | DLL/JGL transaction boundary implemented; measurements above |
 | 3.6 | Coherent overlays, interactions and picking | Guarded live bridge implemented; automated acceptance passed |
 | 3.7 | Cancellation, GPU reset, reload, configuration-off and failure recovery | Implemented; automated retirement/recreation and fail-closed barriers pass; physical device-loss restoration is not claimed |
-| 3.8 | Arbitrary-destination readiness, coherent native navigation, edit/lifecycle and complete latency proof | Pending; explicit responsibilities and acceptance below |
+| 3.8 | Arbitrary-destination readiness, coherent native navigation, edit/lifecycle and complete latency proof | In progress: whole-world input, preparation and bounded compiled backing work; paging, native cutover and full latency acceptance remain |
 
 **Done:** initialized, unchanged supported-world navigation selects already
 prepared scene content without foreground world compilation. Pixels, camera,
@@ -300,6 +362,14 @@ eviction and recovery have separately measured, bounded handling. A responsive
 submission queue or a fast revisit does not prove arbitrary-destination readiness.
 
 ### 3.8 arbitrary-destination navigation
+
+**Supported-size target:** prioritize normal maps through nominal 160 × 160
+Huge maps (12,800 actual staggered tiles). The user explicitly accepts this as
+the upper acceptance envelope. A 332 × 332 / 55,112-tile case remains a limit
+probe, not a release requirement; do not increase residency budgets to pass it.
+Whole-world copied input alone measures about 8 MiB at 12,800 tiles and 35 MiB at
+55,112 tiles. Expanded geometry, worker allocations and driver address space
+must be measured separately; input capacity is not render-ready capacity.
 
 Requested September 20: moving anywhere on the map should feel immediate. Treat
 this as an explicit architectural and latency requirement, not an incidental

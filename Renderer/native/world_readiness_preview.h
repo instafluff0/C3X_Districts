@@ -1,11 +1,14 @@
 // Included in the existing full-world CSV capture harness. This proves renderer
-// preparation/request work, not live Civ III input or desktop presentation.
+// preparation through desktop presentation, excluding live Civ III input.
 char world_test_option[8]={};
 if(GetEnvironmentVariableA("C3X_RENDERER_WORLD_READINESS_TEST",world_test_option,sizeof(world_test_option)) && ok){
     auto set_world=reinterpret_cast<c3x_renderer_set_world_capture_fn>(GetProcAddress(module,"c3x_renderer_set_world_capture"));
     auto get_world=reinterpret_cast<c3x_renderer_world_status_fn>(GetProcAddress(module,"c3x_renderer_world_status"));
     auto gpu_world=reinterpret_cast<c3x_renderer_gpu_render_fn>(GetProcAddress(module,"c3x_renderer_gpu_render"));
-    if(!set_world || !get_world || !gpu_world)return 1;
+    auto world_images=reinterpret_cast<c3x_renderer_gpu_images_fn>(GetProcAddress(module,"c3x_renderer_gpu_images"));
+    auto world_present=reinterpret_cast<c3x_renderer_gpu_present_fn>(GetProcAddress(module,"c3x_renderer_gpu_present"));
+    auto world_reset=reinterpret_cast<c3x_renderer_reset_fn>(GetProcAddress(module,"c3x_renderer_reset"));
+    if(!set_world || !get_world || !gpu_world || !world_images || !world_present || !world_reset)return 1;
     static std::vector<c3x_renderer_tile_v1> world_records;
     static DWORD world_thread=0;
     world_thread=GetCurrentThreadId();capture_whole_world=true;world_records=capture_view();capture_whole_world=false;
@@ -23,7 +26,11 @@ if(GetEnvironmentVariableA("C3X_RENDERER_WORLD_READINESS_TEST",world_test_option
     c3x_renderer_camera_request_v1 request={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(request),&frame,{1,1,1,1}};
     c3x_renderer_gpu_frame_v1 image={sizeof(image)};
     c3x_renderer_output_v1 world_output={C3X_RENDERER_API_VERSION,sizeof(world_output)};
+    // Retire the preview's earlier legacy/CPU baseline. This campaign starts
+    // with the same authoritative GPU publication path as native integration.
+    world_reset();ULONGLONG initial_start=GetTickCount64();
     if(gpu_world(&request,&image,&world_output)!=C3X_RENDERER_RESULT_OK || set_world(producer)!=C3X_RENDERER_RESULT_OK)return 1;
+    auto initial_ms=GetTickCount64()-initial_start;
     ULONGLONG start=GetTickCount64();
     c3x_renderer_world_status_v1 state={sizeof(state)};
     while(GetTickCount64()-start<180000){
@@ -33,14 +40,36 @@ if(GetEnvironmentVariableA("C3X_RENDERER_WORLD_READINESS_TEST",world_test_option
         MsgWaitForMultipleObjectsEx(0,nullptr,16,QS_ALLINPUT,MWMO_INPUTAVAILABLE);
     }
     auto memory=camera_memory_values();
-    std::printf("WORLD_READINESS total=%u authoritative=%u passes=%lld regions=%u attempted=%u unavailable=%u preparation_ms=%llu largest_free=%zu\n",
+    std::printf("WORLD_READINESS total=%u authoritative=%u passes=%lld regions=%u attempted=%u unavailable=%u first_request_ms=%llu preparation_ms=%llu largest_free=%zu\n",
         state.total,state.authoritative,state.capture_passes,state.regions,state.prepared_regions,state.unavailable_regions,
-        GetTickCount64()-start,std::size_t(memory.second));
+        initial_ms,GetTickCount64()-start,std::size_t(memory.second));
     if(!state.capture_passes || state.authoritative!=state.total){set_world(nullptr);return 1;}
     // No route-dependent warmup: the source paging/region policy above cannot
     // observe this seed or the destination sequence. Every first visit counts.
     int home_x=center_x,home_y=center_y;std::uint32_t random=0x38c3;
     LARGE_INTEGER frequency{};QueryPerformanceFrequency(&frequency);
+    // Complete every sample through the existing presenter. Submission alone
+    // allows queued GPU work to migrate into later requests and hides latency.
+    WNDCLASSA window_class{};window_class.lpfnWndProc=DefWindowProcA;
+    window_class.hInstance=GetModuleHandleA(nullptr);window_class.lpszClassName="C3XWorldReadiness";
+    if(!RegisterClassA(&window_class))return 1;
+    HWND world_window=CreateWindowExA(WS_EX_TOPMOST|WS_EX_TOOLWINDOW,window_class.lpszClassName,
+        "World readiness contract",WS_POPUP,20,20,frame.target_width,frame.target_height,
+        nullptr,nullptr,window_class.hInstance,nullptr);
+    if(!world_window)return 1;
+    ShowWindow(world_window,SW_SHOWNOACTIVATE);UpdateWindow(world_window);
+    auto desktop_library=LoadLibraryA("dwmapi.dll");
+    auto desktop_complete=reinterpret_cast<HRESULT(WINAPI*)()>(GetProcAddress(desktop_library,"DwmFlush"));
+    if(!desktop_complete)return 1;
+    struct WorldOracle {int x,y;c3x_renderer_i64 clock;std::vector<unsigned> pixels;};
+    std::vector<WorldOracle> oracles;
+    auto read_world=[&](std::vector<unsigned>& pixels){
+        pixels.resize(std::size_t(image.width)*image.height);
+        c3x_renderer_gpu_images_v1 read{};read.struct_size=sizeof(read);read.action=C3X_GPU_READBACK;
+        read.ticket=image.ticket;read.image=image.map_image;read.pixel_count=unsigned(pixels.size());
+        c3x_renderer_gpu_result_v1 result{sizeof(result)};
+        return world_images(&read,&result,pixels.data(),unsigned(pixels.size()))==C3X_RENDERER_RESULT_OK;
+    };
     for(unsigned n=0;n<100;++n){
         random=random*1664525u+1013904223u;center_x=int(random%unsigned(map_width));
         random=random*1664525u+1013904223u;center_y=int(random%unsigned(map_height));
@@ -50,11 +79,46 @@ if(GetEnvironmentVariableA("C3X_RENDERER_WORLD_READINESS_TEST",world_test_option
         request.frame=&next;world_output={C3X_RENDERER_API_VERSION,sizeof(world_output)};image={sizeof(image)};
         LARGE_INTEGER begin{},end{};QueryPerformanceCounter(&begin);
         int code=gpu_world(&request,&image,&world_output);QueryPerformanceCounter(&end);
-        std::printf("WORLD_JUMP sample=%u x=%d y=%d result=%d request_ms=%.3f built=%u reused=%u uploads=%u\n",
+        c3x_renderer_gpu_present_v1 show{};show.struct_size=sizeof(show);show.ticket=image.ticket;
+        show.image=image.map_image;show.window=world_window;show.width=image.width;show.height=image.height;
+        show.area[2]=image.width;show.area[3]=image.height;
+        if(code!=C3X_RENDERER_RESULT_OK || world_present(&show)!=C3X_RENDERER_RESULT_OK || FAILED(desktop_complete())){ok=false;break;}
+        LARGE_INTEGER displayed{};QueryPerformanceCounter(&displayed);auto memory_now=camera_memory_values();
+        std::printf("WORLD_JUMP sample=%u x=%d y=%d result=%d request_ms=%.3f desktop_ms=%.3f built=%u reused=%u uploads=%u readbacks=%u largest_free=%zu available_va=%zu geometry_bytes=%u begin_qpc=%lld end_qpc=%lld\n",
             n,center_x,center_y,code,1000.*double(end.QuadPart-begin.QuadPart)/double(frequency.QuadPart),
-            world_output.geometry_tiles_built,world_output.geometry_tiles_reused,world_output.geometry_upload_bytes);
-        if(code!=C3X_RENDERER_RESULT_OK){ok=false;break;}
+            1000.*double(displayed.QuadPart-begin.QuadPart)/double(frequency.QuadPart),
+            world_output.geometry_tiles_built,world_output.geometry_tiles_reused,world_output.geometry_upload_bytes,
+            image.map_readbacks,std::size_t(memory_now.second),std::size_t(memory_now.first),world_output.geometry_cache_bytes,begin.QuadPart,displayed.QuadPart);
+        if(n==0 || n==2 || n==4 || n==9 || n==14 || n==25){
+            WorldOracle oracle{center_x,center_y,next.presentation_time_ticks,{}};
+            if(!read_world(oracle.pixels)){ok=false;break;}oracles.push_back(std::move(oracle));
+        }
     }
-    center_x=home_x;center_y=home_y;set_world(nullptr);world_records.clear();
-    std::printf("%s world readiness workload: samples=100 live_input=unmeasured desktop=unmeasured\n",ok?"PASS":"FAIL");
+    c3x_renderer_gpu_present_v1 discard{};discard.struct_size=sizeof(discard);discard.action=1;discard.window=world_window;
+    world_present(&discard);DestroyWindow(world_window);UnregisterClassA(window_class.lpszClassName,window_class.hInstance);FreeLibrary(desktop_library);
+    set_world(nullptr);world_records.clear();
+    // Cold reference checks are outside the timed workload and use independent
+    // world/device lifetimes. Readback is an explicit diagnostic oracle only.
+    for(auto const& oracle:oracles){
+        world_reset();center_x=oracle.x;center_y=oracle.y;
+        auto selected=capture_view();auto cold=frame;cold.tiles=selected.data();cold.tile_count=unsigned(selected.size());
+        cold.presentation_time_ticks=oracle.clock;request.frame=&cold;image={sizeof(image)};
+        world_output={C3X_RENDERER_API_VERSION,sizeof(world_output)};std::vector<unsigned> pixels;
+        if(gpu_world(&request,&image,&world_output)!=C3X_RENDERER_RESULT_OK || !read_world(pixels)){ok=false;break;}
+        unsigned differences=0,maximum=0;
+        for(unsigned i=0;i<pixels.size();++i)for(unsigned shift:{0u,8u,16u}){
+            unsigned delta=unsigned(std::abs(int((pixels[i]>>shift)&255)-int((oracle.pixels[i]>>shift)&255)));
+            differences+=delta!=0;maximum=(std::max)(maximum,delta);
+        }
+        std::printf("WORLD_ORACLE x=%d y=%d differing_channels=%u max_channel_delta=%u\n",center_x,center_y,differences,maximum);
+        if(maximum>1){ok=false;
+            world_output.width=cold.target_width;world_output.height=cold.target_height;world_output.stride_bytes=cold.target_width*4;
+            world_output.bgra_pixels=oracle.pixels.data();write_bmp((std::string(argv[5])+".world-prepared.bmp").c_str(),world_output);
+            world_output.bgra_pixels=pixels.data();write_bmp((std::string(argv[5])+".world-cold.bmp").c_str(),world_output);break;}
+    }
+    center_x=home_x;center_y=home_y;
+    std::printf("%s world readiness workload: samples=100 live_input=unmeasured desktop=measured oracles=%zu\n",ok?"PASS":"FAIL",oracles.size());
+    char only[8]={};if(GetEnvironmentVariableA("C3X_RENDERER_WORLD_READINESS_ONLY",only,sizeof(only))){
+        world_reset();if(!shared_module)FreeLibrary(module);return ok?0:1;
+    }
 }

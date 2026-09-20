@@ -5,6 +5,27 @@ from Renderer.lab.platform import ROOT
 
 
 class ContentPreparationTests(unittest.TestCase):
+    def test_bounded_world_results_do_not_evict_unconsumed_demand(self):
+        run_cpp(r'''
+#include "Renderer/native/render_core/content_preparation.h"
+#include <cassert>
+using namespace c3x_renderer::render_core;
+struct Result {int value;std::size_t bytes()const{return 8u*1024u*1024u;}};
+using Pool=ContentPreparation<int,int,Result>;
+int main(){
+ Pool pool;std::deque<Pool::Job> jobs;std::vector<int> needed;
+ for(int i=0;i<100;++i){jobs.push_back({i,i});needed.push_back(i);}
+ pool.configure(jobs,[](int value,auto const&,unsigned){return std::make_unique<Result>(Result{value});},
+     4,needed,64u*1024u*1024u,true);pool.resume();
+ std::this_thread::sleep_for(std::chrono::milliseconds(50));
+ assert(pool.statistics().pending>0 && pool.statistics().evicted==0);
+ for(int i=0;i<100;++i){auto result=pool.take(i);assert(result && result->value==i);}
+ pool.finish_lease();auto stats=pool.statistics();
+ assert(stats.built==100 && stats.consumed==100 && stats.evicted==0 && stats.rejected==0);
+ assert(stats.peak_bytes<=64u*1024u*1024u);
+}
+''')
+
     def test_finished_lease_keeps_owned_results_and_reuses_workers(self):
         run_cpp(r'''
 #include "Renderer/native/render_core/content_preparation.h"

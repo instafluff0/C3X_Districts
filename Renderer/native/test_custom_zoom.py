@@ -79,15 +79,23 @@ class CustomZoomTests(unittest.TestCase):
         functions = functions.replace("this", "screen")
         program = r'''
 #include <cassert>
+#include <cstddef>
+#include "Renderer/native/c3x_renderer_api.h"
 #define __fastcall
+#define __cdecl
 constexpr int __=0;
 struct State {
+ struct {bool enable_custom_rendering=false;} current_config;
+ c3x_renderer_native_image_fn custom_renderer_native_image=nullptr;
  int custom_renderer_zoom_native_tile_width=128,custom_renderer_zoom_tile_width=128;
  long long custom_renderer_zoom_translate_x_fp=0,custom_renderer_zoom_translate_y_fp=0;
 } state,*is=&state;
 struct CityForm {struct {struct {int Status2=0;} Data;} Base;} city,*p_city_form=&city;
-struct Main_Screen_Form {int mouse_x=0,mouse_y=0;};
-struct Unit{};struct Animator{};struct PCX_Image{};struct PCX_Color_Table{};
+using JGL_Image=void;
+struct Main_Screen_Form {int mouse_x=0,mouse_y=0;struct {struct {struct {struct {JGL_Image* Image=nullptr;} JGL;} Canvas;} Data;} Units_Control;} main_screen,*p_main_screen_form=&main_screen;
+struct Unit{};struct Animator{int field_18E4[32]{};};struct PCX_Image{};struct PCX_Color_Table{};
+void Main_Screen_Form_update_in_go_to_mode(Main_Screen_Form*,int){}
+void Main_Screen_Form_draw_route_cursor(int,int){}
 struct Sprite{int Width=95,Height=63;};
 struct Bic{bool is_zoomed_out=false;} bic,*p_bic_data=&bic;
 int status_calls=0,cursor_calls=0,marker_calls=0,overlay_x=0,overlay_y=0;

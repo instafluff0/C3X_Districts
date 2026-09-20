@@ -129,9 +129,10 @@ class PreparedWorldLifetimeTests(unittest.TestCase):
         source=(ROOT/'Renderer/native/c3x_renderer.cpp').read_text()
         method='bool world_result_valid('+source.split('bool world_result_valid(',1)[1].split('\n    std::unique_ptr<c3x_renderer::fidelity::TerrainSurfaces> compile_terrain',1)[0]
         header=(ROOT/'Renderer/native/world_preparation.h').read_text()
-        key='using WorldPreparationKey='+header.split('using WorldPreparationKey=',1)[1].split('\nusing WorldPreparation=',1)[0]
+        key='using WorldPreparationKey=std::array<std::uint64_t,24>;\ninline WorldPreparationKey world_preparation_key('+header.split('inline WorldPreparationKey world_preparation_key(',1)[1].split('\nusing WorldPreparation=',1)[0]
         run_cpp(r'''
 #include "Renderer/native/c3x_renderer_api.h"
+#include "Renderer/native/render_core/prepared_world_validity.h"
 #include <array>
 #include <algorithm>
 #include <memory>

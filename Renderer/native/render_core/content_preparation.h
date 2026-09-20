@@ -38,6 +38,7 @@ private:
     std::size_t capacity_limit=byte_limit;
     std::atomic<bool> cancel{false};
     bool paused=true,stopping=false,demanded=false;
+    bool bounded_results=false;
     Key demand_key{};
     std::array<bool,6> active{};
     std::array<Key,6> active_key{};
@@ -53,7 +54,19 @@ private:
     void run(unsigned worker) {
         std::unique_lock<std::mutex> lock(mutex);
         for(;;){
-            wake.wait(lock,[&]{return stopping || (!paused && worker<worker_limit && !pending.empty() && ((demanded && pending.front().key==demand_key) || pending.front().urgent || (stats.bytes<capacity_limit/2)));});
+            wake.wait(lock,[&]{
+                if(stopping)return true;
+                if(paused || worker>=worker_limit || pending.empty())return false;
+                if(demanded && pending.front().key==demand_key)return true;
+                if(bounded_results){
+                    // Reserve the declared per-result maximum for in-flight
+                    // producers. Demand order must not turn urgency into an
+                    // unbounded run-ahead that evicts results before adoption.
+                    auto reserved=std::size_t(std::count(active.begin(),active.end(),true))*byte_limit;
+                    return stats.bytes+reserved<=capacity_limit-byte_limit;
+                }
+                return pending.front().urgent || stats.bytes<capacity_limit/2;
+            });
             if(stopping)return;
             bool published=false;
             {
@@ -69,7 +82,7 @@ private:
                 if(cancel.load(std::memory_order_relaxed)){
                     ++stats.cancelled;
                     if(!stopping)pending.push_front(std::move(job));
-                }else if(value && value->bytes()<=capacity_limit){
+                }else if(value && value->bytes()<=(bounded_results?byte_limit:capacity_limit)){
                     auto bytes=value->bytes();
                     while(!ready.empty() && (stats.bytes+bytes>capacity_limit || ready.size()>=job_limit)){
                         // Protect the result being joined by the sole consumer.
@@ -151,7 +164,7 @@ public:
     }
     // Must be called while paused. Jobs own scalar capture data; shared assets
     // and world inputs remain borrowed under the caller's explicit read lease.
-    void configure(std::deque<Job> jobs,Compile next,unsigned count=1,std::vector<Key> needed={},std::size_t budget=byte_limit){
+    void configure(std::deque<Job> jobs,Compile next,unsigned count=1,std::vector<Key> needed={},std::size_t budget=byte_limit,bool bounded=false){
         std::lock_guard<std::mutex> lock(mutex);
         if(!paused || std::any_of(active.begin(),active.end(),[](bool value){return value;}) || jobs.size()>job_limit || count<1 || count>6 || budget<byte_limit || budget>128u*1024u*1024u)throw std::logic_error("CPU preparation lease/budget");
         if(capacity_limit!=budget){ready.clear();stats.bytes=stats.peak_bytes=0;capacity_limit=budget;}
@@ -173,7 +186,7 @@ public:
             }
             std::stable_partition(jobs.begin(),jobs.end(),[&](auto const& job){return required(job.key);});
         }
-        pending.swap(jobs);compile=std::move(next);worker_limit=count;
+        pending.swap(jobs);compile=std::move(next);worker_limit=count;bounded_results=bounded;
     }
     void resume(){
         std::lock_guard<std::mutex> lock(mutex);

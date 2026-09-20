@@ -1,5 +1,17 @@
 # Civ III patch dependency ledger
 
+## M3.8 whole-world input
+
+`required_user_action: []`. No new executable symbols, signatures or addresses.
+The existing tile reader now also supplies complete appearance without unit-list
+traversal to the optional DLL `c3x_renderer_set_world_capture` callback. The DLL
+requests at most 128 records per caller-thread opportunity and copies them into
+the existing scene publication; background workers receive immutable values only.
+Existing map/viewer/visibility and configuration scopes reject obsolete pages.
+The callback is registered at the existing renderer-load boundary and retired
+on unload. Builds without it retain demand capture. Native camera-cutover work
+is still unfinished; no speculative patch dependency is requested.
+
 ## M3.7 asynchronous recovery
 
 `required_user_action: []`. No new CSV entries, signatures or addresses.

@@ -35,7 +35,7 @@ public:
 private:
     std::unordered_map<std::uint64_t,Record> records;
     std::unordered_map<std::uint64_t,Observation> observations;
-    std::uint64_t serial=0,epoch=0,appearance_epoch=0;
+    std::uint64_t serial=0,epoch=0,appearance_epoch=0,scope_epoch=0;
     std::size_t authoritative_records=0;
     int width=0,height=0;
     bool wrap_x=false,wrap_y=false,valid=false;
@@ -50,7 +50,7 @@ public:
         bool changed=!published || configuration!=config || map_epoch!=identity.map_epoch ||
             viewer_epoch!=identity.viewer_epoch || width!=frame.world_width_tiles || height!=frame.world_height_tiles ||
             wrap_x!=(frame.world_wrap_x!=0) || wrap_y!=(frame.world_wrap_y!=0);
-        if(changed){records.clear();observations.clear();valid=false;authoritative_records=0;++appearance_epoch;}
+        if(changed){records.clear();observations.clear();valid=false;authoritative_records=0;++appearance_epoch;++scope_epoch;}
         published=true;configuration=config;map_epoch=identity.map_epoch;viewer_epoch=identity.viewer_epoch;
         width=frame.world_width_tiles;height=frame.world_height_tiles;
         wrap_x=frame.world_wrap_x!=0;wrap_y=frame.world_wrap_y!=0;return changed;
@@ -113,7 +113,7 @@ public:
         if(width!=frame.world_width_tiles || height!=frame.world_height_tiles ||
            wrap_x!=(frame.world_wrap_x!=0) || wrap_y!=(frame.world_wrap_y!=0)){
             if(published)return false; // An old view cannot replace the published world.
-            records.clear();observations.clear();
+            records.clear();observations.clear();authoritative_records=0;++appearance_epoch;
         }
         width=frame.world_width_tiles;height=frame.world_height_tiles;
         wrap_x=frame.world_wrap_x!=0;wrap_y=frame.world_wrap_y!=0;
@@ -209,6 +209,7 @@ public:
     std::size_t size() const{return records.size();}
     std::size_t authoritative_size() const{return authoritative_records;}
     std::uint64_t appearance_sequence() const{return appearance_epoch;}
+    std::uint64_t scope_sequence() const{return scope_epoch;}
     std::uint64_t observation_sequence() const{return epoch;}
     bool matches_world(c3x_renderer_frame_v1 const& frame) const {
         return width==frame.world_width_tiles && height==frame.world_height_tiles &&

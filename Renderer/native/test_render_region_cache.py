@@ -143,6 +143,7 @@ int main(){assert(eligible(false));assert(!eligible(true));}
         predicate="auto selected_tile=[&]"+source.split("auto selected_tile=[&]",1)[1].split("        auto ground_observations=",1)[0]
         run_cpp(r'''
 #include "Renderer/native/c3x_renderer_api.h"
+#include <algorithm>
 #include <vector>
 #include <cassert>
 std::vector<unsigned> select(c3x_renderer_frame_v1 const& frame,int region_input_ring,bool prewarming=false,int prewarm_index=-1,bool offload_prefetch=false,bool guarded_prefetch=false){

@@ -323,6 +323,8 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
     bool prepared_view_fixture=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_PREPARED_VIEW",prepared_area_option,sizeof(prepared_area_option))!=0;
     int visibility_center_x=center_x,visibility_center_y=center_y;
     bool capture_whole_world=false;
+    char world_readiness_option[8]={};
+    bool fixed_world_scene=GetEnvironmentVariableA("C3X_RENDERER_WORLD_READINESS_TEST",world_readiness_option,sizeof(world_readiness_option))!=0;
     auto capture_view = [&]() {
     if(timing_enabled)QueryPerformanceCounter(&capture_begin);
     int center_raw_x = center_x * tile_width / 2;
@@ -379,7 +381,7 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
         tiles.push_back(tile);
       }
     }
-    if(objects) {
+    if(objects && !fixed_world_scene) {
         std::vector<std::size_t> candidates;
         for(std::size_t i=0;i<tiles.size();++i)if(tiles[i].real_terrain_type<=4 &&
             (tiles[i].tile_flags&C3X_RENDERER_TILE_RENDER))candidates.push_back(i);
@@ -911,7 +913,9 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
         std::printf("CAMERA memory available_virtual=%llu largest_free_region=%zu total_virtual=%llu\n",
             values.first,values.second,memory.ullTotalVirtual);
     };
+    #ifdef C3X_GPU_NATIVE_CONTRACT
     #include "world_readiness_preview.h"
+    #endif
     #include "gpu_frame_preview.h"
     #include "prepared_view_preview.h"
     #include "retained_replay_preview.h"

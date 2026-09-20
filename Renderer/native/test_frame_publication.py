@@ -365,6 +365,7 @@ struct TacticalGPU {template<class... T> ID3D11Texture2D* packed(T&&...){unexpec
 struct D3D11_RECT {int left,top,right,bottom;};
 struct RendererState {
     struct Scene : c3x_renderer::render_core::CapturedScene {std::uint64_t signature=0;} topology_cache;
+    struct WorldStorage {unsigned clears=0;void clear(){++clears;}} world_preparation_queue,world_backing;
     TacticalGPU tactical_gpu;
     std::uint64_t unit_scene_rejections=0;
     struct {std::size_t bytes(){return 0;}} unit_scene_work;
@@ -471,6 +472,7 @@ int main(){
         assert(durable_state.topology_cache.retained(durable_state.topology_cache.key(2,0))->appearance.city_id==-1);
         assert(durable_state.topology_cache.retained(durable_state.topology_cache.key(4,0))->appearance.city_id==20);
         assert(durable_state.entered==2); // cancelled edit was never a render job
+        assert(durable_state.world_backing.clears==1); // ordinary content edits keep prepared backing
     }
     // GPU camera uses the same replaceable queue. Hold the real render call
     // before GPU capture to prove begin/pending-poll never join it, and cancel

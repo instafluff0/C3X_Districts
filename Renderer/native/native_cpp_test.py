@@ -18,8 +18,8 @@ def run_cpp(program, *, sources=(), timeout=30):
         path = Path(directory)
         cpp = path / "contract.cpp"
         cpp.write_text(program)
-        needs_windows = any('#include <windows.h>' in (ROOT / source).read_text()
-                            for source in sources)
+        needs_windows = '#include <windows.h>' in program or any(
+            '#include <windows.h>' in (ROOT / source).read_text() for source in sources)
         if os.name == "nt" or needs_windows:
             target_root = ROOT if os.name == "nt" else windows_root()
             # Keep generated paths as quoted batch arguments; no shell expansion

@@ -7,12 +7,12 @@ struct Gpu {
     std::vector<std::array<ID3D11ShaderResourceView*,7>> materials;
     std::unordered_map<std::string,ID3D11ShaderResourceView*> textures;
     ID3D11VertexShader*vs[2]={};ID3D11PixelShader*ps[4]={};
-    ID3D11InputLayout*layout=nullptr;ID3D11Buffer*material_frame=nullptr,*light_frame=nullptr;
+    ID3D11InputLayout*layout=nullptr,*compact_layout=nullptr;ID3D11Buffer*material_frame=nullptr,*light_frame=nullptr;
     ID3D11BlendState*emission=nullptr;ID3D11DepthStencilState*readonly_depth=nullptr;
     std::size_t texture_bytes=0;bool ready=false;
     float night=0,emissive_scale=1;
     template<class T>void drop(T*&p){if(p)p->Release();p=nullptr;}
-    void reset(){for(auto&p:vs)drop(p);for(auto&p:ps)drop(p);drop(layout);drop(material_frame);drop(light_frame);
+    void reset(){for(auto&p:vs)drop(p);for(auto&p:ps)drop(p);drop(layout);drop(compact_layout);drop(material_frame);drop(light_frame);
         drop(emission);drop(readonly_depth);for(auto&p:textures)drop(p.second);textures.clear();materials.clear();
         library={};texture_bytes=0;ready=false;}
     ~Gpu(){reset();}
@@ -39,6 +39,9 @@ struct Gpu {
                     {"TEXCOORD",5,DXGI_FORMAT_R32G32B32_FLOAT,0,120,D3D11_INPUT_PER_VERTEX_DATA,0},
                     {"TEXCOORD",6,DXGI_FORMAT_R32G32_FLOAT,0,152,D3D11_INPUT_PER_VERTEX_DATA,0}};
                 hr=device->CreateInputLayout(e,9,blob->GetBufferPointer(),blob->GetBufferSize(),&layout);
+                unsigned const offsets[]={0,12,20,32,40,44,56,68,80};
+                for(unsigned field=0;field<9;++field)e[field].AlignedByteOffset=offsets[field];
+                if(SUCCEEDED(hr))hr=device->CreateInputLayout(e,9,blob->GetBufferPointer(),blob->GetBufferSize(),&compact_layout);
             }
             drop(blob);if(FAILED(hr)){reset();return false;}
         }
@@ -66,9 +69,9 @@ struct Gpu {
         if(SUCCEEDED(hr))hr=device->CreateDepthStencilState(&z,&readonly_depth);
         if(FAILED(hr)){reset();return false;}ready=true;return true;
     }
-    void bind(ID3D11DeviceContext*context,unsigned material,bool environment,float const*atlas,bool reflect,bool emit){
+    void bind(ID3D11DeviceContext*context,unsigned material,bool environment,float const*atlas,bool reflect,bool emit,bool compact=false){
         auto const&m=materials[material];
-        context->IASetInputLayout(layout);context->VSSetShader(vs[reflect?1:0],nullptr,0);
+        context->IASetInputLayout(compact?compact_layout:layout);context->VSSetShader(vs[reflect?1:0],nullptr,0);
         context->PSSetShader(ps[(reflect?2:0)+(emit?1:0)],nullptr,0);
         float values[]={environment?1.f:0.f,0,0,0,atlas[0],atlas[1],atlas[2],atlas[3]};
         context->UpdateSubresource(material_frame,0,nullptr,values,0,0);context->PSSetConstantBuffers(7,1,&material_frame);

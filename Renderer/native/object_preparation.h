@@ -1,5 +1,5 @@
 #pragma once
-#include "object_compiler.h"
+#include "rigid_object_instance.h"
 #include "city_fidelity/compiler.h"
 #include "source_fidelity/terrain_compiler.h"
 namespace c3x_renderer { namespace objects {
@@ -11,6 +11,7 @@ struct PreparationInput {
     std::int64_t world_revision=0;
     bool river_ready=false,skip_flat_shore=true,separate_relief=true,retain_height=true;
     bool route_ready=false,routes_enabled=true,mine_ready=false,farm_ready=false,city_ready=false,composition_ready=false;
+    bool shared_rigid=false;
 };
 struct PreparedPart {
     render_core::PreparedMesh mesh;
@@ -22,6 +23,7 @@ struct PreparedPart {
 struct PreparedObjects {
     std::array<PreparedPart,layer_count> layers;
     std::vector<PreparedPart> city;
+    std::vector<PreparedRigid> rigid;
     unsigned composition=~0u,instances=0,routes=0;
     std::shared_ptr<void> buffer;
     std::size_t gpu_bytes=0;
@@ -30,7 +32,7 @@ struct PreparedObjects {
     fidelity::NaturalWorld::CellProof rivers;
     std::size_t proof_bytes=0;
     std::size_t bytes()const {
-        std::size_t total=sizeof(*this)+city.capacity()*sizeof(PreparedPart)+gpu_bytes+proof_bytes;
+        std::size_t total=sizeof(*this)+city.capacity()*sizeof(PreparedPart)+rigid.capacity()*sizeof(PreparedRigid)+gpu_bytes+proof_bytes;
         for(auto const& part:layers)total+=part.mesh.bytes();
         for(auto const& part:city)total+=part.mesh.bytes();
         if(!city.empty())total+=sizeof(city_fidelity::Lighting)+city.front().lighting->lights.capacity()*sizeof(city_fidelity::Light)+
@@ -116,7 +118,16 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
             raw_bytes+=(part.indices.size()+part.vertices.size())*sizeof(Vertex);
     }
     if(stop() || (bounded && raw_bytes>32u*1024u*1024u))return {};
-    Surfaces surfaces;compile(plan,input.projection,assets,relief,height_natural,surfaces,true);
+    Surfaces surfaces;
+    if(input.shared_rigid){
+        for(auto const& instance:plan.instances){
+            if(stop())return {};
+            if(instance.asset<assets[instance.family].assets.size())
+                result->rigid.push_back(prepare_rigid(instance,input.projection,assets,relief,height_natural));
+        }
+        plan.instances.clear();
+    }
+    compile(plan,input.projection,assets,relief,height_natural,surfaces,true);
     for(unsigned layer=0;layer<layer_count;++layer){
         render_core::MeshFormat format;format.feature=layer!=route_layer;format.projection_kind=2;
         if(!render_core::prepare_mesh(surfaces.layers[layer],layer==route_layer?nullptr:&surfaces.indices[layer],format,result->layers[layer].mesh,stop))return {};
@@ -132,7 +143,7 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
             PreparedPart part;part.material=chunk.material;part.environment=chunk.environment;
             part.terrain_conforming=chunk.terrain_conforming;part.lighting=chunk.lighting;
             std::copy(chunk.atlas,chunk.atlas+4,part.atlas.begin());
-            render_core::MeshFormat format;format.projection_kind=4;
+            render_core::MeshFormat format;format.projection_kind=4;format.city=true;
             if(!render_core::prepare_mesh(chunk.vertices,&chunk.indices,format,part.mesh,stop))return {};
             std::vector<Vertex>().swap(chunk.vertices);result->city.push_back(std::move(part));
             if(bounded && result->bytes()>Preparation::byte_limit/2)return {};

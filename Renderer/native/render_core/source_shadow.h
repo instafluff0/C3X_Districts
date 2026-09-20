@@ -23,7 +23,8 @@ class SourceShadow {
     ID3D11VertexShader* vertex=nullptr,*instance_vertex=nullptr;
     ID3D11InputLayout* instance_layout=nullptr;
     ID3D11PixelShader *opaque=nullptr,*cutout=nullptr;
-    ID3D11InputLayout *layout=nullptr,*feature_layout=nullptr,*natural_layout=nullptr;
+    ID3D11VertexShader* rigid_vertex=nullptr;
+    ID3D11InputLayout *layout=nullptr,*feature_layout=nullptr,*natural_layout=nullptr,*city_layout=nullptr;
     ID3D11Buffer* caster_settings=nullptr;
     ID3D11RasterizerState* raster=nullptr;
     ID3D11BlendState* maximum=nullptr;
@@ -43,6 +44,7 @@ public:
         std::uint64_t version=0;
         Bounds bounds;
         std::vector<fidelity::MeshInstance> const* instances=nullptr;float instance_material=40;
+        bool rigid=false;
         float offset[3]={};
     };
     SourceShadow()=default;
@@ -50,9 +52,9 @@ public:
     ~SourceShadow(){clear();}
     void clear_cached_pages(){pages={};basis={};epoch=0;}
     void clear(){
-        instance_stream.clear();drop(instance_vertex);drop(instance_layout);
+        instance_stream.clear();drop(instance_vertex);drop(instance_layout);drop(rigid_vertex);
         drop(view);drop(texture);for(auto& t:targets)drop(t);
-        drop(vertex);drop(opaque);drop(cutout);drop(layout);drop(feature_layout);drop(natural_layout);drop(caster_settings);
+        drop(vertex);drop(opaque);drop(cutout);drop(layout);drop(feature_layout);drop(natural_layout);drop(city_layout);drop(caster_settings);
         drop(table);drop(raster);drop(maximum);clear_cached_pages();
     }
     bool ensure(ID3D11Device* device,wchar_t const* path) {
@@ -82,6 +84,11 @@ public:
             elements[3].AlignedByteOffset=56;elements[0].AlignedByteOffset=40;elements[1].AlignedByteOffset=72;
             elements[2].AlignedByteOffset=12;elements[2].Format=DXGI_FORMAT_R32G32B32A32_FLOAT;
             if(SUCCEEDED(hr))hr=device->CreateInputLayout(elements,5,code->GetBufferPointer(),code->GetBufferSize(),&natural_layout);
+            elements[0].AlignedByteOffset=12;elements[1].AlignedByteOffset=40;
+            elements[2].AlignedByteOffset=68;elements[2].Format=DXGI_FORMAT_R32G32B32_FLOAT;
+            elements[3].AlignedByteOffset=52;elements[4].AlignedByteOffset=80;
+            elements[4].Format=DXGI_FORMAT_R32G32_FLOAT;
+            if(SUCCEEDED(hr))hr=device->CreateInputLayout(elements,5,code->GetBufferPointer(),code->GetBufferSize(),&city_layout);
         }
         if(SUCCEEDED(hr)){
             std::wstring instance_path(path);auto slash=instance_path.find_last_of(L"/\\");
@@ -91,6 +98,14 @@ public:
             if(errors)OutputDebugStringA(static_cast<char const*>(errors->GetBufferPointer()));
             if(SUCCEEDED(hr))hr=device->CreateVertexShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,&instance_vertex);
             if(SUCCEEDED(hr))hr=create_instance_layout(device,code,&instance_layout);
+            if(SUCCEEDED(hr)){
+                std::wstring rigid_path(path);auto rigid_slash=rigid_path.find_last_of(L"/\\");
+                rigid_path=rigid_path.substr(0,rigid_slash)+L"/../render_core/rigid_caster.hlsl";
+                drop(code);drop(errors);
+                hr=compile_cached(rigid_path.c_str(),"VSSharedCaster","vs_5_0",&code,&errors);
+                if(errors)OutputDebugStringA(static_cast<char const*>(errors->GetBufferPointer()));
+                if(SUCCEEDED(hr))hr=device->CreateVertexShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,&rigid_vertex);
+            }
         }
         if(SUCCEEDED(hr) && compile("PSOpaque","ps_5_0"))
             hr=device->CreatePixelShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,&opaque);
@@ -346,19 +361,20 @@ public:
                     for(;next<selected.size();++next){
                         auto const&part=casters[selected[next]];
                         if(!part.instances || part.vertices!=c.vertices || part.indices!=c.indices || part.count!=c.count ||
-                           part.binding!=c.binding || part.layer!=c.layer)break;
+                           part.binding!=c.binding || part.layer!=c.layer || part.rigid!=c.rigid ||
+                           part.vertex_offset!=c.vertex_offset || part.index_offset!=c.index_offset)break;
                         if(data.size()+part.instances->size()>InstanceStream::limit)break;
                         for(auto instance:*part.instances){std::copy(part.offset,part.offset+3,instance.view);instance.view[3]=part.instance_material;data.push_back(instance);}
                     }
                     if(data.empty() || !instance_stream.upload(nullptr,context,data))return false;
                     ordinal=next-1;
-                    context->VSSetShader(instance_vertex,nullptr,0);context->IASetInputLayout(instance_layout);
-                    ID3D11Buffer*streams[]={c.vertices,instance_stream.buffer};UINT strides[]={32,64},offsets[]={0,instance_stream.offset};
-                    context->IASetVertexBuffers(0,2,streams,strides,offsets);context->IASetIndexBuffer(c.indices,c.index_format,0);
+                    context->VSSetShader(c.rigid?rigid_vertex:instance_vertex,nullptr,0);context->IASetInputLayout(instance_layout);
+                    ID3D11Buffer*streams[]={c.vertices,instance_stream.buffer};UINT strides[]={32,64},offsets[]={c.vertex_offset,instance_stream.offset};
+                    context->IASetVertexBuffers(0,2,streams,strides,offsets);context->IASetIndexBuffer(c.indices,c.index_format,c.index_offset);
                     context->DrawIndexedInstanced(c.count,UINT(data.size()),0,0,0);++draws;continue;
                 }
                 context->VSSetShader(vertex,nullptr,0);
-                context->IASetInputLayout(c.stride==92?natural_layout:c.stride==48?feature_layout:layout);
+                context->IASetInputLayout(c.stride==88?city_layout:c.stride==92?natural_layout:c.stride==48?feature_layout:layout);
                 UINT stride=c.stride,offset=c.vertex_offset;context->IASetVertexBuffers(0,1,&c.vertices,&stride,&offset);
                 context->IASetIndexBuffer(c.indices,c.index_format,c.index_offset);context->DrawIndexed(c.count,0,0);++draws;
             }

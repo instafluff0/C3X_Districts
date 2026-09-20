@@ -33,7 +33,9 @@ def main(argv=None):
     parser.add_argument('--camera-requests',action='store_true',help='Exercise replaceable GPU camera exports and retained front lifetime')
     parser.add_argument('--benchmark',action='store_true',help='Compare complete native CPU/GPU frame requests and desktop completion')
     parser.add_argument('--profile',action='store_true',help='Enable existing phase and address-space samples; match this setting in both comparison arms')
+    parser.add_argument('--world-readiness-only',action='store_true',help='Run only the complete world-navigation workload and independent cold-pixel oracles')
     parser.add_argument('--world-readiness',action='store_true',help='Page the complete world through the production caller callback, prepare it independently of the route, and measure 100 distributed GPU requests')
+    parser.add_argument('--world-geometry-mib',type=int,choices=(384,512,640,768),help='Isolated Huge-world residency budget control; leaves other budgets and detail unchanged')
     parser.add_argument('--dense-scene',action='store_true',help='Use the existing world-fixed dense city/infrastructure/resource fixture in both comparison arms')
     parser.add_argument('--dense-city-case',default='',help='Dense city culture,era,size,capital, for example 0,3,1,1; requires --dense-scene')
     parser.add_argument('--object-workers',choices=('0','1'),default='1',help='Use the identical object compiler on the foreground (0) or bounded worker (1)')
@@ -48,6 +50,7 @@ def main(argv=None):
     parser.add_argument("--visual-only",action="store_true",help="Use production rendering settings and validate independent visual frames without the 384-request comparison")
     parser.add_argument("--scroll-coverage",action="store_true",help="Exercise fine scrolling and guard coverage against missing map pixels")
     args=parser.parse_args(argv)
+    if args.world_readiness_only:args.world_readiness=True
     if args.native_recovery:args.native_navigation=True
     if args.dense_city_case:
         try:
@@ -85,7 +88,7 @@ def main(argv=None):
         'build_receipt_sha256':digest(build_path) if build_record else None,
         'current_runtime_matches_build':bool(build_sources) and all(build_sources.get(path)==value for path,value in inputs.items()),
         'purpose':'Candidate or explicitly selected historical binary; harness inputs are recorded separately.'}
-    for path in (scene,dll,jgl,ROOT/'injected_code.c',ROOT/'C3X.h',ROOT/'civ_prog_objects.csv',*[ROOT/'Renderer/native'/n for n in ('gpu_frame_preview.h','gpu_camera_identity_preview.h','native_frame_workload.h','native_frame_benchmark.h','test_native_screen.h','test_native_bootstrap.h','test_native_worker.cpp','test_gpu_unit_composition.h','test_native_image_adapter.cpp','test_native_observation.cpp','native_image_adapter.h','native_sprite_diagnostics.h','native_composition_owner.h','native_observation.h','gpu_image_worker_client.h','gpu_image_commands.h','color_quantization.h','test_gpu_frame_api.c','biq_preview.cpp','BUILD.bat','record_gpu_frame.py')]):inputs[path.relative_to(ROOT).as_posix()]=digest(path)
+    for path in (scene,dll,jgl,ROOT/'injected_code.c',ROOT/'C3X.h',ROOT/'civ_prog_objects.csv',*[ROOT/'Renderer/native'/n for n in ('gpu_frame_preview.h','world_readiness_preview.h','gpu_camera_identity_preview.h','native_frame_workload.h','native_frame_benchmark.h','test_native_screen.h','test_native_bootstrap.h','test_native_worker.cpp','test_gpu_unit_composition.h','test_native_image_adapter.cpp','test_native_observation.cpp','native_image_adapter.h','native_sprite_diagnostics.h','native_composition_owner.h','native_observation.h','gpu_image_worker_client.h','gpu_image_commands.h','color_quantization.h','test_gpu_frame_api.c','biq_preview.cpp','BUILD.bat','record_gpu_frame.py')]):inputs[path.relative_to(ROOT).as_posix()]=digest(path)
     # Runtime HLSL is part of the result identity even when the DLL is unchanged.
     from Renderer.lab.preparation import require_current, receipt as shader_receipt
     require_current(ROOT)
@@ -95,7 +98,7 @@ def main(argv=None):
     settings={'C3X_RENDERER_GPU_JGL_TEST':str(win/jgl.relative_to(ROOT)),'C3X_RENDERER_VISUAL_PROFILE':'city-fidelity','C3X_RENDERER_SHARED_SCENE_SURFACE':'',
         'C3X_RENDERER_WATER_COVERAGE':'','C3X_RENDERER_REFLECTION_CONTROL':'0' if args.reflections=='1' else '1','C3X_RENDERER_WAVES':args.waves,'C3X_RENDERER_WATER_MOTION':args.water_motion,'C3X_RENDERER_GPU_FRAME_TEST':'1','C3X_RENDERER_NATIVE_CAMERA_TEST':'1' if args.native_camera_requests or args.native_navigation else '', 'C3X_RENDERER_NATIVE_NAVIGATION_TEST':'1' if args.native_navigation else '', 'C3X_RENDERER_NATIVE_RECOVERY_TEST':'1' if args.native_recovery else '', 'C3X_RENDERER_GPU_CAMERA_IDENTITY_TEST':'1' if args.atomic_camera_views else '', 'C3X_RENDERER_GPU_CAMERA_TEST':'1' if args.camera_requests else '','C3X_RENDERER_SCROLL_COVERAGE_TEST':'1' if args.scroll_coverage else '','C3X_RENDERER_NATIVE_FRAME_BENCHMARK':'1' if args.benchmark else '',
         'C3X_RENDERER_PROFILE':'1' if args.profile else '0','C3X_RENDERER_GROUND_WORKERS':args.ground_workers,'C3X_RENDERER_OBJECT_WORKERS':args.object_workers,
-        'C3X_RENDERER_TRACE':'2','C3X_RENDERER_TRACE_MIB':'32','C3X_RENDERER_TRACE_BUFFERED':'1' if args.benchmark or args.visual_only else '', 'C3X_RENDERER_TRACE_FILE':str(target/'renderer.log'),
+        'C3X_RENDERER_TRACE':'2','C3X_RENDERER_TRACE_MIB':'32','C3X_RENDERER_TRACE_BUFFERED':'1' if args.benchmark or args.visual_only or args.world_readiness else '', 'C3X_RENDERER_TRACE_FILE':str(target/'renderer.log'),
         'C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS':r'..\..\Renderer\custom.custom_rendering.txt',
         'C3X_RENDERER_PREVIEW_OBJECTS':'1','C3X_RENDERER_PREVIEW_CITY':'0,3,1,1',
         'C3X_RENDERER_PREVIEW_DENSE_SCENE':'1' if args.dense_scene else '',
@@ -107,7 +110,9 @@ def main(argv=None):
         'C3X_RENDERER_VISUAL_UNITS':str(args.visual_units),'C3X_RENDERER_VISUAL_UNIT_CASE':args.visual_unit_case,
         'C3X_RENDERER_TACTICAL_PREVIEW':str(target/'tactical') if args.tactical else '',
         'C3X_RENDERER_PREVIEW_SESSION':'','C3X_RENDERER_PREVIEW_REPLAY':'','C3X_RENDERER_PREVIEW_ANIMATION':''}
+    settings['C3X_RENDERER_WORLD_READINESS_ONLY']='1' if args.world_readiness_only else ''
     settings['C3X_RENDERER_WORLD_READINESS_TEST']='1' if args.world_readiness else ''
+    settings['C3X_RENDERER_WORLD_GEOMETRY_MIB']=str(args.world_geometry_mib) if args.world_geometry_mib else ''
     if args.benchmark or args.visual_only or args.scroll_coverage or args.world_readiness:
         # Match configure_custom_renderer_effects with the shipped cache enabled.
         # These are harness settings, never a setup requirement for the player.
@@ -144,7 +149,7 @@ def main(argv=None):
         receipt['native_camera_scope']='Pending polls exclude render waits; ready polls include session import/admission. Completion includes test-driver scheduling. The native fixture services completion hints; the live bridge retries through the unchanged native Animator cadence. This is not live-game latency.'
     dropped=sum(int(value) for value in re.findall(r'TRACE_BUFFER dropped=(\d+)',trace))
     receipt['binary_provenance']=binary_provenance
-    receipt['trace_coverage']={'dropped_lines':dropped,'complete':dropped==0}
+    receipt['trace_coverage']={'dropped_lines':dropped,'complete':bool(trace) and dropped==0}
     resident_units=[line for line in trace.splitlines() if 'resident_pose=1' in line or 'direct_scene=1' in line]
     resident_proof=bool(resident_units) and any('cache_hit=0' in line for line in resident_units) and any('cache_hit=1' in line for line in resident_units) and all('body_readbacks=0 composition_uploads=0' in line for line in resident_units)
     receipt['resident_unit_proof']={'requests':len(resident_units),'cold_and_warm_without_body_readback_or_composition_upload':resident_proof}
@@ -228,11 +233,24 @@ def main(argv=None):
         readiness=[{key:float(value) for key,value in re.findall(r'(\w+)=([0-9.]+)',line)}
                    for line in log.splitlines() if line.startswith('WORLD_READINESS ')]
         values=sorted(row['request_ms'] for row in rows)
+        desktop=sorted(row['desktop_ms'] for row in rows)
+        oracles=[line for line in log.splitlines() if line.startswith('WORLD_ORACLE ')]
+        if args.world_readiness_only:passed=complete==[invocation,'0'] and unchanged and bool(trace) and dropped==0
+        backing=[{key:int(value) for key,value in re.findall(r'(\w+)=(\d+)',line)}
+                 for line in trace.splitlines() if 'stage=world-backing ' in line]
+        for row in rows:
+            operations=[event for event in backing if row.get('begin_qpc',0)<=event.get('qpc',-1)<=row.get('end_qpc',-2)]
+            row['world_compiler_calls']=sum(event['compiler_calls'] for event in operations) if operations else None
+            row['world_restore_calls']=sum(event['restore_calls'] for event in operations) if operations else None
         receipt['world_readiness']={'preparation':readiness,'samples':rows,
-            'scope':'GPU request completion; CSV capture, native overlay composition and live trigger-to-display are excluded',
-            'zero_static_construction':bool(rows) and all(row['built']==0 and row['uploads']==0 for row in rows),
-            'latency':{'mean':statistics.mean(values),'p95':values[int(len(values)*.95)],'max':max(values)} if values else None}
-        passed=passed and len(rows)==100 and 'PASS world readiness workload:' in log
+            'scope':'GPU request submission and request through actual desktop completion; CSV capture, native overlay composition and live trigger-to-display are excluded',
+            'zero_world_compiler_calls':bool(rows) and all(row['world_compiler_calls']==0 for row in rows),
+            'zero_geometry_adoption_or_upload':bool(rows) and all(row['built']==0 and row['uploads']==0 for row in rows),
+            'latency':{'mean':statistics.mean(values),'p95':values[int(len(values)*.95)],'max':max(values)} if values else None,
+            'desktop_latency':{'mean':statistics.mean(desktop),'p95':desktop[int(len(desktop)*.95)],'max':max(desktop)} if desktop else None,
+            'minimum_largest_free':min((row['largest_free'] for row in rows),default=0),'cold_oracles':oracles,
+            'over_100_ms':sum(value>100 for value in desktop),'distinct_destinations':len({(row['x'],row['y']) for row in rows})}
+        passed=passed and len(rows)==100 and len(oracles)==6 and 'PASS world readiness workload:' in log
         receipt['status']='pass' if passed else 'fail'
     if passed:
         shutil.copy2(ROOT/'Renderer/native/build/gpu-composition/test_gpu_frame.exe',out/'test_gpu_frame.exe')

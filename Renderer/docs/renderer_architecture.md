@@ -153,6 +153,25 @@ content/context keys replace camera-local slot indices. Reuse requires current
 topology, coast, world and river proofs; zoom/extent are conservatively isolated.
 Configuration, asset and device reset clear this owner before sources change.
 
+Whole-world preparation also writes exact compiled values/proofs to a bounded
+compressed session file (1 GiB maximum, deleted on close). The existing worker
+lanes decode and validate backing after GPU eviction, then upload through the
+same immutable-allocation path. This avoids geometry generation, but streaming
+is still measured work and is not called resident selection. Full-map appearance
+arrives in caller-thread pages of at most 128 records; the existing world builds
+8×8 staggered region cores with dependency halos, including bounded wrapped edge
+occurrences. It grants no additional visibility. Small maps retain the configured
+GPU geometry cap; worlds above 8,192 tiles currently bound this working set to
+384 MiB to preserve 32-bit address space. The supported acceptance envelope is
+12,800 actual tiles. Backing is optional: missing, invalid or unavailable entries
+recover through the same compiler, and reset joins readers before retiring it.
+
+The combined preparation queue reserves a worst-case result allowance before
+starting a lane, including urgent jobs, to prevent producers evicting unconsumed
+results. GPU eviction uses a non-owning candidate order refreshed per cache epoch;
+generation, current-frame pins and changed ages are checked at removal time.
+Neither backing nor eviction candidates introduce a second render-world owner.
+
 Current captured occurrences take priority in compilation and foreground
 adoption; surrounding working-area content follows. Native occurrence/pass order
 is unchanged. A completed GPU camera awaiting adoption also retains priority over

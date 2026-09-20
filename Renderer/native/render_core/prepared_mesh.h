@@ -59,6 +59,7 @@ struct PreparedMesh {
 struct MeshFormat {
     bool pickup=true,feature=false,natural=false;
     unsigned projection_kind=0,source_tile_width=128,shared_grid=0;
+    bool city=false;
 };
 template<class Layouts>
 unsigned shared_mesh_grid(std::size_t vertices,std::vector<unsigned> const* indices,Layouts& layouts){
@@ -89,7 +90,7 @@ bool prepare_mesh(std::vector<Vertex> const& source,std::vector<unsigned> const*
     }
     auto const& elements=topology?*topology:indices;
     auto count=topology?source.size():unique.size();
-    result.vertex_stride=format.pickup?(format.natural?92u:format.feature?48u:sizeof(Vertex)):120u;
+    result.vertex_stride=format.city?88u:format.pickup?(format.natural?92u:format.feature?48u:sizeof(Vertex)):120u;
     result.index_stride=count<=65535u?2:4;result.index_count=unsigned(elements.size());
     result.shared_grid=format.shared_grid;
     result.vertices.resize(count*result.vertex_stride);result.indices.resize(elements.size()*result.index_stride);
@@ -115,7 +116,17 @@ bool prepare_mesh(std::vector<Vertex> const& source,std::vector<unsigned> const*
             if(format.projection_kind==3)z/=128.f;
         }
         void* output=result.vertices.data()+i*result.vertex_stride;
-        if(format.natural){
+        if(format.city){
+            // Exact channels consumed by the city color, reflection and caster
+            // layouts. No quantization or source detail is lost; terrain-only
+            // fields no longer occupy every city vertex.
+            float data[]={x,y,z,v.u,v.v,v.normal_x,v.normal_y,v.normal_z,
+                v.macro_u,v.macro_v,v.base_terrain,
+                v.material_grass,v.material_plains,v.material_desert,
+                v.material_marsh,v.authored_relief_height,v.authored_relief_blend,
+                v.world_x,v.world_y,v.world_z,v.relief_owner_u,v.relief_owner_v};
+            std::memcpy(output,data,sizeof(data));
+        }else if(format.natural){
             float data[]={x,y,z,v.world_x,v.world_y,v.world_z,v.world_valid,
                 v.normal_x,v.normal_y,v.normal_z,v.u,v.v,
                 v.material_grass,v.material_plains,v.material_desert,v.material_marsh,
