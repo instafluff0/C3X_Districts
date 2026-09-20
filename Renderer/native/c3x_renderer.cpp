@@ -483,7 +483,10 @@ public:
     bool shared_scene_surface=false,scene_surface_requested=false;
     c3x_renderer::render_core::LinearTarget scene_scratch;
     std::vector<D3D11_RECT> scene_dynamic_damage;
-    std::uint64_t scene_static_signature=0;
+    std::uint64_t scene_static_signature=0,scene_reflection_signature=0;
+    ID3D11Texture2D* scene_reflection_texture=nullptr;
+    ID3D11ShaderResourceView* scene_reflection_view=nullptr;
+    unsigned scene_reflection_width=0,scene_reflection_height=0;
     c3x_renderer::render_core::LinearRestore scene_restore;
     std::int64_t scene_static_depth_origin=0;
     bool scene_overlap=false;int scene_dx=0,scene_dy=0;
@@ -935,6 +938,8 @@ public:
     }
 
     void reset_targets() {
+        scene_reflection_signature=0;scene_reflection_width=scene_reflection_height=0;
+        release(scene_reflection_view);release(scene_reflection_texture);
         scene_restore.reset();
         unit_scene_work.reset();scene_scratch.reset();scene_guard.reset();scene_guard_context.clear();scene_guard_pad=0;scene_dynamic_damage.clear();scene_static_signature=0;scene_overlap=false;scene_damage.clear();
         cancel_pixel_preparation();
@@ -2496,11 +2501,7 @@ public:
         char control[8]={};
         bool explicit_surface=GetEnvironmentVariableA("C3X_RENDERER_SHARED_SCENE_SURFACE",control,sizeof(control))!=0;
         bool requested_surface=explicit_surface && std::strcmp(control,"1")==0;
-        if(!explicit_surface){
-            char reflections[8]={};
-            GetEnvironmentVariableA("C3X_RENDERER_REFLECTION_CONTROL",reflections,sizeof(reflections));
-            requested_surface=city_profile && std::strcmp(reflections,"1")==0;
-        }
+        if(!explicit_surface)requested_surface=city_profile;
         scene_surface_requested=requested_surface;
         // API 18 capture owns fog. The off control exists only in benchmark builds.
         visibility_pass=true;
@@ -2547,7 +2548,13 @@ public:
         wave_reuse_control=GetEnvironmentVariableA("C3X_RENDERER_WAVE_REUSE_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0;
         unit_bodies.direct_scene=!(GetEnvironmentVariableA("C3X_RENDERER_UNIT_SCENE_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0);
         animation_readback_atlas=GetEnvironmentVariableA("C3X_RENDERER_ANIMATION_READBACK_ATLAS",control,sizeof(control)) && std::strcmp(control,"1")==0;
-        reflection.enabled=!(GetEnvironmentVariableA("C3X_RENDERER_REFLECTION_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0);
+        bool requested_reflections=!(GetEnvironmentVariableA("C3X_RENDERER_REFLECTION_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0);
+        if(reflection.enabled!=requested_reflections){
+            // Both settings now use the resident route; changing the effect no
+            // longer changes that route implicitly. Retire its finished pixels.
+            reset_targets();clear_resource_backdrops();viewport_cache.clear();viewport_cache_bytes=0;render_regions.clear();
+        }
+        reflection.enabled=requested_reflections;
 #ifdef C3X_RENDERER_BENCHMARK_ORACLE
         GetEnvironmentVariableA("C3X_RENDERER_DIAGNOSTIC_ROUTES",control,sizeof(control));
         diagnostic_routes=std::strcmp(control,"draw")==0?1u:std::strcmp(control,"all")==0?2u:0u;
@@ -4202,6 +4209,71 @@ public:
         sample=unit_bodies.scene_sample;return true;
     }
 
+    bool prepare_scene_reflection() {
+        if(!reflection.enabled)return true;
+        unsigned w=unsigned(width)+16,h=unsigned(height)+16;
+        if(!scene_reflection_texture || scene_reflection_width!=w || scene_reflection_height!=h){
+            scene_reflection_signature=0;release(scene_reflection_view);release(scene_reflection_texture);
+            D3D11_TEXTURE2D_DESC d={};d.Width=w*2;d.Height=h*2;d.MipLevels=d.ArraySize=d.SampleDesc.Count=1;
+            d.Format=DXGI_FORMAT_R16G16B16A16_FLOAT;d.BindFlags=D3D11_BIND_SHADER_RESOURCE;
+            if(FAILED(device->CreateTexture2D(&d,nullptr,&scene_reflection_texture)) ||
+               FAILED(device->CreateShaderResourceView(scene_reflection_texture,nullptr,&scene_reflection_view)))return false;
+            scene_reflection_width=w;scene_reflection_height=h;
+        }
+        unsigned built=0,reused=0;
+        LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
+        if(scene_reflection_signature!=cached_signature.complete){
+            // Reuse the existing bounded mirror scratch and exact dependency
+            // cache. Retain only resolved linear samples for water, never a
+            // second full-view MSAA color/depth pair. World-aligned cells can
+            // survive scrolling, jumps and local edits; no animation clock key.
+            using Shadow=c3x_renderer::render_core::SourceShadow;
+            std::vector<Shadow::Caster> casters;Shadow::PreparedCasters prepared;
+            auto prepared_ptr=prepare_shadow_submission(geometry_vertex_buffers,casters,prepared);
+            int phase_x=int((region_origin_x+8)%128),phase_y=int((region_origin_y+8)%128);
+            int first_x=c3x_renderer::render_core::raster_region_floor(0,phase_x,128);
+            int first_y=c3x_renderer::render_core::raster_region_floor(0,phase_y,128);
+            ID3D11ShaderResourceView* none=nullptr;context->PSSetShaderResources(121,1,&none);
+            for(int y=first_y;y<int(h);y+=128)for(int x=first_x;x<int(w);x+=128){
+                auto local=geometry_viewport_settings;
+                local.translation[0]+=float(4-x);local.translation[1]+=float(4-y);
+                local.inverse_size[0]=local.inverse_size[1]=1.f/136;
+                c3x_renderer::render_core::RenderRegionKey key;
+                bool cacheable=!world_regions_control && render_region_key(geometry_vertex_buffers,local,casters,prepared_ptr,key);
+                if(cacheable)key.push_back(0x7265666c65637431ull); // resolved RGBA16F mirror, not finished BGRA
+                ID3D11Texture2D* image=cacheable?render_regions.find(key):nullptr;
+                if(image)++reused;
+                else {
+                    auto reflected=local;reflected.translation[0]+=4;reflected.translation[1]+=4;
+                    reflected.inverse_size[0]=reflected.inverse_size[1]=1.f/144;
+                    if(!submit_geometry(geometry_vertex_buffers,{{0,0,144,144}},reflected,city_glow.target,
+                        block_depth,144,144,nullptr,false,true,{},true,&casters,prepared_ptr))return false;
+                    ++built;
+                    if(cacheable){
+                        std::size_t bytes=288u*288u*8u;
+                        ID3D11Texture2D* saved=nullptr;
+                        D3D11_TEXTURE2D_DESC desc={};reflection.linear.resolved->GetDesc(&desc);
+                        if(render_regions.make_room(key,bytes) && SUCCEEDED(device->CreateTexture2D(&desc,nullptr,&saved))){
+                            context->CopyResource(saved,reflection.linear.resolved);
+                            if(render_regions.insert(std::move(key),saved,bytes)){image=saved;saved=nullptr;}
+                        }
+                        release(saved);
+                    }
+                }
+                int l=std::max(0,x),t=std::max(0,y),r=std::min(int(w),x+128),b=std::min(int(h),y+128);
+                D3D11_BOX box={UINT((l-x)*2),UINT((t-y)*2),0,UINT((r-x)*2),UINT((b-y)*2),1};
+                context->OMSetRenderTargets(0,nullptr,nullptr);
+                context->CopySubresourceRegion(scene_reflection_texture,0,UINT(l*2),UINT(t*2),0,
+                    image?image:reflection.linear.resolved,0,&box);
+            }
+            scene_reflection_signature=cached_signature.complete;
+        }
+        QueryPerformanceCounter(&end);
+        char detail[256];sprintf_s(detail,"built=%u reused=%u atlas_bytes=%zu cache_bytes=%zu cache_metadata=%zu ms=%.3f",
+            built,reused,std::size_t(w)*h*32,render_regions.gpu_bytes,render_regions.metadata_bytes,trace.milliseconds(end.QuadPart-begin.QuadPart));
+        trace.write("scene-reflection",detail,true);return true;
+    }
+
     bool compose_scene_surface(GeometryDrawView dynamic) {
         // Failure cannot certify partially changed attachments for later reuse.
         struct Transaction {
@@ -4214,14 +4286,15 @@ public:
         unsigned w=unsigned(width)+8,h=unsigned(height)+8;
         std::size_t target_bytes=std::size_t(w)*h*240u+std::size_t(w+scene_guard_pad*2)*(h+scene_guard_pad*2)*192u;
         if(!city_profile || !c3x_renderer::render_core::scene_surface_extent(width,height) ||
-           target_bytes>(world_preparation?1408u:1152u)*1024u*1024u || reflection.enabled) {
-            trace.write("scene-surface-failed","bounded no-reflection view/target contract",true);return false;
+           target_bytes>(world_preparation?1408u:1152u)*1024u*1024u) {
+            trace.write("scene-surface-failed","bounded scene view/target contract",true);return false;
         }
         if(glow.native_extent!=w || glow.native_height!=h || !glow.linear.color){
             scene_scratch.reset();scene_guard.invalidate_all();scene_dynamic_damage.clear();scene_static_signature=0;scene_overlap=false;
         }
         if(!glow.ensure(device,fidelity_root,w,h,true) || !scene_scratch.ensure(device,(w+scene_guard_pad*2)*2,(h+scene_guard_pad*2)*2,true,false) ||
            !scene_restore.ensure(device))return false;
+        if(!prepare_scene_reflection())return false;
         auto& linear=glow.linear;
         ViewportShaderSettings settings=geometry_viewport_settings;
         settings.translation[0]+=4;settings.translation[1]+=4;
@@ -5301,6 +5374,7 @@ public:
             auto const&mesh=buffers[layer][0].content();
             context->UpdateSubresource(viewport_settings_buffer,0,nullptr,&viewport_settings,0,0);++frame_parameter_updates;
             natural.bind_instances(context,unsigned(layer-geometry_natural_forest0));
+            if(reflection_pass)context->VSSetShader(reflection.instance_vs,nullptr,0);
             auto flush=[&](){
                 if(selected.empty())return true;
                 if(!natural.instance_stream.upload(device,context,selected))return false;
@@ -5860,7 +5934,12 @@ public:
         // only by c3x_renderer_blit when Civ III composites its dirty rectangle.
         D3D11_RECT scissor = {0, 0, projection_width, projection_height};
         context->RSSetScissorRects(1, &scissor);
-        if(environment_profile)active_reflection.bind(context);
+        if(environment_profile){
+            if(scene_surface_pass)active_reflection.bind(context,scene_reflection_width*2,scene_reflection_height*2,
+                8-2*(settings.translation[0]-geometry_viewport_settings.translation[0]-4),
+                8-2*(settings.translation[1]-geometry_viewport_settings.translation[1]-4));
+            else active_reflection.bind(context);
+        }
         if(city_profile && !scene_surface_pass){
             std::vector<c3x_renderer::city_fidelity::Lighting const*> active;
             for(auto const&chunk:buffers[geometry_city])if(chunk.content().city_lighting){
@@ -5941,7 +6020,7 @@ public:
                 }
             }
             if(environment_profile && !reflection_pass){
-                ID3D11ShaderResourceView*view=active_reflection.enabled?active_reflection.linear.view:nullptr;
+                ID3D11ShaderResourceView*view=active_reflection.enabled?(scene_surface_pass?scene_reflection_view:active_reflection.linear.view):nullptr;
                 context->PSSetShaderResources(121,1,&view);
             }
             if (!draw(geometry_bed) ||
@@ -6401,7 +6480,7 @@ public:
         if(selected_surface!=shared_scene_surface){
             reset_targets();clear_resource_backdrops();shared_scene_surface=selected_surface;
         }
-        if(gpu_output_mode && (!shared_scene_surface || !city_profile || reflection.enabled))return false;
+        if(gpu_output_mode && (!shared_scene_surface || !city_profile))return false;
         bool water_active=false;visible_water_animations=0;
         if(water_motion && city_profile)
             for(unsigned i=0;i<frame.tile_count;++i){auto const& tile=frame.tiles[i];
@@ -6572,7 +6651,7 @@ public:
             !(GetEnvironmentVariableA("C3X_RENDERER_GROUND_GRID_CONTROL",ground_control,sizeof(ground_control)) &&
             std::strcmp(ground_control,"1")==0);
         char instance_control[8]={};GetEnvironmentVariableA("C3X_RENDERER_TREE_INSTANCES_CONTROL",instance_control,sizeof(instance_control));
-        bool instance_mode=fidelity_profile && retain_ground_grids && !reflection.enabled && std::strcmp(instance_control,"1")!=0;
+        bool instance_mode=fidelity_profile && retain_ground_grids && std::strcmp(instance_control,"1")!=0;
         if(tree_instances_enabled!=instance_mode){tree_instances_enabled=instance_mode;++content_revision;}
         natural.instance_stream.bytes=natural.instance_stream.uploads=natural.instance_stream.discards=0;
         source_shadow.instance_stream.bytes=source_shadow.instance_stream.uploads=source_shadow.instance_stream.discards=0;
@@ -10106,6 +10185,20 @@ public:
             session?static_cast<long long>(session->visual_bytes()):0,session?static_cast<long long>(session->visual_nodes()):0,visual_ticks,visual_frequency};
         return C3X_RENDERER_RESULT_OK;
     }
+    void visual_timer_tick(UINT_PTR timer_id){
+        if(!timer_id || timer_id!=visual_timer)return;
+        // One opportunity at a time. A slow frame must not leave WM_TIMER
+        // permanently due and starve the game's idle/message-pump work.
+        KillTimer(nullptr,timer_id);
+        ULONGLONG begin=GetTickCount64();
+        try{visual_frame(true);}catch(...){OutputDebugStringA("[C3X renderer] visual timer failed\n");}
+        if(visual_timer!=timer_id)return; // native ownership/reset stopped it
+        ULONGLONG elapsed=GetTickCount64()-begin;
+        UINT delay=elapsed>=23?10:UINT(33-elapsed);
+        visual_timer=SetTimer(nullptr,timer_id,delay,renderer_visual_timer);
+        if(!visual_timer)renderer_state.trace.write("visual-timer","rearm failed; native demand retained",true);
+    }
+
     int visual_frame(bool timer=false){
         LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
         // A timer is only transport on the presenter's UI thread. Nested UI
@@ -11811,7 +11904,7 @@ private:
                     ?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_ERROR;
             }else if(command==Command::gpu_render){
                 gpu_view={sizeof(gpu_view)};gpu_metadata={C3X_RENDERER_API_VERSION,sizeof(gpu_metadata)};
-                bool supported=renderer_state.scene_surface_requested&&renderer_state.city_profile&&!renderer_state.reflection.enabled&&
+                bool supported=renderer_state.scene_surface_requested&&renderer_state.city_profile&&
                     c3x_renderer::render_core::scene_surface_extent(job_frame.target_width,job_frame.target_height);
                 if(!supported)result=C3X_RENDERER_RESULT_BAD_ARGUMENT;
                 else {
@@ -12087,8 +12180,8 @@ private:
 };
 
 RendererWorker * renderer_worker = nullptr;
-void CALLBACK renderer_visual_timer(HWND,UINT,UINT_PTR,DWORD){
-    if(renderer_worker)try{renderer_worker->visual_frame(true);}catch(...){OutputDebugStringA("[C3X renderer] visual timer failed\n");}
+void CALLBACK renderer_visual_timer(HWND,UINT,UINT_PTR id,DWORD){
+    if(renderer_worker)renderer_worker->visual_timer_tick(id);
 }
 extern "C" __declspec(dllexport) c3x_renderer_i64 c3x_renderer_visual_clock(){return renderer_worker?renderer_worker->visual_clock():0;}
 extern "C" __declspec(dllexport) int c3x_renderer_gpu_visual_status(c3x_renderer_visual_status_v1* out){

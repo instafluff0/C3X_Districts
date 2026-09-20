@@ -1,12 +1,14 @@
 # Civ III patch dependency ledger
 
-## Water scene effects (2.4)
+## Water scene effects and retained reflections (2.4 / 2.6)
 
 DLL-only shoreline, open-water and directional-river execution consumes existing
 API 18 immutable world topology, map visibility, native anchors and captured
 presentation time. River direction is renderer-owned visual data derived from
 that topology; it adds no gameplay authority or native capture. Existing map capture/composition
-and visual-frame hooks remain unchanged. No native suppression, ABI change or
+and visual-frame hooks remain unchanged. 2.6 retains resolved mirror samples and
+rearms the DLL-owned visual timer after each callback; native gameplay timers
+and injected hooks are unchanged. No native suppression, ABI change or
 CSV entry is needed; `required_user_action: []`. The native waves/reflections
 configuration flags retain their current meaning. Candidate verification does
 not stage/install binaries or launch Civ III.

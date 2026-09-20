@@ -156,11 +156,15 @@ bodies/shadows. Retained wave cells own immutable geometry; occurrences carry
 native projection and visible/frozen time. The pass restores the prior affected
 samples, draws shadow/foam/body contributions in order against scene depth, and
 finishes their union once. Time changes upload no terrain or ribbon geometry.
-The shared path admits waves when reflections are disabled; reflections retain
-the existing compatibility path and their configuration control. No extra HDR
-surface, presenter, native redraw loop or parallel effect scheduler is introduced.
+The shared path admits waves and reflections together. Reflections retain a
+guarded resolved linear image; world-aligned mirror cells reuse the existing
+dependency cache and small MSAA scratch. Static mirror inputs do not depend on
+the water clock. Shared tree meshes feed mirror, color and shadow passes. The
+compatibility path and configuration controls remain available; there is no
+second full-view MSAA reflection color/depth pair, presenter or effect scheduler.
 Optional absent/disabled wave assets retain ordinary water and request no wave
-animation. Open-water motion and river flow remain subsequent effect work.
+animation. Open-water normals and connected river flow now share that dynamic
+pass, with immutable authoritative inputs and visibility-frozen samples.
 
 The tactical pass consumes native selection anchors, scoped route line/text draws
 and grid-setting/tile anchors as immutable primitives. It joins the same dynamic

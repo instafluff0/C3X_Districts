@@ -420,3 +420,14 @@ float4 PSReflection(P input):SV_Target {
  clip(input.world.z-NativeReflection.z-.0001);
  return PSMain(input).color;
 }
+
+// Mirror the same shared source geometry used by color and shadow consumers.
+P VSReflectionInstance(InstanceInput input) {
+ P o=VSInstance(input);
+ float h=max(0,o.world.z-NativeReflection.z);
+ o.position.y-=h*NativeReflection.x*4*inverse_size.y;
+ float dx=o.world.x-input.projection.x,dy=o.world.y-input.projection.y;
+ float base=(dx-dy+1)*input.projection.z*.25;
+ o.position.z=clamp(.5-(floor((base-h*NativeReflection.y)*256+.5)/256+input.placement_view.z)/16384,.001,.999);
+ return o;
+}

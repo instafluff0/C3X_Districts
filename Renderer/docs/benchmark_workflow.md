@@ -78,8 +78,10 @@ its receipt states this limit. Do not label the result complete input-to-display
 `--dense-scene` enables the existing world-fixed city/infrastructure/resource
 stress fixture; match it in both arms when measuring missing-object construction.
 The ordinary fixture's few central objects can stay resident throughout scrolling. Use
-`--waves 1` with a coastal scene to exercise resident shoreline animation; the
-waves-off arm measures the added effect cost, not a visual-equivalent speedup.
+a coastal scene with the default `--waves 1 --reflections 1 --water-motion 1`
+to exercise resident water and shoreline animation. Effects-off arms measure
+added effect cost, not a visual-equivalent speedup. `scene-reflection` reports
+mirror-cell builds/reuse, resolved-image bytes and the existing cache budget.
 `scene-waves` reports visible/frozen occurrences, geometry/upload bytes and cell
 build/reuse counts. Correlate it with `shared-scene-surface` and frame QPC bounds
 to prove static submissions and ribbon uploads disappear on time-only updates.

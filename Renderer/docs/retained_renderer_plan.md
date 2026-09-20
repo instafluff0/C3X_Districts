@@ -21,10 +21,85 @@ paths instead of broad drifting waves or ocean-wide sparkle. Current water
 verification and whole-workload evidence are recorded below.
 **Next architectural step: 2.6 scheduling/reuse.** Always enable shore waves,
 water motion and reflections for idle, scrolling and map-jump optimization.
-The existing reflection compatibility path prevents resident GPU admission;
-removing that restriction without losing reflections is the first responsibility.
+Resident reflections and shared reflected tree meshes now work in the 2.6
+candidate. Idle, scrolling and new-destination costs still miss the performance
+objective; see the current scheduling/reuse checkpoint below.
 [Architecture](renderer_architecture.md) owns the design;
 [validation](benchmark_workflow.md) owns measurement and acceptance.
+
+## 2.6 scheduling/reuse — current checkpoint
+
+The accepted 2.4 DLL remains staged; its integration and fixture fixes were
+committed/pushed in `e4c3a572` and `ee25c29d`. The following 2.6 candidate is separate:
+`native/build/m26-final/C3XRenderer.dll`, SHA-256
+`582c1dc9316f4c3dea41f067f4340f70a45766440b113c36193dc8b9128ff3c2`.
+The final revision adds explicit reflection-toggle pixel invalidation; the
+384-request performance run below predates only that configuration fix.
+
+Reflections now join the resident scene/native GPU composition path. Unchanged
+camera/scene/light inputs reuse resolved mirror samples while water advances.
+Camera changes assemble a guarded image from world-aligned cells in the existing
+bounded dependency cache; mirror generation uses the existing small MSAA scratch.
+There is no second full-view multisampled reflection color/depth allocation, new
+presenter or native patch. Reflected trees now consume the same shared meshes and
+instance transforms as color/shadow passes. The compatibility path and effect
+switches remain available. A renderer timer callback disarms itself during its
+synchronous work and rearms afterward, preserving 33 ms cadence when affordable
+and at least 10 ms of message-pump opportunity after an overrun. Reassess this
+small guard when callbacks become nonblocking; M3 still owns asynchronous camera
+publication.
+
+Matched 640×480 river playback, 48 frames, all effects enabled (no shore-wave
+occurrences in this river view): accepted compatibility DLL **91.12 ms** mean;
+final resident/shared-tree candidate **10.91 ms**. Repeat,
+fog, reveal, reset and motion-off camera checks pass. The independent renderer
+paths differ at 1,309 pixels by at most four channel levels (mean absolute error
+0.00174/255); the full-view path retains the same materials/lighting. This is a
+focused replay comparison, not a whole-game speedup. Shared versus baked tree
+submission alone differs at 19 pixels by at most two channel levels. The final
+hot-toggle witness exactly matches cold reflection-off pixels and restores the
+original reflection-on image without relying on a device reset.
+
+Complete 1120×1192 dense coastal/native workload, waves/reflections/water motion
+on, eight units: 384 requests, 64 per route/workload. Latest GPU mean / p95:
+stationary **11.27 / 13.95 ms**, scrolling **177.53 / 220.91 ms**, local edits
+**19.50 / 56.58 ms**. Thirty separate one-selected-unit visual frames average
+**71.96 / 81.88 ms** request mean / p95 and **80.95 ms** desktop completion.
+All 30 intervals have zero mirror-cell builds, static scene draws, water geometry
+uploads and wave uploads. Native ownership/composition, CPU fallback, prepared
+view adoption and timer checks pass. Sampled contiguous VA stays above **752.6
+MiB**; no dropped trace lines and full input identities unchanged. Receipt,
+distributions and per-interval proof: `native/build/m26-native-instances/`.
+The final configuration-fix candidate also passes the native `--visual-only`
+fixture (`native/build/m26-final-native/receipt.json`), with exact native ownership,
+CPU fallback and timer checks, unchanged inputs and no dropped trace lines.
+Its 30 visual samples average 64.75 ms request / 72.68 ms desktop completion;
+all have zero mirror builds, static draws and wave/water geometry uploads.
+This shorter warm run does not replace the 384-request comparison above.
+The preceding matched uninstanced candidate averaged 71.10 ms visual and 180.15
+ms scrolling; this small difference is inconclusive. Shared reflected meshes are
+a verified capability, not a claimed measured coastal speedup.
+
+Eight distinct new destinations on the retained 100×100 verification world,
+1120×1192, dense objects and all effects: **0.41–5.01 s** capture plus completed
+render, no fallback, inputs/source/binaries unchanged. This harness includes a
+CPU readback endpoint and does not measure native presentation. The 5.01 s jump
+includes **4.30 s waiting for GPU completion**, plus 580.8 ms reported geometry
+work; the stall is not attributed to CPU preparation alone. Evidence:
+`native/build/m26-distant-all-effects/`, including `slow-jump-attribution.json`.
+
+**Next unfinished responsibility:** make the combined dynamic scene cheaper and
+bound new-content preparation/completion stalls. Trace the cold GPU wait, then
+reduce measured water/forward/finishing and scene preparation costs without
+turning effects off. 2.6 and Milestone 2 performance acceptance remain unfinished;
+reflection reuse alone does not establish fast idle, scrolling or map jumping.
+The dependency-selected integration suite covers 303 tests (301 pass / two skips
+after repairing the extracted scheduler fixture and retrying a VM transport
+failure). GPU visibility, native CPU handoff, HDR reconstruction, exact edit and
+wrapped reduced-zoom/cold parity all pass. The additional 25 navigation fixture
+and analysis tests pass, including the current dense-city override. No injected
+source or patch table changed.
+Capture/setup are outside the native benchmark; desktop completion is not scanout.
 
 ## Current implementation and gaps
 
@@ -245,13 +320,10 @@ hit an outside-map alpha oracle mismatch at the large benchmark viewport, so the
 established 100×100 benchmark was used without weakening its native pixel oracle.
 The water visuals are now accepted/staged; live-game evidence remains pending.
 
-**Gated on both milestone 1 and milestone 2:** reflections of nearby scene
-geometry (mountains, buildings) need the whole visible scene's resolved
-color+depth as an input (milestone 1's GPU-submitted output) and need
-selective redraw when the camera or reflected content changes, not full
-static reuse (milestone 2). Sequence this after both land, using the existing
-per-city `environment_refresh::Reflection` scratch-target plumbing as the
-starting point rather than a new reflection pipeline from scratch.
+The 2.6 candidate now retains the existing planar reflections of nearby geometry
+using the original `environment_refresh::Reflection` scratch and the current
+scene/dependency owners. Broader reflection algorithms are not prerequisites for
+optimizing this enabled production workload.
 
 **Independent of this roadmap's milestones:** ship wake/spray is unit-attached
 VFX, the same category as M7.5 attached effects (flames/smoke/steam), not

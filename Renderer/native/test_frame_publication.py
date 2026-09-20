@@ -164,7 +164,9 @@ int main(){
 #include "Renderer/native/render_core/scene_surface.h"
 #include <functional>
 using HDC=void*;using HWND=void*;using UINT_PTR=std::uintptr_t;
-using UINT=unsigned;using DWORD=unsigned long;
+using UINT=unsigned;using DWORD=unsigned long;using ULONGLONG=unsigned long long;
+ULONGLONG GetTickCount64(){assert(false);return 0;}
+void OutputDebugStringA(char const*){assert(false);}
 constexpr unsigned GA_ROOT=2;
 bool IsWindowVisible(HWND){return false;}HWND GetForegroundWindow(){return nullptr;}
 HWND GetAncestor(HWND,unsigned){return nullptr;}

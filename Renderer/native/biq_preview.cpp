@@ -737,6 +737,15 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
         center_x=water_center;tiles=capture_view();frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());
         SetEnvironmentVariableA("C3X_RENDERER_WATER_MOTION","1");reset();frame.presentation_time_ticks=frame.presentation_frequency;
         ok=ok && set_definitions(argv[2],argv[3],nullptr,custom_path)==C3X_RENDERER_RESULT_OK && draw() && pixels()==initial;
+        // Configure an effect change without a device reset: both reflection
+        // settings now use the same resident path and must retire old pixels.
+        char reflection_control[8]={};GetEnvironmentVariableA("C3X_RENDERER_REFLECTION_CONTROL",reflection_control,sizeof(reflection_control));
+        SetEnvironmentVariableA("C3X_RENDERER_REFLECTION_CONTROL","1");
+        ok=ok && set_definitions(argv[2],argv[3],nullptr,custom_path)==C3X_RENDERER_RESULT_OK && draw();auto no_mirrors=pixels();
+        reset();ok=ok && set_definitions(argv[2],argv[3],nullptr,custom_path)==C3X_RENDERER_RESULT_OK && draw() && pixels()==no_mirrors;
+        SetEnvironmentVariableA("C3X_RENDERER_REFLECTION_CONTROL",reflection_control[0]?reflection_control:nullptr);
+        ok=ok && set_definitions(argv[2],argv[3],nullptr,custom_path)==C3X_RENDERER_RESULT_OK && draw() && pixels()==initial;
+        std::printf("WATER reflection toggle: %s warm_off_cold_exact=1 restored_on_exact=1\n",ok?"pass":"FAIL");
         std::printf("%s water material lifecycle\n",ok?"PASS":"FAIL");
     }
     char wave_study[32]={};GetEnvironmentVariableA("C3X_LAB_WAVE_STUDY",wave_study,sizeof(wave_study));

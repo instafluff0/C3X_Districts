@@ -73,7 +73,8 @@ class NavigationFixtureTests(unittest.TestCase):
 #include <vector>
 template<std::size_t N>void strcpy_s(char(&out)[N],char const* value){assert(std::strlen(value)<N);std::strcpy(out,value);}
 '''+seed+r'''
-void place(std::vector<c3x_renderer_tile_v1>& tiles,int map_width,bool dense_scene=true){
+void place(std::vector<c3x_renderer_tile_v1>& tiles,int map_width,bool dense_scene=true,bool dense_city_case=false){
+ int dense_city[]={0,3,1,1};
 '''+body+r'''
 }
 int main(){
@@ -96,6 +97,8 @@ int main(){
   if(a.real_terrain_type==11)assert(!a.road_mask && !a.improvement_flags && a.city_id<0);
  }
  assert(cities && farms && mines && camps && land_resources && water_resources);
+ auto modern=original;place(modern,48,true,true);
+ for(auto const& tile:modern)if(tile.city_id>=0)assert(tile.city_culture_group==0 && tile.city_era==3 && tile.city_size==1 && (tile.city_flags&C3X_RENDERER_CITY_CAPITAL));
  auto disabled=original;place(disabled,48,false);
  assert(std::memcmp(disabled.data(),original.data(),original.size()*sizeof(original[0]))==0);
 }
