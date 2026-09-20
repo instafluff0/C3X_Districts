@@ -93,6 +93,23 @@ typedef int (*c3x_renderer_gpu_camera_poll_fn)(c3x_renderer_i64 ticket,struct c3
    Uses C3X_RENDERER_CAMERA_VIEW_VERSION and exact struct_size. Existing poll and
    synchronous callers retain their ABI and exact-view synchronization. */
 typedef int (*c3x_renderer_gpu_camera_poll_view_fn)(c3x_renderer_i64 ticket,struct c3x_renderer_gpu_camera_view_v1*);
+/* Native map transaction extension. Request copies inputs and returns a ticket;
+   poll returns a complete adopted view or leaves output and native pixels alone.
+   Pending has NO coverage for the requested camera: callers defer its entire
+   native map transaction. They must not relabel the old front, draw new-camera
+   overlays onto it, or change picking. Commit uses C3X_NATIVE_MAP_COMMIT only
+   after ownership validation. Request requires a flushed native command boundary.
+   This contract is separate from the legacy exact/synchronous PREPARE action. */
+/* Registered thread-message ID. Request completion posts it to the requesting
+   thread (ticket low/high words in wParam/lParam). It is a wake hint only: stale
+   messages grant no coverage. Callers retain bounded retry opportunities if an
+   OS notification cannot be posted. Legacy exact requests need no message loop. */
+typedef unsigned (*c3x_renderer_native_camera_message_fn)(void);
+typedef int (*c3x_renderer_native_camera_request_fn)(void * image,
+    struct c3x_renderer_camera_request_v1 const *, c3x_renderer_i64 * ticket);
+typedef int (*c3x_renderer_native_camera_poll_fn)(void * image,
+    c3x_renderer_i64 ticket, struct c3x_renderer_gpu_camera_view_v1 *);
+
 /* READBACK alone writes caller storage, after worker completion. Other calls
    require a null readback pointer/capacity. Native GPU composition does not read
    back implicitly; this explicit barrier supports CPU fallback and the oracle. */

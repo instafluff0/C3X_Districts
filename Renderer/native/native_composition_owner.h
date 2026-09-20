@@ -9,6 +9,10 @@ namespace c3x_native_images {
 // renderer worker owns GPU work; this object never retains game request pointers.
 class CompositionOwner {
     c3x_renderer_gpu_render_fn render;
+    c3x_renderer_gpu_camera_begin_fn camera_begin=nullptr;
+    c3x_renderer_gpu_camera_poll_view_fn camera_poll=nullptr;
+    c3x_renderer_camera_cancel_fn camera_cancel=nullptr;
+    c3x_renderer_i64 camera_ticket=0;void* camera_image=nullptr;int camera_width=0,camera_height=0;
     c3x_renderer_gpu_images_fn images;
     c3x_renderer_gpu_present_fn present;
     c3x_renderer_gpu_unit_fn unit;
@@ -34,9 +38,63 @@ class CompositionOwner {
     void release_window(){c3x_renderer_gpu_present_v1 r={sizeof(r)};r.action=2;
         if(present(&r)!=C3X_RENDERER_RESULT_OK)throw std::runtime_error("native display handoff failed");}
     static int field(void* p,unsigned offset){return *reinterpret_cast<int*>(static_cast<char*>(p)+offset);}
+    bool eligible(void* image,c3x_renderer_frame_v1 const& demand){
+        return lifetime(C3X_NATIVE_MAP,image,0) && field(image,0x24)==16 && !field(image,0x4c4) && !field(image,0x4c8) &&
+            field(image,0x38)==demand.target_width && field(image,0x3c)==demand.target_height;
+    }
+    int prepare_image(void* image,c3x_renderer_gpu_frame_v1 const& next,c3x_renderer_output_v1 const& output,int x,int y){
+        if(client){if(next.ticket!=frame.ticket || next.session!=frame.session)client->advance(next);}
+        else {
+            client=std::make_unique<c3x_gpu_images::WorkerClient>(images,next);
+            adapter=std::make_unique<Adapter<c3x_gpu_images::WorkerClient>>(*client,bits,release,lifetime);
+        }
+        frame=next;
+        if(!adapter->admit(image))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        pending=image;area={output.clip_left,output.clip_top,output.clip_right,output.clip_bottom};
+        phase_x=x;phase_y=y;return C3X_RENDERER_RESULT_OK;
+    }
 public:
     CompositionOwner(c3x_renderer_gpu_render_fn r,c3x_renderer_gpu_images_fn i,c3x_renderer_gpu_present_fn p,
         c3x_renderer_gpu_unit_fn u,c3x_renderer_native_lifetime_fn l,void* b,void* end):render(r),images(i),present(p),unit(u),lifetime(l),bits(b),release(end){}
+    void set_camera(c3x_renderer_gpu_camera_begin_fn begin,c3x_renderer_gpu_camera_poll_view_fn poll,c3x_renderer_camera_cancel_fn cancel){
+        camera_begin=begin;camera_poll=poll;camera_cancel=cancel;
+    }
+    int request_camera(void* image,c3x_renderer_camera_request_v1 const& request,c3x_renderer_i64& ticket){
+        check_thread();
+        // A request never flushes native commands or waits for old worker work.
+        // The caller must close its prior native transaction before beginning.
+        if(!camera_begin || pending || (client&&!client->flushed()) || !eligible(image,*request.frame))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        c3x_renderer_i64 next=0;int result=camera_begin(&request,&next);
+        if(result==C3X_RENDERER_RESULT_PENDING){camera_ticket=next;camera_image=image;camera_width=request.frame->target_width;camera_height=request.frame->target_height;ticket=next;}
+        return result;
+    }
+    int poll_camera(void* image,c3x_renderer_i64 ticket,c3x_renderer_gpu_camera_view_v1& view){
+        check_thread();
+        if(!camera_poll || ticket<=0 || ticket!=camera_ticket || image!=camera_image)return C3X_RENDERER_RESULT_SUPERSEDED;
+        if(pending || (client&&!client->flushed()))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        // Native lifetime validation precedes any adoption; an escaped/deleted
+        // destination cannot redirect a ready result to a different surface.
+        if(!lifetime(C3X_NATIVE_MAP,image,0) || field(image,0x38)!=camera_width || field(image,0x3c)!=camera_height) return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        c3x_renderer_gpu_camera_view_v1 next={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(next)};
+        int result=camera_poll(ticket,&next);if(result!=C3X_RENDERER_RESULT_OK)return result;
+        if(!eligible(image,next.camera.frame))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        result=prepare_image(image,next.image,next.camera.output,next.pixel_phase_x,next.pixel_phase_y);
+        if(result==C3X_RENDERER_RESULT_OK){view=next;camera_ticket=0;camera_image=nullptr;}
+        return result;
+    }
+    void retire_image(int operation,void* image){
+        // Cross-thread observation invalidates admission in Lifetimes. It must
+        // not mutate this caller-thread owner or throw across the C hook.
+        if(GetCurrentThreadId()!=thread)return;
+        if(operation!=C3X_NATIVE_INIT && operation!=C3X_NATIVE_DESTROY && operation!=C3X_NATIVE_IMAGE_REINIT &&
+            !(operation==C3X_NATIVE_VERIFY && !image))return;
+        check_thread();
+        if(!image || image==camera_image){
+            if(camera_ticket&&camera_cancel)camera_cancel(camera_ticket);
+            camera_ticket=0;camera_image=nullptr;
+        }
+        if(!image || image==pending)pending=nullptr;
+    }
     void set_tactical(std::function<int(Tactical const&,c3x_renderer_gpu_unit_v1 const&)> draw){tactical=std::move(draw);}
     bool active()const{return adapter!=nullptr;}
     c3x_renderer_i64 sample_ticks()const{return frame.presentation_time_ticks;}
@@ -44,7 +102,10 @@ public:
     // inserts pixels or claims category replacement on the game's behalf.
     int map(int action,void* image,c3x_renderer_camera_request_v1 const* request,c3x_renderer_output_v1* output){
         check_thread();
-        if(action==C3X_NATIVE_MAP_CANCEL){pending=nullptr;return C3X_RENDERER_RESULT_OK;}
+        if(action==C3X_NATIVE_MAP_CANCEL){
+            if(camera_ticket&&camera_cancel)camera_cancel(camera_ticket);
+            camera_ticket=0;camera_image=nullptr;pending=nullptr;return C3X_RENDERER_RESULT_OK;
+        }
         if(action==C3X_NATIVE_MAP_COMMIT){
             if(!pending||image!=pending||!adapter)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
             pending=nullptr;
@@ -52,23 +113,14 @@ public:
             client->flush();return C3X_RENDERER_RESULT_OK;
         }
         if(action!=C3X_NATIVE_MAP_PREPARE||!request||!request->frame||!output||pending)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
-        if(!lifetime(C3X_NATIVE_MAP,image,0)||field(image,0x24)!=16||field(image,0x4c4)||field(image,0x4c8))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
         auto const& demand=*request->frame;
-        if(field(image,0x38)!=demand.target_width||field(image,0x3c)!=demand.target_height)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        if(!eligible(image,demand))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
         if(adapter&&!adapter->admit(image))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
         if(client)client->flush();
         c3x_renderer_gpu_frame_v1 next={sizeof(next)};
         int result=render(request,&next,output);if(result!=C3X_RENDERER_RESULT_OK)return result;
-        if(client)client->advance(next);
-        else {
-            client=std::make_unique<c3x_gpu_images::WorkerClient>(images,next);
-            adapter=std::make_unique<Adapter<c3x_gpu_images::WorkerClient>>(*client,bits,release,lifetime);
-        }
-        frame=next;
-        if(!adapter->admit(image))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
-        pending=image;area={output->clip_left,output->clip_top,output->clip_right,output->clip_bottom};
-        phase_x=demand.tile_count?demand.tiles[0].anchor_x:0;phase_y=demand.tile_count?demand.tiles[0].anchor_y:0;
-        return C3X_RENDERER_RESULT_OK;
+        camera_ticket=0;camera_image=nullptr;
+        return prepare_image(image,next,*output,demand.tile_count?demand.tiles[0].anchor_x:0,demand.tile_count?demand.tiles[0].anchor_y:0);
     }
     int operation(int op,void* image,void* source,void const* from,void const* to,unsigned color){
         check_thread();if(!adapter)return 0;
@@ -135,6 +187,6 @@ public:
         }
         return adapter->operation(op,image,source,from,to,color);
     }
-    void drain(){check_thread();pending=nullptr;if(client){client->flush();release_window();adapter->drain();adapter.reset();client.reset();}}
+    void drain(){check_thread();if(camera_ticket&&camera_cancel)camera_cancel(camera_ticket);camera_ticket=0;camera_image=nullptr;pending=nullptr;if(client){client->flush();release_window();adapter->drain();adapter.reset();client.reset();}}
 };
 }

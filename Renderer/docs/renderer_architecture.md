@@ -262,6 +262,38 @@ world projection, material and postprocessing inputs are interchangeable.
 The exact native barrier remains until M3.5–3.6 advance native presentation,
 overlays and picking coherently.
 
+M3.5 exposes that result through the existing native `CompositionOwner` with
+`c3x_renderer_native_camera_request` / `c3x_renderer_native_camera_poll`.
+Request copies inputs through the same durable journal and replaceable camera
+queue. Completion posts the registered `C3X.Renderer.CameraReady.v1` thread
+message to the requesting thread. Its ticket is a wake hint only; polling still
+checks the current request, and a bounded retry handles failed message delivery.
+No callback enters Civ III or initiates a native draw from the worker.
+Polling does not wait for unfinished rendering or optional preparation;
+busy publication gates return pending. A ready poll performs the existing session
+import and native-image admission, then returns the exact atomic view. This ready
+adoption still has a measured cost; the API does not promise a zero-duration call.
+The synchronous PREPARE entry shares the same native image preparation/commit
+owner and remains the explicit compatibility barrier.
+
+Pending grants **no coverage for the requested view**. Output and native pixels
+remain unchanged; COMMIT is rejected until a successful poll and caller ownership
+validation. Old pixels are not certified for the new camera. The caller must defer
+that camera's entire native map transaction, not just its terrain insertion.
+Unflushed prior native commands reject asynchronous admission rather than silently
+flushing/waiting. A changed or cancelled ticket, retired destination or changed
+surface extent cannot adopt. The owner retains only the native destination token
+on its caller thread; workers receive copied scene inputs, never JGL/game pointers.
+Ambient visual ticks yield to active camera work instead of cancelling and joining
+it to animate an older front.
+
+The connected native fixture exercises request/poll/validate/commit followed by
+real JGL units, UI, copies and presentation. The injected game still uses exact
+PREPARE: native Animator has already changed camera/erase/wrap state before m71.
+M3.6 must coordinate the whole displayed transaction and picking before switching
+that caller. An available DLL polling contract is not a live nonblocking-camera
+claim, and adding unused injected pointers would not complete that cutover.
+
 The renderer now owns independent visual scheduling through the existing worker
 and presenter. It does not request Civ III redraws. Native camera, visibility,
 action and UI changes still arrive through hooks/captures. General nonblocking

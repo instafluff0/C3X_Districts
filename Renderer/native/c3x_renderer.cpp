@@ -10258,18 +10258,27 @@ public:
             result,view.prepared,renderer_state.trace.milliseconds(end.QuadPart-begin.QuadPart),view.presentation_time_ticks,request.frame->presentation_time_ticks);
         renderer_state.trace.write("gpu-map-request",detail,true);return result;
     }
-    int begin_gpu_camera(c3x_renderer_camera_request_v1 const& request,c3x_renderer_i64& ticket){
+    int begin_gpu_camera(c3x_renderer_camera_request_v1 const& request,c3x_renderer_i64& ticket,
+                         DWORD notify_thread=0,UINT notify_message=0){
         std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);
-        return begin_gpu_camera_locked(request,ticket);
+        int result=begin_gpu_camera_locked(request,ticket);
+        if(result==C3X_RENDERER_RESULT_PENDING){camera_notify_thread=notify_thread;camera_notify_message=notify_message;}
+        return result;
     }
     int poll_gpu_camera(c3x_renderer_i64 ticket,c3x_renderer_gpu_frame_v1& view,c3x_renderer_output_v1& metadata){
         std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);
         return adopt_gpu_camera_locked(lock,ticket,view,metadata);
     }
     int poll_gpu_camera_view(c3x_renderer_i64 ticket,c3x_renderer_gpu_camera_view_v1& view){
-        std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);
+        std::unique_lock<std::mutex> calls(call_mutex,std::try_to_lock);
+        if(!calls.owns_lock())return C3X_RENDERER_RESULT_PENDING;
+        // Only callers allocate serials, under this gate. Stale identity can be
+        // rejected without waiting for the worker's shorter state transition.
+        if(ticket<=0 || ticket!=renderer_state.camera_serial)return C3X_RENDERER_RESULT_SUPERSEDED;
+        std::unique_lock<std::mutex> lock(state_mutex,std::try_to_lock);
+        if(!lock.owns_lock())return C3X_RENDERER_RESULT_PENDING;
         c3x_renderer_gpu_camera_view_v1 next={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(next)};
-        int result=adopt_gpu_camera_locked(lock,ticket,next.image,next.camera.output);
+        int result=adopt_gpu_camera_locked(lock,ticket,next.image,next.camera.output,false);
         if(result==C3X_RENDERER_RESULT_OK){
             // The call gate holds both the adopted session and its copied
             // occurrence owner. Never reconstruct this from newer demand.
@@ -10294,12 +10303,19 @@ private:
         return enqueue_camera_locked(frame,request.identity,ticket,true);
     }
     int adopt_gpu_camera_locked(std::unique_lock<std::mutex>& lock,c3x_renderer_i64 ticket,
-            c3x_renderer_gpu_frame_v1& view,c3x_renderer_output_v1& metadata){
+            c3x_renderer_gpu_frame_v1& view,c3x_renderer_output_v1& metadata,bool wait=true){
         if(ticket<=0 || ticket!=camera_ticket)return C3X_RENDERER_RESULT_SUPERSEDED;
         if(!camera_gpu)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
         if(camera_result!=C3X_RENDERER_RESULT_OK)return camera_result;
         if(gpu_camera_front_ticket!=ticket){
             if(!camera_ready.resident.texture)return C3X_RENDERER_RESULT_PENDING;
+            // Polling never joins optional preparation. Cancel it and let the
+            // message pump return before retrying this completed publication.
+            if(!wait && (ahead_active || unit_pixels_active || has_job)){
+                ahead_cancelled.store(true,std::memory_order_relaxed);
+                foreground_pending.store(true,std::memory_order_relaxed);
+                return C3X_RENDERER_RESULT_PENDING;
+            }
             // Rendering is complete. Only this explicit adoption imports the
             // selected image into the existing native composition session.
             pause_ahead_locked(lock,true);
@@ -10378,7 +10394,12 @@ public:
             GetForegroundWindow()!=GetAncestor(static_cast<HWND>(gpu_present.window),GA_ROOT)))){
             LARGE_INTEGER now={};QueryPerformanceCounter(&now);visual_last=now.QuadPart;return C3X_RENDERER_RESULT_PENDING;
         }
-        std::unique_lock<std::mutex> lock(state_mutex);ForegroundCameraPause pause(*this,lock);
+        std::unique_lock<std::mutex> lock(state_mutex);
+        // An ambient tick must not cancel/join a requested camera merely to
+        // animate the old display. Current demand gets the worker first.
+        if(camera_active || camera_pending || (camera_gpu && camera_result==C3X_RENDERER_RESULT_OK &&
+            camera_ticket!=gpu_camera_front_ticket))return C3X_RENDERER_RESULT_PENDING;
+        ForegroundCameraPause pause(*this,lock);
         auto* session=renderer_state.gpu_composition.get();
         if(!session||!session->visual_active()||!gpu_presenter.view())return C3X_RENDERER_RESULT_PENDING;
         advance_visual_clock();
@@ -10666,6 +10687,7 @@ private:
         camera_pending_frame.tiles=camera_pending_tiles.empty()?nullptr:camera_pending_tiles.data();
         camera_pending_frame.world_topology=camera_pending_topology.empty()?nullptr:camera_pending_topology.data();
         ticket=camera_ticket=++renderer_state.camera_serial;
+        camera_notify_thread=0;camera_notify_message=0;
         camera_result=C3X_RENDERER_RESULT_PENDING;
         camera_ready.clear();
         camera_pending=true;
@@ -11270,6 +11292,7 @@ private:
     c3x_renderer_i64 camera_ticket=0,job_camera_ticket=0;
     int camera_result=C3X_RENDERER_RESULT_SUPERSEDED;
     bool camera_active=false,camera_pending=false,camera_paused=false;
+    DWORD camera_notify_thread=0;UINT camera_notify_message=0;
     bool camera_gpu=false,camera_ready_prepared=false,camera_ready_area=false;
     c3x_renderer_i64 gpu_camera_front_ticket=0;
     std::atomic<bool> camera_cancelled{false};
@@ -11964,6 +11987,12 @@ private:
                         gpu_ticket,camera_ticket,result,unsigned(reused),ready.bytes()+camera_ready.bytes());
                     renderer_state.trace.write("camera-complete",detail,true);
                     camera_active=false;foreground_pending.store(camera_pending,std::memory_order_relaxed);completed.notify_all();
+                    // A completion message is only a wake hint. The caller must
+                    // still poll its current ticket and validate the atomic view.
+                    if(gpu_ticket==camera_ticket && camera_result!=C3X_RENDERER_RESULT_PENDING &&
+                        camera_result!=C3X_RENDERER_RESULT_SUPERSEDED && camera_notify_thread && camera_notify_message)
+                        PostThreadMessageA(camera_notify_thread,camera_notify_message,WPARAM(std::uint64_t(gpu_ticket)&0xffffffffu),
+                            LPARAM(std::uint64_t(gpu_ticket)>>32));
                     lock.unlock();ready.clear();area.clear();lock.lock();continue;
                 }
                 PublishedMapFrame prepared_camera;
@@ -12906,6 +12935,9 @@ extern "C" __declspec(dllexport) int c3x_renderer_gpu_unit(c3x_renderer_unit_v1 
 extern "C" __declspec(dllexport) int c3x_renderer_native_lifetime(int operation,void* image,int context){
     static c3x_native_images::Lifetimes lifetimes;
     bool eligible=lifetimes.observe(operation,image,context,GetCurrentThreadId());
+    // INIT/DESTROY evidence also retires pending destinations before an address
+    // can be recycled for an unrelated native surface of the same dimensions.
+    if(native_composition)native_composition->retire_image(operation,image);
     if(operation==C3X_NATIVE_VERIFY&&!image)OutputDebugStringA("[C3X renderer] stage=native-tracking event=reset\n");
     if(operation==C3X_NATIVE_MAP){
         static unsigned requests=0,accepted=0;++requests;accepted+=eligible;
@@ -12915,23 +12947,55 @@ extern "C" __declspec(dllexport) int c3x_renderer_native_lifetime(int operation,
     return eligible?1:0;
 }
 
-// The live native map seam uses the same GPU producer and image adapter as the
-// connected fixture. No CPU bitmap is returned for an admitted map publication.
+extern "C" __declspec(dllexport) unsigned c3x_renderer_native_camera_message(){
+    static UINT message=RegisterWindowMessageA("C3X.Renderer.CameraReady.v1");
+    return message;
+}
+int begin_native_gpu_camera(c3x_renderer_camera_request_v1 const* request,c3x_renderer_i64* ticket){
+    auto message=c3x_renderer_native_camera_message();
+    if(!message)return C3X_RENDERER_RESULT_ERROR;
+    return get_renderer_worker().begin_gpu_camera(*request,*ticket,GetCurrentThreadId(),message);
+}
+// Shared native transaction owner for exact compatibility and begin/poll users.
+// No worker receives native pointers; only this caller-thread adapter sees JGL.
+bool ensure_native_composition(void* image){
+    if(native_composition)return true;
+    if(!c3x_renderer_native_lifetime(C3X_NATIVE_MAP,image,0))return false;
+    auto jgl=GetModuleHandleA("jgl.dll");if(!c3x_native_observation::verified_module(jgl))return false;
+    auto base=reinterpret_cast<char*>(jgl);
+    native_composition=new c3x_native_images::CompositionOwner(c3x_renderer_gpu_render,c3x_renderer_gpu_images,c3x_renderer_gpu_present,
+        c3x_renderer_gpu_unit,c3x_renderer_native_lifetime,base+0x1b70,base+0x1b90);
+    native_composition->set_tactical([](auto const& capture,auto const& target){return get_renderer_worker().draw_tactical(capture,target);});
+    native_composition->set_camera(begin_native_gpu_camera,c3x_renderer_gpu_camera_poll_view,c3x_renderer_camera_cancel);
+    return true;
+}
+extern "C" __declspec(dllexport) int c3x_renderer_native_camera_request(void* image,
+    c3x_renderer_camera_request_v1 const* request,c3x_renderer_i64* ticket){
+    c3x_renderer_output_v1 check={C3X_RENDERER_API_VERSION,sizeof(check)};
+    if(!ticket || !request || request->version!=C3X_RENDERER_CAMERA_VIEW_VERSION || request->struct_size!=sizeof(*request) ||
+        !valid_frame(request->frame,&check))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    try{
+        if(!ensure_native_composition(image))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        return native_composition->request_camera(image,*request,*ticket);
+    }catch(std::exception const& e){OutputDebugStringA(e.what());return C3X_RENDERER_RESULT_DEVICE_ERROR;}
+}
+extern "C" __declspec(dllexport) int c3x_renderer_native_camera_poll(void* image,
+    c3x_renderer_i64 ticket,c3x_renderer_gpu_camera_view_v1* view){
+    if(!view || view->version!=C3X_RENDERER_CAMERA_VIEW_VERSION || view->struct_size!=sizeof(*view))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    try{
+        if(!native_composition)return C3X_RENDERER_RESULT_SUPERSEDED;
+        return native_composition->poll_camera(image,ticket,*view);
+    }catch(std::exception const& e){OutputDebugStringA(e.what());return C3X_RENDERER_RESULT_DEVICE_ERROR;}
+}
+// The exact compatibility entry shares preparation/commit with nonblocking polls.
 extern "C" __declspec(dllexport) int c3x_renderer_native_map(int action,void* image,
     c3x_renderer_camera_request_v1 const* request,c3x_renderer_output_v1* output){
     if(action==C3X_NATIVE_MAP_PREPARE&&(!request||request->version!=C3X_RENDERER_CAMERA_VIEW_VERSION||
         request->struct_size!=sizeof(*request)||!valid_frame(request->frame,output)))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
     try {
-    if(!native_composition){
-        if(action==C3X_NATIVE_MAP_CANCEL)return C3X_RENDERER_RESULT_OK;
-        if(action!=C3X_NATIVE_MAP_PREPARE||!c3x_renderer_native_lifetime(C3X_NATIVE_MAP,image,0))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
-        auto jgl=GetModuleHandleA("jgl.dll");if(!c3x_native_observation::verified_module(jgl))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
-        auto base=reinterpret_cast<char*>(jgl);
-        native_composition=new c3x_native_images::CompositionOwner(c3x_renderer_gpu_render,c3x_renderer_gpu_images,c3x_renderer_gpu_present,
-            c3x_renderer_gpu_unit,c3x_renderer_native_lifetime,base+0x1b70,base+0x1b90);
-        native_composition->set_tactical([](auto const& capture,auto const& target){return get_renderer_worker().draw_tactical(capture,target);});
-    }
-    return native_composition->map(action,image,request,output);
+        if(!native_composition && action==C3X_NATIVE_MAP_CANCEL)return C3X_RENDERER_RESULT_OK;
+        if(!native_composition && (action!=C3X_NATIVE_MAP_PREPARE || !ensure_native_composition(image)))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        return native_composition->map(action,image,request,output);
     }catch(std::exception const& e){OutputDebugStringA(e.what());return C3X_RENDERER_RESULT_DEVICE_ERROR;}
 }
 

@@ -135,7 +135,8 @@ latency separately from whole-frame timings and restores a clean session before
 the native workload. Pending polls must leave output untouched. Pair this with
 the held-render worker test; short observed timings alone cannot prove absence
 of a render wait. An OK poll still imports the completed map on the GPU owner,
-and the native caller still uses the synchronous exact-view barrier until M3.5.
+and the live native caller retains its exact-view barrier until the M3.6
+overlay/picking cutover. M3.5 adds the native transaction polling contract.
 
 `FRAME_SAMPLE` QPC boundaries locate the corresponding aggregate renderer trace.
 `geometry_ms` includes content assembly, uploads and possible driver waits;
@@ -242,3 +243,15 @@ The shoreline lifecycle keeps water motion and reflections on during normal
 playback, zoom and scrolling. Its wave-off control compares the same time with
 only foam disabled; water still animates. A separate both-motion-off control
 proves the stopped image. Do not infer that disabling one effect stops another.
+
+`--native-camera-requests` routes the native composition fixture through the
+production begin/poll/validate/commit exports. Pending polls must leave output
+untouched and cannot commit. `NATIVE_CAMERA_SAMPLE` separates enqueue, maximum
+poll duration and completion time; the test driver alone waits between polls.
+The driver services real messages and waits for the registered completion hint,
+with a bounded retry timeout. It does not spin or raise system timer resolution.
+The ordinary whole-request/desktop measurements still include that completion
+wait, native units, UI and transfer. This prevents reporting a short enqueue as
+an end-to-end speedup. Match all effects/assets and keep the synchronous run as
+a control. These are real DLL/JGL transactions, not a live Animator/picking test;
+the injected camera cutover remains the M3.6 responsibility.

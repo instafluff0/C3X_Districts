@@ -32,6 +32,7 @@ public:
     }
     // The native owner must flush before advancing the map ticket, drain before
     // retiring a session, and never publish after failure. Destruction sends no work.
+    bool flushed()const{return pending.empty();}
     void flush(){if(pending.empty())return;auto r=request(C3X_GPU_SUBMIT);r.commands=pending.data();r.command_count=unsigned(pending.size());r.command_struct_size=sizeof(pending[0]);run(r);pending.clear();++batches;}
     void advance(c3x_renderer_gpu_frame_v1 const& next){
         if(failed||!pending.empty()||next.struct_size!=sizeof(next)||next.session!=session||next.ticket<=ticket)throw std::runtime_error("GPU ticket advance requires a flushed live session");

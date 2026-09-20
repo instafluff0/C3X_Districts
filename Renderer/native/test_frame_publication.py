@@ -15,6 +15,7 @@ class PublicationTests(unittest.TestCase):
         poll='int poll_gpu_camera_view('+source.split('int poll_gpu_camera_view(',1)[1].split('\nprivate:',1)[0]
         run_cpp(r'''
 #include <algorithm>
+#include <atomic>
 #include <array>
 #include <cassert>
 #include <cstdint>
@@ -26,8 +27,11 @@ class PublicationTests(unittest.TestCase):
 '''+publication+r'''
 struct Owner {
  std::mutex call_mutex,state_mutex;
+ struct {long long camera_serial=2;}renderer_state;
  enum class Command {gpu_render};
  PublishedMapFrame gpu_publication,camera_ready;
+ std::atomic<bool> ahead_cancelled{false},foreground_pending{false};
+ bool ahead_active=false,unit_pixels_active=false,has_job=false;
  bool camera_gpu=true,camera_ready_prepared=false,camera_ready_area=false,gpu_reused=false,nearby_presented=false,fail=true;
  int camera_result=C3X_RENDERER_RESULT_OK,imports=0;
  c3x_renderer_i64 camera_ticket=2,gpu_camera_front_ticket=1;
@@ -52,12 +56,17 @@ void capture(PublishedMapFrame& out,int city,int* released){
 }
 int main(){
  int released=0;Owner owner;capture(owner.gpu_publication,7,&released);capture(owner.camera_ready,9,&released);
+ c3x_renderer_gpu_camera_view_v1 waiting{};waiting.image.ticket=321;auto waiting_before=waiting;
+ owner.ahead_active=true;
+ assert(owner.poll_gpu_camera_view(2,waiting)==C3X_RENDERER_RESULT_PENDING && owner.imports==0);
+ assert(owner.ahead_cancelled && owner.foreground_pending && !std::memcmp(&waiting,&waiting_before,sizeof(waiting)));
+ owner.ahead_active=false;
  auto old=owner.gpu_publication.frame.tiles;auto coverage=owner.gpu_publication.output.replacement_tile_flags;
  c3x_renderer_gpu_camera_view_v1 result{};result.image.ticket=777;auto untouched=result;
  assert(owner.poll_gpu_camera_view(2,result)==C3X_RENDERER_RESULT_ERROR && !std::memcmp(&result,&untouched,sizeof(result)));
  assert(owner.gpu_publication.frame.tiles==old && old->city_id==7 && owner.gpu_publication.output.replacement_tile_flags==coverage);
  assert(owner.gpu_camera_front_ticket==1 && released==1 && !owner.camera_ready.has_image());
- owner.camera_ticket=3;owner.camera_result=C3X_RENDERER_RESULT_OK;owner.fail=false;capture(owner.camera_ready,11,&released);
+ owner.camera_ticket=owner.renderer_state.camera_serial=3;owner.camera_result=C3X_RENDERER_RESULT_OK;owner.fail=false;capture(owner.camera_ready,11,&released);
  assert(owner.poll_gpu_camera_view(3,result)==C3X_RENDERER_RESULT_OK && released==2 && owner.gpu_camera_front_ticket==3);
  assert(result.camera.ticket==3 && result.image.ticket==99 && result.camera.identity.map_epoch==11);
  assert(result.camera.frame.tiles->city_id==11 && result.image.presentation_time_ticks==result.camera.frame.presentation_time_ticks);
@@ -225,6 +234,11 @@ int main(){
 #include <functional>
 using HDC=void*;using HWND=void*;using UINT_PTR=std::uintptr_t;
 using UINT=unsigned;using DWORD=unsigned long;using ULONGLONG=unsigned long long;
+using WPARAM=std::uintptr_t;using LPARAM=std::intptr_t;
+std::atomic<unsigned> camera_notifications{0};
+int PostThreadMessageA(DWORD thread,UINT message,WPARAM ticket,LPARAM high){
+ assert(thread==17 && message==901 && ticket>0 && high==0);++camera_notifications;return 1;
+}
 ULONGLONG GetTickCount64(){assert(false);return 0;}
 void OutputDebugStringA(char const*){assert(false);}
 constexpr unsigned GA_ROOT=2;
@@ -472,7 +486,7 @@ int main(){
         assert(!std::memcmp(&atomic_view,&untouched,sizeof(atomic_view)));
         assert(gpu_worker.camera_poll(active,out)==C3X_RENDERER_RESULT_BAD_ARGUMENT);
         owned.city_id=-1;capture.presentation_time_ticks+=100;
-        assert(gpu_worker.begin_gpu_camera(request,replaced)==C3X_RENDERER_RESULT_PENDING&&replaced>active);
+        assert(gpu_worker.begin_gpu_camera(request,replaced,17,901)==C3X_RENDERER_RESULT_PENDING&&replaced>active);
         owned.city_id=999; // The queued edit owns its copy.
         assert(gpu_worker.poll_gpu_camera(active,resident,out)==C3X_RENDERER_RESULT_SUPERSEDED&&resident.ticket==777);
         assert(gpu_worker.poll_gpu_camera_view(active,atomic_view)==C3X_RENDERER_RESULT_SUPERSEDED);
@@ -490,6 +504,14 @@ int main(){
         gpu_state.camera_serial=INT64_MAX;capture.presentation_time_ticks++;
         assert(recreated.begin_gpu_camera(request,next)==C3X_RENDERER_RESULT_ERROR && next>replaced);
         assert(gpu_state.cancelled>=2);
+    }
+    assert(camera_notifications==0); // cancelled/superseded work sends no ready hint
+    {
+        RendererState notify_state;notify_state.scene_surface_requested=notify_state.city_profile=true;
+        RendererWorker notifying(notify_state);c3x_renderer_camera_request_v1 request={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(request),&f,{1,2,3,4}};
+        c3x_renderer_i64 ticket=0;assert(notifying.begin_gpu_camera(request,ticket,17,901)==C3X_RENDERER_RESULT_PENDING);
+        until([&]{return camera_notifications.load()==1;});
+        notifying.reset_and_stop();
     }
     assert(worker.render(f,out)==C3X_RENDERER_RESULT_OK);
     c3x_renderer_i64 first=0,last=0;

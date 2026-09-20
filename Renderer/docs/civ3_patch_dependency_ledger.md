@@ -1,5 +1,25 @@
 # Civ III patch dependency ledger
 
+## M3.5 native nonblocking transaction boundary
+
+DLL-only exports `c3x_renderer_native_camera_request` and
+`c3x_renderer_native_camera_poll` extend the existing `CompositionOwner`.
+They use the M3.4 atomic result, copied inputs and existing commit/cancel actions.
+`c3x_renderer_native_camera_message` exposes the registered completion-message ID;
+the worker posts a ticket hint to the requesting thread, never calls game code.
+Pending grants no replacement coverage; it never inserts pixels or invokes a
+synchronous fallback. Ready adoption retains its measured session-import cost.
+No injected fields, native patch, signature or executable address changes are
+needed for this boundary: `required_user_action: []`.
+
+The live injected caller still uses exact PREPARE until M3.6 coordinates native
+Animator camera/erase/wrap state, overlays and picking. Do not replace only m19's
+render call: Animator::update has already changed its camera canvases before m71,
+and later unit/UI operations can otherwise join the pending worker or mix views.
+The existing `Main_Screen_Form_move_camera`, m71/m19 and JGL seams remain the
+starting points for that integration; this records no speculative new hook.
+
+
 ## M3.4 atomic GPU view publication
 
 The optional DLL-only `c3x_renderer_gpu_camera_poll_view` export returns the
