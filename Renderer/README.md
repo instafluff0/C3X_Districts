@@ -56,6 +56,10 @@ view, pass and publication ownership. Raster caches accelerate that scene; they 
 not dictate its structure. Use the [roadmap](docs/retained_renderer_plan.md) for
 implemented capabilities, four agreed milestones, measured limits and checkpoint
 identity. Full detail remains the policy; there is no API migration prerequisite.
+Shoreline waves, water motion and reflections are always enabled in the normal
+performance workload. Optimize idle animation, scrolling and map jumps with all
+three on. Effects-off runs are explicit diagnostic controls only; preserve the
+user-facing switches.
 
 Civ III/C3X owns game state, visibility, tile/object screen anchors, day/night and
 seasons. The renderer produces resident map/pose textures and retains the native

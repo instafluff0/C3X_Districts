@@ -154,7 +154,12 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
     std::thread foreign_present([&]{foreign_result=present(&foreign_release);});foreign_present.join();
     verify(foreign_result==C3X_RENDERER_RESULT_BAD_ARGUMENT,"window ownership cannot be released by a foreign thread");
     verify(screen_transfers==1&&owner.stats().readbacks==0,"one complete GPU transfer with no native map readback");
-    verify(gpu.readback(owner.display_image(screen_surface),observed.data(),observed.size())&&observed==expected,"map/screen/save-restore family preserves full color exactly");
+    bool screen_read=gpu.readback(owner.display_image(screen_surface),observed.data(),observed.size());
+    if(screen_read && observed!=expected){
+        unsigned count=0,first=0;for(unsigned i=0;i<expected.size();++i)if(observed[i]!=expected[i]){if(!count)first=i;++count;}
+        std::fprintf(stderr,"NATIVE_SCREEN_MISMATCH pixels=%u first=%u,%u actual=%08x expected=%08x\n",count,first%w,first/w,observed[first],expected[first]);
+    }
+    verify(screen_read&&observed==expected,"map/screen/save-restore family preserves full color exactly");
     RECT last_transfer=full;bool live_active=false,preserve_gdi_display=false;unsigned capture_number=0;
     auto capture_display=[&](std::vector<unsigned> const& pixels,std::vector<unsigned>* captured_pixels=nullptr){
         if(captured_pixels)captured_pixels->resize(pixels.size());
@@ -254,7 +259,10 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
         c3x_renderer_visual_status_v1 transported=after;
         LARGE_INTEGER deadline={};QueryPerformanceCounter(&deadline);deadline.QuadPart+=frequency.QuadPart*3;
         do{
-            MSG message;while(PeekMessageA(&message,nullptr,WM_TIMER,WM_TIMER,PM_REMOVE))DispatchMessageA(&message);
+            // Check the deadline/progress after each callback. A frame longer
+            // than 33 ms can keep WM_TIMER continuously due; draining all of
+            // them here would starve the very status check that ends the test.
+            MSG message;if(PeekMessageA(&message,nullptr,WM_TIMER,WM_TIMER,PM_REMOVE))DispatchMessageA(&message);
             verify(status(&transported)==1,"timer transport status");QueryPerformanceCounter(&end);
             if(transported.frames>=after.frames+3)break;Sleep(1);
         }while(end.QuadPart<deadline.QuadPart);

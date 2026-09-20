@@ -10,13 +10,19 @@ Full detail, authored animation and Civ III's gameplay/state authority remain
 unchanged. The zoom-owned map-overlay extension below is a planned rendering
 ownership change, not a second visibility, selection, or pathfinding system.
 
-**Current technical checkpoint: 1.6 and 2.1–2.3 implemented; 2.4 shoreline verified; 2.5 tactical overlays technically verified in the candidate.**
+**Current technical checkpoint: 1.6 and 2.1–2.3 implemented; 2.4 shoreline, open-water motion and river flow implemented; 2.5 tactical overlays technically verified in the candidate.**
 Units remain above all map geometry under the user's final policy. Selection, route
 and grid draw semantics now enter the existing retained GPU composition path.
-Visual acceptance, Milestone 2 performance acceptance and the strategic live-game
-check remain open. The user advanced to 2.5 with **2.4 open-water motion and
-directional river flow still unfinished**; retain that responsibility before 2.7.
-**Next architectural step: 2.6 scheduling/reuse.**
+Water visual acceptance was granted on September 19; the exact candidate is staged.
+Milestone 2 performance acceptance and the strategic live-game check remain open. The return to 2.4 adds broad/fine ocean normal motion and
+connected directional river flow, with shared sun/moon glints. The visual
+refinement uses smaller, slow multidirectional ripples and concentrated light
+paths instead of broad drifting waves or ocean-wide sparkle. Current water
+verification and whole-workload evidence are recorded below.
+**Next architectural step: 2.6 scheduling/reuse.** Always enable shore waves,
+water motion and reflections for idle, scrolling and map-jump optimization.
+The existing reflection compatibility path prevents resident GPU admission;
+removing that restriction without losing reflections is the first responsibility.
 [Architecture](renderer_architecture.md) owns the design;
 [validation](benchmark_workflow.md) owns measurement and acceptance.
 
@@ -141,11 +147,100 @@ The earlier full-terrain-rebuild concern in `ocean_wave_findings.md` describes t
 pre-retained architecture, not this path. Reflections-enabled rendering keeps its
 existing compatibility path; resident reflection work remains below.
 
-**Next unfinished effect responsibilities:** extend this proven dynamic damage
-mechanism to open-water ripples/swell and directional river flow. These still
-need their own generic material/input and visual validation; they are not supplied
-by enabling shoreline foam. Do not mark all of 2.4 complete yet. General frame
-scheduling/conversion cost remains 2.6, measured before 2.7 acceptance.
+**Open water and rivers implemented:** the existing normal textures now provide
+overlapping ripples and animated highlights without mesh displacement
+or new texture assets. River normals follow renderer-owned immutable tangents,
+derived from native connectivity toward water outlets; closed components use a
+stable visual sink. Wrapped flow and remote-outlet changes participate in river
+page validity. No native patch, gameplay calculation or extra input capture is
+needed. Fog freezes the material sample. Time-only frames reuse geometry and
+static color/depth; affected translucent forward layers retain their original
+order. Existing reflection compatibility remains supported.
+
+**Next unfinished responsibility:** 2.6 scheduling/reuse, followed by 2.7 combined
+acceptance. Water visuals are accepted and staged; the strategic live-game check
+remains pending. These are distinct from executable technical verification. Continue to
+measure the complete request, finishing/publication, memory and actual cadence.
+
+**Current visual refinement:** smaller overlapping ocean ripples use three bounded
+CPU phases, with no dominant translating sheet. Sun/moon highlights form a
+concentrated broken path using a material-only finite-eye approximation derived
+from the authoritative anchors. Shared light direction/intensity remains the
+source of that path. The map projection is unchanged, and this adds no texture,
+render target, mesh or pass. The ocean optical approximation is not underwater
+refraction or a claim about recovered Civ VI shader code. Rivers retain their
+connected downstream motion. Motion-off camera changes expire only finished
+rasters, keeping the optical path out of stale world-image caches.
+
+Current candidate SHA-256:
+`3976b380f5ce0240b16c069e7f00118c8cc6643ffe3b40c22f7a8999f1782655`.
+The focused suite passes 125 tests / one skip. Day/night, fog/reveal, river
+playback, still-scroll/cold and wrapped-camera/cold witnesses pass. Repeat/fog and
+camera comparisons are exact; the independent split/static finish differs by
+one channel level at one pixel, within the existing rounding budget. Current
+previews live under `lab/out/water-refinement/final/`. The user accepted these
+visuals on September 19. The exact DLL is staged in `bin/C3XRenderer.dll`, with
+matching SHA-256 and a rollback copy recorded in
+`lab/out/integration/water-accepted/staging.json`. No install or game launch ran. The current full-workload receipt is
+`native/build/water-refinement-workload-final/receipt.json` (pass, inputs unchanged,
+no dropped trace lines). The same 1120×1192 dense coast, eight-unit native workload
+has 384 requests across CPU/GPU routes, with waves on and reflections off.
+This is historical evidence, not the new all-effects performance baseline. GPU request mean / p95: stationary
+12.51 / 35.76 ms, scrolling 152.65 / 217.41 ms, local edits 17.73 / 44.86 ms.
+The separate one-selected-unit independent workload has 30 frames: 66.76 / 79.62
+ms request mean / p95, 76.16 ms desktop mean, zero static submissions and zero
+content uploads in every interval. Sampled contiguous VA stays above 948.9 MiB.
+The preceding run averaged 66.99 ms independent and 152.12 ms scrolling; this
+similar result is not an isolated shader ablation or a frame-budget acceptance.
+Capture/setup remain outside timing and desktop completion is not scanout.
+`summary.json` alongside the receipt preserves distributions and interval proof.
+
+The first attempt was stopped after its test loop starved its own deadline check
+by draining continuously due timers. The witness now checks progress after each
+callback, preserving the three-frame/three-second requirement. M2.6 must also
+address runtime callback fairness when a visual frame exceeds the 33 ms timer
+interval; fixing this witness does not improve production cadence.
+
+**Initial water workload checkpoint (2026-09-19, before the light-path refinement):** candidate SHA-256
+`f0917aef1be98b9b0c8c027b25624f1434c849e49e439a5b3e69bb6a6df5befa`.
+Same DLL/assets, serial motion-off/on runs, established 100×100 coast at
+1120×1192, dense cities/infrastructure, eight units, native UI and shoreline
+waves enabled. Each arm includes 384 timed native requests (64 per route and
+workload) plus 30 independent visual frames. GPU request mean / p95, ms:
+
+| Workload | Water motion off | Water motion on |
+| --- | ---: | ---: |
+| Stationary native requests | 13.41 / 35.08 | 11.83 / 35.85 |
+| Dense scrolling | 141.36 / 192.03 | 152.12 / 224.08 |
+| Local changes | 17.15 / 40.97 | 15.66 / 48.71 |
+| Independent visual frames | 57.20 / 64.19 | 66.99 / 73.35 |
+
+Independent frames use one selected unit and retained UI; eight units apply to
+the native-request workloads. Independent desktop-completion means are
+68.77 / 76.67 ms. All 30 motion-on
+intervals contain water samples, zero static scene submissions and zero content
+uploads. Pixel/ownership, native fallback, independent timer and bounded unit
+composition checks pass. Sampled minimum contiguous VA is 1036.3 / 1025.6 MiB,
+above the 512 MiB floor; sampling does not bound transient peaks. Input identities
+remain unchanged and buffered traces have no dropped lines.
+
+This pair measures added effect cost, not an equivalent-image speedup. Small
+native-request differences are inconclusive; the extra ~9.8 ms independent-frame
+mean and ~10.8 ms scrolling mean are disclosed costs. Capture/setup are outside
+timing, desktop completion is not scanout, and current cadence remains below
+the eventual frame-budget objective. The slower optional reflection compatibility
+route remains supported, not promoted as the performance path.
+
+Receipts/counters: `native/build/water-motion-workload/comparison.json` and its
+`coast-off` / `coast-on` receipts. Water Lab witnesses cover daylight, moonlight,
+48-frame playback, cold/repeat/time return, fog/reveal, the independent still
+control and reflection compatibility. Wrapped scrolling and authoritative local
+edits match independent cold redraws exactly. Category tests: 135 passed / one skipped;
+three focused water-coverage tests pass. Earlier failed diagnostic runs remain
+preserved: duplicate compatibility water was fixed; the small 32×32 Lab fixture
+hit an outside-map alpha oracle mismatch at the large benchmark viewport, so the
+established 100×100 benchmark was used without weakening its native pixel oracle.
+The water visuals are now accepted/staged; live-game evidence remains pending.
 
 **Gated on both milestone 1 and milestone 2:** reflections of nearby scene
 geometry (mountains, buildings) need the whole visible scene's resolved

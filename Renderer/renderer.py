@@ -459,8 +459,10 @@ def scene(category, case, destination, *, world_size=32):
     destination.write_text(f"C3X_BIQ_TERRAIN_V3,{world_size},{world_size},{len(rows)}\n" + "\n".join(rows) + "\n")
 
 
-def native_render(category, case, hour, zoom, output, *, behavior=None, center=(16, 16), diagnostics=False, candidate=None, preview=None, shared_surface=False):
+def native_render(category, case, hour, zoom, output, *, behavior=None, center=(16, 16), diagnostics=False, candidate=None, preview=None, shared_surface=None):
     from Renderer.lab.platform import run_native_fixture
+    if shared_surface is None:
+        shared_surface = category in ("seas-oceans", "rivers")
     if behavior not in (None, "replay", "edits", "animation", "units", "visibility"):
         raise ValueError("Unknown native behavior check")
     if category == "rivers" and center == (16, 16):
@@ -511,7 +513,7 @@ def native_render(category, case, hour, zoom, output, *, behavior=None, center=(
         "C3X_LAB_VOLCANO_STUDY": "1" if category == "volcanoes" and case == "lifecycle" else "",
         "C3X_LAB_WAVE_STUDY": case if category == "ocean-waves" else "",
         "C3X_RENDERER_WATER_MOTION": "1" if category in ("seas-oceans", "rivers") else "0",
-        "C3X_LAB_WATER_MOTION_STUDY": "1" if category in ("seas-oceans", "rivers") and shared_surface else "",
+        "C3X_LAB_WATER_MOTION_STUDY": "1" if category in ("seas-oceans", "rivers") else "",
         "C3X_LAB_WATER_STUDY": "1" if case.startswith("water-") else "",
     }
     # The same shoreline lifecycle must cover both native compatibility and
@@ -575,6 +577,8 @@ def native_render(category, case, hour, zoom, output, *, behavior=None, center=(
         (output / "witness.txt").write_text(result.get("output_tail", ""))
     if result["status"] != "pass" or "0 fallback, output=" not in result.get("output_tail", "") or not image.is_file():
         raise ValueError("Production renderer failed: " + name)
+    if category in ("seas-oceans", "rivers") and "PASS water material lifecycle" not in result.get("output_tail", ""):
+        raise ValueError("Water material lifecycle did not complete")
     if category == "ocean-waves" and "PASS coastal wave lifecycle" not in result.get("output_tail", ""):
         raise ValueError("Coastal wave lifecycle did not complete")
     if category in ("units", "animation", "shadows") and "PASS category unit study" not in result.get("output_tail", ""):
@@ -667,6 +671,10 @@ def integration_replay_cases(category, *, full=False):
         cases.extend((("wave-beach-scene", None, 128, (10, 18), 12),
                       ("wave-rocky-scene", None, 160, (10, 18), 12),
                       ("wave-mixed-scene", None, 192, (10, 18), 0)))
+    for water_category in ("seas-oceans", "rivers"):
+        if water_category in selected:
+            cases.extend((("water-" + water_category + "-day", None, 128, (16, 16), 12),
+                          ("water-" + water_category + "-night", None, 64, (16, 16), 0)))
     if selected.intersection(terrain):
         cases.append(("terrain-edit", "edits", 128, (50, 50), 12))
     if selected.intersection(("resources", "animation")):
@@ -699,6 +707,9 @@ def integration_replays(category, *, full=False):
                 scene_category, scene_case = "volcanoes", "lifecycle"
             if name.startswith("wave-"):
                 scene_category, scene_case = "ocean-waves", {"wave-beach":"beach", "wave-rocky":"rocky-control", "wave-mixed":"mixed"}[name.removesuffix("-scene")]
+            if name.startswith("water-"):
+                scene_category = name.removeprefix("water-").rsplit("-", 1)[0]
+                scene_case = "gameplay" if scene_category == "seas-oceans" else "detail"
             if name == "site-lifecycle":
                 scene_category, scene_case = (category if category in ("goody-huts", "barbarian-camps") else "huts-camps"), "gameplay"
             if behavior == "edits":
@@ -709,7 +720,7 @@ def integration_replays(category, *, full=False):
                 scene_category, scene_case, center = "shorelines", "lowland", (10, 18)
             native_render(scene_category, scene_case, hour, zoom,
                           replay_root / name, behavior=behavior, center=center,
-                          shared_surface=name.startswith("wave-") and name.endswith("-scene"))
+                          shared_surface=name.startswith("water-") or (name.startswith("wave-") and name.endswith("-scene")))
             results.append({"name": name, "status": "pass"})
         except NativeFixturePending as error:
             results.append({"name": name, "status": "fail", "reason": str(error)})

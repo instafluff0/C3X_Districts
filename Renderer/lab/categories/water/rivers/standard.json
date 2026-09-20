@@ -18,7 +18,8 @@
     "Renderer/native/render_core/world_topology.h",
     "Renderer/lab/shared/hydrology/river_corridor.h",
     "Renderer/lab/shared/natural/world.h",
-    "Renderer/native/c3x_renderer.cpp"
+    "Renderer/native/c3x_renderer.cpp",
+    "Renderer/native/render_core/water_material_frame.h"
   ],
   "recipe": {
     "terrain": 2,

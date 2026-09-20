@@ -31,6 +31,33 @@ int main() {
 }
 ''')
 
+    def test_projected_forward_layers_keep_water_overlap(self):
+        run_cpp(r'''
+#include <cassert>
+#include <limits>
+#include "Renderer/native/render_core/water_coverage.h"
+struct World {
+ int wet_c=8,wet_r=0;unsigned wet=12;
+ int index(int c,int r)const{return (r+100)*256+c+100;}
+ unsigned at(int i)const{return i==index(wet_c,wet_r)?wet:2;}
+};
+struct Bounds {float low[3],high[3];};
+int main(){
+ using c3x_renderer::render_core::water_under_projection;
+ World world;Bounds ground{{0,0,0},{1,1,0}};
+ assert(!water_under_projection(world,ground));
+ Bounds tower{{0,0,0},{1,1,3}};
+ assert(water_under_projection(world,tower));
+ world.wet_c=1;assert(water_under_projection(world,ground));
+ world.wet=2|(32u<<16);assert(water_under_projection(world,ground));
+ world.wet=0xffffffffu;assert(water_under_projection(world,ground));
+ world.wet_c=80;Bounds broad{{0,0,0},{70,1,0}};
+ assert(water_under_projection(world,broad));
+ ground.high[2]=std::numeric_limits<float>::quiet_NaN();
+ assert(water_under_projection(world,ground));
+}
+''')
+
     def test_shader_distance_and_discard_contract(self):
         for directory in ("city_fidelity", "environment_refresh"):
             shader=(ROOT / f"Renderer/native/{directory}/hydrology.hlsl").read_text()

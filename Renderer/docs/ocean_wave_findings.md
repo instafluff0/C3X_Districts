@@ -45,20 +45,50 @@ Primary implementation references reviewed for the remaining M2.4 work:
   composition. The author identifies the artistic approximations and notes
   limited visual return from screen-space reflections in his moving-water demo.
 
-**C3X adaptation to test, not completed capability:** advance existing generic
-normal layers in world coordinates, preserving wrapped seams and the shared
-sun/moon lighting. Begin with shading motion on retained geometry. Evaluate
-river flow against the existing curved corridor; a flow shader does not itself
-supply downstream direction or prove continuity across river-page boundaries.
-Keep flow inputs immutable until their dependencies change, and freeze samples
-under fog. Preserve the existing reflection control and compatibility path.
+**Implemented C3X adaptation:** existing generic normal layers now advance in
+world coordinates. Smaller overlapping ripples use bounded, slow phases in
+differing directions, avoiding a broad sheet drifting across the map. The phases
+are computed once on the CPU, not with per-pixel trigonometry. This uses the existing normal
+textures, with no displaced mesh, extra texture pack or analytic-wave simulation.
+Directional rivers use two staggered normal phases along the curved corridor.
+These are C3X approximations informed by the references, not recovered Civ VI
+shader equations.
 
-Retained composition must preserve translucent layer order: simply painting
-animated water over a cached final scene can overwrite banks, shadows or object
-edges. Measure the complete ocean-heavy and river/city workloads, including
-restoration, finishing and delivery, with motion on/off. Check loop resets,
-zoom shimmer, day/night response and fog boundaries. These references change no
-runtime behavior; open-water motion and directional river flow remain unfinished.
+The user's revised reference calls for a concentrated, broken light path rather
+than ocean-wide sparkle. A finite reflection eye, derived from authoritative
+screen anchors, supplies material-only view variation. An anisotropic highlight
+is narrow across the shared sun/moon direction and broad along it; ripple
+normals break that path into facets. This is an authored optical approximation,
+not Civ VI source evidence, physical ray-traced refraction or a map-camera change.
+It adds no texture, render target, geometry or pass. The still-motion control
+expires completed rasters when this optical eye moves; meshes remain reusable.
+Day/night, fog, wrapped scroll and still-scroll/cold witnesses cover the result.
+
+Civ III supplies river connectivity. The renderer derives deterministic visual
+flow toward connected water outlets; closed components use a stable canonical
+sink. The wrapped world graph rebuilds only when topology changes, with bounded
+transient storage and one retained direction byte per tile. Oversized graphs
+retain still river normals. River-page validity includes those direction bytes,
+so moving a distant outlet invalidates affected upstream material inputs even
+when their local terrain is unchanged. Gameplay state is never modified.
+
+The retained scene restores static color/depth, draws water and affected forward
+layers in their original order, then composes posed resources and shoreline waves.
+Dry forward objects stay static. Time-only material updates build/upload no terrain.
+Explored samples freeze and revealed water resumes. Shared sun/moon lighting and
+reflection controls remain authoritative. The compatibility path also preserves
+the static-prefix split through guarded recursive submissions; the independent
+still control caught and eliminated duplicate translucent water there.
+
+The executable water witness checks 48 frames, repeat/cold/time return, frozen
+fog, reveal and motion-off control. Repeat/cold/fog checks are byte-exact. Only
+the independently finished still control uses the established cold/full-redraw
+8-bit rounding budget (daytime river: one pixel / one channel level at zoom 128;
+17 pixels / at most two levels at zoom 160). Day/night category integration now selects these witnesses.
+Current complete-workload evidence and unfinished acceptance responsibilities
+are in the [roadmap](retained_renderer_plan.md). The user explicitly accepted the
+water refinement on September 19; its exact tested DLL is staged with a hash
+receipt and rollback copy. Fixed references and live-game evidence are unchanged.
 
 ## Recovered source evidence
 

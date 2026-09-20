@@ -68,6 +68,7 @@
 #include "render_core/frame_telemetry.h"
 #include "render_core/raster_grid.h"
 #include "render_core/water_coverage.h"
+#include "render_core/water_material_frame.h"
 #include "render_core/wave_retention.h"
 #include "render_core/cliff_placement.h"
 #include "render_core/source_shadow.h"
@@ -754,6 +755,7 @@ public:
     c3x_renderer_i64 resource_pixel_clock = -1;
     unsigned visible_resource_animations = 0, visible_wave_animations = 0, moving_resources = 0;
     float wave_time_seconds=0,water_time_seconds=0;
+    c3x_renderer::render_core::WaterMaterialFrame water_material;
     bool water_motion=true,water_scene_active=false;
     unsigned visible_water_animations=0;
     ID3D11Buffer* water_frame=nullptr;
@@ -1248,6 +1250,7 @@ public:
             else {hr=device->CreatePixelShader(blob->GetBufferPointer(),blob->GetBufferSize(),nullptr,&wave_shader);release(blob);}
             D3D11_BUFFER_DESC desc={};desc.ByteWidth=16;desc.Usage=D3D11_USAGE_DEFAULT;desc.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
             if(SUCCEEDED(hr))hr=device->CreateBuffer(&desc,nullptr,&wave_frame);
+            desc.ByteWidth=sizeof(water_material);
             if(SUCCEEDED(hr))hr=device->CreateBuffer(&desc,nullptr,&water_frame);
         }
         D3D11_INPUT_ELEMENT_DESC elements[] = {
@@ -3433,7 +3436,8 @@ public:
             moving_resources=visible_resource_animations=visible_wave_animations=0; resource_pixel_signature=0; return true;
         }
         auto clock=resource_clock(frame);
-        water_time_seconds=float(double(frame.presentation_time_ticks)/std::max<c3x_renderer_i64>(1,frame.presentation_frequency));
+        water_material=c3x_renderer::render_core::water_material_frame(frame);
+        water_time_seconds=water_material.time;
         if (posed_count() && resource_pixel_signature==cached_signature.complete &&
             resource_pixel_clock==clock) return true;
         LARGE_INTEGER started={},finished={};QueryPerformanceCounter(&started);
@@ -5366,8 +5370,11 @@ public:
                     context->VSSetShader(layer==geometry_shadow?resource_shadow_vertex_shader:resource_body_vertex_shader,nullptr,0);
                 }
                 if(environment_profile && (layer==geometry_water || layer==geometry_river)){
-                    float sample[]={water_scene_active && chunk.water_visible() && chunk.content().visual_time<0?water_time_seconds:0.f,0,0,0};
-                    context->UpdateSubresource(water_frame,0,nullptr,sample,0,0);
+                    auto sample=water_material;
+                    if(!water_scene_active || !chunk.water_visible() || chunk.content().visual_time>=0){
+                        sample.time=0;sample.drift[0]=sample.drift[1]=sample.drift[2]=0;
+                    }
+                    context->UpdateSubresource(water_frame,0,nullptr,&sample,0,0);
                     context->PSSetConstantBuffers(10,1,&water_frame);
                 }
                 if(layer==geometry_wave){float wave_sample[]={chunk.content().visual_time<0?wave_time_seconds:chunk.content().visual_time,0,0,0};
@@ -5732,7 +5739,7 @@ public:
                         if(cached){++frame_region_hits;frame_region_hit_pixels+=std::size_t(r-l)*(b-t);}
                         else {
                             if(region_path)++frame_region_misses;
-                            if(!submit_geometry(buffers,{block_rect},local,city_profile?active_glow.target:block_target,block_depth,extent,extent_y,cancellation,accumulate,true,shadow_buffers_ptr,false,shadow_casters_ptr,prepared_casters_ptr,region_size,grid_x,grid_y)){
+                            if(!submit_geometry(buffers,{block_rect},local,city_profile?active_glow.target:block_target,block_depth,extent,extent_y,cancellation,accumulate,true,shadow_buffers_ptr,false,shadow_casters_ptr,prepared_casters_ptr,region_size,grid_x,grid_y,require_linear_backdrop)){
                                 destination_texture->Release();return false;
                             }
                             if(cacheable){
@@ -5769,7 +5776,7 @@ public:
             if(pieces.size()>1) {
                 for(std::size_t i=0;i<pieces.size();++i)
                     if(!submit_geometry(buffers,{pieces[i]},settings,target,depth,projection_width,projection_height,
-                        cancellation,accumulate || i!=0,finish && i+1==pieces.size(),shadow_buffers_ptr,reflection_pass,shadow_casters_ptr,prepared_casters_ptr,region_size,grid_x,grid_y))return false;
+                        cancellation,accumulate || i!=0,finish && i+1==pieces.size(),shadow_buffers_ptr,reflection_pass,shadow_casters_ptr,prepared_casters_ptr,region_size,grid_x,grid_y,require_linear_backdrop))return false;
                 return true;
             }
         }
@@ -5831,7 +5838,7 @@ public:
             }
             auto reflection_inputs=water_scene_active && accumulate && shadow_buffers_ptr?shadow_buffers_ptr:buffers;
             if(!submit_geometry(reflection_inputs,reflected_rects,reflected,destination,depth,reflected_extent,reflected_height,
-                cancellation,false,true,shadow_buffers_ptr,true,shadow_casters_ptr,prepared_casters_ptr,region_size,grid_x,grid_y))return false;
+                cancellation,false,true,shadow_buffers_ptr,true,shadow_casters_ptr,prepared_casters_ptr,region_size,grid_x,grid_y,require_linear_backdrop))return false;
         }
         {AnimationGpu::Pass gpu_phase(animation_gpu,context,AnimationGpu::receivers);
         if(pickup_profile && !scene_surface_pass && !prepare_receiver_shadows(shadow_buffers_ptr?shadow_buffers_ptr:buffers,
@@ -6404,6 +6411,16 @@ public:
             }
         if(water_active!=water_scene_active){scene_static_signature=0;scene_guard.invalidate_all();}
         water_scene_active=water_active;
+        auto next_water_material=c3x_renderer::render_core::water_material_frame(frame);
+        if(city_profile && !water_motion && std::memcmp(water_material.camera,next_water_material.camera,sizeof(water_material.camera))){
+            // The still control retains view-dependent optics. Finished world
+            // rasters cannot move a previous camera's reflection path with land.
+            // Meshes/materials remain reusable; only completed pixels expire.
+            cache_valid=false;viewport_cache.clear();viewport_cache_bytes=0;
+            cancel_pixel_preparation();pixel_blocks.clear();render_regions.clear();
+            clear_resource_backdrops();scene_static_signature=0;scene_guard.invalidate_all();
+        }
+        water_material=next_water_material;
         ++trace.sequence;
         char profile_option[8]={};
         profiling=GetEnvironmentVariableA("C3X_RENDERER_PROFILE",profile_option,sizeof(profile_option)) &&

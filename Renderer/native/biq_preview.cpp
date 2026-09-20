@@ -688,6 +688,17 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
             return std::vector<unsigned char>(p,p+output.stride_bytes*output.height);};
         auto draw=[&](){return render_checked(&frame,&output)==C3X_RENDERER_RESULT_OK && output.fallback_tile_count==0;};
         auto save=[&](char const* suffix){return write_bmp((std::string(argv[5])+suffix).c_str(),output);};
+        auto match=[&](char const* label,std::vector<unsigned char> const& expected){
+            auto current=pixels();unsigned changed=0,maximum=0;unsigned long long error=0;
+            for(std::size_t i=0;i<current.size();i+=4){bool bad=false;for(unsigned c=0;c<3;++c){
+                unsigned d=unsigned(std::abs(int(current[i+c])-int(expected[i+c])));maximum=std::max(maximum,d);error+=d;bad=bad||d!=0;}changed+=bad;}
+            std::printf("WATER compare=%s changed=%u maximum=%u error=%llu\n",label,changed,maximum,error);
+            if(changed)save((std::string(".water-")+label+".bmp").c_str());
+            // Only the independently finished static control uses the established
+            // cold/full-redraw 8-bit rounding budget. Playback, reset and fog
+            // comparisons below remain byte-exact.
+            return maximum<=2 && changed<=current.size()/4000 && error<=current.size()/100;
+        };
         auto initial=pixels(),previous=initial;unsigned changed=0;
         LARGE_INTEGER frequency={};QueryPerformanceFrequency(&frequency);double total=0;
         for(int sample=0;sample<48 && ok;++sample){
@@ -714,12 +725,16 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
         ok=ok && draw() && pixels()==initial;
         // Time zero is the preserved still material. Compare independently
         // against the unsplit static rendering route with motion disabled.
-        frame.presentation_time_ticks=0;ok=ok && draw();auto zero=pixels();
+        frame.presentation_time_ticks=0;ok=ok && draw();auto zero=pixels();save(".water-zero.bmp");
         SetEnvironmentVariableA("C3X_RENDERER_WATER_MOTION","0");reset();
-        ok=ok && set_definitions(argv[2],argv[3],nullptr,custom_path)==C3X_RENDERER_RESULT_OK && draw() && pixels()==zero;
+        ok=ok && set_definitions(argv[2],argv[3],nullptr,custom_path)==C3X_RENDERER_RESULT_OK && draw() && match("zero-static",zero);
         auto off=pixels();ok=ok && save(".water-off.bmp");frame.presentation_time_ticks=5*frame.presentation_frequency;
         ok=ok && draw() && pixels()==off && !output.visible_animation_count;
-        std::printf("WATER control: %s zero_time_static_exact=1 disabled_still=1\n",ok?"pass":"FAIL");
+        std::printf("WATER control: %s zero_time_static_rounding_budget=1 disabled_still=1\n",ok?"pass":"FAIL");
+        int water_center=center_x;center_x+=2;tiles=capture_view();frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());
+        ok=ok && draw();auto still_pan=pixels();reset();
+        ok=ok && set_definitions(argv[2],argv[3],nullptr,custom_path)==C3X_RENDERER_RESULT_OK && draw() && match("still-scroll-cold",still_pan);
+        center_x=water_center;tiles=capture_view();frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());
         SetEnvironmentVariableA("C3X_RENDERER_WATER_MOTION","1");reset();frame.presentation_time_ticks=frame.presentation_frequency;
         ok=ok && set_definitions(argv[2],argv[3],nullptr,custom_path)==C3X_RENDERER_RESULT_OK && draw() && pixels()==initial;
         std::printf("%s water material lifecycle\n",ok?"PASS":"FAIL");

@@ -1,9 +1,11 @@
 # Civ III patch dependency ledger
 
-## Shoreline scene effects (2.4)
+## Water scene effects (2.4)
 
-DLL-only shoreline execution consumes existing API 18 immutable map visibility,
-native anchors and captured presentation time. Existing map capture/composition
+DLL-only shoreline, open-water and directional-river execution consumes existing
+API 18 immutable world topology, map visibility, native anchors and captured
+presentation time. River direction is renderer-owned visual data derived from
+that topology; it adds no gameplay authority or native capture. Existing map capture/composition
 and visual-frame hooks remain unchanged. No native suppression, ABI change or
 CSV entry is needed; `required_user_action: []`. The native waves/reflections
 configuration flags retain their current meaning. Candidate verification does

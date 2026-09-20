@@ -15,6 +15,9 @@ Desktop completion is not physical scanout. Worker completion, native caller wai
 and actual fresh-frame cadence are different endpoints.
 
 Use identical assets, quality, inputs, clocks, viewport and normal memory limits.
+The normal workload always enables shoreline waves, water motion and reflections.
+Effects-off runs are explicit diagnostic controls, never performance acceptance.
+Earlier reflections-off receipts remain historical and do not establish this baseline.
 Distinguish process-cold, assets-loaded/content-cold, prepared-resident and revisits.
 Report preparation time, reset coverage, retained content and completed-image reuse
 explicitly. Broad CPU/GPU scene preparation and final pixel prefetch have different

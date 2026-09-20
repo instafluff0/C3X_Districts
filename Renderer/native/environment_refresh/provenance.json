@@ -2,7 +2,7 @@
   "water": "water-natural-r6",
   "reflection": "water-reflection-r5",
   "source_sha256": {
-    "Renderer/lab/shared/shaders/hydrology/water_natural.hlsl": "2da89e656ff89e70e45d9828f8a5454a9b1fcaf7fa17605d7e770f27516f737b",
+    "Renderer/lab/shared/shaders/hydrology/water_natural.hlsl": "1a8b69cffe50bcaaa103ef006008e7d7c3fbb11cdf1c825fa8418a5fb8e70394",
     "Renderer/native/source_fidelity/hydrology.hlsl": "413cd03152647e1cd14fea0e37305ab4e425107a930383837d12b79f5b3763db",
     "Renderer/lab/shared/shaders/hydrology/coastal_waves.hlsl": "7dff9e6e6720024555e7ea9e9497178f4974de56fdb6638fb8de0df9457e27db",
     "Renderer/native/render_core/terrain_scene.hlsl": "2a5f7e8550f3964b255d34e54f8f6bd4daaff1907715ea44f11a38591ec90067",

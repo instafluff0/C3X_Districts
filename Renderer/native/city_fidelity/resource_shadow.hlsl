@@ -3125,9 +3125,11 @@ cbuffer NativeReflectionFrame : register(b5) {
  float4 NativeReflection; // world-height to native pixels, depth metric, plane Z, enabled
  float4 NativeReflectionTarget; // internal extent XY, sampling guard XY
 };
-cbuffer NativeWaterFrame : register(b10) { float4 native_water_sample; };
+cbuffer NativeWaterFrame : register(b10) { float4 native_water_sample; float4 native_water_camera; };
 #undef Q3_WATER_TIME
 #define Q3_WATER_TIME native_water_sample.x
+#define Q3_WATER_DRIFT native_water_sample.yzw
+#define Q3_WATER_CAMERA native_water_camera
 
 #define Q3_NATURAL_WATER 1
 #define Q3_OBJECT_REFLECTION 1
@@ -3145,6 +3147,9 @@ Texture2D q3_object_reflection_texture : register(t121);
 #ifndef Q3_WATER_TIME
 #define Q3_WATER_TIME 0.0
 #endif
+#ifndef Q3_WATER_DRIFT
+#define Q3_WATER_DRIFT float3(0,0,0)
+#endif
 float q3_natural_hash(float2 cell) {
  float period=c3x_world_material.x*q3_source_repeat(.6);
  if(period>0)cell-=floor(cell/period)*period;
@@ -3159,31 +3164,45 @@ float3 q3_natural_normal(PixelInput input) {
  float2 world=q3_source_world(input)+Q3_NATURAL_COORD_SHIFT;
  float2 patch_uv=world*q3_source_repeat(.6);
  float2 warp=float2(q3_natural_noise(patch_uv),q3_natural_noise(patch_uv+float2(7,13)))-.5;
- float time=Q3_WATER_TIME;
- float2 uv0=world*float2(q3_source_repeat(.36),q3_source_repeat(.48))+warp*.16+time*float2(.018,.011);
- float2 uv1=world*float2(q3_source_repeat(.72),q3_source_repeat(.94))+warp*.12+float2(.27,.61)+time*float2(-.027,.019);
+ float3 drift=Q3_WATER_DRIFT;
+ float2 uv0=world*float2(q3_source_repeat(.40),q3_source_repeat(.54))+warp*.16+drift.xy;
+ float2 uv1=world*float2(q3_source_repeat(.95),q3_source_repeat(1.24))+warp*.12+float2(.27,.61)+float2(-drift.y,drift.z);
  float2 a=water_large_lean0_texture.Sample(material_sampler,uv0).rg*2-1;
  float2 b=water_small_lean0_texture.Sample(material_sampler,uv1).rg*2-1;
- float2 secondary_uv=float2(world.y,-world.x)*float2(q3_source_repeat(1.12),q3_source_repeat(1.46))+warp*.1+time*float2(.013,-.023);
+ float2 secondary_uv=float2(world.y,-world.x)*float2(q3_source_repeat(1.4),q3_source_repeat(1.82))+warp*.1+float2(drift.z,-drift.x);
  float2 c=water_small_secondary_lean0_texture.Sample(material_sampler,secondary_uv).rg*2-1;
  // Rotate the crossing detail slope vector back to the world basis too.
  c=float2(-c.y,c.x);
- // Broad calm lanes interrupt the source pattern without per-tile phases.
- float envelope=lerp(.16,1,smoothstep(.20,.78,warp.x+.5));
- float2 slope=(a*.40+b*.38+c*.22)*envelope;
- // Two low-frequency slopes supply broad swell at the map camera's scale.
- // Spatial frequencies close at the world seam; no mesh motion or extra maps.
- float2 broad=float2(q3_source_repeat(.54),q3_source_repeat(.22));
- float2 crossing=float2(q3_source_repeat(.31),-q3_source_repeat(.63));
- slope+=(normalize(broad)*cos(dot(world,broad)*6.2831853-time*.95)*.055
-  +normalize(crossing)*cos(dot(world,crossing)*6.2831853-time*1.23)*.026)*lerp(.45,1,envelope);
+ // Gentle world-coherent variation; fine ripples dominate at gameplay zoom.
+ float envelope=lerp(.35,1,smoothstep(.20,.78,warp.x+.5));
+ float2 slope=(a*.45+b*.35+c*.20)*envelope;
  slope*=lerp(.20,1,smoothstep(.015,.32,input.hydrology_data.w));
  return normalize(float3(-slope,1));
+}
+float q3_water_glint(float3 normal,float3 view,float3 light) {
+ float3 half_vector=normalize(view+light);
+ float2 along=normalize(light.xy+float2(.00001,0));
+ float2 difference=normal.xy-half_vector.xy;
+ float cross_error=dot(difference,float2(-along.y,along.x));
+ float along_error=dot(difference,along);
+ // Narrow across the light path, softer along it; individual ripple normals
+ // break the reflected streak into moving facets. No screen-space sparkle mask.
+ return exp2(-160*cross_error*cross_error-12*along_error*along_error)*saturate(light.z);
 }
 float4 q3_natural_water(PixelInput input) {
  float depth=max(0,input.hydrology_data.w);
  float3 normal=q3_natural_normal(input);
- float3 view=normalize(float3(0,-.52,.86));
+ float3 view=normalize(float3(.43,-.43,1));
+#ifdef Q3_WATER_CAMERA
+ // A finite reflection eye concentrates glints along the shared light's path.
+ // This is a material approximation, not a change to map projection or anchors.
+ float2 delta=q3_source_world(input)-Q3_WATER_CAMERA.xy;
+ float2 raw=float2(delta.x+delta.y,delta.x-delta.y);
+ raw-=round(raw/max(Q3_WATER_CAMERA.zw,1))*Q3_WATER_CAMERA.zw;
+ delta=float2(raw.x+raw.y,raw.x-raw.y)*.5;
+ const float eye_height=2.5;
+ view=normalize(float3(float2(.43,-.43)*eye_height-delta,eye_height));
+#endif
  // The volume is lit on the mean water plane. Fine slopes change reflected
  // light, not the diffuse shading of an opaque corrugated surface.
  float3 bulk_light=q6_receiver_illumination(input,float3(0,0,1),1,1);
@@ -3210,13 +3229,12 @@ float4 q3_natural_water(PixelInput input) {
 #endif
  float2 world=q3_source_world(input)+Q3_NATURAL_COORD_SHIFT;
  float2 micro=water_small_lean0_texture.Sample(material_sampler,
-  world*float2(q3_source_repeat(3.4),q3_source_repeat(4.12))+float2(.71,.29)+Q3_WATER_TIME*float2(-.09,.07)).rg*2-1;
- float sparkle=lerp(.22,1,smoothstep(.025,.16,length(micro)));
- float3 sunhalf=normalize(view+environment_sun_direction);
- float3 moonhalf=normalize(view+environment_moon_direction);
- float3 glint=(environment_sun_color*environment_sun_intensity*pow(saturate(dot(normal,sunhalf)),48)
-  +environment_moon_color*environment_moon_intensity*pow(saturate(dot(normal,moonhalf)),48))
-  *sparkle*.045*environment_water_specular*q6_receiver_visibility(input,normal,1);
+  world*float2(q3_source_repeat(3.4),q3_source_repeat(4.12))+float2(.71,.29)+float2(-Q3_WATER_DRIFT.z,Q3_WATER_DRIFT.y)).rg*2-1;
+ float3 glint_normal=normalize(normal+float3(-micro*.03,0));
+ // Shared radiance and direction drive a spatially concentrated reflection.
+ float3 glint=(environment_sun_color*environment_sun_intensity*q3_water_glint(glint_normal,view,environment_sun_direction)
+  +environment_moon_color*environment_moon_intensity*q3_water_glint(glint_normal,view,environment_moon_direction))
+  *3*environment_water_specular*q6_receiver_visibility(input,normal,1);
  float reflection=saturate(fresnel);
  float coverage=1-exp(-depth*lerp(2.3,3.2,smoothstep(.10,.32,depth)));
  float alpha=coverage+(1-coverage)*reflection;

@@ -196,7 +196,7 @@ int main(){
 
     def test_production_batches_compatible_layers_and_splits_only_at_capacity(self):
         source=(ROOT/"Renderer/native/c3x_renderer.cpp").read_text()
-        submit="    bool submit_scene_pass("+source.split("    bool submit_scene_pass(",1)[1].split("    std::vector<unsigned> static_scene_order()",1)[0]
+        submit="    bool submit_scene_pass("+source.split("    bool submit_scene_pass(",1)[1].split("    std::vector<unsigned> water_scene_order()",1)[0]
         run_cpp(r'''
 #include <algorithm>
 #include <cassert>
@@ -222,6 +222,7 @@ using GeometryDrawRecord=GeometryDrawView::Record;
 using Shadow=c3x_renderer::render_core::SourceShadow;
 struct State {
  int region_origin_x=0,region_origin_y=0,shadow_basis=0,geometry_shadow=3;bool retained_world=false;
+ bool water_scene_active=false;
  GeometryDrawView::Records geometry_vertex_buffers;
  c3x_renderer::render_core::RegionContributorIndex region_contributors;
  double frame_scene_execute_ms=0,frame_scene_select_ms=0;

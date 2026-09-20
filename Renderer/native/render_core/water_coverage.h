@@ -1,5 +1,6 @@
 #pragma once
 #include <cmath>
+#include <algorithm>
 
 namespace c3x_renderer { namespace render_core {
 // The current city/environment water and bed shaders discard positive-land

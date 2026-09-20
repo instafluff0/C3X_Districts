@@ -24,7 +24,7 @@
     },
     {
       "path": "generated/shaders/hydrology/water_natural.hlsl",
-      "sha256": "2da89e656ff89e70e45d9828f8a5454a9b1fcaf7fa17605d7e770f27516f737b"
+      "sha256": "1a8b69cffe50bcaaa103ef006008e7d7c3fbb11cdf1c825fa8418a5fb8e70394"
     },
     {
       "path": "generated/shaders/lighting/city_environment.hlsl",
