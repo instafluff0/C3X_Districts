@@ -5001,6 +5001,13 @@ public:
                 chunk.water_dependent=layer==geometry_water || layer==geometry_river ||
                     ((layer==geometry_shadow || layer==geometry_route || (layer>=geometry_feature && layer<geometry_natural_terrain)) &&
                      c3x_renderer::render_core::water_under_projection(world_coast.world(),source_chunk.world_bounds));
+                // City body materials write opaque/cutout samples, including
+                // emission. Retained color/depth already covers the water below
+                // them. Ground decals and legacy alpha materials still need the
+                // forward pass after animated water.
+                if(city_profile && source_chunk.city_material!=0xffffffffu &&
+                   !cities.library.materials[source_chunk.city_material].ground)
+                    chunk.water_dependent=false;
                 chunk.tile_x=record.tile_x;chunk.tile_y=record.tile_y;
                 chunk.water_visible=!visibility_pass || (record.tile_flags&C3X_RENDERER_TILE_VISIBLE)!=0;
                 if(natural_world || source_chunk.projection_kind)chunk=project_natural_chunk(chunk,record);
