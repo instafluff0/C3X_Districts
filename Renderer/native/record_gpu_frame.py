@@ -15,6 +15,7 @@ def digest(path):return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def main(argv=None):
+    import re
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out",type=Path,help="Explicit disposable output directory for category dispatch")
     parser.add_argument('--scene',type=Path,required=True)
@@ -71,6 +72,9 @@ def main(argv=None):
     blitter=unit_source[unit_source.index('    bool blit_pixels('):unit_source.index('    unsigned keyed_pixels=')]
     (build/'native_unit_blitter.h').write_text('struct NativeUnitBlitter {\n'+storage+blitter+'\n~NativeUnitBlitter(){reset_blit();}\n};\n')
     text=(ROOT/'injected_code.c').read_text()
+    start=text.index('int __fastcall\npatch_OpenGLRenderer_initialize')
+    # C's native `this` parameter is a reserved token in the C++ harness.
+    (build/'native_line_hooks.h').write_text(re.sub(r'\bthis\b','context',text[start:text.index('int __fastcall\npatch_Tile_check_water',start)]))
     (build/'native_probe_hooks.h').write_text(text[text.index('// JGL observation hooks:'):text.index('// End JGL observation hooks.')])
     start=text.index('void\nstart_custom_renderer_native_tracking ()')
     (build/'native_tracking_bootstrap.h').write_text(text[start:text.index('void\npatch_init_floating_point ()',start)])
@@ -98,7 +102,7 @@ def main(argv=None):
         'build_receipt_sha256':digest(build_path) if build_record else None,
         'current_runtime_matches_build':bool(build_sources) and all(build_sources.get(path)==value for path,value in inputs.items()),
         'purpose':'Candidate or explicitly selected historical binary; harness inputs are recorded separately.'}
-    for path in (scene,dll,jgl,ROOT/'injected_code.c',ROOT/'C3X.h',ROOT/'civ_prog_objects.csv',*[ROOT/'Renderer/native'/n for n in ('gpu_frame_preview.h','world_readiness_preview.h','gpu_camera_identity_preview.h','native_frame_workload.h','native_frame_benchmark.h','test_native_screen.h','test_native_bootstrap.h','test_native_worker.cpp','test_gpu_unit_composition.h','test_native_image_adapter.cpp','test_native_observation.cpp','native_image_adapter.h','native_sprite_diagnostics.h','native_composition_owner.h','native_observation.h','gpu_image_worker_client.h','gpu_image_commands.h','color_quantization.h','test_gpu_frame_api.c','biq_preview.cpp','BUILD.bat','record_gpu_frame.py')]):inputs[path.relative_to(ROOT).as_posix()]=digest(path)
+    for path in (scene,dll,jgl,ROOT/'injected_code.c',ROOT/'C3X.h',ROOT/'civ_prog_objects.csv',*[ROOT/'Renderer/native'/n for n in ('gpu_frame_preview.h','world_readiness_preview.h','gpu_camera_identity_preview.h','native_frame_workload.h','native_frame_benchmark.h','test_native_screen.h','test_native_bootstrap.h','test_native_worker.cpp','test_gpu_unit_composition.h','test_native_image_adapter.cpp','test_native_observation.cpp','test_native_line_bridge.h','native_image_adapter.h','native_sprite_diagnostics.h','native_composition_owner.h','native_observation.h','gpu_image_worker_client.h','gpu_image_commands.h','color_quantization.h','test_gpu_frame_api.c','biq_preview.cpp','BUILD.bat','record_gpu_frame.py')]):inputs[path.relative_to(ROOT).as_posix()]=digest(path)
     # Runtime HLSL is part of the result identity even when the DLL is unchanged.
     from Renderer.lab.preparation import require_current, receipt as shader_receipt
     require_current(ROOT)

@@ -24,15 +24,44 @@ testing remain with the user. Performance acceptance is still pending.
 
 ## M3.8 current handoff — in progress
 
-**Playable evaluation remains unchanged:** `bin/C3XRenderer.dll`, SHA-256
-`ea22ea53d835b0085de6c034a4ae4d2fa9e7bf9bec3545d497c0a4c6c8f17e74`.
-The city-close route-cursor ABI fix is committed in `10c3f084`: the GOG wrapper
-and fallback now use the target's `RET 8` / `__stdcall` contract. The x86 negative
-control reproduces the former eight-byte stack imbalance; 400 corrected calls,
-ten zoom/UI tests and the approved injected smoke test passed. Re-run `INSTALL.bat`
-for that bridge fix; the exact live-game sequence remains unconfirmed. No game
-was launched by the agent. See [running the evaluation](renderer_config_spec.md#running-the-current-gpu-evaluation-build)
-and [the ABI correction](civ3_patch_dependency_ledger.md#route-cursor-abi-crash-correction).
+**Native map-ownership repair staged; live acceptance pending.** The September 20
+captures confirmed hardware D3D11 but only 1/311, then 1/51, map composites stayed
+resident. The first loss was an unscoped public DC request after GPU composition.
+The native map-tail line initializer performs that request even with no colony
+outlines to draw. Existing OpenGL hooks now route resident targets to the DLL's
+GPU overlay pass, preserving native style and CPU/config-off barriers. No new
+patch-table entries are needed. See [live findings](live_usage_findings_20260920.md)
+and the [patch ledger](civ3_patch_dependency_ledger.md#native-map-outline-ownership-repair).
+
+**Installable evaluation:** `bin/C3XRenderer.dll`, SHA-256
+`71b3b064413a5d35035e7bc6e40a81ef8c2dd644a2656cd10d9145d7e6baa827`.
+The user must **re-run `INSTALL.bat`** for the changed injected bridge; replacing
+only the DLL preserves the old DC request. `native/build/live-outline-stage.json`
+records staging and the preserved previous DLL. No game was launched or installed
+by the agent. The earlier city-close route-cursor ABI fix remains included.
+
+Connected native/GPU checks retain the map through **144/144** empty line
+initializations, with CPU map storage untouched. Displayed outline color,
+opacity, width, GL/GDI+ dash spacing and clipping pass. Real DC escape still
+falls back; config-off mid-draw drains before native initialization. At the
+captured 1119×1192 extent, unit/text composition, fog, tactical overlays, camera
+retirement/reset and visibility replay pass. Final native context-default and
+fail-closed checks and the approved injected compile also pass. Receipts are
+linked in the live findings; the native EXE/GDI+ test endpoints are stand-ins,
+while JGL hooks and DLL/GPU composition execute their production code.
+
+The 100-frame, full-resolution coast fixture with one selected unit and all water
+effects on measures **24.74 ms mean / 33.14 ms p95** per resident visual request,
+and **35.03 / 50.05 ms** through desktop completion, including the first sample.
+These are controlled fixture timings, not post-fix gameplay FPS, an A/B speedup,
+or arbitrary camera-jump acceptance. M3.8 and Standard <33 ms p95 remain open.
+
+**Next responsibility:** verify resident composition survives the installed
+scroll/jump/selection/city/UI sequence, then measure and remove the remaining
+camera and cancelled speculative-preparation work. Use the existing
+[one-click capture](live_usage_logging.md#one-click-game-capture); it needs no
+debugger or manual uploads. Full detail, waves, water motion and reflections stay
+on. The older `native_smoke` failure is not counted as passing.
 
 Whole-world appearance enters through bounded caller-thread pages. Existing
 workers prepare canonical regions and wrapped occurrences independently of the
@@ -45,9 +74,10 @@ compact placements across color/reflection/shadow passes. Flat and conforming
 pieces preserve their original order and bounds. Normal geometry caps remain
 768 MiB for Standard and 384 MiB above 8,192 actual tiles.
 
-**Current isolated candidate:** `native/build/m38-parameter-append/C3XRenderer.dll`,
+**Performance-test binary:** `native/build/m38-parameter-append/C3XRenderer.dll`,
 SHA-256 `7cbbfe9d65eccb7af834ad0ef8afbb56175919fa879a114eb709266876ea2247`.
-It has not replaced the playable DLL. Optional off-screen guard drawing and its
+This historical timing binary predates the native ownership repair staged above. Optional
+off-screen guard drawing and its
 blocking driver flush are retired; visible damage still uses the retained scene.
 Fully invalid attachments use direct color/depth clears. Mirror cells use the
 existing conservative spatial index for ordered draw traversal while complete
@@ -120,13 +150,14 @@ be compared directly with these unprofiled Standard runs. Shared sources occupie
 about 3 MiB; Standard retained geometry occupied 455.6 MiB. Keep current budgets;
 raising prior expanded-geometry caps consumed address space without latency benefit.
 
-**Next unfinished responsibility:** reduce actual GPU pixel/pass work and establish
+**Next unfinished responsibility:** resolve the live map-admission loss above,
+prove the actual native sequence stays resident, then reduce GPU pixel/pass work and establish
 reliable coherent-display latency, rather than moving waits between endpoints.
 Then finish prompt native cutover for every camera trigger and remaining
 edit/lifecycle/live-input evidence. **M3.8 and the Standard <33 ms p95 target remain
 unpassed.** Fixture timing excludes Civ III input, capture and native overlays;
 manual pans can defer, while selection/action/programmatic centering still preserves
-its exact native path. Do not advertise this candidate as faster or promote it
+its exact native path. Do not advertise the evaluation as faster or claim performance acceptance
 based on shorter request handling alone.
 
 ## M3.7 accepted handoff (preserved)

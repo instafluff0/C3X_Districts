@@ -57,7 +57,13 @@ float4 pixel(V i):SV_Target{
  }else if(p.style.x<1.5){float phase=p.style.z>0?clock.x*.9:0;
   a=max(ring(i.location,p),arrow(i.location,p,phase)*.88);
   shadow=max(ring(i.location-float2(0,1.4),p),arrow(i.location-float2(0,1.4),p,phase))*.5;
- }else {a=glyph(i.location,p);shadow=max(max(glyph(i.location+float2(-1,0),p),glyph(i.location+float2(1,0),p)),max(glyph(i.location+float2(0,-1),p),glyph(i.location+float2(0,1.5),p)))*.9;}
+ }else if(p.style.x<2.5){a=glyph(i.location,p);shadow=max(max(glyph(i.location+float2(-1,0),p),glyph(i.location+float2(1,0),p)),max(glyph(i.location+float2(0,-1),p),glyph(i.location+float2(0,1.5),p)))*.9;
+ }else {float2 v=p.shape.zw-p.shape.xy;float lengthV=max(length(v),.001);float along=dot(i.location-p.shape.xy,v)/lengthV;
+  a=coverage(abs((i.location.x-p.shape.x)*v.y-(i.location.y-p.shape.y)*v.x)/lengthV,p.style.y*.5);
+  if(along<0||along>=lengthV)a=0;
+  if(p.style.z>.5&&p.style.z<1.5){float step=along*max(abs(v.x),abs(v.y))/lengthV;if(fmod(step,10)<5)a=0;}
+  else if(p.style.z>1.5&&fmod(along,4*p.style.y)>=3*p.style.y)a=0;
+ }
  float alpha=a*p.color.a;return over(float4(p.color.rgb*alpha,alpha),float4(.025,.035,.045,1)*shadow);
 })";
         Ptr<ID3DBlob> v,p,error;

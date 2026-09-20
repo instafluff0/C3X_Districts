@@ -1,5 +1,50 @@
 # Actual-use renderer logging
 
+## One-click game capture
+
+For the September 20 map-ownership repair, run `INSTALL.bat` once before capturing.
+The fix changes a native hook as well as the DLL; this launcher does not install it.
+
+In the Windows VM, close Civ III and double-click
+`Conquests\C3X_Districts\Renderer\CAPTURE_GAME.bat`. Approve the Windows PowerShell
+permission prompt for the FPS collector. The game itself runs without elevation;
+neither installation nor injection is performed by this launcher.
+
+Load a usual save, idle with water/units visible for 20 seconds, scroll for 20
+seconds, make several distant jumps and switch selected units, then open/close a
+city and select a worker. Quit normally after about 2–3 minutes and leave the
+launcher open until it reports that the capture is saved. No debugger, manual
+export or upload is needed. Captures stop after at most 15 minutes.
+
+The launcher saves `renderer.log`, PresentMon `frames.csv`, collector errors and
+`session.json` under `Renderer/native/build/live-captures/<session>/`. Per-frame
+files are written to the VM's local temporary directory first, then copied to the
+shared checkout on exit. The session records the staged DLL hash and collector
+completion, not account names or save filenames. A failed setup leaves diagnostic
+files and does not terminate a running game. Closing the launcher prematurely can
+prevent the final copy; local temporary capture files remain recoverable.
+
+Portable, signed [Microsoft DebugView](https://learn.microsoft.com/en-us/sysinternals/downloads/debugview)
+and [Intel PresentMon](https://github.com/GameTechDev/PresentMon) are prepared in
+the ignored `Renderer/native/build/live-tools/` folder in this checkout. Other
+checkouts need `DebugView/dbgviewcli64a.exe` (ARM64) or `dbgviewcli64.exe` (x64), and
+the console `PresentMon.exe`. They are not redistributed with source. The launcher
+verifies publisher signatures and targets only Civ III. Its elevated helper owns
+a unique ETW session, explicitly stops it on game exit, and flushes CSV output;
+it does not install a service or change group membership. `CAPTURE_GAME.bat
+-CheckOnly` validates prerequisites without starting collectors or the game.
+
+The renderer's `graphics-device` startup record identifies `driver=hardware` or
+`driver=warp`, feature level, adapter description and vendor/device IDs. In
+Parallels, hardware identifies the VM's graphics driver, not proof of the host
+GPU's physical utilization. PresentMon's guest presentation intervals complement
+renderer timings; neither is a physical input-to-monitor measurement. Logging
+has some overhead. The launcher sets ordinary trace level 1 and disables expensive
+`C3X_RENDERER_PROFILE` profiling only for its child processes. It preserves game
+rendering controls and does not change persistent environment settings.
+
+## Existing debug stream
+
 The renderer uses the existing `OutputDebugStringA` stream. Ordinary gameplay
 does not open a log file. Capture that stream with the existing Windows debug
 capture workflow and retain its exported text. Start capture before launching
@@ -86,3 +131,6 @@ explicit temporary UI oracle described above.
 The first user-supplied capture is analyzed in
 [September 9 live usage findings](live_usage_findings_20260909.md). The analyzer
 excludes `map-complete.animation_ms`, an animation clock, from latency statistics.
+The one-click capture's first live result is recorded in
+[September 20 live usage findings](live_usage_findings_20260920.md): hardware
+presentation was active while almost all map insertions fell back to CPU bitmaps.

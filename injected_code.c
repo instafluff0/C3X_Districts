@@ -36355,6 +36355,25 @@ set_up_gdi_plus ()
 int __fastcall
 patch_OpenGLRenderer_initialize (OpenGLRenderer * this, int edx, PCX_Image * texture)
 {
+	// The native initializer borrows the map DC even when no outlines follow.
+	// Keep only the current native line target here; the DLL owns GPU drawing.
+	is->custom_renderer_line_owner = NULL;
+	is->custom_renderer_line_target = NULL;
+	if (is->current_config.enable_custom_rendering && is->custom_renderer_native_image != NULL) {
+		int result = translate_custom_renderer_native (C3X_NATIVE_LINE_TARGET, texture->JGL.Image, NULL, NULL, NULL, 0);
+		if (result != 0) {
+			is->custom_renderer_line_owner = this;
+			is->custom_renderer_line_target = texture;
+			if (result < 0) return 2; // Callers may ignore failure; later draws must still honor the barrier.
+			// Native OpenGL creates a fresh context; GDI+ retains its pen state.
+			if (is->current_config.draw_lines_using_gdi_plus == LDO_NEVER ||
+			    (is->current_config.draw_lines_using_gdi_plus == LDO_WINE && ! is->running_on_wine)) {
+				is->ogl_line_width = 1;
+				is->ogl_line_stipple_enabled = false;
+			}
+			return 0;
+		}
+	}
 	if ((is->current_config.draw_lines_using_gdi_plus == LDO_NEVER) ||
 	    ((is->current_config.draw_lines_using_gdi_plus == LDO_WINE) && ! is->running_on_wine))
 		return OpenGLRenderer_initialize (this, __, texture);
@@ -36367,7 +36386,12 @@ patch_OpenGLRenderer_initialize (OpenGLRenderer * this, int edx, PCX_Image * tex
 			is->gdi_plus.DeleteGraphics (is->gdi_plus.gp_graphics);
 			is->gdi_plus.gp_graphics = NULL;
 		}
-		int status = is->gdi_plus.CreateFromHDC (texture->JGL.Image->DC, &is->gdi_plus.gp_graphics);
+		// Public DC access must honor GPU ownership even on the GDI+ fallback.
+		JGL_Image * image = texture->JGL.Image;
+		HDC dc = ((HDC (__fastcall *) (JGL_Image *))((void **)image->vtable)[10]) (image);
+		if (dc == NULL) return 2;
+		int status = is->gdi_plus.CreateFromHDC (dc, &is->gdi_plus.gp_graphics);
+		((void (__fastcall *) (JGL_Image *, int, int))((void **)image->vtable)[11]) (image, __, 1);
 		if (status == 0) {
 			is->gdi_plus.SetSmoothingMode (is->gdi_plus.gp_graphics, 4); // 4 = SmoothingModeAntiAlias from GdiPlusEnums.h
 			return 0;
@@ -36391,6 +36415,7 @@ patch_OpenGLRenderer_set_color (OpenGLRenderer * this, int edx, unsigned int rgb
 	}
 
 	is->ogl_color = (is->ogl_color & 0xFF000000) | rgb888;
+	if (is->custom_renderer_line_owner == this) return;
 	OpenGLRenderer_set_color (this, __, rgb555);
 }
 
@@ -36398,6 +36423,7 @@ void __fastcall
 patch_OpenGLRenderer_set_opacity (OpenGLRenderer * this, int edx, unsigned int alpha)
 {
 	is->ogl_color = (is->ogl_color & 0x00FFFFFF) | (alpha << 24);
+	if (is->custom_renderer_line_owner == this) return;
 	OpenGLRenderer_set_opacity (this, __, alpha);
 }
 
@@ -36405,6 +36431,7 @@ void __fastcall
 patch_OpenGLRenderer_set_line_width (OpenGLRenderer * this, int edx, int width)
 {
 	is->ogl_line_width = width;
+	if (is->custom_renderer_line_owner == this) return;
 	OpenGLRenderer_set_line_width (this, __, width);
 }
 
@@ -36412,6 +36439,7 @@ void __fastcall
 patch_OpenGLRenderer_enable_line_dashing (OpenGLRenderer * this)
 {
 	is->ogl_line_stipple_enabled = true;
+	if (is->custom_renderer_line_owner == this) return;
 	OpenGLRenderer_enable_line_dashing (this);
 }
 
@@ -36419,12 +36447,31 @@ void __fastcall
 patch_OpenGLRenderer_disable_line_dashing (OpenGLRenderer * this)
 {
 	is->ogl_line_stipple_enabled = false;
+	if (is->custom_renderer_line_owner == this) return;
 	OpenGLRenderer_disable_line_dashing (this);
 }
 
 void __fastcall
 patch_OpenGLRenderer_draw_line (OpenGLRenderer * this, int edx, int x1, int y1, int x2, int y2)
 {
+	if (is->custom_renderer_line_owner == this) {
+		int dash = ! is->ogl_line_stipple_enabled ? 0 :
+			((is->current_config.draw_lines_using_gdi_plus == LDO_NEVER ||
+			  (is->current_config.draw_lines_using_gdi_plus == LDO_WINE && ! is->running_on_wine)) ? 1 : 2);
+		struct c3x_renderer_native_stroke line = {x1, y1, x2, y2, is->ogl_line_width, dash, is->ogl_color};
+		int result = translate_custom_renderer_native (C3X_NATIVE_STROKE, is->custom_renderer_line_target->JGL.Image, NULL, (RECT *)&line, NULL, 0);
+		if (result != 0) return; // Negative denies access to stale native pixels.
+		// Ownership may have returned to the CPU during the native draw scope.
+		// Initialize its original backend now and replay the captured style.
+		PCX_Image * target = is->custom_renderer_line_target;
+		if (patch_OpenGLRenderer_initialize (this, __, target) != 0) return;
+		unsigned int color = is->ogl_color;
+		patch_OpenGLRenderer_set_color (this, __, 0x80000000 | ((color >> 9) & 0x7c00) | ((color >> 6) & 0x3e0) | ((color >> 3) & 0x1f));
+		patch_OpenGLRenderer_set_opacity (this, __, color >> 24);
+		patch_OpenGLRenderer_set_line_width (this, __, is->ogl_line_width);
+		if (is->ogl_line_stipple_enabled) patch_OpenGLRenderer_enable_line_dashing (this);
+		else patch_OpenGLRenderer_disable_line_dashing (this);
+	}
 	if ((is->current_config.draw_lines_using_gdi_plus == LDO_NEVER) ||
 	    ((is->current_config.draw_lines_using_gdi_plus == LDO_WINE) && ! is->running_on_wine))
 		OpenGLRenderer_draw_line (this, __, x1, y1, x2, y2);

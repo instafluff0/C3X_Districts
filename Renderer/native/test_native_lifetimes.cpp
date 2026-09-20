@@ -2,10 +2,12 @@
 #define C3X_NATIVE_ADAPTER_TEST
 #include "test_native_observation.cpp"
 #include "test_native_bootstrap.h"
+#include "test_native_line_bridge.h"
 
 DWORD WINAPI escape_lifetime(void* object){RECT area={0,0,16,16};auto image=static_cast<JGL_Image*>(object);
     return DWORD(reinterpret_cast<Fill>(image->vtable[17])(image,&area,int(0x80001234u)));}
 int deny_native_access(int,void*,void*,void const*,void const*,unsigned){return -1;}
+int allow_line_target(int op,void*,void*,void const*,void const*,unsigned){return op==C3X_NATIVE_LINE_TARGET?1:0;}
 int main(int argc,char** argv){
     if(argc!=3)return 2;
     try {
@@ -126,6 +128,19 @@ int main(int argc,char** argv){
             verify(query(images[0])&&images[0]->Bits_Data_Links==1&&images[0]->Current_Bits_Data==int(reinterpret_cast<std::uintptr_t>(held)),"native line preserves caller entry lease");
             reinterpret_cast<Release>(original[9])(images[0],1);
         }
+        OpenGLRenderer native_line;PCX_Image native_target;native_target.JGL.Image=images[0];
+        // A GPU target probe stub isolates fresh-context style defaults; the
+        // connected screen test independently exercises the real GPU target.
+        state.current_config.enable_custom_rendering=true;state.custom_renderer_native_observe=observe;state.custom_renderer_native_image=allow_line_target;
+        state.ogl_line_width=7;state.ogl_line_stipple_enabled=true;
+        verify(patch_OpenGLRenderer_initialize(&native_line,0,&native_target)==0&&query(images[0])&&
+            !native_line.initialized&&state.ogl_line_width==1&&!state.ogl_line_stipple_enabled,"fresh GPU OpenGL scope resets width/stipple without DC access");
+        state.current_config.draw_lines_using_gdi_plus=LDO_ALWAYS;state.ogl_line_width=7;state.ogl_line_stipple_enabled=true;
+        verify(patch_OpenGLRenderer_initialize(&native_line,0,&native_target)==0&&query(images[0])&&
+            !native_line.initialized&&state.ogl_line_width==7&&state.ogl_line_stipple_enabled,"GPU GDI+ scope retains native pen state");
+        state.current_config.draw_lines_using_gdi_plus=LDO_NEVER;state.current_config.enable_custom_rendering=false;
+        verify(patch_OpenGLRenderer_initialize(&native_line,0,&native_target)==0&&native_line.initialized==1&&!query(images[0]),
+            "config-off empty OpenGL initialization alone revokes map eligibility (live regression witness)");
         auto dc=reinterpret_cast<HDC(__thiscall*)(JGL_Image*)>(images[0]->vtable[10])(images[0]);verify(dc!=nullptr,"public native DC");
         reinterpret_cast<Release>(images[0]->vtable[11])(images[0],1);verify(!query(images[0]),"DC release cannot undo a CPU escape");
         verify(reinterpret_cast<Init>(images[0]->vtable[1])(images[0],16,16,0,1)==0&&!query(images[0]),"no-op init cannot erase a CPU escape");
@@ -141,6 +156,12 @@ int main(int argc,char** argv){
         for(auto image:images){reinterpret_cast<Destroy>(image->vtable[0])(image,1);verify(!query(image),"destroyed lifetime retired");}
         auto denied=create(graph,nullptr,1);verify(reinterpret_cast<Init>(denied->vtable[1])(denied,16,16,16,1)==0,"barrier-failure native image");
         state.custom_renderer_native_image=deny_native_access;
+        OpenGLRenderer denied_line;PCX_Image denied_target;denied_target.JGL.Image=denied;
+        state.current_config.enable_custom_rendering=true;
+        verify(patch_OpenGLRenderer_initialize(&denied_line,0,&denied_target)==2&&!denied_line.initialized,"failed GPU line query cannot enter native initializer");
+        patch_OpenGLRenderer_draw_line(&denied_line,0,1,1,8,8);
+        verify(!denied_line.initialized&&!denied_line.drawn,"caller ignoring failed GPU line initialization still cannot draw stale native pixels");
+        state.custom_renderer_line_owner=nullptr;state.custom_renderer_line_target=nullptr;
         verify(!reinterpret_cast<Get>(denied->vtable[3])(denied,0,0),"failed GPU barrier cannot expose a stale pixel pointer");
         verify(!reinterpret_cast<unsigned short*(__thiscall*)(JGL_Image*)>(denied->vtable[4])(denied),"failed GPU barrier cannot expose stale bits");
         verify(!reinterpret_cast<HDC(__thiscall*)(JGL_Image*)>(denied->vtable[10])(denied),"failed GPU barrier cannot expose a stale native DC");

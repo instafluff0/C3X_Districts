@@ -35,6 +35,16 @@ struct Input {
         append({{x-rx-5,y-ry-5,x+rx+5,y+ry+5},{x,y,rx,ry},{.97f,.98f,1.f,.94f},{1,1.8f,moving?1.f:0.f,0}});
         animated|=moving;
     }
+    void native_line(float x0,float y0,float x1,float y1,int width,int dash,unsigned argb){
+        // Native integer anchors, flat caps and caller-supplied opacity. Dash 1
+        // is GL's factor-five 0xAAAA stipple; 2 is GDI+'s width-scaled Dash.
+        if(width<1||width>128||dash<0||dash>2)throw std::runtime_error("native line style");
+        if((x0==x1&&y0==y1)||!(argb>>24))return;
+        x0+=.5f;y0+=.5f;x1+=.5f;y1+=.5f;float pad=float(width)*.5f+1;
+        append({{std::min(x0,x1)-pad,std::min(y0,y1)-pad,std::max(x0,x1)+pad,std::max(y0,y1)+pad},
+            {x0,y0,x1,y1},{float((argb>>16)&255)/255.f,float((argb>>8)&255)/255.f,float(argb&255)/255.f,float(argb>>24)/255.f},
+            {3,float(width),float(dash),0}});
+    }
     void label(float x,float y,std::string const& text,float height){
         // Native supplies the complete turn string, including action suffixes.
         if(!std::isfinite(height)||height<8||height>128)throw std::runtime_error("tactical label size");

@@ -1180,7 +1180,8 @@ public:
             nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, flags,
             levels, static_cast<UINT>(std::size(levels)), D3D11_SDK_VERSION,
             &device, &selected, &context);
-        if (FAILED(hr)) {
+        bool software_device=FAILED(hr);
+        if (software_device) {
             hr = D3D11CreateDevice(
                 nullptr, D3D_DRIVER_TYPE_WARP, nullptr, flags,
                 levels, static_cast<UINT>(std::size(levels)), D3D11_SDK_VERSION,
@@ -1190,6 +1191,18 @@ public:
             reset();
             return false;
         }
+
+        // One startup record establishes the actual device, including the
+        // software fallback. Route counters alone cannot prove hardware use.
+        IDXGIDevice* dxgi_device=nullptr;IDXGIAdapter* adapter=nullptr;
+        DXGI_ADAPTER_DESC adapter_desc={};char adapter_name[384]="unavailable";
+        if(SUCCEEDED(device->QueryInterface(__uuidof(IDXGIDevice),reinterpret_cast<void**>(&dxgi_device))) &&
+           SUCCEEDED(dxgi_device->GetAdapter(&adapter)) && SUCCEEDED(adapter->GetDesc(&adapter_desc)))
+            WideCharToMultiByte(CP_UTF8,0,adapter_desc.Description,-1,adapter_name,sizeof(adapter_name),nullptr,nullptr);
+        release(adapter);release(dxgi_device);
+        char device_detail[512];sprintf_s(device_detail,"driver=%s feature_level=0x%x vendor=0x%x device=0x%x adapter=%s",
+            software_device?"warp":"hardware",unsigned(selected),adapter_desc.VendorId,adapter_desc.DeviceId,adapter_name);
+        trace.write("graphics-device",device_detail,true);
 
         if(trace.buffered){QueryPerformanceCounter(&device_end);char detail[128];
             sprintf_s(detail,"begin=%lld end=%lld elapsed_ms=%.3f",device_begin.QuadPart,device_end.QuadPart,
@@ -13265,7 +13278,26 @@ extern "C" __declspec(dllexport) int c3x_renderer_gpu_unit(c3x_renderer_unit_v1 
 // cannot render, request work, or infer that an older image has no CPU aliases.
 extern "C" __declspec(dllexport) int c3x_renderer_native_lifetime(int operation,void* image,int context){
     static c3x_native_images::Lifetimes lifetimes;
-    bool eligible=lifetimes.observe(operation,image,context,GetCurrentThreadId());
+    bool revoked=false;
+    bool eligible=lifetimes.observe(operation,image,context,GetCurrentThreadId(),&revoked);
+    // Only the first ownership loss of an admitted/demanded lifetime matters.
+    // Keep module-relative frames, never native pixels, paths or game pointers.
+    if(revoked){static std::atomic<unsigned> reports{0};
+        if(reports.fetch_add(1,std::memory_order_relaxed)<16){
+            void* frames[16]={};USHORT count=CaptureStackBackTrace(0,16,frames,nullptr);
+            char line[1024];int used=std::snprintf(line,sizeof(line),
+                "[C3X renderer] stage=native-ownership-revoked operation=%d context=%d stack=",operation,context);
+            for(USHORT n=0;n<count&&used<int(sizeof(line))-64;++n){HMODULE module=nullptr;
+                GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                    reinterpret_cast<char const*>(frames[n]),&module);
+                char const* name=module==GetModuleHandleA(nullptr)?"game":module==GetModuleHandleA("jgl.dll")?"jgl":
+                    module==GetModuleHandleA("C3XRenderer.dll")?"renderer":"other";
+                used+=std::snprintf(line+used,sizeof(line)-used,"%s%s+%lx",n?",":"",name,
+                    static_cast<unsigned long>(reinterpret_cast<std::uintptr_t>(frames[n])-reinterpret_cast<std::uintptr_t>(module)));
+            }
+            std::snprintf(line+used,sizeof(line)-used,"\n");OutputDebugStringA(line);
+        }
+    }
     // INIT/DESTROY evidence also retires pending destinations before an address
     // can be recycled for an unrelated native surface of the same dimensions.
     if(native_composition)native_composition->retire_image(operation,image);

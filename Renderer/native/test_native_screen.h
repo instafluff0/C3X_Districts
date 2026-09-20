@@ -2,6 +2,7 @@
 // Included only in the real-renderer/native-hook fixture.
 #include <thread>
 #include "native_screen_bridge.h"
+#include "test_native_line_bridge.h"
 WorkerClient* screen_client=nullptr;
 c3x_native_images::Adapter<WorkerClient>* screen_adapter=nullptr;
 c3x_renderer_gpu_present_fn screen_present=nullptr;
@@ -572,6 +573,14 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
             verify(native_map(C3X_NATIVE_MAP_PREPARE,live_images[0],&live_request,&meta)==C3X_RENDERER_RESULT_OK&&!meta.bgra_pixels&&
                 meta.replacement_tile_count==ownership.size()&&std::equal(ownership.begin(),ownership.end(),meta.replacement_tile_flags),"production prepare ownership matches current capture");
             verify(native_map(C3X_NATIVE_MAP_COMMIT,live_images[0],nullptr,nullptr)==C3X_RENDERER_RESULT_OK&&raw_unchanged(),"production native commit keeps map CPU storage untouched");
+            OpenGLRenderer line_context;PCX_Image line_target;line_target.JGL.Image=live_images[0];
+            for(int repeat=0;repeat<16;++repeat){
+                verify(patch_OpenGLRenderer_initialize(&line_context,0,&line_target)==0,"native map-tail line initialization");
+                patch_OpenGLRenderer_set_opacity(&line_context,0,255);patch_OpenGLRenderer_set_color(&line_context,0,0x80000000u);
+                patch_OpenGLRenderer_set_line_width(&line_context,0,1);
+                verify(!line_context.initialized&&!line_context.style_calls&&lifetime(C3X_NATIVE_MAP,live_images[0],0)&&raw_unchanged(),
+                    "empty map-tail OpenGL setup retains GPU map without public DC or CPU readback");
+            }
             copy(live_images[0],screen_surface,full);
             int bounds[4]={};
             UnitOracleDib unit_oracle(w,h,0);std::copy(expected.begin(),expected.end(),static_cast<unsigned*>(unit_oracle.pixels));int expected_bounds[4]={};
@@ -589,6 +598,58 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
             reinterpret_cast<Release>(original_release)(screen_surface,1);verify(untouched,"native map/copy/unit/text leaves CPU screen untouched");
             for(int y=9;y<27;++y)for(int x=7;x<31;++x)expected[y*w+x]=0xff00ff00u;
             last_transfer=full;final_ui_drawn=false;patch_JGL_present_screen(&full);live_active=true;capture_display(expected);
+        }
+        // Real outline calls after the previously empty native initialization.
+        // Verify displayed pixels independently, then restore the exact scene.
+        if(w>=320&&h>=240){
+            OpenGLRenderer context;PCX_Image target;target.JGL.Image=screen_surface;
+            auto saved_lines=create(graph,nullptr,1);verify(reinterpret_cast<Init>(saved_lines->vtable[1])(saved_lines,w,h,16,1)==0,"outline GPU save image");
+            copy(screen_surface,saved_lines,full);
+            RECT panel={96,96,240,200},line_clip={100,100,200,190};
+            verify(reinterpret_cast<Fill>(screen_surface->vtable[17])(screen_surface,&panel,int(0x80000000u))==0,"GPU outline backdrop");
+            verify(reinterpret_cast<Clip>(screen_surface->vtable[13])(screen_surface,&line_clip)==0,"GPU outline clipping");
+            auto stroke=[&](int y,unsigned color,unsigned alpha,int width,int dash){
+                verify(patch_OpenGLRenderer_initialize(&context,0,&target)==0,"GPU outline begin");
+                patch_OpenGLRenderer_set_color(&context,0,color);patch_OpenGLRenderer_set_opacity(&context,0,alpha);
+                patch_OpenGLRenderer_set_line_width(&context,0,width);
+                if(dash)patch_OpenGLRenderer_enable_line_dashing(&context);else patch_OpenGLRenderer_disable_line_dashing(&context);
+                patch_OpenGLRenderer_draw_line(&context,0,110,y,220,y);
+            };
+            stroke(110,0x80007fffu,255,1,0);stroke(130,0x80007c00u,128,3,0);stroke(150,0x800003e0u,255,2,1);
+            state.current_config.draw_lines_using_gdi_plus=LDO_ALWAYS;stroke(170,0x8000001fu,255,2,1);
+            state.current_config.draw_lines_using_gdi_plus=LDO_NEVER;
+            verify(!context.initialized&&!context.drawn&&!context.style_calls&&!native_gdi_initializations&&raw_unchanged()&&
+                lifetime(C3X_NATIVE_MAP,screen_surface,0),"native/GDI+ outlines stay GPU resident with no map DC escape");
+            verify(reinterpret_cast<Clip>(screen_surface->vtable[13])(screen_surface,&full)==0,"restore outline clip");
+            last_transfer=full;verify(live(C3X_NATIVE_IMAGE_PRESENT,screen_surface,graph,&full,nullptr,0)==1,"GPU outline display");
+            std::vector<unsigned> shown;capture_display(expected,&shown);
+            auto at=[&](int x,int y){return shown[std::size_t(y)*w+x]&0xffffff;};
+            verify(at(120,110)==0xf8f8f8&&at(120,130)==0x7c0000&&at(120,129)==0x7c0000&&at(120,132)==0,
+                "displayed native color, alpha and line width");
+            verify(at(112,150)==0&&at(117,150)==0x00f800&&at(112,170)==0x0000f8&&at(117,170)==0,
+                "GL factor-five and GDI+ width-scaled dash patterns");
+            for(int y=100;y<190;++y)for(int x=200;x<240;++x)verify(at(x,y)==0,"native outline scissor survives GPU routing");
+            // CPU UI retargeting still invokes the original initializer. A
+            // separate admitted scratch proves a genuine escape mid-scope
+            // lazily initializes that backend and replays its style.
+            target.JGL.Image=root;verify(patch_OpenGLRenderer_initialize(&context,0,&target)==0&&context.initialized==1,"CPU UI retains original line initializer");
+            auto line_scratch=create(graph,nullptr,1);verify(reinterpret_cast<Init>(line_scratch->vtable[1])(line_scratch,w,h,16,1)==0,"outline scratch lifecycle");
+            copy(live_images[0],line_scratch,full);target.JGL.Image=line_scratch;
+            verify(patch_OpenGLRenderer_initialize(&context,0,&target)==0&&context.initialized==1,"new outline target admitted by GPU copy");
+            patch_OpenGLRenderer_set_color(&context,0,0x80007c00u);patch_OpenGLRenderer_set_opacity(&context,0,128);patch_OpenGLRenderer_set_line_width(&context,0,3);
+            auto escaped=reinterpret_cast<HDC(__thiscall*)(JGL_Image*)>(line_scratch->vtable[10])(line_scratch);verify(escaped!=nullptr,"outline-scope real CPU escape");
+            reinterpret_cast<Release>(line_scratch->vtable[11])(line_scratch,1);
+            patch_OpenGLRenderer_draw_line(&context,0,3,3,20,3);
+            verify(context.initialized==2&&context.drawn==1&&!lifetime(C3X_NATIVE_MAP,line_scratch,0)&&!state.custom_renderer_line_owner,
+                "real CPU escape retains native line fallback without re-admission");
+            state.current_config.draw_lines_using_gdi_plus=LDO_ALWAYS;
+            verify(patch_OpenGLRenderer_initialize(&context,0,&target)==0&&native_gdi_initializations==1,"CPU GDI+ target uses public ownership barrier");
+            patch_OpenGLRenderer_draw_line(&context,0,3,3,20,3);
+            verify(native_gdi_draws==1&&native_gdi_argb==0x80f80000&&native_gdi_width==3,"GDI+ fallback preserves captured style");
+            state.current_config.draw_lines_using_gdi_plus=LDO_NEVER;reinterpret_cast<Destroy>(line_scratch->vtable[0])(line_scratch,1);
+            copy(saved_lines,screen_surface,full);reinterpret_cast<Destroy>(saved_lines->vtable[0])(saved_lines,1);
+            verify(live(C3X_NATIVE_IMAGE_PRESENT,screen_surface,graph,&full,nullptr,0)==1,"restore GPU outline save");capture_display(expected);
+            std::puts("PASS native outline bridge: empty_initializations=144 resident=144 GPU_strokes=4 native_DC=0 actual_clip_color_alpha_width_dash=1 CPU_escape_fallback=1");
         }
         // An unrelated CPU-owned UI source uses the existing GPU presenter,
         // retaining full-color displayed pixels outside a partial transfer. The
@@ -701,6 +762,19 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
                 verify(exact_native_map(C3X_NATIVE_MAP_COMMIT,live_images[0],nullptr,nullptr)==C3X_RENDERER_RESULT_OK,"fresh recovery commit");
             }
             std::puts("PASS native async recovery: cases=4 cancellation=1 config_off_barrier=1 pending_reset=1 ready_reset=1 recreated=1 stale_commit=0");
+        }
+        {
+            // Recovery may have legitimately retired the old screen; the map
+            // was freshly committed above and is the current resident target.
+            OpenGLRenderer context;PCX_Image target;target.JGL.Image=live_images[0];
+            verify(patch_OpenGLRenderer_initialize(&context,0,&target)==0&&!context.initialized,"GPU line scope before configuration-off");
+            patch_OpenGLRenderer_set_line_width(&context,0,2);
+            state.current_config.enable_custom_rendering=false;
+            patch_OpenGLRenderer_draw_line(&context,0,3,3,23,3);
+            verify(context.initialized==1&&context.drawn==1&&!state.custom_renderer_line_owner&&!state.custom_renderer_native_image,
+                "configuration-off inside line scope drains before original native initialization/draw");
+            state.current_config.enable_custom_rendering=true;state.custom_renderer_native_image=live;
+            std::puts("PASS native outline configuration-off: mid_scope_drain=1 native_initialize=1 native_draw=1");
         }
         // Reset must drain before the renderer retires its image session, while
         // the native surfaces and final window still exist.

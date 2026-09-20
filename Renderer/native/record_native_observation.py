@@ -2,6 +2,7 @@
 import argparse
 import hashlib
 import json
+import re
 import os
 from pathlib import Path
 import shutil
@@ -34,6 +35,9 @@ def main():
         parser.error('unrecognized JGL binary')
     native=ROOT/'Renderer/native';build=native/'build'
     text=(ROOT/'injected_code.c').read_text()
+    start=text.index('int __fastcall\npatch_OpenGLRenderer_initialize')
+    # C's native `this` parameter is a reserved token in the C++ harness.
+    (build/'native_line_hooks.h').write_text(re.sub(r'\bthis\b','context',text[start:text.index('int __fastcall\npatch_Tile_check_water',start)]))
     if args.lifetimes:
         start=text.index('void\nstart_custom_renderer_native_tracking ()')
         (build/'native_tracking_bootstrap.h').write_text(text[start:text.index('void\npatch_init_floating_point ()',start)])
@@ -42,7 +46,7 @@ def main():
     (build/'native_probe_state.h').write_text(text[start:text.index('\tc3x_renderer_unit_draw_background_fn',start)])
     invocation=uuid.uuid4().hex;out=build/'gpu-composition'/invocation;out.mkdir()
     inputs=[ROOT/'injected_code.c',ROOT/'C3X.h',ROOT/'civ_prog_objects.csv',jgl,*[native/n for n in
-        ('c3x_renderer_api.h','native_observation.h','test_native_observation.cpp','record_native_observation.py','BUILD.bat','gpu_image_compositor.h','gpu_image_commands.h','test_local_image_backend.h','test_gpu_image_compositor.cpp','native_image_adapter.h','native_sprite_diagnostics.h','test_native_image_adapter.cpp','native_lifetime_registry.h','test_native_bootstrap.h','test_native_lifetimes.cpp')]]
+        ('c3x_renderer_api.h','native_observation.h','test_native_observation.cpp','test_native_line_bridge.h','record_native_observation.py','BUILD.bat','gpu_image_compositor.h','gpu_image_commands.h','test_local_image_backend.h','test_gpu_image_compositor.cpp','native_image_adapter.h','native_sprite_diagnostics.h','test_native_image_adapter.cpp','native_lifetime_registry.h','test_native_bootstrap.h','test_native_lifetimes.cpp')]]
     if observer:inputs.append(observer)
     before={p.relative_to(ROOT).as_posix():digest(p) for p in inputs}
     win=windows_root();winout=win/out.relative_to(ROOT)

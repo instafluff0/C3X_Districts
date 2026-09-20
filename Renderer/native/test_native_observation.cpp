@@ -12,10 +12,22 @@ struct JGL_Image {void** vtable;char pad[0x20];int BitCount;char dimensions[0x1c
 static_assert(offsetof(JGL_Image,BitCount)==0x24 && offsetof(JGL_Image,Image_Rect)==0x54 && offsetof(JGL_Image,Bits_Data_Links)==0x4c8);
 struct JGLSprite {void** vtable;int a,b,c,d;void* bits;int f18,f1c,bit_count,f24,f28,stride,width,height;CRITICAL_SECTION lock;};
 struct PCX_Image {struct {JGL_Image* Image;} JGL;};
+struct OpenGLRenderer;
+enum {LDO_NEVER,LDO_WINE,LDO_ALWAYS,IS_OK};
 struct State {
     char const* mod_rel_dir=".";
     bool custom_renderer_modal=false,paused_for_popup=false;int saved_tile_count=-1;
-    struct {bool enable_custom_rendering=true;} current_config;
+    struct {bool enable_custom_rendering=true;int draw_lines_using_gdi_plus=LDO_NEVER;} current_config;
+    bool running_on_wine=false;unsigned ogl_color=0xffffffff;int ogl_line_width=1;bool ogl_line_stipple_enabled=false;
+    struct {int init_state=IS_OK;void* gp_graphics=nullptr;
+        int (__stdcall *CreateFromHDC)(HDC,void**)=nullptr;
+        int (__stdcall *DeleteGraphics)(void*)=nullptr;
+        int (__stdcall *SetSmoothingMode)(void*,int)=nullptr;
+        int (__stdcall *SetPenDashStyle)(void*,int)=nullptr;
+        int (__stdcall *CreatePen1)(unsigned,float,int,void**)=nullptr;
+        int (__stdcall *DeletePen)(void*)=nullptr;
+        int (__stdcall *DrawLineI)(void*,void*,int,int,int,int)=nullptr;
+    } gdi_plus;
     HMODULE kernel32=GetModuleHandleA("kernel32.dll");
 #include "build/native_probe_state.h"
 };

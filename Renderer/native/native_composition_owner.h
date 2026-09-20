@@ -140,6 +140,19 @@ public:
     }
     int operation(int op,void* image,void* source,void const* from,void const* to,unsigned color){
         check_thread();if(!adapter)return 0;
+        if(op==C3X_NATIVE_LINE_TARGET)return tactical&&adapter->owns(image)?1:0;
+        if(op==C3X_NATIVE_STROKE){
+            if(!adapter->owns(image))return 0;
+            auto p=static_cast<c3x_renderer_native_stroke const*>(from);
+            if(!tactical||!p||p->width<1||p->width>128||p->dash<0||p->dash>2||
+                p->x1<-32768||p->x1>32767||p->y1<-32768||p->y1>32767||
+                p->x2<-32768||p->x2>32767||p->y2<-32768||p->y2>32767){
+                adapter->operation(C3X_NATIVE_DC,image,nullptr,nullptr,nullptr,0);return 0;
+            }
+            Tactical capture;capture.native_line(float(p->x1),float(p->y1),float(p->x2),float(p->y2),p->width,p->dash,p->argb);
+            if(tactical_draw(image,capture))return 1;
+            adapter->operation(C3X_NATIVE_DC,image,nullptr,nullptr,nullptr,0);return 0;
+        }
         if(op==C3X_NATIVE_TACTICAL_ROUTE_BEGIN){
             if(!from||route_image||!tactical)return 0;
             route_view=*static_cast<c3x_renderer_tactical_view_v1 const*>(from);

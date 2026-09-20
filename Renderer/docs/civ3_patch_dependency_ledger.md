@@ -1,5 +1,29 @@
 # Civ III patch dependency ledger
 
+## Native map-outline ownership repair
+
+`required_user_action: []` for symbols/patch-table entries. Reuses the existing
+`OpenGLRenderer_initialize`, `OpenGLRenderer_draw_line`, `OpenGLRenderer_set_color`,
+`OpenGLRenderer_set_opacity`, `OpenGLRenderer_set_line_width`,
+`OpenGLRenderer_enable_line_dashing` and `OpenGLRenderer_disable_line_dashing`
+inleads with their existing signatures and addresses. No CSV edit or added
+executable hook is needed. **Re-run `INSTALL.bat`** to install the changed bridge;
+replacing only the renderer DLL leaves the unconditional native DC acquisition.
+
+The native m71 tail calls `FUN_004e48d0`, which initializes the line renderer
+before checking whether any colonies need outlines. `OpenGLRenderer::initialize`
+requests image vtable slot 10 (public DC) before doing any drawing. The existing
+GOG initializer is `0x006274B0`; drawing/style entries are `0x00627760`,
+`0x006277A0`, `0x00627880`, `0x006278C0`, `0x006278E0`, `0x00627900` respectively.
+This destroys the map's exclusive lifetime evidence even when no lines follow.
+
+The bridge keeps the current native line target and copies endpoint/style values
+to the DLL's retained GPU overlay pass. Only already-owned targets qualify.
+Public DC/pixel escapes still revoke ownership; a mid-scope escape or config-off
+drains first, initializes the native backend and replays its style. GDI+ fallback
+also goes through public DC access instead of bypassing the barrier via the HDC
+field. Native UI and unsupported targets retain their existing backend.
+
 ## Route-cursor ABI crash correction
 
 The live city-close/worker-selection report ended immediately after entering

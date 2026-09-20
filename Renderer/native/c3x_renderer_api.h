@@ -444,6 +444,11 @@ enum { C3X_NATIVE_IMAGE_DRAIN = 100, C3X_NATIVE_IMAGE_REINIT = 101, C3X_NATIVE_I
 struct c3x_renderer_native_sprite_style { void *palette, *table; unsigned color; int mode; float opacity; };
 struct c3x_renderer_native_lookup { void *table, *palette; int percent; void *background; int scale[3]; };
 struct c3x_renderer_native_sprite_blend { void *alpha, *background, *palette; };
+/* OpenGL/GDI+ map outlines use copied endpoints/style, never a public map DC.
+   TARGET queries existing ownership only. STROKE returns 0 after safe CPU
+   handoff when unsupported; negative results must not expose native pixels. */
+enum { C3X_NATIVE_LINE_TARGET = 123, C3X_NATIVE_STROKE = 124 };
+struct c3x_renderer_native_stroke { int x1,y1,x2,y2,width,dash; unsigned argb; };
 /* Process-lifetime, read-only tracking. No scene/device/configuration required.
    VERIFY with null image establishes the owner; MAP queries eligibility. */
 typedef int (*c3x_renderer_native_lifetime_fn)(int operation, void * image, int context);
