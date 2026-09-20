@@ -98,8 +98,19 @@ and private two-page river caches also bound individual stages. Container growth
 packing/upload transients and active jobs are additional to ready storage and
 must be checked against whole-process address-space measurements. Oversized or
 failed preparation recovers through the same compilers. Cancellation, exceptions
-and ordinary completion join all readers before the frame's borrowed sources or
-callbacks disappear; queued results do not survive the frame.
+and ordinary completion join all readers before borrowed sources or callbacks
+disappear. The combined world compiler keeps its bounded worker pool alive across
+frames. Ending a lease discards unstarted inputs and borrowed callbacks, while
+complete owned CPU/GPU results can survive in the same reservoir. Stable
+content/context keys replace camera-local slot indices. Reuse requires current
+topology, coast, world and river proofs; zoom/extent are conservatively isolated.
+Configuration, asset and device reset clear this owner before sources change.
+
+Current captured occurrences take priority in compilation and foreground
+adoption; surrounding working-area content follows. Native occurrence/pass order
+is unchanged. A completed GPU camera awaiting adoption also retains priority over
+optional map, unit-pose and guard preparation. Current demand must not acquire an
+unrelated speculative wait merely because its map assembly has just completed.
 
 `object_compiler.h` separates connectivity/part selection from CPU geometry.
 `city_fidelity/compiler.h` retains material chunks, lighting/blockers, source

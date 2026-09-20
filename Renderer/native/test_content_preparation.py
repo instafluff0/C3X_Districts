@@ -5,6 +5,35 @@ from Renderer.lab.platform import ROOT
 
 
 class ContentPreparationTests(unittest.TestCase):
+    def test_finished_lease_keeps_owned_results_and_reuses_workers(self):
+        run_cpp(r'''
+#include "Renderer/native/render_core/content_preparation.h"
+#include <cassert>
+using namespace c3x_renderer::render_core;
+struct Result {int value;std::size_t bytes()const{return 1;}};
+using Pool=ContentPreparation<int,int,Result>;
+int main(){
+ Pool pool;std::thread::id first,second;std::atomic<bool> entered{false},left{false};
+ auto lease=std::make_shared<int>(17);std::weak_ptr<int> borrowed=lease;
+ pool.configure({{1,1},{2,2}},[&,lease](int const& input,auto const& stop,unsigned){
+  first=std::this_thread::get_id();
+  if(input==2){entered=true;while(!stop)std::this_thread::yield();left=true;return std::unique_ptr<Result>{};}
+  return std::make_unique<Result>(Result{*lease});
+ });lease.reset();pool.resume();while(!entered)std::this_thread::yield();
+ pool.finish_lease();assert(left && borrowed.expired());
+ auto stats=pool.statistics();assert(stats.active==0 && stats.pending==0 && stats.bytes==1);
+ assert(pool.contains(1,[](auto const& result){return result.value==17;}));
+ pool.configure({{3,3}},[&](int const& value,auto const&,unsigned){
+  second=std::this_thread::get_id();return std::make_unique<Result>(Result{value});
+ },1,{1,3});pool.resume();assert(pool.take(1)->value==17);assert(pool.take(3)->value==3);
+ pool.finish_lease();assert(first==second); // persistent pool, no per-view thread churn
+ pool.configure({{4,4}},[](int const& value,auto const&,unsigned){return std::make_unique<Result>(Result{value});});
+ pool.resume();while(!pool.statistics().built || pool.statistics().pending || pool.statistics().active)std::this_thread::yield();
+ pool.finish_lease();assert(!pool.contains(4,[](auto const&){return false;}));assert(pool.statistics().invalidated==1);
+ pool.clear();assert(pool.statistics().bytes==0);
+}
+''')
+
     def test_workers_pressure_cancellation_and_failure(self):
         run_cpp(r'''
 #include "Renderer/native/render_core/content_preparation.h"

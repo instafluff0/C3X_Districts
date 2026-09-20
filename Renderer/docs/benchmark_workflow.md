@@ -109,6 +109,14 @@ QPC boundaries. The former ground/object queue traces report zero scheduled jobs
 on this path; they still describe reduced/non-world and explicit serial controls.
 The existing total worker allowance is unchanged; the combined ready budget is
 64 MiB by default rather than adding separate ground/object queues to that budget.
+The world pool now persists across frame leases. `ready_reused` counts validated
+completed results surviving an earlier lease; `ready_bytes` reports the remaining
+owned reservoir after readers join and borrowed callbacks retire. Worker and
+consumption counters remain per-request deltas; reused compilation does not add
+its historical producer times to the current frame. `queue_peak_bytes` is the
+pool's high-water mark, reset when its budget changes. Compare it with the same
+64 MiB cap and sampled process address space, not with another independent cache
+allowance. Reset and asset/configuration changes retire the pool's content.
 
 `record_gpu_frame --camera-requests` additionally exercises the production GPU
 camera exports: 64 superseding exact requests, duplicate tickets, freed caller

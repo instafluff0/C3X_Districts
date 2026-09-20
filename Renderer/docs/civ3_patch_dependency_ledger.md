@@ -1,5 +1,15 @@
 # Civ III patch dependency ledger
 
+## M3.3 demand priority and bounded world preparation
+
+The existing DLL world compiler now retains its bounded worker pool and validated
+owned results across frame leases. Current captured occurrences precede guard
+content, without changing native occurrence order. Existing
+`Map_Renderer_m71_Draw_Tiles`, `Map_Renderer_m19_Draw_Tile_by_XY_and_Flags`,
+`Main_Screen_Form_move_camera` and JGL composition boundaries are unchanged;
+the native camera still waits for its exact view. No injected source, ABI or
+executable-address changes; `required_user_action: []`.
+
 ## M3.2 replaceable resident GPU camera requests
 
 The production `c3x_renderer_gpu_render` DLL entry now joins the shared bounded

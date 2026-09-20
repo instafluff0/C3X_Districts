@@ -134,6 +134,13 @@ public:
         pause();std::lock_guard<std::mutex> lock(mutex);
         ready.clear();pending.clear();compile={};stats.bytes=0;
     }
+    // End borrowed-input ownership without discarding complete, independently
+    // owned results or destroying the bounded worker pool. The next lease must
+    // validate survivors by stable content key before scheduling or taking them.
+    void finish_lease(){
+        pause();std::lock_guard<std::mutex> lock(mutex);
+        pending.clear();compile={};
+    }
     template<class Valid> bool contains(Key const& key,Valid valid){
         std::lock_guard<std::mutex> lock(mutex);
         for(auto it=ready.begin();it!=ready.end();++it)if(it->key==key){

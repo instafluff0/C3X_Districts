@@ -123,3 +123,66 @@ int main(){
  s.world_pass_affine=false;s.region_contributors.ready=false;assert(!s.query_region_inputs(0,0,0,128,out));
 }
 ''')
+
+class PreparedWorldLifetimeTests(unittest.TestCase):
+    def test_current_dependency_validation_and_exact_preparation_key(self):
+        source=(ROOT/'Renderer/native/c3x_renderer.cpp').read_text()
+        method='bool world_result_valid('+source.split('bool world_result_valid(',1)[1].split('\n    std::unique_ptr<c3x_renderer::fidelity::TerrainSurfaces> compile_terrain',1)[0]
+        header=(ROOT/'Renderer/native/world_preparation.h').read_text()
+        key='using WorldPreparationKey='+header.split('using WorldPreparationKey=',1)[1].split('\nusing WorldPreparation=',1)[0]
+        run_cpp(r'''
+#include "Renderer/native/c3x_renderer_api.h"
+#include <array>
+#include <algorithm>
+#include <memory>
+#include <map>
+#include <vector>
+#include <cassert>
+namespace c3x_renderer {namespace fidelity {
+struct NaturalWorld {using CellProof=std::vector<std::pair<int,int>>;bool valid(CellProof const& p){for(auto x:p)if(x.second!=7)return false;return true;}};
+}
+struct Part {
+ std::map<int,int> world,coast,topology;
+ std::vector<std::pair<int,int>> rivers;
+};
+struct PreparedWorld {std::unique_ptr<Part> ground,terrain,objects;};
+'''+key+r'''
+}
+struct State {
+ struct World {int at(int)const{return 2;}};
+ struct Coast {World world()const{return {};}int node_revision(int)const{return 3;}} world_coast;
+ struct Record {int semantic=4;} record;
+ struct Topology {Record value;Record const* current(int key)const{return key?&value:nullptr;}} topology_cache;
+ c3x_renderer::fidelity::NaturalWorld natural;
+ bool terrain_result_valid(c3x_renderer::Part const& p){
+  for(auto x:p.world)if(x.second!=2)return false;
+  for(auto x:p.coast)if(x.second!=3)return false;
+  return natural.valid(p.rivers);
+ }
+'''+method+r'''
+};
+int main(){
+ State state;c3x_renderer::PreparedWorld result;
+ assert(!state.world_result_valid(result));
+ result.ground=std::make_unique<c3x_renderer::Part>();result.terrain=std::make_unique<c3x_renderer::Part>();result.objects=std::make_unique<c3x_renderer::Part>();
+ for(auto* part:{result.ground.get(),result.terrain.get(),result.objects.get()}){
+  part->world[1]=2;part->coast[1]=3;part->rivers={{1,7}};
+ }
+ result.ground->topology[1]=result.objects->topology[1]=4;
+ assert(state.world_result_valid(result));
+ for(auto* part:{result.ground.get(),result.terrain.get(),result.objects.get()}){
+  part->world[1]=9;assert(!state.world_result_valid(result));part->world[1]=2;
+  part->coast[1]=9;assert(!state.world_result_valid(result));part->coast[1]=3;
+  part->rivers[0].second=9;assert(!state.world_result_valid(result));part->rivers[0].second=7;
+ }
+ result.objects->topology[1]=8;assert(!state.world_result_valid(result));result.objects->topology[1]=4;
+ result.ground->topology[0]=4;assert(!state.world_result_valid(result));result.ground->topology[0]=0;
+ assert(state.world_result_valid(result));
+ std::array<std::uint64_t,20> context{};c3x_renderer_frame_v1 frame{};frame.tile_width=128;frame.tile_height=64;frame.target_width=1120;frame.target_height=1192;
+ auto first=c3x_renderer::world_preparation_key(context,frame);
+ frame.presentation_time_ticks=999;assert(first==c3x_renderer::world_preparation_key(context,frame));
+ for(unsigned i=0;i<context.size();++i){++context[i];assert(first!=c3x_renderer::world_preparation_key(context,frame));--context[i];}
+ ++frame.tile_width;assert(first!=c3x_renderer::world_preparation_key(context,frame));--frame.tile_width;
+ ++frame.target_width;assert(first!=c3x_renderer::world_preparation_key(context,frame));
+}
+''')

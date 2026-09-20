@@ -537,6 +537,7 @@ public:
     c3x_renderer::fidelity::TerrainPreparation terrain_preparation;
     c3x_renderer::fidelity::GroundTask::Queue ground_preparation;
     c3x_renderer::fidelity::GroundPreparation selected_ground_preparation;
+    c3x_renderer::WorldPreparation world_preparation_queue;
     std::array<c3x_renderer::fidelity::TerrainCompileScratch,6> terrain_scratch;
     std::array<c3x_renderer::fidelity::SurfaceQueryScratch,6> world_ground_scratch;
     c3x_renderer::fidelity::TerrainCompileScratch foreground_terrain_scratch;
@@ -865,7 +866,7 @@ public:
 
 #ifdef C3X_RENDERER_BENCHMARK_ORACLE
     void trim_to_prepared(c3x_renderer_benchmark_oracle_trim_v1 & result, bool oracle_limits=true) {
-        terrain_preparation.clear();
+        world_preparation_queue.clear();terrain_preparation.clear();
         for(auto& scratch:terrain_scratch)scratch.reset();foreground_terrain_scratch.reset();
         for(auto& scratch:world_ground_scratch){scratch.rivers.reset_world();scratch.reset_tile();}
         result = {};
@@ -1016,7 +1017,7 @@ public:
     void reset() {
         material_views={};material_views_valid=false;
         gpu_composition.reset();tactical_gpu=c3x_renderer::tactical::Gpu{};visibility_gpu.reset();visibility_pixels.clear();
-        terrain_preparation.clear();
+        world_preparation_queue.clear();terrain_preparation.clear();
         for(auto& scratch:terrain_scratch)scratch.reset();foreground_terrain_scratch.reset();
         for(auto& scratch:world_ground_scratch){scratch.rivers.reset_world();scratch.reset_tile();}
         memory_sample("before-reset");
@@ -1552,7 +1553,7 @@ public:
 
     void clear_terrain_assets() {
         material_views={};material_views_valid=false;
-        terrain_preparation.clear();
+        world_preparation_queue.clear();terrain_preparation.clear();
         for(auto& scratch:terrain_scratch)scratch.reset();foreground_terrain_scratch.reset();
         for(auto& scratch:world_ground_scratch){scratch.rivers.reset_world();scratch.reset_tile();}
         for (TerrainTexture & texture : terrain_textures) {
@@ -2506,7 +2507,7 @@ public:
 
     bool configure_definitions(char const * mod_root, char const * default_path,
                                char const * scenario_path, char const * custom_path) {
-        terrain_preparation.clear();
+        world_preparation_queue.clear();terrain_preparation.clear();
         for(auto& scratch:terrain_scratch)scratch.reset();foreground_terrain_scratch.reset();
         for(auto& scratch:world_ground_scratch){scratch.rivers.reset_world();scratch.reset_tile();}
         char requested_profile[32] = {};
@@ -5123,6 +5124,19 @@ public:
         for(auto const& input:result.coast)if(world_coast.node_revision(input.first)!=input.second)return false;
         return natural.valid(result.rivers);
     }
+    bool world_result_valid(c3x_renderer::PreparedWorld const& result) {
+        if(!result.ground || !result.terrain || !result.objects)return false;
+        auto valid=[&](auto const& part){
+            for(auto const& input:part.world)if(world_coast.world().at(input.first)!=input.second)return false;
+            for(auto const& input:part.coast)if(world_coast.node_revision(input.first)!=input.second)return false;
+            for(auto const& input:part.topology){auto current=topology_cache.current(input.first);
+                if((current?current->semantic:0)!=input.second)return false;}
+            return true;
+        };
+        c3x_renderer::fidelity::NaturalWorld::CellProof ground_rivers(result.ground->rivers.begin(),result.ground->rivers.end());
+        return valid(*result.ground) && valid(*result.objects) && terrain_result_valid(*result.terrain) &&
+            natural.valid(ground_rivers) && natural.valid(result.objects->rivers);
+    }
     std::unique_ptr<c3x_renderer::fidelity::TerrainSurfaces> compile_terrain(
             c3x_renderer::fidelity::TerrainCompileInput const& input,
             c3x_renderer::fidelity::TerrainCompileScratch& scratch,std::function<bool()> cancelled,bool bounded=true) {
@@ -7244,7 +7258,10 @@ public:
         bool const object_worker=prepare_objects && !prewarming &&
             !(GetEnvironmentVariableA("C3X_RENDERER_OBJECT_WORKERS",object_control,sizeof(object_control)) && std::strcmp(object_control,"0")==0);
         bool const world_batch_enabled=cpu_terrain_enabled && world_ground && retain_ground_grids && ground_concurrent && object_worker;
-        c3x_renderer::WorldPreparationLease world_lease;
+        auto& world_queue=world_preparation_queue;
+        auto world_before=world_queue.statistics();unsigned world_ready_reused=0;
+        if(!world_batch_enabled)world_queue.clear();
+        std::vector<unsigned> world_compile_order;
         unsigned world_jobs=0,world_recovery=0;double world_join_ms=0;
         double world_ground_ms=0,world_terrain_ms=0,world_object_ms=0,world_upload_ms=0;
         std::size_t world_gpu_bytes=0;
@@ -7421,12 +7438,17 @@ public:
                 terrain_compile_input(tile,frame,ground_type(tile),skip_flat_shore,separate_natural_relief,index_natural_grids,retain_height_samples,world_objects),
                 make_object_job(tile)};
         };
-        // Compile callbacks borrow the local source lease. Clear before those
-        // callbacks/inputs die on all exits, not merely normal publication.
-        struct WorldJoin {c3x_renderer::WorldPreparation& queue;~WorldJoin(){queue.clear();}} world_join{world_lease.queue};
+        // Join and detach borrowed callbacks on all exits. Finished owned results
+        // survive in the same bounded pool and must pass current proofs to reuse.
+        struct WorldJoin {c3x_renderer::WorldPreparation& queue;~WorldJoin(){queue.finish_lease();}} world_join{world_queue};
         if(world_batch_enabled){
             terrain_preparation.clear(); // superseded producers must not compete for this request
             std::deque<c3x_renderer::WorldPreparation::Job> jobs;
+            std::vector<c3x_renderer::WorldPreparationKey> needed;
+            std::vector<std::uint64_t> demanded_tiles;demanded_tiles.reserve(content_source.tile_count);
+            for(unsigned n=0;n<content_source.tile_count;++n)if(content_source.tiles[n].tile_flags&C3X_RENDERER_TILE_RENDER)
+                demanded_tiles.push_back(coordinate_key(content_source.tiles[n].tile_x,content_source.tiles[n].tile_y));
+            std::sort(demanded_tiles.begin(),demanded_tiles.end());
             for(unsigned index=0;index<frame.tile_count;++index){
                 if(!selected_tile(index))continue;
                 auto const& tile=frame.tiles[index];int ground=ground_type(tile);
@@ -7435,13 +7457,30 @@ public:
                 auto instance=topology_cache.retained(coordinate_key(tile.tile_x,tile.tile_y));bool resident=false;
                 if(instance)for(auto handle:instance->compiled_views){auto cached=resident_content.resolve(handle);
                     if(cached && cached->compile_context==expected && tile_content_valid(*cached,tile)){resident=true;break;}}
-                if(!resident)jobs.push_back({index,make_world_job(tile,nodes)});
+                if(!resident){
+                    auto key=c3x_renderer::world_preparation_key(expected,frame);
+                    if(std::binary_search(demanded_tiles.begin(),demanded_tiles.end(),coordinate_key(tile.tile_x,tile.tile_y)))needed.push_back(key);
+                    if(world_queue.contains(key,[&](auto& result){
+                        if(!world_result_valid(result))return false;
+                        // Prior-lease compilation is reuse, not current-frame work.
+                        result.ground_ms=result.terrain_ms=result.object_ms=result.upload_ms=0;
+                        result.ground->compile_ms=0;return true;
+                    }))++world_ready_reused;
+                    else jobs.push_back({key,make_world_job(tile,nodes)});
+                }
             }
+            // Construction order is independent of native occurrence/pass
+            // order. Complete current missing content before surrounding guards.
+            world_compile_order.reserve(frame.tile_count);
+            for(unsigned index=0;index<frame.tile_count;++index)world_compile_order.push_back(index);
+            std::stable_partition(world_compile_order.begin(),world_compile_order.end(),[&](unsigned index){
+                auto const& tile=frame.tiles[index];return std::binary_search(demanded_tiles.begin(),demanded_tiles.end(),coordinate_key(tile.tile_x,tile.tile_y))!=0;
+            });
             world_jobs=unsigned(jobs.size());
-            world_lease.queue.configure(std::move(jobs),[&](auto const& input,auto const& stop,unsigned worker){
+            world_queue.configure(std::move(jobs),[&](auto const& input,auto const& stop,unsigned worker){
                 return compile_world(input,world_ground_scratch[worker],terrain_scratch[worker],[&]{return stop.load(std::memory_order_relaxed) || cancelled();},true);
-            },cpu_terrain_workers,{},cpu_preparation_budget);
-            world_lease.queue.resume();
+            },cpu_terrain_workers,std::move(needed),cpu_preparation_budget);
+            world_queue.resume();
         }
         c3x_renderer::FeatureGroup broadleaf_forest;
         c3x_renderer::FeatureGroup const * forest_group =
@@ -7481,7 +7520,7 @@ public:
         std::vector<c3x_renderer_u32> compiling_tiles;
         for (c3x_renderer_u32 preparation_slot = 0; preparation_slot < (batch_preparing?preparation_count:frame.tile_count+compiling_tiles.size()); ++preparation_slot) {
             c3x_renderer_u32 index=batch_preparing?preparation_indices[preparation_slot]:
-                preparation_slot<frame.tile_count?preparation_slot:compiling_tiles[preparation_slot-frame.tile_count];
+                preparation_slot<frame.tile_count?(world_compile_order.empty()?preparation_slot:world_compile_order[preparation_slot]):compiling_tiles[preparation_slot-frame.tile_count];
             if(index>=frame.tile_count)return false;
             c3x_renderer_tile_v1 const & tile = frame.tiles[index];
             if(!selected_tile(index))continue;
@@ -8462,7 +8501,7 @@ public:
             std::unique_ptr<c3x_renderer::PreparedWorld> prepared_world;
             if(world_batch_enabled && !shared_hit){
                 auto begin=std::chrono::steady_clock::now();
-                prepared_world=world_lease.queue.take(index);
+                prepared_world=world_queue.take(c3x_renderer::world_preparation_key(compile_context,frame));
                 world_join_ms+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count();
                 if(cancelled())return false;
                 if(prepared_world){
@@ -9416,17 +9455,17 @@ public:
         auto ground_drain_started=std::chrono::steady_clock::now();
         ground_batch_lease.finish();
         object_lease.queue.clear();
-        world_lease.queue.clear();
+        world_queue.finish_lease();
         double ground_drain_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-ground_drain_started).count();
         if(pickup_profile && !prewarming) {
             char detail[512];sprintf_s(detail,"built=%u reused=%u ground_ms=%.3f features_ms=%.3f cliffs_ms=%.3f terrain_prep_ms=%.3f upload_ms=%.3f bytes=%llu natural_hits=%u natural_bytes=%zu ground_grid_hits=%u ground_grid_bytes=%zu",
                 frame_tiles_built,frame_tiles_reused,trace.milliseconds(ground_ticks),trace.milliseconds(feature_ticks),
                 trace.milliseconds(cliff_ticks),trace.milliseconds(terrain_prep_ticks),trace.milliseconds(upload_ticks),static_cast<unsigned long long>(tile_geometry_cache_bytes),frame_natural_hits,natural_mesh_cache_bytes,frame_ground_grid_hits,ground_grid_cache_bytes);
             trace.write("mesh-phases",detail,true);
-            if(world_batch_enabled){auto stats=world_lease.queue.statistics();
-                sprintf_s(detail,"scheduled=%u consumed=%llu rejected=%llu evicted=%llu recovery=%u workers=%u worker_ms=%.3f join_ms=%.3f ground_ms=%.3f terrain_ms=%.3f object_ms=%.3f upload_ms=%.3f queue_peak_bytes=%zu gpu_bytes=%zu",
-                    world_jobs,stats.consumed,stats.rejected,stats.evicted,world_recovery,cpu_terrain_workers,stats.cpu_ms,world_join_ms,
-                    world_ground_ms,world_terrain_ms,world_object_ms,world_upload_ms,stats.peak_bytes,world_gpu_bytes);
+            if(world_batch_enabled){auto stats=world_queue.statistics();
+                sprintf_s(detail,"scheduled=%u consumed=%llu rejected=%llu evicted=%llu recovery=%u workers=%u worker_ms=%.3f join_ms=%.3f ground_ms=%.3f terrain_ms=%.3f object_ms=%.3f upload_ms=%.3f queue_peak_bytes=%zu gpu_bytes=%zu ready_reused=%u ready_bytes=%zu",
+                    world_jobs,stats.consumed-world_before.consumed,stats.rejected-world_before.rejected,stats.evicted-world_before.evicted,world_recovery,cpu_terrain_workers,stats.cpu_ms-world_before.cpu_ms,world_join_ms,
+                    world_ground_ms,world_terrain_ms,world_object_ms,world_upload_ms,stats.peak_bytes,world_gpu_bytes,world_ready_reused,stats.bytes);
                 trace.write("world-preparation",detail,true);
             }
             sprintf_s(detail,"rigid_instances=%u terrain_routes=%u city_rigid_parts=%u city_deformed_parts=%u city_fallbacks_omitted=%u",
@@ -11170,6 +11209,7 @@ private:
     c3x_renderer::render_core::UnitFramePreparation unit_pixels_queue;
     std::uint64_t unit_content_revision=0,unit_content_examined=0,unit_offers_examined=0;
     bool unit_preparation_pending() const {
+        if(camera_gpu && camera_ready.resident.texture)return false;
         return unit_pixels_enabled && !unit_pixels_queue.empty() &&
             (!unit_gpu_preparation || unit_content_revision!=unit_content_examined || unit_pixels_queue.offered!=unit_offers_examined);
     }
@@ -12006,13 +12046,13 @@ private:
                 if(!has_job && !camera_pending && !stop_requested){unit_pixels_turn=true;prepare_ahead(lock);}
                 continue;
             }
-            if(!has_job && !stop_requested && !camera_paused && !camera_pending && renderer_state.scene_guard_pending()) {
+            if(!has_job && !stop_requested && !camera_paused && !camera_pending && !(camera_gpu && camera_ready.resident.texture) && renderer_state.scene_guard_pending()) {
                 if(wake.wait_for(lock,std::chrono::milliseconds(2),[this]{return has_job || camera_pending || stop_requested;}))continue;
                 lock.unlock();
                 try{renderer_state.prepare_scene_guard(foreground_pending);}catch(...){renderer_state.scene_guard_failed=true;}
                 lock.lock();continue;
             }
-            if (!has_job && !stop_requested && !camera_paused && warm_cursor < warm_order.size()) {
+            if (!has_job && !stop_requested && !camera_paused && !(camera_gpu && camera_ready.resident.texture) && warm_cursor < warm_order.size()) {
                 // Yield between individual tiles. A foreground request wakes
                 // this delay and cancels CPU construction before GPU upload.
                 if (wake.wait_for(lock, std::chrono::milliseconds(2), [this] {
@@ -12075,7 +12115,7 @@ private:
                 }
                 continue;
             }
-            if (!has_job && !stop_requested && !camera_paused && renderer_state.pixel_work_pending()) {
+            if (!has_job && !stop_requested && !camera_paused && !(camera_gpu && camera_ready.resident.texture) && renderer_state.pixel_work_pending()) {
                 if (wake.wait_for(lock,std::chrono::milliseconds(2),[this]{return has_job || camera_pending || stop_requested;})) continue;
                 lock.unlock();
                 bool ok=false;
@@ -12358,7 +12398,6 @@ private:
             completed_result = result;
             }
             if(command==Command::gpu_render && result==C3X_RENDERER_RESULT_OK){
-                if(rendered_area_ready){retain_view(rendered_area);nearby_presented=true;}
                 nearby_available=renderer_state.shared_scene_surface;
             }else if(command==Command::render && result==C3X_RENDERER_RESULT_OK){
                 char area_option[8]={};GetEnvironmentVariableA("C3X_RENDERER_PREPARED_VIEW",area_option,sizeof(area_option));
