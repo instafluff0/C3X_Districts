@@ -72,6 +72,86 @@ total free VA and sampled largest contiguous VA. Preserve at least 512 MiB sampl
 contiguous headroom in the 32-bit process and disclose transient sampling limits.
 Capacity increases require working-set evidence, not benchmark-only allowances.
 
+## Arbitrary-destination navigation acceptance (M3.8/M4)
+
+Extend the existing navigation and native GPU receipts. Cover each real camera
+trigger: scrolling, minimap, zoom/reframing, newly selected unit centering, action
+following and other native programmatic moves. Minimap and automatic centering
+currently use the exact native centering path rather than the deferred idle-pan
+fast path; both require direct evidence. Use real input/native captures
+for trigger-to-display acceptance; replay/JGL fixtures can establish rendering and
+ownership facts but must label excluded game work. Current historical distant
+CPU render/capture timings cannot stand in for the native GPU path.
+
+Use fixed, recorded seeds and 100 distributed legal destinations per supported
+map/viewport/quality case, with at least 50 distinct destinations where possible.
+Include far first visits, dense cities/infrastructure, coasts/rivers, map edges
+and wraps, mixed visibility, all supported zooms and repeated revisits. Also test
+rapid supersession and native selection/action centering. On smaller worlds,
+report distinct destination count rather than padding it with duplicates. Repeat
+matched runs for percentile/tail claims; 100 samples do not establish a robust p99.
+
+Run and report these populations separately:
+
+| Initial state | What it establishes |
+| --- | --- |
+| Normal initialization, then first visits | Actual user experience, without pre-visiting the test destinations; report remaining preparation coverage |
+| Whole-world preparation complete, dependencies GPU resident | Camera-only construction invariants and view/render/publication cost |
+| CPU prepared, GPU content deliberately evicted | Honest residency/upload cost; distinguish re-upload from recompilation |
+| Authoritative local/remote edit, reveal/viewer change or reload | Correct invalidation scope, fresh capture, cancellation and rebuild cost |
+
+Whole-world preparation policy must be independent of the measured route and
+must not render/cache every destination screenshot. Record time to first usable
+view, time to complete declared world preparation, background CPU/GPU consumption,
+coverage by authority/compiled/resident state and combined resource peaks. If the
+normal readiness claim covers only part of the world, report that limitation;
+selecting random points only from the warm subset cannot pass the anywhere goal.
+Test the normal supported map-size/asset-density envelope and memory pressure,
+not just a small fully resident fixture. Keep water effects and full detail on.
+
+For each input/native-camera-event and request identity record these endpoints
+and counters:
+
+- Input receipt or native camera decision, authoritative capture/diff duration
+  and submission completion. Automatic selection/action moves start at the native
+  decision to move the camera; do not count intentional pre-move gameplay delay
+  as renderer latency or start the clock after expensive capture has finished.
+- World compilation by category, bytes constructed and dependency changes.
+- World GPU allocations, uploads and eviction/re-upload bytes, separately from
+  ordinary camera/instance/animation parameter updates and render-target reuse.
+- Foreground preparation joins, lock/queue waits, readbacks and CPU waits for GPU
+  completion; separate concurrent worker spans from the actual critical path.
+- View/pass selection, draw submission, finishing, native composition, ready time,
+  ready-to-adopt/message-pump delay and first correct coherent displayed frame.
+- Total/free/contiguous VA, GPU/native/history/queue storage and transient peaks;
+  record sampling limits and retain the 512 MiB contiguous-headroom floor.
+
+Counters missing from current instrumentation are unmeasured, not zero. Normal
+production timing remains separate from costly profiling; preserve source/binary,
+assets, clocks, memory limits and quality in comparisons. On this VM, rejected or
+unstable GPU timestamps cannot establish shader cost: use validated timing or
+bounded causal ablations and report uncertainty.
+
+Resident, unchanged destinations require zero static-world compilation,
+static-geometry allocation/upload, foreground content joins and map readback.
+GPU command dependencies still exist, and normal dynamic parameter uploads are
+allowed. Explicit native CPU/UI ownership barriers are measured separately and
+must not be silently counted as a camera-only pass. Validate coverage/pixels
+against independent cold renders and exercise live overlays, fog, picking,
+selection, action centering, cancellation and config-off after every cutover.
+
+The target is <33 ms p95 from input or native camera decision to first correct
+coherent display for unchanged initialized-world navigation on the declared
+target setup; <16.7 ms is the later objective. Report mean, median, p95, maximum,
+sample count and each >100 ms stall separately for each camera-trigger class.
+An aggregate dominated by fast manual pans cannot pass slow selected-unit jumps.
+Also report end-to-end results for normal first visits including every readiness
+miss: a fast conditional resident result cannot replace the user-facing metric.
+Desktop completion is not physical scanout. A short enqueue, old front still
+animating, or correct destination with stale native overlays/picking is not a pass.
+M3.8 closes structural readiness/cutover gaps; remaining rendering-budget misses
+must retain an explicit owner and unpassed status through M4.
+
 ## Existing harnesses
 
 Paths below are relative to the repository root. Use `--help` for case-specific

@@ -14,6 +14,53 @@ sequence. [Validation](benchmark_workflow.md) defines evidence, not another queu
 These documents describe responsibilities; they do not mandate a new engine,
 ECS, class hierarchy, API migration or permanent residency of every world mesh.
 
+## World readiness and arbitrary navigation
+
+An unchanged distant destination must be drawable from persistent world content;
+its first camera visit must not be the event that discovers and constructs all
+of its appearance. Extend `ScenePublication`, `CapturedScene`, `ResidentContent`
+and their existing compilers with explicit coverage/revision/readiness. Full-map
+topology is not a substitute for authoritative remote city, resource, improvement
+and visibility-dependent appearance. Copy that input through the native caller;
+background workers never retain a `Map*`, `Tile*` or other game-owned pointer.
+Offscreen mutation coverage must be proved before remote records are called fresh.
+
+Use compact shared meshes/materials and rigid instances alongside compiled
+regional/deformed geometry. Native projection remains authoritative per visible
+occurrence. Preparation follows initialization and actual dependency changes;
+residency is a bounded representation of that prepared world. GPU eviction need
+not imply reconstructing topology, procedural layout or city composition, but
+retaining CPU/streamable backing has its own measured memory/storage cost. Do not
+assume the current expanded geometry for every tile/zoom fits in a 32-bit process.
+A residency claim must include all consumers: visible color, caster/receiver and
+reflection context, water, units, materials and native composition resources.
+
+Track separately: unknown/stale authority, known but uncompiled content,
+compiled but nonresident content, and current resident content. A fast resident
+subset must not obscure readiness holes across the normal supported world.
+Readiness never grants visibility: unseen tiles stay black, fog hides units and
+explored animation remains frozen. No lower-detail proxy or stale-camera frame
+is an authorized shortcut.
+
+The roadmap's M3.8 contract owns whole-world readiness and coherent native camera
+cutover for every trigger: scrolling, minimap, zoom, selected-unit centering,
+action following and other native programmatic moves. Automatic centering has the
+same latency objective as manual navigation while preserving native destination
+and gameplay ordering. M4 closes remaining measured frame costs. Completion must reach a safe
+caller-thread adoption boundary promptly without depending solely on a 66 ms
+Animator opportunity. Preserve native action progression and centering semantics;
+do not solve visual latency by running extra gameplay updates. The target is
+<33 ms p95 from input or native camera decision to coherent display for each
+trigger class under a declared supported workload, with
+cold/evicted/edit costs and initialization time disclosed separately.
+
+This is C3X's intended architecture, not a verified description of Civ VI's
+runtime. Installed ArtDef/package evidence establishes asset data, not Civ VI's
+world-residency policy or camera scheduling. D3D11 already supports shared
+per-vertex data plus per-instance inputs through
+[DrawIndexedInstanced](https://learn.microsoft.com/en-us/windows/win32/api/d3d11/nf-d3d11-id3d11devicecontext-drawindexedinstanced);
+an API migration is not a prerequisite for that representation.
+
 ## Ownership and data flow
 
 ```text

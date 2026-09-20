@@ -95,10 +95,11 @@ barriers may still wait. The fixture services completion messages, while the liv
 bridge retries on native Animator opportunities. Native capture/traversal and
 live input latency are outside these timings.
 
-**Next unfinished responsibility: M3.8 complete navigation/edit/lifecycle
-acceptance**, including native input-to-display and capture cost, message-pump
-delay, synchronous native UI barriers and memory headroom. No live-game acceptance,
-nonblocking zoom/centering or sustained frame-budget claim has been made.
+**Next unfinished responsibility: M3.8 arbitrary-destination navigation**, with
+explicit whole-world input/preparation coverage, coherent cutover for every camera
+trigger and complete latency evidence as specified below. Queue responsiveness alone cannot establish
+fast navigation. No live-game acceptance, nonblocking minimap/zoom/centering or
+sustained frame-budget claim has been made.
 
 ## M2 automated acceptance checkpoint (preserved)
 
@@ -290,23 +291,103 @@ useful preparation across supersession without evicting the current working set.
 | 3.5 | Nonblocking native polling and honest pending-coverage policy | DLL/JGL transaction boundary implemented; measurements above |
 | 3.6 | Coherent overlays, interactions and picking | Guarded live bridge implemented; automated acceptance passed |
 | 3.7 | Cancellation, GPU reset, reload, configuration-off and failure recovery | Implemented; automated retirement/recreation and fail-closed barriers pass; physical device-loss restoration is not claimed |
-| 3.8 | Navigation/edit/lifecycle acceptance, memory and latency proof | Pending |
+| 3.8 | Arbitrary-destination readiness, coherent native navigation, edit/lifecycle and complete latency proof | Pending; explicit responsibilities and acceptance below |
 
-**Done:** ordinary scrolling/zoom across useful coverage avoids synchronous
-construction barriers; cold, evicted and invalidated destinations have bounded,
-correct handling. Pixels, camera, visibility, overlays and picking advance
-coherently. Never hide a wait by presenting mismatched or stale view identity.
+**Done:** initialized, unchanged supported-world navigation selects already
+prepared scene content without foreground world compilation. Pixels, camera,
+visibility, overlays and picking advance coherently. Cold initialization, edits,
+eviction and recovery have separately measured, bounded handling. A responsive
+submission queue or a fast revisit does not prove arbitrary-destination readiness.
+
+### 3.8 arbitrary-destination navigation
+
+Requested September 20: moving anywhere on the map should feel immediate. Treat
+this as an explicit architectural and latency requirement, not an incidental
+benefit of nearby prefetch. Extend the current world/publication/content owners;
+do not introduce another render world or depend on cached destination screenshots.
+This applies equally to scrolling, minimap jumps, zoom/reframing, newly selected
+unit centering, action following and other native programmatic camera moves.
+Minimap clicks are one diagnostic route, not the scope of the requirement.
+Preserving vanilla centering means preserving destination, clamping and gameplay
+ordering; it does not exempt automatic camera moves from the latency objective.
+
+Current evidence needs three qualifications:
+
+- The 0.38–1.74 s distant-destination and 4.61 s initialization results above are
+  M2 completed-render/CPU-delivery evidence, including synchronization/readback.
+  They are not current native GPU minimap latency or proof that compilation alone
+  consumed those intervals. M3.7 scrolling is 98.48 ms mean / 167.77 ms p95; live
+  minimap latency has not been measured.
+- Full-map topology/visibility observation is not full-map appearance publication.
+  `capture_custom_renderer_world_topology` copies terrain/river/effect topology
+  and detects visibility changes. Full object/city/route records enter through
+  captured occurrences and their appearance halo. `CapturedScene` only marks full
+  render/prefetch observations authoritative; a topology-only record cannot
+  manufacture missing object state or certify remote appearance as current.
+- The decompiled `Navigator_Data::handle_left_click` calls native
+  `bring_tile_into_view(..., reason=0, false, false)`. The current centering guard
+  keeps it exact. Deferred idle pans still adopt at native Animator opportunities;
+  completion messages alone do not bypass that boundary. Waiting for the normal
+  66 ms opportunity can itself exceed a 33 ms latency target.
+
+| Responsibility within 3.8 | Required result |
+| --- | --- |
+| Baseline and attribution | Trace actual minimap, edge/drag scrolling, zoom and native selection/action centering. Separate input/capture, submission, preparation, GPU dependencies, ready wait, adoption, native composition and first coherent display. Re-run distant destinations through the current native GPU path. |
+| Authoritative world coverage | Publish complete renderer-owned appearance for the renderable world independently of visiting each camera destination. Audit offscreen mutations, removals and viewer changes; retain revisions and readiness coverage. Use bounded caller-thread capture and existing change publication; workers never dereference game objects. Preserve fog, unseen coverage and frozen explored animation. |
+| Render-ready representation | Combine shared source meshes/materials and compact rigid instances with compiled regional terrain/deformed/connectivity content. Prepare from world changes and initialization rather than camera misses; retain useful compiled data across GPU eviction where budgets permit. Measure CPU/GPU/disk backing tradeoffs instead of keeping all current expanded meshes resident or increasing cache caps. |
+| Coherent native cutover | Give every camera trigger, including newly selected units and action following, a prompt, safe caller-thread completion boundary that advances pixels, native camera, overlays and picking together. Preserve vanilla destination/clamping and selection/action centering behavior, reentrancy guards and gameplay cadence. Do not accelerate gameplay or invoke extra action updates to consume a ready visual frame. |
+| Acceptance under load | Run the arbitrary-jump matrix in the validation guide, plus edits, cancellation, fog/viewer changes, reset, config-off and memory pressure. Prove prepared-world construction invariants, distinguish streaming misses and account for preparation coverage/time. |
+
+For a destination whose complete dependencies are prepared and GPU resident,
+ordinary camera changes must cause **zero static-world compilation, zero static
+geometry upload/allocation, zero foreground preparation joins and zero map CPU
+readback**. Normal camera/instance/animation parameter uploads and ordered GPU
+execution remain necessary. The goal is no CPU wait for content construction,
+readback or avoidable GPU fences, not a literal absence of GPU synchronization.
+CPU-prepared/GPU-evicted destinations form a separate class: upload/paging costs
+must be explicit, and geometry recompilation must not be hidden as selection.
+
+Use 100 deterministic distributed destinations (at least 50 distinct where map
+extent permits), including first visits and distant dense/coastal regions after
+normal initialization. The initialization/preparation policy must be independent
+of the test route. Report first-interactive time, whole-world readiness time,
+prepared/resident coverage and resource peaks; a route-specific warmup or warm
+subset cannot certify navigation anywhere. Preserve full detail and all water
+effects, current budgets and at least 512 MiB sampled contiguous VA headroom.
+No LOD, placeholder frames or hidden-content exposure is authorized by this goal.
+
+**Latency objective:** under a declared map/viewport/hardware envelope, unchanged
+initialized-world navigation targets **<33 ms p95 from input or native camera
+decision to first correct coherent displayed frame**; <16.7 ms is the later
+60 FPS objective. Report each camera-trigger class separately; rapid pans must
+not conceal slow selected-unit jumps. Report maximums and every
+>100 ms stall as well, so p95 cannot conceal a few slow regions. Both spatial
+readiness and actual rendering/cutover must succeed. Prepared-resident, ordinary
+post-load first visits, eviction and edits retain separate distributions; misses
+in normal post-load navigation cannot be dropped to make the overall result pass.
+
+M3.8 owns missing world/preparation and native-cutover mechanisms required by this
+contract. M4 owns measured rendering/cadence costs remaining once that contract is
+working. A measured latency miss stays an explicit unpassed objective with a named
+cost/owner; neither milestone may call navigation instantaneous because enqueue is
+cheap or the UI continues processing messages.
 
 ## 4. Raise cadence against a measured frame budget
 
-Tune sustained presentation only after frame costs and publication are coherent.
-Measure input-to-display latency, frame tails, sample age, worker interference and
-combined memory. Consider parallel D3D recording or less UI-thread dependence only
-if the remaining cost warrants it. Stay on D3D11 unless evidence justifies a change.
+Reduce remaining warm-view and independent-frame costs using 3.8's attribution:
+spatial/pass selection, compatible submission, shadows/reflections, finishing,
+native composition, GPU queueing and presentation. High tile reuse alone does
+not identify which stage dominates; measure whole requests and critical-path
+waits. More workers cannot remove costs that are already submission, rendering
+or synchronization. Consider parallel D3D recording or less UI-thread dependence
+only when measured; stay on D3D11 unless evidence justifies a change.
 
-**Done:** demonstrate the selected cadence on representative live workloads,
-including navigation, animation and UI transitions. A 33 ms timer is not 30 FPS;
-60 FPS is a later 16.7 ms frame-budget objective, not a current promise.
+**Done:** demonstrate the selected cadence and the arbitrary-navigation latency
+objective on representative live workloads, including navigation, animation and
+UI transitions. Cold/evicted/edited destinations remain visible in the results.
+A 33 ms timer is not 30 FPS; 60 FPS is a later 16.7 ms objective, not a current
+promise. Whole-world readiness is explicit M3.8 work, not deferred implicitly to
+frame-loop tuning here.
 
 ## Water effects: roadmap placement
 
