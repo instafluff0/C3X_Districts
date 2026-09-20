@@ -239,6 +239,29 @@ and foreground GPU operations remain serialized. This is not yet nonblocking
 native presentation. Preserve the exact native barrier until M3.4–3.6 provide
 atomic completed views and coherent overlays, visibility and picking.
 
+M3.4 adds `c3x_renderer_gpu_camera_poll_view`, an optional atomic description of
+that same GPU adoption. Under the existing call/worker gates it returns the
+composition image/ticket, request ticket, copied epochs and frame, ordered native
+occurrences, replacement/fallback coverage and pixel phase. Device generation,
+content revision, session and actual sampled clock travel with the image. It reads
+the adopted owner, never a newer pending request, and writes no caller result
+unless adoption succeeds. Borrowed occurrence/coverage arrays remain owned until
+the next successful map adoption, CPU-map switch, configuration or reset; callers
+remain serialized. No extra scene/texture copy is required by the atomic poll.
+
+Camera ticket allocation survives worker/device recreation, so a retired request
+cannot alias a new request after reset. GPU adoption retains the previous
+publication owner until import succeeds; an import failure restores that owner
+and leaves caller output untouched. This does not replace M3.7's device-loss and
+native recovery policy. Prepared CPU/GPU views refresh clip, scheduling hints and
+animation metadata together without relabeling their sampled clock. Donor and retained-scroll reuse also preserve the relative order of visible
+occurrences: reordered overlapping graphics require fresh pixels even when their
+content is otherwise identical. Prepared pixels require exact occurrence
+coordinates as well as canonical content; wrapping does not by itself prove that
+world projection, material and postprocessing inputs are interchangeable.
+The exact native barrier remains until M3.5–3.6 advance native presentation,
+overlays and picking coherently.
+
 The renderer now owns independent visual scheduling through the existing worker
 and presenter. It does not request Civ III redraws. Native camera, visibility,
 action and UI changes still arrive through hooks/captures. General nonblocking

@@ -1,5 +1,12 @@
 # Civ III patch dependency ledger
 
+## M3.4 atomic GPU view publication
+
+The optional DLL-only `c3x_renderer_gpu_camera_poll_view` export returns the
+adopted image and copied view/coverage identity under one call gate. Existing GPU
+and injected ABI layouts, native hooks and exact-camera synchronization are
+unchanged. No new executable address is required; `required_user_action: []`.
+
 ## M3.3 demand priority and bounded world preparation
 
 The existing DLL world compiler now retains its bounded worker pool and validated

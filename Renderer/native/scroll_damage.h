@@ -28,10 +28,15 @@ inline bool scroll_damage(std::vector<TileFootprint> const & previous,
     for (auto const & tile : previous)
         if (!old_tiles.emplace(tile.coordinate, &tile).second) return false;
     bool found_translation = false;
+    TileFootprint const* previous_common=nullptr;
     for (auto const & tile : current) {
         if (!new_tiles.emplace(tile.coordinate, &tile).second) return false;
         auto old = old_tiles.find(tile.coordinate);
         if (old == old_tiles.end()) continue;
+        // Pixel overlap is reusable only while common contributors retain
+        // their draw order. Equal meshes/anchors do not prove alpha/depth ties.
+        if(previous_common && old->second<previous_common)return false;
+        previous_common=old->second;
         int x = tile.anchor_x - old->second->anchor_x;
         int y = tile.anchor_y - old->second->anchor_y;
         if (found_translation && (x != dx || y != dy)) return false;

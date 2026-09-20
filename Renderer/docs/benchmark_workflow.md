@@ -118,6 +118,15 @@ pool's high-water mark, reset when its budget changes. Compare it with the same
 64 MiB cap and sampled process address space, not with another independent cache
 allowance. Reset and asset/configuration changes retire the pool's content.
 
+`record_gpu_frame --atomic-camera-views` requires the production atomic GPU view
+export and runs 16 transitions: clip/animation metadata, honest held samples,
+occurrence order, zoom, extent, panning, wrapped coordinates, visibility and scene
+scope epochs, topology revision, lighting/season, configuration and reset. Each
+adopted result must carry the exact copied description; retired tickets cannot
+alias a recreated worker. Independent cold CPU renders verify pixels and
+replacement coverage. This is a correctness workload, separate from the complete
+native frame timing comparison. Keep all water effects enabled.
+
 `record_gpu_frame --camera-requests` additionally exercises the production GPU
 camera exports: 64 superseding exact requests, duplicate tickets, freed caller
 inputs, current-front reads during assembly, stable adoption, independent pixel

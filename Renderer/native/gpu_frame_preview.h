@@ -98,6 +98,7 @@ if(ok && !std::strcmp(gpu_frame_test,"1")) {
         if(phase==0 && !std::strcmp(camera_test,"1")){
             auto begin=reinterpret_cast<c3x_renderer_gpu_camera_begin_fn>(GetProcAddress(module,"c3x_renderer_gpu_camera_begin"));
             auto poll=reinterpret_cast<c3x_renderer_gpu_camera_poll_fn>(GetProcAddress(module,"c3x_renderer_gpu_camera_poll"));
+            auto poll_view=reinterpret_cast<c3x_renderer_gpu_camera_poll_view_fn>(GetProcAddress(module,"c3x_renderer_gpu_camera_poll_view"));
             auto cancel=reinterpret_cast<c3x_renderer_camera_cancel_fn>(GetProcAddress(module,"c3x_renderer_camera_cancel"));
             if(!verify_gpu(begin && poll && cancel,"GPU camera exports"))break;
             auto future=test_frame;auto future_tiles=test_tiles;future.tiles=future_tiles.data();
@@ -109,6 +110,14 @@ if(ok && !std::strcmp(gpu_frame_test,"1")) {
             auto pending_meta=meta;pending_meta.width=-77;
             auto invalid_meta=pending_meta;invalid_meta.api_version=0;
             verify_gpu(poll(0,&pending,&invalid_meta)==C3X_RENDERER_RESULT_BAD_ARGUMENT && pending.ticket==-77,"GPU poll validates output ABI");
+            c3x_renderer_gpu_camera_view_v1 atomic_view={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(atomic_view)};
+            atomic_view.image.ticket=-77;auto untouched=atomic_view;
+            if(poll_view){
+                auto invalid=atomic_view;invalid.version=0;
+                verify_gpu(poll_view(0,&invalid)==C3X_RENDERER_RESULT_BAD_ARGUMENT && invalid.image.ticket==-77,"atomic GPU view validates version");
+                invalid=atomic_view;invalid.struct_size--;
+                verify_gpu(poll_view(0,&invalid)==C3X_RENDERER_RESULT_BAD_ARGUMENT && invalid.image.ticket==-77,"atomic GPU view validates size");
+            }
             // Exact view/time/visibility identity, durable local edits and copied
             // input lifetime all participate in the production request queue.
             for(int step=0;step<64 && ok;++step){
@@ -119,6 +128,8 @@ if(ok && !std::strcmp(gpu_frame_test,"1")) {
                 submission_ms.push_back(double(ended.QuadPart-started.QuadPart)*1000/frequency.QuadPart);
                 verify_gpu(code==C3X_RENDERER_RESULT_PENDING && ticket>prior,"replace GPU camera demand");
                 if(prior)verify_gpu(poll(prior,&pending,&pending_meta)==C3X_RENDERER_RESULT_SUPERSEDED && pending.ticket==-77 && pending_meta.width==-77,"stale poll leaves output untouched");
+                if(prior && poll_view)verify_gpu(poll_view(prior,&atomic_view)==C3X_RENDERER_RESULT_SUPERSEDED &&
+                    !std::memcmp(&atomic_view,&untouched,sizeof(atomic_view)),"stale atomic view leaves output untouched");
                 verify_gpu(begin(&next,&duplicate)==C3X_RENDERER_RESULT_PENDING && duplicate==ticket,"identical GPU request retains ticket");
                 prior=ticket;
             }
@@ -128,11 +139,30 @@ if(ok && !std::strcmp(gpu_frame_test,"1")) {
             auto frozen_tiles=future_tiles;future_tiles.clear();future_tiles.shrink_to_fit();future.tiles=nullptr;
             int camera_result=C3X_RENDERER_RESULT_PENDING;auto deadline=GetTickCount64()+15000;
             while(ok && camera_result==C3X_RENDERER_RESULT_PENDING && GetTickCount64()<deadline){
-                camera_result=poll(ticket,&pending,&pending_meta);if(camera_result==C3X_RENDERER_RESULT_PENDING){
+                camera_result=poll_view?poll_view(ticket,&atomic_view):poll(ticket,&pending,&pending_meta);
+                if(poll_view && camera_result==C3X_RENDERER_RESULT_OK){pending=atomic_view.image;pending_meta=atomic_view.camera.output;}
+                if(camera_result==C3X_RENDERER_RESULT_PENDING){
+                    if(poll_view)verify_gpu(!std::memcmp(&atomic_view,&untouched,sizeof(atomic_view)),"pending atomic view leaves output untouched");
                     verify_gpu(pending.ticket==-77 && pending_meta.width==-77,"pending poll leaves output untouched");Sleep(1);
                 }
             }
             verify_gpu(camera_result==C3X_RENDERER_RESULT_OK && pending.ticket!=view.ticket && !pending.map_readbacks && !pending_meta.bgra_pixels,"latest copied camera adopted resident");
+            if(poll_view && ok){
+                auto const& captured=atomic_view.camera.frame;auto expected_frame=future;
+                expected_frame.tiles=captured.tiles;expected_frame.world_topology=nullptr;expected_frame.world_topology_count=0;
+                verify_gpu(atomic_view.camera.ticket==ticket && !std::memcmp(&atomic_view.camera.identity,&next.identity,sizeof(next.identity)) &&
+                    !std::memcmp(&captured,&expected_frame,sizeof(captured)) && captured.tile_count==frozen_tiles.size() &&
+                    !std::memcmp(captured.tiles,frozen_tiles.data(),frozen_tiles.size()*sizeof(frozen_tiles[0])) &&
+                    atomic_view.image.presentation_time_ticks==captured.presentation_time_ticks &&
+                    atomic_view.image.width==captured.target_width && atomic_view.image.height==captured.target_height &&
+                    atomic_view.image.device_generation==atomic_view.camera.output.device_generation &&
+                    atomic_view.image.content_revision==atomic_view.camera.output.content_revision &&
+                    atomic_view.camera.output.replacement_tile_count==ownership.size() &&
+                    std::equal(ownership.begin(),ownership.end(),atomic_view.camera.output.replacement_tile_flags),
+                    "atomic GPU view owns exact sampled frame, occurrence order, coverage and complete identity");
+                auto adopted=atomic_view;
+                verify_gpu(poll_view(ticket,&atomic_view)==C3X_RENDERER_RESULT_OK && !std::memcmp(&atomic_view,&adopted,sizeof(adopted)),"repeated atomic GPU view stable");
+            }
             auto selected=pending;verify_gpu(poll(ticket,&pending,&pending_meta)==C3X_RENDERER_RESULT_OK && pending.ticket==selected.ticket && pending.map_image==selected.map_image,"repeated adoption stable");
             view=selected;verify_gpu(read(view.map_image)==C3X_RENDERER_RESULT_OK,"latest camera pixel oracle");auto selected_pixels=actual;
             future.tiles=frozen_tiles.data();std::vector<unsigned> reference;
@@ -149,6 +179,10 @@ if(ok && !std::strcmp(gpu_frame_test,"1")) {
             future.presentation_time_ticks+=future.presentation_frequency;
             verify_gpu(begin(&next,&ticket)==C3X_RENDERER_RESULT_PENDING,"begin reset GPU camera");gpu_reset();
             verify_gpu(poll(ticket,&pending,&pending_meta)==C3X_RENDERER_RESULT_SUPERSEDED,"reset retires GPU camera ticket");
+            if(poll_view){auto before=atomic_view;
+                verify_gpu(poll_view(ticket,&atomic_view)==C3X_RENDERER_RESULT_SUPERSEDED && !std::memcmp(&before,&atomic_view,sizeof(before)),"reset cannot publish atomic GPU view");
+                if(ok)std::puts("PASS atomic GPU camera view: copied_occurrences=1 complete_identity=1 stable_adoption=1 stale_writes=0 reset_retirement=1");
+            }
             std::sort(submission_ms.begin(),submission_ms.end());double total=0;for(double ms:submission_ms)total+=ms;
             if(ok)std::printf("PASS replaceable GPU camera: requests=64 begin_mean_ms=%.3f begin_p95_ms=%.3f begin_max_ms=%.3f copied_inputs=1 stale_adoptions=0 retained_front=1\n",total/submission_ms.size(),submission_ms[60],submission_ms.back());
             // Oracle readback is explicit; restore clean producer counters for
@@ -156,6 +190,7 @@ if(ok && !std::strcmp(gpu_frame_test,"1")) {
             if(!verify_gpu(render(&test_frame,&control)==C3X_RENDERER_RESULT_OK && capture_reference(test_frame,expected) &&
                 gpu_render(&request,&view,&meta)==C3X_RENDERER_RESULT_OK,"fresh session after camera oracle"))break;map_expected=expected;
         }
+#include "gpu_camera_identity_preview.h"
 #ifdef C3X_GPU_NATIVE_CONTRACT
         if(phase==0){char jgl_path[2048]={};GetEnvironmentVariableA("C3X_RENDERER_GPU_JGL_TEST",jgl_path,sizeof(jgl_path));
             std::vector<NativeFrameSample> performance_frames;

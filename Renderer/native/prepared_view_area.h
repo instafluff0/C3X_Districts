@@ -27,7 +27,10 @@ template<class Publication> struct PreparedViewArea {
             std::uint32_t(canonical(t.tile_y,input.world_height_tiles,input.world_wrap_y!=0));
     }
     static bool same_content(c3x_renderer_tile_v1 a,c3x_renderer_tile_v1 b) {
-        if(a.visibility_mask!=b.visibility_mask || a.tile_visibility!=b.tile_visibility || a.fog_status!=b.fog_status ||
+        // Canonical content can be shared across wrapping; finished pixels also
+        // depend on the actual occurrence's world/projection basis.
+        if(a.tile_x!=b.tile_x || a.tile_y!=b.tile_y ||
+           a.visibility_mask!=b.visibility_mask || a.tile_visibility!=b.tile_visibility || a.fog_status!=b.fog_status ||
            ((a.tile_flags^b.tile_flags)&C3X_RENDERER_TILE_VISIBILITY_BITS))return false;
         a=render_core::CapturedScene::content(a);b=render_core::CapturedScene::content(b);
         return !std::memcmp(&a,&b,sizeof(a));
@@ -119,10 +122,15 @@ template<class Publication> struct PreparedViewArea {
                !same_content(a,b) || std::int64_t(a.anchor_x)-b.anchor_x!=x || std::int64_t(a.anchor_y)-b.anchor_y!=y)return false;
         }
         std::vector<unsigned> replacements(current.tile_count);
+        unsigned previous_occurrence=0;bool have_occurrence=false;
         for(unsigned i=0;i<current.tile_count;++i){auto const& tile=current.tiles[i];
             if(!(tile.tile_flags&C3X_RENDERER_TILE_RENDER))continue;
             auto found=index.find(key(tile));if(found==index.end())return false;
             auto n=found->second;auto const& old=tiles[n];
+            // Alpha/depth ties make native occurrence order part of pixel
+            // identity. Matching content cannot relabel a reordered donor.
+            if(have_occurrence && n<=previous_occurrence)return false;
+            previous_occurrence=n;have_occurrence=true;
             if(!(old.tile_flags&C3X_RENDERER_TILE_RENDER) || !same_content(old,tile) ||
                std::int64_t(old.anchor_x)-tile.anchor_x!=x || std::int64_t(old.anchor_y)-tile.anchor_y!=y)return false;
             replacements[i]=map.replacements[n];
@@ -132,18 +140,12 @@ template<class Publication> struct PreparedViewArea {
         if(sampled.content_revision!=map.output.content_revision || sampled.device_generation!=map.output.device_generation ||
            sampled.width!=input.target_width || sampled.height!=input.target_height || (!sampled.bgra_pixels && !(resident_sample?resident_sample->has_image():map.has_image())) ||
            sampled_ticks>current.presentation_time_ticks)return false;
-        auto normalized=current;normalized.dirty_flags=result.frame.dirty_flags;
         if(result.has_image() && result.frame.presentation_time_ticks==sampled_ticks &&
            result.output.content_revision==map.output.content_revision && result.output.device_generation==map.output.device_generation &&
-           !std::memcmp(&result.identity,&epochs,sizeof(epochs)) && result.matches_static_view(normalized)) {
-            result.output.visible_animation_count=current.visible_animation_count+
-                (map.output.visible_animation_count>input.visible_animation_count?map.output.visible_animation_count-input.visible_animation_count:0);
-            result.output.clip_left=current.clip_left;result.output.clip_top=current.clip_top;
-            result.output.clip_right=current.clip_right;result.output.clip_bottom=current.clip_bottom;
-            return true;
-        }
+           !std::memcmp(&result.identity,&epochs,sizeof(epochs)) && result.refresh_view(current))return true;
         auto output=sampled;output.visible_animation_count=current.visible_animation_count+
             (map.output.visible_animation_count>input.visible_animation_count?map.output.visible_animation_count-input.visible_animation_count:0);
+        output.request_continuous_redraw=output.visible_animation_count!=0;
         output.width=viewport_width;output.height=viewport_height;output.stride_bytes=viewport_width*4;
         output.clip_left=current.clip_left;output.clip_top=current.clip_top;
         output.clip_right=current.clip_right;output.clip_bottom=current.clip_bottom;

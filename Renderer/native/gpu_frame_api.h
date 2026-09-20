@@ -17,6 +17,19 @@ struct c3x_renderer_gpu_frame_v1 {
     unsigned prepared; /* complete fresh capture selected an immutable prepared surface */
     c3x_renderer_i64 presentation_time_ticks; /* actual adopted sample, never the later demand clock */
 };
+/* One adopted map and its exact display description. camera.ticket identifies
+   the request; image.ticket identifies the composition session's map. Ordered
+   occurrences, replacement coverage, clip, native anchors, world/zoom basis,
+   epochs and sampled time belong to these pixels. Topology payload is omitted.
+   Arrays are immutable borrowed storage until the next successful map adoption,
+   a switch to CPU map rendering, configuration or reset. Begin, pending/stale polls and cancellation preserve
+   the adopted description. Caller access follows the existing serialized API. */
+struct c3x_renderer_gpu_camera_view_v1 {
+    unsigned version,struct_size;
+    struct c3x_renderer_gpu_frame_v1 image;
+    struct c3x_renderer_camera_view_v1 camera;
+    int pixel_phase_x,pixel_phase_y;
+};
 enum c3x_renderer_gpu_action {C3X_GPU_CREATE=1,C3X_GPU_UPLOAD,C3X_GPU_SUBMIT,C3X_GPU_DESTROY,C3X_GPU_READBACK};
 enum c3x_renderer_gpu_format {C3X_GPU_BGRA32=0,C3X_GPU_RGB555=1,C3X_GPU_RGB565=2};
 struct c3x_renderer_gpu_command_v1 {
@@ -76,6 +89,10 @@ typedef int (*c3x_renderer_gpu_render_fn)(struct c3x_renderer_camera_request_v1 
    Native nonblocking presentation/overlay/picking cutover remains separate. */
 typedef int (*c3x_renderer_gpu_camera_begin_fn)(struct c3x_renderer_camera_request_v1 const*,c3x_renderer_i64* ticket);
 typedef int (*c3x_renderer_gpu_camera_poll_fn)(c3x_renderer_i64 ticket,struct c3x_renderer_gpu_frame_v1*,struct c3x_renderer_output_v1*);
+/* Atomic description of the same adoption path; no output writes unless OK.
+   Uses C3X_RENDERER_CAMERA_VIEW_VERSION and exact struct_size. Existing poll and
+   synchronous callers retain their ABI and exact-view synchronization. */
+typedef int (*c3x_renderer_gpu_camera_poll_view_fn)(c3x_renderer_i64 ticket,struct c3x_renderer_gpu_camera_view_v1*);
 /* READBACK alone writes caller storage, after worker completion. Other calls
    require a null readback pointer/capacity. Native GPU composition does not read
    back implicitly; this explicit barrier supports CPU fallback and the oracle. */

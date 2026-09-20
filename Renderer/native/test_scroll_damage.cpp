@@ -95,6 +95,9 @@ int main() {
     }
     auto current = old;
     int dx=0,dy=0; std::vector<PixelRect> rectangles;
+    std::reverse(current.begin(),current.end());
+    assert(!scroll_damage(old,current,1024,512,dx,dy,rectangles));
+    current=old;
     current[0].anchor_x++;
     assert(!scroll_damage(old,current,1024,512,dx,dy,rectangles));
     current = old; current.push_back(old[0]);

@@ -8,6 +8,65 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class PublicationTests(unittest.TestCase):
+    def test_gpu_adoption_failure_preserves_published_owner(self):
+        source=(ROOT / 'Renderer/native/c3x_renderer.cpp').read_text()
+        publication='struct PublishedMapFrame {'+source.split('struct PublishedMapFrame {',1)[1].split('// Cheap, deliberately provisional',1)[0]
+        adopt='int adopt_gpu_camera_locked('+source.split('int adopt_gpu_camera_locked(',1)[1].split('\npublic:',1)[0]
+        poll='int poll_gpu_camera_view('+source.split('int poll_gpu_camera_view(',1)[1].split('\nprivate:',1)[0]
+        run_cpp(r'''
+#include <algorithm>
+#include <array>
+#include <cassert>
+#include <cstdint>
+#include <cstring>
+#include <memory>
+#include <mutex>
+#include <vector>
+#include "Renderer/native/gpu_frame_api.h"
+'''+publication+r'''
+struct Owner {
+ std::mutex call_mutex,state_mutex;
+ enum class Command {gpu_render};
+ PublishedMapFrame gpu_publication,camera_ready;
+ bool camera_gpu=true,camera_ready_prepared=false,camera_ready_area=false,gpu_reused=false,nearby_presented=false,fail=true;
+ int camera_result=C3X_RENDERER_RESULT_OK,imports=0;
+ c3x_renderer_i64 camera_ticket=2,gpu_camera_front_ticket=1;
+ c3x_renderer_gpu_frame_v1 gpu_view={sizeof(gpu_view)};
+ c3x_renderer_output_v1 gpu_metadata={};
+ void pause_ahead_locked(std::unique_lock<std::mutex>&,bool){}
+ int submit_locked(std::unique_lock<std::mutex>&,Command){
+  ++imports;if(fail)return C3X_RENDERER_RESULT_ERROR;
+  gpu_view.ticket=99;gpu_view.map_image=100;gpu_view.session=3;
+  gpu_view.presentation_time_ticks=gpu_publication.frame.presentation_time_ticks;
+  gpu_metadata=gpu_publication.output;return C3X_RENDERER_RESULT_OK;
+ }
+'''+adopt+poll+r'''
+};
+void capture(PublishedMapFrame& out,int city,int* released){
+ c3x_renderer_tile_v1 tile{};tile.city_id=city;tile.anchor_x=13;
+ c3x_renderer_frame_v1 frame{};frame.api_version=C3X_RENDERER_API_VERSION;frame.struct_size=sizeof(frame);
+ frame.target_width=frame.target_height=2;frame.tile_count=1;frame.tiles=&tile;frame.presentation_time_ticks=city;
+ unsigned flags=1;c3x_renderer_output_v1 meta{};meta.width=meta.height=2;meta.stride_bytes=8;meta.replacement_tile_count=1;meta.replacement_tile_flags=&flags;
+ PublishedMapFrame::Resident resident{std::shared_ptr<void>(new int(city),[released](void* p){delete static_cast<int*>(p);++*released;}),2,2};
+ assert(out.capture(meta,13,0,&frame,{city,2,3,4},&resident));
+}
+int main(){
+ int released=0;Owner owner;capture(owner.gpu_publication,7,&released);capture(owner.camera_ready,9,&released);
+ auto old=owner.gpu_publication.frame.tiles;auto coverage=owner.gpu_publication.output.replacement_tile_flags;
+ c3x_renderer_gpu_camera_view_v1 result{};result.image.ticket=777;auto untouched=result;
+ assert(owner.poll_gpu_camera_view(2,result)==C3X_RENDERER_RESULT_ERROR && !std::memcmp(&result,&untouched,sizeof(result)));
+ assert(owner.gpu_publication.frame.tiles==old && old->city_id==7 && owner.gpu_publication.output.replacement_tile_flags==coverage);
+ assert(owner.gpu_camera_front_ticket==1 && released==1 && !owner.camera_ready.has_image());
+ owner.camera_ticket=3;owner.camera_result=C3X_RENDERER_RESULT_OK;owner.fail=false;capture(owner.camera_ready,11,&released);
+ assert(owner.poll_gpu_camera_view(3,result)==C3X_RENDERER_RESULT_OK && released==2 && owner.gpu_camera_front_ticket==3);
+ assert(result.camera.ticket==3 && result.image.ticket==99 && result.camera.identity.map_epoch==11);
+ assert(result.camera.frame.tiles->city_id==11 && result.image.presentation_time_ticks==result.camera.frame.presentation_time_ticks);
+ auto stable=result;assert(owner.poll_gpu_camera_view(3,result)==C3X_RENDERER_RESULT_OK && owner.imports==2);
+ assert(!std::memcmp(&result,&stable,sizeof(result)));
+ owner.gpu_publication.clear();assert(released==3);
+}
+''')
+
     def test_memory_tier_shrink_retires_optional_owners(self):
         source = (ROOT / "Renderer/native/c3x_renderer.cpp").read_text()
         body = "bool three_zoom_memory=" + source.split("bool three_zoom_memory=", 1)[1].split("clip_dirty_blocks=", 1)[0]
@@ -298,7 +357,7 @@ struct RendererState {
     bool initialize_device(){assert(native_transfer_test);return true;}
     Device owned_device;Context owned_context;Device* device=&owned_device;Context* context=&owned_context;
     bool gpu_output_mode=false,gpu_map_valid=false,cpu_output_stale=false,scene_surface_requested=false,city_profile=false;
-    ID3D11Texture2D* gpu_map_texture=nullptr;unsigned frame_output_readbacks=0;std::uint64_t gpu_serial=0;
+    ID3D11Texture2D* gpu_map_texture=nullptr;unsigned frame_output_readbacks=0;std::uint64_t gpu_serial=0;std::int64_t camera_serial=0;
     struct {bool enabled=false;} reflection;std::unique_ptr<c3x_gpu_images::Session> gpu_composition;
     unsigned cache_hits=0,device_recoveries=0,frame_tiles_built=0,prepared_blocks=0,visible_resource_animations=0;
     unsigned ambient_count() const {return visible_resource_animations;}
@@ -407,15 +466,29 @@ int main(){
         assert(gpu_worker.begin_gpu_camera(request,duplicate)==C3X_RENDERER_RESULT_PENDING&&duplicate==active);
         c3x_renderer_gpu_frame_v1 resident{sizeof(resident)};resident.ticket=777;
         assert(gpu_worker.poll_gpu_camera(active,resident,out)==C3X_RENDERER_RESULT_PENDING&&resident.ticket==777);
+        c3x_renderer_gpu_camera_view_v1 atomic_view{};atomic_view.image.ticket=777;atomic_view.camera.ticket=888;
+        auto untouched=atomic_view;
+        assert(gpu_worker.poll_gpu_camera_view(active,atomic_view)==C3X_RENDERER_RESULT_PENDING);
+        assert(!std::memcmp(&atomic_view,&untouched,sizeof(atomic_view)));
         assert(gpu_worker.camera_poll(active,out)==C3X_RENDERER_RESULT_BAD_ARGUMENT);
         owned.city_id=-1;capture.presentation_time_ticks+=100;
         assert(gpu_worker.begin_gpu_camera(request,replaced)==C3X_RENDERER_RESULT_PENDING&&replaced>active);
         owned.city_id=999; // The queued edit owns its copy.
         assert(gpu_worker.poll_gpu_camera(active,resident,out)==C3X_RENDERER_RESULT_SUPERSEDED&&resident.ticket==777);
+        assert(gpu_worker.poll_gpu_camera_view(active,atomic_view)==C3X_RENDERER_RESULT_SUPERSEDED);
+        assert(!std::memcmp(&atomic_view,&untouched,sizeof(atomic_view)));
         until([&]{return gpu_state.entered.load()>=2;});
         assert(gpu_worker.camera_cancel(replaced)==C3X_RENDERER_RESULT_OK);
         gpu_worker.reset_and_stop();
         assert(gpu_state.topology_cache.retained(gpu_state.topology_cache.key(tile.tile_x,tile.tile_y))->appearance.city_id==-1);
+        RendererWorker recreated(gpu_state);c3x_renderer_i64 next=0;
+        assert(recreated.begin_gpu_camera(request,next)==C3X_RENDERER_RESULT_PENDING && next>replaced);
+        assert(recreated.poll_gpu_camera_view(active,atomic_view)==C3X_RENDERER_RESULT_SUPERSEDED);
+        assert(recreated.poll_gpu_camera_view(replaced,atomic_view)==C3X_RENDERER_RESULT_SUPERSEDED);
+        assert(!std::memcmp(&atomic_view,&untouched,sizeof(atomic_view)));
+        recreated.camera_cancel(next);recreated.reset_and_stop();
+        gpu_state.camera_serial=INT64_MAX;capture.presentation_time_ticks++;
+        assert(recreated.begin_gpu_camera(request,next)==C3X_RENDERER_RESULT_ERROR && next>replaced);
         assert(gpu_state.cancelled>=2);
     }
     assert(worker.render(f,out)==C3X_RENDERER_RESULT_OK);
@@ -868,6 +941,12 @@ int main(){
         f.presentation_time_ticks=101;
         assert(pull.camera_present_view(request,view)==C3X_RENDERER_RESULT_OK);
         assert(view.frame.presentation_time_ticks==100); // No wait for held producer.
+        auto original=f;f.clip_left=1;f.clip_top=1;f.clip_right=f.target_width-1;f.clip_bottom=f.target_height-1;
+        f.visible_animation_count=2;f.dirty_flags=7;
+        assert(pull.camera_present_view(request,view)==C3X_RENDERER_RESULT_OK);
+        assert(view.frame.clip_left==1 && view.output.clip_left==1 && view.frame.clip_bottom==f.clip_bottom);
+        assert(view.frame.visible_animation_count==2 && view.frame.dirty_flags==7 && view.frame.presentation_time_ticks==100);
+        f=original;
         assert(pull.camera_begin(f,last,epochs)==C3X_RENDERER_RESULT_PENDING);
         assert(pull.camera_poll_view(last,view)==C3X_RENDERER_RESULT_PENDING);
         assert(state.cancelled.load()==cancellations);
@@ -954,6 +1033,9 @@ int main(){
         assert(pull.camera_present_view(request,view)==C3X_RENDERER_RESULT_OK);
         entries=state.entered.load();request.frame=&other;
         assert(pull.camera_present_view(request,view)==C3X_RENDERER_RESULT_OK && state.entered.load()==entries);
+        other.clip_left=2;other.clip_right=other.target_width-2;other.visible_animation_count=3;
+        assert(pull.camera_present_view(request,view)==C3X_RENDERER_RESULT_OK && state.entered.load()==entries);
+        assert(view.frame.clip_left==2 && view.output.clip_left==2 && view.frame.clip_right==other.clip_right && view.frame.visible_animation_count==3);
         ++observed.visibility_mask;
         assert(pull.camera_present_view(request,view)==C3X_RENDERER_RESULT_PENDING);
         pull.reset_and_stop();

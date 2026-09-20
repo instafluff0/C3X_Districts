@@ -10,9 +10,9 @@ Full detail, authored animation and Civ III's gameplay/state authority remain
 unchanged. The zoom-owned map-overlay extension below is a planned rendering
 ownership change, not a second visibility, selection, or pathfinding system.
 
-**Current technical checkpoint: M3.3 current-demand priority and bounded useful
-preparation are implemented and pass the production/native correctness workload.** M1 and M2 automated acceptance remain
-complete. General nonblocking camera publication is still unfinished.
+**Current technical checkpoint: M3.4 atomic view publication is implemented and
+passes the production identity/pixel matrix.** M1 and M2 automated acceptance
+remain complete. Native nonblocking presentation is still unfinished.
 Units stay above all map geometry. Native actions, visibility, controls and unit/UI
 ordering remain authoritative. Shore waves, water motion and reflections are on
 in every normal performance workload. The accepted water DLL remains staged;
@@ -20,85 +20,92 @@ the M2 optimizations and M3 candidate have not been staged, installed or run ins
 [Architecture](renderer_architecture.md) owns the design;
 [validation](benchmark_workflow.md) owns measurement and acceptance.
 
-## M3.3 current handoff
+## M3.4 current handoff
 
-M3.2 was committed on Mac as `1b9e62fc` and pushed from Windows. M3.3 candidate:
-`native/build/m33-persistent-world/C3XRenderer.dll`, SHA-256
-`e58dfb69dbf8855cca28fc9de2d679016d754c7a5b00f4e7763100bbeeab15e3`.
+M3.3 was committed on Mac as `398b0b40` and pushed from Windows. Final M3.4 candidate:
+`native/build/m34-exact-occurrences/C3XRenderer.dll`, SHA-256
+`810540e5a1d38528c33e687d19c8409f76fa9bb1db1f23678a67836f176e2b99`.
 
-- The combined world compiler now retains its existing bounded workers across
-  requests. Ending a frame lease joins readers and releases borrowed callbacks;
-  completed owned results survive in the same reservoir. Stable content keys and
-  current world/coast/topology/river proofs replace camera-local slot identity.
-  Reset, assets and configuration retire this content before sources change.
-- Current captured occurrences precede surrounding guard work in compilation and
-  adoption. Native occurrence/pass order stays unchanged. A completed GPU camera
-  awaiting adoption takes priority over optional unit, guard and pixel preparation.
-  No added workers, independent residency budget, device or presenter.
-- M3.1's durable authority journal and M3.2's one-active/one-pending GPU camera
-  requests remain the production path. Camera replacement preserves completed
-  useful content. The native camera still synchronously adopts its exact view;
-  nonblocking publication waits for M3.4–3.6 coherence contracts.
+- The optional `c3x_renderer_gpu_camera_poll_view` exposes the production adoption
+  as one coherent result: image/map ticket, request ticket, epochs,
+  device/content/session identity, actual sampled clock, ordered occurrences,
+  replacement/fallback coverage, native anchors/zoom/world basis and pixel phase.
+  It adds no scene/texture copy and preserves existing ABI layouts and controls.
+- Pending, stale and failed polls leave caller output untouched. Camera tickets
+  survive worker/device recreation; retired requests cannot alias new ones.
+  Failed GPU import preserves the previous publication owner until replacement
+  succeeds. Full device-loss/native recovery policy remains M3.7.
+- Prepared CPU/GPU views refresh clip, scheduling hints and animation metadata
+  together while keeping the actual image sample time. Clip-only changes and held
+  samples reuse pixels with zero geometry builds/uploads. Reordered contributors
+  and changed wrapped occurrence coordinates require fresh pixels: canonical
+  content alone cannot authorize a different rendering order or world basis.
+  This rule covers both prepared views and order-sensitive retained scroll pixels.
+- M3.1's durable authority journal, M3.2's replaceable camera queue and M3.3's
+  persistent bounded content preparation remain the production owners. Native
+  camera adoption is still synchronous; publication coherence is not permission
+  to display mismatched native overlays or picking.
 
-Matched complete workload: dense coast, modern medium capitals, eight units,
-1120×1192, **384 native requests per DLL**, **64 camera replacements**, and
-**120 independent frames with 32 units**. Shore waves, water motion and
-reflections stay on. GPU request mean / p95 (ms):
+The native identity matrix passes **16 transitions**, with exact independent
+cold pixels and replacement coverage: clip/animation inputs, honest held samples,
+occurrence order, zoom, extent, pan, wrapped coordinates, visibility,
+map/viewer/scene epochs, topology revision, lighting/season, configuration and
+reset. The 64-request burst verifies copied-input lifetime, duplicate tickets,
+old-front preservation and stale/cancelled rejection. The connected 30-frame
+mixed-unit/fog/tactical run also passes, with all static-work counters zero.
+Evidence: `native/build/m34-identity-exact/`.
 
-| Workload | Fresh M3.2 control | M3.3 first | M3.3 repeat |
-| --- | --- | --- | --- |
-| Stationary native demand | 19.42 / 37.47 | 12.81 / 20.66 | 14.15 / 25.72 |
-| Scrolling | 98.19 / 176.50 | 87.37 / 133.19 | 91.74 / 177.90 |
-| Local edit | 17.64 / 35.84 | 16.39 / 58.15 | 17.26 / 56.09 |
-| Independent 32-unit animation | 35.64 / 59.60 | 40.79 / 59.84 | 39.70 / 60.78 |
+Complete matched workload: dense coast, modern medium capitals, eight native
+units, 1120×1192, **384 native requests per DLL**, **64 camera replacements**, and
+**120 independent frames with 32 units**. Shore waves, water motion and reflections
+stay on. GPU request mean / p95 (ms):
 
-Scrolling means improve 6.6–11.0% against the fresh control, but the tail
-improvement does **not** repeat: repeat p95 is 177.90 ms and maximum 308.54 ms.
-Earlier M3.2 runs measured 91.69–91.70 ms scrolling means and 178.78–181.92 ms p95;
-the repeat matches that range. The earlier regression is investigated, not proved
-eliminated. Animation is slower than the fresh control, but matches earlier M3.2
-means of 39.65–40.36 ms. Local-edit tails also worsen against this control. Do not
-claim a reliable frame-budget or general performance win; retain these complete
-workloads for M3.8 and M4, alongside latency and worker-interference attribution.
+| Workload | M3.3 control | M3.4 candidate |
+| --- | ---: | ---: |
+| Stationary native demand | 14.70 / 29.52 | 13.32 / 21.68 |
+| Scrolling | 92.76 / 191.79 | 95.56 / 166.10 |
+| Local edit | 16.39 / 55.32 | 16.61 / 59.02 |
+| Independent 32-unit animation | 38.30 / 59.94 | 37.50 / 55.00 |
 
-The first candidate run reuses **47** validated completed preparation results
-across leases; the repeat consumes none from a prior lease. Reuse depends on work
-finishing before cancellation. Peak ready storage is **19.4 / 24.3 MiB** against
-the existing **64 MiB** cap, with **zero serial recoveries** in both runs. Scrolling builds 3,410 records, reuses 56,296 and uploads
-5,094,936 bytes, matching M3.2's work. Coastal control pixels remain exact.
-Persistent workers remove per-request thread creation/destruction, while owned
-results remove avoidable recompilation. The combined change does not isolate a
-single cause of all earlier timing tails. Cold destinations and synchronous map
-completion remain material costs; this is not full navigation speed acceptance.
+This pair establishes the cost of coherent publication, not a general speedup.
+Animation desktop-completion mean is 49.51 → 48.45 ms. Scrolling mean rises
+3.0%; its maximum rises 238.76 → 405.24 ms despite the lower p95. The candidate's
+worst request spends 302.58 ms in geometry preparation, including a 253.14 ms
+worker join for 55 selected jobs. Both runs build exactly 3,410 scrolling
+contributions, reuse 56,296 and upload 5,094,936 bytes. The trace locates the tail
+in existing selected-content preparation; it does not prove its cause eliminated
+or establish a new publication overhead. Keep this cost visible in M3.5–M3.8.
 
-All 240 candidate independent frames have zero authority adoption, static-world
+All 120 candidate animation intervals prove zero authority adoption, static-world
 builds/uploads/draws, static-scene draws/readbacks, reflection builds, wave
-builds/uploads, water uploads or static-caster recollection. Material selections
-remain reused. Candidate animation desktop completion is **51.75 / 50.74 ms**, not physical
-scanout. Authority-journal peak is **2.87 MiB**; sampled contiguous address-space
-headroom is at least **747 MiB**, not a transient allocation bound.
+builds/uploads, water uploads and static-caster collection; material selections
+are reused. The control image is byte-exact. Camera enqueue mean / p95 / maximum
+is 0.438 / 0.493 / 0.526 ms, with zero stale adoptions and the old front retained.
+Enqueue time excludes completion and native presentation remains synchronous.
 
-The native camera witness passes 64 replacements: begin mean / p95 / max
-**0.421 / 0.461 / 0.588 ms**. Copied-input lifetime, duplicate tickets, exact
-independent pixels, stale/cancelled rejection, stable adopted front, synchronous
-joining and reset pass. Wrapping and authoritative local edits match cold pixels
-exactly. The 48-frame river witness passes animation, frozen fog, reset, reflection
-toggles and still-water scrolling. Its independent static control retains the
-existing ten-pixel, one-channel-level rounding difference.
+The authority journal peaks at 3,010,856 bytes in both runs. The candidate's
+prepared-content queue peaks at 22.95 MiB of its 64 MiB cap, with zero serial
+recoveries; this workload consumes current work without reusing surviving ready
+results. Minimum sampled contiguous address space is 642.75 MiB versus 788.63 MiB
+in the control, above the 512 MiB floor; these samples do not bound transient
+allocation peaks. Receipts, complete traces and workload summaries are in
+`native/build/m34-native-{control,final}/`. Candidate inputs match the build and
+remain unchanged; the control intentionally uses the historical M3.3 DLL.
+Capture/setup are outside timings; desktop completion is not physical scanout.
 
-Verification: clean `/W4 /WX` Windows build; **317 tests passed / two existing
-skips**, including Windows contracts and new persistent-worker/input-lifetime and
-complete dependency-proof tests. Native ownership, full-color/555/565 composition,
-timer, tactical controls, CPU fallback and config-off pass. Evidence:
-`native/build/m33-native-{control,pool,repeat}/`, their `workload-summary.json`, and
-`native/build/m33-persistent-world/integration-evidence.json`. No injected compile
-or patch-table change is needed; `required_user_action: []`. The accepted water
-DLL remains staged; this candidate has not been installed or tested inside Civ III.
+Verification: clean `/W4 /WX` Windows build; **318 tests passed / two existing
+skips**, including the Windows contracts and publication lifetime, rollback,
+reset-ticket, prepared-coverage and contributor-order regressions. Nine focused
+tests also pass. No injected code or patch-table change is needed;
+`required_user_action: []`. No staging, installation or live-game claim.
 
-**Next unfinished responsibility: M3.4 atomic publication of pixels, coverage,
-transform, occurrences and complete identity.** Preserve exact native synchronization
-until M3.5 nonblocking presentation and M3.6 coherent overlays/picking are ready.
-M3.7 asynchronous recovery and M3.8 complete navigation/live acceptance remain.
+**Next unfinished responsibility: M3.5 nonblocking native polling and an explicit
+pending-coverage policy.** Consume the coherent result without hiding waits or
+relabelling old pixels as a newer camera. M3.6 must keep native overlays,
+interactions and picking aligned; M3.7 owns complete asynchronous recovery, and
+M3.8 owns navigation/edit/lifecycle, memory, latency and live acceptance.
+The unresolved M3.3 scrolling tails remain a measurement concern, not an assumed
+future speedup. M4 still owns a demonstrated sustained frame budget.
 
 ## M2 automated acceptance checkpoint (preserved)
 
@@ -285,9 +292,9 @@ useful preparation across supersession without evicting the current working set.
 | --- | --- | --- |
 | 3.1 | Durable copied/versioned authoritative changes and lifecycle | Implemented; committed and pushed |
 | 3.2 | Replaceable exact camera requests independent of durable changes | Implemented; committed and pushed |
-| 3.3 | Current-demand priority and bounded useful preparation | Implemented and measured; handoff above |
-| 3.4 | Atomic pixels, coverage, transform, occurrences and complete identity | Next |
-| 3.5 | Nonblocking native polling and honest pending-coverage policy | Pending |
+| 3.3 | Current-demand priority and bounded useful preparation | Implemented, measured, committed and pushed |
+| 3.4 | Atomic pixels, coverage, transform, occurrences and complete identity | Implemented; identity/pixel acceptance and handoff above |
+| 3.5 | Nonblocking native polling and honest pending-coverage policy | Next |
 | 3.6 | Coherent overlays, interactions and picking | Pending |
 | 3.7 | Cancellation, GPU reset, reload, configuration-off and failure recovery | Pending across the new async path |
 | 3.8 | Navigation/edit/lifecycle acceptance, memory and latency proof | Pending |
