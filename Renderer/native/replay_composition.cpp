@@ -32,7 +32,7 @@ struct Stream {
     Id id(Id recorded)const{if(!recorded)return 0;auto it=ids.find(recorded);return it==ids.end()?UINT64_MAX:it->second;}
 };
 struct Reader {
-    FILE* file=nullptr;std::uint64_t frequency=0,last=0;bool footer=false;unsigned version=0;
+    FILE* file=nullptr;std::uint64_t frequency=0,last=0,last_ticks=0;bool footer=false;unsigned version=0;
     Reader(wchar_t const* path){require(_wfopen_s(&file,path,L"rb")==0&&file,"cannot open recording");
         recording::Bytes b(16);require(fread(b.data(),1,b.size(),file)==b.size(),"missing recording header");recording::Cursor c{b};
         require(c.u32()==0x52433343,"unsupported recording magic");version=c.u32();require(version==2||version==3,"unsupported recording version");frequency=c.u64();require(frequency>0&&frequency<1000000000000ull,"invalid recording clock");}
@@ -42,7 +42,8 @@ struct Reader {
         require(!footer,"data after recording footer");require(size==b.size(),"truncated recording header");recording::Cursor c{b};
         require(c.u32()==0x31523343,"invalid recording marker");kind=c.u32();auto bytes=c.u32(),hash=c.u32();
         require(kind>=recording::begin&&kind<=recording::stop&&bytes<=12u*1024u*1024u,"invalid recording event");
-        require(c.u64()==++last,"recording sequence gap");stream=c.u64();ticks=c.u64();payload.resize(bytes);
+        require(c.u64()==++last,"recording sequence gap");stream=c.u64();ticks=c.u64();
+        require(ticks>=last_ticks,"recording clock moved backwards");last_ticks=ticks;payload.resize(bytes);
         require(fread(payload.data(),1,bytes,file)==bytes,"truncated recording payload");require(recording::checksum(payload)==hash,"corrupt recording payload");return true;
     }
 };
@@ -94,7 +95,15 @@ void generate(wchar_t const* path){
     }
     recording::journal().finish(recording::closed);std::puts("PASS generated production composition recording");
 }
-int replay(wchar_t const* path,bool paced,bool show,std::uint64_t cap,wchar_t const* frames,bool require_ambient){
+struct FrameSelection {
+    std::uint64_t first=1,last=UINT64_MAX,step=32,seconds_first=0,seconds_last=UINT64_MAX;
+    bool explicit_range=false;
+    bool includes(std::uint64_t frame,std::uint64_t ticks,std::uint64_t frequency)const{
+        if(frame<first||frame>last||ticks/frequency<seconds_first||ticks/frequency>=seconds_last)return false;
+        return explicit_range?(frame-first)%step==0:frame==1||frame%step==0;
+    }
+};
+int replay(wchar_t const* path,bool paced,bool show,std::uint64_t cap,wchar_t const* frames,bool require_ambient,FrameSelection const& selection){
     Reader reader(path);Device d;std::map<std::uint64_t,Stream> streams;
     c3x_native_images::Lifetimes lifetimes;
     struct Call {unsigned operation,value;};std::map<std::uint64_t,Call> calls;
@@ -102,7 +111,7 @@ int replay(wchar_t const* path,bool paced,bool show,std::uint64_t cap,wchar_t co
     std::uint64_t lost_at=0,longest_loss=0;bool had_ready=false,ready=false;
     if(frames)require(CreateDirectoryW(frames,nullptr)||GetLastError()==ERROR_ALREADY_EXISTS,"cannot create frame directory");
     NativePresenter presenter;HWND window=nullptr;
-    unsigned kind=0,reason=999;std::uint64_t owner=0,ticks=0,events=0,checks=0,commands=0,externals=0,displays=0,native=0,visuals=0,peak=0;
+    unsigned kind=0,reason=999;std::uint64_t owner=0,ticks=0,events=0,checks=0,commands=0,externals=0,displays=0,native=0,visuals=0,peak=0,exports=0;
     double submit_ms=0;LARGE_INTEGER frequency={},started={};QueryPerformanceFrequency(&frequency);QueryPerformanceCounter(&started);
     recording::Bytes bytes;std::uint64_t first_tick=0;bool first=true;
     auto cleanup=[&]{presenter.reset();if(window){DestroyWindow(window);window=nullptr;}};
@@ -161,14 +170,15 @@ int replay(wchar_t const* path,bool paced,bool show,std::uint64_t cap,wchar_t co
                 require(presenter.prepare(window,d.device.Get(),desc.Width,desc.Height,true),"replay presenter preparation failed");
                 auto ok=gpu.display(s.id(id),presenter.view(),desc.Width,desc.Height,area);require(ok==bool(expected),"display result differs");
                 if(ok){d.context->CopyResource(presenter.buffer(),presenter.retained());require(presenter.present()==C3X_RENDERER_RESULT_OK,"replay present failed");++displays;
-                    if(frames&&(displays==1||displays%32==0)){
+                    if(frames&&selection.includes(displays,ticks,reader.frequency)){
                         auto pixels=read_pixels(d.device.Get(),d.context.Get(),presenter.retained());
                         BITMAPFILEHEADER file={};BITMAPINFOHEADER info={};info.biSize=sizeof(info);info.biWidth=desc.Width;info.biHeight=-LONG(desc.Height);info.biPlanes=1;info.biBitCount=32;
                         file.bfType=0x4d42;file.bfOffBits=sizeof(file)+sizeof(info);file.bfSize=file.bfOffBits+DWORD(pixels.size()*4);
                         wchar_t name[64];swprintf_s(name,L"/frame-%06llu.bmp",displays);auto output=std::wstring(frames)+name;FILE* f=nullptr;
+                        require(GetFileAttributesW(output.c_str())==INVALID_FILE_ATTRIBUTES,"replay frame already exists");
                         require(!_wfopen_s(&f,output.c_str(),L"wb")&&f,"cannot save replay frame");
                         bool saved=fwrite(&file,sizeof(file),1,f)==1&&fwrite(&info,sizeof(info),1,f)==1&&fwrite(pixels.data(),4,pixels.size(),f)==pixels.size();auto closed=fclose(f);
-                        require(saved&&!closed,"replay frame write failed");std::printf("REPLAY_FRAME display=%llu seconds=%.6f\n",displays,double(ticks)/reader.frequency);
+                        require(saved&&!closed,"replay frame write failed");++exports;std::printf("REPLAY_FRAME display=%llu event=%llu ticks=%llu frequency=%llu seconds=%.6f endpoint=composition_draw_accepted\n",displays,events,ticks,reader.frequency,double(ticks)/reader.frequency);
                     }
                 }}
             else throw std::runtime_error("unknown composition event");
@@ -177,6 +187,7 @@ int replay(wchar_t const* path,bool paced,bool show,std::uint64_t cap,wchar_t co
         c.done();
     }
     cleanup();
+    require(!selection.explicit_range||exports>0,"no recorded display in requested range");
     if(had_ready&&!ready)longest_loss=std::max(longest_loss,ticks-lost_at);
     std::printf("{\"native_lifetime_checks\":%llu,\"native_lifetime_mismatches\":%llu,\"thread_evidence\":\"%s\",\"demanded_revocations\":%llu,\"ambient_readiness_checks\":%llu,\"ambient_dependency_losses\":%llu,\"longest_observed_loss_seconds\":%.6f,\"ambient_continuity_accepted\":false}\n",
         lifetime_checks,lifetime_mismatches,reader.version>=3?"recorded":"legacy_assumed_owner",revocations,ready_checks,ready_losses,double(longest_loss)/reader.frequency);
@@ -192,12 +203,23 @@ int replay(wchar_t const* path,bool paced,bool show,std::uint64_t cap,wchar_t co
 int wmain(int argc,wchar_t** argv){
     try{require(argc>=2,"usage: replay_composition recording [--paced] [--show] [--budget-mib N], or --generate file");
         if(!wcscmp(argv[1],L"--generate")){require(argc==3,"generate requires a file");generate(argv[2]);return 0;}
-        bool paced=false,show=false,ambient=false;std::uint64_t cap=0;wchar_t const* frames=nullptr;
+        bool paced=false,show=false,ambient=false,explicit_step=false;std::uint64_t cap=0;wchar_t const* frames=nullptr;FrameSelection selection;
+        auto number=[](wchar_t const* value,std::uint64_t maximum){
+            require(*value>=L'0'&&*value<=L'9',"invalid numeric replay option");wchar_t* end=nullptr;
+            auto result=_wcstoui64(value,&end,10);require(end&&!*end&&result<=maximum,"invalid numeric replay option");return std::uint64_t(result);
+        };
         for(int n=2;n<argc;++n){if(!wcscmp(argv[n],L"--paced"))paced=true;else if(!wcscmp(argv[n],L"--show"))show=true;
             else if(!wcscmp(argv[n],L"--frames")&&n+1<argc)frames=argv[++n];
+            else if(!wcscmp(argv[n],L"--frame-range")&&n+2<argc){selection.first=number(argv[++n],1000000000);selection.last=number(argv[++n],1000000000);
+                require(selection.first&&selection.first<=selection.last,"invalid frame range");selection.explicit_range=true;}
+            else if(!wcscmp(argv[n],L"--seconds")&&n+2<argc){selection.seconds_first=number(argv[++n],900);selection.seconds_last=number(argv[++n],900);
+                require(selection.seconds_first<selection.seconds_last,"invalid seconds range");selection.explicit_range=true;}
+            else if(!wcscmp(argv[n],L"--frame-step")&&n+1<argc){selection.step=number(argv[++n],1000000);require(selection.step>0,"invalid frame step");explicit_step=true;}
             else if(!wcscmp(argv[n],L"--require-ambient"))ambient=true;
             else if(!wcscmp(argv[n],L"--budget-mib")&&n+1<argc){auto value=_wtoi(argv[++n]);require(value>0&&value<=1024,"invalid budget");cap=std::uint64_t(value)*1024*1024;}
             else throw std::runtime_error("unknown replay option");}
-        return replay(argv[1],paced,show,cap,frames,ambient);
+        require(frames||(!selection.explicit_range&&!explicit_step),"frame selection requires --frames");
+        if(selection.explicit_range&&!explicit_step)selection.step=1;
+        return replay(argv[1],paced,show,cap,frames,ambient,selection);
     }catch(std::exception const& e){std::fprintf(stderr,"FAIL composition recording/replay: %s\n",e.what());return 1;}
 }

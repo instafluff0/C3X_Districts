@@ -70,6 +70,18 @@ class CompositionRecordingTests(unittest.TestCase):
             at += 40 + size
         self.assertEqual(at, len(original))
         self.assertEqual(records[-1][1], 14)
+        frames = 'selected-frames-' + uuid.uuid4().hex
+        output = run(f'{exe} {path} --frames build\\composition-replay\\{frames} --frame-range 2 2 --seconds 0 900')
+        self.assertEqual(output['status'], 'pass', output)
+        self.assertIn('REPLAY_FRAME display=2 event=', output['output_tail'])
+        self.assertEqual([p.name for p in (folder / frames).glob('*.bmp')], ['frame-000002.bmp'])
+        self.assertEqual((folder / frames / 'frame-000002.bmp').stat().st_size, 54 + 48 * 32 * 4)
+        # Never silently replace an earlier oracle image or accept empty ranges.
+        for suffix in ('--frame-range 2 2', '--frame-range 3 3', '--frame-range 2 1', '--frame-step 0', '--seconds 2 1'):
+            output = run(f'{exe} {path} --frames build\\composition-replay\\{frames} {suffix}')
+            self.assertEqual(output['status'], 'fail', output)
+        backwards = bytearray(original)
+        struct.pack_into('<Q', backwards, records[1][0] + 32, 0)
         # Valid checksums cannot hide a changed native ownership decision.
         changed = bytearray(original)
         at, _, size = next(item for item in records if item[1] == 12)
@@ -79,6 +91,7 @@ class CompositionRecordingTests(unittest.TestCase):
             checksum = ((checksum ^ byte) * 16777619) & 0xffffffff
         struct.pack_into('<I', changed, at + 12, checksum)
         mutations = {
+            'backwards-clock': bytes(backwards),
             'native-decision': bytes(changed),
             'truncated': original[:-1],
             'bad-checksum': original[:60] + bytes([original[60] ^ 1]) + original[61:],

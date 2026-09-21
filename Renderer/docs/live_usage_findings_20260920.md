@@ -1058,3 +1058,29 @@ storage is 1,008,317,952–1,025,846,784 bytes versus 1,231,400,448 previously;
 the largest individual backup allocation falls from about 348 MiB to 2 MiB.
 These are target-storage estimates, not the entire process footprint. A 1 GiB
 reservation tests reduced VA capacity, not exact game heap fragmentation.
+
+
+Final receipts: `native/build/ambient-continuity-reuse/` and
+`native/build/ambient-continuity-reuse-pressure/` both pass with unchanged inputs
+and complete trace coverage. All 120 timed frames reuse the static backup, with
+zero world builds/uploads, static draws, reflection builds or wave uploads.
+Normal fullscreen request mean/p95 is 31.26/35.16 ms; desktop mean/p95 is
+38.26/52.88 ms. With the 1 GiB reservation, desktop mean/p95 is 47.66/53.18 ms.
+The earlier tiled-but-recapturing pressure run was 54.63/68.68 ms. This removes
+unnecessary work and repairs observed capacity failure; it does not establish
+33 ms performance or a live-game FPS win. Pressure also eliminates the ordinary
+frozen-body cache reuse in this fixture, an unresolved residency cost.
+
+The normal run delivers 38 autonomous ambient frames and 30 map samples during
+24 native movement steps, with no explicit visual calls; all 12 unpublished
+unit-action transitions retain ambient readiness. A visible unfocused window
+continues sampling. Both runs pass first-stroke/native DC behavior, visibility,
+UI composition, navigation and all four reset/recovery cases.
+
+Staged evaluation DLL:
+`80c3bc111fb38433e5012aff8220605017e4681c6d040744a55adb16a11a99aa`.
+`native/build/ambient-continuity-stage.json` binds the passing receipts, compiled
+inputs, staged hash and preserved rollback. Civ III was stopped; no INSTALL or
+game launch. The injected wrapper removals require a new `INSTALL.bat` run.
+Full captured scene/ambient producer replay and live performance remain open;
+no further manual capture is requested for these targeted fixes.

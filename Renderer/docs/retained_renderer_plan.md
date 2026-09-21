@@ -17,16 +17,18 @@ actions, programmatic centering and projection changes retain exact behavior.
 Units stay above all map geometry. Native actions, visibility, controls and unit/UI
 ordering remain authoritative. Shore waves, water motion and reflections are on
 in every normal performance workload. The tested M3.8 production DLL is now
-staged as a user-requested **evaluation build** and installed for the authorized
-game attempt. Live gameplay and performance acceptance are still pending.
+staged as a user-requested **evaluation build**. Re-run `INSTALL.bat` for the
+updated injected bridge. Live gameplay and performance acceptance remain pending.
 [Architecture](renderer_architecture.md) owns the design;
 [validation](benchmark_workflow.md) owns measurement and acceptance.
 
-**Requested implementation sequence:** the [LORE milestones](#lore-testing-and-migration-milestones)
-below define testing and migration within M4, coordinated with the unfinished
-M3.8 navigation contract. All seven are planned, not accepted. The current
-request establishes the plan; it does not certify a performance improvement or
-authorize staging, installation or a game launch.
+**Requested implementation sequence:** complete the M4.0 recorded-workload
+foundation below before further speculative performance changes. The user wants
+one approximately ten-minute capture that can regenerate production frames and
+support systematic architectural comparisons. The [recording contract](recorded_renderer_workload.md)
+defines input completeness, replay modes, overhead and qualification. This does
+not reset M1–M3 or authorize an unrelated renderer/process rewrite. The remaining
+[LORE milestones](#lore-testing-and-migration-milestones) follow measured causes.
 
 ## M3.8 current handoff — in progress
 
@@ -63,11 +65,12 @@ fog/reveal, tactical/UI parity, navigation, reset/recreation and config-off.
 120 visual requests average 31.26 ms; desktop completion averages 38.26 ms,
 p95 52.88 ms. No overall frame-latency improvement over the whole-view control is
 established. These are fullscreen fixture results, not gameplay FPS or scanout.
-The final address-pressure/staging receipt is recorded in the live findings.
+The matching 1 GiB address-pressure run also passes, averaging 47.66 ms desktop
+completion with 53.18 ms p95; it is a capacity stress test, not live-game timing.
 
-**Evaluation candidate:** `80c3bc111fb38433e5012aff8220605017e4681c6d040744a55adb16a11a99aa`.
-Staging requires the matching complete native run and pressure/recovery pass;
-`native/build/ambient-continuity-stage.json` records the final decision and rollback.
+**Staged evaluation DLL:** `80c3bc111fb38433e5012aff8220605017e4681c6d040744a55adb16a11a99aa`.
+Both complete native and pressure/recovery runs pass with matching source/binary
+proof. `native/build/ambient-continuity-stage.json` records staging and rollback.
 Normal launches keep recording disabled. No INSTALL or game launch in this turn.
 
 **Next unfinished responsibility:** full captured scene/ambient input replay and
@@ -579,7 +582,7 @@ resource lifetime and displayed-frame evidence.
 
 | Milestone | Deliverable | Exit decision | Status |
 | --- | --- | --- | --- |
-| M4.0 - Establish causes and controls | Reproducible workloads, driver capabilities and complete cost/memory attribution | Choose the first pass and state which measured work it will remove | Planned |
+| M4.0 - Establish causes and controls | Complete ten-minute renderer-input capture/replay, driver capabilities and complete cost/memory attribution | Qualify the recording, establish a matched baseline, then choose the first architectural cost to remove | In progress: timeline/capacity audit and selected-frame reconstruction pass; complete input capture pending |
 | M4.1 - Prove one LORE-style pass | Immutable draw descriptions, compact commands and filtered serial execution for one production pass | Exact output and repeatable complete-workload benefit justify migration | Planned |
 | M4.2 - Switch scene submission | Adopt the proven path across applicable production scene passes | Migrated paths use the executor by default; obsolete duplicate submission is removed | Planned |
 | M4.3 - Parallelize useful command work | Bounded packet jobs; separately test deferred-context recording | Keep only concurrency that improves complete workloads on the target driver | Planned |
@@ -611,11 +614,35 @@ peak in-flight resources. Do not add overlapping CPU/worker spans or trust the
 VM's uncalibrated timestamp queries. Diagnostic pass omissions identify causes;
 they do not qualify as an equivalent-image candidate.
 
-Use the existing full-scene/native fixtures and the new composition journal for
-their documented scopes. The journal snapshots external map/unit output; it does
-not replay scene generation, admission logic, the retained animation graph or
-game scheduling. Its readbacks/file writes exclude recording FPS from acceptance.
-Extend only a specifically missing boundary needed to reproduce a live failure.
+The user has superseded the symptom-by-symptom validation approach. Complete
+[recorded renderer workloads](recorded_renderer_workload.md) as the M4.0
+prerequisite, using existing owners and production rendering paths:
+
+| Work package | Required exit | Current status |
+| --- | --- | --- |
+| Audit coverage and inspect time | Explicit missing input families, byte/time breakdown, every recorded composition display indexed; selected frame/second ranges reconstruct through strict replay | Implemented and tested on the saved live prefix; scope remains composition only |
+| Capture and replay consumed inputs | Versioned initialization/assets, scene/world, action/lifecycle, camera, native-adapter and ambient/presentation events drive the production owners; short positive and missing-input controls | Next unfinished responsibility |
+| Sustain 600 seconds | Bounded asynchronous segmented storage, exact payload reuse, valid crash prefix, complete real-time ten-minute native workload and measured capture overhead | Pending input protocol |
+| Establish forensic/performance controls | Deterministic logical-time frame oracles plus separately measured execution; seek agrees with full-prefix replay; pressure remains explicitly modeled | Pending complete input replay |
+| Freeze a representative corpus and choose architecture | One qualified user session, repeated baseline and per-cause latency/memory attribution choose the next M4 change | Pending automated qualification; do not request another manual capture yet |
+
+The current v2/v3 writer remains limited to 512 MiB/180 seconds and snapshots
+external map/unit pixels. Its 80.788-second prefix uses 510.745 MiB; pixel-bearing
+records consume about 93.5% of storage. The linear ten-minute projection is
+3.70 GiB, including startup delays; it is not a guaranteed recording size. Simply
+increasing limits would preserve missing inputs and synchronous readback/file
+work. `--require-input-replay` correctly rejects this journal. Production native
+lifetime decisions replay separately; the complete adapter/ambient producers and
+presentation outcomes do not yet replay. New tools have not changed the staged
+DLL or installed bridge, and no game was launched for this work.
+
+Current evidence: `native/build/live-captures/20260921-130328-65f6bd/`
+contains `input-replay-readiness.json`, `display-timeline.jsonl` and
+`replay-loss-transition.json`. The latter reconstructs every composition display
+in second 23–24 while strictly checking the complete prefix. Fullscreen native
+fixtures remain independent regression tests, not substitutes for complete
+captured input coverage. Treat existing manual evidence as reusable; no new
+manual recording is needed to implement the next input protocol.
 
 Exit with a measured bottleneck, the first production pass to change, and matched
 controls capable of accepting or rejecting that change. No broad packet rewrite

@@ -14,6 +14,7 @@ No historical document supplies an additional queue or mandatory baseline campai
 
 | Area | References |
 | --- | --- |
+| Complete workload recording | [Ten-minute input/replay contract](recorded_renderer_workload.md) |
 | Implemented visual frames | [Clock, retained composition and lifecycle](visual_frame_ownership.md) |
 | Native integration | [Workstreams](renderer_workstreams.md), [visible scene](visible_scene_contract.md), [configuration](renderer_config_spec.md), [patch ledger](civ3_patch_dependency_ledger.md) |
 | Visual/source contracts | [Fidelity playbook](visual_fidelity_playbook.md), [source findings](source_art_findings.md), [cliffs](coastal_cliff_findings.md) |

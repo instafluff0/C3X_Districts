@@ -1,4 +1,6 @@
 from pathlib import Path
+import io
+import json
 import struct
 import tempfile
 import unittest
@@ -12,6 +14,38 @@ def event(kind, ordinal, payload=b''):
 
 
 class InspectRecordingTests(unittest.TestCase):
+    def test_ten_minute_timeline_is_not_input_replay_acceptance(self):
+        with tempfile.TemporaryDirectory() as directory:
+            file = Path(directory) / 'ten-minutes.c3xr'
+            header = struct.pack('<IIQ', 0x52433343, 3, 1000)
+            def timed(kind, ordinal, ticks, payload):
+                return struct.pack('<IIIIQQQ', 0x31523343, kind, len(payload), 0, ordinal, 7, ticks) + payload
+            display = struct.pack('<QIiiii', 31, 1, 0, 0, 2240, 1260)
+            rejected = struct.pack('<QIiiii', 31, 0, 0, 0, 2240, 1260)
+            data = header + timed(9, 1, 0, display) + timed(9, 2, 300000, rejected)
+            data += timed(9, 3, 600000, display)
+            footer = bytearray(event(14, 4, struct.pack('<I', 0)))
+            struct.pack_into('<Q', footer, 32, 600000)
+            file.write_bytes(data + footer)
+            timeline = io.StringIO()
+            report = inspect(file, timeline=timeline)
+            entries = [json.loads(line) for line in timeline.getvalue().splitlines()]
+            self.assertEqual([e['display'] for e in entries], [1, 2])
+            self.assertEqual(entries[1]['seconds'], 600)
+            self.assertEqual(entries[1]['file_offset'], 16 + 68 * 2)
+            self.assertFalse(entries[1]['physical_display_confirmed'])
+            self.assertEqual(report['maximum_between_display_gap_seconds'], 600)
+            self.assertEqual(report['capacity']['linear_projection_bytes'], len(data + footer) - 16)
+            self.assertEqual(report['event_bytes']['display'], 3 * 68)
+            self.assertEqual(len(report['seconds']), 3)
+            self.assertTrue(report['seconds'][-1]['aggregated_tail'])
+            self.assertFalse(report['renderer_input_replay_ready'])
+            self.assertIn('retained_ambient_inputs_and_visual_opportunities', report['missing_input_families'])
+            # A valid sequence cannot conceal a reversed recorded clock.
+            file.write_bytes(header + timed(9, 1, 100, display) + timed(9, 2, 99, display))
+            with self.assertRaisesRegex(ValueError, 'clock moved backwards'):
+                inspect(file)
+
     def test_thread_evidence_version_preserves_legacy_reader(self):
         with tempfile.TemporaryDirectory() as directory:
             file = Path(directory) / 'threads.c3xr'

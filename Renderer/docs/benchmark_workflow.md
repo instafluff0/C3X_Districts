@@ -7,6 +7,11 @@ measurement/correctness question that can change the implementation decision.
 
 ## Recorded native composition
 
+The ten-minute production-input target and its qualification rules are in the
+[recorded workload contract](recorded_renderer_workload.md). The roadmap's M4.0
+packages own implementation status. The legacy journal below remains a useful
+composition oracle; it is not a complete renderer-input recording.
+
 The capture launcher requests Windows permission before assigning diagnostic
 environment settings. Civ III's XP compatibility can otherwise elevate the game
 and silently discard those settings. The host then creates the game directly;
@@ -66,8 +71,13 @@ Replay also executes the production native lifetime registry against recorded
 identities, contexts and expected decisions. Version 3 records the calling thread;
 version 2 remains readable with an explicitly reported owner-thread assumption.
 A valid-checksum ownership-decision mutation must fail. `--frames DIRECTORY`
-exports reconstructed displayed BMPs every 32 native displays, including the first;
-these are captured gameplay pixels, not a synthetic scene preview.
+exports reconstructed composition BMPs every 32 accepted draws, including the
+first. `--frame-range FIRST LAST` selects inclusive frame ordinals and exports
+every selected frame; `--seconds FIRST LAST` selects a half-open interval on the
+journal clock. Combine them or add `--frame-step N`. Replay still executes and
+checks the full prefix; it never starts from an incomplete frame-only checkpoint.
+Existing output files and empty selected ranges are rejected. These are captured
+composition pixels, not a synthetic scene preview or confirmed physical scanout.
 `--require-ambient` rejects a map-exposed recording that loses readiness. This
 checks the recorded outcome, not hypothetical new animation from old pixels, and
 is unsuitable as acceptance across intentional map teardown. It does not certify
@@ -76,8 +86,14 @@ executes action replacement before presentation, continuous native movement with
 autonomous ambient delivery, and the captured first-stroke admission/DC escape
 sequence. Preserve the failing-before and passing-after receipts for these cases.
 
-`python3 -m Renderer.tools.inspect_composition_recording PATH` reports framing and
-coverage without executing the GPU or claiming checksum validation. Its optional
+`python3 -m Renderer.tools.inspect_composition_recording PATH` with
+`--timeline INDEX.jsonl --report COVERAGE.json` streams a per-display index,
+per-second traffic and event
+byte breakdown, a labeled ten-minute size projection and missing input families.
+Outputs are exclusively created. `--require-input-replay` rejects v2/v3 journals
+regardless of duration. The index endpoint is accepted GPU composition, not Present
+or scanout. Both readers reject backwards timestamps. Inspection reports framing
+and coverage without executing the GPU or claiming payload checksum validation. Its optional
 `--prefix-copy NEW_PATH` preserves complete framed records from a crash in a new
 file; the strict executable must subsequently validate all checksums/payloads.
 Keep the original. `python3 -m unittest Renderer.native.test_composition_recording`
