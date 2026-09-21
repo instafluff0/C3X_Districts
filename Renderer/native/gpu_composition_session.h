@@ -6,15 +6,16 @@ namespace c3x_gpu_images {
 // Lives exclusively on RendererWorker, with its existing immediate context.
 // A map is immutable; native composition writes separately owned images.
 class Session {
+    static constexpr unsigned live_image_budget=256u*1024u*1024u;
     ID3D11Device* device;ID3D11DeviceContext* context;
     Compositor gpu;RetainedComposition layers;Id map=0;std::int64_t ticket=0,identity=0;std::uint64_t readbacks=0;
     Id resident_unit=0;ID3D11Texture2D* resident_unit_texture=nullptr;
     bool map_animation_expected=false;
 public:
-    Session(ID3D11Device* d,ID3D11DeviceContext* c):device(d),context(c),gpu(d,c,128u*1024u*1024u),layers(d,c){}
-    // Fullscreen map/screen/save pairs plus UI and the next immutable map
-    // need more than 96 MiB at 2240x1260. Keep a bounded 128 MiB live-image
-    // ceiling, including publication overlap; replay has its separate budget.
+    Session(ID3D11Device* d,ID3D11DeviceContext* c):device(d),context(c),gpu(d,c,live_image_budget,true),layers(d,c){}
+    // Eight fullscreen packed/full-color native pairs and old/new immutable
+    // maps require about 194 MiB at 2240x1260. Bound live images at 256 MiB,
+    // including small UI sources; retained replay has its separate budget.
     bool publish(ID3D11Texture2D* texture,std::int64_t serial,int x=0,int y=0,int width=0,int height=0,RetainedComposition::Sample sample={}){
         if(!texture||serial<=ticket)return false;
         D3D11_TEXTURE2D_DESC d={};texture->GetDesc(&d);
@@ -22,7 +23,7 @@ public:
         auto next=gpu.create(width,height,Format::bgra32);
         if(!next){char message[224];auto counts=gpu.stats();
             sprintf_s(message,"[C3X renderer] stage=map-publication-rejected reason=canvas-admission width=%d height=%d resident_bytes=%llu cap_bytes=%u\n",
-                width,height,counts.resident_bytes,128u*1024u*1024u);OutputDebugStringA(message);return false;}
+                width,height,counts.resident_bytes,live_image_budget);OutputDebugStringA(message);return false;}
 
         if(!gpu.import_bgra(next,texture,x,y)){gpu.destroy(next);return false;}
         // Admission failure leaves the previous immutable map and UI handles
@@ -56,7 +57,7 @@ public:
         if(texture!=resident_unit_texture){
             if(resident_unit){layers.destroy(resident_unit);gpu.destroy(resident_unit);}resident_unit=0;resident_unit_texture=nullptr;
             resident_unit=gpu.attach_source(texture);if(!resident_unit)return C3X_RENDERER_RESULT_BAD_ARGUMENT;resident_unit_texture=texture;
-        }
+        }else gpu.record_external(resident_unit);
         try{layers.create(resident_unit,width,height,Format::bgra32);layers.source(resident_unit,texture,std::move(sample),true);}catch(std::exception const& e){OutputDebugStringA("[C3X renderer] retained admission: ");OutputDebugStringA(e.what());OutputDebugStringA("\n");layers.discard();}
         Command draw={Kind::unit_over,Id(request.destination),resident_unit,{x,y,x+int(width),y+int(height)},
             {request.clip[0],request.clip[1],request.clip[2],request.clip[3]},0,0,0,Id(request.background),Id(request.detail),Id(request.background_detail)};
@@ -83,7 +84,9 @@ public:
     bool visual_active()const{return layers.ready()&&layers.animated();}
     void stop_visuals(){layers.uncommit();}
     int visual_frame(long long ticks,long long frequency,ID3D11RenderTargetView* target,ID3D11Texture2D* display,ID3D11Texture2D* buffer){
-        try{return layers.draw(ticks,frequency,target,display,buffer);}catch(std::exception const& e){
+        try{auto result=layers.draw(ticks,frequency,target,display,buffer);
+            c3x_recording::event(c3x_recording::visual,0,[&](auto& b){using namespace c3x_recording;u64(b,std::uint64_t(ticks));u64(b,std::uint64_t(frequency));u32(b,unsigned(result));u64(b,layers.bytes());u64(b,layers.node_count());u64(b,layers.sampled_sources());u32(b,visual_ready());});
+            return result;}catch(std::exception const& e){
             // A failed recipe cannot produce a frame. Release its outputs now;
             // the last completed display stays intact, and the next native map
             // rebuilds retained history from authoritative current images.
@@ -114,7 +117,7 @@ public:
             ComPtr<ID3D11Texture2D> stage;checked(device->CreateTexture2D(&d,nullptr,&stage));context->CopyResource(stage.Get(),texture);
             D3D11_MAPPED_SUBRESOURCE data={};checked(context->Map(stage.Get(),0,D3D11_MAP_READ,0,&data));
             for(unsigned y=0;y<d.Height;++y)std::memcpy(output.data()+std::size_t(y)*d.Width,static_cast<char*>(data.pData)+std::size_t(y)*data.RowPitch,d.Width*4);
-            context->Unmap(stage.Get(),0);++readbacks;ok=true;
+            context->Unmap(stage.Get(),0);++readbacks;ok=true;gpu.record_readback(image,output.data(),output.size());
         }
         auto counts=gpu.stats();result.image=std::int64_t(image);result.pixel_count=unsigned(output.size());
         result.resident_bytes=std::int64_t(counts.resident_bytes);result.uploads=std::int64_t(counts.uploads);

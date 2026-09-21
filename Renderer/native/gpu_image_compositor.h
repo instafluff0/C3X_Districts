@@ -14,9 +14,10 @@
 
 #include "gpu_image_display.h"
 #include "gpu_unit_scene.h"
+#include "composition_recording.h"
 namespace c3x_gpu_images {
 using Microsoft::WRL::ComPtr;
-struct Counts {std::uint64_t uploads=0,upload_bytes=0,commands=0,snapshots=0,resident_bytes=0;};
+struct Counts {std::uint64_t uploads=0,upload_bytes=0,commands=0,snapshots=0,resident_bytes=0,allocations=0,reuses=0;};
 inline void checked(HRESULT hr){if(FAILED(hr))throw std::runtime_error("GPU image operation failed");}
 class Compositor {
     struct Image {Id id=0;unsigned width=0,height=0;Format format=Format::rgb555;std::uint64_t revision=0;bool cpu_current=false,read_only=false;
@@ -24,16 +25,45 @@ class Compositor {
     struct Constants {int area[4],offset[2];unsigned mode,color;};
     ID3D11Device* device;ID3D11DeviceContext* context;
     std::array<Image,128> images={};Image scratch,detail_scratch;Id serial=0;
+    // Only explicitly retired replay scratch enters this pool. Published or
+    // borrowed textures never do; reuse follows ordered work on this context.
+    std::vector<Image> recycled;std::uint64_t recycled_bytes=0;
+    void make_room(std::uint64_t needed){
+        while(!recycled.empty()&&needed>budget-counters.resident_bytes){
+            auto size=bytes(recycled.back());recycled_bytes-=size;counters.resident_bytes-=size;recycled.pop_back();
+        }
+    }
     ImageDisplay display_program;
     ComPtr<ID3D11ComputeShader> shader,import_shader,unit_shader,image_shader,blend_shader,lookup_shader;ComPtr<ID3D11Buffer> constants,image_constants;
     c3x_renderer::GpuUnitScene unit_scene;
-    Counts counters;std::uint64_t budget;
+    Counts counters;std::uint64_t budget,recording=0;
+    unsigned recorded_displays=0;
+    void record_texture(Id id,c3x_recording::Event kind,Rect area={})noexcept{
+        if(!recording||!c3x_recording::journal().snapshot_allowed())return;
+        try{
+            auto image=find(id);if(!image)throw std::runtime_error("recorded texture unavailable");
+            D3D11_TEXTURE2D_DESC d={};image->texture->GetDesc(&d);
+            if(area.left==0&&area.top==0&&area.right==0&&area.bottom==0)area={0,0,int(d.Width),int(d.Height)};
+            area=intersection(area,{0,0,int(d.Width),int(d.Height)});if(area.left>=area.right||area.top>=area.bottom)return;
+            d.Width=unsigned(area.right-area.left);d.Height=unsigned(area.bottom-area.top);
+            d.Usage=D3D11_USAGE_STAGING;d.BindFlags=0;d.CPUAccessFlags=D3D11_CPU_ACCESS_READ;d.MiscFlags=0;
+            ComPtr<ID3D11Texture2D> stage;checked(device->CreateTexture2D(&d,nullptr,&stage));
+            D3D11_BOX box={unsigned(area.left),unsigned(area.top),0,unsigned(area.right),unsigned(area.bottom),1};context->CopySubresourceRegion(stage.Get(),0,0,0,0,image->texture.Get(),0,&box);
+            std::vector<unsigned> words(std::size_t(d.Width)*d.Height);D3D11_MAPPED_SUBRESOURCE mapped={};
+            checked(context->Map(stage.Get(),0,D3D11_MAP_READ,0,&mapped));
+            for(unsigned y=0;y<d.Height;++y)std::memcpy(words.data()+std::size_t(y)*d.Width,static_cast<char*>(mapped.pData)+std::size_t(y)*mapped.RowPitch,d.Width*4);
+            context->Unmap(stage.Get(),0);
+            c3x_recording::event(kind,recording,[&](auto& b){c3x_recording::u64(b,id);
+                if(kind==c3x_recording::external)for(auto v:{area.left,area.top,area.right,area.bottom})c3x_recording::u32(b,unsigned(v));
+                c3x_recording::pixels(b,words.data(),words.size());});
+        }catch(...){c3x_recording::journal().finish(c3x_recording::allocation_failure);}
+    }
     Image* find(Id id){if(!id)return nullptr;for(auto& image:images)if(image.id==id)return &image;return nullptr;}
     static std::uint64_t bytes(Image const& image){return std::uint64_t(image.width)*image.height*4;}
     void make(Image& image,unsigned width,unsigned height){
         D3D11_TEXTURE2D_DESC d={};d.Width=width;d.Height=height;d.MipLevels=d.ArraySize=d.SampleDesc.Count=1;
         d.Format=DXGI_FORMAT_R32_UINT;d.Usage=D3D11_USAGE_DEFAULT;d.BindFlags=D3D11_BIND_SHADER_RESOURCE|D3D11_BIND_UNORDERED_ACCESS;
-        checked(device->CreateTexture2D(&d,nullptr,&image.texture));
+        checked(device->CreateTexture2D(&d,nullptr,&image.texture));++counters.allocations;
         checked(device->CreateShaderResourceView(image.texture.Get(),nullptr,&image.read));
         checked(device->CreateUnorderedAccessView(image.texture.Get(),nullptr,&image.write));image.width=width;image.height=height;
     }
@@ -327,7 +357,8 @@ uint expanded(uint c){uint b=((c&31)<<3)|((c&31)>>2),r,g;
 public:
     // R32_UINT stores native 16-bit words exactly too. Its explicit 4-byte budget
     // avoids format-dependent typed-UAV support and rounding intermediate images.
-    Compositor(ID3D11Device* d,ID3D11DeviceContext* c,std::uint64_t cap=64u*1024u*1024u):device(d),context(c),budget(cap){
+    Compositor(ID3D11Device* d,ID3D11DeviceContext* c,std::uint64_t cap=64u*1024u*1024u,bool record=false):device(d),context(c),budget(cap){
+        if(record)recording=c3x_recording::journal().open(cap);
         if(!d||!c||d->GetFeatureLevel()<D3D_FEATURE_LEVEL_11_0)throw std::runtime_error("GPU image operations require feature level 11");
         char const* source=R"(
 cbuffer Params:register(b0){int4 area;int2 offset;uint mode;uint color;};
@@ -385,19 +416,51 @@ Texture2D<uint> input_image:register(t0);Texture2D<uint> text_curves:register(t1
         D3D11_BUFFER_DESC bd={};bd.ByteWidth=sizeof(Constants);bd.Usage=D3D11_USAGE_DEFAULT;bd.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
         checked(device->CreateBuffer(&bd,nullptr,&constants));
     }
-    ~Compositor(){unbind();}
+    ~Compositor(){if(recording)c3x_recording::event(c3x_recording::end,recording,[](auto&){});unbind();}
     Compositor(Compositor const&)=delete;Compositor& operator=(Compositor const&)=delete;
-    Id create(unsigned width,unsigned height,Format format){
-        if((format!=Format::rgb555&&format!=Format::rgb565&&format!=Format::bgra32)||!width||!height||width>2240||height>1260||std::uint64_t(width)*height*4>budget-counters.resident_bytes)return 0;
-        for(auto& image:images)if(!image.id){Image next;make(next,width,height);next.id=++serial;next.format=format;
-            unsigned zero[4]={};context->ClearUnorderedAccessViewUint(next.write.Get(),zero);
-            counters.resident_bytes+=bytes(next);image=std::move(next);return image.id;}return 0;
+    Id create(unsigned width,unsigned height,Format format,bool clear=true){
+        c3x_recording::FailureGuard guard{recording!=0};
+        auto id=create_unrecorded(width,height,format,clear);
+        if(recording)c3x_recording::event(c3x_recording::create,recording,[&](auto& b){using namespace c3x_recording;u64(b,id);u32(b,width);u32(b,height);u32(b,unsigned(format));u32(b,0);});
+        if(id&&!clear)record_texture(id,c3x_recording::external);return id;
+    }
+    Id create_unrecorded(unsigned width,unsigned height,Format format,bool clear=true){
+        if((format!=Format::rgb555&&format!=Format::rgb565&&format!=Format::bgra32)||!width||!height||width>2240||height>1260)return 0;
+        for(auto& image:images)if(!image.id){Image next;
+            auto cached=std::find_if(recycled.begin(),recycled.end(),[&](Image const& value){return value.width==width&&value.height==height;});
+            if(cached!=recycled.end()){
+                next=std::move(*cached);recycled_bytes-=bytes(next);recycled.erase(cached);++counters.reuses;
+            }else{
+                auto size=std::uint64_t(width)*height*4;make_room(size);
+                if(size>budget-counters.resident_bytes)return 0;
+                make(next,width,height);counters.resident_bytes+=bytes(next);
+            }
+            next.id=++serial;next.format=format;next.revision=0;next.cpu_current=false;
+            if(clear){unsigned zero[4]={};context->ClearUnorderedAccessViewUint(next.write.Get(),zero);}
+            image=std::move(next);return image.id;}return 0;
+    }
+    void clear_recycled(){for(auto const& image:recycled)counters.resident_bytes-=bytes(image);recycled.clear();recycled_bytes=0;}
+    bool recycle(Id id){
+        auto image=find(id);if(!image)return false;
+        constexpr std::uint64_t cap=32u*1024u*1024u;
+        if(image->read_only||bytes(*image)>cap)return destroy(id);
+        unbind();auto size=bytes(*image);
+        while(!recycled.empty()&&(recycled.size()>=32||recycled_bytes+size>cap)){
+            auto released=bytes(recycled.back());counters.resident_bytes-=released;recycled_bytes-=released;recycled.pop_back();
+        }
+        recycled.push_back(std::move(*image));*image={};recycled.back().id=0;recycled_bytes+=size;return true;
     }
     // Borrow an immutable map, pose or UI source from its owner. COM retains
     // the texture through queued draws, without a texture copy or CPU upload.
     Id attach_source(ID3D11Texture2D* texture,Format format=Format::bgra32){
+        c3x_recording::FailureGuard guard{recording!=0};
+        auto id=attach_source_unrecorded(texture,format);
+        if(recording&&id){auto image=find(id);c3x_recording::event(c3x_recording::create,recording,[&](auto& b){using namespace c3x_recording;u64(b,id);u32(b,image->width);u32(b,image->height);u32(b,unsigned(format));u32(b,1);});record_texture(id,c3x_recording::external);}return id;
+    }
+    Id attach_source_unrecorded(ID3D11Texture2D* texture,Format format=Format::bgra32){
         if(!texture||(format!=Format::bgra32&&format!=Format::rgb555&&format!=Format::rgb565))return 0;D3D11_TEXTURE2D_DESC d={};texture->GetDesc(&d);
         ComPtr<ID3D11Device> owner;texture->GetDevice(&owner);
+        make_room(std::uint64_t(d.Width)*d.Height*4);
         if(owner.Get()!=device||d.Format!=DXGI_FORMAT_R32_UINT||d.SampleDesc.Count!=1||d.ArraySize!=1||d.MipLevels!=1||
            !(d.BindFlags&D3D11_BIND_SHADER_RESOURCE)||!d.Width||!d.Height||d.Width>2240||d.Height>1260||std::uint64_t(d.Width)*d.Height*4>budget-counters.resident_bytes)return 0;
         for(auto& image:images)if(!image.id){Image next;next.texture=texture;next.width=d.Width;next.height=d.Height;next.format=format;next.read_only=true;
@@ -407,8 +470,15 @@ Texture2D<uint> input_image:register(t0);Texture2D<uint> text_curves:register(t1
     template<class Visit> void visit_images(Visit visit)const{
         for(auto const& image:images)if(image.id)visit(image.id,image.width,image.height,image.format,image.texture.Get());
     }
-    bool destroy(Id id){auto image=find(id);if(!image)return false;unbind();counters.resident_bytes-=bytes(*image);*image={};return true;}
+    bool destroy(Id id){auto image=find(id);bool ok=image!=nullptr;if(ok){unbind();counters.resident_bytes-=bytes(*image);*image={};}
+        if(recording)c3x_recording::event(c3x_recording::destroy,recording,[&](auto& b){c3x_recording::u64(b,id);c3x_recording::u32(b,ok);});return ok;}
     bool upload(Id id,std::uint64_t revision,std::uint32_t const* pixels,std::size_t count){
+        c3x_recording::FailureGuard guard{recording!=0};
+        auto ok=upload_unrecorded(id,revision,pixels,count);
+        if(recording){if(!pixels||count>2240u*1260u)c3x_recording::journal().finish(c3x_recording::unsupported);
+            else c3x_recording::event(c3x_recording::upload,recording,[&](auto& b){using namespace c3x_recording;u64(b,id);u64(b,revision);u32(b,ok);c3x_recording::pixels(b,pixels,count);});}return ok;
+    }
+    bool upload_unrecorded(Id id,std::uint64_t revision,std::uint32_t const* pixels,std::size_t count){
         auto image=find(id);if(!image||image->read_only||!revision||!pixels||count!=std::size_t(image->width)*image->height)return false;
         if(image->revision==revision)return image->cpu_current;
         if(image->revision>revision)return false;
@@ -420,6 +490,20 @@ Texture2D<uint> input_image:register(t0);Texture2D<uint> text_curves:register(t1
     // Rejection leaves the destination unchanged; hardware errors must invalidate
     // the caller's unpublished transaction, never publish a partially drawn image.
     bool submit(Command const* commands,std::size_t count,c3x_renderer::UnitSceneSample const* scene=nullptr,std::array<int,4> const* footprint=nullptr){
+        c3x_recording::FailureGuard guard{recording!=0};
+        auto ok=submit_unrecorded(commands,count,scene,footprint);
+        if(recording){
+            if(scene||footprint){
+                // Geometry/pose production is outside this composition replay.
+                // Capture its exact result, explicitly labelled external input.
+                if(ok)for(std::size_t n=0;n<count;++n){auto const& c=commands[n];auto area=intersection(c.area,c.clip);
+                    if(area.left<area.right&&area.top<area.bottom){record_texture(c.destination,c3x_recording::external,area);if(c.detail)record_texture(c.detail,c3x_recording::external,area);}}
+                else c3x_recording::journal().finish(c3x_recording::unsupported);
+            }else if(commands&&count&&count<=2048)c3x_recording::event(c3x_recording::submit,recording,[&](auto& b){using namespace c3x_recording;u32(b,ok);u32(b,unsigned(count));for(std::size_t n=0;n<count;++n)command(b,commands[n]);});
+            else c3x_recording::journal().finish(c3x_recording::unsupported);
+        }return ok;
+    }
+    bool submit_unrecorded(Command const* commands,std::size_t count,c3x_renderer::UnitSceneSample const* scene=nullptr,std::array<int,4> const* footprint=nullptr){
         if(!commands||!count||count>2048)return false;
         Image direct;
         if(scene){
@@ -443,6 +527,7 @@ Texture2D<uint> input_image:register(t0);Texture2D<uint> text_curves:register(t1
         bool grow=width&&(scratch.width<width||scratch.height<height);
         bool grow_detail=detail_width&&(detail_scratch.width<detail_width||detail_scratch.height<detail_height);
         auto needed=(grow?std::uint64_t(width)*height*4:0)+(grow_detail?std::uint64_t(detail_width)*detail_height*4:0);
+        make_room(needed);
         if(needed>budget-counters.resident_bytes){
             OutputDebugStringA("[C3X renderer] stage=gpu-composition-reject reason=scratch-budget\n");return false;
         }
@@ -484,6 +569,10 @@ Texture2D<uint> input_image:register(t0);Texture2D<uint> text_curves:register(t1
     }
     // GPU-to-GPU import of a completed display texture; no staging or CPU seed.
     bool import_bgra(Id id,ID3D11Texture2D* source,int x=0,int y=0){
+        c3x_recording::FailureGuard guard{recording!=0};
+        auto ok=import_bgra_unrecorded(id,source,x,y);if(recording){if(ok)record_texture(id,c3x_recording::external);else c3x_recording::journal().finish(c3x_recording::unsupported);}return ok;
+    }
+    bool import_bgra_unrecorded(Id id,ID3D11Texture2D* source,int x=0,int y=0){
         auto destination=find(id);if(!destination||!source||destination->format!=Format::bgra32)return false;
         D3D11_TEXTURE2D_DESC desc={};source->GetDesc(&desc);
         if(x<0||y<0||desc.Width<destination->width||desc.Height<destination->height||
@@ -513,7 +602,20 @@ Texture2D<float4> input_image:register(t0);RWTexture2D<uint> output_image:regist
     bool display(Id id,ID3D11RenderTargetView* target,unsigned width,unsigned height,Rect area){
         auto image=find(id);if(!image||image->format!=Format::bgra32||image->width!=width||image->height!=height||!target)return false;
         RECT clip={std::max(0,area.left),std::max(0,area.top),std::min(int(width),area.right),std::min(int(height),area.bottom)};
-        return display_program.draw(device,context,image->read.Get(),target,width,height,clip);
+        auto ok=display_program.draw(device,context,image->read.Get(),target,width,height,clip);
+        if(recording){c3x_recording::event(c3x_recording::display,recording,[&](auto& b){using namespace c3x_recording;u64(b,id);u32(b,ok);for(auto v:{area.left,area.top,area.right,area.bottom})u32(b,unsigned(v));});
+            if(ok&&(++recorded_displays<=3||recorded_displays%30==0))record_texture(id,c3x_recording::checkpoint);}return ok;
+    }
+
+    void record_readback(Id id,unsigned const* pixels,std::size_t count){if(recording)c3x_recording::event(c3x_recording::checkpoint,recording,[&](auto& b){c3x_recording::u64(b,id);c3x_recording::pixels(b,pixels,count);});}
+    void record_external(Id id,Rect area={}){record_texture(id,c3x_recording::external,area);}
+    // Replay-only replacement for external map/pose output. Does not pretend
+    // that those pixels were produced by a native UI upload or recreate 3D work.
+    bool replay_external(Id id,unsigned const* pixels,std::size_t count,Rect area){
+        auto image=find(id);if(recording||!image||!pixels||area.left<0||area.top<0||area.right<=area.left||area.bottom<=area.top||
+            area.right>int(image->width)||area.bottom>int(image->height)||count!=std::size_t(area.right-area.left)*std::size_t(area.bottom-area.top))return false;
+        D3D11_BOX box={unsigned(area.left),unsigned(area.top),0,unsigned(area.right),unsigned(area.bottom),1};
+        unbind();context->UpdateSubresource(image->texture.Get(),0,&box,pixels,unsigned(area.right-area.left)*4,0);image->cpu_current=false;return true;
     }
 
     ID3D11Texture2D* texture(Id id){auto image=find(id);return image?image->texture.Get():nullptr;}

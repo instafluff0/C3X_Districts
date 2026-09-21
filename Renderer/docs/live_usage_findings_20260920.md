@@ -706,3 +706,252 @@ Candidate `7a46796b…` is staged with source and rollback in
 `native/build/ambient-recovery-stage.json`; no new injected installation is
 needed. This is a verified recovery correction, not a claim that the unlogged
 live initiating failure or interturn presentation has been solved.
+
+## Independent delivery while the native window thread is blocked
+
+The DLL now owns a bounded cadence thread; WM_TIMER is no longer the visual
+transport. Rendering stays on the existing D3D worker under the existing native
+transaction gate. A DirectComposition swap chain replaces the HWND-bound chain
+on the same game window, so ambient Present does not depend on that window
+thread dispatching messages. It uses only copied authorized scene inputs.
+Directed movement/combat still follows native cursors. Native capture, camera
+adoption, modal policy, fog and image ownership remain unchanged. There are no
+new injected hooks or patch-table changes. Windows 8+ is now required for this
+presentation path; Windows 11 remains the verified target.
+
+The small presenter probe produced 30 visible changes with its window thread
+blocked and restored GDI afterward. The complete 2240×1260 renderer then
+produced 41–42 frames and visible map changes during two-second UI stalls with
+no native draws. The first complete fixture failed its GDI handoff oracle:
+the oracle had moved most of the window off-screen, then expected off-screen
+GDI writes to survive later exposure without any WM_PAINT handling. It now
+exposes the complete full-screen window before handoff; partial native writes,
+config-off, and exact display recovery pass. Production retains ordinary native
+repainting for later exposure; no window-procedure shim or repaint loop was added.
+
+The next run exposed test-mode contention: the automatic callback briefly took
+the transaction gate even while manual timing was selected. The fixture-only
+manual control now returns before taking that gate. Production always enables
+automatic delivery. Extracted contracts prove pending Present retry without a
+new render revision, no false completed-frame count, native-camera priority,
+foreign-caller rejection, and re-enabling native recovery on draw/Present errors.
+
+
+Final acceptance: `native/build/independent-visual-acceptance/receipt.json` passes
+with unchanged inputs, all water effects, 2240×1260 and an extra 1 GiB VA reserve.
+The blocked-UI witness records 40 accepted frames, 30 map samples and 26,992
+changed desktop pixels with no native draws. Resource-only motion changes
+31,157 pixels. The 1,200-frame soak records 1,200 map samples, 9,600 unit samples,
+4,800 pose changes, 40,904,712 retained bytes and 36 nodes; mean request/desktop
+cost is 39.314/47.063 ms. Actual HUD, fog/reveal, tactical motion/cancellation,
+config-off, exact GDI handoff and all four cancellation/reset recovery cases
+pass. The capture helper now restores the fully exposed window after every
+scan, including before reset handoff; no pixel comparison was removed.
+
+The tested `7f1fe9df…` DLL is staged with rollback and source hashes in
+`native/build/independent-stage.json`. The installed bridge is unchanged and
+Civ III was confirmed stopped before staging. No game launch or live acceptance
+is claimed. The earlier intermittent fresh-capture failure remains unattributed;
+the explicit off-screen GDI oracle failure diagnosed here is a different case.
+
+
+## First-use HUD blend breaks the live animated map dependency
+
+Capture `native/build/live-captures/20260921-033959-708375` confirms the staged
+`7f1fe9df…` DLL, hardware GPU, and enabled water effects, but **zero independent
+visual frames**. At 15.345 s, operation 108 reads back the owned screen as a HUD
+blend background. There is no owned-destination blend rejection: the destination
+is initially CPU-owned, and the adapter never attempts to admit it. The CPU
+blend loses the animated map dependency. Later public DC escapes revoke native
+image lifetimes, causing further map-copy fallbacks. Their precise native caller
+is not established by this capture; they must not be exempted from ownership
+checks on assumption.
+
+At 22.811 s, publication also fails with 128,719,512 live image bytes against
+a 134,217,728-byte cap. This explains a separate fallback and cannot be repaired
+by animation timer changes. GPU presents alone do not prove animated content.
+
+The adapter now admits an eligible fresh blend destination from its owned
+background using the existing lifetime/lease checks, just as native copies do.
+The hard live-image ceiling is 256 MiB for the actual paired fullscreen family
+and old/new map overlap; retained history and replay limits remain unchanged.
+The present trace now reports animated-map readiness. No injected code, native
+function address or timer behavior changes.
+
+Negative controls: `native/build/live-hud-admission-negative` fails the new
+first-use HUD regression against the previously staged implementation;
+`native/build/live-capacity-negative.log` fails allocation of eight fullscreen
+packed/full-color native pairs at the old cap. Both failures occur before the
+corresponding fix. Production-DLL tests additionally require a subsequent native
+outline to stay GPU-owned without a public DC. Genuine CPU escapes retain their
+fallback and cannot be re-admitted.
+
+
+Positive proof: `native/build/live-capacity-positive.log` and
+`native/build/live-hud-acceptance/receipt.json` pass. At 2240×1260 with water
+motion/reflections/shore waves, eight mixed units and 1 GiB extra VA reservation,
+the new first-use HUD path retains its background with zero readbacks. The
+production DLL keeps its subsequent outline GPU-owned with no native DC.
+Ambient-only desktop motion changes 31,644 pixels; a blocked UI thread admits
+37 frames / 28 map samples / 36,097 changed pixels in at least two seconds.
+The sustained run advances all 1,200 frames and map samples, 9,600 unit samples
+and 4,796 poses, retaining 63,806,136 bytes / 39 nodes. Mean direct request /
+desktop costs are 40.897 / 50.362 ms. This is not a matched speedup or gameplay
+FPS claim. Exact native composition, fog/reveal, tactical controls, config-off
+and all four native recovery cases pass with unchanged inputs.
+
+Candidate `57a39bc4…` is staged with rollback in `native/build/live-hud-stage.json`.
+The game was stopped and its executable matched the earlier audited bridge;
+no injected source changes or new installation were needed. The user-owned live
+scene was not modified. Live stability, attribution of any remaining public DC
+escape, and navigation performance remain open; no game was launched.
+
+
+## Retained-history capacity and replay cost after HUD admission
+
+Capture `native/build/live-captures/20260921-040059-757bf2` loads `57a39bc4…`.
+The user reports improved operation but low FPS. Independent delivery starts,
+then three retained-history texture-budget errors occur; the last logged visual
+failure has 46 delivered frames / six map samples, and later presents report
+`visual_ready=0`. There are no live-image map-publication rejections. One public
+BITS lifetime escape follows the first failed replay; it remains fail-closed.
+
+For non-dropped PresentMon display changes with `14 < TimeInSeconds < 89`,
+859 samples average 86.03 ms (11.62 display changes/s), median 49.99 ms and
+p95 250.59 ms. These include native pauses and interaction; they are not isolated
+GPU rendering timings. `native/build/retained-budget-live-diagnosis.json` records
+the selection and counts. At the first visual failure, the process still reports
+818,991,104 available VA bytes (~781 MiB) and no device removal.
+
+The retained-history cap is now 256 MiB, matching the bounded live-image family;
+replay scratch remains 128 MiB. The eight-fullscreen-pair regression fails at
+11 source textures / 124,185,600 bytes under the old cap, and passes at
+192,243,200 retained bytes (~183 MiB), stable through eight animated replacements.
+The hard-limit rejection test remains; increasing capacity does not remove
+lifetime, visibility, stale-output or allocation-failure checks.
+
+Replay now reuses up to 32 MiB / 32 private textures within its existing cap.
+Idle scratch is evicted before denying a necessary allocation. Published output
+and borrowed input textures cannot enter the pool; handles, format, revision and
+zero-initialization semantics are tested. The base of a fully covered disjoint
+picture is copied once rather than separately for every surviving fragment.
+Sparse/zero coverage and aliased input unions retain the original exact path.
+
+The matched 2240×1260 dense replay (eight retained native pairs, 1,000 UI writes,
+eight changing frames, explicit correctness readback) averaged 206.123 ms before
+reuse, 175.083 ms with pooling, and 94.000 / 84.609 ms with base-copy compaction.
+The final run has zero hot texture allocations and 8,008 reuses, exact pixels,
+stable retained bytes, and passing reset/budget/aliasing/partial-publication
+checks. Logs: `native/build/retained-dense-{allocation-baseline,reuse,compaction,final}.log`.
+This focused result is not a live-game FPS claim. Full workload validation and
+staging are recorded below. No injected changes or new hooks.
+
+
+`native/build/retained-budget-reuse-acceptance/receipt.json` passes with unchanged
+inputs: 2240×1260, all water effects, eight mixed units, 1 GiB extra VA reserved,
+1,200 frames/map samples, 9,600 unit samples and 4,796 pose changes. Retained
+history stays at 63,806,136 bytes / 39 nodes. Mean request / desktop times are
+41.341 / 52.667 ms versus the preceding 40.897 / 50.362 ms; this ordinary fixture
+does not establish a general speedup. Blocked-UI delivery yields 39 frames /
+28 map samples / 36,307 changed pixels; ambient-only motion changes 31,451 pixels.
+Exact HUD/native composition, fog/reveal, tactical controls and all four native
+recovery cases pass.
+
+The separate `native/build/retained-dense-pressure.log` also reserves 1 GiB VA,
+keeps the full 192,243,200-byte retained family, and passes 32 fresh native map
+publications / 32,000 UI writes with exact pixels and stable memory. Its timed
+dense replay averages 94.632 ms. Candidate `7b8b82f9…` is staged with source,
+validation and rollback hashes in `native/build/retained-budget-reuse-stage.json`.
+The game was stopped; the installed executable matches the audited bridge.
+No game launch, injected changes or reinstall. Live sustained readiness and
+complete-frame latency remain the next checkpoint.
+
+## Latest live limit and reproducible composition inputs
+
+Capture `20260921-042106-4a9c31` loads `7b8b82f9…` and exits with code 1.
+It has no retained-history capacity failures or map-publication capacity
+rejections. At 150.647 s D3D11 removes the device; the subsequent worker failure
+reports `device_reason=0x887a0020`, available VA 125,906,944 bytes (~120 MiB),
+then repeated unusable-session errors. Three native ownership revocations are
+also recorded. This establishes severe process address-space pressure and a
+driver-internal failure, not that memory pressure caused device removal or the
+exact cause of game exit. The prior isolated pressure test did not predict it.
+
+The user authorized a bounded recorder and automated replay before another live
+test. `composition_recording.h` records native GPU image inputs and stable resource
+identities, native ownership decisions and independent visual readiness. External
+map/pose results are exact snapshots; direct unit writes capture only their
+affected rectangles. The strict standalone reader executes production image
+commands and the existing native presenter. Scope, bounded-stop and corruption
+rules are in [validation](benchmark_workflow.md#recorded-native-composition).
+It does not yet re-execute native admission decisions, world compilation or the
+retained animation graph. Do not turn its scoped pass into gameplay acceptance.
+
+`native/build/composition-recording-display-check/receipt.json` passes the
+2240×1260 production DLL fixture with all water effects, eight mixed units,
+fog/tactical controls, independent frames and native recovery. Its ~257 MiB
+recording spans 68.34 seconds and replays 3,617 commands, 2,520 exact pixel
+checkpoints and 107 display boundaries. Native/visual observations are retained,
+not silently interpreted as replayed gameplay. The old 128 MiB live-image budget
+fails replay of the admitted fullscreen family, while the normal budget passes.
+555/565, aliased copies, readonly source rejection, partial external patches,
+corrupt/truncated/oversized records and missing-footer classification are tested.
+
+An earlier full fixture in `native/build/composition-recording-final/` fails
+desktop capture 2 after restoring a saved screen; its recorded GPU composition
+still replays 2,493 exact pixel checks. The subsequent fixture adds a source-image
+oracle before that desktop exposure and passes both source and desktop checks.
+The intermittent desktop mismatch is not explained or declared fixed by that
+passing repeat. Preserve both receipts. The final timer-only recorder refinement
+starts the three-minute limit at first composition rather than DLL startup, so
+loading menus do not consume the gameplay recording window.
+
+Final candidate `6e80a66d…` passes the exact production capture/replay again in
+`native/build/composition-recording-ready-shutdown/`, including 2,520 pixel
+checkpoints and 107 display boundaries. It avoids waiting for a terminated
+journal writer during process detach; a missing footer remains an explicit
+prefix. Per-invocation VM output/exit receipts distinguish two observed Parallels
+transport failures from actual positive/negative test results. Staged with
+rollback in `native/build/composition-recording-stage.json`; game stopped,
+installed bridge unchanged, no INSTALL or launch. The requested live recording
+is the next input, not a gameplay-performance acceptance test.
+
+
+### Live flashing/freeze and missing-journal diagnosis
+
+Capture `20260921-053809-a0e677` used the staged `6e80a66d…` candidate and exited
+with code 1. The user observed late UI/minimap flashing followed by an apparent
+freeze. Its preserved `analysis.json` records 290 allocation failures starting
+at 132.405 s, device removal at 139.125 s (`0x887a0020`, 142.56 MiB available
+process VA), 7,599 unusable-session errors and 264 failed display handoffs through
+158.916 s. Scene targets peak at 1,174.35 MiB. This establishes memory pressure
+and broken presentation, not the exact failing allocation or the cause of the
+driver reset. An earlier `direct unit selection retired` failure at 32.405 s is
+a separate unresolved lifecycle witness. Windows reports its fault-tolerant heap
+shim at startup; fixtures must not silently assume an identical allocation path.
+No global compatibility or heap settings were changed.
+
+There is **no composition recording** in this capture, and no DLL runtime trace
+file. The launcher's requested-recording metadata did not establish activation.
+A harmless 32-bit native probe loading the same staged DLL produces both files
+with ordinary launch; `WINXPSP2` compatibility loses both, while direct process
+creation from an unelevated host fails with elevation-required error 740. This
+reproduces the environment loss at the game's compatibility/elevation boundary.
+A preliminary PowerShell probe failed because script execution was disabled;
+that was not evidence of environment loss. The native probe is the confirming
+experiment. The installed mod link's DLL hash matches the staged candidate.
+
+`capture_game.ps1` now elevates the capture host before assigning diagnostic
+variables, converts mapped-share paths to UNC across that boundary, and uses
+explicit `UseShellExecute=false` for the game. The same host covers FPS collection.
+Missing replay files now set `result=recording-missing` and return failure while
+preserving other logs. `test_capture_launch.py` exercises the real launcher with
+a harmless stand-in named for the game, loads the staged production DLL, verifies
+its journal and runtime log, and checks that a deliberately missing journal is
+rejected. Test receipts explicitly say `game_launched=false`; these are launcher
+checks, not gameplay runs. No renderer binary/injected changes or reinstall.
+
+The actual gameplay traffic remains unavailable for replay. One replacement
+live recording is required through the corrected launcher; preserve this failed
+session as evidence rather than claiming its synthetic counterpart fixed the
+flashing, device loss or freeze.

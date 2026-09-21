@@ -1,4 +1,4 @@
-# Elevated collector only. The game and the main launcher remain unelevated.
+# FPS collector inherits elevation from the capture host.
 param(
     [Parameter(Mandatory=$true)][string]$SessionDirectory,
     [Parameter(Mandatory=$true)][ValidatePattern('^C3XCapture-[0-9a-f-]+$')][string]$SessionName,

@@ -1326,3 +1326,66 @@ The game reached its main menu; the user subsequently took over gameplay testing
 Approved injected compilation passes. Extracted bridge tests cover success,
 renderer rejection, denied destination/background DC, zoom, portraits and scope
 restoration.
+
+### Independent ambient delivery during native UI stalls
+
+Existing dependencies: `patch_JGL_present_screen`, `patch_JGL_Graphsy_present`,
+`patch_on_timer_0x9F6500`, popup/Advisor/command-button visual policy scopes, and
+`C3X_NATIVE_IMAGE_PRESENT` / `C3X_NATIVE_VISUAL_POLICY` in the renderer DLL.
+No injected source, native signature, executable address or CSV entry changes.
+The DLL replaces its UI-thread visual timer and HWND swap chain with an owned
+cadence thread and a DirectComposition visual on the same HWND. Native actions,
+scene capture, camera adoption and GDI ownership barriers keep their existing
+caller-thread contracts. Presentation failure retires visual readiness so the
+existing native compatibility path can recover.
+
+`required_user_action: []`: DLL-only staging under the existing authorization;
+the installed bridge is unchanged. This presentation path requires Windows 8+
+and is verified on the Windows 11 VM. Automated blocked-window-thread display
+proof is distinct from live-game acceptance.
+
+
+### First-use native HUD destination admission
+
+Existing dependencies: `patch_JGL_Sprite_blend`, the installed native image
+lifetime/lease hooks, and `C3X_NATIVE_SPRITE_BLEND` in the renderer DLL. The
+adapter extends ownership from an owned background into an eligible destination
+before blending. Existing lifetime exclusions, CPU barriers and original native
+fallback remain authoritative. Fullscreen live-image capacity is DLL-owned.
+No injected source, signature, supported-build address or CSV entry changes.
+
+`required_user_action: []`: DLL-only evaluation staging under existing
+authorization; the installed bridge remains unchanged.
+
+
+### Retained-history capacity and replay working surfaces
+
+Existing dependencies: the installed native image operation/ownership hooks,
+`C3X_NATIVE_IMAGE_PRESENT`, and renderer-owned visual delivery. The DLL raises
+retained-history capacity to 256 MiB and reuses private replay textures within
+the existing scratch cap. It composes fully covered base underlays once while
+preserving sparse/zero coverage and aliased native operation order. No injected
+source, signature, supported-build address, ownership scope or CSV entry changes.
+
+`required_user_action: []`: DLL-only evaluation staging under existing
+authorization. Native bit/DC lifetime exclusions and config-off remain intact.
+
+### Bounded native composition recording
+
+Existing dependencies: `c3x_renderer_native_image`,
+`c3x_renderer_native_lifetime`, the GPU composition session and existing native
+presenter. The opt-in recorder lives entirely under `Renderer/`, observing the
+installed bridge and recording copied GPU inputs/results with local identities.
+No injected code, hook signature, supported-build address, ownership scope or
+CSV entry changes. Ordinary launches keep recording disabled.
+
+`required_user_action: ["Run Renderer/CAPTURE_GAME.bat once for the requested live recording"]`.
+DLL-only evaluation staging; no new INSTALL is required. Capture adds diagnostic
+readbacks and is not a performance-baseline run. The helper saves the bounded
+recording alongside logs automatically. See the validation document for replay
+scope and the remaining native-ownership/scene/retained-animation coverage gaps.
+The first live attempt (`20260921-053809-a0e677`) lost recording settings across
+XP-compatibility elevation. The corrected launcher establishes them after host
+elevation; its real-launcher/staged-DLL stand-in and missing-file control pass.
+One replacement recording is needed. This correction changes only Renderer
+tooling and documentation; the staged DLL and installed bridge remain unchanged.

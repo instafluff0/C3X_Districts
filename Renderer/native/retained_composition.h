@@ -24,7 +24,7 @@ public:
 private:
     struct Node;
     struct Patch {Rect area;std::shared_ptr<Node> node;unsigned output=0;};
-    struct Picture {unsigned width=0,height=0;Format format=Format::bgra32;std::vector<Patch> patches;};
+    struct Picture {unsigned width=0,height=0;Format format=Format::bgra32;std::vector<Patch> patches;bool partitioned=true;};
     struct Node {
         Rect area{};Command command{};bool operation=false,dynamic=false,map_dynamic=false;
         Picture inputs[6];Id original[6]={};
@@ -40,7 +40,9 @@ private:
     std::vector<std::uint64_t> drawn_dependencies;
     bool admitted=true;
     std::size_t nodes=0;std::uint64_t resident_bytes=0;
-    constexpr static std::uint64_t resident_budget=128u*1024u*1024u;
+    // Match the bounded live native family, including saved packed/full-color
+    // versions and old/new immutable map overlap at fullscreen.
+    constexpr static std::uint64_t resident_budget=256u*1024u*1024u;
     Rect intersect(Rect a,Rect b)const{return {std::max(a.left,b.left),std::max(a.top,b.top),std::min(a.right,b.right),std::min(a.bottom,b.bottom)};}
     bool empty(Rect r)const{return r.left>=r.right||r.top>=r.bottom;}
     Rect extent(Picture const& p)const{return {0,0,int(p.width),int(p.height)};}
@@ -80,7 +82,7 @@ private:
     }
     Picture read(Id id,Rect region){
         auto it=images.find(id);if(it==images.end())throw std::runtime_error("retained source missing");
-        Picture out{it->second.width,it->second.height,it->second.format,{}};
+        Picture out{it->second.width,it->second.height,it->second.format,{},it->second.partitioned};
         for(auto const& patch:it->second.patches){auto r=intersect(region,patch.area);if(!empty(r))out.patches.push_back({r,patch.node,patch.output});}
         return out;
     }
@@ -149,8 +151,8 @@ private:
                     if(c.detail)capture_output(*n,1,replay.texture(c.detail),result);
                     n->dependencies=std::move(versions);n->revision=++serial;
                     if(!n->dynamic){for(auto& input:n->inputs)input={};n->dependencies.clear();n->operation=false;}
-                }catch(...){for(unsigned i=0;i<6;++i)if(temporary[i]&&std::find(temporary,temporary+i,temporary[i])==temporary+i)replay.destroy(temporary[i]);throw;}
-                for(unsigned i=0;i<6;++i)if(temporary[i]&&std::find(temporary,temporary+i,temporary[i])==temporary+i)replay.destroy(temporary[i]);
+                }catch(...){for(unsigned i=0;i<6;++i)if(temporary[i]&&std::find(temporary,temporary+i,temporary[i])==temporary+i)replay.recycle(temporary[i]);throw;}
+                for(unsigned i=0;i<6;++i)if(temporary[i]&&std::find(temporary,temporary+i,temporary[i])==temporary+i)replay.recycle(temporary[i]);
             }
         }
         n->seen=frame;
@@ -168,9 +170,31 @@ private:
                 auto id=replay.attach_source(part.node->output[part.output].Get(),p.format);if(id)return id;
             }
         }
-        Id out=replay.create(region.right-region.left,region.bottom-region.top,p.format);if(!out)throw std::runtime_error("retained composition scratch budget");
+        // The oldest full-size underlay is often fragmented by hundreds of
+        // later UI writes. Copy it once, then overlay their disjoint results.
+        // A complete partition proves every overdrawn pixel is overwritten;
+        // sparse canvases and aliased input unions keep exact rectangle copies.
+        Patch const* base=nullptr;
+        if(p.partitioned){
+            std::uint64_t covered=0;bool complete=true;
+            for(auto const& part:p.patches){auto r=intersect(part.area,region);if(empty(r))continue;
+                if(!part.node->output[part.output])complete=false;
+                if(!base)base=&part;covered+=std::uint64_t(r.right-r.left)*(r.bottom-r.top);}
+            if(base){auto r=base->node->area;
+                if(!complete||covered!=std::uint64_t(region.right-region.left)*(region.bottom-region.top)||
+                   r.left>region.left||r.top>region.top||r.right<region.right||r.bottom<region.bottom||
+                   !base->node->output[base->output])base=nullptr;
+            }
+        }
+        Id out=replay.create(region.right-region.left,region.bottom-region.top,p.format,!base);if(!out)throw std::runtime_error("retained composition scratch budget");
         try{
+            if(base){auto r=base->node->area;
+                D3D11_BOX box={unsigned(region.left-r.left),unsigned(region.top-r.top),0,
+                    unsigned(region.right-r.left),unsigned(region.bottom-r.top),1};
+                context->CopySubresourceRegion(replay.texture(out),0,0,0,0,base->node->output[base->output].Get(),0,&box);
+            }
             for(auto const& part:p.patches){
+                if(base&&part.node==base->node&&part.output==base->output)continue;
                 auto& source=part.node->output[part.output];if(!source)continue; // pristine zero canvas
                 auto area=intersect(part.area,region);if(empty(area))continue;
                 D3D11_BOX box={unsigned(area.left-part.node->area.left),unsigned(area.top-part.node->area.top),0,
@@ -178,16 +202,17 @@ private:
                 context->CopySubresourceRegion(replay.texture(out),0,area.left-region.left,area.top-region.top,0,source.Get(),0,&box);
 
             }
-        }catch(...){replay.destroy(out);throw;}
+        }catch(...){replay.recycle(out);throw;}
         return out;
     }
 public:
     RetainedComposition(ID3D11Device* d,ID3D11DeviceContext* c):device(d),context(c),replay(d,c,128u*1024u*1024u){}
     ~RetainedComposition(){front={};images.clear();}
-    void clear(){front={};images.clear();admitted=true;}
-    void discard(){front={};images.clear();admitted=false;}
+    void clear(){front={};images.clear();replay.clear_recycled();admitted=true;}
+    void discard(){front={};images.clear();replay.clear_recycled();admitted=false;}
     void uncommit(){front={};}
     std::uint64_t bytes()const{return resident_bytes;}
+    Counts replay_stats()const{return replay.stats();}
     std::size_t node_count()const{return nodes;}
     bool accepting()const{return admitted;}
     std::size_t sampled_sources()const{
@@ -241,7 +266,7 @@ public:
         // Aliased operands must refer to one assembled before-image. Merge the
         // needed regions; duplicate patches are identical and harmless copies.
         for(unsigned i=0;i<6;++i)if(ids[i])for(unsigned j=i+1;j<6;++j)if(ids[j]==ids[i]){
-            n->inputs[i].patches.insert(n->inputs[i].patches.end(),n->inputs[j].patches.begin(),n->inputs[j].patches.end());n->inputs[j]=n->inputs[i];
+            n->inputs[i].patches.insert(n->inputs[i].patches.end(),n->inputs[j].patches.begin(),n->inputs[j].patches.end());n->inputs[i].partitioned=false;n->inputs[j]=n->inputs[i];
         }
         for(auto const& input:n->inputs)for(auto const& p:input.patches){n->dynamic|=p.node->dynamic;n->map_dynamic|=p.node->map_dynamic;}
         write(images.at(c.destination),area,n,0);if(c.detail)write(images.at(c.detail),area,n,1);
@@ -271,7 +296,7 @@ public:
         auto image=assemble(front,ticks,frequency,0);
         Texture result;
         try{result=crop(replay.texture(image),extent(front));}
-        catch(...){replay.destroy(image);throw;}replay.destroy(image);return result;
+        catch(...){replay.recycle(image);throw;}replay.recycle(image);return result;
     }
     // Caller has supplied a completed native transfer. Rendering only touches
     // private scratch and the existing presenter's retained display.
@@ -284,7 +309,7 @@ public:
         auto image=assemble(front,ticks,frequency,0);
         bool ok=false;
         try{ok=replay.display(image,target,front.width,front.height,extent(front));}
-        catch(...){replay.destroy(image);throw;}replay.destroy(image);
+        catch(...){replay.recycle(image);throw;}replay.recycle(image);
         if(ok){context->CopyResource(buffer,display);context->Flush();drawn_revision=front_revision;drawn_dependencies=std::move(versions);}return ok?1:0;
     }
 };

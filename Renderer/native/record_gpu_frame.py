@@ -21,6 +21,7 @@ def main(argv=None):
     parser.add_argument('--scene',type=Path,required=True)
     parser.add_argument('--dll',type=Path,default=Path('Renderer/native/build/candidate/C3XRenderer.dll'))
     parser.add_argument('--reserve-address-mib',type=int,choices=range(0,1537,64),default=0,help='Harness-only reservation simulating co-resident process address-space pressure')
+    parser.add_argument('--record-composition',action='store_true',help='Record exact native GPU image traffic; adds diagnostic readbacks and invalidates performance-baseline claims')
     parser.add_argument('--width',type=int,default=640)
     parser.add_argument('--height',type=int,default=480)
     parser.add_argument('--tile-width',type=int,choices=(64,128,160,192),default=128)
@@ -131,6 +132,7 @@ def main(argv=None):
         'C3X_RENDERER_PREVIEW_SESSION':'','C3X_RENDERER_PREVIEW_REPLAY':'','C3X_RENDERER_PREVIEW_ANIMATION':''}
     settings['C3X_RENDERER_NATIVE_UI_PACK']=str(target/'native-ui.pack')
     settings['C3X_RENDERER_TEST_RESERVE_MIB']=str(args.reserve_address_mib)
+    settings['C3X_RENDERER_RECORD_FILE']=str(target/'composition.c3xr') if args.record_composition else ''
     settings['C3X_RENDERER_WORLD_READINESS_ONLY']='1' if args.world_readiness_only else ''
     settings['C3X_RENDERER_WORLD_READINESS_TEST']='1' if args.world_readiness else ''
     settings['C3X_RENDERER_WORLD_GEOMETRY_MIB']=str(args.world_geometry_mib) if args.world_geometry_mib else ''
@@ -171,7 +173,13 @@ def main(argv=None):
         receipt['native_camera_scope']='Pending polls exclude render waits; ready polls include session import/admission. Completion includes test-driver scheduling. The native fixture services completion hints; the live bridge retries through the unchanged native Animator cadence. This is not live-game latency.'
     dropped=sum(int(value) for value in re.findall(r'TRACE_BUFFER dropped=(\d+)',trace))
     receipt['binary_provenance']=binary_provenance
-    receipt['diagnostic_only']=bool(args.completion_probe or args.half_pixels)
+    receipt['diagnostic_only']=bool(args.completion_probe or args.half_pixels or args.record_composition)
+    if args.record_composition:
+        recording=out/'composition.c3xr'
+        passed=passed and recording.is_file() and recording.stat().st_size>16
+        receipt['composition_recording']={'path':'composition.c3xr','present':recording.is_file(),
+            'scope':'native GPU composition; external map/pose snapshots; native ownership and visual observations',
+            'performance_baseline':False}
     receipt['trace_coverage']={'dropped_lines':dropped,'complete':bool(trace) and dropped==0}
     resident_units=[line for line in trace.splitlines() if 'resident_pose=1' in line or 'direct_scene=1' in line]
     resident_proof=bool(resident_units) and any('cache_hit=0' in line for line in resident_units) and any('cache_hit=1' in line for line in resident_units) and all('body_readbacks=0 composition_uploads=0' in line for line in resident_units)

@@ -543,6 +543,16 @@ public:
             auto inputs=static_cast<c3x_renderer_native_sprite_blend const*>(source_rect);
             if(color<=1&&inputs&&native_sprite(source)&&native_sprite(inputs->alpha)&&
                (field(source,0x20)!=8||field(inputs->alpha,0x20)!=8))return 0;
+            // A native blend reads a separate background just like a copy.
+            // HUD scratch images start CPU-owned; extend the admitted family
+            // from that background before deciding to fall back and read it.
+            auto owned_background=inputs?find(inputs->background):nullptr;
+            if(owned_background&&owned_background->owned&&(!destination||!destination->owned)){
+                char const* reason=nullptr;
+                if(admit(object,&reason))destination=find(object);
+                else if(blend_rejection_reports++<8){char line[192];std::snprintf(line,sizeof(line),
+                    "[C3X renderer] stage=native-blend-admission reason=%s background_owned=1\n",reason?reason:"unknown");OutputDebugStringA(line);}
+            }
             if(destination&&destination->owned&&draw_blend(*destination,source,source_rect,target_rect,color))return 1;
             if(destination&&destination->owned&&blend_rejection_reports++<8){
                 bool known=native_sprite(source),alpha=inputs&&native_sprite(inputs->alpha);auto bg=inputs?inputs->background:nullptr;

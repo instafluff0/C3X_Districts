@@ -5,6 +5,78 @@ This document defines evidence, not a tooling phase or execution queue. Use the
 Reuse existing harnesses and controls; add diagnostics only for a named missing
 measurement/correctness question that can change the implementation decision.
 
+## Recorded native composition
+
+The capture launcher requests Windows permission before assigning diagnostic
+environment settings. Civ III's XP compatibility can otherwise elevate the game
+and silently discard those settings. The host then creates the game directly;
+mapped shared paths are normalized to UNC across elevation. A missing requested
+journal is a capture failure, even when debug/FPS logs were collected. Run
+`python3 -m Renderer.native.test_capture_launch` to exercise this full launcher
+with harmless native stand-ins and the staged DLL; it never starts Civ III.
+
+`Renderer/CAPTURE_GAME.bat` now enables an opt-in DLL journal through
+`C3X_RENDERER_RECORD_FILE`. Ordinary game/INSTALL launches leave it disabled.
+The capture helper writes locally in the VM, then preserves `composition.c3xr`
+beside the existing logs and binary hash in `native/build/live-captures/`.
+Use `-NoReplayRecording` for the existing low-overhead telemetry-only capture.
+
+The first replay scope is actual native GPU composition: ordered image creation,
+uploads, commands, retirement, explicit CPU-readback pixel checks and native
+display boundaries. Map imports, borrowed poses and directly rendered unit
+rectangles are copied as external inputs. Native operation begin/end results,
+lifetime decisions and independent visual readiness are observations in the same
+ordered stream. Native addresses never enter the file. This is **not** yet a
+replay of the ownership adapter, authoritative scene updates, geometry production,
+retained animation graph or the game's message pump. It can reproduce composition
+pixels and live-image admission differences; it cannot certify an ownership fix,
+retained-history scaling, gameplay FPS or input-to-display latency by itself.
+
+Recording adds explicit GPU readbacks and synchronous bounded file writes. Its
+FPS is diagnostic. Word-run encoding reduces repeated UI data without lossy
+images or hash-based pixel substitution. There is no queued recording backlog.
+The stream stops at 512 MiB, 180 seconds from the first GPU composition session, less than
+256 MiB available process VA before an extra GPU snapshot, or a recording error.
+Stopping recording leaves gameplay running. The footer records the reason;
+size/time/memory stops certify only a captured prefix. A killed process may lack
+a footer or leave a partial final record. Record framing, checksums and bounds
+must be checked before replay; incomplete input never establishes full-session
+acceptance. Source pixels are local diagnostic artifacts, not distributable art.
+
+Windows, from `Renderer/native/`:
+
+```bat
+BUILD.bat composition-replay
+build\composition-replay\replay_composition.exe path\composition.c3xr
+build\composition-replay\replay_composition.exe path\composition.c3xr --paced --show
+```
+
+Both modes execute the production image compositor and same-window presenter in
+a standalone harness. Default mode omits recorded delays; `--paced` preserves
+recorded arrival gaps, which include recording overhead. Neither mode recreates
+game-thread scheduling. External-input uploads, oracle readbacks and file decoding
+are replay costs, not original frame work. The JSON result separates scope,
+command/checkpoint counts, external snapshots, native/visual observations,
+resident image peak, submit CPU time and completeness; it always leaves gameplay,
+retained animation and performance acceptance false. `--budget-mib N` is an
+explicit capacity experiment, not the ordinary production budget.
+
+`python3 -m Renderer.tools.inspect_composition_recording PATH` reports framing and
+coverage without executing the GPU or claiming checksum validation. Its optional
+`--prefix-copy NEW_PATH` preserves complete framed records from a crash in a new
+file; the strict executable must subsequently validate all checksums/payloads.
+Keep the original. `python3 -m unittest Renderer.native.test_composition_recording`
+checks real 555/565 HUD blends, overlapping copies, source lifetimes, map imports,
+partial external replacements and actual presentation. Replaying the admitted
+fullscreen family with the old 128 MiB image allowance must fail. Corrupt, oversized
+and truncated records must fail; missing footer is explicitly a verified prefix.
+
+`record_gpu_frame --record-composition` records the production-DLL fixture and
+marks its receipt diagnostic-only. This is the automated integration gate before
+the requested one-time live recording. Extend the same format at the specific
+missing boundary when captured live evidence warrants it; do not infer that a
+long synthetic idle sequence represents concurrent native UI/surface churn.
+
 ## Measure the complete interaction
 
 Keep separate: setup/build/load, capture, caller/queue waits, worker CPU work,

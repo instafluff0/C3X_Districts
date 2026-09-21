@@ -89,3 +89,51 @@ int main(){
  cadence.disable();cadence.stop();assert(calls>finished);
 }
 ''')
+
+    def test_delivery_backpressure_failure_and_native_ownership(self):
+        source=(ROOT/'Renderer/native/c3x_renderer.cpp').read_text()
+        body='    int visual_frame('+source.split('    int visual_frame(',1)[1].split('    int present_gpu(',1)[0]
+        run_cpp(r'''
+#include <cassert>
+#include <cstdio>
+#include <cstring>
+#include <mutex>
+#include <memory>
+#include "Renderer/native/gpu_frame_api.h"
+struct LARGE_INTEGER{long long QuadPart=0;};void QueryPerformanceCounter(LARGE_INTEGER* q){++q->QuadPart;}
+unsigned GetEnvironmentVariableA(char const*,char*,unsigned){return 0;}
+using HWND=void*;constexpr int GA_ROOT=2;
+bool IsWindowVisible(HWND){return true;}HWND GetForegroundWindow(){return nullptr;}HWND GetAncestor(HWND,int){return nullptr;}
+struct Session{bool active=true;bool visual_active(){return active;}void stop_visuals(){active=false;}
+ unsigned visual_bytes(){return 0;}unsigned visual_nodes(){return 0;}unsigned visual_sources(){return 0;}};
+struct State{
+ std::mutex call_mutex,state_mutex;bool running=true,visual_delivery=true,visual_allowed=true,visual_present_pending=false;
+ bool camera_active=false,camera_pending=false,camera_gpu=false;int camera_result=0,camera_ticket=0,gpu_camera_front_ticket=0;
+ long long visual_last=0;unsigned long long visual_frames=0,visual_map_samples=0;
+ struct{void* window=nullptr;}gpu_present;
+ struct Presenter{bool caller=true;int result=1;unsigned calls=0;bool caller_thread(){return caller;}bool view(){return true;}
+  int present(bool){++calls;return result;}}gpu_presenter;
+ struct{std::unique_ptr<Session> gpu_composition=std::make_unique<Session>();
+  struct{double milliseconds(long long){return 0;}void write(char const*,char const*,bool){}}trace;}renderer_state;
+ enum class Command{visual_frame};int draw_result=1;unsigned draws=0;
+ int submit_locked(std::unique_lock<std::mutex>&,Command){++draws;return draw_result;}
+ void advance_visual_clock(){}void stop_visual_delivery(){visual_delivery=false;visual_present_pending=false;}
+ struct ForegroundCameraPause{ForegroundCameraPause(State&,std::unique_lock<std::mutex>&){}};
+'''+body+r'''
+};
+int main(){
+ State s;s.gpu_presenter.caller=false;
+ assert(s.visual_frame()==C3X_RENDERER_RESULT_PENDING&&!s.draws);
+ s.camera_pending=true;assert(s.visual_frame(true)==C3X_RENDERER_RESULT_PENDING&&!s.draws);
+ s.camera_pending=false;s.gpu_presenter.result=C3X_RENDERER_RESULT_PENDING;
+ assert(s.visual_frame(true)==C3X_RENDERER_RESULT_PENDING&&s.visual_present_pending&&!s.visual_frames);
+ // A render revision need not change for an outstanding Present to retry.
+ s.draw_result=C3X_RENDERER_RESULT_PENDING;s.gpu_presenter.result=1;
+ assert(s.visual_frame(true)==1&&!s.visual_present_pending&&s.visual_frames==1&&s.gpu_presenter.calls==2);
+ s.draw_result=1;s.gpu_presenter.result=C3X_RENDERER_RESULT_ERROR;
+ assert(s.visual_frame(true)==C3X_RENDERER_RESULT_ERROR&&!s.visual_delivery&&!s.renderer_state.gpu_composition->active);
+ unsigned stopped=s.draws;assert(s.visual_frame(true)==C3X_RENDERER_RESULT_PENDING&&s.draws==stopped);
+ State failed;failed.draw_result=C3X_RENDERER_RESULT_ERROR;
+ assert(failed.visual_frame(true)==C3X_RENDERER_RESULT_ERROR&&!failed.gpu_presenter.calls&&!failed.visual_delivery);
+}
+''')

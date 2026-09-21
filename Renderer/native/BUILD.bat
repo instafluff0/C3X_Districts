@@ -26,6 +26,13 @@ if not exist "..\bin" mkdir "..\bin"
 if not exist "build" mkdir "build"
 if not exist "build\candidate" mkdir "build\candidate"
 
+if /i "%~1"=="composition-replay" (
+  if not exist "build\composition-replay" mkdir "build\composition-replay"
+  cl /nologo /std:c++17 /EHsc /O2 /W4 /WX replay_composition.cpp /Fo:build\composition-replay\ /Fe:build\composition-replay\replay_composition.exe /link /LARGEADDRESSAWARE
+  if errorlevel 1 exit /b 1
+  exit /b 0
+)
+
 if /i "%~1"=="tactical" (
   if not exist "..\lab\out" mkdir "..\lab\out"
   if not exist "..\lab\out\tactical-overlays" mkdir "..\lab\out\tactical-overlays"

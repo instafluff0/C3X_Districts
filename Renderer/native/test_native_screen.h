@@ -215,6 +215,9 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
         SelectObject(capture_dc,old);DeleteObject(bitmap);DeleteDC(capture_dc);ReleaseDC(nullptr,desktop);FreeLibrary(dwm);
         if(differences)std::fprintf(stderr,"native display RGB differences=%zu client=%d,%d desktop=%d,%d bounds=%ld,%ld,%ld,%ld\n",differences,w,h,sw,sh,mismatch.left,mismatch.top,mismatch.right,mismatch.bottom);
         verify(!differences&&std::all_of(seen.begin(),seen.end(),[](unsigned char value){return value==1;}),"every native final displayed pixel exact");
+        // Leave the client exposed for subsequent native GDI handoff/reset.
+        // The scan's off-screen placement is not a simulated native WM_PAINT.
+        verify(SetWindowPos(window,HWND_TOPMOST,0,0,0,0,SWP_NOSIZE|SWP_NOACTIVATE)!=FALSE,"restore native window after display oracle");
     };
     capture_display(expected);
     {
@@ -227,6 +230,19 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
         for(unsigned n=0;n<12;++n){copy(scene,screen_surface,full);copy(screen_surface,scene,full);}
         NativeUiAssets hud(graph,reinterpret_cast<char*>(jgl));
         auto hud_readbacks=owner.stats().readbacks;
+        // Live Civ III first blends against the owned screen into an eligible
+        // CPU scratch destination, rather than a pre-admitted destination.
+        // This must extend the same map family, not read back its background.
+        auto hud_scratch=create(graph,nullptr,1);
+        verify(reinterpret_cast<Init>(hud_scratch->vtable[1])(hud_scratch,w,h,16,1)==0,"fresh HUD scratch init");
+        verify(!owner.owns(hud_scratch)&&lifetime(C3X_NATIVE_MAP,hud_scratch,0),"HUD scratch starts eligible but unowned");
+        verify(hud.draw(0,screen_surface,hud_scratch,0,32)==0,"HUD blend into fresh destination");
+        verify(owner.owns(hud_scratch)&&owner.owns(screen_surface)&&owner.stats().readbacks==hud_readbacks,
+            "first HUD blend admits destination without freezing resident background");
+        RECT hud_area={0,32,std::min(w,hud.pairs[0]->color.width),std::min(h,32+hud.pairs[0]->color.height)};
+        copy(hud_scratch,screen_surface,hud_area);
+        reinterpret_cast<Destroy>(hud_scratch->vtable[0])(hud_scratch,1);
+        std::puts("PASS first-use HUD blend: destination_admitted=1 background_retained=1 readbacks=0");
         // Empty draws are common during hover/selection. Match native errors,
         // then compose the actual HUD before resource-only and unit animation.
         JGLSprite empty_sprite={};auto jgl_base=reinterpret_cast<char*>(jgl);
@@ -384,6 +400,11 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
             after.pose_changes-before.pose_changes,after.retained_bytes,after.nodes,
             visual_request_ms/visual_frames,visual_desktop_ms/visual_frames);
         copy(save,screen_surface,full);final_ui_drawn=false;patch_JGL_present_screen(&full);
+        // Separate source composition from desktop delivery at this historically
+        // intermittent post-animation restore boundary. This is an explicit
+        // oracle read, never a production fallback or a performance sample.
+        verify(gpu.readback(owner.display_image(screen_surface),observed.data(),observed.size())&&observed==expected,
+            "post-animation saved screen source is exact before desktop exposure");
         capture_display(expected);
         live(C3X_NATIVE_VISUAL_POLICY,nullptr,nullptr,nullptr,nullptr,1);
         }
@@ -397,11 +418,6 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
     capture_display(expected);verify(screen_transfers==transfers_before_partial+1&&owner.stats().readbacks==0,"partial transfer uses retained GPU display");
     // Partial native handoff must retain full-color displayed pixels, including
     // those outside the native update that differ from the current red canvas.
-    // Return from the capture oracle's off-screen scan before handing off.
-    // GDI clips writes to the visible window; subsequent exposure normally
-    // requests native WM_PAINT, which this deliberately inert window lacks.
-    // The full-screen handoff must preserve every currently visible pixel.
-    verify(SetWindowPos(window,HWND_TOPMOST,0,0,0,0,SWP_NOSIZE|SWP_NOACTIVATE)!=FALSE,"expose complete native handoff");
     c3x_renderer_gpu_present_v1 handoff={sizeof(handoff)};handoff.action=2;
     verify(present(&handoff)==C3X_RENDERER_RESULT_OK,"preserve owned GPU display during GDI handoff");
     preserve_gdi_display=true;
@@ -685,6 +701,27 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
                     "empty map-tail OpenGL setup retains GPU map without public DC or CPU readback");
             }
             copy(live_images[0],screen_surface,full);
+            if(step==0){
+                NativeUiAssets hud(graph,reinterpret_cast<char*>(jgl));
+                auto scratch=create(graph,nullptr,1);
+                verify(reinterpret_cast<Init>(scratch->vtable[1])(scratch,w,h,16,1)==0,"production HUD scratch init");
+                verify(live(C3X_NATIVE_LINE_TARGET,scratch,nullptr,nullptr,nullptr,0)==0,"production HUD scratch initially unowned");
+                verify(hud.draw(0,screen_surface,scratch,0,32)==0&&
+                    live(C3X_NATIVE_LINE_TARGET,scratch,nullptr,nullptr,nullptr,0)==1&&
+                    live(C3X_NATIVE_LINE_TARGET,screen_surface,nullptr,nullptr,nullptr,0)==1,
+                    "production DLL extends owned background through first HUD blend");
+                OpenGLRenderer context;PCX_Image target;target.JGL.Image=scratch;
+                verify(patch_OpenGLRenderer_initialize(&context,0,&target)==0,"first-use HUD outline begin");
+                patch_OpenGLRenderer_set_color(&context,0,0x80007fffu);
+                patch_OpenGLRenderer_set_opacity(&context,0,255);
+                patch_OpenGLRenderer_set_line_width(&context,0,1);
+                patch_OpenGLRenderer_draw_line(&context,0,4,40,20,40);
+                verify(!context.initialized&&!context.drawn&&!context.style_calls&&
+                    lifetime(C3X_NATIVE_MAP,scratch,0)&&raw_unchanged(),
+                    "first-use HUD outline does not escape to native DC");
+                reinterpret_cast<Destroy>(scratch->vtable[0])(scratch,1);
+                std::puts("PASS production first-use HUD blend and outline: background_retained=1 native_DC=0");
+            }
             int bounds[4]={};
             UnitOracleDib unit_oracle(w,h,0);std::copy(expected.begin(),expected.end(),static_cast<unsigned*>(unit_oracle.pixels));int expected_bounds[4]={};
             verify(unit_cpu(&unit,unit_oracle.dc,unit_oracle.dc,expected_bounds)==C3X_RENDERER_RESULT_OK,"production owned unit CPU oracle");GdiFlush();

@@ -107,7 +107,7 @@ int test_retained_composition(){
         ++phase;retained.sample(1006,1000);assert(scene_draws==2);
         // Large copied tactical payloads share the retained memory ceiling;
         // rejected admission cannot alter the existing picture or byte charge.
-        auto charge=retained.bytes();RetainedComposition::Direct oversized;oversized.input_bytes=129ull*1024*1024;
+        auto charge=retained.bytes();RetainedComposition::Direct oversized;oversized.input_bytes=257ull*1024*1024;
         bool rejected=false;try{retained.record({Kind::fill,native,0,full,full},oversized);}catch(...){rejected=true;}
         assert(rejected&&retained.bytes()==charge);
         retained.clear();assert(!retained.ready()&&retained.bytes()==0&&retained.node_count()==0);
@@ -149,8 +149,8 @@ int test_retained_composition(){
         std::printf("PASS fullscreen retained copy chain: transfers=17 pixels=%u retained_bytes=%u nodes=1 immutable_front=1\n",width*height,width*height*4);
     }
     // Fullscreen native map, screen, saved UI and staging pairs remain alive
-    // while the next immutable map is published. Eight current canvases plus
-    // the temporary next map exceed the old 96 MiB live-image ceiling.
+    // while the next immutable map is published. Eight packed/full-color pairs plus
+    // old/new map overlap exercise the complete fullscreen family.
     {
         constexpr unsigned width=2240,height=1260;
         D3D11_TEXTURE2D_DESC desc={};desc.Width=width;desc.Height=height;desc.MipLevels=desc.ArraySize=desc.SampleDesc.Count=1;
@@ -159,16 +159,17 @@ int test_retained_composition(){
         Session session(device.Get(),context.Get());assert(session.publish(source.Get(),1));
         std::vector<Command> commands;std::vector<unsigned> pixels,output;std::vector<Id> canvases;
         c3x_renderer_gpu_result_v1 result={};
-        for(unsigned i=0;i<7;++i){c3x_renderer_gpu_images_v1 request={};request.struct_size=sizeof(request);request.ticket=1;
+        for(unsigned i=0;i<16;++i){c3x_renderer_gpu_images_v1 request={};request.struct_size=sizeof(request);request.ticket=1;
             request.action=C3X_GPU_CREATE;request.width=width;request.height=height;request.format=C3X_GPU_BGRA32;
             assert(session.execute(request,commands,pixels,result,output)==C3X_RENDERER_RESULT_OK);canvases.push_back(Id(result.image));}
-        if(!session.publish(source.Get(),2)){std::fprintf(stderr,"FAIL fullscreen publication: old map plus seven native canvases\n");throw std::runtime_error("fullscreen map publication budget");}
+        if(!session.publish(source.Get(),2)){std::fprintf(stderr,"FAIL fullscreen publication: old map plus eight packed/full-color native pairs\n");throw std::runtime_error("fullscreen map publication budget");}
         // Headroom remains a hard limit. Rejection leaves the old map usable;
         // releasing optional canvases lets the same publication retry succeed.
         c3x_renderer_gpu_images_v1 allocate={};allocate.struct_size=sizeof(allocate);allocate.ticket=2;
         allocate.action=C3X_GPU_CREATE;allocate.width=width;allocate.height=height;allocate.format=C3X_GPU_BGRA32;
         std::vector<Id> optional;
-        for(unsigned i=0;i<3;++i){assert(session.execute(allocate,commands,pixels,result,output)==C3X_RENDERER_RESULT_OK);optional.push_back(Id(result.image));}
+        for(unsigned i=0;i<32;++i){if(session.execute(allocate,commands,pixels,result,output)!=C3X_RENDERER_RESULT_OK)break;optional.push_back(Id(result.image));}
+        assert(!optional.empty()&&optional.size()<32);
         assert(session.execute(allocate,commands,pixels,result,output)==C3X_RENDERER_RESULT_BAD_ARGUMENT);
         assert(!session.publish(source.Get(),3)&&session.current_ticket()==2);
         for(auto canvas:optional){auto release=allocate;release.action=C3X_GPU_DESTROY;release.image=std::int64_t(canvas);
@@ -177,7 +178,93 @@ int test_retained_composition(){
         for(auto canvas:canvases){c3x_renderer_gpu_images_v1 request={};request.struct_size=sizeof(request);request.ticket=3;
             request.action=C3X_GPU_DESTROY;request.image=std::int64_t(canvas);assert(session.execute(request,commands,pixels,result,output)==C3X_RENDERER_RESULT_OK);}
         assert(result.resident_bytes==std::int64_t(width)*height*4);
-        std::puts("PASS fullscreen publication: native_canvases=7 next_map=1 old_map_retired=1 no_CPU_fallback=1");
+        std::puts("PASS fullscreen publication: native_pairs=8 next_map=1 old_map_retired=1 no_CPU_fallback=1");
+    }
+    // A partial publication from an untouched image has actual zero pixels.
+    // Reusing a broad underlay must not paint through those zero patches or
+    // through holes in a newly-created, partially copied destination.
+    {
+        Compositor live(device.Get(),context.Get());RetainedComposition retained(device.Get(),context.Get());
+        auto map=live.create(w,h,Format::bgra32);std::vector<unsigned> pixels(w*h,0xff123456);assert(live.upload(map,1,pixels.data(),pixels.size()));
+        retained.create(1,w,h,Format::bgra32);retained.source(1,live.texture(map));
+        retained.create(2,w,h,Format::bgra32);retained.commit(1,full);retained.commit(2,part);
+        auto actual=retained_read(device.Get(),context.Get(),retained.sample(1,1000).Get());
+        for(unsigned y=0;y<h;++y)for(unsigned x=0;x<w;++x)
+            assert(actual[y*w+x]==(x>=5&&x<38&&y>=3&&y<26?0:0xff123456u));
+        retained.record({Kind::copy,2,1,part,part,part.left,part.top});retained.commit(2,full);
+        actual=retained_read(device.Get(),context.Get(),retained.sample(2,1000).Get());
+        for(unsigned y=0;y<h;++y)for(unsigned x=0;x<w;++x)
+            assert(actual[y*w+x]==(x>=5&&x<38&&y>=3&&y<26?0xff123456u:0));
+        std::puts("PASS retained underlay compaction: zero patches and sparse coverage preserved");
+    }
+    {
+        Compositor scratch(device.Get(),context.Get(),4096);
+        auto first=scratch.create(16,16,Format::rgb555);assert(first);
+        std::vector<unsigned> words(256,0x1234);assert(scratch.upload(first,1,words.data(),words.size()));
+        assert(scratch.recycle(first)&&!scratch.texture(first));
+        auto reused=scratch.create(16,16,Format::bgra32);assert(reused&&scratch.stats().reuses==1);
+        assert(retained_read(device.Get(),context.Get(),scratch.texture(reused))==std::vector<unsigned>(256,0));
+        assert(scratch.recycle(reused));auto larger=scratch.create(32,32,Format::bgra32);assert(larger);
+        assert(scratch.stats().resident_bytes==4096);assert(scratch.recycle(larger));scratch.clear_recycled();
+        assert(scratch.stats().resident_bytes==0);
+        std::puts("PASS replay scratch pool: stale handles rejected, storage cleared, format reset, capacity eviction and reset");
+    }
+    // Native gameplay mutates HUD/outline versions between presentations.
+    // A stationary-only replay cannot expose the live family's source overlap
+    // or the cost of rebuilding hundreds of small GPU working surfaces.
+    {
+        constexpr unsigned width=2240,height=1260;Rect bounds={0,0,width,height};
+        Compositor live(device.Get(),context.Get(),256u*1024u*1024u);
+        RetainedComposition retained(device.Get(),context.Get());
+        auto map=live.create(width,height,Format::bgra32),screen=live.create(width,height,Format::bgra32);
+        assert(map&&screen);std::vector<unsigned> pixels(width*height,0xff123456);
+        assert(live.upload(map,1,pixels.data(),pixels.size()));
+        // Eight native packed/full-color pairs can coexist even when only
+        // one completed screen is displayed. They remain independently owned.
+        for(Id id=100;id<116;++id){retained.create(id,width,height,Format::bgra32);
+            try{retained.source(id,live.texture(map));}catch(std::exception const& e){
+                std::fprintf(stderr,"FAIL dense HUD source admission: pair_textures=%u bytes=%llu reason=%s\n",unsigned(id-100),retained.bytes(),e.what());throw;}}
+        retained.create(map,width,height,Format::bgra32);retained.create(screen,width,height,Format::bgra32);
+        RetainedComposition::Texture sample=live.texture(map);
+        retained.source(map,sample.Get(),[&](long long,long long){return sample;},true,true);
+        std::vector<Command> commands={{Kind::copy,screen,map,bounds,bounds}};
+        for(unsigned i=0;i<1000;++i){Rect area={int(16+(i%40)*50),int(16+(i/40)*40),int(24+(i%40)*50),int(26+(i/40)*40)};
+            commands.push_back({Kind::invert,screen,0,area,area});}
+        assert(live.submit(commands.data(),commands.size()));
+        for(auto const& command:commands)retained.record(command);
+        retained.commit(screen,bounds);
+        auto expected=retained_read(device.Get(),context.Get(),live.texture(screen));
+        assert(retained_read(device.Get(),context.Get(),retained.sample(1,1000).Get())==expected);
+        auto initial_bytes=retained.bytes();auto warm=retained.replay_stats();double elapsed=0;
+        LARGE_INTEGER frequency;QueryPerformanceFrequency(&frequency);
+        for(unsigned tick=0;tick<8;++tick){
+            auto next=live.create(width,height,Format::bgra32);assert(next);
+            std::fill(pixels.begin(),pixels.end(),0xff123456u+tick+1);assert(live.upload(next,1,pixels.data(),pixels.size()));
+            sample=live.texture(next);commands[0].source=next;assert(live.submit(commands.data(),commands.size()));
+            expected=retained_read(device.Get(),context.Get(),live.texture(screen));
+            LARGE_INTEGER begin,end;QueryPerformanceCounter(&begin);
+            auto actual=retained_read(device.Get(),context.Get(),retained.sample(tick+2,1000).Get());
+            QueryPerformanceCounter(&end);elapsed+=1000.*double(end.QuadPart-begin.QuadPart)/frequency.QuadPart;
+            assert(actual==expected);assert(retained.bytes()==initial_bytes);live.destroy(next);
+        }
+        auto hot=retained.replay_stats();assert(hot.allocations==warm.allocations&&hot.reuses>warm.reuses);
+        std::printf("PASS dense fullscreen retained HUD: native_pairs=8 operations=1000 frames=8 exact=1 bytes=%llu mean_ms=%.3f hot_allocations=%llu reused=%llu\n",retained.bytes(),elapsed/8,hot.allocations-warm.allocations,hot.reuses-warm.reuses);
+        // Also replace native pictures repeatedly; stationary sampling alone
+        // cannot prove retirement when the game redraws UI or publishes maps.
+        for(unsigned tick=0;tick<32;++tick){
+            auto next=live.create(width,height,Format::bgra32);assert(next);
+            std::fill(pixels.begin(),pixels.end(),0xff345678u+tick);assert(live.upload(next,1,pixels.data(),pixels.size()));
+            sample=live.texture(next);commands[0].source=next;assert(live.submit(commands.data(),commands.size()));
+            retained.source(map,sample.Get(),[texture=sample](long long,long long){return texture;},true,true);
+            auto transfer=commands[0];transfer.source=map;retained.record(transfer);
+            for(std::size_t i=1;i<commands.size();++i)retained.record(commands[i]);
+            retained.commit(screen,bounds);
+            assert(retained_read(device.Get(),context.Get(),retained.sample(100+tick,1000).Get())==
+                   retained_read(device.Get(),context.Get(),live.texture(screen)));
+            assert(retained.bytes()==initial_bytes);live.destroy(next);
+        }
+        std::puts("PASS dense native replacement: map_publications=32 UI_writes=32000 exact=1 retained_bytes_stable=1");
+        retained.clear();assert(retained.bytes()==0&&retained.node_count()==0);
     }
     // A CPU snapshot can retain correct pixels while losing the map's sample
     // callback. Even an independently animated unit must not certify that

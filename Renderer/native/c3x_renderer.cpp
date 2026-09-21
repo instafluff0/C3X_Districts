@@ -13199,7 +13199,7 @@ extern "C" __declspec(dllexport) int c3x_renderer_gpu_present(c3x_renderer_gpu_p
 // Bound behind the hash-verified native hooks. Map preparation activates the
 // exclusive owner; before that, completed CPU screens retain compatibility
 // presentation. A negative result denies CPU access after a failed barrier.
-extern "C" __declspec(dllexport) int c3x_renderer_native_image(int operation,void* image,void* source,void const* from,void const* to,unsigned color){
+int renderer_native_image_impl(int operation,void* image,void* source,void const* from,void const* to,unsigned color){
     if(operation==C3X_NATIVE_TACTICAL_CAPABLE)return native_composition&&native_composition->active()?1:0;
     if(operation==C3X_NATIVE_VISUAL_POLICY)return renderer_worker?renderer_worker->visual_policy(color):0;
     if(operation==C3X_NATIVE_IMAGE_DRAIN){if(!drain_native_composition())return -1;}
@@ -13209,7 +13209,8 @@ extern "C" __declspec(dllexport) int c3x_renderer_native_image(int operation,voi
             if(operation!=C3X_NATIVE_IMAGE_PRESENT || result!=0){
                 if(operation==C3X_NATIVE_IMAGE_PRESENT&&result>0){static unsigned frames=0;++frames;
                     if(frames<=3||(frames%128)==0){char line[128];std::snprintf(line,sizeof(line),
-                        "[C3X renderer] stage=native-resident-present frames=%u cpu_snapshot=0\n",frames);OutputDebugStringA(line);}}
+                        "[C3X renderer] stage=native-resident-present frames=%u cpu_snapshot=0 visual_ready=%d\n",
+                        frames,renderer_worker?renderer_worker->visual_policy(2):0);OutputDebugStringA(line);}}
                 return result;
             }
             // An unowned CPU UI source uses the same final presenter. The
@@ -13243,6 +13244,13 @@ extern "C" __declspec(dllexport) int c3x_renderer_native_image(int operation,voi
     return presented?1:0;
 }
 
+extern "C" __declspec(dllexport) int c3x_renderer_native_image(int operation,void* image,void* source,void const* from,void const* to,unsigned color){
+    auto token=c3x_recording::journal().native(c3x_recording::native_begin,operation,image,source,color);
+    auto result=renderer_native_image_impl(operation,image,source,from,to,color);
+    if(token)c3x_recording::event(c3x_recording::native_end,0,[&](auto& b){c3x_recording::u64(b,token);c3x_recording::u32(b,unsigned(result));});
+    return result;
+}
+
 // Existing unit playback and pose cache, with GPU-native destination ownership.
 extern "C" __declspec(dllexport) int c3x_renderer_gpu_unit(c3x_renderer_unit_v1 const* unit,c3x_renderer_gpu_unit_v1 const* target,int* bounds){
     if(!unit||unit->struct_size!=sizeof(*unit)||unit->unit_key[63]!=0||!target||target->struct_size!=sizeof(*target)||!bounds||
@@ -13259,6 +13267,7 @@ extern "C" __declspec(dllexport) int c3x_renderer_native_lifetime(int operation,
     static c3x_native_images::Lifetimes lifetimes;
     bool revoked=false;
     bool eligible=lifetimes.observe(operation,image,context,GetCurrentThreadId(),&revoked);
+    c3x_recording::journal().native(c3x_recording::lifetime,operation,image,nullptr,unsigned(context),int(eligible)|(int(revoked)<<1),operation==C3X_NATIVE_DESTROY);
     // Only the first ownership loss of an admitted/demanded lifetime matters.
     // Keep module-relative frames, never native pixels, paths or game pointers.
     if(revoked){static std::atomic<unsigned> reports{0};

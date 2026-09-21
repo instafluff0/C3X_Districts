@@ -22,49 +22,64 @@ game attempt. Live gameplay and performance acceptance are still pending.
 [Architecture](renderer_architecture.md) owns the design;
 [validation](benchmark_workflow.md) owns measurement and acceptance.
 
+**Requested implementation sequence:** the [LORE milestones](#lore-testing-and-migration-milestones)
+below define testing and migration within M4, coordinated with the unfinished
+M3.8 navigation contract. All seven are planned, not accepted. The current
+request establishes the plan; it does not certify a performance improvement or
+authorize staging, installation or a game launch.
+
 ## M3.8 current handoff — in progress
 
-**Live correctness remains open.** The user still reports no water/resource
-animation and pauses during interturn. The last debug-only launch has an empty
-log; do not infer its initiating failure from older captures. The previous
-recorded run lost animated map sources after native fallbacks. See
-[live findings](live_usage_findings_20260920.md).
+**Completed capability:** bounded recording and strict replay of actual native
+GPU composition now supplement the existing renderer/ownership fixtures. The
+recording contains resource lifetimes, uploads, draw batches, exact external
+map/pose inputs, pixel checkpoints, and native/visual observations. It stays
+under `Renderer/`; no injected code or patch-table change. Direct-unit snapshots
+copy only affected rectangles. Ordinary launches leave recording disabled.
 
-**New completed capability:** animation readiness distinguishes an animated map
-from a static CPU snapshot or unit-only animation. The prior readiness check
-could disable native recovery while the map stayed frozen. The DLL propagates
-map animation dependencies through composition and re-enables recovery when
-those dependencies disappear. The production D3D negative test fails on the old
-code and passes after the correction; restored map copies and genuinely static
-maps remain ready. Earlier empty-sprite, stale CPU-mirror and private unit-DC
-corrections remain. No new hook, patch-table entry or injected state is needed.
+**Staged diagnostic candidate:** `6e80a66d98d88755c2ecd68a87289d7884b6be37d0df0870dc83def9b3e8407e`.
+`native/build/composition-recording-stage.json` records matching source/binary
+hashes and the previous DLL rollback. No new INSTALL is required; Civ III was
+confirmed stopped and the installed bridge unchanged. No game was launched.
+`Renderer/CAPTURE_GAME.bat` enables one bounded recording automatically.
 
-**Staged evaluation candidate:**
-`7a46796b9b2344b82a6201ecfbed0559dbcdec17a80d5ffd3944ed83b94acc9b`.
-`native/build/ambient-recovery-stage.json` records source, rollback and validation.
-This DLL-only correction needs no new INSTALL invocation; the private-DC bridge
-was installed previously. No game was launched in this follow-up. Capture now
-also writes a bounded renderer-owned log and continues if optional FPS startup
-fails; PowerShell parsing passes.
+**Validation:** the exact candidate's fullscreen production fixture and replay in
+`native/build/composition-recording-ready-shutdown/` pass: all water effects,
+eight mixed units, native HUD, fog/reveal, tactical/config-off and recovery;
+3,617 recorded commands, 2,520 exact GPU pixel checks and 107 display boundaries.
+Old-budget replay fails as expected; corrupt, oversized and truncated input is
+rejected, and missing-footer input is explicitly a checked prefix. Invocation
+receipts distinguish VM transport failures from native test outcomes. Recording-off
+retained tests still pass 126 GPU oracles, 120 clock frames and 32 fresh map
+publications / 32,000 UI writes. This is validation capability, not a speedup.
 
-**Verification:** `native/build/ambient-recovery-fullscreen/receipt.json` passes
-at 2240×1260 with all water effects and an extra 1 GiB VA reservation. The ambient
-only witness changes 31,526 desktop pixels without units or native redraws.
-1,200 direct frames produce 1,200 map samples, 9,600 unit samples and 4,794 pose
-changes; retained history is 40,904,712 bytes / 36 nodes. Mean request/desktop
-costs are 41.73/51.12 ms. Timer, actual HUD, selection/path/grid, fog/reveal,
-config-off and all four native recovery cases pass. These are stress results,
-not a matched speedup or Standard <33 ms acceptance. The previous long-run
-recovery failure did not recur; its cause is not established by this pass.
-Seven extracted timer/UI/camera contracts pass, one skips.
+**Latest live evidence:** `20260921-053809-a0e677` reports UI flashing/freeze
+and exits with code 1. Allocation failures start at 132.405 s; device removal
+(`0x887a0020`) follows at 139.125 s with 142.56 MiB available process VA, then
+7,599 unusable-session errors and 264 display-handoff failures. Scene targets
+alone reach 1,174.35 MiB. Memory pressure is confirmed; the exact allocation and
+driver-removal cause are not. Windows also applies its fault-tolerant heap shim.
+The earlier intermittent standalone desktop mismatch remains unattributed.
 
-**Next responsibility:** identify the initiating live fallback and prove continuous
-idle map animation in the actual game; investigate the earlier intermittent
-recovery failure. Interturn continuity is separately open: scheduling and final
-presentation still depend on the native UI thread pumping messages. General
-device recovery, sustained lifecycle/navigation stability and Standard <33 ms
-p95 also remain open. Avoid another incremental manual capture request while
-independent investigation remains.
+**Capture correction:** this live run produced neither a composition journal nor
+the DLL runtime log. A harmless native probe reproduced the cause: XP compatibility
+forces elevation and discards the launching process's diagnostic environment.
+The launcher now elevates its host first, normalizes mapped shares to UNC, then
+creates the child directly with inherited settings. It reports missing recordings
+as capture failures. The real launcher/staged-DLL stand-in test verifies journal
+and trace creation across elevation and rejects an intentionally absent journal;
+no game launch, DLL change or reinstall is needed. See
+`native/build/capture-launch/receipt.json` and `capture-launch-missing/receipt.json`.
+
+**Next responsibility:** collect the actual gameplay journal through the corrected
+launcher and replay/correlate its composition traffic. This failed session's
+missing journal cannot be reconstructed from debug logs; one replacement live
+capture is the necessary integration checkpoint. Native admission, authoritative
+scene production, retained animation and full game scheduling are not yet
+re-executed by this recorder. Recording adds readbacks and file I/O; use
+recorder-off runs for performance. Standard <33 ms p95, live stability and
+sustained navigation remain open. See [live findings](live_usage_findings_20260920.md)
+and [recorded composition validation](benchmark_workflow.md#recorded-native-composition).
 
 Whole-world appearance enters through bounded caller-thread pages. Existing
 workers prepare canonical regions and wrapped occurrences independently of the
@@ -353,7 +368,7 @@ acceptance and staging of this optimization candidate remain pending.
 | Spatial selection | World pass index and native/wrapped occurrences feed replacement static submissions directly | Broader spatial sharing where measured |
 | Compatible passes | Compatible static layers, shared material bindings, batched occurrence parameters/uploads, forest instancing, collected poses/shared body contributions, exact native composition | Additional compatible sharing guided by measured cost |
 | GPU reuse/output | Resident map color/depth, direct eligible unit geometry, incremental finishing and native composition | Reduce dynamic conversion, replay and full-map work |
-| Async integration | Bounded GPU-ready ground/terrain/object preparation with shared worker capacity, selected-work urgency and independent visual timer | Coherent general nonblocking camera/content publication |
+| Async integration | Bounded GPU-ready ground/terrain/object preparation with shared worker capacity, selected-work urgency and independent visual delivery | Coherent general nonblocking camera/content publication |
 
 Independent frames use the existing HWND presenter without native redraw requests.
 Civ III's original gameplay timer is unchanged. Map animation still enters the
@@ -489,7 +504,7 @@ Current evidence needs three qualifications:
 | Authoritative world coverage | Publish complete renderer-owned appearance for the renderable world independently of visiting each camera destination. Audit offscreen mutations, removals and viewer changes; retain revisions and readiness coverage. Use bounded caller-thread capture and existing change publication; workers never dereference game objects. Preserve fog, unseen coverage and frozen explored animation. |
 | Render-ready representation | Combine shared source meshes/materials and compact rigid instances with compiled regional terrain/deformed/connectivity content. Prepare from world changes and initialization rather than camera misses; retain useful compiled data across GPU eviction where budgets permit. Measure CPU/GPU/disk backing tradeoffs instead of keeping all current expanded meshes resident or increasing cache caps. |
 | Coherent native cutover | Give every camera trigger, including newly selected units and action following, a prompt, safe caller-thread completion boundary that advances pixels, native camera, overlays and picking together. Preserve vanilla destination/clamping and selection/action centering behavior, reentrancy guards and gameplay cadence. Do not accelerate gameplay or invoke extra action updates to consume a ready visual frame. |
-| Interturn ambient presentation | Open: the presenter's UI-thread timer still depends on native message pumping. Prove continuous visible water/resource motion while gameplay holds that thread busy, using copied authorized scene/visibility inputs and the same HWND. Preserve native/GDI handoff, modal policy, lifecycle cancellation, action timing and atomic camera adoption. Asynchronous scene preparation alone does not satisfy this requirement. |
+| Interturn ambient presentation | Implemented and automated proof passes: owned cadence plus composition presentation on the same HWND, using copied authorized scene/visibility inputs. Actual desktop pixels change with the window thread blocked; native/GDI handoff, modal policy, reset, fog, action timing and camera adoption tests pass. Live-game acceptance remains pending. |
 | Acceptance under load | Run the arbitrary-jump matrix in the validation guide, plus edits, cancellation, fog/viewer changes, reset, config-off and memory pressure. Prove prepared-world construction invariants, distinguish streaming misses and account for preparation coverage/time. |
 
 For a destination whose complete dependencies are prepared and GPU resident,
@@ -540,9 +555,225 @@ only when measured; stay on D3D11 unless evidence justifies a change.
 **Done:** demonstrate the selected cadence and the arbitrary-navigation latency
 objective on representative live workloads, including navigation, animation and
 UI transitions. Cold/evicted/edited destinations remain visible in the results.
-A 33 ms timer is not 30 FPS; 60 FPS is a later 16.7 ms objective, not a current
+A 33 ms scheduling target is not 30 FPS; 60 FPS is a later 16.7 ms objective, not a current
 promise. Whole-world readiness is explicit M3.8 work, not deferred implicitly to
 frame-loop tuning here.
+
+## LORE testing and migration milestones
+
+Requested September 21, 2026. These milestones refine M4; they do not reset M1-M3,
+replace M3.8 camera/readiness acceptance, or create a second renderer project.
+LORE-like means immutable draw descriptions, compact explicit frame commands,
+cheap parameter payloads, redundant-state filtering and useful parallel command
+preparation. D3D11 deferred contexts are optional. A new shading language,
+64-bit helper process, API migration, tessellation/LOD and reduced visual quality
+are outside this sequence. Natural/constructed wonders and Districts stay deferred.
+
+Keep current assets, shading, native coordinates, pass/native order, visibility,
+authored animation and all water effects. Extend existing content, draw, worker
+and composition owners. Replace each migrated production route; temporary
+comparison controls must not become a permanently maintained second engine.
+Lab retains visual ownership; Integration owns submission, native composition,
+resource lifetime and displayed-frame evidence.
+
+| Milestone | Deliverable | Exit decision | Status |
+| --- | --- | --- | --- |
+| M4.0 - Establish causes and controls | Reproducible workloads, driver capabilities and complete cost/memory attribution | Choose the first pass and state which measured work it will remove | Planned |
+| M4.1 - Prove one LORE-style pass | Immutable draw descriptions, compact commands and filtered serial execution for one production pass | Exact output and repeatable complete-workload benefit justify migration | Planned |
+| M4.2 - Switch scene submission | Adopt the proven path across applicable production scene passes | Migrated paths use the executor by default; obsolete duplicate submission is removed | Planned |
+| M4.3 - Parallelize useful command work | Bounded packet jobs; separately test deferred-context recording | Keep only concurrency that improves complete workloads on the target driver | Planned |
+| M4.4 - Bound native composition and memory | Efficient ordered composition, explicit image lifetimes and joint resource accounting | Representative native churn remains correct and stable within process headroom | Planned |
+| M4.5 - Accept the integrated candidate | Full correctness, performance, pressure and sustained replay verification | One production candidate passes the declared automated envelope | Planned |
+| M4.6 - Verify live responsiveness | Batched live gameplay checkpoint with the exact tested candidate | Sustained animation and coherent navigation meet their separate objectives | Planned |
+
+M4.0 selects priorities: M4.4 may precede or accompany scene migration if native
+composition or memory dominates. M4.1 precedes broad M4.2 conversion; M4.3 requires
+a working explicit command boundary, not completion of every scene category.
+M4.5 joins the resulting paths, and M4.6 follows automated acceptance. Independent
+work can continue while a live checkpoint is pending. Milestone numbers describe
+deliverables, not permission to expand scope or a requirement to spawn agents.
+
+### M4.0 - Establish causes and controls
+
+Pin source, DLL, inputs, budgets, driver/VM configuration and reset state for the
+control. Reuse valid existing receipts; run only missing or invalidated cases.
+The newer live capture `20260921-042106-4a9c31` reports about 120 MiB available VA
+and device removal after the earlier history-cap fix. Treat both as unresolved;
+it does not prove memory pressure caused removal. See the
+[live findings](live_usage_findings_20260920.md#latest-live-limit-and-reproducible-composition-inputs).
+
+Query `DriverCommandLists` and `DriverConcurrentCreates`; record unsupported or
+emulated behavior. Separate scene selection/parameter preparation, D3D submission,
+GPU waits where measurable, native composition, presentation and camera adoption.
+Count actual bindings, uploads, draws, copies, allocations and bytes, including
+peak in-flight resources. Do not add overlapping CPU/worker spans or trust the
+VM's uncalibrated timestamp queries. Diagnostic pass omissions identify causes;
+they do not qualify as an equivalent-image candidate.
+
+Use the existing full-scene/native fixtures and the new composition journal for
+their documented scopes. The journal snapshots external map/unit output; it does
+not replay scene generation, admission logic, the retained animation graph or
+game scheduling. Its readbacks/file writes exclude recording FPS from acceptance.
+Extend only a specifically missing boundary needed to reproduce a live failure.
+
+Exit with a measured bottleneck, the first production pass to change, and matched
+controls capable of accepting or rejecting that change. No broad packet rewrite
+is justified solely by LORE's batch-count headline. If evidence instead identifies
+pixel work or native composition as dominant, prioritize that responsibility.
+
+### M4.1 - Prove one LORE-style pass
+
+Choose one expensive pass from M4.0, such as dense city submission or reflection
+geometry. Retain mesh/material/pipeline descriptions with their existing content
+owners. Build compact occurrence/parameter commands in reusable bounded storage.
+Commands specify required state; the serial executor filters redundant bindings
+without changing draw order. Track resource hazards, pass transitions and state
+changes outside the executor explicitly. Packet storage expires with its frame
+lease; it must not become another world cache or retain native game pointers.
+
+Keep identical geometry, shader math, effects and raster ordering. Check exact
+pixels against the existing same-input control, including reflection/shadow
+consumers, wrapped occurrences, invalidation and cancellation. Record command
+build cost, state calls actually eliminated, allocations and total frame cost.
+
+For broad migration, require the complete-workload improvement gate below, not
+just faster submission. Permit one materially different follow-up if the first
+prototype is inconclusive; after two unsuccessful designs, record the result and
+redirect to the measured bottleneck rather than expanding the abstraction.
+
+### M4.2 - Switch scene submission
+
+Convert applicable terrain/natural, city/infrastructure, resource, shadow,
+reflection and water submission incrementally through the same owners. Direct
+unit passes must use the same explicit-state rules where compatible; document
+specialized paths and their measured costs rather than forcing identical commands
+onto unrelated work. Preserve cutout/transparent/decal ordering and native unit
+composition. Batch constants and repeated state by actual compatibility, without
+global material sorting that changes pixels.
+
+Validate each affected category and shared consumers through `renderer.py`.
+Keep a coverage table in the implementation receipt naming each migrated pass,
+its production caller, tests, measured effect and any remaining specialized path.
+Switch a validated pass to the production executor and remove its superseded
+submission implementation, retaining independent pixel oracles and a preserved
+control DLL. A command wrapper that still performs the old setup is not migration.
+Exit with explicit coverage and no unreported old default path or memory increase.
+
+### M4.3 - Parallelize useful command work
+
+First compare serial and job-based packet construction using immutable leased
+inputs, stable merge order, bounded storage and the existing worker allowance.
+Measure critical-path time including joins and cancellation; more busy cores are
+not an exit criterion. Keep small workloads serial when scheduling costs dominate.
+
+Separately compare D3D11 deferred-context recording against the filtered serial
+executor. Each context has one thread owner, explicit initial state and valid
+parameter/upload lifetimes. Execute lists in the established order on the GPU
+owner; preserve reset, resource retirement and native transaction barriers.
+Do not queue multiple stale camera frames to manufacture throughput. Capability
+flags guide the experiment but do not prove a benefit or rule out emulated trials.
+
+Exit with each concurrency mechanism retained or rejected on complete-frame
+evidence. A measured rejection of deferred contexts completes that decision;
+the supported LORE-style serial executor remains the production path. No API or
+process migration is implied by unfavorable Parallels results.
+
+### M4.4 - Bound native composition and memory
+
+Apply explicit commands and storage reuse to the existing image compositor and
+retained dependency graph. Preserve source versions, native return values,
+partial writes, overlapping copies, actual CPU-access barriers and animated map
+dependencies. Eliminate proven redundant copies/replay work and unused versions.
+Native saved images may outlive a frame; frame packet retirement must not discard
+their required history or replace an animated dependency with a frozen snapshot.
+
+Use captured composition commands for exact native-image oracles, plus production
+retained-animation and admission tests for the behavior the journal cannot replay.
+Exercise fullscreen HUD/save/restore churn, repeated map publications, camera
+cancellation and recovery. Account jointly for world geometry, decoded assets,
+live images, retained outputs, scratch and in-flight work; distinguish shared
+allocations from duplicated ownership, GPU bytes from CPU VA, and caps from usage.
+
+Exit with stable memory under repeated churn, no unexpected budget fallback or
+device loss, and the existing 512 MiB sampled contiguous-VA floor in the ordinary
+Standard workload. Artificial VA-reservation runs are separate pressure/recovery
+tests, not proof of ordinary headroom. No automatic cap increases: any capacity
+change needs measured whole-process justification and a bounded lifetime policy.
+Do not claim the observed device-removal cause is fixed without reproduction or
+corresponding live evidence. Remaining 32-bit capacity limits can justify a
+separate helper-process proposal; they do not silently expand this milestone.
+
+### M4.5 - Accept the integrated candidate
+
+Run the affected full integration suite once the connected path is ready. Preserve
+capture, ownership, invalidation, scrolling, wrapping, zoom, animation, exact native
+composition, tactical/fog behavior, unit ordering, reset and config-off tests.
+Include genuine foreign CPU-access fallback and blocked-game-thread ambient
+delivery. Use existing harnesses, not a second acceptance framework.
+
+Require at least 1,200 independent visual frames and a separate ten-minute
+representative churn soak, including repeated native UI transitions, fresh maps,
+navigation and retirement. An idle-only loop cannot satisfy the churn requirement.
+Memory must settle within declared bounds rather than grow with action count.
+Separate cold initialization, first visits, edits and eviction from warm results.
+Fail on unexplained lost animation, stale camera/picking, budget collapse or
+device failure. Missing coverage stays pending, even if a narrower fixture passes.
+
+Exit with a single source/DLL receipt, pixel comparisons, matched timing results,
+memory envelope and rollback candidate. Automated readiness is not staging or
+live acceptance; existing visual/staging/install rules remain in force.
+
+### M4.6 - Verify live responsiveness
+
+After applicable staging/install/launch authorization, use one batched checkpoint:
+idle ambient animation, scrolling, minimap jumps, selected-unit centering, action
+following, zoom, ordinary HUD/dialog transitions, interturn and sustained play.
+Prefer existing automation and captured evidence; request manual evidence only
+for the remaining strategic checkpoint, once as a checklist. Keep performance
+captures free of the diagnostic composition recorder's readbacks and file writes.
+
+Require sustained fresh map animation, stable memory, and no unexplained ownership
+collapse or device failure. On Standard 5,000-tile maps, retain M3.8's **<33 ms p95
+input/native-camera-decision to first coherent displayed frame**, separately for
+each trigger class. Adopt **at least 30 fresh animated map frames/sec with p95
+display intervals <=33.4 ms** as the initial steady-animation engineering target;
+measure UI response separately. Native CPU-bound interturn/input stalls must be
+reported, not attributed away by a continuing renderer animation. The later
+16.7 ms/60 FPS objective is not a promise of this migration.
+
+Report all >100 ms stalls, first-use/eviction/edit results and sustained-session
+failures. Huge 12,800-tile maps retain separate capacity/latency results. Missing
+live evidence leaves M4.6 pending; missing camera behavior leaves M3.8 pending.
+If the measured target still fails, report the remaining cost and decide between
+another bounded optimization, separately approved visual tradeoffs, or a separately
+scoped architecture change. Do not declare success because the migration is done.
+
+### Comparison and decision gates
+
+Use [validation](benchmark_workflow.md) for timing endpoints and fixture scope.
+Primary resolution is the current 2240x1260 gameplay envelope; 1120x1192 is a
+separate diagnostic/control result. Preserve all water effects and current assets.
+Include dense legal cities, coast/water, eight mixed units, the existing 32-unit
+stress case, native UI churn and distributed Standard-map navigation. Record
+hardware/driver and initialization policy; do not warm only the test destinations.
+
+At a migration decision, use at least three alternating control/candidate pairs,
+at least 120 independent visual samples per applicable run and the existing 100
+distributed navigation destinations. Reuse unchanged valid controls; do not rerun
+this campaign on every continuation. Live p95 claims need at least 100 observations
+per claimed camera-trigger class; smaller samples are provisional. Report mean,
+median, p95, maximum, variation and failures, never only averaged FPS or enqueue.
+
+The default engineering gate for expanding a prototype is **>=10% improvement in
+both median and p95 complete request-to-desktop latency for its declared target
+workload**, exceeding control run-to-run variation, with no repeatable >5% regression
+in other representative workloads and no correctness/capacity regression. Fix the
+target workload before measuring the candidate. If display quantization or noise
+makes the gate inconclusive, report that outcome; shorter CPU spans alone cannot
+pass it. These are planning thresholds, not already achieved results or substitutes
+for M4.6's absolute targets. Revisit thresholds explicitly before another design,
+not retroactively to pass a result. Safety fixes have separate correctness evidence
+and do not need to pretend to be performance wins.
 
 ## Water effects: roadmap placement
 

@@ -2,7 +2,7 @@
 
 Civ III owns gameplay, camera/visibility authority, directed actions and UI state.
 The renderer consumes captured changes and owns the intervening visual frames.
-It uses the existing D3D device, GPU worker and HWND presenter; no callback asks
+It uses the existing D3D device, GPU worker and existing HWND; no callback asks
 Civ III to redraw, and no second presenter or window is introduced.
 
 ## Ownership and publication
@@ -56,7 +56,8 @@ The composition visual replaces the old HWND-bound swap chain on Civ III's own
 window. A composition swap chain has no HWND, avoiding the UI-message dependency
 of HWND presentation. Creation, first attachment and native ownership changes
 stay on the UI caller; subsequent ambient Present uses DO_NOT_WAIT. Backpressure
-retains a pending presentation for a later opportunity. Detaching the visual and
+retains a pending presentation for a later opportunity. Presentation failure
+retires readiness and re-enables native compatibility recovery. Detaching the visual and
 waiting for that detach restores native GDI; it is below native child windows.
 This path requires Windows 8 or later (validated on Windows 11). It is distinct
 from putting a flip-model HWND swap chain on Civ III's GDI window.
@@ -98,12 +99,19 @@ under their existing owners; only optional compatibility animation waits for rel
 
 ## Bounds and validation
 
-Retained texture accounting is capped at 128 MiB, nodes at 32,768 and rectangular
+Retained texture accounting is capped at 256 MiB, nodes at 32,768 and rectangular
 patches at 8,192 per image. Separate replay scratch is capped at 128 MiB; the
-live composition owner is capped at 128 MiB, including the temporary overlap of
-old/new immutable maps with 2240×1260 map/screen/saved-UI canvases. The former
-96 MiB ceiling rejected that overlap. Generic compositor tests retain their 64 MiB ceiling. These are ceilings,
-not permanent allocations. Replay checks replacement capacity before allocating
+live composition owner is capped at 256 MiB. Eight packed/full-color native
+canvas pairs plus old/new immutable maps need about 194 MiB at 2240×1260; the
+live capture exhausted the previous 128 MiB cap. The remaining allowance covers
+small UI sources. Generic compositor tests retain their 64 MiB ceiling. These are ceilings,
+not permanent allocations. Replay recycles up to 32 MiB / 32 working textures
+inside its existing 128 MiB cap, evicting idle scratch before admission failure.
+Only private scratch is recyclable; published snapshots and borrowed sources
+retain their original lifetimes. Reset/discard clears the pool. A complete
+disjoint picture may copy its fragmented base once and overlay later results;
+sparse pictures, zero patches and aliased unions keep exact rectangle copies.
+Replay checks replacement capacity before allocating
 a new result and releases temporary image handles even when final sampling or
 display throws. Visible scene storage has no unused off-screen guard padding.
 Once-per-second `process-memory` records report whole-process available virtual
