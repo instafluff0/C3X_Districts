@@ -44,19 +44,32 @@ Civ III to redraw, and no second presenter or window is introduced.
 
 ## Clock, native integration and lifecycle
 
-An ordinary 33 ms Win32 thread timer schedules visual opportunities on the
-existing presenter's UI thread. The renderer worker samples and composes; the
-same UI owner performs DXGI presentation. There is no visual-only call to
-`Animator_update`, no renderer rearming of Civ III's timer, and no extra native
-FLC advancement. Civ III's original gameplay timer continues unchanged.
+An owned cadence thread offers one visual frame at a time, targeting 33 ms with
+at least 10 ms between completion and the next opportunity. There is no catch-up
+queue. It tries the existing renderer transaction gate, yields to camera/native
+work, and submits sampling/composition to the existing D3D worker. It then
+presents the completed composition swap chain independently of the game message
+pump. No new window, D3D context, native draw or game-state read is introduced.
+Civ III's original gameplay timer and directed action advancement are unchanged.
+
+The composition visual replaces the old HWND-bound swap chain on Civ III's own
+window. A composition swap chain has no HWND, avoiding the UI-message dependency
+of HWND presentation. Creation, first attachment and native ownership changes
+stay on the UI caller; subsequent ambient Present uses DO_NOT_WAIT. Backpressure
+retains a pending presentation for a later opportunity. Detaching the visual and
+waiting for that detach restores native GDI; it is below native child windows.
+This path requires Windows 8 or later (validated on Windows 11). It is distinct
+from putting a flip-model HWND swap chain on Civ III's GDI window.
 
 Native unit/map captures query `c3x_renderer_visual_clock`, in QPC-frequency
 units, so a later content/camera update cannot restore an older animation clock.
-Existing popup/Advisor and command-button scopes supply explicit pause/resume
-policy on entry and exit, including exits with no further native transfer. Final
-transfer also supplies the current native visibility policy. Focus loss rebases
-the visual clock. A timer cannot reenter an active renderer call. Presentation still requires the UI thread to pump messages;
-this is not a separate presentation thread capable of bypassing blocked gameplay.
+Popup/Advisor and command-button scopes retain explicit pause/resume policy.
+Focus loss rebases the clock. An interturn UI stall alone no longer pauses an
+eligible front: water, resources and authorized idle/work poses use copied
+scene/visibility records while native actions retain their last observed cursor.
+Camera, viewer and lifecycle changes still validate/adopt coherently. Native
+handoff disables delivery under the same gate; reset joins the cadence thread
+before acquiring that gate and shutting down the D3D worker.
 
 A complete front must exist before autonomous rendering. CPU handoff, reset and
 window release stop visual delivery. Replay failure preserves the previous
@@ -66,6 +79,12 @@ native map publication. This is recipe recovery on a healthy device, **not**
 recovery of authoritative native GPU pixels after device removal. A removed
 device cannot satisfy the CPU ownership barrier; never expose stale native pixels
 as a fallback. Config-off retains the original native path on a healthy device.
+
+Readiness includes the map's ambient dependency, not merely completed screen
+pixels or an animated unit. If an animated map becomes a full CPU snapshot,
+the DLL reports recovery demand until native map writes restore a reachable
+animated map source. Copied and transparent composition nodes propagate that
+map dependency; a genuinely static map does not require an animation callback.
 
 Packed native unit scratch surfaces are valid GPU destinations even without an
 optional full-color layer. Unit blending snapshots only its selected rectangle;
@@ -94,9 +113,11 @@ their last owning version; shared map/pose textures use COM lifetime ownership.
 `test_retained_composition` compares replay against ordinary production GPU
 commands, including source replacement, aliasing, native 555/565 and full color,
 partial publication, opaque overwrite and reset. The connected JGL fixture
-advances actual resource/unit samples without native drawing, dispatches the real
-timer, verifies modal clock pause and restores exact native UI pixels. Explicit
-oracle readbacks remain test-only. `visual-frame` traces report whole-call time;
+advances actual resource/unit samples without native drawing, blocks the window thread for two seconds while checking actual desktop motion,
+verifies modal clock pause and restores exact native UI pixels. Explicit
+oracle readbacks remain test-only. `C3X_RENDERER_MANUAL_VISUAL=1` is a replay-only
+control for direct-call timing; the blocked-UI test clears it, and production
+leaves it unset. `visual-frame` traces report whole-call time;
 read-only visual status reports frames, map/pose samples and retained ownership.
 
 The retained plan records the final measurements and staging identity. These

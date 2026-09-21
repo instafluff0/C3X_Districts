@@ -1,32 +1,21 @@
 # Animation
 
-Gameplay unit playback follows native cursors. Idle/work loops and resources use
-their authored source duration on a shared pause-filtered presentation clock, so
-Civ III interturn stalls resume without a catch-up jump. Idle redraw eligibility
-is 50 ms on Civ III's existing 66 ms timer so callback jitter cannot halve the
-effective cadence. Mouse input keeps a bounded 250 ms click-decision guard;
-the guard is bypassed immediately when Civ III reports a selected-unit map/
-pathfinder hold. Other clicks and the release interval remain guarded, without
-a separate timer or input hook.
+Movement/combat playback follows native action cursors and anchors. Selected
+idle/work loops, resources, water and selection pulses use renderer-owned time
+and immutable captured scene/visibility inputs. Unselected idle bodies freeze;
+fog hides units and freezes explored-but-not-visible ambient content.
 
-The native bridge supplies selection explicitly. Only selected idle units and
-active work loops advance by source time; unselected idle/fidget bodies freeze
-and authorize no future pose preparation. The bounded visual instance owner
-pauses inactive observations and resets on action/lifetime changes. Camera and
-zoom do not change its phase. Movement, combat and selected native-directed
-fidgets retain native cursors. Legacy explicit-cursor Lab requests remain
-supported. At the existing roughly 15 Hz caller cadence, 30 Hz source clips keep
-their speed but cannot display every source sample; no faster timer is implied.
+An owned cadence thread schedules retained frames independently of Civ III's
+message pump, through the existing D3D worker and composition presenter on the
+same window. It targets 33 ms without accumulating work; native/gameplay updates
+do not need to run for ambient animation. Modal, focus, native ownership and
+lifecycle policies still apply. See
+[`visual_frame_ownership.md`](../../../docs/visual_frame_ownership.md).
 
-The `OutputDebugStringA` test stream emits one `scheduler-callback` record per
-eligible Civ III timer callback. Its callback/presentation gaps, mouse-button
-mask and hold time, authoritative pathfinder state, pre/post-guard decisions and reason correlate
-with `map-complete` records carrying requested/presented/pending counts and the
-logical animation time. A matching `timer-return` record splits time between
-the scheduler and Civ III's native timer/Animator path and reports request and
-presentation deltas. Together these distinguish callback starvation, scheduler
-suppression, a blocked native handler and requested redraws Civ III did not
-present.
+The native 66 ms loop continues gameplay advancement and compatibility recovery
+when there is no eligible retained front. Its scheduler traces diagnose that
+fallback; they are not the normal resident animation cadence. Renderer visual
+status and actual blocked-UI desktop tests measure independent delivery.
 
 The detail and gameplay studies each have matching `start` and `mid` views:
 six production unit families, the same surroundings, native action cursors 0

@@ -69,7 +69,11 @@ try {
     $env:C3X_RENDERER_TRACE = '1'
     $env:C3X_RENDERER_PROFILE = '0'
     $env:C3X_RENDERER_TRACE_BUFFERED = '0'
-    Remove-Item Env:C3X_RENDERER_TRACE_FILE -ErrorAction SilentlyContinue
+    # Keep renderer evidence even if the external debug collector stops before
+    # gameplay begins. The DLL bounds this buffered file independently; it does
+    # not require elevation or another process to remain attached.
+    $env:C3X_RENDERER_TRACE_FILE = Join-Path $session 'renderer-runtime.log'
+    $env:C3X_RENDERER_TRACE_MIB = '64'
 
     $debugArgs = @('--accepteula','--no-banner','--no-kernel','--process-filter','Civ3Conquests',
         '--duration','900','--max-lines','500000','--log',(Join-Path $session 'renderer.log'),'--log-limit','64')
@@ -80,11 +84,20 @@ try {
     Write-Host 'If Windows asks to allow Windows PowerShell, choose Yes. Only the FPS collector needs elevation.'
     $presentArgs = @('-NoProfile','-ExecutionPolicy','Bypass','-File',(Join-Path $PSScriptRoot 'capture_frames.ps1'),
         '-SessionDirectory',$session,'-SessionName',('C3XCapture-' + $stamp),'-PresentMon',$present)
-    $presentProcess = Start-Process -FilePath 'powershell.exe' -ArgumentList (Quote-Arguments $presentArgs) -Verb RunAs -PassThru -WindowStyle Hidden
-    $readyDeadline = [DateTime]::UtcNow.AddSeconds(20)
-    while (-not (Test-Path -LiteralPath (Join-Path $session 'frames-ready.txt'))) {
-        if ($presentProcess.HasExited -or [DateTime]::UtcNow -gt $readyDeadline) { throw 'FPS collector did not start; see capture diagnostics.' }
-        Start-Sleep -Milliseconds 200
+    try {
+        $presentProcess = Start-Process -FilePath 'powershell.exe' -ArgumentList (Quote-Arguments $presentArgs) -Verb RunAs -PassThru -WindowStyle Hidden
+        $readyDeadline = [DateTime]::UtcNow.AddSeconds(20)
+        while (-not (Test-Path -LiteralPath (Join-Path $session 'frames-ready.txt'))) {
+            if ($presentProcess.HasExited -or [DateTime]::UtcNow -gt $readyDeadline) { throw 'FPS collector did not start; see capture diagnostics.' }
+            Start-Sleep -Milliseconds 200
+        }
+        $metadata.fps_collector_started = $true
+    } catch {
+        $metadata.fps_collector_started = $false
+        $_.Exception.Message | Set-Content -LiteralPath (Join-Path $session 'fps-start-error.txt')
+        # A delayed elevation response must not leave an orphan collector.
+        'stop' | Set-Content -LiteralPath (Join-Path $session 'stop-frames.txt')
+        Write-Warning 'FPS collection is unavailable. Continuing with bounded renderer/debug logs.'
     }
 
     Write-Host ''

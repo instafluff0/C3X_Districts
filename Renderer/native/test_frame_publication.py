@@ -24,6 +24,7 @@ class PublicationTests(unittest.TestCase):
 #include <mutex>
 #include <vector>
 #include "Renderer/native/gpu_frame_api.h"
+#include "Renderer/native/visual_cadence.h"
 '''+publication+r'''
 struct Owner {
  std::mutex call_mutex,state_mutex;
@@ -115,7 +116,7 @@ int main(){
 
     def test_terrain_preview_anchors_ownership_and_input_bounds(self):
         source = (ROOT / "Renderer/native/c3x_renderer.cpp").read_text()
-        body = "struct PublishedMapFrame {" + source.split("struct PublishedMapFrame {", 1)[1].split("// Civ III remains", 1)[0]
+        body = "struct PublishedMapFrame {" + source.split("struct PublishedMapFrame {", 1)[1].split("void CALLBACK renderer_world_timer", 1)[0]
         program = r'''
 #include <algorithm>
 #include <array>
@@ -194,7 +195,7 @@ int main(){
 
     def test_actual_worker_camera_supersession_and_takeover(self):
         source = (ROOT / "Renderer/native/c3x_renderer.cpp").read_text()
-        publication = "struct PublishedMapFrame {" + source.split("struct PublishedMapFrame {", 1)[1].split("// Civ III remains", 1)[0]
+        publication = "struct PublishedMapFrame {" + source.split("struct PublishedMapFrame {", 1)[1].split("void CALLBACK renderer_world_timer", 1)[0]
         publication = publication.replace("auto first=static_cast<std::uint32_t const*>(source.bgra_pixels);",
                                           "publication_checkpoint(); auto first=static_cast<std::uint32_t const*>(source.bgra_pixels);")
         worker = "class RendererWorker {" + source.split("class RendererWorker {", 1)[1].split("RendererWorker * renderer_worker", 1)[0]
@@ -230,6 +231,7 @@ int main(){
 #include "Renderer/native/render_core/cliff_placement.h"
 #include "Renderer/native/prepared_view_area.h"
 #include "Renderer/native/gpu_frame_api.h"
+#include "Renderer/native/visual_cadence.h"
 #include "Renderer/native/gpu_image_commands.h"
 #include "Renderer/native/tactical_overlay.h"
 #include "Renderer/native/render_core/scene_surface.h"
@@ -257,7 +259,7 @@ struct RECT {int left,top,right,bottom;};
 int unexpected_gpu(){assert(false && "GPU operation in CPU scheduler fixture");return 0;}
 struct D3D11_TEXTURE2D_DESC {unsigned Width=0,Height=0;};
 struct ID3D11Texture2D {void GetDesc(D3D11_TEXTURE2D_DESC*){unexpected_gpu();}void Release(){unexpected_gpu();}};
-struct Device {int CreateTexture2D(D3D11_TEXTURE2D_DESC*,void*,ID3D11Texture2D**){return unexpected_gpu();}};
+struct Device {int GetDeviceRemovedReason(){return unexpected_gpu();}int CreateTexture2D(D3D11_TEXTURE2D_DESC*,void*,ID3D11Texture2D**){return unexpected_gpu();}};
 struct Context {void CopyResource(ID3D11Texture2D*,ID3D11Texture2D*){unexpected_gpu();}};
 bool FAILED(int value){return value<0;}
 namespace c3x_native_images {
@@ -271,7 +273,7 @@ struct NativePresenter {
  template<class... T> bool upload_screen(T...){assert(native_transfer_test);return true;}
  template<class... T> bool preserve_display(T...){return unexpected_gpu();}
  int view(){return unexpected_gpu();}int retained(){return unexpected_gpu();}int buffer(){return unexpected_gpu();}
- int present(){assert(native_transfer_test);++native_transfers;return C3X_RENDERER_RESULT_OK;}void gpu_written(){unexpected_gpu();}
+ int present(bool=false){assert(native_transfer_test);++native_transfers;return C3X_RENDERER_RESULT_OK;}void gpu_written(){unexpected_gpu();}
 };
 struct Compositor {template<class... T> Id attach_source(T...){unexpected_gpu();return 0;} bool destroy(Id){return unexpected_gpu();}template<class... T> bool submit(T...){return unexpected_gpu();}};
 struct RetainedComposition {
@@ -281,7 +283,7 @@ struct RetainedComposition {
 };
 struct Session {
  bool visual_ready(){return false;}bool visual_active(){return false;}
- std::uint64_t visual_bytes(){return 0;}std::size_t visual_nodes(){return 0;}void stop_visuals(){}
+ std::uint64_t visual_bytes(){return 0;}std::size_t visual_nodes(){return 0;}std::size_t visual_sources(){return 0;}void stop_visuals(){}
  template<class... T> RetainedComposition::Texture snapshot_bgra(T...){unexpected_gpu();return {};}
  template<class... T> int visual_frame(T...){return unexpected_gpu();}
  Session(Device*,Context*){unexpected_gpu();}
@@ -294,6 +296,9 @@ struct Session {
  bool display_to(long long,std::uint64_t,int,int,int,int,int,Rect){return unexpected_gpu();}
 };
 }
+struct MEMORYSTATUSEX {unsigned dwLength=0;unsigned long long ullAvailVirtual=0,ullAvailPageFile=0;};
+void GlobalMemoryStatusEx(MEMORYSTATUSEX*){unexpected_gpu();}
+constexpr int S_OK=0;
 struct LARGE_INTEGER {long long QuadPart=0;};
 void QueryPerformanceFrequency(LARGE_INTEGER* out){out->QuadPart=1000000000;}
 void QueryPerformanceCounter(LARGE_INTEGER* out){out->QuadPart=std::chrono::steady_clock::now().time_since_epoch().count();}
@@ -364,6 +369,7 @@ struct Bodies {
 struct TacticalGPU {template<class... T> ID3D11Texture2D* packed(T&&...){unexpected_gpu();return nullptr;}};
 struct D3D11_RECT {int left,top,right,bottom;};
 struct RendererState {
+    bool memory_pressured=false;void preserve_process_headroom(){}
     struct Scene : c3x_renderer::render_core::CapturedScene {std::uint64_t signature=0;} topology_cache;
     struct WorldStorage {unsigned clears=0;void clear(){++clears;}} world_preparation_queue,world_backing;
     TacticalGPU tactical_gpu;

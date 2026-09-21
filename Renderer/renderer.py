@@ -939,6 +939,7 @@ def run_tests(category=None, *, integration=False, full=False):
                         "Renderer.native.test_dynamic_scene_input",
                         "Renderer.native.test_unit_instances",
                         "Renderer.native.test_native_visual_cadence",
+                        "Renderer.native.test_independent_presentation",
                         "Renderer.native.test_native_ui_lifecycle",
                         "Renderer.native.test_native_gdi_completion",
                         "Renderer.native.test_effect_config",

@@ -659,3 +659,50 @@ Automated ordinary clicks, Return and keypad Enter did not navigate the menu.
 The user then took over testing; there is no gameplay/FPS acceptance from this
 attempt. Parallels was temporarily changed from full-screen to windowed to expose
 its current display; do not compare that launch with the 2240×1260 replay timings.
+
+
+## Ambient recovery after a frozen native snapshot
+
+The next user report is still no water/resource animation, plus pauses during
+interturn. The debug-only agent launch produced an empty `renderer.log`; its
+collector was bounded to 300 seconds. No new frames or failure metadata can be
+inferred from that file. Read-only installed-executable inspection confirms the
+`C3X_Shared_Verify` path, which links to the current shared checkout. The capture
+launcher now also sets a bounded 64 MiB renderer-owned file and continues with
+logs if optional FPS startup fails. Windows PowerShell parsing passes; no game
+was launched during this investigation.
+
+A separate production D3D regression reproduces a recovery defect: after CPU
+upload replaces an animated map with a static snapshot, `Session::visual_ready`
+previously still returned true. The native timer then withheld compatibility
+recovery. An animated unit could keep that misleading state alive indefinitely.
+`ambient-recovery-negative.log` fails specifically on the frozen-map readiness
+assertion. The DLL now propagates an animated-map dependency separately from
+ordinary animation and requires it when the published map expects ambient
+motion. Restoring map writes restores readiness; static maps remain eligible.
+`ambient-recovery-positive.log` passes this case, the unit-only variant, restored
+map copies, static-map readiness and 126 existing exact GPU composition oracles.
+This proves a recovery bug, not the initiating failure in the unlogged user run.
+The extracted native timer/UI/camera checks also pass (seven passed, one skipped).
+
+Interturn pauses have a separate architectural explanation: the Win32 visual
+timer and final DXGI Present still run on the game UI thread. A blocked native
+message pump can stop visible animation despite worker-owned rendering. Explicit
+interturn continuity is now in the M3.8 responsibility table and visual-frame
+contract; it has not been implemented or certified by the current recovery fix.
+
+
+`native/build/ambient-recovery-fullscreen/receipt.json` passes with unchanged
+inputs at 2240×1260, all water effects, mixed units and 1 GiB extra VA reserved.
+Ambient-only desktop changes: 31,526 pixels. The 1,200-frame soak records 1,200
+map samples, 9,600 unit samples and 4,794 pose changes, retaining 40,904,712 bytes
+and 36 nodes. Mean request/desktop costs: 41.726/51.121 ms. Timer transport,
+actual HUD, tactical overlays, fog/reveal, config-off and all four native
+recovery cases pass. Each recovery result and native lifetime is now logged.
+The preceding long-run recovery failure did not recur; this pass does not
+establish its cause or certify complete recovery under arbitrary conditions.
+
+Candidate `7a46796b…` is staged with source and rollback in
+`native/build/ambient-recovery-stage.json`; no new injected installation is
+needed. This is a verified recovery correction, not a claim that the unlogged
+live initiating failure or interturn presentation has been solved.

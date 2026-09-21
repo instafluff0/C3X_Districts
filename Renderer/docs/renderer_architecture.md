@@ -63,12 +63,16 @@ per-vertex data plus per-instance inputs through
 [DrawIndexedInstanced](https://learn.microsoft.com/en-us/windows/win32/api/d3d11/nf-d3d11-id3d11devicecontext-drawindexedinstanced);
 an API migration is not a prerequisite for that representation.
 
-The native presenter retains the blt-model swap chain because configuration-off
-and ownership barriers must restore Civ III's GDI drawing on the same HWND.
-Microsoft documents that [flip-model presentation disables ordinary GDI on that
-HWND even after destroying the swap chain](https://learn.microsoft.com/en-us/windows/win32/api/dxgi/ne-dxgi-dxgi_swap_effect).
-Changing the swap effect alone is therefore incompatible with this fallback
-contract; it is not an authorized performance shortcut.
+The native presenter uses a [composition swap chain](https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_2/nf-dxgi1_2-idxgifactory2-createswapchainforcomposition)
+attached to the existing Civ III HWND, replacing the former blt-model presenter.
+It introduces no new window or competing presenter. Ordinary HWND Present can
+[wait on the message-pump thread](https://learn.microsoft.com/en-us/windows/win32/api/dxgi/nf-dxgi-idxgiswapchain-present);
+a composition swap chain has no HWND and supports independent ambient delivery.
+The visual is [below native child windows](https://learn.microsoft.com/en-us/windows/win32/api/dcomp/nf-dcomp-idcompositiondevice-createtargetforhwnd),
+and is detached before native GDI resumes. This is not a flip-model HWND chain,
+which would disable ordinary GDI even after release. Native ownership, exact
+composition and config-off recovery remain required tests. Windows 8+ is
+required for this presentation path; the production target is Windows 11.
 
 ## Ownership and data flow
 

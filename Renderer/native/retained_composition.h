@@ -26,7 +26,7 @@ private:
     struct Patch {Rect area;std::shared_ptr<Node> node;unsigned output=0;};
     struct Picture {unsigned width=0,height=0;Format format=Format::bgra32;std::vector<Patch> patches;};
     struct Node {
-        Rect area{};Command command{};bool operation=false,dynamic=false;
+        Rect area{};Command command{};bool operation=false,dynamic=false,map_dynamic=false;
         Picture inputs[6];Id original[6]={};
         Texture output[2];std::uint64_t bytes[2]={},revision=0,seen=0,sampled=0,direct_revision=0;
         std::vector<std::uint64_t> dependencies;
@@ -202,12 +202,13 @@ public:
         }return count;
     }
     bool animated()const{for(auto const& p:front.patches)if(p.node->dynamic)return true;return false;}
+    bool animated_map()const{for(auto const& p:front.patches)if(p.node->map_dynamic)return true;return false;}
     bool ready()const{return admitted&&front.width!=0;}
     void create(Id id,unsigned w,unsigned h,Format format){if(admitted)images[id]={w,h,format,{}};}
     void destroy(Id id){images.erase(id);} // committed versions retain their own source data
-    void source(Id id,ID3D11Texture2D* texture,Sample sample={},bool immutable=false){
+    void source(Id id,ID3D11Texture2D* texture,Sample sample={},bool immutable=false,bool map_source=false){
         if(!admitted)return;auto& p=images.at(id);auto n=node();n->area=extent(p);n->revision=++serial;
-        output(*n,0,(sample||immutable)?Texture(texture):crop(texture,n->area));n->dynamic=bool(sample);n->sample=std::move(sample);p.patches={{n->area,n,0}};
+        output(*n,0,(sample||immutable)?Texture(texture):crop(texture,n->area));n->dynamic=bool(sample);n->map_dynamic=map_source&&n->dynamic;n->sample=std::move(sample);p.patches={{n->area,n,0}};
     }
     void record(Command const& c,Direct direct={}){
         if(!admitted)return;auto target=images.find(c.destination);if(target==images.end())throw std::runtime_error("retained target missing");
@@ -242,7 +243,7 @@ public:
         for(unsigned i=0;i<6;++i)if(ids[i])for(unsigned j=i+1;j<6;++j)if(ids[j]==ids[i]){
             n->inputs[i].patches.insert(n->inputs[i].patches.end(),n->inputs[j].patches.begin(),n->inputs[j].patches.end());n->inputs[j]=n->inputs[i];
         }
-        for(auto const& input:n->inputs)for(auto const& p:input.patches)n->dynamic|=p.node->dynamic;
+        for(auto const& input:n->inputs)for(auto const& p:input.patches){n->dynamic|=p.node->dynamic;n->map_dynamic|=p.node->map_dynamic;}
         write(images.at(c.destination),area,n,0);if(c.detail)write(images.at(c.detail),area,n,1);
     }
     void commit(Id image,Rect area){

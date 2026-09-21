@@ -68,30 +68,24 @@ int main(){
         self.assertNotIn('Animator_update (',body)
         self.assertNotIn('Timer_reset_and_activate (',body)
 
-    def test_renderer_timer_yields_after_overrun_and_rejects_stale_callbacks(self):
-        source=(ROOT/'Renderer/native/c3x_renderer.cpp').read_text()
-        body='    void visual_timer_tick('+source.split('    void visual_timer_tick(',1)[1].split('    int visual_frame(',1)[0]
+    def test_independent_cadence_stops_and_has_no_catchup_queue(self):
         run_cpp(r'''
 #include <cassert>
-#include <cstddef>
-using UINT_PTR=unsigned long long;using ULONGLONG=unsigned long long;using UINT=unsigned;
-ULONGLONG now=0;unsigned delay=0,killed=0,armed=0;
-ULONGLONG GetTickCount64(){return now;}
-void renderer_visual_timer(){}
-void OutputDebugStringA(char const*){}
-void KillTimer(std::nullptr_t,UINT_PTR){++killed;}
-UINT_PTR SetTimer(std::nullptr_t,UINT_PTR id,UINT wait,void(*)()){++armed;delay=wait;return id;}
-struct State {
- UINT_PTR visual_timer=7;unsigned cost=0,calls=0;bool stop=false;
- struct {struct {void write(char const*,char const*,bool){}}trace;}renderer_state;
- void visual_frame(bool){++calls;now+=cost;if(stop)visual_timer=0;}
-'''+body+r'''
-};
+#include <atomic>
+#include "Renderer/native/visual_cadence.h"
 int main(){
- State s;s.visual_timer_tick(3);assert(!s.calls&&!killed&&!armed);
- s.cost=5;s.visual_timer_tick(7);assert(s.calls==1&&delay==28&&armed==1&&killed==1);
- s.cost=80;s.visual_timer_tick(7);assert(s.calls==2&&delay==10&&armed==2&&killed==2);
- s.stop=true;s.visual_timer_tick(7);assert(s.calls==3&&armed==2&&!s.visual_timer);
- s.visual_timer_tick(7);assert(s.calls==3&&armed==2);
+ using namespace std::chrono;
+ c3x_renderer::VisualCadence cadence;std::atomic<unsigned> calls{0};
+ steady_clock::time_point last_end;bool first=true;
+ cadence.enable([&]{
+  auto begin=steady_clock::now();
+  if(!first)assert(begin-last_end>=milliseconds(9));
+  first=false;++calls;std::this_thread::sleep_for(milliseconds(60));last_end=steady_clock::now();
+ });
+ std::this_thread::sleep_for(milliseconds(260));cadence.stop();
+ unsigned finished=calls;assert(finished>=2&&finished<=4);
+ std::this_thread::sleep_for(milliseconds(80));assert(calls==finished);
+ cadence.enable([&]{++calls;});std::this_thread::sleep_for(milliseconds(100));
+ cadence.disable();cadence.stop();assert(calls>finished);
 }
 ''')

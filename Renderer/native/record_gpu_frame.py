@@ -112,7 +112,7 @@ def main(argv=None):
     from Renderer.native.native_ui_fixture import prepare
     prepare(ROOT,out/"native-ui.pack",inputs)
     win=windows_root();target=win/out.relative_to(ROOT)
-    settings={'C3X_RENDERER_GPU_JGL_TEST':str(win/jgl.relative_to(ROOT)),'C3X_RENDERER_VISUAL_PROFILE':'city-fidelity','C3X_RENDERER_SHARED_SCENE_SURFACE':'',
+    settings={'C3X_RENDERER_MANUAL_VISUAL':'1','C3X_RENDERER_GPU_JGL_TEST':str(win/jgl.relative_to(ROOT)),'C3X_RENDERER_VISUAL_PROFILE':'city-fidelity','C3X_RENDERER_SHARED_SCENE_SURFACE':'',
         'C3X_RENDERER_WATER_COVERAGE':'','C3X_RENDERER_REFLECTION_CONTROL':'0' if args.reflections=='1' else '1','C3X_RENDERER_WAVES':args.waves,'C3X_RENDERER_WATER_MOTION':args.water_motion,'C3X_RENDERER_GPU_FRAME_TEST':'1','C3X_RENDERER_NATIVE_CAMERA_TEST':'1' if args.native_camera_requests or args.native_navigation else '', 'C3X_RENDERER_NATIVE_NAVIGATION_TEST':'1' if args.native_navigation else '', 'C3X_RENDERER_NATIVE_RECOVERY_TEST':'1' if args.native_recovery else '', 'C3X_RENDERER_GPU_CAMERA_IDENTITY_TEST':'1' if args.atomic_camera_views else '', 'C3X_RENDERER_GPU_CAMERA_TEST':'1' if args.camera_requests else '','C3X_RENDERER_SCROLL_COVERAGE_TEST':'1' if args.scroll_coverage else '','C3X_RENDERER_NATIVE_FRAME_BENCHMARK':'1' if args.benchmark else '',
         'C3X_RENDERER_OUTPUT_COMPLETION_PROBE':'1' if args.completion_probe else '0',
         'C3X_RENDERER_DIAGNOSTIC_HALF_PIXELS':'1' if args.half_pixels else '0',
@@ -241,10 +241,10 @@ def main(argv=None):
         passed=passed and not parse_errors and len(samples)==384 and 'PASS whole native frame comparison:' in log
         receipt['status']='pass' if passed else 'fail' if complete else 'unconfirmed'
     if args.visual_only or args.benchmark:
-        passed=passed and 'PASS independent resident frames:' in log and 'PASS visual timer transport:' in log
+        passed=passed and 'PASS independent resident frames:' in log and 'PASS blocked UI visual delivery:' in log
         receipt['status']='pass' if passed else 'fail' if complete else 'unconfirmed'
         receipt['visual_workload']={'units':args.visual_units,'case':args.visual_unit_case,'effects':{'waves':args.waves,'water_motion':args.water_motion,'reflections':args.reflections}}
-        receipt['visual_frames']=[line for line in log.splitlines() if line.startswith(('VISUAL_SAMPLE ','PASS independent resident frames:','PASS visual timer transport:'))]
+        receipt['visual_frames']=[line for line in log.splitlines() if line.startswith(('VISUAL_SAMPLE ','PASS independent resident frames:','PASS blocked UI visual delivery:'))]
     if args.tactical:
         passed=passed and 'PASS tactical native composition:' in log
         receipt['tactical']={'capture':'actual native JGL line/text seams','previews':['tactical-route.bmp','tactical-grid.bmp'],'passed':passed}

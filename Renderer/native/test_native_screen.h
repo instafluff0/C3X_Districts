@@ -307,23 +307,9 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
         verify(visual_desktop!=nullptr,"independent visual desktop boundary");
         SetWindowPos(window,HWND_TOPMOST,20,20,w,h,SWP_NOACTIVATE|SWP_SHOWWINDOW);
         auto desktop_dc=GetDC(nullptr);double visual_request_ms=0,visual_desktop_ms=0;
-        unsigned auxiliary_timers=0,held_visual_timers=0;
         for(unsigned n=0;n<visual_frames;++n){
-            // A sustained standalone run must service its window messages.
-            // Keep timer delivery for the separate transport assertion below;
-            // these samples exercise exactly one direct visual opportunity.
             MSG message;
-            while(PeekMessageA(&message,nullptr,0,WM_TIMER-1,PM_REMOVE)){TranslateMessage(&message);DispatchMessageA(&message);}
-            while(PeekMessageA(&message,nullptr,WM_TIMER+1,0xffff,PM_REMOVE)){TranslateMessage(&message);DispatchMessageA(&message);}
-            // D3D/window support can queue timers too. Service those during
-            // a long direct-frame run; only withhold this DLL's visual callback
-            // until the explicit transport check. Do not manufacture a timer
-            // backlog that a normal game message pump would have consumed.
-            for(unsigned drained=0;drained<64&&PeekMessageA(&message,nullptr,WM_TIMER,WM_TIMER,PM_REMOVE);++drained){
-                HMODULE callback_module=nullptr;
-                if(message.lParam&&GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,reinterpret_cast<char const*>(message.lParam),&callback_module)&&callback_module==renderer_module){++held_visual_timers;break;}
-                ++auxiliary_timers;DispatchMessageA(&message);
-            }
+            while(PeekMessageA(&message,nullptr,0,0,PM_REMOVE)){TranslateMessage(&message);DispatchMessageA(&message);}
             Sleep(33);LARGE_INTEGER a={},b={};QueryPerformanceCounter(&a);
             int result=visual();verify(result==1||result==C3X_RENDERER_RESULT_PENDING,"independent completed GPU visual frame");QueryPerformanceCounter(&b);
             verify(SUCCEEDED(visual_desktop()),"independent visual desktop completion");LARGE_INTEGER visible={};QueryPerformanceCounter(&visible);
@@ -333,7 +319,6 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
             std::printf("VISUAL_SAMPLE result=%d request_ms=%.3f desktop_ms=%.3f begin_qpc=%lld end_qpc=%lld\n",
                 result,request_ms,desktop_ms,a.QuadPart,b.QuadPart);}
         ReleaseDC(nullptr,desktop_dc);FreeLibrary(desktop_library);
-        std::printf("DIRECT_MESSAGE_PUMP auxiliary_timers=%u held_renderer_timers=%u\n",auxiliary_timers,held_visual_timers);
         QueryPerformanceCounter(&end);verify(status(&after)==1,"visual status after");
         verify(after.frames-before.frames>=visual_frames/2&&after.frames-before.frames<=visual_frames&&after.map_samples>before.map_samples&&after.unit_samples>before.unit_samples&&after.pose_changes>before.pose_changes,
             "authored unit poses advance with no new native selection");
@@ -357,22 +342,39 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
             static_cast<void*>(GetAncestor(window,GA_ROOT)),static_cast<unsigned long>(caller_thread),static_cast<unsigned long>(foreground_thread));
         verify(IsWindowVisible(window)&&GetForegroundWindow()==GetAncestor(window,GA_ROOT),"timer fixture owns visible foreground window");
         c3x_renderer_visual_status_v1 transported=after;
-        LARGE_INTEGER deadline={};QueryPerformanceCounter(&deadline);deadline.QuadPart+=frequency.QuadPart*3;
-        unsigned delivered_timers=0;
-        do{
-            // Check the deadline/progress after each callback. A frame longer
-            // than 33 ms can keep WM_TIMER continuously due; draining all of
-            // them here would starve the very status check that ends the test.
-            MSG message;if(PeekMessageA(&message,nullptr,WM_TIMER,WM_TIMER,PM_REMOVE)){++delivered_timers;DispatchMessageA(&message);}
-            verify(status(&transported)==1,"timer transport status");QueryPerformanceCounter(&end);
-            if(transported.frames>=after.frames+3)break;Sleep(1);
-        }while(end.QuadPart<deadline.QuadPart);
-        std::printf("TIMER_DELIVERY callbacks=%u frames=%lld native_events=%zu transfers=%u visible=%d foreground=%d\n",delivered_timers,transported.frames-after.frames,events.size()-native_events,unsigned(screen_transfers-transfers),int(IsWindowVisible(window)),int(GetForegroundWindow()==GetAncestor(window,GA_ROOT)));
-        if(prior_window)SetForegroundWindow(prior_window);
-        verify(transported.frames>=after.frames+3&&events.size()==native_events&&screen_transfers==transfers,
-            "renderer timer transports frames without native draw demand");
-        std::printf("PASS visual timer transport: frames=%lld native_draw_calls=0\n",transported.frames-after.frames);
+        HANDLE witness_done=CreateEventA(nullptr,TRUE,FALSE,nullptr);verify(witness_done!=nullptr,"blocked UI witness event");
+        std::size_t blocked_changes=0;bool witness_ok=false;
+        SetEnvironmentVariableA("C3X_RENDERER_MANUAL_VISUAL",nullptr);
+        std::thread witness([&]{
+            auto dwm=LoadLibraryA("dwmapi.dll");auto finish=reinterpret_cast<HRESULT(WINAPI*)()>(GetProcAddress(dwm,"DwmFlush"));
+            int cw=std::min(w,GetSystemMetrics(SM_CXSCREEN)-20),ch=std::min(h,GetSystemMetrics(SM_CYSCREEN)-20);
+            auto dc=GetDC(nullptr),copy_dc=CreateCompatibleDC(dc);void* pixels=nullptr;
+            BITMAPINFO info={};info.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);info.bmiHeader.biWidth=cw;info.bmiHeader.biHeight=-ch;
+            info.bmiHeader.biPlanes=1;info.bmiHeader.biBitCount=32;
+            auto bitmap=CreateDIBSection(copy_dc,&info,DIB_RGB_COLORS,&pixels,nullptr,0);
+            auto previous=SelectObject(copy_dc,bitmap);std::vector<unsigned> first;
+            if(bitmap&&finish&&SUCCEEDED(finish())&&BitBlt(copy_dc,0,0,cw,ch,dc,20,20,SRCCOPY)){
+                GdiFlush();auto words=static_cast<unsigned*>(pixels);first.assign(words,words+cw*ch);
+                Sleep(2000);
+                if(SUCCEEDED(finish())&&BitBlt(copy_dc,0,0,cw,ch,dc,20,20,SRCCOPY)){
+                    GdiFlush();witness_ok=true;
+                    for(int y=32;y<ch-80;++y)for(int x=32;x<cw-32;++x)blocked_changes+=(words[y*cw+x]&0xffffff)!=(first[y*cw+x]&0xffffff);
+                }
+            }
+            SelectObject(copy_dc,previous);DeleteObject(bitmap);DeleteDC(copy_dc);ReleaseDC(nullptr,dc);FreeLibrary(dwm);SetEvent(witness_done);
+        });
+        // No messages, native animation ticks, draws, or renderer API calls on
+        // the window thread while the observer samples the actual desktop.
+        if(WaitForSingleObject(witness_done,10000)!=WAIT_OBJECT_0){std::fprintf(stderr,"FAIL blocked UI delivery deadlock\n");ExitProcess(97);}
+        witness.join();CloseHandle(witness_done);
+        SetEnvironmentVariableA("C3X_RENDERER_MANUAL_VISUAL","1");
         live(C3X_NATIVE_VISUAL_POLICY,nullptr,nullptr,nullptr,nullptr,0);
+        verify(status(&transported)==1,"independent delivery status");
+        if(prior_window)SetForegroundWindow(prior_window);
+        verify(witness_ok&&blocked_changes>0&&transported.frames>=after.frames+3&&transported.map_samples>after.map_samples&&
+            events.size()==native_events&&screen_transfers==transfers,"ambient frames reach desktop with blocked UI and no native draw demand");
+        std::printf("PASS blocked UI visual delivery: frames=%lld map_samples=%lld changed_pixels=%zu native_draw_calls=0 blocked_UI_ms>=2000\n",
+            transported.frames-after.frames,transported.map_samples-after.map_samples,blocked_changes);
         verify(visual()==C3X_RENDERER_RESULT_PENDING,"explicit modal policy pauses renderer clock");
         auto clock=reinterpret_cast<c3x_renderer_visual_clock_fn>(GetProcAddress(renderer_module,"c3x_renderer_visual_clock"));
         verify(clock!=nullptr,"native capture shares renderer visual clock");auto paused=clock();Sleep(20);
@@ -395,6 +397,11 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
     capture_display(expected);verify(screen_transfers==transfers_before_partial+1&&owner.stats().readbacks==0,"partial transfer uses retained GPU display");
     // Partial native handoff must retain full-color displayed pixels, including
     // those outside the native update that differ from the current red canvas.
+    // Return from the capture oracle's off-screen scan before handing off.
+    // GDI clips writes to the visible window; subsequent exposure normally
+    // requests native WM_PAINT, which this deliberately inert window lacks.
+    // The full-screen handoff must preserve every currently visible pixel.
+    verify(SetWindowPos(window,HWND_TOPMOST,0,0,0,0,SWP_NOSIZE|SWP_NOACTIVATE)!=FALSE,"expose complete native handoff");
     c3x_renderer_gpu_present_v1 handoff={sizeof(handoff)};handoff.action=2;
     verify(present(&handoff)==C3X_RENDERER_RESULT_OK,"preserve owned GPU display during GDI handoff");
     preserve_gdi_display=true;
@@ -859,7 +866,10 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
                 // A fresh authoritative request recovers using the same native
                 // surfaces; worker tickets/sessions cannot alias the old view.
                 c3x_renderer_camera_view_v1 rebuilt={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(rebuilt)};
-                verify(exact_native_map(C3X_NATIVE_MAP_PREPARE,live_images[0],&live_request,&rebuilt)==C3X_RENDERER_RESULT_OK,"fresh capture recovers after retirement");
+                int recovered=exact_native_map(C3X_NATIVE_MAP_PREPARE,live_images[0],&live_request,&rebuilt);
+                std::fprintf(stderr,"NATIVE_RECOVERY case=%d result=%d lifetime=%llu\n",recovery,recovered,
+                    static_cast<unsigned long long>(lifetime(C3X_NATIVE_MAP,live_images[0],0)));
+                verify(recovered==C3X_RENDERER_RESULT_OK,"fresh capture recovers after retirement");
                 verify(exact_native_map(C3X_NATIVE_MAP_COMMIT,live_images[0],nullptr,nullptr)==C3X_RENDERER_RESULT_OK,"fresh recovery commit");
             }
             std::puts("PASS native async recovery: cases=4 cancellation=1 config_off_barrier=1 pending_reset=1 ready_reset=1 recreated=1 stale_commit=0");

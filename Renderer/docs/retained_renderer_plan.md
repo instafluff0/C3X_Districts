@@ -24,47 +24,47 @@ game attempt. Live gameplay and performance acceptance are still pending.
 
 ## M3.8 current handoff — in progress
 
-**Live correctness remains open.** Capture `20260921-020053-d1fc60` still
-has 37 water draws for 37 native composites, zero independent map samples and
-19 retained texture-budget failures. Startup admission improved; the first
-full-screen blend rejection remains unclassified. See
+**Live correctness remains open.** The user still reports no water/resource
+animation and pauses during interturn. The last debug-only launch has an empty
+log; do not infer its initiating failure from older captures. The previous
+recorded run lost animated map sources after native fallbacks. See
 [live findings](live_usage_findings_20260920.md).
 
-**Completed corrections:** known empty native sprites and rejected-format alpha
-calls preserve their native return without an unnecessary pixel barrier. GPU-owned
-canvases release stale CPU mirrors, fixing the reproduced six-fullscreen-canvas
-admission failure without increasing the 64 MiB source-cache budget. The private
-CPU unit fallback scopes its synchronous DC leases and restores the prior scope
-on every exit. Real external escapes retain their barriers. Blend-layout logging
-is bounded. No new patch-table entry or injected state is needed.
+**New completed capability:** animation readiness distinguishes an animated map
+from a static CPU snapshot or unit-only animation. The prior readiness check
+could disable native recovery while the map stayed frozen. The DLL propagates
+map animation dependencies through composition and re-enables recovery when
+those dependencies disappear. The production D3D negative test fails on the old
+code and passes after the correction; restored map copies and genuinely static
+maps remain ready. Earlier empty-sprite, stale CPU-mirror and private unit-DC
+corrections remain. No new hook, patch-table entry or injected state is needed.
 
-**Installed evaluation candidate:**
-`97593ec91d493f600f003203f26a996cf5af33d9bf275dbfd50d53d32b40b9b4`.
-`native/build/native-hud-stage.json` records matching source, rollback and
-validation. The authorized INSTALL invocation displayed success, and Civ III
-launched to its main menu. Automated guest input did not navigate beyond it;
-the user resumed responsibility for gameplay testing. The FPS helper did not
-start; the separate debug-only launch provides no gameplay or FPS acceptance.
+**Staged evaluation candidate:**
+`7a46796b9b2344b82a6201ecfbed0559dbcdec17a80d5ffd3944ed83b94acc9b`.
+`native/build/ambient-recovery-stage.json` records source, rollback and validation.
+This DLL-only correction needs no new INSTALL invocation; the private-DC bridge
+was installed previously. No game was launched in this follow-up. Capture now
+also writes a bounded renderer-owned log and continues if optional FPS startup
+fails; PowerShell parsing passes.
 
-**Broader verification:** the complete 2240×1260 real-JGL 100-frame replay passes
-with actual local HUD panels, empty hover sprites, save/restore, fog/reveal,
-tactical overlays, camera/reset and config-off. An ambient-only desktop witness
-changes 31,392 interior pixels without native redraws. The 1,200-frame stress run
-produces 1,200 map samples, 9,600 unit samples and 4,800 pose changes, retaining
-39.01 MiB / 36 nodes. Timer delivery also passes. Mean request/desktop durations
-are 39.27/48.86 ms with an additional 1 GiB VA reservation; these are stress
-measurements, not an A/B speedup or Standard <33 ms acceptance.
-**That long run fails its later fresh-capture recovery assertion**, so its overall
-receipt is failed. The shorter recovery pass does not close this finding.
-`native-hud-display-check/receipt.json`, `native-hud-sustained/receipt.json` and
-`gpu-composition/140eae6dc3d74ffd9598f5aacb477278/receipt.json` preserve the evidence.
-Approved injected compilation and extracted private-scope tests pass.
+**Verification:** `native/build/ambient-recovery-fullscreen/receipt.json` passes
+at 2240×1260 with all water effects and an extra 1 GiB VA reservation. The ambient
+only witness changes 31,526 desktop pixels without units or native redraws.
+1,200 direct frames produce 1,200 map samples, 9,600 unit samples and 4,794 pose
+changes; retained history is 40,904,712 bytes / 36 nodes. Mean request/desktop
+costs are 41.73/51.12 ms. Timer, actual HUD, selection/path/grid, fog/reveal,
+config-off and all four native recovery cases pass. These are stress results,
+not a matched speedup or Standard <33 ms acceptance. The previous long-run
+recovery failure did not recur; its cause is not established by this pass.
+Seven extracted timer/UI/camera contracts pass, one skips.
 
-**Next responsibility:** diagnose fresh recovery after sustained animation;
-classify any remaining live blend rejection and prove live map animation between
-native redraws. Movement visibility, sustained city/selection/navigation stability,
-general device-removal recovery and Standard <33 ms p95 remain open. Do not ask
-for another incremental manual capture while independent investigation remains.
+**Next responsibility:** identify the initiating live fallback and prove continuous
+idle map animation in the actual game; investigate the earlier intermittent
+recovery failure. Interturn continuity is separately open: scheduling and final
+presentation still depend on the native UI thread pumping messages. General
+device recovery, sustained lifecycle/navigation stability and Standard <33 ms
+p95 also remain open. Avoid another incremental manual capture request while
+independent investigation remains.
 
 Whole-world appearance enters through bounded caller-thread pages. Existing
 workers prepare canonical regions and wrapped occurrences independently of the
@@ -489,6 +489,7 @@ Current evidence needs three qualifications:
 | Authoritative world coverage | Publish complete renderer-owned appearance for the renderable world independently of visiting each camera destination. Audit offscreen mutations, removals and viewer changes; retain revisions and readiness coverage. Use bounded caller-thread capture and existing change publication; workers never dereference game objects. Preserve fog, unseen coverage and frozen explored animation. |
 | Render-ready representation | Combine shared source meshes/materials and compact rigid instances with compiled regional terrain/deformed/connectivity content. Prepare from world changes and initialization rather than camera misses; retain useful compiled data across GPU eviction where budgets permit. Measure CPU/GPU/disk backing tradeoffs instead of keeping all current expanded meshes resident or increasing cache caps. |
 | Coherent native cutover | Give every camera trigger, including newly selected units and action following, a prompt, safe caller-thread completion boundary that advances pixels, native camera, overlays and picking together. Preserve vanilla destination/clamping and selection/action centering behavior, reentrancy guards and gameplay cadence. Do not accelerate gameplay or invoke extra action updates to consume a ready visual frame. |
+| Interturn ambient presentation | Open: the presenter's UI-thread timer still depends on native message pumping. Prove continuous visible water/resource motion while gameplay holds that thread busy, using copied authorized scene/visibility inputs and the same HWND. Preserve native/GDI handoff, modal policy, lifecycle cancellation, action timing and atomic camera adoption. Asynchronous scene preparation alone does not satisfy this requirement. |
 | Acceptance under load | Run the arbitrary-jump matrix in the validation guide, plus edits, cancellation, fog/viewer changes, reset, config-off and memory pressure. Prove prepared-world construction invariants, distinguish streaming misses and account for preparation coverage/time. |
 
 For a destination whose complete dependencies are prepared and GPU resident,

@@ -36,6 +36,7 @@
 #include "gpu_visibility.h"
 #include "render_core/dynamic_scene_input.h"
 #include "gpu_native_presenter.h"
+#include "visual_cadence.h"
 #include "native_screen_bridge.h"
 #include "native_observation.h"
 #include "native_lifetime_registry.h"
@@ -10357,13 +10358,12 @@ struct CameraTerrainPreview {
     }
 };
 
-// Civ III remains the caller and presenter. One renderer worker owns all
-// renderer-state mutation and D3D work, consuming a deep copy of each captured
+// Civ III owns native composition and window lifecycle. One renderer worker
+// owns renderer-state mutation and D3D work, consuming a deep copy of each captured
 // frame. The default synchronous ABI permits no stale-frame fallback. Its
 // opt-in ambient compatibility mode may retain only an exactly matched static
 // camera/scene front while a newer clock tick is in flight; camera or captured
 // ownership changes still take over synchronously. No backlog is accumulated.
-void CALLBACK renderer_visual_timer(HWND,UINT,UINT_PTR,DWORD);
 void CALLBACK renderer_world_timer(HWND,UINT,UINT_PTR,DWORD);
 
 class RendererWorker {
@@ -10590,7 +10590,7 @@ public:
             renderer_state.trace.write("world-input",detail,true);
         }
     }
-    void stop_visual_timer(){if(visual_timer){KillTimer(nullptr,visual_timer);visual_timer=0;}}
+    void stop_visual_delivery(){visual_delivery=false;visual_present_pending=false;visual_cadence.disable();}
     void advance_visual_clock(){
         LARGE_INTEGER now={},frequency={};QueryPerformanceCounter(&now);QueryPerformanceFrequency(&frequency);
         if(visual_last && visual_allowed && now.QuadPart>=visual_last)visual_ticks+=now.QuadPart-visual_last;
@@ -10609,27 +10609,19 @@ public:
             session?static_cast<long long>(session->visual_bytes()):0,session?static_cast<long long>(session->visual_nodes()):0,visual_ticks,visual_frequency};
         return C3X_RENDERER_RESULT_OK;
     }
-    void visual_timer_tick(UINT_PTR timer_id){
-        if(!timer_id || timer_id!=visual_timer)return;
-        // One opportunity at a time. A slow frame must not leave WM_TIMER
-        // permanently due and starve the game's idle/message-pump work.
-        KillTimer(nullptr,timer_id);
-        ULONGLONG begin=GetTickCount64();
-        try{visual_frame(true);}catch(...){OutputDebugStringA("[C3X renderer] visual timer failed\n");}
-        if(visual_timer!=timer_id)return; // native ownership/reset stopped it
-        ULONGLONG elapsed=GetTickCount64()-begin;
-        UINT delay=elapsed>=23?10:UINT(33-elapsed);
-        visual_timer=SetTimer(nullptr,timer_id,delay,renderer_visual_timer);
-        if(!visual_timer)renderer_state.trace.write("visual-timer","rearm failed; native demand retained",true);
-    }
-
-    int visual_frame(bool timer=false){
+    int visual_frame(bool automatic=false){
+        // Deterministic replay measures direct opportunities separately from
+        // the blocked-UI delivery test. Production leaves this variable unset.
+        char manual[8]={};
+        if(automatic&&GetEnvironmentVariableA("C3X_RENDERER_MANUAL_VISUAL",manual,sizeof(manual))&&
+            std::strcmp(manual,"1")==0)return C3X_RENDERER_RESULT_PENDING;
         LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
-        // A timer is only transport on the presenter's UI thread. Nested UI
-        // dispatch cannot reenter a native transaction or wait on its own gate.
+        // The owned cadence thread and native caller share the transaction
+        // gate. An ambient opportunity never waits behind native ownership.
         std::unique_lock<std::mutex> calls(call_mutex,std::try_to_lock);
-        if(!calls.owns_lock()||!running||!gpu_presenter.caller_thread())return C3X_RENDERER_RESULT_PENDING;
-        if(!visual_allowed || (timer&&(!IsWindowVisible(gpu_present.window?static_cast<HWND>(gpu_present.window):nullptr)||
+        if(!calls.owns_lock()||!running||(!automatic&&!gpu_presenter.caller_thread())||
+            (automatic&&!visual_delivery))return C3X_RENDERER_RESULT_PENDING;
+        if(!visual_allowed || (automatic&&(!IsWindowVisible(gpu_present.window?static_cast<HWND>(gpu_present.window):nullptr)||
             GetForegroundWindow()!=GetAncestor(static_cast<HWND>(gpu_present.window),GA_ROOT)))){
             LARGE_INTEGER now={};QueryPerformanceCounter(&now);visual_last=now.QuadPart;return C3X_RENDERER_RESULT_PENDING;
         }
@@ -10643,7 +10635,15 @@ public:
         if(!session||!session->visual_active()||!gpu_presenter.view())return C3X_RENDERER_RESULT_PENDING;
         advance_visual_clock();
         int result=submit_locked(lock,Command::visual_frame);
-        if(result==C3X_RENDERER_RESULT_OK){result=gpu_presenter.present();++visual_frames;}
+        if(result==C3X_RENDERER_RESULT_OK)visual_present_pending=true;
+        if(visual_present_pending&&(result==C3X_RENDERER_RESULT_OK||result==C3X_RENDERER_RESULT_PENDING)){
+            try{result=gpu_presenter.present(automatic);}catch(...){result=C3X_RENDERER_RESULT_ERROR;}
+            if(result==C3X_RENDERER_RESULT_OK){visual_present_pending=false;++visual_frames;}
+            else if(result==C3X_RENDERER_RESULT_ERROR)visual_present_pending=false;
+        }
+        if(result==C3X_RENDERER_RESULT_ERROR){
+            session->stop_visuals();stop_visual_delivery();
+        }
         QueryPerformanceCounter(&end);
         if(result==C3X_RENDERER_RESULT_ERROR || visual_frames<=3 || visual_frames%128==0){
         char line[320];std::snprintf(line,sizeof(line),"result=%d frames=%llu request_ms=%.3f retained_bytes=%llu nodes=%zu native_map_calls=0 native_unit_calls=0 map_samples=%llu map_sources=%zu",
@@ -10658,9 +10658,9 @@ public:
         std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);
         start_locked();drain_camera_locked(lock,gpu_presentation);
         if(!gpu_presenter.caller_thread())return C3X_RENDERER_RESULT_BAD_ARGUMENT;
-        if(request.action==1){stop_visual_timer();if(renderer_state.gpu_composition)renderer_state.gpu_composition->stop_visuals();gpu_presenter.reset();return C3X_RENDERER_RESULT_OK;}
+        if(request.action==1){stop_visual_delivery();if(renderer_state.gpu_composition)renderer_state.gpu_composition->stop_visuals();gpu_presenter.reset();return C3X_RENDERER_RESULT_OK;}
         if(request.action==2){
-            stop_visual_timer();if(renderer_state.gpu_composition)renderer_state.gpu_composition->stop_visuals();
+            stop_visual_delivery();if(renderer_state.gpu_composition)renderer_state.gpu_composition->stop_visuals();
             gpu_present=request;int result=submit_locked(lock,Command::gpu_present);
             if(result==C3X_RENDERER_RESULT_OK)gpu_presenter.release_native();
             return result;
@@ -10673,17 +10673,21 @@ public:
             gpu_present=request;
             int result=submit_locked(lock,Command::gpu_present);
             if(result==C3X_RENDERER_RESULT_OK)result=gpu_presenter.present();
-            if(result!=C3X_RENDERER_RESULT_OK){stop_visual_timer();gpu_presenter.reset();}
-            else if(session->visual_ready()&&!visual_timer){advance_visual_clock();visual_timer=SetTimer(nullptr,0,33,renderer_visual_timer);
-                if(!visual_timer){session->stop_visuals();renderer_state.trace.write("visual-timer", "creation failed; native compatibility demand retained",true);}}
+            if(result!=C3X_RENDERER_RESULT_OK){stop_visual_delivery();session->stop_visuals();gpu_presenter.reset();}
+            else if(session->visual_ready()){
+                advance_visual_clock();visual_present_pending=false;visual_delivery=true;
+                visual_cadence.enable([this]{
+                    try{visual_frame(true);}catch(...){OutputDebugStringA("[C3X renderer] independent visual frame failed\n");}
+                });
+            }
             return result;
-        }catch(...){gpu_presenter.reset();return C3X_RENDERER_RESULT_ERROR;}
+        }catch(...){stop_visual_delivery();session->stop_visuals();gpu_presenter.reset();return C3X_RENDERER_RESULT_ERROR;}
     }
 
     // Native final transfer is independent of map publication. Existing CPU
     // surfaces stay authoritative until their entire access lifetime is covered.
     int native_screen(c3x_native_images::ScreenSnapshot* screen) {
-        std::lock_guard<std::mutex> calls(call_mutex);stop_visual_timer();
+        std::lock_guard<std::mutex> calls(call_mutex);stop_visual_delivery();
         if(renderer_state.gpu_composition)renderer_state.gpu_composition->stop_visuals();std::unique_lock<std::mutex> lock(state_mutex);
         if(!gpu_presenter.caller_thread())return C3X_RENDERER_RESULT_BAD_ARGUMENT;
         if(!screen){
@@ -11373,7 +11377,8 @@ public:
 #endif
 
     void reset_and_stop() {
-        std::unique_lock<std::mutex> call_guard(call_mutex);stop_visual_timer();
+        visual_cadence.stop();
+        std::unique_lock<std::mutex> call_guard(call_mutex);stop_visual_delivery();
         if(world_timer){KillTimer(nullptr,world_timer);world_timer=0;}
         world_capture=nullptr;world_input.reset();
         std::unique_lock<std::mutex> lock(state_mutex);
@@ -11442,7 +11447,8 @@ private:
     std::vector<unsigned short> screen_pixels;unsigned screen_format=1;
     int screen_width=0,screen_height=0;RECT screen_area={};
     c3x_renderer_gpu_present_v1 gpu_present={};
-    UINT_PTR visual_timer=0;bool visual_allowed=true;
+    c3x_renderer::VisualCadence visual_cadence;
+    bool visual_delivery=false,visual_present_pending=false,visual_allowed=true;
     long long visual_ticks=0,visual_last=0,visual_frequency=0;
     std::uint64_t visual_frames=0,visual_map_samples=0,visual_unit_samples=0,visual_pose_changes=0;
     c3x_renderer::render_core::DynamicSceneInputs dynamic_inputs;
@@ -12787,9 +12793,6 @@ private:
 };
 
 RendererWorker * renderer_worker = nullptr;
-void CALLBACK renderer_visual_timer(HWND,UINT,UINT_PTR id,DWORD){
-    if(renderer_worker)renderer_worker->visual_timer_tick(id);
-}
 void CALLBACK renderer_world_timer(HWND,UINT,UINT_PTR id,DWORD){
     try{if(renderer_worker)renderer_worker->capture_world_tick(id);}
     catch(...){OutputDebugStringA("[C3X renderer] world capture page unavailable\n");}

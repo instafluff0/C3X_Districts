@@ -1,13 +1,19 @@
 #pragma once
 #include "gpu_frame_api.h"
 #include "gpu_image_compositor.h"
-#include <dxgi.h>
+#include <dxgi1_2.h>
+#include <dcomp.h>
+#pragma comment(lib,"dcomp.lib")
 namespace c3x_gpu_images {
 // One native-owned HWND; no window creation, message loop or redraw callback.
-// Create/resize/Present/release run on its caller thread while RendererWorker is
-// parked. Only the worker writes the retained display and swap-chain back buffer.
+// Native lifecycle changes stay on the caller. The composition swap chain has
+// no HWND/message-pump dependency during Present; an independently scheduled
+// visual frame can present under the same serialized ownership gate.
 class NativePresenter {
-    ComPtr<IDXGISwapChain> swap;
+    ComPtr<IDXGISwapChain1> swap;
+    ComPtr<IDCompositionDevice> composition;
+    ComPtr<IDCompositionTarget> composition_target;
+    ComPtr<IDCompositionVisual> visual;
     ComPtr<ID3D11Texture2D> back,display;
     ComPtr<ID3D11RenderTargetView> target;
     std::vector<unsigned short> native_pixels;
@@ -19,7 +25,11 @@ class NativePresenter {
 public:
     bool initialized=false;
     bool caller_thread()const{return !owner||owner==GetCurrentThreadId();}
-    void reset(){fallback_pixels.clear();native_pixels.clear();native_view.Reset();native_upload.Reset();target.Reset();display.Reset();back.Reset();swap.Reset();window=nullptr;owner=0;width=height=0;initialized=false;}
+    void reset(){
+        if(composition_target){composition_target->SetRoot(nullptr);if(composition){composition->Commit();composition->WaitForCommitCompletion();}}
+        visual.Reset();composition_target.Reset();composition.Reset();
+        fallback_pixels.clear();native_pixels.clear();native_view.Reset();native_upload.Reset();target.Reset();display.Reset();back.Reset();swap.Reset();window=nullptr;owner=0;width=height=0;initialized=false;
+    }
     // Switching a partial transfer back to GDI must preserve the last displayed
     // pixels outside its rectangle. The CPU compatibility route already owns
     // these bytes; no GPU readback or repaint request is needed.
@@ -68,14 +78,17 @@ public:
         if(!full)return false;
         release_native();
         ComPtr<IDXGIDevice> dxgi;checked(device->QueryInterface(IID_PPV_ARGS(&dxgi)));
-        ComPtr<IDXGIAdapter> adapter;checked(dxgi->GetAdapter(&adapter));ComPtr<IDXGIFactory> factory;checked(adapter->GetParent(IID_PPV_ARGS(&factory)));
-        checked(factory->MakeWindowAssociation(hwnd,DXGI_MWA_NO_WINDOW_CHANGES|DXGI_MWA_NO_ALT_ENTER));
-        // Blt-model windowed presentation permits clean return to native GDI.
-        // Partial native transfers update 'display'; discard buffers never supply
-        // preserved pixels. Do not change Civ III's display mode or window size.
-        DXGI_SWAP_CHAIN_DESC desc={};desc.BufferDesc.Width=w;desc.BufferDesc.Height=h;desc.BufferDesc.Format=DXGI_FORMAT_B8G8R8A8_UNORM;
-        desc.SampleDesc.Count=1;desc.BufferUsage=DXGI_USAGE_RENDER_TARGET_OUTPUT;desc.BufferCount=1;desc.OutputWindow=hwnd;desc.Windowed=TRUE;desc.SwapEffect=DXGI_SWAP_EFFECT_DISCARD;
-        checked(factory->CreateSwapChain(device,&desc,&swap));checked(swap->GetBuffer(0,IID_PPV_ARGS(&back)));
+        ComPtr<IDXGIAdapter> adapter;checked(dxgi->GetAdapter(&adapter));ComPtr<IDXGIFactory2> factory;checked(adapter->GetParent(IID_PPV_ARGS(&factory)));
+        // This flip chain targets a composition visual, not Civ III's HWND.
+        // Detaching the visual restores ordinary GDI on that same window.
+        // Never use CreateSwapChainForHwnd/SetFullscreenState here.
+        DXGI_SWAP_CHAIN_DESC1 desc={};desc.Width=w;desc.Height=h;desc.Format=DXGI_FORMAT_B8G8R8A8_UNORM;
+        desc.SampleDesc.Count=1;desc.BufferUsage=DXGI_USAGE_RENDER_TARGET_OUTPUT;desc.BufferCount=2;
+        desc.SwapEffect=DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;desc.Scaling=DXGI_SCALING_STRETCH;desc.AlphaMode=DXGI_ALPHA_MODE_IGNORE;
+        checked(factory->CreateSwapChainForComposition(device,&desc,nullptr,&swap));checked(swap->GetBuffer(0,IID_PPV_ARGS(&back)));
+        checked(DCompositionCreateDevice(dxgi.Get(),IID_PPV_ARGS(&composition)));
+        checked(composition->CreateTargetForHwnd(hwnd,FALSE,&composition_target));
+        checked(composition->CreateVisual(&visual));checked(visual->SetContent(swap.Get()));
         D3D11_TEXTURE2D_DESC texture={};back->GetDesc(&texture);texture.BindFlags=D3D11_BIND_RENDER_TARGET;texture.MiscFlags=0;
         checked(device->CreateTexture2D(&texture,nullptr,&display));checked(device->CreateRenderTargetView(display.Get(),nullptr,&target));
         window=hwnd;owner=GetCurrentThreadId();width=w;height=h;return true;
@@ -109,10 +122,12 @@ public:
         context->CopyResource(back.Get(),display.Get());context->Flush();return true;
     }
 
-    int present(){
-        if(!swap||owner!=GetCurrentThreadId())return C3X_RENDERER_RESULT_BAD_ARGUMENT;
-        HRESULT hr=swap->Present(0,0);
+    int present(bool independent=false){
+        if(!swap||(!independent&&owner!=GetCurrentThreadId())||(independent&&!initialized))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        HRESULT hr=swap->Present(0,independent?DXGI_PRESENT_DO_NOT_WAIT:0);
+        if(hr==DXGI_ERROR_WAS_STILL_DRAWING)return C3X_RENDERER_RESULT_PENDING;
         if(FAILED(hr))return C3X_RENDERER_RESULT_ERROR;
+        if(!initialized){checked(composition_target->SetRoot(visual.Get()));checked(composition->Commit());}
         initialized=true;return C3X_RENDERER_RESULT_OK;
     }
 };

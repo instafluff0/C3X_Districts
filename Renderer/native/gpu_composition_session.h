@@ -9,6 +9,7 @@ class Session {
     ID3D11Device* device;ID3D11DeviceContext* context;
     Compositor gpu;RetainedComposition layers;Id map=0;std::int64_t ticket=0,identity=0;std::uint64_t readbacks=0;
     Id resident_unit=0;ID3D11Texture2D* resident_unit_texture=nullptr;
+    bool map_animation_expected=false;
 public:
     Session(ID3D11Device* d,ID3D11DeviceContext* c):device(d),context(c),gpu(d,c,128u*1024u*1024u),layers(d,c){}
     // Fullscreen map/screen/save pairs plus UI and the next immutable map
@@ -26,7 +27,7 @@ public:
         if(!gpu.import_bgra(next,texture,x,y)){gpu.destroy(next);return false;}
         // Admission failure leaves the previous immutable map and UI handles
         // usable. Publish the new identity only after its import succeeds.
-        if(map){layers.destroy(map);gpu.destroy(map);}map=next;
+        if(map){layers.destroy(map);gpu.destroy(map);}map=next;map_animation_expected=bool(sample);
         try{
             // A rejected history is rebuilt only at fresh authoritative map
             // demand. Current native images become immutable static inputs;
@@ -36,7 +37,7 @@ public:
                     layers.create(id,w,h,format);layers.source(id,source);
                 });
             }
-            layers.create(map,width,height,Format::bgra32);layers.source(map,gpu.texture(map),std::move(sample),true);}catch(std::exception const& e){OutputDebugStringA("[C3X renderer] retained admission: ");OutputDebugStringA(e.what());OutputDebugStringA("\n");layers.discard();}
+            layers.create(map,width,height,Format::bgra32);layers.source(map,gpu.texture(map),std::move(sample),true,true);}catch(std::exception const& e){OutputDebugStringA("[C3X renderer] retained admission: ");OutputDebugStringA(e.what());OutputDebugStringA("\n");layers.discard();}
         ticket=serial;if(!identity)identity=serial;return true;
     }
     std::int64_t session_identity()const{return identity;}
@@ -75,7 +76,10 @@ public:
     std::uint64_t visual_bytes()const{return layers.bytes();}
     std::size_t visual_nodes()const{return layers.node_count();}
     std::size_t visual_sources()const{return layers.sampled_sources();}
-    bool visual_ready()const{return layers.ready();}
+    // Correct static pixels alone do not certify ambient delivery. A CPU
+    // snapshot can sever map samples while unit animation remains reachable.
+    // Let the existing native recovery demand run until map writes restore it.
+    bool visual_ready()const{return layers.ready()&&(!map_animation_expected||layers.animated_map());}
     bool visual_active()const{return layers.ready()&&layers.animated();}
     void stop_visuals(){layers.uncommit();}
     int visual_frame(long long ticks,long long frequency,ID3D11RenderTargetView* target,ID3D11Texture2D* display,ID3D11Texture2D* buffer){

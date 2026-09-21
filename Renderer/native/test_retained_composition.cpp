@@ -179,5 +179,44 @@ int test_retained_composition(){
         assert(result.resident_bytes==std::int64_t(width)*height*4);
         std::puts("PASS fullscreen publication: native_canvases=7 next_map=1 old_map_retired=1 no_CPU_fallback=1");
     }
+    // A CPU snapshot can retain correct pixels while losing the map's sample
+    // callback. Even an independently animated unit must not certify that
+    // frozen map as ready and disable the native recovery scheduler.
+    {
+        std::vector<unsigned> pixels(w*h,0xff123456),output;
+        D3D11_TEXTURE2D_DESC desc={};desc.Width=w;desc.Height=h;desc.MipLevels=desc.ArraySize=desc.SampleDesc.Count=1;
+        desc.Format=DXGI_FORMAT_B8G8R8A8_UNORM;desc.Usage=D3D11_USAGE_DEFAULT;desc.BindFlags=D3D11_BIND_SHADER_RESOURCE;
+        D3D11_SUBRESOURCE_DATA initial={pixels.data(),w*4,0};ComPtr<ID3D11Texture2D> source;
+        checked(device->CreateTexture2D(&desc,&initial,&source));
+        Session session(device.Get(),context.Get());
+        assert(session.publish(source.Get(),1,0,0,w,h,
+            [&](long long,long long){return RetainedComposition::Texture(source.Get());}));
+        c3x_renderer_gpu_images_v1 request={};request.struct_size=sizeof(request);request.ticket=1;
+        request.action=C3X_GPU_CREATE;request.width=w;request.height=h;request.format=C3X_GPU_BGRA32;
+        c3x_renderer_gpu_result_v1 result={};std::vector<Command> commands;
+        assert(session.execute(request,commands,{},result,output)==C3X_RENDERER_RESULT_OK);Id canvas=Id(result.image);
+        desc.BindFlags=D3D11_BIND_RENDER_TARGET;
+        ComPtr<ID3D11Texture2D> display,buffer;
+        checked(device->CreateTexture2D(&desc,nullptr,&display));checked(device->CreateTexture2D(&desc,nullptr,&buffer));
+        ComPtr<ID3D11RenderTargetView> target;checked(device->CreateRenderTargetView(display.Get(),nullptr,&target));
+        auto show=[&]{assert(session.display_to(1,canvas,target.Get(),display.Get(),buffer.Get(),w,h,full));};
+        auto copy_map=[&]{request.action=C3X_GPU_SUBMIT;commands={{Kind::copy,canvas,session.map_image(),full,full}};
+            assert(session.execute(request,commands,{},result,output)==C3X_RENDERER_RESULT_OK);};
+        copy_map();show();assert(session.visual_ready());
+        request.action=C3X_GPU_UPLOAD;request.image=std::int64_t(canvas);request.revision=1;
+        assert(session.execute(request,{},pixels,result,output)==C3X_RENDERER_RESULT_OK);show();
+        if(session.visual_ready()){std::fprintf(stderr,"FAIL frozen CPU map wrongly disables ambient recovery\n");return 1;}
+        RetainedComposition::Direct unit;unit.animated=true;unit.revision=[](long long ticks,long long){return std::uint64_t(ticks);};
+        unit.draw=[](Compositor& gpu,Command const& input){auto c=input;c.kind=Kind::fill;c.color=0xffabcdef;return gpu.submit(&c,1);};
+        c3x_renderer_gpu_unit_v1 draw={};draw.ticket=1;draw.destination=std::int64_t(canvas);draw.clip[2]=w;draw.clip[3]=h;
+        assert(session.draw_dynamic(draw,8,8,0,0,std::move(unit))==C3X_RENDERER_RESULT_OK);show();
+        if(session.visual_ready()){std::fprintf(stderr,"FAIL animated unit masks missing ambient map source\n");return 1;}
+        copy_map();show();assert(session.visual_ready());
+        assert(session.publish(source.Get(),2)); // genuinely static map is ready too
+        request.ticket=2;request.action=C3X_GPU_SUBMIT;commands={{Kind::copy,canvas,session.map_image(),full,full}};
+        assert(session.execute(request,commands,{},result,output)==C3X_RENDERER_RESULT_OK);
+        assert(session.display_to(2,canvas,target.Get(),display.Get(),buffer.Get(),w,h,full));assert(session.visual_ready());
+        std::puts("PASS ambient ownership recovery: frozen CPU snapshot rejected, unit-only animation rejected, copied map restores readiness, static maps remain ready");
+    }
     std::printf("PASS retained composition: %u exact GPU oracles, 120 independent clock frames, aliasing, paired 555/565/full color, UI versioning, partial publication, bounded overwrite and reset\n",checks);return 0;
 }
