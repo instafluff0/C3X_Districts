@@ -4,6 +4,32 @@ from Renderer.native.native_cpp_test import run_cpp
 
 
 class WorldReadinessTests(unittest.TestCase):
+    def test_returned_page_cannot_change_scope_or_replace_newer_publication(self):
+        run_cpp(r'''
+#include "Renderer/native/render_core/world_input_capture.h"
+#include <cassert>
+using namespace c3x_renderer::render_core;
+int main(){
+ ScenePublication journal;WorldInputCapture capture;std::vector<unsigned> topology(800,2);
+ c3x_renderer_frame_v1 frame{};frame.world_width_tiles=40;frame.world_height_tiles=40;
+ frame.world_topology=topology.data();frame.world_topology_count=unsigned(topology.size());
+ c3x_renderer_camera_identity_v1 identity{1,2,3,4};assert(journal.capture(frame,identity));
+ auto fill=[](c3x_renderer_world_page_v1& page){page.count=128;
+  for(unsigned n=0;n<page.count;++n){auto& t=page.tiles[n];t={};t.tile_y=n/20;t.tile_x=2*(n%20)+(t.tile_y&1);t.tile_flags=C3X_RENDERER_TILE_PREFETCH;}};
+ auto page=capture.page(*journal.state());fill(page);auto sequence=journal.state()->sequence;
+ for(unsigned n=0;n<7;++n){auto bad=page;
+  if(n==0)++bad.identity.map_epoch;if(n==1)++bad.identity.viewer_epoch;
+  if(n==2)++bad.identity.visibility_epoch;if(n==3)++bad.identity.scene_epoch;
+  if(n==4)++bad.frame.world_width_tiles;if(n==5)++bad.frame.world_topology_revision;
+  if(n==6)++bad.frame.world_topology_count;
+  assert(!capture.accept(bad,journal));assert(capture.cursor==0&&journal.state()->sequence==sequence);
+ }
+ assert(journal.capture(frame,identity)); // New publication, even in the same epoch.
+ assert(!capture.accept(page,journal)&&capture.cursor==0);
+ page=capture.page(*journal.state());fill(page);assert(capture.accept(page,journal)&&capture.cursor==128);
+}
+''')
+
     def test_paging_backpressure_scope_and_remote_removal(self):
         run_cpp(r'''
 #include "Renderer/native/render_core/world_input_capture.h"

@@ -4,8 +4,9 @@ The target is one approximately ten-minute gameplay capture that can drive the
 **production renderer from its inputs**, be inspected at any recorded frame/time,
 and be reused to accept or reject architectural changes. This is the evidence
 contract for M4.0 in the [roadmap](retained_renderer_plan.md), not a separate
-renderer or additional milestone ladder. The current composition journal does
-not meet it. Do not ask for another long manual recording until the automated
+renderer or additional milestone ladder. The older composition journal does
+not meet it. A separate [development input protocol](../native/input_recording/README.md)
+is implemented but has not completed the qualification below. Do not ask for another long manual recording until the automated
 capture/replay qualification below passes.
 
 ## What must be reproducible
@@ -98,7 +99,7 @@ an assumed constant recording overhead from reported gameplay FPS.
 
 ## Ten-minute storage and delivery
 
-The current writer flushes each event synchronously, captures external GPU outputs
+The older composition writer flushes each event synchronously, captures external GPU outputs
 through readbacks, and stops at 512 MiB/180 seconds. The inspected live prefix
 contains 471,209 events in 80.788 seconds and 510.745 MiB. Upload/checkpoint/external
 pixel records account for about 93.5% of its event storage; submit records only

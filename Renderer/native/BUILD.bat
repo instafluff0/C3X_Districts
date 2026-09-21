@@ -26,6 +26,26 @@ if not exist "..\bin" mkdir "..\bin"
 if not exist "build" mkdir "build"
 if not exist "build\candidate" mkdir "build\candidate"
 
+if /i "%~1"=="input-replay" (
+  if not exist "build\input-recording" mkdir "build\input-recording"
+  cl /nologo /std:c++17 /EHsc /O2 /W4 /WX /wd4191 replay_inputs.cpp /Fo:build\input-recording\ /Fe:build\input-recording\replay_inputs.exe /link /LARGEADDRESSAWARE user32.lib
+  if errorlevel 1 exit /b 1
+  cl /nologo /std:c++17 /EHsc /O2 /W4 /WX inspect_inputs.cpp /Fo:build\input-recording\ /Fe:build\input-recording\inspect_inputs.exe /link /LARGEADDRESSAWARE
+  if errorlevel 1 exit /b 1
+  cl /nologo /std:c++17 /EHsc /O2 /W4 /WX mutate_inputs.cpp /Fo:build\input-recording\ /Fe:build\input-recording\mutate_inputs.exe /link /LARGEADDRESSAWARE
+  if errorlevel 1 exit /b 1
+  exit /b 0
+)
+
+if /i "%~1"=="input-recording" (
+  if not exist "build\input-recording" mkdir "build\input-recording"
+  cl /nologo /std:c++17 /EHsc /O2 /W4 /WX test_input_recording.cpp /Fo:build\input-recording\ /Fe:build\input-recording\test.exe /link /LARGEADDRESSAWARE
+  if errorlevel 1 exit /b 1
+  cl /nologo /std:c++17 /EHsc /O2 /W4 /WX /wd4191 test_input_canvas.cpp /Fo:build\input-recording\ /Fe:build\input-recording\test_input_canvas.exe /link /LARGEADDRESSAWARE gdi32.lib user32.lib
+  if errorlevel 1 exit /b 1
+  exit /b 0
+)
+
 if /i "%~1"=="linear-backup" (
   if not exist "build\linear-backup" mkdir "build\linear-backup"
   cl /nologo /std:c++17 /EHsc /O2 /W4 /WX test_linear_backup.cpp /Fo:build\linear-backup\ /Fe:build\linear-backup\test.exe /link /LARGEADDRESSAWARE d3d11.lib d3dcompiler.lib

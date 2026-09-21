@@ -125,6 +125,9 @@ if(GetEnvironmentVariableA("C3X_RENDERER_WORLD_READINESS_TEST",world_test_option
     center_x=home_x;center_y=home_y;
     std::printf("%s world readiness workload: samples=100 live_input=unmeasured desktop=measured oracles=%zu\n",ok?"PASS":"FAIL",oracles.size());
     char only[8]={};if(GetEnvironmentVariableA("C3X_RENDERER_WORLD_READINESS_ONLY",only,sizeof(only))){
-        world_reset();if(!shared_module)FreeLibrary(module);return ok?0:1;
+        world_reset();
+        auto finish_inputs=reinterpret_cast<void(*)()>(GetProcAddress(module,"c3x_renderer_input_recording_finish"));
+        if(finish_inputs)finish_inputs();
+        if(!shared_module)FreeLibrary(module);return ok?0:1;
     }
 }

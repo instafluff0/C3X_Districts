@@ -4,6 +4,7 @@
 #include <vector>
 #include <cstdint>
 #include <cstring>
+#include "../input_recording/runtime.h"
 
 namespace c3x_renderer { namespace render_core {
 // The production shaders are flattened offline: their complete dependency closure
@@ -22,6 +23,7 @@ inline HRESULT compile_cached(wchar_t const* path,char const* entry,char const* 
         if(size>0 && size<4*1024*1024){source.resize(size);if(std::fread(source.data(),size,1,file)!=1)source.clear();}
         std::fclose(file);
     }
+    c3x_inputs::runtime().asset(path,source.data(),source.size(),!source.empty());
     if(source.empty())return E_FAIL;
     auto signature=hash(source.data(),source.size());signature=hash(entry,std::strlen(entry),signature);
     signature=hash(target,std::strlen(target),signature);

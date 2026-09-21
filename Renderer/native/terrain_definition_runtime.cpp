@@ -1,6 +1,7 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
+#include "input_recording/runtime.h"
 
 #include <algorithm>
 #include <array>
@@ -42,8 +43,7 @@ bool read_text(char const * path, std::string & text) {
         return false;
     HANDLE file = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
                               FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (file == INVALID_HANDLE_VALUE)
-        return false;
+    if (file == INVALID_HANDLE_VALUE){c3x_inputs::runtime().asset(path,nullptr,0,false);return false;}
     LARGE_INTEGER size = {};
     bool ok = GetFileSizeEx(file, &size) != 0 && size.QuadPart > 0 && size.QuadPart <= 4ll * 1024ll * 1024ll;
     if (ok) {
@@ -55,6 +55,7 @@ bool read_text(char const * path, std::string & text) {
     CloseHandle(file);
     if (!ok)
         text.clear();
+    c3x_inputs::runtime().asset(path,text.data(),text.size(),ok);
     return ok;
 }
 

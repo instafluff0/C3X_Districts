@@ -957,6 +957,7 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
             expected=baseline;unit=original_unit;
             std::puts("PASS tactical native composition: scoped native route/turn capture, under-unit marker, clipped grid, exact cancellation/grid-off, no terrain or unit content rebuild");
         }
+        #include "input_recording_soak.h"
         if(GetEnvironmentVariableA("C3X_RENDERER_NATIVE_RECOVERY_TEST",nullptr,0)){
             custom_renderer_native_view current={};current.width=w;current.height=h;
             current.tile_width=current.native_width=live_frame.tile_width;

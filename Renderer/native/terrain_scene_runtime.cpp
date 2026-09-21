@@ -1,6 +1,7 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
+#include "input_recording/runtime.h"
 
 #include <algorithm>
 #include <cmath>
@@ -31,8 +32,7 @@ bool read_file(std::string const & path, std::vector<std::uint8_t> & output,
                std::size_t limit = 64u * 1024u * 1024u) {
     HANDLE file = CreateFileA(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr,
                               OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (file == INVALID_HANDLE_VALUE)
-        return false;
+    if (file == INVALID_HANDLE_VALUE){c3x_inputs::runtime().asset(path.c_str(),nullptr,0,false);return false;}
     LARGE_INTEGER size = {};
     bool ok = GetFileSizeEx(file, &size) != 0 && size.QuadPart > 0 &&
         static_cast<unsigned long long>(size.QuadPart) <= limit;
@@ -45,6 +45,7 @@ bool read_file(std::string const & path, std::vector<std::uint8_t> & output,
     CloseHandle(file);
     if (!ok)
         output.clear();
+    c3x_inputs::runtime().asset(path.c_str(),output.data(),output.size(),ok);
     return ok;
 }
 

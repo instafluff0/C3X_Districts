@@ -1,5 +1,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <stdexcept>
+#include <thread>
 
 #include <algorithm>
 #include <array>
@@ -915,6 +917,9 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
     };
     #ifdef C3X_GPU_NATIVE_CONTRACT
     #include "world_readiness_preview.h"
+    #endif
+    #ifdef C3X_GPU_NATIVE_CONTRACT
+    #include "input_recording_preview.h"
     #endif
     #include "gpu_frame_preview.h"
     #include "prepared_view_preview.h"
@@ -2164,7 +2169,9 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
 #ifdef C3X_LAB_PREVIEW
     if(ok)ok=lab_compose_units(module,argv[5],frame.hour,tile_width,output);
 #endif
-    if(!shared_module){reset();FreeLibrary(module);}
+    if(!shared_module){reset();
+        auto input_finish=reinterpret_cast<void(*)()>(GetProcAddress(module,"c3x_renderer_input_recording_finish"));if(input_finish)input_finish();
+        FreeLibrary(module);}
     return ok ? 0 : 1;
 }
 

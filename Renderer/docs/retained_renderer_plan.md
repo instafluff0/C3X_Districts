@@ -621,12 +621,54 @@ prerequisite, using existing owners and production rendering paths:
 | Work package | Required exit | Current status |
 | --- | --- | --- |
 | Audit coverage and inspect time | Explicit missing input families, byte/time breakdown, every recorded composition display indexed; selected frame/second ranges reconstruct through strict replay | Implemented and tested on the saved live prefix; scope remains composition only |
-| Capture and replay consumed inputs | Versioned initialization/assets, scene/world, action/lifecycle, camera, native-adapter and ambient/presentation events drive the production owners; short positive and missing-input controls | Next unfinished responsibility |
-| Sustain 600 seconds | Bounded asynchronous segmented storage, exact payload reuse, valid crash prefix, complete real-time ten-minute native workload and measured capture overhead | Pending input protocol |
+| Capture and replay consumed inputs | Versioned initialization/assets, scene/world, action/lifecycle, camera, native-adapter and ambient/presentation events drive the production owners; short positive and missing-input controls | Short controls cleanly reject missing clock/asset/unit/reset inputs; full 2240×1260 native fixture passes output witnesses and two replays with 519 identical composed images. Standard whole-world paging and 100 destination images also repeat exactly. Complete boundary coverage remains unfinished |
+| Sustain 600 seconds | Bounded asynchronous segmented storage, exact payload reuse, valid crash prefix, complete real-time ten-minute native workload and measured capture overhead | Real-time 600-second full-resolution capture closes cleanly: 680 MB, 92,130 calls, 10,200 presentations, 17 MiB peak queue and a declared 512 MiB VA reservation. Two exact-DLL replays match all 10,200 display fingerprints. Capture-off also passes; one matched comparison excludes the first 180 seconds in both arms for known compiler interference. Calibrated overhead and live-pressure qualification remain |
 | Establish forensic/performance controls | Deterministic logical-time frame oracles plus separately measured execution; seek agrees with full-prefix replay; pressure remains explicitly modeled | Pending complete input replay |
 | Freeze a representative corpus and choose architecture | One qualified user session, repeated baseline and per-cause latency/memory attribution choose the next M4 change | Pending automated qualification; do not request another manual capture yet |
 
-The current v2/v3 writer remains limited to 512 MiB/180 seconds and snapshots
+The separate development [input journal](../native/input_recording/README.md)
+now re-enters production rendering from copied values, pins observed assets and
+DLL identity, and checks independently captured output hashes. The short control
+includes 16/32-bit CPU unit delivery and both CPU camera APIs; it has passed twice
+with matching outputs. The full 2240×1260 fixture exposed repeated native-screen
+payload overflow; changed-block storage produced a closed 623 MB/107-second
+capture with about 16 MiB peak queue occupancy. Full replay exposed missing
+presenter caller ownership and asynchronous rejection handling, then a production
+translated-geometry defect: camera movement changed off-screen selection but reused
+the preceding contributor set. The candidate now validates that selection before
+reuse. The repaired native fixture and two full replays pass all recorded output
+witnesses, with 13,128 calls and 519 identical composed presentation sources.
+Frame/time selection and explicit truncated-prefix recovery also pass. See the
+[coverage ledger](../native/input_recording/coverage.md). These are diagnostic
+results, not complete gameplay acceptance. Whole-world callback replay now
+passes too: 5,000 tiles, 198 captured page returns, 100 repeated destination images,
+and six exact cold pixel comparisons. Exported visual clocks and QPC/UTC
+correlation are captured; asset paths survive temporary Windows drive mappings.
+A real ten-minute full-resolution native capture closes cleanly with no open
+calls; both exact-DLL replays match all 10,200 display fingerprints. In the paired
+420-second comparison, capture-on/off idle median is 21.59/21.88 ms and
+camera-change median is 89.81/88.99 ms; other camera-phase iterations retain
+roughly 260–270 ms p95 tails. This single fixture pair is not calibrated game FPS
+or recorder-overhead acceptance. The CPU capture registry now shares one identity
+and scratch budget across serial caller threads and rejects unsupported aliases
+or concurrent capture explicitly. Eight semantic mutations reject cleanly with
+their expected diagnostics. The combined native/window fixture passes all native
+pixel checks and both process exits: 119 window samples align within 0.044 ms,
+and two replays match all 970 display fingerprints. Its 282.2 MiB minimum available
+VA remains above the earlier live 120 MiB envelope. Next: replay native
+adapter/navigation decisions, qualify window lifecycle and performance/pressure
+execution, and calibrate overhead. No new manual capture, staging or game launch yet.
+
+The final world-page check rejects changed scope/topology and responses issued
+before a newer publication, preserving owned metadata and retry position.
+Thirteen portable controls pass. A fresh Standard capture passes six cold pixel
+oracles and two matching 100-frame replays (1,170 calls, 201 page returns).
+All three altered world range/scope/topology controls reject cleanly at the
+expected production acceptance check.
+The recorder/replay core is usable for development correctness experiments;
+the broader full-game validation contract above remains unfinished.
+
+The older v2/v3 writer remains limited to 512 MiB/180 seconds and snapshots
 external map/unit pixels. Its 80.788-second prefix uses 510.745 MiB; pixel-bearing
 records consume about 93.5% of storage. The linear ten-minute projection is
 3.70 GiB, including startup delays; it is not a guaranteed recording size. Simply
