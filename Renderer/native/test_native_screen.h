@@ -71,7 +71,22 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
     JGL_Image* canvases[3];
     for(auto& canvas:canvases){canvas=create(graph,nullptr,1);verify(reinterpret_cast<Init>(canvas->vtable[1])(canvas,w,h,16,1)==0,"fresh native surface");
         verify(reinterpret_cast<Fill>(canvas->vtable[17])(canvas,&full,int(0x80000000u))==0,"clear native surface");}
-    c3x_native_images::Adapter<WorkerClient> owner(gpu,original_bits,original_release,lifetime);adapter=&owner;
+    OpenGLRenderer startup_lines;PCX_Image startup_target;startup_target.JGL.Image=canvases[1];
+    LoadedConfig startup_config={"(base)",nullptr};state.loaded_config_names=&startup_config;state.current_config.enable_custom_rendering=false;
+    verify(patch_OpenGLRenderer_initialize(&startup_lines,0,&startup_target)==0&&!startup_lines.initialized&&
+        lifetime(C3X_NATIVE_MAP,canvases[1],0),"pre-configuration main canvas line initialization preserves copy admission");
+    state.loaded_config_names=&fixture_base_config;state.current_config.enable_custom_rendering=true;
+    c3x_native_images::Adapter<WorkerClient> owner(gpu,original_bits,original_release,lifetime);adapter=&owner;state.custom_renderer_native_image=translate;
+    if(w==2240&&h==1260){
+        // The live HUD uses several separate full-size canvases. Their CPU
+        // words are stale after GPU takeover and must not exhaust source cache.
+        std::vector<JGL_Image*> family;
+        for(unsigned n=0;n<6;++n){auto image=create(graph,nullptr,1);
+            verify(reinterpret_cast<Init>(image->vtable[1])(image,w,h,16,1)==0,"full-resolution family init");
+            verify(owner.admit(image),"six full-resolution native canvases fit without stale CPU mirrors");family.push_back(image);}
+        for(auto image:family)reinterpret_cast<Destroy>(image->vtable[0])(image,1);
+        std::puts("PASS six full-resolution native canvases: no stale CPU-mirror admission limit");
+    }
     auto escaped_dc=reinterpret_cast<HDC(__thiscall*)(JGL_Image*)>(root->vtable[10])(root);
     verify(escaped_dc!=nullptr,"public root DC escape");reinterpret_cast<Release>(root->vtable[11])(root,1);
     verify(!owner.admit(root),"CPU-escaped surface rejected at GPU demand");
@@ -210,13 +225,43 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
         // Repeated native save/restore transfers must retain shared versions,
         // not one fullscreen texture per copy, before independent playback.
         for(unsigned n=0;n<12;++n){copy(scene,screen_surface,full);copy(screen_surface,scene,full);}
+        NativeUiAssets hud(graph,reinterpret_cast<char*>(jgl));
+        auto hud_readbacks=owner.stats().readbacks;
+        // Empty draws are common during hover/selection. Match native errors,
+        // then compose the actual HUD before resource-only and unit animation.
+        JGLSprite empty_sprite={};auto jgl_base=reinterpret_cast<char*>(jgl);
+        reinterpret_cast<JGLSprite*(__thiscall*)(JGLSprite*,void*)>(jgl_base+0x7e80)(&empty_sprite,nullptr);
+        using EmptyDraw=int(__thiscall*)(JGLSprite*,JGL_Image*,int,int,void*);
+        for(unsigned n=0;n<24;++n)verify(reinterpret_cast<EmptyDraw>(empty_sprite.vtable[17])(&empty_sprite,screen_surface,int(n),int(n),nullptr)==7,"full-screen empty sprite preserves native error");
+        reinterpret_cast<void(__thiscall*)(JGLSprite*)>(jgl_base+0x7ed0)(&empty_sprite);
+        for(unsigned n=0;n<hud.pairs.size();++n){int x=n%2?0:std::max(0,w-hud.pairs[n]->color.width),y=std::max(30,h-hud.pairs[n]->color.height-8-int(n/2)*36);
+            verify(hud.draw(n,scene,screen_surface,x,y)==0,"actual HUD over resident map");}
+        verify(owner.owns(scene)&&owner.owns(screen_surface)&&owner.stats().readbacks==hud_readbacks,"HUD and hover keep animated map dependencies resident");
         // Resource-only idle must not depend on an animated/selected unit.
         final_ui_drawn=false;patch_JGL_present_screen(&full);
         live(C3X_NATIVE_VISUAL_POLICY,nullptr,nullptr,nullptr,nullptr,1);
         c3x_renderer_visual_status_v1 ambient_before={sizeof(ambient_before)},ambient_after={sizeof(ambient_after)};
+        SetWindowPos(window,HWND_TOPMOST,0,0,w,h,SWP_NOACTIVATE|SWP_SHOWWINDOW);
+        auto ambient_dwm=LoadLibraryA("dwmapi.dll");auto ambient_finish=reinterpret_cast<HRESULT(WINAPI*)()>(GetProcAddress(ambient_dwm,"DwmFlush"));
+        int ambient_w=std::min(w,GetSystemMetrics(SM_CXSCREEN)),ambient_h=std::min(h,GetSystemMetrics(SM_CYSCREEN));
+        auto ambient_desktop=GetDC(nullptr),ambient_dc=CreateCompatibleDC(ambient_desktop);void* ambient_pixels=nullptr;
+        BITMAPINFO ambient_info={};ambient_info.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);ambient_info.bmiHeader.biWidth=ambient_w;ambient_info.bmiHeader.biHeight=-ambient_h;ambient_info.bmiHeader.biPlanes=1;ambient_info.bmiHeader.biBitCount=32;
+        auto ambient_bitmap=CreateDIBSection(ambient_dc,&ambient_info,DIB_RGB_COLORS,&ambient_pixels,nullptr,0);verify(ambient_bitmap&&ambient_finish,"ambient display witness");
+        auto ambient_previous=SelectObject(ambient_dc,ambient_bitmap);std::vector<unsigned> ambient_first;std::size_t ambient_changes=0;
         verify(status(&ambient_before)==1,"resource-only idle status before");
         for(unsigned n=0;n<8;++n){Sleep(70);int result=visual();
-            verify(result==1||result==C3X_RENDERER_RESULT_PENDING,"resource-only idle visual frame");}
+            verify(result==1||result==C3X_RENDERER_RESULT_PENDING,"resource-only idle visual frame");
+            if(n==0||n==7){verify(SUCCEEDED(ambient_finish()),"ambient desktop completion");
+                verify(BitBlt(ambient_dc,0,0,ambient_w,ambient_h,ambient_desktop,0,0,SRCCOPY)!=FALSE,"ambient desktop pixels");GdiFlush();
+                auto words=static_cast<unsigned*>(ambient_pixels);
+                if(!n)ambient_first.assign(words,words+ambient_w*ambient_h);
+                else for(int y=32;y<ambient_h-80;++y)for(int x=32;x<ambient_w-32;++x)ambient_changes+=(words[y*ambient_w+x]&0xffffff)!=(ambient_first[y*ambient_w+x]&0xffffff);
+            }
+        }
+        SelectObject(ambient_dc,ambient_previous);DeleteObject(ambient_bitmap);DeleteDC(ambient_dc);ReleaseDC(nullptr,ambient_desktop);FreeLibrary(ambient_dwm);
+        verify(ambient_changes>0,"ambient map pixels visibly change without units or native redraws");
+        std::printf("PASS ambient desktop motion: changed_pixels=%zu native_draw_calls=0\n",ambient_changes);
+
         verify(status(&ambient_after)==1&&ambient_after.map_samples>ambient_before.map_samples&&
             ambient_after.unit_samples==ambient_before.unit_samples,"resources animate without any animated unit");
         std::printf("PASS resource-only idle: map_samples=%lld unit_samples=0\n",ambient_after.map_samples-ambient_before.map_samples);
@@ -234,7 +279,7 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
         std::printf("PASS unpublished map replacement: displayed_map_samples=%lld\n",ambient_after.map_samples-retained_before.map_samples);
         char visual_count_option[16]={},visual_case[16]={},visual_frames_option[16]={};
         GetEnvironmentVariableA("C3X_RENDERER_VISUAL_FRAMES",visual_frames_option,sizeof(visual_frames_option));
-        unsigned visual_frames=visual_frames_option[0]?unsigned(std::max(30,std::min(240,std::atoi(visual_frames_option)))):30;
+        unsigned visual_frames=visual_frames_option[0]?unsigned(std::max(30,std::min(1200,std::atoi(visual_frames_option)))):30;
         GetEnvironmentVariableA("C3X_RENDERER_VISUAL_UNITS",visual_count_option,sizeof(visual_count_option));
         GetEnvironmentVariableA("C3X_RENDERER_VISUAL_UNIT_CASE",visual_case,sizeof(visual_case));
         unsigned visual_count=std::max(1,std::min(32,std::atoi(visual_count_option)));
@@ -262,7 +307,24 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
         verify(visual_desktop!=nullptr,"independent visual desktop boundary");
         SetWindowPos(window,HWND_TOPMOST,20,20,w,h,SWP_NOACTIVATE|SWP_SHOWWINDOW);
         auto desktop_dc=GetDC(nullptr);double visual_request_ms=0,visual_desktop_ms=0;
-        for(unsigned n=0;n<visual_frames;++n){Sleep(33);LARGE_INTEGER a={},b={};QueryPerformanceCounter(&a);
+        unsigned auxiliary_timers=0,held_visual_timers=0;
+        for(unsigned n=0;n<visual_frames;++n){
+            // A sustained standalone run must service its window messages.
+            // Keep timer delivery for the separate transport assertion below;
+            // these samples exercise exactly one direct visual opportunity.
+            MSG message;
+            while(PeekMessageA(&message,nullptr,0,WM_TIMER-1,PM_REMOVE)){TranslateMessage(&message);DispatchMessageA(&message);}
+            while(PeekMessageA(&message,nullptr,WM_TIMER+1,0xffff,PM_REMOVE)){TranslateMessage(&message);DispatchMessageA(&message);}
+            // D3D/window support can queue timers too. Service those during
+            // a long direct-frame run; only withhold this DLL's visual callback
+            // until the explicit transport check. Do not manufacture a timer
+            // backlog that a normal game message pump would have consumed.
+            for(unsigned drained=0;drained<64&&PeekMessageA(&message,nullptr,WM_TIMER,WM_TIMER,PM_REMOVE);++drained){
+                HMODULE callback_module=nullptr;
+                if(message.lParam&&GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,reinterpret_cast<char const*>(message.lParam),&callback_module)&&callback_module==renderer_module){++held_visual_timers;break;}
+                ++auxiliary_timers;DispatchMessageA(&message);
+            }
+            Sleep(33);LARGE_INTEGER a={},b={};QueryPerformanceCounter(&a);
             int result=visual();verify(result==1||result==C3X_RENDERER_RESULT_PENDING,"independent completed GPU visual frame");QueryPerformanceCounter(&b);
             verify(SUCCEEDED(visual_desktop()),"independent visual desktop completion");LARGE_INTEGER visible={};QueryPerformanceCounter(&visible);
             verify(GetPixel(desktop_dc,30,32)==RGB(0,255,0),"retained opaque UI unchanged over independent animation");
@@ -271,6 +333,7 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
             std::printf("VISUAL_SAMPLE result=%d request_ms=%.3f desktop_ms=%.3f begin_qpc=%lld end_qpc=%lld\n",
                 result,request_ms,desktop_ms,a.QuadPart,b.QuadPart);}
         ReleaseDC(nullptr,desktop_dc);FreeLibrary(desktop_library);
+        std::printf("DIRECT_MESSAGE_PUMP auxiliary_timers=%u held_renderer_timers=%u\n",auxiliary_timers,held_visual_timers);
         QueryPerformanceCounter(&end);verify(status(&after)==1,"visual status after");
         verify(after.frames-before.frames>=visual_frames/2&&after.frames-before.frames<=visual_frames&&after.map_samples>before.map_samples&&after.unit_samples>before.unit_samples&&after.pose_changes>before.pose_changes,
             "authored unit poses advance with no new native selection");
@@ -279,19 +342,32 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
         auto prior_window=GetForegroundWindow();SetWindowPos(window,HWND_TOPMOST,20,20,w,h,SWP_SHOWWINDOW);
         auto foreground_thread=GetWindowThreadProcessId(prior_window,nullptr),caller_thread=GetCurrentThreadId();
         bool attached=foreground_thread && foreground_thread!=caller_thread && AttachThreadInput(caller_thread,foreground_thread,TRUE);
-        SetForegroundWindow(window);SetFocus(window);
+        auto activated=SetForegroundWindow(window);SetFocus(window);
         if(attached)AttachThreadInput(caller_thread,foreground_thread,FALSE);
+        // Activation can be delivered asynchronously across input queues.
+        auto activation_deadline=GetTickCount64()+500;
+        while(GetForegroundWindow()!=GetAncestor(window,GA_ROOT)&&GetTickCount64()<activation_deadline){
+            MSG message;
+            while(PeekMessageA(&message,nullptr,0,WM_TIMER-1,PM_REMOVE)){TranslateMessage(&message);DispatchMessageA(&message);}
+            Sleep(1);
+        }
+        if(GetForegroundWindow()!=GetAncestor(window,GA_ROOT))std::fprintf(stderr,
+            "FOREGROUND_DIAGNOSTIC activated=%d attached=%d visible=%d prior=%p actual=%p expected=%p caller_thread=%lu foreground_thread=%lu\n",
+            int(activated),int(attached),int(IsWindowVisible(window)),static_cast<void*>(prior_window),static_cast<void*>(GetForegroundWindow()),
+            static_cast<void*>(GetAncestor(window,GA_ROOT)),static_cast<unsigned long>(caller_thread),static_cast<unsigned long>(foreground_thread));
         verify(IsWindowVisible(window)&&GetForegroundWindow()==GetAncestor(window,GA_ROOT),"timer fixture owns visible foreground window");
         c3x_renderer_visual_status_v1 transported=after;
         LARGE_INTEGER deadline={};QueryPerformanceCounter(&deadline);deadline.QuadPart+=frequency.QuadPart*3;
+        unsigned delivered_timers=0;
         do{
             // Check the deadline/progress after each callback. A frame longer
             // than 33 ms can keep WM_TIMER continuously due; draining all of
             // them here would starve the very status check that ends the test.
-            MSG message;if(PeekMessageA(&message,nullptr,WM_TIMER,WM_TIMER,PM_REMOVE))DispatchMessageA(&message);
+            MSG message;if(PeekMessageA(&message,nullptr,WM_TIMER,WM_TIMER,PM_REMOVE)){++delivered_timers;DispatchMessageA(&message);}
             verify(status(&transported)==1,"timer transport status");QueryPerformanceCounter(&end);
             if(transported.frames>=after.frames+3)break;Sleep(1);
         }while(end.QuadPart<deadline.QuadPart);
+        std::printf("TIMER_DELIVERY callbacks=%u frames=%lld native_events=%zu transfers=%u visible=%d foreground=%d\n",delivered_timers,transported.frames-after.frames,events.size()-native_events,unsigned(screen_transfers-transfers),int(IsWindowVisible(window)),int(GetForegroundWindow()==GetAncestor(window,GA_ROOT)));
         if(prior_window)SetForegroundWindow(prior_window);
         verify(transported.frames>=after.frames+3&&events.size()==native_events&&screen_transfers==transfers,
             "renderer timer transports frames without native draw demand");
@@ -656,7 +732,9 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
             // CPU UI retargeting still invokes the original initializer. A
             // separate admitted scratch proves a genuine escape mid-scope
             // lazily initializes that backend and replays its style.
-            target.JGL.Image=root;verify(patch_OpenGLRenderer_initialize(&context,0,&target)==0&&context.initialized==1,"CPU UI retains original line initializer");
+            target.JGL.Image=root;verify(patch_OpenGLRenderer_initialize(&context,0,&target)==0&&context.initialized==0,"CPU UI defers its line initializer until a stroke");
+            patch_OpenGLRenderer_draw_line(&context,0,3,3,20,3);
+            verify(context.initialized==1&&context.drawn==1,"CPU UI actual stroke initializes native backend");
             auto line_scratch=create(graph,nullptr,1);verify(reinterpret_cast<Init>(line_scratch->vtable[1])(line_scratch,w,h,16,1)==0,"outline scratch lifecycle");
             copy(live_images[0],line_scratch,full);target.JGL.Image=line_scratch;
             verify(patch_OpenGLRenderer_initialize(&context,0,&target)==0&&context.initialized==1,"new outline target admitted by GPU copy");
@@ -664,12 +742,12 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
             auto escaped=reinterpret_cast<HDC(__thiscall*)(JGL_Image*)>(line_scratch->vtable[10])(line_scratch);verify(escaped!=nullptr,"outline-scope real CPU escape");
             reinterpret_cast<Release>(line_scratch->vtable[11])(line_scratch,1);
             patch_OpenGLRenderer_draw_line(&context,0,3,3,20,3);
-            verify(context.initialized==2&&context.drawn==1&&!lifetime(C3X_NATIVE_MAP,line_scratch,0)&&!state.custom_renderer_line_owner,
+            verify(context.initialized==2&&context.drawn==2&&!lifetime(C3X_NATIVE_MAP,line_scratch,0)&&!state.custom_renderer_line_owner,
                 "real CPU escape retains native line fallback without re-admission");
             state.current_config.draw_lines_using_gdi_plus=LDO_ALWAYS;
-            verify(patch_OpenGLRenderer_initialize(&context,0,&target)==0&&native_gdi_initializations==1,"CPU GDI+ target uses public ownership barrier");
+            verify(patch_OpenGLRenderer_initialize(&context,0,&target)==0&&native_gdi_initializations==0,"CPU GDI+ initialization remains deferred");
             patch_OpenGLRenderer_draw_line(&context,0,3,3,20,3);
-            verify(native_gdi_draws==1&&native_gdi_argb==0x80f80000&&native_gdi_width==3,"GDI+ fallback preserves captured style");
+            verify(native_gdi_initializations==1&&native_gdi_draws==1&&native_gdi_argb==0x80f80000&&native_gdi_width==3,"GDI+ fallback preserves captured style");
             state.current_config.draw_lines_using_gdi_plus=LDO_NEVER;reinterpret_cast<Destroy>(line_scratch->vtable[0])(line_scratch,1);
             verify(live(C3X_NATIVE_IMAGE_PRESENT,screen_surface,graph,&full,nullptr,0)==1,"restore GPU outline save");capture_display(expected);
             std::puts("PASS native outline bridge: empty_initializations=144 resident=144 GPU_strokes=4 native_DC=0 actual_clip_color_alpha_width_dash=1 CPU_escape_fallback=1");

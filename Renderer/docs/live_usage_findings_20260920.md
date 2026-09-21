@@ -433,3 +433,229 @@ The exact candidate is staged with rollback/provenance in
 `native/build/live-followup-stage.json`. **INSTALL.bat is required** for the fog
 and timer bridge changes. No installer or game was launched. Live animation,
 movement visibility and stability are not yet accepted.
+
+## Follow-up: normal exit, animated map dependency missing
+
+Capture `20260921-002051-c7effa` uses `41c438da…`, exits with code zero after
+approximately 103 seconds, and retains GPU map delivery for all 36 composites.
+The user reports smoother play but barely moving water/resources. All six
+periodic/error visual records show `map_samples=0 map_sources=0`, including
+successful visual frame 128. There are 36 scene-water draws, corresponding to
+native map work, and 31 successful dynamic-map capture admissions. No
+`visual-map-unavailable` event occurs. The displayed composition has lost its
+sampled map dependency; reducing an animation interval will not repair it.
+
+The first map-to-CPU barrier follows a failed native lifetime admission, between
+map insertion and native map completion. Sixteen bounded barrier stacks all stop
+at the same DLL frame; they do not identify the responsible native operation.
+The DLL diagnostics now record adapter operation, surface slot and copy-admission
+reason/rectangles directly. This replaces ineffective guest stack walking without
+changing admission, CPU barriers or drawing. No injected change is needed.
+Reproduce the identified operation through the existing real-JGL harness before
+changing ownership rules; native pointer escape protection remains mandatory.
+
+Minimum sampled available VA is **263.82 MiB**, with no logged worker/device
+failure. Two retained replay failures remain: texture budget at 17.15 seconds
+and retired unit selection at 31.19 seconds. Both report a healthy D3D device;
+neither is a live stability pass. The gameplay swap chain has 1,183 non-dropped
+positive display intervals, mean **68.50 ms**, p95 **99.98 ms**, maximum
+**1,266.65 ms** (14.60 displayed updates/sec). These mix gameplay/UI and frozen
+map frames; they are not unique animated map FPS or input latency. Preserve
+`native/build/live-captures/20260921-002051-c7effa/followup-analysis.json`.
+
+Direct game automation is unnecessary for this investigation. The user runs
+the existing capture launcher; bounded operation logs identify the seam for
+standalone reproduction. No installer, debugger attachment or game launch was
+performed by the agent.
+
+
+Diagnostic candidate `a9702ec4…` passes the full native fixture at 2240×1260,
+30 mixed-unit visual frames, all water effects on and 1 GiB extra VA reservation
+(`native/build/live-animation-diagnostic-check/receipt.json`). It is staged;
+`native/build/live-animation-diagnostic-stage.json` retains provenance/rollback.
+No injected source changed. Restart with the existing capture launcher; no new
+installation is required. This is diagnostic delivery, not an animation fix.
+
+## Allocation failure and two reproduced ownership defects
+
+Capture `20260921-003619-8a3069` uses `a9702ec4…` and exits with code 1.
+Allocation failures start at 103.27 seconds. At 103.31 seconds the retained
+texture-budget failure reports 116,826,112 bytes (111.41 MiB) available VA and
+`device_reason=0`; several GiB of physical/pagefile memory remain available.
+Worker failure follows. Process-headroom trimming was already active at
+19.68 seconds, so lowering those cache ceilings alone did not solve this case.
+`followup-analysis.json` beside the capture preserves the bounded evidence.
+
+The first full-screen map COPY fails destination lifetime admission before
+native map completion. Successful periodic visual records still have zero map
+samples/sources. Source inspection identifies a missed startup path:
+`FUN_004e2b00` initializes the line renderer on the main-screen canvas before
+any GPU map exists. Its public DC acquisition invalidates that canvas's lifetime
+evidence. Deferring initialization only for an already-owned map was too late.
+Custom-on initialization now records the target; only an actual CPU stroke
+initializes its native backend. Config-off remains immediate, and actual CPU
+access still revokes GPU ownership. The lifetime fixture fails on the previous
+wrapper and passes with this change (`startup-line-negative.log` and
+`startup-line-positive.log`). Approved injected compilation passes.
+
+Later 32×32 cursor-copy admission also fails. Disposable CPU source mirrors can
+fill the adapter's fixed slots and force a full-map readback. The adapter now
+trims least-recently-used unowned, clean source mirrors between operations,
+before borrowing internal pointers. GPU-owned images are never evicted this
+way; immutable retained versions preserve recorded copies. The 32-slot/64 MiB
+ceiling is unchanged. A 48-source churn regression fails on the previous adapter
+and passes with zero readbacks after this correction; all existing native pixel
+parity/lifecycle checks pass (`native-source-churn-positive.log`).
+
+The first sustained 2240×1260 fixture completes all 1,200 direct visual samples
+with mixed units, visibility, all water effects and an additional 1 GiB reserved
+VA. Periodic frame 1,152 retains one map source and 1,152 map samples, 24 nodes
+and 37.64 MiB retained history. Minimum sampled available VA is 221.82 MiB;
+there are no allocation/device failures. Request/desktop means are 38.98/48.06 ms,
+not a controlled speedup comparison. The whole receipt is nevertheless **failed**:
+the subsequent timer test could not acquire foreground focus after the long loop.
+The harness now services non-timer window messages during sustained sampling;
+timer delivery remains separately asserted. Preserve
+`native/build/startup-ownership-sustained/sustained-analysis.json` and the original
+failed receipt. Live allocation stability and animation acceptance remain open.
+
+The final candidate repeats all 1,200 direct samples with minimum sampled VA
+209.76 MiB, request/desktop means 39.17/48.20 ms and the same bounded history.
+That receipt also fails the subsequent foreground precondition; message pumping
+alone did not resolve it. The fixture now waits up to 500 ms for asynchronous
+activation, preserving the foreground assertion and logging a failure's window
+identities. `native/build/startup-ownership-complete/receipt.json` then **passes**
+the complete 30-frame workload, including timer-delivered frames, native line
+OpenGL/GDI+ fallbacks, UI, visibility, tactical overlays, camera/reset and
+config-off. Inputs are unchanged. This separates sustained animation evidence
+from the complete shorter regression; neither substitutes for live acceptance.
+
+Candidate `4d413b5a…` is staged with matching injected-source identity and rollback
+in `native/build/startup-ownership-stage.json`. **Re-run INSTALL.bat** before the
+next capture. The source-mirror cache stays in the DLL; only the existing native
+line initialization/stroke bridge changes. No patch-table entry is needed.
+The installer and Civ III were not launched by the agent.
+
+## Base defaults precede renderer configuration
+
+Capture `20260921-012844-ec2871` uses `4d413b5a…`, exits normally after about
+64 seconds, and contains 18 native map composites and exactly 18 water draws.
+Periodic visual records still report zero map samples/sources. Four retained
+texture-budget failures occur with a healthy device; minimum sampled available
+VA is 304.41 MiB. After the initial loading interval, 707 non-dropped positive
+display intervals have mean/p95/max 57.80/83.36/1,033.34 ms. This is a mixture
+of UI and frozen-map updates, not animated map FPS. Preserve the capture's
+`followup-analysis.json`.
+
+Read-only inspection of the installed executable verifies the previous hook is
+present. GOG startup calls `FUN_004e2b00` at `0x004C8E09`, then the registered
+line initializer at `0x004E2B7F`. This runs before `patch_load_scenario` loads
+configuration files; program initialization installed only base defaults with
+`enable_custom_rendering=false`. The previous fixture incorrectly enabled
+rendering before this call, so its passing result missed the real startup state.
+
+The hook now uses the existing loaded-config list to recognize base defaults
+alone. It defers unused initialization before configuration as well as when
+custom-on. A real CPU stroke still initializes/draws through the original backend
+and ownership barrier; configured-off initialization remains immediate. No new
+state, symbol or CSV change. The corrected pre-configuration regression fails
+on the previous code (`native/build/preconfiguration-line-negative.log`) and
+passes after repair, including actual CPU strokes before configuration
+(`preconfiguration-line-final.log`). Approved injected compilation passes.
+
+`native/build/preconfiguration-complete/receipt.json` passes the complete native
+fixture at 2240×1260 with all water effects, mixed units, visibility, tactical
+overlays, native UI, timer, camera/reset and config-off. Its 100 direct frames
+produce 100 map samples, 800 unit samples and 400 pose changes without native
+redraws. History is 37.64 MiB / 24 nodes; minimum sampled VA is 216.25 MiB with
+1 GiB additionally reserved. Request mean/p95 is 41.57/57.16 ms; desktop is
+51.14/68.90 ms. No speedup comparison or live acceptance is claimed.
+
+The capture also shows ordinary sprite fallbacks during mouse holds. The DLL
+now logs at most eight source-layout/scale records for these full-screen
+ownership barriers, without source pixels or altered fallback behavior. That
+remaining path is not fixed yet; do not hide it by claiming timer-only success.
+Candidate `0649cfe6…` is staged with matching source/rollback in
+`native/build/preconfiguration-stage.json`. **INSTALL.bat is required again**
+because the startup decision changed. No installer or game was launched.
+
+## Broader native UI audit after unchanged live behavior
+
+Capture `20260921-020053-d1fc60` uses `0649cfe6…`, exits normally, and still
+has exactly 37 water draws for 37 native map composites. Periodic visual records
+have no map samples/sources; 19 retained texture-budget failures occur. Startup
+copy admission improved, but a full-screen sprite-blend fallback at 19.805 s is
+followed by an unscoped DC revocation at 19.957 s and the first retained-budget
+failure at 20.273 s. The stack still does not identify the native caller. The
+capture's `followup-analysis.json` preserves log identity and this sequence.
+
+Eight mouse-hold diagnostics identify ordinary sprites with the verified native
+vtable, null pixels, zero dimensions and zero bit depth. JGL slot 17 (RVA 0x8180)
+asks its pure bits getter (0x98a0) before touching the destination, and returns 7
+for this case. The adapter now passes these calls through without a readback or
+ownership change, preserving the actual native error. The audit also covers
+empty keyed/mask/shadow/lookup/opacity calls and the format rejection in all
+three alpha programs. The mask returns 16, unlike the ordinary sprite's 7;
+regressions compare the real native results rather than treating every no-op as
+success. Unknown or genuinely pixel-touching programs keep their CPU barriers.
+
+The proactive full-resolution canvas test reproduces another admission failure:
+six 2240×1260 CPU mirrors require 64.6 MiB, above the 64 MiB source-cache budget.
+These mirrors are stale once the GPU owns the canvases. They are now released
+on takeover; an actual CPU fallback allocates one bounded temporary readback.
+The source-cache budget is unchanged. `native-hud-negative/receipt.json` fails
+the six-canvas admission assertion before the correction. This is a reproduced
+capacity defect, **not proof of the first live blend's rejection reason**; that
+capture lacks blend-input metadata. Bounded blend-layout diagnostics now cover
+that missing evidence.
+
+The renderer's own CPU unit fallback also used an unscoped DC lease. Its calls
+are synchronous, and neither DC escapes to native callers. The existing sprite
+scope now covers acquisition, drawing and release, including denied destination
+or background DCs. This preserves future admission while retaining the real
+CPU barrier. Actual extracted bridge tests check scope restoration on every
+exit; genuine external/foreign access must still revoke eligibility. No new
+hook, patch-table entry or injected state is needed.
+
+Native replay now hashes and consumes six panel/button pairs from the locally
+installed Civ III PCX files, through JGL's actual sprite allocator and palettes.
+The binary fixture remains ignored; no game artwork enters source control.
+The small native oracle checks exact pixels and returns at all clipped edges.
+The complete fullscreen replay composes these panels over the animated map,
+exercises empty hover draws and repeated save/restore, then runs independent
+ambient and mixed-unit frames, timer delivery, selection/path/grid, native
+camera/reset and config-off recovery. A preliminary expanded fixture leaked its
+own six probe canvases by installing its cleanup callback too late; the callback
+now precedes the probe. That was a test setup error, not a production finding.
+
+
+Expanded verification: `native/build/native-hud-display-check/receipt.json`
+passes at 2240×1260 with 100 direct mixed frames and the full recovery/config-off
+sequence. Before mixed units are introduced, eight ambient-only frames change
+31,392 interior desktop pixels; this witnesses displayed water/resource motion
+rather than relying only on successful counters. The 1,200-frame
+`native-hud-sustained` run passes independent animation and timer transport:
+1,200 map samples, 9,600 unit samples, 4,800 pose changes, 40,904,712 retained
+bytes and 36 nodes. Mean request/desktop durations are 39.269/48.859 ms with
+1 GiB extra VA reserved. Its **later fresh-capture recovery assertion fails**;
+the overall receipt remains failed. Do not claim full soak acceptance. An earlier
+long run failed timer delivery; restricting the fixture to withhold only the
+renderer callback avoids suppressing unrelated timers, but this alone does not
+establish the earlier failure cause (this run saw zero auxiliary timers).
+
+Actual lifetime/private-DC tests pass in
+`gpu-composition/140eae6dc3d74ffd9598f5aacb477278/receipt.json`; the approved
+injected compile passes in `native-hud-injected.json`. Extracted bridge and
+lifecycle/cadence/camera contracts pass (45 tests, one skipped).
+
+`native/build/native-hud-stage.json` records candidate `97593ec9…`, source and
+rollback identities. Under the explicit game-launch authorization, INSTALL
+showed success and the game reached its main menu. The installer later printed
+an access-denied line while cleaning up its temporary executable; the success
+dialog had already been observed. The standard capture launcher failed to start
+its elevated FPS helper (`live-captures/20260921-024313-e53810`); a bounded
+300-second debug-only launch followed (`agent-game-observation/session.json`).
+Automated ordinary clicks, Return and keypad Enter did not navigate the menu.
+The user then took over testing; there is no gameplay/FPS acceptance from this
+attempt. Parallels was temporarily changed from full-screen to windowed to expose
+its current display; do not compare that launch with the 2240×1260 replay timings.

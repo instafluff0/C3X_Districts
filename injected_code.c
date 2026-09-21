@@ -27913,8 +27913,12 @@ forward_custom_unit_body (Sprite * sprite, PCX_Image * background, PCX_Image * c
 	if (submitted < 0) return false;
 	int result = submitted ? C3X_RENDERER_RESULT_OK : C3X_RENDERER_RESULT_ERROR;
 	if (result != C3X_RENDERER_RESULT_OK) {
+		// This synchronous renderer fallback owns/releases both DCs; neither
+		// escapes to a native caller. Keep CPU barriers, but preserve admission.
+		int previous = is->custom_renderer_native_operation;
+		is->custom_renderer_native_operation = C3X_NATIVE_SPRITE;
 		HDC dc = image->vtable->acquire_dc (image);
-		if (dc == NULL) return false;
+		if (dc == NULL) { is->custom_renderer_native_operation = previous; return false; }
 		HDC background_dc = (underlay == image) ? dc : underlay->vtable->acquire_dc (underlay);
 		if (background_dc != NULL) {
 			if (is->custom_renderer_unit_draw_playback != NULL)
@@ -27925,6 +27929,7 @@ forward_custom_unit_body (Sprite * sprite, PCX_Image * background, PCX_Image * c
 		}
 		if (background_dc != NULL && underlay != image) underlay->vtable->release_dc (underlay, __, 0);
 		image->vtable->release_dc (image, __, 1);
+		is->custom_renderer_native_operation = previous;
 	}
 	if (result == C3X_RENDERER_RESULT_OK) {
 		// Animator unions this same Rect after tick_anim, then erases it next frame.
@@ -36379,28 +36384,9 @@ set_up_gdi_plus ()
 	return is->gdi_plus.init_state == IS_OK;
 }
 
-int __fastcall
-patch_OpenGLRenderer_initialize (OpenGLRenderer * this, int edx, PCX_Image * texture)
+int
+initialize_native_line_backend (OpenGLRenderer * this, PCX_Image * texture)
 {
-	// The native initializer borrows the map DC even when no outlines follow.
-	// Keep only the current native line target here; the DLL owns GPU drawing.
-	is->custom_renderer_line_owner = NULL;
-	is->custom_renderer_line_target = NULL;
-	if (is->current_config.enable_custom_rendering && is->custom_renderer_native_image != NULL) {
-		int result = translate_custom_renderer_native (C3X_NATIVE_LINE_TARGET, texture->JGL.Image, NULL, NULL, NULL, 0);
-		if (result != 0) {
-			is->custom_renderer_line_owner = this;
-			is->custom_renderer_line_target = texture;
-			if (result < 0) return 2; // Callers may ignore failure; later draws must still honor the barrier.
-			// Native OpenGL creates a fresh context; GDI+ retains its pen state.
-			if (is->current_config.draw_lines_using_gdi_plus == LDO_NEVER ||
-			    (is->current_config.draw_lines_using_gdi_plus == LDO_WINE && ! is->running_on_wine)) {
-				is->ogl_line_width = 1;
-				is->ogl_line_stipple_enabled = false;
-			}
-			return 0;
-		}
-	}
 	if ((is->current_config.draw_lines_using_gdi_plus == LDO_NEVER) ||
 	    ((is->current_config.draw_lines_using_gdi_plus == LDO_WINE) && ! is->running_on_wine))
 		return OpenGLRenderer_initialize (this, __, texture);
@@ -36425,6 +36411,33 @@ patch_OpenGLRenderer_initialize (OpenGLRenderer * this, int edx, PCX_Image * tex
 		} else
 			return 2;
 	}
+}
+
+int __fastcall
+patch_OpenGLRenderer_initialize (OpenGLRenderer * this, int edx, PCX_Image * texture)
+{
+	// Main-screen startup initializes lines before any map publication. Defer
+	// acquiring its DC until an actual native stroke needs it. An empty scope
+	// must not revoke the future map-copy destination before GPU admission.
+	is->custom_renderer_line_owner = NULL;
+	is->custom_renderer_line_target = NULL;
+	// Before load_scenario, only the base defaults exist. Its false flag is
+	// not a configured opt-out; startup forms precede the configuration files.
+	bool configuration_pending = is->loaded_config_names != NULL && is->loaded_config_names->next == NULL;
+	if (is->current_config.enable_custom_rendering || configuration_pending) {
+		int result = is->custom_renderer_native_image != NULL ?
+			translate_custom_renderer_native (C3X_NATIVE_LINE_TARGET, texture->JGL.Image, NULL, NULL, NULL, 0) : 0;
+		is->custom_renderer_line_owner = this;
+		is->custom_renderer_line_target = texture;
+		if (result < 0) return 2;
+		if (is->current_config.draw_lines_using_gdi_plus == LDO_NEVER ||
+		    (is->current_config.draw_lines_using_gdi_plus == LDO_WINE && ! is->running_on_wine)) {
+			is->ogl_line_width = 1;
+			is->ogl_line_stipple_enabled = false;
+		}
+		return 0;
+	}
+	return initialize_native_line_backend (this, texture);
 }
 
 void __fastcall
@@ -36491,7 +36504,9 @@ patch_OpenGLRenderer_draw_line (OpenGLRenderer * this, int edx, int x1, int y1, 
 		// Ownership may have returned to the CPU during the native draw scope.
 		// Initialize its original backend now and replay the captured style.
 		PCX_Image * target = is->custom_renderer_line_target;
-		if (patch_OpenGLRenderer_initialize (this, __, target) != 0) return;
+		is->custom_renderer_line_owner = NULL;
+		is->custom_renderer_line_target = NULL;
+		if (initialize_native_line_backend (this, target) != 0) return;
 		unsigned int color = is->ogl_color;
 		patch_OpenGLRenderer_set_color (this, __, 0x80000000 | ((color >> 9) & 0x7c00) | ((color >> 6) & 0x3e0) | ((color >> 3) & 0x1f));
 		patch_OpenGLRenderer_set_opacity (this, __, color >> 24);

@@ -2,6 +2,7 @@
 #include "test_native_observation.cpp"
 #include "native_image_adapter.h"
 #include "native_sprite_diagnostics.h"
+#include "test_native_ui_assets.h"
 #ifdef C3X_NATIVE_WORKER_TEST
 #include "gpu_image_worker_client.h"
 #include "color_quantization.h"
@@ -53,6 +54,18 @@ int native_adapter_contract(char const* path,Backend& gpu,Id map=0,unsigned cons
         state.custom_renderer_native_image=translate;
         for(auto& image:target){image=create(graph,nullptr,1);verify(reinterpret_cast<Init>(image->vtable[1])(image,w,h,16,1)==0,"admitted init");
             verify(backend.owns(image),"fresh destination admitted");verify(reinterpret_cast<Fill>(image->vtable[17])(image,&full,int(0x80000000u))==0,"GPU clear native return");}
+        // Long-lived CPU UI sources must not exhaust destination slots. Their
+        // mirrors are disposable; real CPU pixels remain authoritative.
+        std::vector<JGL_Image*> churn;
+        auto before_churn=backend.stats().readbacks;
+        for(int n=0;n<48;++n){auto image=create(graph,nullptr,1);churn.push_back(image);
+            verify(init(image,w,h,16,1)==0&&fill(image,&full,int(0x80000000u|unsigned(n)))==0,"CPU source churn init");
+            verify(reinterpret_cast<Copy>(image->vtable[16])(image,target[0],&full,&full)==0&&backend.owns(target[0]),"CPU source churn preserves GPU destination");
+        }
+        verify(backend.stats().readbacks==before_churn,"CPU source cache eviction never drains owned maps");
+        for(auto image:churn)reinterpret_cast<Destroy>(image->vtable[0])(image,1);
+        verify(reinterpret_cast<Fill>(target[0]->vtable[17])(target[0],&full,int(0x80000000u))==0,"restore zero parity baseline after churn");
+        std::puts("PASS native CPU source churn: 48 sources, owned destination preserved, zero readbacks");
         auto compare=[&](int index,bool cpu=false){GdiFlush();auto expected=get(control[index],0,0);verify(expected!=nullptr,"oracle lease");
             std::vector<std::uint32_t> observed;
             if(cpu){auto bits=get(target[index],0,0);verify(bits!=nullptr,"restored native lease");auto stride=*reinterpret_cast<int*>(reinterpret_cast<char*>(target[index])+0x40);
@@ -284,6 +297,27 @@ int native_adapter_contract(char const* path,Backend& gpu,Id map=0,unsigned cons
         auto palette=reinterpret_cast<void*(__thiscall*)(JGL_Image*)>(original[58])(ui);
         using SpriteDraw=int(__thiscall*)(JGLSprite*,JGL_Image*,int,int,void*);
         auto original_sprite=reinterpret_cast<SpriteDraw>(state.custom_renderer_jgl_sprite_original);
+        JGLSprite empty_sprite={};reinterpret_cast<JGLSprite*(__thiscall*)(JGLSprite*,void*)>(base_address+0x7e80)(&empty_sprite,nullptr);
+        auto empty_readbacks=backend.stats().readbacks;bool empty_background_owned=backend.owns(target[0]);
+        verify(original_sprite(&empty_sprite,control[2],0,0,nullptr)==7,"native empty sprite returns 7");
+        for(int n=0;n<24;++n)verify(reinterpret_cast<SpriteDraw>(empty_sprite.vtable[17])(&empty_sprite,target[2],n,n,nullptr)==7,"hook preserves native empty sprite return");
+        using EmptyBlend=int(__thiscall*)(JGLSprite*,JGLSprite*,JGL_Image*,JGL_Image*,int,int,void*);
+        using EmptyBlendOnto=int(__thiscall*)(JGLSprite*,JGLSprite*,JGL_Image*,int,int,void*);
+        verify(reinterpret_cast<EmptyBlend>(state.custom_renderer_jgl_blend_original[0])(&empty_sprite,&empty_sprite,control[0],control[2],0,0,nullptr)==23,"native empty blend returns 23");
+        verify(reinterpret_cast<EmptyBlend>(empty_sprite.vtable[20])(&empty_sprite,&empty_sprite,target[0],target[2],0,0,nullptr)==23,"hook preserves native empty blend return");
+        verify(reinterpret_cast<EmptyBlendOnto>(empty_sprite.vtable[21])(&empty_sprite,&empty_sprite,target[2],0,0,nullptr)==23,"hook preserves native empty blend-onto return");
+        verify(reinterpret_cast<EmptyBlendOnto>(empty_sprite.vtable[22])(&empty_sprite,&empty_sprite,target[2],0,0,nullptr)==23,"hook preserves native empty alpha return");
+        verify(reinterpret_cast<SpriteDraw>(empty_sprite.vtable[23])(&empty_sprite,target[2],0,0,nullptr)==7,"empty keyed sprite keeps native return");
+        using EmptyMask=int(__thiscall*)(JGLSprite*,JGL_Image*,int,int,int,void*);
+        verify(reinterpret_cast<EmptyMask>(empty_sprite.vtable[29])(&empty_sprite,target[2],0,0,0,nullptr)==reinterpret_cast<EmptyMask>(state.custom_renderer_jgl_blend_original[7])(&empty_sprite,control[2],0,0,0,nullptr),"empty mask keeps native return");
+        using EmptyLookup=int(__thiscall*)(JGLSprite*,JGL_Image*,int,int,void*,void*);
+        for(int slot:{31,33})verify(reinterpret_cast<EmptyLookup>(empty_sprite.vtable[slot])(&empty_sprite,target[2],0,0,nullptr,nullptr)==7,"empty shadow/lookup keeps native return");
+        using EmptyOpacity=int(__thiscall*)(JGLSprite*,JGL_Image*,int,int,float,void*,int);
+        verify(reinterpret_cast<EmptyOpacity>(empty_sprite.vtable[37])(&empty_sprite,target[2],0,0,.5f,nullptr,0)==7,"empty opacity keeps native return");
+        verify(backend.owns(target[0])==empty_background_owned&&backend.owns(target[2])&&backend.stats().readbacks==empty_readbacks,"empty native draws preserve resident underlay without readbacks");
+        compare(2);
+        reinterpret_cast<void(__thiscall*)(JGLSprite*)>(base_address+0x7ed0)(&empty_sprite);
+        std::puts("PASS empty native sprites: exact error returns, no destination readback or ownership loss");
         auto sprite_readbacks=backend.stats().readbacks;
         auto draw_sprite=[&](int x,int y,void* selected_palette){
             auto key=sprite.f28;auto result=original_sprite(&sprite,control[2],x,y,selected_palette);
@@ -646,6 +680,16 @@ int native_adapter_contract(char const* path,Backend& gpu,Id map=0,unsigned cons
         for(int i:{0,2}){reinterpret_cast<Clip>(control[i]->vtable[13])(control[i],&full);reinterpret_cast<Clip>(target[i]->vtable[13])(target[i],&full);}
         alpha_sprite.bits=nullptr;reinterpret_cast<void(__thiscall*)(JGLSprite*)>(base_address+0x7ed0)(&alpha_sprite);
         sprite.stride=sprite.width=w;sprite.height=h;
+        { // Actual Main_Screen_Form HUD pairs, clipped at all viewport edges.
+            NativeUiAssets hud(graph,base_address);
+            for(unsigned index=0;index<hud.pairs.size();++index)for(auto anchor:std::array<std::array<int,2>,4>{{{{0,0}},{{-17,-9}},{{w-12,h-8}},{{-300,0}}}}){
+                both_fill(0,full,0x80003256u);both_fill(2,full,0x80001234u);
+                auto expected_return=hud.draw(index,control[0],control[2],anchor[0],anchor[1],true);
+                verify(hud.draw(index,target[0],target[2],anchor[0],anchor[1])==expected_return,"local HUD preserves native return");
+                compare(2);verify(backend.owns(target[0])&&backend.owns(target[2])&&backend.stats().readbacks==sprite_readbacks,"local HUD stays resident");
+            }
+            if(!hud.pairs.empty())std::puts("PASS local HUD art: six panel/button pairs, native allocator/palettes, clipped edges, exact pixels and returns, no CPU fallback");
+        }
         // The 16-bit scaled helper is a native no-op; retain the GPU canvas.
         // Its positive key still resolves/mutates through the destination palette.
         sprite.f28=0x80007c1f;sprite.bit_count=16;sprite.bits=source_bits;sprite.stride=*reinterpret_cast<int*>(reinterpret_cast<char*>(ui)+0x40);

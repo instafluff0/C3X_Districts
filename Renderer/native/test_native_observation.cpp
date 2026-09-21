@@ -14,10 +14,13 @@ struct JGLSprite {void** vtable;int a,b,c,d;void* bits;int f18,f1c,bit_count,f24
 struct PCX_Image {struct {JGL_Image* Image;} JGL;};
 struct OpenGLRenderer;
 enum {LDO_NEVER,LDO_WINE,LDO_ALWAYS,IS_OK};
+struct LoadedConfig {char const* name;LoadedConfig* next;};
+LoadedConfig fixture_file_config={"configured",nullptr},fixture_base_config={"(base)",&fixture_file_config};
 struct State {
     char const* mod_rel_dir=".";
     bool custom_renderer_modal=false,paused_for_popup=false;int saved_tile_count=-1;
     struct {bool enable_custom_rendering=true;int draw_lines_using_gdi_plus=LDO_NEVER;} current_config;
+    LoadedConfig* loaded_config_names=&fixture_base_config;
     bool running_on_wine=false;unsigned ogl_color=0xffffffff;int ogl_line_width=1;bool ogl_line_stipple_enabled=false;
     struct {int init_state=IS_OK;void* gp_graphics=nullptr;
         int (__stdcall *CreateFromHDC)(HDC,void**)=nullptr;

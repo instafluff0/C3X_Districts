@@ -35,7 +35,7 @@ def main():
         parser.error('unrecognized JGL binary')
     native=ROOT/'Renderer/native';build=native/'build'
     text=(ROOT/'injected_code.c').read_text()
-    start=text.index('int __fastcall\npatch_OpenGLRenderer_initialize')
+    start=text.index('int\ninitialize_native_line_backend')
     # C's native `this` parameter is a reserved token in the C++ harness.
     (build/'native_line_hooks.h').write_text(re.sub(r'\bthis\b','context',text[start:text.index('int __fastcall\npatch_Tile_check_water',start)]))
     if args.lifetimes:
@@ -46,9 +46,12 @@ def main():
     (build/'native_probe_state.h').write_text(text[start:text.index('\tc3x_renderer_unit_draw_background_fn',start)])
     invocation=uuid.uuid4().hex;out=build/'gpu-composition'/invocation;out.mkdir()
     inputs=[ROOT/'injected_code.c',ROOT/'C3X.h',ROOT/'civ_prog_objects.csv',jgl,*[native/n for n in
-        ('c3x_renderer_api.h','native_observation.h','test_native_observation.cpp','test_native_line_bridge.h','record_native_observation.py','BUILD.bat','gpu_image_compositor.h','gpu_image_commands.h','test_local_image_backend.h','test_gpu_image_compositor.cpp','native_image_adapter.h','native_sprite_diagnostics.h','test_native_image_adapter.cpp','native_lifetime_registry.h','test_native_bootstrap.h','test_native_lifetimes.cpp')]]
+        ('c3x_renderer_api.h','native_observation.h','test_native_observation.cpp','test_native_line_bridge.h','record_native_observation.py','BUILD.bat','gpu_image_compositor.h','gpu_image_commands.h','test_local_image_backend.h','test_gpu_image_compositor.cpp','native_image_adapter.h','native_sprite_diagnostics.h','test_native_image_adapter.cpp','test_native_ui_assets.h','native_ui_fixture.py','native_lifetime_registry.h','test_native_bootstrap.h','test_native_lifetimes.cpp')]]
     if observer:inputs.append(observer)
     before={p.relative_to(ROOT).as_posix():digest(p) for p in inputs}
+    if args.adapter:
+        from Renderer.native.native_ui_fixture import prepare
+        prepare(ROOT,out/'native-ui.pack',before)
     win=windows_root();winout=win/out.relative_to(ROOT)
     mode='gpu-image-operations' if args.gpu else 'native-observation'
     executable='test_gpu_image_compositor.exe' if args.gpu else 'test_native_observation.exe'
@@ -58,7 +61,7 @@ def main():
     if args.lifetimes:
         mode='native-lifetimes';executable='test_native_lifetimes.exe';marker='PASS native startup lifetimes:'
     observer_argument=f' "{win/observer.relative_to(ROOT)}"' if observer else ''
-    run=out/'run.cmd';run.write_text('@echo off\nsetlocal\n'+f'pushd "{win/"Renderer/native"}"\n'
+    run=out/'run.cmd';run.write_text('@echo off\nsetlocal\n'+(f'set \"C3X_RENDERER_NATIVE_UI_PACK={winout/"native-ui.pack"}\"\n' if args.adapter else '')+f'pushd "{win/"Renderer/native"}"\n'
         +f'call BUILD.bat {mode} >"{winout/"build.log"}" 2>&1\nif errorlevel 1 goto failed\n'
         +f'build\\gpu-composition\\{executable} "{win/relative}"{observer_argument} >"{winout/"test.log"}" 2>&1\n'
         +'if not "%errorlevel%"=="0" goto failed\n'+f'>"{winout/"completion.txt"}" echo {invocation} 0\nexit /b 0\n:failed\n'
@@ -67,7 +70,7 @@ def main():
     if os.name=='nt':command=['cmd','/d','/c',str(run)]
     result=subprocess.run(command,capture_output=True,text=True,timeout=120)
     completion=(out/'completion.txt').read_text().split() if (out/'completion.txt').exists() else []
-    unchanged=before=={p.relative_to(ROOT).as_posix():digest(p) for p in inputs}
+    unchanged=all(digest(ROOT/path)==value for path,value in before.items())
     passed=completion==[invocation,'0'] and unchanged and (out/'test.log').is_file() and marker in (out/'test.log').read_text(errors='replace')
     exe=build/'gpu-composition'/executable
     if passed:shutil.copy2(exe,out/exe.name)

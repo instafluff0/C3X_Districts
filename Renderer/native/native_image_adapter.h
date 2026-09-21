@@ -16,13 +16,13 @@ using namespace c3x_gpu_images;
 struct Counts {std::uint64_t translated=0,fallbacks=0,readbacks=0,readback_bytes=0,source_checks=0,text_builds=0,text_hits=0;};
 template<class Backend> class Adapter {
     struct Image {void* native=nullptr;Id gpu=0,detail=0;unsigned width=0,height=0;Format format=Format::rgb555;
-        bool owned=false,dirty=false,cpu_uploaded=false;std::uint64_t revision=0;std::vector<std::uint32_t> cpu;};
+        bool owned=false,dirty=false,cpu_uploaded=false;std::uint64_t revision=0,used=0;std::vector<std::uint32_t> cpu;};
     Backend& gpu;
     c3x_renderer_native_lifetime_fn lifetime;
     void* get_bits;void* release_bits;DWORD thread=GetCurrentThreadId();
-    std::array<Image,32> images={};std::uint64_t cpu_bytes=0;
+    std::array<Image,32> images={};std::uint64_t cpu_bytes=0,source_age=0;
     static constexpr std::uint64_t cpu_budget=64u*1024u*1024u;
-    Counts counters;unsigned large_cpu_barrier_reports=0;
+    Counts counters;unsigned large_cpu_barrier_reports=0,copy_rejection_reports=0,sprite_rejection_reports=0,blend_rejection_reports=0;
     Id sprite_image=0;unsigned sprite_width=0,sprite_height=0;
     std::uint64_t sprite_revision=0;std::vector<std::uint32_t> sprite_pixels;
     struct Lookup {Id image=0;std::uint64_t revision=0;std::vector<std::uint16_t> words;};
@@ -67,9 +67,25 @@ template<class Backend> class Adapter {
     using Get=std::uint16_t*(__thiscall*)(void*);
     using Release=void(__thiscall*)(void*,int);
     static int field(void* p,unsigned offset){return *reinterpret_cast<int*>(static_cast<char*>(p)+offset);}
+    bool native_sprite(void* p)const{
+        auto module=reinterpret_cast<char*>(GetModuleHandleA("jgl.dll"));
+        return module&&p&&*static_cast<void***>(p)==reinterpret_cast<void**>(module+0x68440);
+    }
     static Rect rect(void const* p){auto r=static_cast<RECT const*>(p);return {r->left,r->top,r->right,r->bottom};}
-    Image* find(void* p){for(auto& image:images)if(p&&image.native==p)return &image;return nullptr;}
+    Image* find(void* p){for(auto& image:images)if(p&&image.native==p){image.used=++source_age;return &image;}return nullptr;}
     void forget(Image& image){if(image.detail)gpu.destroy(image.detail);gpu.destroy(image.gpu);cpu_bytes-=image.cpu.size()*4;image={};}
+    void trim_cpu_sources(){
+        // Trim only between native operations, before borrowing any Image*.
+        // Retained recipes own immutable versions; CPU pixels authorize these
+        // unowned mirrors again on demand. Never evict authoritative GPU images.
+        auto count=std::size_t(std::count_if(images.begin(),images.end(),[](auto const& i){return i.native!=nullptr;}));
+        if(count<images.size()-2 && cpu_bytes<=48u*1024u*1024u)return;
+        while(count>images.size()-8 || cpu_bytes>48u*1024u*1024u){
+            Image* oldest=nullptr;
+            for(auto& i:images)if(i.native&&!i.owned&&!i.dirty&&(!oldest||i.used<oldest->used))oldest=&i;
+            if(!oldest)break;forget(*oldest);--count;
+        }
+    }
     Image* create(void* p,bool owned){
         if(!p||field(p,0x24)!=16)return nullptr;
         int w=field(p,0x38),h=field(p,0x3c),stride=field(p,0x40);
@@ -86,7 +102,7 @@ template<class Backend> class Adapter {
         for(auto& image:images)if(!image.native){
             std::vector<std::uint32_t> bytes(std::size_t(w)*h);
             auto id=gpu.create(w,h,format);if(!id)return nullptr;
-            image.native=p;image.gpu=id;image.width=w;image.height=h;image.format=format;image.owned=owned;
+            image.native=p;image.used=++source_age;image.gpu=id;image.width=w;image.height=h;image.format=format;image.owned=owned;
             image.cpu=std::move(bytes);cpu_bytes+=image.cpu.size()*4;return &image;
         }return nullptr;
     }
@@ -106,7 +122,11 @@ template<class Backend> class Adapter {
         // CPU-owned sources may retain pointers: compare complete words on use.
         if(image.cpu_uploaded&&content==image.cpu)return true;
         if(!gpu.upload(image.gpu,image.revision+1,content.data(),content.size()))return false;
-        ++image.revision;image.cpu_uploaded=true;image.cpu=std::move(content);return true;
+        ++image.revision;image.cpu_uploaded=true;
+        cpu_bytes-=image.cpu.size()*4;
+        if(image.owned)std::vector<std::uint32_t>().swap(image.cpu);
+        else {image.cpu=std::move(content);cpu_bytes+=image.cpu.size()*4;}
+        return true;
     }
     // A native-format GPU mirror preserves exact CPU fallback words; only the
     // map/screen copy family also retains full-color pixels. Both change in one
@@ -408,30 +428,28 @@ template<class Backend> class Adapter {
         if(bits==16||trimmed)*reinterpret_cast<unsigned*>(static_cast<char*>(source)+0x28)=trimmed?key&255:key;
         destination.dirty=true;++counters.translated;return true;
     }
-    void cpu_ownership(Image& image){
+    void cpu_ownership(Image& image,int operation=0){
         if(image.dirty){
             if(image.width>=640 && image.height>=480 && large_cpu_barrier_reports++<16){
-                void* frames[12]={};auto count=CaptureStackBackTrace(0,12,frames,nullptr);
-                char line[768];int used=std::snprintf(line,sizeof(line),"[C3X renderer] stage=native-cpu-barrier width=%u height=%u detail=%u stack=",
-                    image.width,image.height,unsigned(image.detail!=0));
-                for(unsigned n=0;n<count&&used<int(sizeof(line))-64;++n){HMODULE module=nullptr;
-                    GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-                        reinterpret_cast<char const*>(frames[n]),&module);
-                    char const* name=module==GetModuleHandleA(nullptr)?"game":module==GetModuleHandleA("jgl.dll")?"jgl":
-                        module==GetModuleHandleA("C3XRenderer.dll")?"renderer":"other";
-                    used+=std::snprintf(line+used,sizeof(line)-used,"%s%s+%lx",n?",":"",name,
-                        static_cast<unsigned long>(reinterpret_cast<std::uintptr_t>(frames[n])-reinterpret_cast<std::uintptr_t>(module)));
-                }
-                std::snprintf(line+used,sizeof(line)-used,"\n");OutputDebugStringA(line);
+                // Guest x86 stack walking can stop in this DLL. Record the
+                // actual adapter operation and stable slot instead of guessing
+                // the native caller from an incomplete stack.
+                char line[256];std::snprintf(line,sizeof(line),
+                    "[C3X renderer] stage=native-cpu-barrier operation=%d slot=%u width=%u height=%u detail=%u owned=%u\n",
+                    operation,unsigned(&image-images.data()),image.width,image.height,unsigned(image.detail!=0),unsigned(image.owned));
+                OutputDebugStringA(line);
             }
-            if(!gpu.readback(image.gpu,image.cpu.data(),image.cpu.size()))
+            // GPU ownership makes the old CPU mirror stale. Materialize only
+            // this explicit fallback, then release its temporary storage.
+            std::vector<std::uint32_t> words(std::size_t(image.width)*image.height);
+            if(!gpu.readback(image.gpu,words.data(),words.size()))
                 throw std::runtime_error("cannot read current GPU image");
             GdiFlush();auto bits=reinterpret_cast<Get>(get_bits)(image.native);
             if(!bits)throw std::runtime_error("cannot restore native image ownership");
             auto stride=field(image.native,0x40);
-            for(unsigned y=0;y<image.height;++y)for(unsigned x=0;x<image.width;++x)bits[y*stride+x]=std::uint16_t(image.cpu[y*image.width+x]);
+            for(unsigned y=0;y<image.height;++y)for(unsigned x=0;x<image.width;++x)bits[y*stride+x]=std::uint16_t(words[y*image.width+x]);
             reinterpret_cast<Release>(release_bits)(image.native,1);
-            ++counters.readbacks;counters.readback_bytes+=image.cpu.size()*4;image.dirty=false;
+            ++counters.readbacks;counters.readback_bytes+=words.size()*4;image.dirty=false;
             // Reestablish CPU-upload revision validity only on its next source use.
             image.cpu_uploaded=false;
         }
@@ -447,42 +465,58 @@ public:
     Adapter(Adapter const&)=delete;Adapter& operator=(Adapter const&)=delete;
     // Call drain while native objects/device still exist. A synchronization/device
     // failure is terminal for this isolated backend, never a stale-pixel fallback.
-    void drain(){for(auto& text:texts)retire_text(text);for(auto& image:images)if(image.native){cpu_ownership(image);forget(image);}if(sprite_image)gpu.destroy(sprite_image);sprite_image=0;sprite_pixels.clear();for(auto& lookup:lookups)if(lookup.image)gpu.destroy(lookup.image);lookups={};}
+    void drain(){for(auto& text:texts)retire_text(text);for(auto& image:images)if(image.native){cpu_ownership(image,C3X_NATIVE_IMAGE_DRAIN);forget(image);}if(sprite_image)gpu.destroy(sprite_image);sprite_image=0;sprite_pixels.clear();for(auto& lookup:lookups)if(lookup.image)gpu.destroy(lookup.image);lookups={};}
     // Admission follows an actual destination demand. Startup observation proves
     // the entire lifetime even when its INIT preceded this GPU session. Sources
     // and unused canvases do not allocate resident destination pairs at startup.
-    bool admit(void* object){
+    bool admit(void* object,char const** rejection=nullptr){
+        auto reject=[&](char const* reason){if(rejection)*rejection=reason;return false;};
         if(GetCurrentThreadId()!=thread)throw std::runtime_error("native admission thread changed");
         auto d=find(object);if(d&&d->owned)return true;
-        if(!lifetime||!lifetime(C3X_NATIVE_MAP,object,0))return false;
+        if(!lifetime||!lifetime(C3X_NATIVE_MAP,object,0))return reject("lifetime");
         // No takeover during even a private outstanding native lease.
-        if(field(object,0x4c4)||field(object,0x4c8))return false;
+        if(field(object,0x4c4)||field(object,0x4c8))return reject("outstanding-lease");
         if(!d)d=create(object,false);
-        if(!d||!refresh(*d))return false;
-        d->owned=true;return true;
+        if(!d)return reject("surface-admission");
+        if(!refresh(*d))return reject("upload");
+        d->owned=true;
+        cpu_bytes-=d->cpu.size()*4;std::vector<std::uint32_t>().swap(d->cpu);
+        return true;
     }
     int operation(int op,void* object,void* source,void const* source_rect,void const* target_rect,unsigned color){
         if(GetCurrentThreadId()!=thread)throw std::runtime_error("native GPU adapter thread changed");
+        trim_cpu_sources();
         auto destination=find(object);
         if(op==C3X_NATIVE_IMAGE_DRAIN){drain();return 0;}
         if(op==C3X_NATIVE_DESTROY){if(destination)forget(*destination);return 0;}
-        if(op==C3X_NATIVE_IMAGE_REINIT){if(destination){cpu_ownership(*destination);forget(*destination);}return 0;}
+        if(op==C3X_NATIVE_IMAGE_REINIT){if(destination){cpu_ownership(*destination,op);forget(*destination);}return 0;}
         if(op==C3X_NATIVE_INIT){
             // The startup service records INIT independently. The legacy fixture
             // without that service can admit only fresh observed native images.
             if(destination)forget(*destination);
             if(!lifetime){destination=create(object,true);if(destination&&!refresh(*destination))forget(*destination);}return 0;
         }
-        if(op==C3X_NATIVE_PIXEL||op==C3X_NATIVE_BITS||op==C3X_NATIVE_DC){if(destination)cpu_ownership(*destination);return 0;}
+        if(op==C3X_NATIVE_PIXEL||op==C3X_NATIVE_BITS||op==C3X_NATIVE_DC){if(destination)cpu_ownership(*destination,op);return 0;}
         // Extend the map/save/display family only along an owned transfer.
         // Unrelated UI fills/sprites remain CPU-generated; they enter as upload
         // sources if subsequently drawn onto the resident map family.
-        if(op==C3X_NATIVE_COPY||op==C3X_NATIVE_IMAGE_DRAW){auto input=find(source);if(input&&input->owned){admit(object);destination=find(object);}}
+        if(op==C3X_NATIVE_COPY||op==C3X_NATIVE_IMAGE_DRAW){auto input=find(source);if(input&&input->owned){
+            char const* rejection=nullptr;
+            if(!admit(object,&rejection)&&copy_rejection_reports++<16){
+                char line[384];auto from=source_rect?rect(source_rect):Rect{};auto to=target_rect?rect(target_rect):Rect{};
+                std::snprintf(line,sizeof(line),"[C3X renderer] stage=native-copy-admission operation=%d reason=%s source_slot=%u destination_slot=%d source=%ux%u destination=%dx%d bits=%d from=%d,%d,%d,%d to=%d,%d,%d,%d\n",
+                    op,rejection?rejection:"unknown",unsigned(input-images.data()),destination?int(destination-images.data()):-1,
+                    input->width,input->height,object?field(object,0x38):0,object?field(object,0x3c):0,object?field(object,0x24):0,
+                    from.left,from.top,from.right,from.bottom,to.left,to.top,to.right,to.bottom);OutputDebugStringA(line);
+            }
+            destination=find(object);
+        }}
         if(op==C3X_NATIVE_TEXT){
             if(destination&&destination->owned&&draw_text(*destination,source,target_rect,color))return 1;
-            if(destination)cpu_ownership(*destination);++counters.fallbacks;return 0;
+            if(destination)cpu_ownership(*destination,op);++counters.fallbacks;return 0;
         }
         if(op==C3X_NATIVE_LOOKUP||op==C3X_NATIVE_SPRITE_LOOKUP||op==C3X_NATIVE_SPRITE_LOOKUP_OVER||op==C3X_NATIVE_SPRITE_LOOKUP_SCALED){
+            if(op==C3X_NATIVE_SPRITE_LOOKUP&&native_sprite(source)&&!field(source,0x14))return 0;
             auto inputs=static_cast<c3x_renderer_native_lookup const*>(source_rect);
             Image* background=nullptr;bool compatible=true;
             if(op==C3X_NATIVE_SPRITE_LOOKUP_OVER||op==C3X_NATIVE_SPRITE_LOOKUP_SCALED){
@@ -497,29 +531,59 @@ public:
             }
             if(destination&&destination->owned&&inputs&&inputs->table&&compatible&&
                (op==C3X_NATIVE_LOOKUP?draw_lookup(*destination,source,inputs,target_rect):draw_sprite(*destination,source,inputs->palette,target_rect,inputs->table,background,op==C3X_NATIVE_SPRITE_LOOKUP_SCALED?inputs->scale:nullptr)))return 1;
-            if(destination)cpu_ownership(*destination);
-            if(background&&background!=destination)cpu_ownership(*background);
-            if(op==C3X_NATIVE_LOOKUP){auto input=find(source);if(input&&input!=destination)cpu_ownership(*input);}
+            if(destination)cpu_ownership(*destination,op);
+            if(background&&background!=destination)cpu_ownership(*background,op);
+            if(op==C3X_NATIVE_LOOKUP){auto input=find(source);if(input&&input!=destination)cpu_ownership(*input,op);}
             ++counters.fallbacks;return 0;
         }
         if(op==C3X_NATIVE_SPRITE_BLEND){
+            // Pinned JGL slots 20/21/22 reject non-indexed sprite formats before
+            // borrowing either image. Let native return 23 without destroying
+            // the resident underlay (slot 22 only queries image metadata first).
+            auto inputs=static_cast<c3x_renderer_native_sprite_blend const*>(source_rect);
+            if(color<=1&&inputs&&native_sprite(source)&&native_sprite(inputs->alpha)&&
+               (field(source,0x20)!=8||field(inputs->alpha,0x20)!=8))return 0;
             if(destination&&destination->owned&&draw_blend(*destination,source,source_rect,target_rect,color))return 1;
-            if(destination)cpu_ownership(*destination);
-            if(source_rect){auto background=find(static_cast<c3x_renderer_native_sprite_blend const*>(source_rect)->background);if(background&&background!=destination)cpu_ownership(*background);}
+            if(destination&&destination->owned&&blend_rejection_reports++<8){
+                bool known=native_sprite(source),alpha=inputs&&native_sprite(inputs->alpha);auto bg=inputs?inputs->background:nullptr;
+                char line[512];std::snprintf(line,sizeof(line),
+                    "[C3X renderer] stage=native-blend-fallback mode=%u source=%d,%d,%d,%d,%d,%d alpha=%d,%d,%d,%d,%d,%d background=%d,%d,%d destination=%u,%u,%d\n",
+                    color,known?field(source,0x20):-1,known?field(source,0x30):0,known?field(source,0x34):0,known?field(source,0x2c):0,known?field(source,0x18):0,known&&field(source,0x14)!=0,
+                    alpha?field(inputs->alpha,0x20):-1,alpha?field(inputs->alpha,0x30):0,alpha?field(inputs->alpha,0x34):0,alpha?field(inputs->alpha,0x2c):0,alpha?field(inputs->alpha,0x18):0,alpha&&field(inputs->alpha,0x14)!=0,
+                    bg?field(bg,0x38):0,bg?field(bg,0x3c):0,bg?field(bg,0x40):0,destination->width,destination->height,field(object,0x40));OutputDebugStringA(line);
+            }
+            if(destination)cpu_ownership(*destination,op);
+            if(source_rect){auto background=find(static_cast<c3x_renderer_native_sprite_blend const*>(source_rect)->background);if(background&&background!=destination)cpu_ownership(*background,op);}
             ++counters.fallbacks;return 0;
         }
         if(op==C3X_NATIVE_SPRITE_STYLE){
             auto input=static_cast<c3x_renderer_native_sprite_style const*>(source_rect);
+            // Slots 23/29/31/37 also query source bits before image pixels.
+            if(input&&input->mode>=1&&input->mode<=4&&native_sprite(source)&&!field(source,0x14))return 0;
             if(destination&&destination->owned&&input&&input->mode>=1&&input->mode<=4&&
                (input->mode!=3||input->table)&&draw_sprite(*destination,source,input->palette,target_rect,input->table,nullptr,nullptr,input->mode,input->color,input->mode==4?input->opacity:1.f))return 1;
-            if(destination)cpu_ownership(*destination);++counters.fallbacks;return 0;
+            if(destination)cpu_ownership(*destination,op);++counters.fallbacks;return 0;
         }
         if(op==C3X_NATIVE_SPRITE){
+            // JGL 0x8180 calls the pure bits getter (0x98a0) first. A null
+            // source returns 7 without touching the destination. Preserve that
+            // native result via pass-through, with no GPU ownership barrier.
+            if(native_sprite(source)&&!field(source,0x14))return 0;
             if(destination&&destination->owned&&draw_sprite(*destination,source,source_rect,target_rect))return 1;
-            if(destination)cpu_ownership(*destination);++counters.fallbacks;return 0;
+            if(destination&&destination->owned&&destination->width>=640&&destination->height>=480&&sprite_rejection_reports++<8){
+                auto module=reinterpret_cast<char*>(GetModuleHandleA("jgl.dll"));
+                bool known=module&&source&&*static_cast<void***>(source)==reinterpret_cast<void**>(module+0x68440);
+                char line[320];std::snprintf(line,sizeof(line),
+                    "[C3X renderer] stage=native-sprite-fallback known=%u bits=%d size=%dx%d stride=%d flags=%d pixels=%u scale=%d,%d,%d\n",
+                    unsigned(known),known?field(source,0x20):0,known?field(source,0x30):0,known?field(source,0x34):0,
+                    known?field(source,0x2c):0,known?field(source,0x18):0,unsigned(known&&field(source,0x14)!=0),
+                    module?*reinterpret_cast<int*>(module+0x6c0fc):0,module?*reinterpret_cast<int*>(module+0x6c100):0,module?*reinterpret_cast<int*>(module+0x6c104):0);
+                OutputDebugStringA(line);
+            }
+            if(destination)cpu_ownership(*destination,op);++counters.fallbacks;return 0;
         }
         if(op!=C3X_NATIVE_COPY&&op!=C3X_NATIVE_FILL&&op!=C3X_NATIVE_IMAGE_DRAW&&op!=C3X_NATIVE_TINT&&op!=C3X_NATIVE_LINE)return 0;
-        auto fallback=[&](){if(destination)cpu_ownership(*destination);auto s=find(source);if(s&&s!=destination)cpu_ownership(*s);++counters.fallbacks;return 0;};
+        auto fallback=[&](){if(destination)cpu_ownership(*destination,op);auto s=find(source);if(s&&s!=destination)cpu_ownership(*s,op);++counters.fallbacks;return 0;};
         if(!destination||!destination->owned)return fallback();
         Image* input=nullptr;
         Command command={Kind::fill,destination->gpu,0,{},rect(static_cast<char*>(object)+0x44),0,0,color&0xffff};

@@ -47,7 +47,7 @@ def main(argv=None):
     parser.add_argument('--ground-workers',choices=('0','1'),default='1',help='Run the production ground compiler serially (0) or on its bounded worker (1)')
     parser.add_argument("--unit-count",type=int,choices=(1,8,16,32),default=8,help="Unit count in the complete native-frame workload")
     parser.add_argument("--visual-units",type=int,choices=(1,8,16,32),default=1,help="Actual retained units in independent visual frames")
-    parser.add_argument("--visual-frames",type=int,choices=range(30,241),default=30,help="Independent visual opportunities; use at least 100 for percentile acceptance")
+    parser.add_argument("--visual-frames",type=int,choices=range(30,1201),default=30,help="Independent visual opportunities; use at least 100 for percentile acceptance")
     parser.add_argument("--visual-unit-case",choices=("selected","work","mixed"),default="selected",help="One selected idle unit plus frozen idle, authored workers, or mixed frozen/work/native-action units")
     parser.add_argument("--unit-scene",choices=("0","1"),default="1",help="Ordered direct unit scene draws (1) or preserved resident-pose control (0)")
     parser.add_argument("--visibility",action="store_true",help="Capture world-fixed visible, explored and unseen regions")
@@ -73,7 +73,7 @@ def main(argv=None):
     blitter=unit_source[unit_source.index('    bool blit_pixels('):unit_source.index('    unsigned keyed_pixels=')]
     (build/'native_unit_blitter.h').write_text('struct NativeUnitBlitter {\n'+storage+blitter+'\n~NativeUnitBlitter(){reset_blit();}\n};\n')
     text=(ROOT/'injected_code.c').read_text()
-    start=text.index('int __fastcall\npatch_OpenGLRenderer_initialize')
+    start=text.index('int\ninitialize_native_line_backend')
     # C's native `this` parameter is a reserved token in the C++ harness.
     (build/'native_line_hooks.h').write_text(re.sub(r'\bthis\b','context',text[start:text.index('int __fastcall\npatch_Tile_check_water',start)]))
     (build/'native_probe_hooks.h').write_text(text[text.index('// JGL observation hooks:'):text.index('// End JGL observation hooks.')])
@@ -103,12 +103,14 @@ def main(argv=None):
         'build_receipt_sha256':digest(build_path) if build_record else None,
         'current_runtime_matches_build':bool(build_sources) and all(build_sources.get(path)==value for path,value in inputs.items()),
         'purpose':'Candidate or explicitly selected historical binary; harness inputs are recorded separately.'}
-    for path in (scene,dll,jgl,ROOT/'injected_code.c',ROOT/'C3X.h',ROOT/'civ_prog_objects.csv',*[ROOT/'Renderer/native'/n for n in ('gpu_frame_preview.h','world_readiness_preview.h','gpu_camera_identity_preview.h','native_frame_workload.h','native_frame_benchmark.h','test_native_screen.h','test_native_bootstrap.h','test_native_worker.cpp','test_gpu_unit_composition.h','test_native_image_adapter.cpp','test_native_observation.cpp','test_native_line_bridge.h','native_image_adapter.h','native_sprite_diagnostics.h','native_composition_owner.h','native_observation.h','gpu_image_worker_client.h','gpu_image_commands.h','color_quantization.h','test_gpu_frame_api.c','biq_preview.cpp','BUILD.bat','record_gpu_frame.py')]):inputs[path.relative_to(ROOT).as_posix()]=digest(path)
+    for path in (scene,dll,jgl,ROOT/'injected_code.c',ROOT/'C3X.h',ROOT/'civ_prog_objects.csv',*[ROOT/'Renderer/native'/n for n in ('gpu_frame_preview.h','world_readiness_preview.h','gpu_camera_identity_preview.h','native_frame_workload.h','native_frame_benchmark.h','test_native_screen.h','test_native_bootstrap.h','test_native_worker.cpp','test_gpu_unit_composition.h','test_native_image_adapter.cpp','test_native_ui_assets.h','native_ui_fixture.py','test_native_observation.cpp','test_native_line_bridge.h','native_image_adapter.h','native_sprite_diagnostics.h','native_composition_owner.h','native_observation.h','gpu_image_worker_client.h','gpu_image_commands.h','color_quantization.h','test_gpu_frame_api.c','biq_preview.cpp','BUILD.bat','record_gpu_frame.py')]):inputs[path.relative_to(ROOT).as_posix()]=digest(path)
     # Runtime HLSL is part of the result identity even when the DLL is unchanged.
     from Renderer.lab.preparation import require_current, receipt as shader_receipt
     require_current(ROOT)
     shader_record=shader_receipt(ROOT)
     inputs.update(shader_record['inputs']);inputs.update(shader_record['outputs'])
+    from Renderer.native.native_ui_fixture import prepare
+    prepare(ROOT,out/"native-ui.pack",inputs)
     win=windows_root();target=win/out.relative_to(ROOT)
     settings={'C3X_RENDERER_GPU_JGL_TEST':str(win/jgl.relative_to(ROOT)),'C3X_RENDERER_VISUAL_PROFILE':'city-fidelity','C3X_RENDERER_SHARED_SCENE_SURFACE':'',
         'C3X_RENDERER_WATER_COVERAGE':'','C3X_RENDERER_REFLECTION_CONTROL':'0' if args.reflections=='1' else '1','C3X_RENDERER_WAVES':args.waves,'C3X_RENDERER_WATER_MOTION':args.water_motion,'C3X_RENDERER_GPU_FRAME_TEST':'1','C3X_RENDERER_NATIVE_CAMERA_TEST':'1' if args.native_camera_requests or args.native_navigation else '', 'C3X_RENDERER_NATIVE_NAVIGATION_TEST':'1' if args.native_navigation else '', 'C3X_RENDERER_NATIVE_RECOVERY_TEST':'1' if args.native_recovery else '', 'C3X_RENDERER_GPU_CAMERA_IDENTITY_TEST':'1' if args.atomic_camera_views else '', 'C3X_RENDERER_GPU_CAMERA_TEST':'1' if args.camera_requests else '','C3X_RENDERER_SCROLL_COVERAGE_TEST':'1' if args.scroll_coverage else '','C3X_RENDERER_NATIVE_FRAME_BENCHMARK':'1' if args.benchmark else '',
@@ -127,6 +129,7 @@ def main(argv=None):
         'C3X_RENDERER_VISUAL_UNITS':str(args.visual_units),'C3X_RENDERER_VISUAL_UNIT_CASE':args.visual_unit_case,
         'C3X_RENDERER_TACTICAL_PREVIEW':str(target/'tactical') if args.tactical else '',
         'C3X_RENDERER_PREVIEW_SESSION':'','C3X_RENDERER_PREVIEW_REPLAY':'','C3X_RENDERER_PREVIEW_ANIMATION':''}
+    settings['C3X_RENDERER_NATIVE_UI_PACK']=str(target/'native-ui.pack')
     settings['C3X_RENDERER_TEST_RESERVE_MIB']=str(args.reserve_address_mib)
     settings['C3X_RENDERER_WORLD_READINESS_ONLY']='1' if args.world_readiness_only else ''
     settings['C3X_RENDERER_WORLD_READINESS_TEST']='1' if args.world_readiness else ''

@@ -17,44 +17,54 @@ actions, programmatic centering and projection changes retain exact behavior.
 Units stay above all map geometry. Native actions, visibility, controls and unit/UI
 ordering remain authoritative. Shore waves, water motion and reflections are on
 in every normal performance workload. The tested M3.8 production DLL is now
-staged as a user-requested **evaluation build**; installation and live-game
-testing remain with the user. Performance acceptance is still pending.
+staged as a user-requested **evaluation build** and installed for the authorized
+game attempt. Live gameplay and performance acceptance are still pending.
 [Architecture](renderer_architecture.md) owns the design;
 [validation](benchmark_workflow.md) owns measurement and acceptance.
 
 ## M3.8 current handoff — in progress
 
-**Live correctness remains open.** Capture `20260920-234930-a86f69`
-retained GPU map delivery through 20 map composites and completed 400 independent
-visual frames, but map effects did not advance between native map requests.
-The user also observed delayed exploration and another freeze. Whole-process
-available virtual space fell to 118.6 MB before terminal GPU failures; physical
-RAM remained plentiful. Earlier smoother behavior is not animation-on performance
-acceptance. See [live findings](live_usage_findings_20260920.md).
+**Live correctness remains open.** Capture `20260921-020053-d1fc60` still
+has 37 water draws for 37 native composites, zero independent map samples and
+19 retained texture-budget failures. Startup admission improved; the first
+full-screen blend rejection remains unclassified. See
+[live findings](live_usage_findings_20260920.md).
 
-The current correction preserves full quality and the previous 224.77 MiB scene
-allocation saving. A worker-owned pressure policy now trims reusable reflection
-pages and unit poses below 768 MiB free virtual space, with hysteresis to 1 GiB.
-Optional preparation pauses; displayed GPU authority and demanded draws remain.
-Native fog-only movement updates compare copied visibility and queue one fresh
-map capture through the existing timer. No new patch entries or state fields.
+**Completed corrections:** known empty native sprites and rejected-format alpha
+calls preserve their native return without an unnecessary pixel barrier. GPU-owned
+canvases release stale CPU mirrors, fixing the reproduced six-fullscreen-canvas
+admission failure without increasing the 64 MiB source-cache budget. The private
+CPU unit fallback scopes its synchronous DC leases and restores the prior scope
+on every exit. Real external escapes retain their barriers. Blend-layout logging
+is bounded. No new patch-table entry or injected state is needed.
 
-**Staged evaluation DLL:** `41c438daaab37e0f2b36c57f3ede33bf46580992e154fa63312da94306770ab7`.
-`native/build/live-followup-stage.json` records source identity, rollback and
-validation. **Re-run INSTALL.bat** for the changed fog/timer hooks. The complete
-2240×1260 pressure fixture passes 100 mixed-unit animation frames, native UI,
-visibility, tactical, camera and reset/config-off checks with 1 GiB extra VA
-reserved and all water effects on. Minimum sampled free VA is 206.81 MiB.
-Sixteen focused contract tests pass; one local executable audit is skipped.
-The approved injected compile smoke test passes. This is fixture correctness,
-not live stability or an FPS improvement claim.
+**Installed evaluation candidate:**
+`97593ec91d493f600f003203f26a996cf5af33d9bf275dbfd50d53d32b40b9b4`.
+`native/build/native-hud-stage.json` records matching source, rollback and
+validation. The authorized INSTALL invocation displayed success, and Civ III
+launched to its main menu. Automated guest input did not navigate beyond it;
+the user resumed responsibility for gameplay testing. The FPS helper did not
+start; the separate debug-only launch provides no gameplay or FPS acceptance.
 
-**Next responsibility:** reproduce why the live native composition loses map
-animation, using the new reachable-map-source/sample and bounded CPU-barrier
-traces. Then prove exploration appears during movement and the game survives
-sustained city UI, selection and navigation without allocation/device failures.
-VM installation/game-launch permission was requested; neither was performed.
-General device-removal recovery and Standard <33 ms p95 acceptance remain open.
+**Broader verification:** the complete 2240×1260 real-JGL 100-frame replay passes
+with actual local HUD panels, empty hover sprites, save/restore, fog/reveal,
+tactical overlays, camera/reset and config-off. An ambient-only desktop witness
+changes 31,392 interior pixels without native redraws. The 1,200-frame stress run
+produces 1,200 map samples, 9,600 unit samples and 4,800 pose changes, retaining
+39.01 MiB / 36 nodes. Timer delivery also passes. Mean request/desktop durations
+are 39.27/48.86 ms with an additional 1 GiB VA reservation; these are stress
+measurements, not an A/B speedup or Standard <33 ms acceptance.
+**That long run fails its later fresh-capture recovery assertion**, so its overall
+receipt is failed. The shorter recovery pass does not close this finding.
+`native-hud-display-check/receipt.json`, `native-hud-sustained/receipt.json` and
+`gpu-composition/140eae6dc3d74ffd9598f5aacb477278/receipt.json` preserve the evidence.
+Approved injected compilation and extracted private-scope tests pass.
+
+**Next responsibility:** diagnose fresh recovery after sustained animation;
+classify any remaining live blend rejection and prove live map animation between
+native redraws. Movement visibility, sustained city/selection/navigation stability,
+general device-removal recovery and Standard <33 ms p95 remain open. Do not ask
+for another incremental manual capture while independent investigation remains.
 
 Whole-world appearance enters through bounded caller-thread pages. Existing
 workers prepare canonical regions and wrapped occurrences independently of the

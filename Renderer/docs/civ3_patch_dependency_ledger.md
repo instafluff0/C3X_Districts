@@ -1,5 +1,33 @@
 # Civ III patch dependency ledger
 
+## Pre-configuration and pre-publication line initialization
+
+`required_user_action: ["Re-run INSTALL.bat to update the injected bridge"]`.
+Reuses the existing `OpenGLRenderer_initialize` and `OpenGLRenderer_draw_line`
+inleads and style wrappers listed below. Signatures remain
+`int (__fastcall *)(OpenGLRenderer*, int, PCX_Image*)` and
+`void (__fastcall *)(OpenGLRenderer*, int, int, int, int, int)`. Registered
+GOG/Steam/PCGames.de addresses remain `0x0062B1A0 / 0x0064E220 / 0x006274B0`
+for initialization and `0x0062B450 / 0x0064E510 / 0x00627760` for drawing.
+No new patch, CSV entry or injected state.
+
+Main-screen startup (`FUN_004e2b00`) initializes lines on its full-screen canvas
+before scenario configuration and the first GPU map publication. Installed GOG
+bytes confirm the startup call at `0x004C8E09` and line initialization at
+`0x004E2B7F`, through the already-installed hook at `0x0062B1A0`. The base
+configuration still disables rendering at this point. Checking custom-on alone
+therefore missed this public DC acquisition and permanently revoked later
+map-copy admission, even with the previous bridge correctly installed.
+
+The existing loaded-configuration list distinguishes base defaults alone from
+loaded configuration files. Before configuration, and when custom-on,
+initialization records the target without acquiring a DC. The first actual CPU
+stroke initializes the original backend and replays its style. Configured-off
+initialization remains immediate. Pointer/DC escape barriers remain unchanged.
+The real-JGL regression fails on the previous wrapper and passes with this
+change, including an actual CPU stroke before configuration. No new state is
+needed. The complete native fixture now begins with this configuration sequence.
+
 ## Movement visibility invalidation
 
 `required_user_action: ["Re-run INSTALL.bat to update the injected bridge"]`.
@@ -67,7 +95,7 @@ replacing only the renderer DLL leaves the unconditional native DC acquisition.
 The native m71 tail calls `FUN_004e48d0`, which initializes the line renderer
 before checking whether any colonies need outlines. `OpenGLRenderer::initialize`
 requests image vtable slot 10 (public DC) before doing any drawing. The existing
-GOG initializer is `0x006274B0`; drawing/style entries are `0x00627760`,
+PCGames.de initializer is `0x006274B0`; drawing/style entries are `0x00627760`,
 `0x006277A0`, `0x00627880`, `0x006278C0`, `0x006278E0`, `0x00627900` respectively.
 This destroys the map's exclusive lifetime evidence even when no lines follow.
 
@@ -1281,3 +1309,20 @@ is the existing GOG `Animator + 0x1914` bit 0; no selection rule is reconstructe
 Required user action for patch registration: **none**; these GOG entries are in
 `civ_prog_objects.csv` under the earlier explicit authorization. Visual acceptance,
 staging and the strategic live-game check are separate from this compile proof.
+
+### Private CPU unit fallback after transient GPU rejection
+
+Existing symbols: `Unit_tick_anim`, `Sprite_draw_unit_body_normal`,
+`Sprite_draw_unit_body_reduced`; existing helper `forward_custom_unit_body`.
+The synchronous renderer fallback now saves/restores the existing
+`custom_renderer_native_operation` around its paired DC leases, using the
+already-audited private sprite scope. A failed GPU barrier still denies access;
+real public or foreign-thread escapes still revoke lifetime evidence. No new
+state, signature, supported-build address or CSV entry is required.
+
+`required_user_action`: none for installation; the user explicitly authorized
+an agent game attempt, and INSTALL displayed success for candidate `97593ec9…`.
+The game reached its main menu; the user subsequently took over gameplay testing.
+Approved injected compilation passes. Extracted bridge tests cover success,
+renderer rejection, denied destination/background DC, zoom, portraits and scope
+restoration.

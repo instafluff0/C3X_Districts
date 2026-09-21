@@ -129,6 +129,26 @@ int main(int argc,char** argv){
             reinterpret_cast<Release>(original[9])(images[0],1);
         }
         OpenGLRenderer native_line;PCX_Image native_target;native_target.JGL.Image=images[0];
+        // Program-start forms precede load_scenario and its config files. The
+        // base config's false flag is not an explicit renderer-off decision.
+        LoadedConfig startup_config={"(base)",nullptr};state.loaded_config_names=&startup_config;
+        state.current_config.enable_custom_rendering=false;state.custom_renderer_native_image=nullptr;
+        verify(patch_OpenGLRenderer_initialize(&native_line,0,&native_target)==0&&query(images[0])&&!native_line.initialized,
+            "pre-configuration line initialization preserves future map-copy destination");
+        auto startup_cpu=create(graph,nullptr,1);
+        verify(reinterpret_cast<Init>(startup_cpu->vtable[1])(startup_cpu,16,16,16,1)==0,"pre-configuration CPU stroke canvas");
+        OpenGLRenderer startup_cpu_lines;PCX_Image startup_cpu_target;startup_cpu_target.JGL.Image=startup_cpu;
+        verify(patch_OpenGLRenderer_initialize(&startup_cpu_lines,0,&startup_cpu_target)==0&&!startup_cpu_lines.initialized,"pre-configuration unused CPU initializer deferred");
+        patch_OpenGLRenderer_set_line_width(&startup_cpu_lines,0,3);
+        patch_OpenGLRenderer_draw_line(&startup_cpu_lines,0,1,1,4,4);
+        verify(startup_cpu_lines.initialized==1&&startup_cpu_lines.drawn==1&&!query(startup_cpu),"actual pre-configuration CPU stroke initializes backend and honors ownership barrier");
+        reinterpret_cast<Destroy>(startup_cpu->vtable[0])(startup_cpu,1);
+        state.loaded_config_names=&fixture_base_config;
+        // Main_Screen_Form startup initializes lines before the first map
+        // publication. No drawing or native DC lease is needed at that point.
+        state.current_config.enable_custom_rendering=true;state.custom_renderer_native_image=nullptr;
+        verify(patch_OpenGLRenderer_initialize(&native_line,0,&native_target)==0&&query(images[0])&&!native_line.initialized,
+            "pre-publication line initialization preserves future map-copy destination");
         // A GPU target probe stub isolates fresh-context style defaults; the
         // connected screen test independently exercises the real GPU target.
         state.current_config.enable_custom_rendering=true;state.custom_renderer_native_observe=observe;state.custom_renderer_native_image=allow_line_target;
@@ -151,6 +171,16 @@ int main(int argc,char** argv){
         set_custom_renderer_native_probe(nullptr);state.custom_renderer_native_observe=nullptr;
         verify(state.custom_renderer_native_probe_active&&query(images[0]),"scene detach preserves process lifetime observation");
         verify(reinterpret_cast<Fill>(images[0]->vtable[17])(images[0],&area,int(0x80005678u))==0&&query(images[0]),"native fill remains native after scene detach");
+        // The renderer's synchronous CPU unit fallback shares the audited
+        // sprite scope. Both DCs are released before return; real public access
+        // afterwards must still revoke admission.
+        verify(query(images[1]),"unit fallback starts from an eligible image");
+        state.custom_renderer_native_operation=C3X_NATIVE_SPRITE;
+        auto private_dc=reinterpret_cast<HDC(__thiscall*)(JGL_Image*)>(images[1]->vtable[10])(images[1]);
+        verify(private_dc!=nullptr,"private unit fallback DC");
+        reinterpret_cast<Release>(images[1]->vtable[11])(images[1],1);
+        state.custom_renderer_native_operation=0;
+        verify(query(images[1]),"private unit fallback can be readmitted after CPU drawing");
         auto thread=CreateThread(nullptr,0,escape_lifetime,images[1],0,nullptr);verify(thread!=nullptr,"foreign native caller");
         verify(WaitForSingleObject(thread,10000)==WAIT_OBJECT_0,"foreign draw completion");CloseHandle(thread);verify(!query(images[1]),"foreign drawing invalidates exclusive ownership");
         for(auto image:images){reinterpret_cast<Destroy>(image->vtable[0])(image,1);verify(!query(image),"destroyed lifetime retired");}

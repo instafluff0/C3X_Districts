@@ -27,7 +27,7 @@ using RECT=Rect;
 struct Unit {struct {Rect Rect;int ID=42,UnitTypeID=0,X=2,Y=4;int army_top_defender_id=-1;Animation Animation;} Body;bool army=false,visible=true;};
 struct UnitType {char Civilipedia_Entry[32]="PRTO_Archer";};
 struct Bic {int UnitTypeCount=1;UnitType* UnitTypes;bool is_zoomed_out=false;};
-struct State {Unit* custom_renderer_unit_context=nullptr;PCX_Image* custom_renderer_unit_canvas=nullptr;
+struct State {int custom_renderer_native_operation=123;Unit* custom_renderer_unit_context=nullptr;PCX_Image* custom_renderer_unit_canvas=nullptr;
  c3x_renderer_unit_forget_fn custom_renderer_unit_forget=nullptr;
  c3x_renderer_unit_draw_background_fn custom_renderer_unit_draw=nullptr;
  c3x_renderer_unit_draw_playback_fn custom_renderer_unit_draw_playback=nullptr;
@@ -67,8 +67,8 @@ void custom_renderer_zoom_transform_point(int* x,int* y){
  *y=transform(*y,state.custom_renderer_zoom_translate_y_fp);
 }
 Unit* army_member=nullptr;Unit* get_unit_ptr(int id){return army_member && army_member->Body.ID==id?army_member:nullptr;}
-HDC __fastcall acquire(JGL_Image* p){if(p==denied_dc)return nullptr;++dc_count;return p;}
-void __fastcall release_dc(JGL_Image*,int,int){--dc_count;}
+HDC __fastcall acquire(JGL_Image* p){assert(state.custom_renderer_native_operation==C3X_NATIVE_SPRITE);if(p==denied_dc)return nullptr;++dc_count;return p;}
+void __fastcall release_dc(JGL_Image*,int,int){assert(state.custom_renderer_native_operation==C3X_NATIVE_SPRITE);--dc_count;}
 int __fastcall colors(JGL_Color_Table*,int,unsigned char* out,int first,int count){assert(first==6 && count==1);out[0]=12;out[1]=34;out[2]=56;return 0;}
 int capture(c3x_renderer_unit_v1 const* value,void* destination,void* background){assert(destination && background && destination!=background && dc_count==2);captured=*value;calls.push_back(20);return success?1:0;}
 int capture_expanded(c3x_renderer_unit_v1 const* value,void* destination,void* background,int* bounds){
@@ -118,7 +118,7 @@ int main(){
  PCXV canvas_v={acquire,release_dc};JGL_Image image={&canvas_v};PCX_Image canvas={{&image}},other={{&image}};
  JGL_Image background_image={&canvas_v};PCX_Image background={{&background_image}};fixture_background=&background;
  state.custom_renderer_unit_draw=capture;
- auto invoke=[&](){calls.clear();patch_Unit_tick_anim(&unit,0,&canvas,101,202,true);assert(dc_count==0 && !state.custom_renderer_unit_context && !state.custom_renderer_unit_canvas);};
+ auto invoke=[&](){calls.clear();patch_Unit_tick_anim(&unit,0,&canvas,101,202,true);assert(state.custom_renderer_native_operation==123 && dc_count==0 && !state.custom_renderer_unit_context && !state.custom_renderer_unit_canvas);};
  success=true;invoke();assert(captured.presentation_time_ticks==0);
  invoke();assert(captured.presentation_time_ticks==66000);
  qpc+=1000000;invoke();assert(captured.presentation_time_ticks==66000); // interturn wall time is frozen
@@ -132,6 +132,7 @@ int main(){
   assert(captured.presentation_frequency==1000000 && captured.presentation_time_ticks>=0);
   assert(captured.display_color_rgb==0x0c2238 && !std::strcmp(captured.unit_key,"PRTO_Archer"));
   success=false;invoke();assert(unit.Body.Rect.left==20 && unit.Body.Rect.right==45);assert((calls==std::vector<int>{10,20,40}));
+  denied_dc=&image;invoke();assert((calls==std::vector<int>{10,40}));
   denied_dc=&background_image;invoke();assert((calls==std::vector<int>{10,40}));denied_dc=nullptr;
   state.current_config.enable_custom_rendering=false;invoke();assert((calls==std::vector<int>{10,30,40}));
   state.current_config.enable_custom_rendering=true;unit.army=true;success=true;
