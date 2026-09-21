@@ -14,6 +14,8 @@ cheap general camera changes and broader compatible submission remain unfinished
 Historical handoffs preserve evidence, not extra queues or current build identity.
 The [input recording handoff](docs/input_recording_handoff.md) describes the current
 recorder, visible Windows playback, measured controls and remaining qualification.
+[Before/After playback](docs/realtime_replay_comparison.md) compares two renderers
+at recorded input speed with independently generated animation frames.
 
 The current C3X checkout is the implementation authority. Lab renders and tests
 that code by category; Integration runs the affected current-code checks. Fixed

@@ -18,7 +18,7 @@ MemorySample memory_sample(){
     while(VirtualQuery(reinterpret_cast<void*>(address),&region,sizeof(region))){if(region.State==MEM_FREE){result.free_bytes+=region.RegionSize;result.largest_free=std::max(result.largest_free,std::uint64_t(region.RegionSize));}
         auto next=reinterpret_cast<std::uintptr_t>(region.BaseAddress)+region.RegionSize;if(next<=address)break;address=next;}return result;
 }
-struct Pending {Event input;std::vector<std::pair<std::uint64_t,std::uint64_t>> clocks;std::size_t settings=0;};
+struct Pending {Event input;std::vector<std::pair<std::uint64_t,std::uint64_t>> clocks;std::size_t settings=0;bool skipped=false;};
 void apply_settings(Reader& header){
     auto environment=GetEnvironmentStringsW();require(environment!=nullptr,"cannot inspect replay environment");
     for(auto item=environment;*item;item+=wcslen(item)+1){std::wstring setting=item;auto equal=setting.find(L'=');
@@ -31,11 +31,14 @@ void apply_settings(Reader& header){
 int wmain(int argc,wchar_t** argv){
     HMODULE module=nullptr;HWND window=nullptr;void* reservation=nullptr;int exit_code=0;
     try{
-        require(argc>=4&&std::wstring(argv[1])==L"--development","usage: replay_inputs --development DLL INPUT_DIRECTORY [--frames DIR LAST | --range DIR FIRST LAST | --seconds DIR START END] [--timeline NEW_FILE] [--fingerprints NEW_FILE] [--trace NEW_FILE] [--allow-prefix] [--compare-candidate] [--performance NEW_FILE] [--reserve-mib N] [--watch]");
-        std::filesystem::path frames,timeline_path,trace_path,fingerprints_path,performance_path;unsigned reserve_mib=0;std::uint64_t first_frame=1,frame_limit=0,frame_number=0,exported=0;double first_second=0,last_second=0;bool seconds=false,allow_prefix=false,tail_truncated=false,compare_candidate=false,binary_matches_capture=true,watch=false;
+        require(argc>=4&&std::wstring(argv[1])==L"--development","usage: replay_inputs --development DLL INPUT_DIRECTORY [--frames DIR LAST | --range DIR FIRST LAST | --seconds DIR START END] [--timeline NEW_FILE] [--fingerprints NEW_FILE] [--trace NEW_FILE] [--allow-prefix] [--compare-candidate] [--performance NEW_FILE] [--reserve-mib N] [--watch] [--realtime NEW_FILE]");
+        std::wstring label=L"C3X input replay";
+        std::filesystem::path frames,timeline_path,trace_path,fingerprints_path,performance_path;unsigned reserve_mib=0;std::uint64_t first_frame=1,frame_limit=0,frame_number=0,exported=0;double first_second=0,last_second=0;bool seconds=false,allow_prefix=false,tail_truncated=false,compare_candidate=false,binary_matches_capture=true,watch=false,realtime=false;
         auto integer=[](wchar_t const* raw){std::size_t used=0;std::wstring text(raw);auto value=std::stoull(text,&used);require(used==text.size()&&value&&value<=1000000,"invalid frame bound");return value;};
         auto second=[](wchar_t const* raw){std::size_t used=0;std::wstring text(raw);auto value=std::stod(text,&used);require(used==text.size()&&std::isfinite(value)&&value>=0&&value<=86400,"invalid second bound");return value;};
         for(int i=4;i<argc;){std::wstring flag=argv[i++];
+            if(flag==L"--label"){require(i<argc,"missing playback label");label=argv[i++];require(label.size()<=120,"playback label limit");continue;}
+            if(flag==L"--realtime"){require(i<argc&&performance_path.empty(),"invalid realtime option");realtime=true;performance_path=argv[i++];continue;}
             if(flag==L"--watch"){watch=true;continue;}
             if(flag==L"--performance"){require(i<argc&&performance_path.empty(),"invalid performance option");performance_path=argv[i++];continue;}
             if(flag==L"--reserve-mib"){require(i<argc&&!reserve_mib,"invalid reservation option");auto n=integer(argv[i++]);require(n<=2048,"reservation limit");reserve_mib=unsigned(n);continue;}
@@ -55,7 +58,7 @@ int wmain(int argc,wchar_t** argv){
         if(reserve_mib){reservation=VirtualAlloc(nullptr,std::size_t(reserve_mib)*1024*1024,MEM_RESERVE,PAGE_NOACCESS);require(reservation!=nullptr,"cannot reserve declared address-space pressure");}
         if(!frames.empty())require(!std::filesystem::exists(frames)&&std::filesystem::create_directories(frames),"frame directory must be new");
         if(!trace_path.empty())require(!std::filesystem::exists(trace_path),"trace must be new");
-        auto configure=[&](Reader& settings){apply_settings(settings);if(!trace_path.empty()){
+        auto configure=[&](Reader& settings){apply_settings(settings);if(realtime)SetEnvironmentVariableW(L"C3X_RENDERER_MANUAL_VISUAL",L"0");if(!trace_path.empty()){
             SetEnvironmentVariableW(L"C3X_RENDERER_TRACE",L"2");SetEnvironmentVariableW(L"C3X_RENDERER_TRACE_MIB",L"32");
             SetEnvironmentVariableW(L"C3X_RENDERER_TRACE_BUFFERED",L"1");SetEnvironmentVariableW(L"C3X_RENDERER_TRACE_FILE",trace_path.c_str());}};
         std::vector<Bytes> settings_versions;std::size_t active_settings=0,applied_settings=0;
@@ -74,17 +77,28 @@ int wmain(int argc,wchar_t** argv){
         module=LoadLibraryW(argv[2]);require(module!=nullptr,"cannot load replay DLL");
         auto replay=reinterpret_cast<Replay>(GetProcAddress(module,"c3x_renderer_input_replay"));require(replay!=nullptr,"DLL lacks production input replay entry");
         auto execution=reinterpret_cast<Execution>(GetProcAddress(module,"c3x_renderer_input_replay_execution"));if(performance)require(execution&&execution(1,nullptr,nullptr,nullptr)==1,"DLL lacks performance replay entry");
+        using LiveStatus=int(*)(unsigned,unsigned,double*,unsigned*);
+        auto live_status=reinterpret_cast<LiveStatus>(GetProcAddress(module,"c3x_renderer_input_replay_live_status"));
+        if(realtime)require(live_status,"DLL lacks independent real-time playback; use a compatible candidate");
         auto asset_entry=reinterpret_cast<int(*)(unsigned char const*,unsigned)>(GetProcAddress(module,"c3x_renderer_input_replay_asset"));require(asset_entry&&asset_entry(nullptr,0)==1,"DLL lacks replay asset verification");
         {SegmentReader probe(argv[3]);Event item;while(!probe.footer&&probe.next_verified(item,allow_prefix,tail_truncated))if(item.kind==Kind::asset&&item.flags==0)require(asset_entry(item.payload.data(),unsigned(item.payload.size()))==1,"replay asset import failed");}
         WNDCLASSW wc={};wc.lpfnWndProc=DefWindowProcW;wc.hInstance=GetModuleHandleW(nullptr);wc.lpszClassName=L"C3XInputReplay";RegisterClassW(&wc);
-        window=CreateWindowW(wc.lpszClassName,L"C3X input replay",WS_POPUP,0,0,2240,1260,nullptr,nullptr,wc.hInstance,nullptr);require(window!=nullptr,"cannot create replay target");
+        window=CreateWindowW(wc.lpszClassName,label.c_str(),WS_POPUP,0,0,2240,1260,nullptr,nullptr,wc.hInstance,nullptr);require(window!=nullptr,"cannot create replay target");
         if(performance||watch)ShowWindow(window,SW_SHOWNOACTIVATE);
         SegmentReader reader(argv[3]);Event event;std::map<std::uint64_t,Pending> pending;
         std::uint64_t calls=0,clocks=0,queued=0,peak=0,last=0;bool manifest=false;LARGE_INTEGER frequency={},started={},ended={};QueryPerformanceFrequency(&frequency);double work_ms=0;
-        LARGE_INTEGER playback_start={};QueryPerformanceCounter(&playback_start);double maximum_playback_lag_ms=0;std::uint64_t late_playback_frames=0;
+        LARGE_INTEGER playback_start={};QueryPerformanceCounter(&playback_start);double maximum_playback_lag_ms=0;std::uint64_t late_playback_frames=0,skipped_offers=0;
+        unsigned live_counts[5]={};std::vector<double> ambient_times;double next_status=1,maximum_input_lateness_ms=0;
+        if(realtime)require(execution(2,nullptr,nullptr,nullptr)==1,"DLL lacks realtime execution mode");
+        auto elapsed=[&]{LARGE_INTEGER now={};QueryPerformanceCounter(&now);return double(now.QuadPart-playback_start.QuadPart)/double(frequency.QuadPart);};
+        auto live_update=[&]{if(!realtime)return;double samples[4096];int count=live_status(unsigned(ambient_times.size()),4096,samples,live_counts);
+            require(count>=0&&!live_counts[3]&&!live_counts[4],"autonomous playback failed or exhausted its bounded telemetry");
+            for(int n=0;n<count;++n){measurements<<"{\"row\":\"ambient-present\",\"seconds\":"<<samples[n]<<"}\n";ambient_times.push_back(samples[n]);}
+            if(elapsed()>=next_status){std::cout<<"realtime seconds="<<elapsed()<<" ambient_presentations="<<live_counts[1]<<" pending="<<live_counts[2]<<" max_input_lag_ms="<<maximum_input_lateness_ms<<std::endl;next_status=elapsed()+1;}
+        };
         auto messages=[&]{MSG message;while(PeekMessageW(&message,nullptr,0,0,PM_REMOVE)){
-            require(!watch||!(message.message==WM_QUIT||(message.message==WM_KEYDOWN&&message.wParam==VK_ESCAPE)),"playback stopped by user");
-            TranslateMessage(&message);DispatchMessageW(&message);}require(!watch||IsWindow(window),"playback window closed");};
+            require(!(watch||realtime)||!(message.message==WM_QUIT||(message.message==WM_KEYDOWN&&message.wParam==VK_ESCAPE)),"playback stopped by user");
+            TranslateMessage(&message);DispatchMessageW(&message);}live_update();require(!(watch||realtime)||IsWindow(window),"playback window closed");};
         while(!reader.footer&&reader.next_verified(event,allow_prefix,tail_truncated)){
             last=event.sequence;Reader payload{event.payload};
             if(event.kind==Kind::manifest){require(!manifest&&event.sequence==1,"duplicate/misplaced input manifest");
@@ -98,7 +112,8 @@ int wmain(int argc,wchar_t** argv){
             auto token=payload.u64();
             if(event.kind!=Kind::result){require(token&&pending.size()<256&&!pending.count(token),"invalid call token");
                 require(event.payload.size()<=32u*1024u*1024u-queued,"replay pending input budget");queued+=event.payload.size();peak=std::max(peak,queued);
-                pending.emplace(token,Pending{std::move(event),{},active_settings});continue;}
+                auto parent=payload.u64();bool skip=realtime&&((event.kind==Kind::visual&&event.flags==1)||(pending.count(parent)&&pending.at(parent).skipped));
+                pending.emplace(token,Pending{std::move(event),{},active_settings,skip});continue;}
             auto it=pending.find(token);require(it!=pending.end(),"result has missing input");auto& call=it->second;
             // A bounded tool envelope carries owned scalar records to the DLL;
             // it is decoded before any production renderer invocation.
@@ -107,16 +122,19 @@ int wmain(int argc,wchar_t** argv){
             envelope.u32(unsigned(event.payload.size()));envelope.reserve(event.payload.size());envelope.bytes.insert(envelope.bytes.end(),event.payload.begin(),event.payload.end());
             envelope.u32(unsigned(call.clocks.size()));for(auto const& sample:call.clocks){envelope.u64(sample.first);envelope.u64(sample.second);}
             messages();
-            if(watch){for(;;){LARGE_INTEGER now={};QueryPerformanceCounter(&now);
+            if(watch||realtime){for(;;){LARGE_INTEGER now={};QueryPerformanceCounter(&now);
                 auto remaining=1000.*double(call.input.ticks)/double(reader.frequency)-1000.*double(now.QuadPart-playback_start.QuadPart)/double(frequency.QuadPart);
-                if(remaining<=0)break;Sleep(DWORD(std::min(50.,std::max(1.,remaining))));messages();}}
+                if(remaining<=0)break;Sleep(DWORD(std::min(10.,std::max(1.,remaining))));messages();}}
             if(applied_settings!=call.settings){Reader settings{settings_versions[call.settings]};configure(settings);applied_settings=call.settings;}
+            if(call.skipped){++skipped_offers;++calls;queued-=call.input.payload.size();pending.erase(it);continue;}
+            auto dispatch_seconds=elapsed();auto lateness_ms=std::max(0.,1000.*(dispatch_seconds-double(call.input.ticks)/double(reader.frequency)));
+            maximum_input_lateness_ms=std::max(maximum_input_lateness_ms,lateness_ms);
             char error[512]={};QueryPerformanceCounter(&started);int ok=replay(envelope.bytes.data(),unsigned(envelope.bytes.size()),window,error,sizeof(error));QueryPerformanceCounter(&ended);
             auto envelope_ms=1000.*double(ended.QuadPart-started.QuadPart)/double(frequency.QuadPart);work_ms+=envelope_ms;
             if(!ok){std::cerr<<"event="<<last<<" call="<<token<<" family="<<unsigned(call.input.kind)<<" subtype="<<call.input.flags<<" error="<<error<<'\n';throw std::runtime_error("production input replay mismatch");}
             Reader request{call.input.payload};request.u64();request.u64();Reader completion{event.payload};completion.u64();auto code=completion.u32();
-            if(performance){double service_ms=0;int actual=0;unsigned reused=0;require(execution(1,&service_ms,&actual,&reused)==1,"performance measurement missing");
-                measurements<<"{\"call\":"<<token<<",\"sequence\":"<<event.sequence<<",\"input_seconds\":"<<double(call.input.ticks)/double(reader.frequency)<<",\"family\":"<<unsigned(call.input.kind)<<",\"subtype\":"<<call.input.flags<<",\"recorded_result\":"<<code<<",\"actual_result\":"<<actual<<",\"production_service_ms\":"<<service_ms<<",\"envelope_ms\":"<<envelope_ms<<",\"reused_adoption\":"<<(reused?"true":"false");
+            if(performance){double service_ms=0;int actual=0;unsigned reused=0;require(execution(realtime?2:1,&service_ms,&actual,&reused)==1,"performance measurement missing");
+                measurements<<"{\"call\":"<<token<<",\"sequence\":"<<event.sequence<<",\"input_seconds\":"<<double(call.input.ticks)/double(reader.frequency)<<",\"dispatch_seconds\":"<<dispatch_seconds<<",\"input_lateness_ms\":"<<lateness_ms<<",\"family\":"<<unsigned(call.input.kind)<<",\"subtype\":"<<call.input.flags<<",\"recorded_result\":"<<code<<",\"actual_result\":"<<actual<<",\"production_service_ms\":"<<service_ms<<",\"envelope_ms\":"<<envelope_ms<<",\"reused_adoption\":"<<(reused?"true":"false");
                 if(calls%100==0){auto memory=memory_sample();measurements<<",\"private_bytes\":"<<memory.private_bytes<<",\"free_va_bytes\":"<<memory.free_bytes<<",\"largest_free_va_bytes\":"<<memory.largest_free;}
                 measurements<<"}\n";require(bool(measurements),"performance measurement write failed");code=unsigned(actual);
             }
@@ -142,9 +160,16 @@ int wmain(int argc,wchar_t** argv){
                     auto export_frame=reinterpret_cast<int(*)(wchar_t const*)>(GetProcAddress(module,"c3x_renderer_input_replay_frame"));
                     wchar_t name[64];swprintf_s(name,L"frame-%06llu.bmp",static_cast<unsigned long long>(frame_number));require(export_frame&&export_frame((frames/name).c_str())==1,"frame export failed");}
                 if(timeline.is_open())timeline<<"{\"frame\":"<<frame_number<<",\"call\":"<<token<<",\"sequence\":"<<event.sequence<<",\"seconds\":"<<time
-                    <<",\"family\":"<<unsigned(call.input.kind)<<",\"exported\":"<<(selected?"true":"false")<<"}\n";
+                    <<",\"dispatch_seconds\":"<<dispatch_seconds<<",\"input_lateness_ms\":"<<lateness_ms<<",\"family\":"<<unsigned(call.input.kind)<<",\"exported\":"<<(selected?"true":"false")<<"}\n";
             }
             ++calls;queued-=call.input.payload.size();pending.erase(it);
+        }
+        if(realtime){
+            // Preserve a trailing interval containing no external calls.
+            while(elapsed()<double(event.ticks)/double(reader.frequency)){messages();Sleep(5);}
+            auto shutdown=reinterpret_cast<void(*)()>(GetProcAddress(module,"c3x_renderer_input_replay_shutdown"));require(shutdown,"realtime shutdown entry missing");shutdown();live_update();
+            double maximum_gap=0;for(std::size_t n=1;n<ambient_times.size();++n)maximum_gap=std::max(maximum_gap,1000.*(ambient_times[n]-ambient_times[n-1]));
+            std::cout<<"{\"viewing_mode\":\"realtime_candidate\",\"recorded_ambient_calls_replaced\":"<<skipped_offers<<",\"autonomous_presentations\":"<<live_counts[1]<<",\"autonomous_pending\":"<<live_counts[2]<<",\"maximum_ambient_gap_ms_including_lifecycle\":"<<maximum_gap<<",\"maximum_input_lateness_ms\":"<<maximum_input_lateness_ms<<",\"wall_seconds\":"<<elapsed()<<"}\n";
         }
         if(timeline.is_open()){timeline.flush();require(bool(timeline),"replay timeline write failed");}
         if(fingerprints.is_open()){fingerprints.flush();require(bool(fingerprints),"replay fingerprint flush failed");}
@@ -152,7 +177,7 @@ int wmain(int argc,wchar_t** argv){
         bool complete=reader.footer&&(reader.reason==Stop::closed||reader.reason==Stop::duration)&&pending.empty()&&!tail_truncated;
         require(complete||allow_prefix,"input capture incomplete (use --allow-prefix to inspect verified completed calls)");
         if(watch)std::cout<<"{\"viewing_mode\":\"paced_forensic_playback\",\"dropped_by_player\":0,\"frames_late_over_33ms\":"<<late_playback_frames<<",\"maximum_playback_lag_ms\":"<<maximum_playback_lag_ms<<"}\n";
-        std::cout<<"{\"status\":\"development_input_replay\",\"qualified\":false,\"timing_scope\":\""<<(performance?"unpaced_native_service_not_live_fps":"forensic_calls_not_performance")<<"\",\"reserved_va_mib\":"<<reserve_mib<<",\"calls\":"<<calls<<",\"binary_matches_capture\":"<<(binary_matches_capture?"true":"false")<<",\"complete\":"<<(complete?"true":"false")<<",\"unfinished_calls\":"<<pending.size()<<",\"accepted_presentations\":"<<frame_number<<",\"clock_samples\":"<<clocks<<",\"pending_peak_bytes\":"<<peak<<",\"replay_envelope_ms\":"<<work_ms<<"}\n";
+        std::cout<<"{\"status\":\"development_input_replay\",\"qualified\":false,\"timing_scope\":\""<<(realtime?"paced_candidate_recorded_native_consumption":performance?"unpaced_native_service_not_live_fps":"forensic_calls_not_performance")<<"\",\"reserved_va_mib\":"<<reserve_mib<<",\"calls\":"<<calls<<",\"binary_matches_capture\":"<<(binary_matches_capture?"true":"false")<<",\"complete\":"<<(complete?"true":"false")<<",\"unfinished_calls\":"<<pending.size()<<",\"accepted_presentations\":"<<frame_number<<",\"clock_samples\":"<<clocks<<",\"pending_peak_bytes\":"<<peak<<",\"replay_envelope_ms\":"<<work_ms<<"}\n";
     }catch(std::exception const& error){std::cerr<<error.what()<<'\n';exit_code=1;}
     // Finish exception unwinding before unloading a DLL that may have thrown.
     if(module){auto reset=reinterpret_cast<void(*)()>(GetProcAddress(module,"c3x_renderer_input_replay_shutdown"));if(!reset)reset=reinterpret_cast<void(*)()>(GetProcAddress(module,"c3x_renderer_reset"));if(reset)reset();}

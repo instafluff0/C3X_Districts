@@ -91,6 +91,12 @@ with performance mode. For captured game sessions, double-click
 `Renderer/PLAY_REPLAY.bat` on Windows and choose the session directory. It uses that
 session's frozen DLL and replay executable, verifies their receipt hashes, and
 requires the original local assets. Older pixel-only captures cannot use it.
+`--realtime NEW_JSONL` instead paces external calls and enables the production
+ambient scheduler, replacing recorded ambient offers. New frames follow wall time;
+the player logs input lateness and independent presentation timestamps. Exact
+pixel witnesses remain in forensic mode; real-time mode retains structural checks
+and permits different time-dependent samples. See [Before/After playback](../../docs/realtime_replay_comparison.md)
+for the sequential Windows launcher and remaining native-consumption constraints.
 `--fingerprints NEW_FILE` reads each accepted retained display and stores its
 extent/identity and 128-bit BGRA content fingerprint, without writing full BMPs.
 This is replay-only oracle work, never capture overhead or a performance run.

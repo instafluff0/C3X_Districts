@@ -109,7 +109,7 @@ struct ReplayState {
             auto old_result=std::int64_t(expected.u64());auto count=expected.u32(),witness=expected.u32();require(witness<=1,"invalid output witness");
             if(witness){require(actual==C3X_RENDERER_RESULT_OK&&result.pixel_count==count&&count<=pixels.size(),"replay readback extent differs");
                 auto hash=c3x_renderer::asset_content_hash(reinterpret_cast<unsigned char const*>(pixels.data()),std::size_t(count)*4);
-                for(auto part:hash)require(part==expected.u32(),"replay pixel witness differs");}
+                for(auto part:hash){auto old=expected.u32();if(!realtime_replay().enabled)require(part==old,"replay pixel witness differs");}}
             if(actual==C3X_RENDERER_RESULT_OK){if(request.action==C3X_GPU_CREATE){require(old_result&&result.image,"replay missing created identity");images[old_result]=result.image;formats[result.image]=request.format;}
                 else if(request.action==C3X_GPU_DESTROY)images.erase(old_image);}
         }else if(kind==Kind::unit&&subtype==2){
@@ -143,7 +143,7 @@ struct ReplayState {
                 // Such decisions are evidence, not forced render durations.
                 actual=measure_replay([&]{return performance?get_renderer_worker().visual_frame(automatic!=0,true):(replay_clock()->values.empty()?C3X_RENDERER_RESULT_PENDING:c3x_renderer_gpu_visual_frame());});
             }else if(subtype==3)actual=get_renderer_worker().visual_policy(in.u32());
-            else if(subtype==4){auto ticks=c3x_renderer_visual_clock();require(std::uint64_t(ticks)==expected.u64(),"exported visual clock differs");actual=1;}
+            else if(subtype==4){auto ticks=c3x_renderer_visual_clock();auto old=expected.u64();if(!realtime_replay().enabled)require(std::uint64_t(ticks)==old,"exported visual clock differs");actual=1;}
             else throw std::runtime_error("unknown visual input");
         }else if(kind==Kind::camera){
             if(subtype==1){c3x_renderer_camera_identity_v1 identity={};c3x_renderer_camera_identity_v1_fields(in,identity);Frame owned;frame(in,owned);
@@ -245,6 +245,12 @@ extern "C" __declspec(dllexport) void c3x_renderer_input_replay_shutdown(){
 }
 
 extern "C" __declspec(dllexport) int c3x_renderer_input_replay_execution(unsigned performance,double* service_ms,int* result,unsigned* reused){
-    if(performance>1)return 0;auto& state=c3x_inputs::replay_execution();state.performance=performance!=0;
+    if(performance>2)return 0;if(performance==2)c3x_inputs::realtime_replay().begin();auto& state=c3x_inputs::replay_execution();state.performance=performance!=0;
     if(service_ms)*service_ms=state.service_ms;if(result)*result=state.result;if(reused)*reused=state.reused_adoption?1u:0u;return 1;
+}
+
+// Accepted autonomous presentation times, distinct from recorded native calls.
+extern "C" __declspec(dllexport) int c3x_renderer_input_replay_live_status(unsigned first,unsigned capacity,double* times,unsigned* counts){
+    try{c3x_inputs::require(capacity<=4096&&times&&counts,"invalid real-time status buffer");c3x_inputs::replay_assets().check();
+        return int(c3x_inputs::realtime_replay().read(first,capacity,times,counts));}catch(...){return -1;}
 }

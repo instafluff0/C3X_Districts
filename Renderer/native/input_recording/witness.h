@@ -21,7 +21,7 @@ inline void check_output(Reader& expected,c3x_renderer_output_v1 const& value,in
         "rendered_tile_count","fallback_tile_count","visible_animation_count","replacement_tile_count"};
     while(generated.at<actual.bytes.size()){
         auto word=generated.at/4;auto wanted=recorded.u32(),got=generated.u32();
-        if(wanted!=got)throw std::runtime_error(std::string("replay map output differs: ")+
+        if(wanted!=got&&!(realtime_replay().enabled&&value.bgra_pixels&&word>=actual.bytes.size()/4-4))throw std::runtime_error(std::string("replay map output differs: ")+
             (word<11?names[word]:"ownership/pixel witness")+" word="+std::to_string(word)+
             " expected="+std::to_string(wanted)+" actual="+std::to_string(got));
     }
@@ -34,6 +34,9 @@ inline void adoption_witness(Writer& out,c3x_renderer_camera_view_v1 const& valu
     auto hash=c3x_renderer::asset_content_hash(owned.bytes.data(),owned.bytes.size());for(auto part:hash)out(part);
 }
 inline void check_adoption(Reader& expected,c3x_renderer_camera_view_v1 const& value,int result){
+    if(realtime_replay().enabled){check_output(expected,value.output,result);if(result==C3X_RENDERER_RESULT_OK){
+        Writer identity;c3x_renderer_camera_identity_v1_fields(identity,value.identity);expected.available(identity.bytes.size()+16);
+        require(std::equal(identity.bytes.begin(),identity.bytes.end(),expected.bytes.begin()+expected.at),"realtime adopted identity differs");expected.at+=identity.bytes.size()+16;}return;}
     Writer actual;adoption_witness(actual,value,result);expected.available(actual.bytes.size());
     require(std::equal(actual.bytes.begin(),actual.bytes.end(),expected.bytes.begin()+expected.at),"replay adopted camera differs");expected.at+=actual.bytes.size();
 }
@@ -46,7 +49,7 @@ inline void check_gpu(Reader& expected,c3x_renderer_gpu_frame_v1 const& image,c3
     auto good=expected.u32();require(good==(result==C3X_RENDERER_RESULT_OK?1u:0u),"GPU adoption result differs");if(!good)return;
     int width=0,height=0;expected(width);expected(height);auto ticks=std::int64_t(expected.u64());
     require(width==image.width&&height==image.height,"GPU adoption extent differs");
-    if(ticks!=image.presentation_time_ticks)throw std::runtime_error("GPU adopted sample differs: expected="+std::to_string(ticks)+" actual="+std::to_string(image.presentation_time_ticks));
+    if(!realtime_replay().enabled&&ticks!=image.presentation_time_ticks)throw std::runtime_error("GPU adopted sample differs: expected="+std::to_string(ticks)+" actual="+std::to_string(image.presentation_time_ticks));
     check_output(expected,metadata,result);
 }
 

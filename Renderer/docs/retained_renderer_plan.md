@@ -676,6 +676,13 @@ a game launch. Capture admission remains closed pending the automated overhead
 and pressure gate. After that, compare one strategic live recording with its window
 evidence before accepting architecture changes as improvements to real gameplay.
 
+[Visible Before/After playback](realtime_replay_comparison.md) now runs the same
+input timeline with independent production ambient cadence. A 128-second same-DLL
+control passes with 1 GiB VA reserved and visible water/unit animation; it is a
+workflow check, not a performance improvement. Exact forensic playback remains
+separate. Native consumption points are still recorded, so this extension does
+not close the live calibration or capture-admission gate above.
+
 The final world-page check rejects changed scope/topology and responses issued
 before a newer publication, preserving owned metadata and retry position.
 Thirteen portable controls pass. A fresh Standard capture passes six cold pixel

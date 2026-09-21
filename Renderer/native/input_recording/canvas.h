@@ -156,7 +156,7 @@ public:
         require(kind==3,"unknown CPU canvas input");auto& value=get(in.u32());auto row=in.u32(),rows=in.u32();require(rows&&row<unsigned(value.height)&&rows<=unsigned(value.height)-row,"CPU canvas patch bounds");
         for(unsigned y=row;y<row+rows;++y)for(unsigned x=0;x<unsigned(value.width);++x){auto pixel=in.u32();require(value.depth==32||pixel<=65535,"invalid CPU canvas word");value.set_word(y,x,pixel);}
     }
-    void check(Reader& expected,Canvas& value){Writer actual;value.witness(actual);expected.available(actual.bytes.size());require(std::equal(actual.bytes.begin(),actual.bytes.end(),expected.bytes.begin()+expected.at),"replay CPU unit pixels differ");expected.at+=actual.bytes.size();}
+    void check(Reader& expected,Canvas& value){Writer actual;value.witness(actual);expected.available(actual.bytes.size());if(!realtime_replay().enabled)require(std::equal(actual.bytes.begin(),actual.bytes.end(),expected.bytes.begin()+expected.at),"replay CPU unit pixels differ");expected.at+=actual.bytes.size();}
     void reset(){values.clear();}
 };
 }

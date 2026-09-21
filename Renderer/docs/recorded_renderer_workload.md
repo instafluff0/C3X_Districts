@@ -86,6 +86,10 @@ No entire-game emulator, gameplay simulation, API migration, lower quality or
    failures. Distinguish external think time from time spent inside renderer calls.
    Faster execution may coalesce/present differently; compare compatible semantic
    frame identities rather than pretending raw frame numbers must be identical.
+   The [visible comparison player](realtime_replay_comparison.md) now feeds recorded
+   external calls at their arrival times while the production cadence generates
+   independent ambient frames. It reports lateness and accepted presentation
+   times; recorded native consumption points still constrain this experiment.
 3. **Pressure:** repeat the workload under declared capacity/CPU/GPU constraints
    derived from the live envelope. A reserved GiB is a capacity probe, not a replay
    of Civ III heap fragmentation. Report where game scheduling, driver behavior

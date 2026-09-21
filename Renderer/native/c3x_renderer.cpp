@@ -10630,7 +10630,18 @@ public:
     }
     void stop_visual_delivery(){visual_delivery=false;visual_present_pending=false;visual_cadence.disable();}
     void advance_visual_clock(){
-        if(c3x_inputs::replay_clock()){c3x_inputs::replay_clock()->sample(visual_ticks,visual_frequency);return;}
+        if(c3x_inputs::replay_clock()&&!c3x_inputs::realtime_replay().enabled){c3x_inputs::replay_clock()->sample(visual_ticks,visual_frequency);return;}
+        // Real-time comparison seeds each worker once, then uses the same wall
+        // clock, policy and independent cadence as gameplay. Captured ambient
+        // offers must not overwrite the clock or drive additional frames.
+        if(c3x_inputs::realtime_replay().enabled&&!replay_clock_seeded){
+            auto clock=c3x_inputs::replay_clock();
+            if(clock&&!clock->values.empty()){
+                LARGE_INTEGER q={},f={};QueryPerformanceCounter(&q);QueryPerformanceFrequency(&f);
+                visual_ticks=static_cast<long long>(double(clock->values.front().first)*double(f.QuadPart)/double(clock->values.front().second));
+                visual_last=q.QuadPart;visual_frequency=f.QuadPart;replay_clock_seeded=true;return;
+            }
+        }
         LARGE_INTEGER now={},frequency={};QueryPerformanceCounter(&now);QueryPerformanceFrequency(&frequency);
         if(visual_last && visual_allowed && now.QuadPart>=visual_last)visual_ticks+=now.QuadPart-visual_last;
         visual_last=now.QuadPart;visual_frequency=frequency.QuadPart;
@@ -10724,7 +10735,7 @@ public:
             else if(session->visual_ready()){
                 advance_visual_clock();visual_present_pending=false;visual_delivery=true;
                 visual_cadence.enable([this]{
-                    try{visual_frame(true);}catch(...){OutputDebugStringA("[C3X renderer] independent visual frame failed\n");}
+                    try{int result=visual_frame(true);c3x_inputs::realtime_replay().offer(result);}catch(...){c3x_inputs::realtime_replay().offer(C3X_RENDERER_RESULT_ERROR);OutputDebugStringA("[C3X renderer] independent visual frame failed\n");}
                 });
             }
             return result;
@@ -11504,6 +11515,7 @@ private:
     int screen_width=0,screen_height=0;RECT screen_area={};
     c3x_renderer_gpu_present_v1 gpu_present={};
     c3x_renderer::VisualCadence visual_cadence;
+    bool replay_clock_seeded=false;
     bool visual_delivery=false,visual_present_pending=false,visual_allowed=true;
     long long visual_ticks=0,visual_last=0,visual_frequency=0;
     std::uint64_t visual_frames=0,visual_map_samples=0,visual_unit_samples=0,visual_pose_changes=0;

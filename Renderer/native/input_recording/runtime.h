@@ -2,6 +2,7 @@
 #include <windows.h>
 #include "journal.h"
 #include "assets.h"
+#include "realtime.h"
 #include <memory>
 #include <map>
 

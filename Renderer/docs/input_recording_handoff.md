@@ -12,7 +12,7 @@ yet qualified as a reproduction of live game responsiveness. The
   owned external values during replay. Game pointers are never dereferenced.
   Recorder failure preserves the original native pixel lease. Destroy identities
   remain valid until both lifecycle notifications finish.
-- Final candidate: `6c1faaab6275f403fdcd82f207117d8b5102fe33a14da8a5027adc6a0b0fc7f1`.
+- Recorder baseline: `6c1faaab6275f403fdcd82f207117d8b5102fe33a14da8a5027adc6a0b0fc7f1`.
   Two 2240×1260 replays pass all output witnesses and match all 426 display
   fingerprints across 12,930 calls. Capture: 98.97 seconds, 515.56 MB and
   17.78 MB peak writer queue. Evidence:
@@ -44,6 +44,20 @@ yet qualified as a reproduction of live game responsiveness. The
   522.05 MB with a 17.78 MB peak queue. This single ordered pair shows no large
   added tail in these cases; faster recorded idle samples are not a speedup.
   Receipt: `native/build/input-recording/native-overhead-comparison-20260921-g.json`.
+- Real-time comparison candidate:
+  `9714a267e2f33cb03bec2be2d522e4c747719d9e471a12d9a29d866080868790`.
+  [COMPARE_REPLAY.bat](realtime_replay_comparison.md) plays Before then After
+  on the original input timeline, with independent production animation cadence.
+  The same-DLL control completes 17,218 calls in 128.118/128.084 seconds with
+  1 GiB reserved, generating 851/844 autonomous presentations. Visible window
+  samples confirm changing water and unit poses. This is a workflow control,
+  not a speedup measurement; window observation overlapped part of one arm.
+  Evidence: `native/build/input-recording/realtime-compare-20260921-a/` and
+  `realtime-window-20260921-a/`. The current production cadence remains 33 ms;
+  no test-only faster scheduler or per-frame readback is added.
+  Exact forensic playback remains a separate correctness check: this candidate
+  passes all 12,930 calls and matches the recorder baseline's 426 fingerprints.
+  Receipt: `native/build/input-recording/realtime-final-20260921-a/receipt.json`.
 
 ## Next unfinished responsibility
 
@@ -57,5 +71,7 @@ The service experiment serializes completed calls and preserves recorded native
 consumption points. It cannot yet measure how the game would react to an earlier
 camera completion, reproduce its heap fragmentation, or claim identical OS/driver
 timing. Architecture comparisons must retain those limits until calibrated.
+Real-time playback adds intervening ambient frames, but preserves these same
+native consumption points. It does not yet prove that replay FPS predicts live FPS.
 Standard navigation below 33 ms p95 and sustained live stability remain open.
 No injected source or patch-table changes, INSTALL, or game launch were needed.
