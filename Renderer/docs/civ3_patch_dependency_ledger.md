@@ -1,5 +1,17 @@
 # Civ III patch dependency ledger
 
+## Ambient continuity through native UI and unit transitions
+
+`required_user_action: ["Re-run INSTALL.bat to remove injected ambient pause calls"]`.
+Existing `show_popup`, `Main_GUI_set_up_unit_command_buttons`, `Advisor_GUI_open`
+and the existing JGL Graphsy presentation hook keep their signatures and patch
+addresses. No new symbols, patch-table changes or injected state. Native popup
+and command reconstruction guards still protect gameplay and optional native
+redraws; they no longer pause DLL-owned ambient samples. Graphsy supplies map
+visibility/loading policy. The DLL preserves the last published unit pose until
+native composition replaces it and admits an eligible canvas at its first actual
+stroke. Genuine escaped CPU/DC lifetimes retain their original fallback.
+
 ## Pre-configuration and pre-publication line initialization
 
 `required_user_action: ["Re-run INSTALL.bat to update the injected bridge"]`.
@@ -1389,3 +1401,15 @@ XP-compatibility elevation. The corrected launcher establishes them after host
 elevation; its real-launcher/staged-DLL stand-in and missing-file control pass.
 One replacement recording is needed. This correction changes only Renderer
 tooling and documentation; the staged DLL and installed bridge remain unchanged.
+
+
+### Packed CPU-source validation
+
+Existing dependencies: the adapter's already-audited private JGL image bit
+getter/release pair and existing GPU upload/copy commands. Compare all current
+16-bit words before expanding changed content for upload; retain raw-pointer
+freshness, stride, GDI completion, ownership exclusions and config-off behavior.
+No injected source, hook, signature, supported-build address or CSV changes.
+`required_user_action: []`. The replacement live recording is present and strict
+composition replay passes its bounded prefix. No further capture is needed to
+validate this scoped optimization; overall gameplay speed remains unaccepted.

@@ -51,7 +51,7 @@ class CompositionRecordingTests(unittest.TestCase):
             expected = 'fail' if '128' in suffix else 'pass'
             self.assertEqual(result['status'], expected, result)
             if expected == 'pass':
-                line = next(line for line in result['output_tail'].splitlines() if line.startswith('{'))
+                line = next(line for line in result['output_tail'].splitlines() if line.startswith('{') and '"status"' in line)
                 report = json.loads(line)
                 self.assertEqual(report['status'], 'verified_composition')
                 self.assertEqual(report['pixel_checks'], 6)
@@ -70,7 +70,16 @@ class CompositionRecordingTests(unittest.TestCase):
             at += 40 + size
         self.assertEqual(at, len(original))
         self.assertEqual(records[-1][1], 14)
+        # Valid checksums cannot hide a changed native ownership decision.
+        changed = bytearray(original)
+        at, _, size = next(item for item in records if item[1] == 12)
+        changed[at + 40 + 32] ^= 1
+        checksum = 2166136261
+        for byte in changed[at + 40:at + 40 + size]:
+            checksum = ((checksum ^ byte) * 16777619) & 0xffffffff
+        struct.pack_into('<I', changed, at + 12, checksum)
         mutations = {
+            'native-decision': bytes(changed),
             'truncated': original[:-1],
             'bad-checksum': original[:60] + bytes([original[60] ^ 1]) + original[61:],
             'oversized': original[:24] + struct.pack('<I', 0xffffffff) + original[28:],

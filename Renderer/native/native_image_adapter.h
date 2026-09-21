@@ -13,10 +13,10 @@
 
 namespace c3x_native_images {
 using namespace c3x_gpu_images;
-struct Counts {std::uint64_t translated=0,fallbacks=0,readbacks=0,readback_bytes=0,source_checks=0,text_builds=0,text_hits=0;};
+struct Counts {std::uint64_t translated=0,fallbacks=0,readbacks=0,readback_bytes=0,source_checks=0,source_reuses=0,source_expanded_bytes=0,text_builds=0,text_hits=0;};
 template<class Backend> class Adapter {
     struct Image {void* native=nullptr;Id gpu=0,detail=0;unsigned width=0,height=0;Format format=Format::rgb555;
-        bool owned=false,dirty=false,cpu_uploaded=false;std::uint64_t revision=0,used=0;std::vector<std::uint32_t> cpu;};
+        bool owned=false,dirty=false,cpu_uploaded=false;std::uint64_t revision=0,used=0;std::vector<std::uint16_t> cpu;};
     Backend& gpu;
     c3x_renderer_native_lifetime_fn lifetime;
     void* get_bits;void* release_bits;DWORD thread=GetCurrentThreadId();
@@ -73,7 +73,7 @@ template<class Backend> class Adapter {
     }
     static Rect rect(void const* p){auto r=static_cast<RECT const*>(p);return {r->left,r->top,r->right,r->bottom};}
     Image* find(void* p){for(auto& image:images)if(p&&image.native==p){image.used=++source_age;return &image;}return nullptr;}
-    void forget(Image& image){if(image.detail)gpu.destroy(image.detail);gpu.destroy(image.gpu);cpu_bytes-=image.cpu.size()*4;image={};}
+    void forget(Image& image){if(image.detail)gpu.destroy(image.detail);gpu.destroy(image.gpu);cpu_bytes-=image.cpu.size()*2;image={};}
     void trim_cpu_sources(){
         // Trim only between native operations, before borrowing any Image*.
         // Retained recipes own immutable versions; CPU pixels authorize these
@@ -98,34 +98,42 @@ template<class Backend> class Adapter {
         else if(dib.dsBmih.biCompression==BI_BITFIELDS&&dib.dsBitfields[0]==0x7c00&&dib.dsBitfields[1]==0x3e0&&dib.dsBitfields[2]==0x1f)format=Format::rgb555;
         else if(dib.dsBmih.biCompression==BI_BITFIELDS&&dib.dsBitfields[0]==0xf800&&dib.dsBitfields[1]==0x7e0&&dib.dsBitfields[2]==0x1f)format=Format::rgb565;
         else return nullptr;
-        if(std::uint64_t(w)*h*4>cpu_budget-cpu_bytes)return nullptr;
+        if(std::uint64_t(w)*h*2>cpu_budget-cpu_bytes)return nullptr;
         for(auto& image:images)if(!image.native){
-            std::vector<std::uint32_t> bytes(std::size_t(w)*h);
+            std::vector<std::uint16_t> bytes(std::size_t(w)*h);
             auto id=gpu.create(w,h,format);if(!id)return nullptr;
             image.native=p;image.used=++source_age;image.gpu=id;image.width=w;image.height=h;image.format=format;image.owned=owned;
-            image.cpu=std::move(bytes);cpu_bytes+=image.cpu.size()*4;return &image;
+            image.cpu=std::move(bytes);cpu_bytes+=image.cpu.size()*2;return &image;
         }return nullptr;
     }
-    std::vector<std::uint32_t> read_cpu(Image const& image){
-        // Complete queued GDI writes before accessing the DIB. Use original core
-        // methods, so private adapter leases neither recurse nor imply CPU escape.
-        std::vector<std::uint32_t> result(std::size_t(image.width)*image.height);
-        GdiFlush();auto bits=reinterpret_cast<Get>(get_bits)(image.native);
-        if(!bits)throw std::runtime_error("native image lease failed");
-        auto stride=field(image.native,0x40);
-        for(unsigned y=0;y<image.height;++y)for(unsigned x=0;x<image.width;++x)result[y*image.width+x]=bits[y*stride+x];
-        reinterpret_cast<Release>(release_bits)(image.native,1);return result;
-    }
     bool refresh(Image& image){
-        ++counters.source_checks;auto content=read_cpu(image);
-        // Pointer equality and getter/release counts are not content revisions.
-        // CPU-owned sources may retain pointers: compare complete words on use.
-        if(image.cpu_uploaded&&content==image.cpu)return true;
+        ++counters.source_checks;
+        std::vector<std::uint32_t> content;
+        std::vector<std::uint16_t> captured;
+        {
+            // Retained native pointers can change without another getter call.
+            // Compare every visible word, in its native representation, before
+            // allocating or widening an upload. Padding is not image content.
+            GdiFlush();auto bits=reinterpret_cast<Get>(get_bits)(image.native);
+            if(!bits)throw std::runtime_error("native image lease failed");
+            struct Lease {void* image;Release release;~Lease(){release(image,1);}} lease{image.native,reinterpret_cast<Release>(release_bits)};
+            auto stride=field(image.native,0x40);
+            auto count=std::size_t(image.width)*image.height;
+            bool same=image.cpu_uploaded&&image.cpu.size()==count;
+            for(unsigned y=0;same&&y<image.height;++y)
+                same=std::memcmp(image.cpu.data()+std::size_t(y)*image.width,bits+std::size_t(y)*stride,image.width*2)==0;
+            if(same){++counters.source_reuses;return true;}
+            content.resize(count);if(!image.owned)captured.resize(count);
+            for(unsigned y=0;y<image.height;++y){
+                auto row=bits+std::size_t(y)*stride;auto offset=std::size_t(y)*image.width;
+                std::copy_n(row,image.width,content.data()+offset);
+                if(!image.owned)std::memcpy(captured.data()+offset,row,image.width*2);
+            }
+            counters.source_expanded_bytes+=content.size()*4;
+        } // Release the private native lease before dispatching to the worker.
         if(!gpu.upload(image.gpu,image.revision+1,content.data(),content.size()))return false;
         ++image.revision;image.cpu_uploaded=true;
-        cpu_bytes-=image.cpu.size()*4;
-        if(image.owned)std::vector<std::uint32_t>().swap(image.cpu);
-        else {image.cpu=std::move(content);cpu_bytes+=image.cpu.size()*4;}
+        cpu_bytes-=image.cpu.size()*2;image.cpu=std::move(captured);cpu_bytes+=image.cpu.size()*2;
         return true;
     }
     // A native-format GPU mirror preserves exact CPU fallback words; only the
@@ -480,7 +488,7 @@ public:
         if(!d)return reject("surface-admission");
         if(!refresh(*d))return reject("upload");
         d->owned=true;
-        cpu_bytes-=d->cpu.size()*4;std::vector<std::uint32_t>().swap(d->cpu);
+        cpu_bytes-=d->cpu.size()*2;std::vector<std::uint16_t>().swap(d->cpu);
         return true;
     }
     int operation(int op,void* object,void* source,void const* source_rect,void const* target_rect,unsigned color){

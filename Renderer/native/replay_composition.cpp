@@ -1,6 +1,7 @@
 #define NOMINMAX
 #include <windows.h>
 #include "gpu_native_presenter.h"
+#include "native_lifetime_registry.h"
 #include <memory>
 #include <map>
 #include <string>
@@ -31,10 +32,10 @@ struct Stream {
     Id id(Id recorded)const{if(!recorded)return 0;auto it=ids.find(recorded);return it==ids.end()?UINT64_MAX:it->second;}
 };
 struct Reader {
-    FILE* file=nullptr;std::uint64_t frequency=0,last=0;bool footer=false;
+    FILE* file=nullptr;std::uint64_t frequency=0,last=0;bool footer=false;unsigned version=0;
     Reader(wchar_t const* path){require(_wfopen_s(&file,path,L"rb")==0&&file,"cannot open recording");
         recording::Bytes b(16);require(fread(b.data(),1,b.size(),file)==b.size(),"missing recording header");recording::Cursor c{b};
-        require(c.u32()==0x52433343&&c.u32()==2,"unsupported recording version");frequency=c.u64();require(frequency>0&&frequency<1000000000000ull,"invalid recording clock");}
+        require(c.u32()==0x52433343,"unsupported recording magic");version=c.u32();require(version==2||version==3,"unsupported recording version");frequency=c.u64();require(frequency>0&&frequency<1000000000000ull,"invalid recording clock");}
     ~Reader(){if(file)fclose(file);}
     bool next(unsigned& kind,std::uint64_t& stream,std::uint64_t& ticks,recording::Bytes& payload){
         recording::Bytes b(40);auto size=fread(b.data(),1,b.size(),file);if(!size){require(!ferror(file),"recording read error");return false;}
@@ -47,6 +48,14 @@ struct Reader {
 };
 void generate(wchar_t const* path){
     SetEnvironmentVariableW(L"C3X_RENDERER_RECORD_FILE",path);Device d;
+    c3x_native_images::Lifetimes tracked;int object=0;
+    auto observe=[&](int operation,void* image,int context){bool revoked=false;
+        auto eligible=tracked.observe(operation,image,context,GetCurrentThreadId(),&revoked);
+        recording::journal().native(recording::lifetime,operation,image,nullptr,unsigned(context),int(eligible)|(int(revoked)<<1),operation==C3X_NATIVE_DESTROY);
+    };
+    observe(C3X_NATIVE_VERIFY,nullptr,0);observe(C3X_NATIVE_INIT,&object,0);observe(C3X_NATIVE_MAP,&object,0);
+    observe(C3X_NATIVE_DC,&object,C3X_NATIVE_COPY);observe(C3X_NATIVE_BITS,&object,0);
+    observe(C3X_NATIVE_MAP,&object,0);observe(C3X_NATIVE_INIT,&object,0);observe(C3X_NATIVE_DESTROY,&object,0);
     {
         Compositor gpu(d.device.Get(),d.context.Get(),256u*1024u*1024u,true);
         // The formerly insufficient 128 MiB live-image budget must fail replay
@@ -85,8 +94,13 @@ void generate(wchar_t const* path){
     }
     recording::journal().finish(recording::closed);std::puts("PASS generated production composition recording");
 }
-int replay(wchar_t const* path,bool paced,bool show,std::uint64_t cap){
+int replay(wchar_t const* path,bool paced,bool show,std::uint64_t cap,wchar_t const* frames,bool require_ambient){
     Reader reader(path);Device d;std::map<std::uint64_t,Stream> streams;
+    c3x_native_images::Lifetimes lifetimes;
+    struct Call {unsigned operation,value;};std::map<std::uint64_t,Call> calls;
+    std::uint64_t lifetime_checks=0,lifetime_mismatches=0,revocations=0,ready_checks=0,ready_losses=0;
+    std::uint64_t lost_at=0,longest_loss=0;bool had_ready=false,ready=false;
+    if(frames)require(CreateDirectoryW(frames,nullptr)||GetLastError()==ERROR_ALREADY_EXISTS,"cannot create frame directory");
     NativePresenter presenter;HWND window=nullptr;
     unsigned kind=0,reason=999;std::uint64_t owner=0,ticks=0,events=0,checks=0,commands=0,externals=0,displays=0,native=0,visuals=0,peak=0;
     double submit_ms=0;LARGE_INTEGER frequency={},started={};QueryPerformanceFrequency(&frequency);QueryPerformanceCounter(&started);
@@ -103,8 +117,24 @@ int replay(wchar_t const* path,bool paced,bool show,std::uint64_t cap){
             streams[owner].gpu=std::make_unique<Compositor>(d.device.Get(),d.context.Get(),cap?cap:budget);}
         else if(kind==recording::end){require(streams.erase(owner)==1,"unknown compositor end");}
         else if(kind==recording::stop){require(!owner,"invalid footer owner");reason=c.u32();require(reason<=recording::unsupported,"invalid stop reason");reader.footer=true;}
-        else if(kind==recording::native_begin||kind==recording::lifetime){c.u64();c.u32();c.u64();c.u64();c.u32();c.u32();++native;}
-        else if(kind==recording::native_end){c.u64();c.u32();}
+        else if(kind==recording::native_begin||kind==recording::lifetime){
+            auto token=c.u64();auto operation=c.u32();auto image=c.u64();c.u64();auto value=c.u32(),expected=c.u32();
+            auto thread=reader.version>=3?c.u32():1u;++native;
+            if(kind==recording::lifetime){
+                require(image<=UINT32_MAX,"invalid native identity");bool revoked=false;
+                auto eligible=lifetimes.observe(int(operation),reinterpret_cast<void*>(std::uintptr_t(image)),int(value),thread,&revoked);
+                ++lifetime_checks;lifetime_mismatches+=(unsigned(eligible)|(unsigned(revoked)<<1))!=expected;
+                if(revoked){++revocations;std::printf("LIFETIME_REVOKED event=%llu seconds=%.6f image=%llu operation=%u context=%u\n",events,double(ticks)/reader.frequency,image,operation,value);}
+            }else{require(calls.size()<8192&&!calls.count(token),"invalid native call nesting");calls[token]={operation,value};}
+        }
+        else if(kind==recording::native_end){auto token=c.u64();int result=int(c.u32());auto call=calls.find(token);require(call!=calls.end(),"unmatched native completion");
+            if(call->second.operation==C3X_NATIVE_VISUAL_POLICY){
+                ++ready_checks;bool next=result>0;
+                if(ready&&!next){lost_at=ticks;++ready_losses;std::printf("AMBIENT_DEPENDENCY_LOST event=%llu seconds=%.6f\n",events,double(ticks)/reader.frequency);}
+                if(!ready&&next&&had_ready)longest_loss=std::max(longest_loss,ticks-lost_at);
+                ready=next;had_ready|=ready;
+            }calls.erase(call);
+        }
         else if(kind==recording::visual){c.u64();c.u64();c.u32();c.u64();c.u64();c.u64();c.u32();++visuals;}
         else{
             auto it=streams.find(owner);require(it!=streams.end(),"missing compositor session");auto& s=it->second;auto& gpu=*s.gpu;
@@ -130,13 +160,28 @@ int replay(wchar_t const* path,bool paced,bool show,std::uint64_t cap){
                 SetWindowPos(window,nullptr,0,0,int(desc.Width),int(desc.Height),SWP_NOACTIVATE|SWP_NOZORDER);
                 require(presenter.prepare(window,d.device.Get(),desc.Width,desc.Height,true),"replay presenter preparation failed");
                 auto ok=gpu.display(s.id(id),presenter.view(),desc.Width,desc.Height,area);require(ok==bool(expected),"display result differs");
-                if(ok){d.context->CopyResource(presenter.buffer(),presenter.retained());require(presenter.present()==C3X_RENDERER_RESULT_OK,"replay present failed");++displays;}}
+                if(ok){d.context->CopyResource(presenter.buffer(),presenter.retained());require(presenter.present()==C3X_RENDERER_RESULT_OK,"replay present failed");++displays;
+                    if(frames&&(displays==1||displays%32==0)){
+                        auto pixels=read_pixels(d.device.Get(),d.context.Get(),presenter.retained());
+                        BITMAPFILEHEADER file={};BITMAPINFOHEADER info={};info.biSize=sizeof(info);info.biWidth=desc.Width;info.biHeight=-LONG(desc.Height);info.biPlanes=1;info.biBitCount=32;
+                        file.bfType=0x4d42;file.bfOffBits=sizeof(file)+sizeof(info);file.bfSize=file.bfOffBits+DWORD(pixels.size()*4);
+                        wchar_t name[64];swprintf_s(name,L"/frame-%06llu.bmp",displays);auto output=std::wstring(frames)+name;FILE* f=nullptr;
+                        require(!_wfopen_s(&f,output.c_str(),L"wb")&&f,"cannot save replay frame");
+                        bool saved=fwrite(&file,sizeof(file),1,f)==1&&fwrite(&info,sizeof(info),1,f)==1&&fwrite(pixels.data(),4,pixels.size(),f)==pixels.size();auto closed=fclose(f);
+                        require(saved&&!closed,"replay frame write failed");std::printf("REPLAY_FRAME display=%llu seconds=%.6f\n",displays,double(ticks)/reader.frequency);
+                    }
+                }}
             else throw std::runtime_error("unknown composition event");
             std::uint64_t total=0;for(auto const& item:streams)total+=item.second.gpu->stats().resident_bytes;peak=std::max(peak,total);
         }
         c.done();
     }
     cleanup();
+    if(had_ready&&!ready)longest_loss=std::max(longest_loss,ticks-lost_at);
+    std::printf("{\"native_lifetime_checks\":%llu,\"native_lifetime_mismatches\":%llu,\"thread_evidence\":\"%s\",\"demanded_revocations\":%llu,\"ambient_readiness_checks\":%llu,\"ambient_dependency_losses\":%llu,\"longest_observed_loss_seconds\":%.6f,\"ambient_continuity_accepted\":false}\n",
+        lifetime_checks,lifetime_mismatches,reader.version>=3?"recorded":"legacy_assumed_owner",revocations,ready_checks,ready_losses,double(longest_loss)/reader.frequency);
+    require(!lifetime_mismatches,"native lifetime decisions differ from recording");
+    if(require_ambient)require(had_ready&&ready_checks&&!ready_losses,"recorded workload loses ambient readiness");
     bool verified=reader.footer&&checks&&commands&&reason==recording::closed;
     // A budget/time/memory stop is a checked prefix, not session acceptance.
     std::printf("{\"status\":\"%s\",\"scope\":\"native_gpu_composition_only\",\"events\":%llu,\"commands\":%llu,\"pixel_checks\":%llu,\"external_snapshots\":%llu,\"display_boundaries\":%llu,\"native_observations\":%llu,\"visual_observations\":%llu,\"peak_compositor_bytes\":%llu,\"submit_cpu_ms\":%.3f,\"footer\":%s,\"stop_reason\":%u,\"full_gameplay_replayed\":false,\"retained_animation_replayed\":false,\"performance_accepted\":false}\n",
@@ -147,10 +192,12 @@ int replay(wchar_t const* path,bool paced,bool show,std::uint64_t cap){
 int wmain(int argc,wchar_t** argv){
     try{require(argc>=2,"usage: replay_composition recording [--paced] [--show] [--budget-mib N], or --generate file");
         if(!wcscmp(argv[1],L"--generate")){require(argc==3,"generate requires a file");generate(argv[2]);return 0;}
-        bool paced=false,show=false;std::uint64_t cap=0;
+        bool paced=false,show=false,ambient=false;std::uint64_t cap=0;wchar_t const* frames=nullptr;
         for(int n=2;n<argc;++n){if(!wcscmp(argv[n],L"--paced"))paced=true;else if(!wcscmp(argv[n],L"--show"))show=true;
+            else if(!wcscmp(argv[n],L"--frames")&&n+1<argc)frames=argv[++n];
+            else if(!wcscmp(argv[n],L"--require-ambient"))ambient=true;
             else if(!wcscmp(argv[n],L"--budget-mib")&&n+1<argc){auto value=_wtoi(argv[++n]);require(value>0&&value<=1024,"invalid budget");cap=std::uint64_t(value)*1024*1024;}
             else throw std::runtime_error("unknown replay option");}
-        return replay(argv[1],paced,show,cap);
+        return replay(argv[1],paced,show,cap,frames,ambient);
     }catch(std::exception const& e){std::fprintf(stderr,"FAIL composition recording/replay: %s\n",e.what());return 1;}
 }

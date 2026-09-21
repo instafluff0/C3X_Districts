@@ -69,7 +69,7 @@ public:
         wchar_t path[32768]={};auto length=GetEnvironmentVariableW(L"C3X_RENDERER_RECORD_FILE",path,32768);if(!length||length>=32768)return;
         if(_wfopen_s(&file,path,L"wb")||!file)return;
         LARGE_INTEGER f={},q={};QueryPerformanceFrequency(&f);QueryPerformanceCounter(&q);frequency=f.QuadPart;start_ticks=q.QuadPart;
-        Bytes header;u32(header,0x52433343);u32(header,2);u64(header,std::uint64_t(frequency));
+        Bytes header;u32(header,0x52433343);u32(header,3);u64(header,std::uint64_t(frequency));
         if(fwrite(header.data(),1,header.size(),file)!=header.size()){fclose(file);file=nullptr;return;}written=header.size();
         enabled=true;OutputDebugStringA("[C3X renderer] composition recording enabled: diagnostic readbacks; not an FPS baseline\n");
     }catch(...){if(file)fclose(file);file=nullptr;enabled=false;}}
@@ -100,6 +100,7 @@ public:
     std::uint64_t native(Event kind,int operation,void* image,void* source,unsigned value,int result=0,bool retire=false)noexcept{
         try{if(!active())return 0;Bytes b;std::uint64_t call;
             {std::lock_guard<std::mutex> lock(mutex);call=++token;u64(b,call);u32(b,unsigned(operation));u64(b,native_id(image));u64(b,native_id(source));u32(b,value);u32(b,unsigned(result));
+                u32(b,GetCurrentThreadId());
                 if(retire)native_ids.erase(image);}
             emit(kind,0,b);return call;
         }catch(...){finish(allocation_failure);return 0;}

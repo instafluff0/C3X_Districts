@@ -26,6 +26,15 @@ if not exist "..\bin" mkdir "..\bin"
 if not exist "build" mkdir "build"
 if not exist "build\candidate" mkdir "build\candidate"
 
+if /i "%~1"=="linear-backup" (
+  if not exist "build\linear-backup" mkdir "build\linear-backup"
+  cl /nologo /std:c++17 /EHsc /O2 /W4 /WX test_linear_backup.cpp /Fo:build\linear-backup\ /Fe:build\linear-backup\test.exe /link /LARGEADDRESSAWARE d3d11.lib d3dcompiler.lib
+  if errorlevel 1 exit /b 1
+  build\linear-backup\test.exe
+  if errorlevel 1 exit /b 1
+  exit /b 0
+)
+
 if /i "%~1"=="composition-replay" (
   if not exist "build\composition-replay" mkdir "build\composition-replay"
   cl /nologo /std:c++17 /EHsc /O2 /W4 /WX replay_composition.cpp /Fo:build\composition-replay\ /Fe:build\composition-replay\replay_composition.exe /link /LARGEADDRESSAWARE

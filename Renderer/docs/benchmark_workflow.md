@@ -24,12 +24,13 @@ Use `-NoReplayRecording` for the existing low-overhead telemetry-only capture.
 The first replay scope is actual native GPU composition: ordered image creation,
 uploads, commands, retirement, explicit CPU-readback pixel checks and native
 display boundaries. Map imports, borrowed poses and directly rendered unit
-rectangles are copied as external inputs. Native operation begin/end results,
-lifetime decisions and independent visual readiness are observations in the same
-ordered stream. Native addresses never enter the file. This is **not** yet a
-replay of the ownership adapter, authoritative scene updates, geometry production,
-retained animation graph or the game's message pump. It can reproduce composition
-pixels and live-image admission differences; it cannot certify an ownership fix,
+rectangles are copied as external inputs. Native operation begin/end results and
+independent visual readiness are observations in the same ordered stream; native
+lifetime decisions are additionally re-executed and checked. Native addresses
+never enter the file. This is **not** yet a replay of the full ownership adapter,
+authoritative scene updates, geometry production, retained animation graph or
+the game's message pump. It reproduces composition pixels and lifetime decisions;
+it cannot alone certify a full ownership fix,
 retained-history scaling, gameplay FPS or input-to-display latency by itself.
 
 Recording adds explicit GPU readbacks and synchronous bounded file writes. Its
@@ -60,6 +61,20 @@ command/checkpoint counts, external snapshots, native/visual observations,
 resident image peak, submit CPU time and completeness; it always leaves gameplay,
 retained animation and performance acceptance false. `--budget-mib N` is an
 explicit capacity experiment, not the ordinary production budget.
+
+Replay also executes the production native lifetime registry against recorded
+identities, contexts and expected decisions. Version 3 records the calling thread;
+version 2 remains readable with an explicitly reported owner-thread assumption.
+A valid-checksum ownership-decision mutation must fail. `--frames DIRECTORY`
+exports reconstructed displayed BMPs every 32 native displays, including the first;
+these are captured gameplay pixels, not a synthetic scene preview.
+`--require-ambient` rejects a map-exposed recording that loses readiness. This
+checks the recorded outcome, not hypothetical new animation from old pixels, and
+is unsuitable as acceptance across intentional map teardown. It does not certify
+performance or complete gameplay. The fullscreen native fixture separately
+executes action replacement before presentation, continuous native movement with
+autonomous ambient delivery, and the captured first-stroke admission/DC escape
+sequence. Preserve the failing-before and passing-after receipts for these cases.
 
 `python3 -m Renderer.tools.inspect_composition_recording PATH` reports framing and
 coverage without executing the GPU or claiming checksum validation. Its optional

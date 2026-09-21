@@ -955,3 +955,106 @@ The actual gameplay traffic remains unavailable for replay. One replacement
 live recording is required through the corrected launcher; preserve this failed
 session as evidence rather than claiming its synthetic counterpart fixed the
 flashing, device loss or freeze.
+
+
+### Recorded live composition and CPU-source validation optimization
+
+The replacement capture `20260921-130328-65f6bd` contains a 535,554,808-byte
+journal, stopping cleanly at its configured byte limit after 80.788 seconds.
+Strict D3D replay verifies the captured prefix: 471,209 events, 29,341 commands,
+116 exact pixel checkpoints, 1,931 external snapshots and 524 display boundaries.
+Peak compositor storage is 140,270,064 bytes; CPU submission totals 329.281 ms.
+That total is neither frame time nor game FPS. Native admission observations,
+retained animation sampling, scene production and the game message pump are not
+re-executed. `replay-initial.json` preserves the exact result and invocation.
+
+The live log shows two public native-access revocations; independent map
+animation readiness disappears by 24.848 s. Subsequent fullscreen map-to-canvas
+copies repeatedly fail lifetime admission and materialize the source for native
+use. The latest session exits normally and reports no allocation/device failures;
+it does not resolve those failures in the preceding session. The first untracked
+DC caller remains unidentified. Do not weaken lifetime evidence to admit it.
+
+A separate avoidable cost is in `Adapter::refresh`: every CPU-source check
+allocated and widened the full image before comparing it. It now compares every
+visible native 16-bit word against a packed baseline, respecting row stride and
+flushing GDI first. Only changed content allocates an expanded GPU upload. Private
+leases release on all exits, including allocation failure, before worker dispatch;
+cache revisions advance only after successful upload. CPU-source baseline storage
+is halved. Public-pointer lifetime exclusions and exact fallback remain intact.
+
+The real JGL adapter fixture compares the old and new complete copy paths,
+including final GPU readback completion (recording off, 96 copies per case):
+
+| Source | Old total ms | New total ms | Uploads |
+|---|---:|---:|---:|
+| 2240×1260 unchanged | 1134.417 | 111.354 | 0 |
+| 2240×1260, edit every 12 copies | 1166.304 | 214.813 | 8 |
+| 2239×1260 padded rows, unchanged | 1122.082 | 103.597 | 0 |
+| 2239×1260 padded rows, periodic edits | 1147.479 | 188.909 | 8 |
+
+All pixels match, including writes through escaped pointers to the final row;
+unchanged checks produce zero expanded-upload bytes. Existing sprite, text,
+source-churn, palette, stretch, ownership, reinit and config-off tests pass.
+Receipts: `native/build/live-cpu-source-{baseline,optimized,comparison}.json`.
+This is a measured 10.2× improvement for unchanged fullscreen copying and 5.4×
+for the periodic-edit case, not a live-game FPS improvement. The next architectural
+responsibility is the independent-animation dependency lost through the native
+canvas lifetime barrier, followed by complete workload/memory validation.
+
+
+The exact optimized DLL `ad03fe4077a52e7320a121bd4af2106b98040afb94fcae1fc28b7c4f13578bba`
+passes `native/build/live-cpu-source-production/receipt.json` at 2240×1260 with
+all water effects, eight mixed units, visibility/tactical, native UI, independent
+frames, recovery and config-off. Staged with matching source/binary proof and
+rollback in `native/build/live-cpu-source-stage.json`; no injected change,
+INSTALL or game launch. Overall gameplay performance remains unaccepted.
+
+
+### Replay-backed ambient continuity and address-space regression
+
+The same saved prefix now re-executes 184,198 production lifetime decisions with
+zero mismatches, in addition to the 116 exact GPU pixel checks. Its version-2
+journal lacks caller thread IDs, so the result explicitly reports the legacy
+owner-thread assumption; new version-3 journals include them. Reconstructed
+native display images and their contact sheet are in the capture's
+`replayed-frames/`. This makes the recorded view inspectable but does not recreate
+scene compilation, ambient sampling or Civ III's CPU/memory/scheduling workload.
+
+The strict ambient outcome check fails this capture: readiness is lost at journal
+23.394 s and never recovers during the remaining 57.394 seconds. Native image 29
+first receives line-target/stroke operations while eligible but not yet owned;
+falling back initializes the native line DC, permanently revoking that canvas.
+The production stroke path now admits an eligible destination on its first valid
+stroke, using the existing adapter. Public CPU/DC escapes still fall back.
+`replay-lifetimes.json` and `replay-ambient-negative.json` preserve these results.
+
+A separate real-DLL regression reproduces a new native action retiring the
+currently displayed unit selection before the next native screen transfer. That
+must freeze the old published pose until replacement, not discard the surrounding
+ambient graph. Water/resources continue from their immutable visible records;
+native action time and anchor remain authoritative. Popup/Advisor/button setup
+no longer pauses the ambient policy, and a visible unfocused window remains
+eligible. Injected changes remove policy calls from existing hooks; no new patch
+symbols, native state or drawing ownership. The approved injected smoke passes.
+
+The failing-before fixtures are `native/build/action-continuity-before/` and
+`native/build/action-continuity-line-before/`. Fullscreen tests now exercise 12
+uncommitted action replacements, 24 native movement transitions with no explicit
+visual calls, a blocked UI thread, lost focus, and the recorded first-stroke/DC
+sequence. Existing visibility/reveal, UI pixel parity, recovery and config-off
+checks remain part of the same production DLL/JGL workload.
+
+Reserving 1 GiB of co-resident address space exposed another failure: the
+unprofiled whole-view-backup candidate failed fresh-capture recovery after reset
+(`ambient-continuity-pressure-unprofiled`). Splitting the same full-view backup
+into single-sample planes failed earlier with `bad_alloc`; that experiment is
+rejected and preserved only in ignored build evidence. The replacement stores
+original-format color/depth samples in small backup tiles under animated damage.
+An independent GPU oracle compares every color/depth sample across partial
+updates, clears, boundaries, resize and retirement; its negative control differs.
+The tiled pressure run passes all recovery cases. Its scene working/backup target
+storage is 1,008,317,952–1,025,846,784 bytes versus 1,231,400,448 previously;
+the largest individual backup allocation falls from about 348 MiB to 2 MiB.
+These are target-storage estimates, not the entire process footprint. A 1 GiB
+reservation tests reduced VA capacity, not exact game heap fragmentation.

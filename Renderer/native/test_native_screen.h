@@ -386,15 +386,73 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
         SetEnvironmentVariableA("C3X_RENDERER_MANUAL_VISUAL","1");
         live(C3X_NATIVE_VISUAL_POLICY,nullptr,nullptr,nullptr,nullptr,0);
         verify(status(&transported)==1,"independent delivery status");
-        if(prior_window)SetForegroundWindow(prior_window);
         verify(witness_ok&&blocked_changes>0&&transported.frames>=after.frames+3&&transported.map_samples>after.map_samples&&
             events.size()==native_events&&screen_transfers==transfers,"ambient frames reach desktop with blocked UI and no native draw demand");
         std::printf("PASS blocked UI visual delivery: frames=%lld map_samples=%lld changed_pixels=%zu native_draw_calls=0 blocked_UI_ms>=2000\n",
             transported.frames-after.frames,transported.map_samples-after.map_samples,blocked_changes);
-        verify(visual()==C3X_RENDERER_RESULT_PENDING,"explicit modal policy pauses renderer clock");
+        // Live captures retire unit selections while preparing the next action,
+        // before the native screen transfer. Exercise that interleaving using
+        // actual JGL canvases and the production DLL, not an isolated GPU draw.
+        live(C3X_NATIVE_VISUAL_POLICY,nullptr,nullptr,nullptr,nullptr,1);
+        auto action_scratch=create(graph,nullptr,1);
+        verify(reinterpret_cast<Init>(action_scratch->vtable[1])(action_scratch,w,h,16,1)==0,"action scratch init");
+        c3x_renderer_visual_status_v1 action_before={sizeof(action_before)},action_after={sizeof(action_after)};
+        verify(status(&action_before)==1,"action continuity baseline");
+        double action_ms=0;unsigned transition_frames=0;
+        for(unsigned step=0;step<12;++step){
+            LARGE_INTEGER a={},b={};QueryPerformanceCounter(&a);
+            auto moving=unit;moving.unit_id=901;moving.action=2;moving.action_cursor=step%8;
+            moving.body_x=int(step)*4;int bounds[4]={};
+            copy(scene,action_scratch,full);
+            verify(owner.draw_unit(unit_gpu,frame.ticket,moving,action_scratch,action_scratch,bounds,
+                C3X_RENDERER_UNIT_STATE_CAPTURED|C3X_RENDERER_UNIT_SELECTED),"prepare next native action");
+            // The old visible unit token is now superseded. Water must still
+            // animate before the next native commit replaces that old pose.
+            Sleep(70);int result=visual();
+            verify(result==1||result==C3X_RENDERER_RESULT_PENDING,"superseded visible pose preserves ambient frame");
+            transition_frames+=result==1;
+            verify(live(C3X_NATIVE_VISUAL_POLICY,nullptr,nullptr,nullptr,nullptr,2)==1,"unit action cannot discard map animation");
+            copy(action_scratch,screen_surface,full);final_ui_drawn=false;patch_JGL_present_screen(&full);
+            QueryPerformanceCounter(&b);action_ms+=1000.*double(b.QuadPart-a.QuadPart)/frequency.QuadPart;
+        }
+        verify(status(&action_after)==1&&action_after.map_samples>action_before.map_samples&&transition_frames>=3,
+            "ambient advances through repeated native movement transitions");
+        std::printf("PASS native action continuity: transitions=12 visual_frames=%u map_samples=%lld full_cycle_ms=%.3f deliberate_wait_ms=70 native_cursor_authority=1\n",
+            transition_frames,action_after.map_samples-action_before.map_samples,action_ms/12);
+        // Now leave delivery entirely to the cadence thread while native
+        // movement keeps changing captures/canvases. No explicit visual ticks.
+        verify(GetForegroundWindow()==GetAncestor(window,GA_ROOT),"movement witness retains foreground ownership");
+        SetEnvironmentVariableA("C3X_RENDERER_MANUAL_VISUAL",nullptr);
+        auto automatic_before=action_after;
+        for(unsigned step=0;step<24;++step){
+            auto moving=unit;moving.unit_id=901;moving.action=2;moving.action_cursor=step%8;
+            moving.body_x=int(step)*4;int bounds[4]={};copy(scene,action_scratch,full);
+            verify(owner.draw_unit(unit_gpu,frame.ticket,moving,action_scratch,action_scratch,bounds,
+                C3X_RENDERER_UNIT_STATE_CAPTURED|C3X_RENDERER_UNIT_SELECTED),"automatic movement capture");
+            Sleep(66);copy(action_scratch,screen_surface,full);final_ui_drawn=false;patch_JGL_present_screen(&full);
+        }
+        SetEnvironmentVariableA("C3X_RENDERER_MANUAL_VISUAL","1");
+        verify(status(&action_after)==1&&action_after.frames>=automatic_before.frames+3&&
+            action_after.map_samples>automatic_before.map_samples,"autonomous ambient delivery survives ongoing native movement");
+        std::printf("PASS automatic movement continuity: native_steps=24 ambient_frames=%lld map_samples=%lld explicit_visual_calls=0\n",
+            action_after.frames-automatic_before.frames,action_after.map_samples-automatic_before.map_samples);
+        auto focus_witness=CreateWindowExA(WS_EX_TOOLWINDOW,"STATIC","Ambient focus witness",WS_POPUP|WS_VISIBLE,
+            GetSystemMetrics(SM_CXSCREEN)-2,GetSystemMetrics(SM_CYSCREEN)-2,1,1,nullptr,nullptr,GetModuleHandleA(nullptr),nullptr);
+        verify(focus_witness&&SetForegroundWindow(focus_witness)&&GetForegroundWindow()==focus_witness,"visible map loses focus to another window");
+        auto background_before=action_after;SetEnvironmentVariableA("C3X_RENDERER_MANUAL_VISUAL",nullptr);
+        Sleep(750);SetEnvironmentVariableA("C3X_RENDERER_MANUAL_VISUAL","1");
+        verify(status(&action_after)==1&&action_after.frames>=background_before.frames+3&&
+            action_after.map_samples>background_before.map_samples,"visible unfocused map keeps ambient motion");
+        DestroyWindow(focus_witness);
+        std::printf("PASS unfocused visible map: ambient_frames=%lld map_samples=%lld\n",
+            action_after.frames-background_before.frames,action_after.map_samples-background_before.map_samples);
+        if(prior_window)SetForegroundWindow(prior_window);
+        reinterpret_cast<Destroy>(action_scratch->vtable[0])(action_scratch,1);
+        live(C3X_NATIVE_VISUAL_POLICY,nullptr,nullptr,nullptr,nullptr,0);
+        verify(visual()==C3X_RENDERER_RESULT_PENDING,"explicit clock suspension pauses renderer clock");
         auto clock=reinterpret_cast<c3x_renderer_visual_clock_fn>(GetProcAddress(renderer_module,"c3x_renderer_visual_clock"));
         verify(clock!=nullptr,"native capture shares renderer visual clock");auto paused=clock();Sleep(20);
-        verify(clock()==paused,"modal pause excludes wall time from shared clock");
+        verify(clock()==paused,"explicit suspension excludes wall time from shared clock");
         std::printf("PASS independent resident frames: frames=%lld map_samples=%lld unit_samples=%lld pose_changes=%lld bytes=%lld nodes=%lld average_request_ms=%.3f average_desktop_ms=%.3f native_draw_calls=0\n",
             after.frames-before.frames,after.map_samples-before.map_samples,after.unit_samples-before.unit_samples,
             after.pose_changes-before.pose_changes,after.retained_bytes,after.nodes,
@@ -779,6 +837,27 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
             target.JGL.Image=root;verify(patch_OpenGLRenderer_initialize(&context,0,&target)==0&&context.initialized==0,"CPU UI defers its line initializer until a stroke");
             patch_OpenGLRenderer_draw_line(&context,0,3,3,20,3);
             verify(context.initialized==1&&context.drawn==1,"CPU UI actual stroke initializes native backend");
+            // Recorded live sequence: LINE_TARGET=0, STROKE=0, then public
+            // DC acquisition revokes an otherwise eligible future map canvas.
+            // A first stroke must admit the canvas before native fallback.
+            auto first_stroke=create(graph,nullptr,1);
+            verify(reinterpret_cast<Init>(first_stroke->vtable[1])(first_stroke,w,h,16,1)==0,"first-stroke canvas lifecycle");
+            verify(live(C3X_NATIVE_LINE_TARGET,first_stroke,nullptr,nullptr,nullptr,0)==0&&lifetime(C3X_NATIVE_MAP,first_stroke,0),
+                "recorded first-stroke target is eligible but unowned");
+            OpenGLRenderer first_context;PCX_Image first_target;first_target.JGL.Image=first_stroke;
+            verify(patch_OpenGLRenderer_initialize(&first_context,0,&first_target)==0,"defer first-stroke native DC");
+            patch_OpenGLRenderer_set_color(&first_context,0,0x80007c00u);
+            patch_OpenGLRenderer_set_line_width(&first_context,0,1);
+            patch_OpenGLRenderer_draw_line(&first_context,0,3,3,20,3);
+            verify(!first_context.initialized&&!first_context.drawn&&lifetime(C3X_NATIVE_MAP,first_stroke,0)&&
+                live(C3X_NATIVE_LINE_TARGET,first_stroke,nullptr,nullptr,nullptr,0)==1,
+                "first native stroke preserves future map lifetime without a DC escape");
+            copy(screen_surface,first_stroke,full);copy(first_stroke,screen_surface,full);
+            verify(live(C3X_NATIVE_IMAGE_PRESENT,screen_surface,graph,&full,nullptr,0)==1&&
+                live(C3X_NATIVE_VISUAL_POLICY,nullptr,nullptr,nullptr,nullptr,2)==1,
+                "first-stroke canvas later carries live map animation");
+            reinterpret_cast<Destroy>(first_stroke->vtable[0])(first_stroke,1);
+            std::puts("PASS recorded first-stroke lifecycle: native_DC=0 map_dependency_preserved=1");
             auto line_scratch=create(graph,nullptr,1);verify(reinterpret_cast<Init>(line_scratch->vtable[1])(line_scratch,w,h,16,1)==0,"outline scratch lifecycle");
             copy(live_images[0],line_scratch,full);target.JGL.Image=line_scratch;
             verify(patch_OpenGLRenderer_initialize(&context,0,&target)==0&&context.initialized==1,"new outline target admitted by GPU copy");

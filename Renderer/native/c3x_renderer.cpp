@@ -74,6 +74,7 @@
 #include "render_core/cliff_placement.h"
 #include "render_core/source_shadow.h"
 #include "render_core/linear_target.h"
+#include "render_core/linear_backup.h"
 #include "source_fidelity/runtime.h"
 #include "source_fidelity/light_frame.h"
 #include "source_fidelity/terrain_compiler.h"
@@ -490,7 +491,7 @@ public:
 #endif
     bool bounded_post=false;
     bool shared_scene_surface=false,scene_surface_requested=false;
-    c3x_renderer::render_core::LinearTarget scene_scratch;
+    c3x_renderer::render_core::LinearBackup scene_backup;
     std::vector<D3D11_RECT> scene_dynamic_damage;
     std::uint64_t scene_static_signature=0,scene_reflection_signature=0;
     ID3D11Texture2D* scene_reflection_texture=nullptr;
@@ -1017,7 +1018,7 @@ public:
         scene_reflection_signature=0;scene_reflection_width=scene_reflection_height=0;
         release(scene_reflection_clear);release(scene_reflection_view);release(scene_reflection_texture);
         scene_restore.reset();
-        unit_scene_work.reset();scene_scratch.reset();scene_dynamic_damage.clear();scene_static_signature=0;scene_overlap=false;scene_damage.clear();
+        unit_scene_work.reset();scene_backup.reset();scene_dynamic_damage.clear();scene_static_signature=0;scene_overlap=false;scene_damage.clear();
         cancel_pixel_preparation();
         linear_frame.reset(); linear_block.reset(); reflection.linear.reset();region_reflection.linear.reset();region_glow.linear.reset();
         pixel_blocks.clear();
@@ -1038,7 +1039,7 @@ public:
     }
 
     void clear_resource_backdrops() {
-        unit_scene_work.reset();scene_scratch.reset();scene_dynamic_damage.clear();scene_static_signature=0;scene_overlap=false;scene_damage.clear();
+        unit_scene_work.reset();scene_backup.reset();scene_dynamic_damage.clear();scene_static_signature=0;scene_overlap=false;scene_damage.clear();
         for(auto & block:resource_backdrops){release(block.color);release(block.depth);}
         resource_backdrops.clear();resource_backdrop_epoch=0;resource_backdrop_bytes=0;
     }
@@ -4413,10 +4414,17 @@ public:
             trace.write("scene-surface-failed","bounded scene view/target contract",true);return false;
         }
         if(glow.native_extent!=w || glow.native_height!=h || !glow.linear.color){
-            scene_scratch.reset();scene_dynamic_damage.clear();scene_static_signature=0;scene_overlap=false;
+            scene_backup.reset();scene_dynamic_damage.clear();scene_static_signature=0;scene_overlap=false;
         }
-        if(!glow.ensure(device,fidelity_root,w,h,true) || !scene_scratch.ensure(device,w*2,h*2,true,false) ||
-           !scene_restore.ensure(device))return false;
+        if(!glow.ensure(device,fidelity_root,w,h,true)){
+            trace.write("scene-surface-failed","working attachments",true);return false;
+        }
+        if(!scene_backup.ensure(device,w*2,h*2)){
+            trace.write("scene-surface-failed","static sample backup",true);return false;
+        }
+        if(!scene_restore.ensure(device)){
+            trace.write("scene-surface-failed","restore pipeline",true);return false;
+        }
         if(!prepare_scene_reflection())return false;
         auto& linear=glow.linear;
         ViewportShaderSettings settings=geometry_viewport_settings;
@@ -4446,15 +4454,13 @@ public:
         // those samples before accepting camera damage or a new pose.
         context->OMSetRenderTargets(0,nullptr,nullptr);
         if(restored || translated){
-            if(!scene_dynamic_damage.empty() && !scene_restore.draw(context,linear,scene_scratch.samples,
-                scene_scratch.depth_samples,0,0,{},&scene_dynamic_damage))return false;
+            if(!scene_dynamic_damage.empty() && !scene_backup.restore(context,linear,scene_dynamic_damage))return false;
             if(translated){
                 auto dirty=physical(static_rectangles);
                 // Clear only exposed/invalidated physical spans. All unchanged
                 // static samples stay at their original world-relative address.
                 for(auto rect:dirty){std::vector<D3D11_RECT> one={rect};
-                    if(!scene_restore.draw(context,linear,scene_scratch.samples,
-                        scene_scratch.depth_samples,0,0,one,&one))return false;}
+                    if(!scene_backup.restore(context,linear,one,true))return false;}
             }
         }else{
             float clear[4]={};context->ClearRenderTargetView(linear.target,clear);
@@ -4527,8 +4533,13 @@ public:
 
             scene_static_signature=cached_signature.complete;scene_static_depth_origin=scene_depth_origin;
         }
-        if(!dynamic_damage.empty() && !scene_restore.draw(context,scene_scratch,linear.samples,
-            linear.depth_samples,0,0,{},&dynamic_damage))return false;
+        // The backup already owns these exact static samples. A stationary
+        // material/pose tick only restores them; copying them back every frame
+        // adds GPU traffic without changing any content.
+        bool backup_reused=restored && scene_dynamic_damage.size()==dynamic_damage.size() &&
+            std::equal(scene_dynamic_damage.begin(),scene_dynamic_damage.end(),dynamic_damage.begin(),
+                [](D3D11_RECT a,D3D11_RECT b){return a.left==b.left&&a.top==b.top&&a.right==b.right&&a.bottom==b.bottom;});
+        if(!backup_reused && !scene_backup.capture(context,linear,dynamic_damage))return false;
         scene_dynamic_damage=std::move(dynamic_damage);
         QueryPerformanceCounter(&static_end);
         // Keep the forward material order: water is below banks, roads, static
@@ -4647,8 +4658,9 @@ public:
         if(gpu_output_mode){gpu_map_valid=true;cpu_output_stale=true;}
         else cpu_output_stale=false; // the complete CPU image is authoritative again
         QueryPerformanceCounter(&copied);
-        char detail[768];sprintf_s(detail,"static_reused=%u translated=%u damage_rects=%zu static_selected=%u dynamic_selected=%u batches=%u target_bytes=%zu target_cap=%zu resolves=%u readbacks=%u full_surface_copies=0 dynamic_damage_rects=%zu copied_rects=%zu static_submit_ms=%.3f dynamic_submit_ms=%.3f finish_submit_ms=%.3f completion_wait_ms=%.3f cpu_copy_ms=%.3f",
-            unsigned(restored),unsigned(translated),static_rectangles.size(),selected_static,selected_dynamic,batches,target_bytes,std::size_t(world_preparation?1408u:1152u)*1024u*1024u,unsigned(!finish_damage.empty()),unsigned(!gpu_output_mode && !copies.empty()),scene_dynamic_damage.size(),copies.size(),
+        target_bytes=std::size_t(w)*h*240u+scene_backup.bytes();
+        char detail[768];sprintf_s(detail,"static_reused=%u translated=%u damage_rects=%zu static_selected=%u dynamic_selected=%u batches=%u target_bytes=%zu target_cap=%zu resolves=%u readbacks=%u full_surface_copies=0 backup_reused=%u backup_bytes=%zu dynamic_damage_rects=%zu copied_rects=%zu static_submit_ms=%.3f dynamic_submit_ms=%.3f finish_submit_ms=%.3f completion_wait_ms=%.3f cpu_copy_ms=%.3f",
+            unsigned(restored),unsigned(translated),static_rectangles.size(),selected_static,selected_dynamic,batches,target_bytes,std::size_t(world_preparation?1408u:1152u)*1024u*1024u,unsigned(!finish_damage.empty()),unsigned(!gpu_output_mode && !copies.empty()),unsigned(backup_reused),scene_backup.bytes(),scene_dynamic_damage.size(),copies.size(),
             trace.milliseconds(static_end.QuadPart-begin.QuadPart),trace.milliseconds(dynamic_end.QuadPart-static_end.QuadPart),
             trace.milliseconds(finish_end.QuadPart-dynamic_end.QuadPart),trace.milliseconds(ready.QuadPart-finish_end.QuadPart),trace.milliseconds(copied.QuadPart-ready.QuadPart));
         trace.write("shared-scene-surface",detail,true);memory_sample("shared-scene-complete");
@@ -10621,8 +10633,8 @@ public:
         std::unique_lock<std::mutex> calls(call_mutex,std::try_to_lock);
         if(!calls.owns_lock()||!running||(!automatic&&!gpu_presenter.caller_thread())||
             (automatic&&!visual_delivery))return C3X_RENDERER_RESULT_PENDING;
-        if(!visual_allowed || (automatic&&(!IsWindowVisible(gpu_present.window?static_cast<HWND>(gpu_present.window):nullptr)||
-            GetForegroundWindow()!=GetAncestor(static_cast<HWND>(gpu_present.window),GA_ROOT)))){
+        if(!visual_allowed || (automatic&&(!IsWindowVisible(static_cast<HWND>(gpu_present.window))||
+            IsIconic(static_cast<HWND>(gpu_present.window))))){
             LARGE_INTEGER now={};QueryPerformanceCounter(&now);visual_last=now.QuadPart;return C3X_RENDERER_RESULT_PENDING;
         }
         std::unique_lock<std::mutex> lock(state_mutex);
@@ -11868,8 +11880,12 @@ private:
         operation.animated=state->animated=unit_instances.animated(selection,renderer_state.unit_bodies.units);
         operation.revision=[this,state,selection](long long ticks,long long frequency){
             auto const& catalog=renderer_state.unit_bodies.units;auto definition=unit_instances.definition(selection,catalog);
+            // A new native action can retire this selection before its screen
+            // transfer replaces the published front. Keep that front's copied
+            // pose, just like retain_visual_unit; never discard the map's
+            // ambient dependency because a prospective unit draw changed.
             if(!definition||!unit_instances.sample(selection,ticks,frequency,catalog,state->draw,state->predict))
-                throw std::runtime_error("direct unit selection retired");
+                return state->revision;
             auto& draw=state->draw;int projection=draw.projection_scale_milli>0?draw.projection_scale_milli:(draw.reduced?500:1000);
             if(!c3x_renderer::expand_unit_canvas(draw.body_x,draw.body_y,draw.sprite_width,draw.sprite_height,projection,definition->minimum_canvas))
                 throw std::runtime_error("direct unit bounds failed");

@@ -30,56 +30,57 @@ authorize staging, installation or a game launch.
 
 ## M3.8 current handoff — in progress
 
-**Completed capability:** bounded recording and strict replay of actual native
-GPU composition now supplement the existing renderer/ownership fixtures. The
-recording contains resource lifetimes, uploads, draw batches, exact external
-map/pose inputs, pixel checkpoints, and native/visual observations. It stays
-under `Renderer/`; no injected code or patch-table change. Direct-unit snapshots
-copy only affected rectangles. Ordinary launches leave recording disabled.
+**Completed:** the saved live prefix now has reconstructed display images,
+184,198 checked production lifetime decisions (zero mismatches), and 116 exact GPU
+pixel checks. Strict ambient outcome validation rejects its readiness loss at
+23.394 s. The captured first-stroke → public DC → revoked map-canvas sequence is
+reproduced in the real DLL/JGL fixture and fixed by admitting an eligible canvas
+on its first valid stroke. Genuine escaped CPU/DC aliases retain native fallback.
 
-**Staged diagnostic candidate:** `6e80a66d98d88755c2ecd68a87289d7884b6be37d0df0870dc83def9b3e8407e`.
-`native/build/composition-recording-stage.json` records matching source/binary
-hashes and the previous DLL rollback. No new INSTALL is required; Civ III was
-confirmed stopped and the installed bridge unchanged. No game was launched.
-`Renderer/CAPTURE_GAME.bat` enables one bounded recording automatically.
+Native action replacement no longer invalidates the whole ambient graph: the last
+published unit pose stays frozen until the native screen replaces it. Water and
+resources keep their independent clock. Popup/Advisor/button setup and loss of
+focus no longer pause visible ambient delivery. Injected changes are small
+removals from existing hooks; the approved injection smoke passes. No new symbols,
+patch-table entries or renderer ownership. Re-run `INSTALL.bat` for these wrapper
+changes when testing the staged candidate.
 
-**Validation:** the exact candidate's fullscreen production fixture and replay in
-`native/build/composition-recording-ready-shutdown/` pass: all water effects,
-eight mixed units, native HUD, fog/reveal, tactical/config-off and recovery;
-3,617 recorded commands, 2,520 exact GPU pixel checks and 107 display boundaries.
-Old-budget replay fails as expected; corrupt, oversized and truncated input is
-rejected, and missing-footer input is explicitly a checked prefix. Invocation
-receipts distinguish VM transport failures from native test outcomes. Recording-off
-retained tests still pass 126 GPU oracles, 120 clock frames and 32 fresh map
-publications / 32,000 UI writes. This is validation capability, not a speedup.
+**Memory/performance:** original-format MSAA backup tiles replace a second
+whole-view target. In the fullscreen coastal workload, target storage falls by
+196–213 MiB and the largest backup allocation falls from about 348 MiB to 2 MiB.
+Unchanged ambient frames retain their static backup; all 120 timed frames skip
+recapture, world builds/uploads, static draws and wave geometry uploads. Every
+color/depth sample matches the independent original-format oracle. A rejected
+single-sample-plane experiment and the previous recovery failure remain preserved
+as negative evidence. Native CPU-source validation also retains the earlier
+10.2× unchanged-copy / 5.4× periodic-edit improvement; those are not game FPS.
 
-**Latest live evidence:** `20260921-053809-a0e677` reports UI flashing/freeze
-and exits with code 1. Allocation failures start at 132.405 s; device removal
-(`0x887a0020`) follows at 139.125 s with 142.56 MiB available process VA, then
-7,599 unusable-session errors and 264 display-handoff failures. Scene targets
-alone reach 1,174.35 MiB. Memory pressure is confirmed; the exact allocation and
-driver-removal cause are not. Windows also applies its fault-tolerant heap shim.
-The earlier intermittent standalone desktop mismatch remains unattributed.
+**Validation:** `native/build/ambient-continuity-reuse/receipt.json` passes at
+2240×1260 with all water effects, eight mixed units, actual JGL/native wrappers,
+12 unpublished action replacements, 24 ongoing movement steps (38 autonomous
+frames, 30 map samples), blocked-UI delivery, unfocused visibility, first stroke,
+fog/reveal, tactical/UI parity, navigation, reset/recreation and config-off.
+120 visual requests average 31.26 ms; desktop completion averages 38.26 ms,
+p95 52.88 ms. No overall frame-latency improvement over the whole-view control is
+established. These are fullscreen fixture results, not gameplay FPS or scanout.
+The final address-pressure/staging receipt is recorded in the live findings.
 
-**Capture correction:** this live run produced neither a composition journal nor
-the DLL runtime log. A harmless native probe reproduced the cause: XP compatibility
-forces elevation and discards the launching process's diagnostic environment.
-The launcher now elevates its host first, normalizes mapped shares to UNC, then
-creates the child directly with inherited settings. It reports missing recordings
-as capture failures. The real launcher/staged-DLL stand-in test verifies journal
-and trace creation across elevation and rejects an intentionally absent journal;
-no game launch, DLL change or reinstall is needed. See
-`native/build/capture-launch/receipt.json` and `capture-launch-missing/receipt.json`.
+**Evaluation candidate:** `80c3bc111fb38433e5012aff8220605017e4681c6d040744a55adb16a11a99aa`.
+Staging requires the matching complete native run and pressure/recovery pass;
+`native/build/ambient-continuity-stage.json` records the final decision and rollback.
+Normal launches keep recording disabled. No INSTALL or game launch in this turn.
 
-**Next responsibility:** collect the actual gameplay journal through the corrected
-launcher and replay/correlate its composition traffic. This failed session's
-missing journal cannot be reconstructed from debug logs; one replacement live
-capture is the necessary integration checkpoint. Native admission, authoritative
-scene production, retained animation and full game scheduling are not yet
-re-executed by this recorder. Recording adds readbacks and file I/O; use
-recorder-off runs for performance. Standard <33 ms p95, live stability and
-sustained navigation remain open. See [live findings](live_usage_findings_20260920.md)
-and [recorded composition validation](benchmark_workflow.md#recorded-native-composition).
+**Next unfinished responsibility:** full captured scene/ambient input replay and
+remaining GPU/foreground composition cost. The old 80.788-second journal is only
+a byte-limited prefix and contains external map/pose pixels, not the scene inputs
+needed to regenerate them. Native lifetime decisions are now replayed (legacy
+version 2 assumes the owner thread; new version 3 records it), but full adapter,
+scene production, ambient graph and game scheduling are not. A 1 GiB VA reservation
+models capacity, not Civ III heap fragmentation. Preserve these distinctions;
+matching pixels and targeted regression passes do not certify live performance.
+Standard <33 ms p95 navigation and sustained live stability remain open. See
+[findings](live_usage_findings_20260920.md) and
+[validation](benchmark_workflow.md#recorded-native-composition).
 
 Whole-world appearance enters through bounded caller-thread pages. Existing
 workers prepare canonical regions and wrapped occurrences independently of the

@@ -12,6 +12,17 @@ def event(kind, ordinal, payload=b''):
 
 
 class InspectRecordingTests(unittest.TestCase):
+    def test_thread_evidence_version_preserves_legacy_reader(self):
+        with tempfile.TemporaryDirectory() as directory:
+            file = Path(directory) / 'threads.c3xr'
+            header = struct.pack('<IIQ', 0x52433343, 3, 1000)
+            payload = struct.pack('<QIQQIiI', 42, 108, 1, 2, 0, 0, 77)
+            file.write_bytes(header + event(10, 1, payload) + event(11, 2, struct.pack('<Qi', 42, 1)))
+            self.assertEqual(inspect(file)['unfinished_native_calls'], 0)
+            file.write_bytes(header + event(10, 1, payload[:-4]))
+            with self.assertRaisesRegex(ValueError, 'native begin'):
+                inspect(file)
+
     def test_native_observations_and_truncated_tail(self):
         with tempfile.TemporaryDirectory() as directory:
             file = Path(directory) / 'sample.c3xr'

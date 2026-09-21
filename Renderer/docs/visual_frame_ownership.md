@@ -11,7 +11,10 @@ Civ III to redraw, and no second presenter or window is introduced.
   revisions and explicit despawn retirement. Only native-selected occurrences
   can contribute; a retained instance never grants visibility. Unselected idle
   units remain frozen. Authored eligible idle/work clips use the visual clock.
-  Directed actions retain their captured native cursor and anchor.
+  Directed actions retain their captured native cursor and anchor. A new native
+  action may supersede the displayed selection before the next screen transfer;
+  that already-published pose stays frozen until replaced, without invalidating
+  the water/resource composition around it.
 - Map samples own copied tiles, topology, projection and selected-view inputs.
   They reuse the established working extent and existing static/pass caches.
   The existing map sample buckets remain unchanged; presentation has a separate
@@ -42,6 +45,15 @@ Civ III to redraw, and no second presenter or window is introduced.
   their recipes. Working native canvases are untouched by intervening frames.
   Unchanged source samples do not cause another display transfer.
 
+A first valid native line stroke is destination demand, like the existing
+HUD blend/copy path. It admits an eligible canvas before native line setup can
+open a public DC; merely querying line capability does not allocate. Actual
+escaped CPU/DC aliases still require the original native fallback.
+
+Static color/depth under animated damage uses small original-format MSAA backup
+tiles. Only touched tiles are resident; camera replacement retires unused tiles.
+Every color/depth sample is preserved, with no change to resolve or quality.
+
 ## Clock, native integration and lifecycle
 
 An owned cadence thread offers one visual frame at a time, targeting 33 ms with
@@ -64,9 +76,10 @@ from putting a flip-model HWND swap chain on Civ III's GDI window.
 
 Native unit/map captures query `c3x_renderer_visual_clock`, in QPC-frequency
 units, so a later content/camera update cannot restore an older animation clock.
-Popup/Advisor and command-button scopes retain explicit pause/resume policy.
-Focus loss rebases the clock. An interturn UI stall alone no longer pauses an
-eligible front: water, resources and authorized idle/work poses use copied
+Popup/Advisor and command-button scopes guard optional native redraws, without
+pausing the renderer clock. A visible, non-minimized window continues ambient
+delivery even when another window has focus. An interturn UI stall does not
+pause an eligible front: water, resources and authorized idle/work poses use copied
 scene/visibility records while native actions retain their last observed cursor.
 Camera, viewer and lifecycle changes still validate/adopt coherently. Native
 handoff disables delivery under the same gate; reset joins the cadence thread
@@ -122,7 +135,7 @@ their last owning version; shared map/pose textures use COM lifetime ownership.
 commands, including source replacement, aliasing, native 555/565 and full color,
 partial publication, opaque overwrite and reset. The connected JGL fixture
 advances actual resource/unit samples without native drawing, blocks the window thread for two seconds while checking actual desktop motion,
-verifies modal clock pause and restores exact native UI pixels. Explicit
+verifies explicit clock suspension and restores exact native UI pixels. Explicit
 oracle readbacks remain test-only. `C3X_RENDERER_MANUAL_VISUAL=1` is a replay-only
 control for direct-call timing; the blocked-UI test clears it, and production
 leaves it unset. `visual-frame` traces report whole-call time;

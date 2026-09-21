@@ -29,7 +29,7 @@ def inspect(path):
         if len(header) != 16:
             raise ValueError('Missing file header')
         magic, version, frequency = struct.unpack('<IIQ', header)
-        if magic != 0x52433343 or version != 2 or not 0 < frequency < 10**12:
+        if magic != 0x52433343 or version not in (2, 3) or not 0 < frequency < 10**12:
             raise ValueError('Unsupported recording header')
         sequence = 0
         truncated = False
@@ -57,7 +57,7 @@ def inspect(path):
             last_tick = ticks
             valid_bytes = stream.tell()
             if kind == 10:
-                if size != 36:
+                if size != (40 if version >= 3 else 36):
                     raise ValueError('Invalid native begin')
                 token, op = struct.unpack_from('<QI', payload)
                 operations[op] += 1

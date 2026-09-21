@@ -304,8 +304,6 @@ pfp_init ()
 	tr.redundant = is->paused_for_popup;
 	if (! tr.redundant) {
 		is->paused_for_popup = true;
-		if (is->custom_renderer_native_image != NULL)
-			is->custom_renderer_native_image (C3X_NATIVE_VISUAL_POLICY, NULL, NULL, NULL, NULL, 0);
 		QueryPerformanceCounter ((LARGE_INTEGER *)&tr.ts_before);
 	}
 	return tr;
@@ -319,8 +317,6 @@ pfp_finish (struct pause_for_popup * pfp)
 		QueryPerformanceCounter ((LARGE_INTEGER *)&ts_after);
 		is->time_spent_paused_during_popup += ts_after - pfp->ts_before;
 		is->paused_for_popup = false;
-		if (is->custom_renderer_native_image != NULL)
-			is->custom_renderer_native_image (C3X_NATIVE_VISUAL_POLICY, NULL, NULL, NULL, NULL, is->current_config.enable_custom_rendering && ! is->custom_renderer_modal);
 	}
 	pfp->done = true;
 }
@@ -20237,8 +20233,9 @@ patch_JGL_Graphsy_present (void * graph, int edx, RECT * rect)
 		}
 	}
 	if (is->custom_renderer_native_image != NULL && custom_renderer_native_probe_on ()) {
-        bool animate = ! is->custom_renderer_modal && ! is->paused_for_popup &&
-            ! p_main_screen_form->is_now_loading_game && *p_player_bits != 0 && is->saved_tile_count < 0;
+        // Ambient samples own immutable inputs. Native UI/action scopes do not
+        // pause them; completed composition determines which map pixels remain visible.
+        bool animate = ! p_main_screen_form->is_now_loading_game && *p_player_bits != 0;
         is->custom_renderer_native_image (C3X_NATIVE_VISUAL_POLICY, NULL, NULL, NULL, NULL, animate ? 1 : 0);
     }
 	if (translate_custom_renderer_native (C3X_NATIVE_IMAGE_PRESENT, image, graph, rect, NULL, 0)) return 0;
@@ -22367,8 +22364,6 @@ patch_Main_GUI_set_up_unit_command_buttons (Main_GUI * this)
 	// Treat native command reconstruction as one UI operation for renderer scheduling.
 	bool previous_modal = is->custom_renderer_modal;
 	is->custom_renderer_modal = true;
-	if (is->custom_renderer_native_image != NULL)
-		is->custom_renderer_native_image (C3X_NATIVE_VISUAL_POLICY, NULL, NULL, NULL, NULL, 0);
 	// Recompute resources now if needed because of a trade deal involving mill inputs. In rare cases the change in deals might affect a mill that
 	// produces a resource that's used for a worker job.
 	recompute_resources_if_necessary ();
@@ -22419,9 +22414,6 @@ patch_Main_GUI_set_up_unit_command_buttons (Main_GUI * this)
 		}
 	}
 	is->custom_renderer_modal = previous_modal;
-	if (is->custom_renderer_native_image != NULL)
-		is->custom_renderer_native_image (C3X_NATIVE_VISUAL_POLICY, NULL, NULL, NULL, NULL,
-			is->current_config.enable_custom_rendering && ! previous_modal && ! is->paused_for_popup);
 }
 
 void 
@@ -37561,19 +37553,14 @@ bool __fastcall patch_Advisor_Base_Form_foreign_m95  (Advisor_Base_Form * this) 
 bool __fastcall patch_Advisor_Base_Form_cultural_m95 (Advisor_Base_Form * this) { on_open_advisor (AK_CULTURAL); return Advisor_Base_Form_cultural_m95 (this); }
 bool __fastcall patch_Advisor_Base_Form_science_m95  (Advisor_Base_Form * this) { on_open_advisor (AK_SCIENCE) ; return Advisor_Base_Form_science_m95  (this); }
 
-// Keep renderer scheduling suspended through Advisor construction and its native dialog loop.
+// Guard optional native redraws through Advisor construction and its dialog loop.
 void __fastcall
 patch_Advisor_GUI_open (Advisor_GUI * this, int edx, AdvisorKind kind)
 {
 	bool previous_modal = is->custom_renderer_modal;
 	is->custom_renderer_modal = true;
-	if (is->custom_renderer_native_image != NULL)
-		is->custom_renderer_native_image (C3X_NATIVE_VISUAL_POLICY, NULL, NULL, NULL, NULL, 0);
 	Advisor_GUI_open (this, edx, kind);
 	is->custom_renderer_modal = previous_modal;
-	if (is->custom_renderer_native_image != NULL)
-		is->custom_renderer_native_image (C3X_NATIVE_VISUAL_POLICY, NULL, NULL, NULL, NULL,
-			is->current_config.enable_custom_rendering && ! previous_modal && ! is->paused_for_popup);
 }
 
 void __fastcall

@@ -103,7 +103,7 @@ int main(){
 struct LARGE_INTEGER{long long QuadPart=0;};void QueryPerformanceCounter(LARGE_INTEGER* q){++q->QuadPart;}
 unsigned GetEnvironmentVariableA(char const*,char*,unsigned){return 0;}
 using HWND=void*;constexpr int GA_ROOT=2;
-bool IsWindowVisible(HWND){return true;}HWND GetForegroundWindow(){return nullptr;}HWND GetAncestor(HWND,int){return nullptr;}
+bool visible=true,minimized=false;bool IsWindowVisible(HWND){return visible;}bool IsIconic(HWND){return minimized;}
 struct Session{bool active=true;bool visual_active(){return active;}void stop_visuals(){active=false;}
  unsigned visual_bytes(){return 0;}unsigned visual_nodes(){return 0;}unsigned visual_sources(){return 0;}};
 struct State{
@@ -122,6 +122,9 @@ struct State{
 '''+body+r'''
 };
 int main(){
+ State hidden;visible=false;assert(hidden.visual_frame(true)==C3X_RENDERER_RESULT_PENDING&&!hidden.draws);
+ visible=true;minimized=true;assert(hidden.visual_frame(true)==C3X_RENDERER_RESULT_PENDING&&!hidden.draws);
+ minimized=false;assert(hidden.visual_frame(true)==1&&hidden.draws==1); // no foreground/focus predicate
  State s;s.gpu_presenter.caller=false;
  assert(s.visual_frame()==C3X_RENDERER_RESULT_PENDING&&!s.draws);
  s.camera_pending=true;assert(s.visual_frame(true)==C3X_RENDERER_RESULT_PENDING&&!s.draws);

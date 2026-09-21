@@ -8,8 +8,9 @@ fog hides units and freezes explored-but-not-visible ambient content.
 An owned cadence thread schedules retained frames independently of Civ III's
 message pump, through the existing D3D worker and composition presenter on the
 same window. It targets 33 ms without accumulating work; native/gameplay updates
-do not need to run for ambient animation. Modal, focus, native ownership and
-lifecycle policies still apply. See
+do not need to run for ambient animation. Native actions, UI setup and focus changes do not pause ambient motion on a
+visible map. Hidden/minimized windows, native ownership and lifecycle boundaries
+still apply. See
 [`visual_frame_ownership.md`](../../../docs/visual_frame_ownership.md).
 
 The native 66 ms loop continues gameplay advancement and compatibility recovery

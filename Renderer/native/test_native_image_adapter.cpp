@@ -746,6 +746,40 @@ int native_adapter_contract(char const* path,Backend& gpu,Id map=0,unsigned cons
         auto expected_clear=get(root,0,0);verify(expected_clear!=nullptr,"null fill oracle lease");
         for(int pixel=0;pixel<w*h;++pixel)verify(cleared[pixel]==expected_clear[pixel],"null fill exact native pixels");release(root,1);
         reinterpret_cast<Destroy>(temporary->vtable[0])(temporary,1);verify(temporary_id&&!backend.image(temporary),"native destruction retires GPU ownership");
+#ifndef C3X_NATIVE_WORKER_TEST
+        // The live recording repeatedly copies CPU-owned fullscreen canvases.
+        // Keep an escaped pointer, including edits in the last row: validation
+        // must inspect current words even when no lease event announces a write.
+        for(int width:{2240,2239}){
+            constexpr int height=1260;RECT area={0,0,width,height};
+            auto source=create(graph,nullptr,1),destination=create(graph,nullptr,1);
+            verify(init(source,width,height,16,1)==0,"fullscreen CPU source init");
+            verify(fill(source,&area,int(0x80000123u))==0,"fullscreen CPU source fill");
+            verify(reinterpret_cast<Init>(destination->vtable[1])(destination,width,height,16,1)==0,"fullscreen GPU destination init");
+            auto held=get(source,0,0);verify(held!=nullptr,"fullscreen escaped pointer");release(source,1);
+            auto stride=*reinterpret_cast<int*>(reinterpret_cast<char*>(source)+0x40);
+            auto transfer=[&]{verify(reinterpret_cast<Copy>(source->vtable[16])(source,destination,&area,&area)==0&&backend.owns(destination),"fullscreen CPU-to-GPU copy");};
+            auto uploads=gpu.stats().uploads;transfer();verify(gpu.stats().uploads==uploads+1,"fullscreen initial upload");
+            std::vector<unsigned> observed(std::size_t(width)*height);
+            verify(gpu.readback(backend.image(destination),observed.data(),observed.size()),"fullscreen warm completion");
+            LARGE_INTEGER frequency,began,ended;QueryPerformanceFrequency(&frequency);
+            for(bool changed:{false,true}){
+                uploads=gpu.stats().uploads;auto expanded=backend.stats().source_expanded_bytes;QueryPerformanceCounter(&began);
+                for(unsigned n=0;n<96;++n){
+                    if(changed&&n%12==0)held[(height-1)*stride+width-1]=static_cast<unsigned short>(0x200+n);
+                    transfer();
+                }
+                verify(gpu.readback(backend.image(destination),observed.data(),observed.size()),"fullscreen measured completion");QueryPerformanceCounter(&ended);
+                verify(gpu.stats().uploads==uploads+(changed?8:0),"fullscreen content changes alone upload");
+                verify(backend.stats().source_expanded_bytes-expanded==std::uint64_t(changed?8:0)*width*height*4,"only changed sources allocate expanded upload pixels");
+                for(int y=0;y<height;++y)for(int x=0;x<width;++x)
+                    verify(observed[std::size_t(y)*width+x]==held[y*stride+x],"fullscreen strided source exact pixels");
+                std::printf("PASS fullscreen CPU source width=%d changed=%u copies=96 uploads=%llu complete_ms=%.3f\n",width,unsigned(changed),gpu.stats().uploads-uploads,1000.*double(ended.QuadPart-began.QuadPart)/frequency.QuadPart);
+            }
+            reinterpret_cast<Destroy>(destination->vtable[0])(destination,1);
+            reinterpret_cast<Destroy>(source->vtable[0])(source,1);
+        }
+#endif
         verify(replace_storage(target[2])==0,"new lifetime before detach");both_fill(2,full,0x80000567);
         reads=backend.stats().readbacks;set_custom_renderer_native_probe(nullptr);compare(2,true);
         verify(backend.stats().readbacks==reads+1&&state.custom_renderer_native_image==nullptr,"detach drains current pixels before removing hooks");

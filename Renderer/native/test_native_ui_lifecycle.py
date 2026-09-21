@@ -14,7 +14,7 @@ class NativeUiLifecycleTests(unittest.TestCase):
 #include <cstdio>
 #include <cstring>
 const int C3X_NATIVE_VISUAL_POLICY=116;
-bool visual_allowed=true;
+bool visual_allowed=true,expected_visual=true;
 int policy(int operation,void*,void*,void const*,void const*,unsigned allow){assert(operation==116);visual_allowed=allow!=0;return 1;}
 #define __fastcall
 #define __ 0
@@ -38,7 +38,7 @@ struct State {
 long long now=0;void QueryPerformanceCounter(LARGE_INTEGER* q){q->QuadPart=++now;}
 int popup_calls=0,button_phases=0,tooltip_calls=0;
 int show_popup(void*,int,int,int);
-void phase(){assert(state.custom_renderer_modal && !visual_allowed);++button_phases;}
+void phase(){assert(state.custom_renderer_modal && visual_allowed==expected_visual);++button_phases;}
 void recompute_resources_if_necessary(){phase();}
 void Main_GUI_set_up_unit_command_buttons(Main_GUI*);
 void set_up_stack_bombard_buttons(Main_GUI*){phase();}
@@ -49,7 +49,7 @@ void Button_set_tooltip(Button*,int,char* text){phase();assert(!std::strcmp(text
 void hide(Base_Form*){phase();}void show(Base_Form*,int,int){phase();}
 ''' + popup.replace('this','self') + buttons.replace('this','self') + r'''
 int show_popup(void* self,int,int nesting,int){
- ++popup_calls;assert(state.paused_for_popup && !visual_allowed);
+ ++popup_calls;assert(state.paused_for_popup && visual_allowed==expected_visual);
  // The constructor returns before the rest of native layout and its dialog.
  auto constructor=[](){assert(state.paused_for_popup);};constructor();
  assert(state.paused_for_popup);
@@ -64,7 +64,7 @@ int main(){
  assert(patch_show_popup(&state,0,1,0)==73);
  assert(popup_calls==2 && !state.paused_for_popup && state.show_popup_was_called && visual_allowed);
  assert(state.time_spent_paused_during_popup==1); // Nested pause counted once.
- state.paused_for_popup=true;visual_allowed=false;patch_show_popup(&state,0,0,0);assert(state.paused_for_popup);
+ state.paused_for_popup=true;visual_allowed=true;patch_show_popup(&state,0,0,0);assert(state.paused_for_popup);
  assert(state.time_spent_paused_during_popup==1);state.paused_for_popup=false;visual_allowed=true;
  Table table{hide,show};Main_GUI gui{};Unit unit;screen.Current_Unit=&unit;
  char label[]="Wait $NUM0 tiles";state.c3x_labels[0]=label;
@@ -72,11 +72,11 @@ int main(){
  gui.Unit_Command_Buttons[0].Button.Base_Data.Status2=1;
  gui.Unit_Command_Buttons[0].Command=UCV_Build_City;
  patch_Main_GUI_set_up_unit_command_buttons(&gui);
- assert(!state.custom_renderer_modal && visual_allowed && button_phases==10 && tooltip_calls==1);
- state.custom_renderer_modal=true;visual_allowed=false;patch_Main_GUI_set_up_unit_command_buttons(&gui);
- assert(state.custom_renderer_modal && !visual_allowed && button_phases==20 && tooltip_calls==2);
+ assert(!state.custom_renderer_modal && visual_allowed==expected_visual && button_phases==10 && tooltip_calls==1);
+ state.custom_renderer_modal=true;visual_allowed=expected_visual=false;patch_Main_GUI_set_up_unit_command_buttons(&gui);
+ assert(state.custom_renderer_modal && visual_allowed==expected_visual && button_phases==20 && tooltip_calls==2);
  assert(!state.paused_for_popup);
- std::puts("UI scopes: complete popup lifetime, nested restoration and all command-button phases pass");
+ std::puts("UI scopes: native popup timing and redraw guards preserved; ambient policy uninterrupted");
 }
 ''')
 
