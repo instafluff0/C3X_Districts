@@ -2,41 +2,60 @@
 
 ## One-click game capture
 
-The current fullscreen allocation-pressure repair is DLL-only. If the startup bridge
-used by capture `20260920-230709-cb9049` is installed, **restart through
-`CAPTURE_GAME.bat`; no reinstall is needed**. Older installations must run
-`INSTALL.bat` once for that existing Graphsy wrapper. This capture launcher does
-not install the bridge.
+Input capture remains admission-gated while automated qualification is unfinished.
+The instructions below describe the workflow once a matching local admission
+receipt exists; do not request a new long manual session before that gate passes.
+See the [current handoff](input_recording_handoff.md).
+
+The input recorder starts with the game and records up to ten minutes after the
+first successful GPU map presentation. It captures renderer/native-bridge inputs,
+sampled window images, process memory, renderer logs and PresentMon intervals.
+It does not install the injected bridge. The existing bridge still requires
+`INSTALL.bat` once if it has not been installed.
 
 In the Windows VM, close Civ III and double-click
-`Conquests\C3X_Districts\Renderer\CAPTURE_GAME.bat`. Approve the Windows PowerShell
-permission prompt for the FPS collector. The game itself runs without elevation;
-neither installation nor injection is performed by this launcher.
+`Conquests\C3X_Districts\Renderer\CAPTURE_GAME.bat`. Accept the Windows permission
+prompt. The capture host elevates before creating the game so compatibility mode
+preserves the recording environment; it does not change compatibility settings.
+Load a usual save and play for about ten minutes. Include idle water/units,
+scrolling, camera jumps, movement, an interturn and opening/closing a city.
+Leave the launcher open until it reports that capture was saved. It stops the
+collectors automatically; the game can remain open. No debugger, manual export
+or upload is needed.
 
-Load a usual save, idle with water/units visible for 20 seconds, scroll for 20
-seconds, make several distant jumps and switch selected units, then open/close a
-city and select a worker. Quit normally after about 2–3 minutes and leave the
-launcher open until it reports that the capture is saved. No debugger, manual
-export or upload is needed. Captures stop after at most 15 minutes.
+The launcher verifies the staged DLL and tool hashes against its local capture
+admission receipt. `-CheckOnly` checks this without starting anything. Missing or
+changed tools fail before launch. `-NoReplayRecording` selects ordinary logs/FPS
+without the input journal or window observer. The input recorder is never enabled
+by the normal installer or ordinary game launch.
 
-The launcher saves `renderer.log`, PresentMon `frames.csv`, collector errors and
-`session.json` under `Renderer/native/build/live-captures/<session>/`. Per-frame
-files are written to the VM's local temporary directory first, then copied to the
-shared checkout on exit. `process-memory` records sample available process address
-space once per second; `visual-failure-memory` and `worker-failure-memory` preserve
-the device-removal HRESULT and available memory before cleanup. These do not
-enable expensive profiling. The session records the staged DLL hash and collector
-completion, not account names or save filenames. A failed setup leaves diagnostic
-files and does not terminate a running game. Closing the launcher prematurely can
-prevent the final copy; local temporary capture files remain recoverable.
+Files are written to the VM's local temporary directory, then collected under
+`Renderer/native/build/live-captures/<session>/`. The session includes the exact
+DLL, input journal, window samples/memory, renderer logs, FPS output and inspection
+report. Quitting early or a crash preserves an explicitly incomplete prefix.
+Closing the launcher itself can interrupt collection; the local temporary files
+remain recoverable. Capture and window observation add overhead: recorded FPS is
+diagnostic, not a benchmark of ordinary play. Window images are sampled at up to
+5 Hz, not every physical displayed frame. Exact retained renderer frames are
+regenerated separately by [input replay](../native/input_recording/README.md).
+To watch a new input recording, run `Renderer\PLAY_REPLAY.bat` in Windows and
+choose its session directory. The visible player regenerates frames using the
+frozen DLL and tools; original assets must still be available. It preserves every
+accepted presentation and reports playback lag. Older pixel-only captures need
+their original inspection tools.
+
+This is the strategic live-validation checkpoint. Automated fixtures prove the
+recorder's supported paths; the first live session must still be compared with
+its window evidence before claiming that replay reproduces the reported game
+slowdown or that a candidate is faster in actual play.
 
 Portable, signed [Microsoft DebugView](https://learn.microsoft.com/en-us/sysinternals/downloads/debugview)
 and [Intel PresentMon](https://github.com/GameTechDev/PresentMon) are prepared in
 the ignored `Renderer/native/build/live-tools/` folder in this checkout. Other
 checkouts need `DebugView/dbgviewcli64a.exe` (ARM64) or `dbgviewcli64.exe` (x64), and
 the console `PresentMon.exe`. They are not redistributed with source. The launcher
-verifies publisher signatures and targets only Civ III. Its elevated helper owns
-a unique ETW session, explicitly stops it on game exit, and flushes CSV output;
+verifies publisher signatures and targets only Civ III. The capture host owns
+a unique ETW session, explicitly stops it at the capture boundary, and flushes CSV output;
 it does not install a service or change group membership. `CAPTURE_GAME.bat
 -CheckOnly` validates prerequisites without starting collectors or the game.
 

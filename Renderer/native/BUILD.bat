@@ -28,7 +28,7 @@ if not exist "build\candidate" mkdir "build\candidate"
 
 if /i "%~1"=="input-replay" (
   if not exist "build\input-recording" mkdir "build\input-recording"
-  cl /nologo /std:c++17 /EHsc /O2 /W4 /WX /wd4191 replay_inputs.cpp /Fo:build\input-recording\ /Fe:build\input-recording\replay_inputs.exe /link /LARGEADDRESSAWARE user32.lib
+  cl /nologo /std:c++17 /EHsc /O2 /W4 /WX /wd4191 replay_inputs.cpp /Fo:build\input-recording\ /Fe:build\input-recording\replay_inputs.exe /link /LARGEADDRESSAWARE user32.lib psapi.lib
   if errorlevel 1 exit /b 1
   cl /nologo /std:c++17 /EHsc /O2 /W4 /WX inspect_inputs.cpp /Fo:build\input-recording\ /Fe:build\input-recording\inspect_inputs.exe /link /LARGEADDRESSAWARE
   if errorlevel 1 exit /b 1
@@ -94,6 +94,15 @@ if /i "%~1"=="gpu-frame" (
 if /i "%~1"=="native-lifetimes" (
   if not exist "build\gpu-composition" mkdir "build\gpu-composition"
   cl /nologo /std:c++17 /EHsc /O2 /W4 /WX /wd4100 /wd4191 test_native_lifetimes.cpp /Fo:build\gpu-composition\ /Fe:build\gpu-composition\test_native_lifetimes.exe /link gdi32.lib user32.lib bcrypt.lib
+  if errorlevel 1 exit /b 1
+  exit /b 0
+)
+
+if /i "%~1"=="native-input-values" (
+  if not exist "build\input-recording" mkdir "build\input-recording"
+  cl /nologo /std:c++17 /EHsc /O2 /W4 /WX /wd4100 /wd4191 test_native_input_values.cpp /Fo:build\input-recording\ /Fe:build\input-recording\test_native_input_values.exe /link gdi32.lib user32.lib bcrypt.lib
+  if errorlevel 1 exit /b 1
+  build\input-recording\test_native_input_values.exe
   if errorlevel 1 exit /b 1
   exit /b 0
 )

@@ -5,6 +5,7 @@
 #include "gpu_frame_api.h"
 #include "gpu_image_commands.h"
 #include "native_text_raster.h"
+#include "native_access.h"
 #include <array>
 #include <vector>
 #include <algorithm>
@@ -33,7 +34,7 @@ template<class Backend> class Adapter {
     void retire_text(Text& text){if(text.pixels)gpu.destroy(text.pixels);if(text.curves)gpu.destroy(text.curves);text_bytes-=text.bytes;text={};}
     bool draw_text(Image& destination,void* text,void const* target,unsigned count){
         if(!target||(!text&&count)||count>1024)return false;if(!count)return true;
-        auto dc=*reinterpret_cast<HDC*>(static_cast<char*>(destination.native)+0x4bc);
+        auto dc=c3x_native_access::dc(destination.native);
         c3x_native_text::State font_state;if(!c3x_native_text::capture(dc,font_state)||(font_state.align&(TA_UPDATECP|TA_RTLREADING)))return false;
         RECT clip={};auto clip_kind=GetClipBox(dc,&clip);if(clip_kind==ERROR||clip_kind==COMPLEXREGION)return false;if(clip_kind==NULLREGION)return true;
         Text* cached=nullptr;for(auto& entry:texts)if(entry.age&&entry.font_state==font_state&&entry.text.size()==count&&!std::memcmp(entry.text.data(),text,count)){cached=&entry;break;}
@@ -66,11 +67,9 @@ template<class Backend> class Adapter {
     }
     using Get=std::uint16_t*(__thiscall*)(void*);
     using Release=void(__thiscall*)(void*,int);
-    static int field(void* p,unsigned offset){return *reinterpret_cast<int*>(static_cast<char*>(p)+offset);}
-    bool native_sprite(void* p)const{
-        auto module=reinterpret_cast<char*>(GetModuleHandleA("jgl.dll"));
-        return module&&p&&*static_cast<void***>(p)==reinterpret_cast<void**>(module+0x68440);
-    }
+    static int field(void* p,unsigned offset){return c3x_native_access::field(p,offset);}
+    bool native_sprite(void* p)const{return c3x_native_access::sprite(p);}
+    static Rect rect_value(RECT r){return {r.left,r.top,r.right,r.bottom};}
     static Rect rect(void const* p){auto r=static_cast<RECT const*>(p);return {r->left,r->top,r->right,r->bottom};}
     Image* find(void* p){for(auto& image:images)if(p&&image.native==p){image.used=++source_age;return &image;}return nullptr;}
     void forget(Image& image){if(image.detail)gpu.destroy(image.detail);gpu.destroy(image.gpu);cpu_bytes-=image.cpu.size()*2;image={};}
@@ -91,8 +90,8 @@ template<class Backend> class Adapter {
         int w=field(p,0x38),h=field(p,0x3c),stride=field(p,0x40);
         if(w<=0||h<=0||w>2240||h>1260||stride<w)return nullptr;
         // Derive format from the actual DIB; 16-bit alone does not distinguish 555/565.
-        DIBSECTION dib={};auto bitmap=*reinterpret_cast<HBITMAP*>(static_cast<char*>(p)+0x4b4);
-        if(GetObject(bitmap,sizeof dib,&dib)!=sizeof dib||dib.dsBm.bmBitsPixel!=16)return nullptr;
+        DIBSECTION dib={};
+        if(!c3x_native_access::dib(p,dib)||dib.dsBm.bmBitsPixel!=16)return nullptr;
         Format format;
         if(dib.dsBmih.biCompression==BI_RGB)format=Format::rgb555;
         else if(dib.dsBmih.biCompression==BI_BITFIELDS&&dib.dsBitfields[0]==0x7c00&&dib.dsBitfields[1]==0x3e0&&dib.dsBitfields[2]==0x1f)format=Format::rgb555;
@@ -114,9 +113,9 @@ template<class Backend> class Adapter {
             // Retained native pointers can change without another getter call.
             // Compare every visible word, in its native representation, before
             // allocating or widening an upload. Padding is not image content.
-            GdiFlush();auto bits=reinterpret_cast<Get>(get_bits)(image.native);
+            GdiFlush();auto bits=c3x_native_access::words(image.native,get_bits);
             if(!bits)throw std::runtime_error("native image lease failed");
-            struct Lease {void* image;Release release;~Lease(){release(image,1);}} lease{image.native,reinterpret_cast<Release>(release_bits)};
+            struct Lease {void* image;void* release;~Lease(){c3x_native_access::release_words(image,release);}} lease{image.native,release_bits};
             auto stride=field(image.native,0x40);
             auto count=std::size_t(image.width)*image.height;
             bool same=image.cpu_uploaded&&image.cpu.size()==count;
@@ -165,7 +164,7 @@ template<class Backend> class Adapter {
     }
     Id upload_lookup(void const* table,unsigned blocks=16){
         if(!table||!blocks||blocks>31)return 0;
-        auto& cache=lookups[blocks<=4?1:0];auto words=static_cast<std::uint16_t const*>(table);unsigned count=blocks*32768u;
+        auto& cache=lookups[blocks<=4?1:0];auto words=c3x_native_access::lookup(table,blocks);unsigned count=blocks*32768u;
         if(cache.image&&cache.words.size()>=count&&!std::memcmp(cache.words.data(),words,std::size_t(count)*2))return cache.image;
         // Content, not pointer identity, validates caller-owned mutable tables.
         // Shadow and FLC tables are simultaneously resident, so alternating
@@ -198,9 +197,8 @@ template<class Backend> class Adapter {
     bool draw_blend(Image& destination,void* source,void const* packet,void const* target,unsigned mode){
         if(!source||!packet||!target||mode>1)return false;
         auto const& inputs=*static_cast<c3x_renderer_native_sprite_blend const*>(packet);
-        auto module=reinterpret_cast<char*>(GetModuleHandleA("jgl.dll"));
-        if(!module||!inputs.alpha||!inputs.background)return false;
-        for(auto sprite:{source,inputs.alpha})if(*static_cast<void***>(sprite)!=reinterpret_cast<void**>(module+0x68440)||field(sprite,0x20)!=8||(field(sprite,0x18)&1))return false;
+        if(!inputs.alpha||!inputs.background)return false;
+        for(auto sprite:{source,inputs.alpha})if(!native_sprite(sprite)||field(sprite,0x20)!=8||(field(sprite,0x18)&1))return false;
         int width=field(source,0x30),height=field(source,0x34),stride=field(source,0x2c);
         if(width<=0||height<=0||width>1024||height>1024||stride<width||field(inputs.alpha,0x30)<width||field(inputs.alpha,0x34)<height||field(inputs.alpha,0x2c)!=stride)return false;
         // The straight-alpha native loop traverses contiguous source bytes and
@@ -211,30 +209,27 @@ template<class Backend> class Adapter {
         area.right=area.left+width;area.bottom=area.top+height;
         auto background=find(inputs.background);if(!background)background=create(inputs.background,false);
         if(!background||background->format!=destination.format||background->width!=destination.width||background->height!=destination.height||field(inputs.background,0x40)!=field(destination.native,0x40))return false;
-        auto clip=mode?Rect{0,0,int(destination.width),int(destination.height)}:rect(static_cast<char*>(inputs.background)+0x44);
+        auto clip=mode?Rect{0,0,int(destination.width),int(destination.height)}:rect_value(c3x_native_access::clip(inputs.background));
         if(mode&&(area.left<0||area.top<0||area.right>int(destination.width)||area.bottom>int(destination.height)))return false;
         if(std::max({0,clip.left,area.left})>=std::min({int(destination.width),clip.right,area.right})||std::max({0,clip.top,area.top})>=std::min({int(destination.height),clip.bottom,area.bottom}))return true;
-        auto palette=inputs.palette?inputs.palette:*reinterpret_cast<void**>(static_cast<char*>(source)+0x10);
-        if(!palette){auto owner=*reinterpret_cast<void**>(module+0x70f48);if(owner)palette=*reinterpret_cast<void**>(static_cast<char*>(owner)+4);}
-        if(!palette)return false;
-        auto table=*static_cast<void***>(palette);unsigned colors[256]={};
+        auto palette=inputs.palette?inputs.palette:c3x_native_access::pointer(source,0x10);
+        if(!palette){palette=c3x_native_access::palette();}
+        if(!palette)return false;unsigned colors[256]={};
         if(mode){
-            for(unsigned n=0;n<256;++n){auto rgb=reinterpret_cast<unsigned char*(__thiscall*)(void*,unsigned)>(table[8])(palette,n);
-                if(!rgb)return false;colors[n]=(unsigned(rgb[0])<<16)|(unsigned(rgb[1])<<8)|rgb[2];}
+            for(unsigned n=0;n<256;++n){colors[n]=c3x_native_access::rgb(palette,n);}
         }else{
-            auto words=reinterpret_cast<unsigned short*(__thiscall*)(void*)>(table[destination.format==Format::rgb565?7:6])(palette);
+            auto words=c3x_native_access::colors(palette,destination.format==Format::rgb565);
             if(!words)return false;for(unsigned n=0;n<256;++n)colors[n]=words[n];
         }
         std::vector<unsigned> decoded(std::size_t(width)*height); // Allocate before borrowing either native source.
-        auto source_table=*static_cast<void***>(source),alpha_table=*static_cast<void***>(inputs.alpha);
-        auto pixels=reinterpret_cast<unsigned char*(__thiscall*)(void*)>(source_table[8])(source);
+        auto pixels=c3x_native_access::sprite_bytes(source);
         if(!pixels)return false;
-        auto alpha=reinterpret_cast<unsigned char*(__thiscall*)(void*)>(alpha_table[8])(inputs.alpha);
-        if(!alpha){reinterpret_cast<Release>(source_table[9])(source,1);return false;}
+        auto alpha=c3x_native_access::sprite_bytes(inputs.alpha);
+        if(!alpha){c3x_native_access::release_sprite(source);return false;}
         for(int y=0;y<height;++y)for(int x=0;x<width;++x){unsigned i=y*stride+x,index=pixels[i],weight=alpha[i];
             // These alpha programs key only 255, unlike ordinary sprite draw.
             decoded[std::size_t(y)*width+x]=index==255||weight==255?0xff000000u:colors[index]|(weight<<24);}
-        reinterpret_cast<Release>(alpha_table[9])(inputs.alpha,1);reinterpret_cast<Release>(source_table[9])(source,1);
+        c3x_native_access::release_sprite(inputs.alpha);c3x_native_access::release_sprite(source);
         if(!background->owned&&!refresh(*background))return false;
         if(background->detail&&!full_color(destination))return false;
         if(!upload_sprite(decoded,unsigned(width),unsigned(height)))return false;
@@ -268,8 +263,7 @@ template<class Backend> class Adapter {
     }
     bool draw_sprite(Image& destination,void* source,void const* palette,void const* target,void const* lookup=nullptr,Image* background=nullptr,int const* native_scale=nullptr,int style=0,unsigned style_color=0,float opacity=1){
         if(!source||!target)return false;
-        auto module=reinterpret_cast<char*>(GetModuleHandleA("jgl.dll"));
-        if(!module||*static_cast<void***>(source)!=reinterpret_cast<void**>(module+0x68440))return false;
+        if(!native_sprite(source))return false;
         // Audited slot 17 ordinary and row-trimmed 8-bit sources, plus ordinary
         // 16-bit sources. Positive scaling follows each native source program;
         // mirrored sources and unsafe trimmed edges retain native ownership.
@@ -296,11 +290,11 @@ template<class Backend> class Adapter {
         if(style==3&&destination.format!=Format::rgb555)return false;
         if(background&&(bits!=8||trimmed||destination.format!=Format::rgb555))return false;
         if((bits!=8&&bits!=16)||(bits==16&&trimmed)||w<1||h<1||w>1024||h>1024||(!trimmed&&stride<w))return false;
-        auto rows=trimmed?*reinterpret_cast<unsigned char**>(static_cast<char*>(source)+0x1c):nullptr;
+        auto rows=trimmed?c3x_native_access::rows(source):nullptr;
         if(trimmed&&!rows)return false;
         if(trimmed)for(int y=0;y<h;++y)if(unsigned(rows[y*4])+rows[y*4+1]>unsigned(w))return false;
-        int denominator=*reinterpret_cast<int*>(module+0x6c104);
-        int scale_x=*reinterpret_cast<int*>(module+0x6c0fc),scale_y=*reinterpret_cast<int*>(module+0x6c100);
+        int denominator=c3x_native_access::scale(2);
+        int scale_x=c3x_native_access::scale(0),scale_y=c3x_native_access::scale(1);
         if(background&&!native_scale){
             if(denominator<=0||denominator>32767||scale_x==INT_MIN||scale_y==INT_MIN)return false;
             scale_x=std::abs(scale_x);scale_y=std::abs(scale_y);
@@ -317,15 +311,15 @@ template<class Backend> class Adapter {
         if(bits==16&&!(key&0x80000000u)){
             // JGL resolves this key through the destination palette and mutates
             // the source descriptor before drawing, even for its scaled no-op.
-            auto selected=*reinterpret_cast<void**>(static_cast<char*>(destination.native)+0x7c);
-            if(!selected){auto owner=*reinterpret_cast<void**>(module+0x70f48);if(owner)selected=*reinterpret_cast<void**>(static_cast<char*>(owner)+4);}
-            if(selected){auto table=*static_cast<void***>(selected);
-                auto words=reinterpret_cast<unsigned short const*(__thiscall*)(void*)>(table[destination.format==Format::rgb565?7:6])(selected);
+            auto selected=c3x_native_access::pointer(destination.native,0x7c);
+            if(!selected){selected=c3x_native_access::palette();}
+            if(selected){
+                auto words=c3x_native_access::colors(selected,destination.format==Format::rgb565);
                 if(!words)return false;key=words[key&255];}
         }
         // The verified native 16-bit helper deliberately does not draw scaled
         // sprites. Preserve that behavior without reading a resident destination.
-        if(bits==16&&scaled){*reinterpret_cast<unsigned*>(static_cast<char*>(source)+0x28)=key;++counters.translated;return true;}
+        if(bits==16&&scaled){c3x_native_access::set_field(source,0x28,key);++counters.translated;return true;}
         int output_width=w,output_height=h,offset_x=0,offset_y=0;
         std::uint64_t step_x=65536,step_y=65536;
         if(scaled||native_scale){
@@ -344,7 +338,7 @@ template<class Backend> class Adapter {
         if(std::int64_t(area.left)+offset_x+output_width>INT_MAX||std::int64_t(area.top)+offset_y+output_height>INT_MAX)return false;
         area.left+=offset_x;area.top+=offset_y;
         area.right=area.left+output_width;area.bottom=area.top+output_height;
-        auto clip=rect(static_cast<char*>(background?background->native:destination.native)+0x44);
+        auto clip=rect_value(c3x_native_access::clip(background?background->native:destination.native));
         std::uint64_t native_row_step=0;
         if(native_scale){
             // Slot 34 clips the destination first, then restarts at source byte
@@ -362,22 +356,20 @@ template<class Backend> class Adapter {
         }
         if(std::max({0,area.left,clip.left})>=std::min({int(destination.width),area.right,clip.right})||
            std::max({0,area.top,clip.top})>=std::min({int(destination.height),area.bottom,clip.bottom})){
-            if(bits==16||trimmed)*reinterpret_cast<unsigned*>(static_cast<char*>(source)+0x28)=trimmed?key&255:key;return true;}
+            if(bits==16||trimmed)c3x_native_access::set_field(source,0x28,trimmed?key&255:key);return true;}
         unsigned short const* colors=nullptr;
         if(bits==8){
-            if(!palette)palette=*reinterpret_cast<void**>(static_cast<char*>(source)+0x10);
-            if(!palette){auto owner=*reinterpret_cast<void**>(module+0x70f48);if(owner)palette=*reinterpret_cast<void**>(static_cast<char*>(owner)+4);}
+            if(!palette)palette=c3x_native_access::pointer(source,0x10);
+            if(!palette){palette=c3x_native_access::palette();}
             if(!palette)return false;
-            auto table=*static_cast<void* const* const*>(palette);
-            colors=reinterpret_cast<unsigned short const*(__thiscall*)(void const*)>(table[destination.format==Format::rgb565?7:6])(palette);
+            colors=c3x_native_access::colors(palette,destination.format==Format::rgb565);
             if(!colors)return false;
         }
         if(style==2)style_color=!trimmed&&(style_color&0x80000000u)?style_color&65535:colors[style_color&255];
         // This is CPU source preparation, as for palette expansion/decompression;
         // composition still targets native/full-color GPU images exclusively.
         std::vector<std::uint32_t> decoded(std::size_t(output_width)*output_height);
-        auto table=*static_cast<void***>(source);
-        auto pixels=reinterpret_cast<unsigned char*(__thiscall*)(void*)>(table[8])(source);
+        auto pixels=c3x_native_access::sprite_bytes(source);
         if(!pixels)return false;
         unsigned stream_end=0;
         if(trimmed)for(int y=0;y<h;++y)stream_end=std::max(stream_end,(unsigned(rows[y*4+2])|(unsigned(rows[y*4+3])<<8))+rows[y*4+1]);
@@ -415,7 +407,7 @@ template<class Backend> class Adapter {
                 decoded[std::size_t(y)*output_width+x]=background?(c<224?65536u|colors[c]:c==255?0xffffffffu:c<240?c-209:c-240):lookup?c:bits==8?(c<254?65536u|colors[c]:0u):(c!=(key&65535)?65536u|c:0u);
             }
         }
-        reinterpret_cast<void(__thiscall*)(void*,int)>(table[9])(source,1);
+        c3x_native_access::release_sprite(source);
         if(!valid_source)return false;
         // Source/palette bytes, including retained-pointer edits, prove reuse.
         if(!upload_sprite(decoded,unsigned(output_width),unsigned(output_height)))return false;
@@ -433,7 +425,7 @@ template<class Backend> class Adapter {
             Command command={Kind::native_lookup,destination.gpu,lookup_image,area,clip,0,0,background||style==3?32u:0u,background?background->gpu:destination.gpu,destination.detail,background?background->detail:destination.detail};
             command.program=sprite_image;if(!gpu.submit(&command,1))return false;
         }else if(!gpu.submit(commands,count))return false;
-        if(bits==16||trimmed)*reinterpret_cast<unsigned*>(static_cast<char*>(source)+0x28)=trimmed?key&255:key;
+        if(bits==16||trimmed)c3x_native_access::set_field(source,0x28,trimmed?key&255:key);
         destination.dirty=true;++counters.translated;return true;
     }
     void cpu_ownership(Image& image,int operation=0){
@@ -452,11 +444,11 @@ template<class Backend> class Adapter {
             std::vector<std::uint32_t> words(std::size_t(image.width)*image.height);
             if(!gpu.readback(image.gpu,words.data(),words.size()))
                 throw std::runtime_error("cannot read current GPU image");
-            GdiFlush();auto bits=reinterpret_cast<Get>(get_bits)(image.native);
+            GdiFlush();auto bits=c3x_native_access::words(image.native,get_bits,true);
             if(!bits)throw std::runtime_error("cannot restore native image ownership");
             auto stride=field(image.native,0x40);
             for(unsigned y=0;y<image.height;++y)for(unsigned x=0;x<image.width;++x)bits[y*stride+x]=std::uint16_t(words[y*image.width+x]);
-            reinterpret_cast<Release>(release_bits)(image.native,1);
+            c3x_native_access::release_words(image.native,release_bits);
             ++counters.readbacks;counters.readback_bytes+=words.size()*4;image.dirty=false;
             // Reestablish CPU-upload revision validity only on its next source use.
             image.cpu_uploaded=false;
@@ -589,13 +581,12 @@ public:
             if(native_sprite(source)&&!field(source,0x14))return 0;
             if(destination&&destination->owned&&draw_sprite(*destination,source,source_rect,target_rect))return 1;
             if(destination&&destination->owned&&destination->width>=640&&destination->height>=480&&sprite_rejection_reports++<8){
-                auto module=reinterpret_cast<char*>(GetModuleHandleA("jgl.dll"));
-                bool known=module&&source&&*static_cast<void***>(source)==reinterpret_cast<void**>(module+0x68440);
+                        bool known=native_sprite(source);
                 char line[320];std::snprintf(line,sizeof(line),
                     "[C3X renderer] stage=native-sprite-fallback known=%u bits=%d size=%dx%d stride=%d flags=%d pixels=%u scale=%d,%d,%d\n",
                     unsigned(known),known?field(source,0x20):0,known?field(source,0x30):0,known?field(source,0x34):0,
                     known?field(source,0x2c):0,known?field(source,0x18):0,unsigned(known&&field(source,0x14)!=0),
-                    module?*reinterpret_cast<int*>(module+0x6c0fc):0,module?*reinterpret_cast<int*>(module+0x6c100):0,module?*reinterpret_cast<int*>(module+0x6c104):0);
+                    c3x_native_access::scale(0),c3x_native_access::scale(1),c3x_native_access::scale(2));
                 OutputDebugStringA(line);
             }
             if(destination)cpu_ownership(*destination,op);++counters.fallbacks;return 0;
@@ -604,18 +595,17 @@ public:
         auto fallback=[&](){if(destination)cpu_ownership(*destination,op);auto s=find(source);if(s&&s!=destination)cpu_ownership(*s,op);++counters.fallbacks;return 0;};
         if(!destination||!destination->owned)return fallback();
         Image* input=nullptr;
-        Command command={Kind::fill,destination->gpu,0,{},rect(static_cast<char*>(object)+0x44),0,0,color&0xffff};
+        Command command={Kind::fill,destination->gpu,0,{},rect_value(c3x_native_access::clip(object)),0,0,color&0xffff};
         command.area=target_rect?rect(target_rect):Rect{0,0,int(destination->width),int(destination->height)};
         if(op==C3X_NATIVE_FILL||op==C3X_NATIVE_TINT||op==C3X_NATIVE_LINE){
             // Both native fill helpers resolve a nonnegative index through the
             // current palette. Negative values are already packed native words.
             if(!(color&0x80000000u)){
-                auto palette=*reinterpret_cast<void**>(static_cast<char*>(object)+0x7c);
-                if(!palette){auto module=reinterpret_cast<char*>(GetModuleHandleA("jgl.dll"));
-                    if(!module)return fallback();auto owner=*reinterpret_cast<void**>(module+0x70f48);
-                    if(owner)palette=*reinterpret_cast<void**>(static_cast<char*>(owner)+4);}
-                if(palette){auto table=*static_cast<void***>(palette);
-                    auto colors=reinterpret_cast<unsigned short const*(__thiscall*)(void*)>(table[destination->format==Format::rgb565?7:6])(palette);
+                auto palette=c3x_native_access::pointer(object,0x7c);
+                if(!palette){
+                    palette=c3x_native_access::palette();}
+                if(palette){
+                    auto colors=c3x_native_access::colors(palette,destination->format==Format::rgb565);
                     if(!colors)return fallback();command.color=colors[color&255];}
             }
             if(op==C3X_NATIVE_TINT){
@@ -642,17 +632,16 @@ public:
                 // its ordered native program; StretchBlt overlap is separate.
                 if(s==destination)return fallback();
                 unsigned key=unsigned(field(source,0x4d0));
-                auto module=reinterpret_cast<char*>(GetModuleHandleA("jgl.dll"));if(!module)return fallback();
-                if(!(key&0x80000000u)){
-                    auto palette=*reinterpret_cast<void**>(static_cast<char*>(object)+0x7c);
-                    if(!palette){auto owner=*reinterpret_cast<void**>(module+0x70f48);if(owner)palette=*reinterpret_cast<void**>(static_cast<char*>(owner)+4);}
-                    if(palette){auto table=*static_cast<void***>(palette);
-                        auto colors=reinterpret_cast<unsigned short const*(__thiscall*)(void*)>(table[destination->format==Format::rgb565?7:6])(palette);
+                        if(!(key&0x80000000u)){
+                    auto palette=c3x_native_access::pointer(object,0x7c);
+                    if(!palette){palette=c3x_native_access::palette();}
+                    if(palette){
+                        auto colors=c3x_native_access::colors(palette,destination->format==Format::rgb565);
                         if(!colors)return fallback();key=colors[key&255];}
                     // Image::draw uses a temporary sprite descriptor; the
                     // palette-key mutation must not change the source Image.
                 }
-                int scale=*reinterpret_cast<int*>(module+0x6c104),sx=*reinterpret_cast<int*>(module+0x6c0fc),sy=*reinterpret_cast<int*>(module+0x6c100);
+                int scale=c3x_native_access::scale(2),sx=c3x_native_access::scale(0),sy=c3x_native_access::scale(1);
                 if(scale<=0||sx<=0||sy<=0)return fallback();
                 if(sx!=scale||sy!=scale){++counters.translated;return 1;} // Native 16-bit scaled no-op.
                 auto right=std::int64_t(command.area.left)+s->width,bottom=std::int64_t(command.area.top)+s->height;
@@ -667,7 +656,7 @@ public:
                 command.kind=Kind::copy;command.source_x=r.left;command.source_y=r.top;
                 if(std::int64_t(r.right)-r.left!=std::int64_t(command.area.right)-command.area.left||
                    std::int64_t(r.bottom)-r.top!=std::int64_t(command.area.bottom)-command.area.top){
-                    auto dc=*reinterpret_cast<HDC*>(static_cast<char*>(object)+0x4bc);
+                    auto dc=c3x_native_access::dc(object);
                     if(!dc||GetStretchBltMode(dc)!=BLACKONWHITE||GetMapMode(dc)!=MM_TEXT||GetGraphicsMode(dc)!=GM_COMPATIBLE||
                        r.left<0||r.top<0||r.right>int(s->width)||r.bottom>int(s->height)||
                        command.area.right<=command.area.left||command.area.bottom<=command.area.top||
@@ -712,7 +701,7 @@ public:
     bool insert_map(void* p,Id map,Rect area,int source_x,int source_y,int phase_x,int phase_y){
         if(GetCurrentThreadId()!=thread)throw std::runtime_error("native map adapter thread changed");
         if(!admit(p))return false;auto d=find(p);
-        Command c={Kind::quantize,d->gpu,map,area,rect(static_cast<char*>(p)+0x44),source_x,source_y,
+        Command c={Kind::quantize,d->gpu,map,area,rect_value(c3x_native_access::clip(p)),source_x,source_y,
             (unsigned(phase_x)&7u)|((unsigned(phase_y)&7u)<<3)};
         if(!full_color(*d))return false;
         Command commands[2]={c,c};commands[1].kind=Kind::copy;commands[1].destination=d->detail;commands[1].color=0;
@@ -725,7 +714,7 @@ public:
         if(!b||b->format!=d->format)return false;
         if(!b->owned&&!refresh(*b))return false;
         if(b->detail&&!full_color(*d))return false;
-        auto clip=rect(static_cast<char*>(target)+0x44);
+        auto clip=rect_value(c3x_native_access::clip(target));
         c3x_renderer_gpu_unit_v1 request={sizeof(request),ticket,std::int64_t(d->gpu),std::int64_t(b->gpu),std::int64_t(d->detail),std::int64_t(b->detail),{clip.left,clip.top,clip.right,clip.bottom},flags};
         gpu.flush();int result=draw(&unit,&request,bounds);
         if(result==C3X_RENDERER_RESULT_OK){d->dirty=true;++counters.translated;return true;}
@@ -736,7 +725,7 @@ public:
         if(GetCurrentThreadId()!=thread)throw std::runtime_error("tactical adapter thread changed");
         if(!admit(target))return false;auto d=find(target);
         if(!full_color(*d))return false;
-        auto clip=rect(static_cast<char*>(target)+0x44);
+        auto clip=rect_value(c3x_native_access::clip(target));
         c3x_renderer_gpu_unit_v1 request={sizeof(request),ticket,std::int64_t(d->gpu),std::int64_t(d->gpu),
             std::int64_t(d->detail),std::int64_t(d->detail),{clip.left,clip.top,clip.right,clip.bottom},0};
         gpu.flush();int result=draw(request);

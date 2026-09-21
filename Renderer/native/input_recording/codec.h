@@ -10,7 +10,7 @@
 
 namespace c3x_inputs {
 using Bytes=std::vector<unsigned char>;
-constexpr std::uint32_t protocol_version=8;
+constexpr std::uint32_t protocol_version=10;
 constexpr std::size_t payload_limit=16u*1024u*1024u;
 inline void require(bool condition,char const* message){if(!condition)throw std::runtime_error(message);}
 struct Writer {

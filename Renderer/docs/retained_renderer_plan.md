@@ -73,14 +73,14 @@ Both complete native and pressure/recovery runs pass with matching source/binary
 proof. `native/build/ambient-continuity-stage.json` records staging and rollback.
 Normal launches keep recording disabled. No INSTALL or game launch in this turn.
 
-**Next unfinished responsibility:** full captured scene/ambient input replay and
-remaining GPU/foreground composition cost. The old 80.788-second journal is only
-a byte-limited prefix and contains external map/pose pixels, not the scene inputs
-needed to regenerate them. Native lifetime decisions are now replayed (legacy
-version 2 assumes the owner thread; new version 3 records it), but full adapter,
-scene production, ambient graph and game scheduling are not. A 1 GiB VA reservation
-models capacity, not Civ III heap fragmentation. Preserve these distinctions;
-matching pixels and targeted regression passes do not certify live performance.
+**Next unfinished responsibility:** qualify the new input recorder against the
+live workload before further GPU/foreground composition optimization. Scene,
+ambient and native-owner inputs now re-enter production code, and visible Windows
+playback is implemented; see the [concise input handoff](input_recording_handoff.md)
+for the candidate and current evidence. The old 80.788-second live journal remains
+a byte-limited pixel-only prefix and cannot retroactively provide those inputs.
+A 1 GiB VA reservation models capacity, not Civ III heap fragmentation. Matching
+pixels and targeted regression passes do not certify live performance.
 Standard <33 ms p95 navigation and sustained live stability remain open. See
 [findings](live_usage_findings_20260920.md) and
 [validation](benchmark_workflow.md#recorded-native-composition).
@@ -621,9 +621,9 @@ prerequisite, using existing owners and production rendering paths:
 | Work package | Required exit | Current status |
 | --- | --- | --- |
 | Audit coverage and inspect time | Explicit missing input families, byte/time breakdown, every recorded composition display indexed; selected frame/second ranges reconstruct through strict replay | Implemented and tested on the saved live prefix; scope remains composition only |
-| Capture and replay consumed inputs | Versioned initialization/assets, scene/world, action/lifecycle, camera, native-adapter and ambient/presentation events drive the production owners; short positive and missing-input controls | Short controls cleanly reject missing clock/asset/unit/reset inputs; full 2240×1260 native fixture passes output witnesses and two replays with 519 identical composed images. Standard whole-world paging and 100 destination images also repeat exactly. Complete boundary coverage remains unfinished |
+| Capture and replay consumed inputs | Versioned initialization/assets, scene/world, action/lifecycle, camera, native-adapter and ambient/presentation events drive the production owners; short positive and missing-input controls | Native-owner protocol passes 12,930 calls and two 426-frame replays; short controls reject missing/altered inputs. Standard whole-world paging and 100 destination images also repeat exactly. Broader live coverage remains unqualified |
 | Sustain 600 seconds | Bounded asynchronous segmented storage, exact payload reuse, valid crash prefix, complete real-time ten-minute native workload and measured capture overhead | Real-time 600-second full-resolution capture closes cleanly: 680 MB, 92,130 calls, 10,200 presentations, 17 MiB peak queue and a declared 512 MiB VA reservation. Two exact-DLL replays match all 10,200 display fingerprints. Capture-off also passes; one matched comparison excludes the first 180 seconds in both arms for known compiler interference. Calibrated overhead and live-pressure qualification remain |
-| Establish forensic/performance controls | Deterministic logical-time frame oracles plus separately measured execution; seek agrees with full-prefix replay; pressure remains explicitly modeled | Pending complete input replay |
+| Establish forensic/performance controls | Deterministic logical-time frame oracles plus separately measured execution; seek agrees with full-prefix replay; pressure remains explicitly modeled | Forensic repeatability/seek and separate native-service measurements pass, including 1 GiB VA reservation. Earlier native consumption points remain constrained by recorded CPU inputs; live request-to-display equivalence is unfinished |
 | Freeze a representative corpus and choose architecture | One qualified user session, repeated baseline and per-cause latency/memory attribution choose the next M4 change | Pending automated qualification; do not request another manual capture yet |
 
 The separate development [input journal](../native/input_recording/README.md)
@@ -655,9 +655,26 @@ or concurrent capture explicitly. Eight semantic mutations reject cleanly with
 their expected diagnostics. The combined native/window fixture passes all native
 pixel checks and both process exits: 119 window samples align within 0.044 ms,
 and two replays match all 970 display fingerprints. Its 282.2 MiB minimum available
-VA remains above the earlier live 120 MiB envelope. Next: replay native
-adapter/navigation decisions, qualify window lifecycle and performance/pressure
-execution, and calibrate overhead. No new manual capture, staging or game launch yet.
+VA remains above the earlier live 120 MiB envelope.
+
+The input boundary now includes the actual native image/composition/navigation
+owners and root reset/configuration transactions. Copied external values replace
+JGL access only inside replay; production still uses the original dependencies.
+The fresh 2240×1260 fixture passes 12,930 calls and two exact 426-frame replays,
+including CPU-ownership output witnesses. Recorder identities survive both destroy
+notifications; replay dependency data retires with the image. Safety tests reject
+missing inputs before proxy dereference and preserve native leases if recording
+fails. No injected source or patch-table change is needed.
+
+Separate unpaced service measurements run actual production work, with explicit
+VA capacity reservations and no display-fingerprint/export overhead. Camera
+publication retains recorded consumption points; this cannot measure how a changed
+native caller would react to earlier completion. The one-command capture launcher
+collects/pins inputs, sampled window evidence, memory and logs and stops collectors
+automatically. Its parser, shared-path quoting and requested-stop test pass without
+a game launch. Capture admission remains closed pending the automated overhead
+and pressure gate. After that, compare one strategic live recording with its window
+evidence before accepting architecture changes as improvements to real gameplay.
 
 The final world-page check rejects changed scope/topology and responses issued
 before a newer publication, preserving owned metadata and retry position.
@@ -665,18 +682,19 @@ Thirteen portable controls pass. A fresh Standard capture passes six cold pixel
 oracles and two matching 100-frame replays (1,170 calls, 201 page returns).
 All three altered world range/scope/topology controls reject cleanly at the
 expected production acceptance check.
-The recorder/replay core is usable for development correctness experiments;
-the broader full-game validation contract above remains unfinished.
+The recorder/replay tooling supports the strategic capture checkpoint; the
+broader full-game fidelity/performance acceptance remains contingent on that evidence.
 
 The older v2/v3 writer remains limited to 512 MiB/180 seconds and snapshots
 external map/unit pixels. Its 80.788-second prefix uses 510.745 MiB; pixel-bearing
 records consume about 93.5% of storage. The linear ten-minute projection is
 3.70 GiB, including startup delays; it is not a guaranteed recording size. Simply
 increasing limits would preserve missing inputs and synchronous readback/file
-work. `--require-input-replay` correctly rejects this journal. Production native
-lifetime decisions replay separately; the complete adapter/ambient producers and
-presentation outcomes do not yet replay. New tools have not changed the staged
-DLL or installed bridge, and no game was launched for this work.
+work. `--require-input-replay` correctly rejects this journal. Its production native
+lifetime decisions replay separately; it cannot regenerate adapter/ambient
+producer inputs. The new input recorder is DLL-owned and does regenerate the
+tested producer paths; the installed injected bridge is unchanged.
+No game was launched for this work.
 
 Current evidence: `native/build/live-captures/20260921-130328-65f6bd/`
 contains `input-replay-readiness.json`, `display-timeline.jsonl` and

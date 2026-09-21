@@ -39,7 +39,7 @@ class CompositionOwner {
     void check_thread(){if(GetCurrentThreadId()!=thread)throw std::runtime_error("native composition caller changed");}
     void release_window(){c3x_renderer_gpu_present_v1 r={sizeof(r)};r.action=2;
         if(present(&r)!=C3X_RENDERER_RESULT_OK)throw std::runtime_error("native display handoff failed");}
-    static int field(void* p,unsigned offset){return *reinterpret_cast<int*>(static_cast<char*>(p)+offset);}
+    static int field(void* p,unsigned offset){return c3x_native_access::field(p,offset);}
 public:
     bool eligible(void* image,c3x_renderer_frame_v1 const& demand){
         return lifetime(C3X_NATIVE_MAP,image,0) && field(image,0x24)==16 && !field(image,0x4c4) && !field(image,0x4c8) &&
@@ -207,10 +207,10 @@ public:
                 adapter->operation(C3X_NATIVE_BITS,image,nullptr,nullptr,nullptr,0);return 0;
             }
             if(!source)throw std::runtime_error("native transfer has no Graphsy owner");
-            auto dc=*reinterpret_cast<HDC*>(static_cast<char*>(source)+0x138);
+            auto window=c3x_native_access::window(source);
             int width=field(image,0x38),height=field(image,0x3c);
             RECT rect=from?*static_cast<RECT const*>(from):RECT{0,0,width,height};
-            c3x_renderer_gpu_present_v1 r={sizeof(r)};r.ticket=frame.ticket;r.image=std::int64_t(id);r.window=WindowFromDC(dc);
+            c3x_renderer_gpu_present_v1 r={sizeof(r)};r.ticket=frame.ticket;r.image=std::int64_t(id);r.window=window;
             r.width=width;r.height=height;r.area[0]=rect.left;r.area[1]=rect.top;r.area[2]=rect.right;r.area[3]=rect.bottom;
             client->flush();auto result=present(&r);
             if(result==C3X_RENDERER_RESULT_OK)return 1;

@@ -108,12 +108,20 @@ public:
     void stop(Stop why){if(journal)journal->stop(why);}
     void finish(){if(journal)journal->finish(Stop::closed);}
 };
+struct ReplayExecution {
+    bool performance=false;int result=0;double service_ms=0;bool reused_adoption=false;
+    long long last_ticks=0,last_frequency=1;
+};
+inline ReplayExecution& replay_execution(){thread_local ReplayExecution state;return state;}
+template<class F>int measure_replay(F run){LARGE_INTEGER start={},end={},frequency={};QueryPerformanceFrequency(&frequency);QueryPerformanceCounter(&start);int result=run();QueryPerformanceCounter(&end);replay_execution().service_ms+=1000.*double(end.QuadPart-start.QuadPart)/double(frequency.QuadPart);return result;}
 struct ReplayClock {
     std::vector<std::pair<std::int64_t,std::int64_t>> values;std::size_t at=0;
     char const* failure=nullptr;
     // Missing diagnostic input must not throw through production clock callers.
     // Preserve their current values and reject at the replay entry boundary.
-    bool sample(long long& ticks,long long& frequency){if(at>=values.size()){failure="replay missing consumed clock input";return false;}
+    bool sample(long long& ticks,long long& frequency){
+        if(replay_execution().performance){auto& execution=replay_execution();if(!values.empty()){execution.last_ticks=values.front().first;execution.last_frequency=values.front().second;}ticks=execution.last_ticks;frequency=execution.last_frequency;at=values.size();return true;}
+        if(at>=values.size()){failure="replay missing consumed clock input";return false;}
         ticks=values[at].first;frequency=values[at++].second;require(ticks>=0&&frequency>0,"invalid replay clock");return true;}
 };
 inline ReplayClock*& replay_clock(){thread_local ReplayClock* clock=nullptr;return clock;}
@@ -121,9 +129,11 @@ inline Runtime& runtime(){static Runtime* service=new Runtime;return *service;}
 // Parent tokens distinguish native API calls from nested GPU/clock calls. The
 // timestamp belongs to input arrival, never asynchronous file completion.
 inline std::uint64_t& parent_token(){thread_local std::uint64_t parent=0;return parent;}
+inline bool& native_root(){thread_local bool value=false;return value;}
 struct Call {
     std::uint64_t id=0,parent=0;bool completed=false;
     template<class Encode>Call(Kind kind,std::uint32_t subtype,Encode encode){
+        if(native_root())return;
         auto& service=runtime();if(!parent_token())service.configuration();if(!service.begin_call())return;
         id=service.token();parent=parent_token();parent_token()=id;
         service.emit(kind,subtype,[&](Writer& out){out.u64(id);out.u64(parent);encode(out);});

@@ -4,13 +4,26 @@
 using namespace c3x_inputs;
 int main(int argc,char** argv){try{
     require(argc==4,"usage: mutate_inputs SOURCE NEW_DIRECTORY MUTATION");
-    std::string mode=argv[3];std::set<std::string> modes={"missing-clock","missing-asset","missing-unit","missing-reset","alter-visibility","alter-action","alter-cpu-write","alter-configuration","alter-world-range","alter-world-scope","alter-world-topology"};
+    std::string mode=argv[3];std::set<std::string> modes={"missing-native-input","missing-clock","missing-asset","missing-unit","missing-reset","alter-visibility","alter-action","alter-cpu-write","alter-configuration","alter-world-range","alter-world-scope","alter-world-topology"};
     require(modes.count(mode)!=0,"unknown mutation");
     // Offline transformation bursts are not paced by rendering. Give this test
     // tool a separate bounded queue; the live recorder keeps its 32 MiB limit.
     Limits mutation_limits;mutation_limits.queue_bytes=128u*1024u*1024u;
-    SegmentReader reader(argv[1]);Journal output(argv[2],reader.frequency,mutation_limits);Event event;bool changed=false;std::set<std::uint64_t> omitted;
+    SegmentReader reader(argv[1]);Journal output(argv[2],reader.frequency,mutation_limits);Event event;bool changed=false;std::set<std::uint64_t> omitted,native_calls;
     while(!reader.footer&&reader.next(event)){if(event.kind==Kind::footer)break;
+        if(!changed&&mode=="missing-native-input"){
+            if(event.kind==Kind::native_bridge){Reader in{event.payload};native_calls.insert(in.u64());}
+            if(event.kind==Kind::result){Reader in{event.payload};auto token=in.u64();
+                if(native_calls.erase(token)){auto result=in.u32(),count=in.u32();if(count){
+                    // Remove one dependency while preserving valid journal checksums
+                    // and all remaining native arguments and output witnesses.
+                    in.u32();in.u32();in.u32();auto full=in.u32();for(unsigned n=0;n<4;++n)in.u32();
+                    if(full){auto bytes=in.u32();in.available(bytes);in.at+=bytes;}
+                    Writer out;out.u64(token);out.u32(result);out.u32(count-1);out.reserve(event.payload.size()-in.at);
+                    out.bytes.insert(out.bytes.end(),event.payload.begin()+in.at,event.payload.end());event.payload=std::move(out.bytes);changed=true;
+                }}
+            }
+        }
         if(!changed&&mode.rfind("alter-world-",0)==0&&event.kind==Kind::world_page){
             Reader in{event.payload};Writer out;out.u64(in.u64());out.u64(in.u64());
             auto first=in.u32(),capacity=in.u32(),count=in.u32();c3x_renderer_camera_identity_v1 identity={};
@@ -53,7 +66,7 @@ int main(int argc,char** argv){try{
         if(mode=="missing-clock"&&!changed&&event.kind==Kind::visual&&event.flags==2){Reader in{event.payload};if(in.u64()){changed=true;continue;}}
         if(mode=="missing-unit"||mode=="missing-reset"){
             auto target=mode=="missing-unit"?Kind::unit:Kind::reset;
-            if(!changed&&event.kind==target){Reader in{event.payload};omitted.insert(in.u64());changed=true;continue;}
+            if(!changed&&(event.kind==target||(mode=="missing-reset"&&event.kind==Kind::native_bridge&&event.flags==6))){Reader in{event.payload};omitted.insert(in.u64());changed=true;continue;}
             if(!omitted.empty()&&event.kind!=Kind::manifest&&event.kind!=Kind::asset&&event.kind!=Kind::settings){
                 Reader in{event.payload};auto token=in.u64();
                 if(omitted.count(token))continue;

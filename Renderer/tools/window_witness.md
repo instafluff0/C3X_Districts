@@ -3,8 +3,8 @@
 `window_witness.cpp` is an optional **external** Windows helper. It targets one
 process's existing main window through Windows Graphics Capture. It neither
 injects nor creates a game presenter, and captures no desktop or other application
-window. The system capture border remains enabled. It is not wired into the game
-launcher and has not qualified the recorded-workload acceptance gate.
+window. The system capture border remains enabled. It is wired into the opt-in game capture launcher behind a matching-build
+admission receipt. This does not establish the complete live-workload fidelity gate.
 
 Build with `Renderer/tools/BUILD_WINDOW_WITNESS.bat`. It builds a 64-bit x64
 helper (using Windows emulation on the ARM VM); no renderer build, staging, installation
@@ -94,3 +94,9 @@ input journals separately store QPC frequency/origin and the UTC correlation
 bracket. The reviewer aligns the two without assuming frame numbers or input-call
 completion equal what Windows composed. Address limits follow Microsoft's
 [process memory limits](https://learn.microsoft.com/en-us/windows/win32/memory/memory-limits-for-windows-releases).
+
+The launcher requests an orderly stop by creating `stop.txt` in the observer
+directory. A successful requested stop is complete for the sampled interval, not
+proof of the full requested duration. The launcher parser/quoting/stop control
+passes against an owned test window with 13 samples; no game is launched by
+`test_capture_launcher.ps1`.

@@ -12,6 +12,8 @@ passes → resident native composition. Renderer-owned visual frames are impleme
 cheap general camera changes and broader compatible submission remain unfinished.
 [Execution rules](docs/autonomous_renderer_execution.md) are a short reference.
 Historical handoffs preserve evidence, not extra queues or current build identity.
+The [input recording handoff](docs/input_recording_handoff.md) describes the current
+recorder, visible Windows playback, measured controls and remaining qualification.
 
 The current C3X checkout is the implementation authority. Lab renders and tests
 that code by category; Integration runs the affected current-code checks. Fixed

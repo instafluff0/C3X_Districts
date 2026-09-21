@@ -177,6 +177,7 @@ int wmain(int argc,wchar_t** argv){
         metadata.close();std::ofstream timeline(out/"timeline.jsonl");require(bool(timeline),"witness timeline unavailable");session.StartCapture();
         auto begin=GetTickCount64(),next=begin,next_memory=begin;long long previous_source=0;std::set<unsigned> colors;std::set<std::pair<int,int>> extents;
         while(GetTickCount64()-begin<seconds*1000ull){
+            if(fs::exists(out/"stop.txt")){reason="requested";break;}
             DWORD current_pid=0;GetWindowThreadProcessId(target.window,&current_pid);if(!IsWindow(target.window)||current_pid!=target.pid){reason="window_closed";break;}
             if(self_test){auto elapsed=GetTickCount64()-begin;SetWindowPos(owned,nullptr,100,100,elapsed<2000?320:448,elapsed<2000?240:288,SWP_NOZORDER|SWP_NOACTIVATE);InvalidateRect(owned,nullptr,FALSE);}
             MSG message={};while(PeekMessageW(&message,nullptr,0,0,PM_REMOVE)){TranslateMessage(&message);DispatchMessageW(&message);}
@@ -200,7 +201,7 @@ int wmain(int argc,wchar_t** argv){
                 <<",\"target_foreground\":"<<(foreground_pid==target.pid?"true":"false")<<",\"bytes\":"<<length<<"}\n";
             timeline.flush();require(bool(timeline),"witness timeline write failed");previous_source=source_time;
         }
-        session.Close();pool.Close();complete=GetTickCount64()-begin>=seconds*1000ull;reason=complete?"duration":reason;
+        session.Close();pool.Close();complete=reason=="requested"||GetTickCount64()-begin>=seconds*1000ull;if(reason!="requested"&&complete)reason="duration";
         if(self_test)require(frames>=3&&colors.count(0xe6140a)&&colors.count(0x0a14e6)&&(seconds<3||extents.size()>=2),"window evidence failed motion/resize control");
         require(frames>0,"no window frames captured");
     }catch(hresult_error const& error){std::cerr<<"window capture HRESULT="<<std::hex<<unsigned(error.code())<<'\n';complete=false;reason="capture_error";}

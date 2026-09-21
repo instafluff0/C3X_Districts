@@ -28,7 +28,8 @@ struct InputInspection {
                 if(event.kind==Kind::visual&&event.flags==2){auto parent=payload.u64();require(!parent||pending.count(parent),"clock has missing parent");continue;}
                 auto token=payload.u64();
                 if(event.kind!=Kind::result){auto parent=payload.u64();require(token&&pending.size()<256&&!pending.count(token),"invalid input call token");
-                    bool display=(event.kind==Kind::visual&&event.flags==1)||
+                    bool display=(event.kind==Kind::native_bridge&&event.flags==1&&payload.u32()==C3X_NATIVE_IMAGE_PRESENT)||
+                        (event.kind==Kind::visual&&event.flags==1)||
                         (event.kind==Kind::presentation&&payload.u32()==0)||
                         (event.kind==Kind::native_snapshot&&event.flags==0&&payload.u32()==1);
                     pending.emplace(token,Open{event.kind,event.flags,event.ticks,parent,display});continue;}

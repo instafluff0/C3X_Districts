@@ -47,6 +47,7 @@
 #include "input_recording/canvas.h"
 #include "input_recording/pixel_delta.h"
 #include "input_recording/display.h"
+#include "input_recording/native_calls.h"
 #include "scroll_damage.h"
 #include "river_node_locality.h"
 #include "pixel_block_cache.h"
@@ -10649,13 +10650,13 @@ public:
             session?static_cast<long long>(session->visual_bytes()):0,session?static_cast<long long>(session->visual_nodes()):0,visual_ticks,visual_frequency};
         return C3X_RENDERER_RESULT_OK;
     }
-    int visual_frame(bool automatic=false){
+    int visual_frame(bool automatic=false,bool recorded_offer=false){
         c3x_inputs::Call input(c3x_inputs::Kind::visual,1,[&](auto& out){out.u32(automatic?1:0);});
         struct PendingInput {c3x_inputs::Call& input;~PendingInput(){if(!input.completed)input.result(C3X_RENDERER_RESULT_PENDING);}} pending_input{input};
         // Deterministic replay measures direct opportunities separately from
         // the blocked-UI delivery test. Production leaves this variable unset.
         char manual[8]={};
-        if(automatic&&GetEnvironmentVariableA("C3X_RENDERER_MANUAL_VISUAL",manual,sizeof(manual))&&
+        if(automatic&&!recorded_offer&&GetEnvironmentVariableA("C3X_RENDERER_MANUAL_VISUAL",manual,sizeof(manual))&&
             std::strcmp(manual,"1")==0)return C3X_RENDERER_RESULT_PENDING;
         LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
         // The owned cadence thread and native caller share the transaction
@@ -12943,7 +12944,7 @@ bool drain_native_composition(){
         // retained window must also survive reset/reload/config-off exactly.
         if(renderer_worker && renderer_worker->native_screen(nullptr)!=C3X_RENDERER_RESULT_OK)return false;
         return true;
-    }catch(std::exception const& e){OutputDebugStringA(e.what());return false;}
+    }catch(std::exception const& e){if(c3x_inputs::replay_assets().enabled)throw;OutputDebugStringA(e.what());return false;}
 }
 }
 
@@ -12952,7 +12953,7 @@ extern "C" __declspec(dllexport) c3x_renderer_u32 c3x_renderer_get_api_version(v
 }
 
 extern "C" __declspec(dllexport) int c3x_renderer_set_pack_path(char const * pack_path) {
-    c3x_inputs::Call input(c3x_inputs::Kind::configuration,1,[&](auto& out){out.string(pack_path,32768);});
+    c3x_inputs::NativeCall input(7,[&](auto& out){out.string(pack_path,32768);});
     if(!drain_native_composition())return input.result(C3X_RENDERER_RESULT_DEVICE_ERROR);
     int result = get_renderer_worker().configure_pack(pack_path);
     if (result != C3X_RENDERER_RESULT_OK)
@@ -12962,7 +12963,7 @@ extern "C" __declspec(dllexport) int c3x_renderer_set_pack_path(char const * pac
 
 extern "C" __declspec(dllexport) int c3x_renderer_set_definition_paths(
     char const * mod_root, char const * default_path, char const * scenario_path, char const * custom_path) {
-    c3x_inputs::Call input(c3x_inputs::Kind::configuration,2,[&](auto& out){out.string(mod_root,32768);out.string(default_path,32768);out.string(scenario_path,32768);out.string(custom_path,32768);});
+    c3x_inputs::NativeCall input(8,[&](auto& out){out.string(mod_root,32768);out.string(default_path,32768);out.string(scenario_path,32768);out.string(custom_path,32768);});
     if(!drain_native_composition())return input.result(C3X_RENDERER_RESULT_DEVICE_ERROR);
     int result = get_renderer_worker().configure_definitions(
         mod_root, default_path, scenario_path, custom_path);
@@ -13107,9 +13108,10 @@ extern "C" __declspec(dllexport) int c3x_renderer_blit(
     return renderer_worker->blit(*output, static_cast<HDC>(destination_hdc));
 }
 
+int& native_reset_outcome(){thread_local int value=0;return value;}
 extern "C" __declspec(dllexport) void c3x_renderer_reset(void) {
-    c3x_inputs::Call input(c3x_inputs::Kind::reset,0,[](auto&){});
-    bool drained=drain_native_composition();if(drained)destroy_renderer_worker();c3x_inputs::reset_canvas_capture();input.result(drained?1:0);
+    c3x_inputs::NativeCall input(6,[](auto&){});
+    bool drained=drain_native_composition();if(drained)destroy_renderer_worker();c3x_inputs::reset_canvas_capture();native_reset_outcome()=drained?1:0;input.result(native_reset_outcome());
 }
 
 #ifdef C3X_RENDERER_BENCHMARK_ORACLE
@@ -13253,7 +13255,15 @@ extern "C" __declspec(dllexport) int c3x_renderer_gpu_camera_poll_view(
     if(!view || view->version!=C3X_RENDERER_CAMERA_VIEW_VERSION || view->struct_size!=sizeof(*view))
         return C3X_RENDERER_RESULT_BAD_ARGUMENT;
     c3x_inputs::Call input(c3x_inputs::Kind::camera,3,[&](auto& out){out(ticket);});
-    try{int code=renderer_worker?renderer_worker->poll_gpu_camera_view(ticket,*view):C3X_RENDERER_RESULT_SUPERSEDED;
+    try{int code=C3X_RENDERER_RESULT_SUPERSEDED;auto access=c3x_native_access::provider();
+        int wanted=access?access->readiness(-999):-999;
+        if(c3x_inputs::replay_assets().enabled&&wanted==C3X_RENDERER_RESULT_PENDING)code=wanted;
+        else {auto deadline=GetTickCount64()+60000;do{
+            code=renderer_worker?renderer_worker->poll_gpu_camera_view(ticket,*view):C3X_RENDERER_RESULT_SUPERSEDED;
+            if(!c3x_inputs::replay_assets().enabled||wanted!=C3X_RENDERER_RESULT_OK||code!=C3X_RENDERER_RESULT_PENDING)break;
+            if(GetTickCount64()>=deadline)throw std::runtime_error("native replay camera readiness timeout");Sleep(1);
+        }while(true);}
+        if(access)access->readiness(code);
         return input.result(code,[&](auto& out){auto const& image=view->image;bool good=code==C3X_RENDERER_RESULT_OK;
             out(std::int64_t(good?image.ticket:0));out(std::int64_t(good?image.map_image:0));out(std::int64_t(good?image.session:0));c3x_inputs::gpu_witness(out,image,view->camera.output,code);c3x_inputs::adoption_witness(out,view->camera,code);if(good){out(view->pixel_phase_x);out(view->pixel_phase_y);}});}
     catch(...){return input.result(C3X_RENDERER_RESULT_ERROR,[](auto& out){out.u64(0);out.u64(0);out.u64(0);out.u32(0);out.u32(0);});}
@@ -13342,9 +13352,14 @@ int renderer_native_image_impl(int operation,void* image,void* source,void const
 }
 
 extern "C" __declspec(dllexport) int c3x_renderer_native_image(int operation,void* image,void* source,void const* from,void const* to,unsigned color){
+    c3x_inputs::NativeCall input(1,[&](auto& out){c3x_inputs::native_operation_input(out,operation,image,source,from,to,color);});
     auto token=c3x_recording::journal().native(c3x_recording::native_begin,operation,image,source,color);
     auto result=renderer_native_image_impl(operation,image,source,from,to,color);
     if(token)c3x_recording::event(c3x_recording::native_end,0,[&](auto& b){c3x_recording::u64(b,token);c3x_recording::u32(b,unsigned(result));});
+    input.result(result,[&](auto& out){if(operation==C3X_NATIVE_UNIT_DRAW&&to&&result==1)for(unsigned n=0;n<4;++n)out(static_cast<int const*>(to)[n]);});
+    // The lifetime notification and adapter destruction refer to the same
+    // object. Retire its recording identity only after both have consumed it.
+    if(operation==C3X_NATIVE_DESTROY){if(input.call.id)c3x_inputs::recorded_native_values().retire(c3x_inputs::native_id(image));c3x_inputs::runtime().retire(image);}
     return result;
 }
 
@@ -13362,6 +13377,7 @@ extern "C" __declspec(dllexport) int c3x_renderer_gpu_unit(c3x_renderer_unit_v1 
 
 // Pinned with the native hooks across renderer configuration/unload. Tracking
 // cannot render, request work, or infer that an older image has no CPU aliases.
+int& native_lifetime_outcome(){thread_local int value=0;return value;}
 extern "C" __declspec(dllexport) int c3x_renderer_native_lifetime(int operation,void* image,int context){
     static c3x_native_images::Lifetimes lifetimes;
     c3x_inputs::Call input(c3x_inputs::Kind::native_operation,1,[&](auto& out){out(std::int32_t(operation));out.u32(c3x_inputs::runtime().object(image));out(std::int32_t(context));out.u32(c3x_inputs::runtime().thread());});
@@ -13395,7 +13411,8 @@ extern "C" __declspec(dllexport) int c3x_renderer_native_lifetime(int operation,
         if(requests<=8||(requests%128)==0){char line[160];std::snprintf(line,sizeof(line),
             "[C3X renderer] stage=native-lifetime requests=%u eligible=%u accepted=%u\n",requests,unsigned(eligible),accepted);OutputDebugStringA(line);}
     }
-    input.result(int(eligible)|(int(revoked)<<1));if(operation==C3X_NATIVE_DESTROY)c3x_inputs::runtime().retire(image);
+    native_lifetime_outcome()=int(eligible)|(int(revoked)<<1);
+    input.result(native_lifetime_outcome());
     return eligible?1:0;
 }
 
@@ -13413,10 +13430,10 @@ int begin_native_gpu_camera(c3x_renderer_camera_request_v1 const* request,c3x_re
 bool ensure_native_composition(void* image){
     if(native_composition)return true;
     if(!c3x_renderer_native_lifetime(C3X_NATIVE_MAP,image,0))return false;
-    auto jgl=GetModuleHandleA("jgl.dll");if(!c3x_native_observation::verified_module(jgl))return false;
+    auto jgl=GetModuleHandleA("jgl.dll");bool replay=c3x_inputs::replay_assets().enabled.load();if(!replay&&!c3x_native_observation::verified_module(jgl))return false;
     auto base=reinterpret_cast<char*>(jgl);
     native_composition=new c3x_native_images::CompositionOwner(c3x_renderer_gpu_render,c3x_renderer_gpu_images,c3x_renderer_gpu_present,
-        c3x_renderer_gpu_unit,c3x_renderer_native_lifetime,base+0x1b70,base+0x1b90);
+        c3x_renderer_gpu_unit,c3x_renderer_native_lifetime,replay?nullptr:base+0x1b70,replay?nullptr:base+0x1b90);
     native_composition->set_tactical([](auto const& capture,auto const& target){return get_renderer_worker().draw_tactical(capture,target);});
     native_composition->set_camera(begin_native_gpu_camera,c3x_renderer_gpu_camera_poll_view,c3x_renderer_camera_cancel);
     return true;
@@ -13426,18 +13443,22 @@ extern "C" __declspec(dllexport) int c3x_renderer_native_camera_request(void* im
     c3x_renderer_output_v1 check={C3X_RENDERER_API_VERSION,sizeof(check)};
     if(!ticket || !request || request->version!=C3X_RENDERER_CAMERA_VIEW_VERSION || request->struct_size!=sizeof(*request) ||
         !valid_frame(request->frame,&check))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    c3x_inputs::NativeCall input(3,[&](auto& out){out.u32(c3x_inputs::native_id(image));c3x_inputs::native_request(out,request);});
+    auto finish=[&](int code){return input.result(code,[&](auto& out){out(std::int64_t(code==C3X_RENDERER_RESULT_PENDING?*ticket:0));});};
     try{
-        if(!ensure_native_composition(image))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
-        return native_composition->request_camera(image,*request,*ticket);
-    }catch(std::exception const& e){OutputDebugStringA(e.what());return C3X_RENDERER_RESULT_DEVICE_ERROR;}
+        if(!ensure_native_composition(image))return finish(C3X_RENDERER_RESULT_BAD_ARGUMENT);
+        return finish(native_composition->request_camera(image,*request,*ticket));
+    }catch(std::exception const& e){OutputDebugStringA(e.what());return finish(C3X_RENDERER_RESULT_DEVICE_ERROR);}
 }
 extern "C" __declspec(dllexport) int c3x_renderer_native_camera_poll(void* image,
     c3x_renderer_i64 ticket,c3x_renderer_gpu_camera_view_v1* view){
     if(!view || view->version!=C3X_RENDERER_CAMERA_VIEW_VERSION || view->struct_size!=sizeof(*view))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    c3x_inputs::NativeCall input(4,[&](auto& out){out.u32(c3x_inputs::native_id(image));out(ticket);});
+    auto finish=[&](int code){return input.result(code,[&](auto& out){c3x_inputs::adoption_witness(out,view->camera,code);});};
     try{
-        if(!native_composition)return C3X_RENDERER_RESULT_SUPERSEDED;
-        return native_composition->poll_camera(image,ticket,*view);
-    }catch(std::exception const& e){OutputDebugStringA(e.what());return C3X_RENDERER_RESULT_DEVICE_ERROR;}
+        if(!native_composition)return finish(C3X_RENDERER_RESULT_SUPERSEDED);
+        return finish(native_composition->poll_camera(image,ticket,*view));
+    }catch(std::exception const& e){OutputDebugStringA(e.what());return finish(C3X_RENDERER_RESULT_DEVICE_ERROR);}
 }
 extern "C" __declspec(dllexport) int c3x_renderer_native_navigation(int action,void* image,
     custom_renderer_native_view* view,c3x_renderer_camera_request_v1 const* request){
@@ -13445,22 +13466,26 @@ extern "C" __declspec(dllexport) int c3x_renderer_native_navigation(int action,v
     if(!view || action<C3X_NAV_REQUEST || action>C3X_NAV_DISCARD ||
         (action==C3X_NAV_REQUEST && (!request || request->version!=C3X_RENDERER_CAMERA_VIEW_VERSION ||
          request->struct_size!=sizeof(*request) || !valid_frame(request->frame,&check))))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    c3x_inputs::NativeCall input(5,[&](auto& out){out(action);out.u32(c3x_inputs::native_id(image));c3x_inputs::native_view(out,*view);c3x_inputs::native_request(out,request);});
+    auto finish=[&](int code){return input.result(code,[&](auto& out){c3x_inputs::native_view(out,*view);});};
     try{
-        if(action==C3X_NAV_REQUEST && !ensure_native_composition(image))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
-        if(!native_composition)return C3X_RENDERER_RESULT_SUPERSEDED;
-        return native_composition->navigate(action,image,*view,request);
-    }catch(std::exception const& e){OutputDebugStringA(e.what());return C3X_RENDERER_RESULT_DEVICE_ERROR;}
+        if(action==C3X_NAV_REQUEST && !ensure_native_composition(image))return finish(C3X_RENDERER_RESULT_BAD_ARGUMENT);
+        if(!native_composition)return finish(C3X_RENDERER_RESULT_SUPERSEDED);
+        return finish(native_composition->navigate(action,image,*view,request));
+    }catch(std::exception const& e){OutputDebugStringA(e.what());return finish(C3X_RENDERER_RESULT_DEVICE_ERROR);}
 }
 // The exact compatibility entry shares preparation/commit with nonblocking polls.
 extern "C" __declspec(dllexport) int c3x_renderer_native_map(int action,void* image,
     c3x_renderer_camera_request_v1 const* request,c3x_renderer_output_v1* output){
     if(action==C3X_NATIVE_MAP_PREPARE&&(!request||request->version!=C3X_RENDERER_CAMERA_VIEW_VERSION||
         request->struct_size!=sizeof(*request)||!valid_frame(request->frame,output)))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    c3x_inputs::NativeCall input(2,[&](auto& out){out(action);out.u32(c3x_inputs::native_id(image));c3x_inputs::native_request(out,request);});
+    auto finish=[&](int code){return input.result(code,[&](auto& out){c3x_inputs::output_witness(out,output?*output:c3x_renderer_output_v1{},action==C3X_NATIVE_MAP_PREPARE?code:0);});};
     try {
-        if(!native_composition && action==C3X_NATIVE_MAP_CANCEL)return C3X_RENDERER_RESULT_OK;
-        if(!native_composition && (action!=C3X_NATIVE_MAP_PREPARE || !ensure_native_composition(image)))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
-        return native_composition->map(action,image,request,output);
-    }catch(std::exception const& e){OutputDebugStringA(e.what());return C3X_RENDERER_RESULT_DEVICE_ERROR;}
+        if(!native_composition && action==C3X_NATIVE_MAP_CANCEL)return finish(C3X_RENDERER_RESULT_OK);
+        if(!native_composition && (action!=C3X_NATIVE_MAP_PREPARE || !ensure_native_composition(image)))return finish(C3X_RENDERER_RESULT_BAD_ARGUMENT);
+        return finish(native_composition->map(action,image,request,output));
+    }catch(std::exception const& e){OutputDebugStringA(e.what());return finish(C3X_RENDERER_RESULT_DEVICE_ERROR);}
 }
 
 // Native caller adoption includes the honest ambient sample clock. The older

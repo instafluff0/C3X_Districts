@@ -11,7 +11,7 @@ inline int replay_world_callback(c3x_renderer_world_page_v1*){return C3X_RENDERE
 struct ReplayState {
     std::map<std::int64_t,std::int64_t> images,tickets,cameras;std::map<std::int64_t,int> formats;
     c3x_renderer_gpu_present_v1 displayed={};c3x_native_images::Lifetimes lifetimes;CanvasReplay canvases;
-    ScreenReplay native_pixels;bool allow_unknown=false;
+    ScreenReplay native_pixels;NativeValueStream native_values;bool allow_unknown=false;
     std::int64_t id(std::map<std::int64_t,std::int64_t> const& values,std::int64_t key){
         if(!key)return 0;auto it=values.find(key);if(it==values.end()){require(allow_unknown,"replay missing lifecycle identity");return INT64_MAX;}return it->second;
     }
@@ -24,7 +24,7 @@ struct ReplayState {
     }
     int call(Kind kind,unsigned subtype,Reader& in,Reader& expected,HWND window){
         auto token=in.u64();in.u64();require(expected.u64()==token,"replay call/result mismatch");int wanted=0;expected(wanted);allow_unknown=wanted!=C3X_RENDERER_RESULT_OK&&wanted!=C3X_RENDERER_RESULT_PENDING;
-        int actual=C3X_RENDERER_RESULT_ERROR;
+        int actual=C3X_RENDERER_RESULT_ERROR;bool performance=replay_execution().performance;
         if(kind==Kind::configuration){
             if(subtype==1){bool present;auto path=in.string(32768,&present);actual=c3x_renderer_set_pack_path(present?path.c_str():nullptr);}
             else if(subtype==2){bool present[4]={};std::string paths[4];for(unsigned n=0;n<4;++n)paths[n]=in.string(32768,&present[n]);
@@ -42,9 +42,48 @@ struct ReplayState {
             else if(subtype==2)actual=c3x_renderer_render_view(&request,&output);
             else throw std::runtime_error("unknown scene input");
             if(subtype==1||subtype==2)check_output(expected,output,actual);
+        }else if(kind==Kind::native_bridge){
+            NativeValuesProvider native;native.replay=true;native.target=window;native.values=native_values.decode(expected);
+            // Reconstruct external GDI/input storage outside production timing.
+            for(auto const& entry:native.values){auto type=std::get<0>(entry.first);auto object=NativeOperationInput::object(std::get<1>(entry.first));if(type==NativeValuesProvider::context)native.dc(object);else if(type==NativeValuesProvider::write_words)native.words(object,nullptr,true);}
+            struct Scope {c3x_native_access::Provider* prior=c3x_native_access::provider();Scope(NativeValuesProvider& p){c3x_native_access::provider()=&p;}~Scope(){c3x_native_access::provider()=prior;}} scope(native);
+            if(subtype==1){NativeOperationInput operation;operation.decode(in);
+                if(operation.operation==C3X_NATIVE_IMAGE_PRESENT){auto w=native.field(operation.image,0x38),h=native.field(operation.image,0x3c);require(w>0&&w<=2240&&h>0&&h<=1260,"native presentation extent");SetWindowPos(window,nullptr,0,0,w,h,SWP_NOZORDER|SWP_NOACTIVATE);}
+                actual=measure_replay([&]{return c3x_renderer_native_image(operation.operation,operation.image,operation.source,operation.from,operation.to,operation.color);});
+                if(operation.operation==C3X_NATIVE_DESTROY)native_values.retire(unsigned(reinterpret_cast<std::uintptr_t>(operation.image)));
+                if(operation.operation==C3X_NATIVE_UNIT_DRAW&&operation.to&&wanted==1)for(auto n:operation.b){auto old=expected.u32();if(!performance)require(std::uint32_t(n)==old,"native unit bounds differ");}
+            }else if(subtype==2){int action=0;in(action);auto image=NativeOperationInput::object(in.u32());Frame owned;c3x_renderer_camera_request_v1 request={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(request)};bool present=in.u32()!=0;
+                if(present){c3x_renderer_camera_identity_v1_fields(in,request.identity);frame(in,owned);request.frame=&owned.value;}
+                c3x_renderer_output_v1 output={C3X_RENDERER_API_VERSION,sizeof(output)};
+                actual=measure_replay([&]{return c3x_renderer_native_map(action,image,present?&request:nullptr,action==C3X_NATIVE_MAP_PREPARE?&output:nullptr);});
+
+                if(performance)expected.at=expected.bytes.size();else check_output(expected,output,action==C3X_NATIVE_MAP_PREPARE?actual:0);
+            }else if(subtype==6){actual=measure_replay([&]{c3x_renderer_reset();return native_reset_outcome();});images.clear();tickets.clear();cameras.clear();formats.clear();displayed={};canvases.reset();native_pixels={};
+            }else if(subtype==7){bool present;auto path=in.string(32768,&present);actual=measure_replay([&]{return c3x_renderer_set_pack_path(present?path.c_str():nullptr);});images.clear();tickets.clear();cameras.clear();
+            }else if(subtype==8){bool present[4]={};std::string paths[4];for(unsigned n=0;n<4;++n)paths[n]=in.string(32768,&present[n]);actual=measure_replay([&]{return c3x_renderer_set_definition_paths(present[0]?paths[0].c_str():nullptr,present[1]?paths[1].c_str():nullptr,present[2]?paths[2].c_str():nullptr,present[3]?paths[3].c_str():nullptr);});images.clear();tickets.clear();cameras.clear();
+            }else if(subtype==3||subtype==5){int action=0;if(subtype==5)in(action);auto image=NativeOperationInput::object(in.u32());custom_renderer_native_view native_view_value={};if(subtype==5)native_view(in,native_view_value);
+                Frame owned;c3x_renderer_camera_request_v1 request={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(request)};bool present=in.u32()!=0;
+                if(present){c3x_renderer_camera_identity_v1_fields(in,request.identity);frame(in,owned);request.frame=&owned.value;}
+                if(subtype==3){c3x_renderer_i64 ticket=0;actual=measure_replay([&]{return c3x_renderer_native_camera_request(image,present?&request:nullptr,&ticket);});auto old=std::int64_t(expected.u64());if(old)cameras[old]=ticket;}
+                else {
+                    actual=measure_replay([&]{auto deadline=GetTickCount64()+60000;do{
+                        actual=c3x_renderer_native_navigation(action,image,&native_view_value,present?&request:nullptr);
+                        if(!performance||action!=C3X_NAV_POLL||wanted!=C3X_RENDERER_RESULT_OK||actual!=C3X_RENDERER_RESULT_PENDING)break;
+                        require(GetTickCount64()<deadline,"performance native navigation timeout");Sleep(1);
+                    }while(true);return actual;});
+                    Writer value;native_view(value,native_view_value);expected.available(value.bytes.size());if(!performance)require(std::equal(value.bytes.begin(),value.bytes.end(),expected.bytes.begin()+expected.at),"native navigation adoption differs");expected.at+=value.bytes.size();
+                }
+            }else if(subtype==4){auto image=NativeOperationInput::object(in.u32());auto ticket=id(cameras,std::int64_t(in.u64()));c3x_renderer_gpu_camera_view_v1 view={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(view)};
+                actual=measure_replay([&]{auto deadline=GetTickCount64()+60000;do{actual=c3x_renderer_native_camera_poll(image,ticket,&view);
+                    if(!performance||wanted!=C3X_RENDERER_RESULT_OK||actual!=C3X_RENDERER_RESULT_PENDING)break;
+                    require(GetTickCount64()<deadline,"performance native camera timeout");Sleep(1);
+                }while(true);return actual;});
+                if(performance)expected.at=expected.bytes.size();else check_adoption(expected,view.camera,actual);
+            }else throw std::runtime_error("unsupported native bridge input");
         }else if(kind==Kind::native_operation){
-            require(subtype==1,"unsupported native input operation");int operation=0,context=0;in(operation);auto object=in.u32();in(context);auto thread=in.u32();require(thread&&thread<=64,"invalid native input thread");bool revoked=false;
-            auto eligible=lifetimes.observe(operation,reinterpret_cast<void*>(std::uintptr_t(object)),context,thread,&revoked);actual=int(eligible)|(int(revoked)<<1);
+            require(subtype==1,"unsupported native input operation");int operation=0,context=0;in(operation);auto object=in.u32();in(context);auto thread=in.u32();require(thread&&thread<=64,"invalid native input thread");
+            auto invoke=[&]{c3x_renderer_native_lifetime(operation,NativeOperationInput::object(object),context);actual=native_lifetime_outcome();};
+            if(thread==1)invoke();else{std::thread other(invoke);other.join();}
         }else if(kind==Kind::native_snapshot&&subtype>=2&&subtype<=4){canvases.event(subtype,in);actual=1;
         }else if(kind==Kind::native_snapshot){
             require(subtype==0,"unknown native snapshot");auto present=in.u32();require(present<=1,"invalid native screen presence");c3x_native_images::ScreenSnapshot screen;
@@ -102,7 +141,7 @@ struct ReplayState {
             if(subtype==1){auto automatic=in.u32();require(automatic<=1,"invalid ambient offer");
                 // No clock consumed means this offer was rejected before work.
                 // Such decisions are evidence, not forced render durations.
-                actual=replay_clock()->values.empty()?C3X_RENDERER_RESULT_PENDING:c3x_renderer_gpu_visual_frame();
+                actual=measure_replay([&]{return performance?get_renderer_worker().visual_frame(automatic!=0,true):(replay_clock()->values.empty()?C3X_RENDERER_RESULT_PENDING:c3x_renderer_gpu_visual_frame());});
             }else if(subtype==3)actual=get_renderer_worker().visual_policy(in.u32());
             else if(subtype==4){auto ticks=c3x_renderer_visual_clock();require(std::uint64_t(ticks)==expected.u64(),"exported visual clock differs");actual=1;}
             else throw std::runtime_error("unknown visual input");
@@ -141,7 +180,10 @@ struct ReplayState {
                 if(subtype==10)check_output(expected,output,actual);else check_adoption(expected,view,actual);
             }else throw std::runtime_error("unsupported camera transition");
         }else throw std::runtime_error("unsupported production replay family");
-        in.done();expected.done();if(actual!=wanted)throw std::runtime_error("production replay return code differs: expected="+std::to_string(wanted)+" actual="+std::to_string(actual));return actual;
+        in.done();expected.done();replay_execution().result=actual;
+        bool variable=performance&&kind==Kind::visual&&subtype==1;
+        if(variable&&actual!=wanted)require((wanted==C3X_RENDERER_RESULT_OK||wanted==C3X_RENDERER_RESULT_PENDING||wanted==C3X_RENDERER_RESULT_SUPERSEDED)&&(actual==C3X_RENDERER_RESULT_OK||actual==C3X_RENDERER_RESULT_PENDING||actual==C3X_RENDERER_RESULT_SUPERSEDED),"performance replay producer failed");
+        if(actual!=wanted&&!variable)throw std::runtime_error("production replay return code differs: expected="+std::to_string(wanted)+" actual="+std::to_string(actual));return actual;
     }
     void write_frame(wchar_t const* path){
         std::vector<unsigned> pixels;unsigned width=0,height=0;
@@ -156,6 +198,7 @@ inline ReplayState& replay_state(){static ReplayState state;return state;}
 extern "C" __declspec(dllexport) int c3x_renderer_input_replay(
     unsigned char const* bytes,unsigned size,void* window,char* error,unsigned error_size){
     c3x_inputs::ReplayClock clock;
+    auto& execution=c3x_inputs::replay_execution();execution.service_ms=0;execution.result=0;execution.reused_adoption=false;
     try{
         c3x_inputs::require(bytes&&size<=2*c3x_inputs::payload_limit&&error&&error_size,"invalid replay envelope");
         c3x_inputs::require(!c3x_inputs::runtime().active(),"capture cannot run inside input replay");
@@ -169,7 +212,7 @@ extern "C" __declspec(dllexport) int c3x_renderer_input_replay(
         c3x_inputs::Reader payload{input},result{expected};
         c3x_inputs::replay_state().call(kind,subtype,payload,result,static_cast<HWND>(window));
         c3x_inputs::require(!clock.failure,clock.failure?clock.failure:"replay clock failure");
-        c3x_inputs::replay_assets().check();c3x_inputs::require(clock.at==clock.values.size(),"replay has unconsumed clock inputs");error[0]=0;return 1;
+        c3x_inputs::replay_assets().check();if(!execution.performance)c3x_inputs::require(clock.at==clock.values.size(),"replay has unconsumed clock inputs");error[0]=0;return 1;
     }catch(std::exception const& e){if(error&&error_size){std::snprintf(error,error_size,"%s",clock.failure?clock.failure:e.what());error[error_size-1]=0;}return 0;}
 }
 
@@ -193,4 +236,15 @@ extern "C" __declspec(dllexport) int c3x_renderer_input_replay_asset(unsigned ch
         c3x_inputs::require(bytes&&size<=65536,"invalid replay asset envelope");c3x_inputs::Bytes data(bytes,bytes+size);c3x_inputs::Reader in{data};std::string path;
         auto asset=c3x_inputs::asset_fields(in,path);in.done();c3x_inputs::replay_assets().add(std::move(path),asset);return 1;
     }catch(...){return 0;}
+}
+
+// A failed replay owns only proxy identities. Teardown never materializes pixels
+// into a native game surface that does not exist in this process.
+extern "C" __declspec(dllexport) void c3x_renderer_input_replay_shutdown(){
+    delete native_composition;native_composition=nullptr;destroy_renderer_worker();
+}
+
+extern "C" __declspec(dllexport) int c3x_renderer_input_replay_execution(unsigned performance,double* service_ms,int* result,unsigned* reused){
+    if(performance>1)return 0;auto& state=c3x_inputs::replay_execution();state.performance=performance!=0;
+    if(service_ms)*service_ms=state.service_ms;if(result)*result=state.result;if(reused)*reused=state.reused_adoption?1u:0u;return 1;
 }

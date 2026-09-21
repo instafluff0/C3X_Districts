@@ -1,5 +1,6 @@
 #pragma once
 #include "gpu_frame_api.h"
+#include "native_access.h"
 #include <vector>
 namespace c3x_native_images {
 // Snapshot a CPU-owned screen before map admission or after an ownership barrier.
@@ -12,20 +13,19 @@ struct ScreenSnapshot {
     std::vector<unsigned short> pixels;
     bool capture(void* image,void* graph,void const* requested){
         if(!image||!graph)return false;
-        auto field=[&](unsigned offset){return *reinterpret_cast<int*>(static_cast<char*>(image)+offset);};
+        auto field=[&](unsigned offset){return c3x_native_access::field(image,offset);};
         if(field(0x24)!=16)return false;
         width=field(0x38);height=field(0x3c);
         if(width<=0||height<=0||width>2240||height>1260)return false;
-        auto dc=*reinterpret_cast<HDC*>(static_cast<char*>(graph)+0x138);
-        window=WindowFromDC(dc);DWORD process=0;
+        window=c3x_native_access::window(graph);DWORD process=0;
         if(!window||GetWindowThreadProcessId(window,&process)!=GetCurrentThreadId()||process!=GetCurrentProcessId())return false;
         RECT client={};if(!GetClientRect(window,&client)||client.right!=width||client.bottom!=height)return false;
         area=requested?*static_cast<RECT const*>(requested):RECT{0,0,width,height};
         area.left=std::max(0L,area.left);area.top=std::max(0L,area.top);
         area.right=std::min(LONG(width),area.right);area.bottom=std::min(LONG(height),area.bottom);
         if(area.left>=area.right||area.top>=area.bottom)return false;
-        DIBSECTION dib={};auto bitmap=*reinterpret_cast<HBITMAP*>(static_cast<char*>(image)+0x4b4);
-        if(GetObject(bitmap,sizeof(dib),&dib)!=sizeof(dib)||!dib.dsBm.bmBits||dib.dsBm.bmBitsPixel!=16||
+        DIBSECTION dib={};
+        if(!c3x_native_access::dib(image,dib)||!dib.dsBm.bmBits||dib.dsBm.bmBitsPixel!=16||
            dib.dsBm.bmWidth!=width||dib.dsBm.bmHeight!=height||dib.dsBm.bmWidthBytes<width*2)return false;
         bool rgb565=false;
         if(dib.dsBmih.biCompression==BI_BITFIELDS){
@@ -38,12 +38,13 @@ struct ScreenSnapshot {
         // incrementing a lease counter. Read that same logical base directly;
         // invoking the public hook would incorrectly revoke lifetime evidence.
         // GetObject's DIB base alone does not preserve native row orientation.
-        auto bits=*reinterpret_cast<unsigned short const* const*>(static_cast<char*>(image)+0x4c0);
+        auto bits=c3x_native_access::words(image,nullptr);
         if(!bits)return false;
         int stride=field(0x40);
         if(stride<width)return false;
         for(int y=area.top;y<area.bottom;++y)
             std::memcpy(pixels.data()+std::size_t(y)*pitch+area.left,bits+std::size_t(y)*stride+area.left,(area.right-area.left)*2);
+        c3x_native_access::release_words(image,nullptr);
         return true;
     }
 };

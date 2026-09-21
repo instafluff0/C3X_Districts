@@ -20,13 +20,18 @@ An unchanged screen references its previous content; recording retains only bloc
 fingerprints. CPU unit canvases separately track native changes and renderer writes.
 Capture supports rectangular-clipped 16-bit RGB555/RGB565 and 32-bit DIBs with
 ordinary GDI translation. Unsupported transforms, complex clips or formats stop
-recording explicitly. This coverage envelope still needs validation against the
-complete native workload.
+recording explicitly. The full native fixture also exercises the production composition owner and
+image adapter, using copied metadata, private pixel leases, palette/sprite data,
+font/DC state, lookup tables and navigation fields. Native object IDs survive both
+lifetime notification and adapter destruction; only then are they retired.
+Consumed external values live in a separate replay provider, so proxy IDs are
+never dereferenced as game objects. Recording failure falls back to the original
+native dependency without duplicating a borrowed pixel lease.
 
 The writer has a 32 MiB queue charged by buffer capacity (including the in-flight
 write), at most two 16 MiB producer buffers, 128 MiB segments and an 8 GiB disk cap.
 CPU fallback capture adds one process-wide scratch DIB (at most approximately 10.8 MiB), bounded
-hash/identity tables, and small stream/metadata allocations. Replay may hold eight
+hash/identity tables, and small stream/metadata allocations. Replay may hold a bounded 96 MiB native dependency cache (retired on image destruction), eight
 CPU canvases and a native screen; its memory is separate from game recording.
 Serial CPU callers share IDs and the scratch budget. Concurrent CPU producers,
 section-backed DIBs and overlapping destination/background storage stop capture
@@ -46,7 +51,8 @@ frequency and predecessor sequence; events carry kind/subtype, sequence, arrival
 time, length and checksum. Call tokens pair input and result events; clock events
 refer to their consuming call. A per-second/presentation index contains 64-bit
 segment offsets. Seeking must rebuild the full prefix. The index alone is not a
-checkpoint. Protocol 8 adds an absolute QPC/UTC correlation bracket, owned exported
+checkpoint. Protocol 10 also records native owner calls and their explicit external
+dependencies; protocols 9/10 are incompatible with older tools. Protocol 8 added an absolute QPC/UTC correlation bracket, owned exported
 visual-clock queries and idle duration closure. It also includes CPU camera lifecycle, adopted-view witnesses, runtime
 control changes, native screen deltas, presentation caller ownership and exact GPU
 adoption sample/view witnesses. Older development protocols require
@@ -78,6 +84,13 @@ and missing interior segments still fail. The report retains `complete:false`.
 `--compare-candidate` explicitly permits a different DLL while preserving asset,
 input and output checks; reports disclose whether the binary matches the capture.
 `--trace NEW_FILE` enables a separate production trace for diagnosing divergence.
+`--watch` opens a visible window and paces calls against recorded input arrival.
+Every accepted presentation is retained; a slow player reports lag instead of
+skipping frames. Escape stops playback. Viewing is forensic and cannot be combined
+with performance mode. For captured game sessions, double-click
+`Renderer/PLAY_REPLAY.bat` on Windows and choose the session directory. It uses that
+session's frozen DLL and replay executable, verifies their receipt hashes, and
+requires the original local assets. Older pixel-only captures cannot use it.
 `--fingerprints NEW_FILE` reads each accepted retained display and stores its
 extent/identity and 128-bit BGRA content fingerprint, without writing full BMPs.
 This is replay-only oracle work, never capture overhead or a performance run.
@@ -137,11 +150,37 @@ The three valid-checksum world mutations (`alter-world-range`,
 that replay's `mutations-b/`. The offline mutator uses a separate bounded 128 MiB
 queue for unpaced file transformation; live recording remains limited to 32 MiB.
 
-The [coverage ledger](coverage.md) lists remaining gaps. Complete adapter decisions,
-rejected API paths, world/native failure fixtures, remaining asset-loader audit,
-window lifecycle and calibrated capture-on/off performance qualification remain required by
-`docs/recorded_renderer_workload.md`. Do not use this development protocol for
-another manual ten-minute capture or performance acceptance yet.
+The [coverage ledger](coverage.md) distinguishes capture-tool admission from
+complete live-game qualification. The native boundary now replays the actual
+composition/image/navigation/reset owners rather than their flattened GPU calls.
+The fresh 2240×1260 fixture records 12,930 calls, 949 native-owner calls, 678 clock
+samples and 426 presentation boundaries in 98.974 seconds (515.56 MB, 17.78 MB peak
+writer queue). Two exact-DLL replays pass all output witnesses and match every
+presentation fingerprint. Evidence: `native-bridge-native-20260921-d/` and
+`native-bridge-replay-20260921-d/` beneath `build/input-recording/`.
+The test also exposed and repaired recorder identity retirement between the two
+native destroy notifications; the original game path was unchanged.
+
+`python -m Renderer.native.measure_input_replay --capture DIRECTORY --dll DLL --out NEW_DIRECTORY`
+runs separate production-boundary measurements. Add `--compare-candidate` for an
+explicit changed DLL, `--reserve-mib N` for declared address-space capacity, and
+`--runs N` for repetitions. This mode disables display fingerprint/export work
+and times native production calls after reconstructing external inputs. Real
+worker readiness is awaited at the consuming boundary; old work durations are
+never slept. Earlier camera offers remain pending until the recorded consumption
+point because the required native CPU input snapshot does not exist earlier.
+Thus these are unpaced service-cost experiments, **not** a simulation of a faster
+game caller, original overlap, input-to-display latency or live FPS. Memory samples
+include replay storage; VA reservations do not reproduce heap fragmentation.
+Changed external input requirements reject instead of synthesizing unseen data.
+Forensic replay remains the independent correctness gate.
+
+The one-command [game capture](../../docs/live_usage_logging.md) collects inputs
+and correlated window evidence. Its admission receipt pins the tested DLL and
+helpers; a mismatch fails before game launch. The launcher parser, shared-path
+quoting and automatic collector stop pass against an owned test window (13 samples,
+no game launch). The first real session is still needed to calibrate live fidelity
+and co-resident pressure. Sampled window evidence never claims every physical frame.
 
 `record_gpu_frame --input-soak-seconds 30` adds a short wall-clock endurance
 segment to the actual native fixture; `600` runs the full duration. Combine with

@@ -9,6 +9,10 @@ $debugName = if ($arm) { 'dbgviewcli64a.exe' } else { 'dbgviewcli64.exe' }
 $debug = Join-Path $tools ('DebugView\' + $debugName)
 $present = Join-Path $tools 'PresentMon.exe'
 $dll = Join-Path $renderer 'bin\C3XRenderer.dll'
+$witness = Join-Path $renderer 'native\build\window-witness\window_witness.exe'
+$inspect = Join-Path $renderer 'native\build\input-recording\inspect_inputs.exe'
+$replay = Join-Path $renderer 'native\build\input-recording\replay_inputs.exe'
+$qualification = Join-Path $renderer 'native\build\input-recording\capture-ready.json'
 $conquests = $ConquestsDirectory
 if (-not $conquests) { $conquests = $env:C3X_RENDERER_CIV3_CONQUESTS }
 if (-not $conquests) {
@@ -62,12 +66,13 @@ if (-not $CheckOnly -and -not $elevated) {
 
 $debugProcess = $null
 $presentProcess = $null
+$witnessProcess = $null
 $gameProcess = $null
 $session = $null
 $saved = $null
 $result = 1
 try {
-    foreach ($file in @($game, $dll, $debug, $present)) {
+    foreach ($file in @($game, $dll, $debug, $present, $witness, $inspect, $replay)) {
         if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { throw "Required file is missing: $file" }
     }
     foreach ($tool in @($debug, $present)) {
@@ -75,6 +80,18 @@ try {
         $publisher = if ($tool -eq $debug) { 'Microsoft Corporation' } else { 'Intel Corporation' }
         if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notlike "*CN=$publisher,*") {
             throw "Capture tool signature could not be verified: $tool"
+        }
+    }
+    if (-not $NoReplayRecording) {
+        if (-not (Test-Path -LiteralPath $qualification -PathType Leaf)) { throw 'The input recorder has not passed its capture acceptance checks yet. No game was started.' }
+        $ready = Get-Content -LiteralPath $qualification -Raw | ConvertFrom-Json
+        if ($ready.status -ne 'pass' -or $ready.dll_sha256 -ne (Get-FileHash -LiteralPath $dll -Algorithm SHA256).Hash.ToLowerInvariant()) {
+            throw 'The staged renderer does not match the qualified capture build. No game was started.'
+        }
+        foreach ($pair in @(@($witness, $ready.window_witness_sha256), @($inspect, $ready.inspector_sha256), @($replay, $ready.replay_sha256))) {
+            if ($pair[1] -ne (Get-FileHash -LiteralPath $pair[0] -Algorithm SHA256).Hash.ToLowerInvariant()) {
+                throw 'A capture tool changed since validation. No game was started.'
+            }
         }
     }
     if ($CheckOnly) {
@@ -93,6 +110,10 @@ try {
     $session = Join-Path $env:TEMP ('C3XRendererCapture\' + $stamp)
     $saved = Join-Path $renderer ('native\build\live-captures\' + $stamp)
     New-Item -ItemType Directory -Path $session -Force | Out-Null
+    $gameHeader = [IO.File]::ReadAllBytes($game)
+    $peOffset = [BitConverter]::ToInt32($gameHeader, 60)
+    $largeAddressAware = ([BitConverter]::ToUInt16($gameHeader, $peOffset + 22) -band 32) -ne 0
+    $gameHeader = $null
     $metadata = [ordered]@{
         schema = 1; started_utc = [DateTime]::UtcNow.ToString('o')
         renderer_sha256 = (Get-FileHash -LiteralPath $dll -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -100,13 +121,18 @@ try {
         debugview_sha256 = (Get-FileHash -LiteralPath $debug -Algorithm SHA256).Hash.ToLowerInvariant()
         trace_level = 1; expensive_profiling = $false; limit_seconds = 900
         game_exit_code = $null; result = 'starting'
-        composition_recording = -not $NoReplayRecording
+        input_recording = -not $NoReplayRecording; window_recording = -not $NoReplayRecording
         capture_host_elevated = $elevated
         game_launch = 'CreateProcess with inherited diagnostic environment'
-        recording_scope = 'native GPU composition; external map/pose pixels; ownership observations'
-        recording_max_bytes = 536870912; recording_max_seconds = 180
-        recording_duration_anchor = 'first GPU composition session'
+        recording_scope = 'production renderer and native bridge inputs; correlated sampled window evidence'
+        recording_max_bytes = 8589934592; recording_max_seconds = 600
+        recording_duration_anchor = 'first successful GPU presentation'
         capture_fps_is_performance_baseline = $false
+        os_version = [Environment]::OSVersion.Version.ToString()
+        process_architecture = $env:PROCESSOR_ARCHITECTURE
+        logical_processors = [Environment]::ProcessorCount
+        game_large_address_aware = $largeAddressAware
+        video_controllers = @(Get-CimInstance Win32_VideoController | Select-Object Name, DriverVersion, AdapterRAM)
     }
     $metadata | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $session 'session.json') -Encoding UTF8
     $env:C3X_RENDERER_TRACE = '1'
@@ -117,9 +143,14 @@ try {
     # not require elevation or another process to remain attached.
     $env:C3X_RENDERER_TRACE_FILE = Join-Path $session 'renderer-runtime.log'
     $env:C3X_RENDERER_TRACE_MIB = '64'
-    # Recording adds explicit GPU readbacks for external map/pose inputs and
-    # selected pixel oracles. Its FPS is diagnostic, never a performance baseline.
-    $env:C3X_RENDERER_RECORD_FILE = if ($NoReplayRecording) { '' } else { Join-Path $session 'composition.c3xr' }
+    # Input and external-window recording compete for CPU/GPU resources.
+    # Its observed FPS is diagnostic, never a performance baseline.
+    $env:C3X_RENDERER_RECORD_FILE = ''
+    $env:C3X_RENDERER_INPUT_RECORD_DIR = if ($NoReplayRecording) { '' } else { Join-Path $session 'inputs' }
+    Copy-Item -LiteralPath $dll -Destination (Join-Path $session 'C3XRenderer.dll')
+    $replayTools = New-Item -ItemType Directory -Path (Join-Path $session 'replay-tools')
+    Copy-Item -LiteralPath $replay, $inspect -Destination $replayTools.FullName
+    Copy-Item -LiteralPath $qualification -Destination (Join-Path $session 'capture-build.json') -ErrorAction SilentlyContinue
 
     $debugArgs = @('--accepteula','--no-banner','--no-kernel','--process-filter','Civ3Conquests',
         '--duration','900','--max-lines','500000','--log',(Join-Path $session 'renderer.log'),'--log-limit','64')
@@ -146,30 +177,44 @@ try {
     }
 
     Write-Host ''
-    Write-Host 'Capture ready. Play for about 2-3 minutes:'
+    Write-Host 'Capture ready. Play normally for about ten minutes, then quit when convenient.'
     if (-not $NoReplayRecording) {
-        Write-Host 'Replay recording is ON. Extra capture work can make this run slower.'
-        Write-Host 'The recording starts with map composition, then stops at 3 minutes, 512 MiB, or low memory.'
-        Write-Host 'Startup ownership events are also captured. Ordinary logs continue afterward.'
+        Write-Host 'Inputs record for ten minutes after the first displayed map. Window samples and memory are captured too.'
+        Write-Host 'Include idle water/units, scrolling, camera jumps, movement, an interturn and opening/closing a city.'
+        Write-Host 'Recording overhead is measured separately; this run is diagnostic.'
     }
-    Write-Host '  1. Load your usual save; stay still with animated water/units for 20 seconds.'
-    Write-Host '  2. Scroll for 20 seconds, make several distant jumps, and switch selected units.'
-    Write-Host '  3. Open/close a city and select a worker. Then quit the game normally.'
-    Write-Host 'Leave this window open. Capture stops automatically after 15 minutes.'
+    Write-Host 'Leave this window open. Collectors stop at the recording boundary or after 15 minutes; the game can remain open.'
     $gameStart = New-Object System.Diagnostics.ProcessStartInfo
     $gameStart.FileName = $game
     $gameStart.WorkingDirectory = $conquests
     $gameStart.UseShellExecute = $false
     $gameProcess = [System.Diagnostics.Process]::Start($gameStart)
     $metadata.game_process_id = $gameProcess.Id
-    $gameProcess.WaitForExit()
-    $metadata.game_exit_code = $gameProcess.ExitCode
-    $metadata.result = 'game-exited'
+    $null = $gameProcess.Handle
+    if (-not $NoReplayRecording) {
+        $witnessArgs = @([string]$gameProcess.Id,(Join-Path $session 'window'), '900', '5', 'sampled-window-evidence')
+        $witnessProcess = Start-Process -FilePath $witness -ArgumentList (Quote-Arguments $witnessArgs) -PassThru `
+            -RedirectStandardOutput (Join-Path $session 'window.log') -RedirectStandardError (Join-Path $session 'window-errors.log')
+        $null = $witnessProcess.Handle
+    }
+    $deadline = [DateTime]::UtcNow.AddSeconds(900)
+    while (-not $gameProcess.HasExited -and [DateTime]::UtcNow -lt $deadline) {
+        if (-not $NoReplayRecording -and (Test-Path -LiteralPath (Join-Path $session 'inputs\finished.json'))) { break }
+        Start-Sleep -Milliseconds 250
+    }
+    if ($gameProcess.HasExited) { $gameProcess.WaitForExit(); $metadata.game_exit_code = $gameProcess.ExitCode }
+    $metadata.result = if ($gameProcess.HasExited) { 'game-exited' } else { 'recording-ended-game-still-running' }
     $result = 0
 } catch {
     Write-Host ('Capture setup: ' + $_.Exception.Message) -ForegroundColor Yellow
     if ($session) { $_.Exception.Message | Set-Content -LiteralPath (Join-Path $session 'capture-error.txt') }
 } finally {
+    if ($session -and $witnessProcess) {
+        $windowDirectory = Join-Path $session 'window'
+        if (Test-Path -LiteralPath $windowDirectory) { 'stop' | Set-Content -LiteralPath (Join-Path $windowDirectory 'stop.txt') }
+        if (-not $witnessProcess.WaitForExit(10000)) { Write-Warning 'Window collector is still running; its time limit remains active.' }
+        else { $metadata.window_collector_exit_code = $witnessProcess.ExitCode }
+    }
     if ($session -and $presentProcess) {
         'stop' | Set-Content -LiteralPath (Join-Path $session 'stop-frames.txt')
         if (-not $presentProcess.WaitForExit(10000)) { Write-Warning 'FPS collector has not finished; its time limit remains active.' }
@@ -187,20 +232,38 @@ try {
         if ($metadata.frame_capture_present) {
             $metadata.frame_rows = @(Import-Csv -LiteralPath $frameFile).Count
         }
-        $recordingFile = Join-Path $session 'composition.c3xr'
-        $metadata.recording_present = Test-Path -LiteralPath $recordingFile -PathType Leaf
+        $recordingDirectory = Join-Path $session 'inputs'
+        $metadata.recording_present = Test-Path -LiteralPath (Join-Path $recordingDirectory 'started.json')
+        $metadata.recording_complete = $false
         if ($metadata.recording_present) {
-            $metadata.recording_bytes = (Get-Item -LiteralPath $recordingFile).Length
-            $metadata.recording_sha256 = (Get-FileHash -LiteralPath $recordingFile -Algorithm SHA256).Hash.ToLowerInvariant()
+            & $inspect $recordingDirectory (Join-Path $session 'inspection') --allow-prefix > (Join-Path $session 'inspection.log') 2>&1
+            $report = Join-Path $session 'inspection\report.json'
+            if (Test-Path -LiteralPath $report) {
+                $inspection = Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
+                $metadata.recording_complete = $inspection.complete -and $inspection.verified_prefix
+                $metadata.recording_calls = $inspection.calls
+                $metadata.recording_presentations = $inspection.accepted_presentations
+            }
         }
-        if ($metadata.composition_recording -and -not $metadata.recording_present) {
-            $metadata.result = 'recording-missing'
-            $result = 1
-            Write-Warning 'Replay recording did not start. Logs were saved, but this session cannot be replayed.'
+        if ($metadata.input_recording -and -not $metadata.recording_complete) {
+            $metadata.result = 'recording-incomplete'; $result = 1
+            Write-Warning 'Capture ended without a complete journal. Verified prefix and diagnostics are preserved.'
+        }
+        if ($metadata.window_recording) {
+            $windowReport = Join-Path $session 'window\finished.json'
+            $metadata.window_complete = $false
+            if (Test-Path -LiteralPath $windowReport) {
+                $windowSummary = Get-Content -LiteralPath $windowReport -Raw | ConvertFrom-Json
+                $metadata.window_complete = $windowSummary.complete -and $windowSummary.frames -gt 0
+            }
+            if (-not $metadata.window_complete) {
+                $metadata.result = 'window-evidence-incomplete'; $result = 1
+                Write-Warning 'Window evidence is incomplete. Renderer inputs and available diagnostics are preserved.'
+            }
         }
         $metadata | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $session 'session.json') -Encoding UTF8
         New-Item -ItemType Directory -Path $saved -Force | Out-Null
-        Copy-Item -Path (Join-Path $session '*') -Destination $saved -Force
+        Copy-Item -Path (Join-Path $session '*') -Destination $saved -Recurse -Force
         Write-Host ''
         Write-Host ('Capture saved: ' + $saved)
         Write-Host 'Tell Codex: Finished the capture. No upload or copy/paste needed.'

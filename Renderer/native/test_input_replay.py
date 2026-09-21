@@ -89,6 +89,7 @@ def main():
     parser.add_argument('--steps', type=int, default=3, choices=range(3, 1201))
     parser.add_argument('--width', type=int, default=640, choices=range(320, 2241))
     parser.add_argument('--height', type=int, default=480, choices=range(240, 1261))
+    parser.add_argument('--reuse-candidate', action='store_true', help='Reuse only a candidate whose source closure and build receipt match exactly')
     args = parser.parse_args()
     scene = args.scene.resolve()
     scene.relative_to(ROOT)
@@ -102,7 +103,14 @@ def main():
     cases = {}
     closures = {unit: unit_inputs(unit) for unit in DLL_UNITS}
     recipe = digest(ROOT / 'Renderer/native/BUILD.bat')
-    for mode in ('candidate-compile', 'input-recording', 'input-replay', 'gpu-frame'):
+    if args.reuse_candidate:
+        candidate = ROOT / 'Renderer/native/build/candidate'
+        recorded = json.loads((candidate / 'build-evidence.json').read_text())
+        if (recorded.get('unit_inputs') != closures or recorded.get('build_recipe') != recipe
+                or recorded.get('dll_sha256') != digest(candidate / 'C3XRenderer.dll')
+                or recorded.get('returncode') != 0 or not recorded.get('sources_unchanged')):
+            raise RuntimeError('Candidate is not verified against current source inputs')
+    for mode in (('input-recording', 'input-replay', 'gpu-frame') if args.reuse_candidate else ('candidate-compile', 'input-recording', 'input-replay', 'gpu-frame')):
         cases[mode] = native_call(out, 'build-' + mode, 'call BUILD.bat ' + mode)
         if cases[mode]['returncode']:
             raise RuntimeError('Native build failed')

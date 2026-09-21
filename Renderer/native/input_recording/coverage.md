@@ -1,6 +1,6 @@
 # Input coverage and remaining qualification
 
-Protocol 8 declares **zero complete-coverage bits**. A captured function or a
+Protocol 10 declares **zero complete-coverage bits**. A captured function or a
 successful short replay does not establish the complete gameplay contract in
 [recorded renderer workloads](../../docs/recorded_renderer_workload.md).
 
@@ -10,13 +10,13 @@ successful short replay does not establish the complete gameplay contract in
 | Map production | Copied frame, ordered tiles and topology through CPU/GPU production render exports; full native fixture output witnesses and two exact repeated replays; visibility mutation rejection | Broader gameplay coverage |
 | World acquisition | Callback registration and copied page results through the production page owner; fresh 5,000-tile fixture, 201 page returns and two exact 100-destination replays; changed range/scope/topology cleanly rejected; portable stale-publication rejection/retry | Broader native callback failure coverage |
 | Units | GPU and 16/32-bit CPU paths, native canvas edits, action inputs, forget events; one bounded CPU canvas registry across serial caller threads | Broader action/lifecycle mutations; simultaneous CPU producers and section-backed/overlapping canvases explicitly stop capture |
-| Camera | CPU/GPU begin/poll/cancel, preparation calls; adopted identity, sample time, ownership and occurrence witnesses | Native navigation cause and transaction admission are not yet re-executed; background preparation/cancellation must preserve coherent content |
-| Composition | Actual GPU image, unit and tactical commands; native screen block changes | `CompositionOwner` and native image adapter decisions are flattened into their consumed leaf operations; source/clip/access arguments must also drive those owners before bridge changes can be qualified |
-| Native ownership | Lifecycle identity and caller role; nonowner present rejection | Re-execute retirement of the actual composition owner, escaped CPU image aliases and all native access scopes |
+| Camera | CPU/GPU begin/poll/cancel, preparation calls; adopted identity, sample time, ownership and occurrence witnesses | Production native navigation/request/poll/map transactions now re-execute; broader game caller/window scheduling remains unqualified |
+| Composition | Actual composition owner and image adapter; operation arguments, native metadata, pixels, palettes/sprites, lookup/font/DC state; nested GPU implementation calls suppressed | Unsupported external formats stop capture; CPU fallback snapshots constrain comparisons to equivalent native pixel semantics |
+| Native ownership | Lifecycle identity/caller role and actual owner retirement; destroy identity persists through both notifications; safe replay teardown | Broader native aliases and nonowner lifecycle scheduling |
 | Ambient | Consumed logical clocks and exported queries, absolute QPC/UTC correlation, policy, offers, accepted outputs; retained display inspection | Automatic pending/backpressure decisions and window visibility/focus transitions |
 | Presentation | Actual existing presenter with a replay HWND; retained native/ambient display source; external native/DirectComposition fixture window samples with verified clock alignment | Live-game window coverage, calibrated observer overhead, correlated Present/scanout outcomes; device-loss and window lifecycle controls |
-| Reset/fallback | Ordered leaf drains/readbacks and production reset; full native reset oracle; CPU unit/native screen fallbacks | Malformed API requests rejected before recording begins, compatibility map blit |
-| Storage | Bounded async writer, segment/metadata checksums, quota/slow-write/I/O tests, incomplete prefix rejection and explicit recovery; real ten-minute capture and two matching 10,200-frame replays | Paired on/off measurements exist; calibrated overhead acceptance, pressure intervals and launcher delivery remain |
+| Reset/fallback | Root reset/configuration transactions; actual owner drains and native CPU output witnesses; CPU unit/native screen fallbacks | Malformed API requests rejected before recording begins, compatibility map blit |
+| Storage | Bounded async writer, segment/metadata checksums, quota/slow-write/I/O tests, incomplete prefix rejection and explicit recovery; real ten-minute capture and two matching 10,200-frame replays | Opt-in launcher collects/pins journal, window samples and tools; parser/quoting/automatic stop verified without game launch; calibrated live overhead remains |
 
 Current short controls reject missing clocks, assets, units and resets and altered
 configuration, visibility, action and CPU input pixels. All eight reject with exit
@@ -54,6 +54,24 @@ VA is 282.2 MiB, above the earlier live 120 MiB envelope. A virtual reservation
 does not reproduce heap fragmentation, and sampled window images are not an
 every-frame physical display oracle.
 
-Next: replay native adapter/navigation decisions, qualify window lifecycle and
-performance/pressure execution, and calibrate recording overhead before manual capture.
-Do not request another manual capture on the strength of the short control.
+The current native-owner fixture passes all pixel/adoption/reset checks and two
+exact 426-frame replays: 12,930 calls, 949 native-root calls and 515.56 MB. The
+recorder's previously premature identity retirement is repaired. Replay rejects
+missing external values before dereferencing proxy identities. Recording failures
+preserve the original native pixel lease and release behavior. Native dependency
+storage is bounded and retired with destroyed images.
+
+A separate unpaced measurement mode executes real production work and excludes
+frame-fingerprint/export work from the measured run. It preserves recorded camera
+consumption points because external CPU snapshots are not available earlier;
+actual worker readiness is awaited there. It is a service-cost/capacity probe,
+not a new game-caller simulation or live responsiveness qualification. Native
+setup reconstruction and journal I/O still compete for CPU, and replay memory is
+included in process measurements. Never interpret these service samples as FPS.
+
+Next responsibility: finish the automated overhead/pressure admission gate, then
+collect one strategic live session and compare actual window symptoms with replay.
+Calibrate the co-resident CPU/GPU/memory envelope and observer overhead before
+claiming live timing equivalence. This checkpoint determines which architectural comparison
+is valid; successful fixture replay alone does not prove the live slowdown or
+freeze is reproduced. Complete-coverage bits intentionally remain zero.
