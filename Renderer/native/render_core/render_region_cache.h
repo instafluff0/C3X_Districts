@@ -27,8 +27,16 @@ public:
         ~Entry(){if(image)image->Release();}
     };
     std::map<RenderRegionKey,Entry> entries;
-    std::size_t gpu_bytes=0,metadata_bytes=0,metadata_limit=metadata_budget;
+    std::size_t gpu_bytes=0,metadata_bytes=0,metadata_limit=metadata_budget,gpu_limit=gpu_budget;
     std::uint64_t age=0,evictions=0;
+    void set_gpu_limit(std::size_t limit){
+        gpu_limit=std::min(limit,gpu_budget);
+        while(!entries.empty() && gpu_bytes>gpu_limit){
+            auto oldest=std::min_element(entries.begin(),entries.end(),[](auto const& a,auto const& b){return a.second.age<b.second.age;});
+            gpu_bytes-=oldest->second.gpu_bytes;metadata_bytes-=oldest->second.metadata_bytes;
+            entries.erase(oldest);++evictions;
+        }
+    }
     Resource* find(RenderRegionKey const& key){
         auto found=entries.find(key);
         if(found==entries.end())return nullptr;
@@ -43,8 +51,8 @@ public:
     // resource description and releases any allocation it cannot reuse.
     bool make_room(RenderRegionKey const& key,std::size_t bytes,Resource** recycled=nullptr){
         auto metadata=metadata_size(key);
-        if(key.empty() || key.size()>key_words_limit || bytes>gpu_budget || metadata>metadata_limit)return false;
-        while(!entries.empty() && (gpu_bytes+bytes>gpu_budget ||
+        if(key.empty() || key.size()>key_words_limit || bytes>gpu_limit || metadata>metadata_limit)return false;
+        while(!entries.empty() && (gpu_bytes+bytes>gpu_limit ||
               metadata_bytes+metadata>metadata_limit || entries.size()>=entry_limit)){
             auto oldest=std::min_element(entries.begin(),entries.end(),[](auto const& a,auto const& b){return a.second.age<b.second.age;});
             gpu_bytes-=oldest->second.gpu_bytes;metadata_bytes-=oldest->second.metadata_bytes;
@@ -53,7 +61,7 @@ public:
             }
             entries.erase(oldest);++evictions;
         }
-        return gpu_bytes+bytes<=gpu_budget && metadata_bytes+metadata<=metadata_limit;
+        return gpu_bytes+bytes<=gpu_limit && metadata_bytes+metadata<=metadata_limit;
     }
     // Takes ownership only on success. The caller releases an unadmitted image.
     bool insert(RenderRegionKey key,Resource* image,std::size_t bytes){

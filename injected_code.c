@@ -28963,7 +28963,26 @@ is_or_could_become_grassland (Tile * tile)
 void __fastcall
 patch_Map_Renderer_draw_fog (Map_Renderer * this, int edx, int viewer, PCX_Image * target, RECT * clip)
 {
-	if (is->current_config.enable_custom_rendering) return;
+	if (is->current_config.enable_custom_rendering) {
+		// Fog-only native updates (including exploration during movement) do not
+		// necessarily traverse m71. Queue one authoritative map capture when the
+		// copied visible state changes; the normal native timer owns the redraw.
+		if (! is->custom_renderer_frame_active && ! is->custom_renderer_draw_in_progress &&
+		    ! is->custom_renderer_redraw_pending && this == &p_bic_data->Map.Renderer) {
+			for (int n = 0; n < is->custom_renderer_tile_count; n++) {
+				struct c3x_renderer_tile_v1 * record = &is->custom_renderer_tiles[n];
+				if (!(record->tile_flags & C3X_RENDERER_TILE_RENDER)) continue;
+				unsigned current = capture_custom_renderer_visibility (tile_at (record->tile_x, record->tile_y),
+					viewer, record->tile_x, record->tile_y);
+				if (current != (record->tile_flags & C3X_RENDERER_TILE_VISIBILITY_BITS)) {
+					is->custom_renderer_dirty_flags |= C3X_RENDERER_DIRTY_SCENE;
+					is->custom_renderer_redraw_pending = true;
+					break;
+				}
+			}
+		}
+		return;
+	}
 	Map_Renderer_draw_fog (this, __, viewer, target, clip);
 }
 
@@ -46859,6 +46878,9 @@ patch_on_timer_0x9F6500 (void)
     bool resident = is->current_config.enable_custom_rendering && is->custom_renderer_native_image != NULL &&
         is->custom_renderer_native_image (C3X_NATIVE_VISUAL_POLICY, NULL, NULL, NULL, NULL, 2) > 0;
     if (! resident) custom_renderer_scheduler_tick ();
+    if (is->current_config.enable_custom_rendering && is->custom_renderer_redraw_pending &&
+        (is->custom_renderer_dirty_flags & C3X_RENDERER_DIRTY_SCENE) && p_main_screen_form->animator.field_18E4 != NULL)
+        *(bool *)(p_main_screen_form->animator.field_18E4 + 10) = true;
     on_timer_0x9F6500 ();
     is->custom_renderer_timer_running = false;
 }

@@ -24,44 +24,37 @@ testing remain with the user. Performance acceptance is still pending.
 
 ## M3.8 current handoff — in progress
 
-**Fullscreen allocation-failure repair; live acceptance pending.** Capture
-`20260920-232812-ce8053` kept GPU map delivery active but reports allocation
-failures at 37.12 seconds, Direct3D device removal at 37.19, then failed native
-handoffs until exit. The executable is already large-address-aware. Exact live
-address-space exhaustion is not measured; this is not a demonstrated input
-handler deadlock. See [live findings](live_usage_findings_20260920.md).
+**Live correctness remains open.** Capture `20260920-234930-a86f69`
+retained GPU map delivery through 20 map composites and completed 400 independent
+visual frames, but map effects did not advance between native map requests.
+The user also observed delayed exploration and another freeze. Whole-process
+available virtual space fell to 118.6 MB before terminal GPU failures; physical
+RAM remained plentiful. Earlier smoother behavior is not animation-on performance
+acceptance. See [live findings](live_usage_findings_20260920.md).
 
-Removed superseded off-screen guard storage. Visible circular scene reuse,
-scroll damage and finishing margins replace it at full quality. At 2240×1260,
-scene targets fall **1,467,084,288 → 1,231,400,448 bytes (224.77 MiB saved)**.
-The existing copy-sharing and 128 MiB live composition cap remain; this repair
-raises no budget. Replay exception cleanup and pre-allocation capacity checks
-reduce transient pressure. All shore waves, reflections and water motion stay on.
-Once-per-second whole-process memory samples and device-failure HRESULTs now
-make live resource pressure observable without expensive profiling.
+The current correction preserves full quality and the previous 224.77 MiB scene
+allocation saving. A worker-owned pressure policy now trims reusable reflection
+pages and unit poses below 768 MiB free virtual space, with hysteresis to 1 GiB.
+Optional preparation pauses; displayed GPU authority and demanded draws remain.
+Native fog-only movement updates compare copied visibility and queue one fresh
+map capture through the existing timer. No new patch entries or state fields.
 
-A fullscreen harness with **1 GiB reserved address space** makes the old DLL fail
-native display allocation; the initial corrected DLL passes 100 mixed-unit
-visual frames and native UI/ownership/recovery checks. The control image differs
-at four pixels by at most one channel level. Request mean/p95 **34.72 / 49.68 ms**,
-desktop **42.76 / 62.27 ms**; all interval static-work elimination proofs pass.
-This is a severe memory-pressure fixture, not live FPS or input latency. Its
-minimum sampled free VA is 89.53 MiB. Receipts and final-build verification are
-in the linked findings. General device-removal recovery remains unfinished;
-never weaken GPU-to-CPU ownership barriers to manufacture fallback.
+**Staged evaluation DLL:** `41c438daaab37e0f2b36c57f3ede33bf46580992e154fa63312da94306770ab7`.
+`native/build/live-followup-stage.json` records source identity, rollback and
+validation. **Re-run INSTALL.bat** for the changed fog/timer hooks. The complete
+2240×1260 pressure fixture passes 100 mixed-unit animation frames, native UI,
+visibility, tactical, camera and reset/config-off checks with 1 GiB extra VA
+reserved and all water effects on. Minimum sampled free VA is 206.81 MiB.
+Sixteen focused contract tests pass; one local executable audit is skipped.
+The approved injected compile smoke test passes. This is fixture correctness,
+not live stability or an FPS improvement claim.
 
-**Staged evaluation DLL:** `34ae28b52a1c03c9914d0ccea6e5601cd1d6eefc3ec6e3c7aa867e9a4a878c37`.
-`native/build/freeze-memory-stage.json` records source identity, rollback and
-final validation. The exact DLL passes the complete 30-frame pressure retry and
-40 fullscreen scrolling/zoom/cancellation cases. Restart through
-`Renderer/CAPTURE_GAME.bat`; no reinstall is needed.
-
-**Next responsibility:** confirm live stability and memory headroom through
-startup, city UI, selection and map updates, then reduce measured camera and
-finishing costs toward Standard <33 ms p95. M3.8 remains open. The DLL is the only
-runtime delivery change; injected source and patch table remain unchanged. The
-existing [one-click capture](live_usage_logging.md#one-click-game-capture) collects
-the added diagnostics. No installer or game was launched by the agent.
+**Next responsibility:** reproduce why the live native composition loses map
+animation, using the new reachable-map-source/sample and bounded CPU-barrier
+traces. Then prove exploration appears during movement and the game survives
+sustained city UI, selection and navigation without allocation/device failures.
+VM installation/game-launch permission was requested; neither was performed.
+General device-removal recovery and Standard <33 ms p95 acceptance remain open.
 
 Whole-world appearance enters through bounded caller-thread pages. Existing
 workers prepare canonical regions and wrapped occurrences independently of the

@@ -22,7 +22,7 @@ template<class Backend> class Adapter {
     void* get_bits;void* release_bits;DWORD thread=GetCurrentThreadId();
     std::array<Image,32> images={};std::uint64_t cpu_bytes=0;
     static constexpr std::uint64_t cpu_budget=64u*1024u*1024u;
-    Counts counters;
+    Counts counters;unsigned large_cpu_barrier_reports=0;
     Id sprite_image=0;unsigned sprite_width=0,sprite_height=0;
     std::uint64_t sprite_revision=0;std::vector<std::uint32_t> sprite_pixels;
     struct Lookup {Id image=0;std::uint64_t revision=0;std::vector<std::uint16_t> words;};
@@ -410,6 +410,20 @@ template<class Backend> class Adapter {
     }
     void cpu_ownership(Image& image){
         if(image.dirty){
+            if(image.width>=640 && image.height>=480 && large_cpu_barrier_reports++<16){
+                void* frames[12]={};auto count=CaptureStackBackTrace(0,12,frames,nullptr);
+                char line[768];int used=std::snprintf(line,sizeof(line),"[C3X renderer] stage=native-cpu-barrier width=%u height=%u detail=%u stack=",
+                    image.width,image.height,unsigned(image.detail!=0));
+                for(unsigned n=0;n<count&&used<int(sizeof(line))-64;++n){HMODULE module=nullptr;
+                    GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                        reinterpret_cast<char const*>(frames[n]),&module);
+                    char const* name=module==GetModuleHandleA(nullptr)?"game":module==GetModuleHandleA("jgl.dll")?"jgl":
+                        module==GetModuleHandleA("C3XRenderer.dll")?"renderer":"other";
+                    used+=std::snprintf(line+used,sizeof(line)-used,"%s%s+%lx",n?",":"",name,
+                        static_cast<unsigned long>(reinterpret_cast<std::uintptr_t>(frames[n])-reinterpret_cast<std::uintptr_t>(module)));
+                }
+                std::snprintf(line+used,sizeof(line)-used,"\n");OutputDebugStringA(line);
+            }
             if(!gpu.readback(image.gpu,image.cpu.data(),image.cpu.size()))
                 throw std::runtime_error("cannot read current GPU image");
             GdiFlush();auto bits=reinterpret_cast<Get>(get_bits)(image.native);

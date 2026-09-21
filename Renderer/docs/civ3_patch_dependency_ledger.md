@@ -1,5 +1,22 @@
 # Civ III patch dependency ledger
 
+## Movement visibility invalidation
+
+`required_user_action: ["Re-run INSTALL.bat to update the injected bridge"]`.
+Reuses existing `Map_Renderer_draw_fog` (GOG `0x004C4EF0`, other builds
+unregistered) and `on_timer_0x9F6500` (GOG/Steam/Complete
+`0x004DE5C0 / 0x004E6FA0 / 0x004DE680`). Signatures remain
+`void (__fastcall *)(Map_Renderer*, int, int, PCX_Image*, RECT*)` and
+`void (__stdcall *)(void)`. No patch-table entry or injected state is added.
+
+The suppressed native fog draw compares current native visibility with copied
+rendered tile records. A difference queues one authoritative map capture. The
+existing timer sets Animator's audited dirty byte before calling the original
+timer, because Animator clears its dirty byte after the movement fog call.
+Unchanged visibility does not request a redraw; config-off calls native fog.
+The extracted reveal/conceal and timer tests pass, as does the approved injected
+compile smoke test. Live movement acceptance remains pending.
+
 ## Fullscreen retained-composition memory repair
 
 `required_user_action: []` for patch registration. This DLL-only continuation

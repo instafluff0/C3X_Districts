@@ -25,7 +25,14 @@ public:
     bool direct_scene=true;
     std::uint64_t map_scene_draws=0,gpu_content_builds=0,gpu_content_hits=0,gpu_content_reuses=0;
     std::uint64_t scene_body_reuses=0,scene_body_builds=0;
-    std::size_t gpu_content_bytes=0;
+    std::size_t gpu_content_bytes=0,gpu_content_limit=192u*1024u*1024u;
+    void set_gpu_content_limit(std::size_t limit){
+        gpu_content_limit=std::clamp(limit,std::size_t(32u*1024u*1024u),std::size_t(192u*1024u*1024u));
+        while(!gpu_content.empty() && gpu_content_bytes>gpu_content_limit){
+            auto old=std::min_element(gpu_content.begin(),gpu_content.end(),[](auto const& a,auto const& b){return a.used<b.used;});
+            gpu_content_bytes-=old->bytes;gpu_content.erase(old);
+        }
+    }
     int scene_output_width=0,scene_output_height=0,scene_output_scale=0;
     std::size_t resident_pose_bytes=0;
     std::uint64_t resident_pose_builds=0,resident_pose_hits=0,output_readbacks=0;
@@ -387,7 +394,7 @@ public:
                 // Share only the immutable body contribution. Native packing,
                 // pose-local shadow and underlay blending still execute per
                 // occurrence. Charge it to the existing GPU-content budget.
-                if(gpu_content_bytes-ready->body_bytes+bytes<=192u*1024u*1024u){
+                if(gpu_content_bytes-ready->body_bytes+bytes<=gpu_content_limit){
                     D3D11_TEXTURE2D_DESC d={};if(ready->body)ready->body->GetDesc(&d);
                     bool allocated=d.Width==bw&&d.Height==bh;
                     if(!allocated){
@@ -662,7 +669,7 @@ private:
         return nullptr;
     }
     GpuContent* retain_gpu_content(ID3D11Device* device,ID3D11DeviceContext* context,Key const& key,std::shared_ptr<UnitPoseContent const> const& content){
-        constexpr std::size_t budget=192u*1024u*1024u;
+        auto budget=gpu_content_limit;
         std::size_t bytes=content->bytes()+std::size_t(content->shadow.extent)*content->shadow.extent*4;
         for(auto const& part:content->uploads)bytes+=part.size()*sizeof(part[0]);
         if(bytes>budget)return nullptr;

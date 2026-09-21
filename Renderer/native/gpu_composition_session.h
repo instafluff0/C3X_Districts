@@ -74,6 +74,7 @@ public:
     RetainedComposition::Texture snapshot_bgra(ID3D11Texture2D* source,int x,int y,unsigned w,unsigned h){return layers.snapshot_bgra(source,x,y,w,h);}
     std::uint64_t visual_bytes()const{return layers.bytes();}
     std::size_t visual_nodes()const{return layers.node_count();}
+    std::size_t visual_sources()const{return layers.sampled_sources();}
     bool visual_ready()const{return layers.ready();}
     bool visual_active()const{return layers.ready()&&layers.animated();}
     void stop_visuals(){layers.uncommit();}

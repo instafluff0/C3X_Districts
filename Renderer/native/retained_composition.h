@@ -190,6 +190,17 @@ public:
     std::uint64_t bytes()const{return resident_bytes;}
     std::size_t node_count()const{return nodes;}
     bool accepting()const{return admitted;}
+    std::size_t sampled_sources()const{
+        std::vector<Node const*> visited;std::vector<Node const*> pending;
+        for(auto const& patch:front.patches)pending.push_back(patch.node.get());
+        std::size_t count=0;
+        while(!pending.empty()){
+            auto n=pending.back();pending.pop_back();
+            if(std::find(visited.begin(),visited.end(),n)!=visited.end())continue;
+            visited.push_back(n);if(n->sample)++count;
+            for(auto const& input:n->inputs)for(auto const& patch:input.patches)pending.push_back(patch.node.get());
+        }return count;
+    }
     bool animated()const{for(auto const& p:front.patches)if(p.node->dynamic)return true;return false;}
     bool ready()const{return admitted&&front.width!=0;}
     void create(Id id,unsigned w,unsigned h,Format format){if(admitted)images[id]={w,h,format,{}};}

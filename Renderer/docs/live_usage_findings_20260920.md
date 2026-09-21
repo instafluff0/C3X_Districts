@@ -383,3 +383,53 @@ cancellation coverage cases without missing strips
 `native/build/freeze-memory-stage.json` preserves rollback and runtime identity.
 Restart through `Renderer/CAPTURE_GAME.bat`; no reinstall is needed. Live-game
 stability remains pending. No installer or game was launched.
+
+
+## Smoother capture with frozen effects and another failure
+
+Capture `20260920-234930-a86f69` used `34ae28b5…`. Twenty native map
+composites retained `gpu_map=1`; 400 independent visual frames succeeded. Yet
+only twenty scene-water/shared-scene draws occurred, corresponding to native
+map requests. All twenty map sample factories admitted copied dynamic inputs.
+The captured front therefore needs further tracing: this evidence does not
+establish whether a native compatibility operation severed its map dependency
+or the callback could not advance. No public ownership revocation was logged.
+Do not describe unit-only frames as successful whole-scene animation.
+
+Available virtual space fell from 344,834,048 bytes at 39.8 seconds to
+118,583,296 near 82.8 seconds, while available physical/pagefile memory remained
+several GiB. Allocation failures preceded a retained texture-budget failure at
+82.61 seconds (`device_reason=0`), followed by device removal and worker failure
+(`0x887a0020`). This supports aggregate x86 address-space pressure; individual
+cache ceilings do not bound the process. General device-loss recovery is still
+unfinished.
+
+The worker now checks available VA at most every 250 ms and enters pressure
+mode below 768 MiB, leaving only above 1 GiB. Reusable reflection pages fall
+from a 256 to 64 MiB ceiling; old unit poses from 192 to 48 MiB. Optional tile,
+world and pose preparation pauses. Foreground draws, authoritative GPU pixels,
+resolution, geometry detail and all water effects remain unchanged. These are
+reproducible caches, not visibility or gameplay authority.
+
+Native Animator can draw fog after movement without rebuilding the map. The
+previous custom hook suppressed that draw without copying the changed visibility.
+It now compares native visibility with rendered tile records and latches the
+existing redraw request. The original timer receives its audited dirty bit on
+the next callback, after Animator has finished clearing the movement flag.
+The extracted regression verifies reveal, conceal, unchanged visibility and
+config-off; the timer regression verifies forwarding even with a retained front.
+Actual in-game reveal acceptance remains pending.
+
+Candidate `41c438da…` passes the complete 2240×1260 native workload with 1 GiB
+reserved VA, 100 mixed-unit frames and all water effects on:
+`native/build/live-followup-pressure/receipt.json`. Minimum sampled free VA is
+206.81 MiB. Focused tests: sixteen pass, one local executable audit skipped;
+approved injected compilation also passes. Timing is not a controlled speedup
+comparison; another small GPU contract ran during part of this validation.
+Bounded CPU-barrier stacks and periodic reachable-map-source/sample counts are
+included to diagnose the remaining live-only animation failure.
+
+The exact candidate is staged with rollback/provenance in
+`native/build/live-followup-stage.json`. **INSTALL.bat is required** for the fog
+and timer bridge changes. No installer or game was launched. Live animation,
+movement visibility and stability are not yet accepted.

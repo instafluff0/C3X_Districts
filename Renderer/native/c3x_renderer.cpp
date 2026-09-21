@@ -591,6 +591,25 @@ public:
     std::size_t frame_prepared_vertex_bytes=0;
     unsigned frame_caster_preparations=0;
     std::size_t frame_post_lanes=0;
+    bool memory_pressured=false;
+    ULONGLONG last_memory_control=0;
+    void preserve_process_headroom(){
+        auto now=GetTickCount64();if(now-last_memory_control<250)return;last_memory_control=now;
+        MEMORYSTATUSEX memory={};memory.dwLength=sizeof(memory);if(!GlobalMemoryStatusEx(&memory))return;
+        bool pressure=memory.ullAvailVirtual<(memory_pressured?1024ull:768ull)*1024*1024;
+        if(pressure==memory_pressured)return;
+        auto before=render_regions.gpu_bytes+unit_bodies.gpu_content_bytes;
+        memory_pressured=pressure;
+        // Completed reflection pages and old unit poses are reproducible caches.
+        // Keep the displayed scene, native GPU authority and current geometry.
+        render_regions.set_gpu_limit((pressure?64u:256u)*1024u*1024u);
+        unit_bodies.set_gpu_content_limit((pressure?48u:192u)*1024u*1024u);
+        GlobalMemoryStatusEx(&memory);
+        char detail[256];sprintf_s(detail,"active=%u available_virtual=%llu released_cache_bytes=%zu reflection_cap=%zu unit_cap=%zu",
+            unsigned(pressure),memory.ullAvailVirtual,before-render_regions.gpu_bytes-unit_bodies.gpu_content_bytes,
+            render_regions.gpu_limit,unit_bodies.gpu_content_limit);
+        trace.write("process-headroom",detail,true);
+    }
     ULONGLONG last_memory_status=0;
     void memory_sample(char const* phase) {
         // Constant-cost live telemetry includes the game's address space. The
@@ -10626,10 +10645,13 @@ public:
         int result=submit_locked(lock,Command::visual_frame);
         if(result==C3X_RENDERER_RESULT_OK){result=gpu_presenter.present();++visual_frames;}
         QueryPerformanceCounter(&end);
-        char line[256];std::snprintf(line,sizeof(line),"result=%d frames=%llu request_ms=%.3f retained_bytes=%llu nodes=%zu native_map_calls=0 native_unit_calls=0",
+        if(result==C3X_RENDERER_RESULT_ERROR || visual_frames<=3 || visual_frames%128==0){
+        char line[320];std::snprintf(line,sizeof(line),"result=%d frames=%llu request_ms=%.3f retained_bytes=%llu nodes=%zu native_map_calls=0 native_unit_calls=0 map_samples=%llu map_sources=%zu",
             result,static_cast<unsigned long long>(visual_frames),renderer_state.trace.milliseconds(end.QuadPart-begin.QuadPart),
-            static_cast<unsigned long long>(session->visual_bytes()),session->visual_nodes());
+            static_cast<unsigned long long>(session->visual_bytes()),session->visual_nodes(),
+            static_cast<unsigned long long>(visual_map_samples),session->visual_sources());
         renderer_state.trace.write("visual-frame",line,result==C3X_RENDERER_RESULT_ERROR||visual_frames<=3||visual_frames%128==0);
+        }
         return result;
     }
     int present_gpu(c3x_renderer_gpu_present_v1 const& request){
@@ -11496,7 +11518,7 @@ private:
     c3x_renderer::render_core::UnitFramePreparation unit_pixels_queue;
     std::uint64_t unit_content_revision=0,unit_content_examined=0,unit_offers_examined=0;
     bool unit_preparation_pending() const {
-        if(camera_gpu && camera_ready.resident.texture)return false;
+        if(renderer_state.memory_pressured || (camera_gpu && camera_ready.resident.texture))return false;
         return unit_pixels_enabled && !unit_pixels_queue.empty() &&
             (!unit_gpu_preparation || unit_content_revision!=unit_content_examined || unit_pixels_queue.offered!=unit_offers_examined);
     }
@@ -11817,7 +11839,9 @@ private:
         auto origin=visual_ticks,clock=RendererState::resource_clock(gpu_publication.frame);
         return [this,capture,selected,origin,clock,x,y,w,h,last=std::move(initial)](long long ticks,long long frequency)mutable -> Texture{
             c3x_renderer_frame_v1 frame={},view={};
-            if(!capture->valid() || !selected->sample(ticks,frequency,origin,view))return last;
+            if(!capture->valid() || !selected->sample(ticks,frequency,origin,view)){
+                renderer_state.trace.write("visual-map-unavailable","captured scope retired or invalid clock",true);return last;
+            }
             frame=capture->frame();
             auto next=RendererState::resource_clock(view);if(next==clock)return last;
             frame.presentation_time_ticks=view.presentation_time_ticks;frame.presentation_frequency=view.presentation_frequency;
@@ -12080,6 +12104,7 @@ private:
     void run() {
         std::unique_lock<std::mutex> lock(state_mutex);
         for (;;) {
+            renderer_state.preserve_process_headroom();
             // Adopt accepted content even when its camera ticket was cancelled.
             // No frame helpers are active here; observations/mesh leases remain
             // immutable while a render is running outside this gate.
@@ -12353,7 +12378,7 @@ private:
             // off-screen drawing (including its driver Flush) used this same
             // owner and could block a new camera request for hundreds of ms.
             // Whole-world content preparation below remains independent of views.
-            if (!has_job && !stop_requested && !camera_paused && !(camera_gpu && camera_ready.resident.texture) && warm_cursor < warm_order.size()) {
+            if (!has_job && !stop_requested && !camera_paused && !renderer_state.memory_pressured && !(camera_gpu && camera_ready.resident.texture) && warm_cursor < warm_order.size()) {
                 // Yield between individual tiles. A foreground request wakes
                 // this delay and cancels CPU construction before GPU upload.
                 if (wake.wait_for(lock, std::chrono::milliseconds(2), [this] {
@@ -12416,7 +12441,7 @@ private:
                 }
                 continue;
             }
-            if (!has_job && !stop_requested && !camera_paused && !(camera_gpu && camera_ready.resident.texture) && renderer_state.pixel_work_pending()) {
+            if (!has_job && !stop_requested && !camera_paused && !renderer_state.memory_pressured && !(camera_gpu && camera_ready.resident.texture) && renderer_state.pixel_work_pending()) {
                 if (wake.wait_for(lock,std::chrono::milliseconds(2),[this]{return has_job || camera_pending || stop_requested;})) continue;
                 lock.unlock();
                 bool ok=false;
@@ -12432,7 +12457,7 @@ private:
                 }
                 continue;
             }
-            if(!has_job && !stop_requested && !camera_pending && !camera_paused && scene_changes_ok &&
+            if(!has_job && !stop_requested && !camera_pending && !camera_paused && !renderer_state.memory_pressured && scene_changes_ok &&
                !(camera_gpu && camera_ready.resident.texture) && renderer_state.world_preparation && renderer_state.cache_valid){
                 auto state=scene_changes.state();auto const& scene=renderer_state.topology_cache;
                 if(state && state->topology && state->metadata.world_topology_count &&
