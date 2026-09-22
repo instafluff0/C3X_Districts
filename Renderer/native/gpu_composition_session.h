@@ -84,7 +84,8 @@ public:
         if(ok)try{layers.record(draw,std::move(operation));}catch(std::exception const& e){OutputDebugStringA(e.what());layers.discard();}
         return ok?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_BAD_ARGUMENT;
     }
-    RetainedComposition::Texture snapshot_bgra(ID3D11Texture2D* source,int x,int y,unsigned w,unsigned h){return layers.snapshot_bgra(source,x,y,w,h);}
+    std::uint64_t visual_sample_allocations()const{return layers.sampling_allocations();}
+    std::uint64_t visual_sample_imports()const{return layers.sampling_imports();}
     std::uint64_t visual_bytes()const{return layers.bytes();}
     std::size_t allocation_bytes()const{return std::size_t(gpu.stats().resident_bytes+layers.bytes());}
     std::size_t visual_nodes()const{return layers.node_count();}

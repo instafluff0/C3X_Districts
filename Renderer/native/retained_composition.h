@@ -12,7 +12,18 @@ namespace c3x_gpu_images {
 class RetainedComposition {
 public:
     using Texture=ComPtr<ID3D11Texture2D>;
-    using Sample=std::function<Texture(long long,long long)>;
+    struct SampledImage {
+        enum class Kind { unchanged, immutable, bgra };
+        Kind kind=Kind::unchanged;Texture texture;Rect area{};
+        SampledImage()=default;
+        SampledImage(Texture value):kind(Kind::immutable),texture(std::move(value)){}
+        // Borrow a working BGRA surface only until this sample is consumed.
+        // The retained node imports it into its own reusable packed output.
+        static SampledImage bgra(ID3D11Texture2D* source,Rect region){
+            SampledImage result;result.kind=Kind::bgra;result.texture=source;result.area=region;return result;
+        }
+    };
+    using Sample=std::function<SampledImage(long long,long long)>;
     struct Direct {
         // Sample copied state once per frame, then execute against assembled
         // resident underlays in native order. No finished unit source image.
@@ -30,7 +41,7 @@ private:
         Picture inputs[6];Id original[6]={};
         Texture output[2];std::uint64_t bytes[2]={},revision=0,seen=0,sampled=0,direct_revision=0;
         std::vector<std::uint64_t> dependencies;
-        Sample sample;Direct direct;
+        Sample sample;Direct direct;Compositor::ImportTarget sample_target;
     };
     ID3D11Device* device;ID3D11DeviceContext* context;
     Compositor replay;
@@ -40,6 +51,7 @@ private:
     std::vector<std::uint64_t> drawn_dependencies;
     bool admitted=true;
     std::size_t nodes=0;std::uint64_t resident_bytes=0;
+    std::uint64_t sample_allocations=0,sample_imports=0;
     // Match the bounded live native family, including saved packed/full-color
     // versions and old/new immutable map overlap at fullscreen.
     constexpr static std::uint64_t resident_budget=256u*1024u*1024u;
@@ -48,7 +60,8 @@ private:
     Rect extent(Picture const& p)const{return {0,0,int(p.width),int(p.height)};}
     std::shared_ptr<Node> node(){
         if(nodes>=32768)throw std::runtime_error("retained composition node budget");
-        auto value=new Node;++nodes;return std::shared_ptr<Node>(value,[this](Node* p){resident_bytes-=p->bytes[0]+p->bytes[1]+p->direct.input_bytes;delete p;--nodes;});
+        auto value=new Node;++nodes;return std::shared_ptr<Node>(value,[this](Node* p){
+            resident_bytes-=p->bytes[0]+p->bytes[1]+p->direct.input_bytes;delete p;--nodes;});
     }
     void output(Node& n,unsigned index,Texture texture){
         D3D11_TEXTURE2D_DESC d={};if(texture)texture->GetDesc(&d);
@@ -117,8 +130,27 @@ private:
         if(depth>256)throw std::runtime_error("retained composition dependency depth");
         if(n->sample){
             auto sampled=n->sample(ticks,frequency);
-            if(!sampled)throw std::runtime_error("retained visual selection retired");
-            if(sampled.Get()!=n->output[0].Get()){output(*n,0,std::move(sampled));n->revision=++serial;}
+            if(sampled.kind==SampledImage::Kind::bgra){
+                auto r=sampled.area;unsigned w=unsigned(n->area.right-n->area.left),h=unsigned(n->area.bottom-n->area.top);
+                if(r.left<0||r.top<0||r.right-r.left!=int(w)||r.bottom-r.top!=int(h))
+                    throw std::runtime_error("retained sample extent changed");
+                if(!n->sample_target.texture){
+                    auto bytes=std::uint64_t(w)*h*4;
+                    if(bytes>resident_budget-(resident_bytes-n->bytes[0]))throw std::runtime_error("retained composition texture budget");
+                    auto canvas=replay.create(w,h,Format::bgra32,false);
+                    if(!canvas)throw std::runtime_error("retained sample admission failed");
+                    n->sample_target=replay.release_import_target(canvas);++sample_allocations;
+                }
+                if(!replay.import_bgra(n->sample_target,sampled.texture.Get(),r.left,r.top))
+                    throw std::runtime_error("retained sample import failed");
+                ++sample_imports;output(*n,0,n->sample_target.texture);n->revision=++serial;
+            }else if(sampled.kind==SampledImage::Kind::immutable){
+                if(!sampled.texture)throw std::runtime_error("retained visual selection retired");
+                if(sampled.texture.Get()!=n->output[0].Get()){
+                    n->sample_target={};
+                    output(*n,0,std::move(sampled.texture));n->revision=++serial;
+                }
+            }
         }else if(n->operation){
             std::vector<std::uint64_t> versions;
             if(n->direct.revision)versions.push_back(n->direct_revision);
@@ -213,6 +245,8 @@ public:
     void uncommit(){front={};}
     std::uint64_t bytes()const{return resident_bytes;}
     Counts replay_stats()const{return replay.stats();}
+    std::uint64_t sampling_allocations()const{return sample_allocations;}
+    std::uint64_t sampling_imports()const{return sample_imports;}
     std::size_t node_count()const{return nodes;}
     bool accepting()const{return admitted;}
     std::size_t sampled_sources()const{
@@ -283,12 +317,6 @@ public:
         auto selected=read(image,area);
         auto zero=node();zero->area=area;write(front,area,zero,0);
         for(auto const& part:selected.patches)write(front,part.area,part.node,part.output);
-    }
-    Texture snapshot_bgra(ID3D11Texture2D* source,int x,int y,unsigned w,unsigned h){
-        auto image=replay.create(w,h,Format::bgra32);if(!image)throw std::runtime_error("retained map import budget");
-        Texture result;
-        try{if(!replay.import_bgra(image,source,x,y))throw std::runtime_error("retained map import failed");result=replay.texture(image);}
-        catch(...){replay.destroy(image);throw;}replay.destroy(image);return result;
     }
     Texture sample(long long ticks,long long frequency){
         if(!ready())return {};++frame;

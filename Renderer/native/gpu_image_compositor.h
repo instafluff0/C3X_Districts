@@ -355,6 +355,10 @@ uint expanded(uint c){uint b=((c&31)<<3)|((c&31)>>2),r,g;
     }
 
 public:
+    struct ImportTarget {
+        ComPtr<ID3D11Texture2D> texture;ComPtr<ID3D11UnorderedAccessView> write;
+        unsigned width=0,height=0;
+    };
     // R32_UINT stores native 16-bit words exactly too. Its explicit 4-byte budget
     // avoids format-dependent typed-UAV support and rounding intermediate images.
     Compositor(ID3D11Device* d,ID3D11DeviceContext* c,std::uint64_t cap=64u*1024u*1024u,bool record=false):device(d),context(c),budget(cap){
@@ -470,6 +474,12 @@ Texture2D<uint> input_image:register(t0);Texture2D<uint> text_curves:register(t1
     template<class Visit> void visit_images(Visit visit)const{
         for(auto const& image:images)if(image.id)visit(image.id,image.width,image.height,image.format,image.texture.Get());
     }
+    // Transfer an unrecorded conversion target to a retained owner, which
+    // charges its storage. It must not also occupy the temporary-work budget.
+    ImportTarget release_import_target(Id id){
+        auto image=find(id);if(recording||!image||image->read_only||image->format!=Format::bgra32)return {};
+        ImportTarget result{image->texture,image->write,image->width,image->height};destroy(id);return result;
+    }
     bool destroy(Id id){auto image=find(id);bool ok=image!=nullptr;if(ok){unbind();counters.resident_bytes-=bytes(*image);*image={};}
         if(recording)c3x_recording::event(c3x_recording::destroy,recording,[&](auto& b){c3x_recording::u64(b,id);c3x_recording::u32(b,ok);});return ok;}
     bool upload(Id id,std::uint64_t revision,std::uint32_t const* pixels,std::size_t count){
@@ -573,10 +583,15 @@ Texture2D<uint> input_image:register(t0);Texture2D<uint> text_curves:register(t1
         auto ok=import_bgra_unrecorded(id,source,x,y);if(recording){if(ok)record_texture(id,c3x_recording::external);else c3x_recording::journal().finish(c3x_recording::unsupported);}return ok;
     }
     bool import_bgra_unrecorded(Id id,ID3D11Texture2D* source,int x=0,int y=0){
-        auto destination=find(id);if(!destination||!source||destination->format!=Format::bgra32)return false;
+        auto destination=find(id);if(!destination||destination->read_only||destination->format!=Format::bgra32)return false;
+        if(!import_bgra({destination->texture,destination->write,destination->width,destination->height},source,x,y))return false;
+        destination->cpu_current=false;return true;
+    }
+    bool import_bgra(ImportTarget const& destination,ID3D11Texture2D* source,int x=0,int y=0){
+        if(!source||!destination.texture||!destination.write)return false;
         D3D11_TEXTURE2D_DESC desc={};source->GetDesc(&desc);
-        if(x<0||y<0||desc.Width<destination->width||desc.Height<destination->height||
-           unsigned(x)>desc.Width-destination->width||unsigned(y)>desc.Height-destination->height||desc.SampleDesc.Count!=1||
+        if(x<0||y<0||desc.Width<destination.width||desc.Height<destination.height||
+           unsigned(x)>desc.Width-destination.width||unsigned(y)>desc.Height-destination.height||desc.SampleDesc.Count!=1||
            desc.Format!=DXGI_FORMAT_B8G8R8A8_UNORM||!(desc.BindFlags&D3D11_BIND_SHADER_RESOURCE))return false;
         ComPtr<ID3D11Device> source_device;source->GetDevice(&source_device);if(source_device.Get()!=device)return false;
         if(!import_shader){
@@ -592,12 +607,12 @@ Texture2D<float4> input_image:register(t0);RWTexture2D<uint> output_image:regist
             checked(device->CreateComputeShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,&import_shader));
         }
         ComPtr<ID3D11ShaderResourceView> input;checked(device->CreateShaderResourceView(source,nullptr,&input));
-        unbind();auto read=input.Get();auto write=destination->write.Get();context->CSSetShaderResources(0,1,&read);context->CSSetUnorderedAccessViews(0,1,&write,nullptr);
+        unbind();auto read=input.Get();auto write=destination.write.Get();context->CSSetShaderResources(0,1,&read);context->CSSetUnorderedAccessViews(0,1,&write,nullptr);
         if(!constants){D3D11_BUFFER_DESC d={};d.ByteWidth=sizeof(Constants);d.Usage=D3D11_USAGE_DEFAULT;d.BindFlags=D3D11_BIND_CONSTANT_BUFFER;checked(device->CreateBuffer(&d,nullptr,&constants));}
         Constants params={};params.offset[0]=x;params.offset[1]=y;
         context->UpdateSubresource(constants.Get(),0,nullptr,&params,0,0);auto cb=constants.Get();context->CSSetConstantBuffers(0,1,&cb);
-        context->CSSetShader(import_shader.Get(),nullptr,0);context->Dispatch((destination->width+7)/8,(destination->height+7)/8,1);unbind();
-        destination->cpu_current=false;return true;
+        context->CSSetShader(import_shader.Get(),nullptr,0);context->Dispatch((destination.width+7)/8,(destination.height+7)/8,1);unbind();
+        return true;
     }
     bool displayable(Id id,unsigned width,unsigned height){
         auto image=find(id);return image&&image->format==Format::bgra32&&image->width==width&&image->height==height;

@@ -302,12 +302,13 @@ struct Compositor {template<class... T> Id attach_source(T...){unexpected_gpu();
 struct RetainedComposition {
  struct Direct {std::uint64_t input_bytes=0;bool animated=false;std::function<std::uint64_t(long long,long long)> revision;std::function<bool(Compositor&,Command const&)> draw;};
  struct Texture {ID3D11Texture2D* Get()const{unexpected_gpu();return nullptr;}explicit operator bool()const{return false;}};
- using Sample=std::function<Texture(long long,long long)>;
+ struct SampledImage {SampledImage()=default;SampledImage(Texture){}static SampledImage bgra(ID3D11Texture2D*,Rect){unexpected_gpu();return {};}};
+ using Sample=std::function<SampledImage(long long,long long)>;
 };
 struct Session {
  bool visual_ready(){return false;}bool visual_active(){return false;}
  std::uint64_t visual_bytes(){return 0;}std::size_t visual_nodes(){return 0;}std::size_t visual_sources(){return 0;}void stop_visuals(){}
- template<class... T> RetainedComposition::Texture snapshot_bgra(T...){unexpected_gpu();return {};}
+ std::uint64_t visual_sample_allocations(){return 0;}std::uint64_t visual_sample_imports(){return 0;}
  template<class... T> int visual_frame(T...){return unexpected_gpu();}
  Session(Device*,Context*){unexpected_gpu();}
  c3x_renderer_i64 current_ticket(){return unexpected_gpu();}std::uint64_t upload_count(){return unexpected_gpu();}
@@ -316,7 +317,7 @@ struct Session {
  template<class... T> int execute(T&&...){return unexpected_gpu();}
  template<class... T> int draw_dynamic(T...){return unexpected_gpu();}
  template<class... T> int compose_resident_unit(T...){return unexpected_gpu();}
- bool display_to(long long,std::uint64_t,int,int,int,int,int,Rect){return unexpected_gpu();}
+ bool display_to(long long,std::uint64_t,int,int,int,int,int,Rect,long long,long long){return unexpected_gpu();}
 };
 }
 struct MEMORYSTATUSEX {unsigned dwLength=0;unsigned long long ullAvailVirtual=0,ullAvailPageFile=0;};

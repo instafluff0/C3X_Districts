@@ -10679,10 +10679,12 @@ public:
         }
         QueryPerformanceCounter(&end);
         if(result==C3X_RENDERER_RESULT_ERROR || visual_frames<=3 || visual_frames%128==0){
-        char line[320];std::snprintf(line,sizeof(line),"result=%d frames=%llu request_ms=%.3f retained_bytes=%llu nodes=%zu native_map_calls=0 native_unit_calls=0 map_samples=%llu map_sources=%zu",
+        char line[448];std::snprintf(line,sizeof(line),"result=%d frames=%llu request_ms=%.3f retained_bytes=%llu nodes=%zu native_map_calls=0 native_unit_calls=0 map_samples=%llu map_sources=%zu sample_allocations=%llu sample_imports=%llu",
             result,static_cast<unsigned long long>(visual_frames),renderer_state.trace.milliseconds(end.QuadPart-begin.QuadPart),
             static_cast<unsigned long long>(session->visual_bytes()),session->visual_nodes(),
-            static_cast<unsigned long long>(visual_map_samples),session->visual_sources());
+            static_cast<unsigned long long>(visual_map_samples),session->visual_sources(),
+            static_cast<unsigned long long>(session->visual_sample_allocations()),
+            static_cast<unsigned long long>(session->visual_sample_imports()));
         renderer_state.trace.write("visual-frame",line,result==C3X_RENDERER_RESULT_ERROR||visual_frames<=3||visual_frames%128==0);
         }
         return input.result(result);
@@ -11686,7 +11688,7 @@ private:
         ~GpuOutputMode(){state.gpu_output_mode=previous;}
     };
     c3x_gpu_images::RetainedComposition::Sample retain_visual_map(c3x_renderer_frame_v1 input){
-        using Texture=c3x_gpu_images::RetainedComposition::Texture;
+        using Sampled=c3x_gpu_images::RetainedComposition::SampledImage;
         // A native prepare is not a displayed-front replacement. Each retained
         // source owns its immutable capture until the compositor releases it.
         // Only renderer reset/configuration invalidates every source at once.
@@ -11701,23 +11703,20 @@ private:
             dynamic_inputs.bytes(),dynamic_inputs.peak,dynamic_inputs.captures,dynamic_inputs.rejected,unit_instances.size());
         renderer_state.trace.write("dynamic-inputs",detail,true);
         if(!capture || !selected)return {}; // Keep the coherent retained image; never sample partial inputs.
-        auto* session=renderer_state.gpu_composition.get();
-        Texture initial=session->snapshot_bgra(static_cast<ID3D11Texture2D*>(gpu_publication.resident.texture.get()),
-            gpu_publication.source_x,gpu_publication.source_y,w,h);
         auto origin=visual_ticks,clock=RendererState::resource_clock(gpu_publication.frame);
-        return [this,capture,selected,origin,clock,x,y,w,h,last=std::move(initial)](long long ticks,long long frequency)mutable -> Texture{
+        return [this,capture,selected,origin,clock,x,y,w,h](long long ticks,long long frequency)mutable -> Sampled{
             c3x_renderer_frame_v1 frame={},view={};
             if(!capture->valid() || !selected->sample(ticks,frequency,origin,view)){
-                renderer_state.trace.write("visual-map-unavailable","captured scope retired or invalid clock",true);return last;
+                renderer_state.trace.write("visual-map-unavailable","captured scope retired or invalid clock",true);return {};
             }
             frame=capture->frame();
-            auto next=RendererState::resource_clock(view);if(next==clock)return last;
+            auto next=RendererState::resource_clock(view);if(next==clock)return {};
             frame.presentation_time_ticks=view.presentation_time_ticks;frame.presentation_frequency=view.presentation_frequency;
             c3x_renderer_output_v1 out={C3X_RENDERER_API_VERSION,sizeof(out)};GpuOutputMode mode(renderer_state,true);
             if(!renderer_state.render(frame,out,-1,nullptr,0,nullptr,0,&view)||!renderer_state.gpu_map_valid||renderer_state.frame_output_readbacks)
                 throw std::runtime_error("retained map sample failed");
-            ++visual_map_samples;last=renderer_state.gpu_composition->snapshot_bgra(renderer_state.gpu_map_texture,x,y,w,h);
-            clock=next;return last;
+            ++visual_map_samples;clock=next;
+            return Sampled::bgra(renderer_state.gpu_map_texture,{x,y,x+w,y+h});
         };
     }
     c3x_gpu_images::RetainedComposition::Direct unit_scene_operation(){

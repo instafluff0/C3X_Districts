@@ -266,6 +266,36 @@ int test_retained_composition(){
         std::puts("PASS dense native replacement: map_publications=32 UI_writes=32000 exact=1 retained_bytes_stable=1");
         retained.clear();assert(retained.bytes()==0&&retained.node_count()==0);
     }
+    // Native saved views may retain multiple animated map versions. Their
+    // outputs use the retained budget, not the smaller temporary-work budget.
+    {
+        constexpr unsigned width=2240,height=1260;Rect bounds={0,0,width,height};
+        Compositor live(device.Get(),context.Get());RetainedComposition retained(device.Get(),context.Get());
+        auto original=live.create(width,height,Format::bgra32);assert(original);
+        std::vector<unsigned> pixels(width*height,0xff123456);
+        D3D11_TEXTURE2D_DESC desc={};desc.Width=width;desc.Height=height;desc.MipLevels=desc.ArraySize=desc.SampleDesc.Count=1;
+        desc.Format=DXGI_FORMAT_B8G8R8A8_UNORM;desc.Usage=D3D11_USAGE_DEFAULT;desc.BindFlags=D3D11_BIND_SHADER_RESOURCE;
+        D3D11_SUBRESOURCE_DATA initial={pixels.data(),width*4,0};ComPtr<ID3D11Texture2D> sampled;
+        checked(device->CreateTexture2D(&desc,&initial,&sampled));
+        retained.create(100,width,height,Format::bgra32);
+        for(Id id=1;id<=16;++id){
+            retained.create(id,width,height,Format::bgra32);
+            retained.source(id,live.texture(original),[&](long long,long long){
+                return RetainedComposition::SampledImage::bgra(sampled.Get(),bounds);},true,true);
+            int left=int(id-1)*140;Rect strip={left,0,left+140,int(height)};
+            retained.record({Kind::copy,100,id,strip,bounds,left,0});
+        }
+        retained.commit(100,bounds);
+        for(unsigned tick=1;tick<=3;++tick){
+            std::fill(pixels.begin(),pixels.end(),0xff123456+tick);
+            context->UpdateSubresource(sampled.Get(),0,nullptr,pixels.data(),width*4,0);
+            assert(retained_read(device.Get(),context.Get(),retained.sample(tick,1000).Get())==pixels);
+            assert(retained.sampling_allocations()==16 && retained.sampling_imports()==16*tick);
+            assert(retained.bytes()==std::uint64_t(width)*height*4*16);
+        }
+        retained.clear();assert(!retained.bytes()&&!retained.node_count()&&!retained.replay_stats().resident_bytes);
+        std::puts("PASS fullscreen sampled versions: 16 independent owners, three exact frames, 16 total allocations, reset releases all storage");
+    }
     // A CPU snapshot can retain correct pixels while losing the map's sample
     // callback. Even an independently animated unit must not certify that
     // frozen map as ready and disable the native recovery scheduler.
@@ -292,21 +322,29 @@ int test_retained_composition(){
         copy_map();show();assert(session.visual_ready());
         // Native transfers must sample the same clock as autonomous frames.
         // The immutable original map stays unchanged; only its sampled source advances.
-        auto sampled=source;long long last_tick=0;unsigned samples=0;
+        ComPtr<ID3D11Texture2D> sampled;desc.BindFlags=D3D11_BIND_SHADER_RESOURCE;
+        checked(device->CreateTexture2D(&desc,&initial,&sampled));
+        long long last_tick=0;unsigned samples=0;
         assert(session.publish(source.Get(),2,0,0,w,h,[&](long long ticks,long long){
-            last_tick=ticks;++samples;return RetainedComposition::Texture(sampled.Get());}));
+            if(ticks==last_tick)return RetainedComposition::SampledImage{};
+            last_tick=ticks;++samples;return RetainedComposition::SampledImage::bgra(sampled.Get(),full);}));
         request.ticket=2;request.action=C3X_GPU_SUBMIT;commands={{Kind::copy,canvas,session.map_image(),full,full}};
         assert(session.execute(request,commands,{},result,output)==C3X_RENDERER_RESULT_OK);
         for(unsigned tick=1;tick<=8;++tick){
             std::fill(pixels.begin(),pixels.end(),0xff123400u+tick);
-            initial.pSysMem=pixels.data();ComPtr<ID3D11Texture2D> next;
-            desc.BindFlags=D3D11_BIND_SHADER_RESOURCE;checked(device->CreateTexture2D(&desc,&initial,&next));sampled=session.snapshot_bgra(next.Get(),0,0,w,h);
+            context->UpdateSubresource(sampled.Get(),0,nullptr,pixels.data(),w*4,0);
             assert(session.display_to(2,canvas,target.Get(),display.Get(),buffer.Get(),w,h,full,tick*66,1000));
             assert(last_tick==tick*66 && samples==tick);
             assert(retained_read(device.Get(),context.Get(),display.Get())==pixels);
+            assert(session.visual_sample_allocations()==1 && session.visual_sample_imports()==tick);
+            assert(session.display_to(2,canvas,target.Get(),display.Get(),buffer.Get(),w,h,full,tick*66,1000));
+            assert(samples==tick && session.visual_sample_imports()==tick);
             // Native working images are not modified by animation presentation.
+            request.action=C3X_GPU_READBACK;request.image=std::int64_t(canvas);request.pixel_count=w*h;
+            assert(session.execute(request,{}, {},result,output)==C3X_RENDERER_RESULT_OK);
+            assert(output==retained_read(device.Get(),context.Get(),source.Get()));
         }
-        std::puts("PASS native transfer animation: eight native-only frames sample current map time without autonomous offers");
+        std::puts("PASS native transfer animation: eight native-only samples, one allocation, unchanged clocks reuse pixels, native versions preserved");
         assert(session.publish(source.Get(),3,0,0,w,h,[&](long long,long long){return RetainedComposition::Texture(source.Get());}));
         request.ticket=3;
         auto show_current=[&]{assert(session.display_to(3,canvas,target.Get(),display.Get(),buffer.Get(),w,h,full));};
@@ -336,8 +374,8 @@ int test_retained_composition(){
         request.action=C3X_GPU_READBACK;request.image=std::int64_t(canvas);request.pixel_count=w*h;
         assert(session.execute(request,{}, {},result,output)==C3X_RENDERER_RESULT_OK);
         assert(output==retained_read(device.Get(),context.Get(),source.Get()));
-        auto recovered=sampled; // sampled already owns packed pixels.
-        assert(session.publish(source.Get(),6,0,0,w,h,[&](long long,long long){return recovered;}));
+        assert(session.publish(source.Get(),6,0,0,w,h,[&](long long,long long){
+            return RetainedComposition::SampledImage::bgra(sampled.Get(),full);}));
         request.ticket=6;copy_map();
         assert(session.display_to(6,canvas,target.Get(),display.Get(),buffer.Get(),w,h,full,726,1000));
         assert(session.visual_ready() && retained_read(device.Get(),context.Get(),display.Get())==pixels);
