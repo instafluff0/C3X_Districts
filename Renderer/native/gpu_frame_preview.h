@@ -219,45 +219,9 @@ if(ok && !std::strcmp(gpu_frame_test,"1")) {
                 gpu_render(&request,&view,&meta)==C3X_RENDERER_RESULT_OK,"fresh session after native oracle"))break;map_expected=expected;
         }
 #endif
-        if(phase==0 && ok && (test_frame.target_width<=2224 || test_frame.target_height<=1244)){
-            auto prepare=reinterpret_cast<c3x_renderer_prepare_nearby_view_fn>(GetProcAddress(module,"c3x_renderer_prepare_nearby_view"));
-            auto refresh=test_frame;auto refresh_tiles=test_tiles;
-            for(auto& tile:refresh_tiles)tile.anchor_x-=80;
-            refresh.tiles=refresh_tiles.data();refresh.presentation_time_ticks+=refresh.presentation_frequency/15;
-            auto refresh_request=request;refresh_request.frame=&refresh;
-            verify_gpu(gpu_render(&refresh_request,&view,&meta)==C3X_RENDERER_RESULT_OK && view.prepared &&
-                view.presentation_time_ticks==test_frame.presentation_time_ticks,"scroll selects previous resident coverage immediately");
-            verify_gpu(prepare && prepare(&refresh_request)==C3X_RENDERER_RESULT_OK,"queue resident nearby area");
-            auto deadline=GetTickCount64()+15000;unsigned delay=20;
-            do {
-                Sleep(delay);delay=(std::min)(500u,delay*2);
-                verify_gpu(gpu_render(&refresh_request,&view,&meta)==C3X_RENDERER_RESULT_OK,"poll resident prepared selection");
-                if(!view.prepared || view.presentation_time_ticks!=refresh.presentation_time_ticks)verify_gpu(prepare(&refresh_request)==C3X_RENDERER_RESULT_OK,"resume superseded preparation");
-            }while(ok && (!view.prepared || view.presentation_time_ticks!=refresh.presentation_time_ticks) && GetTickCount64()<deadline);
-            verify_gpu(view.prepared && !view.map_readbacks && !meta.bgra_pixels,"prepared GPU map adopted without CPU pixels");
-            verify_gpu(view.presentation_time_ticks==refresh.presentation_time_ticks,"prepared adoption preserves sample clock");
-            if(ok){
-                // Preserve the true prepared crop as an explicit oracle. Later
-                // requests may move within this coverage without rendering.
-                verify_gpu(read(view.map_image)==C3X_RENDERER_RESULT_OK,"prepared map oracle");
-                expected=actual;map_expected=actual;
-                auto held=refresh;held.presentation_time_ticks+=test_frame.presentation_frequency/2;
-                auto held_request=request;held_request.frame=&held;
-                verify_gpu(gpu_render(&held_request,&view,&meta)==C3X_RENDERER_RESULT_OK && view.prepared &&
-                    view.presentation_time_ticks==refresh.presentation_time_ticks,"held GPU ambient sample keeps old clock");
-                verify_gpu(read(view.map_image)==C3X_RENDERER_RESULT_OK && actual==expected,"held prepared pixels unchanged");
-                std::vector<unsigned> oracle;
-                verify_gpu(capture_reference(refresh,oracle) && oracle==expected,"prepared GPU crop equals independently finished native CPU area");
-                std::printf("PASS prepared GPU map adoption: queued resident area, selected immutable view, honest clock, no CPU map readback\n");
-                // The ordinary phase counters below require a fresh session.
-                gpu_reset();verify_gpu(render(&test_frame,&control)==C3X_RENDERER_RESULT_OK,"restore CPU phase control");
-                auto control_pixels=static_cast<unsigned const*>(control.bgra_pixels);expected.assign(control_pixels,control_pixels+actual.size());verify_gpu(capture_reference(test_frame,expected),"restore CPU area reference");map_expected=expected;
-                verify_gpu(gpu_render(&request,&view,&meta)==C3X_RENDERER_RESULT_OK,"restore exact GPU phase");
-            }
-        }
-        if(phase==0 && ok && test_frame.target_width>2224 && test_frame.target_height>1244){
-            // At the maximum working extent there is no room for a wider donor.
-            // Demand must render the exact view, with an honest clock and no readback.
+        if(phase==0 && ok){
+            // Every extent renders the demanded retained scene. No padded donor
+            // or alternate zoom image changes the clock or coverage contract.
             auto refresh=test_frame;auto refresh_tiles=test_tiles;
             for(auto& tile:refresh_tiles)tile.anchor_x-=80;
             refresh.tiles=refresh_tiles.data();refresh.presentation_time_ticks+=refresh.presentation_frequency/15;
@@ -265,12 +229,12 @@ if(ok && !std::strcmp(gpu_frame_test,"1")) {
             auto prepare=reinterpret_cast<c3x_renderer_prepare_nearby_view_fn>(GetProcAddress(module,"c3x_renderer_prepare_nearby_view"));
             verify_gpu(capture_reference(refresh,expected) && gpu_render(&refresh_request,&view,&meta)==C3X_RENDERER_RESULT_OK &&
                 !view.prepared && !view.map_readbacks && !meta.bgra_pixels && view.presentation_time_ticks==refresh.presentation_time_ticks,
-                "maximum extent exact resident camera demand");
-            verify_gpu(prepare && prepare(&refresh_request)==C3X_RENDERER_RESULT_ERROR,"maximum extent declines wider preparation");
-            verify_gpu(read(view.map_image)==C3X_RENDERER_RESULT_OK && actual==expected,"maximum extent exact camera pixels");
-            if(ok)std::puts("PASS bounded GPU map demand: exact current camera and clock; wider preparation declined at maximum extent");
+                "exact resident camera demand");
+            verify_gpu(prepare && prepare(&refresh_request)==C3X_RENDERER_RESULT_ERROR,"legacy optional image preparation declines");
+            verify_gpu(read(view.map_image)==C3X_RENDERER_RESULT_OK && actual==expected,"exact camera pixels");
+            if(ok)std::puts("PASS bounded GPU map demand: exact current camera and clock; no wider preparation at any extent");
             gpu_reset();verify_gpu(render(&test_frame,&control)==C3X_RENDERER_RESULT_OK && capture_reference(test_frame,expected) &&
-                gpu_render(&request,&view,&meta)==C3X_RENDERER_RESULT_OK,"restore maximum extent phase control");map_expected=expected;
+                gpu_render(&request,&view,&meta)==C3X_RENDERER_RESULT_OK,"restore exact camera phase control");map_expected=expected;
         }
         if(old_ticket){auto stale=image_request(C3X_GPU_CREATE);stale.ticket=old_ticket;stale.width=stale.height=2;verify_gpu(execute(stale)==C3X_RENDERER_RESULT_SUPERSEDED,"old ticket rejected");}
         old_ticket=view.ticket;

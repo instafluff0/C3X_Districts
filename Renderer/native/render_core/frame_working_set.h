@@ -2,7 +2,9 @@
 #include <algorithm>
 #include <cstddef>
 // Logical D3D allocation bytes, not physical VRAM or process virtual address
-// usage. Geometry, textures and native published fronts have separate owners.
+// usage. Native composition and simultaneous publication occupancy reduce the
+// optional-cache allowance. Geometry/assets keep their existing content budgets;
+// whole-process VA pressure includes their allocations and Civ III itself.
 namespace c3x_renderer { namespace render_core {
 struct FrameWorkingSet {
     static constexpr std::size_t mib=1024u*1024u,limit=1024u*mib;

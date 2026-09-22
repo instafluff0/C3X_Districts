@@ -2655,9 +2655,6 @@ struct district_button_image_set {
 	c3x_renderer_camera_begin_view_fn custom_renderer_camera_begin;
 	c3x_renderer_camera_poll_view_fn custom_renderer_camera_poll;
 	c3x_renderer_camera_present_view_fn custom_renderer_camera_present;
-	c3x_renderer_prepare_nearby_view_fn custom_renderer_prepare_nearby;
-	c3x_renderer_prepare_view_fn custom_renderer_prepare_view;
-	bool custom_renderer_nearby_preparing;
 	c3x_renderer_camera_cancel_fn custom_renderer_camera_cancel;
 	struct custom_renderer_native_view custom_renderer_display_view, custom_renderer_queued_view;
 	long long custom_renderer_camera_ticket, custom_renderer_display_clock;

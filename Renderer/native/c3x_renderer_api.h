@@ -405,14 +405,11 @@ typedef int (*c3x_renderer_camera_poll_view_fn)(c3x_renderer_i64 ticket, struct 
 // This opt-in lease enables immutable synchronous publications for future calls.
 // It neither submits work nor waits for rendering nor schedules a native redraw.
 typedef int (*c3x_renderer_camera_present_view_fn)(struct c3x_renderer_camera_request_v1 const *, struct c3x_renderer_camera_view_v1 *);
-// Optional caller-driven nearby preparation. OK means the copied request is
-// admitted/already served by this preparation policy, not that pixels are ready.
-// The caller keeps polling camera_present_view with fresh authoritative captures.
-// Other results retain the existing exact render/camera-queue path. No callback.
+// Legacy optional preparation ABI. Current builds decline with ERROR and use
+// the ordinary exact render/camera queue. Kept for older bridges and recordings;
+// no background image producer or copied prospective view remains.
 typedef int (*c3x_renderer_prepare_nearby_view_fn)(struct c3x_renderer_camera_request_v1 const *);
-// Optional prospective view, supplied by the caller. Query checks admission only:
-// PENDING requests a snapshot; OK means present/queued. Submission copies input.
-// Pixels still require camera_present_view with fresh authoritative capture.
+// Same legacy optional ABI; query/submission both return ERROR.
 typedef int (*c3x_renderer_prepare_view_fn)(struct c3x_renderer_camera_request_v1 const *, int query_only);
 /* Optional, caller-thread-only native observation. No pixels or strings are captured. */
 enum c3x_renderer_native_operation {

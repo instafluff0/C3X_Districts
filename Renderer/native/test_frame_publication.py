@@ -229,13 +229,36 @@ int main(){
 #include "Renderer/native/render_core/world_input_capture.h"
 #include "Renderer/native/render_core/world_preparation_region.h"
 #include "Renderer/native/render_core/cliff_placement.h"
-#include "Renderer/native/prepared_view_area.h"
 #include "Renderer/native/gpu_frame_api.h"
 #include "Renderer/native/visual_cadence.h"
 #include "Renderer/native/gpu_image_commands.h"
 #include "Renderer/native/tactical_overlay.h"
 #include "Renderer/native/render_core/scene_surface.h"
 #include <functional>
+// Recording is an observation seam; this scheduler fixture leaves it disabled.
+namespace c3x_inputs {
+enum class Kind {camera,world_page,visual,presentation,native_snapshot,tactical};
+struct Call {
+ bool completed=false;template<class F> Call(Kind,int,F){}
+ int result(int code){completed=true;return code;}
+ template<class F> int result(int code,F){return result(code);}
+};
+struct Runtime {bool active(){return false;}void gameplay(){}template<class F>void emit(Kind,int,F){}};
+Runtime& runtime(){static Runtime value;return value;}
+struct Assets {bool enabled=false;};Assets& replay_assets(){static Assets value;return value;}
+struct Realtime {bool enabled=false;void offer(int){}};Realtime& realtime_replay(){static Realtime value;return value;}
+struct Clock {std::vector<std::pair<long long,long long>> values;void sample(long long&,long long&){assert(false);}};
+Clock* replay_clock(){return nullptr;}
+unsigned long long parent_token(){return 0;}
+template<class... T>void c3x_renderer_camera_identity_v1_fields(T&&...){}
+template<class... T>void c3x_renderer_tile_v1_fields(T&&...){}
+template<class... T>void frame(T&&...){}
+template<class... T>void target_fields(T&&...){}
+template<class... T>void tactical(T&&...){}
+void require(bool value,char const*){assert(value);}
+struct ScreenInput {template<class... T>void encode(T&&...){}};
+template<class... T>bool display_pixels(T&&...){assert(false);return false;}
+}
 using HDC=void*;using HWND=void*;using UINT_PTR=std::uintptr_t;
 using UINT=unsigned;using DWORD=unsigned long;using ULONGLONG=unsigned long long;
 using WPARAM=std::uintptr_t;using LPARAM=std::intptr_t;
@@ -246,7 +269,7 @@ int PostThreadMessageA(DWORD thread,UINT message,WPARAM ticket,LPARAM high){
 ULONGLONG GetTickCount64(){assert(false);return 0;}
 void OutputDebugStringA(char const*){assert(false);}
 constexpr unsigned GA_ROOT=2;
-bool IsWindowVisible(HWND){return false;}HWND GetForegroundWindow(){return nullptr;}
+bool IsIconic(HWND){return false;}bool IsWindowVisible(HWND){return false;}HWND GetForegroundWindow(){return nullptr;}
 HWND GetAncestor(HWND,unsigned){return nullptr;}
 void renderer_visual_timer(HWND,UINT,UINT_PTR,DWORD){}
 void renderer_world_timer(HWND,UINT,UINT_PTR,DWORD){}
@@ -369,7 +392,7 @@ struct Bodies {
 struct TacticalGPU {template<class... T> ID3D11Texture2D* packed(T&&...){unexpected_gpu();return nullptr;}};
 struct D3D11_RECT {int left,top,right,bottom;};
 struct RendererState {
-    bool memory_pressured=false;void preserve_process_headroom(){}
+    std::size_t publication_working_bytes=0;bool memory_pressured=false;void preserve_process_headroom(){}
     struct Scene : c3x_renderer::render_core::CapturedScene {std::uint64_t signature=0;} topology_cache;
     struct WorldStorage {unsigned clears=0;void clear(){++clears;}} world_preparation_queue,world_backing;
     TacticalGPU tactical_gpu;
@@ -401,7 +424,6 @@ struct RendererState {
     std::atomic<unsigned> target_clock_entries{0};
     bool animate_pixels=false,fail_render=false,world_preparation=false;
     bool shared_scene_surface=false;
-    std::vector<std::uint64_t> prepared_view_dependencies()const{return {};}
     bool throw_cancellation=false,throw_failure=false;
     bool render(c3x_renderer_frame_v1 const& f,c3x_renderer_output_v1& out,int=-1,
                 std::atomic<bool> const* stop=nullptr,std::uint64_t=0,unsigned const* =nullptr,unsigned=0,c3x_renderer_frame_v1 const* =nullptr,D3D11_RECT const* =nullptr){
@@ -1022,124 +1044,38 @@ int main(){
         for(int i=0;i<20;++i)assert(pull.draw_unit(unit,reinterpret_cast<HDC>(1))==C3X_RENDERER_RESULT_OK);
         assert(hold_unit_pixels.load());hold_unit_pixels=false;pull.reset_and_stop();
     }
-    // A completed surrounding area serves the actual new camera without
-    // entering D3D; the next producer owns copied input and can be cancelled.
-    {
-        RendererState state;RendererWorker pull(state);state.shared_scene_surface=true;
-        state.visible_resource_animations=1;state.animate_pixels=true;
-        auto area_frame=f;auto area_tile=tile;area_tile.tile_x=area_tile.tile_y=20;
-        area_tile.anchor_x=area_tile.anchor_y=0;area_tile.tile_flags=C3X_RENDERER_TILE_RENDER;
-        area_frame.tiles=&area_tile;area_frame.target_width=128;area_frame.target_height=96;
-        area_frame.presentation_frequency=1000;area_frame.presentation_time_ticks=100;
-        c3x_renderer_camera_request_v1 request={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(request),&area_frame,{1,2,3,4}};
-        c3x_renderer_camera_view_v1 view={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(view)};
-        assert(pull.camera_present_view(request,view)==C3X_RENDERER_RESULT_PENDING);
-        assert(pull.render(area_frame,out,request.identity)==C3X_RENDERER_RESULT_OK);
-        assert(pull.prepare_nearby_view(request)==C3X_RENDERER_RESULT_OK);
-        area_tile.anchor_x=-32;
-        until([&]{return pull.camera_present_view(request,view)==C3X_RENDERER_RESULT_OK;});
-        auto entries=state.entered.load();
-        for(int i=0;i<5;++i)assert(pull.camera_present_view(request,view)==C3X_RENDERER_RESULT_OK);
-        assert(state.entered.load()==entries && view.frame.tiles[0].anchor_x==-32);
-        ++area_frame.presentation_time_ticks;
-        assert(pull.prepare_nearby_view(request)==C3X_RENDERER_RESULT_OK);
-        until([&]{return pull.camera_present_view(request,view)==C3X_RENDERER_RESULT_OK && view.frame.presentation_time_ticks==101;});
-        // Refresh keeps the area's original world placement, independent of
-        // the current camera's -32 pixel occurrence translation.
-        assert(static_cast<unsigned const*>(view.output.bgra_pixels)[0]==(128u^topology^101u));
-        entries=state.entered.load();
-        ++area_tile.visibility_mask;
-        assert(pull.camera_present_view(request,view)==C3X_RENDERER_RESULT_PENDING);
-        state.hold=true;
-        assert(pull.prepare_nearby_view(request)==C3X_RENDERER_RESULT_OK);
-        until([&]{return state.entered.load()>entries;});
-        area_tile.anchor_x=-64; // active job already owns the earlier snapshot
-        assert(pull.camera_present_view(request,view)==C3X_RENDERER_RESULT_PENDING);
-        pull.reset_and_stop();assert(state.cancelled.load()>0);
-        assert(pull.camera_present_view(request,view)==C3X_RENDERER_RESULT_PENDING);
-    }
-    // Prospective views are copied, share bounded publication ownership and
-    // return through fresh-capture validation without another renderer entry.
+    // Camera/zoom changes use the same exact publication path at every size.
+    // No optional request can enqueue an alternate image or mutate its owner.
     {
         RendererState state;RendererWorker pull(state);state.shared_scene_surface=true;
         auto base=f;auto observed=tile;observed.tile_x=observed.tile_y=20;
         observed.anchor_x=observed.anchor_y=0;observed.tile_flags=C3X_RENDERER_TILE_RENDER;
         base.tiles=&observed;base.target_width=128;base.target_height=96;base.tile_width=128;base.tile_height=64;
         c3x_renderer_camera_request_v1 request={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(request),&base,{1,2,3,4}};
-        c3x_renderer_camera_view_v1 view={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(view)};
-        assert(pull.camera_present_view(request,view)==C3X_RENDERER_RESULT_PENDING);
+        c3x_renderer_camera_view_v1 current={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(current)};
         assert(pull.render(base,out,request.identity)==C3X_RENDERER_RESULT_OK);
-        auto other=base;other.tile_width=160;other.tile_height=80;request.frame=&other;
-        assert(pull.prepare_view(request,true)==C3X_RENDERER_RESULT_PENDING);
-        auto entries=state.entered.load();state.hold=true;
-        assert(pull.prepare_view(request,false)==C3X_RENDERER_RESULT_OK);
-        until([&]{return state.entered.load()>entries;});
-        assert(pull.prepare_view(request,true)==C3X_RENDERER_RESULT_OK);
-        state.hold=false;
-        until([&]{return pull.camera_present_view(request,view)==C3X_RENDERER_RESULT_OK;});
-        request.frame=&base;
-        assert(pull.camera_present_view(request,view)==C3X_RENDERER_RESULT_OK);
-        entries=state.entered.load();request.frame=&other;
-        assert(pull.camera_present_view(request,view)==C3X_RENDERER_RESULT_OK && state.entered.load()==entries);
-        other.clip_left=2;other.clip_right=other.target_width-2;other.visible_animation_count=3;
-        assert(pull.camera_present_view(request,view)==C3X_RENDERER_RESULT_OK && state.entered.load()==entries);
-        assert(view.frame.clip_left==2 && view.output.clip_left==2 && view.frame.clip_right==other.clip_right && view.frame.visible_animation_count==3);
+        for(int width:{128,160,192,128}) {
+            base.tile_width=width;base.tile_height=width/2;observed.anchor_x-=16;
+            assert(pull.camera_present_view(request,current)==C3X_RENDERER_RESULT_PENDING);
+            auto entries=state.entered.load();
+            assert(pull.prepare_nearby_view(request)==C3X_RENDERER_RESULT_ERROR);
+            assert(pull.prepare_view(request,false)==C3X_RENDERER_RESULT_ERROR);
+            assert(pull.prepare_view(request,true)==C3X_RENDERER_RESULT_ERROR);
+            assert(state.entered.load()==entries);
+            c3x_renderer_i64 ticket=0;state.hold=true;
+            assert(pull.camera_begin(base,ticket,request.identity)==C3X_RENDERER_RESULT_PENDING);
+            until([&]{return state.entered.load()>entries;});
+            auto submitted_anchor=observed.anchor_x;observed.anchor_x-=1;
+            state.hold=false;
+            until([&]{return pull.camera_poll_view(ticket,current)==C3X_RENDERER_RESULT_OK;});
+            assert(current.frame.tile_width==width && current.frame.tiles[0].anchor_x==submitted_anchor);
+            assert(pull.camera_present_view(request,current)==C3X_RENDERER_RESULT_PENDING);
+            observed.anchor_x=submitted_anchor;
+            assert(pull.camera_present_view(request,current)==C3X_RENDERER_RESULT_OK);
+            assert(current.frame.target_width==128 && current.frame.target_height==96);
+        }
         ++observed.visibility_mask;
-        assert(pull.camera_present_view(request,view)==C3X_RENDERER_RESULT_PENDING);
-        pull.reset_and_stop();
-        assert(pull.camera_present_view(request,view)==C3X_RENDERER_RESULT_PENDING);
-    }
-    // Actual camera motion cancels a different prospective zoom immediately,
-    // even within one animation quantum. A stable view can offer it again.
-    {
-        RendererState state;RendererWorker pull(state);state.shared_scene_surface=true;
-        state.visible_resource_animations=1;state.animate_pixels=true;
-        auto base=f;auto observed=tile;observed.tile_x=observed.tile_y=20;
-        observed.anchor_x=observed.anchor_y=0;observed.tile_flags=C3X_RENDERER_TILE_RENDER;
-        base.tiles=&observed;base.target_width=128;base.target_height=96;base.tile_width=128;base.tile_height=64;
-        base.presentation_frequency=1000;base.presentation_time_ticks=100;
-        c3x_renderer_camera_request_v1 request={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(request),&base,{1,2,3,4}};
-        c3x_renderer_camera_view_v1 view={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(view)};
-        pull.camera_present_view(request,view);assert(pull.render(base,out,request.identity)==C3X_RENDERER_RESULT_OK);
-        auto future=base;auto future_tile=observed;future.tiles=&future_tile;
-        future.tile_width=160;future.tile_height=80;request.frame=&future;
-        auto entered=state.entered.load();state.hold_clock=100;
-        assert(pull.prepare_view(request,false)==C3X_RENDERER_RESULT_OK);
-        until([&]{return state.entered.load()>entered;});
-        observed.anchor_x-=16;base.presentation_time_ticks=101;request.frame=&base;
-        assert(pull.camera_present_view(request,view)==C3X_RENDERER_RESULT_OK);
-        assert(pull.prepare_nearby_view(request)==C3X_RENDERER_RESULT_OK);
-        until([&]{return state.cancelled.load()>0;});
-        until([&]{return pull.camera_present_view(request,view)==C3X_RENDERER_RESULT_OK && view.frame.presentation_time_ticks==101;});
-        request.frame=&future;assert(pull.prepare_view(request,true)==C3X_RENDERER_RESULT_PENDING);
-        state.hold_clock=-1;
-        assert(pull.prepare_view(request,false)==C3X_RENDERER_RESULT_OK);
-        until([&]{return pull.camera_present_view(request,view)==C3X_RENDERER_RESULT_OK;});
-        pull.reset_and_stop();
-    }
-    // Current-view animation interrupts speculative compilation. Its immutable
-    // snapshot gets priority and interrupted content can resume afterward.
-    {
-        RendererState state;RendererWorker pull(state);state.shared_scene_surface=true;
-        state.visible_resource_animations=1;state.animate_pixels=true;
-        auto base=f;auto observed=tile;observed.tile_x=observed.tile_y=20;
-        observed.anchor_x=observed.anchor_y=0;observed.tile_flags=C3X_RENDERER_TILE_RENDER;
-        base.tiles=&observed;base.target_width=128;base.target_height=96;base.tile_width=128;base.tile_height=64;
-        base.presentation_frequency=1000;base.presentation_time_ticks=100;
-        c3x_renderer_camera_request_v1 request={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(request),&base,{1,2,3,4}};
-        c3x_renderer_camera_view_v1 view={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(view)};
-        pull.camera_present_view(request,view);assert(pull.render(base,out,request.identity)==C3X_RENDERER_RESULT_OK);
-        auto future=base;future.tile_width=160;future.tile_height=80;request.frame=&future;
-        auto entered=state.entered.load();state.hold_clock=100;
-        assert(pull.prepare_view(request,false)==C3X_RENDERER_RESULT_OK);
-        until([&]{return state.entered.load()>entered;});
-        request.frame=&base;base.presentation_time_ticks=250;
-        assert(pull.camera_present_view(request,view)==C3X_RENDERER_RESULT_OK);
-        assert(pull.prepare_nearby_view(request)==C3X_RENDERER_RESULT_OK);
-        until([&]{return pull.camera_present_view(request,view)==C3X_RENDERER_RESULT_OK && view.frame.presentation_time_ticks==250;});
-        assert(state.cancelled.load()>0);state.hold_clock=-1;
-        request.frame=&future;
-        until([&]{return pull.camera_present_view(request,view)==C3X_RENDERER_RESULT_OK;});
+        assert(pull.camera_present_view(request,current)==C3X_RENDERER_RESULT_PENDING);
         pull.reset_and_stop();
     }
     // Recursive source compilation can unwind on supersession. That must

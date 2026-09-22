@@ -69,4 +69,57 @@ struct WorldPreparationRegion {
         return !selected.empty() && tiles.size()<=CapturedScene::occurrence_limit;
     }
 };
+
+// One background demand order for the existing world compiler. Camera motion
+// reprioritizes unfinished regions; it neither resets completed work nor keeps
+// another copy of tile/topology inputs. Missing authority is retried on the next
+// appearance revision. A cancelled lease leaves its region pending.
+class WorldPreparationSchedule {
+    std::array<std::uint64_t,10> scope{};
+    std::vector<unsigned> pending;
+    int center_x=0,center_y=0;
+    bool reorder=true;
+public:
+    unsigned completed=0,unavailable=0;
+    void clear(){pending.clear();scope={};completed=unavailable=0;reorder=true;}
+    void prioritize(c3x_renderer_frame_v1 const& f){
+        std::int64_t distance=INT64_MAX;int next_x=center_x,next_y=center_y;
+        for(unsigned i=0;i<f.tile_count;++i){auto const& tile=f.tiles[i];
+            if(!(tile.tile_flags&C3X_RENDERER_TILE_RENDER))continue;
+            auto dx=std::int64_t(tile.anchor_x)*2+f.tile_width-f.target_width;
+            auto dy=std::int64_t(tile.anchor_y)*2+f.tile_height-f.target_height;
+            auto d=(dx<0?-dx:dx)+2*(dy<0?-dy:dy);
+            if(d<distance){distance=d;next_x=tile.tile_x;next_y=tile.tile_y;}
+        }
+        reorder|=center_x!=next_x || center_y!=next_y;center_x=next_x;center_y=next_y;
+    }
+    void configure(c3x_renderer_frame_v1 const& f,std::uint64_t appearance,
+                   std::uint64_t lifetime,std::uint64_t assets,unsigned device){
+        std::array<std::uint64_t,10> next={appearance,lifetime,assets,device,
+            std::uint64_t(f.world_width_tiles),std::uint64_t(f.world_height_tiles),
+            std::uint64_t(f.tile_width),std::uint64_t(f.tile_height),
+            std::uint64_t(f.target_width),std::uint64_t(f.target_height)};
+        if(scope!=next){
+            clear();scope=next;pending.resize(WorldPreparationRegion::count(f));
+            for(unsigned i=0;i<pending.size();++i)pending[i]=i;
+        }
+        if(!reorder)return;
+        reorder=false;
+        int horizontal=WorldPreparationRegion::bands(f.world_width_tiles,f.target_width,f.tile_width,f.world_wrap_x!=0);
+        int vertical=WorldPreparationRegion::bands(f.world_height_tiles,f.target_height,f.tile_height,f.world_wrap_y!=0);
+        constexpr int extent=WorldPreparationRegion::extent;
+        unsigned columns=unsigned((f.world_width_tiles+extent-1)/extent+2*horizontal);
+        auto distance=[&](unsigned region){
+            auto x=WorldPreparationRegion::core(region%columns,f.world_width_tiles,horizontal);
+            auto y=WorldPreparationRegion::core(region/columns,f.world_height_tiles,vertical);
+            auto dx=std::int64_t(x[0])+x[1]+extent/2-center_x,dy=std::int64_t(y[0])+y[1]+extent/2-center_y;
+            return (dx<0?-dx:dx)+(dy<0?-dy:dy);
+        };
+        // Pop the nearest first. Stable ties keep preparation deterministic.
+        std::stable_sort(pending.begin(),pending.end(),[&](unsigned a,unsigned b){return distance(a)>distance(b);});
+    }
+    bool empty()const{return pending.empty();}
+    unsigned next()const{return pending.back();}
+    void finish(bool success){pending.pop_back();++completed;if(!success)++unavailable;}
+};
 }}

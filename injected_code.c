@@ -27726,9 +27726,6 @@ unload_custom_renderer ()
 	is->custom_renderer_camera_begin = NULL;
 	is->custom_renderer_camera_poll = NULL;
 	is->custom_renderer_camera_present = NULL;
-	is->custom_renderer_prepare_nearby = NULL;
-	is->custom_renderer_prepare_view = NULL;
-	is->custom_renderer_nearby_preparing = false;
 	is->custom_renderer_camera_cancel = NULL;
 	is->custom_renderer_navigation = NULL;
 	is->custom_renderer_camera_ticket = 0;
@@ -28048,8 +28045,6 @@ ensure_custom_renderer_loaded ()
 		is->custom_renderer_camera_begin = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_camera_begin_view");
 		is->custom_renderer_camera_poll = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_camera_poll_view");
 		is->custom_renderer_camera_present = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_camera_present_view");
-		is->custom_renderer_prepare_nearby = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_prepare_nearby_view");
-		is->custom_renderer_prepare_view = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_prepare_view");
 		is->custom_renderer_camera_cancel = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_camera_cancel");
 		char async_option[8] = {0};
 		if (get_environment != NULL) get_environment ("C3X_RENDERER_NATIVE_ASYNC", async_option, sizeof async_option);
@@ -28716,52 +28711,6 @@ prepare_custom_renderer_frame (struct c3x_renderer_frame_v1 * prepared)
 	return true;
 }
 
-void
-prepare_custom_renderer_zoom_views (struct c3x_renderer_camera_request_v1 const * current)
-{
-	if (! custom_renderer_zoom_enabled () || is->custom_renderer_prepare_view == NULL) return;
-	int levels[3] = {128, 160, 192};
-	struct c3x_renderer_frame_v1 frame = *current->frame;
-	if (frame.tile_width <= 0 || is->custom_renderer_zoom_native_tile_width <= 0) return;
-	struct c3x_renderer_camera_request_v1 request = *current;
-	request.frame = &frame;
-	struct c3x_renderer_tile_v1 * tiles = NULL;
-	long long fp_one = 65536;
-	long long center_x = (long long)(p_bic_data->ScreenWidth / 2) * fp_one;
-	long long center_y = (long long)(p_bic_data->ScreenHeight / 2) * fp_one;
-	for (int level = 0; level < ARRAY_LEN (levels); level++) {
-		if (levels[level] == current->frame->tile_width) continue;
-		frame.tile_width = levels[level]; frame.tile_height = levels[level] / 2;
-		if (is->custom_renderer_prepare_view (&request, true) != C3X_RENDERER_RESULT_PENDING) continue;
-		if (tiles == NULL) tiles = malloc (frame.tile_count * sizeof *tiles);
-		if (tiles == NULL) break;
-		memcpy (tiles, current->frame->tiles, frame.tile_count * sizeof *tiles);
-		long long tx = center_x - (center_x - is->custom_renderer_zoom_translate_x_fp) * levels[level] / current->frame->tile_width;
-		long long ty = center_y - (center_y - is->custom_renderer_zoom_translate_y_fp) * levels[level] / current->frame->tile_width;
-		for (unsigned int n = 0; n < frame.tile_count; n++) {
-			struct c3x_renderer_tile_v1 * tile = &tiles[n];
-			int x = custom_renderer_zoom_inverse_coordinate (tile->anchor_x, is->custom_renderer_zoom_translate_x_fp);
-			int y = custom_renderer_zoom_inverse_coordinate (tile->anchor_y, is->custom_renderer_zoom_translate_y_fp);
-			long long px = (long long)x * levels[level] * fp_one / is->custom_renderer_zoom_native_tile_width + tx;
-			long long py = (long long)y * levels[level] * fp_one / is->custom_renderer_zoom_native_tile_width + ty;
-			tile->anchor_x = (int)((px + (px >= 0 ? fp_one / 2 : -fp_one / 2)) / fp_one);
-			tile->anchor_y = (int)((py + (py >= 0 ? fp_one / 2 : -fp_one / 2)) / fp_one);
-			if (tile->tile_flags & C3X_RENDERER_TILE_PREFETCH) {
-				tile->tile_flags = (tile->tile_flags & ~C3X_RENDERER_TILE_RENDER) | C3X_RENDERER_TILE_TOPOLOGY_HALO;
-				if (tile->terrain_type >= 0 && tile->anchor_x < frame.target_width + 2 * frame.tile_width &&
-				    tile->anchor_x + frame.tile_width > -2 * frame.tile_width &&
-				    tile->anchor_y < frame.target_height + 4 * frame.tile_height &&
-				    tile->anchor_y + 4 * frame.tile_height > -4 * frame.tile_height)
-					tile->tile_flags = (tile->tile_flags & ~C3X_RENDERER_TILE_TOPOLOGY_HALO) | C3X_RENDERER_TILE_RENDER;
-			}
-		}
-		frame.tiles = tiles;
-		is->custom_renderer_prepare_view (&request, false);
-		frame.tiles = current->frame->tiles;
-	}
-	free (tiles);
-}
-
 bool
 composite_custom_renderer_frame ()
 {
@@ -28895,11 +28844,6 @@ composite_custom_renderer_frame ()
 	}
 	if (result == C3X_RENDERER_RESULT_OK) {
 		is->custom_renderer_async_presented = true;
-		// Copy this exact native capture before replacement flags are merged.
-		// Preparation completion never calls Civ III or asks for a redraw.
-		if (is->custom_renderer_async_drawing && is->custom_renderer_prepare_nearby != NULL)
-			is->custom_renderer_nearby_preparing = is->custom_renderer_prepare_nearby (&request) == C3X_RENDERER_RESULT_OK;
-		if (is->custom_renderer_nearby_preparing) prepare_custom_renderer_zoom_views (&request);
 		// Transfer category ownership only after this exact frame has rendered and
 		// composited successfully. Mapping intent alone never suppresses native art.
 		for (int n = 0; n < is->custom_renderer_tile_count; n++)
@@ -30647,7 +30591,7 @@ capture_custom_renderer_native_view (Map_Renderer * target, int viewer, struct c
 {
 	// One active request survives intervening calls. The next available slot
 	// captures the newest demand, so there is no stale FIFO or cancellation storm.
-	if (! navigation && (is->custom_renderer_nearby_preparing || is->custom_renderer_camera_ticket != 0 || ! is->custom_renderer_async_presented)) return false;
+	if (! navigation && (is->custom_renderer_camera_ticket != 0 || ! is->custom_renderer_async_presented)) return false;
 	long long animation_quantum = is->custom_renderer_qpc_frequency.QuadPart / 15;
 	if (animation_quantum < 1) animation_quantum = 1;
 	if (! navigation && view->camera_x == is->custom_renderer_display_view.camera_x &&
@@ -30870,7 +30814,6 @@ patch_Map_Renderer_m71_Draw_Tiles (Map_Renderer * this, int edx, int param_1, in
 	}
 	is->custom_renderer_async_drawing = async_view;
 	is->custom_renderer_async_presented = false;
-	is->custom_renderer_nearby_preparing = false;
 
 	is->custom_renderer_draw_in_progress = true;
 	if (! is->custom_renderer_redraw_pending)

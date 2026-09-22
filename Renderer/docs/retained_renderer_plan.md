@@ -4,8 +4,8 @@
 
 Agreed September 15, 2026: retain the original six architectural responsibilities
 and complete cheap GPU-ready scene rendering on top of independent visual frames.
-Scrolling should usually select/draw reusable content; nearby preparation helps
-without making every possible destination image a prerequisite for fast movement.
+Scrolling should usually select/draw reusable content. One world-content schedule
+prioritizes nearby unfinished regions; it does not prepare destination images.
 Full detail, authored animation and Civ III's gameplay/state authority remain
 unchanged. The zoom-owned map-overlay extension below is a planned rendering
 ownership change, not a second visibility, selection, or pathfinding system.
@@ -17,7 +17,8 @@ actions, programmatic centering and projection changes retain exact behavior.
 Units stay above all map geometry. Native actions, visibility, controls and unit/UI
 ordering remain authoritative. Shore waves, water motion and reflections are on
 in every normal performance workload. The tested renderer DLL is staged as an **evaluation build**; the current
-working-set update changes no injected hooks and loads on game restart. Live
+staged working-set build loads on game restart. The new camera-consolidation
+candidate removes injected speculative calls and requires reinstall after staging. Live
 gameplay and performance acceptance remain pending.
 [Architecture](renderer_architecture.md) owns the design;
 [validation](benchmark_workflow.md) owns measurement and acceptance.
@@ -31,7 +32,36 @@ not certify the failed live tail, complete M3.8 performance acceptance, or start
 a separate-process renderer. Future [LORE work](#lore-testing-and-migration-milestones)
 must follow the remaining measured costs.
 
+The [production architecture audit](architecture_audit.md) records the remaining
+cross-system consolidation: content scheduling and borrowed-input lifetimes,
+prepared-image navigation, native transaction boundaries and whole-process memory
+admission. M3.8 work must name and retire superseded producers/storage/callers
+alongside their replacements; the four working-set changes are not a completed
+architecture-wide cleanup. The implemented follow-up is described in
+[camera consolidation](camera_consolidation_results.md), with its remaining
+native transaction/content-lease costs and separate live validation gap.
+
 ## M3.8 current handoff — in progress
+
+**Completed consolidation:** one world-region preparation order replaces the
+neighborhood geometry queue. Exact retained-scene views replace padded/alternate
+zoom image production, its queues, crop finishing and injected requests. Cache
+admission accounts for concurrent publications and native composition. No new
+patch symbols or rendering ownership; all normal water effects remain enabled.
+Existing native barriers preserve actual CPU/UI ownership. See
+[camera consolidation results](camera_consolidation_results.md) for the replacement
+and retirement ledger, measured effects and independent regression checks.
+
+**Next unfinished responsibility:** shorten the remaining exact map transaction,
+content compilation/adoption and view/pass assembly on the existing recorded
+workload. The cold frame is still expensive; the Standard <33 ms p95 camera goal
+and the failed live tail are not accepted. Do not infer live FPS from replay API
+timings or use another manual capture as a prerequisite for that investigation.
+
+### Preserved earlier M3.8 evidence
+
+The following records precede the camera consolidation. Binary hashes, staging
+instructions and next-step pointers in this historical section are not current.
 
 **Completed:** the saved live prefix now has reconstructed display images,
 184,198 checked production lifetime decisions (zero mismatches), and 116 exact GPU

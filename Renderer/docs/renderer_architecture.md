@@ -14,6 +14,13 @@ sequence. [Validation](benchmark_workflow.md) defines evidence, not another queu
 These documents describe responsibilities; they do not mandate a new engine,
 ECS, class hierarchy, API migration or permanent residency of every world mesh.
 
+The [production architecture audit](architecture_audit.md) distinguishes current
+owners, overlapping scheduling, supported alternate routes and retirement
+requirements. Recent working-set improvements do not imply that consolidation
+is complete. [Camera consolidation](camera_consolidation_results.md) retires
+prepared camera images and the separate neighborhood geometry queue. Exact native
+transactions and frame-bound content leases still have real costs.
+
 ## World readiness and arbitrary navigation
 
 An unchanged distant destination must be drawable from persistent world content;

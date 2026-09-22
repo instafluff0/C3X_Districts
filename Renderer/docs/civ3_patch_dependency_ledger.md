@@ -1,5 +1,16 @@
 # Civ III patch dependency ledger
 
+## Retire speculative camera-image requests
+
+`required_user_action: ["Re-run INSTALL.bat after staging the matching renderer"]`.
+Existing `Map_Renderer_m71_Draw_Tiles`, `Map_Renderer_m19_Draw_Tile_by_XY_and_Flags`, and native navigation/
+composition hooks keep their registered signatures and addresses. The injected
+bridge no longer loads/calls optional nearby/alternate-zoom image preparation;
+three function-pointer/state fields and the prospective zoom helper are removed.
+Exact capture, zoom anchors, native camera following, and fallback remain in their
+existing owners. The DLL retains the optional ABI symbols as explicit unsupported
+responses for old bridges and recordings. No new patches or CSV changes.
+
 ## Ambient continuity through native UI and unit transitions
 
 `required_user_action: ["Re-run INSTALL.bat to remove injected ambient pause calls"]`.

@@ -209,6 +209,7 @@ struct Composition {void drain(){++drains;if(fail)throw std::runtime_error("bloc
 struct Worker {int native_screen(void*){++resets;return fail?C3X_RENDERER_RESULT_ERROR:C3X_RENDERER_RESULT_OK;}};
 Composition* native_composition=nullptr;Worker worker;Worker* renderer_worker=&worker;
 void OutputDebugStringA(char const*){}
+namespace c3x_inputs {struct Assets{bool enabled=false;};Assets& replay_assets(){static Assets a;return a;}}
 '''+drain+r'''
 int main(){
  unload_custom_renderer();assert(drains==1&&!resets&&!frees&&!detaches&&settled==C3X_NAV_BARRIER&&state.custom_renderer_init_state==IS_INIT_FAILED);

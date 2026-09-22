@@ -75,6 +75,7 @@ public:
     }
     RetainedComposition::Texture snapshot_bgra(ID3D11Texture2D* source,int x,int y,unsigned w,unsigned h){return layers.snapshot_bgra(source,x,y,w,h);}
     std::uint64_t visual_bytes()const{return layers.bytes();}
+    std::size_t allocation_bytes()const{return std::size_t(gpu.stats().resident_bytes+layers.bytes());}
     std::size_t visual_nodes()const{return layers.node_count();}
     std::size_t visual_sources()const{return layers.sampled_sources();}
     // Correct static pixels alone do not certify ambient delivery. A CPU

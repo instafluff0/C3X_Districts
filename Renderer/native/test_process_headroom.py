@@ -24,7 +24,8 @@ bool GlobalMemoryStatusEx(MEMORYSTATUSEX* p){p->ullAvailVirtual=available;return
 int retired=0;struct Resource{void Release(){++retired;delete this;}};
 struct State {
  bool memory_pressured=false,shared_scene_surface=false;ULONGLONG last_memory_control=0,last_unit_work=0;
- size_t attachment_bytes=0;
+ size_t attachment_bytes=0,composition_bytes=0;
+ size_t composition_working_bytes()const{return composition_bytes;}
  struct {size_t n=0;size_t bytes()const{return n;}void reset(){n=0;}}unit_scene_work;
  size_t frame_working_bytes()const{return attachment_bytes+unit_scene_work.bytes();}
  c3x_renderer::render_core::RenderRegionCache<Resource> render_regions;
@@ -48,6 +49,11 @@ int main(){
  s.unit_scene_work.n=50*mib;s.last_unit_work=now;now+=250;s.preserve_process_headroom();
  assert(s.unit_bodies.gpu_content_limit==74*mib&&s.unit_scene_work.bytes()==50*mib);
  now+=1000;s.preserve_process_headroom();assert(!s.unit_scene_work.bytes()&&s.unit_bodies.gpu_content_limit==124*mib);
+ // Simultaneously held composition/front allocations compete with optional
+ // caches; releasing a front restores capacity without recreating content.
+ s.composition_bytes=100*mib;now+=250;s.preserve_process_headroom();assert(s.unit_bodies.gpu_content_limit==24*mib);
+ s.composition_bytes=200*mib;now+=250;s.preserve_process_headroom();assert(!s.unit_bodies.gpu_content_limit);
+ s.composition_bytes=0;now+=250;s.preserve_process_headroom();assert(s.unit_bodies.gpu_content_limit==124*mib);
  using Budget=c3x_renderer::render_core::FrameWorkingSet;
  assert(Budget::scene(2240,1260)==684111360&&Budget::mirror(2240,1260)==92116992);
  for(size_t bytes:{0u,100u,900u,1024u,1200u})for(bool pressure:{false,true})for(bool shared:{false,true}){

@@ -1,4 +1,4 @@
-// Current-camera acceptance, including work spent preparing, followed by a
+// Exact retained-view camera acceptance, including demand preparation, followed by a
 // separate full-detail reference run. Included in the existing replay harness.
 if(ok && prepared_view_fixture) {
     struct AreaSample {std::vector<c3x_renderer_tile_v1> tiles;std::vector<unsigned char> pixels;
@@ -6,21 +6,6 @@ if(ok && prepared_view_fixture) {
     std::vector<AreaSample> samples;
     int origin_x=center_x,origin_y=center_y;
     LARGE_INTEGER frequency={},begin={},end={};QueryPerformanceFrequency(&frequency);
-    QueryPerformanceCounter(&begin);
-    bool ready=!prepare_nearby_view;
-    if(prepare_nearby_view) {
-        center_x=origin_x+1;auto probe_tiles=capture_view();center_x=origin_x;
-        auto probe=frame;probe.tiles=probe_tiles.data();probe.tile_count=unsigned(probe_tiles.size());
-        c3x_renderer_camera_request_v1 request={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(request),&probe,{1,2,3,frame.world_topology_revision}};
-        auto deadline=GetTickCount64()+30000;
-        do {c3x_renderer_camera_view_v1 view={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(view)};
-            ready=camera_present_view(&request,&view)==C3X_RENDERER_RESULT_OK;
-            if(!ready)Sleep(10);
-        }while(!ready && GetTickCount64()<deadline);
-    }
-    QueryPerformanceCounter(&end);
-    std::printf("PREPARED_VIEW opportunity_ms=%.3f supported=%u ready=%u\n",double(end.QuadPart-begin.QuadPart)*1000/frequency.QuadPart,unsigned(prepare_nearby_view!=nullptr),unsigned(ready));
-    ok=ok && ready;
     for(auto offset:std::vector<std::pair<int,int>>{{0,0},{1,0},{1,1},{0,1},{-1,1},{-1,0},{-1,-1},{0,-1},{0,0}}) {
         QueryPerformanceCounter(&begin);
         center_x=origin_x+offset.first;center_y=origin_y+offset.second;
@@ -56,63 +41,9 @@ if(ok && prepared_view_fixture) {
         if(code==C3X_RENDERER_RESULT_OK)write_bmp((std::string(argv[5])+".area-reference-"+std::to_string(i)+".bmp").c_str(),output);
     }
     center_x=origin_x;center_y=origin_y;tiles=capture_view();frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());
-    unsigned prepared_exact=0;
-    if(prepare_nearby_view) {
-        reset();handoff_ticket=0;
-        ok=ok && set_definitions(argv[2],argv[3],nullptr,custom_path)==C3X_RENDERER_RESULT_OK;
-        ok=ok && render_checked(&frame,&output)==C3X_RENDERER_RESULT_OK;
-        auto probe=frame;probe.tiles=samples[1].tiles.data();probe.tile_count=unsigned(samples[1].tiles.size());
-        c3x_renderer_camera_request_v1 request={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(request),&probe,{1,2,3,frame.world_topology_revision}};
-        auto deadline=GetTickCount64()+30000;bool fresh_ready=false;
-        do {c3x_renderer_camera_view_v1 view={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(view)};
-            fresh_ready=camera_present_view(&request,&view)==C3X_RENDERER_RESULT_OK;
-            if(!fresh_ready)Sleep(10);
-        }while(!fresh_ready && GetTickCount64()<deadline);
-        ok=ok && fresh_ready;
-        for(unsigned i=0;i<samples.size();++i){
-            probe.tiles=samples[i].tiles.data();probe.tile_count=unsigned(samples[i].tiles.size());
-            c3x_renderer_camera_view_v1 view={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(view)};
-            bool same=camera_present_view(&request,&view)==C3X_RENDERER_RESULT_OK && preview_ownership(probe,view.output);
-            if(same)same=samples[i].pixels.size()==std::size_t(view.output.stride_bytes)*view.output.height &&
-                !std::memcmp(samples[i].pixels.data(),view.output.bgra_pixels,samples[i].pixels.size()) &&
-                std::equal(samples[i].ownership.begin(),samples[i].ownership.end(),view.output.replacement_tile_flags);
-            prepared_exact+=same;ok=ok && same;
-        }
-    } else ok=ok && exact==samples.size();
-    auto oracle_clock=frame.presentation_time_ticks;
-    if(ok && prepare_view && prepare_nearby_view){
-        auto base=frame;
-        for(unsigned position:{0u,1u,2u}){
-            auto selected=base;selected.tiles=samples[position].tiles.data();selected.tile_count=unsigned(samples[position].tiles.size());
-            selected.presentation_time_ticks=oracle_clock+(position+1)*frame.presentation_frequency/15;
-            c3x_renderer_camera_request_v1 request={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(request),&selected,{1,2,3,frame.world_topology_revision}};
-            c3x_renderer_camera_view_v1 view={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(view)};
-            camera_present_view(&request,&view);prepare_nearby_view(&request);
-            auto deadline=GetTickCount64()+30000;bool refreshed=false;
-            do {refreshed=camera_present_view(&request,&view)==C3X_RENDERER_RESULT_OK && view.frame.presentation_time_ticks==selected.presentation_time_ticks;
-                // Civ III asks for preparation again after each successful
-                // composite; a poll alone intentionally schedules no redraw.
-                if(!refreshed){prepare_nearby_view(&request);Sleep(33);}
-            }while(!refreshed && GetTickCount64()<deadline);
-            std::vector<unsigned char> partial;
-            if(refreshed){auto data=static_cast<unsigned char const*>(view.output.bgra_pixels);partial.assign(data,data+std::size_t(view.output.stride_bytes)*view.output.height);}
-            reset();handoff_ticket=0;ok=ok && set_definitions(argv[2],argv[3],nullptr,custom_path)==C3X_RENDERER_RESULT_OK;
-            frame=base;frame.presentation_time_ticks=selected.presentation_time_ticks;
-            int code=render_checked(&frame,&output);
-            bool exact_partial=refreshed && code==C3X_RENDERER_RESULT_OK && camera_present_view(&request,&view)==C3X_RENDERER_RESULT_OK &&
-                partial.size()==std::size_t(view.output.stride_bytes)*view.output.height && !std::memcmp(partial.data(),view.output.bgra_pixels,partial.size());
-            std::printf("SELECTED_VIEW_REFERENCE position=%u status=%s refreshed=%u\n",position,exact_partial?"pass":"FAIL",unsigned(refreshed));
-            if(refreshed && !exact_partial){auto diagnostic=view.output;diagnostic.bgra_pixels=partial.data();
-                write_bmp((std::string(argv[5])+".selected-refresh-"+std::to_string(position)+".bmp").c_str(),diagnostic);
-                write_bmp((std::string(argv[5])+".selected-reference-"+std::to_string(position)+".bmp").c_str(),view.output);}
-            ok=ok && exact_partial;
-        }
-    }else if(ok && prepare_nearby_view){
-        frame.presentation_time_ticks=oracle_clock+3*frame.presentation_frequency/15;
-        ok=render_checked(&frame,&output)==C3X_RENDERER_RESULT_OK;
-    }
-    std::printf("PREPARED_VIEW_END status=%s exact_prepared=%u control_exact=%u samples=%zu visual_review=%s\n",
-        ok?"pass":"fail",prepared_exact,exact,samples.size(),exact==samples.size()?"unchanged":"required");
+    ok=ok && exact==samples.size();
+    std::printf("PREPARED_VIEW_END status=%s exact_prepared=0 control_exact=%u samples=%zu visual_review=%s\n",
+        ok?"pass":"fail",exact,samples.size(),exact==samples.size()?"unchanged":"required");
     // Separately timed, real elapsed animation clock. No file writes or oracle
     // preparation waits occur between these current-camera requests.
     auto offsets=std::vector<std::pair<int,int>>{{0,0},{1,0},{1,1},{0,1},{-1,1},{-1,0},{-1,-1},{0,-1}};
