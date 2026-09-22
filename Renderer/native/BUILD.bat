@@ -46,11 +46,11 @@ if /i "%~1"=="input-recording" (
   exit /b 0
 )
 
-if /i "%~1"=="linear-backup" (
-  if not exist "build\linear-backup" mkdir "build\linear-backup"
-  cl /nologo /std:c++17 /EHsc /O2 /W4 /WX test_linear_backup.cpp /Fo:build\linear-backup\ /Fe:build\linear-backup\test.exe /link /LARGEADDRESSAWARE d3d11.lib d3dcompiler.lib
+if /i "%~1"=="scene-redraw" (
+  if not exist "build\scene-redraw" mkdir "build\scene-redraw"
+  cl /nologo /std:c++17 /EHsc /O2 /W4 /WX test_scene_redraw.cpp /Fo:build\scene-redraw\ /Fe:build\scene-redraw\test.exe /link /LARGEADDRESSAWARE d3d11.lib d3dcompiler.lib
   if errorlevel 1 exit /b 1
-  build\linear-backup\test.exe
+  build\scene-redraw\test.exe
   if errorlevel 1 exit /b 1
   exit /b 0
 )

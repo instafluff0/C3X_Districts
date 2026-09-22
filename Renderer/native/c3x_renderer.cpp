@@ -70,6 +70,7 @@
 #include "render_core/resource_instances.h"
 #include "render_core/scene_depth.h"
 #include "render_core/scene_surface.h"
+#include "render_core/frame_working_set.h"
 #include "render_core/coastal_waves.h"
 #include "render_core/relief_query.h"
 #include "render_core/exact_point_cache.h"
@@ -81,7 +82,6 @@
 #include "render_core/cliff_placement.h"
 #include "render_core/source_shadow.h"
 #include "render_core/linear_target.h"
-#include "render_core/linear_backup.h"
 #include "source_fidelity/runtime.h"
 #include "source_fidelity/light_frame.h"
 #include "source_fidelity/terrain_compiler.h"
@@ -500,7 +500,7 @@ public:
 #endif
     bool bounded_post=false;
     bool shared_scene_surface=false,scene_surface_requested=false;
-    c3x_renderer::render_core::LinearBackup scene_backup;
+    std::map<std::pair<int,int>,c3x_renderer::render_core::RenderRegionKey> scene_reflection_cells;
     std::vector<D3D11_RECT> scene_dynamic_damage;
     std::uint64_t scene_static_signature=0,scene_reflection_signature=0;
     ID3D11Texture2D* scene_reflection_texture=nullptr;
@@ -603,21 +603,33 @@ public:
     unsigned frame_caster_preparations=0;
     std::size_t frame_post_lanes=0;
     bool memory_pressured=false;
-    ULONGLONG last_memory_control=0;
+    ULONGLONG last_memory_control=0,last_unit_work=0;
+    std::size_t frame_working_bytes()const{
+        return region_glow.linear.bytes()+std::size_t(region_glow.native_extent)*region_glow.native_height*(region_glow.native?16:0)+
+            std::size_t(scene_reflection_width)*scene_reflection_height*(scene_reflection_texture?32:0)+
+            unit_scene_work.bytes()+reflection.linear.bytes();
+    }
     void preserve_process_headroom(){
         auto now=GetTickCount64();if(now-last_memory_control<250)return;last_memory_control=now;
         MEMORYSTATUSEX memory={};memory.dwLength=sizeof(memory);if(!GlobalMemoryStatusEx(&memory))return;
         bool pressure=memory.ullAvailVirtual<(memory_pressured?1024ull:768ull)*1024*1024;
-        if(pressure==memory_pressured)return;
-        auto before=render_regions.gpu_bytes+unit_bodies.gpu_content_bytes;
+        // Idle unit scratch has no readers after submitted draws. D3D retains
+        // resources for commands already queued; no flush or fence is needed.
+        auto scratch=unit_scene_work.bytes();
+        if(scratch && now-last_unit_work>=1000)unit_scene_work.reset();
+        auto attachments=frame_working_bytes();
+        auto limits=c3x_renderer::render_core::FrameWorkingSet::caches(attachments,pressure,shared_scene_surface);
+        if(pressure==memory_pressured && limits.regions==render_regions.gpu_limit &&
+            limits.units==unit_bodies.gpu_content_limit && scratch==unit_scene_work.bytes())return;
+        auto before=render_regions.gpu_bytes+unit_bodies.gpu_content_bytes+scratch;
         memory_pressured=pressure;
-        // Completed reflection pages and old unit poses are reproducible caches.
-        // Keep the displayed scene, native GPU authority and current geometry.
-        render_regions.set_gpu_limit((pressure?64u:256u)*1024u*1024u);
-        unit_bodies.set_gpu_content_limit((pressure?48u:192u)*1024u*1024u);
+        // One envelope for working attachments and reproducible caches. The
+        // shared-scene atlas replaces reflection page textures completely.
+        render_regions.set_gpu_limit(limits.regions);
+        unit_bodies.set_gpu_content_limit(limits.units);
         GlobalMemoryStatusEx(&memory);
         char detail[256];sprintf_s(detail,"active=%u available_virtual=%llu released_cache_bytes=%zu reflection_cap=%zu unit_cap=%zu",
-            unsigned(pressure),memory.ullAvailVirtual,before-render_regions.gpu_bytes-unit_bodies.gpu_content_bytes,
+            unsigned(pressure),memory.ullAvailVirtual,before-render_regions.gpu_bytes-unit_bodies.gpu_content_bytes-unit_scene_work.bytes(),
             render_regions.gpu_limit,unit_bodies.gpu_content_limit);
         trace.write("process-headroom",detail,true);
     }
@@ -859,7 +871,7 @@ public:
     std::size_t viewport_cache_bytes = 0;
     CachedGeometry geometry_cache;
     GeometryDrawView::Records geometry_vertex_buffers;
-    struct MaterialSubmission {
+    struct SceneSubmission {
         struct Batch {
             GeometryDrawView::Records records;
             ViewportShaderSettings settings{};
@@ -876,7 +888,7 @@ public:
         std::vector<c3x_renderer::render_core::SourceShadow::Caster> casters;
         c3x_renderer::render_core::SourceShadow::PreparedCasters prepared;
         std::size_t bytes=0;
-    } material_submission;
+    } material_submission,static_submission;
     std::unordered_multimap<std::uint64_t, CachedTileGeometry> tile_geometry_cache;
     c3x_renderer::render_core::ResidentContent<CachedTileGeometry> resident_content{tile_geometry_cache_capacity};
     c3x_renderer::render_core::ResidencyCandidates residency_candidates;
@@ -1027,7 +1039,7 @@ public:
         scene_reflection_signature=0;scene_reflection_width=scene_reflection_height=0;
         release(scene_reflection_clear);release(scene_reflection_view);release(scene_reflection_texture);
         scene_restore.reset();
-        unit_scene_work.reset();scene_backup.reset();scene_dynamic_damage.clear();scene_static_signature=0;scene_overlap=false;scene_damage.clear();
+        unit_scene_work.reset();scene_reflection_cells.clear();scene_dynamic_damage.clear();scene_static_signature=0;scene_overlap=false;scene_damage.clear();
         cancel_pixel_preparation();
         linear_frame.reset(); linear_block.reset(); reflection.linear.reset();region_reflection.linear.reset();region_glow.linear.reset();
         pixel_blocks.clear();
@@ -1048,7 +1060,7 @@ public:
     }
 
     void clear_resource_backdrops() {
-        unit_scene_work.reset();scene_backup.reset();scene_dynamic_damage.clear();scene_static_signature=0;scene_overlap=false;scene_damage.clear();
+        unit_scene_work.reset();scene_reflection_cells.clear();scene_dynamic_damage.clear();scene_static_signature=0;scene_overlap=false;scene_damage.clear();
         for(auto & block:resource_backdrops){release(block.color);release(block.depth);}
         resource_backdrops.clear();resource_backdrop_epoch=0;resource_backdrop_bytes=0;
     }
@@ -4151,8 +4163,8 @@ public:
             bool material_pass=false) {
         auto select_begin=std::chrono::steady_clock::now();double execute_ms=0;
         using Shadow=c3x_renderer::render_core::SourceShadow;
-        auto& retained=material_submission;
-        bool retain=material_pass && inputs.is(geometry_vertex_buffers);
+        auto& retained=material_pass?material_submission:static_submission;
+        bool retain=inputs.is(geometry_vertex_buffers) && (material_pass || !dynamic_pass);
         bool reused=retain && retained.signature && retained.signature==cached_signature.complete &&
             retained.width==w && retained.height==h && retained.origin_x==region_origin_x && retained.origin_y==region_origin_y &&
             !std::memcmp(&retained.settings,&settings,sizeof(settings)) && retained.rectangles.size()==physical_rectangles.size() &&
@@ -4165,17 +4177,17 @@ public:
                     true,false,nullptr,false,&retained.casters,&retained.prepared,128,0,0,false,true))return false;
                 ++batches;
             }
-            selected_dynamic+=retained.selected;
+            if(dynamic_pass)selected_dynamic+=retained.selected;else selected_static+=retained.selected;
             frame_scene_execute_ms+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-select_begin).count();
             char detail[160];sprintf_s(detail,"reused=1 batches=%zu selected=%u bytes=%zu caster_builds=0 selection_scans=0",
-                retained.batches.size(),retained.selected,retained.bytes);trace.write("material-submission",detail,true);
+                retained.batches.size(),retained.selected,retained.bytes);trace.write(material_pass?"material-submission":"static-submission",detail,true);
             return true;
         }
         if(retain)retained={};
         std::vector<Shadow::Caster> temporary_casters;Shadow::PreparedCasters prepared;
-        bool retained_casters=dynamic_pass && !material_pass && retained.signature && retained.signature==cached_signature.complete;
-        auto& casters=retained_casters?retained.casters:temporary_casters;
-        auto prepared_ptr=retained_casters?&retained.prepared:prepare_shadow_submission(geometry_vertex_buffers,casters,prepared);
+        bool retained_casters=dynamic_pass && !material_pass && material_submission.signature && material_submission.signature==cached_signature.complete;
+        auto& casters=retained_casters?material_submission.casters:temporary_casters;
+        auto prepared_ptr=retained_casters?&material_submission.prepared:prepare_shadow_submission(geometry_vertex_buffers,casters,prepared);
         auto spans=c3x_renderer::render_core::scene_spans<D3D11_RECT>(int(w),int(h),region_origin_x,region_origin_y);
             for(auto span:spans){
             ViewportShaderSettings pass_settings=settings;
@@ -4192,7 +4204,7 @@ public:
             // raster surface cells. Dynamic pose lists keep their short scan.
             using Item=c3x_renderer::render_core::RegionContributorIndex::Item;
             std::vector<Item> candidates;
-            bool indexed=retained_world && !dynamic_pass && region_contributors.ready;
+            bool indexed=retained_world && inputs.is(geometry_vertex_buffers) && region_contributors.ready;
             if(indexed){
                 std::vector<Item> found;
                 for(auto const& rect:rectangles){
@@ -4218,7 +4230,7 @@ public:
                 execute_ms+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-execute_begin).count();
                 if(retain && ok){
                     std::size_t count=0;for(auto const& layer:selected)count+=layer.size();
-                    retained.bytes+=sizeof(MaterialSubmission::Batch)+count*sizeof(GeometryDrawRecord)+rectangles.size()*sizeof(D3D11_RECT)+pages.size()*64;
+                    retained.bytes+=sizeof(SceneSubmission::Batch)+count*sizeof(GeometryDrawRecord)+rectangles.size()*sizeof(D3D11_RECT)+pages.size()*64;
                     if(retained.bytes>4u*1024u*1024u){retain=false;retained={};}
                     else {retained.batches.push_back({selected,pass_settings,rectangles,pages,span.rect});retained.selected+=unsigned(count);}
                 }
@@ -4267,7 +4279,7 @@ public:
                     retained.rectangles=physical_rectangles;retained.bytes+=retained.casters.capacity()*sizeof(Shadow::Caster)+retained.prepared.bounds.capacity()*sizeof(retained.prepared.bounds[0]);
                 }
                 char detail[160];sprintf_s(detail,"reused=0 batches=%zu selected=%u bytes=%zu caster_builds=1",
-                    retained.batches.size(),retained.selected,retained.bytes);trace.write("material-submission",detail,true);
+                    retained.batches.size(),retained.selected,retained.bytes);trace.write(material_pass?"material-submission":"static-submission",detail,true);
             }else if(retain)retained={};
             frame_scene_execute_ms+=execute_ms;
             frame_scene_select_ms+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-select_begin).count()-execute_ms;
@@ -4297,8 +4309,15 @@ public:
         unsigned scale=unsigned(definition->sample_scale);if(scale!=1&&scale!=2&&scale!=4)return false;
         unsigned projection=unit.projection_scale_milli?unit.projection_scale_milli:(unit.reduced?500:1000);
         unsigned w=unsigned(unit.sprite_width)*projection/1000,h=unsigned(unit.sprite_height)*projection/1000;
-        if(std::size_t(w)*h*scale*scale*48>96u*1024u*1024u){++unit_scene_rejections;return false;}
+        if(std::size_t(w)*h*scale*scale*48>c3x_renderer::render_core::FrameWorkingSet::unit_limit){++unit_scene_rejections;return false;}
         if(unit_bodies.reuse_scene_body(unit,offset_x,offset_y,region_width,region_height,sample))return true;
+        last_unit_work=GetTickCount64();
+        auto requested=std::size_t(w)*h*scale*scale*48;
+        using Budget=c3x_renderer::render_core::FrameWorkingSet;
+        auto attachments=frame_working_bytes()-work.bytes()+requested;
+        if(attachments>Budget::limit){++unit_scene_rejections;return false;}
+        auto limits=Budget::caches(attachments,memory_pressured,shared_scene_surface);
+        render_regions.set_gpu_limit(limits.regions);unit_bodies.set_gpu_content_limit(limits.units);
         if(!work.ensure(device,w*scale,h*scale,true,false)||!scene_restore.ensure(device))return false;
         // Keep the exact native raster viewport. Clear only this occurrence's
         // conservative footprint; map pixels/depth are never part of unit work.
@@ -4312,25 +4331,33 @@ public:
     }
 
     bool prepare_scene_reflection() {
-        if(!reflection.enabled)return true;
+        if(!reflection.enabled){
+            scene_reflection_cells.clear();scene_reflection_signature=0;
+            release(scene_reflection_clear);release(scene_reflection_view);release(scene_reflection_texture);
+            scene_reflection_width=scene_reflection_height=0;reflection.linear.reset();return true;
+        }
         unsigned w=unsigned(width)+16,h=unsigned(height)+16;
         if(!scene_reflection_texture || scene_reflection_width!=w || scene_reflection_height!=h){
-            scene_reflection_signature=0;release(scene_reflection_clear);release(scene_reflection_view);release(scene_reflection_texture);
+            scene_reflection_signature=0;scene_reflection_cells.clear();release(scene_reflection_clear);release(scene_reflection_view);release(scene_reflection_texture);
             D3D11_TEXTURE2D_DESC d={};d.Width=w*2;d.Height=h*2;d.MipLevels=d.ArraySize=d.SampleDesc.Count=1;
             d.Format=DXGI_FORMAT_R16G16B16A16_FLOAT;d.BindFlags=D3D11_BIND_SHADER_RESOURCE|D3D11_BIND_RENDER_TARGET;
             if(FAILED(device->CreateTexture2D(&d,nullptr,&scene_reflection_texture)) ||
                FAILED(device->CreateShaderResourceView(scene_reflection_texture,nullptr,&scene_reflection_view)) ||
-               FAILED(device->CreateRenderTargetView(scene_reflection_texture,nullptr,&scene_reflection_clear)))return false;
+               FAILED(device->CreateRenderTargetView(scene_reflection_texture,nullptr,&scene_reflection_clear))){
+                release(scene_reflection_clear);release(scene_reflection_view);release(scene_reflection_texture);
+                scene_reflection_width=scene_reflection_height=0;return false;
+            }
             scene_reflection_width=w;scene_reflection_height=h;
         }
-        unsigned built=0,reused=0,unneeded=0,allocations=0,recycled=0;
-        double allocation_ms=0;
+        unsigned built=0,reused=0,unneeded=0;
+        std::size_t metadata_bytes=0;
         LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
         if(scene_reflection_signature!=cached_signature.complete){
-            // Reuse the existing bounded mirror scratch and exact dependency
-            // cache. Retain only resolved linear samples for water, never a
-            // second full-view MSAA color/depth pair. World-aligned cells can
-            // survive scrolling, jumps and local edits; no animation clock key.
+            // Atlas contents have one owner. Keys describe those exact cells,
+            // not a second texture cache. A failed partial update invalidates
+            // all keys before any retry can read overwritten samples.
+            auto previous_cells=std::move(scene_reflection_cells);
+            scene_reflection_cells.clear();scene_reflection_signature=0;
             using Shadow=c3x_renderer::render_core::SourceShadow;
             std::vector<Shadow::Caster> casters;Shadow::PreparedCasters prepared;
             auto prepared_ptr=prepare_shadow_submission(geometry_vertex_buffers,casters,prepared);
@@ -4341,7 +4368,7 @@ public:
             // Only water samples this atlas. Keep conservative receiver bounds,
             // including the shader's <=3 internal-pixel normal distortion and
             // linear filtering. Dry cells need no mirrored scene or cache entry.
-            float clear[4]={};context->ClearRenderTargetView(scene_reflection_clear,clear);
+            std::map<std::pair<int,int>,c3x_renderer::render_core::RenderRegionKey> next_cells;
             std::vector<D3D11_RECT> receivers;
             for(auto layer:{geometry_water,geometry_river})for(auto const& water:geometry_vertex_buffers[layer]){
                 auto r=water.bounds;int dx=water.translation_x+int(geometry_viewport_settings.translation[0])+8;
@@ -4351,6 +4378,8 @@ public:
             for(int y=first_y;y<int(h);y+=128)for(int x=first_x;x<int(w);x+=128){
                 bool needed=false;for(auto const& r:receivers)
                     if(r.left<x+128 && r.right>x && r.top<y+128 && r.bottom>y){needed=true;break;}
+                if(needed && visibility_pass)
+                    needed=visibility_coverage.may_contribute(x-24,y-24,x+144,y+144);
                 if(!needed){++unneeded;continue;}
                 auto local=geometry_viewport_settings;
                 local.translation[0]+=float(4-x);local.translation[1]+=float(4-y);
@@ -4358,49 +4387,28 @@ public:
                 c3x_renderer::render_core::RenderRegionKey key;
                 bool cacheable=!world_regions_control && render_region_key(geometry_vertex_buffers,local,casters,prepared_ptr,key);
                 if(cacheable)key.push_back(0x7265666c65637431ull); // resolved RGBA16F mirror, not finished BGRA
-                ID3D11Texture2D* image=cacheable?render_regions.find(key):nullptr;
-                if(image)++reused;
-                else {
-                    auto reflected=local;reflected.translation[0]+=4;reflected.translation[1]+=4;
-                    reflected.inverse_size[0]=reflected.inverse_size[1]=1.f/144;
-                    if(!submit_geometry(geometry_vertex_buffers,{{0,0,144,144}},reflected,city_glow.target,
-                        block_depth,144,144,nullptr,false,true,{},true,&casters,prepared_ptr))return false;
-                    ++built;
-                    if(cacheable){
-                        std::size_t bytes=288u*288u*8u;
-                        ID3D11Texture2D* saved=nullptr;
-                        D3D11_TEXTURE2D_DESC desc={};reflection.linear.resolved->GetDesc(&desc);
-                        // Reuse a matching evicted allocation instead of creating
-                        // and destroying a GPU texture for every cold mirror cell.
-                        // Copies execute in order on this same immediate context;
-                        // the old dependency key is retired before pixels change.
-                        auto allocation_begin=std::chrono::steady_clock::now();
-                        if(render_regions.make_room(key,bytes,&saved)){
-                            if(saved){D3D11_TEXTURE2D_DESC old={};saved->GetDesc(&old);
-                                if(std::memcmp(&old,&desc,sizeof(desc)))release(saved);
-                                else ++recycled;
-                            }
-                            if(!saved && SUCCEEDED(device->CreateTexture2D(&desc,nullptr,&saved)))++allocations;
-                            if(saved){
-                                context->CopyResource(saved,reflection.linear.resolved);
-                                if(render_regions.insert(std::move(key),saved,bytes)){image=saved;saved=nullptr;}
-                            }
-                        }
-                        allocation_ms+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-allocation_begin).count();
-                        release(saved);
-                    }
-                }
+                auto cell=std::make_pair(x,y);auto old=previous_cells.find(cell);
+                bool same=cacheable && old!=previous_cells.end() && old->second==key;
+                auto bytes=key.capacity()*sizeof(std::uint64_t)+96;
+                if(cacheable && metadata_bytes+bytes<=16u*1024u*1024u){metadata_bytes+=bytes;next_cells.emplace(cell,std::move(key));}
+                if(same){++reused;continue;}
+                auto reflected=local;reflected.translation[0]+=4;reflected.translation[1]+=4;
+                reflected.inverse_size[0]=reflected.inverse_size[1]=1.f/144;
+                if(!submit_geometry(geometry_vertex_buffers,{{0,0,144,144}},reflected,city_glow.target,
+                    block_depth,144,144,nullptr,false,true,{},true,&casters,prepared_ptr))return false;
+                ++built;
                 int l=std::max(0,x),t=std::max(0,y),r=std::min(int(w),x+128),b=std::min(int(h),y+128);
                 D3D11_BOX box={UINT((l-x)*2),UINT((t-y)*2),0,UINT((r-x)*2),UINT((b-y)*2),1};
                 context->OMSetRenderTargets(0,nullptr,nullptr);
                 context->CopySubresourceRegion(scene_reflection_texture,0,UINT(l*2),UINT(t*2),0,
-                    image?image:reflection.linear.resolved,0,&box);
+                    reflection.linear.resolved,0,&box);
             }
+            scene_reflection_cells=std::move(next_cells);
             scene_reflection_signature=cached_signature.complete;
         }
         QueryPerformanceCounter(&end);
         char detail[320];sprintf_s(detail,"built=%u reused=%u unneeded=%u atlas_bytes=%zu cache_bytes=%zu cache_metadata=%zu ms=%.3f allocations=%u recycled=%u allocation_ms=%.3f",
-            built,reused,unneeded,std::size_t(w)*h*32,render_regions.gpu_bytes,render_regions.metadata_bytes,trace.milliseconds(end.QuadPart-begin.QuadPart),allocations,recycled,allocation_ms);
+            built,reused,unneeded,std::size_t(w)*h*32,std::size_t(0),metadata_bytes,trace.milliseconds(end.QuadPart-begin.QuadPart),0u,0u,0.0);
         trace.write("scene-reflection",detail,true);return true;
     }
 
@@ -4414,22 +4422,27 @@ public:
         // Retain only visible samples plus the finishing filter margin. The
         // retired background guard consumed hundreds of MiB without making
         // arbitrary destinations resident; camera damage already redraws exposed spans.
-        // Sparse static backup: color/depth only; finishing targets belong to Glow.
+        // One scene-linear sample set; static damage redraws use retained geometry.
         auto& glow=region_glow;
         unsigned w=unsigned(width)+8,h=unsigned(height)+8;
-        std::size_t target_bytes=std::size_t(w)*h*432u;
+        using Budget=c3x_renderer::render_core::FrameWorkingSet;
+        std::size_t target_bytes=Budget::scene(unsigned(width),unsigned(height));
         if(!city_profile || !c3x_renderer::render_core::scene_surface_extent(width,height) ||
-           target_bytes>(world_preparation?1408u:1152u)*1024u*1024u) {
+           target_bytes>Budget::scene_limit) {
             trace.write("scene-surface-failed","bounded scene view/target contract",true);return false;
         }
+        // Reserve the final working set before allocating replacements. Do
+        // not let old cache capacity compete with required frame attachments.
+        auto attachments=target_bytes+(reflection.enabled?Budget::mirror(unsigned(width),unsigned(height)):0)+
+            unit_scene_work.bytes()+reflection.linear.bytes();
+        if(attachments>Budget::limit)return false;
+        auto limits=Budget::caches(attachments,memory_pressured,true);
+        render_regions.set_gpu_limit(limits.regions);unit_bodies.set_gpu_content_limit(limits.units);
         if(glow.native_extent!=w || glow.native_height!=h || !glow.linear.color){
-            scene_backup.reset();scene_dynamic_damage.clear();scene_static_signature=0;scene_overlap=false;
+            scene_reflection_cells.clear();scene_dynamic_damage.clear();scene_static_signature=0;scene_overlap=false;
         }
         if(!glow.ensure(device,fidelity_root,w,h,true)){
             trace.write("scene-surface-failed","working attachments",true);return false;
-        }
-        if(!scene_backup.ensure(device,w*2,h*2)){
-            trace.write("scene-surface-failed","static sample backup",true);return false;
         }
         if(!scene_restore.ensure(device)){
             trace.write("scene-surface-failed","restore pipeline",true);return false;
@@ -4458,27 +4471,10 @@ public:
             }return result;
         };
         unsigned batches=0,selected_static=0,selected_dynamic=0,selection_candidates=0,selection_scans=0;
-        // The working attachment contains the last composed scene. The spare
-        // owns only the static samples underneath its animated damage. Restore
-        // those samples before accepting camera damage or a new pose.
-        context->OMSetRenderTargets(0,nullptr,nullptr);
-        if(restored || translated){
-            if(!scene_dynamic_damage.empty() && !scene_backup.restore(context,linear,scene_dynamic_damage))return false;
-            if(translated){
-                auto dirty=physical(static_rectangles);
-                // Clear only exposed/invalidated physical spans. All unchanged
-                // static samples stay at their original world-relative address.
-                for(auto rect:dirty){std::vector<D3D11_RECT> one={rect};
-                    if(!scene_backup.restore(context,linear,one,true))return false;}
-            }
-        }else{
-            float clear[4]={};context->ClearRenderTargetView(linear.target,clear);
-            context->ClearDepthStencilView(linear.depth,D3D11_CLEAR_DEPTH|D3D11_CLEAR_STENCIL,1,0);
-        }
         std::vector<D3D11_RECT> dynamic_damage;
         auto damage_for=[&](GeometryDrawView inputs,std::vector<unsigned> const& layers){
         for(auto layer:layers)for(auto item:inputs[layer]){
-            if(inputs.is(geometry_vertex_buffers) && !item.water_dependent())continue;
+            if(inputs.is(geometry_vertex_buffers) && (!item.water_dependent() || !item.water_visible()))continue;
             auto rect=item.bounds();int dx=item.translation_x()+int(settings.translation[0]),dy=item.translation_y()+int(settings.translation[1]);
             rect={std::max<LONG>(0,rect.left+dx-4),std::max<LONG>(0,rect.top+dy-4),
                   std::min<LONG>(w,rect.right+dx+4),std::min<LONG>(h,rect.bottom+dy+4)};
@@ -4522,45 +4518,43 @@ public:
             }
             finish_damage=disjoint(clipped);
         }
-        // Preserve production layer/occurrence order. Batches change only when
-        // selected receivers would exceed the existing 32 shadow-page slots.
+        // The composed scene is the only retained sample surface. Rebuild old
+        // and new animated footprints from immutable static geometry instead
+        // of storing a second MSAA color/depth image underneath them.
+        auto redraw=scene_dynamic_damage;
+        redraw.insert(redraw.end(),dynamic_damage.begin(),dynamic_damage.end());
+        auto exposed=physical(static_rectangles);
+        if(!restored)redraw.insert(redraw.end(),exposed.begin(),exposed.end());
+        redraw=disjoint(redraw);
+        if(restored || translated){
+            if(!redraw.empty() && !scene_restore.draw(context,linear,nullptr,nullptr,0,0,{},&redraw,0,0,false,true))return false;
+        }else{
+            float clear[4]={};context->ClearRenderTargetView(linear.target,clear);
+            context->ClearDepthStencilView(linear.depth,D3D11_CLEAR_DEPTH|D3D11_CLEAR_STENCIL,1,0);
+        }
         auto submit=[&](GeometryDrawView inputs,std::vector<unsigned> const& order,bool dynamic_pass,bool material_pass=false){
-            auto rectangles=dynamic_pass?physical({selected_view}):physical(static_rectangles);
+            // Frozen water keeps its existing samples. Redraw it only when
+            // exposed/static/animated damage actually touches those samples.
+            auto rectangles=dynamic_pass && !material_pass?physical({selected_view}):redraw;
             return submit_scene_pass(inputs,order,dynamic_pass,linear,glow,settings,w,h,rectangles,
                 batches,selected_static,selected_dynamic,selection_candidates,selection_scans,material_pass);
         };
-        if(!restored){
-            std::vector<c3x_renderer::city_fidelity::Lighting const*> lights;
-            for(auto const& item:geometry_vertex_buffers[geometry_city])if(item.content().city_lighting){
-                auto pointer=item.content().city_lighting.get();
-                if(std::find(lights.begin(),lights.end(),pointer)==lights.end())lights.push_back(pointer);
-            }
-            if(!cities.lights(context,lights))return false;
-            auto order=static_scene_order();
-            if(!submit(geometry_vertex_buffers,order,false))return false;
-            context->OMSetRenderTargets(0,nullptr,nullptr);
-
-            scene_static_signature=cached_signature.complete;scene_static_depth_origin=scene_depth_origin;
+        std::vector<c3x_renderer::city_fidelity::Lighting const*> scene_lights;
+        for(auto const& item:geometry_vertex_buffers[geometry_city])if(item.content().city_lighting){
+            auto pointer=item.content().city_lighting.get();
+            if(std::find(scene_lights.begin(),scene_lights.end(),pointer)==scene_lights.end())scene_lights.push_back(pointer);
         }
-        // The backup already owns these exact static samples. A stationary
-        // material/pose tick only restores them; copying them back every frame
-        // adds GPU traffic without changing any content.
-        bool backup_reused=restored && scene_dynamic_damage.size()==dynamic_damage.size() &&
-            std::equal(scene_dynamic_damage.begin(),scene_dynamic_damage.end(),dynamic_damage.begin(),
-                [](D3D11_RECT a,D3D11_RECT b){return a.left==b.left&&a.top==b.top&&a.right==b.right&&a.bottom==b.bottom;});
-        if(!backup_reused && !scene_backup.capture(context,linear,dynamic_damage))return false;
+        if(!cities.lights(context,scene_lights))return false;
+        if(!redraw.empty() && !submit(geometry_vertex_buffers,static_scene_order(),false))return false;
+        context->OMSetRenderTargets(0,nullptr,nullptr);
+        scene_static_signature=cached_signature.complete;scene_static_depth_origin=scene_depth_origin;
         scene_dynamic_damage=std::move(dynamic_damage);
         QueryPerformanceCounter(&static_end);
         // Keep the forward material order: water is below banks, roads, static
         // object alpha and posed bodies. Borrow retained meshes; never rebuild
         // terrain to advance a material clock.
         if(water_scene_active){
-            std::vector<c3x_renderer::city_fidelity::Lighting const*> lights;
-            for(auto const& item:geometry_vertex_buffers[geometry_city])if(item.content().city_lighting){
-                auto pointer=item.content().city_lighting.get();
-                if(std::find(lights.begin(),lights.end(),pointer)==lights.end())lights.push_back(pointer);
-            }
-            if(!cities.lights(context,lights) || !submit(geometry_vertex_buffers,water_scene_order(),true,true))return false;
+            if(!submit(geometry_vertex_buffers,water_scene_order(),true,true))return false;
         }
         if(!submit(dynamic,{geometry_shadow,geometry_wave,geometry_feature},true))return false;
         QueryPerformanceCounter(&dynamic_end);
@@ -4660,19 +4654,23 @@ public:
         QueryPerformanceCounter(&ready);
         // One persistent composed bitmap also covers animation removal. Output
         // pointer selection must not resurrect a pre-animation CPU bitmap.
-        auto& output=pixels;output.resize(std::size_t(width)*height);
+        auto& output=pixels;if(!gpu_output_mode)output.resize(std::size_t(width)*height);
         if(!gpu_output_mode)for(auto rect:copies)for(int y=rect.top;y<rect.bottom;++y)std::memcpy(output.data()+std::size_t(y)*width+rect.left,
             static_cast<unsigned char*>(mapped.pData)+std::size_t(y)*mapped.RowPitch+rect.left*4,std::size_t(rect.right-rect.left)*4);
         if(!gpu_output_mode && !copies.empty())context->Unmap(readback_texture,0);
         if(gpu_output_mode){gpu_map_valid=true;cpu_output_stale=true;}
         else cpu_output_stale=false; // the complete CPU image is authoritative again
         QueryPerformanceCounter(&copied);
-        target_bytes=std::size_t(w)*h*240u+scene_backup.bytes();
+        target_bytes=std::size_t(w)*h*240u;
         char detail[768];sprintf_s(detail,"static_reused=%u translated=%u damage_rects=%zu static_selected=%u dynamic_selected=%u batches=%u target_bytes=%zu target_cap=%zu resolves=%u readbacks=%u full_surface_copies=0 backup_reused=%u backup_bytes=%zu dynamic_damage_rects=%zu copied_rects=%zu static_submit_ms=%.3f dynamic_submit_ms=%.3f finish_submit_ms=%.3f completion_wait_ms=%.3f cpu_copy_ms=%.3f",
-            unsigned(restored),unsigned(translated),static_rectangles.size(),selected_static,selected_dynamic,batches,target_bytes,std::size_t(world_preparation?1408u:1152u)*1024u*1024u,unsigned(!finish_damage.empty()),unsigned(!gpu_output_mode && !copies.empty()),unsigned(backup_reused),scene_backup.bytes(),scene_dynamic_damage.size(),copies.size(),
+            unsigned(restored),unsigned(translated),static_rectangles.size(),selected_static,selected_dynamic,batches,target_bytes,std::size_t(672u)*1024u*1024u,unsigned(!finish_damage.empty()),unsigned(!gpu_output_mode && !copies.empty()),0u,std::size_t(0),scene_dynamic_damage.size(),copies.size(),
             trace.milliseconds(static_end.QuadPart-begin.QuadPart),trace.milliseconds(dynamic_end.QuadPart-static_end.QuadPart),
             trace.milliseconds(finish_end.QuadPart-dynamic_end.QuadPart),trace.milliseconds(ready.QuadPart-finish_end.QuadPart),trace.milliseconds(copied.QuadPart-ready.QuadPart));
-        trace.write("shared-scene-surface",detail,true);memory_sample("shared-scene-complete");
+        trace.write("shared-scene-surface",detail,true);
+        sprintf_s(detail,"attachments=%zu cache_bytes=%zu cache_capacity=%zu logical_limit=%zu process_va_separate=1",
+            frame_working_bytes(),render_regions.gpu_bytes+unit_bodies.gpu_content_bytes,
+            render_regions.gpu_limit+unit_bodies.gpu_content_limit,Budget::limit);
+        trace.write("frame-working-set",detail,true);memory_sample("shared-scene-complete");
         sprintf_s(detail,"visible=%u frozen=%zu geometry_bytes=%zu upload_bytes=%zu cells_built=%u cells_reused=%u",
             visible_wave_animations,wave_chunks.size()-visible_wave_animations,wave_geometry_bytes,wave_upload_bytes,
             wave_cells_built,wave_cells_reused);
@@ -4825,7 +4823,7 @@ public:
 
     void clear_geometry_vertex_buffers() {
         // Borrowed material batches retire before any source mesh can be freed.
-        material_submission={};
+        material_submission={};static_submission={};
         region_contributors.clear();
         resource_anchors.clear();
         geometry_footprints.clear();

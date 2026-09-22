@@ -27,7 +27,7 @@ public:
     std::uint64_t scene_body_reuses=0,scene_body_builds=0;
     std::size_t gpu_content_bytes=0,gpu_content_limit=192u*1024u*1024u;
     void set_gpu_content_limit(std::size_t limit){
-        gpu_content_limit=std::clamp(limit,std::size_t(32u*1024u*1024u),std::size_t(192u*1024u*1024u));
+        gpu_content_limit=std::min(limit,std::size_t(192u*1024u*1024u));
         while(!gpu_content.empty() && gpu_content_bytes>gpu_content_limit){
             auto old=std::min_element(gpu_content.begin(),gpu_content.end(),[](auto const& a,auto const& b){return a.used<b.used;});
             gpu_content_bytes-=old->bytes;gpu_content.erase(old);

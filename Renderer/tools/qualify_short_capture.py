@@ -21,6 +21,22 @@ def read(path):
     return json.loads(path.read_text(encoding='utf-8-sig'))
 
 
+def validate_build(receipt, identity, current_inputs):
+    # Both supported builders pin the DLL: the input-contract builder uses a
+    # scalar field, while record_renderer_build records all output binaries.
+    identities = [receipt.get('dll_sha256'),
+                  receipt.get('binaries', {}).get('C3XRenderer.dll')]
+    identities = [value for value in identities if value is not None]
+    # The standard builder also records the standalone preview executable.
+    recorded = receipt.get('unit_inputs', {})
+    runtime = {unit: recorded.get(unit) for unit in current_inputs}
+    if (receipt.get('returncode') != 0 or not receipt.get('sources_unchanged')
+            or receipt.get('preview_only', False) or not identities
+            or any(value != identity for value in identities)
+            or runtime != current_inputs):
+        raise ValueError('Build does not match current runtime sources and DLL')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--build', type=Path, required=True)
@@ -36,10 +52,7 @@ def main():
     binary = build / 'C3XRenderer.dll'
     identity = digest(binary)
     receipt = read(build / 'build-evidence.json')
-    if (receipt.get('returncode') != 0 or not receipt.get('sources_unchanged')
-            or receipt['dll_sha256'] != identity
-            or receipt['unit_inputs'] != {u: unit_inputs(u) for u in DLL_UNITS}):
-        raise ValueError('Build does not match current runtime sources')
+    validate_build(receipt, identity, {u: unit_inputs(u) for u in DLL_UNITS})
     policy = read(campaign / 'policy.json')
     result = read(campaign / 'receipt.json')
     if result['status'] != 'pass' or policy['order'] != ['off-1', 'on-1', 'on-2', 'off-2']:

@@ -12,6 +12,12 @@ namespace c3x_renderer { namespace render_core {
 struct VisibilityCoverage {
     struct Tile {float x,y;unsigned cells,reserved;}; // Nine packed two-bit states.
     std::vector<Tile> tiles;
+    struct Bounds {int left,top,right,bottom;};
+    std::vector<Bounds> revealed;
+    bool may_contribute(int left,int top,int right,int bottom)const{
+        for(auto r:revealed)if(r.left<right && r.right>left && r.top<bottom && r.bottom>top)return true;
+        return false;
+    }
     int width=0,height=0,tile_width=0,tile_height=0;
     std::map<std::pair<std::int64_t,std::int64_t>,unsigned> states;
     int world_width=0,world_height=0;bool wrap_x=false,wrap_y=false;
@@ -22,7 +28,7 @@ struct VisibilityCoverage {
     unsigned state(std::int64_t x,std::int64_t y)const{auto found=states.find(key(x,y));return found==states.end()?0:found->second;}
     static constexpr float feather=.18f,gray=.18f,fog_alpha=.5f;
     bool capture(c3x_renderer_frame_v1 const& frame){
-        tiles.clear();states.clear();
+        tiles.clear();states.clear();revealed.clear();
         if(frame.tile_count>8192 || (frame.tile_count&&!frame.tiles) ||
            frame.target_width<=0 || frame.target_height<=0 || frame.target_width>8192 || frame.target_height>8192 ||
            frame.tile_width<=0 || frame.tile_height<=0 || frame.tile_width>4096 || frame.tile_height>4096)return false;
@@ -54,6 +60,9 @@ struct VisibilityCoverage {
             }
             auto prior=anchors.emplace(std::make_pair(t.anchor_x,t.anchor_y),cells);
             if(!prior.second){if(prior.first->second!=cells)return false;continue;}
+            // Include explored fog and neighbor feather support, including
+            // fully visible tiles omitted from the fog draw list.
+            if(cells)revealed.push_back({t.anchor_x,t.anchor_y,t.anchor_x+tile_width,t.anchor_y+tile_height});
             // All nine cells currently visible: exact no-op, no GPU allocation.
             if(cells==0x2aaaau)continue;
             tiles.push_back({float(t.anchor_x),float(t.anchor_y),cells,0});

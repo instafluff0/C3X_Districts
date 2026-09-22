@@ -15,7 +15,7 @@ int main(){
  c3x_renderer_tile_v1 t={};t.tile_flags=C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_VISIBILITY_KNOWN;
  f.tiles=&t;f.tile_count=1;VisibilityCoverage c;
  std::vector<unsigned> source(128*64,0xaabb8844),out;
- assert(c.capture(f));c.apply(source.data(),out);assert(out[32*128+64]==0xaa000000);
+ assert(c.capture(f));assert(!c.may_contribute(0,0,128,64));c.apply(source.data(),out);assert(out[32*128+64]==0xaa000000);
  t.tile_flags|=C3X_RENDERER_TILE_EXPLORED;assert(c.capture(f));c.apply(source.data(),out);
  assert(out[32*128+64]==0xaa745b39); // 50% gray over each original channel
  t.tile_flags|=C3X_RENDERER_TILE_VISIBLE;assert(c.capture(f));c.apply(source.data(),out);
@@ -27,7 +27,7 @@ int main(){
  std::vector<c3x_renderer_tile_v1> records;
  for(int v=-1;v<=1;++v)for(int u=-1;u<=1;++u){auto n=t;n.tile_x=u-v;n.tile_y=u+v;
  n.tile_flags=C3X_RENDERER_TILE_VISIBILITY_BITS|((u||v)?C3X_RENDERER_TILE_TOPOLOGY_HALO:C3X_RENDERER_TILE_RENDER);records.push_back(n);}
- f.tiles=records.data();f.tile_count=unsigned(records.size());assert(c.capture(f)&&c.tiles.empty());
+ f.tiles=records.data();f.tile_count=unsigned(records.size());assert(c.capture(f)&&c.tiles.empty());assert(c.may_contribute(0,0,128,64));assert(!c.may_contribute(128,64,256,128));
  records.push_back(records[4]);records.back().tile_x+=20;records.back().anchor_x+=128;
  f.world_width_tiles=20;f.world_wrap_x=1;f.tiles=records.data();f.tile_count=unsigned(records.size());assert(c.capture(f));
  records.back().tile_flags&=~C3X_RENDERER_TILE_VISIBLE;assert(!c.capture(f));
@@ -40,10 +40,16 @@ int main(){
         start=text.index('void __fastcall\npatch_Map_Renderer_draw_fog')
         body=text[start:text.index('\n}\n',start)+3]
         run_cpp('''
+#include "Renderer/native/c3x_renderer_api.h"
 #define __fastcall
 #define __ 0
 struct Map_Renderer{};struct PCX_Image{};struct RECT{};
-struct State {struct {bool enable_custom_rendering;} current_config;} state,*is=&state;
+struct State {struct {bool enable_custom_rendering;} current_config;
+ bool custom_renderer_frame_active=false,custom_renderer_draw_in_progress=false,custom_renderer_redraw_pending=false;
+ int custom_renderer_tile_count=0;unsigned custom_renderer_dirty_flags=0;c3x_renderer_tile_v1* custom_renderer_tiles=nullptr;
+} state,*is=&state;
+struct Bic {struct {Map_Renderer Renderer;} Map;} bic,*p_bic_data=&bic;
+int tile_at(int,int){return 0;}unsigned capture_custom_renderer_visibility(int,int,int,int){return 0;}
 int calls=0;Map_Renderer renderer;PCX_Image image;RECT clip;
 void Map_Renderer_draw_fog(Map_Renderer* r,int,int v,PCX_Image* i,RECT* c){
  if(r!=&renderer || v!=7 || i!=&image || c!=&clip)__builtin_abort();++calls;

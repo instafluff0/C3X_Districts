@@ -16,19 +16,20 @@ acceptance remain complete. Manual pans can defer coherently; native selection,
 actions, programmatic centering and projection changes retain exact behavior.
 Units stay above all map geometry. Native actions, visibility, controls and unit/UI
 ordering remain authoritative. Shore waves, water motion and reflections are on
-in every normal performance workload. The tested M3.8 production DLL is now
-staged as a user-requested **evaluation build**. Re-run `INSTALL.bat` for the
-updated injected bridge. Live gameplay and performance acceptance remain pending.
+in every normal performance workload. The tested renderer DLL is staged as an **evaluation build**; the current
+working-set update changes no injected hooks and loads on game restart. Live
+gameplay and performance acceptance remain pending.
 [Architecture](renderer_architecture.md) owns the design;
 [validation](benchmark_workflow.md) owns measurement and acceptance.
 
-**Requested implementation sequence:** complete the M4.0 recorded-workload
-foundation below before further speculative performance changes. The user wants
-one approximately ten-minute capture that can regenerate production frames and
-support systematic architectural comparisons. The [recording contract](recorded_renderer_workload.md)
-defines input completeness, replay modes, overhead and qualification. This does
-not reset M1–M3 or authorize an unrelated renderer/process rewrite. The remaining
-[LORE milestones](#lore-testing-and-migration-milestones) follow measured causes.
+**Current implementation sequence:** the input recorder now reproduces the
+successful prefix of the first live capture. The user's four measured working-set
+and submission changes are implemented; final evidence and remaining limits are
+in [frame working-set results](frame_working_set_results.md). This replaces the
+static backup and duplicate reflection pages in the shared scene path. It does
+not certify the failed live tail, complete M3.8 performance acceptance, or start
+a separate-process renderer. Future [LORE work](#lore-testing-and-migration-milestones)
+must follow the remaining measured costs.
 
 ## M3.8 current handoff — in progress
 
@@ -47,15 +48,18 @@ removals from existing hooks; the approved injection smoke passes. No new symbol
 patch-table entries or renderer ownership. Re-run `INSTALL.bat` for these wrapper
 changes when testing the staged candidate.
 
-**Memory/performance:** original-format MSAA backup tiles replace a second
-whole-view target. In the fullscreen coastal workload, target storage falls by
-196–213 MiB and the largest backup allocation falls from about 348 MiB to 2 MiB.
-Unchanged ambient frames retain their static backup; all 120 timed frames skip
-recapture, world builds/uploads, static draws and wave geometry uploads. Every
-color/depth sample matches the independent original-format oracle. A rejected
-single-sample-plane experiment and the previous recovery failure remain preserved
-as negative evidence. Native CPU-source validation also retains the earlier
-10.2× unchanged-copy / 5.4× periodic-edit improvement; those are not game FPS.
+**Current memory/submission architecture:** static animated damage redraws from
+retained geometry into one scene MSAA color/depth set. The previous tiled static
+backup implementation is deleted. Relevant reflection cells stay in the current
+atlas with exact dependency keys; no duplicate reflection-page textures remain
+in that route. Static/water submissions retain compatible inputs and frozen water
+redraws only when damaged. Working attachments and reproducible caches share a
+1 GiB logical envelope, independently of process VA and native-front ownership.
+See [current measured effects and checks](frame_working_set_results.md).
+
+**Historical validation below** describes the prior backup-based build. Its
+correctness scenarios remain required; its memory and timing claims are not the
+current implementation's results.
 
 **Validation:** `native/build/ambient-continuity-reuse/receipt.json` passes at
 2240×1260 with all water effects, eight mixed units, actual JGL/native wrappers,

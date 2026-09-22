@@ -6,6 +6,26 @@ frame/time range, compare a changed DLL, and play visibly on Windows. It is not
 yet qualified as a reproduction of live game responsiveness. The
 [recording contract](recorded_renderer_workload.md) remains the acceptance gate.
 
+## Current renderer evaluation
+
+The four measured working-set/submission changes are implemented and staged as
+DLL `54aac95f5e1174aaf3c9b8f034a16c3c786fad8258a4e336c8bcce75e14558d4`.
+See [results, removed machinery and next responsibility](frame_working_set_results.md).
+All 518 successful live-prefix frames match; paired replay execution improves
+20.8%, ambient p95 falls from 49 to 25–27 ms, and minimum free VA rises from
+268–320 to 581–643 MiB. Fullscreen native lifecycle/animation/fog tests also pass
+with eight units and 1 GiB reserved. These are not live FPS or failure-recovery
+qualification. Long native map-preparation boundaries remain unfinished.
+
+Short diagnostic capture has now been requalified for this exact DLL and the
+current tools. All four overhead arms pass; two fresh complete replays match all
+962 frames across 17,226 calls. Requested-stop, window capture, actual Windows
+preflight and installed-path identity pass. Evidence is under
+`native/build/input-recording/frame-working-set-capture-{campaign,controls,observer,preflight}`.
+The qualifier accepts both supported build-receipt formats while checking every
+runtime source and rejecting mismatched DLLs. `CAPTURE_DIAGNOSTIC.bat` is ready;
+no reinstall or new manual capture is required for continued diagnosis.
+
 ## Implemented and verified
 
 - Native image/composition/navigation, reset and configuration transactions use
@@ -59,11 +79,11 @@ yet qualified as a reproduction of live game responsiveness. The
   passes all 12,930 calls and matches the recorder baseline's 426 fingerprints.
   Receipt: `native/build/input-recording/realtime-final-20260921-a/receipt.json`.
 
-## Next unfinished responsibility
+## Earlier recording foundation and capture gate
 
-Short-session preparation is complete. The installed mod path resolves to staged
+The previous short-session preparation completed with staged
 DLL `46f0cfe973a73432d68f22662c585e8866c2d3c91cda93ea7da5b37d4844edea`;
-no reinstall is needed for this DLL update. The final Windows preflight passes,
+The prior Windows preflight passed,
 including signed tools and exact launcher/tool identities. Normal ten-minute
 admission remains closed. See [short diagnostic capture](short_diagnostic_capture.md).
 
@@ -83,11 +103,21 @@ Evidence is under `native/build/input-recording/short-capture-`: campaign
 receipt pins the build and rollback. Redundant historical images/intermediates
 were removed; retain journals and measurements and regenerate only needed frames.
 
-Next, collect one 60–90-second strategic live session, then compare regenerated
-symptoms against its sampled window evidence before producing the bottleneck
-report. Existing pixel-only live captures cannot supply missing scene inputs
-retroactively. This short diagnostic gate is not ten-minute endurance or live-FPS
-qualification; those remain open alongside replay/live scheduling calibration.
+The first live session is captured and investigated; see
+[measured bottlenecks and replay limits](live_bottleneck_findings.md). It preserves
+119.662 seconds despite process termination. Two exact-DLL replays reproduce all
+518 successful presentations identically, and the last regenerated frame visually
+matches its nearby window sample. Both diverge at the live device-failure boundary:
+the standalone process successfully renders the offer that failed in-game.
+Replay also requires the game's working directory for recorded relative paths;
+general launchers still need that contract fixed. Do not call the failure or live
+FPS reproduced. No additional manual capture is currently needed.
+
+Next: reduce the approximately 1.14 GiB scene attachment/backup footprint, address
+the 64 MiB reflection cache versus approximately 125 MiB demanded pages, and
+measure remaining synchronous native boundaries on this corpus. Pressure/failure
+calibration and ten-minute/live-FPS qualification remain unfinished. Preserve the
+failed live boundary as evidence rather than bypassing its replay check.
 
 The service experiment serializes completed calls and preserves recorded native
 consumption points. It cannot yet measure how the game would react to an earlier

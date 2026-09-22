@@ -200,7 +200,7 @@ int main(){
     def test_production_batches_compatible_layers_and_splits_only_at_capacity(self):
         source=(ROOT/"Renderer/native/c3x_renderer.cpp").read_text()
         submit="    bool submit_scene_pass("+source.split("    bool submit_scene_pass(",1)[1].split("    std::vector<unsigned> water_scene_order()",1)[0]
-        retained="    struct MaterialSubmission {"+source.split("    struct MaterialSubmission {",1)[1].split("} material_submission;",1)[0]+"} material_submission;"
+        retained="    struct SceneSubmission {"+source.split("    struct SceneSubmission {",1)[1].split("} material_submission,static_submission;",1)[0]+"} material_submission,static_submission;"
         run_cpp(r'''
 #include <algorithm>
 #include <cassert>
@@ -280,6 +280,14 @@ int main(){
  settings.translation[0]=1;material(false);material(true);
  state.region_origin_x=7;material(false);material(true);
  state.material_submission={};material(false); // Source-view teardown retires borrowers.
+ state=State{};state.geometry_vertex_buffers[3].push_back(GeometryDrawRecord(shadow));
+ for(int iteration=0;iteration<2;++iteration){
+  unsigned batches=0,selected=0,animated=0,candidates=0,scans=0;
+  assert(state.submit_scene_pass(state.geometry_vertex_buffers,{3},false,target,glow,settings,128,128,{{0,0,128,128}},batches,selected,animated,candidates,scans));
+  assert(batches==1&&selected==1&&animated==0);
+  assert(iteration?scans==0:scans>0);
+ }
+ assert(state.static_submission.signature&&!state.material_submission.signature);
 }
 ''')
 

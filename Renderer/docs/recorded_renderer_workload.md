@@ -185,3 +185,20 @@ adoption or presentation. First resolve whether pressure/eviction, repeated nati
 composition, producer work, GPU pixel cost, or serialization dominates. Let that
 evidence choose the next M4 change, including whether a process boundary is worth
 its tradeoffs; do not presume a packet rewrite or bigger budget is the answer.
+
+## Explicit failed-session comparisons
+
+`measure_input_replay --before-event N --game-working-directory` can compare a
+verified successful prefix of an incomplete game capture. Both DLLs execute the
+same events before N; the receipt records the last event, pending calls, tool/DLL
+identities and incomplete status. The original journal is never edited. A cutoff
+beyond verified input, a missing dependency or a semantic mismatch still fails.
+The working-directory option uses the installed Conquests directory, configurable
+with `C3X_RENDERER_CIV3_CONQUESTS`, for game-recorded relative paths.
+
+Use forensic fingerprints separately from unpaced timing. Timing removes
+fingerprint readbacks and permits actual ready outcomes, so its presentation
+count can differ from the recorded count. Compare the same scope and actual
+outcome counts across both arms. Neither mode reproduces Civ III's heap layout,
+thread overlap, VM scheduling or physical scanout. These measurements cannot
+certify recovery from a live allocation failure or be labeled gameplay FPS.

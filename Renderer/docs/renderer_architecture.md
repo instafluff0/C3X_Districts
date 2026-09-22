@@ -246,8 +246,8 @@ Civ III's authority. Directed-motion interpolation is a separate integration tas
 
 The [direct unit scene contract](direct_unit_scene_contract.md) renders selected
 unit geometry into a bounded transparent attachment, then uses exact native
-composition above the map. This is the user's final ordering policy, including
-units behind tall neighboring map objects. Unit self-depth and pose-local shadows
+composition above the map. This is the user's final ordering policy: units remain above tall neighboring
+map objects too. Unit self-depth and pose-local shadows
 remain intact; map depth/provenance and per-unit map captures are no longer inputs.
 The existing pose owner reuses GPU vertices, shadow inputs and cropped body
 contributions under its existing budget. Identical body samples need no second
@@ -259,30 +259,40 @@ Separate direct/compatibility scratch avoids route-switch reallocations. Oversiz
 canvases use bounded resident GPU poses. No CPU body roundtrip or second presenter
 is introduced; native unit/UI order, action and visibility authority remain intact.
 
-Shoreline effects now use the same shared dynamic pass and damage owner as resource
+Shoreline effects use the shared dynamic pass and damage owner with resource
 bodies/shadows. Retained wave cells own immutable geometry; occurrences carry
-native projection and visible/frozen time. The pass restores the prior affected
-samples, draws shadow/foam/body contributions in order against scene depth, and
-finishes their union once. Time changes upload no terrain or ribbon geometry.
-The shared path admits waves and reflections together. Reflections retain a
-guarded resolved linear image; world-aligned mirror cells reuse the existing
-dependency cache and small MSAA scratch. Eviction can transfer one compatible
-texture allocation to the next cell after retiring its old dependency key; the
-caller validates the full descriptor and preserves same-context GPU ordering.
-Mirror draw traversal uses the existing conservative spatial index, retaining
-original occurrence order and complete shadow/lighting authorization. Fully
-invalid retained attachments use direct clears; partial damage preserves exact
-MSAA samples. Static mirror inputs do not depend on
-the water clock. Conservative uploaded-sample coverage rejects dry water/bed
-passes; mirror cells without a possible water receiver remain clear. Shared tree
-meshes feed mirror, color and shadow passes. Exact material batches and their
-static caster inputs survive time-only frames. Camera, selected rectangle, extent,
-lighting/content signature and source-view teardown invalidate those borrowed
-batches. Opaque city bodies stay in static color/depth; alpha ground layers remain
-in forward order. Retained native recipes reuse their own output allocations and
-import a map once, preserving distinct native versions and partial transfers. The
-compatibility path and configuration controls remain available; there is no
-second full-view MSAA reflection color/depth pair, presenter or effect scheduler.
+native projection and visible/frozen time. Old and new animated footprints are
+cleared and rebuilt from retained static geometry before dynamic contributions.
+There is one MSAA scene color/depth set. The former static pixel-backup owner,
+its tiled attachments and capture/restore traversal have been removed. Finishing
+still preserves exact per-sample HDR/depth, alpha order and circular damage.
+
+Reflections own one guarded resolved atlas and a bounded map of exact dependency
+keys for its cells. Only cells intersecting water receivers and conservative
+explored/visibility-feather coverage are constructed. Unchanged cells stay in
+place; changed cells are copied directly from small mirror scratch. No duplicate
+resolved reflection-page texture cache participates in the shared path. Keys
+are withdrawn before mutation, so a failed partial update cannot certify stale
+samples. Hidden atlas regions may contain old data; they have no selected reader
+and must be rebuilt before becoming relevant. Water time does not invalidate
+static reflection content. Camera/content/light dependencies remain explicit.
+
+Static and water submissions retain selected occurrences, shadow-page batches
+and caster inputs under the existing lifetime signatures. Dynamic changes redraw
+only their damage; frozen water is redrawn when another contribution or exposure
+requires it. Borrowers retire with their source assembly. Native unit/UI order,
+config-off forwarding, authored quality and independent ambient clocks remain.
+
+A shared 1 GiB logical envelope covers scene attachments, reflection atlas/scratch,
+unit scratch and reproducible region/unit caches. Required targets take priority;
+cache capacity uses the remainder and tightens under process VA pressure. The
+scene target cap is 672 MiB, unit scratch 96 MiB, and unused unit scratch retires
+after one second without actual raster use. These are allocation accounting,
+not measured VRAM residency or a cap on the entire process. Geometry, source
+assets and native published fronts remain separately owned and measured. The
+compatibility path retains its required regional cache; the shared path gives
+that superseded page cache zero capacity. There is no second presenter or clock.
+
 Optional absent/disabled wave assets retain ordinary water and request no wave
 animation. Open-water normals and connected river flow now share that dynamic
 pass, with immutable authoritative inputs and visibility-frozen samples.
