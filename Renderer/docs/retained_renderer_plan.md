@@ -104,8 +104,11 @@ The game-staged DLL remains the `f2598dad…` ownership-repair evaluation build;
 newer scratch/reset/sampling/delivery candidates are **not staged or capture-qualified**.
 No installer/game launch or fixed-reference replacement occurred. The user's live
 scene export is preserved. Standard-map <33 ms p95 coherent navigation and live
-stability remain unaccepted. Continue M3.9–M3.12 afterward; the optional helper
-trial follows its documented measured decision, and M3.13 remains outside scope.
+stability remain unaccepted. At the user's request, begin the measured M3.H
+64-bit helper feasibility trial now, ahead of further M3.8 optimization. The
+address-space witness meets its capacity trigger, but neither a speedup nor a
+live device-removal fix is established. M3.8–M3.12 remain unfinished and M3.13
+remains outside the requested completion scope.
 
 ### Preserved earlier M3.8 evidence
 
@@ -542,7 +545,7 @@ useful preparation across supersession without evicting the current working set.
 | 3.11 | Complete normal-world readiness and view-independent content reuse | Partially implemented: copied world, durable compiler and bounded backing exist; readiness/key/capacity acceptance remains |
 | 3.12 | Consolidate compatibility ownership and capacity | Partially implemented; remaining callers/storage and optional helper decision below |
 | 3.13 | Integrated navigation, animation and stability acceptance | Pending; retains the existing Standard <33 ms p95 objective |
-| 3.H | Conditional 64-bit helper trial | Decision-gated experiment, not an unconditional migration |
+| 3.H | Conditional 64-bit helper trial | Capacity trigger met; feasibility evaluation active, production migration undecided |
 
 **Done:** initialized, unchanged supported-world navigation selects already
 prepared scene content without foreground world compilation. Pixels, camera,
@@ -660,12 +663,16 @@ frozen unselected idle units, fog and full visual detail.
 
 ### M3.H - Conditional 64-bit helper trial
 
-This is an optional capacity/isolation experiment attached to M3.12, not another
-renderer implementation or a prerequisite for warm-path work. Trigger it when
-measured required working sets/fragmentation prevent safe Standard-map residency,
-or avoidable eviction/restoration remains a dominant cost after ownership review.
-Do not require completing unrelated M4 work before recognizing a hard capacity
-limit. Conversely, a high memory total alone does not establish a speed benefit.
+This capacity/isolation experiment was originally attached to M3.12. The live
+93.66 MiB free-address-space failure and pressure-fixture 65 MiB largest free
+block now meet its trigger, so evaluate it ahead of further M3.8 optimization at
+the user's request. This does not authorize a second production renderer or close
+the existing stabilization work. A prior clean Standard campaign prepared all
+5,000 tiles and made zero world builds, restores, geometry uploads or map
+readbacks during 100 distributed jumps, yet coherent display remained slow.
+Therefore more retention alone cannot be assumed to satisfy the <33 ms target;
+cross-process transfer, GPU pixel work, native composition and cutover must be
+measured separately. Both processes still use the same GPU and driver budget.
 
 1. Reuse the current render core and fixed workload in a 64-bit helper prototype.
    Exchange bounded copied scene/change/camera values through a versioned protocol;
