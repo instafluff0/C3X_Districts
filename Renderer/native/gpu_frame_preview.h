@@ -78,6 +78,67 @@ if(ok && !std::strcmp(gpu_frame_test,"1")) {
         }
         std::puts("PASS scroll coverage: fine pans, two axes, zoom and independent visual work; no missing map strips");return 0;
     }
+    if(GetEnvironmentVariableA("C3X_RENDERER_WAVE_VISIBILITY_TEST",nullptr,0)){
+        // Same geometry, projection and clock: only authoritative visibility
+        // changes. Compare reused occurrences with an independently reset scene.
+        auto capture_map=[&](c3x_renderer_frame_v1 const& source,std::vector<unsigned>& pixels){
+            c3x_renderer_camera_request_v1 request={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(request),&source,{11,12,13,14}};
+            c3x_renderer_output_v1 metadata={C3X_RENDERER_API_VERSION,sizeof(metadata)};
+            if(gpu_render(&request,&view,&metadata)!=C3X_RENDERER_RESULT_OK || read(view.map_image)!=C3X_RENDERER_RESULT_OK)return false;
+            pixels=actual;return true;
+        };
+        auto input=test_frame;auto records=test_tiles;input.tiles=records.data();
+        input.presentation_frequency=1000000;input.presentation_time_ticks=1000000;
+        // Keep selected contributors identical under the retirement control.
+        // The copied topology/visibility halo remains available.
+        for(auto& tile:records)tile.tile_flags&=~C3X_RENDERER_TILE_PREFETCH;
+        std::vector<unsigned> warm,cold;
+        if(!capture_map(input,warm))return 1;
+        gpu_reset();if(!capture_map(input,cold))return 1;
+        if(!verify_gpu(warm==cold,"same visible clock before and after reset"))return 1;
+        auto begin_camera=reinterpret_cast<c3x_renderer_gpu_camera_begin_fn>(GetProcAddress(module,"c3x_renderer_gpu_camera_begin"));
+        auto cancel_camera=reinterpret_cast<c3x_renderer_camera_cancel_fn>(GetProcAddress(module,"c3x_renderer_camera_cancel"));
+        for(unsigned delay:{0u,5u,30u,100u}){
+            auto next=input;auto shifted=records;next.tiles=shifted.data();
+            for(auto& tile:shifted){tile.anchor_x-=23;tile.anchor_y+=11;}
+            next.presentation_time_ticks+=1000000;
+            c3x_renderer_camera_request_v1 request={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(request),&next,{11,12,13,14}};
+            c3x_renderer_i64 ticket=0;
+            if(!begin_camera||!cancel_camera||begin_camera(&request,&ticket)!=C3X_RENDERER_RESULT_PENDING)return 1;
+            Sleep(delay);cancel_camera(ticket);
+            if(!capture_map(input,warm)||!verify_gpu(warm==cold,"same wave sample after cancelled camera"))return 1;
+        }
+        auto moved=input;auto translated=records;moved.tiles=translated.data();
+        for(auto& tile:translated){tile.anchor_x-=52;tile.anchor_y+=28;}
+        if(!capture_map(moved,warm))return 1;
+        // The existing contributor-selection control deterministically retires
+        // occurrences without changing the requested frame identity, just as an
+        // interrupted view does. Immutable coast cells remain reusable.
+        SetEnvironmentVariableA("C3X_RENDERER_PREFETCH_FOREGROUND_CONTROL","1");
+        if(!capture_map(moved,warm))return 1;
+        gpu_reset();if(!capture_map(moved,cold))return 1;
+        std::size_t shifted_pixels=0;for(std::size_t i=0;i<warm.size();++i)shifted_pixels+=warm[i]!=cold[i];
+        std::printf("WAVE_REBASE changed_pixels=%zu\n",shifted_pixels);std::fflush(stdout);
+        if(shifted_pixels){c3x_renderer_output_v1 image={C3X_RENDERER_API_VERSION,sizeof(image)};
+            image.width=moved.target_width;image.height=moved.target_height;image.stride_bytes=image.width*4;
+            image.bgra_pixels=warm.data();write_bmp((std::string(argv[5])+".warm.bmp").c_str(),image);
+            image.bgra_pixels=cold.data();write_bmp((std::string(argv[5])+".cold.bmp").c_str(),image);}
+        if(!verify_gpu(!shifted_pixels,"rebased shoreline occurrences match cold scene"))return 1;
+        for(unsigned visibility:{1u,2u,0u,2u}){
+            for(auto& tile:records){tile.tile_flags&=~C3X_RENDERER_TILE_VISIBILITY_BITS;
+                tile.tile_flags|=C3X_RENDERER_TILE_VISIBILITY_KNOWN;
+                if(visibility)tile.tile_flags|=C3X_RENDERER_TILE_EXPLORED;
+                if(visibility==2)tile.tile_flags|=C3X_RENDERER_TILE_VISIBLE;}
+            if(!capture_map(input,warm))return 1;
+            gpu_reset();if(!capture_map(input,cold))return 1;
+            std::size_t different=0;for(std::size_t i=0;i<warm.size();++i)different+=warm[i]!=cold[i];
+            std::printf("WAVE_VISIBILITY state=%u changed_pixels=%zu\n",visibility,different);std::fflush(stdout);
+            if(!verify_gpu(!different,"warm visibility matches independent cold scene"))return 1;
+            if(visibility<2){auto later=input;later.presentation_time_ticks+=2000000;
+                if(!capture_map(later,warm)||!verify_gpu(warm==cold,"fogged and unseen scenery stays frozen"))return 1;}
+        }
+        std::puts("PASS wave visibility: visible/fog/unseen/reveal, same-clock warm/cold parity, frozen fog");return 0;
+    }
     for(int phase=0;phase<4 && ok;++phase){
         if(phase==1)test_frame.presentation_time_ticks+=test_frame.presentation_frequency/4;
         if(phase==2)for(auto& tile:test_tiles){tile.anchor_x-=23;tile.anchor_y+=11;}

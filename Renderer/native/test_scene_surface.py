@@ -12,20 +12,27 @@ class SceneSurfaceTests(unittest.TestCase):
         run_cpp(r'''
 #include <cstdint>
 #include <cassert>
+#include <array>
+#include <vector>
+using GeometryDrawRecord=int;
 struct Rect {int left,top,right,bottom;};
 struct State {
  bool cache_valid=true;
- unsigned contributors=12;
  struct {bool valid=true;void clear(){valid=false;}} geometry_cache;
- std::uint64_t scene_static_signature=42,resource_pixel_signature=42;
- void clear_geometry_vertex_buffers(){contributors=0;}
-''' + method("void discard_scene_view() {") + r'''
+ std::uint64_t scene_static_signature=42,resource_pixel_signature=42,wave_signature=42;
+ int material_submission=7,static_submission=7;
+ std::vector<int> region_contributors{1},resource_anchors{2},geometry_footprints{3};
+ std::array<std::vector<int>,2> geometry_vertex_buffers{std::vector<int>{4},std::vector<int>{5}};
+''' + method("void clear_geometry_vertex_buffers() {") + method("void discard_scene_view() {") + r'''
 };
 int main(){
  State s;
  s.discard_scene_view();
  assert(!s.cache_valid && !s.resource_pixel_signature); // no cache-hit path into discarded inputs
- assert(!s.contributors && !s.geometry_cache.valid && !s.scene_static_signature);
+ assert(!s.geometry_cache.valid && !s.scene_static_signature && !s.wave_signature);
+ assert(!s.material_submission && !s.static_submission && s.region_contributors.empty());
+ assert(s.resource_anchors.empty() && s.geometry_footprints.empty());
+ for(auto const& layer:s.geometry_vertex_buffers)assert(layer.empty());
 }
 ''')
 

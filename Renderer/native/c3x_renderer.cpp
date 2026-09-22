@@ -4796,6 +4796,11 @@ public:
     void clear_geometry_vertex_buffers() {
         // Borrowed material batches retire before any source mesh can be freed.
         material_submission={};static_submission={};
+        // Shoreline occurrences use this view's geometry translation too. A
+        // cancelled/reassembled identical camera can choose a new basis even
+        // while its complete frame signature is unchanged. Keep immutable coast
+        // cells, but regenerate their placements with the other occurrences.
+        wave_signature=0;
         region_contributors.clear();
         resource_anchors.clear();
         geometry_footprints.clear();

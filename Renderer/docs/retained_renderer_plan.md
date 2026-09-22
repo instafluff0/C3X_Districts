@@ -45,6 +45,44 @@ Commit on the development host and push from Windows after each completed stage.
 M3.13's acceptance requirements remain intact; they are not part of this work's
 requested completion claim.
 
+### Shoreline reset mismatch fixed (candidate verified)
+
+A cancelled/reassembled view could change the geometry translation from
+`(-52, 28)` to `(0, 0)` while retaining the same complete camera signature.
+Shoreline occurrences still carried the old placement. They now invalidate at
+`clear_geometry_vertex_buffers` with the other view contributors; immutable
+coast cells stay resident. No new cache, native hook, clock or visibility policy.
+
+The deterministic GPU control keeps terrain contributors identical: the prior
+DLL differs from an independent cold render at 6,616 pixels; the corrected DLL
+matches exactly. All 279 coast cells are reused with zero wave builds/uploads.
+Same-time reset, cancelled cameras, fog, unseen coverage and reveal pass. The
+production view-retirement test now executes the actual invalidation method.
+
+The earlier recording matches all 337 displayed fingerprints, then rejects the
+corrected CPU restore because its recorded image contains the displaced waves.
+That failed receipt is preserved. A fresh connected recording passes native UI,
+unit/action/ambient continuity, tactical overlays, camera cancellation, reset and
+configuration-off. Two strict replays each complete 9,406 calls and match all 336
+displayed frames, including CPU restoration. This fixes the intermittent reset
+mismatch; it does not establish a live freeze fix or performance gain.
+The 2240×1260 connected fixture also passes with eight mixed units, all water
+effects and 1 GiB reserved VA. All 15 fixed BMPs match the prior candidate;
+sampled free VA reaches 273.95 MiB. Wall-clock tactical-motion images are not
+cross-run equality oracles. Generated BMPs are retained losslessly compressed.
+
+Candidate `native/build/wave-occurrence-retirement/` (`ebb37917…`) is not staged.
+Evidence: `wave-placement-baseline/`, `wave-placement-fixed/`,
+`wave-retirement-native/`, `wave-retirement-native-replay/` and
+`wave-retirement-pressure/` under `native/build/`.
+The focused GPU witness is `C3X_RENDERER_WAVE_VISIBILITY_TEST=1` in the existing
+GPU-frame fixture. Intermediate selection-control comparisons changed contributors
+and are not the final parity oracle. Temporary forensic instrumentation is removed.
+
+**Next:** M3.8 remains open for the captured removed-device freeze, required
+attachment/native ownership capacity and complete-path navigation attribution.
+Continue through M3.12; M3.13 integrated acceptance remains outside this request.
+
 ### Mixed-unit scratch allocation churn removed (candidate verified)
 
 The failure capture contains 442 direct-unit reports before device failure and
@@ -691,7 +729,7 @@ useful preparation across supersession without evicting the current working set.
 | 3.5 | Nonblocking native polling and honest pending-coverage policy | DLL/JGL transaction boundary implemented; measurements above |
 | 3.6 | Coherent overlays, interactions and picking | Guarded live bridge implemented; automated acceptance passed |
 | 3.7 | Cancellation, GPU reset, reload, configuration-off and failure recovery | Implemented; automated retirement/recreation and fail-closed barriers pass; physical device-loss restoration is not claimed |
-| 3.8 | Stabilize native camera/ownership and establish complete-path attribution | In progress: first-turn corner/freeze report and intermittent reset replay mismatch unresolved; existing input corpus available |
+| 3.8 | Stabilize native camera/ownership and establish complete-path attribution | In progress: shoreline/reset mismatch fixed with strict fresh replays; live removed-device freeze/capacity and complete-path attribution remain open |
 | 3.9 | Shorten warm camera transactions | Planned; highest performance priority, using 3.8 attribution |
 | 3.10 | Direct ambient sampling and unified GPU work priority | Planned; native-transfer continuity correction evaluation-staged, broader simplification unfinished |
 | 3.11 | Complete normal-world readiness and view-independent content reuse | Partially implemented: copied world, durable compiler and bounded backing exist; readiness/key/capacity acceptance remains |
