@@ -104,11 +104,14 @@ The game-staged DLL remains the `f2598dad…` ownership-repair evaluation build;
 newer scratch/reset/sampling/delivery candidates are **not staged or capture-qualified**.
 No installer/game launch or fixed-reference replacement occurred. The user's live
 scene export is preserved. Standard-map <33 ms p95 coherent navigation and live
-stability remain unaccepted. At the user's request, begin the measured M3.H
-64-bit helper feasibility trial now, ahead of further M3.8 optimization. The
-address-space witness meets its capacity trigger, but neither a speedup nor a
-live device-removal fix is established. M3.8–M3.12 remain unfinished and M3.13
-remains outside the requested completion scope.
+stability remain unaccepted. At the user's request, the M3.H 64-bit helper
+feasibility trial moved ahead of further M3.8 optimization. Its isolated
+[Gate 1 graphics boundary](helper64_gate1_results.md) now passes on the ARM64
+Parallels VM: x64 shared BGRA frames reach the existing x86 DirectComposition
+presenter, including native UI ordering, partial transfer, blocked window thread,
+resize and helper restart. Gate 2's real renderer/replay comparison has not
+begun. Neither a gameplay speedup nor a live device-removal fix is established.
+M3.8–M3.12 remain unfinished and M3.13 remains outside the requested scope.
 
 ### Preserved earlier M3.8 evidence
 
@@ -545,7 +548,7 @@ useful preparation across supersession without evicting the current working set.
 | 3.11 | Complete normal-world readiness and view-independent content reuse | Partially implemented: copied world, durable compiler and bounded backing exist; readiness/key/capacity acceptance remains |
 | 3.12 | Consolidate compatibility ownership and capacity | Partially implemented; remaining callers/storage and optional helper decision below |
 | 3.13 | Integrated navigation, animation and stability acceptance | Pending; retains the existing Standard <33 ms p95 objective |
-| 3.H | Conditional 64-bit helper trial | Capacity trigger met; feasibility evaluation active, production migration undecided |
+| 3.H | Conditional 64-bit helper trial | Gate 1 graphics/presentation feasibility passed on the VM; Gate 2 workload comparison pending, production migration undecided |
 
 **Done:** initialized, unchanged supported-world navigation selects already
 prepared scene content without foreground world compilation. Pixels, camera,
