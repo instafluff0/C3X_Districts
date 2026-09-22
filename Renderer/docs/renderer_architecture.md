@@ -14,6 +14,14 @@ sequence. [Validation](benchmark_workflow.md) defines evidence, not another queu
 These documents describe responsibilities; they do not mandate a new engine,
 ECS, class hierarchy, API migration or permanent residency of every world mesh.
 
+The [64-bit migration decision](helper64_migration_plan.md) places this retained
+world, asset preparation and D3D execution in a separate x64 process. Civ III
+and a small x86 bridge retain authoritative capture, the game HWND, native
+composition and fallback. The bridge sends bounded copied values and imports
+completed shared GPU images; no Civ III pointer crosses the process boundary.
+The detailed implementation notes below describe the current x86 production
+path until that migration passes complete-replay and live-window acceptance.
+
 The [production architecture audit](architecture_audit.md) distinguishes current
 owners, overlapping scheduling, supported alternate routes and retirement
 requirements. Recent working-set improvements do not imply that consolidation

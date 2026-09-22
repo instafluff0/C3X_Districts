@@ -6,6 +6,10 @@
 2. [Roadmap and current status](retained_renderer_plan.md): existing responsibilities, actual gaps and the [M3 extension](retained_renderer_plan.md#m3-extension-deliverables), [conditional 64-bit trial](retained_renderer_plan.md#m3h---conditional-64-bit-helper-trial) and [measured submission experiments](retained_renderer_plan.md#measured-submission-experiments-lore-where-useful).
 3. [Validation](benchmark_workflow.md): existing harnesses, measurement endpoints and meaningful checkpoints.
 
+The [64-bit migration plan](helper64_migration_plan.md) records the adopted
+process boundary and cutover gates; [Gate 2 results](helper64_gate2_results.md)
+record the scene/pixel/capacity evidence and its gameplay limits.
+
 [Execution rules](autonomous_renderer_execution.md) are a short operating reference.
 The [Lab workbench](../lab/README.md) owns category commands and visual approval.
 No historical document supplies an additional queue or mandatory baseline campaign.

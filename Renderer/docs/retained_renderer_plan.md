@@ -109,9 +109,14 @@ feasibility trial moved ahead of further M3.8 optimization. Its isolated
 [Gate 1 graphics boundary](helper64_gate1_results.md) now passes on the ARM64
 Parallels VM: x64 shared BGRA frames reach the existing x86 DirectComposition
 presenter, including native UI ordering, partial transfer, blocked window thread,
-resize and helper restart. Gate 2's real renderer/replay comparison has not
-begun. Neither a gameplay speedup nor a live device-removal fix is established.
-M3.8–M3.12 remain unfinished and M3.13 remains outside the requested scope.
+resize and helper restart. [Gate 2's real-core scene trial](helper64_gate2_results.md)
+now proves copied x86-to-x64 scene inputs, exact CPU/GPU map pixels returned
+to x86, mid-workload helper restart, and a controlled x86 capacity advantage.
+The [64-bit migration plan](helper64_migration_plan.md) now adopts x64 as the
+target architecture and makes the complete native-interleaved replay its first
+integration gate. One-window game integration remains unproven. Neither a
+gameplay speedup nor a live device-removal fix is established. M3.8–M3.12
+remain unfinished and M3.13 remains an acceptance gate, not a claimed result.
 
 ### Preserved earlier M3.8 evidence
 
@@ -548,7 +553,7 @@ useful preparation across supersession without evicting the current working set.
 | 3.11 | Complete normal-world readiness and view-independent content reuse | Partially implemented: copied world, durable compiler and bounded backing exist; readiness/key/capacity acceptance remains |
 | 3.12 | Consolidate compatibility ownership and capacity | Partially implemented; remaining callers/storage and optional helper decision below |
 | 3.13 | Integrated navigation, animation and stability acceptance | Pending; retains the existing Standard <33 ms p95 objective |
-| 3.H | Conditional 64-bit helper trial | Gate 1 graphics/presentation feasibility passed on the VM; Gate 2 workload comparison pending, production migration undecided |
+| 3.H | 64-bit helper feasibility and migration decision | Gate 1 and Gate 2 passed; x64 target architecture adopted; complete native-interleaved comparison and production cutover pending |
 
 **Done:** initialized, unchanged supported-world navigation selects already
 prepared scene content without foreground world compilation. Pixels, camera,
@@ -668,9 +673,10 @@ frozen unselected idle units, fog and full visual detail.
 
 This capacity/isolation experiment was originally attached to M3.12. The live
 93.66 MiB free-address-space failure and pressure-fixture 65 MiB largest free
-block now meet its trigger, so evaluate it ahead of further M3.8 optimization at
-the user's request. This does not authorize a second production renderer or close
-the existing stabilization work. A prior clean Standard campaign prepared all
+block met its trigger, so Gate 1 and Gate 2 were evaluated ahead of further
+M3.8 optimization. Their evidence supports adopting an x64 helper as the target
+architecture, but does not authorize a production cutover or close the existing
+stabilization work. A prior clean Standard campaign prepared all
 5,000 tiles and made zero world builds, restores, geometry uploads or map
 readbacks during 100 distributed jumps, yet coherent display remained slow.
 Therefore more retention alone cannot be assumed to satisfy the <33 ms target;
@@ -679,22 +685,22 @@ measured separately. Both processes still use the same GPU and driver budget.
 
 1. Reuse the current render core and fixed workload in a 64-bit helper prototype.
    Exchange bounded copied scene/change/camera values through a versioned protocol;
-   no Civ III pointers cross the process boundary. Measure IPC latency/bandwidth,
-   backpressure, memory in both processes and actual frame completion.
+   no Civ III pointers cross the process boundary. The scene-only trial passed;
+   full-workload backpressure and actual frame completion remain for migration.
 2. Prove the Windows/Parallels graphics transfer and presentation boundary before
    broad migration. Preserve one owner of the existing game-window presentation,
    native UI composition, ordered partial transfers and exact camera/picking.
    Do not assume cross-process texture sharing is available or cheap; count any
    required copy/synchronization and reject an uncompetitive full-frame readback path.
 3. Compare the same scenes, settings and inputs against the 32-bit control.
-   Require an actual capacity/reliability or complete-workload latency benefit,
-   no hidden frame queue, and no material regression in normal interactions.
-   Exercise helper startup/exit/crash/reset and resource retirement. Users should
-   retain one normal game launch; a standalone replay success alone cannot prove this.
-4. Record **adopt, reject or defer** with evidence. Adoption requires a concrete
-   production migration plan naming what leaves the injected/DLL bridge and what
-   remains for native capture/composition. This roadmap entry authorizes planning
-   the trial, not claiming process separation solves submission or GPU cost.
+   Gate 2 passed exact scene/pixel parity and a controlled x86 capacity fixture.
+   Complete native-interleaved latency, no material regression in normal
+   interactions, reset/resource retirement and one normal game launch remain
+   migration acceptance, not Gate 2 performance claims.
+4. **Adopt x64 as target architecture.** The
+   [migration plan](helper64_migration_plan.md) names x86 and x64 ownership,
+   complete-replay integration, retirement and normal-launch cutover. Process
+   separation does not by itself solve submission or GPU cost.
 
 ## 4. Raise cadence against a measured frame budget
 

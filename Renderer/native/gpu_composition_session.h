@@ -43,6 +43,12 @@ public:
     }
     std::int64_t session_identity()const{return identity;}
     Id map_image()const{return map;}
+#ifdef C3X_HELPER_TRIAL
+    ID3D11Texture2D* map_texture(){return gpu.texture(map);}
+    bool display_map_to(ID3D11RenderTargetView* target,unsigned width,unsigned height){
+        return gpu.display(map,target,width,height,{0,0,int(width),int(height)});
+    }
+#endif
     std::uint64_t upload_count()const{return gpu.stats().uploads;}
     std::int64_t current_ticket()const{return ticket;}
     bool display_to(std::int64_t requested,Id image,ID3D11RenderTargetView* target,ID3D11Texture2D* retained,ID3D11Texture2D* buffer,unsigned w,unsigned h,Rect area,long long ticks=0,long long frequency=0){

@@ -4317,7 +4317,7 @@ public:
     std::vector<unsigned> water_scene_order() const {
         std::vector<unsigned> order={geometry_water,geometry_river,geometry_shadow,geometry_route};
         for(unsigned i=0;i<cliff_bundle.assets.size();++i)order.push_back(geometry_cliff0+i);
-        for(auto layer:{geometry_feature,geometry_site,geometry_mine,geometry_farm,geometry_city,geometry_wall})order.push_back(layer);
+        for(auto layer:{geometry_feature,geometry_site,geometry_mine,geometry_farm,geometry_city,geometry_wall})order.push_back(unsigned(layer));
         return order;
     }
     std::vector<unsigned> static_scene_order() const {
@@ -10473,6 +10473,16 @@ public:
             result,view.prepared,renderer_state.trace.milliseconds(end.QuadPart-begin.QuadPart),view.presentation_time_ticks,request.frame->presentation_time_ticks);
         renderer_state.trace.write("gpu-map-request",detail,true);return result;
     }
+#ifdef C3X_HELPER_TRIAL
+    int trial_export_shared(c3x_renderer_i64 ticket,c3x_renderer_i64 image,DWORD consumer_pid,
+                            std::uint64_t& handle,unsigned& width,unsigned& height){
+        std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);
+        trial_ticket=ticket;trial_image=image;trial_consumer_pid=consumer_pid;
+        trial_handle=0;trial_width=trial_height=0;
+        int result=submit_locked(lock,Command::trial_export_shared);
+        handle=trial_handle;width=trial_width;height=trial_height;return result;
+    }
+#endif
     int begin_gpu_camera(c3x_renderer_camera_request_v1 const& request,c3x_renderer_i64& ticket,
                          DWORD notify_thread=0,UINT notify_message=0){
         std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);
@@ -11374,6 +11384,9 @@ private:
         render,
         gpu_render,
         gpu_images,
+#ifdef C3X_HELPER_TRIAL
+        trial_export_shared,
+#endif
         gpu_unit,
         tactical,
         gpu_present,
@@ -11396,6 +11409,11 @@ private:
     bool unit_gpu_preparation=false;
     std::uint64_t gpu_unit_output_readbacks=0,gpu_unit_composition_uploads=0;
     c3x_renderer_gpu_result_v1 gpu_result={sizeof(gpu_result)};
+#ifdef C3X_HELPER_TRIAL
+    c3x_renderer_i64 trial_ticket=0,trial_image=0;
+    DWORD trial_consumer_pid=0;std::uint64_t trial_handle=0;
+    unsigned trial_width=0,trial_height=0;
+#endif
     std::vector<unsigned> gpu_pixels,gpu_readback;
     std::vector<c3x_gpu_images::Command> gpu_commands;
     c3x_gpu_images::NativePresenter gpu_presenter;
@@ -12256,6 +12274,45 @@ private:
                 gpu_result={sizeof(gpu_result)};gpu_readback.clear();
                 if(input_display_readback)result=c3x_inputs::display_pixels(renderer_state.device,renderer_state.context,gpu_presenter.retained(),gpu_readback,input_display_width,input_display_height)?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_ERROR;
                 else result=renderer_state.gpu_composition?renderer_state.gpu_composition->execute(gpu_request,gpu_commands,gpu_pixels,gpu_result,gpu_readback):C3X_RENDERER_RESULT_SUPERSEDED;
+#ifdef C3X_HELPER_TRIAL
+            }else if(command==Command::trial_export_shared){
+                auto* session=renderer_state.gpu_composition.get();
+                auto* source=session&&session->current_ticket()==trial_ticket&&
+                    c3x_renderer_i64(session->map_image())==trial_image?session->map_texture():nullptr;
+                result=C3X_RENDERER_RESULT_SUPERSEDED;
+                if(source&&trial_consumer_pid){
+                    D3D11_TEXTURE2D_DESC desc={};source->GetDesc(&desc);
+                    desc.Usage=D3D11_USAGE_DEFAULT;desc.CPUAccessFlags=0;
+                    desc.Format=DXGI_FORMAT_B8G8R8A8_UNORM;
+                    desc.BindFlags=D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE;
+                    desc.MiscFlags=D3D11_RESOURCE_MISC_SHARED_NTHANDLE|D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX;
+                    Microsoft::WRL::ComPtr<ID3D11Texture2D> shared;
+                    Microsoft::WRL::ComPtr<ID3D11RenderTargetView> target;
+                    Microsoft::WRL::ComPtr<IDXGIKeyedMutex> keyed;
+                    Microsoft::WRL::ComPtr<IDXGIResource1> resource;
+                    HANDLE own=nullptr,duplicated=nullptr;
+                    HANDLE consumer=OpenProcess(PROCESS_DUP_HANDLE,FALSE,trial_consumer_pid);
+                    HRESULT hr=consumer?renderer_state.device->CreateTexture2D(&desc,nullptr,&shared):E_FAIL;
+                    if(SUCCEEDED(hr))hr=renderer_state.device->CreateRenderTargetView(shared.Get(),nullptr,&target);
+                    if(SUCCEEDED(hr))hr=shared.As(&keyed);
+                    if(SUCCEEDED(hr))hr=shared.As(&resource);
+                    if(SUCCEEDED(hr))hr=keyed->AcquireSync(0,1000);
+                    if(SUCCEEDED(hr)){
+                        bool displayed=session->display_map_to(target.Get(),desc.Width,desc.Height);
+                        hr=keyed->ReleaseSync(1);renderer_state.context->Flush();
+                        if(!displayed)hr=E_FAIL;
+                    }
+                    if(SUCCEEDED(hr))hr=resource->CreateSharedHandle(nullptr,
+                        DXGI_SHARED_RESOURCE_READ|DXGI_SHARED_RESOURCE_WRITE,nullptr,&own);
+                    if(SUCCEEDED(hr)&&!DuplicateHandle(GetCurrentProcess(),own,consumer,&duplicated,0,FALSE,DUPLICATE_SAME_ACCESS))hr=E_FAIL;
+                    if(own)CloseHandle(own);if(consumer)CloseHandle(consumer);
+                    if(SUCCEEDED(hr)){
+                        trial_handle=std::uint64_t(reinterpret_cast<std::uintptr_t>(duplicated));
+                        trial_width=desc.Width;trial_height=desc.Height;
+                        result=C3X_RENDERER_RESULT_OK;
+                    }else result=C3X_RENDERER_RESULT_DEVICE_ERROR;
+                }
+#endif
             }else if(command==Command::tactical){
                 result=C3X_RENDERER_RESULT_SUPERSEDED;
                 auto* session=renderer_state.gpu_composition.get();
@@ -12845,6 +12902,14 @@ extern "C" __declspec(dllexport) int c3x_renderer_gpu_render(
     try{int code=get_renderer_worker().render_gpu(*request,*view,*metadata);return input.result(code,[&](auto& out){out(view->ticket);out(view->map_image);out(view->session);c3x_inputs::gpu_witness(out,*view,*metadata,code);});}
     catch(...){return input.result(C3X_RENDERER_RESULT_ERROR,[](auto& out){out.u64(0);out.u64(0);out.u64(0);out.u32(0);});}
 }
+#ifdef C3X_HELPER_TRIAL
+extern "C" __declspec(dllexport) int c3x_renderer_trial_export_shared(
+    c3x_renderer_i64 ticket,c3x_renderer_i64 image,DWORD consumer_pid,
+    std::uint64_t* handle,unsigned* width,unsigned* height){
+    if(!handle||!width||!height)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    return get_renderer_worker().trial_export_shared(ticket,image,consumer_pid,*handle,*width,*height);
+}
+#endif
 extern "C" __declspec(dllexport) int c3x_renderer_gpu_camera_begin(
     c3x_renderer_camera_request_v1 const* request,c3x_renderer_i64* ticket){
     c3x_renderer_output_v1 metadata={C3X_RENDERER_API_VERSION,sizeof(metadata)};

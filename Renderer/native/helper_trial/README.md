@@ -42,3 +42,25 @@ estimate of native x64 performance. A Gate 1 pass proves the cross-process
 graphics/presentation boundary on this VM. It does not establish a gameplay
 speedup, Standard-map latency, or that moving the full renderer is worthwhile;
 those belong to Gate 2's same-input workload comparison.
+
+## Gate 2: real renderer scene and GPU map transfer
+
+Run from the repository root with a retained local input journal:
+
+```sh
+python3 Renderer/native/helper_trial/run_gate2.py --capture Renderer/native/build/input-recording/<capture>/inputs
+```
+
+The runner builds the current renderer core in both x86 and x64, extracts the
+same recorded scene values, compares result identities and CPU pixel witnesses,
+and transfers real x64 GPU map images to an x86 D3D11 importer. Add
+`--verify-pixels` for diagnostic GPU readback and exact pixel comparison; add
+`--crash-after 27` to test helper restart mid-workload. The ignored receipt
+under `native/build/helper_trial/gate2/runs/` records source, binary and capture
+hashes, completion, parity, timing and process memory. A scene-only pass is not
+a native-interleaved gameplay speed or presentation result.
+
+The [Gate 2 results](../../docs/helper64_gate2_results.md) close the x64
+architecture/capacity decision. The [migration plan](../../docs/helper64_migration_plan.md)
+defines the complete replay, native composition and cutover acceptance still
+required. This trial never stages a DLL, calls `INSTALL.bat`, or launches Civ III.
