@@ -55,6 +55,11 @@ int main(){
  s.composition_bytes=200*mib;now+=250;s.preserve_process_headroom();assert(!s.unit_bodies.gpu_content_limit);
  s.composition_bytes=0;now+=250;s.preserve_process_headroom();assert(s.unit_bodies.gpu_content_limit==124*mib);
  using Budget=c3x_renderer::render_core::FrameWorkingSet;
+ // Alternating shapes may exceed the envelope even when each request fits.
+ auto wide=Budget::unit_scratch(4096,256,256,4096);
+ assert(wide.width==4096&&wide.height==256);
+ auto smaller=Budget::unit_scratch(240,240,1280,1280);
+ assert(smaller.width==1280&&smaller.height==1280);
  assert(Budget::scene(2240,1260)==684111360&&Budget::mirror(2240,1260)==92116992);
  for(size_t bytes:{0u,100u,900u,1024u,1200u})for(bool pressure:{false,true})for(bool shared:{false,true}){
    auto limits=Budget::caches(bytes*mib,pressure,shared);

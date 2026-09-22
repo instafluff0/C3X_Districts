@@ -51,7 +51,13 @@ public:
         // Native draws update the scene recipe, not its visual time. Both native
         // transfers and autonomous frames sample that same committed recipe.
         // Otherwise every native unit/UI transfer restores the old map sample.
-        if(frequency>0 && visual_active())return visual_frame(ticks,frequency,target,retained,buffer)!=0;
+        if(frequency>0 && visual_active()){
+            if(visual_frame(ticks,frequency,target,retained,buffer)!=0)return true;
+            // Optional clock sampling may run out of scratch while the completed
+            // native transfer is still valid. Discarded history can be rebuilt
+            // at the next map publication; do not reject current native pixels.
+            if(FAILED(device->GetDeviceRemovedReason()))return false;
+        }
         if(!gpu.display(image,target,w,h,area))return false;
         context->CopyResource(buffer,retained);context->Flush();return true;
     }

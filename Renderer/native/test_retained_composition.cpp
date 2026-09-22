@@ -323,6 +323,25 @@ int test_retained_composition(){
         request.ticket=4;request.action=C3X_GPU_SUBMIT;commands={{Kind::copy,canvas,session.map_image(),full,full}};
         assert(session.execute(request,commands,{},result,output)==C3X_RENDERER_RESULT_OK);
         assert(session.display_to(4,canvas,target.Get(),display.Get(),buffer.Get(),w,h,full));assert(session.visual_ready());
+        // A failed optional visual sample must not reject a completed native
+        // transfer or discard the caller's current GPU canvases. This models an
+        // allocation failure without consuming the host's real address space.
+        unsigned failed_samples=0;
+        assert(session.publish(source.Get(),5,0,0,w,h,[&](long long,long long)->RetainedComposition::Texture{
+            ++failed_samples;throw std::bad_alloc();}));
+        request.ticket=5;copy_map();
+        assert(session.display_to(5,canvas,target.Get(),display.Get(),buffer.Get(),w,h,full,660,1000));
+        assert(failed_samples==1 && !session.visual_ready());
+        assert(retained_read(device.Get(),context.Get(),display.Get())==retained_read(device.Get(),context.Get(),source.Get()));
+        request.action=C3X_GPU_READBACK;request.image=std::int64_t(canvas);request.pixel_count=w*h;
+        assert(session.execute(request,{}, {},result,output)==C3X_RENDERER_RESULT_OK);
+        assert(output==retained_read(device.Get(),context.Get(),source.Get()));
+        auto recovered=sampled; // sampled already owns packed pixels.
+        assert(session.publish(source.Get(),6,0,0,w,h,[&](long long,long long){return recovered;}));
+        request.ticket=6;copy_map();
+        assert(session.display_to(6,canvas,target.Get(),display.Get(),buffer.Get(),w,h,full,726,1000));
+        assert(session.visual_ready() && retained_read(device.Get(),context.Get(),display.Get())==pixels);
+        std::puts("PASS native visual allocation failure: completed transfer preserved, CPU ownership exact, fresh publication resumes animation");
         std::puts("PASS ambient ownership recovery: frozen CPU snapshot rejected, unit-only animation rejected, copied map restores readiness, static maps remain ready");
     }
     std::printf("PASS retained composition: %u exact GPU oracles, 120 independent clock frames, aliasing, paired 555/565/full color, UI versioning, partial publication, bounded overwrite and reset\n",checks);return 0;

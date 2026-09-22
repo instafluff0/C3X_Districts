@@ -4313,13 +4313,20 @@ public:
         if(std::size_t(w)*h*scale*scale*48>c3x_renderer::render_core::FrameWorkingSet::unit_limit){++unit_scene_rejections;return false;}
         if(unit_bodies.reuse_scene_body(unit,offset_x,offset_y,region_width,region_height,sample))return true;
         last_unit_work=GetTickCount64();
-        auto requested=std::size_t(w)*h*scale*scale*48;
         using Budget=c3x_renderer::render_core::FrameWorkingSet;
+        auto extent=Budget::unit_scratch(w*scale,h*scale,work.width,work.height);
+        auto requested=std::size_t(extent.width)*extent.height*48;
         auto attachments=frame_working_bytes()-work.bytes()+requested;
         if(attachments>Budget::limit){++unit_scene_rejections;return false;}
         auto limits=Budget::caches(attachments+composition_working_bytes(),memory_pressured,shared_scene_surface);
         render_regions.set_gpu_limit(limits.regions);unit_bodies.set_gpu_content_limit(limits.units);
-        if(!work.ensure(device,w*scale,h*scale,true,false)||!scene_restore.ensure(device))return false;
+        bool allocate=!work.target || work.width!=extent.width || work.height!=extent.height;
+        if(!work.ensure(device,extent.width,extent.height,true,false)||!scene_restore.ensure(device))return false;
+        if(allocate){
+            char detail[192];sprintf_s(detail,"width=%u height=%u raster_width=%u raster_height=%u bytes=%zu",
+                work.width,work.height,w*scale,h*scale,work.bytes());
+            trace.write("unit-scratch-allocation",detail,true);
+        }
         // Keep the exact native raster viewport. Clear only this occurrence's
         // conservative footprint; map pixels/depth are never part of unit work.
         D3D11_RECT raster={offset_x*LONG(scale),offset_y*LONG(scale),
@@ -10698,7 +10705,11 @@ public:
             gpu_present=request;advance_visual_clock();
             int result=submit_locked(lock,Command::gpu_present);
             if(result==C3X_RENDERER_RESULT_OK)result=gpu_presenter.present();
-            if(result!=C3X_RENDERER_RESULT_OK){stop_visual_delivery();session->stop_visuals();gpu_presenter.reset();}
+            if(result!=C3X_RENDERER_RESULT_OK){
+                stop_visual_delivery();session->stop_visuals();
+                // Keep the display attached until the native owner's explicit
+                // preserve/CPU handoff succeeds. Reset here exposes stale GDI.
+            }
             else if(session->visual_ready()){
                 visual_present_pending=false;visual_delivery=true;
                 visual_cadence.enable([this]{
@@ -10706,7 +10717,7 @@ public:
                 });
             }
             return result;
-        }catch(...){stop_visual_delivery();session->stop_visuals();gpu_presenter.reset();return C3X_RENDERER_RESULT_ERROR;}
+        }catch(...){stop_visual_delivery();session->stop_visuals();return C3X_RENDERER_RESULT_ERROR;}
         }();if(code==C3X_RENDERER_RESULT_OK&&request.action==0)c3x_inputs::runtime().gameplay();return input.result(code);
     }
 
@@ -12346,7 +12357,12 @@ private:
                     memory.ullAvailVirtual,memory.ullAvailPageFile);
                 renderer_state.trace.write("worker-failure-memory",failure,true);
                 if(command==Command::unit)renderer_state.unit_bodies.reset_gpu();
-                else if(command!=Command::native_screen && command!=Command::visual_frame)renderer_state.reset();
+                // Native canvases may still contain GPU-only writes. A worker
+                // exception cannot destroy their session underneath the caller
+                // or detach the last display. Only the explicit native drain
+                // followed by reset/configuration may retire that ownership.
+                else if(!renderer_state.gpu_composition && command!=Command::native_screen && command!=Command::visual_frame)renderer_state.reset();
+                try{throw;}catch(std::exception const& error){renderer_state.trace.write("worker-error-detail",error.what(),true);}catch(...){}
                 renderer_state.trace.write("worker-error", "resource allocation or runtime exception", true);
                 output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
                 result = C3X_RENDERER_RESULT_ERROR;

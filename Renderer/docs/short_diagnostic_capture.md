@@ -5,8 +5,10 @@ It is not ten-minute endurance qualification, live FPS acceptance, or proof that
 replay reproduces all game scheduling. The normal ten-minute capture admission
 remains separate.
 
-The tested candidate is staged and the installed game path has been verified to
-resolve to it; no reinstall is needed for this update. Close Civ III, then double-click
+Use this input-capture workflow only when its readiness receipt matches the staged
+DLL; see the roadmap for current staging and unresolved qualification. An evaluation
+DLL may instead use the targeted failure logs described below. For a qualified
+input capture, close Civ III, then double-click
 `Renderer\CAPTURE_DIAGNOSTIC.bat` and accept the Windows capture permission.
 The launcher starts the game with input recording, presentation timing, bounded
 renderer logs, sampled window images and process memory measurements.
@@ -37,7 +39,19 @@ the actual window samples. Use the fixed inputs for the bounded bottleneck
 campaign only within the established fidelity limits. Do not claim architectural
 speedups from faster API returns alone.
 
-## Current qualification
+## Targeted failure logs without a replay recording
+
+`Renderer\CAPTURE_FAILURE.bat` reuses the existing launch/collector path with
+`-NoReplayRecording`. It pins the staged DLL and saves bounded renderer/debug
+logs and presentation timing; it does not record input journals or window images,
+and is not replay qualification or a performance baseline. Use it only for a
+specific unexplained live failure after automated investigation. Reproduce the
+problem and close Civ III (or terminate it if unresponsive); the collector saves
+results through the existing cleanup path. No ten-minute play session is needed.
+A read-only preflight is `CAPTURE_FAILURE.bat -CheckOnly`; it starts no game.
+The short input-capture launcher above still requires its exact qualified build.
+
+## Preserved earlier qualification
 
 The readiness receipt pins DLL
 `54aac95f5e1174aaf3c9b8f034a16c3c786fad8258a4e336c8bcce75e14558d4`

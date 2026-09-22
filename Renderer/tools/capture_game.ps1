@@ -53,6 +53,16 @@ function Get-ShortCaptureStopReason([string]$Timeline) {
     return $null
 }
 
+function Test-OrphanCaptureCollector($Collector, [string[]]$AllowedPaths, [bool]$ParentExists) {
+    # A missing window alone does not imply ownership. Never stop GUI DebugView,
+    # another capture host's collector, or a CLI with unknown launch metadata.
+    return (-not $ParentExists -and
+        $Collector.Name -match '^dbgviewcli(64a?|)\.exe$' -and
+        $Collector.ExecutablePath -and $AllowedPaths -contains $Collector.ExecutablePath -and
+        $Collector.CommandLine -match '"--process-filter"\s+"Civ3Conquests"' -and
+        $Collector.CommandLine -match '"--log"\s+"[^"\r\n]*\\C3XRendererCapture\\\d{8}-\d{6}-[0-9a-f]{6}\\renderer\.log"')
+}
+
 # XP compatibility can elevate Civ III through ShellExecute and discard the
 # launching process's environment. Elevate the capture host first, then create
 # the game directly with the diagnostic environment. One UAC boundary also
@@ -126,8 +136,22 @@ try {
     if (Get-Process -Name Civ3Conquests -ErrorAction SilentlyContinue) {
         throw 'Please close Civ III first, then double-click CAPTURE_GAME.bat again.'
     }
+    $modName = Split-Path (Split-Path $renderer -Parent) -Leaf
+    $installedDebug = Join-Path $conquests ($modName + '\Renderer\native\build\live-tools\DebugView\' + $debugName)
+    foreach ($collector in @(Get-CimInstance Win32_Process -Filter "Name LIKE 'dbgviewcli%.exe'")) {
+        $parentExists = $null -ne (Get-Process -Id $collector.ParentProcessId -ErrorAction SilentlyContinue)
+        if (Test-OrphanCaptureCollector $collector @($debug, $installedDebug) $parentExists) {
+            $owned = Get-Process -Id $collector.ProcessId -ErrorAction SilentlyContinue
+            # Check creation time as well: do not target a reused process ID.
+            if ($owned -and [Math]::Abs(($owned.StartTime.ToUniversalTime() - $collector.CreationDate.ToUniversalTime()).TotalMilliseconds) -lt 1) {
+                Stop-Process -InputObject $owned -ErrorAction Stop
+                if (-not $owned.WaitForExit(5000)) { throw 'The leftover capture collector has not stopped.' }
+                Write-Host 'Cleared a leftover renderer capture collector. Existing logs were preserved.'
+            }
+        }
+    }
     if (Get-Process -Name dbgview,dbgview64,dbgview64a,dbgviewcli,dbgviewcli64,dbgviewcli64a -ErrorAction SilentlyContinue) {
-        throw 'Please close DebugView first so this capture can own and stop its collector.'
+        throw 'Another DebugView collector is running (possibly hidden). Close its capture console or end its DebugView process in Task Manager, then retry.'
     }
 
     $stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmss') + '-' + [Guid]::NewGuid().ToString('N').Substring(0,6)
@@ -208,6 +232,9 @@ try {
     if ($ShortDiagnostic) {
         Write-Host 'Play for 60-90 seconds, then return to this console and press Enter to save.' -ForegroundColor Cyan
         Write-Host 'Keep the game open until Capture saved appears. Then you may quit it.'
+    } elseif ($NoReplayRecording) {
+        Write-Host 'Failure diagnostics ready: reproduce the problem, then close the game to save logs.' -ForegroundColor Cyan
+        Write-Host 'No replay inputs or window images are recorded. You do not need a ten-minute run.'
     } else { Write-Host 'Capture ready. Play normally for about ten minutes.' }
     if (-not $NoReplayRecording) {
         if (-not $ShortDiagnostic) { Write-Host 'Inputs record for at most ten minutes after the first GPU presentation.' }

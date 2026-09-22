@@ -40,6 +40,125 @@ remain; this is not a claim that every historical renderer path is retired.
 
 ## M3 current handoff — stabilization and navigation in progress
 
+Requested stopping point: complete M3.8 through M3.12, then stop before M3.13.
+Commit on the development host and push from Windows after each completed stage.
+M3.13's acceptance requirements remain intact; they are not part of this work's
+requested completion claim.
+
+### Mixed-unit scratch allocation churn removed (candidate verified)
+
+The failure capture contains 442 direct-unit reports before device failure and
+269 changes between 2,764,800-byte scout scratch and 78,643,200-byte worker
+scratch. Their changed-size allocations total 10,990,080,000 bytes; this is
+cumulative allocation traffic, not simultaneous residency or measured driver
+memory. Immediate-context commands can outlive the released application handles.
+
+Unit raster scratch now retains sufficient capacity across smaller requests,
+within the existing 96 MiB bound. Combining wide/tall requests cannot exceed
+that bound. Native viewport, clipping, sample scale, format, pose timing and
+one-second idle retirement are unchanged. New allocation traces report capacity
+separately from raster dimensions. No cache cap or image-quality reduction.
+
+The GPU witness alternates the actual 240/1280-pixel extents for 24 draws: two
+allocations, exact HDR RGB/depth samples against independent tightly sized
+targets, and existing 98,304 packed/full-color comparisons have zero mismatches.
+The isolated candidate replays all 9,433 recorded calls and matches all 337
+displayed fingerprints. The 2240×1260 connected fixture with 1 GiB reserved VA,
+eight mixed units, all water effects, native camera/recovery and fog passes;
+all 15 fixed image outputs match the prior candidate. Twelve wall-clock tactical
+animation images are not cross-run equality oracles. It records four scratch
+allocations across reset/lifecycle exercise; sampled minimum free VA is 276.91
+MiB versus the previous 256.23 MiB. This single comparison establishes no stable
+FPS gain, live freeze fix or removed-device recovery.
+
+Evidence: `native/build/unit-scratch-reuse/`, `unit-scratch-reuse-replay/`,
+`unit-scratch-reuse-pressure/`. Generated BMPs are retained losslessly compressed.
+The game-staged DLL remains `f2598dad…`; this new candidate is not staged or
+capture-qualified. M3.8 remains open for the intermittent reset mismatch and
+lost-device/native ownership decision; the substantial attachment floor also
+remains a measured M3.12 capacity responsibility.
+
+### Live failure captured after the ownership repair
+
+Logs-only session `20260922-054649-e648f1` completed and preserved the exact
+`f2598dad…` evaluation DLL, runtime/DebugView logs and 712 PresentMon rows.
+The user reports mostly smooth motion with intermittent hitches, then a freeze.
+This capture contains no input journal or window images; it establishes failure
+timing and device/memory state, not the exact displayed pixels or a replay.
+
+At sequence 142, available process VA falls to 98,209,792 bytes (93.66 MiB).
+The next recorded GPU image failure reports device reason `0x887a0020`
+(`DXGI_ERROR_DRIVER_INTERNAL_ERROR`, device removed). The last PresentMon
+presentation precedes that report by about 46 ms. There are 522 subsequent
+worker-failure memory records; the dead device does not recover even when free
+VA later rises to about 558 MiB. This confirms a failed-device retry loop and
+severe address-space pressure, but does not establish that pressure caused the
+driver failure. Hardware rendering is confirmed on the Parallels D3D11 device.
+
+At the first failure, tracked working attachments are 819.70 MiB and composition
+plus publication is 166.86 MiB. The ordinary shared-scene target alone reports
+652.42 MiB (11,401,856 resolve pixels for a 2,822,400-pixel viewport). These are
+logical resource sizes, not a complete accounting of driver mappings or Civ III
+memory. The attachment floor remains high after cache trimming; increasing cache
+budgets would not address this failure. The main swap chain has 654 presents over
+37.78 seconds, median interval 28.88 ms and p95 132.27 ms, including camera/action
+work. These are submission intervals, not fresh-frame display acceptance.
+
+Next stabilization responsibility: reduce the measured full-resolution attachment
+overlap without changing fidelity, and handle a removed device through explicit
+native ownership/reconstruction instead of repeatedly submitting to it. Healthy
+device allocation-failure preservation remains necessary and must stay separate
+from removed-device recovery. The intermittent reset replay mismatch remains open.
+No additional manual recording is needed to establish these immediate targets.
+
+Capture launcher cleanup now recognizes only its own orphaned CLI collector
+(known executable, game filter, capture log path, absent parent and matching
+process creation time). GUI/foreign/live-host collectors remain untouched.
+Windows launcher ownership/parser/observer-stop tests pass without launching Civ III.
+
+### Native failure ownership repair (evaluation staged)
+
+The new live report adds an old “Hail Lincoln!” panel over a black map after unit
+movement, with about 2.9 GB observed memory. This is consistent with stale GDI
+content resurfacing, but neither an actual reopened modal nor memory exhaustion
+is established from the screenshot. It is not proved to be the reset replay bug.
+
+Source inspection found two concrete failure hazards: native GPU presentation
+reset/detached the display before successful preservation, and a worker exception
+could destroy the composition session while native canvases (and its caller)
+still referenced it. A third boundary rejected a completed native transfer when
+its optional new visual sample failed allocation. The candidate keeps ownership
+until explicit drain, preserves the attached display after rejected presentation,
+and uses the current completed native GPU canvas when visual sampling fails on
+a healthy device. A fresh map publication restores animation history. Removed
+device failures remain explicit failures, not claimed successful recovery.
+
+The new deterministic allocation-failure GPU test fails on the prior path and
+passes after repair: exact current display, exact CPU restoration and resumed
+animation after fresh publication. All 126 existing GPU image oracles pass.
+Portable tests execute the production presentation/worker failure branches;
+12 selected ownership/camera/cadence tests pass, one native-byte audit skips.
+The 2240×1260 connected fixture with eight mixed units, visibility, tactical,
+navigation/reset/config-off and 1 GiB reserved VA passes. Sampled free VA reaches
+256.2 MiB without worker/visual failure. The reservation is a pressure model,
+not a reproduction of Civ III heap fragmentation or the reported live freeze.
+
+Two replays reproduce all 337 displayed fingerprints exactly. One completes;
+the other retains the intermittent reset failure at event 19709 / call 9296,
+now identified as native map image 10 (1120×630) CPU restoration. This is not
+resolved by the successful run. The exact repair DLL (`f2598dad…`) is staged
+for evaluation; `native/build/native-failure-ownership/staging.json` records its
+identity and the prior `898acda7…` rollback. No installer or game was launched.
+`CAPTURE_FAILURE.bat -CheckOnly` passes for the existing logs-only collector.
+The next live check can reproduce the reported movement/turn failure with bounded
+logs and timing, without another input journal or window-image sequence.
+
+Candidate/evidence: `native/build/native-failure-ownership/`,
+`native-failure-ownership-pressure/` and `native-failure-ownership-replay/`.
+No injected changes, patch symbols, memory-cap increase or visual-quality change.
+The initiating live failure, intermittent reset mismatch, and M3.8 complete-path
+latency attribution remain open; no claim of live fix or performance improvement.
+
 ### Ambient continuity and keyed tactical correction (evaluation staged)
 
 Native screen transfers now sample the committed scene at the current visual
@@ -54,9 +173,10 @@ Functional candidate: `native/build/continuous-presentation-final/C3XRenderer.dl
 (SHA-256 `0428f2a5…`, not staged). The current diagnostic build in
 `continuous-presentation-diagnostic/` only adds image/extent/hash context to a
 replay CPU-handoff error; it does not alter rendering or relax comparison. At the user’s
-explicit request, that diagnostic build (`898acda7…`) is now staged for
+explicit request, that diagnostic build (`898acda7…`) was staged for
 `INSTALL.bat` evaluation, with the prior DLL preserved for rollback in
-`native/build/continuous-presentation-stage-rollback.dll`. It is not capture-qualified.
+`native/build/continuous-presentation-stage-rollback.dll`. The repair above now
+supersedes it; neither evaluation build is input-capture-qualified.
 Final connected fixture
 `continuous-presentation-final-native` passes at 1120×630, including visible
 marker rotation, native navigation/recovery and complete input recording.
@@ -89,9 +209,9 @@ corner and appears frozen after the first turn. This is a separate unresolved
 live regression report, not a demonstrated instance of the replay reset mismatch.
 Check turn transition, native selected-unit centering, requested/adopted/displayed
 view identity and ownership progress before further performance changes. Existing
-replays do not yet reproduce this symptom. Do not request another recording until
-existing evidence and focused native tests are exhausted; the staged evaluation
-DLL is not short-capture-qualified. The reset mismatch also remains unresolved;
+replays do not yet reproduce this symptom. The focused failure tests and pressure fixture above now pass, but do not
+reproduce this live trigger; the next specific evidence is the logs-only failure
+check, not a new input recording. The staged DLL is not short-capture-qualified. The reset mismatch also remains unresolved;
 causation versus the prior renderer is unproved. Refresh qualification after the
 fixes, then resume optimization. Preserve the user’s latest live scene export.
 No game was launched by the agent or fixed references replaced; the user has

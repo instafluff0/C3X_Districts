@@ -9,6 +9,15 @@ namespace c3x_renderer { namespace render_core {
 struct FrameWorkingSet {
     static constexpr std::size_t mib=1024u*1024u,limit=1024u*mib;
     static constexpr std::size_t scene_limit=672u*mib,unit_limit=96u*mib;
+    struct Extent {unsigned width,height;};
+    static Extent unit_scratch(unsigned w,unsigned h,unsigned previous_w,unsigned previous_h){
+        // Different unit packs use different sprite/sample extents. Reuse the
+        // larger allocation without changing the native raster viewport. Do not
+        // combine a wide and a tall request into an over-budget square.
+        auto width=std::max(w,previous_w),height=std::max(h,previous_h);
+        if(std::size_t(width)*height*48u>unit_limit)return {w,h};
+        return {width,height};
+    }
     static std::size_t scene(unsigned w,unsigned h){return std::size_t(w+8)*(h+8)*240u;}
     static std::size_t mirror(unsigned w,unsigned h){return std::size_t(w+16)*(h+16)*32u;}
     // VA and logical GPU bytes are different measurements. Subtract a future
