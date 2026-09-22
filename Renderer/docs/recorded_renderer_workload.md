@@ -9,6 +9,12 @@ not meet it. A separate [development input protocol](../native/input_recording/R
 is implemented but has not completed the qualification below. Do not ask for another long manual recording until the automated
 capture/replay qualification below passes.
 
+The separately admitted [short diagnostic capture](short_diagnostic_capture.md)
+is the user's requested 60–90-second calibration checkpoint. Its scoped receipt
+requires matched overhead/pressure controls and clean stopping; it does not grant
+the ten-minute or live-performance acceptance described here. A stopped recording
+can be complete for its captured interval without proving complete gameplay coverage.
+
 ## What must be reproducible
 
 Record from renderer startup, retaining the initialization prelude, and mark a

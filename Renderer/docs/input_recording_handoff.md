@@ -61,11 +61,33 @@ yet qualified as a reproduction of live game responsiveness. The
 
 ## Next unfinished responsibility
 
-Finish automated capture-overhead and live-pressure qualification, then use one
-strategic live input corpus to compare regenerated frames with its sampled game
-window evidence. Existing pixel-only live captures cannot supply missing scene
-inputs retroactively. Do not request another long manual capture before the
-automated acceptance gate passes.
+Short-session preparation is complete. The installed mod path resolves to staged
+DLL `46f0cfe973a73432d68f22662c585e8866c2d3c91cda93ea7da5b37d4844edea`;
+no reinstall is needed for this DLL update. The final Windows preflight passes,
+including signed tools and exact launcher/tool identities. Normal ten-minute
+admission remains closed. See [short diagnostic capture](short_diagnostic_capture.md).
+
+The fullscreen Standard fixture with all water effects and 1 GiB reserved passes
+the off/on/on/off recorder-overhead gate: idle p95 23.707/24.159 ms, action
+24.925/25.965 ms, camera 252.224/272.739 ms (off/on). Idle and open-transaction
+stop tests, canvas ownership and window collector checks pass. Two fresh replays
+of 17,191 calls match all 950 displayed fingerprints. Combined input/window
+capture also passes; its observer cost is not calibrated as live-game overhead.
+An earlier recorder-off run with 1,152 MiB reserved fails an ambient-pixel check
+near 85 MiB free address space. Preserve that limit; the launcher requests an early
+stop below 128 MiB sampled free space rather than claiming the pressure issue fixed.
+
+Evidence is under `native/build/input-recording/short-capture-`: campaign
+`campaign-20260921-b`, controls `controls-20260921-a`, combined observer
+`observer-20260921-a`, and final preflight `preflight-20260921-b`. The readiness
+receipt pins the build and rollback. Redundant historical images/intermediates
+were removed; retain journals and measurements and regenerate only needed frames.
+
+Next, collect one 60–90-second strategic live session, then compare regenerated
+symptoms against its sampled window evidence before producing the bottleneck
+report. Existing pixel-only live captures cannot supply missing scene inputs
+retroactively. This short diagnostic gate is not ten-minute endurance or live-FPS
+qualification; those remain open alongside replay/live scheduling calibration.
 
 The service experiment serializes completed calls and preserves recorded native
 consumption points. It cannot yet measure how the game would react to an earlier

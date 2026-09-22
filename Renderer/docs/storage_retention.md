@@ -55,6 +55,20 @@ Keep the archive, restore only needed images, and retain the existing 8 GiB free
 space reserve for evidence generation. Compression is maintenance, never part of
 timed rendering or a reason to recreate every archived frame.
 
+## Explicit generated-output cleanup
+
+At the user's request, a reviewed cleanup removed 5,079 generated files from
+`native/build`: redundant replay frame sequences, repeated diagnostic BMPs and
+compiler intermediates. Its logical size fell from 52.22 to 19.47 GiB; measured
+filesystem free space increased by 32.77 GiB. Original recording journals,
+live captures, source assets, active short-capture evidence, tools and staged/
+rollback DLLs remain. SHA-256 checks verified 1,542 retained recording and binary
+files. Per-test control images, sequence samples and the latest examples of named
+diagnostics remain; historical output directories no longer contain every BMP.
+Replay those preserved inputs only when a particular missing image is needed.
+The ignored plan and deletion receipt are under
+`lab/out/maintenance/build-cleanup-20260921.*.json`.
+
 ## Git maintenance
 
 Git is a separate maintenance operation, with no history rewrite or ref deletion.

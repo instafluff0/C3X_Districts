@@ -40,6 +40,7 @@ class Runtime {
     std::mutex assets_mutex;std::map<std::string,Asset> assets;std::size_t asset_names=0;
     std::mutex identities;std::map<void*,std::uint32_t> objects;std::map<DWORD,std::uint32_t> threads;std::uint32_t next_object=0;
     std::uint64_t origin=0,frequency=1;std::atomic<unsigned> producers{0};std::mutex admission;unsigned open_calls=0;
+    bool stop_requested=false;
 public:
     Runtime()noexcept{try{
         wchar_t path[32768]={};auto n=GetEnvironmentVariableW(L"C3X_RENDERER_INPUT_RECORD_DIR",path,32768);
@@ -52,9 +53,14 @@ public:
         HMODULE module=nullptr;
         require(GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_PIN,
             reinterpret_cast<wchar_t const*>(&runtime_anchor),&module)!=0,"cannot pin input recorder module");
-        journal=std::make_unique<Journal>(path,frequency,Limits{},[this](Journal& writer){
+        auto stop_path=std::filesystem::path(path)/"stop.txt";
+        journal=std::make_unique<Journal>(path,frequency,Limits{},[this,stop_path](Journal& writer){
             std::lock_guard<std::mutex> lock(admission);
-            if(!open_calls&&expired())writer.stop(Stop::duration);
+            // File polling runs only on the opt-in recorder's writer thread.
+            // Finish between complete transactions, even if gameplay is idle.
+            std::error_code error;
+            if(!stop_requested)stop_requested=std::filesystem::exists(stop_path,error);
+            if(!open_calls&&(stop_requested||expired()))writer.stop(stop_requested?Stop::closed:Stop::duration);
         });
         Writer manifest;manifest.u32(protocol_version);manifest.u32(C3X_RENDERER_API_VERSION);
         // Coverage is declared explicitly; adding a packet is not proof that
@@ -80,9 +86,9 @@ public:
     void retire(void* pointer){if(!active())return;std::lock_guard<std::mutex> lock(identities);objects.erase(pointer);}
     bool expired()const{auto start=gameplay_start.load();if(!start)return false;auto tick=now();return tick>=start-1&&tick-(start-1)>=600*frequency;}
     bool begin_call(){if(!active())return false;std::lock_guard<std::mutex> lock(admission);if(!active())return false;
-        if(!open_calls&&expired()){journal->stop(Stop::duration);return false;}++open_calls;return true;}
+        if(!open_calls&&(stop_requested||expired())){journal->stop(stop_requested?Stop::closed:Stop::duration);return false;}++open_calls;return true;}
     void end_call(){std::lock_guard<std::mutex> lock(admission);if(open_calls)--open_calls;
-        if(!open_calls&&active()&&expired())journal->stop(Stop::duration);}
+        if(!open_calls&&active()&&(stop_requested||expired()))journal->stop(stop_requested?Stop::closed:Stop::duration);}
     void gameplay(){if(!active())return;std::uint64_t empty=0;gameplay_start.compare_exchange_strong(empty,now()+1);}
     template<class Encode>void emit(Kind kind,std::uint32_t flags,Encode encode)noexcept{
         if(!active())return;

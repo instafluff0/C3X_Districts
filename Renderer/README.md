@@ -16,6 +16,8 @@ The [input recording handoff](docs/input_recording_handoff.md) describes the cur
 recorder, visible Windows playback, measured controls and remaining qualification.
 [Before/After playback](docs/realtime_replay_comparison.md) compares two renderers
 at recorded input speed with independently generated animation frames.
+[Short diagnostic capture](docs/short_diagnostic_capture.md) collects one brief
+gameplay session for calibration, with explicit stop and memory-pressure handling.
 
 The current C3X checkout is the implementation authority. Lab renders and tests
 that code by category; Integration runs the affected current-code checks. Fixed

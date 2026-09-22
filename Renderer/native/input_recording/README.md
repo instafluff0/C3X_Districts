@@ -4,6 +4,12 @@ This is a separate input protocol from the v2/v3 composition/pixel journal.
 `C3X_RENDERER_INPUT_RECORD_DIR` selects a **new** directory. Unset means no writer,
 module pin, file activity or capture queue. Capture is not enabled in the installer.
 
+Creating `stop.txt` in the active input directory requests a clean close. The
+writer observes it while idle and admission closes between complete transactions;
+the game and independent visuals keep running. `finished.json` and the verified
+footer establish completion, not the stop file alone. The short diagnostic
+launcher exposes this through Enter and stops its external collectors afterward.
+
 The optional DLL recorder copies explicit API fields and CPU image inputs. It
 records scene/world records, GPU and CPU unit actions, image commands, tactical
 primitives, GPU and CPU camera calls, sampled visual clocks, visual offers/policy,

@@ -1,7 +1,8 @@
 # Start ordinary gameplay with bounded, process-filtered diagnostics.
 # Portable Microsoft DebugView and Intel PresentMon live in ignored build data.
-param([switch]$CheckOnly, [switch]$NoReplayRecording, [string]$ConquestsDirectory)
+param([switch]$CheckOnly, [switch]$NoReplayRecording, [switch]$ShortDiagnostic, [string]$ConquestsDirectory)
 $ErrorActionPreference = 'Stop'
+if ($ShortDiagnostic -and $NoReplayRecording) { throw 'ShortDiagnostic requires input recording.' }
 $renderer = Split-Path $PSScriptRoot -Parent
 $tools = Join-Path $renderer 'native\build\live-tools'
 $arm = $env:PROCESSOR_ARCHITECTURE -eq 'ARM64' -or $env:PROCESSOR_ARCHITEW6432 -eq 'ARM64'
@@ -13,6 +14,7 @@ $witness = Join-Path $renderer 'native\build\window-witness\window_witness.exe'
 $inspect = Join-Path $renderer 'native\build\input-recording\inspect_inputs.exe'
 $replay = Join-Path $renderer 'native\build\input-recording\replay_inputs.exe'
 $qualification = Join-Path $renderer 'native\build\input-recording\capture-ready.json'
+if ($ShortDiagnostic) { $qualification = Join-Path $renderer 'native\build\input-recording\short-capture-ready.json' }
 $conquests = $ConquestsDirectory
 if (-not $conquests) { $conquests = $env:C3X_RENDERER_CIV3_CONQUESTS }
 if (-not $conquests) {
@@ -39,6 +41,18 @@ function Get-ElevatedPath([string]$Path) {
     return $Path
 }
 
+function Get-ShortCaptureStopReason([string]$Timeline) {
+    if (-not (Test-Path -LiteralPath $Timeline)) { return $null }
+    # Reuse the observer's once-per-second memory sample. Never walk the game's
+    # address space a second time from this launcher.
+    $samples = @(Get-Content -LiteralPath $Timeline -Tail 64 | Where-Object { $_ -match '"event":"process_memory"' })
+    if ($samples.Count) {
+        try { $sample = $samples[-1] | ConvertFrom-Json } catch { return $null }
+        if ($sample.free_bytes -lt 134217728) { return 'low-address-space' }
+    }
+    return $null
+}
+
 # XP compatibility can elevate Civ III through ShellExecute and discard the
 # launching process's environment. Elevate the capture host first, then create
 # the game directly with the diagnostic environment. One UAC boundary also
@@ -53,6 +67,7 @@ if (-not $CheckOnly -and -not $elevated) {
     $directory = Get-ElevatedPath $conquests
     $command = "& '" + $script.Replace("'", "''") + "' -ConquestsDirectory '" + $directory.Replace("'", "''") + "'"
     if ($NoReplayRecording) { $command += ' -NoReplayRecording' }
+    if ($ShortDiagnostic) { $command += ' -ShortDiagnostic' }
     $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($command))
     $arguments = @('-NoProfile','-ExecutionPolicy','Bypass','-EncodedCommand',$encoded)
     try {
@@ -82,9 +97,19 @@ try {
             throw "Capture tool signature could not be verified: $tool"
         }
     }
+    $volume = New-Object System.IO.DriveInfo([IO.Path]::GetPathRoot($env:TEMP))
+    if (-not $NoReplayRecording -and $volume.AvailableFreeSpace -lt 11811160064) {
+        throw 'At least 11 GiB of local free disk space is required for the bounded input and window capture.'
+    }
     if (-not $NoReplayRecording) {
         if (-not (Test-Path -LiteralPath $qualification -PathType Leaf)) { throw 'The input recorder has not passed its capture acceptance checks yet. No game was started.' }
         $ready = Get-Content -LiteralPath $qualification -Raw | ConvertFrom-Json
+        if ($ShortDiagnostic -and $ready.scope -ne 'short-diagnostic-capture') {
+            throw 'This receipt does not qualify the short diagnostic workflow.'
+        }
+        if ($ShortDiagnostic -and $ready.launcher_sha256 -ne (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant()) {
+            throw 'The diagnostic launcher changed since validation.'
+        }
         if ($ready.status -ne 'pass' -or $ready.dll_sha256 -ne (Get-FileHash -LiteralPath $dll -Algorithm SHA256).Hash.ToLowerInvariant()) {
             throw 'The staged renderer does not match the qualified capture build. No game was started.'
         }
@@ -127,6 +152,8 @@ try {
         recording_scope = 'production renderer and native bridge inputs; correlated sampled window evidence'
         recording_max_bytes = 8589934592; recording_max_seconds = 600
         recording_duration_anchor = 'first successful GPU presentation'
+        short_diagnostic = [bool]$ShortDiagnostic
+        capture_stop_requested = $null
         capture_fps_is_performance_baseline = $false
         os_version = [Environment]::OSVersion.Version.ToString()
         process_architecture = $env:PROCESSOR_ARCHITECTURE
@@ -174,12 +201,17 @@ try {
         # A delayed elevation response must not leave an orphan collector.
         'stop' | Set-Content -LiteralPath (Join-Path $session 'stop-frames.txt')
         Write-Warning 'FPS collection is unavailable. Continuing with bounded renderer/debug logs.'
+        if ($ShortDiagnostic) { throw 'Short diagnostic capture requires the FPS collector. No game was started.' }
     }
 
     Write-Host ''
-    Write-Host 'Capture ready. Play normally for about ten minutes, then quit when convenient.'
+    if ($ShortDiagnostic) {
+        Write-Host 'Play for 60-90 seconds, then return to this console and press Enter to save.' -ForegroundColor Cyan
+        Write-Host 'Keep the game open until Capture saved appears. Then you may quit it.'
+    } else { Write-Host 'Capture ready. Play normally for about ten minutes.' }
     if (-not $NoReplayRecording) {
-        Write-Host 'Inputs record for ten minutes after the first displayed map. Window samples and memory are captured too.'
+        if (-not $ShortDiagnostic) { Write-Host 'Inputs record for at most ten minutes after the first GPU presentation.' }
+        Write-Host 'Window samples and memory are captured too.'
         Write-Host 'Include idle water/units, scrolling, camera jumps, movement, an interturn and opening/closing a city.'
         Write-Host 'Recording overhead is measured separately; this run is diagnostic.'
     }
@@ -200,6 +232,15 @@ try {
     $deadline = [DateTime]::UtcNow.AddSeconds(900)
     while (-not $gameProcess.HasExited -and [DateTime]::UtcNow -lt $deadline) {
         if (-not $NoReplayRecording -and (Test-Path -LiteralPath (Join-Path $session 'inputs\finished.json'))) { break }
+        if ($ShortDiagnostic -and -not $metadata.capture_stop_requested) {
+            $reason = Get-ShortCaptureStopReason (Join-Path $session 'window\timeline.jsonl')
+            if ([Console]::KeyAvailable -and [Console]::ReadKey($true).Key -eq [ConsoleKey]::Enter) { $reason = 'user-finished' }
+            if ($reason -and (Test-Path -LiteralPath (Join-Path $session 'inputs\started.json'))) {
+                'stop' | Set-Content -LiteralPath (Join-Path $session 'inputs\stop.txt')
+                $metadata.capture_stop_requested = $reason
+                Write-Host ("Finishing capture ($reason) and saving diagnostics; keep the game open...")
+            }
+        }
         Start-Sleep -Milliseconds 250
     }
     if ($gameProcess.HasExited) { $gameProcess.WaitForExit(); $metadata.game_exit_code = $gameProcess.ExitCode }
@@ -231,6 +272,9 @@ try {
         $metadata.frame_capture_present = (Test-Path -LiteralPath $frameFile) -and (Get-Item -LiteralPath $frameFile).Length -gt 0
         if ($metadata.frame_capture_present) {
             $metadata.frame_rows = @(Import-Csv -LiteralPath $frameFile).Count
+        }
+        if ($ShortDiagnostic -and (-not $metadata.frame_capture_present -or $metadata.frame_rows -lt 1)) {
+            $metadata.result = 'presentation-evidence-missing'; $result = 1
         }
         $recordingDirectory = Join-Path $session 'inputs'
         $metadata.recording_present = Test-Path -LiteralPath (Join-Path $recordingDirectory 'started.json')

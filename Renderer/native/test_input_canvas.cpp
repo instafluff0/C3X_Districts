@@ -16,8 +16,23 @@ struct TestCanvas {
     ~TestCanvas(){DeleteDC(dc);DeleteObject(bitmap);}
 };
 int main(int argc,char** argv){try{
-    require(argc==2,"test requires a new capture directory");
+    require(argc==2||argc==3,"test requires a new capture directory and optional stop mode");
     require(SetEnvironmentVariableA("C3X_RENDERER_INPUT_RECORD_DIR",argv[1])!=0,"canvas test recording environment");
+    if(argc==3){
+        bool transaction=std::string(argv[2])=="stop-transaction";
+        require(transaction||std::string(argv[2])=="stop-idle","unknown stop test");
+        auto& service=runtime();require(service.active(),"stop test recorder did not start");
+        if(transaction)require(service.begin_call(),"stop test transaction did not start");
+        {std::ofstream request(std::filesystem::path(argv[1])/"stop.txt");request<<"stop\n";}
+        Sleep(500);
+        if(transaction){require(service.active(),"stop cut an open transaction");service.end_call();}
+        for(unsigned n=0;n<100&&service.active();++n)Sleep(20);
+        require(!service.active(),"requested stop was not observed");service.finish();
+        require(!service.begin_call(),"capture admitted work after stopping");
+        InputInspection inspection;std::ostringstream timeline;inspection.read(argv[1],timeline);
+        require(inspection.verified&&inspection.complete&&inspection.stop==unsigned(Stop::closed),"requested stop did not close a valid journal");
+        std::cout<<"PASS requested recorder stop: "<<argv[2]<<'\n';return 0;
+    }
     auto& capture=canvas_capture();unsigned first=0,second=0;std::exception_ptr failure;
     TestCanvas a;
     {std::lock_guard<std::mutex> lock(capture.mutex);first=capture.describe(a.dc).id;}
