@@ -45,10 +45,15 @@ public:
     Id map_image()const{return map;}
     std::uint64_t upload_count()const{return gpu.stats().uploads;}
     std::int64_t current_ticket()const{return ticket;}
-    bool display_to(std::int64_t requested,Id image,ID3D11RenderTargetView* target,ID3D11Texture2D* retained,ID3D11Texture2D* buffer,unsigned w,unsigned h,Rect area){
-        if(requested!=ticket||!gpu.display(image,target,w,h,area))return false;
-        context->CopyResource(buffer,retained);context->Flush();
-        try{layers.commit(image,area);}catch(std::exception const& e){OutputDebugStringA("[C3X renderer] retained admission: ");OutputDebugStringA(e.what());OutputDebugStringA("\n");layers.discard();}return true;
+    bool display_to(std::int64_t requested,Id image,ID3D11RenderTargetView* target,ID3D11Texture2D* retained,ID3D11Texture2D* buffer,unsigned w,unsigned h,Rect area,long long ticks=0,long long frequency=0){
+        if(requested!=ticket||!target||!retained||!buffer||!gpu.displayable(image,w,h))return false;
+        try{layers.commit(image,area);}catch(std::exception const& e){OutputDebugStringA("[C3X renderer] retained admission: ");OutputDebugStringA(e.what());OutputDebugStringA("\n");layers.discard();}
+        // Native draws update the scene recipe, not its visual time. Both native
+        // transfers and autonomous frames sample that same committed recipe.
+        // Otherwise every native unit/UI transfer restores the old map sample.
+        if(frequency>0 && visual_active())return visual_frame(ticks,frequency,target,retained,buffer)!=0;
+        if(!gpu.display(image,target,w,h,area))return false;
+        context->CopyResource(buffer,retained);context->Flush();return true;
     }
     int compose_resident_unit(c3x_renderer_gpu_unit_v1 const& request,ID3D11Texture2D* texture,unsigned width,unsigned height,int x,int y,RetainedComposition::Sample sample={}){
         if(request.ticket!=ticket)return C3X_RENDERER_RESULT_SUPERSEDED;

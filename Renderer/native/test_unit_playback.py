@@ -33,7 +33,7 @@ int main() {
  assert(draw(5800000,true) && r.action_cursor==0); // Selection starts here, no catch-up.
  assert(draw(5866000,true) && r.action_cursor==1 && step==2);
  assert(!draw(5932000) && r.action_cursor==1 && queue.empty());
- assert(draw(10000000,true) && r.action_cursor==1);
+ assert(draw(10000000,true) && r.action_cursor==1); // Resuming an unselected idle stays frozen until selected.
  r.unit_id=2;assert(!draw(10000000) && r.action_cursor==0); // Independent instance.
  r.unit_id=1;assert(draw(10100000,true) && r.action_cursor==4);
  r.body_x=900;r.direction=5;r.hour=20;
@@ -42,6 +42,13 @@ int main() {
  assert(playback.resolve(r,directed,false,step) && r.action_cursor==7 && r.frame_count==15);
  r.action=1;assert(draw(10166000,true) && r.action_cursor==0); // New action lifecycle.
  playback.clear();assert(draw(10232000,true) && r.action_cursor==0);
+ // A visible selected/work loop advances even across a slow native transaction.
+ assert(draw(10732000,true) && r.action_cursor==15);
+ r.action=13;assert(draw(11000000) && r.action_cursor==0);
+ assert(draw(11700000) && r.action_cursor==21);
+ assert(draw(15700000) && r.action_cursor==51); // modulo authored duration, no catch-up draws
+ playback.forget(r.unit_id);assert(draw(20000000) && r.action_cursor==0); // actual hidden/despawn retirement
+
 }
 ''')
 

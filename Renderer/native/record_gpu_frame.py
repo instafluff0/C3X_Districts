@@ -199,7 +199,7 @@ def main(argv=None):
     complete=(out/'completion.txt').read_text().split() if (out/'completion.txt').exists() else []
     log=(out/'test.log').read_text(errors='replace') if (out/'test.log').exists() else ''
     unchanged=all(digest(ROOT/p)==h for p,h in inputs.items())
-    passed=complete==[invocation,'0'] and unchanged and 'PASS resident map GPU worker:' in log and 'PASS native GPU worker transport:' in log and 'PASS native screen transfer:' in log and 'PASS live native screen:' in log and 'PASS production native map owner:' in log and ('PASS prepared GPU map adoption:' in log or (args.width>2224 and args.height>1244 and 'PASS bounded GPU map demand:' in log))
+    passed=complete==[invocation,'0'] and unchanged and 'PASS resident map GPU worker:' in log and 'PASS native GPU worker transport:' in log and 'PASS native screen transfer:' in log and 'PASS live native screen:' in log and 'PASS production native map owner:' in log and 'PASS bounded GPU map demand:' in log
     if args.native_recovery:passed=passed and 'PASS native async recovery: cases=4 ' in log
     if args.native_navigation:passed=passed and 'PASS native navigation:' in log
     if args.native_camera_requests or args.native_navigation:passed=passed and 'PASS nonblocking native camera:' in log

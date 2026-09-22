@@ -10695,12 +10695,12 @@ public:
         bool full=request.area[0]<=0&&request.area[1]<=0&&request.area[2]>=request.width&&request.area[3]>=request.height;
         try{
             if(!gpu_presenter.prepare(static_cast<HWND>(request.window),renderer_state.device,request.width,request.height,full))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
-            gpu_present=request;
+            gpu_present=request;advance_visual_clock();
             int result=submit_locked(lock,Command::gpu_present);
             if(result==C3X_RENDERER_RESULT_OK)result=gpu_presenter.present();
             if(result!=C3X_RENDERER_RESULT_OK){stop_visual_delivery();session->stop_visuals();gpu_presenter.reset();}
             else if(session->visual_ready()){
-                advance_visual_clock();visual_present_pending=false;visual_delivery=true;
+                visual_present_pending=false;visual_delivery=true;
                 visual_cadence.enable([this]{
                     try{int result=visual_frame(true);c3x_inputs::realtime_replay().offer(result);}catch(...){c3x_inputs::realtime_replay().offer(C3X_RENDERER_RESULT_ERROR);OutputDebugStringA("[C3X renderer] independent visual frame failed\n");}
                 });
@@ -12269,7 +12269,7 @@ private:
                 else {
                     result=renderer_state.gpu_composition&&renderer_state.gpu_composition->display_to(p.ticket,std::uint64_t(p.image),
                         gpu_presenter.view(),gpu_presenter.retained(),gpu_presenter.buffer(),p.width,p.height,
-                        {p.area[0],p.area[1],p.area[2],p.area[3]})?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_BAD_ARGUMENT;
+                        {p.area[0],p.area[1],p.area[2],p.area[3]},visual_ticks,visual_allowed?visual_frequency:0)?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_BAD_ARGUMENT;
                     if(result==C3X_RENDERER_RESULT_OK)gpu_presenter.gpu_written();
                 }
             }else if (command == Command::configure_pack) {

@@ -46,8 +46,9 @@ public:
         if(advancing && state.advancing && state.frequency==request.presentation_frequency &&
            request.presentation_time_ticks>=state.ticks) {
             double elapsed=double(request.presentation_time_ticks-state.ticks)/request.presentation_frequency;
-            // Hidden units and blocked native calls do not accumulate catch-up.
-            if(elapsed>0 && elapsed<=.25) {
+            // Visibility retirement forgets hidden instances. A slow frame or native
+            // action must not stop time for an instance that is still visible.
+            if(elapsed>0) {
                 state.seconds=std::fmod(state.seconds+elapsed,double(clip.duration));interval=elapsed;
             }
         }

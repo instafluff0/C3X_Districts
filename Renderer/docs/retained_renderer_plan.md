@@ -28,7 +28,7 @@ and submission changes are implemented; final evidence and remaining limits are
 in [frame working-set results](frame_working_set_results.md). This replaces the
 static backup and duplicate reflection pages in the shared scene path. It does
 not certify the failed live tail, complete M3.8 performance acceptance, or start
-a separate-process renderer. Future [LORE work](#lore-testing-and-migration-milestones)
+a separate-process renderer. Future [LORE work](#measured-submission-experiments-lore-where-useful)
 must follow the remaining measured costs.
 
 The [production architecture audit](architecture_audit.md) records the remaining
@@ -38,7 +38,71 @@ cross-system boundaries. The implemented follow-ups are
 removed producers/storage/callers and the necessary compatibility paths that
 remain; this is not a claim that every historical renderer path is retired.
 
-## M3.8 current handoff — in progress
+## M3 current handoff — stabilization and navigation in progress
+
+### Ambient continuity and keyed tactical correction (evaluation staged)
+
+Native screen transfers now sample the committed scene at the current visual
+clock, so unit/UI updates cannot restore the original water/resource sample.
+Camera preparation/adoption retains its existing scheduling guard. Visible
+resources, water, selected idle units and working units animate; unselected idle units and fogged content
+stay frozen. Slow visible unit frames no longer discard elapsed clip time.
+Selection and route hooks supply the separate native map background when drawing
+onto the keyed unit canvas. No new patch symbols, listener, timer or presenter.
+
+Functional candidate: `native/build/continuous-presentation-final/C3XRenderer.dll`
+(SHA-256 `0428f2a5…`, not staged). The current diagnostic build in
+`continuous-presentation-diagnostic/` only adds image/extent/hash context to a
+replay CPU-handoff error; it does not alter rendering or relax comparison. At the user’s
+explicit request, that diagnostic build (`898acda7…`) is now staged for
+`INSTALL.bat` evaluation, with the prior DLL preserved for rollback in
+`native/build/continuous-presentation-stage-rollback.dll`. It is not capture-qualified.
+Final connected fixture
+`continuous-presentation-final-native` passes at 1120×630, including visible
+marker rotation, native navigation/recovery and complete input recording.
+The fullscreen `continuous-presentation-native-c` fixture passes: resource-only
+motion, 8 native-only updates / 8 fresh map samples with cadence disabled,
+24 movement updates / 33 map samples, blocked UI, fog/reveal, keyed selection and
+route, cancellation, reset and configuration-off. The direct GPU regression checks
+eight exact changing displays with no autonomous offers. Injected compile passes;
+portable eligibility/source-pose tests preserve frozen unselected idle units.
+Independent mixed-scene requests average 29.9 ms at 2240×1260 (41.1 ms including
+desktop completion); this is fixture timing, not a live FPS or M3.8 acceptance.
+
+The desktop-size recorded fixture reproduces the old invisible keyed marker and
+shows the corrected marker/route in `continuous-presentation-recorded/`.
+Its native assertions pass and capture closes; its original aggregate receipt is
+failed because the collector still expected retired padded-map adoption below
+fullscreen. The collector now requires the current exact bounded-map witness at
+all sizes. That diagnostic receipt is preserved, not relabeled as a pass.
+The first candidate also exposed intermittent camera-adoption divergence in a
+repeated replay; the final candidate preserves the original camera guard.
+All 337 final-candidate displayed fingerprints match across four runs. However,
+two runs fail the strict native CPU ownership hash at event 19709 / call 9296,
+a pending-camera reset after those presentations. Another final-candidate replay
+and both diagnostic-build runs complete. This remains **unqualified**, not fixed
+by successful retries; logs and the diagnostic summary are preserved under
+`continuous-presentation-final-replay/`.
+
+**Immediate priority:** the user reports that the evaluation build jumps to a map
+corner and appears frozen after the first turn. This is a separate unresolved
+live regression report, not a demonstrated instance of the replay reset mismatch.
+Check turn transition, native selected-unit centering, requested/adopted/displayed
+view identity and ownership progress before further performance changes. Existing
+replays do not yet reproduce this symptom. Do not request another recording until
+existing evidence and focused native tests are exhausted; the staged evaluation
+DLL is not short-capture-qualified. The reset mismatch also remains unresolved;
+causation versus the prior renderer is unproved. Refresh qualification after the
+fixes, then resume optimization. Preserve the user’s latest live scene export.
+No game was launched by the agent or fixed references replaced; the user has
+now tested the evaluation build. Generated BMP evidence is losslessly compressed.
+
+The formal [M3 extension](#m3-extension-deliverables) below replaces the informal
+ranked TODO list. M3.8 stabilizes and attributes; M3.9–3.12 simplify the warm path,
+ambient scheduling, world readiness and ownership; M3.13 verifies them together.
+M4 submission experiments remain conditional on measured benefit. The optional
+[M3.H capacity trial](#m3h---conditional-64-bit-helper-trial) has an explicit decision
+boundary and is not permission to silently replace the production renderer.
 
 **Completed consolidation:** one world-region preparation order replaces the
 neighborhood geometry queue; exact retained-scene views replace padded/alternate
@@ -63,7 +127,9 @@ camera changes, reset and configuration-off. Memory improves modestly, but
 contiguous free VA still falls below 512 MiB. These are service measurements,
 not live FPS or acceptance of the killed recording's failed tail.
 
-**Staging:** `9e76737a…` is staged and qualified for short diagnostic capture.
+**Previous qualification:** the preceding `9e76737a…` build was qualified for
+short diagnostic capture. The evaluation DLL staged above supersedes it for direct
+`INSTALL.bat` testing; the capture launcher receipt still belongs to the old build.
 The four-arm overhead campaign, fullscreen window witness, stop/recovery controls
 and two identical 960-presentation replays pass. Run `INSTALL.bat` before testing
 if the preceding camera-consolidation bridge changes have not been installed.
@@ -491,8 +557,9 @@ shadow casting. No deferred terrain-occlusion task is implied by this policy.
 
 Keep durable world/lifecycle updates separate from replaceable camera requests.
 Publish copied authoritative changes and exact view eligibility; refine mutation
-hooks only where needed. Prioritize current missing content, then nearby reusable
-meshes/instances/pass inputs, then selected future views/animation pixels. Preserve
+hooks only where needed. Prioritize coherent current display and demanded content,
+then useful bounded world/pose preparation. Do not restore speculative camera-image
+production. Preserve
 useful preparation across supersession without evicting the current working set.
 
 | Substep | Responsibility | Status |
@@ -504,7 +571,13 @@ useful preparation across supersession without evicting the current working set.
 | 3.5 | Nonblocking native polling and honest pending-coverage policy | DLL/JGL transaction boundary implemented; measurements above |
 | 3.6 | Coherent overlays, interactions and picking | Guarded live bridge implemented; automated acceptance passed |
 | 3.7 | Cancellation, GPU reset, reload, configuration-off and failure recovery | Implemented; automated retirement/recreation and fail-closed barriers pass; physical device-loss restoration is not claimed |
-| 3.8 | Arbitrary-destination readiness, coherent native navigation, edit/lifecycle and complete latency proof | In progress: whole-world input, preparation and bounded compiled backing work; paging, native cutover and full latency acceptance remain |
+| 3.8 | Stabilize native camera/ownership and establish complete-path attribution | In progress: first-turn corner/freeze report and intermittent reset replay mismatch unresolved; existing input corpus available |
+| 3.9 | Shorten warm camera transactions | Planned; highest performance priority, using 3.8 attribution |
+| 3.10 | Direct ambient sampling and unified GPU work priority | Planned; native-transfer continuity correction evaluation-staged, broader simplification unfinished |
+| 3.11 | Complete normal-world readiness and view-independent content reuse | Partially implemented: copied world, durable compiler and bounded backing exist; readiness/key/capacity acceptance remains |
+| 3.12 | Consolidate compatibility ownership and capacity | Partially implemented; remaining callers/storage and optional helper decision below |
+| 3.13 | Integrated navigation, animation and stability acceptance | Pending; retains the existing Standard <33 ms p95 objective |
+| 3.H | Conditional 64-bit helper trial | Decision-gated experiment, not an unconditional migration |
 
 **Done:** initialized, unchanged supported-world navigation selects already
 prepared scene content without foreground world compilation. Pixels, camera,
@@ -513,6 +586,11 @@ eviction and recovery have separately measured, bounded handling. A responsive
 submission queue or a fast revisit does not prove arbitrary-destination readiness.
 
 ### 3.8 arbitrary-destination navigation
+
+This existing acceptance contract now spans M3.8–M3.13. Completed M3.1–M3.7
+work is not renumbered; regressions reopen the affected contract. The extension
+makes unfinished responsibilities explicit without resetting prior evidence or
+weakening the navigation target.
 
 **Latency acceptance:** the user accepts **<33 ms p95 on nominal 100 × 100
 Standard maps (5,000 actual staggered tiles)** as the performance win, with
@@ -592,11 +670,56 @@ readiness and actual rendering/cutover must succeed. Prepared-resident, ordinary
 post-load first visits, eviction and edits retain separate distributions; misses
 in normal post-load navigation cannot be dropped to make the overall result pass.
 
-M3.8 owns missing world/preparation and native-cutover mechanisms required by this
-contract. M4 owns measured rendering/cadence costs remaining once that contract is
-working. A measured latency miss stays an explicit unpassed objective with a named
-cost/owner; neither milestone may call navigation instantaneous because enqueue is
-cheap or the UI continues processing messages.
+M3.8–M3.13 own this navigation contract. M4 owns broader measured pass execution
+and cadence improvements; an attributed M4 pass experiment may run before M3.13
+if needed to reach the shared latency objective. Architectural progress does not
+close M3.13 while latency or live correctness fails. Neither milestone may call
+navigation instantaneous because enqueue is cheap or the UI processes messages.
+
+### M3 extension deliverables
+
+Execution order follows the measured dependency, not a requirement to finish all
+investigation before implementing a fix. Use existing recordings, source owners
+and harnesses. Keep each change independently comparable, delete its superseded
+production route, and preserve all water effects, native gameplay authority,
+frozen unselected idle units, fog and full visual detail.
+
+| Deliverable | Production result and retirement | Exit evidence / expected impact |
+| --- | --- | --- |
+| **3.8 — Stabilize and attribute** | Resolve the first-turn corner/freeze and reset/CPU-restoration defects separately unless evidence connects them. Audit end-turn, selection/centering, camera adoption and native ownership. Attribute representative slow map calls to required preparation, view/pass work, GPU work, composition and waits on one timeline. | Deterministic behavioral regressions, valid native destination/clamping and coherent output; no stale pending state or suppressed gameplay. Baseline comparison establishes causality where possible. Reliability is blocking; no FPS claim from the reset fix. |
+| **3.9 — Warm camera path** | Remove the dominant repeated warm-view work and avoidable transaction waits identified by 3.8, using retained contributors and existing publication owners. Keep necessary CPU-access barriers. Do not just move waits from request handling to presentation. | Compare prepared-resident navigation with zero world builds/restores/static uploads; report coherent-display latency for every camera trigger and all >100 ms stalls. Highest performance priority: earlier zero-build jumps remained slow. |
+| **3.10 — Ambient execution and scheduling** | Separate visible water/resource time sampling from general map preparation. Consolidate camera, ambient, unit and speculative priority in the existing GPU owner; retire overlapping pause/queue policy. Bound optional batches, retain useful interrupted work and never run extra native action updates to animate scenery. | Fresh ambient pixels during mouse-held routes, movement, interturn and blocked UI; selected/work units animate, unselected idle/fogged content freezes. Measure display intervals, contention and discarded work, not clock advancement alone. High UX impact; speedup must be measured. |
+| **3.11 — Readiness and reuse** | Complete normal-map appearance/readiness coverage; prepare from initialization/changes. Remove viewport/projection dimensions from content keys only where generated content is proven independent. Keep one compiler/backing/residency owner and measure cheaper shared-instance representation where expanded geometry dominates. | Route-independent readiness for Standard 5,000 tiles; 100 distributed destinations, first-interactive/readiness time, coverage, eviction/edit costs and Huge 12,800-tile capacity. No foreground construction at prepared-resident destinations. High first-visit/reuse benefit; does not substitute for 3.9. |
+| **3.12 — Ownership and capacity consolidation** | Inventory each remaining CPU/profile/oversized compiler and pixel-cache caller, then migrate compatible callers and delete replaced implementations. Consolidate native saved-image versions/copies only where lifetimes permit. Account assets, geometry, native/retained images, scratch, pending work and driver/process VA together. | Retirement ledger names surviving owner, removed producer/storage/callers and justified exceptions with retirement conditions. Churn/reset/config-off remain correct; report peaks and contiguous VA. Dormant-code deletion alone earns no performance claim. Decide 3.H from measured capacity/restoration cost. |
+| **3.13 — Integrated acceptance** | One connected production path and one staged identity; focused fixes followed by the existing full regression/soak and one strategic live checkpoint. Refresh capture qualification before requesting a new recording. | Standard <33 ms p95 coherent navigation per trigger, initial steady animation target >=30 fresh frames/s with p95 intervals <=33.4 ms, no unexplained freeze/stale camera or ownership collapse; bounded churn memory and separate Huge results. Missing live or latency evidence remains open. |
+
+### M3.H - Conditional 64-bit helper trial
+
+This is an optional capacity/isolation experiment attached to M3.12, not another
+renderer implementation or a prerequisite for warm-path work. Trigger it when
+measured required working sets/fragmentation prevent safe Standard-map residency,
+or avoidable eviction/restoration remains a dominant cost after ownership review.
+Do not require completing unrelated M4 work before recognizing a hard capacity
+limit. Conversely, a high memory total alone does not establish a speed benefit.
+
+1. Reuse the current render core and fixed workload in a 64-bit helper prototype.
+   Exchange bounded copied scene/change/camera values through a versioned protocol;
+   no Civ III pointers cross the process boundary. Measure IPC latency/bandwidth,
+   backpressure, memory in both processes and actual frame completion.
+2. Prove the Windows/Parallels graphics transfer and presentation boundary before
+   broad migration. Preserve one owner of the existing game-window presentation,
+   native UI composition, ordered partial transfers and exact camera/picking.
+   Do not assume cross-process texture sharing is available or cheap; count any
+   required copy/synchronization and reject an uncompetitive full-frame readback path.
+3. Compare the same scenes, settings and inputs against the 32-bit control.
+   Require an actual capacity/reliability or complete-workload latency benefit,
+   no hidden frame queue, and no material regression in normal interactions.
+   Exercise helper startup/exit/crash/reset and resource retirement. Users should
+   retain one normal game launch; a standalone replay success alone cannot prove this.
+4. Record **adopt, reject or defer** with evidence. Adoption requires a concrete
+   production migration plan naming what leaves the injected/DLL bridge and what
+   remains for native capture/composition. This roadmap entry authorizes planning
+   the trial, not claiming process separation solves submission or GPU cost.
 
 ## 4. Raise cadence against a measured frame budget
 
@@ -612,18 +735,19 @@ only when measured; stay on D3D11 unless evidence justifies a change.
 objective on representative live workloads, including navigation, animation and
 UI transitions. Cold/evicted/edited destinations remain visible in the results.
 A 33 ms scheduling target is not 30 FPS; 60 FPS is a later 16.7 ms objective, not a current
-promise. Whole-world readiness is explicit M3.8 work, not deferred implicitly to
+promise. Whole-world readiness is explicit M3.11 work, not deferred implicitly to
 frame-loop tuning here.
 
-## LORE testing and migration milestones
+## Measured submission experiments (LORE where useful)
 
 Requested September 21, 2026. These milestones refine M4; they do not reset M1-M3,
-replace M3.8 camera/readiness acceptance, or create a second renderer project.
+replace M3.8–M3.13 navigation acceptance, or create a second renderer project.
 LORE-like means immutable draw descriptions, compact explicit frame commands,
 cheap parameter payloads, redundant-state filtering and useful parallel command
 preparation. D3D11 deferred contexts are optional. A new shading language,
-64-bit helper process, API migration, tessellation/LOD and reduced visual quality
-are outside this sequence. Natural/constructed wonders and Districts stay deferred.
+API migration, tessellation/LOD and reduced visual quality are outside this sequence.
+The optional 64-bit helper is scoped separately by M3.H, not bundled into LORE.
+Natural/constructed wonders and Districts stay deferred.
 
 Keep current assets, shading, native coordinates, pass/native order, visibility,
 authored animation and all water effects. Extend existing content, draw, worker
@@ -634,13 +758,19 @@ resource lifetime and displayed-frame evidence.
 
 | Milestone | Deliverable | Exit decision | Status |
 | --- | --- | --- | --- |
-| M4.0 - Establish causes and controls | Complete ten-minute renderer-input capture/replay, driver capabilities and complete cost/memory attribution | Qualify the recording, establish a matched baseline, then choose the first architectural cost to remove | In progress: timeline/capacity audit and selected-frame reconstruction pass; complete input capture pending |
-| M4.1 - Prove one LORE-style pass | Immutable draw descriptions, compact commands and filtered serial execution for one production pass | Exact output and repeatable complete-workload benefit justify migration | Planned |
+| M4.0 - Establish causes and controls | Reuse the recorded input corpus and M3.8 attribution; close only relevant fidelity/capacity gaps | Select the measured cost and matched control; ten-minute endurance remains an integrated acceptance gate | Short live-prefix replay and measurements exist; failed live tail, new regressions and live timing equivalence remain open |
+| M4.1 - Prove or reject one retained-command pass | Immutable draw descriptions, compact commands and filtered serial execution for one production pass | Exact output and repeatable complete-workload benefit justify migration; otherwise reject/defer | Conditional |
 | M4.2 - Switch scene submission | Adopt the proven path across applicable production scene passes | Migrated paths use the executor by default; obsolete duplicate submission is removed | Planned |
 | M4.3 - Parallelize useful command work | Bounded packet jobs; separately test deferred-context recording | Keep only concurrency that improves complete workloads on the target driver | Planned |
 | M4.4 - Bound native composition and memory | Efficient ordered composition, explicit image lifetimes and joint resource accounting | Representative native churn remains correct and stable within process headroom | Planned |
 | M4.5 - Accept the integrated candidate | Full correctness, performance, pressure and sustained replay verification | One production candidate passes the declared automated envelope | Planned |
 | M4.6 - Verify live responsiveness | Batched live gameplay checkpoint with the exact tested candidate | Sustained animation and coherent navigation meet their separate objectives | Planned |
+
+LORE is an approach to test, not a required engine shape. A negative measured
+result completes the experiment: remove its prototype and redirect to the actual
+bottleneck. M4.2/M4.3 are skipped or narrowed when their prerequisite shows no
+benefit; no obligation to maintain a packet layer or deferred contexts. Preserve
+explicit ownership and useful existing batching even when a LORE experiment fails.
 
 M4.0 selects priorities: M4.4 may precede or accompany scene migration if native
 composition or memory dominates. M4.1 precedes broad M4.2 conversion; M4.3 requires
@@ -666,9 +796,12 @@ peak in-flight resources. Do not add overlapping CPU/worker spans or trust the
 VM's uncalibrated timestamp queries. Diagnostic pass omissions identify causes;
 they do not qualify as an equivalent-image candidate.
 
-The user has superseded the symptom-by-symptom validation approach. Complete
-[recorded renderer workloads](recorded_renderer_workload.md) as the M4.0
-prerequisite, using existing owners and production rendering paths:
+The user has superseded the symptom-by-symptom validation approach. Reuse the
+implemented [recorded renderer workloads](recorded_renderer_workload.md), the live
+successful-prefix corpus and its known fidelity limits. Do not restart the recorder
+project or require a new ten-minute capture before each optimization. The table
+below preserves recorder evidence; current build qualification and remaining
+failures are stated in the M3 handoff, which supersedes older pending labels:
 
 | Work package | Required exit | Current status |
 | --- | --- | --- |
@@ -768,7 +901,7 @@ controls capable of accepting or rejecting that change. No broad packet rewrite
 is justified solely by LORE's batch-count headline. If evidence instead identifies
 pixel work or native composition as dominant, prioritize that responsibility.
 
-### M4.1 - Prove one LORE-style pass
+### M4.1 - Prove or reject one retained-command pass
 
 Choose one expensive pass from M4.0, such as dense city submission or reflection
 geometry. Retain mesh/material/pipeline descriptions with their existing content

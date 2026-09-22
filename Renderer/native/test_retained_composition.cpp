@@ -290,19 +290,39 @@ int test_retained_composition(){
         auto copy_map=[&]{request.action=C3X_GPU_SUBMIT;commands={{Kind::copy,canvas,session.map_image(),full,full}};
             assert(session.execute(request,commands,{},result,output)==C3X_RENDERER_RESULT_OK);};
         copy_map();show();assert(session.visual_ready());
+        // Native transfers must sample the same clock as autonomous frames.
+        // The immutable original map stays unchanged; only its sampled source advances.
+        auto sampled=source;long long last_tick=0;unsigned samples=0;
+        assert(session.publish(source.Get(),2,0,0,w,h,[&](long long ticks,long long){
+            last_tick=ticks;++samples;return RetainedComposition::Texture(sampled.Get());}));
+        request.ticket=2;request.action=C3X_GPU_SUBMIT;commands={{Kind::copy,canvas,session.map_image(),full,full}};
+        assert(session.execute(request,commands,{},result,output)==C3X_RENDERER_RESULT_OK);
+        for(unsigned tick=1;tick<=8;++tick){
+            std::fill(pixels.begin(),pixels.end(),0xff123400u+tick);
+            initial.pSysMem=pixels.data();ComPtr<ID3D11Texture2D> next;
+            desc.BindFlags=D3D11_BIND_SHADER_RESOURCE;checked(device->CreateTexture2D(&desc,&initial,&next));sampled=session.snapshot_bgra(next.Get(),0,0,w,h);
+            assert(session.display_to(2,canvas,target.Get(),display.Get(),buffer.Get(),w,h,full,tick*66,1000));
+            assert(last_tick==tick*66 && samples==tick);
+            assert(retained_read(device.Get(),context.Get(),display.Get())==pixels);
+            // Native working images are not modified by animation presentation.
+        }
+        std::puts("PASS native transfer animation: eight native-only frames sample current map time without autonomous offers");
+        assert(session.publish(source.Get(),3,0,0,w,h,[&](long long,long long){return RetainedComposition::Texture(source.Get());}));
+        request.ticket=3;
+        auto show_current=[&]{assert(session.display_to(3,canvas,target.Get(),display.Get(),buffer.Get(),w,h,full));};
         request.action=C3X_GPU_UPLOAD;request.image=std::int64_t(canvas);request.revision=1;
-        assert(session.execute(request,{},pixels,result,output)==C3X_RENDERER_RESULT_OK);show();
+        assert(session.execute(request,{},pixels,result,output)==C3X_RENDERER_RESULT_OK);show_current();
         if(session.visual_ready()){std::fprintf(stderr,"FAIL frozen CPU map wrongly disables ambient recovery\n");return 1;}
         RetainedComposition::Direct unit;unit.animated=true;unit.revision=[](long long ticks,long long){return std::uint64_t(ticks);};
         unit.draw=[](Compositor& gpu,Command const& input){auto c=input;c.kind=Kind::fill;c.color=0xffabcdef;return gpu.submit(&c,1);};
-        c3x_renderer_gpu_unit_v1 draw={};draw.ticket=1;draw.destination=std::int64_t(canvas);draw.clip[2]=w;draw.clip[3]=h;
-        assert(session.draw_dynamic(draw,8,8,0,0,std::move(unit))==C3X_RENDERER_RESULT_OK);show();
+        c3x_renderer_gpu_unit_v1 draw={};draw.ticket=3;draw.destination=std::int64_t(canvas);draw.clip[2]=w;draw.clip[3]=h;
+        assert(session.draw_dynamic(draw,8,8,0,0,std::move(unit))==C3X_RENDERER_RESULT_OK);show_current();
         if(session.visual_ready()){std::fprintf(stderr,"FAIL animated unit masks missing ambient map source\n");return 1;}
-        copy_map();show();assert(session.visual_ready());
-        assert(session.publish(source.Get(),2)); // genuinely static map is ready too
-        request.ticket=2;request.action=C3X_GPU_SUBMIT;commands={{Kind::copy,canvas,session.map_image(),full,full}};
+        copy_map();show_current();assert(session.visual_ready());
+        assert(session.publish(source.Get(),4)); // genuinely static map is ready too
+        request.ticket=4;request.action=C3X_GPU_SUBMIT;commands={{Kind::copy,canvas,session.map_image(),full,full}};
         assert(session.execute(request,commands,{},result,output)==C3X_RENDERER_RESULT_OK);
-        assert(session.display_to(2,canvas,target.Get(),display.Get(),buffer.Get(),w,h,full));assert(session.visual_ready());
+        assert(session.display_to(4,canvas,target.Get(),display.Get(),buffer.Get(),w,h,full));assert(session.visual_ready());
         std::puts("PASS ambient ownership recovery: frozen CPU snapshot rejected, unit-only animation rejected, copied map restores readiness, static maps remain ready");
     }
     std::printf("PASS retained composition: %u exact GPU oracles, 120 independent clock frames, aliasing, paired 555/565/full color, UI versioning, partial publication, bounded overwrite and reset\n",checks);return 0;

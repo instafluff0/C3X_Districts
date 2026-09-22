@@ -599,8 +599,11 @@ Texture2D<float4> input_image:register(t0);RWTexture2D<uint> output_image:regist
         context->CSSetShader(import_shader.Get(),nullptr,0);context->Dispatch((destination->width+7)/8,(destination->height+7)/8,1);unbind();
         destination->cpu_current=false;return true;
     }
+    bool displayable(Id id,unsigned width,unsigned height){
+        auto image=find(id);return image&&image->format==Format::bgra32&&image->width==width&&image->height==height;
+    }
     bool display(Id id,ID3D11RenderTargetView* target,unsigned width,unsigned height,Rect area){
-        auto image=find(id);if(!image||image->format!=Format::bgra32||image->width!=width||image->height!=height||!target)return false;
+        if(!target||!displayable(id,width,height))return false;auto image=find(id);
         RECT clip={std::max(0,area.left),std::max(0,area.top),std::min(int(width),area.right),std::min(int(height),area.bottom)};
         auto ok=display_program.draw(device,context,image->read.Get(),target,width,height,clip);
         if(recording){c3x_recording::event(c3x_recording::display,recording,[&](auto& b){using namespace c3x_recording;u64(b,id);u32(b,ok);for(auto v:{area.left,area.top,area.right,area.bottom})u32(b,unsigned(v));});

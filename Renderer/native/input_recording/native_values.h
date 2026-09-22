@@ -70,7 +70,7 @@ struct NativeValuesProvider: c3x_native_access::Provider {
     void release_words(void* p,void* release)override{auto found=writes.find(identity(p));if(found!=writes.end()){
             if(replay&&replay_execution().performance){writes.erase(found);return;}
             auto w=field(p,0x38),h=field(p,0x3c),stride=field(p,0x40);Sha256 hash;for(int y=0;y<h;++y)hash.add(found->second+y*stride,std::size_t(w)*2);auto result=hash.finish();auto id=key(written_words,p);
-            if(replay){Reader in{get(id)};for(auto x:result){auto expected=in.u32();if(!replay_execution().performance)require(expected==x,"native CPU ownership output differs");}in.done();}
+            if(replay){Reader in{get(id)};for(auto x:result){auto expected=in.u32();if(!replay_execution().performance&&expected!=x)throw std::runtime_error("native CPU ownership output differs: image="+std::to_string(identity(p))+" extent="+std::to_string(w)+"x"+std::to_string(h)+" expected="+std::to_string(expected)+" actual="+std::to_string(x));}in.done();}
             else {Writer out;for(auto x:result)out.u32(x);save(id,out);}writes.erase(found);}
         if(!replay){c3x_native_access::NativeScope scope;c3x_native_access::release_words(p,release);}}
     unsigned char const* buffer(unsigned type,void* p,unsigned size,unsigned char const* data){auto id=key(type,p);if(replay){auto& b=get(id);Reader in{b};if(!in.u32())return nullptr;auto n=in.u32();require(n==size&&b.size()==8+size,"native byte input extent");return b.data()+8;}Writer out;out.u32(data!=nullptr);if(data){out.u32(size);out.reserve(size);out.bytes.insert(out.bytes.end(),data,data+size);}save(id,out);return data;}

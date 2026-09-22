@@ -100,12 +100,17 @@ int main(){
 #include <mutex>
 #include <memory>
 #include "Renderer/native/gpu_frame_api.h"
+namespace c3x_inputs {
+enum class Kind {visual};
+struct Writer {void u32(unsigned){}};
+struct Call {bool completed=false;template<class F>Call(Kind,unsigned,F f){Writer out;f(out);}int result(int code){completed=true;return code;}};
+}
 struct LARGE_INTEGER{long long QuadPart=0;};void QueryPerformanceCounter(LARGE_INTEGER* q){++q->QuadPart;}
 unsigned GetEnvironmentVariableA(char const*,char*,unsigned){return 0;}
 using HWND=void*;constexpr int GA_ROOT=2;
 bool visible=true,minimized=false;bool IsWindowVisible(HWND){return visible;}bool IsIconic(HWND){return minimized;}
 struct Session{bool active=true;bool visual_active(){return active;}void stop_visuals(){active=false;}
- unsigned visual_bytes(){return 0;}unsigned visual_nodes(){return 0;}unsigned visual_sources(){return 0;}};
+ unsigned visual_bytes(){return 0;}std::size_t visual_nodes(){return 0;}std::size_t visual_sources(){return 0;}};
 struct State{
  std::mutex call_mutex,state_mutex;bool running=true,visual_delivery=true,visual_allowed=true,visual_present_pending=false;
  bool camera_active=false,camera_pending=false,camera_gpu=false;int camera_result=0,camera_ticket=0,gpu_camera_front_ticket=0;

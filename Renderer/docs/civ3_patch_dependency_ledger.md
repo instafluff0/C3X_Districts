@@ -1312,6 +1312,18 @@ Incremental GPU finishing uses the same boundary, captured anchors and ordered
 output ownership. It adds no callback, redraw request, asynchronous publication
 mode or executable dependency. `required_user_action: []` for this continuation.
 
+## Continuous native presentation and keyed tactical correction
+
+Existing hooks `Animator_draw_map_unit_cursor` and
+`Main_Screen_Form_update_in_go_to_mode` now pass the existing
+`Base_Data.Canvas.JGL.Image` as the tactical background. The native selected
+cursor (`0x4F03E0`) and route cursor (`0x4E45E0`) already use that map canvas
+with the separate keyed unit canvas. Signatures, supported-build addresses and
+patch entries are unchanged; no CSV edits or additional symbols are required.
+Sampling, blending and lifecycle work remain in the DLL. Config-off still calls
+the original functions. `required_user_action`: rerun `INSTALL.bat` after staging
+the corrected candidate to install these two background arguments.
+
 ## Milestone 2.5 — tactical draws (GOG)
 
 The user's explicit permission to add GOG functions applies to these concrete

@@ -3,7 +3,7 @@
 ## Active reading path
 
 1. [Architecture](renderer_architecture.md): ownership, GPU-ready scene design and firm contracts.
-2. [Roadmap and current status](retained_renderer_plan.md): existing responsibilities, actual gaps and the [LORE testing/migration milestones](retained_renderer_plan.md#lore-testing-and-migration-milestones).
+2. [Roadmap and current status](retained_renderer_plan.md): existing responsibilities, actual gaps and the [M3 extension](retained_renderer_plan.md#m3-extension-deliverables), [conditional 64-bit trial](retained_renderer_plan.md#m3h---conditional-64-bit-helper-trial) and [measured submission experiments](retained_renderer_plan.md#measured-submission-experiments-lore-where-useful).
 3. [Validation](benchmark_workflow.md): existing harnesses, measurement endpoints and meaningful checkpoints.
 
 [Execution rules](autonomous_renderer_execution.md) are a short operating reference.

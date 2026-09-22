@@ -19,7 +19,8 @@ owners, overlapping scheduling, supported alternate routes and retirement
 requirements. Recent working-set improvements do not imply that consolidation
 is complete. [Camera consolidation](camera_consolidation_results.md) retires
 prepared camera images and the separate neighborhood geometry queue. Exact native
-transactions and frame-bound content leases still have real costs.
+transactions and cold-content waits still have real costs. Combined compiler jobs
+now own immutable inputs; scoped leases remain only in compatibility compilers.
 
 ## World readiness and arbitrary navigation
 
@@ -49,7 +50,7 @@ Readiness never grants visibility: unseen tiles stay black, fog hides units and
 explored animation remains frozen. No lower-detail proxy or stale-camera frame
 is an authorized shortcut.
 
-The roadmap's M3.8 contract owns whole-world readiness and coherent native camera
+The roadmap's M3.8–M3.13 contract owns whole-world readiness and coherent native camera
 cutover for every trigger: scrolling, minimap, zoom, selected-unit centering,
 action following and other native programmatic moves. Automatic centering has the
 same latency objective as manual navigation while preserving native destination

@@ -40,6 +40,10 @@ int __fastcall unexpected_startup_native_transfer(void*,int,RECT*){return 917;}
 bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_frame_v1 frame,
                             c3x_renderer_gpu_present_fn present,unsigned const* map,int phase_x,int phase_y,c3x_renderer_native_image_fn live,c3x_renderer_render_view_fn render_view,c3x_renderer_camera_request_v1 const& demand,void (*reset)(),std::vector<NativeFrameSample> const& performance_frames){
     state={};capture={};events.clear();lines.clear();
+    // Static native pixel oracles explicitly suspend visual sampling. Dedicated
+    // motion witnesses below enable the production clock and check live output.
+    main_screen_fixture.is_now_loading_game=true;
+    live(C3X_NATIVE_VISUAL_POLICY,nullptr,nullptr,nullptr,nullptr,0);
     SetProcessDPIAware();WNDCLASSA wc={};wc.lpfnWndProc=screen_window_proc;wc.hInstance=GetModuleHandleA(nullptr);wc.lpszClassName="C3XNativeTransferContract";
     verify(RegisterClassA(&wc)!=0,"register native test window");
     HWND window=CreateWindowExA(WS_EX_TOPMOST|WS_EX_TOOLWINDOW,wc.lpszClassName,"Native transfer contract",WS_POPUP,20,20,frame.width,frame.height,nullptr,nullptr,wc.hInstance,nullptr);
@@ -253,6 +257,7 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
         for(unsigned n=0;n<hud.pairs.size();++n){int x=n%2?0:std::max(0,w-hud.pairs[n]->color.width),y=std::max(30,h-hud.pairs[n]->color.height-8-int(n/2)*36);
             verify(hud.draw(n,scene,screen_surface,x,y)==0,"actual HUD over resident map");}
         verify(owner.owns(scene)&&owner.owns(screen_surface)&&owner.stats().readbacks==hud_readbacks,"HUD and hover keep animated map dependencies resident");
+        main_screen_fixture.is_now_loading_game=false;
         // Resource-only idle must not depend on an animated/selected unit.
         final_ui_drawn=false;patch_JGL_present_screen(&full);
         live(C3X_NATIVE_VISUAL_POLICY,nullptr,nullptr,nullptr,nullptr,1);
@@ -419,6 +424,16 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
             "ambient advances through repeated native movement transitions");
         std::printf("PASS native action continuity: transitions=12 visual_frames=%u map_samples=%lld full_cycle_ms=%.3f deliberate_wait_ms=70 native_cursor_authority=1\n",
             transition_frames,action_after.map_samples-action_before.map_samples,action_ms/12);
+        // Native-only updates must not repeatedly restore the original map
+        // texture when the cadence thread cannot acquire the native call lock.
+        auto native_only_before=action_after;
+        for(unsigned step=0;step<8;++step){
+            Sleep(66);copy(scene,screen_surface,full);final_ui_drawn=false;patch_JGL_present_screen(&full);
+        }
+        verify(status(&action_after)==1&&action_after.map_samples>=native_only_before.map_samples+8,
+            "every native-only transfer samples current ambient map");
+        std::printf("PASS native-only ambient continuity: native_steps=8 map_samples=%lld explicit_visual_calls=0 cadence_disabled=1\n",
+            action_after.map_samples-native_only_before.map_samples);
         // Now leave delivery entirely to the cadence thread while native
         // movement keeps changing captures/canvases. No explicit visual ticks.
         verify(GetForegroundWindow()==GetAncestor(window,GA_ROOT),"movement witness retains foreground ownership");
@@ -448,6 +463,7 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
             action_after.frames-background_before.frames,action_after.map_samples-background_before.map_samples);
         if(prior_window)SetForegroundWindow(prior_window);
         reinterpret_cast<Destroy>(action_scratch->vtable[0])(action_scratch,1);
+        main_screen_fixture.is_now_loading_game=true;
         live(C3X_NATIVE_VISUAL_POLICY,nullptr,nullptr,nullptr,nullptr,0);
         verify(visual()==C3X_RENDERER_RESULT_PENDING,"explicit clock suspension pauses renderer clock");
         auto clock=reinterpret_cast<c3x_renderer_visual_clock_fn>(GetProcAddress(renderer_module,"c3x_renderer_visual_clock"));
@@ -464,7 +480,6 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
         verify(gpu.readback(owner.display_image(screen_surface),observed.data(),observed.size())&&observed==expected,
             "post-animation saved screen source is exact before desktop exposure");
         capture_display(expected);
-        live(C3X_NATIVE_VISUAL_POLICY,nullptr,nullptr,nullptr,nullptr,1);
         }
     }
     auto transfers_before_partial=screen_transfers;
@@ -893,7 +908,7 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
         char tactical_output[MAX_PATH]={};GetEnvironmentVariableA("C3X_RENDERER_TACTICAL_PREVIEW",tactical_output,sizeof(tactical_output));
         if(tactical_output[0]){
             verify(live(C3X_NATIVE_TACTICAL_CAPABLE,nullptr,nullptr,nullptr,nullptr,0)==1,"tactical capability on active native owner");
-            auto original_unit=unit;int cx=w*3/4,cy=h/2,tx=w/4,ty=h*2/3;
+            auto original_unit=unit;int cx=w*9/20,cy=h/2,tx=w*7/20,ty=h*3/5;
             unit.body_x=cx-unit.sprite_width*unit.projection_scale_milli/2000;
             unit.body_y=cy-unit.sprite_height*unit.projection_scale_milli/2000;
             auto draw_body=[&]{int bounds[4]={};verify(live(C3X_NATIVE_UNIT_DRAW,screen_surface,screen_surface,&unit,bounds,1)==1,"tactical under-unit ordering");};
@@ -905,20 +920,37 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
                 fwrite(&a,sizeof(a),1,f);fwrite(&b,sizeof(b),1,f);fwrite(pixels.data(),4,pixels.size(),f);fclose(f);
             };
             copy(live_images[0],screen_surface,full);draw_body();show();std::vector<unsigned> baseline;capture_display(expected,&baseline);
-            auto ring=[&]{int p[4]={cx,cy,live_frame.tile_width,1};verify(live(C3X_NATIVE_TACTICAL_RING,screen_surface,nullptr,p,nullptr,0)==1,"copied selected marker");};
-            copy(live_images[0],screen_surface,full);ring();draw_body();
+            // Civ III draws selection and routes onto a keyed unit canvas,
+            // resolving translucent pixels against its separate map background.
+            auto tactical_canvas=create(graph,nullptr,1);
+            verify(reinterpret_cast<Init>(tactical_canvas->vtable[1])(tactical_canvas,w,h,16,1)==0,"keyed tactical canvas");
+            *reinterpret_cast<int*>(reinterpret_cast<char*>(tactical_canvas)+0x4d0)=int(0x80007c1fu);
+            copy(live_images[0],tactical_canvas,full); // admit through the production copy boundary
+            verify(reinterpret_cast<Fill>(tactical_canvas->vtable[17])(tactical_canvas,&full,int(0x80007c1fu))==0,"clear keyed tactical canvas");
+            auto ring=[&]{int p[4]={cx,cy,live_frame.tile_width,1};verify(live(C3X_NATIVE_TACTICAL_RING,tactical_canvas,live_images[0],p,nullptr,0)==1,"copied selected marker on keyed canvas");};
+            auto composite_tactical=[&]{verify(live(C3X_NATIVE_IMAGE_DRAW,screen_surface,tactical_canvas,nullptr,&full,0)==1,"keyed tactical canvas over map");};
+            // Reproduce the old self-background mistake on exactly the same
+            // keyed canvas: the selected marker vanishes before the correction.
+            int broken_ring[4]={cx,cy,live_frame.tile_width,1};
+            verify(live(C3X_NATIVE_TACTICAL_RING,tactical_canvas,nullptr,broken_ring,nullptr,0)==1,"old keyed self-background case");
+            copy(live_images[0],screen_surface,full);composite_tactical();draw_body();show();
+            capture_display(baseline);save_tactical("-keyed-before.bmp",baseline);
+            copy(live_images[0],screen_surface,full);ring();composite_tactical();draw_body();show();
+            std::vector<unsigned> selected;capture_display(expected,&selected);verify(selected!=baseline,"selection alone visible on keyed canvas");save_tactical("-selection.bmp",selected);
             c3x_renderer_tactical_view_v1 view={live_frame.tile_width,live_frame.tile_width,0,0};
-            verify(live(C3X_NATIVE_TACTICAL_ROUTE_BEGIN,screen_surface,nullptr,&view,nullptr,0)==1,"route lexical capture begin");
+            verify(live(C3X_NATIVE_TACTICAL_ROUTE_BEGIN,tactical_canvas,nullptr,&view,nullptr,0)==1,"route lexical capture begin");
             // These are the same actual native line/text hooks used by Civ III.
-            auto line=reinterpret_cast<int(__thiscall*)(JGL_Image*,int,int,int,int,int,int)>(screen_surface->vtable[25]);
-            verify(line(screen_surface,cx,cy,w/2,ty,int(0x80007c00u),1)==0&&line(screen_surface,w/2,ty,tx,ty,int(0x80007c00u),1)==0,"native route line capture");
-            int destination[2]={tx,ty};verify(live(C3X_NATIVE_TACTICAL_TARGET,screen_surface,nullptr,destination,nullptr,0)==1,"native destination capture");
-            verify(reinterpret_cast<int(__thiscall*)(JGL_Image*,int,int,char const*,int)>(screen_surface->vtable[46])(screen_surface,tx,ty,"2",1)==0,"native authoritative turn label capture");
-            verify(live(C3X_NATIVE_TACTICAL_ROUTE_END,screen_surface,nullptr,nullptr,nullptr,0)==1,"route batch publish");
-            show();std::vector<unsigned> marked;capture_display(expected,&marked);verify(marked!=baseline,"tactical GPU marks change display");save_tactical("-route.bmp",marked);
+            auto line=reinterpret_cast<int(__thiscall*)(JGL_Image*,int,int,int,int,int,int)>(tactical_canvas->vtable[25]);
+            verify(line(tactical_canvas,cx,cy,w*2/5,ty,int(0x80007c00u),1)==0&&line(tactical_canvas,w*2/5,ty,tx,ty,int(0x80007c00u),1)==0,"native route line capture");
+            int destination[2]={tx,ty};verify(live(C3X_NATIVE_TACTICAL_TARGET,tactical_canvas,nullptr,destination,nullptr,0)==1,"native destination capture");
+            verify(reinterpret_cast<int(__thiscall*)(JGL_Image*,int,int,char const*,int)>(tactical_canvas->vtable[46])(tactical_canvas,tx,ty,"2",1)==0,"native authoritative turn label capture");
+            verify(live(C3X_NATIVE_TACTICAL_ROUTE_END,tactical_canvas,live_images[0],nullptr,nullptr,0)==1,"route batch publish");
+            copy(live_images[0],screen_surface,full);composite_tactical();draw_body();
+            show();std::vector<unsigned> marked;capture_display(expected,&marked);verify(marked!=selected,"route adds pixels beyond selection");save_tactical("-route.bmp",marked);
             auto visual=reinterpret_cast<int(*)()>(GetProcAddress(renderer_module,"c3x_renderer_gpu_visual_frame"));
             auto status=reinterpret_cast<int(*)(c3x_renderer_visual_status_v1*)>(GetProcAddress(renderer_module,"c3x_renderer_gpu_visual_status"));
             c3x_renderer_visual_status_v1 before={sizeof(before)},after={sizeof(after)};verify(status(&before)==1,"tactical retained state");
+            main_screen_fixture.is_now_loading_game=false;
             live(C3X_NATIVE_VISUAL_POLICY,nullptr,nullptr,nullptr,nullptr,1);
             auto initial_native_events=events.size();
             SetWindowPos(window,HWND_TOPMOST,0,0,w,h,SWP_NOACTIVATE|SWP_SHOWWINDOW);
@@ -948,12 +980,14 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
             verify(status(&after)==1&&after.frames-before.frames==12&&after.retained_bytes<=128ll*1024*1024,"bounded independent tactical history");
             verify(events.size()==initial_native_events,"tactical animation makes no native draw calls");
             if(w<=GetSystemMetrics(SM_CXSCREEN)&&h<=GetSystemMetrics(SM_CYSCREEN))verify(moved,"selected marker visibly rotates");
+            main_screen_fixture.is_now_loading_game=true;
             live(C3X_NATIVE_VISUAL_POLICY,nullptr,nullptr,nullptr,nullptr,0);
             copy(live_images[0],screen_surface,full);draw_body();show();capture_display(baseline); // cancellation removes both histories exactly
             copy(live_images[0],screen_surface,full);
             verify(live(C3X_NATIVE_TACTICAL_GRID,screen_surface,nullptr,&live_frame,nullptr,1)==1,"native-setting grid draw");draw_body();show();
             std::vector<unsigned> grid;capture_display(expected,&grid);verify(grid!=baseline,"grid visible");save_tactical("-grid.bmp",grid);
             copy(live_images[0],screen_surface,full);verify(live(C3X_NATIVE_TACTICAL_GRID,screen_surface,nullptr,&live_frame,nullptr,0)==1,"grid off");draw_body();show();capture_display(baseline);
+            reinterpret_cast<Destroy>(tactical_canvas->vtable[0])(tactical_canvas,1);
             expected=baseline;unit=original_unit;
             std::puts("PASS tactical native composition: scoped native route/turn capture, under-unit marker, clipped grid, exact cancellation/grid-off, no terrain or unit content rebuild");
         }

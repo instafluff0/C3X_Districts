@@ -23768,7 +23768,8 @@ patch_Animator_draw_map_unit_cursor (Animator * this, int edx, int x, int y)
 			int ring[4] = {x, y, custom_renderer_zoom_enabled () ? is->custom_renderer_zoom_tile_width :
 				(p_bic_data->is_zoomed_out ? 64 : 128), 1};
 			is->custom_renderer_native_image (C3X_NATIVE_TACTICAL_RING,
-				p_main_screen_form->Units_Control.Data.Canvas.JGL.Image, NULL, ring, NULL, 0);
+				p_main_screen_form->Units_Control.Data.Canvas.JGL.Image,
+				p_main_screen_form->Base_Data.Canvas.JGL.Image, ring, NULL, 0);
 		}
 		return;
 	}
@@ -23798,7 +23799,8 @@ patch_Main_Screen_Form_update_in_go_to_mode (Main_Screen_Form * this, int edx)
 	JGL_Image * target = this->Units_Control.Data.Canvas.JGL.Image;
 	is->custom_renderer_native_image (C3X_NATIVE_TACTICAL_ROUTE_BEGIN, target, NULL, &view, NULL, 0);
 	Main_Screen_Form_update_in_go_to_mode (this, __);
-	is->custom_renderer_native_image (C3X_NATIVE_TACTICAL_ROUTE_END, target, NULL, NULL, NULL, 0);
+	is->custom_renderer_native_image (C3X_NATIVE_TACTICAL_ROUTE_END, target,
+		this->Base_Data.Canvas.JGL.Image, NULL, NULL, 0);
 }
 
 void __stdcall

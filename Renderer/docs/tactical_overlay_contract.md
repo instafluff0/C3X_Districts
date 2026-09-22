@@ -17,6 +17,13 @@ projection to the admitted native composition owner. Native eligibility remains
 advance gameplay or the native action director. Native erase/copy/partial display
 operations remove or retain these commands in the same order as unit bodies/UI.
 
+The selected marker and completed route batch use the native unit canvas as
+their destination and `Main_Screen_Form::Base_Data.Canvas` as their background,
+matching the native cursor functions. The unit canvas can contain keyed transparent
+pixels: antialiased coverage resolves against that separate map background, not
+against transparency. Both background identity and full-color detail are copied
+through the existing native operation; no game pointer reaches the GPU worker.
+
 The GOG go-to update wrapper opens a bounded capture scope and executes the
 original function. Only that scope's target image intercepts native line/text
 operations. No route is recomputed, guessed from terrain, or retained through a

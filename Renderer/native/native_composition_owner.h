@@ -29,10 +29,10 @@ class CompositionOwner {
     std::array<float,2> destination={};std::string route_text;
     float projected(int v,bool y)const{return float(double(v)*route_view.tile_width/route_view.native_tile_width+
         double(y?route_view.translate_y_fp:route_view.translate_x_fp)/65536.);}
-    int tactical_draw(void* image,Tactical const& capture){
+    int tactical_draw(void* image,Tactical const& capture,void* background=nullptr){
         if(capture.primitives.empty())return 1;
         if(!tactical)return 0;
-        return adapter->draw_tactical([&](auto const& target){return tactical(capture,target);},frame.ticket,image)?1:0;
+        return adapter->draw_tactical([&](auto const& target){return tactical(capture,target);},frame.ticket,image,background)?1:0;
     }
     Navigation navigation;
     void* pending=nullptr;Rect area={};int phase_x=0,phase_y=0;
@@ -179,11 +179,11 @@ public:
         if(op==C3X_NATIVE_TACTICAL_ROUTE_END){
             if(image!=route_image)return 0;route_image=nullptr;
             if(!route_text.empty())route.label(destination[0],destination[1],route_text,std::max(18.f,float(route_view.tile_width)*.26f));
-            int result=tactical_draw(image,route);route={};route_text.clear();return result;
+            int result=tactical_draw(image,route,source);route={};route_text.clear();return result;
         }
         if(op==C3X_NATIVE_TACTICAL_RING){
             if(!from)return 0;auto p=static_cast<int const*>(from);Tactical capture;
-            capture.ring(float(p[0]),float(p[1]),float(p[2]),p[3]!=0);return tactical_draw(image,capture);
+            capture.ring(float(p[0]),float(p[1]),float(p[2]),p[3]!=0);return tactical_draw(image,capture,source);
         }
         if(op==C3X_NATIVE_TACTICAL_GRID){
             if(!color)return 1;if(!from)return 0;

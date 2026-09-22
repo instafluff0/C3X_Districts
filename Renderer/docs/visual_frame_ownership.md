@@ -74,6 +74,16 @@ waiting for that detach restores native GDI; it is below native child windows.
 This path requires Windows 8 or later (validated on Windows 11). It is distinct
 from putting a flip-model HWND swap chain on Civ III's GDI window.
 
+Native screen transfers commit their changed rectangle and sample the same
+retained scene at the current visual clock before presentation. They cannot
+restore the immutable map's original water/resource time between autonomous
+frames. This also supplies ambient samples while repeated native transactions
+occupy the caller gate. Explicit clock suspension retains the static native
+transfer path; holding a command or advancing native actions is not suspension.
+Camera preparation and adoption retain the existing scheduling guard. Visible eligible
+unit loops advance by elapsed time modulo clip duration even after a slow frame;
+unselected idle units and explored-but-not-visible content remain frozen.
+
 Native unit/map captures query `c3x_renderer_visual_clock`, in QPC-frequency
 units, so a later content/camera update cannot restore an older animation clock.
 Popup/Advisor and command-button scopes guard optional native redraws, without
