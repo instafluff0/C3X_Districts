@@ -52,6 +52,13 @@ Existing native barriers preserve actual CPU/UI ownership. See
 [camera consolidation results](camera_consolidation_results.md) for the replacement
 and retirement ledger, measured effects and independent regression checks.
 
+**Measured:** replay map p95 353–354 → 322–333 ms; ambient p95 about 35 →
+28–29 ms. Total service envelope is essentially unchanged (about 35 s), with
+only a small memory improvement. All 518 recorded frame fingerprints match;
+independent fullscreen native and corrected smaller-view reveal checks pass.
+Candidate `caf7d555…` is not staged; `54aac95f…` remains the qualified capture build.
+Staging must refresh short-capture qualification and then reinstall the bridge.
+
 **Next unfinished responsibility:** shorten the remaining exact map transaction,
 content compilation/adoption and view/pass assembly on the existing recorded
 workload. The cold frame is still expensive; the Standard <33 ms p95 camera goal

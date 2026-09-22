@@ -213,7 +213,7 @@ struct State {
  bool custom_renderer_camera_exact=false;
  c3x_renderer_native_navigation_fn custom_renderer_navigation=nullptr;
  c3x_renderer_visual_clock_fn custom_renderer_visual_clock=nullptr;
- bool custom_renderer_async_enabled=true,custom_renderer_display_valid=false,custom_renderer_nearby_preparing=false;
+ bool custom_renderer_async_enabled=true,custom_renderer_display_valid=false;
  bool custom_renderer_draw_in_progress=false,custom_renderer_async_drawing=false,custom_renderer_async_presented=false;
  bool custom_renderer_capture_only=false,custom_renderer_capture_failed=false,custom_renderer_capture_world_topology=true;
  int custom_renderer_zoom_tile_width=128,custom_renderer_tile_count=0,custom_renderer_viewer_civ_id=2;
