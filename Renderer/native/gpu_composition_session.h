@@ -100,16 +100,20 @@ public:
                 std::vector<unsigned> const& pixels,c3x_renderer_gpu_result_v1& result,std::vector<unsigned>& output){
         output.clear();result={sizeof(result)};
         if(!ticket||request.ticket!=ticket)return C3X_RENDERER_RESULT_SUPERSEDED;
+        // Draws and the immediately following resource boundary share one
+        // owner handoff. Submission order and explicit CPU readback stay exact.
+        if(!commands.empty()){
+            for(auto const& c:commands)if(c.destination==map||c.detail==map)return request.action==C3X_GPU_SUBMIT?C3X_RENDERER_RESULT_BAD_ARGUMENT:C3X_RENDERER_RESULT_ERROR;
+            if(!gpu.submit(commands.data(),commands.size()))return request.action==C3X_GPU_SUBMIT?C3X_RENDERER_RESULT_BAD_ARGUMENT:C3X_RENDERER_RESULT_ERROR;
+            try{for(auto const& command:commands)layers.record(command);}catch(std::exception const& e){OutputDebugStringA("[C3X renderer] retained admission: ");OutputDebugStringA(e.what());OutputDebugStringA("\n");layers.discard();}
+        }
         bool ok=false;Id image=Id(request.image);
         if(request.action==C3X_GPU_CREATE){image=gpu.create(request.width,request.height,request.format==C3X_GPU_RGB555?Format::rgb555:request.format==C3X_GPU_RGB565?Format::rgb565:Format::bgra32);ok=image!=0;if(ok)layers.create(image,request.width,request.height,request.format==C3X_GPU_RGB555?Format::rgb555:request.format==C3X_GPU_RGB565?Format::rgb565:Format::bgra32);}
         else if(request.action==C3X_GPU_UPLOAD){auto before=gpu.stats().uploads;ok=image!=map&&request.revision>0&&gpu.upload(image,request.revision,pixels.data(),pixels.size());
             if(ok&&gpu.stats().uploads!=before)try{layers.source(image,gpu.texture(image));}catch(std::exception const& e){OutputDebugStringA("[C3X renderer] retained admission: ");OutputDebugStringA(e.what());OutputDebugStringA("\n");layers.discard();}}
         else if(request.action==C3X_GPU_DESTROY){ok=image!=map&&gpu.destroy(image);if(ok)layers.destroy(image);}
-        else if(request.action==C3X_GPU_SUBMIT){
-            for(auto const& c:commands)if(c.destination==map||c.detail==map)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
-            ok=gpu.submit(commands.data(),commands.size());
-            if(ok)try{for(auto const& command:commands)layers.record(command);}catch(std::exception const& e){OutputDebugStringA("[C3X renderer] retained admission: ");OutputDebugStringA(e.what());OutputDebugStringA("\n");layers.discard();}
-        }else if(request.action==C3X_GPU_READBACK){
+        else if(request.action==C3X_GPU_SUBMIT)ok=true;
+        else if(request.action==C3X_GPU_READBACK){
             auto texture=gpu.texture(image);if(!texture)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
             D3D11_TEXTURE2D_DESC d={};texture->GetDesc(&d);
             if(std::uint64_t(d.Width)*d.Height>request.pixel_count)return C3X_RENDERER_RESULT_BAD_ARGUMENT;

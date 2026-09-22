@@ -64,6 +64,23 @@ int main(){
 }
 ''')
 
+    def test_content_growth_reserves_process_and_compiler_headroom(self):
+        run_cpp(r'''#include "Renderer/native/render_core/frame_working_set.h"
+#include <cassert>
+using Budget=c3x_renderer::render_core::FrameWorkingSet;
+int main(){
+ constexpr auto mib=Budget::mib;
+ for(unsigned workers:{0u,1u,4u,6u})for(size_t free:{256u,512u,600u,768u,2048u}){
+  auto cap=Budget::content(free*mib,512*mib,768*mib,workers);
+  assert(cap.geometry>=384*mib&&cap.geometry<=768*mib);
+  assert(cap.preparation==std::max(2u,workers+1u)*16u*mib);
+  if(free<512)assert(cap.geometry<=512*mib);
+ }
+ auto small=Budget::content(2048*mib,128*mib,256*mib,4);assert(small.geometry==256*mib);
+ auto ample=Budget::content(2048*mib,512*mib,768*mib,4);assert(ample.geometry==768*mib);
+ auto tight=Budget::content(600*mib,512*mib,768*mib,4);assert(tight.geometry<512*mib);
+}''')
+
     def test_unit_cache_obeys_the_shared_remaining_budget(self):
         source=(ROOT/'Renderer/native/unit_body_renderer.h').read_text()
         method='    void set_gpu_content_limit('+source.split('    void set_gpu_content_limit(',1)[1].split('    int scene_output_width=',1)[0]

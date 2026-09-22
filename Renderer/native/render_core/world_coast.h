@@ -87,6 +87,8 @@ public:
     struct Update { std::size_t topology_changes=0,cells_built=0,bytes=0; };
     void clear() { topology.clear(); coast.clear(); source_revision=-1; ready=false; }
     WorldTopology const& world() const { return topology; }
+    std::int64_t revision()const{return source_revision;}
+    std::size_t bytes()const{return sizeof(*this)+topology.bytes()+coast.estimated_bytes();}
     std::uint64_t node_revision(std::uint64_t id) const { return coast.revision(id); }
     template<class Observe>
     std::vector<CoastSegment> cell(int c,int r,Observe observe) const {

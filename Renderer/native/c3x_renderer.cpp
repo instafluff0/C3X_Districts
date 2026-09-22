@@ -546,6 +546,8 @@ public:
     c3x_renderer::fidelity::GroundTask::Queue ground_preparation;
     c3x_renderer::fidelity::GroundPreparation selected_ground_preparation;
     c3x_renderer::WorldPreparation world_preparation_queue;
+    std::shared_ptr<c3x_renderer::WorldPreparationMemory> world_input_memory=std::make_shared<c3x_renderer::WorldPreparationMemory>();
+    std::weak_ptr<c3x_renderer::WorldPreparationTopology const> world_input_topology;
     c3x_renderer::render_core::CompressedWorldStore<c3x_renderer::WorldPreparationKey> world_backing;
     std::atomic<std::uint64_t> world_uploaded_bytes{0},world_uploads{0},world_compiles{0},world_restores{0};
     std::array<std::atomic<std::uint64_t>,4> world_upload_layers{};
@@ -670,6 +672,11 @@ public:
         sprintf_s(detail,"phase=%s buffers=%zu allocation_bytes=%zu logical_bytes=%zu active_budget=%zu",
             phase,allocations.size(),allocation_bytes,tile_geometry_cache_bytes,tile_geometry_runtime_budget);
         trace.write("memory-world-buffers",detail,true);
+        auto preparation=world_preparation_queue.statistics();
+        sprintf_s(detail,"input_bytes=%zu input_peak=%zu ready_bytes=%zu ready_peak=%zu preparation_cap=%zu active=%u scratch_reserve=%zu",
+            world_input_memory->bytes.load(),world_input_memory->peak.load(),preparation.bytes,preparation.peak_bytes,cpu_preparation_budget,
+            preparation.active,std::size_t(cpu_terrain_workers)*16u*1024u*1024u);
+        trace.write("memory-content",detail,true);
         sprintf_s(detail,"source_bytes=%zu source_allocations=%u instance_capacity=%zu",
             rigid_sources.bytes,rigid_sources.allocations,rigid_sources.stream.buffer?
                 std::size_t(c3x_renderer::render_core::InstanceStream::limit)*sizeof(c3x_renderer::fidelity::MeshInstance):0);
@@ -5142,6 +5149,70 @@ public:
             c3x_renderer::fidelity::TerrainCompileScratch& scratch,std::function<bool()> cancelled,bool bounded=true) {
         return c3x_renderer::fidelity::compile_terrain_surfaces(natural,terrain_textures,world_coast,input,scratch,cancelled,bounded);
     }
+    std::unique_ptr<c3x_renderer::PreparedWorld> compile_world_job(c3x_renderer::WorldPreparationInput const& input,
+            std::atomic<bool> const& cancellation,unsigned worker){
+            auto stop=[&]{return cancellation.load(std::memory_order_relaxed);};
+            bool bounded=true;
+            auto& ground_scratch=world_ground_scratch[worker];auto& surface_scratch=terrain_scratch[worker];
+            auto const& source_coast=input.sources->topology->coast;auto const& ground_observations=input.sources->observations;
+            c3x_renderer::objects::Assets object_assets{{&bridge_bundle,&site_bundle,&mine_bundle,&farm_bundle,&city_bundle,&wall_bundle}};
+            std::unique_ptr<c3x_renderer::PreparedWorld> result;
+            auto restore_begin=std::chrono::steady_clock::now();
+            try {
+                result=c3x_renderer::WorldBackingCodec::decode(world_backing.get(input.key));
+                if(result){
+                    surface_scratch.bind(natural,source_coast.world(),input.terrain.world_revision);
+                    if(!c3x_renderer::render_core::prepared_world_valid(*result,source_coast,ground_observations,surface_scratch.rivers))result.reset();
+                    else result->from_backing=result->backing_saved=true;
+                }
+            }catch(...){result.reset();}
+            if(!result)world_backing.invalidate(input.key);
+            bool restored=bool(result);
+            if(restored)world_restore_microseconds+=std::uint64_t(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now()-restore_begin).count());
+            if(!result)result=std::make_unique<c3x_renderer::PreparedWorld>();
+            auto begin=std::chrono::steady_clock::now();
+            auto elapsed=[&]{auto now=std::chrono::steady_clock::now();
+                double ms=std::chrono::duration<double,std::milli>(now-begin).count();begin=now;return ms;};
+            if(!restored){
+            ++world_compiles;
+            result->ground=c3x_renderer::fidelity::compile_selected_ground(input.ground,natural,source_coast,
+                ground_observations,terrain_textures,ground_scratch,stop);
+            result->ground_ms=elapsed();if(!result->ground || stop())return std::unique_ptr<c3x_renderer::PreparedWorld>{};
+            result->terrain=c3x_renderer::fidelity::compile_terrain_surfaces(natural,terrain_textures,source_coast,input.terrain,surface_scratch,stop,bounded);
+            result->terrain_ms=elapsed();if(!result->terrain || stop())return std::unique_ptr<c3x_renderer::PreparedWorld>{};
+            result->objects=c3x_renderer::objects::prepare(input.objects,object_assets,cities.library,natural,
+                terrain_textures,source_coast,ground_observations,surface_scratch,stop,bounded);
+            result->object_ms=elapsed();if(!result->objects || stop())return std::unique_ptr<c3x_renderer::PreparedWorld>{};
+            try{result->backing_saved=world_backing.put(input.key,c3x_renderer::WorldBackingCodec::encode(*result));}catch(...){/* Backing is optional; keep the compiled result. */}
+            }
+            else ++world_restores;
+            if(input.backing_only)return result;
+            c3x_renderer::render_core::ImmutableMeshUpload upload;
+            auto append=[&](auto const& mesh,unsigned& vertices,unsigned& indices){if(mesh.empty())return;
+                vertices=upload.append(mesh.vertices.data(),mesh.vertices.size());
+                if(!mesh.shared_grid && !mesh.indices.empty())indices=upload.append(mesh.indices.data(),mesh.indices.size());};
+            for(unsigned i=0;i<6;++i){
+                // Bed/water adopt the underlay's identical ranges on the render owner.
+                if(i==2 || i==3)continue;
+                append(result->ground->meshes[i],result->ground_vertices[i],result->ground_indices[i]);
+            }
+            auto ground_bytes=upload.size();
+            for(unsigned i=0;i<3;++i)append(result->terrain->meshes[i],result->terrain_vertices[i],result->terrain_indices[i]);
+            auto terrain_bytes=upload.size()-ground_bytes;
+            for(auto& part:result->objects->layers)append(part.mesh,part.vertex_offset,part.index_offset);
+            auto object_bytes=upload.size()-ground_bytes-terrain_bytes;
+            for(auto& part:result->objects->city)append(part.mesh,part.vertex_offset,part.index_offset);
+            if(stop() || (bounded && result->bytes()+upload.size()>c3x_renderer::WorldPreparation::byte_limit))
+                return std::unique_ptr<c3x_renderer::PreparedWorld>{};
+            ID3D11Buffer* buffer=nullptr;if(!upload.create(device,&buffer))return std::unique_ptr<c3x_renderer::PreparedWorld>{};
+            if(buffer){world_uploaded_bytes+=upload.size();++world_uploads;
+                world_upload_layers[0]+=ground_bytes;world_upload_layers[1]+=terrain_bytes;
+                world_upload_layers[2]+=object_bytes;world_upload_layers[3]+=upload.size()-ground_bytes-terrain_bytes-object_bytes;}
+            if(buffer)result->buffer=std::shared_ptr<void>(buffer,[](void* p){static_cast<ID3D11Buffer*>(p)->Release();});
+            result->gpu_bytes=upload.size();result->objects->buffer=result->buffer;
+            result->upload_ready=true;
+            result->upload_ms=elapsed();return result;
+        }
     // Packs every non-empty natural layer's vertex bytes into one immutable
     // buffer and attaches it to the compiled result, so GPU adoption becomes
     // an AddRef instead of a copy+CreateBuffer. Safe to call from a worker
@@ -5502,7 +5573,7 @@ public:
                 rigid_offsets[i]=unsigned(rigid_instances.size());rigid_instances.push_back(instance);
             }
             if(!rigid_instances.empty() && !rigid_sources.stream.upload(device,context,rigid_instances))return false;
-            auto issue=[&](GeometryDrawReference const& chunk,ViewportShaderSettings const& settings,unsigned index){
+            auto issue=[&](GeometryDrawReference const& chunk,ViewportShaderSettings const& settings,unsigned index,unsigned instances){
                 if(streamed)draw_parameters.bind(1,index);
                 else if(first || std::memcmp(&previous,&settings,sizeof(settings))!=0){
                     context->UpdateSubresource(viewport_settings_buffer,0,nullptr,&settings,0,0);
@@ -5522,7 +5593,7 @@ public:
                     ID3D11Buffer* streams[]={chunk.content().buffer,rigid_sources.stream.buffer};
                     UINT strides[]={32,64},offsets[]={chunk.content().vertex_offset,rigid_sources.stream.offset+rigid_offsets[index]*64};
                     context->IASetVertexBuffers(0,2,streams,strides,offsets);
-                    context->DrawIndexedInstanced(chunk.content().index_count,1,0,0,0);++frame_draw_calls;
+                    context->DrawIndexedInstanced(chunk.content().index_count,instances,0,0,0);++frame_draw_calls;
                     context->IASetInputLayout(feature_input_layout);
                     context->VSSetShader(reflection_pass?reflection.vs[1]:feature_vertex_shader,nullptr,0);
                     return;
@@ -5573,7 +5644,20 @@ public:
                 }
                 if (chunk.content().animation_texture) context->PSSetShaderResources(116,1,resource_texture_views.data());
             };
-            for(unsigned i=0;i<selected.size();++i)issue(selected[i],parameters[i],i);
+            for(unsigned i=0;i<selected.size();){
+                auto const& first_chunk=selected[i].content();unsigned end=i+1;
+                // Only adjacent equal mesh/state draws merge. Instance records
+                // carry projection, translation, depth and material independently;
+                // native ordering and alpha ordering are never sorted away.
+                if(first_chunk.rigid_source)for(;end<selected.size();++end){
+                    auto const& next=selected[end].content();
+                    if(!next.rigid_source || next.buffer!=first_chunk.buffer || next.indices!=first_chunk.indices ||
+                       next.vertex_offset!=first_chunk.vertex_offset || next.index_offset!=first_chunk.index_offset ||
+                       next.index_count!=first_chunk.index_count || next.index_format!=first_chunk.index_format ||
+                       next.projection_kind!=first_chunk.projection_kind)break;
+                }
+                issue(selected[i],parameters[i],i,end-i);i=end;
+            }
             selected.clear();return true;
         };
         for (GeometryDrawReference const & chunk : buffers[layer]) {
@@ -6766,8 +6850,14 @@ public:
         char preparation_option[8]={};GetEnvironmentVariableA("C3X_RENDERER_WORLD_PREPARATION",preparation_option,sizeof(preparation_option));
         // Accepted full-detail neighborhood path; zero preserves the reproducible control.
         world_preparation=std::strcmp(preparation_option,"0")!=0 && shared_scene_surface;
-        cpu_preparation_budget=(world_preparation?64u:16u)*1024u*1024u;
         unsigned requested_workers=!cpu_option[0]?(world_preparation?4u:2u):std::strcmp(cpu_option,"6")==0?6u:std::strcmp(cpu_option,"4")==0?4u:std::strcmp(cpu_option,"2")==0?2u:std::strcmp(cpu_option,"1")==0?1u:0u;
+        MEMORYSTATUSEX content_memory={};content_memory.dwLength=sizeof(content_memory);
+        if(GlobalMemoryStatusEx(&content_memory)){
+            auto ceiling=world_preparation && frame.world_topology_count>8192u?std::min(tile_geometry_cache_budget,large_world_geometry_budget):tile_geometry_cache_budget;
+            auto budget=c3x_renderer::render_core::FrameWorkingSet::content(std::size_t(content_memory.ullAvailVirtual),
+                tile_geometry_cache_bytes,ceiling,requested_workers);
+            tile_geometry_runtime_budget=budget.geometry;cpu_preparation_budget=world_preparation?budget.preparation:16u*1024u*1024u;
+        }
         if(cpu_terrain_workers!=requested_workers){terrain_preparation.clear();cpu_terrain_workers=requested_workers;}
         bool const cpu_terrain_enabled=cpu_terrain_workers && fidelity_profile && retained_world;
         unsigned active_terrain_workers=cpu_terrain_workers;
@@ -7448,72 +7538,11 @@ public:
             object_lease.queue.set_ready_notification(return_lanes);
             return_lanes(); // includes a producer that finished before registration
         }
-        auto compile_world=[&](auto const& input,auto& ground_scratch,auto& surface_scratch,auto stop,bool bounded){
-            std::unique_ptr<c3x_renderer::PreparedWorld> result;
-            auto restore_begin=std::chrono::steady_clock::now();
-            try {
-                result=c3x_renderer::WorldBackingCodec::decode(world_backing.get(input.key));
-                if(result){
-                    surface_scratch.bind(natural,world_coast.world(),input.terrain.world_revision);
-                    if(!c3x_renderer::render_core::prepared_world_valid(*result,world_coast,ground_observations,surface_scratch.rivers))result.reset();
-                    else result->from_backing=result->backing_saved=true;
-                }
-            }catch(...){result.reset();}
-            if(!result)world_backing.invalidate(input.key);
-            bool restored=bool(result);
-            if(restored)world_restore_microseconds+=std::uint64_t(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now()-restore_begin).count());
-            if(!result)result=std::make_unique<c3x_renderer::PreparedWorld>();
-            auto begin=std::chrono::steady_clock::now();
-            auto elapsed=[&]{auto now=std::chrono::steady_clock::now();
-                double ms=std::chrono::duration<double,std::milli>(now-begin).count();begin=now;return ms;};
-            if(!restored){
-            ++world_compiles;
-            result->ground=c3x_renderer::fidelity::compile_selected_ground(input.ground,natural,world_coast,
-                ground_observations,terrain_textures,ground_scratch,stop);
-            result->ground_ms=elapsed();if(!result->ground || stop())return std::unique_ptr<c3x_renderer::PreparedWorld>{};
-            result->terrain=compile_terrain(input.terrain,surface_scratch,stop,bounded);
-            result->terrain_ms=elapsed();if(!result->terrain || stop())return std::unique_ptr<c3x_renderer::PreparedWorld>{};
-            result->objects=c3x_renderer::objects::prepare(input.objects,object_assets,cities.library,natural,
-                terrain_textures,world_coast,ground_observations,surface_scratch,stop,bounded);
-            result->object_ms=elapsed();if(!result->objects || stop())return std::unique_ptr<c3x_renderer::PreparedWorld>{};
-            try{result->backing_saved=world_backing.put(input.key,c3x_renderer::WorldBackingCodec::encode(*result));}catch(...){/* Backing is optional; keep the compiled result. */}
-            }
-            else ++world_restores;
-            if(input.backing_only)return result;
-            c3x_renderer::render_core::ImmutableMeshUpload upload;
-            auto append=[&](auto const& mesh,unsigned& vertices,unsigned& indices){if(mesh.empty())return;
-                vertices=upload.append(mesh.vertices.data(),mesh.vertices.size());
-                if(!mesh.shared_grid && !mesh.indices.empty())indices=upload.append(mesh.indices.data(),mesh.indices.size());};
-            for(unsigned i=0;i<6;++i){
-                // Bed/water adopt the underlay's identical ranges on the render owner.
-                if(i==2 || i==3)continue;
-                append(result->ground->meshes[i],result->ground_vertices[i],result->ground_indices[i]);
-            }
-            auto ground_bytes=upload.size();
-            for(unsigned i=0;i<3;++i)append(result->terrain->meshes[i],result->terrain_vertices[i],result->terrain_indices[i]);
-            auto terrain_bytes=upload.size()-ground_bytes;
-            for(auto& part:result->objects->layers)append(part.mesh,part.vertex_offset,part.index_offset);
-            auto object_bytes=upload.size()-ground_bytes-terrain_bytes;
-            for(auto& part:result->objects->city)append(part.mesh,part.vertex_offset,part.index_offset);
-            if(stop() || (bounded && result->bytes()+upload.size()>c3x_renderer::WorldPreparation::byte_limit))
-                return std::unique_ptr<c3x_renderer::PreparedWorld>{};
-            ID3D11Buffer* buffer=nullptr;if(!upload.create(device,&buffer))return std::unique_ptr<c3x_renderer::PreparedWorld>{};
-            if(buffer){world_uploaded_bytes+=upload.size();++world_uploads;
-                world_upload_layers[0]+=ground_bytes;world_upload_layers[1]+=terrain_bytes;
-                world_upload_layers[2]+=object_bytes;world_upload_layers[3]+=upload.size()-ground_bytes-terrain_bytes-object_bytes;}
-            if(buffer)result->buffer=std::shared_ptr<void>(buffer,[](void* p){static_cast<ID3D11Buffer*>(p)->Release();});
-            result->gpu_bytes=upload.size();result->objects->buffer=result->buffer;
-            result->upload_ready=true;
-            result->upload_ms=elapsed();return result;
-        };
         auto make_world_job=[&](auto const& tile,auto const& nodes){
             return c3x_renderer::WorldPreparationInput{make_ground_job(tile,nodes),
                 terrain_compile_input(tile,frame,ground_type(tile),skip_flat_shore,separate_natural_relief,index_natural_grids,retain_height_samples,world_objects),
                 make_object_job(tile),c3x_renderer::world_preparation_key(compile_context_for(tile,river_context_for(nodes)),content_source),backing_only};
         };
-        // Join and detach borrowed callbacks on all exits. Finished owned results
-        // survive in the same bounded pool and must pass current proofs to reuse.
-        struct WorldJoin {c3x_renderer::WorldPreparation& queue;~WorldJoin(){queue.finish_lease();}} world_join{world_queue};
         if(world_batch_enabled){
             terrain_preparation.clear(); // superseded producers must not compete for this request
             std::deque<c3x_renderer::WorldPreparation::Job> jobs;
@@ -7553,14 +7582,24 @@ public:
                 auto const& tile=frame.tiles[index];return std::binary_search(demanded_tiles.begin(),demanded_tiles.end(),coordinate_key(tile.tile_x,tile.tile_y))!=0;
             });
             world_jobs=unsigned(jobs.size());
-            world_queue.configure(std::move(jobs),[&](auto const& input,auto const& stop,unsigned worker){
-                return compile_world(input,world_ground_scratch[worker],terrain_scratch[worker],[&]{return stop.load(std::memory_order_relaxed) || cancelled();},true);
-            },cpu_terrain_workers,std::move(needed),cpu_preparation_budget,true);
-            world_queue.resume();
+            if(!jobs.empty()){
+                auto topology=world_input_topology.lock();
+                if(topology && topology->coast.revision()!=world_coast.revision())topology.reset();
+                auto snapshot_allowance=topology_cache.observation_snapshot_allowance()+(topology?0:world_coast.bytes());
+                if(snapshot_allowance<=c3x_renderer::WorldPreparationMemory::limit &&
+                   world_input_memory->bytes.load()<=c3x_renderer::WorldPreparationMemory::limit-snapshot_allowance){
+                    if(!topology){topology=std::make_shared<c3x_renderer::WorldPreparationTopology>(world_coast,world_input_memory);world_input_topology=topology;}
+                    auto sources=std::make_shared<c3x_renderer::WorldPreparationSources>(std::move(topology),topology_cache);
+                    for(auto& job:jobs)job.input.sources=sources;
+                }else jobs.clear(); // bounded foreground fallback, never borrowed asynchronous inputs
+            }
+            world_queue.schedule(std::move(jobs),[this](auto const& input,auto const& stop,unsigned worker){
+                return compile_world_job(input,stop,worker);
+            },cpu_terrain_workers,std::move(needed),cpu_preparation_budget);
             if(backing_only){
                 bool ready=true;
                 for(auto const& key:backing_keys){
-                    auto result=world_queue.take(key);
+                    auto result=world_queue.take(key,false,cancelled);
                     if(cancelled())return false;
                     ready=ready && result && result->backing_saved;
                 }
@@ -8591,7 +8630,8 @@ public:
             std::unique_ptr<c3x_renderer::PreparedWorld> prepared_world;
             if(world_batch_enabled && !shared_hit){
                 auto begin=std::chrono::steady_clock::now();
-                prepared_world=world_queue.take(c3x_renderer::world_preparation_key(compile_context,content_source));
+                prepared_world=world_queue.take(c3x_renderer::world_preparation_key(compile_context,content_source),false,cancelled);
+                if(prepared_world && !world_result_valid(*prepared_world))prepared_world.reset();
                 world_join_ms+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count();
                 if(cancelled())return false;
                 if(prepared_world){
@@ -9601,7 +9641,6 @@ public:
         auto ground_drain_started=std::chrono::steady_clock::now();
         ground_batch_lease.finish();
         object_lease.queue.clear();
-        world_queue.finish_lease();
         // Count actual worker uploads, including work that was later evicted or
         // cancelled. Adoption of a prior ready result does not upload it again.
         frame_upload_bytes+=std::size_t(world_uploaded_bytes.load()-world_bytes_before);
@@ -12800,8 +12839,8 @@ extern "C" __declspec(dllexport) int c3x_renderer_gpu_images(
     bool create=request->action==C3X_GPU_CREATE,read=request->action==C3X_GPU_READBACK;
     if((create?(request->format<C3X_GPU_BGRA32||request->format>C3X_GPU_RGB565):request->format!=0)||
        (!upload && request->pixels)||(!upload && request->revision)||
-       (!upload && !read && request->pixel_count)||(!submit && (request->commands||request->command_count||request->command_struct_size))||
-       (submit && (!request->command_count||request->command_struct_size!=sizeof(c3x_renderer_gpu_command_v1)))||(create?(request->width<=0||request->height<=0||request->width>2240||request->height>1260||request->image!=0):(request->width||request->height))||
+       (!upload && !read && request->pixel_count)||
+       (request->command_count?(request->command_struct_size!=sizeof(c3x_renderer_gpu_command_v1)):(request->commands||request->command_struct_size||submit))||(create?(request->width<=0||request->height<=0||request->width>2240||request->height>1260||request->image!=0):(request->width||request->height))||
        (!create && !submit && request->image<=0)||(read&&!request->pixel_count))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
     *result={sizeof(*result)};
     c3x_inputs::Call input(c3x_inputs::Kind::image_commands,0,[&](auto& out){c3x_inputs::images(out,*request);});

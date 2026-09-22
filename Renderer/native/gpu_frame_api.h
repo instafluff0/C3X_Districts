@@ -41,6 +41,8 @@ struct c3x_renderer_gpu_command_v1 {
     int source_width,source_height; /* native_image: positive source extent; target extent is area; color is native key or 65536 for opaque */
     c3x_renderer_i64 program; /* native lookup: optional decoded sprite indices; zero selects an image rectangle */
 };
+/* Any action may carry an ordered draw prelude. It executes before the resource
+   operation in the same worker transaction; explicit readback remains a barrier. */
 struct c3x_renderer_gpu_images_v1 {
     unsigned struct_size;
     int action;

@@ -14,6 +14,7 @@ public:
     World dimensions() const { return world; }
     void clear() { values.clear();flow.clear(); }
     bool empty() const { return values.empty(); }
+    std::size_t bytes()const{return sizeof(*this)+values.capacity()*sizeof(values[0])+flow.capacity();}
     std::vector<Change> update(World next,std::uint32_t const* data,std::size_t count) {
         if(next.width<=0 || next.height<=0 || (next.width&1) || (next.wrap_y && (next.height&1)) ||
             next.width>2048 || next.height>2048 || !data ||

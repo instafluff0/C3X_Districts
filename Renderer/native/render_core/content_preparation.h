@@ -1,7 +1,7 @@
 #pragma once
-// A bounded CPU producer for existing scene compilers. The caller grants a read
-// lease on resident inputs, pauses before changing them, and validates results
-// against current local dependencies before publication. No GPU/game ownership.
+// A bounded producer for existing scene compilers. Durable jobs own changing
+// inputs; compatibility callers may grant explicit borrowed read leases. Results
+// require current dependency validation. Asset/device retirement joins readers.
 #include <algorithm>
 #include <cstdint>
 #include <iterator>
@@ -188,6 +188,38 @@ public:
         }
         pending.swap(jobs);compile=std::move(next);worker_limit=count;bounded_results=bounded;
     }
+    // Retarget durable jobs without revoking active readers. A stable compiler
+    // consumes owned inputs; old pending jobs are replaced, active/ready work
+    // survives and is validated by the consumer before adoption.
+    void schedule(std::deque<Job> jobs,Compile next,unsigned count,std::vector<Key> needed,
+                  std::size_t budget,bool bounded=true){
+        std::lock_guard<std::mutex> lock(mutex);
+        if(stopping || jobs.size()>job_limit || count<1 || count>6 || budget<byte_limit || budget>128u*1024u*1024u)
+            throw std::logic_error("durable preparation budget");
+        if(!compile)compile=std::move(next);
+        capacity_limit=budget;worker_limit=count;bounded_results=bounded;
+        std::sort(needed.begin(),needed.end());
+        auto required=[&](Key const& key){return std::binary_search(needed.begin(),needed.end(),key);};
+        for(auto& item:ready)item.urgent=required(item.key);
+        for(unsigned i=0;i<active.size();++i)active_urgent[i]=active[i] && required(active_key[i]);
+        auto redundant=[&](auto const& job){
+            for(auto const& item:ready)if(item.key==job.key)return true;
+            for(unsigned i=0;i<active.size();++i)if(active[i] && active_key[i]==job.key)return true;
+            return false;
+        };
+        jobs.erase(std::remove_if(jobs.begin(),jobs.end(),redundant),jobs.end());
+        for(auto& job:jobs)job.urgent=required(job.key);
+        std::stable_partition(jobs.begin(),jobs.end(),[](auto const& job){return job.urgent;});
+        auto target=(!jobs.empty() && jobs.front().urgent)?capacity_limit/4:capacity_limit;
+        while(stats.bytes>target){
+            auto victim=std::find_if(ready.begin(),ready.end(),[&](auto const& item){return !item.urgent;});
+            if(victim==ready.end())break;
+            stats.bytes-=victim->value->bytes();ready.erase(victim);++stats.evicted;
+        }
+        pending.swap(jobs);
+        while(!pending.empty() && workers.size()<worker_limit){auto index=unsigned(workers.size());workers.emplace_back([this,index]{run(index);});}
+        cancel=false;paused=false;wake.notify_all();
+    }
     void resume(){
         std::lock_guard<std::mutex> lock(mutex);
         if(pending.empty() || stopping)return;
@@ -227,7 +259,7 @@ public:
         while(workers.size()<worker_limit){auto index=unsigned(workers.size());workers.emplace_back([this,index]{run(index);});}
         cancel=false;paused=false;wake.notify_all();return true;
     }
-    std::unique_ptr<Result> take(Key const& key,bool caller_compiles_pending=false){
+    std::unique_ptr<Result> take(Key const& key,bool caller_compiles_pending=false,std::function<bool()> obsolete={}){
         auto begin=std::chrono::steady_clock::now();
         std::unique_lock<std::mutex> lock(mutex);
         // A demanded missing tile moves ahead of speculative neighbors. The
@@ -242,14 +274,17 @@ public:
         auto running=[&]{for(unsigned i=0;i<active.size();++i)if(active[i] && active_key[i]==key)return true;return false;};
         if(!paused && (queued || running())){
             wake.notify_all();
-            completed.wait(lock,[&]{
-                if(paused || stopping)return true;
+            auto complete=[&]{
+                if(paused || stopping || (obsolete && obsolete()))return true;
                 if(running())return false;
                 return std::none_of(pending.begin(),pending.end(),[&](auto const& j){return j.key==key;});
-            });
+            };
+            if(obsolete)while(!complete())completed.wait_for(lock,std::chrono::milliseconds(1));
+            else completed.wait(lock,complete);
         }
         demanded=false;
         stats.wait_ms+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count();
+        if(obsolete && obsolete())return {};
         for(auto it=ready.begin();it!=ready.end();++it)if(it->key==key){
             stats.bytes-=it->value->bytes();auto value=std::move(it->value);ready.erase(it);++stats.consumed;wake.notify_all();return value;
         }

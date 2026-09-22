@@ -18,7 +18,12 @@ class WorkerClient {
     bool run(c3x_renderer_gpu_images_v1 const& r,unsigned* pixels=nullptr,unsigned count=0,bool admission=false){
         if(failed)throw std::runtime_error("GPU image session is no longer usable");
         ++calls;
-        c3x_renderer_gpu_result_v1 next={sizeof(next)};auto code=execute(&r,&next,pixels,count);
+        auto packet=r;bool prelude=packet.action!=C3X_GPU_SUBMIT && !pending.empty();
+        if(prelude){packet.commands=pending.data();packet.command_count=unsigned(pending.size());packet.command_struct_size=sizeof(pending[0]);}
+        c3x_renderer_gpu_result_v1 next={sizeof(next)};auto code=execute(&packet,&next,pixels,count);
+        // The worker executes the draw prelude before the resource operation,
+        // including a create admission refusal. Never replay those draws.
+        if(prelude && (code==C3X_RENDERER_RESULT_OK || (admission && code==C3X_RENDERER_RESULT_BAD_ARGUMENT))){pending.clear();++batches;}
         if(admission&&code==C3X_RENDERER_RESULT_BAD_ARGUMENT)return false;
         if(code!=C3X_RENDERER_RESULT_OK){
             auto kind=r.command_count?r.commands[0].kind:-1;
@@ -40,12 +45,16 @@ public:
     }
     Id create(unsigned width,unsigned height,Format format){
         if(format!=Format::rgb555&&format!=Format::rgb565&&format!=Format::bgra32)return 0;
-        flush();auto r=request(C3X_GPU_CREATE);r.width=int(width);r.height=int(height);
+        // Invalid dimensions are rejected before a compound packet reaches
+        // the ABI validator, which cannot execute its draw prelude. Preserve
+        // the old flush-before-admission behavior for that rejected request.
+        if(!width || !height || width>2240 || height>1260){flush();return 0;}
+        auto r=request(C3X_GPU_CREATE);r.width=int(width);r.height=int(height);
         r.format=format==Format::rgb555?C3X_GPU_RGB555:format==Format::rgb565?C3X_GPU_RGB565:C3X_GPU_BGRA32;return run(r,nullptr,0,true)?Id(result.image):0;
     }
-    bool destroy(Id id){if(failed)return false;flush();run(request(C3X_GPU_DESTROY,id));return true;}
+    bool destroy(Id id){if(failed)return false;run(request(C3X_GPU_DESTROY,id));return true;}
     bool upload(Id id,std::uint64_t revision,std::uint32_t const* pixels,std::size_t count){
-        if(count>2240u*1260u)return false;flush();auto r=request(C3X_GPU_UPLOAD,id);r.revision=std::int64_t(revision);r.pixels=pixels;r.pixel_count=unsigned(count);run(r);return true;
+        if(count>2240u*1260u)return false;auto r=request(C3X_GPU_UPLOAD,id);r.revision=std::int64_t(revision);r.pixels=pixels;r.pixel_count=unsigned(count);run(r);return true;
     }
     bool submit(Command const* commands,std::size_t count){
         if(failed)throw std::runtime_error("GPU image session is no longer usable");
@@ -56,7 +65,7 @@ public:
         return true;
     }
     bool readback(Id id,std::uint32_t* pixels,std::size_t count){
-        if(!pixels||!count||count>2240u*1260u)return false;flush();auto r=request(C3X_GPU_READBACK,id);r.pixel_count=unsigned(count);run(r,pixels,unsigned(count));return result.pixel_count==count;
+        if(!pixels||!count||count>2240u*1260u)return false;auto r=request(C3X_GPU_READBACK,id);r.pixel_count=unsigned(count);run(r,pixels,unsigned(count));return result.pixel_count==count;
     }
     c3x_renderer_gpu_result_v1 stats()const{return result;}
     std::uint64_t submitted_batches()const{return batches;}

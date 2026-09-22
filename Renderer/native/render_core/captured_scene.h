@@ -184,6 +184,29 @@ public:
         Observation const* current(std::uint64_t id)const{return scene.current(id);}
     };
     ObservationView observation_view()const{return ObservationView(*this);}
+    // Jobs own only the current observations, never retained GPU bindings or
+    // native pointers. Publication can replace the source scene immediately.
+    std::size_t observation_snapshot_allowance()const{return 4096+observations.size()*(sizeof(Observation)+96);}
+    class ObservationSnapshot {
+        int width,height;bool wrap_x,wrap_y;
+        std::unordered_map<std::uint64_t,Observation> values;
+    public:
+        explicit ObservationSnapshot(CapturedScene const& scene):width(scene.width),height(scene.height),wrap_x(scene.wrap_x),wrap_y(scene.wrap_y){
+            values.reserve(scene.observations.size());
+            if(scene.valid)for(auto const& item:scene.observations)
+                if(item.second.seen==scene.epoch)values.emplace(item);
+        }
+        std::uint64_t key(int x,int y)const{
+            if(wrap_x && width>0){x%=width;if(x<0)x+=width;}
+            if(wrap_y && height>0){y%=height;if(y<0)y+=height;}
+            return (std::uint64_t(std::uint32_t(x))<<32)|std::uint32_t(y);
+        }
+        Observation const* current(std::uint64_t id)const{
+            auto it=values.find(id);return it==values.end()?nullptr:&it->second;
+        }
+        std::size_t bytes()const{return sizeof(*this)+values.bucket_count()*sizeof(void*)+values.size()*(sizeof(Observation)+48);}
+    };
+
     std::uint64_t appearance_revision(std::uint64_t id) const {
         auto observed=current(id);
         if(!observed || !(observed->occurrence.tile_flags&(C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_PREFETCH)))return 0;

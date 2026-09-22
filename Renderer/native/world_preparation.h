@@ -1,9 +1,34 @@
 #pragma once
 #include "source_fidelity/ground_preparation.h"
 #include "object_preparation.h"
+#include "render_core/captured_scene.h"
 namespace c3x_renderer {
 // One selected tile is the scheduling and immutable GPU allocation unit.
-// Borrowed assets/world remain under the frame lease; only copied inputs enter jobs.
+// Assets live until the device/content reset barrier; mutable world inputs are owned.
+struct WorldPreparationMemory {
+    static constexpr std::size_t limit=64u*1024u*1024u;
+    std::atomic<std::size_t> bytes{0},peak{0};
+    void add(std::size_t size){auto next=bytes.fetch_add(size)+size;auto old=peak.load();
+        while(old<next && !peak.compare_exchange_weak(old,next)){} }
+};
+struct WorldPreparationTopology {
+    render_core::WorldCoast coast;
+    std::shared_ptr<WorldPreparationMemory> memory;
+    std::size_t size;
+    WorldPreparationTopology(render_core::WorldCoast const& world,std::shared_ptr<WorldPreparationMemory> account)
+        :coast(world),memory(std::move(account)),size(coast.bytes()){memory->add(size);}
+    WorldPreparationTopology(WorldPreparationTopology const&)=delete;
+    ~WorldPreparationTopology(){memory->bytes-=size;}
+};
+struct WorldPreparationSources {
+    std::shared_ptr<WorldPreparationTopology const> topology;
+    render_core::CapturedScene::ObservationSnapshot observations;
+    std::size_t size;
+    WorldPreparationSources(std::shared_ptr<WorldPreparationTopology const> world,render_core::CapturedScene const& scene)
+        :topology(std::move(world)),observations(scene),size(observations.bytes()+sizeof(*this)){topology->memory->add(size);}
+    WorldPreparationSources(WorldPreparationSources const&)=delete;
+    ~WorldPreparationSources(){topology->memory->bytes-=size;}
+};
 using WorldPreparationKey=std::array<std::uint64_t,24>;
 struct WorldPreparationInput {
     fidelity::GroundPreparationInput ground;
@@ -11,6 +36,7 @@ struct WorldPreparationInput {
     objects::PreparationInput objects;
     WorldPreparationKey key{};
     bool backing_only=false;
+    std::shared_ptr<WorldPreparationSources const> sources;
 };
 struct PreparedWorld {
     std::unique_ptr<fidelity::PreparedGround> ground;

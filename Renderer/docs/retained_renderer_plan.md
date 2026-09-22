@@ -16,10 +16,9 @@ acceptance remain complete. Manual pans can defer coherently; native selection,
 actions, programmatic centering and projection changes retain exact behavior.
 Units stay above all map geometry. Native actions, visibility, controls and unit/UI
 ordering remain authoritative. Shore waves, water motion and reflections are on
-in every normal performance workload. The tested renderer DLL is staged as an **evaluation build**; the current
-staged working-set build loads on game restart. The new camera-consolidation
-candidate removes injected speculative calls and requires reinstall after staging. Live
-gameplay and performance acceptance remain pending.
+in every normal performance workload. Staging status and the current evaluation
+build are recorded in the handoff below. Live gameplay and performance acceptance
+remain pending.
 [Architecture](renderer_architecture.md) owns the design;
 [validation](benchmark_workflow.md) owns measurement and acceptance.
 
@@ -33,37 +32,49 @@ a separate-process renderer. Future [LORE work](#lore-testing-and-migration-mile
 must follow the remaining measured costs.
 
 The [production architecture audit](architecture_audit.md) records the remaining
-cross-system consolidation: content scheduling and borrowed-input lifetimes,
-prepared-image navigation, native transaction boundaries and whole-process memory
-admission. M3.8 work must name and retire superseded producers/storage/callers
-alongside their replacements; the four working-set changes are not a completed
-architecture-wide cleanup. The implemented follow-up is described in
-[camera consolidation](camera_consolidation_results.md), with its remaining
-native transaction/content-lease costs and separate live validation gap.
+cross-system boundaries. The implemented follow-ups are
+[camera consolidation](camera_consolidation_results.md) and
+[durable content and native transactions](durable_content_results.md). Each names
+removed producers/storage/callers and the necessary compatibility paths that
+remain; this is not a claim that every historical renderer path is retired.
 
 ## M3.8 current handoff — in progress
 
 **Completed consolidation:** one world-region preparation order replaces the
-neighborhood geometry queue. Exact retained-scene views replace padded/alternate
-zoom image production, its queues, crop finishing and injected requests. Cache
-admission accounts for concurrent publications and native composition. No new
-patch symbols or rendering ownership; all normal water effects remain enabled.
-Existing native barriers preserve actual CPU/UI ownership. See
-[camera consolidation results](camera_consolidation_results.md) for the replacement
-and retirement ledger, measured effects and independent regression checks.
+neighborhood geometry queue; exact retained-scene views replace padded/alternate
+camera images and their injected requests. Combined compilation now owns immutable
+observations and shared topology, survives camera replacement and validates current
+dependencies before adoption. Frame-local combined callbacks/joins are removed.
+Native draw preludes share the following resource-operation handoff; adjacent
+compatible rigid draws are instanced without reordering. Measured process VA
+coordinates geometry growth and preparation capacity, with bounded immutable
+inputs and compiler scratch reserves. No new patch symbols or rendering ownership;
+all normal water effects remain enabled. Native CPU access and asset/device reset
+barriers are preserved. See the linked results for the retirement ledger.
 
-**Measured:** replay map p95 353–354 → 322–333 ms; ambient p95 about 35 →
-28–29 ms. Total service envelope is essentially unchanged (about 35 s), with
-only a small memory improvement. All 518 recorded frame fingerprints match;
-independent fullscreen native and corrected smaller-view reveal checks pass.
-Candidate `caf7d555…` is not staged; `54aac95f…` remains the qualified capture build.
-Staging must refresh short-capture qualification and then reinstall the bridge.
+**Measured:** same-workload paired replay has cold maxima 7.64–7.73 →
+6.93–7.25 s, map boundary p95 336–342 → 333–379 ms, and ambient p95
+28–34 → 25–37 ms. The service envelope remains variable (34.0–35.0 →
+29.5–35.0 s); there is no demonstrated stable overall FPS gain. Native fixture
+handoffs fall 6,402 → 4,475 for the same 2,014 draw batches. All 518 recorded
+frame fingerprints match; 45 selected executable contracts pass. The final
+fullscreen native fixture passes animation, fog/reveal, native composition,
+camera changes, reset and configuration-off. Memory improves modestly, but
+contiguous free VA still falls below 512 MiB. These are service measurements,
+not live FPS or acceptance of the killed recording's failed tail.
 
-**Next unfinished responsibility:** shorten the remaining exact map transaction,
-content compilation/adoption and view/pass assembly on the existing recorded
-workload. The cold frame is still expensive; the Standard <33 ms p95 camera goal
-and the failed live tail are not accepted. Do not infer live FPS from replay API
-timings or use another manual capture as a prerequisite for that investigation.
+**Staging:** `9e76737a…` is staged and qualified for short diagnostic capture.
+The four-arm overhead campaign, fullscreen window witness, stop/recovery controls
+and two identical 960-presentation replays pass. Run `INSTALL.bat` before testing
+if the preceding camera-consolidation bridge changes have not been installed.
+No game was launched. Ten-minute recording and live FPS remain unqualified.
+
+**Next unfinished responsibility:** shorten the exact map boundary through
+view/pass assembly, GPU execution and native composition on the existing recorded
+workload. Cold content and foreground adoption remain costly. The Standard
+<33 ms p95 camera goal and live heap/failed-tail behavior are not accepted.
+No new manual recording is required before that investigation. M3.8 remains open;
+this work does not start M4 or a separate-process renderer.
 
 ### Preserved earlier M3.8 evidence
 

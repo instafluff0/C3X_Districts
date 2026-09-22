@@ -1424,3 +1424,19 @@ No injected source, hook, signature, supported-build address or CSV changes.
 `required_user_action: []`. The replacement live recording is present and strict
 composition replay passes its bounded prefix. No further capture is needed to
 validate this scoped optimization; overall gameplay speed remains unaccepted.
+
+### Durable world jobs and fused native resource transactions
+
+Existing dependencies: `c3x_renderer_native_image`,
+`c3x_renderer_native_lifetime`, the installed native image ownership hooks,
+`C3X_NATIVE_IMAGE_PRESENT`, and the existing GPU map/camera exports. Combined
+content jobs own copied world observations; GPU image commands can accompany a
+resource operation in one ordered worker transaction. These changes are inside
+the renderer DLL. Native CPU access, original operation order, session retirement
+and config-off behavior retain their existing contracts. No injected source,
+patch signature, supported-build address or CSV entry changes.
+
+`required_user_action: []` for this DLL-only change. If the preceding camera
+consolidation bridge changes have not been installed, run `INSTALL.bat` before
+the next game test. Staging must preserve the matching qualified short-capture
+receipt; no new manual recording is required for these automated comparisons.
