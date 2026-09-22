@@ -6,6 +6,50 @@ below describe their individual checkpoints. The [roadmap](retained_renderer_pla
 holds the current handoff. In particular, the shoreline reset mismatch is now
 fixed; the captured removed-device freeze remains open.
 
+### Shared-scene delivery target retirement
+
+Production GPU shared-scene rendering uses `region_glow` and `gpu_map_texture`.
+The legacy `render_texture`/depth pair had no draw consumer on that path, and
+GPU delivery did not consume `readback_texture` or `pixels`. They are no longer
+created there. CPU shared-scene delivery lazily creates staging/bitmap storage;
+a later GPU demand releases it without invalidating the retained scene. Legacy
+profiles retain their required targets. The executable production-method test
+covers repeated GPU demand, CPU transition/reuse, failed CPU staging admission,
+resizing and the surviving alternate-profile consumer. At 2240×1260 the retired
+allocations total 43.07 MiB (32.30 MiB logical GPU + 10.77 MiB CPU), without a
+sampling, format, effect, detail or capacity-cap change.
+
+The preceding allocation-only candidate fails two tight-pressure runs differently:
+`retained-map-owner-pressure-1216` at an independent tactical opportunity (its
+buffered file did not survive early fixture exit), and
+`retained-map-owner-pressure-1216-trace` at fresh native recovery after reset.
+The prior DLL passes `wave-pressure-1216-trace`; this variability prevents a
+claim that the latest sampler caused the failures or that one pass fixes them.
+`pressure-failure-context-1216` then reproduces reset recovery failure and records
+`device_reason=0x887a0020`, total free VA 816,828,416 bytes and largest free block
+68,136,960 bytes. Main-scene attachments report 684,111,360 bytes. These match the
+live device-removal code, not necessarily its cause. No exception loop or stale
+CPU fallback was accepted. `pressure-reflection-context-1216` passes; therefore
+an exact failing reflection HRESULT has not yet been observed. The added
+failure-only diagnostics remain to identify it if it recurs.
+
+Candidate `native/build/shared-scene-delivery/C3XRenderer.dll` SHA-256
+`241ca76b1446abc6b68f38656bbc49e031f4968697577a010da319b01711cc9a` is not staged. The strict replay passes 9,406 calls / 336 frames and CPU
+restore. Thirteen focused tests pass, including existing worker ownership/camera
+and view-retirement contracts. `shared-scene-delivery-pressure-1216` passes the
+same connected fullscreen cases with all effects and eight mixed units; all 15
+fixed images match the preceding 1 GiB candidate, while wall-clock tactical images
+remain excluded from equality. Sampled minimum VA is 155.75 MiB; the 30-frame
+request/desktop means are 31.69/41.65 ms. This is not a live FPS measurement or
+stable failure-rate claim. The normal 1 GiB run also passes, with 15 fixed images
+exact, no GPU-failure records, sampled minimum VA 321.63 MiB (prior candidate:
+291.49 MiB), and request/desktop means 30.21/41.73 ms. All generated BMPs are
+preserved losslessly compressed. Neither pressure run certifies a live fix.
+
+The unresolved capacity audit includes the large required MSAA/resolve surface,
+other writer-only targets, and precise native ownership after device removal.
+Do not enlarge caches or change visual quality to relabel this as solved.
+
 ### Retained ambient output ownership
 
 The sampler supplies either unchanged output, an immutable packed source, or a
@@ -22,7 +66,7 @@ publications and 32,000 UI writes. Eight native-only ambient frames allocate one
 target, unchanged clocks do not reimport, and original CPU ownership reads remain
 exact. Sixteen simultaneous 2240×1260 sampled versions update three times with
 16 target allocations and release every retained/scratch byte on reset. This
-also rejects the first draft's accidental charge against the temporary budget.
+preserves capacity that the first draft would have charged to the temporary budget.
 Twelve production worker/ownership/view-retirement contracts pass. No injected
 files changed, so no injected compile was required.
 

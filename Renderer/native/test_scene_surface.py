@@ -36,6 +36,47 @@ int main(){
 }
 ''')
 
+    def test_shared_gpu_delivery_has_no_legacy_canvas_or_cpu_mirror(self):
+        source = Path(__file__).with_name("c3x_renderer.cpp").read_text()
+        body = '    bool ensure_targets(' + source.split('    bool ensure_targets(', 1)[1].split('\n    static int ground_type', 1)[0]
+        run_cpp(r'''
+#include <cassert>
+#include <cstdint>
+#include <vector>
+using UINT=unsigned;using HRESULT=int;
+bool FAILED(int x){return x<0;}bool SUCCEEDED(int x){return x>=0;}
+enum {DXGI_FORMAT_B8G8R8A8_UNORM,DXGI_FORMAT_D24_UNORM_S8_UINT,D3D11_USAGE_DEFAULT,
+      D3D11_USAGE_STAGING,D3D11_BIND_RENDER_TARGET,D3D11_BIND_DEPTH_STENCIL,D3D11_CPU_ACCESS_READ};
+struct D3D11_TEXTURE2D_DESC {unsigned Width=0,Height=0,MipLevels=0,ArraySize=0,Format=0,Usage=0,BindFlags=0,CPUAccessFlags=0;struct {unsigned Count=0;}SampleDesc;};
+struct Device {
+ unsigned allocations=0;bool fail=false;
+ int CreateTexture2D(D3D11_TEXTURE2D_DESC*,void*,int** out){if(fail)return -1;*out=new int(++allocations);return 0;}
+ int CreateRenderTargetView(int*,void*,int** out){*out=new int(1);return 0;}
+ int CreateDepthStencilView(int*,void*,int** out){*out=new int(1);return 0;}
+};
+struct State {
+ Device owned,*device=&owned;bool shared_scene_surface=true,gpu_output_mode=true;int width=0,height=0;unsigned resets=0;
+ int *render_texture=nullptr,*render_target=nullptr,*depth_texture=nullptr,*depth_target=nullptr,*readback_texture=nullptr;
+ std::vector<std::uint32_t> pixels;
+ void release(int*& p){delete p;p=nullptr;}
+ void reset_targets(){++resets;release(render_texture);release(render_target);release(depth_texture);release(depth_target);release(readback_texture);pixels.clear();width=height=0;}
+ ~State(){reset_targets();}
+''' + body + r'''
+};
+int main(){
+ State s;assert(s.ensure_targets(2240,1260));assert(!s.owned.allocations&&!s.pixels.capacity());
+ for(int i=0;i<8;++i)assert(s.ensure_targets(2240,1260));assert(s.resets==1);
+ s.gpu_output_mode=false;assert(s.ensure_targets(2240,1260));
+ assert(s.owned.allocations==1&&s.readback_texture&&!s.render_texture&&!s.depth_texture&&s.pixels.size()==2240*1260);
+ auto staging=s.readback_texture;assert(s.ensure_targets(2240,1260)&&s.readback_texture==staging&&s.owned.allocations==1);
+ s.gpu_output_mode=true;assert(s.ensure_targets(2240,1260));assert(!s.readback_texture&&!s.pixels.capacity()&&s.resets==1);
+ s.gpu_output_mode=false;s.owned.fail=true;assert(!s.ensure_targets(2240,1260));assert(!s.readback_texture);
+ s.owned.fail=false;assert(s.ensure_targets(1120,630));assert(s.pixels.size()==1120*630&&s.resets==2);
+ s.reset_targets();s.shared_scene_surface=false;assert(s.ensure_targets(1120,630));
+ assert(s.render_texture&&s.depth_texture&&s.readback_texture); // documented compatibility consumer
+}
+''')
+
     def test_incremental_filter_matches_full_circular_convolution(self):
         run_cpp(r'''
 #include "Renderer/native/render_core/scene_surface.h"

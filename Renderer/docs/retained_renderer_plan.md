@@ -47,43 +47,40 @@ requested completion claim.
 
 ### Current capabilities and evidence
 
-Shoreline placements now retire with rebuilt view geometry. The deterministic
-GPU control changes from 6,616 incorrect pixels to exact cold-render parity,
-reusing all 279 coast cells with zero wave builds/uploads. Two strict replays of
-the corrected recording match 9,406 calls, 336 displayed frames and CPU restore.
+- Shoreline placements retire with rebuilt view geometry: the deterministic GPU
+  control changes from 6,616 incorrect pixels to exact cold-render parity, with
+  all 279 coast cells reused and zero wave builds/uploads.
+- Mixed-unit scratch retains bounded sufficient capacity: the actual alternating
+  pack extents need two allocations over 24 draws with exact HDR/depth output.
+- Healthy-device sampling/presentation failures preserve completed native images
+  and CPU restoration. Removed-device recovery remains a separate responsibility.
+- Ambient map sampling owns reusable packed output: 125 samples use one target,
+  with no closure-owned initial duplicate or per-clock texture creation. Native
+  versions remain immutable; 16 simultaneous fullscreen versions and reset pass.
+- Shared-scene GPU delivery no longer allocates the legacy full-size color/depth
+  canvas, CPU staging image or CPU bitmap. At 2240×1260 this removes 32.30 MiB of
+  logical GPU allocations plus 10.77 MiB of CPU pixels. CPU delivery lazily admits
+  its staging image/bitmap; alternate render profiles keep their real consumers.
 
-Mixed-unit scratch now retains bounded sufficient capacity across pack sizes.
-The actual alternating extents need two allocations over 24 draws, with exact
-HDR/depth and 98,304 packed/full-color checks. Failed optional visual sampling on
-a healthy device preserves the completed native transfer and CPU restoration;
-GPU-owned native images survive worker/presentation failures until explicit drain.
+The latest `shared-scene-delivery` candidate matches all 9,406 replay calls and
+336 displayed frames, including CPU restoration. Thirteen focused contracts pass.
+The 2240×1260 fixture with eight mixed units, all water effects and **1,216 MiB
+reserved VA** now passes native animation, tactical overlays, camera cancellation,
+reset/recovery and config-off; all 15 fixed images match. Minimum sampled free VA
+is 155.75 MiB. The normal 1 GiB run also passes with 15 exact fixed images and
+321.63 MiB minimum free VA (preceding candidate: 291.49 MiB). These are bounded
+fixture results, not acceptance of the live game or Standard-map latency goal.
 
-Ambient map samples now reuse node-owned packed storage. The callback no longer
-allocates an initial duplicate map or a new texture every clock step. Existing
-native versions remain immutable. Eight native-only samples use one allocation;
-16 fullscreen sampled versions remain exact and release all storage on reset.
-The retained owner charges those images; temporary composition capacity is unchanged.
-The candidate's strict replay matches all 9,406 calls and 336 displayed frames.
-At 2240×1260 with eight mixed units, all water effects and 1 GiB reserved VA,
-125 samples use one allocation; all 15 fixed images match. Minimum sampled free
-VA is 291.49 MiB versus the preceding run's 273.95 MiB. This is a pressure fixture,
-not a reproduction of Civ III's heap or proof of a live freeze fix.
+The preceding allocation-only change establishes no overall speedup: paired
+unpaced replay envelopes stay about 57.1 s. Ambient opportunity p95 is
+32.9–34.1 → 31.8–33.3 ms, including unchanged-clock opportunities; GPU map means
+are 54.3–55.0 → 51.6–53.1 ms for only 14 requests/run. These are not live FPS.
 
-Paired unpaced replay service envelopes remain about 57.1 s: no overall speedup
-is established. Ambient opportunity p95 is 32.9–34.1 → 31.8–33.3 ms; this includes
-unchanged-clock opportunities and is not fresh-frame latency. The small GPU map
-sample (14 requests/run) has means 54.3–55.0 → 51.6–53.1 ms. These measurements
-are not live FPS or Standard-map acceptance. Twelve focused contracts and the
-126-oracle GPU composition suite pass. The fullscreen 30-frame request mean is
-30.3 ms versus the prior run's 31.6 ms; desktop completion is 41.1 versus 42.2 ms.
-The old per-sample snapshot helper and its closure-owned duplicate are removed;
-no new cache budget, native hook, quality change or injected-code change.
-Evidence: `native/build/retained-map-owner/`, `retained-map-owner-replay/`,
-`retained-map-owner-pressure/`, and `retained-map-owner-service/`.
-[Preserved stabilization evidence](native_stabilization_results.md) contains the
-failure analysis, reset witness, prior qualification and exact candidate identities.
+[Stabilization evidence](native_stabilization_results.md) retains the failure
+analysis, reset witnesses, detailed measurements, staging and binary identities.
 [Durable content results](durable_content_results.md) retains the earlier
-preparation/transaction consolidation measurements and retirement ledger.
+preparation/transaction consolidation and retirement ledger. Generated image
+receipts are losslessly compressed; recordings and failed receipts are preserved.
 
 ### Unfinished responsibility and staging
 
@@ -91,13 +88,20 @@ M3.8 remains open. The live failure capture proves device removal after sampled
 free VA reaches 93.66 MiB, followed by 522 failed worker attempts. It does not prove
 pressure caused the driver failure. Required attachments are about 819.70 MiB,
 including a 652.42 MiB shared-scene target; simply increasing caches cannot fix
-that floor. Removed-device recovery must reconstruct native ownership, not certify
+that floor. The tighter automated fixture now reproduces the same `0x887a0020`
+device-removal code during reset recovery, with 779 MiB free in total but only a
+65 MiB largest free block. This establishes a realistic pressure witness, not
+proof of the live driver's failure mechanism. Earlier tight runs vary (including
+a prior-DLL pass); all failed receipts remain failed. The target retirement passes
+that witness once; a durable live fix is not yet claimed. Failure-only telemetry
+now records contiguous VA/device status and reflection-allocation HRESULTs.
+Removed-device recovery must reconstruct native ownership, not certify
 stale CPU images. Reduce attachment overlap without changing fidelity, address
 failed-device retries, and attribute the complete navigation path before closing
 M3.8. No new manual recording is needed for those immediate responsibilities.
 
 The game-staged DLL remains the `f2598dad…` ownership-repair evaluation build;
-newer scratch/reset/sampling candidates are **not staged or capture-qualified**.
+newer scratch/reset/sampling/delivery candidates are **not staged or capture-qualified**.
 No installer/game launch or fixed-reference replacement occurred. The user's live
 scene export is preserved. Standard-map <33 ms p95 coherent navigation and live
 stability remain unaccepted. Continue M3.9–M3.12 afterward; the optional helper

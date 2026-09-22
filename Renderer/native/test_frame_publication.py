@@ -393,6 +393,7 @@ struct Bodies {
 struct TacticalGPU {template<class... T> ID3D11Texture2D* packed(T&&...){unexpected_gpu();return nullptr;}};
 struct D3D11_RECT {int left,top,right,bottom;};
 struct RendererState {
+    void gpu_failure(char const*){} // Failure diagnostics do not initialize or mutate GPU ownership.
     std::size_t publication_working_bytes=0;bool memory_pressured=false;void preserve_process_headroom(){}
     struct Scene : c3x_renderer::render_core::CapturedScene {std::uint64_t signature=0;} topology_cache;
     struct WorldStorage {unsigned clears=0;void clear(){++clears;}} world_preparation_queue,world_backing;

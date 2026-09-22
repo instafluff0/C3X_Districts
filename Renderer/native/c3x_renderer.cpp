@@ -634,6 +634,15 @@ public:
         trace.write("process-headroom",detail,true);
     }
     ULONGLONG last_memory_status=0;
+    void gpu_failure(char const* phase) {
+        // Sample fragmentation only at an actual failure. Total free VA alone
+        // cannot explain rejection of a large contiguous D3D allocation.
+        auto space=c3x_renderer::render_core::AddressSpaceSample::capture();
+        char detail[320];sprintf_s(detail,"phase=%s device_reason=0x%08lx available_virtual=%llu largest_free_region=%llu attachments_bytes=%zu composition_publication_bytes=%zu",
+            phase,device?device->GetDeviceRemovedReason():S_OK,space.available,space.largest,
+            frame_working_bytes(),composition_working_bytes());
+        trace.write("gpu-failure",detail,true);
+    }
     void memory_sample(char const* phase) {
         // Constant-cost live telemetry includes the game's address space. The
         // detailed VirtualQuery/buffer walk below remains profiling-only.
@@ -2976,6 +2985,24 @@ public:
     }
 
     bool ensure_targets(int requested_width, int requested_height) {
+        if(shared_scene_surface){
+            if(requested_width!=width || requested_height!=height)reset_targets();
+            // The shared scene draws into region_glow and publishes gpu_map.
+            // The old color/depth canvas has no consumer on this path. CPU
+            // delivery needs only a staging image, admitted at its actual use.
+            if(gpu_output_mode){
+                release(readback_texture);std::vector<std::uint32_t>().swap(pixels);
+            }else{
+                if(!readback_texture){
+                    D3D11_TEXTURE2D_DESC desc={};desc.Width=UINT(requested_width);desc.Height=UINT(requested_height);
+                    desc.MipLevels=desc.ArraySize=desc.SampleDesc.Count=1;desc.Format=DXGI_FORMAT_B8G8R8A8_UNORM;
+                    desc.Usage=D3D11_USAGE_STAGING;desc.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
+                    if(FAILED(device->CreateTexture2D(&desc,nullptr,&readback_texture)))return false;
+                }
+                pixels.resize(std::size_t(requested_width)*requested_height);
+            }
+            width=requested_width;height=requested_height;return true;
+        }
         if (requested_width == width && requested_height == height && render_texture != nullptr)
             return true;
         reset_targets();
@@ -4349,9 +4376,14 @@ public:
             scene_reflection_signature=0;scene_reflection_cells.clear();release(scene_reflection_clear);release(scene_reflection_view);release(scene_reflection_texture);
             D3D11_TEXTURE2D_DESC d={};d.Width=w*2;d.Height=h*2;d.MipLevels=d.ArraySize=d.SampleDesc.Count=1;
             d.Format=DXGI_FORMAT_R16G16B16A16_FLOAT;d.BindFlags=D3D11_BIND_SHADER_RESOURCE|D3D11_BIND_RENDER_TARGET;
-            if(FAILED(device->CreateTexture2D(&d,nullptr,&scene_reflection_texture)) ||
-               FAILED(device->CreateShaderResourceView(scene_reflection_texture,nullptr,&scene_reflection_view)) ||
-               FAILED(device->CreateRenderTargetView(scene_reflection_texture,nullptr,&scene_reflection_clear))){
+            HRESULT hr=device->CreateTexture2D(&d,nullptr,&scene_reflection_texture);
+            char const* operation="texture";
+            if(SUCCEEDED(hr)){operation="shader-view";hr=device->CreateShaderResourceView(scene_reflection_texture,nullptr,&scene_reflection_view);}
+            if(SUCCEEDED(hr)){operation="target-view";hr=device->CreateRenderTargetView(scene_reflection_texture,nullptr,&scene_reflection_clear);}
+            if(FAILED(hr)){
+                char detail[192];sprintf_s(detail,"operation=%s hresult=0x%08lx width=%u height=%u bytes=%zu",
+                    operation,hr,d.Width,d.Height,std::size_t(d.Width)*d.Height*8);
+                trace.write("scene-reflection-failed",detail,true);
                 release(scene_reflection_clear);release(scene_reflection_view);release(scene_reflection_texture);
                 scene_reflection_width=scene_reflection_height=0;return false;
             }
@@ -11959,6 +11991,8 @@ private:
                     }catch(c3x_renderer::render_core::CliffPreparationCancelled const&){result=C3X_RENDERER_RESULT_SUPERSEDED;}
                     catch(std::exception const& error){renderer_state.trace.write("camera-error",error.what(),true);}
                     catch(...){renderer_state.trace.write("camera-error","GPU camera exception",true);}
+                    if(result==C3X_RENDERER_RESULT_ERROR && !camera_cancelled.load(std::memory_order_relaxed))
+                        renderer_state.gpu_failure("camera");
                     if(camera_cancelled.load(std::memory_order_relaxed) || result==C3X_RENDERER_RESULT_SUPERSEDED){
                         renderer_state.discard_scene_view();result=C3X_RENDERER_RESULT_SUPERSEDED;
                     }
@@ -12274,6 +12308,7 @@ private:
                 int drawn=renderer_state.gpu_composition?renderer_state.gpu_composition->visual_frame(visual_ticks,visual_frequency,
                     gpu_presenter.view(),gpu_presenter.retained(),gpu_presenter.buffer()):0;
                 result=drawn==1?C3X_RENDERER_RESULT_OK:drawn==2?C3X_RENDERER_RESULT_PENDING:C3X_RENDERER_RESULT_ERROR;
+                if(result==C3X_RENDERER_RESULT_ERROR)renderer_state.gpu_failure("visual");
                 if(result==C3X_RENDERER_RESULT_OK)gpu_presenter.gpu_written();
                 char detail[192];sprintf_s(detail,"body_draws=%llu body_reuses=%llu body_copies=%llu gpu_content_bytes=%zu",
                     bodies.map_scene_draws-draws,bodies.scene_body_reuses-reused,bodies.scene_body_builds-built,bodies.gpu_content_bytes);

@@ -961,7 +961,8 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
             std::vector<unsigned> first_motion;bool moved=false;
             LARGE_INTEGER tactical_frequency={};QueryPerformanceFrequency(&tactical_frequency);
             for(unsigned n=0;n<12;++n){Sleep(80);LARGE_INTEGER start={},submitted={},done={};QueryPerformanceCounter(&start);
-                verify(visual()==1,"independent tactical frame");QueryPerformanceCounter(&submitted);verify(SUCCEEDED(finish()),"tactical desktop completion");QueryPerformanceCounter(&done);
+                auto visual_result=visual();if(visual_result!=1)std::fprintf(stderr,"TACTICAL_VISUAL_FAILURE result=%d frame=%u\n",visual_result,n);
+                verify(visual_result==1,"independent tactical frame");QueryPerformanceCounter(&submitted);verify(SUCCEEDED(finish()),"tactical desktop completion");QueryPerformanceCounter(&done);
                 std::printf("TACTICAL_VISUAL_SAMPLE request_ms=%.3f desktop_ms=%.3f begin_qpc=%lld end_qpc=%lld\n",
                     1000.*double(submitted.QuadPart-start.QuadPart)/tactical_frequency.QuadPart,1000.*double(done.QuadPart-start.QuadPart)/tactical_frequency.QuadPart,start.QuadPart,submitted.QuadPart);
                 if(w<=GetSystemMetrics(SM_CXSCREEN)&&h<=GetSystemMetrics(SM_CYSCREEN)){
