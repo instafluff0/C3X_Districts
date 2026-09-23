@@ -854,7 +854,12 @@ int main() {
         # still cannot present; the connected native-window fixture tests the
         # sole caller-driven transfer and its original-GDI fallback.
         self.assertNotIn("present(", native.split("class rendererworker", 1)[0])
-        for forbidden in ("createswapchain", "civ6", ".blp", ".fgx", "steamapps"):
+        # Renderer64's explicit cross-process composition surface is the
+        # authorized presenter trial; map rendering still cannot create an
+        # HWND swap chain or depend on Firaxis runtime assets.
+        self.assertEqual(native.count("createswapchainforcompositionsurfacehandle"), 1)
+        self.assertNotIn("createswapchainforhwnd", native)
+        for forbidden in ("civ6", ".blp", ".fgx", "steamapps"):
             self.assertNotIn(forbidden, native + api)
 
     def test_native_renderer_loads_definition_driven_normalized_terrain(self) -> None:

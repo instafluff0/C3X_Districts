@@ -6,6 +6,7 @@
 #include "visual_cadence.h"
 #include "input_recording/display.h"
 #include <cstdio>
+#include <map>
 #include <mutex>
 
 namespace c3x_remote_scene {
@@ -24,6 +25,9 @@ class Backend {
     c3x_renderer::VisualCadence cadence;
     HWND active_window=nullptr;
     bool visual_active=false;
+    // Only changed authoritative unit facts need an IPC roundtrip. Native
+    // redraw ticks can repeat the same action/HP for many visual frames.
+    std::map<int,c3x_renderer_unit_state_v1> unit_facts;
     bool detach_direct(bool paint_native,std::vector<unsigned>* retained=nullptr,
                        unsigned* retained_width=nullptr,unsigned* retained_height=nullptr){
         if(!direct_active)return true;
@@ -58,15 +62,17 @@ public:
         std::lock_guard<std::mutex> lock(gate);
         if(!detach_direct(true))return C3X_RENDERER_RESULT_DEVICE_ERROR;
         visual_active=false;active_window=nullptr;cadence.disable();
+        unit_facts.clear();
         direct_unavailable=false;
         return client.definitions(root,fallback,scenario,custom);
     }
     int pack(char const* path){std::lock_guard<std::mutex> lock(gate);
         if(!detach_direct(true))return C3X_RENDERER_RESULT_DEVICE_ERROR;
         visual_active=false;active_window=nullptr;cadence.disable();
+        unit_facts.clear();
         direct_unavailable=false;
         return client.pack(path);}
-    int set_units(int enabled){std::lock_guard<std::mutex> lock(gate);return client.set_units(enabled);}
+    int set_units(int enabled){std::lock_guard<std::mutex> lock(gate);if(!enabled)unit_facts.clear();return client.set_units(enabled);}
     int visual_policy(unsigned policy){std::lock_guard<std::mutex> lock(gate);return client.visual_policy(policy);}
     int render(c3x_renderer_camera_request_v1 const& request,c3x_renderer_gpu_frame_v1& gpu,
                c3x_renderer_output_v1& output){
@@ -91,6 +97,12 @@ public:
     int world_submit(c3x_renderer_world_page_v1 const& page,int callback_result){
         std::lock_guard<std::mutex> lock(gate);return client.world_submit(page,callback_result);
     }
+    int world_delta_scope(c3x_renderer_world_page_v1& page){
+        std::lock_guard<std::mutex> lock(gate);return client.world_delta_scope(page);
+    }
+    int world_delta_submit(c3x_renderer_world_page_v1 const& page,int callback_result){
+        std::lock_guard<std::mutex> lock(gate);return client.world_delta_submit(page,callback_result);
+    }
     int world_status(c3x_renderer_world_status_v1& status){
         std::lock_guard<std::mutex> lock(gate);return client.world_status(status);
     }
@@ -105,9 +117,39 @@ public:
                  std::vector<std::uint32_t>& pixels,int& x,int& y,unsigned& width,unsigned& height){
         std::lock_guard<std::mutex> lock(gate);return client.unit_cpu(unit,flags,bounds,pixels,x,y,width,height);
     }
-    void forget_unit(int id){std::lock_guard<std::mutex> lock(gate);client.forget_unit(id);}
+    void forget_unit(int id){std::lock_guard<std::mutex> lock(gate);unit_facts.erase(id);client.forget_unit(id);}
     int unit_visual(c3x_renderer_unit_visual_v1 const& value){
         std::lock_guard<std::mutex> lock(gate);return client.unit_visual(value);
+    }
+    int unit_move(c3x_renderer_unit_move_v1 const& value){
+        std::lock_guard<std::mutex> lock(gate);unit_facts.erase(value.unit_id);return client.unit_move(value);
+    }
+    int unit_spawn(c3x_renderer_unit_spawn_v1 const& value){
+        std::lock_guard<std::mutex> lock(gate);unit_facts.erase(value.unit_id);return client.unit_spawn(value);
+    }
+    int unit_state(c3x_renderer_unit_state_v1 const& value){
+        std::lock_guard<std::mutex> lock(gate);
+        auto found=unit_facts.find(value.unit_id);
+        if(found!=unit_facts.end()){
+            auto const& old=found->second;
+            if(old.kind==value.kind&&old.tile_x==value.tile_x&&old.tile_y==value.tile_y&&
+               old.unit_type_id==value.unit_type_id&&old.owner_id==value.owner_id&&
+               old.action==value.action&&old.damage==value.damage&&old.max_hp==value.max_hp&&
+               old.visible==value.visible&&old.map_epoch==value.map_epoch&&
+               old.viewer_epoch==value.viewer_epoch&&old.presentation_frequency==value.presentation_frequency)
+                return C3X_RENDERER_RESULT_OK;
+        }
+        c3x_inputs::Call input(c3x_inputs::Kind::unit_state,0,[&](auto& out){
+            auto copied=value;c3x_inputs::unit_state_fields(out,copied);
+        });
+        int code=C3X_RENDERER_RESULT_ERROR;
+        try{code=input.result(client.unit_state(value));}
+        catch(...){input.result(C3X_RENDERER_RESULT_ERROR);throw;}
+        if(code==C3X_RENDERER_RESULT_OK){
+            if(unit_facts.size()>=8192&&found==unit_facts.end())unit_facts.clear();
+            unit_facts[value.unit_id]=value;
+        }
+        return code;
     }
     int tactical(c3x_renderer::tactical::Input const& capture,c3x_renderer_gpu_unit_v1 const& target){
         std::lock_guard<std::mutex> lock(gate);return client.tactical(capture,target);
@@ -237,6 +279,7 @@ public:
         cadence.stop();
         std::lock_guard<std::mutex> lock(gate);
         visual_active=false;
+        unit_facts.clear();
         if(!detach_direct(true))return C3X_RENDERER_RESULT_DEVICE_ERROR;
         active_window=nullptr;
         direct_unavailable=false;

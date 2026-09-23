@@ -220,6 +220,13 @@ Unit * resolve_army_defending_member (Unit * army, Unit * attacker, bool sync_to
 Unit * counter_attacker_for_defender_selection (Unit * attacker, Unit * defender);
 bool unit_has_valid_type_id (Unit * unit);
 int __cdecl patch_get_building_defense_bonus_at (int x, int y, int param_3);
+unsigned int capture_custom_renderer_visibility (Tile * tile, int viewer, int x, int y);
+bool custom_renderer_tile_visible_at (int x, int y);
+bool custom_renderer_tile_near_view (int x, int y, int margin);
+void notify_custom_renderer_tile_change (int x, int y);
+void notify_custom_renderer_unit_move (Unit * unit, int old_x, int old_y, bool source_visible);
+void notify_custom_renderer_unit_spawn (Unit * unit);
+void notify_custom_renderer_unit_state (Unit * unit, unsigned int kind);
 
 // Declare various functions needed for districts and hard to untangle and reorder here
 void __fastcall patch_City_recompute_yields_and_happiness (City * this);
@@ -21636,9 +21643,12 @@ patch_Unit_bombard_tile (Unit * this, int edx, int x, int y)
 void __fastcall
 patch_Unit_move (Unit * this, int edx, int tile_x, int tile_y)
 {
+	int old_x = this->Body.X, old_y = this->Body.Y;
+	bool source_visible = custom_renderer_tile_visible_at (old_x, old_y);
 	record_ai_unit_seen (this, tile_x, tile_y);
 
 	Unit_move (this, __, tile_x, tile_y);
+	notify_custom_renderer_unit_move (this, old_x, old_y, source_visible);
 
 	if (this == is->last_selected_unit.ptr) {
 		is->last_selected_unit.last_x = this->Body.X;
@@ -27730,6 +27740,9 @@ unload_custom_renderer ()
 	is->custom_renderer_camera_present = NULL;
 	is->custom_renderer_camera_cancel = NULL;
 	is->custom_renderer_navigation = NULL;
+	is->custom_renderer_world_move = NULL;
+	is->custom_renderer_world_change = NULL;
+	is->custom_renderer_world_reconcile = NULL;
 	is->custom_renderer_camera_ticket = 0;
 	is->custom_renderer_display_clock = 0;
 	is->custom_renderer_async_enabled = false;
@@ -27744,6 +27757,9 @@ unload_custom_renderer ()
 	is->custom_renderer_unit_draw_expanded = NULL;
 	is->custom_renderer_unit_draw_playback = NULL;
 	is->custom_renderer_unit_visual = NULL;
+	is->custom_renderer_unit_move = NULL;
+	is->custom_renderer_unit_spawn = NULL;
+	is->custom_renderer_unit_state = NULL;
 	is->custom_renderer_unit_context = NULL;
 	is->custom_renderer_unit_canvas = NULL;
 	is->custom_renderer_export_scene = NULL;
@@ -27768,6 +27784,7 @@ unload_custom_renderer ()
 	is->custom_renderer_viewer_epoch = 0;
 	is->custom_renderer_viewer_civ_id = -1;
 	is->custom_renderer_capture_world_topology = false;
+	is->custom_renderer_world_audit_needed = true;
 	is->custom_renderer_frame_active = false;
 	is->custom_renderer_capture_failed = false;
 	is->custom_renderer_composited = false;
@@ -27953,11 +27970,11 @@ void __fastcall
 patch_Unit_tick_anim (Unit * this, int edx, PCX_Image * canvas, int offset_x, int offset_y, bool status)
 {
 	// This native entry draws body, marker, cursor and status; it does not advance actions.
+	notify_custom_renderer_unit_state (this, C3X_RENDERER_UNIT_STATE_OBSERVE);
 	if (is->current_config.enable_custom_rendering &&
 	    !(capture_custom_renderer_visibility (tile_at (this->Body.X, this->Body.Y),
 		p_main_screen_form->Player_CivID, this->Body.X, this->Body.Y) & C3X_RENDERER_TILE_VISIBLE)) {
 		if (is->custom_renderer_unit_forget != NULL) {
-			is->custom_renderer_unit_forget (this->Body.ID);
 			if (Unit_has_ability (this, __, UTA_Army)) is->custom_renderer_unit_forget (this->Body.army_top_defender_id);
 		}
 		return;
@@ -28052,6 +28069,7 @@ ensure_custom_renderer_loaded ()
 	if (get_environment != NULL)
 		get_environment ("C3X_RENDERER_VISUAL_PROFILE", visual_profile, sizeof visual_profile);
 	is->custom_renderer_capture_world_topology = strcmp (visual_profile, "frozen") != 0;
+	is->custom_renderer_world_audit_needed = true;
 	is->custom_renderer_module = LoadLibraryA (path);
 	if (is->custom_renderer_module != NULL) {
 		is->custom_renderer_get_api_version = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_get_api_version");
@@ -28085,6 +28103,9 @@ ensure_custom_renderer_loaded ()
 		is->custom_renderer_unit_draw_expanded = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_draw_expanded");
 		is->custom_renderer_unit_draw_playback = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_draw_playback");
 		is->custom_renderer_unit_visual = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_visual");
+		is->custom_renderer_unit_move = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_move");
+		is->custom_renderer_unit_spawn = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_spawn");
+		is->custom_renderer_unit_state = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_state");
 		is->custom_renderer_export_scene = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_export_scene");
 		is->custom_renderer_schedule = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_schedule_idle");
 		is->custom_renderer_reset = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_reset");
@@ -28095,6 +28116,10 @@ ensure_custom_renderer_loaded ()
 		    (is->custom_renderer_blit != NULL) &&
 		    (is->custom_renderer_unit_draw_playback != NULL) &&
 		    (is->custom_renderer_unit_forget != NULL) &&
+		    (is->custom_renderer_unit_visual != NULL) &&
+		    (is->custom_renderer_unit_move != NULL) &&
+		    (is->custom_renderer_unit_spawn != NULL) &&
+		    (is->custom_renderer_unit_state != NULL) &&
 		    (is->custom_renderer_export_scene != NULL) &&
 		    (is->custom_renderer_schedule != NULL) &&
 		    (is->custom_renderer_reset != NULL) &&
@@ -28122,6 +28147,9 @@ ensure_custom_renderer_loaded ()
 			}
 			is->custom_renderer_init_state = IS_OK;
 			is->custom_renderer_navigation = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_native_navigation");
+			is->custom_renderer_world_move = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_world_move");
+			is->custom_renderer_world_change = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_world_change");
+			is->custom_renderer_world_reconcile = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_world_reconcile");
 			c3x_renderer_set_world_capture_fn set_world_capture = (void *)(*p_GetProcAddress) (
 				is->custom_renderer_module, "c3x_renderer_set_world_capture");
 			if (set_world_capture != NULL)
@@ -28318,6 +28346,9 @@ capture_custom_renderer_tile (int visible_to_civ_id, int pixel_x, int pixel_y,
 			is->custom_renderer_viewer_civ_id = visible_to_civ_id;
 			is->custom_renderer_viewer_epoch = is->custom_renderer_viewer_epoch < 0x7fffffffffffffffLL ?
 				is->custom_renderer_viewer_epoch + 1 : 1;
+			if (is->custom_renderer_world_visibility != NULL)
+				memset (is->custom_renderer_world_visibility, 0xff,
+					is->custom_renderer_world_topology_count * sizeof is->custom_renderer_world_visibility[0]);
 		}
 	} else if (is->custom_renderer_viewer_civ_id != visible_to_civ_id) return false;
 	int const max_tiles = 8192;
@@ -28347,6 +28378,38 @@ capture_custom_renderer_tile (int visible_to_civ_id, int pixel_x, int pixel_y,
 
 // The renderer owns paging, immutable storage and preparation. This callback
 // only reads current game values on the game thread, never a worker thread.
+bool
+read_custom_renderer_world_record (struct c3x_renderer_tile_v1 * record, int viewer, int mask,
+	int x, int y, Tile * tile, bool visibility_only_when_hidden)
+{
+	unsigned int visibility = capture_custom_renderer_visibility (tile, viewer, x, y);
+	if (! (visibility & C3X_RENDERER_TILE_VISIBILITY_KNOWN)) return false;
+	if ((visibility & C3X_RENDERER_TILE_EXPLORED) &&
+	    (! visibility_only_when_hidden || (visibility & C3X_RENDERER_TILE_VISIBLE))) {
+		if (! read_custom_renderer_tile (record, viewer, 0, 0, mask, x, y, tile, false, false)) return false;
+		record->tile_flags = visibility | C3X_RENDERER_TILE_TOPOLOGY_HALO | C3X_RENDERER_TILE_PREFETCH;
+	} else {
+		// On a delta, a hidden tile only updates fog status. Its last visible
+		// appearance stays in Renderer; reading live hidden objects would leak
+		// changes that the player has not seen. Initial explored snapshots still
+		// carry Civ III's available explored appearance.
+		unsigned int topology = is->custom_renderer_world_topology[(y * p_bic_data->Map.Width + x) / 2];
+		*record = (struct c3x_renderer_tile_v1){0};
+		record->tile_x = x; record->tile_y = y;
+		record->terrain_type = topology & 255u;
+		record->real_terrain_type = (topology >> 8) & 255u;
+		record->river_code = (topology >> 16) & 255u;
+		record->visibility_mask = mask;
+		record->tile_visibility = tile->Body.Visibility;
+		record->fog_status = tile->Body.FOWStatus;
+		record->resource_id = record->resource_class = record->tile_building_id = -1;
+		record->city_id = record->city_owner_id = record->unit_type_id = record->unit_owner_id = -1;
+		record->barbarian_tribe_id = -1;
+		record->tile_flags = visibility | C3X_RENDERER_TILE_TOPOLOGY_HALO;
+	}
+	return true;
+}
+
 int
 capture_custom_renderer_world_page (struct c3x_renderer_world_page_v1 * page)
 {
@@ -28363,17 +28426,51 @@ capture_custom_renderer_world_page (struct c3x_renderer_world_page_v1 * page)
 	    page->frame.world_topology_revision != is->custom_renderer_world_topology_revision)
 		return C3X_RENDERER_RESULT_SUPERSEDED;
 	unsigned int count = map->Width * map->Height / 2;
+	if (is->custom_renderer_world_topology == NULL ||
+	    is->custom_renderer_world_topology_count != (int)count)
+		return C3X_RENDERER_RESULT_PENDING;
 	int mask = is->custom_renderer_tile_count > 0 ? is->custom_renderer_tiles[0].visibility_mask : 0;
+	if (page->first == 0xffffffffu || page->first == 0xfffffffeu) {
+		if (page->count == 0 || page->count > page->capacity || page->capacity > 128 || page->tiles == NULL)
+			return C3X_RENDERER_RESULT_ERROR;
+		unsigned int selected = 0;
+		int indices[128];
+		unsigned long long values[128];
+		bool compare = is->custom_renderer_world_visibility != NULL &&
+			is->custom_renderer_world_topology_count == (int)count;
+		unsigned int candidates = page->count;
+		for (unsigned int i = 0; i < candidates; i++) {
+			int x = page->tiles[i].tile_x, y = page->tiles[i].tile_y;
+			if (x < 0 || x >= map->Width || y < 0 || y >= map->Height || ((x + y) & 1))
+				return C3X_RENDERER_RESULT_ERROR;
+			Tile * tile = tile_at (x, y);
+			if (tile == NULL || tile == p_null_tile) return C3X_RENDERER_RESULT_ERROR;
+			unsigned long long value = ((unsigned long long)(unsigned int)tile->Body.Fog_Of_War << 32) |
+				(unsigned int)(tile->Body.FOWStatus | tile->Body.V3 | tile->Body.Visibility | tile->Body.field_D0_Visibility);
+			int index = (y * map->Width + x) / 2;
+			if (page->first == 0xffffffffu && compare && is->custom_renderer_world_visibility[index] == value) continue;
+			if (! read_custom_renderer_world_record (&page->tiles[selected],
+			        is->custom_renderer_viewer_civ_id, mask, x, y, tile, true)) return C3X_RENDERER_RESULT_ERROR;
+			indices[selected] = index;
+			values[selected++] = value;
+		}
+		page->count = selected;
+		if (compare && selected) {
+			for (unsigned int i = 0; i < selected; i++)
+				is->custom_renderer_world_visibility[indices[i]] = values[i];
+			is->custom_renderer_visibility_revision = is->custom_renderer_visibility_revision < 0x7fffffffffffffffLL ?
+				is->custom_renderer_visibility_revision + 1 : 1;
+		}
+		return C3X_RENDERER_RESULT_OK;
+	}
 	page->count = 0;
 	for (unsigned int n = page->first; n < count && page->count < page->capacity; n++) {
 		int y = n / (map->Width / 2), x = 2 * (n % (map->Width / 2)) + (y & 1);
 		Tile * tile = tile_at (x, y);
 		if (tile == NULL || tile == p_null_tile) return C3X_RENDERER_RESULT_ERROR;
 		struct c3x_renderer_tile_v1 * record = &page->tiles[page->count++];
-		if (! read_custom_renderer_tile (record, is->custom_renderer_viewer_civ_id, 0, 0, mask,
-			x, y, tile, false, false)) return C3X_RENDERER_RESULT_ERROR;
-		record->tile_flags = (record->tile_flags & C3X_RENDERER_TILE_VISIBILITY_BITS) |
-			C3X_RENDERER_TILE_TOPOLOGY_HALO | C3X_RENDERER_TILE_PREFETCH;
+		if (! read_custom_renderer_world_record (record, is->custom_renderer_viewer_civ_id,
+			mask, x, y, tile, false)) return C3X_RENDERER_RESULT_ERROR;
 	}
 	return C3X_RENDERER_RESULT_OK;
 }
@@ -28566,6 +28663,8 @@ capture_custom_renderer_world_topology ()
 	if ((map->Width <= 0) || (map->Height <= 0) || (map->Width & 1) ||
 	    (map->Width > 2048) || (map->Height > 2048)) return false;
 	int count = map->Width * map->Height / 2;
+	if (! is->custom_renderer_world_audit_needed && count == is->custom_renderer_world_topology_count)
+		return true;
 	bool changed = count != is->custom_renderer_world_topology_count;
 	bool observe_visibility = is->custom_renderer_render_view != NULL;
 	if (changed || (observe_visibility && is->custom_renderer_world_visibility == NULL)) {
@@ -28631,6 +28730,9 @@ capture_custom_renderer_world_topology ()
 		1000.0 * (double)(finished.QuadPart - started.QuadPart) / (double)is->custom_renderer_qpc_frequency.QuadPart);
 	detail[(sizeof detail) - 1] = '\0';
 	(*p_OutputDebugStringA) (detail);
+	is->custom_renderer_world_audit_needed = false;
+	if (is->custom_renderer_world_reconcile != NULL)
+		is->custom_renderer_world_reconcile ();
 	return true;
 }
 
@@ -30100,6 +30202,7 @@ patch_City_add_or_remove_improvement (City * this, int edx, int improv_id, int a
 			}
 		}
 	}
+	notify_custom_renderer_tile_change (this->Body.X, this->Body.Y);
 }
 
 void
@@ -30556,8 +30659,7 @@ patch_Unit_despawn (Unit * this, int edx, int civ_id_responsible, byte param_2, 
 	}
 
 	// Retire visual identity before native storage/IDs may be reused. No draw is requested.
-	if (is->current_config.enable_custom_rendering && is->custom_renderer_unit_forget != NULL)
-		is->custom_renderer_unit_forget (this->Body.ID);
+	notify_custom_renderer_unit_state (this, C3X_RENDERER_UNIT_STATE_RETIRE);
 	Unit_despawn (this, __, civ_id_responsible, param_2, param_3, param_4, param_5, param_6, param_7);
 
 	is->always_despawn_passengers = prev_always_despawn_passengers;
@@ -31744,6 +31846,7 @@ on_gain_city (Leader * leader, City * city, enum city_gain_reason reason)
 			refresh_distribution_hubs_for_city (city);
 		}
 	}
+	notify_custom_renderer_tile_change (city->Body.X, city->Body.Y);
 }
 
 void
@@ -33220,6 +33323,9 @@ patch_perform_interturn_in_main_loop ()
 		*p_preferences &= ~(P_ANIMATE_BATTLES | P_SHOW_FRIEND_MOVES | P_SHOW_ENEMY_MOVES);
 
 	perform_interturn ();
+	// One full-world reconciliation after a turn catches terrain/visibility changes
+	// whose individual native transitions have not yet been given renderer hooks.
+	is->custom_renderer_world_audit_needed = true;
 
 	if (is->day_night_cycle_img_state == IS_OK) {
 		bool redraw = false;
@@ -36753,8 +36859,10 @@ patch_Leader_spawn_unit (Leader * this, int edx, int type_id, int tile_x, int ti
 	}
 
 	Unit * tr = Leader_spawn_unit (this, __, type_id, spawn_x, spawn_y, barb_tribe_id, id, param_6, leader_kind, race_id);
-	if (tr != NULL)
+	if (tr != NULL) {
 		change_unit_type_count (this, type_id, 1);
+		notify_custom_renderer_unit_spawn (tr);
+	}
 	return tr;
 }
 
@@ -37179,6 +37287,7 @@ patch_Leader_do_capture_city (Leader * this, int edx, City * city, bool involunt
 void __fastcall
 patch_City_raze (City * this, int edx, int civ_id_responsible, bool checking_elimination)
 {
+	int city_x = this->Body.X, city_y = this->Body.Y;
 	Leader * previous_owner = &leaders[this->Body.CivID];
 	int lost_small_wonders[32];
 	int lost_small_wonder_count;
@@ -37200,6 +37309,7 @@ patch_City_raze (City * this, int edx, int civ_id_responsible, bool checking_eli
 			itable_remove (&is->extra_city_improvs, (int)improv_list);
 		}
 	}
+	notify_custom_renderer_tile_change (city_x, city_y);
 }
 
 void __fastcall
@@ -39081,6 +39191,7 @@ patch_set_worker_animation (void * this, int edx, Unit * unit, int job_id)
 void __fastcall
 patch_Unit_work_simple_job (Unit * this, int edx, int job_id)
 {
+	int renderer_tile_x = this->Body.X, renderer_tile_y = this->Body.Y;
 	is->lmify_tile_after_working_simple_job = NULL;
 
 	// Check if districts are enabled
@@ -39119,6 +39230,7 @@ patch_Unit_work_simple_job (Unit * this, int edx, int job_id)
 
 	if (is->lmify_tile_after_working_simple_job != NULL)
 		is->lmify_tile_after_working_simple_job->vtable->m31_set_landmark (is->lmify_tile_after_working_simple_job, __, true);
+	notify_custom_renderer_tile_change (renderer_tile_x, renderer_tile_y);
 }
 
 void __fastcall
@@ -46943,6 +47055,173 @@ patch_Tile_spawn_animated_effect (Tile * this, int edx, enum AnimatedEffect effe
 		return;
 	}
 	Tile_spawn_animated_effect (this, __, effect, tile_x, tile_y, randomize_start_frame, dummy_dir);
+}
+
+// Renderer-only game-thread notifications. Shared Civ III hooks call these
+// after their native work; Renderer owns retained storage and publication.
+// Visibility must be sampled before and after a native move because Civ III
+// can change fog as part of that move.
+bool
+custom_renderer_tile_visible_at (int x, int y)
+{
+	return is->current_config.enable_custom_rendering &&
+		is->custom_renderer_viewer_civ_id >= 0 &&
+		Map_in_range (&p_bic_data->Map, __, x, y) &&
+		(capture_custom_renderer_visibility (tile_at (x, y), is->custom_renderer_viewer_civ_id,
+			x, y) & C3X_RENDERER_TILE_VISIBLE);
+}
+
+// A wrapped tile may appear in the native view at a neighboring occurrence.
+bool
+custom_renderer_tile_near_view (int x, int y, int margin)
+{
+	if (p_main_screen_form == NULL) return false;
+	Map * map = &p_bic_data->Map;
+	for (int wx = -1; wx <= 1; wx++) {
+		if (wx != 0 && ! (map->Flags & 1)) continue;
+		int xx = x + wx * map->Width;
+		if (xx < p_main_screen_form->TileX_Min - margin ||
+		    xx > p_main_screen_form->TileX_Max + margin) continue;
+		for (int wy = -1; wy <= 1; wy++) {
+			if (wy != 0 && ! (map->Flags & 2)) continue;
+			int yy = y + wy * map->Height;
+			if (yy >= p_main_screen_form->TileY_Min - margin &&
+			    yy <= p_main_screen_form->TileY_Max + margin) return true;
+		}
+	}
+	return false;
+}
+
+// Renderer owns paging, immutable storage and preparation. This hook only
+// reports a changed location on the game thread.
+void
+notify_custom_renderer_tile_change (int x, int y)
+{
+	if (! is->current_config.enable_custom_rendering ||
+	    is->custom_renderer_world_change == NULL || p_main_screen_form == NULL)
+		return;
+	if (is->custom_renderer_world_change (x, y) != C3X_RENDERER_RESULT_OK)
+		is->custom_renderer_world_audit_needed = true;
+	// The retained world also tracks off-screen changes. Only a change close to
+	// the displayed view needs Civ III's redraw/capture gate immediately.
+	if (custom_renderer_tile_near_view (x, y, 6) &&
+	    custom_renderer_tile_visible_at (x, y)) {
+		is->custom_renderer_dirty_flags |= C3X_RENDERER_DIRTY_SCENE;
+		is->custom_renderer_redraw_pending = true;
+		if (p_main_screen_form->animator.field_18E4 != NULL)
+			*(bool *)(p_main_screen_form->animator.field_18E4 + 10) = true;
+	}
+}
+
+// Civ III owns the accepted move. Send one ordered value event, then refresh
+// only its sight neighborhoods; Renderer owns copying, batching and diffing.
+void
+notify_custom_renderer_unit_move (Unit * unit, int old_x, int old_y, bool source_visible)
+{
+	if (! is->current_config.enable_custom_rendering ||
+	    (old_x == unit->Body.X && old_y == unit->Body.Y)) return;
+	bool target_visible = custom_renderer_tile_visible_at (unit->Body.X, unit->Body.Y);
+	if (Map_in_range (&p_bic_data->Map, __, old_x, old_y) &&
+	    Map_in_range (&p_bic_data->Map, __, unit->Body.X, unit->Body.Y) &&
+	    is->custom_renderer_unit_move != NULL && (source_visible || target_visible)) {
+		struct c3x_renderer_unit_move_v1 move = {0};
+		move.struct_size = sizeof move;
+		move.unit_id = unit->Body.ID;
+		move.old_x = old_x; move.old_y = old_y;
+		move.new_x = unit->Body.X; move.new_y = unit->Body.Y;
+		move.action = unit->Body.Animation.summary.current_anim_type;
+		move.source_visible = source_visible; move.target_visible = target_visible;
+		move.map_epoch = is->custom_renderer_map_epoch;
+		move.viewer_epoch = is->custom_renderer_viewer_epoch;
+		move.presentation_frequency = is->custom_renderer_qpc_frequency.QuadPart;
+		if (is->custom_renderer_visual_clock != NULL)
+			move.presentation_time_ticks = is->custom_renderer_visual_clock ();
+		else {
+			LARGE_INTEGER now;
+			if (QueryPerformanceCounter (&now)) move.presentation_time_ticks = now.QuadPart;
+		}
+		is->custom_renderer_unit_move (&move);
+	}
+	if (is->custom_renderer_world_move != NULL &&
+	    (unit->Body.CivID == is->custom_renderer_viewer_civ_id ||
+	     source_visible || target_visible)) {
+		if (is->custom_renderer_world_move (old_x, old_y, unit->Body.X, unit->Body.Y) != C3X_RENDERER_RESULT_OK)
+			is->custom_renderer_world_audit_needed = true;
+		if (custom_renderer_tile_near_view (old_x, old_y, 6) ||
+		    custom_renderer_tile_near_view (unit->Body.X, unit->Body.Y, 6)) {
+			is->custom_renderer_dirty_flags |= C3X_RENDERER_DIRTY_SCENE;
+			is->custom_renderer_redraw_pending = true;
+			if (p_main_screen_form->animator.field_18E4 != NULL)
+				*(bool *)(p_main_screen_form->animator.field_18E4 + 10) = true;
+		}
+	}
+	notify_custom_renderer_unit_state (unit, C3X_RENDERER_UNIT_STATE_OBSERVE);
+}
+
+void
+notify_custom_renderer_unit_spawn (Unit * unit)
+{
+	if (unit == NULL || ! is->current_config.enable_custom_rendering ||
+	    is->custom_renderer_unit_spawn == NULL || is->custom_renderer_viewer_civ_id < 0 ||
+	    ! Map_in_range (&p_bic_data->Map, __, unit->Body.X, unit->Body.Y)) return;
+	struct c3x_renderer_unit_spawn_v1 spawn = {0};
+	spawn.struct_size = sizeof spawn;
+	spawn.unit_id = unit->Body.ID;
+	spawn.tile_x = unit->Body.X; spawn.tile_y = unit->Body.Y;
+	spawn.unit_type_id = unit->Body.UnitTypeID;
+	spawn.owner_id = unit->Body.CivID;
+	spawn.visible = (capture_custom_renderer_visibility (tile_at (spawn.tile_x, spawn.tile_y),
+		is->custom_renderer_viewer_civ_id, spawn.tile_x, spawn.tile_y) & C3X_RENDERER_TILE_VISIBLE) != 0;
+	spawn.map_epoch = is->custom_renderer_map_epoch;
+	spawn.viewer_epoch = is->custom_renderer_viewer_epoch;
+	spawn.presentation_frequency = is->custom_renderer_qpc_frequency.QuadPart;
+	if (is->custom_renderer_visual_clock != NULL)
+		spawn.presentation_time_ticks = is->custom_renderer_visual_clock ();
+	else {
+		LARGE_INTEGER now;
+		if (QueryPerformanceCounter (&now)) spawn.presentation_time_ticks = now.QuadPart;
+	}
+	is->custom_renderer_unit_spawn (&spawn);
+	notify_custom_renderer_unit_state (unit, C3X_RENDERER_UNIT_STATE_OBSERVE);
+}
+
+void
+notify_custom_renderer_unit_state (Unit * unit, unsigned int kind)
+{
+	if (unit == NULL || ! is->current_config.enable_custom_rendering ||
+	    is->custom_renderer_unit_state == NULL || is->custom_renderer_viewer_civ_id < 0) return;
+	if (! Map_in_range (&p_bic_data->Map, __, unit->Body.X, unit->Body.Y)) {
+		if (kind == C3X_RENDERER_UNIT_STATE_RETIRE && is->custom_renderer_unit_forget != NULL)
+			is->custom_renderer_unit_forget (unit->Body.ID);
+		return;
+	}
+	struct c3x_renderer_unit_state_v1 state = {0};
+	state.struct_size = sizeof state;
+	state.kind = kind;
+	state.unit_id = unit->Body.ID;
+	state.tile_x = unit->Body.X; state.tile_y = unit->Body.Y;
+	state.unit_type_id = unit->Body.UnitTypeID;
+	state.owner_id = unit->Body.CivID;
+	if (kind == C3X_RENDERER_UNIT_STATE_OBSERVE) {
+		state.action = unit->Body.Animation.summary.current_anim_type;
+		state.damage = unit->Body.Damage; state.max_hp = Unit_get_max_hp (unit);
+		if (state.damage < 0 || state.max_hp <= 0 || state.damage > state.max_hp) return;
+	}
+	state.visible = custom_renderer_tile_visible_at (state.tile_x, state.tile_y);
+	state.map_epoch = is->custom_renderer_map_epoch;
+	state.viewer_epoch = is->custom_renderer_viewer_epoch;
+	state.presentation_frequency = is->custom_renderer_qpc_frequency.QuadPart;
+	if (is->custom_renderer_visual_clock != NULL)
+		state.presentation_time_ticks = is->custom_renderer_visual_clock ();
+	else {
+		LARGE_INTEGER now;
+		if (QueryPerformanceCounter (&now)) state.presentation_time_ticks = now.QuadPart;
+	}
+	if (state.presentation_frequency > 0) {
+		int result = is->custom_renderer_unit_state (&state);
+		if (result == C3X_RENDERER_RESULT_ERROR || result == C3X_RENDERER_RESULT_DEVICE_ERROR)
+			is->custom_renderer_world_audit_needed = true;
+	}
 }
 
 // TCC requires a main function be defined even though it's never used.

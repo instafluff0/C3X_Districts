@@ -28,17 +28,106 @@ private:
     std::map<int,Instance> instances;
     struct Observed {c3x_renderer_unit_visual_v1 value{};double velocity_x=0,velocity_y=0;};
     std::map<int,Observed> observations;
+    std::map<int,c3x_renderer_unit_move_v1> accepted_moves;
+    std::map<int,c3x_renderer_unit_spawn_v1> accepted_spawns;
+    std::map<int,c3x_renderer_unit_state_v1> accepted_states;
     UnitPlayback playback;
     std::uint64_t serial=0,access=0;
     // CPU identity metadata only. Shared meshes and completed poses retain
     // their existing independent budgets. Eviction invalidates old selections.
     std::size_t capacity;
+    bool newer_event(int id,std::int64_t ticks,std::int64_t frequency)const{
+        auto birth=accepted_spawns.find(id);
+        if(birth!=accepted_spawns.end()&&birth->second.presentation_frequency==frequency&&
+           birth->second.presentation_time_ticks>ticks)return true;
+        auto move=accepted_moves.find(id);
+        if(move!=accepted_moves.end()&&move->second.presentation_frequency==frequency&&
+           move->second.presentation_time_ticks>ticks)return true;
+        auto pose=observations.find(id);
+        if(pose!=observations.end()&&pose->second.value.presentation_frequency==frequency&&
+           pose->second.value.presentation_time_ticks>ticks)return true;
+        auto state=accepted_states.find(id);
+        return state!=accepted_states.end()&&state->second.presentation_frequency==frequency&&
+               state->second.presentation_time_ticks>ticks;
+    }
+    bool retired(int id)const{
+        auto found=accepted_states.find(id);
+        return found!=accepted_states.end()&&found->second.kind==C3X_RENDERER_UNIT_STATE_RETIRE;
+    }
+    void retire_at(int id,std::int64_t ticks,std::int64_t frequency){
+        forget(id);
+        if(observations.size()>=capacity)observations.erase(observations.begin());
+        auto& marker=observations[id].value;
+        marker.flags=C3X_RENDERER_UNIT_HIDDEN;
+        marker.presentation_time_ticks=ticks;
+        marker.presentation_frequency=frequency;
+    }
 public:
     std::uint64_t captures=0,reused=0,bindings=0,evictions=0;
     explicit UnitInstances(std::size_t limit=4096):capacity(limit){}
     std::size_t size()const{return instances.size();}
-    void forget(int id){instances.erase(id);observations.erase(id);playback.forget(id);}
-    void clear(){instances.clear();observations.clear();playback.clear();} // serial never reuses a token
+    void forget(int id){instances.erase(id);observations.erase(id);accepted_moves.erase(id);accepted_spawns.erase(id);accepted_states.erase(id);playback.forget(id);}
+    void clear(){instances.clear();observations.clear();accepted_moves.clear();accepted_spawns.clear();accepted_states.clear();playback.clear();} // serial never reuses a token
+
+    bool state(c3x_renderer_unit_state_v1 const& value){
+        if(value.struct_size!=sizeof(value)||value.unit_id<0||value.tile_x<0||value.tile_y<0||
+           value.unit_type_id<0||value.owner_id<0||value.owner_id>=32||value.visible>1||
+           (value.kind!=C3X_RENDERER_UNIT_STATE_OBSERVE&&value.kind!=C3X_RENDERER_UNIT_STATE_RETIRE)||
+           value.presentation_frequency<=0||value.presentation_time_ticks<0||!capacity)return false;
+        if(value.kind==C3X_RENDERER_UNIT_STATE_OBSERVE&&
+           (value.action<-1||value.damage<0||value.max_hp<=0||value.damage>value.max_hp))return false;
+        if(newer_event(value.unit_id,value.presentation_time_ticks,value.presentation_frequency))return false;
+        if(value.kind==C3X_RENDERER_UNIT_STATE_OBSERVE&&retired(value.unit_id))return false;
+        if(value.kind==C3X_RENDERER_UNIT_STATE_RETIRE||!value.visible){
+            retire_at(value.unit_id,value.presentation_time_ticks,value.presentation_frequency);
+        }else{
+            auto prior=accepted_states.find(value.unit_id);
+            if(prior!=accepted_states.end()&&prior->second.action!=value.action){
+                instances.erase(value.unit_id);observations.erase(value.unit_id);playback.forget(value.unit_id);
+            }
+        }
+        if(accepted_states.size()>=capacity&&accepted_states.find(value.unit_id)==accepted_states.end())
+            accepted_states.erase(accepted_states.begin());
+        accepted_states[value.unit_id]=value;
+        return true;
+    }
+    c3x_renderer_unit_state_v1 const* state_of(int id)const{
+        auto found=accepted_states.find(id);return found==accepted_states.end()?nullptr:&found->second;
+    }
+
+    bool spawn(c3x_renderer_unit_spawn_v1 const& value){
+        if(value.struct_size!=sizeof(value)||value.unit_id<0||value.tile_x<0||value.tile_y<0||
+           value.unit_type_id<0||value.owner_id<0||value.owner_id>=32||value.visible>1||
+           value.presentation_frequency<=0||value.presentation_time_ticks<0||!capacity)return false;
+        if(newer_event(value.unit_id,value.presentation_time_ticks,value.presentation_frequency))return false;
+        forget(value.unit_id); // Civ III may reuse an ID after despawn.
+        if(accepted_spawns.size()>=capacity)accepted_spawns.erase(accepted_spawns.begin());
+        accepted_spawns[value.unit_id]=value;
+        return true;
+    }
+
+    bool move(c3x_renderer_unit_move_v1 const& value){
+        if(value.struct_size!=sizeof(value)||value.unit_id<0||value.action<-1||
+           value.source_visible>1||value.target_visible>1||
+           value.presentation_frequency<=0||value.presentation_time_ticks<0||!capacity||
+           (value.old_x==value.new_x&&value.old_y==value.new_y))return false;
+        if(newer_event(value.unit_id,value.presentation_time_ticks,value.presentation_frequency))return false;
+        if(retired(value.unit_id))return false;
+        if(!value.target_visible){
+            forget(value.unit_id);
+            if(accepted_moves.size()>=capacity)accepted_moves.erase(accepted_moves.begin());
+            accepted_moves[value.unit_id]=value; // Retain the fog-loss time against late observations.
+            return true;
+        }
+        auto found=accepted_moves.find(value.unit_id);
+        // An accepted move starts a new segment. Do not predict the previous
+        // native observation across it; a subsequent body capture supplies the
+        // authoritative pixel anchor and FLC action.
+        observations.erase(value.unit_id);
+        if(found==accepted_moves.end()&&accepted_moves.size()>=capacity)accepted_moves.erase(accepted_moves.begin());
+        accepted_moves[value.unit_id]=value;
+        return true;
+    }
 
     bool observe(c3x_renderer_unit_visual_v1 const& value){
         if(value.struct_size!=sizeof(value)||value.unit_id<0||value.action<0||
@@ -46,10 +135,13 @@ public:
            value.projection_scale_milli<=0||value.projection_scale_milli>4000||
            value.max_hp<=0||value.damage<0||value.damage>value.max_hp||
            (value.flags&~7u)||!capacity)return false;
-        if(value.flags&C3X_RENDERER_UNIT_HIDDEN){forget(value.unit_id);return true;}
+        if(newer_event(value.unit_id,value.presentation_time_ticks,value.presentation_frequency))return false;
+        if(retired(value.unit_id))return false;
+        if(value.flags&C3X_RENDERER_UNIT_HIDDEN){
+            retire_at(value.unit_id,value.presentation_time_ticks,value.presentation_frequency);
+            return true;
+        }
         auto found=observations.find(value.unit_id);
-        if(found!=observations.end()&&found->second.value.presentation_time_ticks>value.presentation_time_ticks)
-            return false; // A late observation cannot rewind a newer accepted pose.
         Observed next;next.value=value;
         if(value.action==2){
             double dx=double(value.target_x)-value.pixel_x;
@@ -82,8 +174,11 @@ public:
         selected={};
         if(request.struct_size!=sizeof(request)||request.unit_key[63]||request.unit_id<0||
            (flags&~7u)||!capacity)return false;
+        if(newer_event(request.unit_id,request.presentation_time_ticks,request.presentation_frequency))return false;
+        if(retired(request.unit_id))return false;
         if(flags&C3X_RENDERER_UNIT_HIDDEN){
-            if(flags&C3X_RENDERER_UNIT_STATE_CAPTURED)forget(request.unit_id);
+            if(flags&C3X_RENDERER_UNIT_STATE_CAPTURED)
+                retire_at(request.unit_id,request.presentation_time_ticks,request.presentation_frequency);
             return false;
         }
         ++captures;
@@ -125,7 +220,8 @@ public:
         instances[request.unit_id]=value;
         selected.id=request.unit_id;selected.revision=value.revision;selected.occurrence=request;
         auto observed=observations.find(request.unit_id);
-        if(observed!=observations.end()&&observed->second.value.action==request.action&&
+        if(observed!=observations.end()&&!(observed->second.value.flags&C3X_RENDERER_UNIT_HIDDEN)&&
+           observed->second.value.action==request.action&&
            observed->second.value.presentation_time_ticks==request.presentation_time_ticks&&
            observed->second.value.presentation_frequency==request.presentation_frequency&&
            observed->second.value.body_x==request.body_x&&observed->second.value.body_y==request.body_y){

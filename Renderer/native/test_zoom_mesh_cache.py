@@ -673,13 +673,11 @@ int main(){
 #include <cassert>
 #include <cstdint>
 #include "Renderer/native/render_core/residency_candidates.h"
+#include "Renderer/native/render_core/foreground_selection.h"
 using Handle=c3x_renderer::render_core::ContentHandle;
 #include <unordered_map>
 #include <vector>
-using c3x_renderer_u32=unsigned;
 namespace c3x_renderer {struct TerrainFrameSignature {std::uint64_t complete=0;};}
-struct c3x_renderer_tile_v1 {int x=0;};
-struct c3x_renderer_frame_v1 {unsigned tile_count=2;c3x_renderer_tile_v1 const* tiles;int world_topology_revision=9;};
 ''' + caches + r'''
 struct CachedTileGeometry {bool shared_natural=false;std::uint64_t version=0;Handle binding,natural_content;};
 struct State {
@@ -693,7 +691,7 @@ int main(){
  view.tiles={{3},{5}};
  view.replacement_flags={1,0};view.fallback_indices={1};view.rendered_tile_count=1;
  view.fallback_tile_count=1;view.textured_tile_count=1;
- c3x_renderer_frame_v1 frame={2,view.tiles.data(),9};
+ c3x_renderer_frame_v1 frame={};frame.tile_count=2;frame.tiles=view.tiles.data();frame.world_topology_revision=9;
  CachedTileGeometry camera,world,second;world.shared_natural=true;
  world.binding=state.resident_content.bind(world);camera.natural_content=world.binding;
  camera.binding=state.resident_content.bind(camera);second.binding=state.resident_content.bind(second);

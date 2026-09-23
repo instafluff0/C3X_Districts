@@ -143,6 +143,7 @@ int main(){assert(eligible(false));assert(!eligible(true));}
         predicate="auto selected_tile=[&]"+source.split("auto selected_tile=[&]",1)[1].split("        auto ground_observations=",1)[0]
         run_cpp(r'''
 #include "Renderer/native/c3x_renderer_api.h"
+#include "Renderer/native/render_core/foreground_selection.h"
 #include <algorithm>
 #include <vector>
 #include <cassert>
@@ -150,6 +151,9 @@ std::vector<unsigned> select(c3x_renderer_frame_v1 const& frame,int region_input
  bool pickup_profile=true,batch_preparing=false;std::vector<unsigned> result;
  unsigned const* preparation_indices=nullptr;unsigned preparation_count=0;
  int prefetch_guard_tiles=guarded_prefetch?2:0;
+ c3x_renderer::render_core::ForegroundSelection selection{
+  frame.target_width,frame.target_height,frame.tile_width,frame.tile_height,
+  region_input_ring,prefetch_guard_tiles,pickup_profile,offload_prefetch};
 ''' + predicate + r'''
  for(c3x_renderer_u32 index=0;index<frame.tile_count;++index){
   if(selected_tile(index))result.push_back(index);

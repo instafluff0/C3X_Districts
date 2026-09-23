@@ -67,7 +67,8 @@ public:
             next->metadata.world_topology=nullptr;
             bool scope=latest && same_scope(*latest,f,id,configuration);
             if(scope && latest->topology && latest->topology->size()==f.world_topology_count &&
-               (!f.world_topology_count || !std::memcmp(latest->topology->data(),f.world_topology,f.world_topology_count*4)))
+               (!f.world_topology_count || f.world_topology==latest->topology->data() ||
+                !std::memcmp(latest->topology->data(),f.world_topology,f.world_topology_count*4)))
                 next->topology=latest->topology;
             else {
                 auto topology=std::make_shared<std::vector<c3x_renderer_u32>>();

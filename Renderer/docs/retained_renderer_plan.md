@@ -30,8 +30,46 @@ the former 1,326-line roadmap.
 - The unit body now carries a separate copied native visual observation.
   Renderer64 can smooth movement between successive accepted pixel samples;
   full event-scoped A-to-B timing and selection/path alignment are still open.
-  Off-screen tile/city state is discovered through copied pages; this is not
-  an immediate game-state change stream or a complete unit roster.
+  Off-screen tile/city state starts from copied pages and receives bounded
+  notifications at existing move, city, improvement and worker transitions.
+  Other transitions rely on the post-interturn recovery pass; tile records
+  are not a complete unit roster.
+- World-page capture stops after one map/viewer snapshot; explored tiles carry
+  full appearance and never-explored tiles carry only visibility and terrain
+  topology. Background art preparation skips never-explored cores. Accepted
+  `Unit_move` publishes a bounded old/new neighborhood and a stable-ID move
+  record for visible endpoints, including entry from a hidden tile. The move
+  record retires the prior pixel prediction; a following native body observation
+  supplies the precise screen anchor. The existing `Leader_spawn_unit` hook
+  publishes a scoped stable-ID birth; unit draw copies action/HP, and
+  `Unit_despawn` retires that identity. All four event kinds cross the same
+  ordered Renderer64 IPC and replay stream. Retirement prevents a later stale
+  observation from reviving the ID until a new birth. Repeated unchanged
+  unit facts are coalesced before cross-process delivery. Visible city/improvement/worker changes
+  request a 13-tile local connectivity neighborhood, while off-screen changes do not dirty the
+  native Animator. An exact native view redraw is still requested for on-screen
+  changes and movement fog. Hidden tile deltas update fog status while retaining
+  the last visible content until reveal. Full directed segment timing and a proved
+  hidden-to-visible animation are still outstanding. A post-interturn audit re-arms
+  one paged full-world reconciliation for missed off-screen changes; a rejected
+  sparse change also requests that audit at the next native view. Synthetic
+  reveal and wrap tests pass; live first-move reveal and input-to-displayed-frame
+  latency are not yet accepted.
+  The Standard-sized 12,800-tile synthetic snapshot is 100 pages once per
+  scope or post-interturn recovery; a move inspects at most 170 candidate tiles
+  and copies only changed visibility records. The measured synthetic
+  12,800-tile capture and publication copy took 2.689 ms total on the Mac;
+  region leases took 15.703 ms. These are workload bounds and a standalone
+  CPU measurement, not a measured gameplay FPS improvement.
+- Verification for this cutover: 308 production contract tests passed (two
+  skipped), the approved injected compile passed, day/night unit behavior
+  scenes passed, and an x86-to-Renderer64 direct-surface roundtrip accepted
+  ordered birth, move, action/HP, retirement, stale-viewer rejection and ID
+  reuse. An identical subsequent state caused no extra helper IPC call. No
+  new CSV patch symbol was needed. Civ III gameplay was not launched by these
+  checks, so first-move reveal timing and actual FPS remain unmeasured here.
+  The unit warm/cold witness also records the observed sparse, at-most-five-level
+  color variance in top-edge grass pixels; larger channel differences still fail.
 
 ## Architecture cutover before FPS tuning
 
@@ -41,7 +79,11 @@ the former 1,326-line roadmap.
    Keep injected hooks small; value copying, diffing, sequencing, recovery and
    storage belong in Renderer. Reuse the existing publication journal and
    page capture for initialization/reconciliation rather than creating a second
-   retained world.
+   retained world. The scoped snapshot, move-neighborhood updates, local
+   city/worker changes, unit birth/move/action-HP/retirement stream and bounded
+   recovery are implemented. Next, close remaining tile/city transition gaps,
+   prove every intermediate combat-HP revision at the right time, and deliver
+   selection/path and camera notifications with integrated native/UI replay.
 2. **Cross-process presentation.** Civ III owns its window and creates a
    surface per generation. Renderer64 owns the D3D scene, final image, visual
    clock and presentation to that surface. Remove per-frame Civ III visual

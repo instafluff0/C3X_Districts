@@ -161,6 +161,44 @@ The callback is registered at the existing renderer-load boundary and retired
 on unload. Builds without it retain demand capture. Native camera-cutover work
 is still unfinished; no speculative patch dependency is requested.
 
+## Renderer64 bounded move visibility
+
+`required_user_action: []`. The existing `Unit_move` `inlead` patch (supported
+addresses are already in the table) now forwards old/new accepted tile
+coordinates after Civ III finishes `Unit::update_visibility`, along with a
+stable unit ID, endpoint visibility and presentation timestamp. Renderer64
+retires the previous pixel prediction on a new move. No new CSV symbol
+or address is needed. `c3x_renderer_world_move` asks the registered game-thread
+page callback for at most 128 records per request, scoped to the old and new
+three-ring sight areas. Renderer64 validates map/viewer scope and publishes
+through its existing journal. Other-civ moves with a visible endpoint also
+request a native view capture, including hidden-to-visible entry. After an
+interturn, the existing `perform_interturn` hook schedules an audited topology
+scan and the `c3x_renderer_world_reconcile` export requests one paged appearance
+reconciliation. This adds no CSV dependency. Configuration-off and a missing
+DLL export retain native behavior. The exact first visible game frame and
+the accepted stable-ID enemy motion segment still need integrated proof.
+
+Existing city gain/raze, improvement and worker-completion hooks now request
+forced local appearance records (at most 13 connected tiles) through
+`c3x_renderer_world_change`. This
+uses the same game-thread callback and publication path, with no new native
+patch symbol. Off-screen changes do not set the native Animator dirty byte;
+on-screen changes still request an exact native view capture because Civ III
+owns the current UI/fog composition boundary. That byte is a native map redraw
+gate, not Renderer64's visual clock.
+
+The existing `Leader_spawn_unit` `inlead` hook (GOG `0x005694D0`, Steam
+`0x00575900`, third supported build `0x00569480`) now forwards the assigned
+unit ID, tile, type, owner, viewer scope and visibility after a successful
+spawn. The existing `Unit_tick_anim` hook copies the current action and HP
+before its ordinary native draw; `Unit_despawn` sends a retirement fact before
+the object can be freed. The events use one ordered IPC/replay stream, with
+viewer/map epochs and stale-ID rejection. No new table entry is required;
+config-off retains native behavior. Intermediate combat strike timing remains
+an integrated acceptance test because the draw hook only reports values when
+Civ III invokes it.
+
 Cutover audit: GOG Main Screen `m22` resolves through the installed executable's
 vtable to `0x004EE7A0`; it marks Animator dirty rather than drawing a fresh visual
 frame. Native `Animator::update` (`0x004EEC40`) also advances actions/FLC state,

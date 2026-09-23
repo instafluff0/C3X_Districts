@@ -139,6 +139,23 @@ template<class IO,class Value>void unit_visual_fields(IO& io,Value& v){
     io(v.damage);io(v.max_hp);io(v.flags);
     io(v.presentation_time_ticks);io(v.presentation_frequency);
 }
+template<class IO,class Value>void unit_move_fields(IO& io,Value& v){
+    io(v.unit_id);io(v.old_x);io(v.old_y);io(v.new_x);io(v.new_y);io(v.action);
+    io(v.source_visible);io(v.target_visible);
+    io(v.map_epoch);io(v.viewer_epoch);
+    io(v.presentation_time_ticks);io(v.presentation_frequency);
+}
+template<class IO,class Value>void unit_spawn_fields(IO& io,Value& v){
+    io(v.unit_id);io(v.tile_x);io(v.tile_y);io(v.unit_type_id);io(v.owner_id);
+    io(v.visible);io(v.map_epoch);io(v.viewer_epoch);
+    io(v.presentation_time_ticks);io(v.presentation_frequency);
+}
+template<class IO,class Value>void unit_state_fields(IO& io,Value& v){
+    io(v.kind);io(v.unit_id);io(v.tile_x);io(v.tile_y);io(v.unit_type_id);io(v.owner_id);
+    io(v.action);io(v.damage);io(v.max_hp);io(v.visible);
+    io(v.map_epoch);io(v.viewer_epoch);
+    io(v.presentation_time_ticks);io(v.presentation_frequency);
+}
 // Explicit protocol fields; test coverage fails when the ABI adds a field.
 template<class IO,class Value>void c3x_renderer_camera_identity_v1_fields(IO& io,Value& v){
     io(v.map_epoch);

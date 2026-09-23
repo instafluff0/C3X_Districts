@@ -49,6 +49,35 @@ int main(int argc,char** argv){try{
     Reader visual_in{visual_wire.bytes};unit_visual_fields(visual_in,visual_copy);visual_in.done();
     require(visual_copy.pixel_y==-2&&visual_copy.target_x==215&&visual_copy.damage==2&&visual_copy.max_hp==4&&
         visual_copy.presentation_time_ticks==visual.presentation_time_ticks,"unit visual observation changed");
+    c3x_renderer_unit_move_v1 accepted={sizeof(accepted)};accepted.unit_id=41;
+    accepted.old_x=4;accepted.old_y=4;accepted.new_x=5;accepted.new_y=5;
+    accepted.action=2;accepted.source_visible=0;accepted.target_visible=1;
+    accepted.map_epoch=17;accepted.viewer_epoch=3;
+    accepted.presentation_time_ticks=1234567890123;accepted.presentation_frequency=24000000;
+    Writer move_wire;unit_move_fields(move_wire,accepted);
+    c3x_renderer_unit_move_v1 move_copy={sizeof(move_copy)};
+    Reader move_in{move_wire.bytes};unit_move_fields(move_in,move_copy);move_in.done();
+    require(move_copy.unit_id==41&&move_copy.old_x==4&&move_copy.new_x==5&&
+        move_copy.source_visible==0&&move_copy.target_visible==1&&move_copy.viewer_epoch==3,
+        "accepted unit move changed in replay wire");
+    c3x_renderer_unit_spawn_v1 born={sizeof(born)};born.unit_id=41;born.tile_x=5;born.tile_y=5;
+    born.unit_type_id=2;born.owner_id=1;born.visible=1;born.map_epoch=17;born.viewer_epoch=3;
+    born.presentation_time_ticks=1234567890123;born.presentation_frequency=24000000;
+    Writer spawn_wire;unit_spawn_fields(spawn_wire,born);
+    c3x_renderer_unit_spawn_v1 spawn_copy={sizeof(spawn_copy)};
+    Reader spawn_in{spawn_wire.bytes};unit_spawn_fields(spawn_in,spawn_copy);spawn_in.done();
+    require(spawn_copy.unit_id==41&&spawn_copy.tile_x==5&&spawn_copy.owner_id==1&&
+        spawn_copy.map_epoch==17,"accepted unit spawn changed in replay wire");
+    c3x_renderer_unit_state_v1 state={sizeof(state)};state.kind=C3X_RENDERER_UNIT_STATE_OBSERVE;
+    state.unit_id=41;state.tile_x=5;state.tile_y=5;state.unit_type_id=2;state.owner_id=1;
+    state.action=3;state.damage=2;state.max_hp=4;state.visible=1;
+    state.map_epoch=17;state.viewer_epoch=3;
+    state.presentation_time_ticks=1234567890124;state.presentation_frequency=24000000;
+    Writer state_wire;unit_state_fields(state_wire,state);
+    c3x_renderer_unit_state_v1 state_copy={sizeof(state_copy)};
+    Reader state_in{state_wire.bytes};unit_state_fields(state_in,state_copy);state_in.done();
+    require(state_copy.kind==C3X_RENDERER_UNIT_STATE_OBSERVE&&state_copy.unit_id==41&&
+        state_copy.damage==2&&state_copy.viewer_epoch==3,"accepted unit state changed in replay wire");
     unsigned upload[]={0,0xffffffffu,0x12345678u};c3x_renderer_gpu_images_v1 native={};native.struct_size=sizeof(native);native.action=C3X_GPU_UPLOAD;
     native.ticket=9;native.image=21;native.revision=3;native.pixel_count=3;native.pixels=upload;Writer upload_wire;images(upload_wire,native);Images native_copy;Reader upload_in{upload_wire.bytes};images(upload_in,native_copy);upload_in.done();
     upload[1]=0;require(native_copy.value.pixels!=upload&&native_copy.pixels[1]==0xffffffffu,"native CPU source must be immutable");
@@ -71,6 +100,16 @@ int main(int argc,char** argv){try{
     while(!reader.footer&&reader.next(event)){if(event.kind==Kind::footer)break;
         require(event.kind==Kind::scene&&event.payload==encoded&&event.ticks==count*5000,"input event/order/time changed");++count;}
     require(count==120&&reader.footer&&reader.reason==Stop::duration&&reader.segment>1,"segmented duration reconstruction");
+    {Journal journal(root/"unit-events",1000,limits);
+        require(journal.emit(Kind::unit_move,1,move_wire.bytes),"move event not recorded");
+        require(journal.emit(Kind::unit_spawn,2,spawn_wire.bytes),"spawn event not recorded");
+        require(journal.emit(Kind::unit_state,3,state_wire.bytes),"state event not recorded");
+        journal.finish(Stop::closed);}
+    {SegmentReader stream(root/"unit-events");
+        require(stream.next(event)&&event.kind==Kind::unit_move&&event.payload==move_wire.bytes&&event.sequence==1,"move event order lost");
+        require(stream.next(event)&&event.kind==Kind::unit_spawn&&event.payload==spawn_wire.bytes&&event.sequence==2,"spawn event order lost");
+        require(stream.next(event)&&event.kind==Kind::unit_state&&event.payload==state_wire.bytes&&event.sequence==3,"state event order lost");
+        require(stream.next(event)&&event.kind==Kind::footer,"unit event journal did not close");}
     // These timestamps exercise indexing, not ten-minute endurance.
     limits.writer_delay_ms=20;limits.queue_bytes=encoded.size()+48;
     {Journal journal(root/"slow",1000,limits);require(journal.emit(Kind::scene,1,encoded),"first bounded enqueue");

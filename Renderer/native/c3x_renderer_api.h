@@ -14,7 +14,7 @@ typedef int32_t c3x_renderer_i32;
 typedef int64_t c3x_renderer_i64;
 #endif
 
-#define C3X_RENDERER_API_VERSION 18u
+#define C3X_RENDERER_API_VERSION 19u
 
 enum c3x_renderer_result {
     C3X_RENDERER_RESULT_ERROR = 0,
@@ -137,6 +137,42 @@ struct c3x_renderer_unit_visual_v1 {
     c3x_renderer_i32 body_x, body_y, projection_scale_milli;
     c3x_renderer_i32 damage, max_hp;
     c3x_renderer_u32 flags;
+    c3x_renderer_i64 presentation_time_ticks, presentation_frequency;
+};
+
+// One accepted native move. The receiver never treats this as a gameplay
+// command; the tile and visibility outcomes have already been decided by Civ III.
+struct c3x_renderer_unit_move_v1 {
+    c3x_renderer_u32 struct_size;
+    c3x_renderer_i32 unit_id, old_x, old_y, new_x, new_y, action;
+    c3x_renderer_u32 source_visible, target_visible;
+    c3x_renderer_i64 map_epoch, viewer_epoch;
+    c3x_renderer_i64 presentation_time_ticks, presentation_frequency;
+};
+
+// A new authoritative unit identity after Civ III has assigned its stable ID.
+// Its later body capture supplies art, palette and the exact screen occurrence.
+struct c3x_renderer_unit_spawn_v1 {
+    c3x_renderer_u32 struct_size;
+    c3x_renderer_i32 unit_id, tile_x, tile_y, unit_type_id, owner_id;
+    c3x_renderer_u32 visible;
+    c3x_renderer_i64 map_epoch, viewer_epoch;
+    c3x_renderer_i64 presentation_time_ticks, presentation_frequency;
+};
+
+enum c3x_renderer_unit_state_kind {
+    C3X_RENDERER_UNIT_STATE_OBSERVE = 1u,
+    C3X_RENDERER_UNIT_STATE_RETIRE = 2u
+};
+// Authoritative action/HP and removal facts, copied on Civ III's game thread.
+// They share the ordered input journal and IPC sequence with move and spawn.
+// An observation never predicts a strike or advances gameplay.
+struct c3x_renderer_unit_state_v1 {
+    c3x_renderer_u32 struct_size, kind;
+    c3x_renderer_i32 unit_id, tile_x, tile_y, unit_type_id, owner_id;
+    c3x_renderer_i32 action, damage, max_hp;
+    c3x_renderer_u32 visible;
+    c3x_renderer_i64 map_epoch, viewer_epoch;
     c3x_renderer_i64 presentation_time_ticks, presentation_frequency;
 };
 
@@ -305,6 +341,12 @@ struct c3x_renderer_world_page_v1 {
 };
 typedef int (*c3x_renderer_world_capture_fn)(struct c3x_renderer_world_page_v1 *);
 typedef int (*c3x_renderer_set_world_capture_fn)(c3x_renderer_world_capture_fn);
+// Called after Civ III has accepted a move and updated visibility. Coordinates
+// are authoritative old/new tile positions; the DLL copies the bounded affected
+// neighborhood through the registered game-thread callback.
+typedef int (*c3x_renderer_world_move_fn)(int old_x, int old_y, int new_x, int new_y);
+typedef int (*c3x_renderer_world_change_fn)(int tile_x, int tile_y);
+typedef int (*c3x_renderer_world_reconcile_fn)(void);
 struct c3x_renderer_world_status_v1 {
     c3x_renderer_u32 struct_size, total, authoritative, capture_cursor;
     c3x_renderer_u32 regions, prepared_regions, unavailable_regions;
@@ -516,6 +558,9 @@ typedef int (*c3x_renderer_set_unit_rendering_fn)(int enabled);
 /* Retire a despawned visual identity before Civ III can reuse its ID. No drawing. */
 typedef void (*c3x_renderer_unit_forget_fn)(int unit_id);
 typedef int (*c3x_renderer_unit_visual_fn)(struct c3x_renderer_unit_visual_v1 const *);
+typedef int (*c3x_renderer_unit_move_fn)(struct c3x_renderer_unit_move_v1 const *);
+typedef int (*c3x_renderer_unit_spawn_fn)(struct c3x_renderer_unit_spawn_v1 const *);
+typedef int (*c3x_renderer_unit_state_fn)(struct c3x_renderer_unit_state_v1 const *);
 typedef int (*c3x_renderer_export_scene_fn)(struct c3x_renderer_frame_v1 const *, struct c3x_renderer_scene_export_v1 const *);
 typedef int (*c3x_renderer_schedule_fn)(struct c3x_renderer_schedule_v1 const *, struct c3x_renderer_schedule_result_v1 *);
 typedef void (*c3x_renderer_reset_fn)(void);

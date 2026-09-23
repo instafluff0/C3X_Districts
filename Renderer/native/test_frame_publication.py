@@ -227,6 +227,7 @@ int main(){
 #include "Renderer/native/render_core/dynamic_scene_input.h"
 #include "Renderer/native/render_core/scene_publication.h"
 #include "Renderer/native/render_core/world_input_capture.h"
+#include "Renderer/native/render_core/world_move_footprint.h"
 #include "Renderer/native/render_core/world_preparation_region.h"
 #include "Renderer/native/render_core/cliff_placement.h"
 #include "Renderer/native/gpu_frame_api.h"
@@ -253,6 +254,7 @@ unsigned long long parent_token(){return 0;}
 template<class... T>void c3x_renderer_camera_identity_v1_fields(T&&...){}
 template<class... T>void c3x_renderer_tile_v1_fields(T&&...){}
 template<class... T>void frame(T&&...){}
+template<class... T>void frame_fields(T&&...){}
 template<class... T>void target_fields(T&&...){}
 template<class... T>void tactical(T&&...){}
 void require(bool value,char const*){assert(value);}
@@ -355,6 +357,7 @@ std::atomic<bool> hold_unit_pixels{false},unit_pixels_entered{false};
 std::atomic<bool> check_demand_priority{false},demand_executed{false};
 std::atomic<unsigned> priority_preparations{0};
 struct Bodies {
+    std::vector<unsigned> pixels;
     template<class... T> bool scene_coverage(T&&...){return unexpected_gpu();}
     template<class... T> void offer_scene_pose(T&&...){unexpected_gpu();}
     std::uint64_t scene_body_reuses=0,scene_body_builds=0;

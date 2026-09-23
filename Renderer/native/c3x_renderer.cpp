@@ -104,6 +104,7 @@
 #include "render_core/prepared_world_validity.h"
 #include "render_core/residency_candidates.h"
 #include "render_core/world_input_capture.h"
+#include "render_core/world_move_footprint.h"
 #include "render_core/world_preparation_region.h"
 #include "city_fidelity/glow.h"
 #include "../lab/shared/natural/ground.h"
@@ -10637,6 +10638,15 @@ public:
         if(callback)world_timer=SetTimer(nullptr,0,33,renderer_world_timer);
         return !callback || world_timer?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_ERROR;
     }
+    int reconcile_world(){
+        if(!world_capture||GetCurrentThreadId()!=world_capture_thread)return C3X_RENDERER_RESULT_PENDING;
+        std::lock_guard<std::mutex> calls(call_mutex);
+        std::lock_guard<std::mutex> lock(state_mutex);
+        world_input.reset();
+        if(world_timer){KillTimer(nullptr,world_timer);world_timer=0;}
+        world_timer=SetTimer(nullptr,0,33,renderer_world_timer);
+        return world_timer?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_ERROR;
+    }
     int world_status(c3x_renderer_world_status_v1& status){
         std::unique_lock<std::mutex> calls(call_mutex,std::try_to_lock);
         if(!calls.owns_lock())return C3X_RENDERER_RESULT_PENDING;
@@ -10652,6 +10662,69 @@ public:
         status.preparation_sequence=c3x_renderer_i64(world_prepare_sequence);
         return C3X_RENDERER_RESULT_OK;
     }
+    int world_delta_scope(c3x_renderer_world_page_v1& page){
+        std::lock_guard<std::mutex> calls(call_mutex);
+        std::lock_guard<std::mutex> lock(state_mutex);
+        auto state=scene_changes.state();
+        if(!state||!state->topology||!state->metadata.world_topology_count)return C3X_RENDERER_RESULT_PENDING;
+        page={};page.struct_size=sizeof(page);page.first=UINT_MAX;page.capacity=128;
+        page.identity=state->identity;page.frame=state->metadata;
+        page.frame.tiles=nullptr;page.frame.tile_count=0;page.frame.world_topology=nullptr;
+        return C3X_RENDERER_RESULT_OK;
+    }
+    int world_delta_submit(c3x_renderer_world_page_v1 const& page,int callback_result){
+        if(callback_result!=C3X_RENDERER_RESULT_OK)return callback_result;
+        std::lock_guard<std::mutex> calls(call_mutex);
+        std::lock_guard<std::mutex> lock(state_mutex);
+        auto state=scene_changes.state();
+        if(!state||!state->topology||(page.first!=UINT_MAX&&page.first!=UINT_MAX-1)||page.count>128||
+           (page.count&&!page.tiles)||page.capacity!=128||
+           std::memcmp(&page.identity,&state->identity,sizeof(page.identity))||
+           page.frame.world_width_tiles!=state->metadata.world_width_tiles||
+           page.frame.world_height_tiles!=state->metadata.world_height_tiles||
+           page.frame.world_wrap_x!=state->metadata.world_wrap_x||
+           page.frame.world_wrap_y!=state->metadata.world_wrap_y||
+           page.frame.world_topology_revision!=state->metadata.world_topology_revision)
+            return C3X_RENDERER_RESULT_SUPERSEDED;
+        if(!page.count)return C3X_RENDERER_RESULT_OK;
+        for(unsigned i=0;i<page.count;++i){auto const& tile=page.tiles[i];
+            if(tile.tile_x<0||tile.tile_x>=page.frame.world_width_tiles||
+               tile.tile_y<0||tile.tile_y>=page.frame.world_height_tiles||
+               ((tile.tile_x+tile.tile_y)&1)||
+               !(tile.tile_flags&C3X_RENDERER_TILE_VISIBILITY_KNOWN)||
+               !(tile.tile_flags&C3X_RENDERER_TILE_TOPOLOGY_HALO)||
+               ((tile.tile_flags&C3X_RENDERER_TILE_PREFETCH)&&!(tile.tile_flags&C3X_RENDERER_TILE_EXPLORED))||
+               ((tile.tile_flags&C3X_RENDERER_TILE_VISIBLE)&&!(tile.tile_flags&C3X_RENDERER_TILE_PREFETCH))||
+               (tile.tile_flags&C3X_RENDERER_TILE_RENDER))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        }
+        auto frame=state->metadata;frame.world_topology=state->topology->data();
+        frame.tiles=page.tiles;frame.tile_count=page.count;
+        if(!scene_changes.capture(frame,state->identity))return C3X_RENDERER_RESULT_ERROR;
+        wake.notify_one();return C3X_RENDERER_RESULT_OK;
+    }
+    int world_move(int old_x,int old_y,int new_x,int new_y,bool force=false){
+        if(!world_capture||GetCurrentThreadId()!=world_capture_thread)return C3X_RENDERER_RESULT_PENDING;
+        c3x_renderer_world_page_v1 page={};
+        int code=world_delta_scope(page);if(code!=C3X_RENDERER_RESULT_OK)return code;
+        if(force)page.first=UINT_MAX-1;
+        auto coords=c3x_renderer::render_core::world_move_footprint(page.frame,old_x,old_y,new_x,new_y,force?2:6);
+        if(coords.empty())return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        for(std::size_t first=0;first<coords.size();first+=128){
+            c3x_renderer_tile_v1 tiles[128]={};
+            page.count=unsigned(std::min<std::size_t>(128,coords.size()-first));page.tiles=tiles;
+            for(unsigned i=0;i<page.count;++i){tiles[i].tile_x=coords[first+i].first;tiles[i].tile_y=coords[first+i].second;}
+            int captured=world_capture(&page);
+            c3x_inputs::Call input(c3x_inputs::Kind::world_page,force?2:1,[&](auto& out){
+                out(page.first);out(page.capacity);out(page.count);
+                c3x_inputs::c3x_renderer_camera_identity_v1_fields(out,page.identity);
+                c3x_inputs::frame_fields(out,page.frame);out(std::int32_t(captured));
+                for(unsigned i=0;i<page.count;++i)c3x_inputs::c3x_renderer_tile_v1_fields(out,page.tiles[i]);
+            });
+            code=world_delta_submit(page,captured);input.result(code==C3X_RENDERER_RESULT_OK?1:0);
+            if(code!=C3X_RENDERER_RESULT_OK)return code;
+        }
+        return C3X_RENDERER_RESULT_OK;
+    }
     void capture_world_tick(UINT_PTR id){
         if(!id || id!=world_timer || GetCurrentThreadId()!=world_capture_thread)return;
         std::unique_lock<std::mutex> calls(call_mutex,std::try_to_lock);
@@ -10661,6 +10734,9 @@ public:
         auto state=scene_changes.state();
         if(!state || !state->topology || !state->metadata.world_topology_count ||
            state->metadata.world_topology_count>c3x_renderer::render_core::CapturedScene::record_limit)return;
+        if(!world_input.needs_snapshot(*state)){
+            KillTimer(nullptr,world_timer);world_timer=0;return;
+        }
         auto page=world_input.page(*state);
         // Immutable scope/topology stay leased while the native caller copies.
         // No renderer lock needed by the callback is held; it only reads Civ III.
@@ -10676,6 +10752,7 @@ public:
         bool accepted=result==C3X_RENDERER_RESULT_OK && world_input.accept(page,scene_changes);
         input.result(accepted?1:0);
         if(accepted)wake.notify_one();
+        if(accepted&&world_input.passes){KillTimer(nullptr,world_timer);world_timer=0;}
         if(accepted && (!world_input.cursor || world_input.pages==1)){
             char detail[224];sprintf_s(detail,"pages=%llu records=%llu passes=%llu coverage=%u total=%u capture_ms=%.3f",
                 world_input.pages,world_input.records,world_input.passes,world_input.cursor,
@@ -10704,6 +10781,8 @@ public:
         if(!state||!state->topology||!state->metadata.world_topology_count||
            state->metadata.world_topology_count>c3x_renderer::render_core::CapturedScene::record_limit)
             return C3X_RENDERER_RESULT_PENDING;
+        // The x86 bridge stops requesting pages after one pass. Keep explicit
+        // queries usable by older recorded streams that contain later passes.
         result=world_input.page(*state);
         result.tiles=nullptr;result.frame.tiles=nullptr;result.frame.world_topology=nullptr;
         return C3X_RENDERER_RESULT_OK;
@@ -11293,6 +11372,49 @@ public:
         return unit_instances.observe(value)?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_BAD_ARGUMENT;
     }
 
+    int accept_unit_move(c3x_renderer_unit_move_v1 const& value){
+        std::lock_guard<std::mutex> call_guard(call_mutex);
+        std::lock_guard<std::mutex> lock(state_mutex);
+        auto state=scene_changes.state();
+        if(!state||state->identity.map_epoch!=value.map_epoch||
+           state->identity.viewer_epoch!=value.viewer_epoch)return C3X_RENDERER_RESULT_SUPERSEDED;
+        if(!unit_instances.move(value))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        unit_pixels_queue.forget(value.unit_id);
+        return C3X_RENDERER_RESULT_OK;
+    }
+
+    int accept_unit_spawn(c3x_renderer_unit_spawn_v1 const& value){
+        std::lock_guard<std::mutex> call_guard(call_mutex);
+        std::lock_guard<std::mutex> lock(state_mutex);
+        auto state=scene_changes.state();
+        if(!state||state->identity.map_epoch!=value.map_epoch||
+           state->identity.viewer_epoch!=value.viewer_epoch)return C3X_RENDERER_RESULT_SUPERSEDED;
+        if(value.tile_x>=state->metadata.world_width_tiles||
+           value.tile_y>=state->metadata.world_height_tiles||
+           ((value.tile_x+value.tile_y)&1))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        if(!unit_instances.spawn(value))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        unit_pixels_queue.forget(value.unit_id);
+        return C3X_RENDERER_RESULT_OK;
+    }
+
+    int accept_unit_state(c3x_renderer_unit_state_v1 const& value){
+        std::lock_guard<std::mutex> call_guard(call_mutex);
+        std::lock_guard<std::mutex> lock(state_mutex);
+        auto state=scene_changes.state();
+        if(!state||state->identity.map_epoch!=value.map_epoch||
+           state->identity.viewer_epoch!=value.viewer_epoch)return C3X_RENDERER_RESULT_SUPERSEDED;
+        if(value.tile_x>=state->metadata.world_width_tiles||
+           value.tile_y>=state->metadata.world_height_tiles||
+           ((value.tile_x+value.tile_y)&1))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        auto prior=unit_instances.state_of(value.unit_id);
+        bool changed=prior&&(prior->action!=value.action||prior->damage!=value.damage||
+            prior->max_hp!=value.max_hp||prior->kind!=value.kind);
+        if(!unit_instances.state(value))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        if(changed||value.kind==C3X_RENDERER_UNIT_STATE_RETIRE||!value.visible)
+            unit_pixels_queue.forget(value.unit_id);
+        return C3X_RENDERER_RESULT_OK;
+    }
+
     int draw_tactical(c3x_renderer::tactical::Input const& capture,c3x_renderer_gpu_unit_v1 const& target){
         std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);
         start_locked();ForegroundCameraPause pause(*this,lock);
@@ -11635,11 +11757,17 @@ private:
     bool publish_scene_capture(c3x_renderer_frame_v1 const& frame,c3x_renderer_camera_identity_v1 const& identity){
         auto prior=scene_changes.state();
         if(!scene_changes.capture(frame,identity))return false;
-        if(prior && (prior->identity.map_epoch!=identity.map_epoch || prior->identity.viewer_epoch!=identity.viewer_epoch ||
+        bool new_scope=!prior || (prior->identity.map_epoch!=identity.map_epoch || prior->identity.viewer_epoch!=identity.viewer_epoch ||
             prior->metadata.world_width_tiles!=frame.world_width_tiles || prior->metadata.world_height_tiles!=frame.world_height_tiles ||
-            prior->metadata.world_wrap_x!=frame.world_wrap_x || prior->metadata.world_wrap_y!=frame.world_wrap_y)){
-            dynamic_inputs.invalidate();unit_instances.clear();unit_pixels_queue.clear();
+            prior->metadata.world_wrap_x!=frame.world_wrap_x || prior->metadata.world_wrap_y!=frame.world_wrap_y);
+        if(new_scope){
+            if(prior){dynamic_inputs.invalidate();unit_instances.clear();unit_pixels_queue.clear();}
+            // Rebuild the off-screen snapshot once for a new map/viewer. The
+            // current view itself is already published by this capture.
+            world_input.reset();
         }
+        if(world_capture&&!world_timer&&!world_input.passes&&GetCurrentThreadId()==world_capture_thread)
+            world_timer=SetTimer(nullptr,0,33,renderer_world_timer);
         wake.notify_one();return true;
     }
 
@@ -12299,14 +12427,17 @@ private:
                         try{
                             c3x_renderer::render_core::WorldPreparationRegion input;
                             if(input.build(scene,frame,region)){
-                                c3x_renderer_output_v1 unused{};
-                                // Nonzero signature forces the observation lease to
-                                // switch when visiting another preparation region.
-                                auto signature=c3x_renderer::terrain_frame_signature(input.frame,renderer_state.content_revision,renderer_state.device_generation).complete;
-                                GpuOutputMode mode(renderer_state,true);
-                                ok=renderer_state.render(input.frame,unused,int(input.selected.front()),&foreground_pending,
-                                    signature,input.selected.data(),unsigned(input.selected.size()),&frame);
-                                built=renderer_state.frame_tiles_built;reused=renderer_state.frame_tiles_reused;
+                                if(input.selected.empty())ok=true;
+                                else {
+                                    c3x_renderer_output_v1 unused{};
+                                    // Nonzero signature forces the observation lease to
+                                    // switch when visiting another preparation region.
+                                    auto signature=c3x_renderer::terrain_frame_signature(input.frame,renderer_state.content_revision,renderer_state.device_generation).complete;
+                                    GpuOutputMode mode(renderer_state,true);
+                                    ok=renderer_state.render(input.frame,unused,int(input.selected.front()),&foreground_pending,
+                                        signature,input.selected.data(),unsigned(input.selected.size()),&frame);
+                                    built=renderer_state.frame_tiles_built;reused=renderer_state.frame_tiles_reused;
+                                }
                             }
                         }catch(...){ok=false;}
                         QueryPerformanceCounter(&end);lock.lock();
@@ -12897,6 +13028,7 @@ extern "C" __declspec(dllexport) int c3x_renderer_set_world_capture(c3x_renderer
         get_renderer_worker().set_world_capture(callback));}
     catch(...){return input.result(C3X_RENDERER_RESULT_ERROR);}
 }
+
 extern "C" __declspec(dllexport) int c3x_renderer_world_status(c3x_renderer_world_status_v1* status){
     if(!status || status->struct_size!=sizeof(*status))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
     try{return remote_renderer_requested()?remote_renderer_backend()->world_status(*status):
@@ -12960,6 +13092,10 @@ std::unique_ptr<c3x_renderer::UnitBodyRenderer> remote_unit_blitter;
 int remote_blit_phase_x=0,remote_blit_phase_y=0;
 c3x_renderer_world_capture_fn remote_world_capture=nullptr;
 UINT_PTR remote_world_timer=0;
+c3x_renderer_i64 remote_world_map_epoch=0,remote_world_viewer_epoch=0;
+int remote_world_width=0,remote_world_height=0;
+unsigned remote_world_wrap_x=0,remote_world_wrap_y=0;
+bool remote_world_snapshot_complete=false;
 bool remote_renderer_requested(){
     if(sizeof(void*)!=4)return false;
     char enabled[4]={};return GetEnvironmentVariableA("C3X_RENDERER_HELPER64",enabled,sizeof(enabled))==1&&enabled[0]=='1';
@@ -12984,19 +13120,24 @@ c3x_remote_scene::Backend* remote_renderer_backend(){
 }
 int remote_world_capture_register(c3x_renderer_world_capture_fn callback){
     if(remote_world_timer){KillTimer(nullptr,remote_world_timer);remote_world_timer=0;}
-    remote_world_capture=callback;
+    remote_world_capture=callback;remote_world_snapshot_complete=false;
+    remote_world_map_epoch=remote_world_viewer_epoch=0;remote_world_width=remote_world_height=0;
+    remote_world_wrap_x=remote_world_wrap_y=0;
     if(callback&&!c3x_inputs::replay_assets().enabled)remote_world_timer=SetTimer(nullptr,0,33,renderer_world_timer);
     return !callback||remote_world_timer||c3x_inputs::replay_assets().enabled?
         C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_ERROR;
 }
 void remote_world_capture_tick(UINT_PTR id){
-    if(!remote_world_capture||!remote_world_timer||id!=remote_world_timer||!remote_renderer)return;
+    if(!remote_world_capture||!remote_world_timer||id!=remote_world_timer||!remote_renderer||remote_world_snapshot_complete)return;
     for(unsigned n=0;n<2;++n){
         c3x_renderer_world_page_v1 page={};
         if(remote_renderer->world_query(page)!=C3X_RENDERER_RESULT_OK)return;
         c3x_renderer_tile_v1 records[128]={};page.tiles=records;
         int captured=remote_world_capture(&page);
         if(remote_renderer->world_submit(page,captured)!=C3X_RENDERER_RESULT_OK)return;
+        if(page.first+page.count==page.frame.world_topology_count){
+            remote_world_snapshot_complete=true;KillTimer(nullptr,remote_world_timer);remote_world_timer=0;return;
+        }
     }
 }
 bool drain_native_composition(){
@@ -13023,6 +13164,51 @@ int remote_draw_cpu_unit(c3x_renderer_unit_v1 const& unit,HDC destination,HDC ba
 }
 }
 
+int c3x_renderer_world_update(int old_x,int old_y,int new_x,int new_y,bool force){
+    try{
+        if(!remote_renderer_requested())return get_renderer_worker().world_move(old_x,old_y,new_x,new_y,force);
+        if(!remote_world_capture)return C3X_RENDERER_RESULT_PENDING;
+        c3x_renderer_world_page_v1 page={};
+        int code=remote_renderer_backend()->world_delta_scope(page);
+        if(code!=C3X_RENDERER_RESULT_OK)return code;
+        if(force)page.first=UINT_MAX-1;
+        auto coords=c3x_renderer::render_core::world_move_footprint(page.frame,old_x,old_y,new_x,new_y,force?2:6);
+        if(coords.empty())return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        for(std::size_t first=0;first<coords.size();first+=128){
+            c3x_renderer_tile_v1 tiles[128]={};
+            page.count=unsigned(std::min<std::size_t>(128,coords.size()-first));page.tiles=tiles;
+            for(unsigned i=0;i<page.count;++i){tiles[i].tile_x=coords[first+i].first;tiles[i].tile_y=coords[first+i].second;}
+            int captured=remote_world_capture(&page);
+            c3x_inputs::Call input(c3x_inputs::Kind::world_page,force?2:1,[&](auto& out){
+                out(page.first);out(page.capacity);out(page.count);
+                c3x_inputs::c3x_renderer_camera_identity_v1_fields(out,page.identity);
+                c3x_inputs::frame_fields(out,page.frame);out(std::int32_t(captured));
+                for(unsigned i=0;i<page.count;++i)c3x_inputs::c3x_renderer_tile_v1_fields(out,page.tiles[i]);
+            });
+            code=remote_renderer_backend()->world_delta_submit(page,captured);
+            input.result(code==C3X_RENDERER_RESULT_OK?1:0);
+            if(code!=C3X_RENDERER_RESULT_OK)return code;
+        }
+        return C3X_RENDERER_RESULT_OK;
+    }catch(...){return C3X_RENDERER_RESULT_ERROR;}
+}
+extern "C" __declspec(dllexport) int c3x_renderer_world_move(int old_x,int old_y,int new_x,int new_y){
+    return c3x_renderer_world_update(old_x,old_y,new_x,new_y,false);
+}
+extern "C" __declspec(dllexport) int c3x_renderer_world_change(int x,int y){
+    return c3x_renderer_world_update(x,y,x,y,true);
+}
+extern "C" __declspec(dllexport) int c3x_renderer_world_reconcile(void){
+    try{
+        if(!remote_renderer_requested())return get_renderer_worker().reconcile_world();
+        if(!remote_world_capture)return C3X_RENDERER_RESULT_PENDING;
+        remote_world_snapshot_complete=false;
+        if(remote_world_timer){KillTimer(nullptr,remote_world_timer);remote_world_timer=0;}
+        if(!c3x_inputs::replay_assets().enabled)remote_world_timer=SetTimer(nullptr,0,33,renderer_world_timer);
+        return remote_world_timer||c3x_inputs::replay_assets().enabled?
+            C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_ERROR;
+    }catch(...){return C3X_RENDERER_RESULT_ERROR;}
+}
 extern "C" __declspec(dllexport) c3x_renderer_u32 c3x_renderer_get_api_version(void) {
     return C3X_RENDERER_API_VERSION;
 }
@@ -13296,6 +13482,32 @@ extern "C" __declspec(dllexport) int c3x_renderer_unit_visual(c3x_renderer_unit_
     catch(...){return input.result(C3X_RENDERER_RESULT_ERROR);}
 }
 
+extern "C" __declspec(dllexport) int c3x_renderer_unit_move(c3x_renderer_unit_move_v1 const* move){
+    if(!move||move->struct_size!=sizeof(*move))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    c3x_inputs::Call input(c3x_inputs::Kind::unit_move,0,[&](auto& out){auto value=*move;c3x_inputs::unit_move_fields(out,value);});
+    try{return input.result(remote_renderer_requested()?remote_renderer_backend()->unit_move(*move):
+        get_renderer_worker().accept_unit_move(*move));}
+    catch(...){return input.result(C3X_RENDERER_RESULT_ERROR);}
+}
+
+extern "C" __declspec(dllexport) int c3x_renderer_unit_spawn(c3x_renderer_unit_spawn_v1 const* spawn){
+    if(!spawn||spawn->struct_size!=sizeof(*spawn))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    c3x_inputs::Call input(c3x_inputs::Kind::unit_spawn,0,[&](auto& out){auto value=*spawn;c3x_inputs::unit_spawn_fields(out,value);});
+    try{return input.result(remote_renderer_requested()?remote_renderer_backend()->unit_spawn(*spawn):
+        get_renderer_worker().accept_unit_spawn(*spawn));}
+    catch(...){return input.result(C3X_RENDERER_RESULT_ERROR);}
+}
+
+extern "C" __declspec(dllexport) int c3x_renderer_unit_state(c3x_renderer_unit_state_v1 const* state){
+    if(!state||state->struct_size!=sizeof(*state))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    try{
+        if(remote_renderer_requested())return remote_renderer_backend()->unit_state(*state);
+    }catch(...){return C3X_RENDERER_RESULT_ERROR;}
+    c3x_inputs::Call input(c3x_inputs::Kind::unit_state,0,[&](auto& out){auto value=*state;c3x_inputs::unit_state_fields(out,value);});
+    try{return input.result(get_renderer_worker().accept_unit_state(*state));}
+    catch(...){return input.result(C3X_RENDERER_RESULT_ERROR);}
+}
+
 extern "C" __declspec(dllexport) int c3x_renderer_set_unit_rendering(int enabled) {
     c3x_inputs::Call input(c3x_inputs::Kind::configuration,3,[&](auto& out){out(std::int32_t(enabled));});
     try{return input.result(remote_renderer_requested()?remote_renderer_backend()->set_units(enabled):
@@ -13354,6 +13566,19 @@ extern "C" __declspec(dllexport) int c3x_renderer_gpu_render(
        request->frame->target_width>2240||request->frame->target_height>1260)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
     *view={sizeof(*view)};
     c3x_inputs::Call input(c3x_inputs::Kind::scene,3,[&](auto& out){c3x_inputs::c3x_renderer_camera_identity_v1_fields(out,request->identity);c3x_inputs::frame(out,*request->frame);});
+    if(remote_renderer_requested()){
+        auto const& f=*request->frame;auto const& id=request->identity;
+        if(remote_world_map_epoch!=id.map_epoch||remote_world_viewer_epoch!=id.viewer_epoch||
+           remote_world_width!=f.world_width_tiles||remote_world_height!=f.world_height_tiles||
+           remote_world_wrap_x!=f.world_wrap_x||remote_world_wrap_y!=f.world_wrap_y){
+            remote_world_map_epoch=id.map_epoch;remote_world_viewer_epoch=id.viewer_epoch;
+            remote_world_width=f.world_width_tiles;remote_world_height=f.world_height_tiles;
+            remote_world_wrap_x=f.world_wrap_x;remote_world_wrap_y=f.world_wrap_y;
+            remote_world_snapshot_complete=false;
+        }
+        if(remote_world_capture&&!remote_world_snapshot_complete&&!remote_world_timer&&!c3x_inputs::replay_assets().enabled)
+            remote_world_timer=SetTimer(nullptr,0,33,renderer_world_timer);
+    }
     try{int code=remote_renderer_requested()?remote_renderer_backend()->render(*request,*view,*metadata):
         get_renderer_worker().render_gpu(*request,*view,*metadata);
         return input.result(code,[&](auto& out){out(view->ticket);out(view->map_image);out(view->session);c3x_inputs::gpu_witness(out,*view,*metadata,code);});}
@@ -13442,6 +13667,15 @@ extern "C" __declspec(dllexport) int c3x_renderer_trial_world_submit(
     if(!page||page->struct_size!=sizeof(*page)||page->count>128||(page->count&&!page->tiles))
         return C3X_RENDERER_RESULT_BAD_ARGUMENT;
     return get_renderer_worker().trial_world_submit(*page,callback_result);
+}
+extern "C" __declspec(dllexport) int c3x_renderer_trial_world_delta_scope(c3x_renderer_world_page_v1* page){
+    if(!page)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    return get_renderer_worker().world_delta_scope(*page);
+}
+extern "C" __declspec(dllexport) int c3x_renderer_trial_world_delta_submit(
+    c3x_renderer_world_page_v1 const* page,int callback_result){
+    if(!page)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    return get_renderer_worker().world_delta_submit(*page,callback_result);
 }
 #endif
 extern "C" __declspec(dllexport) int c3x_renderer_gpu_camera_begin(

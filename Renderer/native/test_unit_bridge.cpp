@@ -47,6 +47,11 @@ unsigned playback_flags=0;
 State state;State* is=&state;Bic bic;Bic* p_bic_data=&bic;PCX_Color_Table fixture_palette;
 std::vector<int> calls;c3x_renderer_unit_v1 captured;bool success=true,fixture_reduced=false;int dc_count=0;PCX_Image* fixture_background=nullptr;JGL_Image* denied_dc=nullptr;
 c3x_renderer_unit_visual_v1 captured_visual{};int visual_calls=0;
+int state_calls=0;
+void notify_custom_renderer_unit_state(Unit* unit,unsigned kind){
+ assert(unit&&kind==C3X_RENDERER_UNIT_STATE_OBSERVE);
+ ++state_calls;
+}
 int capture_visual(c3x_renderer_unit_visual_v1 const* value){assert(value&&value->struct_size==sizeof(*value));captured_visual=*value;++visual_calls;return 1;}
 int Unit_get_max_hp(Unit*){return 4;}
 int clamp(int a,int b,int v){return v<a?a:(v>b?b:v);}
@@ -125,6 +130,7 @@ int main(){
  state.custom_renderer_unit_visual=capture_visual;
  auto invoke=[&](){calls.clear();patch_Unit_tick_anim(&unit,0,&canvas,101,202,true);assert(state.custom_renderer_native_operation==123 && dc_count==0 && !state.custom_renderer_unit_context && !state.custom_renderer_unit_canvas);};
  success=true;invoke();assert(captured.presentation_time_ticks==0);
+ assert(state_calls==1);
  assert(visual_calls==1 && captured_visual.unit_id==42 && captured_visual.action==2);
  assert(captured_visual.pixel_x==640 && captured_visual.pixel_y==480 && captured_visual.target_x==720 && captured_visual.target_y==520);
  assert(captured_visual.damage==2 && captured_visual.max_hp==4 && captured_visual.body_x==captured.body_x && captured_visual.body_y==captured.body_y);

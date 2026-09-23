@@ -185,7 +185,7 @@ int main(){
         injected=Path('injected_code.c').read_text()
         unload='void unload_custom_renderer ()'+injected.split('void\nunload_custom_renderer ()',1)[1].split('\tis->custom_renderer_module = NULL;',1)[0]+'}'
         renderer=Path('Renderer/native/c3x_renderer.cpp').read_text()
-        drain='bool drain_native_composition(){'+renderer.split('bool drain_native_composition(){',1)[1].split('\n}\n}',1)[0]+'\n}'
+        drain='bool drain_native_composition(){'+renderer.split('bool drain_native_composition(){',1)[1].split('\n}\nint remote_draw_cpu_unit',1)[0]+'\n}'
         run_cpp(r'''
 #include <cassert>
 #include <stdexcept>
@@ -208,6 +208,8 @@ struct State {
 struct Composition {void drain(){++drains;if(fail)throw std::runtime_error("blocked");}};
 struct Worker {int native_screen(void*){++resets;return fail?C3X_RENDERER_RESULT_ERROR:C3X_RENDERER_RESULT_OK;}};
 Composition* native_composition=nullptr;Worker worker;Worker* renderer_worker=&worker;
+struct Remote {int screen(void*){++resets;return fail?C3X_RENDERER_RESULT_ERROR:C3X_RENDERER_RESULT_OK;}};
+Remote* remote_renderer=nullptr;
 void OutputDebugStringA(char const*){}
 namespace c3x_inputs {struct Assets{bool enabled=false;};Assets& replay_assets(){static Assets a;return a;}}
 '''+drain+r'''

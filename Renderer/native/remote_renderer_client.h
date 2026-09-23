@@ -146,6 +146,29 @@ public:
         return int(invoke(unsigned(c3x_inputs::Kind::world_page),2,input.bytes.data(),
             unsigned(input.bytes.size())).code);
     }
+    int world_delta_scope(c3x_renderer_world_page_v1& page){
+        auto const& response=invoke(unsigned(c3x_inputs::Kind::world_page),4,nullptr,0);
+        if(response.code!=C3X_RENDERER_RESULT_OK)return int(response.code);
+        auto bytes=reply(response);c3x_inputs::Reader input{bytes};
+        page={};page.struct_size=sizeof(page);page.frame.api_version=C3X_RENDERER_API_VERSION;
+        page.frame.struct_size=sizeof(page.frame);
+        input(page.first);input(page.capacity);
+        c3x_inputs::c3x_renderer_camera_identity_v1_fields(input,page.identity);
+        c3x_inputs::frame_fields(input,page.frame);input.done();
+        c3x_inputs::require(page.first==UINT_MAX&&page.capacity==128,"remote delta scope");
+        return C3X_RENDERER_RESULT_OK;
+    }
+    int world_delta_submit(c3x_renderer_world_page_v1 const& page,int callback_result){
+        c3x_inputs::require((page.first==UINT_MAX||page.first==UINT_MAX-1)&&page.capacity==128&&page.count<=128&&
+            (page.count==0||page.tiles),"remote delta bounds");
+        c3x_inputs::Writer input;input(page.first);input(page.capacity);input(page.count);
+        auto identity=page.identity;auto frame=page.frame;
+        c3x_inputs::c3x_renderer_camera_identity_v1_fields(input,identity);
+        c3x_inputs::frame_fields(input,frame);input(std::int32_t(callback_result));
+        for(unsigned n=0;n<page.count;++n){auto tile=page.tiles[n];c3x_inputs::c3x_renderer_tile_v1_fields(input,tile);}
+        return int(invoke(unsigned(c3x_inputs::Kind::world_page),5,input.bytes.data(),
+            unsigned(input.bytes.size())).code);
+    }
     int world_status(c3x_renderer_world_status_v1& status){
         auto const& response=invoke(unsigned(c3x_inputs::Kind::world_page),3,nullptr,0);
         if(response.code!=C3X_RENDERER_RESULT_OK)return int(response.code);
@@ -202,6 +225,18 @@ public:
     int unit_visual(c3x_renderer_unit_visual_v1 value){
         c3x_inputs::Writer input;c3x_inputs::unit_visual_fields(input,value);
         return int(invoke(unsigned(c3x_inputs::Kind::unit_visual),0,input.bytes.data(),unsigned(input.bytes.size())).code);
+    }
+    int unit_move(c3x_renderer_unit_move_v1 value){
+        c3x_inputs::Writer input;c3x_inputs::unit_move_fields(input,value);
+        return int(invoke(unsigned(c3x_inputs::Kind::unit_move),0,input.bytes.data(),unsigned(input.bytes.size())).code);
+    }
+    int unit_spawn(c3x_renderer_unit_spawn_v1 value){
+        c3x_inputs::Writer input;c3x_inputs::unit_spawn_fields(input,value);
+        return int(invoke(unsigned(c3x_inputs::Kind::unit_spawn),0,input.bytes.data(),unsigned(input.bytes.size())).code);
+    }
+    int unit_state(c3x_renderer_unit_state_v1 value){
+        c3x_inputs::Writer input;c3x_inputs::unit_state_fields(input,value);
+        return int(invoke(unsigned(c3x_inputs::Kind::unit_state),0,input.bytes.data(),unsigned(input.bytes.size())).code);
     }
     int tactical(c3x_renderer::tactical::Input const& capture,c3x_renderer_gpu_unit_v1 const& target){
         c3x_inputs::Writer input;auto value=target;c3x_inputs::target_fields(input,value);

@@ -29,6 +29,10 @@ public:
         requested_sequence=state.sequence;
         return result;
     }
+    // The full-world pass bootstraps one map/viewer generation. Visible-scene
+    // captures publish subsequent changes; another pass needs a new scope or
+    // an explicit recovery reset, not another 33 ms polling lap.
+    bool needs_snapshot(ScenePublication::State const& state){page(state);return passes==0;}
     bool accept(c3x_renderer_world_page_v1 const& page,ScenePublication& journal){
         auto state=journal.state();
         if(!state||state->sequence!=requested_sequence||state->configuration!=configuration)return false;
@@ -47,12 +51,36 @@ public:
         if(width<=0 || height<=0 || (width&1) || width>2048 || height>2048 ||
            page.first!=cursor || page.tiles!=storage.data() || page.capacity!=storage.size())return false;
         auto total=unsigned(width)*unsigned(height)/2;
-        if(cursor>=total || page.count!=std::min(unsigned(storage.size()),total-cursor))return false;
+        if(cursor>=total || !state->topology || state->topology->size()!=total ||
+           page.count!=std::min(unsigned(storage.size()),total-cursor))return false;
         for(unsigned i=0;i<page.count;++i){
             auto const& tile=page.tiles[i];auto n=cursor+i;
             int y=int(n/unsigned(width/2)),x=int(2*(n%unsigned(width/2)))+(y&1);
-            if(tile.tile_x!=x || tile.tile_y!=y || !(tile.tile_flags&C3X_RENDERER_TILE_PREFETCH) ||
-               (tile.tile_flags&C3X_RENDERER_TILE_RENDER))return false;
+            bool explored=(tile.tile_flags&C3X_RENDERER_TILE_EXPLORED)!=0;
+            bool full=(tile.tile_flags&C3X_RENDERER_TILE_PREFETCH)!=0;
+            if(tile.tile_x!=x || tile.tile_y!=y ||
+               !(tile.tile_flags&C3X_RENDERER_TILE_VISIBILITY_KNOWN) ||
+               !(tile.tile_flags&C3X_RENDERER_TILE_TOPOLOGY_HALO) ||
+               (explored&&!full) || (tile.tile_flags&C3X_RENDERER_TILE_RENDER))return false;
+            if(!explored){
+                // Older input journals carried full hidden art. Strip it at the
+                // adoption boundary while preserving their replayable fog facts.
+                auto visibility=tile.tile_flags&C3X_RENDERER_TILE_VISIBILITY_BITS;
+                auto topology=(*state->topology)[n];
+                auto safe=c3x_renderer_tile_v1{};
+                safe.tile_x=x;safe.tile_y=y;
+                safe.terrain_type=int(topology&255u);
+                safe.real_terrain_type=int((topology>>8)&255u);
+                safe.river_code=(topology>>16)&255u;
+                safe.visibility_mask=tile.visibility_mask;
+                safe.tile_visibility=tile.tile_visibility;
+                safe.fog_status=tile.fog_status;
+                safe.resource_id=safe.resource_class=safe.tile_building_id=-1;
+                safe.city_id=safe.city_owner_id=safe.unit_type_id=safe.unit_owner_id=-1;
+                safe.barbarian_tribe_id=-1;
+                safe.tile_flags=visibility|C3X_RENDERER_TILE_TOPOLOGY_HALO;
+                storage[i]=safe;
+            }
         }
         // Projection, time and all other metadata remain owned by the issued
         // publication, rather than accepting unrelated callback mutations.

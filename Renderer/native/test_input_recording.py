@@ -33,6 +33,10 @@ class InputRecordingTests(unittest.TestCase):
         contracts = (
             (api, 'c3x_renderer_tile_v1', 'c3x_renderer_tile_v1_fields', set()),
             (api, 'c3x_renderer_unit_v1', 'c3x_renderer_unit_v1_fields', {'struct_size'}),
+            (api, 'c3x_renderer_unit_visual_v1', 'unit_visual_fields', {'struct_size'}),
+            (api, 'c3x_renderer_unit_move_v1', 'unit_move_fields', {'struct_size'}),
+            (api, 'c3x_renderer_unit_spawn_v1', 'unit_spawn_fields', {'struct_size'}),
+            (api, 'c3x_renderer_unit_state_v1', 'unit_state_fields', {'struct_size'}),
             (api, 'c3x_renderer_camera_identity_v1', 'c3x_renderer_camera_identity_v1_fields', set()),
             (api, 'c3x_renderer_frame_v1', 'frame_fields', {'api_version', 'struct_size', 'tile_count', 'tiles', 'world_topology_count', 'world_topology'}),
             (gpu, 'c3x_renderer_gpu_unit_v1', 'target_fields', {'struct_size'}),

@@ -14,7 +14,7 @@
 
 namespace c3x_inputs {
 enum class Kind:std::uint32_t { manifest=1,configuration,scene,world_page,unit,unit_forget,
-    camera,native_operation,native_snapshot,image_commands,tactical,visual,presentation,result,reset,footer,asset,settings,native_bridge,unit_visual };
+    camera,native_operation,native_snapshot,image_commands,tactical,visual,presentation,result,reset,footer,asset,settings,native_bridge,unit_visual,unit_move,unit_spawn,unit_state };
 enum class Stop:std::uint32_t { closed=0,duration,queue_full,byte_limit,io_error,unsupported,allocation_failure,producer_limit };
 struct Limits {
     std::size_t queue_bytes=32u*1024u*1024u;
@@ -104,7 +104,7 @@ public:
     bool emit(Kind kind,std::uint64_t ticks,Bytes payload,std::uint32_t flags=0)noexcept{
         try{
             std::lock_guard<std::mutex> lock(mutex);if(stopping)return false;
-            if(kind==Kind::footer||std::uint32_t(kind)<1||std::uint32_t(kind)>std::uint32_t(Kind::unit_visual)){reason=Stop::unsupported;stopping=true;enabled=false;wake.notify_one();return false;}
+            if(kind==Kind::footer||std::uint32_t(kind)<1||std::uint32_t(kind)>std::uint32_t(Kind::unit_state)){reason=Stop::unsupported;stopping=true;enabled=false;wake.notify_one();return false;}
             auto bytes=48+payload.capacity();
             if(payload.size()>payload_limit||bytes>limits.queue_bytes-queued_bytes){reason=Stop::queue_full;stopping=true;enabled=false;wake.notify_one();return false;}
             queue.push_back({kind,flags,++sequence,ticks,std::move(payload)});queued_bytes+=bytes;high_water=std::max(high_water,queued_bytes);wake.notify_one();return true;
@@ -144,7 +144,7 @@ struct SegmentReader {
         require(!footer,"read after input footer");
         if(stream.peek()==std::char_traits<char>::eof()&&!open())return false;
         Bytes bytes;read(bytes,48);Reader header{bytes};require(header.u32()==0x45583343,"invalid input event marker");
-        auto kind=header.u32();require(kind>=1&&kind<=std::uint32_t(Kind::unit_visual),"unknown input event");item.kind=Kind(kind);
+        auto kind=header.u32();require(kind>=1&&kind<=std::uint32_t(Kind::unit_state),"unknown input event");item.kind=Kind(kind);
         auto count=header.u32();require(count<=payload_limit,"oversized input event");item.flags=header.u32();item.sequence=header.u64();item.ticks=header.u64();
         require(item.sequence==++sequence,"input sequence gap");std::array<std::uint32_t,4> hash;for(auto& part:hash)part=header.u32();
         read(item.payload,count);auto actual=c3x_renderer::asset_content_hash(item.payload.data(),item.payload.size());

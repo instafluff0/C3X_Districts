@@ -53,20 +53,40 @@ struct WorldPreparationRegion {
             // the whole-world lease can prove that projection unambiguously.
             if(!seen.insert(key).second)return false;
             auto record=scene.retained(key);
-            if(!record || !record->authoritative)return false;
-            auto tile=record->appearance;
+            if(!record || !(record->visibility_flags&C3X_RENDERER_TILE_VISIBILITY_KNOWN))return false;
+            bool explored=(record->visibility_flags&C3X_RENDERER_TILE_EXPLORED)!=0;
+            if(explored && !record->authoritative)return false;
+            c3x_renderer_tile_v1 tile{};
+            if(explored)tile=record->appearance;
+            else {
+                // Unseen halo contributes topology to neighboring explored art,
+                // without importing objects or becoming a compiler core.
+                auto canonical_x=x%source.world_width_tiles,canonical_y=y%source.world_height_tiles;
+                if(canonical_x<0)canonical_x+=source.world_width_tiles;
+                if(canonical_y<0)canonical_y+=source.world_height_tiles;
+                auto index=(canonical_y*source.world_width_tiles+canonical_x)/2;
+                if(!source.world_topology || index<0 || unsigned(index)>=source.world_topology_count)return false;
+                auto topology=source.world_topology[index];
+                tile.terrain_type=int(topology&255u);tile.real_terrain_type=int((topology>>8)&255u);
+                tile.river_code=(topology>>16)&255u;
+                tile.resource_id=tile.resource_class=tile.tile_building_id=-1;
+                tile.city_id=tile.city_owner_id=tile.unit_type_id=tile.unit_owner_id=-1;
+                tile.barbarian_tribe_id=-1;
+            }
             tile.tile_x=x+x_core[1];tile.tile_y=y+y_core[1];
             tile.anchor_x=(x-left)*source.tile_width/2;
             tile.anchor_y=(y-top)*source.tile_height/2;
             tile.visibility_mask=record->visibility_mask;tile.tile_visibility=record->tile_visibility;
             tile.fog_status=record->fog_status;
-            tile.tile_flags=record->visibility_flags|C3X_RENDERER_TILE_TOPOLOGY_HALO|C3X_RENDERER_TILE_PREFETCH;
+            tile.tile_flags=record->visibility_flags|C3X_RENDERER_TILE_TOPOLOGY_HALO|
+                (explored?C3X_RENDERER_TILE_PREFETCH:0u);
             if(x>=left && x<left+extent && y>=top && y<top+extent &&
-               x<source.world_width_tiles && y<source.world_height_tiles)selected.push_back(unsigned(tiles.size()));
+               x<source.world_width_tiles && y<source.world_height_tiles && explored)
+                selected.push_back(unsigned(tiles.size()));
             tiles.push_back(tile);
         }
         frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());
-        return !selected.empty() && tiles.size()<=CapturedScene::occurrence_limit;
+        return tiles.size()<=CapturedScene::occurrence_limit;
     }
 };
 

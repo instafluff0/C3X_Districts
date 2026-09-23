@@ -29,9 +29,35 @@ in the patch dependency ledger.
 The current world-page callback discovers tile/city state in batches on the
 game thread. It is useful for initial population and reconciliation, but a
 periodic page read is not an immediate city, visibility, or unit notification.
-Visible map capture can supply a complete correction. Move, spawn, removal,
-action, city and visibility changes need explicit publication where a known
-native/C3X transition makes them available. A page or view capture remains the
+The first cutover stops that periodic pass after one complete map/viewer
+snapshot. It sends full art only for explored tiles; never-explored tiles retain
+visibility and terrain topology and are skipped by background art preparation.
+Older recorded full pages are scrubbed to that same boundary when replayed.
+After an accepted `Unit_move`, the existing patch sends old/new tile
+coordinates; the registered game-thread callback copies only their bounded
+sight neighborhoods, compares native visibility bits with the existing capture
+cache, and sends only changed tile records into Renderer64's scene journal.
+A post-interturn audit re-arms one paged world reconciliation for changes
+without an explicit transition hook. Other-civ moves that enter visible tiles
+also request an exact view capture. They still need a stable-ID accepted motion
+segment before hidden-to-visible animation can be claimed. First-move reveal is an integrated display test,
+not established by the synthetic publication test alone.
+The existing `Leader_spawn_unit` hook now reports a scoped stable-ID birth after
+the game assigns its ID. Renderer64 retires any pose from a prior use of that ID;
+the next body capture supplies its art and exact screen anchor. Births, moves,
+fog loss and body observations now reject older timestamps for the same ID;
+a hidden move retains its timestamp so a late reveal cannot resurrect the pose.
+A small copied state record carries action and HP at each native unit draw;
+`Unit_despawn` sends a retirement fact before storage or ID reuse. These events
+share the ordered IPC and replay sequence with birth, movement and body samples.
+An explicit retirement is a tombstone: a later observation cannot revive the
+same ID without a new accepted birth. The state stream does not itself grant
+visibility or guess an intermediate combat strike. The x86 Renderer bridge
+coalesces identical unit facts before IPC; native redraw ticks do not require
+another Renderer64 roundtrip when action, HP, position and visibility are unchanged.
+A rejected sparse world change schedules the bounded reconciliation on the next
+native view.
+Visible map capture corrects a requested tile. A page or view capture remains the
 bounded recovery path when an individual transition cannot be observed safely.
 Off-screen unit metadata in a tile record is not a complete unit roster;
 unit instances need stable IDs and explicit retirement. Stored hidden data
@@ -105,9 +131,14 @@ draw anchor, damage, maximum HP and action into a separate observation. Renderer
 successive observations to smooth visible travel between native updates, bounded
 to 90 ms and corrected by each newer native pose. The first sample uses Civ III's
 ordinary movement-speed estimate and the copied target; subsequent samples use
-measured native progress. This is a conservative visual refinement, not yet the full accepted
-segment contract above: explicit tile endpoints, durations, interruption IDs,
-selection/route attachment and intermediate combat HP timing still need work.
+measured native progress. `Unit_move` also sends the accepted old/new tile pair,
+unit identity, viewer scope and endpoint visibility. Renderer64 discards the
+previous pixel prediction at that boundary; the next native observation fixes
+the new segment's screen anchor. A hidden destination retires the unit visual.
+This is a conservative visual refinement, not yet the full accepted segment
+contract above: durations, interruption IDs,
+selection/route attachment and proof that every combat HP revision is observed
+at the intended presentation time still need work.
 
 ## Surface and frame lifecycle
 

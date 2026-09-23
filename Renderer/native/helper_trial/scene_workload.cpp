@@ -52,12 +52,16 @@ struct Core {
     CpuUnit unit_cpu=nullptr;
     using UnitForget=void(*)(int);UnitForget unit_forget=nullptr;
     c3x_renderer_unit_visual_fn unit_visual=nullptr;
+    c3x_renderer_unit_move_fn unit_move=nullptr;
+    c3x_renderer_unit_spawn_fn unit_spawn=nullptr;
+    c3x_renderer_unit_state_fn unit_state=nullptr;
     using Tactical=int(*)(c3x_renderer::tactical::Input const*,c3x_renderer_gpu_unit_v1 const*);
     Tactical tactical_gpu=nullptr;
     using WorldQuery=int(*)(c3x_renderer_world_page_v1*);
     using WorldSubmit=int(*)(c3x_renderer_world_page_v1 const*,int);
     using WorldStatus=int(*)(c3x_renderer_world_status_v1*);
     WorldQuery world_query=nullptr;WorldSubmit world_submit=nullptr;
+    WorldQuery world_delta_scope=nullptr;WorldSubmit world_delta_submit=nullptr;
     WorldStatus world_status=nullptr;
     using SetUnits=int(*)(int);
     SetUnits set_units=nullptr;
@@ -92,9 +96,14 @@ struct Core {
         unit_cpu=reinterpret_cast<CpuUnit>(GetProcAddress(module,"c3x_renderer_trial_unit_pixels"));
         unit_forget=reinterpret_cast<UnitForget>(GetProcAddress(module,"c3x_renderer_unit_forget"));
         unit_visual=reinterpret_cast<c3x_renderer_unit_visual_fn>(GetProcAddress(module,"c3x_renderer_unit_visual"));
+        unit_move=reinterpret_cast<c3x_renderer_unit_move_fn>(GetProcAddress(module,"c3x_renderer_unit_move"));
+        unit_spawn=reinterpret_cast<c3x_renderer_unit_spawn_fn>(GetProcAddress(module,"c3x_renderer_unit_spawn"));
+        unit_state=reinterpret_cast<c3x_renderer_unit_state_fn>(GetProcAddress(module,"c3x_renderer_unit_state"));
         tactical_gpu=reinterpret_cast<Tactical>(GetProcAddress(module,"c3x_renderer_trial_tactical"));
         world_query=reinterpret_cast<WorldQuery>(GetProcAddress(module,"c3x_renderer_trial_world_query"));
         world_submit=reinterpret_cast<WorldSubmit>(GetProcAddress(module,"c3x_renderer_trial_world_submit"));
+        world_delta_scope=reinterpret_cast<WorldQuery>(GetProcAddress(module,"c3x_renderer_trial_world_delta_scope"));
+        world_delta_submit=reinterpret_cast<WorldSubmit>(GetProcAddress(module,"c3x_renderer_trial_world_delta_submit"));
         world_status=reinterpret_cast<WorldStatus>(GetProcAddress(module,"c3x_renderer_world_status"));
         set_units=reinterpret_cast<SetUnits>(GetProcAddress(module,"c3x_renderer_set_unit_rendering"));
         set_clock=reinterpret_cast<TrialClock>(GetProcAddress(module,"c3x_renderer_trial_set_clock"));
@@ -224,6 +233,29 @@ struct Core {
                     wire.reply_size=unsigned(response.bytes.size());
                     std::memcpy(wire.payload,response.bytes.data(),wire.reply_size);
                 }
+            }else if(wire.live&&wire.kind==unsigned(Kind::world_page)&&wire.subtype==4){
+                in.done();require(world_delta_scope!=nullptr,"helper lacks delta scope entry");
+                c3x_renderer_world_page_v1 page={};page.struct_size=sizeof(page);
+                wire.code=unsigned(world_delta_scope(&page));
+                if(wire.code==C3X_RENDERER_RESULT_OK){
+                    Writer response;response(page.first);response(page.capacity);
+                    c3x_inputs::c3x_renderer_camera_identity_v1_fields(response,page.identity);
+                    c3x_inputs::frame_fields(response,page.frame);
+                    wire.reply_size=unsigned(response.bytes.size());
+                    std::memcpy(wire.payload,response.bytes.data(),wire.reply_size);
+                }
+            }else if(wire.live&&wire.kind==unsigned(Kind::world_page)&&wire.subtype==5){
+                require(world_delta_submit!=nullptr,"helper lacks delta submit entry");
+                c3x_renderer_world_page_v1 page={};page.struct_size=sizeof(page);
+                in(page.first);in(page.capacity);in(page.count);
+                c3x_inputs::c3x_renderer_camera_identity_v1_fields(in,page.identity);
+                c3x_inputs::frame_fields(in,page.frame);
+                int callback_result=0;in(callback_result);
+                require((page.first==UINT_MAX||page.first==UINT_MAX-1)&&page.capacity==128&&page.count<=128,"remote delta limit");
+                std::vector<c3x_renderer_tile_v1> tiles(page.count);
+                for(auto& tile:tiles)c3x_inputs::c3x_renderer_tile_v1_fields(in,tile);
+                in.done();page.tiles=tiles.data();
+                wire.code=unsigned(world_delta_submit(&page,callback_result));
             }else if(wire.kind==unsigned(Kind::scene)&&wire.subtype>=1&&wire.subtype<=3){
                 c3x_renderer_camera_identity_v1 identity={};if(wire.subtype!=1)c3x_renderer_camera_identity_v1_fields(in,identity);
                 Frame frame_value;frame(in,frame_value);in.done();
@@ -406,6 +438,21 @@ struct Core {
                 c3x_renderer_unit_visual_v1 value={sizeof(value)};
                 c3x_inputs::unit_visual_fields(in,value);in.done();
                 wire.code=unsigned(unit_visual(&value));
+            }else if(wire.kind==unsigned(Kind::unit_move)&&wire.subtype==0){
+                require(unit_move!=nullptr,"helper lacks unit move entry");
+                c3x_renderer_unit_move_v1 value={sizeof(value)};
+                c3x_inputs::unit_move_fields(in,value);in.done();
+                wire.code=unsigned(unit_move(&value));
+            }else if(wire.kind==unsigned(Kind::unit_spawn)&&wire.subtype==0){
+                require(unit_spawn!=nullptr,"helper lacks unit spawn entry");
+                c3x_renderer_unit_spawn_v1 value={sizeof(value)};
+                c3x_inputs::unit_spawn_fields(in,value);in.done();
+                wire.code=unsigned(unit_spawn(&value));
+            }else if(wire.kind==unsigned(Kind::unit_state)&&wire.subtype==0){
+                require(unit_state!=nullptr,"helper lacks unit state entry");
+                c3x_renderer_unit_state_v1 value={sizeof(value)};
+                c3x_inputs::unit_state_fields(in,value);in.done();
+                wire.code=unsigned(unit_state(&value));
             }else if(wire.live&&wire.kind==unsigned(Kind::tactical)&&wire.subtype==0){
                 require(tactical_gpu!=nullptr,"helper lacks tactical renderer entry");
                 c3x_renderer_gpu_unit_v1 target={sizeof(target)};c3x_inputs::target_fields(in,target);

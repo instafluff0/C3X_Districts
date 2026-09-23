@@ -30,6 +30,7 @@ int wmain(int argc,wchar_t** argv){
         bool definitions=false,submitted=false;unsigned polls=0;
         c3x_remote_scene::CameraOutput adopted;
         while(journal.next(event)){
+            if(event.kind==Kind::footer)break;
             if(event.kind!=Kind::native_bridge&&event.kind!=Kind::scene)continue;
             Reader recorded{event.payload};recorded.u64();recorded.u64();
             if(event.kind==Kind::native_bridge&&event.flags==8){
@@ -76,6 +77,57 @@ int wmain(int argc,wchar_t** argv){
         c3x_renderer_world_page_v1 retry={};
         require(helper.world_query(retry)==C3X_RENDERER_RESULT_OK&&retry.first==page.first,
             "rejected native page advanced the world cursor");
+        c3x_renderer_world_page_v1 delta={};
+        require(helper.world_delta_scope(delta)==C3X_RENDERER_RESULT_OK&&
+            delta.first==UINT_MAX&&delta.capacity==128,"x64 move delta scope failed");
+        c3x_renderer_tile_v1 changed_tile={};changed_tile.tile_x=0;changed_tile.tile_y=0;
+        changed_tile.tile_flags=C3X_RENDERER_TILE_PREFETCH|C3X_RENDERER_TILE_TOPOLOGY_HALO|
+            C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_EXPLORED;
+        delta.count=1;delta.tiles=&changed_tile;
+        auto stale=delta;++stale.identity.viewer_epoch;
+        require(helper.world_delta_submit(stale,C3X_RENDERER_RESULT_OK)==C3X_RENDERER_RESULT_SUPERSEDED,
+            "stale viewer move delta was accepted");
+        auto unchanged=delta;unchanged.count=0;
+        require(helper.world_delta_submit(unchanged,C3X_RENDERER_RESULT_OK)==C3X_RENDERER_RESULT_OK,
+            "unchanged move delta was not a no-op");
+        require(helper.world_delta_submit(delta,C3X_RENDERER_RESULT_OK)==C3X_RENDERER_RESULT_OK,
+            "accepted move delta did not reach Renderer64");
+        c3x_renderer_unit_spawn_v1 birth={sizeof(birth)};
+        birth.unit_id=9001;birth.tile_x=0;birth.tile_y=0;birth.unit_type_id=1;
+        birth.owner_id=0;birth.visible=1;
+        birth.map_epoch=delta.identity.map_epoch;birth.viewer_epoch=delta.identity.viewer_epoch;
+        birth.presentation_time_ticks=1000;birth.presentation_frequency=1000000;
+        require(helper.unit_spawn(birth)==C3X_RENDERER_RESULT_OK,"scoped unit birth did not reach Renderer64");
+        c3x_renderer_unit_move_v1 move={sizeof(move)};
+        move.unit_id=birth.unit_id;move.old_x=0;move.old_y=0;move.new_x=2;move.new_y=0;
+        move.action=2;move.target_visible=1;move.source_visible=1;
+        move.map_epoch=birth.map_epoch;move.viewer_epoch=birth.viewer_epoch;
+        move.presentation_time_ticks=1100;move.presentation_frequency=birth.presentation_frequency;
+        require(helper.unit_move(move)==C3X_RENDERER_RESULT_OK,"ordered unit move did not reach Renderer64");
+        c3x_renderer_unit_state_v1 state={sizeof(state)};
+        state.kind=C3X_RENDERER_UNIT_STATE_OBSERVE;state.unit_id=birth.unit_id;
+        state.tile_x=2;state.tile_y=0;state.unit_type_id=1;state.owner_id=0;
+        state.action=13;state.damage=1;state.max_hp=3;state.visible=1;
+        state.map_epoch=birth.map_epoch;state.viewer_epoch=birth.viewer_epoch;
+        state.presentation_time_ticks=1200;state.presentation_frequency=birth.presentation_frequency;
+        require(helper.unit_state(state)==C3X_RENDERER_RESULT_OK,"action and damage did not reach Renderer64");
+        auto sent=helper.replay_stats().sequence;
+        state.presentation_time_ticks=1250;
+        require(helper.unit_state(state)==C3X_RENDERER_RESULT_OK&&helper.replay_stats().sequence==sent,
+            "unchanged unit state caused another x64 IPC roundtrip");
+        auto wrong_viewer=state;++wrong_viewer.viewer_epoch;
+        require(helper.unit_state(wrong_viewer)==C3X_RENDERER_RESULT_SUPERSEDED,
+            "stale-viewer unit state was accepted");
+        state.kind=C3X_RENDERER_UNIT_STATE_RETIRE;state.action=-1;state.max_hp=0;
+        state.presentation_time_ticks=1300;
+        require(helper.unit_state(state)==C3X_RENDERER_RESULT_OK,"unit retirement did not reach Renderer64");
+        state.kind=C3X_RENDERER_UNIT_STATE_OBSERVE;state.action=13;state.max_hp=3;
+        state.presentation_time_ticks=1400;
+        require(helper.unit_state(state)==C3X_RENDERER_RESULT_BAD_ARGUMENT,
+            "retired unit identity revived without a new birth");
+        birth.tile_x=2;birth.presentation_time_ticks=1500;
+        require(helper.unit_spawn(birth)==C3X_RENDERER_RESULT_OK,
+            "new accepted birth could not reuse a retired ID");
         auto const& view=adopted.value;auto width=view.image.width,height=view.image.height;
         require(width>0&&height>0&&width<=2240&&height<=1260,"invalid adopted extent");
         window=CreateWindowExW(0,L"STATIC",L"C3X live helper roundtrip",WS_POPUP,0,0,width,height,

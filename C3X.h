@@ -2670,6 +2670,12 @@ struct district_button_image_set {
 	PCX_Image * custom_renderer_line_target;
 	c3x_renderer_native_map_view_fn custom_renderer_native_map;
 	c3x_renderer_native_navigation_fn custom_renderer_navigation;
+	c3x_renderer_world_move_fn custom_renderer_world_move;
+	c3x_renderer_world_change_fn custom_renderer_world_change;
+	c3x_renderer_world_reconcile_fn custom_renderer_world_reconcile;
+	c3x_renderer_unit_move_fn custom_renderer_unit_move;
+	c3x_renderer_unit_spawn_fn custom_renderer_unit_spawn;
+	c3x_renderer_unit_state_fn custom_renderer_unit_state;
 	void * custom_renderer_jgl_original[60], * custom_renderer_jgl_sprite_original, * custom_renderer_jgl_present_original;
 	void * custom_renderer_jgl_blend_original[10];
 	void ** custom_renderer_jgl_table, ** custom_renderer_jgl_sprite_table, ** custom_renderer_jgl_graph_table;
@@ -2699,6 +2705,7 @@ struct district_button_image_set {
 	long long custom_renderer_map_epoch, custom_renderer_viewer_epoch;
 	int custom_renderer_viewer_civ_id;
 	bool custom_renderer_capture_world_topology;
+	bool custom_renderer_world_audit_needed;
 	// Main-map stepped zoom is an injected camera transform. Civ III remains the
 	// authoritative camera; these fields scale its captured anchors and invert
 	// mouse coordinates back into the native projection for interaction.

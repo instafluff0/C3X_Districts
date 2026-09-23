@@ -20,7 +20,8 @@ if(GetEnvironmentVariableA("C3X_RENDERER_WORLD_READINESS_TEST",world_test_option
         page->count=unsigned((std::min)(std::size_t(page->capacity),world_records.size()-page->first));
         for(unsigned i=0;i<page->count;++i){page->tiles[i]=world_records[page->first+i];
             auto& tile=page->tiles[i];tile.anchor_x=tile.anchor_y=0;
-            tile.tile_flags=(tile.tile_flags&C3X_RENDERER_TILE_VISIBILITY_BITS)|C3X_RENDERER_TILE_TOPOLOGY_HALO|C3X_RENDERER_TILE_PREFETCH;}
+            tile.tile_flags=(tile.tile_flags&C3X_RENDERER_TILE_VISIBILITY_BITS)|C3X_RENDERER_TILE_TOPOLOGY_HALO|
+                ((tile.tile_flags&C3X_RENDERER_TILE_EXPLORED)?C3X_RENDERER_TILE_PREFETCH:0u);}
         return C3X_RENDERER_RESULT_OK;
     };
     c3x_renderer_camera_request_v1 request={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(request),&frame,{1,1,1,1}};
@@ -35,7 +36,7 @@ if(GetEnvironmentVariableA("C3X_RENDERER_WORLD_READINESS_TEST",world_test_option
     c3x_renderer_world_status_v1 state={sizeof(state)};
     while(GetTickCount64()-start<180000){
         MSG message{};while(PeekMessageA(&message,nullptr,0,0,PM_REMOVE)){TranslateMessage(&message);DispatchMessageA(&message);}
-        if(get_world(&state)==C3X_RENDERER_RESULT_OK && state.capture_passes>0 && state.authoritative==state.total &&
+        if(get_world(&state)==C3X_RENDERER_RESULT_OK && state.capture_passes>0 && state.authoritative<=state.total &&
            state.preparation_sequence==state.appearance_sequence && state.prepared_regions==state.regions)break;
         MsgWaitForMultipleObjectsEx(0,nullptr,16,QS_ALLINPUT,MWMO_INPUTAVAILABLE);
     }
@@ -43,7 +44,7 @@ if(GetEnvironmentVariableA("C3X_RENDERER_WORLD_READINESS_TEST",world_test_option
     std::printf("WORLD_READINESS total=%u authoritative=%u passes=%lld regions=%u attempted=%u unavailable=%u first_request_ms=%llu preparation_ms=%llu largest_free=%zu\n",
         state.total,state.authoritative,state.capture_passes,state.regions,state.prepared_regions,state.unavailable_regions,
         initial_ms,GetTickCount64()-start,std::size_t(memory.second));
-    if(!state.capture_passes || state.authoritative!=state.total ||
+    if(!state.capture_passes || state.authoritative>state.total ||
        state.preparation_sequence!=state.appearance_sequence || state.prepared_regions!=state.regions ||
        state.unavailable_regions){set_world(nullptr);return 1;}
     // No route-dependent warmup: the source paging/region policy above cannot

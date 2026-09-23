@@ -94,6 +94,18 @@ struct ReplayState {
                 require(window!=nullptr,"native screen requires replay window");SetWindowPos(window,nullptr,0,0,screen.width,screen.height,SWP_NOZORDER|SWP_NOACTIVATE);}else native_pixels={};
             actual=remote_renderer_requested()?remote_renderer_backend()->screen(present?&screen:nullptr):
                 get_renderer_worker().native_screen(present?&screen:nullptr);
+        }else if(kind==Kind::world_page&&(subtype==1||subtype==2)){
+            c3x_renderer_world_page_v1 page={};page.struct_size=sizeof(page);
+            in(page.first);in(page.capacity);in(page.count);
+            c3x_renderer_camera_identity_v1_fields(in,page.identity);
+            frame_fields(in,page.frame);int callback_result=0;in(callback_result);
+            require(page.first==(subtype==1?UINT_MAX:UINT_MAX-1)&&page.capacity==128&&page.count<=128,"replay delta bounds");
+            std::vector<c3x_renderer_tile_v1> records(page.count);
+            for(auto& record:records)c3x_renderer_tile_v1_fields(in,record);
+            page.tiles=records.data();
+            actual=remote_renderer_requested()?
+                (remote_renderer_backend()->world_delta_submit(page,callback_result)==C3X_RENDERER_RESULT_OK?1:0):
+                (get_renderer_worker().world_delta_submit(page,callback_result)==C3X_RENDERER_RESULT_OK?1:0);
         }else if(kind==Kind::world_page){
             c3x_renderer_world_page_v1 page={};page.struct_size=sizeof(page);in(page.first);in(page.capacity);in(page.count);c3x_renderer_camera_identity_v1_fields(in,page.identity);
             Frame owned;frame(in,owned);page.frame=owned.value;int callback_result=0;in(callback_result);
@@ -153,6 +165,18 @@ struct ReplayState {
             require(subtype==0,"unsupported unit visual input");
             c3x_renderer_unit_visual_v1 value={sizeof(value)};unit_visual_fields(in,value);
             actual=c3x_renderer_unit_visual(&value);
+        }else if(kind==Kind::unit_move){
+            require(subtype==0,"unsupported unit move input");
+            c3x_renderer_unit_move_v1 value={sizeof(value)};unit_move_fields(in,value);
+            actual=c3x_renderer_unit_move(&value);
+        }else if(kind==Kind::unit_spawn){
+            require(subtype==0,"unsupported unit spawn input");
+            c3x_renderer_unit_spawn_v1 value={sizeof(value)};unit_spawn_fields(in,value);
+            actual=c3x_renderer_unit_spawn(&value);
+        }else if(kind==Kind::unit_state){
+            require(subtype==0,"unsupported unit state input");
+            c3x_renderer_unit_state_v1 value={sizeof(value)};unit_state_fields(in,value);
+            actual=c3x_renderer_unit_state(&value);
         }else if(kind==Kind::tactical){c3x_renderer_gpu_unit_v1 dest={};target_fields(in,dest);target(dest);
             c3x_renderer::tactical::Input value;tactical(in,value);actual=remote_renderer_requested()?
                 remote_renderer_backend()->tactical(value,dest):get_renderer_worker().draw_tactical(value,dest);

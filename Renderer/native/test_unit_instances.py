@@ -80,11 +80,73 @@ int main(){
  assert(motion.sample(second,1099000,1000000,catalog,out,step)&&out.body_x==1009);
  assert(motion.sample(second,2000000,1000000,catalog,out,step)&&out.body_x<=1015); // bounded extrapolation
  auto stale=visual;stale.presentation_time_ticks=1000000;assert(!motion.observe(stale));
+ c3x_renderer_unit_move_v1 accepted{};accepted.struct_size=sizeof(accepted);
+ accepted.unit_id=55;accepted.old_x=4;accepted.old_y=4;accepted.new_x=5;accepted.new_y=5;
+ accepted.action=2;accepted.source_visible=0;accepted.target_visible=1;
+ accepted.presentation_frequency=1000000;accepted.presentation_time_ticks=1100000;
+ assert(motion.move(accepted));assert(!motion.observe(visual));
+ moving.presentation_time_ticks=1100000;assert(motion.capture(moving,1,catalog,name,first));
+ assert(!first.has_visual); // the old pixel segment cannot cross the accepted move
+ visual.presentation_time_ticks=1100000;assert(motion.observe(visual));
+ assert(motion.capture(moving,1,catalog,name,first)&&first.has_visual);
+ accepted.old_x=5;accepted.old_y=5;accepted.new_x=6;accepted.new_y=6;
+ accepted.source_visible=1;accepted.target_visible=0;accepted.presentation_time_ticks=1200000;
+ assert(motion.move(accepted));assert(motion.size()==0);
+ accepted.target_visible=1;accepted.presentation_time_ticks=1100000;
+ assert(!motion.move(accepted)); // a late reveal cannot undo newer fog loss
+ moving.presentation_time_ticks=1100000;assert(!motion.capture(moving,1,catalog,name,first));
+ accepted.presentation_time_ticks=1250000;
+ assert(motion.move(accepted)); // a later reveal may reuse the stable ID
+ accepted.action=-1;accepted.presentation_time_ticks=1260000;
+ assert(motion.move(accepted)); // Native fast moves may have no active FLC action.
+ accepted.action=2;
+ c3x_renderer_unit_spawn_v1 born{};born.struct_size=sizeof(born);
+ born.unit_id=55;born.tile_x=6;born.tile_y=6;born.unit_type_id=1;born.owner_id=2;
+ born.visible=1;born.presentation_frequency=1000000;born.presentation_time_ticks=1150000;
+ assert(!motion.spawn(born)); // an old birth cannot retire the newer accepted move
+ born.visible=1;born.presentation_frequency=1000000;born.presentation_time_ticks=1300000;
+ assert(motion.spawn(born));assert(motion.size()==0);
+ visual.flags=C3X_RENDERER_UNIT_STATE_CAPTURED;
+ visual.presentation_time_ticks=1200000;assert(!motion.observe(visual));
+ moving.presentation_time_ticks=1200000;assert(!motion.capture(moving,1,catalog,name,first));
+ visual.presentation_time_ticks=1300000;assert(motion.observe(visual));
+ moving.presentation_time_ticks=1300000;
  moving.action=1;assert(motion.capture(moving,1,catalog,name,first));
  assert(!motion.sample(second,1100000,1000000,catalog,out,step));
  visual.flags=C3X_RENDERER_UNIT_STATE_CAPTURED|C3X_RENDERER_UNIT_HIDDEN;
- visual.presentation_time_ticks=1100000;assert(motion.observe(visual));
+ visual.presentation_time_ticks=1400000;assert(motion.observe(visual));
  assert(!motion.sample(first,1100000,1000000,catalog,out,step));
+ visual.flags=C3X_RENDERER_UNIT_STATE_CAPTURED;
+ visual.presentation_time_ticks=1350000;assert(!motion.observe(visual));
+ moving.presentation_time_ticks=1350000;assert(!motion.capture(moving,1,catalog,name,first));
+ born.presentation_time_ticks=1350000;assert(!motion.spawn(born));
+ accepted.presentation_time_ticks=1350000;assert(!motion.move(accepted));
+ moving.presentation_time_ticks=1500000;
+ assert(!motion.capture(moving,C3X_RENDERER_UNIT_STATE_CAPTURED|C3X_RENDERER_UNIT_HIDDEN,
+                        catalog,name,first));
+ visual.presentation_time_ticks=1450000;assert(!motion.observe(visual));
+ c3x_renderer_unit_state_v1 state{};state.struct_size=sizeof(state);
+ state.kind=C3X_RENDERER_UNIT_STATE_OBSERVE;state.unit_id=55;
+ state.tile_x=6;state.tile_y=6;state.unit_type_id=1;state.owner_id=2;
+ state.action=13;state.damage=1;state.max_hp=4;state.visible=1;
+ state.presentation_frequency=1000000;state.presentation_time_ticks=1600000;
+ assert(motion.state(state)&&motion.state_of(55)->damage==1);
+ state.damage=2;state.presentation_time_ticks=1550000;
+ assert(!motion.state(state)&&motion.state_of(55)->damage==1);
+ moving.presentation_time_ticks=1550000;assert(!motion.capture(moving,1,catalog,name,first));
+ state.damage=2;state.presentation_time_ticks=1700000;
+ assert(motion.state(state)&&motion.state_of(55)->damage==2);
+ state.kind=C3X_RENDERER_UNIT_STATE_RETIRE;state.presentation_time_ticks=1800000;
+ assert(motion.state(state)&&motion.state_of(55)->kind==C3X_RENDERER_UNIT_STATE_RETIRE);
+ state.kind=C3X_RENDERER_UNIT_STATE_OBSERVE;state.presentation_time_ticks=1750000;
+ assert(!motion.state(state));
+ state.presentation_time_ticks=1900000;
+ assert(!motion.state(state)); // Only a new accepted birth can reuse a retired ID.
+ visual.presentation_time_ticks=1900000;assert(!motion.observe(visual));
+ moving.presentation_time_ticks=1900000;assert(!motion.capture(moving,1,catalog,name,first));
+ accepted.presentation_time_ticks=1900000;assert(!motion.move(accepted));
+ born.presentation_time_ticks=2000000;assert(motion.spawn(born));
+ state.presentation_time_ticks=2000000;assert(motion.state(state));
  UnitFramePreparation queue;input.unit_key[0]=0;input.unit_id=12;input.action_cursor=1;input.frame_count=16;
  queue.observe(input,true);assert(!queue.empty());queue.forget(12);assert(queue.empty());
 }

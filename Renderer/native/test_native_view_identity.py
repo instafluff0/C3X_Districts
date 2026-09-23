@@ -104,6 +104,8 @@ struct State {
  int custom_renderer_world_topology_count=0,custom_renderer_tile_count=0,custom_renderer_viewer_civ_id=-1;
  long long custom_renderer_world_topology_revision=0,custom_renderer_visibility_revision=0;
  long long custom_renderer_map_epoch=0,custom_renderer_viewer_epoch=0;
+ bool custom_renderer_world_audit_needed=true;
+ c3x_renderer_world_reconcile_fn custom_renderer_world_reconcile=nullptr;
  unsigned custom_renderer_requested_frames=0;LARGE_INTEGER custom_renderer_qpc_frequency{1000};
 } state;State* is=&state;
 ''' + world + '\nbool viewer(int visible_to_civ_id){\n' + viewer + '\nreturn true;}\nvoid retire(){\n' + retire + r'''
@@ -123,13 +125,15 @@ int main(){
  assert(capture_custom_renderer_world_topology());
  assert(state.custom_renderer_world_topology_revision==topology && state.custom_renderer_visibility_revision==visibility);
  tiles[7].Body.Visibility=1;assert(capture_custom_renderer_world_topology());
+ assert(state.custom_renderer_visibility_revision==visibility); // No continuous scan.
+ state.custom_renderer_world_audit_needed=true;assert(capture_custom_renderer_world_topology());
  assert(state.custom_renderer_world_topology_revision==topology && state.custom_renderer_visibility_revision==++visibility);
- tiles[7].Body.FOWStatus=0x12345678;assert(capture_custom_renderer_world_topology());
+ tiles[7].Body.FOWStatus=0x12345678;state.custom_renderer_world_audit_needed=true;assert(capture_custom_renderer_world_topology());
  assert(state.custom_renderer_visibility_revision==++visibility); // All sources of current visibility and explored state are observed.
- tiles[6].Body.V3=8;assert(capture_custom_renderer_world_topology());assert(state.custom_renderer_visibility_revision==++visibility);
- tiles[6].Body.field_D0_Visibility=16;assert(capture_custom_renderer_world_topology());assert(state.custom_renderer_visibility_revision==++visibility);
- tiles[6].Body.Fog_Of_War=32;assert(capture_custom_renderer_world_topology());assert(state.custom_renderer_visibility_revision==++visibility);
- tiles[2].ground=4;assert(capture_custom_renderer_world_topology());
+ tiles[6].Body.V3=8;state.custom_renderer_world_audit_needed=true;assert(capture_custom_renderer_world_topology());assert(state.custom_renderer_visibility_revision==++visibility);
+ tiles[6].Body.field_D0_Visibility=16;state.custom_renderer_world_audit_needed=true;assert(capture_custom_renderer_world_topology());assert(state.custom_renderer_visibility_revision==++visibility);
+ tiles[6].Body.Fog_Of_War=32;state.custom_renderer_world_audit_needed=true;assert(capture_custom_renderer_world_topology());assert(state.custom_renderer_visibility_revision==++visibility);
+ tiles[2].ground=4;state.custom_renderer_world_audit_needed=true;assert(capture_custom_renderer_world_topology());
  assert(state.custom_renderer_world_topology_revision==++topology && state.custom_renderer_visibility_revision==visibility);
  assert(demand()==7 && modern_calls==1 && !legacy_calls && state.custom_renderer_map_epoch==1);
  assert(received.map_epoch==1 && received.viewer_epoch==2 && received.visibility_epoch==visibility && received.scene_epoch==topology);
@@ -150,7 +154,7 @@ int main(){
  bic.Map={2048,2048};fail_at=16u*1024u*1024u;
  assert(!capture_custom_renderer_world_topology() && largest_request==fail_at && state.custom_renderer_world_topology_count==5000);
  fail_at=~std::size_t(0);bic.Map={4,4};assert(capture_custom_renderer_world_topology());
- absent=3;assert(!capture_custom_renderer_world_topology() && !state.custom_renderer_world_topology_count);
+ absent=3;state.custom_renderer_world_audit_needed=true;assert(!capture_custom_renderer_world_topology() && !state.custom_renderer_world_topology_count);
  absent=-1;assert(capture_custom_renderer_world_topology());
  auto count=state.custom_renderer_world_topology_count;
  for(auto dims: {MapData{2049,4},MapData{4,2049},MapData{3,4},MapData{0,4}}){
