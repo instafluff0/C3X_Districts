@@ -8,7 +8,9 @@
 
 The [64-bit migration plan](helper64_migration_plan.md) records the adopted
 process boundary and cutover gates; [Gate 2 results](helper64_gate2_results.md)
-record the scene/pixel/capacity evidence and its gameplay limits.
+record the scene/pixel/capacity evidence and its gameplay limits. The
+[direct composition-surface trial](direct_surface_trial.md) records the
+copy-free presentation proof and its native-UI layering requirement.
 
 [Execution rules](autonomous_renderer_execution.md) are a short operating reference.
 The [Lab workbench](../lab/README.md) owns category commands and visual approval.

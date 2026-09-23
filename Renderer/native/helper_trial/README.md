@@ -72,3 +72,22 @@ The [Gate 2 results](../../docs/helper64_gate2_results.md) close the x64
 architecture/capacity decision. The [migration plan](../../docs/helper64_migration_plan.md)
 defines the complete replay, native composition and cutover acceptance still
 required. This trial never stages a DLL, calls `INSTALL.bat`, or launches Civ III.
+
+## Direct cross-process composition surface
+
+`call helper_trial\probe_direct_surface.bat 1120 1192` from `Renderer/native`
+builds a separate x86-window/x64-producer proof. Omit the dimensions for a
+320×240 smoke test. The x86 owner creates one DirectComposition surface handle,
+duplicates it into x64, and binds a wrapper to its own HWND once. The x64
+process owns the BGRA swap chain and presents ten subsequent frames. The x86
+window thread samples desktop pixels without pumping messages or adopting a
+per-frame shared image. This is a graphics and window-layer feasibility test,
+not a Civ III launch, renderer-core benchmark, frame-rate test or staging step.
+
+The Windows VM showed all ten x64 presents at both sizes, with nine map-color
+transitions seen while the owner thread was unpumped. A native child-window
+pixel remained on top. The composition map covered a native pixel drawn directly
+to the parent HWND; Civ III's same-HWND labels and HUD therefore need a separate
+upper composition plane (or an equivalent exact ownership solution) before this
+path can replace the current presenter. See
+[the direct-surface findings](../../docs/direct_surface_trial.md).

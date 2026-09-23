@@ -171,6 +171,16 @@ The audit mode is replay-only and leaves strict replay as the default. The next
 performance change must improve both navigation and sustained ambient frames;
 reducing mirror draw calls alone is insufficient.
 
+A [direct composition-surface proof](direct_surface_trial.md) now establishes
+that this VM can show x64-owned BGRA swap-chain frames on an x86-owned HWND
+without an x86 copy or per-frame image/control handoff. Ten deliberate color
+frames produced nine observed desktop transitions while the window thread was
+unpumped, at both 320×240 and 1120×1192. This is not a real-scene speed result.
+The same proof confirmed that the map visual covers GDI pixels drawn directly
+to the HWND; an exact upper native UI/overlay plane is necessary before using
+this route in Civ III. Treat direct presentation plus preserved UI ordering as
+the next step-3 experiment, with the current x86 presenter as fallback.
+
 This migration takes priority over isolated x86 M3.8 tuning, but carries forward
 M3.8–M3.13 stability, readiness, consolidation and navigation acceptance. It
 does not begin deferred natural-wonder, constructed-wonder or District rendering.
