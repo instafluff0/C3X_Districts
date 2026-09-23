@@ -131,10 +131,29 @@ latency in the x64 keyed shared-image acquisition. Retaining the x86 shared
 image import across frames improved median present time, but worsened tail
 latency: desktop p95 rose to about 698 ms with 856 ms worst-case present time.
 That experiment was rejected and the per-frame import path restored. The
-remaining step-3 responsibility is to decouple final-image production and
-consumption without such GPU synchronization stalls, then rerun the full
-integrated frame and animation workload. These figures are VM fixture results,
-not live-game FPS.
+remaining step-3 responsibility is to reduce the complete GPU frame and
+presentation critical path, then rerun the full integrated animation workload.
+These figures are VM fixture results, not live-game FPS.
+
+A follow-up three-image handoff trial kept the composed image local to x64 and
+rotated shared output images. It preserved six exact destination oracles and
+12 changing ambient frames during a blocked x86 window thread, but increased
+the 100-jump desktop p95 from about 280 to 313 ms. The wait moved from shared
+image acquisition into scene display, so extra buffers did not remove the
+underlying GPU/driver work. The trial was discarded. A matched effects-on x86
+in-process control measured about 669 ms desktop p95, confirming a substantial
+x64 tail improvement without implying the 33 ms target is close.
+
+Diagnostic controls on the x64 Standard workload measured about 180 ms desktop
+p95 with reflections off (waves and water motion still on), about 313 ms with
+waves off (reflections and water motion still on), and about 180 ms with all
+three off. The normal all-on workload remains about 280 ms p95. These are
+separate VM runs, not additive pass timings or accepted visual alternatives.
+The mirror atlas rebuilt about 52 cells per view on average, up to 110, with
+zero cell reuse across the distributed jumps. Step 3 should now target the
+reflection rendering/submission and GPU completion path while preserving the
+accepted water appearance; another shared-image cache alone has no measured
+case. Recheck the complete effects-on frame after each candidate change.
 
 This migration takes priority over isolated x86 M3.8 tuning, but carries forward
 M3.8–M3.13 stability, readiness, consolidation and navigation acceptance. It
