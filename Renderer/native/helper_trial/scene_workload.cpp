@@ -19,6 +19,7 @@
 #include "../input_recording/journal.h"
 #include "../asset_content_hash.h"
 #include "../gpu_composition_session.h"
+#include "../remote_scene_output.h"
 #include "scene_wire.h"
 
 using namespace c3x_inputs;
@@ -70,7 +71,8 @@ struct Core {
         require(render&&render_view&&gpu_render&&definitions&&reset,"renderer DLL entries missing");}
     ~Core(){if(module){reset();FreeLibrary(module);}}
     void execute(Wire& wire){
-        wire.status=0;wire.code=0;wire.executed=1;wire.width=wire.height=wire.rendered=wire.fallback=0;wire.shared_handle=0;
+        wire.status=0;wire.code=0;wire.executed=1;wire.reply_size=0;
+        wire.width=wire.height=wire.rendered=wire.fallback=0;wire.shared_handle=0;
         wire.result_image=0;wire.result_pixels=0;
         std::fill(std::begin(wire.bounds),std::end(wire.bounds),0);
         std::fill(std::begin(wire.hash),std::end(wire.hash),0);std::fill(std::begin(wire.gpu_hash),std::end(wire.gpu_hash),0);wire.gpu_hash_valid=0;
@@ -99,10 +101,11 @@ struct Core {
                 c3x_renderer_camera_identity_v1 identity={};if(wire.subtype!=1)c3x_renderer_camera_identity_v1_fields(in,identity);
                 Frame frame_value;frame(in,frame_value);in.done();
                 c3x_renderer_output_v1 output={C3X_RENDERER_API_VERSION,sizeof(output)};
+                c3x_renderer_gpu_frame_v1 gpu={sizeof(gpu)};
                 c3x_renderer_camera_request_v1 request={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(request),&frame_value.value,identity};
                 if(wire.subtype==1)wire.code=unsigned(render(&frame_value.value,&output));
                 else if(wire.subtype==2)wire.code=unsigned(render_view(&request,&output));
-                else{c3x_renderer_gpu_frame_v1 gpu={sizeof(gpu)};wire.code=unsigned(gpu_render(&request,&gpu,&output));
+                else{wire.code=unsigned(gpu_render(&request,&gpu,&output));
                     if(wire.code==C3X_RENDERER_RESULT_OK&&wire.recorded_ticket&&wire.recorded_image){
                         ticket_ids[wire.recorded_ticket]=gpu.ticket;image_ids[wire.recorded_image]=gpu.map_image;}
                     if(wire.code==C3X_RENDERER_RESULT_OK&&verify_pixels){
@@ -128,6 +131,12 @@ struct Core {
                     auto hash=c3x_renderer::asset_content_hash(static_cast<unsigned char const*>(output.bgra_pixels),
                         std::size_t(output.stride_bytes)*unsigned(output.height));
                     std::copy(hash.begin(),hash.end(),wire.hash);
+                }
+                if(wire.code==C3X_RENDERER_RESULT_OK){
+                    Writer response;c3x_remote_scene::encode(response,gpu,output);
+                    require(response.bytes.size()<=wire_capacity,"remote scene response exceeds slot");
+                    wire.reply_size=unsigned(response.bytes.size());
+                    std::memcpy(wire.payload,response.bytes.data(),wire.reply_size);
                 }
             }else if(wire.kind==unsigned(Kind::image_commands)&&wire.subtype==0){
                 require(images!=nullptr,"helper lacks GPU image entry");

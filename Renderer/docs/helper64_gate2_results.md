@@ -107,6 +107,13 @@ visual-parity tolerance for the x86/x64 comparison, **not** proof of which
 floating-point or raster operation caused it. A later lifecycle or input
 mismatch would remain a failure even if it affected a similarly small area.
 
+The same recorded workload then exercised a complete pointer-free scene-result
+reply across the process boundary. All 50 successful scene outputs decoded in
+x86 and matched the recorded native output witness, including clip, fallback
+and replacement ownership. The one unsuccessful scene call has no result
+payload by contract. The x86 control still performs its own rendering, so
+this validates the result schema rather than a production cutover.
+
 After the reset, the recording uses CPU/native scene presentation. The x64
 sidecar lacks that owner, so its later visual-policy/results are **not** a
 valid x64 gameplay comparison. The x86 replay peaked at 2,435 MiB private;

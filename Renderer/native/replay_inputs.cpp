@@ -3,8 +3,11 @@
 #include <psapi.h>
 #include "input_recording/journal.h"
 #include "input_recording/assets.h"
+#include "input_recording/runtime.h"
+#include "input_recording/witness.h"
 #include "helper_trial/scene_client.h"
 #include "helper_trial/shared_frame_reader.h"
+#include "remote_scene_output.h"
 #include <iostream>
 #include <iomanip>
 #include <iterator>
@@ -201,6 +204,19 @@ int wmain(int argc,wchar_t** argv){
                     call.clocks.empty()?0:std::int64_t(call.clocks.front().first),
                     call.clocks.empty()?0:std::int64_t(call.clocks.front().second),final_image);
                 QueryPerformanceCounter(&shadow_end);
+                bool remote_output_valid=false,remote_output_match=false;
+                if(call.input.kind==Kind::scene&&remote.code==C3X_RENDERER_RESULT_OK&&remote.reply_size){
+                    Bytes reply(remote.payload,remote.payload+remote.reply_size);Reader returned{reply};
+                    c3x_remote_scene::Output owned;c3x_remote_scene::decode(returned,owned);
+                    remote_output_valid=true;
+                    try{
+                        Reader wanted{event.payload};wanted.u64();wanted.u32();
+                        if(call.input.flags==3){wanted.u64();wanted.u64();wanted.u64();
+                            check_gpu(wanted,owned.gpu,owned.value,remote.code);}
+                        else check_output(wanted,owned.value,remote.code);
+                        remote_output_match=true;
+                    }catch(std::exception const&){remote_output_match=false;}
+                }
                 bool final_valid=false,final_match=false,diff_available=false;
                 unsigned final_hash[4]={};std::uint64_t different_pixels=0;
                 int difference_bounds[4]={},max_channel_delta=0;
@@ -249,6 +265,8 @@ int wmain(int argc,wchar_t** argv){
                     <<",\"result_pixels\":"<<remote.result_pixels<<",\"pixel_witness\":"<<pixel_witness
                     <<",\"pixels_match\":"<<(pixels_match?"true":"false")
                     <<",\"bounds_match\":"<<(bounds_match?"true":"false")
+                    <<",\"remote_output_valid\":"<<(remote_output_valid?"true":"false")
+                    <<",\"remote_output_match\":"<<(remote_output_match?"true":"false")
                     <<",\"final_image\":"<<(remote.shared_handle?"true":"false")
                     <<",\"final_valid\":"<<(final_valid?"true":"false")
                     <<",\"final_match\":"<<(final_match?"true":"false")

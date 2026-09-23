@@ -75,6 +75,12 @@ address space is an enabler, not a substitute for render-path optimization.
 Current integration checkpoint: a full native-interleaved **shadow** replay
 now covers the GPU phase and shared final images; see
 [the measured result](helper64_gate2_results.md#full-native-interleaved-shadow-checkpoint).
+The process boundary also returns a versioned, pointer-free copy of the full
+map output (all scalar fields, replacement/fallback ownership arrays and
+optional CPU pixels). The full replay decoded and matched all 50 successful
+scene results against their recorded native witnesses. This validates the
+value contract; the x86 control still does not consume those results for live
+composition.
 The x86 control still performs its own scene work. Step 1 remains unfinished
 until the x86 bridge actually consumes x64-owned scene output, including the
 post-reset CPU/native route and asynchronous camera contracts. Steps 2–5 have

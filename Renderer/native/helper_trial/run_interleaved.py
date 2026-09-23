@@ -62,7 +62,8 @@ def run(capture: Path, reuse_build: bool) -> int:
                          NATIVE / "input_recording/replay.h",
                          NATIVE / "helper_trial/scene_wire.h", NATIVE / "helper_trial/scene_workload.cpp",
                          NATIVE / "helper_trial/run_interleaved.py", NATIVE / "helper_trial/build_gate2.bat",
-                         NATIVE / "c3x_renderer.cpp", NATIVE / "gpu_composition_session.h")}
+                         NATIVE / "c3x_renderer.cpp", NATIVE / "gpu_composition_session.h",
+                         NATIVE / "remote_scene_output.h")}
         receipt["capture_segments_sha256"] = {path.name: digest(path)
             for path in sorted(capture.glob("segment-*.c3xi"))}
         win = windows_root()
@@ -107,6 +108,10 @@ def run(capture: Path, reuse_build: bool) -> int:
             row["gpu_phase"] = gpu_phase
         receipt["x86"] = summary
         receipt["x64_scene"] = {"operations": len(scene), "scene_calls": sum(row["kind"] == 3 for row in scene),
+            "remote_outputs": sum(row["remote_output_valid"] for row in scene),
+            "remote_output_matches": sum(row["remote_output_match"] for row in scene),
+            "remote_output_mismatches": [row["sequence"] for row in scene
+                if row["remote_output_valid"] and not row["remote_output_match"]],
             "presentations": sum(row["kind"] == 13 for row in scene),
             "visual_offers": sum(row["kind"] == 12 for row in scene),
             "skipped_native_admissions": sum(not row["executed"] for row in scene),
