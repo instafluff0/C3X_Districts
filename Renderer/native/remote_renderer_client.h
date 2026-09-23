@@ -127,6 +127,17 @@ public:
         return int(invoke(unsigned(c3x_inputs::Kind::world_page),2,input.bytes.data(),
             unsigned(input.bytes.size())).code);
     }
+    int world_status(c3x_renderer_world_status_v1& status){
+        auto const& response=invoke(unsigned(c3x_inputs::Kind::world_page),3,nullptr,0);
+        if(response.code!=C3X_RENDERER_RESULT_OK)return int(response.code);
+        auto bytes=reply(response);c3x_inputs::Reader input{bytes};
+        status={sizeof(status)};input(status.total);input(status.authoritative);
+        input(status.capture_cursor);input(status.regions);
+        input(status.prepared_regions);input(status.unavailable_regions);
+        input(status.capture_passes);input(status.appearance_sequence);
+        input(status.preparation_sequence);input.done();
+        return C3X_RENDERER_RESULT_OK;
+    }
     int images(c3x_renderer_gpu_images_v1 const& request,c3x_renderer_gpu_result_v1& result,
                unsigned* pixels,unsigned capacity){
         c3x_inputs::Writer input;c3x_inputs::images(input,request);

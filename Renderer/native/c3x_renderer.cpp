@@ -12422,15 +12422,23 @@ private:
                             D3D11_TEXTURE2D_DESC desc={};trial_display->GetDesc(&desc);
                             if(desc.Width!=unsigned(p.width)||desc.Height!=unsigned(p.height))result=C3X_RENDERER_RESULT_BAD_ARGUMENT;
                             else{
+                                LARGE_INTEGER phase_begin={},phase_acquire={},phase_display={},phase_flush={},phase_duplicate={};
+                                if(renderer_state.trace.level>=2)QueryPerformanceCounter(&phase_begin);
                                 HRESULT hr=trial_display_mutex->AcquireSync(0,1000);
-                                if(hr!=S_OK)result=C3X_RENDERER_RESULT_DEVICE_ERROR;
+                                if(renderer_state.trace.level>=2)QueryPerformanceCounter(&phase_acquire);
+                                if(hr!=S_OK){phase_display=phase_flush=phase_acquire;result=C3X_RENDERER_RESULT_DEVICE_ERROR;}
                                 else{
                                     bool drawn=session->display_to(p.ticket,std::uint64_t(p.image),trial_display_view.Get(),
                                         trial_display.Get(),trial_buffer.Get(),unsigned(p.width),unsigned(p.height),
                                         {p.area[0],p.area[1],p.area[2],p.area[3]},visual_ticks,
                                         visual_allowed?visual_frequency:0);
+                                    if(renderer_state.trace.level>=2)QueryPerformanceCounter(&phase_display);
                                     hr=trial_display_mutex->ReleaseSync(drawn?1:0);renderer_state.context->Flush();
+                                    if(renderer_state.trace.level>=2)QueryPerformanceCounter(&phase_flush);
                                     result=drawn&&SUCCEEDED(hr)?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_BAD_ARGUMENT;
+                                    if(result==C3X_RENDERER_RESULT_OK){
+                                        trial_width=desc.Width;trial_height=desc.Height;
+                                    }
                                     if(result==C3X_RENDERER_RESULT_OK){
                                         Microsoft::WRL::ComPtr<IDXGIResource1> resource;
                                         HANDLE own=nullptr,duplicated=nullptr;
@@ -12440,11 +12448,18 @@ private:
                                             DXGI_SHARED_RESOURCE_READ|DXGI_SHARED_RESOURCE_WRITE,nullptr,&own);
                                         if(SUCCEEDED(hr)&&!DuplicateHandle(GetCurrentProcess(),own,consumer,&duplicated,0,FALSE,DUPLICATE_SAME_ACCESS))hr=E_FAIL;
                                         if(own)CloseHandle(own);if(consumer)CloseHandle(consumer);
-                                        if(SUCCEEDED(hr)){trial_handle=std::uint64_t(reinterpret_cast<std::uintptr_t>(duplicated));
-                                            trial_width=desc.Width;trial_height=desc.Height;}
+                                        if(SUCCEEDED(hr))trial_handle=std::uint64_t(reinterpret_cast<std::uintptr_t>(duplicated));
                                         else result=C3X_RENDERER_RESULT_DEVICE_ERROR;
                                     }
                                 }
+                                if(renderer_state.trace.level>=2){QueryPerformanceCounter(&phase_duplicate);
+                                    char detail[256];std::snprintf(detail,sizeof(detail),
+                                        "acquire_ms=%.3f display_ms=%.3f release_flush_ms=%.3f duplicate_ms=%.3f result=%d",
+                                        renderer_state.trace.milliseconds(phase_acquire.QuadPart-phase_begin.QuadPart),
+                                        renderer_state.trace.milliseconds(phase_display.QuadPart-phase_acquire.QuadPart),
+                                        renderer_state.trace.milliseconds(phase_flush.QuadPart-phase_display.QuadPart),
+                                        renderer_state.trace.milliseconds(phase_duplicate.QuadPart-phase_flush.QuadPart),result);
+                                    renderer_state.trace.write("trial-present-phase",detail,true);}
                             }
                         }
                     }
@@ -12464,6 +12479,10 @@ private:
                         result=FAILED(hr)?C3X_RENDERER_RESULT_DEVICE_ERROR:
                             drawn>=1?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_PENDING;
                         if(result==C3X_RENDERER_RESULT_OK){
+                            D3D11_TEXTURE2D_DESC desc={};trial_display->GetDesc(&desc);
+                            trial_width=desc.Width;trial_height=desc.Height;
+                        }
+                        if(result==C3X_RENDERER_RESULT_OK){
                             Microsoft::WRL::ComPtr<IDXGIResource1> resource;
                             HANDLE own=nullptr,duplicated=nullptr;
                             HANDLE consumer=OpenProcess(PROCESS_DUP_HANDLE,FALSE,trial_consumer_pid);
@@ -12472,9 +12491,7 @@ private:
                                 DXGI_SHARED_RESOURCE_READ|DXGI_SHARED_RESOURCE_WRITE,nullptr,&own);
                             if(SUCCEEDED(hr)&&!DuplicateHandle(GetCurrentProcess(),own,consumer,&duplicated,0,FALSE,DUPLICATE_SAME_ACCESS))hr=E_FAIL;
                             if(own)CloseHandle(own);if(consumer)CloseHandle(consumer);
-                            if(SUCCEEDED(hr)){D3D11_TEXTURE2D_DESC desc={};trial_display->GetDesc(&desc);
-                                trial_handle=std::uint64_t(reinterpret_cast<std::uintptr_t>(duplicated));
-                                trial_width=desc.Width;trial_height=desc.Height;}
+                            if(SUCCEEDED(hr))trial_handle=std::uint64_t(reinterpret_cast<std::uintptr_t>(duplicated));
                             else result=C3X_RENDERER_RESULT_DEVICE_ERROR;
                         }
                     }
@@ -12735,7 +12752,8 @@ extern "C" __declspec(dllexport) int c3x_renderer_set_world_capture(c3x_renderer
 }
 extern "C" __declspec(dllexport) int c3x_renderer_world_status(c3x_renderer_world_status_v1* status){
     if(!status || status->struct_size!=sizeof(*status))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
-    try{return renderer_worker?renderer_worker->world_status(*status):C3X_RENDERER_RESULT_PENDING;}
+    try{return remote_renderer_requested()?remote_renderer_backend()->world_status(*status):
+        renderer_worker?renderer_worker->world_status(*status):C3X_RENDERER_RESULT_PENDING;}
     catch(...){return C3X_RENDERER_RESULT_ERROR;}
 }
 
@@ -13187,6 +13205,7 @@ extern "C" __declspec(dllexport) int c3x_renderer_gpu_render(
     catch(...){return input.result(C3X_RENDERER_RESULT_ERROR,[](auto& out){out.u64(0);out.u64(0);out.u64(0);out.u32(0);});}
 }
 #ifdef C3X_HELPER_TRIAL
+extern "C" __declspec(dllexport) void c3x_renderer_trial_trace_flush(){renderer.trace.flush();}
 extern "C" __declspec(dllexport) void c3x_renderer_trial_set_clock(
     std::int64_t ticks,std::int64_t frequency){
     static thread_local c3x_inputs::ReplayClock clock;
@@ -13220,7 +13239,8 @@ extern "C" __declspec(dllexport) int c3x_renderer_trial_present_shared(
 extern "C" __declspec(dllexport) int c3x_renderer_trial_visual_shared(
     c3x_renderer_i64 ticks,c3x_renderer_i64 frequency,DWORD consumer_pid,
     std::uint64_t* handle,unsigned* width,unsigned* height){
-    if(frequency<=0||!consumer_pid||!handle||!width||!height)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    if(frequency<=0||!consumer_pid||!handle||!width||!height)
+        return C3X_RENDERER_RESULT_BAD_ARGUMENT;
     return get_renderer_worker().trial_visual_shared(ticks,frequency,consumer_pid,*handle,*width,*height);
 }
 extern "C" __declspec(dllexport) int c3x_renderer_trial_tactical(

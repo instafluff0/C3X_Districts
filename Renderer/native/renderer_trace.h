@@ -46,13 +46,14 @@ struct RendererTrace {
         }
     }
 
-    ~RendererTrace() {
-        if(file) {
-            if(buffered){std::fwrite(pending.data(),1,pending.size(),file);
-                std::fprintf(file,"TRACE_BUFFER dropped=%zu\n",dropped);}
-            std::fclose(file);
-        }
+    void flush() {
+        std::lock_guard<std::mutex> guard(write_mutex);
+        if(!file)return;
+        if(buffered){std::fwrite(pending.data(),1,pending.size(),file);
+            pending.clear();std::fprintf(file,"TRACE_BUFFER dropped=%zu\n",dropped);buffered=false;}
+        std::fflush(file);
     }
+    ~RendererTrace() {flush();if(file)std::fclose(file);}
 
     double milliseconds(c3x_renderer_i64 ticks) const {
         return frequency.QuadPart > 0 ? 1000.0 * ticks / frequency.QuadPart : 0.0;

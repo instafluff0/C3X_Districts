@@ -20,6 +20,9 @@ def main(argv=None):
     parser.add_argument("--out",type=Path,help="Explicit disposable output directory for category dispatch")
     parser.add_argument('--scene',type=Path,required=True)
     parser.add_argument('--dll',type=Path,default=Path('Renderer/native/build/candidate/C3XRenderer.dll'))
+    parser.add_argument('--x64-helper',type=Path,help='Opt-in x64 scene process for the same native fixture')
+    parser.add_argument('--x64-dll',type=Path,help='Renderer DLL loaded only by the x64 scene process')
+    parser.add_argument('--present-phases',action='store_true',help='Diagnostic x86 presentation split; invalidates latency-baseline claims')
     parser.add_argument('--reserve-address-mib',type=int,choices=range(0,1537,64),default=0,help='Harness-only reservation simulating co-resident process address-space pressure')
     parser.add_argument('--input-soak-seconds', type=int, choices=(30, 600), help='Real wall-clock native recorder endurance; capture-on/off use identical input owners')
     parser.add_argument('--record-inputs',action='store_true',help='Development renderer input capture; not yet gameplay qualification')
@@ -59,8 +62,11 @@ def main(argv=None):
     parser.add_argument("--visual-only",action="store_true",help="Use production rendering settings and validate independent visual frames without the 384-request comparison")
     parser.add_argument("--scroll-coverage",action="store_true",help="Exercise fine scrolling and guard coverage against missing map pixels")
     args=parser.parse_args(argv)
+    if bool(args.x64_helper)!=bool(args.x64_dll):parser.error('x64 helper and DLL must be supplied together')
     if args.window_witness_seconds and args.benchmark:
         parser.error('Window evidence competes for GPU/CPU; use a separate witness run from the benchmark')
+    if args.window_witness_seconds and args.present_phases:
+        parser.error('presentation phase diagnostics use the ordinary fixture command')
     if args.window_witness_seconds and (not args.input_soak_seconds or args.window_witness_seconds>args.input_soak_seconds-5):
         parser.error('Window evidence requires an input soak at least five seconds longer than capture')
     if args.world_readiness_only:args.world_readiness=True
@@ -90,8 +96,13 @@ def main(argv=None):
     text=(ROOT/'C3X.h').read_text();start=text.index('\tc3x_renderer_native_observe_fn')
     (build/'native_probe_state.h').write_text(text[start:text.index('\tc3x_renderer_unit_draw_background_fn',start)])
     scene=args.scene.resolve();dll=args.dll.resolve()
-    for path in (scene,dll,jgl):
+    helper64=args.x64_helper.resolve() if args.x64_helper else None
+    dll64=args.x64_dll.resolve() if args.x64_dll else None
+    for path in (scene,dll,jgl,*((helper64,dll64) if helper64 else ())):
         if any(c in path.relative_to(ROOT).as_posix() for c in '\r\n"%&|<>^!'):parser.error('unsupported input path')
+    if helper64:
+        for path in (helper64,dll64):
+            if not path.is_file():parser.error(f'missing x64 input: {path.name}')
     if not(64<=args.width<=2240 and 64<=args.height<=1260):parser.error('unsupported extent')
     header=scene.read_text().splitlines()[0].split(',');cx=int(header[1])//2;cy=int(header[2])//2
     invocation=uuid.uuid4().hex;out=args.out.resolve() if args.out else ROOT/'Renderer/native/build/gpu-composition'/invocation;out.mkdir(parents=True,exist_ok=True)
@@ -112,6 +123,8 @@ def main(argv=None):
         'current_runtime_matches_build':bool(build_sources) and all(build_sources.get(path)==value for path,value in inputs.items()),
         'purpose':'Candidate or explicitly selected historical binary; harness inputs are recorded separately.'}
     for path in (scene,dll,jgl,ROOT/'injected_code.c',ROOT/'C3X.h',ROOT/'civ_prog_objects.csv',*[ROOT/'Renderer/native'/n for n in ('gpu_frame_preview.h','input_recording_soak.h','world_readiness_preview.h','gpu_camera_identity_preview.h','native_frame_workload.h','native_frame_benchmark.h','test_native_screen.h','test_native_bootstrap.h','test_native_worker.cpp','test_gpu_unit_composition.h','test_native_image_adapter.cpp','test_native_ui_assets.h','native_ui_fixture.py','test_native_observation.cpp','test_native_line_bridge.h','native_image_adapter.h','native_sprite_diagnostics.h','native_composition_owner.h','native_observation.h','gpu_image_worker_client.h','gpu_image_commands.h','color_quantization.h','test_gpu_frame_api.c','biq_preview.cpp','BUILD.bat','record_gpu_frame.py')]):inputs[path.relative_to(ROOT).as_posix()]=digest(path)
+    if helper64:
+        for path in (helper64,dll64):inputs[path.relative_to(ROOT).as_posix()]=digest(path)
     if args.window_witness_seconds:
         for name in ('window_witness.cpp','BUILD_WINDOW_WITNESS.bat'):
             path=ROOT/'Renderer/tools'/name;inputs[path.relative_to(ROOT).as_posix()]=digest(path)
@@ -140,6 +153,10 @@ def main(argv=None):
         'C3X_RENDERER_VISUAL_UNITS':str(args.visual_units),'C3X_RENDERER_VISUAL_UNIT_CASE':args.visual_unit_case,
         'C3X_RENDERER_TACTICAL_PREVIEW':str(target/'tactical') if args.tactical else '',
         'C3X_RENDERER_PREVIEW_SESSION':'','C3X_RENDERER_PREVIEW_REPLAY':'','C3X_RENDERER_PREVIEW_ANIMATION':''}
+    if helper64:
+        settings.update({'C3X_RENDERER_HELPER64':'1','C3X_RENDERER_HELPER_EXE':str(win/helper64.relative_to(ROOT)),
+            'C3X_RENDERER_X64_DLL':str(win/dll64.relative_to(ROOT))})
+    if args.present_phases:settings['C3X_RENDERER_PRESENT_PHASES']='1'
     settings['C3X_RENDERER_NATIVE_UI_PACK']=str(target/'native-ui.pack')
     settings['C3X_RENDERER_TEST_RESERVE_MIB']=str(args.reserve_address_mib)
     settings['C3X_RENDERER_INPUT_SOAK_SECONDS']=str(args.input_soak_seconds) if args.input_soak_seconds else ''
@@ -188,11 +205,12 @@ def main(argv=None):
             +f'copy /y build\\window-witness\\window_witness.exe "{target/"window_witness.exe"}" >nul\nif errorlevel 1 goto failed\n')
         command=f'powershell -NoProfile -ExecutionPolicy Bypass -File "{target/"window-fixture.ps1"}"'
     invocation_log='witness-run.log' if args.window_witness_seconds else 'test.log'
+    stderr_output=f' 2>"{target/"present-phases.log"}"' if args.present_phases else ' 2>&1'
     (out/'run.cmd').write_text('@echo off\nsetlocal\n'+f'pushd "{win/"Renderer/native"}"\n'
         +witness_build
         +f'call BUILD.bat gpu-frame >"{target/"build.log"}" 2>&1\nif errorlevel 1 goto failed\n'
         +''.join(f'set "{k}={v}"\n' for k,v in settings.items())
-        +command+f' >"{target/invocation_log}" 2>&1\nif not "%errorlevel%"=="0" goto failed\n'
+        +command+f' >"{target/invocation_log}"'+stderr_output+'\nif not "%errorlevel%"=="0" goto failed\n'
         +f'>"{target/"completion.txt"}" echo {invocation} 0\nexit /b 0\n:failed\n>"{target/"completion.txt"}" echo {invocation} 1\nexit /b 1\n')
     print(out.relative_to(ROOT),flush=True)
     process=subprocess.run(['prlctl','exec',os.environ.get('C3X_RENDERER_VM','Windows 11'),'--current-user','cmd','/d','/s','/c',f'call "{target/"run.cmd"}"'],capture_output=True,text=True,timeout=max(900 if args.benchmark else 480, (args.input_soak_seconds or 0)+480, (args.window_witness_seconds or 0)+480))
@@ -206,7 +224,9 @@ def main(argv=None):
     if args.camera_requests:passed=passed and 'PASS replaceable GPU camera:' in log
     if args.atomic_camera_views:passed=passed and 'PASS atomic GPU identity transitions: cases=16 ' in log
     receipt={'status':'pass' if passed else 'fail' if complete else 'unconfirmed','inputs':inputs,'inputs_unchanged':unchanged,'transport_returncode':process.returncode,'transport_output':process.stdout+process.stderr,'settings':settings,'scope':'production captured renderer map -> existing GPU worker -> packed composition; oracle readback explicit; actual native final presentation including CPU compatibility callback; no game speedup claim'}
-    trace=(out/'renderer.log').read_text(errors='replace') if (out/'renderer.log').exists() else ''
+    if helper64:receipt['x64_helper']={'exe_sha256':digest(helper64),'dll_sha256':digest(dll64)}
+    trace_file=out/('renderer.log.x64' if helper64 else 'renderer.log')
+    trace=trace_file.read_text(errors='replace') if trace_file.exists() else ''
     import re
     if args.native_camera_requests or args.native_navigation:
         receipt['native_camera_samples']=[{key:float(value) for key,value in re.findall(r'(\w+)=([0-9.]+)',line)}
@@ -214,7 +234,7 @@ def main(argv=None):
         receipt['native_camera_scope']='Pending polls exclude render waits; ready polls include session import/admission. Completion includes test-driver scheduling. The native fixture services completion hints; the live bridge retries through the unchanged native Animator cadence. This is not live-game latency.'
     dropped=sum(int(value) for value in re.findall(r'TRACE_BUFFER dropped=(\d+)',trace))
     receipt['binary_provenance']=binary_provenance
-    receipt['diagnostic_only']=bool(args.completion_probe or args.half_pixels or args.record_composition or args.record_inputs or args.window_witness_seconds)
+    receipt['diagnostic_only']=bool(args.completion_probe or args.half_pixels or args.record_composition or args.record_inputs or args.window_witness_seconds or args.present_phases)
     if args.record_composition:
         recording=out/'composition.c3xr'
         passed=passed and recording.is_file() and recording.stat().st_size>16

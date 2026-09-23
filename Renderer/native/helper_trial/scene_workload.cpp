@@ -54,7 +54,9 @@ struct Core {
     Tactical tactical_gpu=nullptr;
     using WorldQuery=int(*)(c3x_renderer_world_page_v1*);
     using WorldSubmit=int(*)(c3x_renderer_world_page_v1 const*,int);
+    using WorldStatus=int(*)(c3x_renderer_world_status_v1*);
     WorldQuery world_query=nullptr;WorldSubmit world_submit=nullptr;
+    WorldStatus world_status=nullptr;
     using SetUnits=int(*)(int);
     SetUnits set_units=nullptr;
     using TrialClock=void(*)(std::int64_t,std::int64_t);
@@ -84,6 +86,7 @@ struct Core {
         tactical_gpu=reinterpret_cast<Tactical>(GetProcAddress(module,"c3x_renderer_trial_tactical"));
         world_query=reinterpret_cast<WorldQuery>(GetProcAddress(module,"c3x_renderer_trial_world_query"));
         world_submit=reinterpret_cast<WorldSubmit>(GetProcAddress(module,"c3x_renderer_trial_world_submit"));
+        world_status=reinterpret_cast<WorldStatus>(GetProcAddress(module,"c3x_renderer_world_status"));
         set_units=reinterpret_cast<SetUnits>(GetProcAddress(module,"c3x_renderer_set_unit_rendering"));
         set_clock=reinterpret_cast<TrialClock>(GetProcAddress(module,"c3x_renderer_trial_set_clock"));
         shared=reinterpret_cast<Shared>(GetProcAddress(module,"c3x_renderer_trial_export_shared"));
@@ -91,7 +94,8 @@ struct Core {
         present_shared=reinterpret_cast<PresentShared>(GetProcAddress(module,"c3x_renderer_trial_present_shared"));
         visual_shared=reinterpret_cast<VisualShared>(GetProcAddress(module,"c3x_renderer_trial_visual_shared"));
         require(render&&render_view&&gpu_render&&camera_begin&&camera_poll&&camera_cancel&&definitions&&reset,"renderer DLL entries missing");}
-    ~Core(){if(module){reset();FreeLibrary(module);}}
+    ~Core(){if(module){reset();auto trace_flush=reinterpret_cast<void(*)()>(GetProcAddress(module,"c3x_renderer_trial_trace_flush"));
+        if(trace_flush)trace_flush();FreeLibrary(module);}}
     void execute(Wire& wire){
         wire.status=0;wire.code=0;wire.executed=1;wire.reply_size=0;
         wire.width=wire.height=wire.rendered=wire.fallback=0;wire.shared_handle=0;
@@ -173,6 +177,19 @@ struct Core {
                 for(auto& tile:tiles)c3x_inputs::c3x_renderer_tile_v1_fields(in,tile);
                 in.done();page.tiles=tiles.data();
                 wire.code=unsigned(world_submit(&page,callback_result));
+            }else if(wire.live&&wire.kind==unsigned(Kind::world_page)&&wire.subtype==3){
+                in.done();require(world_status!=nullptr,"helper lacks world status entry");
+                c3x_renderer_world_status_v1 status={sizeof(status)};
+                wire.code=unsigned(world_status(&status));
+                if(wire.code==C3X_RENDERER_RESULT_OK){
+                    Writer response;response(status.total);response(status.authoritative);
+                    response(status.capture_cursor);response(status.regions);
+                    response(status.prepared_regions);response(status.unavailable_regions);
+                    response(status.capture_passes);response(status.appearance_sequence);
+                    response(status.preparation_sequence);
+                    wire.reply_size=unsigned(response.bytes.size());
+                    std::memcpy(wire.payload,response.bytes.data(),wire.reply_size);
+                }
             }else if(wire.kind==unsigned(Kind::scene)&&wire.subtype>=1&&wire.subtype<=3){
                 c3x_renderer_camera_identity_v1 identity={};if(wire.subtype!=1)c3x_renderer_camera_identity_v1_fields(in,identity);
                 Frame frame_value;frame(in,frame_value);in.done();
@@ -277,7 +294,8 @@ struct Core {
                         value.ticket=found!=ticket_ids.end()?found->second:INT64_MAX;}
                     if(!wire.live&&value.image){auto found=image_ids.find(value.image);
                         value.image=found!=image_ids.end()?found->second:INT64_MAX;}
-                    wire.code=unsigned(present_shared(&value,wire.consumer_pid,&wire.shared_handle,&wire.width,&wire.height));
+                    wire.code=unsigned(present_shared(&value,wire.consumer_pid,
+                        &wire.shared_handle,&wire.width,&wire.height));
                 }
             }else if(wire.kind==unsigned(Kind::visual)&&wire.subtype==1){
                 require(visual_shared!=nullptr,"helper lacks visual shared export");
@@ -434,7 +452,21 @@ void report(std::ofstream& file,std::uint64_t sequence,Wire const& wire,double r
 int wmain(int argc,wchar_t** argv){
     try{
 #if defined(_WIN64)
-        require(argc==4&&std::wstring(argv[1])==L"--child","helper usage: --child NAME DLL");
+        require(argc==5&&std::wstring(argv[1])==L"--child","helper usage: --child NAME DLL PARENT_PID");
+        auto parent_pid=std::stoull(std::wstring(argv[4]));
+        require(parent_pid>0&&parent_pid<=MAXDWORD,"invalid helper parent PID");
+        struct ParentGuard {HANDLE handle;~ParentGuard(){if(handle)CloseHandle(handle);}} parent{
+            OpenProcess(SYNCHRONIZE,FALSE,DWORD(parent_pid))};
+        require(parent.handle!=nullptr,"helper parent unavailable");
+        // The bridge and helper may both construct a trace sink. Keep their
+        // files distinct so the x86 endpoint cannot truncate x64 evidence.
+        wchar_t trace_path[MAX_PATH]={};
+        auto trace_size=GetEnvironmentVariableW(L"C3X_RENDERER_TRACE_FILE",trace_path,MAX_PATH);
+        if(trace_size && trace_size<MAX_PATH-4){
+            std::wstring helper_trace(trace_path,trace_size);helper_trace+=L".x64";
+            require(SetEnvironmentVariableW(L"C3X_RENDERER_TRACE_FILE",helper_trace.c_str())!=FALSE,
+                "x64 trace path setup failed");
+        }
         std::wstring base=argv[2];HANDLE mapping=OpenFileMappingW(FILE_MAP_ALL_ACCESS,FALSE,object_name(base,L"_map").c_str());
         HANDLE request=OpenEventW(SYNCHRONIZE,FALSE,object_name(base,L"_request").c_str());
         HANDLE response=OpenEventW(EVENT_MODIFY_STATE,FALSE,object_name(base,L"_response").c_str());
@@ -442,7 +474,8 @@ int wmain(int argc,wchar_t** argv){
         auto* wire=static_cast<Wire*>(MapViewOfFile(mapping,FILE_MAP_ALL_ACCESS,0,0,sizeof(Wire)));require(wire!=nullptr,"scene IPC map failed");
         Core core(argv[3]);require(SetEvent(response)!=FALSE,"helper ready signal failed");
         unsigned last=wire->sequence;
-        while(WaitForSingleObject(request,120000)==WAIT_OBJECT_0){
+        HANDLE active[2]={request,parent.handle};
+        while(WaitForMultipleObjects(2,active,FALSE,120000)==WAIT_OBJECT_0){
             require(wire->magic==wire_magic&&wire->version==wire_version&&wire->sequence==last+1,"scene IPC sequence mismatch");
             last=wire->sequence;if(wire->kind==0){wire->status=0;SetEvent(response);break;}
             core.execute(*wire);require(SetEvent(response)!=FALSE,"helper response signal failed");
@@ -467,7 +500,7 @@ int wmain(int argc,wchar_t** argv){
         HANDLE mapping=nullptr,request=nullptr,response=nullptr;Wire* shared=nullptr;PROCESS_INFORMATION child={};ChildGuard child_guard;
         std::wstring base;std::vector<unsigned char> last_config;
         auto start_child=[&]{
-            std::wstring command=L"\""+std::wstring(argv[5])+L"\" --child \""+base+L"\" \""+std::wstring(argv[2])+L"\"";
+            std::wstring command=L"\""+std::wstring(argv[5])+L"\" --child \""+base+L"\" \""+std::wstring(argv[2])+L"\" "+std::to_wstring(GetCurrentProcessId());
             std::vector<wchar_t> writable(command.begin(),command.end());writable.push_back(0);STARTUPINFOW startup={};startup.cb=sizeof(startup);
             require(CreateProcessW(argv[5],writable.data(),nullptr,nullptr,FALSE,CREATE_NO_WINDOW,nullptr,nullptr,&startup,&child)!=FALSE,"x64 helper start failed");
             child_guard.process=child.hProcess;CloseHandle(child.hThread);

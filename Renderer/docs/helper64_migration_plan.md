@@ -86,10 +86,11 @@ FPS or cutover acceptance**. The native screen handoff still suspends the
 independent visual cadence, so seamless interturn animation is not yet proved.
 The x86 and x64 presenters now support replay-only displayed-frame readback.
 For the first 213 common presentation events, 209 whole-screen fingerprints
-match; three initial exported BMPs are byte-identical. One of the four differing
-events was inspected pixel by pixel and differs at exactly one channel of one
-pixel. The other three have not yet been classified. Step 1 remains open for
-the remaining displayed-image and presentation timing evidence;
+match; three initial exported BMPs are byte-identical. Each of the four
+differing events was inspected pixel by pixel: exactly one pixel differed, in
+one color channel by one level. The sampled visual result is therefore within
+the accepted cross-architecture precision tolerance. Step 1 remains open for
+input-to-first-correct-frame and live presentation timing evidence;
 steps 2–5 have not been accepted or cut over. The earlier
 [shadow replay result](helper64_gate2_results.md#full-native-interleaved-shadow-checkpoint)
 remains the independent scene comparison.
@@ -117,6 +118,23 @@ live FPS or a hardware GPU budget. It does show the intended address-space
 separation and identifies visual-frame execution and native presentation for
 step 3 measurement. The generated per-call evidence is under
 `native/build/helper_trial/primary/`.
+
+The opt-in x64 bridge also completed a Standard-size prepared-world workload:
+5,000 authoritative tiles, all 247 regions prepared in about 7.4 s, then 100
+distributed camera destinations. The jumps performed zero world compiler calls,
+geometry adoption/uploads or readbacks; six destination images matched their
+oracles exactly. Request p95 was about 43 ms, while first coherent desktop-frame
+p95 was about 280–297 ms in two control runs. The measured x86 native-present
+call, rather than DWM completion, dominated that gap (about 252 ms p95 versus
+17 ms p95 for the desktop wait). A phase probe located much of the present
+latency in the x64 keyed shared-image acquisition. Retaining the x86 shared
+image import across frames improved median present time, but worsened tail
+latency: desktop p95 rose to about 698 ms with 856 ms worst-case present time.
+That experiment was rejected and the per-frame import path restored. The
+remaining step-3 responsibility is to decouple final-image production and
+consumption without such GPU synchronization stalls, then rerun the full
+integrated frame and animation workload. These figures are VM fixture results,
+not live-game FPS.
 
 This migration takes priority over isolated x86 M3.8 tuning, but carries forward
 M3.8–M3.13 stability, readiness, consolidation and navigation acceptance. It

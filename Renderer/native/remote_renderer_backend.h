@@ -4,6 +4,7 @@
 #include "native_screen_bridge.h"
 #include "visual_cadence.h"
 #include "input_recording/display.h"
+#include <cstdio>
 #include <mutex>
 
 namespace c3x_remote_scene {
@@ -58,6 +59,9 @@ public:
     int world_submit(c3x_renderer_world_page_v1 const& page,int callback_result){
         std::lock_guard<std::mutex> lock(gate);return client.world_submit(page,callback_result);
     }
+    int world_status(c3x_renderer_world_status_v1& status){
+        std::lock_guard<std::mutex> lock(gate);return client.world_status(status);
+    }
     int images(c3x_renderer_gpu_images_v1 const& request,c3x_renderer_gpu_result_v1& result,
                unsigned* pixels,unsigned capacity){
         std::lock_guard<std::mutex> lock(gate);return client.images(request,result,pixels,capacity);
@@ -75,6 +79,9 @@ public:
     }
     int present(c3x_renderer_gpu_present_v1 const& request){
         std::lock_guard<std::mutex> lock(gate);
+        char phase_option[4]={};bool phase_probe=GetEnvironmentVariableA("C3X_RENDERER_PRESENT_PHASES",phase_option,sizeof(phase_option))==1&&phase_option[0]=='1';
+        LARGE_INTEGER phase_begin={},phase_remote={},phase_adopt={},phase_end={},phase_rate={};
+        if(phase_probe){QueryPerformanceCounter(&phase_begin);QueryPerformanceFrequency(&phase_rate);}
         if(!presenter.caller_thread())return C3X_RENDERER_RESULT_BAD_ARGUMENT;
         if(request.action==0){
             if(!graphics())return C3X_RENDERER_RESULT_DEVICE_ERROR;
@@ -84,9 +91,12 @@ public:
                 return C3X_RENDERER_RESULT_BAD_ARGUMENT;
         }
         SharedFrame frame;int code=client.present(request,frame);
+        auto helper_present_service=phase_probe?client.stats().service_us:0;
+        if(phase_probe)QueryPerformanceCounter(&phase_remote);
         if(code!=C3X_RENDERER_RESULT_OK){if(frame.handle)CloseHandle(reinterpret_cast<HANDLE>(std::uintptr_t(frame.handle)));return code;}
         if(request.action==0){
             int displayed=presenter.adopt_shared(device1.Get(),context.Get(),frame.handle,frame.width,frame.height);
+            if(phase_probe)QueryPerformanceCounter(&phase_adopt);
             if(displayed==C3X_RENDERER_RESULT_OK){
                 active_window=static_cast<HWND>(request.window);
                 visual_active=client.visual_policy(2)!=0;
@@ -96,6 +106,12 @@ public:
                         visual(now.QuadPart,frequency.QuadPart);}catch(...){OutputDebugStringA("[C3X renderer] x64 visual frame unavailable\n");}
                 });
             }
+            if(phase_probe){QueryPerformanceCounter(&phase_end);
+                std::fprintf(stderr,"PRESENT_PHASE ticket=%lld remote_ms=%.3f helper_service_ms=%.3f adopt_ms=%.3f policy_ms=%.3f result=%d\n",
+                    static_cast<long long>(request.ticket),1000.*double(phase_remote.QuadPart-phase_begin.QuadPart)/double(phase_rate.QuadPart),
+                    double(helper_present_service)/1000.,
+                    1000.*double(phase_adopt.QuadPart-phase_remote.QuadPart)/double(phase_rate.QuadPart),
+                    1000.*double(phase_end.QuadPart-phase_adopt.QuadPart)/double(phase_rate.QuadPart),displayed);}
             return displayed;
         }
         if(frame.handle)CloseHandle(reinterpret_cast<HANDLE>(std::uintptr_t(frame.handle)));

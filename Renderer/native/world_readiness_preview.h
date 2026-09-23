@@ -84,10 +84,14 @@ if(GetEnvironmentVariableA("C3X_RENDERER_WORLD_READINESS_TEST",world_test_option
         c3x_renderer_gpu_present_v1 show{};show.struct_size=sizeof(show);show.ticket=image.ticket;
         show.image=image.map_image;show.window=world_window;show.width=image.width;show.height=image.height;
         show.area[2]=image.width;show.area[3]=image.height;
-        if(code!=C3X_RENDERER_RESULT_OK || world_present(&show)!=C3X_RENDERER_RESULT_OK || FAILED(desktop_complete())){ok=false;break;}
+        int presented_code=code==C3X_RENDERER_RESULT_OK?world_present(&show):code;
+        LARGE_INTEGER presented{};QueryPerformanceCounter(&presented);
+        if(code!=C3X_RENDERER_RESULT_OK || presented_code!=C3X_RENDERER_RESULT_OK || FAILED(desktop_complete())){ok=false;break;}
         LARGE_INTEGER displayed{};QueryPerformanceCounter(&displayed);auto memory_now=camera_memory_values();
-        std::printf("WORLD_JUMP sample=%u x=%d y=%d result=%d request_ms=%.3f desktop_ms=%.3f built=%u reused=%u uploads=%u readbacks=%u largest_free=%zu available_va=%zu geometry_bytes=%u begin_qpc=%lld end_qpc=%lld\n",
+        std::printf("WORLD_JUMP sample=%u x=%d y=%d result=%d request_ms=%.3f present_ms=%.3f desktop_wait_ms=%.3f desktop_ms=%.3f built=%u reused=%u uploads=%u readbacks=%u largest_free=%zu available_va=%zu geometry_bytes=%u begin_qpc=%lld end_qpc=%lld\n",
             n,center_x,center_y,code,1000.*double(end.QuadPart-begin.QuadPart)/double(frequency.QuadPart),
+            1000.*double(presented.QuadPart-end.QuadPart)/double(frequency.QuadPart),
+            1000.*double(displayed.QuadPart-presented.QuadPart)/double(frequency.QuadPart),
             1000.*double(displayed.QuadPart-begin.QuadPart)/double(frequency.QuadPart),
             world_output.geometry_tiles_built,world_output.geometry_tiles_reused,world_output.geometry_upload_bytes,
             image.map_readbacks,std::size_t(memory_now.second),std::size_t(memory_now.first),world_output.geometry_cache_bytes,begin.QuadPart,displayed.QuadPart);

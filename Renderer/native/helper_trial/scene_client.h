@@ -48,7 +48,7 @@ public:
             if(!mapping||!request||!response)throw std::runtime_error("x64 scene IPC creation failed");
             wire=static_cast<Wire*>(MapViewOfFile(mapping,FILE_MAP_ALL_ACCESS,0,0,sizeof(Wire)));
             if(!wire)throw std::runtime_error("x64 scene IPC view failed");
-            std::wstring command=L"\""+helper+L"\" --child \""+base+L"\" \""+dll+L"\"";
+            std::wstring command=L"\""+helper+L"\" --child \""+base+L"\" \""+dll+L"\" "+std::to_wstring(GetCurrentProcessId());
             std::vector<wchar_t> writable(command.begin(),command.end());writable.push_back(0);
             STARTUPINFOW startup={};startup.cb=sizeof(startup);PROCESS_INFORMATION child={};
             if(!CreateProcessW(helper.c_str(),writable.data(),nullptr,nullptr,FALSE,CREATE_NO_WINDOW,
