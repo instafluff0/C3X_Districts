@@ -60,6 +60,13 @@ public:
         }catch(...){stop();throw;}
     }
     ~SceneClient(){stop();}
+    std::uint64_t duplicate_into_helper(HANDLE source){
+        if(!source||!process)throw std::runtime_error("invalid surface handle");
+        HANDLE remote=nullptr;
+        if(!DuplicateHandle(GetCurrentProcess(),source,process,&remote,0,FALSE,DUPLICATE_SAME_ACCESS))
+            throw std::runtime_error("surface handle duplication failed");
+        return std::uint64_t(reinterpret_cast<std::uintptr_t>(remote));
+    }
     Wire const& call(unsigned kind,unsigned subtype,unsigned char const* bytes,unsigned count,
                      unsigned expected_code=0,std::int64_t recorded_ticket=0,std::int64_t recorded_image=0,
                      std::int64_t clock_ticks=0,std::int64_t clock_frequency=0,bool final_image=false,

@@ -1,5 +1,11 @@
 # Renderer architecture
 
+The [Renderer64 scene and motion cutover](renderer64_scene_and_motion.md) is
+authoritative for process separation, cross-process presentation, visual-clock
+ownership and directed unit motion. The retained world/GPU contracts below
+remain useful; older statements about the Civ III presenter or native action
+sampling describe the pre-cutover implementation.
+
 ## Destination
 
 Civ III publishes authoritative scene changes; the renderer retains GPU-ready

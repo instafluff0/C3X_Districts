@@ -1,16 +1,19 @@
 # Renderer documentation
 
-## Active reading path
+## Read first
 
-1. [Architecture](renderer_architecture.md): ownership, GPU-ready scene design and firm contracts.
-2. [Roadmap and current status](retained_renderer_plan.md): existing responsibilities, actual gaps and the [M3 extension](retained_renderer_plan.md#m3-extension-deliverables), [conditional 64-bit trial](retained_renderer_plan.md#m3h---conditional-64-bit-helper-trial) and [measured submission experiments](retained_renderer_plan.md#measured-submission-experiments-lore-where-useful).
-3. [Validation](benchmark_workflow.md): existing harnesses, measurement endpoints and meaningful checkpoints.
+1. [Current roadmap and status](retained_renderer_plan.md): the live work queue and unaccepted responsibilities.
+2. [Renderer64 scene and motion](renderer64_scene_and_motion.md): the target process boundary, state delivery, unit-motion UX and playable cutover gate.
+3. [Validation](benchmark_workflow.md): use at the integrated gate or for a focused contract, not as a separate implementation campaign.
 
-The [64-bit migration plan](helper64_migration_plan.md) records the adopted
-process boundary and cutover gates; [Gate 2 results](helper64_gate2_results.md)
-record the scene/pixel/capacity evidence and its gameplay limits. The
-[direct composition-surface trial](direct_surface_trial.md) records the
-copy-free presentation proof and its native-UI layering requirement.
+[Deep architecture](renderer_architecture.md) explains retained world/GPU
+contracts; its older presenter and timing assumptions are superseded by the
+Renderer64 cutover. Read only the relevant subsystem when working on it.
+
+The [64-bit migration plan](helper64_migration_plan.md) records gate evidence;
+[Gate 2 results](helper64_gate2_results.md) records its gameplay limits. The
+[cross-process surface trial](direct_surface_trial.md) preserves its graphics
+proof and native-UI layering requirement.
 
 [Execution rules](autonomous_renderer_execution.md) are a short operating reference.
 The [Lab workbench](../lab/README.md) owns category commands and visual approval.
@@ -39,10 +42,10 @@ and findings, not alternate architecture or implementation status.
 - [Earlier navigation design](navigation_implementation_plan.md), [activation/rollback handoff](navigation_handoff.md), [continuation archive](history/navigation_continuation_20260910.md).
 - [Game findings](live_usage_findings_20260909.md), [busy workload](busy_navigation_session.md).
 
-Historical “current”, “next” and staging statements apply to their recorded versions,
-not today's checkout. The pre-synthesis active guides are recoverable from Git at
-`c1360ea9`. Preserve expensive findings and ignored inputs; documentation cleanup
-is not permission to delete assets or controls.
+Historical “current”, “next” and staging statements apply to their recorded
+versions, not today's checkout. The former long roadmap remains in Git history.
+Preserve expensive findings and ignored inputs; documentation cleanup is not
+permission to delete assets or controls.
 
 ## Keeping this usable
 

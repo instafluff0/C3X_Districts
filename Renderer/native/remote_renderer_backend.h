@@ -1,6 +1,7 @@
 #pragma once
 #include "remote_renderer_client.h"
 #include "gpu_native_presenter.h"
+#include "remote_direct_surface.h"
 #include "native_screen_bridge.h"
 #include "visual_cadence.h"
 #include "input_recording/display.h"
@@ -17,9 +18,32 @@ class Backend {
     c3x_gpu_images::ComPtr<ID3D11Device1> device1;
     c3x_gpu_images::ComPtr<ID3D11DeviceContext> context;
     c3x_gpu_images::NativePresenter presenter;
+    DirectSurface direct_surface;
+    bool direct_active=false;
+    bool direct_unavailable=false;
     c3x_renderer::VisualCadence cadence;
     HWND active_window=nullptr;
     bool visual_active=false;
+    bool detach_direct(bool paint_native,std::vector<unsigned>* retained=nullptr,
+                       unsigned* retained_width=nullptr,unsigned* retained_height=nullptr){
+        if(!direct_active)return true;
+        std::vector<unsigned> pixels;unsigned w=0,h=0;
+        bool have=(!paint_native&&!retained)||client.surface_pixels(pixels,w,h);
+        HWND hwnd=active_window;
+        client.bind_surface(nullptr,0,0);
+        direct_surface.reset();direct_active=false;
+        if(retained&&have){*retained=std::move(pixels);
+            if(retained_width)*retained_width=w;if(retained_height)*retained_height=h;}
+        else if(paint_native&&have&&hwnd&&IsWindow(hwnd)){
+            HDC dc=GetDC(hwnd);
+            if(dc){BITMAPINFO info={};info.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);
+                info.bmiHeader.biWidth=LONG(w);info.bmiHeader.biHeight=-LONG(h);
+                info.bmiHeader.biPlanes=1;info.bmiHeader.biBitCount=32;
+                SetDIBitsToDevice(dc,0,0,w,h,0,0,0,h,pixels.data(),&info,DIB_RGB_COLORS);
+                GdiFlush();ReleaseDC(hwnd,dc);}
+        }
+        return have;
+    }
     bool graphics(){
         if(device)return true;
         D3D_FEATURE_LEVEL feature={};
@@ -31,9 +55,17 @@ public:
     Backend(std::wstring const& helper,std::wstring const& dll):client(helper,dll){}
     ~Backend(){cadence.stop();}
     int definitions(char const* root,char const* fallback,char const* scenario,char const* custom){
-        std::lock_guard<std::mutex> lock(gate);return client.definitions(root,fallback,scenario,custom);
+        std::lock_guard<std::mutex> lock(gate);
+        if(!detach_direct(true))return C3X_RENDERER_RESULT_DEVICE_ERROR;
+        visual_active=false;active_window=nullptr;cadence.disable();
+        direct_unavailable=false;
+        return client.definitions(root,fallback,scenario,custom);
     }
-    int pack(char const* path){std::lock_guard<std::mutex> lock(gate);return client.pack(path);}
+    int pack(char const* path){std::lock_guard<std::mutex> lock(gate);
+        if(!detach_direct(true))return C3X_RENDERER_RESULT_DEVICE_ERROR;
+        visual_active=false;active_window=nullptr;cadence.disable();
+        direct_unavailable=false;
+        return client.pack(path);}
     int set_units(int enabled){std::lock_guard<std::mutex> lock(gate);return client.set_units(enabled);}
     int visual_policy(unsigned policy){std::lock_guard<std::mutex> lock(gate);return client.visual_policy(policy);}
     int render(c3x_renderer_camera_request_v1 const& request,c3x_renderer_gpu_frame_v1& gpu,
@@ -82,36 +114,69 @@ public:
         char phase_option[4]={};bool phase_probe=GetEnvironmentVariableA("C3X_RENDERER_PRESENT_PHASES",phase_option,sizeof(phase_option))==1&&phase_option[0]=='1';
         LARGE_INTEGER phase_begin={},phase_remote={},phase_adopt={},phase_end={},phase_rate={};
         if(phase_probe){QueryPerformanceCounter(&phase_begin);QueryPerformanceFrequency(&phase_rate);}
-        if(!presenter.caller_thread())return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        if(!presenter.caller_thread()||!direct_surface.caller_thread())return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        if(request.action&&direct_active&&!detach_direct(request.action==2))
+            return C3X_RENDERER_RESULT_DEVICE_ERROR;
         if(request.action==0){
+            DWORD process=0;
+            if(GetWindowThreadProcessId(static_cast<HWND>(request.window),&process)!=GetCurrentThreadId()||
+               process!=GetCurrentProcessId())return C3X_RENDERER_RESULT_BAD_ARGUMENT;
             if(!graphics())return C3X_RENDERER_RESULT_DEVICE_ERROR;
             bool full=request.area[0]==0&&request.area[1]==0&&request.area[2]==request.width&&request.area[3]==request.height;
-            if(!presenter.prepare(static_cast<HWND>(request.window),device.Get(),
-                                  unsigned(request.width),unsigned(request.height),full))
-                return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+            if(direct_active&&!direct_surface.matches(static_cast<HWND>(request.window),
+               unsigned(request.width),unsigned(request.height))){
+                if(!detach_direct(true))return C3X_RENDERER_RESULT_DEVICE_ERROR;
+            }
+            char trial[4]={};bool requested=GetEnvironmentVariableA("C3X_RENDERER_DIRECT_SURFACE_TRIAL",trial,sizeof(trial))==1&&trial[0]=='1';
+            char strict_option[4]={};bool strict=GetEnvironmentVariableA("C3X_RENDERER_DIRECT_SURFACE_STRICT_TRIAL",strict_option,sizeof(strict_option))==1&&strict_option[0]=='1';
+            if(requested&&full&&!direct_active&&!direct_unavailable){
+                direct_active=direct_surface.prepare(static_cast<HWND>(request.window),device.Get(),
+                    unsigned(request.width),unsigned(request.height))&&
+                    client.bind_surface(direct_surface.handle(),unsigned(request.width),unsigned(request.height))==C3X_RENDERER_RESULT_OK;
+                if(!direct_active)direct_unavailable=true;
+            }
+            if(!direct_active){
+                direct_surface.reset();
+                if(requested&&full&&strict)return C3X_RENDERER_RESULT_DEVICE_ERROR;
+                if(!presenter.prepare(static_cast<HWND>(request.window),device.Get(),
+                                      unsigned(request.width),unsigned(request.height),full))
+                    return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+            }
         }
         SharedFrame frame;int code=client.present(request,frame);
+        if(code==C3X_RENDERER_RESULT_OK&&direct_active&&request.action==0&&!direct_surface.activate())
+            code=C3X_RENDERER_RESULT_DEVICE_ERROR;
+        if(code==C3X_RENDERER_RESULT_DEVICE_ERROR&&direct_active&&request.action==0){
+            char strict_option[4]={};if(GetEnvironmentVariableA("C3X_RENDERER_DIRECT_SURFACE_STRICT_TRIAL",strict_option,sizeof(strict_option))==1&&strict_option[0]=='1')
+                return code;
+            client.bind_surface(nullptr,0,0);direct_surface.reset();direct_active=false;direct_unavailable=true;
+            bool full=request.area[0]==0&&request.area[1]==0&&request.area[2]==request.width&&request.area[3]==request.height;
+            if(presenter.prepare(static_cast<HWND>(request.window),device.Get(),
+                                 unsigned(request.width),unsigned(request.height),full))code=client.present(request,frame);
+        }
         auto helper_present_service=phase_probe?client.stats().service_us:0;
         if(phase_probe)QueryPerformanceCounter(&phase_remote);
         if(code!=C3X_RENDERER_RESULT_OK){if(frame.handle)CloseHandle(reinterpret_cast<HANDLE>(std::uintptr_t(frame.handle)));return code;}
         if(request.action==0){
-            int displayed=presenter.adopt_shared(device1.Get(),context.Get(),frame.handle,frame.width,frame.height);
+            int displayed=direct_active?C3X_RENDERER_RESULT_OK:
+                presenter.adopt_shared(device1.Get(),context.Get(),frame.handle,frame.width,frame.height);
             if(phase_probe)QueryPerformanceCounter(&phase_adopt);
             if(displayed==C3X_RENDERER_RESULT_OK){
                 active_window=static_cast<HWND>(request.window);
                 visual_active=client.visual_policy(2)!=0;
                 char manual[4]={};bool manual_replay=GetEnvironmentVariableA("C3X_RENDERER_MANUAL_VISUAL",manual,sizeof(manual))==1&&manual[0]=='1';
-                if(visual_active&&!manual_replay)cadence.enable([this]{
+                if(visual_active&&!manual_replay&&!direct_active)cadence.enable([this]{
                     try{LARGE_INTEGER now={},frequency={};QueryPerformanceCounter(&now);QueryPerformanceFrequency(&frequency);
                         visual(now.QuadPart,frequency.QuadPart);}catch(...){OutputDebugStringA("[C3X renderer] x64 visual frame unavailable\n");}
                 });
+                else cadence.disable();
             }
             if(phase_probe){QueryPerformanceCounter(&phase_end);
-                std::fprintf(stderr,"PRESENT_PHASE ticket=%lld remote_ms=%.3f helper_service_ms=%.3f adopt_ms=%.3f policy_ms=%.3f result=%d\n",
+                std::fprintf(stderr,"PRESENT_PHASE ticket=%lld remote_ms=%.3f helper_service_ms=%.3f adopt_ms=%.3f policy_ms=%.3f route=%s result=%d\n",
                     static_cast<long long>(request.ticket),1000.*double(phase_remote.QuadPart-phase_begin.QuadPart)/double(phase_rate.QuadPart),
                     double(helper_present_service)/1000.,
                     1000.*double(phase_adopt.QuadPart-phase_remote.QuadPart)/double(phase_rate.QuadPart),
-                    1000.*double(phase_end.QuadPart-phase_adopt.QuadPart)/double(phase_rate.QuadPart),displayed);}
+                    1000.*double(phase_end.QuadPart-phase_adopt.QuadPart)/double(phase_rate.QuadPart),direct_active?"direct":"shared",displayed);}
             return displayed;
         }
         if(frame.handle)CloseHandle(reinterpret_cast<HANDLE>(std::uintptr_t(frame.handle)));
@@ -130,12 +195,19 @@ public:
             return C3X_RENDERER_RESULT_PENDING;
         SharedFrame frame;int code=client.visual(ticks,frequency,frame);
         if(code!=C3X_RENDERER_RESULT_OK){if(frame.handle)CloseHandle(reinterpret_cast<HANDLE>(std::uintptr_t(frame.handle)));return code;}
+        if(direct_active)return code;
         if(!frame.handle)return C3X_RENDERER_RESULT_PENDING;
         return presenter.adopt_shared(device1.Get(),context.Get(),frame.handle,frame.width,frame.height,true);
     }
     int screen(c3x_native_images::ScreenSnapshot const* source){
         std::lock_guard<std::mutex> lock(gate);
-        visual_active=false;active_window=nullptr;cadence.disable();
+        visual_active=false;cadence.disable();
+        std::vector<unsigned> previous;unsigned previous_width=0,previous_height=0;
+        if(direct_active){
+            if(source){if(!detach_direct(false,&previous,&previous_width,&previous_height))return C3X_RENDERER_RESULT_DEVICE_ERROR;}
+            else if(!detach_direct(true))return C3X_RENDERER_RESULT_DEVICE_ERROR;
+        }
+        active_window=nullptr;
         if(!source){
             if(presenter.initialized){
                 if(!presenter.preserve_display(context.Get()))return C3X_RENDERER_RESULT_DEVICE_ERROR;
@@ -146,6 +218,12 @@ public:
         if(!graphics())return C3X_RENDERER_RESULT_DEVICE_ERROR;
         bool full=source->area.left==0&&source->area.top==0&&
             source->area.right==source->width&&source->area.bottom==source->height;
+        if(!full&&!previous.empty()){
+            if(previous_width!=unsigned(source->width)||previous_height!=unsigned(source->height)||
+               !presenter.prepare(source->window,device.Get(),previous_width,previous_height,true)||
+               !presenter.seed_bgra(context.Get(),previous.data(),previous_width,previous_height))
+                return C3X_RENDERER_RESULT_DEVICE_ERROR;
+        }
         if(!presenter.prepare(source->window,device.Get(),unsigned(source->width),unsigned(source->height),full)||
            !presenter.upload_screen(context.Get(),source->pixels.data(),unsigned(source->width),
                unsigned(source->height),source->area,source->native_format))
@@ -155,7 +233,10 @@ public:
     int reset(){
         cadence.stop();
         std::lock_guard<std::mutex> lock(gate);
-        visual_active=false;active_window=nullptr;
+        visual_active=false;
+        if(!detach_direct(true))return C3X_RENDERER_RESULT_DEVICE_ERROR;
+        active_window=nullptr;
+        direct_unavailable=false;
         if(presenter.initialized){
             if(!presenter.preserve_display(context.Get()))return C3X_RENDERER_RESULT_DEVICE_ERROR;
             presenter.release_native();
@@ -164,6 +245,7 @@ public:
     }
     bool replay_display(std::vector<unsigned>& pixels,unsigned& width,unsigned& height){
         std::lock_guard<std::mutex> lock(gate);
+        if(direct_active)return client.surface_pixels(pixels,width,height);
         return c3x_inputs::display_pixels(device.Get(),context.Get(),presenter.retained(),pixels,width,height);
     }
     c3x_helper_trial::SceneClient::Stats replay_stats(){

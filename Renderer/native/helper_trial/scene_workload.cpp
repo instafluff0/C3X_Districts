@@ -20,6 +20,7 @@
 #include "../asset_content_hash.h"
 #include "../gpu_composition_session.h"
 #include "../remote_scene_output.h"
+#include "../visual_cadence.h"
 #include "scene_wire.h"
 
 using namespace c3x_inputs;
@@ -67,6 +68,12 @@ struct Core {
     PresentShared present_shared=nullptr;
     using VisualShared=int(*)(std::int64_t,std::int64_t,DWORD,std::uint64_t*,unsigned*,unsigned*);
     VisualShared visual_shared=nullptr;
+    using BindSurface=int(*)(std::uint64_t,unsigned,unsigned);
+    BindSurface bind_surface=nullptr;bool direct_surface_bound=false,direct_display_ready=false;
+    c3x_renderer::VisualCadence direct_cadence{
+        std::chrono::microseconds(16667),std::chrono::milliseconds(2)};
+    using SurfacePixels=int(*)(unsigned*,unsigned,unsigned*,unsigned*);
+    SurfacePixels surface_pixels=nullptr;
     std::map<std::int64_t,std::int64_t> ticket_ids,image_ids;
     explicit Core(wchar_t const* dll,bool verify=false):verify_pixels(verify){module=LoadLibraryW(dll);require(module!=nullptr,"renderer DLL load failed");
         render=reinterpret_cast<c3x_renderer_render_fn>(GetProcAddress(module,"c3x_renderer_render"));
@@ -93,9 +100,28 @@ struct Core {
         shared_raw=reinterpret_cast<Shared>(GetProcAddress(module,"c3x_renderer_trial_export_shared_raw"));
         present_shared=reinterpret_cast<PresentShared>(GetProcAddress(module,"c3x_renderer_trial_present_shared"));
         visual_shared=reinterpret_cast<VisualShared>(GetProcAddress(module,"c3x_renderer_trial_visual_shared"));
+        bind_surface=reinterpret_cast<BindSurface>(GetProcAddress(module,"c3x_renderer_trial_bind_surface"));
+        surface_pixels=reinterpret_cast<SurfacePixels>(GetProcAddress(module,"c3x_renderer_trial_surface_pixels"));
         require(render&&render_view&&gpu_render&&camera_begin&&camera_poll&&camera_cancel&&definitions&&reset,"renderer DLL entries missing");}
-    ~Core(){if(module){reset();auto trace_flush=reinterpret_cast<void(*)()>(GetProcAddress(module,"c3x_renderer_trial_trace_flush"));
+    ~Core(){direct_cadence.stop();if(module){reset();auto trace_flush=reinterpret_cast<void(*)()>(GetProcAddress(module,"c3x_renderer_trial_trace_flush"));
         if(trace_flush)trace_flush();FreeLibrary(module);}}
+    void start_direct_cadence(){
+        if(!direct_surface_bound||!direct_display_ready||!visual_shared||!native_image)return;
+        char manual[4]={};
+        if(GetEnvironmentVariableA("C3X_RENDERER_MANUAL_VISUAL",manual,sizeof(manual))==1&&manual[0]=='1')return;
+        if(native_image(C3X_NATIVE_VISUAL_POLICY,nullptr,nullptr,nullptr,nullptr,2)<=0)return;
+        direct_cadence.enable([this]{
+            LARGE_INTEGER now={},frequency={};
+            if(!QueryPerformanceCounter(&now)||!QueryPerformanceFrequency(&frequency))return;
+            std::uint64_t handle=0;unsigned width=0,height=0;
+            int code=visual_shared(now.QuadPart,frequency.QuadPart,0,&handle,&width,&height);
+            if(code==C3X_RENDERER_RESULT_ERROR||code==C3X_RENDERER_RESULT_DEVICE_ERROR){
+                OutputDebugStringA("[C3X renderer] Renderer64 visual surface unavailable\n");
+                direct_cadence.disable();
+            }
+        });
+    }
+    void stop_direct_cadence(){direct_cadence.stop();direct_display_ready=false;}
     void execute(Wire& wire){
         wire.status=0;wire.code=0;wire.executed=1;wire.reply_size=0;
         wire.width=wire.height=wire.rendered=wire.fallback=0;wire.shared_handle=0;
@@ -118,18 +144,24 @@ struct Core {
                 in(operation);in(image);in(source);in(color);in.done();
                 require(operation==C3X_NATIVE_VISUAL_POLICY&&!image&&!source&&native_image,
                     "unsupported native policy message");
+                if(color==0)stop_direct_cadence();
                 wire.code=unsigned(native_image(operation,nullptr,nullptr,nullptr,nullptr,color));
+                if(color==1&&wire.code>0)start_direct_cadence();
             }else if(wire.kind==unsigned(Kind::native_bridge)&&wire.subtype==6){
-                in.done();reset();ticket_ids.clear();image_ids.clear();wire.code=1;
+                in.done();stop_direct_cadence();reset();ticket_ids.clear();image_ids.clear();direct_surface_bound=false;wire.code=1;
             }else if(wire.kind==unsigned(Kind::native_bridge)&&wire.subtype==8){
+                stop_direct_cadence();
                 bool present[4]={};std::string paths[4];for(unsigned n=0;n<4;++n)paths[n]=in.string(32768,&present[n]);in.done();
                 wire.code=unsigned(definitions(present[0]?paths[0].c_str():nullptr,present[1]?paths[1].c_str():nullptr,
                     present[2]?paths[2].c_str():nullptr,present[3]?paths[3].c_str():nullptr));
+                direct_surface_bound=false;
                 ticket_ids.clear();image_ids.clear();
             }else if(wire.live&&wire.kind==unsigned(Kind::native_bridge)&&wire.subtype==7){
+                stop_direct_cadence();
                 require(pack!=nullptr,"helper lacks pack configuration");
                 bool present=false;auto path=in.string(32768,&present);in.done();
                 wire.code=unsigned(pack(present?path.c_str():nullptr));
+                direct_surface_bound=false;
                 ticket_ids.clear();image_ids.clear();
             }else if(wire.live&&wire.kind==unsigned(Kind::camera)&&wire.subtype==1){
                 c3x_renderer_camera_identity_v1 identity={};c3x_renderer_camera_identity_v1_fields(in,identity);
@@ -279,12 +311,27 @@ struct Core {
                         }
                     }
                 }
+            }else if(wire.live&&wire.kind==unsigned(Kind::presentation)&&wire.subtype==1){
+                stop_direct_cadence();
+                require(bind_surface!=nullptr,"helper lacks direct-surface entry");
+                auto handle=in.u64();auto width=in.u32(),height=in.u32();in.done();
+                wire.code=unsigned(bind_surface(handle,width,height));
+                direct_surface_bound=handle&&wire.code==C3X_RENDERER_RESULT_OK;
+            }else if(wire.live&&wire.kind==unsigned(Kind::presentation)&&wire.subtype==2){
+                in.done();require(surface_pixels&&direct_surface_bound,"direct surface readback unavailable");
+                wire.code=unsigned(surface_pixels(reinterpret_cast<unsigned*>(wire.payload),
+                    wire_capacity/4,&wire.width,&wire.height));
+                if(wire.code==C3X_RENDERER_RESULT_OK){
+                    require(std::uint64_t(wire.width)*wire.height*4<=wire_capacity,"direct surface readback exceeded slot");
+                    wire.reply_size=wire.width*wire.height*4;
+                }
             }else if(wire.kind==unsigned(Kind::presentation)&&wire.subtype==0){
                 require(present_shared!=nullptr,"helper lacks final-image shared export");
                 c3x_renderer_gpu_present_v1 value={sizeof(value)};
                 in(value.action);in(value.ticket);in(value.image);in(value.width);in(value.height);
                 for(auto& x:value.area)in(x);auto owner=in.u32();in.done();
                 require(owner<=1,"invalid presentation role");
+                if(value.action)stop_direct_cadence();
                 if(!wire.live&&wire.expected_code!=C3X_RENDERER_RESULT_OK){
                     // Native admission rejected this offer before a renderer
                     // frame existed; do not mutate the x64 retained display.
@@ -296,12 +343,16 @@ struct Core {
                         value.image=found!=image_ids.end()?found->second:INT64_MAX;}
                     wire.code=unsigned(present_shared(&value,wire.consumer_pid,
                         &wire.shared_handle,&wire.width,&wire.height));
+                    if(value.action)direct_surface_bound=false;
+                    else if(wire.code==C3X_RENDERER_RESULT_OK&&direct_surface_bound){
+                        direct_display_ready=true;start_direct_cadence();
+                    }
                 }
             }else if(wire.kind==unsigned(Kind::visual)&&wire.subtype==1){
                 require(visual_shared!=nullptr,"helper lacks visual shared export");
                 auto automatic=in.u32();in.done();require(automatic<=1,"invalid visual offer");
                 if(!wire.clock_frequency&&!wire.live){wire.code=wire.expected_code;wire.executed=0;}
-                else{require(wire.consumer_pid,"sampled visual frame has no consumer");
+                else{require(wire.consumer_pid||direct_surface_bound,"sampled visual frame has no consumer");
                     auto rendered=unsigned(visual_shared(wire.clock_ticks,wire.clock_frequency,wire.consumer_pid,
                         &wire.shared_handle,&wire.width,&wire.height));
                     wire.rendered=rendered;

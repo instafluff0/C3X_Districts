@@ -4,12 +4,12 @@ The [documentation index](docs/README.md) separates active work from preserved
 contracts and history. Use [storage retention](docs/storage_retention.md) for
 generated-output maintenance; ignored assets are not automatically disposable.
 
-For renderer development, use [the architecture](docs/renderer_architecture.md),
-[the roadmap/current status](docs/retained_renderer_plan.md), and
-[validation](docs/benchmark_workflow.md). The active destination is cheap GPU-ready
-scene rendering: persistent world content → selected occurrences → compatible
-passes → resident native composition. Renderer-owned visual frames are implemented;
-cheap general camera changes and broader compatible submission remain unfinished.
+For renderer development, start with [current status](docs/retained_renderer_plan.md)
+and the [Renderer64 scene and motion contract](docs/renderer64_scene_and_motion.md).
+Use [validation](docs/benchmark_workflow.md) at the relevant integration gate and
+the [deep architecture](docs/renderer_architecture.md) for subsystem detail.
+The active destination is a retained GPU scene with copied authoritative game
+changes, smooth renderer-owned presentation, and a cross-process map surface.
 [Execution rules](docs/autonomous_renderer_execution.md) are a short reference.
 Historical handoffs preserve evidence, not extra queues or current build identity.
 The [input recording handoff](docs/input_recording_handoff.md) describes the current
@@ -57,11 +57,11 @@ and generated preview/verification archives have been removed.
 
 ## Architectural boundaries
 
-The [architecture](docs/renderer_architecture.md) defines world, asset, instance,
-view, pass and publication ownership. Raster caches accelerate that scene; they do
-not dictate its structure. Use the [roadmap](docs/retained_renderer_plan.md) for
-implemented capabilities, four agreed milestones, measured limits and checkpoint
-identity. Full detail remains the policy; there is no API migration prerequisite.
+The [architecture](docs/renderer_architecture.md) remains the deep reference for
+world, asset, instance, view, pass and publication ownership. The short
+[roadmap](docs/retained_renderer_plan.md) gives current status and order;
+older presenter and clock details in deep references do not override the
+Renderer64 cutover.
 Shoreline waves, water motion and reflections are always enabled in the normal
 performance workload. Optimize idle animation, scrolling and map jumps with all
 three on. Effects-off runs are explicit diagnostic controls only; preserve the

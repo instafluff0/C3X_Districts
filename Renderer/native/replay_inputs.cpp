@@ -51,10 +51,10 @@ void apply_settings(Reader& header){
 int wmain(int argc,wchar_t** argv){
     HMODULE module=nullptr;HWND window=nullptr;void* reservation=nullptr;int exit_code=0;
     try{
-        require(argc>=4&&std::wstring(argv[1])==L"--development","usage: replay_inputs --development DLL INPUT_DIRECTORY [--frames DIR LAST | --range DIR FIRST LAST | --seconds DIR START END] [--timeline NEW_FILE] [--fingerprints NEW_FILE] [--trace NEW_FILE] [--allow-prefix] [--before-event N] [--compare-candidate [--pixel-audit]] [--performance NEW_FILE] [--reserve-mib N] [--watch] [--realtime NEW_FILE] [--x64-scene HELPER DLL NEW_REPORT] [--x64-primary HELPER DLL]");
+        require(argc>=4&&std::wstring(argv[1])==L"--development","usage: replay_inputs --development DLL INPUT_DIRECTORY [--frames DIR LAST | --range DIR FIRST LAST | --seconds DIR START END] [--timeline NEW_FILE] [--fingerprints NEW_FILE] [--trace NEW_FILE] [--allow-prefix] [--before-event N] [--compare-candidate [--pixel-audit]] [--performance NEW_FILE] [--reserve-mib N] [--watch] [--realtime NEW_FILE] [--x64-scene HELPER DLL NEW_REPORT] [--x64-primary HELPER DLL] [--direct-surface-trial]");
         std::wstring label=L"C3X input replay";
         std::filesystem::path frames,timeline_path,trace_path,fingerprints_path,performance_path,shadow_path;
-        std::wstring shadow_helper,shadow_dll,primary_helper,primary_dll;unsigned reserve_mib=0;std::uint64_t before_event=0;bool stopped_before_event=false;std::uint64_t first_frame=1,frame_limit=0,frame_number=0,exported=0;double first_second=0,last_second=0;bool seconds=false,allow_prefix=false,tail_truncated=false,compare_candidate=false,pixel_audit=false,binary_matches_capture=true,watch=false,realtime=false;
+        std::wstring shadow_helper,shadow_dll,primary_helper,primary_dll;unsigned reserve_mib=0;std::uint64_t before_event=0;bool stopped_before_event=false;std::uint64_t first_frame=1,frame_limit=0,frame_number=0,exported=0;double first_second=0,last_second=0;bool seconds=false,allow_prefix=false,tail_truncated=false,compare_candidate=false,pixel_audit=false,binary_matches_capture=true,watch=false,realtime=false,direct_surface_trial=false;
         auto integer=[](wchar_t const* raw){std::size_t used=0;std::wstring text(raw);auto value=std::stoull(text,&used);require(used==text.size()&&value&&value<=1000000,"invalid frame bound");return value;};
         auto second=[](wchar_t const* raw){std::size_t used=0;std::wstring text(raw);auto value=std::stod(text,&used);require(used==text.size()&&std::isfinite(value)&&value>=0&&value<=86400,"invalid second bound");return value;};
         for(int i=4;i<argc;){std::wstring flag=argv[i++];
@@ -65,6 +65,7 @@ int wmain(int argc,wchar_t** argv){
             if(flag==L"--x64-scene"){require(i+2<argc&&shadow_path.empty(),"invalid x64 scene option");shadow_helper=argv[i++];shadow_dll=argv[i++];shadow_path=argv[i++];continue;}
             if(flag==L"--x64-primary"){require(i+1<argc&&primary_helper.empty(),"invalid x64 primary option");
                 primary_helper=argv[i++];primary_dll=argv[i++];continue;}
+            if(flag==L"--direct-surface-trial"){direct_surface_trial=true;continue;}
             if(flag==L"--reserve-mib"){require(i<argc&&!reserve_mib,"invalid reservation option");auto n=integer(argv[i++]);require(n<=2048,"reservation limit");reserve_mib=unsigned(n);continue;}
             if(flag==L"--compare-candidate"){compare_candidate=true;continue;}
             if(flag==L"--pixel-audit"){pixel_audit=true;continue;}
@@ -88,11 +89,14 @@ int wmain(int argc,wchar_t** argv){
         bool performance=!performance_path.empty();require(!performance||(frames.empty()&&fingerprints_path.empty()&&!watch),"performance runs cannot export, fingerprint or pace playback");require(!reserve_mib||performance,"reservation requires performance mode");
         require(shadow_path.empty()||!realtime,"x64 scene diagnostic is unpaced only");
         require(primary_helper.empty()||shadow_path.empty(),"x64 primary and shadow modes are exclusive");
+        require(!direct_surface_trial||!primary_helper.empty(),"direct surface trial requires x64 primary");
         std::ofstream measurements;if(performance){require(!std::filesystem::exists(performance_path),"performance output must be new");measurements.open(performance_path);require(bool(measurements),"cannot open performance output");}
         if(reserve_mib){reservation=VirtualAlloc(nullptr,std::size_t(reserve_mib)*1024*1024,MEM_RESERVE,PAGE_NOACCESS);require(reservation!=nullptr,"cannot reserve declared address-space pressure");}
         if(!frames.empty())require(!std::filesystem::exists(frames)&&std::filesystem::create_directories(frames),"frame directory must be new");
         if(!trace_path.empty())require(!std::filesystem::exists(trace_path),"trace must be new");
         auto configure=[&](Reader& settings){apply_settings(settings);if(realtime)SetEnvironmentVariableW(L"C3X_RENDERER_MANUAL_VISUAL",L"0");
+            if(direct_surface_trial){SetEnvironmentVariableW(L"C3X_RENDERER_DIRECT_SURFACE_TRIAL",L"1");
+                SetEnvironmentVariableW(L"C3X_RENDERER_DIRECT_SURFACE_STRICT_TRIAL",L"1");}
             if(!primary_helper.empty()){SetEnvironmentVariableW(L"C3X_RENDERER_HELPER64",L"1");
                 SetEnvironmentVariableW(L"C3X_RENDERER_HELPER_EXE",primary_helper.c_str());
                 SetEnvironmentVariableW(L"C3X_RENDERER_X64_DLL",primary_dll.c_str());}
@@ -349,7 +353,7 @@ int wmain(int argc,wchar_t** argv){
         if(watch)std::cout<<"{\"viewing_mode\":\"paced_forensic_playback\",\"dropped_by_player\":0,\"frames_late_over_33ms\":"<<late_playback_frames<<",\"maximum_playback_lag_ms\":"<<maximum_playback_lag_ms<<"}\n";
         unsigned map_pixel_mismatches=0,unit_pixel_mismatches=0;
         if(pixel_audit)require(audit(&map_pixel_mismatches,&unit_pixel_mismatches)==1,"replay pixel audit unavailable");
-        std::cout<<"{\"status\":\"development_input_replay\",\"qualified\":false,\"timing_scope\":\""<<(realtime?"paced_candidate_recorded_native_consumption":performance?"unpaced_native_service_not_live_fps":"forensic_calls_not_performance")<<"\",\"reserved_va_mib\":"<<reserve_mib<<",\"calls\":"<<calls<<",\"binary_matches_capture\":"<<(binary_matches_capture?"true":"false")<<",\"complete\":"<<(complete?"true":"false")<<",\"before_event\":"<<before_event<<",\"last_event\":"<<last<<",\"unfinished_calls\":"<<pending.size()<<",\"accepted_presentations\":"<<frame_number<<",\"clock_samples\":"<<clocks<<",\"pending_peak_bytes\":"<<peak<<",\"pixel_audit\":"<<(pixel_audit?"true":"false")<<",\"map_pixel_mismatches\":"<<map_pixel_mismatches<<",\"unit_pixel_mismatches\":"<<unit_pixel_mismatches<<",\"replay_envelope_ms\":"<<work_ms<<"}\n";
+        std::cout<<"{\"status\":\"development_input_replay\",\"qualified\":false,\"timing_scope\":\""<<(realtime?"paced_candidate_recorded_native_consumption":performance?"unpaced_native_service_not_live_fps":"forensic_calls_not_performance")<<"\",\"direct_surface_trial\":"<<(direct_surface_trial?"true":"false")<<",\"reserved_va_mib\":"<<reserve_mib<<",\"calls\":"<<calls<<",\"binary_matches_capture\":"<<(binary_matches_capture?"true":"false")<<",\"complete\":"<<(complete?"true":"false")<<",\"before_event\":"<<before_event<<",\"last_event\":"<<last<<",\"unfinished_calls\":"<<pending.size()<<",\"accepted_presentations\":"<<frame_number<<",\"clock_samples\":"<<clocks<<",\"pending_peak_bytes\":"<<peak<<",\"pixel_audit\":"<<(pixel_audit?"true":"false")<<",\"map_pixel_mismatches\":"<<map_pixel_mismatches<<",\"unit_pixel_mismatches\":"<<unit_pixel_mismatches<<",\"replay_envelope_ms\":"<<work_ms<<"}\n";
     }catch(std::exception const& error){std::cerr<<error.what()<<'\n';exit_code=1;}
     // Finish exception unwinding before unloading a DLL that may have thrown.
     if(module){auto reset=reinterpret_cast<void(*)()>(GetProcAddress(module,"c3x_renderer_input_replay_shutdown"));if(!reset)reset=reinterpret_cast<void(*)()>(GetProcAddress(module,"c3x_renderer_reset"));if(reset)reset();}

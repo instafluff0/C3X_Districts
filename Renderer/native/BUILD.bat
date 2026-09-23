@@ -28,7 +28,7 @@ if not exist "build\candidate" mkdir "build\candidate"
 
 if /i "%~1"=="input-replay" (
   if not exist "build\input-recording" mkdir "build\input-recording"
-  cl /nologo /std:c++17 /EHsc /O2 /W4 /WX /wd4191 replay_inputs.cpp /Fo:build\input-recording\ /Fe:build\input-recording\replay_inputs.exe /link /LARGEADDRESSAWARE user32.lib psapi.lib d3d11.lib dxgi.lib
+  cl /nologo /std:c++17 /EHsc /O2 /W4 /WX /wd4191 replay_inputs.cpp /Fo:build\input-recording\ /Fe:build\input-recording\replay_inputs.exe /link /LARGEADDRESSAWARE user32.lib psapi.lib d3d11.lib dxgi.lib dcomp.lib
   if errorlevel 1 exit /b 1
   cl /nologo /std:c++17 /EHsc /O2 /W4 /WX inspect_inputs.cpp /Fo:build\input-recording\ /Fe:build\input-recording\inspect_inputs.exe /link /LARGEADDRESSAWARE
   if errorlevel 1 exit /b 1
@@ -163,7 +163,7 @@ if /i "%~1"=="unit-bridge" (
   exit /b 0
 )
 
-cl /nologo /std:c++17 /EHsc /O2 /W4 /WX /LD c3x_renderer.cpp terrain_scene_runtime.cpp environment_runtime.cpp terrain_definition_runtime.cpp scene_export.cpp frame_scheduler.cpp /Fo:build\ /Fe:build\candidate\C3XRenderer.dll /link /DEF:c3x_renderer.def /IMPLIB:build\candidate\C3XRenderer.lib d3d11.lib d3dcompiler.lib dxgi.lib gdi32.lib msimg32.lib user32.lib bcrypt.lib
+cl /nologo /std:c++17 /EHsc /O2 /W4 /WX /LD c3x_renderer.cpp terrain_scene_runtime.cpp environment_runtime.cpp terrain_definition_runtime.cpp scene_export.cpp frame_scheduler.cpp /Fo:build\ /Fe:build\candidate\C3XRenderer.dll /link /DEF:c3x_renderer.def /IMPLIB:build\candidate\C3XRenderer.lib d3d11.lib d3dcompiler.lib dxgi.lib dcomp.lib gdi32.lib msimg32.lib user32.lib bcrypt.lib
 if errorlevel 1 exit /b 1
 
 cl /nologo /std:c++17 /EHsc /O2 /W4 /WX test_asset_content_hash.cpp /Fo:build\ /Fe:build\test_asset_content_hash.exe

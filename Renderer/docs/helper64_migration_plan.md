@@ -8,6 +8,13 @@ proved real-core scene/pixel parity and a controlled address-space advantage.
 Neither gate proved live gameplay FPS. The installed x86 path stays available
 until the integrated x64 candidate passes.
 
+The current implementation order is governed by the
+[Renderer64 scene and motion cutover](renderer64_scene_and_motion.md): finish
+the cross-process surface, authoritative state/change delivery, renderer-owned
+frame clock, and accepted unit motion together; then qualify one playable build
+in the game. Whole-frame FPS optimization follows that UX checkpoint. The
+shared-texture path remains a recovery/control route during the cutover.
+
 ## Target ownership
 
 - **Civ III and x86 bridge:** authoritative gameplay/map state, native screen
@@ -24,11 +31,17 @@ until the integrated x64 candidate passes.
   frozen except work/action cases. Camera changes select prepared content instead
   of constructing it in the foreground.
 - **Boundary:** versioned, bounded value messages with coalesced replaceable
-  camera requests and durable world/gameplay changes. A small number of GPU
-  shared textures carry completed map images; x86 imports/composes them with
-  native UI. Backpressure never grows an unbounded queue or stalls Civ III's
-  input thread. A helper crash/device loss invalidates its generations, retires
-  handles and restarts or falls back without presenting a stale scene.
+  camera requests and durable world/gameplay changes. The preferred presentation
+  candidate is an x86-owned DirectComposition target with an x64-owned surface
+  swap chain: x86 supplies a surface handle once per window generation, then x64
+  advances completed frames without a per-frame image transfer. The current
+  shared-texture/x86-presenter route remains the fallback and a comparison
+  control. Native UI that is already part of the renderer's final image stays
+  there; any later same-HWND UI write needs an exact upper layer or native
+  ownership transition. Backpressure never grows an unbounded queue or stalls
+  Civ III's input thread. A helper crash/device loss invalidates its
+  generations, retires handles and restarts or falls back without presenting a
+  stale scene.
 
 Users still launch the normal game executable. The x86 bridge starts the
 packaged x64 helper and manages its lifetime; no second app or overlay window
@@ -94,6 +107,15 @@ input-to-first-correct-frame and live presentation timing evidence;
 steps 2–5 have not been accepted or cut over. The earlier
 [shadow replay result](helper64_gate2_results.md#full-native-interleaved-shadow-checkpoint)
 remains the independent scene comparison.
+
+A separate [direct-surface trial](direct_surface_trial.md) now presents real x64
+final images into an x86-owned HWND composition target. Its initial replay
+comparison was route-confounded by replay settings that cleared the opt-in;
+those timing and fingerprint observations were discarded. Strict route
+selection and a targeted blocked-window visual test are in progress. This is a
+transport experiment, not step-1 acceptance: x86 still sends each visual offer,
+and full native UI ordering, return-to-native, first-correct desktop timing
+and recovery remain to be qualified before any cutover.
 
 A focused 2240×1260 x86-window fixture held the owner thread without message
 pumping for 450 ms after GPU presentation. The helper and x86 composition

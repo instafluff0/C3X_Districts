@@ -12,6 +12,7 @@ struct SharedFrame {std::uint64_t handle=0;unsigned width=0,height=0;};
 // arrays remain valid until the next successful scene or camera adoption.
 class Client {
     c3x_helper_trial::SceneClient transport;
+    bool direct_surface_bound=false;
     Output scene_result;
     CameraOutput camera_result;
     static c3x_inputs::Bytes reply(c3x_helper_trial::Wire const& wire){
@@ -45,7 +46,25 @@ public:
             unsigned(input.bytes.size())).code);
     }
     int reset(){
+        direct_surface_bound=false;
         return int(invoke(unsigned(c3x_inputs::Kind::native_bridge),6,nullptr,0).code);
+    }
+    int bind_surface(HANDLE local_surface,unsigned width,unsigned height){
+        auto remote=local_surface?transport.duplicate_into_helper(local_surface):0;
+        c3x_inputs::Writer input;input.u64(remote);input.u32(width);input.u32(height);
+        // Surface binding is transport setup, not a recorded Civ III input.
+        // It must not consume the next recorded presentation clock sample.
+        auto code=int(transport.call_live(unsigned(c3x_inputs::Kind::presentation),1,input.bytes.data(),
+            unsigned(input.bytes.size())).code);
+        direct_surface_bound=remote&&code==C3X_RENDERER_RESULT_OK;
+        return code;
+    }
+    bool surface_pixels(std::vector<unsigned>& pixels,unsigned& width,unsigned& height){
+        auto const& response=transport.call_live(unsigned(c3x_inputs::Kind::presentation),2,nullptr,0);
+        if(response.code!=C3X_RENDERER_RESULT_OK||
+           std::uint64_t(response.width)*response.height*4!=response.reply_size)return false;
+        width=response.width;height=response.height;pixels.resize(std::size_t(width)*height);
+        std::memcpy(pixels.data(),response.payload,response.reply_size);return true;
     }
     int set_units(int enabled){
         c3x_inputs::Writer input;input(std::int32_t(enabled));
@@ -190,13 +209,14 @@ public:
         c3x_inputs::Writer input;input(value.action);input(value.ticket);input(value.image);
         input(value.width);input(value.height);for(auto x:value.area)input(x);input.u32(1);
         auto const& response=invoke(unsigned(c3x_inputs::Kind::presentation),0,input.bytes.data(),
-            unsigned(input.bytes.size()),value.action==0);
+            unsigned(input.bytes.size()),value.action==0&&!direct_surface_bound);
+        if(value.action)direct_surface_bound=false;
         frame={response.shared_handle,response.width,response.height};return int(response.code);
     }
     int visual(std::int64_t ticks,std::int64_t frequency,SharedFrame& frame){
         c3x_inputs::Writer input;input.u32(1);
         auto const& response=invoke(unsigned(c3x_inputs::Kind::visual),1,input.bytes.data(),
-            unsigned(input.bytes.size()),true,false,ticks,frequency);
+            unsigned(input.bytes.size()),!direct_surface_bound,false,ticks,frequency);
         frame={response.shared_handle,response.width,response.height};return int(response.code);
     }
 };

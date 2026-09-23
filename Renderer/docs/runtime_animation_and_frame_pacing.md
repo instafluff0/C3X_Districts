@@ -1,5 +1,11 @@
 # Runtime Animation And Frame Pacing Contract
 
+This document preserves the earlier Civ III-driven presentation contract.
+For the adopted architecture, use
+[Renderer64 scene and motion](renderer64_scene_and_motion.md). Native gameplay
+timing and outcome safeguards below remain relevant; the older ban on an
+independent renderer frame clock/presenter is superseded.
+
 ## Purpose
 
 The custom renderer is a guest in Civilization III's existing UI, simulation, animation, and map-render loop. It must improve presentation without creating a second game loop, advancing gameplay state, blocking Civ III, or rendering from an unsafe callback.

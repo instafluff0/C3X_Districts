@@ -51,3 +51,43 @@ partial transfers, resize, helper restart, device loss and the displayed
 first-correct frame before any cutover. Compare all-effects-on idle and Standard
 map navigation to the current x64 path; the color-swap proof alone establishes
 neither speedup nor correctness for Civ III.
+
+## Real-scene opt-in checkpoint
+
+`C3X_RENDERER_DIRECT_SURFACE_TRIAL=1` now routes the x64 helper's retained
+final-image composer to a surface swap chain on the renderer's own D3D device.
+The x86 bridge owns the HWND, creates/attaches the surface, and duplicates its
+handle once per window generation. The helper can present without exporting a
+shared image back to x86. The established shared-texture presenter remains the
+default and is selected if surface setup or presentation fails. A trial-only
+readback supports exact replay fingerprints; it is not used for normal frames.
+Direct-surface activation waits until the first completed image so setup does
+not cover the previous native display with a blank surface. Returning to a
+native partial transfer seeds the x86 presenter from the last completed x64
+image once, preserving pixels outside the transfer rectangle.
+
+The first paired `continuous-presentation-final-native` replay completed
+9,433 calls per run, but it did **not** compare the routes: replay settings
+cleared the environment opt-in before the renderer loaded. Its apparent
+50.4-to-29.1 ms map-presentation p95 difference and 337 matching fingerprints
+were shared-path versus shared-path observations and are discarded as evidence
+for direct presentation. A targeted blocked-window roundtrip did enter the
+direct path and exposed an argument gate that rejected x64 visual frames;
+the corresponding shared-path control advanced 12. That gate is fixed in the
+trial DLL. Replay now has an explicit `--direct-surface-trial` option, restored
+after each settings event, and strict route selection that fails rather than
+silently falling back. Repeat its performance and pixel comparison before
+claiming any real-scene speedup or parity.
+
+The direct-surface candidate now schedules its own ambient frames in Renderer64.
+The x86 bridge sends state, camera, presentation ownership and lifecycle changes;
+it does not send each direct-surface visual offer. The focused real-scene fixture
+held the x86 window thread for 450 ms without issuing a visual request. The
+displayed surface changed during that interval, with four visible animations in
+the scene. This proves the independent clock in that controlled state. The
+shared-texture control still uses x86 visual offers. The trial removes the
+per-frame shared-handle import, keyed wait, x86 GPU copy and x86 `Present` on
+its direct route, but does not establish that every same-HWND Civ III UI write
+is above the surface. Keep the opt-in route out of the installed game until
+native UI ordering, interturn, resize, restart, config-off and device loss pass.
+There is no valid full-workload speed comparison yet.

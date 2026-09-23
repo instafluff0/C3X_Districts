@@ -3,6 +3,9 @@
 #include <windows.h>
 #include <d3d11.h>
 #include <d3dcompiler.h>
+#ifdef C3X_HELPER_TRIAL
+#include <dxgi1_3.h>
+#endif
 
 #include <algorithm>
 #include <atomic>
@@ -10487,17 +10490,38 @@ public:
                              std::uint64_t& handle,unsigned& width,unsigned& height){
         std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);
         gpu_present=request;trial_consumer_pid=consumer_pid;trial_handle=0;trial_width=trial_height=0;
-        if(request.action==0&&consumer_pid)advance_visual_clock();
+        if(request.action==0&&(consumer_pid||trial_surface_swap))advance_visual_clock();
         int result=submit_locked(lock,Command::trial_present_shared);
         handle=trial_handle;width=trial_width;height=trial_height;return result;
     }
     int trial_visual_shared(c3x_renderer_i64 ticks,c3x_renderer_i64 frequency,DWORD consumer_pid,
                             std::uint64_t& handle,unsigned& width,unsigned& height){
-        std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);
+        // Direct-surface offers are optional display work. Never queue behind a
+        // game-state or camera transaction merely to draw an older visual time.
+        std::unique_lock<std::mutex> calls(call_mutex,std::defer_lock);
+        if(consumer_pid)calls.lock();
+        else if(!calls.try_lock())return C3X_RENDERER_RESULT_PENDING;
+        std::unique_lock<std::mutex> lock(state_mutex,std::defer_lock);
+        if(consumer_pid)lock.lock();
+        else if(!lock.try_lock())return C3X_RENDERER_RESULT_PENDING;
         trial_consumer_pid=consumer_pid;trial_handle=0;trial_width=trial_height=0;
         visual_ticks=ticks;visual_frequency=frequency;
         int result=submit_locked(lock,Command::trial_visual_shared);
         handle=trial_handle;width=trial_width;height=trial_height;return result;
+    }
+    int trial_bind_surface(HANDLE surface,unsigned width,unsigned height){
+        std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);
+        trial_surface_handle=surface;trial_surface_width=width;trial_surface_height=height;
+        return submit_locked(lock,Command::trial_bind_surface);
+    }
+    int trial_surface_pixels(unsigned* output,unsigned capacity,unsigned& width,unsigned& height){
+        std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);
+        int code=submit_locked(lock,Command::trial_surface_pixels);
+        width=trial_width;height=trial_height;
+        if(code!=C3X_RENDERER_RESULT_OK)return code;
+        if(!output||trial_readback_pixels.size()>capacity)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        std::copy(trial_readback_pixels.begin(),trial_readback_pixels.end(),output);
+        return code;
     }
 #endif
     int begin_gpu_camera(c3x_renderer_camera_request_v1 const& request,c3x_renderer_i64& ticket,
@@ -11449,6 +11473,8 @@ private:
         trial_export_shared,
         trial_present_shared,
         trial_visual_shared,
+        trial_bind_surface,
+        trial_surface_pixels,
 #endif
         gpu_unit,
         tactical,
@@ -11479,6 +11505,11 @@ private:
     Microsoft::WRL::ComPtr<ID3D11Texture2D> trial_display,trial_buffer;
     Microsoft::WRL::ComPtr<ID3D11RenderTargetView> trial_display_view;
     Microsoft::WRL::ComPtr<IDXGIKeyedMutex> trial_display_mutex;
+    HANDLE trial_surface_handle=nullptr;
+    unsigned trial_surface_width=0,trial_surface_height=0;
+    Microsoft::WRL::ComPtr<IDXGISwapChain1> trial_surface_swap;
+    Microsoft::WRL::ComPtr<ID3D11Texture2D> trial_surface_buffer;
+    std::vector<unsigned> trial_readback_pixels;
 #endif
     std::vector<unsigned> gpu_pixels,gpu_readback;
     std::vector<c3x_gpu_images::Command> gpu_commands;
@@ -12306,6 +12337,9 @@ private:
                 dynamic_inputs.invalidate();renderer_state.gpu_composition.reset();
 #ifdef C3X_HELPER_TRIAL
                 trial_display_view.Reset();trial_display_mutex.Reset();trial_display.Reset();trial_buffer.Reset();
+                trial_surface_buffer.Reset();trial_surface_swap.Reset();
+                trial_readback_pixels.clear();trial_readback_pixels.shrink_to_fit();
+                if(trial_surface_handle){CloseHandle(trial_surface_handle);trial_surface_handle=nullptr;}
 #endif
             }
             if(command==Command::native_screen){
@@ -12386,15 +12420,93 @@ private:
                         result=C3X_RENDERER_RESULT_OK;
                     }else result=C3X_RENDERER_RESULT_DEVICE_ERROR;
                 }
+            }else if(command==Command::trial_bind_surface){
+                // The HWND target stays in x86. This duplicated handle is the
+                // only window-related object admitted to the x64 renderer.
+                trial_surface_buffer.Reset();trial_surface_swap.Reset();
+                if(trial_surface_handle&&trial_surface_width>0&&trial_surface_height>0&&
+                   trial_surface_width<=2240&&trial_surface_height<=1260&&renderer_state.initialize_device()){
+                    Microsoft::WRL::ComPtr<IDXGIDevice> dxgi;
+                    Microsoft::WRL::ComPtr<IDXGIAdapter> adapter;
+                    Microsoft::WRL::ComPtr<IDXGIFactoryMedia> factory;
+                    HRESULT hr=renderer_state.device->QueryInterface(IID_PPV_ARGS(&dxgi));
+                    if(SUCCEEDED(hr))hr=dxgi->GetAdapter(&adapter);
+                    if(SUCCEEDED(hr))hr=adapter->GetParent(IID_PPV_ARGS(&factory));
+                    DXGI_SWAP_CHAIN_DESC1 desc={};desc.Width=trial_surface_width;desc.Height=trial_surface_height;
+                    desc.Format=DXGI_FORMAT_B8G8R8A8_UNORM;desc.SampleDesc.Count=1;
+                    desc.BufferUsage=DXGI_USAGE_RENDER_TARGET_OUTPUT;desc.BufferCount=2;
+                    desc.SwapEffect=DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;desc.AlphaMode=DXGI_ALPHA_MODE_IGNORE;
+                    if(SUCCEEDED(hr))hr=factory->CreateSwapChainForCompositionSurfaceHandle(
+                        renderer_state.device,trial_surface_handle,&desc,nullptr,&trial_surface_swap);
+                    Microsoft::WRL::ComPtr<ID3D11Texture2D> back;
+                    if(SUCCEEDED(hr))hr=trial_surface_swap->GetBuffer(0,IID_PPV_ARGS(&back));
+                    if(SUCCEEDED(hr)){
+                        D3D11_TEXTURE2D_DESC scratch={};back->GetDesc(&scratch);
+                        scratch.MiscFlags=0;scratch.Usage=D3D11_USAGE_DEFAULT;scratch.CPUAccessFlags=0;
+                        scratch.BindFlags=D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE;
+                        hr=renderer_state.device->CreateTexture2D(&scratch,nullptr,&trial_surface_buffer);
+                    }
+                    result=SUCCEEDED(hr)?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_DEVICE_ERROR;
+                }else result=!trial_surface_handle?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_BAD_ARGUMENT;
+                if(trial_surface_handle){CloseHandle(trial_surface_handle);trial_surface_handle=nullptr;}
+                if(result!=C3X_RENDERER_RESULT_OK){trial_surface_buffer.Reset();trial_surface_swap.Reset();}
+            }else if(command==Command::trial_surface_pixels){
+                result=C3X_RENDERER_RESULT_BAD_ARGUMENT;trial_readback_pixels.clear();
+                if(trial_surface_buffer&&renderer_state.device&&renderer_state.context){
+                    D3D11_TEXTURE2D_DESC desc={};trial_surface_buffer->GetDesc(&desc);
+                    trial_width=desc.Width;trial_height=desc.Height;
+                    desc.Usage=D3D11_USAGE_STAGING;desc.BindFlags=0;
+                    desc.CPUAccessFlags=D3D11_CPU_ACCESS_READ;desc.MiscFlags=0;
+                    Microsoft::WRL::ComPtr<ID3D11Texture2D> stage;
+                    HRESULT hr=renderer_state.device->CreateTexture2D(&desc,nullptr,&stage);
+                    if(SUCCEEDED(hr)){
+                        renderer_state.context->CopyResource(stage.Get(),trial_surface_buffer.Get());
+                        D3D11_MAPPED_SUBRESOURCE mapped={};
+                        hr=renderer_state.context->Map(stage.Get(),0,D3D11_MAP_READ,0,&mapped);
+                        if(SUCCEEDED(hr)){
+                            trial_readback_pixels.resize(std::size_t(desc.Width)*desc.Height);
+                            for(unsigned row=0;row<desc.Height;++row)
+                                std::memcpy(trial_readback_pixels.data()+std::size_t(row)*desc.Width,
+                                    static_cast<char const*>(mapped.pData)+std::size_t(row)*mapped.RowPitch,
+                                    std::size_t(desc.Width)*4);
+                            renderer_state.context->Unmap(stage.Get(),0);
+                            result=C3X_RENDERER_RESULT_OK;
+                        }
+                    }
+                    if(FAILED(hr))result=C3X_RENDERER_RESULT_DEVICE_ERROR;
+                }
             }else if(command==Command::trial_present_shared){
                 auto const& p=gpu_present;
                 if(p.action==1||p.action==2){
                     trial_display_view.Reset();trial_display_mutex.Reset();trial_display.Reset();trial_buffer.Reset();
+                    trial_surface_buffer.Reset();trial_surface_swap.Reset();
+                    trial_readback_pixels.clear();
                     if(renderer_state.gpu_composition)renderer_state.gpu_composition->stop_visuals();
                     result=C3X_RENDERER_RESULT_OK;
                 }else{
                     auto* session=renderer_state.gpu_composition.get();
                     result=C3X_RENDERER_RESULT_SUPERSEDED;
+                    if(trial_surface_swap&&trial_surface_buffer&&session&&
+                       session->current_ticket()==p.ticket&&p.image>0){
+                        if(p.width!=int(trial_surface_width)||p.height!=int(trial_surface_height))
+                            result=C3X_RENDERER_RESULT_BAD_ARGUMENT;
+                        else{
+                            Microsoft::WRL::ComPtr<ID3D11Texture2D> back;
+                            Microsoft::WRL::ComPtr<ID3D11RenderTargetView> view;
+                            HRESULT hr=trial_surface_swap->GetBuffer(0,IID_PPV_ARGS(&back));
+                            if(SUCCEEDED(hr))hr=renderer_state.device->CreateRenderTargetView(back.Get(),nullptr,&view);
+                            bool full=p.area[0]<=0&&p.area[1]<=0&&p.area[2]>=p.width&&p.area[3]>=p.height;
+                            if(SUCCEEDED(hr)&&!full)renderer_state.context->CopyResource(back.Get(),trial_surface_buffer.Get());
+                            bool drawn=SUCCEEDED(hr)&&session->display_to(p.ticket,std::uint64_t(p.image),view.Get(),
+                                back.Get(),trial_surface_buffer.Get(),trial_surface_width,trial_surface_height,
+                                {p.area[0],p.area[1],p.area[2],p.area[3]},visual_ticks,
+                                visual_allowed?visual_frequency:0);
+                            if(drawn)hr=trial_surface_swap->Present(0,0);
+                            result=FAILED(hr)?C3X_RENDERER_RESULT_DEVICE_ERROR:
+                                drawn?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_BAD_ARGUMENT;
+                            if(result==C3X_RENDERER_RESULT_OK){trial_width=trial_surface_width;trial_height=trial_surface_height;}
+                        }
+                    }else
                     if(session&&session->current_ticket()==p.ticket&&trial_consumer_pid&&p.width>0&&p.height>0&&
                        p.width<=2240&&p.height<=1260&&p.image>0){
                         bool full=p.area[0]<=0&&p.area[1]<=0&&p.area[2]>=p.width&&p.area[3]>=p.height;
@@ -12466,6 +12578,22 @@ private:
                 }
             }else if(command==Command::trial_visual_shared){
                 result=C3X_RENDERER_RESULT_PENDING;
+                if(trial_surface_swap&&trial_surface_buffer&&renderer_state.gpu_composition&&visual_frequency>0){
+                    Microsoft::WRL::ComPtr<ID3D11Texture2D> back;
+                    Microsoft::WRL::ComPtr<ID3D11RenderTargetView> view;
+                    HRESULT hr=trial_surface_swap->GetBuffer(0,IID_PPV_ARGS(&back));
+                    if(SUCCEEDED(hr))hr=renderer_state.device->CreateRenderTargetView(back.Get(),nullptr,&view);
+                    int drawn=0;
+                    if(SUCCEEDED(hr)){
+                        renderer_state.context->CopyResource(back.Get(),trial_surface_buffer.Get());
+                        drawn=renderer_state.gpu_composition->visual_frame(visual_ticks,visual_frequency,
+                            view.Get(),back.Get(),trial_surface_buffer.Get());
+                    }
+                    if(drawn>=1)hr=trial_surface_swap->Present(0,0);
+                    result=FAILED(hr)?C3X_RENDERER_RESULT_DEVICE_ERROR:
+                        drawn>=1?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_PENDING;
+                    if(result==C3X_RENDERER_RESULT_OK){trial_width=trial_surface_width;trial_height=trial_surface_height;}
+                }else
                 if(trial_display&&trial_display_view&&trial_display_mutex&&trial_buffer&&
                    renderer_state.gpu_composition&&visual_frequency>0&&trial_consumer_pid){
                     HRESULT hr=trial_display_mutex->AcquireSync(0,1000);
@@ -13239,9 +13367,20 @@ extern "C" __declspec(dllexport) int c3x_renderer_trial_present_shared(
 extern "C" __declspec(dllexport) int c3x_renderer_trial_visual_shared(
     c3x_renderer_i64 ticks,c3x_renderer_i64 frequency,DWORD consumer_pid,
     std::uint64_t* handle,unsigned* width,unsigned* height){
-    if(frequency<=0||!consumer_pid||!handle||!width||!height)
+    if(frequency<=0||!handle||!width||!height)
         return C3X_RENDERER_RESULT_BAD_ARGUMENT;
     return get_renderer_worker().trial_visual_shared(ticks,frequency,consumer_pid,*handle,*width,*height);
+}
+extern "C" __declspec(dllexport) int c3x_renderer_trial_bind_surface(
+    std::uint64_t surface,unsigned width,unsigned height){
+    if((surface&&!width)||(!surface&&(width||height)))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    // The worker consumes and closes the duplicated helper-process handle.
+    return get_renderer_worker().trial_bind_surface(reinterpret_cast<HANDLE>(std::uintptr_t(surface)),width,height);
+}
+extern "C" __declspec(dllexport) int c3x_renderer_trial_surface_pixels(
+    unsigned* pixels,unsigned capacity,unsigned* width,unsigned* height){
+    if(!width||!height)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    return get_renderer_worker().trial_surface_pixels(pixels,capacity,*width,*height);
 }
 extern "C" __declspec(dllexport) int c3x_renderer_trial_tactical(
     c3x_renderer::tactical::Input const* input,c3x_renderer_gpu_unit_v1 const* target){
@@ -13380,7 +13519,10 @@ int renderer_native_image_impl(int operation,void* image,void* source,void const
             // An unowned CPU UI source uses the same final presenter. The
             // resident map family remains untouched, including full-color data.
         }
-        catch(std::exception const& e){OutputDebugStringA(e.what());return -1;}
+        catch(std::exception const& e){OutputDebugStringA(e.what());
+            char strict[4]={};if(GetEnvironmentVariableA("C3X_RENDERER_DIRECT_SURFACE_STRICT_TRIAL",strict,sizeof(strict))==1&&strict[0]=='1')
+                std::fprintf(stderr,"DIRECT_NATIVE_ERROR operation=%d detail=%s\n",operation,e.what());
+            return -1;}
     }
     if(operation!=C3X_NATIVE_IMAGE_PRESENT && operation!=C3X_NATIVE_IMAGE_DRAIN)return 0;
     if(operation==C3X_NATIVE_IMAGE_DRAIN)return 0; // The shared barrier already preserved the window.

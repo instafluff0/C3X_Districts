@@ -97,6 +97,15 @@ public:
     ID3D11RenderTargetView* view()const{return target.Get();}
     ID3D11Texture2D* retained()const{return display.Get();}
     ID3D11Texture2D* buffer()const{return back.Get();}
+    // A rare direct-surface -> native partial-transfer handoff seeds the
+    // x86 presenter with the exact previous x64 frame before applying 16-bit
+    // Civ III pixels. Ordinary direct frames never use this CPU path.
+    bool seed_bgra(ID3D11DeviceContext* context,unsigned const* pixels,unsigned w,unsigned h){
+        if(!context||!pixels||!display||!back||w!=width||h!=height)return false;
+        context->UpdateSubresource(display.Get(),0,nullptr,pixels,w*4,0);
+        context->CopyResource(back.Get(),display.Get());context->Flush();gpu_written();
+        return present()==C3X_RENDERER_RESULT_OK;
+    }
     // The helper owns scene composition; this process owns the Civ III window.
     // The duplicated handle is consumed exactly once. No CPU readback or HWND
     // crosses the process boundary, and no frame is adopted after a mismatch.
