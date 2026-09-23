@@ -19,12 +19,17 @@ inline void check_output(Reader& expected,c3x_renderer_output_v1 const& value,in
     Reader generated{actual.bytes};auto recorded=expected;
     char const* names[]={"result","width","height","clip_left","clip_top","clip_right","clip_bottom",
         "rendered_tile_count","fallback_tile_count","visible_animation_count","replacement_tile_count"};
+    char audit[4]={};bool pixel_audit=GetEnvironmentVariableA("C3X_MAP_PIXEL_AUDIT",audit,sizeof(audit))==1&&audit[0]=='1';
+    bool pixel_drift=false;
     while(generated.at<actual.bytes.size()){
         auto word=generated.at/4;auto wanted=recorded.u32(),got=generated.u32();
-        if(wanted!=got&&!(realtime_replay().enabled&&value.bgra_pixels&&word>=actual.bytes.size()/4-4))throw std::runtime_error(std::string("replay map output differs: ")+
+        bool pixel_hash=value.bgra_pixels&&word>=actual.bytes.size()/4-4;
+        if(wanted!=got&&pixel_audit&&pixel_hash)pixel_drift=true;
+        if(wanted!=got&&!((realtime_replay().enabled||pixel_audit)&&pixel_hash))throw std::runtime_error(std::string("replay map output differs: ")+
             (word<11?names[word]:"ownership/pixel witness")+" word="+std::to_string(word)+
             " expected="+std::to_string(wanted)+" actual="+std::to_string(got));
     }
+    if(pixel_drift)++replay_execution().map_pixel_mismatches;
     expected.at+=actual.bytes.size();
 }
 inline void adoption_witness(Writer& out,c3x_renderer_camera_view_v1 const& value,int result){

@@ -159,6 +159,7 @@ public:
     bool check(Reader& expected,Canvas& value){Writer actual;value.witness(actual);expected.available(actual.bytes.size());
         bool exact=std::equal(actual.bytes.begin(),actual.bytes.end(),expected.bytes.begin()+expected.at);
         char audit[4]={};bool diagnostic=GetEnvironmentVariableA("C3X_CPU_UNIT_AUDIT",audit,sizeof(audit))==1&&audit[0]=='1';
+        if(!exact&&diagnostic)++replay_execution().unit_pixel_mismatches;
         if(!realtime_replay().enabled&&!diagnostic)require(exact,"replay CPU unit pixels differ");
         expected.at+=actual.bytes.size();return exact;}
     void reset(){values.clear();}

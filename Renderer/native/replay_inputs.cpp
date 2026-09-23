@@ -51,10 +51,10 @@ void apply_settings(Reader& header){
 int wmain(int argc,wchar_t** argv){
     HMODULE module=nullptr;HWND window=nullptr;void* reservation=nullptr;int exit_code=0;
     try{
-        require(argc>=4&&std::wstring(argv[1])==L"--development","usage: replay_inputs --development DLL INPUT_DIRECTORY [--frames DIR LAST | --range DIR FIRST LAST | --seconds DIR START END] [--timeline NEW_FILE] [--fingerprints NEW_FILE] [--trace NEW_FILE] [--allow-prefix] [--before-event N] [--compare-candidate] [--performance NEW_FILE] [--reserve-mib N] [--watch] [--realtime NEW_FILE] [--x64-scene HELPER DLL NEW_REPORT]");
+        require(argc>=4&&std::wstring(argv[1])==L"--development","usage: replay_inputs --development DLL INPUT_DIRECTORY [--frames DIR LAST | --range DIR FIRST LAST | --seconds DIR START END] [--timeline NEW_FILE] [--fingerprints NEW_FILE] [--trace NEW_FILE] [--allow-prefix] [--before-event N] [--compare-candidate [--pixel-audit]] [--performance NEW_FILE] [--reserve-mib N] [--watch] [--realtime NEW_FILE] [--x64-scene HELPER DLL NEW_REPORT] [--x64-primary HELPER DLL]");
         std::wstring label=L"C3X input replay";
         std::filesystem::path frames,timeline_path,trace_path,fingerprints_path,performance_path,shadow_path;
-        std::wstring shadow_helper,shadow_dll,primary_helper,primary_dll;unsigned reserve_mib=0;std::uint64_t before_event=0;bool stopped_before_event=false;std::uint64_t first_frame=1,frame_limit=0,frame_number=0,exported=0;double first_second=0,last_second=0;bool seconds=false,allow_prefix=false,tail_truncated=false,compare_candidate=false,binary_matches_capture=true,watch=false,realtime=false;
+        std::wstring shadow_helper,shadow_dll,primary_helper,primary_dll;unsigned reserve_mib=0;std::uint64_t before_event=0;bool stopped_before_event=false;std::uint64_t first_frame=1,frame_limit=0,frame_number=0,exported=0;double first_second=0,last_second=0;bool seconds=false,allow_prefix=false,tail_truncated=false,compare_candidate=false,pixel_audit=false,binary_matches_capture=true,watch=false,realtime=false;
         auto integer=[](wchar_t const* raw){std::size_t used=0;std::wstring text(raw);auto value=std::stoull(text,&used);require(used==text.size()&&value&&value<=1000000,"invalid frame bound");return value;};
         auto second=[](wchar_t const* raw){std::size_t used=0;std::wstring text(raw);auto value=std::stod(text,&used);require(used==text.size()&&std::isfinite(value)&&value>=0&&value<=86400,"invalid second bound");return value;};
         for(int i=4;i<argc;){std::wstring flag=argv[i++];
@@ -67,6 +67,7 @@ int wmain(int argc,wchar_t** argv){
                 primary_helper=argv[i++];primary_dll=argv[i++];continue;}
             if(flag==L"--reserve-mib"){require(i<argc&&!reserve_mib,"invalid reservation option");auto n=integer(argv[i++]);require(n<=2048,"reservation limit");reserve_mib=unsigned(n);continue;}
             if(flag==L"--compare-candidate"){compare_candidate=true;continue;}
+            if(flag==L"--pixel-audit"){pixel_audit=true;continue;}
             if(flag==L"--allow-prefix"){allow_prefix=true;continue;}
             if(flag==L"--before-event"){
                 require(i<argc&&!before_event,"invalid event cutoff");std::wstring raw=argv[i++];std::size_t used=0;
@@ -82,6 +83,8 @@ int wmain(int argc,wchar_t** argv){
             else throw std::runtime_error("unknown replay option");
         }
         require(!before_event||allow_prefix,"explicit event cutoff requires --allow-prefix");
+        require(!pixel_audit||compare_candidate,"pixel audit requires explicit candidate comparison");
+        if(pixel_audit){SetEnvironmentVariableW(L"C3X_MAP_PIXEL_AUDIT",L"1");SetEnvironmentVariableW(L"C3X_CPU_UNIT_AUDIT",L"1");}
         bool performance=!performance_path.empty();require(!performance||(frames.empty()&&fingerprints_path.empty()&&!watch),"performance runs cannot export, fingerprint or pace playback");require(!reserve_mib||performance,"reservation requires performance mode");
         require(shadow_path.empty()||!realtime,"x64 scene diagnostic is unpaced only");
         require(primary_helper.empty()||shadow_path.empty(),"x64 primary and shadow modes are exclusive");
@@ -112,6 +115,9 @@ int wmain(int argc,wchar_t** argv){
         module=LoadLibraryW(argv[2]);require(module!=nullptr,"cannot load replay DLL");
         auto replay=reinterpret_cast<Replay>(GetProcAddress(module,"c3x_renderer_input_replay"));require(replay!=nullptr,"DLL lacks production input replay entry");
         auto execution=reinterpret_cast<Execution>(GetProcAddress(module,"c3x_renderer_input_replay_execution"));if(performance)require(execution&&execution(1,nullptr,nullptr,nullptr)==1,"DLL lacks performance replay entry");
+        using Audit=int(*)(unsigned*,unsigned*);
+        auto audit=reinterpret_cast<Audit>(GetProcAddress(module,"c3x_renderer_input_replay_audit"));
+        if(pixel_audit)require(audit!=nullptr,"DLL lacks replay pixel audit entry");
         using RemoteStats=int(*)(unsigned*,std::uint64_t*,std::uint64_t*);
         auto remote_stats=reinterpret_cast<RemoteStats>(GetProcAddress(module,"c3x_renderer_input_replay_remote_stats"));
         if(performance&&!primary_helper.empty())require(remote_stats,"DLL lacks x64 helper measurements");
@@ -341,7 +347,9 @@ int wmain(int argc,wchar_t** argv){
         bool complete=!stopped_before_event&&reader.footer&&(reader.reason==Stop::closed||reader.reason==Stop::duration)&&pending.empty()&&!tail_truncated;
         require(complete||allow_prefix,"input capture incomplete (use --allow-prefix to inspect verified completed calls)");
         if(watch)std::cout<<"{\"viewing_mode\":\"paced_forensic_playback\",\"dropped_by_player\":0,\"frames_late_over_33ms\":"<<late_playback_frames<<",\"maximum_playback_lag_ms\":"<<maximum_playback_lag_ms<<"}\n";
-        std::cout<<"{\"status\":\"development_input_replay\",\"qualified\":false,\"timing_scope\":\""<<(realtime?"paced_candidate_recorded_native_consumption":performance?"unpaced_native_service_not_live_fps":"forensic_calls_not_performance")<<"\",\"reserved_va_mib\":"<<reserve_mib<<",\"calls\":"<<calls<<",\"binary_matches_capture\":"<<(binary_matches_capture?"true":"false")<<",\"complete\":"<<(complete?"true":"false")<<",\"before_event\":"<<before_event<<",\"last_event\":"<<last<<",\"unfinished_calls\":"<<pending.size()<<",\"accepted_presentations\":"<<frame_number<<",\"clock_samples\":"<<clocks<<",\"pending_peak_bytes\":"<<peak<<",\"replay_envelope_ms\":"<<work_ms<<"}\n";
+        unsigned map_pixel_mismatches=0,unit_pixel_mismatches=0;
+        if(pixel_audit)require(audit(&map_pixel_mismatches,&unit_pixel_mismatches)==1,"replay pixel audit unavailable");
+        std::cout<<"{\"status\":\"development_input_replay\",\"qualified\":false,\"timing_scope\":\""<<(realtime?"paced_candidate_recorded_native_consumption":performance?"unpaced_native_service_not_live_fps":"forensic_calls_not_performance")<<"\",\"reserved_va_mib\":"<<reserve_mib<<",\"calls\":"<<calls<<",\"binary_matches_capture\":"<<(binary_matches_capture?"true":"false")<<",\"complete\":"<<(complete?"true":"false")<<",\"before_event\":"<<before_event<<",\"last_event\":"<<last<<",\"unfinished_calls\":"<<pending.size()<<",\"accepted_presentations\":"<<frame_number<<",\"clock_samples\":"<<clocks<<",\"pending_peak_bytes\":"<<peak<<",\"pixel_audit\":"<<(pixel_audit?"true":"false")<<",\"map_pixel_mismatches\":"<<map_pixel_mismatches<<",\"unit_pixel_mismatches\":"<<unit_pixel_mismatches<<",\"replay_envelope_ms\":"<<work_ms<<"}\n";
     }catch(std::exception const& error){std::cerr<<error.what()<<'\n';exit_code=1;}
     // Finish exception unwinding before unloading a DLL that may have thrown.
     if(module){auto reset=reinterpret_cast<void(*)()>(GetProcAddress(module,"c3x_renderer_input_replay_shutdown"));if(!reset)reset=reinterpret_cast<void(*)()>(GetProcAddress(module,"c3x_renderer_reset"));if(reset)reset();}

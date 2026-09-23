@@ -155,6 +155,22 @@ reflection rendering/submission and GPU completion path while preserving the
 accepted water appearance; another shared-image cache alone has no measured
 case. Recheck the complete effects-on frame after each candidate change.
 
+The first mirror-region trial doubled cell width from 128 to 256 native pixels
+only in the normal x64 scene. Across three Standard-map, all-effects-on runs,
+desktop-frame p95 was about 211–264 ms versus about 297 ms in the prior 128-cell
+control, but typical frames rose from about 145 ms median to 163–180 ms. Six
+independent destination oracles matched the candidate exactly; comparison with
+the 128-cell images found at most two pixels per sampled frame, each one color
+level apart. A complete 15,503-call x64-primary native-interleaved replay passed
+all non-pixel witnesses under explicit candidate pixel audit, with four map
+pixel-witness differences and eight known CPU-unit pose differences. Its 74.97 s
+unpaced envelope exceeded the previous 70.04 s x64 run, and visual-frame work
+was higher. These VM runs are not a paired live-FPS experiment, but they do not
+support adopting the region change for the whole workload. It was reverted.
+The audit mode is replay-only and leaves strict replay as the default. The next
+performance change must improve both navigation and sustained ambient frames;
+reducing mirror draw calls alone is insufficient.
+
 This migration takes priority over isolated x86 M3.8 tuning, but carries forward
 M3.8–M3.13 stability, readiness, consolidation and navigation acceptance. It
 does not begin deferred natural-wonder, constructed-wonder or District rendering.

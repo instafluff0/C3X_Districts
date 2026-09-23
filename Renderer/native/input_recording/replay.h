@@ -301,6 +301,11 @@ extern "C" __declspec(dllexport) int c3x_renderer_input_replay_execution(unsigne
     if(performance>2)return 0;if(performance==2)c3x_inputs::realtime_replay().begin();auto& state=c3x_inputs::replay_execution();state.performance=performance!=0;
     if(service_ms)*service_ms=state.service_ms;if(result)*result=state.result;if(reused)*reused=state.reused_adoption?1u:0u;return 1;
 }
+extern "C" __declspec(dllexport) int c3x_renderer_input_replay_audit(unsigned* map_pixels,unsigned* unit_pixels){
+    if(!map_pixels||!unit_pixels)return 0;
+    auto const& state=c3x_inputs::replay_execution();
+    *map_pixels=state.map_pixel_mismatches;*unit_pixels=state.unit_pixel_mismatches;return 1;
+}
 extern "C" __declspec(dllexport) int c3x_renderer_input_replay_remote_stats(
     unsigned* sequence,std::uint64_t* service_us,std::uint64_t* private_bytes){
     if(!sequence||!service_us||!private_bytes||!remote_renderer)return 0;

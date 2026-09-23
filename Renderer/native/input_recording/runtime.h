@@ -117,6 +117,7 @@ public:
 };
 struct ReplayExecution {
     bool performance=false;int result=0;double service_ms=0;bool reused_adoption=false;
+    unsigned map_pixel_mismatches=0,unit_pixel_mismatches=0;
     long long last_ticks=0,last_frequency=1;
 };
 inline ReplayExecution& replay_execution(){thread_local ReplayExecution state;return state;}

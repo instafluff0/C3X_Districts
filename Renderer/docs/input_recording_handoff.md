@@ -127,3 +127,11 @@ Real-time playback adds intervening ambient frames, but preserves these same
 native consumption points. It does not yet prove that replay FPS predicts live FPS.
 Standard navigation below 33 ms p95 and sustained live stability remain open.
 No injected source or patch-table changes, INSTALL, or game launch were needed.
+
+Candidate replays can now use `--compare-candidate --pixel-audit` to complete a
+recording after a rendering-only pixel change. The mode still rejects changed
+result, dimensions, ownership, camera identity and non-pixel witnesses; it
+counts map and CPU-unit pixel-witness mismatches in the final summary. Strict
+pixel matching remains the default. A pixel-audited replay is diagnostic, not
+visual acceptance: compare exported candidate frames with the control before
+promoting changed art.
