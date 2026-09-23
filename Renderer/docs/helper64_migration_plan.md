@@ -94,18 +94,29 @@ steps 2–5 have not been accepted or cut over. The earlier
 [shadow replay result](helper64_gate2_results.md#full-native-interleaved-shadow-checkpoint)
 remains the independent scene comparison.
 
+A focused 2240×1260 x86-window fixture held the owner thread without message
+pumping for 450 ms after GPU presentation. The helper and x86 composition
+endpoint completed 12 independent ambient frames, and replay-only readback
+verified that the displayed map pixels changed. This proves the GPU-owned scene
+can animate through a blocked window thread in that state; it does not prove
+that Civ III's interturn/native-screen lifecycle preserves the same ownership.
+The current native-screen handoff disables the cadence.
+
 One paired unpaced full-recording run measured a 99.06 s x86-control envelope
 and a 70.04 s x64-primary envelope. Sampled x86 private memory peaked at
 2,456.5 MiB in control and 163.8 MiB with the helper; the helper peaked at
 2,470.1 MiB. The x64 process completed 535 ambient offers versus 321 in the
 x86 control; successful-offer p95 was 69.8 versus 127.8 ms. More completed
 offers make the all-offer p95 incomparable as a frame-rate measure. The helper
-spent 48.55 s in its own operations, led by scene work (24.69 s) and ambient
-frames (9.89 s). This is one VM run per route, includes replay reconstruction
-and different readiness outcomes, and does not establish live FPS or a hardware
-GPU budget. It does show the intended address-space separation and identifies
-scene construction and visual-frame execution for step 3 measurement. The
-generated per-call evidence is under `native/build/helper_trial/primary/`.
+spent 48.55 s in its own operations. Scene calls in the recording's
+**post-reset CPU/native fallback** contributed 24.69 s; the 14 GPU scene calls
+contributed 0.53 s. Ambient frames contributed 9.89 s and are the more relevant
+repeated cost for the intended GPU path. This is one VM run per route, includes
+replay reconstruction and different readiness outcomes, and does not establish
+live FPS or a hardware GPU budget. It does show the intended address-space
+separation and identifies visual-frame execution and native presentation for
+step 3 measurement. The generated per-call evidence is under
+`native/build/helper_trial/primary/`.
 
 This migration takes priority over isolated x86 M3.8 tuning, but carries forward
 M3.8–M3.13 stability, readiness, consolidation and navigation acceptance. It

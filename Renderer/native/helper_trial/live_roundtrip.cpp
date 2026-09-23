@@ -1,8 +1,12 @@
 #define NOMINMAX
 #include <windows.h>
+#include <atomic>
 #include <cstdio>
+#include <exception>
 #include <stdexcept>
 #include <string>
+#include <thread>
+#include <vector>
 #include "../input_recording/journal.h"
 #include "../remote_scene_output.h"
 #include "../remote_renderer_backend.h"
@@ -16,6 +20,7 @@ int wmain(int argc,wchar_t** argv){
         require(argc==4,"usage: live_roundtrip.exe HELPER DLL CAPTURE");
         SegmentReader journal(argv[3]);Event event;
         require(journal.next(event)&&event.kind==Kind::manifest,"recording manifest missing");
+        SetEnvironmentVariableA("C3X_RENDERER_MANUAL_VISUAL","1");
         c3x_remote_scene::Backend helper(argv[1],argv[2]);
         bool definitions=false,submitted=false;unsigned polls=0;
         c3x_remote_scene::CameraOutput adopted;
@@ -75,6 +80,28 @@ int wmain(int argc,wchar_t** argv){
         offer.image=view.image.map_image;offer.window=window;offer.width=width;offer.height=height;
         offer.area[2]=width;offer.area[3]=height;
         require(helper.present(offer)==C3X_RENDERER_RESULT_OK,"x64 final frame was not presented by x86");
+        require(adopted.value.camera.output.visible_animation_count>0,
+            "fixture has no visible animation to test independent presentation");
+        std::vector<unsigned> initial_pixels,final_pixels;unsigned initial_width=0,initial_height=0,final_width=0,final_height=0;
+        require(helper.replay_display(initial_pixels,initial_width,initial_height),"initial displayed frame readback failed");
+        std::atomic<unsigned> independent_frames{0};
+        std::exception_ptr independent_error;
+        std::thread independent([&]{
+            try{for(unsigned n=0;n<12;++n){
+                    LARGE_INTEGER ticks={},frequency={};QueryPerformanceCounter(&ticks);QueryPerformanceFrequency(&frequency);
+                    if(helper.visual(ticks.QuadPart,frequency.QuadPart)==C3X_RENDERER_RESULT_OK)
+                        independent_frames.fetch_add(1,std::memory_order_relaxed);
+                    Sleep(25);
+                }}catch(...){independent_error=std::current_exception();}
+        });
+        Sleep(450); // The x86 window owner deliberately does no work or message pumping.
+        independent.join();
+        if(independent_error)std::rethrow_exception(independent_error);
+        require(independent_frames.load(std::memory_order_relaxed)>=2,
+            "visible ambient frames stopped while the x86 owner was blocked");
+        require(helper.replay_display(final_pixels,final_width,final_height)&&
+            initial_width==final_width&&initial_height==final_height&&initial_pixels!=final_pixels,
+            "ambient presentation did not change the displayed map while the owner was blocked");
         offer={sizeof(offer)};offer.action=2;
         require(helper.present(offer)==C3X_RENDERER_RESULT_OK,"x86 native handoff failed");
         c3x_native_images::ScreenSnapshot native;
@@ -84,7 +111,9 @@ int wmain(int argc,wchar_t** argv){
             helper.screen(nullptr)==C3X_RENDERER_RESULT_OK,"native CPU fallback presentation failed");
         require(helper.reset()==C3X_RENDERER_RESULT_OK,"helper reset failed");
         DestroyWindow(window);window=nullptr;
-        std::printf("PASS live x64 camera to x86 native presenter: %u polls, %dx%d frame\n",polls+1,width,height);
+        std::printf("PASS live x64 camera to x86 native presenter: %u polls, %dx%d frame, %u visible animations, %u frames under blocked owner\n",
+            polls+1,width,height,adopted.value.camera.output.visible_animation_count,
+            independent_frames.load(std::memory_order_relaxed));
         return 0;
     }catch(std::exception const& error){
         if(window)DestroyWindow(window);
