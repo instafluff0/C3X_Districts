@@ -177,9 +177,11 @@ without an x86 copy or per-frame image/control handoff. Ten deliberate color
 frames produced nine observed desktop transitions while the window thread was
 unpumped, at both 320×240 and 1120×1192. This is not a real-scene speed result.
 The same proof confirmed that the map visual covers GDI pixels drawn directly
-to the HWND; an exact upper native UI/overlay plane is necessary before using
-this route in Civ III. Treat direct presentation plus preserved UI ordering as
-the next step-3 experiment, with the current x86 presenter as fallback.
+to the HWND. The existing x64 final-image compositor already receives some
+native image operations; audit any remaining same-HWND draws and preserve them
+in the final image, an upper native plane, or a native ownership handoff before
+cutover. Treat direct presentation plus exact UI ordering as the next step-3
+experiment, with the current x86 presenter as fallback.
 
 This migration takes priority over isolated x86 M3.8 tuning, but carries forward
 M3.8–M3.13 stability, readiness, consolidation and navigation acceptance. It

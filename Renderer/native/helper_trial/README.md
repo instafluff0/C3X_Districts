@@ -87,7 +87,7 @@ not a Civ III launch, renderer-core benchmark, frame-rate test or staging step.
 The Windows VM showed all ten x64 presents at both sizes, with nine map-color
 transitions seen while the owner thread was unpumped. A native child-window
 pixel remained on top. The composition map covered a native pixel drawn directly
-to the parent HWND; Civ III's same-HWND labels and HUD therefore need a separate
-upper composition plane (or an equivalent exact ownership solution) before this
-path can replace the current presenter. See
+to the parent HWND. Civ III UI not already composed into the x64 final image
+needs an upper plane or an exact ownership handoff before this path can replace
+the current presenter. See
 [the direct-surface findings](../../docs/direct_surface_trial.md).

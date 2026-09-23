@@ -23,11 +23,13 @@ The trial also showed the critical UI issue. A parent-HWND GDI pixel was green
 before attachment, then covered by the composition map. That agrees with
 [Microsoft's HWND target layer order](https://learn.microsoft.com/en-us/windows/win32/api/dcomp/nf-dcomp-idcompositiondevice-createtargetforhwnd):
 DirectComposition content is above direct-HDC drawing on the target window;
-child windows can remain above a non-topmost visual. Civ III draws more than
-child-window UI. Direct x64 presentation must preserve labels, HUD, native
-overlays, partial screen transfers and config-off/GDI restoration through an
-exact upper native composition plane or another proven equivalent. It cannot
-simply attach the x64 map and leave native UI to draw behind it.
+child windows can remain above a non-topmost visual. The existing x64
+final-image compositor already receives some native image operations, so those
+pixels can be inside the direct surface. Any labels, HUD or overlays drawn
+directly to the HWND *after* that composition would be hidden. The production
+experiment must inventory those writes and preserve their order through the
+final image, an upper native plane, or an exact ownership handoff. Partial
+screen transfers and config-off/GDI restoration remain required.
 
 The SDK's [composition-surface-handle swap-chain method](https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_3/nf-dxgi1_3-idxgifactorymedia-createswapchainforcompositionsurfacehandle)
 is documented as a YUV method, although this VM accepted `DXGI_FORMAT_B8G8R8A8_UNORM`
@@ -42,8 +44,9 @@ The next production experiment should create one surface per window generation,
 let x64 render its real final image directly into that swap chain, and deliver
 ambient frames using its own clock. x86 sends only authoritative state/camera/
 native-overlay changes and lifecycle commands; it does not request every visual
-frame. Add an exact upper native UI plane and retain the current x86 presenter
-as the fallback. Full native-interleaved replay must prove pixels, order,
+frame. Preserve native UI operations in the final image where they already
+exist; add an upper plane only for remaining same-HWND draws. Retain the current
+x86 presenter as fallback. Full native-interleaved replay must prove pixels, order,
 partial transfers, resize, helper restart, device loss and the displayed
 first-correct frame before any cutover. Compare all-effects-on idle and Standard
 map navigation to the current x64 path; the color-swap proof alone establishes
