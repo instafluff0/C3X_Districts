@@ -20235,7 +20235,7 @@ patch_JGL_Graphsy_present (void * graph, int edx, RECT * rect)
 	if (is->custom_renderer_native_image != NULL && custom_renderer_native_probe_on ()) {
         // Ambient samples own immutable inputs. Native UI/action scopes do not
         // pause them; completed composition determines which map pixels remain visible.
-        bool animate = ! p_main_screen_form->is_now_loading_game && *p_player_bits != 0;
+        bool animate = ! p_main_screen_form->is_now_loading_game;
         is->custom_renderer_native_image (C3X_NATIVE_VISUAL_POLICY, NULL, NULL, NULL, NULL, animate ? 1 : 0);
     }
 	if (translate_custom_renderer_native (C3X_NATIVE_IMAGE_PRESENT, image, graph, rect, NULL, 0)) return 0;
@@ -27743,6 +27743,7 @@ unload_custom_renderer ()
 	is->custom_renderer_unit_draw = NULL;
 	is->custom_renderer_unit_draw_expanded = NULL;
 	is->custom_renderer_unit_draw_playback = NULL;
+	is->custom_renderer_unit_visual = NULL;
 	is->custom_renderer_unit_context = NULL;
 	is->custom_renderer_unit_canvas = NULL;
 	is->custom_renderer_export_scene = NULL;
@@ -27898,6 +27899,21 @@ forward_custom_unit_body (Sprite * sprite, PCX_Image * background, PCX_Image * c
 		p_main_screen_form->Player_CivID, display_unit->Body.X, display_unit->Body.Y) & C3X_RENDERER_TILE_VISIBLE))
 		flags |= C3X_RENDERER_UNIT_HIDDEN;
 	if (display_unit == p_main_screen_form->Current_Unit) flags |= C3X_RENDERER_UNIT_SELECTED;
+	if (is->custom_renderer_unit_visual != NULL) {
+		struct c3x_renderer_unit_visual_v1 visual = {0};
+		visual.struct_size = sizeof visual;
+		visual.unit_id = draw.unit_id; visual.action = draw.action;
+		visual.pixel_x = unit->Body.Animation.summary.pixel_loc_x;
+		visual.pixel_y = unit->Body.Animation.summary.pixel_loc_y;
+		visual.target_x = unit->Body.Animation.summary.pixel_target_x;
+		visual.target_y = unit->Body.Animation.summary.pixel_target_y;
+		visual.body_x = draw.body_x; visual.body_y = draw.body_y;
+		visual.projection_scale_milli = draw.projection_scale_milli;
+		visual.damage = unit->Body.Damage; visual.max_hp = Unit_get_max_hp (unit); visual.flags = flags;
+		visual.presentation_time_ticks = draw.presentation_time_ticks;
+		visual.presentation_frequency = draw.presentation_frequency;
+		is->custom_renderer_unit_visual (&visual);
+	}
 	// The resident path consumes native image identities before any CPU DC lease.
 	int submitted = translate_custom_renderer_native (C3X_NATIVE_UNIT_DRAW, image, underlay,
 		(RECT *)&draw, (RECT *)body_bounds, flags);
@@ -28068,6 +28084,7 @@ ensure_custom_renderer_loaded ()
 		is->custom_renderer_unit_draw = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_draw_background");
 		is->custom_renderer_unit_draw_expanded = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_draw_expanded");
 		is->custom_renderer_unit_draw_playback = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_draw_playback");
+		is->custom_renderer_unit_visual = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_visual");
 		is->custom_renderer_export_scene = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_export_scene");
 		is->custom_renderer_schedule = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_schedule_idle");
 		is->custom_renderer_reset = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_reset");

@@ -14,6 +14,9 @@ public:
         int id=-1;
         std::uint64_t revision=0;
         c3x_renderer_unit_v1 occurrence{};
+        c3x_renderer_unit_visual_v1 visual{};
+        double velocity_x=0,velocity_y=0;
+        bool has_visual=false;
     };
 private:
     struct Instance {
@@ -23,6 +26,8 @@ private:
         std::uint64_t revision=0,used=0;
     };
     std::map<int,Instance> instances;
+    struct Observed {c3x_renderer_unit_visual_v1 value{};double velocity_x=0,velocity_y=0;};
+    std::map<int,Observed> observations;
     UnitPlayback playback;
     std::uint64_t serial=0,access=0;
     // CPU identity metadata only. Shared meshes and completed poses retain
@@ -32,8 +37,44 @@ public:
     std::uint64_t captures=0,reused=0,bindings=0,evictions=0;
     explicit UnitInstances(std::size_t limit=4096):capacity(limit){}
     std::size_t size()const{return instances.size();}
-    void forget(int id){instances.erase(id);playback.forget(id);}
-    void clear(){instances.clear();playback.clear();} // serial never reuses a token
+    void forget(int id){instances.erase(id);observations.erase(id);playback.forget(id);}
+    void clear(){instances.clear();observations.clear();playback.clear();} // serial never reuses a token
+
+    bool observe(c3x_renderer_unit_visual_v1 const& value){
+        if(value.struct_size!=sizeof(value)||value.unit_id<0||value.action<0||
+           value.presentation_frequency<=0||value.presentation_time_ticks<0||
+           value.projection_scale_milli<=0||value.projection_scale_milli>4000||
+           value.max_hp<=0||value.damage<0||value.damage>value.max_hp||
+           (value.flags&~7u)||!capacity)return false;
+        if(value.flags&C3X_RENDERER_UNIT_HIDDEN){forget(value.unit_id);return true;}
+        auto found=observations.find(value.unit_id);
+        if(found!=observations.end()&&found->second.value.presentation_time_ticks>value.presentation_time_ticks)
+            return false; // A late observation cannot rewind a newer accepted pose.
+        Observed next;next.value=value;
+        if(value.action==2){
+            double dx=double(value.target_x)-value.pixel_x;
+            double dy=double(value.target_y)-value.pixel_y;
+            double metric=std::hypot(dx,2.0*dy);
+            // Civ III uses a doubled-Y distance over its fast speed. The
+            // ordinary 150-pixel/s estimate starts the first segment; later
+            // observed progress replaces it with the actual per-unit rate.
+            if(metric>0){next.velocity_x=150.0*dx/metric;next.velocity_y=150.0*dy/metric;}
+        }
+        if(value.action==2&&found!=observations.end()){
+            auto const& previous=found->second.value;
+            auto delta=value.presentation_time_ticks-previous.presentation_time_ticks;
+            if(previous.action==2&&previous.target_x==value.target_x&&previous.target_y==value.target_y&&
+               previous.presentation_frequency==value.presentation_frequency&&delta>0&&
+               delta<value.presentation_frequency/2){
+                double seconds=double(delta)/double(value.presentation_frequency);
+                next.velocity_x=double(value.pixel_x-previous.pixel_x)/seconds;
+                next.velocity_y=double(value.pixel_y-previous.pixel_y)/seconds;
+            }
+        }
+        if(found==observations.end()&&observations.size()>=capacity)observations.erase(observations.begin());
+        observations[value.unit_id]=next;
+        return true;
+    }
 
     template<class Catalog, class ActionName>
     bool capture(c3x_renderer_unit_v1 request,unsigned flags,Catalog const& catalog,
@@ -82,7 +123,16 @@ public:
             forget(oldest->first);++evictions;
         }
         instances[request.unit_id]=value;
-        selected={request.unit_id,value.revision,request};return true;
+        selected.id=request.unit_id;selected.revision=value.revision;selected.occurrence=request;
+        auto observed=observations.find(request.unit_id);
+        if(observed!=observations.end()&&observed->second.value.action==request.action&&
+           observed->second.value.presentation_time_ticks==request.presentation_time_ticks&&
+           observed->second.value.presentation_frequency==request.presentation_frequency&&
+           observed->second.value.body_x==request.body_x&&observed->second.value.body_y==request.body_y){
+            selected.visual=observed->second.value;selected.velocity_x=observed->second.velocity_x;
+            selected.velocity_y=observed->second.velocity_y;selected.has_visual=true;
+        }
+        return true;
     }
 
     // Clock sampling requires no new native body call. Directed actions retain
@@ -101,6 +151,24 @@ public:
             if(!playback.resolve(output,clip,selected_unit,predict))predict=0;
             if(!predict && !clip.ambient && output.action==1){output.action_cursor=0;output.frame_count=1;}
         }
+        if(selected.has_visual&&output.action==2&&selected.visual.action==2&&
+           selected.visual.presentation_frequency==frequency&&ticks>=selected.visual.presentation_time_ticks){
+            // Renderer time only refines the displayed location. It does not
+            // advance Civ III's tile, animation cursor, or movement outcome.
+            double elapsed=double(ticks-selected.visual.presentation_time_ticks)/double(frequency);
+            elapsed=std::min(elapsed,0.09); // Never run far ahead of native correction.
+            auto motion=[&](int current,int target,double velocity){
+                double delta=velocity*elapsed;
+                int remaining=target-current;
+                if(remaining>0)delta=std::clamp(delta,0.0,double(remaining));
+                else delta=std::clamp(delta,double(remaining),0.0);
+                double screen_limit=64.0*1000.0/double(selected.visual.projection_scale_milli);
+                return std::clamp(delta,-screen_limit,screen_limit);
+            };
+            double scale=double(selected.visual.projection_scale_milli)/1000.0;
+            output.body_x+=int(std::lround(motion(selected.visual.pixel_x,selected.visual.target_x,selected.velocity_x)*scale));
+            output.body_y+=int(std::lround(motion(selected.visual.pixel_y,selected.visual.target_y,selected.velocity_y)*scale));
+        }
         return true;
     }
     template<class Catalog> bool animated(Selection const& selected,Catalog const& catalog)const{
@@ -109,6 +177,8 @@ public:
         auto const& instance=found->second;
         if(!(instance.flags&C3X_RENDERER_UNIT_STATE_CAPTURED)||instance.unit>=catalog.size()||instance.action>=catalog[instance.unit].actions.size())return false;
         auto const& clip=catalog[instance.unit].actions[instance.action];int action=instance.content.action;
+        if(selected.has_visual&&action==2&&selected.visual.action==2&&
+           (selected.visual.pixel_x!=selected.visual.target_x||selected.visual.pixel_y!=selected.visual.target_y))return true;
         return clip.ambient&&clip.loop&&((action==1&&(instance.flags&C3X_RENDERER_UNIT_SELECTED))||action==11||(action>=13&&action<=18));
     }
     template<class Catalog>

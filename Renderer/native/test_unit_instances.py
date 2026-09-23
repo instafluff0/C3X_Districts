@@ -57,6 +57,34 @@ int main(){
  assert(!world.sample(old,0,1000000,catalog,out,step));
  old=b;world.clear();assert(capture(b));assert(!world.sample(old,0,1000000,catalog,out,step));
  old=b;std::strcpy(input.unit_key,"unknown");assert(!capture(a));assert(!world.sample(old,0,1000000,catalog,out,step));
+ // Copied native movement samples refine only visible screen position. A
+ // newer sample corrects travel; interruption and fog retire the segment.
+ UnitInstances motion;UnitInstances::Selection first,second;
+ c3x_renderer_unit_v1 moving{};moving.struct_size=sizeof(moving);moving.unit_id=55;
+ moving.action=2;moving.frame_count=16;moving.body_x=1000;moving.body_y=200;
+ moving.projection_scale_milli=1000;moving.presentation_frequency=1000000;
+ moving.presentation_time_ticks=1000000;std::strcpy(moving.unit_key,"worker");
+ c3x_renderer_unit_visual_v1 visual{};visual.struct_size=sizeof(visual);
+ visual.unit_id=55;visual.action=2;visual.pixel_x=100;visual.pixel_y=50;
+ visual.target_x=200;visual.target_y=50;visual.body_x=1000;visual.body_y=200;
+ visual.max_hp=4;
+ visual.projection_scale_milli=1000;visual.flags=C3X_RENDERER_UNIT_STATE_CAPTURED;
+ visual.presentation_time_ticks=1000000;visual.presentation_frequency=1000000;
+ assert(motion.observe(visual));
+ assert(motion.capture(moving,1,catalog,name,first));
+ assert(motion.animated(first,catalog));
+ assert(motion.sample(first,1016000,1000000,catalog,out,step)&&out.body_x==1002);
+ visual.pixel_x=106;visual.body_x=1006;visual.presentation_time_ticks=1066000;
+ moving.body_x=1006;moving.presentation_time_ticks=1066000;
+ assert(motion.observe(visual)&&motion.capture(moving,1,catalog,name,second));
+ assert(motion.sample(second,1099000,1000000,catalog,out,step)&&out.body_x==1009);
+ assert(motion.sample(second,2000000,1000000,catalog,out,step)&&out.body_x<=1015); // bounded extrapolation
+ auto stale=visual;stale.presentation_time_ticks=1000000;assert(!motion.observe(stale));
+ moving.action=1;assert(motion.capture(moving,1,catalog,name,first));
+ assert(!motion.sample(second,1100000,1000000,catalog,out,step));
+ visual.flags=C3X_RENDERER_UNIT_STATE_CAPTURED|C3X_RENDERER_UNIT_HIDDEN;
+ visual.presentation_time_ticks=1100000;assert(motion.observe(visual));
+ assert(!motion.sample(first,1100000,1000000,catalog,out,step));
  UnitFramePreparation queue;input.unit_key[0]=0;input.unit_id=12;input.action_cursor=1;input.frame_count=16;
  queue.observe(input,true);assert(!queue.empty());queue.forget(12);assert(queue.empty());
 }

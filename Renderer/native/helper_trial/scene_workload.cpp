@@ -51,6 +51,7 @@ struct Core {
     using CpuUnit=int(*)(c3x_renderer_unit_v1 const*,unsigned,int,int*,int*,int*,unsigned*,unsigned*,std::uint32_t*,unsigned);
     CpuUnit unit_cpu=nullptr;
     using UnitForget=void(*)(int);UnitForget unit_forget=nullptr;
+    c3x_renderer_unit_visual_fn unit_visual=nullptr;
     using Tactical=int(*)(c3x_renderer::tactical::Input const*,c3x_renderer_gpu_unit_v1 const*);
     Tactical tactical_gpu=nullptr;
     using WorldQuery=int(*)(c3x_renderer_world_page_v1*);
@@ -90,6 +91,7 @@ struct Core {
         unit_gpu=reinterpret_cast<GpuUnit>(GetProcAddress(module,"c3x_renderer_gpu_unit"));
         unit_cpu=reinterpret_cast<CpuUnit>(GetProcAddress(module,"c3x_renderer_trial_unit_pixels"));
         unit_forget=reinterpret_cast<UnitForget>(GetProcAddress(module,"c3x_renderer_unit_forget"));
+        unit_visual=reinterpret_cast<c3x_renderer_unit_visual_fn>(GetProcAddress(module,"c3x_renderer_unit_visual"));
         tactical_gpu=reinterpret_cast<Tactical>(GetProcAddress(module,"c3x_renderer_trial_tactical"));
         world_query=reinterpret_cast<WorldQuery>(GetProcAddress(module,"c3x_renderer_trial_world_query"));
         world_submit=reinterpret_cast<WorldSubmit>(GetProcAddress(module,"c3x_renderer_trial_world_submit"));
@@ -106,10 +108,10 @@ struct Core {
     ~Core(){direct_cadence.stop();if(module){reset();auto trace_flush=reinterpret_cast<void(*)()>(GetProcAddress(module,"c3x_renderer_trial_trace_flush"));
         if(trace_flush)trace_flush();FreeLibrary(module);}}
     void start_direct_cadence(){
-        if(!direct_surface_bound||!direct_display_ready||!visual_shared||!native_image)return;
+        if(!direct_surface_bound||!direct_display_ready||!visual_shared||!native_image){direct_cadence.disable();return;}
         char manual[4]={};
-        if(GetEnvironmentVariableA("C3X_RENDERER_MANUAL_VISUAL",manual,sizeof(manual))==1&&manual[0]=='1')return;
-        if(native_image(C3X_NATIVE_VISUAL_POLICY,nullptr,nullptr,nullptr,nullptr,2)<=0)return;
+        if(GetEnvironmentVariableA("C3X_RENDERER_MANUAL_VISUAL",manual,sizeof(manual))==1&&manual[0]=='1'){direct_cadence.disable();return;}
+        if(native_image(C3X_NATIVE_VISUAL_POLICY,nullptr,nullptr,nullptr,nullptr,3)<=0){direct_cadence.disable();return;}
         direct_cadence.enable([this]{
             LARGE_INTEGER now={},frequency={};
             if(!QueryPerformanceCounter(&now)||!QueryPerformanceFrequency(&frequency))return;
@@ -399,6 +401,11 @@ struct Core {
             }else if(wire.live&&wire.kind==unsigned(Kind::unit_forget)&&wire.subtype==0){
                 require(unit_forget!=nullptr,"helper lacks unit retirement entry");
                 int id=0;in(id);in.done();unit_forget(id);wire.code=1;
+            }else if(wire.kind==unsigned(Kind::unit_visual)&&wire.subtype==0){
+                require(unit_visual!=nullptr,"helper lacks unit visual entry");
+                c3x_renderer_unit_visual_v1 value={sizeof(value)};
+                c3x_inputs::unit_visual_fields(in,value);in.done();
+                wire.code=unsigned(unit_visual(&value));
             }else if(wire.live&&wire.kind==unsigned(Kind::tactical)&&wire.subtype==0){
                 require(tactical_gpu!=nullptr,"helper lacks tactical renderer entry");
                 c3x_renderer_gpu_unit_v1 target={sizeof(target)};c3x_inputs::target_fields(in,target);

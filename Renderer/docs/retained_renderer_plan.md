@@ -27,8 +27,9 @@ the former 1,326-line roadmap.
   autonomous Renderer64 cadence and complete lifecycle acceptance remain open.
   Earlier paired speed/pixel numbers accidentally compared the shared-image
   route with itself and are invalid for this surface.
-- The current directed unit body uses Civ III's captured anchor and animation
-  cursor. Renderer64 does not yet interpolate one accepted A-to-B move.
+- The unit body now carries a separate copied native visual observation.
+  Renderer64 can smooth movement between successive accepted pixel samples;
+  full event-scoped A-to-B timing and selection/path alignment are still open.
   Off-screen tile/city state is discovered through copied pages; this is not
   an immediate game-state change stream or a complete unit roster.
 

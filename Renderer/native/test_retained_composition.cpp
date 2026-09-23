@@ -319,7 +319,7 @@ int test_retained_composition(){
         auto show=[&]{assert(session.display_to(1,canvas,target.Get(),display.Get(),buffer.Get(),w,h,full));};
         auto copy_map=[&]{request.action=C3X_GPU_SUBMIT;commands={{Kind::copy,canvas,session.map_image(),full,full}};
             assert(session.execute(request,commands,{},result,output)==C3X_RENDERER_RESULT_OK);};
-        copy_map();show();assert(session.visual_ready());
+        copy_map();show();assert(session.visual_ready()&&session.visual_active());
         // Native transfers must sample the same clock as autonomous frames.
         // The immutable original map stays unchanged; only its sampled source advances.
         ComPtr<ID3D11Texture2D> sampled;desc.BindFlags=D3D11_BIND_SHADER_RESOURCE;
@@ -356,11 +356,12 @@ int test_retained_composition(){
         c3x_renderer_gpu_unit_v1 draw={};draw.ticket=3;draw.destination=std::int64_t(canvas);draw.clip[2]=w;draw.clip[3]=h;
         assert(session.draw_dynamic(draw,8,8,0,0,std::move(unit))==C3X_RENDERER_RESULT_OK);show_current();
         if(session.visual_ready()){std::fprintf(stderr,"FAIL animated unit masks missing ambient map source\n");return 1;}
-        copy_map();show_current();assert(session.visual_ready());
+        copy_map();show_current();assert(session.visual_ready()&&session.visual_active());
         assert(session.publish(source.Get(),4)); // genuinely static map is ready too
         request.ticket=4;request.action=C3X_GPU_SUBMIT;commands={{Kind::copy,canvas,session.map_image(),full,full}};
         assert(session.execute(request,commands,{},result,output)==C3X_RENDERER_RESULT_OK);
-        assert(session.display_to(4,canvas,target.Get(),display.Get(),buffer.Get(),w,h,full));assert(session.visual_ready());
+        assert(session.display_to(4,canvas,target.Get(),display.Get(),buffer.Get(),w,h,full));
+        assert(session.visual_ready()&&!session.visual_active()); // fog/static: no animation callbacks
         // A failed optional visual sample must not reject a completed native
         // transfer or discard the caller's current GPU canvases. This models an
         // allocation failure without consuming the host's real address space.

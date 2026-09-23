@@ -106,6 +106,9 @@ public:
         std::lock_guard<std::mutex> lock(gate);return client.unit_cpu(unit,flags,bounds,pixels,x,y,width,height);
     }
     void forget_unit(int id){std::lock_guard<std::mutex> lock(gate);client.forget_unit(id);}
+    int unit_visual(c3x_renderer_unit_visual_v1 const& value){
+        std::lock_guard<std::mutex> lock(gate);return client.unit_visual(value);
+    }
     int tactical(c3x_renderer::tactical::Input const& capture,c3x_renderer_gpu_unit_v1 const& target){
         std::lock_guard<std::mutex> lock(gate);return client.tactical(capture,target);
     }
@@ -163,7 +166,7 @@ public:
             if(phase_probe)QueryPerformanceCounter(&phase_adopt);
             if(displayed==C3X_RENDERER_RESULT_OK){
                 active_window=static_cast<HWND>(request.window);
-                visual_active=client.visual_policy(2)!=0;
+                visual_active=client.visual_policy(3)!=0;
                 char manual[4]={};bool manual_replay=GetEnvironmentVariableA("C3X_RENDERER_MANUAL_VISUAL",manual,sizeof(manual))==1&&manual[0]=='1';
                 if(visual_active&&!manual_replay&&!direct_active)cadence.enable([this]{
                     try{LARGE_INTEGER now={},frequency={};QueryPerformanceCounter(&now);QueryPerformanceFrequency(&frequency);

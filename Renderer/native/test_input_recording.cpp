@@ -39,6 +39,16 @@ int main(int argc,char** argv){try{
     std::memcpy(actor.unit_key,"PRTO_Worker",12);Writer actor_wire;unit(actor_wire,actor);c3x_renderer_unit_v1 actor_copy={};Reader actor_in{actor_wire.bytes};unit(actor_in,actor_copy);actor_in.done();
     require(actor_copy.action==8&&actor_copy.queued_action==3&&actor_copy.action_cursor==19&&actor_copy.presentation_time_ticks==actor.presentation_time_ticks,"unit action/time changed");
     auto changed=actor;changed.action_cursor++;Writer changed_wire;unit(changed_wire,changed);require(changed_wire.bytes!=actor_wire.bytes,"action mutation lost");
+    c3x_renderer_unit_visual_v1 visual={sizeof(visual)};visual.unit_id=41;visual.action=2;
+    visual.pixel_x=127;visual.pixel_y=-2;visual.target_x=215;visual.target_y=42;
+    visual.body_x=640;visual.body_y=320;visual.projection_scale_milli=750;
+    visual.damage=2;visual.max_hp=4;visual.flags=C3X_RENDERER_UNIT_STATE_CAPTURED;
+    visual.presentation_time_ticks=1234567890123;visual.presentation_frequency=24000000;
+    Writer visual_wire;unit_visual_fields(visual_wire,visual);
+    c3x_renderer_unit_visual_v1 visual_copy={sizeof(visual_copy)};
+    Reader visual_in{visual_wire.bytes};unit_visual_fields(visual_in,visual_copy);visual_in.done();
+    require(visual_copy.pixel_y==-2&&visual_copy.target_x==215&&visual_copy.damage==2&&visual_copy.max_hp==4&&
+        visual_copy.presentation_time_ticks==visual.presentation_time_ticks,"unit visual observation changed");
     unsigned upload[]={0,0xffffffffu,0x12345678u};c3x_renderer_gpu_images_v1 native={};native.struct_size=sizeof(native);native.action=C3X_GPU_UPLOAD;
     native.ticket=9;native.image=21;native.revision=3;native.pixel_count=3;native.pixels=upload;Writer upload_wire;images(upload_wire,native);Images native_copy;Reader upload_in{upload_wire.bytes};images(upload_in,native_copy);upload_in.done();
     upload[1]=0;require(native_copy.value.pixels!=upload&&native_copy.pixels[1]==0xffffffffu,"native CPU source must be immutable");

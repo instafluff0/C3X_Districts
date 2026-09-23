@@ -199,6 +199,10 @@ public:
         c3x_inputs::Writer input;input(std::int32_t(id));
         invoke(unsigned(c3x_inputs::Kind::unit_forget),0,input.bytes.data(),unsigned(input.bytes.size()));
     }
+    int unit_visual(c3x_renderer_unit_visual_v1 value){
+        c3x_inputs::Writer input;c3x_inputs::unit_visual_fields(input,value);
+        return int(invoke(unsigned(c3x_inputs::Kind::unit_visual),0,input.bytes.data(),unsigned(input.bytes.size())).code);
+    }
     int tactical(c3x_renderer::tactical::Input const& capture,c3x_renderer_gpu_unit_v1 const& target){
         c3x_inputs::Writer input;auto value=target;c3x_inputs::target_fields(input,value);
         c3x_inputs::tactical(input,capture);

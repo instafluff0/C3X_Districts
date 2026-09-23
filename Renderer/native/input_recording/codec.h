@@ -132,6 +132,13 @@ template<class IO,class Value>void c3x_renderer_unit_v1_fields(IO& io,Value& v){
     io(v.presentation_frequency);
     io(v.unit_key);
 }
+template<class IO,class Value>void unit_visual_fields(IO& io,Value& v){
+    io(v.unit_id);io(v.action);
+    io(v.pixel_x);io(v.pixel_y);io(v.target_x);io(v.target_y);
+    io(v.body_x);io(v.body_y);io(v.projection_scale_milli);
+    io(v.damage);io(v.max_hp);io(v.flags);
+    io(v.presentation_time_ticks);io(v.presentation_frequency);
+}
 // Explicit protocol fields; test coverage fails when the ABI adds a field.
 template<class IO,class Value>void c3x_renderer_camera_identity_v1_fields(IO& io,Value& v){
     io(v.map_epoch);

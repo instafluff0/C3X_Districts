@@ -20,17 +20,18 @@ struct PCXV {HDC (__fastcall *acquire_dc)(JGL_Image*);void (__fastcall *release_
 struct JGL_Image {PCXV* vtable;};
 struct PCX_Image {struct {JGL_Image* Image;} JGL;};
 struct Animation_Info {int* Frame_Counts;};
-struct Summary {int current_anim_type=2,queued_anim_type=0,direction_2=3,pixel_loc_x=640,pixel_loc_y=480;};
+struct Summary {int current_anim_type=2,queued_anim_type=0,direction_2=3,pixel_loc_x=640,pixel_loc_y=480,pixel_target_x=720,pixel_target_y=520;};
 struct Animation {struct {void* Flic_Info;Sprite sprite;} Frame_1;Animation_Info* Animation_Info;Summary summary;int field_FC=7;};
 struct Rect {int left=20,top=30,right=45,bottom=55;};
 using RECT=Rect;
-struct Unit {struct {Rect Rect;int ID=42,UnitTypeID=0,X=2,Y=4;int army_top_defender_id=-1;Animation Animation;} Body;bool army=false,visible=true;};
+struct Unit {struct {Rect Rect;int ID=42,UnitTypeID=0,X=2,Y=4,Damage=2;int army_top_defender_id=-1;Animation Animation;} Body;bool army=false,visible=true;};
 struct UnitType {char Civilipedia_Entry[32]="PRTO_Archer";};
 struct Bic {int UnitTypeCount=1;UnitType* UnitTypes;bool is_zoomed_out=false;};
 struct State {int custom_renderer_native_operation=123;Unit* custom_renderer_unit_context=nullptr;PCX_Image* custom_renderer_unit_canvas=nullptr;
  c3x_renderer_unit_forget_fn custom_renderer_unit_forget=nullptr;
  c3x_renderer_unit_draw_background_fn custom_renderer_unit_draw=nullptr;
  c3x_renderer_unit_draw_playback_fn custom_renderer_unit_draw_playback=nullptr;
+ c3x_renderer_unit_visual_fn custom_renderer_unit_visual=nullptr;
  c3x_renderer_unit_draw_expanded_fn custom_renderer_unit_draw_expanded=nullptr;int custom_renderer_init_state=1;
  struct {bool enable_custom_rendering=true,enable_custom_rendering_zoom=false;int day_night_cycle_mode=0,seasonal_cycle_mode=0;} current_config;
  int custom_renderer_zoom_tile_width=128,custom_renderer_zoom_native_tile_width=128;
@@ -45,6 +46,9 @@ struct Screen {int Player_CivID=1;Unit* Current_Unit=nullptr;} screen;Screen* p_
 unsigned playback_flags=0;
 State state;State* is=&state;Bic bic;Bic* p_bic_data=&bic;PCX_Color_Table fixture_palette;
 std::vector<int> calls;c3x_renderer_unit_v1 captured;bool success=true,fixture_reduced=false;int dc_count=0;PCX_Image* fixture_background=nullptr;JGL_Image* denied_dc=nullptr;
+c3x_renderer_unit_visual_v1 captured_visual{};int visual_calls=0;
+int capture_visual(c3x_renderer_unit_visual_v1 const* value){assert(value&&value->struct_size==sizeof(*value));captured_visual=*value;++visual_calls;return 1;}
+int Unit_get_max_hp(Unit*){return 4;}
 int clamp(int a,int b,int v){return v<a?a:(v>b?b:v);}
 long long qpc=1000000;
 bool QueryPerformanceCounter(LARGE_INTEGER* value){value->QuadPart=qpc;qpc+=66000;return true;}
@@ -118,8 +122,13 @@ int main(){
  PCXV canvas_v={acquire,release_dc};JGL_Image image={&canvas_v};PCX_Image canvas={{&image}},other={{&image}};
  JGL_Image background_image={&canvas_v};PCX_Image background={{&background_image}};fixture_background=&background;
  state.custom_renderer_unit_draw=capture;
+ state.custom_renderer_unit_visual=capture_visual;
  auto invoke=[&](){calls.clear();patch_Unit_tick_anim(&unit,0,&canvas,101,202,true);assert(state.custom_renderer_native_operation==123 && dc_count==0 && !state.custom_renderer_unit_context && !state.custom_renderer_unit_canvas);};
  success=true;invoke();assert(captured.presentation_time_ticks==0);
+ assert(visual_calls==1 && captured_visual.unit_id==42 && captured_visual.action==2);
+ assert(captured_visual.pixel_x==640 && captured_visual.pixel_y==480 && captured_visual.target_x==720 && captured_visual.target_y==520);
+ assert(captured_visual.damage==2 && captured_visual.max_hp==4 && captured_visual.body_x==captured.body_x && captured_visual.body_y==captured.body_y);
+ assert(captured_visual.presentation_time_ticks==captured.presentation_time_ticks);
  invoke();assert(captured.presentation_time_ticks==66000);
  qpc+=1000000;invoke();assert(captured.presentation_time_ticks==66000); // interturn wall time is frozen
  for(int zoom=0;zoom<2;++zoom){

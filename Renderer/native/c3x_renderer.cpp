@@ -3463,12 +3463,16 @@ public:
         auto anchor=frame.tiles;
         for(unsigned i=0;i<frame.tile_count;++i)if(frame.tiles[i].tile_flags&C3X_RENDERER_TILE_RENDER){anchor=frame.tiles+i;break;}
         // Pin the complete requested set before any admission can evict cells.
-        for(auto const& cell:cells){auto found=retained_wave_cells.find(cell.first);
+        for(auto const& cell:cells){int c=cell.first.first,r=cell.first.second;
+            if(visibility_pass&&!visibility_coverage.state(c+r,c-r))continue;
+            auto found=retained_wave_cells.find(cell.first);
             if(found!=retained_wave_cells.end())found->second.used=retained_wave_epoch;}
         float hw=frame.tile_width*.5f,hh=frame.tile_height*.5f;
         int dx=int(geometry_viewport_settings.translation[0]),dy=int(geometry_viewport_settings.translation[1]);
         for(auto const& entry:cells) {
             int c=entry.first.first,r=entry.first.second;
+            unsigned visibility=visibility_pass?visibility_coverage.state(c+r,c-r):2;
+            if(!visibility)continue; // Black, never-explored coast needs no resident wave geometry.
             auto found=retained_wave_cells.find(entry.first);
             if(found==retained_wave_cells.end()) {
                 RetainedWaveCell cell;cell.used=retained_wave_epoch;
@@ -3510,7 +3514,6 @@ public:
                 wave_geometry_bytes+=bytes;wave_upload_bytes+=bytes;++wave_cells_built;
             } else ++wave_cells_reused;
             auto const& owner=found->second.chunk;if(!owner.buffer)continue;
-            unsigned visibility=visibility_pass?visibility_coverage.state(c+r,c-r):2;if(!visibility)continue;
             auto chunk=owner;chunk.visual_time=visibility==2?-1.f:0.f;
             // Cell-local vertices stay immutable. Visible occurrences provide
             // their authoritative screen transform through the existing buffer.
@@ -10748,7 +10751,8 @@ public:
         std::lock_guard<std::mutex> calls(call_mutex);
         c3x_inputs::Call input(c3x_inputs::Kind::visual,3,[&](auto& out){out(policy);});
         if(policy<2){advance_visual_clock();visual_allowed=policy!=0;}
-        auto* session=renderer_state.gpu_composition.get();return input.result(session&&session->visual_ready()?1:0);
+        auto* session=renderer_state.gpu_composition.get();
+        return input.result(session&&(policy==3?session->visual_active():session->visual_ready())?1:0);
     }
     int visual_status(c3x_renderer_visual_status_v1& out){
         std::lock_guard<std::mutex> calls(call_mutex);auto* session=renderer_state.gpu_composition.get();
@@ -10834,12 +10838,12 @@ public:
                 // Keep the display attached until the native owner's explicit
                 // preserve/CPU handoff succeeds. Reset here exposes stale GDI.
             }
-            else if(session->visual_ready()){
+            else if(session->visual_active()){
                 visual_present_pending=false;visual_delivery=true;
                 visual_cadence.enable([this]{
                     try{int result=visual_frame(true);c3x_inputs::realtime_replay().offer(result);}catch(...){c3x_inputs::realtime_replay().offer(C3X_RENDERER_RESULT_ERROR);OutputDebugStringA("[C3X renderer] independent visual frame failed\n");}
                 });
-            }
+            }else stop_visual_delivery();
             return result;
         }catch(...){stop_visual_delivery();session->stop_visuals();return C3X_RENDERER_RESULT_ERROR;}
         }();if(code==C3X_RENDERER_RESULT_OK&&request.action==0)c3x_inputs::runtime().gameplay();return input.result(code);
@@ -11281,6 +11285,12 @@ public:
         unit_instances.forget(id);unit_pixels_queue.forget(id);
         // In-flight poses are immutable shared content. They cannot publish
         // themselves or restore the retired instance's selection.
+    }
+
+    int observe_unit(c3x_renderer_unit_visual_v1 const& value){
+        std::lock_guard<std::mutex> call_guard(call_mutex);
+        std::lock_guard<std::mutex> lock(state_mutex);
+        return unit_instances.observe(value)?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_BAD_ARGUMENT;
     }
 
     int draw_tactical(c3x_renderer::tactical::Input const& capture,c3x_renderer_gpu_unit_v1 const& target){
@@ -12660,8 +12670,17 @@ private:
                     auto& body=renderer_state.unit_bodies;auto reads=body.output_readbacks,uploads=renderer_state.gpu_composition->upload_count();
                     if(body.direct_scene){
                         unsigned scale=job_unit.projection_scale_milli?job_unit.projection_scale_milli:(job_unit.reduced?500:1000);
-                        result=renderer_state.gpu_composition->draw_dynamic(gpu_unit,job_unit.sprite_width*scale/1000,job_unit.sprite_height*scale/1000,
-                            job_unit.body_x,job_unit.body_y,unit_scene_operation());
+                        // The retained command owns a fixed rectangle. Reserve
+                        // room for interpolated travel or the new body would
+                        // be clipped at its original native draw bounds.
+                        auto movement_margin=[&](double velocity){return job_unit_selection.has_visual&&job_unit.action==2?
+                            std::min(64,int(std::ceil(std::abs(velocity)*0.09*double(scale)/1000.0))+2):0;};
+                        int margin_x=movement_margin(job_unit_selection.velocity_x);
+                        int margin_y=movement_margin(job_unit_selection.velocity_y);
+                        result=renderer_state.gpu_composition->draw_dynamic(gpu_unit,
+                            job_unit.sprite_width*scale/1000+2*margin_x,
+                            job_unit.sprite_height*scale/1000+2*margin_y,
+                            job_unit.body_x-margin_x,job_unit.body_y-margin_y,unit_scene_operation());
                     }else if(body.render(renderer_state.device,renderer_state.context,job_unit,[&](auto const& action){return renderer_state.prepare_unit_action(action);},nullptr,job_unit_predict,true)){
                         auto const& pose=body.resident_pose;result=renderer_state.gpu_composition->compose_resident_unit(gpu_unit,pose.texture.Get(),unsigned(pose.width),unsigned(pose.height),job_unit.body_x,job_unit.body_y,retain_visual_unit(pose.texture));
                     }else result=C3X_RENDERER_RESULT_ERROR;
@@ -13269,6 +13288,14 @@ extern "C" __declspec(dllexport) void c3x_renderer_unit_forget(int unit_id) {
     input.result(1);
 }
 
+extern "C" __declspec(dllexport) int c3x_renderer_unit_visual(c3x_renderer_unit_visual_v1 const* visual){
+    if(!visual||visual->struct_size!=sizeof(*visual))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    c3x_inputs::Call input(c3x_inputs::Kind::unit_visual,0,[&](auto& out){auto value=*visual;c3x_inputs::unit_visual_fields(out,value);});
+    try{return input.result(remote_renderer_requested()?remote_renderer_backend()->unit_visual(*visual):
+        get_renderer_worker().observe_unit(*visual));}
+    catch(...){return input.result(C3X_RENDERER_RESULT_ERROR);}
+}
+
 extern "C" __declspec(dllexport) int c3x_renderer_set_unit_rendering(int enabled) {
     c3x_inputs::Call input(c3x_inputs::Kind::configuration,3,[&](auto& out){out(std::int32_t(enabled));});
     try{return input.result(remote_renderer_requested()?remote_renderer_backend()->set_units(enabled):
@@ -13554,6 +13581,11 @@ int renderer_native_image_impl(int operation,void* image,void* source,void const
 
 extern "C" __declspec(dllexport) int c3x_renderer_native_image(int operation,void* image,void* source,void const* from,void const* to,unsigned color){
     c3x_inputs::NativeCall input(1,[&](auto& out){c3x_inputs::native_operation_input(out,operation,image,source,from,to,color);});
+    // Record the window dependency at every final native handoff. The CPU
+    // snapshot and cross-process surface routes may ask for it at different
+    // points; capturing it here keeps a gameplay recording route-independent.
+    if(operation==C3X_NATIVE_IMAGE_PRESENT&&source&&input.active)
+        c3x_native_access::window(source);
     auto token=c3x_recording::journal().native(c3x_recording::native_begin,operation,image,source,color);
     auto result=renderer_native_image_impl(operation,image,source,from,to,color);
     if(token)c3x_recording::event(c3x_recording::native_end,0,[&](auto& b){c3x_recording::u64(b,token);c3x_recording::u32(b,unsigned(result));});

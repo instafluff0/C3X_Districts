@@ -126,6 +126,20 @@ struct c3x_renderer_unit_v1 {
     char unit_key[64];
 };
 
+/* A copied observation of Civ III's accepted unit animation. This is separate
+   from the established unit draw ABI so older input journals remain readable.
+   Pixel positions are Civ III's own current/target coordinates, not a proposed
+   gameplay move. A hidden observation retires any retained visual segment. */
+struct c3x_renderer_unit_visual_v1 {
+    c3x_renderer_u32 struct_size;
+    c3x_renderer_i32 unit_id, action;
+    c3x_renderer_i32 pixel_x, pixel_y, target_x, target_y;
+    c3x_renderer_i32 body_x, body_y, projection_scale_milli;
+    c3x_renderer_i32 damage, max_hp;
+    c3x_renderer_u32 flags;
+    c3x_renderer_i64 presentation_time_ticks, presentation_frequency;
+};
+
 struct c3x_renderer_tile_v1 {
     c3x_renderer_i32 tile_x;
     c3x_renderer_i32 tile_y;
@@ -437,6 +451,8 @@ typedef int (*c3x_renderer_native_observe_fn)(struct c3x_renderer_native_observa
    A backend must drain before removal; it cannot fail open with stale CPU pixels.
    Negative results deny native access after a failed ownership barrier. */
 enum { C3X_NATIVE_IMAGE_DRAIN = 100, C3X_NATIVE_IMAGE_REINIT = 101, C3X_NATIVE_IMAGE_CLIP = 102, C3X_NATIVE_IMAGE_PRESENT = 103, C3X_NATIVE_IMAGE_PALETTE = 104, C3X_NATIVE_UNIT_DRAW = 105, C3X_NATIVE_IMAGE_TEXT_STATE = 106, C3X_NATIVE_TEXT = 107, C3X_NATIVE_SPRITE_BLEND = 108, C3X_NATIVE_TINT = 109, C3X_NATIVE_LINE = 110, C3X_NATIVE_LOOKUP = 111, C3X_NATIVE_SPRITE_LOOKUP = 112, C3X_NATIVE_SPRITE_LOOKUP_OVER = 113, C3X_NATIVE_SPRITE_LOOKUP_SCALED = 114, C3X_NATIVE_SPRITE_STYLE = 115, C3X_NATIVE_VISUAL_POLICY = 116 };
+/* VISUAL_POLICY 0/1 gate the visual clock, 2 reports a coherent retained
+   front for native fallback, 3 reports active visible animation for cadence. */
 /* Borrowed only for the synchronous native callback; never queued to a worker. */
 struct c3x_renderer_native_sprite_style { void *palette, *table; unsigned color; int mode; float opacity; };
 struct c3x_renderer_native_lookup { void *table, *palette; int percent; void *background; int scale[3]; };
@@ -499,6 +515,7 @@ typedef int (*c3x_renderer_unit_draw_playback_fn)(struct c3x_renderer_unit_v1 co
 typedef int (*c3x_renderer_set_unit_rendering_fn)(int enabled);
 /* Retire a despawned visual identity before Civ III can reuse its ID. No drawing. */
 typedef void (*c3x_renderer_unit_forget_fn)(int unit_id);
+typedef int (*c3x_renderer_unit_visual_fn)(struct c3x_renderer_unit_visual_v1 const *);
 typedef int (*c3x_renderer_export_scene_fn)(struct c3x_renderer_frame_v1 const *, struct c3x_renderer_scene_export_v1 const *);
 typedef int (*c3x_renderer_schedule_fn)(struct c3x_renderer_schedule_v1 const *, struct c3x_renderer_schedule_result_v1 *);
 typedef void (*c3x_renderer_reset_fn)(void);

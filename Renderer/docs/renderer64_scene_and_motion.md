@@ -18,6 +18,14 @@ missing or superseded changes require a fresh scoped snapshot. The existing
 tile publication journal and unit lifecycle owner are the starting points,
 not duplicate worlds to retain indefinitely.
 
+Keep Renderer-only patch functions together at the end of `injected_code.c`,
+immediately before its required `main`. Existing patches that also serve other
+C3X features stay with their shared logic. A hook should copy authoritative
+values and forward them; sequencing, diffing, storage and visual playback belong
+in `Renderer/`. Add a `civ_prog_objects.csv` entry when a concrete new hook is
+needed, and record its signature, supported-build addresses, fallback and reason
+in the patch dependency ledger.
+
 The current world-page callback discovers tile/city state in batches on the
 game thread. It is useful for initial population and reconciliation, but a
 periodic page read is not an immediate city, visibility, or unit notification.
@@ -33,7 +41,9 @@ Renderer64 stores the most recent accepted scene generation and samples it
 without reading Civ III memory. Ambient water, visible resources, eligible
 selected idle units and visible working units run on its own clock. Unselected
 idle units and explored-but-not-visible resources stay frozen; hidden units do
-not draw. A game-thread stall cannot pause eligible ambient animation. Native
+not draw. A retained front with no eligible visible animation does not start
+the visual-frame cadence, even when its static pixels remain ready for native
+presentation. A game-thread stall cannot pause eligible ambient animation. Native
 actions, audio, combat outcomes, turn processing and path legality stay in
 Civ III. The native 66 ms callback retains any gameplay/action advancement;
 custom rendering suppresses only superseded native drawing.
@@ -90,9 +100,14 @@ The event carries those authoritative identities, target tile and result. A miss
 intermediate HP revision is a capture defect; Renderer64 must never fill it in
 by dividing the final damage across imagined strikes. Losing visibility
 immediately removes combatants and bars from the map scene.
-The current body capture provides native cursor and draw anchor, but does not
-publish an accepted movement segment or interpolate A to B. It remains a
-reconciliation input until the motion contract is connected.
+The body hook now copies Civ III's current and accepted target pixel positions,
+draw anchor, damage, maximum HP and action into a separate observation. Renderer64 uses
+successive observations to smooth visible travel between native updates, bounded
+to 90 ms and corrected by each newer native pose. The first sample uses Civ III's
+ordinary movement-speed estimate and the copied target; subsequent samples use
+measured native progress. This is a conservative visual refinement, not yet the full accepted
+segment contract above: explicit tile endpoints, durations, interruption IDs,
+selection/route attachment and intermediate combat HP timing still need work.
 
 ## Surface and frame lifecycle
 
@@ -111,6 +126,10 @@ retain pixels outside their rectangle. Resize, modal transitions, minimize,
 config-off, helper restart and device loss retire or recreate surface generations
 without displaying stale map pixels. The shared-texture presenter stays a
 controlled recovery path until this full lifecycle is proven.
+Final native handoffs now record the graph-window input independent of whether
+the CPU snapshot or cross-process surface route consumed it. Earlier recordings
+cannot gain that missing input retroactively and need a fresh capture for an
+exact route comparison.
 
 ## Integration gate before performance work
 
