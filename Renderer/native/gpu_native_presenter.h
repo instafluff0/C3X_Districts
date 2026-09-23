@@ -1,6 +1,7 @@
 #pragma once
 #include "gpu_frame_api.h"
 #include "gpu_image_compositor.h"
+#include <d3d11_1.h>
 #include <dxgi1_2.h>
 #include <dcomp.h>
 #pragma comment(lib,"dcomp.lib")
@@ -96,6 +97,31 @@ public:
     ID3D11RenderTargetView* view()const{return target.Get();}
     ID3D11Texture2D* retained()const{return display.Get();}
     ID3D11Texture2D* buffer()const{return back.Get();}
+    // The helper owns scene composition; this process owns the Civ III window.
+    // The duplicated handle is consumed exactly once. No CPU readback or HWND
+    // crosses the process boundary, and no frame is adopted after a mismatch.
+    int adopt_shared(ID3D11Device1* device,ID3D11DeviceContext* context,
+                     std::uint64_t raw_handle,unsigned w,unsigned h,bool independent=false){
+        HANDLE handle=reinterpret_cast<HANDLE>(std::uintptr_t(raw_handle));
+        if(!handle)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        struct Close {HANDLE value;~Close(){CloseHandle(value);}} close{handle};
+        if(!device||!context||!display||!back||w!=width||h!=height||
+           (!independent&&owner!=GetCurrentThreadId())||(independent&&!initialized)||!swap)
+            return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        ComPtr<ID3D11Texture2D> source;
+        if(FAILED(device->OpenSharedResource1(handle,IID_PPV_ARGS(&source))))return C3X_RENDERER_RESULT_DEVICE_ERROR;
+        D3D11_TEXTURE2D_DESC desc={};source->GetDesc(&desc);
+        if(desc.Width!=w||desc.Height!=h||desc.Format!=DXGI_FORMAT_B8G8R8A8_UNORM)
+            return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        ComPtr<IDXGIKeyedMutex> mutex;
+        if(FAILED(source.As(&mutex))||FAILED(mutex->AcquireSync(1,1000)))
+            return C3X_RENDERER_RESULT_DEVICE_ERROR;
+        context->CopyResource(display.Get(),source.Get());
+        context->CopyResource(back.Get(),display.Get());
+        auto released=mutex->ReleaseSync(0);context->Flush();
+        if(FAILED(released)||FAILED(device->GetDeviceRemovedReason()))return C3X_RENDERER_RESULT_DEVICE_ERROR;
+        gpu_written();return present(independent);
+    }
     // Worker-only upload of a completed native CPU surface. Keep pixels outside
     // the native transfer rectangle from the previous displayed frame.
     bool upload_screen(ID3D11DeviceContext* context,unsigned short const* pixels,unsigned w,unsigned h,RECT area,unsigned format){

@@ -81,6 +81,11 @@ optional CPU pixels). The full replay decoded and matched all 50 successful
 scene results against their recorded native witnesses. This validates the
 value contract; the x86 control still does not consume those results for live
 composition.
+The x86 native presenter now has a keyed, one-use shared-BGRA adoption path.
+An isolated Windows test used two separate D3D devices, imported a shared
+frame, presented through the existing composition target and checked the
+retained BGRA pixel. This verifies the last graphics handoff primitive; it
+does not yet connect the helper to the native composition owner.
 The x86 control still performs its own scene work. Step 1 remains unfinished
 until the x86 bridge actually consumes x64-owned scene output, including the
 post-reset CPU/native route and asynchronous camera contracts. Steps 2–5 have

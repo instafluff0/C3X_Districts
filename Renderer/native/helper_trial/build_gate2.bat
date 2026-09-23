@@ -32,6 +32,10 @@ if errorlevel 1 goto fail
 if not exist "build\helper_trial\gate2\obj32" mkdir "build\helper_trial\gate2\obj32"
 cl /nologo /std:c++17 /EHsc /O2 /W4 /WX /wd4191 helper_trial\scene_workload.cpp /Fo:build\helper_trial\gate2\obj32\scene_workload.obj /Fe:build\helper_trial\gate2\scene_workload_x86.exe /link /LARGEADDRESSAWARE psapi.lib d3d11.lib d3dcompiler.lib dxgi.lib
 if errorlevel 1 goto fail
+cl /nologo /std:c++17 /EHsc /O2 /W4 /WX helper_trial\shared_presenter_preview.cpp /Fo:build\helper_trial\gate2\obj32\shared_presenter_preview.obj /Fe:build\helper_trial\gate2\shared_presenter_preview.exe /link d3d11.lib dxgi.lib dcomp.lib gdi32.lib user32.lib
+if errorlevel 1 goto fail
+build\helper_trial\gate2\shared_presenter_preview.exe
+if errorlevel 1 goto fail
 popd
 exit /b 0
 
