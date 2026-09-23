@@ -38,6 +38,12 @@ struct Output {
         value.bgra_pixels=pixels.empty()?nullptr:pixels.data();
     }
 };
+struct CameraOutput {
+    c3x_renderer_gpu_camera_view_v1 value={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(value)};
+    c3x_inputs::Frame frame;
+    Output output;
+    void bind(){value.camera.frame=frame.value;value.camera.output=output.value;value.image=output.gpu;}
+};
 inline void encode(c3x_inputs::Writer& out,c3x_renderer_gpu_frame_v1 const& gpu,
                    c3x_renderer_output_v1 const& source){
     c3x_inputs::require(source.api_version==C3X_RENDERER_API_VERSION&&source.struct_size==sizeof(source)&&
@@ -73,5 +79,19 @@ inline void decode(c3x_inputs::Reader& in,Output& target){
          target.value.stride_bytes==target.value.width*4),"remote scene result pixel extent");
     target.pixels.resize(pixel_count);for(auto& item:target.pixels)in(item);
     in.done();target.bind();
+}
+inline void decode_camera(c3x_inputs::Reader& in,CameraOutput& target){
+    target={};target.value.camera.version=C3X_RENDERER_CAMERA_VIEW_VERSION;
+    target.value.camera.struct_size=sizeof(target.value.camera);
+    in(target.value.camera.ticket);
+    c3x_inputs::c3x_renderer_camera_identity_v1_fields(in,target.value.camera.identity);
+    c3x_inputs::frame(in,target.frame);
+    // The scene decoder consumes its entire input, so split the trailing
+    // phase into a bounded inner result without exposing any process pointer.
+    c3x_inputs::require(in.bytes.size()>=in.at+8,"truncated remote camera phase");
+    c3x_inputs::Bytes scene(in.bytes.begin()+in.at,in.bytes.end()-8);
+    c3x_inputs::Reader scene_reader{scene};decode(scene_reader,target.output);
+    in.at=in.bytes.size()-8;
+    in(target.value.pixel_phase_x);in(target.value.pixel_phase_y);in.done();target.bind();
 }
 }

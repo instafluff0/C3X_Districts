@@ -35,6 +35,10 @@ struct Core {
     c3x_renderer_render_view_fn render_view=nullptr;
     using GpuRender=int(*)(c3x_renderer_camera_request_v1 const*,c3x_renderer_gpu_frame_v1*,c3x_renderer_output_v1*);
     GpuRender gpu_render=nullptr;
+    using CameraBegin=int(*)(c3x_renderer_camera_request_v1 const*,c3x_renderer_i64*);
+    using CameraPoll=int(*)(c3x_renderer_i64,c3x_renderer_gpu_camera_view_v1*);
+    using CameraCancel=int(*)(c3x_renderer_i64);
+    CameraBegin camera_begin=nullptr;CameraPoll camera_poll=nullptr;CameraCancel camera_cancel=nullptr;
     using Definitions=int(*)(char const*,char const*,char const*,char const*);
     Definitions definitions=nullptr;
     using Reset=void(*)();Reset reset=nullptr;
@@ -57,6 +61,9 @@ struct Core {
         render=reinterpret_cast<c3x_renderer_render_fn>(GetProcAddress(module,"c3x_renderer_render"));
         render_view=reinterpret_cast<c3x_renderer_render_view_fn>(GetProcAddress(module,"c3x_renderer_render_view"));
         gpu_render=reinterpret_cast<GpuRender>(GetProcAddress(module,"c3x_renderer_gpu_render"));
+        camera_begin=reinterpret_cast<CameraBegin>(GetProcAddress(module,"c3x_renderer_gpu_camera_begin"));
+        camera_poll=reinterpret_cast<CameraPoll>(GetProcAddress(module,"c3x_renderer_gpu_camera_poll_view"));
+        camera_cancel=reinterpret_cast<CameraCancel>(GetProcAddress(module,"c3x_renderer_camera_cancel"));
         definitions=reinterpret_cast<Definitions>(GetProcAddress(module,"c3x_renderer_set_definition_paths"));
         reset=reinterpret_cast<Reset>(GetProcAddress(module,"c3x_renderer_reset"));
         images=reinterpret_cast<c3x_renderer_gpu_images_fn>(GetProcAddress(module,"c3x_renderer_gpu_images"));
@@ -68,16 +75,18 @@ struct Core {
         shared_raw=reinterpret_cast<Shared>(GetProcAddress(module,"c3x_renderer_trial_export_shared_raw"));
         present_shared=reinterpret_cast<PresentShared>(GetProcAddress(module,"c3x_renderer_trial_present_shared"));
         visual_shared=reinterpret_cast<VisualShared>(GetProcAddress(module,"c3x_renderer_trial_visual_shared"));
-        require(render&&render_view&&gpu_render&&definitions&&reset,"renderer DLL entries missing");}
+        require(render&&render_view&&gpu_render&&camera_begin&&camera_poll&&camera_cancel&&definitions&&reset,"renderer DLL entries missing");}
     ~Core(){if(module){reset();FreeLibrary(module);}}
     void execute(Wire& wire){
         wire.status=0;wire.code=0;wire.executed=1;wire.reply_size=0;
         wire.width=wire.height=wire.rendered=wire.fallback=0;wire.shared_handle=0;
         wire.result_image=0;wire.result_pixels=0;
+        wire.resident_bytes=wire.uploads=wire.commands=wire.readbacks=0;
         std::fill(std::begin(wire.bounds),std::end(wire.bounds),0);
         std::fill(std::begin(wire.hash),std::end(wire.hash),0);std::fill(std::begin(wire.gpu_hash),std::end(wire.gpu_hash),0);wire.gpu_hash_valid=0;
         try{
-            require(wire.magic==wire_magic&&wire.version==wire_version&&wire.size<=wire_capacity,"invalid scene wire header");
+            require(wire.magic==wire_magic&&wire.version==wire_version&&wire.size<=wire_capacity&&
+                wire.live<=1&&(!wire.live||!wire.replay_clock),"invalid scene wire header");
             if(wire.replay_clock){require(set_clock!=nullptr,"helper lacks recorded clock entry");
                 set_clock(wire.clock_ticks,wire.clock_frequency);}
             Bytes bytes(wire.payload,wire.payload+wire.size);Reader in{bytes};auto started=milliseconds();
@@ -97,6 +106,29 @@ struct Core {
                 wire.code=unsigned(definitions(present[0]?paths[0].c_str():nullptr,present[1]?paths[1].c_str():nullptr,
                     present[2]?paths[2].c_str():nullptr,present[3]?paths[3].c_str():nullptr));
                 ticket_ids.clear();image_ids.clear();
+            }else if(wire.live&&wire.kind==unsigned(Kind::camera)&&wire.subtype==1){
+                c3x_renderer_camera_identity_v1 identity={};c3x_renderer_camera_identity_v1_fields(in,identity);
+                Frame frame_value;frame(in,frame_value);in.done();
+                c3x_renderer_camera_request_v1 request={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(request),&frame_value.value,identity};
+                c3x_renderer_i64 ticket=0;wire.code=unsigned(camera_begin(&request,&ticket));
+                wire.recorded_ticket=ticket;
+            }else if(wire.live&&wire.kind==unsigned(Kind::camera)&&wire.subtype==3){
+                c3x_renderer_i64 ticket=0;in(ticket);in.done();
+                c3x_renderer_gpu_camera_view_v1 view={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(view)};
+                wire.code=unsigned(camera_poll(ticket,&view));
+                if(wire.code==C3X_RENDERER_RESULT_OK){
+                    Writer response;
+                    response(view.camera.ticket);
+                    auto identity=view.camera.identity;c3x_renderer_camera_identity_v1_fields(response,identity);
+                    frame(response,view.camera.frame);
+                    c3x_remote_scene::encode(response,view.image,view.camera.output);
+                    response(view.pixel_phase_x);response(view.pixel_phase_y);
+                    require(response.bytes.size()<=wire_capacity,"remote camera result exceeds slot");
+                    wire.reply_size=unsigned(response.bytes.size());
+                    std::memcpy(wire.payload,response.bytes.data(),wire.reply_size);
+                }
+            }else if(wire.live&&wire.kind==unsigned(Kind::camera)&&wire.subtype==4){
+                c3x_renderer_i64 ticket=0;in(ticket);in.done();wire.code=unsigned(camera_cancel(ticket));
             }else if(wire.kind==unsigned(Kind::scene)&&wire.subtype>=1&&wire.subtype<=3){
                 c3x_renderer_camera_identity_v1 identity={};if(wire.subtype!=1)c3x_renderer_camera_identity_v1_fields(in,identity);
                 Frame frame_value;frame(in,frame_value);in.done();
@@ -106,7 +138,7 @@ struct Core {
                 if(wire.subtype==1)wire.code=unsigned(render(&frame_value.value,&output));
                 else if(wire.subtype==2)wire.code=unsigned(render_view(&request,&output));
                 else{wire.code=unsigned(gpu_render(&request,&gpu,&output));
-                    if(wire.code==C3X_RENDERER_RESULT_OK&&wire.recorded_ticket&&wire.recorded_image){
+                    if(!wire.live&&wire.code==C3X_RENDERER_RESULT_OK&&wire.recorded_ticket&&wire.recorded_image){
                         ticket_ids[wire.recorded_ticket]=gpu.ticket;image_ids[wire.recorded_image]=gpu.map_image;}
                     if(wire.code==C3X_RENDERER_RESULT_OK&&verify_pixels){
                         require(images!=nullptr&&gpu.width>0&&gpu.height>0,"GPU readback entry or extent missing");
@@ -124,6 +156,9 @@ struct Core {
                         unsigned w=0,h=0;int code=export_map(gpu.ticket,gpu.map_image,wire.consumer_pid,&wire.shared_handle,&w,&h);
                         require(code==C3X_RENDERER_RESULT_OK&&wire.shared_handle&&w==unsigned(gpu.width)&&h==unsigned(gpu.height),"shared map export failed");
                     }}
+                if(wire.live&&wire.code==C3X_RENDERER_RESULT_OK){
+                    wire.recorded_ticket=gpu.ticket;wire.recorded_image=gpu.map_image;
+                }
                 wire.width=unsigned(std::max(0,output.width));wire.height=unsigned(std::max(0,output.height));
                 wire.rendered=output.rendered_tile_count;wire.fallback=output.fallback_tile_count;
                 if(wire.code==C3X_RENDERER_RESULT_OK&&output.bgra_pixels&&output.width>0&&output.height>0&&
@@ -148,15 +183,17 @@ struct Core {
                     return std::int64_t(INT64_MAX);
                 };
                 auto old_image=owned.value.image;
-                owned.value.ticket=map_id(ticket_ids,owned.value.ticket);
-                owned.value.image=map_id(image_ids,owned.value.image);
-                for(auto& command:owned.commands){
-                    command.destination=map_id(image_ids,command.destination);
-                    command.source=map_id(image_ids,command.source);
-                    command.background=map_id(image_ids,command.background);
-                    command.detail=map_id(image_ids,command.detail);
-                    command.background_detail=map_id(image_ids,command.background_detail);
-                    command.program=map_id(image_ids,command.program);
+                if(!wire.live){
+                    owned.value.ticket=map_id(ticket_ids,owned.value.ticket);
+                    owned.value.image=map_id(image_ids,owned.value.image);
+                    for(auto& command:owned.commands){
+                        command.destination=map_id(image_ids,command.destination);
+                        command.source=map_id(image_ids,command.source);
+                        command.background=map_id(image_ids,command.background);
+                        command.detail=map_id(image_ids,command.detail);
+                        command.background_detail=map_id(image_ids,command.background_detail);
+                        command.program=map_id(image_ids,command.program);
+                    }
                 }
                 std::vector<unsigned> readback;
                 if(owned.value.action==C3X_GPU_READBACK)readback.resize(owned.value.pixel_count);
@@ -164,14 +201,21 @@ struct Core {
                 wire.code=unsigned(images(&owned.value,&result,readback.empty()?nullptr:readback.data(),
                     unsigned(readback.size())));
                 wire.result_image=result.image;wire.result_pixels=result.pixel_count;
+                wire.resident_bytes=result.resident_bytes;wire.uploads=result.uploads;
+                wire.commands=result.commands;wire.readbacks=result.readbacks;
                 if(wire.code==C3X_RENDERER_RESULT_OK){
-                    if(owned.value.action==C3X_GPU_CREATE&&wire.recorded_image)
+                    if(!wire.live&&owned.value.action==C3X_GPU_CREATE&&wire.recorded_image)
                         image_ids[wire.recorded_image]=result.image;
-                    else if(owned.value.action==C3X_GPU_DESTROY)image_ids.erase(old_image);
+                    else if(!wire.live&&owned.value.action==C3X_GPU_DESTROY)image_ids.erase(old_image);
                     if(owned.value.action==C3X_GPU_READBACK&&result.pixel_count<=readback.size()){
                         auto hash=c3x_renderer::asset_content_hash(reinterpret_cast<unsigned char const*>(readback.data()),
                             std::size_t(result.pixel_count)*4);
                         std::copy(hash.begin(),hash.end(),wire.gpu_hash);wire.gpu_hash_valid=1;
+                        if(wire.live){
+                            require(std::size_t(result.pixel_count)*4<=wire_capacity,"remote readback slot limit");
+                            wire.reply_size=result.pixel_count*4;
+                            std::memcpy(wire.payload,readback.data(),wire.reply_size);
+                        }
                     }
                 }
             }else if(wire.kind==unsigned(Kind::presentation)&&wire.subtype==0){
@@ -180,28 +224,28 @@ struct Core {
                 in(value.action);in(value.ticket);in(value.image);in(value.width);in(value.height);
                 for(auto& x:value.area)in(x);auto owner=in.u32();in.done();
                 require(owner<=1,"invalid presentation role");
-                if(wire.expected_code!=C3X_RENDERER_RESULT_OK){
+                if(!wire.live&&wire.expected_code!=C3X_RENDERER_RESULT_OK){
                     // Native admission rejected this offer before a renderer
                     // frame existed; do not mutate the x64 retained display.
                     wire.code=wire.expected_code;wire.executed=0;
                 }else{
-                    if(value.ticket){auto found=ticket_ids.find(value.ticket);
+                    if(!wire.live&&value.ticket){auto found=ticket_ids.find(value.ticket);
                         value.ticket=found!=ticket_ids.end()?found->second:INT64_MAX;}
-                    if(value.image){auto found=image_ids.find(value.image);
+                    if(!wire.live&&value.image){auto found=image_ids.find(value.image);
                         value.image=found!=image_ids.end()?found->second:INT64_MAX;}
                     wire.code=unsigned(present_shared(&value,wire.consumer_pid,&wire.shared_handle,&wire.width,&wire.height));
                 }
             }else if(wire.kind==unsigned(Kind::visual)&&wire.subtype==1){
                 require(visual_shared!=nullptr,"helper lacks visual shared export");
                 auto automatic=in.u32();in.done();require(automatic<=1,"invalid visual offer");
-                if(!wire.clock_frequency){wire.code=wire.expected_code;wire.executed=0;}
+                if(!wire.clock_frequency&&!wire.live){wire.code=wire.expected_code;wire.executed=0;}
                 else{require(wire.consumer_pid,"sampled visual frame has no consumer");
                     auto rendered=unsigned(visual_shared(wire.clock_ticks,wire.clock_frequency,wire.consumer_pid,
                         &wire.shared_handle,&wire.width,&wire.height));
                     wire.rendered=rendered;
                     // A submitted frame can be pending at the x86 window
                     // despite its x64 pixels already being ready.
-                    wire.code=wire.expected_code==C3X_RENDERER_RESULT_PENDING&&rendered==C3X_RENDERER_RESULT_OK?
+                    wire.code=!wire.live&&wire.expected_code==C3X_RENDERER_RESULT_PENDING&&rendered==C3X_RENDERER_RESULT_OK?
                         C3X_RENDERER_RESULT_PENDING:rendered;}
             }else if(wire.kind==unsigned(Kind::unit)&&wire.subtype==1){
                 require(unit_gpu!=nullptr,"helper lacks GPU unit entry");
@@ -214,11 +258,13 @@ struct Core {
                     require(wire.expected_code!=C3X_RENDERER_RESULT_OK,"missing successful GPU unit identity");
                     return std::int64_t(INT64_MAX);
                 };
-                target.ticket=map_id(ticket_ids,target.ticket);
-                target.destination=map_id(image_ids,target.destination);
-                target.background=map_id(image_ids,target.background);
-                target.detail=map_id(image_ids,target.detail);
-                target.background_detail=map_id(image_ids,target.background_detail);
+                if(!wire.live){
+                    target.ticket=map_id(ticket_ids,target.ticket);
+                    target.destination=map_id(image_ids,target.destination);
+                    target.background=map_id(image_ids,target.background);
+                    target.detail=map_id(image_ids,target.detail);
+                    target.background_detail=map_id(image_ids,target.background_detail);
+                }
                 wire.code=unsigned(unit_gpu(&value,&target,wire.bounds));
             }else throw std::runtime_error("unsupported scene wire operation");
             wire.service_us=std::uint64_t((milliseconds()-started)*1000.0);
@@ -378,6 +424,7 @@ int wmain(int argc,wchar_t** argv){
             auto& input=found->second;Reader in{input.payload};in.u64();in.u64();
             Wire* wire=remote?shared:local_wire.get();wire->magic=wire_magic;wire->version=wire_version;wire->sequence=++sent;
             wire->kind=unsigned(input.kind);wire->subtype=input.flags;wire->size=unsigned(input.payload.size()-in.at);
+            wire->live=0;wire->reply_size=0;
             wire->shared_raw=remote&&raw_shared?1u:0u;
             wire->consumer_pid=remote?GetCurrentProcessId():0;
             require(wire->size<=wire_capacity,"scene value payload exceeds IPC capacity");

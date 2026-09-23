@@ -60,13 +60,15 @@ public:
     ~SceneClient(){stop();}
     Wire const& call(unsigned kind,unsigned subtype,unsigned char const* bytes,unsigned count,
                      unsigned expected_code=0,std::int64_t recorded_ticket=0,std::int64_t recorded_image=0,
-                     std::int64_t clock_ticks=0,std::int64_t clock_frequency=0,bool final_image=false){
+                     std::int64_t clock_ticks=0,std::int64_t clock_frequency=0,bool final_image=false,
+                     bool live=false,bool raw_shared=false){
         if(!wire||!process||count>wire_capacity||(!bytes&&count))throw std::runtime_error("invalid scene request");
         wire->magic=wire_magic;wire->version=wire_version;wire->sequence=++sequence;
-        wire->kind=kind;wire->subtype=subtype;wire->size=count;wire->reply_size=0;wire->shared_raw=0;
+        wire->kind=kind;wire->subtype=subtype;wire->size=count;wire->reply_size=0;
+        wire->shared_raw=raw_shared?1u:0u;wire->live=live?1u:0u;
         wire->consumer_pid=final_image?GetCurrentProcessId():0;
         wire->expected_code=expected_code;wire->recorded_ticket=recorded_ticket;wire->recorded_image=recorded_image;
-        wire->replay_clock=1;wire->clock_ticks=clock_ticks;wire->clock_frequency=clock_frequency;
+        wire->replay_clock=live?0u:1u;wire->clock_ticks=clock_ticks;wire->clock_frequency=clock_frequency;
         if(count)std::memcpy(wire->payload,bytes,count);
         HANDLE ready[2]={response,process};
         if(!SetEvent(request)||WaitForMultipleObjects(2,ready,FALSE,120000)!=WAIT_OBJECT_0)
@@ -76,6 +78,11 @@ public:
             throw std::runtime_error("x64 scene helper response header changed");
         if(wire->status)throw std::runtime_error(std::string("x64 scene helper: ")+wire->error);
         return *wire;
+    }
+    Wire const& call_live(unsigned kind,unsigned subtype,unsigned char const* bytes,unsigned count,
+                          bool shared_frame=false,bool raw_shared=false,
+                          std::int64_t ticks=0,std::int64_t frequency=0){
+        return call(kind,subtype,bytes,count,0,0,0,ticks,frequency,shared_frame,true,raw_shared);
     }
 };
 }
