@@ -34,7 +34,7 @@ cl /nologo /std:c++17 /EHsc /O2 /W4 /WX /wd4191 helper_trial\scene_workload.cpp 
 if errorlevel 1 goto fail
 cl /nologo /std:c++17 /EHsc /O2 /W4 /WX helper_trial\shared_presenter_preview.cpp /Fo:build\helper_trial\gate2\obj32\shared_presenter_preview.obj /Fe:build\helper_trial\gate2\shared_presenter_preview.exe /link d3d11.lib dxgi.lib dcomp.lib gdi32.lib user32.lib
 if errorlevel 1 goto fail
-cl /nologo /std:c++17 /EHsc /O2 /W4 /WX helper_trial\live_roundtrip.cpp /Fo:build\helper_trial\gate2\obj32\live_roundtrip.obj /Fe:build\helper_trial\gate2\live_roundtrip.exe /link d3d11.lib dxgi.lib dcomp.lib gdi32.lib user32.lib
+cl /nologo /std:c++17 /EHsc /O2 /W4 /WX helper_trial\live_roundtrip.cpp /Fo:build\helper_trial\gate2\obj32\live_roundtrip.obj /Fe:build\helper_trial\gate2\live_roundtrip.exe /link d3d11.lib d3dcompiler.lib dxgi.lib dcomp.lib gdi32.lib user32.lib
 if errorlevel 1 goto fail
 build\helper_trial\gate2\shared_presenter_preview.exe
 if errorlevel 1 goto fail

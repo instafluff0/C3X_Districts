@@ -92,13 +92,18 @@ struct ReplayState {
                     count==((unsigned(screen.width)+1)&~1u)*unsigned(screen.height),"invalid native screen extent");
                 screen.pixels=native_pixels.pixels;
                 require(window!=nullptr,"native screen requires replay window");SetWindowPos(window,nullptr,0,0,screen.width,screen.height,SWP_NOZORDER|SWP_NOACTIVATE);}else native_pixels={};
-            actual=get_renderer_worker().native_screen(present?&screen:nullptr);
+            actual=remote_renderer_requested()?remote_renderer_backend()->screen(present?&screen:nullptr):
+                get_renderer_worker().native_screen(present?&screen:nullptr);
         }else if(kind==Kind::world_page){
             c3x_renderer_world_page_v1 page={};page.struct_size=sizeof(page);in(page.first);in(page.capacity);in(page.count);c3x_renderer_camera_identity_v1_fields(in,page.identity);
             Frame owned;frame(in,owned);page.frame=owned.value;int callback_result=0;in(callback_result);
             require(page.count<=page.capacity&&page.count<=128,"replay world page bounds");std::vector<c3x_renderer_tile_v1> records(page.count);
             for(auto& record:records)c3x_renderer_tile_v1_fields(in,record);page.tiles=records.data();
-            actual=get_renderer_worker().replay_world_page(page,callback_result);
+            if(remote_renderer_requested()){
+                c3x_renderer_world_page_v1 demand={};int query=remote_renderer_backend()->world_query(demand);
+                actual=query==C3X_RENDERER_RESULT_OK&&demand.first==page.first&&demand.capacity==page.capacity&&
+                    remote_renderer_backend()->world_submit(page,callback_result)==C3X_RENDERER_RESULT_OK?1:0;
+            }else actual=get_renderer_worker().replay_world_page(page,callback_result);
         }else if(kind==Kind::image_commands){
             require(subtype==0,"unknown image input");Images owned;c3x_inputs::images(in,owned);auto& request=owned.value;
             auto old_image=request.image;request.ticket=id(tickets,request.ticket);request.image=id(images,request.image);
@@ -109,25 +114,44 @@ struct ReplayState {
             auto old_result=std::int64_t(expected.u64());auto count=expected.u32(),witness=expected.u32();require(witness<=1,"invalid output witness");
             if(witness){require(actual==C3X_RENDERER_RESULT_OK&&result.pixel_count==count&&count<=pixels.size(),"replay readback extent differs");
                 auto hash=c3x_renderer::asset_content_hash(reinterpret_cast<unsigned char const*>(pixels.data()),std::size_t(count)*4);
-                for(auto part:hash){auto old=expected.u32();if(!realtime_replay().enabled)require(part==old,"replay pixel witness differs");}}
+                for(auto part:hash){auto old=expected.u32();if(!realtime_replay().enabled&&!remote_renderer_requested())
+                    require(part==old,"replay pixel witness differs");}}
             if(actual==C3X_RENDERER_RESULT_OK){if(request.action==C3X_GPU_CREATE){require(old_result&&result.image,"replay missing created identity");images[old_result]=result.image;formats[result.image]=request.format;}
                 else if(request.action==C3X_GPU_DESTROY)images.erase(old_image);}
         }else if(kind==Kind::unit&&subtype==2){
             auto variant=in.u32();c3x_renderer_unit_v1 value={};unit(in,value);auto flags=in.u32(),dest_id=in.u32(),back_id=in.u32();auto& dest=canvases.get(dest_id);Canvas* back=back_id?&canvases.get(back_id):nullptr;int bounds[4]={};
+            auto dump_canvas=[&](char const* phase){
+                char root[32768]={};DWORD length=GetEnvironmentVariableA("C3X_CPU_UNIT_DUMP",root,sizeof(root));
+                if(!length||length>=sizeof(root))return;
+                auto path=std::filesystem::path(root)/("unit-"+std::to_string(token)+"-"+std::to_string(dest.id)+"-"+phase+".bin");
+                std::ofstream dump(path,std::ios::binary);if(!dump)return;
+                std::uint32_t header[]={unsigned(dest.width),unsigned(dest.height),unsigned(dest.depth),unsigned(dest.format),
+                    variant,unsigned(value.unit_id),unsigned(value.action_cursor),unsigned(value.frame_count)};
+                dump.write(reinterpret_cast<char const*>(header),sizeof(header));
+                for(int row=0;row<dest.height;++row)for(int col=0;col<dest.width;++col){auto word=dest.word(unsigned(row),unsigned(col));
+                    dump.write(reinterpret_cast<char const*>(&word),dest.depth/8);}
+            };
+            dump_canvas("before");
             if(variant==1)actual=c3x_renderer_unit_draw(&value,dest.dc);
             else if(variant==2)actual=c3x_renderer_unit_draw_background(&value,dest.dc,back?back->dc:nullptr);
             else if(variant==3)actual=c3x_renderer_unit_draw_expanded(&value,dest.dc,back?back->dc:nullptr,bounds);
             else if(variant==4)actual=c3x_renderer_unit_draw_playback(&value,dest.dc,back?back->dc:nullptr,bounds,flags);
             else throw std::runtime_error("unknown CPU unit entry");
-            GdiFlush();auto has_bounds=expected.u32();require(has_bounds<=1,"invalid CPU unit bounds witness");if(has_bounds)for(unsigned n=0;n<4;++n){int recorded=0;expected(recorded);if(wanted==1)require(bounds[n]==recorded,"CPU unit bounds differ");}
-            canvases.check(expected,dest);if(back&&back!=&dest)canvases.check(expected,*back);
+            GdiFlush();dump_canvas("after");
+            auto has_bounds=expected.u32();require(has_bounds<=1,"invalid CPU unit bounds witness");if(has_bounds)for(unsigned n=0;n<4;++n){int recorded=0;expected(recorded);if(wanted==1)require(bounds[n]==recorded,"CPU unit bounds differ");}
+            auto exact=canvases.check(expected,dest);
+            if(back&&back!=&dest)exact=canvases.check(expected,*back)&&exact;
+            if(!exact){char root[32768]={};DWORD length=GetEnvironmentVariableA("C3X_CPU_UNIT_DUMP",root,sizeof(root));
+                if(length>0&&length<sizeof(root)){std::ofstream audit(std::filesystem::path(root)/"mismatches.txt",std::ios::app);
+                    audit<<token<<' '<<dest.id<<' '<<variant<<'\n';}}
         }else if(kind==Kind::unit){
             require(subtype==1,"unsupported unit input");c3x_renderer_unit_v1 value={};unit(in,value);c3x_renderer_gpu_unit_v1 dest={};target_fields(in,dest);target(dest);
             int bounds[4]={};actual=c3x_renderer_gpu_unit(&value,&dest,bounds);
             for(unsigned n=0;n<4;++n){int recorded=0;expected(recorded);if(wanted==C3X_RENDERER_RESULT_OK)require(bounds[n]==recorded,"replay unit bounds differ");}
         }else if(kind==Kind::unit_forget){int unit_id=0;in(unit_id);c3x_renderer_unit_forget(unit_id);actual=1;
         }else if(kind==Kind::tactical){c3x_renderer_gpu_unit_v1 dest={};target_fields(in,dest);target(dest);
-            c3x_renderer::tactical::Input value;tactical(in,value);actual=get_renderer_worker().draw_tactical(value,dest);
+            c3x_renderer::tactical::Input value;tactical(in,value);actual=remote_renderer_requested()?
+                remote_renderer_backend()->tactical(value,dest):get_renderer_worker().draw_tactical(value,dest);
         }else if(kind==Kind::presentation){
             c3x_renderer_gpu_present_v1 value={sizeof(value)};in(value.action);in(value.ticket);in(value.image);in(value.width);in(value.height);for(auto& x:value.area)in(x);auto owner=in.u32();require(owner<=1,"invalid presentation caller role");
             value.ticket=id(tickets,value.ticket);value.image=id(images,value.image);value.window=window;
@@ -135,14 +159,21 @@ struct ReplayState {
             if(owner)actual=c3x_renderer_gpu_present(&value);
             else{require(replay_clock()->values.empty(),"nonowner presentation consumed a visual clock");
                 std::thread caller([&]{actual=c3x_renderer_gpu_present(&value);});caller.join();}
+            if(actual!=wanted)throw std::runtime_error("presentation result differs: action="+
+                std::to_string(value.action)+" owner="+std::to_string(owner)+
+                " expected="+std::to_string(wanted)+" actual="+std::to_string(actual));
             if(actual==1)displayed=value;
         }else if(kind==Kind::reset){actual=drain_native_composition()?1:0;if(actual)destroy_renderer_worker();images.clear();tickets.clear();cameras.clear();formats.clear();displayed={};canvases.reset();native_pixels={};
         }else if(kind==Kind::visual){
             if(subtype==1){auto automatic=in.u32();require(automatic<=1,"invalid ambient offer");
                 // No clock consumed means this offer was rejected before work.
                 // Such decisions are evidence, not forced render durations.
-                actual=measure_replay([&]{return performance?get_renderer_worker().visual_frame(automatic!=0,true):(replay_clock()->values.empty()?C3X_RENDERER_RESULT_PENDING:c3x_renderer_gpu_visual_frame());});
-            }else if(subtype==3)actual=get_renderer_worker().visual_policy(in.u32());
+                actual=measure_replay([&]{return remote_renderer_requested()?
+                    (replay_clock()->values.empty()?C3X_RENDERER_RESULT_PENDING:c3x_renderer_gpu_visual_frame()):
+                    performance?get_renderer_worker().visual_frame(automatic!=0,true):
+                    (replay_clock()->values.empty()?C3X_RENDERER_RESULT_PENDING:c3x_renderer_gpu_visual_frame());});
+            }else if(subtype==3){auto policy=in.u32();actual=remote_renderer_requested()?
+                remote_renderer_backend()->visual_policy(policy):get_renderer_worker().visual_policy(policy);}
             else if(subtype==4){auto ticks=c3x_renderer_visual_clock();auto old=expected.u64();if(!realtime_replay().enabled)require(std::uint64_t(ticks)==old,"exported visual clock differs");actual=1;}
             else throw std::runtime_error("unknown visual input");
         }else if(kind==Kind::camera){
@@ -181,13 +212,18 @@ struct ReplayState {
             }else throw std::runtime_error("unsupported camera transition");
         }else throw std::runtime_error("unsupported production replay family");
         in.done();expected.done();replay_execution().result=actual;
-        bool variable=performance&&kind==Kind::visual&&subtype==1;
+        // Producer readiness is timing-dependent even with identical recorded
+        // visual time: either process may finish an additional valid frame at
+        // an offer where the captured process was still pending.
+        bool variable=kind==Kind::visual&&subtype==1;
         if(variable&&actual!=wanted)require((wanted==C3X_RENDERER_RESULT_OK||wanted==C3X_RENDERER_RESULT_PENDING||wanted==C3X_RENDERER_RESULT_SUPERSEDED)&&(actual==C3X_RENDERER_RESULT_OK||actual==C3X_RENDERER_RESULT_PENDING||actual==C3X_RENDERER_RESULT_SUPERSEDED),"performance replay producer failed");
         if(actual!=wanted&&!variable)throw std::runtime_error("production replay return code differs: expected="+std::to_string(wanted)+" actual="+std::to_string(actual));return actual;
     }
     void write_frame(wchar_t const* path){
         std::vector<unsigned> pixels;unsigned width=0,height=0;
-        require(renderer_worker&&renderer_worker->replay_display(pixels,width,height),"cannot export retained replay display");
+        require(remote_renderer_requested()?remote_renderer_backend()->replay_display(pixels,width,height):
+                renderer_worker&&renderer_worker->replay_display(pixels,width,height),
+                "cannot export retained replay display");
         display_bitmap(path,pixels,width,height);
     }
 };
@@ -225,7 +261,9 @@ extern "C" __declspec(dllexport) int c3x_renderer_input_replay_fingerprint(unsig
     try{
         c3x_inputs::require(extent&&hash,"missing display fingerprint output");
         std::vector<unsigned> pixels;unsigned width=0,height=0;
-        c3x_inputs::require(renderer_worker&&renderer_worker->replay_display(pixels,width,height),"cannot fingerprint retained replay display");
+        c3x_inputs::require(remote_renderer_requested()?remote_renderer_backend()->replay_display(pixels,width,height):
+                            renderer_worker&&renderer_worker->replay_display(pixels,width,height),
+                            "cannot fingerprint retained replay display");
         auto value=c3x_renderer::asset_content_hash(reinterpret_cast<unsigned char const*>(pixels.data()),pixels.size()*4);
         extent[0]=width;extent[1]=height;std::copy(value.begin(),value.end(),hash);return 1;
     }catch(...){return 0;}
@@ -238,7 +276,9 @@ extern "C" __declspec(dllexport) int c3x_renderer_input_replay_pixels(
     try{
         c3x_inputs::require(output&&width&&height&&std::uint64_t(width)*height<=capacity,"invalid replay pixel destination");
         std::vector<unsigned> pixels;unsigned actual_width=0,actual_height=0;
-        c3x_inputs::require(renderer_worker&&renderer_worker->replay_display(pixels,actual_width,actual_height),"replay display unavailable");
+        c3x_inputs::require(remote_renderer_requested()?remote_renderer_backend()->replay_display(pixels,actual_width,actual_height):
+                            renderer_worker&&renderer_worker->replay_display(pixels,actual_width,actual_height),
+                            "replay display unavailable");
         c3x_inputs::require(width==actual_width&&height==actual_height&&pixels.size()==std::size_t(width)*height,"replay display extent differs");
         std::copy(pixels.begin(),pixels.end(),output);return 1;
     }catch(...){return 0;}

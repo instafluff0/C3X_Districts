@@ -44,7 +44,7 @@ public:
             width=desc.Width;height=desc.Height;
         }
         Microsoft::WRL::ComPtr<IDXGIKeyedMutex> mutex;
-        if(FAILED(source.As(&mutex))||FAILED(mutex->AcquireSync(1,1000)))
+        if(FAILED(source.As(&mutex))||mutex->AcquireSync(1,1000)!=S_OK)
             throw std::runtime_error("x86 final-image acquire failed");
         bool mapped=false;
         try{

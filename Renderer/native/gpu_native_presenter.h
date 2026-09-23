@@ -114,7 +114,7 @@ public:
         if(desc.Width!=w||desc.Height!=h||desc.Format!=DXGI_FORMAT_B8G8R8A8_UNORM)
             return C3X_RENDERER_RESULT_BAD_ARGUMENT;
         ComPtr<IDXGIKeyedMutex> mutex;
-        if(FAILED(source.As(&mutex))||FAILED(mutex->AcquireSync(1,1000)))
+        if(FAILED(source.As(&mutex))||mutex->AcquireSync(1,1000)!=S_OK)
             return C3X_RENDERER_RESULT_DEVICE_ERROR;
         context->CopyResource(display.Get(),source.Get());
         context->CopyResource(back.Get(),display.Get());

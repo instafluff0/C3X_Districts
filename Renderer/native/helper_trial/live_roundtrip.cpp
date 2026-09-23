@@ -1,19 +1,14 @@
 #define NOMINMAX
 #include <windows.h>
-#include <d3d11_1.h>
-#include <wrl/client.h>
 #include <cstdio>
-#include <memory>
 #include <stdexcept>
 #include <string>
 #include "../input_recording/journal.h"
 #include "../remote_scene_output.h"
-#include "../remote_renderer_client.h"
-#include "../gpu_native_presenter.h"
+#include "../remote_renderer_backend.h"
 
 using namespace c3x_inputs;
 using namespace c3x_helper_trial;
-using Microsoft::WRL::ComPtr;
 
 int wmain(int argc,wchar_t** argv){
     HWND window=nullptr;
@@ -21,7 +16,7 @@ int wmain(int argc,wchar_t** argv){
         require(argc==4,"usage: live_roundtrip.exe HELPER DLL CAPTURE");
         SegmentReader journal(argv[3]);Event event;
         require(journal.next(event)&&event.kind==Kind::manifest,"recording manifest missing");
-        c3x_remote_scene::Client helper(argv[1],argv[2]);
+        c3x_remote_scene::Backend helper(argv[1],argv[2]);
         bool definitions=false,submitted=false;unsigned polls=0;
         c3x_remote_scene::CameraOutput adopted;
         while(journal.next(event)){
@@ -54,26 +49,41 @@ int wmain(int argc,wchar_t** argv){
             }
         }
         require(submitted,"recording has no GPU scene following definitions");
+        c3x_renderer_world_page_v1 page={};bool page_ready=false;
+        for(unsigned attempt=0;attempt<2000;++attempt){
+            auto code=helper.world_query(page);
+            if(code==C3X_RENDERER_RESULT_PENDING){Sleep(1);continue;}
+            require(code==C3X_RENDERER_RESULT_OK&&page.first==0&&page.capacity==128,
+                "x64 world page query failed");
+            page_ready=true;break;
+        }
+        require(page_ready,"x64 world page was never available");
+        c3x_renderer_tile_v1 page_storage[128]={};page.tiles=page_storage;
+        auto rejected=helper.world_submit(page,C3X_RENDERER_RESULT_PENDING);
+        if(rejected!=C3X_RENDERER_RESULT_PENDING){char detail[160];
+            std::snprintf(detail,sizeof(detail),"rejected native page result=%d first=%u count=%u",rejected,page.first,page.count);
+            throw std::runtime_error(detail);}
+        c3x_renderer_world_page_v1 retry={};
+        require(helper.world_query(retry)==C3X_RENDERER_RESULT_OK&&retry.first==page.first,
+            "rejected native page advanced the world cursor");
         auto const& view=adopted.value;auto width=view.image.width,height=view.image.height;
         require(width>0&&height>0&&width<=2240&&height<=1260,"invalid adopted extent");
         window=CreateWindowExW(0,L"STATIC",L"C3X live helper roundtrip",WS_POPUP,0,0,width,height,
             nullptr,nullptr,GetModuleHandleW(nullptr),nullptr);
         require(window!=nullptr,"x86 presentation window failed");
-        ComPtr<ID3D11Device> device;ComPtr<ID3D11DeviceContext> context;D3D_FEATURE_LEVEL level={};
-        require(SUCCEEDED(D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_HARDWARE,nullptr,
-            D3D11_CREATE_DEVICE_BGRA_SUPPORT,nullptr,0,D3D11_SDK_VERSION,&device,&level,&context)),"x86 device failed");
-        ComPtr<ID3D11Device1> device1;require(SUCCEEDED(device.As(&device1)),"x86 device1 failed");
-        c3x_gpu_images::NativePresenter presenter;
-        require(presenter.prepare(window,device.Get(),unsigned(width),unsigned(height),true),"x86 presenter failed");
         c3x_renderer_gpu_present_v1 offer={sizeof(offer)};offer.ticket=view.image.ticket;
-        offer.image=view.image.map_image;offer.width=width;offer.height=height;
+        offer.image=view.image.map_image;offer.window=window;offer.width=width;offer.height=height;
         offer.area[2]=width;offer.area[3]=height;
-        c3x_remote_scene::SharedFrame shared;
-        require(helper.present(offer,shared)==C3X_RENDERER_RESULT_OK&&shared.handle&&
-            shared.width==unsigned(width)&&shared.height==unsigned(height),"x64 final shared frame failed");
-        require(presenter.adopt_shared(device1.Get(),context.Get(),shared.handle,shared.width,shared.height)==
-            C3X_RENDERER_RESULT_OK,"x86 native composition of x64 frame failed");
-        presenter.reset();DestroyWindow(window);
+        require(helper.present(offer)==C3X_RENDERER_RESULT_OK,"x64 final frame was not presented by x86");
+        offer={sizeof(offer)};offer.action=2;
+        require(helper.present(offer)==C3X_RENDERER_RESULT_OK,"x86 native handoff failed");
+        c3x_native_images::ScreenSnapshot native;
+        native.window=window;native.width=width;native.height=height;
+        native.area={0,0,width,height};native.pixels.resize(std::size_t((width+1)&~1)*height,0x4210);
+        require(helper.screen(&native)==C3X_RENDERER_RESULT_OK&&
+            helper.screen(nullptr)==C3X_RENDERER_RESULT_OK,"native CPU fallback presentation failed");
+        require(helper.reset()==C3X_RENDERER_RESULT_OK,"helper reset failed");
+        DestroyWindow(window);window=nullptr;
         std::printf("PASS live x64 camera to x86 native presenter: %u polls, %dx%d frame\n",polls+1,width,height);
         return 0;
     }catch(std::exception const& error){

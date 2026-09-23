@@ -54,7 +54,7 @@ int wmain(int argc,wchar_t** argv){
         require(argc>=4&&std::wstring(argv[1])==L"--development","usage: replay_inputs --development DLL INPUT_DIRECTORY [--frames DIR LAST | --range DIR FIRST LAST | --seconds DIR START END] [--timeline NEW_FILE] [--fingerprints NEW_FILE] [--trace NEW_FILE] [--allow-prefix] [--before-event N] [--compare-candidate] [--performance NEW_FILE] [--reserve-mib N] [--watch] [--realtime NEW_FILE] [--x64-scene HELPER DLL NEW_REPORT]");
         std::wstring label=L"C3X input replay";
         std::filesystem::path frames,timeline_path,trace_path,fingerprints_path,performance_path,shadow_path;
-        std::wstring shadow_helper,shadow_dll;unsigned reserve_mib=0;std::uint64_t before_event=0;bool stopped_before_event=false;std::uint64_t first_frame=1,frame_limit=0,frame_number=0,exported=0;double first_second=0,last_second=0;bool seconds=false,allow_prefix=false,tail_truncated=false,compare_candidate=false,binary_matches_capture=true,watch=false,realtime=false;
+        std::wstring shadow_helper,shadow_dll,primary_helper,primary_dll;unsigned reserve_mib=0;std::uint64_t before_event=0;bool stopped_before_event=false;std::uint64_t first_frame=1,frame_limit=0,frame_number=0,exported=0;double first_second=0,last_second=0;bool seconds=false,allow_prefix=false,tail_truncated=false,compare_candidate=false,binary_matches_capture=true,watch=false,realtime=false;
         auto integer=[](wchar_t const* raw){std::size_t used=0;std::wstring text(raw);auto value=std::stoull(text,&used);require(used==text.size()&&value&&value<=1000000,"invalid frame bound");return value;};
         auto second=[](wchar_t const* raw){std::size_t used=0;std::wstring text(raw);auto value=std::stod(text,&used);require(used==text.size()&&std::isfinite(value)&&value>=0&&value<=86400,"invalid second bound");return value;};
         for(int i=4;i<argc;){std::wstring flag=argv[i++];
@@ -63,6 +63,8 @@ int wmain(int argc,wchar_t** argv){
             if(flag==L"--watch"){watch=true;continue;}
             if(flag==L"--performance"){require(i<argc&&performance_path.empty(),"invalid performance option");performance_path=argv[i++];continue;}
             if(flag==L"--x64-scene"){require(i+2<argc&&shadow_path.empty(),"invalid x64 scene option");shadow_helper=argv[i++];shadow_dll=argv[i++];shadow_path=argv[i++];continue;}
+            if(flag==L"--x64-primary"){require(i+1<argc&&primary_helper.empty(),"invalid x64 primary option");
+                primary_helper=argv[i++];primary_dll=argv[i++];continue;}
             if(flag==L"--reserve-mib"){require(i<argc&&!reserve_mib,"invalid reservation option");auto n=integer(argv[i++]);require(n<=2048,"reservation limit");reserve_mib=unsigned(n);continue;}
             if(flag==L"--compare-candidate"){compare_candidate=true;continue;}
             if(flag==L"--allow-prefix"){allow_prefix=true;continue;}
@@ -82,11 +84,16 @@ int wmain(int argc,wchar_t** argv){
         require(!before_event||allow_prefix,"explicit event cutoff requires --allow-prefix");
         bool performance=!performance_path.empty();require(!performance||(frames.empty()&&fingerprints_path.empty()&&!watch),"performance runs cannot export, fingerprint or pace playback");require(!reserve_mib||performance,"reservation requires performance mode");
         require(shadow_path.empty()||!realtime,"x64 scene diagnostic is unpaced only");
+        require(primary_helper.empty()||shadow_path.empty(),"x64 primary and shadow modes are exclusive");
         std::ofstream measurements;if(performance){require(!std::filesystem::exists(performance_path),"performance output must be new");measurements.open(performance_path);require(bool(measurements),"cannot open performance output");}
         if(reserve_mib){reservation=VirtualAlloc(nullptr,std::size_t(reserve_mib)*1024*1024,MEM_RESERVE,PAGE_NOACCESS);require(reservation!=nullptr,"cannot reserve declared address-space pressure");}
         if(!frames.empty())require(!std::filesystem::exists(frames)&&std::filesystem::create_directories(frames),"frame directory must be new");
         if(!trace_path.empty())require(!std::filesystem::exists(trace_path),"trace must be new");
-        auto configure=[&](Reader& settings){apply_settings(settings);if(realtime)SetEnvironmentVariableW(L"C3X_RENDERER_MANUAL_VISUAL",L"0");if(!trace_path.empty()){
+        auto configure=[&](Reader& settings){apply_settings(settings);if(realtime)SetEnvironmentVariableW(L"C3X_RENDERER_MANUAL_VISUAL",L"0");
+            if(!primary_helper.empty()){SetEnvironmentVariableW(L"C3X_RENDERER_HELPER64",L"1");
+                SetEnvironmentVariableW(L"C3X_RENDERER_HELPER_EXE",primary_helper.c_str());
+                SetEnvironmentVariableW(L"C3X_RENDERER_X64_DLL",primary_dll.c_str());}
+            if(!trace_path.empty()){
             SetEnvironmentVariableW(L"C3X_RENDERER_TRACE",L"2");SetEnvironmentVariableW(L"C3X_RENDERER_TRACE_MIB",L"32");
             SetEnvironmentVariableW(L"C3X_RENDERER_TRACE_BUFFERED",L"1");SetEnvironmentVariableW(L"C3X_RENDERER_TRACE_FILE",trace_path.c_str());}};
         std::vector<Bytes> settings_versions;std::size_t active_settings=0,applied_settings=0;

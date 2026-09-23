@@ -36,6 +36,7 @@
 #include "gpu_visibility.h"
 #include "render_core/dynamic_scene_input.h"
 #include "gpu_native_presenter.h"
+#include "remote_renderer_backend.h"
 #include "visual_cadence.h"
 #include "native_screen_bridge.h"
 #include "native_observation.h"
@@ -10665,6 +10666,40 @@ public:
         bool accepted=callback_result==C3X_RENDERER_RESULT_OK&&world_input.accept(page,scene_changes);
         if(accepted)wake.notify_one();return accepted?1:0;
     }
+#ifdef C3X_HELPER_TRIAL
+    int trial_world_query(c3x_renderer_world_page_v1& result){
+        std::unique_lock<std::mutex> calls(call_mutex,std::try_to_lock);
+        if(!calls.owns_lock())return C3X_RENDERER_RESULT_PENDING;
+        std::unique_lock<std::mutex> lock(state_mutex,std::try_to_lock);
+        if(!lock.owns_lock()||has_job||camera_pending||camera_active||camera_paused)
+            return C3X_RENDERER_RESULT_PENDING;
+        auto state=scene_changes.state();
+        if(!state||!state->topology||!state->metadata.world_topology_count||
+           state->metadata.world_topology_count>c3x_renderer::render_core::CapturedScene::record_limit)
+            return C3X_RENDERER_RESULT_PENDING;
+        result=world_input.page(*state);
+        result.tiles=nullptr;result.frame.tiles=nullptr;result.frame.world_topology=nullptr;
+        return C3X_RENDERER_RESULT_OK;
+    }
+    int trial_world_submit(c3x_renderer_world_page_v1 const& submitted,int callback_result){
+        std::lock_guard<std::mutex> calls(call_mutex);
+        std::unique_lock<std::mutex> lock(state_mutex);
+        auto state=scene_changes.state();if(!state)return C3X_RENDERER_RESULT_SUPERSEDED;
+        auto page=world_input.page(*state);
+        if(submitted.first!=page.first||submitted.capacity!=page.capacity||
+           submitted.count>page.capacity||(submitted.count&&!submitted.tiles)||
+           std::memcmp(&submitted.identity,&page.identity,sizeof(page.identity))||
+           submitted.frame.world_width_tiles!=page.frame.world_width_tiles||
+           submitted.frame.world_height_tiles!=page.frame.world_height_tiles||
+           submitted.frame.world_topology_revision!=page.frame.world_topology_revision)
+            return C3X_RENDERER_RESULT_SUPERSEDED;
+        page.count=submitted.count;
+        for(unsigned n=0;n<page.count;++n)page.tiles[n]=submitted.tiles[n];
+        bool accepted=callback_result==C3X_RENDERER_RESULT_OK&&world_input.accept(page,scene_changes);
+        if(accepted)wake.notify_one();return accepted?C3X_RENDERER_RESULT_OK:
+            callback_result==C3X_RENDERER_RESULT_OK?C3X_RENDERER_RESULT_SUPERSEDED:callback_result;
+    }
+#endif
     void stop_visual_delivery(){visual_delivery=false;visual_present_pending=false;visual_cadence.disable();}
     void advance_visual_clock(){
         if(c3x_inputs::replay_clock()&&!c3x_inputs::realtime_replay().enabled){c3x_inputs::replay_clock()->sample(visual_ticks,visual_frequency);return;}
@@ -11231,7 +11266,9 @@ public:
         tactical_input=capture;tactical_target=target;advance_visual_clock();
         return input.result(submit_locked(lock,Command::tactical));
     }
-    int draw_unit(c3x_renderer_unit_v1 const & request,HDC destination,HDC background=nullptr,int* bounds=nullptr,unsigned playback_flags=0,c3x_renderer_gpu_unit_v1 const* gpu_target=nullptr) {
+    int draw_unit(c3x_renderer_unit_v1 const & request,HDC destination,HDC background=nullptr,int* bounds=nullptr,unsigned playback_flags=0,c3x_renderer_gpu_unit_v1 const* gpu_target=nullptr,
+                  std::vector<std::uint32_t>* cpu_pixels=nullptr,int* cpu_width=nullptr,int* cpu_height=nullptr,
+                  int* cpu_x=nullptr,int* cpu_y=nullptr) {
         std::lock_guard<std::mutex> call_guard(call_mutex);
         std::unique_lock<std::mutex> lock(state_mutex);
         if(!renderer_state.unit_rendering_enabled)return C3X_RENDERER_RESULT_ERROR;
@@ -11239,6 +11276,7 @@ public:
             if(!(playback_flags&C3X_RENDERER_UNIT_STATE_CAPTURED))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
             unit_instances.forget(request.unit_id);unit_pixels_queue.forget(request.unit_id);
             if(bounds){bounds[0]=bounds[2]=request.body_x;bounds[1]=bounds[3]=request.body_y;}
+            if(cpu_pixels){cpu_pixels->clear();*cpu_width=*cpu_height=0;*cpu_x=request.body_x;*cpu_y=request.body_y;}
             return C3X_RENDERER_RESULT_OK;
         }
         start_locked();
@@ -11263,6 +11301,7 @@ public:
             if(!c3x_renderer::expand_unit_canvas(job_unit.body_x,job_unit.body_y,job_unit.sprite_width,job_unit.sprite_height,
                                    projection,definition->minimum_canvas))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
         }
+        if(cpu_pixels){*cpu_x=job_unit.body_x;*cpu_y=job_unit.body_y;}
         LARGE_INTEGER started={},finished={};QueryPerformanceCounter(&started);
         // Cached unit pixels are an independent CPU publication. Do not cancel
         // an exact ambient map render merely to copy a pose already in memory.
@@ -11299,8 +11338,10 @@ public:
         }
         if(hit) {
             unsigned keyed=0;
-            int result=renderer_state.unit_bodies.blit(cached,destination,job_unit.body_x,job_unit.body_y,background,keyed)
-                ? C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_ERROR;
+            int result=C3X_RENDERER_RESULT_OK;
+            if(cpu_pixels){*cpu_pixels=cached.pixels;*cpu_width=cached.width;*cpu_height=cached.height;}
+            else if(!renderer_state.unit_bodies.blit(cached,destination,job_unit.body_x,job_unit.body_y,background,keyed))
+                result=C3X_RENDERER_RESULT_ERROR;
             if(cached.prepared)++unit_pixels_hits;
             if(result==C3X_RENDERER_RESULT_OK && bounds) {
                 bounds[0]=job_unit.body_x;bounds[1]=job_unit.body_y;
@@ -11326,8 +11367,12 @@ public:
         ForegroundCameraPause pause(*this,lock);
         int result=submit_locked(lock,Command::unit);
         lock.unlock();
-        if(result==C3X_RENDERER_RESULT_OK && !renderer_state.unit_bodies.blit(destination,job_unit.body_x,job_unit.body_y,background)) {
-            result=C3X_RENDERER_RESULT_ERROR;renderer_state.unit_bodies.failure_reason="native-canvas-blit";
+        if(result==C3X_RENDERER_RESULT_OK){
+            if(cpu_pixels){*cpu_pixels=renderer_state.unit_bodies.pixels;
+                *cpu_width=renderer_state.unit_bodies.image_width;*cpu_height=renderer_state.unit_bodies.image_height;}
+            else if(!renderer_state.unit_bodies.blit(destination,job_unit.body_x,job_unit.body_y,background)) {
+                result=C3X_RENDERER_RESULT_ERROR;renderer_state.unit_bodies.failure_reason="native-canvas-blit";
+            }
         }
         if(result==C3X_RENDERER_RESULT_OK && bounds) {
             bounds[0]=job_unit.body_x;bounds[1]=job_unit.body_y;
@@ -12324,11 +12369,11 @@ private:
                     if(SUCCEEDED(hr))hr=shared.As(&keyed);
                     if(SUCCEEDED(hr))hr=shared.As(&resource);
                     if(SUCCEEDED(hr))hr=keyed->AcquireSync(0,1000);
-                    if(SUCCEEDED(hr)){
+                    if(hr==S_OK){
                         bool displayed=true;
                         if(trial_raw)renderer_state.context->CopyResource(shared.Get(),source);
                         else displayed=session->display_map_to(target.Get(),desc.Width,desc.Height);
-                        hr=keyed->ReleaseSync(1);renderer_state.context->Flush();
+                        hr=keyed->ReleaseSync(displayed?1:0);renderer_state.context->Flush();
                         if(!displayed)hr=E_FAIL;
                     }
                     if(SUCCEEDED(hr))hr=resource->CreateSharedHandle(nullptr,
@@ -12378,13 +12423,13 @@ private:
                             if(desc.Width!=unsigned(p.width)||desc.Height!=unsigned(p.height))result=C3X_RENDERER_RESULT_BAD_ARGUMENT;
                             else{
                                 HRESULT hr=trial_display_mutex->AcquireSync(0,1000);
-                                if(FAILED(hr))result=C3X_RENDERER_RESULT_DEVICE_ERROR;
+                                if(hr!=S_OK)result=C3X_RENDERER_RESULT_DEVICE_ERROR;
                                 else{
                                     bool drawn=session->display_to(p.ticket,std::uint64_t(p.image),trial_display_view.Get(),
                                         trial_display.Get(),trial_buffer.Get(),unsigned(p.width),unsigned(p.height),
                                         {p.area[0],p.area[1],p.area[2],p.area[3]},visual_ticks,
                                         visual_allowed?visual_frequency:0);
-                                    hr=trial_display_mutex->ReleaseSync(1);renderer_state.context->Flush();
+                                    hr=trial_display_mutex->ReleaseSync(drawn?1:0);renderer_state.context->Flush();
                                     result=drawn&&SUCCEEDED(hr)?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_BAD_ARGUMENT;
                                     if(result==C3X_RENDERER_RESULT_OK){
                                         Microsoft::WRL::ComPtr<IDXGIResource1> resource;
@@ -12409,7 +12454,7 @@ private:
                 if(trial_display&&trial_display_view&&trial_display_mutex&&trial_buffer&&
                    renderer_state.gpu_composition&&visual_frequency>0&&trial_consumer_pid){
                     HRESULT hr=trial_display_mutex->AcquireSync(0,1000);
-                    if(FAILED(hr))result=C3X_RENDERER_RESULT_DEVICE_ERROR;
+                    if(hr!=S_OK)result=C3X_RENDERER_RESULT_DEVICE_ERROR;
                     else{
                         int drawn=renderer_state.gpu_composition->visual_frame(visual_ticks,visual_frequency,
                             trial_display_view.Get(),trial_display.Get(),trial_buffer.Get());
@@ -12647,13 +12692,22 @@ private:
 };
 
 RendererWorker * renderer_worker = nullptr;
+bool remote_renderer_requested();
+c3x_remote_scene::Backend* remote_renderer_backend();
+int remote_world_capture_register(c3x_renderer_world_capture_fn callback);
+void remote_world_capture_tick(UINT_PTR id);
 void CALLBACK renderer_world_timer(HWND,UINT,UINT_PTR id,DWORD){
-    try{if(renderer_worker)renderer_worker->capture_world_tick(id);}
+    try{if(remote_renderer_requested())remote_world_capture_tick(id);
+        else if(renderer_worker)renderer_worker->capture_world_tick(id);}
     catch(...){OutputDebugStringA("[C3X renderer] world capture page unavailable\n");}
 }
 extern "C" __declspec(dllexport) c3x_renderer_i64 c3x_renderer_visual_clock(){
     c3x_inputs::Call input(c3x_inputs::Kind::visual,4,[](auto&){});
-    c3x_renderer_i64 ticks=renderer_worker?renderer_worker->visual_clock():0;
+    c3x_renderer_i64 ticks=0;
+    if(remote_renderer_requested()){LARGE_INTEGER now={},frequency={};QueryPerformanceCounter(&now);QueryPerformanceFrequency(&frequency);
+        ticks=now.QuadPart;long long sampled_frequency=frequency.QuadPart;
+        if(c3x_inputs::replay_clock())c3x_inputs::replay_clock()->sample(ticks,sampled_frequency);}
+    else ticks=renderer_worker?renderer_worker->visual_clock():0;
     input.result(C3X_RENDERER_RESULT_OK,[&](auto& out){out(ticks);});return ticks;
 }
 extern "C" __declspec(dllexport) int c3x_renderer_gpu_visual_status(c3x_renderer_visual_status_v1* out){
@@ -12661,6 +12715,10 @@ extern "C" __declspec(dllexport) int c3x_renderer_gpu_visual_status(c3x_renderer
     return renderer_worker?renderer_worker->visual_status(*out):C3X_RENDERER_RESULT_PENDING;
 }
 extern "C" __declspec(dllexport) int c3x_renderer_gpu_visual_frame(){
+    if(remote_renderer_requested()){LARGE_INTEGER now={},frequency={};QueryPerformanceCounter(&now);QueryPerformanceFrequency(&frequency);
+        long long ticks=now.QuadPart,rate=frequency.QuadPart;
+        if(c3x_inputs::replay_clock())c3x_inputs::replay_clock()->sample(ticks,rate);
+        try{return remote_renderer_backend()->visual(ticks,rate);}catch(...){return C3X_RENDERER_RESULT_DEVICE_ERROR;}}
     return renderer_worker?renderer_worker->visual_frame():C3X_RENDERER_RESULT_PENDING;
 }
 
@@ -12671,7 +12729,8 @@ RendererWorker & get_renderer_worker() {
 }
 extern "C" __declspec(dllexport) int c3x_renderer_set_world_capture(c3x_renderer_world_capture_fn callback){
     c3x_inputs::Call input(c3x_inputs::Kind::configuration,4,[&](auto& out){out.u32(callback?1:0);});
-    try{return input.result(get_renderer_worker().set_world_capture(callback));}
+    try{return input.result(remote_renderer_requested()?remote_world_capture_register(callback):
+        get_renderer_worker().set_world_capture(callback));}
     catch(...){return input.result(C3X_RENDERER_RESULT_ERROR);}
 }
 extern "C" __declspec(dllexport) int c3x_renderer_world_status(c3x_renderer_world_status_v1* status){
@@ -12730,14 +12789,72 @@ bool valid_frame(c3x_renderer_frame_v1 const * frame, c3x_renderer_output_v1 con
 
 namespace {
 c3x_native_images::CompositionOwner* native_composition=nullptr;
+std::unique_ptr<c3x_remote_scene::Backend> remote_renderer;
+MapBlitter remote_map_blitter;
+std::unique_ptr<c3x_renderer::UnitBodyRenderer> remote_unit_blitter;
+int remote_blit_phase_x=0,remote_blit_phase_y=0;
+c3x_renderer_world_capture_fn remote_world_capture=nullptr;
+UINT_PTR remote_world_timer=0;
+bool remote_renderer_requested(){
+    if(sizeof(void*)!=4)return false;
+    char enabled[4]={};return GetEnvironmentVariableA("C3X_RENDERER_HELPER64",enabled,sizeof(enabled))==1&&enabled[0]=='1';
+}
+std::wstring remote_renderer_file(wchar_t const* variable,wchar_t const* sibling){
+    wchar_t configured[32768]={};DWORD length=GetEnvironmentVariableW(variable,configured,32768);
+    if(length>0&&length<32768)return std::wstring(configured,length);
+    if(length>=32768)throw std::runtime_error("x64 helper path too long");
+    HMODULE self=GetModuleHandleW(L"C3XRenderer.dll");
+    wchar_t module[32768]={};
+    if(!self||!GetModuleFileNameW(self,module,32768))throw std::runtime_error("renderer module path unavailable");
+    std::wstring path(module);auto slash=path.find_last_of(L"\\/");
+    if(slash==std::wstring::npos)throw std::runtime_error("renderer module directory unavailable");
+    return path.substr(0,slash+1)+sibling;
+}
+c3x_remote_scene::Backend* remote_renderer_backend(){
+    if(!remote_renderer_requested())return nullptr;
+    if(!remote_renderer)remote_renderer=std::make_unique<c3x_remote_scene::Backend>(
+        remote_renderer_file(L"C3X_RENDERER_HELPER_EXE",L"C3XRendererHelper64.exe"),
+        remote_renderer_file(L"C3X_RENDERER_X64_DLL",L"C3XRenderer_x64.dll"));
+    return remote_renderer.get();
+}
+int remote_world_capture_register(c3x_renderer_world_capture_fn callback){
+    if(remote_world_timer){KillTimer(nullptr,remote_world_timer);remote_world_timer=0;}
+    remote_world_capture=callback;
+    if(callback&&!c3x_inputs::replay_assets().enabled)remote_world_timer=SetTimer(nullptr,0,33,renderer_world_timer);
+    return !callback||remote_world_timer||c3x_inputs::replay_assets().enabled?
+        C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_ERROR;
+}
+void remote_world_capture_tick(UINT_PTR id){
+    if(!remote_world_capture||!remote_world_timer||id!=remote_world_timer||!remote_renderer)return;
+    for(unsigned n=0;n<2;++n){
+        c3x_renderer_world_page_v1 page={};
+        if(remote_renderer->world_query(page)!=C3X_RENDERER_RESULT_OK)return;
+        c3x_renderer_tile_v1 records[128]={};page.tiles=records;
+        int captured=remote_world_capture(&page);
+        if(remote_renderer->world_submit(page,captured)!=C3X_RENDERER_RESULT_OK)return;
+    }
+}
 bool drain_native_composition(){
     try {
         if(native_composition){native_composition->drain();delete native_composition;native_composition=nullptr;}
         // CPU-source presentation can exist without a CompositionOwner. Its
         // retained window must also survive reset/reload/config-off exactly.
         if(renderer_worker && renderer_worker->native_screen(nullptr)!=C3X_RENDERER_RESULT_OK)return false;
+        if(remote_renderer && remote_renderer->screen(nullptr)!=C3X_RENDERER_RESULT_OK)return false;
         return true;
     }catch(std::exception const& e){if(c3x_inputs::replay_assets().enabled)throw;OutputDebugStringA(e.what());return false;}
+}
+int remote_draw_cpu_unit(c3x_renderer_unit_v1 const& unit,HDC destination,HDC background,
+                         int* bounds,unsigned flags){
+    try{
+        std::vector<std::uint32_t> pixels;unsigned width=0,height=0;int x=0,y=0;
+        int code=remote_renderer_backend()->unit_cpu(unit,flags,bounds,pixels,x,y,width,height);
+        if(code!=C3X_RENDERER_RESULT_OK||pixels.empty())return code;
+        if(!remote_unit_blitter)remote_unit_blitter=std::make_unique<c3x_renderer::UnitBodyRenderer>();
+        unsigned keyed=0;
+        return remote_unit_blitter->blit_pixels(pixels,int(width),int(height),destination,
+            x,y,background,keyed)?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_ERROR;
+    }catch(...){return C3X_RENDERER_RESULT_DEVICE_ERROR;}
 }
 }
 
@@ -12748,7 +12865,9 @@ extern "C" __declspec(dllexport) c3x_renderer_u32 c3x_renderer_get_api_version(v
 extern "C" __declspec(dllexport) int c3x_renderer_set_pack_path(char const * pack_path) {
     c3x_inputs::NativeCall input(7,[&](auto& out){out.string(pack_path,32768);});
     if(!drain_native_composition())return input.result(C3X_RENDERER_RESULT_DEVICE_ERROR);
-    int result = get_renderer_worker().configure_pack(pack_path);
+    int result=C3X_RENDERER_RESULT_ERROR;
+    try{result=remote_renderer_requested()?remote_renderer_backend()->pack(pack_path):
+        get_renderer_worker().configure_pack(pack_path);}catch(...){result=C3X_RENDERER_RESULT_DEVICE_ERROR;}
     if (result != C3X_RENDERER_RESULT_OK)
         destroy_renderer_worker();
     return input.result(result);
@@ -12758,8 +12877,10 @@ extern "C" __declspec(dllexport) int c3x_renderer_set_definition_paths(
     char const * mod_root, char const * default_path, char const * scenario_path, char const * custom_path) {
     c3x_inputs::NativeCall input(8,[&](auto& out){out.string(mod_root,32768);out.string(default_path,32768);out.string(scenario_path,32768);out.string(custom_path,32768);});
     if(!drain_native_composition())return input.result(C3X_RENDERER_RESULT_DEVICE_ERROR);
-    int result = get_renderer_worker().configure_definitions(
-        mod_root, default_path, scenario_path, custom_path);
+    int result=C3X_RENDERER_RESULT_ERROR;
+    try{result=remote_renderer_requested()?remote_renderer_backend()->definitions(
+        mod_root,default_path,scenario_path,custom_path):get_renderer_worker().configure_definitions(
+        mod_root, default_path, scenario_path, custom_path);}catch(...){result=C3X_RENDERER_RESULT_DEVICE_ERROR;}
     if(renderer.trace.level) {
         char effect[16]={};
         GetEnvironmentVariableA("C3X_RENDERER_WAVES",effect,sizeof(effect));
@@ -12786,7 +12907,15 @@ extern "C" __declspec(dllexport) int c3x_renderer_render(
     LARGE_INTEGER started={},finished={};
     if(request)QueryPerformanceCounter(&started);
     c3x_inputs::Call input(c3x_inputs::Kind::scene,1,[&](auto& out){c3x_inputs::frame(out,*frame);});
-    int result=get_renderer_worker().render(*frame,*output);
+    int result=C3X_RENDERER_RESULT_ERROR;
+    try{if(remote_renderer_requested()){
+            result=remote_renderer_backend()->render_cpu(*frame,nullptr,*output);
+            if(result==C3X_RENDERER_RESULT_OK){
+                remote_blit_phase_x=frame->tile_count?frame->tiles[0].anchor_x:0;
+                remote_blit_phase_y=frame->tile_count?frame->tiles[0].anchor_y:0;
+            }
+        }else result=get_renderer_worker().render(*frame,*output);
+    }catch(...){result=C3X_RENDERER_RESULT_DEVICE_ERROR;}
     input.result(result,[&](auto& out){c3x_inputs::output_witness(out,*output,result);});
     if(request) {
         QueryPerformanceCounter(&finished);
@@ -12806,7 +12935,15 @@ extern "C" __declspec(dllexport) int c3x_renderer_render_view(
     LARGE_INTEGER started={},finished={};
     if(usage)QueryPerformanceCounter(&started);
     c3x_inputs::Call input(c3x_inputs::Kind::scene,2,[&](auto& out){c3x_inputs::c3x_renderer_camera_identity_v1_fields(out,request->identity);c3x_inputs::frame(out,*request->frame);});
-    int result=get_renderer_worker().render(*request->frame,*output,request->identity);
+    int result=C3X_RENDERER_RESULT_ERROR;
+    try{if(remote_renderer_requested()){
+            result=remote_renderer_backend()->render_cpu(*request->frame,&request->identity,*output);
+            if(result==C3X_RENDERER_RESULT_OK){
+                remote_blit_phase_x=request->frame->tile_count?request->frame->tiles[0].anchor_x:0;
+                remote_blit_phase_y=request->frame->tile_count?request->frame->tiles[0].anchor_y:0;
+            }
+        }else result=get_renderer_worker().render(*request->frame,*output,request->identity);
+    }catch(...){result=C3X_RENDERER_RESULT_DEVICE_ERROR;}
     input.result(result,[&](auto& out){c3x_inputs::output_witness(out,*output,result);});
     if(usage){QueryPerformanceCounter(&finished);
         renderer.trace.usage_result(usage,result,finished.QuadPart-started.QuadPart,*output);}
@@ -12844,7 +12981,9 @@ extern "C" __declspec(dllexport) int c3x_renderer_camera_poll(
 
 extern "C" __declspec(dllexport) int c3x_renderer_camera_cancel(c3x_renderer_i64 ticket) {
     c3x_inputs::Call input(c3x_inputs::Kind::camera,4,[&](auto& out){out(ticket);});
-    return input.result(renderer_worker?renderer_worker->camera_cancel(ticket):C3X_RENDERER_RESULT_SUPERSEDED);
+    try{return input.result(remote_renderer_requested()?remote_renderer_backend()->camera_cancel(ticket):
+        renderer_worker?renderer_worker->camera_cancel(ticket):C3X_RENDERER_RESULT_SUPERSEDED);}
+    catch(...){return input.result(C3X_RENDERER_RESULT_DEVICE_ERROR);}
 }
 
 extern "C" __declspec(dllexport) int c3x_renderer_camera_begin_view(
@@ -12896,6 +13035,8 @@ extern "C" __declspec(dllexport) int c3x_renderer_blit(
         output->bgra_pixels == nullptr)
         return C3X_RENDERER_RESULT_BAD_ARGUMENT;
 
+    if(remote_renderer_requested())return remote_map_blitter.blit(*output,static_cast<HDC>(destination_hdc),
+        remote_blit_phase_x,remote_blit_phase_y,renderer.trace)?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_ERROR;
     if (renderer_worker == nullptr)
         return C3X_RENDERER_RESULT_ERROR;
     return renderer_worker->blit(*output, static_cast<HDC>(destination_hdc));
@@ -12904,7 +13045,16 @@ extern "C" __declspec(dllexport) int c3x_renderer_blit(
 int& native_reset_outcome(){thread_local int value=0;return value;}
 extern "C" __declspec(dllexport) void c3x_renderer_reset(void) {
     c3x_inputs::NativeCall input(6,[](auto&){});
-    bool drained=drain_native_composition();if(drained)destroy_renderer_worker();c3x_inputs::reset_canvas_capture();native_reset_outcome()=drained?1:0;input.result(native_reset_outcome());
+    bool drained=drain_native_composition();
+    if(drained){if(remote_world_timer){KillTimer(nullptr,remote_world_timer);remote_world_timer=0;}
+        remote_world_capture=nullptr;
+        remote_map_blitter.reset_blit_surface();remote_unit_blitter.reset();
+        remote_blit_phase_x=remote_blit_phase_y=0;
+        // Reset renderer generations and native presentation together, while
+        // retaining the configured helper process and its definition paths.
+        if(remote_renderer){try{drained=remote_renderer->reset()==C3X_RENDERER_RESULT_OK;}catch(...){drained=false;}}
+        destroy_renderer_worker();}
+    c3x_inputs::reset_canvas_capture();native_reset_outcome()=drained?1:0;input.result(native_reset_outcome());
 }
 
 #ifdef C3X_RENDERER_BENCHMARK_ORACLE
@@ -12929,16 +13079,19 @@ extern "C" __declspec(dllexport) int c3x_renderer_unit_draw(
     c3x_renderer_unit_v1 const* unit,void* destination_hdc) {
     if(!unit || unit->struct_size!=sizeof(*unit) || unit->unit_key[63]!=0 || !destination_hdc)
         return C3X_RENDERER_RESULT_BAD_ARGUMENT;
-    if(!renderer_worker)return C3X_RENDERER_RESULT_ERROR;
-    return c3x_inputs::cpu_unit(1,*unit,static_cast<HDC>(destination_hdc),nullptr,nullptr,0,[&]{return renderer_worker->draw_unit(*unit,static_cast<HDC>(destination_hdc));});
+    if(!renderer_worker&&!remote_renderer_requested())return C3X_RENDERER_RESULT_ERROR;
+    return c3x_inputs::cpu_unit(1,*unit,static_cast<HDC>(destination_hdc),nullptr,nullptr,0,[&]{return remote_renderer_requested()?
+        remote_draw_cpu_unit(*unit,static_cast<HDC>(destination_hdc),nullptr,nullptr,0):renderer_worker->draw_unit(*unit,static_cast<HDC>(destination_hdc));});
 }
 
 extern "C" __declspec(dllexport) int c3x_renderer_unit_draw_background(
     c3x_renderer_unit_v1 const* unit,void* destination_hdc,void* background_hdc) {
     if(!unit || unit->struct_size!=sizeof(*unit) || unit->unit_key[63]!=0 || !destination_hdc || !background_hdc)
         return C3X_RENDERER_RESULT_BAD_ARGUMENT;
-    if(!renderer_worker)return C3X_RENDERER_RESULT_ERROR;
-    return c3x_inputs::cpu_unit(2,*unit,static_cast<HDC>(destination_hdc),static_cast<HDC>(background_hdc),nullptr,0,[&]{return renderer_worker->draw_unit(*unit,static_cast<HDC>(destination_hdc),static_cast<HDC>(background_hdc));});
+    if(!renderer_worker&&!remote_renderer_requested())return C3X_RENDERER_RESULT_ERROR;
+    return c3x_inputs::cpu_unit(2,*unit,static_cast<HDC>(destination_hdc),static_cast<HDC>(background_hdc),nullptr,0,[&]{return remote_renderer_requested()?
+        remote_draw_cpu_unit(*unit,static_cast<HDC>(destination_hdc),static_cast<HDC>(background_hdc),nullptr,0):
+        renderer_worker->draw_unit(*unit,static_cast<HDC>(destination_hdc),static_cast<HDC>(background_hdc));});
 }
 
 // Optional extension: success publishes the complete drawn rectangle. Legacy
@@ -12947,27 +13100,34 @@ extern "C" __declspec(dllexport) int c3x_renderer_unit_draw_expanded(
     c3x_renderer_unit_v1 const* unit,void* destination_hdc,void* background_hdc,int* bounds) {
     if(!unit || unit->struct_size!=sizeof(*unit) || unit->unit_key[63]!=0 || !destination_hdc || !background_hdc || !bounds)
         return C3X_RENDERER_RESULT_BAD_ARGUMENT;
-    if(!renderer_worker)return C3X_RENDERER_RESULT_ERROR;
-    return c3x_inputs::cpu_unit(3,*unit,static_cast<HDC>(destination_hdc),static_cast<HDC>(background_hdc),bounds,0,[&]{return renderer_worker->draw_unit(*unit,static_cast<HDC>(destination_hdc),static_cast<HDC>(background_hdc),bounds);});
+    if(!renderer_worker&&!remote_renderer_requested())return C3X_RENDERER_RESULT_ERROR;
+    return c3x_inputs::cpu_unit(3,*unit,static_cast<HDC>(destination_hdc),static_cast<HDC>(background_hdc),bounds,0,[&]{return remote_renderer_requested()?
+        remote_draw_cpu_unit(*unit,static_cast<HDC>(destination_hdc),static_cast<HDC>(background_hdc),bounds,0):
+        renderer_worker->draw_unit(*unit,static_cast<HDC>(destination_hdc),static_cast<HDC>(background_hdc),bounds);});
 }
 
 extern "C" __declspec(dllexport) int c3x_renderer_unit_draw_playback(
     c3x_renderer_unit_v1 const* unit,void* destination_hdc,void* background_hdc,int* bounds,unsigned flags) {
     if(!unit || unit->struct_size!=sizeof(*unit) || unit->unit_key[63]!=0 || !destination_hdc || !background_hdc || !bounds ||
        !(flags&C3X_RENDERER_UNIT_STATE_CAPTURED) || (flags&~7u))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
-    if(!renderer_worker)return C3X_RENDERER_RESULT_ERROR;
-    return c3x_inputs::cpu_unit(4,*unit,static_cast<HDC>(destination_hdc),static_cast<HDC>(background_hdc),bounds,flags,[&]{return renderer_worker->draw_unit(*unit,static_cast<HDC>(destination_hdc),static_cast<HDC>(background_hdc),bounds,flags);});
+    if(!renderer_worker&&!remote_renderer_requested())return C3X_RENDERER_RESULT_ERROR;
+    return c3x_inputs::cpu_unit(4,*unit,static_cast<HDC>(destination_hdc),static_cast<HDC>(background_hdc),bounds,flags,[&]{return remote_renderer_requested()?
+        remote_draw_cpu_unit(*unit,static_cast<HDC>(destination_hdc),static_cast<HDC>(background_hdc),bounds,flags):
+        renderer_worker->draw_unit(*unit,static_cast<HDC>(destination_hdc),static_cast<HDC>(background_hdc),bounds,flags);});
 }
 
 extern "C" __declspec(dllexport) void c3x_renderer_unit_forget(int unit_id) {
     c3x_inputs::Call input(c3x_inputs::Kind::unit_forget,0,[&](auto& out){out(std::int32_t(unit_id));});
-    if(renderer_worker)renderer_worker->forget_unit(unit_id);
+    try{if(remote_renderer_requested())remote_renderer_backend()->forget_unit(unit_id);
+        else if(renderer_worker)renderer_worker->forget_unit(unit_id);}catch(...){}
     input.result(1);
 }
 
 extern "C" __declspec(dllexport) int c3x_renderer_set_unit_rendering(int enabled) {
     c3x_inputs::Call input(c3x_inputs::Kind::configuration,3,[&](auto& out){out(std::int32_t(enabled));});
-    return input.result(get_renderer_worker().set_unit_rendering(enabled));
+    try{return input.result(remote_renderer_requested()?remote_renderer_backend()->set_units(enabled):
+        get_renderer_worker().set_unit_rendering(enabled));}
+    catch(...){return input.result(C3X_RENDERER_RESULT_DEVICE_ERROR);}
 }
 
 // Optional compatibility redraws rebuild native command buttons, whose show
@@ -13021,15 +13181,18 @@ extern "C" __declspec(dllexport) int c3x_renderer_gpu_render(
        request->frame->target_width>2240||request->frame->target_height>1260)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
     *view={sizeof(*view)};
     c3x_inputs::Call input(c3x_inputs::Kind::scene,3,[&](auto& out){c3x_inputs::c3x_renderer_camera_identity_v1_fields(out,request->identity);c3x_inputs::frame(out,*request->frame);});
-    try{int code=get_renderer_worker().render_gpu(*request,*view,*metadata);return input.result(code,[&](auto& out){out(view->ticket);out(view->map_image);out(view->session);c3x_inputs::gpu_witness(out,*view,*metadata,code);});}
+    try{int code=remote_renderer_requested()?remote_renderer_backend()->render(*request,*view,*metadata):
+        get_renderer_worker().render_gpu(*request,*view,*metadata);
+        return input.result(code,[&](auto& out){out(view->ticket);out(view->map_image);out(view->session);c3x_inputs::gpu_witness(out,*view,*metadata,code);});}
     catch(...){return input.result(C3X_RENDERER_RESULT_ERROR,[](auto& out){out.u64(0);out.u64(0);out.u64(0);out.u32(0);});}
 }
 #ifdef C3X_HELPER_TRIAL
 extern "C" __declspec(dllexport) void c3x_renderer_trial_set_clock(
     std::int64_t ticks,std::int64_t frequency){
     static thread_local c3x_inputs::ReplayClock clock;
+    if(frequency<=0){c3x_inputs::replay_clock()=nullptr;c3x_inputs::replay_execution().performance=false;return;}
     clock.values.clear();clock.at=0;clock.failure=nullptr;
-    if(frequency>0)clock.values.emplace_back(ticks,frequency);
+    clock.values.emplace_back(ticks,frequency);
     c3x_inputs::replay_execution().performance=true;
     c3x_inputs::replay_clock()=&clock;
 }
@@ -13060,6 +13223,40 @@ extern "C" __declspec(dllexport) int c3x_renderer_trial_visual_shared(
     if(frequency<=0||!consumer_pid||!handle||!width||!height)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
     return get_renderer_worker().trial_visual_shared(ticks,frequency,consumer_pid,*handle,*width,*height);
 }
+extern "C" __declspec(dllexport) int c3x_renderer_trial_tactical(
+    c3x_renderer::tactical::Input const* input,c3x_renderer_gpu_unit_v1 const* target){
+    if(!input||!target||target->struct_size!=sizeof(*target))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    return get_renderer_worker().draw_tactical(*input,*target);
+}
+// CPU compatibility units remain a native-surface insertion on x86. Their
+// posed/illuminated pixels are produced by the x64 scene owner and copied as
+// bounded values; the x86 bridge only blends them with Civ III's DIB.
+extern "C" __declspec(dllexport) int c3x_renderer_trial_unit_pixels(
+    c3x_renderer_unit_v1 const* unit,unsigned flags,int with_bounds,int* bounds,
+    int* x,int* y,unsigned* width,unsigned* height,std::uint32_t* pixels,unsigned capacity){
+    if(!unit||unit->struct_size!=sizeof(*unit)||unit->unit_key[63]!=0||
+       !bounds||!x||!y||!width||!height||!pixels||capacity>1024u*1024u||
+       (flags&~7u)||(flags&&!(flags&C3X_RENDERER_UNIT_STATE_CAPTURED)))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    std::vector<std::uint32_t> body;int w=0,h=0;
+    int code=get_renderer_worker().draw_unit(*unit,nullptr,nullptr,with_bounds?bounds:nullptr,
+        flags,nullptr,&body,&w,&h,x,y);
+    if(code!=C3X_RENDERER_RESULT_OK)return code;
+    if(w<0||h<0||std::uint64_t(w)*unsigned(h)!=body.size()||body.size()>capacity)
+        return C3X_RENDERER_RESULT_ERROR;
+    *width=unsigned(w);*height=unsigned(h);
+    if(!body.empty())std::memcpy(pixels,body.data(),body.size()*sizeof(body[0]));
+    return code;
+}
+extern "C" __declspec(dllexport) int c3x_renderer_trial_world_query(c3x_renderer_world_page_v1* page){
+    if(!page||page->struct_size!=sizeof(*page))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    return get_renderer_worker().trial_world_query(*page);
+}
+extern "C" __declspec(dllexport) int c3x_renderer_trial_world_submit(
+    c3x_renderer_world_page_v1 const* page,int callback_result){
+    if(!page||page->struct_size!=sizeof(*page)||page->count>128||(page->count&&!page->tiles))
+        return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    return get_renderer_worker().trial_world_submit(*page,callback_result);
+}
 #endif
 extern "C" __declspec(dllexport) int c3x_renderer_gpu_camera_begin(
     c3x_renderer_camera_request_v1 const* request,c3x_renderer_i64* ticket){
@@ -13067,7 +13264,8 @@ extern "C" __declspec(dllexport) int c3x_renderer_gpu_camera_begin(
     if(!request||!ticket||request->version!=C3X_RENDERER_CAMERA_VIEW_VERSION||request->struct_size!=sizeof(*request)||
        !valid_frame(request->frame,&metadata)||request->frame->target_width>2240||request->frame->target_height>1260)
         return C3X_RENDERER_RESULT_BAD_ARGUMENT;
-    try{return get_renderer_worker().begin_gpu_camera(*request,*ticket);}
+    try{return remote_renderer_requested()?remote_renderer_backend()->camera_begin(*request,*ticket):
+        get_renderer_worker().begin_gpu_camera(*request,*ticket);}
     catch(...){return C3X_RENDERER_RESULT_ERROR;}
 }
 extern "C" __declspec(dllexport) int c3x_renderer_gpu_camera_poll(
@@ -13075,7 +13273,11 @@ extern "C" __declspec(dllexport) int c3x_renderer_gpu_camera_poll(
     if(!view||view->struct_size!=sizeof(*view)||!metadata||metadata->api_version!=C3X_RENDERER_API_VERSION||
        metadata->struct_size!=sizeof(*metadata))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
     c3x_inputs::Call input(c3x_inputs::Kind::camera,2,[&](auto& out){out(ticket);});
-    try{int code=renderer_worker?renderer_worker->poll_gpu_camera(ticket,*view,*metadata):C3X_RENDERER_RESULT_SUPERSEDED;
+    try{int code=C3X_RENDERER_RESULT_SUPERSEDED;
+        if(remote_renderer_requested()){c3x_renderer_gpu_camera_view_v1 adopted={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(adopted)};
+            code=remote_renderer_backend()->camera_poll(ticket,adopted);
+            if(code==C3X_RENDERER_RESULT_OK){*view=adopted.image;*metadata=adopted.camera.output;}}
+        else code=renderer_worker?renderer_worker->poll_gpu_camera(ticket,*view,*metadata):C3X_RENDERER_RESULT_SUPERSEDED;
         return input.result(code,[&](auto& out){auto const& image=*view;bool good=code==C3X_RENDERER_RESULT_OK;
             out(std::int64_t(good?image.ticket:0));out(std::int64_t(good?image.map_image:0));out(std::int64_t(good?image.session:0));c3x_inputs::gpu_witness(out,image,*metadata,code);});}
     catch(...){return input.result(C3X_RENDERER_RESULT_ERROR,[](auto& out){out.u64(0);out.u64(0);out.u64(0);out.u32(0);});}
@@ -13089,7 +13291,8 @@ extern "C" __declspec(dllexport) int c3x_renderer_gpu_camera_poll_view(
         int wanted=access?access->readiness(-999):-999;
         if(c3x_inputs::replay_assets().enabled&&wanted==C3X_RENDERER_RESULT_PENDING)code=wanted;
         else {auto deadline=GetTickCount64()+60000;do{
-            code=renderer_worker?renderer_worker->poll_gpu_camera_view(ticket,*view):C3X_RENDERER_RESULT_SUPERSEDED;
+            code=remote_renderer_requested()?remote_renderer_backend()->camera_poll(ticket,*view):
+                renderer_worker?renderer_worker->poll_gpu_camera_view(ticket,*view):C3X_RENDERER_RESULT_SUPERSEDED;
             if(!c3x_inputs::replay_assets().enabled||wanted!=C3X_RENDERER_RESULT_OK||code!=C3X_RENDERER_RESULT_PENDING)break;
             if(GetTickCount64()>=deadline)throw std::runtime_error("native replay camera readiness timeout");Sleep(1);
         }while(true);}
@@ -13115,7 +13318,8 @@ extern "C" __declspec(dllexport) int c3x_renderer_gpu_images(
        (!create && !submit && request->image<=0)||(read&&!request->pixel_count))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
     *result={sizeof(*result)};
     c3x_inputs::Call input(c3x_inputs::Kind::image_commands,0,[&](auto& out){c3x_inputs::images(out,*request);});
-    try{int code=get_renderer_worker().images_gpu(*request,*result,readback,capacity);
+    try{int code=remote_renderer_requested()?remote_renderer_backend()->images(*request,*result,readback,capacity):
+        get_renderer_worker().images_gpu(*request,*result,readback,capacity);
         return input.result(code,[&](auto& out){out(result->image);out(result->pixel_count);
             // Explicit readback is an independent output witness, never producer input.
             bool witness=code==C3X_RENDERER_RESULT_OK&&read;out.u32(witness?1:0);
@@ -13130,7 +13334,8 @@ extern "C" __declspec(dllexport) int c3x_renderer_gpu_present(c3x_renderer_gpu_p
     if(!request||request->struct_size!=sizeof(*request)||request->action<0||request->action>2)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
     if(request->action==0&&(request->ticket<=0||request->image<=0||!request->window||request->width<=0||request->height<=0||request->width>2240||request->height>1260||
         request->area[0]>=request->area[2]||request->area[1]>=request->area[3]||request->area[0]>=request->width||request->area[1]>=request->height||request->area[2]<=0||request->area[3]<=0))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
-    try{return get_renderer_worker().present_gpu(*request);}catch(...){return C3X_RENDERER_RESULT_ERROR;}
+    try{return remote_renderer_requested()?remote_renderer_backend()->present(*request):
+        get_renderer_worker().present_gpu(*request);}catch(...){return C3X_RENDERER_RESULT_DEVICE_ERROR;}
 }
 
 // Bound behind the hash-verified native hooks. Map preparation activates the
@@ -13138,7 +13343,8 @@ extern "C" __declspec(dllexport) int c3x_renderer_gpu_present(c3x_renderer_gpu_p
 // presentation. A negative result denies CPU access after a failed barrier.
 int renderer_native_image_impl(int operation,void* image,void* source,void const* from,void const* to,unsigned color){
     if(operation==C3X_NATIVE_TACTICAL_CAPABLE)return native_composition&&native_composition->active()?1:0;
-    if(operation==C3X_NATIVE_VISUAL_POLICY)return renderer_worker?renderer_worker->visual_policy(color):0;
+    if(operation==C3X_NATIVE_VISUAL_POLICY)return remote_renderer_requested()?remote_renderer_backend()->visual_policy(color):
+        renderer_worker?renderer_worker->visual_policy(color):0;
     if(operation==C3X_NATIVE_IMAGE_DRAIN){if(!drain_native_composition())return -1;}
     else if(native_composition&&native_composition->active()){
         try{
@@ -13147,7 +13353,8 @@ int renderer_native_image_impl(int operation,void* image,void* source,void const
                 if(operation==C3X_NATIVE_IMAGE_PRESENT&&result>0){static unsigned frames=0;++frames;
                     if(frames<=3||(frames%128)==0){char line[128];std::snprintf(line,sizeof(line),
                         "[C3X renderer] stage=native-resident-present frames=%u cpu_snapshot=0 visual_ready=%d\n",
-                        frames,renderer_worker?renderer_worker->visual_policy(2):0);OutputDebugStringA(line);}}
+                        frames,remote_renderer_requested()?remote_renderer_backend()->visual_policy(2):
+                            renderer_worker?renderer_worker->visual_policy(2):0);OutputDebugStringA(line);}}
                 return result;
             }
             // An unowned CPU UI source uses the same final presenter. The
@@ -13164,11 +13371,13 @@ int renderer_native_image_impl(int operation,void* image,void* source,void const
         if(screen.capture(image,source,from)){
             QueryPerformanceCounter(&captured);
             uploaded=std::uint64_t(screen.area.right-screen.area.left)*(screen.area.bottom-screen.area.top)*2;
-            presented=get_renderer_worker().native_screen(&screen)==C3X_RENDERER_RESULT_OK;
+            presented=(remote_renderer_requested()?remote_renderer_backend()->screen(&screen):
+                get_renderer_worker().native_screen(&screen))==C3X_RENDERER_RESULT_OK;
         }
     }catch(...){}
     // Release DXGI before JGL's original BitBlt. CPU images were never stale.
-    if(!presented && renderer_worker)try{renderer_worker->native_screen(nullptr);}catch(...){}
+    if(!presented)try{if(remote_renderer_requested())remote_renderer_backend()->screen(nullptr);
+        else if(renderer_worker)renderer_worker->native_screen(nullptr);}catch(...){}
     QueryPerformanceCounter(&ended);QueryPerformanceFrequency(&frequency);
     struct Counts {unsigned calls=0,gpu=0;std::uint64_t bytes=0;double capture_ms=0,callback_ms=0,max_ms=0;};
     static Counts counts;
@@ -13199,9 +13408,10 @@ extern "C" __declspec(dllexport) int c3x_renderer_gpu_unit(c3x_renderer_unit_v1 
        target->ticket<=0||target->destination<=0||target->background<=0||target->detail<0||target->background_detail<0||
        target->clip[0]>target->clip[2]||target->clip[1]>target->clip[3]||(target->playback_flags&~7u)||
        unit->body_x<-32768||unit->body_x>32768||unit->body_y<-32768||unit->body_y>32768)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
-    if(!renderer_worker)return C3X_RENDERER_RESULT_ERROR;
+    if(!renderer_worker&&!remote_renderer_requested())return C3X_RENDERER_RESULT_ERROR;
     c3x_inputs::Call input(c3x_inputs::Kind::unit,1,[&](auto& out){c3x_inputs::unit(out,*unit);c3x_inputs::target_fields(out,*target);});
-    try{int code=renderer_worker->draw_unit(*unit,nullptr,nullptr,bounds,target->playback_flags,target);
+    try{int code=remote_renderer_requested()?remote_renderer_backend()->unit(*unit,*target,bounds):
+        renderer_worker->draw_unit(*unit,nullptr,nullptr,bounds,target->playback_flags,target);
         return input.result(code,[&](auto& out){for(unsigned n=0;n<4;++n)out(std::int32_t(code==C3X_RENDERER_RESULT_OK?bounds[n]:0));});}catch(...){return input.result(C3X_RENDERER_RESULT_ERROR,[&](auto& out){for(unsigned n=0;n<4;++n)out.u32(0);});}
 }
 
@@ -13251,6 +13461,7 @@ extern "C" __declspec(dllexport) unsigned c3x_renderer_native_camera_message(){
     return message;
 }
 int begin_native_gpu_camera(c3x_renderer_camera_request_v1 const* request,c3x_renderer_i64* ticket){
+    if(remote_renderer_requested())return remote_renderer_backend()->camera_begin(*request,*ticket);
     auto message=c3x_renderer_native_camera_message();
     if(!message)return C3X_RENDERER_RESULT_ERROR;
     return get_renderer_worker().begin_gpu_camera(*request,*ticket,GetCurrentThreadId(),message);
@@ -13264,7 +13475,8 @@ bool ensure_native_composition(void* image){
     auto base=reinterpret_cast<char*>(jgl);
     native_composition=new c3x_native_images::CompositionOwner(c3x_renderer_gpu_render,c3x_renderer_gpu_images,c3x_renderer_gpu_present,
         c3x_renderer_gpu_unit,c3x_renderer_native_lifetime,replay?nullptr:base+0x1b70,replay?nullptr:base+0x1b90);
-    native_composition->set_tactical([](auto const& capture,auto const& target){return get_renderer_worker().draw_tactical(capture,target);});
+    native_composition->set_tactical([](auto const& capture,auto const& target){return remote_renderer_requested()?
+        remote_renderer_backend()->tactical(capture,target):get_renderer_worker().draw_tactical(capture,target);});
     native_composition->set_camera(begin_native_gpu_camera,c3x_renderer_gpu_camera_poll_view,c3x_renderer_camera_cancel);
     return true;
 }

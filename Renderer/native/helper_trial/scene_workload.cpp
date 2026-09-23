@@ -41,11 +41,20 @@ struct Core {
     CameraBegin camera_begin=nullptr;CameraPoll camera_poll=nullptr;CameraCancel camera_cancel=nullptr;
     using Definitions=int(*)(char const*,char const*,char const*,char const*);
     Definitions definitions=nullptr;
+    using Pack=int(*)(char const*);Pack pack=nullptr;
     using Reset=void(*)();Reset reset=nullptr;
     c3x_renderer_gpu_images_fn images=nullptr;
     c3x_renderer_native_image_fn native_image=nullptr;
     using GpuUnit=int(*)(c3x_renderer_unit_v1 const*,c3x_renderer_gpu_unit_v1 const*,int*);
     GpuUnit unit_gpu=nullptr;
+    using CpuUnit=int(*)(c3x_renderer_unit_v1 const*,unsigned,int,int*,int*,int*,unsigned*,unsigned*,std::uint32_t*,unsigned);
+    CpuUnit unit_cpu=nullptr;
+    using UnitForget=void(*)(int);UnitForget unit_forget=nullptr;
+    using Tactical=int(*)(c3x_renderer::tactical::Input const*,c3x_renderer_gpu_unit_v1 const*);
+    Tactical tactical_gpu=nullptr;
+    using WorldQuery=int(*)(c3x_renderer_world_page_v1*);
+    using WorldSubmit=int(*)(c3x_renderer_world_page_v1 const*,int);
+    WorldQuery world_query=nullptr;WorldSubmit world_submit=nullptr;
     using SetUnits=int(*)(int);
     SetUnits set_units=nullptr;
     using TrialClock=void(*)(std::int64_t,std::int64_t);
@@ -65,10 +74,16 @@ struct Core {
         camera_poll=reinterpret_cast<CameraPoll>(GetProcAddress(module,"c3x_renderer_gpu_camera_poll_view"));
         camera_cancel=reinterpret_cast<CameraCancel>(GetProcAddress(module,"c3x_renderer_camera_cancel"));
         definitions=reinterpret_cast<Definitions>(GetProcAddress(module,"c3x_renderer_set_definition_paths"));
+        pack=reinterpret_cast<Pack>(GetProcAddress(module,"c3x_renderer_set_pack_path"));
         reset=reinterpret_cast<Reset>(GetProcAddress(module,"c3x_renderer_reset"));
         images=reinterpret_cast<c3x_renderer_gpu_images_fn>(GetProcAddress(module,"c3x_renderer_gpu_images"));
         native_image=reinterpret_cast<c3x_renderer_native_image_fn>(GetProcAddress(module,"c3x_renderer_native_image"));
         unit_gpu=reinterpret_cast<GpuUnit>(GetProcAddress(module,"c3x_renderer_gpu_unit"));
+        unit_cpu=reinterpret_cast<CpuUnit>(GetProcAddress(module,"c3x_renderer_trial_unit_pixels"));
+        unit_forget=reinterpret_cast<UnitForget>(GetProcAddress(module,"c3x_renderer_unit_forget"));
+        tactical_gpu=reinterpret_cast<Tactical>(GetProcAddress(module,"c3x_renderer_trial_tactical"));
+        world_query=reinterpret_cast<WorldQuery>(GetProcAddress(module,"c3x_renderer_trial_world_query"));
+        world_submit=reinterpret_cast<WorldSubmit>(GetProcAddress(module,"c3x_renderer_trial_world_submit"));
         set_units=reinterpret_cast<SetUnits>(GetProcAddress(module,"c3x_renderer_set_unit_rendering"));
         set_clock=reinterpret_cast<TrialClock>(GetProcAddress(module,"c3x_renderer_trial_set_clock"));
         shared=reinterpret_cast<Shared>(GetProcAddress(module,"c3x_renderer_trial_export_shared"));
@@ -86,9 +101,10 @@ struct Core {
         std::fill(std::begin(wire.hash),std::end(wire.hash),0);std::fill(std::begin(wire.gpu_hash),std::end(wire.gpu_hash),0);wire.gpu_hash_valid=0;
         try{
             require(wire.magic==wire_magic&&wire.version==wire_version&&wire.size<=wire_capacity&&
-                wire.live<=1&&(!wire.live||!wire.replay_clock),"invalid scene wire header");
+                wire.live<=1&&wire.replay_clock<=1,"invalid scene wire header");
             if(wire.replay_clock){require(set_clock!=nullptr,"helper lacks recorded clock entry");
                 set_clock(wire.clock_ticks,wire.clock_frequency);}
+            else if(wire.live&&set_clock)set_clock(0,0);
             Bytes bytes(wire.payload,wire.payload+wire.size);Reader in{bytes};auto started=milliseconds();
             if(wire.kind==unsigned(Kind::configuration)&&wire.subtype==3){
                 int enabled=0;in(enabled);in.done();require(set_units!=nullptr,"helper lacks unit configuration");
@@ -105,6 +121,11 @@ struct Core {
                 bool present[4]={};std::string paths[4];for(unsigned n=0;n<4;++n)paths[n]=in.string(32768,&present[n]);in.done();
                 wire.code=unsigned(definitions(present[0]?paths[0].c_str():nullptr,present[1]?paths[1].c_str():nullptr,
                     present[2]?paths[2].c_str():nullptr,present[3]?paths[3].c_str():nullptr));
+                ticket_ids.clear();image_ids.clear();
+            }else if(wire.live&&wire.kind==unsigned(Kind::native_bridge)&&wire.subtype==7){
+                require(pack!=nullptr,"helper lacks pack configuration");
+                bool present=false;auto path=in.string(32768,&present);in.done();
+                wire.code=unsigned(pack(present?path.c_str():nullptr));
                 ticket_ids.clear();image_ids.clear();
             }else if(wire.live&&wire.kind==unsigned(Kind::camera)&&wire.subtype==1){
                 c3x_renderer_camera_identity_v1 identity={};c3x_renderer_camera_identity_v1_fields(in,identity);
@@ -129,6 +150,29 @@ struct Core {
                 }
             }else if(wire.live&&wire.kind==unsigned(Kind::camera)&&wire.subtype==4){
                 c3x_renderer_i64 ticket=0;in(ticket);in.done();wire.code=unsigned(camera_cancel(ticket));
+            }else if(wire.live&&wire.kind==unsigned(Kind::world_page)&&wire.subtype==1){
+                in.done();require(world_query!=nullptr,"helper lacks world query entry");
+                c3x_renderer_world_page_v1 page={};page.struct_size=sizeof(page);
+                wire.code=unsigned(world_query(&page));
+                if(wire.code==C3X_RENDERER_RESULT_OK){
+                    Writer response;response(page.first);response(page.capacity);
+                    c3x_inputs::c3x_renderer_camera_identity_v1_fields(response,page.identity);
+                    c3x_inputs::frame_fields(response,page.frame);
+                    wire.reply_size=unsigned(response.bytes.size());
+                    std::memcpy(wire.payload,response.bytes.data(),wire.reply_size);
+                }
+            }else if(wire.live&&wire.kind==unsigned(Kind::world_page)&&wire.subtype==2){
+                require(world_submit!=nullptr,"helper lacks world submit entry");
+                c3x_renderer_world_page_v1 page={};page.struct_size=sizeof(page);
+                in(page.first);in(page.capacity);in(page.count);
+                c3x_inputs::c3x_renderer_camera_identity_v1_fields(in,page.identity);
+                c3x_inputs::frame_fields(in,page.frame);
+                int callback_result=0;in(callback_result);
+                require(page.count<=128,"remote world page limit");
+                std::vector<c3x_renderer_tile_v1> tiles(page.count);
+                for(auto& tile:tiles)c3x_inputs::c3x_renderer_tile_v1_fields(in,tile);
+                in.done();page.tiles=tiles.data();
+                wire.code=unsigned(world_submit(&page,callback_result));
             }else if(wire.kind==unsigned(Kind::scene)&&wire.subtype>=1&&wire.subtype<=3){
                 c3x_renderer_camera_identity_v1 identity={};if(wire.subtype!=1)c3x_renderer_camera_identity_v1_fields(in,identity);
                 Frame frame_value;frame(in,frame_value);in.done();
@@ -247,6 +291,23 @@ struct Core {
                     // despite its x64 pixels already being ready.
                     wire.code=!wire.live&&wire.expected_code==C3X_RENDERER_RESULT_PENDING&&rendered==C3X_RENDERER_RESULT_OK?
                         C3X_RENDERER_RESULT_PENDING:rendered;}
+            }else if(wire.live&&wire.kind==unsigned(Kind::unit)&&wire.subtype==2){
+                require(unit_cpu!=nullptr,"helper lacks CPU unit pixel entry");
+                c3x_renderer_unit_v1 value={};c3x_inputs::unit(in,value);
+                unsigned flags=in.u32(),with_bounds=in.u32();in.done();
+                require(with_bounds<=1,"invalid CPU unit bounds request");
+                std::vector<std::uint32_t> pixels(1024u*1024u);unsigned width=0,height=0;int x=0,y=0;
+                wire.code=unsigned(unit_cpu(&value,flags,int(with_bounds),wire.bounds,&x,&y,&width,&height,
+                    pixels.data(),unsigned(pixels.size())));
+                if(wire.code==C3X_RENDERER_RESULT_OK){
+                    require(width<=1024&&height<=1024,"CPU unit output extent exceeded");
+                    Writer reply;reply(x);reply(y);reply(width);reply(height);
+                    for(unsigned n=0;n<4;++n)reply(wire.bounds[n]);
+                    for(unsigned n=0;n<width*height;++n)reply(pixels[n]);
+                    require(reply.bytes.size()<=wire_capacity,"CPU unit output exceeded IPC slot");
+                    wire.reply_size=unsigned(reply.bytes.size());
+                    std::memcpy(wire.payload,reply.bytes.data(),wire.reply_size);
+                }
             }else if(wire.kind==unsigned(Kind::unit)&&wire.subtype==1){
                 require(unit_gpu!=nullptr,"helper lacks GPU unit entry");
                 c3x_renderer_unit_v1 value={};c3x_inputs::unit(in,value);
@@ -266,6 +327,14 @@ struct Core {
                     target.background_detail=map_id(image_ids,target.background_detail);
                 }
                 wire.code=unsigned(unit_gpu(&value,&target,wire.bounds));
+            }else if(wire.live&&wire.kind==unsigned(Kind::unit_forget)&&wire.subtype==0){
+                require(unit_forget!=nullptr,"helper lacks unit retirement entry");
+                int id=0;in(id);in.done();unit_forget(id);wire.code=1;
+            }else if(wire.live&&wire.kind==unsigned(Kind::tactical)&&wire.subtype==0){
+                require(tactical_gpu!=nullptr,"helper lacks tactical renderer entry");
+                c3x_renderer_gpu_unit_v1 target={sizeof(target)};c3x_inputs::target_fields(in,target);
+                c3x_renderer::tactical::Input capture;c3x_inputs::tactical(in,capture);in.done();
+                wire.code=unsigned(tactical_gpu(&capture,&target));
             }else throw std::runtime_error("unsupported scene wire operation");
             wire.service_us=std::uint64_t((milliseconds()-started)*1000.0);
             wire.private_bytes=private_bytes();
@@ -307,7 +376,7 @@ struct Importer {
             width=desc.Width;height=desc.Height;
         }
         Microsoft::WRL::ComPtr<IDXGIKeyedMutex> keyed;require(SUCCEEDED(source.As(&keyed)),"x86 shared map lacks keyed mutex");
-        hr=keyed->AcquireSync(1,1000);require(SUCCEEDED(hr),"x86 shared map acquire failed");
+        hr=keyed->AcquireSync(1,1000);require(hr==S_OK,"x86 shared map acquire failed");
         if(wire.shared_raw){
             if(!composition)composition=std::make_unique<c3x_gpu_images::Session>(device.Get(),context.Get());
             require(composition->publish_shared(source.Get(),++serial),"x86 shared map admission failed");

@@ -72,24 +72,27 @@ address space is an enabler, not a substitute for render-path optimization.
    keep a controlled fallback until the new path is stable. Do not treat the
    earlier x86 device-removal symptom as fixed without corresponding evidence.
 
-Current integration checkpoint: a full native-interleaved **shadow** replay
-now covers the GPU phase and shared final images; see
-[the measured result](helper64_gate2_results.md#full-native-interleaved-shadow-checkpoint).
-The process boundary also returns a versioned, pointer-free copy of the full
-map output (all scalar fields, replacement/fallback ownership arrays and
-optional CPU pixels). The full replay decoded and matched all 50 successful
-scene results against their recorded native witnesses. This validates the
-value contract; the x86 control still does not consume those results for live
-composition.
-The x86 native presenter now has a keyed, one-use shared-BGRA adoption path.
-An isolated Windows test used two separate D3D devices, imported a shared
-frame, presented through the existing composition target and checked the
-retained BGRA pixel. This verifies the last graphics handoff primitive; it
-does not yet connect the helper to the native composition owner.
-The x86 control still performs its own scene work. Step 1 remains unfinished
-until the x86 bridge actually consumes x64-owned scene output, including the
-post-reset CPU/native route and asynchronous camera contracts. Steps 2–5 have
-not been accepted or cut over.
+Current integration checkpoint: the opt-in x86 bridge now consumes x64-owned
+scene, camera, image, unit, tactical and visual results, including shared BGRA
+presentation and the post-reset CPU/native route. A full native-interleaved
+recording completed 15,503 calls, 1,007 accepted presentations and 3,549 clock
+samples through the x64 primary path in strict forensic replay. Recorded clock
+samples reach the helper; autonomous visual offers may produce an additional
+valid frame relative to the x86 control. Of 309 compared CPU unit draws, 301
+were pixel-exact and eight differed by one pixel each under the explicit pose
+rounding audit. The x64 primary also completed the same full workload in
+unpaced performance mode. These are integration and replay results, **not live
+FPS or cutover acceptance**. The native screen handoff still suspends the
+independent visual cadence, so seamless interturn animation is not yet proved.
+The x86 and x64 presenters now support replay-only displayed-frame readback.
+For the first 213 common presentation events, 209 whole-screen fingerprints
+match; three initial exported BMPs are byte-identical. One of the four differing
+events was inspected pixel by pixel and differs at exactly one channel of one
+pixel. The other three have not yet been classified. Step 1 remains open for
+the remaining displayed-image and presentation timing evidence;
+steps 2–5 have not been accepted or cut over. The earlier
+[shadow replay result](helper64_gate2_results.md#full-native-interleaved-shadow-checkpoint)
+remains the independent scene comparison.
 
 This migration takes priority over isolated x86 M3.8 tuning, but carries forward
 M3.8–M3.13 stability, readiness, consolidation and navigation acceptance. It
