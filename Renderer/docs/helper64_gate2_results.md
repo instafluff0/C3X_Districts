@@ -99,6 +99,14 @@ GPU unit bounds matched. Eight of 2,507 diagnostic GPU readback hashes still
 differ after four unit poses. The raw `R32_UINT` shared-map trial also retains
 exact scene/GPU pixel parity (`gate2/runs/4210bef201ba40398b5be1336f4f5218/receipt.json`).
 
+A repeat of the full replay saved only the five mismatch crops. The larger
+case shows the same pose and position at native size; its delta follows the
+unit's antialiased/shaded pixels, rather than a displaced or missing unit.
+The other four deltas are single pixels by one color level. This is a bounded
+visual-parity tolerance for the x86/x64 comparison, **not** proof of which
+floating-point or raster operation caused it. A later lifecycle or input
+mismatch would remain a failure even if it affected a similarly small area.
+
 After the reset, the recording uses CPU/native scene presentation. The x64
 sidecar lacks that owner, so its later visual-policy/results are **not** a
 valid x64 gameplay comparison. The x86 replay peaked at 2,435 MiB private;

@@ -15,6 +15,19 @@ using namespace c3x_inputs;
 using Replay=int(*)(unsigned char const*,unsigned,void*,char*,unsigned);
 using Execution=int(*)(unsigned,double*,int*,unsigned*);
 struct MemorySample {std::uint64_t private_bytes=0,free_bytes=0,largest_free=0;};
+void write_difference_crop(std::filesystem::path const& path,std::vector<unsigned> const& pixels,
+                           unsigned width,unsigned height,int const bounds[4]){
+    int left=std::max(0,bounds[0]-8),top=std::max(0,bounds[1]-8);
+    int right=std::min(int(width),bounds[2]+8),bottom=std::min(int(height),bounds[3]+8);
+    require(left<right&&top<bottom&&pixels.size()==std::size_t(width)*height,"invalid difference crop");
+    std::ofstream out(path,std::ios::binary);require(bool(out),"cannot open difference crop");
+    out<<"P6\n"<<right-left<<' '<<bottom-top<<"\n255\n";
+    for(int y=top;y<bottom;++y)for(int x=left;x<right;++x){
+        auto bgra=pixels[std::size_t(y)*width+x];char rgb[3]={char((bgra>>16)&255),char((bgra>>8)&255),char(bgra&255)};
+        out.write(rgb,sizeof(rgb));
+    }
+    require(bool(out),"difference crop write failed");
+}
 MemorySample memory_sample(){
     MemorySample result;PROCESS_MEMORY_COUNTERS_EX memory={};memory.cb=sizeof(memory);
     require(GetProcessMemoryInfo(GetCurrentProcess(),reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&memory),sizeof(memory))!=FALSE,"cannot sample replay process");result.private_bytes=memory.PrivateUsage;
@@ -214,7 +227,13 @@ int wmain(int argc,wchar_t** argv){
                                 difference_bounds[3]=std::max(difference_bounds[3],int(y)+1);
                                 for(unsigned shift=0;shift<32;shift+=8)
                                     max_channel_delta=std::max(max_channel_delta,std::abs(int((a>>shift)&255)-int((b>>shift)&255)));
-                            }}
+                            }
+                            if(different_pixels){
+                                auto base=shadow_path.parent_path()/ ("difference-"+std::to_string(call.input.sequence));
+                                write_difference_crop(base.string()+"-x86.ppm",local,frame.width,frame.height,difference_bounds);
+                                write_difference_crop(base.string()+"-x64.ppm",frame.pixels,frame.width,frame.height,difference_bounds);
+                            }
+                        }
                     }
                 }
                 bool pixels_match=!pixel_witness||(remote.gpu_hash_valid&&
