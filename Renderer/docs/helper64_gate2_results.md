@@ -88,8 +88,8 @@ The next probe now replays all 15,503 recorded calls in the x86 production
 owner while sending copied scene, GPU-image, GPU-unit, native visual-policy,
 presentation and ambient-frame values to an x64 sidecar. x64 composes final
 BGRA frames into a reusable shared D3D texture; x86 imports and hashes them.
-The source-matched receipt is the ignored local file
-`Renderer/native/build/helper_trial/interleaved/runs/de3e73cbab3e45138b7fb5671046df23/receipt.json`.
+The latest source-matched receipt is the ignored local file
+`Renderer/native/build/helper_trial/interleaved/runs/49fff54b9640420199b25ef6a172f24f/receipt.json`.
 
 In the GPU-owned interval before the recorded reset, every executed result
 matched. Of 235 imported final frames, 230 were byte-exact. Four mismatches
@@ -113,6 +113,14 @@ x86 and matched the recorded native output witness, including clip, fallback
 and replacement ownership. The one unsuccessful scene call has no result
 payload by contract. The x86 control still performs its own rendering, so
 this validates the result schema rather than a production cutover.
+
+The latest unpaced interleaved receipt separates the workload: the 51 scene
+calls consumed 25.29 seconds round-trip (mean 496 ms, p95 1,768 ms across
+mixed cold and warm demands); 545 executed visual offers averaged 2.23 ms
+round-trip (p95 14.61 ms). These are service timings with two renderers
+running, not game FPS. They show that x64 address space alone does not erase
+cold scene construction and that whole-frame FPS must wait for x86 to consume
+x64 output without duplicating scene work.
 
 After the reset, the recording uses CPU/native scene presentation. The x64
 sidecar lacks that owner, so its later visual-policy/results are **not** a
