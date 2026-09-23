@@ -150,5 +150,8 @@ public:
         std::lock_guard<std::mutex> lock(gate);
         return c3x_inputs::display_pixels(device.Get(),context.Get(),presenter.retained(),pixels,width,height);
     }
+    c3x_helper_trial::SceneClient::Stats replay_stats(){
+        std::lock_guard<std::mutex> lock(gate);return client.stats();
+    }
 };
 }

@@ -294,12 +294,18 @@ extern "C" __declspec(dllexport) int c3x_renderer_input_replay_asset(unsigned ch
 // A failed replay owns only proxy identities. Teardown never materializes pixels
 // into a native game surface that does not exist in this process.
 extern "C" __declspec(dllexport) void c3x_renderer_input_replay_shutdown(){
-    delete native_composition;native_composition=nullptr;destroy_renderer_worker();
+    delete native_composition;native_composition=nullptr;destroy_renderer_worker();remote_renderer.reset();
 }
 
 extern "C" __declspec(dllexport) int c3x_renderer_input_replay_execution(unsigned performance,double* service_ms,int* result,unsigned* reused){
     if(performance>2)return 0;if(performance==2)c3x_inputs::realtime_replay().begin();auto& state=c3x_inputs::replay_execution();state.performance=performance!=0;
     if(service_ms)*service_ms=state.service_ms;if(result)*result=state.result;if(reused)*reused=state.reused_adoption?1u:0u;return 1;
+}
+extern "C" __declspec(dllexport) int c3x_renderer_input_replay_remote_stats(
+    unsigned* sequence,std::uint64_t* service_us,std::uint64_t* private_bytes){
+    if(!sequence||!service_us||!private_bytes||!remote_renderer)return 0;
+    auto value=remote_renderer->replay_stats();
+    *sequence=value.sequence;*service_us=value.service_us;*private_bytes=value.private_bytes;return 1;
 }
 
 // Accepted autonomous presentation times, distinct from recorded native calls.

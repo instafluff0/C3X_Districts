@@ -112,6 +112,9 @@ int wmain(int argc,wchar_t** argv){
         module=LoadLibraryW(argv[2]);require(module!=nullptr,"cannot load replay DLL");
         auto replay=reinterpret_cast<Replay>(GetProcAddress(module,"c3x_renderer_input_replay"));require(replay!=nullptr,"DLL lacks production input replay entry");
         auto execution=reinterpret_cast<Execution>(GetProcAddress(module,"c3x_renderer_input_replay_execution"));if(performance)require(execution&&execution(1,nullptr,nullptr,nullptr)==1,"DLL lacks performance replay entry");
+        using RemoteStats=int(*)(unsigned*,std::uint64_t*,std::uint64_t*);
+        auto remote_stats=reinterpret_cast<RemoteStats>(GetProcAddress(module,"c3x_renderer_input_replay_remote_stats"));
+        if(performance&&!primary_helper.empty())require(remote_stats,"DLL lacks x64 helper measurements");
         using LiveStatus=int(*)(unsigned,unsigned,double*,unsigned*);
         auto live_status=reinterpret_cast<LiveStatus>(GetProcAddress(module,"c3x_renderer_input_replay_live_status"));
         if(realtime)require(live_status,"DLL lacks independent real-time playback; use a compatible candidate");
@@ -290,6 +293,11 @@ int wmain(int argc,wchar_t** argv){
             }
             if(performance){double service_ms=0;int actual=0;unsigned reused=0;require(execution(realtime?2:1,&service_ms,&actual,&reused)==1,"performance measurement missing");
                 measurements<<"{\"call\":"<<token<<",\"sequence\":"<<event.sequence<<",\"input_seconds\":"<<double(call.input.ticks)/double(reader.frequency)<<",\"dispatch_seconds\":"<<dispatch_seconds<<",\"input_lateness_ms\":"<<lateness_ms<<",\"family\":"<<unsigned(call.input.kind)<<",\"subtype\":"<<call.input.flags<<",\"recorded_result\":"<<code<<",\"actual_result\":"<<actual<<",\"production_service_ms\":"<<service_ms<<",\"envelope_ms\":"<<envelope_ms<<",\"reused_adoption\":"<<(reused?"true":"false");
+                if(remote_stats&&!primary_helper.empty()){
+                    unsigned helper_sequence=0;std::uint64_t helper_service_us=0,helper_private_bytes=0;
+                    if(remote_stats(&helper_sequence,&helper_service_us,&helper_private_bytes))
+                        measurements<<",\"helper_sequence\":"<<helper_sequence<<",\"helper_service_us\":"<<helper_service_us<<",\"helper_private_bytes\":"<<helper_private_bytes;
+                }
                 if(calls%100==0){auto memory=memory_sample();measurements<<",\"private_bytes\":"<<memory.private_bytes<<",\"free_va_bytes\":"<<memory.free_bytes<<",\"largest_free_va_bytes\":"<<memory.largest_free;}
                 measurements<<"}\n";require(bool(measurements),"performance measurement write failed");code=unsigned(actual);
             }
