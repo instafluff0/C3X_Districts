@@ -60,6 +60,14 @@ under `native/build/helper_trial/gate2/runs/` records source, binary and capture
 hashes, completion, parity, timing and process memory. A scene-only pass is not
 a native-interleaved gameplay speed or presentation result.
 
+Use `--raw-shared --verify-pixels` to exercise the zero-readback `R32_UINT`
+map transfer and exact imported pixels. For the complete recorded call stream,
+run `python3 Renderer/native/helper_trial/run_interleaved.py --capture
+Renderer/native/build/input-recording/<capture>/inputs`. That diagnostic mirrors
+GPU/native visual policy, image and unit lifecycles, final-image composition,
+and ambient frames; it still renders the x86 control simultaneously and does
+not qualify production FPS or the post-reset CPU/native route.
+
 The [Gate 2 results](../../docs/helper64_gate2_results.md) close the x64
 architecture/capacity decision. The [migration plan](../../docs/helper64_migration_plan.md)
 defines the complete replay, native composition and cutover acceptance still

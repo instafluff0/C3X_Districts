@@ -28,7 +28,7 @@ if not exist "build\candidate" mkdir "build\candidate"
 
 if /i "%~1"=="input-replay" (
   if not exist "build\input-recording" mkdir "build\input-recording"
-  cl /nologo /std:c++17 /EHsc /O2 /W4 /WX /wd4191 replay_inputs.cpp /Fo:build\input-recording\ /Fe:build\input-recording\replay_inputs.exe /link /LARGEADDRESSAWARE user32.lib psapi.lib
+  cl /nologo /std:c++17 /EHsc /O2 /W4 /WX /wd4191 replay_inputs.cpp /Fo:build\input-recording\ /Fe:build\input-recording\replay_inputs.exe /link /LARGEADDRESSAWARE user32.lib psapi.lib d3d11.lib dxgi.lib
   if errorlevel 1 exit /b 1
   cl /nologo /std:c++17 /EHsc /O2 /W4 /WX inspect_inputs.cpp /Fo:build\input-recording\ /Fe:build\input-recording\inspect_inputs.exe /link /LARGEADDRESSAWARE
   if errorlevel 1 exit /b 1

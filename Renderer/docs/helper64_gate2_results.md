@@ -81,3 +81,28 @@ Add `--verify-pixels` for diagnostic GPU readback or `--crash-after 27` for
 mid-workload recovery. The runner records source/binary/journal hashes, child
 completion, parity and timing in ignored `Renderer/native/build/helper_trial/gate2/runs/`.
 Candidate builds and replay do not stage C3X or launch Civ III.
+
+## Full native-interleaved shadow checkpoint
+
+The next probe now replays all 15,503 recorded calls in the x86 production
+owner while sending copied scene, GPU-image, GPU-unit, native visual-policy,
+presentation and ambient-frame values to an x64 sidecar. x64 composes final
+BGRA frames into a reusable shared D3D texture; x86 imports and hashes them.
+The source-matched receipt is the ignored local file
+`Renderer/native/build/helper_trial/interleaved/runs/de3e73cbab3e45138b7fb5671046df23/receipt.json`.
+
+In the GPU-owned interval before the recorded reset, every executed result
+matched. Of 235 imported final frames, 230 were byte-exact. Four mismatches
+were one pixel by one color level; the fifth followed a unit pose and affected
+385 pixels in a 72-by-53 region, with maximum channel difference 34. All 200
+GPU unit bounds matched. Eight of 2,507 diagnostic GPU readback hashes still
+differ after four unit poses. The raw `R32_UINT` shared-map trial also retains
+exact scene/GPU pixel parity (`gate2/runs/4210bef201ba40398b5be1336f4f5218/receipt.json`).
+
+After the reset, the recording uses CPU/native scene presentation. The x64
+sidecar lacks that owner, so its later visual-policy/results are **not** a
+valid x64 gameplay comparison. The x86 replay peaked at 2,435 MiB private;
+the x64 sidecar peaked at 2,424 MiB. These processes both render in this
+diagnostic, so their combined memory and timing cannot predict the split
+production path. The 36.7-second x64 service total is unpaced workload time,
+not FPS or input-to-display latency. No installed binary was changed.

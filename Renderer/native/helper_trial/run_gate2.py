@@ -27,6 +27,8 @@ SOURCES = (
     NATIVE / "gpu_composition_session.h",
     NATIVE / "helper_trial/build_gate2.bat",
     NATIVE / "helper_trial/scene_workload.cpp",
+    NATIVE / "helper_trial/scene_wire.h",
+    NATIVE / "input_recording/replay.h",
     NATIVE / "helper_trial/run_gate2.py",
 )
 PARITY = ("sequence", "family", "subtype", "bytes", "result", "width", "height",
@@ -89,6 +91,7 @@ def run(args: argparse.Namespace) -> int:
                "scope": "recorded_scene_values_and_real_gpu_map_transfer",
                "qualified_for_gameplay": False, "capture": capture.relative_to(ROOT).as_posix(),
                "verify_pixels": args.verify_pixels, "crash_after": args.crash_after,
+               "raw_shared": args.raw_shared,
                "source_sha256": {p.relative_to(ROOT).as_posix(): digest(p) for p in SOURCES}}
     try:
         receipt["capture_segments_sha256"] = {
@@ -126,6 +129,8 @@ def run(args: argparse.Namespace) -> int:
                     command += f" --crash-after {args.crash_after}"
             if args.verify_pixels:
                 command += " --verify-pixels"
+            if mode == "x64" and args.raw_shared:
+                command += " --raw-shared"
             token = uuid.uuid4().hex
             batch = directory / "run.cmd"
             batch.write_text("@echo off\nsetlocal\n" + command + f' >"{target / "run.log"}" 2>&1\n'
@@ -171,6 +176,7 @@ if __name__ == "__main__":
     parser.add_argument("--capture", type=Path, required=True)
     parser.add_argument("--reuse-build", action="store_true")
     parser.add_argument("--verify-pixels", action="store_true")
+    parser.add_argument("--raw-shared", action="store_true")
     parser.add_argument("--crash-after", type=int, default=0)
     options = parser.parse_args()
     if options.crash_after and not (1 < options.crash_after < 54):

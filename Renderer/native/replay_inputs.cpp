@@ -3,9 +3,13 @@
 #include <psapi.h>
 #include "input_recording/journal.h"
 #include "input_recording/assets.h"
+#include "helper_trial/scene_client.h"
+#include "helper_trial/shared_frame_reader.h"
 #include <iostream>
 #include <iomanip>
+#include <iterator>
 #include <map>
+#include <memory>
 #include <cmath>
 using namespace c3x_inputs;
 using Replay=int(*)(unsigned char const*,unsigned,void*,char*,unsigned);
@@ -31,9 +35,10 @@ void apply_settings(Reader& header){
 int wmain(int argc,wchar_t** argv){
     HMODULE module=nullptr;HWND window=nullptr;void* reservation=nullptr;int exit_code=0;
     try{
-        require(argc>=4&&std::wstring(argv[1])==L"--development","usage: replay_inputs --development DLL INPUT_DIRECTORY [--frames DIR LAST | --range DIR FIRST LAST | --seconds DIR START END] [--timeline NEW_FILE] [--fingerprints NEW_FILE] [--trace NEW_FILE] [--allow-prefix] [--before-event N] [--compare-candidate] [--performance NEW_FILE] [--reserve-mib N] [--watch] [--realtime NEW_FILE]");
+        require(argc>=4&&std::wstring(argv[1])==L"--development","usage: replay_inputs --development DLL INPUT_DIRECTORY [--frames DIR LAST | --range DIR FIRST LAST | --seconds DIR START END] [--timeline NEW_FILE] [--fingerprints NEW_FILE] [--trace NEW_FILE] [--allow-prefix] [--before-event N] [--compare-candidate] [--performance NEW_FILE] [--reserve-mib N] [--watch] [--realtime NEW_FILE] [--x64-scene HELPER DLL NEW_REPORT]");
         std::wstring label=L"C3X input replay";
-        std::filesystem::path frames,timeline_path,trace_path,fingerprints_path,performance_path;unsigned reserve_mib=0;std::uint64_t before_event=0;bool stopped_before_event=false;std::uint64_t first_frame=1,frame_limit=0,frame_number=0,exported=0;double first_second=0,last_second=0;bool seconds=false,allow_prefix=false,tail_truncated=false,compare_candidate=false,binary_matches_capture=true,watch=false,realtime=false;
+        std::filesystem::path frames,timeline_path,trace_path,fingerprints_path,performance_path,shadow_path;
+        std::wstring shadow_helper,shadow_dll;unsigned reserve_mib=0;std::uint64_t before_event=0;bool stopped_before_event=false;std::uint64_t first_frame=1,frame_limit=0,frame_number=0,exported=0;double first_second=0,last_second=0;bool seconds=false,allow_prefix=false,tail_truncated=false,compare_candidate=false,binary_matches_capture=true,watch=false,realtime=false;
         auto integer=[](wchar_t const* raw){std::size_t used=0;std::wstring text(raw);auto value=std::stoull(text,&used);require(used==text.size()&&value&&value<=1000000,"invalid frame bound");return value;};
         auto second=[](wchar_t const* raw){std::size_t used=0;std::wstring text(raw);auto value=std::stod(text,&used);require(used==text.size()&&std::isfinite(value)&&value>=0&&value<=86400,"invalid second bound");return value;};
         for(int i=4;i<argc;){std::wstring flag=argv[i++];
@@ -41,6 +46,7 @@ int wmain(int argc,wchar_t** argv){
             if(flag==L"--realtime"){require(i<argc&&performance_path.empty(),"invalid realtime option");realtime=true;performance_path=argv[i++];continue;}
             if(flag==L"--watch"){watch=true;continue;}
             if(flag==L"--performance"){require(i<argc&&performance_path.empty(),"invalid performance option");performance_path=argv[i++];continue;}
+            if(flag==L"--x64-scene"){require(i+2<argc&&shadow_path.empty(),"invalid x64 scene option");shadow_helper=argv[i++];shadow_dll=argv[i++];shadow_path=argv[i++];continue;}
             if(flag==L"--reserve-mib"){require(i<argc&&!reserve_mib,"invalid reservation option");auto n=integer(argv[i++]);require(n<=2048,"reservation limit");reserve_mib=unsigned(n);continue;}
             if(flag==L"--compare-candidate"){compare_candidate=true;continue;}
             if(flag==L"--allow-prefix"){allow_prefix=true;continue;}
@@ -59,6 +65,7 @@ int wmain(int argc,wchar_t** argv){
         }
         require(!before_event||allow_prefix,"explicit event cutoff requires --allow-prefix");
         bool performance=!performance_path.empty();require(!performance||(frames.empty()&&fingerprints_path.empty()&&!watch),"performance runs cannot export, fingerprint or pace playback");require(!reserve_mib||performance,"reservation requires performance mode");
+        require(shadow_path.empty()||!realtime,"x64 scene diagnostic is unpaced only");
         std::ofstream measurements;if(performance){require(!std::filesystem::exists(performance_path),"performance output must be new");measurements.open(performance_path);require(bool(measurements),"cannot open performance output");}
         if(reserve_mib){reservation=VirtualAlloc(nullptr,std::size_t(reserve_mib)*1024*1024,MEM_RESERVE,PAGE_NOACCESS);require(reservation!=nullptr,"cannot reserve declared address-space pressure");}
         if(!frames.empty())require(!std::filesystem::exists(frames)&&std::filesystem::create_directories(frames),"frame directory must be new");
@@ -90,6 +97,15 @@ int wmain(int argc,wchar_t** argv){
         WNDCLASSW wc={};wc.lpfnWndProc=DefWindowProcW;wc.hInstance=GetModuleHandleW(nullptr);wc.lpszClassName=L"C3XInputReplay";RegisterClassW(&wc);
         window=CreateWindowW(wc.lpszClassName,label.c_str(),WS_POPUP,0,0,2240,1260,nullptr,nullptr,wc.hInstance,nullptr);require(window!=nullptr,"cannot create replay target");
         if(performance||watch)ShowWindow(window,SW_SHOWNOACTIVATE);
+        std::unique_ptr<c3x_helper_trial::SceneClient> shadow;
+        std::unique_ptr<c3x_helper_trial::SharedFrameReader> shadow_frames;
+        std::ofstream shadow_log;
+        if(!shadow_path.empty()){
+            require(!std::filesystem::exists(shadow_path),"x64 scene report must be new");
+            shadow_log.open(shadow_path);require(bool(shadow_log),"cannot open x64 scene report");
+            shadow=std::make_unique<c3x_helper_trial::SceneClient>(shadow_helper,shadow_dll);
+            shadow_frames=std::make_unique<c3x_helper_trial::SharedFrameReader>();
+        }
         SegmentReader reader(argv[3]);Event event;std::map<std::uint64_t,Pending> pending;
         std::uint64_t calls=0,clocks=0,queued=0,peak=0,last=0;bool manifest=false;LARGE_INTEGER frequency={},started={},ended={};QueryPerformanceFrequency(&frequency);double work_ms=0;
         LARGE_INTEGER playback_start={};QueryPerformanceCounter(&playback_start);double maximum_playback_lag_ms=0;std::uint64_t late_playback_frames=0,skipped_offers=0;
@@ -139,6 +155,95 @@ int wmain(int argc,wchar_t** argv){
             auto envelope_ms=1000.*double(ended.QuadPart-started.QuadPart)/double(frequency.QuadPart);work_ms+=envelope_ms;
             if(!ok){std::cerr<<"event="<<last<<" call="<<token<<" family="<<unsigned(call.input.kind)<<" subtype="<<call.input.flags<<" error="<<error<<'\n';throw std::runtime_error("production input replay mismatch");}
             Reader request{call.input.payload};request.u64();request.u64();Reader completion{event.payload};completion.u64();auto code=completion.u32();
+            bool native_visual_policy=false;
+            if(shadow&&call.input.kind==Kind::native_bridge&&call.input.flags==1){
+                Reader visual_request{call.input.payload};visual_request.u64();visual_request.u64();
+                int operation=0;visual_request(operation);native_visual_policy=operation==C3X_NATIVE_VISUAL_POLICY;
+            }
+            if(shadow&&(call.input.kind==Kind::scene||call.input.kind==Kind::image_commands||
+                        (call.input.kind==Kind::configuration&&call.input.flags==3)||
+                        (call.input.kind==Kind::unit&&call.input.flags==1)||
+                        call.input.kind==Kind::presentation||
+                        (call.input.kind==Kind::visual&&call.input.flags==1)||
+                        native_visual_policy||
+                        (call.input.kind==Kind::native_bridge&&(call.input.flags==6||call.input.flags==8)))){
+                Reader identities{event.payload};identities.u64();identities.u32();
+                std::int64_t old_ticket=0,old_image=0;
+                unsigned pixel_witness=0;unsigned pixel_hash[4]={};
+                int old_bounds[4]={};
+                if(call.input.kind==Kind::scene&&call.input.flags==3){old_ticket=std::int64_t(identities.u64());old_image=std::int64_t(identities.u64());}
+                else if(call.input.kind==Kind::image_commands){
+                    old_image=std::int64_t(identities.u64());identities.u32();pixel_witness=identities.u32();
+                    if(pixel_witness)for(auto& word:pixel_hash)word=identities.u32();
+                }
+                else if(call.input.kind==Kind::unit)for(auto& bound:old_bounds)identities(bound);
+                bool final_image=false;
+                if(call.input.kind==Kind::presentation){Reader value{call.input.payload};value.u64();value.u64();
+                    int action=0;value(action);final_image=action==0&&code==C3X_RENDERER_RESULT_OK;}
+                if(call.input.kind==Kind::visual)final_image=!call.clocks.empty();
+                LARGE_INTEGER shadow_begin={},shadow_end={};QueryPerformanceCounter(&shadow_begin);
+                auto const& remote=shadow->call(unsigned(call.input.kind),call.input.flags,
+                    call.input.payload.data()+request.at,unsigned(call.input.payload.size()-request.at),
+                    code,old_ticket,old_image,
+                    call.clocks.empty()?0:std::int64_t(call.clocks.front().first),
+                    call.clocks.empty()?0:std::int64_t(call.clocks.front().second),final_image);
+                QueryPerformanceCounter(&shadow_end);
+                bool final_valid=false,final_match=false,diff_available=false;
+                unsigned final_hash[4]={};std::uint64_t different_pixels=0;
+                int difference_bounds[4]={},max_channel_delta=0;
+                if(remote.shared_handle){
+                    auto frame=shadow_frames->read(remote.shared_handle,remote.width,remote.height);
+                    std::copy(frame.hash.begin(),frame.hash.end(),final_hash);
+                    unsigned local_extent[2]={},local_hash[4]={};
+                    auto fingerprint=reinterpret_cast<int(*)(unsigned*,unsigned*)>(GetProcAddress(module,"c3x_renderer_input_replay_fingerprint"));
+                    final_valid=fingerprint&&fingerprint(local_extent,local_hash)==1&&
+                        local_extent[0]==frame.width&&local_extent[1]==frame.height;
+                    final_match=final_valid&&std::equal(std::begin(local_hash),std::end(local_hash),std::begin(final_hash));
+                    if(final_valid&&!final_match){
+                        auto pixels=reinterpret_cast<int(*)(unsigned*,unsigned,unsigned,unsigned)>(
+                            GetProcAddress(module,"c3x_renderer_input_replay_pixels"));
+                        std::vector<unsigned> local(frame.pixels.size());
+                        diff_available=pixels&&pixels(local.data(),unsigned(local.size()),frame.width,frame.height)==1;
+                        if(diff_available){difference_bounds[0]=int(frame.width);difference_bounds[1]=int(frame.height);
+                            for(unsigned y=0;y<frame.height;++y)for(unsigned x=0;x<frame.width;++x){
+                                auto index=std::size_t(y)*frame.width+x;
+                                auto a=local[index],b=frame.pixels[index];if(a==b)continue;
+                                ++different_pixels;difference_bounds[0]=std::min(difference_bounds[0],int(x));
+                                difference_bounds[1]=std::min(difference_bounds[1],int(y));
+                                difference_bounds[2]=std::max(difference_bounds[2],int(x)+1);
+                                difference_bounds[3]=std::max(difference_bounds[3],int(y)+1);
+                                for(unsigned shift=0;shift<32;shift+=8)
+                                    max_channel_delta=std::max(max_channel_delta,std::abs(int((a>>shift)&255)-int((b>>shift)&255)));
+                            }}
+                    }
+                }
+                bool pixels_match=!pixel_witness||(remote.gpu_hash_valid&&
+                    std::equal(std::begin(pixel_hash),std::end(pixel_hash),std::begin(remote.gpu_hash)));
+                bool bounds_match=call.input.kind!=Kind::unit||code!=C3X_RENDERER_RESULT_OK||
+                    std::equal(std::begin(old_bounds),std::end(old_bounds),std::begin(remote.bounds));
+                shadow_log<<"{\"sequence\":"<<call.input.sequence<<",\"kind\":"<<unsigned(call.input.kind)
+                    <<",\"subtype\":"<<call.input.flags<<",\"recorded_result\":"<<code
+                    <<",\"helper_result\":"<<remote.code<<",\"matches\":"<<(remote.code==code?"true":"false")
+                    <<",\"bytes\":"<<remote.size<<",\"width\":"<<remote.width
+                    <<",\"height\":"<<remote.height<<",\"rendered\":"<<remote.rendered
+                    <<",\"fallback\":"<<remote.fallback<<",\"result_image\":"<<remote.result_image
+                    <<",\"result_pixels\":"<<remote.result_pixels<<",\"pixel_witness\":"<<pixel_witness
+                    <<",\"pixels_match\":"<<(pixels_match?"true":"false")
+                    <<",\"bounds_match\":"<<(bounds_match?"true":"false")
+                    <<",\"final_image\":"<<(remote.shared_handle?"true":"false")
+                    <<",\"final_valid\":"<<(final_valid?"true":"false")
+                    <<",\"final_match\":"<<(final_match?"true":"false")
+                    <<",\"diff_available\":"<<(diff_available?"true":"false")
+                    <<",\"different_pixels\":"<<different_pixels
+                    <<",\"max_channel_delta\":"<<max_channel_delta
+                    <<",\"difference_bounds\":["<<difference_bounds[0]<<","<<difference_bounds[1]
+                    <<","<<difference_bounds[2]<<","<<difference_bounds[3]<<"]"
+                    <<",\"executed\":"<<(remote.executed?"true":"false")
+                    <<",\"service_ms\":"<<double(remote.service_us)/1000.
+                    <<",\"roundtrip_ms\":"<<1000.*double(shadow_end.QuadPart-shadow_begin.QuadPart)/double(frequency.QuadPart)
+                    <<",\"x64_private_bytes\":"<<remote.private_bytes<<"}\n";
+                require(bool(shadow_log),"x64 scene report write failed");
+            }
             if(performance){double service_ms=0;int actual=0;unsigned reused=0;require(execution(realtime?2:1,&service_ms,&actual,&reused)==1,"performance measurement missing");
                 measurements<<"{\"call\":"<<token<<",\"sequence\":"<<event.sequence<<",\"input_seconds\":"<<double(call.input.ticks)/double(reader.frequency)<<",\"dispatch_seconds\":"<<dispatch_seconds<<",\"input_lateness_ms\":"<<lateness_ms<<",\"family\":"<<unsigned(call.input.kind)<<",\"subtype\":"<<call.input.flags<<",\"recorded_result\":"<<code<<",\"actual_result\":"<<actual<<",\"production_service_ms\":"<<service_ms<<",\"envelope_ms\":"<<envelope_ms<<",\"reused_adoption\":"<<(reused?"true":"false");
                 if(calls%100==0){auto memory=memory_sample();measurements<<",\"private_bytes\":"<<memory.private_bytes<<",\"free_va_bytes\":"<<memory.free_bytes<<",\"largest_free_va_bytes\":"<<memory.largest_free;}

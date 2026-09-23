@@ -10475,11 +10475,27 @@ public:
     }
 #ifdef C3X_HELPER_TRIAL
     int trial_export_shared(c3x_renderer_i64 ticket,c3x_renderer_i64 image,DWORD consumer_pid,
-                            std::uint64_t& handle,unsigned& width,unsigned& height){
+                            std::uint64_t& handle,unsigned& width,unsigned& height,bool raw=false){
         std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);
-        trial_ticket=ticket;trial_image=image;trial_consumer_pid=consumer_pid;
+        trial_ticket=ticket;trial_image=image;trial_consumer_pid=consumer_pid;trial_raw=raw;
         trial_handle=0;trial_width=trial_height=0;
         int result=submit_locked(lock,Command::trial_export_shared);
+        handle=trial_handle;width=trial_width;height=trial_height;return result;
+    }
+    int trial_present_shared(c3x_renderer_gpu_present_v1 const& request,DWORD consumer_pid,
+                             std::uint64_t& handle,unsigned& width,unsigned& height){
+        std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);
+        gpu_present=request;trial_consumer_pid=consumer_pid;trial_handle=0;trial_width=trial_height=0;
+        if(request.action==0&&consumer_pid)advance_visual_clock();
+        int result=submit_locked(lock,Command::trial_present_shared);
+        handle=trial_handle;width=trial_width;height=trial_height;return result;
+    }
+    int trial_visual_shared(c3x_renderer_i64 ticks,c3x_renderer_i64 frequency,DWORD consumer_pid,
+                            std::uint64_t& handle,unsigned& width,unsigned& height){
+        std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);
+        trial_consumer_pid=consumer_pid;trial_handle=0;trial_width=trial_height=0;
+        visual_ticks=ticks;visual_frequency=frequency;
+        int result=submit_locked(lock,Command::trial_visual_shared);
         handle=trial_handle;width=trial_width;height=trial_height;return result;
     }
 #endif
@@ -11386,6 +11402,8 @@ private:
         gpu_images,
 #ifdef C3X_HELPER_TRIAL
         trial_export_shared,
+        trial_present_shared,
+        trial_visual_shared,
 #endif
         gpu_unit,
         tactical,
@@ -11411,8 +11429,11 @@ private:
     c3x_renderer_gpu_result_v1 gpu_result={sizeof(gpu_result)};
 #ifdef C3X_HELPER_TRIAL
     c3x_renderer_i64 trial_ticket=0,trial_image=0;
-    DWORD trial_consumer_pid=0;std::uint64_t trial_handle=0;
+    DWORD trial_consumer_pid=0;std::uint64_t trial_handle=0;bool trial_raw=false;
     unsigned trial_width=0,trial_height=0;
+    Microsoft::WRL::ComPtr<ID3D11Texture2D> trial_display,trial_buffer;
+    Microsoft::WRL::ComPtr<ID3D11RenderTargetView> trial_display_view;
+    Microsoft::WRL::ComPtr<IDXGIKeyedMutex> trial_display_mutex;
 #endif
     std::vector<unsigned> gpu_pixels,gpu_readback;
     std::vector<c3x_gpu_images::Command> gpu_commands;
@@ -12236,7 +12257,12 @@ private:
             // Map and unit jobs borrow the device; only configuration/reset owns
             // native composition lifetimes. An ordinary CPU publication cannot
             // invalidate GPU UI/background handles held by the caller.
-            if(command==Command::configure_pack || command==Command::configure_definitions || command==Command::reset){dynamic_inputs.invalidate();renderer_state.gpu_composition.reset();}
+            if(command==Command::configure_pack || command==Command::configure_definitions || command==Command::reset){
+                dynamic_inputs.invalidate();renderer_state.gpu_composition.reset();
+#ifdef C3X_HELPER_TRIAL
+                trial_display_view.Reset();trial_display_mutex.Reset();trial_display.Reset();trial_buffer.Reset();
+#endif
+            }
             if(command==Command::native_screen){
                 // Retain the transfer image with the presenter, not with a map
                 // ticket. Native UI-only transfers must not retire prepared maps.
@@ -12283,8 +12309,9 @@ private:
                 if(source&&trial_consumer_pid){
                     D3D11_TEXTURE2D_DESC desc={};source->GetDesc(&desc);
                     desc.Usage=D3D11_USAGE_DEFAULT;desc.CPUAccessFlags=0;
-                    desc.Format=DXGI_FORMAT_B8G8R8A8_UNORM;
-                    desc.BindFlags=D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE;
+                    desc.Format=trial_raw?DXGI_FORMAT_R32_UINT:DXGI_FORMAT_B8G8R8A8_UNORM;
+                    desc.BindFlags=trial_raw?D3D11_BIND_SHADER_RESOURCE:
+                        (D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE);
                     desc.MiscFlags=D3D11_RESOURCE_MISC_SHARED_NTHANDLE|D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX;
                     Microsoft::WRL::ComPtr<ID3D11Texture2D> shared;
                     Microsoft::WRL::ComPtr<ID3D11RenderTargetView> target;
@@ -12293,12 +12320,14 @@ private:
                     HANDLE own=nullptr,duplicated=nullptr;
                     HANDLE consumer=OpenProcess(PROCESS_DUP_HANDLE,FALSE,trial_consumer_pid);
                     HRESULT hr=consumer?renderer_state.device->CreateTexture2D(&desc,nullptr,&shared):E_FAIL;
-                    if(SUCCEEDED(hr))hr=renderer_state.device->CreateRenderTargetView(shared.Get(),nullptr,&target);
+                    if(SUCCEEDED(hr)&&!trial_raw)hr=renderer_state.device->CreateRenderTargetView(shared.Get(),nullptr,&target);
                     if(SUCCEEDED(hr))hr=shared.As(&keyed);
                     if(SUCCEEDED(hr))hr=shared.As(&resource);
                     if(SUCCEEDED(hr))hr=keyed->AcquireSync(0,1000);
                     if(SUCCEEDED(hr)){
-                        bool displayed=session->display_map_to(target.Get(),desc.Width,desc.Height);
+                        bool displayed=true;
+                        if(trial_raw)renderer_state.context->CopyResource(shared.Get(),source);
+                        else displayed=session->display_map_to(target.Get(),desc.Width,desc.Height);
                         hr=keyed->ReleaseSync(1);renderer_state.context->Flush();
                         if(!displayed)hr=E_FAIL;
                     }
@@ -12311,6 +12340,99 @@ private:
                         trial_width=desc.Width;trial_height=desc.Height;
                         result=C3X_RENDERER_RESULT_OK;
                     }else result=C3X_RENDERER_RESULT_DEVICE_ERROR;
+                }
+            }else if(command==Command::trial_present_shared){
+                auto const& p=gpu_present;
+                if(p.action==1||p.action==2){
+                    trial_display_view.Reset();trial_display_mutex.Reset();trial_display.Reset();trial_buffer.Reset();
+                    if(renderer_state.gpu_composition)renderer_state.gpu_composition->stop_visuals();
+                    result=C3X_RENDERER_RESULT_OK;
+                }else{
+                    auto* session=renderer_state.gpu_composition.get();
+                    result=C3X_RENDERER_RESULT_SUPERSEDED;
+                    if(session&&session->current_ticket()==p.ticket&&trial_consumer_pid&&p.width>0&&p.height>0&&
+                       p.width<=2240&&p.height<=1260&&p.image>0){
+                        bool full=p.area[0]<=0&&p.area[1]<=0&&p.area[2]>=p.width&&p.area[3]>=p.height;
+                        if(trial_display){D3D11_TEXTURE2D_DESC previous={};trial_display->GetDesc(&previous);
+                            if((previous.Width!=unsigned(p.width)||previous.Height!=unsigned(p.height))&&full){
+                                trial_display_view.Reset();trial_display_mutex.Reset();trial_display.Reset();trial_buffer.Reset();
+                            }}
+                        if(!trial_display){
+                            if(!full)result=C3X_RENDERER_RESULT_BAD_ARGUMENT;
+                            else{
+                                D3D11_TEXTURE2D_DESC desc={};desc.Width=unsigned(p.width);desc.Height=unsigned(p.height);
+                                desc.MipLevels=desc.ArraySize=desc.SampleDesc.Count=1;
+                                desc.Format=DXGI_FORMAT_B8G8R8A8_UNORM;
+                                desc.BindFlags=D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE;
+                                desc.MiscFlags=D3D11_RESOURCE_MISC_SHARED_NTHANDLE|D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX;
+                                HRESULT hr=renderer_state.device->CreateTexture2D(&desc,nullptr,&trial_display);
+                                if(SUCCEEDED(hr))hr=renderer_state.device->CreateRenderTargetView(trial_display.Get(),nullptr,&trial_display_view);
+                                if(SUCCEEDED(hr))hr=trial_display.As(&trial_display_mutex);
+                                desc.MiscFlags=0;
+                                if(SUCCEEDED(hr))hr=renderer_state.device->CreateTexture2D(&desc,nullptr,&trial_buffer);
+                                if(FAILED(hr)){trial_display_view.Reset();trial_display_mutex.Reset();trial_display.Reset();trial_buffer.Reset();result=C3X_RENDERER_RESULT_DEVICE_ERROR;}
+                            }
+                        }
+                        if(trial_display){
+                            D3D11_TEXTURE2D_DESC desc={};trial_display->GetDesc(&desc);
+                            if(desc.Width!=unsigned(p.width)||desc.Height!=unsigned(p.height))result=C3X_RENDERER_RESULT_BAD_ARGUMENT;
+                            else{
+                                HRESULT hr=trial_display_mutex->AcquireSync(0,1000);
+                                if(FAILED(hr))result=C3X_RENDERER_RESULT_DEVICE_ERROR;
+                                else{
+                                    bool drawn=session->display_to(p.ticket,std::uint64_t(p.image),trial_display_view.Get(),
+                                        trial_display.Get(),trial_buffer.Get(),unsigned(p.width),unsigned(p.height),
+                                        {p.area[0],p.area[1],p.area[2],p.area[3]},visual_ticks,
+                                        visual_allowed?visual_frequency:0);
+                                    hr=trial_display_mutex->ReleaseSync(1);renderer_state.context->Flush();
+                                    result=drawn&&SUCCEEDED(hr)?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_BAD_ARGUMENT;
+                                    if(result==C3X_RENDERER_RESULT_OK){
+                                        Microsoft::WRL::ComPtr<IDXGIResource1> resource;
+                                        HANDLE own=nullptr,duplicated=nullptr;
+                                        HANDLE consumer=OpenProcess(PROCESS_DUP_HANDLE,FALSE,trial_consumer_pid);
+                                        hr=consumer?trial_display.As(&resource):E_FAIL;
+                                        if(SUCCEEDED(hr))hr=resource->CreateSharedHandle(nullptr,
+                                            DXGI_SHARED_RESOURCE_READ|DXGI_SHARED_RESOURCE_WRITE,nullptr,&own);
+                                        if(SUCCEEDED(hr)&&!DuplicateHandle(GetCurrentProcess(),own,consumer,&duplicated,0,FALSE,DUPLICATE_SAME_ACCESS))hr=E_FAIL;
+                                        if(own)CloseHandle(own);if(consumer)CloseHandle(consumer);
+                                        if(SUCCEEDED(hr)){trial_handle=std::uint64_t(reinterpret_cast<std::uintptr_t>(duplicated));
+                                            trial_width=desc.Width;trial_height=desc.Height;}
+                                        else result=C3X_RENDERER_RESULT_DEVICE_ERROR;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }else if(command==Command::trial_visual_shared){
+                result=C3X_RENDERER_RESULT_PENDING;
+                if(trial_display&&trial_display_view&&trial_display_mutex&&trial_buffer&&
+                   renderer_state.gpu_composition&&visual_frequency>0&&trial_consumer_pid){
+                    HRESULT hr=trial_display_mutex->AcquireSync(0,1000);
+                    if(FAILED(hr))result=C3X_RENDERER_RESULT_DEVICE_ERROR;
+                    else{
+                        int drawn=renderer_state.gpu_composition->visual_frame(visual_ticks,visual_frequency,
+                            trial_display_view.Get(),trial_display.Get(),trial_buffer.Get());
+                        // A renderer no-op retains the previous completed
+                        // frame; the x86 presenter can still display it.
+                        hr=trial_display_mutex->ReleaseSync(drawn>=1?1:0);renderer_state.context->Flush();
+                        result=FAILED(hr)?C3X_RENDERER_RESULT_DEVICE_ERROR:
+                            drawn>=1?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_PENDING;
+                        if(result==C3X_RENDERER_RESULT_OK){
+                            Microsoft::WRL::ComPtr<IDXGIResource1> resource;
+                            HANDLE own=nullptr,duplicated=nullptr;
+                            HANDLE consumer=OpenProcess(PROCESS_DUP_HANDLE,FALSE,trial_consumer_pid);
+                            hr=consumer?trial_display.As(&resource):E_FAIL;
+                            if(SUCCEEDED(hr))hr=resource->CreateSharedHandle(nullptr,
+                                DXGI_SHARED_RESOURCE_READ|DXGI_SHARED_RESOURCE_WRITE,nullptr,&own);
+                            if(SUCCEEDED(hr)&&!DuplicateHandle(GetCurrentProcess(),own,consumer,&duplicated,0,FALSE,DUPLICATE_SAME_ACCESS))hr=E_FAIL;
+                            if(own)CloseHandle(own);if(consumer)CloseHandle(consumer);
+                            if(SUCCEEDED(hr)){D3D11_TEXTURE2D_DESC desc={};trial_display->GetDesc(&desc);
+                                trial_handle=std::uint64_t(reinterpret_cast<std::uintptr_t>(duplicated));
+                                trial_width=desc.Width;trial_height=desc.Height;}
+                            else result=C3X_RENDERER_RESULT_DEVICE_ERROR;
+                        }
+                    }
                 }
 #endif
             }else if(command==Command::tactical){
@@ -12903,11 +13025,40 @@ extern "C" __declspec(dllexport) int c3x_renderer_gpu_render(
     catch(...){return input.result(C3X_RENDERER_RESULT_ERROR,[](auto& out){out.u64(0);out.u64(0);out.u64(0);out.u32(0);});}
 }
 #ifdef C3X_HELPER_TRIAL
+extern "C" __declspec(dllexport) void c3x_renderer_trial_set_clock(
+    std::int64_t ticks,std::int64_t frequency){
+    static thread_local c3x_inputs::ReplayClock clock;
+    clock.values.clear();clock.at=0;clock.failure=nullptr;
+    if(frequency>0)clock.values.emplace_back(ticks,frequency);
+    c3x_inputs::replay_execution().performance=true;
+    c3x_inputs::replay_clock()=&clock;
+}
 extern "C" __declspec(dllexport) int c3x_renderer_trial_export_shared(
     c3x_renderer_i64 ticket,c3x_renderer_i64 image,DWORD consumer_pid,
     std::uint64_t* handle,unsigned* width,unsigned* height){
     if(!handle||!width||!height)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
     return get_renderer_worker().trial_export_shared(ticket,image,consumer_pid,*handle,*width,*height);
+}
+extern "C" __declspec(dllexport) int c3x_renderer_trial_export_shared_raw(
+    c3x_renderer_i64 ticket,c3x_renderer_i64 image,DWORD consumer_pid,
+    std::uint64_t* handle,unsigned* width,unsigned* height){
+    if(!handle||!width||!height)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    return get_renderer_worker().trial_export_shared(ticket,image,consumer_pid,*handle,*width,*height,true);
+}
+// Trial-only final-map composition. The helper never receives or owns the game
+// HWND; x86 imports this completed texture and remains the sole presenter.
+extern "C" __declspec(dllexport) int c3x_renderer_trial_present_shared(
+    c3x_renderer_gpu_present_v1 const* request,DWORD consumer_pid,
+    std::uint64_t* handle,unsigned* width,unsigned* height){
+    if(!request||request->struct_size!=sizeof(*request)||request->action<0||request->action>2||
+       !handle||!width||!height)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    return get_renderer_worker().trial_present_shared(*request,consumer_pid,*handle,*width,*height);
+}
+extern "C" __declspec(dllexport) int c3x_renderer_trial_visual_shared(
+    c3x_renderer_i64 ticks,c3x_renderer_i64 frequency,DWORD consumer_pid,
+    std::uint64_t* handle,unsigned* width,unsigned* height){
+    if(frequency<=0||!consumer_pid||!handle||!width||!height)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    return get_renderer_worker().trial_visual_shared(ticks,frequency,consumer_pid,*handle,*width,*height);
 }
 #endif
 extern "C" __declspec(dllexport) int c3x_renderer_gpu_camera_begin(

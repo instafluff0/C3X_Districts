@@ -72,6 +72,14 @@ address space is an enabler, not a substitute for render-path optimization.
    keep a controlled fallback until the new path is stable. Do not treat the
    earlier x86 device-removal symptom as fixed without corresponding evidence.
 
+Current integration checkpoint: a full native-interleaved **shadow** replay
+now covers the GPU phase and shared final images; see
+[the measured result](helper64_gate2_results.md#full-native-interleaved-shadow-checkpoint).
+The x86 control still performs its own scene work. Step 1 remains unfinished
+until the x86 bridge actually consumes x64-owned scene output, including the
+post-reset CPU/native route and asynchronous camera contracts. Steps 2–5 have
+not been accepted or cut over.
+
 This migration takes priority over isolated x86 M3.8 tuning, but carries forward
 M3.8–M3.13 stability, readiness, consolidation and navigation acceptance. It
 does not begin deferred natural-wonder, constructed-wonder or District rendering.

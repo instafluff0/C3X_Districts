@@ -231,6 +231,19 @@ extern "C" __declspec(dllexport) int c3x_renderer_input_replay_fingerprint(unsig
     }catch(...){return 0;}
 }
 
+// Development-only exact pixel witness for narrowing cross-architecture frame
+// differences. The ordinary renderer API never exposes this readback.
+extern "C" __declspec(dllexport) int c3x_renderer_input_replay_pixels(
+    unsigned* output,unsigned capacity,unsigned width,unsigned height){
+    try{
+        c3x_inputs::require(output&&width&&height&&std::uint64_t(width)*height<=capacity,"invalid replay pixel destination");
+        std::vector<unsigned> pixels;unsigned actual_width=0,actual_height=0;
+        c3x_inputs::require(renderer_worker&&renderer_worker->replay_display(pixels,actual_width,actual_height),"replay display unavailable");
+        c3x_inputs::require(width==actual_width&&height==actual_height&&pixels.size()==std::size_t(width)*height,"replay display extent differs");
+        std::copy(pixels.begin(),pixels.end(),output);return 1;
+    }catch(...){return 0;}
+}
+
 extern "C" __declspec(dllexport) int c3x_renderer_input_replay_asset(unsigned char const* bytes,unsigned size){
     try{if(!bytes&&!size){c3x_inputs::replay_assets().begin();return 1;}
         c3x_inputs::require(bytes&&size<=65536,"invalid replay asset envelope");c3x_inputs::Bytes data(bytes,bytes+size);c3x_inputs::Reader in{data};std::string path;

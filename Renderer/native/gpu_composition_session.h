@@ -16,16 +16,18 @@ public:
     // Eight fullscreen packed/full-color native pairs and old/new immutable
     // maps require about 194 MiB at 2240x1260. Bound live images at 256 MiB,
     // including small UI sources; retained replay has its separate budget.
-    bool publish(ID3D11Texture2D* texture,std::int64_t serial,int x=0,int y=0,int width=0,int height=0,RetainedComposition::Sample sample={}){
+    bool publish_source(ID3D11Texture2D* texture,std::int64_t serial,int x,int y,int width,int height,
+                        RetainedComposition::Sample sample,bool shared_source){
         if(!texture||serial<=ticket)return false;
         D3D11_TEXTURE2D_DESC d={};texture->GetDesc(&d);
         if(!width)width=int(d.Width);if(!height)height=int(d.Height);
-        auto next=gpu.create(width,height,Format::bgra32);
+        if(shared_source && (x||y||width!=int(d.Width)||height!=int(d.Height)))return false;
+        auto next=shared_source?gpu.attach_source(texture):gpu.create(width,height,Format::bgra32);
         if(!next){char message[224];auto counts=gpu.stats();
             sprintf_s(message,"[C3X renderer] stage=map-publication-rejected reason=canvas-admission width=%d height=%d resident_bytes=%llu cap_bytes=%u\n",
                 width,height,counts.resident_bytes,live_image_budget);OutputDebugStringA(message);return false;}
 
-        if(!gpu.import_bgra(next,texture,x,y)){gpu.destroy(next);return false;}
+        if(!shared_source&&!gpu.import_bgra(next,texture,x,y)){gpu.destroy(next);return false;}
         // Admission failure leaves the previous immutable map and UI handles
         // usable. Publish the new identity only after its import succeeds.
         if(map){layers.destroy(map);gpu.destroy(map);}map=next;map_animation_expected=bool(sample);
@@ -40,6 +42,15 @@ public:
             }
             layers.create(map,width,height,Format::bgra32);layers.source(map,gpu.texture(map),std::move(sample),true,true);}catch(std::exception const& e){OutputDebugStringA("[C3X renderer] retained admission: ");OutputDebugStringA(e.what());OutputDebugStringA("\n");layers.discard();}
         ticket=serial;if(!identity)identity=serial;return true;
+    }
+    bool publish(ID3D11Texture2D* texture,std::int64_t serial,int x=0,int y=0,int width=0,int height=0,RetainedComposition::Sample sample={}){
+        return publish_source(texture,serial,x,y,width,height,std::move(sample),false);
+    }
+    // A map produced by the x64 core is immutable R32_UINT scene data. The
+    // x86 native composition owner borrows its shared allocation directly;
+    // neither a CPU readback nor a second full-size map texture is required.
+    bool publish_shared(ID3D11Texture2D* texture,std::int64_t serial,RetainedComposition::Sample sample={}){
+        return publish_source(texture,serial,0,0,0,0,std::move(sample),true);
     }
     std::int64_t session_identity()const{return identity;}
     Id map_image()const{return map;}

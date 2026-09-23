@@ -114,7 +114,10 @@ now proves copied x86-to-x64 scene inputs, exact CPU/GPU map pixels returned
 to x86, mid-workload helper restart, and a controlled x86 capacity advantage.
 The [64-bit migration plan](helper64_migration_plan.md) now adopts x64 as the
 target architecture and makes the complete native-interleaved replay its first
-integration gate. One-window game integration remains unproven. Neither a
+integration gate. The [full shadow checkpoint](helper64_gate2_results.md#full-native-interleaved-shadow-checkpoint)
+now verifies shared final images across the GPU phase, but x86 still duplicates
+scene work and the post-reset CPU/native route has no x64 owner. One-window game
+integration remains unproven. Neither a
 gameplay speedup nor a live device-removal fix is established. M3.8–M3.12
 remain unfinished and M3.13 remains an acceptance gate, not a claimed result.
 

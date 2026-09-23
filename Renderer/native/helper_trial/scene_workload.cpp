@@ -18,18 +18,12 @@
 #include <vector>
 #include "../input_recording/journal.h"
 #include "../asset_content_hash.h"
+#include "../gpu_composition_session.h"
+#include "scene_wire.h"
 
 using namespace c3x_inputs;
+using namespace c3x_helper_trial;
 namespace {
-constexpr unsigned wire_magic=0x32483343,wire_version=1,wire_capacity=1024*1024;
-struct Wire {
-    unsigned magic,version,sequence,kind,subtype,size,status,code;
-    unsigned width,height,rendered,fallback,hash[4],gpu_hash[4],gpu_hash_valid;
-    std::uint64_t service_us,private_bytes,shared_handle;
-    unsigned consumer_pid;
-    char error[128];
-    unsigned char payload[wire_capacity];
-};
 static_assert(sizeof(void*)==4||sizeof(void*)==8,"unsupported process architecture");
 double milliseconds(){LARGE_INTEGER q={},f={};QueryPerformanceCounter(&q);QueryPerformanceFrequency(&f);return 1000.0*double(q.QuadPart)/double(f.QuadPart);}
 std::uint64_t private_bytes(){PROCESS_MEMORY_COUNTERS_EX m={};m.cb=sizeof(m);if(!GetProcessMemoryInfo(GetCurrentProcess(),reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&m),sizeof(m)))throw std::runtime_error("memory sample failed");return m.PrivateUsage;}
@@ -44,8 +38,20 @@ struct Core {
     Definitions definitions=nullptr;
     using Reset=void(*)();Reset reset=nullptr;
     c3x_renderer_gpu_images_fn images=nullptr;
+    c3x_renderer_native_image_fn native_image=nullptr;
+    using GpuUnit=int(*)(c3x_renderer_unit_v1 const*,c3x_renderer_gpu_unit_v1 const*,int*);
+    GpuUnit unit_gpu=nullptr;
+    using SetUnits=int(*)(int);
+    SetUnits set_units=nullptr;
+    using TrialClock=void(*)(std::int64_t,std::int64_t);
+    TrialClock set_clock=nullptr;
     using Shared=int(*)(c3x_renderer_i64,c3x_renderer_i64,DWORD,std::uint64_t*,unsigned*,unsigned*);
-    Shared shared=nullptr;bool verify_pixels=false;
+    Shared shared=nullptr,shared_raw=nullptr;bool verify_pixels=false;
+    using PresentShared=int(*)(c3x_renderer_gpu_present_v1 const*,DWORD,std::uint64_t*,unsigned*,unsigned*);
+    PresentShared present_shared=nullptr;
+    using VisualShared=int(*)(std::int64_t,std::int64_t,DWORD,std::uint64_t*,unsigned*,unsigned*);
+    VisualShared visual_shared=nullptr;
+    std::map<std::int64_t,std::int64_t> ticket_ids,image_ids;
     explicit Core(wchar_t const* dll,bool verify=false):verify_pixels(verify){module=LoadLibraryW(dll);require(module!=nullptr,"renderer DLL load failed");
         render=reinterpret_cast<c3x_renderer_render_fn>(GetProcAddress(module,"c3x_renderer_render"));
         render_view=reinterpret_cast<c3x_renderer_render_view_fn>(GetProcAddress(module,"c3x_renderer_render_view"));
@@ -53,19 +59,42 @@ struct Core {
         definitions=reinterpret_cast<Definitions>(GetProcAddress(module,"c3x_renderer_set_definition_paths"));
         reset=reinterpret_cast<Reset>(GetProcAddress(module,"c3x_renderer_reset"));
         images=reinterpret_cast<c3x_renderer_gpu_images_fn>(GetProcAddress(module,"c3x_renderer_gpu_images"));
+        native_image=reinterpret_cast<c3x_renderer_native_image_fn>(GetProcAddress(module,"c3x_renderer_native_image"));
+        unit_gpu=reinterpret_cast<GpuUnit>(GetProcAddress(module,"c3x_renderer_gpu_unit"));
+        set_units=reinterpret_cast<SetUnits>(GetProcAddress(module,"c3x_renderer_set_unit_rendering"));
+        set_clock=reinterpret_cast<TrialClock>(GetProcAddress(module,"c3x_renderer_trial_set_clock"));
         shared=reinterpret_cast<Shared>(GetProcAddress(module,"c3x_renderer_trial_export_shared"));
+        shared_raw=reinterpret_cast<Shared>(GetProcAddress(module,"c3x_renderer_trial_export_shared_raw"));
+        present_shared=reinterpret_cast<PresentShared>(GetProcAddress(module,"c3x_renderer_trial_present_shared"));
+        visual_shared=reinterpret_cast<VisualShared>(GetProcAddress(module,"c3x_renderer_trial_visual_shared"));
         require(render&&render_view&&gpu_render&&definitions&&reset,"renderer DLL entries missing");}
     ~Core(){if(module){reset();FreeLibrary(module);}}
     void execute(Wire& wire){
-        wire.status=0;wire.code=0;wire.width=wire.height=wire.rendered=wire.fallback=0;wire.shared_handle=0;
+        wire.status=0;wire.code=0;wire.executed=1;wire.width=wire.height=wire.rendered=wire.fallback=0;wire.shared_handle=0;
+        wire.result_image=0;wire.result_pixels=0;
+        std::fill(std::begin(wire.bounds),std::end(wire.bounds),0);
         std::fill(std::begin(wire.hash),std::end(wire.hash),0);std::fill(std::begin(wire.gpu_hash),std::end(wire.gpu_hash),0);wire.gpu_hash_valid=0;
         try{
             require(wire.magic==wire_magic&&wire.version==wire_version&&wire.size<=wire_capacity,"invalid scene wire header");
+            if(wire.replay_clock){require(set_clock!=nullptr,"helper lacks recorded clock entry");
+                set_clock(wire.clock_ticks,wire.clock_frequency);}
             Bytes bytes(wire.payload,wire.payload+wire.size);Reader in{bytes};auto started=milliseconds();
-            if(wire.kind==unsigned(Kind::native_bridge)&&wire.subtype==8){
+            if(wire.kind==unsigned(Kind::configuration)&&wire.subtype==3){
+                int enabled=0;in(enabled);in.done();require(set_units!=nullptr,"helper lacks unit configuration");
+                wire.code=unsigned(set_units(enabled));
+            }else if(wire.kind==unsigned(Kind::native_bridge)&&wire.subtype==1){
+                int operation=0;unsigned image=0,source=0,color=0;
+                in(operation);in(image);in(source);in(color);in.done();
+                require(operation==C3X_NATIVE_VISUAL_POLICY&&!image&&!source&&native_image,
+                    "unsupported native policy message");
+                wire.code=unsigned(native_image(operation,nullptr,nullptr,nullptr,nullptr,color));
+            }else if(wire.kind==unsigned(Kind::native_bridge)&&wire.subtype==6){
+                in.done();reset();ticket_ids.clear();image_ids.clear();wire.code=1;
+            }else if(wire.kind==unsigned(Kind::native_bridge)&&wire.subtype==8){
                 bool present[4]={};std::string paths[4];for(unsigned n=0;n<4;++n)paths[n]=in.string(32768,&present[n]);in.done();
                 wire.code=unsigned(definitions(present[0]?paths[0].c_str():nullptr,present[1]?paths[1].c_str():nullptr,
                     present[2]?paths[2].c_str():nullptr,present[3]?paths[3].c_str():nullptr));
+                ticket_ids.clear();image_ids.clear();
             }else if(wire.kind==unsigned(Kind::scene)&&wire.subtype>=1&&wire.subtype<=3){
                 c3x_renderer_camera_identity_v1 identity={};if(wire.subtype!=1)c3x_renderer_camera_identity_v1_fields(in,identity);
                 Frame frame_value;frame(in,frame_value);in.done();
@@ -74,6 +103,8 @@ struct Core {
                 if(wire.subtype==1)wire.code=unsigned(render(&frame_value.value,&output));
                 else if(wire.subtype==2)wire.code=unsigned(render_view(&request,&output));
                 else{c3x_renderer_gpu_frame_v1 gpu={sizeof(gpu)};wire.code=unsigned(gpu_render(&request,&gpu,&output));
+                    if(wire.code==C3X_RENDERER_RESULT_OK&&wire.recorded_ticket&&wire.recorded_image){
+                        ticket_ids[wire.recorded_ticket]=gpu.ticket;image_ids[wire.recorded_image]=gpu.map_image;}
                     if(wire.code==C3X_RENDERER_RESULT_OK&&verify_pixels){
                         require(images!=nullptr&&gpu.width>0&&gpu.height>0,"GPU readback entry or extent missing");
                         auto count=unsigned(gpu.width)*unsigned(gpu.height);std::vector<unsigned> pixels(count);
@@ -85,8 +116,9 @@ struct Core {
                         std::copy(hash.begin(),hash.end(),wire.gpu_hash);wire.gpu_hash_valid=1;
                     }
                     if(wire.code==C3X_RENDERER_RESULT_OK&&wire.consumer_pid){
-                        require(shared!=nullptr,"helper lacks shared map export");
-                        unsigned w=0,h=0;int code=shared(gpu.ticket,gpu.map_image,wire.consumer_pid,&wire.shared_handle,&w,&h);
+                        auto export_map=wire.shared_raw?shared_raw:shared;
+                        require(export_map!=nullptr,"helper lacks requested shared map export");
+                        unsigned w=0,h=0;int code=export_map(gpu.ticket,gpu.map_image,wire.consumer_pid,&wire.shared_handle,&w,&h);
                         require(code==C3X_RENDERER_RESULT_OK&&wire.shared_handle&&w==unsigned(gpu.width)&&h==unsigned(gpu.height),"shared map export failed");
                     }}
                 wire.width=unsigned(std::max(0,output.width));wire.height=unsigned(std::max(0,output.height));
@@ -97,6 +129,88 @@ struct Core {
                         std::size_t(output.stride_bytes)*unsigned(output.height));
                     std::copy(hash.begin(),hash.end(),wire.hash);
                 }
+            }else if(wire.kind==unsigned(Kind::image_commands)&&wire.subtype==0){
+                require(images!=nullptr,"helper lacks GPU image entry");
+                Images owned;c3x_inputs::images(in,owned);in.done();
+                auto map_id=[&](auto const& table,std::int64_t old){
+                    if(!old)return std::int64_t(0);
+                    auto found=table.find(old);if(found!=table.end())return found->second;
+                    require(wire.expected_code!=C3X_RENDERER_RESULT_OK,"missing successful GPU image identity");
+                    return std::int64_t(INT64_MAX);
+                };
+                auto old_image=owned.value.image;
+                owned.value.ticket=map_id(ticket_ids,owned.value.ticket);
+                owned.value.image=map_id(image_ids,owned.value.image);
+                for(auto& command:owned.commands){
+                    command.destination=map_id(image_ids,command.destination);
+                    command.source=map_id(image_ids,command.source);
+                    command.background=map_id(image_ids,command.background);
+                    command.detail=map_id(image_ids,command.detail);
+                    command.background_detail=map_id(image_ids,command.background_detail);
+                    command.program=map_id(image_ids,command.program);
+                }
+                std::vector<unsigned> readback;
+                if(owned.value.action==C3X_GPU_READBACK)readback.resize(owned.value.pixel_count);
+                c3x_renderer_gpu_result_v1 result={sizeof(result)};
+                wire.code=unsigned(images(&owned.value,&result,readback.empty()?nullptr:readback.data(),
+                    unsigned(readback.size())));
+                wire.result_image=result.image;wire.result_pixels=result.pixel_count;
+                if(wire.code==C3X_RENDERER_RESULT_OK){
+                    if(owned.value.action==C3X_GPU_CREATE&&wire.recorded_image)
+                        image_ids[wire.recorded_image]=result.image;
+                    else if(owned.value.action==C3X_GPU_DESTROY)image_ids.erase(old_image);
+                    if(owned.value.action==C3X_GPU_READBACK&&result.pixel_count<=readback.size()){
+                        auto hash=c3x_renderer::asset_content_hash(reinterpret_cast<unsigned char const*>(readback.data()),
+                            std::size_t(result.pixel_count)*4);
+                        std::copy(hash.begin(),hash.end(),wire.gpu_hash);wire.gpu_hash_valid=1;
+                    }
+                }
+            }else if(wire.kind==unsigned(Kind::presentation)&&wire.subtype==0){
+                require(present_shared!=nullptr,"helper lacks final-image shared export");
+                c3x_renderer_gpu_present_v1 value={sizeof(value)};
+                in(value.action);in(value.ticket);in(value.image);in(value.width);in(value.height);
+                for(auto& x:value.area)in(x);auto owner=in.u32();in.done();
+                require(owner<=1,"invalid presentation role");
+                if(wire.expected_code!=C3X_RENDERER_RESULT_OK){
+                    // Native admission rejected this offer before a renderer
+                    // frame existed; do not mutate the x64 retained display.
+                    wire.code=wire.expected_code;wire.executed=0;
+                }else{
+                    if(value.ticket){auto found=ticket_ids.find(value.ticket);
+                        value.ticket=found!=ticket_ids.end()?found->second:INT64_MAX;}
+                    if(value.image){auto found=image_ids.find(value.image);
+                        value.image=found!=image_ids.end()?found->second:INT64_MAX;}
+                    wire.code=unsigned(present_shared(&value,wire.consumer_pid,&wire.shared_handle,&wire.width,&wire.height));
+                }
+            }else if(wire.kind==unsigned(Kind::visual)&&wire.subtype==1){
+                require(visual_shared!=nullptr,"helper lacks visual shared export");
+                auto automatic=in.u32();in.done();require(automatic<=1,"invalid visual offer");
+                if(!wire.clock_frequency){wire.code=wire.expected_code;wire.executed=0;}
+                else{require(wire.consumer_pid,"sampled visual frame has no consumer");
+                    auto rendered=unsigned(visual_shared(wire.clock_ticks,wire.clock_frequency,wire.consumer_pid,
+                        &wire.shared_handle,&wire.width,&wire.height));
+                    wire.rendered=rendered;
+                    // A submitted frame can be pending at the x86 window
+                    // despite its x64 pixels already being ready.
+                    wire.code=wire.expected_code==C3X_RENDERER_RESULT_PENDING&&rendered==C3X_RENDERER_RESULT_OK?
+                        C3X_RENDERER_RESULT_PENDING:rendered;}
+            }else if(wire.kind==unsigned(Kind::unit)&&wire.subtype==1){
+                require(unit_gpu!=nullptr,"helper lacks GPU unit entry");
+                c3x_renderer_unit_v1 value={};c3x_inputs::unit(in,value);
+                c3x_renderer_gpu_unit_v1 target={};target.struct_size=sizeof(target);
+                c3x_inputs::target_fields(in,target);in.done();
+                auto map_id=[&](auto const& table,std::int64_t old){
+                    if(!old)return std::int64_t(0);
+                    auto found=table.find(old);if(found!=table.end())return found->second;
+                    require(wire.expected_code!=C3X_RENDERER_RESULT_OK,"missing successful GPU unit identity");
+                    return std::int64_t(INT64_MAX);
+                };
+                target.ticket=map_id(ticket_ids,target.ticket);
+                target.destination=map_id(image_ids,target.destination);
+                target.background=map_id(image_ids,target.background);
+                target.detail=map_id(image_ids,target.detail);
+                target.background_detail=map_id(image_ids,target.background_detail);
+                wire.code=unsigned(unit_gpu(&value,&target,wire.bounds));
             }else throw std::runtime_error("unsupported scene wire operation");
             wire.service_us=std::uint64_t((milliseconds()-started)*1000.0);
             wire.private_bytes=private_bytes();
@@ -108,6 +222,10 @@ struct Importer {
     Microsoft::WRL::ComPtr<ID3D11Device1> device1;
     Microsoft::WRL::ComPtr<ID3D11DeviceContext> context;
     Microsoft::WRL::ComPtr<ID3D11Texture2D> target;
+    Microsoft::WRL::ComPtr<ID3D11Texture2D> buffer;
+    Microsoft::WRL::ComPtr<ID3D11RenderTargetView> target_view;
+    std::unique_ptr<c3x_gpu_images::Session> composition;
+    std::int64_t serial=0;
     unsigned width=0,height=0;
     Importer(){D3D_FEATURE_LEVEL feature={};HRESULT hr=D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_HARDWARE,nullptr,
         D3D11_CREATE_DEVICE_BGRA_SUPPORT,nullptr,0,D3D11_SDK_VERSION,&device,&feature,&context);
@@ -118,20 +236,34 @@ struct Importer {
         Microsoft::WRL::ComPtr<ID3D11Texture2D> source;HRESULT hr=device1->OpenSharedResource1(handle,IID_PPV_ARGS(&source));CloseHandle(handle);
         require(SUCCEEDED(hr),"x86 shared map import failed");
         D3D11_TEXTURE2D_DESC desc={};source->GetDesc(&desc);
-        if(desc.Width!=wire.width||desc.Height!=wire.height||desc.Format!=DXGI_FORMAT_B8G8R8A8_UNORM){
+        auto expected_format=wire.shared_raw?DXGI_FORMAT_R32_UINT:DXGI_FORMAT_B8G8R8A8_UNORM;
+        if(desc.Width!=wire.width||desc.Height!=wire.height||desc.Format!=expected_format){
             char detail[160];std::snprintf(detail,sizeof(detail),"x86 imported map description differs actual=%ux%u format=%u expected=%ux%u",
                 desc.Width,desc.Height,unsigned(desc.Format),wire.width,wire.height);throw std::runtime_error(detail);}
+        D3D11_TEXTURE2D_DESC display_desc=desc;
+        display_desc.MiscFlags=0;display_desc.Format=DXGI_FORMAT_B8G8R8A8_UNORM;
+        display_desc.BindFlags=D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE;
         if(!target||width!=desc.Width||height!=desc.Height){
-            desc.MiscFlags=0;desc.BindFlags=D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE;
-            hr=device->CreateTexture2D(&desc,nullptr,&target);require(SUCCEEDED(hr),"x86 map destination allocation failed");
+            hr=device->CreateTexture2D(&display_desc,nullptr,&target);require(SUCCEEDED(hr),"x86 map destination allocation failed");
+            if(wire.shared_raw){
+                hr=device->CreateTexture2D(&display_desc,nullptr,&buffer);require(SUCCEEDED(hr),"x86 map history allocation failed");
+                hr=device->CreateRenderTargetView(target.Get(),nullptr,&target_view);require(SUCCEEDED(hr),"x86 map render target failed");
+            }
             width=desc.Width;height=desc.Height;
         }
         Microsoft::WRL::ComPtr<IDXGIKeyedMutex> keyed;require(SUCCEEDED(source.As(&keyed)),"x86 shared map lacks keyed mutex");
         hr=keyed->AcquireSync(1,1000);require(SUCCEEDED(hr),"x86 shared map acquire failed");
-        context->CopyResource(target.Get(),source.Get());hr=keyed->ReleaseSync(0);context->Flush();
+        if(wire.shared_raw){
+            if(!composition)composition=std::make_unique<c3x_gpu_images::Session>(device.Get(),context.Get());
+            require(composition->publish_shared(source.Get(),++serial),"x86 shared map admission failed");
+            require(composition->display_to(composition->current_ticket(),composition->map_image(),
+                target_view.Get(),target.Get(),buffer.Get(),width,height,{0,0,int(width),int(height)}),
+                "x86 shared map composition failed");
+        }else context->CopyResource(target.Get(),source.Get());
+        hr=keyed->ReleaseSync(0);context->Flush();
         require(SUCCEEDED(hr),"x86 shared map release failed");
         if(verify_pixels){
-            D3D11_TEXTURE2D_DESC stage_desc=desc;stage_desc.MiscFlags=0;stage_desc.BindFlags=0;
+            D3D11_TEXTURE2D_DESC stage_desc=display_desc;stage_desc.MiscFlags=0;stage_desc.BindFlags=0;
             stage_desc.Usage=D3D11_USAGE_STAGING;stage_desc.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
             Microsoft::WRL::ComPtr<ID3D11Texture2D> stage;
             hr=device->CreateTexture2D(&stage_desc,nullptr,&stage);require(SUCCEEDED(hr),"x86 diagnostic stage allocation failed");
@@ -193,11 +325,12 @@ int wmain(int argc,wchar_t** argv){
         }
         UnmapViewOfFile(wire);CloseHandle(response);CloseHandle(request);CloseHandle(mapping);return 0;
 #else
-        require(argc>=5&&argc<=11,"driver usage: --local DLL CAPTURE REPORT | --remote DLL CAPTURE REPORT HELPER [--verify-pixels] [--crash-after N] [--reserve-mib N]");
-        bool remote=std::wstring(argv[1])==L"--remote",verify_pixels=false;unsigned crash_after=0,reserve_mib=0;
+        require(argc>=5&&argc<=12,"driver usage: --local DLL CAPTURE REPORT | --remote DLL CAPTURE REPORT HELPER [--verify-pixels] [--raw-shared] [--crash-after N] [--reserve-mib N]");
+        bool remote=std::wstring(argv[1])==L"--remote",verify_pixels=false,raw_shared=false;unsigned crash_after=0,reserve_mib=0;
         require(remote||std::wstring(argv[1])==L"--local","invalid scene driver mode");
         for(int n=remote?6:5;n<argc;++n){std::wstring flag=argv[n];
             if(flag==L"--verify-pixels")verify_pixels=true;
+            else if(flag==L"--raw-shared"&&remote)raw_shared=true;
             else if(flag==L"--crash-after"&&remote&&n+1<argc){crash_after=unsigned(std::stoul(argv[++n]));require(crash_after>1&&crash_after<54,"invalid helper crash point");}
             else if(flag==L"--reserve-mib"&&n+1<argc){reserve_mib=unsigned(std::stoul(argv[++n]));require(reserve_mib<=2048,"invalid x86 address-space reservation");}
             else throw std::runtime_error("unknown scene driver option");}
@@ -236,6 +369,7 @@ int wmain(int argc,wchar_t** argv){
             auto& input=found->second;Reader in{input.payload};in.u64();in.u64();
             Wire* wire=remote?shared:local_wire.get();wire->magic=wire_magic;wire->version=wire_version;wire->sequence=++sent;
             wire->kind=unsigned(input.kind);wire->subtype=input.flags;wire->size=unsigned(input.payload.size()-in.at);
+            wire->shared_raw=remote&&raw_shared?1u:0u;
             wire->consumer_pid=remote?GetCurrentProcessId():0;
             require(wire->size<=wire_capacity,"scene value payload exceeds IPC capacity");
             std::copy(input.payload.begin()+in.at,input.payload.end(),wire->payload);
