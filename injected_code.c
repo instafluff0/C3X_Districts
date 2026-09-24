@@ -20457,10 +20457,15 @@ start_custom_renderer_native_tracking ()
 	if (JGL_present_screen == NULL || p_jgl_screen_canvas == NULL ||
 	    is->custom_renderer_native_module != NULL || (*p_GetModuleHandleA) ("jgl.dll") == NULL) return;
 	char path[2 * MAX_PATH];
-	snprintf (path, sizeof path, "%s\\Renderer\\bin\\C3XRenderer.dll", is->mod_rel_dir);
+	snprintf (path, sizeof path, "%s\\Renderer\\bin\\renderer64\\C3XRenderer.dll", is->mod_rel_dir);
 	path[(sizeof path) - 1] = '\0';
 	HMODULE module = LoadLibraryA (path);
 	if (module == NULL) return;
+	int (*set_backend_mode) (int) = (void *)(*p_GetProcAddress) (module, "c3x_renderer_set_backend_mode");
+	if (set_backend_mode == NULL || set_backend_mode (1) != C3X_RENDERER_RESULT_OK) {
+		FreeLibrary (module);
+		return;
+	}
 	c3x_renderer_native_lifetime_fn lifetime = (c3x_renderer_native_lifetime_fn)(*p_GetProcAddress) (module, "c3x_renderer_native_lifetime");
 	c3x_renderer_native_observe_fn observe = (c3x_renderer_native_observe_fn)(*p_GetProcAddress) (module, "c3x_renderer_native_observe");
 	if (lifetime == NULL || observe == NULL) { FreeLibrary (module); return; }
@@ -27730,6 +27735,7 @@ unload_custom_renderer ()
 		FreeLibrary (is->custom_renderer_module);
 	is->custom_renderer_module = NULL;
 	is->custom_renderer_get_api_version = NULL;
+	is->custom_renderer_backend_healthy = NULL;
 	is->custom_renderer_visual_clock = NULL;
 	is->custom_renderer_set_pack_path = NULL;
 	is->custom_renderer_set_definition_paths = NULL;
@@ -28060,7 +28066,7 @@ ensure_custom_renderer_loaded ()
 		return false;
 	}
 	char path[2 * MAX_PATH];
-	snprintf (path, sizeof path, "%s\\Renderer\\bin\\C3XRenderer.dll", is->mod_rel_dir);
+	snprintf (path, sizeof path, "%s\\Renderer\\bin\\renderer64\\C3XRenderer.dll", is->mod_rel_dir);
 	path[(sizeof path) - 1] = '\0';
 	log_custom_renderer_event ("load-start", C3X_RENDERER_RESULT_OK);
 	char visual_profile[32] = {0};
@@ -28072,7 +28078,16 @@ ensure_custom_renderer_loaded ()
 	is->custom_renderer_world_audit_needed = true;
 	is->custom_renderer_module = LoadLibraryA (path);
 	if (is->custom_renderer_module != NULL) {
+		int (*set_backend_mode) (int) = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_set_backend_mode");
+		if (set_backend_mode == NULL || set_backend_mode (1) != C3X_RENDERER_RESULT_OK) {
+			FreeLibrary (is->custom_renderer_module);
+			is->custom_renderer_module = NULL;
+			is->custom_renderer_init_state = IS_INIT_FAILED;
+			log_custom_renderer_event ("renderer64-select", C3X_RENDERER_RESULT_ERROR);
+			return false;
+		}
 		is->custom_renderer_get_api_version = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_get_api_version");
+		is->custom_renderer_backend_healthy = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_backend_healthy");
 		is->custom_renderer_visual_clock = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_visual_clock");
 		is->custom_renderer_set_pack_path = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_set_pack_path");
 		is->custom_renderer_set_definition_paths = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_set_definition_paths");
@@ -28110,6 +28125,7 @@ ensure_custom_renderer_loaded ()
 		is->custom_renderer_schedule = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_schedule_idle");
 		is->custom_renderer_reset = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_reset");
 		if ((is->custom_renderer_get_api_version != NULL) &&
+		    (is->custom_renderer_backend_healthy != NULL) &&
 		    (is->custom_renderer_set_pack_path != NULL) &&
 		    (is->custom_renderer_set_definition_paths != NULL) &&
 		    (is->custom_renderer_render != NULL) &&
@@ -30880,6 +30896,12 @@ patch_Map_Renderer_m71_Draw_Tiles (Map_Renderer * this, int edx, int param_1, in
 		clear_tile_animation_pcx_matches_in_cache ();
 	}
 
+	if (is->current_config.enable_custom_rendering &&
+	    is->custom_renderer_backend_healthy != NULL &&
+	    ! is->custom_renderer_backend_healthy ()) {
+		log_custom_renderer_event ("renderer64-helper-exited", C3X_RENDERER_RESULT_DEVICE_ERROR);
+		is->current_config.enable_custom_rendering = false;
+	}
 	if (! is->current_config.enable_custom_rendering) {
 		if ((is->custom_renderer_module != NULL) || (is->custom_renderer_tiles != NULL) ||
 		    (is->custom_renderer_init_state != IS_UNINITED))
@@ -30893,8 +30915,13 @@ patch_Map_Renderer_m71_Draw_Tiles (Map_Renderer * this, int edx, int param_1, in
 		log_custom_renderer_event ("reentrant-map-draw", C3X_RENDERER_RESULT_ERROR);
 		return;
 	}
-	if (! ensure_custom_renderer_loaded ())
+	if (! ensure_custom_renderer_loaded ()) {
+		is->current_config.enable_custom_rendering = false;
+		unload_custom_renderer ();
+		if (is->custom_renderer_native_image == NULL)
+			patch_Map_Renderer_m71_Draw_Tiles (this, __, param_1, param_2, param_3);
 		return;
+	}
 	if (((is->custom_renderer_qpc_frequency.QuadPart <= 0) &&
 	     ! QueryPerformanceFrequency (&is->custom_renderer_qpc_frequency)) ||
 		! QueryPerformanceCounter (&is->custom_renderer_frame_timestamp)) {
@@ -46944,6 +46971,11 @@ patch_on_timer_0x9F6500 (void)
 {
     if (is->custom_renderer_timer_running) return;
     is->custom_renderer_timer_running = true;
+    if (is->current_config.enable_custom_rendering &&
+        is->custom_renderer_backend_healthy != NULL && ! is->custom_renderer_backend_healthy ()) {
+        is->custom_renderer_redraw_pending = true;
+        is->custom_renderer_dirty_flags |= C3X_RENDERER_DIRTY_SCENE;
+    }
     if (is->current_config.enable_custom_animations && ! is->current_config.enable_custom_rendering) {
         if ((*p_debug_mode_bits & 0xC) != 0) clear_active_custom_tile_animation_effects ();
         else tile_animation_scheduler_tick ();

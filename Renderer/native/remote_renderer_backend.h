@@ -22,6 +22,7 @@ class Backend {
     DirectSurface direct_surface;
     bool direct_active=false;
     bool direct_unavailable=false;
+    bool direct_requested=false;
     c3x_renderer::VisualCadence cadence;
     HWND active_window=nullptr;
     bool visual_active=false;
@@ -56,8 +57,14 @@ class Backend {
         return SUCCEEDED(result)&&SUCCEEDED(device.As(&device1));
     }
 public:
-    Backend(std::wstring const& helper,std::wstring const& dll):client(helper,dll){}
+    Backend(std::wstring const& helper,std::wstring const& dll,bool direct=false):client(helper,dll),direct_requested(direct){}
     ~Backend(){cadence.stop();}
+    bool healthy()const{return client.alive();}
+    void abandon(){
+        cadence.stop();std::lock_guard<std::mutex> lock(gate);
+        direct_surface.reset();direct_active=false;visual_active=false;active_window=nullptr;
+        presenter.reset();unit_facts.clear();
+    }
     int definitions(char const* root,char const* fallback,char const* scenario,char const* custom){
         std::lock_guard<std::mutex> lock(gate);
         if(!detach_direct(true))return C3X_RENDERER_RESULT_DEVICE_ERROR;
@@ -172,7 +179,8 @@ public:
                unsigned(request.width),unsigned(request.height))){
                 if(!detach_direct(true))return C3X_RENDERER_RESULT_DEVICE_ERROR;
             }
-            char trial[4]={};bool requested=GetEnvironmentVariableA("C3X_RENDERER_DIRECT_SURFACE_TRIAL",trial,sizeof(trial))==1&&trial[0]=='1';
+            char trial[4]={};bool requested=direct_requested||
+                (GetEnvironmentVariableA("C3X_RENDERER_DIRECT_SURFACE_TRIAL",trial,sizeof(trial))==1&&trial[0]=='1');
             char strict_option[4]={};bool strict=GetEnvironmentVariableA("C3X_RENDERER_DIRECT_SURFACE_STRICT_TRIAL",strict_option,sizeof(strict_option))==1&&strict_option[0]=='1';
             if(requested&&full&&!direct_active&&!direct_unavailable){
                 direct_active=direct_surface.prepare(static_cast<HWND>(request.window),device.Get(),

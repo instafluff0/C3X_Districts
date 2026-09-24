@@ -41,13 +41,16 @@ class NativeVisualCadenceTests(unittest.TestCase):
 #include <cstddef>
 #define __stdcall
 const int C3X_NATIVE_VISUAL_POLICY=116;
+const int C3X_RENDERER_RESULT_DEVICE_ERROR=5;
 char animator_bytes[64]={};struct {struct {char* field_18E4=animator_bytes;}animator;} screen;auto p_main_screen_form=&screen;
 const unsigned C3X_RENDERER_DIRTY_SCENE=1;
 int native_calls=0,legacy_redraws=0,effects=0;bool resident=true,reenter=false;
 int policy(int,void*,void*,void const*,void const*,unsigned color){assert(color==2);return resident;}
 struct State{bool custom_renderer_redraw_pending=false;unsigned custom_renderer_dirty_flags=0;bool custom_renderer_timer_running=false;struct{bool enable_custom_animations=true,enable_custom_rendering=true;}current_config;
- int (*custom_renderer_native_image)(int,void*,void*,void const*,void const*,unsigned)=policy;};
+ int (*custom_renderer_native_image)(int,void*,void*,void const*,void const*,unsigned)=policy;
+ int (*custom_renderer_backend_healthy)()=nullptr;};
 State state;State* is=&state;unsigned debug=0;unsigned* p_debug_mode_bits=&debug;
+void log_custom_renderer_event(char const*,int){}
 void patch_on_timer_0x9F6500();
 void on_timer_0x9F6500(){++native_calls;if(reenter)patch_on_timer_0x9F6500();}
 void custom_renderer_scheduler_tick(){++legacy_redraws;}

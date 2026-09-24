@@ -13096,8 +13096,10 @@ c3x_renderer_i64 remote_world_map_epoch=0,remote_world_viewer_epoch=0;
 int remote_world_width=0,remote_world_height=0;
 unsigned remote_world_wrap_x=0,remote_world_wrap_y=0;
 bool remote_world_snapshot_complete=false;
+bool remote_configured_mode=false;
 bool remote_renderer_requested(){
     if(sizeof(void*)!=4)return false;
+    if(remote_configured_mode)return true;
     char enabled[4]={};return GetEnvironmentVariableA("C3X_RENDERER_HELPER64",enabled,sizeof(enabled))==1&&enabled[0]=='1';
 }
 std::wstring remote_renderer_file(wchar_t const* variable,wchar_t const* sibling){
@@ -13115,7 +13117,7 @@ c3x_remote_scene::Backend* remote_renderer_backend(){
     if(!remote_renderer_requested())return nullptr;
     if(!remote_renderer)remote_renderer=std::make_unique<c3x_remote_scene::Backend>(
         remote_renderer_file(L"C3X_RENDERER_HELPER_EXE",L"C3XRendererHelper64.exe"),
-        remote_renderer_file(L"C3X_RENDERER_X64_DLL",L"C3XRenderer_x64.dll"));
+        remote_renderer_file(L"C3X_RENDERER_X64_DLL",L"C3XRenderer_x64.dll"),remote_configured_mode);
     return remote_renderer.get();
 }
 int remote_world_capture_register(c3x_renderer_world_capture_fn callback){
@@ -13142,6 +13144,11 @@ void remote_world_capture_tick(UINT_PTR id){
 }
 bool drain_native_composition(){
     try {
+        if(remote_renderer&&!remote_renderer->healthy()){
+            if(native_composition){native_composition->abandon();delete native_composition;native_composition=nullptr;}
+            remote_renderer->abandon();remote_renderer.reset();
+            return true;
+        }
         if(native_composition){native_composition->drain();delete native_composition;native_composition=nullptr;}
         // CPU-source presentation can exist without a CompositionOwner. Its
         // retained window must also survive reset/reload/config-off exactly.
@@ -13162,6 +13169,19 @@ int remote_draw_cpu_unit(c3x_renderer_unit_v1 const& unit,HDC destination,HDC ba
             x,y,background,keyed)?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_ERROR;
     }catch(...){return C3X_RENDERER_RESULT_DEVICE_ERROR;}
 }
+}
+
+// Normal C3X configuration chooses the helper before any scene or device is
+// created. Environment overrides remain available only to standalone replay.
+extern "C" __declspec(dllexport) int c3x_renderer_set_backend_mode(int renderer64){
+    if(renderer64!=0&&renderer64!=1)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    if(remote_configured_mode==(renderer64!=0))return C3X_RENDERER_RESULT_OK;
+    if(remote_renderer||renderer_worker||native_composition)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    remote_configured_mode=renderer64!=0;
+    return C3X_RENDERER_RESULT_OK;
+}
+extern "C" __declspec(dllexport) int c3x_renderer_backend_healthy(){
+    return !remote_renderer||remote_renderer->healthy()?1:0;
 }
 
 int c3x_renderer_world_update(int old_x,int old_y,int new_x,int new_y,bool force){

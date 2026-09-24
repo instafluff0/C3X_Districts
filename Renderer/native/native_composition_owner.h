@@ -233,5 +233,11 @@ public:
         route={};route_image=nullptr;route_text.clear();
         if(client){client->flush();release_window();adapter->drain();adapter.reset();client.reset();}
     }
+    void abandon(){
+        check_thread();
+        if(adapter){adapter->abandon();adapter.reset();}
+        client.reset();pending=nullptr;camera_ticket=0;camera_image=nullptr;
+        route={};route_image=nullptr;route_text.clear();navigation.clear();
+    }
 };
 }

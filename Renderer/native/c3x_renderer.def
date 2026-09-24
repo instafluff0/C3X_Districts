@@ -1,6 +1,8 @@
 LIBRARY C3XRenderer
 EXPORTS
     c3x_renderer_get_api_version
+    c3x_renderer_set_backend_mode
+    c3x_renderer_backend_healthy
     c3x_renderer_set_pack_path
     c3x_renderer_set_definition_paths
     c3x_renderer_render

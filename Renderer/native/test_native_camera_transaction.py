@@ -188,6 +188,7 @@ int main(){
         drain='bool drain_native_composition(){'+renderer.split('bool drain_native_composition(){',1)[1].split('\n}\nint remote_draw_cpu_unit',1)[0]+'\n}'
         run_cpp(r'''
 #include <cassert>
+#include <memory>
 #include <stdexcept>
 #include "Renderer/native/gpu_frame_api.h"
 constexpr int IS_INIT_FAILED=2;
@@ -205,11 +206,11 @@ struct State {
  void (*custom_renderer_reset)()=reset;
 } state;auto is=&state;
 '''+unload+r'''
-struct Composition {void drain(){++drains;if(fail)throw std::runtime_error("blocked");}};
+struct Composition {void drain(){++drains;if(fail)throw std::runtime_error("blocked");}void abandon(){++detaches;}};
 struct Worker {int native_screen(void*){++resets;return fail?C3X_RENDERER_RESULT_ERROR:C3X_RENDERER_RESULT_OK;}};
 Composition* native_composition=nullptr;Worker worker;Worker* renderer_worker=&worker;
-struct Remote {int screen(void*){++resets;return fail?C3X_RENDERER_RESULT_ERROR:C3X_RENDERER_RESULT_OK;}};
-Remote* remote_renderer=nullptr;
+struct Remote {bool healthy()const{return !fail;}void abandon(){++detaches;}int screen(void*){++resets;return fail?C3X_RENDERER_RESULT_ERROR:C3X_RENDERER_RESULT_OK;}};
+std::unique_ptr<Remote> remote_renderer;
 void OutputDebugStringA(char const*){}
 namespace c3x_inputs {struct Assets{bool enabled=false;};Assets& replay_assets(){static Assets a;return a;}}
 '''+drain+r'''
@@ -222,6 +223,9 @@ int main(){
  fail=false;assert(drain_native_composition()&&!native_composition);
  fail=true;assert(!drain_native_composition()); // CPU-source-only display failure is not swallowed
  fail=false;assert(drain_native_composition());
+ remote_renderer=std::make_unique<Remote>();native_composition=new Composition;
+ int before=detaches;fail=true;
+ assert(drain_native_composition()&&!native_composition&&!remote_renderer&&detaches==before+2);
 }
 ''')
 

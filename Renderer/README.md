@@ -24,6 +24,13 @@ that code by category; Integration runs the affected current-code checks. Fixed
 reference images are optional visual comparison aids, not numbered releases or
 integration gates. Git holds history.
 
+For the Windows game build, `native/BUILD_RENDERER64.bat` builds and stages the
+32-bit bridge, Renderer64 DLL, and helper together under `bin/renderer64/`.
+The existing `enable_custom_rendering` setting selects Renderer64 when true;
+there is no separate backend setting. `INSTALL.bat` still installs C3X itself.
+The game-facing direct surface and unit/UI behavior remain under integration
+qualification as described in the [current status](docs/retained_renderer_plan.md).
+
 Start with [the visual workbench](lab/README.md). The catalog has separate entries
 for base terrains, relief, vegetation, water, map objects and animation. Shared
 day/night and shadows live under lighting; tile-to-tile transitions live under

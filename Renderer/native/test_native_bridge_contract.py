@@ -805,7 +805,10 @@ int main() {
         enabled = injected[injected.index("if (! is->current_config.enable_custom_rendering)") :]
         unavailable = enabled[enabled.index("if (! ensure_custom_renderer_loaded ()") :]
         unavailable = unavailable[:unavailable.index("is->custom_renderer_draw_in_progress = true;")]
-        self.assertNotIn("Map_Renderer_m71_Draw_Tiles", unavailable)
+        self.assertNotIn("\n\t\tMap_Renderer_m71_Draw_Tiles (", unavailable)
+        failed_load = unavailable[:unavailable.index("performance-counter")]
+        self.assertLess(failed_load.index("enable_custom_rendering = false"),
+                        failed_load.index("patch_Map_Renderer_m71_Draw_Tiles ("))
         self.assertIn('log_custom_renderer_event ("performance-counter"', unavailable)
         self.assertIn("render_result == C3X_RENDERER_RESULT_DEVICE_ERROR", injected)
         self.assertIn("is->custom_renderer_reset ()", injected)

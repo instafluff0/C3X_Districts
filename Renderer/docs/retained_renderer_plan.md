@@ -20,13 +20,18 @@ the former 1,326-line roadmap.
 - Gate 1 proved a Windows cross-process graphics boundary. Gate 2 proved
   real-core scene/pixel parity and a controlled x86 address-space advantage.
   Neither proved live gameplay FPS or a device-loss fix.
-- An opt-in cross-process surface candidate exists in the current checkout.
-  It can display real frames without a per-frame shared-image return to Civ III.
-  It is not the installed default. Its strict replay reaches a native handoff
-  where the recording lacks an external native input; actual game UI ordering,
-  autonomous Renderer64 cadence and complete lifecycle acceptance remain open.
-  Earlier paired speed/pixel numbers accidentally compared the shared-image
-  route with itself and are invalid for this surface.
+- `enable_custom_rendering = true` now selects Renderer64 as the sole custom
+  backend, with the direct cross-process map surface requested in normal play.
+  The 32-bit bridge, Renderer64 DLL and helper are built and staged together;
+  `INSTALL.bat` has installed the matching injected game executable. An early
+  JGL screen could previously instantiate the x86 renderer before Renderer64
+  selection, silently forcing native fallback. Selection now precedes native
+  screen tracking and repeat selection is safe. The exact installed-directory
+  startup probe passes bridge selection, early screen-policy activity, definition
+  loading and helper health. Real game UI ordering, autonomous cadence and
+  lifecycle acceptance still await the user's live check. Earlier paired
+  speed/pixel numbers accidentally compared the shared-image route with itself
+  and are invalid for this surface.
 - The unit body now carries a separate copied native visual observation.
   Renderer64 can smooth movement between successive accepted pixel samples;
   full event-scoped A-to-B timing and selection/path alignment are still open.
@@ -62,12 +67,14 @@ the former 1,326-line roadmap.
   region leases took 15.703 ms. These are workload bounds and a standalone
   CPU measurement, not a measured gameplay FPS improvement.
 - Verification for this cutover: 308 production contract tests passed (two
-  skipped), the approved injected compile passed, day/night unit behavior
+  skipped), the approved injected compile passed after the startup correction,
+  45 focused bridge/camera/cadence tests passed (one skipped), day/night unit behavior
   scenes passed, and an x86-to-Renderer64 direct-surface roundtrip accepted
   ordered birth, move, action/HP, retirement, stale-viewer rejection and ID
   reuse. An identical subsequent state caused no extra helper IPC call. No
   new CSV patch symbol was needed. Civ III gameplay was not launched by these
-  checks, so first-move reveal timing and actual FPS remain unmeasured here.
+  checks, so first-move reveal timing, live surface/UI ordering and actual FPS
+  remain unmeasured here.
   The unit warm/cold witness also records the observed sparse, at-most-five-level
   color variance in top-edge grass pixels; larger channel differences still fail.
 

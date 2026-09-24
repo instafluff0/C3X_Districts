@@ -32,6 +32,7 @@ class Client {
     }
 public:
     Client(std::wstring const& helper,std::wstring const& dll):transport(helper,dll){}
+    bool alive()const{return transport.alive();}
     c3x_helper_trial::SceneClient::Stats stats()const{return transport.stats();}
     int definitions(char const* root,char const* fallback,char const* scenario,char const* custom){
         c3x_inputs::Writer input;

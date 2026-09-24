@@ -466,6 +466,9 @@ public:
     // Call drain while native objects/device still exist. A synchronization/device
     // failure is terminal for this isolated backend, never a stale-pixel fallback.
     void drain(){for(auto& text:texts)retire_text(text);for(auto& image:images)if(image.native){cpu_ownership(image,C3X_NATIVE_IMAGE_DRAIN);forget(image);}if(sprite_image)gpu.destroy(sprite_image);sprite_image=0;sprite_pixels.clear();for(auto& lookup:lookups)if(lookup.image)gpu.destroy(lookup.image);lookups={};}
+    // A dead helper has no GPU images to read back or destroy. The caller must
+    // detach its composition surface and request a full native redraw next.
+    void abandon(){texts={};images={};lookups={};sprite_image=0;sprite_pixels.clear();cpu_bytes=text_bytes=0;}
     // Admission follows an actual destination demand. Startup observation proves
     // the entire lifetime even when its INIT preceded this GPU session. Sources
     // and unused canvases do not allocate resident destination pairs at startup.
