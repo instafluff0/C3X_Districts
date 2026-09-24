@@ -3419,7 +3419,7 @@ public:
     bool frame_has_resource_animation(c3x_renderer_frame_v1 const & frame) const {
         if(water_scene_active)return true;
         if(wave_ready)for(unsigned i=0;i<frame.tile_count;++i)
-            if((frame.tiles[i].tile_flags&C3X_RENDERER_TILE_RENDER) && frame.tiles[i].terrain_type>=11)return true;
+            if(c3x_renderer::render_core::water_scene_tile(frame.tiles[i],visibility_pass))return true;
         if (resource_animations.empty()) return false;
         for (unsigned i=0;i<frame.tile_count;++i)
             if ((frame.tiles[i].tile_flags&C3X_RENDERER_TILE_RENDER) && resource_animation_for(frame.tiles[i])>=0)
@@ -6759,9 +6759,9 @@ public:
         bool water_active=false;visible_water_animations=0;
         if(water_motion && city_profile)
             for(unsigned i=0;i<frame.tile_count;++i){auto const& tile=frame.tiles[i];
-                if(!(tile.tile_flags&C3X_RENDERER_TILE_RENDER) || (tile.terrain_type<11 && !(tile.river_code&170u)))continue;
+                if(!c3x_renderer::render_core::water_scene_tile(tile,visibility_pass))continue;
                 water_active=true;
-                if(!visibility_pass || (tile.tile_flags&C3X_RENDERER_TILE_VISIBLE))++visible_water_animations;
+                ++visible_water_animations;
             }
         if(water_active!=water_scene_active){scene_static_signature=0;}
         water_scene_active=water_active;
@@ -12031,24 +12031,43 @@ private:
         operation.draw=[this,state](c3x_gpu_images::Compositor& target,c3x_gpu_images::Command const& command){
             auto& body=renderer_state.unit_bodies;c3x_renderer::UnitSceneSample sample;
             if(unit_pixels_enabled && state->animated)unit_pixels_queue.observe(state->draw,true,state->predict!=0,state->predict);
+            // The retained command reserves the entire travel envelope. A
+            // single pose still has its original sprite dimensions, so submit
+            // it at its current bounds inside that envelope. Submitting the
+            // envelope as the source rect rejects moving units as oversized.
+            auto draw=command;
+            int projection=state->draw.projection_scale_milli>0?state->draw.projection_scale_milli:(state->draw.reduced?500:1000);
+            draw.area={state->draw.body_x,state->draw.body_y,
+                state->draw.body_x+state->draw.sprite_width*projection/1000,
+                state->draw.body_y+state->draw.sprite_height*projection/1000};
+            draw.clip=c3x_gpu_images::intersection(command.clip,draw.area);
             std::array<int,4> coverage;
-            if(!body.scene_coverage(state->draw,[&](auto const& action){return renderer_state.prepare_unit_action(action);},state->predict,coverage))return false;
-            auto selected=c3x_gpu_images::intersection(command.clip,{command.area.left+coverage[0],command.area.top+coverage[1],
-                command.area.left+coverage[2],command.area.top+coverage[3]});
+            if(!body.scene_coverage(state->draw,[&](auto const& action){return renderer_state.prepare_unit_action(action);},state->predict,coverage)){
+                renderer_state.trace.write("unit-scene-rejection","coverage unavailable",true);return false;
+            }
+            auto selected=c3x_gpu_images::intersection(draw.clip,{draw.area.left+coverage[0],draw.area.top+coverage[1],
+                draw.area.left+coverage[2],draw.area.top+coverage[3]});
             if(selected.left>=selected.right || selected.top>=selected.bottom)return true;
             if(renderer_state.draw_scene_unit(selected.right-selected.left,selected.bottom-selected.top,state->draw,state->predict,sample,
-                selected.left-command.area.left,selected.top-command.area.top)){
+                selected.left-draw.area.left,selected.top-draw.area.top)){
                 sample.coverage=coverage;++visual_unit_samples;
-                return target.submit(&command,1,&sample);
+                bool submitted=target.submit(&draw,1,&sample);
+                if(!submitted)renderer_state.trace.write("unit-scene-rejection","scene submission failed",true);
+                return submitted;
             }
+            renderer_state.trace.write("unit-scene-fallback",body.failure_reason,true);
             // Oversized optional work retains the established
             // bounded GPU pose cache. Admission failure must not force skinning
             // and rasterization of an unchanged compatibility pose every frame.
             if(!body.render(renderer_state.device,renderer_state.context,state->draw,
-                [&](auto const& action){return renderer_state.prepare_unit_action(action);},nullptr,state->predict,true))return false;
+                [&](auto const& action){return renderer_state.prepare_unit_action(action);},nullptr,state->predict,true)){
+                renderer_state.trace.write("unit-scene-rejection",body.failure_reason,true);return false;
+            }
             auto source=target.attach_source(body.resident_pose.texture.Get());if(!source)return false;
-            auto op=command;op.source=source;++visual_unit_samples;
-            bool ok=target.submit(&op,1,nullptr,&coverage);target.destroy(source);return ok;
+            auto op=draw;op.source=source;++visual_unit_samples;
+            bool ok=target.submit(&op,1,nullptr,&coverage);target.destroy(source);
+            if(!ok)renderer_state.trace.write("unit-scene-rejection","pose submission failed",true);
+            return ok;
         };
         return operation;
     }
@@ -12804,10 +12823,10 @@ private:
                         // The retained command owns a fixed rectangle. Reserve
                         // room for interpolated travel or the new body would
                         // be clipped at its original native draw bounds.
-                        auto movement_margin=[&](double velocity){return job_unit_selection.has_visual&&job_unit.action==2?
-                            std::min(64,int(std::ceil(std::abs(velocity)*0.09*double(scale)/1000.0))+2):0;};
-                        int margin_x=movement_margin(job_unit_selection.velocity_x);
-                        int margin_y=movement_margin(job_unit_selection.velocity_y);
+                        auto movement_margin=[&](int current,int target){return job_unit_selection.has_visual&&job_unit.action==2?
+                            int(std::ceil(std::min(160.0,double(std::abs(target-current)))*double(scale)/1000.0))+2:0;};
+                        int margin_x=movement_margin(job_unit_selection.visual.pixel_x,job_unit_selection.visual.target_x);
+                        int margin_y=movement_margin(job_unit_selection.visual.pixel_y,job_unit_selection.visual.target_y);
                         result=renderer_state.gpu_composition->draw_dynamic(gpu_unit,
                             job_unit.sprite_width*scale/1000+2*margin_x,
                             job_unit.sprite_height*scale/1000+2*margin_y,

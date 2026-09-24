@@ -9,6 +9,14 @@ struct WaterMaterialFrame {
     float time=0, drift[3]={};
     float camera[4]={}; // natural-world center XY, wrapped raw-world periods XY
 };
+inline bool water_scene_tile(c3x_renderer_tile_v1 const& tile,bool visibility_pass){
+    // Civ III m49 is the underlying biome; m50 is the visible square category.
+    // A coast can have a land-like m49 value even though its rendered surface
+    // is water. Fogged tiles must not keep the material clock running.
+    return (tile.tile_flags&C3X_RENDERER_TILE_RENDER) &&
+        (!visibility_pass || (tile.tile_flags&C3X_RENDERER_TILE_VISIBLE)) &&
+        (tile.real_terrain_type>=11 || tile.terrain_type>=11 || (tile.river_code&170u));
+}
 inline WaterMaterialFrame water_material_frame(c3x_renderer_frame_v1 const& frame) {
     WaterMaterialFrame result;
     result.time=float(double(frame.presentation_time_ticks)/double(frame.presentation_frequency>0?frame.presentation_frequency:1));

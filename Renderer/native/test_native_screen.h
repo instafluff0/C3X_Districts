@@ -50,9 +50,28 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
     verify(window!=nullptr,"create native-owned test window");ShowWindow(window,SW_SHOWNOACTIVATE);UpdateWindow(window);
     HMODULE renderer_module=nullptr;verify(GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,reinterpret_cast<char const*>(live),&renderer_module)!=FALSE,"native renderer module");
     char candidate_path[MAX_PATH];verify(GetModuleFileNameA(renderer_module,candidate_path,MAX_PATH)>0,"candidate module path");tracking_candidate=candidate_path;
-    auto dc=GetDC(window);auto graph=patch_load_jgl_lib(path);auto jgl=bootstrap_jgl;verify(graph&&dc,"native screen fixture post-load boundary");
+    char helper64[4]={};bool remote_fixture=GetEnvironmentVariableA("C3X_RENDERER_HELPER64",helper64,sizeof(helper64))==1&&helper64[0]=='1';
+    auto dc=GetDC(window);void* graph=nullptr;
+    if(remote_fixture){
+        // This combined fixture has already constructed the renderer while
+        // testing map commands. Renderer64's production startup deliberately
+        // rejects changing modes then; the separate fresh-process startup
+        // probe covers that order. Attach the same native observer here.
+        graph=test_load_jgl(path);
+        auto module=LoadLibraryA(candidate_path);
+        auto lifetime=reinterpret_cast<c3x_renderer_native_lifetime_fn>(GetProcAddress(module,"c3x_renderer_native_lifetime"));
+        auto observe=reinterpret_cast<c3x_renderer_native_observe_fn>(GetProcAddress(module,"c3x_renderer_native_observe"));
+        verify(module&&lifetime&&observe,"remote fixture native observer exports");
+        state.custom_renderer_native_observe=observe;
+        lifetime(C3X_NATIVE_VERIFY,nullptr,0);
+        set_custom_renderer_native_hooks(true,nullptr);
+        state.custom_renderer_native_module=module;
+        state.custom_renderer_native_lifetime=lifetime;
+    }else graph=patch_load_jgl_lib(path);
+    auto jgl=bootstrap_jgl;verify(graph&&dc,"native screen fixture post-load boundary");
     auto gt=*static_cast<void***>(graph);
-    verify(state.custom_renderer_native_lifetime&&state.custom_renderer_native_probe_active,"production bootstrap before screen creation");
+    verify(state.custom_renderer_native_lifetime&&state.custom_renderer_native_probe_active,
+        remote_fixture?"remote fixture native observer attachment":"production bootstrap before screen creation");
     // The isolated factory does not install the screen palettes. Use audited
     // native creation/activation, as the game does, before its original transfer.
     auto palette_create=reinterpret_cast<void*(__thiscall*)(void*,void*)>(gt[30]);
@@ -227,7 +246,9 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
     {
         auto visual=reinterpret_cast<int(*)()>(GetProcAddress(renderer_module,"c3x_renderer_gpu_visual_frame"));
         auto status=reinterpret_cast<int(*)(c3x_renderer_visual_status_v1*)>(GetProcAddress(renderer_module,"c3x_renderer_gpu_visual_status"));
-        if(visual&&status){
+        // visual_status is an x86-worker diagnostic. Renderer64 presents on
+        // its own clock; those counters describe the unrelated local worker.
+        if(visual&&status&&!remote_fixture){
         copy(screen_surface,save,full);copy(scene,screen_surface,full);
         // Repeated native save/restore transfers must retain shared versions,
         // not one fullscreen texture per copy, before independent playback.
@@ -401,6 +422,17 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
         live(C3X_NATIVE_VISUAL_POLICY,nullptr,nullptr,nullptr,nullptr,1);
         auto action_scratch=create(graph,nullptr,1);
         verify(reinterpret_cast<Init>(action_scratch->vtable[1])(action_scratch,w,h,16,1)==0,"action scratch init");
+        // A directed movement has a larger retained travel envelope than its
+        // one-pose source image. The first GPU draw must accept that envelope
+        // without falling back to native CPU pixels.
+        auto observe_unit=reinterpret_cast<c3x_renderer_unit_visual_fn>(GetProcAddress(renderer_module,"c3x_renderer_unit_visual"));
+        c3x_renderer_unit_visual_v1 moving_visual={};moving_visual.struct_size=sizeof(moving_visual);
+        moving_visual.unit_id=901;moving_visual.action=2;moving_visual.pixel_x=100;moving_visual.target_x=164;
+        moving_visual.body_y=unit.body_y;moving_visual.projection_scale_milli=unit.projection_scale_milli;
+        moving_visual.max_hp=1;moving_visual.flags=C3X_RENDERER_UNIT_STATE_CAPTURED;
+        moving_visual.presentation_time_ticks=unit.presentation_time_ticks;
+        moving_visual.presentation_frequency=unit.presentation_frequency;
+        verify(observe_unit&&observe_unit(&moving_visual)==C3X_RENDERER_RESULT_OK,"directed movement visual input");
         c3x_renderer_visual_status_v1 action_before={sizeof(action_before)},action_after={sizeof(action_after)};
         verify(status(&action_before)==1,"action continuity baseline");
         double action_ms=0;unsigned transition_frames=0;

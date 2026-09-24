@@ -15,7 +15,7 @@ public:
         std::uint64_t revision=0;
         c3x_renderer_unit_v1 occurrence{};
         c3x_renderer_unit_visual_v1 visual{};
-        double velocity_x=0,velocity_y=0;
+        c3x_renderer_unit_visual_v1 motion_origin{};
         bool has_visual=false;
     };
 private:
@@ -26,7 +26,7 @@ private:
         std::uint64_t revision=0,used=0;
     };
     std::map<int,Instance> instances;
-    struct Observed {c3x_renderer_unit_visual_v1 value{};double velocity_x=0,velocity_y=0;};
+    struct Observed {c3x_renderer_unit_visual_v1 value{},origin{};};
     std::map<int,Observed> observations;
     std::map<int,c3x_renderer_unit_move_v1> accepted_moves;
     std::map<int,c3x_renderer_unit_spawn_v1> accepted_spawns;
@@ -142,26 +142,13 @@ public:
             return true;
         }
         auto found=observations.find(value.unit_id);
-        Observed next;next.value=value;
-        if(value.action==2){
-            double dx=double(value.target_x)-value.pixel_x;
-            double dy=double(value.target_y)-value.pixel_y;
-            double metric=std::hypot(dx,2.0*dy);
-            // Civ III uses a doubled-Y distance over its fast speed. The
-            // ordinary 150-pixel/s estimate starts the first segment; later
-            // observed progress replaces it with the actual per-unit rate.
-            if(metric>0){next.velocity_x=150.0*dx/metric;next.velocity_y=150.0*dy/metric;}
-        }
+        Observed next;next.value=value;next.origin=value;
         if(value.action==2&&found!=observations.end()){
             auto const& previous=found->second.value;
-            auto delta=value.presentation_time_ticks-previous.presentation_time_ticks;
             if(previous.action==2&&previous.target_x==value.target_x&&previous.target_y==value.target_y&&
-               previous.presentation_frequency==value.presentation_frequency&&delta>0&&
-               delta<value.presentation_frequency/2){
-                double seconds=double(delta)/double(value.presentation_frequency);
-                next.velocity_x=double(value.pixel_x-previous.pixel_x)/seconds;
-                next.velocity_y=double(value.pixel_y-previous.pixel_y)/seconds;
-            }
+               previous.projection_scale_milli==value.projection_scale_milli&&
+               previous.presentation_frequency==value.presentation_frequency)
+                next.origin=found->second.origin;
         }
         if(found==observations.end()&&observations.size()>=capacity)observations.erase(observations.begin());
         observations[value.unit_id]=next;
@@ -225,8 +212,8 @@ public:
            observed->second.value.presentation_time_ticks==request.presentation_time_ticks&&
            observed->second.value.presentation_frequency==request.presentation_frequency&&
            observed->second.value.body_x==request.body_x&&observed->second.value.body_y==request.body_y){
-            selected.visual=observed->second.value;selected.velocity_x=observed->second.velocity_x;
-            selected.velocity_y=observed->second.velocity_y;selected.has_visual=true;
+            selected.visual=observed->second.value;
+            selected.motion_origin=observed->second.origin;selected.has_visual=true;
         }
         return true;
     }
@@ -248,22 +235,37 @@ public:
             if(!predict && !clip.ambient && output.action==1){output.action_cursor=0;output.frame_count=1;}
         }
         if(selected.has_visual&&output.action==2&&selected.visual.action==2&&
-           selected.visual.presentation_frequency==frequency&&ticks>=selected.visual.presentation_time_ticks){
-            // Renderer time only refines the displayed location. It does not
-            // advance Civ III's tile, animation cursor, or movement outcome.
-            double elapsed=double(ticks-selected.visual.presentation_time_ticks)/double(frequency);
-            elapsed=std::min(elapsed,0.09); // Never run far ahead of native correction.
-            auto motion=[&](int current,int target,double velocity){
-                double delta=velocity*elapsed;
-                int remaining=target-current;
-                if(remaining>0)delta=std::clamp(delta,0.0,double(remaining));
-                else delta=std::clamp(delta,double(remaining),0.0);
-                double screen_limit=64.0*1000.0/double(selected.visual.projection_scale_milli);
-                return std::clamp(delta,-screen_limit,screen_limit);
+           selected.motion_origin.presentation_frequency==frequency&&
+           ticks>=selected.motion_origin.presentation_time_ticks){
+            // Civ III has already accepted this move and supplied its actual
+            // pixel target. Sample one continuous segment from the first body
+            // observation; later sparse native poses correct it without
+            // restarting the clock or pulling the unit backwards.
+            auto const& origin=selected.motion_origin;
+            double dx=double(origin.target_x)-origin.pixel_x;
+            double dy=double(origin.target_y)-origin.pixel_y;
+            double distance=std::hypot(dx,2.0*dy);
+            double elapsed=double(ticks-origin.presentation_time_ticks)/double(frequency);
+            // One ordinary native step is at most a tile. A larger target
+            // delta means a camera/projection discontinuity, not travel to
+            // predict from this stale screen-space anchor.
+            // FLC_Animation advances toward its target with doubled-Y
+            // distance / Animation_Info::fast_speed. Civ III's stock ground
+            // unit INIs (including Scout and Worker) specify Fast Speed=225;
+            // later authoritative poses correct custom-unit speed overrides.
+            constexpr double stock_ground_move_speed=225.0;
+            double progress=distance>0&&distance<=160.0?
+                std::clamp(stock_ground_move_speed*elapsed/distance,0.0,1.0):0.0;
+            auto position=[&](double start,double change,double current){
+                double predicted=start+change*progress;
+                return change>0?std::max(predicted,current):change<0?std::min(predicted,current):current;
             };
             double scale=double(selected.visual.projection_scale_milli)/1000.0;
-            output.body_x+=int(std::lround(motion(selected.visual.pixel_x,selected.visual.target_x,selected.velocity_x)*scale));
-            output.body_y+=int(std::lround(motion(selected.visual.pixel_y,selected.visual.target_y,selected.velocity_y)*scale));
+            output.body_x+=int(std::lround((position(origin.pixel_x,dx,selected.visual.pixel_x)-selected.visual.pixel_x)*scale));
+            output.body_y+=int(std::lround((position(origin.pixel_y,dy,selected.visual.pixel_y)-selected.visual.pixel_y)*scale));
+            if(output.frame_count>1&&distance>0)
+                output.action_cursor=std::max(output.action_cursor,
+                    std::min(output.frame_count-1,int(progress*output.frame_count)));
         }
         return true;
     }

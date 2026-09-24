@@ -22,6 +22,7 @@ def main(argv=None):
     parser.add_argument('--dll',type=Path,default=Path('Renderer/native/build/candidate/C3XRenderer.dll'))
     parser.add_argument('--x64-helper',type=Path,help='Opt-in x64 scene process for the same native fixture')
     parser.add_argument('--x64-dll',type=Path,help='Renderer DLL loaded only by the x64 scene process')
+    parser.add_argument('--direct-surface-trial',action='store_true',help='Use Renderer64 direct presentation in the native fixture')
     parser.add_argument('--present-phases',action='store_true',help='Diagnostic x86 presentation split; invalidates latency-baseline claims')
     parser.add_argument('--reserve-address-mib',type=int,choices=range(0,1537,64),default=0,help='Harness-only reservation simulating co-resident process address-space pressure')
     parser.add_argument('--input-soak-seconds', type=int, choices=(30, 600), help='Real wall-clock native recorder endurance; capture-on/off use identical input owners')
@@ -63,6 +64,7 @@ def main(argv=None):
     parser.add_argument("--scroll-coverage",action="store_true",help="Exercise fine scrolling and guard coverage against missing map pixels")
     args=parser.parse_args(argv)
     if bool(args.x64_helper)!=bool(args.x64_dll):parser.error('x64 helper and DLL must be supplied together')
+    if args.direct_surface_trial and not args.x64_helper:parser.error('direct surface requires the x64 helper')
     if args.window_witness_seconds and args.benchmark:
         parser.error('Window evidence competes for GPU/CPU; use a separate witness run from the benchmark')
     if args.window_witness_seconds and args.present_phases:
@@ -92,7 +94,12 @@ def main(argv=None):
     (build/'native_line_hooks.h').write_text(re.sub(r'\bthis\b','context',text[start:text.index('int __fastcall\npatch_Tile_check_water',start)]))
     (build/'native_probe_hooks.h').write_text(text[text.index('// JGL observation hooks:'):text.index('// End JGL observation hooks.')])
     start=text.index('void\nstart_custom_renderer_native_tracking ()')
-    (build/'native_tracking_bootstrap.h').write_text(text[start:text.index('void\npatch_init_floating_point ()',start)])
+    bootstrap=text[start:text.index('void\npatch_init_floating_point ()',start)]
+    # The injected C accepts void* -> function-pointer assignment; this
+    # extracted native harness is C++ and needs the equivalent explicit cast.
+    bootstrap=bootstrap.replace('int (*set_backend_mode) (int) = (void *)',
+                                'int (*set_backend_mode) (int) = (int (*)(int))')
+    (build/'native_tracking_bootstrap.h').write_text(bootstrap)
     text=(ROOT/'C3X.h').read_text();start=text.index('\tc3x_renderer_native_observe_fn')
     (build/'native_probe_state.h').write_text(text[start:text.index('\tc3x_renderer_unit_draw_background_fn',start)])
     scene=args.scene.resolve();dll=args.dll.resolve()
@@ -156,6 +163,9 @@ def main(argv=None):
     if helper64:
         settings.update({'C3X_RENDERER_HELPER64':'1','C3X_RENDERER_HELPER_EXE':str(win/helper64.relative_to(ROOT)),
             'C3X_RENDERER_X64_DLL':str(win/dll64.relative_to(ROOT))})
+    if args.direct_surface_trial:
+        settings.update({'C3X_RENDERER_DIRECT_SURFACE_TRIAL':'1',
+                         'C3X_RENDERER_DIRECT_SURFACE_STRICT_TRIAL':'1'})
     if args.present_phases:settings['C3X_RENDERER_PRESENT_PHASES']='1'
     settings['C3X_RENDERER_NATIVE_UI_PACK']=str(target/'native-ui.pack')
     settings['C3X_RENDERER_TEST_RESERVE_MIB']=str(args.reserve_address_mib)

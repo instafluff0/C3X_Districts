@@ -1,20 +1,26 @@
 # Start ordinary gameplay with bounded, process-filtered diagnostics.
 # Portable Microsoft DebugView and Intel PresentMon live in ignored build data.
-param([switch]$CheckOnly, [switch]$NoReplayRecording, [switch]$ShortDiagnostic, [string]$ConquestsDirectory)
+param([switch]$CheckOnly, [switch]$NoReplayRecording, [switch]$ShortDiagnostic,
+      [switch]$Renderer64, [string]$ConquestsDirectory)
 $ErrorActionPreference = 'Stop'
 if ($ShortDiagnostic -and $NoReplayRecording) { throw 'ShortDiagnostic requires input recording.' }
+if ($Renderer64 -and -not $ShortDiagnostic) { throw 'Renderer64 recording currently requires ShortDiagnostic.' }
 $renderer = Split-Path $PSScriptRoot -Parent
 $tools = Join-Path $renderer 'native\build\live-tools'
 $arm = $env:PROCESSOR_ARCHITECTURE -eq 'ARM64' -or $env:PROCESSOR_ARCHITEW6432 -eq 'ARM64'
 $debugName = if ($arm) { 'dbgviewcli64a.exe' } else { 'dbgviewcli64.exe' }
 $debug = Join-Path $tools ('DebugView\' + $debugName)
 $present = Join-Path $tools 'PresentMon.exe'
-$dll = Join-Path $renderer 'bin\C3XRenderer.dll'
+$runtime = if ($Renderer64) { Join-Path $renderer 'bin\renderer64' } else { Join-Path $renderer 'bin' }
+$dll = Join-Path $runtime 'C3XRenderer.dll'
+$renderer64Dll = if ($Renderer64) { Join-Path $runtime 'C3XRenderer_x64.dll' } else { $null }
+$renderer64Helper = if ($Renderer64) { Join-Path $runtime 'C3XRendererHelper64.exe' } else { $null }
 $witness = Join-Path $renderer 'native\build\window-witness\window_witness.exe'
 $inspect = Join-Path $renderer 'native\build\input-recording\inspect_inputs.exe'
 $replay = Join-Path $renderer 'native\build\input-recording\replay_inputs.exe'
 $qualification = Join-Path $renderer 'native\build\input-recording\capture-ready.json'
 if ($ShortDiagnostic) { $qualification = Join-Path $renderer 'native\build\input-recording\short-capture-ready.json' }
+if ($Renderer64) { $qualification = Join-Path $renderer 'native\build\input-recording\renderer64-short-capture-ready.json' }
 $conquests = $ConquestsDirectory
 if (-not $conquests) { $conquests = $env:C3X_RENDERER_CIV3_CONQUESTS }
 if (-not $conquests) {
@@ -78,6 +84,7 @@ if (-not $CheckOnly -and -not $elevated) {
     $command = "& '" + $script.Replace("'", "''") + "' -ConquestsDirectory '" + $directory.Replace("'", "''") + "'"
     if ($NoReplayRecording) { $command += ' -NoReplayRecording' }
     if ($ShortDiagnostic) { $command += ' -ShortDiagnostic' }
+    if ($Renderer64) { $command += ' -Renderer64' }
     $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($command))
     $arguments = @('-NoProfile','-ExecutionPolicy','Bypass','-EncodedCommand',$encoded)
     try {
@@ -97,7 +104,9 @@ $session = $null
 $saved = $null
 $result = 1
 try {
-    foreach ($file in @($game, $dll, $debug, $present, $witness, $inspect, $replay)) {
+    $required = @($game, $dll, $debug, $present, $witness, $inspect, $replay)
+    if ($Renderer64) { $required += @($renderer64Dll, $renderer64Helper) }
+    foreach ($file in $required) {
         if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { throw "Required file is missing: $file" }
     }
     foreach ($tool in @($debug, $present)) {
@@ -114,14 +123,23 @@ try {
     if (-not $NoReplayRecording) {
         if (-not (Test-Path -LiteralPath $qualification -PathType Leaf)) { throw 'The input recorder has not passed its capture acceptance checks yet. No game was started.' }
         $ready = Get-Content -LiteralPath $qualification -Raw | ConvertFrom-Json
-        if ($ShortDiagnostic -and $ready.scope -ne 'short-diagnostic-capture') {
-            throw 'This receipt does not qualify the short diagnostic workflow.'
+        $expectedScope = if ($Renderer64) { 'renderer64-short-diagnostic-capture' } else { 'short-diagnostic-capture' }
+        if ($ShortDiagnostic -and $ready.scope -ne $expectedScope) {
+            throw 'This receipt does not qualify the selected short diagnostic workflow.'
         }
         if ($ShortDiagnostic -and $ready.launcher_sha256 -ne (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant()) {
             throw 'The diagnostic launcher changed since validation.'
         }
         if ($ready.status -ne 'pass' -or $ready.dll_sha256 -ne (Get-FileHash -LiteralPath $dll -Algorithm SHA256).Hash.ToLowerInvariant()) {
             throw 'The staged renderer does not match the qualified capture build. No game was started.'
+        }
+        if ($Renderer64 -and ($ready.renderer64_dll_sha256 -ne (Get-FileHash -LiteralPath $renderer64Dll -Algorithm SHA256).Hash.ToLowerInvariant() -or
+                              $ready.renderer64_helper_sha256 -ne (Get-FileHash -LiteralPath $renderer64Helper -Algorithm SHA256).Hash.ToLowerInvariant())) {
+            throw 'A Renderer64 companion changed since capture qualification. No game was started.'
+        }
+        if ($Renderer64 -and ($ready.batch_sha256 -ne (Get-FileHash -LiteralPath (Join-Path $renderer 'CAPTURE_DIAGNOSTIC.bat') -Algorithm SHA256).Hash.ToLowerInvariant() -or
+                              $ready.frames_launcher_sha256 -ne (Get-FileHash -LiteralPath (Join-Path $PSScriptRoot 'capture_frames.ps1') -Algorithm SHA256).Hash.ToLowerInvariant())) {
+            throw 'A Renderer64 capture launcher changed since validation. No game was started.'
         }
         foreach ($pair in @(@($witness, $ready.window_witness_sha256), @($inspect, $ready.inspector_sha256), @($replay, $ready.replay_sha256))) {
             if ($pair[1] -ne (Get-FileHash -LiteralPath $pair[0] -Algorithm SHA256).Hash.ToLowerInvariant()) {
@@ -166,6 +184,11 @@ try {
     $metadata = [ordered]@{
         schema = 1; started_utc = [DateTime]::UtcNow.ToString('o')
         renderer_sha256 = (Get-FileHash -LiteralPath $dll -Algorithm SHA256).Hash.ToLowerInvariant()
+        renderer_backend = if ($Renderer64) { 'Renderer64 direct surface' } else { 'x86' }
+        renderer64_dll_sha256 = if ($Renderer64) { (Get-FileHash -LiteralPath $renderer64Dll -Algorithm SHA256).Hash.ToLowerInvariant() } else { $null }
+        renderer64_helper_sha256 = if ($Renderer64) { (Get-FileHash -LiteralPath $renderer64Helper -Algorithm SHA256).Hash.ToLowerInvariant() } else { $null }
+        presentmon_target = if ($Renderer64) { 'C3XRendererHelper64.exe' } else { 'Civ3Conquests.exe' }
+        presentmon_scope = if ($Renderer64) { 'Renderer64 helper presents; Civ III UI is observed in window samples' } else { 'Civ III presents' }
         presentmon_sha256 = (Get-FileHash -LiteralPath $present -Algorithm SHA256).Hash.ToLowerInvariant()
         debugview_sha256 = (Get-FileHash -LiteralPath $debug -Algorithm SHA256).Hash.ToLowerInvariant()
         trace_level = 1; expensive_profiling = $false; limit_seconds = 900
@@ -173,6 +196,7 @@ try {
         input_recording = -not $NoReplayRecording; window_recording = -not $NoReplayRecording
         capture_host_elevated = $elevated
         game_launch = 'CreateProcess with inherited diagnostic environment'
+        game_working_directory = $conquests
         recording_scope = 'production renderer and native bridge inputs; correlated sampled window evidence'
         recording_max_bytes = 8589934592; recording_max_seconds = 600
         recording_duration_anchor = 'first successful GPU presentation'
@@ -194,11 +218,16 @@ try {
     # not require elevation or another process to remain attached.
     $env:C3X_RENDERER_TRACE_FILE = Join-Path $session 'renderer-runtime.log'
     $env:C3X_RENDERER_TRACE_MIB = '64'
+    if ($Renderer64) { $env:C3X_RENDERER_HELPER64 = '1' }
     # Input and external-window recording compete for CPU/GPU resources.
     # Its observed FPS is diagnostic, never a performance baseline.
     $env:C3X_RENDERER_RECORD_FILE = ''
     $env:C3X_RENDERER_INPUT_RECORD_DIR = if ($NoReplayRecording) { '' } else { Join-Path $session 'inputs' }
     Copy-Item -LiteralPath $dll -Destination (Join-Path $session 'C3XRenderer.dll')
+    if ($Renderer64) {
+        $frozen = New-Item -ItemType Directory -Path (Join-Path $session 'renderer64') -Force
+        Copy-Item -LiteralPath $renderer64Dll, $renderer64Helper -Destination $frozen.FullName
+    }
     $replayTools = New-Item -ItemType Directory -Path (Join-Path $session 'replay-tools')
     Copy-Item -LiteralPath $replay, $inspect -Destination $replayTools.FullName
     Copy-Item -LiteralPath $qualification -Destination (Join-Path $session 'capture-build.json') -ErrorAction SilentlyContinue
@@ -210,7 +239,8 @@ try {
     if ($debugProcess.HasExited) { throw 'Debug output collector stopped before the game started.' }
 
     $presentArgs = @('-NoProfile','-ExecutionPolicy','Bypass','-File',(Join-Path $PSScriptRoot 'capture_frames.ps1'),
-        '-SessionDirectory',$session,'-SessionName',('C3XCapture-' + $stamp),'-PresentMon',$present)
+        '-SessionDirectory',$session,'-SessionName',('C3XCapture-' + $stamp),'-PresentMon',$present,
+        '-TargetProcess',$(if ($Renderer64) { 'C3XRendererHelper64.exe' } else { 'Civ3Conquests.exe' }))
     try {
         $presentProcess = Start-Process -FilePath 'powershell.exe' -ArgumentList (Quote-Arguments $presentArgs) -PassThru -WindowStyle Hidden
         $readyDeadline = [DateTime]::UtcNow.AddSeconds(20)
@@ -257,7 +287,23 @@ try {
         $null = $witnessProcess.Handle
     }
     $deadline = [DateTime]::UtcNow.AddSeconds(900)
+    $nextHelperSample = [DateTime]::UtcNow
     while (-not $gameProcess.HasExited -and [DateTime]::UtcNow -lt $deadline) {
+        if ($Renderer64 -and [DateTime]::UtcNow -ge $nextHelperSample) {
+            $nextHelperSample = [DateTime]::UtcNow.AddSeconds(1)
+            foreach ($helperProcess in @(Get-Process -Name C3XRendererHelper64 -ErrorAction SilentlyContinue)) {
+                try {
+                    $sample = [ordered]@{
+                        qpc = [System.Diagnostics.Stopwatch]::GetTimestamp()
+                        pid = $helperProcess.Id
+                        private_bytes = $helperProcess.PrivateMemorySize64
+                        working_set_bytes = $helperProcess.WorkingSet64
+                        cpu_seconds = $helperProcess.TotalProcessorTime.TotalSeconds
+                    }
+                    $sample | ConvertTo-Json -Compress | Add-Content -LiteralPath (Join-Path $session 'renderer64-memory.jsonl')
+                } catch { Write-Warning 'One helper memory sample was unavailable; capture continues.' }
+            }
+        }
         if (-not $NoReplayRecording -and (Test-Path -LiteralPath (Join-Path $session 'inputs\finished.json'))) { break }
         if ($ShortDiagnostic -and -not $metadata.capture_stop_requested) {
             $reason = Get-ShortCaptureStopReason (Join-Path $session 'window\timeline.jsonl')
@@ -305,6 +351,15 @@ try {
         }
         $recordingDirectory = Join-Path $session 'inputs'
         $metadata.recording_present = Test-Path -LiteralPath (Join-Path $recordingDirectory 'started.json')
+        if ($Renderer64) {
+            $helperMemory = Join-Path $session 'renderer64-memory.jsonl'
+            $metadata.renderer64_helper_observed = (Test-Path -LiteralPath $helperMemory) -and (Get-Item -LiteralPath $helperMemory).Length -gt 0
+            $metadata.renderer64_trace_present = Test-Path -LiteralPath (Join-Path $session 'renderer-runtime.log.x64')
+            if (-not $metadata.renderer64_helper_observed) {
+                $metadata.result = 'renderer64-helper-not-observed'; $result = 1
+                Write-Warning 'Renderer64 helper was not observed. Capture is not a Renderer64 performance baseline.'
+            }
+        }
         $metadata.recording_complete = $false
         if ($metadata.recording_present) {
             & $inspect $recordingDirectory (Join-Path $session 'inspection') --allow-prefix > (Join-Path $session 'inspection.log') 2>&1

@@ -1,20 +1,20 @@
 # Short gameplay diagnostic
 
-This is a 60–90-second calibration capture for the bottleneck investigation.
-It is not ten-minute endurance qualification, live FPS acceptance, or proof that
-replay reproduces all game scheduling. The normal ten-minute capture admission
-remains separate.
+This is a 60–90-second Renderer64 calibration capture for unit travel and
+camera navigation. It records the actual staged 32-bit bridge, 64-bit DLL and
+helper. It is not ten-minute endurance qualification or live FPS acceptance.
 
-Use this input-capture workflow only when its readiness receipt matches the staged
-DLL; see the roadmap for current staging and unresolved qualification. An evaluation
-DLL may instead use the targeted failure logs described below. For a qualified
-input capture, close Civ III, then double-click
-`Renderer\CAPTURE_DIAGNOSTIC.bat` and accept the Windows capture permission.
-The launcher starts the game with input recording, presentation timing, bounded
-renderer logs, sampled window images and process memory measurements.
+Close Civ III, double-click `Renderer\CAPTURE_DIAGNOSTIC.bat` on Windows, and
+accept the Windows capture permission. The launcher checks the exact staged
+Renderer64 binaries against `renderer64-short-capture-ready.json` before it
+starts the game. It records ordered renderer inputs, helper presentation timing,
+bounded logs, sampled whole-window images, and Civ III/helper memory. It does
+not require `INSTALL.bat` again for the currently staged build.
 
-Load a game and play naturally for about a minute: linger over animated water
-and resources, scroll and jump the camera, select/move units and end a turn.
+Load a game and play for 60–90 seconds: idle over visible water and resources
+for about ten seconds; move a selected unit twice; scroll continuously; make
+one distant camera jump, including a selected-unit jump if convenient. Include
+an interturn only if it fits naturally.
 Return to the capture console and press **Enter**, keeping Civ III open until
 **Capture saved** appears. The recorder closes between complete transactions;
 collectors stop and results are saved automatically. Then quit the game if desired
@@ -26,34 +26,32 @@ sampling cannot guarantee prevention of a sudden allocation failure. The saved
 metadata distinguishes this stop from a user finish. A crash may leave a verified
 prefix, never a silently certified complete session.
 
-The short admission receipt pins the DLL, replay/inspection/window tools and
-launcher. It requires source-matched builds, reverse-order capture-on/off controls,
-requested-stop tests, window collector tests and exact repeated replay. The
-overhead checks use the fullscreen Standard fixture with all water effects on.
-Their measured recorder overhead does not include every live-game scheduling
-effect; observer overhead and the game's heap layout remain separately identified.
-Captured FPS is diagnostic, not the unrecorded game's performance baseline.
+The Renderer64 readiness receipt pins all three binaries and the capture tools.
+A fresh controlled direct-surface recording closed, then exact and real-time
+same-route replay completed. The separate startup and launcher/window controls
+passed without launching Civ III. The direct-surface fixture still disagrees
+with the old x86 pixel oracle; this is a visual qualification limit, not a
+claim of pixel parity. Captured FPS includes observer overhead and is not the
+unrecorded game's performance baseline.
 
-After recording, first verify the journal and compare replayed symptoms against
-the actual window samples. Use the fixed inputs for the bounded bottleneck
-campaign only within the established fidelity limits. Do not claim architectural
-speedups from faster API returns alone.
+After recording, the agent runs
+`python3 -m Renderer.tools.analyze_renderer64_capture SESSION_DIR` on the Mac
+for bridge call time, helper present intervals, memory and coverage. Use
+`Renderer.tools.inspect_window_witness` with the
+session's `window` and `inspection` directories to review a contact sheet and
+timestamped window samples. Compare replayed symptoms against those samples
+before using the fixed inputs for candidate comparisons. The next helper present
+after an input is an opportunity, not proof of a correct displayed frame.
 
 ## Targeted failure logs without a replay recording
 
-`Renderer\CAPTURE_FAILURE.bat` reuses the existing launch/collector path with
-`-NoReplayRecording`. It pins the staged DLL and saves bounded renderer/debug
-logs and presentation timing; it does not record input journals or window images,
-and is not replay qualification or a performance baseline. Use it only for a
-specific unexplained live failure after automated investigation. Reproduce the
-problem and close Civ III (or terminate it if unresponsive); the collector saves
-results through the existing cleanup path. No ten-minute play session is needed.
-A read-only preflight is `CAPTURE_FAILURE.bat -CheckOnly`; it starts no game.
-The short input-capture launcher above still requires its exact qualified build.
+`Renderer\CAPTURE_FAILURE.bat` is the earlier x86 targeted-log workflow. It does
+not capture the current Renderer64 triad and should not be used to diagnose this
+build. The short input-capture launcher above is the current Renderer64 path.
 
-## Preserved earlier qualification
+## Preserved earlier x86 qualification
 
-The readiness receipt pins DLL
+The earlier x86 short-capture receipt pins DLL
 `54aac95f5e1174aaf3c9b8f034a16c3c786fad8258a4e336c8bcce75e14558d4`
 and the current replay, inspector and window collector. Four fresh fullscreen
 control arms pass at 1 GiB reserved VA with water effects enabled. Off/on p95 is
@@ -65,10 +63,9 @@ The full-duration launcher remains independently admission-gated.
 
 ## Maintaining capture readiness when staging
 
-A renderer evaluation update must also refresh the supported short-capture
-workflow before it is reported ready for recording. Use
-`python3 -m Renderer.tools.qualify_short_capture` with evidence for the exact
-candidate, then run `capture_game.ps1 -ShortDiagnostic -CheckOnly` on Windows and
-verify the installed mod resolves to that staged DLL. Do not merely replace the
-DLL hash in an older admission receipt. If capture has not yet been revalidated,
-state that limitation explicitly; rendering qualification alone is insufficient.
+A Renderer64 update must refresh the short-capture receipt with controlled
+direct-route recording, exact/real-time replay and launcher/window evidence for
+the exact staged triad. Run `python3 -m Renderer.tools.qualify_renderer64_capture`
+with its three evidence paths, then run
+`capture_game.ps1 -ShortDiagnostic -Renderer64 -CheckOnly` on Windows. Never
+copy hashes into an older receipt to bypass qualification.

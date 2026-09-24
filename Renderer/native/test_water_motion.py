@@ -13,6 +13,14 @@ int main(){
  static_assert(sizeof(WaterMaterialFrame)==32,"two constant-buffer vectors");
  c3x_renderer_tile_v1 tile={};tile.tile_x=10;tile.tile_y=12;
  tile.anchor_x=100;tile.anchor_y=200;tile.tile_flags=C3X_RENDERER_TILE_RENDER;
+ tile.terrain_type=2;tile.real_terrain_type=11;
+ assert(water_scene_tile(tile,false)); // Civ III coast: land-like m49, water m50.
+ assert(!water_scene_tile(tile,true)); // Explored/fogged water stays still.
+ tile.tile_flags|=C3X_RENDERER_TILE_VISIBLE;
+ assert(water_scene_tile(tile,true));
+ tile.real_terrain_type=2;assert(!water_scene_tile(tile,true));
+ tile.river_code=170;assert(water_scene_tile(tile,true));
+ tile.real_terrain_type=11;tile.river_code=0;
  c3x_renderer_frame_v1 frame={};frame.target_width=640;frame.target_height=480;
  frame.tile_width=128;frame.tile_height=64;frame.tiles=&tile;frame.tile_count=1;
  frame.presentation_frequency=1000;frame.world_width_tiles=100;frame.world_height_tiles=80;

@@ -14,15 +14,20 @@ enable_custom_rendering_cache = true
 enable_custom_rendering_zoom = true
 ```
 
-With Civ III closed, run `INSTALL.bat` from the Windows installed game's
-`Conquests\C3X_Districts` directory, then launch Civ III normally. In the configured
-VM this directory links to the shared current checkout. Use that installed-game
-path so the injector resolves the executable and records the correct relative
-mod directory. `C3X_RENDERER_CIV3_CONQUESTS` configures a relocated game install.
+With Civ III closed, run `Renderer\SETUP_GAME_TEST.bat` through the Windows
+installed game's `Conquests\C3X_Districts` checkout, then launch Civ III
+normally. In the configured VM this directory links to the shared current
+checkout. Use that installed-game path so the injector resolves the executable
+and records the correct relative mod directory. The script compiles and stages
+the matching 32-bit bridge, Renderer64 DLL and helper under
+`Renderer\bin\renderer64\`, verifies the injected code, and runs `INSTALL.bat`.
+It creates an enabled `custom.c3x_config.ini` only if none exists. Art packs
+must already be copied into `Renderer\packs\`. Pass `--check` for a read-only
+preflight.
 
-`INSTALL.bat` installs the injected bridge; it does **not** compile or stage the
-renderer. The bridge loads `Renderer\bin\C3XRenderer.dll`, whose current staged
-identity and validation are recorded in the [roadmap](retained_renderer_plan.md).
+`INSTALL.bat` alone installs the injected bridge; it does **not** compile or
+stage Renderer64. The current build identity and validation are recorded in the
+[roadmap](retained_renderer_plan.md).
 The native GPU/JGL route and guarded asynchronous manual-pan path require no
 additional launcher. Reset any explicit `C3X_RENDERER_NATIVE_ASYNC=0` diagnostic
 override to use the default. Configuration changes require a game restart.

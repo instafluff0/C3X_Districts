@@ -31,6 +31,19 @@ there is no separate backend setting. `INSTALL.bat` still installs C3X itself.
 The game-facing direct surface and unit/UI behavior remain under integration
 qualification as described in the [current status](docs/retained_renderer_plan.md).
 
+For a repeatable game test from a Windows VM, run
+`Renderer\SETUP_GAME_TEST.bat` through the checkout inside the installed game's
+`Conquests\C3X_Districts` folder, with Civ III closed. It checks the copied local
+packs, creates `custom.c3x_config.ini` with the renderer enabled only if that file
+is absent, compiles the injected bridge, builds/stages the matching Renderer64
+binaries, and runs `INSTALL.bat`. It does not copy art or launch the game. The VM
+needs Visual Studio C++ x86/x64 build tools; the art packs remain local and
+ignored by Git. An existing local config is preserved and must enable custom
+rendering for this test. Pass `--check` for a read-only location, packs, and
+build-tool preflight without compiling or installing.
+If Windows protects the installed `Conquests` directory, run the setup from an
+elevated Command Prompt so `INSTALL.bat` can update the game executable.
+
 Start with [the visual workbench](lab/README.md). The catalog has separate entries
 for base terrains, relief, vegetation, water, map objects and animation. Shared
 day/night and shadows live under lighting; tile-to-tile transitions live under

@@ -73,12 +73,24 @@ int main(){
  assert(motion.observe(visual));
  assert(motion.capture(moving,1,catalog,name,first));
  assert(motion.animated(first,catalog));
- assert(motion.sample(first,1016000,1000000,catalog,out,step)&&out.body_x==1002);
+ assert(motion.sample(first,1016000,1000000,catalog,out,step)&&out.body_x==1004);
  visual.pixel_x=106;visual.body_x=1006;visual.presentation_time_ticks=1066000;
  moving.body_x=1006;moving.presentation_time_ticks=1066000;
  assert(motion.observe(visual)&&motion.capture(moving,1,catalog,name,second));
- assert(motion.sample(second,1099000,1000000,catalog,out,step)&&out.body_x==1009);
- assert(motion.sample(second,2000000,1000000,catalog,out,step)&&out.body_x<=1015); // bounded extrapolation
+ assert(motion.sample(second,1099000,1000000,catalog,out,step)&&out.body_x==1022 && out.action_cursor>=3);
+ assert(motion.sample(second,1300000,1000000,catalog,out,step)&&out.body_x==1068);
+ assert(motion.sample(second,2000000,1000000,catalog,out,step)&&out.body_x==1100); // accepted target reached without another native tick
+ UnitInstances correction;UnitInstances::Selection corrected;
+ visual.pixel_x=100;visual.body_x=1000;visual.presentation_time_ticks=1000000;
+ moving.body_x=1000;moving.presentation_time_ticks=1000000;
+ assert(correction.observe(visual)&&correction.capture(moving,1,catalog,name,corrected));
+ assert(correction.sample(corrected,1300000,1000000,catalog,out,step)&&out.body_x==1068);
+ visual.pixel_x=110;visual.body_x=1010;visual.presentation_time_ticks=1300000;
+ moving.body_x=1010;moving.presentation_time_ticks=1300000;
+ assert(correction.observe(visual)&&correction.capture(moving,1,catalog,name,corrected));
+ assert(correction.sample(corrected,1316000,1000000,catalog,out,step)&&out.body_x>=1071); // no snap back at a late native pose
+ visual.pixel_x=106;visual.body_x=1006;visual.presentation_time_ticks=1066000;
+ moving.body_x=1006;moving.presentation_time_ticks=1066000;
  auto stale=visual;stale.presentation_time_ticks=1000000;assert(!motion.observe(stale));
  c3x_renderer_unit_move_v1 accepted{};accepted.struct_size=sizeof(accepted);
  accepted.unit_id=55;accepted.old_x=4;accepted.old_y=4;accepted.new_x=5;accepted.new_y=5;

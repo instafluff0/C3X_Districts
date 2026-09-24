@@ -734,8 +734,16 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
         frame.presentation_time_ticks=0;ok=ok && draw();auto zero=pixels();save(".water-zero.bmp");
         SetEnvironmentVariableA("C3X_RENDERER_WATER_MOTION","0");reset();
         ok=ok && set_definitions(argv[2],argv[3],nullptr,custom_path)==C3X_RENDERER_RESULT_OK && draw() && match("zero-static",zero);
+        // Shore waves remain independently animated when ocean material
+        // motion is disabled. Disable them only for this explicit still-water
+        // control; the normal lifecycle above and below keeps waves on.
+        char wave_control[8]={};GetEnvironmentVariableA("C3X_RENDERER_WAVES",wave_control,sizeof(wave_control));
+        SetEnvironmentVariableA("C3X_RENDERER_WAVES","0");reset();
+        ok=ok && set_definitions(argv[2],argv[3],nullptr,custom_path)==C3X_RENDERER_RESULT_OK && draw();
         auto off=pixels();ok=ok && save(".water-off.bmp");frame.presentation_time_ticks=5*frame.presentation_frequency;
         ok=ok && draw() && pixels()==off && !output.visible_animation_count;
+        SetEnvironmentVariableA("C3X_RENDERER_WAVES",wave_control[0]?wave_control:nullptr);
+        reset();ok=ok && set_definitions(argv[2],argv[3],nullptr,custom_path)==C3X_RENDERER_RESULT_OK && draw();
         std::printf("WATER control: %s zero_time_static_rounding_budget=1 disabled_still=1\n",ok?"pass":"FAIL");
         int water_center=center_x;center_x+=2;tiles=capture_view();frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());
         ok=ok && draw();auto still_pan=pixels();reset();

@@ -28,10 +28,21 @@ the former 1,326-line roadmap.
   selection, silently forcing native fallback. Selection now precedes native
   screen tracking and repeat selection is safe. The exact installed-directory
   startup probe passes bridge selection, early screen-policy activity, definition
-  loading and helper health. Real game UI ordering, autonomous cadence and
-  lifecycle acceptance still await the user's live check. Earlier paired
+  loading and helper health. The user confirmed normal installation activates
+  the custom renderer and reported mostly smooth idle play, but slow unit travel,
+  scrolling and distant jumps. Complete UI ordering, autonomous cadence and
+  lifecycle acceptance remain open. Earlier paired
   speed/pixel numbers accidentally compared the shared-image route with itself
-  and are invalid for this surface.
+  and are invalid for this surface. The Renderer64 short diagnostic is now
+  source-matched and staged: its controlled direct-surface journal closed with
+  7,137 calls and 87 accepted presentations, and exact/real-time same-route
+  replays completed, with startup and launcher/window controls passing. These
+  counts are capture/replay coverage, not a gameplay FPS measurement. The direct
+  fixture still fails the legacy x86 pixel oracle,
+  so it is not visual-parity evidence. The next responsibility is one short live
+  capture to calibrate helper presents and complete-window samples against the
+  reported movement and navigation delays; see
+  [short diagnostic capture](short_diagnostic_capture.md).
 - The unit body now carries a separate copied native visual observation.
   Renderer64 can smooth movement between successive accepted pixel samples;
   full event-scoped A-to-B timing and selection/path alignment are still open.

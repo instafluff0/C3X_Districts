@@ -40,7 +40,11 @@ def main():
     (build/'native_line_hooks.h').write_text(re.sub(r'\bthis\b','context',text[start:text.index('int __fastcall\npatch_Tile_check_water',start)]))
     if args.lifetimes:
         start=text.index('void\nstart_custom_renderer_native_tracking ()')
-        (build/'native_tracking_bootstrap.h').write_text(text[start:text.index('void\npatch_init_floating_point ()',start)])
+        bootstrap=text[start:text.index('void\npatch_init_floating_point ()',start)]
+        # This extracted hook is compiled as C++, unlike injected_code.c.
+        bootstrap=bootstrap.replace('int (*set_backend_mode) (int) = (void *)',
+                                    'int (*set_backend_mode) (int) = (int (*)(int))')
+        (build/'native_tracking_bootstrap.h').write_text(bootstrap)
     (build/'native_probe_hooks.h').write_text(text[text.index('// JGL observation hooks:'):text.index('// End JGL observation hooks.')])
     text=(ROOT/'C3X.h').read_text();start=text.index('\tc3x_renderer_native_observe_fn')
     (build/'native_probe_state.h').write_text(text[start:text.index('\tc3x_renderer_unit_draw_background_fn',start)])
