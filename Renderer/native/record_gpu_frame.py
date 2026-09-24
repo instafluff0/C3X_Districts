@@ -353,6 +353,9 @@ def main(argv=None):
             'minimum_largest_free':min((row['largest_free'] for row in rows),default=0),'cold_oracles':oracles,
             'over_100_ms':sum(value>100 for value in desktop),'distinct_destinations':len({(row['x'],row['y']) for row in rows})}
         passed=passed and len(rows)==100 and len(oracles)==6 and 'PASS world readiness workload:' in log
+        if args.world_readiness_only and args.x64_helper:
+            passed=passed and receipt['world_readiness']['zero_world_compiler_calls'] and \
+                receipt['world_readiness']['zero_geometry_adoption_or_upload']
         receipt['status']='pass' if passed else 'fail'
     if args.input_soak_seconds:
         soak_samples=[{key:float(value) for key,value in re.findall(r'(\w+)=([0-9.]+)', line)}

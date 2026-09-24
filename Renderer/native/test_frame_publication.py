@@ -428,7 +428,7 @@ struct RendererState {
     std::atomic<long long> hold_clock{-1};
     std::atomic<unsigned> target_clock_entries{0};
     bool animate_pixels=false,fail_render=false,world_preparation=false;
-    bool shared_scene_surface=false;
+    bool shared_scene_surface=false,water_scene_active=false;unsigned visible_wave_animations=0;
     bool throw_cancellation=false,throw_failure=false;
     bool render(c3x_renderer_frame_v1 const& f,c3x_renderer_output_v1& out,int=-1,
                 std::atomic<bool> const* stop=nullptr,std::uint64_t=0,unsigned const* =nullptr,unsigned=0,c3x_renderer_frame_v1 const* =nullptr,D3D11_RECT const* =nullptr){
@@ -453,7 +453,7 @@ struct RendererState {
         out.bgra_pixels=pixels.data();out.replacement_tile_flags=flags.data();out.replacement_tile_count=f.tile_count;
         out.clip_right=out.width;out.clip_bottom=out.height;out.visible_animation_count=f.visible_animation_count+ambient_count();return true;
     }
-    static long long resource_clock(c3x_renderer_frame_v1 const& f){return f.presentation_time_ticks;}
+    static long long resource_clock(c3x_renderer_frame_v1 const& f,int=15){return f.presentation_time_ticks;}
     bool configure_pack(char const*){reset();return true;}
     bool configure_definitions(char const*,char const*,char const*,char const*){reset();return true;}
     void reset(){demand_executed=true;++resets;pixels.clear();flags.clear();}

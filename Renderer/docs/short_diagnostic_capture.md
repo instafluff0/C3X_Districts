@@ -42,6 +42,10 @@ session's `window` and `inspection` directories to review a contact sheet and
 timestamped window samples. Compare replayed symptoms against those samples
 before using the fixed inputs for candidate comparisons. The next helper present
 after an input is an opportunity, not proof of a correct displayed frame.
+The report's `pipeline` section separates map render waits, native CPU
+readbacks, copy-admission lease reasons, and Renderer64 visual sampling and
+presentation. Trace counts may be capped; missing timings mean that stage was
+not captured, not that it cost zero.
 
 ## Targeted failure logs without a replay recording
 
@@ -69,3 +73,6 @@ the exact staged triad. Run `python3 -m Renderer.tools.qualify_renderer64_captur
 with its three evidence paths, then run
 `capture_game.ps1 -ShortDiagnostic -Renderer64 -CheckOnly` on Windows. Never
 copy hashes into an older receipt to bypass qualification.
+Desktop graphics replays in the Parallels VM must run in its interactive user
+session (`prlctl exec --current-user`); a service-session replay cannot
+qualify DirectComposition window presentation.

@@ -89,6 +89,12 @@ int main(){
  moving.body_x=1010;moving.presentation_time_ticks=1300000;
  assert(correction.observe(visual)&&correction.capture(moving,1,catalog,name,corrected));
  assert(correction.sample(corrected,1316000,1000000,catalog,out,step)&&out.body_x>=1071); // no snap back at a late native pose
+ // An unusually advanced native sample does not accelerate the visible
+ // segment; all units retain the same continuous presentation pace.
+ visual.pixel_x=190;visual.body_x=1090;visual.presentation_time_ticks=1316000;
+ moving.body_x=1090;moving.presentation_time_ticks=1316000;
+ assert(correction.observe(visual)&&correction.capture(moving,1,catalog,name,corrected));
+ assert(correction.sample(corrected,1332000,1000000,catalog,out,step)&&out.body_x==1075);
  visual.pixel_x=106;visual.body_x=1006;visual.presentation_time_ticks=1066000;
  moving.body_x=1006;moving.presentation_time_ticks=1066000;
  auto stale=visual;stale.presentation_time_ticks=1000000;assert(!motion.observe(stale));

@@ -239,8 +239,7 @@ public:
            ticks>=selected.motion_origin.presentation_time_ticks){
             // Civ III has already accepted this move and supplied its actual
             // pixel target. Sample one continuous segment from the first body
-            // observation; later sparse native poses correct it without
-            // restarting the clock or pulling the unit backwards.
+            // observation; later sparse native poses must not alter its pace.
             auto const& origin=selected.motion_origin;
             double dx=double(origin.target_x)-origin.pixel_x;
             double dy=double(origin.target_y)-origin.pixel_y;
@@ -249,20 +248,15 @@ public:
             // One ordinary native step is at most a tile. A larger target
             // delta means a camera/projection discontinuity, not travel to
             // predict from this stale screen-space anchor.
-            // FLC_Animation advances toward its target with doubled-Y
-            // distance / Animation_Info::fast_speed. Civ III's stock ground
-            // unit INIs (including Scout and Worker) specify Fast Speed=225;
-            // later authoritative poses correct custom-unit speed overrides.
-            constexpr double stock_ground_move_speed=225.0;
+            // Use one presentation pace for every unit. Civ III's movement
+            // distance uses doubled Y; its stock ground art uses 225 for the
+            // corresponding speed. A new action/target retires this segment.
+            constexpr double unit_move_presentation_speed=225.0;
             double progress=distance>0&&distance<=160.0?
-                std::clamp(stock_ground_move_speed*elapsed/distance,0.0,1.0):0.0;
-            auto position=[&](double start,double change,double current){
-                double predicted=start+change*progress;
-                return change>0?std::max(predicted,current):change<0?std::min(predicted,current):current;
-            };
+                std::clamp(unit_move_presentation_speed*elapsed/distance,0.0,1.0):0.0;
             double scale=double(selected.visual.projection_scale_milli)/1000.0;
-            output.body_x+=int(std::lround((position(origin.pixel_x,dx,selected.visual.pixel_x)-selected.visual.pixel_x)*scale));
-            output.body_y+=int(std::lround((position(origin.pixel_y,dy,selected.visual.pixel_y)-selected.visual.pixel_y)*scale));
+            output.body_x+=int(std::lround((origin.pixel_x+dx*progress-selected.visual.pixel_x)*scale));
+            output.body_y+=int(std::lround((origin.pixel_y+dy*progress-selected.visual.pixel_y)*scale));
             if(output.frame_count>1&&distance>0)
                 output.action_cursor=std::max(output.action_cursor,
                     std::min(output.frame_count-1,int(progress*output.frame_count)));

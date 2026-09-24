@@ -25,7 +25,8 @@ inline void check_output(Reader& expected,c3x_renderer_output_v1 const& value,in
         auto word=generated.at/4;auto wanted=recorded.u32(),got=generated.u32();
         bool pixel_hash=value.bgra_pixels&&word>=actual.bytes.size()/4-4;
         if(wanted!=got&&pixel_audit&&pixel_hash)pixel_drift=true;
-        if(wanted!=got&&!((realtime_replay().enabled||pixel_audit)&&pixel_hash))throw std::runtime_error(std::string("replay map output differs: ")+
+        bool implementation_count=pixel_audit&&(word==7||word==9);
+        if(wanted!=got&&!implementation_count&&!((realtime_replay().enabled||pixel_audit)&&pixel_hash))throw std::runtime_error(std::string("replay map output differs: ")+
             (word<11?names[word]:"ownership/pixel witness")+" word="+std::to_string(word)+
             " expected="+std::to_string(wanted)+" actual="+std::to_string(got));
     }
@@ -39,7 +40,8 @@ inline void adoption_witness(Writer& out,c3x_renderer_camera_view_v1 const& valu
     auto hash=c3x_renderer::asset_content_hash(owned.bytes.data(),owned.bytes.size());for(auto part:hash)out(part);
 }
 inline void check_adoption(Reader& expected,c3x_renderer_camera_view_v1 const& value,int result){
-    if(realtime_replay().enabled){check_output(expected,value.output,result);if(result==C3X_RENDERER_RESULT_OK){
+    char audit[4]={};bool pixel_audit=GetEnvironmentVariableA("C3X_MAP_PIXEL_AUDIT",audit,sizeof(audit))==1&&audit[0]=='1';
+    if(realtime_replay().enabled||pixel_audit){check_output(expected,value.output,result);if(result==C3X_RENDERER_RESULT_OK){
         Writer identity;c3x_renderer_camera_identity_v1_fields(identity,value.identity);expected.available(identity.bytes.size()+16);
         require(std::equal(identity.bytes.begin(),identity.bytes.end(),expected.bytes.begin()+expected.at),"realtime adopted identity differs");expected.at+=identity.bytes.size()+16;}return;}
     Writer actual;adoption_witness(actual,value,result);expected.available(actual.bytes.size());

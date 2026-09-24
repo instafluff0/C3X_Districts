@@ -23,7 +23,8 @@ class Backend {
     bool direct_active=false;
     bool direct_unavailable=false;
     bool direct_requested=false;
-    c3x_renderer::VisualCadence cadence;
+    c3x_renderer::VisualCadence cadence{
+        std::chrono::microseconds(16667),std::chrono::milliseconds(2)};
     HWND active_window=nullptr;
     bool visual_active=false;
     // Only changed authoritative unit facts need an IPC roundtrip. Native

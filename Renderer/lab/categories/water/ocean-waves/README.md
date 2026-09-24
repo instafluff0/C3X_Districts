@@ -11,7 +11,8 @@ source recovery; `integration ocean-waves --renderer-only` checks production
 playback, repeatability and cached terrain.
 
 The production compositor overlays waves in bounded blocks over retained static
-color/depth at 15 Hz using the existing ambient animation clock. Missing or
+color/depth. Renderer64 samples visible water and shore motion at up to 60 Hz
+on its own clock; authored resource poses still select frames at 15 Hz. Missing or
 disabled wave packs leave the terrain intact. Set the normalized pack's
 `enabled` flag to false and prepare to disable; `C3X_RENDERER_WAVES=0` is a
 process-level diagnostic control. References have not been replaced.

@@ -103,16 +103,34 @@ if(GetEnvironmentVariableA("C3X_RENDERER_WORLD_READINESS_TEST",world_test_option
     }
     c3x_renderer_gpu_present_v1 discard{};discard.struct_size=sizeof(discard);discard.action=1;discard.window=world_window;
     world_present(&discard);DestroyWindow(world_window);UnregisterClassA(window_class.lpszClassName,window_class.hInstance);FreeLibrary(desktop_library);
-    set_world(nullptr);world_records.clear();
-    // Cold reference checks are outside the timed workload and use independent
-    // world/device lifetimes. Readback is an explicit diagnostic oracle only.
+    set_world(nullptr);
+    // Independent reference checks use a fresh world/device lifetime, but the
+    // same authoritative world pages as the prepared path. Comparing a scoped
+    // world with a view-only cold render changes cross-tile art at its edges.
+    // Readback remains an explicit diagnostic oracle outside the timed run.
     unsigned oracle_index=0;
     for(auto const& oracle:oracles){
         world_reset();center_x=oracle.x;center_y=oracle.y;
         auto selected=capture_view();auto cold=frame;cold.tiles=selected.data();cold.tile_count=unsigned(selected.size());
         cold.presentation_time_ticks=oracle.clock;request.frame=&cold;image={sizeof(image)};
         world_output={C3X_RENDERER_API_VERSION,sizeof(world_output)};std::vector<unsigned> pixels;
-        if(gpu_world(&request,&image,&world_output)!=C3X_RENDERER_RESULT_OK || !read_world(pixels)){ok=false;break;}
+        if(gpu_world(&request,&image,&world_output)!=C3X_RENDERER_RESULT_OK ||
+           set_world(producer)!=C3X_RENDERER_RESULT_OK){ok=false;break;}
+        ULONGLONG reference_start=GetTickCount64();c3x_renderer_world_status_v1 reference={sizeof(reference)};
+        while(GetTickCount64()-reference_start<30000){
+            MSG message{};while(PeekMessageA(&message,nullptr,0,0,PM_REMOVE)){TranslateMessage(&message);DispatchMessageA(&message);}
+            if(get_world(&reference)==C3X_RENDERER_RESULT_OK && reference.authoritative==reference.total &&
+               reference.total==world_records.size() && reference.capture_passes>0 &&
+               reference.preparation_sequence==reference.appearance_sequence &&
+               reference.prepared_regions==reference.regions)break;
+            MsgWaitForMultipleObjectsEx(0,nullptr,16,QS_ALLINPUT,MWMO_INPUTAVAILABLE);
+        }
+        image={sizeof(image)};world_output={C3X_RENDERER_API_VERSION,sizeof(world_output)};
+        if(reference.authoritative!=reference.total || reference.total!=world_records.size() ||
+           reference.preparation_sequence!=reference.appearance_sequence ||
+           reference.prepared_regions!=reference.regions || reference.unavailable_regions ||
+           gpu_world(&request,&image,&world_output)!=C3X_RENDERER_RESULT_OK || !read_world(pixels)){ok=false;break;}
+        set_world(nullptr);
         unsigned differences=0,maximum=0;
         for(unsigned i=0;i<pixels.size();++i)for(unsigned shift:{0u,8u,16u}){
             unsigned delta=unsigned(std::abs(int((pixels[i]>>shift)&255)-int((oracle.pixels[i]>>shift)&255)));
@@ -127,6 +145,7 @@ if(GetEnvironmentVariableA("C3X_RENDERER_WORLD_READINESS_TEST",world_test_option
             world_output.bgra_pixels=oracle.pixels.data();write_bmp((std::string(argv[5])+".world-prepared.bmp").c_str(),world_output);
             world_output.bgra_pixels=pixels.data();write_bmp((std::string(argv[5])+".world-cold.bmp").c_str(),world_output);break;}
     }
+    set_world(nullptr);world_records.clear();
     center_x=home_x;center_y=home_y;
     std::printf("%s world readiness workload: samples=100 live_input=unmeasured desktop=measured oracles=%zu\n",ok?"PASS":"FAIL",oracles.size());
     char only[8]={};if(GetEnvironmentVariableA("C3X_RENDERER_WORLD_READINESS_ONLY",only,sizeof(only))){

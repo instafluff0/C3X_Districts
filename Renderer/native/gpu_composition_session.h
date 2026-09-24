@@ -2,6 +2,7 @@
 #include "gpu_frame_api.h"
 #include "gpu_image_compositor.h"
 #include "retained_composition.h"
+#include <array>
 namespace c3x_gpu_images {
 // Lives exclusively on RendererWorker, with its existing immediate context.
 // A map is immutable; native composition writes separately owned images.
@@ -62,9 +63,12 @@ public:
 #endif
     std::uint64_t upload_count()const{return gpu.stats().uploads;}
     std::int64_t current_ticket()const{return ticket;}
-    bool display_to(std::int64_t requested,Id image,ID3D11RenderTargetView* target,ID3D11Texture2D* retained,ID3D11Texture2D* buffer,unsigned w,unsigned h,Rect area,long long ticks=0,long long frequency=0){
+    bool display_to(std::int64_t requested,Id image,ID3D11RenderTargetView* target,ID3D11Texture2D* retained,ID3D11Texture2D* buffer,unsigned w,unsigned h,Rect area,long long ticks=0,long long frequency=0,std::array<LONGLONG,4>* phase_ticks=nullptr,std::array<LONGLONG,8>* draw_ticks=nullptr){
         if(requested!=ticket||!target||!retained||!buffer||!gpu.displayable(image,w,h))return false;
+        LARGE_INTEGER mark={};
+        if(phase_ticks)QueryPerformanceCounter(&mark);
         try{layers.commit(image,area);}catch(std::exception const& e){OutputDebugStringA("[C3X renderer] retained admission: ");OutputDebugStringA(e.what());OutputDebugStringA("\n");layers.discard();}
+        if(phase_ticks){LARGE_INTEGER next={};QueryPerformanceCounter(&next);(*phase_ticks)[0]=next.QuadPart-mark.QuadPart;mark=next;}
         // Native draws update the scene recipe, not its visual time. Both native
         // transfers and autonomous frames sample that same committed recipe.
         // Otherwise every native unit/UI transfer restores the old map sample.
@@ -75,8 +79,13 @@ public:
             // at the next map publication; do not reject current native pixels.
             if(FAILED(device->GetDeviceRemovedReason()))return false;
         }
-        if(!gpu.display(image,target,w,h,area))return false;
-        context->CopyResource(buffer,retained);context->Flush();return true;
+        if(!gpu.display(image,target,w,h,area,draw_ticks))return false;
+        if(phase_ticks){LARGE_INTEGER next={};QueryPerformanceCounter(&next);(*phase_ticks)[1]=next.QuadPart-mark.QuadPart;mark=next;}
+        context->CopyResource(buffer,retained);
+        if(phase_ticks){LARGE_INTEGER next={};QueryPerformanceCounter(&next);(*phase_ticks)[2]=next.QuadPart-mark.QuadPart;mark=next;}
+        context->Flush();
+        if(phase_ticks){LARGE_INTEGER next={};QueryPerformanceCounter(&next);(*phase_ticks)[3]=next.QuadPart-mark.QuadPart;}
+        return true;
     }
     int compose_resident_unit(c3x_renderer_gpu_unit_v1 const& request,ID3D11Texture2D* texture,unsigned width,unsigned height,int x,int y,RetainedComposition::Sample sample={}){
         if(request.ticket!=ticket)return C3X_RENDERER_RESULT_SUPERSEDED;

@@ -38,6 +38,10 @@ public:
         c3x_inputs::Writer input;
         input.string(root,32768);input.string(fallback,32768);
         input.string(scenario,32768);input.string(custom,32768);
+        // Civ III may load scenario/user settings after the helper was started
+        // for early native-screen ownership. Publish the current renderer
+        // settings with the definitions that consume them.
+        c3x_inputs::settings_fields(input,c3x_inputs::input_settings());
         return int(invoke(unsigned(c3x_inputs::Kind::native_bridge),8,input.bytes.data(),
             unsigned(input.bytes.size())).code);
     }

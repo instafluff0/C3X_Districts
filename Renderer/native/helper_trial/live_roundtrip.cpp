@@ -17,9 +17,25 @@ using namespace c3x_helper_trial;
 int wmain(int argc,wchar_t** argv){
     HWND window=nullptr;
     try{
-        require(argc==4||(argc==5&&std::wstring(argv[4])==L"--direct"),
-            "usage: live_roundtrip.exe HELPER DLL CAPTURE [--direct]");
-        bool direct=argc==5;
+        bool direct=argc>=5&&std::wstring(argv[4])==L"--direct";
+        unsigned hold_ms=450;
+        if(argc>=6&&direct){
+            wchar_t* end=nullptr;auto parsed=wcstoul(argv[5],&end,10);
+            require(end&&*end==0&&parsed>=450&&parsed<=10000,
+                "direct hold must be 450..10000 ms");
+            hold_ms=static_cast<unsigned>(parsed);
+        }
+        unsigned requested_width=0,requested_height=0;
+        if(argc==8&&direct){
+            wchar_t* width_end=nullptr;wchar_t* height_end=nullptr;
+            auto width=wcstoul(argv[6],&width_end,10),height=wcstoul(argv[7],&height_end,10);
+            require(width_end&&*width_end==0&&height_end&&*height_end==0&&
+                width>=640&&width<=2240&&height>=480&&height<=1260,
+                "direct extent must fit the renderer surface");
+            requested_width=static_cast<unsigned>(width);requested_height=static_cast<unsigned>(height);
+        }
+        require(argc==4||(argc==5&&direct)||(argc==6&&direct)||(argc==8&&direct),
+            "usage: live_roundtrip.exe HELPER DLL CAPTURE [--direct [hold-ms [width height]]]");
         SegmentReader journal(argv[3]);Event event;
         require(journal.next(event)&&event.kind==Kind::manifest,"recording manifest missing");
         // Shared presentation is driven by the fixture. The direct surface
@@ -44,6 +60,17 @@ int wmain(int argc,wchar_t** argv){
                 Bytes values(event.payload.begin()+recorded.at,event.payload.end());Reader input{values};
                 c3x_renderer_camera_identity_v1 identity={};c3x_renderer_camera_identity_v1_fields(input,identity);
                 Frame frame_value;frame(input,frame_value);input.done();
+                if(requested_width){
+                    int dx=(int(requested_width)-frame_value.value.target_width)/2;
+                    int dy=(int(requested_height)-frame_value.value.target_height)/2;
+                    frame_value.value.target_width=int(requested_width);
+                    frame_value.value.target_height=int(requested_height);
+                    frame_value.value.clip_left=frame_value.value.clip_top=0;
+                    frame_value.value.clip_right=int(requested_width);
+                    frame_value.value.clip_bottom=int(requested_height);
+                    for(auto& tile:frame_value.tiles){tile.anchor_x+=dx;tile.anchor_y+=dy;}
+                    frame_value.bind();
+                }
                 c3x_renderer_camera_request_v1 request={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(request),&frame_value.value,identity};
                 c3x_renderer_i64 ticket=0;
                 require(helper.camera_begin(request,ticket)==C3X_RENDERER_RESULT_PENDING&&ticket>0,"camera begin failed");
@@ -155,7 +182,7 @@ int wmain(int argc,wchar_t** argv){
                     Sleep(25);
                 }}catch(...){independent_error=std::current_exception();}
         });
-        Sleep(450); // The x86 window owner deliberately does no work or message pumping.
+        Sleep(hold_ms); // The x86 window owner deliberately does no work or message pumping.
         independent.join();
         if(independent_error)std::rethrow_exception(independent_error);
         if(!direct&&independent_frames.load(std::memory_order_relaxed)<2){char detail[180];

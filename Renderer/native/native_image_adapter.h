@@ -430,26 +430,33 @@ template<class Backend> class Adapter {
     }
     void cpu_ownership(Image& image,int operation=0){
         if(image.dirty){
-            if(image.width>=640 && image.height>=480 && large_cpu_barrier_reports++<16){
-                // Guest x86 stack walking can stop in this DLL. Record the
-                // actual adapter operation and stable slot instead of guessing
-                // the native caller from an incomplete stack.
-                char line[256];std::snprintf(line,sizeof(line),
-                    "[C3X renderer] stage=native-cpu-barrier operation=%d slot=%u width=%u height=%u detail=%u owned=%u\n",
-                    operation,unsigned(&image-images.data()),image.width,image.height,unsigned(image.detail!=0),unsigned(image.owned));
-                OutputDebugStringA(line);
-            }
+            bool report=image.width>=640&&image.height>=480&&large_cpu_barrier_reports++<16;
+            LARGE_INTEGER begin={},gpu_done={},end={},frequency={};
+            if(report){QueryPerformanceFrequency(&frequency);QueryPerformanceCounter(&begin);}
             // GPU ownership makes the old CPU mirror stale. Materialize only
             // this explicit fallback, then release its temporary storage.
             std::vector<std::uint32_t> words(std::size_t(image.width)*image.height);
             if(!gpu.readback(image.gpu,words.data(),words.size()))
                 throw std::runtime_error("cannot read current GPU image");
+            if(report)QueryPerformanceCounter(&gpu_done);
             GdiFlush();auto bits=c3x_native_access::words(image.native,get_bits,true);
             if(!bits)throw std::runtime_error("cannot restore native image ownership");
             auto stride=field(image.native,0x40);
             for(unsigned y=0;y<image.height;++y)for(unsigned x=0;x<image.width;++x)bits[y*stride+x]=std::uint16_t(words[y*image.width+x]);
             c3x_native_access::release_words(image.native,release_bits);
             ++counters.readbacks;counters.readback_bytes+=words.size()*4;image.dirty=false;
+            if(report){
+                QueryPerformanceCounter(&end);
+                // A native image can keep a legitimate writable lease. Record
+                // the cost of restoring its CPU pixels before choosing a new
+                // presentation boundary; never take over that lease blindly.
+                char line[320];std::snprintf(line,sizeof(line),
+                    "[C3X renderer] stage=native-cpu-barrier operation=%d slot=%u width=%u height=%u detail=%u owned=%u gpu_ms=%.3f total_ms=%.3f\n",
+                    operation,unsigned(&image-images.data()),image.width,image.height,unsigned(image.detail!=0),unsigned(image.owned),
+                    1000.*double(gpu_done.QuadPart-begin.QuadPart)/frequency.QuadPart,
+                    1000.*double(end.QuadPart-begin.QuadPart)/frequency.QuadPart);
+                OutputDebugStringA(line);
+            }
             // Reestablish CPU-upload revision validity only on its next source use.
             image.cpu_uploaded=false;
         }
@@ -478,7 +485,8 @@ public:
         auto d=find(object);if(d&&d->owned)return true;
         if(!lifetime||!lifetime(C3X_NATIVE_MAP,object,0))return reject("lifetime");
         // No takeover during even a private outstanding native lease.
-        if(field(object,0x4c4)||field(object,0x4c8))return reject("outstanding-lease");
+        if(field(object,0x4c4))return reject("dc-lease");
+        if(field(object,0x4c8))return reject("bits-lease");
         if(!d)d=create(object,false);
         if(!d)return reject("surface-admission");
         if(!refresh(*d))return reject("upload");

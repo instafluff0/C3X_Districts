@@ -18,6 +18,41 @@ int test_retained_composition(){
     ComPtr<ID3D11Device> device;ComPtr<ID3D11DeviceContext> context;D3D_FEATURE_LEVEL level;
     checked(D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_HARDWARE,nullptr,0,nullptr,0,D3D11_SDK_VERSION,&device,&level,&context));
     constexpr unsigned w=48,h=32;Rect full={0,0,w,h},part={5,3,38,26};unsigned checks=0;
+    {
+        // A native unit is first submitted in screen coordinates, then replayed
+        // into a rectangle-local image when the animated map changes. Its body
+        // must stay above the new map sample at its original screen location.
+        Compositor gpu(device.Get(),context.Get());RetainedComposition retained(device.Get(),context.Get());
+        Id map=10000;auto screen=gpu.create(w,h,Format::bgra32);
+        assert(screen);std::vector<unsigned> pixels(w*h,0xff183040u);
+        D3D11_TEXTURE2D_DESC desc={};desc.Width=w;desc.Height=h;desc.MipLevels=desc.ArraySize=desc.SampleDesc.Count=1;
+        desc.Format=DXGI_FORMAT_B8G8R8A8_UNORM;desc.Usage=D3D11_USAGE_DEFAULT;desc.BindFlags=D3D11_BIND_SHADER_RESOURCE;
+        D3D11_SUBRESOURCE_DATA initial={pixels.data(),w*4,0};ComPtr<ID3D11Texture2D> source;
+        checked(device->CreateTexture2D(&desc,&initial,&source));
+        retained.create(map,w,h,Format::bgra32);retained.create(screen,w,h,Format::bgra32);
+        retained.source(map,source.Get(),[&](long long,long long){
+            return RetainedComposition::SampledImage::bgra(source.Get(),full);},true,true);
+        retained.record({Kind::copy,screen,map,full,full});
+        Rect envelope={18,8,36,26},body={24,13,29,19};
+        RetainedComposition::Direct unit;unit.draw=[=](Compositor& target,Command const& command){
+            Command fill={Kind::fill,command.destination,0,rebase_direct_rect(body,envelope,command.area),
+                command.clip,0,0,0xffe4b05au};
+            return target.submit(&fill,1);
+        };
+        retained.record({Kind::unit_over,screen,0,envelope,full},std::move(unit));retained.commit(screen,full);
+        for(unsigned tick=0;tick<2;++tick){
+            unsigned ground=tick?0xff52728cu:0xff183040u;
+            if(tick){std::fill(pixels.begin(),pixels.end(),ground);context->UpdateSubresource(source.Get(),0,nullptr,pixels.data(),w*4,0);}
+            RetainedComposition::Texture result;
+            try{result=retained.sample(tick+1,1000);}catch(std::exception const& error){
+                std::fprintf(stderr,"direct unit sample failed: %s\n",error.what());std::fflush(stderr);return 1;
+            }
+            assert(result);
+            auto image=retained_read(device.Get(),context.Get(),result.Get());
+            assert(image[15*w+26]==0xffe4b05au && image[12*w+24]==ground && image[20*w+34]==ground);
+        }
+        std::puts("PASS retained direct unit: body survives two animated map samples in screen position");
+    }
     for(auto format:{Format::rgb555,Format::rgb565}){
         Compositor live(device.Get(),context.Get());RetainedComposition retained(device.Get(),context.Get());
         auto create=[&](unsigned x,unsigned y,Format f){auto id=live.create(x,y,f);assert(id);retained.create(id,x,y,f);return id;};
@@ -142,11 +177,12 @@ int test_retained_composition(){
         try{result=retained.sample(1,1000);}catch(std::exception const& e){std::fprintf(stderr,"FAIL fullscreen copy chain: %s bytes=%llu nodes=%zu\n",e.what(),retained.bytes(),retained.node_count());throw;}
         auto actual=retained_read(device.Get(),context.Get(),result.Get());assert(actual==pixels);
         assert(retained.bytes()==std::uint64_t(width)*height*4&&retained.node_count()==1);
+        assert(retained.replay_stats().allocations==0&&retained.replay_stats().resident_bytes==0);
         // Replacing the source image must not rewrite the completed front.
         retained.record({Kind::fill,1,0,bounds,bounds,0,0,0xffabcdef});
         assert(retained_read(device.Get(),context.Get(),retained.sample(2,1000).Get())==pixels);
         retained.clear();assert(retained.bytes()==0&&retained.node_count()==0);
-        std::printf("PASS fullscreen retained copy chain: transfers=17 pixels=%u retained_bytes=%u nodes=1 immutable_front=1\n",width*height,width*height*4);
+        std::printf("PASS fullscreen retained copy chain: transfers=17 pixels=%u retained_bytes=%u nodes=1 immutable_front=1 assembly_scratch=0\n",width*height,width*height*4);
     }
     // Fullscreen native map, screen, saved UI and staging pairs remain alive
     // while the next immutable map is published. Eight packed/full-color pairs plus
@@ -382,6 +418,38 @@ int test_retained_composition(){
         assert(session.visual_ready() && retained_read(device.Get(),context.Get(),display.Get())==pixels);
         std::puts("PASS native visual allocation failure: completed transfer preserved, CPU ownership exact, fresh publication resumes animation");
         std::puts("PASS ambient ownership recovery: frozen CPU snapshot rejected, unit-only animation rejected, copied map restores readiness, static maps remain ready");
+    }
+    {
+        // Re-presenting the same completed native screen is common around UI
+        // messages. It must not resubmit a full-screen GPU composition when no
+        // source, operation or displayed rectangle changed.
+        constexpr unsigned width=640,height=480;Rect bounds={0,0,width,height};
+        Compositor live(device.Get(),context.Get());RetainedComposition retained(device.Get(),context.Get());
+        auto image=live.create(width,height,Format::bgra32);assert(image);
+        std::vector<unsigned> pixels(width*height,0xff264c72u);
+        assert(live.upload(image,1,pixels.data(),pixels.size()));
+        retained.create(image,width,height,Format::bgra32);retained.source(image,live.texture(image));
+        D3D11_TEXTURE2D_DESC desc={};desc.Width=width;desc.Height=height;desc.MipLevels=desc.ArraySize=desc.SampleDesc.Count=1;
+        desc.Format=DXGI_FORMAT_B8G8R8A8_UNORM;desc.Usage=D3D11_USAGE_DEFAULT;desc.BindFlags=D3D11_BIND_RENDER_TARGET;
+        ComPtr<ID3D11Texture2D> display,buffer;ComPtr<ID3D11RenderTargetView> target;
+        checked(device->CreateTexture2D(&desc,nullptr,&display));checked(device->CreateTexture2D(&desc,nullptr,&buffer));
+        checked(device->CreateRenderTargetView(display.Get(),nullptr,&target));
+        retained.commit(image,bounds);assert(retained.draw(1,1000,target.Get(),display.Get(),buffer.Get())==1);
+        assert(retained.replay_stats().allocations==0);
+        LARGE_INTEGER frequency={},begin={},end={};QueryPerformanceFrequency(&frequency);QueryPerformanceCounter(&begin);
+        unsigned unchanged=0;
+        for(unsigned tick=2;tick<=81;++tick){retained.commit(image,bounds);
+            unchanged+=retained.draw(tick,1000,target.Get(),display.Get(),buffer.Get())==2;}
+        context->Flush();QueryPerformanceCounter(&end);
+        assert(retained_read(device.Get(),context.Get(),display.Get())==pixels);
+        assert(unchanged==80);
+        retained.record({Kind::fill,image,0,bounds,bounds,0,0,0xff876543u});
+        retained.commit(image,bounds);
+        assert(retained.draw(82,1000,target.Get(),display.Get(),buffer.Get())==1);
+        assert(retained_read(device.Get(),context.Get(),display.Get())==
+               std::vector<unsigned>(width*height,0xff876543u));
+        std::printf("MEASURE unchanged full-screen native transfers: noops=%u/80 submit_ms=%.3f\n",
+            unchanged,1000.*double(end.QuadPart-begin.QuadPart)/frequency.QuadPart);
     }
     std::printf("PASS retained composition: %u exact GPU oracles, 120 independent clock frames, aliasing, paired 555/565/full color, UI versioning, partial publication, bounded overwrite and reset\n",checks);return 0;
 }

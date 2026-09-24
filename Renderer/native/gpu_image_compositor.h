@@ -617,10 +617,11 @@ Texture2D<float4> input_image:register(t0);RWTexture2D<uint> output_image:regist
     bool displayable(Id id,unsigned width,unsigned height){
         auto image=find(id);return image&&image->format==Format::bgra32&&image->width==width&&image->height==height;
     }
-    bool display(Id id,ID3D11RenderTargetView* target,unsigned width,unsigned height,Rect area){
+    bool display(Id id,ID3D11RenderTargetView* target,unsigned width,unsigned height,Rect area,
+                 std::array<LONGLONG,8>* phase_ticks=nullptr){
         if(!target||!displayable(id,width,height))return false;auto image=find(id);
         RECT clip={std::max(0,area.left),std::max(0,area.top),std::min(int(width),area.right),std::min(int(height),area.bottom)};
-        auto ok=display_program.draw(device,context,image->read.Get(),target,width,height,clip);
+        auto ok=display_program.draw(device,context,image->read.Get(),target,width,height,clip,0,phase_ticks);
         if(recording){c3x_recording::event(c3x_recording::display,recording,[&](auto& b){using namespace c3x_recording;u64(b,id);u32(b,ok);for(auto v:{area.left,area.top,area.right,area.bottom})u32(b,unsigned(v));});
             if(ok&&(++recorded_displays<=3||recorded_displays%30==0))record_texture(id,c3x_recording::checkpoint);}return ok;
     }

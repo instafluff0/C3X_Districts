@@ -35,7 +35,7 @@ public:
 private:
     struct Node;
     struct Patch {Rect area;std::shared_ptr<Node> node;unsigned output=0;};
-    struct Picture {unsigned width=0,height=0;Format format=Format::bgra32;std::vector<Patch> patches;bool partitioned=true;};
+    struct Picture {unsigned width=0,height=0;Format format=Format::bgra32;std::vector<Patch> patches;bool partitioned=true;std::uint64_t version=0;};
     struct Node {
         Rect area{};Command command{};bool operation=false,dynamic=false,map_dynamic=false;
         Picture inputs[6];Id original[6]={};
@@ -109,7 +109,7 @@ private:
         }
         next.insert(next.end(),replacement.begin(),replacement.end());
         if(next.size()>8192)throw std::runtime_error("retained composition region budget");
-        image.patches=std::move(next);
+        image.patches=std::move(next);image.version=++serial;
     }
     void write(Picture& image,Rect region,std::shared_ptr<Node> const& value,unsigned output){
         region=intersect(region,extent(image));if(!empty(region))replace(image,region,{{region,value,output}});
@@ -263,11 +263,11 @@ public:
     bool animated()const{for(auto const& p:front.patches)if(p.node->dynamic)return true;return false;}
     bool animated_map()const{for(auto const& p:front.patches)if(p.node->map_dynamic)return true;return false;}
     bool ready()const{return admitted&&front.width!=0;}
-    void create(Id id,unsigned w,unsigned h,Format format){if(admitted)images[id]={w,h,format,{}};}
+    void create(Id id,unsigned w,unsigned h,Format format){if(admitted){images[id]={w,h,format,{}};images[id].version=++serial;}}
     void destroy(Id id){images.erase(id);} // committed versions retain their own source data
     void source(Id id,ID3D11Texture2D* texture,Sample sample={},bool immutable=false,bool map_source=false){
         if(!admitted)return;auto& p=images.at(id);auto n=node();n->area=extent(p);n->revision=++serial;
-        output(*n,0,(sample||immutable)?Texture(texture):crop(texture,n->area));n->dynamic=bool(sample);n->map_dynamic=map_source&&n->dynamic;n->sample=std::move(sample);p.patches={{n->area,n,0}};
+        output(*n,0,(sample||immutable)?Texture(texture):crop(texture,n->area));n->dynamic=bool(sample);n->map_dynamic=map_source&&n->dynamic;n->sample=std::move(sample);p.patches={{n->area,n,0}};p.version=++serial;
     }
     void record(Command const& c,Direct direct={}){
         if(!admitted)return;auto target=images.find(c.destination);if(target==images.end())throw std::runtime_error("retained target missing");
@@ -306,8 +306,16 @@ public:
         write(images.at(c.destination),area,n,0);if(c.detail)write(images.at(c.detail),area,n,1);
     }
     void commit(Id image,Rect area){
-        if(!admitted)return;auto const& p=images.at(image);area=intersect(area,extent(p));if(empty(area))return;++front_revision;
-        if(area.left==0&&area.top==0&&area.right==int(p.width)&&area.bottom==int(p.height)){front=p;return;}
+        if(!admitted)return;auto const& p=images.at(image);area=intersect(area,extent(p));if(empty(area))return;
+        if(area.left==0&&area.top==0&&area.right==int(p.width)&&area.bottom==int(p.height)){
+            // The native screen may be offered again without any intervening
+            // write. Preserve its completed visual revision so the autonomous
+            // presenter can skip an identical full-screen GPU composition.
+            bool same=front.version==p.version&&front.width==p.width&&front.height==p.height&&front.format==p.format;
+            if(!same){front=p;++front_revision;}
+            return;
+        }
+        ++front_revision;
         if(front.width!=p.width||front.height!=p.height||front.format!=p.format){
             if(area.left||area.top||area.right!=int(p.width)||area.bottom!=int(p.height)){front={};return;}
             front=p;return;
@@ -321,7 +329,7 @@ public:
     Texture sample(long long ticks,long long frequency){
         if(!ready())return {};++frame;
         for(auto const& part:front.patches)collect(part.node,ticks,frequency,0);
-        auto image=assemble(front,ticks,frequency,0);
+        auto image=assemble(front,ticks,frequency,0,{},true);
         Texture result;
         try{result=crop(replay.texture(image),extent(front));}
         catch(...){replay.recycle(image);throw;}replay.recycle(image);return result;
@@ -334,7 +342,7 @@ public:
         std::vector<std::uint64_t> versions;
         for(auto const& part:front.patches){evaluate(part.node,ticks,frequency,0);versions.push_back(part.node->revision);}
         if(drawn_revision==front_revision&&versions==drawn_dependencies)return 2; // no new source sample
-        auto image=assemble(front,ticks,frequency,0);
+        auto image=assemble(front,ticks,frequency,0,{},true);
         bool ok=false;
         try{ok=replay.display(image,target,front.width,front.height,extent(front));}
         catch(...){replay.recycle(image);throw;}replay.recycle(image);

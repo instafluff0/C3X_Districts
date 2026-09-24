@@ -16,6 +16,8 @@ class GpuFailureOwnershipTests(unittest.TestCase):
 #include "Renderer/native/gpu_frame_api.h"
 using HWND=void*;
 void OutputDebugStringA(char const*){}
+bool manual_visual=false;
+unsigned GetEnvironmentVariableA(char const*,char* value,unsigned size){if(manual_visual&&size>1){value[0]='1';value[1]=0;return 1;}return 0;}
 namespace c3x_inputs {
 enum class Kind{presentation};
 struct Writer{template<class T>void operator()(T){}void u32(unsigned){}};
@@ -26,11 +28,11 @@ struct Realtime{void offer(int){}};Realtime& realtime_replay(){static Realtime r
 struct State {
  std::mutex call_mutex,state_mutex;bool gpu_presentation=true,visual_present_pending=false,visual_delivery=false;
  c3x_renderer_gpu_present_v1 gpu_present={};int result=1;bool explode=false;
- struct Session{int ticket=7;bool active=true;int current_ticket(){return ticket;}void stop_visuals(){active=false;}bool visual_ready(){return active;}};
+ struct Session{int ticket=7;bool active=true;int current_ticket(){return ticket;}void stop_visuals(){active=false;}bool visual_ready(){return active;}bool visual_active(){return active;}};
  struct{std::unique_ptr<Session> gpu_composition=std::make_unique<Session>();void* device=nullptr;}renderer_state;
  struct Presenter{unsigned resets=0,releases=0;bool caller_thread(){return true;}void reset(){++resets;}
   void release_native(){++releases;}bool prepare(HWND,void*,int,int,bool){return true;}int present(){return 1;}}gpu_presenter;
- struct Cadence{template<class F>void enable(F){}}visual_cadence;
+ struct Cadence{unsigned enables=0,disables=0;template<class F>void enable(F){++enables;}void disable(){++disables;}}visual_cadence;
  enum class Command{gpu_present};
  void start_locked(){}void drain_camera_locked(std::unique_lock<std::mutex>&,bool){}
  void stop_visual_delivery(){visual_delivery=false;}void advance_visual_clock(){}
@@ -49,6 +51,12 @@ int main(){
   s.result=C3X_RENDERER_RESULT_OK;
   assert(s.present_gpu(r)==C3X_RENDERER_RESULT_OK&&s.gpu_presenter.releases==1);
  }
+ State manual;manual_visual=true;manual.result=C3X_RENDERER_RESULT_OK;
+ c3x_renderer_gpu_present_v1 frame={sizeof(frame)};frame.ticket=7;frame.width=320;frame.height=240;frame.area[2]=320;frame.area[3]=240;
+ assert(manual.present_gpu(frame)==C3X_RENDERER_RESULT_OK);
+ assert(manual.visual_delivery&&manual.visual_cadence.enables==0&&manual.visual_cadence.disables==1);
+ manual_visual=false;assert(manual.present_gpu(frame)==C3X_RENDERER_RESULT_OK);
+ assert(manual.visual_cadence.enables==1);
 }
 ''')
 

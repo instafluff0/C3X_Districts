@@ -34,6 +34,17 @@ class Renderer64CaptureAnalysisTests(unittest.TestCase):
             (session / "window/timeline.jsonl").write_text(
                 json.dumps({"event": "process_memory", "private_bytes": 209715200,
                             "free_bytes": 314572800}) + "\n" + json.dumps({"frame": 1}) + "\n")
+            (session / "renderer.log").write_text("\n".join((
+                "[C3X renderer] qpc=10 ms=900 stage=composite render_wait_ms=17.5",
+                "[C3X renderer] stage=native-copy-admission operation=9 reason=bits-lease",
+                "[C3X renderer] stage=native-cpu-barrier operation=9 gpu_ms=6.5 total_ms=8.0",
+                "[C3X renderer] stage=native-handoff call_ms=27.0")) + "\n")
+            (session / "renderer-runtime.log.x64").write_text("\n".join((
+                "[C3X renderer] stage=visual-readiness ready=1 active=1",
+                "[C3X renderer] stage=direct-visual drawn=1 sample_ms=4.0 present_ms=2.0 total_ms=7.0",
+                "[C3X renderer] stage=trial-present-phase display_ms=12.0 target_ms=10.0 present_ms=0.5",
+                "[C3X renderer] stage=video-memory local_budget=419430400 local_usage=209715200",
+                "[C3X renderer] stage=visual-frame request_ms=9.0")) + "\n")
             result = analyze(session)
             self.assertEqual(result["families"]["camera"]["bridge_call_service"]["median_ms"], 5)
             self.assertEqual(result["families"]["camera"]["next_helper_present_opportunity"]["median_ms"], 20)
@@ -44,6 +55,15 @@ class Renderer64CaptureAnalysisTests(unittest.TestCase):
             self.assertEqual(result["helper_private_peak_mib"], 100)
             self.assertEqual(result["window_samples"], 1)
             self.assertEqual(result["missing"], [])
+            pipeline = result["pipeline"]
+            self.assertEqual(pipeline["map_render_wait"]["median_ms"], 17.5)
+            self.assertEqual(pipeline["native_copy_admission"]["reasons"], {"bits-lease": 1})
+            self.assertEqual(pipeline["native_cpu_barriers"]["gpu_readback"]["median_ms"], 6.5)
+            self.assertEqual(pipeline["direct_visual"]["changed_frames"], 1)
+            self.assertEqual(pipeline["direct_visual"]["present"]["median_ms"], 2)
+            self.assertEqual(pipeline["direct_present"]["target_bind"]["median_ms"], 10)
+            self.assertEqual(pipeline["gpu_memory"]["local_budget_mib_min"], 400)
+            self.assertEqual(pipeline["gpu_memory"]["local_usage_mib_peak"], 200)
             (session / "frames.csv").unlink()
             self.assertIn("helper_presentmon", analyze(session)["missing"])
 

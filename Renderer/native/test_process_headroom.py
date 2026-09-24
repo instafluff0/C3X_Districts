@@ -19,8 +19,8 @@ template<size_t N,class... T> void sprintf_s(char(&s)[N],char const* f,T...args)
 using ULONGLONG=unsigned long long;
 ULONGLONG now=1000,available=2ull*1024*1024*1024;
 ULONGLONG GetTickCount64(){return now;}
-struct MEMORYSTATUSEX {unsigned dwLength=0;ULONGLONG ullAvailVirtual=0;};
-bool GlobalMemoryStatusEx(MEMORYSTATUSEX* p){p->ullAvailVirtual=available;return true;}
+struct MEMORYSTATUSEX {unsigned dwLength=0;ULONGLONG ullAvailVirtual=0,ullAvailPhys=0;};
+bool GlobalMemoryStatusEx(MEMORYSTATUSEX* p){p->ullAvailVirtual=available;p->ullAvailPhys=available;return true;}
 int retired=0;struct Resource{void Release(){++retired;delete this;}};
 struct State {
  bool memory_pressured=false,shared_scene_surface=false;ULONGLONG last_memory_control=0,last_unit_work=0;
@@ -29,6 +29,7 @@ struct State {
  struct {size_t n=0;size_t bytes()const{return n;}void reset(){n=0;}}unit_scene_work;
  size_t frame_working_bytes()const{return attachment_bytes+unit_scene_work.bytes();}
  c3x_renderer::render_core::RenderRegionCache<Resource> render_regions;
+ c3x_renderer::render_core::RenderRegionCache<Resource,768u*1024u*1024u> reflection_regions;
  struct {size_t gpu_content_bytes=192u*1024*1024,gpu_content_limit=192u*1024*1024;
  void set_gpu_content_limit(size_t n){gpu_content_limit=n;gpu_content_bytes=std::min(n,gpu_content_bytes);}}unit_bodies;
  struct {void write(char const*,char const*,bool){}}trace;
@@ -37,13 +38,14 @@ struct State {
 int main(){
  State s;constexpr size_t mib=1024*1024;
  for(unsigned i=0;i<4;++i)assert(s.render_regions.insert({i+1},new Resource,64*mib));
+ assert(s.reflection_regions.insert({9},new Resource,64*mib));
  s.preserve_process_headroom();assert(!s.memory_pressured&&!retired);
- available=700*mib;now+=250;s.preserve_process_headroom();assert(s.memory_pressured&&retired==3);
+ available=700*mib;now+=250;s.preserve_process_headroom();assert(s.memory_pressured&&retired==4);
  assert(s.render_regions.gpu_bytes==64*mib&&s.unit_bodies.gpu_content_limit==48*mib);
  available=900*mib;now+=250;s.preserve_process_headroom();assert(s.memory_pressured);
  available=1100*mib;now+=250;s.preserve_process_headroom();assert(!s.memory_pressured&&s.render_regions.gpu_limit==256*mib);
  assert(s.render_regions.gpu_bytes==64*mib); // restoring capacity never recreates evicted images
- auto resource=s.render_regions.find({4});assert(resource);s.render_regions.clear();assert(retired==4);
+ auto resource=s.render_regions.find({4});assert(resource);s.render_regions.clear();assert(retired==5);
  s.shared_scene_surface=true;s.attachment_bytes=900*mib;now+=250;s.preserve_process_headroom();
  assert(s.render_regions.gpu_limit==0&&s.unit_bodies.gpu_content_limit==124*mib);
  s.unit_scene_work.n=50*mib;s.last_unit_work=now;now+=250;s.preserve_process_headroom();
@@ -66,6 +68,12 @@ int main(){
    assert(limits.regions+limits.units<= (bytes<1024?(1024-bytes)*mib:0));
    if(shared)assert(!limits.regions);
  }
+ // A full-screen Renderer64 frame once exhausted the old combined allowance,
+ // evicting every reusable unit body. The larger helper allowance retains the
+ // 192 MiB unit cache, while pressure still clamps it to 48 MiB.
+ assert(Budget::caches(1100*mib,false,true).units==0);
+ assert(Budget::caches(1100*mib,false,true,1792*mib).units==192*mib);
+ assert(Budget::caches(1100*mib,true,true,1792*mib).units==48*mib);
 }
 ''')
 

@@ -162,7 +162,20 @@ struct Core {
                 in.done();stop_direct_cadence();reset();ticket_ids.clear();image_ids.clear();direct_surface_bound=false;wire.code=1;
             }else if(wire.kind==unsigned(Kind::native_bridge)&&wire.subtype==8){
                 stop_direct_cadence();
-                bool present[4]={};std::string paths[4];for(unsigned n=0;n<4;++n)paths[n]=in.string(32768,&present[n]);in.done();
+                bool present[4]={};std::string paths[4];for(unsigned n=0;n<4;++n)paths[n]=in.string(32768,&present[n]);
+                // Older pinned bridge recordings contain only the paths.
+                // Current live calls also carry settings loaded after this
+                // helper's early startup, before definitions read them.
+                if(in.at<bytes.size()){
+                    auto count=in.u32();require(count<=512,"renderer settings limit");
+                    for(unsigned n=0;n<count;++n){auto key=in.string(256),value=in.string(32768);
+                        require(key.rfind("C3X_RENDERER_",0)==0&&key.rfind("C3X_RENDERER_INPUT_",0)!=0,
+                            "invalid renderer setting");
+                        if(key.find("TRACE")==std::string::npos&&key.find("RECORD")==std::string::npos)
+                            require(SetEnvironmentVariableA(key.c_str(),value.c_str())!=FALSE,"renderer setting publication failed");
+                    }
+                }
+                in.done();
                 wire.code=unsigned(definitions(present[0]?paths[0].c_str():nullptr,present[1]?paths[1].c_str():nullptr,
                     present[2]?paths[2].c_str():nullptr,present[3]?paths[3].c_str():nullptr));
                 direct_surface_bound=false;

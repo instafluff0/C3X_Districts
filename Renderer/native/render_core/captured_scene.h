@@ -213,6 +213,17 @@ public:
         auto record=retained(id);auto appearance=content(observed->occurrence);
         return record && !std::memcmp(&appearance,&record->appearance,sizeof(appearance))?record->revision:0;
     }
+    // A compiled world tile may depend on art outside the current camera's
+    // observation set. The published full-world record remains its authority;
+    // a current full observation must still agree before it can validate art.
+    std::uint64_t world_appearance_revision(std::uint64_t id) const {
+        auto observed=current(id);
+        if(observed && (observed->occurrence.tile_flags&
+                (C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_PREFETCH)))
+            return appearance_revision(id);
+        auto record=retained(id);
+        return record && record->authoritative?record->revision:0;
+    }
     void attach(c3x_renderer_tile_v1 const& tile,ContentHandle handle) {
         if(!(tile.tile_flags&(C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_PREFETCH)))return;
         auto id=key(tile.tile_x,tile.tile_y);auto found=records.find(id);

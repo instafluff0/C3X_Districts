@@ -49,6 +49,7 @@ int main(){
  assert(scene.current(key)->occurrence.city_id==17 && scene.retained(key)->revision==revision);
  // Camera departure keeps content but revokes eligibility, not just draw flags.
  input.clear();submit();assert(!scene.current(key) && !scene.appearance_revision(key));assert(scene.retained(key)->revision==revision);
+ assert(!scene.world_appearance_revision(key)); // an un-published view is not world authority
  auto edited=full;edited.city_id=-1;edited.resource_id=-1;edited.road_mask=8;
  edited.tile_flags=C3X_RENDERER_TILE_TOPOLOGY_HALO|C3X_RENDERER_TILE_PREFETCH;
  input={edited};submit();assert(scene.retained(key)->revision>revision);
@@ -65,6 +66,30 @@ int main(){
  // New world basis cannot keep prior eligibility/content identities.
  f.world_width_tiles=102;submit();assert(scene.retained(key)->revision>removed_revision);
  scene={};assert(!scene.retained(key) && !scene.current(key));
+}
+''')
+
+    def test_world_appearance_dependency_survives_camera_departure(self):
+        run_cpp(r'''
+#include "Renderer/native/render_core/captured_scene.h"
+#include <cassert>
+using c3x_renderer::render_core::CapturedScene;
+int main(){
+ CapturedScene scene;c3x_renderer_tile_v1 tile={};tile.tile_x=4;tile.tile_y=6;
+ tile.tile_flags=C3X_RENDERER_TILE_RENDER;tile.terrain_type=2;tile.real_terrain_type=2;
+ c3x_renderer_frame_v1 frame={};frame.world_width_tiles=100;frame.world_height_tiles=100;
+ c3x_renderer_camera_identity_v1 identity={};scene.publication_scope(frame,identity,1);
+ bool changed=false;assert(scene.publish(tile,changed)&&changed);auto key=scene.key(4,6);
+ auto revision=scene.world_appearance_revision(key);assert(revision);
+ frame.tiles=&tile;frame.tile_count=1;assert(scene.begin(frame));
+ assert(scene.update(tile,2,2,2,100));scene.finish();
+ assert(scene.appearance_revision(key)==revision&&scene.world_appearance_revision(key)==revision);
+ frame.tile_count=0;assert(scene.begin(frame));scene.finish();
+ assert(!scene.appearance_revision(key)&&scene.world_appearance_revision(key)==revision);
+ auto edited=tile;edited.resource_id=3;assert(scene.publish(edited,changed)&&changed);
+ assert(scene.world_appearance_revision(key)!=revision);
+ assert(scene.begin(frame));assert(scene.update(tile,2,2,2,100));scene.finish();
+ assert(!scene.world_appearance_revision(key)); // a stale full observation cannot validate art
 }
 ''')
 

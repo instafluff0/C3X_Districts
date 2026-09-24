@@ -5,6 +5,7 @@ import csv
 import json
 import math
 from pathlib import Path
+import re
 import statistics
 
 
@@ -28,6 +29,86 @@ def stats(values):
     return {"count": len(values), "median_ms": statistics.median(values),
             "p95_ms": values[math.ceil(len(values) * .95) - 1],
             "max_ms": values[-1], "over_100_ms": sum(value > 100 for value in values)}
+
+
+def trace_profile(path, stages):
+    """Use only named duration fields; a trace prefix also has an absolute ms clock."""
+    found = path.is_file() and path.stat().st_size > 0
+    events = []
+    if found:
+        with path.open(encoding="utf-8", errors="replace") as stream:
+            for line in stream:
+                marker = line.find("[C3X renderer]")
+                if marker < 0:
+                    continue
+                fields = dict(re.findall(r"([a-z][a-z0-9_]*)=([^\s]+)", line[marker:]))
+                if fields.get("stage") in stages:
+                    events.append(fields)
+    return found, events
+
+
+def duration(events, stage, field):
+    values = []
+    for event in events:
+        if event.get("stage") != stage:
+            continue
+        try:
+            value = float(event[field])
+        except (KeyError, ValueError):
+            continue
+        if math.isfinite(value) and value >= 0:
+            values.append(value)
+    return stats(values)
+
+
+def pipeline_profile(session):
+    bridge, native = trace_profile(session / "renderer.log", {
+        "composite", "native-cpu-barrier", "native-copy-admission", "native-handoff"})
+    helper, remote = trace_profile(session / "renderer-runtime.log.x64", {
+        "direct-visual", "visual-frame", "visual-readiness", "trial-present-phase", "video-memory"})
+    barriers = [event for event in native if event.get("stage") == "native-cpu-barrier"]
+    admissions = [event for event in native if event.get("stage") == "native-copy-admission"]
+    visual = [event for event in remote if event.get("stage") == "direct-visual"]
+    memory = []
+    for event in remote:
+        if event.get("stage") != "video-memory":
+            continue
+        try:
+            memory.append((int(event["local_budget"]), int(event["local_usage"])))
+        except (KeyError, ValueError):
+            continue
+    return {
+        "bridge_trace_available": bridge, "helper_trace_available": helper,
+        "map_render_wait": duration(native, "composite", "render_wait_ms"),
+        "native_handoff": duration(native, "native-handoff", "call_ms"),
+        "native_cpu_barriers": {
+            "logged": len(barriers),
+            "operations": {key: sum(e.get("operation") == key for e in barriers)
+                           for key in sorted({e.get("operation", "unknown") for e in barriers})},
+            "gpu_readback": duration(native, "native-cpu-barrier", "gpu_ms"),
+            "complete": duration(native, "native-cpu-barrier", "total_ms")},
+        "native_copy_admission": {
+            "logged": len(admissions),
+            "reasons": {key: sum(e.get("reason") == key for e in admissions)
+                        for key in sorted({e.get("reason", "unknown") for e in admissions})}},
+        "direct_visual": {
+            "logged": len(visual), "changed_frames": sum(e.get("drawn") == "1" for e in visual),
+            "sample": duration(remote, "direct-visual", "sample_ms"),
+            "present": duration(remote, "direct-visual", "present_ms"),
+            "total": duration(remote, "direct-visual", "total_ms")},
+        "direct_present": {
+            "display": duration(remote, "trial-present-phase", "display_ms"),
+            "target_bind": duration(remote, "trial-present-phase", "target_ms"),
+            "dxgi_present": duration(remote, "trial-present-phase", "present_ms")},
+        "gpu_memory": {
+            "samples": len(memory),
+            "local_budget_mib_min": min((budget for budget, _ in memory), default=0) / 1048576,
+            "local_usage_mib_peak": max((usage for _, usage in memory), default=0) / 1048576,
+            "over_budget_samples": sum(usage > budget for budget, usage in memory)},
+        "visual_frame_request": duration(remote, "visual-frame", "request_ms"),
+        "visual_readiness_transitions": [e.get("ready") for e in remote
+                                          if e.get("stage") == "visual-readiness"],
+        "limits": "Trace messages can be sampled or capped; logged counts are lower bounds. Map wait and helper visual samples are different paths and must not be added."}
 
 
 def analyze(session):
@@ -126,6 +207,7 @@ def analyze(session):
             "journal_complete": bool(report.get("complete") and report.get("verified_prefix")),
             "journal_calls": report.get("calls"), "families": families,
             "presentation": presentation,
+            "pipeline": pipeline_profile(session),
             "helper_private_peak_mib": max((row.get("private_bytes", 0) for row in helper_memory), default=0) / 1048576,
             "civ3_private_peak_mib": max((row.get("private_bytes", 0) for row in native_memory), default=0) / 1048576,
             "civ3_min_free_mib": min((row.get("free_bytes", 0) for row in native_memory), default=0) / 1048576,

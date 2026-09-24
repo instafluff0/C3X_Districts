@@ -7,9 +7,14 @@
 #include "c3x_renderer_api.h"
 
 int main(int argc, char** argv) {
-    if (argc != 3) {
-        std::fprintf(stderr, "usage: renderer64_startup_probe <mod-relative-dir> <bridge-dll>\n");
+    bool late_cache = argc == 4 && std::strcmp(argv[3], "--late-cache") == 0;
+    if (argc != 3 && !late_cache) {
+        std::fprintf(stderr, "usage: renderer64_startup_probe <mod-relative-dir> <bridge-dll> [--late-cache]\n");
         return 2;
+    }
+    if (late_cache) {
+        SetEnvironmentVariableA("C3X_RENDERER_WORLD_RASTER_GRID", "0");
+        SetEnvironmentVariableA("C3X_RENDERER_WORLD_REGIONS", "0");
     }
     HMODULE bridge = LoadLibraryA(argv[2]);
     if (!bridge) {
@@ -46,6 +51,11 @@ int main(int argc, char** argv) {
         reset();
         FreeLibrary(bridge);
         return 1;
+    }
+    if (late_cache) {
+        SetEnvironmentVariableA("C3X_RENDERER_VISUAL_PROFILE", "city-fidelity");
+        SetEnvironmentVariableA("C3X_RENDERER_WORLD_RASTER_GRID", "1");
+        SetEnvironmentVariableA("C3X_RENDERER_WORLD_REGIONS", "1");
     }
     char defaults[2 * MAX_PATH], custom[2 * MAX_PATH];
     if (std::snprintf(defaults, sizeof defaults, "%s\\Renderer\\default.custom_rendering.txt", argv[1]) >= int(sizeof defaults) ||

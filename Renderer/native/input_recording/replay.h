@@ -272,6 +272,15 @@ extern "C" __declspec(dllexport) int c3x_renderer_input_replay(
         count=in.u32();in.available(count);c3x_inputs::Bytes expected(envelope.begin()+in.at,envelope.begin()+in.at+count);in.at+=count;
         count=in.u32();c3x_inputs::require(count<=64,"excessive replay clock samples");
         for(unsigned n=0;n<count;++n){auto ticks=std::int64_t(in.u64()),frequency=std::int64_t(in.u64());clock.values.emplace_back(ticks,frequency);}in.done();
+        if(kind==c3x_inputs::Kind::visual&&subtype==4&&clock.values.empty()&&remote_renderer_requested()){
+            // Renderer64's exported clock returns the QPC sample directly;
+            // unlike worker-owned clocks it emits no nested clock record.
+            // Replay that recorded return through the same production call.
+            c3x_inputs::Reader recorded{expected};recorded.u64();recorded.u32();
+            auto ticks=std::int64_t(recorded.u64());recorded.done();
+            LARGE_INTEGER frequency={};c3x_inputs::require(QueryPerformanceFrequency(&frequency)!=FALSE&&frequency.QuadPart>0,"replay clock frequency unavailable");
+            clock.values.emplace_back(ticks,frequency.QuadPart);
+        }
         struct ClockScope {ClockScope(c3x_inputs::ReplayClock& clock){c3x_inputs::replay_clock()=&clock;}~ClockScope(){c3x_inputs::replay_clock()=nullptr;}} scope(clock);
         c3x_inputs::Reader payload{input},result{expected};
         c3x_inputs::replay_state().call(kind,subtype,payload,result,static_cast<HWND>(window));
