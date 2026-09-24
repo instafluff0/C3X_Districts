@@ -16,3 +16,6 @@ __pycache__/
 *.pyc
 /bin/
 /native/build/
+
+# Historical sandbox source/evidence, excluded from active implementation work.
+/.sandbox-archive/
