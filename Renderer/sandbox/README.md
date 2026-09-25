@@ -96,9 +96,10 @@ instance stream. Prepared rigid objects retain shared meshes and instances.
 Four synthetic units use resident authored meshes, exact source-frame GPU skinning,
 and material shading directly in the scene depth target. The synthetic host
 publishes moves and combat events while the client advances visible clips.
-Static color and depth survive camera motion; short scrolls redraw exposed
-strips, and unchanged reflections reuse their target. The main target is native
-resolution with 2x MSAA, the reflection target is 0.375x resolution, and a
+Static color and depth survive camera motion in a wider resident region; short
+scrolls draw newly exposed strips, and unchanged reflections reuse their target.
+The main target is native resolution with single-sample shading by default,
+the reflection target is 0.375x resolution, and a
 half-resolution HDR bloom feeds tone mapping directly into the swapchain.
 Animated shoreline foam now comes from the water material's prepared coast depth
 instead of submitting separate small wave meshes for this distant map view.
@@ -192,9 +193,14 @@ moving water and units composite over it without a full color copy. A dedicated
 water pass retains the prepared mesh, source textures, shadow and reflection
 inputs with a bounded two-normal shader. Its fine ripples differ from the
 production material. The next performance step is to replace the full-screen
-multisample scroll restore with a larger resident camera region and redraw only
-newly exposed geometry. Measure the moving workload with zoom included; do not
-add pixel-comparison gates.
+multisample scroll restore with a larger resident camera region. Short scrolls
+now draw newly exposed geometry into that region and crop its retained color
+and depth for the current view. The current normal-present moving workload is
+16 ms median and 31 ms p95; the wider region increases target memory and has
+not meaningfully improved total frame time. A flat-color run through the same
+swapchain measured 16 ms median and 32 ms p95. Measure displayed latency at
+the Civ III surface handoff before treating swapchain statistics as delivered
+frames.
 
 ## Later visual experiment: cliff-impact waves
 

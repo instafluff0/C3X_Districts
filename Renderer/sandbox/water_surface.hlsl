@@ -1,10 +1,15 @@
 // Appended to production's BIQ hydrology declarations. This is a D3D11
 // adaptation of 0 A.D.'s water_high.fs getNormal/getSpecular/getReflection
 // and main Fresnel blend. Prepared coast geometry and source textures remain.
+cbuffer SandboxAquaticBounds : register(b11) { float4 aquatic_bounds; };
 float4 ShadeWaterSurface(PixelInput input) {
     clip(-input.hydrology_data.x - 0.0001);
     float depth = max(0, input.hydrology_data.w);
     float coastal_detail = 1 - smoothstep(.30, .39, depth);
+    // Keep long ocean glints out of the narrow coastal wave zone. Distance is
+    // the prepared signed shoreline field, so deep inlets still count as coast.
+    float offshore = max(0, -input.hydrology_data.x);
+    float open_ocean = smoothstep(.25, 1.65, offshore);
     float2 world = q3_source_world(input);
 
     // 0 A.D. blends animated normals before Fresnel and reflected light.
@@ -40,11 +45,15 @@ float4 ShadeWaterSurface(PixelInput input) {
     // t123 is the water variant's marine-color layer. Sample it through the
     // moving normal so fish and whales inherit surface refraction, reflection
     // and foam rather than being composited over the finished ocean.
-    uint aquatic_width, aquatic_height;
-    resource_base_texture_7.GetDimensions(aquatic_width, aquatic_height);
-    float2 aquatic_uv = (input.position.xy - normal.xy * 5) /
-        max(float2(aquatic_width, aquatic_height), 1);
-    float4 aquatic = resource_base_texture_7.SampleLevel(decal_sampler, aquatic_uv, 0);
+    float4 aquatic = 0;
+    if (all(input.position.xy >= aquatic_bounds.xy) &&
+        all(input.position.xy < aquatic_bounds.zw)) {
+        uint aquatic_width, aquatic_height;
+        resource_base_texture_7.GetDimensions(aquatic_width, aquatic_height);
+        float2 aquatic_uv = (input.position.xy - normal.xy * 5) /
+            max(float2(aquatic_width, aquatic_height), 1);
+        aquatic = resource_base_texture_7.SampleLevel(decal_sampler, aquatic_uv, 0);
+    }
     float3 reflected_ray = reflect(-eye, normal);
     float3 sky_light = environment_ambient_color * .6 +
         environment_sun_color * environment_sun_intensity * .6 +
@@ -79,7 +88,7 @@ float4 ShadeWaterSurface(PixelInput input) {
     float3 marine_body = aquatic.rgb / max(aquatic.a, .01);
     color = lerp(color, color * float3(.12, .30, .42) +
         marine_body * .035, marine_coverage);
-    color += shadow * saturate(specular * sun);
+    color += shadow * saturate(specular * sun) * lerp(.06, 1, open_ocean);
     // 0 A.D.'s water_high getFoam uses animated normal detail plus shoreline
     // coverage. The prepared BIQ coastal depth supplies that coverage here,
     // so the far-zoom scene needs no separate short-strip wave meshes.
@@ -87,7 +96,9 @@ float4 ShadeWaterSurface(PixelInput input) {
         (1 - smoothstep(.105, .155, depth));
     float foam_pattern = smoothstep(.27, .55,
         broad.x * .42 + fine.y * .58 + .12);
-    float foam = foam_band * foam_pattern * coastal_detail * .34;
+    // The explicit breaker pass owns nearshore foam; the surface pattern
+    // becomes visible only as that breaker zone gives way to open water.
+    float foam = foam_band * foam_pattern * coastal_detail * open_ocean * .34;
     color = lerp(color, light * float3(.46, .60, .63), foam);
     float coverage = 1 - exp(-depth * lerp(2.3, 3.2,
         smoothstep(.10, .32, depth)));

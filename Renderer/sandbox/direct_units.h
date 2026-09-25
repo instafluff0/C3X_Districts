@@ -392,7 +392,9 @@ float4 PSShadow(Output i):SV_Target {
                     placement_values[16]=1;
                     placement_values[17]=-key_light.direction[0]/key_light.direction[2]*
                         c3x_renderer::lighting::object_height_to_world;
-                    placement_values[18]=-key_light.direction[1]/key_light.direction[2]*
+                    // Source-local Y runs opposite world V; match the shared
+                    // resource and terrain shadow projection.
+                    placement_values[18]=key_light.direction[1]/key_light.direction[2]*
                         c3x_renderer::lighting::object_height_to_world;
                     context->UpdateSubresource(placement,0,nullptr,placement_values,0,0);
                     context->OMSetDepthStencilState(renderer.natural.decal_depth,0);

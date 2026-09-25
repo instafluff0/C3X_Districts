@@ -69,7 +69,7 @@ struct LinearRestore {
         char const* source=R"(
 Texture2DMS<float4,4> scene:register(t0);
 Texture2DMS<float,4> scene_depth:register(t1);
-cbuffer Restore:register(b0){int4 move_extent;int4 metadata;int4 dirty[16];};
+cbuffer Restore:register(b0){int4 move_extent;int4 metadata;int4 dirty[16];float4 depth_adjust;};
 float4 VS(uint id:SV_VertexID):SV_Position{float2 p=float2((id<<1)&2,id&2);return float4(p*float2(2,-2)+float2(-1,1),0,1);}
 struct Output{float4 color:SV_Target;float depth:SV_Depth;};
 Output PS(float4 position:SV_Position,uint sample:SV_SampleIndex){
@@ -80,7 +80,7 @@ Output PS(float4 position:SV_Position,uint sample:SV_SampleIndex){
  bool valid=all(p>=0)&&all(p<move_extent.zw);
  for(int i=0;i<metadata.x;++i)if(all(destination>=dirty[i].xy*2)&&all(destination<dirty[i].zw*2))valid=false;
  Output result;result.color=valid?scene.Load(p,sample):float4(0,0,0,0);
- result.depth=valid?scene_depth.Load(p,sample):1;
+ result.depth=valid?scene_depth.Load(p,sample)+depth_adjust.x:1;
  if(metadata.z!=0){result.color=0;result.depth=1;}return result;
 })";
         std::string shader=source;
@@ -111,7 +111,7 @@ Output PS(float4 position:SV_Position,uint sample:SV_SampleIndex){
         if(SUCCEEDED(hr))hr=device->CreateVertexShader(blob->GetBufferPointer(),blob->GetBufferSize(),nullptr,&vertex);release(blob);
         if(SUCCEEDED(hr))hr=compile("PS","ps_5_0",&blob);
         if(SUCCEEDED(hr))hr=device->CreatePixelShader(blob->GetBufferPointer(),blob->GetBufferSize(),nullptr,&pixel);release(blob);
-        D3D11_BUFFER_DESC b={};b.ByteWidth=288;b.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
+        D3D11_BUFFER_DESC b={};b.ByteWidth=304;b.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
         if(SUCCEEDED(hr))hr=device->CreateBuffer(&b,nullptr,&settings);
         D3D11_DEPTH_STENCIL_DESC d={};d.DepthEnable=true;d.DepthWriteMask=D3D11_DEPTH_WRITE_MASK_ALL;d.DepthFunc=D3D11_COMPARISON_ALWAYS;
         if(SUCCEEDED(hr))hr=device->CreateDepthStencilState(&d,&depth);
@@ -122,11 +122,12 @@ Output PS(float4 position:SV_Position,uint sample:SV_SampleIndex){
     bool draw(ID3D11DeviceContext* context,LinearTarget const& target,
               ID3D11ShaderResourceView* color,ID3D11ShaderResourceView* old_depth,
               int dx,int dy,std::vector<D3D11_RECT> const& dirty,
-              std::vector<D3D11_RECT> const* regions=nullptr,unsigned source_width=0,unsigned source_height=0,bool circular=false,bool clear=false,int sample_scale=0,D3D11_RECT const* clip=nullptr,int offset_scale=2){
+              std::vector<D3D11_RECT> const* regions=nullptr,unsigned source_width=0,unsigned source_height=0,bool circular=false,bool clear=false,int sample_scale=0,D3D11_RECT const* clip=nullptr,int offset_scale=2,float depth_shift=0){
         if(dirty.size()>16)return false;
-        struct Constants{int move_extent[4],metadata[4];D3D11_RECT dirty[16];} values={};
+        struct Constants{int move_extent[4],metadata[4];D3D11_RECT dirty[16];float depth_adjust[4];} values={};
         values.move_extent[0]=dx*offset_scale;values.move_extent[1]=dy*offset_scale;
         values.move_extent[2]=int(source_width?source_width:target.width);values.move_extent[3]=int(source_height?source_height:target.height);values.metadata[0]=int(dirty.size());values.metadata[1]=circular?1:0;values.metadata[2]=clear?1:0;values.metadata[3]=sample_scale;
+        values.depth_adjust[0]=depth_shift;
         std::copy(dirty.begin(),dirty.end(),values.dirty);context->UpdateSubresource(settings,0,nullptr,&values,0,0);
         context->OMSetRenderTargets(1,&target.target,target.depth);context->OMSetBlendState(nullptr,nullptr,0xffffffffu);
         context->OMSetDepthStencilState(depth,0);context->RSSetState(rasterizer);

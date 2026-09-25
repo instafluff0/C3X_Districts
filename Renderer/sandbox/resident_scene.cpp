@@ -266,10 +266,13 @@ extern "C" __declspec(dllexport) int c3x_sandbox_present(HWND window,
     QueryPerformanceCounter(&ticks[2]);
     static bool captured_initial = false, captured_moved = false;
     static bool captured_jump=false,captured_return=false,captured_wrap=false;
+    static bool captured_scroll=false;
     bool initial_capture = unit_x == 19 && unit_y == 47 && !captured_initial;
     bool moved_capture = unit_x == 20 && unit_y == 48 && !captured_moved && frame &&
         frame->presentation_time_ticks>=2000;
     bool jump_capture=camera_x==-640 && camera_y==-256 && !captured_jump;
+    bool scroll_capture=camera_x>=128 && camera_x<144 &&
+        camera_y>=64 && camera_y<80 && !captured_scroll;
     bool return_capture=camera_x==0 && camera_y==0 && !captured_return && frame &&
         frame->presentation_time_ticks>=8000;
     bool wrap_capture=camera_x==6400 && camera_y==0 && !captured_wrap;
@@ -280,6 +283,7 @@ extern "C" __declspec(dllexport) int c3x_sandbox_present(HWND window,
         "C3X_SANDBOX_CAPTURE_SEQUENCE",sequence_prefix,sizeof(sequence_prefix));
     char const* capture_variable = initial_capture ? "C3X_SANDBOX_CAPTURE" :
         moved_capture ? "C3X_SANDBOX_CAPTURE_MOVED" :
+        scroll_capture ? "C3X_SANDBOX_CAPTURE_SCROLL" :
         jump_capture ? "C3X_SANDBOX_CAPTURE_JUMP" :
         return_capture ? "C3X_SANDBOX_CAPTURE_RETURN" :
         wrap_capture ? "C3X_SANDBOX_CAPTURE_WRAP" : nullptr;
@@ -321,6 +325,7 @@ extern "C" __declspec(dllexport) int c3x_sandbox_present(HWND window,
                     if (initial_capture) captured_initial = true;
                     if (moved_capture) captured_moved = true;
                     if (jump_capture) captured_jump=true;
+                    if (scroll_capture) captured_scroll=true;
                     if (return_capture) captured_return=true;
                     if (wrap_capture) captured_wrap=true;
                 }

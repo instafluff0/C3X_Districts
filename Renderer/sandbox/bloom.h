@@ -35,7 +35,8 @@ float4 VS(uint id:SV_VertexID):SV_Position{
 float3 highlight(float4 c){
  if(c.a<=0)return 0;
  float peak=max(c.r,max(c.g,c.b));
- return c.rgb*(max(peak-1,0)/max(peak,.0001));
+ // Leave sunlit terrain below the bloom knee; preserve strong HDR highlights.
+ return c.rgb*(max(peak-2.5,0)/max(peak,.0001));
 }
 float4 PSExtract(float4 position:SV_Position):SV_Target{
  int2 at=int2(position.xy)*2;
