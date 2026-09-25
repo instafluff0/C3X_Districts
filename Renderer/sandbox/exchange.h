@@ -16,6 +16,7 @@ struct Snapshot {
     LONG unit_x;
     LONG unit_y;
     LONG unit_visible;
+    LONG combat_serial;
 };
 struct Action {
     LONG serial;

@@ -16,10 +16,27 @@ LRESULT CALLBACK sandbox_window_proc(HWND window, UINT message, WPARAM wparam, L
     return DefWindowProcA(window, message, wparam, lparam);
 }
 
+void sandbox_camera_path(ULONGLONG elapsed,int& x,int& y){
+    x=y=0;
+    if(elapsed>=23500 && elapsed<27500){
+        x=int((elapsed-23500)*256/4000);
+        y=int((elapsed-23500)*128/4000);
+    }else if(elapsed>=27500 && elapsed<29000){x=-640;y=-256;}
+    else if(elapsed>=33500 && elapsed<35000)x=6400;
+}
+
+float sandbox_zoom_path(ULONGLONG elapsed){
+    if(elapsed>=29500 && elapsed<31000)
+        return 1.f+.2f*float(elapsed-29500)/1500.f;
+    if(elapsed>=31000 && elapsed<32500)
+        return 1.2f-.2f*float(elapsed-31000)/1500.f;
+    return 1.f;
+}
+
 int sandbox_client_run(HMODULE module, c3x_renderer_frame_v1 const& prepared_frame) {
     using namespace sandbox_exchange;
     auto draw = reinterpret_cast<int(*)(c3x_renderer_frame_v1 const*, char const*,
-        int,int,int,int,int,int,int)>(
+        int,int,int,int,int,int,int,float)>(
         GetProcAddress(module, "c3x_sandbox_draw_fresh"));
     auto present = reinterpret_cast<int(*)(HWND, c3x_renderer_frame_v1 const*,
         int,int,int,int,int,int,int)>(
@@ -38,6 +55,16 @@ int sandbox_client_run(HMODULE module, c3x_renderer_frame_v1 const& prepared_fra
     if (!draw || !present || !observed) return 2;
     auto inspect = reinterpret_cast<void(*)()>(GetProcAddress(module, "c3x_sandbox_inspect_scene"));
     if (inspect) inspect();
+    auto prewarm = reinterpret_cast<int(*)(int,int)>(
+        GetProcAddress(module,"c3x_sandbox_prewarm_units"));
+    auto combat = reinterpret_cast<void(*)(int,c3x_renderer_i64)>(
+        GetProcAddress(module,"c3x_sandbox_combat_event"));
+    if(!prewarm||!combat)return 2;
+    auto prewarm_begin=GetTickCount64();
+    int prewarm_result=prewarm(prepared_frame.hour,prepared_frame.season);
+    std::printf("CLIENT_PREWARM units_ms=%llu result=%d\n",
+        static_cast<unsigned long long>(GetTickCount64()-prewarm_begin),prewarm_result);
+    if(prewarm_result)return 2;
     WNDCLASSA window_class{};
     window_class.lpfnWndProc = sandbox_window_proc;
     window_class.hInstance = GetModuleHandleA(nullptr);
@@ -49,6 +76,43 @@ int sandbox_client_run(HMODULE module, c3x_renderer_frame_v1 const& prepared_fra
         nullptr, nullptr, window_class.hInstance, nullptr);
     if (!window) return 4;
     ShowWindow(window, SW_SHOW);
+    Snapshot opening{0,1,1,7,19,47,1,0};
+    auto prime_frame=prepared_frame;
+    prime_frame.presentation_frequency=1000;
+    prime_frame.presentation_time_ticks=0;
+    auto prime_begin=GetTickCount64();
+    int prime_result=draw(&prime_frame,nullptr,0,0,opening.unit_x,opening.unit_y,
+        opening.unit_incarnation,opening.viewer,opening.unit_visible,1.f);
+    if(!prime_result)prime_result=present(window,&prime_frame,opening.unit_x,opening.unit_y,
+        opening.unit_incarnation,opening.viewer,opening.unit_visible,0,0);
+    std::printf("CLIENT_PRIME scene_and_swapchain_ms=%llu result=%d\n",
+        static_cast<unsigned long long>(GetTickCount64()-prime_begin),prime_result);
+    if(prime_result)return 4;
+    char clip_option[8]{};
+    if(GetEnvironmentVariableA("C3X_SANDBOX_REPLAY_CLIP",clip_option,sizeof(clip_option)) &&
+            std::strcmp(clip_option,"1")==0){
+        // Every source frame is rendered at 30 Hz. The first 15 seconds keep
+        // the camera fixed so water and authored ambient clips are inspectable.
+        for(int index=0;index<1080;++index){
+            int t=int((std::int64_t(index)*1000+15)/30);
+            int x=0,y=0;sandbox_camera_path(t,x,y);
+            Snapshot actor=opening;
+            if(t>=15000){actor.unit_x=20;actor.unit_y=48;}
+            if(t>=17500)combat(1,t);
+            auto frame=prepared_frame;
+            frame.presentation_frequency=1000;
+            frame.presentation_time_ticks=t;
+            int result=draw(&frame,nullptr,x,y,actor.unit_x,actor.unit_y,
+                actor.unit_incarnation,actor.viewer,actor.unit_visible,sandbox_zoom_path(t));
+            if(!result)result=present(window,&frame,actor.unit_x,actor.unit_y,
+                actor.unit_incarnation,actor.viewer,actor.unit_visible,x,y);
+            if(result)return result;
+            if(index%30==0)std::printf("CLIENT_CLIP_FRAME time_ms=%d camera=%d,%d zoom=%.3f\n",
+                t,x,y,sandbox_zoom_path(t));
+        }
+        DestroyWindow(window);
+        return 0;
+    }
 
     HANDLE mapping = CreateFileMappingW(INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE, 0,
         sizeof(Exchange), mapping_name);
@@ -78,7 +142,7 @@ int sandbox_client_run(HMODULE module, c3x_renderer_frame_v1 const& prepared_fra
 
     auto start = GetTickCount64();
     LONG host_before_pause = 0, host_after_pause = 0;
-    LONG last_generation = 0, frames_during_host_pause = 0;
+    LONG last_generation = 0, frames_during_host_pause = 0, last_combat=0;
     int camera_x = 0, camera_y = 0;
     int input_x=0,input_y=0;
     bool client_paused = false, action_sent = false;
@@ -87,9 +151,12 @@ int sandbox_client_run(HMODULE module, c3x_renderer_frame_v1 const& prepared_fra
     unsigned visible_min=UINT_MAX,visible_max=0,shadow_builds=0,resident_builds=0;
     std::vector<double> frame_times, steady_times, draw_times, present_times;
     std::array<std::vector<double>,4> present_stages;
-    std::array<std::vector<double>,5> phase_times;
+    std::array<std::vector<double>,10> phase_times;
+    std::vector<double> zoom_times;
+    std::array<std::vector<double>,2> zoom_legs;
+    double first_zoom_ms=0,return_zoom_ms=0;
     std::array<std::vector<double>,6> scene_stages;
-    while (GetTickCount64() - start < 18000) {
+    while (GetTickCount64() - start < 36000) {
         MSG message{};
         while (PeekMessageA(&message, nullptr, 0, 0, PM_REMOVE)) {
             if (message.message == WM_QUIT) break;
@@ -110,19 +177,7 @@ int sandbox_client_run(HMODULE module, c3x_renderer_frame_v1 const& prepared_fra
         Snapshot snapshot{};
         if (observe(exchange, snapshot)) last_generation = snapshot.generation;
         int next_x=0,next_y=0;
-        if (elapsed>=2000 && elapsed<4000) {
-            next_x=int((elapsed-2000)*128/2000);
-            next_y=int((elapsed-2000)*64/2000);
-        } else if (elapsed>=4000 && elapsed<6200) {
-            next_x=128;next_y=64;
-        } else if (elapsed>=6200 && elapsed<8200) {
-            next_x=128+int((elapsed-6200)*128/2000);
-            next_y=64+int((elapsed-6200)*64/2000);
-        } else if (elapsed>=8200 && elapsed<10000) {
-            next_x=-640;next_y=-256;
-        } else if (elapsed>=15000 && elapsed<16500) {
-            next_x=6400;
-        }
+        sandbox_camera_path(elapsed,next_x,next_y);
         if (GetAsyncKeyState(VK_LEFT) & 0x8000) input_x+=4;
         if (GetAsyncKeyState(VK_RIGHT) & 0x8000) input_x-=4;
         if (GetAsyncKeyState(VK_UP) & 0x8000) input_y+=4;
@@ -134,7 +189,11 @@ int sandbox_client_run(HMODULE module, c3x_renderer_frame_v1 const& prepared_fra
             exchange->camera_x = camera_x; exchange->camera_y = camera_y;
             InterlockedIncrement(&exchange->camera_sequence);
         }
-        if (elapsed >= 6100 && !action_sent && snapshot.generation) {
+        if(snapshot.combat_serial>last_combat){
+            last_combat=snapshot.combat_serial;
+            combat(last_combat,c3x_renderer_i64(elapsed));
+        }
+        if (elapsed >= 15000 && !action_sent && snapshot.generation) {
             Action action{1, snapshot.generation, snapshot.viewer,
                 snapshot.unit_incarnation, snapshot.unit_x + 1, snapshot.unit_y + 1};
             action_sent = send_action(exchange, action);
@@ -142,10 +201,11 @@ int sandbox_client_run(HMODULE module, c3x_renderer_frame_v1 const& prepared_fra
         auto frame = prepared_frame;
         frame.presentation_frequency = 1000;
         frame.presentation_time_ticks = c3x_renderer_i64(GetTickCount64() - start);
+        float zoom=sandbox_zoom_path(elapsed);
         auto begin = GetTickCount64();
         int result = flat_present ? 0 : draw(&frame, nullptr, camera_x, camera_y,
             snapshot.unit_x,snapshot.unit_y,snapshot.unit_incarnation,
-            snapshot.viewer,snapshot.unit_visible);
+            snapshot.viewer,snapshot.unit_visible,zoom);
         auto drawn_at = GetTickCount64();
         if (!result) result = present(window, &frame, snapshot.unit_x, snapshot.unit_y,
             snapshot.unit_incarnation,snapshot.viewer,snapshot.unit_visible,camera_x,camera_y);
@@ -172,16 +232,23 @@ int sandbox_client_run(HMODULE module, c3x_renderer_frame_v1 const& prepared_fra
         double duration = double(GetTickCount64() - begin);
         if(frame_times.size()>=3)steady_times.push_back(duration);
         frame_times.push_back(duration);
-        unsigned phase=elapsed<2000?0:elapsed<8200?1:elapsed<10000?2:
-            elapsed<15000?3:4;
+        unsigned phase=elapsed<15000?0:elapsed<16500?1:elapsed<23500?2:
+            elapsed<27500?3:elapsed<29000?4:elapsed<29500?5:
+            elapsed<32500?6:elapsed<33500?7:elapsed<35000?8:9;
         phase_times[phase].push_back(duration);
+        if(elapsed>=29500 && elapsed<32500){
+            zoom_times.push_back(duration);
+            zoom_legs[elapsed<31000?0:1].push_back(duration);
+            if(first_zoom_ms==0)first_zoom_ms=duration;
+        } else if(elapsed>=32500 && return_zoom_ms==0 && first_zoom_ms!=0)
+            return_zoom_ms=duration;
         draw_times.push_back(double(drawn_at-begin));
         present_times.push_back(duration-draw_times.back());
-        if (phase==2 && camera_frame_ms==0) camera_frame_ms=duration;
+        if (phase==4 && camera_frame_ms==0) camera_frame_ms=duration;
         if (!snapshot.unit_visible) ++hidden_frames;
-        if (elapsed>=15000 && snapshot.unit_visible) ++returned_visible_frames;
+        if (elapsed>=35000 && snapshot.unit_visible) ++returned_visible_frames;
         InterlockedIncrement(&exchange->client_heartbeat);
-        if (elapsed >= 4000 && elapsed < 6000) ++frames_during_host_pause;
+        if (elapsed >= 9000 && elapsed < 11000) ++frames_during_host_pause;
     }
     std::sort(frame_times.begin(), frame_times.end());
     std::sort(steady_times.begin(), steady_times.end());
@@ -193,12 +260,23 @@ int sandbox_client_run(HMODULE module, c3x_renderer_frame_v1 const& prepared_fra
         return samples.empty() ? 0.0 : samples[std::min(samples.size()-1,
             std::size_t(fraction * double(samples.size()-1)))];
     };
-    char const* phase_names[]={"idle","scroll_and_move","jump",
-        "resident_return","wrap_and_return"};
+    char const* phase_names[]={"idle","moving_unit","combat","scroll","jump",
+        "resident_return","zoom","hold","wrap","wrap_return"};
     for (unsigned i=0;i<phase_times.size();++i) {
         auto& samples=phase_times[i];std::sort(samples.begin(),samples.end());
         std::printf("CLIENT_PHASE name=%s frames=%zu median_ms=%.1f p95_ms=%.1f worst_ms=%.1f\n",
             phase_names[i],samples.size(),quantile(samples,.5),
+            quantile(samples,.95),quantile(samples,1));
+    }
+    std::sort(zoom_times.begin(),zoom_times.end());
+    std::printf("CLIENT_ZOOM frames=%zu first_ms=%.1f median_ms=%.1f p95_ms=%.1f worst_ms=%.1f return_ms=%.1f\n",
+        zoom_times.size(),first_zoom_ms,quantile(zoom_times,.5),
+        quantile(zoom_times,.95),quantile(zoom_times,1),return_zoom_ms);
+    char const* zoom_leg_names[]={"zoom_in","zoom_out"};
+    for(unsigned i=0;i<zoom_legs.size();++i){
+        auto& samples=zoom_legs[i];std::sort(samples.begin(),samples.end());
+        std::printf("CLIENT_ZOOM_LEG name=%s frames=%zu median_ms=%.1f p95_ms=%.1f worst_ms=%.1f\n",
+            zoom_leg_names[i],samples.size(),quantile(samples,.5),
             quantile(samples,.95),quantile(samples,1));
     }
     char const* stage_names[]={"backbuffer_composition","units","capture","Present"};

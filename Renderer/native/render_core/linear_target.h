@@ -7,11 +7,11 @@ struct LinearTarget {
     ID3D11RenderTargetView *target=nullptr;
     ID3D11ShaderResourceView *view=nullptr,*samples=nullptr,*depth_samples=nullptr;
     ID3D11DepthStencilView *depth=nullptr;
-    UINT width=0,height=0;
+    UINT width=0,height=0,sample_count=0;
     template<class T> void release(T*& p) { if(p) { p->Release(); p=nullptr; } }
     void reset() {
         release(depth_samples); release(samples); release(depth); release(depth_texture); release(view); release(target);
-        release(resolved); release(color); width=height=0;
+        release(resolved); release(color); width=height=sample_count=0;
     }
     ~LinearTarget() { reset(); }
     void swap(LinearTarget& other){
@@ -19,15 +19,17 @@ struct LinearTarget {
         std::swap(target,other.target);std::swap(view,other.view);std::swap(samples,other.samples);
         std::swap(depth_samples,other.depth_samples);std::swap(depth,other.depth);
         std::swap(width,other.width);std::swap(height,other.height);
+        std::swap(sample_count,other.sample_count);
     }
-    bool ensure(ID3D11Device* device,UINT w,UINT h,bool sampleable=false,bool resolve=true) {
-        if(target && width==w && height==h && (!sampleable || samples) && (!resolve || resolved)) return true;
+    bool ensure(ID3D11Device* device,UINT w,UINT h,bool sampleable=false,bool resolve=true,UINT count=4) {
+        if(target && width==w && height==h && sample_count==count &&
+            (!sampleable || samples) && (!resolve || resolved)) return true;
         reset();
         UINT quality=0;
-        if(FAILED(device->CheckMultisampleQualityLevels(DXGI_FORMAT_R16G16B16A16_FLOAT,4,&quality)) ||
+        if(FAILED(device->CheckMultisampleQualityLevels(DXGI_FORMAT_R16G16B16A16_FLOAT,count,&quality)) ||
             quality==0) return false;
         D3D11_TEXTURE2D_DESC d={}; d.Width=w; d.Height=h; d.MipLevels=d.ArraySize=1;
-        d.Format=DXGI_FORMAT_R16G16B16A16_FLOAT; d.SampleDesc.Count=4;
+        d.Format=DXGI_FORMAT_R16G16B16A16_FLOAT; d.SampleDesc.Count=count;
         d.BindFlags=D3D11_BIND_RENDER_TARGET|(sampleable?D3D11_BIND_SHADER_RESOURCE:0); d.Usage=D3D11_USAGE_DEFAULT;
         HRESULT hr=device->CreateTexture2D(&d,nullptr,&color);
         if(SUCCEEDED(hr)) hr=device->CreateRenderTargetView(color,nullptr,&target);
@@ -35,7 +37,7 @@ struct LinearTarget {
         d.SampleDesc.Count=1; d.BindFlags=D3D11_BIND_SHADER_RESOURCE;
         if(SUCCEEDED(hr) && resolve) hr=device->CreateTexture2D(&d,nullptr,&resolved);
         if(SUCCEEDED(hr) && resolve) hr=device->CreateShaderResourceView(resolved,nullptr,&view);
-        d.SampleDesc.Count=4; d.Format=sampleable?DXGI_FORMAT_R24G8_TYPELESS:DXGI_FORMAT_D24_UNORM_S8_UINT;
+        d.SampleDesc.Count=count; d.Format=sampleable?DXGI_FORMAT_R24G8_TYPELESS:DXGI_FORMAT_D24_UNORM_S8_UINT;
         d.BindFlags=D3D11_BIND_DEPTH_STENCIL|(sampleable?D3D11_BIND_SHADER_RESOURCE:0);
         if(SUCCEEDED(hr)) hr=device->CreateTexture2D(&d,nullptr,&depth_texture);
         D3D11_DEPTH_STENCIL_VIEW_DESC ds={};ds.Format=DXGI_FORMAT_D24_UNORM_S8_UINT;ds.ViewDimension=D3D11_DSV_DIMENSION_TEXTURE2DMS;
@@ -43,9 +45,10 @@ struct LinearTarget {
         D3D11_SHADER_RESOURCE_VIEW_DESC dv={};dv.Format=DXGI_FORMAT_R24_UNORM_X8_TYPELESS;dv.ViewDimension=D3D11_SRV_DIMENSION_TEXTURE2DMS;
         if(SUCCEEDED(hr) && sampleable) hr=device->CreateShaderResourceView(depth_texture,&dv,&depth_samples);
         if(FAILED(hr)) { reset(); return false; }
-        width=w; height=h; return true;
+        width=w; height=h; sample_count=count; return true;
     }
-    std::size_t bytes() const { return std::size_t(width)*height*(8*4+(resolved?8:0)+4*4); }
+    std::size_t bytes() const { return std::size_t(width)*height*
+        (8*sample_count+(resolved?8:0)+4*sample_count); }
 };
 // Sample-preserving translation of a resident static scene. Newly exposed or
 // invalidated rectangles are cleared in the same draw, before selected geometry.
@@ -53,11 +56,13 @@ struct LinearRestore {
     ID3D11VertexShader* vertex=nullptr;ID3D11PixelShader* pixel=nullptr;
     ID3D11Buffer* settings=nullptr;ID3D11DepthStencilState* depth=nullptr;
     ID3D11RasterizerState* rasterizer=nullptr;
+    UINT sample_count=0;
     template<class T>void release(T*& p){if(p)p->Release();p=nullptr;}
-    void reset(){release(vertex);release(pixel);release(settings);release(depth);release(rasterizer);}
+    void reset(){release(vertex);release(pixel);release(settings);release(depth);release(rasterizer);sample_count=0;}
     ~LinearRestore(){reset();}
-    bool ensure(ID3D11Device* device){
-        if(pixel)return true;
+    bool ensure(ID3D11Device* device,UINT count=4){
+        if(pixel && sample_count==count)return true;
+        reset();
         char const* source=R"(
 Texture2DMS<float4,4> scene:register(t0);
 Texture2DMS<float,4> scene_depth:register(t1);
@@ -75,8 +80,14 @@ Output PS(float4 position:SV_Position,uint sample:SV_SampleIndex){
  result.depth=valid?scene_depth.Load(p,sample):1;
  if(metadata.z!=0){result.color=0;result.depth=1;}return result;
 })";
+        std::string shader=source;
+        if(count!=4){
+            if(count!=2)return false;
+            auto position=shader.find(",4>");
+            while(position!=std::string::npos){shader.replace(position,3,",2>");position=shader.find(",4>",position+3);}
+        }
         auto compile=[&](char const* entry,char const* target,ID3DBlob** blob){
-            ID3DBlob* errors=nullptr;HRESULT hr=D3DCompile(source,std::strlen(source),"scene_restore",nullptr,nullptr,
+            ID3DBlob* errors=nullptr;HRESULT hr=D3DCompile(shader.data(),shader.size(),"scene_restore",nullptr,nullptr,
                 entry,target,D3DCOMPILE_OPTIMIZATION_LEVEL3,0,blob,&errors);
             if(errors){OutputDebugStringA(static_cast<char const*>(errors->GetBufferPointer()));errors->Release();}return hr;
         };
@@ -90,7 +101,7 @@ Output PS(float4 position:SV_Position,uint sample:SV_SampleIndex){
         if(SUCCEEDED(hr))hr=device->CreateDepthStencilState(&d,&depth);
         D3D11_RASTERIZER_DESC r={};r.FillMode=D3D11_FILL_SOLID;r.CullMode=D3D11_CULL_NONE;r.DepthClipEnable=true;r.MultisampleEnable=true;r.ScissorEnable=true;
         if(SUCCEEDED(hr))hr=device->CreateRasterizerState(&r,&rasterizer);
-        if(FAILED(hr)){reset();return false;}return true;
+        if(FAILED(hr)){reset();return false;}sample_count=count;return true;
     }
     bool draw(ID3D11DeviceContext* context,LinearTarget const& target,
               ID3D11ShaderResourceView* color,ID3D11ShaderResourceView* old_depth,

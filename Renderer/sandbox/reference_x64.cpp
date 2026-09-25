@@ -434,6 +434,28 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
             auto& rail=tiles[candidates[5]];rail.road_mask=15;rail.railroad_mask=15;rail.route_style=3;
         }
     }
+#ifdef C3X_SANDBOX_CLIENT
+    // These BIQ sites enter the ordinary production tile preparation below.
+    // Keep the compact settlement beside the moving unit's jungle crossing.
+    for(auto& tile:tiles){
+        int x=((tile.tile_x%map_width)+map_width)%map_width,y=tile.tile_y;
+        if(y==57 && (x==25 || x==27 || x==29)){
+            tile.road_mask=15;tile.route_style=2;
+            if(x==27){
+                tile.city_id=1;tile.city_owner_id=1;tile.city_population=7;
+                tile.city_size=1;tile.city_culture_group=0;tile.city_era=1;
+            }else if(x==25)tile.improvement_flags=C3X_RENDERER_IMPROVEMENT_MINE;
+            else {tile.improvement_flags=C3X_RENDERER_IMPROVEMENT_IRRIGATION;
+                tile.irrigation_mask=15;}
+        }
+        if(y==58 && (x==26 || x==28)){
+            tile.road_mask=15;tile.route_style=2;
+        }
+        if(y==59 && x>=23 && x<=31 && x%2==1){
+            tile.road_mask=15;tile.railroad_mask=15;tile.route_style=3;
+        }
+    }
+#endif
     if(dense_scene)for(auto & tile:tiles) {
         // Synthetic stress inputs remain world-fixed across capture changes.
         // Fill ordinary supported objects only; draw eligibility stays native.

@@ -19,13 +19,13 @@ int main() {
     auto start = GetTickCount64();
     LONG accepted = 0, rejected = 0, published_during_client_pause = 0;
     LONG previous_client = acquire(&exchange->client_heartbeat);
-    Snapshot snapshot = {0, 1, 1, 7, 19, 47, 1};
+    Snapshot snapshot = {0, 1, 1, 7, 19, 47, 1, 0};
     bool host_paused = false;
     LARGE_INTEGER frequency{}; QueryPerformanceFrequency(&frequency);
     std::vector<LONG> publication_us;
-    while (GetTickCount64() - start < 18000) {
+    while (GetTickCount64() - start < 36000) {
         auto elapsed = GetTickCount64() - start;
-        if (elapsed >= 4000 && !host_paused) {
+        if (elapsed >= 9000 && !host_paused) {
             host_paused = true;
             std::printf("HOST_PAUSE_BEGIN generation=%ld client_frames=%ld\n", snapshot.generation,
                 acquire(&exchange->client_heartbeat));
@@ -56,9 +56,10 @@ int main() {
             // enter the bounded queue. Already published actions keep order.
             InterlockedExchange(&exchange->reconcile_required, 0);
         }
-        snapshot.viewer=elapsed>=14000 && elapsed<15000?2:1;
+        if(elapsed>=17500)snapshot.combat_serial=1;
+        snapshot.viewer=elapsed>=34000 && elapsed<35000?2:1;
         snapshot.unit_visible=snapshot.viewer==1;
-        if (elapsed>=15000) snapshot.unit_incarnation=8;
+        if (elapsed>=35000) snapshot.unit_incarnation=8;
         ++snapshot.generation;
         LARGE_INTEGER publication_begin{}, publication_end{};
         QueryPerformanceCounter(&publication_begin);
@@ -68,7 +69,7 @@ int main() {
             1000000 / frequency.QuadPart));
         InterlockedIncrement(&exchange->host_heartbeat);
         LONG client = acquire(&exchange->client_heartbeat);
-        if (client == previous_client && elapsed >= 8000 && elapsed < 10000)
+        if (client == previous_client && elapsed >= 12000 && elapsed < 14000)
             ++published_during_client_pause;
         previous_client = client;
         Sleep(16);

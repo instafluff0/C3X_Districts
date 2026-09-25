@@ -1,48 +1,99 @@
 #pragma once
 
-// The synthetic actor's authored mesh, textures, pose compiler and material
-// shader are production assets. This owner places their posed vertices in the
-// scene HDR/depth target; it never renders a unit-sized color target.
+// 0 A.D.'s GPUSkinnedModelRenderer keeps mesh inputs resident and updates only
+// the animation palette for visible models. Here each authored frame is already
+// an immutable palette: the vertex shader selects one exact source frame.
 struct SandboxDirectUnits {
-    struct Pose {
-        int action=0,cursor=0,direction=0,hour=0,season=0;
-        std::vector<Microsoft::WRL::ComPtr<ID3D11Buffer>> vertices;
-        Microsoft::WRL::ComPtr<ID3D11Texture2D> shadow;
-        Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> shadow_view;
-        unsigned shadow_extent=0;
+    struct Vertex {
+        float position[3],normal[3],uv[2],tangent[3],bitangent[3];
+        std::uint32_t joints[4];float weights[4];
     };
-    std::vector<Pose> poses;
+    static_assert(sizeof(Vertex)==88);
+    struct Mesh {
+        Microsoft::WRL::ComPtr<ID3D11Buffer> vertices,indices,palettes;
+        Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> palette_view;
+    };
+    std::vector<Mesh> meshes;
     ID3D11VertexShader* vertex=nullptr;
     ID3D11PixelShader* pixel=nullptr;
     ID3D11InputLayout* layout=nullptr;
     ID3D11Buffer *material=nullptr,*beauty=nullptr,*placement=nullptr;
+    ID3D11Texture2D* unshadowed=nullptr;
+    ID3D11ShaderResourceView* unshadowed_view=nullptr;
     ID3D11SamplerState* samplers[4]={};
     int previous_x=INT_MIN,previous_y=INT_MIN;
     int previous_viewer=INT_MIN,previous_incarnation=INT_MIN;
     int move_from_x=0,move_from_y=0;
-    c3x_renderer_i64 move_started=-1;
-    unsigned draws=0,pose_builds=0;
+    c3x_renderer_i64 move_started=-1,combat_started=-1;
+    int combat_serial=0;
+    unsigned draws=0,pose_builds=0,mesh_builds=0;
     template<class T>static void drop(T*& p){if(p)p->Release();p=nullptr;}
     ~SandboxDirectUnits(){drop(vertex);drop(pixel);drop(layout);drop(material);drop(beauty);
-        drop(placement);for(auto& sampler:samplers)drop(sampler);}
+        drop(placement);drop(unshadowed_view);drop(unshadowed);
+        for(auto& sampler:samplers)drop(sampler);}
+    c3x_renderer::UnitBodyRenderer::Unit const* unit_for(int subject){
+        char const* keys[]={"PRTO_Warrior","PRTO_Archer","PRTO_Worker","PRTO_Spearman"};
+        auto& units=renderer.unit_bodies.units;
+        auto unit=std::find_if(units.begin(),units.end(),[&](auto const& item){
+            return std::find(item.keys.begin(),item.keys.end(),keys[subject])!=item.keys.end();});
+        return unit==units.end()?nullptr:&*unit;
+    }
+    c3x_renderer::UnitBodyRenderer::Action const* action_named(
+            c3x_renderer::UnitBodyRenderer::Unit const& unit,char const* name){
+        auto action=std::find_if(unit.actions.begin(),unit.actions.end(),
+            [&](auto const& item){return item.name==name;});
+        return action==unit.actions.end()?nullptr:&*action;
+    }
+    c3x_renderer::UnitBodyRenderer::Action const* action_for(
+            c3x_renderer::UnitBodyRenderer::Unit const& unit,int number){
+        return action_named(unit,c3x_renderer::native_unit_action(number));
+    }
     bool initialize(){
         if(pixel)return true;
         char const* source=R"(
-cbuffer ScenePlacement:register(b2){float2 origin;float2 extent;float scale;float depth_base;float2 padding;};
-struct Input{float3 p:POSITION;float3 n:NORMAL;float2 uv:TEXCOORD0;
- float3 shadow:TEXCOORD1;float3 tangent:TANGENT;float3 bitangent:BINORMAL;};
+StructuredBuffer<float4> Palettes:register(t0);
+cbuffer ScenePlacement:register(b2){
+ float2 origin;float2 extent;float scale;float depth_base;float2 padding;
+ float4 skin_frame;float4 skin_shape;
+};
+struct Input{float3 position:POSITION;float3 normal:NORMAL;float2 uv:TEXCOORD0;
+ float3 tangent:TANGENT;float3 bitangent:BINORMAL;uint4 joints:BLENDINDICES;
+ float4 weights:BLENDWEIGHT;};
 struct Output{float4 p:SV_Position;float3 n:NORMAL;float2 uv:TEXCOORD0;
  float3 shadow:TEXCOORD1;float3 tangent:TANGENT;float3 bitangent:BINORMAL;};
 Output VS(Input i){
- Output o;float2 local=float2((i.p.x+1)*95.5,(1-i.p.y)*95.5);
+ float3 position=0,normal=0,tangent=0,bitangent=0;
+ [unroll]for(uint influence=0;influence<4;++influence){
+  float weight=i.weights[influence];if(weight<=0)continue;
+  uint address=((uint)skin_frame.x*(uint)skin_frame.y+i.joints[influence])*4;
+  float3 c0=Palettes[address].xyz,c1=Palettes[address+1].xyz;
+  float3 c2=Palettes[address+2].xyz,c3=Palettes[address+3].xyz;
+  position+=weight*(i.position.x*c0+i.position.y*c1+i.position.z*c2+c3);
+  float3 n0=cross(c1,c2),n1=cross(c2,c0),n2=cross(c0,c1);
+  float determinant=dot(c0,n0);
+  if(abs(determinant)>1e-12)
+   normal+=weight*(i.normal.x*n0+i.normal.y*n1+i.normal.z*n2)/determinant;
+  tangent+=weight*(i.tangent.x*c0+i.tangent.y*c1+i.tangent.z*c2);
+  bitangent+=weight*(i.bitangent.x*c0+i.bitangent.y*c1+i.bitangent.z*c2);
+ }
+ float c=skin_frame.z,s=skin_frame.w,unit_scale=skin_shape.x;
+ float x=(position.x*c-position.y*s)*unit_scale;
+ float y=(position.x*s+position.y*c)*unit_scale;
+ float z=(position.z+skin_shape.y)*unit_scale;
+ float2 local=float2(95.5+(x-y)*64,95.5+(x+y)*32-z*(150.0*128/224));
  float2 pixel=(origin+local)*scale;
- o.p=float4(pixel/extent*float2(2,-2)+float2(-1,1),
-  clamp(.5-(depth_base+(0.5-i.p.z)*100)/16384,.001,.999),1);
- o.n=i.n;o.uv=i.uv;o.shadow=i.shadow;
- o.tangent=i.tangent;o.bitangent=i.bitangent;return o;
+ Output o;o.p=float4(pixel/extent*float2(2,-2)+float2(-1,1),
+  clamp(.5-(depth_base+(x+y)*5+z*.1)/16384,.001,.999),1);
+ float3 n=float3(normal.x*c-normal.y*s,normal.x*s+normal.y*c,normal.z);
+ float3 t=float3(tangent.x*c-tangent.y*s,tangent.x*s+tangent.y*c,tangent.z);
+ float3 b=float3(bitangent.x*c-bitangent.y*s,bitangent.x*s+bitangent.y*c,bitangent.z);
+ o.n=normalize(float3(n.x,-n.y,n.z/(150.0/(112*.82))));
+ o.tangent=normalize(float3(t.x,-t.y,t.z/(150.0/(112*.82))));
+ o.bitangent=normalize(float3(b.x,-b.y,b.z/(150.0/(112*.82))));
+ o.uv=i.uv;o.shadow=float3(z,.5,.5);return o;
 })";
         ID3DBlob *vs=nullptr,*ps=nullptr,*errors=nullptr;
-        HRESULT hr=D3DCompile(source,std::strlen(source),"sandbox_scene_unit",nullptr,nullptr,
+        HRESULT hr=D3DCompile(source,std::strlen(source),"sandbox_gpu_skin",nullptr,nullptr,
             "VS","vs_5_0",D3DCOMPILE_OPTIMIZATION_LEVEL3,0,&vs,&errors);
         if(errors){if(FAILED(hr))std::printf("SANDBOX_UNIT_SHADER %s\n",
             static_cast<char const*>(errors->GetBufferPointer()));drop(errors);}
@@ -55,19 +106,27 @@ Output VS(Input i){
             vs->GetBufferSize(),nullptr,&vertex);
         if(SUCCEEDED(hr))hr=renderer.device->CreatePixelShader(ps->GetBufferPointer(),
             ps->GetBufferSize(),nullptr,&pixel);
-        D3D11_INPUT_ELEMENT_DESC elements[]={{"POSITION",0,DXGI_FORMAT_R32G32B32_FLOAT,0,0,D3D11_INPUT_PER_VERTEX_DATA,0},
+        D3D11_INPUT_ELEMENT_DESC elements[]={
+            {"POSITION",0,DXGI_FORMAT_R32G32B32_FLOAT,0,0,D3D11_INPUT_PER_VERTEX_DATA,0},
             {"NORMAL",0,DXGI_FORMAT_R32G32B32_FLOAT,0,12,D3D11_INPUT_PER_VERTEX_DATA,0},
             {"TEXCOORD",0,DXGI_FORMAT_R32G32_FLOAT,0,24,D3D11_INPUT_PER_VERTEX_DATA,0},
-            {"TEXCOORD",1,DXGI_FORMAT_R32G32B32_FLOAT,0,32,D3D11_INPUT_PER_VERTEX_DATA,0},
-            {"TANGENT",0,DXGI_FORMAT_R32G32B32_FLOAT,0,44,D3D11_INPUT_PER_VERTEX_DATA,0},
-            {"BINORMAL",0,DXGI_FORMAT_R32G32B32_FLOAT,0,56,D3D11_INPUT_PER_VERTEX_DATA,0}};
-        if(SUCCEEDED(hr))hr=renderer.device->CreateInputLayout(elements,6,
+            {"TANGENT",0,DXGI_FORMAT_R32G32B32_FLOAT,0,32,D3D11_INPUT_PER_VERTEX_DATA,0},
+            {"BINORMAL",0,DXGI_FORMAT_R32G32B32_FLOAT,0,44,D3D11_INPUT_PER_VERTEX_DATA,0},
+            {"BLENDINDICES",0,DXGI_FORMAT_R32G32B32A32_UINT,0,56,D3D11_INPUT_PER_VERTEX_DATA,0},
+            {"BLENDWEIGHT",0,DXGI_FORMAT_R32G32B32A32_FLOAT,0,72,D3D11_INPUT_PER_VERTEX_DATA,0}};
+        if(SUCCEEDED(hr))hr=renderer.device->CreateInputLayout(elements,7,
             vs->GetBufferPointer(),vs->GetBufferSize(),&layout);
         drop(vs);drop(ps);
         D3D11_BUFFER_DESC b={};b.ByteWidth=128;b.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
         if(SUCCEEDED(hr))hr=renderer.device->CreateBuffer(&b,nullptr,&material);
         b.ByteWidth=80;if(SUCCEEDED(hr))hr=renderer.device->CreateBuffer(&b,nullptr,&beauty);
-        b.ByteWidth=32;if(SUCCEEDED(hr))hr=renderer.device->CreateBuffer(&b,nullptr,&placement);
+        b.ByteWidth=64;if(SUCCEEDED(hr))hr=renderer.device->CreateBuffer(&b,nullptr,&placement);
+        float empty_height=-1.f;
+        D3D11_TEXTURE2D_DESC t={};t.Width=t.Height=t.MipLevels=t.ArraySize=t.SampleDesc.Count=1;
+        t.Format=DXGI_FORMAT_R32_FLOAT;t.BindFlags=D3D11_BIND_SHADER_RESOURCE;
+        D3D11_SUBRESOURCE_DATA blank={&empty_height,4,0};
+        if(SUCCEEDED(hr))hr=renderer.device->CreateTexture2D(&t,&blank,&unshadowed);
+        if(SUCCEEDED(hr))hr=renderer.device->CreateShaderResourceView(unshadowed,nullptr,&unshadowed_view);
         for(unsigned mode=0;mode<4 && SUCCEEDED(hr);++mode){
             D3D11_SAMPLER_DESC s={};s.Filter=D3D11_FILTER_ANISOTROPIC;s.MaxAnisotropy=16;
             s.AddressU=(mode&1)?D3D11_TEXTURE_ADDRESS_CLAMP:D3D11_TEXTURE_ADDRESS_WRAP;
@@ -77,71 +136,66 @@ Output VS(Input i){
         }
         return SUCCEEDED(hr);
     }
-    Pose* pose(c3x_renderer::UnitBodyRenderer::Unit const& unit,
-            c3x_renderer::UnitBodyRenderer::Action const& action,
-            int action_number,int cursor,int direction,int hour,int season){
-        for(auto& saved:poses)if(saved.action==action_number && saved.cursor==cursor &&
-            saved.direction==direction && saved.hour==hour && saved.season==season)
-            return &saved;
-        if(!renderer.prepare_unit_action(action))return nullptr;
-        c3x_renderer::NativeUnitDraw draw{};
-        draw.sprite=draw.expected_sprite=draw.canvas=draw.expected_canvas=1;
-        draw.unit_id=1;draw.action=action_number;draw.direction=direction;
-        draw.action_cursor=cursor;draw.frame_count=16;draw.sprite_width=draw.sprite_height=191;
-        draw.projection_scale_milli=1000;
-        c3x_renderer::UnitAnimationPose phase{};
-        if(!c3x_renderer::prepare_native_unit_pose(draw,action.loop,phase))return nullptr;
-        c3x_renderer::UnitPoseInput input{};
-        input.phase=phase.phase;input.direction=direction;
-        input.width=input.height=191;input.anchor_x=phase.anchor_x;
-        input.anchor_y=phase.anchor_y;input.zoom=phase.projection_scale;
-        auto environment=c3x_renderer::evaluate_environment(float(hour),season);
-        auto light=c3x_renderer::lighting::key_light(environment);
-        input.light_x=light.direction[0];input.light_y=light.direction[1];
-        input.shadow_strength=environment.shadow_strength;
-        input.source.scale=unit.scale;input.source.yaw_offset=unit.yaw_offset;
-        input.source.offset_z=unit.offset_z;input.source.allow_exit_clip=action.allow_exit_clip;
-        input.source.shadow_extent=unit.minimum_canvas?1536:128;
-        for(auto const& part:action.parts){
-            if(part.mesh>=renderer.unit_bodies.meshes.size() ||
-                !renderer.unit_bodies.meshes[part.mesh].animation)return nullptr;
-            input.source.meshes.push_back(renderer.unit_bodies.meshes[part.mesh].animation);
+    bool prepare_mesh(unsigned index){
+        auto& bodies=renderer.unit_bodies;
+        if(index>=bodies.meshes.size())return false;
+        if(meshes.size()<bodies.meshes.size())meshes.resize(bodies.meshes.size());
+        auto& gpu=meshes[index];if(gpu.vertices)return true;
+        auto const& mesh=bodies.meshes[index].animation;
+        if(!mesh||mesh->vertices.empty()||mesh->indices.empty()||mesh->palettes.empty())return false;
+        std::vector<Vertex> input(mesh->vertices.size());
+        for(std::size_t n=0;n<input.size();++n){
+            auto const& source=mesh->vertices[n];auto& output=input[n];
+            std::copy(source.source.position,source.source.position+3,output.position);
+            std::copy(source.source.normal,source.source.normal+3,output.normal);
+            std::copy(source.source.uv,source.source.uv+2,output.uv);
+            std::copy(source.tangent.begin(),source.tangent.end(),output.tangent);
+            std::copy(source.bitangent.begin(),source.bitangent.end(),output.bitangent);
+            std::copy(source.joints.begin(),source.joints.end(),output.joints);
+            std::copy(source.weights.begin(),source.weights.end(),output.weights);
         }
-        std::atomic<bool> cancelled{false};
-        auto content=c3x_renderer::UnitPoseCompiler{}(input,cancelled,0);
-        if(!content || content->shadow.heights.empty())return nullptr;
-        Pose saved{};saved.action=action_number;saved.cursor=cursor;
-        saved.direction=direction;saved.hour=hour;saved.season=season;
-        saved.shadow_extent=unsigned(content->shadow.extent);
-        D3D11_TEXTURE2D_DESC t={};t.Width=t.Height=saved.shadow_extent;
-        t.MipLevels=t.ArraySize=t.SampleDesc.Count=1;t.Format=DXGI_FORMAT_R32_FLOAT;
-        t.BindFlags=D3D11_BIND_SHADER_RESOURCE;
-        D3D11_SUBRESOURCE_DATA shadow_data={content->shadow.heights.data(),
-            saved.shadow_extent*4,0};
-        if(FAILED(renderer.device->CreateTexture2D(&t,&shadow_data,&saved.shadow)) ||
-            FAILED(renderer.device->CreateShaderResourceView(saved.shadow.Get(),nullptr,
-                &saved.shadow_view)))return nullptr;
-        for(auto const& upload:content->uploads){
-            if(upload.empty())return nullptr;
-            D3D11_BUFFER_DESC b={};b.ByteWidth=UINT(upload.size()*sizeof(upload[0]));
-            b.Usage=D3D11_USAGE_IMMUTABLE;b.BindFlags=D3D11_BIND_VERTEX_BUFFER;
-            D3D11_SUBRESOURCE_DATA data={upload.data(),0,0};
-            Microsoft::WRL::ComPtr<ID3D11Buffer> buffer;
-            if(FAILED(renderer.device->CreateBuffer(&b,&data,&buffer)))return nullptr;
-            saved.vertices.push_back(std::move(buffer));
+        D3D11_BUFFER_DESC b={};D3D11_SUBRESOURCE_DATA data={};
+        b.ByteWidth=UINT(input.size()*sizeof(Vertex));b.Usage=D3D11_USAGE_IMMUTABLE;
+        b.BindFlags=D3D11_BIND_VERTEX_BUFFER;data.pSysMem=input.data();
+        if(FAILED(renderer.device->CreateBuffer(&b,&data,&gpu.vertices)))return false;
+        b.ByteWidth=UINT(mesh->indices.size()*4);b.BindFlags=D3D11_BIND_INDEX_BUFFER;
+        data.pSysMem=mesh->indices.data();
+        if(FAILED(renderer.device->CreateBuffer(&b,&data,&gpu.indices)))return false;
+        b.ByteWidth=UINT(mesh->palettes.size()*4);b.BindFlags=D3D11_BIND_SHADER_RESOURCE;
+        b.MiscFlags=D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;b.StructureByteStride=16;
+        data.pSysMem=mesh->palettes.data();
+        if(FAILED(renderer.device->CreateBuffer(&b,&data,&gpu.palettes)))return false;
+        D3D11_SHADER_RESOURCE_VIEW_DESC view={};view.Format=DXGI_FORMAT_UNKNOWN;
+        view.ViewDimension=D3D11_SRV_DIMENSION_BUFFER;
+        view.Buffer.NumElements=UINT(mesh->palettes.size()/4);
+        if(FAILED(renderer.device->CreateShaderResourceView(gpu.palettes.Get(),&view,
+            &gpu.palette_view)))return false;
+        ++mesh_builds;return true;
+    }
+    bool prewarm(int,int){
+        if(!initialize())return false;
+        char const* needed[4][4]={{"idle","move",nullptr,nullptr},
+            {"idle","attack","defend",nullptr},{"idle","road",nullptr,nullptr},
+            {"idle","attack","defend",nullptr}};
+        for(int subject=0;subject<4;++subject){
+            auto* unit=unit_for(subject);if(!unit)return false;
+            for(auto const* name:needed[subject]){
+                if(!name)continue;
+                auto* action=action_named(*unit,name);if(!action)return false;
+                if(!renderer.prepare_unit_action(*action))return false;
+                for(auto const& part:action->parts)if(!prepare_mesh(part.mesh))return false;
+            }
         }
-        if(poses.size()>=48)poses.erase(poses.begin());
-        poses.push_back(std::move(saved));++pose_builds;
-        return &poses.back();
+        return true;
+    }
+    void combat_event(int serial,c3x_renderer_i64 ticks){
+        if(serial>combat_serial){combat_serial=serial;combat_started=ticks;}
     }
     bool draw(c3x_renderer_frame_v1 const& frame,int world_x,int world_y,
             int incarnation,int viewer,bool visible,int camera_x,int camera_y,
-            c3x_renderer::render_core::LinearTarget& scene,unsigned scene_scale){
+            c3x_renderer::render_core::LinearTarget& scene,unsigned scene_scale,float zoom){
         if(!initialize())return false;
         auto& bodies=renderer.unit_bodies;
-        auto unit=std::find_if(bodies.units.begin(),bodies.units.end(),[](auto const& item){
-            return std::find(item.keys.begin(),item.keys.end(),"PRTO_Warrior")!=item.keys.end();});
-        if(unit==bodies.units.end())return false;
         if(incarnation!=previous_incarnation || viewer!=previous_viewer || previous_x==INT_MIN){
             previous_x=world_x;previous_y=world_y;move_started=-1;
         }else if(world_x!=previous_x || world_y!=previous_y){
@@ -149,10 +203,7 @@ Output VS(Input i){
             previous_x=world_x;previous_y=world_y;move_started=frame.presentation_time_ticks;
         }
         previous_incarnation=incarnation;previous_viewer=viewer;
-        float travel=move_started<0?1.f:std::clamp(float(frame.presentation_time_ticks-
-            move_started)/float(std::max<c3x_renderer_i64>(1,frame.presentation_frequency)),0.f,1.f);
-        if(travel>=1)move_started=-1;
-        int positions[4][2]={{world_x,world_y},{21,45},{23,55},{24,56}};
+        int positions[4][2]={{world_x,world_y},{25,57},{24,58},{24,56}};
         auto locate=[&](int x,int y){
             c3x_renderer_tile_v1 const* found=nullptr;int best=INT_MAX;
             for(unsigned i=0;i<frame.tile_count;++i){auto const& tile=frame.tiles[i];
@@ -177,17 +228,62 @@ Output VS(Input i){
         context->VSSetConstantBuffers(2,1,&placement);
         context->PSSetConstantBuffers(0,1,&material);
         context->PSSetConstantBuffers(1,1,&beauty);
+        context->PSSetShaderResources(1,1,&unshadowed_view);
+        context->PSSetSamplers(1,1,&samplers[3]);
+        auto environment=c3x_renderer::evaluate_environment(float(frame.hour),frame.season);
+        auto noon=c3x_renderer::evaluate_environment(12,0);
+        auto key_light=c3x_renderer::lighting::key_light(environment);
+        float beauty_values[20]={};float const ambient_source[]={.34f,.45f,.60f};
+        float const chromatic[]={1.f,4.5f/6.2f,3.5f/6.2f};
+        auto light=key_light.direction.data();auto light_color=key_light.color.data();
+        for(unsigned axis=0;axis<3;++axis){
+            beauty_values[axis]=light[axis];
+            beauty_values[4+axis]=chromatic[axis]*light_color[axis]/
+                std::max(.001f,noon.sun_color[axis]);
+            beauty_values[8+axis]=ambient_source[axis]*environment.ambient_color[axis]/
+                std::max(.001f,noon.ambient_color[axis]);
+        }
+        beauty_values[3]=2.05f*(environment.sun_intensity+environment.moon_intensity)/
+            (noon.sun_intensity+noon.moon_intensity);
+        beauty_values[7]=1;beauty_values[11]=.62f;
+        beauty_values[12]=.490290f;beauty_values[13]=-.735435f;
+        beauty_values[14]=.469979f;beauty_values[16]=1;
+        context->UpdateSubresource(beauty,0,nullptr,beauty_values,0,0);
+        double seconds=double(frame.presentation_time_ticks)/
+            double(std::max<c3x_renderer_i64>(1,frame.presentation_frequency));
+        double combat_seconds=combat_started<0?-1:double(frame.presentation_time_ticks-combat_started)/
+            double(std::max<c3x_renderer_i64>(1,frame.presentation_frequency));
+        auto clip_duration=[&](int subject,char const* action_name){
+            auto* unit=unit_for(subject);
+            auto* action=unit?action_named(*unit,action_name):nullptr;
+            return action&&!action->parts.empty()&&action->parts[0].mesh<bodies.meshes.size()&&
+                bodies.meshes[action->parts[0].mesh].animation?
+                double(bodies.meshes[action->parts[0].mesh].animation->duration):0.0;
+        };
+        double archer_attack=clip_duration(1,"attack"),spearman_attack=clip_duration(3,"attack");
+        double first_exchange=archer_attack,second_exchange=archer_attack+spearman_attack;
+        double third_exchange=second_exchange+archer_attack;
+        double combat_end=third_exchange+spearman_attack;
         for(int index=0;index<4;++index){
             if(index==0&&!visible)continue;
+            auto* unit=unit_for(index);if(!unit)return false;
             auto* anchor=locate(positions[index][0],positions[index][1]);
             if(!anchor)continue;
             float x=float(anchor->anchor_x),y=float(anchor->anchor_y);
             float world_row=float(anchor->tile_y);
+            double move_seconds=0,travel=1;
             if(index==0&&move_started>=0)if(auto* from=locate(move_from_x,move_from_y)){
-                x=float(from->anchor_x)+(x-float(from->anchor_x))*travel;
-                y=float(from->anchor_y)+(y-float(from->anchor_y))*travel;
-                world_row=float(from->tile_y)+(world_row-float(from->tile_y))*travel;
+                double dx=double(x-float(from->anchor_x))*zoom;
+                double dy=double(y-float(from->anchor_y))*zoom;
+                double distance=std::hypot(dx,2.0*dy);
+                move_seconds=double(frame.presentation_time_ticks-move_started)/
+                    double(std::max<c3x_renderer_i64>(1,frame.presentation_frequency));
+                travel=distance>0?std::clamp(move_seconds*225.0/distance,0.0,1.0):1;
+                x=float(from->anchor_x)+(x-float(from->anchor_x))*float(travel);
+                y=float(from->anchor_y)+(y-float(from->anchor_y))*float(travel);
+                world_row=float(from->tile_y)+(world_row-float(from->tile_y))*float(travel);
             }
+            if(index==0&&move_started>=0&&travel>=1)move_started=-1;
             int body_x=int(std::lround(x))+camera_x+frame.tile_width/2-95;
             int body_y=int(std::lround(y))+camera_y+frame.tile_height/2-120;
             if(frame.world_wrap_x && frame.world_width_tiles>0){
@@ -197,56 +293,41 @@ Output VS(Input i){
             }
             if(body_x>frame.target_width || body_x+191<0 ||
                 body_y>frame.target_height || body_y+191<0)continue;
-            int action_number=index==0&&move_started>=0?2:1;
-            int cursor=int((frame.presentation_time_ticks*15/
-                std::max<c3x_renderer_i64>(1,frame.presentation_frequency)+index*4)%16);
-            auto name=c3x_renderer::native_unit_action(action_number);
-            auto action=std::find_if(unit->actions.begin(),unit->actions.end(),
-                [&](auto const& item){return item.name==name;});
-            if(action==unit->actions.end())return false;
-            Pose* prepared=pose(*unit,*action,action_number,cursor,3,frame.hour,frame.season);
-            if(!prepared)return false;
-            // Resident terrain stores depth relative to its world row. Match
-            // that basis instead of using the screen-space sprite rectangle.
+            int action_number=index==0&&move_started>=0?2:index==2?13:1;
+            double action_seconds=action_number==2?move_seconds:seconds+index*.137;
+            char const* combat_action=nullptr;
+            if(combat_seconds>=0&&combat_seconds<combat_end&&(index==1||index==3)){
+                int exchange=combat_seconds<first_exchange?0:
+                    combat_seconds<second_exchange?1:combat_seconds<third_exchange?2:3;
+                double start=exchange==0?0:exchange==1?first_exchange:
+                    exchange==2?second_exchange:third_exchange;
+                bool archer_attacks=(exchange&1)==0;
+                combat_action=(archer_attacks==(index==1))?"attack":"defend";
+                action_seconds=combat_seconds-start;
+            }
+            auto* action=combat_action?action_named(*unit,combat_action):
+                action_for(*unit,action_number);
+            if(!action)return false;
             float ground_depth=world_row*frame.tile_height*.5f+
                 renderer.geometry_viewport_settings.depth_translation+
                 frame.tile_height*.5f+4.f;
-            float placement_values[8]={float(body_x+4),float(body_y+4),float(scene.width),
-                float(scene.height),float(scene_scale),ground_depth,0,0};
-            context->UpdateSubresource(placement,0,nullptr,placement_values,0,0);
-            auto environment=c3x_renderer::evaluate_environment(float(frame.hour),frame.season);
-            auto noon=c3x_renderer::evaluate_environment(12,0);
-            auto key_light=c3x_renderer::lighting::key_light(environment);
-            float beauty_values[20]={};float const ambient_source[]={.34f,.45f,.60f};
-            float const chromatic[]={1.f,4.5f/6.2f,3.5f/6.2f};
-            auto light=key_light.direction.data();auto light_color=key_light.color.data();
-            for(unsigned axis=0;axis<3;++axis){
-                beauty_values[axis]=light[axis];
-                beauty_values[4+axis]=chromatic[axis]*light_color[axis]/
-                    std::max(.001f,noon.sun_color[axis]);
-                beauty_values[8+axis]=ambient_source[axis]*environment.ambient_color[axis]/
-                    std::max(.001f,noon.ambient_color[axis]);
-            }
-            beauty_values[3]=2.05f*(environment.sun_intensity+environment.moon_intensity)/
-                (noon.sun_intensity+noon.moon_intensity);
-            beauty_values[7]=1;beauty_values[11]=.62f;
-            beauty_values[12]=.490290f;beauty_values[13]=-.735435f;
-            beauty_values[14]=.469979f;beauty_values[16]=float(prepared->shadow_extent);
-            context->UpdateSubresource(beauty,0,nullptr,beauty_values,0,0);
-            ID3D11ShaderResourceView* shadow_view=prepared->shadow_view.Get();
-            context->PSSetShaderResources(1,1,&shadow_view);
-            context->PSSetSamplers(1,1,&samplers[3]);
-            for(unsigned part_index=0;part_index<action->parts.size();++part_index){
-                auto const& part=action->parts[part_index];
+            for(auto const& part:action->parts){
                 if(part.mesh>=bodies.meshes.size() || part.texture>=bodies.textures.size() ||
                     !bodies.textures[part.texture].view)return false;
-                auto& mesh=bodies.meshes[part.mesh];
-                if(!mesh.indices){
-                    D3D11_BUFFER_DESC b={};b.ByteWidth=UINT(mesh.animation->indices.size()*4);
-                    b.Usage=D3D11_USAGE_IMMUTABLE;b.BindFlags=D3D11_BIND_INDEX_BUFFER;
-                    D3D11_SUBRESOURCE_DATA data={mesh.animation->indices.data(),0,0};
-                    if(FAILED(renderer.device->CreateBuffer(&b,&data,&mesh.indices)))return false;
-                }
+                auto const& source=bodies.meshes[part.mesh].animation;
+                if(!source||part.mesh>=meshes.size()||!meshes[part.mesh].vertices)return false;
+                auto& gpu=meshes[part.mesh];
+                double duration=std::max(.001,double(source->duration));
+                double local=action->loop?std::fmod(std::max(0.0,action_seconds),duration):
+                    std::clamp(action_seconds,0.0,duration);
+                unsigned frame_number=std::min(source->frames-1,
+                    unsigned(std::floor(local/duration*double(source->frames-1)+1e-7)));
+                float angle=(unit->yaw_offset+float((index==1?5:index==3?1:3)%8)*45)*.01745329252f;
+                float placement_values[16]={float(body_x+4),float(body_y+4),
+                    float(scene.width),float(scene.height),float(scene_scale),ground_depth,0,0,
+                    float(frame_number),float(source->bones),std::cos(angle),std::sin(angle),
+                    unit->scale,unit->offset_z,0,0};
+                context->UpdateSubresource(placement,0,nullptr,placement_values,0,0);
                 float values[32]={part.tint[0],part.tint[1],part.tint[2],part.mask};
                 for(unsigned axis=0;axis<3;++axis){
                     float color=float((0x205bddu>>(16-axis*8))&255)/255;
@@ -269,17 +350,21 @@ Output VS(Input i){
                     }
                 values[23]=part.material_model;
                 context->UpdateSubresource(material,0,nullptr,values,0,0);
-                ID3D11Buffer* posed=prepared->vertices[part_index].Get();
-                UINT stride=68,offset=0;context->IASetVertexBuffers(0,1,&posed,&stride,&offset);
-                context->IASetIndexBuffer(mesh.indices,DXGI_FORMAT_R32_UINT,0);
+                ID3D11Buffer* static_vertices=gpu.vertices.Get();
+                UINT stride=sizeof(Vertex),offset=0;
+                context->IASetVertexBuffers(0,1,&static_vertices,&stride,&offset);
+                context->IASetIndexBuffer(gpu.indices.Get(),DXGI_FORMAT_R32_UINT,0);
+                ID3D11ShaderResourceView* palette=gpu.palette_view.Get();
+                context->VSSetShaderResources(0,1,&palette);
                 context->PSSetShaderResources(0,1,&bodies.textures[part.texture].view);
                 context->PSSetShaderResources(2,4,extra);
                 context->PSSetSamplers(0,1,&samplers[part.address]);
-                context->DrawIndexed(UINT(mesh.animation->indices.size()),0,0);
+                context->DrawIndexed(UINT(source->indices.size()),0,0);
                 ++draws;
             }
         }
         ID3D11ShaderResourceView* empty[6]={};context->PSSetShaderResources(0,6,empty);
+        context->VSSetShaderResources(0,1,empty);
         context->OMSetRenderTargets(0,nullptr,nullptr);
         return true;
     }

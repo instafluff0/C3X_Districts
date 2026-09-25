@@ -5042,7 +5042,8 @@ public:
             c3x_renderer::render_core::MeshFormat format;
             format.pickup=pickup_profile;format.feature=compact_feature;format.natural=natural_vertex;
             format.projection_kind=projection_kind;
-            format.city=projection_kind==4;
+            // Shared cliffs use projection kind 4 but retain the feature shader's vertex layout.
+            format.city=projection_kind==4 && !compact_feature;
             auto topology=cached?&cached_indices:grid_indices;
             auto const& input=cached?packed:vertices;
             if(natural_vertex && grid_indices)format.shared_grid=c3x_renderer::render_core::shared_mesh_grid(input.size(),topology,patch_layouts);

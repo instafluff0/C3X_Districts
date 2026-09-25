@@ -93,12 +93,16 @@ The sandbox selects resident records independently for the main and reflected
 cameras, owns geometry submission and complete terrain, object, cutout vegetation,
 water and transparent pass state, and batches visible vegetation through one
 instance stream. Prepared rigid objects retain shared meshes and instances.
-Four synthetic units use authored animation poses and material shading directly
-in the scene depth target. Static color and depth survive camera motion; short
-scrolls redraw exposed strips, and unchanged reflections reuse their target.
-The main target is native resolution with 4x MSAA, the reflection target is half
-resolution by default, and a half-resolution HDR bloom feeds tone mapping directly
-into the swapchain. These are adaptations of the reviewed 0 A.D. scene and
+Four synthetic units use resident authored meshes, exact source-frame GPU skinning,
+and material shading directly in the scene depth target. The synthetic host
+publishes moves and combat events while the client advances visible clips.
+Static color and depth survive camera motion; short scrolls redraw exposed
+strips, and unchanged reflections reuse their target. The main target is native
+resolution with 2x MSAA, the reflection target is 0.375x resolution, and a
+half-resolution HDR bloom feeds tone mapping directly into the swapchain.
+Animated shoreline foam now comes from the water material's prepared coast depth
+instead of submitting separate small wave meshes for this distant map view.
+These are adaptations of the reviewed 0 A.D. scene and
 batching structure, not a wholesale port.
 
 Build a resident scene with terrain chunks, shared meshes/materials, compact

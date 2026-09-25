@@ -58,6 +58,21 @@ float c3x_paged_visibility(Texture2DArray field,float4 world,float3 normal,bool 
 )");
         return true;
     }
+    static bool tune_native_terrain(std::string& shader) {
+        // At native resolution the prepared sand relief covers fewer samples.
+        // Keep its authored textures and placement, while restoring the
+        // material normal response visible in the production-sized target.
+        auto replace=[&](char const* old_text,char const* new_text) {
+            auto at=shader.find(old_text);
+            if(at==std::string::npos)return false;
+            shader.replace(at,std::strlen(old_text),new_text);return true;
+        };
+        if(!replace("packed = lerp(0.5.xx, packed, 0.58);",
+                    "packed = lerp(0.5.xx, packed, 1.80);"))return false;
+        if(!replace("geometric = detail_normal(geometric, input.world, height_detail);",
+                    "geometric = detail_normal_strength(geometric, input.world, height_detail, Detail.y * (0.85 + 3.00 * desert_weight));"))return false;
+        return true;
+    }
     static bool compile(char const* file, char const* entry, ID3D11PixelShader** output) {
         bool water_variant = std::strcmp(file,"water_surface.hlsl")==0;
         std::string shader = source(water_variant?"hydrology.hlsl":file);
@@ -68,7 +83,8 @@ float c3x_paged_visibility(Texture2DArray field,float4 world,float3 normal,bool 
             shader.append(std::istreambuf_iterator<char>(variant),
                 std::istreambuf_iterator<char>());
         }
-        if (shader.empty() || !patch(shader)) return false;
+        if (shader.empty() || !patch(shader) ||
+            (std::strcmp(file,"terrain.hlsl")==0 && !tune_native_terrain(shader))) return false;
         std::uint64_t key=14695981039346656037ull;
         for (unsigned char c:shader) key=(key^c)*1099511628211ull;
         for (unsigned char const* p=reinterpret_cast<unsigned char const*>(entry);*p;++p)
@@ -416,7 +432,9 @@ struct SandboxFreshPipeline {
     int camera_x=0,camera_y=0;
     unsigned visible=0,culled=0;
     unsigned reflection_count=0;
-    unsigned scene_scale=1,scene_samples=4;
+    unsigned scene_scale=1,scene_samples=2;
+    // A close crop in the output pass keeps the static cache resident.
+    float display_zoom=1.f;
     float reflection_scale=1;
     unsigned depth_copies=0,cache_scrolls=0,cache_full_draws=0;
     unsigned reflection_reuses=0,reflection_draws=0;
@@ -777,6 +795,7 @@ struct SandboxFreshPipeline {
             context->IASetInputLayout(renderer.feature_input_layout);
             context->VSSetShader(renderer.feature_vertex_shader,nullptr,0);
             context->PSSetShader(renderer.feature_pixel_shader,nullptr,0);
+            context->PSSetSamplers(0,1,&renderer.natural_clamp);
             unsigned index=renderer.cliff_bundle.assets[layer-geometry_cliff0].texture_index;
             context->PSSetShaderResources(25,4,renderer.cliff_views.data()+index);
         } else if (layer>=geometry_feature && layer<=geometry_site) {
@@ -843,9 +862,12 @@ struct SandboxFreshPipeline {
                 geometry_natural_decal}) if(!draw(layer))return false;
         for(unsigned layer=geometry_natural_forest0;layer<geometry_layer_count;++layer)
             if(!draw(static_cast<GeometryLayer>(layer)))return false;
-        if(!mirrored && (!draw(geometry_bed) || !draw(geometry_water) ||
-                !draw(geometry_river) || !draw(geometry_shadow) ||
-                !draw(geometry_route))) return false;
+        if(!mirrored) {
+            if(!draw(geometry_bed))return false;
+            if(!draw(geometry_water))return false;
+            if(!draw(geometry_river) || !draw(geometry_shadow) ||
+                    !draw(geometry_route))return false;
+        }
         for(unsigned i=0;i<renderer.cliff_bundle.assets.size();++i)
             if(!draw(static_cast<GeometryLayer>(geometry_cliff0+i)))return false;
         if(!draw_features(records,settings,rect,target,depth,mirrored,scale))return false;
@@ -872,13 +894,13 @@ struct SandboxFreshPipeline {
     }
     bool ensure_linear_target(c3x_renderer::render_core::LinearTarget& target,
             unsigned width,unsigned height,unsigned samples,bool resolved) {
-        return samples==4 && target.ensure(renderer.device,width,height,true,resolved);
+        return target.ensure(renderer.device,width,height,true,resolved,samples);
     }
     bool ensure_targets(unsigned width,unsigned height) {
         char value[8]{};
-        scene_scale=1;scene_samples=4;
+        scene_scale=1;scene_samples=2;
         reflection_scale=GetEnvironmentVariableA("C3X_SANDBOX_REFLECTION_FULL",value,sizeof(value)) &&
-            std::strcmp(value,"1")==0?1.f:.5f;
+            std::strcmp(value,"1")==0?1.f:.375f;
         unsigned reflection_width=unsigned((width+8)*reflection_scale);
         unsigned reflection_height=unsigned((height+8)*reflection_scale);
         if(static_cache.width!=width || static_cache.height!=height)static_valid=false;
@@ -887,7 +909,7 @@ struct SandboxFreshPipeline {
         if(!ensure_glow(width,height))return false;
         if(!ensure_linear_target(static_cache,width*scene_scale,
                 height*scene_scale,scene_samples,true) ||
-           !static_restore.ensure(renderer.device))
+           !static_restore.ensure(renderer.device,scene_samples))
             return false;
         return reflection.ensure(renderer.device,reflection_width,reflection_height);
     }
@@ -899,7 +921,8 @@ struct SandboxFreshPipeline {
         return bloom.draw(static_cache.view,glow.linear.view);
     }
     bool draw(c3x_renderer_frame_v1 const& frame,int next_camera_x,int next_camera_y,
-            int unit_x,int unit_y,int incarnation,int viewer,bool unit_visible) {
+            int unit_x,int unit_y,int incarnation,int viewer,bool unit_visible,
+            float next_zoom) {
         LARGE_INTEGER frequency{},ticks[7]={};
         QueryPerformanceFrequency(&frequency);QueryPerformanceCounter(&ticks[0]);
         int width=renderer.content_view_width,height=renderer.content_view_height;
@@ -931,6 +954,7 @@ struct SandboxFreshPipeline {
         renderer.geometry_viewport_settings.translation[1]+=float(next_camera_y-camera_y);
         renderer.geometry_viewport_settings.depth_translation+=float(next_camera_y-camera_y);
         camera_x=next_camera_x;camera_y=next_camera_y;
+        display_zoom=std::clamp(next_zoom,1.f,1.35f);
         renderer.water_material=c3x_renderer::render_core::water_material_frame(frame);
         int water_camera_x=frame.world_wrap_x && frame.world_width_tiles>0?
             camera_x%(frame.world_width_tiles*frame.tile_width/2):camera_x;
@@ -1044,7 +1068,11 @@ struct SandboxFreshPipeline {
         bool skip_wave=GetEnvironmentVariableA("C3X_SANDBOX_SKIP_WAVE",
             wave_diagnostic,sizeof(wave_diagnostic)) &&
             std::strcmp(wave_diagnostic,"1")==0;
-        if (!skip_water && !skip_wave && !renderer.wave_chunks.empty()) {
+        char legacy_wave_option[8]{};
+        bool legacy_wave_geometry=GetEnvironmentVariableA("C3X_SANDBOX_WAVE_GEOMETRY",
+            legacy_wave_option,sizeof(legacy_wave_option)) &&
+            std::strcmp(legacy_wave_option,"1")==0;
+        if (!skip_water && !skip_wave && legacy_wave_geometry && !renderer.wave_chunks.empty()) {
             GeometryDrawView::Records waves{};
             for(auto const& chunk:renderer.wave_chunks)
                 waves[geometry_wave].emplace_back(chunk);
@@ -1056,7 +1084,8 @@ struct SandboxFreshPipeline {
         bool units=GetEnvironmentVariableA("C3X_SANDBOX_UNITS",unit_control,
             sizeof(unit_control)) && std::strcmp(unit_control,"1")==0;
         if(units && !sandbox_direct_units.draw(frame,unit_x,unit_y,
-            incarnation,viewer,unit_visible,camera_x,camera_y,glow.linear,scene_scale))
+            incarnation,viewer,unit_visible,camera_x,camera_y,glow.linear,
+            scene_scale,next_zoom))
             return false;
         QueryPerformanceCounter(&ticks[5]);
         if(!reconstruct())return false;
@@ -1079,7 +1108,8 @@ extern "C" __declspec(dllexport) void c3x_sandbox_fresh_metrics(double* phases,
     if (resident_builds) *resident_builds=sandbox_fresh.resident_builds;
     if (gpu_bytes) *gpu_bytes=sandbox_fresh.static_cache.bytes()+
         sandbox_fresh.glow.linear.bytes()+
-        sandbox_fresh.reflection.bytes()+sandbox_fresh.bloom.bytes()+4096ull*4096ull*4;
+        sandbox_fresh.reflection.bytes()+
+        sandbox_fresh.bloom.bytes()+4096ull*4096ull*4;
     if (shadow_box) std::copy(sandbox_fresh.shadow.box,sandbox_fresh.shadow.box+4,shadow_box);
 }
 
@@ -1094,12 +1124,22 @@ extern "C" __declspec(dllexport) void c3x_sandbox_cache_metrics(unsigned* depth_
     *pose_builds=sandbox_direct_units.pose_builds;
 }
 
+extern "C" __declspec(dllexport) int c3x_sandbox_prewarm_units(int hour,int season) {
+    return sandbox_direct_units.prewarm(hour,season)?0:1;
+}
+
+extern "C" __declspec(dllexport) void c3x_sandbox_combat_event(int serial,
+        c3x_renderer_i64 presentation_ticks) {
+    sandbox_direct_units.combat_event(serial,presentation_ticks);
+}
+
 extern "C" __declspec(dllexport) int c3x_sandbox_draw_fresh(
         c3x_renderer_frame_v1 const* frame,char const*,int camera_x,int camera_y,
-        int unit_x,int unit_y,int incarnation,int viewer,int unit_visible) {
+        int unit_x,int unit_y,int incarnation,int viewer,int unit_visible,
+        float zoom) {
     if (!frame) return 1;
     if (!sandbox_fresh.draw(*frame,camera_x,camera_y,unit_x,unit_y,
-            incarnation,viewer,unit_visible!=0)) {
+            incarnation,viewer,unit_visible!=0,zoom)) {
         std::printf("SANDBOX_FRESH_DRAW_ERROR visible=%u culled=%u shadow_builds=%u\n",
             sandbox_fresh.visible,sandbox_fresh.culled,sandbox_fresh.shadow.builds);
         return 2;
