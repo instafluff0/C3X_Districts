@@ -40,9 +40,12 @@ struct LinearTarget {
         d.SampleDesc.Count=count; d.Format=sampleable?DXGI_FORMAT_R24G8_TYPELESS:DXGI_FORMAT_D24_UNORM_S8_UINT;
         d.BindFlags=D3D11_BIND_DEPTH_STENCIL|(sampleable?D3D11_BIND_SHADER_RESOURCE:0);
         if(SUCCEEDED(hr)) hr=device->CreateTexture2D(&d,nullptr,&depth_texture);
-        D3D11_DEPTH_STENCIL_VIEW_DESC ds={};ds.Format=DXGI_FORMAT_D24_UNORM_S8_UINT;ds.ViewDimension=D3D11_DSV_DIMENSION_TEXTURE2DMS;
+        D3D11_DEPTH_STENCIL_VIEW_DESC ds={};ds.Format=DXGI_FORMAT_D24_UNORM_S8_UINT;
+        ds.ViewDimension=count==1?D3D11_DSV_DIMENSION_TEXTURE2D:D3D11_DSV_DIMENSION_TEXTURE2DMS;
         if(SUCCEEDED(hr)) hr=device->CreateDepthStencilView(depth_texture,&ds,&depth);
-        D3D11_SHADER_RESOURCE_VIEW_DESC dv={};dv.Format=DXGI_FORMAT_R24_UNORM_X8_TYPELESS;dv.ViewDimension=D3D11_SRV_DIMENSION_TEXTURE2DMS;
+        D3D11_SHADER_RESOURCE_VIEW_DESC dv={};dv.Format=DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+        dv.ViewDimension=count==1?D3D11_SRV_DIMENSION_TEXTURE2D:D3D11_SRV_DIMENSION_TEXTURE2DMS;
+        if(count==1)dv.Texture2D.MipLevels=1;
         if(SUCCEEDED(hr) && sampleable) hr=device->CreateShaderResourceView(depth_texture,&dv,&depth_samples);
         if(FAILED(hr)) { reset(); return false; }
         width=w; height=h; sample_count=count; return true;
@@ -81,7 +84,20 @@ Output PS(float4 position:SV_Position,uint sample:SV_SampleIndex){
  if(metadata.z!=0){result.color=0;result.depth=1;}return result;
 })";
         std::string shader=source;
-        if(count!=4){
+        if(count==1){
+            auto replace_all=[&](char const* from,char const* to){
+                std::size_t position=0;std::size_t length=std::strlen(from);
+                while((position=shader.find(from,position))!=std::string::npos){
+                    shader.replace(position,length,to);position+=std::strlen(to);
+                }
+            };
+            replace_all("Texture2DMS<float4,4>","Texture2D<float4>");
+            replace_all("Texture2DMS<float,4>","Texture2D<float>");
+            replace_all("Output PS(float4 position:SV_Position,uint sample:SV_SampleIndex)",
+                "Output PS(float4 position:SV_Position)");
+            replace_all("scene.Load(p,sample)","scene.Load(int3(p,0))");
+            replace_all("scene_depth.Load(p,sample)","scene_depth.Load(int3(p,0))");
+        }else if(count!=4){
             if(count!=2)return false;
             auto position=shader.find(",4>");
             while(position!=std::string::npos){shader.replace(position,3,",2>");position=shader.find(",4>",position+3);}

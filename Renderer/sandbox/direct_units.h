@@ -15,7 +15,7 @@ struct SandboxDirectUnits {
     };
     std::vector<Mesh> meshes;
     ID3D11VertexShader* vertex=nullptr;
-    ID3D11PixelShader* pixel=nullptr;
+    ID3D11PixelShader* pixel=nullptr,*shadow_pixel=nullptr;
     ID3D11InputLayout* layout=nullptr;
     ID3D11Buffer *material=nullptr,*beauty=nullptr,*placement=nullptr;
     ID3D11Texture2D* unshadowed=nullptr;
@@ -24,15 +24,17 @@ struct SandboxDirectUnits {
     int previous_x=INT_MIN,previous_y=INT_MIN;
     int previous_viewer=INT_MIN,previous_incarnation=INT_MIN;
     int move_from_x=0,move_from_y=0;
+    int moving_subject=0;
     c3x_renderer_i64 move_started=-1,combat_started=-1;
     int combat_serial=0;
     unsigned draws=0,pose_builds=0,mesh_builds=0;
     template<class T>static void drop(T*& p){if(p)p->Release();p=nullptr;}
-    ~SandboxDirectUnits(){drop(vertex);drop(pixel);drop(layout);drop(material);drop(beauty);
+    ~SandboxDirectUnits(){drop(vertex);drop(pixel);drop(shadow_pixel);drop(layout);drop(material);drop(beauty);
         drop(placement);drop(unshadowed_view);drop(unshadowed);
         for(auto& sampler:samplers)drop(sampler);}
     c3x_renderer::UnitBodyRenderer::Unit const* unit_for(int subject){
-        char const* keys[]={"PRTO_Warrior","PRTO_Archer","PRTO_Worker","PRTO_Spearman"};
+        char const* keys[]={"PRTO_Warrior","PRTO_Archer","PRTO_Worker",
+            "PRTO_Spearman","PRTO_Scout"};
         auto& units=renderer.unit_bodies.units;
         auto unit=std::find_if(units.begin(),units.end(),[&](auto const& item){
             return std::find(item.keys.begin(),item.keys.end(),keys[subject])!=item.keys.end();});
@@ -55,6 +57,7 @@ StructuredBuffer<float4> Palettes:register(t0);
 cbuffer ScenePlacement:register(b2){
  float2 origin;float2 extent;float scale;float depth_base;float2 padding;
  float4 skin_frame;float4 skin_shape;
+ float4 pass_control;
 };
 struct Input{float3 position:POSITION;float3 normal:NORMAL;float2 uv:TEXCOORD0;
  float3 tangent:TANGENT;float3 bitangent:BINORMAL;uint4 joints:BLENDINDICES;
@@ -80,8 +83,12 @@ Output VS(Input i){
  float x=(position.x*c-position.y*s)*unit_scale;
  float y=(position.x*s+position.y*c)*unit_scale;
  float z=(position.z+skin_shape.y)*unit_scale;
+ if(pass_control.x>.5 && pass_control.x<1.5){
+  x+=z*pass_control.y;y+=z*pass_control.z;z=0;
+ }
  float2 local=float2(95.5+(x-y)*64,95.5+(x+y)*32-z*(150.0*128/224));
  float2 pixel=(origin+local)*scale;
+ if(pass_control.x>1.5)pixel.y+=2*z*(150.0*128/224)*scale;
  Output o;o.p=float4(pixel/extent*float2(2,-2)+float2(-1,1),
   clamp(.5-(depth_base+(x+y)*5+z*.1)/16384,.001,.999),1);
  float3 n=float3(normal.x*c-normal.y*s,normal.x*s+normal.y*c,normal.z);
@@ -91,8 +98,14 @@ Output VS(Input i){
  o.tangent=normalize(float3(t.x,-t.y,t.z/(150.0/(112*.82))));
  o.bitangent=normalize(float3(b.x,-b.y,b.z/(150.0/(112*.82))));
  o.uv=i.uv;o.shadow=float3(z,.5,.5);return o;
+}
+Texture2D<float4> shadow_base:register(t0);
+SamplerState shadow_sampler:register(s0);
+float4 PSShadow(Output i):SV_Target {
+ if(pass_control.w>.5)clip(shadow_base.Sample(shadow_sampler,i.uv).a-.5);
+ return float4(0,0,0,.28);
 })";
-        ID3DBlob *vs=nullptr,*ps=nullptr,*errors=nullptr;
+        ID3DBlob *vs=nullptr,*ps=nullptr,*shadow_ps=nullptr,*errors=nullptr;
         HRESULT hr=D3DCompile(source,std::strlen(source),"sandbox_gpu_skin",nullptr,nullptr,
             "VS","vs_5_0",D3DCOMPILE_OPTIMIZATION_LEVEL3,0,&vs,&errors);
         if(errors){if(FAILED(hr))std::printf("SANDBOX_UNIT_SHADER %s\n",
@@ -102,10 +115,17 @@ Output VS(Input i){
             nullptr,nullptr,"PS","ps_5_0",D3DCOMPILE_OPTIMIZATION_LEVEL3,0,&ps,&errors);
         if(errors){if(FAILED(hr))std::printf("SANDBOX_UNIT_MATERIAL %s\n",
             static_cast<char const*>(errors->GetBufferPointer()));drop(errors);}
+        if(SUCCEEDED(hr))hr=D3DCompile(source,std::strlen(source),"sandbox_unit_shadow",
+            nullptr,nullptr,"PSShadow","ps_5_0",D3DCOMPILE_OPTIMIZATION_LEVEL3,0,
+            &shadow_ps,&errors);
+        if(errors){if(FAILED(hr))std::printf("SANDBOX_UNIT_SHADOW %s\n",
+            static_cast<char const*>(errors->GetBufferPointer()));drop(errors);}
         if(SUCCEEDED(hr))hr=renderer.device->CreateVertexShader(vs->GetBufferPointer(),
             vs->GetBufferSize(),nullptr,&vertex);
         if(SUCCEEDED(hr))hr=renderer.device->CreatePixelShader(ps->GetBufferPointer(),
             ps->GetBufferSize(),nullptr,&pixel);
+        if(SUCCEEDED(hr))hr=renderer.device->CreatePixelShader(shadow_ps->GetBufferPointer(),
+            shadow_ps->GetBufferSize(),nullptr,&shadow_pixel);
         D3D11_INPUT_ELEMENT_DESC elements[]={
             {"POSITION",0,DXGI_FORMAT_R32G32B32_FLOAT,0,0,D3D11_INPUT_PER_VERTEX_DATA,0},
             {"NORMAL",0,DXGI_FORMAT_R32G32B32_FLOAT,0,12,D3D11_INPUT_PER_VERTEX_DATA,0},
@@ -116,11 +136,11 @@ Output VS(Input i){
             {"BLENDWEIGHT",0,DXGI_FORMAT_R32G32B32A32_FLOAT,0,72,D3D11_INPUT_PER_VERTEX_DATA,0}};
         if(SUCCEEDED(hr))hr=renderer.device->CreateInputLayout(elements,7,
             vs->GetBufferPointer(),vs->GetBufferSize(),&layout);
-        drop(vs);drop(ps);
+        drop(vs);drop(ps);drop(shadow_ps);
         D3D11_BUFFER_DESC b={};b.ByteWidth=128;b.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
         if(SUCCEEDED(hr))hr=renderer.device->CreateBuffer(&b,nullptr,&material);
         b.ByteWidth=80;if(SUCCEEDED(hr))hr=renderer.device->CreateBuffer(&b,nullptr,&beauty);
-        b.ByteWidth=64;if(SUCCEEDED(hr))hr=renderer.device->CreateBuffer(&b,nullptr,&placement);
+        b.ByteWidth=80;if(SUCCEEDED(hr))hr=renderer.device->CreateBuffer(&b,nullptr,&placement);
         float empty_height=-1.f;
         D3D11_TEXTURE2D_DESC t={};t.Width=t.Height=t.MipLevels=t.ArraySize=t.SampleDesc.Count=1;
         t.Format=DXGI_FORMAT_R32_FLOAT;t.BindFlags=D3D11_BIND_SHADER_RESOURCE;
@@ -174,10 +194,16 @@ Output VS(Input i){
     }
     bool prewarm(int,int){
         if(!initialize())return false;
-        char const* needed[4][4]={{"idle","move",nullptr,nullptr},
+        char moving[16]{};
+        if(GetEnvironmentVariableA("C3X_SANDBOX_MOVING_UNIT",moving,sizeof(moving))){
+            if(std::strcmp(moving,"Spearman")==0)moving_subject=3;
+            else if(std::strcmp(moving,"Scout")==0)moving_subject=4;
+        }
+        char const* needed[5][4]={{"idle","move",nullptr,nullptr},
             {"idle","attack","defend",nullptr},{"idle","road",nullptr,nullptr},
-            {"idle","attack","defend",nullptr}};
-        for(int subject=0;subject<4;++subject){
+            {"idle","attack","defend",moving_subject==3?"move":nullptr},
+            {"idle","move",nullptr,nullptr}};
+        for(int subject=0;subject<(moving_subject==4?5:4);++subject){
             auto* unit=unit_for(subject);if(!unit)return false;
             for(auto const* name:needed[subject]){
                 if(!name)continue;
@@ -191,9 +217,10 @@ Output VS(Input i){
     void combat_event(int serial,c3x_renderer_i64 ticks){
         if(serial>combat_serial){combat_serial=serial;combat_started=ticks;}
     }
-    bool draw(c3x_renderer_frame_v1 const& frame,int world_x,int world_y,
+    template<class Target>bool draw(c3x_renderer_frame_v1 const& frame,int world_x,int world_y,
             int incarnation,int viewer,bool visible,int camera_x,int camera_y,
-            c3x_renderer::render_core::LinearTarget& scene,unsigned scene_scale,float zoom){
+            Target& scene,float scene_scale,float zoom,float visual_hour,
+            bool reflected=false){
         if(!initialize())return false;
         auto& bodies=renderer.unit_bodies;
         if(incarnation!=previous_incarnation || viewer!=previous_viewer || previous_x==INT_MIN){
@@ -226,11 +253,12 @@ Output VS(Input i){
         context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         context->VSSetShader(vertex,nullptr,0);context->PSSetShader(pixel,nullptr,0);
         context->VSSetConstantBuffers(2,1,&placement);
+        context->PSSetConstantBuffers(2,1,&placement);
         context->PSSetConstantBuffers(0,1,&material);
         context->PSSetConstantBuffers(1,1,&beauty);
         context->PSSetShaderResources(1,1,&unshadowed_view);
         context->PSSetSamplers(1,1,&samplers[3]);
-        auto environment=c3x_renderer::evaluate_environment(float(frame.hour),frame.season);
+        auto environment=c3x_renderer::evaluate_environment(visual_hour,frame.season);
         auto noon=c3x_renderer::evaluate_environment(12,0);
         auto key_light=c3x_renderer::lighting::key_light(environment);
         float beauty_values[20]={};float const ambient_source[]={.34f,.45f,.60f};
@@ -266,7 +294,7 @@ Output VS(Input i){
         double combat_end=third_exchange+spearman_attack;
         for(int index=0;index<4;++index){
             if(index==0&&!visible)continue;
-            auto* unit=unit_for(index);if(!unit)return false;
+            auto* unit=unit_for(index==0?moving_subject:index);if(!unit)return false;
             auto* anchor=locate(positions[index][0],positions[index][1]);
             if(!anchor)continue;
             float x=float(anchor->anchor_x),y=float(anchor->anchor_y);
@@ -285,7 +313,7 @@ Output VS(Input i){
             }
             if(index==0&&move_started>=0&&travel>=1)move_started=-1;
             int body_x=int(std::lround(x))+camera_x+frame.tile_width/2-95;
-            int body_y=int(std::lround(y))+camera_y+frame.tile_height/2-120;
+            int body_y=int(std::lround(y))+camera_y+frame.tile_height/2-95;
             if(frame.world_wrap_x && frame.world_width_tiles>0){
                 int span=frame.world_width_tiles*frame.tile_width/2;
                 while(body_x>frame.target_width+191)body_x-=span;
@@ -323,11 +351,12 @@ Output VS(Input i){
                 unsigned frame_number=std::min(source->frames-1,
                     unsigned(std::floor(local/duration*double(source->frames-1)+1e-7)));
                 float angle=(unit->yaw_offset+float((index==1?5:index==3?1:3)%8)*45)*.01745329252f;
-                float placement_values[16]={float(body_x+4),float(body_y+4),
+                float placement_values[20]={float(body_x+(reflected?8:4)),
+                    float(body_y+(reflected?8:4)),
                     float(scene.width),float(scene.height),float(scene_scale),ground_depth,0,0,
                     float(frame_number),float(source->bones),std::cos(angle),std::sin(angle),
-                    unit->scale,unit->offset_z,0,0};
-                context->UpdateSubresource(placement,0,nullptr,placement_values,0,0);
+                    unit->scale,unit->offset_z,0,0,
+                    reflected?2.f:0.f,0,0,part.cutout};
                 float values[32]={part.tint[0],part.tint[1],part.tint[2],part.mask};
                 for(unsigned axis=0;axis<3;++axis){
                     float color=float((0x205bddu>>(16-axis*8))&255)/255;
@@ -359,6 +388,23 @@ Output VS(Input i){
                 context->PSSetShaderResources(0,1,&bodies.textures[part.texture].view);
                 context->PSSetShaderResources(2,4,extra);
                 context->PSSetSamplers(0,1,&samplers[part.address]);
+                if(!reflected && key_light.intensity>.001f){
+                    placement_values[16]=1;
+                    placement_values[17]=-key_light.direction[0]/key_light.direction[2]*
+                        c3x_renderer::lighting::object_height_to_world;
+                    placement_values[18]=-key_light.direction[1]/key_light.direction[2]*
+                        c3x_renderer::lighting::object_height_to_world;
+                    context->UpdateSubresource(placement,0,nullptr,placement_values,0,0);
+                    context->OMSetDepthStencilState(renderer.natural.decal_depth,0);
+                    context->OMSetBlendState(renderer.blend_state,nullptr,0xffffffffu);
+                    context->PSSetShader(shadow_pixel,nullptr,0);
+                    context->DrawIndexed(UINT(source->indices.size()),0,0);
+                    placement_values[16]=0;
+                    context->OMSetDepthStencilState(renderer.depth_state,0);
+                    context->OMSetBlendState(nullptr,nullptr,0xffffffffu);
+                    context->PSSetShader(pixel,nullptr,0);
+                }
+                context->UpdateSubresource(placement,0,nullptr,placement_values,0,0);
                 context->DrawIndexed(UINT(source->indices.size()),0,0);
                 ++draws;
             }

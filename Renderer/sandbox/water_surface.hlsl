@@ -37,6 +37,14 @@ float4 ShadeWaterSurface(PixelInput input) {
     float3 refracted = lerp(float3(.023, .074, .096),
         float3(.003, .015, .040), smoothstep(.18, .43, depth)) * light;
     refracted *= 1 + dot(normal.xy, float2(.85, -.65));
+    // t123 is the water variant's marine-color layer. Sample it through the
+    // moving normal so fish and whales inherit surface refraction, reflection
+    // and foam rather than being composited over the finished ocean.
+    uint aquatic_width, aquatic_height;
+    resource_base_texture_7.GetDimensions(aquatic_width, aquatic_height);
+    float2 aquatic_uv = (input.position.xy - normal.xy * 5) /
+        max(float2(aquatic_width, aquatic_height), 1);
+    float4 aquatic = resource_base_texture_7.SampleLevel(decal_sampler, aquatic_uv, 0);
     float3 reflected_ray = reflect(-eye, normal);
     float3 sky_light = environment_ambient_color * .6 +
         environment_sun_color * environment_sun_intensity * .6 +
@@ -66,8 +74,12 @@ float4 ShadeWaterSurface(PixelInput input) {
         max(dot(specular_direction, eye), 0)) * .9;
     float3 sun = environment_sun_color * environment_sun_intensity;
     float blend = fresnel * reflection_strength * .68;
-    float3 color = lerp(refracted, reflected, blend) +
-        shadow * saturate(specular * sun);
+    float3 color = lerp(refracted, reflected, blend);
+    float marine_coverage = saturate(aquatic.a * 1.6) * (1 - blend);
+    float3 marine_body = aquatic.rgb / max(aquatic.a, .01);
+    color = lerp(color, color * float3(.12, .30, .42) +
+        marine_body * .035, marine_coverage);
+    color += shadow * saturate(specular * sun);
     // 0 A.D.'s water_high getFoam uses animated normal detail plus shoreline
     // coverage. The prepared BIQ coastal depth supplies that coverage here,
     // so the far-zoom scene needs no separate short-strip wave meshes.

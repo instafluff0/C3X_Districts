@@ -3,6 +3,7 @@
 #include <windows.h>
 #include <algorithm>
 #include <array>
+#include <cstdlib>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -77,6 +78,15 @@ int sandbox_client_run(HMODULE module, c3x_renderer_frame_v1 const& prepared_fra
     if (!window) return 4;
     ShowWindow(window, SW_SHOW);
     Snapshot opening{0,1,1,7,19,47,1,0};
+    char move_start_tile[32]{};
+    int diagnostic_x=0,diagnostic_y=0;
+    if(GetEnvironmentVariableA("C3X_SANDBOX_MOVE_START_TILE",move_start_tile,
+            sizeof(move_start_tile)) &&
+            sscanf_s(move_start_tile,"%d,%d",&diagnostic_x,&diagnostic_y)==2 &&
+            diagnostic_x>=0 && diagnostic_y>=0){
+        opening.unit_x=diagnostic_x;
+        opening.unit_y=diagnostic_y;
+    }
     auto prime_frame=prepared_frame;
     prime_frame.presentation_frequency=1000;
     prime_frame.presentation_time_ticks=0;
@@ -91,24 +101,76 @@ int sandbox_client_run(HMODULE module, c3x_renderer_frame_v1 const& prepared_fra
     char clip_option[8]{};
     if(GetEnvironmentVariableA("C3X_SANDBOX_REPLAY_CLIP",clip_option,sizeof(clip_option)) &&
             std::strcmp(clip_option,"1")==0){
+        char day_night_option[8]{};
+        bool day_night=GetEnvironmentVariableA("C3X_SANDBOX_DAY_NIGHT",day_night_option,
+            sizeof(day_night_option)) && std::strcmp(day_night_option,"1")==0;
+        std::vector<double> cycle_frames,cycle_draws,cycle_presents;
+        std::array<std::vector<double>,6> cycle_stages;
+        LARGE_INTEGER cycle_frequency{};
+        QueryPerformanceFrequency(&cycle_frequency);
+        char frame_limit_text[16]{};
+        int frame_limit=day_night?900:1080;
+        if(GetEnvironmentVariableA("C3X_SANDBOX_CLIP_FRAMES",frame_limit_text,
+                sizeof(frame_limit_text)))
+            frame_limit=std::clamp(std::atoi(frame_limit_text),1,frame_limit);
+        char move_at_text[16]{};
+        int move_at=15000;
+        if(!day_night && GetEnvironmentVariableA("C3X_SANDBOX_MOVE_AT_MS",
+                move_at_text,sizeof(move_at_text)))
+            move_at=std::clamp(std::atoi(move_at_text),0,32000);
         // Every source frame is rendered at 30 Hz. The first 15 seconds keep
         // the camera fixed so water and authored ambient clips are inspectable.
-        for(int index=0;index<1080;++index){
+        for(int index=0;index<frame_limit;++index){
             int t=int((std::int64_t(index)*1000+15)/30);
-            int x=0,y=0;sandbox_camera_path(t,x,y);
+            int x=0,y=0;
+            if(!day_night)sandbox_camera_path(t,x,y);
             Snapshot actor=opening;
-            if(t>=15000){actor.unit_x=20;actor.unit_y=48;}
-            if(t>=17500)combat(1,t);
+            if(!day_night){
+                if(t>=move_at){actor.unit_x=opening.unit_x+1;actor.unit_y=opening.unit_y+1;}
+                if(t>=17500)combat(1,t);
+            }
             auto frame=prepared_frame;
             frame.presentation_frequency=1000;
             frame.presentation_time_ticks=t;
-            int result=draw(&frame,nullptr,x,y,actor.unit_x,actor.unit_y,
-                actor.unit_incarnation,actor.viewer,actor.unit_visible,sandbox_zoom_path(t));
+            LARGE_INTEGER started{},drawn{},finished{};
+            QueryPerformanceCounter(&started);
+            int result=flat_present?0:draw(&frame,nullptr,x,y,actor.unit_x,actor.unit_y,
+                actor.unit_incarnation,actor.viewer,actor.unit_visible,
+                day_night?1.f:sandbox_zoom_path(t));
+            QueryPerformanceCounter(&drawn);
             if(!result)result=present(window,&frame,actor.unit_x,actor.unit_y,
                 actor.unit_incarnation,actor.viewer,actor.unit_visible,x,y);
+            QueryPerformanceCounter(&finished);
             if(result)return result;
-            if(index%30==0)std::printf("CLIENT_CLIP_FRAME time_ms=%d camera=%d,%d zoom=%.3f\n",
-                t,x,y,sandbox_zoom_path(t));
+            if(day_night && index>=3){
+                double divisor=double(cycle_frequency.QuadPart)/1000.;
+                cycle_frames.push_back(double(finished.QuadPart-started.QuadPart)/divisor);
+                cycle_draws.push_back(double(drawn.QuadPart-started.QuadPart)/divisor);
+                cycle_presents.push_back(double(finished.QuadPart-drawn.QuadPart)/divisor);
+                if(metrics){
+                    double phases[6]={};unsigned selected=0,shadow_builds=0,resident_builds=0;
+                    std::size_t bytes=0;float box[4]={};
+                    metrics(phases,&selected,&shadow_builds,&resident_builds,&bytes,box);
+                    for(unsigned stage=0;stage<6;++stage)cycle_stages[stage].push_back(phases[stage]);
+                }
+            }
+            if(index%30==0)std::printf("CLIENT_CLIP_FRAME time_ms=%d hour=%.2f camera=%d,%d zoom=%.3f\n",
+                t,day_night?12.f+24.f*float(t)/30000.f:float(frame.hour),x,y,
+                day_night?1.f:sandbox_zoom_path(t));
+        }
+        if(day_night){
+            auto report=[](char const* name,std::vector<double>& values){
+                std::sort(values.begin(),values.end());
+                auto at=[&](double fraction){return values.empty()?0.:values[std::min(
+                    values.size()-1,std::size_t(fraction*double(values.size()-1)))];};
+                std::printf("CLIENT_CYCLE name=%s frames=%zu median_ms=%.2f p95_ms=%.2f\n",
+                    name,values.size(),at(.5),at(.95));
+            };
+            report("total",cycle_frames);report("draw",cycle_draws);
+            report("present",cycle_presents);
+            char const* names[]={"selection_and_shadows","reflection","static_cache",
+                "water_and_waves","animated_units","hdr_and_bloom"};
+            for(unsigned stage=0;stage<6;++stage)report(names[stage],cycle_stages[stage]);
         }
         DestroyWindow(window);
         return 0;

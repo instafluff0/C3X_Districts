@@ -9,8 +9,9 @@ struct InstanceStream {
     InstanceStream()=default;InstanceStream(InstanceStream const&)=delete;
     ~InstanceStream(){clear();}
     void clear(){if(buffer)buffer->Release();buffer=nullptr;bytes=uploads=discards=cursor=offset=0;}
-    bool upload(ID3D11Device*device,ID3D11DeviceContext*context,std::vector<Instance> const& data){
-        if(data.empty() || data.size()>limit)return false;
+    bool upload(ID3D11Device*device,ID3D11DeviceContext*context,
+            Instance const* data,std::size_t count){
+        if(!data || !count || count>limit)return false;
         if(!buffer){D3D11_BUFFER_DESC d={};d.ByteWidth=limit*sizeof(Instance);
             d.Usage=D3D11_USAGE_DYNAMIC;d.BindFlags=D3D11_BIND_VERTEX_BUFFER;d.CPUAccessFlags=D3D11_CPU_ACCESS_WRITE;
             bool borrowed=device!=nullptr;if(!borrowed)context->GetDevice(&device);
@@ -19,13 +20,16 @@ struct InstanceStream {
         // Append only to untouched bytes. On wrap, DISCARD gives the driver a
         // fresh allocation while earlier draws retain their submitted contents.
         // The cursor survives frames; resetting counters must not reuse live data.
-        unsigned begin=cursor+data.size()>limit?0:cursor;
+        unsigned begin=cursor+count>limit?0:cursor;
         D3D11_MAPPED_SUBRESOURCE mapped={};
         if(FAILED(context->Map(buffer,0,begin?D3D11_MAP_WRITE_NO_OVERWRITE:D3D11_MAP_WRITE_DISCARD,0,&mapped)))return false;
         offset=begin*sizeof(Instance);
-        std::memcpy(static_cast<char*>(mapped.pData)+offset,data.data(),data.size()*sizeof(Instance));context->Unmap(buffer,0);
-        cursor=begin+unsigned(data.size());if(!begin)++discards;
-        bytes+=data.size()*sizeof(Instance);++uploads;return true;
+        std::memcpy(static_cast<char*>(mapped.pData)+offset,data,count*sizeof(Instance));context->Unmap(buffer,0);
+        cursor=begin+unsigned(count);if(!begin)++discards;
+        bytes+=count*sizeof(Instance);++uploads;return true;
+    }
+    bool upload(ID3D11Device*device,ID3D11DeviceContext*context,std::vector<Instance> const& data){
+        return upload(device,context,data.data(),data.size());
     }
 };
 inline HRESULT create_instance_layout(ID3D11Device*device,ID3DBlob*code,ID3D11InputLayout**layout){

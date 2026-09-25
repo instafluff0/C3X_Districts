@@ -21,6 +21,7 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <tuple>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -539,6 +540,9 @@ public:
     c3x_renderer::render_core::RenderRegionCache<ID3D11Texture2D,
         sizeof(void*)==8?768u*1024u*1024u:0u> reflection_regions;
     c3x_renderer::render_core::SourceShadow::PreparedCasters retained_region_casters;
+    // The sandbox may combine these already-prepared land meshes into resident
+    // shadow patches. Production remains the sole source of terrain geometry.
+    std::map<std::tuple<int,int,unsigned>,c3x_renderer::render_core::PreparedMesh> sandbox_shadow_meshes;
     c3x_renderer::render_core::RegionContributorIndex region_contributors;
     c3x_renderer::render_core::WorldPassIndex world_pass_index;
     std::unordered_map<std::uintptr_t,std::vector<std::pair<unsigned,unsigned>>> world_pass_occurrences;
@@ -891,6 +895,8 @@ public:
     std::vector<ResourceAnimation> resource_animations;
     std::vector<ResourceAnchor> resource_anchors;
     std::vector<ResourceBuffer> resource_buffers;
+    GeometryDrawView::Records sandbox_resource_poses;
+    GeometryDrawView::Records sandbox_aquatic_resource_poses;
     std::vector<ResourceBackdrop> resource_backdrops;
     std::int64_t scene_depth_origin=0;
     std::uint64_t resource_backdrop_epoch=0;
@@ -1053,6 +1059,8 @@ public:
         resource_pixel_signature = 0;
         resource_pixel_clock = -1;
         moving_resources = visible_resource_animations = visible_wave_animations = 0;
+        sandbox_resource_poses = {};
+        sandbox_aquatic_resource_poses = {};
         for(auto& chunk:wave_chunks){release(chunk.buffer);release(chunk.indices);}
         wave_chunks.clear();wave_signature=0;wave_upload_bytes=0;
         geometry_cache.clear();
@@ -3420,6 +3428,35 @@ public:
                 if(!read_file(mesh.path.c_str(),payload) || !c3x_renderer::decode_animation_mesh(payload,decoded)) {
                     mesh.failed=true;trace.write("unit-payload","invalid mesh; only this kit falls back",true);return false;
                 }
+                if(action.name=="move" && decoded.frames>1){
+                    // Most authored locomotion clips are already anchored. A
+                    // few keep common whole-body travel below a stationary
+                    // root bone (notably Spearman). Native tile movement owns
+                    // that travel; strip only a substantial shared endpoint
+                    // delta, leaving the gait's joint and vertical motion.
+                    std::vector<float> dx,dy;dx.reserve(decoded.bones);dy.reserve(decoded.bones);
+                    for(unsigned bone=0;bone<decoded.bones;++bone){
+                        auto first=std::size_t(bone)*16+12;
+                        auto last=(std::size_t(decoded.frames-1)*decoded.bones+bone)*16+12;
+                        dx.push_back(decoded.palettes[last]-decoded.palettes[first]);
+                        dy.push_back(decoded.palettes[last+1]-decoded.palettes[first+1]);
+                    }
+                    auto middle=decoded.bones/2;
+                    std::nth_element(dx.begin(),dx.begin()+middle,dx.end());
+                    std::nth_element(dy.begin(),dy.begin()+middle,dy.end());
+                    float travel_x=dx[middle],travel_y=dy[middle];
+                    float drift=std::hypot(travel_x,travel_y);
+                    if(drift>.12f && drift<4.f){
+                        for(unsigned frame_index=1;frame_index<decoded.frames;++frame_index){
+                            float phase=float(frame_index)/float(decoded.frames-1);
+                            for(unsigned bone=0;bone<decoded.bones;++bone){
+                                auto at=(std::size_t(frame_index)*decoded.bones+bone)*16+12;
+                                decoded.palettes[at]-=travel_x*phase;
+                                decoded.palettes[at+1]-=travel_y*phase;
+                            }
+                        }
+                    }
+                }
                 std::size_t bytes=decoded.vertices.capacity()*sizeof(c3x_renderer::AnimationVertex)+
                     decoded.indices.capacity()*sizeof(std::uint32_t)*2+decoded.palettes.capacity()*sizeof(float);
                 if(!reserve(bytes))return false;
@@ -3642,8 +3679,12 @@ public:
         return true;
     }
 
-    bool compose_resource_animations(c3x_renderer_frame_v1 const & frame) {
+    bool compose_resource_animations(c3x_renderer_frame_v1 const & frame,
+            bool pose_only=false) {
         resource_composite_ticks=0;
+        if(pose_only && resource_anchors.empty()){
+            sandbox_resource_poses={};sandbox_aquatic_resource_poses={};return true;
+        }
         if(visibility_pass && !visibility_coverage.capture(frame))return false;
         // Visibility is deliberately absent from geometry identities. Refresh
         // occurrence samples without rebuilding/reuploading immutable meshes.
@@ -3652,14 +3693,17 @@ public:
         if (!shared_scene_surface && !frame_has_resource_animation(frame)) {
             moving_resources=visible_resource_animations=visible_wave_animations=0; resource_pixel_signature=0; return true;
         }
-        auto clock=resource_clock(frame);
-        water_material=c3x_renderer::render_core::water_material_frame(frame);
-        water_time_seconds=water_material.time;
-        if (posed_count() && resource_pixel_signature==cached_signature.complete &&
+        auto clock=resource_clock(frame,pose_only?60:15);
+        if(!pose_only){
+            water_material=c3x_renderer::render_core::water_material_frame(frame);
+            water_time_seconds=water_material.time;
+        }
+        if (!pose_only && posed_count() && resource_pixel_signature==cached_signature.complete &&
             resource_pixel_clock==clock) return true;
         LARGE_INTEGER started={},finished={};QueryPerformanceCounter(&started);
         visible_resource_animations=moving_resources=0;
         std::array<std::vector<CachedVertexChunk>,geometry_layer_count> buffers; // posed bodies only
+        std::vector<unsigned char> aquatic_resource;
         std::vector<D3D11_RECT> rectangles;
         using c3x_renderer::render_core::RasterRegionAxis;
         using c3x_renderer::render_core::raster_anchor_phase;
@@ -3688,10 +3732,15 @@ public:
         float half_w=frame.tile_width*.5f,half_h=frame.tile_height*.5f;
         float projection=frame.tile_width/224.f,relief=projection*.82f;
         int dx=int(geometry_viewport_settings.translation[0]),dy=int(geometry_viewport_settings.translation[1]);
-        auto ticks=clock*std::max<c3x_renderer_i64>(1,frame.presentation_frequency/15);
+        auto ticks=clock*std::max<c3x_renderer_i64>(1,frame.presentation_frequency/(pose_only?60:15));
         for (auto const & anchor:resource_anchors) {
             if (anchor.asset>=resource_animations.size()) return false;
             auto & animation=resource_animations[anchor.asset];
+            // In the sandbox's direct scene pass, keep the animated marine
+            // bodies at the waterline. The source whale mesh spans roughly
+            // 0.22 tile units above its anchored base after scaling.
+            float submersion=pose_only && animation.name=="whales"?0.17f:
+                pose_only && animation.name=="fish"?0.015f:0.f;
             unsigned visibility=visibility_pass?visibility_coverage.state(anchor.tile_x,anchor.tile_y):2;
             if(!visibility)continue; // Never-explored objects contribute no body or shadow.
             bool advances=visibility==2;
@@ -3714,7 +3763,8 @@ public:
                     for(unsigned a=0;a<3;++a)source[a]=(c&(1u<<a))?posed_bounds.high[a]:posed_bounds.low[a];
                     float x=source[0]+animation.offset[0],y=source[1]+animation.offset[1];
                     float lx=(x*cosine-y*sine)*animation.scale,ly=(x*sine+y*cosine)*animation.scale;
-                    float lz=(source[2]+animation.offset[2])*animation.scale,feature_height=lz*150.f/.82f;
+                    float lz=(source[2]+animation.offset[2])*animation.scale-submersion,
+                        feature_height=lz*150.f/.82f;
                     float sx=center_x+(lx-ly)*half_w,sy=center_y+(lx+ly)*half_h-lz*150.f*projection;
                     auto cast=c3x_renderer::lighting::ground_offset(shadow_basis.data()+8,feature_height/112.f);
                     float shadow_x=center_x+(lx-ly)*half_w+(cast[0]+cast[1])*half_w;
@@ -3765,7 +3815,7 @@ public:
                 if(FAILED(context->Map(pool.vertices,0,D3D11_MAP_WRITE_DISCARD,0,&mapped)))return false;
                 auto values=static_cast<float*>(mapped.pData);
                 float placement[]={cosine,sine,animation.scale,c3x_renderer::lighting::object_height_to_world,
-                    animation.offset[0],animation.offset[1],animation.offset[2],anchor.ground,
+                    animation.offset[0],animation.offset[1],animation.offset[2]-submersion/animation.scale,anchor.ground,
                     center_x,center_y,anchor.world_u+anchor.u,anchor.world_v+1-anchor.v,
                     half_w,half_h,projection,float(content_view_height)};
                 std::copy(std::begin(placement),std::end(placement),values);
@@ -3778,6 +3828,7 @@ public:
                 chunk.index_count=shadow_chunk.index_count=unsigned(animation.mesh.indices.size());
                 chunk.animation_texture=shadow_chunk.animation_texture=animation.view;
                 buffers[geometry_shadow].push_back(shadow_chunk);buffers[geometry_feature].push_back(chunk);
+                aquatic_resource.push_back(animation.name=="fish" || animation.name=="whales");
                 ++visible_resource_animations;if(advances)++moving_resources;continue;
             }
             if (!c3x_renderer::sample_animation_mesh(animation.mesh,time,true,posed)) {
@@ -3892,7 +3943,21 @@ public:
             // it projects each complete card as an opaque black rectangle.
             shadow_chunk.animation_texture=animation.view;
             buffers[geometry_shadow].push_back(shadow_chunk);
-            buffers[geometry_feature].push_back(chunk);++visible_resource_animations;if(advances)++moving_resources;
+            buffers[geometry_feature].push_back(chunk);
+            aquatic_resource.push_back(animation.name=="fish" || animation.name=="whales");
+            ++visible_resource_animations;if(advances)++moving_resources;
+        }
+        if(pose_only){
+            sandbox_resource_poses={};
+            sandbox_aquatic_resource_poses={};
+            for(auto layer:{geometry_shadow,geometry_feature}){
+                if(buffers[layer].size()!=aquatic_resource.size())return false;
+                for(std::size_t i=0;i<aquatic_resource.size();++i){
+                    auto& output=aquatic_resource[i]?sandbox_aquatic_resource_poses:sandbox_resource_poses;
+                    output[layer].emplace_back(buffers[layer][i]);
+                }
+            }
+            return true;
         }
         if(!prepare_wave_chunks(frame))return false;
         visible_wave_animations=unsigned(std::count_if(wave_chunks.begin(),wave_chunks.end(),[](auto const& chunk){return chunk.visual_time<0;}));
@@ -4959,6 +5024,7 @@ public:
     }
 
     void clear_tile_geometry_cache() {
+        sandbox_shadow_meshes.clear();
         residency_candidates.clear();
         natural_mesh_cache.clear();natural_mesh_cache_bytes=0;
         ground_grid_cache.clear();ground_grid_cache_bytes=0;
@@ -9418,6 +9484,18 @@ public:
             }
             ground_join_ms+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-ground_join_started).count();
             if(!prepared_ground || cancelled())return false;
+            char sandbox_patch_batch[8]={};
+            if(GetEnvironmentVariableA("C3X_SANDBOX_SHADOW_PATCHES",sandbox_patch_batch,sizeof(sandbox_patch_batch)) &&
+                sandbox_patch_batch[0]=='1'){
+                auto capture=[&](unsigned layer,c3x_renderer::render_core::PreparedMesh const& mesh){
+                    if(!mesh.empty())sandbox_shadow_meshes[{tile.tile_x,tile.tile_y,layer}]=mesh;
+                };
+                capture(geometry_land,prepared_ground->meshes[geometry_land]);
+                if(prepared_terrain){
+                    capture(geometry_natural_terrain,prepared_terrain->meshes[0]);
+                    capture(geometry_natural_mountain,prepared_terrain->meshes[2]);
+                }
+            }
             ground_compile_ms+=prepared_ground->compile_ms;
             ground_ready_peak=std::max(ground_ready_peak,prepared_ground->bytes());
             if(!world_ground || !shared_hit)++ground_jobs;

@@ -174,9 +174,12 @@ extern "C" __declspec(dllexport) void c3x_sandbox_inspect_scene() {
         for (auto const& layer : terrain.relief_layer_dds) material_bytes += layer.size();
         for (auto const& layer : terrain.water_surface_dds) material_bytes += layer.size();
     }
-    std::printf("SANDBOX_PREPARATION tiles=%zu draw_records=%zu layers=%zu gpu_bytes=%zu material_bytes=%zu feature_assets=%zu\n",
+    std::printf("SANDBOX_PREPARATION tiles=%zu draw_records=%zu layers=%zu gpu_bytes=%zu material_bytes=%zu feature_assets=%zu resource_assets=%d resource_anchors=%zu resource_animations=%zu feature_records=%zu\n",
         renderer.tile_geometry_cache.size(), records, nonempty_layers, gpu_bytes, material_bytes,
-        renderer.feature_bundle.assets.size());
+        renderer.feature_bundle.assets.size(),int(renderer.resource_assets_ready),
+        renderer.resource_anchors.size(),renderer.resource_animations.size(),
+        renderer.geometry_vertex_buffers[geometry_feature].size());
+    std::fflush(stdout);
     IDXGIDevice* dxgi = nullptr; IDXGIAdapter* adapter = nullptr;
     DXGI_ADAPTER_DESC description{};
     if (renderer.device && SUCCEEDED(renderer.device->QueryInterface(__uuidof(IDXGIDevice),
@@ -273,7 +276,7 @@ extern "C" __declspec(dllexport) int c3x_sandbox_present(HWND window,
     char capture_path[4 * MAX_PATH]{};
     char sequence_prefix[3 * MAX_PATH]{};
     static unsigned sequence_frame=0;
-    bool sequence_capture=units && frame && GetEnvironmentVariableA(
+    bool sequence_capture=frame && GetEnvironmentVariableA(
         "C3X_SANDBOX_CAPTURE_SEQUENCE",sequence_prefix,sizeof(sequence_prefix));
     char const* capture_variable = initial_capture ? "C3X_SANDBOX_CAPTURE" :
         moved_capture ? "C3X_SANDBOX_CAPTURE_MOVED" :

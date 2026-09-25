@@ -196,6 +196,25 @@ multisample scroll restore with a larger resident camera region and redraw only
 newly exposed geometry. Measure the moving workload with zoom included; do not
 add pixel-comparison gates.
 
+## Later visual experiment: cliff-impact waves
+
+After the moving-scene performance baseline is measured, try a sandbox-only
+rocky-coast effect using the locally installed Steam Workshop **Tsunami Waves:
+Lite Version** (`steamapps/workshop/content/289070/1477315433/ArtDefs/Wave.artdef`)
+as an offline tuning reference. The mod supplies settings, not new wave art: its
+changes include scale 1.2–4, cycle time 8–20 seconds, end distance 4 and crash
+distance 12. Reuse the existing generic coastal crest/foam pack; do not load a
+Civ VI ArtDef at runtime or redistribute source art.
+
+The first proof should show intermittent breakers and impact foam/spray at one
+`test.biq` rocky cliff with visible waterline boulders. Select stable rocky
+contours, keep the effect in water, depth-test it against the cliffs/boulders,
+and advance phases on renderer-local time without rebuilding coast geometry.
+The current beach-only coverage check and short ribbon are not suitable for a
+direct fourfold scale substitution. Compare a brief motion clip and stills,
+then measure idle, scroll, jump and zoom with the effect on. Keep this optional
+until it looks convincing and fits the moving-scene performance budget.
+
 ## Boundaries and useful prior findings
 
 All new work stays in `Renderer/sandbox/`. Read/copy production visual code; do not

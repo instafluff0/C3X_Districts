@@ -436,23 +436,34 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
     }
 #ifdef C3X_SANDBOX_CLIENT
     // These BIQ sites enter the ordinary production tile preparation below.
-    // Keep the compact settlement beside the moving unit's jungle crossing.
+    // Keep one compact settlement on the inland clearing near the crossing.
     for(auto& tile:tiles){
         int x=((tile.tile_x%map_width)+map_width)%map_width,y=tile.tile_y;
         if(y==57 && (x==25 || x==27 || x==29)){
             tile.road_mask=15;tile.route_style=2;
-            if(x==27){
-                tile.city_id=1;tile.city_owner_id=1;tile.city_population=7;
-                tile.city_size=1;tile.city_culture_group=0;tile.city_era=1;
-            }else if(x==25)tile.improvement_flags=C3X_RENDERER_IMPROVEMENT_MINE;
-            else {tile.improvement_flags=C3X_RENDERER_IMPROVEMENT_IRRIGATION;
+            if(x==25)tile.improvement_flags=C3X_RENDERER_IMPROVEMENT_MINE;
+            else if(x==29){tile.improvement_flags=C3X_RENDERER_IMPROVEMENT_IRRIGATION;
                 tile.irrigation_mask=15;}
         }
+        if(y==61 && x==21){
+            tile.city_id=1;tile.city_owner_id=1;tile.city_population=7;
+            tile.city_size=1;tile.city_culture_group=0;tile.city_era=1;
+            tile.road_mask=15;tile.route_style=2;
+        }
+        if(y==60 && x==22){tile.road_mask=15;tile.route_style=2;}
         if(y==58 && (x==26 || x==28)){
             tile.road_mask=15;tile.route_style=2;
         }
         if(y==59 && x>=23 && x<=31 && x%2==1){
             tile.road_mask=15;tile.railroad_mask=15;tile.route_style=3;
+        }
+        struct ResourceSite {int x,y,id;char const* name;};
+        ResourceSite const resources[]={{21,59,201,"Horses"},
+            {19,55,202,"Gold"},{20,52,203,"Iron"},
+            {28,50,204,"Fish"},{10,50,205,"Whales"}};
+        for(auto const& site:resources)if(x==site.x && y==site.y){
+            tile.resource_id=site.id;tile.resource_class=0;
+            strcpy_s(tile.resource_name,site.name);
         }
     }
 #endif
@@ -485,12 +496,27 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
     }
     if (animate && !dense_scene && !retained_boundary) {
         char const * names[]={"Horses","Cattle","Wheat","Fish","Whales","Game","Furs","Ivory","Bananas","Rubber"};
-        if (resource_sites.empty())
-            for (auto const & tile:tiles)
-                if ((tile.tile_flags&C3X_RENDERER_TILE_RENDER) && tile.anchor_x>target_width/5 &&
-                    tile.anchor_x<target_width*4/5 && tile.anchor_y>target_height/4 && tile.anchor_y<target_height*3/4 &&
-                    resource_sites.size()<std::size(names))
-                    resource_sites.push_back({((tile.tile_x%map_width)+map_width)%map_width,tile.tile_y});
+        if (resource_sites.empty()){
+            resource_sites.resize(std::size(names),{-1,-1});
+            for(unsigned i=0;i<std::size(names);++i){
+                bool aquatic=i==3 || i==4;
+                int goal_x=int(target_width*(aquatic?(i==3?.30f:.43f):(.28f+.42f*float((i*3)%8)/7.f)));
+                int goal_y=int(target_height*(aquatic?(i==3?.42f:.62f):(.32f+.36f*float((i*5)%9)/8.f)));
+                int best_score=1000000000;
+                std::array<int,2> best{};
+                for(auto const& tile:tiles){
+                    if(!(tile.tile_flags&C3X_RENDERER_TILE_RENDER) ||
+                       (aquatic?tile.real_terrain_type<11:tile.real_terrain_type>4) ||
+                       tile.anchor_x<=target_width/5 || tile.anchor_x>=target_width*4/5 ||
+                       tile.anchor_y<=target_height/4 || tile.anchor_y>=target_height*3/4)continue;
+                    std::array<int,2> site={((tile.tile_x%map_width)+map_width)%map_width,tile.tile_y};
+                    if(std::find(resource_sites.begin(),resource_sites.end(),site)!=resource_sites.end())continue;
+                    int score=std::abs(tile.anchor_x-goal_x)+std::abs(tile.anchor_y-goal_y);
+                    if(score<best_score){best_score=score;best=site;}
+                }
+                if(best_score<1000000000)resource_sites[i]=best;
+            }
+        }
         for(auto & tile:tiles)for(unsigned i=0;i<resource_sites.size();++i)
             if(((tile.tile_x%map_width)+map_width)%map_width==resource_sites[i][0] && tile.tile_y==resource_sites[i][1]) {
                 tile.resource_id=int(100+i);strcpy_s(tile.resource_name,names[i]);

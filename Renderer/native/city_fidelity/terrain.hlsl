@@ -154,7 +154,16 @@ struct P {
     float coast_coverage : TEXCOORD4;
     float coast_inland : TEXCOORD5;
 };
+#ifdef SANDBOX_TERRAIN_MATERIAL
+struct Output {
+    float4 color : SV_Target0;
+    float4 normal : SV_Target1;
+    float4 world : SV_Target2;
+    float4 properties : SV_Target3;
+};
+#else
 struct Output { float4 color : SV_Target0; float validity : SV_Target1; };
+#endif
 
 P VSMain(V input) {
     P output;
@@ -302,7 +311,13 @@ Output shade(P input) {
     Output output;
     if (input.material.y < 0.5) {
         output.color = float4(atmosphere(input.uv.y), 1);
+#ifdef SANDBOX_TERRAIN_MATERIAL
+        output.normal = float4(0.5, 0.5, 1, 1);
+        output.world = float4(input.world, 1);
+        output.properties = float4(1, 1, 1, 1);
+#else
         output.validity = 1;
+#endif
         return output;
     }
 
@@ -475,6 +490,17 @@ Output shade(P input) {
 #ifdef BEAUTY_VOLCANO_MATERIAL
     albedo = volcano_albedo(albedo, input.volcano_owner, input.world.z);
 #endif
+#ifdef SANDBOX_TERRAIN_MATERIAL
+    // The sandbox retains source-composed material once per camera. Dynamic
+    // sun, shadow and local-light evaluation runs over the visible pixels.
+    float cavity = lerp(0.79, 1.0, smoothstep(0.02, 0.30, input.material.x));
+    output.color = float4(albedo * alpha, alpha);
+    output.normal = float4((geometric * 0.5 + 0.5) * alpha, alpha);
+    output.world = float4(input.world * alpha, alpha);
+    output.properties = float4(float3(cavity, surface_occlusion,
+                                      input.coast_inland) * alpha, alpha);
+    return output;
+#else
     float ndl = saturate(dot(geometric, light_direction));
     float wrap = saturate((dot(geometric, light_direction) + 0.20) / 1.20);
     float sky = saturate(geometric.z * 0.5 + 0.5);
@@ -498,6 +524,7 @@ Output shade(P input) {
     output.color = float4(max(radiance, 0) * alpha, alpha);
     output.validity = alpha;
     return output;
+#endif
 }
 
 Output PSMain(P input) { return shade(input); }

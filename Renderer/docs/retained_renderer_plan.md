@@ -282,6 +282,18 @@ goal remains under 33 ms p95 for coherent prepared navigation; Huge-map
 capacity (about 12,800 actual tiles) is reported separately. Do not claim a
 frame-rate or memory improvement merely because work moved to Renderer64.
 
+**Deferred smooth edge scrolling.** Revisit this only after the sandbox's
+representative scene, async camera and motion are working, and a playable
+in-game integration has confirmed visual quality, map UI ordering, picking and
+frame pacing. Then prototype a renderer-owned continuous display camera with
+edge-distance speed and eased starts/stops. Civ III retains the committed camera,
+wrap/clamp and gameplay authority; C3X intercepts only qualified manual pan
+steps, while native recentering, jumps, zoom and config-off retain their existing
+paths. Keep map-anchored overlays and clicks tied to the actually displayed
+camera. Validate edge approach/release/reversal, diagonal motion, wrap/clamp,
+zoom, jumps, clicks during motion and host stalls, with units and water animating.
+Measure displayed frame intervals and input-to-display latency before promotion.
+
 Retire superseded x86 world preparation, raster caches, per-frame shared-image
 handoff and duplicate scene owners only after the new route and config-off/
 recovery behavior cover their callers. Preserve necessary native UI, replay,
