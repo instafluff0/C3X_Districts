@@ -416,6 +416,158 @@ float4 PSShadow(Output i):SV_Target {
         context->OMSetRenderTargets(0,nullptr,nullptr);
         return true;
     }
+
+#ifdef C3X_RENDERER64_FRESH
+    template<class Target>bool draw_real(c3x_renderer_frame_v1 const& frame,
+            std::vector<c3x_renderer::render_core::UnitInstances::ScenePose> const& visible,
+            Target& scene,float scene_scale,float visual_hour,bool reflected=false){
+        if(visible.empty())return true;
+        if(!initialize())return false;
+        auto& bodies=renderer.unit_bodies;
+        auto* context=renderer.context;
+        context->OMSetRenderTargets(1,&scene.target,scene.depth);
+        context->OMSetDepthStencilState(renderer.depth_state,0);
+        context->OMSetBlendState(nullptr,nullptr,0xffffffffu);
+        context->RSSetState(renderer.rasterizer_state);
+        D3D11_VIEWPORT viewport={0,0,float(scene.width),float(scene.height),0,1};
+        D3D11_RECT scissor={0,0,LONG(scene.width),LONG(scene.height)};
+        context->RSSetViewports(1,&viewport);context->RSSetScissorRects(1,&scissor);
+        context->IASetInputLayout(layout);
+        context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        context->VSSetShader(vertex,nullptr,0);context->PSSetShader(pixel,nullptr,0);
+        context->VSSetConstantBuffers(2,1,&placement);
+        context->PSSetConstantBuffers(2,1,&placement);
+        context->PSSetConstantBuffers(0,1,&material);
+        context->PSSetConstantBuffers(1,1,&beauty);
+        context->PSSetShaderResources(1,1,&unshadowed_view);
+        context->PSSetSamplers(1,1,&samplers[3]);
+        auto environment=c3x_renderer::evaluate_environment(visual_hour,frame.season);
+        auto noon=c3x_renderer::evaluate_environment(12,0);
+        auto key_light=c3x_renderer::lighting::key_light(environment);
+        float beauty_values[20]={};float const ambient_source[]={.34f,.45f,.60f};
+        float const chromatic[]={1.f,4.5f/6.2f,3.5f/6.2f};
+        auto light=key_light.direction.data();auto light_color=key_light.color.data();
+        for(unsigned axis=0;axis<3;++axis){
+            beauty_values[axis]=light[axis];
+            beauty_values[4+axis]=chromatic[axis]*light_color[axis]/
+                std::max(.001f,noon.sun_color[axis]);
+            beauty_values[8+axis]=ambient_source[axis]*environment.ambient_color[axis]/
+                std::max(.001f,noon.ambient_color[axis]);
+        }
+        beauty_values[3]=2.05f*(environment.sun_intensity+environment.moon_intensity)/
+            (noon.sun_intensity+noon.moon_intensity);
+        beauty_values[7]=1;beauty_values[11]=.62f;
+        beauty_values[12]=.490290f;beauty_values[13]=-.735435f;
+        beauty_values[14]=.469979f;beauty_values[16]=1;
+        context->UpdateSubresource(beauty,0,nullptr,beauty_values,0,0);
+        for(auto const& instance:visible){
+            if(instance.unit>=bodies.units.size())return false;
+            auto const& unit=bodies.units[instance.unit];
+            if(instance.action>=unit.actions.size())return false;
+            auto const& action=unit.actions[instance.action];
+            auto draw=instance.draw;
+            int projection=draw.projection_scale_milli>0?draw.projection_scale_milli:(draw.reduced?500:1000);
+            c3x_renderer::NativeUnitDraw source_draw{};
+            source_draw.expected_sprite=source_draw.sprite=1;
+            source_draw.expected_canvas=source_draw.canvas=1;
+            source_draw.unit_id=draw.unit_id;source_draw.action=draw.action;
+            source_draw.direction=draw.direction;source_draw.action_cursor=draw.action_cursor;
+            source_draw.frame_count=draw.frame_count;source_draw.body_x=draw.body_x;
+            source_draw.body_y=draw.body_y;source_draw.sprite_width=draw.sprite_width;
+            source_draw.sprite_height=draw.sprite_height;source_draw.reduced=draw.reduced!=0;
+            source_draw.projection_scale_milli=projection;
+            c3x_renderer::UnitAnimationPose pose{};
+            if(!c3x_renderer::prepare_native_unit_pose(source_draw,action.loop,pose)||
+               !c3x_renderer::expand_unit_canvas(draw.body_x,draw.body_y,
+                    draw.sprite_width,draw.sprite_height,projection,unit.minimum_canvas))return false;
+            if(frame.world_wrap_x&&frame.world_width_tiles>0){
+                int span=frame.world_width_tiles*frame.tile_width/2;
+                if(span>0){
+                    while(draw.body_x>frame.target_width+512)draw.body_x-=span;
+                    while(draw.body_x+512<0)draw.body_x+=span;
+                }
+            }
+            if(draw.body_x>frame.target_width+512||draw.body_x+512<0||
+               draw.body_y>frame.target_height+512||draw.body_y+512<0)continue;
+            if(!renderer.prepare_unit_action(action))return false;
+            float ground_depth=float(instance.tile_y)*frame.tile_height*.5f+
+                renderer.geometry_viewport_settings.depth_translation+
+                frame.tile_height*.5f+4.f;
+            for(auto const& part:action.parts){
+                if(part.mesh>=bodies.meshes.size()||part.texture>=bodies.textures.size()||
+                   !bodies.textures[part.texture].view||!prepare_mesh(part.mesh))return false;
+                auto const& source=bodies.meshes[part.mesh].animation;
+                if(!source||!source->frames)return false;
+                auto& gpu=meshes[part.mesh];
+                unsigned frame_number=std::min(source->frames-1,
+                    unsigned(std::floor(pose.phase*double(source->frames-1)+1e-7)));
+                float angle=(unit.yaw_offset+float((draw.direction-1)%8)*45)*.01745329252f;
+                float scale=pose.projection_scale*scene_scale;
+                float guard=reflected?8.f:4.f;
+                float placement_values[20]={float(draw.body_x+guard)/pose.projection_scale,
+                    float(draw.body_y+guard)/pose.projection_scale,
+                    float(scene.width),float(scene.height),scale,ground_depth,0,0,
+                    float(frame_number),float(source->bones),std::cos(angle),std::sin(angle),
+                    unit.scale,unit.offset_z,0,0,
+                    reflected?2.f:0.f,0,0,part.cutout};
+                float values[32]={part.tint[0],part.tint[1],part.tint[2],part.mask};
+                for(unsigned axis=0;axis<3;++axis){
+                    float color=float((draw.display_color_rgb>>(16-axis*8))&255)/255;
+                    values[4+axis]=color<=.04045f?color/12.92f:
+                        std::pow((color+.055f)/1.055f,2.4f);
+                    values[8+axis]=environment.sun_direction[axis];
+                    values[12+axis]=environment.sun_color[axis];
+                    values[16+axis]=environment.moon_direction[axis];
+                    values[20+axis]=environment.moon_color[axis];
+                    values[24+axis]=environment.ambient_color[axis];
+                }
+                values[7]=part.strength;values[11]=environment.sun_intensity;
+                values[19]=environment.moon_intensity;values[27]=part.cutout;
+                ID3D11ShaderResourceView* extra[4]={};
+                for(unsigned channel=0;channel<4;++channel)
+                    if(part.material_textures[channel]!=UINT32_MAX){
+                        unsigned texture=part.material_textures[channel];
+                        if(texture>=bodies.textures.size()||!bodies.textures[texture].view)return false;
+                        extra[channel]=bodies.textures[texture].view;values[28+channel]=1;
+                    }
+                values[23]=part.material_model;
+                context->UpdateSubresource(material,0,nullptr,values,0,0);
+                ID3D11Buffer* static_vertices=gpu.vertices.Get();
+                UINT stride=sizeof(Vertex),offset=0;
+                context->IASetVertexBuffers(0,1,&static_vertices,&stride,&offset);
+                context->IASetIndexBuffer(gpu.indices.Get(),DXGI_FORMAT_R32_UINT,0);
+                ID3D11ShaderResourceView* palette=gpu.palette_view.Get();
+                context->VSSetShaderResources(0,1,&palette);
+                context->PSSetShaderResources(0,1,&bodies.textures[part.texture].view);
+                context->PSSetShaderResources(2,4,extra);
+                context->PSSetSamplers(0,1,&samplers[part.address]);
+                if(!reflected&&key_light.intensity>.001f){
+                    placement_values[16]=1;
+                    placement_values[17]=-key_light.direction[0]/key_light.direction[2]*
+                        c3x_renderer::lighting::object_height_to_world;
+                    placement_values[18]=key_light.direction[1]/key_light.direction[2]*
+                        c3x_renderer::lighting::object_height_to_world;
+                    context->UpdateSubresource(placement,0,nullptr,placement_values,0,0);
+                    context->OMSetDepthStencilState(renderer.natural.decal_depth,0);
+                    context->OMSetBlendState(renderer.blend_state,nullptr,0xffffffffu);
+                    context->PSSetShader(shadow_pixel,nullptr,0);
+                    context->DrawIndexed(UINT(source->indices.size()),0,0);
+                    placement_values[16]=0;
+                    context->OMSetDepthStencilState(renderer.depth_state,0);
+                    context->OMSetBlendState(nullptr,nullptr,0xffffffffu);
+                    context->PSSetShader(pixel,nullptr,0);
+                }
+                context->UpdateSubresource(placement,0,nullptr,placement_values,0,0);
+                context->DrawIndexed(UINT(source->indices.size()),0,0);
+                ++draws;
+            }
+        }
+        ID3D11ShaderResourceView* empty[6]={};context->PSSetShaderResources(0,6,empty);
+        context->VSSetShaderResources(0,1,empty);
+        context->OMSetRenderTargets(0,nullptr,nullptr);
+        return true;
+    }
+#endif
 };
 
 SandboxDirectUnits sandbox_direct_units;

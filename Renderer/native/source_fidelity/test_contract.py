@@ -4,6 +4,43 @@ import hashlib,json,subprocess,tempfile,unittest
 from .prepare import ROOT,HERE,LAB,function,terrain_boundaries
 from Renderer.lab.test_natural import NaturalInputs
 class Contract(unittest.TestCase):
+    def test_native_hill_vegetation_uses_diagonal_terrain(self):
+        source = r'''
+#include <array>
+#include <cassert>
+#include <vector>
+#include "hill_vegetation.h"
+int main() {
+    auto sheet=[](int center,std::array<int,4> neighbors,unsigned seed=0u) {
+        return c3x_renderer::native_hill_vegetation(center,[&](int dx,int dy) {
+            return neighbors[(dy>0?2:0)+(dx>0?1:0)];
+        },seed);
+    };
+    assert(sheet(5,{7,7,5,5})==7);
+    assert(sheet(5,{8,8,5,5})==8);
+    assert(sheet(5,{7,7,7,7})==7);
+    assert(sheet(5,{8,8,8,8})==8);
+    assert(sheet(5,{7,7,2,5})==0);
+    assert(sheet(5,{5,6,5,10})==0);
+    assert(sheet(7,{7,7,7,7})==0);
+    assert(sheet(5,{7,8,5,5},0)==8);
+    assert(sheet(5,{7,8,5,5},1)==7);
+    struct Vertex {float position[3];};
+    struct Asset {std::vector<Vertex> vertices;};
+    Asset tree{{{{-.1f,0,0}},{{.1f,0,0}},{{0,0,2}}}};
+    auto slope=[](float x,float){return 2.5f+20*x;};
+    float ground=c3x_renderer::native_hill_plant_ground(tree,.5f,.5f,1,0,1,150,slope);
+    assert(ground>=slope(.6f,.5f)-2.5f);
+    assert(ground<13.f);
+}
+'''
+        with tempfile.TemporaryDirectory() as directory:
+            cpp=Path(directory)/'hill.cpp';binary=Path(directory)/'hill'
+            cpp.write_text(source)
+            subprocess.run(['c++','-std=c++17','-I',str(HERE.parent),str(cpp),'-o',str(binary)],
+                           check=True,capture_output=True,text=True)
+            subprocess.run([str(binary)],check=True,capture_output=True,text=True)
+
     def test_coastal_feature_uses_current_shared_material(self):
         shared=(LAB/'shaders/relief/coast_rocks.hlsl').read_text()
         runtime=(HERE.parent/'environment_refresh/feature.hlsl').read_text()

@@ -2,6 +2,7 @@
 #include <cassert>
 #include <cstring>
 #include <iostream>
+#include <set>
 using namespace c3x_renderer::fidelity;
 
 struct Shore {float distance,beach_width;};
@@ -28,15 +29,33 @@ int main() {
                 [&](){return stop && ++calls==stop;},out);
         };
         std::vector<MapVertex>a,b;assert(emit(a)&&emit(b));
-        std::size_t expected=30;
-        assert(a.size()==expected&&b.size()==expected&&!std::memcmp(a.data(),b.data(),a.size()*sizeof(MapVertex)));
+        assert(a.size()>=72&&a.size()<=132&&a.size()%6==0&&b.size()==a.size()&&
+               !std::memcmp(a.data(),b.data(),a.size()*sizeof(MapVertex)));
         for(auto const&v:a) {
             assert(v.material_plains==5+float(biome));assert(v.material_desert==1);
             assert(v.u>=.1f&&v.u<=.9f&&v.v>=.2f&&v.v<=.8f);assert(v.base_terrain==-9);
             assert(std::isfinite(v.world_x)&&std::isfinite(v.world_y)&&std::isfinite(v.world_z));
+            assert(std::abs(v.world_z-(2.5f+v.world_x*.07f+v.world_y*.11f+.18f)/112.f)<.00001f);
+            assert(v.normal_z>.99f&&v.normal_x<0&&v.normal_y<0);
         }
         std::vector<MapVertex>cancelled;assert(!emit(cancelled,2));assert(cancelled.empty());
         verified+=unsigned(a.size());
+    }
+    {
+        std::set<std::size_t> counts;
+        bool crosses_tile_edge=false;
+        for(int coordinate=0;coordinate<24;coordinate++) {
+            Tile owner{coordinate,7,3,-4,2};
+            GroundProjection projection{3,-4,64,32,128.f/224*.82f,480};
+            auto weights=[](float,float){return std::array<float,5>{1,0,0,0,0};};
+            std::vector<MapVertex>out;
+            assert(emit_surface_decals(natural,owner,projection,height,shore,weights,
+                                       []{return false;},out));
+            counts.insert(out.size());
+            for(auto const&v:out)
+                crosses_tile_edge|=v.world_x<3||v.world_x>4||v.world_y< -4||v.world_y> -3;
+        }
+        assert(counts.size()>=4&&crosses_tile_edge);
     }
     {
         unsigned emitted=0,empty=0;
@@ -48,7 +67,13 @@ int main() {
             auto run=[&](std::vector<MapVertex>&out){return emit_surface_decals(natural,owner,projection,height,shore,weights,[]{return false;},out);};
             assert(run(a)&&run(b)&&a.size()==b.size());
             assert(a.empty()||a.size()==18);
-            if(a.empty())empty++;else {emitted++;verified+=unsigned(a.size());}
+            if(a.empty())empty++;else {
+                for(auto const&v:a) {
+                    assert(std::abs(v.world_z-2.68f/112.f)<.00001f);
+                    assert(v.normal_x==0&&v.normal_y==0&&v.normal_z==1);
+                }
+                emitted++;verified+=unsigned(a.size());
+            }
         }
         assert(emitted>0&&empty>0);
     }

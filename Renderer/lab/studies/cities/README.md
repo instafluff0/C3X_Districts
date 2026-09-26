@@ -7,15 +7,17 @@ era rows and three population columns (Town 1–6, City 7–12, Metropolis 13+).
 Each population cell contains a labeled 2×2 comparison: base, walls, capital,
 and walls + capital. Focused one-era sheets instead show population rows and
 the four variants as columns at a larger size. All cells assume flat grassland.
-Towns, including their wall ring, stay within one tile. Cities and metropolises
-may extend beyond it. The magenta ground is a PCX-style review aid, not a
+Town buildings stay within one tile. This Lab candidate lets their outer wall
+overhang by up to .05 tile unit so it clears the building plots. Cities and
+metropolises may extend farther. The magenta ground is a PCX-style review aid, not a
 terrain asset.
 
 `layouts.json` freezes 20 culture/era recipes, each with three population
 compositions. Ancient towns/cities/metropolises have 4/6/8 houses; medieval
 3/5/7; industrial 2/4/6; modern 2/3/5. Later eras use taller source bodies,
 while ancient settlements gain density through more smaller buildings. Houses
-can move slightly as the settlement grows. Each base city has a civic
+can move slightly as the settlement grows, but a given house or palace keeps
+the same scale across population tiers within its era. Each base city has a civic
 centerpiece; a capital uses the palace on that plot so the building stays
 legible. Buildings and palaces share the same tile-edge facing direction.
 Walls form a complete rounded ring with 16/20/24 joined segments by population
@@ -69,14 +71,29 @@ PYTHONPATH=. python3 -m unittest Renderer.lab.studies.cities.test_designs
 PYTHONPATH=. python3 Renderer/lab/studies/cities/sheet.py
 PYTHONPATH=. python3 Renderer/lab/studies/cities/sheet.py --culture asian --era ancient
 PYTHONPATH=. python3 Renderer/lab/studies/cities/build_wall_bundle.py
+PYTHONPATH=. python3 Renderer/lab/studies/cities/build_source_frames.py
 ```
 
 The sheet renderer needs Pillow. The Codex desktop bundled Python supplies it
 when the default Python does not. Output is disposable under
 `Renderer/lab/out/cities/design-sheets/`; `layouts.json` is the editable proposal.
-The D3D map comparison compiles only an isolated candidate pack. The complete
-AncientWood input and its verified source frames can be regenerated from the
+The D3D map comparison compiles only an isolated candidate pack. The broad
+five-culture source frames and the layout pack can be regenerated from the
 locally installed source package:
+
+```sh
+PYTHONPATH=. python3 Renderer/native/city_fidelity/prepare_pack.py \
+  --output Renderer/lab/out/cities/test-biq/all-designs-pack \
+  --lab-layouts Renderer/lab/studies/cities/layouts.json \
+  --lab-frames Renderer/lab/out/cities/source-frames/all-city-source-frames.json
+PYTHONPATH=. python3 Renderer/lab/studies/cities/test_biq_gallery.py --kind flat
+PYTHONPATH=. python3 Renderer/lab/studies/cities/test_biq_gallery.py --kind hill
+```
+
+The gallery script requires an isolated `city-preview` DLL and a test.biq
+terrain capture. It verifies the selected `lab-fixed-*` composition in the
+renderer trace for each image. The complete AncientWood input can be
+regenerated separately for the focused Asian reference comparison:
 
 ```sh
 PYTHONPATH=. python3 Renderer/tools/asset_compiler/city_asset_importer.py \
@@ -101,15 +118,19 @@ changed by these commands.
 ## Site adaptation after design acceptance
 
 The flat layout is the canonical visual design. At a real site, capture the
-authoritative tile and neighboring terrain/river/shore information. Sample the
-ground under each source footprint, place each body's base on that ground, and
-move a body only within a bounded local search if its authored footprint
-collides with water, steep relief, another building or the wall. Keep its
-uniform scale, orientation family, source mesh and material channels. Preserve
-the growth prefix and cohesive street/court arrangement when moving a body.
-Fit the rounded wall to the accepted footprint and keep the gate accessible.
-If a complete legal composition cannot be found, retain the previous native
-city/wall appearance; do not float, squash or silently omit buildings.
+authoritative tile and neighboring terrain/river/shore information. The current
+Lab hill candidate samples a 9×9 grid beneath each rigid building footprint,
+sets its base above the highest sampled ground, and fills the downhill gap with
+a level-topped masonry retaining face. Its lower edge follows the sampled hill
+shape. The masonry material and UV patch come from the normalized medieval
+wall kit and repeat at a uniform 2× module size; the city source mesh, roof,
+scale and facade channels remain intact. Separate wall pieces sit beyond the
+building foundations and step over the hill contour without retaining masonry
+underneath. These are experimental
+site adaptations and require visual review on several hill shapes. A complete
+legal composition still falls back to the native city if shore, river or steep
+relief makes the immutable design impossible. A future local placement search
+can adjust a building without changing its scale or facing direction.
 
 Compile each candidate into an isolated Lab pack and render it with the current
 D3D11 path against `test.biq` before asking for visual acceptance. Include

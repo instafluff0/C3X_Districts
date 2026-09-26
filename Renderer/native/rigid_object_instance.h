@@ -31,6 +31,9 @@ PreparedRigid prepare_rigid(Instance const& source,Projection const& input,Asset
     float u=float(input.tile.tile_x+input.tile.tile_y)*.5f,v=float(input.tile.tile_x-input.tile.tile_y)*.5f;
     float ground=relief(u+source.u,v+1-source.v)[0];
     if(source.family==site_family)ground=height(u+source.u,v+1-source.v)-2.5f;
+    if(source.family==wall_family && input.tile.real_terrain_type==5)
+        ground=hill_wall_ground(asset,input.tile,source.u,source.v,
+            source.rotation,source.scale,height);
     float values[]={u,v,source.u,source.v,std::cos(source.rotation),std::sin(source.rotation),source.scale,ground};
     std::copy(values,values+8,result.instance.place);
     result.material=float(asset.texture_index)+source.material+source.owner;

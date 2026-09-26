@@ -1,7 +1,6 @@
 // Shared statement body: deterministic source-decal composition on the joined
 // production ground. The normalized pack supplies biome-neutral placement
 // records; the renderer owns only stable selection and C3X world placement.
-    (void)height_natural;
     if(owner.real>=0 && owner.real<=2) {
         unsigned biome=unsigned(2-owner.real); // grass, plains, desert
         unsigned total=0;
@@ -11,11 +10,12 @@
             std::uint32_t state=std::uint32_t(owner.source_x*0x193u)^
                 std::uint32_t(owner.source_y*0x217u)^0x51f3a9u;
             // Exact source triangles make the land families readable without
-            // stamping a rectangular copy of the complete atlas. Desert dunes
-            // remain regional; grass and plains carry a denser source-clutter
-            // layer like their substantially larger authored count sets.
+            // stamping a rectangular copy of the complete atlas. Keep the
+            // authored recipe weights, but vary the visible patch count by the
+            // source tile coordinates as well as position, rotation and scale.
+            // Desert dunes retain their sparse regional distribution.
             bool sparse_desert=biome==2 && (random_u32(state)&1u)!=0;
-            unsigned density=sparse_desert?0u:(biome==2?3u:5u);
+            unsigned density=sparse_desert?0u:(biome==2?3u:0u); // Diagnostic: no grass/plains decals.
             auto owner_shore=shore_sample_at(float(nc)+.5f,float(nr)+.5f);
             float owner_coverage=biome==2
                 ? desert_coast_coverage(float(owner_shore.distance))
@@ -28,11 +28,26 @@
                     selected-=candidate.weight;
                 }
                 if(!recipe)return false;
-                float center_x=float(nc)+.08f+.84f*random01(state);
-                float center_y=float(nr)+.08f+.84f*random01(state);
+                // Fine grass/plains patches may straddle owner boundaries.
+                // The former inset left a systematic empty strip once their
+                // scale was reduced. Desert keeps its established placement.
+                float center_x=float(nc)+(biome==2?.08f+.84f*random01(state):random01(state));
+                float center_y=float(nr)+(biome==2?.08f+.84f*random01(state):random01(state));
                 float angle=random01(state)*6.283185307f;
-                float scale=recipe->scale*.32f*(1+recipe->variation*(random01(state)*2-1));
+                // Grass and plains need fine grain. Preserve the established
+                // desert dune footprint at biome boundaries.
+                float scale=recipe->scale*(biome==2?.32f:.18f)*
+                    (1+recipe->variation*(random01(state)*2-1));
                 float co=std::cos(angle),si=std::sin(angle);
+                float patch_normal[]={0,0,1};
+                if(biome!=2) {
+                    constexpr float normal_step=.006f;
+                    patch_normal[0]=-(height_natural(center_x+normal_step,center_y,nullptr)-
+                        height_natural(center_x-normal_step,center_y,nullptr))/(2*normal_step*128);
+                    patch_normal[1]=-(height_natural(center_x,center_y+normal_step,nullptr)-
+                        height_natural(center_x,center_y-normal_step,nullptr))/(2*normal_step*128);
+                    normalize3(patch_normal);
+                }
                 for(unsigned triangle_index=0;triangle_index<recipe->vertex_count;triangle_index+=3) {
                     if(cancelled())return false;
                     std::array<Vertex,3> projected;
@@ -41,8 +56,11 @@
                         float du=source.x*scale,dv=source.y*scale;
                         float world_x=center_x+co*du-si*dv;
                         float world_y=center_y+si*du+co*dv;
-                        auto out=project_natural(world_x,world_y,2.68f);
-                        out.normal_x=out.normal_y=0;out.normal_z=1;
+                        auto out=project_natural(world_x,world_y,biome==2?2.68f:
+                            height_natural(world_x,world_y,nullptr)+.18f);
+                        out.normal_x=patch_normal[0];
+                        out.normal_y=patch_normal[1];
+                        out.normal_z=patch_normal[2];
                         out.u=source.u;out.v=source.v;
                         auto weights=material_weights_for(world_x,world_y);
                         float source_weight=std::clamp(1-weights[3],0.f,1.f);

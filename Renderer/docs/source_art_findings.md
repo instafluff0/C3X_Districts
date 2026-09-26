@@ -51,6 +51,12 @@ coverage, LEAN evaluation, ambient SH and temporal filtering remain inferred.
 Use actual opacity-tested source triangles for both visible bodies and casters.
 All participating providers must agree on canonical coordinates and the same
 face/cast light direction, including offscreen and wrap contributors.
+All 22 selected normal-forest bodies carry base color, paired LEAN and gloss
+textures; 15 leafy bodies carry opacity masks. Their DDS payloads preserve source
+resolution and mip chains. The tree material flag previously left the paired
+LEAN textures unlit despite binding them, which made the canopy look flatter.
+The enabled slope response remains a C3X approximation, not recovered Firaxis
+LEAN shading.
 
 ## Units and cities
 

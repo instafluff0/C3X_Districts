@@ -395,24 +395,35 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
     char road_study_option[8]={};
     if(GetEnvironmentVariableA("C3X_LAB_ROAD_STUDY",road_study_option,sizeof(road_study_option))){
         int era=std::clamp(std::atoi(road_study_option),0,3);
-        char road_layout[16]={};
+        char road_layout[24]={};
         bool isolated=GetEnvironmentVariableA("C3X_LAB_ROAD_LAYOUT",road_layout,sizeof(road_layout)) &&
             std::strcmp(road_layout,"isolated")==0;
+        bool isolated_plains=std::strcmp(road_layout,"isolated-plains")==0;
+        bool isolated_mountain=std::strcmp(road_layout,"isolated-mountain")==0;
+        bool orthogonal=std::strcmp(road_layout,"orthogonal")==0;
         for(auto& tile:tiles){
             if(tile.real_terrain_type<0 || tile.real_terrain_type>10)continue;
             int x=((tile.tile_x%map_width)+map_width)%map_width;
             int c=(x+tile.tile_y)/2,r=(x-tile.tile_y)/2;
             unsigned seed=preview_seed(x,tile.tile_y);
             bool arterial=(c%7==0 || (r+70)%7==0);
-            bool dense=(c>=55 && c<=66 && r>=-4 && r<=9 && seed%11u!=0);
+            bool dense=(c>=55 && c<=66 && r>=-4 && r<=9) ||
+                (c>=47 && c<=56 && r>=20 && r<=30);
             bool branch=(seed%29u==0 && (c%7==1 || (r+70)%7==1));
-            bool road=isolated ? x==21 && tile.tile_y==85 : arterial || dense || branch;
+            bool road=isolated ? x==21 && tile.tile_y==85 :
+                isolated_plains ? x==77 && tile.tile_y==25 :
+                isolated_mountain ? x==77 && tile.tile_y==23 :
+                orthogonal ? ((x==80 && (tile.tile_y==24 || tile.tile_y==26 || tile.tile_y==28)) ||
+                              (tile.tile_y==26 && (x==78 || x==82))) :
+                arterial || dense || branch;
             if(road){tile.road_mask=1;tile.route_style=era;}
         }
     }
     if(objects && !fixed_world_scene) {
+        char city_only_setting[8]={};
+        bool city_only=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_CITY_ONLY",city_only_setting,sizeof(city_only_setting)) && city_only_setting[0]=='1';
         std::vector<std::size_t> candidates;
-        for(std::size_t i=0;i<tiles.size();++i)if(tiles[i].real_terrain_type<=4 &&
+        for(std::size_t i=0;i<tiles.size();++i)if(tiles[i].real_terrain_type<=(city_only?5:4) &&
             (tiles[i].tile_flags&C3X_RENDERER_TILE_RENDER))candidates.push_back(i);
         std::sort(candidates.begin(),candidates.end(),[&](auto a,auto b){
             auto distance=[&](auto i){auto const& t=tiles[i];return std::abs(t.anchor_x-target_width/2)+std::abs(t.anchor_y-target_height/2);};
@@ -420,6 +431,13 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
         });
         char fixed_city_case[80]={};
         if(GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_CITY",fixed_city_case,sizeof(fixed_city_case))){
+            char fixed_site[80]={};
+            if(GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_CITY_SITE",fixed_site,sizeof(fixed_site))){
+                int site_x=-1,site_y=-1;
+                if(sscanf_s(fixed_site,"%d,%d",&site_x,&site_y)==2 &&
+                   site_x>=0 && site_x<map_width && site_y>=0 && site_y<map_height)
+                    city_object_sites.push_back({site_x,site_y});
+            }
             if(city_object_sites.empty() && candidates.size()>=6)
                 for(unsigned object=0;object<6;object++){auto const&t=tiles[candidates[object]];
                     city_object_sites.push_back({((t.tile_x%map_width)+map_width)%map_width,t.tile_y});}
@@ -435,8 +453,6 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
                 }
             }
         }
-        char city_only_setting[8]={};
-        bool city_only=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_CITY_ONLY",city_only_setting,sizeof(city_only_setting)) && city_only_setting[0]=='1';
         if(candidates.size()>=(city_only?1u:6u)){
             auto& city=tiles[candidates[0]];city.city_id=1;city.city_owner_id=1;city.city_size=2;
             city.city_culture_group=0;city.city_era=2;city.city_flags=C3X_RENDERER_CITY_CAPITAL|C3X_RENDERER_CITY_WALLED;

@@ -166,6 +166,115 @@ if(ok && !std::strcmp(gpu_frame_test,"1")) {
             std::printf("GPU_FRAME_FRESH_WITNESS width=%d height=%d built=%u reused=%u map_readbacks=%u\n",
                 view.width,view.height,meta.geometry_tiles_built,
                 meta.geometry_tiles_reused,view.map_readbacks);
+            auto spawn_unit=reinterpret_cast<c3x_renderer_unit_spawn_fn>(GetProcAddress(module,"c3x_renderer_unit_spawn"));
+            auto state_unit=reinterpret_cast<c3x_renderer_unit_state_fn>(GetProcAddress(module,"c3x_renderer_unit_state"));
+            auto capture_unit=reinterpret_cast<c3x_renderer_gpu_unit_fn>(GetProcAddress(module,"c3x_renderer_gpu_unit"));
+            auto land=std::min_element(test_tiles.begin(),test_tiles.end(),[&](auto const& a,auto const& b){
+                auto distance=[&](auto const& t){return (t.tile_flags&C3X_RENDERER_TILE_RENDER)&&
+                    (t.tile_flags&C3X_RENDERER_TILE_VISIBLE)&&t.real_terrain_type<=4&&t.city_id<0&&
+                    t.tile_x>=0&&t.tile_x+2<test_frame.world_width_tiles&&t.tile_y>=0&&
+                    t.anchor_y>test_frame.target_height/2?
+                    std::abs(t.anchor_x-test_frame.target_width/2)+std::abs(t.anchor_y-test_frame.target_height*3/4):INT_MAX;};
+                return distance(a)<distance(b);
+            });
+            if(!verify_gpu(spawn_unit&&state_unit&&capture_unit&&land!=test_tiles.end()&&
+                land->real_terrain_type<=4,"fresh unit fixture"))break;
+            c3x_renderer_unit_spawn_v1 birth={sizeof(birth)};
+            birth.unit_id=28173;birth.tile_x=land->tile_x;birth.tile_y=land->tile_y;
+            birth.unit_type_id=1;birth.owner_id=0;birth.visible=1;
+            birth.map_epoch=request.identity.map_epoch;birth.viewer_epoch=request.identity.viewer_epoch;
+            birth.presentation_frequency=test_frame.presentation_frequency;
+            birth.presentation_time_ticks=test_frame.presentation_time_ticks-3;
+            c3x_renderer_unit_state_v1 unit_state={sizeof(unit_state)};
+            unit_state.kind=C3X_RENDERER_UNIT_STATE_OBSERVE;unit_state.unit_id=birth.unit_id;
+            unit_state.tile_x=birth.tile_x;unit_state.tile_y=birth.tile_y;
+            unit_state.unit_type_id=birth.unit_type_id;unit_state.owner_id=birth.owner_id;
+            unit_state.action=1;unit_state.max_hp=3;unit_state.visible=1;
+            unit_state.map_epoch=birth.map_epoch;unit_state.viewer_epoch=birth.viewer_epoch;
+            unit_state.presentation_frequency=birth.presentation_frequency;
+            unit_state.presentation_time_ticks=birth.presentation_time_ticks+1;
+            c3x_renderer_unit_v1 body={};body.struct_size=sizeof(body);
+            strcpy_s(body.unit_key,"PRTO_Warrior");body.unit_id=birth.unit_id;
+            body.action=1;body.direction=3;body.frame_count=16;
+            body.sprite_width=body.sprite_height=191;
+            body.projection_scale_milli=test_frame.tile_width*1000/128;
+            body.body_x=land->anchor_x+test_frame.tile_width/2-191*body.projection_scale_milli/2000;
+            body.body_y=land->anchor_y+test_frame.tile_height/2-191*body.projection_scale_milli/2000;
+            body.presentation_frequency=birth.presentation_frequency;
+            body.presentation_time_ticks=birth.presentation_time_ticks+2;
+            body.hour=test_frame.hour;body.season=test_frame.season;
+            body.display_color_rgb=0x205bdd;
+            c3x_renderer_gpu_unit_v1 unit_target={sizeof(unit_target)};
+            unit_target.ticket=view.ticket;unit_target.destination=view.map_image;
+            unit_target.background=view.map_image;
+            unit_target.clip[2]=test_frame.target_width;unit_target.clip[3]=test_frame.target_height;
+            unit_target.playback_flags=C3X_RENDERER_UNIT_STATE_CAPTURED;
+            int body_bounds[4]={};auto before_unit=actual;
+            if(!verify_gpu(spawn_unit(&birth)==C3X_RENDERER_RESULT_OK&&
+                state_unit(&unit_state)==C3X_RENDERER_RESULT_OK&&
+                capture_unit(&body,&unit_target,body_bounds)==C3X_RENDERER_RESULT_OK,
+                "fresh captured unit accepted"))break;
+            auto unit_request=request;++unit_request.identity.scene_epoch;
+            c3x_renderer_output_v1 unit_meta={C3X_RENDERER_API_VERSION,sizeof(unit_meta)};
+            if(!verify_gpu(gpu_render(&unit_request,&view,&unit_meta)==C3X_RENDERER_RESULT_OK&&
+                !view.map_readbacks&&unit_meta.raster_draw_pixels==0,
+                "fresh unit map rendered without raster work")||
+               !verify_gpu(read(view.map_image)==C3X_RENDERER_RESULT_OK,
+                "fresh unit image witness"))break;
+            std::size_t unit_pixels=0;
+            for(std::size_t i=0;i<actual.size();++i)unit_pixels+=actual[i]!=before_unit[i];
+            std::printf("GPU_FRAME_FRESH_UNIT changed_pixels=%zu map_readbacks=%u raster_pixels=%u\n",
+                unit_pixels,view.map_readbacks,unit_meta.raster_draw_pixels);
+            if(!verify_gpu(unit_pixels>0,"fresh unit visible in map scene"))break;
+            witness=unit_meta;witness.bgra_pixels=actual.data();
+            if(!verify_gpu(write_bmp((std::string(argv[5])+".unit.bmp").c_str(),witness),
+                "fresh unit screenshot"))break;
+            auto unit_move=reinterpret_cast<c3x_renderer_unit_move_fn>(GetProcAddress(module,"c3x_renderer_unit_move"));
+            auto observe_unit=reinterpret_cast<c3x_renderer_unit_visual_fn>(GetProcAddress(module,"c3x_renderer_unit_visual"));
+            auto destination_tile=std::find_if(test_tiles.begin(),test_tiles.end(),[&](auto const& tile){
+                return tile.tile_x==birth.tile_x+2&&tile.tile_y==birth.tile_y&&
+                    (tile.tile_flags&C3X_RENDERER_TILE_VISIBLE);});
+            if(!verify_gpu(unit_move&&observe_unit&&destination_tile!=test_tiles.end(),
+                "one-tile move destination visible"))break;
+            c3x_renderer_unit_move_v1 movement={sizeof(movement)};
+            movement.unit_id=birth.unit_id;movement.old_x=birth.tile_x;movement.old_y=birth.tile_y;
+            movement.new_x=destination_tile->tile_x;movement.new_y=destination_tile->tile_y;
+            movement.action=2;movement.source_visible=movement.target_visible=1;
+            movement.map_epoch=birth.map_epoch;movement.viewer_epoch=birth.viewer_epoch;
+            movement.presentation_frequency=birth.presentation_frequency;
+            movement.presentation_time_ticks=body.presentation_time_ticks+1;
+            unit_state.tile_x=movement.new_x;unit_state.tile_y=movement.new_y;
+            unit_state.action=2;unit_state.presentation_time_ticks=movement.presentation_time_ticks+1;
+            body.action=2;body.action_cursor=4;body.body_x+=test_frame.tile_width/2;
+            body.presentation_time_ticks=unit_state.presentation_time_ticks+1;
+            c3x_renderer_unit_visual_v1 motion={sizeof(motion)};
+            motion.unit_id=body.unit_id;motion.action=body.action;
+            motion.pixel_x=body.body_x;motion.pixel_y=body.body_y;
+            motion.target_x=body.body_x+test_frame.tile_width/2;motion.target_y=body.body_y;
+            motion.body_x=body.body_x;motion.body_y=body.body_y;
+            motion.projection_scale_milli=body.projection_scale_milli;
+            motion.max_hp=3;motion.flags=C3X_RENDERER_UNIT_STATE_CAPTURED;
+            motion.presentation_frequency=body.presentation_frequency;
+            motion.presentation_time_ticks=body.presentation_time_ticks;
+            if(!verify_gpu(unit_move(&movement)==C3X_RENDERER_RESULT_OK&&
+                state_unit(&unit_state)==C3X_RENDERER_RESULT_OK&&
+                observe_unit(&motion)==C3X_RENDERER_RESULT_OK&&
+                capture_unit(&body,&unit_target,body_bounds)==C3X_RENDERER_RESULT_OK,
+                "ordered native one-tile move captured"))break;
+            auto moving_frame=test_frame;moving_frame.presentation_time_ticks+=100000;
+            auto moving_request=unit_request;moving_request.frame=&moving_frame;
+            ++moving_request.identity.scene_epoch;
+            c3x_renderer_output_v1 moving_meta={C3X_RENDERER_API_VERSION,sizeof(moving_meta)};
+            if(!verify_gpu(gpu_render(&moving_request,&view,&moving_meta)==C3X_RENDERER_RESULT_OK&&
+                !view.map_readbacks&&moving_meta.raster_draw_pixels==0&&
+                read(view.map_image)==C3X_RENDERER_RESULT_OK,
+                "moving native unit in fresh map"))break;
+            witness=moving_meta;witness.bgra_pixels=actual.data();
+            if(!verify_gpu(write_bmp((std::string(argv[5])+".moving.bmp").c_str(),witness),
+                "moving unit screenshot"))break;
+            std::printf("GPU_FRAME_FRESH_MOVE id=%d source=%d,%d target=%d,%d map_readbacks=%u raster_pixels=%u\n",
+                body.unit_id,movement.old_x,movement.old_y,movement.new_x,movement.new_y,
+                view.map_readbacks,moving_meta.raster_draw_pixels);
             auto shifted_tiles=test_tiles;
             for(auto& tile:shifted_tiles){tile.anchor_x+=96;tile.anchor_y+=48;}
             auto shifted=test_frame;shifted.tiles=shifted_tiles.data();
@@ -206,6 +315,36 @@ if(ok && !std::strcmp(gpu_frame_test,"1")) {
             std::printf("GPU_FRAME_FRESH_EDIT built=%u reused=%u invalidations=%u map_readbacks=%u\n",
                 local_meta.geometry_tiles_built,local_meta.geometry_tiles_reused,
                 local_meta.frame_invalidation_flags,view.map_readbacks);
+            int home_x=center_x,home_y=center_y,home_width=tile_width,home_height=tile_height;
+            for(int step=0;step<4 && ok;++step){
+                center_x=step==0?home_x+18:step==1?home_x+18:step==2?home_x+map_width:home_x;
+                center_y=step<2?home_y+8:home_y;
+                tile_width=step==1?160:home_width;tile_height=tile_width/2;
+                auto navigation_tiles=capture_view();
+                auto navigation=test_frame;navigation.tiles=navigation_tiles.data();
+                navigation.tile_count=unsigned(navigation_tiles.size());
+                navigation.tile_width=tile_width;navigation.tile_height=tile_height;
+                navigation.presentation_time_ticks+=c3x_renderer_i64(step+1)*200000;
+                auto navigation_request=request;navigation_request.frame=&navigation;
+                navigation_request.identity.scene_epoch+=10+step;
+                c3x_renderer_output_v1 navigation_meta={C3X_RENDERER_API_VERSION,sizeof(navigation_meta)};
+                if(!verify_gpu(gpu_render(&navigation_request,&view,&navigation_meta)==C3X_RENDERER_RESULT_OK&&
+                    !view.map_readbacks&&navigation_meta.raster_draw_pixels==0,
+                    "fresh jump zoom wrap return"))break;
+                std::printf("GPU_FRAME_FRESH_NAV step=%d center=%d,%d zoom=%d built=%u reused=%u map_readbacks=%u raster_pixels=%u\n",
+                    step,center_x,center_y,tile_width,navigation_meta.geometry_tiles_built,
+                    navigation_meta.geometry_tiles_reused,view.map_readbacks,navigation_meta.raster_draw_pixels);
+                if(step==1||step==3){
+                    if(!verify_gpu(read(view.map_image)==C3X_RENDERER_RESULT_OK,
+                        "fresh navigation screenshot"))break;
+                    witness=navigation_meta;witness.bgra_pixels=actual.data();
+                    auto name=std::string(argv[5])+(step==1?".zoom.bmp":".return.bmp");
+                    if(!verify_gpu(write_bmp(name.c_str(),witness),
+                        "fresh navigation image"))break;
+                }
+            }
+            center_x=home_x;center_y=home_y;tile_width=home_width;tile_height=home_height;
+            if(!ok)break;
             gpu_reset();
             c3x_renderer_output_v1 reset_meta={C3X_RENDERER_API_VERSION,sizeof(reset_meta)};
             if(!verify_gpu(gpu_render(&request,&view,&reset_meta)==C3X_RENDERER_RESULT_OK,

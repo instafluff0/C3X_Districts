@@ -21,7 +21,7 @@ def build_pack(output=OUT, lab_layouts=None, lab_focus=None, lab_frames=None):
     output=Path(output).resolve()
     output.relative_to(ROOT/'Renderer')
     for source in (INPUT.parent,ROOT/city.PACK,ROOT/'Renderer/packs/CityStudyAuxiliaryUV',
-                   ROOT/'Renderer/packs/CityPalacesNormalized'):
+                   ROOT/'Renderer/packs/CityPalacesNormalized',ROOT/'Renderer/packs/CityAdjunctsNormalized'):
         source=source.resolve()
         if output==source or output in source.parents or source in output.parents:
             raise ValueError('City output must not overlap preserved source inputs')
@@ -121,12 +121,38 @@ def _build(OUT, lab_layouts=None, lab_focus=None, lab_frames=None):
     # Use the actual selected placements first. The coastal capital retains its
     # preceding legal composition instead of inventing a central placement.
     light_cache={}
+    foundation_source=None
+    def foundation():
+        nonlocal foundation_source
+        if foundation_source is None:
+            asset='city/walls/medieval/segment_01'
+            wall=body(asset,Path('Renderer/packs/CityAdjunctsNormalized'))
+            # The masonry side of this normalized wall supplies a proven
+            # textured patch for Lab retaining faces. No source format reaches
+            # the runtime; its generic pack stores only a material and UV box.
+            mesh,mat=wall['parts'][0]
+            side=[v for v in mesh['vertices'] if v['normal'][0]>.9 and
+                  -.014<=v['position'][2]<=.03 and
+                  .65<=v['uv0'][0]<=.70 and .55<=v['uv0'][1]<=.72]
+            if len(side)<4:raise ValueError('foundation masonry UV patch missing')
+            uv=[min(v['uv0'][0] for v in side),min(v['uv0'][1] for v in side),
+                max(v['uv0'][0] for v in side),max(v['uv0'][1] for v in side)]
+            positions=sorted({round(v['position'][1],6) for v in side})
+            module_width=min(b-a for a,b in zip(positions,positions[1:]) if b-a>.005)
+            module_height=max(v['position'][2] for v in side)-min(v['position'][2] for v in side)
+            # Use a uniform 2x masonry module on the retaining faces. This
+            # keeps the source aspect ratio while avoiding a tiny tiled grid.
+            step=[module_width*2.3*2,module_height*2.3*2/.648266978876*112]
+            foundation_source={'material':material(mat,asset),'uv':uv,'step':step}
+        return foundation_source
     def template(pool,size,instances,capital=False,authority=None,environment=False,clearance=None,
                  source_z_factor=1.0):
         culture,era=pool.removeprefix('city/pool/').split('/')
         if culture not in styles:raise ValueError('unknown normalized culture '+culture)
         out={'culture':styles.index(culture),'era':eras.index(era),'size':size,'capital':capital,'environment':environment,'authority':authority,
             'clearance':clearance or [.05,2.5,.12,12.4],'instances':[]}
+        if authority and authority.startswith('lab-fixed-'):
+            out['foundation']=foundation()
         for inst in instances:
             asset=inst['asset'];pack=Path(inst.get('pack','Renderer/packs/CityStudyAuxiliaryUV'));b=body(asset,pack)
             mid=model(asset,pack,source_z_factor);rot=inst['rotation'];scale=inst['scale'];offset=inst['offset'];box=bounds(b,rot,scale)
@@ -257,7 +283,7 @@ def _build(OUT, lab_layouts=None, lab_focus=None, lab_frames=None):
     (OUT/'manifest.json').write_text(json.dumps(meta,indent=2)+'\n')
     # Generic binary: all paths are relative to the mod root; no source package
     # parser or Python runtime is needed by the game.
-    wire=bytearray(b'C3XCITY2')
+    wire=bytearray(b'C3XCITY3' if lab_layouts is not None else b'C3XCITY2')
     def u(n):wire.extend(struct.pack('<I',n))
     def f(values):wire.extend(struct.pack('<'+'f'*len(values),*values))
     def string(s):b=s.encode();u(len(b));wire.extend(b)
@@ -283,6 +309,11 @@ def _build(OUT, lab_layouts=None, lab_focus=None, lab_frames=None):
             u(p['material']);f(p['period']+p['atlas_uv']);u(len(p['vertices']));u(len(p['indices']))
             for v in p['vertices']:f(v)
             for i in p['indices']:u(i)
+        if lab_layouts is not None:
+            foundation_data=t.get('foundation')
+            u(1 if foundation_data else 0)
+            if foundation_data:
+                u(foundation_data['material']);f(foundation_data['uv']+foundation_data['step'])
     (OUT/'city.bin').write_bytes(wire)
     print('PASS',len(models),'models',len(materials),'materials',len(templates),'growth templates; bytes',len(wire),'gaps',len(gaps))
     return meta

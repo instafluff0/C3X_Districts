@@ -29,8 +29,8 @@ def terrain_boundaries(s):
         '    float4 material : TEXCOORD2;\n    float2 biome : TEXCOORD3;\n    float coast_coverage : TEXCOORD4;')
     s=s.replace('    float3 world : TEXCOORD0;',
         '    float4 world : TEXCOORD0;',1)
-    s=s.replace('    float coast_coverage : TEXCOORD4;\n};\nstruct Output',
-        '    float coast_coverage : TEXCOORD4;\n    float coast_inland : TEXCOORD5;\n};\nstruct Output')
+    s=s.replace('    float coast_coverage : TEXCOORD4;\n};\n#ifdef SANDBOX_TERRAIN_MATERIAL',
+        '    float coast_coverage : TEXCOORD4;\n    float coast_inland : TEXCOORD5;\n};\n#ifdef SANDBOX_TERRAIN_MATERIAL')
     s=s.replace('    output.world = input.world;',
         '    output.world = input.world.xyz;')
     s=s.replace('    output.material = input.material;',
@@ -56,6 +56,11 @@ SamplerState Wrap : register(s0);''')
         float tundra_weight = saturate(input.material.w / max(1-desert_weight, 0.00001));
         float plains_weight = saturate(input.biome.x / max(1-desert_weight-input.material.w, 0.00001));''')
     s=s.replace('        float tundra_weight = smoothstep(1.12, 1.82, input.material.w);\n','')
+    biome_detail='float grass_plains_detail = saturate(1 - tundra_weight)'
+    if biome_detail not in s:
+        raise ValueError('Grass/plains detail must be masked from native desert material')
+    s=s.replace(biome_detail,
+                'float grass_plains_detail = saturate(1 - tundra_weight - desert_weight)')
     key='        float base_s = lerp(lerp(grass_s, plains_s, plains_weight), tundra_s, tundra_weight);'
     s=s.replace(key,key+'''
         base = lerp(base, DesertColor.Sample(Wrap, uv0).rgb, desert_weight);

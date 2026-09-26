@@ -450,6 +450,9 @@ Output shade(P input) {
         albedo = lerp(base, hill, rocky_band * 0.90);
         height_detail = lerp(base_h, hill_h, rocky_band);
         specular_map = lerp(base_s, hill_s, rocky_band);
+        // Keep the source height response on the joined terrain.
+        float grass_plains_detail = saturate(1 - tundra_weight - desert_weight) *
+            (1 - smoothstep(0.06, 0.45, input.material.z));
         geometric = detail_normal(geometric, input.world, height_detail);
 
         // Source-backed detail supplies a continuous material-scale response.
@@ -458,6 +461,15 @@ Output shade(P input) {
         float broad = surface_shape(input.world.xy);
         albedo *= lerp(float3(0.88, 0.94, 0.97),
                        float3(1.09, 1.045, 0.91), broad);
+        albedo *= 1 + clamp((broad - 0.30) * 0.55, -0.12, 0.15) * grass_plains_detail;
+        // A second source-detail frequency breaks broad uniform areas without
+        // inventing a new texture or reusing the decal atlas as a tile stamp.
+        float2 grain_uv = input.world.xy * 0.61 + float2(0.41, 0.73);
+        float grain = SurfaceDetail.Sample(Wrap, grain_uv).r;
+        // 0.303 is the measured mean of this source R8 field. The small
+        // brightness swing retains its authored hills and hollows in material
+        // space while avoiding a new geometric relief field on flat game tiles.
+        albedo *= 1 + clamp((grain - 0.303) * 0.9, -0.16, 0.22) * grass_plains_detail;
     }
 
 #ifdef BEAUTY_COMPOSED_SHADOWS

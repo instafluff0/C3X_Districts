@@ -1930,11 +1930,19 @@ struct SandboxFreshPipeline {
             reflection_valid=true;
             ++reflection_draws;
             }
-            if(redraw || units){
+            if(redraw || units
+#ifdef C3X_RENDERER64_FRESH
+                || !renderer.fresh_unit_poses.empty()
+#endif
+                ){
                 renderer.context->OMSetRenderTargets(0,nullptr,nullptr);
                 renderer.context->CopyResource(reflection.color,reflection_static.color);
                 renderer.context->CopyResource(reflection.depth_texture,reflection_static.depth_texture);
             }
+#ifdef C3X_RENDERER64_FRESH
+            if(!sandbox_direct_units.draw_real(frame,renderer.fresh_unit_poses,reflection,
+                    reflection_scale,visual_hour,true))return fail("reflected_real_units");
+#endif
             if(units && !sandbox_direct_units.draw(frame,unit_x,unit_y,
                     incarnation,viewer,unit_visible,camera_x,camera_y,reflection,
                     reflection_scale,next_zoom,visual_hour,true))return fail("reflected_units");
@@ -2075,6 +2083,10 @@ struct SandboxFreshPipeline {
                     glow.linear.depth,false,float(scene_scale)))return fail("coastal_waves");
         }
         QueryPerformanceCounter(&ticks[4]);
+#ifdef C3X_RENDERER64_FRESH
+        if(!sandbox_direct_units.draw_real(frame,renderer.fresh_unit_poses,glow.linear,
+                float(scene_scale),visual_hour))return fail("real_units");
+#endif
         if(units && !sandbox_direct_units.draw(frame,unit_x,unit_y,
             incarnation,viewer,unit_visible,camera_x,camera_y,glow.linear,
             float(scene_scale),next_zoom,visual_hour))

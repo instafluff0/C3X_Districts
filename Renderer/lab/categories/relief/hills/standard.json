@@ -7,6 +7,7 @@
     "transitions"
   ],
   "implementation": [
+    "Renderer/native/hill_vegetation.h",
     "Renderer/lab/shared/shaders/relief/beauty_terrain.hlsl",
     "Renderer/lab/shared/natural/data.h",
     "Renderer/native/source_fidelity/geometry.h",

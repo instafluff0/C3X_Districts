@@ -23,7 +23,7 @@ struct Instance {
     float u,v,rotation,scale,material,owner;
     bool shadow;
 };
-struct Route {float u0,v0,u1,v1;unsigned style;bool railroad,bridge;};
+struct Route {float u0,v0,u1,v1;unsigned style;bool railroad,bridge,reverse,bypass=false;float bridge_t=1.0f;};
 struct Plan {std::vector<Instance> instances;std::vector<Route> routes;};
 struct Surfaces {
     std::array<std::vector<Vertex>,layer_count> layers;
@@ -105,6 +105,22 @@ inline void append_shadow(Projection const& input,FeatureAsset const& asset,floa
     shadow_vertices.insert(shadow_vertices.end(),
                            std::begin(triangles), std::end(triangles));
 }
+template<class Height>
+float hill_wall_ground(FeatureAsset const& asset,c3x_renderer_tile_v1 const& tile,
+        float local_u,float local_v,float rotation,float scale,Height natural_height_at){
+    float world_u=float(tile.tile_x+tile.tile_y)*.5f;
+    float world_v=float(tile.tile_x-tile.tile_y)*.5f;
+    float highest=natural_height_at(world_u+local_u,world_v+1.f-local_v);
+    float lowest_source=0.f,cosine=std::cos(rotation),sine=std::sin(rotation);
+    for(auto const& source:asset.vertices){
+        float x=(source.position[0]*cosine-source.position[1]*sine)*scale;
+        float y=(source.position[0]*sine+source.position[1]*cosine)*scale;
+        highest=std::max(highest,natural_height_at(
+            world_u+local_u+x,world_v+1.f-local_v-y));
+        lowest_source=std::min(lowest_source,source.position[2]*scale);
+    }
+    return highest-2.5f-lowest_source*(150.f/.82f)+.02f;
+}
 template<class Relief,class Height>
 void append_instance(Projection const& input,FeatureBundle const& bundle,FeaturePlacement const& placement,
         float local_u,float local_v,float rotation,float scale,float material_offset,float owner_code,bool cast_shadow,
@@ -124,6 +140,10 @@ void append_instance(Projection const& input,FeatureBundle const& bundle,Feature
     std::array<float, 3> ground_sample = relief_at_world(
         tile_world_u + local_u, tile_world_v + (1.0f - local_v));
     bool farm_asset=asset.id.rfind("farm_",0)==0;
+    bool terrain_wall=asset.id.rfind("city/walls/",0)==0 &&
+        tile.real_terrain_type==5;
+    if(terrain_wall)ground_sample[0]=hill_wall_ground(
+        asset,tile,local_u,local_v,rotation,scale,natural_height_at);
     if (farm_asset && asset.id.find(":base:")!=std::string::npos && ground_sample[2]<.55f)
         return;
     if (farm_asset && asset.id.find(":building:")!=std::string::npos && ground_sample[2]<.14f)
@@ -298,16 +318,62 @@ void append_instance(Projection const& input,FeatureBundle const& bundle,Feature
     }else for (std::uint32_t source_index : asset.indices)
         target.push_back(transformed[source_index]);
 }
-template<class Relief>
-void append_route(Projection const& input,Route const& route,Relief relief_at_world,std::vector<Vertex>& route_vertices){
+template<class Relief,class Height>
+void append_route(Projection const& input,Route const& route,Relief relief_at_world,Height height_at_world,std::vector<Vertex>& route_vertices){
     float u0=route.u0,v0=route.v0,u1=route.u1,v1=route.v1;unsigned style=route.style;bool railroad=route.railroad;
     auto const& tile=input.tile;
     float left=input.left,top=input.top,half_w=input.half_w,half_h=input.half_h;
     float relief_projection_scale=input.relief_projection_scale;
     bool pickup_profile=input.pickup_profile,world_objects=input.world_objects;
     auto ndc_x=[](float x){return x;};auto ndc_y=[](float y){return y;};
-    constexpr int subdivisions = 16;
-    float route_half_width = railroad ? 0.076f : 0.040f;
+    float tile_world_u = static_cast<float>(tile.tile_x + tile.tile_y) * 0.5f;
+    float tile_world_v = static_cast<float>(tile.tile_x - tile.tile_y) * 0.5f;
+    auto surface_height = [&](float world_u,float world_v) {
+        return std::max(relief_at_world(world_u,world_v)[0],
+            height_at_world(world_u,world_v)-2.5f);
+    };
+    if(route.bypass){
+        auto skirt_anchor=[&](float& local_u,float& local_v){
+            // Edge crossings stay fixed for the opposite tile's half. Find a
+            // nearby low saddle only for the interior mountain-loop anchors.
+            if(local_u<=.10f || local_u>=.90f || local_v<=.10f || local_v>=.90f)return;
+            float source_u=local_u,source_v=local_v;
+            float best=surface_height(tile_world_u+source_u,tile_world_v+1.0f-source_v);
+            if(best-relief_at_world(tile_world_u+source_u,
+                    tile_world_v+1.0f-source_v)[0]<10.0f)return;
+            for(int y=-3;y<=3;++y)for(int x=-3;x<=3;++x){
+                float trial_u=std::clamp(source_u+float(x)*.1f,.06f,.94f);
+                float trial_v=std::clamp(source_v+float(y)*.1f,.06f,.94f);
+                float distance=std::sqrt((trial_u-source_u)*(trial_u-source_u)+
+                    (trial_v-source_v)*(trial_v-source_v));
+                float score=surface_height(tile_world_u+trial_u,
+                    tile_world_v+1.0f-trial_v)+distance*18.0f;
+                if(score<best){best=score;local_u=trial_u;local_v=trial_v;}
+            }
+        };
+        skirt_anchor(u0,v0);skirt_anchor(u1,v1);
+    }
+    if(!railroad && !route.bypass && std::abs(u1-.5f)+std::abs(v1-.5f)>.35f){
+        // All incident routes start at one tile junction. On a raised hill or
+        // mountain, search a small interior patch for a lower saddle so the
+        // road winds around the crown instead of cutting across its peak.
+        float center_u=tile_world_u+u0,center_v=tile_world_v+1.0f-v0;
+        float crown=surface_height(center_u,center_v)-relief_at_world(center_u,center_v)[0];
+        if(crown>12.0f){
+            float best=surface_height(center_u,center_v),best_u=u0,best_v=v0;
+            for(int y=-2;y<=2;++y)for(int x=-2;x<=2;++x){
+                float candidate_u=std::clamp(u0+float(x)*.09f,.19f,.81f);
+                float candidate_v=std::clamp(v0+float(y)*.09f,.19f,.81f);
+                float score=surface_height(tile_world_u+candidate_u,
+                    tile_world_v+1.0f-candidate_v)+
+                    8.0f*std::sqrt(float(x*x+y*y))*.09f;
+                if(score<best){best=score;best_u=candidate_u;best_v=candidate_v;}
+            }
+            u0=best_u;v0=best_v;
+        }
+    }
+    constexpr int subdivisions = 32;
+    float route_half_width = railroad ? 0.076f : (route.bridge ? 0.064f : 0.028f);
     float atlas_half_width = railroad ? 0.058f : 0.075f;
     float du = u1 - u0, dv = v1 - v0;
     float original_length = std::sqrt(du * du + dv * dv);
@@ -315,14 +381,37 @@ void append_route(Projection const& input,Route const& route,Relief relief_at_wo
         return;
     float direction_u = du / original_length;
     float direction_v = dv / original_length;
-    float original_u0 = u0, original_v0 = v0;
     float original_u1 = u1, original_v1 = v1;
-    u0 -= direction_u * 0.14f; v0 -= direction_v * 0.14f;
-    u1 += direction_u * 0.14f; v1 += direction_v * 0.14f;
+    // Tile junctions and shared edge points are exact joins. Only a small
+    // coverage bias is needed; long extensions made multiway knots.
+    float start_overhang=0.008f,end_overhang=0.018f;
+    u0 -= direction_u * start_overhang; v0 -= direction_v * start_overhang;
+    u1 += direction_u * end_overhang; v1 += direction_v * end_overhang;
     du = u1 - u0; dv = v1 - v0;
     float length = std::sqrt(du * du + dv * dv);
     float perpendicular_u = -dv / length;
     float perpendicular_v = du / length;
+    float bypass_offset=0.0f;
+    if(route.bypass && !route.bridge){
+        float best=1e30f;
+        for(int candidate=-3;candidate<=3;++candidate){
+            float offset=float(candidate)*.15f;
+            float score=std::abs(offset)*25.0f;
+            for(int sample=1;sample<8;++sample){
+                float t=float(sample)*.125f;
+                float bend=offset*std::sin(t*3.14159265359f);
+                float local_u=u0+du*t+perpendicular_u*bend;
+                float local_v=v0+dv*t+perpendicular_v*bend;
+                float world_u=tile_world_u+local_u;
+                float world_v=tile_world_v+1.0f-local_v;
+                float raised=std::max(0.0f,surface_height(world_u,world_v)-
+                    relief_at_world(world_u,world_v)[0]);
+                score+=std::max(0.0f,raised-12.0f)*
+                    std::max(0.0f,raised-12.0f)*.006f;
+            }
+            if(score<best){best=score;bypass_offset=offset;}
+        }
+    }
     float atlas_dx = 1.0f;
     float atlas_dy = 0.99021526f - 0.90606654f;
     float atlas_length = std::sqrt(atlas_dx * atlas_dx + atlas_dy * atlas_dy);
@@ -333,60 +422,101 @@ void append_route(Projection const& input,Route const& route,Relief relief_at_wo
         value ^= value >> 15; value *= 0x846ca68bu;
         return value ^ (value >> 16);
     };
-    unsigned seed = route_hash(tile.variant_seed ^
-        static_cast<unsigned>(tile.tile_x * 73856093u) ^
-        static_cast<unsigned>(tile.tile_y * 19349663u) ^
-        static_cast<unsigned>((original_u1 - original_u0 + 2.0f) * 97.0f) ^
-        static_cast<unsigned>((original_v1 - original_v0 + 2.0f) * 193.0f));
+    // Both halves of a logical edge share the same width and atlas variation.
+    // The edge midpoint is independent of which tile prepared its half.
+    unsigned edge_u = static_cast<unsigned>((tile_world_u + original_u1) * 2.0f);
+    unsigned edge_v = static_cast<unsigned>((tile_world_v + 1.0f - original_v1) * 2.0f);
+    unsigned seed = route_hash(edge_u * 73856093u ^ edge_v * 19349663u);
     float wave_phase = float(seed & 0xffffu) / 65536.0f * 6.28318530718f;
     float width_variation = railroad ? 1.0f :
-        0.92f + float(route_hash(seed ^ 0x9e3779b9u) & 0xffffu) / 65536.0f * 0.16f;
-    auto route_vertex = [&](float along, float across) {
-        float source_along = (along * length - 0.14f) / original_length;
+        0.78f + float(route_hash(seed ^ 0x9e3779b9u) & 0xffffu) / 65536.0f * 0.44f;
+    auto road_bend = [&](float along) {
+        if (route.bridge || railroad) return 0.0f;
+        float curve_t = std::clamp((along * length - start_overhang) / original_length, 0.0f, 1.0f);
+        if (curve_t <= 0.0f || curve_t >= 1.0f) return 0.0f;
+        if(route.bypass)return bypass_offset*std::sin(curve_t*3.14159265359f);
+        float center_u = tile_world_u + u0 + du * along;
+        float center_v = tile_world_v + 1.0f - (v0 + dv * along);
+        float plus_height = surface_height(
+            center_u + perpendicular_u * 0.18f,
+            center_v - perpendicular_v * 0.18f);
+        float minus_height = surface_height(
+            center_u - perpendicular_u * 0.18f,
+            center_v + perpendicular_v * 0.18f);
+        return std::clamp((minus_height - plus_height) * 0.003f,
+            -0.16f,0.16f) * std::sin(curve_t * 3.14159265359f);
+    };
+    auto route_vertex = [&](float along, float across, float terrain_bend, float deck_drop = 0.0f) {
+        float source_along = (along * length - start_overhang) / original_length;
         float curve_t = std::clamp(source_along, 0.0f, 1.0f);
         // The midpoint is the shared river edge. Keep its crossing straight
         // and centered under the authored bridge body.
         float curve_envelope = std::sin(curve_t * 6.28318530718f);
         float curve_amplitude = route.bridge ? 0.0f :
-            (railroad ? 0.020f : 0.032f);
+            (railroad ? 0.020f : (route.bypass ? 0.025f : 0.085f));
         float road_wave = curve_envelope * curve_amplitude *
             (0.62f * std::sin(wave_phase) +
              0.38f * std::sin(curve_t * 6.28318530718f + wave_phase));
+        float center_u=u0+du*along+perpendicular_u*(road_wave+terrain_bend);
+        float center_v=v0+dv*along+perpendicular_v*(road_wave+terrain_bend);
+        float center_world_u=tile_world_u+center_u;
+        float center_world_v=tile_world_v+1.0f-center_v;
+        float crown=surface_height(center_world_u,center_world_v)-
+            relief_at_world(center_world_u,center_world_v)[0];
+        // A large rocky crown can extend into adjacent road tiles. Taper the
+        // visible trail into its occluding rock mass instead of projecting a
+        // bright stripe up a near-vertical face.
+        float rock_clearance=route.bridge &&
+            std::abs((curve_t-route.bridge_t)*original_length)<.26f?1.0f:
+            std::clamp((50.0f-crown)/20.0f,0.0f,1.0f);
         float route_u = u0 + du * along + perpendicular_u *
-            (route_half_width * width_variation * across + road_wave);
+            (route_half_width * width_variation * across * rock_clearance + road_wave + terrain_bend);
         float route_v = v0 + dv * along + perpendicular_v *
-            (route_half_width * width_variation * across + road_wave);
-        float atlas_along = railroad || (seed & 1u) == 0u ? source_along : 1.0f - source_along;
+            (route_half_width * width_variation * across * rock_clearance + road_wave + terrain_bend);
+        float atlas_along = source_along;
+        if (!railroad) {
+            float edge_along = route.reverse ? 1.0f - curve_t * 0.5f : curve_t * 0.5f;
+            if ((seed & 1u) != 0u) edge_along = 1.0f - edge_along;
+            atlas_along = float((seed >> 1) % 3u) * 0.18f + edge_along * 0.60f;
+        }
         float atlas_u = atlas_dx * atlas_along +
             atlas_perpendicular_u * atlas_half_width * across;
         float atlas_v = 0.90606654f + atlas_dy * atlas_along +
             atlas_perpendicular_v * atlas_half_width * across;
-        float tile_world_u = static_cast<float>(tile.tile_x + tile.tile_y) * 0.5f;
-        float tile_world_v = static_cast<float>(tile.tile_x - tile.tile_y) * 0.5f;
-        std::array<float, 3> ground_sample = relief_at_world(
-            tile_world_u + route_u, tile_world_v + (1.0f - route_v));
+        float world_u = tile_world_u + route_u;
+        float world_v = tile_world_v + (1.0f - route_v);
+        float ground_height = surface_height(world_u,world_v);
+        if(route.bridge){
+            // The imported arches have parapets but no continuous roadway.
+            // Their crown is about 13 natural height units above the banks;
+            // meet that crown at the shared river midpoint on both tile halves.
+            float crossing_distance=std::abs((curve_t-route.bridge_t)*original_length);
+            float ramp=std::clamp((.26f-crossing_distance)/.26f,0.0f,1.0f);
+            ground_height+=13.0f*ramp*ramp*(3.0f-2.0f*ramp)-deck_drop;
+        }
         float ground_x = left + half_w + (route_u - route_v) * half_w;
         float ground_y = top + (route_u + route_v) * half_h;
-        float h = ground_sample[0] * relief_projection_scale;
+        // Keep the decal just above the sampled land surface. The bias is in
+        // screen pixels and does not flatten relief or detach the route.
+        float h = ground_height * relief_projection_scale + 0.65f;
         float depth =
             ground_y + h * 0.75f;
         Vertex vertex{
             ndc_x(ground_x), ndc_y(ground_y - h), depth,
             atlas_u, atlas_v, 1.0f, 0.0f, 0.0f, 1.0f,
-            across, curve_t, source_along, 0.90606654f + atlas_dy * source_along,
+            across, curve_t, atlas_dx * atlas_along,
+            0.90606654f + atlas_dy * atlas_along,
             11.0f, 0.0f, static_cast<float>(style), 0.0f,
             route_u, route_v, 0.0f, 0.0f,
             0.0f, 0.0f, 1.0f,
             1000.0f, 0.0f, 1000.0f, 0.0f, -1.0f};
         if (!pickup_profile) {
             constexpr float normal_step = 0.025f;
-            float world_u = tile_world_u + route_u;
-            float world_v = tile_world_v + 1.0f - route_v;
-            float slope_u = (relief_at_world(world_u + normal_step, world_v)[0] -
-                relief_at_world(world_u - normal_step, world_v)[0]) *
+            float slope_u = (surface_height(world_u + normal_step, world_v) -
+                surface_height(world_u - normal_step, world_v)) *
                 relief_projection_scale / (2.0f * normal_step * input.tile_width);
-            float slope_v = (relief_at_world(world_u, world_v + normal_step)[0] -
-                relief_at_world(world_u, world_v - normal_step)[0]) *
+            float slope_v = (surface_height(world_u, world_v + normal_step) -
+                surface_height(world_u, world_v - normal_step)) *
                 relief_projection_scale / (2.0f * normal_step * input.tile_width);
             float inverse_length = 1.0f / std::sqrt(slope_u * slope_u + slope_v * slope_v + 1.0f);
             vertex.normal_x = -slope_u * inverse_length;
@@ -394,24 +524,55 @@ void append_route(Projection const& input,Route const& route,Relief relief_at_wo
             vertex.normal_z = inverse_length;
         }
         if (pickup_profile) {
-            vertex.world_x = tile_world_u + route_u;
-            vertex.world_y = tile_world_v + 1.0f - route_v;
-            vertex.world_z = (ground_sample[0] + 2.5f) / 112.0f;
+            vertex.world_x = world_u;
+            vertex.world_y = world_v;
+            vertex.world_z = (ground_height + 3.9f) / 112.0f;
             vertex.world_valid = 1.0f;
             if(world_objects){vertex.x=64.f+(route_u-route_v)*64.f;
-                vertex.y=(route_u+route_v)*32.f-ground_sample[0]*(128.f/224.f*.82f);vertex.z=0;}
+                vertex.y=(route_u+route_v)*32.f-ground_height*(128.f/224.f*.82f)-.65f;
+                vertex.z=0;}
         }
         return vertex;
     };
+    std::array<Vertex, subdivisions + 1> left_vertices{},right_vertices{};
+    for (int sample = 0; sample <= subdivisions; ++sample) {
+        float along = static_cast<float>(sample) / subdivisions;
+        float bend = road_bend(along);
+        left_vertices[sample] = route_vertex(along, -1.0f, bend);
+        right_vertices[sample] = route_vertex(along, 1.0f, bend);
+    }
     for (int segment = 0; segment < subdivisions; ++segment) {
-        float a0 = static_cast<float>(segment) / subdivisions;
-        float a1 = static_cast<float>(segment + 1) / subdivisions;
-        Vertex left0 = route_vertex(a0, -1.0f);
-        Vertex right0 = route_vertex(a0, 1.0f);
-        Vertex right1 = route_vertex(a1, 1.0f);
-        Vertex left1 = route_vertex(a1, -1.0f);
+        Vertex const& left0 = left_vertices[segment];
+        Vertex const& right0 = right_vertices[segment];
+        Vertex const& right1 = right_vertices[segment + 1];
+        Vertex const& left1 = left_vertices[segment + 1];
         Vertex triangles[] = {left0, right0, right1, left0, right1, left1};
         route_vertices.insert(route_vertices.end(), std::begin(triangles), std::end(triangles));
+    }
+    if(route.bridge){
+        // A narrow fascia makes the new surface a solid deck when the river
+        // and bank are visible beneath the imported side arches.
+        constexpr int deck_segments=12;
+        float deck_start=std::max(0.0f,route.bridge_t-.26f/original_length);
+        float deck_end=std::min(1.0f+end_overhang/original_length,
+            route.bridge_t+.26f/original_length);
+        for(int segment=0;segment<deck_segments;++segment){
+            float source_a=deck_start+(deck_end-deck_start)*float(segment)/deck_segments;
+            float source_b=deck_start+(deck_end-deck_start)*float(segment+1)/deck_segments;
+            float a=(source_a*original_length+start_overhang)/length;
+            float b=(source_b*original_length+start_overhang)/length;
+            for(float side:{-1.0f,1.0f}){
+                Vertex top_a=route_vertex(a,side,0.0f),top_b=route_vertex(b,side,0.0f);
+                Vertex low_a=route_vertex(a,side,0.0f,4.0f),low_b=route_vertex(b,side,0.0f,4.0f);
+                float normal_u=perpendicular_u*side,normal_v=-perpendicular_v*side;
+                for(Vertex* vertex:{&top_a,&top_b,&low_a,&low_b}){
+                    vertex->normal_x=normal_u;vertex->normal_y=normal_v;
+                    vertex->normal_z=0.0f;
+                }
+                Vertex fascia[]={top_a,low_a,top_b,top_b,low_a,low_b};
+                route_vertices.insert(route_vertices.end(),std::begin(fascia),std::end(fascia));
+            }
+        }
     }
 }
 template<class Lookup>
@@ -424,17 +585,35 @@ void select_routes(c3x_renderer_tile_v1 const& tile,Assets const& assets,bool ro
             plan.instances.push_back({Family(family),placement.asset_index,layer,u,v,rotation,scale,material,owner,shadow});return;
         }
     };
-    auto append_route_segment=[&](float a,float b,float c,float d,unsigned style,bool railroad,bool bridge){plan.routes.push_back({a,b,c,d,style,railroad,bridge});};
+    auto append_route_segment=[&](float a,float b,float c,float d,unsigned style,bool railroad,bool bridge,bool reverse,bool bypass=false){plan.routes.push_back({a,b,c,d,style,railroad,bridge,reverse,bypass});};
     if (route_assets_ready && (tile.road_mask != 0 || tile.railroad_mask != 0)) {
-        constexpr int route_offsets[4][2] = {
-            {1, -1}, {2, 0}, {1, 1}, {0, 2}
+        auto route_hash=[](unsigned value){
+            value ^= value >> 16; value *= 0x7feb352du;
+            value ^= value >> 15; value *= 0x846ca68bu;
+            return value ^ (value >> 16);
         };
-        constexpr unsigned river_edge_bits[4] = {2u, 0u, 8u, 0u};
-        constexpr unsigned opposite_river_bits[4] = {32u, 0u, 128u, 0u};
+        unsigned center_seed=route_hash(tile.variant_seed ^
+            static_cast<unsigned>(tile.tile_x)*73856093u ^
+            static_cast<unsigned>(tile.tile_y)*19349663u);
+        float center_u=0.5f,center_v=0.5f;
+        bool mountain_ring=tile.real_terrain_type==6 && tile.road_mask && !tile.railroad_mask;
+        if (tile.road_mask && !tile.railroad_mask && !mountain_ring) {
+            center_u += (float(center_seed & 0xffffu)/65535.0f-0.5f)*0.38f;
+            center_v += (float((center_seed >> 16) & 0xffffu)/65535.0f-0.5f)*0.38f;
+        }
+        constexpr float ring_u[8]={.5f,.75f,.85f,.75f,.5f,.25f,.15f,.25f};
+        constexpr float ring_v[8]={.15f,.25f,.5f,.75f,.85f,.75f,.5f,.25f};
+        constexpr int route_offsets[8][2] = {
+            {1, -1}, {2, 0}, {1, 1}, {0, 2},
+            {-1, 1}, {-2, 0}, {-1, -1}, {0, -2}
+        };
+        constexpr unsigned river_edge_bits[8] = {2u, 0u, 8u, 0u, 32u, 0u, 128u, 0u};
+        constexpr unsigned opposite_river_bits[8] = {32u, 0u, 128u, 0u, 2u, 0u, 8u, 0u};
         float base_world_u = static_cast<float>(tile.tile_x + tile.tile_y) * 0.5f;
         float base_world_v = static_cast<float>(tile.tile_x - tile.tile_y) * 0.5f;
         bool connected = false;
-        for (int direction = 0; direction < 4; ++direction) {
+        unsigned mountain_spokes=0;
+        for (int direction = 0; direction < 8; ++direction) {
             int neighbor_x = tile.tile_x + route_offsets[direction][0];
             int neighbor_y = tile.tile_y + route_offsets[direction][1];
             auto found = lookup(neighbor_x, neighbor_y);
@@ -443,9 +622,33 @@ void select_routes(c3x_renderer_tile_v1 const& tile,Assets const& assets,bool ro
             c3x_renderer_tile_v1 const & neighbor = found->occurrence;
             bool railroad = tile.railroad_mask != 0 && neighbor.railroad_mask != 0;
             bool road = tile.road_mask != 0 && neighbor.road_mask != 0;
+            unsigned edge_seed=route_hash(
+                static_cast<unsigned>(tile.tile_x+neighbor_x)*73856093u ^
+                static_cast<unsigned>(tile.tile_y+neighbor_y)*19349663u);
+            if (road && !railroad && (direction & 1)) {
+                // A corner-to-corner link is redundant when an incident tile
+                // already carries the route around that corner. Civ III has a
+                // road bit, not authored edge bits; this keeps dense late-game
+                // maps legible while sparse diagonal connections still work.
+                int dx = route_offsets[direction][0];
+                int dy = route_offsets[direction][1];
+                int mid_x = tile.tile_x + dx / 2;
+                int mid_y = tile.tile_y + dy / 2;
+                for (int side : {-1, 1}) {
+                    auto mid = lookup(mid_x + (dx == 0 ? side : 0),
+                                      mid_y + (dy == 0 ? side : 0));
+                    if (mid != nullptr && mid->occurrence.road_mask != 0) {
+                        // Keep a minority of redundant long links: dense
+                        // networks gain irregular through-tile crossings.
+                        road = edge_seed % 10u == 0u;
+                        break;
+                    }
+                }
+            }
             if (!railroad && !road)
                 continue;
             connected = true;
+            if(mountain_ring && road)mountain_spokes|=1u<<direction;
             float end_u = (static_cast<float>(neighbor_x + neighbor_y) * 0.5f + 0.5f) -
                 base_world_u;
             float end_v = 1.0f - ((static_cast<float>(neighbor_x - neighbor_y) * 0.5f + 0.5f) -
@@ -455,9 +658,20 @@ void select_routes(c3x_renderer_tile_v1 const& tile,Assets const& assets,bool ro
             bool bridge = river_edge_bits[direction] != 0 &&
                 (((tile.river_code & river_edge_bits[direction]) != 0) ||
                  ((neighbor.river_code & opposite_river_bits[direction]) != 0));
+            float edge_u=(0.5f+end_u)*0.5f,edge_v=(0.5f+end_v)*0.5f;
+            if (!railroad && !bridge) {
+                float axis_u=end_u-0.5f,axis_v=end_v-0.5f;
+                float axis_length=std::sqrt(axis_u*axis_u+axis_v*axis_v);
+                float shift=(float((edge_seed >> 8)&0xffffu)/65535.0f-0.5f)*0.10f;
+                float orientation=direction<4?1.0f:-1.0f;
+                edge_u += -axis_v/axis_length*shift*orientation;
+                edge_v += axis_u/axis_length*shift*orientation;
+            }
             if(routes_enabled)
-                append_route_segment(0.5f, 0.5f, end_u, end_v, style, railroad, bridge);
-            if (bridge) {
+                append_route_segment(mountain_ring?ring_u[direction]:center_u,
+                    mountain_ring?ring_v[direction]:center_v,edge_u,edge_v,
+                    style, railroad, bridge, direction >= 4,mountain_ring);
+            if (bridge && direction < 4) {
                 char const * bridge_style = railroad ? "railroad" :
                     (style >= 3u ? "modern" : (style >= 2u ? "industrial" : "medieval"));
                 std::string group_name = std::string("bridge_") + bridge_style + "_normal";
@@ -474,27 +688,70 @@ void select_routes(c3x_renderer_tile_v1 const& tile,Assets const& assets,bool ro
                 }
             }
         }
-        if (!connected && routes_enabled) {
-            constexpr int reverse_offsets[4][2] = {
-                {-1, 1}, {-2, 0}, {-1, -1}, {0, -2}
-            };
-            for (auto const& offset : reverse_offsets) {
-                auto found = lookup(tile.tile_x + offset[0], tile.tile_y + offset[1]);
-                if (found != nullptr &&
-                    ((tile.road_mask && found->occurrence.road_mask) ||
-                     (tile.railroad_mask && found->occurrence.railroad_mask))) {
-                    connected = true;
-                    break;
-                }
+        if(mountain_ring && connected && routes_enabled){
+            unsigned style=static_cast<unsigned>(std::clamp(tile.route_style,0,3));
+            // Join the occupied spokes by the shorter set of skirt arcs.
+            // Omit the largest empty gap instead of drawing a redundant loop
+            // around every mountain tile.
+            unsigned gap_start=0,gap_length=0;
+            for(unsigned direction=0;direction<8;++direction)if(mountain_spokes&(1u<<direction)){
+                unsigned length=1;
+                while(length<8 && !(mountain_spokes&(1u<<((direction+length)&7u))))++length;
+                if(length>gap_length){gap_start=direction;gap_length=length;}
             }
-            if (!connected) {
-                bool railroad = tile.railroad_mask != 0;
-                unsigned style = railroad ? 4u :
-                    static_cast<unsigned>(std::clamp(tile.route_style, 0, 3));
-                // A single built road still needs a readable mark on the tile.
-                append_route_segment(0.36f, 0.50f, 0.64f, 0.50f, style, railroad, false);
+            for(unsigned direction=0;direction<8;++direction){
+                if(((direction+8u-gap_start)&7u)<gap_length)continue;
+                unsigned next=(direction+1u)&7u;
+                append_route_segment(ring_u[direction],ring_v[direction],
+                    ring_u[next],ring_v[next],style,false,false,false,true);
             }
         }
+        if (!connected && routes_enabled) {
+            bool railroad = tile.railroad_mask != 0;
+            unsigned style = railroad ? 4u :
+                static_cast<unsigned>(std::clamp(tile.route_style, 0, 3));
+            // A single built road still needs a readable mark on the tile.
+            if(mountain_ring)
+                append_route_segment(ring_u[3],ring_v[3],
+                    ring_u[4],ring_v[4],style,false,false,false,true);
+            else append_route_segment(center_u-0.14f, center_v,
+                center_u+0.14f, center_v, style, railroad, false, false);
+        }
+    }
+}
+template<class River>
+void promote_river_crossings(c3x_renderer_tile_v1 const& tile,Assets const& assets,
+        River river_distance,Plan& plan){
+    auto const& bridges=assets[bridge_family];
+    float tile_world_u=float(tile.tile_x+tile.tile_y)*.5f;
+    float tile_world_v=float(tile.tile_x-tile.tile_y)*.5f;
+    for(auto& route:plan.routes){
+        if(route.railroad || route.bridge)continue;
+        float closest=1000.0f,crossing_t=0.0f;
+        for(unsigned sample=0;sample<=24;++sample){
+            float t=float(sample)/24.0f;
+            float local_u=route.u0+(route.u1-route.u0)*t;
+            float local_v=route.v0+(route.v1-route.v0)*t;
+            float distance=river_distance(tile_world_u+local_u,
+                tile_world_v+1.0f-local_v);
+            if(distance<closest){closest=distance;crossing_t=t;}
+        }
+        if(closest>=5.0f || crossing_t<.125f)continue;
+        route.bridge=true;route.bridge_t=crossing_t;
+        // When a river follows the shared boundary, both tile halves raise
+        // their roadbed but only one owns the authored bridge mesh.
+        if(route.reverse && crossing_t>.75f)continue;
+        char const* style=route.style>=3u?"modern":
+            (route.style>=2u?"industrial":"medieval");
+        std::string group_name=std::string("bridge_")+style+"_normal";
+        auto group=c3x_renderer::find_feature_group(bridges,group_name.c_str());
+        if(!group || group->placements.empty())continue;
+        auto const& placement=group->placements.front();
+        float crossing_u=route.u0+(route.u1-route.u0)*crossing_t;
+        float crossing_v=route.v0+(route.v1-route.v0)*crossing_t;
+        float rotation=std::atan2(route.v1-route.v0,route.u1-route.u0);
+        plan.instances.push_back({bridge_family,placement.asset_index,feature_layer,
+            crossing_u,crossing_v,rotation,placement.scale,13.0f,0.0f,true});
     }
 }
 inline bool select_improvements(c3x_renderer_tile_v1 const& tile,Assets const& assets,int ground,unsigned site_flags,
@@ -687,7 +944,7 @@ inline bool select_improvements(c3x_renderer_tile_v1 const& tile,Assets const& a
                 !gate->placements.empty() && !tower->placements.empty()) {
                 constexpr float pi = 3.14159265359f;
                 constexpr unsigned samples = 2048u;
-                float const radius[3] = {.43f, .58f, .70f};
+                float const radius[3] = {.48f, .64f, .76f};
                 unsigned const sectors[3] = {16u, 20u, 24u};
                 std::array<std::array<float, 2>, samples + 1u> points{};
                 std::array<float, samples + 1u> distances{};
@@ -848,7 +1105,7 @@ void settle_farm_props(Plan& plan,c3x_renderer_tile_v1 const& tile,Assets const&
 template<class Relief,class Height>
 void compile(Plan const& plan,Projection const& input,Assets const& assets,Relief relief,Height height,Surfaces& output,bool indexed=false,
         std::vector<unsigned>* instance_counts=nullptr){
-    for(auto const& route:plan.routes)append_route(input,route,relief,output.layers[route_layer]);
+    for(auto const& route:plan.routes)append_route(input,route,relief,height,output.layers[route_layer]);
     for(auto const& instance:plan.instances){
         auto before=indexed?output.indices[instance.layer].size():output.layers[instance.layer].size();
         FeaturePlacement placement{};placement.asset_index=instance.asset;

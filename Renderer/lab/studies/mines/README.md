@@ -62,6 +62,33 @@ inference; and compare close and gameplay views on real map terrain.
   Civ III eras; the Lab marker also changes the fixture's orientation between
   era rows, which should not be mistaken for a distinct authored building set.
 
+## Current central-building trial
+
+The later user-directed trial keeps only source variants 1 and 2 in each of
+the two authored art families. For each, it selects the largest attached
+non-decal component, which is the central building and shaft apparatus shown
+in the close-ups. It preserves that component's mesh, UVs, base color and
+emissive channel, recenters its ground contact, and scales it 3.0x. It removes
+the accessory rocks, shelters, carts, and brown ground decals. The unchanged
+Lab selector has three variant slots per family, so its third slot reuses
+variant 1; no source variant 3 mesh is present in the new pack.
+
+On hills the building anchor is exactly at tile center. Its lower source
+vertices follow the sampled visible hill height, while the upper building
+stays rigid above the highest sampled ground under its supports. This fitting
+is an inferred Lab treatment, not an authored source deformation. On
+mountains, additional front-base candidates improve visibility; shoreline
+and river checks reject unsafe forward positions and retain the earlier base
+site where needed. The wooded mountain remains less legible than the exposed
+ridge and needs a further visibility or vegetation pass before production.
+
+The current witnesses are `test-biq-mine-central-grassland.png` for the two
+building variants in all four Civ III eras and
+`test-biq-mine-central-final.png` for inland/coastal hills and dense/wooded
+mountains against the earlier complete mine. `test-biq-mine-hill-support.png`
+and `test-biq-mine-mountain-front.png` retain the placement comparisons. Each
+capture checks zero fallback tiles; source `test.biq` remains unchanged.
+
 Each output frame has a neighboring `capture.json` with BIQ, scene, DLL and pack
 hashes. The off-screen renderer must report zero fallback tiles. Repeat renders
 are compared by exact image hash for determinism. The source BIQ hash is
@@ -74,6 +101,10 @@ Lab VM available:
 python3 Renderer/lab/studies/mines/study.py
 python3 Renderer/lab/studies/mines/terrain.py
 python3 Renderer/lab/studies/mines/closeups.py
+python3 Renderer/lab/studies/mines/central.py
+python3 Renderer/lab/studies/mines/mountain.py
+python3 Renderer/lab/studies/mines/hill.py
+python3 Renderer/lab/studies/mines/hill_support.py
 ```
 
 Generated outputs are ignored Lab artifacts. This is a visual Lab candidate;

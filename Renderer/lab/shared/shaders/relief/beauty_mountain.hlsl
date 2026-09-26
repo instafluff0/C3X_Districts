@@ -93,7 +93,16 @@ struct P {
     float3 material : TEXCOORD2;
 #endif
 };
+#ifdef SANDBOX_TERRAIN_MATERIAL
+struct Output {
+    float4 color : SV_Target0;
+    float4 normal : SV_Target1;
+    float4 world : SV_Target2;
+    float4 properties : SV_Target3;
+};
+#else
 struct Output { float4 color : SV_Target0; float validity : SV_Target1; };
+#endif
 
 P VSMain(V input) {
     P output;
@@ -337,7 +346,13 @@ Output shade(P input) {
     Output output;
     if (input.material.y < 0.5) {
         output.color = float4(atmosphere(input.uv.y), 1);
+#ifdef SANDBOX_TERRAIN_MATERIAL
+        output.normal = float4(0.5, 0.5, 1, 1);
+        output.world = float4(input.world, 1);
+        output.properties = float4(3, 1, 1, 1);
+#else
         output.validity = 1;
+#endif
         return output;
     }
 
@@ -457,6 +472,25 @@ Output shade(P input) {
     // gradients. This changes shading only, never the geometric surface.
     float rock_normal_strength = Quality.z * lerp(1.0, 1.60, rock_detail_coverage);
     float3 normal = Quality.x > 0.5 ? height_derivative_normal(geometric, input.world, lerp(float2(ddx(ground_height), ddy(ground_height)), rock_derivatives, rock_detail_coverage), rock_normal_strength) : geometric;
+#ifdef SANDBOX_TERRAIN_MATERIAL
+#ifdef BEAUTY_VOLCANO_MATERIAL
+    albedo = volcano_albedo(albedo, input.volcano_owner, input.world.z);
+#endif
+    float altitude = input.material.y > 1.5 ? input.material.x : 0;
+    float mountain_cavity = lerp(0.76, 1.0, smoothstep(0.03, 0.48, altitude));
+    float ground_cavity = lerp(0.79, 1.0,
+        smoothstep(0.02, 0.30, input.base_relief));
+    float cavity = lerp(ground_cavity, mountain_cavity, rock_albedo_coverage);
+    float crevice = lerp(1.0, rock_crevice, rock_albedo_coverage);
+    float coast_inland = smoothstep(0.18, 0.86, coast_alpha);
+    output.color = float4(albedo * coast_alpha, coast_alpha);
+    output.normal = float4((normal * 0.5 + 0.5) * coast_alpha, coast_alpha);
+    output.world = float4(input.world * coast_alpha, coast_alpha);
+    // The offset marks the rock material for the common relight shader.
+    output.properties = float4(float3(2 + cavity, crevice, coast_inland) *
+                               coast_alpha, coast_alpha);
+    return output;
+#else
 #ifdef BEAUTY_COMPOSED_SHADOWS
     // The shared shadow-frame light is authoritative for both the BRDF and
     // projection, so every mountain face and cast shadow agrees in direction.
@@ -515,6 +549,7 @@ Output shade(P input) {
     output.color = float4(max(radiance, 0) * coast_alpha, coast_alpha);
     output.validity = coast_alpha;
     return output;
+#endif
 }
 
 Output PSMain(P input) { return shade(input); }

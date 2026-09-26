@@ -2,6 +2,8 @@
 #include "unit_playback.h"
 #include <map>
 #include <cstdint>
+#include <cmath>
+#include <vector>
 
 namespace c3x_renderer { namespace render_core {
 // Serialized by RendererWorker's caller gate. Instances own copied content and
@@ -21,9 +23,11 @@ public:
 private:
     struct Instance {
         c3x_renderer_unit_v1 content{};
+        c3x_renderer_unit_v1 occurrence{};
         unsigned flags=0;
         std::size_t unit=0,action=0;
         std::uint64_t revision=0,used=0;
+        int camera_x=0,camera_y=0,tile_width=0,tile_height=0,tile_x=-1,tile_y=-1;
     };
     std::map<int,Instance> instances;
     struct Observed {c3x_renderer_unit_visual_v1 value{},origin{};};
@@ -33,6 +37,7 @@ private:
     std::map<int,c3x_renderer_unit_state_v1> accepted_states;
     UnitPlayback playback;
     std::uint64_t serial=0,access=0;
+    std::uint64_t scene_generation=0;
     // CPU identity metadata only. Shared meshes and completed poses retain
     // their existing independent budgets. Eviction invalidates old selections.
     std::size_t capacity;
@@ -66,8 +71,9 @@ public:
     std::uint64_t captures=0,reused=0,bindings=0,evictions=0;
     explicit UnitInstances(std::size_t limit=4096):capacity(limit){}
     std::size_t size()const{return instances.size();}
-    void forget(int id){instances.erase(id);observations.erase(id);accepted_moves.erase(id);accepted_spawns.erase(id);accepted_states.erase(id);playback.forget(id);}
-    void clear(){instances.clear();observations.clear();accepted_moves.clear();accepted_spawns.clear();accepted_states.clear();playback.clear();} // serial never reuses a token
+    std::uint64_t generation()const{return scene_generation;}
+    void forget(int id){instances.erase(id);observations.erase(id);accepted_moves.erase(id);accepted_spawns.erase(id);accepted_states.erase(id);playback.forget(id);++scene_generation;}
+    void clear(){instances.clear();observations.clear();accepted_moves.clear();accepted_spawns.clear();accepted_states.clear();playback.clear();++scene_generation;} // serial never reuses a token
 
     bool state(c3x_renderer_unit_state_v1 const& value){
         if(value.struct_size!=sizeof(value)||value.unit_id<0||value.tile_x<0||value.tile_y<0||
@@ -89,6 +95,7 @@ public:
         if(accepted_states.size()>=capacity&&accepted_states.find(value.unit_id)==accepted_states.end())
             accepted_states.erase(accepted_states.begin());
         accepted_states[value.unit_id]=value;
+        ++scene_generation;
         return true;
     }
     c3x_renderer_unit_state_v1 const* state_of(int id)const{
@@ -103,6 +110,7 @@ public:
         forget(value.unit_id); // Civ III may reuse an ID after despawn.
         if(accepted_spawns.size()>=capacity)accepted_spawns.erase(accepted_spawns.begin());
         accepted_spawns[value.unit_id]=value;
+        ++scene_generation;
         return true;
     }
 
@@ -117,6 +125,7 @@ public:
             forget(value.unit_id);
             if(accepted_moves.size()>=capacity)accepted_moves.erase(accepted_moves.begin());
             accepted_moves[value.unit_id]=value; // Retain the fog-loss time against late observations.
+            ++scene_generation;
             return true;
         }
         auto found=accepted_moves.find(value.unit_id);
@@ -126,6 +135,7 @@ public:
         observations.erase(value.unit_id);
         if(found==accepted_moves.end()&&accepted_moves.size()>=capacity)accepted_moves.erase(accepted_moves.begin());
         accepted_moves[value.unit_id]=value;
+        ++scene_generation;
         return true;
     }
 
@@ -152,6 +162,7 @@ public:
         }
         if(found==observations.end()&&observations.size()>=capacity)observations.erase(observations.begin());
         observations[value.unit_id]=next;
+        ++scene_generation;
         return true;
     }
 
@@ -200,11 +211,16 @@ public:
             value.revision=found->second.revision;++reused;
         }else value.revision=++serial;
         value.content=content;value.flags=flags;value.used=++access;
+        value.occurrence=request;
+        if(auto state=state_of(request.unit_id)){
+            value.tile_x=state->tile_x;value.tile_y=state->tile_y;
+        }
         if(found==instances.end() && instances.size()>=capacity){
             auto oldest=std::min_element(instances.begin(),instances.end(),[](auto const& a,auto const& b){return a.second.used<b.second.used;});
             forget(oldest->first);++evictions;
         }
         instances[request.unit_id]=value;
+        ++scene_generation;
         selected.id=request.unit_id;selected.revision=value.revision;selected.occurrence=request;
         auto observed=observations.find(request.unit_id);
         if(observed!=observations.end()&&!(observed->second.value.flags&C3X_RENDERER_UNIT_HIDDEN)&&
@@ -216,6 +232,80 @@ public:
             selected.motion_origin=observed->second.origin;selected.has_visual=true;
         }
         return true;
+    }
+
+    void bind_scene_camera(int id,c3x_renderer_frame_v1 const& frame){
+        auto found=instances.find(id);
+        if(found==instances.end()||!frame.tile_count||!frame.tiles)return;
+        auto const& first=frame.tiles[0];
+        found->second.camera_x=first.anchor_x-first.tile_x*frame.tile_width/2;
+        found->second.camera_y=first.anchor_y-first.tile_y*frame.tile_height/2;
+        found->second.tile_width=frame.tile_width;
+        found->second.tile_height=frame.tile_height;
+    }
+
+    struct ScenePose {
+        c3x_renderer_unit_v1 draw{};
+        int tile_x=0,tile_y=0;
+        std::size_t unit=0,action=0;
+        unsigned predict=0;
+        bool animated=false;
+    };
+    template<class Catalog>
+    std::vector<ScenePose> scene_poses(c3x_renderer_frame_v1 const& frame,
+            long long ticks,long long frequency,Catalog const& catalog){
+        std::vector<ScenePose> result;
+        if(!frame.tile_count||!frame.tiles||frequency<=0)return result;
+        for(auto const& pair:instances){
+            auto const& item=pair.second;
+            if(!(item.flags&C3X_RENDERER_UNIT_STATE_CAPTURED)||
+               (item.flags&C3X_RENDERER_UNIT_HIDDEN)||item.tile_width<=0||item.tile_height<=0)
+                continue;
+            auto state=state_of(pair.first);
+            if(!state||!state->visible||state->kind!=C3X_RENDERER_UNIT_STATE_OBSERVE||
+               state->tile_x!=item.tile_x||state->tile_y!=item.tile_y)continue;
+            c3x_renderer_tile_v1 const* occurrence=nullptr;
+            for(unsigned i=0;i<frame.tile_count;++i){auto const& tile=frame.tiles[i];
+                bool same_x=tile.tile_x==item.tile_x;
+                if(frame.world_wrap_x&&frame.world_width_tiles>0)
+                    same_x=((tile.tile_x-item.tile_x)%frame.world_width_tiles)==0;
+                if(same_x&&tile.tile_y==item.tile_y&&
+                   (tile.tile_flags&C3X_RENDERER_TILE_VISIBLE)&&
+                   (tile.tile_flags&C3X_RENDERER_TILE_RENDER)){
+                    occurrence=&tile;break;
+                }
+            }
+            if(!occurrence)continue;
+            Selection selected{};selected.id=pair.first;selected.revision=item.revision;
+            selected.occurrence=item.occurrence;
+            auto observed=observations.find(pair.first);
+            if(observed!=observations.end()&&
+               observed->second.value.action==item.occurrence.action&&
+               observed->second.value.presentation_time_ticks==item.occurrence.presentation_time_ticks&&
+               observed->second.value.presentation_frequency==item.occurrence.presentation_frequency&&
+               observed->second.value.body_x==item.occurrence.body_x&&
+               observed->second.value.body_y==item.occurrence.body_y){
+                selected.visual=observed->second.value;
+                selected.motion_origin=observed->second.origin;selected.has_visual=true;
+            }
+            ScenePose pose{};
+            if(!sample(selected,ticks,frequency,catalog,pose.draw,pose.predict))continue;
+            // Native body anchors belong to the last displayed camera. Rebase
+            // that tile-relative offset for a newly copied pan, zoom or wrap
+            // without asking Civ III to rebuild the unit mesh or its pose.
+            double scale=double(frame.tile_width)/item.tile_width;
+            int old_x=item.camera_x+item.tile_x*item.tile_width/2;
+            int old_y=item.camera_y+item.tile_y*item.tile_height/2;
+            pose.draw.body_x=occurrence->anchor_x+int(std::lround((pose.draw.body_x-old_x)*scale));
+            pose.draw.body_y=occurrence->anchor_y+int(std::lround((pose.draw.body_y-old_y)*scale));
+            pose.draw.projection_scale_milli=int(std::lround(pose.draw.projection_scale_milli*scale));
+            pose.draw.hour=frame.hour;pose.draw.season=frame.season;
+            pose.tile_x=occurrence->tile_x;pose.tile_y=occurrence->tile_y;
+            pose.unit=item.unit;pose.action=item.action;
+            pose.animated=animated(selected,catalog);
+            result.push_back(pose);
+        }
+        return result;
     }
 
     // Clock sampling requires no new native body call. Directed actions retain

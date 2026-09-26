@@ -4,6 +4,39 @@ from Renderer.native.native_cpp_test import run_cpp
 
 
 class ObjectCompilerTests(unittest.TestCase):
+    def test_city_wall_follows_varying_hill_ground(self):
+        run_cpp(r'''
+#include "Renderer/native/object_compiler.h"
+#include <cassert>
+using namespace c3x_renderer;
+int main(){
+ FeatureBundle wall;FeatureAsset asset;asset.id="city/walls/medieval/segment_01";
+ asset.vertices={{{-.2f,0,0},{0,0,1},{0,0}},
+                 {{.2f,0,0},{0,0,1},{1,0}},
+                 {{.2f,0,.02f},{0,0,1},{1,1}}};
+ asset.indices={0,1,2};wall.assets.push_back(asset);
+ FeaturePlacement placement{};objects::Projection p;p.tile_width=128;
+ p.tile.real_terrain_type=5;
+ p.content_view_height=640;p.half_w=64;p.half_h=32;
+ p.relief_projection_scale=128.f/224.f*.82f;
+ p.feature_projection_scale=128.f/224.f;p.pickup_profile=p.world_objects=true;
+ auto relief=[](float,float){return std::array<float,3>{0,0,1};};
+ auto height=[](float x,float){return 10*x;};
+ std::vector<objects::Vertex> vertices,shadows;
+ objects::append_instance(p,wall,placement,.5f,.5f,0,1,21,.01f,false,false,
+                          relief,height,vertices,shadows);
+ assert(vertices.size()==3);
+ assert(vertices[0].world_z>7.f/112.f);
+ assert(vertices[1].world_z==vertices[0].world_z);
+ assert(vertices[2].world_z>vertices[1].world_z);
+ std::vector<objects::Vertex> next;
+ objects::append_instance(p,wall,placement,.8f,.5f,0,1,21,.01f,false,false,
+                          relief,height,next,shadows);
+ assert(next.size()==3);
+ assert(next[0].world_z>vertices[0].world_z);
+}
+''')
+
     def test_farm_river_edge_trims_as_one_clean_bank(self):
         run_cpp(r'''
 #include "Renderer/native/object_compiler.h"
@@ -46,7 +79,8 @@ int main(){
 #include <cassert>
 using namespace c3x_renderer;
 int main(){
- city_fidelity::Library library;library.materials.resize(1);library.materials[0].channels=5;
+ city_fidelity::Library library;library.materials.resize(2);
+ library.materials[0].channels=5;library.materials[1].channels=3;
  city_fidelity::Model model;model.low[2]=0;model.high[2]=.3f;
  city_fidelity::Part part;city_fidelity::Vertex vertex{};
  vertex.normal[2]=1;vertex.tangent[0]=1;vertex.bitangent[1]=1;
@@ -55,6 +89,10 @@ int main(){
  library.models.push_back(model);
  city_fidelity::Composition composition;composition.culture=0;composition.era=0;
  composition.size=0;composition.authority="lab-fixed-hill";composition.clearance[1]=18;
+ composition.foundation_material=1;composition.foundation_uv[0]=.60f;
+ composition.foundation_uv[1]=.55f;composition.foundation_uv[2]=.79f;
+ composition.foundation_uv[3]=.72f;
+ composition.foundation_step[0]=.1f;composition.foundation_step[1]=1.f;
  city_fidelity::Instance instance;instance.scale=1;
  instance.bounds[0]=instance.bounds[1]=-.2f;
  instance.bounds[2]=instance.bounds[3]=.2f;
@@ -74,11 +112,18 @@ int main(){
  assert(city_fidelity::compile(library,*selected,10,12,hill,projection,output));
  assert(output.chunks.size()==2);
  auto const& terrace=output.chunks[0];auto const& building=output.chunks[1];
- assert(terrace.vertices.size()==30 && building.vertices.size()==3);
- assert(terrace.material==building.material && !terrace.terrain_conforming);
+ assert(terrace.vertices.size()>198 && building.vertices.size()==3);
+ assert(terrace.material==1 && building.material==0 && !terrace.terrain_conforming);
+ assert(terrace.vertices[0].u==.60f && terrace.vertices[2].v==.72f);
+ assert(terrace.vertices[6].u==.60f && terrace.vertices[6].v==.55f);
  assert(terrace.vertices[0].world_z>terrace.vertices[2].world_z);
  assert(terrace.vertices[6].world_z>terrace.vertices[8].world_z);
  assert(building.vertices[0].normal_z==1 && building.vertices[0].world_z>0);
+ auto uneven=[](float x,float y){return 9.f-40.f*(std::abs(x-10.55f)+std::abs(y-12.55f));};
+ city_fidelity::Surfaces peak_output;
+ assert(city_fidelity::compile(library,*selected,10,12,uneven,projection,peak_output));
+ assert(peak_output.chunks.size()==2);
+ for(auto const& v:peak_output.chunks[1].vertices)assert(v.world_z>9.f/112.f);
 }
 ''')
 
@@ -348,17 +393,71 @@ int main(){
  std::set<std::pair<int,int>> queried;
  auto lookup=[&](int x,int y){queried.emplace(x,y);return &neighbor;};
  objects::Plan routes;objects::select_routes(tile,assets,true,true,lookup,routes);
- assert(routes.routes.size()==4 && routes.instances.size()==1 && queried.size()==4);
+ assert(routes.routes.size()==8 && routes.instances.size()==1 && queried.size()==8);
  for(auto const&r:routes.routes)assert(r.railroad && r.style==4);
  objects::Plan diagnostic;objects::select_routes(tile,assets,true,false,lookup,diagnostic);
  assert(diagnostic.routes.empty() && diagnostic.instances.size()==1);
+ tile.railroad_mask=0;neighbor.occurrence.railroad_mask=0;
+ objects::Plan dense_roads;objects::select_routes(tile,assets,true,true,lookup,dense_roads);
+ assert(dense_roads.routes.size()>=4 && dense_roads.routes.size()<=8);
+ auto missing=[](int,int)->Observation const*{return nullptr;};
+ objects::Plan isolated;objects::select_routes(tile,assets,true,true,missing,isolated);
+ assert(isolated.routes.size()==1 && !isolated.routes[0].railroad);
+ assert(isolated.routes[0].u0>=.20f && isolated.routes[0].u1<=.80f);
+ for(auto offset:std::array<std::array<int,2>,8>{{{1,-1},{2,0},{1,1},{0,2},{-1,1},{-2,0},{-1,-1},{0,-2}}}){
+  auto one=[&](int x,int y)->Observation const*{
+   return x==tile.tile_x+offset[0] && y==tile.tile_y+offset[1]?&neighbor:nullptr;};
+  objects::Plan edge;objects::select_routes(tile,assets,true,true,one,edge);
+  assert(edge.routes.size()==1 && !edge.routes[0].railroad);
+  assert(edge.routes[0].u0>=.34f && edge.routes[0].u0<=.66f);
+  assert(edge.routes[0].v0>=.34f && edge.routes[0].v0<=.66f);
+ }
+ tile.real_terrain_type=6;
+ objects::Plan isolated_mountain;objects::select_routes(tile,assets,true,true,missing,isolated_mountain);
+ assert(isolated_mountain.routes.size()==1 && isolated_mountain.routes.front().bypass);
+ for(auto offset:std::array<std::array<int,2>,2>{{{2,0},{0,2}}}){
+  auto forward=[&](int x,int y)->Observation const*{
+   return x==tile.tile_x+offset[0] && y==tile.tile_y+offset[1]?&neighbor:nullptr;};
+  objects::Plan mountain;objects::select_routes(tile,assets,true,true,forward,mountain);
+  assert(mountain.routes.size()==1);
+  for(auto const& route:mountain.routes)assert(route.bypass);
+  c3x_renderer_tile_v1 far=tile;far.tile_x+=offset[0];far.tile_y+=offset[1];far.real_terrain_type=2;
+  Observation near{tile};auto reverse=[&](int x,int y)->Observation const*{
+   return x==tile.tile_x && y==tile.tile_y?&near:nullptr;};
+  objects::Plan return_path;objects::select_routes(far,assets,true,true,reverse,return_path);
+  assert(return_path.routes.size()==1);
+  auto const& outbound=mountain.routes.front();auto const& inbound=return_path.routes.front();
+  float outbound_u=float(tile.tile_x+tile.tile_y)*.5f+outbound.u1;
+  float outbound_v=float(tile.tile_x-tile.tile_y)*.5f+1.f-outbound.v1;
+  float inbound_u=float(far.tile_x+far.tile_y)*.5f+inbound.u1;
+  float inbound_v=float(far.tile_x-far.tile_y)*.5f+1.f-inbound.v1;
+  assert(std::abs(outbound_u-inbound_u)<.0001f && std::abs(outbound_v-inbound_v)<.0001f);
+ }
+ tile.real_terrain_type=0;
+ tile.railroad_mask=1;neighbor.occurrence.railroad_mask=1;
  objects::Projection projection;projection.tile=tile;projection.tile_width=128;projection.half_w=64;projection.half_h=32;
  projection.pickup_profile=projection.world_objects=true;projection.relief_projection_scale=128.f/224*.82f;
  auto flat=[](float,float){return std::array<float,3>{0,0,0};};auto sloped=[](float u,float v){return std::array<float,3>{u+v,0,0};};
  objects::Surfaces a,b;objects::compile(routes,projection,assets,flat,[](float,float){return 0.f;},a);
  objects::compile(routes,projection,assets,sloped,[](float,float){return 0.f;},b);
- assert(a.layers[objects::route_layer].size()==384);
- for(unsigned i=0;i<384;++i){auto const& x=a.layers[objects::route_layer][i];auto const& y=b.layers[objects::route_layer][i];assert(x.u==y.u && x.v==y.v && x.x==y.x && x.y!=y.y);}
+ unsigned expected_vertices=0;for(auto const& route:routes.routes)expected_vertices+=route.bridge?336u:192u;
+ assert(a.layers[objects::route_layer].size()==expected_vertices);
+ for(unsigned i=0;i<expected_vertices;++i){auto const& x=a.layers[objects::route_layer][i];auto const& y=b.layers[objects::route_layer][i];assert(x.u==y.u && x.v==y.v && x.x==y.x && x.y!=y.y);}
+ objects::Route deck{.5f,.5f,1.f,.5f,0,false,true,false};std::vector<objects::Vertex> deck_vertices;
+ objects::append_route(projection,deck,flat,[](float,float){return 0.f;},deck_vertices);
+ assert(deck_vertices.size()==336);
+ float deck_top=0;for(auto const& vertex:deck_vertices)deck_top=std::max(deck_top,vertex.world_z);
+ assert(deck_top>.14f && deck_vertices[0].world_z<.05f);
+ objects::Route straight{.5f,.5f,1.f,.5f,0,false,false,false};
+ std::vector<objects::Vertex> junction_vertices;
+ objects::append_route(projection,straight,flat,[](float,float){return 0.f;},junction_vertices);
+ float tile_u=float(tile.tile_x+tile.tile_y)*.5f;
+ assert(std::abs(junction_vertices.front().world_x-(tile_u+.5f))<.02f);
+ assert(std::abs(junction_vertices.back().world_x-(tile_u+1.f))<.03f);
+ objects::Plan wet;wet.routes.push_back({.5f,.5f,1.f,.5f,3,false,false,false});
+ objects::promote_river_crossings(tile,assets,[&](float u,float){return std::abs(u-(tile_u+.75f))*100.f;},wet);
+ assert(wet.routes[0].bridge && std::abs(wet.routes[0].bridge_t-.5f)<.001f);
+ assert(wet.instances.size()==1 && std::abs(wet.instances[0].u-.75f)<.001f);
  objects::Plan sites;assert(objects::select_improvements(tile,assets,2,C3X_RENDERER_IMPROVEMENT_GOODY_HUT|C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP,false,false,false,false,sites));
  assert(sites.instances.size()==2);bundles[objects::farm_family].groups.clear();objects::Plan failure;
  assert(!objects::select_improvements(tile,assets,2,0,true,true,true,false,failure));
@@ -401,8 +500,10 @@ int main(){
   p.relief_projection_scale=width/224.f*.82f;p.feature_projection_scale=width/224.f;p.pickup_profile=p.world_objects=true;
   input.ground=2;input.world_revision=1;input.composition_ready=input.route_ready=true;
   auto expected=objects::prepare(input,assets,library,natural,terrain,coast,observations,foreground,[]{return false;});
-  assert(expected && expected->city.size()==2 && expected->topology.size()==4 && !expected->world.empty());
+  assert(expected && expected->city.size()==2 && expected->topology.size()==8 && !expected->world.empty());
   assert(expected->routes==1 && !expected->layers[objects::route_layer].mesh.empty());
+  float route_x=0;std::memcpy(&route_x,expected->layers[objects::route_layer].mesh.vertices.data(),sizeof(route_x));
+  assert(route_x>5.f); // world projection keeps source-space XY; no kind-2 normalization
   objects::PreparationLease lease;auto job=input;
   lease.queue.configure({{1,job}},[&](auto const& owned,auto const& stop,unsigned){
    return objects::prepare(owned,assets,library,natural,terrain,coast,observations,lease.scratch,[&]{return stop.load();});

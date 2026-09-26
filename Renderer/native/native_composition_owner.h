@@ -23,6 +23,7 @@ class CompositionOwner {
     std::unique_ptr<c3x_gpu_images::WorkerClient> client;
     std::unique_ptr<Adapter<c3x_gpu_images::WorkerClient>> adapter;
     c3x_renderer_gpu_frame_v1 frame={sizeof(frame)};
+    bool scene_units=false;
     using Tactical=c3x_renderer::tactical::Input;
     std::function<int(Tactical const&,c3x_renderer_gpu_unit_v1 const&)> tactical;
     Tactical route;void* route_image=nullptr;c3x_renderer_tactical_view_v1 route_view={};
@@ -59,7 +60,7 @@ public:
     }
 public:
     CompositionOwner(c3x_renderer_gpu_render_fn r,c3x_renderer_gpu_images_fn i,c3x_renderer_gpu_present_fn p,
-        c3x_renderer_gpu_unit_fn u,c3x_renderer_native_lifetime_fn l,void* b,void* end):render(r),images(i),present(p),unit(u),lifetime(l),bits(b),release(end){}
+        c3x_renderer_gpu_unit_fn u,c3x_renderer_native_lifetime_fn l,void* b,void* end,bool direct_scene_units=false):render(r),images(i),present(p),unit(u),lifetime(l),bits(b),release(end),scene_units(direct_scene_units){}
     void set_camera(c3x_renderer_gpu_camera_begin_fn begin,c3x_renderer_gpu_camera_poll_view_fn poll,c3x_renderer_camera_cancel_fn cancel){
         camera_begin=begin;camera_poll=poll;camera_cancel=cancel;
     }
@@ -220,6 +221,20 @@ public:
         }
         if(op==C3X_NATIVE_UNIT_DRAW){
             if(!from||!to)return 0;
+            if(scene_units&&adapter->owns(image)){
+                // The fresh scene owns the map body and depth. Forward only the
+                // copied native identity/pose; pending UI commands keep their
+                // normal order and are flushed at the display boundary.
+                c3x_renderer_gpu_unit_v1 target={sizeof(target)};
+                target.ticket=frame.ticket;target.destination=frame.map_image;
+                target.background=frame.map_image;target.clip[2]=frame.width;
+                target.clip[3]=frame.height;target.playback_flags=color;
+                int result=unit(static_cast<c3x_renderer_unit_v1 const*>(from),&target,
+                    const_cast<int*>(static_cast<int const*>(to)));
+                if(result!=C3X_RENDERER_RESULT_OK)
+                    throw std::runtime_error("fresh map unit capture failed");
+                return 1;
+            }
             return adapter->draw_unit(unit,frame.ticket,*static_cast<c3x_renderer_unit_v1 const*>(from),image,source,
                 const_cast<int*>(static_cast<int const*>(to)),color)?1:0;
         }

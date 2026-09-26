@@ -36,6 +36,7 @@ CULTURE_SHIFT = ((-.025, -.015), (.0, -.035), (.025, .015),
                  (-.015, .025), (.015, .0))
 WALL_SCALE = 2.3
 WALL_RADII = (.43, .58, .70)
+WALL_DRAW_RADII = (.48, .64, .76)
 WALL_SEGMENTS = (16, 20, 24)
 WALL_ROUNDNESS = 6
 TIER_SCALES = (1.0, 1.22, 1.42)
@@ -51,7 +52,7 @@ PALACE_STYLES = (
 
 def wall_curve(size: int, count: int) -> list[tuple[float, float, float]]:
     """Equally spaced positions/tangents on a low rounded-square perimeter."""
-    radius = WALL_RADII[size]
+    radius = WALL_DRAW_RADII[size]
     steps = 2048
     points = []
     distances = [0.0]
@@ -317,7 +318,7 @@ def build() -> dict:
                             **({"vertical_metric": 1.0} if replaces_centerpiece else {}),
                             "wall_kit": ("ancient", "medieval", "industrial", "industrial")[era]})
     return {"schema": "c3x.lab.city_design.v1", "site": "flat grassland",
-            "tile_xy": [-.5, -.5, .5, .5], "wall_perimeters": list(WALL_RADII),
+            "tile_xy": [-.5, -.5, .5, .5], "wall_perimeters": list(WALL_DRAW_RADII),
             "styles": list(STYLES), "eras": list(ERAS), "designs": designs}
 
 

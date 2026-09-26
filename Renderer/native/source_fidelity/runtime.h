@@ -93,7 +93,9 @@ struct Natural : NaturalWorld {
         d.ByteWidth=UINT(indices.size()*sizeof(unsigned));d.BindFlags=D3D11_BIND_INDEX_BUFFER;input.pSysMem=indices.data();
         if(FAILED(device->CreateBuffer(&d,&input,&m.indices))){drop(m.vertices);return false;}
         auto const& material=materials[bodies[body].material];
-        float values[]={1,material.repeat?2.f:0.f,material.channels[3]!=0xffffffffu?1.f:0.f,
+        float values[]={1,(material.repeat?2.f:0.f)+
+            (material.channels[1]!=0xffffffffu && material.channels[2]!=0xffffffffu?1.f:0.f),
+            material.channels[3]!=0xffffffffu?1.f:0.f,
             material.channels[4]!=0xffffffffu?1.f:0.f,float(material.tint),material.channels[6]!=0xffffffffu?1.f:0.f,0,0};
         d.ByteWidth=sizeof(values);d.BindFlags=D3D11_BIND_CONSTANT_BUFFER;input.pSysMem=values;
         if(FAILED(device->CreateBuffer(&d,&input,&m.material))){drop(m.vertices);drop(m.indices);return false;}

@@ -93,6 +93,57 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
         auto value=input.retain_height?scratch.heights.get(x,y,compute):compute();
         if(support)*support=value[1];return value[0];
     };
+    struct MountainPiece {
+        unsigned height_field,blend_field;
+        float center_x,center_y,long_span,cross_span,height_scale;
+        bool connected,range_y;
+    };
+    std::array<MountainPiece,9> mountain_pieces{};
+    unsigned mountain_count=0;
+    if(input.projection.tile.road_mask || input.projection.tile.railroad_mask)
+        for(int dr=-1;dr<=1;++dr)for(int dc=-1;dc<=1;++dc){
+            int pc=nc+dc,pr=nr+dr;auto owner=lookup_natural(pc,pr);
+            if(owner.real!=6)continue;
+            bool west=lookup_natural(pc-1,pr).real==6,east=lookup_natural(pc+1,pr).real==6;
+            bool north=lookup_natural(pc,pr-1).real==6,south=lookup_natural(pc,pr+1).real==6;
+            unsigned along_x=unsigned(west)+unsigned(east),along_y=unsigned(north)+unsigned(south);
+            bool connected=along_x+along_y>0,turn=connected&&along_x==along_y;
+            unsigned variant=mountain_seed(owner)%5u;
+            mountain_pieces[mountain_count++]={natural.macro[variant][0],natural.macro[variant][1],
+                float(pc)+.5f+.09f*(int(east)-int(west)),
+                float(pr)+.5f+.09f*(int(south)-int(north)),
+                connected?(turn?2.08f:2.46f):1.85f,
+                connected?(turn?1.82f:1.34f):1.55f,
+                connected?142.f:165.f,connected,along_y>along_x};
+        }
+    auto route_height=[&](float x,float y){
+        float base=height_natural(x,y);
+        if(!mountain_count)return base;
+        float displacement=0;
+        for(unsigned index=0;index<mountain_count;++index){
+            auto const&piece=mountain_pieces[index];
+            float source_x=piece.range_y?(y-piece.center_y)/piece.long_span:
+                (x-piece.center_x)/piece.long_span;
+            float source_y=piece.range_y?(x-piece.center_x)/piece.cross_span:
+                (y-piece.center_y)/piece.cross_span;
+            float u=.5f+source_x,v=.5f-source_y;
+            if(u<0||u>1||v<0||v>1)continue;
+            float h=natural.fields[piece.height_field].sample(u,v);
+            float blend=natural.fields[piece.blend_field].sample(u,v);
+            float shaped=piece.connected?std::pow(std::max(0.f,h),.80f):h;
+            float next=shaped*piece.height_scale*smooth01((blend-.28f)/.34f);
+            if(next<=0)continue;
+            if(displacement<=0)displacement=next;
+            else {float high=std::max(displacement,next);
+                float ridge=std::max(0.f,10.f-std::abs(displacement-next));
+                displacement=high+ridge*ridge/40.f;}
+        }
+        if(displacement<=0)return base;
+        auto shore=queries.shore(x,y);
+        float river_scale=input.river_ready?
+            smooth01((float(scratch.rivers.river_sample({x,y}).distance)-6.f)/16.f):1.f;
+        return base+displacement*coast_relief(float(shore.distance),float(shore.beach_width))*river_scale;
+    };
 
     auto relief=[&](float u,float v){auto s=pickup_surface.sample(u,v);
         float farm_clearance=1.0f;
@@ -113,6 +164,10 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
         auto key=observations.key(x,y);auto record=observations.current(key);
         result->topology.emplace(key,record?record->semantic:0);return record;
     },plan);
+    if(input.river_ready && input.route_ready && input.routes_enabled)
+        promote_river_crossings(tile,assets,[&](float x,float y){
+            return float(scratch.rivers.river_sample({x,y}).distance);
+        },plan);
     unsigned sites=tile.improvement_flags&(C3X_RENDERER_IMPROVEMENT_GOODY_HUT|C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP);
     if(!select_improvements(tile,assets,input.ground,sites,input.mine_ready,input.farm_ready,input.city_ready,composition!=nullptr,plan))return {};
     if(input.farm_ready && (tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_IRRIGATION)){
@@ -122,7 +177,9 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
     result->instances=unsigned(plan.instances.size());result->routes=unsigned(plan.routes.size());
     // Bound worker transients before expanded triangles are constructed. Large
     // valid packs can still use the same synchronous compiler on recovery.
-    std::uint64_t raw_bytes=std::uint64_t(plan.routes.size())*96u*sizeof(Vertex);
+    std::uint64_t raw_bytes=0;
+    for(auto const& route:plan.routes)
+        raw_bytes+=std::uint64_t(route.bridge?336u:192u)*sizeof(Vertex);
     for(auto const& instance:plan.instances){
         if(instance.asset>=assets[instance.family].assets.size())continue; // same absent-asset behavior as append_instance
         auto const& asset=assets[instance.family].assets[instance.asset];
@@ -170,7 +227,7 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
         plan.instances=std::move(surfaces_only);
     }
     std::vector<unsigned> instance_counts;
-    compile(plan,input.projection,assets,relief,height_natural,surfaces,true,
+    compile(plan,input.projection,assets,relief,route_height,surfaces,true,
         input.shared_rigid?&instance_counts:nullptr);
     if(input.shared_rigid){
         for(auto& draw:result->draws)if(draw.rigid==~0u)draw.count=0;
@@ -185,7 +242,8 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
             result->draws.end());
     }
     for(unsigned layer=0;layer<layer_count;++layer){
-        render_core::MeshFormat format;format.feature=layer!=route_layer;format.projection_kind=2;
+        render_core::MeshFormat format;format.feature=layer!=route_layer;
+        format.projection_kind=layer==route_layer && input.projection.world_objects?1:2;
         if(!render_core::prepare_mesh(surfaces.layers[layer],layer==route_layer?nullptr:&surfaces.indices[layer],format,result->layers[layer].mesh,stop))return {};
         std::vector<Vertex>().swap(surfaces.layers[layer]);
         if(bounded && result->bytes()>Preparation::byte_limit/2)return {};

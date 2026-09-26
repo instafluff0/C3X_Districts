@@ -59,7 +59,10 @@ Composition const* select(Library const& library,c3x_renderer_tile_v1 const& rec
             if(!legal || !clear_box(clear_box,x,y,dx+paving_margin,dy+paving_margin,0)){legal=false;break;}
             float low=height_natural(x,y),high=low;
             for(int sy:{-1,1})for(int sx:{-1,1}){float h=height_natural(x+float(sx)*dx,y+float(sy)*dy);low=std::min(low,h);high=std::max(high,h);}
-            if(high-low>t.clearance[1]){legal=false;break;}
+            float slope_limit=t.clearance[1];
+            if(record.real_terrain_type==5 && t.authority.rfind("lab-fixed-",0)==0)
+                slope_limit=std::max(slope_limit,64.f);
+            if(high-low>slope_limit){legal=false;break;}
         }
         if(legal)return &t;
     }
@@ -81,17 +84,21 @@ bool compile(Library const& library,Composition const& selected,int nc,int nr,
         float y_low=center_y-i.bounds[3],y_high=center_y-i.bounds[1];
         float corners[4][2]={{x_low,y_low},{x_high,y_low},
                               {x_high,y_high},{x_low,y_high}};
-        float corner_ground[4]={};
         float ground_low=ground_center,ground_high=ground_center;
-        for(unsigned corner=0;corner<4;corner++){
-            corner_ground[corner]=height_natural(corners[corner][0],corners[corner][1]);
-            ground_low=std::min(ground_low,corner_ground[corner]);
-            ground_high=std::max(ground_high,corner_ground[corner]);
+        // Hills can crest in the middle of a plot, not just at its corners.
+        // Sample the complete building footprint before choosing its level.
+        for(unsigned row=0;row<=8;row++)for(unsigned column=0;column<=8;column++){
+            float x=x_low+(x_high-x_low)*float(column)/8.f;
+            float y=y_low+(y_high-y_low)*float(row)/8.f;
+            float ground=height_natural(x,y);
+            ground_low=std::min(ground_low,ground);
+            ground_high=std::max(ground_high,ground);
         }
         bool terrace=composition->authority.rfind("lab-fixed-",0)==0 &&
             ground_high-ground_low>.75f;
+        float lowest_source=std::min(0.f,m.low[2]*i.scale/source_z_metric);
         auto placement=place(i,float(nc)+.5f,float(nr)+.5f,
-                             terrace?ground_high+.02f:ground_center);
+                             terrace?ground_high-lowest_source+.02f:ground_center);
         for(auto const&l:i.lights)lighting->lights.push_back(placement.light(l,owner_index));
         Lighting::Box b={{placement.x+i.bounds[0],-placement.y+i.bounds[1],
             placement.z*source_z_metric+std::max(0.f,m.low[2])*i.scale,0},
@@ -109,13 +116,19 @@ bool compile(Library const& library,Composition const& selected,int nc,int nr,
                     foundation_u=vertex.uv0[0];foundation_v=vertex.uv0[1];
                 }
             if(foundation_material!=~0u){
+                if(composition->foundation_material!=~0u)
+                    foundation_material=composition->foundation_material;
+                float u0=composition->foundation_material!=~0u?composition->foundation_uv[0]:foundation_u;
+                float v0=composition->foundation_material!=~0u?composition->foundation_uv[1]:foundation_v;
+                float u1=composition->foundation_material!=~0u?composition->foundation_uv[2]:foundation_u;
+                float v1=composition->foundation_material!=~0u?composition->foundation_uv[3]:foundation_v;
                 Chunk support;support.material=foundation_material;
                 support.environment=composition->environment!=0;
                 support.lighting=lighting;
-                float top=placement.z*112.f+.006f;
-                auto vertex=[&](float x,float y,float z,float nx,float ny,float nz){
+                float top=placement.z*112.f+m.low[2]*i.scale/source_z_metric+.006f;
+                auto vertex=[&](float x,float y,float z,float nx,float ny,float nz,float u,float v){
                     auto out=project_natural(x,y,z);
-                    out.u=foundation_u;out.v=foundation_v;
+                    out.u=u;out.v=v;
                     out.normal_x=nx;out.normal_y=ny;out.normal_z=nz;
                     out.material_grass=1.f;out.material_plains=0.f;
                     out.material_desert=0.f;out.material_marsh=0.f;
@@ -128,19 +141,52 @@ bool compile(Library const& library,Composition const& selected,int nc,int nr,
                     float dy=corners[next][1]-corners[side][1];
                     float length=std::hypot(dx,dy);
                     float nx=length>0?dy/length:0.f,ny=length>0?-dx/length:0.f;
+                    float module_x=composition->foundation_step[0]>0?
+                        composition->foundation_step[0]:length/8.f;
+                    float module_z=composition->foundation_step[1]>0?
+                        composition->foundation_step[1]:std::max(1.f,top-ground_low);
+                    unsigned sections=std::clamp(unsigned(std::ceil(length/module_x)),1u,64u);
+                    for(unsigned section=0;section<sections;section++){
+                        float start=float(section)/float(sections),end=float(section+1u)/float(sections);
+                        float x0=corners[side][0]+dx*start,y0=corners[side][1]+dy*start;
+                        float x1=corners[side][0]+dx*end,y1=corners[side][1]+dy*end;
+                        float g0=height_natural(x0,y0)-.02f,g1=height_natural(x1,y1)-.02f;
+                        float us=u0,ue=u0+(u1-u0)*(length*(end-start)/module_x);
+                        unsigned courses=std::clamp(unsigned(std::ceil((top-std::min(g0,g1))/module_z)),1u,64u);
+                        for(unsigned course=0;course<courses;course++){
+                            float level=top-float(course)*module_z;
+                            float upper0=std::max(level,g0),upper1=std::max(level,g1);
+                            float lower0=std::max(level-module_z,g0),lower1=std::max(level-module_z,g1);
+                            if(upper0<=lower0 && upper1<=lower1)continue;
+                            auto uv_v=[&](float z){return v0+(v1-v0)*
+                                std::clamp((level-z)/module_z,0.f,1.f);};
+                            unsigned base=unsigned(support.vertices.size());
+                            support.vertices.push_back(vertex(x0,y0,upper0,nx,ny,0.f,us,uv_v(upper0)));
+                            support.vertices.push_back(vertex(x1,y1,upper1,nx,ny,0.f,ue,uv_v(upper1)));
+                            support.vertices.push_back(vertex(x1,y1,lower1,nx,ny,0.f,ue,uv_v(lower1)));
+                            support.vertices.push_back(vertex(x0,y0,lower0,nx,ny,0.f,us,uv_v(lower0)));
+                            unsigned triangles[]={base,base+1u,base+2u,base,base+2u,base+3u};
+                            support.indices.insert(support.indices.end(),std::begin(triangles),std::end(triangles));
+                        }
+                    }
+                }
+                float module_x=composition->foundation_step[0]>0?
+                    composition->foundation_step[0]:std::max(x_high-x_low,y_high-y_low);
+                unsigned across=std::clamp(unsigned(std::ceil((x_high-x_low)/module_x)),1u,64u);
+                unsigned deep=std::clamp(unsigned(std::ceil((y_high-y_low)/module_x)),1u,64u);
+                for(unsigned row=0;row<deep;row++)for(unsigned column=0;column<across;column++){
+                    float xa=x_low+float(column)*module_x,xb=std::min(xa+module_x,x_high);
+                    float ya=y_low+float(row)*module_x,yb=std::min(ya+module_x,y_high);
+                    float ue=u0+(u1-u0)*(xb-xa)/module_x;
+                    float ve=v0+(v1-v0)*(yb-ya)/module_x;
                     unsigned base=unsigned(support.vertices.size());
-                    support.vertices.push_back(vertex(corners[side][0],corners[side][1],top,nx,ny,0.f));
-                    support.vertices.push_back(vertex(corners[next][0],corners[next][1],top,nx,ny,0.f));
-                    support.vertices.push_back(vertex(corners[next][0],corners[next][1],corner_ground[next]-.02f,nx,ny,0.f));
-                    support.vertices.push_back(vertex(corners[side][0],corners[side][1],corner_ground[side]-.02f,nx,ny,0.f));
+                    support.vertices.push_back(vertex(xa,ya,top,0.f,0.f,1.f,u0,v0));
+                    support.vertices.push_back(vertex(xb,ya,top,0.f,0.f,1.f,ue,v0));
+                    support.vertices.push_back(vertex(xb,yb,top,0.f,0.f,1.f,ue,ve));
+                    support.vertices.push_back(vertex(xa,yb,top,0.f,0.f,1.f,u0,ve));
                     unsigned triangles[]={base,base+1u,base+2u,base,base+2u,base+3u};
                     support.indices.insert(support.indices.end(),std::begin(triangles),std::end(triangles));
                 }
-                unsigned base=unsigned(support.vertices.size());
-                for(auto const&corner:corners)
-                    support.vertices.push_back(vertex(corner[0],corner[1],top,0.f,0.f,1.f));
-                unsigned top_triangles[]={base,base+1u,base+2u,base,base+2u,base+3u};
-                support.indices.insert(support.indices.end(),std::begin(top_triangles),std::end(top_triangles));
                 if(!indexed){
                     std::vector<fidelity::MapVertex> expanded;
                     expanded.reserve(support.indices.size());

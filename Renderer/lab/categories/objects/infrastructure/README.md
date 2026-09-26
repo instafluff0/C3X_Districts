@@ -4,9 +4,12 @@ Current roads, railroads, mines and farms; preserve category ownership and fallb
 
 The fixtures supply two connected runs and a cross-branch, plus a separate mine
 and irrigated farm, with and without surrounding relief/vegetation. All four
-custom ownership flags are checked through the production API. The present
-headless output shows gaps between route segments despite connected input
-nodes; this is an exposed current limitation, not a new design.
+custom ownership flags are checked through the production API. The existing
+category reference shows gaps between route segments despite connected input
+nodes; the candidate in `Renderer/lab/studies/roads/` addresses tile ownership
+at those seams and is being evaluated over `test.biq`. It also tests all eight
+neighbor directions, deterministic shape variation, four road eras, mountain
+bypass paths, and river bridges with a deck between the authored side arches.
 This category does not imply new support for pollution, craters, colonies or
 other tile improvements that the current renderer does not replace.
 

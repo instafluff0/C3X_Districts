@@ -43,6 +43,9 @@ struct Composition {
     float clearance[4]={}; // dry shore, height range, vegetation margin, river pixels
     std::vector<Instance> instances;
     Paving paving;
+    unsigned foundation_material=~0u;
+    float foundation_uv[4]={};
+    float foundation_step[2]={};
 };
 struct WorldInstance {
     float x=0,y=0,z=0,scale=1,cosine=1,sine=0;
@@ -112,7 +115,9 @@ struct Library {
     bool decode(std::vector<std::uint8_t> const&bytes) {
         // Decode transactionally: an incomplete/stale pack cannot replace a
         // usable library or cause native city suppression.
-        if(bytes.size()<20 || bytes.size()>32u*1024u*1024u || std::memcmp(bytes.data(),"C3XCITY2",8))return false;
+        if(bytes.size()<20 || bytes.size()>32u*1024u*1024u ||
+            (std::memcmp(bytes.data(),"C3XCITY2",8) && std::memcmp(bytes.data(),"C3XCITY3",8)))return false;
+        bool with_foundations=bytes[7]=='3';
         Library next;Reader r{bytes};
         unsigned nm=r.number(512),nb=r.number(512),nt=r.number(256);
         if(!r.valid || !nm || !nb || !nt)return false;
@@ -155,6 +160,16 @@ struct Library {
                 if(!r.valid || nv>(bytes.size()-r.cursor)/sizeof(PavingVertex))return false;
                 p.vertices.resize(nv);
                 if(!r.floats(reinterpret_cast<float*>(p.vertices.data()),nv*3) || !r.indices(p.indices,nv,ni2))return false;
+            }
+            if(with_foundations && r.number(1)){
+                t.foundation_material=r.number(nm-1);
+                if(!r.floats(t.foundation_uv,4) || !r.floats(t.foundation_step,2) ||
+                    t.foundation_step[0]<=0 || t.foundation_step[1]<=0 ||
+                    t.foundation_step[0]>1 || t.foundation_step[1]>112 ||
+                    t.foundation_uv[0]<0 ||
+                    t.foundation_uv[1]<0 || t.foundation_uv[2]>1 ||
+                    t.foundation_uv[3]>1 || t.foundation_uv[0]>=t.foundation_uv[2] ||
+                    t.foundation_uv[1]>=t.foundation_uv[3])return false;
             }
         }
         if(!r.valid || r.cursor!=bytes.size())return false;

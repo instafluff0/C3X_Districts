@@ -42,7 +42,9 @@
                 auto out=project_natural(x,y,ground_h+p.position[2]*scale*z_basis*112);
                 float n[]={p.normal[0]*co-p.normal[1]*si,-(p.normal[0]*si+p.normal[1]*co),p.normal[2]/z_basis};normalize3(n);
                 out.normal_x=n[0];out.normal_y=n[1];out.normal_z=n[2];out.u=p.uv[0];out.v=p.uv[1];
-                out.material_grass=1;out.material_plains=mat.repeat?2.f:0.f;out.material_desert=mat.channels[3]!=0xffffffffu?1.f:0.f;
+                out.material_grass=1;out.material_plains=(mat.repeat?2.f:0.f)+
+                    (mat.channels[1]!=0xffffffffu && mat.channels[2]!=0xffffffffu?1.f:0.f);
+                out.material_desert=mat.channels[3]!=0xffffffffu?1.f:0.f;
                 out.material_marsh=mat.channels[4]!=0xffffffffu?1.f:0.f;out.authored_relief_height=float(mat.tint);
                 out.authored_relief_blend=mat.channels[6]!=0xffffffffu?1.f:0.f;
                 out.base_terrain=mat.repeat?41.f:40.f;
