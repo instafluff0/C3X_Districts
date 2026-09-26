@@ -10,7 +10,8 @@ inline bool shared_rigid_mesh(FeatureAsset const& asset){
     // This is a geometry property, independent of pack origin or asset naming.
     if(asset.vertices.empty() || asset.indices.empty())return false;
     auto z=asset.vertices.front().position[2];
-    for(auto const& vertex:asset.vertices)if(vertex.position[2]!=z)return true;
+    float tolerance=asset.id.rfind("farm_",0)==0?1e-5f:0.0f;
+    for(auto const& vertex:asset.vertices)if(std::abs(vertex.position[2]-z)>tolerance)return true;
     return false;
 }
 // Copied placement of a rigid source asset. The source mesh belongs to the

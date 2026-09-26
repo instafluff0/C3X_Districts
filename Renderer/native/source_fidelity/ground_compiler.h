@@ -20,7 +20,7 @@
 // shared state. The frozen/legacy (!pickup_profile) callables still delegate
 // to the shared, topology_cache-reading closures below, since that path is
 // foreground-only and never scheduled concurrently.
-#include "../../lab/shared/natural/vertex.h"
+#include "../../lab/shared/natural/ground.h"
 #include "../render_core/terrain_query.h"
 #include "../c3x_renderer_api.h"
 #include <algorithm>
@@ -226,11 +226,20 @@ void compile_ground_surfaces(GroundCompileInput const & input, c3x_renderer_fram
                 water_family_depth(point.world_u, point.world_v);
         return ground_point_cache.emplace(key, point).first->second;
     };
+    bool river_near = input.fidelity_profile && input.river_assets_ready &&
+        (((tile.river_code & 170u) != 0) ||
+         natural.river_affects((tile.tile_x+tile.tile_y)/2,(tile.tile_x-tile.tile_y)/2));
     auto make_ground_vertex = [&](float u, float v, float layer) {
         GroundPoint & point = ground_point_at(u, v);
         float world_u = point.world_u;
         float world_v = point.world_v;
+        bool underlay_surface = layer > 0.4f && layer < 0.6f;
         bool land_surface = layer > 0.75f && layer < 1.25f;
+        bool river_surface = layer > 8.5f && layer < 9.5f;
+        bool shadow_surface = layer > 9.5f && layer < 10.5f;
+        float river_surface_distance = river_surface ||
+            (river_near && (underlay_surface || land_surface || shadow_surface))
+            ? river_distance(tile, u, v) : 1000.0f;
         bool terrain_conforming_surface = land_surface ||
             (layer > 8.5f && layer < 10.5f);
         if (terrain_conforming_surface && !point.terrain_ready) {
@@ -256,6 +265,8 @@ void compile_ground_surfaces(GroundCompileInput const & input, c3x_renderer_fram
         std::array<float, 3> relief_sample = terrain_conforming_surface
             ? std::array<float, 3>{point.relief[0], point.relief[1], point.relief[2]} :
               std::array<float, 3>{0.0f, 0.0f, 0.0f};
+        if (river_near && (underlay_surface || land_surface || river_surface || shadow_surface))
+            relief_sample[0] += river_channel_cut(river_surface_distance);
         float h = relief_sample[0] * input.relief_projection_scale;
         float signed_shore = point.signed_shore;
         if (!input.pickup_profile && land_surface && h > 0.0f) {
@@ -276,9 +287,6 @@ void compile_ground_surfaces(GroundCompileInput const & input, c3x_renderer_fram
         float surface_coordinate = point.surface_coordinate;
         float shadow_visibility = !input.pickup_profile && layer > 9.5f
             ? cast_shadow_visibility(world_u, world_v, relief_sample[0]) : 1.0f;
-        bool river_surface = layer > 8.5f && layer < 9.5f;
-        float river_surface_distance = river_surface
-            ? river_distance(tile, u, v) : 1000.0f;
         auto owner_material = input.pickup_profile && terrain_conforming_surface
             ? pickup_ground_at(world_u, world_v).owner : std::array<float,4>{};
         MapVertex vertex{
@@ -351,7 +359,9 @@ void compile_ground_surfaces(GroundCompileInput const & input, c3x_renderer_fram
                 }else{
                     grid_vertices[at]=make_ground_vertex(u,v,layer);
                     if(record){auto const& point=ground_point_at(u,v);
-                        pending.samples[at]={layer==1.f || layer==9.f?point.relief[0]:0.f,
+                        pending.samples[at]={layer==.5f || layer==1.f || layer==9.f
+                            ? point.relief[0]+(river_near
+                                ? river_channel_cut(grid_vertices[at].river_distance) : 0.f) : 0.f,
                             point.normal_delta[0],point.normal_delta[1]};}
                 }
             }
@@ -381,15 +391,20 @@ void compile_ground_surfaces(GroundCompileInput const & input, c3x_renderer_fram
             }
         }
     };
-    append_ground_layer(destination.underlay_vertices, 0.5f, input.flat_grid, &destination.underlay_indices);
+    append_ground_layer(destination.underlay_vertices, 0.5f,
+                        river_near ? std::max(input.flat_grid,
+                            frame.tile_width >= 96 ? 32 : 16) : input.flat_grid,
+                        &destination.underlay_indices);
     if (input.ground < 11 && (!input.fidelity_profile || input.draw_marsh))
-        append_ground_layer(destination.land_vertices, 1.0f, input.tile_ground_grid, &destination.land_indices);
+        append_ground_layer(destination.land_vertices, 1.0f,
+                            river_near ? std::max(input.tile_ground_grid,
+                                frame.tile_width >= 96 ? 32 : 16) : input.tile_ground_grid,
+                            &destination.land_indices);
     if (!input.pickup_profile) {
         append_ground_layer(destination.bed_vertices, 4.0f, input.flat_grid, &destination.bed_indices);
         append_ground_layer(destination.water_vertices, 5.0f, input.flat_grid, &destination.water_indices);
     }
-    if (input.river_assets_ready && ((tile.river_code & 170u) != 0 ||
-            (input.fidelity_profile && natural.river_affects((tile.tile_x+tile.tile_y)/2,(tile.tile_x-tile.tile_y)/2))))
+    if (input.river_assets_ready && ((tile.river_code & 170u) != 0 || river_near))
         append_ground_layer(destination.river_vertices, 9.0f,
                             frame.tile_width >= 96 ? 32 : 16, &destination.river_indices);
     if (!input.pickup_profile && input.ground < 11) {

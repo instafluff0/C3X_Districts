@@ -12,6 +12,13 @@
 #include "../../../native/source_fidelity/kernels.h"
 #include "../../../native/source_fidelity/coast_join.h"
 namespace c3x_renderer { namespace fidelity {
+inline float river_channel_cut(float distance) {
+    auto smooth=[](float value) {
+        value=std::clamp(value,0.f,1.f);
+        return value*value*(3.f-2.f*value);
+    };
+    return -1.1f*(1.f-smooth((distance-5.6f)/1.8f));
+}
 struct GroundProjection {
     int column, row;
     float half_width, half_height, relief_scale, target_height;

@@ -66,6 +66,28 @@ are authored data, not the recovered placement algorithm. Keep Base/Expansion2
 profiles distinct when content merge order is unknown. The user's single-era
 city policy supersedes attempts to reproduce mixed-era distribution weights.
 
+The installed Base `Cultures.artdef` associates Japan with both AncientWood
+and EastAsian art tags. The Base AncientWood/ancient city block list resolves
+37 distinct components: eleven A houses, eleven B houses, and fifteen composed
+blocks. The earlier representative pool admitted only twelve, including just
+one B house; its darker A-house selection could not represent the golden-roof
+B family visible in the source atlas. The B atlas has authored golden thatch
+color and the focused Lab intake retains its 1024×512 base color, LEAN and
+gloss textures plus source vertex frames. This proves the missing source family
+was available, but does not prove the exact Civ VI Japanese screenshot uses a
+particular block or reproduce its engine exposure. The AncientWood palace is
+separately resolved from `CityPalacesNormalized`; its stone platform is authored
+geometry. The fifteen composed blocks have broad stone bases, so adopting them
+requires a separate tile-fit and grounding review rather than treating them as
+interchangeable houses.
+
+All palace platform meshes selected for the five culture-group Lab designs
+have roughly a 30-degree source-grid offset, while the selected city houses
+are aligned to the tile grid. Giving both the same numeric rotation misaligns
+their visible walls. The Lab designs apply the measured palace correction so
+its edges run parallel to the tile edges; this is an authored-mesh orientation
+correction, not per-city variation.
+
 City paving uses selected source atlas parts, terrain-following projection and
 independent material coordinates. It receives shadows but is not a rigid building
 foundation. Tested AO-bearing bodies use a separate UV set; do not generalize

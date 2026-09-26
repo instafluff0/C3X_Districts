@@ -27,6 +27,11 @@
 #include <vector>
 
 #include "c3x_renderer_api.h"
+#ifdef C3X_RENDERER64_FRESH
+// Defined by the Renderer64 scene client after production's visual preparation.
+bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
+    ID3D11RenderTargetView* target);
+#endif
 #include "terrain_scene_runtime.h"
 #include "object_compiler.h"
 #include "animation_runtime.h"
@@ -479,6 +484,9 @@ public:
     // Background content compilation keeps native viewport depth/projection units.
     int content_view_width=0,content_view_height=0;
     bool gpu_output_mode=false,cpu_output_stale=false;
+#ifdef C3X_RENDERER64_FRESH
+    bool fresh_path_failed=false;
+#endif
     bool visibility_pass=false;
     c3x_renderer::GpuVisibility visibility_gpu;
     c3x_renderer::render_core::VisibilityCoverage visibility_coverage;
@@ -4883,7 +4891,13 @@ public:
         output.clip_bottom = frame.clip_bottom;
         output.rendered_tile_count = cached_rendered_tile_count;
         output.fallback_tile_count = cached_fallback_tile_count;
+#ifdef C3X_RENDERER64_FRESH
+        // The fresh scene already posed and drew resources into its own pass.
+        if (!(gpu_output_mode && std::strcmp(frame_cache_path,"resident-fresh")==0) &&
+            !compose_resource_animations(frame)) return false;
+#else
         if (!compose_resource_animations(frame)) return false;
+#endif
         if(world_regions){
             char detail[320];sprintf_s(detail,"hits=%zu misses=%zu hit_pixels=%zu gpu_bytes=%zu metadata_bytes=%zu entries=%zu rejected=%zu evictions=%llu metadata_cap=%zu local_revisions=%u",
                 frame_region_hits,frame_region_misses,frame_region_hit_pixels,render_regions.gpu_bytes,render_regions.metadata_bytes,
@@ -6902,6 +6916,18 @@ public:
             ~PreparationLease(){try{preparation.resume();}catch(...){preparation.clear();}}
         } preparation_lease(terrain_preparation);
         bool const prewarming = prewarm_index >= 0;
+#ifdef C3X_RENDERER64_FRESH
+        char legacy_control[8]{};
+        bool const force_legacy=GetEnvironmentVariableA("C3X_RENDERER64_LEGACY",
+            legacy_control,sizeof(legacy_control)) && !std::strcmp(legacy_control,"1");
+        bool const fresh_scene_path = gpu_output_mode && scene_surface_requested &&
+            city_profile && !prewarming && !fresh_path_failed && !force_legacy;
+        // A CPU control render can have a valid bitmap cache but no published
+        // GPU map. The recovery renderer must create a real GPU image first.
+        if(gpu_output_mode && !fresh_scene_path && !gpu_map_valid)cache_valid=false;
+#else
+        bool const fresh_scene_path = false;
+#endif
         // The 32-bit Huge-map pressure campaign exhausts address space at the
         // configured 768 MiB ceiling. Retain a smaller working set when backing
         // a large world; the configured tier remains an upper bound/control.
@@ -7140,7 +7166,7 @@ public:
         std::vector<std::uint32_t> restored_viewport;
         CachedViewport const* restored_viewport_entry=nullptr;
         if (!prewarming) {
-        if (cache_valid && geometry_cache.selection==selection && (!frame_has_resource_animation(frame) || geometry_cache.valid) &&
+        if (!fresh_scene_path && cache_valid && geometry_cache.selection==selection && (!frame_has_resource_animation(frame) || geometry_cache.valid) &&
             signature.complete == cached_signature.complete) {
             if (cache_hits != 0xffffffffu)
                 ++cache_hits;
@@ -7150,7 +7176,7 @@ public:
             return fill_output(frame, output, 0, 0);
         }
         {
-            for (std::size_t cache_index = 0; !shared_scene_surface && cache_index < viewport_cache.size(); ++cache_index) {
+            for (std::size_t cache_index = 0; !fresh_scene_path && !shared_scene_surface && cache_index < viewport_cache.size(); ++cache_index) {
                 if (viewport_cache[cache_index].signature.complete != signature.complete || !(viewport_cache[cache_index].selection==selection))
                     continue;
                 if(frame_has_resource_animation(frame)) {
@@ -7182,7 +7208,7 @@ public:
                 return fill_output(frame, output, 0, 0);
             }
         }
-        if (!shared_scene_surface && !frame_has_resource_animation(frame) && reuse_cached_subset(frame, signature)) {
+        if (!fresh_scene_path && !shared_scene_surface && !frame_has_resource_animation(frame) && reuse_cached_subset(frame, signature)) {
             frame_cache_path = "viewport-subset";
             if (cache_hits != 0xffffffffu)
                 ++cache_hits;
@@ -7253,6 +7279,13 @@ public:
         int geometry_translation_y = 0;
         bool reuse_geometry = !prewarming && reuse_geometry_for_translation(
             frame, signature, selection,geometry_translation_x, geometry_translation_y);
+        // The old bitmap path returned before this point for an identical
+        // viewport. Fresh Renderer64 must still draw the advancing water clock,
+        // so retain its unchanged scene records when the camera has not moved.
+        if(!reuse_geometry && fresh_scene_path && !prewarming &&
+            (!pickup_profile || frame.world_topology_revision==geometry_world_revision))
+            reuse_geometry=geometry_matches(geometry_cache,frame,signature,selection,
+                geometry_translation_x,geometry_translation_y,false);
         if (reuse_geometry) {
             frame_cache_path = "geometry-translation";
             if (cache_hits != 0xffffffffu)
@@ -8780,7 +8813,17 @@ public:
                     height = height * (1.0f - valley * 0.92f) +
                              valley_floor * valley * 0.92f;
                 }
-                return std::array<float, 3>{height, authored_height, authored_blend};
+                float farm_clearance=1.0f;
+                if(tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_IRRIGATION){
+                    farm_clearance=float(shore_sample_at(world_u,world_v).distance);
+                    if(river_assets_ready && height_tile.terrain_type<11){
+                        float local_river_u=world_u-tile_world_u;
+                        float local_river_v=1.0f-(world_v-tile_world_v);
+                        farm_clearance=std::min(farm_clearance,
+                            (river_distance(height_tile,local_river_u,local_river_v)-8.5f)/64.0f);
+                    }
+                }
+                return std::array<float, 3>{height, authored_height, farm_clearance};
             };
             // Retain the actual wrapped occurrence: vertices contain raw world
             // coordinates/UVs, not just canonical gameplay identity.
@@ -9344,6 +9387,10 @@ public:
                 if(tile_city_composition && city_assets_ready && ground<11)++city_fallbacks_omitted;
                 if(!c3x_renderer::objects::select_improvements(tile,object_assets,ground,site_flags,
                         mine_assets_ready,farm_assets_ready,city_assets_ready,tile_city_composition!=nullptr,plan))return false;
+                if(farm_assets_ready && (tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_IRRIGATION)){
+                    c3x_renderer::objects::settle_farm_fields(plan,tile,object_assets,relief_at_world);
+                    c3x_renderer::objects::settle_farm_props(plan,tile,object_assets,relief_at_world);
+                }
                 object_instances+=unsigned(plan.instances.size());object_routes+=unsigned(plan.routes.size());
                 c3x_renderer::objects::compile(plan,object_projection,object_assets,relief_at_world,natural_height_at,object_output);
                 adopt_objects(object_output);
@@ -10024,6 +10071,59 @@ public:
             frame_tiles_reused = textured_tile_count;
             fallback_tile_count = geometry_cache.fallback_tile_count;
         }
+#ifdef C3X_RENDERER64_FRESH
+        if (fresh_scene_path) {
+            // The authoritative scene has been prepared. Publish one native-size
+            // GPU image; the fresh passes own all raster work from here onward.
+            cached_signature=signature;
+            previous_signature=signature;
+            cached_rendered_tile_count=textured_tile_count;
+            cached_fallback_tile_count=fallback_tile_count;
+            cached_textured_tile_count=textured_tile_count;
+            cached_visible_animation_count=frame.visible_animation_count;
+            cached_request_continuous_redraw=true;
+            cache_valid=true;
+            if(frame.tile_count)cached_tiles.assign(frame.tiles,frame.tiles+frame.tile_count);
+            else cached_tiles.clear();
+            cached_replacement_tile_flags=replacement_tile_flags;
+            // The fresh water pass consumes these resident coast ribbons
+            // directly. The legacy compositor used to refresh them later while
+            // composing resource animations, which this path bypasses.
+            // Drop borrowed legacy wave records before replacing their buffers;
+            // the fresh pass draws the new ribbons from wave_chunks below.
+            geometry_vertex_buffers[geometry_wave].clear();
+            trace.write("fresh-wave", "begin", true);
+            if(!prepare_wave_chunks(frame)){
+                fresh_path_failed=true;return false;
+            }
+            trace.write("fresh-wave", "ready", true);
+            D3D11_TEXTURE2D_DESC description={};
+            if(gpu_map_texture)gpu_map_texture->GetDesc(&description);
+            if(!gpu_map_texture || description.Width!=UINT(width) || description.Height!=UINT(height)) {
+                release(gpu_map_texture);
+                description={};description.Width=UINT(width);description.Height=UINT(height);
+                description.MipLevels=description.ArraySize=description.SampleDesc.Count=1;
+                description.Format=DXGI_FORMAT_B8G8R8A8_UNORM;
+                description.BindFlags=D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE;
+                if(FAILED(device->CreateTexture2D(&description,nullptr,&gpu_map_texture)))return false;
+            }
+            ID3D11RenderTargetView* target=nullptr;
+            if(FAILED(device->CreateRenderTargetView(gpu_map_texture,nullptr,&target)))return false;
+            LARGE_INTEGER draw_start={},draw_end={};QueryPerformanceCounter(&draw_start);
+            bool drawn=c3x_renderer64_render_fresh(frame,target);
+            target->Release();QueryPerformanceCounter(&draw_end);
+            if(!drawn){
+                fresh_path_failed=true;
+                trace.write("fresh-fallback","scene draw failed; next map uses legacy GPU route",true);
+                return false;
+            }
+            frame_geometry_ticks=draw_start.QuadPart-started.QuadPart;
+            frame_draw_ticks=draw_end.QuadPart-draw_start.QuadPart;
+            gpu_map_valid=true;cpu_output_stale=true;
+            frame_cache_path="resident-fresh";
+            return fill_output(frame,output,invalidations,draw_end.QuadPart-started.QuadPart);
+        }
+#endif
         std::vector<c3x_renderer::TileFootprint> current_footprints = geometry_footprints;
         for (auto & footprint : current_footprints) {
             footprint.anchor_x += geometry_translation_x;

@@ -19,11 +19,22 @@ def main():
     select=parser.add_mutually_exclusive_group(required=True)
     select.add_argument('--pool')
     select.add_argument('--palace',help='Generic root ID in the existing normalized palace library')
+    parser.add_argument('--source-report',type=Path,
+                        help='Focused city importer report for a complete local source pool')
+    parser.add_argument('--pack',type=Path,
+                        help='Normalized pack produced with --source-report')
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--include-frame',action='store_true',help='Also decode the two tangent directions established by the installed rigid-model vertex shader')
     a=parser.parse_args()
     if a.output.exists():raise ValueError('preserve existing normal-source evidence')
+    if bool(a.source_report)!=bool(a.pack) or (a.source_report and not a.pool):
+        parser.error('--source-report and --pack must accompany --pool together')
     selected,pack,units,report=selection(a.pool,a.palace)
+    if a.source_report:
+        report=json.loads(a.source_report.read_text())
+        selected=next(p['selected'] for p in report['pools'] if p['pool']=='city/pool/'+a.pool)
+        pack=a.pack
+        units=100
     manifest=json.loads((pack/'manifest.json').read_text());packages={};overrides={};records=[]
     for item in selected:
         if item['package'] not in packages:

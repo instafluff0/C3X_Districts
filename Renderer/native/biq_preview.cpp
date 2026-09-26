@@ -312,6 +312,7 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
     char object_option[8]={};bool objects=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_OBJECTS",object_option,sizeof(object_option))!=0;
     char animation_option[8]={};bool animate=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_ANIMATION",animation_option,sizeof(animation_option))!=0;
     char dense_option[8]={};bool dense_scene=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_DENSE_SCENE",dense_option,sizeof(dense_option))!=0;
+    char farm_option[8]={};bool farm_study=GetEnvironmentVariableA("C3X_LAB_FARM_STUDY",farm_option,sizeof(farm_option))!=0;
     // Optional dense-city case uses the same four fields as the ordinary city
     // witness. Default dense capture retains its existing industrial fixture.
     char dense_city_option[80]={};int dense_city[4]={};
@@ -383,6 +384,32 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
         tiles.push_back(tile);
       }
     }
+    if(farm_study)for(auto& tile:tiles){
+        if(tile.real_terrain_type<0 || tile.real_terrain_type>4 || tile.terrain_type>4)continue;
+        unsigned seed=preview_seed((tile.tile_x%map_width+map_width)%map_width,tile.tile_y);
+        if(seed%7u>=3u)continue;
+        tile.improvement_flags|=C3X_RENDERER_IMPROVEMENT_IRRIGATION;
+        tile.irrigation_mask=seed&15u;
+        tile.route_style=int((seed>>4)&3u);
+    }
+    char road_study_option[8]={};
+    if(GetEnvironmentVariableA("C3X_LAB_ROAD_STUDY",road_study_option,sizeof(road_study_option))){
+        int era=std::clamp(std::atoi(road_study_option),0,3);
+        char road_layout[16]={};
+        bool isolated=GetEnvironmentVariableA("C3X_LAB_ROAD_LAYOUT",road_layout,sizeof(road_layout)) &&
+            std::strcmp(road_layout,"isolated")==0;
+        for(auto& tile:tiles){
+            if(tile.real_terrain_type<0 || tile.real_terrain_type>10)continue;
+            int x=((tile.tile_x%map_width)+map_width)%map_width;
+            int c=(x+tile.tile_y)/2,r=(x-tile.tile_y)/2;
+            unsigned seed=preview_seed(x,tile.tile_y);
+            bool arterial=(c%7==0 || (r+70)%7==0);
+            bool dense=(c>=55 && c<=66 && r>=-4 && r<=9 && seed%11u!=0);
+            bool branch=(seed%29u==0 && (c%7==1 || (r+70)%7==1));
+            bool road=isolated ? x==21 && tile.tile_y==85 : arterial || dense || branch;
+            if(road){tile.road_mask=1;tile.route_style=era;}
+        }
+    }
     if(objects && !fixed_world_scene) {
         std::vector<std::size_t> candidates;
         for(std::size_t i=0;i<tiles.size();++i)if(tiles[i].real_terrain_type<=4 &&
@@ -408,23 +435,29 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
                 }
             }
         }
-        if(candidates.size()>=6){
+        char city_only_setting[8]={};
+        bool city_only=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_CITY_ONLY",city_only_setting,sizeof(city_only_setting)) && city_only_setting[0]=='1';
+        if(candidates.size()>=(city_only?1u:6u)){
             auto& city=tiles[candidates[0]];city.city_id=1;city.city_owner_id=1;city.city_size=2;
             city.city_culture_group=0;city.city_era=2;city.city_flags=C3X_RENDERER_CITY_CAPITAL|C3X_RENDERER_CITY_WALLED;
             char city_case[80]={};
             if(GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_CITY",city_case,sizeof(city_case))){
-                int culture=0,era=0,size=0,capital=0;
-                if(sscanf_s(city_case,"%d,%d,%d,%d",&culture,&era,&size,&capital)==4 &&
-                    culture>=0 && culture<=4 && era>=0 && era<=3 && size>=0 && size<=2 && capital>=0 && capital<=1){
+                int culture=0,era=0,size=0,capital=0,walled=0;
+                int fields=sscanf_s(city_case,"%d,%d,%d,%d,%d",&culture,&era,&size,&capital,&walled);
+                if(fields>=4 &&
+                    culture>=0 && culture<=4 && era>=0 && era<=3 && size>=0 && size<=2 && capital>=0 && capital<=1 &&
+                    (fields==4 || walled==0 || walled==1)){
                     city.city_culture_group=culture;city.city_era=era;city.city_size=size;
-                    city.city_flags=capital?C3X_RENDERER_CITY_CAPITAL:0;
+                    city.city_flags=(capital?C3X_RENDERER_CITY_CAPITAL:0)|(fields==5 && walled?C3X_RENDERER_CITY_WALLED:0);
                 }
             }
-            auto& mine=tiles[candidates[1]];mine.improvement_flags=C3X_RENDERER_IMPROVEMENT_MINE;mine.route_style=2;
-            auto& farm=tiles[candidates[2]];farm.improvement_flags=C3X_RENDERER_IMPROVEMENT_IRRIGATION;farm.irrigation_mask=15;farm.route_style=2;
-            auto& resource=tiles[candidates[3]];resource.resource_id=1;resource.resource_class=0;strcpy_s(resource.resource_name,"Iron");
-            auto& road=tiles[candidates[4]];road.road_mask=15;road.route_style=2;
-            auto& rail=tiles[candidates[5]];rail.road_mask=15;rail.railroad_mask=15;rail.route_style=3;
+            if(!city_only){
+                auto& mine=tiles[candidates[1]];mine.improvement_flags=C3X_RENDERER_IMPROVEMENT_MINE;mine.route_style=2;
+                auto& farm=tiles[candidates[2]];farm.improvement_flags=C3X_RENDERER_IMPROVEMENT_IRRIGATION;farm.irrigation_mask=15;farm.route_style=2;
+                auto& resource=tiles[candidates[3]];resource.resource_id=1;resource.resource_class=0;strcpy_s(resource.resource_name,"Iron");
+                auto& road=tiles[candidates[4]];road.road_mask=15;road.route_style=2;
+                auto& rail=tiles[candidates[5]];rail.road_mask=15;rail.railroad_mask=15;rail.route_style=3;
+            }
         }
     }
     if(dense_scene)for(auto & tile:tiles) {
@@ -670,9 +703,56 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
         }
         return code;
     };
+    // Short GPU-only map-demand control for Renderer64. It avoids the legacy
+    // CPU bitmap render and diagnostic screenshot readbacks used below.
+    char fresh_timing[8]={};
+    if(GetEnvironmentVariableA("C3X_RENDERER_FRESH_TIMING",fresh_timing,sizeof(fresh_timing)) &&
+       std::strcmp(fresh_timing,"1")==0) {
+        auto gpu=reinterpret_cast<c3x_renderer_gpu_render_fn>(GetProcAddress(module,"c3x_renderer_gpu_render"));
+        if(!gpu)return 1;
+        LARGE_INTEGER frequency={};QueryPerformanceFrequency(&frequency);
+        std::vector<double> idle,scroll,revisit;
+        unsigned built=0,reused=0;std::uint64_t uploads=0;
+        double cold_ms=0;
+        for(int step=0;step<49;++step) {
+            auto input=frame;auto records=tiles;input.tiles=records.data();
+            input.presentation_time_ticks=frame.presentation_frequency+
+                step*frame.presentation_frequency/60;
+            if(step>=25)for(auto& tile:records){
+                int travel=step<=36?step-24:48-step;
+                tile.anchor_x+=travel*8;tile.anchor_y+=travel*4;
+            }
+            c3x_renderer_camera_request_v1 request={C3X_RENDERER_CAMERA_VIEW_VERSION,
+                sizeof(request),&input,{1,1,step+1,step+1}};
+            c3x_renderer_gpu_frame_v1 view={sizeof(view)};
+            c3x_renderer_output_v1 metadata={C3X_RENDERER_API_VERSION,sizeof(metadata)};
+            LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
+            int result=gpu(&request,&view,&metadata);QueryPerformanceCounter(&end);
+            if(result!=C3X_RENDERER_RESULT_OK || view.map_readbacks)return 1;
+            double ms=double(end.QuadPart-begin.QuadPart)*1000/frequency.QuadPart;
+            if(step==0)cold_ms=ms;
+            if(step>=13 && step<25)idle.push_back(ms);
+            if(step>=25 && step<37)scroll.push_back(ms);
+            if(step>=37)revisit.push_back(ms);
+            built+=metadata.geometry_tiles_built;reused+=metadata.geometry_tiles_reused;
+            uploads+=metadata.geometry_upload_bytes;
+        }
+        auto report=[](char const* label,std::vector<double>& samples){
+            std::sort(samples.begin(),samples.end());
+            std::printf("FRESH_TIMING %s median_ms=%.3f p95_ms=%.3f count=%zu\n",
+                label,samples[samples.size()/2],samples[(samples.size()*95+99)/100-1],samples.size());
+        };
+        std::printf("FRESH_TIMING cold_ms=%.3f\n",cold_ms);
+        report("idle",idle);report("scroll",scroll);report("revisit",revisit);
+        std::printf("FRESH_TIMING_WORK built=%u reused=%u uploads=%llu map_readbacks=0\n",
+            built,reused,static_cast<unsigned long long>(uploads));
+        return 0;
+    }
     LARGE_INTEGER initial_begin={},initial_done={},initial_frequency={};QueryPerformanceFrequency(&initial_frequency);
     QueryPerformanceCounter(&initial_begin);
     int result = render_checked(&frame, &output);
+    if(farm_study)std::printf("FARM_STUDY render=%d rendered=%u fallback=%u captured=%u\n",
+        result,output.rendered_tile_count,output.fallback_tile_count,frame.tile_count);
     QueryPerformanceCounter(&initial_done);
     double initial_render_ms=double(initial_done.QuadPart-initial_begin.QuadPart)*1000/initial_frequency.QuadPart;
     std::size_t expected_rendered = 0;
@@ -1982,7 +2062,10 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
         ok=write_color_preview(argv[5],module,output);
     if(ok && objects){
         unsigned ownership=0;for(unsigned i=0;i<output.replacement_tile_count;++i)ownership|=output.replacement_tile_flags[i];
-        unsigned expected=C3X_RENDERER_TILE_CUSTOM_CITY_REPLACED|C3X_RENDERER_TILE_CUSTOM_RESOURCE_REPLACED|
+        char city_only_setting[8]={};
+        bool city_only=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_CITY_ONLY",city_only_setting,sizeof(city_only_setting)) && city_only_setting[0]=='1';
+        unsigned expected=C3X_RENDERER_TILE_CUSTOM_CITY_REPLACED;
+        if(!city_only)expected|=C3X_RENDERER_TILE_CUSTOM_RESOURCE_REPLACED|
             C3X_RENDERER_TILE_CUSTOM_MINE_REPLACED|C3X_RENDERER_TILE_CUSTOM_FARM_REPLACED|
             C3X_RENDERER_TILE_CUSTOM_ROAD_REPLACED|C3X_RENDERER_TILE_CUSTOM_RAILROAD_REPLACED;
         ok=(ownership&expected)==expected;

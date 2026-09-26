@@ -26,6 +26,17 @@ silhouette agree instead of reading as a uniform painted ribbon. A wider
 world-noise feather affects only coverage at the dry outer edge, preserving the
 fine bank texture while smoothly revealing the underlying grassland or plains.
 
+The current Lab candidate keeps the established river course and applies a
+very narrow, shallow bed depression to terrain, underlay, and river surfaces.
+The bank is mostly exposed terrain with low-opacity, irregular deposits
+instead of a continuous dark soil strip. Sparse grit reuses authored shoreline
+crack cells and the river gravel atlas, with a little shallow gravel through the
+water. This visual candidate has not replaced a fixed reference or been staged
+for game integration.
+
+At the mouth, the river surface alpha now fades across the optical shore so
+the ocean remains visible under the last reach instead of a solid blue cap.
+
 `standard.json` identifies the shared implementation, dependencies, fixture recipe
 and focused regression tests. The current checkout is authoritative.
 Reference captures reproduce production using small synthetic diagnostic scenes;

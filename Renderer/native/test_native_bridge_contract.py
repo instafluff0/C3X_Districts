@@ -379,8 +379,8 @@ int main() {
         self.assertIn("reuse_geometry_for_translation", renderer)
         self.assertTrue("#define C3X_RENDERER_GPU_GEOMETRY_MIB 768" in renderer,
                         "The user-authorized modern default must be explicit")
-        self.assertTrue("C3X_RENDERER_GPU_GEOMETRY_MIB<=1024" in renderer,
-                        "Pressure-test overrides must remain bounded in the x86 host")
+        self.assertIn("C3X_RENDERER_GPU_GEOMETRY_MIB<=(sizeof(void*)==8?2048:1024)", renderer,
+                      "Pressure-test overrides must respect each process's address space")
         self.assertTrue("tile_geometry_cache_budget = C3X_RENDERER_GPU_GEOMETRY_MIB * 1024u * 1024u" in renderer)
         self.assertTrue("tile_geometry_cache_capacity = C3X_RENDERER_GPU_GEOMETRY_MIB / 192u * 4096u" in renderer)
         self.assertIn("observed_coordinate_key", renderer)
@@ -556,8 +556,8 @@ int main() {
             self.assertIn(asset, renderer)
         self.assertIn("tile.river_code", runtime)
         self.assertIn("tile.river_code & 170u", renderer)
-        self.assertIn("add_river_edge(tile.tile_x, tile.tile_y - 1", renderer)
-        self.assertIn("add_river_edge(tile.tile_x + 1, tile.tile_y", renderer)
+        self.assertIn("add_river_edge(tile.tile_x,tile.tile_y-1", renderer)
+        self.assertIn("add_river_edge(tile.tile_x+1,tile.tile_y", renderer)
         self.assertIn("canonical_river_x = canonical_component", renderer)
         self.assertIn("(distance - 4.0f) / 16.0f", renderer)
         self.assertIn("valley * 0.92f", renderer)

@@ -10,6 +10,8 @@
        (ground<11 || shore_sample_at(float(nc)+.5f,float(nr)+.5f).distance>-.8f)){
         auto coastal=shore_sample_at(float(nc)+.5f,float(nr)+.5f);
         unsigned divisions=coastal.rocky>.55 && std::abs(coastal.distance)<1.25 ? patch_detail.rocky_ground : 16;
+        if(river_terrain_near && project_natural.half_width>=48)
+            divisions=std::max(divisions,32u);
         if(!emit_ground_grid(natural_vertices[0],surface,cancelled,divisions,
                              index_natural_grids?&natural_grid_indices[0]:nullptr,&patch_layouts.get(divisions)))return false;
     }
@@ -44,4 +46,3 @@
     record_natural_phase(2);
     #include "../../lab/shared/natural/vegetation_floor_mesh_body.h"
     record_natural_phase(3);
-

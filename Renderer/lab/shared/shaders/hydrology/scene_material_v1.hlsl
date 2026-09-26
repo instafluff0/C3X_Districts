@@ -213,20 +213,22 @@ float4 q3_water_material(PixelInput input) {
   float grain=river_height_texture.Sample(material_sampler,uv).r;
   float material_grain=q3_surface_grain(river_material.a,
    river_base_texture.SampleBias(material_sampler,uv,3).a);
-  float water_width=5.8+noise*.8;
-  float water=1-smoothstep(water_width-.65,water_width,distance_pixels);
-  float bank_width=12.2+noise*4.8+(sediment_noise-.5)*2.4+(grain-.5)*1.2;
-  // Feather only the bank coverage: the sand retains its high-frequency
-  // material detail while the underlying grassland/plains resolves gradually.
-  float bank_feather=2.2+sediment_noise*.8;
+  float water_width=5.8+noise*1.1;
+  float water=1-smoothstep(water_width-1.0,water_width+.25,
+   distance_pixels+(gravel_noise-.5)*.5);
+  // Keep the authored channel path, but let land reach close to the water.
+  // The outer deposit is a broken, translucent margin rather than a solid
+  // sand-colored ribbon on both sides of every bend.
+  float bank_width=water_width+2.5+noise*1.4+(sediment_noise-.5)*1.3;
+  float bank_feather=1.8+sediment_noise*.7;
   float bank_edge_distance=distance_pixels+(gravel_noise-.5)*.7;
   float bank=1-smoothstep(bank_width-bank_feather,bank_width+.6,bank_edge_distance);
   bank=saturate(bank+material_grain*2.0*bank*(1-bank));
-  // Banks end at the optical shore; the water itself overlaps and dissolves
-  // into the existing sea surface instead of ending in an offshore capsule.
+  // Fade the complete river surface into the sea across the optical shore.
+  // The final alpha must keep this fade after the water/shore mix below.
   float land_bank=smoothstep(-.025,.065,sd);
-  float outlet=smoothstep(-.20,.025,sd);
-  bank*=outlet;clip(bank-.001);
+  float outlet=smoothstep(-.28,.08,sd);
+  bank*=outlet;
   water=lerp(1,water,land_bank);
   float3 bed=river_material.rgb;
   float3 sand=beach_base_texture.Sample(material_sampler,uv).rgb;
@@ -234,27 +236,59 @@ float4 q3_water_material(PixelInput input) {
    world*float2(q3_source_repeat(2.17),q3_source_repeat(2.63))+float2(.37,.59)).rgb;
   float gravel_height,gravel_cavity;
   float4 clutter=q3_margin_detail(world,gravel_height,gravel_cavity);
+  float4 shore_cracks=sample_coast_clutter(world);
+  // Isolated gravel and cracked-rock deposits can reach past the soil lip.
+  // Their source alpha and broken noise field keep the surrounding terrain
+  // visible, including at bends where a broad painted bank would look false.
+  float grit_reach=smoothstep(water_width+.4,water_width+1.5,distance_pixels)
+   *(1-smoothstep(bank_width+.5,bank_width+4.5,distance_pixels));
+  float grit_seed=smoothstep(.37,.63,sediment_noise*.60
+   +(noise+.5)*.25+gravel_noise*.15);
+  float grit_spill=max(clutter.a*.62,shore_cracks.a*.72)
+   *grit_reach*grit_seed*outlet*land_bank;
+  clip(max(bank,grit_spill)-.001);
   float bank_position=saturate((distance_pixels-water_width)/max(1,bank_width-water_width));
   float sediment=smoothstep(.30,.70,sediment_noise*.52+(noise+.5)*.32+grain*.16);
   float3 textured_sand=lerp(sand,fine_sand,.46);
-  float3 dry_sand=lerp(bed,textured_sand,.18)*.96;
-  float3 bank_soil=lerp(bed,float3(.22,.18,.12),.15)*.78;
-  float sand_patch=saturate(sediment*.86+smoothstep(.48,.94,bank_position)*.24);
-  float3 dry=lerp(bank_soil,dry_sand,sand_patch)*lerp(.90,1.08,sediment);
+  float3 dry_sand=lerp(bed,textured_sand,.20);
+  float3 bank_soil=lerp(bed,textured_sand,.22);
+  float sand_patch=saturate((sediment-.28)*1.20)
+   *smoothstep(.22,.62,bank_position);
+  float3 dry=lerp(bank_soil,dry_sand,sand_patch*.32)*lerp(.96,1.04,sediment);
   dry*=1+material_grain;
   float gravel=smoothstep(.35,.68,gravel_noise)*clutter.a
    *smoothstep(.10,.58,bank_position);
-  dry=lerp(dry,clutter.rgb*.82,gravel*.60);
+  dry=lerp(dry,clutter.rgb*.82,gravel*.72);
   float pebble=smoothstep(.68,.84,gravel_noise)*smoothstep(.12,.68,bank_position);
   float3 pebble_color=lerp(float3(.16,.12,.07),textured_sand*1.18,sediment);
   dry=lerp(dry,pebble_color,pebble*.34);
   dry*=.91+gravel_noise*.16;
-  float wet=1-smoothstep(water_width,bank_width-1.0,distance_pixels);
-  float damp_breakup=saturate(.72+noise*.38+(gravel_noise-.5)*.20);
-  float3 shore=lerp(dry,dry*lerp(.62,.76,damp_breakup),wet);
+  // Reuse the authored shoreline crack cells as scattered exposed grit.
+  float shore_grit=shore_cracks.a
+   *grit_seed*smoothstep(water_width+.3,water_width+1.5,distance_pixels)
+   *(1-smoothstep(bank_width,bank_width+1.0,distance_pixels));
+  // The land remains visible almost to the water. Variable coverage and
+  // isolated deposits replace the former continuous dark cut-face stripe.
+  float bank_patch=smoothstep(.38,.66,sediment_noise*.57
+   +(noise+.5)*.28+gravel_noise*.15);
+  float bank_opacity=(bank_patch*.20+gravel*.08+shore_grit*.10)
+   *(1-smoothstep(water_width+.6,bank_width+.7,distance_pixels));
+  bank=max(water,max(bank*bank_opacity,grit_spill*.43));
+  float wet=(1-smoothstep(water_width+.1,water_width+1.7,distance_pixels))
+   *bank_patch;
+  float3 shore=lerp(dry,dry*.84,wet);
+  float3 grit_color=lerp(clutter.rgb*.90,shore_cracks.rgb*.90,
+   shore_cracks.a/max(.001,shore_cracks.a+clutter.a));
+  shore=lerp(shore,grit_color,max(shore_grit*.45,grit_spill*.55));
   float optical_depth=.10+.32*(1-smoothstep(0,5.5,max(0,distance_pixels)));
   float3 transmitted=bed*exp(-optical_depth*float3(8,4,2));
   float3 river=lerp(transmitted,float3(.018,.074,.090),1-exp(-optical_depth*4));
+  float submerged=smoothstep(water_width-3.0,water_width-1.0,distance_pixels)
+   *(1-smoothstep(water_width-.15,water_width+.45,distance_pixels));
+  river=lerp(river,clutter.rgb*float3(.30,.49,.52),submerged*clutter.a*.27);
+  float bank_shadow=smoothstep(water_width-2.0,water_width-.65,distance_pixels)
+   *(1-smoothstep(water_width-.05,water_width+.4,distance_pixels));
+  river*=1-bank_shadow*.18;
   float2 river_uv=world*float2(q3_source_repeat(.92),q3_source_repeat(1.27));
   float2 lean=river_lean0_texture.Sample(material_sampler,river_uv).rg*2-1;
 #if defined(Q3_WATER_TIME)
@@ -278,14 +312,15 @@ float4 q3_water_material(PixelInput input) {
     pow(saturate(dot(river_normal,normalize(river_view+environment_moon_direction))),48))
     *.022*environment_water_specular*q6_receiver_visibility(input,river_normal,1);
   // Shade the existing bank grain and authored gravel, not the river surface.
-  float bank_height=grain*.35+material_grain*.38+(gravel_height-.5)*gravel*.40;
+  float bank_height=grain*.25+material_grain*.30+(gravel_height-.5)*gravel*.30
+   +shore_grit*.25+grit_spill*.28;
   float mean_grain=river_height_texture.SampleBias(material_sampler,uv,2).r;
   float cavity=q3_margin_visibility(grain,mean_grain)*
    lerp(1,gravel_cavity,gravel);
   shore*=lerp(1,cavity,.65);
-  float3 bank_normal=q3_margin_normal(input,bank_height,.045);
+  float3 bank_normal=q3_margin_normal(input,bank_height,.070);
   float3 bank_light=q6_receiver_illumination(input,bank_normal,1,1);
-  return float4(lerp(shore*bank_light,river*water_light+river_glint,water),bank);
+  return float4(lerp(shore*bank_light,river*water_light+river_glint,water),bank*outlet);
 #elif defined(Q3_STATIC_OPTICS_V2)
   // Keep the captured curve and navigable width. The source river bed remains
   // visible through shallow edges; narrow damp banks replace the sandy outline.

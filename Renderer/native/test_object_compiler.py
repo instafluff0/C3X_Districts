@@ -4,6 +4,289 @@ from Renderer.native.native_cpp_test import run_cpp
 
 
 class ObjectCompilerTests(unittest.TestCase):
+    def test_farm_river_edge_trims_as_one_clean_bank(self):
+        run_cpp(r'''
+#include "Renderer/native/object_compiler.h"
+#include <cassert>
+#include <cmath>
+using namespace c3x_renderer;
+int main(){
+ FeatureBundle farm;FeatureAsset field;field.id="farm_0:crop:field:e0";
+ for(unsigned y=0;y<=8;++y)for(unsigned x=0;x<=8;++x)
+  field.vertices.push_back({{float(x)*.1f-.4f,float(y)*.1f-.4f,.002f},
+                            {0,0,1},{float(x)*.125f,float(y)*.125f}});
+ for(unsigned y=0;y<8;++y)for(unsigned x=0;x<8;++x){
+  unsigned a=y*9+x,b=a+1,c=a+9,d=c+1;
+  field.indices.insert(field.indices.end(),{a,b,d,a,d,c});
+ }
+ farm.assets.push_back(field);FeaturePlacement placement{};
+ objects::Projection p;p.tile_width=128;p.content_view_height=640;
+ p.half_w=64;p.half_h=32;p.relief_projection_scale=128.f/224.f*.82f;
+ p.feature_projection_scale=128.f/224.f;p.pickup_profile=p.world_objects=true;
+ auto river=[](float u,float v){
+  return std::array<float,3>{0,0,u-(.48f+.02f*std::sin(v*12.f))};};
+ auto height=[](float,float){return 2.5f;};
+ std::vector<objects::Vertex> vertices,shadows;std::vector<unsigned> indices;
+ objects::append_instance(p,farm,placement,.5f,.5f,0,1,21,.01f,false,false,
+                          river,height,vertices,shadows,&indices);
+ assert(!indices.empty() && vertices.size()==indices.size());
+ float left=1.f;
+ for(auto const& vertex:vertices){
+  left=std::min(left,vertex.world_x);
+  assert(river(vertex.world_x,vertex.world_y)[2]>=-1e-4f);
+ }
+ assert(left>.51f && left<.65f);
+}
+''')
+
+    def test_lab_city_buildings_use_terraces_on_hills(self):
+        run_cpp(r'''
+#include "Renderer/native/city_fidelity/compiler.h"
+#include "Renderer/lab/shared/natural/ground.h"
+#include <cassert>
+using namespace c3x_renderer;
+int main(){
+ city_fidelity::Library library;library.materials.resize(1);library.materials[0].channels=5;
+ city_fidelity::Model model;model.low[2]=0;model.high[2]=.3f;
+ city_fidelity::Part part;city_fidelity::Vertex vertex{};
+ vertex.normal[2]=1;vertex.tangent[0]=1;vertex.bitangent[1]=1;
+ part.vertices={vertex,vertex,vertex};part.vertices[1].position[0]=.1f;
+ part.vertices[2].position[1]=.1f;part.indices={0,1,2};model.parts.push_back(part);
+ library.models.push_back(model);
+ city_fidelity::Composition composition;composition.culture=0;composition.era=0;
+ composition.size=0;composition.authority="lab-fixed-hill";composition.clearance[1]=18;
+ city_fidelity::Instance instance;instance.scale=1;
+ instance.bounds[0]=instance.bounds[1]=-.2f;
+ instance.bounds[2]=instance.bounds[3]=.2f;
+ composition.instances.push_back(instance);library.compositions.push_back(composition);
+ c3x_renderer_tile_v1 tile{};tile.city_id=1;
+ struct Land{int base=2,real=2;};struct Shore{double distance=100;};
+ auto world=[](int,int){return Land{};};auto shore=[](float,float){return Shore{};};
+ auto river=[](float,float){return 100.;};
+ auto hill=[](float x,float){return (x-10.5f)*12.f;};
+ auto selected=city_fidelity::select(library,tile,10,12,world,shore,river,hill);
+ assert(selected==&library.compositions[0]);
+ library.compositions[0].clearance[1]=2.5f;
+ assert(!city_fidelity::select(library,tile,10,12,world,shore,river,hill));
+ library.compositions[0].clearance[1]=18;
+ fidelity::GroundProjection projection{10,12,64,32,1,480};
+ city_fidelity::Surfaces output;
+ assert(city_fidelity::compile(library,*selected,10,12,hill,projection,output));
+ assert(output.chunks.size()==2);
+ auto const& terrace=output.chunks[0];auto const& building=output.chunks[1];
+ assert(terrace.vertices.size()==30 && building.vertices.size()==3);
+ assert(terrace.material==building.material && !terrace.terrain_conforming);
+ assert(terrace.vertices[0].world_z>terrace.vertices[2].world_z);
+ assert(terrace.vertices[6].world_z>terrace.vertices[8].world_z);
+ assert(building.vertices[0].normal_z==1 && building.vertices[0].world_z>0);
+}
+''')
+
+    def test_farm_fields_fit_inside_dry_quadrants_before_clipping(self):
+        run_cpp(r'''
+#include "Renderer/native/object_compiler.h"
+#include <cassert>
+using namespace c3x_renderer;
+int main(){
+ FeatureBundle farm;FeatureGroup group;group.name="farm_0";
+ for(unsigned palette=0;palette<3;++palette){
+  FeatureAsset asset;asset.id="farm_0:crop:field:e0";asset.texture_index=palette;
+  asset.vertices={{{-.12f,-.12f,.002f},{0,0,1},{0,0}},
+                  {{ .12f,-.12f,.002f},{0,0,1},{1,0}},
+                  {{ .12f, .12f,.002f},{0,0,1},{1,1}},
+                  {{-.12f, .12f,.002f},{0,0,1},{0,1}}};
+  asset.indices={0,1,2,0,2,3};farm.assets.push_back(asset);
+  FeaturePlacement placement{};placement.asset_index=palette;group.placements.push_back(placement);
+ }
+ farm.groups.push_back(group);FeatureBundle other;
+ objects::Assets assets{{&other,&other,&other,&farm,&other,&other}};
+ c3x_renderer_tile_v1 tile{};tile.improvement_flags=C3X_RENDERER_IMPROVEMENT_IRRIGATION;
+ tile.variant_seed=18;
+ objects::Plan plan;
+ assert(objects::select_improvements(tile,assets,0,0,false,true,false,false,plan));
+ assert(plan.instances.size()==4);
+ auto original=plan.instances;
+ auto coast=[](float u,float){return std::array<float,3>{0,0,u-.15f};};
+ objects::settle_farm_fields(plan,tile,assets,coast);
+ assert(plan.instances.size()==4);
+ for(unsigned i=0;i<4;++i)if(original[i].u<.5f)
+  assert(plan.instances[i].scale<original[i].scale);
+ objects::Projection p;p.tile_width=128;p.content_view_height=640;
+ p.half_w=64;p.half_h=32;p.relief_projection_scale=128.f/224.f*.82f;
+ p.feature_projection_scale=128.f/224.f;p.pickup_profile=p.world_objects=true;
+ auto height=[](float,float){return 2.5f;};objects::Surfaces out;
+ objects::compile(plan,p,assets,coast,height,out);
+ assert(!out.layers[objects::farm_layer].empty());
+ for(auto const& vertex:out.layers[objects::farm_layer])
+  assert(vertex.world_x>=.175f-1e-4f);
+}
+''', sources=("Renderer/native/terrain_scene_runtime.cpp",))
+
+    def test_farm_trees_and_building_relocate_to_dry_shore(self):
+        run_cpp(r'''
+#include "Renderer/native/object_compiler.h"
+#include <cassert>
+using namespace c3x_renderer;
+int main(){
+ FeatureBundle farm;FeatureGroup group;group.name="farm_0";
+ for(auto id:{"farm_0:tree:source:e0","farm_0:building:source:e0"}){
+  FeatureAsset asset;asset.id=id;farm.assets.push_back(asset);
+  FeaturePlacement placement{};placement.asset_index=unsigned(farm.assets.size()-1);
+  group.placements.push_back(placement);
+ }
+ farm.groups.push_back(group);
+ FeatureBundle other;
+ objects::Assets assets{{&other,&other,&other,&farm,&other,&other}};
+ c3x_renderer_tile_v1 tile{};tile.improvement_flags=C3X_RENDERER_IMPROVEMENT_IRRIGATION;
+ objects::Plan plan;
+ auto dry=[](float,float){return std::array<float,3>{0,0,1};};
+ for(unsigned seed=0;seed<128;++seed){
+  tile.variant_seed=seed;plan.instances.clear();
+  assert(objects::select_improvements(tile,assets,0,0,false,true,false,false,plan));
+  objects::settle_farm_props(plan,tile,assets,dry);
+  unsigned trees=0,buildings=0;
+  for(auto const& instance:plan.instances){
+   if(instance.asset==0)++trees;else ++buildings;
+  }
+  assert(trees>=4 && trees<=6 && buildings==1);
+ }
+ tile.variant_seed=7;plan.instances.clear();
+ assert(objects::select_improvements(tile,assets,0,0,false,true,false,false,plan));
+ auto coast=[](float u,float v){return std::array<float,3>{0,0,u>.55f&&v<.83f?1.f:-1.f};};
+ objects::settle_farm_props(plan,tile,assets,coast);
+ unsigned trees=0,buildings=0;
+ for(auto const& instance:plan.instances){
+  assert(coast(instance.u,1.f-instance.v)[2]>0);
+  if(instance.asset==0)++trees;else ++buildings;
+ }
+ assert(trees>=4 && buildings==1);
+ auto river=[](float u,float){return std::array<float,3>{0,0,std::abs(u-.5f)>.16f?1.f:-1.f};};
+ objects::settle_farm_props(plan,tile,assets,river);
+ for(auto const& instance:plan.instances)
+  assert(river(instance.u,1.f-instance.v)[2]>0);
+}
+''', sources=("Renderer/native/terrain_scene_runtime.cpp",))
+
+    def test_four_farm_fields_stay_in_separate_quadrants(self):
+        run_cpp(r'''
+#include "Renderer/native/object_compiler.h"
+#include <cassert>
+#include <cmath>
+using namespace c3x_renderer;
+int main(){
+ FeatureBundle bundle;FeatureGroup group;group.name="farm_0";
+ for(unsigned palette=0;palette<3;++palette){
+  FeatureAsset asset;asset.id="farm_0:crop:field:e0";asset.texture_index=palette;
+  asset.vertices={{{-.12f,-.12f,.002f},{0,0,1},{0,0}},
+                  {{ .12f,-.12f,.002f},{0,0,1},{1,0}},
+                  {{ .12f, .12f,.002f},{0,0,1},{1,1}},
+                  {{-.12f, .12f,.002f},{0,0,1},{0,1}}};
+  asset.indices={0,1,2,0,2,3};bundle.assets.push_back(asset);
+  FeaturePlacement placement{};placement.asset_index=palette;group.placements.push_back(placement);
+ }
+ bundle.groups.push_back(group);
+ objects::Assets assets{{&bundle,&bundle,&bundle,&bundle,&bundle,&bundle}};
+ c3x_renderer_tile_v1 tile{};tile.improvement_flags=C3X_RENDERER_IMPROVEMENT_IRRIGATION;
+ for(unsigned seed=0;seed<128;++seed)for(unsigned mask=0;mask<16;++mask)
+  for(int ground=0;ground<5;++ground){
+   tile.variant_seed=seed;tile.irrigation_mask=mask;
+   objects::Plan plan;
+   assert(objects::select_improvements(tile,assets,ground,0,false,true,false,false,plan));
+   assert(plan.instances.size()==4);
+   std::array<std::array<float,4>,4> bounds{};
+   bool used_palette[3]={};
+   for(unsigned i=0;i<4;++i){
+    auto const& instance=plan.instances[i];auto const& asset=bundle.assets[instance.asset];
+    used_palette[asset.texture_index]=true;
+    float cosine=std::cos(instance.rotation),sine=std::sin(instance.rotation);
+    bounds[i]={2,2,-1,-1};
+    for(auto const& vertex:asset.vertices){
+     float x=instance.u+(vertex.position[0]*cosine-vertex.position[1]*sine)*instance.scale;
+     float y=instance.v+(vertex.position[0]*sine+vertex.position[1]*cosine)*instance.scale;
+     bounds[i][0]=std::min(bounds[i][0],x);bounds[i][1]=std::min(bounds[i][1],y);
+     bounds[i][2]=std::max(bounds[i][2],x);bounds[i][3]=std::max(bounds[i][3],y);
+    }
+    assert(bounds[i][0]>.02f && bounds[i][1]>.02f &&
+           bounds[i][2]<.98f && bounds[i][3]<.98f);
+   }
+   for(unsigned i=0;i<4;++i)for(unsigned j=i+1;j<4;++j)
+    assert(bounds[i][2]+.01f<bounds[j][0] || bounds[j][2]+.01f<bounds[i][0] ||
+           bounds[i][3]+.01f<bounds[j][1] || bounds[j][3]+.01f<bounds[i][1]);
+   assert(unsigned(used_palette[0])+unsigned(used_palette[1])+unsigned(used_palette[2])==2);
+  }
+}
+''', sources=("Renderer/native/terrain_scene_runtime.cpp",))
+
+    def test_farm_decal_follows_relief_and_stops_at_shore(self):
+        run_cpp(r'''
+#include "Renderer/native/object_compiler.h"
+#include <cassert>
+#include <cmath>
+using namespace c3x_renderer;
+int main(){
+ FeatureBundle bundle;FeatureAsset asset;asset.id="farm_0:crop:field:e0";
+ asset.vertices={{{-.4f,-.3f,.002f},{0,0,1},{0,0}},
+                 {{.4f,-.3f,.002f},{0,0,1},{1,0}},
+                 {{.4f,.3f,.002f},{0,0,1},{1,1}},
+                 {{-.4f,.3f,.002f},{0,0,1},{0,1}}};
+ asset.indices={0,1,2,0,2,3};bundle.assets.push_back(asset);
+ FeaturePlacement placement{};objects::Projection p;p.tile_width=128;p.content_view_height=640;
+ p.half_w=64;p.half_h=32;p.relief_projection_scale=128.f/224.f*.82f;
+ p.feature_projection_scale=128.f/224.f;p.pickup_profile=p.world_objects=true;
+ auto relief=[](float u,float){return std::array<float,3>{u*4.f,0,u-.5f};};
+ auto height=[](float,float){return 2.5f;};
+ std::vector<objects::Vertex> vertices,shadows;std::vector<unsigned> indices;
+ objects::append_instance(p,bundle,placement,.5f,.5f,0,1,21,.01f,false,false,
+                          relief,height,vertices,shadows,&indices);
+ assert(indices.size()==9 && vertices.size()==9 && shadows.empty());
+ objects::Assets assets{{&bundle,&bundle,&bundle,&bundle,&bundle,&bundle}};
+ objects::Plan plan;plan.instances.push_back({objects::farm_family,0,objects::farm_layer,
+                                           .5f,.5f,0,1,21,.01f,false});
+ objects::Surfaces compiled;std::vector<unsigned> counts;
+ objects::compile(plan,p,assets,relief,height,compiled,true,&counts);
+ assert(counts.size()==1 && counts[0]==9 &&
+        compiled.indices[objects::farm_layer].size()==9);
+ for(auto const& v:vertices){
+  assert(v.world_x>=.5f-1e-5f);
+  assert(std::abs(v.world_z-(v.world_x*4.f+2.5f+.002f*150.f/.82f)/112.f)<1e-5f);
+ }
+}
+''')
+
+    def test_farm_decal_leaves_an_interior_river_channel_open(self):
+        run_cpp(r'''
+#include "Renderer/native/object_compiler.h"
+#include <cassert>
+#include <cmath>
+using namespace c3x_renderer;
+int main(){
+ FeatureBundle bundle;FeatureAsset asset;asset.id="farm_0:crop:field:e0";
+ for(unsigned y=0;y<5;++y)for(unsigned x=0;x<5;++x)
+  asset.vertices.push_back({{float(x)*.25f-.5f,float(y)*.25f-.5f,.002f},
+                            {0,0,1},{float(x)*.25f,float(y)*.25f}});
+ for(unsigned y=0;y<4;++y)for(unsigned x=0;x<4;++x){
+  unsigned a=y*5+x,b=a+1,c=a+5,d=c+1;
+  asset.indices.insert(asset.indices.end(),{a,b,d,a,d,c});
+ }
+ bundle.assets.push_back(asset);FeaturePlacement placement{};
+ objects::Projection p;p.tile_width=128;p.content_view_height=640;
+ p.half_w=64;p.half_h=32;p.relief_projection_scale=128.f/224.f*.82f;
+ p.feature_projection_scale=128.f/224.f;p.pickup_profile=p.world_objects=true;
+ auto relief=[](float u,float){return std::array<float,3>{0,0,std::abs(u-.5f)-.12f};};
+ auto height=[](float,float){return 2.5f;};
+ std::vector<objects::Vertex> vertices,shadows;std::vector<unsigned> indices;
+ objects::append_instance(p,bundle,placement,.5f,.5f,0,1,21,.01f,false,false,
+                          relief,height,vertices,shadows,&indices);
+ assert(!indices.empty() && vertices.size()==indices.size());
+ bool left=false,right=false;
+ for(auto const& vertex:vertices){
+  assert(std::abs(vertex.world_x-.5f)>=.12f-1e-5f);
+  left|=vertex.world_x<.5f;right|=vertex.world_x>.5f;
+ }
+ assert(left && right);
+}
+''')
+
     def test_infrastructure_selection_projection_and_fallback(self):
         run_cpp(r'''
 #include "Renderer/native/object_compiler.h"

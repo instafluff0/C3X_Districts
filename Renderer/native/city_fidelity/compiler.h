@@ -75,13 +75,82 @@ bool compile(Library const& library,Composition const& selected,int nc,int nr,
     for(unsigned owner_index=0;owner_index<composition->instances.size();owner_index++){
         if(stop())return false;
         auto const&i=composition->instances[owner_index];auto const&m=library.models[i.model];
+        float center_x=float(nc)+.5f+i.offset[0],center_y=float(nr)+.5f-i.offset[1];
+        float ground_center=height_natural(center_x,center_y);
+        float x_low=center_x+i.bounds[0],x_high=center_x+i.bounds[2];
+        float y_low=center_y-i.bounds[3],y_high=center_y-i.bounds[1];
+        float corners[4][2]={{x_low,y_low},{x_high,y_low},
+                              {x_high,y_high},{x_low,y_high}};
+        float corner_ground[4]={};
+        float ground_low=ground_center,ground_high=ground_center;
+        for(unsigned corner=0;corner<4;corner++){
+            corner_ground[corner]=height_natural(corners[corner][0],corners[corner][1]);
+            ground_low=std::min(ground_low,corner_ground[corner]);
+            ground_high=std::max(ground_high,corner_ground[corner]);
+        }
+        bool terrace=composition->authority.rfind("lab-fixed-",0)==0 &&
+            ground_high-ground_low>.75f;
         auto placement=place(i,float(nc)+.5f,float(nr)+.5f,
-            height_natural(float(nc)+.5f+i.offset[0],float(nr)+.5f-i.offset[1]));
+                             terrace?ground_high+.02f:ground_center);
         for(auto const&l:i.lights)lighting->lights.push_back(placement.light(l,owner_index));
         Lighting::Box b={{placement.x+i.bounds[0],-placement.y+i.bounds[1],
             placement.z*source_z_metric+std::max(0.f,m.low[2])*i.scale,0},
             {placement.x+i.bounds[2],-placement.y+i.bounds[3],placement.z*source_z_metric+m.high[2]*i.scale,0}};
         lighting->blockers.push_back(b);
+        if(terrace){
+            // A rigid building stays upright on a level plot. Its compact
+            // retaining skirt follows the sampled downhill terrain while the
+            // original mesh, normals and proportions remain untouched.
+            unsigned foundation_material=~0u;
+            float foundation_u=0.f,foundation_v=0.f,lowest=1e9f;
+            for(auto const&part:m.parts)if(!library.materials[part.material].ground)
+                for(auto const&vertex:part.vertices)if(vertex.position[2]<lowest){
+                    lowest=vertex.position[2];foundation_material=part.material;
+                    foundation_u=vertex.uv0[0];foundation_v=vertex.uv0[1];
+                }
+            if(foundation_material!=~0u){
+                Chunk support;support.material=foundation_material;
+                support.environment=composition->environment!=0;
+                support.lighting=lighting;
+                float top=placement.z*112.f+.006f;
+                auto vertex=[&](float x,float y,float z,float nx,float ny,float nz){
+                    auto out=project_natural(x,y,z);
+                    out.u=foundation_u;out.v=foundation_v;
+                    out.normal_x=nx;out.normal_y=ny;out.normal_z=nz;
+                    out.material_grass=1.f;out.material_plains=0.f;
+                    out.material_desert=0.f;out.material_marsh=0.f;
+                    out.base_terrain=100.f+float(library.materials[foundation_material].channels);
+                    return out;
+                };
+                for(unsigned side=0;side<4;side++){
+                    unsigned next=(side+1u)%4u;
+                    float dx=corners[next][0]-corners[side][0];
+                    float dy=corners[next][1]-corners[side][1];
+                    float length=std::hypot(dx,dy);
+                    float nx=length>0?dy/length:0.f,ny=length>0?-dx/length:0.f;
+                    unsigned base=unsigned(support.vertices.size());
+                    support.vertices.push_back(vertex(corners[side][0],corners[side][1],top,nx,ny,0.f));
+                    support.vertices.push_back(vertex(corners[next][0],corners[next][1],top,nx,ny,0.f));
+                    support.vertices.push_back(vertex(corners[next][0],corners[next][1],corner_ground[next]-.02f,nx,ny,0.f));
+                    support.vertices.push_back(vertex(corners[side][0],corners[side][1],corner_ground[side]-.02f,nx,ny,0.f));
+                    unsigned triangles[]={base,base+1u,base+2u,base,base+2u,base+3u};
+                    support.indices.insert(support.indices.end(),std::begin(triangles),std::end(triangles));
+                }
+                unsigned base=unsigned(support.vertices.size());
+                for(auto const&corner:corners)
+                    support.vertices.push_back(vertex(corner[0],corner[1],top,0.f,0.f,1.f));
+                unsigned top_triangles[]={base,base+1u,base+2u,base,base+2u,base+3u};
+                support.indices.insert(support.indices.end(),std::begin(top_triangles),std::end(top_triangles));
+                if(!indexed){
+                    std::vector<fidelity::MapVertex> expanded;
+                    expanded.reserve(support.indices.size());
+                    for(unsigned index:support.indices)expanded.push_back(support.vertices[index]);
+                    support.vertices=std::move(expanded);
+                    support.indices.clear();
+                }
+                output.chunks.push_back(std::move(support));
+            }
+        }
         for(auto const&p:m.parts){
             auto const&material=library.materials[p.material];Chunk chunk;
             chunk.source_model=i.model;chunk.source_part=unsigned(&p-m.parts.data());chunk.placement=placement;

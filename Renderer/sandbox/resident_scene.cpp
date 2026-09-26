@@ -3,6 +3,7 @@
 #include "../native/c3x_renderer.cpp"
 #include <dxgi1_2.h>
 #include <wincodec.h>
+#include <new>
 #pragma comment(lib,"ole32.lib")
 #pragma comment(lib,"windowscodecs.lib")
 
@@ -59,6 +60,12 @@ struct SandboxBackbufferOutput {
     ID3D11PixelShader* pixel=nullptr;
     ID3D11Buffer* settings=nullptr;
     ID3D11RasterizerState* rasterizer=nullptr;
+    ~SandboxBackbufferOutput() {
+        if(vertex)vertex->Release();
+        if(pixel)pixel->Release();
+        if(settings)settings->Release();
+        if(rasterizer)rasterizer->Release();
+    }
     bool ensure() {
         if(pixel)return true;
         char const* source=R"(
@@ -205,6 +212,47 @@ float4 PSOutput(float4 position : SV_Position) : SV_Target {
     }
 };
 static SandboxBackbufferOutput sandbox_backbuffer_output;
+
+#ifdef C3X_RENDERER64_FRESH
+// Renderer64 supplies the copied Civ III frame and owns GPU publication. This
+// adapter writes the sandbox scene into its map image, never an HWND or RPC page.
+bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
+        ID3D11RenderTargetView* target) {
+    renderer.trace.write("fresh-callback","enter",true);
+    static unsigned device_generation=0;
+    if(device_generation!=renderer.device_generation) {
+        if(device_generation) {
+            sandbox_backbuffer_output.~SandboxBackbufferOutput();
+            new(&sandbox_backbuffer_output) SandboxBackbufferOutput();
+            sandbox_fresh.~SandboxFreshPipeline();
+            new(&sandbox_fresh) SandboxFreshPipeline();
+            sandbox_direct_units.~SandboxDirectUnits();
+            new(&sandbox_direct_units) SandboxDirectUnits();
+        }
+        device_generation=renderer.device_generation;
+    }
+    int camera_x=0,camera_y=0;
+    if(frame.tile_count && frame.tiles) {
+        auto const& first=frame.tiles[0];
+        camera_x=first.anchor_x-first.tile_x*frame.tile_width/2;
+        camera_y=first.anchor_y-first.tile_y*frame.tile_height/2;
+    }
+    if(!sandbox_fresh.draw(frame,camera_x,camera_y,0,0,0,0,false,1.f))return false;
+    renderer.trace.write("fresh-callback","scene-ready",true);
+    if(renderer.trace.level) {
+        char detail[256];
+        sprintf_s(detail,"prepare=%.3f reflection=%.3f static=%.3f water=%.3f units=%.3f reconstruct=%.3f shadow_builds=%u reflection_draws=%u static_draws=%u",
+            sandbox_fresh.phases[0],sandbox_fresh.phases[1],sandbox_fresh.phases[2],
+            sandbox_fresh.phases[3],sandbox_fresh.phases[4],sandbox_fresh.phases[5],
+            sandbox_fresh.shadow.builds,sandbox_fresh.reflection_draws,
+            sandbox_fresh.cache_full_draws);
+        renderer.trace.write("fresh-scene-phases",detail,true);
+    }
+    bool presented=sandbox_backbuffer_output.draw(target,frame.target_width,frame.target_height);
+    renderer.trace.write("fresh-callback",presented?"map-ready":"map-failed",true);
+    return presented;
+}
+#endif
 static LONG sandbox_swapchain_observed = -1;
 static double sandbox_present_phases[4] = {};
 

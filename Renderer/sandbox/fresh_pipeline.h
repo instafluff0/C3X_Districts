@@ -267,7 +267,11 @@ float4 PSSandboxAquaticFeature(FeaturePixelInput input) : SV_Target {
                   body.a * 0.40);
 }
 )");
-        if (shader.empty() || !patch(shader)) return false;
+        if (shader.empty() || !patch(shader)) {
+            char detail[192];sprintf_s(detail,"file=%s entry=%s source_or_patch=0",file,entry);
+            renderer.trace.write("fresh-shader-failed",detail,true);
+            return false;
+        }
         std::uint64_t key=14695981039346656037ull;
         for (unsigned char c:shader) key=(key^c)*1099511628211ull;
         for (unsigned char const* p=reinterpret_cast<unsigned char const*>(entry);*p;++p)
@@ -303,6 +307,10 @@ float4 PSSandboxAquaticFeature(FeaturePixelInput input) : SV_Target {
             std::ofstream saved(cache,std::ios::binary);
             saved.write(static_cast<char const*>(code->GetBufferPointer()),
                 std::streamsize(code->GetBufferSize()));
+        }
+        if (FAILED(hr)) {
+            char detail[192];sprintf_s(detail,"file=%s entry=%s hr=0x%08x",file,entry,unsigned(hr));
+            renderer.trace.write("fresh-shader-failed",detail,true);
         }
         if (code) code->Release();
         return SUCCEEDED(hr);
@@ -408,6 +416,10 @@ struct SandboxSceneShadow {
                 ID3DBlob** result) {
             std::wstring wide(path.begin(),path.end()); ID3DBlob* errors=nullptr;
             HRESULT hr=c3x_renderer::render_core::compile_cached(wide.c_str(),entry,profile,result,&errors);
+            if (FAILED(hr)) {
+                char detail[256];sprintf_s(detail,"entry=%s hr=0x%08x",entry,unsigned(hr));
+                renderer.trace.write("fresh-shadow-shader-failed",detail,true);
+            }
             if (errors) {if (FAILED(hr)) std::printf("SANDBOX_CASTER_SHADER %s\n",
                 static_cast<char const*>(errors->GetBufferPointer())); errors->Release();}
             return SUCCEEDED(hr);
@@ -475,13 +487,21 @@ struct SandboxSceneShadow {
         D3D11_RASTERIZER_DESC raster_desc={};raster_desc.FillMode=D3D11_FILL_SOLID;
         raster_desc.CullMode=D3D11_CULL_NONE;raster_desc.DepthClipEnable=FALSE;
         if (SUCCEEDED(hr)) hr=renderer.device->CreateRasterizerState(&raster_desc,&raster);
-        if (FAILED(hr)) return false;
+        if (FAILED(hr)) {
+            char detail[128];sprintf_s(detail,"resources hr=0x%08x",unsigned(hr));
+            renderer.trace.write("fresh-shadow-setup-failed",detail,true);
+            return false;
+        }
         production_view=renderer.source_shadow.view;
         renderer.source_shadow.view=view;
         renderer.collect_shadow_casters(renderer.geometry_vertex_buffers,casters);
         append_cliff_casters();
         batch_terrain_casters();
-        return prepare_instances();
+        if(!prepare_instances()) {
+            renderer.trace.write("fresh-shadow-setup-failed","instance preparation",true);
+            return false;
+        }
+        return true;
     }
     void append_cliff_casters() {
         auto dims=renderer.world_coast.world().dimensions();
@@ -682,7 +702,7 @@ struct SandboxSceneShadow {
             views[0]=renderer.cliff_views[renderer.cliff_bundle.assets[layer-geometry_cliff0].texture_index];
         context->PSSetShaderResources(0,33,views.data());return true;
     }
-    bool render(GeometryDrawView::Records const& receivers) {
+    bool render(GeometryDrawView::Records const& receivers,std::uint64_t scene) {
         if (!ensure()) return false;
         float needed[4]={std::numeric_limits<float>::max(),std::numeric_limits<float>::max(),
             -std::numeric_limits<float>::max(),-std::numeric_limits<float>::max()};
@@ -697,7 +717,7 @@ struct SandboxSceneShadow {
                 any=true;
             }
         if (!any) return false;
-        if (signature==renderer.cached_signature.complete &&
+        if (signature==scene &&
             light_basis==renderer.shadow_basis &&
             needed[0]>box[0]+1 && needed[1]>box[1]+1 &&
             needed[2]<box[0]+box[2]-1 && needed[3]<box[1]+box[3]-1) return true;
@@ -782,7 +802,7 @@ struct SandboxSceneShadow {
         std::array<std::array<float,4>,64> table{};
         std::copy(box,box+4,table[0].begin());
         context->UpdateSubresource(renderer.source_shadow.table,0,nullptr,table.data(),0,0);
-        signature=renderer.cached_signature.complete;
+        signature=scene;
         light_basis=renderer.shadow_basis;
         ++builds;
         return true;
@@ -937,24 +957,41 @@ struct SandboxFreshPipeline {
     bool reflection_valid=false;
     double phases[6]={};
     bool active=false;
+    std::uint64_t scene_revision() const {
+#ifdef C3X_RENDERER64_FRESH
+        // The production preparer may replace selected draw records while its
+        // content signature stays constant (a newly resident tile, for example).
+        // Keep camera-only translations cheap, but refresh retained references
+        // whenever that preparer starts a new geometry generation.
+        return renderer.cached_signature.geometry ^
+            (renderer.tile_geometry_epoch * 0x9e3779b97f4a7c15ull);
+#else
+        return renderer.cached_signature.complete;
+#endif
+    }
     ~SandboxFreshPipeline() {
         if(aquatic_bounds_buffer)aquatic_bounds_buffer->Release();
         if(terrain_material_blend)terrain_material_blend->Release();
         if(aquatic_depth)aquatic_depth->Release();
+#ifndef C3X_RENDERER64_FRESH
         if (production_reflection) {
             renderer.scene_reflection_view=production_reflection;
             renderer.scene_reflection_width=production_reflection_width;
             renderer.scene_reflection_height=production_reflection_height;
         }
+#endif
     }
     bool capture(ViewportShaderSettings const& settings,
             ViewportShaderSettings const& reflected,int width,int height,int next_wrap_pixels) {
-        if (resident_signature!=renderer.cached_signature.complete ||
+        if (resident_signature!=scene_revision() ||
                 wrap_pixels!=next_wrap_pixels) {
             visibility_valid=false;
             static_valid=false;
             resident={};wrap_pixels=next_wrap_pixels;
-            for (unsigned layer=0;layer<geometry_layer_count;++layer)
+            for (unsigned layer=0;layer<geometry_layer_count;++layer) {
+#ifdef C3X_RENDERER64_FRESH
+                if(layer==geometry_wave)continue;
+#endif
                 for (auto const& record:renderer.geometry_vertex_buffers[layer]) {
                     resident[layer].push_back(record);
                     if (wrap_pixels) for (int direction:{-1,1}) {
@@ -963,11 +1000,12 @@ struct SandboxFreshPipeline {
                         resident[layer].push_back(wrapped);
                     }
                 }
-            resident_signature=renderer.cached_signature.complete;
+            }
+            resident_signature=scene_revision();
             ++resident_builds;
             shadow.signature=0;
         }
-        std::array<std::uint64_t,5> scene_key={renderer.cached_signature.complete,
+        std::array<std::uint64_t,5> scene_key={scene_revision(),
             std::uint64_t(next_wrap_pixels),std::uint64_t(width),
             std::uint64_t(height),std::uint64_t(renderer.water_scene_active)};
         std::array<float,5> view_key={settings.translation[0],settings.translation[1],
@@ -1596,7 +1634,7 @@ struct SandboxFreshPipeline {
             reflection_static.ensure(renderer.device,reflection_width,reflection_height);
     }
     bool prepare_material_cache(ViewportShaderSettings const& settings,D3D11_RECT rect) {
-        if(material_valid && material_signature==renderer.cached_signature.complete &&
+        if(material_valid && material_signature==scene_revision() &&
            material_camera_x==camera_x && material_camera_y==camera_y)return true;
         auto* context=renderer.context;
         float clear[4]={};
@@ -1619,14 +1657,14 @@ struct SandboxFreshPipeline {
             if(!issue_records(static_visible,geometry_underlay,settings,rect,false))return false;
         }
         context->OMSetRenderTargets(0,nullptr,nullptr);
-        material_signature=renderer.cached_signature.complete;
+        material_signature=scene_revision();
         material_camera_x=camera_x;material_camera_y=camera_y;
         material_valid=true;
         return true;
     }
     bool prepare_terrain_material(ViewportShaderSettings const& settings,D3D11_RECT rect) {
         if(terrain_material_valid &&
-           terrain_material_signature==renderer.cached_signature.complete &&
+           terrain_material_signature==scene_revision() &&
            terrain_material_camera_x==camera_x && terrain_material_camera_y==camera_y)
             return true;
         auto* context=renderer.context;
@@ -1642,7 +1680,7 @@ struct SandboxFreshPipeline {
             if(!draw_layer(static_visible,layer,settings,rect,terrain_albedo.target,
                     terrain_albedo.depth,false,float(scene_scale),true))return false;
         context->OMSetRenderTargets(0,nullptr,nullptr);
-        terrain_material_signature=renderer.cached_signature.complete;
+        terrain_material_signature=scene_revision();
         terrain_material_camera_x=camera_x;terrain_material_camera_y=camera_y;
         terrain_material_valid=true;
         return true;
@@ -1650,7 +1688,7 @@ struct SandboxFreshPipeline {
     bool prepare_reflected_terrain_material(ViewportShaderSettings const& settings,
             D3D11_RECT rect) {
         if(reflected_terrain_material_valid &&
-           reflected_terrain_material_signature==renderer.cached_signature.complete &&
+           reflected_terrain_material_signature==scene_revision() &&
            reflected_terrain_camera_x==camera_x &&
            reflected_terrain_camera_y==camera_y)return true;
         auto* context=renderer.context;
@@ -1667,7 +1705,7 @@ struct SandboxFreshPipeline {
                     reflected_terrain_albedo.target,reflected_terrain_albedo.depth,
                     true,reflection_scale,true))return false;
         context->OMSetRenderTargets(0,nullptr,nullptr);
-        reflected_terrain_material_signature=renderer.cached_signature.complete;
+        reflected_terrain_material_signature=scene_revision();
         reflected_terrain_camera_x=camera_x;reflected_terrain_camera_y=camera_y;
         reflected_terrain_material_valid=true;
         return true;
@@ -1764,12 +1802,18 @@ struct SandboxFreshPipeline {
     bool draw(c3x_renderer_frame_v1 const& frame,int next_camera_x,int next_camera_y,
             int unit_x,int unit_y,int incarnation,int viewer,bool unit_visible,
             float next_zoom) {
-        auto fail=[](char const* stage){std::printf("SANDBOX_DRAW_ERROR stage=%s\n",stage);std::fflush(stdout);return false;};
+        auto fail=[](char const* stage){
+            renderer.trace.write("fresh-draw-failed",stage,true);
+            std::printf("SANDBOX_DRAW_ERROR stage=%s\n",stage);
+            std::fflush(stdout);
+            return false;
+        };
         LARGE_INTEGER frequency{},ticks[7]={};
         QueryPerformanceFrequency(&frequency);QueryPerformanceCounter(&ticks[0]);
         int width=renderer.content_view_width,height=renderer.content_view_height;
         if (!renderer.device || !renderer.context || width<1 || height<1) return false;
-        if (!visual.install() || !shadow.ensure()) return fail("visual_or_shadow_setup");
+        if (!visual.install()) return fail("visual_setup");
+        if (!shadow.ensure()) return fail("shadow_setup");
         unsigned w=unsigned(width)+8,h=unsigned(height)+8;
         if (!ensure_targets(w,h)) return fail("targets");
         update_environment(frame);
@@ -1785,6 +1829,21 @@ struct SandboxFreshPipeline {
             production_reflection_height=renderer.scene_reflection_height;
             active=true;
         }
+#ifdef C3X_RENDERER64_FRESH
+        // The production state owns its reflection view. Borrow the sandbox
+        // view only during this scene draw, including every early exit.
+        struct ReflectionBinding {
+            ID3D11ShaderResourceView*& view;
+            unsigned& width;
+            unsigned& height;
+            ID3D11ShaderResourceView* old_view;
+            unsigned old_width,old_height;
+            ~ReflectionBinding(){view=old_view;width=old_width;height=old_height;}
+        } reflection_binding{renderer.scene_reflection_view,
+            renderer.scene_reflection_width,renderer.scene_reflection_height,
+            renderer.scene_reflection_view,renderer.scene_reflection_width,
+            renderer.scene_reflection_height};
+#endif
         char skip_scene[8]{};
         if (resident_builds && GetEnvironmentVariableA("C3X_SANDBOX_SKIP_SCENE",
                 skip_scene,sizeof(skip_scene)) && std::strcmp(skip_scene,"1")==0) {
@@ -1794,9 +1853,11 @@ struct SandboxFreshPipeline {
         renderer.scene_reflection_view=reflection.view;
         renderer.scene_reflection_width=unsigned(reflection.width/reflection_scale)/2;
         renderer.scene_reflection_height=unsigned(reflection.height/reflection_scale)/2;
+#ifndef C3X_RENDERER64_FRESH
         renderer.geometry_viewport_settings.translation[0]+=float(next_camera_x-camera_x);
         renderer.geometry_viewport_settings.translation[1]+=float(next_camera_y-camera_y);
         renderer.geometry_viewport_settings.depth_translation+=float(next_camera_y-camera_y);
+#endif
         camera_x=next_camera_x;camera_y=next_camera_y;
         display_zoom=std::clamp(next_zoom,1.f,1.35f);
         renderer.water_material=c3x_renderer::render_core::water_material_frame(frame);
@@ -1820,7 +1881,7 @@ struct SandboxFreshPipeline {
             frame.world_width_tiles*frame.tile_width/2:0;
         if (!capture(settings,reflected,int(w),int(h),next_wrap_pixels))return fail("visibility_capture");
         bool recenter_region=!static_valid ||
-            static_signature!=renderer.cached_signature.complete ||
+            static_signature!=scene_revision() ||
             std::abs(camera_x-region_camera_x)>=region_margin_x ||
             std::abs(camera_y-region_camera_y)>=region_margin_y;
         if(recenter_region){
@@ -1835,7 +1896,7 @@ struct SandboxFreshPipeline {
         region_settings.inverse_size[1]=1.f/static_region.height;
         D3D11_RECT region_rect={region_margin_x,region_margin_y,
             LONG(region_margin_x+w),LONG(region_margin_y+h)};
-        if(!update_city_lights() || !shadow.render(all_visible))return fail("lights_or_shadow");
+        if(!update_city_lights() || !shadow.render(all_visible,scene_revision()))return fail("lights_or_shadow");
         QueryPerformanceCounter(&ticks[1]);
         D3D11_RECT full={0,0,LONG(w),LONG(h)};
         char unit_control[8]{};
@@ -1846,7 +1907,7 @@ struct SandboxFreshPipeline {
         if (renderer.reflection.enabled &&
             (!water_visible[geometry_water].empty() || !water_visible[geometry_river].empty())) {
             bool redraw=!reflection_valid ||
-                reflection_signature!=renderer.cached_signature.complete ||
+                reflection_signature!=scene_revision() ||
                 reflection_shadow_builds!=shadow.builds ||
                 reflection_camera_x!=camera_x || reflection_camera_y!=camera_y;
             if(!redraw)++reflection_reuses;
@@ -1863,7 +1924,7 @@ struct SandboxFreshPipeline {
             if(!draw_scene(reflection_visible,reflected,mirror,reflection_static.target,
                     reflection_static.depth,true,reflection_scale,false,true))return fail("reflection_scene");
             renderer.context->OMSetRenderTargets(0,nullptr,nullptr);
-            reflection_signature=renderer.cached_signature.complete;
+            reflection_signature=scene_revision();
             reflection_shadow_builds=shadow.builds;
             reflection_camera_x=camera_x;reflection_camera_y=camera_y;
             reflection_valid=true;
@@ -1881,7 +1942,7 @@ struct SandboxFreshPipeline {
         QueryPerformanceCounter(&ticks[2]);
         auto* context=renderer.context;
         bool const cache_ready=scene_scale==1 && static_valid &&
-            static_signature==renderer.cached_signature.complete &&
+            static_signature==scene_revision() &&
             static_shadow_builds==shadow.builds;
         if(!cache_ready){
             // A light or scene change replaces the whole resident image at
@@ -1898,7 +1959,7 @@ struct SandboxFreshPipeline {
                     static_region.target,static_region.depth,false,float(scene_scale)))return fail("static_scene");
             region_covered=region_rect;
             ++cache_full_draws;
-            static_signature=renderer.cached_signature.complete;
+            static_signature=scene_revision();
             static_shadow_builds=shadow.builds;
             static_valid=true;
         }

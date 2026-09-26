@@ -155,6 +155,66 @@ if(ok && !std::strcmp(gpu_frame_test,"1")) {
         if(!verify_gpu(gpu_render(&request,&view,&meta)==C3X_RENDERER_RESULT_OK,"GPU render")||
            !verify_gpu(!meta.bgra_pixels&&!view.map_readbacks&&view.width==test_frame.target_width&&view.height==test_frame.target_height,"GPU-only output")||
            !verify_gpu(meta.replacement_tile_count==ownership.size()&&std::equal(ownership.begin(),ownership.end(),meta.replacement_tile_flags),"native ownership parity"))break;
+        char fresh_witness[8]={};
+        if(phase==0 && GetEnvironmentVariableA("C3X_RENDERER_FRESH_WITNESS",
+                fresh_witness,sizeof(fresh_witness)) && !std::strcmp(fresh_witness,"1")) {
+            if(!verify_gpu(read(view.map_image)==C3X_RENDERER_RESULT_OK,
+                    "fresh map readback witness"))break;
+            auto witness=meta;witness.bgra_pixels=actual.data();
+            if(!verify_gpu(write_bmp((std::string(argv[5])+".fresh.bmp").c_str(),witness),
+                    "fresh map image witness"))break;
+            std::printf("GPU_FRAME_FRESH_WITNESS width=%d height=%d built=%u reused=%u map_readbacks=%u\n",
+                view.width,view.height,meta.geometry_tiles_built,
+                meta.geometry_tiles_reused,view.map_readbacks);
+            auto shifted_tiles=test_tiles;
+            for(auto& tile:shifted_tiles){tile.anchor_x+=96;tile.anchor_y+=48;}
+            auto shifted=test_frame;shifted.tiles=shifted_tiles.data();
+            shifted.presentation_time_ticks+=shifted.presentation_frequency/2;
+            auto shifted_request=request;shifted_request.frame=&shifted;
+            ++shifted_request.identity.scene_epoch;
+            c3x_renderer_output_v1 shifted_meta={C3X_RENDERER_API_VERSION,sizeof(shifted_meta)};
+            int shifted_code=gpu_render(&shifted_request,&view,&shifted_meta);
+            std::printf("GPU_FRAME_FRESH_SCROLL_CODE code=%d\n",shifted_code);
+            if(!verify_gpu(shifted_code==C3X_RENDERER_RESULT_OK,
+                    "fresh scrolled GPU render"))break;
+            if(!verify_gpu(read(view.map_image)==C3X_RENDERER_RESULT_OK,
+                    "fresh scrolled readback witness"))break;
+            witness=shifted_meta;witness.bgra_pixels=actual.data();
+            if(!verify_gpu(write_bmp((std::string(argv[5])+".scrolled.bmp").c_str(),witness),
+                    "fresh scrolled image witness"))break;
+            std::printf("GPU_FRAME_FRESH_SCROLL built=%u reused=%u invalidations=%u map_readbacks=%u\n",
+                shifted_meta.geometry_tiles_built,shifted_meta.geometry_tiles_reused,
+                shifted_meta.frame_invalidation_flags,view.map_readbacks);
+            auto edited_tiles=shifted_tiles;
+            auto edited=std::find_if(edited_tiles.begin(),edited_tiles.end(),[](auto const& tile){
+                return (tile.tile_flags&C3X_RENDERER_TILE_RENDER)!=0 &&
+                    tile.terrain_type<=4 && !(tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_MINE);
+            });
+            if(edited==edited_tiles.end())break;
+            edited->improvement_flags|=C3X_RENDERER_IMPROVEMENT_MINE;
+            auto local=shifted;local.tiles=edited_tiles.data();
+            auto local_request=shifted_request;local_request.frame=&local;
+            ++local_request.identity.scene_epoch;
+            c3x_renderer_output_v1 local_meta={C3X_RENDERER_API_VERSION,sizeof(local_meta)};
+            if(!verify_gpu(gpu_render(&local_request,&view,&local_meta)==C3X_RENDERER_RESULT_OK,
+                    "fresh local GPU render"))break;
+            if(!verify_gpu(read(view.map_image)==C3X_RENDERER_RESULT_OK,
+                    "fresh local readback witness"))break;
+            witness=local_meta;witness.bgra_pixels=actual.data();
+            if(!verify_gpu(write_bmp((std::string(argv[5])+".edited.bmp").c_str(),witness),
+                    "fresh local image witness"))break;
+            std::printf("GPU_FRAME_FRESH_EDIT built=%u reused=%u invalidations=%u map_readbacks=%u\n",
+                local_meta.geometry_tiles_built,local_meta.geometry_tiles_reused,
+                local_meta.frame_invalidation_flags,view.map_readbacks);
+            gpu_reset();
+            c3x_renderer_output_v1 reset_meta={C3X_RENDERER_API_VERSION,sizeof(reset_meta)};
+            if(!verify_gpu(gpu_render(&request,&view,&reset_meta)==C3X_RENDERER_RESULT_OK,
+                    "fresh post-reset GPU render"))break;
+            std::printf("GPU_FRAME_FRESH_RESET built=%u reused=%u map_readbacks=%u\n",
+                reset_meta.geometry_tiles_built,reset_meta.geometry_tiles_reused,
+                view.map_readbacks);
+            gpu_reset();return 0;
+        }
         char camera_test[8]={};GetEnvironmentVariableA("C3X_RENDERER_GPU_CAMERA_TEST",camera_test,sizeof(camera_test));
         if(phase==0 && !std::strcmp(camera_test,"1")){
             auto begin=reinterpret_cast<c3x_renderer_gpu_camera_begin_fn>(GetProcAddress(module,"c3x_renderer_gpu_camera_begin"));

@@ -154,6 +154,20 @@ if /i "%~1"=="city-fidelity" (
   exit /b 0
 )
 
+if /i "%~1"=="city-preview" (
+  if not exist "build\city-preview" mkdir "build\city-preview"
+  cl /nologo /std:c++17 /EHsc /O2 /W4 /WX biq_preview.cpp /Fo:build\city-preview\ /Fe:build\city-preview\biq_preview.exe /link /LARGEADDRESSAWARE gdi32.lib
+  if errorlevel 1 exit /b 1
+  exit /b 0
+)
+
+if /i "%~1"=="city-lab-renderer" (
+  if not exist "build\city-preview" mkdir "build\city-preview"
+  cl /nologo /std:c++17 /EHsc /O2 /W4 /WX /LD c3x_renderer.cpp terrain_scene_runtime.cpp environment_runtime.cpp terrain_definition_runtime.cpp scene_export.cpp frame_scheduler.cpp /Fo:build\city-preview\ /Fe:build\city-preview\C3XRenderer.dll /link /DEF:c3x_renderer.def /IMPLIB:build\city-preview\C3XRenderer.lib d3d11.lib d3dcompiler.lib dxgi.lib dcomp.lib gdi32.lib msimg32.lib user32.lib bcrypt.lib
+  if errorlevel 1 exit /b 1
+  exit /b 0
+)
+
 if /i "%~1"=="unit-bridge" (
   if not exist "build\unit_bridge_capture.h" exit /b 1
   cl /nologo /std:c++17 /EHsc /O2 /W4 /WX /wd4100 /wd4191 test_unit_bridge.cpp /Fo:build\ /Fe:build\test_unit_bridge.exe

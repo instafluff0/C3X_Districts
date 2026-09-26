@@ -17,7 +17,7 @@ from Renderer.lab.shared.cities.facades import derive
 
 def read(p):return city.read(p)
 def sha(p):return hashlib.sha256(city.input_bytes(p)).hexdigest()
-def build_pack(output=OUT):
+def build_pack(output=OUT, lab_layouts=None, lab_focus=None, lab_frames=None):
     output=Path(output).resolve()
     output.relative_to(ROOT/'Renderer')
     for source in (INPUT.parent,ROOT/city.PACK,ROOT/'Renderer/packs/CityStudyAuxiliaryUV',
@@ -29,10 +29,10 @@ def build_pack(output=OUT):
     # multiple category builds run in the same Python process.
     city.component.cache_clear()
     with city.track_inputs(generated=(output/'frames.json',)) as consumed:
-        meta=_build(output)
+        meta=_build(output, lab_layouts, lab_focus, lab_frames)
     return meta,consumed
 
-def _build(OUT):
+def _build(OUT, lab_layouts=None, lab_focus=None, lab_frames=None):
     OUT.mkdir(parents=True,exist_ok=True)
     source=read('Renderer/packs/CityFidelitySources/manifest.json');catalog=read('Renderer/packs/CityStudyAuxiliaryUV/city_catalog.json')
     styles=['american','european','mediterranean','middle_eastern','asian'];eras=['ancient','medieval','industrial','modern']
@@ -50,6 +50,12 @@ def _build(OUT):
         p=str((INPUT/name).relative_to(ROOT));pins[p]=sha(p)
         if 'normals' in name:frames.update(read(p)['meshes'])
         else:extra.update(read(p)['materials'])
+    if lab_frames is not None:
+        frame_path=Path(lab_frames).resolve()
+        frame_path.relative_to(ROOT/'Renderer/lab')
+        if lab_layouts is None:raise ValueError('Lab frames require Lab layouts')
+        frames.update(read(frame_path)['meshes'])
+        pins[str(frame_path.relative_to(ROOT))]=sha(frame_path)
     ground_parts=read(INPUT/'ground-parts.json')['parts']
     pins[str((INPUT/'ground-parts.json').relative_to(ROOT))]=sha(INPUT/'ground-parts.json')
     ground_binding=current['ground_binding']
@@ -78,10 +84,18 @@ def _build(OUT):
             for p in paths:
                 if p:pins[p]=sha(p)
         return material_ids[key]
-    def model(asset,pack=Path('Renderer/packs/CityStudyAuxiliaryUV')):
-        key=str(pack)+'/'+asset
+    def model(asset,pack=Path('Renderer/packs/CityStudyAuxiliaryUV'),source_z_factor=1.0):
+        key=(str(pack),asset,source_z_factor)
         if key in model_ids:return model_ids[key]
         b=body(asset,pack);parts=[]
+        def direction(values,normal=False):
+            # A Lab layout may retain the authored vertical proportion while
+            # the runtime keeps its established source-to-world projection.
+            if source_z_factor==1.0:return list(values)
+            v=list(values)
+            v[2]*=1/source_z_factor if normal else source_z_factor
+            length=math.sqrt(sum(n*n for n in v))
+            return [n/length for n in v] if length else v
         source_parts=b['parts']+[(x['mesh'],x['material']) for x in ground_parts.get(asset,[])]
         for mesh,mat in source_parts:
             ground=mat['alpha_mode']=='blend';frame=frames.get(mesh.get('asset_id'))
@@ -89,14 +103,17 @@ def _build(OUT):
             if frame and geometry_digest(mesh)!=frame['geometry_digest']:raise ValueError('source frame fingerprint mismatch')
             vertices=[]
             for i,v in enumerate(mesh['vertices']):
-                position=[v['position'][j]-(b['lo'][j]+b['hi'][j])/2 for j in (0,1)]+[v['position'][2]]
+                position=[v['position'][j]-(b['lo'][j]+b['hi'][j])/2 for j in (0,1)]+[v['position'][2]*source_z_factor]
                 normal=frame['normals'][i] if frame else v['normal']
                 tangent=frame['tangents'][i] if frame else [1,0,0];bitangent=frame['bitangents'][i] if frame else [0,1,0]
-                vertices.append(position+v['uv0']+normal+v.get('uv1',[0,0])+tangent+bitangent+v.get('uv2',[0,0]))
+                vertices.append(position+v['uv0']+direction(normal,True)+v.get('uv1',[0,0])+direction(tangent)+direction(bitangent)+v.get('uv2',[0,0]))
             parts.append({'material':material(mat,asset,ground),'vertices':vertices,'indices':mesh['topology']['indices']})
         mid=len(models);model_ids[key]=mid
         hull=convex_hull([(v['position'][0]-(b['lo'][0]+b['hi'][0])/2,v['position'][1]-(b['lo'][1]+b['hi'][1])/2) for mesh,mat in b['parts'] if mat['alpha_mode']!='blend' for v in mesh['vertices']])
-        models.append({'asset':asset,'pack':str(pack),'low':b['lo'],'high':b['hi'],'hull':hull,'parts':parts})
+        models.append({'asset':asset,'pack':str(pack),
+                       'low':b['lo'][:2]+[b['lo'][2]*source_z_factor],
+                       'high':b['hi'][:2]+[b['hi'][2]*source_z_factor],
+                       'hull':hull,'parts':parts})
         return mid
     selected={}
     for item in current['selected']:
@@ -104,17 +121,18 @@ def _build(OUT):
     # Use the actual selected placements first. The coastal capital retains its
     # preceding legal composition instead of inventing a central placement.
     light_cache={}
-    def template(pool,size,instances,capital=False,authority=None,environment=False,clearance=None):
+    def template(pool,size,instances,capital=False,authority=None,environment=False,clearance=None,
+                 source_z_factor=1.0):
         culture,era=pool.removeprefix('city/pool/').split('/')
         if culture not in styles:raise ValueError('unknown normalized culture '+culture)
         out={'culture':styles.index(culture),'era':eras.index(era),'size':size,'capital':capital,'environment':environment,'authority':authority,
             'clearance':clearance or [.05,2.5,.12,12.4],'instances':[]}
         for inst in instances:
             asset=inst['asset'];pack=Path(inst.get('pack','Renderer/packs/CityStudyAuxiliaryUV'));b=body(asset,pack)
-            mid=model(asset,pack);rot=inst['rotation'];scale=inst['scale'];offset=inst['offset'];box=bounds(b,rot,scale)
+            mid=model(asset,pack,source_z_factor);rot=inst['rotation'];scale=inst['scale'];offset=inst['offset'];box=bounds(b,rot,scale)
             # The original quadrature and facade-plane rule run once offline;
             # all resulting positions are transformed with the same instance.
-            key=(str(pack),asset,scale,rot,inst['slot']=='capital')
+            key=(str(pack),asset,scale,rot,inst['slot']=='capital',source_z_factor)
             if key not in light_cache:
                 entry={'asset':asset,'slot':inst['slot'],'scale':scale,'rotation':rot,'offset':[0,0],'local_bounds':box,'sample_start':0}
                 aug={'emissive_uv':2,'grounding':'source_z_zero','scene_world_z_per_source_unit':1/0.648266978876,'pack':str(pack),'source_normals':None,'emissive_gain':8,'capital':{'mapping':{'pack':str(pack)}},'instances':[entry]}
@@ -126,6 +144,9 @@ def _build(OUT):
                 except ValueError as e:
                     if 'no emitting facade samples' not in str(e):raise
                     derived={'lights':[],'blockers':[]}
+                if source_z_factor!=1.0:
+                    for light in derived['lights']:
+                        light['position'][2]*=source_z_factor
                 light_cache[key]=derived
             out['instances'].append({'model':mid,'slot':inst['slot'],'scale':scale,'rotation':rot,'offset':offset,'bounds':box,'lights':light_cache[key]['lights']})
         # The selected connected paving is the same footprint union used by
@@ -135,7 +156,10 @@ def _build(OUT):
         if era=='modern':
             ordinary=[i for i in out['instances'] if i['slot']!='capital']
             scale=ordinary[0]['scale']
-            if any(abs(i['scale']-scale)>1e-8 for i in ordinary):raise ValueError('nonuniform city scale')
+            if any(abs(i['scale']-scale)>1e-8 for i in ordinary):
+                if not authority or not authority.startswith('lab-fixed-'):
+                    raise ValueError('nonuniform city scale')
+                scale=sum(i['scale'] for i in ordinary)/len(ordinary)
             boxes=[];coverage_boxes=[];polygons=[]
             for i in out['instances']:
                 x,y=i['offset'];b=i['bounds'];box=[x+b[0],-y-b[3],x+b[2],-y-b[1]];boxes.append(box)
@@ -158,6 +182,30 @@ def _build(OUT):
             subset=[i for i in inst if i['slot']=='capital' or i['slot']<counts[size]]
             template(a['pool'],size,subset,a['capital']['drawn'],f'selected-r{revision}',revision in [111,112,101],
                 [.05,2.5,a.get('vegetation_clearance') or 0,(a.get('river_exclusion') or {}).get('threshold_pixels',0)])
+    if lab_layouts is not None:
+        layout_path=Path(lab_layouts).resolve()
+        layout_path.relative_to(ROOT/'Renderer/lab')
+        layouts=read(layout_path)
+        if layouts.get('schema')!='c3x.lab.city_design.v1':raise ValueError('unsupported Lab city design')
+        for design in layouts['designs']:
+            culture=design['culture_name'].lower().replace(' ','_')
+            era=design['era_name'].lower()
+            if lab_focus is not None and (culture,era)!=lab_focus:continue
+            pool=f'city/pool/{culture}/{era}'
+            if pool not in catalog['pools']:raise ValueError('Lab city design has no source pool')
+            for size,count in enumerate(design['population_counts']):
+                if not 0<count<=len(design['houses']):raise ValueError('invalid Lab population tier')
+                tier=design['tier_designs'][size]
+                if len(tier['houses'])!=count:raise ValueError('invalid Lab size design')
+                houses=[{**item,'slot':slot} for slot,item in enumerate(tier['houses'])]
+                civic={**tier['base_centerpiece'],'slot':count}
+                for capital in (False,True):
+                    instances=houses+([] if capital and design.get('capital_replaces_centerpiece') else [civic])
+                    if capital:instances.append({**tier['palace'],'slot':'capital'})
+                    vertical_metric=design.get('vertical_metric',.648266978876)
+                    template(pool,size,instances,capital,
+                             f'lab-fixed-{culture}-{era}',era=='modern',
+                             [.04,18.0,0,4.0],.648266978876/vertical_metric)
     # The same bounded Lab growth solver and source-scale rule cover other
     # normalized pools. These are production adaptations, not new Lab witnesses.
     for pool,record in sorted(catalog['pools'].items()):
@@ -244,9 +292,23 @@ def main():
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output',type=Path,help='Build a disposable candidate without changing the runtime pack')
+    parser.add_argument('--lab-layouts',type=Path,help='Optional Lab-only city design recipes')
+    parser.add_argument('--lab-focus',help='Compile one culture,era from --lab-layouts')
+    parser.add_argument('--lab-frames',type=Path,help='Optional Lab-only source frame evidence')
     args=parser.parse_args()
     if args.output:
         OUT=(ROOT/args.output).resolve()
         if not OUT.is_relative_to(ROOT/'Renderer'):
             parser.error('output must stay within Renderer')
-    main()
+    if args.lab_layouts:
+        if not args.output:parser.error('--lab-layouts requires an isolated --output')
+        focus=tuple(args.lab_focus.split(',')) if args.lab_focus else None
+        if focus is not None and (len(focus)!=2 or
+                                  focus[0] not in ('american','european','mediterranean','middle_eastern','asian') or
+                                  focus[1] not in ('ancient','medieval','industrial','modern')):
+            parser.error('invalid --lab-focus')
+        build_pack(OUT,args.lab_layouts,focus,args.lab_frames)
+    else:
+        if args.lab_focus:parser.error('--lab-focus requires --lab-layouts')
+        if args.lab_frames:parser.error('--lab-frames requires --lab-layouts')
+        main()

@@ -1,5 +1,9 @@
 # Cities
 
+The current one-tile culture/era/population city redesign and culture-wide
+PCX-style review sheets are in [the city layout study](../../../studies/cities/README.md).
+They are Lab proposals and do not alter this category's production template.
+
 Current city-fidelity templates, single-era growth, central modern palace, source materials, paving and facade lighting.
 
 `standard.json` identifies the shared implementation, dependencies, fixture recipe

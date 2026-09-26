@@ -23,7 +23,7 @@ struct Instance {
     float u,v,rotation,scale,material,owner;
     bool shadow;
 };
-struct Route {float u0,v0,u1,v1;unsigned style;bool railroad;};
+struct Route {float u0,v0,u1,v1;unsigned style;bool railroad,bridge;};
 struct Plan {std::vector<Instance> instances;std::vector<Route> routes;};
 struct Surfaces {
     std::array<std::vector<Vertex>,layer_count> layers;
@@ -123,6 +123,13 @@ void append_instance(Projection const& input,FeatureBundle const& bundle,Feature
     float tile_world_v = static_cast<float>(tile.tile_x - tile.tile_y) * 0.5f;
     std::array<float, 3> ground_sample = relief_at_world(
         tile_world_u + local_u, tile_world_v + (1.0f - local_v));
+    bool farm_asset=asset.id.rfind("farm_",0)==0;
+    if (farm_asset && asset.id.find(":base:")!=std::string::npos && ground_sample[2]<.55f)
+        return;
+    if (farm_asset && asset.id.find(":building:")!=std::string::npos && ground_sample[2]<.14f)
+        return;
+    if (farm_asset && asset.id.find(":tree:")!=std::string::npos && ground_sample[2]<.11f)
+        return;
     if(pickup_profile && site)
         ground_sample[0]=natural_height_at(
             tile_world_u+local_u,tile_world_v+1.f-local_v)-2.5f;
@@ -134,19 +141,39 @@ void append_instance(Projection const& input,FeatureBundle const& bundle,Feature
                              ground_sample[0] * relief_projection_scale);
     float cosine = std::cos(rotation);
     float sine = std::sin(rotation);
+    bool farm_decal = false;
+    if (farm_asset && !asset.vertices.empty()) {
+        farm_decal = true;
+        float level = asset.vertices.front().position[2];
+        for (auto const& vertex : asset.vertices)
+            farm_decal = farm_decal && std::abs(vertex.position[2]-level)<1e-5f;
+    }
     std::vector<Vertex> transformed(asset.vertices.size());
+    std::vector<float> farm_shore(farm_decal ? asset.vertices.size() : 0);
+    std::vector<std::array<float,2>> farm_world(farm_decal ? asset.vertices.size() : 0);
     for (std::size_t vertex_index = 0; vertex_index < asset.vertices.size(); ++vertex_index) {
         c3x_renderer::FeatureSourceVertex const & source = asset.vertices[vertex_index];
         float local_x = (source.position[0] * cosine - source.position[1] * sine) * scale;
         float local_y = (source.position[0] * sine + source.position[1] * cosine) * scale;
         float local_z = source.position[2] * scale;
+        auto vertex_ground = farm_decal
+            ? relief_at_world(tile_world_u + local_u + local_x,
+                              tile_world_v + 1.0f - local_v - local_y)
+            : ground_sample;
+        if (farm_decal) {
+            farm_shore[vertex_index] = vertex_ground[2];
+            farm_world[vertex_index] = {tile_world_u+local_u+local_x,
+                                        tile_world_v+1.0f-local_v-local_y};
+        }
         float screen_x = center_x + (local_x - local_y) * half_w;
         float screen_y = center_y + (local_x + local_y) * half_h -
-            local_z * 150.0f * feature_projection_scale;
+            local_z * 150.0f * feature_projection_scale -
+            (vertex_ground[0] - ground_sample[0]) * relief_projection_scale;
         float normal_x = source.normal[0] * cosine - source.normal[1] * sine;
         float normal_y = source.normal[0] * sine + source.normal[1] * cosine;
-        float ground_height_pixels = ground_sample[0] * relief_projection_scale;
-        float base_ground_y = center_y + ground_height_pixels +
+        float ground_height_pixels = vertex_ground[0] * relief_projection_scale;
+        float base_ground_y = center_y +
+            ground_sample[0] * relief_projection_scale +
             (local_x + local_y) * half_h;
         float feature_height_tiles = local_z * 150.0f *
             (world_objects?128.f/224.f:feature_projection_scale) /
@@ -168,16 +195,101 @@ void append_instance(Projection const& input,FeatureBundle const& bundle,Feature
             auto & vertex = transformed[vertex_index];
             vertex.world_x = tile_world_u + local_u + local_x;
             vertex.world_y = tile_world_v + 1.0f - local_v - local_y;
-            vertex.world_z = (ground_sample[0] + 2.5f + feature_height_tiles) / 112.0f;
+            vertex.world_z = (vertex_ground[0] + 2.5f + feature_height_tiles) / 112.0f;
             vertex.world_valid = 1.0f;
             if(world_objects){
                 vertex.x=64.f+(local_u-local_v)*64.f+(local_x-local_y)*64.f;
-                vertex.y=((local_u+local_v)*32.f-ground_sample[0]*(128.f/224.f*.82f))+(local_x+local_y)*32.f-local_z*150.f*(128.f/224.f);
+                vertex.y=((local_u+local_v)*32.f-vertex_ground[0]*(128.f/224.f*.82f))+(local_x+local_y)*32.f-local_z*150.f*(128.f/224.f);
                 vertex.z=feature_height_tiles;
             }
             auto normal=c3x_renderer::lighting::object_normal(normal_x,normal_y,source.normal[2]);
             vertex.normal_x=normal[0];vertex.normal_y=normal[1];vertex.normal_z=normal[2];
         }
+    }
+    if (farm_decal) {
+        if(asset.id.find(":crop:")!=std::string::npos){
+            float min_u=1e6f,max_u=-1e6f,min_v=1e6f,max_v=-1e6f;
+            for(auto const& point:farm_world){
+                min_u=std::min(min_u,point[0]);max_u=std::max(max_u,point[0]);
+                min_v=std::min(min_v,point[1]);max_v=std::max(max_v,point[1]);
+            }
+            float min_wet_u=1e6f,max_wet_u=-1e6f,min_wet_v=1e6f,max_wet_v=-1e6f;
+            for(unsigned row=0;row<=8u;++row)for(unsigned column=0;column<=8u;++column){
+                float u=min_u+(max_u-min_u)*float(column)*.125f;
+                float v=min_v+(max_v-min_v)*float(row)*.125f;
+                if(relief_at_world(u,v)[2]<.025f){
+                    min_wet_u=std::min(min_wet_u,u);max_wet_u=std::max(max_wet_u,u);
+                    min_wet_v=std::min(min_wet_v,v);max_wet_v=std::max(max_wet_v,v);
+                }
+            }
+            if(min_wet_u<=max_wet_u){
+                float best=.4f,cut=0;unsigned axis=0;float sign=0;
+                auto offer=[&](float retained,float limit,unsigned direction,float orientation){
+                    if(retained>best){best=retained;cut=limit;axis=direction;sign=orientation;}
+                };
+                float width=max_u-min_u,height=max_v-min_v;
+                if(width>0 && height>0){
+                    offer((max_u-max_wet_u-.02f)/width,max_wet_u+.02f,0,1);
+                    offer((min_wet_u-min_u-.02f)/width,min_wet_u-.02f,0,-1);
+                    offer((max_v-max_wet_v-.02f)/height,max_wet_v+.02f,1,1);
+                    offer((min_wet_v-min_v-.02f)/height,min_wet_v-.02f,1,-1);
+                }
+                if(sign!=0){
+                    bool safe=false;
+                    for(unsigned shift=0;shift<12u && !safe;++shift){
+                        safe=true;
+                        for(unsigned sample=0;sample<=16u;++sample){
+                            float along=float(sample)*.0625f;
+                            float u=axis==0?cut:min_u+width*along;
+                            float v=axis==1?cut:min_v+height*along;
+                            if(relief_at_world(u,v)[2]<.025f){safe=false;break;}
+                        }
+                        if(!safe)cut+=sign*.01f;
+                    }
+                    float remaining=axis==0?(sign>0?(max_u-cut)/width:(cut-min_u)/width):
+                        (sign>0?(max_v-cut)/height:(cut-min_v)/height);
+                    if(safe && remaining>=.4f)
+                        for(std::size_t index=0;index<farm_shore.size();++index)
+                            farm_shore[index]=std::min(farm_shore[index],
+                                sign*(farm_world[index][axis]-cut));
+                }
+            }
+        }
+        struct ShoreVertex { Vertex vertex; float distance; };
+        auto intersect=[](ShoreVertex const& a,ShoreVertex const& b){
+            float t=a.distance/(a.distance-b.distance);
+            ShoreVertex result{a.vertex,0};
+            auto* output=reinterpret_cast<float*>(&result.vertex);
+            auto const* from=reinterpret_cast<float const*>(&a.vertex);
+            auto const* to=reinterpret_cast<float const*>(&b.vertex);
+            for(unsigned i=0;i<sizeof(Vertex)/sizeof(float);++i)
+                output[i]=from[i]+(to[i]-from[i])*t;
+            return result;
+        };
+        for(std::size_t triangle=0;triangle+2<asset.indices.size();triangle+=3){
+            std::array<ShoreVertex,4> polygon{};
+            unsigned count=3;
+            for(unsigned corner=0;corner<3;++corner){
+                auto index=asset.indices[triangle+corner];
+                polygon[corner]={transformed[index],farm_shore[index]};
+            }
+            std::array<ShoreVertex,4> clipped{};
+            unsigned kept=0;
+            for(unsigned corner=0;corner<count;++corner){
+                auto const& a=polygon[corner];auto const& b=polygon[(corner+1)%count];
+                bool a_land=a.distance>=0,b_land=b.distance>=0;
+                if(a_land)clipped[kept++]=a;
+                if(a_land!=b_land)clipped[kept++]=intersect(a,b);
+            }
+            for(unsigned corner=1;corner+1<kept;++corner){
+                for(unsigned index:{0u,corner,corner+1}){
+                    if(topology){topology->push_back(unsigned(target.size()));
+                        target.push_back(clipped[index].vertex);}
+                    else target.push_back(clipped[index].vertex);
+                }
+            }
+        }
+        return;
     }
     if(topology){
         unsigned base=unsigned(target.size());
@@ -195,7 +307,7 @@ void append_route(Projection const& input,Route const& route,Relief relief_at_wo
     bool pickup_profile=input.pickup_profile,world_objects=input.world_objects;
     auto ndc_x=[](float x){return x;};auto ndc_y=[](float y){return y;};
     constexpr int subdivisions = 16;
-    float route_half_width = railroad ? 0.076f : 0.105f;
+    float route_half_width = railroad ? 0.076f : 0.040f;
     float atlas_half_width = railroad ? 0.058f : 0.075f;
     float du = u1 - u0, dv = v1 - v0;
     float original_length = std::sqrt(du * du + dv * dv);
@@ -216,25 +328,38 @@ void append_route(Projection const& input,Route const& route,Relief relief_at_wo
     float atlas_length = std::sqrt(atlas_dx * atlas_dx + atlas_dy * atlas_dy);
     float atlas_perpendicular_u = -atlas_dy / atlas_length;
     float atlas_perpendicular_v = atlas_dx / atlas_length;
-    float wave_seed = std::fmod(std::fabs(
-        original_u0 * 17.0f + original_v0 * 31.0f +
-        original_u1 * 47.0f + original_v1 * 61.0f), 19.0f) / 19.0f;
-    float wave_phase = wave_seed * 6.28318530718f;
+    auto route_hash=[](unsigned value){
+        value ^= value >> 16; value *= 0x7feb352du;
+        value ^= value >> 15; value *= 0x846ca68bu;
+        return value ^ (value >> 16);
+    };
+    unsigned seed = route_hash(tile.variant_seed ^
+        static_cast<unsigned>(tile.tile_x * 73856093u) ^
+        static_cast<unsigned>(tile.tile_y * 19349663u) ^
+        static_cast<unsigned>((original_u1 - original_u0 + 2.0f) * 97.0f) ^
+        static_cast<unsigned>((original_v1 - original_v0 + 2.0f) * 193.0f));
+    float wave_phase = float(seed & 0xffffu) / 65536.0f * 6.28318530718f;
+    float width_variation = railroad ? 1.0f :
+        0.92f + float(route_hash(seed ^ 0x9e3779b9u) & 0xffffu) / 65536.0f * 0.16f;
     auto route_vertex = [&](float along, float across) {
         float source_along = (along * length - 0.14f) / original_length;
         float curve_t = std::clamp(source_along, 0.0f, 1.0f);
-        float curve_envelope = std::sin(curve_t * 3.14159265359f);
-        float curve_amplitude = railroad ? 0.028f : 0.042f;
+        // The midpoint is the shared river edge. Keep its crossing straight
+        // and centered under the authored bridge body.
+        float curve_envelope = std::sin(curve_t * 6.28318530718f);
+        float curve_amplitude = route.bridge ? 0.0f :
+            (railroad ? 0.020f : 0.032f);
         float road_wave = curve_envelope * curve_amplitude *
             (0.62f * std::sin(wave_phase) +
              0.38f * std::sin(curve_t * 6.28318530718f + wave_phase));
         float route_u = u0 + du * along + perpendicular_u *
-            (route_half_width * across + road_wave);
+            (route_half_width * width_variation * across + road_wave);
         float route_v = v0 + dv * along + perpendicular_v *
-            (route_half_width * across + road_wave);
-        float atlas_u = atlas_dx * source_along +
+            (route_half_width * width_variation * across + road_wave);
+        float atlas_along = railroad || (seed & 1u) == 0u ? source_along : 1.0f - source_along;
+        float atlas_u = atlas_dx * atlas_along +
             atlas_perpendicular_u * atlas_half_width * across;
-        float atlas_v = 0.90606654f + atlas_dy * source_along +
+        float atlas_v = 0.90606654f + atlas_dy * atlas_along +
             atlas_perpendicular_v * atlas_half_width * across;
         float tile_world_u = static_cast<float>(tile.tile_x + tile.tile_y) * 0.5f;
         float tile_world_v = static_cast<float>(tile.tile_x - tile.tile_y) * 0.5f;
@@ -253,6 +378,21 @@ void append_route(Projection const& input,Route const& route,Relief relief_at_wo
             route_u, route_v, 0.0f, 0.0f,
             0.0f, 0.0f, 1.0f,
             1000.0f, 0.0f, 1000.0f, 0.0f, -1.0f};
+        if (!pickup_profile) {
+            constexpr float normal_step = 0.025f;
+            float world_u = tile_world_u + route_u;
+            float world_v = tile_world_v + 1.0f - route_v;
+            float slope_u = (relief_at_world(world_u + normal_step, world_v)[0] -
+                relief_at_world(world_u - normal_step, world_v)[0]) *
+                relief_projection_scale / (2.0f * normal_step * input.tile_width);
+            float slope_v = (relief_at_world(world_u, world_v + normal_step)[0] -
+                relief_at_world(world_u, world_v - normal_step)[0]) *
+                relief_projection_scale / (2.0f * normal_step * input.tile_width);
+            float inverse_length = 1.0f / std::sqrt(slope_u * slope_u + slope_v * slope_v + 1.0f);
+            vertex.normal_x = -slope_u * inverse_length;
+            vertex.normal_y = -slope_v * inverse_length;
+            vertex.normal_z = inverse_length;
+        }
         if (pickup_profile) {
             vertex.world_x = tile_world_u + route_u;
             vertex.world_y = tile_world_v + 1.0f - route_v;
@@ -284,7 +424,7 @@ void select_routes(c3x_renderer_tile_v1 const& tile,Assets const& assets,bool ro
             plan.instances.push_back({Family(family),placement.asset_index,layer,u,v,rotation,scale,material,owner,shadow});return;
         }
     };
-    auto append_route_segment=[&](float a,float b,float c,float d,unsigned style,bool railroad){plan.routes.push_back({a,b,c,d,style,railroad});};
+    auto append_route_segment=[&](float a,float b,float c,float d,unsigned style,bool railroad,bool bridge){plan.routes.push_back({a,b,c,d,style,railroad,bridge});};
     if (route_assets_ready && (tile.road_mask != 0 || tile.railroad_mask != 0)) {
         constexpr int route_offsets[4][2] = {
             {1, -1}, {2, 0}, {1, 1}, {0, 2}
@@ -293,6 +433,7 @@ void select_routes(c3x_renderer_tile_v1 const& tile,Assets const& assets,bool ro
         constexpr unsigned opposite_river_bits[4] = {32u, 0u, 128u, 0u};
         float base_world_u = static_cast<float>(tile.tile_x + tile.tile_y) * 0.5f;
         float base_world_v = static_cast<float>(tile.tile_x - tile.tile_y) * 0.5f;
+        bool connected = false;
         for (int direction = 0; direction < 4; ++direction) {
             int neighbor_x = tile.tile_x + route_offsets[direction][0];
             int neighbor_y = tile.tile_y + route_offsets[direction][1];
@@ -304,17 +445,18 @@ void select_routes(c3x_renderer_tile_v1 const& tile,Assets const& assets,bool ro
             bool road = tile.road_mask != 0 && neighbor.road_mask != 0;
             if (!railroad && !road)
                 continue;
+            connected = true;
             float end_u = (static_cast<float>(neighbor_x + neighbor_y) * 0.5f + 0.5f) -
                 base_world_u;
             float end_v = 1.0f - ((static_cast<float>(neighbor_x - neighbor_y) * 0.5f + 0.5f) -
                 base_world_v);
             unsigned style = railroad ? 4u : static_cast<unsigned>(
                 std::clamp(tile.route_style, 0, 3));
-            if(routes_enabled)
-            append_route_segment(0.5f, 0.5f, end_u, end_v, style, railroad);
             bool bridge = river_edge_bits[direction] != 0 &&
                 (((tile.river_code & river_edge_bits[direction]) != 0) ||
                  ((neighbor.river_code & opposite_river_bits[direction]) != 0));
+            if(routes_enabled)
+                append_route_segment(0.5f, 0.5f, end_u, end_v, style, railroad, bridge);
             if (bridge) {
                 char const * bridge_style = railroad ? "railroad" :
                     (style >= 3u ? "modern" : (style >= 2u ? "industrial" : "medieval"));
@@ -330,6 +472,27 @@ void select_routes(c3x_renderer_tile_v1 const& tile,Assets const& assets,bool ro
                         rotation, placement.scale, 13.0f, 0.0f, true,
                         feature_vertices);
                 }
+            }
+        }
+        if (!connected && routes_enabled) {
+            constexpr int reverse_offsets[4][2] = {
+                {-1, 1}, {-2, 0}, {-1, -1}, {0, -2}
+            };
+            for (auto const& offset : reverse_offsets) {
+                auto found = lookup(tile.tile_x + offset[0], tile.tile_y + offset[1]);
+                if (found != nullptr &&
+                    ((tile.road_mask && found->occurrence.road_mask) ||
+                     (tile.railroad_mask && found->occurrence.railroad_mask))) {
+                    connected = true;
+                    break;
+                }
+            }
+            if (!connected) {
+                bool railroad = tile.railroad_mask != 0;
+                unsigned style = railroad ? 4u :
+                    static_cast<unsigned>(std::clamp(tile.route_style, 0, 3));
+                // A single built road still needs a readable mark on the tile.
+                append_route_segment(0.36f, 0.50f, 0.64f, 0.50f, style, railroad, false);
             }
         }
     }
@@ -405,38 +568,73 @@ inline bool select_improvements(c3x_renderer_tile_v1 const& tile,Assets const& a
             c3x_renderer::find_feature_group(farm_bundle, group_name.c_str());
         if (group == nullptr || group->placements.empty())
             return false;
-        unsigned connections = 0u;
-        for (unsigned bits = tile.irrigation_mask; bits != 0u; bits >>= 1u)
-            connections += bits & 1u;
-        bool shadow_emitted = false;
+        unsigned seed=c3x_renderer::stable_hash(tile.variant_seed ^
+            (tile.irrigation_mask&15u)*0x9e3779b9u ^ unsigned(ground)*0x85ebca6bu);
+        unsigned color_mask=(seed>>8)&15u;
+        if(color_mask==0u)color_mask=1u<<((seed>>12)&3u);
+        if(color_mask==15u)color_mask^=1u<<((seed>>12)&3u);
+        float field_rotation=float(seed&3u)*1.57079632679f+
+            (c3x_renderer::stable_random(seed+29u)-.5f)*.08f;
+        constexpr unsigned palettes[5][2]={{1,2},{1,0},{0,1},{2,1},{0,2}};
+        unsigned terrain=unsigned(std::clamp(ground,0,4));
         for (c3x_renderer::FeaturePlacement const & placement : group->placements) {
             if (placement.asset_index >= farm_bundle.assets.size())
                 return false;
             c3x_renderer::FeatureAsset const & asset =
                 farm_bundle.assets[placement.asset_index];
-            bool base_part = asset.id.find(":base:") != std::string::npos;
             bool building_part = asset.id.find(":building:") != std::string::npos;
             bool crop_part = asset.id.find(":crop:") != std::string::npos;
-            bool include_base = base_part && connections < 4u &&
-                c3x_renderer::stable_hash(
-                    static_cast<std::uint32_t>(tile.tile_x * 37 + tile.tile_y * 101)) % 5u == 0u;
-            bool include_building = building_part &&
-                c3x_renderer::stable_hash(
-                    static_cast<std::uint32_t>(tile.tile_x * 71 + tile.tile_y * 43)) % 7u == 0u;
-            if (!crop_part && !include_base && !include_building)
-                continue;
-            float scale = crop_part ? 2.22f + 0.025f * static_cast<float>(connections) :
-                (building_part ? 0.94f : 1.05f);
+            bool tree_part = asset.id.find(":tree:") != std::string::npos;
             unsigned emissive_code = 0u;
             std::size_t marker = asset.id.rfind(":e");
             if (marker != std::string::npos)
                 emissive_code = static_cast<unsigned>(std::strtoul(
                     asset.id.c_str() + marker + 2u, nullptr, 10));
-            bool cast_shadow = building_part && !shadow_emitted;
-            append_feature_instance(farm_bundle, placement, 0.5f, 0.5f, 0.0f,
-                scale, 21.0f, 0.01f * static_cast<float>(emissive_code + 1u),
-                cast_shadow, farm_vertices);
-            shadow_emitted = shadow_emitted || cast_shadow;
+            if (crop_part) {
+                for(unsigned patch=0;patch<4u;++patch){
+                    unsigned palette=palettes[terrain][(color_mask>>patch)&1u];
+                    if(asset.texture_index!=palette)continue;
+                    unsigned patch_seed=c3x_renderer::stable_hash(seed ^ ((patch+1u)*0x9e3779b9u));
+                    float rotation=field_rotation+
+                        (c3x_renderer::stable_random(patch_seed+29u)-.5f)*.03f;
+                    float cosine=std::cos(rotation),sine=std::sin(rotation);
+                    float low_x=1e6f,high_x=-1e6f,low_y=1e6f,high_y=-1e6f;
+                    for(auto const& vertex:asset.vertices){
+                        float x=vertex.position[0]*cosine-vertex.position[1]*sine;
+                        float y=vertex.position[0]*sine+vertex.position[1]*cosine;
+                        low_x=std::min(low_x,x);high_x=std::max(high_x,x);
+                        low_y=std::min(low_y,y);high_y=std::max(high_y,y);
+                    }
+                    float footprint=.40f+.025f*c3x_renderer::stable_random(patch_seed+13u);
+                    float scale=footprint/std::max(high_x-low_x,high_y-low_y);
+                    float desired_u=(patch&1u)?.728f:.272f;
+                    float desired_v=(patch&2u)?.728f:.272f;
+                    float jitter_u=(c3x_renderer::stable_random(patch_seed+37u)-.5f)*.012f;
+                    float jitter_v=(c3x_renderer::stable_random(patch_seed+53u)-.5f)*.012f;
+                    float u=desired_u-(low_x+high_x)*.5f*scale+jitter_u;
+                    float v=desired_v-(low_y+high_y)*.5f*scale+jitter_v;
+                    append_feature_instance(farm_bundle,placement,u,v,rotation,
+                        scale,21.0f,.01f*float(emissive_code+1u),false,farm_vertices);
+                }
+            } else if (tree_part) {
+                unsigned count=4u+((seed>>5)%3u);
+                for(unsigned slot=0;slot<count;++slot){
+                    unsigned tree_seed=c3x_renderer::stable_hash(seed ^ ((slot+5u)*0x85ebca6bu));
+                    float u=slot<4u?((slot&1u)?.81f:.19f):.5f;
+                    float v=slot<4u?((slot&2u)?.81f:.19f):(slot==4u?.19f:.81f);
+                    u+=(c3x_renderer::stable_random(tree_seed+19u)-.5f)*.12f;
+                    v+=(c3x_renderer::stable_random(tree_seed+31u)-.5f)*.12f;
+                    float scale=1.35f+.45f*c3x_renderer::stable_random(tree_seed+47u);
+                    append_feature_instance(farm_bundle,placement,u,v,
+                        float(tree_seed&3u)*1.57079632679f,scale,21.0f,
+                        .01f*float(emissive_code+1u),true,farm_vertices);
+                }
+            } else if (building_part) {
+                append_feature_instance(farm_bundle,placement,
+                    .37f+float(seed&1u)*.20f,.38f+float((seed>>1)&1u)*.19f,
+                    float((seed>>2)&3u)*1.57079632679f,1.45f,21.0f,
+                    .01f*float(emissive_code+1u),true,farm_vertices);
+            }
         }
     }
     if (city_assets_ready && tile.city_id >= 0 && ground < 11) {
@@ -474,6 +672,75 @@ inline bool select_improvements(c3x_renderer_tile_v1 const& tile,Assets const& a
             }
         }
         if ((tile.city_flags & C3X_RENDERER_CITY_WALLED) != 0) {
+            // A Lab wall bundle can provide the individual pieces used by the
+            // fixed city layouts. Ordinary bundles retain the legacy wall path.
+            char const * lab_era = era_names[std::min(era, 2u)];
+            std::string lab_prefix = std::string("wall_lab_") + lab_era + "_";
+            auto const * segment = c3x_renderer::find_feature_group(
+                wall_bundle, (lab_prefix + "segment").c_str());
+            auto const * gate = c3x_renderer::find_feature_group(
+                wall_bundle, (lab_prefix + "gate").c_str());
+            auto const * tower = c3x_renderer::find_feature_group(
+                wall_bundle, (lab_prefix + "tower").c_str());
+            if (composed_city && segment != nullptr && gate != nullptr &&
+                tower != nullptr && !segment->placements.empty() &&
+                !gate->placements.empty() && !tower->placements.empty()) {
+                constexpr float pi = 3.14159265359f;
+                constexpr unsigned samples = 2048u;
+                float const radius[3] = {.43f, .58f, .70f};
+                unsigned const sectors[3] = {16u, 20u, 24u};
+                std::array<std::array<float, 2>, samples + 1u> points{};
+                std::array<float, samples + 1u> distances{};
+                for (unsigned index = 0u; index <= samples; ++index) {
+                    float angle = pi / 4.0f + float(index) * 2.0f * pi / float(samples);
+                    float cosine = std::cos(angle), sine = std::sin(angle);
+                    points[index] = {
+                        radius[size] * std::copysign(std::pow(std::abs(cosine), 1.0f / 3.0f), cosine),
+                        radius[size] * std::copysign(std::pow(std::abs(sine), 1.0f / 3.0f), sine)};
+                    if (index != 0u) {
+                        float du = points[index][0] - points[index - 1u][0];
+                        float dv = points[index][1] - points[index - 1u][1];
+                        distances[index] = distances[index - 1u] + std::sqrt(du * du + dv * dv);
+                    }
+                }
+                std::vector<std::array<float, 3>> ring;
+                ring.reserve(sectors[size]);
+                for (unsigned sector = 0u; sector < sectors[size]; ++sector) {
+                    float target = distances[samples] * float(sector) / float(sectors[size]);
+                    unsigned index = 0u;
+                    while (index < samples && distances[index] < target) ++index;
+                    float blend = index == 0u ? 0.0f :
+                        (target - distances[index - 1u]) /
+                        (distances[index] - distances[index - 1u]);
+                    float x = index == 0u ? points[0u][0] :
+                        points[index - 1u][0] * (1.0f - blend) + points[index][0] * blend;
+                    float y = index == 0u ? points[0u][1] :
+                        points[index - 1u][1] * (1.0f - blend) + points[index][1] * blend;
+                    unsigned before = index == 0u ? samples - 1u : index - 1u;
+                    unsigned after = std::min(index + 1u, samples);
+                    float tangent = std::atan2(points[after][1] - points[before][1],
+                                               points[after][0] - points[before][0]);
+                    ring.push_back({x, y, tangent - pi / 2.0f});
+                }
+                for (unsigned sector = 0u; sector < sectors[size]; ++sector) {
+                    auto const & position = ring[sector];
+                    auto const & part = sector == 0u ? gate->placements.front()
+                                                     : segment->placements.front();
+                    append_feature_instance(wall_bundle, part,
+                        .5f + position[0], .5f + position[1],
+                        position[2] + (sector == 0u ? pi / 2.0f : 0.0f),
+                        part.scale, 29.0f,
+                        .08f * static_cast<float>(owner + 1u), true, wall_vertices);
+                }
+                for (unsigned sector = 2u; sector < sectors[size]; sector += 4u) {
+                    auto const & position = ring[sector];
+                    auto const & part = tower->placements.front();
+                    append_feature_instance(wall_bundle, part,
+                        .5f + position[0], .5f + position[1], position[2],
+                        part.scale, 29.0f,
+                        .08f * static_cast<float>(owner + 1u), true, wall_vertices);
+                }
+            } else {
             c3x_renderer::FeatureGroup const * walls = c3x_renderer::find_feature_group(
                 wall_bundle, wall_names[std::min(era, 2u)]);
             if (walls != nullptr && !walls->placements.empty()) {
@@ -490,18 +757,106 @@ inline bool select_improvements(c3x_renderer_tile_v1 const& tile,Assets const& a
                         wall.scale * (size == 0u ? 0.82f : 1.0f), 29.0f,
                         0.08f * static_cast<float>(owner + 1u), true, wall_vertices);
             }
+            }
         }
     }
     return true;
 }
+template<class Relief>
+void settle_farm_fields(Plan& plan,c3x_renderer_tile_v1 const& tile,Assets const& assets,Relief relief){
+    constexpr std::array<float,7> scales{{1.f,.94f,.88f,.82f,.75f,.68f,.6f}};
+    float world_u=float(tile.tile_x+tile.tile_y)*.5f;
+    float world_v=float(tile.tile_x-tile.tile_y)*.5f;
+    for(std::size_t index=0;index<plan.instances.size();++index){
+        auto& instance=plan.instances[index];
+        if(instance.family!=farm_family || instance.asset>=assets[farm_family].assets.size())continue;
+        auto const& asset=assets[farm_family].assets[instance.asset];
+        if(asset.id.find(":crop:")==std::string::npos || asset.vertices.empty())continue;
+        bool right=instance.u>.5f,lower=instance.v>.5f;
+        float low_u=right?.505f:.04f,high_u=right?.96f:.495f;
+        float low_v=lower?.505f:.04f,high_v=lower?.96f:.495f;
+        float cosine=std::cos(instance.rotation),sine=std::sin(instance.rotation);
+        bool found=false;
+        for(float factor:scales){
+            if(found)break;
+            for(int radius=0;radius<=2 && !found;++radius)
+            for(int du=-radius;du<=radius && !found;++du)
+            for(int dv=-radius;dv<=radius;++dv){
+                if(std::max(std::abs(du),std::abs(dv))!=radius)continue;
+                float u=instance.u+float(du)*.05f,v=instance.v+float(dv)*.05f;
+                float min_u=1e6f,max_u=-1e6f,min_v=1e6f,max_v=-1e6f;
+                for(auto const& vertex:asset.vertices){
+                    float x=(vertex.position[0]*cosine-vertex.position[1]*sine)*instance.scale*factor;
+                    float y=(vertex.position[0]*sine+vertex.position[1]*cosine)*instance.scale*factor;
+                    min_u=std::min(min_u,u+x);max_u=std::max(max_u,u+x);
+                    min_v=std::min(min_v,v+y);max_v=std::max(max_v,v+y);
+                }
+                if(min_u<low_u || max_u>high_u || min_v<low_v || max_v>high_v)continue;
+                bool dry=true;
+                for(unsigned row=0;row<5u && dry;++row)for(unsigned column=0;column<5u;++column){
+                    float sample_u=min_u+(max_u-min_u)*float(column)*.25f;
+                    float sample_v=min_v+(max_v-min_v)*float(row)*.25f;
+                    if(relief(world_u+sample_u,world_v+1.f-sample_v)[2]<.025f){dry=false;break;}
+                }
+                if(dry){instance.u=u;instance.v=v;instance.scale*=factor;found=true;break;}
+            }
+        }
+    }
+}
+template<class Relief>
+void settle_farm_props(Plan& plan,c3x_renderer_tile_v1 const& tile,Assets const& assets,Relief relief){
+    constexpr std::array<std::array<float,2>,16> anchors{{
+        {{.22f,.22f}},{{.50f,.22f}},{{.78f,.22f}},{{.22f,.50f}},
+        {{.78f,.50f}},{{.22f,.78f}},{{.50f,.78f}},{{.78f,.78f}},
+        {{.14f,.35f}},{{.14f,.65f}},{{.32f,.35f}},{{.32f,.65f}},
+        {{.68f,.35f}},{{.68f,.65f}},{{.86f,.35f}},{{.86f,.65f}}}};
+    float world_u=float(tile.tile_x+tile.tile_y)*.5f;
+    float world_v=float(tile.tile_x-tile.tile_y)*.5f;
+    std::vector<std::array<float,2>> occupied;
+    std::vector<unsigned char> keep(plan.instances.size(),1u);
+    // Buildings choose their dry position first; trees fill the remaining gaps.
+    for(unsigned pass=0;pass<2u;++pass)for(std::size_t index=0;index<plan.instances.size();++index){
+        auto& instance=plan.instances[index];
+        if(instance.family!=farm_family || instance.asset>=assets[farm_family].assets.size())continue;
+        auto const& id=assets[farm_family].assets[instance.asset].id;
+        bool building=id.find(":building:")!=std::string::npos;
+        bool tree=id.find(":tree:")!=std::string::npos;
+        if((pass==0u && !building) || (pass==1u && !tree))continue;
+        float clearance=building?.14f:.11f;
+        float spacing=building?.17f:.105f;
+        auto fits=[&](float u,float v){
+            if(relief(world_u+u,world_v+1.f-v)[2]<clearance)return false;
+            for(auto const& used:occupied)if(std::hypot(u-used[0],v-used[1])<spacing)return false;
+            return true;
+        };
+        float u=instance.u,v=instance.v;
+        bool found=fits(u,v);
+        unsigned seed=c3x_renderer::stable_hash(tile.variant_seed ^ unsigned(index+1u)*0x9e3779b9u);
+        for(unsigned attempt=0;!found && attempt<anchors.size();++attempt){
+            auto const& anchor=anchors[(seed+attempt*5u)%anchors.size()];
+            float candidate_u=anchor[0]+(c3x_renderer::stable_random(seed+attempt*17u)-.5f)*.06f;
+            float candidate_v=anchor[1]+(c3x_renderer::stable_random(seed+attempt*23u+11u)-.5f)*.06f;
+            if(fits(candidate_u,candidate_v)){u=candidate_u;v=candidate_v;found=true;}
+        }
+        if(found){instance.u=u;instance.v=v;occupied.push_back({u,v});}
+        else keep[index]=0u;
+    }
+    std::size_t index=0;
+    plan.instances.erase(std::remove_if(plan.instances.begin(),plan.instances.end(),
+        [&](Instance const&){return keep[index++]==0u;}),plan.instances.end());
+}
 template<class Relief,class Height>
-void compile(Plan const& plan,Projection const& input,Assets const& assets,Relief relief,Height height,Surfaces& output,bool indexed=false){
+void compile(Plan const& plan,Projection const& input,Assets const& assets,Relief relief,Height height,Surfaces& output,bool indexed=false,
+        std::vector<unsigned>* instance_counts=nullptr){
     for(auto const& route:plan.routes)append_route(input,route,relief,output.layers[route_layer]);
     for(auto const& instance:plan.instances){
+        auto before=indexed?output.indices[instance.layer].size():output.layers[instance.layer].size();
         FeaturePlacement placement{};placement.asset_index=instance.asset;
         append_instance(input,assets[instance.family],placement,instance.u,instance.v,instance.rotation,
             instance.scale,instance.material,instance.owner,instance.shadow,instance.family==site_family,
             relief,height,output.layers[instance.layer],output.shadows,indexed?&output.indices[instance.layer]:nullptr);
+        if(instance_counts)instance_counts->push_back(unsigned(
+            (indexed?output.indices[instance.layer].size():output.layers[instance.layer].size())-before));
     }
 }
 }}

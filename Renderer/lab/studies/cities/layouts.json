@@ -1,0 +1,6280 @@
+{
+  "schema": "c3x.lab.city_design.v1",
+  "site": "flat grassland",
+  "tile_xy": [
+    -0.5,
+    -0.5,
+    0.5,
+    0.5
+  ],
+  "wall_perimeters": [
+    0.43,
+    0.58,
+    0.7
+  ],
+  "styles": [
+    "American",
+    "European",
+    "Mediterranean",
+    "Middle Eastern",
+    "Asian"
+  ],
+  "eras": [
+    "Ancient",
+    "Medieval",
+    "Industrial",
+    "Modern"
+  ],
+  "designs": [
+    {
+      "culture": 0,
+      "culture_name": "American",
+      "era": 0,
+      "era_name": "Ancient",
+      "population_counts": [
+        4,
+        6,
+        8
+      ],
+      "tier_designs": [
+        {
+          "houses": [
+            {
+              "asset": "city/component/078c3aa94ecabb44",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 5.54501068,
+              "rotation": 0.0,
+              "offset": [
+                -0.315,
+                0.245
+              ]
+            },
+            {
+              "asset": "city/component/3b04bf3abfa61f38",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.72640223,
+              "rotation": 0.0,
+              "offset": [
+                -0.14,
+                0.28
+              ]
+            },
+            {
+              "asset": "city/component/c800677c003782d8",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.90778894,
+              "rotation": 0.0,
+              "offset": [
+                0.07,
+                0.28
+              ]
+            },
+            {
+              "asset": "city/component/ea64dc2c2ac50f56",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 4.11785036,
+              "rotation": 0.0,
+              "offset": [
+                0.28,
+                0.245
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/0363dbee61e13503",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 5.03982077,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/82e46464c341ec9f",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 14.81408187,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        },
+        {
+          "houses": [
+            {
+              "asset": "city/component/078c3aa94ecabb44",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 5.54501068,
+              "rotation": 0.0,
+              "offset": [
+                -0.35,
+                0.315
+              ]
+            },
+            {
+              "asset": "city/component/3b04bf3abfa61f38",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.72640223,
+              "rotation": 0.0,
+              "offset": [
+                -0.14,
+                0.35
+              ]
+            },
+            {
+              "asset": "city/component/c800677c003782d8",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.90778894,
+              "rotation": 0.0,
+              "offset": [
+                0.07,
+                0.35
+              ]
+            },
+            {
+              "asset": "city/component/ea64dc2c2ac50f56",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 4.11785036,
+              "rotation": 0.0,
+              "offset": [
+                0.315,
+                0.315
+              ]
+            },
+            {
+              "asset": "city/component/20c6179bd3b7587a",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.46462053,
+              "rotation": 0.0,
+              "offset": [
+                -0.455,
+                0.0
+              ]
+            },
+            {
+              "asset": "city/component/6cf90d821d71767d",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.47264116,
+              "rotation": 0.0,
+              "offset": [
+                0.42,
+                0.0
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/0363dbee61e13503",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 5.03982077,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/82e46464c341ec9f",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 14.81408187,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        },
+        {
+          "houses": [
+            {
+              "asset": "city/component/078c3aa94ecabb44",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 5.54501068,
+              "rotation": 0.0,
+              "offset": [
+                -0.385,
+                0.35
+              ]
+            },
+            {
+              "asset": "city/component/3b04bf3abfa61f38",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.72640223,
+              "rotation": 0.0,
+              "offset": [
+                -0.14,
+                0.385
+              ]
+            },
+            {
+              "asset": "city/component/c800677c003782d8",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.90778894,
+              "rotation": 0.0,
+              "offset": [
+                0.105,
+                0.385
+              ]
+            },
+            {
+              "asset": "city/component/ea64dc2c2ac50f56",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 4.11785036,
+              "rotation": 0.0,
+              "offset": [
+                0.35,
+                0.35
+              ]
+            },
+            {
+              "asset": "city/component/20c6179bd3b7587a",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.46462053,
+              "rotation": 0.0,
+              "offset": [
+                -0.49,
+                0.0
+              ]
+            },
+            {
+              "asset": "city/component/6cf90d821d71767d",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.47264116,
+              "rotation": 0.0,
+              "offset": [
+                0.455,
+                0.0
+              ]
+            },
+            {
+              "asset": "city/component/19e3fcaaa0e909cb",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 4.34797898,
+              "rotation": 0.0,
+              "offset": [
+                -0.49,
+                -0.28
+              ]
+            },
+            {
+              "asset": "city/component/6f4428cceabd90b1",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 4.34797898,
+              "rotation": 0.0,
+              "offset": [
+                0.455,
+                -0.28
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/0363dbee61e13503",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 5.03982077,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/82e46464c341ec9f",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 14.81408187,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        }
+      ],
+      "base_centerpiece": {
+        "asset": "city/component/0363dbee61e13503",
+        "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+        "scale": 5.03982077,
+        "rotation": 0.0,
+        "offset": [
+          0,
+          -0.16
+        ]
+      },
+      "houses": [
+        {
+          "asset": "city/component/078c3aa94ecabb44",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 5.54501068,
+          "rotation": 0.0,
+          "offset": [
+            -0.385,
+            0.35
+          ]
+        },
+        {
+          "asset": "city/component/3b04bf3abfa61f38",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.72640223,
+          "rotation": 0.0,
+          "offset": [
+            -0.14,
+            0.385
+          ]
+        },
+        {
+          "asset": "city/component/c800677c003782d8",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.90778894,
+          "rotation": 0.0,
+          "offset": [
+            0.105,
+            0.385
+          ]
+        },
+        {
+          "asset": "city/component/ea64dc2c2ac50f56",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 4.11785036,
+          "rotation": 0.0,
+          "offset": [
+            0.35,
+            0.35
+          ]
+        },
+        {
+          "asset": "city/component/20c6179bd3b7587a",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.46462053,
+          "rotation": 0.0,
+          "offset": [
+            -0.49,
+            0.0
+          ]
+        },
+        {
+          "asset": "city/component/6cf90d821d71767d",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.47264116,
+          "rotation": 0.0,
+          "offset": [
+            0.455,
+            0.0
+          ]
+        },
+        {
+          "asset": "city/component/19e3fcaaa0e909cb",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 4.34797898,
+          "rotation": 0.0,
+          "offset": [
+            -0.49,
+            -0.28
+          ]
+        },
+        {
+          "asset": "city/component/6f4428cceabd90b1",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 4.34797898,
+          "rotation": 0.0,
+          "offset": [
+            0.455,
+            -0.28
+          ]
+        }
+      ],
+      "palace": {
+        "asset": "city/palace/root/82e46464c341ec9f",
+        "pack": "Renderer/packs/CityPalacesNormalized",
+        "scale": 14.81408187,
+        "rotation": 0.5235987755982988,
+        "offset": [
+          0,
+          -0.16
+        ]
+      },
+      "capital_replaces_centerpiece": true,
+      "vertical_metric": 1.0,
+      "wall_kit": "ancient"
+    },
+    {
+      "culture": 0,
+      "culture_name": "American",
+      "era": 1,
+      "era_name": "Medieval",
+      "population_counts": [
+        3,
+        5,
+        7
+      ],
+      "tier_designs": [
+        {
+          "houses": [
+            {
+              "asset": "city/component/19bafa8e1214cde9",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.65305173,
+              "rotation": 0.0,
+              "offset": [
+                -0.245,
+                0.245
+              ]
+            },
+            {
+              "asset": "city/component/4eaaeb89d63d009d",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 2.85883268,
+              "rotation": 0.0,
+              "offset": [
+                0.0,
+                0.28
+              ]
+            },
+            {
+              "asset": "city/component/2741cf9173c575a3",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 2.57796491,
+              "rotation": 0.0,
+              "offset": [
+                0.245,
+                0.21
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/7f7e297c49049754",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 3.97459439,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/82e46464c341ec9f",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 14.81408187,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        },
+        {
+          "houses": [
+            {
+              "asset": "city/component/19bafa8e1214cde9",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.65305173,
+              "rotation": 0.0,
+              "offset": [
+                -0.35,
+                0.315
+              ]
+            },
+            {
+              "asset": "city/component/4eaaeb89d63d009d",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 2.85883268,
+              "rotation": 0.0,
+              "offset": [
+                -0.035,
+                0.385
+              ]
+            },
+            {
+              "asset": "city/component/2741cf9173c575a3",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 2.57796491,
+              "rotation": 0.0,
+              "offset": [
+                0.28,
+                0.315
+              ]
+            },
+            {
+              "asset": "city/component/620eacf16b61c6c1",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.89905288,
+              "rotation": 0.0,
+              "offset": [
+                -0.42,
+                0.0
+              ]
+            },
+            {
+              "asset": "city/component/51ca50452851124c",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.14981626,
+              "rotation": 0.0,
+              "offset": [
+                0.42,
+                0.0
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/7f7e297c49049754",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 3.97459439,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/82e46464c341ec9f",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 14.81408187,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        },
+        {
+          "houses": [
+            {
+              "asset": "city/component/19bafa8e1214cde9",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.65305173,
+              "rotation": 0.0,
+              "offset": [
+                -0.385,
+                0.35
+              ]
+            },
+            {
+              "asset": "city/component/4eaaeb89d63d009d",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 2.85883268,
+              "rotation": 0.0,
+              "offset": [
+                -0.035,
+                0.42
+              ]
+            },
+            {
+              "asset": "city/component/2741cf9173c575a3",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 2.57796491,
+              "rotation": 0.0,
+              "offset": [
+                0.315,
+                0.35
+              ]
+            },
+            {
+              "asset": "city/component/620eacf16b61c6c1",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.89905288,
+              "rotation": 0.0,
+              "offset": [
+                -0.49,
+                0.0
+              ]
+            },
+            {
+              "asset": "city/component/51ca50452851124c",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.14981626,
+              "rotation": 0.0,
+              "offset": [
+                0.455,
+                0.0
+              ]
+            },
+            {
+              "asset": "city/component/d93a576616d178de",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.62974086,
+              "rotation": 0.0,
+              "offset": [
+                -0.49,
+                -0.28
+              ]
+            },
+            {
+              "asset": "city/component/2b9024d85a6595df",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 4.6706555,
+              "rotation": 0.0,
+              "offset": [
+                0.455,
+                -0.315
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/7f7e297c49049754",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 3.97459439,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/82e46464c341ec9f",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 14.81408187,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        }
+      ],
+      "base_centerpiece": {
+        "asset": "city/component/7f7e297c49049754",
+        "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+        "scale": 3.97459439,
+        "rotation": 0.0,
+        "offset": [
+          0,
+          -0.16
+        ]
+      },
+      "houses": [
+        {
+          "asset": "city/component/19bafa8e1214cde9",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.65305173,
+          "rotation": 0.0,
+          "offset": [
+            -0.385,
+            0.35
+          ]
+        },
+        {
+          "asset": "city/component/4eaaeb89d63d009d",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 2.85883268,
+          "rotation": 0.0,
+          "offset": [
+            -0.035,
+            0.42
+          ]
+        },
+        {
+          "asset": "city/component/2741cf9173c575a3",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 2.57796491,
+          "rotation": 0.0,
+          "offset": [
+            0.315,
+            0.35
+          ]
+        },
+        {
+          "asset": "city/component/620eacf16b61c6c1",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.89905288,
+          "rotation": 0.0,
+          "offset": [
+            -0.49,
+            0.0
+          ]
+        },
+        {
+          "asset": "city/component/51ca50452851124c",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.14981626,
+          "rotation": 0.0,
+          "offset": [
+            0.455,
+            0.0
+          ]
+        },
+        {
+          "asset": "city/component/d93a576616d178de",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.62974086,
+          "rotation": 0.0,
+          "offset": [
+            -0.49,
+            -0.28
+          ]
+        },
+        {
+          "asset": "city/component/2b9024d85a6595df",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 4.6706555,
+          "rotation": 0.0,
+          "offset": [
+            0.455,
+            -0.315
+          ]
+        }
+      ],
+      "palace": {
+        "asset": "city/palace/root/82e46464c341ec9f",
+        "pack": "Renderer/packs/CityPalacesNormalized",
+        "scale": 14.81408187,
+        "rotation": 0.5235987755982988,
+        "offset": [
+          0,
+          -0.16
+        ]
+      },
+      "capital_replaces_centerpiece": true,
+      "vertical_metric": 1.0,
+      "wall_kit": "medieval"
+    },
+    {
+      "culture": 0,
+      "culture_name": "American",
+      "era": 2,
+      "era_name": "Industrial",
+      "population_counts": [
+        2,
+        4,
+        6
+      ],
+      "tier_designs": [
+        {
+          "houses": [
+            {
+              "asset": "city/component/40eab4ef97a2b405",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 5.68888889,
+              "rotation": 0.0,
+              "offset": [
+                -0.21,
+                0.245
+              ]
+            },
+            {
+              "asset": "city/component/3af6650f1293827d",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 6.12373106,
+              "rotation": 0.0,
+              "offset": [
+                0.175,
+                0.28
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/08a67dba7b786d28",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 5.23225529,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/0d0c35f4a4c9651a",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 15.04508558,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        },
+        {
+          "houses": [
+            {
+              "asset": "city/component/40eab4ef97a2b405",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 5.68888889,
+              "rotation": 0.0,
+              "offset": [
+                -0.28,
+                0.35
+              ]
+            },
+            {
+              "asset": "city/component/3af6650f1293827d",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 6.12373106,
+              "rotation": 0.0,
+              "offset": [
+                0.245,
+                0.35
+              ]
+            },
+            {
+              "asset": "city/component/2bc7f8f4fbdbc21e",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 5.30133333,
+              "rotation": 0.0,
+              "offset": [
+                -0.42,
+                0.0
+              ]
+            },
+            {
+              "asset": "city/component/9fde6b617b069475",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 5.71187454,
+              "rotation": 0.0,
+              "offset": [
+                0.385,
+                0.0
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/08a67dba7b786d28",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 5.23225529,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/0d0c35f4a4c9651a",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 15.04508558,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        },
+        {
+          "houses": [
+            {
+              "asset": "city/component/40eab4ef97a2b405",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 5.68888889,
+              "rotation": 0.0,
+              "offset": [
+                -0.315,
+                0.385
+              ]
+            },
+            {
+              "asset": "city/component/3af6650f1293827d",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 6.12373106,
+              "rotation": 0.0,
+              "offset": [
+                0.245,
+                0.385
+              ]
+            },
+            {
+              "asset": "city/component/2bc7f8f4fbdbc21e",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 5.30133333,
+              "rotation": 0.0,
+              "offset": [
+                -0.49,
+                0.0
+              ]
+            },
+            {
+              "asset": "city/component/9fde6b617b069475",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 5.71187454,
+              "rotation": 0.0,
+              "offset": [
+                0.455,
+                0.0
+              ]
+            },
+            {
+              "asset": "city/component/df30e8412e6e4490",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 4.89589247,
+              "rotation": 0.0,
+              "offset": [
+                -0.49,
+                -0.28
+              ]
+            },
+            {
+              "asset": "city/component/504377ebfa9a3bd2",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 4.85563784,
+              "rotation": 0.0,
+              "offset": [
+                0.455,
+                -0.35
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/08a67dba7b786d28",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 5.23225529,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/0d0c35f4a4c9651a",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 15.04508558,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        }
+      ],
+      "base_centerpiece": {
+        "asset": "city/component/08a67dba7b786d28",
+        "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+        "scale": 5.23225529,
+        "rotation": 0.0,
+        "offset": [
+          0,
+          -0.16
+        ]
+      },
+      "houses": [
+        {
+          "asset": "city/component/40eab4ef97a2b405",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 5.68888889,
+          "rotation": 0.0,
+          "offset": [
+            -0.315,
+            0.385
+          ]
+        },
+        {
+          "asset": "city/component/3af6650f1293827d",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 6.12373106,
+          "rotation": 0.0,
+          "offset": [
+            0.245,
+            0.385
+          ]
+        },
+        {
+          "asset": "city/component/2bc7f8f4fbdbc21e",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 5.30133333,
+          "rotation": 0.0,
+          "offset": [
+            -0.49,
+            0.0
+          ]
+        },
+        {
+          "asset": "city/component/9fde6b617b069475",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 5.71187454,
+          "rotation": 0.0,
+          "offset": [
+            0.455,
+            0.0
+          ]
+        },
+        {
+          "asset": "city/component/df30e8412e6e4490",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 4.89589247,
+          "rotation": 0.0,
+          "offset": [
+            -0.49,
+            -0.28
+          ]
+        },
+        {
+          "asset": "city/component/504377ebfa9a3bd2",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 4.85563784,
+          "rotation": 0.0,
+          "offset": [
+            0.455,
+            -0.35
+          ]
+        }
+      ],
+      "palace": {
+        "asset": "city/palace/root/0d0c35f4a4c9651a",
+        "pack": "Renderer/packs/CityPalacesNormalized",
+        "scale": 15.04508558,
+        "rotation": 0.5235987755982988,
+        "offset": [
+          0,
+          -0.16
+        ]
+      },
+      "capital_replaces_centerpiece": true,
+      "vertical_metric": 1.0,
+      "wall_kit": "industrial"
+    },
+    {
+      "culture": 0,
+      "culture_name": "American",
+      "era": 3,
+      "era_name": "Modern",
+      "population_counts": [
+        2,
+        3,
+        5
+      ],
+      "tier_designs": [
+        {
+          "houses": [
+            {
+              "asset": "city/component/201c181c2d3d95c2",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.95958938,
+              "rotation": 0.0,
+              "offset": [
+                -0.21,
+                0.21
+              ]
+            },
+            {
+              "asset": "city/component/1a2cdd77f4c26999",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.82701561,
+              "rotation": 0.0,
+              "offset": [
+                0.14,
+                0.245
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/1a71fb8ac25f1241",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 2.46757799,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/0d0c35f4a4c9651a",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 15.04508558,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        },
+        {
+          "houses": [
+            {
+              "asset": "city/component/201c181c2d3d95c2",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.95958938,
+              "rotation": 0.0,
+              "offset": [
+                -0.28,
+                0.35
+              ]
+            },
+            {
+              "asset": "city/component/1a2cdd77f4c26999",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.82701561,
+              "rotation": 0.0,
+              "offset": [
+                0.245,
+                0.35
+              ]
+            },
+            {
+              "asset": "city/component/790e2a73c14737d8",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 4.41133948,
+              "rotation": 0.0,
+              "offset": [
+                -0.035,
+                0.385
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/1a71fb8ac25f1241",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 2.46757799,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/0d0c35f4a4c9651a",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 15.04508558,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        },
+        {
+          "houses": [
+            {
+              "asset": "city/component/201c181c2d3d95c2",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.95958938,
+              "rotation": 0.0,
+              "offset": [
+                -0.315,
+                0.385
+              ]
+            },
+            {
+              "asset": "city/component/1a2cdd77f4c26999",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.82701561,
+              "rotation": 0.0,
+              "offset": [
+                0.245,
+                0.385
+              ]
+            },
+            {
+              "asset": "city/component/790e2a73c14737d8",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 4.41133948,
+              "rotation": 0.0,
+              "offset": [
+                -0.035,
+                0.455
+              ]
+            },
+            {
+              "asset": "city/component/81157340c6bc8609",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.91157742,
+              "rotation": 0.0,
+              "offset": [
+                -0.525,
+                -0.07
+              ]
+            },
+            {
+              "asset": "city/component/f65b0689b7acb564",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.4336814,
+              "rotation": 0.0,
+              "offset": [
+                0.455,
+                -0.07
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/1a71fb8ac25f1241",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 2.46757799,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/0d0c35f4a4c9651a",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 15.04508558,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        }
+      ],
+      "base_centerpiece": {
+        "asset": "city/component/1a71fb8ac25f1241",
+        "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+        "scale": 2.46757799,
+        "rotation": 0.0,
+        "offset": [
+          0,
+          -0.16
+        ]
+      },
+      "houses": [
+        {
+          "asset": "city/component/201c181c2d3d95c2",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.95958938,
+          "rotation": 0.0,
+          "offset": [
+            -0.315,
+            0.385
+          ]
+        },
+        {
+          "asset": "city/component/1a2cdd77f4c26999",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.82701561,
+          "rotation": 0.0,
+          "offset": [
+            0.245,
+            0.385
+          ]
+        },
+        {
+          "asset": "city/component/790e2a73c14737d8",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 4.41133948,
+          "rotation": 0.0,
+          "offset": [
+            -0.035,
+            0.455
+          ]
+        },
+        {
+          "asset": "city/component/81157340c6bc8609",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.91157742,
+          "rotation": 0.0,
+          "offset": [
+            -0.525,
+            -0.07
+          ]
+        },
+        {
+          "asset": "city/component/f65b0689b7acb564",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.4336814,
+          "rotation": 0.0,
+          "offset": [
+            0.455,
+            -0.07
+          ]
+        }
+      ],
+      "palace": {
+        "asset": "city/palace/root/0d0c35f4a4c9651a",
+        "pack": "Renderer/packs/CityPalacesNormalized",
+        "scale": 15.04508558,
+        "rotation": 0.5235987755982988,
+        "offset": [
+          0,
+          -0.16
+        ]
+      },
+      "capital_replaces_centerpiece": true,
+      "vertical_metric": 1.0,
+      "wall_kit": "industrial"
+    },
+    {
+      "culture": 1,
+      "culture_name": "European",
+      "era": 0,
+      "era_name": "Ancient",
+      "population_counts": [
+        4,
+        6,
+        8
+      ],
+      "tier_designs": [
+        {
+          "houses": [
+            {
+              "asset": "city/component/74a3878677e1abf5",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.43874294,
+              "rotation": 0.0,
+              "offset": [
+                -0.28,
+                0.245
+              ]
+            },
+            {
+              "asset": "city/component/4e1caf8e90b00192",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.43874294,
+              "rotation": 0.0,
+              "offset": [
+                -0.105,
+                0.315
+              ]
+            },
+            {
+              "asset": "city/component/7bd81405dc3124c1",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 2.76977979,
+              "rotation": 0.0,
+              "offset": [
+                0.105,
+                0.315
+              ]
+            },
+            {
+              "asset": "city/component/05ccbf3268868743",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 2.76977979,
+              "rotation": 0.0,
+              "offset": [
+                0.28,
+                0.245
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/b32e1a0761cc6957",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 3.11676801,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/e72b960ecae6421d",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 15.04508558,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        },
+        {
+          "houses": [
+            {
+              "asset": "city/component/74a3878677e1abf5",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.43874294,
+              "rotation": 0.0,
+              "offset": [
+                -0.35,
+                0.28
+              ]
+            },
+            {
+              "asset": "city/component/4e1caf8e90b00192",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.43874294,
+              "rotation": 0.0,
+              "offset": [
+                -0.105,
+                0.35
+              ]
+            },
+            {
+              "asset": "city/component/7bd81405dc3124c1",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 2.76977979,
+              "rotation": 0.0,
+              "offset": [
+                0.105,
+                0.35
+              ]
+            },
+            {
+              "asset": "city/component/05ccbf3268868743",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 2.76977979,
+              "rotation": 0.0,
+              "offset": [
+                0.35,
+                0.28
+              ]
+            },
+            {
+              "asset": "city/component/07bbf182fa98e1bc",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.33300461,
+              "rotation": 0.0,
+              "offset": [
+                -0.42,
+                0.0
+              ]
+            },
+            {
+              "asset": "city/component/058e01e6613c9d18",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.33300461,
+              "rotation": 0.0,
+              "offset": [
+                0.42,
+                0.0
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/b32e1a0761cc6957",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 3.11676801,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/e72b960ecae6421d",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 15.04508558,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        },
+        {
+          "houses": [
+            {
+              "asset": "city/component/74a3878677e1abf5",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.43874294,
+              "rotation": 0.0,
+              "offset": [
+                -0.35,
+                0.315
+              ]
+            },
+            {
+              "asset": "city/component/4e1caf8e90b00192",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.43874294,
+              "rotation": 0.0,
+              "offset": [
+                -0.105,
+                0.385
+              ]
+            },
+            {
+              "asset": "city/component/7bd81405dc3124c1",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 2.76977979,
+              "rotation": 0.0,
+              "offset": [
+                0.105,
+                0.385
+              ]
+            },
+            {
+              "asset": "city/component/05ccbf3268868743",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 2.76977979,
+              "rotation": 0.0,
+              "offset": [
+                0.35,
+                0.315
+              ]
+            },
+            {
+              "asset": "city/component/07bbf182fa98e1bc",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.33300461,
+              "rotation": 0.0,
+              "offset": [
+                -0.455,
+                -0.035
+              ]
+            },
+            {
+              "asset": "city/component/058e01e6613c9d18",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.33300461,
+              "rotation": 0.0,
+              "offset": [
+                0.455,
+                -0.035
+              ]
+            },
+            {
+              "asset": "city/component/53a332be71546ae9",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 4.03327859,
+              "rotation": 0.0,
+              "offset": [
+                -0.455,
+                -0.315
+              ]
+            },
+            {
+              "asset": "city/component/030890d45c710226",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 4.08182243,
+              "rotation": 0.0,
+              "offset": [
+                0.455,
+                -0.315
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/b32e1a0761cc6957",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 3.11676801,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/e72b960ecae6421d",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 15.04508558,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        }
+      ],
+      "base_centerpiece": {
+        "asset": "city/component/b32e1a0761cc6957",
+        "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+        "scale": 3.11676801,
+        "rotation": 0.0,
+        "offset": [
+          0,
+          -0.16
+        ]
+      },
+      "houses": [
+        {
+          "asset": "city/component/74a3878677e1abf5",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.43874294,
+          "rotation": 0.0,
+          "offset": [
+            -0.35,
+            0.315
+          ]
+        },
+        {
+          "asset": "city/component/4e1caf8e90b00192",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.43874294,
+          "rotation": 0.0,
+          "offset": [
+            -0.105,
+            0.385
+          ]
+        },
+        {
+          "asset": "city/component/7bd81405dc3124c1",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 2.76977979,
+          "rotation": 0.0,
+          "offset": [
+            0.105,
+            0.385
+          ]
+        },
+        {
+          "asset": "city/component/05ccbf3268868743",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 2.76977979,
+          "rotation": 0.0,
+          "offset": [
+            0.35,
+            0.315
+          ]
+        },
+        {
+          "asset": "city/component/07bbf182fa98e1bc",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.33300461,
+          "rotation": 0.0,
+          "offset": [
+            -0.455,
+            -0.035
+          ]
+        },
+        {
+          "asset": "city/component/058e01e6613c9d18",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.33300461,
+          "rotation": 0.0,
+          "offset": [
+            0.455,
+            -0.035
+          ]
+        },
+        {
+          "asset": "city/component/53a332be71546ae9",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 4.03327859,
+          "rotation": 0.0,
+          "offset": [
+            -0.455,
+            -0.315
+          ]
+        },
+        {
+          "asset": "city/component/030890d45c710226",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 4.08182243,
+          "rotation": 0.0,
+          "offset": [
+            0.455,
+            -0.315
+          ]
+        }
+      ],
+      "palace": {
+        "asset": "city/palace/root/e72b960ecae6421d",
+        "pack": "Renderer/packs/CityPalacesNormalized",
+        "scale": 15.04508558,
+        "rotation": 0.5235987755982988,
+        "offset": [
+          0,
+          -0.16
+        ]
+      },
+      "capital_replaces_centerpiece": true,
+      "vertical_metric": 1.0,
+      "wall_kit": "ancient"
+    },
+    {
+      "culture": 1,
+      "culture_name": "European",
+      "era": 1,
+      "era_name": "Medieval",
+      "population_counts": [
+        3,
+        5,
+        7
+      ],
+      "tier_designs": [
+        {
+          "houses": [
+            {
+              "asset": "city/component/02f0fb9418ca8751",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 2.79361217,
+              "rotation": 0.0,
+              "offset": [
+                -0.245,
+                0.245
+              ]
+            },
+            {
+              "asset": "city/component/522818d5bb53654b",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.05973982,
+              "rotation": 0.0,
+              "offset": [
+                0.0,
+                0.315
+              ]
+            },
+            {
+              "asset": "city/component/bf6b75a9953e6dee",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 4.91862841,
+              "rotation": 0.0,
+              "offset": [
+                0.245,
+                0.245
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/9372c1432c3f5f23",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 3.61825835,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/c9fb1862f0f18efe",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 15.04508558,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        },
+        {
+          "houses": [
+            {
+              "asset": "city/component/02f0fb9418ca8751",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 2.79361217,
+              "rotation": 0.0,
+              "offset": [
+                -0.315,
+                0.315
+              ]
+            },
+            {
+              "asset": "city/component/522818d5bb53654b",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.05973982,
+              "rotation": 0.0,
+              "offset": [
+                0.0,
+                0.35
+              ]
+            },
+            {
+              "asset": "city/component/bf6b75a9953e6dee",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 4.91862841,
+              "rotation": 0.0,
+              "offset": [
+                0.315,
+                0.315
+              ]
+            },
+            {
+              "asset": "city/component/ccc6cacf8ce678e2",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 5.58106285,
+              "rotation": 0.0,
+              "offset": [
+                -0.42,
+                0.0
+              ]
+            },
+            {
+              "asset": "city/component/0b29e76d7a7d6d9e",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 2.95259562,
+              "rotation": 0.0,
+              "offset": [
+                0.42,
+                0.0
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/9372c1432c3f5f23",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 3.61825835,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/c9fb1862f0f18efe",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 15.04508558,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        },
+        {
+          "houses": [
+            {
+              "asset": "city/component/02f0fb9418ca8751",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 2.79361217,
+              "rotation": 0.0,
+              "offset": [
+                -0.35,
+                0.35
+              ]
+            },
+            {
+              "asset": "city/component/522818d5bb53654b",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.05973982,
+              "rotation": 0.0,
+              "offset": [
+                0.0,
+                0.385
+              ]
+            },
+            {
+              "asset": "city/component/bf6b75a9953e6dee",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 4.91862841,
+              "rotation": 0.0,
+              "offset": [
+                0.35,
+                0.35
+              ]
+            },
+            {
+              "asset": "city/component/ccc6cacf8ce678e2",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 5.58106285,
+              "rotation": 0.0,
+              "offset": [
+                -0.455,
+                -0.035
+              ]
+            },
+            {
+              "asset": "city/component/0b29e76d7a7d6d9e",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 2.95259562,
+              "rotation": 0.0,
+              "offset": [
+                0.455,
+                -0.035
+              ]
+            },
+            {
+              "asset": "city/component/45b4e5476b262097",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.34385803,
+              "rotation": 0.0,
+              "offset": [
+                -0.455,
+                -0.315
+              ]
+            },
+            {
+              "asset": "city/component/f96fa4fa560da3d4",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 2.91555556,
+              "rotation": 0.0,
+              "offset": [
+                0.455,
+                -0.315
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/9372c1432c3f5f23",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 3.61825835,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/c9fb1862f0f18efe",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 15.04508558,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        }
+      ],
+      "base_centerpiece": {
+        "asset": "city/component/9372c1432c3f5f23",
+        "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+        "scale": 3.61825835,
+        "rotation": 0.0,
+        "offset": [
+          0,
+          -0.16
+        ]
+      },
+      "houses": [
+        {
+          "asset": "city/component/02f0fb9418ca8751",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 2.79361217,
+          "rotation": 0.0,
+          "offset": [
+            -0.35,
+            0.35
+          ]
+        },
+        {
+          "asset": "city/component/522818d5bb53654b",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.05973982,
+          "rotation": 0.0,
+          "offset": [
+            0.0,
+            0.385
+          ]
+        },
+        {
+          "asset": "city/component/bf6b75a9953e6dee",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 4.91862841,
+          "rotation": 0.0,
+          "offset": [
+            0.35,
+            0.35
+          ]
+        },
+        {
+          "asset": "city/component/ccc6cacf8ce678e2",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 5.58106285,
+          "rotation": 0.0,
+          "offset": [
+            -0.455,
+            -0.035
+          ]
+        },
+        {
+          "asset": "city/component/0b29e76d7a7d6d9e",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 2.95259562,
+          "rotation": 0.0,
+          "offset": [
+            0.455,
+            -0.035
+          ]
+        },
+        {
+          "asset": "city/component/45b4e5476b262097",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.34385803,
+          "rotation": 0.0,
+          "offset": [
+            -0.455,
+            -0.315
+          ]
+        },
+        {
+          "asset": "city/component/f96fa4fa560da3d4",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 2.91555556,
+          "rotation": 0.0,
+          "offset": [
+            0.455,
+            -0.315
+          ]
+        }
+      ],
+      "palace": {
+        "asset": "city/palace/root/c9fb1862f0f18efe",
+        "pack": "Renderer/packs/CityPalacesNormalized",
+        "scale": 15.04508558,
+        "rotation": 0.5235987755982988,
+        "offset": [
+          0,
+          -0.16
+        ]
+      },
+      "capital_replaces_centerpiece": true,
+      "vertical_metric": 1.0,
+      "wall_kit": "medieval"
+    },
+    {
+      "culture": 1,
+      "culture_name": "European",
+      "era": 2,
+      "era_name": "Industrial",
+      "population_counts": [
+        2,
+        4,
+        6
+      ],
+      "tier_designs": [
+        {
+          "houses": [
+            {
+              "asset": "city/component/13bb2e1d15353365",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.55347019,
+              "rotation": 0.0,
+              "offset": [
+                -0.21,
+                0.28
+              ]
+            },
+            {
+              "asset": "city/component/1798df2c0b0dae91",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.40016361,
+              "rotation": 0.0,
+              "offset": [
+                0.21,
+                0.245
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/4726112ba59d8613",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 1.58988257,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/c9fb1862f0f18efe",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 15.04508558,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        },
+        {
+          "houses": [
+            {
+              "asset": "city/component/13bb2e1d15353365",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.55347019,
+              "rotation": 0.0,
+              "offset": [
+                -0.245,
+                0.315
+              ]
+            },
+            {
+              "asset": "city/component/1798df2c0b0dae91",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.40016361,
+              "rotation": 0.0,
+              "offset": [
+                0.245,
+                0.315
+              ]
+            },
+            {
+              "asset": "city/component/4c0100a20570fefc",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.12417441,
+              "rotation": 0.0,
+              "offset": [
+                -0.42,
+                0.0
+              ]
+            },
+            {
+              "asset": "city/component/41293ee327fcf5f3",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 2.87725011,
+              "rotation": 0.0,
+              "offset": [
+                0.42,
+                0.0
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/4726112ba59d8613",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 1.58988257,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/c9fb1862f0f18efe",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 15.04508558,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        },
+        {
+          "houses": [
+            {
+              "asset": "city/component/13bb2e1d15353365",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.55347019,
+              "rotation": 0.0,
+              "offset": [
+                -0.28,
+                0.35
+              ]
+            },
+            {
+              "asset": "city/component/1798df2c0b0dae91",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.40016361,
+              "rotation": 0.0,
+              "offset": [
+                0.28,
+                0.35
+              ]
+            },
+            {
+              "asset": "city/component/4c0100a20570fefc",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.12417441,
+              "rotation": 0.0,
+              "offset": [
+                -0.455,
+                -0.035
+              ]
+            },
+            {
+              "asset": "city/component/41293ee327fcf5f3",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 2.87725011,
+              "rotation": 0.0,
+              "offset": [
+                0.455,
+                -0.035
+              ]
+            },
+            {
+              "asset": "city/component/bc425961b58d6a0c",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 2.88909203,
+              "rotation": 0.0,
+              "offset": [
+                -0.455,
+                -0.315
+              ]
+            },
+            {
+              "asset": "city/component/ad5bc1c5cee504e7",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.69430894,
+              "rotation": 0.0,
+              "offset": [
+                0.455,
+                -0.315
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/4726112ba59d8613",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 1.58988257,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/c9fb1862f0f18efe",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 15.04508558,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        }
+      ],
+      "base_centerpiece": {
+        "asset": "city/component/4726112ba59d8613",
+        "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+        "scale": 1.58988257,
+        "rotation": 0.0,
+        "offset": [
+          0,
+          -0.16
+        ]
+      },
+      "houses": [
+        {
+          "asset": "city/component/13bb2e1d15353365",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.55347019,
+          "rotation": 0.0,
+          "offset": [
+            -0.28,
+            0.35
+          ]
+        },
+        {
+          "asset": "city/component/1798df2c0b0dae91",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.40016361,
+          "rotation": 0.0,
+          "offset": [
+            0.28,
+            0.35
+          ]
+        },
+        {
+          "asset": "city/component/4c0100a20570fefc",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.12417441,
+          "rotation": 0.0,
+          "offset": [
+            -0.455,
+            -0.035
+          ]
+        },
+        {
+          "asset": "city/component/41293ee327fcf5f3",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 2.87725011,
+          "rotation": 0.0,
+          "offset": [
+            0.455,
+            -0.035
+          ]
+        },
+        {
+          "asset": "city/component/bc425961b58d6a0c",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 2.88909203,
+          "rotation": 0.0,
+          "offset": [
+            -0.455,
+            -0.315
+          ]
+        },
+        {
+          "asset": "city/component/ad5bc1c5cee504e7",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.69430894,
+          "rotation": 0.0,
+          "offset": [
+            0.455,
+            -0.315
+          ]
+        }
+      ],
+      "palace": {
+        "asset": "city/palace/root/c9fb1862f0f18efe",
+        "pack": "Renderer/packs/CityPalacesNormalized",
+        "scale": 15.04508558,
+        "rotation": 0.5235987755982988,
+        "offset": [
+          0,
+          -0.16
+        ]
+      },
+      "capital_replaces_centerpiece": true,
+      "vertical_metric": 1.0,
+      "wall_kit": "industrial"
+    },
+    {
+      "culture": 1,
+      "culture_name": "European",
+      "era": 3,
+      "era_name": "Modern",
+      "population_counts": [
+        2,
+        3,
+        5
+      ],
+      "tier_designs": [
+        {
+          "houses": [
+            {
+              "asset": "city/component/201c181c2d3d95c2",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.72201402,
+              "rotation": 0.0,
+              "offset": [
+                -0.175,
+                0.245
+              ]
+            },
+            {
+              "asset": "city/component/1a2cdd77f4c26999",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.59739468,
+              "rotation": 0.0,
+              "offset": [
+                0.175,
+                0.245
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/1a71fb8ac25f1241",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 2.46757799,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/c9fb1862f0f18efe",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 15.04508558,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        },
+        {
+          "houses": [
+            {
+              "asset": "city/component/201c181c2d3d95c2",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.72201402,
+              "rotation": 0.0,
+              "offset": [
+                -0.245,
+                0.315
+              ]
+            },
+            {
+              "asset": "city/component/1a2cdd77f4c26999",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.59739468,
+              "rotation": 0.0,
+              "offset": [
+                0.245,
+                0.315
+              ]
+            },
+            {
+              "asset": "city/component/790e2a73c14737d8",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 4.14665911,
+              "rotation": 0.0,
+              "offset": [
+                0.0,
+                0.385
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/1a71fb8ac25f1241",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 2.46757799,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/c9fb1862f0f18efe",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 15.04508558,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        },
+        {
+          "houses": [
+            {
+              "asset": "city/component/201c181c2d3d95c2",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.72201402,
+              "rotation": 0.0,
+              "offset": [
+                -0.28,
+                0.35
+              ]
+            },
+            {
+              "asset": "city/component/1a2cdd77f4c26999",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.59739468,
+              "rotation": 0.0,
+              "offset": [
+                0.28,
+                0.35
+              ]
+            },
+            {
+              "asset": "city/component/790e2a73c14737d8",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 4.14665911,
+              "rotation": 0.0,
+              "offset": [
+                0.0,
+                0.42
+              ]
+            },
+            {
+              "asset": "city/component/81157340c6bc8609",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.67688277,
+              "rotation": 0.0,
+              "offset": [
+                -0.49,
+                -0.105
+              ]
+            },
+            {
+              "asset": "city/component/f65b0689b7acb564",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.22766052,
+              "rotation": 0.0,
+              "offset": [
+                0.49,
+                -0.105
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/1a71fb8ac25f1241",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 2.46757799,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/c9fb1862f0f18efe",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 15.04508558,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        }
+      ],
+      "base_centerpiece": {
+        "asset": "city/component/1a71fb8ac25f1241",
+        "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+        "scale": 2.46757799,
+        "rotation": 0.0,
+        "offset": [
+          0,
+          -0.16
+        ]
+      },
+      "houses": [
+        {
+          "asset": "city/component/201c181c2d3d95c2",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.72201402,
+          "rotation": 0.0,
+          "offset": [
+            -0.28,
+            0.35
+          ]
+        },
+        {
+          "asset": "city/component/1a2cdd77f4c26999",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.59739468,
+          "rotation": 0.0,
+          "offset": [
+            0.28,
+            0.35
+          ]
+        },
+        {
+          "asset": "city/component/790e2a73c14737d8",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 4.14665911,
+          "rotation": 0.0,
+          "offset": [
+            0.0,
+            0.42
+          ]
+        },
+        {
+          "asset": "city/component/81157340c6bc8609",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.67688277,
+          "rotation": 0.0,
+          "offset": [
+            -0.49,
+            -0.105
+          ]
+        },
+        {
+          "asset": "city/component/f65b0689b7acb564",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.22766052,
+          "rotation": 0.0,
+          "offset": [
+            0.49,
+            -0.105
+          ]
+        }
+      ],
+      "palace": {
+        "asset": "city/palace/root/c9fb1862f0f18efe",
+        "pack": "Renderer/packs/CityPalacesNormalized",
+        "scale": 15.04508558,
+        "rotation": 0.5235987755982988,
+        "offset": [
+          0,
+          -0.16
+        ]
+      },
+      "capital_replaces_centerpiece": true,
+      "vertical_metric": 1.0,
+      "wall_kit": "industrial"
+    },
+    {
+      "culture": 2,
+      "culture_name": "Mediterranean",
+      "era": 0,
+      "era_name": "Ancient",
+      "population_counts": [
+        4,
+        6,
+        8
+      ],
+      "tier_designs": [
+        {
+          "houses": [
+            {
+              "asset": "city/component/7603a8ac1e0a4c15",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 4.14988242,
+              "rotation": 0.0,
+              "offset": [
+                -0.245,
+                0.28
+              ]
+            },
+            {
+              "asset": "city/component/07f1bedbab5860af",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.59805544,
+              "rotation": 0.0,
+              "offset": [
+                -0.035,
+                0.28
+              ]
+            },
+            {
+              "asset": "city/component/e614b2e0ed2e6276",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.66708215,
+              "rotation": 0.0,
+              "offset": [
+                0.175,
+                0.28
+              ]
+            },
+            {
+              "asset": "city/component/60086ac55525c719",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.64667689,
+              "rotation": 0.0,
+              "offset": [
+                0.315,
+                0.07
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/f9328c8bf9110e11",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 5.61935654,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/cbb941762b70fc8b",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 15.04508558,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        },
+        {
+          "houses": [
+            {
+              "asset": "city/component/7603a8ac1e0a4c15",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 4.14988242,
+              "rotation": 0.0,
+              "offset": [
+                -0.315,
+                0.35
+              ]
+            },
+            {
+              "asset": "city/component/07f1bedbab5860af",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.59805544,
+              "rotation": 0.0,
+              "offset": [
+                -0.07,
+                0.385
+              ]
+            },
+            {
+              "asset": "city/component/e614b2e0ed2e6276",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.66708215,
+              "rotation": 0.0,
+              "offset": [
+                0.14,
+                0.385
+              ]
+            },
+            {
+              "asset": "city/component/60086ac55525c719",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.64667689,
+              "rotation": 0.0,
+              "offset": [
+                0.35,
+                0.35
+              ]
+            },
+            {
+              "asset": "city/component/3e0c044ce5844e5d",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 2.83112577,
+              "rotation": 0.0,
+              "offset": [
+                -0.42,
+                0.035
+              ]
+            },
+            {
+              "asset": "city/component/ca31cbba31f78f34",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 2.84301132,
+              "rotation": 0.0,
+              "offset": [
+                0.42,
+                0.035
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/f9328c8bf9110e11",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 5.61935654,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/cbb941762b70fc8b",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 15.04508558,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        },
+        {
+          "houses": [
+            {
+              "asset": "city/component/7603a8ac1e0a4c15",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 4.14988242,
+              "rotation": 0.0,
+              "offset": [
+                -0.35,
+                0.385
+              ]
+            },
+            {
+              "asset": "city/component/07f1bedbab5860af",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.59805544,
+              "rotation": 0.0,
+              "offset": [
+                -0.105,
+                0.42
+              ]
+            },
+            {
+              "asset": "city/component/e614b2e0ed2e6276",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.66708215,
+              "rotation": 0.0,
+              "offset": [
+                0.14,
+                0.42
+              ]
+            },
+            {
+              "asset": "city/component/60086ac55525c719",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.64667689,
+              "rotation": 0.0,
+              "offset": [
+                0.385,
+                0.385
+              ]
+            },
+            {
+              "asset": "city/component/3e0c044ce5844e5d",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 2.83112577,
+              "rotation": 0.0,
+              "offset": [
+                -0.455,
+                0.035
+              ]
+            },
+            {
+              "asset": "city/component/ca31cbba31f78f34",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 2.84301132,
+              "rotation": 0.0,
+              "offset": [
+                0.49,
+                0.035
+              ]
+            },
+            {
+              "asset": "city/component/52f1a911f55d5874",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 5.45880627,
+              "rotation": 0.0,
+              "offset": [
+                -0.455,
+                -0.245
+              ]
+            },
+            {
+              "asset": "city/component/54e0844b5aaf8e4f",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 4.25251603,
+              "rotation": 0.0,
+              "offset": [
+                0.49,
+                -0.245
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/f9328c8bf9110e11",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 5.61935654,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/cbb941762b70fc8b",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 15.04508558,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        }
+      ],
+      "base_centerpiece": {
+        "asset": "city/component/f9328c8bf9110e11",
+        "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+        "scale": 5.61935654,
+        "rotation": 0.0,
+        "offset": [
+          0,
+          -0.16
+        ]
+      },
+      "houses": [
+        {
+          "asset": "city/component/7603a8ac1e0a4c15",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 4.14988242,
+          "rotation": 0.0,
+          "offset": [
+            -0.35,
+            0.385
+          ]
+        },
+        {
+          "asset": "city/component/07f1bedbab5860af",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.59805544,
+          "rotation": 0.0,
+          "offset": [
+            -0.105,
+            0.42
+          ]
+        },
+        {
+          "asset": "city/component/e614b2e0ed2e6276",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.66708215,
+          "rotation": 0.0,
+          "offset": [
+            0.14,
+            0.42
+          ]
+        },
+        {
+          "asset": "city/component/60086ac55525c719",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.64667689,
+          "rotation": 0.0,
+          "offset": [
+            0.385,
+            0.385
+          ]
+        },
+        {
+          "asset": "city/component/3e0c044ce5844e5d",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 2.83112577,
+          "rotation": 0.0,
+          "offset": [
+            -0.455,
+            0.035
+          ]
+        },
+        {
+          "asset": "city/component/ca31cbba31f78f34",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 2.84301132,
+          "rotation": 0.0,
+          "offset": [
+            0.49,
+            0.035
+          ]
+        },
+        {
+          "asset": "city/component/52f1a911f55d5874",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 5.45880627,
+          "rotation": 0.0,
+          "offset": [
+            -0.455,
+            -0.245
+          ]
+        },
+        {
+          "asset": "city/component/54e0844b5aaf8e4f",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 4.25251603,
+          "rotation": 0.0,
+          "offset": [
+            0.49,
+            -0.245
+          ]
+        }
+      ],
+      "palace": {
+        "asset": "city/palace/root/cbb941762b70fc8b",
+        "pack": "Renderer/packs/CityPalacesNormalized",
+        "scale": 15.04508558,
+        "rotation": 0.5235987755982988,
+        "offset": [
+          0,
+          -0.16
+        ]
+      },
+      "capital_replaces_centerpiece": true,
+      "vertical_metric": 1.0,
+      "wall_kit": "ancient"
+    },
+    {
+      "culture": 2,
+      "culture_name": "Mediterranean",
+      "era": 1,
+      "era_name": "Medieval",
+      "population_counts": [
+        3,
+        5,
+        7
+      ],
+      "tier_designs": [
+        {
+          "houses": [
+            {
+              "asset": "city/component/0e0c678d85286e36",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 4.56769387,
+              "rotation": 0.0,
+              "offset": [
+                -0.245,
+                0.28
+              ]
+            },
+            {
+              "asset": "city/component/8292248f33e3438e",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 5.06962715,
+              "rotation": 0.0,
+              "offset": [
+                0.035,
+                0.28
+              ]
+            },
+            {
+              "asset": "city/component/5b2b6cadbb711014",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 4.66012002,
+              "rotation": 0.0,
+              "offset": [
+                0.28,
+                0.175
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/4228486ecb5ec6df",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 3.20692397,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/4c07d82d4fa8d28f",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 15.04508558,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        },
+        {
+          "houses": [
+            {
+              "asset": "city/component/0e0c678d85286e36",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 4.56769387,
+              "rotation": 0.0,
+              "offset": [
+                -0.28,
+                0.35
+              ]
+            },
+            {
+              "asset": "city/component/8292248f33e3438e",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 5.06962715,
+              "rotation": 0.0,
+              "offset": [
+                0.035,
+                0.42
+              ]
+            },
+            {
+              "asset": "city/component/5b2b6cadbb711014",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 4.66012002,
+              "rotation": 0.0,
+              "offset": [
+                0.35,
+                0.35
+              ]
+            },
+            {
+              "asset": "city/component/81e83985317d79e5",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.29273225,
+              "rotation": 0.0,
+              "offset": [
+                -0.42,
+                0.035
+              ]
+            },
+            {
+              "asset": "city/component/e70e0440af62b4f7",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.35544566,
+              "rotation": 0.0,
+              "offset": [
+                0.42,
+                0.035
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/4228486ecb5ec6df",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 3.20692397,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/4c07d82d4fa8d28f",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 15.04508558,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        },
+        {
+          "houses": [
+            {
+              "asset": "city/component/0e0c678d85286e36",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 4.56769387,
+              "rotation": 0.0,
+              "offset": [
+                -0.315,
+                0.385
+              ]
+            },
+            {
+              "asset": "city/component/8292248f33e3438e",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 5.06962715,
+              "rotation": 0.0,
+              "offset": [
+                0.035,
+                0.455
+              ]
+            },
+            {
+              "asset": "city/component/5b2b6cadbb711014",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 4.66012002,
+              "rotation": 0.0,
+              "offset": [
+                0.385,
+                0.385
+              ]
+            },
+            {
+              "asset": "city/component/81e83985317d79e5",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.29273225,
+              "rotation": 0.0,
+              "offset": [
+                -0.455,
+                0.035
+              ]
+            },
+            {
+              "asset": "city/component/e70e0440af62b4f7",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.35544566,
+              "rotation": 0.0,
+              "offset": [
+                0.49,
+                0.035
+              ]
+            },
+            {
+              "asset": "city/component/21608a60a5ccc056",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.01692823,
+              "rotation": 0.0,
+              "offset": [
+                -0.455,
+                -0.245
+              ]
+            },
+            {
+              "asset": "city/component/9c9145f02bb767f9",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 4.46830355,
+              "rotation": 0.0,
+              "offset": [
+                0.49,
+                -0.245
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/4228486ecb5ec6df",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 3.20692397,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/4c07d82d4fa8d28f",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 15.04508558,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        }
+      ],
+      "base_centerpiece": {
+        "asset": "city/component/4228486ecb5ec6df",
+        "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+        "scale": 3.20692397,
+        "rotation": 0.0,
+        "offset": [
+          0,
+          -0.16
+        ]
+      },
+      "houses": [
+        {
+          "asset": "city/component/0e0c678d85286e36",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 4.56769387,
+          "rotation": 0.0,
+          "offset": [
+            -0.315,
+            0.385
+          ]
+        },
+        {
+          "asset": "city/component/8292248f33e3438e",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 5.06962715,
+          "rotation": 0.0,
+          "offset": [
+            0.035,
+            0.455
+          ]
+        },
+        {
+          "asset": "city/component/5b2b6cadbb711014",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 4.66012002,
+          "rotation": 0.0,
+          "offset": [
+            0.385,
+            0.385
+          ]
+        },
+        {
+          "asset": "city/component/81e83985317d79e5",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.29273225,
+          "rotation": 0.0,
+          "offset": [
+            -0.455,
+            0.035
+          ]
+        },
+        {
+          "asset": "city/component/e70e0440af62b4f7",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.35544566,
+          "rotation": 0.0,
+          "offset": [
+            0.49,
+            0.035
+          ]
+        },
+        {
+          "asset": "city/component/21608a60a5ccc056",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.01692823,
+          "rotation": 0.0,
+          "offset": [
+            -0.455,
+            -0.245
+          ]
+        },
+        {
+          "asset": "city/component/9c9145f02bb767f9",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 4.46830355,
+          "rotation": 0.0,
+          "offset": [
+            0.49,
+            -0.245
+          ]
+        }
+      ],
+      "palace": {
+        "asset": "city/palace/root/4c07d82d4fa8d28f",
+        "pack": "Renderer/packs/CityPalacesNormalized",
+        "scale": 15.04508558,
+        "rotation": 0.5235987755982988,
+        "offset": [
+          0,
+          -0.16
+        ]
+      },
+      "capital_replaces_centerpiece": true,
+      "vertical_metric": 1.0,
+      "wall_kit": "medieval"
+    },
+    {
+      "culture": 2,
+      "culture_name": "Mediterranean",
+      "era": 2,
+      "era_name": "Industrial",
+      "population_counts": [
+        2,
+        4,
+        6
+      ],
+      "tier_designs": [
+        {
+          "houses": [
+            {
+              "asset": "city/component/40eab4ef97a2b405",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 5.68888889,
+              "rotation": 0.0,
+              "offset": [
+                -0.21,
+                0.245
+              ]
+            },
+            {
+              "asset": "city/component/3af6650f1293827d",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 6.12373106,
+              "rotation": 0.0,
+              "offset": [
+                0.175,
+                0.28
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/08a67dba7b786d28",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 5.23225529,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/4c07d82d4fa8d28f",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 15.04508558,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        },
+        {
+          "houses": [
+            {
+              "asset": "city/component/40eab4ef97a2b405",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 5.68888889,
+              "rotation": 0.0,
+              "offset": [
+                -0.245,
+                0.385
+              ]
+            },
+            {
+              "asset": "city/component/3af6650f1293827d",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 6.12373106,
+              "rotation": 0.0,
+              "offset": [
+                0.28,
+                0.385
+              ]
+            },
+            {
+              "asset": "city/component/2bc7f8f4fbdbc21e",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 5.30133333,
+              "rotation": 0.0,
+              "offset": [
+                -0.42,
+                0.035
+              ]
+            },
+            {
+              "asset": "city/component/9fde6b617b069475",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 5.71187454,
+              "rotation": 0.0,
+              "offset": [
+                0.385,
+                0.035
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/08a67dba7b786d28",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 5.23225529,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/4c07d82d4fa8d28f",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 15.04508558,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        },
+        {
+          "houses": [
+            {
+              "asset": "city/component/40eab4ef97a2b405",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 5.68888889,
+              "rotation": 0.0,
+              "offset": [
+                -0.245,
+                0.42
+              ]
+            },
+            {
+              "asset": "city/component/3af6650f1293827d",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 6.12373106,
+              "rotation": 0.0,
+              "offset": [
+                0.315,
+                0.42
+              ]
+            },
+            {
+              "asset": "city/component/2bc7f8f4fbdbc21e",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 5.30133333,
+              "rotation": 0.0,
+              "offset": [
+                -0.455,
+                0.035
+              ]
+            },
+            {
+              "asset": "city/component/9fde6b617b069475",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 5.71187454,
+              "rotation": 0.0,
+              "offset": [
+                0.49,
+                0.035
+              ]
+            },
+            {
+              "asset": "city/component/df30e8412e6e4490",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 4.89589247,
+              "rotation": 0.0,
+              "offset": [
+                -0.455,
+                -0.245
+              ]
+            },
+            {
+              "asset": "city/component/504377ebfa9a3bd2",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 4.85563784,
+              "rotation": 0.0,
+              "offset": [
+                0.455,
+                -0.315
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/08a67dba7b786d28",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 5.23225529,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/4c07d82d4fa8d28f",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 15.04508558,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        }
+      ],
+      "base_centerpiece": {
+        "asset": "city/component/08a67dba7b786d28",
+        "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+        "scale": 5.23225529,
+        "rotation": 0.0,
+        "offset": [
+          0,
+          -0.16
+        ]
+      },
+      "houses": [
+        {
+          "asset": "city/component/40eab4ef97a2b405",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 5.68888889,
+          "rotation": 0.0,
+          "offset": [
+            -0.245,
+            0.42
+          ]
+        },
+        {
+          "asset": "city/component/3af6650f1293827d",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 6.12373106,
+          "rotation": 0.0,
+          "offset": [
+            0.315,
+            0.42
+          ]
+        },
+        {
+          "asset": "city/component/2bc7f8f4fbdbc21e",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 5.30133333,
+          "rotation": 0.0,
+          "offset": [
+            -0.455,
+            0.035
+          ]
+        },
+        {
+          "asset": "city/component/9fde6b617b069475",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 5.71187454,
+          "rotation": 0.0,
+          "offset": [
+            0.49,
+            0.035
+          ]
+        },
+        {
+          "asset": "city/component/df30e8412e6e4490",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 4.89589247,
+          "rotation": 0.0,
+          "offset": [
+            -0.455,
+            -0.245
+          ]
+        },
+        {
+          "asset": "city/component/504377ebfa9a3bd2",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 4.85563784,
+          "rotation": 0.0,
+          "offset": [
+            0.455,
+            -0.315
+          ]
+        }
+      ],
+      "palace": {
+        "asset": "city/palace/root/4c07d82d4fa8d28f",
+        "pack": "Renderer/packs/CityPalacesNormalized",
+        "scale": 15.04508558,
+        "rotation": 0.5235987755982988,
+        "offset": [
+          0,
+          -0.16
+        ]
+      },
+      "capital_replaces_centerpiece": true,
+      "vertical_metric": 1.0,
+      "wall_kit": "industrial"
+    },
+    {
+      "culture": 2,
+      "culture_name": "Mediterranean",
+      "era": 3,
+      "era_name": "Modern",
+      "population_counts": [
+        2,
+        3,
+        5
+      ],
+      "tier_designs": [
+        {
+          "houses": [
+            {
+              "asset": "city/component/201c181c2d3d95c2",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.95958938,
+              "rotation": 0.0,
+              "offset": [
+                -0.14,
+                0.245
+              ]
+            },
+            {
+              "asset": "city/component/1a2cdd77f4c26999",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.82701561,
+              "rotation": 0.0,
+              "offset": [
+                0.21,
+                0.21
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/1a71fb8ac25f1241",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 2.46757799,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/4c07d82d4fa8d28f",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 15.04508558,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        },
+        {
+          "houses": [
+            {
+              "asset": "city/component/201c181c2d3d95c2",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.95958938,
+              "rotation": 0.0,
+              "offset": [
+                -0.245,
+                0.385
+              ]
+            },
+            {
+              "asset": "city/component/1a2cdd77f4c26999",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.82701561,
+              "rotation": 0.0,
+              "offset": [
+                0.28,
+                0.385
+              ]
+            },
+            {
+              "asset": "city/component/790e2a73c14737d8",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 4.41133948,
+              "rotation": 0.0,
+              "offset": [
+                0.0,
+                0.385
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/1a71fb8ac25f1241",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 2.46757799,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/4c07d82d4fa8d28f",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 15.04508558,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        },
+        {
+          "houses": [
+            {
+              "asset": "city/component/201c181c2d3d95c2",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.95958938,
+              "rotation": 0.0,
+              "offset": [
+                -0.245,
+                0.42
+              ]
+            },
+            {
+              "asset": "city/component/1a2cdd77f4c26999",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.82701561,
+              "rotation": 0.0,
+              "offset": [
+                0.315,
+                0.42
+              ]
+            },
+            {
+              "asset": "city/component/790e2a73c14737d8",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 4.41133948,
+              "rotation": 0.0,
+              "offset": [
+                0.035,
+                0.49
+              ]
+            },
+            {
+              "asset": "city/component/81157340c6bc8609",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.91157742,
+              "rotation": 0.0,
+              "offset": [
+                -0.455,
+                -0.035
+              ]
+            },
+            {
+              "asset": "city/component/f65b0689b7acb564",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.4336814,
+              "rotation": 0.0,
+              "offset": [
+                0.525,
+                -0.035
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/1a71fb8ac25f1241",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 2.46757799,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/4c07d82d4fa8d28f",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 15.04508558,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        }
+      ],
+      "base_centerpiece": {
+        "asset": "city/component/1a71fb8ac25f1241",
+        "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+        "scale": 2.46757799,
+        "rotation": 0.0,
+        "offset": [
+          0,
+          -0.16
+        ]
+      },
+      "houses": [
+        {
+          "asset": "city/component/201c181c2d3d95c2",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.95958938,
+          "rotation": 0.0,
+          "offset": [
+            -0.245,
+            0.42
+          ]
+        },
+        {
+          "asset": "city/component/1a2cdd77f4c26999",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.82701561,
+          "rotation": 0.0,
+          "offset": [
+            0.315,
+            0.42
+          ]
+        },
+        {
+          "asset": "city/component/790e2a73c14737d8",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 4.41133948,
+          "rotation": 0.0,
+          "offset": [
+            0.035,
+            0.49
+          ]
+        },
+        {
+          "asset": "city/component/81157340c6bc8609",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.91157742,
+          "rotation": 0.0,
+          "offset": [
+            -0.455,
+            -0.035
+          ]
+        },
+        {
+          "asset": "city/component/f65b0689b7acb564",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.4336814,
+          "rotation": 0.0,
+          "offset": [
+            0.525,
+            -0.035
+          ]
+        }
+      ],
+      "palace": {
+        "asset": "city/palace/root/4c07d82d4fa8d28f",
+        "pack": "Renderer/packs/CityPalacesNormalized",
+        "scale": 15.04508558,
+        "rotation": 0.5235987755982988,
+        "offset": [
+          0,
+          -0.16
+        ]
+      },
+      "capital_replaces_centerpiece": true,
+      "vertical_metric": 1.0,
+      "wall_kit": "industrial"
+    },
+    {
+      "culture": 3,
+      "culture_name": "Middle Eastern",
+      "era": 0,
+      "era_name": "Ancient",
+      "population_counts": [
+        4,
+        6,
+        8
+      ],
+      "tier_designs": [
+        {
+          "houses": [
+            {
+              "asset": "city/component/74a3878677e1abf5",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.43874294,
+              "rotation": 0.0,
+              "offset": [
+                -0.245,
+                0.28
+              ]
+            },
+            {
+              "asset": "city/component/4e1caf8e90b00192",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.43874294,
+              "rotation": 0.0,
+              "offset": [
+                -0.07,
+                0.315
+              ]
+            },
+            {
+              "asset": "city/component/7bd81405dc3124c1",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 2.76977979,
+              "rotation": 0.0,
+              "offset": [
+                0.105,
+                0.315
+              ]
+            },
+            {
+              "asset": "city/component/05ccbf3268868743",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 2.76977979,
+              "rotation": 0.0,
+              "offset": [
+                0.28,
+                0.245
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/b32e1a0761cc6957",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 3.11676801,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/e72b960ecae6421d",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 15.04508558,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        },
+        {
+          "houses": [
+            {
+              "asset": "city/component/74a3878677e1abf5",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.43874294,
+              "rotation": 0.0,
+              "offset": [
+                -0.35,
+                0.35
+              ]
+            },
+            {
+              "asset": "city/component/4e1caf8e90b00192",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.43874294,
+              "rotation": 0.0,
+              "offset": [
+                -0.14,
+                0.42
+              ]
+            },
+            {
+              "asset": "city/component/7bd81405dc3124c1",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 2.76977979,
+              "rotation": 0.0,
+              "offset": [
+                0.105,
+                0.42
+              ]
+            },
+            {
+              "asset": "city/component/05ccbf3268868743",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 2.76977979,
+              "rotation": 0.0,
+              "offset": [
+                0.315,
+                0.35
+              ]
+            },
+            {
+              "asset": "city/component/07bbf182fa98e1bc",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.33300461,
+              "rotation": 0.0,
+              "offset": [
+                -0.455,
+                0.035
+              ]
+            },
+            {
+              "asset": "city/component/058e01e6613c9d18",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.33300461,
+              "rotation": 0.0,
+              "offset": [
+                0.42,
+                0.035
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/b32e1a0761cc6957",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 3.11676801,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/e72b960ecae6421d",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 15.04508558,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        },
+        {
+          "houses": [
+            {
+              "asset": "city/component/74a3878677e1abf5",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.43874294,
+              "rotation": 0.0,
+              "offset": [
+                -0.385,
+                0.385
+              ]
+            },
+            {
+              "asset": "city/component/4e1caf8e90b00192",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.43874294,
+              "rotation": 0.0,
+              "offset": [
+                -0.14,
+                0.455
+              ]
+            },
+            {
+              "asset": "city/component/7bd81405dc3124c1",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 2.76977979,
+              "rotation": 0.0,
+              "offset": [
+                0.105,
+                0.455
+              ]
+            },
+            {
+              "asset": "city/component/05ccbf3268868743",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 2.76977979,
+              "rotation": 0.0,
+              "offset": [
+                0.35,
+                0.385
+              ]
+            },
+            {
+              "asset": "city/component/07bbf182fa98e1bc",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.33300461,
+              "rotation": 0.0,
+              "offset": [
+                -0.49,
+                0.07
+              ]
+            },
+            {
+              "asset": "city/component/058e01e6613c9d18",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.33300461,
+              "rotation": 0.0,
+              "offset": [
+                0.455,
+                0.07
+              ]
+            },
+            {
+              "asset": "city/component/53a332be71546ae9",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 4.03327859,
+              "rotation": 0.0,
+              "offset": [
+                -0.49,
+                -0.245
+              ]
+            },
+            {
+              "asset": "city/component/030890d45c710226",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 4.08182243,
+              "rotation": 0.0,
+              "offset": [
+                0.455,
+                -0.245
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/b32e1a0761cc6957",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 3.11676801,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/e72b960ecae6421d",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 15.04508558,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        }
+      ],
+      "base_centerpiece": {
+        "asset": "city/component/b32e1a0761cc6957",
+        "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+        "scale": 3.11676801,
+        "rotation": 0.0,
+        "offset": [
+          0,
+          -0.16
+        ]
+      },
+      "houses": [
+        {
+          "asset": "city/component/74a3878677e1abf5",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.43874294,
+          "rotation": 0.0,
+          "offset": [
+            -0.385,
+            0.385
+          ]
+        },
+        {
+          "asset": "city/component/4e1caf8e90b00192",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.43874294,
+          "rotation": 0.0,
+          "offset": [
+            -0.14,
+            0.455
+          ]
+        },
+        {
+          "asset": "city/component/7bd81405dc3124c1",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 2.76977979,
+          "rotation": 0.0,
+          "offset": [
+            0.105,
+            0.455
+          ]
+        },
+        {
+          "asset": "city/component/05ccbf3268868743",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 2.76977979,
+          "rotation": 0.0,
+          "offset": [
+            0.35,
+            0.385
+          ]
+        },
+        {
+          "asset": "city/component/07bbf182fa98e1bc",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.33300461,
+          "rotation": 0.0,
+          "offset": [
+            -0.49,
+            0.07
+          ]
+        },
+        {
+          "asset": "city/component/058e01e6613c9d18",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.33300461,
+          "rotation": 0.0,
+          "offset": [
+            0.455,
+            0.07
+          ]
+        },
+        {
+          "asset": "city/component/53a332be71546ae9",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 4.03327859,
+          "rotation": 0.0,
+          "offset": [
+            -0.49,
+            -0.245
+          ]
+        },
+        {
+          "asset": "city/component/030890d45c710226",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 4.08182243,
+          "rotation": 0.0,
+          "offset": [
+            0.455,
+            -0.245
+          ]
+        }
+      ],
+      "palace": {
+        "asset": "city/palace/root/e72b960ecae6421d",
+        "pack": "Renderer/packs/CityPalacesNormalized",
+        "scale": 15.04508558,
+        "rotation": 0.5235987755982988,
+        "offset": [
+          0,
+          -0.16
+        ]
+      },
+      "capital_replaces_centerpiece": true,
+      "vertical_metric": 1.0,
+      "wall_kit": "ancient"
+    },
+    {
+      "culture": 3,
+      "culture_name": "Middle Eastern",
+      "era": 1,
+      "era_name": "Medieval",
+      "population_counts": [
+        3,
+        5,
+        7
+      ],
+      "tier_designs": [
+        {
+          "houses": [
+            {
+              "asset": "city/component/2d9ce20aa846db1b",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.42615642,
+              "rotation": 0.0,
+              "offset": [
+                -0.245,
+                0.28
+              ]
+            },
+            {
+              "asset": "city/component/9e5f6ddb7df354cc",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.42615642,
+              "rotation": 0.0,
+              "offset": [
+                0.0,
+                0.315
+              ]
+            },
+            {
+              "asset": "city/component/032750ab3c565be7",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 5.92842105,
+              "rotation": 0.0,
+              "offset": [
+                0.245,
+                0.21
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/114eeacd1044133c",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 3.64955899,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/ae2c5cdbee6ada1f",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 14.91385033,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        },
+        {
+          "houses": [
+            {
+              "asset": "city/component/2d9ce20aa846db1b",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.42615642,
+              "rotation": 0.0,
+              "offset": [
+                -0.315,
+                0.385
+              ]
+            },
+            {
+              "asset": "city/component/9e5f6ddb7df354cc",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.42615642,
+              "rotation": 0.0,
+              "offset": [
+                0.0,
+                0.42
+              ]
+            },
+            {
+              "asset": "city/component/032750ab3c565be7",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 5.92842105,
+              "rotation": 0.0,
+              "offset": [
+                0.28,
+                0.385
+              ]
+            },
+            {
+              "asset": "city/component/e5239cff4356125b",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.58045719,
+              "rotation": 0.0,
+              "offset": [
+                -0.42,
+                0.035
+              ]
+            },
+            {
+              "asset": "city/component/8302596a5a277624",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 4.01130341,
+              "rotation": 0.0,
+              "offset": [
+                0.385,
+                0.035
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/114eeacd1044133c",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 3.64955899,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/ae2c5cdbee6ada1f",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 14.91385033,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        },
+        {
+          "houses": [
+            {
+              "asset": "city/component/2d9ce20aa846db1b",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.42615642,
+              "rotation": 0.0,
+              "offset": [
+                -0.35,
+                0.42
+              ]
+            },
+            {
+              "asset": "city/component/9e5f6ddb7df354cc",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.42615642,
+              "rotation": 0.0,
+              "offset": [
+                -0.035,
+                0.455
+              ]
+            },
+            {
+              "asset": "city/component/032750ab3c565be7",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 5.92842105,
+              "rotation": 0.0,
+              "offset": [
+                0.315,
+                0.42
+              ]
+            },
+            {
+              "asset": "city/component/e5239cff4356125b",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.58045719,
+              "rotation": 0.0,
+              "offset": [
+                -0.49,
+                0.07
+              ]
+            },
+            {
+              "asset": "city/component/8302596a5a277624",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 4.01130341,
+              "rotation": 0.0,
+              "offset": [
+                0.455,
+                0.07
+              ]
+            },
+            {
+              "asset": "city/component/0ca098dc8b8b7100",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.68970687,
+              "rotation": 0.0,
+              "offset": [
+                -0.49,
+                -0.245
+              ]
+            },
+            {
+              "asset": "city/component/782960c102fba313",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 2.65916533,
+              "rotation": 0.0,
+              "offset": [
+                0.455,
+                -0.245
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/114eeacd1044133c",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 3.64955899,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/ae2c5cdbee6ada1f",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 14.91385033,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        }
+      ],
+      "base_centerpiece": {
+        "asset": "city/component/114eeacd1044133c",
+        "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+        "scale": 3.64955899,
+        "rotation": 0.0,
+        "offset": [
+          0,
+          -0.16
+        ]
+      },
+      "houses": [
+        {
+          "asset": "city/component/2d9ce20aa846db1b",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.42615642,
+          "rotation": 0.0,
+          "offset": [
+            -0.35,
+            0.42
+          ]
+        },
+        {
+          "asset": "city/component/9e5f6ddb7df354cc",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.42615642,
+          "rotation": 0.0,
+          "offset": [
+            -0.035,
+            0.455
+          ]
+        },
+        {
+          "asset": "city/component/032750ab3c565be7",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 5.92842105,
+          "rotation": 0.0,
+          "offset": [
+            0.315,
+            0.42
+          ]
+        },
+        {
+          "asset": "city/component/e5239cff4356125b",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.58045719,
+          "rotation": 0.0,
+          "offset": [
+            -0.49,
+            0.07
+          ]
+        },
+        {
+          "asset": "city/component/8302596a5a277624",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 4.01130341,
+          "rotation": 0.0,
+          "offset": [
+            0.455,
+            0.07
+          ]
+        },
+        {
+          "asset": "city/component/0ca098dc8b8b7100",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.68970687,
+          "rotation": 0.0,
+          "offset": [
+            -0.49,
+            -0.245
+          ]
+        },
+        {
+          "asset": "city/component/782960c102fba313",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 2.65916533,
+          "rotation": 0.0,
+          "offset": [
+            0.455,
+            -0.245
+          ]
+        }
+      ],
+      "palace": {
+        "asset": "city/palace/root/ae2c5cdbee6ada1f",
+        "pack": "Renderer/packs/CityPalacesNormalized",
+        "scale": 14.91385033,
+        "rotation": 0.5235987755982988,
+        "offset": [
+          0,
+          -0.16
+        ]
+      },
+      "capital_replaces_centerpiece": true,
+      "vertical_metric": 1.0,
+      "wall_kit": "medieval"
+    },
+    {
+      "culture": 3,
+      "culture_name": "Middle Eastern",
+      "era": 2,
+      "era_name": "Industrial",
+      "population_counts": [
+        2,
+        4,
+        6
+      ],
+      "tier_designs": [
+        {
+          "houses": [
+            {
+              "asset": "city/component/13bb2e1d15353365",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.55347019,
+              "rotation": 0.0,
+              "offset": [
+                -0.21,
+                0.28
+              ]
+            },
+            {
+              "asset": "city/component/1798df2c0b0dae91",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.40016361,
+              "rotation": 0.0,
+              "offset": [
+                0.175,
+                0.28
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/4726112ba59d8613",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 1.58988257,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/ae2c5cdbee6ada1f",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 15.04508558,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        },
+        {
+          "houses": [
+            {
+              "asset": "city/component/13bb2e1d15353365",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.55347019,
+              "rotation": 0.0,
+              "offset": [
+                -0.28,
+                0.385
+              ]
+            },
+            {
+              "asset": "city/component/1798df2c0b0dae91",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.40016361,
+              "rotation": 0.0,
+              "offset": [
+                0.245,
+                0.385
+              ]
+            },
+            {
+              "asset": "city/component/4c0100a20570fefc",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.12417441,
+              "rotation": 0.0,
+              "offset": [
+                -0.42,
+                0.035
+              ]
+            },
+            {
+              "asset": "city/component/41293ee327fcf5f3",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 2.87725011,
+              "rotation": 0.0,
+              "offset": [
+                0.42,
+                0.035
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/4726112ba59d8613",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 1.58988257,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/ae2c5cdbee6ada1f",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 15.04508558,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        },
+        {
+          "houses": [
+            {
+              "asset": "city/component/13bb2e1d15353365",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.55347019,
+              "rotation": 0.0,
+              "offset": [
+                -0.28,
+                0.42
+              ]
+            },
+            {
+              "asset": "city/component/1798df2c0b0dae91",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.40016361,
+              "rotation": 0.0,
+              "offset": [
+                0.245,
+                0.42
+              ]
+            },
+            {
+              "asset": "city/component/4c0100a20570fefc",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.12417441,
+              "rotation": 0.0,
+              "offset": [
+                -0.49,
+                0.07
+              ]
+            },
+            {
+              "asset": "city/component/41293ee327fcf5f3",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 2.87725011,
+              "rotation": 0.0,
+              "offset": [
+                0.455,
+                0.07
+              ]
+            },
+            {
+              "asset": "city/component/bc425961b58d6a0c",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 2.88909203,
+              "rotation": 0.0,
+              "offset": [
+                -0.49,
+                -0.245
+              ]
+            },
+            {
+              "asset": "city/component/ad5bc1c5cee504e7",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.69430894,
+              "rotation": 0.0,
+              "offset": [
+                0.455,
+                -0.245
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/4726112ba59d8613",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 1.58988257,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/ae2c5cdbee6ada1f",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 15.04508558,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        }
+      ],
+      "base_centerpiece": {
+        "asset": "city/component/4726112ba59d8613",
+        "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+        "scale": 1.58988257,
+        "rotation": 0.0,
+        "offset": [
+          0,
+          -0.16
+        ]
+      },
+      "houses": [
+        {
+          "asset": "city/component/13bb2e1d15353365",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.55347019,
+          "rotation": 0.0,
+          "offset": [
+            -0.28,
+            0.42
+          ]
+        },
+        {
+          "asset": "city/component/1798df2c0b0dae91",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.40016361,
+          "rotation": 0.0,
+          "offset": [
+            0.245,
+            0.42
+          ]
+        },
+        {
+          "asset": "city/component/4c0100a20570fefc",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.12417441,
+          "rotation": 0.0,
+          "offset": [
+            -0.49,
+            0.07
+          ]
+        },
+        {
+          "asset": "city/component/41293ee327fcf5f3",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 2.87725011,
+          "rotation": 0.0,
+          "offset": [
+            0.455,
+            0.07
+          ]
+        },
+        {
+          "asset": "city/component/bc425961b58d6a0c",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 2.88909203,
+          "rotation": 0.0,
+          "offset": [
+            -0.49,
+            -0.245
+          ]
+        },
+        {
+          "asset": "city/component/ad5bc1c5cee504e7",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.69430894,
+          "rotation": 0.0,
+          "offset": [
+            0.455,
+            -0.245
+          ]
+        }
+      ],
+      "palace": {
+        "asset": "city/palace/root/ae2c5cdbee6ada1f",
+        "pack": "Renderer/packs/CityPalacesNormalized",
+        "scale": 15.04508558,
+        "rotation": 0.5235987755982988,
+        "offset": [
+          0,
+          -0.16
+        ]
+      },
+      "capital_replaces_centerpiece": true,
+      "vertical_metric": 1.0,
+      "wall_kit": "industrial"
+    },
+    {
+      "culture": 3,
+      "culture_name": "Middle Eastern",
+      "era": 3,
+      "era_name": "Modern",
+      "population_counts": [
+        2,
+        3,
+        5
+      ],
+      "tier_designs": [
+        {
+          "houses": [
+            {
+              "asset": "city/component/201c181c2d3d95c2",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.95958938,
+              "rotation": 0.0,
+              "offset": [
+                -0.21,
+                0.21
+              ]
+            },
+            {
+              "asset": "city/component/1a2cdd77f4c26999",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.82701561,
+              "rotation": 0.0,
+              "offset": [
+                0.14,
+                0.245
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/1a71fb8ac25f1241",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 2.46757799,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/ae2c5cdbee6ada1f",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 15.04508558,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        },
+        {
+          "houses": [
+            {
+              "asset": "city/component/201c181c2d3d95c2",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.95958938,
+              "rotation": 0.0,
+              "offset": [
+                -0.28,
+                0.385
+              ]
+            },
+            {
+              "asset": "city/component/1a2cdd77f4c26999",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.82701561,
+              "rotation": 0.0,
+              "offset": [
+                0.245,
+                0.385
+              ]
+            },
+            {
+              "asset": "city/component/790e2a73c14737d8",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 4.41133948,
+              "rotation": 0.0,
+              "offset": [
+                -0.035,
+                0.385
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/1a71fb8ac25f1241",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 2.46757799,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/ae2c5cdbee6ada1f",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 15.04508558,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        },
+        {
+          "houses": [
+            {
+              "asset": "city/component/201c181c2d3d95c2",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.95958938,
+              "rotation": 0.0,
+              "offset": [
+                -0.28,
+                0.42
+              ]
+            },
+            {
+              "asset": "city/component/1a2cdd77f4c26999",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.82701561,
+              "rotation": 0.0,
+              "offset": [
+                0.245,
+                0.42
+              ]
+            },
+            {
+              "asset": "city/component/790e2a73c14737d8",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 4.41133948,
+              "rotation": 0.0,
+              "offset": [
+                -0.035,
+                0.49
+              ]
+            },
+            {
+              "asset": "city/component/81157340c6bc8609",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.91157742,
+              "rotation": 0.0,
+              "offset": [
+                -0.525,
+                -0.035
+              ]
+            },
+            {
+              "asset": "city/component/f65b0689b7acb564",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.4336814,
+              "rotation": 0.0,
+              "offset": [
+                0.49,
+                -0.035
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/1a71fb8ac25f1241",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 2.46757799,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/ae2c5cdbee6ada1f",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 15.04508558,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        }
+      ],
+      "base_centerpiece": {
+        "asset": "city/component/1a71fb8ac25f1241",
+        "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+        "scale": 2.46757799,
+        "rotation": 0.0,
+        "offset": [
+          0,
+          -0.16
+        ]
+      },
+      "houses": [
+        {
+          "asset": "city/component/201c181c2d3d95c2",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.95958938,
+          "rotation": 0.0,
+          "offset": [
+            -0.28,
+            0.42
+          ]
+        },
+        {
+          "asset": "city/component/1a2cdd77f4c26999",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.82701561,
+          "rotation": 0.0,
+          "offset": [
+            0.245,
+            0.42
+          ]
+        },
+        {
+          "asset": "city/component/790e2a73c14737d8",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 4.41133948,
+          "rotation": 0.0,
+          "offset": [
+            -0.035,
+            0.49
+          ]
+        },
+        {
+          "asset": "city/component/81157340c6bc8609",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.91157742,
+          "rotation": 0.0,
+          "offset": [
+            -0.525,
+            -0.035
+          ]
+        },
+        {
+          "asset": "city/component/f65b0689b7acb564",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.4336814,
+          "rotation": 0.0,
+          "offset": [
+            0.49,
+            -0.035
+          ]
+        }
+      ],
+      "palace": {
+        "asset": "city/palace/root/ae2c5cdbee6ada1f",
+        "pack": "Renderer/packs/CityPalacesNormalized",
+        "scale": 15.04508558,
+        "rotation": 0.5235987755982988,
+        "offset": [
+          0,
+          -0.16
+        ]
+      },
+      "capital_replaces_centerpiece": true,
+      "vertical_metric": 1.0,
+      "wall_kit": "industrial"
+    },
+    {
+      "culture": 4,
+      "culture_name": "Asian",
+      "era": 0,
+      "era_name": "Ancient",
+      "population_counts": [
+        4,
+        6,
+        8
+      ],
+      "tier_designs": [
+        {
+          "houses": [
+            {
+              "asset": "city/component/6a24fa4c3eae7164",
+              "pack": "Renderer/packs/CityAncientWoodCandidates",
+              "scale": 7.44615719,
+              "rotation": 0.0,
+              "offset": [
+                -0.245,
+                0.28
+              ]
+            },
+            {
+              "asset": "city/component/c4f54876637029c8",
+              "pack": "Renderer/packs/CityAncientWoodCandidates",
+              "scale": 5.52968476,
+              "rotation": 0.0,
+              "offset": [
+                -0.035,
+                0.245
+              ]
+            },
+            {
+              "asset": "city/component/6a24fa4c3eae7164",
+              "pack": "Renderer/packs/CityAncientWoodCandidates",
+              "scale": 7.44615719,
+              "rotation": 0.0,
+              "offset": [
+                0.175,
+                0.28
+              ]
+            },
+            {
+              "asset": "city/component/6a24fa4c3eae7164",
+              "pack": "Renderer/packs/CityAncientWoodCandidates",
+              "scale": 7.44615719,
+              "rotation": 0.0,
+              "offset": [
+                0.28,
+                0.07
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/fc05d09b408d3779",
+            "pack": "Renderer/packs/CityAncientWoodCandidates",
+            "scale": 4.34633213,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.17
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/57520845b3095674",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 14.0,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        },
+        {
+          "houses": [
+            {
+              "asset": "city/component/6a24fa4c3eae7164",
+              "pack": "Renderer/packs/CityAncientWoodCandidates",
+              "scale": 7.44615719,
+              "rotation": 0.0,
+              "offset": [
+                -0.315,
+                0.35
+              ]
+            },
+            {
+              "asset": "city/component/c4f54876637029c8",
+              "pack": "Renderer/packs/CityAncientWoodCandidates",
+              "scale": 5.52968476,
+              "rotation": 0.0,
+              "offset": [
+                -0.105,
+                0.385
+              ]
+            },
+            {
+              "asset": "city/component/6a24fa4c3eae7164",
+              "pack": "Renderer/packs/CityAncientWoodCandidates",
+              "scale": 7.44615719,
+              "rotation": 0.0,
+              "offset": [
+                0.14,
+                0.385
+              ]
+            },
+            {
+              "asset": "city/component/6a24fa4c3eae7164",
+              "pack": "Renderer/packs/CityAncientWoodCandidates",
+              "scale": 7.44615719,
+              "rotation": 0.0,
+              "offset": [
+                0.35,
+                0.35
+              ]
+            },
+            {
+              "asset": "city/component/2fe091000eb20825",
+              "pack": "Renderer/packs/CityAncientWoodCandidates",
+              "scale": 4.65249042,
+              "rotation": 0.0,
+              "offset": [
+                -0.42,
+                0.035
+              ]
+            },
+            {
+              "asset": "city/component/b343ea82f6041dfe",
+              "pack": "Renderer/packs/CityAncientWoodCandidates",
+              "scale": 4.443702,
+              "rotation": 0.0,
+              "offset": [
+                0.42,
+                0.035
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/fc05d09b408d3779",
+            "pack": "Renderer/packs/CityAncientWoodCandidates",
+            "scale": 4.34633213,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.17
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/57520845b3095674",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 14.0,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        },
+        {
+          "houses": [
+            {
+              "asset": "city/component/6a24fa4c3eae7164",
+              "pack": "Renderer/packs/CityAncientWoodCandidates",
+              "scale": 7.44615719,
+              "rotation": 0.0,
+              "offset": [
+                -0.35,
+                0.35
+              ]
+            },
+            {
+              "asset": "city/component/c4f54876637029c8",
+              "pack": "Renderer/packs/CityAncientWoodCandidates",
+              "scale": 5.52968476,
+              "rotation": 0.0,
+              "offset": [
+                -0.105,
+                0.42
+              ]
+            },
+            {
+              "asset": "city/component/6a24fa4c3eae7164",
+              "pack": "Renderer/packs/CityAncientWoodCandidates",
+              "scale": 7.44615719,
+              "rotation": 0.0,
+              "offset": [
+                0.14,
+                0.42
+              ]
+            },
+            {
+              "asset": "city/component/6a24fa4c3eae7164",
+              "pack": "Renderer/packs/CityAncientWoodCandidates",
+              "scale": 7.44615719,
+              "rotation": 0.0,
+              "offset": [
+                0.385,
+                0.35
+              ]
+            },
+            {
+              "asset": "city/component/2fe091000eb20825",
+              "pack": "Renderer/packs/CityAncientWoodCandidates",
+              "scale": 4.65249042,
+              "rotation": 0.0,
+              "offset": [
+                -0.455,
+                0.035
+              ]
+            },
+            {
+              "asset": "city/component/b343ea82f6041dfe",
+              "pack": "Renderer/packs/CityAncientWoodCandidates",
+              "scale": 4.443702,
+              "rotation": 0.0,
+              "offset": [
+                0.49,
+                0.035
+              ]
+            },
+            {
+              "asset": "city/component/fa7ad2bdac50f63c",
+              "pack": "Renderer/packs/CityAncientWoodCandidates",
+              "scale": 4.86961197,
+              "rotation": 0.0,
+              "offset": [
+                -0.455,
+                -0.315
+              ]
+            },
+            {
+              "asset": "city/component/fc05d09b408d3779",
+              "pack": "Renderer/packs/CityAncientWoodCandidates",
+              "scale": 4.23954609,
+              "rotation": 0.0,
+              "offset": [
+                0.49,
+                -0.28
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/fc05d09b408d3779",
+            "pack": "Renderer/packs/CityAncientWoodCandidates",
+            "scale": 4.34633213,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.17
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/57520845b3095674",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 14.0,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        }
+      ],
+      "base_centerpiece": {
+        "asset": "city/component/fc05d09b408d3779",
+        "pack": "Renderer/packs/CityAncientWoodCandidates",
+        "scale": 4.34633213,
+        "rotation": 0.0,
+        "offset": [
+          0,
+          -0.17
+        ]
+      },
+      "houses": [
+        {
+          "asset": "city/component/6a24fa4c3eae7164",
+          "pack": "Renderer/packs/CityAncientWoodCandidates",
+          "scale": 7.44615719,
+          "rotation": 0.0,
+          "offset": [
+            -0.35,
+            0.35
+          ]
+        },
+        {
+          "asset": "city/component/c4f54876637029c8",
+          "pack": "Renderer/packs/CityAncientWoodCandidates",
+          "scale": 5.52968476,
+          "rotation": 0.0,
+          "offset": [
+            -0.105,
+            0.42
+          ]
+        },
+        {
+          "asset": "city/component/6a24fa4c3eae7164",
+          "pack": "Renderer/packs/CityAncientWoodCandidates",
+          "scale": 7.44615719,
+          "rotation": 0.0,
+          "offset": [
+            0.14,
+            0.42
+          ]
+        },
+        {
+          "asset": "city/component/6a24fa4c3eae7164",
+          "pack": "Renderer/packs/CityAncientWoodCandidates",
+          "scale": 7.44615719,
+          "rotation": 0.0,
+          "offset": [
+            0.385,
+            0.35
+          ]
+        },
+        {
+          "asset": "city/component/2fe091000eb20825",
+          "pack": "Renderer/packs/CityAncientWoodCandidates",
+          "scale": 4.65249042,
+          "rotation": 0.0,
+          "offset": [
+            -0.455,
+            0.035
+          ]
+        },
+        {
+          "asset": "city/component/b343ea82f6041dfe",
+          "pack": "Renderer/packs/CityAncientWoodCandidates",
+          "scale": 4.443702,
+          "rotation": 0.0,
+          "offset": [
+            0.49,
+            0.035
+          ]
+        },
+        {
+          "asset": "city/component/fa7ad2bdac50f63c",
+          "pack": "Renderer/packs/CityAncientWoodCandidates",
+          "scale": 4.86961197,
+          "rotation": 0.0,
+          "offset": [
+            -0.455,
+            -0.315
+          ]
+        },
+        {
+          "asset": "city/component/fc05d09b408d3779",
+          "pack": "Renderer/packs/CityAncientWoodCandidates",
+          "scale": 4.23954609,
+          "rotation": 0.0,
+          "offset": [
+            0.49,
+            -0.28
+          ]
+        }
+      ],
+      "palace": {
+        "asset": "city/palace/root/57520845b3095674",
+        "pack": "Renderer/packs/CityPalacesNormalized",
+        "scale": 14.0,
+        "rotation": 0.5235987755982988,
+        "offset": [
+          0,
+          -0.16
+        ]
+      },
+      "capital_replaces_centerpiece": true,
+      "vertical_metric": 1.0,
+      "wall_kit": "ancient"
+    },
+    {
+      "culture": 4,
+      "culture_name": "Asian",
+      "era": 1,
+      "era_name": "Medieval",
+      "population_counts": [
+        3,
+        5,
+        7
+      ],
+      "tier_designs": [
+        {
+          "houses": [
+            {
+              "asset": "city/component/7139dac17b5b5976",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 5.15141018,
+              "rotation": 0.0,
+              "offset": [
+                -0.245,
+                0.245
+              ]
+            },
+            {
+              "asset": "city/component/88675b776a2a1e7e",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 5.15141018,
+              "rotation": 0.0,
+              "offset": [
+                0.0,
+                0.28
+              ]
+            },
+            {
+              "asset": "city/component/098e4d380fe565f2",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 5.15141018,
+              "rotation": 0.0,
+              "offset": [
+                0.245,
+                0.245
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/1f91717edf46efa1",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 4.91020025,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/079e88fbd22dd1ce",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 14.44444747,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        },
+        {
+          "houses": [
+            {
+              "asset": "city/component/7139dac17b5b5976",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 5.15141018,
+              "rotation": 0.0,
+              "offset": [
+                -0.28,
+                0.35
+              ]
+            },
+            {
+              "asset": "city/component/88675b776a2a1e7e",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 5.15141018,
+              "rotation": 0.0,
+              "offset": [
+                0.0,
+                0.385
+              ]
+            },
+            {
+              "asset": "city/component/098e4d380fe565f2",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 5.15141018,
+              "rotation": 0.0,
+              "offset": [
+                0.315,
+                0.35
+              ]
+            },
+            {
+              "asset": "city/component/45e5295deb5e85fb",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 5.70334698,
+              "rotation": 0.0,
+              "offset": [
+                -0.42,
+                0.035
+              ]
+            },
+            {
+              "asset": "city/component/792c9e7ecef6407a",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.06958491,
+              "rotation": 0.0,
+              "offset": [
+                0.42,
+                0.035
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/1f91717edf46efa1",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 4.91020025,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/079e88fbd22dd1ce",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 14.44444747,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        },
+        {
+          "houses": [
+            {
+              "asset": "city/component/7139dac17b5b5976",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 5.15141018,
+              "rotation": 0.0,
+              "offset": [
+                -0.315,
+                0.385
+              ]
+            },
+            {
+              "asset": "city/component/88675b776a2a1e7e",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 5.15141018,
+              "rotation": 0.0,
+              "offset": [
+                0.035,
+                0.42
+              ]
+            },
+            {
+              "asset": "city/component/098e4d380fe565f2",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 5.15141018,
+              "rotation": 0.0,
+              "offset": [
+                0.35,
+                0.385
+              ]
+            },
+            {
+              "asset": "city/component/45e5295deb5e85fb",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 5.70334698,
+              "rotation": 0.0,
+              "offset": [
+                -0.455,
+                0.035
+              ]
+            },
+            {
+              "asset": "city/component/792c9e7ecef6407a",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.06958491,
+              "rotation": 0.0,
+              "offset": [
+                0.49,
+                0.035
+              ]
+            },
+            {
+              "asset": "city/component/bf64e91d35a671ba",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 4.3758655,
+              "rotation": 0.0,
+              "offset": [
+                -0.455,
+                -0.28
+              ]
+            },
+            {
+              "asset": "city/component/90c40ad6be7ce751",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.57818182,
+              "rotation": 0.0,
+              "offset": [
+                0.49,
+                -0.28
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/1f91717edf46efa1",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 4.91020025,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/079e88fbd22dd1ce",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 14.44444747,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        }
+      ],
+      "base_centerpiece": {
+        "asset": "city/component/1f91717edf46efa1",
+        "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+        "scale": 4.91020025,
+        "rotation": 0.0,
+        "offset": [
+          0,
+          -0.16
+        ]
+      },
+      "houses": [
+        {
+          "asset": "city/component/7139dac17b5b5976",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 5.15141018,
+          "rotation": 0.0,
+          "offset": [
+            -0.315,
+            0.385
+          ]
+        },
+        {
+          "asset": "city/component/88675b776a2a1e7e",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 5.15141018,
+          "rotation": 0.0,
+          "offset": [
+            0.035,
+            0.42
+          ]
+        },
+        {
+          "asset": "city/component/098e4d380fe565f2",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 5.15141018,
+          "rotation": 0.0,
+          "offset": [
+            0.35,
+            0.385
+          ]
+        },
+        {
+          "asset": "city/component/45e5295deb5e85fb",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 5.70334698,
+          "rotation": 0.0,
+          "offset": [
+            -0.455,
+            0.035
+          ]
+        },
+        {
+          "asset": "city/component/792c9e7ecef6407a",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.06958491,
+          "rotation": 0.0,
+          "offset": [
+            0.49,
+            0.035
+          ]
+        },
+        {
+          "asset": "city/component/bf64e91d35a671ba",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 4.3758655,
+          "rotation": 0.0,
+          "offset": [
+            -0.455,
+            -0.28
+          ]
+        },
+        {
+          "asset": "city/component/90c40ad6be7ce751",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.57818182,
+          "rotation": 0.0,
+          "offset": [
+            0.49,
+            -0.28
+          ]
+        }
+      ],
+      "palace": {
+        "asset": "city/palace/root/079e88fbd22dd1ce",
+        "pack": "Renderer/packs/CityPalacesNormalized",
+        "scale": 14.44444747,
+        "rotation": 0.5235987755982988,
+        "offset": [
+          0,
+          -0.16
+        ]
+      },
+      "capital_replaces_centerpiece": true,
+      "vertical_metric": 1.0,
+      "wall_kit": "medieval"
+    },
+    {
+      "culture": 4,
+      "culture_name": "Asian",
+      "era": 2,
+      "era_name": "Industrial",
+      "population_counts": [
+        2,
+        4,
+        6
+      ],
+      "tier_designs": [
+        {
+          "houses": [
+            {
+              "asset": "city/component/13bb2e1d15353365",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.55347019,
+              "rotation": 0.0,
+              "offset": [
+                -0.21,
+                0.28
+              ]
+            },
+            {
+              "asset": "city/component/1798df2c0b0dae91",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.40016361,
+              "rotation": 0.0,
+              "offset": [
+                0.175,
+                0.28
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/4726112ba59d8613",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 1.58988257,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/079e88fbd22dd1ce",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 14.44444747,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        },
+        {
+          "houses": [
+            {
+              "asset": "city/component/13bb2e1d15353365",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.55347019,
+              "rotation": 0.0,
+              "offset": [
+                -0.245,
+                0.35
+              ]
+            },
+            {
+              "asset": "city/component/1798df2c0b0dae91",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.40016361,
+              "rotation": 0.0,
+              "offset": [
+                0.28,
+                0.35
+              ]
+            },
+            {
+              "asset": "city/component/4c0100a20570fefc",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.12417441,
+              "rotation": 0.0,
+              "offset": [
+                -0.42,
+                0.035
+              ]
+            },
+            {
+              "asset": "city/component/41293ee327fcf5f3",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 2.87725011,
+              "rotation": 0.0,
+              "offset": [
+                0.42,
+                0.035
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/4726112ba59d8613",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 1.58988257,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/079e88fbd22dd1ce",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 14.44444747,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        },
+        {
+          "houses": [
+            {
+              "asset": "city/component/13bb2e1d15353365",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.55347019,
+              "rotation": 0.0,
+              "offset": [
+                -0.245,
+                0.385
+              ]
+            },
+            {
+              "asset": "city/component/1798df2c0b0dae91",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.40016361,
+              "rotation": 0.0,
+              "offset": [
+                0.28,
+                0.385
+              ]
+            },
+            {
+              "asset": "city/component/4c0100a20570fefc",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.12417441,
+              "rotation": 0.0,
+              "offset": [
+                -0.455,
+                0.035
+              ]
+            },
+            {
+              "asset": "city/component/41293ee327fcf5f3",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 2.87725011,
+              "rotation": 0.0,
+              "offset": [
+                0.49,
+                0.035
+              ]
+            },
+            {
+              "asset": "city/component/bc425961b58d6a0c",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 2.88909203,
+              "rotation": 0.0,
+              "offset": [
+                -0.455,
+                -0.28
+              ]
+            },
+            {
+              "asset": "city/component/ad5bc1c5cee504e7",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.69430894,
+              "rotation": 0.0,
+              "offset": [
+                0.49,
+                -0.28
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/4726112ba59d8613",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 1.58988257,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/079e88fbd22dd1ce",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 14.44444747,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        }
+      ],
+      "base_centerpiece": {
+        "asset": "city/component/4726112ba59d8613",
+        "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+        "scale": 1.58988257,
+        "rotation": 0.0,
+        "offset": [
+          0,
+          -0.16
+        ]
+      },
+      "houses": [
+        {
+          "asset": "city/component/13bb2e1d15353365",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.55347019,
+          "rotation": 0.0,
+          "offset": [
+            -0.245,
+            0.385
+          ]
+        },
+        {
+          "asset": "city/component/1798df2c0b0dae91",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.40016361,
+          "rotation": 0.0,
+          "offset": [
+            0.28,
+            0.385
+          ]
+        },
+        {
+          "asset": "city/component/4c0100a20570fefc",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.12417441,
+          "rotation": 0.0,
+          "offset": [
+            -0.455,
+            0.035
+          ]
+        },
+        {
+          "asset": "city/component/41293ee327fcf5f3",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 2.87725011,
+          "rotation": 0.0,
+          "offset": [
+            0.49,
+            0.035
+          ]
+        },
+        {
+          "asset": "city/component/bc425961b58d6a0c",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 2.88909203,
+          "rotation": 0.0,
+          "offset": [
+            -0.455,
+            -0.28
+          ]
+        },
+        {
+          "asset": "city/component/ad5bc1c5cee504e7",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.69430894,
+          "rotation": 0.0,
+          "offset": [
+            0.49,
+            -0.28
+          ]
+        }
+      ],
+      "palace": {
+        "asset": "city/palace/root/079e88fbd22dd1ce",
+        "pack": "Renderer/packs/CityPalacesNormalized",
+        "scale": 14.44444747,
+        "rotation": 0.5235987755982988,
+        "offset": [
+          0,
+          -0.16
+        ]
+      },
+      "capital_replaces_centerpiece": true,
+      "vertical_metric": 1.0,
+      "wall_kit": "industrial"
+    },
+    {
+      "culture": 4,
+      "culture_name": "Asian",
+      "era": 3,
+      "era_name": "Modern",
+      "population_counts": [
+        2,
+        3,
+        5
+      ],
+      "tier_designs": [
+        {
+          "houses": [
+            {
+              "asset": "city/component/201c181c2d3d95c2",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.95958938,
+              "rotation": 0.0,
+              "offset": [
+                -0.14,
+                0.245
+              ]
+            },
+            {
+              "asset": "city/component/1a2cdd77f4c26999",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.82701561,
+              "rotation": 0.0,
+              "offset": [
+                0.21,
+                0.21
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/1a71fb8ac25f1241",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 2.46757799,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/079e88fbd22dd1ce",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 14.44444747,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        },
+        {
+          "houses": [
+            {
+              "asset": "city/component/201c181c2d3d95c2",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.95958938,
+              "rotation": 0.0,
+              "offset": [
+                -0.245,
+                0.35
+              ]
+            },
+            {
+              "asset": "city/component/1a2cdd77f4c26999",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.82701561,
+              "rotation": 0.0,
+              "offset": [
+                0.28,
+                0.35
+              ]
+            },
+            {
+              "asset": "city/component/790e2a73c14737d8",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 4.41133948,
+              "rotation": 0.0,
+              "offset": [
+                0.0,
+                0.385
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/1a71fb8ac25f1241",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 2.46757799,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/079e88fbd22dd1ce",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 14.44444747,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        },
+        {
+          "houses": [
+            {
+              "asset": "city/component/201c181c2d3d95c2",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.95958938,
+              "rotation": 0.0,
+              "offset": [
+                -0.245,
+                0.385
+              ]
+            },
+            {
+              "asset": "city/component/1a2cdd77f4c26999",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.82701561,
+              "rotation": 0.0,
+              "offset": [
+                0.28,
+                0.385
+              ]
+            },
+            {
+              "asset": "city/component/790e2a73c14737d8",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 4.41133948,
+              "rotation": 0.0,
+              "offset": [
+                0.0,
+                0.455
+              ]
+            },
+            {
+              "asset": "city/component/81157340c6bc8609",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.91157742,
+              "rotation": 0.0,
+              "offset": [
+                -0.49,
+                -0.035
+              ]
+            },
+            {
+              "asset": "city/component/f65b0689b7acb564",
+              "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+              "scale": 3.4336814,
+              "rotation": 0.0,
+              "offset": [
+                0.525,
+                -0.035
+              ]
+            }
+          ],
+          "base_centerpiece": {
+            "asset": "city/component/1a71fb8ac25f1241",
+            "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+            "scale": 2.46757799,
+            "rotation": 0.0,
+            "offset": [
+              0,
+              -0.16
+            ]
+          },
+          "palace": {
+            "asset": "city/palace/root/079e88fbd22dd1ce",
+            "pack": "Renderer/packs/CityPalacesNormalized",
+            "scale": 14.44444747,
+            "rotation": 0.5235987755982988,
+            "offset": [
+              0,
+              -0.16
+            ]
+          }
+        }
+      ],
+      "base_centerpiece": {
+        "asset": "city/component/1a71fb8ac25f1241",
+        "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+        "scale": 2.46757799,
+        "rotation": 0.0,
+        "offset": [
+          0,
+          -0.16
+        ]
+      },
+      "houses": [
+        {
+          "asset": "city/component/201c181c2d3d95c2",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.95958938,
+          "rotation": 0.0,
+          "offset": [
+            -0.245,
+            0.385
+          ]
+        },
+        {
+          "asset": "city/component/1a2cdd77f4c26999",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.82701561,
+          "rotation": 0.0,
+          "offset": [
+            0.28,
+            0.385
+          ]
+        },
+        {
+          "asset": "city/component/790e2a73c14737d8",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 4.41133948,
+          "rotation": 0.0,
+          "offset": [
+            0.0,
+            0.455
+          ]
+        },
+        {
+          "asset": "city/component/81157340c6bc8609",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.91157742,
+          "rotation": 0.0,
+          "offset": [
+            -0.49,
+            -0.035
+          ]
+        },
+        {
+          "asset": "city/component/f65b0689b7acb564",
+          "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+          "scale": 3.4336814,
+          "rotation": 0.0,
+          "offset": [
+            0.525,
+            -0.035
+          ]
+        }
+      ],
+      "palace": {
+        "asset": "city/palace/root/079e88fbd22dd1ce",
+        "pack": "Renderer/packs/CityPalacesNormalized",
+        "scale": 14.44444747,
+        "rotation": 0.5235987755982988,
+        "offset": [
+          0,
+          -0.16
+        ]
+      },
+      "capital_replaces_centerpiece": true,
+      "vertical_metric": 1.0,
+      "wall_kit": "industrial"
+    }
+  ]
+}

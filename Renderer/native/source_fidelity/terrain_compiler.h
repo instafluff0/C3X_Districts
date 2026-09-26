@@ -96,16 +96,22 @@ bool emit_terrain_surfaces(NaturalData const& natural,Assets const& assets,
         shore_sample_at(queries.center_u,queries.center_v).distance,world_lookup,relief_sample,shore_sample_at,river,dune,activity,
         scratch.pickup,height_queries,input.separate_relief);
     auto pickup_height=[&](float x,float y){return pickup_surface.height(x,y);};
+    auto const river_field=scratch.rivers.bind_river_page(float(nc)+.5,float(nr)+.5);
+    auto river_at=[&](float x,float y){return river_field.sample({x,y}).distance;};
+    bool river_terrain_near=input.river_ready && scratch.rivers.river_affects(nc,nr);
     auto height_natural=[&](float x,float y,float* support=nullptr){
         auto compute=[&]{std::array<float,2> value{};value[0]=queries.height(natural,pickup_height,x,y,&value[1]);return value;};
         auto value=input.retain_height?scratch.heights.get(x,y,compute):compute();
-        if(support)*support=value[1];return value[0];
+        if(support)*support=value[1];return value[0]+
+            (river_terrain_near ? river_channel_cut(float(river_at(x,y))) : 0.f);
     };
-    auto const river_field=scratch.rivers.bind_river_page(float(nc)+.5,float(nr)+.5);
-    auto river_at=[&](float x,float y){return river_field.sample({x,y}).distance;};
     GroundProjection project_natural{nc,nr,input.tile_width*.5f,input.tile_height*.5f,
         float(input.tile_width)/224.f*.82f,float(input.target_height)};
-    auto surface=[&](float u,float v){return ground_surface(project_natural,u,v,height_natural,shore_sample_at,material_weights_for);};
+    auto surface=[&](float u,float v){
+        auto out=ground_surface(project_natural,u,v,height_natural,shore_sample_at,material_weights_for);
+        out.river_distance=river_terrain_near ? float(river_at(out.world_x,out.world_y)) : 1000.f;
+        return out;
+    };
     auto triangle=[](std::vector<Vertex>& out,Vertex const& a,Vertex const& b,Vertex const& c){out.push_back(a);out.push_back(b);out.push_back(c);};
     auto const& tile=input;int ground=input.ground;auto owner=lookup_natural(nc,nr);
     auto patch_detail=input.detail;auto& patch_layouts=scratch.layouts;

@@ -8,19 +8,23 @@ if(fidelity_profile) {
         return queries.natural_tile(c,r);
     };
     Tile owner=lookup_natural(nc,nr);
+    auto const river_field=natural.bind_river_page(float(nc)+.5,float(nr)+.5);
+    auto river_at=[&](float x,float y){return river_field.sample({x,y}).distance;};
+    bool river_terrain_near=river_assets_ready && natural.river_affects(nc,nr);
     auto height_natural=[&](float x,float y,float*support=nullptr){
-        return natural_height_at(x,y,support);
+        return natural_height_at(x,y,support)+
+            (river_terrain_near ? river_channel_cut(float(river_at(x,y))) : 0.f);
     };
     // The page includes the authoritative halo needed by this complete tile
     // and its finite-difference collar. Bind it once: mountain tessellation
     // performs thousands of distance samples and must not re-enter the LRU for
     // every vertex and normal tap.
-    auto const river_field=natural.bind_river_page(float(nc)+.5,float(nr)+.5);
-    auto river_at=[&](float x,float y){return river_field.sample({x,y}).distance;};
     GroundProjection project_natural{nc,nr,half_w,half_h,relief_projection_scale,float(frame.target_height)};
     auto triangle=[](std::vector<Vertex>&out,Vertex const&a,Vertex const&b,Vertex const&c){out.push_back(a);out.push_back(b);out.push_back(c);};
     auto surface=[&](float u,float v){
-        return ground_surface(project_natural,u,v,height_natural,shore_sample_at,material_weights_for);
+        auto out=ground_surface(project_natural,u,v,height_natural,shore_sample_at,material_weights_for);
+        out.river_distance=river_terrain_near ? float(river_at(out.world_x,out.world_y)) : 1000.f;
+        return out;
     };
     if(!cpu_terrain_enabled) {
         #include "terrain_mesh_body.h"

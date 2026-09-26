@@ -6,6 +6,10 @@ shared cast shadow on 2026-09-12, and authorized production staging. Smoke,
 particles, emissive glow and animation are excluded. Natural-wonder volcanoes
 remain deferred. No fixed reference has been replaced.
 
+The separate [ordinary-volcano variety study](../../../studies/volcanoes/README.md)
+keeps the accepted silhouette and explores orientations of the single authored
+volcano field on grassland. It has not changed the accepted renderer or staging.
+
 ```sh
 python3 Renderer/renderer.py lab volcanoes
 python3 Renderer/renderer.py test volcanoes

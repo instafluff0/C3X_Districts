@@ -1,5 +1,50 @@
 # Volcano source and ownership diagnosis
 
+## Ordinary-volcano variety study
+
+The installed Expansion2 source has one dedicated ordinary-volcano terrain
+element and one terrain-asset entry, both numbered `01`. Its ArtDef permits
+rotation; the two height levels are resolution LODs of that one field, not
+distinct shapes. Named natural-wonder volcanoes have separate entries and remain
+outside this study.
+
+The installed `Expansion2_NamedPlaces.xml` lists both Haleakalā and Mount Asama
+as ordinary `NamedVolcanoes`; neither name selects an art entry. The installed
+`Expansion2_Features.xml` puts `FEATURE_VOLCANO` on mountain terrain, while
+Vesuvius is explicitly marked as a natural wonder. The photographed difference
+is consistent with varied underlying mountains, orientation and active effects.
+The exact Civ VI height-composition rule is not recovered, so that explanation
+remains an inference from the source definitions and screenshot.
+
+`variety_study.py` builds a private 32-bit production D3D11 candidate under
+`lab/out/volcanoes/variety-study/root/` and renders it with the native Lab preview.
+Run it with a Python containing Pillow. Its source-art links are read-only; it
+does not change the current renderer, sandbox, staged DLL or fixed references.
+
+```sh
+python3 Renderer/lab/studies/volcanoes/variety_study.py
+```
+
+The proposal keeps the existing Civ VI-derived height, width, crater and rock
+fields. It rotates or mirrors that same field deterministically per tile, and
+applies the matching transform to its rock material. These are C3X-derived
+orientations of one authored source, not undiscovered Civ VI volcano models.
+Static crater lava is omitted; smoke was already absent. Sixteen isolated
+volcanoes on flat grassland produce
+`lab/out/volcanoes/variety-study/grassland-comparison.png`, and the unchanged
+category gameplay scene produces `gameplay-comparison.png`. A 224-pixel tile
+closeup produces `closeup-comparison.png`. Their capture receipts
+record exact DLL, scene and image hashes. These are Lab art examples for review,
+not a promoted appearance or a live-game verification.
+
+The native preview completed all six current/proposal frames with zero fallback
+tiles. The grassland sheet shows visible changes to ridge direction and crater
+view while preserving the existing height and width. It also shows the limit of
+this approach: rotations of one source field cannot reproduce the more dramatic
+differences visible between some Civ VI named volcanoes. A varied mountain
+foundation is a plausible further Lab study, but its exact Civ VI composition
+remains unverified.
+
 Run with a Python containing Pillow and NumPy:
 
 ```sh

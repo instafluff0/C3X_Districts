@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Compile representative generated-city components into a generic local pack."""
+"""Compile generated-city components into a generic local pack.
+
+The default intake stays representative. A focused Lab intake may include the
+complete candidate set for one source pool without changing the runtime pack.
+"""
 
 from __future__ import annotations
 
@@ -239,10 +243,18 @@ def compile_city_assets(
     pack: Path = DEFAULT_PACK,
     report_path: Path = DEFAULT_REPORT,
     auxiliary_uvs: bool = False,
+    focus_pool: str | None = None,
+    all_candidates: bool = False,
 ) -> dict[str, Any]:
+    if all_candidates and not focus_pool:
+        raise ValueError("Full source intake requires one focused city pool")
     strategy = load_strategy(strategy_path)
     blocks = read_city_blocks(assets_root)
     candidate_pools = build_candidate_pools(blocks, strategy)
+    if focus_pool:
+        candidate_pools = [pool for pool in candidate_pools if pool["id"] == focus_pool]
+        if not candidate_pools:
+            raise ValueError(f"Unknown city pool {focus_pool}")
     try:
         report_path.resolve().relative_to(pack.resolve())
     except ValueError:
@@ -261,6 +273,7 @@ def compile_city_assets(
     minimum = strategy["proof_components_per_pool"]
 
     for pool in candidate_pools:
+        target_count = len(pool["candidates"]) if all_candidates else minimum
         selected = []
         selected_sources = []
         for candidate in pool["candidates"]:
@@ -306,10 +319,10 @@ def compile_city_assets(
             selected_sources.append(
                 {"package": candidate["package_path"], "entry": candidate["entry"], "asset_id": asset_id}
             )
-            if len(selected) == minimum:
+            if len(selected) == target_count:
                 break
-        if len(selected) != minimum:
-            raise ValueError(f"City pool {pool['id']} compiled only {len(selected)} components")
+        if len(selected) != target_count:
+            raise ValueError(f"City pool {pool['id']} compiled only {len(selected)} of {target_count} components")
         runtime_pools[pool["id"]] = {"components": selected}
         pool_reports.append(
             {
@@ -326,7 +339,10 @@ def compile_city_assets(
         pack / catalog_path,
         {
             "schema": "c3x.city_catalog.v0",
-            "composition_status": "representative_intake_only",
+            "composition_status": (
+                "complete_focused_candidate_intake" if all_candidates
+                else "representative_intake_only"
+            ),
             "eras": [
                 {"civ3_era": item["civ3_era"], "id": item["id"]}
                 for item in sorted(strategy["eras"], key=lambda item: item["civ3_era"])
@@ -414,9 +430,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--pack", type=Path, default=DEFAULT_PACK)
     parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
     parser.add_argument("--auxiliary-uvs", action="store_true", help="Opt-in source atlas-coordinate study")
+    parser.add_argument("--focus-pool", help="Build only one city/pool/style/era source group")
+    parser.add_argument("--all-candidates", action="store_true", help="Intake every candidate in the focused source group")
     args = parser.parse_args(argv)
     try:
-        report = compile_city_assets(args.assets_root, args.strategy, args.pack, args.report, args.auxiliary_uvs)
+        report = compile_city_assets(args.assets_root, args.strategy, args.pack, args.report,
+                                     args.auxiliary_uvs, args.focus_pool, args.all_candidates)
     except (OSError, ValueError, KeyError, TypeError, ET.ParseError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1

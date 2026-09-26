@@ -94,7 +94,16 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
         if(support)*support=value[1];return value[0];
     };
 
-    auto relief=[&](float u,float v){auto s=pickup_surface.sample(u,v);return std::array<float,3>{s.height,s.authored_height,s.authored_blend};};
+    auto relief=[&](float u,float v){auto s=pickup_surface.sample(u,v);
+        float farm_clearance=1.0f;
+        if(input.farm_ready && (input.projection.tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_IRRIGATION)){
+            farm_clearance=float(queries.shore(u,v).distance);
+            // The river surface ends at 7.4 source pixels from its centerline.
+            // Leave a narrow bank before placing a field or raised farm piece.
+            if(input.river_ready)farm_clearance=std::min(farm_clearance,
+                (float(scratch.rivers.river_sample({u,v}).distance)-8.5f)/64.0f);
+        }
+        return std::array<float,3>{s.height,s.authored_height,farm_clearance};};
     auto const& tile=input.projection.tile;
     auto composition=input.composition_ready?city_fidelity::select(library,tile,nc,nr,world_lookup,shore_sample_at,
         [&](float x,float y){return scratch.rivers.river_sample({x,y}).distance;},height_natural):nullptr;
@@ -106,6 +115,10 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
     },plan);
     unsigned sites=tile.improvement_flags&(C3X_RENDERER_IMPROVEMENT_GOODY_HUT|C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP);
     if(!select_improvements(tile,assets,input.ground,sites,input.mine_ready,input.farm_ready,input.city_ready,composition!=nullptr,plan))return {};
+    if(input.farm_ready && (tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_IRRIGATION)){
+        settle_farm_fields(plan,tile,assets,relief);
+        settle_farm_props(plan,tile,assets,relief);
+    }
     result->instances=unsigned(plan.instances.size());result->routes=unsigned(plan.routes.size());
     // Bound worker transients before expanded triangles are constructed. Large
     // valid packs can still use the same synchronous compiler on recovery.
@@ -113,7 +126,9 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
     for(auto const& instance:plan.instances){
         if(instance.asset>=assets[instance.family].assets.size())continue; // same absent-asset behavior as append_instance
         auto const& asset=assets[instance.family].assets[instance.asset];
-        raw_bytes+=(asset.indices.size()+asset.vertices.size())*sizeof(Vertex);}
+        auto triangles=asset.id.rfind("farm_",0)==0 && !shared_rigid_mesh(asset)
+            ? asset.indices.size()*2u : asset.indices.size();
+        raw_bytes+=(triangles+asset.vertices.size())*sizeof(Vertex);}
     if(composition){
         raw_bytes+=(composition->paving.indices.size()+composition->paving.vertices.size())*sizeof(Vertex);
         for(auto const& instance:composition->instances)for(auto const& part:library.models[instance.model].parts)
@@ -121,6 +136,7 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
     }
     if(stop() || (bounded && raw_bytes>32u*1024u*1024u))return {};
     Surfaces surfaces;
+    std::vector<unsigned> surface_draws;
     if(input.shared_rigid){
         std::vector<Instance> surfaces_only;
         std::array<unsigned,layer_count> indices{};
@@ -129,6 +145,16 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
             if(instance.asset>=assets[instance.family].assets.size())continue;
             auto const& asset=assets[instance.family].assets[instance.asset];
             if(asset.vertices.empty() || asset.indices.empty())continue;
+            if(instance.family==farm_family && (asset.id.find(":base:")!=std::string::npos ||
+                    asset.id.find(":building:")!=std::string::npos ||
+                    asset.id.find(":tree:")!=std::string::npos)){
+                float u=float(capture.tile_x+capture.tile_y)*.5f+instance.u;
+                float v=float(capture.tile_x-capture.tile_y)*.5f+1.0f-instance.v;
+                float shore=relief(u,v)[2];
+                float clearance=asset.id.find(":base:")!=std::string::npos?.55f:
+                    asset.id.find(":building:")!=std::string::npos?.14f:.11f;
+                if(shore<clearance)continue;
+            }
             if(shared_rigid_mesh(asset)){
                 result->draws.push_back({unsigned(instance.layer),0,0,unsigned(result->rigid.size())});
                 result->rigid.push_back(prepare_rigid(instance,input.projection,assets,relief,height_natural));
@@ -138,11 +164,26 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
                     result->draws.back().count+=count;
                 else result->draws.push_back({unsigned(instance.layer),indices[instance.layer],count,~0u});
                 indices[instance.layer]+=count;surfaces_only.push_back(instance);
+                surface_draws.push_back(unsigned(result->draws.size()-1));
             }
         }
         plan.instances=std::move(surfaces_only);
     }
-    compile(plan,input.projection,assets,relief,height_natural,surfaces,true);
+    std::vector<unsigned> instance_counts;
+    compile(plan,input.projection,assets,relief,height_natural,surfaces,true,
+        input.shared_rigid?&instance_counts:nullptr);
+    if(input.shared_rigid){
+        for(auto& draw:result->draws)if(draw.rigid==~0u)draw.count=0;
+        for(std::size_t index=0;index<instance_counts.size();++index)
+            result->draws[surface_draws[index]].count+=instance_counts[index];
+        std::array<unsigned,layer_count> offsets{};
+        for(auto& draw:result->draws)if(draw.rigid==~0u){
+            draw.first=offsets[draw.layer];offsets[draw.layer]+=draw.count;
+        }
+        result->draws.erase(std::remove_if(result->draws.begin(),result->draws.end(),
+            [](PreparedObjects::Draw const& draw){return draw.rigid==~0u && draw.count==0;}),
+            result->draws.end());
+    }
     for(unsigned layer=0;layer<layer_count;++layer){
         render_core::MeshFormat format;format.feature=layer!=route_layer;format.projection_kind=2;
         if(!render_core::prepare_mesh(surfaces.layers[layer],layer==route_layer?nullptr:&surfaces.indices[layer],format,result->layers[layer].mesh,stop))return {};
