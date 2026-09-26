@@ -402,7 +402,7 @@ int main(){
  assert(dense_roads.routes.size()>=4 && dense_roads.routes.size()<=8);
  auto missing=[](int,int)->Observation const*{return nullptr;};
  objects::Plan isolated;objects::select_routes(tile,assets,true,true,missing,isolated);
- assert(isolated.routes.size()==1 && !isolated.routes[0].railroad);
+ assert(isolated.routes.size()==1 && !isolated.routes[0].railroad && isolated.routes[0].isolated);
  assert(isolated.routes[0].u0>=.20f && isolated.routes[0].u1<=.80f);
  for(auto offset:std::array<std::array<int,2>,8>{{{1,-1},{2,0},{1,1},{0,2},{-1,1},{-2,0},{-1,-1},{0,-2}}}){
   auto one=[&](int x,int y)->Observation const*{
@@ -447,17 +447,30 @@ int main(){
  objects::append_route(projection,deck,flat,[](float,float){return 0.f;},deck_vertices);
  assert(deck_vertices.size()==336);
  float deck_top=0;for(auto const& vertex:deck_vertices)deck_top=std::max(deck_top,vertex.world_z);
- assert(deck_top>.14f && deck_vertices[0].world_z<.05f);
+ assert(deck_top>deck_vertices[0].world_z+.05f);
  objects::Route straight{.5f,.5f,1.f,.5f,0,false,false,false};
  std::vector<objects::Vertex> junction_vertices;
  objects::append_route(projection,straight,flat,[](float,float){return 0.f;},junction_vertices);
  float tile_u=float(tile.tile_x+tile.tile_y)*.5f;
  assert(std::abs(junction_vertices.front().world_x-(tile_u+.5f))<.02f);
  assert(std::abs(junction_vertices.back().world_x-(tile_u+1.f))<.03f);
+ std::vector<objects::Vertex> crown_vertices;
+ auto exposed_crown=[&](float u,float){return std::abs(u-(tile_u+.75f))<.13f?80.f:0.f;};
+ objects::append_route(projection,straight,flat,exposed_crown,crown_vertices);
+ assert(!crown_vertices.empty() && crown_vertices.size()<junction_vertices.size());
  objects::Plan wet;wet.routes.push_back({.5f,.5f,1.f,.5f,3,false,false,false});
- objects::promote_river_crossings(tile,assets,[&](float u,float){return std::abs(u-(tile_u+.75f))*100.f;},wet);
+ objects::promote_river_crossings(tile,[&](float u,float){return std::abs(u-(tile_u+.75f))*100.f;},wet);
  assert(wet.routes[0].bridge && std::abs(wet.routes[0].bridge_t-.5f)<.001f);
- assert(wet.instances.size()==1 && std::abs(wet.instances[0].u-.75f)<.001f);
+ assert(!wet.routes[0].bridge_structural && wet.instances.empty());
+ objects::Plan bank;bank.routes.push_back({.5f,.5f,1.f,.5f,3,false,false,false});
+ objects::promote_river_crossings(tile,[&](float u,float){return 10.f+(tile_u+1.f-u)*40.f;},bank);
+ assert(bank.routes[0].bridge && bank.routes[0].bridge_t>.99f);
+ std::vector<objects::Vertex> river_deck;
+ auto river_bed=[&](float u,float){return std::abs(u-(tile_u+.75f))<.2f?-60.f:0.f;};
+ auto river_relief=[&](float u,float v){return std::array<float,3>{river_bed(u,v),0,0};};
+ objects::append_route(projection,wet.routes[0],river_relief,river_bed,river_deck);
+ float river_top=-1000;for(auto const& vertex:river_deck)river_top=std::max(river_top,vertex.world_z);
+ assert(river_top>.10f);
  objects::Plan sites;assert(objects::select_improvements(tile,assets,2,C3X_RENDERER_IMPROVEMENT_GOODY_HUT|C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP,false,false,false,false,sites));
  assert(sites.instances.size()==2);bundles[objects::farm_family].groups.clear();objects::Plan failure;
  assert(!objects::select_improvements(tile,assets,2,0,true,true,true,false,failure));

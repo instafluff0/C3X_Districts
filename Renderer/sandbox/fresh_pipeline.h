@@ -36,7 +36,7 @@ struct SandboxVisualShaders {
     static std::string source(std::string const& relative) {
         char const* profile=renderer.city_profile?"city_fidelity":
             renderer.environment_profile?"environment_refresh":"source_fidelity";
-        std::ifstream file(renderer.fidelity_root + "/Renderer/native/" + profile + "/" + relative,
+        std::ifstream file(renderer.shader_root + "/Renderer/native/" + profile + "/" + relative,
             std::ios::binary);
         if (!file) return {};
         return {std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
@@ -135,7 +135,7 @@ float c3x_paged_visibility(Texture2DArray field,float4 world,float3 normal,bool 
                 "*shadow*.24;\n");
         }
         if(water_variant){
-            std::ifstream variant(renderer.fidelity_root+
+            std::ifstream variant(renderer.shader_root+
                 "/Renderer/sandbox/"+file,std::ios::binary);
             if(!variant)return false;
             shader.append(std::istreambuf_iterator<char>(variant),
@@ -398,6 +398,7 @@ struct SandboxSceneShadow {
     ID3D11ShaderResourceView* production_view = nullptr;
     float box[4] = {};
     std::uint64_t signature = 0;
+    std::uint64_t caster_signature = ~std::uint64_t(0);
     std::array<float,12> light_basis{};
     unsigned builds = 0, draws = 0;
     template<class T> static void drop(T*& pointer) {if (pointer) pointer->Release(); pointer=nullptr;}
@@ -411,7 +412,7 @@ struct SandboxSceneShadow {
     }
     bool ensure() {
         if (view) return true;
-        auto root = renderer.fidelity_root + "/Renderer/native/";
+        auto root = renderer.shader_root + "/Renderer/native/";
         auto shader = [&](std::string const& path, char const* entry, char const* profile,
                 ID3DBlob** result) {
             std::wstring wide(path.begin(),path.end()); ID3DBlob* errors=nullptr;
@@ -494,6 +495,20 @@ struct SandboxSceneShadow {
         }
         production_view=renderer.source_shadow.view;
         renderer.source_shadow.view=view;
+        return true;
+    }
+    bool refresh_casters(std::uint64_t scene) {
+        if(caster_signature==scene)return true;
+        // Production may replace or evict vertex chunks without changing the
+        // D3D device. Caster buffer and instance pointers must follow that
+        // residency generation; the shadow target and shaders can remain.
+        ID3D11Buffer* empty[]={nullptr,nullptr};
+        UINT strides[]={0,0},offsets[]={0,0};
+        renderer.context->IASetVertexBuffers(0,2,empty,strides,offsets);
+        renderer.context->IASetIndexBuffer(nullptr,DXGI_FORMAT_UNKNOWN,0);
+        casters.clear();instance_groups.clear();
+        for(auto*& buffer:patch_buffers)drop(buffer);
+        patch_buffers.clear();
         renderer.collect_shadow_casters(renderer.geometry_vertex_buffers,casters);
         append_cliff_casters();
         batch_terrain_casters();
@@ -501,6 +516,7 @@ struct SandboxSceneShadow {
             renderer.trace.write("fresh-shadow-setup-failed","instance preparation",true);
             return false;
         }
+        caster_signature=scene;
         return true;
     }
     void append_cliff_casters() {
@@ -703,7 +719,7 @@ struct SandboxSceneShadow {
         context->PSSetShaderResources(0,33,views.data());return true;
     }
     bool render(GeometryDrawView::Records const& receivers,std::uint64_t scene) {
-        if (!ensure()) return false;
+        if (!ensure() || !refresh_casters(scene)) return false;
         float needed[4]={std::numeric_limits<float>::max(),std::numeric_limits<float>::max(),
             -std::numeric_limits<float>::max(),-std::numeric_limits<float>::max()};
         bool any=false;

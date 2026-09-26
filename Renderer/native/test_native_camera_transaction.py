@@ -7,7 +7,7 @@ from Renderer.native.native_cpp_test import run_cpp
 class NativeCameraTransactionTests(unittest.TestCase):
     def test_pending_supersession_lifetime_and_explicit_commit(self):
         source=Path('Renderer/native/native_composition_owner.h').read_text()
-        methods=source[source.index('    bool eligible('):source.index('    void set_tactical(')]
+        methods=source[source.index('    void clear_camera_capture()'):source.index('    void set_tactical(')]
         methods+='\n'+source[source.index('    int map('):source.index('    int operation(')]
         run_cpp(r'''
 #include <cassert>
@@ -50,12 +50,15 @@ struct Owner {
  c3x_renderer_gpu_camera_poll_view_fn camera_poll=nullptr;
  c3x_renderer_camera_cancel_fn camera_cancel=nullptr;
  c3x_renderer_i64 camera_ticket=0;void* camera_image=nullptr;int camera_width=0,camera_height=0;
+ c3x_renderer_frame_v1 camera_capture={};c3x_renderer_camera_identity_v1 camera_identity={};
+ std::vector<c3x_renderer_tile_v1> camera_tiles;std::vector<c3x_renderer_u32> camera_topology;
  int route=0;void* route_image=nullptr;std::string route_text;
  void* bits=nullptr;void* release=nullptr;void* pending=nullptr;
  Rect area;int phase_x=0,phase_y=0;
  std::unique_ptr<c3x_gpu_images::WorkerClient> client;
  std::unique_ptr<Adapter<c3x_gpu_images::WorkerClient>> adapter;
  c3x_renderer_gpu_frame_v1 frame={sizeof(frame)};
+ bool scene_units=false;
  void check_thread(){}
  static int field(void* p,unsigned offset){return *reinterpret_cast<int*>(static_cast<char*>(p)+offset);}
 ''' + methods.replace('CompositionOwner(', 'Owner(') + r'''
@@ -178,6 +181,26 @@ int main(){
  assert(fresh.navigate(C3X_NAV_POLL,image,displayed,nullptr)==C3X_RENDERER_RESULT_OK);
  assert(fresh.map(C3X_NATIVE_MAP_PREPARE,image,&request,&output)==C3X_RENDERER_RESULT_OK);
  assert(fresh.map(C3X_NATIVE_MAP_COMMIT,image,nullptr,nullptr)==C3X_RENDERER_RESULT_OK);
+ // Renderer64 admission starts and polls copied scene work; the exact render
+ // pointer is absent, so any synchronous legacy call fails this fixture.
+ Owner async(nullptr,nullptr,nullptr,nullptr,life,nullptr,nullptr);async.scene_units=true;
+ async.set_camera(begin,poll,cancel);
+ c3x_renderer_frame_v1 async_frame{};async_frame.struct_size=sizeof(async_frame);
+ async_frame.target_width=640;async_frame.target_height=480;
+ c3x_renderer_tile_v1 async_tile{};async_frame.tiles=&async_tile;async_frame.tile_count=1;
+ c3x_renderer_camera_request_v1 async_request{};async_request.frame=&async_frame;
+ ready=false;
+ assert(async.map(C3X_NATIVE_MAP_PREPARE,image,&async_request,&output)==C3X_RENDERER_RESULT_PENDING);
+ auto first_async_ticket=async.camera_ticket;
+ assert(async.map(C3X_NATIVE_MAP_PREPARE,image,&async_request,&output)==C3X_RENDERER_RESULT_PENDING &&
+        async.camera_ticket==first_async_ticket && !async.pending);
+ async_tile.anchor_x=8;
+ assert(async.map(C3X_NATIVE_MAP_PREPARE,image,&async_request,&output)==C3X_RENDERER_RESULT_PENDING &&
+        async.camera_ticket!=first_async_ticket && !async.pending);
+ ready=true;
+ assert(async.map(C3X_NATIVE_MAP_PREPARE,image,&async_request,&output)==C3X_RENDERER_RESULT_OK &&
+        output.clip_right==640);
+ assert(async.map(C3X_NATIVE_MAP_COMMIT,image,nullptr,nullptr)==C3X_RENDERER_RESULT_OK);
 }
 ''')
 

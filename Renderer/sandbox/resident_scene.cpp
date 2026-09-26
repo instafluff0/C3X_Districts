@@ -239,13 +239,18 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
     }
     if(!sandbox_fresh.draw(frame,camera_x,camera_y,0,0,0,0,false,1.f))return false;
     renderer.trace.write("fresh-callback","scene-ready",true);
+    // Complete the resident HDR writes before using those textures in the
+    // final output pass; this submits work without waiting for GPU completion.
+    renderer.context->Flush();
     if(renderer.trace.level) {
-        char detail[256];
-        sprintf_s(detail,"prepare=%.3f reflection=%.3f static=%.3f water=%.3f units=%.3f reconstruct=%.3f shadow_builds=%u reflection_draws=%u static_draws=%u",
+        char detail[384];
+        sprintf_s(detail,"prepare=%.3f reflection=%.3f static=%.3f water=%.3f units=%.3f reconstruct=%.3f shadow_builds=%u reflection_draws=%u static_draws=%u visible=%u culled=%u camera=%d,%d translation=%.1f,%.1f",
             sandbox_fresh.phases[0],sandbox_fresh.phases[1],sandbox_fresh.phases[2],
             sandbox_fresh.phases[3],sandbox_fresh.phases[4],sandbox_fresh.phases[5],
             sandbox_fresh.shadow.builds,sandbox_fresh.reflection_draws,
-            sandbox_fresh.cache_full_draws);
+            sandbox_fresh.cache_full_draws,sandbox_fresh.visible,sandbox_fresh.culled,
+            camera_x,camera_y,renderer.geometry_viewport_settings.translation[0],
+            renderer.geometry_viewport_settings.translation[1]);
         renderer.trace.write("fresh-scene-phases",detail,true);
     }
     bool presented=sandbox_backbuffer_output.draw(target,frame.target_width,frame.target_height);

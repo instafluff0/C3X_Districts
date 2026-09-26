@@ -4,6 +4,50 @@ from Renderer.native.native_cpp_test import run_cpp
 
 
 class UnitInstanceTests(unittest.TestCase):
+    def test_scene_pose_rebases_pan_zoom_wrap_and_visibility(self):
+        run_cpp(r'''
+#include "Renderer/native/render_core/unit_instances.h"
+#include <cassert>
+#include <string>
+#include <vector>
+using namespace c3x_renderer::render_core;
+struct Clip {std::string name="idle";bool ambient=true,loop=true;double duration=1;unsigned frames=16;};
+struct Unit {std::vector<std::string> keys={"warrior"};std::vector<Clip> actions={Clip{}};};
+int main(){
+ std::vector<Unit> catalog(1);UnitInstances world;
+ c3x_renderer_unit_state_v1 state{};state.struct_size=sizeof(state);
+ state.kind=C3X_RENDERER_UNIT_STATE_OBSERVE;state.unit_id=7;
+ state.tile_x=4;state.tile_y=4;state.unit_type_id=1;state.owner_id=0;
+ state.action=1;state.max_hp=3;state.visible=1;state.presentation_frequency=1000000;
+ assert(world.state(state));
+ c3x_renderer_unit_v1 body{};body.struct_size=sizeof(body);
+ body.unit_id=7;body.action=1;body.frame_count=16;body.sprite_width=body.sprite_height=191;
+ body.body_x=112;body.body_y=80;body.projection_scale_milli=1000;
+ body.presentation_frequency=1000000;std::strcpy(body.unit_key,"warrior");
+ UnitInstances::Selection selected;
+ assert(world.capture(body,C3X_RENDERER_UNIT_STATE_CAPTURED,catalog,
+     [](int){return "idle";},selected));
+ c3x_renderer_tile_v1 tile{};tile.tile_x=4;tile.tile_y=4;
+ tile.anchor_x=tile.anchor_y=100;
+ tile.tile_flags=C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_VISIBLE;
+ c3x_renderer_frame_v1 frame{};frame.tile_count=1;frame.tiles=&tile;
+ frame.tile_width=128;frame.tile_height=64;frame.world_width_tiles=12;frame.world_wrap_x=1;
+ world.bind_scene_camera(7,frame);
+ auto poses=world.scene_poses(frame,0,1000000,catalog);
+ assert(poses.size()==1&&poses[0].draw.body_x==112&&poses[0].draw.body_y==80);
+ tile.anchor_x=120;tile.anchor_y=110;
+ poses=world.scene_poses(frame,0,1000000,catalog);
+ assert(poses.size()==1&&poses[0].draw.body_x==132&&poses[0].draw.body_y==90);
+ tile.tile_x=16;tile.anchor_x=140;tile.anchor_y=120;
+ frame.tile_width=160;frame.tile_height=80;
+ poses=world.scene_poses(frame,0,1000000,catalog);
+ assert(poses.size()==1&&poses[0].draw.body_x==155&&poses[0].draw.body_y==95&&
+        poses[0].draw.projection_scale_milli==1250);
+ tile.tile_flags=C3X_RENDERER_TILE_RENDER;
+ assert(world.scene_poses(frame,0,1000000,catalog).empty());
+}
+''')
+
     def test_retained_instances_selected_occurrences_and_lifecycle(self):
         run_cpp(r'''
 #include "Renderer/native/render_core/unit_instances.h"

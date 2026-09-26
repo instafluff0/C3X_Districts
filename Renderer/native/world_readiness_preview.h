@@ -38,6 +38,7 @@ if(GetEnvironmentVariableA("C3X_RENDERER_WORLD_READINESS_TEST",world_test_option
         MSG message{};while(PeekMessageA(&message,nullptr,0,0,PM_REMOVE)){TranslateMessage(&message);DispatchMessageA(&message);}
         if(get_world(&state)==C3X_RENDERER_RESULT_OK && state.capture_passes>0 && state.authoritative<=state.total &&
            state.preparation_sequence==state.appearance_sequence && state.prepared_regions==state.regions)break;
+        if(state.unavailable_regions)break;
         MsgWaitForMultipleObjectsEx(0,nullptr,16,QS_ALLINPUT,MWMO_INPUTAVAILABLE);
     }
     auto memory=camera_memory_values();
@@ -73,7 +74,11 @@ if(GetEnvironmentVariableA("C3X_RENDERER_WORLD_READINESS_TEST",world_test_option
         c3x_renderer_gpu_result_v1 result{sizeof(result)};
         return world_images(&read,&result,pixels.data(),unsigned(pixels.size()))==C3X_RENDERER_RESULT_OK;
     };
-    for(unsigned n=0;n<100;++n){
+    char short_workload_option[16]={};
+    unsigned samples=GetEnvironmentVariableA("C3X_RENDERER_WORLD_READINESS_SAMPLES",
+        short_workload_option,sizeof(short_workload_option))?
+        unsigned(std::clamp(std::atoi(short_workload_option),1,100)):100u;
+    for(unsigned n=0;n<samples;++n){
         random=random*1664525u+1013904223u;center_x=int(random%unsigned(map_width));
         random=random*1664525u+1013904223u;center_y=int(random%unsigned(map_height));
         center_x=(center_x&~1)|(center_y&1);
@@ -96,7 +101,7 @@ if(GetEnvironmentVariableA("C3X_RENDERER_WORLD_READINESS_TEST",world_test_option
             1000.*double(displayed.QuadPart-begin.QuadPart)/double(frequency.QuadPart),
             world_output.geometry_tiles_built,world_output.geometry_tiles_reused,world_output.geometry_upload_bytes,
             image.map_readbacks,std::size_t(memory_now.second),std::size_t(memory_now.first),world_output.geometry_cache_bytes,begin.QuadPart,displayed.QuadPart);
-        if(n==0 || n==2 || n==4 || n==9 || n==14 || n==25){
+        if(samples==100 && (n==0 || n==2 || n==4 || n==9 || n==14 || n==25)){
             WorldOracle oracle{center_x,center_y,next.presentation_time_ticks,{}};
             if(!read_world(oracle.pixels)){ok=false;break;}oracles.push_back(std::move(oracle));
         }
@@ -147,7 +152,7 @@ if(GetEnvironmentVariableA("C3X_RENDERER_WORLD_READINESS_TEST",world_test_option
     }
     set_world(nullptr);world_records.clear();
     center_x=home_x;center_y=home_y;
-    std::printf("%s world readiness workload: samples=100 live_input=unmeasured desktop=measured oracles=%zu\n",ok?"PASS":"FAIL",oracles.size());
+    std::printf("%s world readiness workload: samples=%u live_input=unmeasured desktop=measured oracles=%zu\n",ok?"PASS":"FAIL",samples,oracles.size());
     char only[8]={};if(GetEnvironmentVariableA("C3X_RENDERER_WORLD_READINESS_ONLY",only,sizeof(only))){
         world_reset();
         auto finish_inputs=reinterpret_cast<void(*)()>(GetProcAddress(module,"c3x_renderer_input_recording_finish"));

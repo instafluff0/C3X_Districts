@@ -14,19 +14,21 @@ that two identical modern captures have the same image hash. The existing
 authored bridge arches sit at the river crossing. A raised roadbed
 and narrow side fascia close their missing deck; both tile halves meet at the
 arch crown, with approaches blending into the banks. River distance sampling
-also places a bridge where the road crosses the channel inside a tile. The
-ordinary dirt road remains narrow; only its bridge deck fills the arch gap.
-Each tile contributes
-its half of an incident edge so the path stays visible where adjoining terrain
-meshes overlap. A road tile can connect in all eight directions, including
+adds a narrow raised deck where a road crosses a channel inside a tile. The
+authored arches remain on their side-edge crossings, avoiding duplicate arches
+in dense networks. The ordinary dirt road remains narrow, and the crossing
+surface follows nearby bank grade so it remains visible over carved channels.
+Each tile contributes its half of an incident edge so the path stays visible
+where adjoining terrain meshes overlap. A road tile can connect in all eight directions, including
 left-right and top-bottom pairs; a sparse diagonal stays connected, while
 redundant diagonals in a dense network are omitted. Mountain tiles connect
 their spokes through an interior skirt path that omits unused arcs and bends
 toward low saddles. Where a rocky crown extends into another tile, the path
-narrows into the occluding mass instead of painting across a sheer face.
-Tile coordinates seed
-junction positions, width, atlas-region, and bend variation; a shared edge
-seed agrees at the seam and replay is stable.
+bends toward lower ground and omits exposed face segments. The nearby skirt
+remains visible. Tile coordinates seed junction positions, width, atlas-region,
+and bend variation; a shared edge
+seed agrees at the seam and replay is stable. The study rejects an isolated
+road capture that matches its no-road control.
 
 ## Source evidence and reconstruction choices
 
@@ -45,8 +47,8 @@ Following `Renderer/docs/visual_fidelity_playbook.md`, this study preserves the
 authored atlas detail rather than sharpening the final image, samples the path
 mesh against world terrain relief instead of painting a flat tile sprite, and
 uses the same scene lighting and relief normal basis as the surrounding ground.
-Roads use terrain depth so they sit above hills and the mountain mesh. They
-receive scene lighting but do not cast a raised shadow. Bridge arches cast
+Roads follow hill relief and use a small surface clearance to stay above
+cross-tile terrain overlap. They receive scene lighting but do not cast a raised shadow. Bridge arches cast
 their own shadows; the procedural deck has side normals and follows the road
 material for its era. The study
 does not claim complete source material parity: further source-channel work,

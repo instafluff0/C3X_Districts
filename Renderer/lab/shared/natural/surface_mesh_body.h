@@ -15,7 +15,7 @@
             // source tile coordinates as well as position, rotation and scale.
             // Desert dunes retain their sparse regional distribution.
             bool sparse_desert=biome==2 && (random_u32(state)&1u)!=0;
-            unsigned density=sparse_desert?0u:(biome==2?3u:0u); // Diagnostic: no grass/plains decals.
+            unsigned density=sparse_desert?0u:(biome==2?3u:(biome==0?12u:14u)+random_u32(state)%9u);
             auto owner_shore=shore_sample_at(float(nc)+.5f,float(nr)+.5f);
             float owner_coverage=biome==2
                 ? desert_coast_coverage(float(owner_shore.distance))

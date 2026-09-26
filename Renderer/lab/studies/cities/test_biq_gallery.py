@@ -10,7 +10,7 @@ import json
 import time
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageDraw
 
 from Renderer.lab.platform import native_command_result
 from Renderer.lab.studies.cities.build_layouts import ERAS, ROOT, STYLES
@@ -24,7 +24,8 @@ WINDOWS_ROOT = r"..\lab\out\cities\test-biq\root"
 
 
 def render(culture: int, era: int, size: int, site: tuple[int, int], name: str,
-           glow_off: bool = False) -> dict:
+           glow_off: bool = False, tile_width: int = 256,
+           capital: bool = True, walls: bool = True) -> dict:
     OUT.mkdir(parents=True, exist_ok=True)
     trace = OUT / (name + ".trace.log")
     bitmap = OUT / (name + ".bmp")
@@ -32,7 +33,7 @@ def render(culture: int, era: int, size: int, site: tuple[int, int], name: str,
         "C3X_RENDERER_VISUAL_PROFILE": "city-fidelity",
         "C3X_RENDERER_PREVIEW_OBJECTS": "1",
         "C3X_RENDERER_PREVIEW_CITY_ONLY": "1",
-        "C3X_RENDERER_PREVIEW_CITY": f"{culture},{era},{size},1,1",
+        "C3X_RENDERER_PREVIEW_CITY": f"{culture},{era},{size},{int(capital)},{int(walls)}",
         "C3X_RENDERER_PREVIEW_CITY_SITE": f"{site[0]},{site[1]}",
         "C3X_RENDERER_CITY_GLOW_CONTROL": "1" if glow_off else "0",
         "C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS":
@@ -48,7 +49,7 @@ def render(culture: int, era: int, size: int, site: tuple[int, int], name: str,
                 r'..\default.custom_rendering.txt '
                 r'..\lab\out\cities\test-biq\terrain.csv '
                 '"' + "..\\lab\\out\\cities\\test-biq\\gallery\\" + bitmap.name + '" '
-                f'1280 800 {site[0]} {site[1]} 256 12')
+                f'1280 800 {site[0]} {site[1]} {tile_width} 12')
     result = None
     for attempt in range(3):
         result = native_command_result("Renderer/native", command, timeout_seconds=180)
@@ -70,6 +71,26 @@ def render(culture: int, era: int, size: int, site: tuple[int, int], name: str,
             "size": size, "site": list(site), "image": image.name,
             "sha256": hashlib.sha256(image.read_bytes()).hexdigest(),
             "authority": authority}
+
+
+def flat_contact_sheet(records: list[dict]) -> Path:
+    by_style_era = {(item["culture"], item["era"]): item for item in records}
+    if len(by_style_era) != len(STYLES) * len(ERAS):
+        raise ValueError("flat contact sheet requires every culture and era")
+    sheet = Image.new("RGB", (390 * len(STYLES), 300 * len(ERAS)), (31, 25, 38))
+    draw = ImageDraw.Draw(sheet)
+    for row, era in enumerate(ERAS):
+        for column, culture in enumerate(STYLES):
+            record = by_style_era[(culture, era)]
+            with Image.open(OUT / record["image"]) as source:
+                # Native output pixels: a crop, never a resize or sharpen pass.
+                crop = source.convert("RGB").crop((455, 255, 825, 515))
+            x, y = column * 390, row * 300
+            sheet.paste(crop, (x + 10, y + 34))
+            draw.text((x + 10, y + 9), culture + " · " + era, fill="white")
+    target = OUT / "flat-contact.png"
+    sheet.save(target)
+    return target
 
 
 def main() -> None:
@@ -115,6 +136,8 @@ def main() -> None:
                 "cases": records}
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / (args.kind + ".json")).write_text(json.dumps(manifest, indent=2) + "\n")
+    if args.kind == "flat" and len(records) == len(STYLES) * len(ERAS):
+        flat_contact_sheet(records)
     cards = "\n".join(
         '<article><img src="' + html.escape(case["image"]) + '" alt="' +
         html.escape(case["name"]) + '"><h2>' + html.escape(case["culture"] + " " +

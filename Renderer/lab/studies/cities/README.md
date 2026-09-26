@@ -55,6 +55,8 @@ city path. The golden roofs are more legible than the earlier dark A-family
 sample, but the city still reads softer than nearby mountains at gameplay
 scale. The authored house color, LEAN and gloss atlases are 1024×512; their
 projected roof areas remain small. This is still an open Lab quality issue.
+The staged single-building and material evidence is in
+[fidelity_findings.md](fidelity_findings.md).
 A map-backed headless replay is not an in-game `test.biq` acceptance image.
 Do not downsample textures, decimate meshes or flatten roofs/facades to make a
 layout fit. Uniform scale, placement and art selection are the available design
@@ -88,11 +90,17 @@ PYTHONPATH=. python3 Renderer/native/city_fidelity/prepare_pack.py \
   --lab-frames Renderer/lab/out/cities/source-frames/all-city-source-frames.json
 PYTHONPATH=. python3 Renderer/lab/studies/cities/test_biq_gallery.py --kind flat
 PYTHONPATH=. python3 Renderer/lab/studies/cities/test_biq_gallery.py --kind hill
+PYTHONPATH=. python3 Renderer/lab/studies/cities/fidelity_probe.py
+PYTHONPATH=. python3 Renderer/lab/studies/cities/shader_probe.py
+PYTHONPATH=. python3 Renderer/lab/studies/cities/shader_probe.py --scale 2
+PYTHONPATH=. python3 Renderer/lab/studies/cities/screen_size_trial.py
 ```
 
 The gallery script requires an isolated `city-preview` DLL and a test.biq
 terrain capture. It verifies the selected `lab-fixed-*` composition in the
-renderer trace for each image. The complete AncientWood input can be
+renderer trace for each image. Its flat run also writes
+`Renderer/lab/out/cities/test-biq/gallery/flat-contact.png` with native-size
+crops for all 20 culture/era combinations. The complete AncientWood input can be
 regenerated separately for the focused Asian reference comparison:
 
 ```sh
@@ -115,7 +123,7 @@ PYTHONPATH=. python3 Renderer/native/city_fidelity/prepare_pack.py \
 No production runtime pack, DLL, native city ownership or reference image is
 changed by these commands.
 
-## Site adaptation after design acceptance
+## Lab site adaptation
 
 The flat layout is the canonical visual design. At a real site, capture the
 authoritative tile and neighboring terrain/river/shore information. The current

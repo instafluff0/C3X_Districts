@@ -334,17 +334,70 @@ if(ok && !std::strcmp(gpu_frame_test,"1")) {
                 std::printf("GPU_FRAME_FRESH_NAV step=%d center=%d,%d zoom=%d built=%u reused=%u map_readbacks=%u raster_pixels=%u\n",
                     step,center_x,center_y,tile_width,navigation_meta.geometry_tiles_built,
                     navigation_meta.geometry_tiles_reused,view.map_readbacks,navigation_meta.raster_draw_pixels);
-                if(step==1||step==3){
+                {
                     if(!verify_gpu(read(view.map_image)==C3X_RENDERER_RESULT_OK,
                         "fresh navigation screenshot"))break;
+                    std::size_t occupied=0;for(auto pixel:actual)occupied+=pixel!=0;
+                    std::printf("GPU_FRAME_FRESH_NAV_PIXELS step=%d occupied=%zu\n",step,occupied);
+                    if(!verify_gpu(occupied>0,"fresh navigation map has visible pixels"))break;
                     witness=navigation_meta;witness.bgra_pixels=actual.data();
-                    auto name=std::string(argv[5])+(step==1?".zoom.bmp":".return.bmp");
+                    auto name=std::string(argv[5])+(step==0?".jump.bmp":step==1?".zoom.bmp":
+                        step==2?".wrap.bmp":".return.bmp");
                     if(!verify_gpu(write_bmp(name.c_str(),witness),
                         "fresh navigation image"))break;
                 }
             }
             center_x=home_x;center_y=home_y;tile_width=home_width;tile_height=home_height;
             if(!ok)break;
+            // The game uses the copied, pending camera API. A cold camera may
+            // take much longer to build than either native submission or a
+            // concurrent unit fact; neither caller may wait for that frame.
+            auto async_begin=reinterpret_cast<c3x_renderer_gpu_camera_begin_fn>(
+                GetProcAddress(module,"c3x_renderer_gpu_camera_begin"));
+            auto async_poll=reinterpret_cast<c3x_renderer_gpu_camera_poll_view_fn>(
+                GetProcAddress(module,"c3x_renderer_gpu_camera_poll_view"));
+            if(!verify_gpu(async_begin&&async_poll,"fresh asynchronous camera exports"))break;
+            center_x=home_x+42;center_y=home_y-5;
+            auto pending_tiles=capture_view();
+            auto pending_frame=test_frame;pending_frame.tiles=pending_tiles.data();
+            pending_frame.tile_count=unsigned(pending_tiles.size());
+            pending_frame.presentation_time_ticks+=pending_frame.presentation_frequency*3;
+            auto pending_request=request;pending_request.frame=&pending_frame;
+            pending_request.identity.scene_epoch+=40;
+            LARGE_INTEGER clock_rate={},begin_time={},begin_done={},unit_done={};
+            QueryPerformanceFrequency(&clock_rate);
+            c3x_renderer_i64 pending_ticket=0;
+            QueryPerformanceCounter(&begin_time);
+            int begin_code=async_begin(&pending_request,&pending_ticket);
+            QueryPerformanceCounter(&begin_done);
+            if(!verify_gpu(begin_code==C3X_RENDERER_RESULT_PENDING&&pending_ticket>0,
+                "fresh cold camera accepted without rendering"))break;
+            int pending_bounds[4]={};
+            unit_target.ticket=view.ticket;unit_target.destination=view.map_image;
+            unit_target.background=view.map_image;
+            int unit_code=capture_unit(&body,&unit_target,pending_bounds);
+            QueryPerformanceCounter(&unit_done);
+            if(!verify_gpu(unit_code==C3X_RENDERER_RESULT_OK,
+                "fresh unit capture while cold camera prepares"))break;
+            double begin_ms=1000.0*double(begin_done.QuadPart-begin_time.QuadPart)/clock_rate.QuadPart;
+            double unit_ms=1000.0*double(unit_done.QuadPart-begin_done.QuadPart)/clock_rate.QuadPart;
+            c3x_renderer_gpu_camera_view_v1 adopted={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(adopted)};
+            int poll_code=C3X_RENDERER_RESULT_PENDING;
+            auto deadline=GetTickCount64()+15000;
+            while(poll_code==C3X_RENDERER_RESULT_PENDING&&GetTickCount64()<deadline){
+                poll_code=async_poll(pending_ticket,&adopted);
+                if(poll_code==C3X_RENDERER_RESULT_PENDING)Sleep(1);
+            }
+            if(!verify_gpu(poll_code==C3X_RENDERER_RESULT_OK&&
+                adopted.image.map_readbacks==0&&adopted.camera.output.raster_draw_pixels==0,
+                "fresh asynchronous camera publication"))break;
+            double render_ms=1000.0*double(adopted.camera.output.renderer_cpu_ticks)/clock_rate.QuadPart;
+            std::printf("GPU_FRAME_FRESH_ASYNC begin_ms=%.3f unit_capture_ms=%.3f render_ms=%.3f built=%u map_readbacks=%u\n",
+                begin_ms,unit_ms,render_ms,adopted.camera.output.geometry_tiles_built,
+                adopted.image.map_readbacks);
+            if(!verify_gpu(render_ms>100.0&&begin_ms<render_ms/3&&unit_ms<render_ms/3,
+                "native fact submission independent of cold Renderer64 frame"))break;
+            center_x=home_x;center_y=home_y;
             gpu_reset();
             c3x_renderer_output_v1 reset_meta={C3X_RENDERER_API_VERSION,sizeof(reset_meta)};
             if(!verify_gpu(gpu_render(&request,&view,&reset_meta)==C3X_RENDERER_RESULT_OK,

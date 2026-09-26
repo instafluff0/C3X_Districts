@@ -450,15 +450,21 @@ Output shade(P input) {
         albedo = lerp(base, hill, rocky_band * 0.90);
         height_detail = lerp(base_h, hill_h, rocky_band);
         specular_map = lerp(base_s, hill_s, rocky_band);
-        // Keep the source height response on the joined terrain.
+        // Retain the source height response while making grass and plains
+        // grain legible under the shared sun. Hills keep their existing form.
         float grass_plains_detail = saturate(1 - tundra_weight - desert_weight) *
             (1 - smoothstep(0.06, 0.45, input.material.z));
-        geometric = detail_normal(geometric, input.world, height_detail);
+        geometric = detail_normal_strength(geometric, input.world, height_detail,
+                                           Detail.y * (1 + 0.9 * grass_plains_detail));
 
         // Source-backed detail supplies a continuous material-scale response.
         // Cooler lows and warm dry highs add readable regional variation
         // without perturbing the flat-ground geometry or drawing tile borders.
         float broad = surface_shape(input.world.xy);
+        float broad_height = SurfaceDetail.SampleBias(Wrap,
+            input.world.xy * 0.071 + float2(0.13, 0.37), 3).r;
+        geometric = detail_normal_strength(geometric, input.world, broad_height,
+                                           0.35 * grass_plains_detail);
         albedo *= lerp(float3(0.88, 0.94, 0.97),
                        float3(1.09, 1.045, 0.91), broad);
         albedo *= 1 + clamp((broad - 0.30) * 0.55, -0.12, 0.15) * grass_plains_detail;

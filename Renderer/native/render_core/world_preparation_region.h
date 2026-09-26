@@ -95,13 +95,14 @@ struct WorldPreparationRegion {
 // another copy of tile/topology inputs. Missing authority is retried on the next
 // appearance revision. A cancelled lease leaves its region pending.
 class WorldPreparationSchedule {
-    std::array<std::uint64_t,10> scope{};
+    std::array<std::uint64_t,9> scope{};
     std::vector<unsigned> pending;
+    std::vector<unsigned char> state;
     int center_x=0,center_y=0;
     bool reorder=true;
 public:
     unsigned completed=0,unavailable=0;
-    void clear(){pending.clear();scope={};completed=unavailable=0;reorder=true;}
+    void clear(){pending.clear();state.clear();scope={};completed=unavailable=0;reorder=true;}
     void prioritize(c3x_renderer_frame_v1 const& f){
         std::int64_t distance=INT64_MAX;int next_x=center_x,next_y=center_y;
         for(unsigned i=0;i<f.tile_count;++i){auto const& tile=f.tiles[i];
@@ -113,14 +114,15 @@ public:
         }
         reorder|=center_x!=next_x || center_y!=next_y;center_x=next_x;center_y=next_y;
     }
-    void configure(c3x_renderer_frame_v1 const& f,std::uint64_t appearance,
-                   std::uint64_t lifetime,std::uint64_t assets,unsigned device){
-        std::array<std::uint64_t,10> next={appearance,lifetime,assets,device,
+    void configure(c3x_renderer_frame_v1 const& f,std::uint64_t lifetime,
+                   std::uint64_t assets,unsigned device){
+        std::array<std::uint64_t,9> next={lifetime,assets,device,
             std::uint64_t(f.world_width_tiles),std::uint64_t(f.world_height_tiles),
             std::uint64_t(f.tile_width),std::uint64_t(f.tile_height),
             std::uint64_t(f.target_width),std::uint64_t(f.target_height)};
         if(scope!=next){
             clear();scope=next;pending.resize(WorldPreparationRegion::count(f));
+            state.resize(pending.size());
             for(unsigned i=0;i<pending.size();++i)pending[i]=i;
         }
         if(!reorder)return;
@@ -138,8 +140,30 @@ public:
         // Pop the nearest first. Stable ties keep preparation deterministic.
         std::stable_sort(pending.begin(),pending.end(),[&](unsigned a,unsigned b){return distance(a)>distance(b);});
     }
+    void invalidate(c3x_renderer_frame_v1 const& f,int tile_x,int tile_y){
+        if(state.size()!=WorldPreparationRegion::count(f))return;
+        auto contains=[](int coordinate,int left,int world,bool wrap){
+            for(int offset=wrap?-2:0;offset<=(wrap?2:0);++offset){
+                int occurrence=coordinate+offset*world;
+                if(occurrence>=left-WorldPreparationRegion::halo &&
+                   occurrence<left+WorldPreparationRegion::extent+WorldPreparationRegion::halo)return true;
+            }
+            return false;
+        };
+        int horizontal=WorldPreparationRegion::bands(f.world_width_tiles,f.target_width,f.tile_width,f.world_wrap_x!=0);
+        int vertical=WorldPreparationRegion::bands(f.world_height_tiles,f.target_height,f.tile_height,f.world_wrap_y!=0);
+        unsigned columns=unsigned((f.world_width_tiles+WorldPreparationRegion::extent-1)/WorldPreparationRegion::extent+2*horizontal);
+        for(unsigned region=0;region<state.size();++region){
+            auto x=WorldPreparationRegion::core(region%columns,f.world_width_tiles,horizontal);
+            auto y=WorldPreparationRegion::core(region/columns,f.world_height_tiles,vertical);
+            if(!contains(tile_x,x[0],f.world_width_tiles,f.world_wrap_x!=0) ||
+               !contains(tile_y,y[0],f.world_height_tiles,f.world_wrap_y!=0) || !state[region])continue;
+            if(state[region]==2)--unavailable;
+            --completed;state[region]=0;pending.push_back(region);reorder=true;
+        }
+    }
     bool empty()const{return pending.empty();}
     unsigned next()const{return pending.back();}
-    void finish(bool success){pending.pop_back();++completed;if(!success)++unavailable;}
+    void finish(bool success){state[pending.back()]=success?1:2;pending.pop_back();++completed;if(!success)++unavailable;}
 };
 }}

@@ -261,6 +261,13 @@ def main() -> None:
     subprocess.run(["node", str(ROOT / "Renderer/sandbox/export_biq.js"),
                     str(BIQ), str(scene)], cwd=ROOT, check=True)
     captures = {case[0]: capture(*case, scene) for case in CASES}
+    from PIL import Image, ImageChops
+    for control,road in (("isolated-control","isolated-hill"),
+                         ("isolated-plains-control","isolated-plains"),
+                         ("isolated-mountain-control","isolated-mountain")):
+        with Image.open(captures[control]) as before, Image.open(captures[road]) as after:
+            if ImageChops.difference(before,after).getbbox() is None:
+                raise RuntimeError(f"Built road is invisible: {road}")
     duplicate = capture("modern-repeat", (77, 25), 160, 12, 3, "network", scene)
     if digest(captures["modern"]) != digest(duplicate):
         raise RuntimeError("Road layout changed between identical captures")

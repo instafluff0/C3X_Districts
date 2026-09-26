@@ -14,6 +14,10 @@ class CompositionOwner {
     c3x_renderer_gpu_camera_poll_view_fn camera_poll=nullptr;
     c3x_renderer_camera_cancel_fn camera_cancel=nullptr;
     c3x_renderer_i64 camera_ticket=0;void* camera_image=nullptr;int camera_width=0,camera_height=0;
+    c3x_renderer_frame_v1 camera_capture={};
+    c3x_renderer_camera_identity_v1 camera_identity={};
+    std::vector<c3x_renderer_tile_v1> camera_tiles;
+    std::vector<c3x_renderer_u32> camera_topology;
     c3x_renderer_gpu_images_fn images;
     c3x_renderer_gpu_present_fn present;
     c3x_renderer_gpu_unit_fn unit;
@@ -41,6 +45,21 @@ class CompositionOwner {
     void release_window(){c3x_renderer_gpu_present_v1 r={sizeof(r)};r.action=2;
         if(present(&r)!=C3X_RENDERER_RESULT_OK)throw std::runtime_error("native display handoff failed");}
     static int field(void* p,unsigned offset){return c3x_native_access::field(p,offset);}
+    void clear_camera_capture(){camera_capture={};camera_tiles.clear();camera_topology.clear();}
+    bool same_camera_capture(c3x_renderer_camera_request_v1 const& request)const{
+        if(!camera_capture.struct_size || std::memcmp(&camera_identity,&request.identity,sizeof(camera_identity)))return false;
+        auto current=*request.frame,retained=camera_capture;
+        current.tiles=retained.tiles=nullptr;
+        current.world_topology=retained.world_topology=nullptr;
+        current.presentation_time_ticks=retained.presentation_time_ticks=0;
+        current.dirty_flags=retained.dirty_flags=0;
+        current.visible_animation_count=retained.visible_animation_count=0;
+        return !std::memcmp(&current,&retained,sizeof(current)) &&
+            (!current.tile_count || !std::memcmp(request.frame->tiles,camera_tiles.data(),
+                camera_tiles.size()*sizeof(camera_tiles[0]))) &&
+            (!current.world_topology_count || !std::memcmp(request.frame->world_topology,
+                camera_topology.data(),camera_topology.size()*sizeof(camera_topology[0])));
+    }
 public:
     bool eligible(void* image,c3x_renderer_frame_v1 const& demand){
         return lifetime(C3X_NATIVE_MAP,image,0) && field(image,0x24)==16 && !field(image,0x4c4) && !field(image,0x4c8) &&
@@ -101,7 +120,7 @@ public:
         check_thread();
         if(!image || image==camera_image){
             if(camera_ticket&&camera_cancel)camera_cancel(camera_ticket);
-            camera_ticket=0;camera_image=nullptr;navigation.clear();
+            camera_ticket=0;camera_image=nullptr;clear_camera_capture();navigation.clear();
         }
         if(!image || image==pending){pending=nullptr;navigation.clear();}
         if(!image || image==route_image){route={};route_image=nullptr;route_text.clear();}
@@ -115,7 +134,7 @@ public:
         check_thread();
         if(action==C3X_NATIVE_MAP_CANCEL){
             if(camera_ticket&&camera_cancel)camera_cancel(camera_ticket);
-            camera_ticket=0;camera_image=nullptr;pending=nullptr;navigation.clear();return C3X_RENDERER_RESULT_OK;
+            camera_ticket=0;camera_image=nullptr;clear_camera_capture();pending=nullptr;navigation.clear();return C3X_RENDERER_RESULT_OK;
         }
         if(action==C3X_NATIVE_MAP_COMMIT){
             if(navigation.available()||!pending||image!=pending||!adapter)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
@@ -126,13 +145,48 @@ public:
         if(action==C3X_NATIVE_MAP_PREPARE && request && request->frame && output && navigation.available()){
             if(pending==image && eligible(image,*request->frame) && navigation.take(image,*request,*output))return C3X_RENDERER_RESULT_OK;
             // Fresh authoritative capture changed while this view was pending.
-            // Reject its old coverage and use the established exact path.
+            // Reject its old coverage and request a new copied camera scene.
             pending=nullptr;navigation.clear();
         }
         if(action!=C3X_NATIVE_MAP_PREPARE||!request||!request->frame||!output||pending)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
         auto const& demand=*request->frame;
         if(!eligible(image,demand))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
         if(adapter&&!adapter->admit(image))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        if(scene_units){
+            // The game thread only submits or polls a copied camera demand.
+            // A cold destination may remain unpresented until its scene is
+            // ready; this branch never calls the exact GPU renderer.
+            if(camera_ticket && (camera_image!=image || !same_camera_capture(*request))){
+                if(camera_cancel)camera_cancel(camera_ticket);
+                camera_ticket=0;camera_image=nullptr;clear_camera_capture();
+            }
+            if(camera_ticket){
+                c3x_renderer_gpu_camera_view_v1 ready={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(ready)};
+                int result=poll_camera(image,camera_ticket,ready);
+                if(result==C3X_RENDERER_RESULT_OK){
+                    *output=ready.camera.output;clear_camera_capture();return result;
+                }
+                if(result!=C3X_RENDERER_RESULT_PENDING){camera_ticket=0;camera_image=nullptr;clear_camera_capture();}
+                return result;
+            }
+            if(client&&!client->flushed())return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+            c3x_renderer_i64 next=0;
+            int result=request_camera(image,*request,next);
+            if(result!=C3X_RENDERER_RESULT_PENDING)return result;
+            try{
+                camera_capture=demand;camera_identity=request->identity;
+                if(demand.tile_count)camera_tiles.assign(demand.tiles,demand.tiles+demand.tile_count);
+                else camera_tiles.clear();
+                if(demand.world_topology_count)camera_topology.assign(demand.world_topology,
+                    demand.world_topology+demand.world_topology_count);
+                else camera_topology.clear();
+                camera_capture.tiles=nullptr;camera_capture.world_topology=nullptr;
+            }catch(...){
+                if(camera_cancel)camera_cancel(camera_ticket);
+                camera_ticket=0;camera_image=nullptr;clear_camera_capture();throw;
+            }
+            return C3X_RENDERER_RESULT_PENDING;
+        }
         if(client)client->flush();
         c3x_renderer_gpu_frame_v1 next={sizeof(next)};
         int result=render(request,&next,output);if(result!=C3X_RENDERER_RESULT_OK)return result;
@@ -140,7 +194,12 @@ public:
         return prepare_image(image,next,*output,demand.tile_count?demand.tiles[0].anchor_x:0,demand.tile_count?demand.tiles[0].anchor_y:0);
     }
     int operation(int op,void* image,void* source,void const* from,void const* to,unsigned color){
-        check_thread();if(!adapter)return 0;
+        check_thread();
+        // Native unit state/visual capture already ran before this call. Until
+        // the first fresh map owns its canvas, there is no map body to compose
+        // into; admitting the old raster unit path here would resurrect it.
+        if(op==C3X_NATIVE_UNIT_DRAW&&scene_units&&(!adapter||!adapter->owns(image)))return 1;
+        if(!adapter)return 0;
         if(op==C3X_NATIVE_LINE_TARGET)return tactical&&adapter->owns(image)?1:0;
         if(op==C3X_NATIVE_STROKE){
             auto p=static_cast<c3x_renderer_native_stroke const*>(from);
@@ -221,7 +280,7 @@ public:
         }
         if(op==C3X_NATIVE_UNIT_DRAW){
             if(!from||!to)return 0;
-            if(scene_units&&adapter->owns(image)){
+            if(scene_units){
                 // The fresh scene owns the map body and depth. Forward only the
                 // copied native identity/pose; pending UI commands keep their
                 // normal order and are flushed at the display boundary.

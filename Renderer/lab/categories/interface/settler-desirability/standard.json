@@ -1,0 +1,23 @@
+{
+  "id": "settler-desirability",
+  "title": "Settler city-site desirability",
+  "depends_on": ["tactical-overlays"],
+  "implementation": [
+    "Renderer/lab/studies/settler_desirability/preview.py",
+    "Renderer/renderer.py"
+  ],
+  "recipe": {
+    "terrain": 2,
+    "feature": 2,
+    "objects": false,
+    "hours": [12],
+    "zooms": [128, 160, 192],
+    "cases": ["outlined", "coastal", "wash"]
+  },
+  "tests": ["Renderer.lab.studies.settler_desirability.test_preview"],
+  "references": {"d3d11": []},
+  "limitations": [
+    "Scores and settlement eligibility are synthetic; no live game evaluation is captured.",
+    "The terrain comes from the production renderer, but the highlight is a Lab-only CPU composition study."
+  ]
+}

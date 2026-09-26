@@ -117,18 +117,25 @@ public:
             pending=true;return true;
         }catch(...){return reject();}
     }
-    template<class Scene> bool apply(Scene& scene,bool& content_changed){
+    template<class Scene> bool apply(Scene& scene,bool& content_changed,
+                                     std::vector<std::pair<int,int>>* changed_tiles=nullptr){
         if(!pending)return true;
         // Retained-world admission may allocate. A partial adoption cannot
         // authorize output; keep the journal for retry instead of killing the
         // worker or spinning on the same failed allocation.
         try {
             content_changed=scene.publication_scope(latest->metadata,latest->identity,latest->configuration);
+            bool scope_changed=content_changed;
             // Keep the last adopted batch until different inputs arrive, so a
             // device reset can restore authority without allocating a new journal.
             if(content_changed)tile_pending=true;
-            if(tile_pending)for(auto const& item:updates)if(!scene.publish(item.second,content_changed)){
-                pending=false;return false;
+            if(tile_pending)for(auto const& item:updates){
+                auto before=scene.appearance_sequence();
+                if(!scene.publish(item.second,content_changed)){
+                    pending=false;return false;
+                }
+                if(changed_tiles && !scope_changed && scene.appearance_sequence()!=before)
+                    changed_tiles->emplace_back(item.second.tile_x,item.second.tile_y);
             }
         }catch(...){pending=false;return false;}
         pending=tile_pending=false;++applied;if(content_changed)++changed;return true;

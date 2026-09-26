@@ -119,6 +119,8 @@ struct State{
  std::mutex call_mutex,state_mutex;bool running=true,visual_delivery=true,visual_allowed=true,visual_present_pending=false;
  bool camera_active=false,camera_pending=false,camera_gpu=false;int camera_result=0,camera_ticket=0,gpu_camera_front_ticket=0;
  long long visual_last=0;unsigned long long visual_frames=0,visual_map_samples=0;
+ struct{c3x_renderer_frame_v1 frame={};}gpu_publication;
+ long long visual_ticks=0,visual_frequency=1;
  struct{void* window=nullptr;}gpu_present;
  struct Presenter{bool caller=true;int result=1;unsigned calls=0;bool caller_thread(){return caller;}bool view(){return true;}
   int present(bool){++calls;return result;}}gpu_presenter;
@@ -126,6 +128,7 @@ struct State{
   struct{double milliseconds(long long){return 0;}void write(char const*,char const*,bool){}}trace;}renderer_state;
  enum class Command{visual_frame};int draw_result=1;unsigned draws=0;
  int submit_locked(std::unique_lock<std::mutex>&,Command){++draws;return draw_result;}
+ void snapshot_fresh_units(c3x_renderer_frame_v1 const&,long long,long long){}
  void advance_visual_clock(){}void stop_visual_delivery(){visual_delivery=false;visual_present_pending=false;}
  struct ForegroundCameraPause{ForegroundCameraPause(State&,std::unique_lock<std::mutex>&){}};
 '''+body+r'''

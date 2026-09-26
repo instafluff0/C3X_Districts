@@ -81,8 +81,17 @@ public:
         wire->replay_clock=!live||replay_override;wire->clock_ticks=clock_ticks;wire->clock_frequency=clock_frequency;
         if(count)std::memcpy(wire->payload,bytes,count);
         HANDLE ready[2]={response,process};
-        if(!SetEvent(request)||WaitForMultipleObjects(2,ready,FALSE,120000)!=WAIT_OBJECT_0)
-            throw std::runtime_error("x64 scene helper response failed");
+        if(!SetEvent(request))throw std::runtime_error("x64 scene helper request signal failed");
+        DWORD const wait=WaitForMultipleObjects(2,ready,FALSE,120000);
+        if(wait==WAIT_OBJECT_0+1){
+            DWORD exit_code=0;
+            GetExitCodeProcess(process,&exit_code);
+            throw std::runtime_error("x64 scene helper exited before response, code="+
+                std::to_string(static_cast<unsigned long>(exit_code)));
+        }
+        if(wait!=WAIT_OBJECT_0)
+            throw std::runtime_error("x64 scene helper response wait failed, code="+
+                std::to_string(static_cast<unsigned long>(wait)));
         if(wire->magic!=wire_magic||wire->version!=wire_version||wire->sequence!=sequence||
            wire->kind!=kind||wire->subtype!=subtype||wire->size!=count||wire->reply_size>wire_capacity)
             throw std::runtime_error("x64 scene helper response header changed");

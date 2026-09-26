@@ -54,6 +54,8 @@ int main() {
         retire = source.split('\t// No publication survives unload;', 1)[1].split('\tis->custom_renderer_capture_world_topology = false;', 1)[0]
         retire = retire.split('\n', 1)[1]
         dispatch = '\tstruct c3x_renderer_camera_request_v1 request = {0};' + source.split('\tstruct c3x_renderer_camera_request_v1 request = {0};', 1)[1].split('\tif (is->custom_renderer_presented_frames == 0)', 1)[0]
+        dispatch = dispatch.replace('(void *)(*p_GetProcAddress)',
+            '(DWORD (*)(char const *, char *, DWORD))(*p_GetProcAddress)')
         run_cpp(r'''
 #include "Renderer/native/c3x_renderer_api.h"
 #include <cassert>
@@ -62,6 +64,16 @@ int main() {
 #include <cstdio>
 #include <vector>
 #include <algorithm>
+using DWORD=unsigned;
+#define WINAPI
+bool legacy_recovery=false;
+DWORD environment(char const*,char* value,DWORD capacity){
+ if(!legacy_recovery || capacity<2)return 0;
+ value[0]='1';value[1]=0;return 1;
+}
+void* lookup(void*,char const*){return reinterpret_cast<void*>(&environment);}
+auto p_GetProcAddress=&lookup;
+void log_custom_renderer_event(char const*,int){}
 struct LARGE_INTEGER {long long QuadPart=0;};
 void QueryPerformanceCounter(LARGE_INTEGER* p){p->QuadPart=1000;}
 void debug(char const*){} auto p_OutputDebugStringA=&debug;
@@ -92,6 +104,7 @@ int modern(c3x_renderer_camera_request_v1 const* r,c3x_renderer_output_v1*){
 }
 int legacy(c3x_renderer_frame_v1 const*,c3x_renderer_output_v1*){++legacy_calls;return 9;}
 struct State {
+ void* kernel32=nullptr;
  bool custom_renderer_async_drawing=false;
  c3x_renderer_camera_present_view_fn custom_renderer_camera_present=nullptr;
  long long custom_renderer_display_clock=0,custom_renderer_camera_ticket=0;
@@ -107,6 +120,7 @@ struct State {
  bool custom_renderer_world_audit_needed=true;
  c3x_renderer_world_reconcile_fn custom_renderer_world_reconcile=nullptr;
  unsigned custom_renderer_requested_frames=0;LARGE_INTEGER custom_renderer_qpc_frequency{1000};
+ unsigned custom_renderer_dirty_flags=0;bool custom_renderer_redraw_pending=false;
 } state;State* is=&state;
 ''' + world + '\nbool viewer(int visible_to_civ_id){\n' + viewer + '\nreturn true;}\nvoid retire(){\n' + retire + r'''
 }
@@ -135,8 +149,7 @@ int main(){
  tiles[6].Body.Fog_Of_War=32;state.custom_renderer_world_audit_needed=true;assert(capture_custom_renderer_world_topology());assert(state.custom_renderer_visibility_revision==++visibility);
  tiles[2].ground=4;state.custom_renderer_world_audit_needed=true;assert(capture_custom_renderer_world_topology());
  assert(state.custom_renderer_world_topology_revision==++topology && state.custom_renderer_visibility_revision==visibility);
- assert(demand()==7 && modern_calls==1 && !legacy_calls && state.custom_renderer_map_epoch==1);
- assert(received.map_epoch==1 && received.viewer_epoch==2 && received.visibility_epoch==visibility && received.scene_epoch==topology);
+ assert(demand()==C3X_RENDERER_RESULT_BAD_ARGUMENT && !modern_calls && !legacy_calls && state.custom_renderer_map_epoch==1);
  bic.Map={100,100};assert(capture_custom_renderer_world_topology());
  assert(state.custom_renderer_world_topology_count==5000 && largest_request==5000*sizeof(unsigned long long));
  // Either allocation may fail during shrink. Returning to the old map must
@@ -162,19 +175,24 @@ int main(){
  }
  retire();assert(!state.custom_renderer_world_visibility && !state.custom_renderer_visibility_revision);
  assert(state.custom_renderer_map_epoch==2 && !state.custom_renderer_viewer_epoch && state.custom_renderer_viewer_civ_id==-1);
- state.custom_renderer_render_view=nullptr;assert(demand()==9 && legacy_calls==1 && modern_calls==1);
+ legacy_recovery=true;state.custom_renderer_render_view=nullptr;
+ assert(demand()==9 && legacy_calls==1 && !modern_calls);
+ legacy_recovery=false;
  bic.Map={4,4};assert(capture_custom_renderer_world_topology() && !state.custom_renderer_world_visibility); // Older DLL compatibility.
  // The real map dispatch carries the same epochs through the resident owner,
  // and only an admission rejection permits the existing CPU path.
  state.custom_renderer_render_view=modern;state.custom_renderer_native_map=resident;
  state.custom_renderer_native_lifetime=[](int,void*,int){return 1;};
- assert(demand()==C3X_RENDERER_RESULT_OK&&resident_calls==1&&modern_calls==1&&legacy_calls==1);
+ assert(demand()==C3X_RENDERER_RESULT_OK&&resident_calls==1&&!modern_calls&&legacy_calls==1);
  assert(state.custom_renderer_display_clock==55&&received.map_epoch==state.custom_renderer_map_epoch);
  resident_result=C3X_RENDERER_RESULT_DEVICE_ERROR;
- assert(demand()==C3X_RENDERER_RESULT_DEVICE_ERROR&&modern_calls==1&&legacy_calls==1);
+ assert(demand()==C3X_RENDERER_RESULT_DEVICE_ERROR&&!modern_calls&&legacy_calls==1);
  resident_result=C3X_RENDERER_RESULT_BAD_ARGUMENT;
- assert(demand()==7&&modern_calls==2&&resident_calls==3);
- probe=false;assert(demand()==7&&modern_calls==3&&resident_calls==3);
+ assert(demand()==C3X_RENDERER_RESULT_BAD_ARGUMENT&&!modern_calls&&resident_calls==3);
+ resident_result=C3X_RENDERER_RESULT_PENDING;
+ assert(demand()==0&&state.custom_renderer_redraw_pending&&
+        (state.custom_renderer_dirty_flags&C3X_RENDERER_DIRTY_SCENE));
+ probe=false;assert(demand()==C3X_RENDERER_RESULT_BAD_ARGUMENT&&!modern_calls&&resident_calls==4);
  std::free(state.custom_renderer_world_topology);
 }
 ''')

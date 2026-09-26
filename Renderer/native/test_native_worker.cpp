@@ -10,6 +10,16 @@ bool native_worker_contract(char const* path,c3x_renderer_gpu_images_fn images,c
         state={};capture={};events.clear();lines.clear();
         HMODULE module=nullptr;verify(GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,reinterpret_cast<char const*>(images),&module)!=FALSE,"worker module");
         WorkerClient gpu(images,view);
+        // The fresh scene intentionally has different pixels from the legacy
+        // CPU map. Compare native insertion and UI composition against the
+        // image actually published by Renderer64, using one explicit oracle
+        // readback outside the timed/native map path.
+        std::vector<unsigned> fresh_map_oracle;
+        if(GetEnvironmentVariableA("C3X_RENDERER_NATIVE_FRESH_MAP_TEST",nullptr,0)){
+            fresh_map_oracle.resize(std::size_t(view.width)*view.height);
+            verify(gpu.readback(Id(view.map_image),fresh_map_oracle.data(),fresh_map_oracle.size()),"fresh map oracle");
+            pixels=fresh_map_oracle.data();
+        }
         if(native_adapter_contract(path,gpu,Id(view.map_image),pixels,view.width,phase_x,phase_y))return false;
         verify(gpu.stats().resident_bytes==std::int64_t(view.width)*view.height*4+64*48*8,"native drain leaves only immutable map and paired overlap scratch");
         auto canvas=gpu.create(16,16,Format::bgra32);

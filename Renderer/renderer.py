@@ -455,6 +455,25 @@ def scene(category, case, destination, *, world_size=32):
                     real = 7
                 if case == "gameplay" and x > 21:
                     base = real = 11 if x < 24 else 12
+            if category == "settler-desirability":
+                # Terrain context only. The mock eligibility/score field lives
+                # in the Lab study and is deliberately independent of terrain.
+                base = real = 1 if x < 12 else 2 if x < 19 else 3
+                if (x, y) in ((13, 13), (14, 14), (18, 12)):
+                    base, real = 2, 7
+                if (x, y) in ((12, 18), (17, 17)):
+                    base, real = 2, 5
+                if case == "coastal" and x >= 19:
+                    base = real = 11 if x < 21 else 12
+            if category == "borders":
+                # Landscape context for the one-city territory study. Tile
+                # ownership and border paint are composed separately in Lab.
+                c = (x + y) // 2
+                base = real = 1 if c < 14 else 2 if c < 19 else 3
+                if (x, y) in ((12, 12), (13, 13), (19, 13), (20, 14)):
+                    base, real = 2, 7
+                if (x, y) in ((12, 18), (22, 16)):
+                    base, real = 2, 5
             rows.append(f"{x},{y},{base},{real},0,0,{river}")
     destination.write_text(f"C3X_BIQ_TERRAIN_V3,{world_size},{world_size},{len(rows)}\n" + "\n".join(rows) + "\n")
 
@@ -498,7 +517,9 @@ def native_render(category, case, hour, zoom, output, *, behavior=None, center=(
         "C3X_RENDERER_TRACE_FILE": "", "C3X_RENDERER_PREVIEW_COLOR": "",
         "C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS": r"..\..\Renderer\custom.custom_rendering.txt",
         "C3X_RENDERER_PREVIEW_OBJECTS": "1" if standard(category)["recipe"]["objects"] and category != "shadows" else "",
-        "C3X_RENDERER_PREVIEW_CITY": "0,3,1,1",
+        "C3X_RENDERER_PREVIEW_CITY": "0,1,1,0,0" if category == "borders" else "0,3,1,1",
+        "C3X_RENDERER_PREVIEW_CITY_ONLY": "1" if category == "borders" else "",
+        "C3X_RENDERER_PREVIEW_CITY_SITE": "16,16" if category == "borders" else "",
         "C3X_RENDERER_PREVIEW_REPLAY": "", "C3X_RENDERER_PREVIEW_MINIMAP": "",
         "C3X_RENDERER_PREVIEW_EDITS": "", "C3X_RENDERER_PREVIEW_ANIMATION": "",
         "C3X_RENDERER_PREVIEW_UNITS": "", "C3X_RENDERER_PREVIEW_VISIBILITY": "", "C3X_RENDERER_PREVIEW_SEASON": "0",
@@ -597,8 +618,16 @@ def native_render(category, case, hour, zoom, output, *, behavior=None, center=(
                 raise ValueError("Volcano lifecycle witness did not complete")
     if behavior:
         verify_behavior_output(behavior, result.get("output_tail", ""))
+    if category in ("settler-desirability", "borders"):
+        if category == "borders":
+            from Renderer.lab.studies.borders.preview import render_bitmap
+            render_bitmap(image, zoom, case, csv)
+        else:
+            from Renderer.lab.studies.settler_desirability.preview import render_bitmap
+            render_bitmap(image, zoom, case)
     return {"image": relative(image), "sha256": checksum(image), "dll_sha256": checksum(dll),
-            "case": case, "hour": hour, "zoom": zoom, "backend": "d3d11", "fixture": "synthetic"}
+            "case": case, "hour": hour, "zoom": zoom, "backend": "d3d11",
+            "fixture": "synthetic_lab_overlay" if category in ("settler-desirability", "borders") else "synthetic"}
 
 
 def verify_behavior_output(behavior, output):
@@ -765,6 +794,18 @@ def render(category, *, selected_case=None):
     result = {"category": category, "outputs": outputs,
               "implementation_identity": signature, "input_signature": signature, "recipe": recipe}
     write(out / "render.json", result)
+    if category in ("settler-desirability", "borders"):
+        from PIL import Image, ImageDraw
+        panels = Image.new("RGB", (3 * 322, ((len(outputs) + 2) // 3) * 268), "#232b27")
+        pen = ImageDraw.Draw(panels)
+        for index, entry in enumerate(outputs):
+            with Image.open(local(entry["image"])) as source:
+                thumb = source.convert("RGB").resize((320, 240), Image.Resampling.LANCZOS)
+            x, y = (index % 3) * 322, (index // 3) * 268
+            panels.paste(thumb, (x, y + 22))
+            pen.text((x + 6, y + 5), f'{entry["case"]} / tile {entry["zoom"]}', fill="white")
+        panels.save(out / "examples.png")
+        print(relative(out / "examples.png"))
     print(relative(out / "render.json"))
     return result
 

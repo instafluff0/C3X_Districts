@@ -8,7 +8,7 @@ python3 Renderer/lab/studies/terrain/test_biq.py --dll Renderer/native/build/gra
 ```
 
 The script exports the unchanged BIQ to a preview scene and records input and
-image hashes for two camera distances and noon/evening lighting. Candidate
+image hashes for three camera distances and noon/evening lighting. Candidate
 screenshots stay under ignored `Renderer/lab/out/`; nothing is staged into the
 game installation.
 
@@ -31,6 +31,24 @@ restores the original desert dune footprint, height, and normal. Grassland and
 plains patches fade with their interpolated biome ownership. Compare the
 `plains-close` view against the baseline at the desert edge before changing
 biome mixing or decal coverage again.
+
+At maximum preview zoom, faint section lines remain in some grassy areas.
+The older baseline shows the broad pattern too. Removing the new decals,
+normal boost, and color modulation individually did not remove it. A
+constant-color terrain diagnostic identified the straight polygon edges as
+the handoff between two ground providers: ordinary terrain and the larger
+mountain-neighborhood relief surface. `terrain_mesh_body.h` intentionally omits
+ordinary ground in the nine-tile mountain neighborhood; `relief_mesh_body.h`
+emits a full replacement grid, including its flat fringe. That fringe uses a
+different shader and height-field normal calculation from ordinary terrain.
+The two providers therefore change shading at the neighborhood edge even
+where mountain displacement is zero. Culling flat relief triangles exposed
+the dark underlay because ordinary ground is absent there; it cannot repair
+the seam by itself. The diagnostic changes were reverted. Grass/plains decals
+now reach tile edges, and the relief provider samples the same new world-space
+color modulation, but the provider handoff still needs matched normals and
+material response. Compare desert and coastline joins before any visual
+promotion.
 
 This candidate improves material texture and light-facing detail. It does not
 add terrain elevation or new cast shadows to flat grassland/plains. True

@@ -14,19 +14,22 @@ int main(){
  c3x_renderer_frame_v1 frame{};frame.world_width_tiles=frame.world_height_tiles=40;
  frame.world_topology=topology.data();frame.world_topology_count=800;
  c3x_renderer_camera_identity_v1 id{1,1,1,1};bool changed=false;
+ std::vector<std::pair<int,int>> changed_tiles;
  c3x_renderer_tile_v1 tile{};tile.tile_x=4;tile.tile_y=4;tile.city_id=7;tile.resource_id=3;
  tile.tile_flags=C3X_RENDERER_TILE_TOPOLOGY_HALO|C3X_RENDERER_TILE_PREFETCH|
    C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_EXPLORED|C3X_RENDERER_TILE_VISIBLE;
  frame.tiles=&tile;frame.tile_count=1;
- assert(journal.capture(frame,id)&&journal.apply(scene,changed));
+ assert(journal.capture(frame,id)&&journal.apply(scene,changed,&changed_tiles));
  auto key=scene.key(4,4);assert(scene.retained(key)->appearance.city_id==7);
  tile.tile_flags&=~(C3X_RENDERER_TILE_PREFETCH|C3X_RENDERER_TILE_VISIBLE);
  tile.city_id=99;tile.resource_id=8; // hidden live values must not replace memory
- assert(journal.capture(frame,id)&&journal.apply(scene,changed));
+ changed_tiles.clear();assert(journal.capture(frame,id)&&journal.apply(scene,changed,&changed_tiles));
+ assert(changed_tiles.empty());
  auto hidden=scene.retained(key);assert(hidden->appearance.city_id==7&&hidden->appearance.resource_id==3);
  assert(!(hidden->visibility_flags&C3X_RENDERER_TILE_VISIBLE));
  tile.tile_flags|=C3X_RENDERER_TILE_PREFETCH|C3X_RENDERER_TILE_VISIBLE;
- assert(journal.capture(frame,id)&&journal.apply(scene,changed));
+ changed_tiles.clear();assert(journal.capture(frame,id)&&journal.apply(scene,changed,&changed_tiles));
+ assert(changed_tiles.size()==1&&changed_tiles[0].first==4&&changed_tiles[0].second==4);
  assert(scene.retained(key)->appearance.city_id==99&&scene.retained(key)->appearance.resource_id==8);
 }
 ''')

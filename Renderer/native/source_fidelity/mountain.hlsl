@@ -405,6 +405,17 @@ void ground_material(P input, out float3 albedo, out float height_detail,
         float2(input.world.y, -input.world.x) * 0.183 + float2(0.61, 0.29)).r * 0.28;
     albedo *= lerp(float3(0.88, 0.94, 0.97),
                    float3(1.09, 1.045, 0.91), saturate(broad));
+    // Keep the grass/plains detail response continuous where a relief patch
+    // takes over from the ordinary terrain mesh. Both paths sample the same
+    // world-space field; desert and tundra keep their original response.
+    float grass_plains_detail = saturate(1 - tundra_weight - desert_weight) *
+        (1 - smoothstep(0.06, 0.45, input.material.z));
+    albedo *= 1 + clamp((saturate(broad) - 0.30) * 0.55, -0.12, 0.15) *
+              grass_plains_detail;
+    float grain = GroundSurfaceDetail.Sample(Wrap,
+        input.world.xy * 0.61 + float2(0.41, 0.73)).r;
+    albedo *= 1 + clamp((grain - 0.303) * 0.9, -0.16, 0.22) *
+              grass_plains_detail;
 #else
     float2 uv = input.world.xy * 0.27 + 0.5;
     albedo = GrassColor.Sample(Wrap, uv).rgb;

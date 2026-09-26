@@ -574,7 +574,7 @@ public:
     c3x_renderer::city_fidelity::Glow region_glow;
     c3x_renderer::environment_refresh::Reflection reflection;
     c3x_renderer::environment_refresh::Reflection region_reflection;
-    std::string fidelity_root;
+    std::string fidelity_root,shader_root;
     c3x_renderer::fidelity::Natural natural;
     c3x_renderer::fidelity::TerrainPreparation terrain_preparation;
     c3x_renderer::fidelity::GroundTask::Queue ground_preparation;
@@ -1371,9 +1371,9 @@ public:
         auto compile_terrain_shader = [this](char const * entry, char const * target,
                                              ID3DBlob ** blob) {
             std::string selected_shader=integrated_shader_path;
-            if(fidelity_profile && std::strstr(entry,"Feature"))selected_shader=fidelity_root+(city_profile?"/Renderer/native/city_fidelity/feature.hlsl":environment_profile?"/Renderer/native/environment_refresh/feature.hlsl":"/Renderer/native/render_core/terrain_scene.hlsl");
+            if(fidelity_profile && std::strstr(entry,"Feature"))selected_shader=shader_root+(city_profile?"/Renderer/native/city_fidelity/feature.hlsl":environment_profile?"/Renderer/native/environment_refresh/feature.hlsl":"/Renderer/native/render_core/terrain_scene.hlsl");
             if(city_profile && (!std::strcmp(entry,"VSResourceBody") || !std::strcmp(entry,"VSResourceShadow")))
-                selected_shader=fidelity_root+"/Renderer/native/city_fidelity/"+
+                selected_shader=shader_root+"/Renderer/native/city_fidelity/"+
                     (std::strcmp(entry,"VSResourceBody")==0?"resource_body.hlsl":"resource_shadow.hlsl");
             int count = MultiByteToWideChar(CP_UTF8, 0, selected_shader.c_str(),
                                             -1, nullptr, 0);
@@ -1556,7 +1556,7 @@ public:
             desc.ByteWidth = 80;
             if (SUCCEEDED(hr)) hr = device->CreateBuffer(&desc, nullptr, &shadow_settings_buffer);
             if (SUCCEEDED(hr) && !linear_output.ensure(device)) hr = E_FAIL;
-            std::string source_path=fidelity_profile ? fidelity_root+(city_profile?"/Renderer/native/city_fidelity/source_caster.hlsl":environment_profile?"/Renderer/native/environment_refresh/source_caster.hlsl":"/Renderer/native/render_core/source_caster.hlsl") : integrated_shader_path.substr(0,integrated_shader_path.find_last_of("\\/"))+"/source_caster.hlsl";
+            std::string source_path=fidelity_profile ? shader_root+(city_profile?"/Renderer/native/city_fidelity/source_caster.hlsl":environment_profile?"/Renderer/native/environment_refresh/source_caster.hlsl":"/Renderer/native/render_core/source_caster.hlsl") : integrated_shader_path.substr(0,integrated_shader_path.find_last_of("\\/"))+"/source_caster.hlsl";
             int count=MultiByteToWideChar(CP_UTF8,0,source_path.c_str(),-1,nullptr,0);
             std::wstring wide(static_cast<std::size_t>(count),L'\0');
             MultiByteToWideChar(CP_UTF8,0,source_path.c_str(),-1,wide.data(),count);
@@ -2780,12 +2780,18 @@ public:
 #endif
         fidelity_shadow_control=GetEnvironmentVariableA("C3X_RENDERER_FIDELITY_SHADOW_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0;
         fidelity_root = mod_root ? mod_root : "";
+        shader_root=fidelity_root;
+        char shader_override[4*MAX_PATH]={};
+        DWORD shader_length=GetEnvironmentVariableA("C3X_RENDERER_SHADER_SOURCE_ROOT",
+            shader_override,DWORD(std::size(shader_override)));
+        if(shader_length>=std::size(shader_override))return false;
+        if(shader_length)shader_root=shader_override;
         bool use_pickup = std::strcmp(requested_profile, "frozen") != 0;
         if (pickup_profile != use_pickup) reset();
         pickup_profile = use_pickup;
         char shader_path[4 * MAX_PATH];
         if (mod_root != nullptr &&
-            pack_path(mod_root, city_profile ? "Renderer\\native\\city_fidelity\\hydrology.hlsl" : environment_profile ? "Renderer\\native\\environment_refresh\\hydrology.hlsl" : fidelity_profile ? "Renderer\\native\\source_fidelity\\hydrology.hlsl" : pickup_profile ? "Renderer\\native\\render_core\\terrain_scene.hlsl" :
+            pack_path(shader_root.c_str(), city_profile ? "Renderer\\native\\city_fidelity\\hydrology.hlsl" : environment_profile ? "Renderer\\native\\environment_refresh\\hydrology.hlsl" : fidelity_profile ? "Renderer\\native\\source_fidelity\\hydrology.hlsl" : pickup_profile ? "Renderer\\native\\render_core\\terrain_scene.hlsl" :
                       "Renderer\\native\\integrated_terrain.hlsl",
                       shader_path, std::size(shader_path)) &&
             GetFileAttributesA(shader_path) != INVALID_FILE_ATTRIBUTES)
@@ -4657,7 +4663,7 @@ public:
         if(glow.native_extent!=w || glow.native_height!=h || !glow.linear.color){
             scene_reflection_cells.clear();scene_dynamic_damage.clear();scene_static_signature=0;scene_overlap=false;
         }
-        if(!glow.ensure(device,fidelity_root,w,h,true)){
+        if(!glow.ensure(device,shader_root,w,h,true)){
             trace.write("scene-surface-failed","working attachments",true);return false;
         }
         if(!scene_restore.ensure(device)){
@@ -6928,6 +6934,10 @@ public:
             legacy_control,sizeof(legacy_control)) && !std::strcmp(legacy_control,"1");
         bool const fresh_scene_path = gpu_output_mode && scene_surface_requested &&
             city_profile && !prewarming && !force_legacy;
+        if(gpu_output_mode && !prewarming && !force_legacy && !fresh_scene_path){
+            trace.write("fresh-path-required","fresh scene prerequisites unavailable; explicit legacy control required for recovery",true);
+            return false;
+        }
         if(fresh_scene_path && fresh_path_failed){
             trace.write("fresh-path-required","previous fresh draw failed; explicit legacy control required for recovery",true);
             return false;
@@ -6936,7 +6946,7 @@ public:
             trace.write("map-path",fresh_scene_path?"fresh":"explicit-legacy-or-unsupported",true);
         // A CPU control render can have a valid bitmap cache but no published
         // GPU map. The recovery renderer must create a real GPU image first.
-        if(gpu_output_mode && !fresh_scene_path && !gpu_map_valid)cache_valid=false;
+        if(gpu_output_mode && !prewarming && !fresh_scene_path && !gpu_map_valid)cache_valid=false;
 #else
         bool const fresh_scene_path = false;
 #endif
@@ -7054,15 +7064,15 @@ public:
             }
             trace.write("coastal-wave-pack",wave_ready?"enabled":"disabled or unavailable; terrain retained",true);
         }
-        if(fidelity_profile && !natural.load(device,fidelity_root,read_fidelity,upload_fidelity,city_profile?"city_fidelity":environment_profile?"environment_refresh":"source_fidelity")) {
+        if(fidelity_profile && !natural.load(device,shader_root,read_fidelity,upload_fidelity,city_profile?"city_fidelity":environment_profile?"environment_refresh":"source_fidelity")) {
             trace.write("source-fidelity-failed",natural.failure.c_str(),true);return false;
         }
         load_phase("load-natural");
-        if(environment_profile && !reflection.ensure(device,fidelity_root,city_profile?"city_fidelity":"environment_refresh",city_profile?144:136)){
+        if(environment_profile && !reflection.ensure(device,shader_root,city_profile?"city_fidelity":"environment_refresh",city_profile?144:136)){
             trace.write("reflection-failed","shader initialization",true);return false;
         }
         load_phase("load-reflection");
-        if(city_profile && !cities.load(device,fidelity_root,read_fidelity,upload_fidelity)){
+        if(city_profile && !cities.load(device,shader_root,read_fidelity,upload_fidelity)){
             trace.write("city-composition-failed","pack/material initialization; native fallback",true);return false;
         }
         load_phase("load-city");
@@ -7071,10 +7081,10 @@ public:
         // The fresh map has its own native-size glow targets. Retain the old
         // guarded/region targets only for a recovery render; their allocation
         // has no consumer on the normal scene path.
-        if(city_profile && !fresh_scene_path && !city_glow.ensure(device,fidelity_root)){trace.write("city-composition-failed","guarded glow initialization",true);return false;}
-        if(city_profile && scene_region_size!=128 &&
-           ((!fresh_scene_path && !region_glow.ensure(device,fidelity_root,unsigned(scene_region_size+8),unsigned(scene_region_height+8))) ||
-            !region_reflection.ensure(device,fidelity_root,"city_fidelity",unsigned(scene_region_size+16),unsigned(scene_region_height+16)))) {
+        if(city_profile && !fresh_scene_path && !city_glow.ensure(device,shader_root)){trace.write("city-composition-failed","guarded glow initialization",true);return false;}
+        if(city_profile && scene_region_size!=128 && !fresh_scene_path &&
+           (!region_glow.ensure(device,shader_root,unsigned(scene_region_size+8),unsigned(scene_region_height+8)) ||
+            !region_reflection.ensure(device,shader_root,"city_fidelity",unsigned(scene_region_size+16),unsigned(scene_region_height+16)))) {
             trace.write("region-scratch-failed","bounded guarded region initialization",true);return false;
         }
         load_phase("load-glow");
@@ -7689,7 +7699,7 @@ public:
 #endif
         if(shared_rigid){
             auto bytes=rigid_sources.bytes;auto allocations=rigid_sources.allocations;
-            if(!rigid_sources.ensure(device,fidelity_root,object_assets))return false;
+            if(!rigid_sources.ensure(device,shader_root,object_assets))return false;
             frame_upload_bytes+=rigid_sources.bytes-bytes;frame_content_uploads+=rigid_sources.allocations-allocations;
         }
         // Beyond the nearby GPU working set, prepare all core tiles into the
@@ -10126,7 +10136,9 @@ public:
             geometry_vertex_buffers[geometry_wave].clear();
             trace.write("fresh-wave", "begin", true);
             if(!prepare_wave_chunks(frame)){
-                fresh_path_failed=true;return false;
+                fresh_path_failed=true;
+                trace.write("fresh-path-required","coastal wave preparation failed",true);
+                return false;
             }
             trace.write("fresh-wave", "ready", true);
             D3D11_TEXTURE2D_DESC description={};
@@ -10137,10 +10149,18 @@ public:
                 description.MipLevels=description.ArraySize=description.SampleDesc.Count=1;
                 description.Format=DXGI_FORMAT_B8G8R8A8_UNORM;
                 description.BindFlags=D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE;
-                if(FAILED(device->CreateTexture2D(&description,nullptr,&gpu_map_texture)))return false;
+                if(FAILED(device->CreateTexture2D(&description,nullptr,&gpu_map_texture))){
+                    fresh_path_failed=true;
+                    trace.write("fresh-path-required","native map target allocation failed",true);
+                    return false;
+                }
             }
             ID3D11RenderTargetView* target=nullptr;
-            if(FAILED(device->CreateRenderTargetView(gpu_map_texture,nullptr,&target)))return false;
+            if(FAILED(device->CreateRenderTargetView(gpu_map_texture,nullptr,&target))){
+                fresh_path_failed=true;
+                trace.write("fresh-path-required","native map target view failed",true);
+                return false;
+            }
             LARGE_INTEGER draw_start={},draw_end={};QueryPerformanceCounter(&draw_start);
             bool drawn=c3x_renderer64_render_fresh(frame,target);
             target->Release();QueryPerformanceCounter(&draw_end);
@@ -11841,8 +11861,15 @@ public:
         }
         if(cpu_pixels){*cpu_x=job_unit.body_x;*cpu_y=job_unit.body_y;}
 #ifdef C3X_RENDERER64_FRESH
-        if(gpu_target && gpu_publication.fresh &&
-           !renderer_state.fresh_path_failed){
+        char legacy_unit_control[8]{};
+        bool const legacy_unit=GetEnvironmentVariableA("C3X_RENDERER64_LEGACY",
+            legacy_unit_control,sizeof(legacy_unit_control)) && !std::strcmp(legacy_unit_control,"1");
+        if(gpu_target && !legacy_unit){
+            if(!gpu_publication.fresh || renderer_state.fresh_path_failed){
+                renderer_state.trace.write("fresh-unit-required",
+                    "no fresh map publication; explicit legacy control required for recovery",true);
+                return C3X_RENDERER_RESULT_ERROR;
+            }
             if(bounds){
                 int scale=job_unit.projection_scale_milli>0?job_unit.projection_scale_milli:
                     (job_unit.reduced?500:1000);
@@ -12386,8 +12413,9 @@ private:
     // sleep-driven animation clock or second D3D context crosses this boundary.
     struct GpuOutputMode {
         RendererState& state;bool previous;
-        GpuOutputMode(RendererState& s,bool gpu):state(s),previous(s.gpu_output_mode){
-            state.gpu_output_mode=gpu;if(gpu){state.gpu_map_valid=false;state.cpu_output_stale=true;}
+        GpuOutputMode(RendererState& s,bool gpu,bool preparation=false):state(s),previous(s.gpu_output_mode){
+            state.gpu_output_mode=gpu;
+            if(gpu && !preparation){state.gpu_map_valid=false;state.cpu_output_stale=true;}
         }
         ~GpuOutputMode(){state.gpu_output_mode=previous;}
     };
@@ -12615,9 +12643,15 @@ private:
             // immutable while a render is running outside this gate.
             if(scene_changes.ready()){
                 auto scope=renderer_state.topology_cache.scope_sequence();
-                bool changed=false;scene_changes_ok=scene_changes.apply(renderer_state.topology_cache,changed);
+                bool changed=false;std::vector<std::pair<int,int>> changed_tiles;
+                scene_changes_ok=scene_changes.apply(renderer_state.topology_cache,changed,&changed_tiles);
                 if(scope!=renderer_state.topology_cache.scope_sequence()){
                     renderer_state.world_preparation_queue.clear();renderer_state.world_backing.clear();
+                    world_schedule.clear();
+                }else if(scene_changes_ok){
+                    auto state=scene_changes.state();
+                    for(auto const& tile:changed_tiles)
+                        world_schedule.invalidate(state->metadata,tile.first,tile.second);
                 }
                 world_authoritative=unsigned(renderer_state.topology_cache.authoritative_size());
                 world_appearance_sequence=renderer_state.topology_cache.appearance_sequence();
@@ -12686,7 +12720,11 @@ private:
                         if(!scene_changes_ok)throw std::runtime_error("authoritative scene publication unavailable");
                         bool supported=renderer_state.scene_surface_requested && renderer_state.city_profile &&
                             c3x_renderer::render_core::scene_surface_extent(job_frame.target_width,job_frame.target_height);
-                        if(!supported)result=C3X_RENDERER_RESULT_BAD_ARGUMENT;
+                        if(!supported){
+                            renderer_state.trace.write("fresh-path-required",
+                                "GPU camera lacks scene surface or visual preparation; no legacy map render",true);
+                            result=C3X_RENDERER_RESULT_BAD_ARGUMENT;
+                        }
                         else {
                             GpuOutputMode mode(renderer_state,true);
                             c3x_renderer_output_v1 output={C3X_RENDERER_API_VERSION,sizeof(output)};
@@ -12864,7 +12902,7 @@ private:
                 continue;
             }
             if(!has_job && !stop_requested && !camera_pending && !camera_paused && !renderer_state.memory_pressured && scene_changes_ok &&
-               !(camera_gpu && camera_ready.resident.texture) && renderer_state.world_preparation && renderer_state.cache_valid){
+               renderer_state.world_preparation && renderer_state.cache_valid){
                 auto state=scene_changes.state();auto const& scene=renderer_state.topology_cache;
                 // Build camera-independent regions from one complete authority
                 // snapshot. Starting while pages are still arriving repeats
@@ -12873,7 +12911,7 @@ private:
                 if(state && state->topology && state->metadata.world_topology_count &&
                    world_input.passes>0){
                     world_prepare_sequence=scene.appearance_sequence();
-                    world_schedule.configure(state->metadata,world_prepare_sequence,scene.scope_sequence(),
+                    world_schedule.configure(state->metadata,scene.scope_sequence(),
                         renderer_state.content_revision,renderer_state.device_generation);
                     unsigned count=c3x_renderer::render_core::WorldPreparationRegion::count(state->metadata);
                     if(!world_schedule.empty()){
@@ -12882,17 +12920,19 @@ private:
                         auto sequence=world_prepare_sequence;auto region=world_schedule.next();
                         foreground_pending.store(false,std::memory_order_relaxed);lock.unlock();
                         LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
-                        bool ok=false;unsigned built=0,reused=0;
+                        bool ok=false,lease_built=false;unsigned built=0,reused=0,selected_count=0;
                         try{
                             c3x_renderer::render_core::WorldPreparationRegion input;
-                            if(input.build(scene,frame,region)){
+                            lease_built=input.build(scene,frame,region);
+                            if(lease_built){
+                                selected_count=unsigned(input.selected.size());
                                 if(input.selected.empty())ok=true;
                                 else {
                                     c3x_renderer_output_v1 unused{};
                                     // Nonzero signature forces the observation lease to
                                     // switch when visiting another preparation region.
                                     auto signature=c3x_renderer::terrain_frame_signature(input.frame,renderer_state.content_revision,renderer_state.device_generation).complete;
-                                    GpuOutputMode mode(renderer_state,true);
+                                    GpuOutputMode mode(renderer_state,true,true);
                                     ok=renderer_state.render(input.frame,unused,int(input.selected.front()),&foreground_pending,
                                         signature,input.selected.data(),unsigned(input.selected.size()),&frame);
                                     built=renderer_state.frame_tiles_built;reused=renderer_state.frame_tiles_reused;
@@ -12906,8 +12946,8 @@ private:
                         prepared_tiles+=built;if(cancelled)++cancelled_tiles;
                         unavailable_tiles=world_schedule.unavailable;
                         publish_preparation_progress();
-                        char detail[256];sprintf_s(detail,"sequence=%llu region=%u regions=%u ok=%u cancelled=%u built=%u reused=%u unavailable=%u geometry_bytes=%zu ms=%.3f",
-                            sequence,region,count,unsigned(ok),unsigned(cancelled),built,reused,world_schedule.unavailable,
+                        char detail[320];sprintf_s(detail,"sequence=%llu region=%u regions=%u ok=%u lease=%u selected=%u retained=%zu authoritative=%zu cancelled=%u built=%u reused=%u unavailable=%u geometry_bytes=%zu ms=%.3f",
+                            sequence,region,count,unsigned(ok),unsigned(lease_built),selected_count,scene.size(),scene.authoritative_size(),unsigned(cancelled),built,reused,world_schedule.unavailable,
                             renderer_state.tile_geometry_cache_bytes,renderer_state.trace.milliseconds(end.QuadPart-begin.QuadPart));
                         renderer_state.trace.write("world-region-prepared",detail,true);
                         continue;
@@ -13640,7 +13680,11 @@ void remote_world_capture_tick(UINT_PTR id){
         c3x_renderer_tile_v1 records[128]={};page.tiles=records;
         int captured=remote_world_capture(&page);
         if(remote_renderer->world_submit(page,captured)!=C3X_RENDERER_RESULT_OK)return;
-        if(page.first+page.count==page.frame.world_topology_count){
+        // The remote page query carries frame scalars, not the topology array
+        // length. The indexed world always has one record per checkerboard
+        // tile, so use its dimensions to end this one-time capture pass.
+        unsigned total=unsigned(page.frame.world_width_tiles)*unsigned(page.frame.world_height_tiles)/2;
+        if(total && page.first+page.count==total){
             remote_world_snapshot_complete=true;KillTimer(nullptr,remote_world_timer);remote_world_timer=0;return;
         }
     }
@@ -14105,7 +14149,15 @@ extern "C" __declspec(dllexport) int c3x_renderer_gpu_render(
     try{int code=remote_renderer_requested()?remote_renderer_backend()->render(*request,*view,*metadata):
         get_renderer_worker().render_gpu(*request,*view,*metadata);
         return input.result(code,[&](auto& out){out(view->ticket);out(view->map_image);out(view->session);c3x_inputs::gpu_witness(out,*view,*metadata,code);});}
-    catch(...){return input.result(C3X_RENDERER_RESULT_ERROR,[](auto& out){out.u64(0);out.u64(0);out.u64(0);out.u32(0);});}
+    catch(std::exception const& failure){
+        char detail[512];std::snprintf(detail,sizeof(detail),"[C3X renderer] fresh GPU request failed: %s\n",failure.what());
+        OutputDebugStringA(detail);std::fputs(detail,stderr);
+        return input.result(C3X_RENDERER_RESULT_ERROR,[](auto& out){out.u64(0);out.u64(0);out.u64(0);out.u32(0);});
+    }
+    catch(...){
+        OutputDebugStringA("[C3X renderer] fresh GPU request failed: unknown exception\n");
+        return input.result(C3X_RENDERER_RESULT_ERROR,[](auto& out){out.u64(0);out.u64(0);out.u64(0);out.u32(0);});
+    }
 }
 #ifdef C3X_HELPER_TRIAL
 extern "C" __declspec(dllexport) void c3x_renderer_trial_trace_flush(){renderer.trace.flush();}
@@ -14471,7 +14523,7 @@ extern "C" __declspec(dllexport) int c3x_renderer_native_navigation(int action,v
         return finish(native_composition->navigate(action,image,*view,request));
     }catch(std::exception const& e){OutputDebugStringA(e.what());return finish(C3X_RENDERER_RESULT_DEVICE_ERROR);}
 }
-// The exact compatibility entry shares preparation/commit with nonblocking polls.
+// Native map admission shares preparation/commit with nonblocking camera polls.
 extern "C" __declspec(dllexport) int c3x_renderer_native_map(int action,void* image,
     c3x_renderer_camera_request_v1 const* request,c3x_renderer_output_v1* output){
     if(action==C3X_NATIVE_MAP_PREPARE&&(!request||request->version!=C3X_RENDERER_CAMERA_VIEW_VERSION||

@@ -26,6 +26,8 @@
     "goody-huts": "objects/goody-huts",
     "barbarian-camps": "objects/barbarian-camps",
     "ocean-waves": "water/ocean-waves",
-    "tactical-overlays": "interface/tactical-overlays"
+    "tactical-overlays": "interface/tactical-overlays",
+    "borders": "interface/borders",
+    "settler-desirability": "interface/settler-desirability"
   }
 }

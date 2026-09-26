@@ -28890,19 +28890,35 @@ composite_custom_renderer_frame ()
 		is->custom_renderer_display_clock = displayed.frame.presentation_time_ticks;
 	} else if (resident_result != C3X_RENDERER_RESULT_BAD_ARGUMENT) render_result = resident_result;
 	else {
-		if (is->custom_renderer_async_drawing)
-			render_result = is->custom_renderer_camera_present (&request, &displayed);
-		if (render_result == C3X_RENDERER_RESULT_OK) {
-			output = displayed.output;
-			is->custom_renderer_display_clock = displayed.frame.presentation_time_ticks;
+		char legacy_control[8] = {0};
+		DWORD (WINAPI * get_environment) (char const *, char *, DWORD) =
+			(void *)(*p_GetProcAddress) (is->kernel32, "GetEnvironmentVariableA");
+		bool explicit_legacy = get_environment != NULL &&
+			get_environment ("C3X_RENDERER64_LEGACY", legacy_control, sizeof legacy_control) != 0 &&
+			strcmp (legacy_control, "1") == 0;
+		if (! explicit_legacy) {
+			render_result = resident_result;
+			if (render_result == C3X_RENDERER_RESULT_BAD_ARGUMENT)
+				log_custom_renderer_event ("fresh-map-required", render_result);
 		} else {
-			// A fresh complete capture failed the display proof. Do not expose stale
-			// content or a partial preview; exact render also drains incompatible work.
-			is->custom_renderer_camera_ticket = 0;
-			render_result = is->custom_renderer_render_view != NULL ?
-				is->custom_renderer_render_view (&request, &output) : is->custom_renderer_render (&frame, &output);
-			is->custom_renderer_display_clock = frame.presentation_time_ticks;
+			if (is->custom_renderer_async_drawing)
+				render_result = is->custom_renderer_camera_present (&request, &displayed);
+			if (render_result == C3X_RENDERER_RESULT_OK) {
+				output = displayed.output;
+				is->custom_renderer_display_clock = displayed.frame.presentation_time_ticks;
+			} else {
+				// Explicit recovery retains the old exact map path.
+				is->custom_renderer_camera_ticket = 0;
+				render_result = is->custom_renderer_render_view != NULL ?
+					is->custom_renderer_render_view (&request, &output) : is->custom_renderer_render (&frame, &output);
+				is->custom_renderer_display_clock = frame.presentation_time_ticks;
+			}
 		}
+	}
+	if (render_result == C3X_RENDERER_RESULT_PENDING) {
+		is->custom_renderer_dirty_flags |= C3X_RENDERER_DIRTY_SCENE;
+		is->custom_renderer_redraw_pending = true;
+		return false;
 	}
 	if (is->custom_renderer_presented_frames == 0)
 		log_custom_renderer_event ("render-done", render_result);
@@ -29104,7 +29120,7 @@ patch_Map_Renderer_m19_Draw_Tile_by_XY_and_Flags (Map_Renderer * this, int edx, 
 				capture_custom_renderer_topology (param_1, param_5);
 				composite_custom_renderer_frame ();
 			}
-			if (is->custom_renderer_async_drawing && ! is->custom_renderer_async_presented) {
+			if (! is->custom_renderer_async_presented) {
 				JGL_Image * failed_image = ((PCX_Image *)this)->JGL.Image;
 				if (failed_image != NULL)
 					PCX_Image_fill_area ((PCX_Image *)this, __, &failed_image->Image_Rect, -2147483647 - 1);

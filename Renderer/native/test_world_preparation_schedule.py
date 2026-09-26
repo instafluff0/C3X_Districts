@@ -15,22 +15,27 @@ int main(){
  f.tile_width=128;f.tile_height=64;f.target_width=800;f.target_height=600;
  c3x_renderer_tile_v1 tile{};tile.tile_flags=C3X_RENDERER_TILE_RENDER;
  tile.tile_x=tile.tile_y=4;f.tiles=&tile;f.tile_count=1;
- WorldPreparationSchedule q;q.prioritize(f);q.configure(f,1,1,1,1);
- assert(q.next()==0);auto cancelled=q.next();q.configure(f,1,1,1,1);
+ WorldPreparationSchedule q;q.prioritize(f);q.configure(f,1,1,1);
+ assert(q.next()==0);auto cancelled=q.next();q.configure(f,1,1,1);
  assert(q.next()==cancelled && !q.completed);q.finish(true);
- tile.tile_x=tile.tile_y=60;q.prioritize(f);q.configure(f,1,1,1,1);
+ tile.tile_x=tile.tile_y=60;q.prioritize(f);q.configure(f,1,1,1);
  assert(q.next()==63 && q.completed==1);std::set<unsigned> seen{0};
- while(!q.empty()){assert(seen.insert(q.next()).second);q.finish(true);q.configure(f,1,1,1,1);}
+ while(!q.empty()){assert(seen.insert(q.next()).second);q.finish(true);q.configure(f,1,1,1);}
  assert(seen.size()==WorldPreparationRegion::count(f) && q.completed==seen.size());
- q.prioritize(f);q.configure(f,1,1,1,1);assert(q.empty());
- // New content, projection, device or world lifetime must each re-arm work.
- q.configure(f,2,1,1,1);assert(!q.empty());q.finish(false);assert(q.unavailable==1);
- q.configure(f,2,1,1,2);assert(q.completed==0 && q.unavailable==0);
- q.finish(true);f.tile_width=160;q.configure(f,2,1,1,2);assert(q.completed==0);
- q.finish(true);f.target_width=1024;q.configure(f,2,1,1,2);assert(q.completed==0);
- q.finish(true);q.configure(f,2,2,1,2);assert(q.completed==0);
+ q.prioritize(f);q.configure(f,1,1,1);assert(q.empty());
+ // A local edit re-arms only the cores whose halo uses that tile.
+ q.invalidate(f,30,30);auto affected=seen.size()-q.completed;
+ assert(affected>0 && affected<seen.size());
+ while(!q.empty()){q.finish(true);q.configure(f,1,1,1);}
+ assert(q.completed==seen.size());
+ // Projection, device or world lifetime changes re-arm the whole schedule.
+ q.configure(f,1,1,2);assert(q.completed==0);q.finish(false);assert(q.unavailable==1);
+ q.configure(f,1,1,3);assert(q.completed==0 && q.unavailable==0);
+ q.finish(true);f.tile_width=160;q.configure(f,1,1,3);assert(q.completed==0);
+ q.finish(true);f.target_width=1024;q.configure(f,1,1,3);assert(q.completed==0);
+ q.finish(true);q.configure(f,2,1,3);assert(q.completed==0);
  // Wrapped edge occurrences remain part of coverage, with no duplicate region.
- f.world_wrap_x=f.world_wrap_y=1;q.configure(f,3,3,1,2);seen.clear();
+ f.world_wrap_x=f.world_wrap_y=1;q.configure(f,3,1,3);seen.clear();
  while(!q.empty()){assert(seen.insert(q.next()).second);q.finish(true);}
  assert(seen.size()==WorldPreparationRegion::count(f));
 }

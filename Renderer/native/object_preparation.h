@@ -165,7 +165,7 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
         result->topology.emplace(key,record?record->semantic:0);return record;
     },plan);
     if(input.river_ready && input.route_ready && input.routes_enabled)
-        promote_river_crossings(tile,assets,[&](float x,float y){
+        promote_river_crossings(tile,[&](float x,float y){
             return float(scratch.rivers.river_sample({x,y}).distance);
         },plan);
     unsigned sites=tile.improvement_flags&(C3X_RENDERER_IMPROVEMENT_GOODY_HUT|C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP);
