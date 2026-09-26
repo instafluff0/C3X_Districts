@@ -230,7 +230,10 @@ bool compile(Library const& library,Composition const& selected,int nc,int nr,
         for(auto const&v:p.vertices){
             float x=float(nc)+.5f+v.x,y=float(nr)+.5f+v.y;
             auto out=project_natural(x,y,height_natural(x,y)+.005f);
-            out.u=x/p.period[0];out.v=y/p.period[1];out.base_terrain=62+v.coverage;
+            out.u=x/p.period[0];out.v=y/p.period[1];
+            // A paving material with source normal detail uses a distinct
+            // shader tag. The coverage still controls its feathered edge.
+            out.base_terrain=((library.materials[p.material].channels&2u)?64.f:62.f)+v.coverage;
             transformed.push_back(out);
         }
         if(indexed){chunk.vertices=std::move(transformed);chunk.indices.assign(p.indices.begin(),p.indices.end());}

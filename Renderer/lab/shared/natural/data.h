@@ -46,7 +46,8 @@ struct NaturalData {
         if(!read("Renderer/packs/NaturalFidelityRuntime/natural.bin",d)||d.size()<32||std::memcmp(d.data(),"C3XNAT3\0",8))return false;
         std::size_t pos=8;
         auto take=[&](void*out,std::size_t n){if(n>d.size()-pos)return false;std::memcpy(out,d.data()+pos,n);pos+=n;return true;};
-        unsigned count[6]={};if(!take(count,24)||count[0]>128||count[1]>64||count[2]!=22||count[3]!=25||
+        unsigned count[6]={};if(!take(count,24)||count[0]>128||count[1]>64||
+                !((count[2]==22&&count[3]==25)||(count[2]==32&&count[3]==35))||
                 count[4]<3||count[4]>64||count[5]<3||count[5]>100000||count[5]%3)return false;
         textures.resize(count[0]);fields.resize(count[0]);
         for(unsigned i=0;i<count[0];i++){
@@ -81,7 +82,7 @@ struct NaturalData {
         failure="recipes";
         recipes.resize(count[3]);unsigned weight=0;
         for(auto&r:recipes){if(!take(&r,sizeof(r))||r.object>=bodies.size()||!std::isfinite(r.scale)||r.scale<=0||!std::isfinite(r.variation)||r.variation<0||r.variation>2||r.flags>7)return false;weight+=r.count;}
-        if(weight!=180)return false;
+        if(weight!=(count[2]==32?301u:180u))return false;
         surface_recipes.resize(count[4]);unsigned surface_weight[3]={};
         for(auto&r:surface_recipes){if(!take(&r,sizeof(r))||r.biome>2||!std::isfinite(r.scale)||r.scale<=0||r.scale>16||
                 !std::isfinite(r.variation)||r.variation<0||r.variation>2||!r.weight||r.weight>64||

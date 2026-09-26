@@ -348,7 +348,7 @@ enum GeometryLayer : std::size_t {
     geometry_cliff4, geometry_cliff5, geometry_cliff6, geometry_cliff7,
     geometry_natural_terrain, geometry_natural_decal, geometry_natural_mountain,
     geometry_natural_forest0,
-    geometry_layer_count = geometry_natural_forest0 + 22
+    geometry_layer_count = geometry_natural_forest0 + 32
 };
 
 using GeometryDrawRecord=c3x_renderer::render_core::GeometryDrawRecord<CachedVertexChunk>;
@@ -7430,7 +7430,7 @@ public:
         std::vector<Vertex> farm_vertices;
         std::vector<Vertex> site_vertices;
         std::array<std::vector<Vertex>,8> cliff_vertices;
-        std::array<std::vector<Vertex>,25> natural_vertices;
+        std::array<std::vector<Vertex>,35> natural_vertices;
         std::array<std::vector<UINT>,2> natural_grid_indices;
         std::array<std::vector<Vertex> *, geometry_layer_count> tile_layers = {
             &underlay_vertices, &land_vertices, &bed_vertices, &water_vertices,
@@ -7438,7 +7438,7 @@ public:
             &city_vertices, &wall_vertices, &mine_vertices, &farm_vertices, &site_vertices,
             &cliff_vertices[0], &cliff_vertices[1], &cliff_vertices[2], &cliff_vertices[3],
             &cliff_vertices[4], &cliff_vertices[5], &cliff_vertices[6], &cliff_vertices[7]};
-        for(unsigned i=0;i<25;i++)tile_layers[geometry_natural_terrain+i]=&natural_vertices[i];
+        for(unsigned i=0;i<35;i++)tile_layers[geometry_natural_terrain+i]=&natural_vertices[i];
         bool const world_objects=city_profile && retained_world && share_world_meshes &&
             frame.tile_height*2==frame.tile_width;
         bool const world_ground=world_objects && frame.tile_width>=96;
@@ -7526,7 +7526,7 @@ public:
                 shadow_basis=c3x_renderer::fidelity::light_frame(environment);
                 float shadow[20]={};std::copy(shadow_basis.begin(),shadow_basis.end(),shadow);
                 shadow[16]=fidelity_profile && fidelity_shadow_control?0.f:1.f;shadow[17]=1;
-                if(fidelity_profile){char detail[384];sprintf_s(detail,"authority=r13 adapter=natural-coverage-r3 mountain_mask=1 biome_field=1 coast_coverage=1 coast_height=1 trees=22 recipes=25 weight=180 msaa=4 anisotropy=16 scale=2 mip_bias=-1 scratch_max=3670016 river_pages_max=16 L=%.6f,%.6f,%.6f receive=%.0f",shadow_basis[8],shadow_basis[9],shadow_basis[10],shadow[16]);trace.write("source-fidelity",detail,true);}
+                if(fidelity_profile){char detail[384];sprintf_s(detail,"authority=r13 adapter=natural-coverage-r3 mountain_mask=1 biome_field=1 coast_coverage=1 coast_height=1 trees=32 recipes=35 weight=301 msaa=4 anisotropy=16 scale=2 mip_bias=-1 scratch_max=3670016 river_pages_max=16 L=%.6f,%.6f,%.6f receive=%.0f",shadow_basis[8],shadow_basis[9],shadow_basis[10],shadow[16]);trace.write("source-fidelity",detail,true);}
                 context->UpdateSubresource(shadow_settings_buffer, 0, nullptr, shadow, 0, 0);
                 if(fidelity_profile)natural.update(context,environment,shadow_basis.data()+8);
                 shadow_tile_width=frame.tile_width;shadow_tile_height=frame.tile_height;
@@ -9152,7 +9152,7 @@ public:
             int vegetation_type = hill_vegetation ? hill_vegetation : tile.real_terrain_type;
             if (feature_assets_ready &&
                 (vegetation_type == 7 || vegetation_type == 8) &&
-                !(fidelity_profile && vegetation_type == 7)) {
+                !(fidelity_profile && (vegetation_type == 7 || vegetation_type == 8))) {
                 char const * group_name = vegetation_type == 7 ? "forest" : "jungle";
                 c3x_renderer::FeatureGroup const * group =
                     vegetation_type == 7 ? forest_group :
@@ -9587,9 +9587,9 @@ public:
             } // immutable routes and objects already resident on a world hit
             QueryPerformanceCounter(&phase_end);cliff_ticks+=phase_end.QuadPart-phase_time.QuadPart;phase_time=phase_end;
             std::unique_ptr<c3x_renderer::fidelity::TerrainSurfaces> prepared_terrain;
-            std::array<std::vector<c3x_renderer::fidelity::MeshInstance>,22> forest_instances;
-            std::array<c3x_renderer::render_core::SourceShadow::Bounds,22> forest_bounds;
-            std::array<c3x_renderer::render_core::ProjectedMeshBounds,22> forest_projected;
+            std::array<std::vector<c3x_renderer::fidelity::MeshInstance>,32> forest_instances;
+            std::array<c3x_renderer::render_core::SourceShadow::Bounds,32> forest_bounds;
+            std::array<c3x_renderer::render_core::ProjectedMeshBounds,32> forest_projected;
             auto natural_found=natural_mesh_cache.find(natural_key);
             bool natural_hit=fidelity_profile && natural_found!=natural_mesh_cache.end();
             if(natural_hit && !natural.valid(natural_found->second.river_dependencies))natural_hit=false;

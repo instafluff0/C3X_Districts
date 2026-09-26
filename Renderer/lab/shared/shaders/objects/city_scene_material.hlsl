@@ -61,7 +61,26 @@ Q6SceneOutput Q8_CITY_FEATURE_ENTRY(FeaturePixelInput p) {
  if(p.material_index<39.5)return Q8LegacyPSFeature(p);
  if(p.material_index>=59.5 && p.material_index<69.5) {
   float4 ground=city_base_texture_0.Sample(decal_sampler,p.uv);
-  return q6_scene_output(float4(ground.rgb*q6_receiver_illumination(p,normalize(p.geometry_normal),1,1),ground.a));
+  float3 ground_normal=normalize(p.geometry_normal);
+  float3 ground_tangent=float3(1,0,0),ground_bitangent=float3(0,1,0);
+  float2 ground_slope=float2(0,0);
+  if(p.material_index>63.5)
+   ground_normal=q8_settlement_ground_normal(p,ground_tangent,ground_bitangent,ground_slope);
+  float3 ground_lit=ground.rgb*q6_receiver_illumination(p,ground_normal,1,1);
+#if Q8_CITY_SOURCE_SPECULAR
+  if(p.material_index>63.5) {
+   float2 folded=frac(p.uv*.5)*2-1;
+   float2 uv=q8_settlement_ground_uv(p,folded);
+   float2 ux=q8_settlement_ground_gradient(p,folded,ddx(p.uv));
+   float2 uy=q8_settlement_ground_gradient(p,folded,ddy(p.uv));
+   float3 roughness=resource_base_texture_1.SampleGrad(decal_sampler,uv,ux,uy).rgb;
+   ground_lit+=q8_city_direct_specular(environment_sun_direction,
+    environment_sun_color*environment_sun_intensity,ground_normal,
+    normalize(p.geometry_normal),ground_tangent,ground_bitangent,
+    ground_slope,roughness,ground.rgb,0);
+  }
+#endif
+  return q6_scene_output(float4(ground_lit,ground.a));
  }
  bool emission_only=(p.material_index>=79.5 && p.material_index<89.5)||p.material_index>=199.5;
  int channels=(int)round(p.material_index-(p.material_index>=199.5?200:p.material_index>=99.5?100:40));

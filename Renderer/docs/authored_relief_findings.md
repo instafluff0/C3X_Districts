@@ -48,7 +48,9 @@ The old combined nine-cell mountain atlas is compatibility-only. M6.7c2 replaces
 - The loose-height adapter can preserve a higher-resolution authored R8 hill
   field without resampling. The local Hillier Hills study uses its 1024x1024
   field, broader overlapping hill envelopes and taller—but still clearly
-  sub-mountain—relief. Derived source bytes remain ignored and local-only.
+  sub-mountain—relief. The current Lab selects the standard Civ VI 512x512
+  field; the Hillier source remains an optional local study. Derived source
+  bytes remain ignored and local-only.
 - Mountains now preserve the standard five-piece and desert four-piece groups. Underlying desert/flood-plain ground selects the desert group; deterministic orientation, footprint scaling, and connection-directed overlap compose neighboring pieces into ranges.
 - The former radial skirt, procedural secondary/tertiary peaks, radial cone mask, and sine edge noise no longer participate in mountain geometry.
 - Standard mountains use authored base, upper-rock, and snow materials. Snow follows the confirmed 24/26 thresholds normalized by the declared height of 32. Desert mountains use their authored base and three stripe materials at the declared 10, 18, and 23 height bands normalized by the declared height of 24.

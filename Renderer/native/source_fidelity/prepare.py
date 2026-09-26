@@ -3,12 +3,14 @@
 No image resizing, texture transcoding, or changes to the live unit/city packs.
 """
 from pathlib import Path
-import hashlib, json, re, struct
+import hashlib, json, math, re, struct
 ROOT=Path(__file__).resolve().parents[3]
 HERE=Path(__file__).resolve().parent
 LAB=ROOT/'Renderer/lab/shared'
 PACK=ROOT/'Renderer/packs/NaturalFidelityRuntime'
-LOCAL_HILL_HEIGHT=ROOT/'Renderer/packs/HillierHillsSource/height.dds'
+HILL_HEIGHT=ROOT/'Renderer/packs/Civ5EnvironmentSkin/textures/relief/hills/standard/height_lod0.dds'
+TREE_HEIGHT_SCALE=.50
+JUNGLE_HEIGHT_SCALE=.50
 
 def function(s,name):
     start=s.rfind('\n',0,s.index(name+'('))+1
@@ -127,8 +129,8 @@ def build_pack(output=PACK):
     # Shader freshness is checked by the workbench preparation cache; CPU code
     # by the candidate build. This record describes only inputs to the pack.
     pins={}
-    # Generic binary payload: complete source tree vertices/recipes and channel
-    # identities, with only tree material/body records retained.
+    # Generic binary payload: selected source tree vertices/recipes and channel
+    # identities, with a Lab vertical proportion adjustment to the tree bodies.
     source_pack=ROOT/'Renderer/packs/BeautyStudies/beauty_objects.bin'
     data=source_pack.read_bytes();pos=8
     pins[str(source_pack.relative_to(ROOT))]=hashlib.sha256(data).hexdigest()
@@ -146,7 +148,6 @@ def build_pack(output=PACK):
         objs.append((label,kind,mat,n,v))
     recipes=[unpack('IffIIIIff') for _ in range(nr)];assert pos==len(data)
     trees=[i for i,o in enumerate(objs) if o[1]==1];assert len(trees)==22 and nr==25 and sum(r[3] for r in recipes)==180
-    materials=sorted({objs[i][2] for i in trees})
     assets=[]
     def asset(path):
         p=(ROOT/path).resolve();p.relative_to(ROOT)
@@ -164,6 +165,38 @@ def build_pack(output=PACK):
         p=(ROOT/path).resolve();p.relative_to(ROOT)
         raw=p.read_bytes();pins[str(p.relative_to(ROOT))]=hashlib.sha256(raw).hexdigest()
         return json.loads(raw)
+    # The older beauty study contains the forest only. Admit all ten desktop
+    # jungle models from the normalized local import with their complete
+    # source material stack, retaining the authored placement weights.
+    vegetation='Renderer/packs/VegetationNormalized/'
+    vegetation_manifest=metadata(vegetation+'manifest.json')
+    jungle_placements=vegetation_manifest['features']['jungle']['placements']
+    jungle_start=len(trees)
+    for placement in jungle_placements:
+        asset_id=placement['asset']
+        entry=vegetation_manifest['assets'][asset_id]
+        mesh=metadata(vegetation+entry['mesh'])
+        material=metadata(vegetation+entry['material'])
+        if material['alpha_mode']!='opaque' or len(mesh['topology']['indices'])%3:
+            raise ValueError('Unsupported jungle model: '+asset_id)
+        channels=[material['base_color']['texture'],material['lean_normal']['texture_0'],
+                  material['lean_normal']['texture_1'],'',material['gloss']['texture'],'','']
+        mat_index=len(mats)
+        mats.append(([vegetation+path if path else '' for path in channels],0,0))
+        body=bytearray()
+        for index in mesh['topology']['indices']:
+            vertex=mesh['vertices'][index]
+            body+=struct.pack('<8f',*(vertex['position']+vertex['normal']+vertex['uv0']))
+        object_index=len(objs)
+        objs.append((asset_id,1,mat_index,len(mesh['topology']['indices']),bytes(body)))
+        trees.append(object_index)
+        flags=(1 if placement['allow_overlap'] else 0)|(2 if placement['show_decal'] else 0)
+        recipes.append((object_index,float(placement['scale']),float(placement['scale_variation']),
+                        int(placement['count']),int(placement['min_count']),int(placement['priority']),
+                        flags,float(placement['width']),float(placement['low_end_reduction'])))
+    if len(trees)!=32 or len(recipes)!=35 or sum(r[3] for r in recipes[25:])!=121:
+        raise ValueError('Jungle source recipe count changed')
+    materials=sorted({objs[i][2] for i in trees})
     def source(path):return asset('Renderer/packs/Civ5EnvironmentSkin/'+path)
     decal_pack=ROOT/'Renderer/packs/DecalsNormalized'
     decal_manifest=metadata('Renderer/packs/DecalsNormalized/manifest.json')
@@ -175,12 +208,9 @@ def build_pack(output=PACK):
     for family in ['grassland','grasshill_top','plains','plainshill_top']:
         terrain += [source(f'textures/{family}_{c}.dds') for c in ['base_color','height','specular']]
     terrain += [asset('Renderer/packs/DecalsNormalized/textures/decals/'+p) for p in ['base_color_c996c6a9d015eebe.dds','height_31eb0f0117ea3beb.dds']]
-    # A loose authored hill field may be imported locally through the generic
-    # R8 adapter. Runtime payloads remain source-independent; absent that local
-    # experiment, retain the normalized baseline field exactly.
-    hill_height = LOCAL_HILL_HEIGHT if LOCAL_HILL_HEIGHT.is_file() else (
-        ROOT/'Renderer/packs/Civ5EnvironmentSkin/textures/relief/hills/standard/height_lod0.dds')
-    terrain += [asset(hill_height.relative_to(ROOT).as_posix())]
+    # Use the standard normalized Civ VI hill field for the Lab and runtime
+    # pack. Loose authored imports remain available for isolated studies.
+    terrain += [asset(HILL_HEIGHT.relative_to(ROOT).as_posix())]
     terrain += [source(f'textures/tundra_blend_{c}.dds') for c in ['base_color','height','specular']]
     terrain += [terrain[-1]]
     terrain += [source(f'textures/desert_{c}.dds') for c in ['base_color','height','specular']]
@@ -217,20 +247,35 @@ def build_pack(output=PACK):
         paths,tint,repeat=mats[i]
         bindings.append(([asset(p) if p else 0xffffffff for p in paths],tint,repeat))
     out=bytearray(b'C3XNAT3\0')
-    out+=struct.pack('<6I',len(assets),len(bindings),len(trees),nr,len(surface),len(surface_vertices))
+    out+=struct.pack('<6I',len(assets),len(bindings),len(trees),len(recipes),len(surface),len(surface_vertices))
     for path in assets:
         b=path.encode();out+=struct.pack('<I',len(b))+b
     for row in [terrain,mountain,*macro]:out+=struct.pack('<'+'I'*len(row),*row)
     for channels,tint,repeat in bindings:out+=struct.pack('<9I',*channels,tint,repeat)
     for i in trees:
-        _,_,mat,n,v=objs[i];out+=struct.pack('<2I',materials.index(mat),n)+v
+        _,_,mat,n,v=objs[i]
+        height_scale=TREE_HEIGHT_SCALE if i<jungle_start else JUNGLE_HEIGHT_SCALE
+        body=bytearray(v)
+        for vertex in range(n):
+            at=vertex*32
+            z,=struct.unpack_from('<f',body,at+8)
+            nx,ny,nz=struct.unpack_from('<3f',body,at+12)
+            nz/=height_scale
+            length=math.sqrt(nx*nx+ny*ny+nz*nz)
+            if not math.isfinite(length) or length<=0:
+                raise ValueError('Invalid source tree normal')
+            struct.pack_into('<f',body,at+8,z*height_scale)
+            struct.pack_into('<3f',body,at+12,nx/length,ny/length,nz/length)
+        out+=struct.pack('<2I',materials.index(mat),n)+body
     for r in recipes:out+=struct.pack('<IffIIIIff',trees.index(r[0]),*r[1:])
     for r in surface:out+=struct.pack('<IffIffII',*r)
     for vertex in surface_vertices:out+=struct.pack('<4f',*vertex)
     (output/'natural.bin').write_bytes(out)
     record={'schema':1,'authority':'source-fidelity-r13/inland','source_sha256':pins,
-        'hill_height_source':'local-authored-overlay' if hill_height==LOCAL_HILL_HEIGHT else 'normalized-baseline',
-        'trees':22,'recipes':25,'count_weight':180,'surface_recipes':len(surface),
+        'hill_height_source':'normalized-baseline',
+        'trees':32,'recipes':35,'count_weight':301,'tree_height_scale':TREE_HEIGHT_SCALE,
+        'jungle_bodies':10,'jungle_height_scale':JUNGLE_HEIGHT_SCALE,
+        'surface_recipes':len(surface),
         'surface_weight':sum(r[3] for r in surface),'surface_triangles':len(surface_vertices)//3,
         'texture_count':len(assets),
         'pack_sha256':hashlib.sha256(out).hexdigest(),'sampling':{'samples':4,'anisotropy':16,'render_scale':2,'mip_bias':-1,'reconstruction':'one scene-linear equal-area box'}}
@@ -240,7 +285,7 @@ def main():
     shaders()
     record=build_pack()
     (HERE/'provenance.json').write_text(json.dumps(record,indent=2)+'\n')
-    print(f"PASS generic natural pack: {record['texture_count']} unchanged DDS payloads, 22 bodies, 25 tree recipes, {record['surface_recipes']} surface recipes, {record['surface_triangles']} exact decal triangles")
+    print(f"PASS generic natural pack: {record['texture_count']} unchanged DDS payloads, 32 bodies, 35 tree recipes, {record['surface_recipes']} surface recipes, {record['surface_triangles']} exact decal triangles")
 if __name__=='__main__':
     import argparse
     parser=argparse.ArgumentParser(description=__doc__)

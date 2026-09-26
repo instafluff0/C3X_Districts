@@ -19,6 +19,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 from Renderer.lab.studies.cities.build_layouts import wall_instances
 from Renderer.lab.shared.cities.assets import component
+from Renderer.lab.shared.cities.ground import building_polygon, center_paths, coverage
 from Renderer.preview.render_city_day_night_sheet import _draw_mesh
 from Renderer.preview.render_feature_asset import DdsBc1Texture
 from Renderer.preview.render_iso import Canvas
@@ -108,10 +109,54 @@ def transformed(mesh: dict, instance: dict) -> dict:
         x, y, z = vertex["position"]
         nx, ny, nz = vertex["normal"]
         vertices.append({"position": [ox+scale*(x*c-y*s), oy+scale*(x*s+y*c),
-                                      z*scale/vertical_metric],
+                                      (z+instance.get("ground_z_offset", 0))*scale/vertical_metric],
                          "normal": [nx*c-ny*s, nx*s+ny*c, nz],
                          "uv0": vertex["uv0"]})
     return {"vertices": vertices, "topology": mesh["topology"]}
+
+
+def draw_cover(canvas: Canvas, center: tuple[int, int], tile_pixels: int,
+               instances: list[dict], spec: dict) -> None:
+    """Preview the exact source paving color and world repeat on magenta."""
+    polygons = []
+    for instance in instances:
+        if not instance.get("surface", True):
+            continue
+        body = component(instance["asset"], Path(instance["pack"]))
+        polygons.append(building_polygon(body,instance["scale"],instance["rotation"],
+                                         instance["offset"]))
+    if not polygons:
+        return
+    paths = center_paths(polygons,spec.get("lane_half_width",.045))
+    margin, feather = spec["margin"], spec["feather"]
+    corners = [(x+sx*margin,y+sy*margin) for polygon in polygons
+               for x,y in polygon for sx in (-1,1) for sy in (-1,1)]
+    projected = [(center[0]+(x-y)*tile_pixels/2,
+                  center[1]+(x+y)*tile_pixels/4) for x, y in corners]
+    left = max(0, math.floor(min(p[0] for p in projected)))
+    right = min(canvas.width, math.ceil(max(p[0] for p in projected))+1)
+    top = max(0, math.floor(min(p[1] for p in projected)))
+    bottom = min(canvas.height, math.ceil(max(p[1] for p in projected))+1)
+    base = texture(spec["texture"], "clamp", "clamp")
+    u0, v0, u1, v1 = spec.get("atlas_uv", [0, 0, 1, 1])
+    for py in range(top, bottom):
+        for px in range(left, right):
+            dx = (px+.5-center[0])/(tile_pixels/2)
+            dy = (py+.5-center[1])/(tile_pixels/4)
+            x, y = (dx+dy)/2, (dy-dx)/2
+            alpha = coverage(x, y, (), margin, feather, polygons, paths)
+            if alpha <= 0:
+                continue
+            # Match the captured test.biq site's world-stable, mirrored UV.
+            uu, vv = (20.5+x)/spec["period"][0], (64.5-y)/spec["period"][1]
+            u = u0+(1-abs((uu*.5 % 1)*2-1))*(u1-u0)
+            v = v0+(1-abs((vv*.5 % 1)*2-1))*(v1-v0)
+            sample = base.sample(u, v)
+            strength = alpha*sample[3]/255
+            index = py*canvas.width+px
+            previous = canvas.pixels[index]
+            canvas.pixels[index] = tuple(round(previous[i]*(1-strength)+sample[i]*strength)
+                                         for i in range(3))
 
 
 def render_cell(design: dict, size: int, walls: bool, capital: bool,
@@ -133,9 +178,17 @@ def render_cell(design: dict, size: int, walls: bool, capital: bool,
                          if capital else tier["base_centerpiece"])
     if capital:
         instances.append(tier["palace"])
+    instances.extend(tier.get("capital_decorations", []) if capital else
+                     tier.get("decorations", []))
+    if tier.get("ground_cover"):
+        draw_cover(canvas, (cx, cy), tile_pixels, instances, tier["ground_cover"])
     if walls:
         instances.extend(wall_instances(design["wall_kit"], size))
     for instance in instances:
+        if (tier.get("ground_cover") and instance.get("surface", True) and
+                instance["pack"] != "Renderer/packs/CityAdjunctsNormalized"):
+            body = component(instance["asset"], Path(instance["pack"]))
+            instance = {**instance, "ground_z_offset": -body["lo"][2]}
         if "vertical_metric" in design and instance["pack"] != "Renderer/packs/CityAdjunctsNormalized":
             instance = {**instance, "vertical_metric": design["vertical_metric"]}
         for mesh, base, emissive in prepared_asset(instance["asset"], instance["pack"]):

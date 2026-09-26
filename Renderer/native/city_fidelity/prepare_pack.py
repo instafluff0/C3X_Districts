@@ -11,7 +11,7 @@ INPUT=ROOT/'Renderer/packs/CityFidelitySources/current'
 sys.path.insert(0,str(ROOT))
 from Renderer.lab.shared.cities import assets as city
 from Renderer.lab.shared.cities.growth import solve,bounds,expanded,overlaps
-from Renderer.lab.shared.cities.ground import footprint_alignment,convex_hull,grid,coverage
+from Renderer.lab.shared.cities.ground import footprint_alignment,convex_hull,grid,coverage,building_polygon,center_paths
 from Renderer.lab.shared.cities.fingerprint import geometry_digest
 from Renderer.lab.shared.cities.facades import derive
 
@@ -84,8 +84,8 @@ def _build(OUT, lab_layouts=None, lab_focus=None, lab_frames=None):
             for p in paths:
                 if p:pins[p]=sha(p)
         return material_ids[key]
-    def model(asset,pack=Path('Renderer/packs/CityStudyAuxiliaryUV'),source_z_factor=1.0):
-        key=(str(pack),asset,source_z_factor)
+    def model(asset,pack=Path('Renderer/packs/CityStudyAuxiliaryUV'),source_z_factor=1.0,ground_to_base=False):
+        key=(str(pack),asset,source_z_factor,ground_to_base)
         if key in model_ids:return model_ids[key]
         b=body(asset,pack);parts=[]
         def direction(values,normal=False):
@@ -103,7 +103,7 @@ def _build(OUT, lab_layouts=None, lab_focus=None, lab_frames=None):
             if frame and geometry_digest(mesh)!=frame['geometry_digest']:raise ValueError('source frame fingerprint mismatch')
             vertices=[]
             for i,v in enumerate(mesh['vertices']):
-                position=[v['position'][j]-(b['lo'][j]+b['hi'][j])/2 for j in (0,1)]+[v['position'][2]*source_z_factor]
+                position=[v['position'][j]-(b['lo'][j]+b['hi'][j])/2 for j in (0,1)]+[(v['position'][2]-(b['lo'][2] if ground_to_base else 0))*source_z_factor]
                 normal=frame['normals'][i] if frame else v['normal']
                 tangent=frame['tangents'][i] if frame else [1,0,0];bitangent=frame['bitangents'][i] if frame else [0,1,0]
                 vertices.append(position+v['uv0']+direction(normal,True)+v.get('uv1',[0,0])+direction(tangent)+direction(bitangent)+v.get('uv2',[0,0]))
@@ -111,8 +111,8 @@ def _build(OUT, lab_layouts=None, lab_focus=None, lab_frames=None):
         mid=len(models);model_ids[key]=mid
         hull=convex_hull([(v['position'][0]-(b['lo'][0]+b['hi'][0])/2,v['position'][1]-(b['lo'][1]+b['hi'][1])/2) for mesh,mat in b['parts'] if mat['alpha_mode']!='blend' for v in mesh['vertices']])
         models.append({'asset':asset,'pack':str(pack),
-                       'low':b['lo'][:2]+[b['lo'][2]*source_z_factor],
-                       'high':b['hi'][:2]+[b['hi'][2]*source_z_factor],
+                       'low':b['lo'][:2]+[(0 if ground_to_base else b['lo'][2])*source_z_factor],
+                       'high':b['hi'][:2]+[(b['hi'][2]-(b['lo'][2] if ground_to_base else 0))*source_z_factor],
                        'hull':hull,'parts':parts})
         return mid
     selected={}
@@ -146,7 +146,7 @@ def _build(OUT, lab_layouts=None, lab_focus=None, lab_frames=None):
             foundation_source={'material':material(mat,asset),'uv':uv,'step':step}
         return foundation_source
     def template(pool,size,instances,capital=False,authority=None,environment=False,clearance=None,
-                 source_z_factor=1.0):
+                 source_z_factor=1.0,ground_cover=None):
         culture,era=pool.removeprefix('city/pool/').split('/')
         if culture not in styles:raise ValueError('unknown normalized culture '+culture)
         out={'culture':styles.index(culture),'era':eras.index(era),'size':size,'capital':capital,'environment':environment,'authority':authority,
@@ -155,10 +155,11 @@ def _build(OUT, lab_layouts=None, lab_focus=None, lab_frames=None):
             out['foundation']=foundation()
         for inst in instances:
             asset=inst['asset'];pack=Path(inst.get('pack','Renderer/packs/CityStudyAuxiliaryUV'));b=body(asset,pack)
-            mid=model(asset,pack,source_z_factor);rot=inst['rotation'];scale=inst['scale'];offset=inst['offset'];box=bounds(b,rot,scale)
+            ground_to_base=bool(ground_cover and inst.get('surface',True))
+            mid=model(asset,pack,source_z_factor,ground_to_base);rot=inst['rotation'];scale=inst['scale'];offset=inst['offset'];box=bounds(b,rot,scale)
             # The original quadrature and facade-plane rule run once offline;
             # all resulting positions are transformed with the same instance.
-            key=(str(pack),asset,scale,rot,inst['slot']=='capital',source_z_factor)
+            key=(str(pack),asset,scale,rot,inst['slot']=='capital',source_z_factor,ground_to_base)
             if key not in light_cache:
                 entry={'asset':asset,'slot':inst['slot'],'scale':scale,'rotation':rot,'offset':[0,0],'local_bounds':box,'sample_start':0}
                 aug={'emissive_uv':2,'grounding':'source_z_zero','scene_world_z_per_source_unit':1/0.648266978876,'pack':str(pack),'source_normals':None,'emissive_gain':8,'capital':{'mapping':{'pack':str(pack)}},'instances':[entry]}
@@ -173,32 +174,59 @@ def _build(OUT, lab_layouts=None, lab_focus=None, lab_frames=None):
                 if source_z_factor!=1.0:
                     for light in derived['lights']:
                         light['position'][2]*=source_z_factor
+                if ground_to_base:
+                    for light in derived['lights']:
+                        light['position'][2]-=b['lo'][2]*source_z_factor
                 light_cache[key]=derived
-            out['instances'].append({'model':mid,'slot':inst['slot'],'scale':scale,'rotation':rot,'offset':offset,'bounds':box,'lights':light_cache[key]['lights']})
+            out['instances'].append({'model':mid,'slot':inst['slot'],'scale':scale,'rotation':rot,'offset':offset,'bounds':box,'lights':light_cache[key]['lights'],
+                                     'surface':inst.get('surface',True)})
         # The selected connected paving is the same footprint union used by
         # Lab. Store topology/coverage offline; runtime only conforms/clips it
         # against captured terrain and supplies a world-stable UV origin.
         out['paving']=None
-        if era=='modern':
-            ordinary=[i for i in out['instances'] if i['slot']!='capital']
+        if era=='modern' or ground_cover:
+            ordinary=[i for i in out['instances'] if i['slot']!='capital' and i['surface']]
             scale=ordinary[0]['scale']
             if any(abs(i['scale']-scale)>1e-8 for i in ordinary):
-                if not authority or not authority.startswith('lab-fixed-'):
+                if not ground_cover and (not authority or not authority.startswith('lab-fixed-')):
                     raise ValueError('nonuniform city scale')
                 scale=sum(i['scale'] for i in ordinary)/len(ordinary)
-            boxes=[];coverage_boxes=[];polygons=[]
-            for i in out['instances']:
-                x,y=i['offset'];b=i['bounds'];box=[x+b[0],-y-b[3],x+b[2],-y-b[1]];boxes.append(box)
-                if i['slot']=='capital':
-                    polygons.append(convex_hull([(x+p[0]*i['scale'],-y-p[1]*i['scale']) for h in models[i['model']]['hull'] for p in [city.rotate([*h,0],i['rotation'])]]))
-                else:coverage_boxes.append(box)
-            xy,triangles=grid(boxes,.1)
-            alpha=[coverage(x,y,coverage_boxes,.1,.025,polygons) for x,y in xy]
+            boxes=[];coverage_boxes=[];polygons=[];paths=[]
+            if ground_cover:
+                for source_inst,i in zip(instances,out['instances']):
+                    if not i['surface']:continue
+                    raised=building_polygon(body(source_inst['asset'],Path(source_inst.get('pack','Renderer/packs/CityStudyAuxiliaryUV'))),
+                                             i['scale'],i['rotation'],i['offset'],flip_y=True)
+                    polygons.append(raised)
+                    boxes.append([min(p[0] for p in raised),min(p[1] for p in raised),
+                                  max(p[0] for p in raised),max(p[1] for p in raised)])
+                paths=center_paths(polygons,ground_cover.get('lane_half_width',.045))
+            else:
+                for i in out['instances']:
+                    if not i['surface']:continue
+                    x,y=i['offset'];b=i['bounds'];box=[x+b[0],-y-b[3],x+b[2],-y-b[1]];boxes.append(box)
+                    if i['slot']=='capital':
+                        polygons.append(convex_hull([(x+p[0]*i['scale'],-y-p[1]*i['scale']) for h in models[i['model']]['hull'] for p in [city.rotate([*h,0],i['rotation'])]]))
+                    else:coverage_boxes.append(box)
+            margin=ground_cover['margin'] if ground_cover else .1
+            feather=ground_cover['feather'] if ground_cover else .025
+            grid_step=.0125 if ground_cover else .025
+            xy,triangles=grid(boxes,margin,grid_step)
+            alpha=[coverage(x,y,coverage_boxes,margin,feather,polygons,paths) for x,y in xy]
             indices=[i for tri in triangles if max(alpha[i] for i in tri)>0 for i in tri]
-            paving_mat=material({'channels':{'base_color':{'texture':ground_reference['atlas']['texture'],'address_u':'clamp','address_v':'clamp'}}},'',True)
-            out['paving']={'material':paving_mat,'period':[v*scale/ground_reference['uniform_ordinary_city_scale'] for v in ground_reference['tile_period']],
-                'atlas_uv':ground_reference['atlas_uv'],'margin':.1,'feather':.025,'grid_step':.025,
-                'vertices':[[x,y,a] for (x,y),a in zip(xy,alpha)],'indices':indices,'coverage_boxes':coverage_boxes,'coverage_polygons':polygons}
+            paving_texture=ground_cover['texture'] if ground_cover else ground_reference['atlas']['texture']
+            paving_channels={'base_color':{'texture':paving_texture,'address_u':'clamp','address_v':'clamp'}}
+            if ground_cover and ground_cover.get('normal_0'):
+                paving_channels['normal_0']={'texture':ground_cover['normal_0']}
+            if ground_cover and ground_cover.get('gloss'):
+                paving_channels['gloss']={'texture':ground_cover['gloss']}
+            paving_mat=material({'channels':paving_channels},'',True)
+            period=ground_cover['period'] if ground_cover else [v*scale/ground_reference['uniform_ordinary_city_scale'] for v in ground_reference['tile_period']]
+            atlas_uv=ground_cover.get('atlas_uv',[0,0,1,1]) if ground_cover else ground_reference['atlas_uv']
+            out['paving']={'material':paving_mat,'period':period,
+                'atlas_uv':atlas_uv,'margin':margin,'feather':feather,'grid_step':grid_step,
+                'vertices':[[x,y,a] for (x,y),a in zip(xy,alpha)],'indices':indices,
+                'coverage_boxes':coverage_boxes,'coverage_polygons':polygons,'coverage_paths':paths}
         templates.append(out);return out
     (OUT/'frames.json').write_text(json.dumps({'meshes':frames},separators=(',',':'))+'\n')
     for revision,a in selected.items():
@@ -230,10 +258,13 @@ def _build(OUT, lab_layouts=None, lab_focus=None, lab_frames=None):
                               if capital else tier['base_centerpiece']),'slot':len(houses)}
                     instances=houses+([] if capital and design.get('capital_replaces_centerpiece') else [civic])
                     if capital:instances.append({**tier['palace'],'slot':'capital'})
+                    instances.extend({**item,'slot':len(houses)+1+index}
+                                     for index,item in enumerate(tier.get('capital_decorations',[]) if capital else tier.get('decorations',[])))
                     vertical_metric=design.get('vertical_metric',.648266978876)
                     template(pool,size,instances,capital,
                              f'lab-fixed-{culture}-{era}',era=='modern',
-                             [.04,18.0,0,4.0],.648266978876/vertical_metric)
+                             [.04,18.0,0,4.0],.648266978876/vertical_metric,
+                             tier.get('ground_cover'))
     # The same bounded Lab growth solver and source-scale rule cover other
     # normalized pools. These are production adaptations, not new Lab witnesses.
     for pool,record in sorted(catalog['pools'].items()):

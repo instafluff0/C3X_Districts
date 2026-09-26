@@ -2973,14 +2973,45 @@ float3 q8_city_environment_specular(float3 normal,float3 roughness,float3 base,f
 
 // Authored ground underlay. Crop and texel density are normalized offline data.
 // Mirror inside an unmarked atlas interior rather than stretch the whole sheet.
+float2 q8_settlement_ground_uv(FeaturePixelInput p,float2 folded) {
+ float2 extent=Q8_SETTLEMENT_ATLAS.zw-Q8_SETTLEMENT_ATLAS.xy;
+ return Q8_SETTLEMENT_ATLAS.xy+(1-abs(folded))*extent;
+}
+float2 q8_settlement_ground_gradient(FeaturePixelInput p,float2 folded,float2 uv_gradient) {
+ float2 extent=Q8_SETTLEMENT_ATLAS.zw-Q8_SETTLEMENT_ATLAS.xy;
+ return uv_gradient*(-sign(folded)*extent);
+}
 float4 q8_settlement_ground_sample(FeaturePixelInput p) {
  float2 folded=frac(p.uv*.5)*2-1;
- float2 extent=Q8_SETTLEMENT_ATLAS.zw-Q8_SETTLEMENT_ATLAS.xy;
- float2 uv=Q8_SETTLEMENT_ATLAS.xy+(1-abs(folded))*extent;
- float2 direction=-sign(folded)*extent;
- float4 ground=city_base_texture_0.SampleGrad(decal_sampler,uv,ddx(p.uv)*direction,ddy(p.uv)*direction);
- ground.a*=saturate(p.material_index-62)*Q8_SETTLEMENT_GAIN;
+ float2 uv=q8_settlement_ground_uv(p,folded);
+ float2 ux=q8_settlement_ground_gradient(p,folded,ddx(p.uv));
+ float2 uy=q8_settlement_ground_gradient(p,folded,ddy(p.uv));
+ float4 ground=city_base_texture_0.SampleGrad(decal_sampler,uv,ux,uy);
+ ground.a*=saturate(p.material_index-(p.material_index>63.5?64:62))*Q8_SETTLEMENT_GAIN;
  return ground;
+}
+float3 q8_settlement_ground_normal(FeaturePixelInput p,
+ out float3 tangent,out float3 bitangent,out float2 slope) {
+ float3 n=normalize(p.geometry_normal);
+ float2 folded=frac(p.uv*.5)*2-1;
+ float2 uv=q8_settlement_ground_uv(p,folded);
+ float2 ux=q8_settlement_ground_gradient(p,folded,ddx(p.uv));
+ float2 uy=q8_settlement_ground_gradient(p,folded,ddy(p.uv));
+ slope=resource_base_texture_3.SampleGrad(decal_sampler,uv,ux,uy).rg*2-1;
+ tangent=float3(1,0,0);bitangent=float3(0,1,0);
+ float3 world=p.q6_world.xyz*float3(1,-1,Q8_CITY_WORLD_Z_TO_SOURCE);
+ float3 dx=ddx(world),dy=ddy(world);
+ float determinant=ux.x*uy.y-uy.x*ux.y;
+ if(abs(determinant)>1e-9) {
+  float3 t=(dx*uy.y-dy*ux.y)/determinant;
+  float3 b=(dy*ux.x-dx*uy.x)/determinant;
+  t-=n*dot(t,n);b-=n*dot(b,n);
+  if(dot(t,t)>1e-10 && dot(b,b)>1e-10) {
+   tangent=normalize(t);bitangent=normalize(b);
+   n=normalize(n+tangent*slope.x+bitangent*slope.y);
+  }
+ }
+ return n;
 }
 
 // Complete source bodies in the shared terrain/water namespace. The caller has
@@ -3046,7 +3077,26 @@ Q6SceneOutput Q8_CITY_FEATURE_ENTRY(FeaturePixelInput p) {
  if(p.material_index<39.5)return Q8LegacyPSFeature(p);
  if(p.material_index>=59.5 && p.material_index<69.5) {
   float4 ground=p.material_index>61.5?q8_settlement_ground_sample(p):city_base_texture_0.Sample(decal_sampler,p.uv);
-  return q6_scene_output(float4(ground.rgb*q6_receiver_illumination(p,normalize(p.geometry_normal),1,1),ground.a));
+  float3 ground_normal=normalize(p.geometry_normal);
+  float3 ground_tangent=float3(1,0,0),ground_bitangent=float3(0,1,0);
+  float2 ground_slope=float2(0,0);
+  if(p.material_index>63.5)
+   ground_normal=q8_settlement_ground_normal(p,ground_tangent,ground_bitangent,ground_slope);
+  float3 ground_lit=ground.rgb*q6_receiver_illumination(p,ground_normal,1,1);
+#if Q8_CITY_SOURCE_SPECULAR
+  if(p.material_index>63.5) {
+   float2 folded=frac(p.uv*.5)*2-1;
+   float2 uv=q8_settlement_ground_uv(p,folded);
+   float2 ux=q8_settlement_ground_gradient(p,folded,ddx(p.uv));
+   float2 uy=q8_settlement_ground_gradient(p,folded,ddy(p.uv));
+   float3 roughness=resource_base_texture_1.SampleGrad(decal_sampler,uv,ux,uy).rgb;
+   ground_lit+=q8_city_direct_specular(environment_sun_direction,
+    environment_sun_color*environment_sun_intensity,ground_normal,
+    normalize(p.geometry_normal),ground_tangent,ground_bitangent,
+    ground_slope,roughness,ground.rgb,0);
+  }
+#endif
+  return q6_scene_output(float4(ground_lit,ground.a));
  }
  bool emission_only=(p.material_index>=79.5 && p.material_index<89.5)||p.material_index>=199.5;
  int channels=(int)round(p.material_index-(p.material_index>=199.5?200:p.material_index>=99.5?100:40));

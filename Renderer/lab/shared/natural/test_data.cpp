@@ -52,7 +52,9 @@ struct Fixture {
 };
 
 void valid_data(NaturalData const&data,unsigned surface_count=3){
-    check(data.bodies.size()==22 && data.recipes.size()==25 && data.surface_recipes.size()==surface_count,"body/recipe count");
+    check(((data.bodies.size()==22 && data.recipes.size()==25)||
+           (data.bodies.size()==32 && data.recipes.size()==35)) &&
+           data.surface_recipes.size()==surface_count,"body/recipe count");
     check(data.surface_vertices.size()>=18 && data.surface_vertices.size()%3==0,"surface triangle count");
     check(data.fields[data.terrain[30]].sample(.25f,.25f)>0,"surface detail field");
     auto flat=[](int c,int r){return Tile{c+r,c-r,c,r,2};};

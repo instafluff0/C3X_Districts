@@ -277,7 +277,8 @@ int main() {
     def test_selected_source_pins(self):
         p=json.loads((HERE/'provenance.json').read_text())
         self.assertEqual(p['authority'],'source-fidelity-r13/inland')
-        self.assertEqual((p['trees'],p['recipes'],p['count_weight']),(22,25,180))
+        self.assertEqual((p['trees'],p['recipes'],p['count_weight']),(32,35,301))
+        self.assertEqual((p['jungle_bodies'],p['jungle_height_scale']),(10,0.5))
         for relative,expected in p['source_sha256'].items():
             self.assertEqual(hashlib.sha256((ROOT/relative).read_bytes()).hexdigest(),expected,relative)
     def test_executable_light_and_river_contract(self):

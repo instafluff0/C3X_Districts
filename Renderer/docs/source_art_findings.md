@@ -57,6 +57,18 @@ resolution and mip chains. The tree material flag previously left the paired
 LEAN textures unlit despite binding them, which made the canopy look flatter.
 The enabled slope response remains a C3X approximation, not recovered Firaxis
 LEAN shading.
+The forest Lab uses a user-selected 0.50 vertical scale for tree bodies, with
+inverse-transformed normals. This C3X proportion adjustment preserves the source
+meshes and their original horizontal dimensions.
+
+The desktop jungle ArtDef selects ten bodies with a combined placement count of
+121. All ten normalized materials retain base color, paired LEAN and gloss;
+the runtime's earlier vegetation bundle consumed only base color. The jungle
+Lab candidate carries the full material stack through the natural renderer and
+halves body height without changing source meshes, UVs, or texture payloads.
+The forest-like spiral placement, the LEAN response, and the 0.50 height choice
+are C3X reconstructions; the ArtDef body list, weights, sixteen floor decal
+counts and material channels are source evidence.
 
 ## Units and cities
 

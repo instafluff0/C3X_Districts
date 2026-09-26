@@ -31,7 +31,7 @@ if(fidelity_profile) {
     }
     #include "../city_fidelity/geometry.h"
     record_natural_phase(4);
-    if(tile.real_terrain_type==7 || hill_vegetation==7){
+    if(tile.real_terrain_type==7 || tile.real_terrain_type==8 || hill_vegetation==7 || hill_vegetation==8){
         bool hill_forest=hill_vegetation==7;
         // Exact current production building meshes/placement, used only as
         // exclusions. City appearance and its geometry path remain unchanged.
@@ -82,7 +82,12 @@ if(fidelity_profile) {
         };
         auto&hash=c3x_renderer::stable_hash;
         auto&random=c3x_renderer::stable_random;
-        #include "../../lab/shared/natural/forest_mesh_body.h"
+        if(tile.real_terrain_type==7 || hill_forest){
+            #include "../../lab/shared/natural/forest_mesh_body.h"
+        }else{
+            bool hill_jungle=hill_vegetation==8;
+            #include "../../lab/shared/natural/jungle_mesh_body.h"
+        }
     }
     record_natural_phase(5);
     if(cpu_terrain_enabled) {

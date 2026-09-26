@@ -1,7 +1,7 @@
 # Forests
 
 Current weighted source-tree recipes, opacity masks, authored vertex normals,
-paired source slope textures, uniform source proportions,
+paired source slope textures,
 building/water exclusions, and the recovered terrain-following dirt/leaf-litter floor decals.
 The source zero-count decal pool follows the individual recipe `ShowDecal` flag and tree
 centers; the unavailable engine scatter is reconstructed deterministically.
@@ -13,6 +13,10 @@ Tree base-color, paired LEAN textures and gloss retain their original DDS resolu
 and mip chains. The paired textures now set the material flag consumed by the
 object shader; their visual normal response remains an inferred C3X approximation
 of Civ VI's unrecovered LEAN lighting.
+The Lab pack scales tree bodies to 50% of their source height while retaining
+their horizontal footprint. It applies the corresponding inverse normal transform;
+source meshes and texture payloads remain unchanged. This is a C3X visual choice,
+not a recovered Civ VI scale.
 
 `standard.json` identifies the shared implementation, dependencies, fixture recipe
 and focused regression tests. The current checkout is authoritative.

@@ -19,6 +19,7 @@ def main():
     parser.add_argument("--source-report", type=Path, required=True)
     parser.add_argument("--flat-pack", type=Path, required=True)
     parser.add_argument("--flat-palace-pack", type=Path)
+    parser.add_argument("--farm-tree-pack", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     source = json.loads(args.source_report.read_text())
@@ -38,8 +39,8 @@ def main():
         part("Bld_02", 3.3, 0, .39),
     ]
     city = town + [
-        part("Block_SQ_001", 1.6, -.49, -.33),
-        part("Block_SQ_002", 1.6, .49, -.33),
+        part("Block_REC_002", 1.3, -.44, -.33),
+        part("Block_REC_003", 1.3, .44, -.33),
         part("Bld_01", 3.3, -.49, .35),
         part("Bld_07", 3.3, .49, .35),
     ]
@@ -56,8 +57,8 @@ def main():
         part("Bld_07", 3.3, .29, .35),
     ]
     capital_city = capital_town + [
-        part("Block_SQ_001", 1.6, -.50, -.38),
-        part("Block_SQ_002", 1.6, .50, -.38),
+        part("Block_REC_002", 1.3, -.44, -.33),
+        part("Block_REC_003", 1.3, .44, -.33),
         part("Bld_02", 3.3, -.55, .18),
         part("Bld_01", 3.3, .53, .18),
     ]
@@ -82,6 +83,48 @@ def main():
         tiers.append({"houses": houses, "capital_houses": capital_houses,
                       "base_centerpiece": civic, "capital_centerpiece": capital_civic,
                       "palace": palace})
+    if args.farm_tree_pack:
+        tree_pack = args.farm_tree_pack.as_posix()
+        tree_asset = "city/prop/source_farm_tree"
+        tree_body = component(tree_asset, args.farm_tree_pack)
+        # Search a short, curated list of planting sites rather than allowing
+        # props to obscure a door, the civic roof, or the enclosing wall.
+        sites = [(-.36, -.37), (.36, -.37), (-.39, .06), (.39, .06),
+                 (-.52, -.12), (.52, -.12), (-.32, .52), (.32, .52),
+                 (-.23, -.52), (.23, -.52), (0, -.45),
+                 (-.55, -.39), (.55, -.39), (-.57, .27), (.57, .27), (0, .61),
+                 (-.68, -.3), (.68, -.3), (-.69, .44), (.69, .44)]
+        for size, tier in enumerate(tiers):
+            for capital in (False, True):
+                buildings = ((tier["capital_houses"] + [capital_civic, palace]) if capital else
+                             (tier["houses"] + [civic]))
+                occupied = [footprint({"low": component(i["asset"], Path(i["pack"]))["lo"],
+                                       "high": component(i["asset"], Path(i["pack"]))["hi"]}, i)
+                            for i in buildings]
+                planted = []
+                for x, y in sites:
+                    prop = {"asset": tree_asset, "pack": tree_pack, "scale": 2.35,
+                            "rotation": 0.0, "offset": [x, y], "surface": False}
+                    box = footprint({"low": tree_body["lo"], "high": tree_body["hi"]}, prop)
+                    radius = (.46, .62, .74)[size]
+                    if any((abs(px) / radius) ** 6 + (abs(py) / radius) ** 6 > 1
+                           for px in (box[0], box[2]) for py in (box[1], box[3])):
+                        continue
+                    if any(overlaps(box, previous) for previous in occupied):
+                        continue
+                    planted.append(prop)
+                    occupied.append(box)
+                    if len(planted) == (2, 4, 6)[size]:
+                        break
+                tier["capital_decorations" if capital else "decorations"] = planted
+        for tier in tiers:
+            tier["ground_cover"] = {
+                "texture": str(args.flat_pack / "textures/compound/base_color_07a9d1cc9983722e.dds"),
+                "normal_0": str(args.flat_pack / "textures/compound/normal_0_1afe4528aa33c1fd.dds"),
+                "gloss": str(args.flat_pack / "textures/compound/gloss_0c8f690bcd7c93b1.dds"),
+                "period": [.32, .32], "atlas_uv": [0, 0, 1, 1],
+                "margin": .105, "feather": .045, "lane_half_width": .065,
+            }
     design.update(population_counts=[len(town), len(city), len(metro)],
                   tier_designs=tiers, houses=metro, base_centerpiece=civic,
                   palace=palace, capital_replaces_centerpiece=False)

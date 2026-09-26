@@ -4,6 +4,7 @@ This is a Lab proposal for one fixed design per Civ III culture group, era and
 population tier. Each design has base, walls, capital and walls + capital
 variants. Each culture's overview follows the Civ III PCX convention: four
 era rows and three population columns (Town 1–6, City 7–12, Metropolis 13+).
+
 Each population cell contains a labeled 2×2 comparison: base, walls, capital,
 and walls + capital. Focused one-era sheets instead show population rows and
 the four variants as columns at a larger size. All cells assume flat grassland.
@@ -62,6 +63,82 @@ Do not downsample textures, decimate meshes or flatten roofs/facades to make a
 layout fit. Uniform scale, placement and art selection are the available design
 controls. Evaluate how much detail survives at Civ III's normal and reduced
 zooms; a source model's polygon count alone does not prove a readable city.
+
+## Curated Mediterranean medieval candidate
+
+The focused candidate in `medieval_recipe.py` tests a more deliberate method
+against the supplied walled Roman/Mediterranean reference. It is an isolated
+Lab study; `layouts.json`, the runtime city pack, and reference images are not
+changed. The source audition found 25 usable components in the installed
+26-component Mediterranean medieval pool. One source block has no required
+base-color material; the focused importer records that rejection explicitly.
+
+The audition showed why the earlier city looked sparse: its selected pieces
+were mostly isolated towers, while the same source pool also provides detailed
+multi-building blocks. `flat_blocks.py` removes only the tall, below-ground
+plinth geometry from those blocks for this flat-ground study. The source
+architecture, paving, UVs, materials, vertex frames, and textures stay intact.
+`flat_palace.py` does the same for the selected palace's two plinth geometries.
+Neither derivative is a hill foundation or a replacement wall.
+
+The recipe places one identifiable tall civic block, roof groups, and smaller
+towers. Population adds fixed-scale buildings around that core. Capital layouts
+have their own `capital_houses` and `capital_centerpiece`, retaining the tall
+civic silhouette and placing a distinct palace in a visible court. Both use
+tile-edge-aligned facades. The recipe rejects overlapping boxes, any town
+building outside its tile, and any building outside the current complete wall
+ring's inner clearance. The wall itself remains terrain-following and separate
+from the buildings. A future accepted style can encode its own wall perimeter;
+the current renderer still uses one radius per population tier.
+
+The focused flat-ground candidate uses the source block-paving base color,
+normal and gloss maps. Its paving envelope follows every building's raised
+footprint, including the civic building and palace, with short connecting
+lanes. The cover feathers into terrain instead of repeating rectangular
+decals. Each sourced building is grounded by its lowest vertex so the
+remaining stone base sits on paving rather than projecting through it. Small
+trees come from the existing farm source assets and stay outside the paving
+envelope. The software sheet shows paving color and spacing; the native replay
+also exercises the material channels and terrain compositing. Source
+cobblestones have a 256×256 base-color map, so texture detail remains limited
+at normal gameplay zoom despite the complete source material stack.
+
+Use this process for other culture/era combinations: audition the entire
+available local source pool; identify landmark, roof-group and infill roles;
+compose and review the three population stages and four state variants;
+compile an isolated pack with source normals and material channels; compare
+the sheet with native-size D3D terrain replays. Treat a visually weak culture
+as an art-selection or layout problem before adjusting sharpening. The focused
+magenta sheet and map-backed replay are in ignored Lab output under
+`Renderer/lab/out/cities/medieval-art/sheet-v13/` and
+`Renderer/lab/out/cities/test-biq/gallery/medieval-candidate-v13-*.png`.
+The replay is not an in-game acceptance screenshot.
+
+## Two-stage ground design
+
+Keep each culture/era/population/capital/wall recipe's building anchors, facing,
+spacing, and ground footprint authored. At map draw time, form the visible
+ground from the captured site's terrain material and height samples. A small
+worn-earth or stone accent can strengthen lanes and courts near buildings,
+then fade into the surrounding terrain. Buildings stand on individually level
+plots where necessary; the ground connects and follows the intervening slope.
+Walls remain a separate perimeter that follows the terrain contour. Roads,
+rivers, shorelines and neighboring relief are site constraints, not inputs to
+a prepainted city image.
+
+The current candidate already conforms paving vertices to the runtime terrain
+height, but its material is fixed in the compiled city pack. The source
+plains-hill and desert-hill color textures are useful Lab comparisons. Their
+base-color alpha is terrain material data rather than opacity, so
+`terrain_ground_color.py` makes disposable RGB-identical opaque swatches for
+the software sheet. A direct terrain texture pasted under the buildings still
+looks like a colored patch. The 4096² plains-hill swatch also exceeds the
+separate city texture budget when added to this candidate's existing assets.
+The runtime design should sample the already-loaded terrain material instead
+of duplicating that texture in the city pack. Its authored color, height and
+specular response should remain available to the ground shader. This method
+still needs flat and varied-hill D3D replays before it replaces the fixed
+cobblestone Lab candidate.
 
 ## Reproduce
 

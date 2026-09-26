@@ -1,9 +1,10 @@
 # Hills
 
-Authored high-resolution hill relief, stable world-seeded rolling chains,
-irregular rock decals and the production coastline join. A locally imported
-generic R8 height field may replace the normalized baseline without creating a
-runtime dependency on its source game or mod.
+Standard Civ VI 512x512 hill relief, stable world-seeded rolling chains,
+irregular rock decals and the production coastline join. The natural pack
+builder selects the normalized field even when a local Hillier Hills import is
+present. A different generic R8 field can still be tried in an isolated study
+without creating a runtime dependency on its source game or mod.
 
 Native Civ III chooses forested or jungled hill art from the four diagonal
 neighbors of a hill tile. The renderer now applies that selection to captured

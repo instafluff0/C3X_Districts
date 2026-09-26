@@ -9,9 +9,10 @@ recovered source crests on lowland and rocky coasts. It is isolated, pending
 approval, and does not change the category's production appearance.
 
 The [coastal-shallows study](../../../studies/coastal_shallows/README.md)
-compares coast-family clarity and authored seabed visibility against the
-sandbox water baseline at a 256-pixel tile width. It remains a visual Lab
-experiment; its shaders are not the production appearance.
+compares coast-family clarity and submerged source-height detail against the
+current-code water baseline at 256-pixel close zoom and 128-pixel gameplay
+zoom. Its selected Lab direction transfers continuous desert sand and
+desert-hills height to the coast bed. It has not changed production appearance.
 
 Rock geometry remains exclusive to hill tiles adjoining water. The shoreline
 witness includes both that rocky join and an ordinary lowland beach so changes

@@ -31,16 +31,36 @@ triangle outlines as the grass subtype (`material.y` between 4.5 and 5.5).
 The Lab mesh now skips those optional grass patches; plains and desert patches
 remain. The softer straight band that persists without those patches comes
 from the single GrassColor lookup used by both ordinary terrain and the flat
-mountain fringe. Both Lab material sources now average four offset samples of
-that same texture. This retains source grass detail while reducing its broad
-repeated band. Mountain adjacency and rock materials are unchanged.
+mountain fringe. Averaging four full-resolution samples removed the band but
+visibly flattened large grassland scenes. The current Lab material instead
+keeps the original fine sample and replaces only its mip-7 coarse color with
+an average of four offset coarse samples. This retains the source grass grit
+and medium-scale variation while reducing the repeated band. Mountain
+adjacency and rock materials are unchanged.
 
 `Renderer/lab/studies/mountains/triangle_ablation.py` reproduces isolated
 shader controls using an explicit candidate DLL and shader source root. The
-fixed-camera native captures and the exact user-crop comparison are under
-`Renderer/lab/out/mountains/triangle-final-source/`, including three wider
-`test.biq` context views. The final candidate was built without staging, and
-the fixed reference images were not replaced. Visual acceptance is pending.
+fixed-camera ablations and the first exact user-crop comparison are under
+`Renderer/lab/out/mountains/triangle-final-source/`. The wide-scene audit and
+one-change-at-a-time captures are under `Renderer/lab/out/terrain-wide-audit/`.
+The selected mip-7 comparison is under
+`Renderer/lab/out/mountains/triangle-mip7/`, and native captures regenerated
+from current Lab sources are under
+`Renderer/lab/out/mountains/triangle-current-source/`. The candidate was built
+without staging, and fixed references were not replaced. The Terrain task's
+eight-view, 1600x900 native `test.biq` audit is under
+`Renderer/lab/out/terrain-wide-audit/mip7-contact.png`: grass/plains/desert
+blends, mountain collars, shorelines, and evening shadows show no new seams.
+`test.biq` has no volcano tile, so this audit cannot assess volcanoes. Visual
+acceptance is pending.
+
+That material audit used the standard mountain mesh. A separate isolated Lab
+build combines its corrected grass material and disabled grass triangles with
+the `lower` mesh (68% height, 108% span). Six 1600x900 `test.biq` views and a
+matched standard-versus-lower comparison are under
+`Renderer/lab/out/mountains/lower-terrain-audit/`; all rendered with zero
+fallback. Its build uses the committed city compiler while a concurrent city
+edit is in progress; no shared native source or sandbox files were changed.
 
 ## Sandbox-based shape study (Lab only)
 

@@ -15,6 +15,8 @@ from Renderer.lab.platform import native_command_result
 
 OUT = ROOT / "Renderer/lab/out/coastal-shallows"
 SANDBOX = ROOT / "Renderer/sandbox"
+GROUND_COMPILER = ROOT / "Renderer/native/source_fidelity/ground_compiler.h"
+RENDERER_CPP = ROOT / "Renderer/native/c3x_renderer.cpp"
 
 
 def digest(path: Path) -> str:
@@ -470,6 +472,78 @@ def refine() -> None:
         declaration + "\n float4 shallow=shallow_bed_texture.Sample(material_sampler,uv);", 1)
     body = body[:scene_start] + scene + body[scene_end:]
     clean_bed.write_text(body)
+    shelf_root = OUT / "shader-shelf-relief"
+    for path in clean_root.rglob("*.hlsl"):
+        destination = shelf_root / path.relative_to(clean_root)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, destination)
+    shelf_bed = shelf_root / "Renderer/native/city_fidelity/hydrology.hlsl"
+    body = shelf_bed.read_text()
+    anchor = "float3 q3_authored_bed_normal(PixelInput input) {"
+    helper = """// Filter the continuous source shallow pattern at two unrelated world scales.
+// This is an inferred seabed height response, not recovered source geometry.
+float q3_lab_shelf_height(float2 world) {
+ float2 broad_uv=world*q3_source_repeat(.29)+float2(.17,.41);
+ float2 middle_uv=float2(world.y,-world.x)*q3_source_repeat(.53)+float2(.63,.23);
+ float broad=shallow_bed_texture.SampleBias(material_sampler,broad_uv,3).a;
+ float middle=shallow_bed_texture.SampleBias(material_sampler,middle_uv,1).a;
+ return (broad-.34)*.82+(middle-.34)*.30;
+}
+"""
+    if body.count(anchor) != 1:
+        raise ValueError("Shelf-relief helper anchor changed")
+    body = body.replace(anchor, helper + anchor)
+    old = """ float3 continuous_normal=q3_margin_normal(input,bed_alpha,.025);
+ return normalize(lerp(decal_normal,continuous_normal,coast_family));"""
+    new = """ float shelf=smoothstep(.03,.14,input.hydrology_data.w)
+  *(1-smoothstep(.43,.68,input.hydrology_data.w));
+ float sculpted=q3_lab_shelf_height(world)*shelf;
+ float3 continuous_normal=q3_margin_normal(input,
+  sculpted*.82+bed_alpha*.18,.42);
+ return normalize(lerp(decal_normal,continuous_normal,coast_family));"""
+    if body.count(old) != 1:
+        raise ValueError("Shelf-relief normal anchor changed")
+    body = body.replace(old, new)
+    old = " color*=1+beach_grain*.32*coast_shelf;"
+    new = """ color*=1+beach_grain*.32*coast_shelf;
+ // Broad authored ridges carry a restrained sediment light/dark response.
+ float shelf_height=q3_lab_shelf_height(world);
+ color*=1+clamp(shelf_height*.45,-.12,.16)*coast_shelf;"""
+    if body.count(old) != 1:
+        raise ValueError("Shelf-relief material anchor changed")
+    shelf_bed.write_text(body.replace(old, new))
+    mesh_root = OUT / "shader-shelf-mesh"
+    for path in clean_root.rglob("*.hlsl"):
+        destination = mesh_root / path.relative_to(clean_root)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, destination)
+    lit_mesh_root = OUT / "shader-shelf-mesh-lit"
+    for path in mesh_root.rglob("*.hlsl"):
+        destination = lit_mesh_root / path.relative_to(mesh_root)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, destination)
+    lit_mesh_bed = lit_mesh_root / "Renderer/native/city_fidelity/hydrology.hlsl"
+    body = lit_mesh_bed.read_text()
+    old = """ float3 absorption=exp(-input.hydrology_data.w*float3(9,5,3)
+  *lerp(1,.42,coast_shelf));"""
+    new = """ // The isolated mesh carries broad elevation in q6_world.z. Use its
+ // raised/depressed residual for local optical depth, as well as geometry.
+ float depth=input.hydrology_data.w;
+ float water=smoothstep(0,.14,-input.hydrology_data.x);
+ float coast=1-smoothstep(.34,.63,saturate(input.surface_coordinate));
+ float base=min(-2.5,-.75-depth*23)*water*coast;
+ float elevation=input.q6_world.z*112-2.5-base;
+ float visual_depth=max(.015,depth-clamp(elevation*.032,-.17,.17)*coast_shelf);
+ float3 absorption=exp(-visual_depth*float3(9,5,3)
+  *lerp(1,.42,coast_shelf));"""
+    if body.count(old) != 1:
+        raise ValueError("Shelf-mesh-light optical anchor changed")
+    lit_mesh_bed.write_text(body.replace(old, new))
+    control_root = OUT / "shader-shelf-mesh-control"
+    for path in clean_root.rglob("*.hlsl"):
+        destination = control_root / path.relative_to(clean_root)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, destination)
     reef_root = OUT / "shader-reef-field"
     for path in clean_root.rglob("*.hlsl"):
         destination = reef_root / path.relative_to(clean_root)
@@ -573,6 +647,90 @@ def refine() -> None:
             raise ValueError("Reef-lit anchor changed: " + old)
         body = body.replace(old, new)
     lit_bed.write_text(body)
+    stone_root = OUT / "shader-reef-stone"
+    for path in lit_root.rglob("*.hlsl"):
+        destination = stone_root / path.relative_to(lit_root)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, destination)
+    stone_bed = stone_root / "Renderer/native/city_fidelity/hydrology.hlsl"
+    body = stone_bed.read_text()
+    changes = (
+        (""" float2 relief=water_decal_height_texture.Sample(decal_sampler,placement.xy).rg;
+ // The second packed channel isolates rock interiors in this source atlas;
+ // its physical meaning remains unresolved, so this is a Lab art mask.
+ rock.a*=placement.z*smoothstep(.30,.48,relief.g);""",
+         """ // As in the hill material, source color separates stone from its
+ // softer decal footprint. A filtered lookup carries the broad formation;
+ // the native lookup keeps small irregular edges without isolated freckles.
+ float3 broad=water_decal_base_texture.SampleBias(decal_sampler,placement.xy,3).rgb;
+ float broad_ratio=broad.b/max(broad.g,.025);
+ float fine_ratio=rock.b/max(rock.g,.025);
+ float stone=smoothstep(.395,.455,broad_ratio)*.82
+  +smoothstep(.38,.53,fine_ratio)*.18;
+ rock.a*=placement.z*stone;"""),
+        (""" float3 placement=q3_lab_reef_placement(world);
+ float rock_relief=water_decal_height_texture.Sample(decal_sampler,placement.xy).g;
+ float3 rock_normal=q3_margin_normal(input,rock_relief*reef,.72);""",
+         """ float rock_height=cliff_height_texture.Sample(material_sampler,rock_uv).r;
+ float3 rock_normal=q3_margin_normal(input,reef*(.60+.40*rock_height),.38);"""),
+        (""" float3 placement=q3_lab_reef_placement(world);
+ float rock_relief=water_decal_height_texture.Sample(decal_sampler,placement.xy).g;
+ float rock_height=cliff_height_texture.Sample(material_sampler,rock_uv).r;
+ float rock_mean=cliff_height_texture.SampleBias(material_sampler,rock_uv,3).r;
+ float3 submerged_rock=lerp(float3(.20,.13,.09),float3(.45,.27,.16),smoothstep(.31,.50,rock_relief))*(.73+rock_grain*.95);
+ color=lerp(color,submerged_rock,rock_mask*.94);
+ color*=1+clamp((rock_height-rock_mean)*1.5,-.20,.25)*rock_mask;
+ color*=1+clamp((rock_relief-.37)*2.0,-.22,.28)*rock_mask;""",
+         """ float rock_height=cliff_height_texture.Sample(material_sampler,rock_uv).r;
+ float rock_mean=cliff_height_texture.SampleBias(material_sampler,rock_uv,3).r;
+ float rock_luma=dot(rock_grain,float3(.2126,.7152,.0722));
+ // The continuous sand stays visible between authored stone interiors.
+ float3 submerged_rock=lerp(rock_grain,rock_luma.xxx,.44)
+  *float3(.54,.37,.24)*1.22;
+ color=lerp(color,submerged_rock,rock_mask*.97);
+ color*=1+clamp((rock_height-rock_mean)*1.9,-.25,.30)*rock_mask;"""),
+    )
+    for old, new in changes:
+        if body.count(old) != 1:
+            raise ValueError("Reef-stone anchor changed: " + old[:60])
+        body = body.replace(old, new)
+    stone_bed.write_text(body)
+    grain_root = OUT / "shader-reef-stone-grain"
+    for path in stone_root.rglob("*.hlsl"):
+        destination = grain_root / path.relative_to(stone_root)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, destination)
+    grain_bed = grain_root / "Renderer/native/city_fidelity/hydrology.hlsl"
+    body = grain_bed.read_text()
+    changes = (
+        ("float2 p=world/1.65,c=floor(p);", "float2 p=world/1.95,c=floor(p);"),
+        ("float active=step(.44,r2);", "float active=step(.54,r2);"),
+        ("float2 center=cell+.5+(float2(r0,r1)-.5)*.90;",
+         "float2 center=cell+.5+(float2(r0,r1)-.5)*.98;"),
+        ("float scale=lerp(.38,.67,frac(r0*13.7+r1*5.1));",
+         "float scale=lerp(.29,.81,frac(r0*13.7+r1*5.1));"),
+        ("float3 rock_normal=q3_margin_normal(input,reef*(.60+.40*rock_height),.38);",
+         "float3 rock_normal=q3_margin_normal(input,reef*(.60+.40*rock_height),.48);"),
+        (""" float3 submerged_rock=lerp(rock_grain,rock_luma.xxx,.44)
+  *float3(.54,.37,.24)*1.22;
+ color=lerp(color,submerged_rock,rock_mask*.97);
+ color*=1+clamp((rock_height-rock_mean)*1.9,-.25,.30)*rock_mask;""",
+         """ float3 submerged_rock=lerp(rock_grain,rock_luma.xxx,.34)
+  *float3(.65,.46,.31)*1.20;
+ color=lerp(color,submerged_rock,rock_mask*.94);
+ // Hill-like source detail sits within the broad formation; the desert-like
+ // sand base remains continuous between sparse, world-stable accents.
+ float3 placement=q3_lab_reef_placement(world);
+ float3 broad=water_decal_base_texture.SampleBias(decal_sampler,placement.xy,3).rgb;
+ float authored_grain=dot(reef.rgb-broad,float3(.2126,.7152,.0722));
+ color*=1+clamp(authored_grain*1.6,-.18,.24)*rock_mask;
+ color*=1+clamp((rock_height-rock_mean)*2.0,-.25,.30)*rock_mask;"""),
+    )
+    for old, new in changes:
+        if body.count(old) != 1:
+            raise ValueError("Reef-stone-grain anchor changed: " + old[:60])
+        body = body.replace(old, new)
+    grain_bed.write_text(body)
     window_root = OUT / "shader-reef-window"
     for path in lit_root.rglob("*.hlsl"):
         destination = window_root / path.relative_to(lit_root)
@@ -663,6 +821,14 @@ def refine() -> None:
     record["aquamarine-no-margin_hydrology_sha256"] = digest(no_margin_bed)
     record["aquamarine-clean-bed_water_sha256"] = digest(clean_root / "Renderer/sandbox/water_surface.hlsl")
     record["aquamarine-clean-bed_hydrology_sha256"] = digest(clean_bed)
+    record["shelf-relief_water_sha256"] = digest(shelf_root / "Renderer/sandbox/water_surface.hlsl")
+    record["shelf-relief_hydrology_sha256"] = digest(shelf_bed)
+    record["shelf-mesh_water_sha256"] = digest(mesh_root / "Renderer/sandbox/water_surface.hlsl")
+    record["shelf-mesh_hydrology_sha256"] = digest(mesh_root / "Renderer/native/city_fidelity/hydrology.hlsl")
+    record["shelf-mesh-lit_water_sha256"] = digest(lit_mesh_root / "Renderer/sandbox/water_surface.hlsl")
+    record["shelf-mesh-lit_hydrology_sha256"] = digest(lit_mesh_bed)
+    record["shelf-mesh-control_water_sha256"] = digest(control_root / "Renderer/sandbox/water_surface.hlsl")
+    record["shelf-mesh-control_hydrology_sha256"] = digest(control_root / "Renderer/native/city_fidelity/hydrology.hlsl")
     record["reef-field_water_sha256"] = digest(reef_root / "Renderer/sandbox/water_surface.hlsl")
     record["reef-field_hydrology_sha256"] = digest(reef_bed)
     record["reef-forms_water_sha256"] = digest(forms_root / "Renderer/sandbox/water_surface.hlsl")
@@ -675,6 +841,10 @@ def refine() -> None:
     record["reef-contrast_hydrology_sha256"] = digest(contrast_bed)
     record["reef-lit_water_sha256"] = digest(lit_root / "Renderer/sandbox/water_surface.hlsl")
     record["reef-lit_hydrology_sha256"] = digest(lit_bed)
+    record["reef-stone_water_sha256"] = digest(stone_root / "Renderer/sandbox/water_surface.hlsl")
+    record["reef-stone_hydrology_sha256"] = digest(stone_bed)
+    record["reef-stone-grain_water_sha256"] = digest(grain_root / "Renderer/sandbox/water_surface.hlsl")
+    record["reef-stone-grain_hydrology_sha256"] = digest(grain_bed)
     record["reef-window_water_sha256"] = digest(window_water)
     record["reef-window_hydrology_sha256"] = digest(window_root / "Renderer/native/city_fidelity/hydrology.hlsl")
     record["reef-detail_water_sha256"] = digest(detail_root / "Renderer/sandbox/water_surface.hlsl")
@@ -774,6 +944,336 @@ def build_client() -> None:
         raise ValueError("Water-only study client build failed: " + result["output_tail"][-2000:])
 
 
+def build_shelf_mesh() -> None:
+    """Build one isolated DLL with separate bed geometry; restore both sources."""
+    if not (OUT / "build.bat").is_file():
+        raise ValueError("Run build first to create the isolated build script")
+    original = GROUND_COMPILER.read_text()
+    renderer_original = RENDERER_CPP.read_text()
+    changes = (
+        ('#include "../../lab/shared/natural/ground.h"',
+         '#include "../../lab/shared/natural/ground.h"\n'
+         '#include "../../lab/studies/coastal_shallows/seabed_relief.h"'),
+        ('        bool underlay_surface = layer > 0.4f && layer < 0.6f;',
+         '        bool underlay_surface = layer > 0.4f && layer < 0.6f;\n'
+         '        bool bed_surface = layer > 3.5f && layer < 4.5f;'),
+        ("""        float h = relief_sample[0] * input.relief_projection_scale;
+        float signed_shore = point.signed_shore;""",
+         """        float h = relief_sample[0] * input.relief_projection_scale;
+        float bed_normal_x=0.f,bed_normal_y=0.f,bed_normal_z=1.f;
+        if (bed_surface && input.pickup_profile) {
+            auto bed_at=[&](float x,float y) {
+                return coastal_lab::height(x,y,float(point.shore.distance),
+                    float(point.shore.depth),point.surface_coordinate,
+                    frame.world_width_tiles,frame.world_height_tiles,
+                    frame.world_wrap_x!=0,frame.world_wrap_y!=0);
+            };
+            float bed_height=bed_at(world_u,world_v);
+            relief_sample[0]=bed_height;
+            h=bed_height*input.relief_projection_scale;
+            constexpr float normal_step=.015f;
+            float slope_x=(bed_at(world_u+normal_step,world_v)-
+                           bed_at(world_u-normal_step,world_v))/(2*normal_step*64.f);
+            float slope_y=(bed_at(world_u,world_v+normal_step)-
+                           bed_at(world_u,world_v-normal_step))/(2*normal_step*64.f);
+            float length=std::sqrt(1.f+slope_x*slope_x+slope_y*slope_y);
+            bed_normal_x=-slope_x/length;
+            bed_normal_y=-slope_y/length;
+            bed_normal_z=1.f/length;
+        }
+        float signed_shore = point.signed_shore;"""),
+        ("""        float normal_x = terrain_conforming_surface ? point.normal[0] : 0.0f;
+        float normal_y = terrain_conforming_surface ? point.normal[1] : 0.0f;
+        float normal_z = terrain_conforming_surface ? point.normal[2] : 1.0f;""",
+         """        float normal_x = bed_surface && input.pickup_profile ? bed_normal_x :
+            terrain_conforming_surface ? point.normal[0] : 0.0f;
+        float normal_y = bed_surface && input.pickup_profile ? bed_normal_y :
+            terrain_conforming_surface ? point.normal[1] : 0.0f;
+        float normal_z = bed_surface && input.pickup_profile ? bed_normal_z :
+            terrain_conforming_surface ? point.normal[2] : 1.0f;"""),
+        ("""        if (input.world_ground) {
+            float elevation=relief_sample[0]*(128.f/224.f*.82f),base=(u+v)*32.f;
+            vertex.x=64.f+(u-v)*64.f;vertex.y=base-elevation;vertex.z=base+elevation*.75f;
+            if(terrain_conforming_surface){vertex.normal_x=-point.normal_delta[0]/.012f;
+                vertex.normal_y=point.normal_delta[1]/.012f;vertex.normal_z=1;}
+        }
+        return vertex;""",
+         """        if (input.world_ground) {
+            float elevation=relief_sample[0]*(128.f/224.f*.82f),base=(u+v)*32.f;
+            vertex.x=64.f+(u-v)*64.f;vertex.y=base-elevation;vertex.z=base+elevation*.75f;
+            if(terrain_conforming_surface){vertex.normal_x=-point.normal_delta[0]/.012f;
+                vertex.normal_y=point.normal_delta[1]/.012f;vertex.normal_z=1;}
+        }
+        if (bed_surface && input.pickup_profile) {
+            // The 2.5D renderer projects the water mask on the mean plane.
+            // Keep bed coverage aligned while world height and lit normals
+            // carry the relief underneath the flat water surface.
+            float plane=input.world_ground ? (u+v)*32.f : ground_y;
+            vertex.y=plane;
+            vertex.z=plane-(input.world_ground ? 2.f : 2.f*frame.tile_width/128.f);
+        }
+        return vertex;"""),
+        ("""    if (!input.pickup_profile) {
+        append_ground_layer(destination.bed_vertices, 4.0f, input.flat_grid, &destination.bed_indices);""",
+         """    if (input.pickup_profile &&
+        std::abs(ground_point_at(.5f,.5f).shore.distance)<1.5f) {
+        append_ground_layer(destination.bed_vertices, 4.0f, input.flat_grid,
+                            &destination.bed_indices);
+    }
+    if (!input.pickup_profile) {
+        append_ground_layer(destination.bed_vertices, 4.0f, input.flat_grid, &destination.bed_indices);"""),
+        ('        bool record=input.retain_ground_grids && !input.world_ground && !input.prewarming && indices && !cached_grid;',
+         '        bool record=input.retain_ground_grids && !input.world_ground && !input.prewarming && indices && !cached_grid && layer!=4.f;'),
+    )
+    patched = original
+    for old, new in changes:
+        if patched.count(old) != 1:
+            raise ValueError("Shelf mesh source anchor changed: " + old[:65])
+        patched = patched.replace(old, new)
+    renderer_changes = (
+        ("""                if(i==2 || i==3)continue;
+                append(result->ground->meshes[i],result->ground_vertices[i],result->ground_indices[i]);""",
+         """                if(i==3)continue; // Water alone retains the flat underlay mesh.
+                append(result->ground->meshes[i],result->ground_vertices[i],result->ground_indices[i]);"""),
+        ("""                if(pickup_profile && (layer==geometry_bed || layer==geometry_water)) {
+                    if(!water_coverage)continue;""",
+         """                if(pickup_profile && (layer==geometry_water ||
+                    (layer==geometry_bed && prepared_ground->meshes[2].empty()))) {
+                    if(!water_coverage)continue;"""),
+    )
+    renderer_patched = renderer_original
+    for old, new in renderer_changes:
+        if renderer_patched.count(old) != 1:
+            raise ValueError("Shelf mesh draw-path anchor changed: " + old[:65])
+        renderer_patched = renderer_patched.replace(old, new)
+    original_hash = hashlib.sha256(original.encode()).hexdigest()
+    renderer_hash = hashlib.sha256(renderer_original.encode()).hexdigest()
+    try:
+        GROUND_COMPILER.write_text(patched)
+        RENDERER_CPP.write_text(renderer_patched)
+        result = native_command_result("Renderer/sandbox",
+                                       r'call "..\lab\out\coastal-shallows\build.bat"',
+                                       timeout_seconds=600)
+        if result["status"] != "pass":
+            raise ValueError("Shelf mesh candidate build failed: " + result["output_tail"][-2500:])
+        candidate = OUT / "build/C3XReference_x64.dll"
+        if not candidate.is_file():
+            raise ValueError("Shelf mesh build did not produce a DLL")
+        shutil.copy2(candidate, OUT / "C3XReferenceShelf_x64.dll")
+    finally:
+        restore_error = None
+        for path, expected, source in ((GROUND_COMPILER, patched, original),
+                                       (RENDERER_CPP, renderer_patched, renderer_original)):
+            if path.read_text() != expected:
+                restore_error = f"{path.name} changed during isolated build; preserve its current contents"
+            else:
+                path.write_text(source)
+        if restore_error:
+            raise ValueError(restore_error)
+    if digest(GROUND_COMPILER) != original_hash or digest(RENDERER_CPP) != renderer_hash:
+        raise ValueError("Renderer sources were not restored byte for byte")
+    record = json.loads((OUT / "snapshot.json").read_text())
+    record["shelf_mesh_dll_sha256"] = digest(OUT / "C3XReferenceShelf_x64.dll")
+    record["shelf_mesh_header_sha256"] = original_hash
+    record["shelf_mesh_renderer_sha256"] = renderer_hash
+    (OUT / "snapshot.json").write_text(json.dumps(record, indent=2) + "\n")
+    print(OUT / "C3XReferenceShelf_x64.dll")
+
+
+def build_mesh_control() -> None:
+    """Compile the unmodified current source with the same build path."""
+    if not (OUT / "build.bat").is_file():
+        raise ValueError("Run build first to create the isolated build script")
+    before = digest(GROUND_COMPILER)
+    result = native_command_result("Renderer/sandbox",
+                                   r'call "..\lab\out\coastal-shallows\build.bat"',
+                                   timeout_seconds=600)
+    if result["status"] != "pass":
+        raise ValueError("Shelf mesh control build failed: " + result["output_tail"][-2500:])
+    if digest(GROUND_COMPILER) != before:
+        raise ValueError("Ground compiler changed during control build")
+    candidate = OUT / "build/C3XReference_x64.dll"
+    shutil.copy2(candidate, OUT / "C3XReferenceCurrent_x64.dll")
+    record = json.loads((OUT / "snapshot.json").read_text())
+    record["shelf_mesh_control_dll_sha256"] = digest(OUT / "C3XReferenceCurrent_x64.dll")
+    (OUT / "snapshot.json").write_text(json.dumps(record, indent=2) + "\n")
+    print(OUT / "C3XReferenceCurrent_x64.dll")
+
+
+def build_form_probe() -> None:
+    """Deliberately obvious bed-only bands to prove the visible material path."""
+    source = OUT / "shader-shelf-mesh-control"
+    target = OUT / "shader-form-probe"
+    if not source.is_dir():
+        raise ValueError("Run refine before the form probe")
+    for path in source.rglob("*.hlsl"):
+        destination = target / path.relative_to(source)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, destination)
+    bed = target / "Renderer/native/city_fidelity/hydrology.hlsl"
+    body = bed.read_text()
+    old = " return color*clamp(.86+(height-.426)*.55,.65,1.1)*absorption*tint;"
+    new = """ // Diagnostic world-space ridge: deliberately simple and high contrast.
+ // It is a route/scale probe, not proposed seabed art.
+ float ridge=sin(world.x*4.2+world.y*1.2);
+ float diagnostic=coast_shelf*.52*ridge;
+ return color*clamp(.86+(height-.426)*.55,.65,1.1)*absorption*tint
+  *(1+diagnostic);"""
+    if body.count(old) != 1:
+        raise ValueError("Form probe bed anchor changed")
+    bed.write_text(body.replace(old, new))
+
+
+def build_bed_hidden_probe() -> None:
+    """Hide only the candidate bed draw to diagnose its water/depth coverage."""
+    source = OUT / "shader-shelf-mesh-lit"
+    target = OUT / "shader-bed-hidden-probe"
+    for path in source.rglob("*.hlsl"):
+        destination = target / path.relative_to(source)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, destination)
+    bed = target / "Renderer/native/city_fidelity/hydrology.hlsl"
+    body = bed.read_text()
+    old = " if(kind<4.5)return float4(q3_scene_bed(input)*q6_receiver_illumination(input,q3_authored_bed_normal(input),1,1),1);"
+    new = " if(kind<4.5){clip(-1);return 0;}"
+    if body.count(old) != 1:
+        raise ValueError("Bed hidden probe anchor changed")
+    bed.write_text(body.replace(old, new))
+
+
+def build_desert_ripple_bed() -> None:
+    """Reuse the desert's continuous source height under coast water only."""
+    source = OUT / "shader-shelf-mesh-control"
+    target = OUT / "shader-desert-ripple-bed"
+    for path in source.rglob("*.hlsl"):
+        destination = target / path.relative_to(source)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, destination)
+    bed = target / "Renderer/native/city_fidelity/hydrology.hlsl"
+    body = bed.read_text()
+    old = " float3 continuous_normal=q3_margin_normal(input,bed_alpha,.025);\n return normalize(lerp(decal_normal,continuous_normal,coast_family));"
+    new = (" // Desert's continuous authored sand height, transferred beneath coast water.\n"
+           " float2 sand_uv=world*q3_source_repeat(.26)+float2(.31,.17);\n"
+           " float sand_height=desert_height_texture.Sample(material_sampler,sand_uv).r;\n"
+           " float shelf=coast_family*(1-smoothstep(.28,.64,input.hydrology_data.w));\n"
+           " float3 continuous_normal=q3_margin_normal(input,\n"
+           "  lerp(bed_alpha,sand_height,.88),.42);\n"
+           " return normalize(lerp(decal_normal,continuous_normal,shelf));")
+    if body.count(old) != 1:
+        raise ValueError("Desert ripple normal anchor changed")
+    body = body.replace(old, new)
+    old = " color*=1+beach_grain*.32*coast_shelf;"
+    new = (" color*=1+beach_grain*.32*coast_shelf;\n"
+           " float2 sand_uv=world*q3_source_repeat(.26)+float2(.31,.17);\n"
+           " float sand_height=desert_height_texture.Sample(material_sampler,sand_uv).r;\n"
+           " float sand_mean=desert_height_texture.SampleBias(material_sampler,sand_uv,3).r;\n"
+           " // Source-height crest/cavity response, with no added stamps.\n"
+           " color*=clamp(1+(sand_height-sand_mean)*2.4*coast_shelf,.72,1.23);")
+    if body.count(old) != 1:
+        raise ValueError("Desert ripple color anchor changed")
+    bed.write_text(body.replace(old, new))
+
+
+def build_desert_ripple_broad() -> None:
+    """Add the source desert-hills height as a broad seabed relief scale."""
+    build_desert_ripple_bed()
+    source = OUT / "shader-desert-ripple-bed"
+    target = OUT / "shader-desert-ripple-broad"
+    for path in source.rglob("*.hlsl"):
+        destination = target / path.relative_to(source)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, destination)
+    bed = target / "Renderer/native/city_fidelity/hydrology.hlsl"
+    body = bed.read_text()
+    old = """ float3 continuous_normal=q3_margin_normal(input,
+  lerp(bed_alpha,sand_height,.88),.42);"""
+    new = """ float2 broad_uv=float2(world.y,-world.x)*q3_source_repeat(.115)+float2(.43,.61);
+ float broad_height=desert_hills_height_texture.Sample(material_sampler,broad_uv).r;
+ float3 continuous_normal=q3_margin_normal(input,
+  sand_height*.48+broad_height*.52,.63);"""
+    if body.count(old) != 1:
+        raise ValueError("Broad desert normal anchor changed")
+    body = body.replace(old, new)
+    old = " color*=clamp(1+(sand_height-sand_mean)*2.4*coast_shelf,.72,1.23);"
+    new = """ float2 broad_uv=float2(world.y,-world.x)*q3_source_repeat(.115)+float2(.43,.61);
+ float broad_height=desert_hills_height_texture.Sample(material_sampler,broad_uv).r;
+ float broad_mean=desert_hills_height_texture.SampleBias(material_sampler,broad_uv,3).r;
+ float surface=(sand_height-sand_mean)*1.5+(broad_height-broad_mean)*2.7;
+ color*=clamp(1+surface*coast_shelf,.65,1.26);"""
+    if body.count(old) != 1:
+        raise ValueError("Broad desert color anchor changed")
+    bed.write_text(body.replace(old, new))
+
+
+def build_desert_direction_mix(broad: bool = False) -> None:
+    """Blend two source-height dune flows, optionally retaining hills relief."""
+    if broad:
+        build_desert_ripple_broad()
+    else:
+        build_desert_ripple_bed()
+    source = OUT / ("shader-desert-ripple-broad" if broad else "shader-desert-ripple-bed")
+    target = OUT / ("shader-desert-direction-broad" if broad else "shader-desert-direction-mix")
+    for path in source.rglob("*.hlsl"):
+        destination = target / path.relative_to(source)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, destination)
+    bed = target / "Renderer/native/city_fidelity/hydrology.hlsl"
+    body = bed.read_text()
+    anchor = "float3 q3_authored_bed_normal(PixelInput input) {"
+    helper = """float2 q3_coast_dune_height(float2 world) {
+ // Both directions use the existing desert source height. Broad source noise
+ // selects their flow continuously, so no tile owns a direction or stamp.
+ float2 uv0=world*q3_source_repeat(.26)+float2(.31,.17);
+ float2 uv1=float2(world.y,-world.x)*q3_source_repeat(.26)+float2(.71,.43);
+ float2 a=float2(desert_height_texture.Sample(material_sampler,uv0).r,
+  desert_height_texture.SampleBias(material_sampler,uv0,3).r);
+ float2 b=float2(desert_height_texture.Sample(material_sampler,uv1).r,
+  desert_height_texture.SampleBias(material_sampler,uv1,3).r);
+ float2 flow_uv=world*float2(q3_source_repeat(.11),q3_source_repeat(.14))
+  +float2(.19,.53);
+ float flow=river_bank_noise_texture.Sample(material_sampler,flow_uv).r;
+ return lerp(a,b,smoothstep(.39,.61,flow));
+}
+"""
+    if body.count(anchor) != 1:
+        raise ValueError("Directional dune helper anchor changed")
+    head, tail = body.replace(anchor, helper + anchor).split("float3 q3_scene_bed(PixelInput input) {", 1)
+    old = " float2 sand_uv=world*q3_source_repeat(.26)+float2(.31,.17);\n float sand_height=desert_height_texture.Sample(material_sampler,sand_uv).r;"
+    if head.count(old) != 1:
+        raise ValueError("Directional dune normal anchor changed")
+    head = head.replace(old, " float sand_height=q3_coast_dune_height(world).x;")
+    old = (" float2 sand_uv=world*q3_source_repeat(.26)+float2(.31,.17);\n"
+           " float sand_height=desert_height_texture.Sample(material_sampler,sand_uv).r;\n"
+           " float sand_mean=desert_height_texture.SampleBias(material_sampler,sand_uv,3).r;")
+    if tail.count(old) != 1:
+        raise ValueError("Directional dune color anchor changed")
+    tail = tail.replace(old, " float2 dune=q3_coast_dune_height(world);\n float sand_height=dune.x,sand_mean=dune.y;")
+    bed.write_text(head + "float3 q3_scene_bed(PixelInput input) {" + tail)
+
+
+def build_desert_direction_patches() -> None:
+    """Keep the preferred relief while changing flow over broad coast regions."""
+    build_desert_direction_mix(broad=True)
+    source = OUT / "shader-desert-direction-broad"
+    target = OUT / "shader-desert-direction-patches"
+    for path in source.rglob("*.hlsl"):
+        destination = target / path.relative_to(source)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, destination)
+    bed = target / "Renderer/native/city_fidelity/hydrology.hlsl"
+    body = bed.read_text()
+    changes = (
+        ("q3_source_repeat(.11),q3_source_repeat(.14)",
+         "q3_source_repeat(.035),q3_source_repeat(.048)"),
+        ("smoothstep(.39,.61,flow)", "smoothstep(.455,.545,flow)"),
+    )
+    for old, new in changes:
+        if body.count(old) != 1:
+            raise ValueError("Directional patch anchor changed: " + old)
+        body = body.replace(old, new)
+    bed.write_text(body)
+
+
 def render(label: str, zoom: int = 128) -> None:
     if not (OUT / "snapshot.json").exists():
         raise ValueError("Run prepare first")
@@ -785,7 +1285,10 @@ def render(label: str, zoom: int = 128) -> None:
     relative_output = f"z{zoom}\\{label}" if zoom != 128 else label
     capture = rf"..\lab\out\coastal-shallows\{relative_output}\frame"
     executable = r"..\lab\out\coastal-shallows\client_x64.exe"
-    dll = r"..\lab\out\coastal-shallows\C3XReference_x64.dll"
+    dll_name = ("C3XReferenceShelf_x64.dll" if label in ("shelf-mesh", "shelf-mesh-lit", "bed-hidden-probe") else
+                "C3XReferenceCurrent_x64.dll" if label in ("shelf-mesh-control", "form-probe", "desert-ripple-bed", "desert-ripple-broad", "desert-direction-mix", "desert-direction-broad", "desert-direction-patches") else
+                "C3XReference_x64.dll")
+    dll = rf"..\lab\out\coastal-shallows\{dll_name}"
     scene = r"..\lab\out\coastal-shallows\scene.csv"
     batch = output / "render.bat"
     batch.write_text("\n".join((
@@ -823,7 +1326,7 @@ def render(label: str, zoom: int = 128) -> None:
         "hydrology_sha256": digest(OUT / f"shader-{label}/Renderer/native/city_fidelity/hydrology.hlsl"),
         "scene_sha256": digest(OUT / "scene.csv"),
         "client_sha256": digest(OUT / "client_x64.exe"),
-        "dll_sha256": digest(OUT / "C3XReference_x64.dll"),
+        "dll_sha256": digest(OUT / dll_name),
     }, indent=2) + "\n")
     print(frame)
 
@@ -976,9 +1479,9 @@ def review_zoom() -> None:
     root = OUT / "z256"
     snapshot = json.loads((OUT / "snapshot.json").read_text())
     frames = {}
-    for label in ("baseline", "candidate", "rich", "lagoon", "bed-only", "clearwater", "no-clutter", "scattered", "rockbeds", "continuous", "aquamarine", "aquamarine-no-margin", "aquamarine-clean-bed", "reef-field", "reef-forms", "reef-ridges", "reef-relief", "reef-contrast", "reef-lit", "reef-window", "reef-detail", "reef-composite"):
+    for label in ("baseline", "candidate", "rich", "lagoon", "bed-only", "clearwater", "no-clutter", "scattered", "rockbeds", "continuous", "aquamarine", "aquamarine-no-margin", "aquamarine-clean-bed", "reef-field", "reef-forms", "reef-ridges", "reef-relief", "reef-contrast", "reef-lit", "reef-window", "reef-detail", "reef-composite", "reef-stone", "reef-stone-grain"):
         folder = root / label
-        if label in ("lagoon", "bed-only", "clearwater", "no-clutter", "scattered", "rockbeds", "continuous", "aquamarine", "aquamarine-no-margin", "aquamarine-clean-bed", "reef-field", "reef-forms", "reef-ridges", "reef-relief", "reef-contrast", "reef-lit", "reef-window", "reef-detail", "reef-composite") and not (folder / "result.json").is_file():
+        if label in ("lagoon", "bed-only", "clearwater", "no-clutter", "scattered", "rockbeds", "continuous", "aquamarine", "aquamarine-no-margin", "aquamarine-clean-bed", "reef-field", "reef-forms", "reef-ridges", "reef-relief", "reef-contrast", "reef-lit", "reef-window", "reef-detail", "reef-composite", "reef-stone", "reef-stone-grain") and not (folder / "result.json").is_file():
             continue
         receipt = json.loads((folder / "result.json").read_text())
         frame = folder / "frame-0000.jpg"
@@ -1008,7 +1511,7 @@ def review_zoom() -> None:
     ImageDraw.Draw(strip).text((862, 10), "Candidate · 256 px tiles · native crop",
                                fill="white", font=font)
     strip.save(root / "shoreline-before-candidate.png")
-    for label in ("lagoon", "bed-only", "clearwater", "no-clutter", "scattered", "rockbeds", "continuous", "aquamarine", "aquamarine-no-margin", "aquamarine-clean-bed", "reef-field", "reef-forms", "reef-ridges", "reef-relief", "reef-contrast", "reef-lit", "reef-window", "reef-detail", "reef-composite"):
+    for label in ("lagoon", "bed-only", "clearwater", "no-clutter", "scattered", "rockbeds", "continuous", "aquamarine", "aquamarine-no-margin", "aquamarine-clean-bed", "reef-field", "reef-forms", "reef-ridges", "reef-relief", "reef-contrast", "reef-lit", "reef-window", "reef-detail", "reef-composite", "reef-stone", "reef-stone-grain"):
         if label not in frames:
             continue
         strip.paste(frames[label].crop(box), (850, 48))
@@ -1108,6 +1611,24 @@ def review_zoom() -> None:
                                              f"{label.title()} · 2× display",
                                              fill="white", font=font)
         rock_detail.save(root / "reef-lit-rocks-2x.png")
+    if "reef-stone" in frames:
+        detail_box = (530, 120, 1080, 670)
+        detail = Image.new("RGB", (1100, 598), "#14212a")
+        for column, label in enumerate(("aquamarine-clean-bed", "reef-stone")):
+            detail.paste(frames[label].crop(detail_box), (column * 550, 48))
+            ImageDraw.Draw(detail).text((column * 550 + 12, 10),
+                                        f"{label.title()} · native coast detail",
+                                        fill="white", font=font)
+        detail.save(root / "clean-bed-vs-reef-stone.png")
+    if "reef-stone-grain" in frames:
+        detail_box = (530, 120, 1080, 670)
+        detail = Image.new("RGB", (1100, 598), "#14212a")
+        for column, label in enumerate(("reef-stone", "reef-stone-grain")):
+            detail.paste(frames[label].crop(detail_box), (column * 550, 48))
+            ImageDraw.Draw(detail).text((column * 550 + 12, 10),
+                                        f"{label.title()} · native coast detail",
+                                        fill="white", font=font)
+        detail.save(root / "reef-stone-vs-grain.png")
     if "reef-window" in frames:
         detail_box = (530, 120, 1080, 670)
         detail = Image.new("RGB", (1100, 598), "#14212a")
@@ -1194,6 +1715,12 @@ def review_zoom() -> None:
         print(root / "shoreline-before-reef-lit.png")
         print(root / "clean-bed-vs-reef-lit.png")
         print(root / "reef-lit-rocks-2x.png")
+    if "reef-stone" in frames:
+        print(root / "shoreline-before-reef-stone.png")
+        print(root / "clean-bed-vs-reef-stone.png")
+    if "reef-stone-grain" in frames:
+        print(root / "shoreline-before-reef-stone-grain.png")
+        print(root / "reef-stone-vs-grain.png")
     if "reef-window" in frames:
         print(root / "shoreline-before-reef-window.png")
         print(root / "reef-lit-vs-window.png")
@@ -1207,9 +1734,51 @@ def review_zoom() -> None:
     print(root / "review.json")
 
 
+def review_shelf(candidate: str = "shelf-relief") -> None:
+    """Verify frozen inputs and compare the sculpted shelf at native zoom."""
+    from PIL import Image, ImageChops, ImageDraw, ImageFont
+    root = OUT / "z256"
+    snapshot = json.loads((OUT / "snapshot.json").read_text())
+    frames = {}
+    for label in ("aquamarine-clean-bed", candidate):
+        folder = root / label
+        receipt = json.loads((folder / "result.json").read_text())
+        frame = folder / "frame-0000.jpg"
+        expected = {
+            "frame_sha256": digest(frame),
+            "shader_sha256": snapshot[f"{label}_water_sha256"],
+            "hydrology_sha256": snapshot[f"{label}_hydrology_sha256"],
+            "scene_sha256": snapshot["scene_sha256"],
+            "client_sha256": snapshot["binaries"]["client_x64.exe"],
+            "dll_sha256": (snapshot["shelf_mesh_dll_sha256"] if label == "shelf-mesh"
+                           else snapshot["binaries"]["C3XReference_x64.dll"]),
+            "tile_width": 256,
+        }
+        if any(receipt.get(key) != value for key, value in expected.items()):
+            raise ValueError(f"Stale shelf capture: {label}")
+        frames[label] = Image.open(frame).convert("RGB")
+    before, after = frames.values()
+    if before.size != after.size:
+        raise ValueError("Mismatched shelf frame sizes")
+    control = (0, 0, 200, 400)
+    if ImageChops.difference(before.crop(control), after.crop(control)).getbbox():
+        raise ValueError("Open-ocean control changed in shelf relief")
+    crop = (530, 120, 1080, 670)
+    review = Image.new("RGB", (1100, 598), "#14212a")
+    font = ImageFont.load_default(size=23)
+    for column, (label, frame) in enumerate(frames.items()):
+        review.paste(frame.crop(crop), (column * 550, 48))
+        ImageDraw.Draw(review).text((column * 550 + 12, 10),
+                                    f"{label.title()} · native coast detail",
+                                    fill="white", font=font)
+    output = root / f"clean-bed-vs-{candidate}.png"
+    review.save(output)
+    print(output)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("build", "build-client", "prepare", "refine", "baseline", "candidate", "rich", "lagoon", "bed-only", "clearwater", "no-clutter", "scattered", "rockbeds", "continuous", "aquamarine", "aquamarine-no-margin", "aquamarine-clean-bed", "reef-field", "reef-forms", "reef-ridges", "reef-relief", "reef-contrast", "reef-lit", "reef-window", "reef-detail", "reef-composite", "recover-rich", "review", "review-rich", "review-zoom"))
+    parser.add_argument("action", choices=("build", "build-client", "build-shelf-mesh", "build-mesh-control", "prepare", "refine", "baseline", "candidate", "rich", "lagoon", "bed-only", "clearwater", "no-clutter", "scattered", "rockbeds", "continuous", "aquamarine", "aquamarine-no-margin", "aquamarine-clean-bed", "shelf-relief", "shelf-mesh", "shelf-mesh-lit", "shelf-mesh-control", "form-probe", "bed-hidden-probe", "desert-ripple-bed", "desert-ripple-broad", "desert-direction-mix", "desert-direction-broad", "desert-direction-patches", "reef-field", "reef-forms", "reef-ridges", "reef-relief", "reef-contrast", "reef-lit", "reef-stone", "reef-stone-grain", "reef-window", "reef-detail", "reef-composite", "recover-rich", "review", "review-rich", "review-zoom", "review-shelf", "review-mesh"))
     parser.add_argument("--zoom", type=int, choices=(128, 192, 256), default=128,
                         help="Sandbox tile width for a capture (default: 128)")
     args = parser.parse_args()
@@ -1217,6 +1786,31 @@ if __name__ == "__main__":
         build()
     elif args.action == "build-client":
         build_client()
+    elif args.action == "build-shelf-mesh":
+        build_shelf_mesh()
+    elif args.action == "build-mesh-control":
+        build_mesh_control()
+    elif args.action == "form-probe":
+        build_form_probe()
+        render(args.action, args.zoom)
+    elif args.action == "bed-hidden-probe":
+        build_bed_hidden_probe()
+        render(args.action, args.zoom)
+    elif args.action == "desert-ripple-bed":
+        build_desert_ripple_bed()
+        render(args.action, args.zoom)
+    elif args.action == "desert-ripple-broad":
+        build_desert_ripple_broad()
+        render(args.action, args.zoom)
+    elif args.action == "desert-direction-mix":
+        build_desert_direction_mix()
+        render(args.action, args.zoom)
+    elif args.action == "desert-direction-broad":
+        build_desert_direction_mix(broad=True)
+        render(args.action, args.zoom)
+    elif args.action == "desert-direction-patches":
+        build_desert_direction_patches()
+        render(args.action, args.zoom)
     elif args.action == "prepare":
         prepare()
     elif args.action == "refine":
@@ -1227,6 +1821,10 @@ if __name__ == "__main__":
         review_rich()
     elif args.action == "review-zoom":
         review_zoom()
+    elif args.action == "review-shelf":
+        review_shelf()
+    elif args.action == "review-mesh":
+        review_shelf("shelf-mesh")
     elif args.action == "recover-rich":
         recover_rich_capture()
     else:
