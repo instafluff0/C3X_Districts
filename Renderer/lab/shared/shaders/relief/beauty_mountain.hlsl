@@ -281,7 +281,10 @@ void ordinary_flat_material(P input, float3 geometric, out float3 albedo,
     float2 uv0 = input.world.xy * 0.43 + float2(0.31, 0.17);
     float2 uv1 = float2(input.world.y, -input.world.x) * (0.43 * 0.91) + float2(0.63, 0.29);
     float2 tundra_uv = input.world.xy * (0.43 * 0.84) + float2(0.19, 0.71);
-    float3 grass = GrassColor.Sample(Wrap, uv0).rgb;
+    float3 grass = (GrassColor.Sample(Wrap, uv0).rgb +
+                    GrassColor.Sample(Wrap, uv0 + float2(.37, .11)).rgb +
+                    GrassColor.Sample(Wrap, uv0 + float2(.13, .53)).rgb +
+                    GrassColor.Sample(Wrap, uv0 + float2(.61, .71)).rgb) * .25;
     float3 plains = PlainsColor.Sample(Wrap, uv1).rgb;
     float3 tundra = TundraColor.Sample(Wrap, tundra_uv).rgb;
     float grass_h = GrassHeight.Sample(Wrap, uv0).r;
@@ -357,7 +360,10 @@ void ground_material(P input, out float3 albedo, out float height_detail,
         max(1 - desert_weight, 0.00001));
     float plains_weight = saturate(input.biome.x /
         max(1 - desert_weight - input.material.w, 0.00001));
-    float3 grass = ground_surface_sample(GrassColor, input, 0.43, float2(.31,.17), false).rgb;
+    float3 grass = (ground_surface_sample(GrassColor, input, 0.43, float2(.31,.17), false).rgb +
+                    ground_surface_sample(GrassColor, input, 0.43, float2(.68,.28), false).rgb +
+                    ground_surface_sample(GrassColor, input, 0.43, float2(.44,.70), false).rgb +
+                    ground_surface_sample(GrassColor, input, 0.43, float2(.92,.88), false).rgb) * .25;
     float3 plains = ground_surface_sample(PlainsColor, input, 0.43*.91, float2(.63,.29), true).rgb;
     float3 tundra = ground_surface_sample(TundraColor, input, 0.43*.84, float2(.19,.71), false).rgb;
     albedo = lerp(lerp(grass, plains, plains_weight), tundra, tundra_weight);

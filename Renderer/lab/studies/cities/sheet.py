@@ -127,9 +127,10 @@ def render_cell(design: dict, size: int, walls: bool, capital: bool,
     guide = list(canvas.pixels)
     depth = [-math.inf]*(cell[0]*cell[1])
     tier = design["tier_designs"][size]
-    instances = list(tier["houses"])
+    instances = list(tier.get("capital_houses", tier["houses"]) if capital else tier["houses"])
     if not capital or not design.get("capital_replaces_centerpiece", False):
-        instances.append(tier["base_centerpiece"])
+        instances.append(tier.get("capital_centerpiece", tier["base_centerpiece"])
+                         if capital else tier["base_centerpiece"])
     if capital:
         instances.append(tier["palace"])
     if walls:

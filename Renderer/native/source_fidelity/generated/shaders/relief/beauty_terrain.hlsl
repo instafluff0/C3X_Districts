@@ -208,6 +208,10 @@ Output shade(P input) {
         // authoritative biome field fades it at ecotones and terrain edits.
         alpha *= patch.a * smoothstep(0.015, 0.42, input.material.z) *
                  (desert_dune ? 0.62 : 1.0);
+        if (!desert_dune && !plains_surface) {
+            float edge = min(input.material.w, min(input.biome.x, input.biome.y));
+            alpha *= smoothstep(0.0, 0.18, edge);
+        }
     } else if (input.material.y > 2.5) {
         bool jungle_floor = input.material.y > 3.5;
         float4 floor_sample = jungle_floor ? JungleFloorColor.Sample(Clamp, input.uv) :

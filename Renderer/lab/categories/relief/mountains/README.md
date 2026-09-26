@@ -12,6 +12,8 @@ ground. Its zero-rise fringe now carries the ordinary ground normal, altitude
 and support values, uses the native-prepared terrain material response, and
 enters shared lighting as ground. The handoff fades out before the raised
 rock and authored hill response, preserving adjacent mountain connections.
+This handoff adjustment alone did not remove the straight grassland marks seen
+in the `test.biq` crop; the separate material study below isolates them.
 The original `test.biq` is unchanged. Review the real native captures under
 `Renderer/lab/out/mountains/ground-handoff/after-v8/` against `before/`;
 the marked plains/desert edges and nearby hill are collected in
@@ -19,6 +21,26 @@ the marked plains/desert edges and nearby hill are collected in
 `python3 Renderer/renderer.py test mountains` passes (136 tests, one skip),
 and the reviewed BIQ cameras render with zero fallback. This remains a Lab
 candidate; no binary was staged and no fixed reference was replaced.
+
+## Grassland triangle and texture-band study (Lab candidate)
+
+At the fixed `test.biq` camera `(20,79)`, single-variable shader ablations
+identified two overlapping marks. Grassland source-surface recipes draw many
+disconnected three-vertex patches. A material-class render marks the visible
+triangle outlines as the grass subtype (`material.y` between 4.5 and 5.5).
+The Lab mesh now skips those optional grass patches; plains and desert patches
+remain. The softer straight band that persists without those patches comes
+from the single GrassColor lookup used by both ordinary terrain and the flat
+mountain fringe. Both Lab material sources now average four offset samples of
+that same texture. This retains source grass detail while reducing its broad
+repeated band. Mountain adjacency and rock materials are unchanged.
+
+`Renderer/lab/studies/mountains/triangle_ablation.py` reproduces isolated
+shader controls using an explicit candidate DLL and shader source root. The
+fixed-camera native captures and the exact user-crop comparison are under
+`Renderer/lab/out/mountains/triangle-final-source/`, including three wider
+`test.biq` context views. The final candidate was built without staging, and
+the fixed reference images were not replaced. Visual acceptance is pending.
 
 ## Sandbox-based shape study (Lab only)
 

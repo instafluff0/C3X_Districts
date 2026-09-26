@@ -1,11 +1,9 @@
 # Coastal shallows experiment
 
 This isolated study starts from the sandbox water shader and its existing
-coast/sea/ocean family weights. It evaluates a modest coast-only color and
-transparency adjustment plus a small increase in the accepted beach-alpha
-seabed grain, intended to reveal more of the already-authored seabed
-through shallow water. The shoreline contour, sand, cliffs, foam, normal motion,
-reflections, sea and ocean formulas are unchanged.
+coast/sea/ocean family weights. It first cleans repeated brown marks out of
+the aquamarine shallow bed, then tests source-backed submerged rock forms and
+grain. The shoreline contour, dry sand, cliffs and foam are unchanged.
 
 The source assets and existing shore material work are documented in
 `Renderer/docs/coastline_and_water_findings.md` and
@@ -27,6 +25,10 @@ python3 Renderer/lab/studies/coastal_shallows/study.py candidate --zoom 256
 python3 Renderer/lab/studies/coastal_shallows/study.py rich --zoom 256
 python3 Renderer/lab/studies/coastal_shallows/study.py lagoon --zoom 256
 python3 Renderer/lab/studies/coastal_shallows/study.py aquamarine --zoom 256
+python3 Renderer/lab/studies/coastal_shallows/study.py aquamarine-clean-bed --zoom 256
+python3 Renderer/lab/studies/coastal_shallows/study.py aquamarine-clean-bed
+python3 Renderer/lab/studies/coastal_shallows/study.py reef-lit --zoom 256
+python3 Renderer/lab/studies/coastal_shallows/study.py reef-lit
 python3 Renderer/lab/studies/coastal_shallows/study.py review-zoom
 ```
 
@@ -60,22 +62,63 @@ At this zoom, `clearwater` exposed repeated blotches. A no-clutter diagnostic
 removed them, identifying projected atlas color as the cause. Jittered sparse
 placement (`scattered`) and stronger rock contrast (`rockbeds`) still looked
 stamped and were rejected. The authored `shallows_base_color` alpha contains a
-continuous irregular pattern, while its RGB is much flatter. `continuous`
+continuous irregular pattern, while its RGB includes baked rock clusters. `continuous`
 showed that pattern too strongly and looked yellow and busy. `aquamarine`
 suppresses projected atlas color only in coast-family beds, uses the alpha
-pattern at low contrast, and tints the shallow bed blue-green. This avoids the
-obvious stamps, but the current scene still lacks the target's distinct dark
-submerged rock forms. It is a Lab visual direction, not an accepted replacement.
+pattern at low contrast, and tints the shallow bed blue-green. Its water hue
+and clarity worked, but a close crop still showed regularly spaced brown
+shapes. The source shallows RGB contains four baked rock clusters per texture;
+the submerged margin also samples a repeated gravel atlas. Removing only the
+submerged gravel barely changed the stamps. `aquamarine-clean-bed` suppresses
+that margin gravel and uses the source texture's highest-mip mean sand color
+for coast-family beds, while keeping its independent alpha structure at low
+contrast. The close crop no longer shows the repeated brown clusters. It is a
+Lab visual direction, not an accepted replacement, and the current scene still
+lacks the target's distinct dark submerged rock forms.
 The alpha texture contents are confirmed source data; interpreting them as
 seabed contrast and normal detail is a C3X inference.
 
 Matched 256-pixel captures for `baseline`, `clearwater`, `scattered`,
-`continuous` and `aquamarine` all completed on the Windows VM. The native
-`stamps-vs-aquamarine.png` crop shows the rejected blotches beside the cleaner
-candidate. A 128-pixel `aquamarine` gameplay capture also completed. All use the
+`continuous`, `aquamarine`, `aquamarine-no-margin`, and
+`aquamarine-clean-bed` all completed on the Windows VM. The native
+`aquamarine-vs-clean-bed.png` crop isolates the remaining baked stamps beside
+the cleaned bed. Both `aquamarine` and `aquamarine-clean-bed` also completed
+at the 128-pixel gameplay scale. All use the
 same frozen BIQ, client, DLL and noon frame; the far-open-ocean control is
 pixel-identical to baseline at both zooms. No production shader, binary or
 reference was replaced.
+
+## Submerged-rock pass
+
+The five nonzero `TER_Ocean_Decal` atlas cells supply authored rock color and
+soft coverage. A separate packed channel varies across the rock interiors;
+this study uses its second component as an exploratory art mask. Its physical
+meaning is not confirmed, so this is not a recovered source material decode.
+`reef-lit` places those source cells at deterministic, jittered world positions
+with varying scale and rotation. It uses the source mask to reject each cell's
+soft outer plate, adds cliff-material grain, and derives local normals from the
+varying rock channel under the same scene light. The distribution, tint,
+contrast and normal strength are C3X visual choices.
+
+The native 256-pixel `clean-bed-vs-reef-lit.png` crop shows sparse, textured
+submerged forms without restoring the repeating brown clusters. The 128-pixel
+capture shows they remain fairly subtle at gameplay scale. The earlier
+`reef-field` became a soft dark shadow; `reef-forms` admitted whole decal
+footprints; `reef-ridges` and `reef-relief` improved their outline but lacked
+contrast; `reef-contrast` produced a cyan spot in the wider crop. A local
+surface-clarity test (`reef-window`) was visually negligible. Source-color
+high-pass (`reef-detail`) revealed grain but became a patch of freckles; adding
+back a restrained interior shadow (`reef-composite`) did not resolve that look.
+`reef-lit` is
+the best current Lab candidate, still softer and less three-dimensional than
+the Civ reference. There is no claim that projected bed shading substitutes
+for actual submerged rock geometry.
+
+All close captures use the frozen scene, binaries and noon environment. The
+far-open-ocean pixel control remains identical to baseline. The `reef-lit`
+surface shader is byte-identical to `aquamarine-clean-bed`, so its difference
+is the submerged bed alone. No production shader, binary or fixed reference
+was replaced.
 
 The local 0 A.D. `water_high.fs` at commit
 `0ed48b3a1fb1b4b718a78869fa497185af55e086` blends a refracted scene with reflected

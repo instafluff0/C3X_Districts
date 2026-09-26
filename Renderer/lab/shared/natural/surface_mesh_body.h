@@ -15,7 +15,11 @@
             // source tile coordinates as well as position, rotation and scale.
             // Desert dunes retain their sparse regional distribution.
             bool sparse_desert=biome==2 && (random_u32(state)&1u)!=0;
-            unsigned density=sparse_desert?0u:(biome==2?3u:(biome==0?12u:14u)+random_u32(state)%9u);
+            // Grass source recipes are disconnected authored triangles whose
+            // straight mesh edges remain visible even when their color alpha
+            // is faded. The continuous grass material supplies this detail.
+            unsigned density=biome==0 || sparse_desert?0u:
+                (biome==2?3u:14u+random_u32(state)%9u);
             auto owner_shore=shore_sample_at(float(nc)+.5f,float(nr)+.5f);
             float owner_coverage=biome==2
                 ? desert_coast_coverage(float(owner_shore.distance))

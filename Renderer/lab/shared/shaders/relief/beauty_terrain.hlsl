@@ -251,7 +251,13 @@ Output shade(P input) {
     } else {
         float2 uv0 = input.world.xy * Detail.x + float2(0.31, 0.17);
         float2 uv1 = float2(input.world.y, -input.world.x) * (Detail.x * 0.91) + float2(0.63, 0.29);
-        float3 grass = GrassColor.Sample(Wrap, uv0).rgb;
+        // Average independent regions of the source grass color. One lookup
+        // carries a broad dark band that repeats as a straight map line; the
+        // four-way sample keeps its fine mottling without that band.
+        float3 grass = (GrassColor.Sample(Wrap, uv0).rgb +
+                        GrassColor.Sample(Wrap, uv0 + float2(.37, .11)).rgb +
+                        GrassColor.Sample(Wrap, uv0 + float2(.13, .53)).rgb +
+                        GrassColor.Sample(Wrap, uv0 + float2(.61, .71)).rgb) * .25;
         float3 plains = PlainsColor.Sample(Wrap, uv1).rgb;
         float2 tundra_uv = input.world.xy * (Detail.x * 0.84) + float2(0.19, 0.71);
         float3 tundra = TundraColor.Sample(Wrap, tundra_uv).rgb;

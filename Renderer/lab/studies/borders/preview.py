@@ -225,7 +225,7 @@ def inward_fade_mask(flat_paths: list[list[tuple[float, float]]],
     """Build a varied, fading inward band from ground-draped parallel paths."""
     mask = Image.new("L", (image_size[0]*scale, image_size[1]*scale))
     pen = ImageDraw.Draw(mask)
-    reach = stroke_width*3.8
+    reach = stroke_width*5.0
     steps = max(2, math.ceil(reach/1.6))
     line_width = max(2, round(2.9*scale))
     for loop_index, flat_path in enumerate(flat_paths):
@@ -259,7 +259,7 @@ def inward_fade_mask(flat_paths: list[list[tuple[float, float]]],
                 fade = max(0.0, 1-distance/(reach*edge_variation))**1.25
                 texture = 0.87+0.09*math.sin(index*.073+loop_index*.9)+\
                           0.07*math.sin(index*.21+distance*.14)
-                opacity = round(104*fade*texture)
+                opacity = round(145*fade*texture)
                 projected.append((px*scale, py*scale))
                 coverage.append(opacity)
                 hidden.append(occluders is not None and depth is not None and

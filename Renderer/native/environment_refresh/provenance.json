@@ -10,7 +10,7 @@
     "Renderer/native/render_core/shadow_receiver.hlsl": "927b58bc3a77f8d947b54a279b1b2183ef52b01caddaf8e7d60d2484e37d9436",
     "Renderer/lab/shared/shaders/lighting/paged_shadow_v1.hlsl": "0314e3cadc09dab8d6098f6158e97e4da269afde783d8477722a7f3be70c495f",
     "Renderer/lab/shared/shaders/relief/coast_rocks.hlsl": "39ba4ada0ad6567b0fb75827495b55f727a98c563f13d4a762f087deba2a9398",
-    "Renderer/native/source_fidelity/terrain.hlsl": "bf1e39db0c52207afa1b36b55625f32b40e2bdb83f6a927e7cdb89361de1c16f",
+    "Renderer/native/source_fidelity/terrain.hlsl": "c27ee4f3dcf420696ee208d5bc1ce8484a6e6a56ec0956756277806084b14484",
     "Renderer/native/source_fidelity/mountain.hlsl": "4b42efbb3225436c4764e741222fd9cffcb13a99a50ff609a7aa45a28ef5031b",
     "Renderer/native/source_fidelity/objects.hlsl": "042e6e976f031b14c1bfdc44e31898fa41ae656c3b9d9f42136b937bfe0b3956",
     "Renderer/native/render_core/source_caster.hlsl": "00ebc017793b7674d30c92ec7bd57ce9541d90e7b8a412134ba80da305cb1bee"

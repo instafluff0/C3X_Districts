@@ -9,7 +9,7 @@ edges stay straight through their centers, with small rounded turns at tile
 corners. The outline is continuous, including through forest. Its opacity fades
 across the stroke's width, leaving a stronger center and soft edges. Every
 part of the ribbon uses the selected civ RGB color, with no white outline.
-A narrow semitransparent band in that same color continues into the owned
+A visible semitransparent band in that same color continues into the owned
 territory. Its width and opacity vary gently along the edge, then taper to
 transparency; the outside has no matching band. Each inset contour samples the
 renderer ground mesh and depth, so the band follows relief and fades behind

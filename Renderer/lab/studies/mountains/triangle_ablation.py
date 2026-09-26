@@ -19,6 +19,7 @@ from Renderer.lab.studies.terrain.test_biq import capture
 
 OUT = ROOT / "Renderer/lab/out/mountains/triangle-ablation"
 NATIVE = ROOT / "Renderer/native"
+SOURCE_TREE = NATIVE
 DLL = ROOT / "Renderer/lab/out/mountains/ground-handoff/v8-C3XRenderer.dll"
 SCENE = ROOT / "Renderer/lab/out/mountains/ground-handoff/after-v8/test-biq.csv"
 SHADERS = ("city_fidelity/terrain.hlsl", "city_fidelity/mountain.hlsl")
@@ -31,6 +32,67 @@ def replace_once(source: str, old: str, new: str, label: str) -> str:
 
 
 def ablate(source: str, case: str) -> str:
+    if case.startswith("grass-off-plus-"):
+        return ablate(ablate(source, "grass-surface-off"),
+                      case.removeprefix("grass-off-plus-"))
+    if case == "edge-fade-on":
+        if "Texture2D GroundSurfaceDetail" in source:
+            return source
+        return replace_once(source,
+            "(desert_dune ? 0.62 : 1.0);",
+            "(desert_dune ? 0.62 : 1.0);\n"
+            "        if (!desert_dune && !plains_surface) {\n"
+            "            float edge = min(input.material.w, min(input.biome.x, input.biome.y));\n"
+            "            alpha *= smoothstep(0.0, 0.18, edge);\n"
+            "        }",case)
+    if case in ("edge-fade-soft", "edge-fade-minimal"):
+        if "Texture2D GroundSurfaceDetail" in source:
+            return source
+        gain = "0.50" if case == "edge-fade-soft" else "0.25"
+        return replace_once(source,
+            "(desert_dune ? 0.62 : 1.0);",
+            "(desert_dune ? 0.62 : 1.0);\n"
+            "        if (!desert_dune && !plains_surface) {\n"
+            "            float edge = min(input.material.w, min(input.biome.x, input.biome.y));\n"
+            f"            alpha *= smoothstep(0.0, 0.26, edge) * {gain};\n"
+            "        }",case)
+    if case == "edge-fade-off":
+        if "Texture2D GroundSurfaceDetail" in source:
+            return source
+        return replace_once(source,"alpha *= smoothstep(0.0, 0.18, edge);",
+            "alpha *= 1.0;",case)
+    if case in ("decal-all-off", "hill-decal-off", "surface-decal-off", "floor-decal-off",
+                "grass-surface-off", "plains-surface-off", "desert-surface-off"):
+        if "Texture2D GroundSurfaceDetail" in source:
+            return source
+        condition = {"decal-all-off": "input.material.y > 1.5",
+                     "hill-decal-off": "input.material.y > 1.5 && input.material.y < 2.5",
+                     "surface-decal-off": "input.material.y > 4.5",
+                     "floor-decal-off": "input.material.y > 2.5 && input.material.y < 4.5",
+                     "grass-surface-off": "input.material.y > 4.5 && input.material.y < 5.5",
+                     "plains-surface-off": "input.material.y > 5.5 && input.material.y < 6.5",
+                     "desert-surface-off": "input.material.y > 6.5"}[case]
+        return replace_once(source, "    float3 geometric = normalize(input.normal);",
+            f"    if ({condition}) clip(-1);\n    float3 geometric = normalize(input.normal);",case)
+    if case == "material-class-view":
+        if "Texture2D GroundSurfaceDetail" in source:
+            return source
+        return replace_once(source,
+            "#ifdef BEAUTY_COMPOSED_SHADOWS\n    // Q6ShadowL",
+            "albedo = input.material.y > 4.5 ? float3(1,0,0) : "
+            "input.material.y > 3.5 ? float3(1,0,1) : "
+            "input.material.y > 2.5 ? float3(0,0,1) : "
+            "input.material.y > 1.5 ? float3(1,0.5,0) : float3(0.4,0.4,0.4);\n"
+            "#ifdef BEAUTY_COMPOSED_SHADOWS\n    // Q6ShadowL",case)
+    if case == "surface-subclass-view":
+        if "Texture2D GroundSurfaceDetail" in source:
+            return source
+        return replace_once(source,
+            "#ifdef BEAUTY_COMPOSED_SHADOWS\n    // Q6ShadowL",
+            "albedo = input.material.y > 6.5 ? float3(1,0,0) : "
+            "input.material.y > 5.5 ? float3(0,1,0) : "
+            "input.material.y > 4.5 ? float3(0,0,1) : float3(0.4,0.4,0.4);\n"
+            "#ifdef BEAUTY_COMPOSED_SHADOWS\n    // Q6ShadowL",case)
     if case.startswith("diagnostic-"):
         source = ablate(source, "flat-color-after-detail")
         operation = case.removeprefix("diagnostic-")
@@ -68,6 +130,44 @@ def ablate(source: str, case: str) -> str:
         raise ValueError(case)
     if case == "control":
         return source
+    if case == "final-albedo-flat":
+        if "float ndl = saturate(dot(geometric, light_direction));" in source:
+            return replace_once(source,
+                "float ndl = saturate(dot(geometric, light_direction));",
+                "albedo = float3(0.32, 0.37, 0.17);\n    float ndl = saturate(dot(geometric, light_direction));",case)
+        return replace_once(source,
+            "float ndl = saturate(dot(normal, light_direction));",
+            "albedo = float3(0.32, 0.37, 0.17);\n    float ndl = saturate(dot(normal, light_direction));",case)
+    if case == "both-grass-flat":
+        if "Texture2D GroundSurfaceDetail" in source:
+            return replace_once(source,
+                "float3 grass = ground_surface_sample(GrassColor, input, 0.43, float2(.31,.17), false).rgb;",
+                "float3 grass = float3(0.32, 0.37, 0.17);",case)
+        return replace_once(source,"float3 grass = GrassColor.Sample(Wrap, uv0).rgb;",
+            "float3 grass = float3(0.32, 0.37, 0.17);",case)
+    if case in ("both-grass-four", "both-grass-highpass"):
+        mountain = "Texture2D GroundSurfaceDetail" in source
+        if mountain:
+            old = "float3 grass = ground_surface_sample(GrassColor, input, 0.43, float2(.31,.17), false).rgb;"
+            if case == "both-grass-four":
+                new = "float3 grass = (ground_surface_sample(GrassColor, input, 0.43, float2(.31,.17), false).rgb + "
+                new += "ground_surface_sample(GrassColor, input, 0.43, float2(.68,.28), false).rgb + "
+                new += "ground_surface_sample(GrassColor, input, 0.43, float2(.44,.70), false).rgb + "
+                new += "ground_surface_sample(GrassColor, input, 0.43, float2(.92,.88), false).rgb) * 0.25;"
+            else:
+                new = "float3 fine_grass = ground_surface_sample(GrassColor, input, 0.43, float2(.31,.17), false).rgb;\n"
+                new += "    float3 low_grass = GrassColor.SampleBias(Wrap, input.world.xy * 0.43 + float2(.31,.17), 5).rgb;\n"
+                new += "    float3 grass = saturate(float3(.32,.37,.17) + (fine_grass-low_grass)*.75);"
+        else:
+            old = "float3 grass = GrassColor.Sample(Wrap, uv0).rgb;"
+            if case == "both-grass-four":
+                new = "float3 grass = (GrassColor.Sample(Wrap,uv0).rgb + GrassColor.Sample(Wrap,uv0+float2(.37,.11)).rgb + "
+                new += "GrassColor.Sample(Wrap,uv0+float2(.13,.53)).rgb + GrassColor.Sample(Wrap,uv0+float2(.61,.71)).rgb)*.25;"
+            else:
+                new = "float3 fine_grass = GrassColor.Sample(Wrap,uv0).rgb;\n"
+                new += "        float3 low_grass = GrassColor.SampleBias(Wrap,uv0,5).rgb;\n"
+                new += "        float3 grass = saturate(float3(.32,.37,.17) + (fine_grass-low_grass)*.75);"
+        return replace_once(source,old,new,case)
     if case == "broad-tint-off":
         return replace_once(source,
             "albedo *= lerp(float3(0.88, 0.94, 0.97),\n",
@@ -119,11 +219,14 @@ def ablate(source: str, case: str) -> str:
 def shader_tree(case: str) -> Path:
     root = OUT / "shaders" / case
     target = root / "Renderer/native"
-    for shader in NATIVE.rglob("*.hlsl"):
-        path = target / shader.relative_to(NATIVE)
+    for shader in SOURCE_TREE.rglob("*.hlsl"):
+        relative = shader.relative_to(SOURCE_TREE).as_posix()
+        path = target / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         source = shader.read_text()
-        if shader.relative_to(NATIVE).as_posix() in SHADERS:
+        if relative in SHADERS and not (relative.endswith("mountain.hlsl") and
+                case in ("base-color-flat", "hill-band-off", "plains-weight-off",
+                         "source-color-flat")):
             source = ablate(source, case)
         path.write_text(source)
     if case != "control":
@@ -139,10 +242,16 @@ def shader_tree(case: str) -> Path:
 
 
 def main() -> None:
+    global OUT, DLL, SOURCE_TREE
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--dll", type=Path, default=DLL)
+    parser.add_argument("--output", type=Path, default=OUT)
+    parser.add_argument("--shader-base", type=Path, default=NATIVE)
     parser.add_argument("cases", nargs="*", default=["control", "broad-tint-off",
         "broad-contrast-off", "grain-off", "broad-normal-off", "source-color-flat"])
     args = parser.parse_args()
+    OUT, DLL = args.output.resolve(), args.dll.resolve()
+    SOURCE_TREE = args.shader_base.resolve()
     if not DLL.is_file() or not SCENE.is_file():
         raise FileNotFoundError("Saved Lab candidate or unchanged BIQ export missing")
     OUT.mkdir(parents=True, exist_ok=True)

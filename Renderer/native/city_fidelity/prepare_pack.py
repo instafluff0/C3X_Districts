@@ -223,9 +223,11 @@ def _build(OUT, lab_layouts=None, lab_focus=None, lab_frames=None):
                 if not 0<count<=len(design['houses']):raise ValueError('invalid Lab population tier')
                 tier=design['tier_designs'][size]
                 if len(tier['houses'])!=count:raise ValueError('invalid Lab size design')
-                houses=[{**item,'slot':slot} for slot,item in enumerate(tier['houses'])]
-                civic={**tier['base_centerpiece'],'slot':count}
                 for capital in (False,True):
+                    chosen=tier.get('capital_houses',tier['houses']) if capital else tier['houses']
+                    houses=[{**item,'slot':slot} for slot,item in enumerate(chosen)]
+                    civic={**(tier.get('capital_centerpiece',tier['base_centerpiece'])
+                              if capital else tier['base_centerpiece']),'slot':len(houses)}
                     instances=houses+([] if capital and design.get('capital_replaces_centerpiece') else [civic])
                     if capital:instances.append({**tier['palace'],'slot':'capital'})
                     vertical_metric=design.get('vertical_metric',.648266978876)

@@ -186,6 +186,136 @@ def continuous_bed_shader(source: str) -> str:
     return source
 
 
+def reef_field_bed_shader(source: str) -> str:
+    """Give the clean shelf sparse, aperiodic rock forms with authored grain."""
+    anchor = "float3 q3_authored_bed_normal(PixelInput input) {"
+    helper = """float q3_lab_rock_noise(float2 p) {
+ float2 c=floor(p),f=frac(p);f=f*f*(3-2*f);
+ return lerp(lerp(macro_decal_hash(c),macro_decal_hash(c+float2(1,0)),f.x),
+  lerp(macro_decal_hash(c+float2(0,1)),macro_decal_hash(c+1),f.x),f.y);
+}
+float q3_lab_rock_field(float2 world) {
+ float2 p=world*q3_source_repeat(.54);
+ float2 warp=float2(q3_lab_rock_noise(p*.47+float2(3.1,7.7)),
+  q3_lab_rock_noise(p*.47+float2(9.3,1.4)))-.5;
+ float2 q=p+warp*.74;
+ float broad=q3_lab_rock_noise(q);
+ float middle=q3_lab_rock_noise(float2(q.y,-q.x)*2.13+float2(4.2,1.8));
+ return smoothstep(.57,.70,broad*.77+middle*.23);
+}
+float q3_lab_rock_coverage(PixelInput input,float2 world) {
+ float depth=input.hydrology_data.w;
+ float coast=1-smoothstep(.34,.63,saturate(input.surface_coordinate));
+ return q3_lab_rock_field(world)*coast*smoothstep(.035,.16,depth)
+  *(1-smoothstep(.39,.62,depth));
+}
+"""
+    if source.count(anchor) != 1:
+        raise ValueError("Rock-field helper anchor changed")
+    source = source.replace(anchor, helper + anchor)
+    old = " return normalize(lerp(decal_normal,continuous_normal,coast_family));"
+    new = """ float3 base_normal=normalize(lerp(decal_normal,continuous_normal,coast_family));
+ float rock_mask=q3_lab_rock_coverage(input,world);
+ float2 rock_uv=world*q3_source_repeat(1.12)+float2(.21,.37);
+ float rock_height=cliff_height_texture.Sample(material_sampler,rock_uv).r;
+ float3 rock_normal=q3_margin_normal(input,rock_height*rock_mask,.14);
+ return normalize(lerp(base_normal,rock_normal,rock_mask));"""
+    if source.count(old) != 1:
+        raise ValueError("Rock-field normal anchor changed")
+    source = source.replace(old, new)
+    old = " color*=lerp(1,fine_cavity,margin);"
+    new = """ color*=lerp(1,fine_cavity,margin);
+ float rock_mask=q3_lab_rock_coverage(input,world);
+ float2 rock_uv=world*q3_source_repeat(1.12)+float2(.21,.37);
+ float3 rock_grain=cliff_base_texture.Sample(material_sampler,rock_uv).rgb;
+ float rock_height=cliff_height_texture.Sample(material_sampler,rock_uv).r;
+ float rock_mean=cliff_height_texture.SampleBias(material_sampler,rock_uv,3).r;
+ float3 submerged_rock=rock_grain*float3(.58,.83,1.16);
+ color=lerp(color,submerged_rock,rock_mask*.78);
+ color*=1+clamp((rock_height-rock_mean)*1.3,-.20,.25)*rock_mask;"""
+    if source.count(old) != 1:
+        raise ValueError("Rock-field material anchor changed")
+    return source.replace(old, new)
+
+
+def reef_forms_bed_shader(source: str) -> str:
+    """Irregular source-rock placements, masking the source decal's soft plate."""
+    anchor = "float3 q3_authored_bed_normal(PixelInput input) {"
+    helper = """float3 q3_lab_reef_placement(float2 world) {
+ float2 p=world/1.65,c=floor(p);
+ float best=100,variant=0,angle=0;
+ float2 chosen=0;
+ [unroll] for(int y=-1;y<=1;y++) {
+  [unroll] for(int x=-1;x<=1;x++) {
+   float2 cell=c+float2(x,y);
+   float r0=macro_decal_hash(cell+float2(17,31));
+   float r1=macro_decal_hash(cell+float2(43,11));
+   float r2=macro_decal_hash(cell+float2(71,47));
+   float active=step(.44,r2);
+   float2 center=cell+.5+(float2(r0,r1)-.5)*.90;
+   float scale=lerp(.38,.67,frac(r0*13.7+r1*5.1));
+   float2 delta=(p-center)/scale;
+   float metric=dot(delta,delta);
+   if(active>.5 && metric<best) {
+    best=metric;chosen=delta;
+    variant=floor(frac(r0*7.31+r1*3.97)*5);
+    angle=frac(r2*17.13)*6.2831853;
+   }
+  }
+ }
+ float2 rotated=float2(chosen.x*cos(angle)-chosen.y*sin(angle),
+  chosen.x*sin(angle)+chosen.y*cos(angle));
+ float2 local=rotated*.5+.5;
+ float inside=step(best,1.0)*step(0,local.x)*step(local.x,1)
+  *step(0,local.y)*step(local.y,1);
+ return float3(ocean_clutter_atlas_uv(saturate(local),variant),inside);
+}
+float4 q3_lab_reef_sample(float2 world) {
+ float3 placement=q3_lab_reef_placement(world);
+ float4 rock=water_decal_base_texture.Sample(decal_sampler,placement.xy);
+ float2 relief=water_decal_height_texture.Sample(decal_sampler,placement.xy).rg;
+ // The second packed channel isolates rock interiors in this source atlas;
+ // its physical meaning remains unresolved, so this is a Lab art mask.
+ rock.a*=placement.z*smoothstep(.06,.34,relief.g);
+ return rock;
+}
+float q3_lab_reef_coverage(PixelInput input,float2 world) {
+ float depth=input.hydrology_data.w;
+ float coast=1-smoothstep(.34,.63,saturate(input.surface_coordinate));
+ return q3_lab_reef_sample(world).a*coast*smoothstep(.035,.16,depth)
+  *(1-smoothstep(.40,.63,depth));
+}
+"""
+    if source.count(anchor) != 1:
+        raise ValueError("Reef-forms helper anchor changed")
+    source = source.replace(anchor, helper + anchor)
+    old = " return normalize(lerp(decal_normal,continuous_normal,coast_family));"
+    new = """ float3 base_normal=normalize(lerp(decal_normal,continuous_normal,coast_family));
+ float reef=q3_lab_reef_coverage(input,world);
+ float2 rock_uv=world*q3_source_repeat(1.12)+float2(.21,.37);
+ float rock_height=cliff_height_texture.Sample(material_sampler,rock_uv).r;
+ float3 rock_normal=q3_margin_normal(input,rock_height*reef,.15);
+ return normalize(lerp(base_normal,rock_normal,reef));"""
+    if source.count(old) != 1:
+        raise ValueError("Reef-forms normal anchor changed")
+    source = source.replace(old, new)
+    old = " color*=lerp(1,fine_cavity,margin);"
+    new = """ color*=lerp(1,fine_cavity,margin);
+ float4 reef=q3_lab_reef_sample(world);
+ float rock_mask=reef.a*coast_family*smoothstep(.035,.16,input.hydrology_data.w)
+  *(1-smoothstep(.40,.63,input.hydrology_data.w));
+ float2 rock_uv=world*q3_source_repeat(1.12)+float2(.21,.37);
+ float3 rock_grain=cliff_base_texture.Sample(material_sampler,rock_uv).rgb;
+ float rock_height=cliff_height_texture.Sample(material_sampler,rock_uv).r;
+ float rock_mean=cliff_height_texture.SampleBias(material_sampler,rock_uv,3).r;
+ float3 submerged_rock=lerp(reef.rgb,rock_grain,.30)*float3(.46,.73,1.05);
+ color=lerp(color,submerged_rock,rock_mask*.80);
+ color*=1+clamp((rock_height-rock_mean)*1.5,-.20,.25)*rock_mask;"""
+    if source.count(old) != 1:
+        raise ValueError("Reef-forms material anchor changed")
+    return source.replace(old, new)
+
+
 def refine() -> None:
     baseline = OUT / "shader-baseline/Renderer/native/city_fidelity/hydrology.hlsl"
     candidate = OUT / "shader-candidate/Renderer/native/city_fidelity/hydrology.hlsl"
@@ -301,6 +431,213 @@ def refine() -> None:
             raise ValueError("Aquamarine bed anchor changed: " + old)
         body = body.replace(old, new)
     aquamarine_bed.write_text(body)
+    no_margin_root = OUT / "shader-aquamarine-no-margin"
+    for path in aquamarine_root.rglob("*.hlsl"):
+        destination = no_margin_root / path.relative_to(aquamarine_root)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, destination)
+    no_margin_bed = no_margin_root / "Renderer/native/city_fidelity/hydrology.hlsl"
+    body = no_margin_bed.read_text()
+    old = " float margin=(1-smoothstep(.08,.38,input.hydrology_data.w))*lerp(.25,1.0,q3_margin_patch(world));"
+    if body.count(old) != 1:
+        raise ValueError("Submerged margin detail anchor changed")
+    no_margin_bed.write_text(body.replace(old, old.replace(";", "*(1-coast_family);")))
+    clean_root = OUT / "shader-aquamarine-clean-bed"
+    for path in no_margin_root.rglob("*.hlsl"):
+        destination = clean_root / path.relative_to(no_margin_root)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, destination)
+    clean_bed = clean_root / "Renderer/native/city_fidelity/hydrology.hlsl"
+    body = clean_bed.read_text()
+    old = " float3 bed=shallow.rgb;"
+    # The highest mip supplies this texture's mean sand color without its four
+    # baked rock clusters; the independent alpha still supplies fine detail.
+    new = " float3 bed=lerp(shallow.rgb,shallow_bed_texture.SampleLevel(material_sampler,uv,10).rgb,coast_family);"
+    # The coast-family value is normally declared below this line.
+    if body.count(old) != 1:
+        raise ValueError("Shallow-bed base color anchor changed")
+    body = body.replace(old, new)
+    declaration = " float coast_family=1-smoothstep(.34,.63,saturate(input.surface_coordinate));"
+    if body.count(declaration) != 2:
+        raise ValueError("Coast-family declaration contract changed")
+    scene_start = body.index("float3 q3_scene_bed(PixelInput input) {")
+    scene_end = body.index("void q3_shore_material", scene_start)
+    scene = body[scene_start:scene_end]
+    if scene.count(declaration) != 1:
+        raise ValueError("Shallow-bed coast-family declaration changed")
+    scene = scene.replace(declaration, "", 1).replace(
+        " float4 shallow=shallow_bed_texture.Sample(material_sampler,uv);",
+        declaration + "\n float4 shallow=shallow_bed_texture.Sample(material_sampler,uv);", 1)
+    body = body[:scene_start] + scene + body[scene_end:]
+    clean_bed.write_text(body)
+    reef_root = OUT / "shader-reef-field"
+    for path in clean_root.rglob("*.hlsl"):
+        destination = reef_root / path.relative_to(clean_root)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, destination)
+    reef_bed = reef_root / "Renderer/native/city_fidelity/hydrology.hlsl"
+    reef_bed.write_text(reef_field_bed_shader(reef_bed.read_text()))
+    forms_root = OUT / "shader-reef-forms"
+    for path in clean_root.rglob("*.hlsl"):
+        destination = forms_root / path.relative_to(clean_root)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, destination)
+    forms_bed = forms_root / "Renderer/native/city_fidelity/hydrology.hlsl"
+    forms_bed.write_text(reef_forms_bed_shader(forms_bed.read_text()))
+    ridges_root = OUT / "shader-reef-ridges"
+    for path in forms_root.rglob("*.hlsl"):
+        destination = ridges_root / path.relative_to(forms_root)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, destination)
+    ridges_bed = ridges_root / "Renderer/native/city_fidelity/hydrology.hlsl"
+    body = ridges_bed.read_text()
+    old = "smoothstep(.06,.34,relief.g)"
+    if body.count(old) != 1:
+        raise ValueError("Reef-ridges relief anchor changed")
+    ridges_bed.write_text(body.replace(old, "smoothstep(.30,.48,relief.g)"))
+    relief_root = OUT / "shader-reef-relief"
+    for path in ridges_root.rglob("*.hlsl"):
+        destination = relief_root / path.relative_to(ridges_root)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, destination)
+    relief_bed = relief_root / "Renderer/native/city_fidelity/hydrology.hlsl"
+    body = relief_bed.read_text()
+    old = """ float rock_height=cliff_height_texture.Sample(material_sampler,rock_uv).r;
+ float3 rock_normal=q3_margin_normal(input,rock_height*reef,.15);"""
+    new = """ float3 placement=q3_lab_reef_placement(world);
+ float rock_relief=water_decal_height_texture.Sample(decal_sampler,placement.xy).g;
+ float3 rock_normal=q3_margin_normal(input,rock_relief*reef,.32);"""
+    if body.count(old) != 1:
+        raise ValueError("Reef-relief normal anchor changed")
+    body = body.replace(old, new)
+    old = """ float rock_height=cliff_height_texture.Sample(material_sampler,rock_uv).r;
+ float rock_mean=cliff_height_texture.SampleBias(material_sampler,rock_uv,3).r;"""
+    new = """ float3 placement=q3_lab_reef_placement(world);
+ float rock_relief=water_decal_height_texture.Sample(decal_sampler,placement.xy).g;
+ float rock_height=cliff_height_texture.Sample(material_sampler,rock_uv).r;
+ float rock_mean=cliff_height_texture.SampleBias(material_sampler,rock_uv,3).r;"""
+    if body.count(old) != 1:
+        raise ValueError("Reef-relief color anchor changed")
+    body = body.replace(old, new)
+    old = " color*=1+clamp((rock_height-rock_mean)*1.5,-.20,.25)*rock_mask;"
+    new = """ color*=1+clamp((rock_height-rock_mean)*1.5,-.20,.25)*rock_mask;
+ color*=1+clamp((rock_relief-.37)*1.6,-.22,.22)*rock_mask;"""
+    if body.count(old) != 1:
+        raise ValueError("Reef-relief contrast anchor changed")
+    relief_bed.write_text(body.replace(old, new))
+    contrast_root = OUT / "shader-reef-contrast"
+    for path in relief_root.rglob("*.hlsl"):
+        destination = contrast_root / path.relative_to(relief_root)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, destination)
+    contrast_bed = contrast_root / "Renderer/native/city_fidelity/hydrology.hlsl"
+    body = contrast_bed.read_text()
+    changes = (
+        ("float2 p=world/1.65,c=floor(p);", "float2 p=world/1.90,c=floor(p);"),
+        ("float scale=lerp(.38,.67,frac(r0*13.7+r1*5.1));",
+         "float scale=lerp(.30,.79,frac(r0*13.7+r1*5.1));"),
+        ("float active=step(.44,r2);", "float active=step(.50,r2);"),
+        ("float3 submerged_rock=lerp(reef.rgb,rock_grain,.30)*float3(.46,.73,1.05);",
+         "float3 submerged_rock=lerp(float3(.075,.12,.15),float3(.29,.33,.32),"
+         "smoothstep(.30,.50,rock_relief))*(.75+rock_grain*.85);"),
+        ("color=lerp(color,submerged_rock,rock_mask*.80);",
+         "color=lerp(color,submerged_rock,rock_mask*.88);"),
+        ("color*=1+clamp((rock_relief-.37)*1.6,-.22,.22)*rock_mask;",
+         "color*=1+clamp((rock_relief-.37)*2.2,-.24,.28)*rock_mask;"),
+    )
+    for old, new in changes:
+        if body.count(old) != 1:
+            raise ValueError("Reef-contrast anchor changed: " + old)
+        body = body.replace(old, new)
+    contrast_bed.write_text(body)
+    lit_root = OUT / "shader-reef-lit"
+    for path in relief_root.rglob("*.hlsl"):
+        destination = lit_root / path.relative_to(relief_root)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, destination)
+    lit_bed = lit_root / "Renderer/native/city_fidelity/hydrology.hlsl"
+    body = lit_bed.read_text()
+    changes = (
+        ("float3 rock_normal=q3_margin_normal(input,rock_relief*reef,.32);",
+         "float3 rock_normal=q3_margin_normal(input,rock_relief*reef,.72);"),
+        ("float3 submerged_rock=lerp(reef.rgb,rock_grain,.30)*float3(.46,.73,1.05);",
+         "float3 submerged_rock=lerp(float3(.20,.13,.09),float3(.45,.27,.16),"
+         "smoothstep(.31,.50,rock_relief))*(.73+rock_grain*.95);"),
+        ("color=lerp(color,submerged_rock,rock_mask*.80);",
+         "color=lerp(color,submerged_rock,rock_mask*.94);"),
+        ("color*=1+clamp((rock_relief-.37)*1.6,-.22,.22)*rock_mask;",
+         "color*=1+clamp((rock_relief-.37)*2.0,-.22,.28)*rock_mask;"),
+    )
+    for old, new in changes:
+        if body.count(old) != 1:
+            raise ValueError("Reef-lit anchor changed: " + old)
+        body = body.replace(old, new)
+    lit_bed.write_text(body)
+    window_root = OUT / "shader-reef-window"
+    for path in lit_root.rglob("*.hlsl"):
+        destination = window_root / path.relative_to(lit_root)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, destination)
+    window_water = window_root / "Renderer/sandbox/water_surface.hlsl"
+    body = window_water.read_text()
+    old = "    alpha *= 1 - .62 * bed_window; // Lab: reveal the authored bed"
+    new = old + "\n    alpha *= 1 - .25 * q3_lab_reef_coverage(input, world); // Lab: local clear water above rocks"
+    if body.count(old) != 1:
+        raise ValueError("Reef-window water alpha anchor changed")
+    window_water.write_text(body.replace(old, new))
+    detail_root = OUT / "shader-reef-detail"
+    for path in lit_root.rglob("*.hlsl"):
+        destination = detail_root / path.relative_to(lit_root)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, destination)
+    detail_bed = detail_root / "Renderer/native/city_fidelity/hydrology.hlsl"
+    body = detail_bed.read_text()
+    changes = (
+        (""" float2 relief=water_decal_height_texture.Sample(decal_sampler,placement.xy).rg;
+ // The second packed channel isolates rock interiors in this source atlas;
+ // its physical meaning remains unresolved, so this is a Lab art mask.
+ rock.a*=placement.z*smoothstep(.30,.48,relief.g);""",
+         " rock.a*=placement.z;"),
+        (""" float3 placement=q3_lab_reef_placement(world);
+ float rock_relief=water_decal_height_texture.Sample(decal_sampler,placement.xy).g;
+ float3 rock_normal=q3_margin_normal(input,rock_relief*reef,.72);""",
+         """ float source_luma=dot(q3_lab_reef_sample(world).rgb,float3(.30,.59,.11));
+ float3 rock_normal=q3_margin_normal(input,source_luma*reef,.30);"""),
+        (""" float3 placement=q3_lab_reef_placement(world);
+ float rock_relief=water_decal_height_texture.Sample(decal_sampler,placement.xy).g;
+ float rock_height=cliff_height_texture.Sample(material_sampler,rock_uv).r;
+ float rock_mean=cliff_height_texture.SampleBias(material_sampler,rock_uv,3).r;
+ float3 submerged_rock=lerp(float3(.20,.13,.09),float3(.45,.27,.16),smoothstep(.31,.50,rock_relief))*(.73+rock_grain*.95);
+ color=lerp(color,submerged_rock,rock_mask*.94);
+ color*=1+clamp((rock_height-rock_mean)*1.5,-.20,.25)*rock_mask;
+ color*=1+clamp((rock_relief-.37)*2.0,-.22,.28)*rock_mask;""",
+         """ float3 placement=q3_lab_reef_placement(world);
+ float3 local_mean=water_decal_base_texture.SampleBias(decal_sampler,placement.xy,6).rgb;
+ float3 source_form=(reef.rgb-local_mean)*3.2;
+ color+=source_form*rock_mask*(.78+rock_grain*.32);"""),
+    )
+    for old, new in changes:
+        if body.count(old) != 1:
+            raise ValueError("Reef-detail anchor changed: " + old[:60])
+        body = body.replace(old, new)
+    detail_bed.write_text(body)
+    composite_root = OUT / "shader-reef-composite"
+    for path in detail_root.rglob("*.hlsl"):
+        destination = composite_root / path.relative_to(detail_root)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, destination)
+    composite_bed = composite_root / "Renderer/native/city_fidelity/hydrology.hlsl"
+    body = composite_bed.read_text()
+    old = """ float3 source_form=(reef.rgb-local_mean)*3.2;
+ color+=source_form*rock_mask*(.78+rock_grain*.32);"""
+    new = """ float relief=water_decal_height_texture.Sample(decal_sampler,placement.xy).g;
+ float core=smoothstep(.22,.45,relief);
+ color*=1-rock_mask*core*.28;
+ float3 source_form=(reef.rgb-local_mean)*2.15;
+ color+=source_form*rock_mask*(.78+rock_grain*.32);"""
+    if body.count(old) != 1:
+        raise ValueError("Reef-composite material anchor changed")
+    composite_bed.write_text(body.replace(old, new))
     record = json.loads((OUT / "snapshot.json").read_text())
     record["baseline_hydrology_sha256"] = digest(baseline)
     record["candidate_hydrology_sha256"] = digest(candidate)
@@ -322,6 +659,28 @@ def refine() -> None:
     record["continuous_hydrology_sha256"] = digest(continuous_bed)
     record["aquamarine_water_sha256"] = digest(aquamarine_water)
     record["aquamarine_hydrology_sha256"] = digest(aquamarine_bed)
+    record["aquamarine-no-margin_water_sha256"] = digest(no_margin_root / "Renderer/sandbox/water_surface.hlsl")
+    record["aquamarine-no-margin_hydrology_sha256"] = digest(no_margin_bed)
+    record["aquamarine-clean-bed_water_sha256"] = digest(clean_root / "Renderer/sandbox/water_surface.hlsl")
+    record["aquamarine-clean-bed_hydrology_sha256"] = digest(clean_bed)
+    record["reef-field_water_sha256"] = digest(reef_root / "Renderer/sandbox/water_surface.hlsl")
+    record["reef-field_hydrology_sha256"] = digest(reef_bed)
+    record["reef-forms_water_sha256"] = digest(forms_root / "Renderer/sandbox/water_surface.hlsl")
+    record["reef-forms_hydrology_sha256"] = digest(forms_bed)
+    record["reef-ridges_water_sha256"] = digest(ridges_root / "Renderer/sandbox/water_surface.hlsl")
+    record["reef-ridges_hydrology_sha256"] = digest(ridges_bed)
+    record["reef-relief_water_sha256"] = digest(relief_root / "Renderer/sandbox/water_surface.hlsl")
+    record["reef-relief_hydrology_sha256"] = digest(relief_bed)
+    record["reef-contrast_water_sha256"] = digest(contrast_root / "Renderer/sandbox/water_surface.hlsl")
+    record["reef-contrast_hydrology_sha256"] = digest(contrast_bed)
+    record["reef-lit_water_sha256"] = digest(lit_root / "Renderer/sandbox/water_surface.hlsl")
+    record["reef-lit_hydrology_sha256"] = digest(lit_bed)
+    record["reef-window_water_sha256"] = digest(window_water)
+    record["reef-window_hydrology_sha256"] = digest(window_root / "Renderer/native/city_fidelity/hydrology.hlsl")
+    record["reef-detail_water_sha256"] = digest(detail_root / "Renderer/sandbox/water_surface.hlsl")
+    record["reef-detail_hydrology_sha256"] = digest(detail_bed)
+    record["reef-composite_water_sha256"] = digest(composite_root / "Renderer/sandbox/water_surface.hlsl")
+    record["reef-composite_hydrology_sha256"] = digest(composite_bed)
     (OUT / "snapshot.json").write_text(json.dumps(record, indent=2) + "\n")
 
 
@@ -617,9 +976,9 @@ def review_zoom() -> None:
     root = OUT / "z256"
     snapshot = json.loads((OUT / "snapshot.json").read_text())
     frames = {}
-    for label in ("baseline", "candidate", "rich", "lagoon", "bed-only", "clearwater", "no-clutter", "scattered", "rockbeds", "continuous", "aquamarine"):
+    for label in ("baseline", "candidate", "rich", "lagoon", "bed-only", "clearwater", "no-clutter", "scattered", "rockbeds", "continuous", "aquamarine", "aquamarine-no-margin", "aquamarine-clean-bed", "reef-field", "reef-forms", "reef-ridges", "reef-relief", "reef-contrast", "reef-lit", "reef-window", "reef-detail", "reef-composite"):
         folder = root / label
-        if label in ("lagoon", "bed-only", "clearwater", "no-clutter", "scattered", "rockbeds", "continuous", "aquamarine") and not (folder / "result.json").is_file():
+        if label in ("lagoon", "bed-only", "clearwater", "no-clutter", "scattered", "rockbeds", "continuous", "aquamarine", "aquamarine-no-margin", "aquamarine-clean-bed", "reef-field", "reef-forms", "reef-ridges", "reef-relief", "reef-contrast", "reef-lit", "reef-window", "reef-detail", "reef-composite") and not (folder / "result.json").is_file():
             continue
         receipt = json.loads((folder / "result.json").read_text())
         frame = folder / "frame-0000.jpg"
@@ -649,7 +1008,7 @@ def review_zoom() -> None:
     ImageDraw.Draw(strip).text((862, 10), "Candidate · 256 px tiles · native crop",
                                fill="white", font=font)
     strip.save(root / "shoreline-before-candidate.png")
-    for label in ("lagoon", "bed-only", "clearwater", "no-clutter", "scattered", "rockbeds", "continuous", "aquamarine"):
+    for label in ("lagoon", "bed-only", "clearwater", "no-clutter", "scattered", "rockbeds", "continuous", "aquamarine", "aquamarine-no-margin", "aquamarine-clean-bed", "reef-field", "reef-forms", "reef-ridges", "reef-relief", "reef-contrast", "reef-lit", "reef-window", "reef-detail", "reef-composite"):
         if label not in frames:
             continue
         strip.paste(frames[label].crop(box), (850, 48))
@@ -667,6 +1026,115 @@ def review_zoom() -> None:
                                         f"{label.title()} · native coast detail",
                                         fill="white", font=font)
         detail.save(root / "stamps-vs-aquamarine.png")
+    if "aquamarine-no-margin" in frames:
+        detail_box = (530, 120, 1080, 670)
+        detail = Image.new("RGB", (1100, 598), "#14212a")
+        for column, label in enumerate(("aquamarine", "aquamarine-no-margin")):
+            detail.paste(frames[label].crop(detail_box), (column * 550, 48))
+            ImageDraw.Draw(detail).text((column * 550 + 12, 10),
+                                        f"{label.title()} · native coast detail",
+                                        fill="white", font=font)
+        detail.save(root / "aquamarine-vs-no-margin.png")
+    if "aquamarine-clean-bed" in frames:
+        detail_box = (530, 120, 1080, 670)
+        detail = Image.new("RGB", (1100, 598), "#14212a")
+        for column, label in enumerate(("aquamarine", "aquamarine-clean-bed")):
+            detail.paste(frames[label].crop(detail_box), (column * 550, 48))
+            ImageDraw.Draw(detail).text((column * 550 + 12, 10),
+                                        f"{label.title()} · native coast detail",
+                                        fill="white", font=font)
+        detail.save(root / "aquamarine-vs-clean-bed.png")
+    if "reef-field" in frames:
+        detail_box = (530, 120, 1080, 670)
+        detail = Image.new("RGB", (1100, 598), "#14212a")
+        for column, label in enumerate(("aquamarine-clean-bed", "reef-field")):
+            detail.paste(frames[label].crop(detail_box), (column * 550, 48))
+            ImageDraw.Draw(detail).text((column * 550 + 12, 10),
+                                        f"{label.title()} · native coast detail",
+                                        fill="white", font=font)
+        detail.save(root / "clean-bed-vs-reef-field.png")
+    if "reef-forms" in frames:
+        detail_box = (530, 120, 1080, 670)
+        detail = Image.new("RGB", (1100, 598), "#14212a")
+        for column, label in enumerate(("aquamarine-clean-bed", "reef-forms")):
+            detail.paste(frames[label].crop(detail_box), (column * 550, 48))
+            ImageDraw.Draw(detail).text((column * 550 + 12, 10),
+                                        f"{label.title()} · native coast detail",
+                                        fill="white", font=font)
+        detail.save(root / "clean-bed-vs-reef-forms.png")
+    if "reef-ridges" in frames:
+        detail_box = (530, 120, 1080, 670)
+        detail = Image.new("RGB", (1100, 598), "#14212a")
+        for column, label in enumerate(("aquamarine-clean-bed", "reef-ridges")):
+            detail.paste(frames[label].crop(detail_box), (column * 550, 48))
+            ImageDraw.Draw(detail).text((column * 550 + 12, 10),
+                                        f"{label.title()} · native coast detail",
+                                        fill="white", font=font)
+        detail.save(root / "clean-bed-vs-reef-ridges.png")
+    if "reef-relief" in frames:
+        detail_box = (530, 120, 1080, 670)
+        detail = Image.new("RGB", (1100, 598), "#14212a")
+        for column, label in enumerate(("aquamarine-clean-bed", "reef-relief")):
+            detail.paste(frames[label].crop(detail_box), (column * 550, 48))
+            ImageDraw.Draw(detail).text((column * 550 + 12, 10),
+                                        f"{label.title()} · native coast detail",
+                                        fill="white", font=font)
+        detail.save(root / "clean-bed-vs-reef-relief.png")
+    if "reef-contrast" in frames:
+        detail_box = (530, 120, 1080, 670)
+        detail = Image.new("RGB", (1100, 598), "#14212a")
+        for column, label in enumerate(("aquamarine-clean-bed", "reef-contrast")):
+            detail.paste(frames[label].crop(detail_box), (column * 550, 48))
+            ImageDraw.Draw(detail).text((column * 550 + 12, 10),
+                                        f"{label.title()} · native coast detail",
+                                        fill="white", font=font)
+        detail.save(root / "clean-bed-vs-reef-contrast.png")
+    if "reef-lit" in frames:
+        detail_box = (530, 120, 1080, 670)
+        detail = Image.new("RGB", (1100, 598), "#14212a")
+        for column, label in enumerate(("aquamarine-clean-bed", "reef-lit")):
+            detail.paste(frames[label].crop(detail_box), (column * 550, 48))
+            ImageDraw.Draw(detail).text((column * 550 + 12, 10),
+                                        f"{label.title()} · native coast detail",
+                                        fill="white", font=font)
+        detail.save(root / "clean-bed-vs-reef-lit.png")
+        rock_box = (680, 170, 1000, 500)
+        rock_detail = Image.new("RGB", (1280, 708), "#14212a")
+        for column, label in enumerate(("aquamarine-clean-bed", "reef-lit")):
+            crop = frames[label].crop(rock_box).resize(
+                (640, 660), Image.Resampling.NEAREST)
+            rock_detail.paste(crop, (column * 640, 48))
+            ImageDraw.Draw(rock_detail).text((column * 640 + 12, 10),
+                                             f"{label.title()} · 2× display",
+                                             fill="white", font=font)
+        rock_detail.save(root / "reef-lit-rocks-2x.png")
+    if "reef-window" in frames:
+        detail_box = (530, 120, 1080, 670)
+        detail = Image.new("RGB", (1100, 598), "#14212a")
+        for column, label in enumerate(("reef-lit", "reef-window")):
+            detail.paste(frames[label].crop(detail_box), (column * 550, 48))
+            ImageDraw.Draw(detail).text((column * 550 + 12, 10),
+                                        f"{label.title()} · native coast detail",
+                                        fill="white", font=font)
+        detail.save(root / "reef-lit-vs-window.png")
+    if "reef-detail" in frames:
+        detail_box = (530, 120, 1080, 670)
+        detail = Image.new("RGB", (1100, 598), "#14212a")
+        for column, label in enumerate(("aquamarine-clean-bed", "reef-detail")):
+            detail.paste(frames[label].crop(detail_box), (column * 550, 48))
+            ImageDraw.Draw(detail).text((column * 550 + 12, 10),
+                                        f"{label.title()} · native coast detail",
+                                        fill="white", font=font)
+        detail.save(root / "clean-bed-vs-reef-detail.png")
+    if "reef-composite" in frames:
+        detail_box = (530, 120, 1080, 670)
+        detail = Image.new("RGB", (1100, 598), "#14212a")
+        for column, label in enumerate(("aquamarine-clean-bed", "reef-composite")):
+            detail.paste(frames[label].crop(detail_box), (column * 550, 48))
+            ImageDraw.Draw(detail).text((column * 550 + 12, 10),
+                                        f"{label.title()} · native coast detail",
+                                        fill="white", font=font)
+        detail.save(root / "clean-bed-vs-reef-composite.png")
     difference = ImageChops.difference(frames["baseline"], frames["rich"])
     gain = ImageEnhance.Contrast(difference.crop(box)).enhance(8)
     gain.save(root / "rich-difference-x8.png")
@@ -701,13 +1169,47 @@ def review_zoom() -> None:
     if "aquamarine" in frames:
         print(root / "shoreline-before-aquamarine.png")
         print(root / "stamps-vs-aquamarine.png")
+    if "aquamarine-no-margin" in frames:
+        print(root / "shoreline-before-aquamarine-no-margin.png")
+        print(root / "aquamarine-vs-no-margin.png")
+    if "aquamarine-clean-bed" in frames:
+        print(root / "shoreline-before-aquamarine-clean-bed.png")
+        print(root / "aquamarine-vs-clean-bed.png")
+    if "reef-field" in frames:
+        print(root / "shoreline-before-reef-field.png")
+        print(root / "clean-bed-vs-reef-field.png")
+    if "reef-forms" in frames:
+        print(root / "shoreline-before-reef-forms.png")
+        print(root / "clean-bed-vs-reef-forms.png")
+    if "reef-ridges" in frames:
+        print(root / "shoreline-before-reef-ridges.png")
+        print(root / "clean-bed-vs-reef-ridges.png")
+    if "reef-relief" in frames:
+        print(root / "shoreline-before-reef-relief.png")
+        print(root / "clean-bed-vs-reef-relief.png")
+    if "reef-contrast" in frames:
+        print(root / "shoreline-before-reef-contrast.png")
+        print(root / "clean-bed-vs-reef-contrast.png")
+    if "reef-lit" in frames:
+        print(root / "shoreline-before-reef-lit.png")
+        print(root / "clean-bed-vs-reef-lit.png")
+        print(root / "reef-lit-rocks-2x.png")
+    if "reef-window" in frames:
+        print(root / "shoreline-before-reef-window.png")
+        print(root / "reef-lit-vs-window.png")
+    if "reef-detail" in frames:
+        print(root / "shoreline-before-reef-detail.png")
+        print(root / "clean-bed-vs-reef-detail.png")
+    if "reef-composite" in frames:
+        print(root / "shoreline-before-reef-composite.png")
+        print(root / "clean-bed-vs-reef-composite.png")
     print(root / "rich-difference-x8.png")
     print(root / "review.json")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("build", "build-client", "prepare", "refine", "baseline", "candidate", "rich", "lagoon", "bed-only", "clearwater", "no-clutter", "scattered", "rockbeds", "continuous", "aquamarine", "recover-rich", "review", "review-rich", "review-zoom"))
+    parser.add_argument("action", choices=("build", "build-client", "prepare", "refine", "baseline", "candidate", "rich", "lagoon", "bed-only", "clearwater", "no-clutter", "scattered", "rockbeds", "continuous", "aquamarine", "aquamarine-no-margin", "aquamarine-clean-bed", "reef-field", "reef-forms", "reef-ridges", "reef-relief", "reef-contrast", "reef-lit", "reef-window", "reef-detail", "reef-composite", "recover-rich", "review", "review-rich", "review-zoom"))
     parser.add_argument("--zoom", type=int, choices=(128, 192, 256), default=128,
                         help="Sandbox tile width for a capture (default: 128)")
     args = parser.parse_args()

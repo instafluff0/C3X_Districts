@@ -245,9 +245,12 @@ def compile_city_assets(
     auxiliary_uvs: bool = False,
     focus_pool: str | None = None,
     all_candidates: bool = False,
+    allow_rejected_candidates: bool = False,
 ) -> dict[str, Any]:
     if all_candidates and not focus_pool:
         raise ValueError("Full source intake requires one focused city pool")
+    if allow_rejected_candidates and not (all_candidates and focus_pool):
+        raise ValueError("Rejected-candidate tolerance requires a focused full intake")
     strategy = load_strategy(strategy_path)
     blocks = read_city_blocks(assets_root)
     candidate_pools = build_candidate_pools(blocks, strategy)
@@ -321,7 +324,7 @@ def compile_city_assets(
             )
             if len(selected) == target_count:
                 break
-        if len(selected) != target_count:
+        if len(selected) != target_count and not (allow_rejected_candidates and len(selected) >= minimum):
             raise ValueError(f"City pool {pool['id']} compiled only {len(selected)} of {target_count} components")
         runtime_pools[pool["id"]] = {"components": selected}
         pool_reports.append(
@@ -340,7 +343,7 @@ def compile_city_assets(
         {
             "schema": "c3x.city_catalog.v0",
             "composition_status": (
-                "complete_focused_candidate_intake" if all_candidates
+                ("partial_focused_candidate_intake" if rejected else "complete_focused_candidate_intake") if all_candidates
                 else "representative_intake_only"
             ),
             "eras": [
@@ -432,10 +435,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--auxiliary-uvs", action="store_true", help="Opt-in source atlas-coordinate study")
     parser.add_argument("--focus-pool", help="Build only one city/pool/style/era source group")
     parser.add_argument("--all-candidates", action="store_true", help="Intake every candidate in the focused source group")
+    parser.add_argument("--allow-rejected-candidates", action="store_true",
+                        help="For a focused full Lab intake, record failed components and keep the usable pool")
     args = parser.parse_args(argv)
     try:
         report = compile_city_assets(args.assets_root, args.strategy, args.pack, args.report,
-                                     args.auxiliary_uvs, args.focus_pool, args.all_candidates)
+                                     args.auxiliary_uvs, args.focus_pool, args.all_candidates,
+                                     args.allow_rejected_candidates)
     except (OSError, ValueError, KeyError, TypeError, ET.ParseError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1

@@ -20,7 +20,7 @@ int main() {
     auto height=[](float x,float y,float*){return 2.5f+x*.07f+y*.11f;};
     auto shore=[](float,float){return Shore{2,.2f};};
     unsigned verified=0;
-    for(int real:{2,1}) {
+    for(int real:{1}) {
         unsigned biome=unsigned(2-real);Tile owner{17+real,-9+real,3,-4,real};
         GroundProjection projection{3,-4,64,32,128.f/224*.82f,480};
         auto weights=[&](float,float){std::array<float,5>w{};w[biome]=1;return w;};
@@ -42,8 +42,6 @@ int main() {
         verified+=unsigned(a.size());
     }
     {
-        std::set<std::size_t> counts;
-        bool crosses_tile_edge=false;
         for(int coordinate=0;coordinate<24;coordinate++) {
             Tile owner{coordinate,7,3,-4,2};
             GroundProjection projection{3,-4,64,32,128.f/224*.82f,480};
@@ -51,11 +49,10 @@ int main() {
             std::vector<MapVertex>out;
             assert(emit_surface_decals(natural,owner,projection,height,shore,weights,
                                        []{return false;},out));
-            counts.insert(out.size());
-            for(auto const&v:out)
-                crosses_tile_edge|=v.world_x<3||v.world_x>4||v.world_y< -4||v.world_y> -3;
+            // Grass source recipes are disconnected triangles. Their optional
+            // mesh is omitted so its straight edges cannot mark the map.
+            assert(out.empty());
         }
-        assert(counts.size()>=4&&crosses_tile_edge);
     }
     {
         unsigned emitted=0,empty=0;
@@ -83,6 +80,6 @@ int main() {
         std::vector<MapVertex>out;assert(emit_surface_decals(natural,owner,projection,height,shore,weak,[]{return false;},out));
         assert(out.empty());
     }
-    std::cout<<"PASS source surface composition: 3 biomes, "<<verified
+    std::cout<<"PASS source surface composition: grass omitted, 2 active biomes, "<<verified
              <<" deterministic vertices, biome fade and cancellation\n";
 }

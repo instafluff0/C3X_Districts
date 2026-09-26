@@ -17,7 +17,7 @@ class NaturalInputs(unittest.TestCase):
         self.shared_probe("mesh", "328 scopes")
 
     def test_source_surface_composition(self):
-        self.shared_probe("surface", "3 biomes")
+        self.shared_probe("surface", "grass omitted, 2 active biomes")
 
     def test_relief_inputs_and_query_policy(self):
         self.shared_probe("relief", "1440 exact field samples, 16 scopes")
