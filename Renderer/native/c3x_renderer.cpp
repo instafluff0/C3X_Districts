@@ -78,6 +78,7 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
 #include "render_core/prepared_mesh.h"
 #include "render_core/resource_instances.h"
 #include "render_core/scene_depth.h"
+#include "../lab/studies/borders/depth_export.h"
 #include "render_core/scene_surface.h"
 #include "render_core/frame_working_set.h"
 #include "render_core/coastal_waves.h"
@@ -139,12 +140,13 @@ constexpr std::size_t default_resource_backdrop_cache_budget = 128u * 1024u * 10
 static_assert(default_viewport_cache_budget+natural_mesh_cache_budget==128u*1024u*1024u,
     "World mesh reuse must not increase the combined CPU cache budget");
 // Includes active buffers: a frame pins its entries, never a second copy.
-// Renderer64 can retain a Standard world's compiled geometry outside Civ III's
-// address space; the 32-bit bridge keeps its smaller fallback tier.
+// Renderer64 can retain a large world's compiled geometry outside Civ III's
+// address space; the 32-bit bridge keeps its smaller fallback tier. Runtime
+// video-memory headroom can reduce this ceiling on smaller adapters.
 // A compile-time override retains explicit pressure testing of smaller tiers.
 #ifndef C3X_RENDERER_GPU_GEOMETRY_MIB
 #if defined(_WIN64)
-#define C3X_RENDERER_GPU_GEOMETRY_MIB 1536
+#define C3X_RENDERER_GPU_GEOMETRY_MIB 2048
 #else
 #define C3X_RENDERER_GPU_GEOMETRY_MIB 768
 #endif
@@ -913,6 +915,9 @@ public:
     std::array<std::vector<CachedVertexChunk>,geometry_layer_count> sandbox_pose_chunks;
     std::vector<ResourceBackdrop> resource_backdrops;
     std::int64_t scene_depth_origin=0;
+    c3x_renderer::fidelity::BorderDepthExport border_depth_export;
+    std::string border_depth_prefix;
+    float border_depth_offset=0;
     std::uint64_t resource_backdrop_epoch=0;
     std::size_t resource_backdrop_bytes=0;
     c3x_renderer_i64 resource_composite_ticks=0;
@@ -979,7 +984,10 @@ public:
     c3x_renderer::render_core::ResidencyCandidates residency_candidates;
     std::size_t tile_geometry_cache_bytes = 0, prefetched_geometry_bytes = 0;
     std::size_t tile_geometry_runtime_budget = tile_geometry_cache_budget;
-    std::size_t large_world_geometry_budget = 384u*1024u*1024u;
+    // The large-map reduction protects the 32-bit recovery renderer's address
+    // space. Renderer64 has its own process and retains the ordinary GPU tier.
+    std::size_t large_world_geometry_budget = sizeof(void*)==8?
+        tile_geometry_cache_budget:384u*1024u*1024u;
     std::unordered_map<std::uint64_t,NaturalTile> natural_mesh_cache;
     std::size_t natural_mesh_cache_bytes=0;
     std::unordered_map<std::uint64_t,CachedGroundTile> ground_grid_cache;
@@ -1136,6 +1144,7 @@ public:
         scene_restore.reset();
         unit_scene_work.reset();scene_reflection_cells.clear();scene_dynamic_damage.clear();scene_static_signature=0;scene_overlap=false;scene_damage.clear();
         cancel_pixel_preparation();
+        border_depth_export.reset();
         linear_frame.reset(); linear_block.reset(); reflection.linear.reset();region_reflection.linear.reset();region_glow.linear.reset();
         pixel_blocks.clear();
         release(block_readback); release(block_depth); release(block_depth_texture);
@@ -2705,6 +2714,11 @@ public:
         city_profile=use_city;
         environment_profile=use_environment;
         fidelity_profile = use_fidelity;
+        char border_prefix[1024]={};
+        unsigned border_prefix_length=GetEnvironmentVariableA(
+            "C3X_RENDERER_BORDER_MESH_PREFIX",border_prefix,sizeof(border_prefix));
+        border_depth_prefix=border_prefix_length && border_prefix_length<sizeof(border_prefix) ?
+            border_prefix : "";
         char control[8]={};
         bool explicit_surface=GetEnvironmentVariableA("C3X_RENDERER_SHARED_SCENE_SURFACE",control,sizeof(control))!=0;
         bool requested_surface=explicit_surface && std::strcmp(control,"1")==0;
@@ -2766,7 +2780,8 @@ public:
         GetEnvironmentVariableA("C3X_RENDERER_DIAGNOSTIC_ROUTES",control,sizeof(control));
         diagnostic_routes=std::strcmp(control,"draw")==0?1u:std::strcmp(control,"all")==0?2u:0u;
         diagnostic_half_pixels=GetEnvironmentVariableA("C3X_RENDERER_DIAGNOSTIC_HALF_PIXELS",control,sizeof(control)) && std::strcmp(control,"1")==0;
-        large_world_geometry_budget=384u*1024u*1024u;
+        large_world_geometry_budget=sizeof(void*)==8?
+            tile_geometry_cache_budget:384u*1024u*1024u;
         if(GetEnvironmentVariableA("C3X_RENDERER_WORLD_GEOMETRY_MIB",control,sizeof(control))){
             unsigned mib=unsigned(std::strtoul(control,nullptr,10));
             if(mib==384 || mib==512 || mib==640 || mib==768)
@@ -2789,6 +2804,9 @@ public:
         bool use_pickup = std::strcmp(requested_profile, "frozen") != 0;
         if (pickup_profile != use_pickup) reset();
         pickup_profile = use_pickup;
+        // The frozen compatibility renderer predates copied fog ownership and
+        // accepts partial native traversals. Civ III retains its fog there.
+        if (!pickup_profile) visibility_pass=false;
         char shader_path[4 * MAX_PATH];
         if (mod_root != nullptr &&
             pack_path(shader_root.c_str(), city_profile ? "Renderer\\native\\city_fidelity\\hydrology.hlsl" : environment_profile ? "Renderer\\native\\environment_refresh\\hydrology.hlsl" : fidelity_profile ? "Renderer\\native\\source_fidelity\\hydrology.hlsl" : pickup_profile ? "Renderer\\native\\render_core\\terrain_scene.hlsl" :
@@ -6242,7 +6260,7 @@ public:
                         c3x_renderer::render_core::RenderRegionKey key;
                         std::vector<std::size_t> sections;
                         bool cacheable=false;
-                        if(region_path && !world_regions_control){
+                        if(region_path && !world_regions_control && border_depth_prefix.empty()){
                             try{cacheable=render_region_key(buffers,local,*shadow_casters_ptr,prepared_casters_ptr,key,region_diagnostics?&sections:nullptr);}
                             catch(...){key.clear();}
                             if(!cacheable)++frame_region_rejected;
@@ -6284,6 +6302,12 @@ public:
                                 if(image)image->Release();
                                 if(!admitted)++frame_region_rejected;
                             }
+                        }
+                        if(!border_depth_prefix.empty() && buffers.is(geometry_vertex_buffers) &&
+                           !border_depth_export.save(device,context,active_glow.linear.depth_samples,
+                               UINT(extent),UINT(extent_y),border_depth_prefix,l,t,r,b,
+                               l-x+guard,t-y+guard,border_depth_offset)){
+                            destination_texture->Release();return false;
                         }
                         D3D11_BOX box={UINT(l-x+guard),UINT(t-y+guard),0,UINT(r-x+guard),UINT(b-y+guard),1};
                         context->OMSetRenderTargets(0,nullptr,nullptr);
@@ -6350,7 +6374,8 @@ public:
             if (FAILED(hr)) return false;
             D3D11_TEXTURE2D_DESC desc = {}; texture->GetDesc(&desc); texture->Release();
             linear = reflection_pass?&active_reflection.linear:city_profile?&active_glow.linear:desc.Width == 128 && desc.Height == 128 ? &linear_block : &linear_frame;
-            if (!linear->ensure(device, reflection_pass?active_reflection.native_extent*2:desc.Width*(fidelity_profile?2:1), reflection_pass?active_reflection.native_height*2:desc.Height*(fidelity_profile?2:1))) {
+            if (!linear->ensure(device, reflection_pass?active_reflection.native_extent*2:desc.Width*(fidelity_profile?2:1), reflection_pass?active_reflection.native_height*2:desc.Height*(fidelity_profile?2:1),
+                    city_profile && !reflection_pass && !border_depth_prefix.empty())) {
                 trace.write("linear-target-failed", "pickup MSAA4 allocation", true); return false;
             }
             target = linear->target; depth = linear->depth;
@@ -6951,8 +6976,8 @@ public:
         bool const fresh_scene_path = false;
 #endif
         // The 32-bit Huge-map pressure campaign exhausts address space at the
-        // configured 768 MiB ceiling. Retain a smaller working set when backing
-        // a large world; the configured tier remains an upper bound/control.
+        // configured 768 MiB ceiling. Its smaller working set is independent
+        // of Renderer64's address space and normal GPU cache tier.
         if(world_preparation && frame.world_topology_count>8192u)
             tile_geometry_runtime_budget=std::min(tile_geometry_runtime_budget,large_world_geometry_budget);
         bool const batch_preparing=prewarming && preparation_indices && preparation_count;
@@ -7135,7 +7160,34 @@ public:
         MEMORYSTATUSEX content_memory={};content_memory.dwLength=sizeof(content_memory);
         if(GlobalMemoryStatusEx(&content_memory)){
             auto ceiling=world_preparation && frame.world_topology_count>8192u?std::min(tile_geometry_cache_budget,large_world_geometry_budget):tile_geometry_cache_budget;
-            auto budget=c3x_renderer::render_core::FrameWorkingSet::content(std::size_t(content_memory.ullAvailVirtual),
+#if defined(_WIN64) && defined(C3X_HELPER_TRIAL)
+            if(world_preparation && frame.world_topology_count>8192u && device){
+                Microsoft::WRL::ComPtr<IDXGIDevice> dxgi;
+                Microsoft::WRL::ComPtr<IDXGIAdapter> base;
+                Microsoft::WRL::ComPtr<IDXGIAdapter3> adapter;
+                if(SUCCEEDED(device->QueryInterface(IID_PPV_ARGS(&dxgi))) &&
+                   SUCCEEDED(dxgi->GetAdapter(&base)) && SUCCEEDED(base.As(&adapter))){
+                    DXGI_QUERY_VIDEO_MEMORY_INFO local={};
+                    if(SUCCEEDED(adapter->QueryVideoMemoryInfo(0,DXGI_MEMORY_SEGMENT_GROUP_LOCAL,&local)) && local.Budget){
+                        auto reserve=std::max<std::uint64_t>(512ull*1024ull*1024ull,local.Budget/5);
+                        auto headroom=local.Budget>local.CurrentUsage+reserve?
+                            local.Budget-local.CurrentUsage-reserve:0;
+                        auto safe=tile_geometry_cache_bytes+std::size_t(headroom);
+                        ceiling=std::min(ceiling,std::max<std::size_t>(384u*1024u*1024u,safe));
+                    }
+                }
+            }
+#endif
+#if defined(_WIN64)
+            // Renderer64 has ample virtual address space, but retained world
+            // geometry consumes real process and driver memory. Leave another
+            // GiB beyond the compiler reserve before admitting cache growth.
+            auto available_for_content=std::size_t(content_memory.ullAvailPhys>1024ull*1024ull*1024ull?
+                content_memory.ullAvailPhys-1024ull*1024ull*1024ull:0);
+#else
+            auto available_for_content=std::size_t(content_memory.ullAvailVirtual);
+#endif
+            auto budget=c3x_renderer::render_core::FrameWorkingSet::content(available_for_content,
                 tile_geometry_cache_bytes,ceiling,requested_workers);
             tile_geometry_runtime_budget=budget.geometry;cpu_preparation_budget=world_preparation?budget.preparation:16u*1024u*1024u;
         }
@@ -7454,6 +7506,8 @@ public:
             auto basis=c3x_renderer::render_core::scene_depth_basis(reference.anchor_y,reference.tile_y,
                 frame.tile_height,frame.target_height,geometry_translation_y);
             viewport_settings.depth_translation=basis.translation;
+            border_depth_offset=float(std::int64_t(reference.anchor_y)-
+                std::int64_t(reference.tile_y)*frame.tile_height/2+basis.world_origin);
             if(!prewarming)scene_depth_origin=basis.world_origin;
         }
         if (!prewarming) {
@@ -8095,8 +8149,7 @@ public:
                     auto neighbor = topology_lookup(tile.tile_x + dx, tile.tile_y + dy);
                     return neighbor ? neighbor->occurrence.real_terrain_type : -1;
                 },
-                stable_feature_hash(std::uint32_t(tile.tile_x * 0x193u) ^
-                    std::uint32_t(tile.tile_y * 0x217u)));
+                c3x_renderer::native_hill_seed(tile.tile_x,tile.tile_y));
             float left = 0.0f; // mesh origin is local; Civ III supplies the draw anchor
             float top = 0.0f;
             // The source terrain materials are detail textures, not one enormous
@@ -8849,7 +8902,7 @@ public:
                              valley_floor * valley * 0.92f;
                 }
                 float farm_clearance=1.0f;
-                if(tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_IRRIGATION){
+                if(pickup_profile && (tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_IRRIGATION)){
                     farm_clearance=float(shore_sample_at(world_u,world_v).distance);
                     if(river_assets_ready && height_tile.terrain_type<11){
                         float local_river_u=world_u-tile_world_u;
@@ -9099,7 +9152,7 @@ public:
             int vegetation_type = hill_vegetation ? hill_vegetation : tile.real_terrain_type;
             if (feature_assets_ready &&
                 (vegetation_type == 7 || vegetation_type == 8) &&
-                !(fidelity_profile && tile.real_terrain_type == 7)) {
+                !(fidelity_profile && vegetation_type == 7)) {
                 char const * group_name = vegetation_type == 7 ? "forest" : "jungle";
                 c3x_renderer::FeatureGroup const * group =
                     vegetation_type == 7 ? forest_group :
@@ -10285,6 +10338,9 @@ public:
         HRESULT hr = raster_rects.empty() ? S_OK : context->Map(readback_texture, 0, D3D11_MAP_READ, 0, &mapped);
         QueryPerformanceCounter(&map_end);
         if (FAILED(hr)) {
+            char detail[96];std::snprintf(detail,sizeof(detail),"readback hr=0x%08lx removed=0x%08lx",
+                static_cast<unsigned long>(hr),static_cast<unsigned long>(device?device->GetDeviceRemovedReason():S_OK));
+            trace.write("native-failure",detail,true);
             OutputDebugStringA("[C3X renderer] native-failure=readback\n");
             return false;
         }
@@ -12901,8 +12957,11 @@ private:
                 }
                 continue;
             }
-            if(!has_job && !stop_requested && !camera_pending && !camera_paused && !renderer_state.memory_pressured && scene_changes_ok &&
+            if(!has_job && !stop_requested && !camera_pending && !camera_paused && scene_changes_ok &&
                renderer_state.world_preparation && renderer_state.cache_valid){
+                // Pressure reduces the geometry admission budget in render().
+                // Pausing this queue on pressure alone can deadlock readiness:
+                // retained geometry may be the memory keeping pressure active.
                 auto state=scene_changes.state();auto const& scene=renderer_state.topology_cache;
                 // Build camera-independent regions from one complete authority
                 // snapshot. Starting while pages are still arriving repeats

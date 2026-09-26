@@ -10,6 +10,8 @@ neighbors of a hill tile. The renderer now applies that selection to captured
 terrain and places the resulting plants on the authored hill surface, checking
 their base vertices against the slope. Original `test.biq` includes both cases;
 the sandbox examples use hill tiles `(20,84)` and `(32,50)` respectively.
+Forested hills use the same source forest bodies, base color, paired LEAN,
+gloss, opacity, and slope-following leaf/dirt floor decals as ordinary forests.
 
 `standard.json` identifies the shared implementation, dependencies, fixture recipe
 and focused regression tests. The current checkout is authoritative.

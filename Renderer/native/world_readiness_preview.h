@@ -50,7 +50,7 @@ if(GetEnvironmentVariableA("C3X_RENDERER_WORLD_READINESS_TEST",world_test_option
        state.unavailable_regions){set_world(nullptr);return 1;}
     // No route-dependent warmup: the source paging/region policy above cannot
     // observe this seed or the destination sequence. Every first visit counts.
-    int home_x=center_x,home_y=center_y;std::uint32_t random=0x38c3;
+    int home_x=center_x,home_y=center_y,first_x=0,first_y=0;std::uint32_t random=0x38c3;
     LARGE_INTEGER frequency{};QueryPerformanceFrequency(&frequency);
     // Complete every sample through the existing presenter. Submission alone
     // allows queued GPU work to migrate into later requests and hides latency.
@@ -82,6 +82,9 @@ if(GetEnvironmentVariableA("C3X_RENDERER_WORLD_READINESS_TEST",world_test_option
         random=random*1664525u+1013904223u;center_x=int(random%unsigned(map_width));
         random=random*1664525u+1013904223u;center_y=int(random%unsigned(map_height));
         center_x=(center_x&~1)|(center_y&1);
+        if(!n){first_x=center_x;first_y=center_y;}
+        if(samples>=3 && n==samples-2){center_x=first_x;center_y=first_y;}
+        if(samples>=3 && n==samples-1){center_x=home_x;center_y=home_y;}
         auto next_tiles=capture_view();auto next=frame;next.tiles=next_tiles.data();next.tile_count=unsigned(next_tiles.size());
         next.presentation_time_ticks+=c3x_renderer_i64(n+1)*next.presentation_frequency/30;
         request.frame=&next;world_output={C3X_RENDERER_API_VERSION,sizeof(world_output)};image={sizeof(image)};

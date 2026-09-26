@@ -143,7 +143,8 @@ c3x_renderer_tile_v1 make_tile(int x, int y, int anchor_x, int anchor_y, int ter
     tile.visibility_mask = 1;
     tile.tile_visibility = 1;
     tile.variant_seed = seed;
-    tile.tile_flags = C3X_RENDERER_TILE_RENDER;
+    tile.tile_flags = C3X_RENDERER_TILE_RENDER | C3X_RENDERER_TILE_VISIBILITY_KNOWN |
+        C3X_RENDERER_TILE_EXPLORED | C3X_RENDERER_TILE_VISIBLE;
     tile.resource_id = -1;
     tile.resource_class = -1;
     tile.tile_building_id = -1;

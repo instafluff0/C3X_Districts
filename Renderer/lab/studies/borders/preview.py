@@ -6,7 +6,8 @@ import bisect
 import math
 from pathlib import Path
 
-from PIL import Image, ImageColor, ImageDraw, ImageFilter
+from PIL import Image, ImageChops, ImageColor, ImageDraw, ImageFilter
+from Renderer.lab.studies.borders.mesh_surface import GroundSurface, ProjectedTerrain, RenderDepth
 
 CITY = (16, 16)
 NEIGHBORS = ((1, -1), (1, 1), (-1, 1), (-1, -1))
@@ -45,41 +46,12 @@ def biq_city_territory(center: tuple[int, int], terrain_csv: Path) -> set[tuple[
     terrain = read_biq_terrain(terrain_csv)
     # All coordinates are genuine map tiles. Ownership is a deliberately
     # invented visual fixture because terrain CSV has no culture ownership.
-    offsets = {(dc, dr) for dc in range(-1, 2) for dr in range(-1, 2)} | {(2, 0), (2, -1)}
+    offsets = {(dc, dr) for dc in range(-1, 2) for dr in range(-1, 2)} | {(2, 0)}
     selected = {(center[0] + dc + dr, center[1] + dc - dr) for dc, dr in offsets}
     if not all(tile in terrain and terrain[tile][0] < 11 for tile in selected):
         raise ValueError("selected city territory is not all BIQ land tiles")
     return selected
 
-
-class ReliefStudy:
-    """Continuous BIQ-type relief proxy for the visual draft, not mesh heights."""
-
-    def __init__(self, terrain: dict[tuple[int, int], tuple[int, int]],
-                 tile_width: int, image_size: tuple[int, int], center: tuple[int, int]):
-        self.width = tile_width
-        self.image_size = image_size
-        self.center = center
-        self.landforms = []
-        for (x, y), (base, real) in terrain.items():
-            if abs(x-center[0]) > 9 or abs(y-center[1]) > 9:
-                continue
-            c, r = (x+y)/2, (x-y)/2
-            if real in (5, 6, 10):
-                amplitude = {5: 0.19, 6: 0.37, 10: 0.34}[real] * tile_width
-                self.landforms.append((c, r, amplitude))
-
-    def world_at(self, px: float, py: float) -> tuple[float, float]:
-        dx = (px-self.image_size[0]/2)/(self.width/2)
-        dy = (py-self.image_size[1]/2)/(self.width/4)
-        return ((self.center[0]+self.center[1])/2+(dx+dy)/2,
-                (self.center[0]-self.center[1])/2+(dx-dy)/2)
-
-    def height(self, px: float, py: float) -> float:
-        c, r = self.world_at(px, py)
-        lift = sum(amplitude * math.exp(-((c-nc)**2+(r-nr)**2)/0.66)
-                   for nc, nr, amplitude in self.landforms)
-        return min(lift, self.width*0.40)
 
 def diamond(x: int, y: int, tile_width: int, image_size: tuple[int, int],
             center: tuple[int, int] = CITY):
@@ -159,8 +131,10 @@ def point_at(points: list[tuple[float, float]], distances: list[float], distance
 
 def draped_paths(owned: set[tuple[int, int]], image_size: tuple[int, int],
                  tile_width: int, center: tuple[int, int],
-                 relief: ReliefStudy | None = None) -> list[list[tuple[float, float]]]:
-    """Sample the tile perimeter densely before projecting each point uphill."""
+                 surface: GroundSurface | None = None,
+                 depths: list[list[float]] | None = None,
+                 flat_paths: list[list[tuple[float, float]]] | None = None) -> list[list[tuple[float, float]]]:
+    """Sample the tile perimeter densely and project onto renderer triangles."""
     paths = []
     for corners in perimeter_loops(owned, tile_width, image_size, center):
         points = round_tile_corners(corners)
@@ -168,10 +142,23 @@ def draped_paths(owned: set[tuple[int, int]], image_size: tuple[int, int],
         total = distances[-1]
         samples = max(2, math.ceil(total / 2.0))
         path = []
+        path_depths = []
+        flat_path = []
         for step in range(samples + 1):
             x, y = point_at(points, distances, total * step / samples)
-            path.append((x, y - (relief.height(x, y) if relief is not None else 0)))
+            flat_path.append((x, y))
+            if surface is not None:
+                projected_x, projected_y, depth = surface.project_with_depth(
+                    x, y, image_size, tile_width, center)
+                path.append((projected_x, projected_y))
+                path_depths.append(depth)
+            else:
+                path.append((x, y))
         paths.append(path)
+        if depths is not None:
+            depths.append(path_depths)
+        if flat_paths is not None:
+            flat_paths.append(flat_path)
     return paths
 
 
@@ -197,31 +184,185 @@ def painted_mask(paths: list[list[tuple[float, float]]], image_size: tuple[int, 
     return mask.resize(image_size, Image.Resampling.LANCZOS)
 
 
+def coherent_occlusion(flags: list[bool],
+                       strong: list[bool] | None = None) -> list[bool]:
+    """Keep coherent crossings with convincing foreground depth."""
+    if not flags:
+        return flags
+    count = len(flags)
+    joined = [value or (flags[(index-1) % count] and flags[(index+1) % count])
+              for index, value in enumerate(flags)]
+    clean = [value and sum(joined[(index+delta) % count]
+                           for delta in (-2, -1, 0, 1, 2)) >= 3
+             for index, value in enumerate(joined)]
+    if strong is None or not any(clean):
+        return clean
+    if all(clean):
+        return clean if sum(strong) >= 4 else [False]*count
+    result = clean[:]
+    start = next(index for index, value in enumerate(clean) if not value)
+    position = 1
+    while position <= count:
+        index = (start+position) % count
+        if not clean[index]:
+            position += 1
+            continue
+        run = []
+        while position <= count and clean[(start+position) % count]:
+            run.append((start+position) % count)
+            position += 1
+        if sum(strong[item] for item in run) < 4:
+            for item in run:
+                result[item] = False
+    return result
+
+
+def inward_fade_mask(flat_paths: list[list[tuple[float, float]]],
+                     image_size: tuple[int, int], stroke_width: float,
+                     scale: int, surface: GroundSurface | None = None,
+                     tile_width: int = 128, center: tuple[int, int] = CITY,
+                     occluders: ProjectedTerrain | RenderDepth | None = None) -> Image.Image:
+    """Build a varied, fading inward band from ground-draped parallel paths."""
+    mask = Image.new("L", (image_size[0]*scale, image_size[1]*scale))
+    pen = ImageDraw.Draw(mask)
+    reach = stroke_width*3.8
+    steps = max(2, math.ceil(reach/1.6))
+    line_width = max(2, round(2.9*scale))
+    for loop_index, flat_path in enumerate(flat_paths):
+        ring = flat_path[:-1] if flat_path[0] == flat_path[-1] else flat_path
+        signed_area = sum(a[0]*b[1]-b[0]*a[1]
+                          for a, b in zip(ring, ring[1:]+ring[:1]))
+        direction = 1 if signed_area > 0 else -1
+        normals = []
+        for index in range(len(ring)):
+            before, after = ring[index-1], ring[(index+1) % len(ring)]
+            dx, dy = after[0]-before[0], after[1]-before[1]
+            length = math.hypot(dx, dy)
+            normals.append((-dy/length*direction, dx/length*direction))
+        # Draw from the transparent inner edge toward the stripe, so nearby
+        # stronger samples cover any overlap between parallel contours.
+        for radial_step in range(steps, -1, -1):
+            distance = reach*radial_step/steps
+            projected = []
+            coverage = []
+            hidden = []
+            strong = []
+            for index, ((x, y), (nx, ny)) in enumerate(zip(ring, normals)):
+                flat_x, flat_y = x+nx*distance, y+ny*distance
+                if surface is None:
+                    px, py, depth = flat_x, flat_y, None
+                else:
+                    px, py, depth = surface.project_with_depth(
+                        flat_x, flat_y, image_size, tile_width, center)
+                edge_variation = 0.93+0.05*math.sin(index*.051+loop_index*1.9)+\
+                                 0.025*math.sin(index*.17+loop_index*.8)
+                fade = max(0.0, 1-distance/(reach*edge_variation))**1.25
+                texture = 0.87+0.09*math.sin(index*.073+loop_index*.9)+\
+                          0.07*math.sin(index*.21+distance*.14)
+                opacity = round(104*fade*texture)
+                projected.append((px*scale, py*scale))
+                coverage.append(opacity)
+                hidden.append(occluders is not None and depth is not None and
+                              occluders.is_occluded(px, py, depth, clearance=20.0))
+                if isinstance(occluders, RenderDepth) and depth is not None:
+                    strong.append(occluders.is_occluded(
+                        px, py, depth, clearance=85.0*image_size[1]/800))
+            for index, occluded in enumerate(coherent_occlusion(
+                    hidden, strong if strong else None)):
+                if occluded:
+                    coverage[index] = round(coverage[index]*.34)
+            projected.append(projected[0])
+            coverage.append(coverage[0])
+            for (a, b), opacity in zip(zip(projected, projected[1:]), coverage):
+                if opacity:
+                    pen.line((a, b), fill=opacity, width=line_width, joint="curve")
+    band = mask.resize(image_size, Image.Resampling.LANCZOS).filter(
+        ImageFilter.GaussianBlur(radius=0.45))
+    # Smooth, fixed-value noise breaks up a perfectly even translucent ribbon
+    # without turning the border into dashes or changing its color.
+    values = bytearray(band.tobytes())
+    noise_grid = {}
+    def noise(gx: int, gy: int) -> float:
+        key = gx, gy
+        if key not in noise_grid:
+            value = (gx*374761393+gy*668265263) & 0xffffffff
+            value = ((value ^ (value >> 13))*1274126177) & 0xffffffff
+            noise_grid[key] = (value & 255)/255
+        return noise_grid[key]
+    for index, alpha in enumerate(values):
+        if not alpha:
+            continue
+        x, y = index % image_size[0], index // image_size[0]
+        gx, gy = x//11, y//11
+        u, v = (x%11)/11, (y%11)/11
+        u, v = u*u*(3-2*u), v*v*(3-2*v)
+        variation = ((noise(gx, gy)*(1-u)+noise(gx+1, gy)*u)*(1-v)+
+                     (noise(gx, gy+1)*(1-u)+noise(gx+1, gy+1)*u)*v)
+        grain = ((x*73856093 ^ y*19349663) & 31)/31-0.5
+        values[index] = min(255, round(alpha*(0.80+0.40*variation+0.06*grain)))
+    return Image.frombytes("L", image_size, bytes(values))
+
+
+def terrain_visibility(paths: list[list[tuple[float, float]]],
+                       depths: list[list[float]], terrain: ProjectedTerrain | RenderDepth,
+                       image_size: tuple[int, int], stroke_width: float) -> Image.Image:
+    """Lower border opacity only where projected terrain is nearer to camera."""
+    hidden = Image.new("L", image_size)
+    pen = ImageDraw.Draw(hidden)
+    for path, path_depths in zip(paths, depths):
+        occluded = coherent_occlusion(
+            [terrain.is_occluded(x, y, depth)
+             for (x, y), depth in zip(path, path_depths)],
+            [terrain.is_occluded(x, y, depth, clearance=85.0*image_size[1]/800)
+             for (x, y), depth in zip(path, path_depths)]
+            if isinstance(terrain, RenderDepth) else None)
+        for i, (a, b) in enumerate(zip(path, path[1:])):
+            if occluded[i] or occluded[i+1]:
+                pen.line((a, b), fill=255, width=max(3, round(stroke_width*2.2)))
+        # The last and first samples coincide on a closed territory perimeter.
+        if occluded[-1] or occluded[0]:
+            pen.line((path[-1], path[0]), fill=255,
+                     width=max(3, round(stroke_width*2.2)))
+    hidden = hidden.filter(ImageFilter.GaussianBlur(radius=1.5))
+    return hidden.point(lambda value: 255-round(value*0.66))
+
+
 def overlay(image_size: tuple[int, int], tile_width: int, color: tuple[int, int, int],
             stroke_width: float, owned: set[tuple[int, int]] | None = None,
             center: tuple[int, int] = CITY,
-            terrain: dict[tuple[int, int], tuple[int, int]] | None = None) -> Image.Image:
+            surface: GroundSurface | None = None) -> Image.Image:
     """Drape a soft, translucent civ-color ribbon across tile-edge relief."""
     scale = 3
-    relief = ReliefStudy(terrain, tile_width, image_size, center) if terrain else None
+    depths = []
+    flat_paths = []
     paths = draped_paths(owned if owned is not None else city_territory(center),
-                         image_size, tile_width, center, relief)
+                         image_size, tile_width, center, surface, depths, flat_paths)
+    occluders = None
+    if surface is not None:
+        depth_files = list(surface.prefix.parent.glob(surface.prefix.name + ".depth.*_*.bin"))
+        occluders = (RenderDepth(surface.prefix, image_size) if depth_files else
+                     ProjectedTerrain(surface, image_size, tile_width, center))
     width = stroke_width * (tile_width / 128) ** 0.65
-    soft = painted_mask(paths, image_size, width*1.5, scale).filter(
-        ImageFilter.GaussianBlur(radius=max(0.8, width*0.48)))
+    soft = painted_mask(paths, image_size, width*1.25, scale).filter(
+        ImageFilter.GaussianBlur(radius=max(0.65, width*0.32)))
     main = painted_mask(paths, image_size, width, scale, texture=True).filter(
-        ImageFilter.GaussianBlur(radius=max(0.35, width*0.12)))
+        ImageFilter.GaussianBlur(radius=max(0.25, width*0.08)))
     centerline = painted_mask(paths, image_size, max(1.0, width*0.35), scale).filter(
-        ImageFilter.GaussianBlur(radius=max(0.35, width*0.12)))
-    result = Image.new("RGBA", image_size)
+        ImageFilter.GaussianBlur(radius=max(0.25, width*0.08)))
+    result = Image.new("RGBA", image_size, (*color, 0))
+    result.putalpha(inward_fade_mask(flat_paths, image_size, width, scale,
+                                     surface, tile_width, center, occluders))
     for mask, strength in (
-        (soft, 105),
-        (main, 175),
-        (centerline, 45),
+        (soft, 75),
+        (main, 198),
+        (centerline, 42),
     ):
         layer = Image.new("RGBA", image_size, (*color, 0))
         layer.putalpha(mask.point(lambda value: value*strength//255))
         result = Image.alpha_composite(result, layer)
+    if surface is not None:
+        visibility = terrain_visibility(paths, depths, occluders, image_size, width)
+        result.putalpha(ImageChops.multiply(result.getchannel("A"), visibility))
     return result
 
 
@@ -229,7 +370,7 @@ def compose(source: Image.Image, tile_width: int, case: str,
             civ_color: tuple[int, int, int] | None = None,
             owned: set[tuple[int, int]] | None = None,
             center: tuple[int, int] = CITY,
-            terrain: dict[tuple[int, int], tuple[int, int]] | None = None) -> Image.Image:
+            surface: GroundSurface | None = None) -> Image.Image:
     if case not in CASES:
         raise ValueError("unknown border preview case")
     if tile_width not in (64, 128, 256):
@@ -241,14 +382,14 @@ def compose(source: Image.Image, tile_width: int, case: str,
             raise ValueError("civ color must be three RGB bytes")
         color = civ_color
     return Image.alpha_composite(base, overlay(base.size, tile_width, color, stroke_width,
-                                               owned, center, terrain)).convert("RGB")
+                                               owned, center, surface)).convert("RGB")
 
 
 def render_bitmap(path: Path, tile_width: int, case: str,
-                  terrain_csv: Path | None = None) -> None:
+                  mesh_prefix: Path) -> None:
     with Image.open(path) as source:
         result = compose(source, tile_width, case,
-                         terrain=read_biq_terrain(terrain_csv) if terrain_csv else None)
+                         surface=GroundSurface(mesh_prefix, tile_width))
     result.save(path)
 
 
@@ -261,6 +402,8 @@ def main() -> None:
     parser.add_argument("--color", help="Override the sample civilization color, as #RRGGBB")
     parser.add_argument("--site", help="BIQ city tile as x,y, matching the background's view center")
     parser.add_argument("--terrain-csv", type=Path, help="BIQ terrain capture for checked city territory tiles")
+    parser.add_argument("--mesh-prefix", type=Path,
+                        help="Native renderer ground mesh export for the same city view")
     args = parser.parse_args()
     civ_color = None
     if args.color is not None:
@@ -270,11 +413,12 @@ def main() -> None:
             civ_color = ImageColor.getrgb(args.color)
         except ValueError:
             parser.error("--color must use #RRGGBB")
-    if bool(args.site) != bool(args.terrain_csv):
-        parser.error("--site and --terrain-csv must be supplied together")
+    if any((args.site, args.terrain_csv, args.mesh_prefix)) and not all(
+            (args.site, args.terrain_csv, args.mesh_prefix)):
+        parser.error("--site, --terrain-csv and --mesh-prefix are required together")
     center = CITY
     owned = None
-    terrain = None
+    surface = None
     if args.site:
         try:
             center = tuple(map(int, args.site.split(",")))
@@ -282,10 +426,10 @@ def main() -> None:
             parser.error("--site must be x,y")
         if len(center) != 2:
             parser.error("--site must be x,y")
-        terrain = read_biq_terrain(args.terrain_csv)
         owned = biq_city_territory(center, args.terrain_csv)
+        surface = GroundSurface(args.mesh_prefix, args.tile_width)
     with Image.open(args.background) as source:
-        result = compose(source, args.tile_width, args.case, civ_color, owned, center, terrain)
+        result = compose(source, args.tile_width, args.case, civ_color, owned, center, surface)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     result.save(args.output)
 

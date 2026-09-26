@@ -5,6 +5,21 @@ Connected mountains broaden along captured adjacency; shared-edge geometry and
 shadow coverage match. Grass, plains, tundra or desert climbs the lower slope
 before stone takes over. Terrain decals remain later.
 
+## Flat-ground handoff (Lab candidate)
+
+The mountain neighborhood uses one joined relief grid in place of ordinary
+ground. Its zero-rise fringe now carries the ordinary ground normal, altitude
+and support values, uses the native-prepared terrain material response, and
+enters shared lighting as ground. The handoff fades out before the raised
+rock and authored hill response, preserving adjacent mountain connections.
+The original `test.biq` is unchanged. Review the real native captures under
+`Renderer/lab/out/mountains/ground-handoff/after-v8/` against `before/`;
+the marked plains/desert edges and nearby hill are collected in
+`Renderer/lab/out/mountains/ground-handoff/seam-review.png`.
+`python3 Renderer/renderer.py test mountains` passes (136 tests, one skip),
+and the reviewed BIQ cameras render with zero fallback. This remains a Lab
+candidate; no binary was staged and no fixed reference was replaced.
+
 ## Sandbox-based shape study (Lab only)
 
 `Renderer/lab/studies/mountains/shape_study.py` copies the current sandbox x64

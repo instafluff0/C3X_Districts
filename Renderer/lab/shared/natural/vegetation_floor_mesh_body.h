@@ -4,7 +4,12 @@
 // ShowDecal flag. Exact engine scatter remains unavailable, so this generic
 // reconstruction preserves those associations, descriptor footprints,
 // ArtDef scale/variation, stable world seeds and feature clipping.
-    if(tile.real_terrain_type==7 || tile.real_terrain_type==8){
+    int floor_hill_canopy=c3x_renderer::native_hill_vegetation(tile.real_terrain_type,
+        [&](int dx,int dy){return lookup_natural(nc+(dx+dy)/2,nr+(dx-dy)/2).real;},
+        c3x_renderer::native_hill_seed(owner.source_x,owner.source_y));
+    bool floor_hill_forest=floor_hill_canopy==7;
+    int vegetation_kind=floor_hill_forest?7:tile.real_terrain_type;
+    if(vegetation_kind==7 || vegetation_kind==8){
         struct FloorDecal {float x0,y0,x1,y1,scale,variation;};
         constexpr FloorDecal forest_floor[]={
             {-1.25433612f,-1.25433612f,1.25433612f,1.25433612f,.35f,.15f},
@@ -12,13 +17,14 @@
         constexpr FloorDecal jungle_floor[]={
             {-1.10028418f,-1.10028418f,1.10028418f,1.10028418f,.60f,.25f},
             {-1.26879136f,-1.26879136f,1.26879136f,1.26879136f,.60f,.25f}};
-        auto const*decals=tile.real_terrain_type==7?forest_floor:jungle_floor;
+        auto const*decals=vegetation_kind==7?forest_floor:jungle_floor;
         std::uint32_t floor_seed=std::uint32_t(owner.source_x*0x193u)^std::uint32_t(owner.source_y*0x217u)^0x6d2bu;
-        float edge=tile.real_terrain_type==7?.01f:.03f;
+        float edge=vegetation_kind==7?.01f:.03f;
         auto coverage_at=[&](float x,float y){
             float coverage=0;
             for(int r=int(std::floor(y))-1;r<=int(std::floor(y))+1;r++)for(int c=int(std::floor(x))-1;c<=int(std::floor(x))+1;c++){
-                if(lookup_natural(c,r).real!=tile.real_terrain_type)continue;
+                if(lookup_natural(c,r).real!=vegetation_kind &&
+                    !(floor_hill_forest && c==nc && r==nr))continue;
                 float dx=std::max({float(c)-x,0.f,x-float(c+1)});
                 float dy=std::max({float(r)-y,0.f,y-float(r+1)});
                 float distance=std::hypot(dx,dy);
@@ -27,13 +33,13 @@
             return coverage;
         };
         std::uint32_t feature_seed=floor_seed^0x6d2bu;
-        unsigned forest_density=31+c3x_renderer::stable_hash(feature_seed^0xa53du)%11u;
-        unsigned instance_count=tile.real_terrain_type==7?forest_density:8u;
+        unsigned forest_density=floor_hill_forest?16u:31+c3x_renderer::stable_hash(feature_seed^0xa53du)%11u;
+        unsigned instance_count=vegetation_kind==7?forest_density:8u;
         for(unsigned instance=0;instance<instance_count;instance++){
             if(cancelled())return false;
             unsigned variant;
             float center_x,center_y;
-            if(tile.real_terrain_type==7){
+            if(vegetation_kind==7){
                 // Match the corresponding forest-body selection and center.
                 unsigned selected=c3x_renderer::stable_hash(feature_seed+instance*31u)%180;
                 Recipe const*recipe=nullptr;
@@ -80,7 +86,7 @@
                 float h=height_natural(world_x,world_y)+.18f;
                 auto out=project_natural(world_x,world_y,h);
                 out.u=x/8.f;out.v=y/8.f;
-                out.material_plains=tile.real_terrain_type==7?3.f:4.f;
+                out.material_plains=vegetation_kind==7?3.f:4.f;
                 out.base_terrain=-10+coverage_at(world_x,world_y);
                 return out;
             };

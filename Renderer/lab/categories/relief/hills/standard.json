@@ -4,10 +4,14 @@
   "depends_on": [
     "day-night",
     "shadows",
-    "transitions"
+    "transitions",
+    "forests",
+    "jungles"
   ],
   "implementation": [
     "Renderer/native/hill_vegetation.h",
+    "Renderer/lab/shared/natural/forest_mesh_body.h",
+    "Renderer/lab/shared/natural/vegetation_floor_mesh_body.h",
     "Renderer/lab/shared/shaders/relief/beauty_terrain.hlsl",
     "Renderer/lab/shared/natural/data.h",
     "Renderer/native/source_fidelity/geometry.h",

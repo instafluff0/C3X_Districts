@@ -300,10 +300,13 @@ def decode_decal_mesh(
         x, y, u, v = struct.unpack_from("<4e", vertex_bytes, source * DECAL_VERTEX_STRIDE)
         if not all(math.isfinite(value) for value in (x, y, u, v)):
             raise ValueError("Decal vertex contains a non-finite value")
-        # Half precision can place a clamp-addressed atlas edge one quantum
-        # beyond 1.0 (observed 1.00390625); retain that authored coordinate.
-        if not all(-0.02 <= value <= 1.02 for value in (x, y, u, v)):
-            raise ValueError("Decal packed XY/UV coordinate is outside 0..1")
+        # Position stays within the normalized descriptor. Clamp-addressed
+        # atlas UVs can intentionally extend beyond the edge (1.0419921875
+        # in the Expansion 2 floodplain set); preserve that authored value.
+        if not all(-0.02 <= value <= 1.02 for value in (x, y)) or not all(
+            -0.0625 <= value <= 1.0625 for value in (u, v)
+        ):
+            raise ValueError("Decal packed XY/UV coordinate is outside its bounded range")
         vertices.append({
             "position": _round_values((
                 left + (right - left) * x,

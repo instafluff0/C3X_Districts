@@ -9,38 +9,62 @@ edges stay straight through their centers, with small rounded turns at tile
 corners. The outline is continuous, including through forest. Its opacity fades
 across the stroke's width, leaving a stronger center and soft edges. Every
 part of the ribbon uses the selected civ RGB color, with no white outline.
+A narrow semitransparent band in that same color continues into the owned
+territory. Its width and opacity vary gently along the edge, then taper to
+transparency; the outside has no matching band. Each inset contour samples the
+renderer ground mesh and depth, so the band follows relief and fades behind
+foreground geometry along with the stripe.
 Adjacent owned tiles have no interior strokes.
 
-The sample ownership, color, and city are a visual fixture. This category does
-not change game capture, native border ownership, the renderer DLL, or any
-approved reference. If the design is later brought into game rendering, Civ III
-tile ownership and its effective civilization palette must supply the inputs.
+The sample ownership, color, and city are a visual fixture. A Lab-only exporter
+captures the exact ground and replacement mountain triangles built by the
+production renderer for the same frame. Border points are projected onto those
+triangles before the color stroke is composited. A Lab-only depth readback of
+the finished city pass checks which parts of the line are behind hills,
+mountains, trees, or other rendered foreground objects. Only those parts are
+made more transparent; the exposed line keeps its full opacity. Small depth
+differences and isolated samples do not trigger the fade, preventing spots on
+clear ground. This does not change game
+capture or native border ownership. If the design is later brought into game
+rendering, Civ III tile ownership and its effective civilization palette must
+supply the inputs.
 
-To try another civ color on an existing city bitmap without running the VM:
+First capture the `test.biq` city and its matching terrain mesh through the
+Windows VM (after building the isolated `city-preview` renderer):
+
+```sh
+python3 -m Renderer.lab.studies.borders.capture_test_biq
+```
+
+That capture also writes `test-biq-occlusion-examples.png`, a four-panel sheet
+with the original hill crossing plus mountain, forest, and combined crossings.
+The three full-size variants are `test-biq-mountain-crossing.png`,
+`test-biq-forest-crossing.png`, and `test-biq-mountain-and-forest.png` in
+`Renderer/lab/out/borders/`. They use the same `test.biq` city and renderer
+frame, with different invented contiguous ownership groups and civ colors.
+The script checks that every selected tile is land and that each variant has
+an occluded border segment in the renderer depth readback.
+`test-biq-inward-detail.png` enlarges a quiet grass edge of the forest variant
+to inspect the subtle one-sided color fade.
+`test-biq-clear-north-detail.png` and `test-biq-clear-south-detail.png` show
+the two formerly spurious opacity changes after the depth-confidence check.
+
+To try another civ color on that paired capture without rerunning the VM:
 
 ```sh
 python3 -m Renderer.lab.studies.borders.preview \
-  --background Renderer/lab/out/cities/your-city.bmp \
+  --background Renderer/lab/out/borders/test-biq-ground.bmp \
+  --terrain-csv Renderer/lab/out/cities/test-biq/terrain.csv \
+  --mesh-prefix Renderer/lab/out/borders/test-biq-ground \
+  --site 20,64 --tile-width 256 \
   --output Renderer/lab/out/borders/custom-color.png \
   --case crimson-brush --color '#4A9D55'
 ```
 
-For the map-backed `test.biq` city at tile `(20,64)`, use the existing City Lab
-headless capture and its BIQ terrain CSV:
-
-```sh
-python3 -m Renderer.lab.studies.borders.preview \
-  --background Renderer/lab/out/cities/test-biq/gallery/flat-asian-ancient.png \
-  --terrain-csv Renderer/lab/out/cities/test-biq/terrain.csv \
-  --site 20,64 --tile-width 256 --case crimson-brush \
-  --output Renderer/lab/out/borders/test-biq-city.png
-```
-
 The backdrop's terrain is captured from `test.biq`; the city placement and
 territory ownership are synthetic Lab inputs. The selected territory cells are
-checked against the captured map and must all be land tiles. For this visual
-draft, a continuous height proxy derived from the BIQ hill/mountain tile types
-lifts densely sampled border points.
-This is an inferred relief treatment, not a sample of the renderer's exact
-terrain mesh. Production terrain attachment must query the renderer's actual
-surface height and use its depth buffer for occlusion.
+checked against the captured map and must all be land tiles. The exported
+ground triangles contain the renderer's actual mesh elevations, including the
+joined mountain replacement surface. The sample territory leaves the steep southern hill tile outside its
+boundary, so this example avoids a narrow crest while still following exposed
+tile edges and the exact surface beneath them.

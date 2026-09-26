@@ -1,11 +1,13 @@
 #pragma once
 #include "../terrain_scene_runtime.h"
+#include "../hill_vegetation.h"
 #include "../../lab/shared/natural/world.h"
 #include "../../lab/shared/natural/queries.h"
 #include "../../lab/shared/natural/relief.h"
 #include "../../lab/shared/natural/ground.h"
 #include "../render_core/content_preparation.h"
 #include "../render_core/prepared_mesh.h"
+#include "../../lab/studies/borders/mesh_export.h"
 namespace c3x_renderer { namespace fidelity {
 struct TerrainCompileInput {
     using Key=std::array<std::uint64_t,12>;
@@ -119,6 +121,8 @@ bool emit_terrain_surfaces(NaturalData const& natural,Assets const& assets,
     auto record_natural_phase=[](unsigned){}; // Worker CPU time is recorded by its queue.
     #include "terrain_mesh_body.h"
     if(cancelled())return false;
+    if(!export_border_ground_mesh(input.tile_x,input.tile_y,
+                                  natural_vertices,natural_grid_indices))return false;
     for(unsigned layer=0;layer<3;++layer){
         auto topology=input.indexed && layer!=1?&natural_grid_indices[layer==0?0:1]:nullptr;
         render_core::MeshFormat format;format.natural=true;

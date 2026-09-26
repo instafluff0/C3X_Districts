@@ -525,6 +525,12 @@ if(ok && !std::strcmp(gpu_frame_test,"1")) {
                 center_x=home_x;center_y=home_y;
             }
             if(!verify_gpu(jgl_path[0]&&native_worker_contract(jgl_path,gpu_images,view,gpu_render,gpu_present,request,expected.data(),test_tiles[0].anchor_x,test_tiles[0].anchor_y,performance_frames),"actual native hooks on renderer worker"))break;
+            // The fresh handoff has its own scene pixels and direct unit path.
+            // The remainder of this fixture compares the old CPU map pixel for
+            // pixel with the old GPU map, so it is not a fresh-scene oracle.
+            if(GetEnvironmentVariableA("C3X_RENDERER_NATIVE_FRESH_MAP_TEST",nullptr,0)){
+                gpu_reset();return 0;
+            }
             // The independent native oracle intentionally reads back. Start a
             // fresh session for the existing producer/readback counters below.
             gpu_reset();

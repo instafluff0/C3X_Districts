@@ -176,11 +176,25 @@ class GenericDecalCompilerTests(unittest.TestCase):
             (1.0, 0.0, 1.0, 0.0),
             (1.2, 1.0, 1.0, 1.0),
         ))
-        with self.assertRaisesRegex(ValueError, "outside 0..1"):
+        with self.assertRaisesRegex(ValueError, "outside its bounded range"):
             decode_decal_mesh(
                 bytes(raw), [-1.0, -1.0, 1.0, 1.0], vertices,
                 struct.pack("<3H", 0, 1, 2), 3, 3
             )
+
+    def test_decal_mesh_preserves_clamped_floodplain_atlas_edge(self) -> None:
+        raw = bytearray(108)
+        struct.pack_into("<5I", raw, 0x3C, 0, 0, 0, 0, 3)
+        vertices = b"".join(struct.pack("<4e", *vertex) for vertex in (
+            (0.0, 0.0, 0.25, 1.0419921875),
+            (1.0, 0.0, 0.5, 0.5),
+            (0.0, 1.0, 0.75, 0.25),
+        ))
+        mesh, _ = decode_decal_mesh(
+            bytes(raw), [-1.0, -1.0, 1.0, 1.0], vertices,
+            struct.pack("<3H", 0, 1, 2), 3, 3
+        )
+        self.assertAlmostEqual(mesh["vertices"][0]["uv0"][1], 1.0419921875)
 
 
 if __name__ == "__main__":

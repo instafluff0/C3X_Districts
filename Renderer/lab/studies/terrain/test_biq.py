@@ -36,7 +36,7 @@ def digest(path: Path) -> str:
 
 
 def capture(name: str, center: tuple[int, int], zoom: int, hour: int,
-            dll: Path, scene: Path, output: Path) -> Path:
+            dll: Path, scene: Path, output: Path, shader_root: Path | None = None) -> Path:
     folder = output / name
     folder.mkdir(parents=True, exist_ok=True)
     image = folder / "preview.bmp"
@@ -57,6 +57,8 @@ def capture(name: str, center: tuple[int, int], zoom: int, hour: int,
         "C3X_LAB_PID_FILE": windows(folder / "process.txt"),
         "C3X_LAB_RUN_ID": run_id,
     }
+    if shader_root is not None:
+        settings["C3X_RENDERER_SHADER_SOURCE_ROOT"] = windows(shader_root)
     command = "\n".join(f'set "{key}={value}"' for key, value in settings.items())
     command += (f'\n{windows(PREVIEW)} "{windows(dll)}" '
                 f'..\\.. "..\\..\\Renderer\\default.custom_rendering.txt" '

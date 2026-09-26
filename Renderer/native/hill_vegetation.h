@@ -1,10 +1,17 @@
 #pragma once
 #include <algorithm>
+#include <cstdint>
 #include <initializer_list>
 
 // Civ III keeps the hill as the visible terrain type. Its hill sprite sheet is
 // selected from the four diagonal neighbors: forest, jungle, or plain hill.
 namespace c3x_renderer {
+inline unsigned native_hill_seed(int x,int y) {
+    std::uint32_t value=std::uint32_t(x*0x193u)^std::uint32_t(y*0x217u);
+    value^=value>>16;value*=0x7feb352du;
+    value^=value>>15;value*=0x846ca68bu;
+    return value^(value>>16);
+}
 template<class Lookup>
 int native_hill_vegetation(int center_real, Lookup neighbor_real, unsigned tie_seed) {
     if (center_real != 5) return 0;

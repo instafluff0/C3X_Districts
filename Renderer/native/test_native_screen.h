@@ -99,6 +99,61 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
     verify(patch_OpenGLRenderer_initialize(&startup_lines,0,&startup_target)==0&&!startup_lines.initialized&&
         lifetime(C3X_NATIVE_MAP,canvases[1],0),"pre-configuration main canvas line initialization preserves copy admission");
     state.loaded_config_names=&fixture_base_config;state.current_config.enable_custom_rendering=true;
+    if(GetEnvironmentVariableA("C3X_RENDERER_NATIVE_FRESH_MAP_TEST",nullptr,0)){
+        // The older contract below owns an independent raster-unit adapter.
+        // Exercise the actual fresh map owner and native UI handoff here.
+        auto map_view=reinterpret_cast<c3x_renderer_native_map_view_fn>(GetProcAddress(renderer_module,"c3x_renderer_native_map_view"));
+        verify(map_view!=nullptr,"fresh native map export");
+        struct NativePcx {void* unused;JGL_Image* image;} pcx={nullptr,canvases[1]};
+        auto old_screen=*reinterpret_cast<void**>(static_cast<char*>(graph)+0x148);
+        auto old_dc=*reinterpret_cast<HDC*>(static_cast<char*>(graph)+0x138);
+        *reinterpret_cast<void**>(static_cast<char*>(graph)+0x148)=&pcx;
+        *reinterpret_cast<HDC*>(static_cast<char*>(graph)+0x138)=dc;
+        screen_graph=graph;screen_image=canvases[1];screen.JGL.Image=canvases[1];
+        state.custom_renderer_native_image=live;present_fn=complete_native_ui;
+        c3x_renderer_camera_view_v1 view={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(view)};
+        LARGE_INTEGER frequency={},begin={},end={};QueryPerformanceFrequency(&frequency);QueryPerformanceCounter(&begin);
+        int result=C3X_RENDERER_RESULT_PENDING;unsigned polls=0;
+        auto deadline=GetTickCount64()+30000;
+        while(result==C3X_RENDERER_RESULT_PENDING && GetTickCount64()<deadline){
+            result=map_view(C3X_NATIVE_MAP_PREPARE,canvases[0],&demand,&view);
+            if(result==C3X_RENDERER_RESULT_PENDING){++polls;MsgWaitForMultipleObjectsEx(0,nullptr,16,QS_ALLINPUT,MWMO_INPUTAVAILABLE);}
+        }
+        QueryPerformanceCounter(&end);
+        verify(result==C3X_RENDERER_RESULT_OK&&polls>0&&view.output.bgra_pixels==nullptr,
+            "fresh native map prepared asynchronously without CPU pixels");
+        verify(map_view(C3X_NATIVE_MAP_COMMIT,canvases[0],nullptr,nullptr)==C3X_RENDERER_RESULT_OK,
+            "fresh native map commit");
+        verify(reinterpret_cast<Copy>(canvases[0]->vtable[16])(canvases[0],canvases[1],&full,&full)==0,
+            "fresh native map copied beneath UI");
+        c3x_renderer_unit_v1 unit={};unit.struct_size=sizeof(unit);strcpy_s(unit.unit_key,"PRTO_Warrior");
+        unit.unit_id=732;unit.action=1;unit.direction=3;unit.frame_count=16;unit.action_cursor=7;
+        unit.sprite_width=unit.sprite_height=191;unit.projection_scale_milli=demand.frame->tile_width*1000/128;
+        unit.body_x=w/2;unit.body_y=h/2;unit.hour=12;unit.display_color_rgb=0x205bdd;
+        unit.presentation_frequency=1000000;unit.presentation_time_ticks=1000000;
+        int bounds[4]={};
+        verify(live(C3X_NATIVE_UNIT_DRAW,canvases[1],canvases[1],&unit,bounds,C3X_RENDERER_UNIT_STATE_CAPTURED)==1,
+            "fresh native unit identity captured without raster composition");
+        RECT panel={46,38,136,74};
+        verify(reinterpret_cast<Fill>(canvases[1]->vtable[17])(canvases[1],&panel,int(0x80007c00u))==0,
+            "native UI fill above fresh map");
+        final_ui_drawn=false;patch_JGL_present_screen(&full);
+        verify(final_ui_drawn&&lifetime(C3X_NATIVE_MAP,canvases[0],0)&&lifetime(C3X_NATIVE_MAP,canvases[1],0)&&
+            live(C3X_NATIVE_IMAGE_PRESENT,canvases[1],graph,&full,nullptr,0)==1,
+            "fresh native map and UI presented without ownership loss");
+        std::printf("PASS fresh native map handoff: prepare_ms=%.3f polls=%u map_cpu_pixels=0 ui_presented=1 unit_capture=1\n",
+            1000.*double(end.QuadPart-begin.QuadPart)/double(frequency.QuadPart),polls);
+        reset();present_fn=native_present;screen.JGL.Image=nullptr;screen_image=nullptr;screen_graph=nullptr;
+        *reinterpret_cast<void**>(static_cast<char*>(graph)+0x148)=old_screen;
+        *reinterpret_cast<HDC*>(static_cast<char*>(graph)+0x138)=old_dc;
+        for(auto canvas:canvases)reinterpret_cast<Destroy>(canvas->vtable[0])(canvas,1);
+        reinterpret_cast<Destroy>(root->vtable[0])(root,1);
+        reinterpret_cast<void(__thiscall*)(void*)>(gt[49])(graph);
+        for(auto palette:palettes)reinterpret_cast<void*(__thiscall*)(void*,unsigned)>(reinterpret_cast<char*>(jgl)+0x3cf10)(palette,1);
+        set_custom_renderer_native_probe(nullptr);patch_unload_jgl_lib();
+        ReleaseDC(window,dc);DestroyWindow(window);UnregisterClassA(wc.lpszClassName,wc.hInstance);
+        return true;
+    }
     c3x_native_images::Adapter<WorkerClient> owner(gpu,original_bits,original_release,lifetime);adapter=&owner;state.custom_renderer_native_image=translate;
     if(w==2240&&h==1260){
         // The live HUD uses several separate full-size canvases. Their CPU

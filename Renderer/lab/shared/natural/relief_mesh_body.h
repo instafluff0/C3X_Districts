@@ -134,8 +134,25 @@
                     out.world_valid=1+std::max(0.f,(elevation-mountain_height-2.5f)/112);
                     float n[]={-(surface_height[at+1]-surface_height[at-1])/(2*step*112),
                         (surface_height[at+span]-surface_height[at-span])/(2*step*112),1};normalize3(n);
+                    float ground_support=0;
+                    float flat_blend=smooth01(mountain_height/1.f);
+                    // The flat fringe replaces ordinary terrain. At its outer
+                    // handoff use that provider's exact finite-difference
+                    // normal; blend into the joined mountain normal on rise.
+                    if(mountain_height<1.f){
+                        constexpr float e=.006f;
+                        height_natural(world_x,world_y,&ground_support);
+                        float ground_n[]={-(height_natural(world_x+e,world_y,nullptr)-
+                            height_natural(world_x-e,world_y,nullptr))/(2*e*128),
+                            -(height_natural(world_x,world_y+e,nullptr)-
+                            height_natural(world_x,world_y-e,nullptr))/(2*e*128),1};normalize3(ground_n);
+                        for(unsigned axis=0;axis<3;axis++)n[axis]=ground_n[axis]*(1-flat_blend)+n[axis]*flat_blend;
+                        normalize3(n);
+                    }
                     out.normal_x=n[0];out.normal_y=n[1];out.normal_z=n[2];out.u=sample.u;out.v=sample.v;
-                    out.material_grass=sample.height;out.material_plains=2;out.material_desert=sample.blend;
+                    out.material_grass=std::max(0.f,(elevation-2.5f)/112)*(1-flat_blend)+sample.height*flat_blend;
+                    out.material_plains=2;
+                    out.material_desert=ground_support*(1-flat_blend)+sample.blend*flat_blend;
                     auto weights=material_weights_for(world_x,world_y);
                     // Match the terrain provider's normalized source-family
                     // weights. Native marsh remains underneath at its boundary;

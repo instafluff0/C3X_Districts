@@ -1,0 +1,33 @@
+{
+  "schema": "c3x.source_decal_mapping.v0",
+  "source_units_per_tile": 12.0,
+  "sources": {
+    "package": "DLC/Expansion2/Platforms/Windows/BLPs/environment/clutter.blp",
+    "shared_data": "DLC/Expansion2/Platforms/Windows/BLPs/SHARED_DATA",
+    "artdef": "DLC/Expansion2/ArtDefs/Clutter.artdef"
+  },
+  "groups": [
+    {
+      "group_id": "terrain/floodplain/plains_surface",
+      "artdef_set": "CLUTTER_FLOODPLAINS_PLAINS",
+      "collection": "Plants",
+      "assets": [
+        {"source_asset": "TER_Floodplain_Plains_Decal01", "asset_id": "terrain/floodplain/plains_decal_01"},
+        {"source_asset": "TER_Floodplain_Plains_Decal02", "asset_id": "terrain/floodplain/plains_decal_02"},
+        {"source_asset": "TER_Floodplain_Plains_Decal03", "asset_id": "terrain/floodplain/plains_decal_03"},
+        {"source_asset": "TER_Floodplain_Plains_Decal04", "asset_id": "terrain/floodplain/plains_decal_04"}
+      ]
+    },
+    {
+      "group_id": "terrain/floodplain/grassland_surface",
+      "artdef_set": "CLUTTER_FLOODPLAINS_GRASSLAND",
+      "collection": "Plants",
+      "assets": [
+        {"source_asset": "TER_Floodplain_Grassland_Decal01", "asset_id": "terrain/floodplain/grassland_decal_01"},
+        {"source_asset": "TER_Floodplain_Grassland_Decal02", "asset_id": "terrain/floodplain/grassland_decal_02"},
+        {"source_asset": "TER_Floodplain_Grassland_Decal03", "asset_id": "terrain/floodplain/grassland_decal_03"},
+        {"source_asset": "TER_Floodplain_Grassland_Decal04", "asset_id": "terrain/floodplain/grassland_decal_04"}
+      ]
+    }
+  ]
+}

@@ -84,11 +84,11 @@
     },
     {
       "path": "generated/shaders/relief/beauty_mountain.hlsl",
-      "sha256": "822c6a2755e1a1a2af6001aadc2c8fad709607f85064ea510e1f8c89f4f367d5"
+      "sha256": "9dbab1d5ef67fa2156275765183c83faadd8d93769383de535278c0ca7e181ce"
     },
     {
       "path": "generated/shaders/relief/beauty_terrain.hlsl",
-      "sha256": "4ac6c43b785f73f8bd5916afe76bb0f9d9efba87c9718a734ba0f4fa17c83eeb"
+      "sha256": "6db9a93790dbaefc9a4ba8db1535b189b0dcfb688ea9af8c01fdfbcf7ab88bbc"
     },
     {
       "path": "generated/shaders/relief/coast_rocks.hlsl",

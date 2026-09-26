@@ -1,7 +1,7 @@
 // Shared statement body: retain the native x86 calling context and float rounding.
 // Included by the native tile compiler and the portable typed adapter in mesh.h.
         std::uint32_t seed=std::uint32_t(owner.source_x*0x193u)^std::uint32_t(owner.source_y*0x217u);
-        unsigned density=31+hash(seed^0xa53du)%11u;
+        unsigned density=hill_forest?16u:31+hash(seed^0xa53du)%11u;
         for(unsigned i=0;i<density;i++){
             if(cancelled())return false;
             unsigned selected=hash(seed+i*31u)%180;Recipe const*recipe=nullptr;
@@ -10,7 +10,7 @@
             float ring=std::sqrt((float(i)+.5f)/float(density));
             float angle=2.39996323f*float(i)+random(seed^0x71b3u)*6.283185307f;
             float u=.5f+std::cos(angle)*ring*.43f,v=.5f+std::sin(angle)*ring*.43f;
-            float scale=recipe->scale*(1+recipe->variation*(random(seed+i*71u+23u)*2-1))*.46f;
+            float scale=recipe->scale*(1+recipe->variation*(random(seed+i*71u+23u)*2-1))*(hill_forest?.34f:.46f);
             float yaw=random(seed+i*97u+47u)*6.283185307f;
             float co=std::cos(yaw),si=std::sin(yaw);auto const&body=natural.bodies[recipe->object];
             auto const&mat=natural.materials[body.material];
@@ -31,10 +31,13 @@
             float screen_radius=std::hypot((rx+ry)*64,(rx+ry)*32);
             if(river_at(cx,cy)<9+std::max(screen_radius,radius*64))clipped=true;
             if(clipped)continue;
-            float ground_h=height_natural(float(nc)+u,float(nr)+1-v);
             // Uniform source XYZ scale precedes the documented source-to-world
             // basis conversion; normals use its inverse transpose.
             constexpr float z_basis=150.f/(.82f*64.f);
+            float ground_h=hill_forest
+                ? 2.5f+c3x_renderer::native_hill_plant_ground(body,float(nc)+u,float(nr)+1-v,
+                    co,si,scale,z_basis*112.f,height_natural)
+                : height_natural(float(nc)+u,float(nr)+1-v);
             if(emit_forest_instance(recipe->object,nc,nr,u,v,co,si,scale,ground_h))continue;
             for(auto const&p:body.vertices){
                 float x=float(nc)+u+(p.position[0]*co-p.position[1]*si)*scale;

@@ -536,6 +536,8 @@ def native_render(category, case, hour, zoom, output, *, behavior=None, center=(
         "C3X_RENDERER_WATER_MOTION": "1",
         "C3X_LAB_WATER_MOTION_STUDY": "1" if category in ("seas-oceans", "rivers") else "",
         "C3X_LAB_WATER_STUDY": "1" if case.startswith("water-") else "",
+        "C3X_RENDERER_BORDER_MESH_PREFIX": "",
+        "C3X_RENDERER_BORDER_MESH_SITE": "",
     }
     # The same shoreline lifecycle must cover both native compatibility and
     # resident scene composition; no alternate wave material or timing model.
@@ -559,6 +561,12 @@ def native_render(category, case, hour, zoom, output, *, behavior=None, center=(
             env["C3X_RENDERER_PREVIEW_OBJECTS"] = ""
     def windows(path):
         return "..\\..\\" + relative(path).replace("/", "\\")
+    mesh_prefix = output / (name + "-ground")
+    if category == "borders":
+        for previous in mesh_prefix.parent.glob(mesh_prefix.name + ".*_*.bin"):
+            previous.unlink()
+        env["C3X_RENDERER_BORDER_MESH_PREFIX"] = windows(mesh_prefix)
+        env["C3X_RENDERER_BORDER_MESH_SITE"] = f"{center[0]},{center[1]}"
     run_id = uuid.uuid4().hex
     env["C3X_LAB_PID_FILE"] = windows(output / "process.txt")
     env["C3X_LAB_RUN_ID"] = run_id
@@ -621,7 +629,7 @@ def native_render(category, case, hour, zoom, output, *, behavior=None, center=(
     if category in ("settler-desirability", "borders"):
         if category == "borders":
             from Renderer.lab.studies.borders.preview import render_bitmap
-            render_bitmap(image, zoom, case, csv)
+            render_bitmap(image, zoom, case, mesh_prefix)
         else:
             from Renderer.lab.studies.settler_desirability.preview import render_bitmap
             render_bitmap(image, zoom, case)

@@ -137,8 +137,22 @@ bool reference_relief(NaturalData const&natural,int real,Tile owner,GroundProjec
                     out.world_valid=1+std::max(0.f,(elevation-mountain_height-2.5f)/112);
                     float n[]={-(surface_height[at+1]-surface_height[at-1])/(2*step*112),
                         (surface_height[at+span]-surface_height[at-span])/(2*step*112),1};normalize3(n);
+                    float ground_support=0;
+                    float flat_blend=smooth01(mountain_height/1.f);
+                    if(mountain_height<1.f){
+                        constexpr float e=.006f;
+                        height_natural(world_x,world_y,&ground_support);
+                        float ground_n[]={-(height_natural(world_x+e,world_y,nullptr)-
+                            height_natural(world_x-e,world_y,nullptr))/(2*e*128),
+                            -(height_natural(world_x,world_y+e,nullptr)-
+                            height_natural(world_x,world_y-e,nullptr))/(2*e*128),1};normalize3(ground_n);
+                        for(unsigned axis=0;axis<3;axis++)n[axis]=ground_n[axis]*(1-flat_blend)+n[axis]*flat_blend;
+                        normalize3(n);
+                    }
                     out.normal_x=n[0];out.normal_y=n[1];out.normal_z=n[2];out.u=sample.u;out.v=sample.v;
-                    out.material_grass=sample.height;out.material_plains=2;out.material_desert=sample.blend;
+                    out.material_grass=std::max(0.f,(elevation-2.5f)/112)*(1-flat_blend)+sample.height*flat_blend;
+                    out.material_plains=2;
+                    out.material_desert=ground_support*(1-flat_blend)+sample.blend*flat_blend;
                     auto weights=material_weights_for(world_x,world_y);
                     float source_weight=std::clamp(1-weights[3],0.f,1.f);
                     float desert_weight=std::clamp(weights[2]/std::max(source_weight,.00001f),0.f,1.f);
@@ -346,6 +360,34 @@ int main(){
         vertices+=check(actual,expected,a,b);observations+=a.observations.size();scopes++;
     }
     for(bool seen:variants)assert(seen);
+    {
+        // A zero-rise relief patch replaces ordinary ground and must carry its
+        // exact normal, altitude and support channels at every vertex.
+        NaturalData flat=data;
+        for(unsigned variant=0;variant<5;variant++){
+            auto&field=flat.fields[flat.macro[variant][1]];
+            field.minimum=field.maximum=0;
+            std::fill(field.pixels.begin(),field.pixels.end(),0);
+        }
+        Probe probe{{},0,0,0};GroundProjection projection{0,0,64,32,.4f,480};
+        auto topology=[](int c,int r){return Tile{c+r,c-r,c,r,c==0&&r==0?6:2};};
+        Layers out;
+        assert(emit_relief_meshes(flat,6,topology(0,0),projection,topology,
+            [&](float x,float y,float*s){return probe.height(x,y,s);},
+            [&](float x,float y){return probe.shore(x,y);},
+            [&](float x,float y){return probe.river(x,y);},weights,
+            [&](){return probe.cancelled();},out[1],out[2]));
+        assert(!out[2].empty());
+        float expected_n[]={-.17f/128,-.23f/128,1};normalize3(expected_n);
+        for(auto const&vertex:out[2]){
+            assert(std::abs(vertex.normal_x-expected_n[0])<1e-5f);
+            assert(std::abs(vertex.normal_y-expected_n[1])<1e-5f);
+            assert(std::abs(vertex.normal_z-expected_n[2])<1e-5f);
+            assert(std::abs(vertex.material_grass-
+                std::max(0.f,(vertex.world_x*.17f+vertex.world_y*.23f)/112))<1e-5f);
+            assert(std::abs(vertex.material_desert-.25f)<1e-5f);
+        }
+    }
     for(unsigned i=0;i<open_mountain_peaks.size();i++){
         assert(open_mountain_peaks[i]>0);
         assert(river_valley_peaks[i]>0);

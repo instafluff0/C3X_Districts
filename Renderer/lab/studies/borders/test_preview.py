@@ -1,13 +1,17 @@
 import unittest
+import struct
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from PIL import Image, ImageChops
+from Renderer.lab.studies.borders.mesh_surface import GroundSurface, RenderDepth
 
 from Renderer.lab.studies.borders.preview import (
-    CASES, CITY, NEIGHBORS, ReliefStudy, arc_lengths, biq_city_territory,
-    city_territory, compose, diamond, draped_paths, exposed_edges, overlay,
+    CASES, CITY, NEIGHBORS, arc_lengths, biq_city_territory,
+    city_territory, coherent_occlusion, compose, diamond, draped_paths,
+    exposed_edges, inward_fade_mask, overlay,
     perimeter_loops, point_at, read_biq_terrain, round_tile_corners,
+    terrain_visibility,
 )
 
 
@@ -59,6 +63,59 @@ class BorderStudyTests(unittest.TestCase):
         self.assertGreater(sample(0), sample(width*0.8))
         self.assertGreater(sample(width*0.8), sample(width*2.5))
 
+    def test_inward_band_fades_with_varied_opacity_only_on_owned_ground(self):
+        size = (640, 480)
+        flat_paths = []
+        draped_paths({CITY}, size, 128, CITY, flat_paths=flat_paths)
+        wash = inward_fade_mask(flat_paths, size, 4.2, 3)
+        def sample(distance, inside):
+            sign = -1 if inside else 1
+            return wash.getpixel((round(352+sign*.447*distance),
+                                  round(224-sign*.894*distance)))
+        self.assertGreater(sample(5, True), 35)
+        self.assertLess(sample(5, True), 70)
+        self.assertGreater(sample(5, True), sample(10, True))
+        self.assertGreater(sample(10, True), sample(14, True))
+        self.assertEqual(0, sample(20, True))
+        self.assertEqual(0, sample(8, False))
+        along_edge = [wash.getpixel((round(x-4*.447), round(y+4*.894)))
+                      for x, y in ((336, 216), (348, 222), (360, 228), (372, 234))]
+        self.assertGreaterEqual(max(along_edge)-min(along_edge), 4)
+
+    def test_inward_band_uses_ground_projection_and_local_occlusion(self):
+        size = (640, 480)
+        flat_paths = []
+        draped_paths({CITY}, size, 128, CITY, flat_paths=flat_paths)
+        class RaisedGround:
+            def project_with_depth(self, x, y, image_size, tile_width, center):
+                return x, y-12, 0
+        class Foreground:
+            def is_occluded(self, x, y, depth, clearance=5.0):
+                return 345 < x < 360
+        base = inward_fade_mask(flat_paths, size, 4.2, 3)
+        draped = inward_fade_mask(flat_paths, size, 4.2, 3,
+                                  surface=RaisedGround())
+        hidden = inward_fade_mask(flat_paths, size, 4.2, 3,
+                                  surface=RaisedGround(), occluders=Foreground())
+        self.assertGreater(base.getpixel((350, 228)), 35)
+        self.assertLessEqual(draped.getpixel((350, 228)), 2)
+        self.assertAlmostEqual(base.getpixel((350, 228)),
+                               draped.getpixel((350, 216)), delta=9)
+        self.assertLess(hidden.getpixel((350, 216)), draped.getpixel((350, 216))//2)
+
+    def test_occlusion_ignores_single_spots_but_keeps_solid_crossings(self):
+        self.assertEqual([False]*7,
+                         coherent_occlusion([False, False, True, False, False, False, False]))
+        self.assertEqual([False, True, True, True, True, True, False],
+                         coherent_occlusion([False, True, True, False, True, True, False]))
+        candidates = [False, True, True, True, True, True, True, False]
+        self.assertEqual([False]*8,
+                         coherent_occlusion(candidates,
+                                            [False, False, True, False, True, False, False, False]))
+        self.assertEqual(candidates,
+                         coherent_occlusion(candidates,
+                                            [False, True, True, True, True, False, False, False]))
+
     def test_color_changes_only_the_border(self):
         source = Image.new("RGB", (640, 480), (80, 105, 65))
         red = compose(source, 128, "crimson-brush")
@@ -72,7 +129,7 @@ class BorderStudyTests(unittest.TestCase):
     def test_biq_region_uses_real_map_tiles_and_keeps_straight_edge_centers(self):
         site = (20, 64)
         selected = {(site[0] + dc + dr, site[1] + dc - dr)
-                    for dc in range(-1, 2) for dr in range(-1, 2)} | {(22, 66), (21, 67)}
+                    for dc in range(-1, 2) for dr in range(-1, 2)} | {(22, 66)}
         with TemporaryDirectory() as directory:
             csv = Path(directory) / "terrain.csv"
             csv.write_text("C3X_BIQ_TERRAIN_V3,100,100,11\n" +
@@ -93,27 +150,44 @@ class BorderStudyTests(unittest.TestCase):
             cross = (b[0] - a[0]) * (approach[1] - departure[1]) - (b[1] - a[1]) * (approach[0] - departure[0])
             self.assertAlmostEqual(0, cross, places=5)
 
-    def test_biq_relief_drapes_the_tile_boundary(self):
-        owned = city_territory()
-        terrain = {tile: (2, 5) for tile in owned}
-        relief = ReliefStudy(terrain, 128, (640, 480), CITY)
-        flat = draped_paths(owned, (640, 480), 128, CITY)
-        raised = draped_paths(owned, (640, 480), 128, CITY, relief)
-        self.assertEqual([len(path) for path in flat], [len(path) for path in raised])
-        self.assertTrue(any(y-flat_y < -8 for path, original in zip(raised, flat)
-                            for (_, y), (_, flat_y) in zip(path, original)))
-        self.assertEqual([x for path in flat for x, _ in path],
-                         [x for path in raised for x, _ in path])
+    def test_projected_mesh_samples_the_mountain_replacement_layer(self):
+        with TemporaryDirectory() as directory:
+            prefix = Path(directory) / "surface"
+            payload = bytearray(b"C3XBRD1\0" + struct.pack("<2i", 16, 16))
+            for lift in (0, 12):
+                vertices = []
+                for u, v in ((0, 0), (1, 0), (1, 1), (0, 1)):
+                    vertices.extend((16+u, 1-v, (2.5+lift)/112))
+                payload.extend(struct.pack("<2I", 4, 6))
+                payload.extend(struct.pack("<12f", *vertices))
+                payload.extend(struct.pack("<6I", 0, 1, 2, 0, 2, 3))
+            (Path(directory) / "surface.16_16.bin").write_bytes(payload)
+            surface = GroundSurface(prefix, 128)
+            self.assertAlmostEqual(14.5/112, surface.sample_world(16.5, 0.5))
+            x, y = surface.project(320, 240, (640, 480), 128, CITY)
+            self.assertAlmostEqual(320, x)
+            self.assertAlmostEqual(240-12*(128/224*0.82), y, places=6)
+            with self.assertRaisesRegex(ValueError, "misses exported ground mesh"):
+                surface.sample_world(19.5, 0.5)
 
-    def test_forest_does_not_break_the_border(self):
-        owned = city_territory()
-        x, y, _ = next(iter(exposed_edges(owned)))
-        forest = ReliefStudy({(x, y): (2, 7)}, 128, (640, 480), CITY)
-        flat = draped_paths(owned, (640, 480), 128, CITY)
-        covered = draped_paths(owned, (640, 480), 128, CITY, forest)
-        self.assertEqual(flat, covered)
-        self.assertEqual(1, len(covered))
-        self.assertEqual(covered[0][0], covered[0][-1])
+    def test_renderer_depth_dulls_only_a_foreground_crossing(self):
+        with TemporaryDirectory() as directory:
+            prefix = Path(directory) / "surface"
+            rows = [0.49 if 40 <= x < 60 else
+                    0.5-1.5/16384 if x == 20 and y == 50 else 0.5
+                    for y in range(100) for x in range(100)]
+            (Path(directory) / "surface.depth.0_0.bin").write_bytes(
+                b"C3XBDP1\0" + struct.pack("<4if", 0, 0, 100, 100, 0.0) +
+                struct.pack("<10000f", *rows))
+            depth = RenderDepth(prefix, (100, 100))
+            self.assertTrue(depth.is_occluded(50, 50, 0.0))
+            self.assertFalse(depth.is_occluded(20, 50, 0.0))
+            path = [(float(x), 50.0) for x in range(10, 91, 2)]
+            visibility = terrain_visibility([path], [[0.0]*len(path)], depth,
+                                            (100, 100), 4.0)
+            self.assertEqual(255, visibility.getpixel((20, 50)))
+            self.assertLess(visibility.getpixel((50, 50)), 100)
+            self.assertEqual(255, visibility.getpixel((80, 50)))
 
 
 if __name__ == "__main__":

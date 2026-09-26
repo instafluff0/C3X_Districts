@@ -8,6 +8,11 @@ The [coastal-wave study](../../../studies/waves/README.md) separately evaluates
 recovered source crests on lowland and rocky coasts. It is isolated, pending
 approval, and does not change the category's production appearance.
 
+The [coastal-shallows study](../../../studies/coastal_shallows/README.md)
+compares coast-family clarity and authored seabed visibility against the
+sandbox water baseline at a 256-pixel tile width. It remains a visual Lab
+experiment; its shaders are not the production appearance.
+
 Rock geometry remains exclusive to hill tiles adjoining water. The shoreline
 witness includes both that rocky join and an ordinary lowland beach so changes
 to the cliff composition cannot hide a regression in the unrocked coast.

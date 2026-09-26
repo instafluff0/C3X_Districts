@@ -31,7 +31,8 @@ if(fidelity_profile) {
     }
     #include "../city_fidelity/geometry.h"
     record_natural_phase(4);
-    if(tile.real_terrain_type==7){
+    if(tile.real_terrain_type==7 || hill_vegetation==7){
+        bool hill_forest=hill_vegetation==7;
         // Exact current production building meshes/placement, used only as
         // exclusions. City appearance and its geometry path remain unchanged.
         std::vector<BuildingBounds> buildings;
