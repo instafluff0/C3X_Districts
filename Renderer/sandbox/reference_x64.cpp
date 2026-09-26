@@ -738,7 +738,13 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
               (pickup ? output.rendered_tile_count >= expected_rendered : output.rendered_tile_count == expected_rendered) &&
               output.fallback_tile_count == 0 && write_bmp(argv[5], output);
 #ifdef C3X_SANDBOX_CLIENT
-    if (!ok) return 1;
+    if (!ok) {
+        std::printf("CLIENT_PREPARE_ERROR result=%d rendered=%u expected=%zu built=%u upload_bytes=%u fallback=%u\n",
+            result,output.rendered_tile_count,expected_rendered,output.geometry_tiles_built,
+            output.geometry_upload_bytes,output.fallback_tile_count);
+        std::fflush(stdout);
+        return 1;
+    }
     std::printf("CLIENT_PREPARE reference_and_scene_ms=%.1f tiles=%u built=%u upload_bytes=%u fallback=%u\n",
         initial_render_ms,frame.tile_count,output.geometry_tiles_built,
         output.geometry_upload_bytes,output.fallback_tile_count);

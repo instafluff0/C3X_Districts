@@ -41,6 +41,13 @@ float4 ShadeWaterSurface(PixelInput input) {
     // objects, then mixes them with a bounded view/normal Fresnel term.
     float3 refracted = lerp(float3(.023, .074, .096),
         float3(.003, .015, .040), smoothstep(.18, .43, depth)) * light;
+    // The prepared surface coordinate blends the authoritative Civ III water
+    // families: coast .34, sea .68, ocean 1.0. Keep the ocean endpoint intact.
+    float family = saturate(input.surface_coordinate);
+    float coast_family = 1 - smoothstep(.34, .63, family);
+    float sea_family = (1 - coast_family) * (1 - smoothstep(.65, .99, family));
+    refracted += light * (float3(.012, .058, .046) * coast_family +
+                          float3(.006, .026, .023) * sea_family);
     refracted *= 1 + dot(normal.xy, float2(.85, -.65));
     // t123 is the water variant's marine-color layer. Sample it through the
     // moving normal so fish and whales inherit surface refraction, reflection
@@ -89,6 +96,34 @@ float4 ShadeWaterSurface(PixelInput input) {
     color = lerp(color, color * float3(.12, .30, .42) +
         marine_body * .035, marine_coverage);
     color += shadow * saturate(specular * sun) * lerp(.06, 1, open_ocean);
+    // The broad low-sun reflection shares the forest-ray time window. Keep
+    // the wave normals and angular specular term so this remains moving water,
+    // while the noon and night ocean retain their established appearance.
+    float low_sun = smoothstep(.10, .25, environment_sun_intensity) *
+        (1 - smoothstep(.65, .82, environment_sun_intensity));
+    float broad_glint = smoothstep(.10, .78,
+        saturate(dot(specular_direction, eye)));
+    float wave_glimmer = saturate(.42 + broad.x * .32 + fine.y * .30);
+    float twilight_glint = shadow * low_sun * open_ocean *
+        broad_glint * wave_glimmer;
+    color += sun * twilight_glint * .35;
+    // Keep a hint of the earlier purple-red twilight shimmer in the moving
+    // specular path, rather than tinting the whole daytime ocean.
+    color += float3(.045, .010, .032) * twilight_glint *
+        environment_sun_intensity;
+    // Moonlight follows the same moving normals and open-water selection as
+    // the sun, with its own reflected direction and a neutral white glint.
+    // Q6ShadowL is the active shadow-map light vector. Once night takes over,
+    // the highlight therefore points back toward the shadow-casting moon.
+    float3 moon_specular_direction = reflect(-normalize(Q6ShadowL.xyz), normal);
+    float moon_facing = saturate(dot(moon_specular_direction, eye));
+    float moon_broad = smoothstep(.10, .78, moon_facing);
+    float moon_narrow = smoothstep(.82, .995, moon_facing);
+    float moon_glint = shadow * environment_moon_intensity *
+        smoothstep(.18, .28, environment_moon_intensity) *
+        open_ocean * wave_glimmer;
+    color += float3(1, 1, 1) * moon_glint *
+        (moon_broad * .55 + moon_narrow * .65);
     // 0 A.D.'s water_high getFoam uses animated normal detail plus shoreline
     // coverage. The prepared BIQ coastal depth supplies that coverage here,
     // so the far-zoom scene needs no separate short-strip wave meshes.
@@ -108,4 +143,19 @@ float4 ShadeWaterSurface(PixelInput input) {
 }
 float4 PSWaterSurface(PixelInput input) : SV_Target {
     return ShadeWaterSurface(input);
+}
+float4 PSRiverSurface(PixelInput input) : SV_Target {
+    // Production preparation supplies the river, wet bank and shoreline
+    // materials. The sandbox's common scene shadow field also darkens their
+    // ambient response where nearby terrain or vegetation blocks moon/sun.
+    float4 river = q6_raw_main(input);
+    float visibility = q6_receiver_visibility(input, float3(0, 0, 1), 1);
+    river.rgb *= lerp(.25, 1, visibility);
+    // River banks already use the prepared beach sand. At low sun their
+    // separate river lighting ran hotter than the adjacent coastal shore.
+    float low_sun = smoothstep(.10, .25, environment_sun_intensity) *
+        (1 - smoothstep(.65, .82, environment_sun_intensity));
+    float dry_bank = smoothstep(5.5, 9.5, input.river_data.x);
+    river.rgb *= 1 - .20 * low_sun * dry_bank;
+    return q6_scene_output(river).color;
 }

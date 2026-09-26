@@ -218,6 +218,7 @@ int sandbox_client_run(HMODULE module, c3x_renderer_frame_v1 const& prepared_fra
     std::array<std::vector<double>,2> zoom_legs;
     double first_zoom_ms=0,return_zoom_ms=0;
     std::array<std::vector<double>,6> scene_stages;
+    bool frame_failed=false;
     while (GetTickCount64() - start < 36000) {
         MSG message{};
         while (PeekMessageA(&message, nullptr, 0, 0, PM_REMOVE)) {
@@ -273,6 +274,7 @@ int sandbox_client_run(HMODULE module, c3x_renderer_frame_v1 const& prepared_fra
             snapshot.unit_incarnation,snapshot.viewer,snapshot.unit_visible,camera_x,camera_y);
         if (result) {
             std::printf("CLIENT_FRAME_ERROR code=%d frame=%zu\n", result, frame_times.size());
+            frame_failed=true;
             break;
         }
         if (present_metrics) {
@@ -372,7 +374,7 @@ int sandbox_client_run(HMODULE module, c3x_renderer_frame_v1 const& prepared_fra
     CloseHandle(host.hThread); CloseHandle(host.hProcess);
     UnmapViewOfFile(exchange); CloseHandle(mapping);
     DestroyWindow(window);
-    return frame_times.empty() ? 9 : 0;
+    return frame_failed ? 10 : frame_times.empty() ? 9 : 0;
 }
 
 int main(int argc, char** argv) {

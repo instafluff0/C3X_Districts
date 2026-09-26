@@ -897,6 +897,7 @@ public:
     std::vector<ResourceBuffer> resource_buffers;
     GeometryDrawView::Records sandbox_resource_poses;
     GeometryDrawView::Records sandbox_aquatic_resource_poses;
+    std::array<std::vector<CachedVertexChunk>,geometry_layer_count> sandbox_pose_chunks;
     std::vector<ResourceBackdrop> resource_backdrops;
     std::int64_t scene_depth_origin=0;
     std::uint64_t resource_backdrop_epoch=0;
@@ -1061,6 +1062,7 @@ public:
         moving_resources = visible_resource_animations = visible_wave_animations = 0;
         sandbox_resource_poses = {};
         sandbox_aquatic_resource_poses = {};
+        sandbox_pose_chunks = {};
         for(auto& chunk:wave_chunks){release(chunk.buffer);release(chunk.indices);}
         wave_chunks.clear();wave_signature=0;wave_upload_bytes=0;
         geometry_cache.clear();
@@ -3683,7 +3685,8 @@ public:
             bool pose_only=false) {
         resource_composite_ticks=0;
         if(pose_only && resource_anchors.empty()){
-            sandbox_resource_poses={};sandbox_aquatic_resource_poses={};return true;
+            sandbox_resource_poses={};sandbox_aquatic_resource_poses={};
+            sandbox_pose_chunks={};return true;
         }
         if(visibility_pass && !visibility_coverage.capture(frame))return false;
         // Visibility is deliberately absent from geometry identities. Refresh
@@ -3950,11 +3953,12 @@ public:
         if(pose_only){
             sandbox_resource_poses={};
             sandbox_aquatic_resource_poses={};
+            sandbox_pose_chunks=std::move(buffers);
             for(auto layer:{geometry_shadow,geometry_feature}){
-                if(buffers[layer].size()!=aquatic_resource.size())return false;
+                if(sandbox_pose_chunks[layer].size()!=aquatic_resource.size())return false;
                 for(std::size_t i=0;i<aquatic_resource.size();++i){
                     auto& output=aquatic_resource[i]?sandbox_aquatic_resource_poses:sandbox_resource_poses;
-                    output[layer].emplace_back(buffers[layer][i]);
+                    output[layer].emplace_back(sandbox_pose_chunks[layer][i]);
                 }
             }
             return true;

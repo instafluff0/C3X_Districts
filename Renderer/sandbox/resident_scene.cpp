@@ -69,6 +69,8 @@ SamplerState linear_clamp : register(s0);
 cbuffer OutputSettings : register(b0) {
  float exposure;float gain;float2 inverse_scene;
  float zoom;float3 padding;
+ float4 ray_source_direction;
+ float4 ray_shape;
 };
 float4 VSOutput(uint id : SV_VertexID) : SV_Position {
  float2 p=float2((id<<1)&2,id&2); return float4(p*float2(2,-2)+float2(-1,1),0,1);
@@ -88,6 +90,51 @@ float4 PSOutput(float4 position : SV_Position) : SV_Target {
   c=dynamic_color+scene.SampleLevel(linear_clamp,uv,0)*(1-dynamic_color.a);
  }
  if(c.a<=.000001) return 0;
+ // A single sunward source fans across the whole scene.
+ // Modulate the composed HDR surfaces instead of laying pale air-colored
+ // polygons over them: this preserves terrain texture and object silhouettes.
+ if(ray_shape.x>.001){
+  float2 delta=source_position-ray_source_direction.xy;
+  float distance=max(length(delta),1);
+  float2 direction=ray_source_direction.zw;
+  float forward=dot(delta,direction);
+  float across=1.7*(direction.x*delta.y-direction.y*delta.x)/distance;
+  // Peak close to the shared sunward origin, then nearly vanish after
+  // travelling forty percent of the viewport width.
+  float screen_width=1/inverse_scene.x-8;
+  float visible_distance=max(distance-ray_shape.w,0);
+  float radial=smoothstep(0,screen_width*.12,visible_distance)*
+      exp(-3.2*visible_distance/(screen_width*.40))*
+      smoothstep(0,ray_shape.y*.30,forward);
+  float soft=4.0/distance;
+  float shafts=
+      .35*exp(-pow((across+.82)/(.013+soft),2))+
+      .62*exp(-pow((across+.67)/(.017+soft),2))+
+      .44*exp(-pow((across+.55)/(.012+soft),2))+
+      .82*exp(-pow((across+.41)/(.019+soft),2))+
+      .57*exp(-pow((across+.29)/(.014+soft),2))+
+      .76*exp(-pow((across+.18)/(.016+soft),2))+
+      .49*exp(-pow((across+.06)/(.011+soft),2))+
+     1.00*exp(-pow((across-.08)/(.018+soft),2))+
+      .58*exp(-pow((across-.21)/(.013+soft),2))+
+      .87*exp(-pow((across-.34)/(.017+soft),2))+
+      .41*exp(-pow((across-.49)/(.012+soft),2))+
+      .68*exp(-pow((across-.63)/(.018+soft),2))+
+      .37*exp(-pow((across-.78)/(.014+soft),2));
+  float light=saturate(shafts*1.3)*radial*ray_shape.x;
+  float3 surface=max(c.rgb/c.a,0);
+  // Blue water gets its own moving low-sun glint in the water pass.
+  float water_hint=smoothstep(.025,.12,surface.b-surface.r);
+  light*=1-.82*water_hint;
+  float brightness=dot(surface,float3(.25,.62,.13));
+  float evening=smoothstep(12,17,ray_shape.z);
+  float3 warmth=lerp(float3(.84,.61,.20),float3(.95,.52,.09),evening);
+  // Preserve texture contrast: bright surfaces catch more warm light while
+  // dark creases and cast shadows remain recognizably dark.
+  surface=surface*(1+light*.35)+
+      warmth*light*.70*sqrt(saturate(brightness));
+  c.rgb=surface*c.a;
+ }
  c.rgb+=bloom.SampleLevel(linear_clamp,(source_position+.5)*inverse_scene,0).rgb*gain*c.a;
  float3 rgb=max(0,c.rgb/c.a*exposure);
  rgb/=1+max(rgb.r,max(rgb.g,rgb.b));
@@ -112,7 +159,7 @@ float4 PSOutput(float4 position : SV_Position) : SV_Target {
         if(SUCCEEDED(result))result=renderer.device->CreatePixelShader(ps->GetBufferPointer(),
             ps->GetBufferSize(),nullptr,&pixel);
         if(vs)vs->Release();if(ps)ps->Release();
-        D3D11_BUFFER_DESC buffer{};buffer.ByteWidth=32;
+        D3D11_BUFFER_DESC buffer{};buffer.ByteWidth=64;
         buffer.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
         if(SUCCEEDED(result))result=renderer.device->CreateBuffer(&buffer,nullptr,&settings);
         D3D11_RASTERIZER_DESC raster{};raster.FillMode=D3D11_FILL_SOLID;
@@ -132,9 +179,18 @@ float4 PSOutput(float4 position : SV_Position) : SV_Target {
         context->IASetInputLayout(nullptr);
         context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         context->VSSetShader(vertex,nullptr,0);context->PSSetShader(pixel,nullptr,0);
-        float values[8]={renderer.display_exposure,sandbox_fresh.glow.gain,
+        float values[16]={renderer.display_exposure,sandbox_fresh.glow.gain,
             1.f/sandbox_fresh.glow.native_extent,1.f/sandbox_fresh.glow.native_height,
             sandbox_fresh.display_zoom,0,0,0};
+        if(sandbox_fresh.shafts.count){
+            auto const& ray=sandbox_fresh.shafts.bands[0];
+            values[8]=ray.x+4;
+            values[9]=ray.y+4;
+            values[10]=ray.dx;values[11]=ray.dy;
+            values[12]=ray.phase;values[13]=ray.tile;
+            values[14]=sandbox_fresh.visual_hour;
+            values[15]=ray.offscreen;
+        }
         context->UpdateSubresource(settings,0,nullptr,values,0,0);
         context->PSSetConstantBuffers(0,1,&settings);
         ID3D11ShaderResourceView* sources[]={sandbox_fresh.static_cache.view,
@@ -189,6 +245,17 @@ extern "C" __declspec(dllexport) void c3x_sandbox_inspect_scene() {
         WideCharToMultiByte(CP_UTF8, 0, description.Description, -1, name, sizeof(name), nullptr, nullptr);
         std::printf("SANDBOX_DEVICE vendor=0x%x device=0x%x feature_level=0x%x adapter=%s\n",
             description.VendorId, description.DeviceId, unsigned(renderer.device->GetFeatureLevel()), name);
+        IDXGIAdapter3* budget_adapter=nullptr;
+        if(SUCCEEDED(adapter->QueryInterface(__uuidof(IDXGIAdapter3),
+                reinterpret_cast<void**>(&budget_adapter)))){
+            DXGI_QUERY_VIDEO_MEMORY_INFO memory{};
+            if(SUCCEEDED(budget_adapter->QueryVideoMemoryInfo(0,
+                    DXGI_MEMORY_SEGMENT_GROUP_LOCAL,&memory)))
+                std::printf("SANDBOX_VIDEO_MEMORY local_budget_bytes=%llu local_usage_bytes=%llu\n",
+                    static_cast<unsigned long long>(memory.Budget),
+                    static_cast<unsigned long long>(memory.CurrentUsage));
+            budget_adapter->Release();
+        }
     }
     if (adapter) adapter->Release(); if (dxgi) dxgi->Release();
 }
@@ -242,6 +309,7 @@ extern "C" __declspec(dllexport) int c3x_sandbox_present(HWND window,
         if (dxgi_device) dxgi_device->Release();
         if (FAILED(result) || !swap) {
             std::printf("SANDBOX_SWAPCHAIN_ERROR hresult=0x%08lx\n", result);
+            std::fflush(stdout);
             return 2;
         }
         result=swap->GetBuffer(0,__uuidof(ID3D11Texture2D),

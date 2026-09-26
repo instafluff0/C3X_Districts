@@ -192,39 +192,29 @@ is above the 60 Hz target. Static color is now retained across unchanged frames;
 moving water and units composite over it without a full color copy. A dedicated
 water pass retains the prepared mesh, source textures, shadow and reflection
 inputs with a bounded two-normal shader. Its fine ripples differ from the
-production material. The next performance step is to replace the full-screen
-multisample scroll restore with a larger resident camera region. Short scrolls
-now draw newly exposed geometry into that region and crop its retained color
-and depth for the current view. The current normal-present moving workload is
-16 ms median and 31 ms p95; the wider region increases target memory and has
-not meaningfully improved total frame time. A flat-color run through the same
-swapchain measured 16 ms median and 32 ms p95. Measure displayed latency at
-the Civ III surface handoff before treating swapchain statistics as delivered
-frames.
+production material. Short scrolls draw newly exposed geometry into a resident
+camera region and crop its retained color and depth for the current view. Run
+`run_client.bat` in the Windows VM with screenshot capture disabled for the
+repeatable 36-second idle/move/combat/scroll/jump/zoom/wrap baseline. The final
+normal-present run measured 16 ms median and 31 ms p95; a dense 112-by-112
+prepared scene also measured 16/31 ms, with one resident build and five full
+static cache draws. The dense scene retained 768 MB of tile geometry and 271 MiB
+of rendering targets. A flat-color run through the same swapchain measured
+16/32 ms. Measure displayed latency at the Civ III surface handoff before
+treating swapchain statistics as delivered frames.
 
-## Later visual experiment: cliff-impact waves
+## Archived cliff-impact wave experiment
 
-After the moving-scene performance baseline is measured, try a sandbox-only
-rocky-coast effect using the locally installed Steam Workshop **Tsunami Waves:
-Lite Version** (`steamapps/workshop/content/289070/1477315433/ArtDefs/Wave.artdef`)
-as an offline tuning reference. The mod supplies settings, not new wave art: its
-changes include scale 1.2–4, cycle time 8–20 seconds, end distance 4 and crash
-distance 12. Reuse the existing generic coastal crest/foam pack; do not load a
-Civ VI ArtDef at runtime or redistribute source art.
-
-The first proof should show intermittent breakers and impact foam/spray at one
-`test.biq` rocky cliff with visible waterline boulders. Select stable rocky
-contours, keep the effect in water, depth-test it against the cliffs/boulders,
-and advance phases on renderer-local time without rebuilding coast geometry.
-The current beach-only coverage check and short ribbon are not suitable for a
-direct fourfold scale substitution. Compare a brief motion clip and stills,
-then measure idle, scroll, jump and zoom with the effect on. Keep this optional
-until it looks convincing and fits the moving-scene performance budget.
+The rocky-coast prototype is preserved under `archive/cliff_impact/` and is
+excluded from the active renderer and production port. Its incoming breaker,
+wash and spray did not yet convincingly strike the rocks. Keep the ordinary
+coastal and ocean effects active.
 
 ## Boundaries and useful prior findings
 
-All new work stays in `Renderer/sandbox/`. Read/copy production visual code; do not
-change shared production files in this assignment. Reuse existing VM/compiler
+New rendering execution stays in `Renderer/sandbox/`; the shared visual-preparation
+path may receive a necessary correctness fix, such as retaining resource pose
+chunks for the lifetime of their draw records. Reuse existing VM/compiler
 discovery and `Renderer/renderer.py` for production-category runs. Sandbox builds
 and runs are authorized. Do not stage, install, launch Civ III, edit injected code
 or patch tables, or begin deferred wonder/District rendering. Keep licensed assets

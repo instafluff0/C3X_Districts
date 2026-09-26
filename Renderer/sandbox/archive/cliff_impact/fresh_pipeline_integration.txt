@@ -1,0 +1,213 @@
+// Archived sandbox cliff-wave integration points. These are inactive.
+
+    bool prepare_cliff_waves(c3x_renderer_frame_v1 const& frame) {
+        std::array<std::uint64_t,6> key={
+            std::uint64_t(renderer.world_coast.revision()),renderer.content_revision,
+            renderer.device_generation,std::uint64_t(frame.tile_width),
+            std::uint64_t(frame.tile_height),std::uint64_t(renderer.wave_ready)};
+        if(key==cliff_wave_key)return true;
+        cliff_wave_cells.clear();
+        if(!renderer.wave_ready || frame.tile_width<1 || frame.tile_height<1){
+            std::printf("SANDBOX_CLIFF_WAVES unavailable wave_ready=%u tile=%d,%d coast_revision=%lld\n",
+                unsigned(renderer.wave_ready),frame.tile_width,frame.tile_height,
+                static_cast<long long>(renderer.world_coast.revision()));
+            std::fflush(stdout);
+            cliff_wave_key=key;return true;
+        }
+        using namespace c3x_renderer::render_core;
+        auto sites=sandbox_cliff_waves::selected_sites(renderer.world_coast);
+        std::size_t bytes=0;
+        float hw=frame.tile_width*.5f,hh=frame.tile_height*.5f;
+        for(auto const& site:sites){
+            auto identity=renderer.world_coast.world().index(site.c,site.r);
+            if(identity==std::size_t(-1))continue;
+            auto hash=c3x_renderer::stable_hash(unsigned(identity)*193u+117u);
+            float seed=c3x_renderer::stable_random(hash),
+                seed2=c3x_renderer::stable_random(hash+23u);
+            auto ribbon=sandbox_cliff_waves::ribbon(renderer.world_coast,site,
+                1.1f+.35f*seed);
+            if(ribbon.empty())continue;
+            RetainedWaveCell cell;
+            auto& chunk=cell.chunk;
+            chunk.projection_kind=3;
+            chunk.source_tile_width=frame.tile_width;
+            chunk.natural_projection[2]=float(frame.tile_width);
+            chunk.bounds={LONG_MAX,LONG_MAX,LONG_MIN,LONG_MIN};
+            for(unsigned axis=0;axis<3;++axis){
+                chunk.world_bounds.low[axis]=1e9f;
+                chunk.world_bounds.high[axis]=-1e9f;
+            }
+            std::vector<Vertex> vertices;vertices.reserve(ribbon.size()+6000);
+            auto append=[&](Vertex const& out){
+                Vertex packed=out;
+                packed.x/=float(frame.tile_width);
+                packed.y/=float(frame.tile_width);
+                packed.z/=float(frame.tile_width);
+                vertices.push_back(packed);
+                chunk.bounds.left=std::min(chunk.bounds.left,LONG(std::floor(out.x))-2);
+                chunk.bounds.right=std::max(chunk.bounds.right,LONG(std::ceil(out.x))+2);
+                chunk.bounds.top=std::min(chunk.bounds.top,LONG(std::floor(out.y))-2);
+                chunk.bounds.bottom=std::max(chunk.bounds.bottom,LONG(std::ceil(out.y))+2);
+                float world[]={out.world_x,out.world_y,out.world_z};
+                for(unsigned axis=0;axis<3;++axis){
+                    chunk.world_bounds.low[axis]=std::min(chunk.world_bounds.low[axis],world[axis]);
+                    chunk.world_bounds.high[axis]=std::max(chunk.world_bounds.high[axis],world[axis]);
+                }
+            };
+            for(auto const& point:ribbon){
+                float u=float(point.position.x)-float(site.c);
+                float v=1-(float(point.position.y)-float(site.r));
+                Vertex out={};out.x=hw+(u-v)*hw;out.y=(u+v)*hh;
+                out.z=out.y+.08f;
+                out.u=point.distance;
+                out.v=point.along;
+                out.panel=1;out.normal_z=1;out.shadow_visibility=1;
+                out.ambient_visibility=point.coverage;
+                out.base_terrain=seed;out.real_terrain=seed2;out.surface_kind=7;
+                out.world_x=float(point.position.x);
+                out.world_y=float(point.position.y);
+                out.world_z=2.5f/112;out.world_valid=1;
+                out.macro_u=out.world_x*.5f;out.macro_v=out.world_y*.5f;
+                append(out);
+            }
+            std::array<WavePoint,41> spine{};
+            std::array<bool,41> spine_ready{};
+            for(auto const& point:ribbon)if(point.distance<.01f){
+                unsigned row=std::min(40u,unsigned(std::lround(point.along*40)));
+                spine[row]=point;spine_ready[row]=true;
+            }
+            auto observe=[](auto...){ };
+            auto patch=renderer.world_coast.prepare(
+                (site.segment.a+site.segment.b)*.5+Point{.5,.5},2.6,0,observe);
+            auto wash_vertex=[&](WavePoint const& root,float across){
+                Point foot=root.position;
+                double nx=renderer.world_coast.sample(foot+Point{.02,0},observe,observe,&patch).distance-
+                    renderer.world_coast.sample(foot-Point{.02,0},observe,observe,&patch).distance;
+                double ny=renderer.world_coast.sample(foot+Point{0,.02},observe,observe,&patch).distance-
+                    renderer.world_coast.sample(foot-Point{0,.02},observe,observe,&patch).distance;
+                double length=std::max(1e-6,std::hypot(nx,ny));
+                Point p=foot+Point{nx/length,ny/length}*(-.18+.76*across);
+                float u=float(p.x)-float(site.c),v=1-(float(p.y)-float(site.r));
+                Vertex out={};out.x=hw+(u-v)*hw;out.y=(u+v)*hh;
+                out.z=out.y+280.f;out.u=across;out.v=root.along;
+                out.panel=1;out.normal_z=1;out.shadow_visibility=1;
+                out.ambient_visibility=root.coverage;
+                out.base_terrain=seed;out.real_terrain=seed2;out.surface_kind=8;
+                out.world_x=float(p.x);out.world_y=float(p.y);
+                out.world_z=2.5f/112;out.world_valid=1;
+                out.macro_u=out.world_x*.5f;out.macro_v=out.world_y*.5f;
+                return out;
+            };
+            for(unsigned row=0;row<40;++row)if(spine_ready[row]&&spine_ready[row+1])
+                for(unsigned band=0;band<4;++band){
+                    float low=float(band)/4,high=float(band+1)/4;
+                    auto a=wash_vertex(spine[row],low),
+                        b=wash_vertex(spine[row+1],low),
+                        d=wash_vertex(spine[row],high),
+                        e=wash_vertex(spine[row+1],high);
+                    for(auto const& vertex:{a,b,e,a,e,d})append(vertex);
+                }
+            auto spray_vertex=[&](WavePoint const& root,float height){
+                auto base=wash_vertex(root,.24f),inland=wash_vertex(root,.55f);
+                base.x+=(inland.x-base.x)*height*.35f;
+                base.y+=(inland.y-base.y)*height*.35f-
+                    float(frame.tile_width)*.24f*height;
+                base.z=base.y+320.f;
+                base.u=height;base.surface_kind=9;
+                base.world_z+=height*.20f;
+                return base;
+            };
+            for(unsigned row=0;row<40;++row)if(spine_ready[row]&&spine_ready[row+1]){
+                auto a=spray_vertex(spine[row],0),
+                    b=spray_vertex(spine[row+1],0),
+                    d=spray_vertex(spine[row],1),
+                    e=spray_vertex(spine[row+1],1);
+                for(auto const& vertex:{a,e,b,a,d,e})append(vertex);
+            }
+            std::map<std::array<float,7>,unsigned> shared;
+            std::vector<Vertex> compact;compact.reserve(vertices.size());
+            std::vector<unsigned> indices;indices.reserve(vertices.size());
+            for(auto const& vertex:vertices){
+                std::array<float,7> vertex_key={vertex.x,vertex.y,vertex.z,
+                    vertex.u,vertex.v,vertex.surface_kind,
+                    vertex.ambient_visibility};
+                auto [entry,inserted]=shared.emplace(vertex_key,unsigned(compact.size()));
+                if(inserted)compact.push_back(vertex);
+                indices.push_back(entry->second);
+            }
+            vertices.swap(compact);
+            unsigned vertex_bytes=unsigned(vertices.size()*sizeof(Vertex));
+            unsigned index_bytes=unsigned(indices.size()*sizeof(unsigned));
+            if(bytes+vertex_bytes+index_bytes>24u*1024u*1024u){
+                std::printf("SANDBOX_CLIFF_WAVE_BUDGET sites=%zu bytes=%zu\n",
+                    cliff_wave_cells.size(),bytes);
+                return false;
+            }
+            D3D11_BUFFER_DESC desc={};desc.ByteWidth=vertex_bytes;
+            desc.Usage=D3D11_USAGE_IMMUTABLE;desc.BindFlags=D3D11_BIND_VERTEX_BUFFER;
+            D3D11_SUBRESOURCE_DATA data={};data.pSysMem=vertices.data();
+            if(FAILED(renderer.device->CreateBuffer(&desc,&data,&chunk.buffer)))return false;
+            desc.ByteWidth=index_bytes;desc.BindFlags=D3D11_BIND_INDEX_BUFFER;
+            data.pSysMem=indices.data();
+            if(FAILED(renderer.device->CreateBuffer(&desc,&data,&chunk.indices)))return false;
+            chunk.vertex_stride=sizeof(Vertex);
+            chunk.index_count=unsigned(indices.size());
+            chunk.byte_count=vertex_bytes+index_bytes;
+            cell.bytes=chunk.byte_count;bytes+=cell.bytes;
+            cliff_wave_cells.emplace(std::make_pair(site.c,site.r),std::move(cell));
+        }
+        cliff_wave_key=key;
+        std::printf("SANDBOX_CLIFF_WAVES sites=%zu resident_bytes=%zu\n",
+            cliff_wave_cells.size(),bytes);
+        std::fflush(stdout);
+        return true;
+    }
+
+// Draw block from SandboxFreshPipeline::draw:
+        char cliff_control[8]{};
+        bool skip_cliff=GetEnvironmentVariableA("C3X_SANDBOX_SKIP_CLIFF_IMPACT",
+            cliff_control,sizeof(cliff_control)) && std::strcmp(cliff_control,"1")==0;
+        if(!skip_water && !skip_wave && !skip_cliff && !cliff_wave_cells.empty()){
+            GeometryDrawView::Records impacts{};
+            auto anchor=frame.tiles;
+            for(unsigned i=0;i<frame.tile_count;++i)
+                if(frame.tiles[i].tile_flags&C3X_RENDERER_TILE_RENDER){
+                    anchor=frame.tiles+i;break;
+                }
+            float hw=frame.tile_width*.5f,hh=frame.tile_height*.5f;
+            int dx=int(renderer.geometry_viewport_settings.translation[0]);
+            int dy=int(renderer.geometry_viewport_settings.translation[1]);
+            for(auto const& [coordinate,cell]:cliff_wave_cells){
+                int c=coordinate.first,r=coordinate.second;
+                unsigned visibility=renderer.visibility_pass?
+                    renderer.visibility_coverage.state(c+r,c-r):2;
+                if(!visibility || !cell.chunk.buffer)continue;
+                GeometryDrawView::Record occurrence(cell.chunk);
+                occurrence.translation_x=anchor->anchor_x+
+                    (c+r-anchor->tile_x)*int(hw)-dx;
+                occurrence.translation_y=anchor->anchor_y+
+                    (c-r-anchor->tile_y)*int(hh)-dy;
+                auto admit=[&](GeometryDrawView::Record const& record){
+                    if(renderer.chunk_intersects_region(GeometryDrawReference(record),
+                            settings,full,false))
+                        impacts[geometry_wave].push_back(record);
+                };
+                admit(occurrence);
+                if(wrap_pixels)for(int direction:{-1,1}){
+                    auto wrapped=occurrence;
+                    wrapped.translation_x+=direction*wrap_pixels;
+                    admit(wrapped);
+                }
+            }
+            static bool reported_cliff_visibility=false;
+            if(!reported_cliff_visibility){
+                std::printf("SANDBOX_CLIFF_VISIBLE candidates=%zu selected=%zu anchor=%d,%d tile=%d,%d view=%.1f,%.1f\n",
+                    cliff_wave_cells.size(),impacts[geometry_wave].size(),
+                    anchor->anchor_x,anchor->anchor_y,anchor->tile_x,anchor->tile_y,
+                    settings.translation[0],settings.translation[1]);
+                std::fflush(stdout);reported_cliff_visibility=true;
+            }
+            if(!draw_layer(impacts,geometry_wave,settings,full,glow.linear.target,
+                    glow.linear.depth,false,float(scene_scale),false,
+                    visual.cliff_impact))return false;
+        }

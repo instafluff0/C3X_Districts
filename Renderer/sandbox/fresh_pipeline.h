@@ -8,6 +8,7 @@
 struct SandboxVisualShaders {
     bool installed = false;
     ID3D11PixelShader* water_surface = nullptr;
+    ID3D11PixelShader* river_surface = nullptr;
     ID3D11PixelShader* underlay = nullptr;
     ID3D11PixelShader* material_albedo = nullptr;
     ID3D11PixelShader* material_normal_world = nullptr;
@@ -20,6 +21,7 @@ struct SandboxVisualShaders {
     ID3D11PixelShader* aquatic_feature = nullptr;
     ~SandboxVisualShaders() {
         if(water_surface) water_surface->Release();
+        if(river_surface) river_surface->Release();
         if(underlay) underlay->Release();
         if(material_albedo) material_albedo->Release();
         if(material_normal_world) material_normal_world->Release();
@@ -122,9 +124,19 @@ float c3x_paged_visibility(Texture2DArray field,float4 world,float3 normal,bool 
                 cavity=shader.find("    float cavity = lerp(0.79, 1.0,",end+1);
             }
         }
+        if(renderer.city_profile && std::strcmp(file,"objects.hlsl")==0){
+            auto at=shader.find("    radiance += Ambient.rgb * rim * 0.08;");
+            if(at==std::string::npos)return false;
+            shader.insert(at,
+                "    float low_sun=smoothstep(.10,.25,Sun.w)*"
+                "(1-smoothstep(.52,.69,Sun.w));\n"
+                "    if(kind>.5 && kind<1.5)radiance+=SunColorExposure.rgb*"
+                "Sun.w*low_sun*pow(1-saturate(dot(normal,normalize(View.xyz))),2)"
+                "*shadow*.24;\n");
+        }
         if(water_variant){
             std::ifstream variant(renderer.fidelity_root+
-                "/Renderer/sandbox/water_surface.hlsl",std::ios::binary);
+                "/Renderer/sandbox/"+file,std::ios::binary);
             if(!variant)return false;
             shader.append(std::istreambuf_iterator<char>(variant),
                 std::istreambuf_iterator<char>());
@@ -186,6 +198,13 @@ Texture2D<float4> SandboxTerrainWorld : register(t118);
 Texture2D<float4> SandboxTerrainProperties : register(t119);
 Texture2D<float> SandboxTerrainDepth : register(t120);
 struct SandboxTerrainLit { float4 color : SV_Target0; float depth : SV_Depth; };
+float sandbox_shadow_blocker(float3 world) {
+    float2 uv=(float2(dot(world,ShadowU.xyz),dot(world,ShadowV.xyz))-
+               pickup_pages[0].xy)/pickup_pages[0].zw*4096;
+    int2 cell=int2(floor(uv));
+    return all(cell>=0) && all(cell<4096) ?
+        ShadowField.Load(int4(cell,0,0)).r : -1e6;
+}
 SandboxTerrainLit PSSandboxTerrainRelight(float4 position : SV_Position) {
     int3 pixel = int3(position.xy, 0);
     float4 sample_color = SandboxTerrainAlbedo.Load(pixel);
@@ -216,6 +235,22 @@ SandboxTerrainLit PSSandboxTerrainRelight(float4 position : SV_Position) {
         lerp(1, properties.y, 0.7 * rock));
     radiance += sun * ggx(normal, light_direction, normalize(View.xyz),
         lerp(0.86, 0.70, rock), lerp(0.035, 0.045, rock)) * shadow;
+    // Low-angle light between nearby tree casters creates restrained beams
+    // across the forest floor. Use the actual shared light-space occluders so
+    // the beams follow the same sun direction as the trees' cast shadows.
+    float low_sun=smoothstep(.10,.25,Sun.w)*
+                  (1-smoothstep(.52,.69,Sun.w));
+    if(low_sun>.001 && world.z<.32 && rock<.4 && shadow>.35) {
+        float2 across=normalize(float2(-ShadowL.y,ShadowL.x));
+        float3 left=world+float3(across*.27,0);
+        float3 right=world-float3(across*.27,0);
+        float left_canopy=smoothstep(.018,.09,
+            sandbox_shadow_blocker(left)-dot(left,ShadowL.xyz));
+        float right_canopy=smoothstep(.018,.09,
+            sandbox_shadow_blocker(right)-dot(right,ShadowL.xyz));
+        float gap=shadow*max(left_canopy,right_canopy);
+        radiance+=sun*gap*low_sun*.34;
+    }
     radiance += albedo * q8_local_irradiance(float4(world, 1),
         normalize(normal * float3(1, -1, 1 / Q8_LOCAL_Z_METRIC)), 1);
     SandboxTerrainLit output;
@@ -255,8 +290,11 @@ float4 PSSandboxAquaticFeature(FeaturePixelInput input) : SV_Target {
         HRESULT hr = D3DCompile(shader.data(), shader.size(), file, nullptr, nullptr,
             entry, "ps_5_0", D3DCOMPILE_OPTIMIZATION_LEVEL3, 0, &code, &errors);
         if (errors) {
-            if (FAILED(hr)) std::printf("SANDBOX_SHADER_ERROR file=%s entry=%s %s\n", file, entry,
-                static_cast<char const*>(errors->GetBufferPointer()));
+            if (FAILED(hr)) {
+                std::printf("SANDBOX_SHADER_ERROR file=%s entry=%s %s\n", file, entry,
+                    static_cast<char const*>(errors->GetBufferPointer()));
+                std::fflush(stdout);
+            }
             errors->Release();
         }
         if (SUCCEEDED(hr)) hr = renderer.device->CreatePixelShader(
@@ -286,7 +324,8 @@ float4 PSSandboxAquaticFeature(FeaturePixelInput input) : SV_Target {
             (*target.slot)->Release();
             *target.slot = replacement;
         }
-        if(!compile("water_surface.hlsl","PSWaterSurface",&water_surface))return false;
+        if(!compile("water_surface.hlsl","PSWaterSurface",&water_surface) ||
+           !compile("water_surface.hlsl","PSRiverSurface",&river_surface))return false;
         if(!compile("hydrology.hlsl","PSSandboxUnderlay",&underlay))return false;
         if(!compile("hydrology.hlsl","PSSandboxMaterialAlbedo",&material_albedo) ||
            !compile("hydrology.hlsl","PSSandboxMaterialNormalWorld",&material_normal_world) ||
@@ -803,11 +842,40 @@ struct SandboxMaterialChannel {
     }
 };
 
-// Frame ownership follows 0 A.D.'s submit/prepare/render split. Immutable
-// occurrences survive camera changes; each pass gets only visible references.
+// One screen-wide sun source lights the final composition. It is independent
+// of forest ownership, so every terrain and object type can catch the rays.
+struct SandboxSunShafts {
+    struct Band {float x=0,y=0,dx=0,dy=0,tile=0,phase=0,offscreen=0;};
+    std::array<Band,1> bands{};
+    unsigned count=0;
+    void prepare(unsigned width,unsigned height,float sun_intensity,
+                 std::array<float,12> const& shadow_basis) {
+        count=0;
+        auto smooth=[](float a,float b,float x){
+            float t=std::clamp((x-a)/(b-a),0.f,1.f);return t*t*(3-2*t);};
+        float phase=smooth(.10f,.25f,sun_intensity)*
+                    (1-smooth(.65f,.82f,sun_intensity));
+        if(phase<.02f)return;
+        float lx=shadow_basis[8],ly=shadow_basis[9],lz=shadow_basis[10];
+        float vx=-(lx+ly)*.5f;
+        float vy=-(lx-ly)*.25f+.16f*lz;
+        float length=std::hypot(vx,vy);
+        if(length<.01f)return;
+        vx/=length;vy/=length;
+        // Place the shared source well beyond the edge. The screen-entry point
+        // remains the reference for attenuation, so distant rays stay visible.
+        float offscreen=float(width)*.65f;
+        bands[0]={float(width)*(vy<0?.82f:.64f)-vx*offscreen,
+                  float(height)*(vy<0?1.06f:-.05f)-vy*offscreen,
+                  vx,vy,float(width)/16.f,phase,offscreen};
+        count=1;
+    }
+};
+
 struct SandboxFreshPipeline {
     SandboxVisualShaders visual;
     SandboxSceneShadow shadow;
+    SandboxSunShafts shafts;
     c3x_renderer::city_fidelity::Glow glow;
     SandboxBloom bloom;
     c3x_renderer::render_core::LinearTarget static_cache;
@@ -846,7 +914,7 @@ struct SandboxFreshPipeline {
     float reflection_scale=1;
     unsigned depth_copies=0,cache_scrolls=0,cache_full_draws=0;
     unsigned reflection_reuses=0,reflection_draws=0;
-    float visual_hour=12.f,previous_hour=-1.f;
+    float visual_hour=12.f,visual_sun_intensity=0.f,previous_hour=-1.f;
     int previous_season=INT_MIN;
     std::uint64_t static_signature=0;
     std::uint64_t reflection_signature=0;
@@ -999,10 +1067,16 @@ struct SandboxFreshPipeline {
             ID3D11SamplerState* shadow_samplers[]={renderer.natural_wrap,renderer.natural_clamp};
             context->PSSetSamplers(0,2,shadow_samplers);
             context->OMSetDepthStencilState(renderer.natural.decal_depth,0);
-            if(!issue_records(poses,geometry_shadow,settings,rect,false))return false;
+            if(!issue_records(poses,geometry_shadow,settings,rect,false)){
+                std::printf("SANDBOX_RESOURCE_DRAW_ERROR pass=shadow records=%zu\n",
+                    poses[geometry_shadow].size());std::fflush(stdout);return false;
+            }
         }
         if(!draw_features(poses,settings,rect,target,depth,false,float(scene_scale),
-                submerged))return false;
+                submerged)){
+            std::printf("SANDBOX_RESOURCE_DRAW_ERROR pass=body records=%zu\n",
+                poses[geometry_feature].size());std::fflush(stdout);return false;
+        }
         return true;
     }
     // Like CPatchRData::RenderBases, visible records are submitted from resident
@@ -1019,7 +1093,11 @@ struct SandboxFreshPipeline {
         selected.reserve(values.size());
         auto flush=[&]() {
             if(selected.empty())return true;
-            if(streamed && !parameters.upload(values.data(),unsigned(selected.size())))return false;
+            if(streamed && !parameters.upload(values.data(),unsigned(selected.size()))){
+                std::printf("SANDBOX_RECORD_UPLOAD_ERROR layer=%u records=%zu reason=0x%08lx\n",
+                    unsigned(layer),selected.size(),renderer.device->GetDeviceRemovedReason());
+                std::fflush(stdout);return false;
+            }
             std::vector<c3x_renderer::fidelity::MeshInstance> rigid;
             std::array<unsigned,c3x_renderer::render_core::DrawParameterStream::limit> rigid_offset{};
             for(unsigned i=0;i<selected.size();++i){
@@ -1035,8 +1113,11 @@ struct SandboxFreshPipeline {
                 instance.view[3]=chunk.content().instance_material;
                 rigid_offset[i]=unsigned(rigid.size());rigid.push_back(instance);
             }
-            if(!rigid.empty() && !renderer.rigid_sources.stream.upload(renderer.device,context,rigid))
-                return false;
+            if(!rigid.empty() && !renderer.rigid_sources.stream.upload(renderer.device,context,rigid)){
+                std::printf("SANDBOX_RECORD_RIGID_ERROR layer=%u records=%zu reason=0x%08lx\n",
+                    unsigned(layer),rigid.size(),renderer.device->GetDeviceRemovedReason());
+                std::fflush(stdout);return false;
+            }
             auto& mirror=renderer.scene_region_size==128?
                 renderer.reflection:renderer.region_reflection;
             for(unsigned i=0;i<selected.size();){
@@ -1321,6 +1402,8 @@ struct SandboxFreshPipeline {
             context->PSSetShaderResources(123,1,&aquatic);
             context->PSSetConstantBuffers(11,1,&aquatic_bounds_buffer);
         }
+        if(!mirrored && layer==geometry_river)
+            context->PSSetShader(visual.river_surface,nullptr,0);
         if(!mirrored && layer==geometry_underlay)
             context->PSSetShader(visual.underlay,nullptr,0);
         if(capture_terrain_material) {
@@ -1398,6 +1481,7 @@ struct SandboxFreshPipeline {
         if(previous_hour==hour && previous_season==frame.season)return;
         previous_hour=hour;previous_season=frame.season;
         auto environment=c3x_renderer::evaluate_environment(hour,frame.season);
+        visual_sun_intensity=environment.sun_intensity;
         auto light=c3x_renderer::lighting::key_light(environment);
         TerrainShaderSettings settings{};
         settings.height_texel[0]=settings.height_texel[1]=1.f/2048.f;
@@ -1680,14 +1764,16 @@ struct SandboxFreshPipeline {
     bool draw(c3x_renderer_frame_v1 const& frame,int next_camera_x,int next_camera_y,
             int unit_x,int unit_y,int incarnation,int viewer,bool unit_visible,
             float next_zoom) {
+        auto fail=[](char const* stage){std::printf("SANDBOX_DRAW_ERROR stage=%s\n",stage);std::fflush(stdout);return false;};
         LARGE_INTEGER frequency{},ticks[7]={};
         QueryPerformanceFrequency(&frequency);QueryPerformanceCounter(&ticks[0]);
         int width=renderer.content_view_width,height=renderer.content_view_height;
         if (!renderer.device || !renderer.context || width<1 || height<1) return false;
-        if (!visual.install() || !shadow.ensure()) return false;
+        if (!visual.install() || !shadow.ensure()) return fail("visual_or_shadow_setup");
         unsigned w=unsigned(width)+8,h=unsigned(height)+8;
-        if (!ensure_targets(w,h)) return false;
+        if (!ensure_targets(w,h)) return fail("targets");
         update_environment(frame);
+        shafts.prepare(w,h,visual_sun_intensity,renderer.shadow_basis);
         char reflection_diagnostic[8]{};
         if(GetEnvironmentVariableA("C3X_SANDBOX_SKIP_REFLECTION",
                 reflection_diagnostic,sizeof(reflection_diagnostic)) &&
@@ -1722,7 +1808,7 @@ struct SandboxFreshPipeline {
             float(camera_y)/frame.tile_height;
         renderer.water_time_seconds=renderer.water_material.time;
         renderer.wave_time_seconds=renderer.water_material.time;
-        if(!renderer.compose_resource_animations(frame,true))return false;
+        if(!renderer.compose_resource_animations(frame,true))return fail("resource_poses");
         auto settings=renderer.geometry_viewport_settings;
         settings.translation[0]+=4;settings.translation[1]+=4;
         settings.inverse_size[0]=1.f/w;settings.inverse_size[1]=1.f/h;
@@ -1732,7 +1818,7 @@ struct SandboxFreshPipeline {
         reflected.inverse_size[1]=1.f/float(h+8);
         int next_wrap_pixels=frame.world_wrap_x?
             frame.world_width_tiles*frame.tile_width/2:0;
-        if (!capture(settings,reflected,int(w),int(h),next_wrap_pixels))return false;
+        if (!capture(settings,reflected,int(w),int(h),next_wrap_pixels))return fail("visibility_capture");
         bool recenter_region=!static_valid ||
             static_signature!=renderer.cached_signature.complete ||
             std::abs(camera_x-region_camera_x)>=region_margin_x ||
@@ -1749,7 +1835,7 @@ struct SandboxFreshPipeline {
         region_settings.inverse_size[1]=1.f/static_region.height;
         D3D11_RECT region_rect={region_margin_x,region_margin_y,
             LONG(region_margin_x+w),LONG(region_margin_y+h)};
-        if(!update_city_lights() || !shadow.render(all_visible))return false;
+        if(!update_city_lights() || !shadow.render(all_visible))return fail("lights_or_shadow");
         QueryPerformanceCounter(&ticks[1]);
         D3D11_RECT full={0,0,LONG(w),LONG(h)};
         char unit_control[8]{};
@@ -1768,14 +1854,14 @@ struct SandboxFreshPipeline {
             ID3D11ShaderResourceView* none=nullptr;
             renderer.context->PSSetShaderResources(121,1,&none);
             D3D11_RECT mirror={0,0,LONG(w+8),LONG(h+8)};
-            if(!prepare_reflected_terrain_material(reflected,mirror))return false;
+            if(!prepare_reflected_terrain_material(reflected,mirror))return fail("reflected_terrain");
             float mirror_clear[4]={};
             renderer.context->ClearRenderTargetView(reflection_static.target,mirror_clear);
             renderer.context->ClearDepthStencilView(reflection_static.depth,
                 D3D11_CLEAR_DEPTH|D3D11_CLEAR_STENCIL,1,0);
             relight_reflected_terrain();
             if(!draw_scene(reflection_visible,reflected,mirror,reflection_static.target,
-                    reflection_static.depth,true,reflection_scale,false,true))return false;
+                    reflection_static.depth,true,reflection_scale,false,true))return fail("reflection_scene");
             renderer.context->OMSetRenderTargets(0,nullptr,nullptr);
             reflection_signature=renderer.cached_signature.complete;
             reflection_shadow_builds=shadow.builds;
@@ -1790,7 +1876,7 @@ struct SandboxFreshPipeline {
             }
             if(units && !sandbox_direct_units.draw(frame,unit_x,unit_y,
                     incarnation,viewer,unit_visible,camera_x,camera_y,reflection,
-                    reflection_scale,next_zoom,visual_hour,true))return false;
+                    reflection_scale,next_zoom,visual_hour,true))return fail("reflected_units");
         }
         QueryPerformanceCounter(&ticks[2]);
         auto* context=renderer.context;
@@ -1809,7 +1895,7 @@ struct SandboxFreshPipeline {
             context->ClearDepthStencilView(static_region.depth,
                 D3D11_CLEAR_DEPTH|D3D11_CLEAR_STENCIL,1,0);
             if(!draw_scene(static_visible,region_settings,region_rect,
-                    static_region.target,static_region.depth,false,float(scene_scale)))return false;
+                    static_region.target,static_region.depth,false,float(scene_scale)))return fail("static_scene");
             region_covered=region_rect;
             ++cache_full_draws;
             static_signature=renderer.cached_signature.complete;
@@ -1866,7 +1952,7 @@ struct SandboxFreshPipeline {
                     static_region.depth_samples,shift_x-region_margin_x,
                     shift_y-region_margin_y,{},nullptr,static_region.width,
                     static_region.height,false,false,0,nullptr,1,
-                    -float(shift_y)/16384.f))return false;
+                    -float(shift_y)/16384.f))return fail("static_restore");
             context->OMSetRenderTargets(0,nullptr,nullptr);
             if(scene_samples==1)context->CopyResource(static_cache.resolved,static_cache.color);
             else context->ResolveSubresource(static_cache.resolved,0,static_cache.color,0,
@@ -1902,7 +1988,7 @@ struct SandboxFreshPipeline {
             context->PSSetShaderResources(123,1,&none);
             context->ClearRenderTargetView(aquatic_scene.target,dynamic_clear);
             if(!draw_resource_poses(renderer.sandbox_aquatic_resource_poses,settings,full,
-                    aquatic_scene.target,nullptr,true))return false;
+                    aquatic_scene.target,nullptr,true))return fail("aquatic_resources");
             context->OMSetRenderTargets(0,nullptr,nullptr);
         }
         char water_diagnostic[8]{};
@@ -1911,11 +1997,11 @@ struct SandboxFreshPipeline {
             std::strcmp(water_diagnostic,"1")==0;
         if (renderer.water_scene_active && !skip_water) {
             if(!draw_scene(water_visible,settings,full,glow.linear.target,
-                    glow.linear.depth,false,float(scene_scale)))return false;
+                    glow.linear.depth,false,float(scene_scale)))return fail("water_scene");
         }
         if(!draw_resource_poses(renderer.sandbox_resource_poses,settings,full,
                 glow.linear.target,glow.linear.depth))
-            return false;
+            return fail("resource_scene");
         char wave_diagnostic[8]{};
         bool skip_wave=GetEnvironmentVariableA("C3X_SANDBOX_SKIP_WAVE",
             wave_diagnostic,sizeof(wave_diagnostic)) &&
@@ -1925,15 +2011,15 @@ struct SandboxFreshPipeline {
             for(auto const& chunk:renderer.wave_chunks)
                 waves[geometry_wave].emplace_back(chunk);
             if(!draw_layer(waves,geometry_wave,settings,full,glow.linear.target,
-                    glow.linear.depth,false,float(scene_scale)))return false;
+                    glow.linear.depth,false,float(scene_scale)))return fail("coastal_waves");
         }
         QueryPerformanceCounter(&ticks[4]);
         if(units && !sandbox_direct_units.draw(frame,unit_x,unit_y,
             incarnation,viewer,unit_visible,camera_x,camera_y,glow.linear,
             float(scene_scale),next_zoom,visual_hour))
-            return false;
+            return fail("direct_units");
         QueryPerformanceCounter(&ticks[5]);
-        if(!reconstruct())return false;
+        if(!reconstruct())return fail("reconstruct");
         renderer.context->OMSetRenderTargets(0,nullptr,nullptr);
         QueryPerformanceCounter(&ticks[6]);
         for (int i=0;i<6;++i) phases[i]=1000.0*double(ticks[i+1].QuadPart-ticks[i].QuadPart)/
@@ -2005,6 +2091,7 @@ extern "C" __declspec(dllexport) int c3x_sandbox_draw_fresh(
             incarnation,viewer,unit_visible!=0,zoom)) {
         std::printf("SANDBOX_FRESH_DRAW_ERROR visible=%u culled=%u shadow_builds=%u\n",
             sandbox_fresh.visible,sandbox_fresh.culled,sandbox_fresh.shadow.builds);
+        std::fflush(stdout);
         return 2;
     }
     static bool reported=false;
