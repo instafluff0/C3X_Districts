@@ -1,4 +1,4 @@
-"""The explicit diagnostic command delegates when disabled and only moves cameras."""
+"""Opt-in diagnostic input delegates when disabled and stays within its test scope."""
 from pathlib import Path
 import unittest
 from Renderer.native.native_cpp_test import run_cpp
@@ -23,7 +23,10 @@ class ScriptedGameInputTests(unittest.TestCase):
 #define VK_RETURN 13
 using DWORD=unsigned;using LPCSTR=char const*;using LPSTR=char*;
 using Env=DWORD(*)(LPCSTR,LPSTR,DWORD);
-struct Main_Screen_Form {int field_2E194=0,camera_x=10,camera_y=20;bool is_now_loading_game=false;
+struct Unit {struct {int X=42,Y=43;}Body;} unit;
+int messages=0;
+void show_map_specific_text(int x,int y,char const* text,bool pause){assert(x==42&&y==43&&text&&!pause);++messages;}
+struct Main_Screen_Form {int field_2E194=0,camera_x=10,camera_y=20;bool is_now_loading_game=false;Unit* Current_Unit=nullptr;
  struct {bool is_enabled=false;} GUI;} form;
 auto p_main_screen_form=&form;
 struct Bic {struct {void* Tiles=nullptr;} Map;} bic;auto p_bic_data=&bic;
@@ -58,8 +61,9 @@ int main(){
  env_length=9;assert(checkpoint()==0&&state.custom_renderer_test_step==1);
  state.custom_renderer_test_step=0;state.current_config.enable_custom_rendering=false;env_calls=0;
  assert(command(&form,19,0x87)==73&&env_calls==0);
+ assert(command(&form,19,0x86)==73&&env_calls==0&&messages==0);
  state.current_config.enable_custom_rendering=true;
- assert(command(&form,19,0x86)==73&&env_calls==0);
+ assert(command(&form,19,0x85)==73&&env_calls==0);
  assert(command(&form,19,0x87,0)==73&&env_calls==0);
  env_length=0;assert(command(&form,19,0x87)==73&&state.custom_renderer_test_step==0);
  env_length=MAX_PATH;assert(command(&form,19,0x87)==73&&state.custom_renderer_test_step==0);
@@ -71,6 +75,10 @@ int main(){
  form.is_now_loading_game=false;
  for(int n=0;n<40;++n)assert(command(&form,19,0x87)==1);
  assert(moves==32&&state.custom_renderer_test_step==33&&form.camera_x==10&&form.camera_y==20);
+ assert(command(&form,19,0x86)==1&&messages==0);
+ form.Current_Unit=&unit;assert(command(&form,19,0x86)==1&&messages==2&&moves==32);
+ form.is_now_loading_game=true;assert(command(&form,19,0x86)==1&&messages==2);
+ form.is_now_loading_game=false;env_length=0;assert(command(&form,19,0x86)==73&&messages==2);
 }
 ''')
 

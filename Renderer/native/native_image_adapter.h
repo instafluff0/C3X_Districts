@@ -24,7 +24,7 @@ template<class Backend> class Adapter {
     void* get_bits;void* release_bits;DWORD thread=GetCurrentThreadId();
     std::array<Image,32> images={};std::uint64_t cpu_bytes=0,source_age=0;
     static constexpr std::uint64_t cpu_budget=64u*1024u*1024u;
-    Counts counters;unsigned large_cpu_barrier_reports=0,copy_rejection_reports=0,sprite_rejection_reports=0,blend_rejection_reports=0,image_rejection_reports=0;
+    Counts counters;unsigned large_cpu_barrier_reports=0,copy_rejection_reports=0,sprite_rejection_reports=0,blend_rejection_reports=0,image_rejection_reports=0,lookup_rejection_reports=0;
     Id sprite_image=0;SpriteCache<Backend> sprites;
     struct Lookup {Id image=0;std::uint64_t revision=0;std::vector<std::uint16_t> words;};
     std::array<Lookup,2> lookups; // Full effects and the small native shadow table coexist.
@@ -563,7 +563,10 @@ public:
         // Extend the map/save/display family only along an owned transfer.
         // Unrelated UI fills/sprites remain CPU-generated; they enter as upload
         // sources if subsequently drawn onto the resident map family.
-        if(op==C3X_NATIVE_COPY||op==C3X_NATIVE_IMAGE_DRAW){auto input=find(source);if(input&&input->owned){
+        // Lookup effects read the map under a CPU-created text canvas too.
+        // Admit that destination from the same startup lifetime evidence as a
+        // copy; otherwise an ordinary map message tries to read the map back.
+        if(op==C3X_NATIVE_COPY||op==C3X_NATIVE_IMAGE_DRAW||op==C3X_NATIVE_LOOKUP){auto input=find(source);if(input&&input->owned){
             char const* rejection=nullptr;
             if(!admit(object,&rejection)&&copy_rejection_reports++<16){
                 char line[384];auto from=source_rect?rect(source_rect):Rect{};auto to=target_rect?rect(target_rect):Rect{};
@@ -602,6 +605,13 @@ public:
             }
             if(destination&&destination->owned&&inputs&&inputs->table&&compatible&&
                (op==C3X_NATIVE_LOOKUP?draw_lookup(*destination,source,inputs,target_rect):draw_sprite(*destination,source,inputs->palette,target_rect,inputs->table,background,op==C3X_NATIVE_SPRITE_LOOKUP_SCALED?inputs->scale:nullptr)))return 1;
+            if(op==C3X_NATIVE_LOOKUP&&destination&&destination->owned&&lookup_rejection_reports++<8){
+                auto area=target_rect?rect(target_rect):Rect{};char line[384];
+                std::snprintf(line,sizeof(line),"[C3X renderer] stage=native-lookup-rejected percent=%d table=%u destination=%u,%u,%d source=%d,%d,%d area=%d,%d,%d,%d\n",
+                    inputs?inputs->percent:-1,unsigned(inputs&&inputs->table),destination->width,destination->height,field(object,0x40),
+                    source?field(source,0x38):0,source?field(source,0x3c):0,source?field(source,0x40):0,
+                    area.left,area.top,area.right,area.bottom);OutputDebugStringA(line);
+            }
             if(destination)cpu_ownership(*destination,op);
             if(background&&background!=destination)cpu_ownership(*background,op);
             if(op==C3X_NATIVE_LOOKUP){auto input=find(source);if(input&&input!=destination)cpu_ownership(*input,op);}

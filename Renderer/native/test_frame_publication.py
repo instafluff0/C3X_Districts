@@ -8,6 +8,39 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class PublicationTests(unittest.TestCase):
+    def test_direct_native_transfer_uses_current_visual_time(self):
+        source=(ROOT / 'Renderer/native/c3x_renderer.cpp').read_text()
+        branch=source.split('}else if(command==Command::trial_present_shared){',1)[1]
+        call='bool drawn=session->display_to'+branch.split('bool drawn=session->display_to',1)[1].split(';',1)[0]+';'
+        run_cpp(r'''
+#include <cassert>
+#include <array>
+#include <cstdint>
+using LONGLONG=long long;
+struct Handle {int Get(){return 1;}};
+struct Session {
+ long long observed=0;
+ bool display_to(long long,std::uint64_t,int,int,int,unsigned,unsigned,
+                 std::array<int,4>,long long ticks,long long frequency,
+                 std::array<LONGLONG,4>*,std::array<LONGLONG,8>*){
+  observed=frequency?ticks:0;return true;
+ }
+};
+int main(){
+ Session state,*session=&state;
+ struct {long long ticket=1,image=2;int area[4]={0,0,2240,1260};} p;
+ Handle trial_surface_view,trial_surface_back,trial_surface_buffer;
+ unsigned trial_surface_width=2240,trial_surface_height=1260;
+ bool visual_allowed=true,phase_probe=false;long long visual_ticks=0,visual_frequency=1000;
+ std::array<LONGLONG,4> display_phases{};std::array<LONGLONG,8> draw_phases{};
+ for(int frame=1;frame<=600;++frame){
+  visual_ticks=frame*17;
+  '''+call+r'''
+  assert(drawn&&state.observed==visual_ticks); // no capture-time rewind on native updates
+ }
+}
+''')
+
     def test_helper_present_preserves_adopted_camera_storage(self):
         source=(ROOT / 'Renderer/native/c3x_renderer.cpp').read_text()
         publication='struct PublishedMapFrame {'+source.split('struct PublishedMapFrame {',1)[1].split('// Cheap, deliberately provisional',1)[0]
@@ -450,6 +483,8 @@ struct Bodies {
 struct TacticalGPU {template<class... T> ID3D11Texture2D* packed(T&&...){unexpected_gpu();return nullptr;}};
 struct D3D11_RECT {int left,top,right,bottom;};
 struct RendererState {
+    std::vector<c3x_renderer::render_core::UnitInstances::ScenePose> fresh_unit_poses;
+    char const* frame_cache_path="cold";
     void gpu_failure(char const*){} // Failure diagnostics do not initialize or mutate GPU ownership.
     std::size_t publication_working_bytes=0;bool memory_pressured=false;void preserve_process_headroom(){}
     struct Scene : c3x_renderer::render_core::CapturedScene {std::uint64_t signature=0;} topology_cache;

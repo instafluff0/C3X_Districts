@@ -12290,9 +12290,12 @@ private:
 #ifdef C3X_RENDERER64_FRESH
         renderer_state.fresh_unit_poses=unit_instances.scene_poses(frame,ticks,frequency,
             renderer_state.unit_bodies.units);
-        char detail[128];std::snprintf(detail,sizeof(detail),"count=%zu generation=%llu",
+        auto pose=renderer_state.fresh_unit_poses.empty()?c3x_renderer::render_core::UnitInstances::ScenePose{}:renderer_state.fresh_unit_poses.front();
+        char detail[256];std::snprintf(detail,sizeof(detail),"count=%zu generation=%llu first=%d tile=%d,%d body=%d,%d sprite=%d,%d projection=%d cursor=%u view_tile=%d,%d",
             renderer_state.fresh_unit_poses.size(),
-            static_cast<unsigned long long>(unit_instances.generation()));
+            static_cast<unsigned long long>(unit_instances.generation()),pose.draw.unit_id,pose.tile_x,pose.tile_y,
+            pose.draw.body_x,pose.draw.body_y,pose.draw.sprite_width,pose.draw.sprite_height,
+            pose.draw.projection_scale_milli,unsigned(pose.cursor),frame.tile_width,frame.tile_height);
         renderer_state.trace.write("fresh-unit-snapshot",detail,true);
 #else
         (void)frame;(void)ticks;(void)frequency;
@@ -14530,7 +14533,7 @@ int renderer_native_image_impl(int operation,void* image,void* source,void const
     if(operation==C3X_NATIVE_UNIT_DRAW&&remote_renderer_requested()){
         if(!from||!to)return -1;
         auto const& unit=*static_cast<c3x_renderer_unit_v1 const*>(from);
-        if(unit.struct_size!=sizeof(unit)||unit.unit_key[63]||(color&~7u))return -1;
+        if(unit.struct_size!=sizeof(unit)||unit.unit_key[63]||(color&~15u))return -1;
         c3x_renderer_gpu_unit_v1 capture={sizeof(capture)};capture.playback_flags=color;
         try{return remote_renderer_backend()->unit(unit,capture,
             const_cast<int*>(static_cast<int const*>(to)))==C3X_RENDERER_RESULT_OK?1:-1;}

@@ -1,9 +1,31 @@
 # Scripted real-game renderer diagnostic
 
-This is an explicitly requested integration diagnostic. It does not authorize
-ordinary agents to automate gameplay. Run it with Civ III and debug collectors
-closed, using the shared checkout link beneath the installed `Conquests` folder.
+The user authorized these bounded real-game tests for this renderer integration
+and asked that future agents reuse them. Run with Civ III and debug collectors
+closed. Never take over an unrelated running game. Use a disposable copy of a
+local save, never save the resulting gameplay, and retain the script's cleanup.
 The game executable must contain the current injected diagnostic hooks.
+
+## Repeatable workflow
+
+1. Run focused source tests and build an isolated, unstaged renderer candidate.
+2. Run the affected native pixel oracles and asynchronous GPU fixture. Record
+   source signatures, the three binary hashes, and each invocation's receipt.
+3. With Civ III closed, stage the matching bridge, x64 DLL and helper together.
+   Verify their hashes against the qualified candidate.
+4. After injected changes, run `TEST_INJECTED_CODE_COMPILE.bat`, then the console
+   installer below. DLL-only changes do not require reinjection.
+5. Run the bounded game scenario. Read `result.json`, the complete renderer log
+   and window samples. Command delivery and an error-free log are necessary
+   evidence, but do not establish correct visible output.
+6. Confirm cleanup and original-save hash before another run. Record remaining
+   defects in the current renderer status; do not call fixture FPS live FPS.
+
+The installed `Conquests/C3X_Shared_Verify` directory link points at the shared
+checkout. Run compile/injection through that link so `ep.c` finds the installed
+executable. `C3X_RENDERER_CIV3_CONQUESTS` overrides the default GOG install.
+Candidate builds can use `Renderer.lab.platform.windows_root()` for the shared
+checkout; no mapped drive or literal user home path is necessary.
 
 ## Installation without a popup
 
@@ -60,7 +82,60 @@ remains the independent controlled cadence check.
 
 The optional `-Scenario interaction -Seconds 90` retains the native welcome
 dialog, dismisses it with Enter, cycles zoom through 192/160/128, sends one
-eastward unit movement key, and opens/closes the domestic advisor. It operates
+eastward unit movement key, then sends F1 and Escape. At each zoom it sends
+F23 to publish two transient map messages through the ordinary native message
+path. This opt-in key is gated by the child diagnostic environment, custom
+rendering, a valid map and a selected unit. It operates
 on the disposable save and never saves the result. The default `scroll` scenario
 still performs the bounded 32-camera loop. Command delivery alone is not a
 visual pass; inspect the recorded windows and renderer failures.
+
+
+## From the Mac agent terminal
+
+`prlctl exec` avoids Parallels GUI control. Compile/build commands normally use
+`--current-user`. The installer and scheduled-task launcher need elevation:
+omit `--current-user` to use the guest command service's elevated context. A
+plain current-user installer can fail with "requires elevation".
+
+For example, set `C3X_TEST_LINK` to the Windows path of `C3X_Shared_Verify` and
+`C3X_TEST_SAVE` to an existing local test save, then run from the Mac shell:
+
+```sh
+vm="${C3X_RENDERER_VM:-Windows 11}"
+prlctl exec "$vm" powershell -NoProfile -ExecutionPolicy Bypass -File \
+  "$C3X_TEST_LINK\Renderer\tools\install_console.ps1"
+prlctl exec "$vm" powershell -NoProfile -ExecutionPolicy Bypass -File \
+  "$C3X_TEST_LINK\Renderer\tools\run_scripted_game_test.ps1" \
+  -SaveFile "$C3X_TEST_SAVE" -Seconds 90 -Scenario interaction
+```
+
+The scheduled task runs in the logged-in Windows user's interactive desktop,
+with the required elevated token. Running Civ III directly as the guest service
+can put it in the wrong desktop; invoking a compatibility-elevated executable
+with `--current-user` can instead lose the diagnostic environment at UAC.
+The launcher resolves both issues without clicking menus or installer dialogs.
+
+## Evidence and limitations
+
+The window witness executable and DebugView CLI must already exist at the
+paths checked by the script. Their absence is an explicit preflight error.
+The witness writes JPEG samples and `timeline.jsonl` with capture timestamps under
+`window/`; `finished.json` records coverage and dropped samples. Use those
+actual timestamps, not the frame number, to align pictures with commands.
+Sampling defaults to two frames per second. Pass `-SampleHz 10` for a bounded
+animation diagnostic. Even that misses display frames; combine it with the
+clock regression tests and do not treat it as a scanout/FPS measurement.
+
+The interaction test currently uses an early 4000 BC save. The unit movement
+must be confirmed from its changed map position. F1 may do nothing when there
+are no cities; the later Escape then opens the quit confirmation. That is a
+native popup witness, not proof of an advisor screen. Record the actual visible
+screen. Current interaction coverage requires all ten commands and three
+map-text events. Earlier runs delivered their commands but exposed disappearing
+HUD pieces and stale selection graphics. The failure summary now also includes
+unit-publication rejection; review images even when that summary is empty.
+
+The shared VM volume can cache directory listings. If a finished capture looks
+incomplete from macOS, copy it through guest PowerShell into the ignored
+`Renderer/native/build/` directory before diagnosing missing output.

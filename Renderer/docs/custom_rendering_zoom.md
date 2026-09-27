@@ -24,8 +24,9 @@ highlights and map text receive the same forward transform; custom-rendered
 unit bodies receive an exact numeric projection scale rather than the old
 normal/reduced binary. While this zoom feature is enabled, native FLC unit bodies
 are never shown: if custom units are disabled or a custom body cannot render,
-that body is omitted. Native selection, health, status and unit-HUD overlays keep
-their existing ownership. Map-specific calls for city-HUD coordinates, unit
+that body is omitted. The selected white ring shares Renderer64's sampled unit anchor and draws
+before unit meshes. Native health, status and unit-HUD overlays keep their
+existing ownership. Map-specific calls for city-HUD coordinates, unit
 health/status, selection cursors and civilization markers transform attachment
 points directly, preserving native UI size and offsets. Ordinary and army paths
 are covered. Shared drawing functions and city-screen callers remain unpatched.
@@ -37,15 +38,23 @@ check call-site wiring, coordinate parity and argument preservation.
 Zoom is deliberately main-map-only. It uses the existing patched
 `Main_Screen_Form_handle_key_down` boundary and consumes `Z` before Civ III's
 native two-level toggle. No mouse-wheel vtable entry is required. The handler
-uses Civ III's native `bring_tile_into_view` operation to preserve the map center
-and force the same complete tile traversal as native `Z`. A plain Animator dirty
+retains the exact native pixel camera and uses `move_camera` to update bounds
+without rounding through a tile center. It then requests a complete traversal. A plain Animator dirty
 bit is insufficient because it may request only a one-tile damage redraw,
 leaving the exclusive custom terrain plane without a complete visible capture.
 The city screen retains its existing C3X `Z` handling. Changing Civ III's native
 zoom mode with another existing control resets the custom transform to the
 supported normal level around the screen center. Renderer failure retains the existing custom-map-plane policy.
-Outside this zoom mode, unit-body failure retains the existing native fallback;
-while zoom is enabled, the failed body is omitted as described above.
+Custom-on map unit failure is reported and the body is omitted; CPU unit
+rasterization is not a fallback. Renderer-off units remain native.
+
+The settler territory preview transforms only its audited native line call.
+Civ III still selects the legal edges and current civilization palette color;
+the GPU line pass receives that copied style. Transient `MapMessage` layout
+transforms the tile attachment and translates the complete native dirty rectangle.
+Its font size, overlap placement and lifetime stay native. This includes messages
+from `show_map_specific_text`; shared `PCX_Image_draw_text` UI calls are unchanged.
+Both hooks currently have verified GOG addresses only, recorded in the patch ledger.
 
 Zoomed-out capture promotes only complete appearance records that can reach the
 scaled viewport. The outer topology ring remains non-renderable. Intermediate

@@ -10,28 +10,35 @@ the former 1,326-line roadmap.
 
 ## Current state
 
-- **Current staged candidate: bounded input history and immutable sprite reuse.**
-  Automated real-game run `20260927-135838` reproduces input history reaching
-  its 96 MiB limit; regional payload compaction fixes it without raising that
-  limit. Run `20260927-140022` then identifies publication queue exhaustion at
-  43.377 s. A bounded cache of 256 immutable decoded sprites (16 MiB) removes
-  redundant uploads. Native pixel oracle `9a89e41d0e9f4487861d9c5213f9493d`
-  passes. Full asynchronous fixture `8bb8c078fe3e4d199771678676c3691f` passes
-  at 55.62 FPS with 32 camera updates, independent process progress and no
-  unexpected diagnostic failures. The matched trio is staged.
-  Real-game run `20260927-141651` completes 75 seconds without either fatal
-  error, adopts 13 maps and reuses 69,610 sprite draws with 22 uploads. It is
-  still slow and visually incorrect. At the user's direction the legacy PCX
-  tile highlights now bail when custom rendering is enabled; their Lab-derived
-  GPU replacement remains separate work. The config-off/capture tests and
-  approved injected compile check pass. Live run `20260927-142322` completes
-  all 32 camera moves and 33 map adoptions without a renderer failure. Median
-  native map time drops from about 1.1 seconds to 3.959 ms (capture 2.504 ms).
-  Terrain survives the scrolling loop, but unit/selection alignment, visibility
-  and cold startup still need verification. The [scripted game diagnostic](../tools/scripted_game_test.md)
-  loads a copied save and drives 32 camera commands without manual dialogs.
-  Fixture FPS is not live-game FPS. Preserve the roughly 52 FPS sandbox
-  baseline; further FPS tuning is deferred.
+- **Current staged candidate: consistent animation time and map attachments.**
+  Asynchronous fixture `8c7918bb0f2b4c0d927660c82c9b4b88` passes at **59.51 FPS**,
+  with 32 camera adoptions, 116 frames while the host pauses, 81 publications
+  while the renderer pauses, and zero CPU map readbacks. Submission p95 is
+  0.617 ms, maximum 1.689 ms. These are fixture measurements, not live-game FPS.
+  The qualified bridge, x64 DLL and helper are staged together. Preserve the
+  roughly 52 FPS sandbox baseline; further FPS tuning is deferred.
+
+  Native presentation now samples the current visual clock instead of rewinding
+  to the captured map time. The white selected ring shares its unit's sampled
+  anchor and draws before the unit meshes. The bridge admits its explicit
+  cursor flag. Exact native unit centers replace the sandbox canvas assumption;
+  zoom preserves the pixel camera rather than repeatedly rounding a tile.
+  GPU visibility and borrowed publication lifetime regressions are covered.
+  Config-off and unrelated native UI remain on their existing paths.
+
+  The settler preview uses the native civilization palette and edge eligibility,
+  with copied endpoints transformed for custom zoom. Transient map messages
+  transform their native attachment/dirty rectangle while retaining native font
+  size, timing and overlap layout. The two scoped GOG hooks and their other-build
+  limitations are in the [patch ledger](civ3_patch_dependency_ledger.md).
+
+  Live run `20260927-152331` exposed one remaining bridge flag rejection despite
+  its earlier empty error summary. The summary now includes unit-publication
+  errors, and the full GPU fixture exercises that selected-cursor path. A fresh
+  interaction and scrolling check is in progress. Do not claim live visual or
+  animation acceptance from the fixture. The [scripted game diagnostic](../tools/scripted_game_test.md)
+  documents disposable-save loading, elevated launch, zoom, transient text,
+  movement, UI, sampling and cleanup for future agents.
 - Milestones 1 and 2 and M3.7 have automated acceptance evidence. M3.8–M3.12
   and the integrated M3.13 acceptance are not complete. Existing x86 gameplay,
   native UI, visibility and config-off contracts remain authoritative.

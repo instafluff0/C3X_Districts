@@ -151,15 +151,22 @@ also runs the existing GPU visibility pass on every publication target;
 resource-free scenes still refresh visibility. The GPU oracle checks 3,295,332
 pixels across zoom, scrolling offsets and reset (maximum channel error one).
 
-Candidate `34e1326f9e4b4316b1c2a1f7c8b89190` passes the asynchronous fixture at
-55.89 FPS, but real run `20260927-144050` exposes a publication lifetime defect
-after eight adoptions. The helper faults at RVA `0x24D9`, within tile-record
-serialization. The worker's old command exclusions omitted helper presentation
-commands, allowing an independent frame to free the adopted camera's records
-after polling. Retirement now explicitly belongs to map/configuration commands.
-The extracted completion regression fails against the old code and passes
-780 borrowed-map operations with the same live records; reset/configuration
-still retire them. The replacement candidate is undergoing live qualification.
+The borrowed-publication lifetime repair is covered by 780 completion operations;
+only map/configuration commands retire adopted camera records. The direct native
+presentation path samples the same current visual time as autonomous frames.
+Passing zero frequency there previously restored capture-time animation poses
+on each native update, causing periodic rewinds.
+
+The white selected-unit ring now carries an explicit eligibility bit in copied
+body observations. It uses that unit's sampled/reprojected anchor and the shared
+visual clock, before unit mesh drawing. New selection clears the prior cursor.
+The old retained screen-space ring operation is consumed without duplication.
+The full bridge fixture includes the cursor flag to catch boundary validators
+that would otherwise reject selected bodies.
+
+Current qualified fixture `8c7918bb0f2b4c0d927660c82c9b4b88` measures 59.51 FPS,
+32 camera changes and no CPU map readbacks. See the current-status entry for
+real-game evidence and remaining limitations.
 
 The current staged candidate bounds retained input payload, in addition to
 command depth. Capture `20260927-132302` first fails during a native sprite draw

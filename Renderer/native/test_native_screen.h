@@ -227,6 +227,22 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
         }
         verify(reinterpret_cast<Copy>(canvases[0]->vtable[16])(canvases[0],canvases[1],&full,&full)==0,
             "fresh native map copied beneath UI");
+        if(asynchronous){
+            // MapMessage fills a CPU-created canvas, then grades the resident
+            // map into that canvas. No preceding map copy admits its target.
+            auto message=create(graph,nullptr,1);
+            verify(reinterpret_cast<Init>(message->vtable[1])(message,w,h,16,1)==0,"map message canvas init");
+            RECT area={w/2-100,h/2-30,w/2+100,h/2};
+            verify(reinterpret_cast<Fill>(message->vtable[17])(message,&area,int(0x80007c1fu))==0,"native map message transparent fill");
+            std::vector<unsigned short> lookup(16*32768);
+            for(unsigned n=0;n<lookup.size();++n)lookup[n]=static_cast<unsigned short>(n&32767);
+            using Lookup=int(__thiscall*)(JGL_Image*,RECT*,JGL_Image*,int,void*);
+            verify(reinterpret_cast<Lookup>(message->vtable[21])(message,&area,canvases[0],40,lookup.data())==0,
+                "map message admits its canvas from the GPU-owned lookup background");
+            verify(reinterpret_cast<Copy>(message->vtable[16])(message,canvases[1],&area,&area)==0,
+                "map message joins the native composition without CPU map access");
+            reinterpret_cast<Destroy>(message->vtable[0])(message,1);
+        }
         draw_async_hud(true);
         c3x_renderer_unit_v1 unit={};unit.struct_size=sizeof(unit);strcpy_s(unit.unit_key,"PRTO_Warrior");
         unit.unit_id=732;unit.action=1;unit.direction=3;unit.frame_count=16;unit.action_cursor=7;
@@ -240,16 +256,24 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
             facts.unit_id=unit.unit_id;facts.action=unit.action;facts.max_hp=3;facts.visible=1;
             facts.map_epoch=demand.identity.map_epoch;facts.viewer_epoch=demand.identity.viewer_epoch;
             facts.presentation_time_ticks=unit.presentation_time_ticks;facts.presentation_frequency=unit.presentation_frequency;
-            auto const& anchor=demand.frame->tiles[demand.frame->tile_count/2];
+            auto const* chosen=&demand.frame->tiles[0];long long distance=LLONG_MAX;
+            for(unsigned n=0;n<demand.frame->tile_count;++n){auto const& tile=demand.frame->tiles[n];
+                if(!(tile.tile_flags&C3X_RENDERER_TILE_RENDER)||!(tile.tile_flags&C3X_RENDERER_TILE_VISIBLE))continue;
+                long long x=tile.anchor_x+demand.frame->tile_width/2-w/2;
+                long long y=tile.anchor_y+demand.frame->tile_height/2-h/2;
+                if(x*x+y*y<distance){distance=x*x+y*y;chosen=&tile;}}
+            verify(distance!=LLONG_MAX,"unit fixture has a visible tile");
+            auto const& anchor=*chosen;
             facts.tile_x=anchor.tile_x;facts.tile_y=anchor.tile_y;
-            unit.body_x=anchor.anchor_x;unit.body_y=anchor.anchor_y;
+            unit.body_x=anchor.anchor_x+demand.frame->tile_width/2-unit.sprite_width*unit.projection_scale_milli/2000;
+            unit.body_y=anchor.anchor_y+demand.frame->tile_height/2-unit.sprite_height*unit.projection_scale_milli/2000;
             verify(unit_state(&facts)==C3X_RENDERER_RESULT_OK,"authoritative unit facts published");
             main_screen_fixture.is_now_loading_game=false;
             live(C3X_NATIVE_VISUAL_POLICY,nullptr,nullptr,nullptr,nullptr,1);
         }
         int bounds[4]={};
         verify(live(C3X_NATIVE_UNIT_DRAW,canvases[1],canvases[1],&unit,bounds,
-            C3X_RENDERER_UNIT_STATE_CAPTURED|(asynchronous?C3X_RENDERER_UNIT_SELECTED:0u))==1,
+            C3X_RENDERER_UNIT_STATE_CAPTURED|(asynchronous?(C3X_RENDERER_UNIT_SELECTED|C3X_RENDERER_UNIT_CURSOR):0u))==1,
             "fresh native unit identity captured without raster composition");
         if(asynchronous){
             RECT background={bounds[0],bounds[1],bounds[2],bounds[3]};

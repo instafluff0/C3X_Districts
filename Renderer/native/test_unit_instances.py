@@ -1,9 +1,39 @@
 """Retained content validity and selection sampling without native callbacks."""
 import unittest
-from Renderer.native.native_cpp_test import run_cpp
+from Renderer.native.native_cpp_test import ROOT, run_cpp
 
 
 class UnitInstanceTests(unittest.TestCase):
+    def test_remote_native_body_accepts_cursor_flag(self):
+        source=(ROOT/'Renderer/native/c3x_renderer.cpp').read_text()
+        body=source.split('int renderer_native_image_impl(',1)[1].split(
+            'if(operation==C3X_NATIVE_TACTICAL_CAPABLE)',1)[0]
+        run_cpp(r'''
+#include "Renderer/native/c3x_renderer_api.h"
+#include "Renderer/native/gpu_frame_api.h"
+#include <cassert>
+struct Remote {
+ unsigned flags=0,calls=0;
+ int unit(c3x_renderer_unit_v1 const&,c3x_renderer_gpu_unit_v1 const& capture,int* bounds){
+  flags=capture.playback_flags;++calls;bounds[0]=123;return C3X_RENDERER_RESULT_OK;
+ }
+} remote;
+bool remote_renderer_requested(){return true;}
+Remote* remote_renderer_backend(){return &remote;}
+int invoke(''' + body + r'''return 0;}
+int main(){
+ c3x_renderer_unit_v1 unit{};unit.struct_size=sizeof(unit);int bounds[4]={};
+ unsigned flags=C3X_RENDERER_UNIT_STATE_CAPTURED|C3X_RENDERER_UNIT_SELECTED|C3X_RENDERER_UNIT_CURSOR;
+ assert(invoke(C3X_NATIVE_UNIT_DRAW,nullptr,nullptr,&unit,bounds,flags)==1);
+ assert(remote.calls==1&&remote.flags==flags&&bounds[0]==123);
+ assert(invoke(C3X_NATIVE_UNIT_DRAW,nullptr,nullptr,&unit,bounds,flags|16u)==-1);
+ assert(invoke(C3X_NATIVE_UNIT_DRAW,nullptr,nullptr,nullptr,bounds,flags)==-1);
+ unit.struct_size=0;
+ assert(invoke(C3X_NATIVE_UNIT_DRAW,nullptr,nullptr,&unit,bounds,flags)==-1);
+ assert(remote.calls==1);
+}
+''')
+
     def test_scene_pose_rebases_pan_zoom_wrap_and_visibility(self):
         run_cpp(r'''
 #include "Renderer/native/render_core/unit_instances.h"
@@ -45,6 +75,45 @@ int main(){
         poses[0].draw.projection_scale_milli==1250);
  tile.tile_flags=C3X_RENDERER_TILE_RENDER;
  assert(world.scene_poses(frame,0,1000000,catalog).empty());
+}
+''')
+
+    def test_recapture_preserves_authored_cycle_and_exclusive_cursor(self):
+        run_cpp(r'''
+#include "Renderer/native/render_core/unit_instances.h"
+#include <cassert>
+#include <string>
+using namespace c3x_renderer::render_core;
+struct Clip {std::string name="idle";bool ambient=true,loop=true;double duration=3;unsigned frames=91;};
+struct Unit {std::vector<std::string> keys={"settler"};std::vector<Clip> actions={Clip{}};};
+int main(){
+ UnitInstances world;std::vector<Unit> catalog(1);
+ c3x_renderer_tile_v1 tile{};tile.tile_x=4;tile.tile_y=4;
+ tile.tile_flags=C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_VISIBLE;
+ c3x_renderer_frame_v1 frame{};frame.tile_count=1;frame.tiles=&tile;frame.tile_width=128;frame.tile_height=64;
+ c3x_renderer_unit_state_v1 state{};state.struct_size=sizeof(state);state.unit_id=7;
+ state.kind=C3X_RENDERER_UNIT_STATE_OBSERVE;state.tile_x=state.tile_y=4;
+ state.action=1;state.max_hp=3;state.visible=1;state.presentation_frequency=60000;
+ c3x_renderer_unit_v1 body{};body.struct_size=sizeof(body);body.unit_id=7;body.action=1;
+ body.frame_count=15;body.sprite_width=body.sprite_height=191;body.projection_scale_milli=1000;
+ body.presentation_frequency=60000;std::strcpy(body.unit_key,"settler");
+ auto capture=[&]{assert(world.state(state));UnitInstances::Selection selection;
+  assert(world.capture(body,11,catalog,[](int){return "idle";},selection));
+  world.bind_scene_camera(body.unit_id,frame);
+ };
+ capture();
+ for(int n=0;n<720;++n){
+  if(n%10==0){body.presentation_time_ticks=state.presentation_time_ticks=n*1000;
+   body.action_cursor=(n/10)%15;capture();} // sparse native FLC captures wrap independently
+  auto poses=world.scene_poses(frame,n*1000,60000,catalog);
+  assert(poses.size()==1&&poses[0].cursor&&poses[0].animated);
+  assert(poses[0].draw.action_cursor==(n/2)%90);
+ }
+ body.unit_id=state.unit_id=8;body.presentation_time_ticks=state.presentation_time_ticks=720000;capture();
+ auto poses=world.scene_poses(frame,720000,60000,catalog);
+ assert(poses.size()==2&&!poses[0].cursor&&poses[1].cursor);
+ state.visible=0;state.presentation_time_ticks=721000;assert(world.state(state));
+ poses=world.scene_poses(frame,721000,60000,catalog);assert(poses.size()==1&&!poses[0].cursor);
 }
 ''')
 

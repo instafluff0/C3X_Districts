@@ -1,7 +1,8 @@
 # Bounded real-game renderer diagnostic, enabled only in the child environment.
 param([Parameter(Mandatory=$true)][string]$SaveFile, [string]$ConquestsDirectory,
       [ValidateRange(35,120)][int]$Seconds = 75,
-      [ValidateSet('scroll','interaction')][string]$Scenario = 'scroll')
+      [ValidateSet('scroll','interaction')][string]$Scenario = 'scroll',
+      [ValidateRange(1,10)][int]$SampleHz = 2)
 $ErrorActionPreference = 'Stop'
 $renderer = Split-Path $PSScriptRoot -Parent
 if (-not $ConquestsDirectory) { $ConquestsDirectory = $env:C3X_RENDERER_CIV3_CONQUESTS }
@@ -72,14 +73,14 @@ try {
     $env:C3X_RENDERER_GAME_TEST_SAVE=$oldEnvironment
     $env:C3X_RENDERER_GAME_TEST_MODE=$oldMode
     Write-Host ('Scripted game PID='+$child.Id+' capture='+$session)
-    $observer=Start-Process $witness -ArgumentList (Quote-Arguments @([string]$child.Id,(Join-Path $session 'window'),[string]$Seconds,'2','sampled-window-evidence')) -PassThru -WindowStyle Hidden
+    $observer=Start-Process $witness -ArgumentList (Quote-Arguments @([string]$child.Id,(Join-Path $session 'window'),[string]$Seconds,[string]$SampleHz,'sampled-window-evidence')) -PassThru -WindowStyle Hidden
     $end=[DateTime]::UtcNow.AddSeconds($Seconds)
     $sent=0
     $started=[DateTime]::UtcNow
     $enterCount=0
     $cursorParked=$false
     $interactionIndex=0
-    $interaction=@(@(28,13,'close-welcome'),@(36,90,'zoom-192'),@(43,90,'zoom-160'),@(50,90,'zoom-128'),@(57,0x66,'move-east'),@(65,0x70,'advisor'),@(74,27,'close-advisor'))
+    $interaction=@(@(28,13,'close-welcome'),@(36,90,'zoom-192'),@(39,0x86,'text-192'),@(43,90,'zoom-160'),@(46,0x86,'text-160'),@(50,90,'zoom-128'),@(53,0x86,'text-128'),@(57,0x66,'move-east'),@(65,0x70,'advisor'),@(74,27,'close-advisor'))
     while ([DateTime]::UtcNow -lt $end -and -not $child.HasExited) {
         $child.Refresh(); $window=$child.MainWindowHandle
         if ($window -ne [IntPtr]::Zero) {
@@ -134,9 +135,10 @@ try {
 }
 $log=Get-Content -LiteralPath (Join-Path $session 'renderer.log') -Raw
 $steps=@([regex]::Matches($log,'stage=scripted-game-scroll step=(\d+)') | ForEach-Object {[int]$_.Groups[1].Value})
-$errors=@($log -split "`n" | Where-Object {$_ -match 'stage=native-operation-failed|budget exceeded|stage=visual-failure|stage=worker-error'})
-[ordered]@{ scenario=$Scenario; interaction_commands=$interactionIndex; posted_commands=$sent; load_requested=($log -match 'stage=scripted-game-load'); scroll_steps=$steps;
+$textEvents=[regex]::Matches($log,'stage=scripted-game-map-text').Count
+$errors=@($log -split "`n" | Where-Object {$_ -match 'stage=native-operation-failed|budget exceeded|stage=visual-failure|stage=worker-error|stage=unit-publication-failed'})
+[ordered]@{ scenario=$Scenario; interaction_commands=$interactionIndex; map_text_events=$textEvents; posted_commands=$sent; load_requested=($log -match 'stage=scripted-game-load'); scroll_steps=$steps;
     native_failures=$errors; original_save_unchanged=$true; scope='Real Civ III diagnostic; window samples require visual review; not an FPS benchmark' } |
     ConvertTo-Json -Depth 4 | Set-Content (Join-Path $session 'result.json')
 Write-Host ('Scripted diagnostic saved: '+$session)
-if (($Scenario -eq 'scroll' -and $steps.Count -ne 32) -or ($Scenario -eq 'interaction' -and $interactionIndex -ne $interaction.Count) -or $errors.Count) { exit 1 }
+if (($Scenario -eq 'scroll' -and $steps.Count -ne 32) -or ($Scenario -eq 'interaction' -and ($interactionIndex -ne $interaction.Count -or $textEvents -ne 3)) -or $errors.Count) { exit 1 }

@@ -1,5 +1,57 @@
 # Civ III patch dependency ledger
 
+## Transient map text at custom zoom
+
+`show_map_specific_text` and native map messages both use the native
+`MapMessage` layout routine at **GOG `0x004D7DC0`**. Its verified signature is
+`RECT * __fastcall(MapMessage *)`; the original bytes begin
+`83 EC 08 55 56 8B F1`, and both returns put `this + 0x28` in EAX.
+The authorized CSV entry is `inlead, MapMessage_compute_rect`. Steam and
+PCGames.de addresses remain `0x0` because those builds have not been audited.
+`required_user_action: []`.
+
+The wrapper first runs native layout, then transforms its map attachment point
+and translates the complete text/dirty rectangle. Text size, overlap placement,
+expiration and pause behavior stay native. Invisible empty rectangles remain
+empty. Config-off calls the original unchanged. Shared `PCX_Image_draw_text`
+and screen-space UI calls stay unchanged. The scoped F23 diagnostic publishes
+two ordinary map messages through `show_map_specific_text` at each custom zoom;
+it is active only in a custom-renderer diagnostic launch.
+
+## Settler preview, zoom and continuous selection (current repair)
+
+The user authorized the new CSV entry. The installed, unmodded GOG executable
+confirms `Main_Screen_Form::FUN_004dd800` calls `OpenGLRenderer_draw_line` at
+**`0x004DE1A9`** (bytes `E8 A2 D2 14 00`, target `0x0062B450`). The replacement-call
+symbol is **`OpenGLRenderer_draw_settler_boundary`**, with wrapper signature
+`void __fastcall(OpenGLRenderer *, int, int x1, int y1, int x2, int y2)`.
+Steam and PCGames.de addresses are `0x0` (unverified; no patch on those builds).
+The existing full-custom live path is GOG-qualified only.
+
+This narrow drawing call preserves the native routine's city-location legality,
+territory edge choices, civilization color and dirty flags. Config-on transforms
+the copied edge endpoints with the custom camera and draws through the existing
+GPU line pass. Config-off delegates unchanged to the existing C3X line wrapper,
+including its optional GDI+ behavior. No inferred unit-draw scope or extra state
+is needed. `required_user_action: []`; the authorized CSV edit is implemented.
+The approved injected compile smoke passed after this entry was added.
+
+Zoom now retains the exact native pixel camera while updating bounds through
+existing `Main_Screen_Form_move_camera` (`0x4DF700`, GOG). Repeated tile rounding
+previously shifted it left. The same hook's asynchronous camera deferral tests
+actual directed-action and redraw flags; `turn_end_flag` means the player's
+turn is active, and does not mean a unit animation is running. Existing
+`Animator_update_display` (`0x4EEC40`, GOG) continues its native update while a
+new camera is pending. No new entries are needed for either repair.
+
+The native body capture carries an explicit cursor eligibility bit alongside
+selection. Renderer64 samples the white ring at the same anchor and clock as
+its unit, before drawing unit meshes; the old native ring operation is consumed
+without adding a second overlay. Config-off cursor drawing is unchanged.
+The direct cross-process native-present path now uses the current visual clock:
+its previous zero-frequency argument displayed the original camera sample on
+each native update, periodically rewinding independently animated units.
+
 ## Legacy tile highlights under custom rendering
 
 At the user's explicit direction, custom rendering bypasses

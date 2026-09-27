@@ -36,6 +36,7 @@ struct State {
 };
 State state={};State* is=&state;
 struct {bool is_now_loading_game=false;} main_screen_fixture;auto p_main_screen_form=&main_screen_fixture;
+void custom_renderer_zoom_transform_point(int*,int*){}
 unsigned player_bits=1;unsigned* p_player_bits=&player_bits;
 auto p_GetModuleHandleA=&GetModuleHandleA;auto p_GetProcAddress=&GetProcAddress;
 PCX_Image screen;PCX_Image* screen_canvas=&screen;

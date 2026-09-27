@@ -25,6 +25,40 @@ def inverse(value: int, width: int, native_width: int, translation: int) -> int:
 
 
 class CustomZoomTests(unittest.TestCase):
+    def test_transient_message_anchor_preserves_font_and_dirty_rect(self):
+        source=(ROOT/'injected_code.c').read_text()
+        start=source.index('RECT * __fastcall\npatch_MapMessage_compute_rect')
+        wrapper=source[start:source.index('\n}\n',start)+3]
+        run_cpp(r'''
+#include <cassert>
+#include <initializer_list>
+#include <cstddef>
+#define __fastcall
+struct RECT {int left,top,right,bottom;};
+struct MapMessage {RECT native,output;};
+struct {struct {bool enable_custom_rendering=false;} current_config;} state,*is=&state;
+int width=128,calls=0,transforms=0;
+RECT* MapMessage_compute_rect(MapMessage* p){++calls;p->output=p->native;return &p->output;}
+bool custom_renderer_zoom_transform_active(){return is->current_config.enable_custom_rendering&&width!=128;}
+void custom_renderer_zoom_transform_point(int* x,int* y){++transforms;*x=*x*width/128-240;*y=*y*width/128+80;}
+'''+wrapper.replace('this','self')+r'''
+int main(){
+ for(int zoom:{128,160,192})for(int text_width:{80,81,234})for(int lower:{0,32}){
+  width=zoom;MapMessage p{{640-text_width/2-2,320+lower-18-2,640-text_width/2-2+text_width,320+lower-2},{}};
+  for(bool enabled:{false,true}){is->current_config.enable_custom_rendering=enabled;
+   for(int repeat=0;repeat<10;++repeat){auto before=calls;RECT* r=patch_MapMessage_compute_rect(&p);
+    assert(r==&p.output&&calls==before+1&&r->right-r->left==text_width&&r->bottom-r->top==18);
+    int x=r->left+text_width/2+2,y=r->bottom+2;
+    assert(x==((enabled&&zoom!=128)?640*zoom/128-240:640));
+    assert(y==((enabled&&zoom!=128)?(320+lower)*zoom/128+80:320+lower));
+   }
+  }
+ }
+ MapMessage hidden{{0,0,0,0},{}};auto before=transforms;
+ assert(patch_MapMessage_compute_rect(&hidden)->right==0&&transforms==before);
+}
+''')
+
     def test_z_key_cycles_toward_zoom_out_then_wraps(self) -> None:
         levels = [128, 160, 192]
         current = 128
@@ -35,6 +69,35 @@ class CustomZoomTests(unittest.TestCase):
             observed.append(current)
         self.assertEqual(observed, [192, 160, 128])
         self.assertEqual(levels[0], 128)
+
+    def test_settler_boundary_callsite_projects_only_when_enabled(self):
+        source=(ROOT/'injected_code.c').read_text()
+        start=source.index('void __fastcall\npatch_OpenGLRenderer_draw_settler_boundary')
+        wrapper=source[start:source.index('\n}\n',start)+3]
+        run_cpp(r'''
+#include <cassert>
+#include <initializer_list>
+#define __fastcall
+struct OpenGLRenderer{};
+struct {struct {bool enable_custom_rendering=false;} current_config;} state,*is=&state;
+int width=128,tx=0,ty=0,calls=0,transforms=0,points[4];
+void custom_renderer_zoom_transform_point(int* x,int* y){++transforms;*x=*x*width/128+tx;*y=*y*width/128+ty;}
+void patch_OpenGLRenderer_draw_line(OpenGLRenderer*,int edx,int x1,int y1,int x2,int y2){
+ assert(edx==73);++calls;points[0]=x1;points[1]=y1;points[2]=x2;points[3]=y2;
+}
+'''+wrapper.replace('this','self')+r'''
+int main(){OpenGLRenderer context;
+ for(int zoom:{128,160,192}){width=zoom;tx=-256;ty=64;
+  is->current_config.enable_custom_rendering=false;transforms=0;
+  patch_OpenGLRenderer_draw_settler_boundary(&context,73,256,128,512,256);
+  assert(!transforms&&points[0]==256&&points[1]==128&&points[2]==512&&points[3]==256);
+  is->current_config.enable_custom_rendering=true;
+  patch_OpenGLRenderer_draw_settler_boundary(&context,73,256,128,512,256);
+  assert(transforms==2&&points[0]==2*zoom-256&&points[1]==zoom+64&&points[2]==4*zoom-256&&points[3]==2*zoom+64);
+ }
+ assert(calls==6);
+}
+'''.replace('#include <cassert>','#include <cassert>\n#include <initializer_list>'))
 
     def test_repeated_zoom_keeps_exact_native_camera(self):
         source = (ROOT / "injected_code.c").read_text()
@@ -115,6 +178,8 @@ int main(){
     def test_native_input_and_hud_share_the_projection(self):
         source = (ROOT / "injected_code.c").read_text()
         functions = source[source.index("int\ncustom_renderer_zoom_transform_coordinate"):source.index("// Temporary, event-bounded diagnosis")]
+        start=functions.index('RECT * __fastcall\npatch_MapMessage_compute_rect')
+        functions=functions[:start]+functions[functions.index('\n}\n',start)+3:]
         functions = functions.replace("this", "screen")
         program = r'''
 #include <cassert>

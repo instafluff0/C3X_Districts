@@ -23802,6 +23802,26 @@ patch_Main_Screen_Form_city_hud_coords (Main_Screen_Form * this, int edx, int ti
 	}
 }
 
+// MapMessage::compute_rect returns the native text/dirty rectangle at +0x28.
+// Its attachment is two pixels beyond the horizontal center and bottom edge.
+RECT * __fastcall
+patch_MapMessage_compute_rect (MapMessage * this)
+{
+	if (! is->current_config.enable_custom_rendering)
+		return MapMessage_compute_rect (this);
+	RECT * rect = MapMessage_compute_rect (this);
+	if (custom_renderer_zoom_transform_active () && rect != NULL &&
+	    rect->right > rect->left && rect->bottom > rect->top) {
+		int x = rect->left + (rect->right - rect->left) / 2 + 2;
+		int y = rect->bottom + 2;
+		int anchor_x = x, anchor_y = y;
+		custom_renderer_zoom_transform_point (&x, &y);
+		rect->left += x - anchor_x; rect->right += x - anchor_x;
+		rect->top += y - anchor_y; rect->bottom += y - anchor_y;
+	}
+	return rect;
+}
+
 // Only the audited map/army call sites use these wrappers. The shared native
 // routines remain unpatched for city-screen lists and other UI consumers.
 void __fastcall
@@ -29365,10 +29385,20 @@ patch_Main_Screen_Form_m82_handle_key_event (Main_Screen_Form * this, int edx, i
     // Only a diagnostic launch sets this environment variable. Posted F24
     // events run on the ordinary game thread, through existing load/camera paths.
     // The launcher uses native Enter/menu loading; no remote thread calls game code.
-    if (is->current_config.enable_custom_rendering && virtual_key_code == 0x87 && is_down && this == p_main_screen_form) {
+    if (is->current_config.enable_custom_rendering && (virtual_key_code == 0x87 || virtual_key_code == 0x86) && is_down && this == p_main_screen_form) {
         DWORD (WINAPI * get_environment) (LPCSTR, LPSTR, DWORD) = (void *)(*p_GetProcAddress) (is->kernel32, "GetEnvironmentVariableA");
         DWORD length = get_environment != NULL ? get_environment ("C3X_RENDERER_GAME_TEST_SAVE", is->custom_renderer_test_save, MAX_PATH) : 0;
         if (length > 0 && length < MAX_PATH) {
+            if (virtual_key_code == 0x86) {
+                if (! this->is_now_loading_game && this->GUI.is_enabled &&
+                    is->custom_renderer_display_valid && this->Current_Unit != NULL) {
+                    Unit * unit = this->Current_Unit;
+                    show_map_specific_text (unit->Body.X, unit->Body.Y, "Renderer map text", false);
+                    show_map_specific_text (unit->Body.X, unit->Body.Y, "Second map message", false);
+                    (*p_OutputDebugStringA) ("[C3X renderer] stage=scripted-game-map-text\n");
+                }
+                return;
+            }
             if (is->custom_renderer_test_step > 0 && is->custom_renderer_test_step <= 32 && ! this->is_now_loading_game &&
                 this->GUI.is_enabled && p_bic_data->Map.Tiles != NULL && is->custom_renderer_display_valid) {
                 unsigned step = is->custom_renderer_test_step++;
@@ -36711,6 +36741,21 @@ patch_OpenGLRenderer_draw_line (OpenGLRenderer * this, int edx, int x1, int y1, 
 			is->gdi_plus.DeletePen (gp_pen);
 		}
 	}
+}
+
+// Replaces only the verified line call in Main_Screen_Form::FUN_004dd800.
+// Native eligibility, territory edges, civ color and erase flags remain native.
+void __fastcall
+patch_OpenGLRenderer_draw_settler_boundary (OpenGLRenderer * this, int edx, int x1, int y1, int x2, int y2)
+{
+	if (! is->current_config.enable_custom_rendering) {
+		patch_OpenGLRenderer_draw_line (this, edx, x1, y1, x2, y2);
+		return;
+	}
+	custom_renderer_zoom_transform_point (&x1, &y1);
+	custom_renderer_zoom_transform_point (&x2, &y2);
+	// The existing line owner sends copied endpoints/style to the GPU pass.
+	patch_OpenGLRenderer_draw_line (this, edx, x1, y1, x2, y2);
 }
 
 int __fastcall

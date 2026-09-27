@@ -42,7 +42,7 @@ struct State {int custom_renderer_native_operation=123;Unit* custom_renderer_uni
  c3x_renderer_visual_clock_fn custom_renderer_visual_clock=nullptr;
  LARGE_INTEGER custom_renderer_qpc_frequency={1000000},custom_renderer_animation_timestamp={},custom_renderer_animation_sample_at={};};
 constexpr int AT_DEFAULT=1,AT_PLANT=18,DNCM_OFF=0,SCM_OFF=0,CS_SUMMER=0,CS_SPRING=3,IS_OK=1,UTA_Army=1;
-struct Screen {int Player_CivID=1;Unit* Current_Unit=nullptr;} screen;Screen* p_main_screen_form=&screen;
+struct Screen {int Player_CivID=1;Unit* Current_Unit=nullptr;struct {int field_18E4[13]={};} animator;} screen;Screen* p_main_screen_form=&screen;
 unsigned playback_flags=0;
 State state;State* is=&state;Bic bic;Bic* p_bic_data=&bic;PCX_Color_Table fixture_palette;
 std::vector<int> calls;c3x_renderer_unit_v1 captured;bool success=true,fixture_reduced=false;int dc_count=0;PCX_Image* fixture_background=nullptr;JGL_Image* denied_dc=nullptr;
@@ -94,7 +94,13 @@ int __fastcall original_reduced(Sprite*,int,PCX_Image*,PCX_Image*,int x,int y,in
 auto Sprite_draw_unit_body_reduced=original_reduced;
 void __fastcall Unit_tick_anim(Unit*,int,PCX_Image*,int,int,bool);
 
-int translate_custom_renderer_native(int,JGL_Image*,void*,RECT*,RECT*,unsigned){return 0;}
+int publication_errors=0;
+void log_custom_renderer_event(char const*,int){++publication_errors;}
+int translate_custom_renderer_native(int operation,JGL_Image* image,void* background,RECT* from,RECT*,unsigned flags){
+ assert(operation==C3X_NATIVE_UNIT_DRAW&&image&&background&&dc_count==0);
+ captured=*reinterpret_cast<c3x_renderer_unit_v1*>(from);playback_flags=flags;calls.push_back(20);
+ return success?1:-1;
+}
 
 #define this self
 struct Tile{};Tile visibility_tile;bool tile_visible=true;
@@ -147,8 +153,8 @@ int main(){
   assert(captured.presentation_frequency==1000000 && captured.presentation_time_ticks>=0);
   assert(captured.display_color_rgb==0x0c2238 && !std::strcmp(captured.unit_key,"PRTO_Archer"));
   success=false;invoke();assert(unit.Body.Rect.left==20 && unit.Body.Rect.right==45);assert((calls==std::vector<int>{10,20,40}));
-  denied_dc=&image;invoke();assert((calls==std::vector<int>{10,40}));
-  denied_dc=&background_image;invoke();assert((calls==std::vector<int>{10,40}));denied_dc=nullptr;
+  denied_dc=&image;invoke();assert((calls==std::vector<int>{10,20,40}));
+  denied_dc=&background_image;invoke();assert((calls==std::vector<int>{10,20,40}));denied_dc=nullptr;
   state.current_config.enable_custom_rendering=false;invoke();assert((calls==std::vector<int>{10,30,40}));
   state.current_config.enable_custom_rendering=true;unit.army=true;success=true;
   invoke();assert((calls==std::vector<int>{10,20,40}));
@@ -160,19 +166,19 @@ int main(){
   army_member=nullptr;unit.army=false;
   unit.visible=false;invoke();assert(calls.empty());unit.visible=true;
  }
- state.custom_renderer_unit_draw_expanded=capture_expanded;
- success=true;invoke();assert(unit.Body.Rect.left==-40 && unit.Body.Rect.top==-60 && unit.Body.Rect.right==300 && unit.Body.Rect.bottom==280);
- success=false;invoke();assert(unit.Body.Rect.left==20 && unit.Body.Rect.right==45);
- state.custom_renderer_unit_draw_expanded=nullptr;
- state.custom_renderer_unit_draw_playback=capture_playback;success=true;
- invoke();assert(playback_flags==C3X_RENDERER_UNIT_STATE_CAPTURED);
+ // Resident bodies publish copied observations without any CPU DC lease.
+ success=true;invoke();assert(playback_flags==C3X_RENDERER_UNIT_STATE_CAPTURED);
+ auto failures=publication_errors;success=false;invoke();assert(publication_errors==failures+1);
+ assert((calls==std::vector<int>{10,20,40}));success=true;
  tile_visible=false;playback_flags=0;invoke();assert(playback_flags==0);tile_visible=true;
- screen.Current_Unit=&unit;invoke();assert(playback_flags==(C3X_RENDERER_UNIT_STATE_CAPTURED|C3X_RENDERER_UNIT_SELECTED));
+ unsigned selected=C3X_RENDERER_UNIT_STATE_CAPTURED|C3X_RENDERER_UNIT_SELECTED|C3X_RENDERER_UNIT_CURSOR;
+ screen.Current_Unit=&unit;invoke();assert(playback_flags==selected);
+ screen.animator.field_18E4[12]=1;invoke();assert(playback_flags==(selected&~C3X_RENDERER_UNIT_CURSOR));
+ screen.animator.field_18E4[12]=0;
  unit.army=true;Unit member=unit;member.army=false;member.Body.ID=84;member.Body.Rect={};army_member=&member;unit.Body.army_top_defender_id=84;
- invoke();assert(captured.unit_id==84 && playback_flags==(C3X_RENDERER_UNIT_STATE_CAPTURED|C3X_RENDERER_UNIT_SELECTED));
- assert(unit.Body.Rect.left==-40 && member.Body.Rect.left==20);
+ invoke();assert(captured.unit_id==84 && playback_flags==selected);
+ assert(member.Body.Rect.left==20);
  army_member=nullptr;unit.army=false;screen.Current_Unit=nullptr;
- state.custom_renderer_unit_draw_playback=nullptr;
  // UI portraits use these same native hooks, outside the map tick's canvas.
  // They must preserve native arguments/return values at every custom zoom.
  state.current_config.enable_custom_rendering_zoom=true;
