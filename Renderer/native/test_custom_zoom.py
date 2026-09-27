@@ -36,6 +36,45 @@ class CustomZoomTests(unittest.TestCase):
         self.assertEqual(observed, [192, 160, 128])
         self.assertEqual(levels[0], 128)
 
+    def test_repeated_zoom_keeps_exact_native_camera(self):
+        source = (ROOT / "injected_code.c").read_text()
+        function = source[source.index("bool\nadvance_custom_renderer_zoom_from_key"):source.index("int __fastcall\npatch_Main_Screen_Form_handle_key_down")]
+        run_cpp(r'''
+#include <cassert>
+#include <cstdio>
+#include <array>
+#define Main_Screen_Form_move_camera native_move
+#define ARRAY_LEN(x) (sizeof(x)/sizeof((x)[0]))
+constexpr int VK_Z=90,__=0,C3X_RENDERER_DIRTY_ALL=255;
+struct Main_Screen_Form {bool is_now_loading_game=false;int camera_x=0,camera_y=0;};
+struct State {struct {bool enable_custom_rendering=true,enable_custom_rendering_zoom=true;} current_config;
+ int custom_renderer_zoom_tile_width=128,custom_renderer_dirty_flags=0;bool custom_renderer_redraw_pending=false;
+ long long custom_renderer_zoom_translate_x_fp=0,custom_renderer_zoom_translate_y_fp=0;} state,*is=&state;
+struct Bic {int ScreenWidth=2240,ScreenHeight=1260;} bic,*p_bic_data=&bic;
+int players=1,*p_player_bits=&players,moves=0;
+void sync_custom_renderer_zoom_to_native(){}
+void debug(char const*){}auto p_OutputDebugStringA=debug;
+void native_move(Main_Screen_Form* screen,int,int x,int y,int reason,bool bounds){
+ assert(x==screen->camera_x&&y==screen->camera_y&&reason==0&&bounds);++moves;
+}
+''' + function.replace('this', 'screen') + r'''
+int main(){
+ for(int x:{-129,0,3616,3679})for(int y:{-17,0,394,427}){
+  Main_Screen_Form screen;screen.camera_x=x;screen.camera_y=y;
+  state.custom_renderer_zoom_tile_width=128;
+  state.custom_renderer_zoom_translate_x_fp=state.custom_renderer_zoom_translate_y_fp=0;
+  for(int n=0;n<120;++n){assert(advance_custom_renderer_zoom_from_key(&screen,0,VK_Z));
+   assert(screen.camera_x==x&&screen.camera_y==y);
+  }
+  assert(state.custom_renderer_zoom_tile_width==128);
+  assert(state.custom_renderer_zoom_translate_x_fp==0&&state.custom_renderer_zoom_translate_y_fp==0);
+  state.current_config.enable_custom_rendering=false;auto before=moves;
+  assert(!advance_custom_renderer_zoom_from_key(&screen,0,VK_Z)&&moves==before);
+  state.current_config.enable_custom_rendering=true;
+ }
+}
+''')
+
     def test_cursor_anchor_and_inverse_pick(self) -> None:
         for native_width in (64, 128):
             translation = 0
@@ -232,7 +271,8 @@ int main(){
 #define __fastcall
 constexpr int __=0,IS_OK=1;
 struct Unit{struct {int X=2,Y=4,ID=7,army_top_defender_id=-1;}Body;};struct PCX_Image{};
-constexpr unsigned C3X_RENDERER_TILE_VISIBLE=1;constexpr int UTA_Army=1;
+constexpr unsigned C3X_RENDERER_TILE_VISIBLE=1;constexpr int UTA_Army=1,C3X_RENDERER_UNIT_STATE_OBSERVE=1;
+void notify_custom_renderer_unit_state(Unit*,int){}
 struct Tile{};Tile tile;bool visible=true;Tile* tile_at(int,int){return &tile;}
 unsigned capture_custom_renderer_visibility(Tile*,int,int,int){return visible?C3X_RENDERER_TILE_VISIBLE:0;}
 bool Unit_has_ability(Unit*,int,int){return false;}
@@ -277,7 +317,8 @@ int main(){
 #include <cstdio>
 #define ARRAY_LEN(a) (sizeof(a)/sizeof((a)[0]))
 enum {VK_Z=90,C3X_RENDERER_DIRTY_ALL=255,__=0};
-struct Main_Screen_Form {bool is_now_loading_game=false;int TileX_Max=100,TileX_Min=0,TileY_Max=100,TileY_Min=0;};
+#define Main_Screen_Form_move_camera native_move
+struct Main_Screen_Form {bool is_now_loading_game=false;int camera_x=3616,camera_y=394;};
 struct State {
  struct {bool enable_custom_rendering=true,enable_custom_rendering_zoom=true;} current_config;
  int custom_renderer_zoom_native_tile_width=0,custom_renderer_zoom_tile_width=0;
@@ -287,7 +328,7 @@ struct State {
 struct Bic {bool is_zoomed_out=false;int ScreenWidth=1024,ScreenHeight=768;} bic,*p_bic_data=&bic;
 int player_bits=1,*p_player_bits=&player_bits,redraws=0;
 void debug(char const*){} auto p_OutputDebugStringA=debug;
-void Main_Screen_Form_bring_tile_into_view(Main_Screen_Form*,int,int,int,int,bool,bool){++redraws;}
+void native_move(Main_Screen_Form* s,int,int x,int y,int reason,bool bounds){assert(x==s->camera_x&&y==s->camera_y&&reason==0&&bounds);++redraws;}
 ''' + sync + key + r'''
 int main(){
  Main_Screen_Form screen;
@@ -355,8 +396,7 @@ int main(){
         handler = handler.split("patch_Main_Screen_Form_handle_key_down", 1)[0]
         self.assertIn("custom_renderer_redraw_pending = true", handler)
         self.assertIn("stage=zoom-key", handler)
-        self.assertIn("Main_Screen_Form_bring_tile_into_view", handler)
-        self.assertIn("center_x - 1, center_y - 1, 0, true, false", handler)
+        self.assertIn("this->camera_x, this->camera_y, 0, true", handler)
         self.assertNotIn("m73_call_m22_Draw", handler)
         self.assertNotIn("custom_renderer_original_mouse_wheel", handler)
         self.assertNotIn("ensure_custom_renderer_mouse_wheel_hook", source)

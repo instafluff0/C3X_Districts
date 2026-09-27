@@ -1014,7 +1014,7 @@
       },
       "capital_replaces_centerpiece": true,
       "vertical_metric": 1.0,
-      "wall_kit": "industrial"
+      "wall_kit": "tsikhe"
     },
     {
       "culture": 0,
@@ -1274,7 +1274,7 @@
       },
       "capital_replaces_centerpiece": true,
       "vertical_metric": 1.0,
-      "wall_kit": "industrial"
+      "wall_kit": "modern_low"
     },
     {
       "culture": 1,
@@ -2264,7 +2264,7 @@
       },
       "capital_replaces_centerpiece": true,
       "vertical_metric": 1.0,
-      "wall_kit": "industrial"
+      "wall_kit": "tsikhe"
     },
     {
       "culture": 1,
@@ -2524,7 +2524,7 @@
       },
       "capital_replaces_centerpiece": true,
       "vertical_metric": 1.0,
-      "wall_kit": "industrial"
+      "wall_kit": "modern_low"
     },
     {
       "culture": 2,
@@ -3514,7 +3514,7 @@
       },
       "capital_replaces_centerpiece": true,
       "vertical_metric": 1.0,
-      "wall_kit": "industrial"
+      "wall_kit": "tsikhe"
     },
     {
       "culture": 2,
@@ -3774,7 +3774,7 @@
       },
       "capital_replaces_centerpiece": true,
       "vertical_metric": 1.0,
-      "wall_kit": "industrial"
+      "wall_kit": "modern_low"
     },
     {
       "culture": 3,
@@ -4764,7 +4764,7 @@
       },
       "capital_replaces_centerpiece": true,
       "vertical_metric": 1.0,
-      "wall_kit": "industrial"
+      "wall_kit": "tsikhe"
     },
     {
       "culture": 3,
@@ -5024,7 +5024,7 @@
       },
       "capital_replaces_centerpiece": true,
       "vertical_metric": 1.0,
-      "wall_kit": "industrial"
+      "wall_kit": "modern_low"
     },
     {
       "culture": 4,
@@ -6014,7 +6014,7 @@
       },
       "capital_replaces_centerpiece": true,
       "vertical_metric": 1.0,
-      "wall_kit": "industrial"
+      "wall_kit": "tsikhe"
     },
     {
       "culture": 4,
@@ -6274,7 +6274,7 @@
       },
       "capital_replaces_centerpiece": true,
       "vertical_metric": 1.0,
-      "wall_kit": "industrial"
+      "wall_kit": "modern_low"
     }
   ]
 }

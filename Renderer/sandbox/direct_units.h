@@ -86,7 +86,7 @@ Output VS(Input i){
  if(pass_control.x>.5 && pass_control.x<1.5){
   x+=z*pass_control.y;y+=z*pass_control.z;z=0;
  }
- float2 local=float2(95.5+(x-y)*64,95.5+(x+y)*32-z*(150.0*128/224));
+ float2 local=float2((x-y)*64,(x+y)*32-z*(150.0*128/224));
  float2 pixel=(origin+local)*scale;
  if(pass_control.x>1.5)pixel.y+=2*z*(150.0*128/224)*scale;
  Output o;o.p=float4(pixel/extent*float2(2,-2)+float2(-1,1),
@@ -351,8 +351,8 @@ float4 PSShadow(Output i):SV_Target {
                 unsigned frame_number=std::min(source->frames-1,
                     unsigned(std::floor(local/duration*double(source->frames-1)+1e-7)));
                 float angle=(unit->yaw_offset+float((index==1?5:index==3?1:3)%8)*45)*.01745329252f;
-                float placement_values[20]={float(body_x+(reflected?8:4)),
-                    float(body_y+(reflected?8:4)),
+                float placement_values[20]={float(body_x+(reflected?8:4))+95.5f,
+                    float(body_y+(reflected?8:4))+95.5f,
                     float(scene.width),float(scene.height),float(scene_scale),ground_depth,0,0,
                     float(frame_number),float(source->bones),std::cos(angle),std::sin(angle),
                     unit->scale,unit->offset_z,0,0,
@@ -425,6 +425,25 @@ float4 PSShadow(Output i):SV_Target {
         if(!initialize())return false;
         auto& bodies=renderer.unit_bodies;
         auto* context=renderer.context;
+        if(!reflected){
+            c3x_renderer::tactical::Input cursors;
+            for(auto const& instance:visible)if(instance.cursor){
+                auto const& draw=instance.draw;
+                int projection=draw.projection_scale_milli>0?draw.projection_scale_milli:(draw.reduced?500:1000);
+                // Same native center and sampled travel as the body below.
+                int x=draw.body_x+int(std::int64_t(draw.sprite_width)*projection/2000);
+                int y=draw.body_y+int(std::int64_t(draw.sprite_height)*projection/2000);
+                if(frame.world_wrap_x&&frame.world_width_tiles>0){
+                    int span=frame.world_width_tiles*frame.tile_width/2;
+                    if(span>0){while(x>frame.target_width+512)x-=span;while(x+512<0)x+=span;}
+                }
+                cursors.ring(float(x+4),float(y+4),draw.reduced?64.f:128.f,true);
+            }
+            if(!cursors.primitives.empty())renderer.tactical_gpu.draw_into(renderer.device,context,cursors,
+                {0,0,int(scene.width/scene_scale),int(scene.height/scene_scale)},
+                double(frame.presentation_time_ticks)/double(std::max(1ll,frame.presentation_frequency)),
+                scene.target,scene.width,scene.height);
+        }
         context->OMSetRenderTargets(1,&scene.target,scene.depth);
         context->OMSetDepthStencilState(renderer.depth_state,0);
         context->OMSetBlendState(nullptr,nullptr,0xffffffffu);
@@ -483,8 +502,8 @@ float4 PSShadow(Output i):SV_Target {
             if(frame.world_wrap_x&&frame.world_width_tiles>0){
                 int span=frame.world_width_tiles*frame.tile_width/2;
                 if(span>0){
-                    while(draw.body_x>frame.target_width+512)draw.body_x-=span;
-                    while(draw.body_x+512<0)draw.body_x+=span;
+                    while(draw.body_x>frame.target_width+512){draw.body_x-=span;pose.anchor_x-=span;}
+                    while(draw.body_x+512<0){draw.body_x+=span;pose.anchor_x+=span;}
                 }
             }
             if(draw.body_x>frame.target_width+512||draw.body_x+512<0||
@@ -504,8 +523,10 @@ float4 PSShadow(Output i):SV_Target {
                 float angle=(unit.yaw_offset+float((draw.direction-1)%8)*45)*.01745329252f;
                 float scale=pose.projection_scale*scene_scale;
                 float guard=reflected?8.f:4.f;
-                float placement_values[20]={float(draw.body_x+guard)/pose.projection_scale,
-                    float(draw.body_y+guard)/pose.projection_scale,
+                // The ground point is Civ III's captured center. Sprite size
+                // and expanded dirty canvases must not move the resident mesh.
+                float placement_values[20]={float(pose.anchor_x+guard)/pose.projection_scale,
+                    float(pose.anchor_y+guard)/pose.projection_scale,
                     float(scene.width),float(scene.height),scale,ground_depth,0,0,
                     float(frame_number),float(source->bones),std::cos(angle),std::sin(angle),
                     unit.scale,unit.offset_z,0,0,

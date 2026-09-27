@@ -148,6 +148,11 @@ def main(argv=None):
             parser.error('Renderer64 runtime shader pack is missing')
         for path in sorted(shader_root.rglob('*')):
             if path.is_file():inputs[path.relative_to(ROOT).as_posix()]=digest(path)
+        # The wall bundle is shared with active Lab work and controls startup
+        # admission as well as texture slots. Detect edits during this witness.
+        wall_root=ROOT/'Renderer/packs/CityAdjunctsNormalized'
+        for path in (wall_root/'wall_runtime.bin', *sorted((wall_root/'textures').rglob('*.dds'))):
+            inputs[path.relative_to(ROOT).as_posix()]=digest(path)
     else:
         from Renderer.lab.preparation import require_current, receipt as shader_receipt
         require_current(ROOT)
@@ -246,16 +251,32 @@ def main(argv=None):
     log=(out/'test.log').read_text(errors='replace') if (out/'test.log').exists() else ''
     unchanged=all(digest(ROOT/p)==h for p,h in inputs.items())
     passed=complete==[invocation,'0'] and unchanged and 'PASS resident map GPU worker:' in log and 'PASS native GPU worker transport:' in log and 'PASS native screen transfer:' in log and 'PASS live native screen:' in log and 'PASS production native map owner:' in log and 'PASS bounded GPU map demand:' in log
-    if args.async_bridge:passed=complete==[invocation,'0'] and unchanged and 'PASS async native independence:' in log
+    native_errors=[line for line in log.splitlines() if line.startswith('DIRECT_NATIVE_ERROR ')]
+    if args.async_bridge:
+        expected_error='DIRECT_NATIVE_ERROR operation=103 detail=asynchronous native presentation failed'
+        scroll_steps=[int(re.search(r'step=(\d+)',line).group(1)) for line in log.splitlines() if line.startswith('ASYNC_SCROLL ')]
+        queued_steps=sum(line.startswith('ASYNC_SCROLL ') and 'queued_native=1' in line for line in log.splitlines())
+        passed=(complete==[invocation,'0'] and unchanged and 'PASS async native independence:' in log
+                and 'PASS asynchronous form input:' in log and 'ASYNC_DENSE_INPUT draws=2600 ' in log
+                and 'PASS asynchronous camera ordering:' in log
+                and scroll_steps==list(range(32)) and queued_steps==32
+                and native_errors==[expected_error])
     if args.native_recovery:passed=passed and 'PASS native async recovery: cases=4 ' in log
     if args.native_navigation:passed=passed and 'PASS native navigation:' in log
     if args.native_camera_requests or args.native_navigation:passed=passed and 'PASS nonblocking native camera:' in log
     if args.camera_requests:passed=passed and 'PASS replaceable GPU camera:' in log
     if args.atomic_camera_views:passed=passed and 'PASS atomic GPU identity transitions: cases=16 ' in log
     receipt={'status':'pass' if passed else 'fail' if complete else 'unconfirmed','inputs':inputs,'inputs_unchanged':unchanged,'transport_returncode':process.returncode,'transport_output':process.stdout+process.stderr,'settings':settings,'scope':'production captured renderer map -> existing GPU worker -> packed composition; oracle readback explicit; actual native final presentation including CPU compatibility callback; no game speedup claim'}
+    if args.async_bridge:receipt['native_errors']=native_errors
     if helper64:receipt['x64_helper']={'exe_sha256':digest(helper64),'dll_sha256':digest(dll64)}
     trace_file=out/('renderer.log.x64' if helper64 else 'renderer.log')
     trace=trace_file.read_text(errors='replace') if trace_file.exists() else ''
+    if args.async_bridge:
+        composition_errors=[line for line in trace.splitlines() if any(stage in line for stage in
+            ('stage=worker-error', 'stage=camera-error', 'stage=asset-admission-failed',
+             'stage=visual-failure-memory', 'stage=async-publication-failed'))]
+        receipt['composition_errors']=composition_errors
+        passed=passed and not composition_errors
     import re
     if args.native_camera_requests or args.native_navigation:
         receipt['native_camera_samples']=[{key:float(value) for key,value in re.findall(r'(\w+)=([0-9.]+)',line)}

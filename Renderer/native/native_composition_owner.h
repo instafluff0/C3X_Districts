@@ -98,9 +98,14 @@ public:
     }
     int request_camera(void* image,c3x_renderer_camera_request_v1 const& request,c3x_renderer_i64& ticket){
         check_thread();
-        // A request never flushes native commands or waits for old worker work.
-        // The caller must close its prior native transaction before beginning.
-        if(!camera_begin || pending || (client&&!client->flushed()) || !eligible(image,*request.frame))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        if(!camera_begin || pending || !eligible(image,*request.frame))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        // Civ III clears/draws native surfaces before requesting its next map.
+        // Publish those commands under the old ticket before the camera request.
+        // Renderer64 flush only enqueues copied work; it never waits for x64.
+        if(client&&!client->flushed()){
+            if(!scene_units)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+            client->flush();
+        }
         c3x_renderer_i64 next=0;int result=camera_begin(&request,&next);
         if(result==C3X_RENDERER_RESULT_PENDING){camera_ticket=next;camera_image=image;camera_width=request.frame->target_width;camera_height=request.frame->target_height;ticket=next;}
         return result;
@@ -108,10 +113,17 @@ public:
     int poll_camera(void* image,c3x_renderer_i64 ticket,c3x_renderer_gpu_camera_view_v1& view){
         check_thread();
         if(!camera_poll || ticket<=0 || ticket!=camera_ticket || image!=camera_image)return C3X_RENDERER_RESULT_SUPERSEDED;
-        if(pending || (client&&!client->flushed()))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        if(pending)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
         // Native lifetime validation precedes any adoption; an escaped/deleted
         // destination cannot redirect a ready result to a different surface.
         if(!lifetime(C3X_NATIVE_MAP,image,0) || field(image,0x38)!=camera_width || field(image,0x3c)!=camera_height) return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        // Adoption changes the active ticket. All earlier native commands must
+        // precede it in the same publication queue, including draws made while
+        // this camera was pending.
+        if(client&&!client->flushed()){
+            if(!scene_units)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+            client->flush();
+        }
         c3x_renderer_gpu_camera_view_v1 next={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(next)};
         int result=camera_poll(ticket,&next);
         if(result!=C3X_RENDERER_RESULT_OK){trace_map("poll",result,image);return result;}
@@ -207,7 +219,6 @@ public:
                 trace_map("poll-return",result,image,request);
                 return result;
             }
-            if(client&&!client->flushed())return C3X_RENDERER_RESULT_BAD_ARGUMENT;
             c3x_renderer_i64 next=0;
             int result=request_camera(image,*request,next);
             trace_map("begin",result,image,request);
@@ -294,6 +305,10 @@ public:
             int result=tactical_draw(image,route,source);route={};route_text.clear();return result;
         }
         if(op==C3X_NATIVE_TACTICAL_RING){
+            // Resident units own their cursor in the same current scene, below
+            // the body. A retained native ring would float over it and survive
+            // old native erase rectangles after movement/selection changes.
+            if(scene_units)return 1;
             if(!from)return 0;auto p=static_cast<int const*>(from);Tactical capture;
             capture.ring(float(p[0]),float(p[1]),float(p[2]),p[3]!=0);return tactical_draw(image,capture,source);
         }

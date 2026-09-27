@@ -144,7 +144,7 @@ public:
            value.presentation_frequency<=0||value.presentation_time_ticks<0||
            value.projection_scale_milli<=0||value.projection_scale_milli>4000||
            value.max_hp<=0||value.damage<0||value.damage>value.max_hp||
-           (value.flags&~7u)||!capacity)return false;
+           (value.flags&~15u)||!capacity)return false;
         if(newer_event(value.unit_id,value.presentation_time_ticks,value.presentation_frequency))return false;
         if(retired(value.unit_id))return false;
         if(value.flags&C3X_RENDERER_UNIT_HIDDEN){
@@ -171,7 +171,7 @@ public:
                  ActionName action_name,Selection& selected) {
         selected={};
         if(request.struct_size!=sizeof(request)||request.unit_key[63]||request.unit_id<0||
-           (flags&~7u)||!capacity)return false;
+           (flags&~15u)||!capacity)return false;
         if(newer_event(request.unit_id,request.presentation_time_ticks,request.presentation_frequency))return false;
         if(retired(request.unit_id))return false;
         if(flags&C3X_RENDERER_UNIT_HIDDEN){
@@ -219,6 +219,11 @@ public:
             auto oldest=std::min_element(instances.begin(),instances.end(),[](auto const& a,auto const& b){return a.second.used<b.second.used;});
             forget(oldest->first);++evictions;
         }
+        // Selection is exclusive even if Civ III does not redraw the previous
+        // selected body during this update. Retire its cursor immediately.
+        if(flags&C3X_RENDERER_UNIT_SELECTED)for(auto& pair:instances)
+            if(pair.first!=request.unit_id)
+                pair.second.flags&=~(C3X_RENDERER_UNIT_SELECTED|C3X_RENDERER_UNIT_CURSOR);
         instances[request.unit_id]=value;
         ++scene_generation;
         selected.id=request.unit_id;selected.revision=value.revision;selected.occurrence=request;
@@ -249,7 +254,7 @@ public:
         int tile_x=0,tile_y=0;
         std::size_t unit=0,action=0;
         unsigned predict=0;
-        bool animated=false;
+        bool animated=false,cursor=false;
     };
     template<class Catalog>
     std::vector<ScenePose> scene_poses(c3x_renderer_frame_v1 const& frame,
@@ -302,7 +307,8 @@ public:
             pose.draw.hour=frame.hour;pose.draw.season=frame.season;
             pose.tile_x=occurrence->tile_x;pose.tile_y=occurrence->tile_y;
             pose.unit=item.unit;pose.action=item.action;
-            pose.animated=animated(selected,catalog);
+            pose.cursor=(item.flags&C3X_RENDERER_UNIT_CURSOR)&&(item.flags&C3X_RENDERER_UNIT_SELECTED);
+            pose.animated=pose.cursor||animated(selected,catalog);
             result.push_back(pose);
         }
         return result;

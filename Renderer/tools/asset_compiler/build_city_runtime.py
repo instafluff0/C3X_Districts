@@ -19,7 +19,8 @@ POOLS = (
 WALLS = (
     ("wall_ancient", "city/walls/ancient/half_01"),
     ("wall_medieval", "city/walls/medieval/half_01"),
-    ("wall_industrial", "city/walls/industrial/half_01"),
+    ("wall_industrial", "city/walls/tsikhe/half_01"),
+    ("wall_modern", "city/walls/modern_low/half_01"),
 )
 
 
@@ -101,14 +102,25 @@ def build_walls(pack: Path) -> Path:
     groups: list[bytes] = []
     for group_name, asset_id in WALLS:
         landmark = json.loads((pack / manifest["assets"][asset_id]["landmark"]).read_text(encoding="utf-8"))
-        mesh = json.loads((pack / landmark["components"]["geometry"][0]).read_text(encoding="utf-8"))
-        material = json.loads((pack / landmark["components"]["materials"][0]).read_text(encoding="utf-8"))
-        texture = material["channels"]["base_color"]["texture"]
-        if not textures:
+        parts = [json.loads((pack / name).read_text(encoding="utf-8"))
+                 for name in landmark["components"]["geometry"]]
+        materials = [json.loads((pack / name).read_text(encoding="utf-8"))
+                     for name in landmark["components"]["materials"]]
+        source_textures = {material["channels"]["base_color"]["texture"]
+                           for material in materials}
+        if len(source_textures) != 1:
+            raise ValueError(f"{asset_id}: wall half must use one texture atlas")
+        texture = source_textures.pop()
+        if texture not in textures:
             textures.append(texture)
-        elif texture != textures[0]:
-            raise ValueError("selected wall eras do not share their source material")
-        assets.append(asset_payload(asset_id, 0, mesh))
+        vertices = []
+        indices = []
+        for part in parts:
+            start = len(vertices)
+            vertices.extend(part["vertices"])
+            indices.extend(start + index for index in part["topology"]["indices"])
+        mesh = {"vertices": vertices, "topology": {"indices": indices}}
+        assets.append(asset_payload(asset_id, textures.index(texture), mesh))
         groups.append(group_payload(group_name, [(len(assets) - 1, 7.2)]))
     target = pack / "wall_runtime.bin"
     target.write_bytes(serialize(textures, assets, groups))

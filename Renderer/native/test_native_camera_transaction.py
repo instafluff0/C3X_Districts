@@ -28,9 +28,9 @@ long long next_ticket=0,worker_ticket=0;
 namespace c3x_gpu_images {
 struct WorkerClient {
  bool empty=true;
- WorkerClient(c3x_renderer_gpu_images_fn,c3x_renderer_gpu_frame_v1 const&){++creates;}
+ WorkerClient(c3x_renderer_gpu_images_fn,c3x_renderer_gpu_frame_v1 const&,bool=false){++creates;}
  bool flushed()const{return empty;}
- void advance(c3x_renderer_gpu_frame_v1 const&){++imports;}
+ void advance(c3x_renderer_gpu_frame_v1 const&){assert(empty);++imports;}
  void flush(){++flushes;empty=true;}
 };
 }
@@ -208,6 +208,20 @@ int main(){
  assert(async.map(C3X_NATIVE_MAP_PREPARE,image,&async_request,&output)==C3X_RENDERER_RESULT_OK &&
         output.clip_right==640);
  assert(!async.defer_cold_stroke(other,&stroke));
+ assert(async.map(C3X_NATIVE_MAP_COMMIT,image,nullptr,nullptr)==C3X_RENDERER_RESULT_OK);
+ // Real Civ III begins map redraws with unpresented native clear/HUD commands.
+ // Publish that old-ticket batch without waiting before starting or polling
+ // the next camera. Pending work is ordinary ordering, not bad arguments.
+ ready=false;async.client->empty=false;auto previous_flushes=flushes;
+ assert(async.map(C3X_NATIVE_MAP_PREPARE,image,&async_request,&output)==C3X_RENDERER_RESULT_PENDING);
+ assert(async.client->empty&&flushes==previous_flushes+1);
+ auto queued_ticket=async.camera_ticket;
+ async.client->empty=false;
+ assert(async.map(C3X_NATIVE_MAP_PREPARE,image,&async_request,&output)==C3X_RENDERER_RESULT_PENDING);
+ assert(async.camera_ticket==queued_ticket&&async.client->empty&&flushes==previous_flushes+2);
+ ready=true;async.client->empty=false;
+ assert(async.map(C3X_NATIVE_MAP_PREPARE,image,&async_request,&output)==C3X_RENDERER_RESULT_OK);
+ assert(async.client->empty&&flushes==previous_flushes+3);
  assert(async.map(C3X_NATIVE_MAP_COMMIT,image,nullptr,nullptr)==C3X_RENDERER_RESULT_OK);
 }
 ''')

@@ -19913,8 +19913,8 @@ patch_JGL_Image_bits (JGL_Image * image)
 	return ((void * (__fastcall *) (JGL_Image *))is->custom_renderer_jgl_original[4]) (image);
 }
 
-// Supplied by the patch ledger's original-function definition. Until the human
-// adds that definition and the call-site entry, this hook is not installed.
+// The patch table supplies the original function and the one form-input call
+// site. Builds without that capability keep their native call unchanged.
 #ifdef PCX_Image_get_pixel
 unsigned __fastcall
 patch_PCX_Image_get_form_hit_pixel (PCX_Image * pcx, int edx, int x, int y)
@@ -19929,7 +19929,13 @@ patch_PCX_Image_get_form_hit_pixel (PCX_Image * pcx, int edx, int x, int y)
 		int result = is->custom_renderer_native_image (C3X_NATIVE_HIT_PIXEL, pcx->JGL.Image, NULL, point, &value, 0);
 		if (result != 0) return result > 0 ? value : 0;
 	}
-	return PCX_Image_get_pixel (pcx, edx, x, y);
+	// The verified native sampler returns a value and releases its pixel lease.
+	// Before GPU adoption this remains a private read, not an escaped pointer.
+	int previous = is->custom_renderer_native_operation;
+	is->custom_renderer_native_operation = C3X_NATIVE_HIT_PIXEL;
+	unsigned value = PCX_Image_get_pixel (pcx, edx, x, y);
+	is->custom_renderer_native_operation = previous;
+	return value;
 }
 #endif
 
@@ -21269,6 +21275,7 @@ deinit_disabled_command_buttons ()
 void
 init_tile_highlights ()
 {
+	if (is->current_config.enable_custom_rendering) return;
 	if (is->tile_highlight_state != IS_UNINITED)
 		return;
 
@@ -22151,6 +22158,7 @@ parse_turns_from_tooltip (char const * tooltip)
 void
 compute_highlighted_worker_tiles_for_districts ()
 {
+	if (is->current_config.enable_custom_rendering) return;
 	if (is_online_game () 
 		|| ! is->current_config.enable_districts 
 		|| ! is->current_config.enable_city_work_radii_highlights)
@@ -23632,14 +23640,14 @@ advance_custom_renderer_zoom_from_key (Main_Screen_Form * this, int char_code, i
 		old_width, new_width, p_bic_data->ScreenWidth / 2, p_bic_data->ScreenHeight / 2);
 	message[(sizeof message) - 1] = '\0';
 	(*p_OutputDebugStringA) (message);
-	// Native Z uses this same path after changing its two-level zoom flag. Besides
-	// preserving the current map center, it requests a complete tile traversal;
-	// merely dirtying Animator can produce a one-tile partial capture.
-	int center_x = (this->TileX_Max + this->TileX_Min) / 2;
-	int center_y = (this->TileY_Max + this->TileY_Min) / 2;
-	if ((center_x & 1) != (center_y & 1))
-		center_x += (center_y & 1) ? 1 : -1;
-	Main_Screen_Form_bring_tile_into_view (this, __, center_x - 1, center_y - 1, 0, true, false);
+	// Custom zoom changes only the projection. Re-centering through rounded
+	// tile bounds loses sub-tile camera position on every key press.
+	// Ask native code to refresh bounds at the exact existing pixel camera.
+#ifdef Main_Screen_Form_move_camera
+	Main_Screen_Form_move_camera (this, __, this->camera_x, this->camera_y, 0, true);
+#else
+	*(bool *)(this->animator.field_18E4 + 10) = true;
+#endif
 	return true;
 }
 
@@ -27958,7 +27966,11 @@ forward_custom_unit_body (Sprite * sprite, PCX_Image * background, PCX_Image * c
 	if (!(capture_custom_renderer_visibility (tile_at (display_unit->Body.X, display_unit->Body.Y),
 		p_main_screen_form->Player_CivID, display_unit->Body.X, display_unit->Body.Y) & C3X_RENDERER_TILE_VISIBLE))
 		flags |= C3X_RENDERER_UNIT_HIDDEN;
-	if (display_unit == p_main_screen_form->Current_Unit) flags |= C3X_RENDERER_UNIT_SELECTED;
+	if (display_unit == p_main_screen_form->Current_Unit) {
+		flags |= C3X_RENDERER_UNIT_SELECTED;
+		if ((p_main_screen_form->animator.field_18E4[12] & 1) == 0)
+			flags |= C3X_RENDERER_UNIT_CURSOR;
+	}
 	if (is->custom_renderer_unit_visual != NULL) {
 		struct c3x_renderer_unit_visual_v1 visual = {0};
 		visual.struct_size = sizeof visual;
@@ -29110,7 +29122,7 @@ patch_Map_Renderer_draw_grid (Map_Renderer * this, int edx, PCX_Image * target,
 void __fastcall
 patch_Map_Renderer_m19_Draw_Tile_by_XY_and_Flags (Map_Renderer * this, int edx, int param_1, int pixel_x, int pixel_y, Map_Renderer * map_renderer, int param_5, int tile_x, int tile_y, int param_8)
 {
-	if (is->custom_renderer_capture_only) {
+	if (is->current_config.enable_custom_rendering && is->custom_renderer_capture_only) {
 		if (! is->custom_renderer_capture_failed)
 			is->custom_renderer_capture_failed = ! capture_custom_renderer_tile (
 				param_1, pixel_x, pixel_y, map_renderer, param_5, tile_x, tile_y, tile_at (tile_x, tile_y), false);
@@ -29125,7 +29137,7 @@ patch_Map_Renderer_m19_Draw_Tile_by_XY_and_Flags (Map_Renderer * this, int edx, 
 	is->current_render_tile_district = get_district_instance (tile);
 
 	int draw_flags = param_8;
-	if (is->custom_renderer_frame_active) {
+	if (is->current_config.enable_custom_rendering && is->custom_renderer_frame_active) {
 		if (param_8 == 9) {
 			if (! is->custom_renderer_capture_failed)
 				is->custom_renderer_capture_failed = ! capture_custom_renderer_tile (
@@ -29148,13 +29160,18 @@ patch_Map_Renderer_m19_Draw_Tile_by_XY_and_Flags (Map_Renderer * this, int edx, 
 	// multiplexed terrain, relief, river, road, improvement, resource, city, or
 	// other tile layers over it. Configuration-off is the only vanilla terrain path;
 	// configuration-on never replays native terrain after a custom failure.
-	if (! is->custom_renderer_frame_active)
+	if (! is->current_config.enable_custom_rendering || ! is->custom_renderer_frame_active)
 		Map_Renderer_m19_Draw_Tile_by_XY_and_Flags (this, __, param_1, pixel_x, pixel_y, map_renderer, param_5, tile_x, tile_y, draw_flags);
 
 	is->current_render_tile = NULL;
 	is->current_render_tile_x = -1;
 	is->current_render_tile_y = -1;
 	is->current_render_tile_district = NULL;
+
+	// Renderer64 owns tile highlights. Keep legacy PCX highlights and their
+	// city-site evaluation out of every custom-renderer traversal, including
+	// partial native calls and already initialized sprite lifetimes.
+	if (is->current_config.enable_custom_rendering) return;
 
 	if ((is->city_loc_display_perspective >= 0) &&
 	    (! map->vtable->m10_Get_Map_Zoom (map)) && // Turn off display when zoomed out. Need another set of highlight images for that.
@@ -29337,9 +29354,38 @@ patch_Map_Renderer_m52_Draw_Railroads (Map_Renderer * this, int edx, int image_i
 	Map_Renderer_m08_Draw_Tile_Forests_Jungle_Swamp (this, __, is->current_render_tile_x, is->current_render_tile_y, map_renderer, pixel_x, pixel_y);
 }
 
+#ifdef Main_Screen_Form_move_camera
+void __fastcall patch_Main_Screen_Form_move_camera (Main_Screen_Form * this, int edx, int x, int y, int reason, bool update_bounds);
+#endif
+
 void __fastcall
 patch_Main_Screen_Form_m82_handle_key_event (Main_Screen_Form * this, int edx, int virtual_key_code, int is_down)
 {
+#ifdef Main_Screen_Form_move_camera
+    // Only a diagnostic launch sets this environment variable. Posted F24
+    // events run on the ordinary game thread, through existing load/camera paths.
+    // The launcher uses native Enter/menu loading; no remote thread calls game code.
+    if (is->current_config.enable_custom_rendering && virtual_key_code == 0x87 && is_down && this == p_main_screen_form) {
+        DWORD (WINAPI * get_environment) (LPCSTR, LPSTR, DWORD) = (void *)(*p_GetProcAddress) (is->kernel32, "GetEnvironmentVariableA");
+        DWORD length = get_environment != NULL ? get_environment ("C3X_RENDERER_GAME_TEST_SAVE", is->custom_renderer_test_save, MAX_PATH) : 0;
+        if (length > 0 && length < MAX_PATH) {
+            if (is->custom_renderer_test_step > 0 && is->custom_renderer_test_step <= 32 && ! this->is_now_loading_game &&
+                this->GUI.is_enabled && p_bic_data->Map.Tiles != NULL && is->custom_renderer_display_valid) {
+                unsigned step = is->custom_renderer_test_step++;
+                int direction = (step - 1) / 8;
+                int x = this->camera_x + (direction == 0 ? 64 : direction == 2 ? -64 : 0);
+                int y = this->camera_y + (direction == 1 ? 32 : direction == 3 ? -32 : 0);
+                patch_Main_Screen_Form_move_camera (this, edx, x, y, 1, false);
+                char message[160];
+                snprintf (message, sizeof message, "[C3X renderer] stage=scripted-game-scroll step=%u requested=%d,%d native=%d,%d\n",
+                    step, x, y, this->camera_x, this->camera_y);
+                (*p_OutputDebugStringA) (message);
+            }
+            return;
+        }
+    }
+#endif
+
 	char s[200];
 	int * last_events = is->last_main_screen_key_up_events;
 	bool in_game = *p_player_bits != 0; // Player bits all zero indicates we aren't currently in a game. Need to check for this because UI events
@@ -30805,12 +30851,13 @@ capture_custom_renderer_native_view (Map_Renderer * target, int viewer, struct c
 	return queued;
 }
 
-// This is precisely Animator::update's native early-return predicate. A pending
-// camera must never suppress a call that would advance gameplay/actions or UI.
+// During a player's turn, turn_end_flag is true even with no directed action.
+// Keep that ordinary Animator/UI work running at the displayed camera while a
+// pan is pending. Actual directed actions and native redraws remain barriers.
 bool
-custom_renderer_animator_idle (Animator * animator)
+custom_renderer_camera_may_defer (Animator * animator)
 {
-    return ! p_main_screen_form->turn_end_flag && ! *(bool *)(animator->field_18E4 + 10) &&
+    return ! *(bool *)(animator->field_18E4 + 10) &&
         animator->Units2_Count < 1 && ! *(bool *)(animator->field_18E4 + 0xD);
 }
 
@@ -30872,7 +30919,7 @@ patch_Main_Screen_Form_move_camera (Main_Screen_Form * this, int edx, int x, int
         is->custom_renderer_display_valid && ! is->custom_renderer_draw_in_progress &&
         is->custom_renderer_capture_world_topology && custom_renderer_zoom_enabled () &&
         custom_renderer_same_projection (&displayed, &is->custom_renderer_display_view) &&
-        custom_renderer_animator_idle (&this->animator) && !(p_city_form->Base.Data.Status2 & 1);
+        custom_renderer_camera_may_defer (&this->animator) && !(p_city_form->Base.Data.Status2 & 1);
 #endif
     // Native selection/centering, clamping, wrapping and bounds remain authoritative.
     Main_Screen_Form_move_camera (this, __, x, y, reason, update_bounds);
@@ -30900,9 +30947,9 @@ void __fastcall
 patch_Animator_update_display (Animator * this, int edx)
 {
     if (this == &p_main_screen_form->animator)
-        settle_custom_renderer_navigation (is->current_config.enable_custom_rendering && custom_renderer_animator_idle (this) ?
+        settle_custom_renderer_navigation (is->current_config.enable_custom_rendering && custom_renderer_camera_may_defer (this) ?
             C3X_NAV_POLL : C3X_NAV_BARRIER);
-    // Always run the native director; pending may only take its own early return.
+    // Always run the native director and UI, including the active player turn.
     Animator_update_display (this, __);
 }
 #endif
@@ -33233,6 +33280,21 @@ patch_do_open_load_game_file_picker (void * this)
 int __fastcall
 patch_show_intro_after_load_popup (void * this, int edx, int param_1, int param_2)
 {
+	// The explicit test launch reaches this checkpoint through native save loading.
+	// Mark readiness and dismiss only this known load confirmation, never a turn.
+	if (is->current_config.enable_custom_rendering) {
+		DWORD (WINAPI * get_environment) (LPCSTR, LPSTR, DWORD) = (void *)(*p_GetProcAddress) (is->kernel32, "GetEnvironmentVariableA");
+		DWORD length = get_environment != NULL ? get_environment ("C3X_RENDERER_GAME_TEST_SAVE", is->custom_renderer_test_save, MAX_PATH) : 0;
+		if (length > 0 && length < MAX_PATH) {
+			is->custom_renderer_test_step = 1;
+			(*p_OutputDebugStringA) ("[C3X renderer] stage=scripted-game-load ready=1\n");
+            char mode[16] = {0};
+            if (get_environment ("C3X_RENDERER_GAME_TEST_MODE", mode, sizeof mode) > 0 &&
+                strcmp (mode, "interaction") == 0)
+                return patch_show_popup (this, __, param_1, param_2);
+			return 0;
+		}
+	}
 	if (! is->suppress_intro_after_load_popup)
 		return patch_show_popup (this, __, param_1, param_2);
 	else {

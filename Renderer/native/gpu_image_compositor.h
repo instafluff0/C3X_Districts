@@ -24,7 +24,11 @@ class Compositor {
         ComPtr<ID3D11Texture2D> texture;ComPtr<ID3D11ShaderResourceView> read;ComPtr<ID3D11UnorderedAccessView> write;};
     struct Constants {int area[4],offset[2];unsigned mode,color;};
     ID3D11Device* device;ID3D11DeviceContext* context;
-    std::array<Image,128> images={};Image scratch,detail_scratch;Id serial=0;
+    // The native adapter retains 256 immutable sprite sources, up to 64
+    // native/detail images, 64 text images and two lookup tables. Keep handles
+    // for those bounded owners plus composition scratch sources; the existing
+    // byte budget still limits actual texture residency.
+    std::array<Image,512> images={};Image scratch,detail_scratch;Id serial=0;
     // Only explicitly retired replay scratch enters this pool. Published or
     // borrowed textures never do; reuse follows ordered work on this context.
     std::vector<Image> recycled;std::uint64_t recycled_bytes=0;

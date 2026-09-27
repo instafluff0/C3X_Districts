@@ -96,7 +96,7 @@ def wall_instances(kit: str, size: int = 0,
     for sector, (x, y, _) in enumerate(ring):
         next_x, next_y, _ = ring[(sector + 1) % len(ring)]
         direction = math.atan2(next_y - y, next_x - x)
-        closed_gate = (kit == "ancient" or "gate" not in parts) and sector == 0
+        closed_gate = (kit in ("ancient", "tsikhe") or "gate" not in parts) and sector == 0
         asset_id = segment if closed_gate else gate if sector == 0 else segment
         body = component(asset_id, Path(pack))
         axis = 0 if sector == 0 and not closed_gate else 1
@@ -337,7 +337,7 @@ def build() -> dict:
                             "palace": palace_instance,
                             "capital_replaces_centerpiece": replaces_centerpiece,
                             **({"vertical_metric": 1.0} if replaces_centerpiece else {}),
-                            "wall_kit": ("ancient", "medieval", "industrial", "industrial")[era]})
+                            "wall_kit": ("ancient", "medieval", "tsikhe", "modern_low")[era]})
     return {"schema": "c3x.lab.city_design.v1", "site": "flat grassland",
             "tile_xy": [-.5, -.5, .5, .5], "wall_perimeters": list(WALL_DRAW_RADII),
             "styles": list(STYLES), "eras": list(ERAS), "designs": designs}

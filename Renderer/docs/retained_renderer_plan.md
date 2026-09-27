@@ -10,22 +10,28 @@ the former 1,326-line roadmap.
 
 ## Current state
 
-- **Current candidate: asynchronous sandbox port.** Native draws, image updates
-  and unit facts publish copied data to a bounded queue; Renderer64 draws the
-  sandbox resident scene on its own clock. CPU map readback and unit raster
-  fallback remain rejected. Capture `20260927-102412` identifies a final-window
-  handoff failure after successful map publication. The loading-screen presenter
-  still owned the composition target needed by Renderer64. The isolated fixture
-  now reproduces that startup sequence; transferring ownership fixes it and
-  prevents presentation errors from triggering CPU readback. Validation passes
-  at 55.02 fixture frames/sec, with all 32 scrolls, independent process progress
-  and zero CPU map readbacks. The matching trio is staged; no injected change or
-  reinstall is needed. Live gameplay remains unverified. A later form hit-test
-  pixel access occurred after the original fault and still needs identification
-  in a healthy session. The next strategic checkpoint is the user's
-  `CAPTURE_MAP_FAILURE.bat` map and scrolling capture.
-  See [current bridge and remaining checkpoints](renderer64_scene_and_motion.md#current-asynchronous-bridge).
-  Preserve the roughly 52 FPS sandbox baseline; further FPS tuning is deferred.
+- **Current staged candidate: bounded input history and immutable sprite reuse.**
+  Automated real-game run `20260927-135838` reproduces input history reaching
+  its 96 MiB limit; regional payload compaction fixes it without raising that
+  limit. Run `20260927-140022` then identifies publication queue exhaustion at
+  43.377 s. A bounded cache of 256 immutable decoded sprites (16 MiB) removes
+  redundant uploads. Native pixel oracle `9a89e41d0e9f4487861d9c5213f9493d`
+  passes. Full asynchronous fixture `8bb8c078fe3e4d199771678676c3691f` passes
+  at 55.62 FPS with 32 camera updates, independent process progress and no
+  unexpected diagnostic failures. The matched trio is staged.
+  Real-game run `20260927-141651` completes 75 seconds without either fatal
+  error, adopts 13 maps and reuses 69,610 sprite draws with 22 uploads. It is
+  still slow and visually incorrect. At the user's direction the legacy PCX
+  tile highlights now bail when custom rendering is enabled; their Lab-derived
+  GPU replacement remains separate work. The config-off/capture tests and
+  approved injected compile check pass. Live run `20260927-142322` completes
+  all 32 camera moves and 33 map adoptions without a renderer failure. Median
+  native map time drops from about 1.1 seconds to 3.959 ms (capture 2.504 ms).
+  Terrain survives the scrolling loop, but unit/selection alignment, visibility
+  and cold startup still need verification. The [scripted game diagnostic](../tools/scripted_game_test.md)
+  loads a copied save and drives 32 camera commands without manual dialogs.
+  Fixture FPS is not live-game FPS. Preserve the roughly 52 FPS sandbox
+  baseline; further FPS tuning is deferred.
 - Milestones 1 and 2 and M3.7 have automated acceptance evidence. M3.8–M3.12
   and the integrated M3.13 acceptance are not complete. Existing x86 gameplay,
   native UI, visibility and config-off contracts remain authoritative.

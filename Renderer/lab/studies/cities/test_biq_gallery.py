@@ -25,7 +25,8 @@ WINDOWS_ROOT = r"..\lab\out\cities\test-biq\root"
 
 def render(culture: int, era: int, size: int, site: tuple[int, int], name: str,
            glow_off: bool = False, tile_width: int = 256,
-           capital: bool = True, walls: bool = True) -> dict:
+           capital: bool = True, walls: bool | None = None) -> dict:
+    walls = size == 0 if walls is None else walls and size == 0
     OUT.mkdir(parents=True, exist_ok=True)
     trace = OUT / (name + ".trace.log")
     bitmap = OUT / (name + ".bmp")
@@ -68,7 +69,7 @@ def render(culture: int, era: int, size: int, site: tuple[int, int], name: str,
         rendered.save(image)
     print("PASS", name, authority, flush=True)
     return {"name": name, "culture": STYLES[culture], "era": ERAS[era],
-            "size": size, "site": list(site), "image": image.name,
+            "size": size, "site": list(site), "walls": walls, "image": image.name,
             "sha256": hashlib.sha256(image.read_bytes()).hexdigest(),
             "authority": authority}
 
@@ -143,7 +144,8 @@ def main() -> None:
         html.escape(case["name"]) + '"><h2>' + html.escape(case["culture"] + " " +
         case["era"]) + '</h2><p>' + ("Town" if case["size"] == 0 else
         "City" if case["size"] == 1 else "Metropolis") +
-        ' · capital · walled · ' + args.kind + ' terrain</p></article>'
+        ' · capital · ' + ('walled' if case['walls'] else 'unwalled') +
+        ' · ' + args.kind + ' terrain</p></article>'
         for case in records)
     document = ('<!doctype html><meta charset="utf-8"><title>City Lab test.biq gallery</title>'
                 '<style>body{background:#211b29;color:#f4eaf5;font:16px system-ui;margin:24px}'

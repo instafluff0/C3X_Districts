@@ -6,7 +6,8 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-from Renderer.lab.studies.cities.all_source_pair_review import OUT
+from Renderer.lab.studies.cities.all_source_pair_review import OUT, ROOT
+from Renderer.lab.studies.cities.medieval_family_review import slug
 from Renderer.lab.studies.cities.sheet import font
 
 
@@ -119,8 +120,11 @@ def main():
              "not final Civ III culture or era assignments. The `Tag_Era=DEFAULT` pool is",
              "era-unspecified. Some tags share identical building sets; they remain separate",
              "here because their source selectors and palaces can differ.", "",
-             "Every full magenta sheet shows Town, City, and Metropolis with Base, Walls,",
-             "Capital, and Walls + Capital. The wall kit is a provisional comparison aid.",
+             "Every full magenta sheet shows Town with Base, Walls, Capital, and Walls +",
+             "Capital. City and Metropolis show Base and Capital; their wall columns",
+             "are marked unavailable because walls apply only to Towns. Their sprawl",
+             "is unchanged. Town wall kits follow the Civ III target era: Ancient Walls,",
+             "Castle, Tsikhe, and the lower spike-free Modern Tower Defense variant.",
              "Where the source has no matching palace, the sheet uses a generic comparison",
              "palace; its status is recorded below. These software previews compare layout",
              "and source models, not native D3D material fidelity or in-game acceptance.",
@@ -133,19 +137,57 @@ def main():
              "No city ground decal or elevated masonry is added by these recipes.",
              "The offline foundation-free study packs remove buried source geometry.",
              "A few exposed source pedestals use per-entry grade cuts; source packs",
-             "remain untouched, and the runtime consumes ordinary normalized meshes.", "",
+             "remain untouched, and the runtime consumes ordinary normalized meshes.",
+             "The five-culture Industrial/Modern compositions keep their mapped",
+             "Industrial house base. Industrial City/Metropolis swap two/four inner",
+             "plots for ordinary ARTERA_MODERN midrises. Modern places one/two",
+             "distinct ModernGlass towers. Ordinary cities replace the center plot",
+             "with glass; capitals place glass behind the palace in a ten-to-two",
+             "o'clock screen arc. Each accent asset appears once per city variant.",
+             "Culture-family houses surround downtown. The raw ARTERA_MODERN",
+             "source sheets below remain unaltered source-art auditions. Towns retain",
+             "their original houses. Skyline and farm-tree plot order use a stable seed",
+             "specific to the source family and chosen variation; collision-checked",
+             "placements change between seeds without reshuffling on redraw.", "",
+             "### Seeded skyline and vegetation comparisons", "",
+             "![Industrial City and Metropolis seed comparison](industrial-seeded-skyline-and-trees.png)", "",
+             "![Modern source-family house and tree seed comparison](modern-seeded-source-art-and-trees.png)", "",
+             "Three authored candidate seeds now cover every source-art pair and",
+             "population/capital combination. Seed 0 remains the main full-sheet",
+             "gallery; the other layouts change a few ordinary houses and trees",
+             "while preserving civic cores and special downtown buildings.", "",
+             "![City recipe variation examples](seeded-variant-examples.png)", "",
+             "[Variant candidate manifest](seeded-variant-manifest.json)", "",
+             "### Five Civ III culture candidates", "",
+             "The current candidate family mapping is shown at seed 0. Modern",
+             "inherits the mapped Industrial outer-house family and",
+             "adds taller ModernGlass towers downtown. The mapping and placements",
+             "remain reviewable Lab metadata.", "",
+             "![Five culture Industrial and Modern city candidates](civ3-five-culture-late-era-candidates.png)", "",
+             "![Modern capital City and Metropolis downtowns](modern-capital-downtown-comparison.png)", "",
+             "| Civ III culture | Industrial full sheet | Modern full sheet |",
+             "| --- | --- | --- |"]
+    strategy = json.loads((ROOT / "Renderer/tools/asset_compiler/city_render_strategy.json")
+                          .read_text(encoding="utf-8"))
+    for style in sorted(strategy["styles"], key=lambda item: item["civ3_culture_group"]):
+        name = style["id"]
+        directory = slug(name)
+        lines.append(f"| {name.replace('_', ' ').title()} | "
+                     f"[view sheet](civ3-culture-compositions/{directory}/industrial/sheet.png) | "
+                     f"[view sheet](civ3-culture-compositions/{directory}/modern/sheet.png) |")
+    lines.extend(["",
              "### SE/SW façade comparison", "",
              "![Vietnam, Vikings, and Māori City bases and capitals](se-sw-facade-city-comparison.png)", "",
              "### Alignment and foundation review", "",
              "![Nine corrected City examples](alignment-and-foundations-review.png)", "",
-             "[Source-art era inventory](../../../../studies/cities/source_era_inventory.md)", ""]
+             "[Source-art era inventory](../../../../studies/cities/source_era_inventory.md)", ""])
     for era in ERAS:
         entries = [entry for entry in collected
                    if entry["source_art_era"] == ("DEFAULT" if era == "unspecified"
                                                   else "ARTERA_" + era.upper())]
         lines.extend([f"## {LABELS[era]} ({len(entries)})", "",
                       f"![{LABELS[era]} City overview]({era}-city-overview.png)", "",
-                      "| Source culture tag | Full 12-state sheet | Palace | Façade pieces | Usable pieces | Rejected pieces |",
+                      "| Source culture tag | Full variant sheet | Palace | Façade pieces | Usable pieces | Rejected pieces |",
                       "| --- | --- | --- | --- | ---: | ---: |"])
         for entry in entries:
             lines.append(f"| `{entry['source_culture']}` | [view sheet]({entry['sheet'].removeprefix('review/')}) | "

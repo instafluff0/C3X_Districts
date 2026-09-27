@@ -370,7 +370,7 @@ int main(){
  }
  auto group=[&](objects::Family family,char const* name){FeatureGroup g;g.name=name;FeaturePlacement p{};p.asset_index=0;p.scale=1;g.placements.push_back(p);bundles[family].groups.push_back(g);};
  for(auto n:{"ancient","medieval","industrial","modern"})group(objects::city_family,n);
- for(auto n:{"wall_ancient","wall_medieval","wall_industrial"})group(objects::wall_family,n);
+ for(auto n:{"wall_ancient","wall_medieval","wall_industrial","wall_modern"})group(objects::wall_family,n);
  for(auto n:{"farm_0","farm_1","farm_2"})group(objects::farm_family,n);
  for(auto n:{"mine_0","mine_1","mine_2","mine_3","mine_4","mine_5"})group(objects::mine_family,n);
  for(auto n:{"hut_0","hut_1","hut_2","camp"})group(objects::site_family,n);
@@ -384,7 +384,7 @@ int main(){
   assert(objects::select_improvements(tile,assets,2,0,true,true,true,false,legacy));
   assert(objects::select_improvements(tile,assets,2,0,true,true,true,true,composed));
   unsigned city=0,walls=0;for(auto const& i:legacy.instances){city+=i.layer==objects::city_layer;walls+=i.layer==objects::wall_layer;}
-  assert(city==unsigned(size==0?4:size==1?7:11) && walls==4);
+  assert(city==unsigned(size==0?4:size==1?7:11) && walls==unsigned(size==0?4:0));
   assert(legacy.instances.size()==composed.instances.size()+city);
   for(auto const& i:composed.instances)assert(i.layer!=objects::city_layer);
   for(int width:{64,128,160,192}){

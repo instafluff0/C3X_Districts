@@ -51,6 +51,7 @@ def main():
     invocation=uuid.uuid4().hex;out=build/'gpu-composition'/invocation;out.mkdir()
     inputs=[ROOT/'injected_code.c',ROOT/'C3X.h',ROOT/'civ_prog_objects.csv',jgl,*[native/n for n in
         ('c3x_renderer_api.h','native_observation.h','test_native_observation.cpp','test_native_line_bridge.h','record_native_observation.py','BUILD.bat','gpu_image_compositor.h','gpu_image_commands.h','test_local_image_backend.h','native_hit_scene.h','gpu_image_worker_client.h','test_gpu_image_compositor.cpp','native_image_adapter.h','native_sprite_diagnostics.h','test_native_image_adapter.cpp','test_native_ui_assets.h','native_ui_fixture.py','native_lifetime_registry.h','native_callsite_diagnostic.h','test_native_bootstrap.h','test_native_lifetimes.cpp')]]
+    inputs.append(native/'native_sprite_cache.h')
     if observer:inputs.append(observer)
     before={p.relative_to(ROOT).as_posix():digest(p) for p in inputs}
     if args.adapter:

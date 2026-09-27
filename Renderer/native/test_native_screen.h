@@ -97,7 +97,7 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
     observer_start.operation=C3X_NATIVE_VERIFY;observer_start.object=jgl;
     capture.write=log_line;verify(capture.observe(&observer_start)!=0,"initialize independent test observer");
     state.custom_renderer_native_observe=observe;
-    JGL_Image* canvases[3];
+    JGL_Image* canvases[4];
     for(auto& canvas:canvases){canvas=create(graph,nullptr,1);verify(reinterpret_cast<Init>(canvas->vtable[1])(canvas,w,h,16,1)==0,"fresh native surface");
         verify(reinterpret_cast<Fill>(canvas->vtable[17])(canvas,&full,int(0x80000000u))==0,"clear native surface");}
     OpenGLRenderer startup_lines;PCX_Image startup_target;startup_target.JGL.Image=canvases[1];
@@ -137,6 +137,17 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
         if(asynchronous){async_indexed=std::make_unique<NativeKeyedImage>(graph,reinterpret_cast<char*>(jgl));
             async_hud=std::make_unique<NativeUiAssets>(graph,reinterpret_cast<char*>(jgl));
             verify(async_hud->pairs.size()==6,"async fixture includes actual Civ III HUD assets");draw_async_hud(false);
+            // During asynchronous startup Civ III tests form input while the
+            // canvases are still CPU-owned. The scalar sampler must release
+            // its private lease without revoking their future GPU admission.
+            for(auto canvas:{canvases[1],canvases[2]}){
+                PCX_Image input;input.JGL.Image=canvas;
+                auto calls=original_hit_calls;
+                verify(patch_PCX_Image_get_form_hit_pixel(&input,0,w/2,h/2)==0&&
+                    original_hit_calls==calls+1&&lifetime(C3X_NATIVE_MAP,canvas,0)&&
+                    !canvas->Bits_Data_Links&&state.custom_renderer_native_operation==0,
+                    "startup form input preserves private lease and future GPU admission");
+            }
             // Civ III presents its CPU-owned loading screen before the first
             // map is ready. That already owns this HWND's composition target.
             verify(live(C3X_NATIVE_IMAGE_PRESENT,canvases[1],graph,&full,nullptr,0)==1,
@@ -182,6 +193,38 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
             "fresh native map prepared asynchronously without CPU pixels");
         verify(map_view(C3X_NATIVE_MAP_COMMIT,canvases[0],nullptr,nullptr)==C3X_RENDERER_RESULT_OK,
             "fresh native map commit");
+        if(asynchronous){
+            verify(reinterpret_cast<Copy>(canvases[0]->vtable[16])(canvases[0],canvases[3],&full,&full)==0,
+                "save clean map before input-history stress");
+            // Map redraws can issue thousands of transparent native overlay
+            // commands before the screen copy. Small HUD-only fixtures missed
+            // the former whole-canvas input-history traversal here.
+            JGLSprite overlay={};auto base=reinterpret_cast<char*>(jgl);
+            reinterpret_cast<JGLSprite*(__thiscall*)(JGLSprite*,void*)>(base+0x7e80)(&overlay,nullptr);
+            std::vector<unsigned char> indices(128*64,255);
+            overlay.bit_count=8;overlay.bits=indices.data();overlay.stride=overlay.width=128;overlay.height=64;
+            LARGE_INTEGER a={},b={};QueryPerformanceCounter(&a);
+            for(int n=0;n<2600;++n){int x=(n*64)%w,y=((n/35)*32)%h;
+                verify(reinterpret_cast<int(__thiscall*)(JGLSprite*,JGL_Image*,int,int,void*)>(overlay.vtable[17])
+                    (&overlay,canvases[0],x,y,palettes[0])==0,"dense native map overlay accepted");}
+            QueryPerformanceCounter(&b);double ms=1000.*double(b.QuadPart-a.QuadPart)/frequency.QuadPart;
+            std::printf("ASYNC_DENSE_INPUT draws=2600 submit_ms=%.3f\n",ms);
+            verify(ms<2000,"dense map input avoids the multi-second startup stall");
+            // A reused transparent source cannot expose retained upload growth.
+            // Exercise visible, changing sources across repeated native redraws.
+            QueryPerformanceCounter(&a);
+            for(int n=0;n<5200;++n){
+                for(unsigned p=0;p<indices.size();++p)indices[p]=(p+n)%5?static_cast<unsigned char>((p+n)%254):255;
+                int x=(n*64)%w,y=((n/35)*32)%h;
+                verify(reinterpret_cast<int(__thiscall*)(JGLSprite*,JGL_Image*,int,int,void*)>(overlay.vtable[17])
+                    (&overlay,canvases[0],x,y,palettes[0])==0,"changing native sprite input accepted");
+            }
+            QueryPerformanceCounter(&b);
+            std::printf("ASYNC_CHANGING_INPUT draws=5200 submit_ms=%.3f\n",1000.*double(b.QuadPart-a.QuadPart)/frequency.QuadPart);
+            overlay.bits=nullptr;reinterpret_cast<void(__thiscall*)(JGLSprite*)>(base+0x7ed0)(&overlay);
+            verify(reinterpret_cast<Copy>(canvases[3]->vtable[16])(canvases[3],canvases[0],&full,&full)==0,
+                "restore clean map and retire sprite histories before ordinary input checks");
+        }
         verify(reinterpret_cast<Copy>(canvases[0]->vtable[16])(canvases[0],canvases[1],&full,&full)==0,
             "fresh native map copied beneath UI");
         draw_async_hud(true);
@@ -208,6 +251,12 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
         verify(live(C3X_NATIVE_UNIT_DRAW,canvases[1],canvases[1],&unit,bounds,
             C3X_RENDERER_UNIT_STATE_CAPTURED|(asynchronous?C3X_RENDERER_UNIT_SELECTED:0u))==1,
             "fresh native unit identity captured without raster composition");
+        if(asynchronous){
+            RECT background={bounds[0],bounds[1],bounds[2],bounds[3]};
+            verify(background.left==background.right&&background.top==background.bottom,"scene-owned unit has an empty native raster envelope");
+            verify(reinterpret_cast<Copy>(canvases[0]->vtable[16])(canvases[0],canvases[1],&background,&background)==0,
+                "empty unit background restore is a native no-op");
+        }
         RECT panel={46,38,136,74};
         verify(reinterpret_cast<Fill>(canvases[1]->vtable[17])(canvases[1],&panel,int(0x80007c00u))==0,
             "native UI fill above fresh map");
@@ -331,6 +380,12 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
                 auto camera_started=GetTickCount64();auto camera_deadline=camera_started+30000;
                 int ready=C3X_RENDERER_RESULT_PENDING;double longest_poll=0;
                 do{
+                    // Real redraws reach map preparation after native clear/UI
+                    // writes, with no intervening Present to flush their batch.
+                    // Alternate full clears with retained-map redraws. Queued
+                    // UI alone must not reject a camera or require a map clear.
+                    if(!(step&1))verify(reinterpret_cast<Fill>(canvases[0]->vtable[17])(canvases[0],&full,int(0x80000000u))==0,"native map clear before camera preparation");
+                    verify(reinterpret_cast<Fill>(canvases[1]->vtable[17])(canvases[1],&panel,int(0x80007c00u))==0,"native UI queued before camera preparation");
                     LARGE_INTEGER a={},b={};QueryPerformanceCounter(&a);
                     ready=map_view(C3X_NATIVE_MAP_PREPARE,canvases[0],&moving,&view);
                     QueryPerformanceCounter(&b);longest_poll=std::max(longest_poll,1000.*double(b.QuadPart-a.QuadPart)/double(frequency.QuadPart));
@@ -343,7 +398,12 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
                 }
                 verify(ready==C3X_RENDERER_RESULT_OK,"asynchronous scrolling camera ready");
                 verify(map_view(C3X_NATIVE_MAP_COMMIT,canvases[0],nullptr,nullptr)==C3X_RENDERER_RESULT_OK,"scrolling map commit");
+                RECT empty_background={unit.body_x-offset,unit.body_y+offset/2,unit.body_x-offset,unit.body_y+offset/2};
+                verify(reinterpret_cast<Copy>(canvases[0]->vtable[16])(canvases[0],canvases[1],&empty_background,&empty_background)==0,"empty unit background restore after camera adoption");
+                verify(live(C3X_NATIVE_TACTICAL_GRID,canvases[0],nullptr,&moved,nullptr,1)==1,"grid follows the newly adopted camera");
                 verify(reinterpret_cast<Copy>(canvases[0]->vtable[16])(canvases[0],canvases[1],&full,&full)==0,"scrolling native map copy");
+                int ring[4]={unit.body_x-offset,unit.body_y+offset/2,moved.tile_width,1};
+                verify(live(C3X_NATIVE_TACTICAL_RING,canvases[1],canvases[0],ring,nullptr,0)==1,"selected ring uses the current camera underlay");
                 draw_async_hud(true);
                 verify(reinterpret_cast<Fill>(canvases[1]->vtable[17])(canvases[1],&panel,int(0x80007c00u))==0,"scrolling UI preserved");
                 verify(live(C3X_NATIVE_IMAGE_PRESENT,canvases[1],graph,&full,nullptr,0)==1,"scrolling native presentation");
@@ -352,10 +412,17 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
                 verify(patch_PCX_Image_get_form_hit_pixel(&hit_map,0,w/2,h/2)==1&&
                     patch_PCX_Image_get_form_hit_pixel(&hit_screen,0,60,50)==0x7c00&&original_hit_calls==calls,
                     "scrolling input stays current without calling the original pixel getter");
-                std::printf("ASYNC_SCROLL step=%u ready_ms=%llu longest_poll_ms=%.3f built=%u uploaded=%u\n",
+                verify(GetTickCount64()-camera_started<2000,"scrolling map and complete HUD submission stay responsive");
+                std::printf("ASYNC_SCROLL step=%u ready_ms=%llu longest_poll_ms=%.3f built=%u uploaded=%u queued_native=1\n",
                     step,GetTickCount64()-camera_started,longest_poll,view.output.geometry_tiles_built,view.output.geometry_upload_bytes);
                 Sleep(100);
             }
+            settled=GetTickCount64()+30000;
+            do{verify(progress(&accepted,&completed,&frames)==C3X_RENDERER_RESULT_OK,"scrolling consumer healthy");
+                if(accepted==completed)break;Sleep(10);
+            }while(GetTickCount64()<settled);
+            verify(accepted==completed,"all scrolling map, tactical and UI publications consumed before shutdown");
+            std::puts("PASS asynchronous camera ordering: 32 adopted maps; queued UI; alternating clears; grid and selection; empty unit copies; consumer drained");
             if(witness.done)verify(WaitForSingleObject(witness.done,30000)==WAIT_OBJECT_0,"async window evidence finished");
         }
         async_indexed.reset();async_hud.reset();reset();present_fn=native_present;screen.JGL.Image=nullptr;screen_image=nullptr;screen_graph=nullptr;

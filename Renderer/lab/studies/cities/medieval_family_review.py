@@ -160,7 +160,7 @@ def place(assets, pack, occupied, size, target, height, span):
 
 
 def generate(pool, flat_pack, palace_pack, palace_asset, tree_pack,
-             use_curated=True):
+             use_curated=True, variation_seed=0):
     family = pool["source_culture"]
     layouts = json.loads((ROOT / "Renderer/lab/studies/cities/layouts.json").read_text())
     design = next(d for d in layouts["designs"] if (d["culture"], d["era"]) == (1, 1))
@@ -172,8 +172,9 @@ def generate(pool, flat_pack, palace_pack, palace_asset, tree_pack,
     if not use_curated:
         design["review_context"] = "Civ VI source-art audition"
         design["wall_kit"] = ("ancient" if pool["source_art_era"] == "ARTERA_ANCIENT"
-                              else "industrial" if pool["source_art_era"] in
-                              ("ARTERA_INDUSTRIAL", "ARTERA_MODERN", "ARTERA_FUTURE")
+                              else "tsikhe" if pool["source_art_era"] == "ARTERA_INDUSTRIAL"
+                              else "modern_low" if pool["source_art_era"] in
+                              ("ARTERA_MODERN", "ARTERA_FUTURE")
                               else "medieval")
     if use_curated and family in CURATED:
         directory, culture = CURATED[family]
@@ -234,7 +235,8 @@ def generate(pool, flat_pack, palace_pack, palace_asset, tree_pack,
                               "palace": palace})
             else:
                 tiers[size]["capital_houses"] = list(houses)
-    plant(tiers, tree_pack, counts=(1, 3, 5))
+    plant(tiers, tree_pack, counts=(2, 5, 8), scale=3.1,
+          seed=f"{pool['source_art_era']}|{family}|{variation_seed}")
     design.update(grounding="terrain", slope_limit=64.0, vertical_metric=1.0,
                   population_counts=[len(t["houses"]) for t in tiers],
                   tier_designs=tiers, houses=tiers[-1]["houses"],

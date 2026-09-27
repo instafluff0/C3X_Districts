@@ -54,6 +54,20 @@ int native_adapter_contract(char const* path,Backend& gpu,Id map=0,unsigned cons
         state.custom_renderer_native_image=translate;
         for(auto& image:target){image=create(graph,nullptr,1);verify(reinterpret_cast<Init>(image->vtable[1])(image,w,h,16,1)==0,"admitted init");
             verify(backend.owns(image),"fresh destination admitted");verify(reinterpret_cast<Fill>(image->vtable[17])(image,&full,int(0x80000000u))==0,"GPU clear native return");}
+        // Renderer64 unit observations can have no native raster rectangle.
+        // The native animation still offers its empty background copy.
+        auto empty_reads=backend.stats().readbacks;
+        for(RECT area:std::array<RECT,3>{{{10,10,10,10},{10,10,10,20},{10,10,20,10}}})for(int which=0;which<3;++which){
+            auto from=which==1?full:area,to=which==2?full:area;
+            int native_result=copy(control[0],control[1],&from,&to);
+            int translated_result=reinterpret_cast<Copy>(target[0]->vtable[16])(target[0],target[1],&from,&to);
+            std::printf("EMPTY_NATIVE_COPY rect=%ld,%ld,%ld,%ld native=%d translated=%d readbacks=%llu\n",
+                area.left,area.top,area.right,area.bottom,native_result,translated_result,
+                static_cast<unsigned long long>(backend.stats().readbacks-empty_reads));
+            verify(native_result==translated_result,"empty native background copy return value");
+            verify(backend.owns(target[0])&&backend.owns(target[1])&&backend.stats().readbacks==empty_reads,
+                "empty unit background copies retain GPU ownership without readback");
+        }
         // Long-lived CPU UI sources must not exhaust destination slots. Their
         // mirrors are disposable; real CPU pixels remain authoritative.
         std::vector<JGL_Image*> churn;
@@ -224,6 +238,17 @@ int native_adapter_contract(char const* path,Backend& gpu,Id map=0,unsigned cons
             verify(reinterpret_cast<Draw>(ui->vtable[33])(ui,target[0],-3,2)==0,"hooked GPU image draw");compare(0);
         }
         verify(backend.stats().readbacks==0&&gpu.stats().uploads==upload_before+3,"keyed image chain reuses CPU upload without readback");
+        // Civ III offers off-screen dialog components even when the complete
+        // source is outside the current clip. Native reports success and draws
+        // nothing; this must not surrender the destination to a CPU readback.
+        auto clipped_reads=backend.stats().readbacks;
+        for(auto xy:std::array<std::array<int,2>,4>{{{{-w,0}},{{w,0}},{{0,-h}},{{0,h}}}}){
+            auto expected=reinterpret_cast<Draw>(original[33])(ui,control[0],xy[0],xy[1]);
+            auto observed=reinterpret_cast<Draw>(ui->vtable[33])(ui,target[0],xy[0],xy[1]);
+            verify(expected==observed,"fully clipped image native return");compare(0);
+            verify(backend.owns(target[0])&&backend.stats().readbacks==clipped_reads,"clipped image keeps GPU ownership");
+        }
+        std::puts("PASS fully clipped native image draws: four edges, zero readbacks");
 #ifdef C3X_NATIVE_WORKER_TEST
         // Full-color destination: only native UI is expanded. The map beneath
         // transparent pixels retains every BGRA bit from the production renderer.
@@ -357,6 +382,16 @@ int native_adapter_contract(char const* path,Backend& gpu,Id map=0,unsigned cons
             verify(sprite.f28==expected_key,"native source-key side effect");
             compare(2);verify(backend.owns(target[2])&&backend.stats().readbacks==sprite_readbacks,"native sprite has no destination readback");
         };
+        // An allocated, fully keyed sprite is a successful native no-op.
+        // Retained-pointer edits can make it visible on the very next draw.
+        auto saved_sprite_words=std::vector<unsigned short>(static_cast<unsigned short*>(sprite.bits),static_cast<unsigned short*>(sprite.bits)+w*h);
+        auto saved_sprite_key=sprite.f28;sprite.f28=int(0x80007c1fu);
+        std::fill_n(static_cast<unsigned short*>(sprite.bits),w*h,static_cast<unsigned short>(0x7c1f));
+        auto transparent_uploads=gpu.stats().uploads,transparent_commands=gpu.stats().commands;
+        draw_sprite(3,4,palette);
+        verify(gpu.stats().uploads==transparent_uploads&&gpu.stats().commands==transparent_commands,
+            "fully transparent native sprite creates no GPU upload or retained draw");
+        std::copy(saved_sprite_words.begin(),saved_sprite_words.end(),static_cast<unsigned short*>(sprite.bits));sprite.f28=saved_sprite_key;
         auto sprite_uploads=gpu.stats().uploads;
         draw_sprite(3,4,palette);draw_sprite(-9,7,palette);draw_sprite(300,400,palette);
         verify(gpu.stats().uploads==sprite_uploads+1,"native sprite reuses unchanged source at new anchors");
@@ -608,7 +643,7 @@ int native_adapter_contract(char const* path,Backend& gpu,Id map=0,unsigned cons
             verify(reinterpret_cast<SpriteShadow>(sprite.vtable[31])(&sprite,target[2],0,0,shadow_table.data(),sprite_palette)==0,"shadow table stays resident beside FLC table");
         };
         alternate_tables();auto alternating_uploads=gpu.stats().uploads;alternate_tables();
-        verify(gpu.stats().uploads==alternating_uploads+2,"alternating tables upload only changed sprite programs, not lookup assets");
+        verify(gpu.stats().uploads==alternating_uploads,"alternating tables reuse both sprite programs and lookup assets");
         reinterpret_cast<Destroy>(lookup_background->vtable[0])(lookup_background,1);
         both_fill(2,full,0x80000567u);for(unsigned n=0;n<indexed.size();++n)indexed[n]=static_cast<unsigned char>(n%256);
         verify(backend.stats().readbacks==sprite_readbacks,"complete native FLC chain remains resident");

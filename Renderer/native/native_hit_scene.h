@@ -12,29 +12,46 @@
 namespace c3x_native_hit {
 using namespace c3x_gpu_images;
 constexpr unsigned opaque_map=0x10000;
+constexpr int tile_size=64;
 struct Node;
 using Ref=std::shared_ptr<Node const>;
 struct Budget {std::size_t nodes=0,bytes=0;};
+struct Values {
+    std::shared_ptr<Budget> budget;std::vector<unsigned> words;
+    Values(std::shared_ptr<Budget> b,std::vector<unsigned> data):budget(std::move(b)),words(std::move(data)){
+        if(words.size()*sizeof(unsigned)>96u*1024u*1024u-budget->bytes)throw std::runtime_error("native input coverage byte budget exceeded");
+        budget->bytes+=words.size()*sizeof(unsigned);
+    }
+    ~Values(){budget->bytes-=words.size()*sizeof(unsigned);}
+};
 struct Node {
     std::shared_ptr<Budget> budget;
     explicit Node(std::shared_ptr<Budget> b):budget(std::move(b)){
-        if(budget->nodes>=8192)throw std::runtime_error("native input coverage node budget exceeded");++budget->nodes;
+        if(budget->nodes>=32768)throw std::runtime_error("native input coverage node budget exceeded");++budget->nodes;
     }
-    ~Node(){--budget->nodes;budget->bytes-=pixels.size()*sizeof(unsigned);}
+    ~Node(){--budget->nodes;}
     Command command={};Rect bounds={};Format format=Format::rgb555;
     Ref prior,source,background,program;
-    unsigned width=0,height=0,constant=0;bool draw=false;
-    std::vector<unsigned> pixels;
+    int grid_left=0,grid_top=0,grid_columns=0;std::vector<Ref> cells;
+    unsigned width=0,height=0,constant=0,depth=0;bool draw=false;
+    std::size_t payload_cost=0;
+    std::shared_ptr<Values const> pixels;
 };
 inline bool inside(Rect r,int x,int y){return x>=r.left&&x<r.right&&y>=r.top&&y<r.bottom;}
 inline unsigned sample(Ref const& node,int x,int y,unsigned depth=0){
     if(!node||x<0||y<0||x>=int(node->width)||y>=int(node->height))return 0;
     if(depth>1024)throw std::runtime_error("native input coverage depth exceeded");
     auto read=[&](Ref const& r,int a,int b){return sample(r,a,b,depth+1);};
-    if(!node->draw)return node->pixels.empty()?node->constant:node->pixels[std::size_t(y)*node->width+x];
+    if(node->grid_columns){
+        int col=x/tile_size-node->grid_left,row=y/tile_size-node->grid_top;
+        if(col<0||row<0||col>=node->grid_columns||row>=int(node->cells.size())/node->grid_columns)return 0;
+        return read(node->cells[row*node->grid_columns+col],x,y);
+    }
+    if(!node->draw)return !node->pixels?node->constant:node->pixels->words[std::size_t(y)*node->width+x];
     auto const& c=node->command;
     auto prior=[&]{return read(node->prior,x,y);};
     if(!inside(node->bounds,x,y))return prior();
+    if(node->pixels)return node->pixels->words[std::size_t(y-node->bounds.top)*(node->bounds.right-node->bounds.left)+x-node->bounds.left];
     int sx=x-c.area.left+c.source_x,sy=y-c.area.top+c.source_y;
     if(c.kind==Kind::fill)return c.color;
     if(c.kind==Kind::quantize)return opaque_map;
@@ -62,7 +79,10 @@ inline unsigned sample(Ref const& node,int x,int y,unsigned depth=0){
         unsigned weight=c.color==2?unsigned(c.source_height):p>>24;
         if(c.color!=2&&c.color!=4&&weight==255)return prior();
         auto below=read(node->background,x,y);unsigned word=p&65535;
-        if(c.color==4)return below==(p>>16)?word:prior();
+        // A destination-keyed transfer tests the old destination. On a miss
+        // that same sampled value survives; evaluating its history again makes
+        // repeated misses branch exponentially before regional compaction.
+        if(c.color==4)return below==(p>>16)?word:c.background==c.destination?below:prior();
         if(c.color==0){
             if(!weight)return word;if(below==opaque_map)return opaque_map;
             unsigned b=((word&31)*8+((below&31)*8*weight>>8))>>3;
@@ -133,6 +153,26 @@ struct RetentionHash {
 using RetentionCache=std::unordered_map<RetentionKey,Ref,RetentionHash>;
 inline Ref retain(Ref const& node,Regions const& needed,RetentionCache& cache,unsigned depth=0){
     if(!node||needed.empty())return {};
+    if(node->grid_columns){
+        // Select only the tiles this command reads. A small HUD copy must not
+        // keep every unrelated overlay in its source canvas alive.
+        int left=int(node->width),top=int(node->height),right=0,bottom=0;
+        for(auto r:needed){r=intersection(r,{0,0,int(node->width),int(node->height)});if(!nonempty(r))continue;
+            left=std::min(left,r.left/tile_size);top=std::min(top,r.top/tile_size);
+            right=std::max(right,(r.right-1)/tile_size+1);bottom=std::max(bottom,(r.bottom-1)/tile_size+1);}
+        left=std::max(left,node->grid_left);top=std::max(top,node->grid_top);
+        right=std::min(right,node->grid_left+node->grid_columns);
+        bottom=std::min(bottom,node->grid_top+int(node->cells.size())/node->grid_columns);
+        if(left>=right||top>=bottom)return {};
+        auto root=std::make_shared<Node>(node->budget);root->width=node->width;root->height=node->height;root->format=node->format;
+        root->grid_left=left;root->grid_top=top;root->grid_columns=right-left;
+        for(int y=top;y<bottom;++y)for(int x=left;x<right;++x){Regions clipped;
+            for(auto r:needed)append(clipped,intersection(r,{x*tile_size,y*tile_size,(x+1)*tile_size,(y+1)*tile_size}));
+            auto value=retain(node->cells[(y-node->grid_top)*node->grid_columns+x-node->grid_left],clipped,cache,depth+1);
+            root->cells.push_back(value);if(value){root->depth=std::max(root->depth,value->depth+1);root->payload_cost=std::min<std::size_t>(96u*1024u*1024u,root->payload_cost+value->payload_cost);}
+        }
+        return root->cells.size()==1?root->cells[0]:root;
+    }
     if(!node->draw)return node;
     if(depth>1024)throw std::runtime_error("native input coverage retention depth exceeded");
     RetentionKey key{node.get(),needed};auto found=cache.find(key);if(found!=cache.end())return found->second;
@@ -161,8 +201,11 @@ inline Ref retain(Ref const& node,Regions const& needed,RetentionCache& cache,un
     auto program=retain(node->program,source,cache,depth+1);
     if(before==node->prior&&from==node->source&&background==node->background&&program==node->program)return save(node);
     auto n=std::make_shared<Node>(node->budget);n->draw=true;n->command=c;n->bounds=node->bounds;
-    n->width=node->width;n->height=node->height;n->format=node->format;
-    n->prior=std::move(before);n->source=std::move(from);n->background=std::move(background);n->program=std::move(program);return save(n);
+    n->width=node->width;n->height=node->height;n->format=node->format;n->pixels=node->pixels;
+    n->prior=std::move(before);n->source=std::move(from);n->background=std::move(background);n->program=std::move(program);
+    n->payload_cost=n->pixels?n->pixels->words.size()*sizeof(unsigned):0;
+    for(auto ref:{n->prior,n->source,n->background,n->program})if(ref){n->depth=std::max(n->depth,ref->depth+1);n->payload_cost=std::min<std::size_t>(96u*1024u*1024u,n->payload_cost+ref->payload_cost);}
+    return save(n);
 }
 class Scene {
     struct Image {unsigned width=0,height=0;Format format=Format::rgb555;Ref value;};
@@ -179,7 +222,7 @@ public:
         if(count!=std::size_t(i.width)*i.height)throw std::runtime_error("native input coverage upload size");
         if(count*sizeof(unsigned)>96u*1024u*1024u-budget->bytes)throw std::runtime_error("native input coverage byte budget exceeded");
         auto n=std::make_shared<Node>(budget);n->width=i.width;n->height=i.height;n->format=i.format;
-        n->pixels.assign(data,data+count);budget->bytes+=count*sizeof(unsigned);i.value=n;
+        n->pixels=std::make_shared<Values>(budget,std::vector<unsigned>(data,data+count));n->payload_cost=count*sizeof(unsigned);i.value=n;
     }
     void submit(Command const& c){
         auto found=images.find(c.destination);if(found==images.end()||found->second.format==Format::bgra32)return;
@@ -192,14 +235,48 @@ public:
             auto source=get(c.source);if(source&&source->width==i.width&&source->height==i.height){i.value=source;return;}}
         if(full&&(c.kind==Kind::fill||c.kind==Kind::quantize)){
             unsigned value=c.kind==Kind::fill?c.color:opaque_map;
-            if(i.value&&!i.value->draw&&i.value->pixels.empty()&&i.value->constant==value)return;
+            if(i.value&&!i.value->draw&&!i.value->grid_columns&&!i.value->pixels&&i.value->constant==value)return;
             create(c.destination,i.width,i.height,i.format,value);return;
         }
-        auto n=std::make_shared<Node>(budget);n->width=i.width;n->height=i.height;n->format=i.format;
-        n->draw=true;n->bounds=bounds;n->command=c;n->source=get(c.source);n->background=get(c.background);n->program=get(c.program);
-        if(!overwrite(c.kind)||!full)n->prior=i.value;
-        RetentionCache cache;
-        i.value=retain(n,{{0,0,int(i.width),int(i.height)}},cache);
+        auto root=std::make_shared<Node>(budget);root->width=i.width;root->height=i.height;root->format=i.format;
+        root->grid_columns=(int(i.width)+tile_size-1)/tile_size;
+        int rows=(int(i.height)+tile_size-1)/tile_size;
+        if(i.value->grid_columns)root->cells=i.value->cells;
+        else root->cells.assign(root->grid_columns*rows,i.value);
+        // Capture source versions before changing any destination tiles,
+        // including overlapping copies within the same native image.
+        auto source=get(c.source),background=get(c.background),program=get(c.program);
+        for(int ty=bounds.top/tile_size;ty<=(bounds.bottom-1)/tile_size;++ty)
+        for(int tx=bounds.left/tile_size;tx<=(bounds.right-1)/tile_size;++tx){
+            Rect tile={tx*tile_size,ty*tile_size,std::min((tx+1)*tile_size,int(i.width)),std::min((ty+1)*tile_size,int(i.height))};
+            auto& before=root->cells[ty*root->grid_columns+tx];
+            auto n=std::make_shared<Node>(budget);n->width=i.width;n->height=i.height;n->format=i.format;
+            n->draw=true;n->bounds=intersection(bounds,tile);n->command=c;
+            n->source=source;n->background=background;n->program=program;n->prior=before;
+            for(auto const& ref:{n->prior,n->source,n->background,n->program})if(ref){n->depth=std::max(n->depth,ref->depth+1);n->payload_cost=std::min<std::size_t>(96u*1024u*1024u,n->payload_cost+ref->payload_cost);}
+            RetentionCache cache;auto retained=retain(n,{tile},cache);
+            // History is bounded independently in each screen region. Compact
+            // only that region's input values; never evaluate a full map image
+            // or send these values to the renderer/native pixel buffers.
+            // A shallow chain can still pin many changing sprite uploads.
+            // Bound its conservative payload cost to two regional value arrays,
+            // independently of the depth limit. Shared references may be counted
+            // twice; that only compacts input values earlier. Map samples remain
+            // the opaque sentinel, with no terrain pixels or GPU work involved.
+            auto regional_bytes=std::size_t(tile.right-tile.left)*(tile.bottom-tile.top)*sizeof(unsigned);
+            if(retained->depth>=24||retained->payload_cost>2*regional_bytes){
+                std::vector<unsigned> points;points.reserve(std::size_t(tile.right-tile.left)*(tile.bottom-tile.top));
+                for(int y=tile.top;y<tile.bottom;++y)for(int x=tile.left;x<tile.right;++x)points.push_back(sample(retained,x,y));
+                auto compact=std::make_shared<Node>(budget);compact->draw=true;compact->command={Kind::fill,c.destination,0,tile,tile};
+                compact->bounds=tile;compact->width=i.width;compact->height=i.height;compact->format=i.format;
+                if(std::all_of(points.begin(),points.end(),[&](unsigned v){return v==points[0];}))compact->command.color=points[0];
+                else {compact->pixels=std::make_shared<Values>(budget,std::move(points));compact->payload_cost=regional_bytes;}
+                retained=compact;
+            }
+            before=std::move(retained);
+        }
+        for(auto const& cell:root->cells)if(cell){root->depth=std::max(root->depth,cell->depth+1);root->payload_cost=std::min<std::size_t>(96u*1024u*1024u,root->payload_cost+cell->payload_cost);}
+        i.value=std::move(root);
     }
     bool pixel(Id id,int x,int y,unsigned& value)const{
         auto f=images.find(id);if(f==images.end()||f->second.format==Format::bgra32)return false;

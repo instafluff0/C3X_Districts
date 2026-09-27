@@ -2662,6 +2662,9 @@ struct district_button_image_set {
 	bool custom_renderer_async_enabled, custom_renderer_display_valid, custom_renderer_camera_exact;
 	bool custom_renderer_async_drawing, custom_renderer_capture_only, custom_renderer_async_presented;
 	bool custom_renderer_timer_running;
+	// Opt-in scripted game diagnostics; inactive without the per-process save path.
+	char custom_renderer_test_save[MAX_PATH];
+	unsigned custom_renderer_test_step;
 	c3x_renderer_blit_fn custom_renderer_blit;
 	c3x_renderer_native_observe_fn custom_renderer_native_observe;
 	c3x_renderer_native_lifetime_fn custom_renderer_native_lifetime;

@@ -6,6 +6,7 @@
 #include "gpu_image_commands.h"
 #include "native_text_raster.h"
 #include "native_access.h"
+#include "native_sprite_cache.h"
 #include <array>
 #include <vector>
 #include <algorithm>
@@ -23,9 +24,8 @@ template<class Backend> class Adapter {
     void* get_bits;void* release_bits;DWORD thread=GetCurrentThreadId();
     std::array<Image,32> images={};std::uint64_t cpu_bytes=0,source_age=0;
     static constexpr std::uint64_t cpu_budget=64u*1024u*1024u;
-    Counts counters;unsigned large_cpu_barrier_reports=0,copy_rejection_reports=0,sprite_rejection_reports=0,blend_rejection_reports=0;
-    Id sprite_image=0;unsigned sprite_width=0,sprite_height=0;
-    std::uint64_t sprite_revision=0;std::vector<std::uint32_t> sprite_pixels;
+    Counts counters;unsigned large_cpu_barrier_reports=0,copy_rejection_reports=0,sprite_rejection_reports=0,blend_rejection_reports=0,image_rejection_reports=0;
+    Id sprite_image=0;SpriteCache<Backend> sprites;
     struct Lookup {Id image=0;std::uint64_t revision=0;std::vector<std::uint16_t> words;};
     std::array<Lookup,2> lookups; // Full effects and the small native shadow table coexist.
     struct Text {c3x_native_text::State font_state;std::string text;
@@ -150,18 +150,17 @@ template<class Backend> class Adapter {
         return ((b<<3)|(b>>2))|((format==Format::rgb565?((g<<2)|(g>>4)):((g<<3)|(g>>2)))<<8)|(((r<<3)|(r>>2))<<16)|0xff000000u;
     }
     bool upload_sprite(std::vector<unsigned>& decoded,unsigned width,unsigned height){
-        if(!sprite_image||sprite_width!=width||sprite_height!=height){
-            if(sprite_image)gpu.destroy(sprite_image);
-            sprite_image=0;sprite_pixels.clear();sprite_revision=0;
-            sprite_image=gpu.create(width,height,Format::bgra32);if(!sprite_image)return false;
-            sprite_width=width;sprite_height=height;
+        sprite_image=sprites.select(gpu,decoded,width,height);
+        if(sprite_image&&((sprites.hits+sprites.uploads)%4096)==0){
+            char line[224];std::snprintf(line,sizeof(line),
+                "[C3X renderer] stage=native-sprite-cache hits=%llu uploads=%llu uploaded_bytes=%llu resident_bytes=%zu\n",
+                static_cast<unsigned long long>(sprites.hits),static_cast<unsigned long long>(sprites.uploads),
+                static_cast<unsigned long long>(sprites.uploaded_bytes),sprites.bytes());
+            OutputDebugStringA(line);
         }
-        if(decoded!=sprite_pixels){
-            if(!gpu.upload(sprite_image,++sprite_revision,decoded.data(),decoded.size()))return false;
-            sprite_pixels=std::move(decoded);
-        }
-        return true;
+        return sprite_image!=0;
     }
+
     bool draw_keyed_region(Image& destination,void* source,void const* from,void const* to,unsigned key){
         if(!source||!from||!to||field(source,0x24)!=8)return false;
         auto a=rect(from),b=rect(to);int w=field(source,0x38),h=field(source,0x3c),stride=field(source,0x40);
@@ -436,6 +435,16 @@ template<class Backend> class Adapter {
         }
         c3x_native_access::release_sprite(source);
         if(!valid_source)return false;
+        // A fully transparent ordinary sprite changes neither packed nor
+        // full-color pixels. Do not retain a dependency on the animated map
+        // for such a no-op; thousands of empty overlays otherwise replay on
+        // every autonomous frame. The decoded source proves this independently
+        // of destination pixels, and native descriptor mutation still occurs.
+        if(!lookup&&!background&&style!=4&&
+           std::none_of(decoded.begin(),decoded.end(),[](unsigned value){return (value&65536)!=0;})){
+            if(bits==16||trimmed)c3x_native_access::set_field(source,0x28,trimmed?key&255:key);
+            ++counters.translated;return true;
+        }
         // Source/palette bytes, including retained-pointer edits, prove reuse.
         if(!upload_sprite(decoded,unsigned(output_width),unsigned(output_height)))return false;
         Command sprite_command={Kind::native_sprite,destination.gpu,sprite_image,area,clip};
@@ -460,6 +469,12 @@ template<class Backend> class Adapter {
             bool report=image.width>=640&&image.height>=480&&large_cpu_barrier_reports++<16;
             LARGE_INTEGER begin={},gpu_done={},end={},frequency={};
             if(report){QueryPerformanceFrequency(&frequency);QueryPerformanceCounter(&begin);}
+            // Log before the ownership boundary: Renderer64 deliberately rejects
+            // readback, so a post-readback message loses the triggering operation.
+            char reason[224];std::snprintf(reason,sizeof(reason),
+                "[C3X renderer] stage=native-cpu-ownership-request operation=%d width=%u height=%u owned=%u detail=%u\n",
+                operation,image.width,image.height,unsigned(image.owned),unsigned(image.detail!=0));
+            OutputDebugStringA(reason);
             // GPU ownership makes the old CPU mirror stale. Materialize only
             // this explicit fallback, then release its temporary storage.
             std::vector<std::uint32_t> words(std::size_t(image.width)*image.height);
@@ -495,14 +510,14 @@ template<class Backend> class Adapter {
     }
 public:
     Adapter(Backend& g,void* bits,void* release,c3x_renderer_native_lifetime_fn evidence=nullptr):gpu(g),lifetime(evidence),get_bits(bits),release_bits(release){}
-    ~Adapter(){for(auto& text:texts)retire_text(text);for(auto& image:images)if(image.native)forget(image);if(sprite_image)gpu.destroy(sprite_image);for(auto& lookup:lookups)if(lookup.image)gpu.destroy(lookup.image);}
+    ~Adapter(){for(auto& text:texts)retire_text(text);for(auto& image:images)if(image.native)forget(image);sprites.clear(gpu);for(auto& lookup:lookups)if(lookup.image)gpu.destroy(lookup.image);}
     Adapter(Adapter const&)=delete;Adapter& operator=(Adapter const&)=delete;
     // Call drain while native objects/device still exist. A synchronization/device
     // failure is terminal for this isolated backend, never a stale-pixel fallback.
-    void drain(){for(auto& text:texts)retire_text(text);for(auto& image:images)if(image.native){cpu_ownership(image,C3X_NATIVE_IMAGE_DRAIN);forget(image);}if(sprite_image)gpu.destroy(sprite_image);sprite_image=0;sprite_pixels.clear();for(auto& lookup:lookups)if(lookup.image)gpu.destroy(lookup.image);lookups={};}
+    void drain(){for(auto& text:texts)retire_text(text);for(auto& image:images)if(image.native){cpu_ownership(image,C3X_NATIVE_IMAGE_DRAIN);forget(image);}sprites.clear(gpu);sprite_image=0;for(auto& lookup:lookups)if(lookup.image)gpu.destroy(lookup.image);lookups={};}
     // A dead helper has no GPU images to read back or destroy. The caller must
     // detach its composition surface and request a full native redraw next.
-    void abandon(){texts={};images={};lookups={};sprite_image=0;sprite_pixels.clear();cpu_bytes=text_bytes=0;}
+    void abandon(){texts={};images={};lookups={};sprite_image=0;sprites.abandon();cpu_bytes=text_bytes=0;}
     // Admission follows an actual destination demand. Startup observation proves
     // the entire lifetime even when its INIT preceded this GPU session. Sources
     // and unused canvases do not allocate resident destination pairs at startup.
@@ -535,6 +550,16 @@ public:
             if(!lifetime){destination=create(object,true);if(destination&&!refresh(*destination))forget(*destination);}return 0;
         }
         if(op==C3X_NATIVE_PIXEL||op==C3X_NATIVE_BITS||op==C3X_NATIVE_DC){if(destination)cpu_ownership(*destination,op);return 0;}
+        // JGL's copy returns success without changing either image when a
+        // source or destination dimension is zero. Scene-owned unit bodies
+        // leave just such an empty native background rectangle. Handle it
+        // before admission/fallback: neither image needs pixels or a CPU lease.
+        if(op==C3X_NATIVE_COPY&&source_rect&&target_rect){
+            auto from=rect(source_rect),to=rect(target_rect);
+            if(from.left==from.right||from.top==from.bottom||to.left==to.right||to.top==to.bottom){
+                ++counters.translated;return 1;
+            }
+        }
         // Extend the map/save/display family only along an owned transfer.
         // Unrelated UI fills/sprites remain CPU-generated; they enter as upload
         // sources if subsequently drawn onto the resident map family.
@@ -644,7 +669,16 @@ public:
             if(destination)cpu_ownership(*destination,op);++counters.fallbacks;return 0;
         }
         if(op!=C3X_NATIVE_COPY&&op!=C3X_NATIVE_FILL&&op!=C3X_NATIVE_IMAGE_DRAW&&op!=C3X_NATIVE_TINT&&op!=C3X_NATIVE_LINE)return 0;
-        auto fallback=[&](){if(destination)cpu_ownership(*destination,op);auto s=find(source);if(s&&s!=destination)cpu_ownership(*s,op);++counters.fallbacks;return 0;};
+        auto fallback=[&](){
+            if(op==C3X_NATIVE_IMAGE_DRAW&&destination&&destination->owned&&image_rejection_reports++<8){
+                auto anchor=target_rect?rect(target_rect):Rect{};auto clip=c3x_native_access::clip(object);
+                char line[384];std::snprintf(line,sizeof(line),
+                    "[C3X renderer] stage=native-image-draw-rejected source=%dx%d bits=%d self=%u anchor=%d,%d clip=%ld,%ld,%ld,%ld scale=%d,%d,%d\n",
+                    source?field(source,0x38):0,source?field(source,0x3c):0,source?field(source,0x24):0,unsigned(source==object),
+                    anchor.left,anchor.top,clip.left,clip.top,clip.right,clip.bottom,
+                    c3x_native_access::scale(0),c3x_native_access::scale(1),c3x_native_access::scale(2));OutputDebugStringA(line);
+            }
+            if(destination)cpu_ownership(*destination,op);auto s=find(source);if(s&&s!=destination)cpu_ownership(*s,op);++counters.fallbacks;return 0;};
         if(!destination||!destination->owned)return fallback();
         Image* input=nullptr;
         Command command={Kind::fill,destination->gpu,0,{},rect_value(c3x_native_access::clip(object)),0,0,color&0xffff};
@@ -700,7 +734,7 @@ public:
                 if(right>INT_MAX||bottom>INT_MAX)return fallback();
                 command.area.right=int(right);command.area.bottom=int(bottom);
                 if(std::max(command.area.left,command.clip.left)>=std::min(command.area.right,command.clip.right)||
-                   std::max(command.area.top,command.clip.top)>=std::min(command.area.bottom,command.clip.bottom))return fallback();
+                   std::max(command.area.top,command.clip.top)>=std::min(command.area.bottom,command.clip.bottom)){++counters.translated;return 1;}
                 command.kind=Kind::color_key;command.color=key&65535;
             }else{
                 if(!source_rect)return fallback();auto r=rect(source_rect);

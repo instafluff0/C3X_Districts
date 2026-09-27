@@ -254,6 +254,17 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
         renderer.trace.write("fresh-scene-phases",detail,true);
     }
     bool presented=sandbox_backbuffer_output.draw(target,frame.target_width,frame.target_height);
+    // The sandbox draws a fully visible scene. Game frames finish with the
+    // existing GPU fog pass, including independent animation frames. Apply it
+    // to this publication target, preserving the reusable HDR scene underneath.
+    if(presented && renderer.visibility_pass){
+        Microsoft::WRL::ComPtr<ID3D11Resource> resource;
+        Microsoft::WRL::ComPtr<ID3D11Texture2D> texture;
+        target->GetResource(&resource);
+        presented=SUCCEEDED(resource.As(&texture)) &&
+            renderer.visibility_gpu.apply(renderer.device,renderer.context,
+                texture.Get(),renderer.visibility_coverage);
+    }
     renderer.trace.write("fresh-callback",presented?"map-ready":"map-failed",true);
     return presented;
 }

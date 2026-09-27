@@ -167,6 +167,11 @@ def load_strategy(path: Path = DEFAULT_STRATEGY) -> dict[str, Any]:
             isinstance(value, str) and value for value in mapping.values()
         ):
             raise ValueError(f"City style {style.get('id')} has an incomplete source culture map")
+        composition_bases = style.get("composition_base_by_era", {})
+        if (not isinstance(composition_bases, dict) or
+                not set(composition_bases).issubset(era_ids) or
+                any(value not in era_ids for value in composition_bases.values())):
+            raise ValueError(f"City style {style.get('id')} has an invalid composition base")
     recipes = strategy.get("runtime", {}).get("size_recipes")
     if not isinstance(recipes, list) or len(recipes) != 3:
         raise ValueError("City strategy must define town, city, and metropolis recipes")

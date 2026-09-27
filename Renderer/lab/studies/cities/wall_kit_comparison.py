@@ -28,6 +28,7 @@ KITS = (
     ("modern_low", "Modern Tower Defense, lower wall*"),
 )
 PAIR_OUT = OUT.with_name("modern-tower-defense-refinement.png")
+DETAIL_OUT = OUT.with_name("modern-tower-defense-lower-detail.png")
 
 
 def main() -> None:
@@ -75,6 +76,19 @@ def main() -> None:
               font=font(16), fill=(224, 203, 225))
     pair.save(PAIR_OUT)
     print(PAIR_OUT.relative_to(ROOT))
+
+    detail_cell = (1120, 740)
+    detail = Image.new("RGB", (detail_cell[0], detail_cell[1] + 84), (34, 29, 42))
+    detail_draw = ImageDraw.Draw(detail)
+    detail_draw.text((24, 14), "Modern Tower Defense | lower wall, no spikes or dark skirt",
+                     font=font(26), fill=(249, 240, 249))
+    detail_draw.text((24, 51), "Same source texture and city composition | flat magenta Lab preview",
+                     font=font(17), fill=(206, 192, 213))
+    image, _ = render_cell({**design, "wall_kit": "modern_low"}, 1, True, False,
+                           cell=detail_cell, tile_pixels=790)
+    detail.paste(image, (0, 84))
+    detail.save(DETAIL_OUT)
+    print(DETAIL_OUT.relative_to(ROOT))
 
 
 if __name__ == "__main__":

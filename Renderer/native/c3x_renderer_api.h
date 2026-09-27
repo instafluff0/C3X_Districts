@@ -107,7 +107,8 @@ enum c3x_renderer_scheduler_state_flags {
 enum c3x_renderer_unit_playback_flags {
     C3X_RENDERER_UNIT_STATE_CAPTURED = 1u,
     C3X_RENDERER_UNIT_SELECTED = 2u,
-    C3X_RENDERER_UNIT_HIDDEN = 4u // Authoritative current visibility; retire body selection.
+    C3X_RENDERER_UNIT_HIDDEN = 4u, // Authoritative current visibility; retire body selection.
+    C3X_RENDERER_UNIT_CURSOR = 8u // Native selection cursor eligible beneath this body.
 };
 
 #pragma pack(push, 4)

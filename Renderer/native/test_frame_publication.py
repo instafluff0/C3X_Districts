@@ -8,6 +8,60 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class PublicationTests(unittest.TestCase):
+    def test_helper_present_preserves_adopted_camera_storage(self):
+        source=(ROOT / 'Renderer/native/c3x_renderer.cpp').read_text()
+        publication='struct PublishedMapFrame {'+source.split('struct PublishedMapFrame {',1)[1].split('// Cheap, deliberately provisional',1)[0]
+        commands='enum class Command {'+source.split('enum class Command {',1)[1].split('};',1)[0]+'};'
+        cleanup='if(command==Command::render && result==C3X_RENDERER_RESULT_OK)start_ahead();'+source.split(
+            'if(command==Command::render && result==C3X_RENDERER_RESULT_OK)start_ahead();',1)[1].split('last_job_result=result;',1)[0]
+        classification=''
+        if 'bool const changes_map_publication=' in source:
+            classification='bool const changes_map_publication='+source.split(
+                'bool const changes_map_publication=',1)[1].split(';',1)[0]+';'
+        run_cpp(r'''
+#include <cassert>
+#include <cstdint>
+#include <cstring>
+#include <memory>
+#include <vector>
+#define C3X_HELPER_TRIAL
+#define C3X_RENDERER_BENCHMARK_ORACLE
+#include "Renderer/native/c3x_renderer_api.h"
+'''+publication+commands+r'''
+struct Worker {
+ PublishedMapFrame gpu_publication;bool gpu_presentation=true;int ahead=0;
+ void start_ahead(){++ahead;}
+ void finish(Command command,int result){
+'''+classification+cleanup+r'''
+ }
+};
+int main(){
+ Worker worker;unsigned flags=1;
+ c3x_renderer_tile_v1 tile{};tile.city_id=73;
+ c3x_renderer_frame_v1 frame{};frame.target_width=frame.target_height=2;frame.tile_count=1;frame.tiles=&tile;
+ c3x_renderer_output_v1 meta{};meta.width=meta.height=2;meta.stride_bytes=8;meta.replacement_tile_count=1;meta.replacement_tile_flags=&flags;
+ PublishedMapFrame::Resident resident{std::make_shared<int>(1),2,2};
+ auto capture=[&]{assert(worker.gpu_publication.capture(meta,0,0,&frame,{},&resident));worker.gpu_presentation=true;};
+ capture();auto camera=worker.gpu_publication.frame;
+ auto replacement=worker.gpu_publication.output.replacement_tile_flags;
+ for(int i=0;i<60;++i)for(auto command:{Command::trial_export_shared,Command::trial_present_shared,
+     Command::trial_visual_shared,Command::trial_bind_surface,Command::trial_surface_pixels,
+     Command::gpu_images,Command::gpu_unit,Command::tactical,Command::gpu_present,
+     Command::visual_frame,Command::native_screen,Command::unit,Command::gpu_render}){
+  worker.finish(command,C3X_RENDERER_RESULT_OK);
+  assert(worker.gpu_presentation&&worker.gpu_publication.has_image());
+  assert(worker.gpu_publication.frame.tiles==camera.tiles&&camera.tiles->city_id==73);
+  assert(worker.gpu_publication.output.replacement_tile_flags==replacement&&*replacement==1);
+ }
+ for(auto command:{Command::reset,Command::configure_pack,Command::configure_definitions,Command::benchmark_trim}){
+  capture();worker.finish(command,C3X_RENDERER_RESULT_OK);
+  assert(!worker.gpu_presentation&&!worker.gpu_publication.has_image());
+ }
+ capture();worker.finish(Command::render,C3X_RENDERER_RESULT_ERROR);
+ assert(!worker.gpu_presentation&&!worker.gpu_publication.has_image());
+}
+''')
+
     def test_gpu_adoption_failure_preserves_published_owner(self):
         source=(ROOT / 'Renderer/native/c3x_renderer.cpp').read_text()
         publication='struct PublishedMapFrame {'+source.split('struct PublishedMapFrame {',1)[1].split('// Cheap, deliberately provisional',1)[0]
@@ -32,7 +86,7 @@ struct Owner {
  enum class Command {gpu_render};
  PublishedMapFrame gpu_publication,camera_ready;
  std::atomic<bool> ahead_cancelled{false},foreground_pending{false};
- bool ahead_active=false,unit_pixels_active=false,has_job=false;
+ bool ahead_active=false,unit_pixels_active=false,has_job=false,camera_active=false;
  bool camera_gpu=true,camera_ready_prepared=false,camera_ready_area=false,gpu_reused=false,nearby_presented=false,fail=true;
  int camera_result=C3X_RENDERER_RESULT_OK,imports=0;
  c3x_renderer_i64 camera_ticket=2,gpu_camera_front_ticket=1;

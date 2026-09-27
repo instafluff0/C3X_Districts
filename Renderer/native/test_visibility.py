@@ -5,6 +5,86 @@ from Renderer.native.native_cpp_test import run_cpp
 
 
 class VisibilityTests(unittest.TestCase):
+    def test_fresh_map_without_resources_refreshes_visibility(self):
+        text=Path('Renderer/native/c3x_renderer.cpp').read_text()
+        prefix=text.split('bool compose_resource_animations(',1)[1].split(
+            'if (!shared_scene_surface',1)[0]
+        body=prefix.split('{',1)[1]
+        run_cpp(r'''
+#include "Renderer/native/render_core/visibility_coverage.h"
+#include <cassert>
+#include <vector>
+using namespace c3x_renderer::render_core;
+struct Renderer {
+ VisibilityCoverage visibility_coverage;bool visibility_pass=true;
+ long long resource_composite_ticks=1;
+ std::vector<int> resource_anchors,sandbox_resource_poses,sandbox_aquatic_resource_poses,sandbox_pose_chunks;
+ enum {geometry_water,geometry_river};
+ struct Chunk {int tile_x=0,tile_y=0;bool water_visible=true;};
+ std::vector<Chunk> geometry_vertex_buffers[2]={{Chunk{}},{Chunk{}}};
+ bool sample(c3x_renderer_frame_v1 const& frame,bool pose_only){
+''' + body + r'''
+ return false;
+ }
+};
+int main(){
+ Renderer renderer;c3x_renderer_frame_v1 frame{};
+ frame.target_width=frame.tile_width=128;frame.target_height=frame.tile_height=64;
+ c3x_renderer_tile_v1 tile{};frame.tiles=&tile;frame.tile_count=1;
+ for(unsigned flags:std::vector<unsigned>{C3X_RENDERER_TILE_VISIBILITY_BITS,
+      C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_EXPLORED,
+      C3X_RENDERER_TILE_VISIBILITY_KNOWN}){
+  tile.tile_flags=C3X_RENDERER_TILE_RENDER|flags;
+  assert(renderer.sample(frame,true));
+  unsigned wanted=(flags&C3X_RENDERER_TILE_VISIBLE)?2:(flags&C3X_RENDERER_TILE_EXPLORED)?1:0;
+  assert(renderer.visibility_coverage.state(0,0)==wanted);
+  for(auto const& layer:renderer.geometry_vertex_buffers)
+   assert(layer[0].water_visible==(wanted==2));
+  assert(!renderer.visibility_coverage.tiles.empty());
+ }
+ tile.tile_flags=C3X_RENDERER_TILE_RENDER;
+ assert(!renderer.sample(frame,true)); // never publish an unclassified map
+}
+''')
+
+    def test_fresh_output_masks_the_actual_publication_target(self):
+        text=Path('Renderer/sandbox/resident_scene.cpp').read_text()
+        body=text.split('bool presented=sandbox_backbuffer_output.draw(',1)[1].split(
+            'renderer.trace.write("fresh-callback",presented?',1)[0]
+        run_cpp(r'''
+#include <cassert>
+#define SUCCEEDED(x) ((x)>=0)
+struct ID3D11Texture2D {int id;};
+namespace Microsoft {namespace WRL {
+template<class T>struct ComPtr {T* value=nullptr;T** operator&(){return &value;}
+ T* Get(){return value;}T* operator->(){return value;}
+ template<class U>int As(U** output){return value->As(output);}};
+}}
+struct ID3D11Resource {ID3D11Texture2D* value;
+ int As(ID3D11Texture2D** output){*output=value;return 0;}};
+struct Target {ID3D11Resource resource;
+ void GetResource(ID3D11Resource** output){*output=&resource;}};
+bool drawn=false,draw_ok=true,apply_ok=true;int masks=0;
+struct Output {bool draw(Target*,int,int){drawn=true;return draw_ok;}} sandbox_backbuffer_output;
+struct Renderer {bool visibility_pass=true;int device=0,context=0,visibility_coverage=123;
+ struct Mask {bool apply(int,int,ID3D11Texture2D* texture,int coverage){
+  assert(drawn&&texture->id==42&&coverage==123);++masks;return apply_ok;}} visibility_gpu;
+} renderer;
+struct Frame {int target_width=128,target_height=64;} frame;
+bool sample(Target* target){
+ bool presented=sandbox_backbuffer_output.draw(''' + body + r'''
+ return presented;
+}
+int main(){
+ ID3D11Texture2D texture{42};Target target{{&texture}};
+ for(int i=0;i<60;++i){drawn=false;assert(sample(&target));}
+ assert(masks==60); // each independent frame receives coverage exactly once
+ renderer.visibility_pass=false;assert(sample(&target)&&masks==60);
+ renderer.visibility_pass=true;draw_ok=false;assert(!sample(&target)&&masks==60);
+ draw_ok=true;apply_ok=false;assert(!sample(&target)&&masks==61);
+}
+''')
+
     def test_coverage_and_capture(self):
         run_cpp(r'''
 #include "Renderer/native/render_core/visibility_coverage.h"

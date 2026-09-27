@@ -925,7 +925,7 @@ inline bool select_improvements(c3x_renderer_tile_v1 const& tile,Assets const& a
         constexpr char const * era_names[] = {
             "ancient", "medieval", "industrial", "modern"};
         constexpr char const * wall_names[] = {
-            "wall_ancient", "wall_medieval", "wall_industrial"};
+            "wall_ancient", "wall_medieval", "wall_industrial", "wall_modern"};
         constexpr unsigned counts[] = {4u, 7u, 11u};
         constexpr float radii[] = {0.25f, 0.33f, 0.41f};
         constexpr float size_scales[] = {0.92f, 1.00f, 1.08f};
@@ -955,10 +955,10 @@ inline bool select_improvements(c3x_renderer_tile_v1 const& tile,Assets const& a
                     0.08f * static_cast<float>(owner + 1u), true, city_vertices);
             }
         }
-        if ((tile.city_flags & C3X_RENDERER_CITY_WALLED) != 0) {
+        if (size == 0u && (tile.city_flags & C3X_RENDERER_CITY_WALLED) != 0) {
             // A Lab wall bundle can provide the individual pieces used by the
             // fixed city layouts. Ordinary bundles retain the legacy wall path.
-            char const * lab_era = era_names[std::min(era, 2u)];
+            char const * lab_era = era_names[era];
             std::string lab_prefix = std::string("wall_lab_") + lab_era + "_";
             auto const * segment = c3x_renderer::find_feature_group(
                 wall_bundle, (lab_prefix + "segment").c_str());
@@ -1044,7 +1044,7 @@ inline bool select_improvements(c3x_renderer_tile_v1 const& tile,Assets const& a
                 }
             } else {
             c3x_renderer::FeatureGroup const * walls = c3x_renderer::find_feature_group(
-                wall_bundle, wall_names[std::min(era, 2u)]);
+                wall_bundle, wall_names[era]);
             if (walls != nullptr && !walls->placements.empty()) {
                 c3x_renderer::FeaturePlacement const & wall = walls->placements.front();
                 constexpr float offsets[4][3] = {

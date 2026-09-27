@@ -85,8 +85,10 @@ def load_mapping(path: Path = DEFAULT_MAPPING) -> dict[str, Any]:
            for options in package_options.values()):
         raise ValueError("City-adjunct package options are invalid")
     era_selection = document.get("era_selection")
-    if era_selection != {"0": "ancient", "1": "medieval", "2": "industrial", "3": "industrial"}:
+    if era_selection != {"0": "ancient", "1": "medieval", "2": "tsikhe", "3": "modern_low"}:
         raise ValueError("City-adjunct era selection must cover all four Civ III eras")
+    if document.get("population_wall_rule") != "town_only":
+        raise ValueError("City-adjunct walls must be limited to Towns")
     derived_kits = document.get("derived_kits", {})
     if not isinstance(derived_kits, dict) or set(derived_kits) != {"modern_clean", "modern_low"}:
         raise ValueError("City-adjunct derived kit declaration is invalid")
@@ -259,6 +261,7 @@ def compile_city_adjuncts(
         },
         "walls": {
             "era_selection": mapping["era_selection"],
+            "population_wall_rule": mapping["population_wall_rule"],
             "kits": wall_kits,
             "kit_usage": mapping["kit_usage"],
             "composition": "perimeter_from_authoritative_city_footprint",

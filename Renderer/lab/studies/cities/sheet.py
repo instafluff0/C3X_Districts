@@ -184,7 +184,7 @@ def render_cell(design: dict, size: int, walls: bool, capital: bool,
                      tier.get("decorations", []))
     if tier.get("ground_cover"):
         draw_cover(canvas, (cx, cy), tile_pixels, instances, tier["ground_cover"])
-    if walls:
+    if walls and size == 0:
         radius = None
         if size == 2:
             # Match the native adaptive ring: the compact default expands
@@ -234,6 +234,19 @@ def font(size: int):
     return ImageFont.load_default()
 
 
+def variant_cell(design: dict, size: int, walls: bool, capital: bool,
+                 cell: tuple[int, int], tile_pixels: int):
+    if walls and size > 0:
+        image = Image.new("RGB", cell, (45, 37, 53))
+        draw = ImageDraw.Draw(image)
+        draw.text((cell[0]//2-116, cell[1]//2-14), "No wall at this size",
+                  font=font(19), fill=(204, 188, 208))
+        return image, 0, False
+    image, art_pixels = render_cell(design, size, walls, capital,
+                                    cell=cell, tile_pixels=tile_pixels)
+    return image, art_pixels, True
+
+
 def render_culture(layouts: dict, culture: int, output: Path, only_era: int | None = None):
     designs = [d for d in layouts["designs"] if d["culture"] == culture
                and (only_era is None or d["era"] == only_era)]
@@ -254,10 +267,16 @@ def render_culture(layouts: dict, culture: int, output: Path, only_era: int | No
                                if d.get("source_art_era")), None)
         review_context = next((d.get("review_context") for d in designs
                                if d.get("review_context")), None)
+        target_civ3_era = next((d.get("target_civ3_era") for d in designs
+                                if d.get("target_civ3_era")), None)
         heading = (title+" | "+review_context if review_context else
                    title+" | Civ III Middle Ages candidate" if source_art_era
                    else title+" city designs")
-        caption = (f"Civ VI {source_art_era.removeprefix('ARTERA_').title()} art tier "
+        caption = (f"Civ III {target_civ3_era.title()} recipe  |  "
+                   f"Civ VI {source_art_era.removeprefix('ARTERA_').title()} house base  |  "
+                   "flat grassland  |  software material preview"
+                   if target_civ3_era and source_art_era else
+                   f"Civ VI {source_art_era.removeprefix('ARTERA_').title()} art tier "
                    f"({source_art_era})  |  flat grassland  |  software material preview"
                    if source_art_era else
                    "Flat grassland  |  town within one tile; larger cities may sprawl  |  software material preview")
@@ -274,11 +293,12 @@ def render_culture(layouts: dict, culture: int, output: Path, only_era: int | No
                 y = base_y+era_header+size*row_height
                 draw.text((14, y+15), population, font=font(16), fill=(242, 222, 239))
                 for column, (walls, capital, _) in enumerate(variants):
-                    image, art_pixels = render_cell(design, size, walls, capital,
-                                                    cell=cell, tile_pixels=tile_pixels)
+                    image, art_pixels, available = variant_cell(
+                        design, size, walls, capital, cell, tile_pixels)
                     sheet.paste(image, (left+column*cell[0], y))
                     evidence.append({"culture": culture, "era": design["era"], "size": size,
                                      "walls": walls, "capital": capital,
+                                     "available": available,
                                      "houses": (len(design["tier_designs"][size].get(
                                          "capital_houses", design["tier_designs"][size]["houses"]))
                                                 if capital else design["population_counts"][size]),
@@ -313,11 +333,12 @@ def render_culture(layouts: dict, culture: int, output: Path, only_era: int | No
                     y = row_y+(variant//2)*(cell[1]+caption)
                     draw.rectangle((x, y, x+cell[0]-2, y+caption-1), fill=(57, 43, 65))
                     draw.text((x+9, y+3), name, font=font(15), fill=(250, 230, 247))
-                    image, art_pixels = render_cell(design, size, walls, capital,
-                                                    cell=cell, tile_pixels=tile_pixels)
+                    image, art_pixels, available = variant_cell(
+                        design, size, walls, capital, cell, tile_pixels)
                     sheet.paste(image, (x, y+caption))
                     evidence.append({"culture": culture, "era": design["era"], "size": size,
                                      "walls": walls, "capital": capital,
+                                     "available": available,
                                      "houses": (len(design["tier_designs"][size].get(
                                          "capital_houses", design["tier_designs"][size]["houses"]))
                                                 if capital else design["population_counts"][size]),

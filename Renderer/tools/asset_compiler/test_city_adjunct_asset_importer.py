@@ -26,6 +26,13 @@ class CityAdjunctAssetImporterTests(unittest.TestCase):
         self.assertEqual(mapping["kit_usage"]["modern_barricade"]["role"],
                          "non_city_candidate")
         self.assertNotIn("modern_barricade", mapping["era_selection"].values())
+        self.assertEqual(mapping["derived_kits"]["modern_clean"]["source_kit"],
+                         "modern_barricade")
+        self.assertEqual(mapping["derived_kits"]["modern_low"]["source_kit"],
+                         "modern_clean")
+        self.assertEqual(mapping["era_selection"],
+                         {"0": "ancient", "1": "medieval", "2": "tsikhe", "3": "modern_low"})
+        self.assertEqual(mapping["population_wall_rule"], "town_only")
 
     def test_rejects_duplicate_runtime_asset_ids(self) -> None:
         mapping = importer.load_mapping()

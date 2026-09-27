@@ -50,9 +50,10 @@
   "era_selection": {
     "0": "ancient",
     "1": "medieval",
-    "2": "industrial",
-    "3": "industrial"
+    "2": "tsikhe",
+    "3": "modern_low"
   },
+  "population_wall_rule": "town_only",
   "kit_usage": {
     "ancient": {"source_gameplay": "BUILDING_WALLS", "role": "standard_city_perimeter"},
     "medieval": {"source_gameplay": "BUILDING_CASTLE", "role": "standard_city_perimeter"},
@@ -61,7 +62,7 @@
     "pirate_medieval": {"source_gameplay": "BUILDING_CASTLE", "role": "scenario_city_perimeter", "inherits_from": "medieval"},
     "modern_barricade": {"source_gameplay": "IMPROVEMENT_MODERN_TOWER_DEFENSE", "role": "non_city_candidate", "source_context": "Zombie Defense mode"},
     "modern_clean": {"source_gameplay": "IMPROVEMENT_MODERN_TOWER_DEFENSE", "role": "non_city_candidate", "derived_from": "modern_barricade", "source_edit": "remove_spike_mesh_islands"},
-    "modern_low": {"source_gameplay": "IMPROVEMENT_MODERN_TOWER_DEFENSE", "role": "non_city_candidate", "derived_from": "modern_clean", "source_edit": "trim_lower_skirt_at_ground"}
+    "modern_low": {"source_gameplay": "IMPROVEMENT_MODERN_TOWER_DEFENSE", "role": "custom_city_perimeter", "source_context": "Zombie Defense mode", "derived_from": "modern_clean", "source_edit": "trim_lower_skirt_at_ground"}
   },
   "derived_kits": {
     "modern_clean": {

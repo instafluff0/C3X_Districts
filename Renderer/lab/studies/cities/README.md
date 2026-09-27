@@ -5,14 +5,17 @@ and Asian. The renderer's internal `mediterranean` slot is the Roman group;
 it is not a sixth culture. The local Civ VI import strategy maps its art
 families into these five slots offline.
 
-This is a Lab proposal for one fixed design per Civ III culture group, era and
-population tier. Each design has base, walls, capital and walls + capital
-variants. Each culture's overview follows the Civ III PCX convention: four
+This is a Lab proposal for a base design per Civ III culture group, era and
+population tier, with stable seeded choices for inner accents and vegetation.
+Towns have base, walls, capital and walls + capital variants. Cities and
+metropolises have base and capital variants without walls. Each culture's
+overview follows the Civ III PCX convention: four
 era rows and three population columns (Town 1–6, City 7–12, Metropolis 13+).
 
-Each population cell contains a labeled 2×2 comparison: base, walls, capital,
-and walls + capital. Focused one-era sheets instead show population rows and
-the four variants as columns at a larger size. All cells assume flat grassland.
+Each Town cell contains a labeled 2×2 comparison. The City and Metropolis wall
+positions are marked unavailable instead of repeating unwalled art. Focused
+one-era sheets show population rows and state columns at a larger size. All
+cells assume flat grassland.
 Town buildings stay within one tile. This Lab candidate lets their outer wall
 overhang by up to .05 tile unit so it clears the building plots. Cities and
 metropolises may extend farther. The magenta ground is a PCX-style review aid, not a
@@ -28,12 +31,14 @@ as the settlement grows, but a given house or palace keeps the same scale
 across population tiers within its era. Each base city has a civic
 centerpiece; a capital uses the palace on that plot so the building stays
 legible. Buildings and palaces share the same tile-edge facing direction.
-Walls form a complete rounded ring with 16/20/24 joined segments by population
-size, a gate, and small buttresses over every joint. The walls remain below the roofs.
+The active Town wall choices are Ancient Walls, Castle, Tsikhe, and the lower,
+spike-free Modern Tower Defense variant for the four Civ III eras. Town walls
+form a complete rounded ring; Tsikhe and Modern use a closed source segment
+at the entrance because the current isolated wall bundle cannot retain
+Tsikhe's multi-atlas gate and the Modern source has no gate. City and
+Metropolis building sprawl is retained without a perimeter.
 The [wall source audit](wall_source_audit.md) distinguishes the three ordinary
 Civ VI fortification stages from Georgian, scenario, and improvement sets.
-The Industrial and Modern review rows currently share the Renaissance Star
-Fort art; supplemental wall kits are only auditions.
 The source palace selectors are provenance for these proposed mappings, not
 evidence that Civ III civilizations have the same architecture as Civ VI.
 These are culture-group fallbacks; a future city-style profile can override an
@@ -175,9 +180,25 @@ layouts are for choosing which families merit hand calibration; a source tag
 is not a hard-coded runtime civilization or a new Civ III culture slot.
 The sheet renderer restores each wall part's source center after loading its
 centered preview mesh, so the preview ring matches the connected native ring.
-The larger metropolis cell is framed higher to keep its near wall visible.
+The larger metropolis cell remains framed for its broader building sprawl.
 
 The all-era source-art auditions now use separate foundation-free Lab packs.
+Industrial and Modern City/Metropolis candidates put ordinary ARTERA_MODERN
+infill near the civic center; Modern additionally draws its high-rise accents
+from the ModernGlass source family. In ordinary Modern cities, glass replaces
+the central civic plot. In capitals, the City and Metropolis glass plots stay
+in the palace's rear screen arc (roughly ten to two o'clock), reserved as a
+compatible pair before smaller downtown accents are placed. A variant uses each ARTERA_MODERN
+and ModernGlass component at most once. Downtown plots and existing farm-tree
+positions vary by stable city identity seed; most source-family houses remain
+around the cluster. Towns get no accents.
+The source-art auditions also keep three deterministic recipe candidates per
+source pair. Seed 0 is the full-sheet gallery template; seeds 1 and 2 replace
+a few ordinary houses at existing plots and vary the farm-tree positions.
+Special buildings, population counts, walls, and the palace stay in their
+authored positions. `seeded-variant-manifest.json` indexes all 46 source pairs
+and the 20 mapped Civ III culture/era candidates for later city-identity
+selection; these candidates are not promoted.
 `trim_subsurface.py` clips imported city-component triangles at the authored
 ground datum, preserving UVs, normals, materials and the original source pack.
 `foundation_grades.json` records the few visually calibrated cuts where a

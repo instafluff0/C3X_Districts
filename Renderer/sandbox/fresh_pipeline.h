@@ -730,7 +730,7 @@ struct SandboxSceneShadow {
         std::copy(renderer.bridge_texture_views.begin(),renderer.bridge_texture_views.end(),views.begin()+13);
         std::copy(renderer.resource_texture_views.begin(),renderer.resource_texture_views.end(),views.begin()+21);
         std::copy(renderer.city_base_views.begin(),renderer.city_base_views.end(),views.begin()+29);
-        if (layer==geometry_wall) views[29]=views[30]=views[31]=views[32]=renderer.wall_texture_view;
+        if (layer==geometry_wall) std::copy(renderer.wall_texture_views.begin(),renderer.wall_texture_views.end(),views.begin()+29);
         if (layer==geometry_site) std::copy(renderer.site_views.begin(),renderer.site_views.end(),views.begin()+21);
         if (layer==geometry_mine) std::copy(renderer.mine_base_views.begin(),renderer.mine_base_views.end(),views.begin()+21);
         if (layer==geometry_farm) std::copy(renderer.farm_base_views.begin(),renderer.farm_base_views.end(),views.begin()+21);
@@ -1439,7 +1439,7 @@ struct SandboxFreshPipeline {
             if(layer==geometry_wall){
                 std::array<ID3D11ShaderResourceView*,4> empty{};
                 context->PSSetShaderResources(116,4,empty.data());
-                context->PSSetShaderResources(124,1,&renderer.wall_texture_view);
+                context->PSSetShaderResources(124,4,renderer.wall_texture_views.data());
             }
         } else if (layer==geometry_wave) {
             context->PSSetShader(renderer.wave_shader,nullptr,0);

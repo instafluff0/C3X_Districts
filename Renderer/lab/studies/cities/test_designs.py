@@ -103,7 +103,7 @@ class CityDesigns(unittest.TestCase):
                     self.assertEqual(tiers[size-1][key]["scale"], tiers[size][key]["scale"])
 
     def test_rounded_walls_form_a_complete_perimeter(self):
-        for kit in ("ancient", "medieval", "industrial"):
+        for kit in ("ancient", "medieval", "tsikhe", "modern_low"):
             for size, segments in enumerate(WALL_SEGMENTS):
                 wall = wall_instances(kit, size)
                 self.assertEqual(len(wall), segments*2)
@@ -116,7 +116,7 @@ class CityDesigns(unittest.TestCase):
                 for index in range(segments):
                     item = wall[index]
                     body = component(item["asset"], Path(item["pack"]))
-                    axis = 0 if index == 0 and kit != "ancient" else 1
+                    axis = 0 if index == 0 and kit == "medieval" else 1
                     other = 1 - axis
                     middle = (body["lo"][other] + body["hi"][other]) / 2
                     c, s = math.cos(item["rotation"]), math.sin(item["rotation"])

@@ -302,6 +302,39 @@ int test_retained_composition(){
         std::puts("PASS dense native replacement: map_publications=32 UI_writes=32000 exact=1 retained_bytes_stable=1");
         retained.clear();assert(retained.bytes()==0&&retained.node_count()==0);
     }
+    // Transparent HUD holes can keep prior camera versions alive even after
+    // a new full-map copy. Freeze retired sources and collapse their completed
+    // recipes without changing any pixels or retaining every camera texture.
+    {
+        constexpr unsigned width=128,height=96;Rect bounds={0,0,width,height},area={29,41,93,73};
+        Compositor live(device.Get(),context.Get());RetainedComposition retained(device.Get(),context.Get());
+        auto create=[&](unsigned x,unsigned y,Format f){auto id=live.create(x,y,f);assert(id);retained.create(id,x,y,f);return id;};
+        auto screen=create(width,height,Format::rgb555),hud=create(width,height,Format::rgb555),sprite=create(64,32,Format::bgra32);
+        std::vector<unsigned> pixels(width*height),program(64*32);
+        for(unsigned i=0;i<program.size();++i)program[i]=i%3==0?0xff000000u:i%3==1?0x8000001fu:0x00000400u;
+        assert(live.upload(sprite,1,program.data(),program.size()));retained.source(sprite,live.texture(sprite));
+        auto draw=[&](Command command){assert(live.submit(&command,1));retained.record(command);};
+        draw({Kind::fill,hud,0,bounds,bounds});
+        unsigned current=0;std::size_t peak=0;
+        for(unsigned view=1;view<=80;++view){
+            current=view;auto map=create(width,height,Format::rgb555);
+            std::fill(pixels.begin(),pixels.end(),0x1234u+view);assert(live.upload(map,1,pixels.data(),pixels.size()));
+            auto texture=RetainedComposition::Texture(live.texture(map));
+            retained.source(map,texture.Get(),[&,view,texture](long long,long long){
+                return current==view?RetainedComposition::SampledImage(texture):RetainedComposition::SampledImage::frozen();},true,true);
+            draw({Kind::copy,screen,map,bounds,bounds});
+            draw({Kind::native_blend,hud,sprite,area,bounds,0,0,0,screen});
+            draw({Kind::copy,screen,hud,area,bounds,area.left,area.top});
+            retained.commit(screen,bounds);
+            assert(retained_read(device.Get(),context.Get(),retained.sample(view,1000).Get())==
+                   retained_read(device.Get(),context.Get(),live.texture(screen)));
+            assert(retained.animated_map());peak=std::max(peak,std::size_t(retained.bytes()));
+            assert(retained.bytes()<width*height*4*8);
+            retained.destroy(map);live.destroy(map);
+        }
+        std::printf("PASS retired camera HUD feedback: views=80 exact=1 current_map_animated=1 peak_bytes=%zu\n",peak);
+        retained.clear();assert(retained.bytes()==0&&retained.node_count()==0);
+    }
     // Native saved views may retain multiple animated map versions. Their
     // outputs use the retained budget, not the smaller temporary-work budget.
     {

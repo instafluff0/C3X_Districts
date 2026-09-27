@@ -416,6 +416,19 @@ int main(){
  patch_Main_Screen_Form_move_camera(&screen,0,400,100,1,false);assert(nav_pending);
  ++screen.Player_CivID;nav_ready=true;patch_Animator_update_display(&screen.animator,0);
  assert(!nav_pending&&screen.camera_x==300);
+ // Real player turns keep turn_end_flag set even with no directed action.
+ // Native updates continue on every poll, using one displayed camera until
+ // the completed map is ready. The turn flag cannot bypass this transaction.
+ screen.Player_CivID=2;state.custom_renderer_viewer_civ_id=2;
+ screen.turn_end_flag=true;screen.animator.fields[10]=0;nav_ready=false;
+ state.custom_renderer_display_valid=true;state.custom_renderer_display_view=custom_renderer_native_view(&bic.Map.Renderer);
+ auto before_work=native_work;auto before_camera=screen.camera_x;
+ patch_Main_Screen_Form_move_camera(&screen,0,500,100,1,false);
+ assert(nav_pending&&screen.camera_x==before_camera);
+ for(int n=0;n<20;++n){patch_Animator_update_display(&screen.animator,0);assert(screen.camera_x==before_camera&&overlay_x==before_camera);}
+ assert(native_work==before_work+20);
+ nav_ready=true;patch_Animator_update_display(&screen.animator,0);
+ assert(screen.camera_x==500&&overlay_x==500&&native_work==before_work+21);
 }
 '''
         run_cpp(enabled)

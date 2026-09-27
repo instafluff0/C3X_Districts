@@ -13,9 +13,12 @@ class RetainedComposition {
 public:
     using Texture=ComPtr<ID3D11Texture2D>;
     struct SampledImage {
-        enum class Kind { unchanged, immutable, bgra };
+        enum class Kind { unchanged, immutable, bgra, frozen };
         Kind kind=Kind::unchanged;Texture texture;Rect area{};
         SampledImage()=default;
+        // The source owner has moved to another camera. Preserve this exact
+        // completed image, but retire its animation callback and dependencies.
+        static SampledImage frozen(){SampledImage result;result.kind=Kind::frozen;return result;}
         SampledImage(Texture value):kind(Kind::immutable),texture(std::move(value)){}
         // Borrow a working BGRA surface only until this sample is consumed.
         // The retained node imports it into its own reusable packed output.
@@ -130,7 +133,9 @@ private:
         if(depth>256)throw std::runtime_error("retained composition dependency depth");
         if(n->sample){
             auto sampled=n->sample(ticks,frequency);
-            if(sampled.kind==SampledImage::Kind::bgra){
+            if(sampled.kind==SampledImage::Kind::frozen){
+                n->sample={};n->sample_target={};n->dynamic=n->map_dynamic=false;
+            }else if(sampled.kind==SampledImage::Kind::bgra){
                 auto r=sampled.area;unsigned w=unsigned(n->area.right-n->area.left),h=unsigned(n->area.bottom-n->area.top);
                 if(r.left<0||r.top<0||r.right-r.left!=int(w)||r.bottom-r.top!=int(h))
                     throw std::runtime_error("retained sample extent changed");
@@ -154,7 +159,11 @@ private:
         }else if(n->operation){
             std::vector<std::uint64_t> versions;
             if(n->direct.revision)versions.push_back(n->direct_revision);
-            for(auto const& p:n->inputs)for(auto const& patch:p.patches){evaluate(patch.node,ticks,frequency,depth+1);versions.push_back(patch.node->revision);}
+            n->dynamic=n->direct.animated;n->map_dynamic=false;
+            for(auto const& p:n->inputs)for(auto const& patch:p.patches){
+                evaluate(patch.node,ticks,frequency,depth+1);versions.push_back(patch.node->revision);
+                n->dynamic|=patch.node->dynamic;n->map_dynamic|=patch.node->map_dynamic;
+            }
             if(!n->output[0]||versions!=n->dependencies){
                 Id temporary[6]={};
                 auto const& original=n->command;
@@ -182,10 +191,12 @@ private:
                     capture_output(*n,0,replay.texture(c.destination),result);
                     if(c.detail)capture_output(*n,1,replay.texture(c.detail),result);
                     n->dependencies=std::move(versions);n->revision=++serial;
-                    if(!n->dynamic){for(auto& input:n->inputs)input={};n->dependencies.clear();n->operation=false;}
                 }catch(...){for(unsigned i=0;i<6;++i)if(temporary[i]&&std::find(temporary,temporary+i,temporary[i])==temporary+i)replay.recycle(temporary[i]);throw;}
                 for(unsigned i=0;i<6;++i)if(temporary[i]&&std::find(temporary,temporary+i,temporary[i])==temporary+i)replay.recycle(temporary[i]);
             }
+            // A frozen source can leave the output revision unchanged. Retire
+            // its recipe even then, so HUD holes do not keep every old camera.
+            if(!n->dynamic){for(auto& input:n->inputs)input={};n->dependencies.clear();n->operation=false;}
         }
         n->seen=frame;
     }

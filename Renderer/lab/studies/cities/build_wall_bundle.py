@@ -75,21 +75,27 @@ def build(output: Path, pack: Path = PACK) -> Path:
         assets.append(asset_payload(asset_id, textures.index(texture), parts[0]))
         groups.append(group_payload(group_name, [(len(assets) - 1, 7.2)]))
 
-    for era in ("ancient", "medieval", "industrial"):
-        kit = catalog["walls"]["kits"][era]
+    for era, kit_name in (("ancient", catalog["walls"]["era_selection"]["0"]),
+                          ("medieval", catalog["walls"]["era_selection"]["1"]),
+                          ("industrial", catalog["walls"]["era_selection"]["2"]),
+                          ("modern", catalog["walls"]["era_selection"]["3"])):
+        kit = catalog["walls"]["kits"][kit_name]
         for role in ("segment", "gate", "tower"):
-            asset_id = (next((asset for asset in kit[role]
-                              if asset.endswith("tower_small")), kit[role][0])
-                        if role == "tower" else kit[role][0])
-            if era == "ancient" and role == "gate":
-                # The sourced ancient gate is two posts with no arch. Use a
-                # full source masonry span so the Lab perimeter is connected.
+            if role == "tower":
+                asset_id = next((asset for asset in kit[role]
+                                 if asset.endswith("tower_small")), kit[role][0])
+            elif role == "gate" and (era in ("ancient", "industrial") or "gate" not in kit):
+                # Ancient's source gate is open, Tsikhe's has extra material
+                # atlases the current wall bundle cannot retain, and Modern
+                # has no gate. Use a full source segment in these Lab rings.
                 asset_id = kit["segment"][0]
+            else:
+                asset_id = kit[role][0]
             parts, texture = source_asset(pack, manifest, asset_id)
             if texture not in textures:
                 textures.append(texture)
             mesh = merged_centered(parts)
-            if era == "ancient" and role == "gate":
+            if role == "gate" and (era in ("ancient", "industrial") or "gate" not in kit):
                 mesh = ancient_closed_gate(mesh)
                 asset_id += ":closed_gate"
             assets.append(asset_payload(asset_id, textures.index(texture), mesh))

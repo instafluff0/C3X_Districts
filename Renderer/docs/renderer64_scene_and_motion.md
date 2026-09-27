@@ -144,42 +144,178 @@ at the intended presentation time still need work.
 
 ### Current asynchronous bridge
 
-Capture `20260927-102412` confirms the slot-14 UI fix removed HUD blend
-admission failures. The map publishes successfully with zero readbacks; the
-first failure is final window presentation, before the later canvas hit test.
+The fresh-scene handoff now uses Civ III's captured unit center instead of the
+sandbox's fixed 191-pixel canvas center. The extracted production placement and
+shader math pass 8,640 size/zoom/wrap/reflection cases. The final fresh output
+also runs the existing GPU visibility pass on every publication target;
+resource-free scenes still refresh visibility. The GPU oracle checks 3,295,332
+pixels across zoom, scrolling offsets and reset (maximum channel error one).
 
-The missing standalone-fixture step was presenting the loading screen first.
-Its x86 presenter already owns the HWND's DirectComposition target. Attempting
-to create the helper surface target at that same layer fails, as specified by
-[CreateTargetForHwnd](https://learn.microsoft.com/en-us/windows/win32/api/dcomp/nf-dcomp-idcompositiondevice-createtargetforhwnd).
-The bridge now relinquishes the loading-screen target before attaching the
-helper surface. Async presentation cannot enter the synchronous shared-texture
-adoption route. A presentation rejection also cannot drain GPU images through
-a forbidden CPU readback or poison their command queue.
+Candidate `34e1326f9e4b4316b1c2a1f7c8b89190` passes the asynchronous fixture at
+55.89 FPS, but real run `20260927-144050` exposes a publication lifetime defect
+after eight adoptions. The helper faults at RVA `0x24D9`, within tile-record
+serialization. The worker's old command exclusions omitted helper presentation
+commands, allowing an independent frame to free the adopted camera's records
+after polling. Retirement now explicitly belongs to map/configuration commands.
+The extracted completion regression fails against the old code and passes
+780 borrowed-map operations with the same live records; reset/configuration
+still retire them. The replacement candidate is undergoing live qualification.
 
-Negative receipt `eabcf57be9944e63b54135c4379972b9` reproduces the failure with
-the previous trio. Fixed receipt `3349fcf612244181a0cdaf7f5484fc24` passes the
-same startup sequence, recovery after an invalid presentation target, all 32
-scrolling cases, UI composition and zero CPU map readbacks. The renderer advances
-121 frames during a two-second native-host pause; the host publishes 76 updates
-during a two-second renderer pause (p95/max 1.212/2.385 ms). Warm cadence is 441
-frames in 8.015 seconds, or 55.02/sec. These are isolated fixture measurements,
-not physical scanout or live-game FPS. The matching trio is preserved and staged.
-No injected source changed, so another compile/injection or INSTALL is unnecessary.
+The current staged candidate bounds retained input payload, in addition to
+command depth. Capture `20260927-132302` first fails during a native sprite draw
+at 18.221 s: changing source uploads exhaust the input description's 96 MiB
+budget before any readback fault. Scripted real-game run `20260927-135838`
+reproduces the same error at 22.188 s and the visible black/repeating map.
+Regional compaction now considers payload cost; the cap remains 96 MiB and
+these values never enter map rendering or native/GPU pixel buffers. The old
+probe exhausts memory after 3,072 changing draws. The corrected regression
+completes 10,400 with a copied prior view intact and 22,611,968 peak bytes.
 
-Live gameplay remains a strategic checkpoint. The later full-canvas read is
-Civ III form hit testing through `FUN_00600340` / `FUN_00600b30`, with the
-pixel-test return at GOG `0x6090c8`. It occurred after the presentation fault;
-its form identity and behavior with a healthy session are unconfirmed. Keep
-ownership checks strict and retain the bounded escape diagnostics. Use the next
-`CAPTURE_MAP_FAILURE.bat` map/scroll run to distinguish the corrected handoff
-from any remaining independent ownership problem.
+All nine input tests and native oracle `f440524ed1e248479bcacd7c03131acc` pass.
+Full GPU fixture `26f3810cd26449a9812f9b78ec6d64b1` submits 5,200 changing
+sprites in 1.466 s, restores its clean map, then measures 56.76 FPS warm cadence.
+It passes 32 complete scrolls in 31–125 ms, 33 adoptions/commits and independent
+host/renderer progress. Complete diagnostics through teardown contain only the
+intentional invalid-window test failure, with no input/texture budget fault or
+unexpected map readback. The matched binaries are staged and startup passes.
+Automated live run `20260927-140022` removes that input-memory failure, then
+exhausts the ordered publication queue at 43.377 s after three camera moves.
+Warm map rendering takes 63–81 ms but queued native image work delays adoption
+by seconds. The adapter previously retained only the last sprite payload;
+alternating unchanged sprites therefore caused repeated uploads and IPC. The
+staged candidate retains up to 256 immutable decoded sources within 16 MiB,
+compares complete content and dimensions, and retires LRU sources in command
+order. Palette, animation and retained-pointer changes still create fresh
+content. The GPU handle table accounts for these bounded owners; its texture
+byte budget and the publication queue limits remain unchanged. Native oracle
+`9a89e41d0e9f4487861d9c5213f9493d` passes exact pixels, source mutation and
+config-off behavior. Full asynchronous fixture
+`8bb8c078fe3e4d199771678676c3691f` passes at 55.62 FPS with 32 complete
+camera updates (31–141 ms), independent process progress and no unexpected
+diagnostic failures through reset. Automated live run `20260927-141651`
+completes 75 seconds without either fatal error, adopts 13 maps, and reuses
+69,610 sprite draws with only 22 uploads (892,624 bytes). Scrolling and visible
+composition still fail acceptance. Native capture was also evaluating/drawing
+legacy C3X tile highlights in all five native passes, including pending frames.
+At the user's direction, custom rendering now bypasses their initialization,
+worker-highlight preparation and drawing. The simpler bypass replaces the
+intermediate pass restriction and leaves vanilla behavior intact. Its injected
+compile and extracted hook checks pass. Live run `20260927-142322` completes
+all 32 camera moves and 33 map adoptions without a renderer failure. Median
+native map time is 3.959 ms, compared with about 1.1 seconds before the bypass;
+median capture is 2.504 ms. Sampled terrain survives the scrolling loop.
+Remaining visual work includes unit/selection alignment and visibility. The
+first map still takes 6.233 seconds to render (5.357 seconds geometry).
+Controlled cadence remains separate from live-game FPS.
 
-The earlier JGL slot-14 fix remains: indexed UI source data is copied privately,
-while destination-key comparison and replacement run on the GPU. Receipt
-`fb295afa6eb0482e8e7e4a8d8637479e` covers 48 exact JGL/GPU cases, clipping,
-duplicate palette colors, full-word keys and preservation of full-color map
-pixels. Lifetime and injected compile checks passed before its installation.
+The user explicitly requested a bounded automated real-game test for this
+integration investigation. Native menu loading, the existing post-load popup
+hook and raw main-form key hook now allow a copied save and 32 camera commands.
+The opt-in additions guard custom rendering and the child environment variable;
+ordinary and config-off behavior remain unchanged. The injected smoke test and
+extracted guard/camera contract pass. See the [diagnostic guide](../tools/scripted_game_test.md)
+for elevation, console installation, cleanup and evidence limits.
+
+
+An earlier correction handles empty native background copies. Capture
+`20260927-130716` adopts a map, then a forbidden image readback poisons
+composition immediately after a unit draw. Its original diagnostic does not
+identify the triggering operation; the exact live cause remains unproven.
+Renderer64 unit observations return an empty native raster envelope, which
+Civ III can still use for background restoration. Native JGL treats a copy with
+a zero dimension as a successful no-op. The previous adapter instead entered
+CPU fallback and attempted two readbacks. The adapter now handles that no-op
+before admission or fallback, with no drawing, ownership change or extra state.
+Readback and exception diagnostics now identify the native operation.
+
+The native JGL oracle passes nine zero-dimension cases with no readbacks.
+The expanded asynchronous fixture fails with the previously staged binaries
+(`96733a37f4944e27bf1457e0437adf00`), reproducing readback, unusable session
+and failed scrolling. The corrected matched trio passes
+`9c572774fce745f3b1982abbf3693002`: 33 camera adoptions/commits, all 32
+scroll/grid/selection/HUD updates, queued native writes, alternating clears,
+empty unit copies and a fully drained consumer. At 2240×1260, warm cadence is
+55.51 FPS and complete scroll updates take 31–313 ms. Host/renderer suspension
+retains independent progress with no CPU map readbacks. Diagnostic capture
+through reset has no unexpected operation, composition or texture-budget
+failure. The trio is staged and its installed-directory startup probe passes;
+no injected source or installed executable change was necessary.
+Live cold startup, scrolling and the reported fog appearance remain unqualified.
+Fixture cadence is not live-game FPS.
+
+The preceding capture `20260927-124922` had no forbidden image readback or
+missing-display failure. Its first completed native map redraw was
+309.399 ms, compared with 7,156.676 ms in `115530`; this excludes the preceding
+cold scene preparation and is not startup latency or live FPS. The first map
+commits at 10.659 s and native presentation succeeds at 11.095 s. Only ticket 6
+is adopted. Later redraws report `BAD_ARGUMENT` before camera begin, followed
+by a retained texture-budget failure at 16.744 s.
+
+The native composition owner rejected requests and polls whenever unpresented
+native commands were queued. Civ III legitimately enters that boundary after
+native drawing; the previous fixture always presented first. Renderer64 now
+publishes the old-ticket batch before camera begin or adoption using its existing
+asynchronous queue. The legacy exact path keeps its explicit flush contract.
+An extracted regression fails on the former rejection and passes with the new
+ordering, including draws queued while a camera is pending. The Windows fixture
+now queues native map/UI writes before every camera request and poll. No new
+game hook, address, CPU map readback, or rendering fallback is involved.
+
+Three camera-policy and five publication tests pass. The current combined
+fixture preserves this ordering coverage and adds empty unit background copies.
+Absence of the earlier texture-budget failure in fixtures is not proof of its
+live resolution.
+
+Capture `20260927-115530` failed before the first displayed map. A CPU-owned
+HUD form was sampled before GPU adoption, and the unscoped temporary bits lease
+incorrectly revoked its lifetime evidence. Later HUD blending attempted a
+forbidden readback and disabled composition. The fix scopes the verified native
+sampler's temporary bits read before adoption; the GPU-owned path still answers
+input locally. This supersedes the previous fixture-only startup qualification.
+The reported fog appearance remains visually unqualified.
+
+The final canvas sampler call in GOG form hit testing is at `0x006090C3`.
+Its new wrapper first checks `enable_custom_rendering` and delegates directly
+to the original sampler at `0x00600340` when false. CPU-owned UI also retains
+that function. For GPU-owned canvases, native UI commands and copied UI source
+words describe the current input surface. A query evaluates one point without
+waiting for Renderer64 or accessing GPU/native map pixels. Terrain is opaque
+for input regardless of its lighting; explicit transparent-key and zero UI
+regions retain their native meaning. This is restricted to that form-input call,
+not a general substitute for native pixel getters.
+
+The input description uses immutable command references indexed by 64-pixel
+screen regions. Source snapshots keep only the regions a command samples;
+replaced history is retired locally. Deep translucent histories become bounded
+input values for one region. Map words stay the semantic opaque marker. These
+values never enter a GPU upload, native pixel buffer, or displayed frame.
+The former whole-canvas traversal took seconds on dense map overlays and could
+exceed its depth limit despite passing small HUD fixtures. The regression now
+covers 20,800 map overlay draws, 20,000 partial HUD redraws, cross-region
+translucent blending, lifetime reuse and both 16-bit native formats. The native
+oracle compares known input values against GPU/JGL pixels.
+
+The GOG entries were added with explicit user authorization. The injected
+compile/injection check and native input recording/replay codec pass. See the
+[patch ledger](civ3_patch_dependency_ledger.md#asynchronous-form-hit-testing) for
+addresses, signatures, disabled behavior and exact validation receipts. Full-size validation now includes CPU form input before adoption and 2,600
+transparent overlay calls, as well as 32 scrolls and independent process progress.
+A diagnostic run also exposed old map callbacks retained through translucent
+HUD history. Superseded fresh-map sources now freeze their completed GPU output;
+static dependent recipes retire their old inputs even when pixels are unchanged.
+An 80-view GPU oracle verifies exact pixels, bounded memory and current-map
+animation. The full-size fixture also caught exponential input work on repeated
+nonmatching destination-key transfers. Reusing the already sampled destination
+removes that duplicate traversal. The final fixture times complete HUD submission
+as well as camera polling, and rejects updates lasting two seconds or longer.
+The preceding startup correction was installed. Its full-size fixture
+`dba0b01184d345cc911e430e6ce0bd9b` passes at 55.62 FPS with all 32 complete
+scroll/HUD updates in 31–125 ms and no composition errors. It verifies
+independent progress while either process is paused, with no CPU map readbacks.
+The native HUD oracle and installed-directory startup probe pass. Installed
+disassembly confirms immediate config-off delegation and restoration of the
+private CPU sampler context. General gameplay acceptance remains a strategic checkpoint;
+fixture cadence is not live-game FPS.
 
 `sandbox/async_scene_client.h` owns copied publications between the native
 composition owner and the existing process transport. The game reserves image

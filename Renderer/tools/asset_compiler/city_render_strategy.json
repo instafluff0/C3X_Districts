@@ -16,7 +16,8 @@
         "medieval": "SouthAmerican",
         "industrial": "Colonial",
         "modern": "ModernGlass"
-      }
+      },
+      "composition_base_by_era": {"modern": "industrial"}
     },
     {
       "civ3_culture_group": 1,
@@ -26,7 +27,8 @@
         "medieval": "DEFAULT",
         "industrial": "RowHouse",
         "modern": "ModernGlass"
-      }
+      },
+      "composition_base_by_era": {"modern": "industrial"}
     },
     {
       "civ3_culture_group": 2,
@@ -36,7 +38,8 @@
         "medieval": "Mediterranean",
         "industrial": "Colonial",
         "modern": "ModernGlass"
-      }
+      },
+      "composition_base_by_era": {"modern": "industrial"}
     },
     {
       "civ3_culture_group": 3,
@@ -46,7 +49,8 @@
         "medieval": "Mughal",
         "industrial": "RowHouse",
         "modern": "ModernGlass"
-      }
+      },
+      "composition_base_by_era": {"modern": "industrial"}
     },
     {
       "civ3_culture_group": 4,
@@ -56,7 +60,8 @@
         "medieval": "EastAsian",
         "industrial": "RowHouse",
         "modern": "ModernGlass"
-      }
+      },
+      "composition_base_by_era": {"modern": "industrial"}
     }
   ],
   "runtime": {
@@ -104,6 +109,13 @@
     "walls": {
       "composition": "separate_perimeter_kit",
       "fit": "city_footprint",
+      "population_rule": "town_only",
+      "kit_by_civ3_era": {
+        "ancient": "ancient",
+        "medieval": "medieval",
+        "industrial": "tsikhe",
+        "modern": "modern_low"
+      },
       "native_policy": "retain_until_per-era_wall_matrix_is_approved"
     },
     "lighting": {

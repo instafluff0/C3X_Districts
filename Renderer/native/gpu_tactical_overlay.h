@@ -118,15 +118,27 @@ public:
         if(!w||!h||w>2240||h>1260||capture.primitives.empty())throw std::runtime_error("tactical extent");
         if(w!=width||h!=height){texture.Reset();target.Reset();color_view.Reset();packed_texture.Reset();packed_view.Reset();D3D11_TEXTURE2D_DESC td={};td.Width=w;td.Height=h;td.MipLevels=td.ArraySize=1;td.Format=DXGI_FORMAT_B8G8R8A8_UNORM;td.SampleDesc.Count=1;td.BindFlags=D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE;
             check(d->CreateTexture2D(&td,nullptr,&texture));check(d->CreateRenderTargetView(texture.Get(),nullptr,&target));width=w;height=h;}
+        float clear[4]={};c->ClearRenderTargetView(target.Get(),clear);
+        draw_into(d,c,capture,area,seconds,target.Get(),w,h);
+        return texture.Get();
+    }
+    // Shared primitive/shader implementation for the scene's under-unit pass.
+    // The caller owns the target and ordering; preserve its existing pixels.
+    void draw_into(ID3D11Device* d,ID3D11DeviceContext* c,Input const& capture,
+                   std::array<int,4> area,double seconds,ID3D11RenderTargetView* rt,
+                   unsigned target_width,unsigned target_height){
+        if(capture.primitives.empty())return;
+        initialize(d);unsigned w=unsigned(area[2]-area[0]),h=unsigned(area[3]-area[1]);
+        if(!rt||!w||!h||!target_width||!target_height)throw std::runtime_error("tactical target");
         unsigned count=unsigned(capture.primitives.size());
         if(count>capacity){input.Reset();instances.Reset();capacity=std::max(64u,count);D3D11_BUFFER_DESC b={};b.ByteWidth=capacity*sizeof(Primitive);b.Usage=D3D11_USAGE_DYNAMIC;b.BindFlags=D3D11_BIND_SHADER_RESOURCE;b.CPUAccessFlags=D3D11_CPU_ACCESS_WRITE;b.MiscFlags=D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;b.StructureByteStride=sizeof(Primitive);
             check(d->CreateBuffer(&b,nullptr,&instances));check(d->CreateShaderResourceView(instances.Get(),nullptr,&input));}
         D3D11_MAPPED_SUBRESOURCE mapped={};check(c->Map(instances.Get(),0,D3D11_MAP_WRITE_DISCARD,0,&mapped));std::memcpy(mapped.pData,capture.primitives.data(),count*sizeof(Primitive));c->Unmap(instances.Get(),0);
         float values[8]={float(area[0]),float(area[1]),float(w),float(h),cursor_phase(seconds),0,0,0};c->UpdateSubresource(params.Get(),0,nullptr,values,0,0);
-        ID3D11RenderTargetView* rt=target.Get();float clear[4]={};c->ClearRenderTargetView(rt,clear);c->OMSetRenderTargets(1,&rt,nullptr);c->OMSetBlendState(blend.Get(),nullptr,~0u);c->OMSetDepthStencilState(nullptr,0);c->RSSetState(raster.Get());D3D11_VIEWPORT vp={0,0,float(w),float(h),0,1};c->RSSetViewports(1,&vp);
+        c->OMSetRenderTargets(1,&rt,nullptr);c->OMSetBlendState(blend.Get(),nullptr,~0u);c->OMSetDepthStencilState(nullptr,0);c->RSSetState(raster.Get());D3D11_VIEWPORT vp={0,0,float(target_width),float(target_height),0,1};c->RSSetViewports(1,&vp);
         c->IASetInputLayout(nullptr);c->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);c->VSSetShader(vs.Get(),nullptr,0);c->PSSetShader(ps.Get(),nullptr,0);auto buffer=params.Get();c->VSSetConstantBuffers(0,1,&buffer);c->PSSetConstantBuffers(0,1,&buffer);
         ID3D11ShaderResourceView* views[]={input.Get(),glyphs.Get()};c->VSSetShaderResources(0,1,views);c->PSSetShaderResources(0,2,views);auto sam=sampler.Get();c->PSSetSamplers(0,1,&sam);c->DrawInstanced(6,count,0,0);
-        views[0]=views[1]=nullptr;c->VSSetShaderResources(0,1,views);c->PSSetShaderResources(0,2,views);c->OMSetRenderTargets(0,nullptr,nullptr);return texture.Get();
+        views[0]=views[1]=nullptr;c->VSSetShaderResources(0,1,views);c->PSSetShaderResources(0,2,views);c->OMSetRenderTargets(0,nullptr,nullptr);
     }
     ID3D11Texture2D* packed(ID3D11Device* d,ID3D11DeviceContext* c,Input const& capture,std::array<int,4> area,double seconds){
         draw(d,c,capture,area,seconds);

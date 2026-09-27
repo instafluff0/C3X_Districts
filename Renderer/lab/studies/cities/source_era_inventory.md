@@ -75,11 +75,17 @@ this inventory does not infer its exact gameplay selection rule.
 
 The [46-pair source-art review](../../out/cities/all-era-source-auditions/review/README.md)
 gives every populated cell in this table a separate pink Town/City/Metro sheet
-with Base, Walls, Capital, and Both states. Its wall kits and palace fallbacks
-are provisional comparison aids. All selections happen in Lab preparation;
+with Town wall variants and unwalled City/Metropolis states. The Town wall kits
+are Ancient Walls, Castle, Tsikhe, and lower spike-free Modern Tower Defense
+by Civ III target era. Palace fallbacks remain comparison aids. All selections happen in Lab preparation;
 the game renderer receives generic composition metadata.
-The [wall source audit](wall_source_audit.md) records why Industrial and Modern
-review rows currently share Civ VI's Renaissance Star Fort geometry.
+The [wall source audit](wall_source_audit.md) records source provenance and
+the difference between Civ VI's own wall use and our Civ III art mapping.
+The five-culture Industrial/Modern candidate comparison keeps each mapped
+Industrial house family as the Modern outer neighborhood, then adds ordinary
+Modern infill and ModernGlass high-rises toward the center. The separate
+`ARTERA_MODERN` source sheets remain raw family auditions, not the final
+five-culture composition.
 
 The source graph has separate jobs:
 

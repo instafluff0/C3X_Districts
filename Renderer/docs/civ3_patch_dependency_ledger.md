@@ -1,9 +1,139 @@
 # Civ III patch dependency ledger
 
+## Legacy tile highlights under custom rendering
+
+At the user's explicit direction, custom rendering bypasses
+`init_tile_highlights`, `compute_highlighted_worker_tiles_for_districts`, and
+the legacy city-site/district/focus highlight tail of the m19 tile hook.
+Already initialized PCX sprites cannot re-enter through partial native calls.
+Config-off retains native drawing and the existing highlight behavior. No new
+state or native function is patched. The Lab settler-desirability category is
+currently a synthetic CPU composition study; its eventual GPU integration is
+separate from this bypass. No CPU replacement is introduced here.
+
+Reuses `Map_Renderer_m19_Draw_Tile_by_XY_and_Flags`, replacement vptr,
+`void (__fastcall *)(Map_Renderer *, int, int, int, int, Map_Renderer *, int, int, int, int)`.
+Registered GOG/Steam/PCGames.de addresses: `0x66A554`, `0x687660`, `0x66A554`.
+No new symbol, address or patch-table change. `required_user_action: []`.
+The extracted actual hook verifies capture/adoption, partial calls and stale
+renderer state with config-off. The approved injected compile smoke passes.
+Live run `20260927-142322` completes all 32 camera moves and 33 map adoptions
+without a renderer failure. Legacy colored diamonds are absent. Median native
+map time is 3.959 ms, down from about 1.1 seconds. This proves the bounded
+camera diagnostic, not full gameplay or live FPS.
+
+## Bounded changing-sprite input history and scripted game diagnostic
+
+Capture `20260927-132302` first fails at 18.221 s with
+`native input coverage byte budget exceeded` during `C3X_NATIVE_SPRITE`.
+No readback request precedes it. The input description retained changing source
+uploads even when command depth stayed low. Regional compaction now considers
+retained payload bytes as well as depth; the 96 MiB cap is unchanged. This is
+input/hit-test metadata only: no CPU map rendering or GPU readback is added.
+The old-code probe fails after 3,072 changing draws at exactly 96 MiB. The
+corrected test completes 10,400, preserves a copied prior view, and peaks at
+22,611,968 bytes. All nine input tests pass. Native oracle
+`f440524ed1e248479bcacd7c03131acc` and full asynchronous fixture
+`26f3810cd26449a9812f9b78ec6d64b1` pass; the latter adds 5,200 changing uploads
+before its warm cadence measurement (56.76 FPS). Its complete diagnostic has
+only the deliberate invalid-window rejection and no unexpected readback or
+budget failure. These remain controlled fixture results, not live-game FPS.
+
+The automated live run `20260927-140022` no longer exhausts input-history
+memory, but native image traffic fills the ordered publication queue at
+43.377 s. Bounded content-based sprite reuse passes the native pixel oracle
+and asynchronous fixture; subsequent live runs finish without that failure.
+It needs no injected hook or patch-table change.
+
+At the user's explicit request, a bounded real-game diagnostic reuses:
+
+- `Main_Screen_Form_m82_handle_key_event`: existing replacement vptr;
+  `void (__fastcall *)(Main_Screen_Form *, int, int, int)`;
+  GOG `0x66B520`, Steam `0x688620`, PCGames.de `0x66B520`.
+- `show_intro_after_load_popup`: existing replacement call;
+  `int (__fastcall *)(void *, int, int, int)`;
+  GOG `0x5936F3`, Steam `0x5A0E8C`, PCGames.de `0x593413`.
+- `Main_Screen_Form_move_camera`: existing inlead;
+  `void (__fastcall *)(Main_Screen_Form *, int, int, int, int, bool)`;
+  GOG `0x4DF700`; other builds have no registered address. Scripted camera
+  commands are compiled only when that existing symbol is available.
+
+Both diagnostic additions first check `enable_custom_rendering` and then the
+explicit child environment variable. Normal/config-off launches retain their
+existing paths. The script uses native menu loading of a copied save, dismisses
+only its known post-load welcome popup, and issues at most 32 camera moves.
+No patch-table edit, new address, remote game-thread injection or turn command
+is involved. The approved compile/injection smoke test and extracted opt-in,
+config-off, load-readiness and bounded-camera contracts pass.
+
+`required_user_action: []`. Installation and this scoped automated game test
+were explicitly authorized. The new console installer wraps the existing
+`ep.c` installer without modifying it. See
+[scripted diagnostic usage](../tools/scripted_game_test.md). Live rendering
+acceptance still depends on the captured map and camera results.
+
+## Empty native unit background copies
+
+`required_user_action: ["At the strategic game checkpoint, verify cold startup and scrolling with the staged empty-copy correction using the existing diagnostic"]`.
+Capture `20260927-130716` adopts its first map, then a forbidden image readback
+poisons composition immediately after a unit draw. That capture lacks the
+triggering native operation, so its exact cause is not established. The
+expanded native fixture reproduces this failure chain with an empty unit
+background copy: original JGL returns success without drawing, but the old
+adapter attempts two readbacks. Renderer64 unit capture intentionally returns
+an empty native raster envelope. The adapter now accepts zero-dimension copies
+before image admission or fallback, preserving both owners without GPU work.
+
+This reuses `patch_JGL_Image_copy`, `C3X_NATIVE_COPY` and the existing unit-draw
+interface. No new symbol, signature, address or patch-table entry is needed;
+injected code and config-off delegation are unchanged. Diagnostics now identify
+the operation before a forbidden readback and when an image operation throws.
+Native oracle `47c3fee579d344eda7514fab54ce9856` passes all nine empty-copy
+cases with no readbacks. Full asynchronous fixture
+`96733a37f4944e27bf1457e0437adf00` fails on the previously staged binaries;
+corrected fixture `9c572774fce745f3b1982abbf3693002` passes at 2240×1260 with
+33 adoptions/commits, all 32 scroll updates, 55.51 FPS warm cadence, and no
+readback or composition failure through reset. Complete updates take 31–313 ms.
+The matched trio is staged; its startup probe passes. Installed executable,
+injected source and CSV hashes remain unchanged, so reinjection is unnecessary.
+Live acceptance remains pending.
+
+## Native drawing before asynchronous camera updates
+
+`required_user_action: []` (covered by the current combined checkpoint above).
+Capture `20260927-124922` adopts the first map, but subsequent requests fail
+before camera begin because native drawing commands are still queued. The fix
+is confined to the existing Renderer composition owner: publish the old-ticket
+batch through the asynchronous queue before requesting/polling the next camera.
+It reuses the existing native copy/fill hooks and `custom_renderer_native_map`
+boundary. No new symbol, signature, patch-table entry or address is required;
+config-off delegation and the explicit legacy path remain unchanged. A focused
+regression reproduces the old rejection and verifies ordered adoption.
+Fixture `458b020da9ea4a68b2ed83c99932ff0c` completes 33 map adoptions/commits,
+including queued UI before every camera request/poll, alternating clears,
+grid and selection. Updates take 31–141 ms with 55.65 FPS warm cadence;
+diagnostics through teardown contain no composition or texture-budget failure.
+The matched trio is staged and its installed-directory startup probe passes.
+Injected code, CSV and installed executable hashes match the prior installation,
+so no injection change or new patch capability is needed.
+
 ## Asynchronous form hit testing
 
-`required_user_action: ["Add the two GOG entries below to civ_prog_objects.csv"]`.
-The candidate is not installed until those entries and its validation are complete.
+`required_user_action: ["Verify the installed startup/input correction in Civ III with the existing diagnostic capture"]`.
+The user authorized the two verified GOG entries below. No new address or patch
+capability is required for this correction. The original installed wrapper's
+config-off branch was verified in the executable.
+
+Capture `20260927-115530` shows a previously untested ordering: form hit testing
+runs on CPU-owned HUD canvases before the first map is adopted. The wrapper's
+native delegation exposed a temporary bits lease with context zero, revoking
+admission for the full-size HUD canvas at 12.091736 s. After the map was adopted,
+HUD blending failed admission at 20.006994 s and its forbidden background
+readback poisoned composition. The verified `0x00600340` body releases that
+lease and returns only a scalar. The corrected wrapper scopes just this call
+as `C3X_NATIVE_HIT_PIXEL`; lifetime tracking exempts its bits lease, while public
+pixel/DC access and foreign-thread access still revoke admission. Config-off
+still calls vanilla immediately with unchanged arguments.
 
 Capture `20260927-103925` confirms loading-screen presentation succeeds
 (`native-ui-present result=1`, 11.874208 s). Its next failure is a 32×32 button
@@ -20,7 +150,7 @@ with the global transparent key and optionally zero.
 | `repl call` | `PCX_Image_get_form_hit_pixel` | `0x006090C3` | unverified (`0x0`) | unverified (`0x0`) |
 
 Both use `unsigned (__fastcall *)(PCX_Image*, int edx, int x, int y)`.
-Add these rows; keep the original-function definition before the call-site row:
+Registered rows (the original definition precedes the call-site row):
 
 ```csv
 define, 0x00600340, 0x0, 0x0, "PCX_Image_get_pixel", "unsigned (__fastcall *) (PCX_Image * this, int edx, int x, int y)"
@@ -31,7 +161,7 @@ repl call, 0x006090C3, 0x0, 0x0, "PCX_Image_get_form_hit_pixel", ""
 When false it immediately calls the original function with unchanged arguments.
 When true, GPU-owned canvases answer one input point from retained native UI
 commands and copied UI source words. The map is semantically opaque for input,
-independent of lighting. CPU-owned UI still delegates to the original sampler.
+independent of lighting. CPU-owned UI delegates to the original sampler with the audited private-read scope.
 No GPU wait, GPU readback, CPU terrain drawing, or global pixel-getter bypass is
 introduced. Renderer errors preserve GPU ownership and return no hit. The hook
 is compiled only when its original-function definition exists; unsupported
@@ -39,16 +169,57 @@ builds keep their unpatched call site. No runtime address discovery is used.
 
 Reuses existing JGL ownership/copy/fill/sprite hooks and the renderer image API;
 adds `C3X_NATIVE_HIT_PIXEL` to recorded input and replay. Other pixel/DC getters
-retain their original ownership checks. `civ_prog_objects.csv` and the native
-Civ III header are unchanged by the agent.
+retain their original ownership checks. The native Civ III header is unchanged.
 
-Automated validation is in progress. The portable hook test covers config-off
-before any image dereference/probe/query, CPU UI delegation, admitted GPU input,
-and failure without stale pixel access. A 20,000-redraw input test checks
-bounded retention, both 16-bit formats, copied lifetimes and destruction.
-The native GPU oracle validates known UI point values against the existing
-pixel fixtures. The asynchronous fixture covers 1,156 button points and opaque
-map input; its later scrolling failure remains under investigation.
+Validation for the corrected startup path:
+
+- Extracted-hook tests prove immediate config-off delegation and scoped CPU
+  sampler delegation, including context restoration. Only the audited bits
+  lease is exempt; public pixels/DCs and foreign threads still revoke ownership.
+- Input commands are indexed by 64-pixel regions. A 20,800-draw map regression
+  stays bounded and verifies full clears and retained source snapshots. Long HUD
+  redraw and cross-region translucent-blend tests retain exact input values.
+- Native UI oracle `291fa6fbc6d54a57aa119eb2fae6a6c3` compares those values with
+  GPU/JGL pixels, including six real HUD pairs and transparent sprite no-ops.
+  Proven empty sprite draws no longer retain animated-map dependencies.
+- GPU retained-composition tests cover 80 retired-camera transitions with
+  translucent HUD feedback: exact pixels, current map animation, 122,880 peak
+  retained bytes. Superseded fresh-map callbacks freeze their completed output;
+  dependent static recipes release their old camera inputs on the GPU thread.
+- The former `88bc9e4fb3fd4d219f86656f22220355` and repeat fixture receipts
+  passed small HUD/scroll tests but missed pre-adoption input and dense overlays.
+  Capture `20260927-115530` rejects their live-startup qualification. A later
+  diagnostic run exposed old camera textures reaching the retained budget after
+  repeated scrolling; final full-size validation must have no such failures.
+- Full-size run `e7578c5eed2e4b488bbce2152433ed34` reached 55.01 FPS with
+  all 32 scrolls and no worker/camera errors, but step 23 spent 50.83 seconds
+  updating input history. This rejects its responsive-startup qualification.
+  Destination-key misses were recursively sampling the same prior value twice.
+  They now reuse that value; 1,024 consecutive misses, matching keys and distinct
+  backgrounds are covered. The native fixture rejects any complete scroll/HUD
+  update taking two seconds or longer.
+- Approved injected compilation and the 13 portable input/publication tests pass.
+- During validation, the shared wall bundle changed from one texture to three.
+  The loader and both rendering paths now populate the four existing shader
+  slots from the bundle. Failed asset admission records the missing category;
+  the async receipt hashes wall inputs and rejects worker/camera failures.
+- The broader object-compiler suite remains separate: five tests currently fail
+  because of stale `select_improvements` call signatures or a Windows `max`
+  macro collision in their fixtures. This is not a passing full-suite claim.
+- Final native fixture `dba0b01184d345cc911e430e6ce0bd9b` passes at 2240×1260:
+  55.62 FPS, 32 complete scroll/HUD updates in 31–125 ms, no worker/camera or
+  retained-budget errors. The formerly slow step 23 takes 46 ms. Dense input
+  submission takes 162.54 ms for 2,600 calls. Pausing the host for two seconds
+  allows 120 renderer frames; pausing Renderer64 allows 72 host publications
+  with 1.193 ms submission p95 and zero CPU map readbacks.
+- Matching bridge/DLL/helper hashes and source closure were verified before
+  staging. Startup reports `select=1 definitions=1 healthy=1`; `INSTALL.bat`
+  completed through the command line. Installed executable SHA-256:
+  `cbb5e438c54ceb86e66e1fd0f0bcce354741ce3f6db0cea34bc61382a932c546`.
+  Call site `0x006090C3` targets `0x00DB5873`. Disassembly verifies the first
+  config-off branch delegates to `0x00600340`, and the enabled CPU delegation
+  sets private context 126 around that call and restores the previous context.
+  Civ III was not launched. Live startup, fog and scrolling remain user checks.
 
 The prior loading-screen target handoff and JGL indexed slot-14 fix remain in
 place. CPU map readback and unit raster fallback remain rejected. Preserve the
