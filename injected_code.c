@@ -19913,6 +19913,26 @@ patch_JGL_Image_bits (JGL_Image * image)
 	return ((void * (__fastcall *) (JGL_Image *))is->custom_renderer_jgl_original[4]) (image);
 }
 
+// Supplied by the patch ledger's original-function definition. Until the human
+// adds that definition and the call-site entry, this hook is not installed.
+#ifdef PCX_Image_get_pixel
+unsigned __fastcall
+patch_PCX_Image_get_form_hit_pixel (PCX_Image * pcx, int edx, int x, int y)
+{
+	if (! is->current_config.enable_custom_rendering)
+		return PCX_Image_get_pixel (pcx, edx, x, y);
+	// Only the Base_Form canvas hit-test call uses this entry. General pixel
+	// readers still require real native pixels and retain their ownership checks.
+	if (custom_renderer_native_probe_on () && is->custom_renderer_native_image != NULL) {
+		int point[2] = {x, y};
+		unsigned value = 0;
+		int result = is->custom_renderer_native_image (C3X_NATIVE_HIT_PIXEL, pcx->JGL.Image, NULL, point, &value, 0);
+		if (result != 0) return result > 0 ? value : 0;
+	}
+	return PCX_Image_get_pixel (pcx, edx, x, y);
+}
+#endif
+
 HDC __fastcall
 patch_JGL_Image_acquire_dc (JGL_Image * image)
 {

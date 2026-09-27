@@ -14582,7 +14582,8 @@ extern "C" __declspec(dllexport) int c3x_renderer_native_image(int operation,voi
         OutputDebugStringA(detail);
     }
     if(token)c3x_recording::event(c3x_recording::native_end,0,[&](auto& b){c3x_recording::u64(b,token);c3x_recording::u32(b,unsigned(result));});
-    input.result(result,[&](auto& out){if(operation==C3X_NATIVE_UNIT_DRAW&&to&&result==1)for(unsigned n=0;n<4;++n)out(static_cast<int const*>(to)[n]);});
+    input.result(result,[&](auto& out){if(operation==C3X_NATIVE_UNIT_DRAW&&to&&result==1)for(unsigned n=0;n<4;++n)out(static_cast<int const*>(to)[n]);
+        if(operation==C3X_NATIVE_HIT_PIXEL&&to&&result==1)out(*static_cast<unsigned const*>(to));});
     // The lifetime notification and adapter destruction refer to the same
     // object. Retire its recording identity only after both have consumed it.
     if(operation==C3X_NATIVE_DESTROY){if(input.call.id)c3x_inputs::recorded_native_values().retire(c3x_inputs::native_id(image));c3x_inputs::runtime().retire(image);}

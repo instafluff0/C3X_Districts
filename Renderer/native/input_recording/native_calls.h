@@ -23,6 +23,7 @@ inline void native_operation_input(Writer& out,int op,void* image,void* source,v
     out(std::int32_t(op));out.u32(native_id(image));out.u32(op==C3X_NATIVE_TEXT?0:native_id(source));out(color);
     if(op==C3X_NATIVE_TEXT){out.u32(source?1:0);if(source){require(color<=1024,"native text length");out.u32(color);out.reserve(color);auto text=static_cast<unsigned char const*>(source);out.bytes.insert(out.bytes.end(),text,text+color);}native_rect(out,to);}
     else if(op==C3X_NATIVE_UNIT_DRAW){out.u32(from?1:0);if(from)unit(out,*static_cast<c3x_renderer_unit_v1 const*>(from));out.u32(to?1:0);}
+    else if(op==C3X_NATIVE_HIT_PIXEL){native_rect(out,from,2);out.u32(to?1:0);}
     else if(op==C3X_NATIVE_TACTICAL_GRID){out.u32(from?1:0);if(from)frame(out,*static_cast<c3x_renderer_frame_v1 const*>(from));}
     else if(op==C3X_NATIVE_TACTICAL_ROUTE_BEGIN){out.u32(from?1:0);if(from){auto& v=*static_cast<c3x_renderer_tactical_view_v1 const*>(from);out(v.tile_width);out(v.native_tile_width);out(v.translate_x_fp);out(v.translate_y_fp);}}
     else if(op==C3X_NATIVE_LOOKUP||op==C3X_NATIVE_SPRITE_LOOKUP||op==C3X_NATIVE_SPRITE_LOOKUP_OVER||op==C3X_NATIVE_SPRITE_LOOKUP_SCALED){out.u32(from?1:0);if(from){auto& p=*static_cast<c3x_renderer_native_lookup const*>(from);out.u32(native_id(p.palette));out(p.percent);out.u32(native_id(p.background));for(auto x:p.scale)out(x);native_table(out,p.table,op>=C3X_NATIVE_SPRITE_LOOKUP_OVER?31:16);}native_rect(out,to);}
@@ -43,6 +44,7 @@ struct NativeOperationInput {
     void decode(Reader& in){in(operation);image=object(in.u32());source=object(in.u32());in(color);auto op=operation;
         if(op==C3X_NATIVE_TEXT){if(in.u32()){auto n=in.u32();require(n==color&&n<=1024,"native text size");in.available(n);text.assign(reinterpret_cast<char const*>(in.bytes.data()+in.at),n);in.at+=n;source=text.data();}rect(in,to,b.data());}
         else if(op==C3X_NATIVE_UNIT_DRAW){if(in.u32()){unit(in,actor);from=&actor;}if(in.u32())to=b.data();}
+        else if(op==C3X_NATIVE_HIT_PIXEL){rect(in,from,a.data(),2);if(in.u32())to=b.data();}
         else if(op==C3X_NATIVE_TACTICAL_GRID){if(in.u32()){frame(in,scene);from=&scene.value;}}
         else if(op==C3X_NATIVE_TACTICAL_ROUTE_BEGIN){if(in.u32()){in(view.tile_width);in(view.native_tile_width);in(view.translate_x_fp);in(view.translate_y_fp);from=&view;}}
         else if(op==C3X_NATIVE_LOOKUP||op==C3X_NATIVE_SPRITE_LOOKUP||op==C3X_NATIVE_SPRITE_LOOKUP_OVER||op==C3X_NATIVE_SPRITE_LOOKUP_SCALED){if(in.u32()){lookup.palette=object(in.u32());in(lookup.percent);lookup.background=object(in.u32());for(auto& x:lookup.scale)in(x);words(in,lookup.table);from=&lookup;}rect(in,to,b.data());}

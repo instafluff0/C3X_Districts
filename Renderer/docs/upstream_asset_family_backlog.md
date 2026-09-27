@@ -9,7 +9,7 @@ suppression.
 
 | Family | Offline result | Lab ownership still required |
 | --- | --- | --- |
-| City walls | 19 pieces across complete ancient, medieval, and industrial role kits | L17 perimeter topology, scale, grounding, and both-zoom approval |
+| City walls | 33 locally normalized pieces: three standard kits plus Tsikhe, Pirates scenario, and Modern Tower Defense candidates; see `Renderer/lab/studies/cities/wall_source_audit.md` | Perimeter topology, scale, grounding, and both-zoom approval; late-era style still requires art review |
 | Capital accents | Exact installed ArtDef scan finds 47 distinct standard-game palace roots; all bodies normalize with 585 geometry parts, 464 materials, 124 emissive bindings, and exact attachment transforms. The Gran Colombian root retains four unresolved required tree children | L17 selects/calibrates candidates at both zooms through generic pack profiles; no Civ VI civilization ID enters runtime logic |
 | Naval unit | Galley body normalized from three skinned meshes/two materials; eight basic actions converted, validated, and included in the family model-aware pose-cache bake | L20 multi-part rendering, scale/facing, formation, and visual approval |
 | Army commanders | Dedicated Classical and Modern Great General ArtDefs resolved; Modern foot officer is direct, while Classical horse+rider now passes the generic socket/paired-clip compiler; the two-child Army contract preserves Civ III's exact displayed member | L20 calibrates both commander profiles and the full Army matrix; I20 captures both native bodies atomically |

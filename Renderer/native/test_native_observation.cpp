@@ -56,6 +56,24 @@ auto present_fn=&native_present;
 #define JGL_present_screen present_fn
 // The camera bridge itself is executed by test_native_view_identity.py.
 void settle_custom_renderer_navigation(int){}
+// Original PCX sampler fixture: count direct delegation independently of the
+// renderer query and exercise the real JGL bits/stride path for CPU canvases.
+unsigned original_hit_calls=0;
+unsigned __fastcall original_form_pixel(PCX_Image* pcx,int,int x,int y){
+    ++original_hit_calls;
+    auto image=pcx->JGL.Image;if(!image||x<0||y<0)return 0;
+    if(x>=reinterpret_cast<int(__thiscall*)(JGL_Image*)>(image->vtable[54])(image)||
+       y>=reinterpret_cast<int(__thiscall*)(JGL_Image*)>(image->vtable[55])(image))return 0;
+    auto bits=reinterpret_cast<void*(__thiscall*)(JGL_Image*)>(image->vtable[4])(image);
+    unsigned value=0;
+    if(bits){int offset=y**reinterpret_cast<int*>(reinterpret_cast<char*>(image)+0x40)+x;
+        if(image->BitCount==8)value=static_cast<unsigned char*>(bits)[offset];
+        else if(image->BitCount==16)value=static_cast<unsigned short*>(bits)[offset];
+        else if(image->BitCount==32)value=static_cast<unsigned*>(bits)[offset];}
+    reinterpret_cast<void(__thiscall*)(JGL_Image*,int)>(image->vtable[9])(image,1);
+    return value;
+}
+#define PCX_Image_get_pixel original_form_pixel
 #include "build/native_probe_hooks.h"
 using Create=JGL_Image*(__thiscall*)(void*,void*,int);
 using Init=int(__thiscall*)(JGL_Image*,int,int,int,int);

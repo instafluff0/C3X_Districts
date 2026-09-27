@@ -28,5 +28,13 @@ int main(){
     assert(pointer==pixels&&leases==1&&c3x_native_access::provider()==nullptr&&failing.failed);
     c3x_native_access::release_words(nullptr,reinterpret_cast<void*>(release));assert(releases==1);
     custom_renderer_native_view original{1,2,3,4,5,6,7,8,9,10,11,12},restored{};Writer view;native_view(view,original);Reader view_in{view.bytes};native_view(view_in,restored);view_in.done();assert(!std::memcmp(&original,&restored,sizeof original));
-    std::cout<<"PASS native input dependencies: content references, missing/corrupt input rejection, complete navigation fields, capture failure preserves one lease/release; replay fails before native dereference\n";
+    for(bool with_point:{false,true})for(bool with_result:{false,true}){
+        int point[2]={-17,35};unsigned hit=0;Writer call;
+        native_operation_input(call,C3X_NATIVE_HIT_PIXEL,nullptr,nullptr,with_point?point:nullptr,with_result?&hit:nullptr,0);
+        Reader input{call.bytes};NativeOperationInput operation;operation.decode(input);input.done();
+        assert(operation.operation==C3X_NATIVE_HIT_PIXEL&&bool(operation.from)==with_point&&bool(operation.to)==with_result);
+        if(with_point)assert(operation.a[0]==-17&&operation.a[1]==35);
+        if(with_result){*static_cast<unsigned*>(const_cast<void*>(operation.to))=0x7c1f;assert(operation.b[0]==0x7c1f);}
+    }
+    std::cout<<"PASS native input dependencies: content references, missing/corrupt input rejection, complete navigation fields and form input points, capture failure preserves one lease/release; replay fails before native dereference\n";
 }

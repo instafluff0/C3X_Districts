@@ -1,0 +1,58 @@
+{
+  "schema": "c3x.source_unit_family_strategy.v0",
+  "source_content": "Base",
+  "source_units_per_tile": 100.0,
+  "units": [
+    {
+      "slug": "settler",
+      "civ3_ids": [
+        "PRTO_Lab_SettlerCarrier"
+      ],
+      "source_artdef": "UNIT_SETTLER",
+      "domain": "land",
+      "archetype": "civilian",
+      "minimum_matching_tracks": 30,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_Settler_Backpack_IdleA",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_Settler_Backpack_Run",
+          "loop": true
+        }
+      },
+      "additional_actions": {
+        "fidget": {
+          "source": "ANIMATION_Settler_Backpack_FidgetA",
+          "loop": false
+        },
+        "fortify": {
+          "source": "ANIMATION_Settler_Backpack_Run_Stop",
+          "loop": false
+        }
+      },
+      "member_index": 2,
+      "selected_member_count": 1,
+      "action_scope": "civilian"
+    }
+  ],
+  "deferred_archetype_probes": [],
+  "runtime": {
+    "direction_count": 8,
+    "body_ownership": "unit_body_only",
+    "retained_native_layers": [
+      "selection_cursor",
+      "health_bar",
+      "activity_marks",
+      "stack_indicators",
+      "hud"
+    ],
+    "movement_policy": "authoritative_civ3_anchor_and_segment_progress",
+    "action_timing_policy": "native_cursor_for_gameplay_actions; pause_filtered_authored_duration_for_idle_and_worker_job_loops",
+    "owner_color_policy": "civ3_ntp_palette_with_inferred_source_mask_mapping",
+    "unsupported_policy": "complete_native_unit_body_fallback"
+  },
+  "runtime_integration": "not_enabled",
+  "selection_notes": "Lab-only single SettlerBuilder member. Civ VI declares two identical copies; this preview selects one. The inferred Backpack-to-Pelvis socket needs visual calibration before game use."
+}

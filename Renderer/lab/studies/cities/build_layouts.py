@@ -87,7 +87,8 @@ def wall_instances(kit: str, size: int = 0,
     pack = "Renderer/packs/CityAdjunctsNormalized"
     catalog = json.loads((ROOT / pack / "city_adjunct_catalog.json").read_text())
     parts = catalog["walls"]["kits"][kit]
-    segment, gate = (parts[role][0] for role in ("segment", "gate"))
+    segment = parts["segment"][0]
+    gate = parts.get("gate", parts["segment"])[0]
     tower = next((asset for asset in parts["tower"] if asset.endswith("tower_small")),
                  parts["tower"][0])
     result = []
@@ -95,17 +96,17 @@ def wall_instances(kit: str, size: int = 0,
     for sector, (x, y, _) in enumerate(ring):
         next_x, next_y, _ = ring[(sector + 1) % len(ring)]
         direction = math.atan2(next_y - y, next_x - x)
-        closed_ancient_gate = kit == "ancient" and sector == 0
-        asset_id = segment if closed_ancient_gate else gate if sector == 0 else segment
+        closed_gate = (kit == "ancient" or "gate" not in parts) and sector == 0
+        asset_id = segment if closed_gate else gate if sector == 0 else segment
         body = component(asset_id, Path(pack))
-        axis = 0 if sector == 0 and not closed_ancient_gate else 1
+        axis = 0 if sector == 0 and not closed_gate else 1
         length = body["hi"][axis] - body["lo"][axis]
         if length <= 0:
             raise ValueError("wall section has no length")
         # A butt joint leaves a wedge at each turn because the masonry has
         # thickness. A small overlap closes it without a broad footprint.
         scale = math.dist((x, y), (next_x, next_y)) * 1.06 / length
-        rotation = (direction if sector == 0 and not closed_ancient_gate
+        rotation = (direction if sector == 0 and not closed_gate
                     else direction - math.pi / 2)
         center = [(body["lo"][axis] + body["hi"][axis]) / 2 for axis in (0, 1)]
         c, s = math.cos(rotation), math.sin(rotation)

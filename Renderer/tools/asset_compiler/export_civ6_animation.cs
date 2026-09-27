@@ -178,8 +178,30 @@ internal static class ExportCiv6Animation
         string directory = Path.GetDirectoryName(converter);
         Assembly utilityAssembly = Assembly.LoadFrom(Path.Combine(directory, "Firaxis.Utility.dll"));
         Type availableType = utilityAssembly.GetType("Firaxis.Utility.Available", true);
-        availableType.GetMethod("Startup", new Type[] { typeof(string), typeof(bool) }).Invoke(
-            null, new object[] { "C3XAnimationExporter", true });
+        // The disconnected Granny loader still asks Firaxis for a virtual space.
+        // A plain VM may have no CivNexus tool path registered; supply one only
+        // for startup and restore the user's ToolAssetPath value immediately.
+        using (var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(@"Software\Firaxis\Tools"))
+        {
+            object previous = key.GetValue("ToolAssetPath");
+            if (previous == null)
+            {
+                string fallback = Path.Combine(Path.GetTempPath(), "C3XAnimationExporter");
+                Directory.CreateDirectory(Path.Combine(fallback, "Assets"));
+                Directory.CreateDirectory(Path.Combine(fallback, "Resource"));
+                key.SetValue("ToolAssetPath", fallback);
+            }
+            try
+            {
+                availableType.GetMethod("Startup", new Type[] { typeof(string), typeof(bool) }).Invoke(
+                    null, new object[] { "C3XAnimationExporter", true });
+            }
+            finally
+            {
+                if (previous == null)
+                    key.DeleteValue("ToolAssetPath", false);
+            }
+        }
 
         Assembly grannyAssembly = Assembly.LoadFrom(Path.Combine(directory, "Firaxis.Granny.Impl.dll"));
         Type loaderType = grannyAssembly.GetTypes().Single(type => type.Name == "GrannyFileLoader");

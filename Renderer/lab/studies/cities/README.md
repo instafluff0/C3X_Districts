@@ -30,6 +30,10 @@ centerpiece; a capital uses the palace on that plot so the building stays
 legible. Buildings and palaces share the same tile-edge facing direction.
 Walls form a complete rounded ring with 16/20/24 joined segments by population
 size, a gate, and small buttresses over every joint. The walls remain below the roofs.
+The [wall source audit](wall_source_audit.md) distinguishes the three ordinary
+Civ VI fortification stages from Georgian, scenario, and improvement sets.
+The Industrial and Modern review rows currently share the Renaissance Star
+Fort art; supplemental wall kits are only auditions.
 The source palace selectors are provenance for these proposed mappings, not
 evidence that Civ III civilizations have the same architecture as Civ VI.
 These are culture-group fallbacks; a future city-style profile can override an

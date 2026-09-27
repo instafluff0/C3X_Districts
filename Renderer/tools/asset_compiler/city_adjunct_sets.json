@@ -1,6 +1,11 @@
 {
   "schema": "c3x.source_city_adjunct_mapping.v0",
   "source_units_per_tile": 100.0,
+  "package_options": {
+    "DLC/PiratesScenario/Platforms/Windows/BLPs/landmarks/Walls.blp": {
+      "allow_declared_size_mismatch": true
+    }
+  },
   "capital_probe": {
     "source_artdef": "Base/ArtDefs/Buildings.artdef",
     "source_building": "BUILDING_PALACE",
@@ -13,6 +18,7 @@
     {"asset_id": "city/walls/ancient/segment_02", "source_package": "Base/Platforms/Windows/BLPs/landmarks/Walls.blp", "source_entry": "CityWalls_ANC_wall_02", "kind": "wall_piece", "era": "ancient", "role": "segment"},
     {"asset_id": "city/walls/ancient/gate", "source_package": "Base/Platforms/Windows/BLPs/landmarks/Walls.blp", "source_entry": "CityWalls_ANC_gate", "kind": "wall_piece", "era": "ancient", "role": "gate"},
     {"asset_id": "city/walls/ancient/tower_small", "source_package": "Base/Platforms/Windows/BLPs/landmarks/Walls.blp", "source_entry": "CityWalls_ANC_sm_tower", "kind": "wall_piece", "era": "ancient", "role": "tower"},
+    {"asset_id": "city/walls/ancient/tower_large", "source_package": "Base/Platforms/Windows/BLPs/landmarks/Walls.blp", "source_entry": "CityWalls_ANC_lg_tower", "kind": "wall_piece", "era": "ancient", "role": "tower"},
     {"asset_id": "city/walls/medieval/half_01", "source_package": "Base/Platforms/Windows/BLPs/landmarks/Walls.blp", "source_entry": "CityWalls_MED_halfwall", "kind": "wall_piece", "era": "medieval", "role": "half"},
     {"asset_id": "city/walls/medieval/half_02", "source_package": "Base/Platforms/Windows/BLPs/landmarks/Walls.blp", "source_entry": "citywalls_med_halfwall_02", "kind": "wall_piece", "era": "medieval", "role": "half"},
     {"asset_id": "city/walls/medieval/segment_01", "source_package": "Base/Platforms/Windows/BLPs/landmarks/Walls.blp", "source_entry": "CityWalls_MED_wall", "kind": "wall_piece", "era": "medieval", "role": "segment"},
@@ -26,12 +32,54 @@
     {"asset_id": "city/walls/industrial/segment_02", "source_package": "Base/Platforms/Windows/BLPs/landmarks/Walls.blp", "source_entry": "CityWalls_REN_wall_02", "kind": "wall_piece", "era": "industrial", "role": "segment"},
     {"asset_id": "city/walls/industrial/gate", "source_package": "Base/Platforms/Windows/BLPs/landmarks/Walls.blp", "source_entry": "CityWalls_REN_gate", "kind": "wall_piece", "era": "industrial", "role": "gate"},
     {"asset_id": "city/walls/industrial/tower_small", "source_package": "Base/Platforms/Windows/BLPs/landmarks/Walls.blp", "source_entry": "CityWalls_REN_sm_tower", "kind": "wall_piece", "era": "industrial", "role": "tower"},
-    {"asset_id": "city/walls/industrial/tower_large", "source_package": "Base/Platforms/Windows/BLPs/landmarks/Walls.blp", "source_entry": "CityWalls_REN_lg_tower", "kind": "wall_piece", "era": "industrial", "role": "tower"}
+    {"asset_id": "city/walls/industrial/tower_large", "source_package": "Base/Platforms/Windows/BLPs/landmarks/Walls.blp", "source_entry": "CityWalls_REN_lg_tower", "kind": "wall_piece", "era": "industrial", "role": "tower"},
+    {"asset_id": "city/walls/tsikhe/half_01", "source_package": "DLC/Expansion1/platforms/windows/BLPs/Walls_Tsikhe.blp", "source_entry": "citywalls_Tsikhe_halfwall", "kind": "wall_piece", "era": "tsikhe", "role": "half"},
+    {"asset_id": "city/walls/tsikhe/half_02", "source_package": "DLC/Expansion1/platforms/windows/BLPs/Walls_Tsikhe.blp", "source_entry": "citywalls_Tsikhe_halfwall_02", "kind": "wall_piece", "era": "tsikhe", "role": "half"},
+    {"asset_id": "city/walls/tsikhe/segment_01", "source_package": "DLC/Expansion1/platforms/windows/BLPs/Walls_Tsikhe.blp", "source_entry": "CityWalls_Tsikhe_wall", "kind": "wall_piece", "era": "tsikhe", "role": "segment"},
+    {"asset_id": "city/walls/tsikhe/segment_02", "source_package": "DLC/Expansion1/platforms/windows/BLPs/Walls_Tsikhe.blp", "source_entry": "CityWalls_Tsikhe_wall_02", "kind": "wall_piece", "era": "tsikhe", "role": "segment"},
+    {"asset_id": "city/walls/tsikhe/gate", "source_package": "DLC/Expansion1/platforms/windows/BLPs/Walls_Tsikhe.blp", "source_entry": "Citywalls_Tsikhe_gate", "kind": "wall_piece", "era": "tsikhe", "role": "gate"},
+    {"asset_id": "city/walls/tsikhe/tower_small", "source_package": "DLC/Expansion1/platforms/windows/BLPs/Walls_Tsikhe.blp", "source_entry": "CityWalls_Tsikhe_sm_tower", "kind": "wall_piece", "era": "tsikhe", "role": "tower"},
+    {"asset_id": "city/walls/pirate_medieval/half_01", "source_package": "DLC/PiratesScenario/Platforms/Windows/BLPs/landmarks/Walls.blp", "source_entry": "Pirate_Scenario_CityWalls_MED_halfwall", "kind": "wall_piece", "era": "pirate_medieval", "role": "half"},
+    {"asset_id": "city/walls/pirate_medieval/segment_01", "source_package": "DLC/PiratesScenario/Platforms/Windows/BLPs/landmarks/Walls.blp", "source_entry": "PirateScenario_CityWalls_MED_wall", "kind": "wall_piece", "era": "pirate_medieval", "role": "segment"},
+    {"asset_id": "city/walls/modern_barricade/half_01", "source_package": "DLC/Portugal/Platforms/Windows/BLPs/landmarks/Walls.blp", "source_entry": "IMP_MOD_Zombie_HalfWall_A", "kind": "wall_piece", "era": "modern_barricade", "role": "half"},
+    {"asset_id": "city/walls/modern_barricade/segment_01", "source_package": "DLC/Portugal/Platforms/Windows/BLPs/landmarks/Walls.blp", "source_entry": "IMP_MOD_Zombie_Wall_A", "kind": "wall_piece", "era": "modern_barricade", "role": "segment"},
+    {"asset_id": "city/walls/modern_barricade/segment_02", "source_package": "DLC/Portugal/Platforms/Windows/BLPs/landmarks/Walls.blp", "source_entry": "IMP_MOD_Zombie_Wall_B", "kind": "wall_piece", "era": "modern_barricade", "role": "segment"},
+    {"asset_id": "city/walls/modern_barricade/tower_small", "source_package": "DLC/Portugal/Platforms/Windows/BLPs/landmarks/Walls.blp", "source_entry": "IMP_MOD_Zombie_Tower_A", "kind": "wall_piece", "era": "modern_barricade", "role": "tower"},
+    {"asset_id": "city/walls/modern_barricade/tower_a2", "source_package": "DLC/Portugal/Platforms/Windows/BLPs/landmarks/Walls.blp", "source_entry": "IMP_MOD_Zombie_Tower_A2", "kind": "wall_piece", "era": "modern_barricade", "role": "tower"}
   ],
   "era_selection": {
     "0": "ancient",
     "1": "medieval",
     "2": "industrial",
     "3": "industrial"
+  },
+  "kit_usage": {
+    "ancient": {"source_gameplay": "BUILDING_WALLS", "role": "standard_city_perimeter"},
+    "medieval": {"source_gameplay": "BUILDING_CASTLE", "role": "standard_city_perimeter"},
+    "industrial": {"source_gameplay": "BUILDING_STAR_FORT", "role": "standard_city_perimeter", "source_style": "renaissance"},
+    "tsikhe": {"source_gameplay": "BUILDING_TSIKHE", "role": "unique_city_perimeter"},
+    "pirate_medieval": {"source_gameplay": "BUILDING_CASTLE", "role": "scenario_city_perimeter", "inherits_from": "medieval"},
+    "modern_barricade": {"source_gameplay": "IMPROVEMENT_MODERN_TOWER_DEFENSE", "role": "non_city_candidate", "source_context": "Zombie Defense mode"},
+    "modern_clean": {"source_gameplay": "IMPROVEMENT_MODERN_TOWER_DEFENSE", "role": "non_city_candidate", "derived_from": "modern_barricade", "source_edit": "remove_spike_mesh_islands"},
+    "modern_low": {"source_gameplay": "IMPROVEMENT_MODERN_TOWER_DEFENSE", "role": "non_city_candidate", "derived_from": "modern_clean", "source_edit": "trim_lower_skirt_at_ground"}
+  },
+  "derived_kits": {
+    "modern_clean": {
+      "source_kit": "modern_barricade",
+      "operation": "remove_uv_island_components",
+      "uv_rect": [0.02, 0.24, 0.56, 0.61],
+      "expected_removed_triangles": {
+        "half_01": [0, 0],
+        "segment_01": [94, 116],
+        "segment_02": [116, 56],
+        "tower_small": [116, 98],
+        "tower_a2": [116, 98]
+      }
+    },
+    "modern_low": {
+      "source_kit": "modern_clean",
+      "operation": "trim_skirt_and_ground",
+      "floor_z": 0.008
+    }
   }
 }

@@ -1,4 +1,30 @@
-# Unit size and sampling study
+# Unit studies
+
+## Single settler carrier Lab study
+
+`UNIT_SETTLER` declares a leader, a donkey, and two copies of one
+`SettlerBuilder`/`SettlerBackpack` variation. This study selects one copy with
+member recipe index 2. It imports the backpack, armor, body and head into
+`UnitSettlerCarrierLab`, converts the source backpack idle, run, fidget and
+run-stop clips, validates their skeleton bindings, and builds the separate
+`UnitSettlerCarrierRuntime` pack. Its only native key is
+`PRTO_Lab_SettlerCarrier`; the current `PRTO_Settler` remains untouched.
+
+```sh
+python3 -m Renderer.lab.studies.units.settler_carrier
+python3 -m Renderer.lab.studies.units.settler_carrier --render
+```
+
+The second command builds a private native preview executable and renders the
+same single carrier at rest and walking with the current production D3D11 unit
+renderer. Two poses appear side by side for inspection; they do not mean the
+Lab unit contains two people. Generated packs, clips, reports and images stay
+local and ignored. The imported ArtDef `Backpack` point currently uses an
+inferred `Pelvis` socket. Calibrate that attachment and complete the remaining
+capture, founding and death actions before proposing a game binding. No staged
+DLL, installation or fixed reference is changed by this study.
+
+## Size and sampling study
 
 Candidate only. The user requested that production remain unchanged pending
 approval. `UnitAnimationFidelity`, `UnitAnimationRuntime`, staged DLLs and fixed

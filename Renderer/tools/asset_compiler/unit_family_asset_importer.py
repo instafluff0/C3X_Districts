@@ -62,6 +62,9 @@ def load_strategy(path: Path = DEFAULT_STRATEGY) -> dict[str, Any]:
         member = unit.get("member_index")
         if member is not None and (type(member) is not int or member < 0):
             raise ValueError(f"{slug} has an invalid member index")
+        selected_count = unit.get("selected_member_count")
+        if selected_count is not None and (type(selected_count) is not int or selected_count < 1):
+            raise ValueError(f"{slug} has an invalid selected member count")
         excluded = unit.get("exclude_roles", [])
         if not isinstance(excluded, list) or any(not isinstance(role, str) or not role for role in excluded):
             raise ValueError(f"{slug} has invalid excluded roles")
@@ -315,6 +318,9 @@ def compile_unit_families(
     for unit in strategy["units"]:
         content = unit.get("source_content", strategy["source_content"])
         recipe = resolve_unit(assets_root, unit["source_artdef"], "Any", member_index=unit.get("member_index"), content=content)
+        selected_count = unit.get("selected_member_count")
+        if selected_count is not None and selected_count > recipe["member"]["count"]:
+            raise ValueError("selected member count exceeds the source recipe")
         excluded = set(unit.get("exclude_roles", []))
         available = {item["role"] for item in recipe["selected_components"]}
         if excluded - available:
@@ -513,7 +519,7 @@ def compile_unit_families(
                 "archetype": unit["archetype"],
                 "action_scope": unit.get("action_scope", "combat"),
                 "member": {
-                    "count": source_recipe["member"]["count"],
+                    "count": unit.get("selected_member_count", source_recipe["member"]["count"]),
                     "member_scale": source_recipe["member"]["member_scale"],
                     "variation_scale": source_recipe["member"]["variation_scale"],
                 },

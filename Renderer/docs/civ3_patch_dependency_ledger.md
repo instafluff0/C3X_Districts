@@ -1,59 +1,59 @@
 # Civ III patch dependency ledger
 
-## Renderer64 asynchronous publication candidate
+## Asynchronous form hit testing
 
-`required_user_action: ["Run CAPTURE_MAP_FAILURE.bat, load the map and scroll briefly, then finish the capture"]`.
-The matching renderer trio is staged; the installed injected executable remains
-current because this change touches only Renderer files.
+`required_user_action: ["Add the two GOG entries below to civ_prog_objects.csv"]`.
+The candidate is not installed until those entries and its validation are complete.
 
-Capture `20260927-102412` has no HUD blend admission failures after the JGL
-slot-14 fix. Its first failure is final presentation (`result=2`, 11.666548 s),
-after successful GPU map publication. The failed presentation then requests a
-forbidden CPU map readback and poisons the image session. The later full-canvas
-pixel escape at 11.872399 s is not the first failure.
+Capture `20260927-103925` confirms loading-screen presentation succeeds
+(`native-ui-present result=1`, 11.874208 s). Its next failure is a 32×32 button
+canvas pixel request at 11.874938 s, through `FUN_00600340` / `FUN_00600b30`.
+The forbidden GPU readback poisons composition before later full-map accesses.
+Installed GOG bytes identify the final canvas test in `FUN_00608d50`:
+`lea ecx,[esi+0x274]` then `call 0x00600340` at **0x006090C3**; **0x006090C8**
+is the return address, not the patch address. The caller compares the result
+with the global transparent key and optionally zero.
 
-The isolated fixture reproduces this failure when it presents the CPU-owned
-loading screen before map admission. That screen already owns the HWND's
-DirectComposition target. The bridge now releases that target before attaching
-the helper surface. Async presentation rejects the synchronous shared-texture
-route; a rejected window preserves GPU image ownership instead of attempting
-a readback. No injected hooks, patch addresses or CSV entries change.
+| Capability | Symbol | GOG | Steam | PCGames.de |
+| --- | --- | --- | --- | --- |
+| `define` | `PCX_Image_get_pixel` | `0x00600340` | unverified (`0x0`) | unverified (`0x0`) |
+| `repl call` | `PCX_Image_get_form_hit_pixel` | `0x006090C3` | unverified (`0x0`) | unverified (`0x0`) |
 
-Negative receipt `eabcf57be9944e63b54135c4379972b9` fails with the staged old trio.
-Fixed receipt `3349fcf612244181a0cdaf7f5484fc24` passes loading-screen handoff,
-invalid-window recovery, all 32 scrolls, independent process progress and zero
-CPU map readbacks. It records 55.02 fixture frames/sec, not live-game FPS.
-It preserves the matching binaries, build evidence, hashes and previous trio.
+Both use `unsigned (__fastcall *)(PCX_Image*, int edx, int x, int y)`.
+Add these rows; keep the original-function definition before the call-site row:
 
-The post-failure pixel access comes through `FUN_00600340` / `FUN_00600b30`,
-called by form hit testing at GOG `0x6090c8`. Its specific form and behavior in
-a healthy session remain unconfirmed. Do not bypass native ownership checks or
-return stale map pixels. Existing bounded diagnostics remain enabled for the
-next live checkpoint. No speculative hit-test patch entry is requested.
+```csv
+define, 0x00600340, 0x0, 0x0, "PCX_Image_get_pixel", "unsigned (__fastcall *) (PCX_Image * this, int edx, int x, int y)"
+repl call, 0x006090C3, 0x0, 0x0, "PCX_Image_get_form_hit_pixel", ""
+```
 
-The preceding slot-14 change (`patch_JGL_Image_keyed_region`, JGL RVA `0x1e20`)
-remains installed. Its signature is `int __fastcall (JGL_Image*, int, JGL_Image*,
-int sx, int sy, int x, int y, int width, int height, int key)`; the existing
-hash-verified vtable hook requires no Civ III patch-table entry. It copies UI
-source assets and performs destination-key comparison/replacement on the GPU.
-The deferred-world-capture fix also remains: a pending callback cannot publish
-an empty page. CPU map readback and unit raster fallback remain rejected.
+`patch_PCX_Image_get_form_hit_pixel` first checks `enable_custom_rendering`.
+When false it immediately calls the original function with unchanged arguments.
+When true, GPU-owned canvases answer one input point from retained native UI
+commands and copied UI source words. The map is semantically opaque for input,
+independent of lighting. CPU-owned UI still delegates to the original sampler.
+No GPU wait, GPU readback, CPU terrain drawing, or global pixel-getter bypass is
+introduced. Renderer errors preserve GPU ownership and return no hit. The hook
+is compiled only when its original-function definition exists; unsupported
+builds keep their unpatched call site. No runtime address discovery is used.
 
-Reuses `Unit_tick_anim`, `Sprite_draw_unit_body_normal`,
-`Sprite_draw_unit_body_reduced`, `Map_Renderer_m71_Draw_Tiles`,
-`Map_Renderer_m19_Draw_Tile_by_XY_and_Flags`, the existing navigation patches and
-audited JGL image/Graphsy hooks. Unit bodies publish copied scene observations
-without acquiring native DCs. The old synchronous CPU unit fallback is removed.
-Renderer/startup failure keeps custom rendering enabled and reports the failure;
-only an explicit config-off transition returns ownership to native rendering.
-The approved injected compile smoke test passes.
+Reuses existing JGL ownership/copy/fill/sprite hooks and the renderer image API;
+adds `C3X_NATIVE_HIT_PIXEL` to recorded input and replay. Other pixel/DC getters
+retain their original ownership checks. `civ_prog_objects.csv` and the native
+Civ III header are unchanged by the agent.
 
-The DLL copies frame/image/unit inputs into a bounded transport queue, reserves
-image IDs locally, and polls copied camera results. Only its transport thread
-waits for Renderer64. The helper draws the sandbox resident scene on its own
-cadence. Queue exhaustion fails explicitly; automatic process/device recovery
-and the live gameplay checkpoint remain unqualified. See
-[scene and motion cutover](renderer64_scene_and_motion.md).
+Automated validation is in progress. The portable hook test covers config-off
+before any image dereference/probe/query, CPU UI delegation, admitted GPU input,
+and failure without stale pixel access. A 20,000-redraw input test checks
+bounded retention, both 16-bit formats, copied lifetimes and destruction.
+The native GPU oracle validates known UI point values against the existing
+pixel fixtures. The asynchronous fixture covers 1,156 button points and opaque
+map input; its later scrolling failure remains under investigation.
+
+The prior loading-screen target handoff and JGL indexed slot-14 fix remain in
+place. CPU map readback and unit raster fallback remain rejected. Preserve the
+roughly 52 FPS sandbox baseline; whole-frame tuning and gameplay acceptance
+remain separate checkpoints.
 
 ## Pending fresh-frame handoff
 

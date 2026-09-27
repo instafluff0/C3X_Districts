@@ -52,6 +52,7 @@ struct ReplayState {
                 actual=measure_replay([&]{return c3x_renderer_native_image(operation.operation,operation.image,operation.source,operation.from,operation.to,operation.color);});
                 if(operation.operation==C3X_NATIVE_DESTROY)native_values.retire(unsigned(reinterpret_cast<std::uintptr_t>(operation.image)));
                 if(operation.operation==C3X_NATIVE_UNIT_DRAW&&operation.to&&wanted==1)for(auto n:operation.b){auto old=expected.u32();if(!performance)require(std::uint32_t(n)==old,"native unit bounds differ");}
+                if(operation.operation==C3X_NATIVE_HIT_PIXEL&&operation.to&&wanted==1){auto old=expected.u32();if(!performance)require(unsigned(operation.b[0])==old,"native hit coverage differs");}
             }else if(subtype==2){int action=0;in(action);auto image=NativeOperationInput::object(in.u32());Frame owned;c3x_renderer_camera_request_v1 request={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(request)};bool present=in.u32()!=0;
                 if(present){c3x_renderer_camera_identity_v1_fields(in,request.identity);frame(in,owned);request.frame=&owned.value;}
                 c3x_renderer_output_v1 output={C3X_RENDERER_API_VERSION,sizeof(output)};

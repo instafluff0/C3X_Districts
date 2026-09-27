@@ -1,6 +1,7 @@
 #pragma once
 #include "gpu_frame_api.h"
 #include "gpu_image_commands.h"
+#include "native_hit_scene.h"
 #include <vector>
 #include <stdexcept>
 #include <algorithm>
@@ -12,6 +13,7 @@ class WorkerClient {
     std::vector<c3x_renderer_gpu_command_v1> pending;
     c3x_renderer_gpu_result_v1 result={sizeof(result)};
     bool failed=false;std::uint64_t batches=0,calls=0;
+    std::unique_ptr<c3x_native_hit::Scene> hit_scene;
     c3x_renderer_gpu_images_v1 request(int action,Id image=0)const{
         c3x_renderer_gpu_images_v1 r={};r.struct_size=sizeof(r);r.action=action;r.ticket=ticket;r.image=std::int64_t(image);return r;
     }
@@ -32,8 +34,13 @@ class WorkerClient {
         result=next;return true;
     }
 public:
-    WorkerClient(c3x_renderer_gpu_images_fn fn,c3x_renderer_gpu_frame_v1 const& frame):execute(fn),ticket(frame.ticket),session(frame.session){
+    WorkerClient(c3x_renderer_gpu_images_fn fn,c3x_renderer_gpu_frame_v1 const& frame,bool input_coverage=false):execute(fn),ticket(frame.ticket),session(frame.session){
         if(!fn||ticket<=0||session<=0||frame.struct_size!=sizeof(frame))throw std::runtime_error("missing GPU image session");pending.reserve(2048);
+        if(input_coverage)hit_scene=std::make_unique<c3x_native_hit::Scene>();
+    }
+    bool hit_pixel(Id id,int x,int y,unsigned& value)const{
+        if(!hit_scene||!hit_scene->pixel(id,x,y,value))return false;
+        if(value==c3x_native_hit::opaque_map)value=1;return true;
     }
     // The native owner must flush before advancing the map ticket, drain before
     // retiring a session, and never publish after failure. Destruction sends no work.
@@ -50,17 +57,19 @@ public:
         // the old flush-before-admission behavior for that rejected request.
         if(!width || !height || width>2240 || height>1260){flush();return 0;}
         auto r=request(C3X_GPU_CREATE);r.width=int(width);r.height=int(height);
-        r.format=format==Format::rgb555?C3X_GPU_RGB555:format==Format::rgb565?C3X_GPU_RGB565:C3X_GPU_BGRA32;return run(r,nullptr,0,true)?Id(result.image):0;
+        r.format=format==Format::rgb555?C3X_GPU_RGB555:format==Format::rgb565?C3X_GPU_RGB565:C3X_GPU_BGRA32;
+        if(!run(r,nullptr,0,true))return 0;
+        auto id=Id(result.image);if(hit_scene)hit_scene->create(id,width,height,format);return id;
     }
-    bool destroy(Id id){if(failed)return false;run(request(C3X_GPU_DESTROY,id));return true;}
+    bool destroy(Id id){if(failed)return false;run(request(C3X_GPU_DESTROY,id));if(hit_scene)hit_scene->destroy(id);return true;}
     bool upload(Id id,std::uint64_t revision,std::uint32_t const* pixels,std::size_t count){
-        if(count>2240u*1260u)return false;auto r=request(C3X_GPU_UPLOAD,id);r.revision=std::int64_t(revision);r.pixels=pixels;r.pixel_count=unsigned(count);run(r);return true;
+        if(count>2240u*1260u)return false;auto r=request(C3X_GPU_UPLOAD,id);r.revision=std::int64_t(revision);r.pixels=pixels;r.pixel_count=unsigned(count);run(r);if(hit_scene)hit_scene->upload(id,pixels,count);return true;
     }
     bool submit(Command const* commands,std::size_t count){
         if(failed)throw std::runtime_error("GPU image session is no longer usable");
         if(!commands||!count||count>2048)return false;
         if(count+pending.size()>2048)flush();
-        for(std::size_t n=0;n<count;++n){auto const& c=commands[n];pending.push_back({int(c.kind),std::int64_t(c.destination),std::int64_t(c.source),
+        for(std::size_t n=0;n<count;++n){auto const& c=commands[n];if(hit_scene)hit_scene->submit(c);pending.push_back({int(c.kind),std::int64_t(c.destination),std::int64_t(c.source),
             {c.area.left,c.area.top,c.area.right,c.area.bottom},{c.clip.left,c.clip.top,c.clip.right,c.clip.bottom},c.source_x,c.source_y,c.color,std::int64_t(c.background),std::int64_t(c.detail),std::int64_t(c.background_detail),c.source_width,c.source_height,std::int64_t(c.program)});}
         return true;
     }

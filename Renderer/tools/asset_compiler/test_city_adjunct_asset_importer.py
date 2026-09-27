@@ -11,7 +11,7 @@ from Renderer.tools.asset_compiler import city_adjunct_asset_importer as importe
 class CityAdjunctAssetImporterTests(unittest.TestCase):
     def test_default_mapping_has_capital_and_complete_wall_roles(self) -> None:
         mapping = importer.load_mapping()
-        self.assertEqual(len(mapping["assets"]), 19)
+        self.assertEqual(len(mapping["assets"]), 33)
         self.assertEqual(
             mapping["capital_probe"]["status"],
             "composition_marker_not_terminal_asset",
@@ -23,6 +23,9 @@ class CityAdjunctAssetImporterTests(unittest.TestCase):
                 if item["kind"] == "wall_piece" and item["era"] == era
             }
             self.assertEqual(roles, {"half", "segment", "gate", "tower"})
+        self.assertEqual(mapping["kit_usage"]["modern_barricade"]["role"],
+                         "non_city_candidate")
+        self.assertNotIn("modern_barricade", mapping["era_selection"].values())
 
     def test_rejects_duplicate_runtime_asset_ids(self) -> None:
         mapping = importer.load_mapping()

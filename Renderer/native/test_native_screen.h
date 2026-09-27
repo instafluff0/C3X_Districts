@@ -223,6 +223,24 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
             "fresh native map and UI presented without ownership loss");
         if(asynchronous){
             std::puts("PASS loading-screen handoff: existing window target transferred; rejected target did not poison GPU ownership");
+            auto button=create(graph,nullptr,1);
+            verify(reinterpret_cast<Init>(button->vtable[1])(button,32,32,16,1)==0,"hit-test button initialization");
+            RECT whole_button={0,0,32,32},opaque_button={5,7,27,25},zero_button={9,10,12,14};
+            verify(reinterpret_cast<Copy>(canvases[0]->vtable[16])(canvases[0],button,&whole_button,&whole_button)==0,"button joins GPU background family");
+            verify(reinterpret_cast<Fill>(button->vtable[17])(button,&whole_button,int(0x80007c1fu))==0&&
+                reinterpret_cast<Fill>(button->vtable[17])(button,&opaque_button,int(0x80007c00u))==0&&
+                reinterpret_cast<Fill>(button->vtable[17])(button,&zero_button,int(0x80000000u))==0,"GPU button input shape");
+            PCX_Image hit_button={};hit_button.JGL.Image=button;
+            for(int y=-1;y<=32;++y)for(int x=-1;x<=32;++x){
+                unsigned expected=x<0||y<0||x>=32||y>=32?0:
+                    x>=9&&x<12&&y>=10&&y<14?0:x>=5&&x<27&&y>=7&&y<25?0x7c00:0x7c1f;
+                verify(patch_PCX_Image_get_form_hit_pixel(&hit_button,0,x,y)==expected,"GPU button hit shape matches native transparency and zero tests");
+            }
+            PCX_Image hit_map={};hit_map.JGL.Image=canvases[0];
+            verify(patch_PCX_Image_get_form_hit_pixel(&hit_map,0,w/2,h/2)==1&&lifetime(C3X_NATIVE_MAP,button,0),
+                "opaque map input and GPU button queries preserve ownership");
+            reinterpret_cast<Destroy>(button->vtable[0])(button,1);
+            std::puts("PASS asynchronous form input: 1156 button points; transparent/zero/opaque/outside; no raw lease or GPU wait");
             verify(set_world_capture(nullptr)==C3X_RENDERER_RESULT_OK,"stop the startup world-capture witness");
             std::printf("PASS deferred world capture: callbacks=%u first_map_published=1\n",deferred_world_captures);
         }
@@ -318,12 +336,22 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
                     QueryPerformanceCounter(&b);longest_poll=std::max(longest_poll,1000.*double(b.QuadPart-a.QuadPart)/double(frequency.QuadPart));
                     if(ready==C3X_RENDERER_RESULT_PENDING)Sleep(1);
                 }while(ready==C3X_RENDERER_RESULT_PENDING&&GetTickCount64()<camera_deadline);
+                if(ready!=C3X_RENDERER_RESULT_OK){
+                    progress(&accepted,&completed,&frames);
+                    std::fprintf(stderr,"ASYNC_SCROLL_ERROR step=%u result=%d elapsed_ms=%llu accepted=%u completed=%u frames=%u\n",
+                        step,ready,GetTickCount64()-camera_started,accepted,completed,frames);
+                }
                 verify(ready==C3X_RENDERER_RESULT_OK,"asynchronous scrolling camera ready");
                 verify(map_view(C3X_NATIVE_MAP_COMMIT,canvases[0],nullptr,nullptr)==C3X_RENDERER_RESULT_OK,"scrolling map commit");
                 verify(reinterpret_cast<Copy>(canvases[0]->vtable[16])(canvases[0],canvases[1],&full,&full)==0,"scrolling native map copy");
                 draw_async_hud(true);
                 verify(reinterpret_cast<Fill>(canvases[1]->vtable[17])(canvases[1],&panel,int(0x80007c00u))==0,"scrolling UI preserved");
                 verify(live(C3X_NATIVE_IMAGE_PRESENT,canvases[1],graph,&full,nullptr,0)==1,"scrolling native presentation");
+                PCX_Image hit_map={},hit_screen={};hit_map.JGL.Image=canvases[0];hit_screen.JGL.Image=canvases[1];
+                unsigned calls=original_hit_calls;
+                verify(patch_PCX_Image_get_form_hit_pixel(&hit_map,0,w/2,h/2)==1&&
+                    patch_PCX_Image_get_form_hit_pixel(&hit_screen,0,60,50)==0x7c00&&original_hit_calls==calls,
+                    "scrolling input stays current without calling the original pixel getter");
                 std::printf("ASYNC_SCROLL step=%u ready_ms=%llu longest_poll_ms=%.3f built=%u uploaded=%u\n",
                     step,GetTickCount64()-camera_started,longest_poll,view.output.geometry_tiles_built,view.output.geometry_upload_bytes);
                 Sleep(100);

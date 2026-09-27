@@ -78,6 +78,8 @@ gives every populated cell in this table a separate pink Town/City/Metro sheet
 with Base, Walls, Capital, and Both states. Its wall kits and palace fallbacks
 are provisional comparison aids. All selections happen in Lab preparation;
 the game renderer receives generic composition metadata.
+The [wall source audit](wall_source_audit.md) records why Industrial and Modern
+review rows currently share Civ VI's Renaissance Star Fort geometry.
 
 The source graph has separate jobs:
 

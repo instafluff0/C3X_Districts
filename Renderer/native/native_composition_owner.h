@@ -81,7 +81,7 @@ public:
     int prepare_image(void* image,c3x_renderer_gpu_frame_v1 const& next,c3x_renderer_output_v1 const& output,int x,int y){
         if(client){if(next.ticket!=frame.ticket || next.session!=frame.session)client->advance(next);}
         else {
-            auto next_client=std::make_unique<c3x_gpu_images::WorkerClient>(images,next);
+            auto next_client=std::make_unique<c3x_gpu_images::WorkerClient>(images,next,scene_units);
             auto next_adapter=std::make_unique<Adapter<c3x_gpu_images::WorkerClient>>(*next_client,bits,release,lifetime);
             client=std::move(next_client);adapter=std::move(next_adapter);
         }
@@ -244,6 +244,14 @@ public:
             OutputDebugStringA(line);return 1;
         }
         if(!adapter)return 0;
+        if(op==C3X_NATIVE_HIT_PIXEL){
+            if(!scene_units||!adapter->owns(image))return 0;
+            if(!from||!to)throw std::runtime_error("missing form input query");
+            auto point=static_cast<int const*>(from);unsigned value=0;
+            if(!client->hit_pixel(adapter->image(image),point[0],point[1],value))
+                throw std::runtime_error("missing owned form input coverage");
+            *const_cast<unsigned*>(static_cast<unsigned const*>(to))=value;return 1;
+        }
         if(op==C3X_NATIVE_LINE_TARGET)return tactical&&adapter->owns(image)?1:0;
         if(op==C3X_NATIVE_STROKE){
             auto p=static_cast<c3x_renderer_native_stroke const*>(from);

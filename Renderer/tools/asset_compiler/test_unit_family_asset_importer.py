@@ -137,6 +137,26 @@ class UnitFamilyAssetImporterTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 load_strategy(path)
 
+    def test_settler_carrier_lab_selects_one_member_without_rebinding_the_game(self) -> None:
+        root = Path(__file__).resolve().parents[3]
+        strategy = load_strategy(
+            root / "Renderer/lab/studies/units/settler_carrier_strategy.json"
+        )
+        self.assertEqual(1, len(strategy["units"]))
+        carrier = strategy["units"][0]
+        self.assertEqual("UNIT_SETTLER", carrier["source_artdef"])
+        self.assertEqual(2, carrier["member_index"])
+        self.assertEqual(1, carrier["selected_member_count"])
+        self.assertEqual(["PRTO_Lab_SettlerCarrier"], carrier["civ3_ids"])
+        self.assertEqual("not_enabled", strategy["runtime_integration"])
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "strategy.json"
+            for invalid in (0, True, "1"):
+                carrier["selected_member_count"] = invalid
+                path.write_text(json.dumps(strategy), encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, "selected member count"):
+                    load_strategy(path)
+
     def test_initial_entry_requires_a_unique_package_string(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             package = Path(temporary) / "unit.blp"

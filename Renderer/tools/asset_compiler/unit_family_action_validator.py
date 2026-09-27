@@ -17,6 +17,7 @@ from Renderer.tools.asset_compiler import normalized_animation, normalized_skin
 
 SOCKET_PROFILE = {
     "Root": {"bone": "Root", "status": "identity_or_matching_root"},
+    "Backpack": {"bone": "Pelvis", "status": "inferred_lab_socket"},
     "ArmBand": {"bone": "Lure", "status": "inferred_lab_profile"},
     "Tool": {"bone": "Inven_R_Hand", "status": "inferred_builder_tool_socket"},
     "Hat": {"bone": "Head", "status": "inferred_lab_profile"},

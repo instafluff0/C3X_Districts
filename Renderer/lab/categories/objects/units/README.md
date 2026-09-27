@@ -14,6 +14,12 @@ source geometry, material addressing and animation palettes. Edit source assets
 or `Renderer/native/environment_refresh/prepare_units.py`, not generated payloads.
 See `Renderer/native/environment_refresh/UNIT_FIDELITY.md` for current contracts.
 
+The isolated [settler carrier study](../../../studies/units/README.md#single-settler-carrier-lab-study)
+selects one of Civ VI's two identical backpack members. Its private key and pack
+do not replace the current `PRTO_Settler` binding. The study builds the carrier's
+idle, run, fidget and run-stop clips and renders two poses with the production
+D3D11 unit renderer; backpack socket placement remains provisional.
+
 The opt-in `sizing`, `sizing-gameplay` and `sizing-move` cases compare a separate
 six-subject anatomy-sizing pack and 1x/2x material sampling. They use a larger
 diagnostic canvas and do not promote that pack or change production sizing.
