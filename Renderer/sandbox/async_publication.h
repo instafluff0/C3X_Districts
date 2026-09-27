@@ -83,6 +83,10 @@ public:
         auto task=std::make_shared<std::packaged_task<Result()>>(std::move(work));
         auto done=task->get_future();
         if(!post(sizeof(*task),[task]{(*task)();}))throw std::runtime_error("renderer publication unavailable");
+        // The queue must be the sole owner before waiting. If an earlier
+        // command faults, discarding this task then wakes the waiter with a
+        // broken promise instead of leaving reset/configuration stuck forever.
+        task.reset();
         return done.get();
     }
 };

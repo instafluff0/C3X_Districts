@@ -5,6 +5,28 @@ from Renderer.native.native_cpp_test import run_cpp
 
 
 class AsyncPublicationTests(unittest.TestCase):
+    def test_consumer_failure_releases_an_already_queued_setup_waiter(self):
+        run_cpp(r'''
+#include "Renderer/sandbox/async_publication.h"
+#include <cassert>
+#include <chrono>
+using namespace std::chrono_literals;
+int main(){
+ std::promise<void> entered,release;auto held=release.get_future();std::atomic<int> configured{0};
+ c3x_async::Publication queue;
+ assert(queue.post(1,[&]{entered.set_value();held.wait();throw std::runtime_error("helper lost");}));
+ entered.get_future().get();
+ auto result=std::async(std::launch::async,[&]{
+  try{queue.setup([&]{++configured;return 1;});return false;}catch(std::exception const&){return true;}
+ });
+ auto deadline=std::chrono::steady_clock::now()+2s;
+ while(queue.accepted()!=2&&std::chrono::steady_clock::now()<deadline)std::this_thread::yield();
+ assert(queue.accepted()==2);release.set_value();
+ assert(result.wait_for(2s)==std::future_status::ready&&result.get());
+ queue.stop();assert(!queue.healthy()&&configured==0);
+}
+''')
+
     def test_injected_unit_publication_has_no_cpu_fallback(self):
         source=(ROOT/'injected_code.c').read_text()
         start=source.index('\t// The resident path consumes native image identities')

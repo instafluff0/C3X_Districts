@@ -12,10 +12,10 @@ namespace c3x_renderer::tactical {
 // zoomed-out draw halves the frame; custom camera zoom does not resize it.
 inline float cursor_scale(float native_tile_width){return std::min(native_tile_width,128.f)/128.f;}
 inline float cursor_phase(double seconds){
-    // Thirty 83 ms source frames make one outward-and-back motion. Cosine
-    // easing brings the markers to rest at both ends before reversing.
-    constexpr double cycle=2.5,pi=3.14159265358979323846;
-    return float(pi*.5*(1-std::cos(2*pi*std::fmod(seconds,cycle)/cycle)));
+    // One quarter-turn out and back over five seconds. Cosine easing brings
+    // the markers to rest at both ends before reversing.
+    constexpr double cycle=5.,pi=3.14159265358979323846;
+    return float(pi*.25*(1-std::cos(2*pi*std::fmod(seconds,cycle)/cycle)));
 }
 // Copied draw semantics only. No unit, route finder, native surface or game
 // pointer survives capture. Coordinates are authoritative projected pixels.

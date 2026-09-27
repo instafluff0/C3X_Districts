@@ -79,6 +79,10 @@ def main():
              "and source models, not native D3D material fidelity or in-game acceptance.",
              "The rejected count records pieces the importer could not safely compile;",
              "the Future pool omits seven unresolved effect-bearing blocks per tag.",
+             "For façade alignment, the era-unspecified Vietnam sheet supplements its",
+             "combined blocks with individual Vietnam houses from the Classical source",
+             "pool. The era-unspecified Vikings and Māori sheets use individual houses",
+             "from their own pools instead of mixed-facing multi-house blocks.",
              "No city ground decal or elevated masonry is added by these recipes.", "",
              "[Source-art era inventory](../../../../studies/cities/source_era_inventory.md)", ""]
     for era in ERAS:
@@ -87,11 +91,12 @@ def main():
                                                   else "ARTERA_" + era.upper())]
         lines.extend([f"## {LABELS[era]} ({len(entries)})", "",
                       f"![{LABELS[era]} City overview]({era}-city-overview.png)", "",
-                      "| Source culture tag | Full 12-state sheet | Palace | Usable pieces | Rejected pieces |",
-                      "| --- | --- | --- | ---: | ---: |"])
+                      "| Source culture tag | Full 12-state sheet | Palace | Façade pieces | Usable pieces | Rejected pieces |",
+                      "| --- | --- | --- | --- | ---: | ---: |"])
         for entry in entries:
             lines.append(f"| `{entry['source_culture']}` | [view sheet]({entry['sheet'].removeprefix('review/')}) | "
                          f"{entry.get('palace_status', 'previous Classical candidate')} | "
+                         f"{entry.get('facade_source', 'existing Classical composition')} | "
                          f"{entry['selected_components']} | {entry['rejected_components']} |")
         lines.append("")
     (root / "README.md").write_text("\n".join(lines) + "\n")

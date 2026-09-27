@@ -36,6 +36,13 @@ SITES = {
         (0, .60), (0, -.60), (-.37, .56), (.37, .56),
         (-.59, -.07), (.59, -.07)],
 }
+FACADE_INFILL = {
+    0: [(-.19, .12), (.19, .12)],
+    1: [(-.24, -.18), (.24, -.18), (-.30, .07), (.30, .07),
+        (-.18, .30), (.18, .30)],
+    2: [(-.37, -.36), (.37, -.36), (-.30, -.10), (.30, -.10),
+        (-.18, .22), (.18, .22), (-.42, .30), (.42, .30)],
+}
 OFFSETS = [(dx*.025, dy*.025) for dx in range(-12, 13)
            for dy in range(-12, 13)]
 OFFSETS.sort(key=lambda p: (p[0]*p[0]+p[1]*p[1], abs(p[0]), abs(p[1])))
@@ -88,10 +95,29 @@ def palace_for(family, catalog):
 
 def choices(pool, pack):
     entries = pool["selected"]
+    family = pool["source_culture"]
     blocks = [p for p in entries if "_Block_" in p["entry"]]
     cores = [p for p in blocks if "LG_SQ" in p["entry"]]
     squares = [p for p in blocks if "_SQ_" in p["entry"] and "LG_SQ" not in p["entry"]]
     singles = [p for p in entries if "_Bld" in p["entry"] and "_Block_" not in p["entry"]]
+    # These source blocks contain several houses with conflicting baked front
+    # directions. Use isolated houses so the street-facing facade stays on a
+    # SE/SW tile-edge side. Vietnam's generic-era pool has blocks only; the
+    # same-culture Classical pool supplies its matching individual houses.
+    if family == "CIVILIZATION_VIETNAM" and pool["source_art_era"] == "DEFAULT":
+        source = ROOT / "Renderer/lab/out/cities/medieval-source-families"
+        report = json.loads((source / "source-report-uv.json").read_text())
+        related = next(p for p in report["pools"] if p["source_culture"] == family)
+        singles = [{**entry, "pack": (source / "flat-pack-uv").as_posix(),
+                    "rotation": 0.0}
+                   for entry in related["selected"] if "_Bld_" in entry["entry"]]
+        cores = [{**p, "rotation": 0.0} for p in blocks if "_Block_SQ_01" in p["entry"]]
+        squares = []
+    elif family in ("Vikings", "CIVILIZATION_MAORI") and pool["source_art_era"] == "DEFAULT":
+        singles = [{**p, "rotation": 0.0} for p in singles]
+        cores = [next(p for p in singles if p["entry"].endswith(
+            "_Bld_A_05" if family == "Vikings" else "_Bldg_A"))]
+        squares = []
     # Portugal and Vietnam's era-unspecified source pools expose complete
     # blocks but no isolated houses. Audition their smaller blocks as infill.
     if not singles:
@@ -99,13 +125,15 @@ def choices(pool, pack):
     if not singles:
         raise ValueError(f"No source buildings for {pool['source_culture']}")
     def dimensions(record):
-        b = component(record["asset_id"], pack)
+        b = component(record["asset_id"], Path(record.get("pack", pack)))
         return ((b["hi"][0]-b["lo"][0])*(b["hi"][1]-b["lo"][1]),
                 b["hi"][2]-b["lo"][2])
     singles.sort(key=lambda p: (dimensions(p)[0], dimensions(p)[1]), reverse=True)
     # Avoid the largest civic model as a repeated house and keep several roof
     # forms. The physical size calculation below chooses a uniform scale.
     ordinary = singles[1:14] if len(singles) >= 9 and singles[0] not in blocks else singles
+    if family in ("Vikings", "CIVILIZATION_MAORI") and pool["source_art_era"] == "DEFAULT":
+        ordinary = [p for p in ordinary if p["asset_id"] != cores[0]["asset_id"]]
     return (cores or squares or singles)[:3], squares[:3], ordinary
 
 
@@ -114,9 +142,11 @@ def place(assets, pack, occupied, size, target, height, span):
         x, y = round(target[0]+dx, 3), round(target[1]+dy, 3)
         for entry in assets:
             asset = entry["asset_id"]
-            nominal = scale_for(asset, pack, height, span)
+            source_pack = Path(entry.get("pack", pack))
+            nominal = scale_for(asset, source_pack, height, span)
             for factor in (1.0, .92, .84):
-                item = instance(asset, pack, round(nominal*factor, 3), x, y)
+                item = instance(asset, source_pack, round(nominal*factor, 3), x, y,
+                                entry.get("rotation"))
                 bounds = box(item)
                 if not inside_wall(bounds, size, clearance=.015):
                     continue
@@ -168,17 +198,22 @@ def generate(pool, flat_pack, palace_pack, palace_asset, tree_pack,
         return layouts, {"kind": "curated", "counts": [len(t["houses"]) for t in tiers]}
 
     cores, squares, singles = choices(pool, flat_pack)
+    facing_profile = family in ("CIVILIZATION_VIETNAM", "Vikings",
+                                "CIVILIZATION_MAORI") and pool["source_art_era"] == "DEFAULT"
     core_asset = cores[0]["asset_id"]
-    core = instance(core_asset, flat_pack, scale_for(core_asset, flat_pack, .36, .43), 0, -.08)
+    core_pack = Path(cores[0].get("pack", flat_pack))
+    core = instance(core_asset, core_pack, scale_for(core_asset, core_pack, .36, .43),
+                    0, -.08, -math.pi/4 if facing_profile else cores[0].get("rotation"))
     palace = instance(palace_asset, palace_pack,
                       scale_for(palace_asset, palace_pack, .46, .42),
-                      0, -.08, math.pi/6)
+                      0, -.08, -math.pi/4 if facing_profile else 0.0)
     tiers = []
     for center, capital in ((core, False), (palace, True)):
         occupied = [box(center)]
         houses = []
         for size in range(3):
-            for slot, target in enumerate(SITES[size]):
+            targets = SITES[size] + (FACADE_INFILL[size] if facing_profile else [])
+            for slot, target in enumerate(targets):
                 if size == 0 and slot < 2 and squares:
                     palette, height, span = squares, .30, .23
                 elif size > 0 and slot < 2 and squares:
@@ -204,7 +239,14 @@ def generate(pool, flat_pack, palace_pack, palace_asset, tree_pack,
                   base_centerpiece=core, palace=palace,
                   capital_replaces_centerpiece=True)
     return layouts, {"kind": "automatic", "counts": [len(t["houses"]) for t in tiers],
-                     "capital_counts": [len(t["capital_houses"]) for t in tiers]}
+                     "capital_counts": [len(t["capital_houses"]) for t in tiers],
+                     "facade_source": ("same-culture Classical individual houses"
+                                       if family == "CIVILIZATION_VIETNAM" and
+                                       pool["source_art_era"] == "DEFAULT"
+                                       else "same-pool individual houses"
+                                       if family in ("Vikings", "CIVILIZATION_MAORI") and
+                                       pool["source_art_era"] == "DEFAULT"
+                                       else "source-pool components")}
 
 
 def main():

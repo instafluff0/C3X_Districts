@@ -29,17 +29,24 @@ int test_tactical_overlay(){
         c3x_renderer::tactical::Input input;input.ring(320,180,float(zoom),true);input.line(320,180,230,240);input.line(230,240,100,240);input.ring(100,240,float(zoom),false);input.label(100,240,"2",20.f);
         auto copied=input;input.primitives.clear();
         auto frame=[&](double seconds){return tactical_pixels(device.Get(),context.Get(),gpu.draw(device.Get(),context.Get(),copied,{0,0,480,320},seconds));};
-        auto a=frame(0),b=frame(1),repeat=frame(2.5);assert(a==repeat&&a!=b);
+        auto a=frame(0),b=frame(1),endFrame=frame(2.5),repeat=frame(5);assert(a==repeat&&a!=b);
+        if(zoom==128){unsigned marker=178*480+357;assert((endFrame[marker]&255)>(a[marker]&255)+150);}
         auto packed=tactical_pixels(device.Get(),context.Get(),gpu.packed(device.Get(),context.Get(),copied,{0,0,480,320},0));assert(a==packed);
         unsigned partial=0,opaque=0;for(auto pixel:a){auto alpha=pixel>>24;partial+=alpha>0&&alpha<250;opaque+=alpha>=250;}
         assert(partial>300&&opaque>5);assert(a[0]==0&&a[479]==0);++checks;
         char path[192];sprintf_s(path,"../lab/out/tactical-overlays/current-z%d.bmp",zoom);tactical_bmp(path,a,480,320);
-        if(zoom==128)for(int n=0;n<12;++n){auto pixels=frame(double(n)*.2);sprintf_s(path,"../lab/out/tactical-overlays/motion-%02d.bmp",n);tactical_bmp(path,pixels,480,320);}
+        if(zoom==128)for(int n=0;n<25;++n){auto pixels=frame(double(n)*.2);sprintf_s(path,"../lab/out/tactical-overlays/motion-%02d.bmp",n);tactical_bmp(path,pixels,480,320);}
     }
     c3x_renderer::tactical::Input route;route.line(20,40,200,40);
     auto flat=tactical_pixels(device.Get(),context.Get(),gpu.draw(device.Get(),context.Get(),route,{0,0,240,80},0));
     assert((flat[40*240+100]>>24)>0 && (flat[45*240+100]>>24)==0);
-    std::printf("PASS tactical GPU: %u zooms, native-size cursor, reversing marker, shadowless route, antialias coverage and clear exterior\n",checks);return 0;
+    c3x_renderer::tactical::Input cursor;cursor.ring(100,40,128,false);
+    auto curled=tactical_pixels(device.Get(),context.Get(),gpu.draw(device.Get(),context.Get(),cursor,{0,0,200,80},0));
+    auto alpha=[&](int x,int y){return curled[y*200+x]>>24;};
+    assert(alpha(59,38)>80&&alpha(59,42)>80&&alpha(56,40)<60);
+    assert(alpha(98,18)>80&&alpha(102,18)>80&&alpha(100,18)<60);
+    tactical_bmp("../lab/out/tactical-overlays/cursor-only.bmp",curled,200,80);
+    std::printf("PASS tactical GPU: %u zooms, curled cursor, eased quarter-turn and dark-white fade, shadowless route, antialias coverage and clear exterior\n",checks);return 0;
 }
 
 #ifdef C3X_TACTICAL_STANDALONE

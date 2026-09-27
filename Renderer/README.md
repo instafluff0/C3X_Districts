@@ -97,9 +97,10 @@ The renderer owns map fog/unseen coverage from copied native visibility. Admitte
 map views also draw copied selection, route/turn-label and grid primitives through
 the [tactical pass](docs/tactical_overlay_contract.md). Borders, city labels, unit
 HUD and general UI retain native ownership.
-Config-off preserves the original path. Custom-on map-plane failure must not
-silently replay native terrain; custom-on map units are exclusively 3D, with explicit CPU 3D delivery at native
-ownership barriers. UI portraits and renderer-off units remain native.
+Config-off preserves the original path. Custom-on map-plane failure preserves
+the last completed GPU view and reports the failure. Custom-on map units publish
+copied observations to the resident 3D scene; CPU map readback and CPU unit
+rasterization are rejected. UI portraits and renderer-off units remain native.
 
 Integration owns capture, bounded caches, invalidation, dirty redraw, scrolling,
 wrapping, zoom, compositing, device recovery and timing. Unit animation follows

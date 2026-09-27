@@ -2,9 +2,13 @@
 
 ## Renderer64 asynchronous publication candidate
 
-`required_user_action: ["After candidate review, stage the three matching Renderer64 binaries and re-run INSTALL.bat"]`.
-This candidate has not been staged or installed. It supersedes the installed
-handoff described below. No new patch symbol, signature, supported-build address,
+`required_user_action: ["Run CAPTURE_MAP_FAILURE.bat and reproduce the black map from startup"]`.
+The user authorized staging and installation. The three binaries from fixture
+`d045f124368c4939a39cf0f1a2fef0f8` were staged with matching hashes, the startup
+probe passed, and `INSTALL.bat` updated the game executable with the new unit
+publication path. The user's first live check showed a black map and repeated
+city labels after scrolling; live integration has failed and needs diagnosis.
+No new patch symbol, signature, supported-build address,
 or `civ_prog_objects.csv` entry is required.
 
 Reuses `Unit_tick_anim`, `Sprite_draw_unit_body_normal`,

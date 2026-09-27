@@ -16,9 +16,9 @@ int main(){using namespace c3x_renderer::tactical;Input a;a.line(-100,20,40,20);
  Input custom;custom.ring(0,0,192,false);assert(custom.primitives[0].shape[2]==44.f);
  Input selected;selected.ring(0,0,128,true);assert(selected.primitives[0].shape[1]==-2.f);
  assert(c.primitives[0].shape[1]==0.f);
- assert(cursor_phase(0)==cursor_phase(2.5));
- assert(cursor_phase(.625)<cursor_phase(1.25) && cursor_phase(1.875)<cursor_phase(1.25));
- assert(cursor_phase(1.25)>3.14f && cursor_phase(1.25)<3.15f);
+ assert(cursor_phase(0)==cursor_phase(5));
+ assert(cursor_phase(1.25)<cursor_phase(2.5) && cursor_phase(3.75)<cursor_phase(2.5));
+ assert(cursor_phase(2.5)>1.57f && cursor_phase(2.5)<1.58f);
  return 0;}
 ''')
 

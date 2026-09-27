@@ -8,8 +8,13 @@ turn label. Source media remain external/local; runtime art is generic.
 The installed Civ III `Cursor.flc` confirms a 93×46 frame, 30 frames and an
 83 ms frame interval. Decompiled native cursor draws use the full frame at
 normal zoom and half at native zoom-out. The Lab ellipse sits within that frame
-and stays independent of custom camera zoom. The easing curve is a visual
-approximation of the source frame sequence, rather than a decoded runtime FLC.
+and stays independent of custom camera zoom. Each of its four cardinal gaps
+has a small inward curl, matching the visible stroke ends of the native frame.
+The five-second easing cycle is a user-requested half-speed approximation of
+the source sequence, rather than a decoded runtime FLC. The markers turn 90°
+between endpoints. Decoded installed FLC frames brighten the inward markers
+through the middle of their cycle and darken them near its wrap; Lab fades
+them from dark to white and back with the same eased phase as their rotation.
 
 There is one current selected unit and one active go-to preview for that unit.
 The destination ring/turn label belongs to that preview, not another selection.

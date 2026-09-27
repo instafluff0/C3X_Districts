@@ -10,6 +10,16 @@ the former 1,326-line roadmap.
 
 ## Current state
 
+- **Current candidate: asynchronous sandbox port.** Native draws, image updates
+  and unit facts publish owned copies to a bounded transport queue; Renderer64
+  draws the sandbox resident scene on its own clock. CPU map readback and unit
+  raster fallbacks are rejected. The final real-JGL fixture sustained 55.76
+  renderer submissions/sec at 2240×1260 and proved progress with either process
+  paused. This is not a live-game FPS result. The tested trio was staged and
+  installed with user authorization. The first live check failed with a black
+  map and repeated city labels after scrolling; diagnose that publication path
+  with a short startup log capture. See [current bridge and remaining checkpoints](renderer64_scene_and_motion.md#current-asynchronous-bridge).
+  Preserve the roughly 52 FPS sandbox baseline; further FPS tuning is deferred.
 - Milestones 1 and 2 and M3.7 have automated acceptance evidence. M3.8–M3.12
   and the integrated M3.13 acceptance are not complete. Existing x86 gameplay,
   native UI, visibility and config-off contracts remain authoritative.

@@ -93,13 +93,20 @@ struct State {
 } state,*is=&state;
 struct CityForm {struct {struct {int Status2=0;} Data;} Base;} city,*p_city_form=&city;
 using JGL_Image=void;
-struct Main_Screen_Form {int mouse_x=0,mouse_y=0;struct {struct {struct {struct {JGL_Image* Image=nullptr;} JGL;} Canvas;} Data;} Units_Control;} main_screen,*p_main_screen_form=&main_screen;
+struct Main_Screen_Form {int mouse_x=0,mouse_y=0;struct {struct {struct {struct {JGL_Image* Image=nullptr;} JGL;} Canvas;} Data;} Units_Control;struct {struct {struct {JGL_Image* Image=nullptr;} JGL;} Canvas;} Base_Data;} main_screen,*p_main_screen_form=&main_screen;
 struct Unit{};struct Animator{int field_18E4[32]{};};struct PCX_Image{};struct PCX_Color_Table{};
 void Main_Screen_Form_update_in_go_to_mode(Main_Screen_Form*,int){}
 void Main_Screen_Form_draw_route_cursor(int,int){}
 struct Sprite{int Width=95,Height=63;};
 struct Bic{bool is_zoomed_out=false;} bic,*p_bic_data=&bic;
 int status_calls=0,cursor_calls=0,marker_calls=0,overlay_x=0,overlay_y=0;
+int ring_calls=0;
+int native_image(int op,void*,void*,void const* from,void const*,unsigned){
+ if(op==C3X_NATIVE_TACTICAL_CAPABLE)return 1;
+ assert(op==C3X_NATIVE_TACTICAL_RING);
+ auto ring=static_cast<int const*>(from);assert(ring[2]==(bic.is_zoomed_out?64:128)&&ring[3]==1);
+ overlay_x=ring[0];overlay_y=ring[1];++ring_calls;return 1;
+}
 PCX_Image canvas;PCX_Color_Table palette;
 void Unit_draw_status(Unit*,int,PCX_Image* c,int x,int y,bool stack){
  assert(c==&canvas&&stack);++status_calls;overlay_x=x;overlay_y=y;
@@ -120,6 +127,8 @@ void Main_Screen_Form_tile_to_screen_coords(Main_Screen_Form*,int,int,int,int* x
 ''' + functions + r'''
 int main(){
  Main_Screen_Form screen;
+ state.current_config.enable_custom_rendering=true;
+ state.custom_renderer_native_image=native_image;
  for(int basis:{64,128})for(int zoom:{128,160,192})for(int camera:{-317,0,803}){
   bic.is_zoomed_out=basis==64;
   state.custom_renderer_zoom_native_tile_width=basis;state.custom_renderer_zoom_tile_width=zoom;
@@ -174,6 +183,7 @@ int main(){
   assert(patch_Sprite_draw_map_unit_marker(&sprite,0,&canvas,center_x-hw,center_y-hh,123,1,1,basis==64?2:1,&palette)==37);
   assert(overlay_x==center_x-hw&&overlay_y==center_y-hh);enabled=true;
  }
+ assert(ring_calls==36);
 }
 '''
         run_cpp("#include <initializer_list>\n" + program)

@@ -156,7 +156,10 @@ surface reconstruction rather than replaying an incomplete queue.
 
 Readiness inspection does not retire the displayed map. Adoption is a separate
 ordered command, so all old-map draws finish before the new map identity becomes
-usable by subsequent commands. Camera results and uploaded arrays are owned
+usable by subsequent commands. The helper consumer acquires the render boundary
+once for readiness/adoption; repeated try-lock polling could starve an already
+completed camera behind ambient frames. The game only polls copied local state.
+Camera results and uploaded arrays are owned
 copies; no game pointer or borrowed surface handle survives publication. Startup,
 definition loading and explicit reset still join transport outside the frame
 path. CPU map readback and CPU unit rasterization are rejected in this mode.
@@ -175,11 +178,25 @@ the matching x64 helper/DLL, the local audited JGL binary and a captured scene.
 It pauses the native host and then the renderer for two seconds each, checks
 ordered consumption on resume, rejects CPU map reads, and exercises scrolling.
 `--window-witness-seconds` adds separate sampled compositor evidence. Present
-counts measure successful renderer submissions, not physical scanout. The first
-independence run observed 104 frames during the two-second host pause and native
-publication p95/max of 0.759/1.008 ms during renderer suspension. The user's
-current priority is completing this port while retaining that performance, not
-further FPS tuning.
+counts measure successful renderer submissions, not physical scanout or Civ III
+gameplay FPS. The final candidate fixture at 2240×1260 observed 447 submissions
+in 8.016 seconds (55.76/sec), with waves, water motion and reflections enabled.
+During a two-second host pause it produced 118 frames. During renderer suspension,
+native publication p95/max was 1.058/35.805 ms; the outlier is not attributed.
+All 32 scrolling captures completed, with readiness median/p95/max of
+47/78/109 ms, including the fixture's polling interval. These are readiness
+measurements, not input-to-display latency. The receipt, log and three preserved
+tested binaries are under
+`native/build/gpu-composition/d045f124368c4939a39cf0f1a2fef0f8/`.
+Separate sampled window evidence is under
+`native/build/gpu-composition/32b2e85754814b2b96cbe1fff212c55e/window-witness/`.
+The user authorized staging and installation of that tested trio; staged hashes
+and the startup probe passed, and the injected executable was updated. The first
+live game check showed a black map with city-label trails after scrolling.
+The fixture therefore does not cover the failing live publication path.
+`CAPTURE_MAP_FAILURE.bat` collects both processes' default debug messages while
+the user launches and operates the game. The user's current priority is fixing
+this port while retaining the sandbox's roughly 52 FPS, not further FPS tuning.
 
 The Civ III bridge owns the window and creates one DirectComposition surface
 per window generation. Renderer64 owns the device, swap chain, final map image

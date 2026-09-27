@@ -33,11 +33,28 @@ V vertex(uint vertex:SV_VertexID,uint instance:SV_InstanceID){
 float segment(float2 q,float2 a,float2 b){float2 v=b-a;return length(q-a-v*saturate(dot(q-a,v)/max(dot(v,v),.001)));}
 float coverage(float distance,float halfWidth){return saturate((halfWidth-distance)/max(fwidth(distance),.75)+.5);}
 float4 over(float4 a,float4 b){return a+b*(1-a.a);}
+float curlDistance(float2 q,float2 a,float2 control,float2 end){
+ float2 midpoint=(a+2*control+end)*.25;
+ return min(segment(q,a,midpoint),segment(q,midpoint,end));
+}
 float ringDistance(float2 q,Primitive p){float2 n=(q-p.shape.xy)/p.shape.zw;return abs(length(n)-1)/max(length(n/(p.shape.zw*max(length(n),.001))),.0001);}
 float ring(float2 q,Primitive p){
- float2 n=(q-p.shape.xy)/p.shape.zw;
+ float scale=p.shape.z/44,halfWidth=p.style.y*.5*scale;
  float gap=min(abs(q.x-p.shape.x),abs(q.y-p.shape.y));
- return coverage(ringDistance(q,p),p.style.y*.5)*smoothstep(1.5,3.2,gap);
+ float rim=coverage(ringDistance(q,p),halfWidth)*smoothstep(1.5*scale,3.2*scale,gap);
+ float curls=1000;
+ [unroll]for(int k=0;k<4;++k){
+  float sx=(k&1)?1:-1,sy=(k&2)?1:-1;
+  float2 sideStart=p.shape.xy+float2(sx*(p.shape.z-.5*scale),sy*3.2*scale);
+  float2 sideControl=p.shape.xy+float2(sx*(p.shape.z+scale),sy*1.8*scale);
+  float2 sideEnd=p.shape.xy+float2(sx*(p.shape.z-2.7*scale),sy*1.8*scale);
+  curls=min(curls,curlDistance(q,sideStart,sideControl,sideEnd));
+  float2 tipStart=p.shape.xy+float2(sx*3.2*scale,sy*(p.shape.w-.1*scale));
+  float2 tipControl=p.shape.xy+float2(sx*1.8*scale,sy*(p.shape.w+.8*scale));
+  float2 tipEnd=p.shape.xy+float2(sx*1.8*scale,sy*(p.shape.w-2.3*scale));
+  curls=min(curls,curlDistance(q,tipStart,tipControl,tipEnd));
+ }
+ return max(rim,coverage(curls,halfWidth));
 }
 float arrow(float2 q,Primitive p,float phase){
  float2 n=(q-p.shape.xy)/p.shape.zw;float a=atan2(n.y,n.x)-phase;
@@ -51,9 +68,10 @@ float glyph(float2 q,Primitive p){float2 uv=(q-p.shape.xy)/p.shape.zw;
  if(any(uv<0)||any(uv>1))return 0;uint g=(uint)p.style.y;
  return font.SampleLevel(linearClamp,(float2(g%16,g/16)+uv)/float2(16,6),0).r;}
 float4 pixel(V i):SV_Target{
- Primitive p=items[i.id];float a=0,marker=0,shadow=0;
+ Primitive p=items[i.id];float a=0,marker=0,markerLight=0,shadow=0;
  if(p.style.x<.5){float dist=segment(i.location,p.shape.xy,p.shape.zw);a=coverage(dist,p.style.y*.5);
  }else if(p.style.x<1.5){float phase=p.style.z>0?clock.x:0;
+  markerLight=saturate(phase/1.5707963);
   a=ring(i.location,p);marker=arrow(i.location,p,phase);
   shadow=max(ring(i.location-float2(0,1.4),p),arrow(i.location-float2(0,1.4),p,phase))*.5;
  }else if(p.style.x<2.5){a=glyph(i.location,p);shadow=max(max(glyph(i.location+float2(-1,0),p),glyph(i.location+float2(1,0),p)),max(glyph(i.location+float2(0,-1),p),glyph(i.location+float2(0,1.5),p)))*.9;
@@ -64,7 +82,9 @@ float4 pixel(V i):SV_Target{
   else if(p.style.z>1.5&&fmod(along,4*p.style.y)>=3*p.style.y)a=0;
  }
  float alpha=a*p.color.a;float4 fill=float4(p.color.rgb*alpha,alpha);
- float markAlpha=marker*.78;fill=over(float4(float3(.26,.27,.28)*markAlpha,markAlpha),fill);
+ float markAlpha=marker*.88;
+ float3 markerColor=lerp(float3(.12,.12,.12),float3(.98,.98,.98),markerLight);
+ fill=over(float4(markerColor*markAlpha,markAlpha),fill);
  return over(fill,float4(.025,.035,.045,1)*shadow);
 })";
         Ptr<ID3DBlob> v,p,error;
