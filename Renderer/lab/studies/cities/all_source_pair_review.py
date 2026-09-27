@@ -10,19 +10,112 @@ import json
 from pathlib import Path
 
 from Renderer.lab.studies.cities.build_layouts import ROOT
-from Renderer.lab.studies.cities.medieval_family_review import generate, slug
+from Renderer.lab.studies.cities.medieval_family_review import box, generate, place, scale_for, slug
 from Renderer.lab.studies.cities.sheet import render_culture
 
 
 OUT = ROOT / "Renderer/lab/out/cities/all-era-source-auditions"
 FAMILIES = {
     "ancient": (ROOT / "Renderer/lab/out/cities/ancient-source-families/source-report.json",
-                ROOT / "Renderer/lab/out/cities/ancient-source-families/no-ground-flat-pack"),
+                ROOT / "Renderer/lab/out/cities/ancient-source-families/foundation-free-pack"),
     "classical": (ROOT / "Renderer/lab/out/cities/medieval-source-families/source-report-uv.json",
-                  ROOT / "Renderer/lab/out/cities/medieval-source-families/flat-pack-uv"),
-    **{era: (OUT / era / "source-report.json", OUT / era / "flat-pack")
+                  ROOT / "Renderer/lab/out/cities/medieval-source-families/foundation-free-pack-uv-v2"),
+    **{era: (OUT / era / "source-report.json", OUT / era / "foundation-free-pack")
        for era in ("industrial", "modern", "future", "unspecified")},
 }
+
+# These large source blocks contain baked-in, differently facing buildings.
+# A single aligned civic building makes the tile-edge direction unambiguous.
+CLASSICAL_CENTERS = {
+    "Baltic": "DIS_CTY_RBAL_Bld_F",
+    "Scottish": "DIS_CTY_RSCT_Bld_07",
+    "CIVILIZATION_VIETNAM": "DIS_CTY_RVIE_Bld_07",
+}
+
+
+def classical_layout(source, pool, pack):
+    layouts = json.loads(source.read_text())
+    original_pack = "Renderer/lab/out/cities/medieval-source-families/flat-pack-uv"
+    replacement = pack.relative_to(ROOT).as_posix()
+
+    def repoint(node):
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if key == "pack" and value == original_pack:
+                    node[key] = replacement
+                else:
+                    repoint(value)
+        elif isinstance(node, list):
+            for value in node:
+                repoint(value)
+
+    repoint(layouts)
+    name = CLASSICAL_CENTERS.get(pool["source_culture"])
+    if name:
+        record = next(entry for entry in pool["selected"] if entry["entry"] == name)
+        design = next(d for d in layouts["designs"] if (d["culture"], d["era"]) == (1, 1))
+        old = design["base_centerpiece"]
+        aligned = {**old, "asset": record["asset_id"], "pack": replacement,
+                   "scale": scale_for(record["asset_id"], pack, .39, .33),
+                   "rotation": 0.0}
+        design["base_centerpiece"] = aligned
+        for tier in design["tier_designs"]:
+            tier["base_centerpiece"] = aligned.copy()
+    if pool["source_culture"] == "America":
+        # The source LG_SQ and SQ_01 blocks bake several houses with
+        # conflicting street directions into one mesh. Rebuild their plots
+        # from aligned same-family individual buildings. Every substitute
+        # stays within the footprint of the block it replaces.
+        records = {entry["entry"]: entry["asset_id"] for entry in pool["selected"]}
+        def aligned_item(source, entry, scale, dx=0.0, dy=0.0):
+            return {**source, "asset": records[entry], "pack": replacement,
+                    "scale": scale, "rotation": 0.0,
+                    "offset": [round(source["offset"][0] + dx, 3),
+                               round(source["offset"][1] + dy, 3)]}
+        design = next(d for d in layouts["designs"] if (d["culture"], d["era"]) == (1, 1))
+        old_core = design["base_centerpiece"]
+        core = aligned_item(old_core, "DIS_CTY_RE_Bld_MD_B_03", 2.85)
+        square = records["DIS_CTY_RE_Block_B_SQ_01"]
+        for tier in design["tier_designs"]:
+            tier["base_centerpiece"] = core.copy()
+            for key in ("houses", "capital_houses"):
+                houses = []
+                for item in tier[key]:
+                    if item["asset"] == square:
+                        inward = (-.025 if item["offset"][0] > .5 else
+                                  .025 if item["offset"][0] < -.5 else 0.0)
+                        houses.extend((aligned_item(item, "DIS_CTY_RE_Bld_MD_B_01", 2.18,
+                                                    dx=inward, dy=-.045),
+                                       aligned_item(item, "DIS_CTY_RE_Bld_XSM_B_01", 2.0,
+                                                    dx=inward, dy=.065)))
+                    else:
+                        houses.append(item)
+                if key == "houses":
+                    for dx in (-.155, .155):
+                        houses.append(aligned_item(old_core, "DIS_CTY_RE_Bld_SM_B_01",
+                                                   2.0, dx=dx, dy=-.165))
+                tier[key] = houses
+        infill = ["DIS_CTY_RE_Bld_XSM_B_02", "DIS_CTY_RE_Bld_SM_B_02",
+                  "DIS_CTY_RE_Bld_XSM_B_01", "DIS_CTY_RE_Bld_MD_B_02"]
+        targets = [(-.16, .26), (.16, .26), (-.33, -.04), (.33, -.04),
+                   (0, -.16)]
+        for size, tier in enumerate(design["tier_designs"]):
+            if size == 0:
+                continue
+            for key, center in (("houses", core), ("capital_houses", tier["palace"])):
+                occupied = [box(item) for item in tier[key]] + [box(center)]
+                for index, target in enumerate(targets):
+                    choices = [dict(asset_id=records[entry], rotation=0.0)
+                               for entry in infill[index % len(infill):] +
+                               infill[:index % len(infill)]]
+                    extra = place(choices, pack, occupied, size, target, .28, .16)
+                    if extra is not None:
+                        tier[key].append(extra)
+        design["base_centerpiece"] = core
+        design["houses"] = design["tier_designs"][-1]["houses"]
+        design["population_counts"] = [len(tier["houses"])
+                                       for tier in design["tier_designs"]]
+    return layouts
 
 
 def palace_for(pool, catalog):
@@ -61,13 +154,18 @@ def main():
         if args.era == "classical":
             source = (ROOT / "Renderer/lab/out/cities/medieval-source-families/review" /
                       slug(culture) / "layouts.json")
+            layouts = classical_layout(source, pool, pack)
+            (destination / "layouts.json").write_text(json.dumps(layouts, indent=2) + "\n")
             if args.render:
-                layouts = json.loads(source.read_text())
                 design = next(d for d in layouts["designs"]
                               if (d["culture"], d["era"]) == (1, 1))
                 design["review_context"] = "Civ VI source-art audition"
                 render_culture(layouts, 1, sheet, only_era=1)
-            detail = {"kind": "existing Classical composition", "counts": None}
+            detail = {"kind": ("aligned individual composition" if culture == "America"
+                               else "aligned Classical composition" if culture in CLASSICAL_CENTERS
+                               else "existing Classical composition"),
+                      "counts": ([len(tier["houses"]) for tier in design["tier_designs"]]
+                      if args.render and culture == "America" else None)}
         else:
             asset, palace_status = palace_for(pool, catalog)
             layouts, detail = generate(pool, pack, palace_pack, asset, tree_pack,

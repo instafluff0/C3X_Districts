@@ -67,8 +67,9 @@ class Backend {
     }
 public:
     Backend(std::wstring const& helper,std::wstring const& dll,bool direct=false):
-        client(direct,[](char const* reason){OutputDebugStringA("[C3X renderer] stage=async-publication-failed reason=");
-            OutputDebugStringA(reason);OutputDebugStringA("\n");},helper,dll),direct_requested(direct){}
+        client(direct,[](char const* reason){char line[512];
+            std::snprintf(line,sizeof(line),"[C3X renderer] stage=async-publication-failed reason=%s\n",reason);
+            OutputDebugStringA(line);},helper,dll),direct_requested(direct){}
     ~Backend(){cadence.stop();}
     bool healthy()const{return client.alive();}
     void progress(unsigned& accepted,unsigned& completed,unsigned& frames)const{client.progress(accepted,completed,frames);}

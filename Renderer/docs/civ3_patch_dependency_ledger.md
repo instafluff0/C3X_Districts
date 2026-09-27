@@ -2,14 +2,36 @@
 
 ## Renderer64 asynchronous publication candidate
 
-`required_user_action: ["Run CAPTURE_MAP_FAILURE.bat and reproduce the black map from startup"]`.
-The user authorized staging and installation. The three binaries from fixture
-`d045f124368c4939a39cf0f1a2fef0f8` were staged with matching hashes, the startup
-probe passed, and `INSTALL.bat` updated the game executable with the new unit
-publication path. The user's first live check showed a black map and repeated
-city labels after scrolling; live integration has failed and needs diagnosis.
-No new patch symbol, signature, supported-build address,
-or `civ_prog_objects.csv` entry is required.
+`required_user_action: ["Run CAPTURE_MAP_FAILURE.bat, launch Civ III, load the map and scroll briefly, then finish the capture"]`.
+The tested matching trio is staged and the updated injected executable is installed.
+The user's `20260927-100403` capture identifies startup UI transfers through
+JGL image slot 14 (RVA `0x1e20`, destination lease return `jgl+0x6c19`).
+Civ III's tiled UI background routine calls this indexed, destination-keyed
+transfer. Its private pixel borrow was unscoped, permanently disqualifying
+canvases from later GPU composition. The isolated JGL regression reproduces
+that loss with the original method and preserves admission with the new hook.
+
+Adds `patch_JGL_Image_keyed_region` to the existing hash-verified runtime JGL
+vtable hooks. Signature: `int __fastcall (JGL_Image*, int, JGL_Image*, int sx,
+int sy, int x, int y, int width, int height, int key)`. Slot 14 is verified against
+the installed JGL hash and RVA; it does not require a Civ III executable patch
+address. No `civ_prog_objects.csv` change is required. Config-off/startup calls
+retain native drawing inside a private lease scope. GPU-owned destinations use
+an ordered GPU key comparison/replacement over copied indexed UI source pixels;
+CPU map readback and unit raster fallback remain rejected. This hook change
+passed the approved injected compile test and matching `INSTALL.bat` run.
+The staged startup probe passes. Receipt `e5ec8b393f404609b9791258cb900cee`
+preserves the matching trio, hashes, prior staged binaries and install receipt:
+55.14 fixture submissions/sec, all 32 scrolling cases, independent process
+progress and zero CPU map readbacks. This is not yet live gameplay evidence.
+
+The capture also shows a failed 36×30 HUD destination and a full-screen canvas.
+Its shared diagnostic quota filled before their specific escape events, so the
+slot-14 finding does not yet prove the entire live black-map failure is fixed.
+Large canvases and post-demand escapes now have separate bounded quotas.
+Earlier captures established that deferred world capture must not queue an
+empty page (`090553`) and that GPU map publication succeeds before a later HUD
+ownership failure (`092023`, `094257`). The async queue fix remains in place.
 
 Reuses `Unit_tick_anim`, `Sprite_draw_unit_body_normal`,
 `Sprite_draw_unit_body_reduced`, `Map_Renderer_m71_Draw_Tiles`,

@@ -79,7 +79,7 @@ int main(){
 using namespace std::chrono_literals;
 struct State {
  std::mutex mutex;std::condition_variable wake;bool held=false,entered=false;
- int creates=0,adoptions=0,reads=0,observations=0;long long current=0;
+ int creates=0,adoptions=0,reads=0,observations=0,pages=0;long long current=0;
  std::vector<unsigned> uploaded;std::vector<long long> sources;
  void barrier(){std::unique_lock<std::mutex> lock(mutex);entered=true;wake.notify_all();wake.wait(lock,[&]{return !held;});}
  void hold(){std::lock_guard<std::mutex> lock(mutex);held=true;entered=false;}
@@ -104,6 +104,11 @@ struct Fake {
   ++state.adoptions;state.current=ticket;camera_ready(ticket,value);value.image.ticket=100+ticket;value.image.map_image=1000+ticket;return C3X_RENDERER_RESULT_OK;
  }
  int camera_cancel(long long){return C3X_RENDERER_RESULT_OK;}
+ int world_submit(c3x_renderer_world_page_v1 const& page,int code){
+  if(code!=C3X_RENDERER_RESULT_OK)return code;
+  assert(page.count==1&&page.tiles[0].anchor_x==17);++state.pages;return C3X_RENDERER_RESULT_OK;
+ }
+ int world_delta_submit(c3x_renderer_world_page_v1 const& page,int code){return world_submit(page,code);}
  int images(c3x_renderer_gpu_images_v1 const& value,c3x_renderer_gpu_result_v1& result,unsigned*,unsigned){
   state.barrier();assert(value.ticket==100+state.current);
   for(unsigned n=0;n<value.command_count;++n){state.sources.push_back(value.commands[n].source);assert(value.commands[n].source==1000+state.current);}
@@ -131,9 +136,22 @@ int main(){
  c3x_renderer_gpu_unit_v1 target={sizeof(target)};int bounds[4]={};
  assert(client.unit(unit,target,bounds)==C3X_RENDERER_RESULT_OK);std::strcpy(unit.unit_key,"reused");
  state.release();client.stats();assert(state.adoptions==0&&state.observations==1);
+ // Civ III refuses background world capture until the first map is displayed.
+ // This is a deferred capture, not an empty snapshot or a renderer failure.
+ c3x_renderer_world_page_v1 page={};page.struct_size=sizeof(page);page.capacity=128;
+ for(int deferred:{C3X_RENDERER_RESULT_PENDING,C3X_RENDERER_RESULT_SUPERSEDED,C3X_RENDERER_RESULT_ERROR}){
+  assert(client.world_submit(page,deferred)==deferred);
+  assert(client.world_delta_submit(page,deferred)==deferred);
+ }
+ client.stats();assert(client.alive()&&state.pages==0);
  assert(client.camera_poll(camera,view)==C3X_RENDERER_RESULT_OK);
  assert(view.camera.frame.tiles[0].anchor_x==17&&view.camera.ticket==camera);
  auto first=view.image;client.stats();assert(state.adoptions==1);
+ // Once capture is available, its copied records still enter in order.
+ tile.anchor_x=17;page.count=1;page.tiles=&tile;
+ assert(client.world_submit(page,C3X_RENDERER_RESULT_OK)==C3X_RENDERER_RESULT_OK);
+ assert(client.world_delta_submit(page,C3X_RENDERER_RESULT_OK)==C3X_RENDERER_RESULT_OK);
+ tile.anchor_x=999;client.stats();assert(state.pages==2&&client.alive());
  // Pause the actual consumer for two seconds. Creates still return distinct
  // usable identities; caller memory can immediately be overwritten or freed.
  state.hold();c3x_renderer_gpu_images_v1 image={};image.struct_size=sizeof(image);image.ticket=first.ticket;

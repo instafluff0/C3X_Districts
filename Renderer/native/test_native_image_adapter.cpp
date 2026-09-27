@@ -86,6 +86,37 @@ int native_adapter_contract(char const* path,Backend& gpu,Id map=0,unsigned cons
 #endif
         auto both_fill=[&](int index,RECT area,unsigned color){verify(fill(control[index],&area,int(color))==0,"oracle fill");verify(reinterpret_cast<Fill>(target[index]->vtable[17])(target[index],&area,int(color))==0,"hooked fill");};
         auto both_copy=[&](int from,int to,RECT a,RECT b){verify(copy(control[from],control[to],&a,&b)==0,"oracle copy");verify(reinterpret_cast<Copy>(target[from]->vtable[16])(target[from],target[to],&a,&b)==0,"hooked copy");};
+        {
+            auto saved_control=control[0],saved_target=target[0];
+            control[0]=create(graph,nullptr,1);target[0]=create(graph,nullptr,1);
+            verify(init(control[0],w,h,16,1)==0&&reinterpret_cast<Init>(target[0]->vtable[1])(target[0],w,h,16,1)==0,"dedicated keyed transfer canvases");
+            NativeKeyedImage indexed(graph,module);auto before=backend.stats().readbacks;
+            auto detail=backend.display_image(target[0]);verify(detail!=0,"keyed destination detail");
+            std::vector<unsigned> detail_seed(w*h,0xff97bde3u),detail_output(w*h);std::uint64_t revision=0;
+            RECT clip={3,4,61,45};
+            for(auto image:{control[0],target[0]})verify(reinterpret_cast<Clip>(image->vtable[13])(image,&clip)==0,"keyed region clip");
+            for(int key:{17,18,255})for(int sx:{-3,0,4,12})for(int x:{-4,5,58,70}){
+                unsigned key_word=key==255?65535:0x1234;
+                both_fill(0,full,0x80000000u|key_word);RECT stripe={8,0,10,h};both_fill(0,stripe,0x80006543u);
+                verify(gpu.upload(detail,++revision,detail_seed.data(),detail_seed.size()),"keyed independent full-color background");
+                verify(indexed.draw(control[0],sx,-2,x,2,11,12,key,true)==0,"native keyed region oracle");
+                verify(indexed.draw(target[0],sx,-2,x,2,11,12,key)==0,"GPU keyed region");compare(0);
+                verify(gpu.readback(detail,detail_output.data(),detail_output.size()),"keyed detail oracle");
+                auto words=get(control[0],0,0);int pitch=*reinterpret_cast<int*>(reinterpret_cast<char*>(control[0])+0x40);
+                for(int py=0;py<h;++py)for(int px=0;px<w;++px){
+                    int ix=sx+px-x,iy=-2+py-2;bool selected=px>=clip.left&&px<clip.right&&py>=clip.top&&py<clip.bottom&&px>=x&&px<x+11&&py>=2&&py<14&&ix>=0&&ix<11&&iy>=0&&iy<9&&!(px>=8&&px<10);
+                    unsigned expected=detail_seed[py*w+px];
+                    if(selected){unsigned word=words[py*pitch+px],b=word&31,g=(word>>5)&31,r=(word>>10)&31;
+                        expected=0xff000000u|((b<<3)|(b>>2))|(((g<<3)|(g>>2))<<8)|(((r<<3)|(r>>2))<<16);}
+                    verify(detail_output[py*w+px]==expected,"destination key preserves full-color pixels outside replacement");
+                }release(control[0],1);
+                verify(backend.owns(target[0])&&backend.stats().readbacks==before,"keyed regions retain GPU ownership without map readback");
+            }
+            for(auto image:{control[0],target[0]})verify(reinterpret_cast<Clip>(image->vtable[13])(image,&full)==0,"keyed unclip");
+            for(auto image:{control[0],target[0]})reinterpret_cast<Destroy>(image->vtable[0])(image,1);
+            control[0]=saved_control;target[0]=saved_target;
+            std::puts("PASS indexed destination-key transfer: 48 native/GPU comparisons, exact clipping, full-color preservation, zero readbacks");
+        }
         for(int phase=0;phase<6;++phase){
             RECT clip={7,8,59,44},area={-4,3,44,39};
             verify(reinterpret_cast<Clip>(control[0]->vtable[13])(control[0],&clip)==0,"oracle clip");verify(reinterpret_cast<Clip>(target[0]->vtable[13])(target[0],&clip)==0,"GPU clip metadata");

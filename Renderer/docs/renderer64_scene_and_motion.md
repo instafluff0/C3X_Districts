@@ -144,6 +144,45 @@ at the intended presentation time still need work.
 
 ### Current asynchronous bridge
 
+Latest capture `20260927-100403` identifies a missing startup UI transfer hook:
+JGL image slot 14 (RVA `0x1e20`) calls the destination pixel getter at `0x6c16`.
+The module-relative caller candidates match both that disassembly and Civ III's
+tiled background routine. The method copies indexed source pixels only where
+the destination matches the source palette's key color. Its private borrow
+previously revoked destination admission. The new `patch_JGL_Image_keyed_region`
+keeps native startup/config-off scopes private and translates GPU-owned draws
+through the existing ordered composition path. It uploads source UI data only;
+key comparison and destination replacement run on the GPU. Nonmatching pixels
+retain independent full-color map data. Genuine public pointer escapes still
+revoke ownership.
+
+The original-method regression loses admission; the hook retains it. Receipt
+`fb295afa6eb0482e8e7e4a8d8637479e` passes 48 exact JGL/GPU comparisons covering
+source/destination clipping, duplicate palette colors, a full-word key,
+full-color preservation and zero execution readbacks for this operation.
+Lifetime receipt `d1f9cbdc40ab401aa8b2539c6a7d1f8a` and the approved injected
+compile smoke test pass. The async fixture now includes this real native
+transfer both before and after first map publication and during scrolling.
+Async receipt `e5ec8b393f404609b9791258cb900cee` passes with 442 submissions in
+8.016 seconds (55.14/sec), 121 frames during a two-second host pause and 77
+native publications during a renderer pause (p95/max 0.563/0.903 ms). All 32
+scrolling cases pass; readiness spans 31–312 ms, including polling. CPU map
+readbacks remain zero. The exact matching trio is preserved and staged, startup
+probe passes, and `INSTALL.bat` installed the updated injected hook. The isolated
+8/16-bit source-recording test passes guard-page, odd-size and padding checks;
+seven portable async/input tests pass. Three older source-text bridge assertions
+also fail on HEAD and are not evidence against this change; their comparison is
+saved beside the receipt. The next strategic checkpoint is the user's live map
+and scrolling capture with `CAPTURE_MAP_FAILURE.bat`. No manual reinstall is
+needed.
+
+The capture's 128-entry diagnostic budget filled with small startup canvases
+before the rejected 36×30 button and full-screen HUD canvas escaped. The full
+live failure is therefore still unproven. Separate bounded budgets now preserve
+large-canvas and post-demand events. This is an integration correctness change;
+the sandbox performance target and the ban on CPU map/unit fallback remain.
+
+
 `sandbox/async_scene_client.h` owns copied publications between the native
 composition owner and the existing process transport. The game reserves image
 identities locally and publishes creates, uploads, draws, unit facts and presents
@@ -165,6 +204,13 @@ definition loading and explicit reset still join transport outside the frame
 path. CPU map readback and CPU unit rasterization are rejected in this mode.
 Native UI assets may still originate in Civ III's CPU surfaces.
 
+World capture can return `PENDING` while Civ III loads, draws, or waits for its
+first displayed map. This status means no snapshot was captured. The bridge
+returns non-success capture results directly without queuing an empty page or
+faulting transport; the native timer can retry while map publication continues.
+Successfully captured pages and deltas still enter the ordered queue as owned
+copies. Async transport errors identify the failing operation in one log line.
+
 The helper's ambient frames invoke the sandbox resident draw directly. They
 refresh copied unit poses and visual time without re-entering full terrain
 preparation. Geometry preparation runs on authoritative scene/camera changes.
@@ -173,30 +219,26 @@ changed the geometry generation; continuity during long cold preparation still
 needs a separately owned resident scene. Displayed-view input timing, modal UI,
 device/process recovery and live gameplay remain integration checkpoints.
 
-The real-JGL fixture can be run with `native.record_gpu_frame --async-bridge`,
-the matching x64 helper/DLL, the local audited JGL binary and a captured scene.
-It pauses the native host and then the renderer for two seconds each, checks
-ordered consumption on resume, rejects CPU map reads, and exercises scrolling.
-`--window-witness-seconds` adds separate sampled compositor evidence. Present
-counts measure successful renderer submissions, not physical scanout or Civ III
-gameplay FPS. The final candidate fixture at 2240×1260 observed 447 submissions
-in 8.016 seconds (55.76/sec), with waves, water motion and reflections enabled.
-During a two-second host pause it produced 118 frames. During renderer suspension,
-native publication p95/max was 1.058/35.805 ms; the outlier is not attributed.
-All 32 scrolling captures completed, with readiness median/p95/max of
-47/78/109 ms, including the fixture's polling interval. These are readiness
-measurements, not input-to-display latency. The receipt, log and three preserved
-tested binaries are under
-`native/build/gpu-composition/d045f124368c4939a39cf0f1a2fef0f8/`.
-Separate sampled window evidence is under
-`native/build/gpu-composition/32b2e85754814b2b96cbe1fff212c55e/window-witness/`.
-The user authorized staging and installation of that tested trio; staged hashes
-and the startup probe passed, and the injected executable was updated. The first
-live game check showed a black map with city-label trails after scrolling.
-The fixture therefore does not cover the failing live publication path.
-`CAPTURE_MAP_FAILURE.bat` collects both processes' default debug messages while
-the user launches and operates the game. The user's current priority is fixing
-this port while retaining the sandbox's roughly 52 FPS, not further FPS tuning.
+The real-JGL fixture runs with `native.record_gpu_frame --async-bridge`, the
+matching x64 helper/DLL, audited local JGL and a captured scene. It exercises
+pre-display world-capture deferral, indexed UI transfers, six actual HUD pairs,
+first-map adoption, scrolling and independent process progress. It pauses the
+native host and renderer separately for two seconds and rejects CPU map reads.
+`--window-witness-seconds` adds separately sampled compositor evidence. Present
+counts measure renderer submissions, not physical scanout or gameplay FPS;
+readiness measurements do not certify input-to-display latency. Preserve the
+sandbox's roughly 52 FPS; further FPS tuning is deferred.
+
+Earlier evidence remains useful: capture `090553` failed when a deferred world
+capture entered the queue as an empty page (negative regression receipt
+`2aaf54663a8f4505b3a5136d38f31b20`). Capture `092023` then confirmed map publication
+before a HUD admission failure. Capture `094257` identified a full-screen canvas
+that lost eligibility on a context-0 bits request before GPU publication; both
+it and a rejected 36×30 button had no active leases at the later blend. Releasing
+a lease does not prove that a caller discarded its pointer, so ownership checks
+remain strict. Bounded stack candidates are checked against disassembly, not
+reported as a proven backtrace; the optimized-JGL witness recovers `jgl+244d`.
+The newest capture and candidate evidence are summarized above.
 
 The Civ III bridge owns the window and creates one DirectComposition surface
 per window generation. Renderer64 owns the device, swap chain, final map image

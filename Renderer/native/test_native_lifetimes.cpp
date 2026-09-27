@@ -3,6 +3,15 @@
 #include "test_native_observation.cpp"
 #include "test_native_bootstrap.h"
 #include "test_native_line_bridge.h"
+#include "native_callsite_diagnostic.h"
+#include "test_native_ui_assets.h"
+
+std::string native_callsite_witness;
+void* __fastcall capture_native_bits_caller(JGL_Image* image,void*){
+    char candidates[640];c3x_native_diagnostic::callsite_candidates(candidates,sizeof(candidates));
+    if(native_callsite_witness.size()<2048){native_callsite_witness+=candidates;native_callsite_witness+=';';}
+    return patch_JGL_Image_bits(image);
+}
 
 DWORD WINAPI escape_lifetime(void* object){RECT area={0,0,16,16};auto image=static_cast<JGL_Image*>(object);
     return DWORD(reinterpret_cast<Fill>(image->vtable[17])(image,&area,int(0x80001234u)));}
@@ -24,6 +33,30 @@ int main(int argc,char** argv){
         verify(reinterpret_cast<Init>(original[1])(older,16,16,16,1)==0,"unobserved init cannot claim lifetime");
         auto query=[&](void* image){return state.custom_renderer_native_lifetime(C3X_NATIVE_MAP,image,0)!=0;};
         verify(!query(older),"preexisting image is never admitted by a later draw");
+        // Exercise the caller diagnostic through optimized, frame-pointer-free
+        // JGL, not a fabricated address array or a direct C++ call alone.
+        auto caller_source=create(graph,nullptr,1),caller_target=create(graph,nullptr,1);
+        for(auto image:{caller_source,caller_target})
+            verify(reinterpret_cast<Init>(image->vtable[1])(image,36,30,16,1)==0,"caller witness canvas");
+        DWORD caller_protect=0,caller_unused=0;
+        verify(VirtualProtect(&caller_source->vtable[4],sizeof(void*),PAGE_READWRITE,&caller_protect)!=0,"caller witness hook protection");
+        auto caller_bits=caller_source->vtable[4];caller_source->vtable[4]=reinterpret_cast<void*>(&capture_native_bits_caller);
+        reinterpret_cast<int(__thiscall*)(JGL_Image*,JGL_Image*,int,int)>(original[33])(caller_source,caller_target,0,0);
+        caller_source->vtable[4]=caller_bits;VirtualProtect(&caller_source->vtable[4],sizeof(void*),caller_protect,&caller_unused);
+        if(native_callsite_witness.find("jgl+244d@")==std::string::npos)std::fprintf(stderr,"CALLER_CANDIDATES %s\n",native_callsite_witness.c_str());
+        verify(native_callsite_witness.find("jgl+244d@")!=std::string::npos,"diagnostic recovers actual JGL bits caller without unwind metadata");
+        std::printf("PASS native caller diagnostic: %s\n",native_callsite_witness.c_str());
+        for(auto image:{caller_source,caller_target})reinterpret_cast<Destroy>(image->vtable[0])(image,1);
+        {
+            NativeKeyedImage indexed(graph,reinterpret_cast<char*>(jgl));
+            auto unscoped=create(graph,nullptr,1),scoped=create(graph,nullptr,1);
+            for(auto image:{unscoped,scoped})verify(reinterpret_cast<Init>(image->vtable[1])(image,36,30,16,1)==0,"keyed UI canvas init");
+            verify(indexed.draw(unscoped,0,0,0,0,11,9,17,true)==0&&!query(unscoped),"original unscoped indexed transfer reproduces live lifetime loss");
+            verify(indexed.draw(scoped)==0&&query(scoped)&&!scoped->Bits_Data_Links&&state.custom_renderer_native_operation==0,
+                "hooked indexed transfer preserves future GPU admission");
+            for(auto image:{unscoped,scoped})reinterpret_cast<Destroy>(image->vtable[0])(image,1);
+            std::puts("PASS indexed UI startup: original revokes lifetime; hook retains lifetime without leaking leases");
+        }
         JGL_Image* images[2];RECT area={0,0,16,16};
         for(auto& image:images){image=create(graph,nullptr,1);verify(reinterpret_cast<Init>(image->vtable[1])(image,16,16,16,1)==0,"tracked native init");verify(query(image),"fresh native lifetime recorded while rendering is disabled");}
         verify(reinterpret_cast<Fill>(images[0]->vtable[17])(images[0],&area,int(0x80001234u))==0,"native fill");

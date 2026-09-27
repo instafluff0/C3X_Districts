@@ -36,3 +36,29 @@ struct NativeUiAssets {
         return reinterpret_cast<Draw>(original?state.custom_renderer_jgl_blend_original[0]:p.color.vtable[20])(&p.color,&p.alpha,background,destination,x,y,p.palette);
     }
 };
+
+// Real JGL slot 14: copy an indexed region only where the destination equals
+// the source palette's key color. Civ III tiles UI backgrounds this way.
+struct NativeKeyedImage {
+    using Draw=int(__thiscall*)(JGL_Image*,JGL_Image*,int,int,int,int,int,int,int);
+    JGL_Image* image=nullptr;void* palette=nullptr;char* module=nullptr;
+    NativeKeyedImage(void* graph,char* base):module(base){
+        auto gt=*static_cast<void***>(graph);
+        palette=reinterpret_cast<void*(__thiscall*)(void*,void*)>(gt[30])(graph,nullptr);
+        verify(palette!=nullptr,"indexed transfer palette");auto pt=*static_cast<void***>(palette);
+        for(int mode=0;mode<2;++mode){auto colors=reinterpret_cast<unsigned short*(__thiscall*)(void*)>(pt[6+mode])(palette);
+            for(unsigned n=0;n<256;++n)colors[n]=static_cast<unsigned short>(n*113u);
+            colors[17]=0x1234;colors[18]=0x1234;colors[255]=0xffff;}
+        image=reinterpret_cast<Create>(gt[31])(graph,nullptr,1);
+        verify(reinterpret_cast<Init>(image->vtable[1])(image,11,9,8,1)==0,"indexed transfer image");
+        reinterpret_cast<void(__thiscall*)(JGL_Image*,void*)>(image->vtable[59])(image,palette);
+        auto bits=reinterpret_cast<unsigned char*(__thiscall*)(JGL_Image*)>(state.custom_renderer_jgl_original[4])(image);
+        for(int y=0;y<9;++y)for(int x=0;x<11;++x)bits[y*(*reinterpret_cast<int*>(reinterpret_cast<char*>(image)+0x40))+x]=static_cast<unsigned char>(x+y*11);
+        reinterpret_cast<Release>(state.custom_renderer_jgl_original[9])(image,1);
+    }
+    int draw(JGL_Image* target,int sx=0,int sy=0,int x=0,int y=0,int w=11,int h=9,int key=17,bool original=false){
+        return reinterpret_cast<Draw>(original?state.custom_renderer_jgl_original[14]:image->vtable[14])(image,target,sx,sy,x,y,w,h,key);
+    }
+    ~NativeKeyedImage(){reinterpret_cast<Destroy>(image->vtable[0])(image,1);
+        reinterpret_cast<void*(__thiscall*)(void*,unsigned)>(module+0x3cf10)(palette,1);}
+};

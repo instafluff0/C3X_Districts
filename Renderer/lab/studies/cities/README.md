@@ -173,6 +173,16 @@ The sheet renderer restores each wall part's source center after loading its
 centered preview mesh, so the preview ring matches the connected native ring.
 The larger metropolis cell is framed higher to keep its near wall visible.
 
+The all-era source-art auditions now use separate foundation-free Lab packs.
+`trim_subsurface.py` clips imported city-component triangles at the authored
+ground datum, preserving UVs, normals, materials and the original source pack.
+`foundation_grades.json` records the few visually calibrated cuts where a
+visible masonry pedestal rises above that datum. The American comparison
+replaces mixed-facing source blocks with aligned individual houses; Baltic,
+Scottish and Vietnamese civic centers likewise use aligned source singles.
+Palace roots use their measured footprint correction so their fronts match
+the SE/SW street grid. These edits affect review assets and recipes only.
+
 ## Ancient culture auditions
 
 The focused ancient import now retains all seven ancient source tags in a

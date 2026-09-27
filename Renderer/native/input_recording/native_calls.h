@@ -29,7 +29,7 @@ inline void native_operation_input(Writer& out,int op,void* image,void* source,v
     else if(op==C3X_NATIVE_SPRITE_STYLE){out.u32(from?1:0);if(from){auto& p=*static_cast<c3x_renderer_native_sprite_style const*>(from);out.u32(native_id(p.palette));out(p.color);out(p.mode);out(p.opacity);native_table(out,p.table,p.mode==3?4:16);}native_rect(out,to);}
     else if(op==C3X_NATIVE_SPRITE_BLEND){out.u32(from?1:0);if(from){auto& p=*static_cast<c3x_renderer_native_sprite_blend const*>(from);out.u32(native_id(p.alpha));out.u32(native_id(p.background));out.u32(native_id(p.palette));}native_rect(out,to);}
     else if(op==C3X_NATIVE_SPRITE){out.u32(native_id(from));native_rect(out,to);}
-    else if(op==C3X_NATIVE_COPY||op==C3X_NATIVE_FILL||op==C3X_NATIVE_IMAGE_DRAW||op==C3X_NATIVE_IMAGE_PRESENT||op==C3X_NATIVE_LINE||op==C3X_NATIVE_TINT||op==C3X_NATIVE_TACTICAL_RING||op==C3X_NATIVE_TACTICAL_TARGET||op==C3X_NATIVE_STROKE){
+    else if(op==C3X_NATIVE_IMAGE_KEYED_REGION||op==C3X_NATIVE_COPY||op==C3X_NATIVE_FILL||op==C3X_NATIVE_IMAGE_DRAW||op==C3X_NATIVE_IMAGE_PRESENT||op==C3X_NATIVE_LINE||op==C3X_NATIVE_TINT||op==C3X_NATIVE_TACTICAL_RING||op==C3X_NATIVE_TACTICAL_TARGET||op==C3X_NATIVE_STROKE){
         native_rect(out,from,op==C3X_NATIVE_TINT?1:op==C3X_NATIVE_TACTICAL_TARGET?2:op==C3X_NATIVE_STROKE?7:4);native_rect(out,to);}
     // The remaining notifications consume identity/op/color only.
 }
@@ -49,7 +49,7 @@ struct NativeOperationInput {
         else if(op==C3X_NATIVE_SPRITE_STYLE){if(in.u32()){style.palette=object(in.u32());in(style.color);in(style.mode);in(style.opacity);words(in,style.table);from=&style;}rect(in,to,b.data());}
         else if(op==C3X_NATIVE_SPRITE_BLEND){if(in.u32()){blend.alpha=object(in.u32());blend.background=object(in.u32());blend.palette=object(in.u32());from=&blend;}rect(in,to,b.data());}
         else if(op==C3X_NATIVE_SPRITE){from=object(in.u32());rect(in,to,b.data());}
-        else if(op==C3X_NATIVE_COPY||op==C3X_NATIVE_FILL||op==C3X_NATIVE_IMAGE_DRAW||op==C3X_NATIVE_IMAGE_PRESENT||op==C3X_NATIVE_LINE||op==C3X_NATIVE_TINT||op==C3X_NATIVE_TACTICAL_RING||op==C3X_NATIVE_TACTICAL_TARGET||op==C3X_NATIVE_STROKE){rect(in,from,a.data(),op==C3X_NATIVE_TINT?1:op==C3X_NATIVE_TACTICAL_TARGET?2:op==C3X_NATIVE_STROKE?7:4);rect(in,to,b.data());}
+        else if(op==C3X_NATIVE_IMAGE_KEYED_REGION||op==C3X_NATIVE_COPY||op==C3X_NATIVE_FILL||op==C3X_NATIVE_IMAGE_DRAW||op==C3X_NATIVE_IMAGE_PRESENT||op==C3X_NATIVE_LINE||op==C3X_NATIVE_TINT||op==C3X_NATIVE_TACTICAL_RING||op==C3X_NATIVE_TACTICAL_TARGET||op==C3X_NATIVE_STROKE){rect(in,from,a.data(),op==C3X_NATIVE_TINT?1:op==C3X_NATIVE_TACTICAL_TARGET?2:op==C3X_NATIVE_STROKE?7:4);rect(in,to,b.data());}
     }
 };
 }

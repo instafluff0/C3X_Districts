@@ -108,7 +108,7 @@ def choices(pool, pack):
         source = ROOT / "Renderer/lab/out/cities/medieval-source-families"
         report = json.loads((source / "source-report-uv.json").read_text())
         related = next(p for p in report["pools"] if p["source_culture"] == family)
-        singles = [{**entry, "pack": (source / "flat-pack-uv").as_posix(),
+        singles = [{**entry, "pack": (source / "foundation-free-pack-uv-v2").as_posix(),
                     "rotation": 0.0}
                    for entry in related["selected"] if "_Bld_" in entry["entry"]]
         cores = [{**p, "rotation": 0.0} for p in blocks if "_Block_SQ_01" in p["entry"]]
@@ -203,10 +203,12 @@ def generate(pool, flat_pack, palace_pack, palace_asset, tree_pack,
     core_asset = cores[0]["asset_id"]
     core_pack = Path(cores[0].get("pack", flat_pack))
     core = instance(core_asset, core_pack, scale_for(core_asset, core_pack, .36, .43),
-                    0, -.08, -math.pi/4 if facing_profile else cores[0].get("rotation"))
+                    0, -.08, cores[0].get("rotation"))
+    # Palace root meshes carry a baked diagonal turn. Correct that source
+    # orientation onto the same tile-edge grid as the individual houses.
     palace = instance(palace_asset, palace_pack,
                       scale_for(palace_asset, palace_pack, .46, .42),
-                      0, -.08, -math.pi/4 if facing_profile else 0.0)
+                      0, -.08, facing_correction(palace_asset, palace_pack))
     tiers = []
     for center, capital in ((core, False), (palace, True)):
         occupied = [box(center)]

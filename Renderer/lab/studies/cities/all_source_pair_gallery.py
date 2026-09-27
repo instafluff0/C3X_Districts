@@ -50,6 +50,24 @@ def atlas(era, entries, output):
     image.save(output)
 
 
+def facade_comparison(output):
+    families = ("vietnam", "vikings", "maori")
+    width, height, header, gap = 760, 480, 42, 12
+    image = Image.new("RGB", (3*(width+gap)-gap, 2*(height+header+gap)-gap),
+                      (31, 25, 38))
+    draw = ImageDraw.Draw(image)
+    for column, family in enumerate(families):
+        with Image.open(OUT / "review" / "unspecified" / family / "sheet.png") as sheet:
+            for row, (label, start) in enumerate((("City base", 154),
+                                                   ("City capital", 1674))):
+                x, y = column*(width+gap), row*(height+header+gap)
+                draw.text((x+12, y+9), f"{family.title()} | {label}",
+                          font=font(20), fill=(249, 236, 249))
+                image.paste(sheet.crop((start, 618, start+width, 1098)),
+                            (x, y+header))
+    image.save(output)
+
+
 def main():
     root = OUT / "review"
     collected = []
@@ -65,6 +83,7 @@ def main():
         collected.extend(entries)
     if len(collected) != 46:
         raise ValueError(f"Expected 46 populated source pairs; found {len(collected)}")
+    facade_comparison(root / "se-sw-facade-city-comparison.png")
     (root / "index.json").write_text(json.dumps(collected, indent=2) + "\n")
     lines = ["# Civ VI city source-art auditions", "",
              "These 46 sheets cover every populated `Tag_Culture × Tag_Era` city-building",
@@ -83,7 +102,12 @@ def main():
              "combined blocks with individual Vietnam houses from the Classical source",
              "pool. The era-unspecified Vikings and Māori sheets use individual houses",
              "from their own pools instead of mixed-facing multi-house blocks.",
-             "No city ground decal or elevated masonry is added by these recipes.", "",
+             "No city ground decal or elevated masonry is added by these recipes.",
+             "The offline foundation-free study packs remove buried source geometry.",
+             "A few exposed source pedestals use per-entry grade cuts; source packs",
+             "remain untouched, and the runtime consumes ordinary normalized meshes.", "",
+             "### SE/SW façade comparison", "",
+             "![Vietnam, Vikings, and Māori City bases and capitals](se-sw-facade-city-comparison.png)", "",
              "[Source-art era inventory](../../../../studies/cities/source_era_inventory.md)", ""]
     for era in ERAS:
         entries = [entry for entry in collected

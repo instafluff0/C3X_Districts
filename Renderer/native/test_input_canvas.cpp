@@ -2,6 +2,7 @@
 #include "asset_content_hash.h"
 #include "input_recording/canvas.h"
 #include "input_recording/inspect.h"
+#include "input_recording/native_values.h"
 #include <iostream>
 #include <sstream>
 using namespace c3x_inputs;
@@ -33,6 +34,28 @@ int main(int argc,char** argv){try{
         require(inspection.verified&&inspection.complete&&inspection.stop==unsigned(Stop::closed),"requested stop did not close a valid journal");
         std::cout<<"PASS requested recorder stop: "<<argv[2]<<'\n';return 0;
     }
+    // Source-image recording supports indexed bytes without reading them as
+    // 16-bit words. A guard page makes an overread fail at the actual boundary.
+    for(int bits:{8,16})for(int stride:{3,4}){
+        constexpr int w=3,h=3;unsigned row_bytes=unsigned(stride*bits/8),size=row_bytes*h;
+        auto allocation=static_cast<unsigned char*>(VirtualAlloc(nullptr,8192,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE));
+        require(allocation!=nullptr,"native source guard allocation");DWORD old=0;
+        require(VirtualProtect(allocation+4096,4096,PAGE_NOACCESS,&old)!=0,"native source guard protection");
+        auto data=allocation+4096-size;for(unsigned n=0;n<size;++n)data[n]=static_cast<unsigned char>(n+1);
+        alignas(void*) std::array<unsigned char,0x4d0> image{};
+        for(auto field:{std::pair<unsigned,int>{0x24,bits},{0x38,w},{0x3c,h},{0x40,stride}})
+            std::memcpy(image.data()+field.first,&field.second,sizeof(field.second));
+        std::memcpy(image.data()+0x4c0,&data,sizeof(data));
+        NativeValuesProvider recorded;require(recorded.words(image.data(),nullptr,false)==reinterpret_cast<unsigned short*>(data),"record original source pointer");
+        NativeValuesProvider replay;replay.replay=true;replay.values=recorded.values;
+        auto copy=reinterpret_cast<unsigned char*>(replay.words(replay.object(recorded.identity(image.data())),nullptr,false));
+        auto& payload=recorded.get(recorded.key(NativeValuesProvider::read_words,image.data()));
+        require(payload.size()==8+((size+1)/2)*2,"bounded indexed/packed source payload");
+        for(unsigned n=0;n<((size+1)/2)*2;++n)
+            require(copy[n]==(n<size&&n%row_bytes<unsigned(w*bits/8)?data[n]:0),"replayed source bytes or padding differ");
+        require(VirtualFree(allocation,0,MEM_RELEASE)!=0,"native source guard cleanup");
+    }
+    std::cout<<"PASS native image input recording: guarded 8/16-bit sources, odd extents, padding and exact replay bytes\n";
     auto& capture=canvas_capture();unsigned first=0,second=0;std::exception_ptr failure;
     TestCanvas a;
     {std::lock_guard<std::mutex> lock(capture.mutex);first=capture.describe(a.dc).id;}

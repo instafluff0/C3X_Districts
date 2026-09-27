@@ -504,6 +504,9 @@ struct c3x_renderer_native_sprite_blend { void *alpha, *background, *palette; };
    the first full-screen map copy is pending; unsupported strokes return 0
    after safe CPU handoff. Negative results must not expose native pixels. */
 enum { C3X_NATIVE_LINE_TARGET = 123, C3X_NATIVE_STROKE = 124 };
+/* Indexed source region -> palette-keyed destination replacement (JGL slot 14).
+   source_rect/destination_rect have equal extents; color is the key index. */
+enum { C3X_NATIVE_IMAGE_KEYED_REGION = 125 };
 struct c3x_renderer_native_stroke { int x1,y1,x2,y2,width,dash; unsigned argb; };
 /* Process-lifetime, read-only tracking. No scene/device/configuration required.
    VERIFY with null image establishes the owner; MAP queries eligibility. */

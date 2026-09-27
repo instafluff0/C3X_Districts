@@ -14,5 +14,7 @@ inline Rect rebase_direct_rect(Rect occurrence,Rect original_envelope,Rect comma
     int dx=command_envelope.left-original_envelope.left,dy=command_envelope.top-original_envelope.top;
     return {occurrence.left+dx,occurrence.top+dy,occurrence.right+dx,occurrence.bottom+dy};
 }
+// native_blend mode 4 replaces destination words matching the source high
+// 16-bit key with the source low 16-bit value, preserving all other pixels.
 struct Command {Kind kind;Id destination,source;Rect area,clip;int source_x=0,source_y=0;std::uint32_t color=0;Id background=0,detail=0,background_detail=0;int source_width=0,source_height=0;Id program=0;};
 }

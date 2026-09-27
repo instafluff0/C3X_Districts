@@ -12,6 +12,11 @@ void* screen_graph=nullptr;
 JGL_Image* screen_image=nullptr;
 unsigned screen_transfers=0;
 bool final_ui_drawn=false;
+unsigned deferred_world_captures=0;
+int defer_world_capture_before_display(c3x_renderer_world_page_v1*){
+    // The real injected callback returns PENDING until display_valid is set.
+    ++deferred_world_captures;return C3X_RENDERER_RESULT_PENDING;
+}
 
 int present_native_image(void* image,void* graph,void const* rect){
     c3x_renderer_gpu_present_v1 request={sizeof(request)};
@@ -113,6 +118,32 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
         screen_graph=graph;screen_image=canvases[1];screen.JGL.Image=canvases[1];
         state.custom_renderer_native_image=live;present_fn=complete_native_ui;
         bool asynchronous=GetEnvironmentVariableA("C3X_RENDERER_ASYNC_NATIVE_TEST",nullptr,0)!=0;
+        std::unique_ptr<NativeUiAssets> async_hud;
+        std::unique_ptr<NativeKeyedImage> async_indexed;
+        auto draw_async_hud=[&](bool publish){
+            if(!async_hud)return;
+            for(auto canvas:{canvases[1],canvases[2]})
+                verify(async_indexed->draw(canvas,0,0,4,4)==0,"indexed UI transfer before and after GPU admission");
+            for(unsigned n=0;n<async_hud->pairs.size();++n){
+                auto const& sprite=async_hud->pairs[n]->color;
+                int x=n%2?0:std::max(0,w-sprite.width),y=std::max(0,h-sprite.height-int(n/2)*36);
+                verify(async_hud->draw(n,canvases[1],canvases[2],x,y)==0,"native HUD blend into separate canvas");
+                RECT area={x,y,std::min(w,x+sprite.width),std::min(h,y+sprite.height)};
+                verify(reinterpret_cast<Copy>(canvases[2]->vtable[16])(canvases[2],canvases[1],&area,&area)==0,"HUD canvas copied to screen");
+            }
+            verify(lifetime(C3X_NATIVE_MAP,canvases[1],0)&&lifetime(C3X_NATIVE_MAP,canvases[2],0),
+                publish?"published HUD preserves map family":"pre-map native HUD preserves future admission");
+        };
+        if(asynchronous){async_indexed=std::make_unique<NativeKeyedImage>(graph,reinterpret_cast<char*>(jgl));
+            async_hud=std::make_unique<NativeUiAssets>(graph,reinterpret_cast<char*>(jgl));
+            verify(async_hud->pairs.size()==6,"async fixture includes actual Civ III HUD assets");draw_async_hud(false);}
+        auto set_world_capture=reinterpret_cast<c3x_renderer_set_world_capture_fn>(
+            GetProcAddress(renderer_module,"c3x_renderer_set_world_capture"));
+        if(asynchronous){
+            deferred_world_captures=0;
+            verify(set_world_capture&&set_world_capture(defer_world_capture_before_display)==C3X_RENDERER_RESULT_OK,
+                "register real world-capture timer before the first map");
+        }
         c3x_renderer_camera_view_v1 view={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(view)};
         LARGE_INTEGER frequency={},begin={},end={};QueryPerformanceFrequency(&frequency);QueryPerformanceCounter(&begin);
         int result=C3X_RENDERER_RESULT_PENDING;unsigned polls=0;
@@ -129,6 +160,14 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
                     "cold unit observation accepted without GPU canvas or CPU DC");
                 verify(!*reinterpret_cast<int*>(reinterpret_cast<char*>(canvases[0])+0x4c4)&&
                        !*reinterpret_cast<int*>(reinterpret_cast<char*>(canvases[1])+0x4c4),"cold unit acquires no DC leases");
+                // Let a background world query complete before adopting the
+                // ready camera, matching the failing live startup ordering.
+                auto capture_deadline=GetTickCount64()+30000;
+                while(!deferred_world_captures&&GetTickCount64()<capture_deadline){
+                    MSG message={};while(PeekMessage(&message,nullptr,0,0,PM_REMOVE)){TranslateMessage(&message);DispatchMessage(&message);}
+                    Sleep(1);
+                }
+                verify(deferred_world_captures>0,"world capture deferred while the first map is undisplayed");
             }
             if(result==C3X_RENDERER_RESULT_PENDING){++polls;
                 MSG message={};while(PeekMessage(&message,nullptr,0,0,PM_REMOVE)){TranslateMessage(&message);DispatchMessage(&message);}
@@ -141,6 +180,7 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
             "fresh native map commit");
         verify(reinterpret_cast<Copy>(canvases[0]->vtable[16])(canvases[0],canvases[1],&full,&full)==0,
             "fresh native map copied beneath UI");
+        draw_async_hud(true);
         c3x_renderer_unit_v1 unit={};unit.struct_size=sizeof(unit);strcpy_s(unit.unit_key,"PRTO_Warrior");
         unit.unit_id=732;unit.action=1;unit.direction=3;unit.frame_count=16;unit.action_cursor=7;
         unit.sprite_width=unit.sprite_height=191;unit.projection_scale_milli=demand.frame->tile_width*1000/128;
@@ -171,6 +211,10 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
         verify(final_ui_drawn&&lifetime(C3X_NATIVE_MAP,canvases[0],0)&&lifetime(C3X_NATIVE_MAP,canvases[1],0)&&
             live(C3X_NATIVE_IMAGE_PRESENT,canvases[1],graph,&full,nullptr,0)==1,
             "fresh native map and UI presented without ownership loss");
+        if(asynchronous){
+            verify(set_world_capture(nullptr)==C3X_RENDERER_RESULT_OK,"stop the startup world-capture witness");
+            std::printf("PASS deferred world capture: callbacks=%u first_map_published=1\n",deferred_world_captures);
+        }
         std::printf("PASS fresh native map handoff: prepare_ms=%.3f polls=%u map_cpu_pixels=0 ui_presented=1 unit_capture=1\n",
             1000.*double(end.QuadPart-begin.QuadPart)/double(frequency.QuadPart),polls);
         if(asynchronous){
@@ -266,6 +310,7 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
                 verify(ready==C3X_RENDERER_RESULT_OK,"asynchronous scrolling camera ready");
                 verify(map_view(C3X_NATIVE_MAP_COMMIT,canvases[0],nullptr,nullptr)==C3X_RENDERER_RESULT_OK,"scrolling map commit");
                 verify(reinterpret_cast<Copy>(canvases[0]->vtable[16])(canvases[0],canvases[1],&full,&full)==0,"scrolling native map copy");
+                draw_async_hud(true);
                 verify(reinterpret_cast<Fill>(canvases[1]->vtable[17])(canvases[1],&panel,int(0x80007c00u))==0,"scrolling UI preserved");
                 verify(live(C3X_NATIVE_IMAGE_PRESENT,canvases[1],graph,&full,nullptr,0)==1,"scrolling native presentation");
                 std::printf("ASYNC_SCROLL step=%u ready_ms=%llu longest_poll_ms=%.3f built=%u uploaded=%u\n",
@@ -274,7 +319,7 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
             }
             if(witness.done)verify(WaitForSingleObject(witness.done,30000)==WAIT_OBJECT_0,"async window evidence finished");
         }
-        reset();present_fn=native_present;screen.JGL.Image=nullptr;screen_image=nullptr;screen_graph=nullptr;
+        async_indexed.reset();async_hud.reset();reset();present_fn=native_present;screen.JGL.Image=nullptr;screen_image=nullptr;screen_graph=nullptr;
         *reinterpret_cast<void**>(static_cast<char*>(graph)+0x148)=old_screen;
         *reinterpret_cast<HDC*>(static_cast<char*>(graph)+0x138)=old_dc;
         for(auto canvas:canvases)reinterpret_cast<Destroy>(canvas->vtable[0])(canvas,1);

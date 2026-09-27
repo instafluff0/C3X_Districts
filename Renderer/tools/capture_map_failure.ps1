@@ -20,6 +20,12 @@ $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $session = Join-Path $env:TEMP ('C3XMapFailure\' + $stamp)
 New-Item -ItemType Directory -Path $session -Force | Out-Null
 $log = Join-Path $session 'renderer.log'
+$binaries = foreach ($name in @('C3XRenderer.dll', 'C3XRenderer_x64.dll', 'C3XRendererHelper64.exe')) {
+    $binary = Join-Path $renderer ('bin\renderer64\' + $name)
+    [ordered]@{ name = $name; sha256 = (Get-FileHash -LiteralPath $binary -Algorithm SHA256).Hash.ToLowerInvariant() }
+}
+[ordered]@{ renderer_binaries = @($binaries) } | ConvertTo-Json -Depth 4 |
+    Set-Content -LiteralPath (Join-Path $session 'binaries.json') -Encoding UTF8
 $arguments = @('--accepteula', '--no-banner', '--no-kernel', '--duration', '180',
     '--max-lines', '50000', '--log', ('"' + $log + '"'), '--log-limit', '16') -join ' '
 $collector = Start-Process -FilePath $debug -ArgumentList $arguments -PassThru -WindowStyle Hidden

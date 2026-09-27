@@ -1,0 +1,20 @@
+{
+  "culture_defaults": {
+    "Scottish": 0.004,
+    "DEFAULT": 0.005
+  },
+  "entry_prefixes": {
+    "DIS_CTY_RE_Bld_Brick_Tower_B_": 0.030,
+    "DIS_CTY_RVIE_Block_SQ_": 0.030
+  },
+  "entries": {
+    "DIS_CTY_RE_Bld_MD_B_01": 0.027,
+    "DIS_CTY_RE_Bld_MD_B_02": 0.017,
+    "DIS_CTY_RE_Bld_MD_B_03": 0.031,
+    "DIS_CTY_RE_Bld_MD_B_04": 0.020,
+    "DIS_CTY_RE_Bld_SM_B_01": 0.034,
+    "DIS_CTY_RE_Bld_SM_B_02": 0.024,
+    "DIS_CTY_RE_Bld_XSM_B_01": 0.030,
+    "DIS_CTY_RE_Bld_XSM_B_02": 0.019
+  }
+}

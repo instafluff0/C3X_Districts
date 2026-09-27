@@ -162,6 +162,33 @@ template<class Backend> class Adapter {
         }
         return true;
     }
+    bool draw_keyed_region(Image& destination,void* source,void const* from,void const* to,unsigned key){
+        if(!source||!from||!to||field(source,0x24)!=8)return false;
+        auto a=rect(from),b=rect(to);int w=field(source,0x38),h=field(source,0x3c),stride=field(source,0x40);
+        auto width=std::int64_t(a.right)-a.left,height=std::int64_t(a.bottom)-a.top;
+        if(w<=0||w>2240||h<=0||h>1260||stride<w||width!=std::int64_t(b.right)-b.left||height!=std::int64_t(b.bottom)-b.top)return false;
+        // Native clips the source to its extent, then the destination to its
+        // clip region. Capture only that source rectangle, never map pixels.
+        auto src=intersection(a,{0,0,w,h});auto clip=rect_value(c3x_native_access::clip(destination.native));
+        auto dx=std::int64_t(b.left)-a.left,dy=std::int64_t(b.top)-a.top;
+        if(dx<INT_MIN||dx>INT_MAX||dy<INT_MIN||dy>INT_MAX||std::int64_t(src.left)+dx<INT_MIN||std::int64_t(src.right)+dx>INT_MAX||std::int64_t(src.top)+dy<INT_MIN||std::int64_t(src.bottom)+dy>INT_MAX)return false;
+        Rect target={int(src.left+dx),int(src.top+dy),int(src.right+dx),int(src.bottom+dy)};
+        target=intersection(intersection(target,clip),{0,0,int(destination.width),int(destination.height)});
+        if(target.left>=target.right||target.top>=target.bottom){++counters.translated;return true;}
+        auto palette=c3x_native_access::pointer(source,0x7c);if(!palette)palette=c3x_native_access::palette();if(!palette)return false;
+        auto colors=c3x_native_access::colors(palette,destination.format==Format::rgb565);if(!colors)return false;
+        unsigned tw=unsigned(target.right-target.left),th=unsigned(target.bottom-target.top),match=colors[key&255];
+        std::vector<unsigned> decoded(std::size_t(tw)*th);
+        auto pixels=reinterpret_cast<unsigned char const*>(c3x_native_access::words(source,get_bits));if(!pixels)return false;
+        for(unsigned y=0;y<th;++y)for(unsigned x=0;x<tw;++x)
+            decoded[y*tw+x]=colors[pixels[std::size_t(target.top-int(dy)+int(y))*stride+target.left-int(dx)+int(x)]]|(match<<16);
+        c3x_native_access::release_words(source,release_bits);
+        if(!upload_sprite(decoded,tw,th))return false;
+        // Blend mode 4 compares the resident packed destination with the key.
+        // Nonmatching pixels retain their independent full-color map content.
+        Command command={Kind::native_blend,destination.gpu,sprite_image,target,clip,0,0,4,destination.gpu,destination.detail};
+        if(!gpu.submit(&command,1))return false;destination.dirty=true;++counters.translated;return true;
+    }
     Id upload_lookup(void const* table,unsigned blocks=16){
         if(!table||!blocks||blocks>31)return 0;
         auto& cache=lookups[blocks<=4?1:0];auto words=c3x_native_access::lookup(table,blocks);unsigned count=blocks*32768u;
@@ -523,6 +550,13 @@ public:
             }
             destination=find(object);
         }}
+        if(op==C3X_NATIVE_IMAGE_KEYED_REGION){
+            // The native method rejects non-indexed sources before touching a
+            // destination; preserve that result without surrendering ownership.
+            if(source&&field(source,0x24)!=8)return 0;
+            if(destination&&destination->owned&&draw_keyed_region(*destination,source,source_rect,target_rect,color))return 1;
+            if(destination)cpu_ownership(*destination,op);return 0;
+        }
         if(op==C3X_NATIVE_TEXT){
             if(destination&&destination->owned&&draw_text(*destination,source,target_rect,color))return 1;
             if(destination)cpu_ownership(*destination,op);++counters.fallbacks;return 0;
@@ -562,8 +596,14 @@ public:
             if(owned_background&&owned_background->owned&&(!destination||!destination->owned)){
                 char const* reason=nullptr;
                 if(admit(object,&reason))destination=find(object);
-                else if(blend_rejection_reports++<8){char line[192];std::snprintf(line,sizeof(line),
-                    "[C3X renderer] stage=native-blend-admission reason=%s background_owned=1\n",reason?reason:"unknown");OutputDebugStringA(line);}
+                else if(blend_rejection_reports++<8){char line[512];
+                    auto area=target_rect?rect(target_rect):Rect{};
+                    std::snprintf(line,sizeof(line),
+                        "[C3X renderer] stage=native-blend-admission reason=%s background_owned=1 background_object=%p destination_object=%p background=%ux%u destination=%dx%d bits=%d dc_links=%d bits_links=%d anchor=%d,%d mode=%u\n",
+                        reason?reason:"unknown",inputs->background,object,owned_background->width,owned_background->height,
+                        object?field(object,0x38):0,object?field(object,0x3c):0,object?field(object,0x24):0,
+                        object?field(object,0x4c4):0,object?field(object,0x4c8):0,area.left,area.top,color);
+                    OutputDebugStringA(line);}
             }
             if(destination&&destination->owned&&draw_blend(*destination,source,source_rect,target_rect,color))return 1;
             if(destination&&destination->owned&&blend_rejection_reports++<8){

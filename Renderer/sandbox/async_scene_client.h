@@ -37,12 +37,12 @@ template<class Transport>class AsyncSceneClient {
         std::mutex mutex;bool query=false;
         c3x_renderer_world_status_v1 value={sizeof(value)};
     } world_progress;
-    static void require_result(int code){
+    static void require_result(int code,char const* operation){
         if(code!=C3X_RENDERER_RESULT_OK)
-            throw std::runtime_error("asynchronous renderer command failed: "+std::to_string(code));
+            throw std::runtime_error(std::string("asynchronous renderer ")+operation+" failed: "+std::to_string(code));
     }
-    static void accept_state(int code){
-        if(code!=C3X_RENDERER_RESULT_SUPERSEDED)require_result(code);
+    static void accept_state(int code,char const* operation){
+        if(code!=C3X_RENDERER_RESULT_SUPERSEDED)require_result(code,operation);
     }
     Id image(Id local)const{
         if(!local)return 0;
@@ -95,12 +95,17 @@ template<class Transport>class AsyncSceneClient {
         return publication.healthy()?C3X_RENDERER_RESULT_PENDING:C3X_RENDERER_RESULT_DEVICE_ERROR;
     }
     int submit_page(c3x_renderer_world_page_v1 value,int code,bool delta){
+        // Until a map is displayed, Civ III deliberately defers world capture.
+        // Return that status to the caller so it can capture again later; no
+        // owned snapshot exists to publish and no transport failure occurred.
+        if(code!=C3X_RENDERER_RESULT_OK)return code;
         auto tiles=std::make_shared<std::vector<c3x_renderer_tile_v1>>();
         if(value.count)tiles->assign(value.tiles,value.tiles+value.count);
         value.tiles=nullptr;value.frame.tiles=nullptr;value.frame.world_topology=nullptr;
         return post(sizeof(value)+tiles->size()*sizeof((*tiles)[0]),[this,value,code,delta,tiles]()mutable{
             value.tiles=tiles->data();
-            accept_state(delta?transport.world_delta_submit(value,code):transport.world_submit(value,code));
+            accept_state(delta?transport.world_delta_submit(value,code):transport.world_submit(value,code),
+                delta?"world-delta":"world-page");
         });
     }
     void clear(){
@@ -132,7 +137,7 @@ public:
         camera.reset();displayed.reset();published_frame.reset();++session;
         return enabled?publication.setup([&]{clear();return transport.reset();}):transport.reset();
     }
-    int set_units(int value){return enabled?post(sizeof(value),[this,value]{require_result(transport.set_units(value));}):transport.set_units(value);}
+    int set_units(int value){return enabled?post(sizeof(value),[this,value]{require_result(transport.set_units(value),"unit-configuration");}):transport.set_units(value);}
     int visual_policy(unsigned value){
         if(!enabled)return transport.visual_policy(value);
         if(value>=2)return policy.load(std::memory_order_acquire);
@@ -146,7 +151,7 @@ public:
             [this,slot,frame,identity]{
                 c3x_renderer_camera_request_v1 value={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(value),&frame->value,identity};
                 Id actual=0;int accepted=transport.camera_begin(value,actual);
-                if(accepted!=C3X_RENDERER_RESULT_PENDING)require_result(accepted);
+                if(accepted!=C3X_RENDERER_RESULT_PENDING)require_result(accepted,"camera-begin");
                 worker_camera=slot->ticket;remote_camera=actual;
             },1); // latest camera wins; reliable image/unit commands stay ordered
         if(code!=C3X_RENDERER_RESULT_OK)return code;
@@ -172,7 +177,7 @@ public:
                     if(accepted!=C3X_RENDERER_RESULT_PENDING)break;
                     std::this_thread::sleep_for(std::chrono::milliseconds(1));
                 }while(std::chrono::steady_clock::now()<deadline);
-                require_result(accepted);
+                require_result(accepted,"camera-adopt");
                 if(worker_map)image_ids.erase(worker_map);
                 ticket_ids.clear();ticket_ids[wanted]=actual.image.ticket;
                 image_ids[map]=actual.image.map_image;worker_map=map;
@@ -201,7 +206,7 @@ public:
         if(!enabled)return transport.camera_cancel(wanted);
         if(camera&&camera->ticket==wanted)camera.reset();
         return post(sizeof(wanted),[this,wanted]{if(worker_camera==wanted){
-            accept_state(transport.camera_cancel(remote_camera));worker_camera=remote_camera=0;}});
+            accept_state(transport.camera_cancel(remote_camera),"camera-cancel");worker_camera=remote_camera=0;}});
     }
     int images(c3x_renderer_gpu_images_v1 const& request,c3x_renderer_gpu_result_v1& result,unsigned* pixels,unsigned capacity){
         if(!enabled)return transport.images(request,result,pixels,capacity);
@@ -217,7 +222,7 @@ public:
             for(auto& draw:packet->commands){draw.destination=image(draw.destination);draw.source=image(draw.source);
                 draw.background=image(draw.background);draw.detail=image(draw.detail);draw.background_detail=image(draw.background_detail);draw.program=image(draw.program);}
             c3x_renderer_gpu_result_v1 output={sizeof(output)};
-            require_result(transport.images(value,output,nullptr,0));
+            require_result(transport.images(value,output,nullptr,0),"images");
             if(created)image_ids[created]=output.image;
             if(value.action==C3X_GPU_DESTROY){for(auto at=image_ids.begin();at!=image_ids.end();++at)
                 if(at->second==value.image){image_ids.erase(at);break;}}
@@ -230,17 +235,17 @@ public:
         // or redraw their canvas while the renderer advances its own clock.
         bounds[0]=bounds[2]=value.body_x;bounds[1]=bounds[3]=value.body_y;
         return post(sizeof(value)+sizeof(destination),[this,value,destination]()mutable{
-            target(destination);int unused[4]={};require_result(transport.unit(value,destination,unused));});
+            target(destination);int unused[4]={};require_result(transport.unit(value,destination,unused),"unit-observation");});
     }
     void forget_unit(int id){if(enabled)post(sizeof(id),[this,id]{transport.forget_unit(id);});else transport.forget_unit(id);}
-    int unit_visual(c3x_renderer_unit_visual_v1 value){return enabled?post(sizeof(value),[this,value]{accept_state(transport.unit_visual(value));}):transport.unit_visual(value);}
-    int unit_move(c3x_renderer_unit_move_v1 value){return enabled?post(sizeof(value),[this,value]{accept_state(transport.unit_move(value));}):transport.unit_move(value);}
-    int unit_spawn(c3x_renderer_unit_spawn_v1 value){return enabled?post(sizeof(value),[this,value]{accept_state(transport.unit_spawn(value));}):transport.unit_spawn(value);}
-    int unit_state(c3x_renderer_unit_state_v1 value){return enabled?post(sizeof(value),[this,value]{accept_state(transport.unit_state(value));}):transport.unit_state(value);}
+    int unit_visual(c3x_renderer_unit_visual_v1 value){return enabled?post(sizeof(value),[this,value]{accept_state(transport.unit_visual(value),"unit-visual");}):transport.unit_visual(value);}
+    int unit_move(c3x_renderer_unit_move_v1 value){return enabled?post(sizeof(value),[this,value]{accept_state(transport.unit_move(value),"unit-move");}):transport.unit_move(value);}
+    int unit_spawn(c3x_renderer_unit_spawn_v1 value){return enabled?post(sizeof(value),[this,value]{accept_state(transport.unit_spawn(value),"unit-spawn");}):transport.unit_spawn(value);}
+    int unit_state(c3x_renderer_unit_state_v1 value){return enabled?post(sizeof(value),[this,value]{accept_state(transport.unit_state(value),"unit-state");}):transport.unit_state(value);}
     int tactical(c3x_renderer::tactical::Input capture,c3x_renderer_gpu_unit_v1 destination){
         if(!enabled)return transport.tactical(capture,destination);
         auto size=sizeof(destination)+capture.primitives.size()*sizeof(capture.primitives[0]);
-        return post(size,[this,capture=std::move(capture),destination]()mutable{target(destination);require_result(transport.tactical(capture,destination));});
+        return post(size,[this,capture=std::move(capture),destination]()mutable{target(destination);require_result(transport.tactical(capture,destination),"tactical");});
     }
     int world_query(c3x_renderer_world_page_v1& page){return enabled?query_page(world_page,page,false):transport.world_query(page);}
     int world_delta_scope(c3x_renderer_world_page_v1& page){
@@ -267,13 +272,13 @@ public:
     template<class Handle>int bind_surface(Handle handle,unsigned width,unsigned height){
         if(!enabled)return transport.bind_surface(handle,width,height);
         auto retained=transport.retain_surface(handle);
-        return post(sizeof(handle)+8,[this,retained,width,height]{require_result(transport.bind_surface(retained.get(),width,height));});
+        return post(sizeof(handle)+8,[this,retained,width,height]{require_result(transport.bind_surface(retained.get(),width,height),"surface-bind");});
     }
     template<class Shared>int present(c3x_renderer_gpu_present_v1 value,Shared& frame){
         if(!enabled)return transport.present(value,frame);
         frame={};return post(sizeof(value),[this,value]()mutable{
             if(!value.action){value.ticket=ticket(value.ticket);value.image=image(value.image);}
-            Shared unused;require_result(transport.present(value,unused));policy=transport.visual_policy(3);
+            Shared unused;require_result(transport.present(value,unused),"present");policy=transport.visual_policy(3);
         });
     }
     template<class Shared>int visual(std::int64_t ticks,std::int64_t frequency,Shared& frame){

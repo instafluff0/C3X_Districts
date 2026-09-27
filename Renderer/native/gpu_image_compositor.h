@@ -94,7 +94,7 @@ class Compositor {
         }
         if(command.kind==Kind::native_blend){
             auto b=find(command.background),detail=find(command.detail),bd=find(command.background_detail);
-            if(d->format==Format::bgra32||!b||b->format!=d->format||command.color>3||
+            if(d->format==Format::bgra32||!b||b->format!=d->format||command.color>4||
                (command.color==2?(s!=d||b!=d||command.source_width<0||command.source_width>65535||command.source_height<0||command.source_height>256):(s->format!=Format::bgra32||s==d)))return false;
             if(command.detail&&(!detail||detail->read_only||detail->format!=Format::bgra32||detail->width!=d->width||detail->height!=d->height||detail==s))return false;
             if(command.background_detail&&(!detail||!bd||bd->format!=Format::bgra32||bd->width!=b->width||bd->height!=b->height||((bd==detail)!=(b==d))))return false;
@@ -253,9 +253,11 @@ uint3 expanded(uint c){uint3 q=unpack(c);return (q<<uint3(3,mode==1?2:3,3))|(q>>
 uint packed(uint3 rgb){uint3 q=rgb>>uint3(3,mode==1?2:3,3);return q.x|(q.y<<5)|(q.z<<(mode==1?11:10));}
 [numthreads(8,8,1)] void main(uint3 thread:SV_DispatchThreadID){
  int2 at=area.xy+int2(thread.xy);if(any(at>=area.zw))return;
- uint pixel=(flags&8)?uint(offset.x):source.Load(int3(at+offset,0)),weight=(flags&8)?uint(offset.y):pixel>>24;if(!(flags&8)&&weight==255)return;
+ uint pixel=(flags&8)?uint(offset.x):source.Load(int3(at+offset,0)),weight=(flags&8)?uint(offset.y):pixel>>24;if(!(flags&40)&&weight==255)return;
  uint below=background.Load(int3(at,0)),word=pixel&65535,detail_weight=weight;
- if(flags&16){
+ if(flags&32){
+   if(below!=(pixel>>16))return;detail_weight=0;
+ }else if(flags&16){
    uint3 q=(unpack(word)*weight+unpack(below)*(16-weight))>>4;
    word=q.x|(q.y<<5)|(q.z<<(mode==1?11:10));detail_weight=(16-weight)*16;
  }else if(flags&8){
@@ -295,7 +297,7 @@ uint packed(uint3 rgb){uint3 q=rgb>>uint3(3,mode==1?2:3,3);return q.x|(q.y<<5)|(
         D3D11_BOX box={unsigned(r.left),unsigned(r.top),0,unsigned(r.right),unsigned(r.bottom),1};
         if(b==d){context->CopySubresourceRegion(scratch.texture.Get(),0,r.left,r.top,0,b->texture.Get(),0,&box);b=&scratch;++counters.snapshots;}
         if(bd&&bd==detail){context->CopySubresourceRegion(detail_scratch.texture.Get(),0,r.left,r.top,0,bd->texture.Get(),0,&box);bd=&detail_scratch;++counters.snapshots;}
-        Constants params={{r.left,r.top,r.right,r.bottom},{int(std::int64_t(op.source_x)-op.area.left),int(std::int64_t(op.source_y)-op.area.top)},d->format==Format::rgb565?1u:0u,(detail?1u:0u)|(bd?2u:0u)|(op.color==3?16u:op.color==2?8u:op.color?4u:0u)};
+        Constants params={{r.left,r.top,r.right,r.bottom},{int(std::int64_t(op.source_x)-op.area.left),int(std::int64_t(op.source_y)-op.area.top)},d->format==Format::rgb565?1u:0u,(detail?1u:0u)|(bd?2u:0u)|(op.color==4?32u:op.color==3?16u:op.color==2?8u:op.color?4u:0u)};
         if(op.color==2){params.offset[0]=op.source_width;params.offset[1]=op.source_height;}
         context->UpdateSubresource(constants.Get(),0,nullptr,&params,0,0);auto cb=constants.Get();context->CSSetConstantBuffers(0,1,&cb);
         ID3D11ShaderResourceView* reads[3]={op.color==2?nullptr:find(op.source)->read.Get(),b->read.Get(),bd?bd->read.Get():nullptr};

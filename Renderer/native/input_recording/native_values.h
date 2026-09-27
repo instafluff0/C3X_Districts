@@ -62,8 +62,9 @@ struct NativeValuesProvider: c3x_native_access::Provider {
     unsigned short* words(void* p,void* getter,bool write)override{
         auto id=key(write?write_words:read_words,p);if(replay){auto& data=get(id);Reader in{data};auto present=in.u32();if(!present)return nullptr;auto count=in.u32();require(count<=2240u*1260u+1260u,"native words extent");if(write&&data.size()==8)data.resize(8+std::size_t(count)*2);require(data.size()==8+std::size_t(count)*2,"native words payload");auto result=reinterpret_cast<unsigned short*>(data.data()+8);if(write)writes[identity(p)]=result;return result;}
         unsigned short* result;{c3x_native_access::NativeScope scope;result=c3x_native_access::words(p,getter,write);}borrowed_words=true;last_words=result;Writer out;out.u32(result!=nullptr);
-        if(result){int w=field(p,0x38),h=field(p,0x3c),stride=field(p,0x40);require(w>0&&w<=2240&&h>0&&h<=1260&&stride>=w&&stride<=2241,"native words extent");auto count=unsigned(stride)*unsigned(h);out.u32(count);if(!write)out.reserve(std::size_t(count)*2);
-            if(!write)for(int y=0;y<h;++y)for(int x=0;x<stride;++x){unsigned word=x<w?result[y*stride+x]:0;out.bytes.push_back(static_cast<unsigned char>(word));out.bytes.push_back(static_cast<unsigned char>(word>>8));}
+        if(result){int w=field(p,0x38),h=field(p,0x3c),stride=field(p,0x40);require(w>0&&w<=2240&&h>0&&h<=1260&&stride>=w&&stride<=2241,"native words extent");int bits=field(p,0x24);require(bits==8||bits==16,"native words format");auto count=(unsigned(stride)*unsigned(h)*unsigned(bits/8)+1)/2;out.u32(count);if(!write)out.reserve(std::size_t(count)*2);
+            if(!write){auto data=reinterpret_cast<unsigned char const*>(result);unsigned row_bytes=unsigned(stride)*unsigned(bits/8),used_bytes=unsigned(w)*unsigned(bits/8);
+                for(unsigned n=0;n<count*2;++n)out.bytes.push_back(n<unsigned(h)*row_bytes&&n%row_bytes<used_bytes?data[n]:0);}
             if(write)writes[identity(p)]=result;}
         save(id,out);return result;
     }

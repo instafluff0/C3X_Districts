@@ -11,14 +11,19 @@ the former 1,326-line roadmap.
 ## Current state
 
 - **Current candidate: asynchronous sandbox port.** Native draws, image updates
-  and unit facts publish owned copies to a bounded transport queue; Renderer64
-  draws the sandbox resident scene on its own clock. CPU map readback and unit
-  raster fallbacks are rejected. The final real-JGL fixture sustained 55.76
-  renderer submissions/sec at 2240×1260 and proved progress with either process
-  paused. This is not a live-game FPS result. The tested trio was staged and
-  installed with user authorization. The first live check failed with a black
-  map and repeated city labels after scrolling; diagnose that publication path
-  with a short startup log capture. See [current bridge and remaining checkpoints](renderer64_scene_and_motion.md#current-asynchronous-bridge).
+  and unit facts publish copied data to a bounded queue; Renderer64 draws the
+  sandbox resident scene on its own clock. CPU map readback and unit raster
+  fallback remain rejected. Capture `20260927-100403` identified an unhooked
+  indexed UI transfer that invalidates future destination admission. The new
+  JGL slot-14 hook and GPU translation pass native lifetime and pixel parity
+  regressions, including full-color preservation. Async validation passes at
+  55.14 fixture submissions/sec, with all 32 scrolls, independent process
+  progress and zero CPU map readbacks. The matching trio is staged and the
+  updated injected executable is installed. Live gameplay remains unverified:
+  a full-screen canvas's separate pre-publication access is unresolved, and
+  dedicated diagnostic capacity now preserves its evidence. The next strategic
+  checkpoint is the user's `CAPTURE_MAP_FAILURE.bat` map and scrolling capture.
+  See [current bridge and remaining checkpoints](renderer64_scene_and_motion.md#current-asynchronous-bridge).
   Preserve the roughly 52 FPS sandbox baseline; further FPS tuning is deferred.
 - Milestones 1 and 2 and M3.7 have automated acceptance evidence. M3.8–M3.12
   and the integrated M3.13 acceptance are not complete. Existing x86 gameplay,

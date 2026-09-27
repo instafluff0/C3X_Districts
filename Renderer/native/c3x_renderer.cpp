@@ -50,6 +50,7 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
 #include "native_screen_bridge.h"
 #include "native_observation.h"
 #include "native_lifetime_registry.h"
+#include "native_callsite_diagnostic.h"
 #include "native_composition_owner.h"
 #include "asset_content_hash.h"
 #include "input_recording/runtime.h"
@@ -14612,18 +14613,37 @@ extern "C" __declspec(dllexport) int c3x_renderer_native_lifetime(int operation,
     bool revoked=false,early_escape=false;
     bool eligible=lifetimes.observe(operation,image,context,GetCurrentThreadId(),&revoked,&early_escape);
     c3x_recording::journal().native(c3x_recording::lifetime,operation,image,nullptr,unsigned(context),int(eligible)|(int(revoked)<<1),operation==C3X_NATIVE_DESTROY);
+    // Correlate failed HUD admission with the actual canvas lifetime. Stack
+    // unwinding through injected x86 code can stop before reaching the game;
+    // object identity and observed init/retirement remain direct evidence.
+    if(image&&(operation==C3X_NATIVE_INIT||operation==C3X_NATIVE_IMAGE_REINIT||operation==C3X_NATIVE_DESTROY||
+              (operation==C3X_NATIVE_MAP&&!eligible))){
+        int width=0,height=0;SIZE_T bytes=0;
+        bool readable=ReadProcessMemory(GetCurrentProcess(),static_cast<char*>(image)+0x38,&width,sizeof(width),&bytes)&&bytes==sizeof(width)&&
+            ReadProcessMemory(GetCurrentProcess(),static_cast<char*>(image)+0x3c,&height,sizeof(height),&bytes)&&bytes==sizeof(height);
+        if(readable&&((width>=640&&height>=480)||(operation==C3X_NATIVE_INIT&&!eligible))){
+            static unsigned changes=0,rejections=0;
+            auto& reports=operation==C3X_NATIVE_MAP?rejections:changes;
+            unsigned limit=operation==C3X_NATIVE_MAP?32:256;
+            if(reports++<limit){char line[256];std::snprintf(line,sizeof(line),
+                "[C3X renderer] stage=native-canvas-lifetime image=%p size=%d,%d operation=%d context=%d eligible=%u\n",
+                image,width,height,operation,context,unsigned(eligible));OutputDebugStringA(line);
+            }else if(reports==limit+1)OutputDebugStringA("[C3X renderer] stage=native-canvas-lifetime limit-reached\n");
+        }
+    }
     // A fullscreen UI canvas may escape before its first map copy. Trace that
     // first loss too; otherwise later admission only reports "lifetime".
     // Keep bounded module-relative frames, never pixel contents or file paths.
-    if(revoked||early_escape){static std::atomic<unsigned> reports{0};
+    if(revoked||early_escape){static std::atomic<unsigned> reports[3]{};
         // Some contract probes deliberately use opaque integer identities.
         // ReadProcessMemory makes this diagnostic optional for those values
         // and never dereferences an unverified game pointer.
-        int width=0,height=0;SIZE_T bytes=0;
-        bool dimensions=!early_escape ||
-            (ReadProcessMemory(GetCurrentProcess(),reinterpret_cast<void const*>(reinterpret_cast<std::uintptr_t>(image)+0x38),&width,sizeof(width),&bytes)&&bytes==sizeof(width)&&
-             ReadProcessMemory(GetCurrentProcess(),reinterpret_cast<void const*>(reinterpret_cast<std::uintptr_t>(image)+0x3c),&height,sizeof(height),&bytes)&&bytes==sizeof(height));
-        if(dimensions&&(revoked||(width>=640&&height>=480))&&reports.fetch_add(1,std::memory_order_relaxed)<128){
+        int width=0,height=0,bits=0;SIZE_T bytes=0;
+        bool dimensions=
+            ReadProcessMemory(GetCurrentProcess(),reinterpret_cast<void const*>(reinterpret_cast<std::uintptr_t>(image)+0x38),&width,sizeof(width),&bytes)&&bytes==sizeof(width)&&
+            ReadProcessMemory(GetCurrentProcess(),reinterpret_cast<void const*>(reinterpret_cast<std::uintptr_t>(image)+0x3c),&height,sizeof(height),&bytes)&&bytes==sizeof(height)&&
+            ReadProcessMemory(GetCurrentProcess(),reinterpret_cast<void const*>(reinterpret_cast<std::uintptr_t>(image)+0x24),&bits,sizeof(bits),&bytes)&&bytes==sizeof(bits);
+        if((revoked||(dimensions&&bits==16&&width>0&&height>0))&&reports[revoked?2:(width>=640&&height>=480?1:0)].fetch_add(1,std::memory_order_relaxed)<128){
             void* frames[16]={};USHORT count=CaptureStackBackTrace(0,16,frames,nullptr);
             char line[1024];int used=std::snprintf(line,sizeof(line),
                 "[C3X renderer] stage=native-ownership-escape phase=%s image=%p size=%d,%d operation=%d context=%d stack=",
@@ -14637,6 +14657,9 @@ extern "C" __declspec(dllexport) int c3x_renderer_native_lifetime(int operation,
                     static_cast<unsigned long>(reinterpret_cast<std::uintptr_t>(frames[n])-reinterpret_cast<std::uintptr_t>(module)));
             }
             std::snprintf(line+used,sizeof(line)-used,"\n");OutputDebugStringA(line);
+            char candidates[640];c3x_native_diagnostic::callsite_candidates(candidates,sizeof(candidates));
+            std::snprintf(line,sizeof(line),"[C3X renderer] stage=native-escape-callers image=%p candidates=%s\n",image,candidates);
+            OutputDebugStringA(line);
         }
     }
     // INIT/DESTROY evidence also retires pending destinations before an address

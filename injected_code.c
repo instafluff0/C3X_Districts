@@ -19942,6 +19942,23 @@ patch_JGL_Image_palette (JGL_Image * image, int edx, void * palette)
 }
 
 int __fastcall
+patch_JGL_Image_keyed_region (JGL_Image * image, int edx, JGL_Image * destination,
+    int sx, int sy, int x, int y, int width, int height, int key)
+{
+	// Slot 14 returns no pointers: its indexed transfer holds private pixel
+	// leases only while replacing destination pixels matching the palette key.
+	RECT source = {sx, sy, sx + width, sy + height}, target = {x, y, x + width, y + height};
+	if (translate_custom_renderer_native (C3X_NATIVE_IMAGE_KEYED_REGION, destination, image, &source, &target, key)) return 0;
+	bool observing = custom_renderer_native_probe_on () || (is->custom_renderer_native_lifetime != NULL && is->custom_renderer_probe_thread_id () == is->custom_renderer_probe_owner);
+	int previous = is->custom_renderer_native_operation;
+	if (observing) is->custom_renderer_native_operation = C3X_NATIVE_COPY;
+	int result = ((int (__fastcall *) (JGL_Image *, int, JGL_Image *, int, int, int, int, int, int, int))is->custom_renderer_jgl_original[14])
+		(image, __, destination, sx, sy, x, y, width, height, key);
+	if (observing) is->custom_renderer_native_operation = previous;
+	return result;
+}
+
+int __fastcall
 patch_JGL_Image_copy (JGL_Image * image, int edx, JGL_Image * destination, RECT * source, RECT * target)
 {
 	bool observing = custom_renderer_native_probe_on () || (is->custom_renderer_native_lifetime != NULL && is->custom_renderer_probe_thread_id () == is->custom_renderer_probe_owner);
@@ -20319,10 +20336,10 @@ set_custom_renderer_native_hooks (bool enabled, JGL_Image * root)
 {
 	// Runtime DLL slots cannot be encoded as fixed Civ III executable addresses.
 	// Verify the exact DLL hash through the optional observer, then all slot RVAs.
-	int slots[18] = {0, 1, 3, 4, 10, 13, 16, 17, 18, 21, 25, 33, 42, 43, 44, 45, 46, 59};
-	unsigned rvas[18] = {0x15d0, 0x1800, 0x1bc0, 0x1b70, 0x1b20, 0x1a40, 0x1ec0, 0x2270, 0x2320, 0x22c0, 0x2160, 0x2410, 0x1d10, 0x1d40, 0x1db0, 0x1d70, 0x1de0, 0x1ca0};
-	void * hooks[18] = {(void *)patch_JGL_Image_destroy, (void *)patch_JGL_Image_init, (void *)patch_JGL_Image_pixel_3, (void *)patch_JGL_Image_bits,
-		(void *)patch_JGL_Image_acquire_dc, (void *)patch_JGL_Image_clip,
+	int slots[19] = {0, 1, 3, 4, 10, 13, 14, 16, 17, 18, 21, 25, 33, 42, 43, 44, 45, 46, 59};
+	unsigned rvas[19] = {0x15d0, 0x1800, 0x1bc0, 0x1b70, 0x1b20, 0x1a40, 0x1e20, 0x1ec0, 0x2270, 0x2320, 0x22c0, 0x2160, 0x2410, 0x1d10, 0x1d40, 0x1db0, 0x1d70, 0x1de0, 0x1ca0};
+	void * hooks[19] = {(void *)patch_JGL_Image_destroy, (void *)patch_JGL_Image_init, (void *)patch_JGL_Image_pixel_3, (void *)patch_JGL_Image_bits,
+		(void *)patch_JGL_Image_acquire_dc, (void *)patch_JGL_Image_clip, (void *)patch_JGL_Image_keyed_region,
 		(void *)patch_JGL_Image_copy, (void *)patch_JGL_Image_fill, (void *)patch_JGL_Image_tint, (void *)patch_JGL_Image_lookup, (void *)patch_JGL_Image_line, (void *)patch_JGL_Image_draw_onto,
 		(void *)patch_JGL_Image_font, (void *)patch_JGL_Image_default_font, (void *)patch_JGL_Image_text_index, (void *)patch_JGL_Image_text_rgb, (void *)patch_JGL_Image_text, (void *)patch_JGL_Image_palette};
 	if (enabled) {
@@ -20340,7 +20357,7 @@ set_custom_renderer_native_hooks (bool enabled, JGL_Image * root)
 		check.struct_size = sizeof check; check.operation = C3X_NATIVE_VERIFY; check.object = module;
 		if (! is->custom_renderer_native_observe (&check)) { is->custom_renderer_native_probe_rejected = true; return; }
 		void ** table = (void **)(module + 0x68238), ** sprite_table = (void **)(module + 0x68440);
-		for (int n = 0; n < 18; n++) if (table[slots[n]] != module + rvas[n]) { is->custom_renderer_native_probe_rejected = true; return; }
+		for (int n = 0; n < 19; n++) if (table[slots[n]] != module + rvas[n]) { is->custom_renderer_native_probe_rejected = true; return; }
 		// The named export is a factory: calling it replaces JGL's active owner.
 		// Read the existing owner from the hash-verified DLL instead.
 		void * graph = *(void **)(module + 0x70d30);
@@ -20368,7 +20385,7 @@ set_custom_renderer_native_hooks (bool enabled, JGL_Image * root)
 		is->custom_renderer_jgl_blend_original[8] = sprite_table[31];
 		is->custom_renderer_jgl_blend_original[9] = sprite_table[37];
 		for (int n = 0; n < 3; n++) is->custom_renderer_jgl_blend_original[n] = sprite_table[20+n];
-		for (int n = 0; n < 18; n++) table[slots[n]] = hooks[n];
+		for (int n = 0; n < 19; n++) table[slots[n]] = hooks[n];
 		sprite_table[17] = (void *)patch_JGL_Sprite_draw;
 		sprite_table[33] = (void *)patch_JGL_Sprite_lookup;
 		sprite_table[35] = (void *)patch_JGL_Sprite_lookup_over;
@@ -20402,7 +20419,7 @@ set_custom_renderer_native_hooks (bool enabled, JGL_Image * root)
 	DWORD protect, unused;
 	void ** table = is->custom_renderer_jgl_table;
 	if (VirtualProtect (table, 0x300, PAGE_READWRITE, &protect)) {
-		for (int n = 0; n < 18; n++) if (table[slots[n]] == hooks[n]) table[slots[n]] = is->custom_renderer_jgl_original[slots[n]];
+		for (int n = 0; n < 19; n++) if (table[slots[n]] == hooks[n]) table[slots[n]] = is->custom_renderer_jgl_original[slots[n]];
 		if (is->custom_renderer_jgl_sprite_table[17] == (void *)patch_JGL_Sprite_draw)
 			is->custom_renderer_jgl_sprite_table[17] = is->custom_renderer_jgl_sprite_original;
 		if (is->custom_renderer_jgl_sprite_table[33] == (void *)patch_JGL_Sprite_lookup)
