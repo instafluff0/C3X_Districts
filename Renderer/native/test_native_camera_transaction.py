@@ -19,6 +19,7 @@ class NativeCameraTransactionTests(unittest.TestCase):
 using DWORD=unsigned;
 DWORD caller_thread=1;
 DWORD GetCurrentThreadId(){return caller_thread;}
+void OutputDebugStringA(char const*){}
 using Id=unsigned long long;
 struct Rect {int left=0,top=0,right=0,bottom=0;};
 int creates=0,imports=0,inserts=0,flushes=0,polls=0,cancels=0;
@@ -58,7 +59,7 @@ struct Owner {
  std::unique_ptr<c3x_gpu_images::WorkerClient> client;
  std::unique_ptr<Adapter<c3x_gpu_images::WorkerClient>> adapter;
  c3x_renderer_gpu_frame_v1 frame={sizeof(frame)};
- bool scene_units=false;
+ bool scene_units=false,tactical=true;void* front_native=nullptr;void* display_native=nullptr;unsigned surface_copy_reports=0,surface_fill_reports=0,cold_stroke_reports=0;
  void check_thread(){}
  static int field(void* p,unsigned offset){return *reinterpret_cast<int*>(static_cast<char*>(p)+offset);}
 ''' + methods.replace('CompositionOwner(', 'Owner(') + r'''
@@ -191,6 +192,12 @@ int main(){
  c3x_renderer_camera_request_v1 async_request{};async_request.frame=&async_frame;
  ready=false;
  assert(async.map(C3X_NATIVE_MAP_PREPARE,image,&async_request,&output)==C3X_RENDERER_RESULT_PENDING);
+ *reinterpret_cast<int*>(other+0x24)=16;*reinterpret_cast<int*>(other+0x38)=640;*reinterpret_cast<int*>(other+0x3c)=480;
+ c3x_renderer_native_stroke stroke{3,3,20,3,1,0,0x80ffffffu};
+ assert(async.defer_cold_stroke(other,&stroke)&&!async.adapter&&async.cold_stroke_reports==1);
+ eligible_native=false;assert(!async.defer_cold_stroke(other,&stroke));eligible_native=true;
+ *reinterpret_cast<int*>(other+0x38)=320;assert(!async.defer_cold_stroke(other,&stroke));
+ *reinterpret_cast<int*>(other+0x38)=640;stroke.width=0;assert(!async.defer_cold_stroke(other,&stroke));stroke.width=1;
  auto first_async_ticket=async.camera_ticket;
  assert(async.map(C3X_NATIVE_MAP_PREPARE,image,&async_request,&output)==C3X_RENDERER_RESULT_PENDING &&
         async.camera_ticket==first_async_ticket && !async.pending);
@@ -200,6 +207,7 @@ int main(){
  ready=true;
  assert(async.map(C3X_NATIVE_MAP_PREPARE,image,&async_request,&output)==C3X_RENDERER_RESULT_OK &&
         output.clip_right==640);
+ assert(!async.defer_cold_stroke(other,&stroke));
  assert(async.map(C3X_NATIVE_MAP_COMMIT,image,nullptr,nullptr)==C3X_RENDERER_RESULT_OK);
 }
 ''')

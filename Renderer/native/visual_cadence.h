@@ -46,13 +46,16 @@ public:
             thread=std::thread([this,callback]{
                 using Clock=std::chrono::steady_clock;
                 std::unique_lock<std::mutex> guard(mutex);
+                auto next=Clock::now();
                 while(!stopping){
                     wake.wait(guard,[this]{return stopping||enabled;});
                     if(stopping)break;
-                    auto begin=Clock::now();
                     guard.unlock();callback();guard.lock();
                     auto now=Clock::now();
-                    auto next=begin+period>now+minimum_pause?begin+period:now+minimum_pause;
+                    // Keep the deadline across frames. Restarting the period
+                    // after every late wake adds scheduler jitter to every
+                    // frame and steadily lowers the achieved frame rate.
+                    next=next+period>now+minimum_pause?next+period:now+minimum_pause;
 #ifdef _WIN32
                     if(timer&&interrupt&&enabled){
                         auto nanoseconds=std::chrono::duration_cast<std::chrono::nanoseconds>(next-now).count();

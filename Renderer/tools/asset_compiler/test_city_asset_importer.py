@@ -9,6 +9,7 @@ from Renderer.tools.asset_compiler.city_asset_importer import (
     DEFAULT_STRATEGY,
     _component_id,
     build_candidate_pools,
+    build_source_family_pools,
     load_strategy,
     parse_city_generator_blocks,
 )
@@ -79,6 +80,19 @@ class CityAssetImporterTests(unittest.TestCase):
         self.assertEqual(first, _component_id("Base/secret.blp", "SourceBuilding"))
         self.assertRegex(first, r"^city/component/[0-9a-f]{16}$")
         self.assertNotIn("SourceBuilding", first)
+
+    def test_source_family_pools_preserve_unmapped_artdef_families(self) -> None:
+        blocks = [
+            {"source_culture": "Region", "source_art_era": "ARTERA_ANCIENT", "package_path": "a", "entry": "A"},
+            {"source_culture": "Region", "source_art_era": "ARTERA_ANCIENT", "package_path": "a", "entry": "A"},
+            {"source_culture": "CIVILIZATION_OTHER", "source_art_era": "ARTERA_FUTURE", "package_path": "b", "entry": "B"},
+        ]
+        pools = build_source_family_pools(blocks)
+        self.assertEqual(2, len(pools))
+        self.assertEqual(2, sum(len(pool["candidates"]) for pool in pools))
+        self.assertTrue(all(pool["id"].startswith("city/family/") for pool in pools))
+        self.assertNotIn("Region", pools[0]["id"])
+        self.assertNotIn("CIVILIZATION", pools[1]["id"])
 
 
 if __name__ == "__main__":

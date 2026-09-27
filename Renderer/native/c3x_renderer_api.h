@@ -500,8 +500,9 @@ struct c3x_renderer_native_sprite_style { void *palette, *table; unsigned color;
 struct c3x_renderer_native_lookup { void *table, *palette; int percent; void *background; int scale[3]; };
 struct c3x_renderer_native_sprite_blend { void *alpha, *background, *palette; };
 /* OpenGL/GDI+ map outlines use copied endpoints/style, never a public map DC.
-   TARGET queries existing ownership only. STROKE returns 0 after safe CPU
-   handoff when unsupported; negative results must not expose native pixels. */
+   TARGET queries existing ownership only. A cold STROKE may be consumed while
+   the first full-screen map copy is pending; unsupported strokes return 0
+   after safe CPU handoff. Negative results must not expose native pixels. */
 enum { C3X_NATIVE_LINE_TARGET = 123, C3X_NATIVE_STROKE = 124 };
 struct c3x_renderer_native_stroke { int x1,y1,x2,y2,width,dash; unsigned argb; };
 /* Process-lifetime, read-only tracking. No scene/device/configuration required.

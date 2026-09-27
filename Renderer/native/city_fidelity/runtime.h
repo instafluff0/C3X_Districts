@@ -47,6 +47,19 @@ struct Composition {
     float foundation_uv[4]={};
     float foundation_step[2]={};
 };
+inline float metropolis_wall_radius(Composition const& city){
+    if(city.size!=2)return 0.0f;
+    float radius=.70f;
+    for(auto const& building:city.instances)
+        for(float x:{building.bounds[0],building.bounds[2]})
+            for(float y:{building.bounds[1],building.bounds[3]}){
+                float bx=std::abs(building.offset[0]+x);
+                float by=std::abs(building.offset[1]+y);
+                float reach=std::pow(std::pow(bx,6.0f)+std::pow(by,6.0f),1.0f/6.0f);
+                radius=std::max(radius,reach+.03f);
+            }
+    return radius;
+}
 struct WorldInstance {
     float x=0,y=0,z=0,scale=1,cosine=1,sine=0;
     void position(float const*source,float*world) const {

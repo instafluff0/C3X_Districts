@@ -8,6 +8,15 @@
 #include <vector>
 
 namespace c3x_renderer::tactical {
+// The installed Civ III cursor FLC is 93x46 at normal map zoom. Its native
+// zoomed-out draw halves the frame; custom camera zoom does not resize it.
+inline float cursor_scale(float native_tile_width){return std::min(native_tile_width,128.f)/128.f;}
+inline float cursor_phase(double seconds){
+    // Thirty 83 ms source frames make one outward-and-back motion. Cosine
+    // easing brings the markers to rest at both ends before reversing.
+    constexpr double cycle=2.5,pi=3.14159265358979323846;
+    return float(pi*.5*(1-std::cos(2*pi*std::fmod(seconds,cycle)/cycle)));
+}
 // Copied draw semantics only. No unit, route finder, native surface or game
 // pointer survives capture. Coordinates are authoritative projected pixels.
 struct Primitive {
@@ -24,14 +33,16 @@ struct Input {
     }
     void line(float x0,float y0,float x1,float y1,float width=2.2f,bool grid=false){
         if(!std::isfinite(width)||width<=0||width>16)throw std::runtime_error("tactical line width");
-        float pad=grid?2.f:5.f;
+        float pad=grid?2.f:width*.5f+2.f;
         append({{std::min(x0,x1)-pad,std::min(y0,y1)-pad,std::max(x0,x1)+pad,std::max(y0,y1)+pad},
             {x0,y0,x1,y1},grid?std::array<float,4>{.64f,.66f,.68f,.52f}:std::array<float,4>{.94f,.17f,.18f,.97f},
-            {0,width,grid?0.f:1.f,0}});
+            {0,width,0,0}});
     }
-    void ring(float x,float y,float tile_width,bool moving){
-        if(!std::isfinite(tile_width)||tile_width<64||tile_width>192)throw std::runtime_error("tactical projection");
-        float rx=tile_width*.47f,ry=tile_width*.235f;
+    void ring(float x,float y,float native_tile_width,bool moving){
+        if(!std::isfinite(native_tile_width)||native_tile_width<64||native_tile_width>192)throw std::runtime_error("tactical projection");
+        // Visible strokes sit a few pixels inside the 93x46 FLC canvas.
+        float scale=cursor_scale(native_tile_width),rx=44.f*scale,ry=21.5f*scale;
+        if(moving)y-=2.f*scale;
         append({{x-rx-5,y-ry-5,x+rx+5,y+ry+5},{x,y,rx,ry},{.97f,.98f,1.f,.94f},{1,1.8f,moving?1.f:0.f,0}});
         animated|=moving;
     }

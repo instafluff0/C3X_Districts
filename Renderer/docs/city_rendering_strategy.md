@@ -58,20 +58,33 @@ source formats, culture tags, or component names.
 
 ## Civ III selection matrix
 
-The checked source-to-lab fallback mapping is:
+The original 20-pool intake fallback mapping is:
 
 | Civ III culture group | Ancient | Medieval | Industrial | Modern |
 |---|---|---|---|---|
 | American | AncientWood | SouthAmerican | Colonial | ModernGlass |
 | European | AncientEarth | DEFAULT | RowHouse | ModernGlass |
-| Mediterranean | DEFAULT | Mediterranean | Colonial | ModernGlass |
+| Roman (internal `mediterranean` slot) | DEFAULT | Mediterranean | Colonial | ModernGlass |
 | Middle Eastern | AncientEarth | Mughal | RowHouse | ModernGlass |
 | Asian | AncientWood | EastAsian | RowHouse | ModernGlass |
 
 These source labels exist only in the offline strategy and build report. The
-runtime catalog exposes generic `style × era` pool IDs. A future explicit
-civilization override may replace any pool, but the five culture groups remain
-the complete fallback so every Civ III city is renderable.
+current focused ancient Lab auditions also compare Mapuche, Babylon and Cree
+with that baseline; they have not changed the fallback pack. The installed
+source has seven ancient tags but six distinct city component sets because
+Gaul's ancient entries duplicate AncientEarth. The runtime catalog exposes
+generic `style × era` pool IDs and must remain independent of source culture,
+package and civilization names.
+
+The intended selection order for a future scenario-configurable pack is an
+explicit civilization art-style override, then a Civ III culture-group style,
+then a neutral fallback. Resolve those names to generic style IDs when a
+scenario or pack loads, with a concrete pack-defined recipe for each
+`style × era × population × capital × walls` combination. The captured city
+civilization name and culture group are already separate inputs; the current
+city library still selects by the five numbered culture slots. This override
+contract is proposed, not implemented in the game runtime. Source-specific
+mapping and any asset preparation stay in the offline importer and metadata.
 
 Population is a composition axis rather than another model family:
 
@@ -81,6 +94,13 @@ Population is a composition axis rather than another model family:
 | City | 7–12 | 7 | 0.39 tile | 1.00 |
 | Metropolis | 13+ | 11 | 0.46 tile | 1.08 |
 
+For the authored city designs, ancient, medieval and industrial roofs and
+buildings should be approximately the same map-view size as the curated
+medieval Roman example. Population growth adds fixed-size buildings; it does
+not scale the structures already present. Era identity comes from the sourced
+architecture and composition, not a forced small ancient house size. The
+baseline table above predates this focused visual target.
+
 Composition is seeded by world seed, stable city ID, and map position. A pool
 is exhausted before a component repeats, and slot angles remain stable across
 population transitions. Growth should add outer slots rather than reshuffling
@@ -89,7 +109,10 @@ banners; the complete city is never player-color graded.
 
 ## Capitals, walls, and retained information
 
-A capital is an additive center-slot accent, not a replacement city family.
+A capital is a separately authored center-slot variant within the selected
+city style. A recipe may replace its ordinary civic centerpiece with a palace
+to keep the center plot clear; surrounding houses retain their style and
+fixed scale.
 The generic source `BUILDING_PALACE` record names `DIS_CTY_Palace_CP`, but that
 string is composition metadata rather than a terminal body. The original
 narrow DLC search found two culture-specific compounds; the complete installed

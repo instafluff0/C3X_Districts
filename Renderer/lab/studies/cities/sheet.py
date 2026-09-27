@@ -17,7 +17,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-from Renderer.lab.studies.cities.build_layouts import wall_instances
+from Renderer.lab.studies.cities.build_layouts import footprint, wall_instances
 from Renderer.lab.shared.cities.assets import component
 from Renderer.lab.shared.cities.ground import building_polygon, center_paths, coverage
 from Renderer.preview.render_city_day_night_sheet import _draw_mesh
@@ -162,7 +162,9 @@ def draw_cover(canvas: Canvas, center: tuple[int, int], tile_pixels: int,
 def render_cell(design: dict, size: int, walls: bool, capital: bool,
                 cell: tuple[int, int] = CELL, tile_pixels: int = TILE_PIXELS):
     canvas = Canvas(*cell, MAGENTA)
-    cx, cy = cell[0]//2, round(cell[1]*.64)
+    # Metropolis rings are wider and project lower; keep their near walls
+    # inside the review cell without changing the map-scale geometry.
+    cx, cy = cell[0]//2, round(cell[1]*(.58 if size == 2 else .64))
     half_width, half_height = tile_pixels//2, tile_pixels//4
     diamond = [(cx, cy-half_height), (cx+half_width, cy),
                (cx, cy+half_height), (cx-half_width, cy)]
@@ -183,8 +185,30 @@ def render_cell(design: dict, size: int, walls: bool, capital: bool,
     if tier.get("ground_cover"):
         draw_cover(canvas, (cx, cy), tile_pixels, instances, tier["ground_cover"])
     if walls:
-        instances.extend(wall_instances(design["wall_kit"], size))
+        radius = None
+        if size == 2:
+            # Match the native adaptive ring: the compact default expands
+            # only when a particular recipe has an outer building plot.
+            radius = .70
+            for item in instances:
+                body = component(item["asset"], Path(item["pack"]))
+                box = footprint({"low": body["lo"], "high": body["hi"]}, item)
+                radius = max(radius, max((abs(x)**6 + abs(y)**6)**(1/6) + .03
+                                         for x in (box[0], box[2])
+                                         for y in (box[1], box[3])))
+        instances.extend(wall_instances(design["wall_kit"], size, radius))
     for instance in instances:
+        if instance["pack"] == "Renderer/packs/CityAdjunctsNormalized":
+            # The preview mesh loader centers every asset in XY. Wall ring
+            # offsets are authored for the uncentered native mesh, so restore
+            # its center here or the preview opens artificial gaps at joints.
+            body = component(instance["asset"], Path(instance["pack"]))
+            center = [(body["lo"][axis]+body["hi"][axis])/2 for axis in (0, 1)]
+            scale, rotation = instance["scale"], instance["rotation"]
+            c, s = math.cos(rotation), math.sin(rotation)
+            instance = {**instance, "offset": [
+                instance["offset"][0]+scale*(center[0]*c-center[1]*s),
+                instance["offset"][1]+scale*(center[0]*s+center[1]*c)]}
         if (tier.get("ground_cover") and instance.get("surface", True) and
                 instance["pack"] != "Renderer/packs/CityAdjunctsNormalized"):
             body = component(instance["asset"], Path(instance["pack"]))
@@ -216,7 +240,8 @@ def render_culture(layouts: dict, culture: int, output: Path, only_era: int | No
     variants = ((False, False, "Base"), (True, False, "Walls"),
                 (False, True, "Capital"), (True, True, "Walls + capital"))
     focused = only_era is not None
-    title = layouts["styles"][culture]
+    # The internal Mediterranean source slot is Civ III's Roman culture group.
+    title = "Roman" if culture == 2 else layouts["styles"][culture]
     evidence = []
     if focused:
         cell, tile_pixels = (760, 480), 512
@@ -225,8 +250,19 @@ def render_culture(layouts: dict, culture: int, output: Path, only_era: int | No
         height = top+len(designs)*(era_header+row_height*3)+20
         sheet = Image.new("RGB", (width, height), (33, 27, 42))
         draw = ImageDraw.Draw(sheet)
-        draw.text((20, 13), title+" city designs", font=font(26), fill=(249, 240, 249))
-        draw.text((20, 49), "Flat grassland  |  town within one tile; larger cities may sprawl  |  software material preview",
+        source_art_era = next((d.get("source_art_era") for d in designs
+                               if d.get("source_art_era")), None)
+        review_context = next((d.get("review_context") for d in designs
+                               if d.get("review_context")), None)
+        heading = (title+" | "+review_context if review_context else
+                   title+" | Civ III Middle Ages candidate" if source_art_era
+                   else title+" city designs")
+        caption = (f"Civ VI {source_art_era.removeprefix('ARTERA_').title()} art tier "
+                   f"({source_art_era})  |  flat grassland  |  software material preview"
+                   if source_art_era else
+                   "Flat grassland  |  town within one tile; larger cities may sprawl  |  software material preview")
+        draw.text((20, 13), heading, font=font(26), fill=(249, 240, 249))
+        draw.text((20, 49), caption,
                   font=font(15), fill=(202, 186, 204))
         for column, (_, _, name) in enumerate(variants):
             draw.text((left+column*cell[0]+14, 73), name, font=font(17), fill=(250, 230, 247))
@@ -243,7 +279,9 @@ def render_culture(layouts: dict, culture: int, output: Path, only_era: int | No
                     sheet.paste(image, (left+column*cell[0], y))
                     evidence.append({"culture": culture, "era": design["era"], "size": size,
                                      "walls": walls, "capital": capital,
-                                     "houses": design["population_counts"][size],
+                                     "houses": (len(design["tier_designs"][size].get(
+                                         "capital_houses", design["tier_designs"][size]["houses"]))
+                                                if capital else design["population_counts"][size]),
                                      "art_pixels": art_pixels,
                                      "palace": design["palace"]["asset"] if capital else None})
     else:
@@ -280,7 +318,9 @@ def render_culture(layouts: dict, culture: int, output: Path, only_era: int | No
                     sheet.paste(image, (x, y+caption))
                     evidence.append({"culture": culture, "era": design["era"], "size": size,
                                      "walls": walls, "capital": capital,
-                                     "houses": design["population_counts"][size],
+                                     "houses": (len(design["tier_designs"][size].get(
+                                         "capital_houses", design["tier_designs"][size]["houses"]))
+                                                if capital else design["population_counts"][size]),
                                      "art_pixels": art_pixels,
                                      "palace": design["palace"]["asset"] if capital else None})
     output.parent.mkdir(parents=True, exist_ok=True)

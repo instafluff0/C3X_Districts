@@ -116,7 +116,7 @@ class CityDesigns(unittest.TestCase):
                 for index in range(segments):
                     item = wall[index]
                     body = component(item["asset"], Path(item["pack"]))
-                    axis = 0 if index == 0 else 1
+                    axis = 0 if index == 0 and kit != "ancient" else 1
                     other = 1 - axis
                     middle = (body["lo"][other] + body["hi"][other]) / 2
                     c, s = math.cos(item["rotation"]), math.sin(item["rotation"])

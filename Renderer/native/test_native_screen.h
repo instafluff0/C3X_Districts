@@ -1,6 +1,7 @@
 #include "test_native_bootstrap.h"
 // Included only in the real-renderer/native-hook fixture.
 #include <thread>
+#include <tlhelp32.h>
 #include "native_screen_bridge.h"
 #include "test_native_line_bridge.h"
 WorkerClient* screen_client=nullptr;
@@ -111,13 +112,27 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
         *reinterpret_cast<HDC*>(static_cast<char*>(graph)+0x138)=dc;
         screen_graph=graph;screen_image=canvases[1];screen.JGL.Image=canvases[1];
         state.custom_renderer_native_image=live;present_fn=complete_native_ui;
+        bool asynchronous=GetEnvironmentVariableA("C3X_RENDERER_ASYNC_NATIVE_TEST",nullptr,0)!=0;
         c3x_renderer_camera_view_v1 view={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(view)};
         LARGE_INTEGER frequency={},begin={},end={};QueryPerformanceFrequency(&frequency);QueryPerformanceCounter(&begin);
         int result=C3X_RENDERER_RESULT_PENDING;unsigned polls=0;
         auto deadline=GetTickCount64()+30000;
         while(result==C3X_RENDERER_RESULT_PENDING && GetTickCount64()<deadline){
             result=map_view(C3X_NATIVE_MAP_PREPARE,canvases[0],&demand,&view);
-            if(result==C3X_RENDERER_RESULT_PENDING){++polls;MsgWaitForMultipleObjectsEx(0,nullptr,16,QS_ALLINPUT,MWMO_INPUTAVAILABLE);}
+            if(asynchronous&&polls==0&&result==C3X_RENDERER_RESULT_PENDING){
+                c3x_renderer_unit_v1 cold={};cold.struct_size=sizeof(cold);strcpy_s(cold.unit_key,"PRTO_Warrior");
+                cold.unit_id=732;cold.action=1;cold.direction=3;cold.frame_count=16;
+                cold.sprite_width=cold.sprite_height=191;cold.projection_scale_milli=1000;cold.hour=12;
+                cold.presentation_frequency=1000000;cold.presentation_time_ticks=1000000;
+                int envelope[4]={};
+                verify(live(C3X_NATIVE_UNIT_DRAW,canvases[1],canvases[0],&cold,envelope,C3X_RENDERER_UNIT_STATE_CAPTURED)==1,
+                    "cold unit observation accepted without GPU canvas or CPU DC");
+                verify(!*reinterpret_cast<int*>(reinterpret_cast<char*>(canvases[0])+0x4c4)&&
+                       !*reinterpret_cast<int*>(reinterpret_cast<char*>(canvases[1])+0x4c4),"cold unit acquires no DC leases");
+            }
+            if(result==C3X_RENDERER_RESULT_PENDING){++polls;
+                MSG message={};while(PeekMessage(&message,nullptr,0,0,PM_REMOVE)){TranslateMessage(&message);DispatchMessage(&message);}
+                Sleep(1);}
         }
         QueryPerformanceCounter(&end);
         verify(result==C3X_RENDERER_RESULT_OK&&polls>0&&view.output.bgra_pixels==nullptr,
@@ -131,8 +146,23 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
         unit.sprite_width=unit.sprite_height=191;unit.projection_scale_milli=demand.frame->tile_width*1000/128;
         unit.body_x=w/2;unit.body_y=h/2;unit.hour=12;unit.display_color_rgb=0x205bdd;
         unit.presentation_frequency=1000000;unit.presentation_time_ticks=1000000;
+        if(asynchronous){
+            auto unit_state=reinterpret_cast<c3x_renderer_unit_state_fn>(GetProcAddress(renderer_module,"c3x_renderer_unit_state"));
+            verify(unit_state!=nullptr,"unit state export");
+            c3x_renderer_unit_state_v1 facts={};facts.struct_size=sizeof(facts);facts.kind=C3X_RENDERER_UNIT_STATE_OBSERVE;
+            facts.unit_id=unit.unit_id;facts.action=unit.action;facts.max_hp=3;facts.visible=1;
+            facts.map_epoch=demand.identity.map_epoch;facts.viewer_epoch=demand.identity.viewer_epoch;
+            facts.presentation_time_ticks=unit.presentation_time_ticks;facts.presentation_frequency=unit.presentation_frequency;
+            auto const& anchor=demand.frame->tiles[demand.frame->tile_count/2];
+            facts.tile_x=anchor.tile_x;facts.tile_y=anchor.tile_y;
+            unit.body_x=anchor.anchor_x;unit.body_y=anchor.anchor_y;
+            verify(unit_state(&facts)==C3X_RENDERER_RESULT_OK,"authoritative unit facts published");
+            main_screen_fixture.is_now_loading_game=false;
+            live(C3X_NATIVE_VISUAL_POLICY,nullptr,nullptr,nullptr,nullptr,1);
+        }
         int bounds[4]={};
-        verify(live(C3X_NATIVE_UNIT_DRAW,canvases[1],canvases[1],&unit,bounds,C3X_RENDERER_UNIT_STATE_CAPTURED)==1,
+        verify(live(C3X_NATIVE_UNIT_DRAW,canvases[1],canvases[1],&unit,bounds,
+            C3X_RENDERER_UNIT_STATE_CAPTURED|(asynchronous?C3X_RENDERER_UNIT_SELECTED:0u))==1,
             "fresh native unit identity captured without raster composition");
         RECT panel={46,38,136,74};
         verify(reinterpret_cast<Fill>(canvases[1]->vtable[17])(canvases[1],&panel,int(0x80007c00u))==0,
@@ -143,6 +173,107 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
             "fresh native map and UI presented without ownership loss");
         std::printf("PASS fresh native map handoff: prepare_ms=%.3f polls=%u map_cpu_pixels=0 ui_presented=1 unit_capture=1\n",
             1000.*double(end.QuadPart-begin.QuadPart)/double(frequency.QuadPart),polls);
+        if(asynchronous){
+            using Progress=int(*)(unsigned*,unsigned*,unsigned*);
+            auto progress=reinterpret_cast<Progress>(GetProcAddress(renderer_module,"c3x_renderer_async_progress"));
+            verify(progress!=nullptr,"asynchronous progress export");
+            unsigned accepted=0,completed=0,frames=0;
+            auto settled=GetTickCount64()+30000;
+            do{verify(progress(&accepted,&completed,&frames)==C3X_RENDERER_RESULT_OK,"asynchronous consumer healthy");
+                if(accepted==completed&&frames>=5)break;Sleep(10);
+            }while(GetTickCount64()<settled);
+            verify(accepted==completed&&frames>=5,"queued map and UI actually consumed, autonomous frames running");
+            unsigned before=frames;Sleep(2000);
+            verify(progress(&accepted,&completed,&frames)==C3X_RENDERER_RESULT_OK&&frames>before+10,
+                "renderer advances while the native host is paused");
+            unsigned independent_frames=frames-before;
+            // Suspend only this fixture's child, never a running user's game.
+            HANDLE snapshot=CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS,0);PROCESSENTRY32 entry={sizeof(entry)};
+            DWORD child=0;if(snapshot!=INVALID_HANDLE_VALUE){if(Process32First(snapshot,&entry))do{
+                if(entry.th32ParentProcessID==GetCurrentProcessId()&&!_stricmp(entry.szExeFile,"C3XRendererHelper64.exe")){child=entry.th32ProcessID;break;}
+            }while(Process32Next(snapshot,&entry));CloseHandle(snapshot);}
+            struct Paused {
+                std::vector<HANDLE> threads;
+                void resume(){for(auto thread:threads){ResumeThread(thread);CloseHandle(thread);}threads.clear();}
+                ~Paused(){resume();}
+            } paused;
+            verify(child!=0,"fixture renderer child identity");
+            snapshot=CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD,0);THREADENTRY32 thread={sizeof(thread)};
+            verify(snapshot!=INVALID_HANDLE_VALUE,"fixture thread snapshot");
+            bool suspended=true;
+            if(Thread32First(snapshot,&thread))do{if(thread.th32OwnerProcessID==child){
+                HANDLE handle=OpenThread(THREAD_SUSPEND_RESUME,FALSE,thread.th32ThreadID);
+                if(!handle||SuspendThread(handle)==DWORD(-1)){if(handle)CloseHandle(handle);suspended=false;break;}
+                paused.threads.push_back(handle);
+            }}while(Thread32Next(snapshot,&thread));
+            CloseHandle(snapshot);
+            verify(suspended&&!paused.threads.empty(),"pause fixture renderer threads");
+            std::vector<double> submission_ms;unsigned before_accepted=accepted;
+            auto until=GetTickCount64()+2000;
+            while(GetTickCount64()<until){
+                LARGE_INTEGER started={},finished={};QueryPerformanceCounter(&started);
+                reinterpret_cast<Fill>(canvases[1]->vtable[17])(canvases[1],&panel,int(0x80007c00u));
+                verify(live(C3X_NATIVE_IMAGE_PRESENT,canvases[1],graph,&full,nullptr,0)==1,"paused renderer accepts native draw publication");
+                QueryPerformanceCounter(&finished);
+                submission_ms.push_back(1000.*double(finished.QuadPart-started.QuadPart)/double(frequency.QuadPart));
+                Sleep(16);
+            }
+            verify(progress(&accepted,&completed,&frames)==C3X_RENDERER_RESULT_OK&&accepted>before_accepted+20,
+                "native host advances during renderer suspension");
+            paused.resume();
+            settled=GetTickCount64()+30000;
+            do{verify(progress(&accepted,&completed,&frames)==C3X_RENDERER_RESULT_OK,"resumed consumer healthy");
+                if(accepted==completed)break;Sleep(10);
+            }while(GetTickCount64()<settled);
+            verify(accepted==completed,"resumed renderer consumes complete ordered UI updates");
+            std::sort(submission_ms.begin(),submission_ms.end());
+            std::printf("PASS async native independence: host_pause_frames=%u renderer_pause_publications=%zu submit_p95_ms=%.3f submit_max_ms=%.3f cpu_map_readbacks=0\n",
+                independent_frames,submission_ms.size(),submission_ms[submission_ms.size()*95/100],submission_ms.back());
+            // Sample warm production cadence without synchronous renderer
+            // queries. These are completed Present calls, not scanout counts.
+            auto warm_begin=GetTickCount64();unsigned warm_frames=frames;
+            Sleep(8000);
+            auto warm_ms=GetTickCount64()-warm_begin;
+            verify(progress(&accepted,&completed,&frames)==C3X_RENDERER_RESULT_OK,"warm renderer healthy");
+            std::printf("ASYNC_WARM_CADENCE frames=%u elapsed_ms=%llu fps=%.2f\n",
+                frames-warm_frames,warm_ms,1000.*double(frames-warm_frames)/double(warm_ms));
+            // Optional compositor evidence is separate from the timing above.
+            struct Witness {HANDLE ready=nullptr,done=nullptr;~Witness(){if(ready)CloseHandle(ready);if(done)CloseHandle(done);}} witness;
+            wchar_t witness_name[128]={};
+            auto length=GetEnvironmentVariableW(L"C3X_RENDERER_INPUT_WINDOW_EVENT",witness_name,128);
+            if(length){
+                verify(length<128,"async window evidence event");
+                witness.ready=CreateEventW(nullptr,TRUE,FALSE,witness_name);
+                auto done_name=std::wstring(witness_name)+L"-done";
+                witness.done=CreateEventW(nullptr,TRUE,FALSE,done_name.c_str());
+                verify(witness.ready&&witness.done&&SetEvent(witness.ready),"begin async window evidence");
+            }
+            auto moved=*demand.frame;auto moving=demand;
+            std::vector<c3x_renderer_tile_v1> moving_tiles(moved.tiles,moved.tiles+moved.tile_count);
+            moved.tiles=moving_tiles.data();moving.frame=&moved;
+            for(unsigned step=0;step<32;++step){
+                int offset=step<16?int(step+1)*4:int(31-step)*4;
+                for(unsigned n=0;n<moved.tile_count;++n){
+                    moving_tiles[n]=demand.frame->tiles[n];moving_tiles[n].anchor_x-=offset;moving_tiles[n].anchor_y+=offset/2;}
+                auto camera_started=GetTickCount64();auto camera_deadline=camera_started+30000;
+                int ready=C3X_RENDERER_RESULT_PENDING;double longest_poll=0;
+                do{
+                    LARGE_INTEGER a={},b={};QueryPerformanceCounter(&a);
+                    ready=map_view(C3X_NATIVE_MAP_PREPARE,canvases[0],&moving,&view);
+                    QueryPerformanceCounter(&b);longest_poll=std::max(longest_poll,1000.*double(b.QuadPart-a.QuadPart)/double(frequency.QuadPart));
+                    if(ready==C3X_RENDERER_RESULT_PENDING)Sleep(1);
+                }while(ready==C3X_RENDERER_RESULT_PENDING&&GetTickCount64()<camera_deadline);
+                verify(ready==C3X_RENDERER_RESULT_OK,"asynchronous scrolling camera ready");
+                verify(map_view(C3X_NATIVE_MAP_COMMIT,canvases[0],nullptr,nullptr)==C3X_RENDERER_RESULT_OK,"scrolling map commit");
+                verify(reinterpret_cast<Copy>(canvases[0]->vtable[16])(canvases[0],canvases[1],&full,&full)==0,"scrolling native map copy");
+                verify(reinterpret_cast<Fill>(canvases[1]->vtable[17])(canvases[1],&panel,int(0x80007c00u))==0,"scrolling UI preserved");
+                verify(live(C3X_NATIVE_IMAGE_PRESENT,canvases[1],graph,&full,nullptr,0)==1,"scrolling native presentation");
+                std::printf("ASYNC_SCROLL step=%u ready_ms=%llu longest_poll_ms=%.3f built=%u uploaded=%u\n",
+                    step,GetTickCount64()-camera_started,longest_poll,view.output.geometry_tiles_built,view.output.geometry_upload_bytes);
+                Sleep(100);
+            }
+            if(witness.done)verify(WaitForSingleObject(witness.done,30000)==WAIT_OBJECT_0,"async window evidence finished");
+        }
         reset();present_fn=native_present;screen.JGL.Image=nullptr;screen_image=nullptr;screen_graph=nullptr;
         *reinterpret_cast<void**>(static_cast<char*>(graph)+0x148)=old_screen;
         *reinterpret_cast<HDC*>(static_cast<char*>(graph)+0x138)=old_dc;

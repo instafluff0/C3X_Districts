@@ -10,7 +10,16 @@ int main(){using namespace c3x_renderer::tactical;Input a;a.line(-100,20,40,20);
  auto b=a;a.primitives.clear();assert(b.primitives.size()==5&&b.animated);
  auto r=b.extent({0,0,100,80});assert(r[0]==0&&r[2]==100&&r[3]==80);
  bool rejected=false;try{b.line(NAN,0,1,1);}catch(...){rejected=true;}assert(rejected);
- Input c;c.ring(0,0,128,false);assert(!c.animated);return 0;}
+ Input c;c.ring(0,0,128,false);assert(!c.animated);
+ assert(c.primitives[0].shape[2]==44.f && c.primitives[0].shape[3]==21.5f);
+ Input small;small.ring(0,0,64,false);assert(small.primitives[0].shape[2]==22.f);
+ Input custom;custom.ring(0,0,192,false);assert(custom.primitives[0].shape[2]==44.f);
+ Input selected;selected.ring(0,0,128,true);assert(selected.primitives[0].shape[1]==-2.f);
+ assert(c.primitives[0].shape[1]==0.f);
+ assert(cursor_phase(0)==cursor_phase(2.5));
+ assert(cursor_phase(.625)<cursor_phase(1.25) && cursor_phase(1.875)<cursor_phase(1.25));
+ assert(cursor_phase(1.25)>3.14f && cursor_phase(1.25)<3.15f);
+ return 0;}
 ''')
 
     def test_production_gpu_coverage_and_packed_composition(self):

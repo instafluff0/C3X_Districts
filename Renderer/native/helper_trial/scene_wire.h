@@ -2,7 +2,7 @@
 #include <cstdint>
 
 namespace c3x_helper_trial {
-constexpr unsigned wire_magic=0x32483343,wire_version=8,wire_capacity=16*1024*1024;
+constexpr unsigned wire_magic=0x32483343,wire_version=9,wire_capacity=16*1024*1024;
 struct Wire {
     unsigned magic,version,sequence,kind,subtype,size,reply_size,status,code,shared_raw,expected_code,executed,live;
     unsigned width,height,rendered,fallback,hash[4],gpu_hash[4],gpu_hash_valid;
@@ -14,6 +14,7 @@ struct Wire {
     unsigned result_pixels;
     int bounds[4];
     unsigned consumer_pid;
+    alignas(4) volatile std::int32_t visual_frames;
     char error[128];
     unsigned char payload[wire_capacity];
 };

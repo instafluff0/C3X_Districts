@@ -781,7 +781,8 @@ void promote_river_crossings(c3x_renderer_tile_v1 const& tile,
     }
 }
 inline bool select_improvements(c3x_renderer_tile_v1 const& tile,Assets const& assets,int ground,unsigned site_flags,
-        bool mine_assets_ready,bool farm_assets_ready,bool city_assets_ready,bool composed_city,Plan& plan){
+        bool mine_assets_ready,bool farm_assets_ready,bool city_assets_ready,bool composed_city,
+        float composed_wall_radius,Plan& plan){
     auto const& site_bundle=assets[site_family];
     auto const& mine_bundle=assets[mine_family];auto const& farm_bundle=assets[farm_family];
     auto const& city_bundle=assets[city_family];auto const& wall_bundle=assets[wall_family];
@@ -970,7 +971,8 @@ inline bool select_improvements(c3x_renderer_tile_v1 const& tile,Assets const& a
                 !gate->placements.empty() && !tower->placements.empty()) {
                 constexpr float pi = 3.14159265359f;
                 constexpr unsigned samples = 2048u;
-                float const radius[3] = {.474f, .625f, .755f};
+                float const radius[3] = {.474f, .625f,
+                    std::max(.70f, composed_wall_radius)};
                 unsigned const sectors[3] = {16u, 20u, 24u};
                 std::array<std::array<float, 2>, samples + 1u> points{};
                 std::array<float, samples + 1u> distances{};

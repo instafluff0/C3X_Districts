@@ -36,6 +36,7 @@ public:
     struct Stats {unsigned sequence=0;std::uint64_t service_us=0,private_bytes=0;};
     Stats stats()const{return wire?Stats{wire->sequence,wire->service_us,wire->private_bytes}:Stats{};}
     bool alive()const{return process&&WaitForSingleObject(process,0)==WAIT_TIMEOUT;}
+    unsigned frames()const{return wire?unsigned(InterlockedCompareExchange(reinterpret_cast<volatile LONG*>(&wire->visual_frames),0,0)):0;}
     SceneClient(SceneClient const&)=delete;
     SceneClient& operator=(SceneClient const&)=delete;
     SceneClient(std::wstring const& helper,std::wstring const& dll){

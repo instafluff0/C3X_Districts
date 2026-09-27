@@ -27,9 +27,12 @@ struct Realtime{void offer(int){}};Realtime& realtime_replay(){static Realtime r
 }
 struct State {
  std::mutex call_mutex,state_mutex;bool gpu_presentation=true,visual_present_pending=false,visual_delivery=false;
+ bool camera_active=false,camera_pending=false;
+ c3x_renderer_i64 camera_ticket=0,camera_front_ticket=0,gpu_camera_front_ticket=0;
  c3x_renderer_gpu_present_v1 gpu_present={};int result=1;bool explode=false;
  struct Session{int ticket=7;bool active=true;int current_ticket(){return ticket;}void stop_visuals(){active=false;}bool visual_ready(){return active;}bool visual_active(){return active;}};
- struct{std::unique_ptr<Session> gpu_composition=std::make_unique<Session>();void* device=nullptr;}renderer_state;
+ struct{std::unique_ptr<Session> gpu_composition=std::make_unique<Session>();void* device=nullptr;
+  struct{void write(char const*,char const*,bool){}}trace;}renderer_state;
  struct Presenter{unsigned resets=0,releases=0;bool caller_thread(){return true;}void reset(){++resets;}
   void release_native(){++releases;}bool prepare(HWND,void*,int,int,bool){return true;}int present(){return 1;}}gpu_presenter;
  struct Cadence{unsigned enables=0,disables=0;template<class F>void enable(F){++enables;}void disable(){++disables;}}visual_cadence;

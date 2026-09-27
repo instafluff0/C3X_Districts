@@ -18,6 +18,7 @@
 #include "gpu_frame_api.h"
 #include "native_frame_workload.h"
 #ifdef C3X_GPU_NATIVE_CONTRACT
+bool async_native_contract(HMODULE,c3x_renderer_frame_v1 const&);
 bool native_worker_contract(char const*,c3x_renderer_gpu_images_fn,c3x_renderer_gpu_frame_v1&,c3x_renderer_gpu_render_fn,c3x_renderer_gpu_present_fn,c3x_renderer_camera_request_v1 const&,unsigned const*,int,int,std::vector<NativeFrameSample> const&);
 #endif
 #include "benchmark_oracle.h"
@@ -277,6 +278,11 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
     QueryPerformanceCounter(&dll_done);
     if (module == nullptr)
         return 1;
+    bool async_native=GetEnvironmentVariableA("C3X_RENDERER_ASYNC_NATIVE_TEST",nullptr,0)!=0;
+    if(async_native){
+        auto backend=reinterpret_cast<int(*)(int)>(GetProcAddress(module,"c3x_renderer_set_backend_mode"));
+        if(!backend||backend(1)!=C3X_RENDERER_RESULT_OK)return 1;
+    }
     auto set_definitions = reinterpret_cast<c3x_renderer_set_definition_paths_fn>(
         GetProcAddress(module, "c3x_renderer_set_definition_paths"));
     auto render = reinterpret_cast<c3x_renderer_render_fn>(GetProcAddress(module, "c3x_renderer_render"));
@@ -722,6 +728,9 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
     // Short GPU-only map-demand control for Renderer64. It avoids the legacy
     // CPU bitmap render and diagnostic screenshot readbacks used below.
     char fresh_timing[8]={};
+#ifdef C3X_GPU_NATIVE_CONTRACT
+    if(async_native)return async_native_contract(module,frame)?0:1;
+#endif
     if(GetEnvironmentVariableA("C3X_RENDERER_FRESH_TIMING",fresh_timing,sizeof(fresh_timing)) &&
        std::strcmp(fresh_timing,"1")==0) {
         auto gpu=reinterpret_cast<c3x_renderer_gpu_render_fn>(GetProcAddress(module,"c3x_renderer_gpu_render"));

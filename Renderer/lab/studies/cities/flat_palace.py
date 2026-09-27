@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Make a small Lab copy of one palace without its below-ground plinth."""
+"""Make a Lab palace copy without its deep plinth or optional ground planes."""
 
 import argparse
 import json
@@ -12,19 +12,29 @@ def main():
     parser.add_argument("--source-pack", type=Path, required=True)
     parser.add_argument("--asset", required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--omit-ground-planes", action="store_true")
     args = parser.parse_args()
     if args.output.exists():
         raise ValueError("preserve existing Lab derivative; choose a new output path")
     manifest = json.loads((args.source_pack / "manifest.json").read_text())
     entry = manifest["assets"][args.asset]
     landmark = json.loads((args.source_pack / entry["landmark"]).read_text())
+    worked = {binding["geometry"] for binding in landmark["draw_bindings"]
+              if "worked" in binding["states"]}
     removed = set()
     for index, name in enumerate(landmark["components"]["geometry"]):
         mesh = json.loads((args.source_pack / name).read_text())
-        levels = [vertex["position"][2] for vertex in mesh["vertices"]]
-        if min(levels) < -.007 and max(levels) < .001:
+        vertices = mesh["vertices"]
+        levels = [vertex["position"][2] for vertex in vertices]
+        # Source palaces may have one or several separate ground slabs; their
+        # finished tops can rise slightly above zero.
+        if index in worked and min(levels) < -.007 and max(levels) < .005:
             removed.add(index)
-    if len(removed) != 2:
+        elif (args.omit_ground_planes and 0 <= min(levels) <= .002 and
+              max(levels) - min(levels) < .002 and
+              all(vertex["normal"][2] > .95 for vertex in vertices)):
+            removed.add(index)
+    if not removed:
         raise ValueError("unrecognized palace plinth geometry")
     landmark["draw_bindings"] = [binding for binding in landmark["draw_bindings"]
                                   if binding["geometry"] not in removed]

@@ -9,9 +9,10 @@ class Lifetimes {
     struct Entry {void* object=nullptr;bool demanded=false;};
     std::array<Entry,1024> entries={};std::mutex mutex;unsigned owner=0;
 public:
-    bool observe(int operation,void* object,int context,unsigned thread,bool* revoked=nullptr){
+    bool observe(int operation,void* object,int context,unsigned thread,bool* revoked=nullptr,bool* early_escape=nullptr){
         std::lock_guard<std::mutex> lock(mutex);
         if(revoked)*revoked=false;
+        if(early_escape)*early_escape=false;
         if(operation==C3X_NATIVE_VERIFY&&!object){entries={};owner=thread;return true;}
         if(!owner)owner=thread;
         if(!object)return false;
@@ -32,6 +33,7 @@ public:
                 (context==C3X_NATIVE_IMAGE_PRESENT&&operation==C3X_NATIVE_DC);
             if(thread!=owner||(!private_lease&&(operation==C3X_NATIVE_PIXEL||operation==C3X_NATIVE_BITS||operation==C3X_NATIVE_DC))){
                 if(revoked)*revoked=found->demanded;
+                if(early_escape)*early_escape=!found->demanded;
                 *found={};
             }
         }

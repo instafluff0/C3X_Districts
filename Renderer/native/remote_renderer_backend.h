@@ -1,5 +1,6 @@
 #pragma once
 #include "remote_renderer_client.h"
+#include "../sandbox/async_scene_client.h"
 #include "gpu_native_presenter.h"
 #include "remote_direct_surface.h"
 #include "native_screen_bridge.h"
@@ -13,7 +14,7 @@ namespace c3x_remote_scene {
 // Single x86 endpoint for the native composition owner. Scene/image work stays
 // in x64; only the final shared BGRA texture crosses to the Civ III window.
 class Backend {
-    Client client;
+    AsyncSceneClient<Client> client;
     std::mutex gate;
     c3x_gpu_images::ComPtr<ID3D11Device> device;
     c3x_gpu_images::ComPtr<ID3D11Device1> device1;
@@ -33,6 +34,13 @@ class Backend {
     bool detach_direct(bool paint_native,std::vector<unsigned>* retained=nullptr,
                        unsigned* retained_width=nullptr,unsigned* retained_height=nullptr){
         if(!direct_active)return true;
+        if(client.asynchronous()){
+            // Native menus/config-off repaint their own UI. Runtime map pixels
+            // never make a round trip through GDI during this ownership change.
+            int code=client.bind_surface(nullptr,0,0);
+            direct_surface.reset();direct_active=false;
+            return code==C3X_RENDERER_RESULT_OK;
+        }
         std::vector<unsigned> pixels;unsigned w=0,h=0;
         bool have=(!paint_native&&!retained)||client.surface_pixels(pixels,w,h);
         HWND hwnd=active_window;
@@ -58,9 +66,12 @@ class Backend {
         return SUCCEEDED(result)&&SUCCEEDED(device.As(&device1));
     }
 public:
-    Backend(std::wstring const& helper,std::wstring const& dll,bool direct=false):client(helper,dll),direct_requested(direct){}
+    Backend(std::wstring const& helper,std::wstring const& dll,bool direct=false):
+        client(direct,[](char const* reason){OutputDebugStringA("[C3X renderer] stage=async-publication-failed reason=");
+            OutputDebugStringA(reason);OutputDebugStringA("\n");},helper,dll),direct_requested(direct){}
     ~Backend(){cadence.stop();}
     bool healthy()const{return client.alive();}
+    void progress(unsigned& accepted,unsigned& completed,unsigned& frames)const{client.progress(accepted,completed,frames);}
     void abandon(){
         cadence.stop();std::lock_guard<std::mutex> lock(gate);
         direct_surface.reset();direct_active=false;visual_active=false;active_window=nullptr;
@@ -91,7 +102,10 @@ public:
         std::lock_guard<std::mutex> lock(gate);return client.render_cpu(frame,identity,output);
     }
     int camera_begin(c3x_renderer_camera_request_v1 const& request,c3x_renderer_i64& ticket){
-        std::lock_guard<std::mutex> lock(gate);return client.camera_begin(request,ticket);
+        std::lock_guard<std::mutex> lock(gate);
+        // Facts observed before the first scoped camera may be superseded by
+        // its adoption. The next native traversal republishes those facts.
+        unit_facts.clear();return client.camera_begin(request,ticket);
     }
     int camera_poll(c3x_renderer_i64 ticket,c3x_renderer_gpu_camera_view_v1& view){
         std::lock_guard<std::mutex> lock(gate);return client.camera_poll(ticket,view);
@@ -208,7 +222,7 @@ public:
             if(presenter.prepare(static_cast<HWND>(request.window),device.Get(),
                                  unsigned(request.width),unsigned(request.height),full))code=client.present(request,frame);
         }
-        auto helper_present_service=phase_probe?client.stats().service_us:0;
+        auto helper_present_service=phase_probe&&!client.asynchronous()?client.stats().service_us:0;
         if(phase_probe)QueryPerformanceCounter(&phase_remote);
         if(code!=C3X_RENDERER_RESULT_OK){if(frame.handle)CloseHandle(reinterpret_cast<HANDLE>(std::uintptr_t(frame.handle)));return code;}
         if(request.action==0){

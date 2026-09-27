@@ -4,6 +4,26 @@ from Renderer.native.native_cpp_test import run_cpp
 
 
 class ObjectCompilerTests(unittest.TestCase):
+    def test_metropolis_wall_uses_compact_radius_until_outer_building_needs_space(self):
+        run_cpp(r'''
+#include "Renderer/native/city_fidelity/runtime.h"
+#include <cassert>
+using namespace c3x_renderer::city_fidelity;
+int main(){
+ Composition city;city.size=2;
+ Instance outer;outer.offset[0]=.60f;outer.bounds[0]=-.06f;
+ outer.bounds[2]=.06f;outer.bounds[1]=-.03f;outer.bounds[3]=.03f;
+ city.instances.push_back(outer);
+ float compact=metropolis_wall_radius(city);
+ assert(compact>=.70f && compact<.71f);
+ city.instances[0].offset[0]=.72f;
+ float expanded=metropolis_wall_radius(city);
+ assert(expanded>.80f && expanded<.82f);
+ city.size=1;
+ assert(metropolis_wall_radius(city)==0.0f);
+}
+''')
+
     def test_city_wall_follows_varying_hill_ground(self):
         run_cpp(r'''
 #include "Renderer/native/object_compiler.h"

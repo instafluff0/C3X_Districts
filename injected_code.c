@@ -23780,8 +23780,8 @@ patch_Animator_draw_map_unit_cursor (Animator * this, int edx, int x, int y)
 		// Native cursor eligibility is Animator+0x1914 bit 0 (GOG).
 		if ((this->field_18E4[12] & 1) == 0 && is->custom_renderer_native_image != NULL) {
 			custom_renderer_zoom_transform_point (&x, &y);
-			int ring[4] = {x, y, custom_renderer_zoom_enabled () ? is->custom_renderer_zoom_tile_width :
-				(p_bic_data->is_zoomed_out ? 64 : 128), 1};
+			// The native cursor FLC has a fixed frame size at each Civ III zoom.
+			int ring[4] = {x, y, p_bic_data->is_zoomed_out ? 64 : 128, 1};
 			is->custom_renderer_native_image (C3X_NATIVE_TACTICAL_RING,
 				p_main_screen_form->Units_Control.Data.Canvas.JGL.Image,
 				p_main_screen_form->Base_Data.Canvas.JGL.Image, ring, NULL, 0);
@@ -27940,36 +27940,17 @@ forward_custom_unit_body (Sprite * sprite, PCX_Image * background, PCX_Image * c
 	// The resident path consumes native image identities before any CPU DC lease.
 	int submitted = translate_custom_renderer_native (C3X_NATIVE_UNIT_DRAW, image, underlay,
 		(RECT *)&draw, (RECT *)body_bounds, flags);
-	if (submitted < 0) return false;
-	int result = submitted ? C3X_RENDERER_RESULT_OK : C3X_RENDERER_RESULT_ERROR;
-	if (result != C3X_RENDERER_RESULT_OK) {
-		// This synchronous renderer fallback owns/releases both DCs; neither
-		// escapes to a native caller. Keep CPU barriers, but preserve admission.
-		int previous = is->custom_renderer_native_operation;
-		is->custom_renderer_native_operation = C3X_NATIVE_SPRITE;
-		HDC dc = image->vtable->acquire_dc (image);
-		if (dc == NULL) { is->custom_renderer_native_operation = previous; return false; }
-		HDC background_dc = (underlay == image) ? dc : underlay->vtable->acquire_dc (underlay);
-		if (background_dc != NULL) {
-			if (is->custom_renderer_unit_draw_playback != NULL)
-				result = is->custom_renderer_unit_draw_playback (&draw, dc, background_dc, body_bounds, flags);
-			else if (is->custom_renderer_unit_draw_expanded != NULL)
-				result = is->custom_renderer_unit_draw_expanded (&draw, dc, background_dc, body_bounds);
-			else result = is->custom_renderer_unit_draw (&draw, dc, background_dc);
-		}
-		if (background_dc != NULL && underlay != image) underlay->vtable->release_dc (underlay, __, 0);
-		image->vtable->release_dc (image, __, 1);
-		is->custom_renderer_native_operation = previous;
+	if (submitted != 1) {
+		log_custom_renderer_event ("unit-publication-failed", C3X_RENDERER_RESULT_ERROR);
+		return false;
 	}
-	if (result == C3X_RENDERER_RESULT_OK) {
-		// Animator unions this same Rect after tick_anim, then erases it next frame.
-		// Its native FLC crop does not cover the custom body and shadow envelope.
-		if (display_unit->Body.Rect.left > body_bounds[0]) display_unit->Body.Rect.left = body_bounds[0];
-		if (display_unit->Body.Rect.top > body_bounds[1]) display_unit->Body.Rect.top = body_bounds[1];
-		if (display_unit->Body.Rect.right < body_bounds[2]) display_unit->Body.Rect.right = body_bounds[2];
-		if (display_unit->Body.Rect.bottom < body_bounds[3]) display_unit->Body.Rect.bottom = body_bounds[3];
-	}
-	return result == C3X_RENDERER_RESULT_OK;
+	// The renderer returns an empty raster envelope for resident scene bodies.
+	// Preserve Animator's native bookkeeping for overlays in the same Rect.
+	if (display_unit->Body.Rect.left > body_bounds[0]) display_unit->Body.Rect.left = body_bounds[0];
+	if (display_unit->Body.Rect.top > body_bounds[1]) display_unit->Body.Rect.top = body_bounds[1];
+	if (display_unit->Body.Rect.right < body_bounds[2]) display_unit->Body.Rect.right = body_bounds[2];
+	if (display_unit->Body.Rect.bottom < body_bounds[3]) display_unit->Body.Rect.bottom = body_bounds[3];
+	return true;
 }
 
 void __fastcall
@@ -29120,11 +29101,8 @@ patch_Map_Renderer_m19_Draw_Tile_by_XY_and_Flags (Map_Renderer * this, int edx, 
 				capture_custom_renderer_topology (param_1, param_5);
 				composite_custom_renderer_frame ();
 			}
-			if (! is->custom_renderer_async_presented) {
-				JGL_Image * failed_image = ((PCX_Image *)this)->JGL.Image;
-				if (failed_image != NULL)
-					PCX_Image_fill_area ((PCX_Image *)this, __, &failed_image->Image_Rect, -2147483647 - 1);
-			}
+			// A pending fresh frame leaves the last completed map in this canvas.
+			// Clearing it here made routine asynchronous redraws alternate with black.
 		}
 	}
 
@@ -30915,8 +30893,12 @@ patch_Map_Renderer_m71_Draw_Tiles (Map_Renderer * this, int edx, int param_1, in
 	if (is->current_config.enable_custom_rendering &&
 	    is->custom_renderer_backend_healthy != NULL &&
 	    ! is->custom_renderer_backend_healthy ()) {
-		log_custom_renderer_event ("renderer64-helper-exited", C3X_RENDERER_RESULT_DEVICE_ERROR);
-		is->current_config.enable_custom_rendering = false;
+		// Keep the last completed GPU view. A renderer failure must not turn
+		// custom rendering off and silently restart native CPU map drawing.
+		if (is->custom_renderer_init_state != IS_INIT_FAILED)
+			log_custom_renderer_event ("renderer64-publication-failed", C3X_RENDERER_RESULT_DEVICE_ERROR);
+		is->custom_renderer_init_state = IS_INIT_FAILED;
+		return;
 	}
 	if (! is->current_config.enable_custom_rendering) {
 		if ((is->custom_renderer_module != NULL) || (is->custom_renderer_tiles != NULL) ||
@@ -30932,10 +30914,8 @@ patch_Map_Renderer_m71_Draw_Tiles (Map_Renderer * this, int edx, int param_1, in
 		return;
 	}
 	if (! ensure_custom_renderer_loaded ()) {
-		is->current_config.enable_custom_rendering = false;
-		unload_custom_renderer ();
-		if (is->custom_renderer_native_image == NULL)
-			patch_Map_Renderer_m71_Draw_Tiles (this, __, param_1, param_2, param_3);
+		// Custom-on owns the map even when startup fails. Preserve that error
+		// instead of changing the user's setting and drawing a native CPU map.
 		return;
 	}
 	if (((is->custom_renderer_qpc_frequency.QuadPart <= 0) &&

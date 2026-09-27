@@ -48,6 +48,17 @@ def merged_centered(parts: list[dict]) -> dict:
     return {"vertices": centered, "topology": {"indices": indices}}
 
 
+def ancient_closed_gate(segment: dict) -> dict:
+    """Turn a source segment onto the gate's long axis without rescaling art."""
+    vertices = []
+    for vertex in segment["vertices"]:
+        x, y, z = vertex["position"]
+        nx, ny, nz = vertex["normal"]
+        vertices.append({**vertex, "position": [y, -x, z],
+                         "normal": [ny, -nx, nz]})
+    return {**segment, "vertices": vertices}
+
+
 def build(output: Path, pack: Path = PACK) -> Path:
     manifest = json.loads((pack / "manifest.json").read_text(encoding="utf-8"))
     catalog = json.loads((pack / "city_adjunct_catalog.json").read_text(encoding="utf-8"))
@@ -70,11 +81,18 @@ def build(output: Path, pack: Path = PACK) -> Path:
             asset_id = (next((asset for asset in kit[role]
                               if asset.endswith("tower_small")), kit[role][0])
                         if role == "tower" else kit[role][0])
+            if era == "ancient" and role == "gate":
+                # The sourced ancient gate is two posts with no arch. Use a
+                # full source masonry span so the Lab perimeter is connected.
+                asset_id = kit["segment"][0]
             parts, texture = source_asset(pack, manifest, asset_id)
             if texture not in textures:
                 textures.append(texture)
-            assets.append(asset_payload(asset_id, textures.index(texture),
-                                        merged_centered(parts)))
+            mesh = merged_centered(parts)
+            if era == "ancient" and role == "gate":
+                mesh = ancient_closed_gate(mesh)
+                asset_id += ":closed_gate"
+            assets.append(asset_payload(asset_id, textures.index(texture), mesh))
             scale = 2.0 if role == "tower" else 2.3
             groups.append(group_payload(f"wall_lab_{era}_{role}",
                                         [(len(assets) - 1, scale)]))

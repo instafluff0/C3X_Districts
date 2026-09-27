@@ -9,6 +9,7 @@ from pathlib import Path
 from Renderer.lab.shared.cities.assets import component
 from Renderer.lab.studies.cities.build_layouts import footprint
 from Renderer.lab.shared.cities.growth import overlaps
+from Renderer.lab.studies.cities.medieval_density import fill
 
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -77,9 +78,22 @@ def main():
         palace["pack"] = args.flat_palace_pack.as_posix()
     palace["rotation"] = math.pi / 6
     palace["offset"] = [0, .26]
+    def box(item):
+        body = component(item["asset"], Path(item["pack"]))
+        return footprint({"low": body["lo"], "high": body["hi"]}, item)
+
+    palette = [(name, scale) for name, scale in (
+        ("Bld_01", 3.3), ("Bld_07", 3.3), ("Bld_05", 3.3),
+        ("Bld_02", 3.3), ("Bld_09", 3.3), ("Bld_011", 2.8))]
     tiers = []
-    for houses, capital_houses in zip((town, city, metro),
-                                      (capital_town, capital_city, capital_metro)):
+    for size, (houses, capital_houses) in enumerate(zip(
+            (town, city, metro),
+            (capital_town, capital_city, capital_metro))):
+        houses = fill(houses, [civic], size, (1, 6, 8)[size],
+                      palette, part, box, radii=(.46, .62, .74))
+        capital_houses = fill(capital_houses, [capital_civic, palace], size,
+                              (2, 7, 9)[size], palette, part, box,
+                              radii=(.46, .62, .74))
         tiers.append({"houses": houses, "capital_houses": capital_houses,
                       "base_centerpiece": civic, "capital_centerpiece": capital_civic,
                       "palace": palace})
@@ -118,8 +132,8 @@ def main():
                         break
                 tier["capital_decorations" if capital else "decorations"] = planted
     design.update(grounding="terrain", slope_limit=64.0,
-                  population_counts=[len(town), len(city), len(metro)],
-                  tier_designs=tiers, houses=metro, base_centerpiece=civic,
+                  population_counts=[len(tier["houses"]) for tier in tiers],
+                  tier_designs=tiers, houses=tiers[-1]["houses"], base_centerpiece=civic,
                   palace=palace, capital_replaces_centerpiece=False)
     for size, tier in enumerate(tiers):
         for capital in (False, True):

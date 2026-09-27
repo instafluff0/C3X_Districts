@@ -5,6 +5,11 @@ the global grid setting. The DLL owns only the copied draw semantics. The user's
 `selected_unit.mov` and `pathfinder.png` supply the visual reference: a broken
 white ellipse with rotating inward markers, red route, destination ellipse and
 turn label. Source media remain external/local; runtime art is generic.
+The installed Civ III `Cursor.flc` confirms a 93×46 frame, 30 frames and an
+83 ms frame interval. Decompiled native cursor draws use the full frame at
+normal zoom and half at native zoom-out. The Lab ellipse sits within that frame
+and stays independent of custom camera zoom. The easing curve is a visual
+approximation of the source frame sequence, rather than a decoded runtime FLC.
 
 There is one current selected unit and one active go-to preview for that unit.
 The destination ring/turn label belongs to that preview, not another selection.
@@ -38,8 +43,9 @@ anchors. Each revealed/explored tile contributes its top two diamond edges once.
 Unseen tiles contribute no geometry. A native map copy removes the previous grid
 before the new setting is applied. No Ctrl+G listener or independent toggle exists.
 
-One instanced GPU pass uses analytic antialias coverage, premultiplied color and
-restrained shadows. A generic Segoe UI glyph atlas is prepared once per device.
+One instanced GPU pass uses analytic antialias coverage and premultiplied color.
+The route stroke has no shadow. The native path label requests a bold size-16
+font; Lab uses a generic Arial Bold glyph atlas prepared once per device.
 There is no terrain/unit mesh input or readback in tactical draws. The temporary
 RGBA and packed-native scratch attachments are each bounded by 2240×1192; input is capped at 16,384 primitives and
 32 label characters. Copied primitive capacity is charged to the existing retained

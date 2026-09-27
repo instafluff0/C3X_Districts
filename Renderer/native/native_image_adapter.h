@@ -515,8 +515,9 @@ public:
             char const* rejection=nullptr;
             if(!admit(object,&rejection)&&copy_rejection_reports++<16){
                 char line[384];auto from=source_rect?rect(source_rect):Rect{};auto to=target_rect?rect(target_rect):Rect{};
-                std::snprintf(line,sizeof(line),"[C3X renderer] stage=native-copy-admission operation=%d reason=%s source_slot=%u destination_slot=%d source=%ux%u destination=%dx%d bits=%d from=%d,%d,%d,%d to=%d,%d,%d,%d\n",
+                std::snprintf(line,sizeof(line),"[C3X renderer] stage=native-copy-admission operation=%d reason=%s source_slot=%u destination_slot=%d source_object=%p destination_object=%p source=%ux%u destination=%dx%d bits=%d from=%d,%d,%d,%d to=%d,%d,%d,%d\n",
                     op,rejection?rejection:"unknown",unsigned(input-images.data()),destination?int(destination-images.data()):-1,
+                    source,object,
                     input->width,input->height,object?field(object,0x38):0,object?field(object,0x3c):0,object?field(object,0x24):0,
                     from.left,from.top,from.right,from.bottom,to.left,to.top,to.right,to.bottom);OutputDebugStringA(line);
             }

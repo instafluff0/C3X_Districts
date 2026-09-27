@@ -142,6 +142,45 @@ at the intended presentation time still need work.
 
 ## Surface and frame lifecycle
 
+### Current asynchronous bridge
+
+`sandbox/async_scene_client.h` owns copied publications between the native
+composition owner and the existing process transport. The game reserves image
+identities locally and publishes creates, uploads, draws, unit facts and presents
+in order. Pending camera captures are replaceable; replacing one moves the newest
+capture behind already accepted reliable commands. Queue capacity is 128 MiB and
+8,192 entries, including in-flight bytes. Exhaustion or consumer failure latches
+an explicit error and preserves the completed GPU display. Automatic recovery
+from that fault is not implemented yet; it needs a fresh scoped scene and native
+surface reconstruction rather than replaying an incomplete queue.
+
+Readiness inspection does not retire the displayed map. Adoption is a separate
+ordered command, so all old-map draws finish before the new map identity becomes
+usable by subsequent commands. Camera results and uploaded arrays are owned
+copies; no game pointer or borrowed surface handle survives publication. Startup,
+definition loading and explicit reset still join transport outside the frame
+path. CPU map readback and CPU unit rasterization are rejected in this mode.
+Native UI assets may still originate in Civ III's CPU surfaces.
+
+The helper's ambient frames invoke the sandbox resident draw directly. They
+refresh copied unit poses and visual time without re-entering full terrain
+preparation. Geometry preparation runs on authoritative scene/camera changes.
+An old retained source keeps its last complete image if a replacement has
+changed the geometry generation; continuity during long cold preparation still
+needs a separately owned resident scene. Displayed-view input timing, modal UI,
+device/process recovery and live gameplay remain integration checkpoints.
+
+The real-JGL fixture can be run with `native.record_gpu_frame --async-bridge`,
+the matching x64 helper/DLL, the local audited JGL binary and a captured scene.
+It pauses the native host and then the renderer for two seconds each, checks
+ordered consumption on resume, rejects CPU map reads, and exercises scrolling.
+`--window-witness-seconds` adds separate sampled compositor evidence. Present
+counts measure successful renderer submissions, not physical scanout. The first
+independence run observed 104 frames during the two-second host pause and native
+publication p95/max of 0.759/1.008 ms during renderer suspension. The user's
+current priority is completing this port while retaining that performance, not
+further FPS tuning.
+
 The Civ III bridge owns the window and creates one DirectComposition surface
 per window generation. Renderer64 owns the device, swap chain, final map image
 and frame scheduler. It receives the surface handle once; normal frames never

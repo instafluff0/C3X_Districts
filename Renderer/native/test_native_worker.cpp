@@ -4,6 +4,23 @@
 #include "native_frame_workload.h"
 #include "test_native_screen.h"
 
+bool async_native_contract(HMODULE module,c3x_renderer_frame_v1 const& frame){
+    try{
+        auto images=reinterpret_cast<c3x_renderer_gpu_images_fn>(GetProcAddress(module,"c3x_renderer_gpu_images"));
+        auto present=reinterpret_cast<c3x_renderer_gpu_present_fn>(GetProcAddress(module,"c3x_renderer_gpu_present"));
+        auto live=reinterpret_cast<c3x_renderer_native_image_fn>(GetProcAddress(module,"c3x_renderer_native_image"));
+        auto render_view=reinterpret_cast<c3x_renderer_render_view_fn>(GetProcAddress(module,"c3x_renderer_render_view"));
+        auto reset=reinterpret_cast<void(*)()>(GetProcAddress(module,"c3x_renderer_reset"));
+        verify(images&&present&&live&&reset,"async native exports");
+        char path[4*MAX_PATH]={};GetEnvironmentVariableA("C3X_RENDERER_GPU_JGL_TEST",path,sizeof(path));
+        c3x_renderer_gpu_frame_v1 placeholder={sizeof(placeholder)};
+        placeholder.ticket=placeholder.session=1;placeholder.width=frame.target_width;placeholder.height=frame.target_height;
+        WorkerClient unused(images,placeholder);
+        c3x_renderer_camera_request_v1 demand={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(demand),&frame,{1,1,1,1}};
+        return native_screen_contract(path,unused,placeholder,present,nullptr,0,0,live,render_view,demand,reset,{});
+    }catch(std::exception const& error){std::fprintf(stderr,"ASYNC_NATIVE_ERROR %s\n",error.what());return false;}
+}
+
 bool native_worker_contract(char const* path,c3x_renderer_gpu_images_fn images,c3x_renderer_gpu_frame_v1& view,c3x_renderer_gpu_render_fn render,c3x_renderer_gpu_present_fn present,c3x_renderer_camera_request_v1 const& request,
                             unsigned const* pixels,int phase_x,int phase_y,std::vector<NativeFrameSample> const& performance_frames){
     try{

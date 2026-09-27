@@ -130,7 +130,7 @@ struct State{
  int submit_locked(std::unique_lock<std::mutex>&,Command){++draws;return draw_result;}
  void snapshot_fresh_units(c3x_renderer_frame_v1 const&,long long,long long){}
  void advance_visual_clock(){}void stop_visual_delivery(){visual_delivery=false;visual_present_pending=false;}
- struct ForegroundCameraPause{ForegroundCameraPause(State&,std::unique_lock<std::mutex>&){}};
+ struct ForegroundCameraPause{ForegroundCameraPause(State&,std::unique_lock<std::mutex>&,char const*){}};
 '''+body+r'''
 };
 int main(){

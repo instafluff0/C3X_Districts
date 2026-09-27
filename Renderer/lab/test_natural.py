@@ -113,7 +113,7 @@ class NaturalInputs(unittest.TestCase):
             if local_pack.exists():
                 args.append(str(ROOT))
             result = subprocess.run(args, check=True, capture_output=True, text=True)
-            self.assertIn("22 invalid inputs, height sampling and 24 lighting phases", result.stdout)
+            self.assertIn("23 invalid inputs, height sampling and 24 lighting phases", result.stdout)
             if local_pack.exists():
                 self.assertIn("PASS production natural payload:", result.stdout)
 

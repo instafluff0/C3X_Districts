@@ -23,8 +23,8 @@ if not exist "Renderer\packs\UnitAnimationRuntime" (
   echo The copied Renderer packs are missing UnitAnimationRuntime. 1>&2
   goto fail
 )
-if not exist "Renderer\packs\NaturalFidelityCutoverControl\natural.bin" (
-  echo The pinned Renderer64 natural pack is missing. Copy the local NaturalFidelityCutoverControl pack before testing. 1>&2
+if not exist "Renderer\packs\NaturalFidelityRuntime\natural.bin" (
+  echo The complete Renderer64 natural pack is missing. Copy the local NaturalFidelityRuntime pack before testing. 1>&2
   goto fail
 )
 if not exist "Renderer\packs\Renderer64CutoverControl\Renderer\native\city_fidelity\terrain.hlsl" (

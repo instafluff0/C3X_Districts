@@ -3,6 +3,7 @@
 #include "input_recording/journal.h"
 #include "input_recording/runtime.h"
 #include "remote_scene_output.h"
+#include <memory>
 
 namespace c3x_remote_scene {
 struct SharedFrame {std::uint64_t handle=0;unsigned width=0,height=0;};
@@ -33,6 +34,7 @@ class Client {
 public:
     Client(std::wstring const& helper,std::wstring const& dll):transport(helper,dll){}
     bool alive()const{return transport.alive();}
+    unsigned frames()const{return transport.frames();}
     c3x_helper_trial::SceneClient::Stats stats()const{return transport.stats();}
     int definitions(char const* root,char const* fallback,char const* scenario,char const* custom){
         c3x_inputs::Writer input;
@@ -63,6 +65,13 @@ public:
             unsigned(input.bytes.size())).code);
         direct_surface_bound=remote&&code==C3X_RENDERER_RESULT_OK;
         return code;
+    }
+    std::shared_ptr<void> retain_surface(HANDLE handle){
+        if(!handle)return {};
+        HANDLE copy=nullptr;
+        if(!DuplicateHandle(GetCurrentProcess(),handle,GetCurrentProcess(),&copy,0,FALSE,DUPLICATE_SAME_ACCESS))
+            throw std::runtime_error("surface publication handle retention failed");
+        return std::shared_ptr<void>(copy,[](void* value){CloseHandle(value);});
     }
     bool surface_pixels(std::vector<unsigned>& pixels,unsigned& width,unsigned& height){
         auto const& response=transport.call_live(unsigned(c3x_inputs::Kind::presentation),2,nullptr,0);
@@ -113,14 +122,16 @@ public:
         if(response.code==C3X_RENDERER_RESULT_PENDING)ticket=response.recorded_ticket;
         return int(response.code);
     }
-    int camera_poll(c3x_renderer_i64 ticket,c3x_renderer_gpu_camera_view_v1& view){
+    int camera_query(c3x_renderer_i64 ticket,c3x_renderer_gpu_camera_view_v1& view,unsigned kind){
         c3x_inputs::Writer input;input(ticket);
-        auto const& response=invoke(unsigned(c3x_inputs::Kind::camera),3,input.bytes.data(),
+        auto const& response=invoke(unsigned(c3x_inputs::Kind::camera),kind,input.bytes.data(),
             unsigned(input.bytes.size()));
         if(response.code!=C3X_RENDERER_RESULT_OK)return int(response.code);
         auto bytes=reply(response);c3x_inputs::Reader reader{bytes};decode_camera(reader,camera_result);
         view=camera_result.value;return C3X_RENDERER_RESULT_OK;
     }
+    int camera_poll(c3x_renderer_i64 ticket,c3x_renderer_gpu_camera_view_v1& view){return camera_query(ticket,view,3);}
+    int camera_ready(c3x_renderer_i64 ticket,c3x_renderer_gpu_camera_view_v1& view){return camera_query(ticket,view,5);}
     int camera_cancel(c3x_renderer_i64 ticket){
         c3x_inputs::Writer input;input(ticket);
         return int(invoke(unsigned(c3x_inputs::Kind::camera),4,input.bytes.data(),

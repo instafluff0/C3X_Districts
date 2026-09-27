@@ -16,6 +16,7 @@ from Renderer.lab.shared.cities.growth import expanded, gap, overlaps
 
 
 ROOT = Path(__file__).resolve().parents[4]
+# Five Civ III slots. "Mediterranean" is the internal source name for Roman.
 STYLES = ("American", "European", "Mediterranean", "Middle Eastern", "Asian")
 ERAS = ("Ancient", "Medieval", "Industrial", "Modern")
 COUNTS_BY_ERA = ((4, 6, 8), (3, 5, 7), (2, 4, 6), (2, 3, 5))
@@ -49,9 +50,9 @@ PALACE_STYLES = (
 )
 
 
-def wall_curve(size: int, count: int) -> list[tuple[float, float, float]]:
+def wall_curve(size: int, count: int, radius: float | None = None) -> list[tuple[float, float, float]]:
     """Equally spaced positions/tangents on a low rounded-square perimeter."""
-    radius = WALL_DRAW_RADII[size]
+    radius = WALL_DRAW_RADII[size] if radius is None else radius
     steps = 2048
     points = []
     distances = [0.0]
@@ -81,7 +82,8 @@ def wall_curve(size: int, count: int) -> list[tuple[float, float, float]]:
     return result
 
 
-def wall_instances(kit: str, size: int = 0) -> list[dict]:
+def wall_instances(kit: str, size: int = 0,
+                   radius: float | None = None) -> list[dict]:
     pack = "Renderer/packs/CityAdjunctsNormalized"
     catalog = json.loads((ROOT / pack / "city_adjunct_catalog.json").read_text())
     parts = catalog["walls"]["kits"][kit]
@@ -89,20 +91,22 @@ def wall_instances(kit: str, size: int = 0) -> list[dict]:
     tower = next((asset for asset in parts["tower"] if asset.endswith("tower_small")),
                  parts["tower"][0])
     result = []
-    ring = wall_curve(size, WALL_SEGMENTS[size])
+    ring = wall_curve(size, WALL_SEGMENTS[size], radius)
     for sector, (x, y, _) in enumerate(ring):
         next_x, next_y, _ = ring[(sector + 1) % len(ring)]
         direction = math.atan2(next_y - y, next_x - x)
-        asset_id = gate if sector == 0 else segment
+        closed_ancient_gate = kit == "ancient" and sector == 0
+        asset_id = segment if closed_ancient_gate else gate if sector == 0 else segment
         body = component(asset_id, Path(pack))
-        axis = 0 if sector == 0 else 1
+        axis = 0 if sector == 0 and not closed_ancient_gate else 1
         length = body["hi"][axis] - body["lo"][axis]
         if length <= 0:
             raise ValueError("wall section has no length")
         # A butt joint leaves a wedge at each turn because the masonry has
         # thickness. A small overlap closes it without a broad footprint.
         scale = math.dist((x, y), (next_x, next_y)) * 1.06 / length
-        rotation = direction if sector == 0 else direction - math.pi / 2
+        rotation = (direction if sector == 0 and not closed_ancient_gate
+                    else direction - math.pi / 2)
         center = [(body["lo"][axis] + body["hi"][axis]) / 2 for axis in (0, 1)]
         c, s = math.cos(rotation), math.sin(rotation)
         result.append({"asset": asset_id, "pack": pack,

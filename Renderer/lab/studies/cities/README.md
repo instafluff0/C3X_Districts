@@ -1,5 +1,10 @@
 # City layout study
 
+The five Civ III culture groups are American, European, Roman, Middle Eastern,
+and Asian. The renderer's internal `mediterranean` slot is the Roman group;
+it is not a sixth culture. The local Civ VI import strategy maps its art
+families into these five slots offline.
+
 This is a Lab proposal for one fixed design per Civ III culture group, era and
 population tier. Each design has base, walls, capital and walls + capital
 variants. Each culture's overview follows the Civ III PCX convention: four
@@ -13,16 +18,18 @@ overhang by up to .05 tile unit so it clears the building plots. Cities and
 metropolises may extend farther. The magenta ground is a PCX-style review aid, not a
 terrain asset.
 
-`layouts.json` freezes 20 culture/era recipes, each with three population
-compositions. Ancient towns/cities/metropolises have 4/6/8 houses; medieval
-3/5/7; industrial 2/4/6; modern 2/3/5. Later eras use taller source bodies,
-while ancient settlements gain density through more smaller buildings. Houses
-can move slightly as the settlement grows, but a given house or palace keeps
-the same scale across population tiers within its era. Each base city has a civic
+`layouts.json` holds the original 20 culture/era baseline recipes. Its ancient
+4/6/8, medieval 3/5/7, industrial 2/4/6 and modern 2/3/5 house counts are
+not a size target for the focused candidates. Use the medieval Roman city's
+roof and body size as the visual target for ancient, medieval and industrial
+art, even when their historical sizes would differ. Increase population by
+adding buildings rather than enlarging existing ones. Houses can move slightly
+as the settlement grows, but a given house or palace keeps the same scale
+across population tiers within its era. Each base city has a civic
 centerpiece; a capital uses the palace on that plot so the building stays
 legible. Buildings and palaces share the same tile-edge facing direction.
 Walls form a complete rounded ring with 16/20/24 joined segments by population
-size, a gate, and four to six small towers. The walls remain below the roofs.
+size, a gate, and small buttresses over every joint. The walls remain below the roofs.
 The source palace selectors are provenance for these proposed mappings, not
 evidence that Civ III civilizations have the same architecture as Civ VI.
 These are culture-group fallbacks; a future city-style profile can override an
@@ -109,6 +116,113 @@ magenta sheet and map-backed replay are in ignored Lab output under
 `Renderer/lab/out/cities/test-biq/gallery/medieval-no-ground-tight-*.png`.
 The replay is not an in-game acceptance screenshot.
 
+The other medieval cultures now have focused Lab candidates in
+`medieval_block_recipe.py`. The full source auditions found 23 usable European,
+31 Asian, 38 American, and 37 Middle Eastern pieces. Earlier generic sheets
+mostly chose isolated, narrow buildings even though each pool has complete
+neighborhood blocks. `flat_blocks.py` identifies deep plinth meshes in
+each block by vertical span rather than source order, then
+omits only those draw bindings in a local derivative pack. The selected palace's
+separate below-ground plinth bindings are also omitted. Source roofs, facades,
+materials, normals, and horizontal scale are retained. Each culture's offline
+profile selects a large central block, substantial flank groups, readable
+individual landmarks, and a matching palace. The curated town starts with five
+surrounding pieces, like the Mediterranean candidate; city and metropolis add
+larger roof groups and infill to suit each source pool. Growth adds buildings
+without resizing existing ones. The magenta sheets are
+under `Renderer/lab/out/cities/medieval-{european,asian,american,middle_eastern}/`
+and do not change `layouts.json` or any production pack.
+
+The current medieval review keeps all five Civ III culture-group candidates
+separate. Roman City/Metropolis layouts have 15/21 surrounding buildings;
+European, Asian, and Middle Eastern have 16/22, while American uses 13/19
+larger neighborhood pieces. Capital layouts have their own checked infill, and
+farm-source trees occupy clear plots. No ground decal or elevated masonry is
+included. European's source `LG_SQ_01` and `SQ_02` blocks contain conspicuously
+misaligned houses baked into single meshes. This candidate selects the more
+coherent `LG_SQ_02` core, removes `SQ_02`, and substitutes larger, consistently
+facing houses for its two small side pieces. The full 12-cell sheets are under
+each culture's `review-dense-sheet/`; native map replays are under
+`Renderer/lab/out/cities/test-biq/gallery/medieval-*-review-dense-*.png`.
+These remain Lab examples for visual review, not promoted art.
+
+The optional, ignored `medieval-source-families/` intake preserves all 23
+installed `ARTERA_CLASSICAL` source culture tags and 676 usable components,
+including families beyond the five provisional Civ III mappings. That source
+catalog is an offline asset-pipeline input; game drawing still selects generic
+pack metadata without source- or civilization-specific branches.
+`ARTERA_CLASSICAL` is Civ VI's shared visual tier for its Classical, Medieval,
+and Renaissance gameplay eras, as recorded in the installed `Eras.artdef`.
+"Medieval" here names our Civ III Middle Ages **target row**, not the historical
+period of every source building. See [the source-era inventory](source_era_inventory.md)
+for the era mapping and tag counts.
+
+For a complete medieval-family audition, `medieval_family_review.py` creates
+one isolated 12-cell layout per installed source tag. The five source tags
+already used by the focused Civ III candidates reuse their curated layouts;
+the other 18 use the same measured-size, collision-checked initial placement
+method and their matching source palaces. `medieval_family_palaces.py` removes
+separate palace plinth and ground-plane bindings where present.
+`medieval_family_build.py` generates each full magenta sheet and a source-frame
+backed candidate pack, and `medieval_family_maps.py` runs five headless
+`test.biq` examples per family. The index and comparison atlases are under
+`Renderer/lab/out/cities/medieval-source-families/review/`. The first-pass
+layouts are for choosing which families merit hand calibration; a source tag
+is not a hard-coded runtime civilization or a new Civ III culture slot.
+The sheet renderer restores each wall part's source center after loading its
+centered preview mesh, so the preview ring matches the connected native ring.
+The larger metropolis cell is framed higher to keep its near wall visible.
+
+## Ancient culture auditions
+
+The focused ancient import now retains all seven ancient source tags in a
+source-neutral local pack: AncientEarth, AncientWood, Babylon, Cree, Gaul,
+Mapuche and DEFAULT. Gaul's 33 resolved city entries duplicate AncientEarth's,
+leaving six distinct component sets to compare. The older five-culture fallback
+reused AncientWood for American and Asian, AncientEarth for European and Middle
+Eastern, and DEFAULT for Roman. The current auditions instead try Mapuche for
+American and Babylon for Middle Eastern, with Cree as an additional alternate.
+These choices are offline mappings for review, not runtime civilization tests.
+
+`ancient_roman_scale_recipe.py` arranges complete source blocks at fixed scales
+around a central civic or palace; `ancient_babylon_recipe.py` arranges the
+Babylon singles because that source family has no complete blocks. Each recipe
+checks town bounds, body overlap and clearance inside the wall ring. The
+current auditions add buildings across population tiers rather than enlarging
+existing roofs: the block families use 5/17/22 houses and Babylon uses
+6/18/26. The city and metropolis tiers have roughly 30 percent more buildings
+than the preceding review, placed within the same wall ring. Capital and
+walls + capital now use additional, independently checked palace-side infill
+plots, so replacing the civic centerpiece does not leave the capital variants
+visibly thinner. The two capital states share the same building list; only the
+wall state differs. AncientWood and
+Babylon use their own vertical conversion to keep
+their taller source silhouettes in proportion with the medieval Roman review
+target; horizontal scale and source roof detail are retained. The
+palace shares the tile-edge facing with the houses. Local derivative packs
+omit the deep source plinths and the separate, low horizontal ground planes in
+both neighborhood blocks and palaces. The palace's modeled architectural
+footing remains part of its building mesh. No city ground decal, runtime paving,
+or elevated masonry is included. A Lab-only wall bundle substitutes a complete stone span
+for the ancient kit's open two-post gate so the native replay has a closed
+perimeter.
+
+The older seven-family source sheet at
+`Renderer/lab/out/cities/ancient-source-families/family-sheet-flat.png`
+predates ground-plane removal. The current four-state/three-size sheets are under
+`Renderer/lab/out/cities/ancient-{american,european,mediterranean,asian,middle_eastern}/roman-scale-sheet-v11/`;
+Cree uses `ancient-source-families/cree-sheet-v11/`.
+The seven tagged source families are shown together, including Gaul's
+AncientEarth duplicate, at
+`Renderer/lab/out/cities/ancient-comparison/ancient-all-families-magenta-v11.png`.
+The matching town/city/metropolis native-size map comparison with the medieval
+Roman reference is at
+`Renderer/lab/out/cities/ancient-comparison/ancient-all-families-test-biq-v11.png`.
+These map shots use captured `test.biq` terrain and the D3D renderer, with
+trace-verified Lab compositions and no renderer fallback. They are not live
+Civ III screenshots or approval images. Retain all families as candidates
+until their appearance is reviewed.
+
 ## Two-stage ground design
 
 Keep each culture/era/population/capital/wall recipe's building anchors, facing,
@@ -192,18 +306,15 @@ changed by these commands.
 
 The flat layout is the canonical visual design. At a real site, capture the
 authoritative tile and neighboring terrain/river/shore information. The current
-Lab hill candidate samples a 9×9 grid beneath each rigid building footprint,
-sets its base above the highest sampled ground, and fills the downhill gap with
-a level-topped masonry retaining face. Its lower edge follows the sampled hill
-shape. The masonry material and UV patch come from the normalized medieval
-wall kit and repeat at a uniform 2× module size; the city source mesh, roof,
-scale and facade channels remain intact. Separate wall pieces sit beyond the
-building foundations and step over the hill contour without retaining masonry
-underneath. These are experimental
-site adaptations and require visual review on several hill shapes. A complete
-legal composition still falls back to the native city if shore, river or steep
-relief makes the immutable design impossible. A future local placement search
-can adjust a building without changing its scale or facing direction.
+Lab candidate places each rigid building above its sampled footprint and leaves
+the terrain directly beneath it visible. The earlier elevated retaining masonry
+and city ground decals are absent from these candidates. Separate wall pieces
+follow sampled terrain per vertex around the buildings. This adaptation still
+needs review on several hill shapes, especially where a steep local slope could
+leave a visible gap beneath a rigid building. A complete legal composition
+falls back to the native city if shore, river or steep relief makes the immutable
+design impossible. A future local placement search can adjust a building
+without changing its scale or facing direction.
 
 Compile each candidate into an isolated Lab pack and render it with the current
 D3D11 path against `test.biq` before asking for visual acceptance. Include

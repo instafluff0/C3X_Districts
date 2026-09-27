@@ -33,6 +33,8 @@ RENDERER_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_STRATEGY = Path(__file__).with_name("city_render_strategy.json")
 DEFAULT_PACK = RENDERER_ROOT / "packs" / "CityComponentsNormalized"
 DEFAULT_REPORT = RENDERER_ROOT / "preview" / "out" / "cities" / "build.json"
+DEFAULT_FAMILY_PACK = RENDERER_ROOT / "lab" / "out" / "cities" / "all-source-families" / "pack"
+DEFAULT_FAMILY_REPORT = RENDERER_ROOT / "lab" / "out" / "cities" / "all-source-families" / "source-report.json"
 SAFE_ID = re.compile(
     r"^[a-z0-9]+(?:[._-]?[a-z0-9]+)*(?:/[a-z0-9]+(?:[._-]?[a-z0-9]+)*)*$"
 )
@@ -215,6 +217,25 @@ def build_candidate_pools(
     return pools
 
 
+def build_source_family_pools(blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Preserve every installed ArtDef culture/era pair before Civ III mapping."""
+    by_tags: dict[tuple[str, str], dict[tuple[str, str], dict[str, Any]]] = defaultdict(dict)
+    for block in blocks:
+        by_tags[(block["source_culture"], block["source_art_era"])].setdefault(
+            (block["package_path"], block["entry"]), block
+        )
+    pools = []
+    for (culture, art_era), candidates in sorted(by_tags.items()):
+        digest = _sha256((culture + "\0" + art_era).encode("utf-8"))[:16]
+        pools.append({
+            "id": f"city/family/{digest}",
+            "source_culture": culture,
+            "source_art_era": art_era,
+            "candidates": sorted(candidates.values(), key=lambda item: (item["package_path"], item["entry"])),
+        })
+    return pools
+
+
 def _component_id(package_path: str, entry: str) -> str:
     digest = _sha256((package_path + "\0" + entry).encode("utf-8"))[:16]
     return f"city/component/{digest}"
@@ -246,14 +267,24 @@ def compile_city_assets(
     focus_pool: str | None = None,
     all_candidates: bool = False,
     allow_rejected_candidates: bool = False,
+    all_source_families: bool = False,
+    source_art_era: str | None = None,
 ) -> dict[str, Any]:
-    if all_candidates and not focus_pool:
+    if all_source_families and focus_pool:
+        raise ValueError("Full family intake cannot use a Civ III focused pool")
+    if source_art_era and not all_source_families:
+        raise ValueError("Source art-era filtering requires family intake")
+    if all_candidates and not (focus_pool or all_source_families):
         raise ValueError("Full source intake requires one focused city pool")
-    if allow_rejected_candidates and not (all_candidates and focus_pool):
+    if allow_rejected_candidates and not (all_source_families or (all_candidates and focus_pool)):
         raise ValueError("Rejected-candidate tolerance requires a focused full intake")
-    strategy = load_strategy(strategy_path)
+    strategy = None if all_source_families else load_strategy(strategy_path)
     blocks = read_city_blocks(assets_root)
-    candidate_pools = build_candidate_pools(blocks, strategy)
+    candidate_pools = build_source_family_pools(blocks) if all_source_families else build_candidate_pools(blocks, strategy)
+    if source_art_era:
+        candidate_pools = [pool for pool in candidate_pools if pool["source_art_era"] == source_art_era]
+        if not candidate_pools:
+            raise ValueError(f"No city source families for {source_art_era}")
     if focus_pool:
         candidate_pools = [pool for pool in candidate_pools if pool["id"] == focus_pool]
         if not candidate_pools:
@@ -273,10 +304,10 @@ def compile_city_assets(
     texture_cache: dict[tuple[str, str], tuple[str, dict[str, Any]]] = {}
     runtime_pools: dict[str, dict[str, Any]] = {}
     pool_reports = []
-    minimum = strategy["proof_components_per_pool"]
+    minimum = 0 if all_source_families else strategy["proof_components_per_pool"]
 
     for pool in candidate_pools:
-        target_count = len(pool["candidates"]) if all_candidates else minimum
+        target_count = len(pool["candidates"]) if (all_candidates or all_source_families) else minimum
         selected = []
         selected_sources = []
         for candidate in pool["candidates"]:
@@ -331,16 +362,26 @@ def compile_city_assets(
             {
                 "pool": pool["id"],
                 "source_culture": pool["source_culture"],
-                "source_art_era": pool["era"]["source_art_era"],
+                "source_art_era": pool["source_art_era"] if all_source_families else pool["era"]["source_art_era"],
                 "candidate_count": len(pool["candidates"]),
                 "selected": selected_sources,
             }
         )
 
-    catalog_path = "city_catalog.json"
-    _write_json(
-        pack / catalog_path,
-        {
+    catalog_path = "city_family_catalog.json" if all_source_families else "city_catalog.json"
+    if all_source_families:
+        catalog = {
+            "schema": "c3x.city_family_catalog.v0",
+            "composition_status": "partial_source_intake" if rejected else "complete_source_intake",
+            "families": {pool["id"]: runtime_pools[pool["id"]] for pool in candidate_pools},
+            "provenance": {
+                "kind": "local_normalized_import",
+                "adapter": "c3x.city_component.v0",
+                "source_format_dependency": None,
+            },
+        }
+    else:
+        catalog = {
             "schema": "c3x.city_catalog.v0",
             "composition_status": (
                 ("partial_focused_candidate_intake" if rejected else "complete_focused_candidate_intake") if all_candidates
@@ -368,17 +409,17 @@ def compile_city_assets(
                 "adapter": "c3x.city_component.v0",
                 "source_format_dependency": None,
             },
-        },
-    )
+        }
+    _write_json(pack / catalog_path, catalog)
     _write_json(
         pack / "manifest.json",
         {
             "schema": "c3x.asset_pack.v0",
-            "name": "CityComponentsNormalized",
-            "display_name": "Normalized City Components",
+            "name": "CitySourceFamiliesNormalized" if all_source_families else "CityComponentsNormalized",
+            "display_name": "Normalized City Source Families" if all_source_families else "Normalized City Components",
             "source_policy": "Local licensed-source import; derived art is not redistributable.",
             "assets": dict(sorted(assets.items())),
-            "city_catalog": catalog_path,
+            "city_family_catalog" if all_source_families else "city_catalog": catalog_path,
         },
     )
     independence_errors = validate_runtime_independence(pack)
@@ -391,7 +432,7 @@ def compile_city_assets(
     unique_bindings = {(item["package_path"], item["entry"]) for item in blocks}
     report = {
         "schema": "c3x.source_city_component_build.v0",
-        "strategy": {"path": str(strategy_path), "sha256": _sha256(strategy_path.read_bytes())},
+        "mode": "all_source_families" if all_source_families else "civ3_fallback_strategy",
         "source_graph": {
             "bindings": len(blocks),
             "unique_components": len(unique_bindings),
@@ -422,6 +463,10 @@ def compile_city_assets(
         "runtime_independence": "passed",
         "runtime_integration": "not_enabled",
     }
+    if not all_source_families:
+        report["strategy"] = {"path": str(strategy_path), "sha256": _sha256(strategy_path.read_bytes())}
+    if source_art_era:
+        report["source_art_era_filter"] = source_art_era
     _write_json(report_path, report)
     return report
 
@@ -437,11 +482,22 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--all-candidates", action="store_true", help="Intake every candidate in the focused source group")
     parser.add_argument("--allow-rejected-candidates", action="store_true",
                         help="For a focused full Lab intake, record failed components and keep the usable pool")
+    parser.add_argument("--all-source-families", action="store_true",
+                        help="Import every installed culture/era family into a generic local Lab catalog")
+    parser.add_argument("--source-art-era", help="With family intake, limit to one source art-era tag")
     args = parser.parse_args(argv)
+    if args.all_source_families:
+        if args.pack == DEFAULT_PACK:
+            args.pack = (DEFAULT_FAMILY_PACK.parent.parent / "ancient-source-families" / "pack"
+                         if args.source_art_era == "ARTERA_ANCIENT" else DEFAULT_FAMILY_PACK)
+        if args.report == DEFAULT_REPORT:
+            args.report = (DEFAULT_FAMILY_REPORT.parent.parent / "ancient-source-families" / "source-report.json"
+                           if args.source_art_era == "ARTERA_ANCIENT" else DEFAULT_FAMILY_REPORT)
     try:
         report = compile_city_assets(args.assets_root, args.strategy, args.pack, args.report,
                                      args.auxiliary_uvs, args.focus_pool, args.all_candidates,
-                                     args.allow_rejected_candidates)
+                                     args.allow_rejected_candidates, args.all_source_families,
+                                     args.source_art_era)
     except (OSError, ValueError, KeyError, TypeError, ET.ParseError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1

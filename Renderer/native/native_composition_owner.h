@@ -28,6 +28,7 @@ class CompositionOwner {
     std::unique_ptr<Adapter<c3x_gpu_images::WorkerClient>> adapter;
     c3x_renderer_gpu_frame_v1 frame={sizeof(frame)};
     bool scene_units=false;
+    void* front_native=nullptr;void* display_native=nullptr;unsigned surface_copy_reports=0,surface_fill_reports=0,cold_stroke_reports=0;
     using Tactical=c3x_renderer::tactical::Input;
     std::function<int(Tactical const&,c3x_renderer_gpu_unit_v1 const&)> tactical;
     Tactical route;void* route_image=nullptr;c3x_renderer_tactical_view_v1 route_view={};
@@ -46,6 +47,18 @@ class CompositionOwner {
         if(present(&r)!=C3X_RENDERER_RESULT_OK)throw std::runtime_error("native display handoff failed");}
     static int field(void* p,unsigned offset){return c3x_native_access::field(p,offset);}
     void clear_camera_capture(){camera_capture={};camera_tiles.clear();camera_topology.clear();}
+    void trace_map(char const* phase,int result,void* image,c3x_renderer_camera_request_v1 const* request=nullptr)const{
+        char line[320];int anchor_x=0,anchor_y=0;
+        if(request&&request->frame&&request->frame->tile_count&&request->frame->tiles){
+            anchor_x=request->frame->tiles[0].anchor_x;anchor_y=request->frame->tiles[0].anchor_y;
+        }
+        std::snprintf(line,sizeof(line),
+            "[C3X renderer] stage=native-map-transaction phase=%s result=%d camera_ticket=%lld front_ticket=%lld pending=%u image_matches_camera=%u image_matches_pending=%u anchor=%d,%d tiles=%u\n",
+            phase,result,static_cast<long long>(camera_ticket),static_cast<long long>(frame.ticket),
+            unsigned(pending!=nullptr),unsigned(image==camera_image),unsigned(image==pending),
+            anchor_x,anchor_y,request&&request->frame?request->frame->tile_count:0u);
+        OutputDebugStringA(line);
+    }
     bool same_camera_capture(c3x_renderer_camera_request_v1 const& request)const{
         if(!camera_capture.struct_size || std::memcmp(&camera_identity,&request.identity,sizeof(camera_identity)))return false;
         auto current=*request.frame,retained=camera_capture;
@@ -100,7 +113,8 @@ public:
         // destination cannot redirect a ready result to a different surface.
         if(!lifetime(C3X_NATIVE_MAP,image,0) || field(image,0x38)!=camera_width || field(image,0x3c)!=camera_height) return C3X_RENDERER_RESULT_BAD_ARGUMENT;
         c3x_renderer_gpu_camera_view_v1 next={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(next)};
-        int result=camera_poll(ticket,&next);if(result!=C3X_RENDERER_RESULT_OK)return result;
+        int result=camera_poll(ticket,&next);
+        if(result!=C3X_RENDERER_RESULT_OK){trace_map("poll",result,image);return result;}
         if(!eligible(image,next.camera.frame))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
         result=prepare_image(image,next.image,next.camera.output,next.pixel_phase_x,next.pixel_phase_y);
         if(result==C3X_RENDERER_RESULT_OK){view=next;camera_ticket=0;camera_image=nullptr;}
@@ -123,7 +137,28 @@ public:
             camera_ticket=0;camera_image=nullptr;clear_camera_capture();navigation.clear();
         }
         if(!image || image==pending){pending=nullptr;navigation.clear();}
+        if(!image || image==front_native)front_native=nullptr;
+        if(!image || image==display_native)display_native=nullptr;
         if(!image || image==route_image){route={};route_image=nullptr;route_text.clear();}
+    }
+    bool defer_cold_stroke(void* image,void const* stroke){
+        // The first copied camera frame has not created its GPU adapter yet.
+        // A line drawn into its future full-screen destination would be
+        // overwritten by the map copy; acquiring a native DC for that line
+        // would instead disqualify the destination for its entire lifetime.
+        if(!scene_units||adapter||camera_ticket<=0||!image||!stroke||!tactical||
+            camera_width<640||camera_height<480||field(image,0x24)!=16||
+            field(image,0x38)!=camera_width||field(image,0x3c)!=camera_height||
+            !lifetime(C3X_NATIVE_MAP,image,0))return false;
+        auto p=static_cast<c3x_renderer_native_stroke const*>(stroke);
+        if(p->width<1||p->width>128||p->dash<0||p->dash>2||
+            p->x1<-32768||p->x1>32767||p->y1<-32768||p->y1>32767||
+            p->x2<-32768||p->x2>32767||p->y2<-32768||p->y2>32767)return false;
+        if(cold_stroke_reports++<8){char line[192];std::snprintf(line,sizeof(line),
+            "[C3X renderer] stage=native-cold-stroke-deferred ticket=%lld image=%p size=%d,%d\n",
+            static_cast<long long>(camera_ticket),image,camera_width,camera_height);
+            OutputDebugStringA(line);}
+        return true;
     }
     void set_tactical(std::function<int(Tactical const&,c3x_renderer_gpu_unit_v1 const&)> draw){tactical=std::move(draw);}
     bool active()const{return adapter!=nullptr;}
@@ -133,6 +168,7 @@ public:
     int map(int action,void* image,c3x_renderer_camera_request_v1 const* request,c3x_renderer_output_v1* output){
         check_thread();
         if(action==C3X_NATIVE_MAP_CANCEL){
+            trace_map("cancel",C3X_RENDERER_RESULT_OK,image);
             if(camera_ticket&&camera_cancel)camera_cancel(camera_ticket);
             camera_ticket=0;camera_image=nullptr;clear_camera_capture();pending=nullptr;navigation.clear();return C3X_RENDERER_RESULT_OK;
         }
@@ -140,7 +176,7 @@ public:
             if(navigation.available()||!pending||image!=pending||!adapter)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
             pending=nullptr;
             if(!adapter->insert_map(image,Id(frame.map_image),area,area.left,area.top,phase_x,phase_y))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
-            client->flush();return C3X_RENDERER_RESULT_OK;
+            front_native=image;client->flush();trace_map("commit",C3X_RENDERER_RESULT_OK,image);return C3X_RENDERER_RESULT_OK;
         }
         if(action==C3X_NATIVE_MAP_PREPARE && request && request->frame && output && navigation.available()){
             if(pending==image && eligible(image,*request->frame) && navigation.take(image,*request,*output))return C3X_RENDERER_RESULT_OK;
@@ -149,6 +185,7 @@ public:
             pending=nullptr;navigation.clear();
         }
         if(action!=C3X_NATIVE_MAP_PREPARE||!request||!request->frame||!output||pending)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        trace_map("prepare",C3X_RENDERER_RESULT_PENDING,image,request);
         auto const& demand=*request->frame;
         if(!eligible(image,demand))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
         if(adapter&&!adapter->admit(image))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
@@ -164,14 +201,16 @@ public:
                 c3x_renderer_gpu_camera_view_v1 ready={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(ready)};
                 int result=poll_camera(image,camera_ticket,ready);
                 if(result==C3X_RENDERER_RESULT_OK){
-                    *output=ready.camera.output;clear_camera_capture();return result;
+                    *output=ready.camera.output;clear_camera_capture();trace_map("adopt",result,image,request);return result;
                 }
                 if(result!=C3X_RENDERER_RESULT_PENDING){camera_ticket=0;camera_image=nullptr;clear_camera_capture();}
+                trace_map("poll-return",result,image,request);
                 return result;
             }
             if(client&&!client->flushed())return C3X_RENDERER_RESULT_BAD_ARGUMENT;
             c3x_renderer_i64 next=0;
             int result=request_camera(image,*request,next);
+            trace_map("begin",result,image,request);
             if(result!=C3X_RENDERER_RESULT_PENDING)return result;
             try{
                 camera_capture=demand;camera_identity=request->identity;
@@ -198,7 +237,12 @@ public:
         // Native unit state/visual capture already ran before this call. Until
         // the first fresh map owns its canvas, there is no map body to compose
         // into; admitting the old raster unit path here would resurrect it.
-        if(op==C3X_NATIVE_UNIT_DRAW&&scene_units&&(!adapter||!adapter->owns(image)))return 1;
+        if(op==C3X_NATIVE_UNIT_DRAW&&scene_units&&(!adapter||!adapter->owns(image))){
+            char line[160];std::snprintf(line,sizeof(line),
+                "[C3X renderer] stage=native-unit-capture result=1 accepted=0 reason=unowned-canvas front_ticket=%lld adapter=%u\n",
+                static_cast<long long>(frame.ticket),unsigned(bool(adapter)));
+            OutputDebugStringA(line);return 1;
+        }
         if(!adapter)return 0;
         if(op==C3X_NATIVE_LINE_TARGET)return tactical&&adapter->owns(image)?1:0;
         if(op==C3X_NATIVE_STROKE){
@@ -234,11 +278,11 @@ public:
         if(op==C3X_NATIVE_TACTICAL_TARGET){
             if(!from||route_image!=image)return 0;auto p=static_cast<int const*>(from);
             destination={projected(p[0],false),projected(p[1],true)};
-            route.ring(destination[0],destination[1],float(route_view.tile_width),false);return 1;
+            route.ring(destination[0],destination[1],float(route_view.native_tile_width),false);return 1;
         }
         if(op==C3X_NATIVE_TACTICAL_ROUTE_END){
             if(image!=route_image)return 0;route_image=nullptr;
-            if(!route_text.empty())route.label(destination[0],destination[1],route_text,std::max(18.f,float(route_view.tile_width)*.26f));
+            if(!route_text.empty())route.label(destination[0],destination[1],route_text,20.f);
             int result=tactical_draw(image,route,source);route={};route_text.clear();return result;
         }
         if(op==C3X_NATIVE_TACTICAL_RING){
@@ -259,12 +303,14 @@ public:
             return tactical_draw(image,capture);
         }
         if(op==C3X_NATIVE_IMAGE_PRESENT){
+            display_native=image;
             auto id=adapter->display_image(image);
             if(!id){
                 // Full-color allocation can fail even for an owned surface.
                 // Materialize it before the caller's private CPU snapshot;
                 // ordinary CPU UI sources simply pass through this barrier.
-                adapter->operation(C3X_NATIVE_BITS,image,nullptr,nullptr,nullptr,0);return 0;
+                adapter->operation(C3X_NATIVE_BITS,image,nullptr,nullptr,nullptr,0);
+                OutputDebugStringA("[C3X renderer] stage=native-ui-present result=0 reason=missing-display-image\n");return 0;
             }
             if(!source)throw std::runtime_error("native transfer has no Graphsy owner");
             auto window=c3x_native_access::window(source);
@@ -273,6 +319,11 @@ public:
             c3x_renderer_gpu_present_v1 r={sizeof(r)};r.ticket=frame.ticket;r.image=std::int64_t(id);r.window=window;
             r.width=width;r.height=height;r.area[0]=rect.left;r.area[1]=rect.top;r.area[2]=rect.right;r.area[3]=rect.bottom;
             client->flush();auto result=present(&r);
+            char line[256];std::snprintf(line,sizeof(line),
+                "[C3X renderer] stage=native-ui-present result=%d ticket=%lld map_image=%lld display_image=%lld area=%ld,%ld,%ld,%ld\n",
+                result,static_cast<long long>(frame.ticket),static_cast<long long>(frame.map_image),
+                static_cast<long long>(id),rect.left,rect.top,rect.right,rect.bottom);
+            OutputDebugStringA(line);
             if(result==C3X_RENDERER_RESULT_OK)return 1;
             // Admission rejection is safe only after the actual display and
             // current native source have separately returned to CPU ownership.
@@ -290,6 +341,10 @@ public:
                 target.clip[3]=frame.height;target.playback_flags=color;
                 int result=unit(static_cast<c3x_renderer_unit_v1 const*>(from),&target,
                     const_cast<int*>(static_cast<int const*>(to)));
+                char line[160];std::snprintf(line,sizeof(line),
+                    "[C3X renderer] stage=native-unit-capture result=%d accepted=%u front_ticket=%lld\n",
+                    result,unsigned(result==C3X_RENDERER_RESULT_OK),static_cast<long long>(frame.ticket));
+                OutputDebugStringA(line);
                 if(result!=C3X_RENDERER_RESULT_OK)
                     throw std::runtime_error("fresh map unit capture failed");
                 return 1;
@@ -297,7 +352,31 @@ public:
             return adapter->draw_unit(unit,frame.ticket,*static_cast<c3x_renderer_unit_v1 const*>(from),image,source,
                 const_cast<int*>(static_cast<int const*>(to)),color)?1:0;
         }
-        return adapter->operation(op,image,source,from,to,color);
+        bool full_copy=op==C3X_NATIVE_COPY&&from&&to&&source&&image&&
+            field(source,0x38)>=640&&field(source,0x3c)>=480&&
+            field(image,0x38)>=640&&field(image,0x3c)>=480;
+        bool source_owned=full_copy&&adapter->owns(source),destination_owned=full_copy&&adapter->owns(image);
+        int result=adapter->operation(op,image,source,from,to,color);
+        if(full_copy&&surface_copy_reports++<32){
+            char line[320];std::snprintf(line,sizeof(line),
+                "[C3X renderer] stage=native-surface-copy result=%d front_ticket=%lld source_front=%u destination_front=%u source_display=%u destination_display=%u source_owned=%u destination_owned=%u from=%ld,%ld,%ld,%ld to=%ld,%ld,%ld,%ld\n",
+                result,static_cast<long long>(frame.ticket),unsigned(source==front_native),unsigned(image==front_native),
+                unsigned(source==display_native),unsigned(image==display_native),unsigned(source_owned),unsigned(destination_owned),
+                static_cast<RECT const*>(from)->left,static_cast<RECT const*>(from)->top,
+                static_cast<RECT const*>(from)->right,static_cast<RECT const*>(from)->bottom,
+                static_cast<RECT const*>(to)->left,static_cast<RECT const*>(to)->top,
+                static_cast<RECT const*>(to)->right,static_cast<RECT const*>(to)->bottom);
+            OutputDebugStringA(line);
+        }
+        if(op==C3X_NATIVE_FILL&&image==front_native&&to&&surface_fill_reports++<16){
+            auto const* bounds=static_cast<RECT const*>(to);char line[192];
+            std::snprintf(line,sizeof(line),
+                "[C3X renderer] stage=native-front-fill result=%d front_ticket=%lld owned=%u color=%u area=%ld,%ld,%ld,%ld\n",
+                result,static_cast<long long>(frame.ticket),unsigned(adapter->owns(image)),color,
+                bounds->left,bounds->top,bounds->right,bounds->bottom);
+            OutputDebugStringA(line);
+        }
+        return result;
     }
     void drain(){
         check_thread();
@@ -305,12 +384,17 @@ public:
         // fails. Retry may release ownership, never revive the cancelled view.
         map(C3X_NATIVE_MAP_CANCEL,nullptr,nullptr,nullptr);
         route={};route_image=nullptr;route_text.clear();
-        if(client){client->flush();release_window();adapter->drain();adapter.reset();client.reset();}
+        if(client){client->flush();release_window();
+            // Renderer64 retires its GPU surfaces; config-off/menu transitions
+            // repaint native content. They never read the custom map into JGL.
+            if(!scene_units)adapter->drain();
+            adapter.reset();client.reset();}
+        front_native=nullptr;display_native=nullptr;
     }
     void abandon(){
         check_thread();
         if(adapter){adapter->abandon();adapter.reset();}
-        client.reset();pending=nullptr;camera_ticket=0;camera_image=nullptr;
+        client.reset();pending=nullptr;camera_ticket=0;camera_image=nullptr;front_native=nullptr;display_native=nullptr;
         route={};route_image=nullptr;route_text.clear();navigation.clear();
     }
 };

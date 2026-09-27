@@ -20,17 +20,17 @@ struct Fixture {
     std::vector<std::uint8_t> pack={'C','3','X','N','A','T','3',0},dds=std::vector<std::uint8_t>(152);
     std::size_t bindings=0,material=0,body=0,recipe=0,surface=0,surface_vertices=0;
     Fixture(){
-        for(unsigned count:{1,1,22,25,3,18})append(pack,count);
+        for(unsigned count:{1,1,32,35,3,18})append(pack,count);
         append(pack,5u);for(char c:std::string("a.dds"))pack.push_back(std::uint8_t(c));
         bindings=pack.size();for(unsigned i=0;i<54;i++)append(pack,0u);
         material=pack.size();append(pack,Material{});
         body=pack.size();
-        for(unsigned i=0;i<22;i++){
+        for(unsigned i=0;i<32;i++){
             append(pack,0u);append(pack,3u);
             for(unsigned j=0;j<3;j++)append(pack,BodyVertex{{float(j),float(i),0},{0,0,1},{0,0}});
         }
         recipe=pack.size();
-        for(unsigned i=0;i<25;i++)append(pack,Recipe{i%22,1,0,i==0?180u:0u,0,0,0,1,0});
+        for(unsigned i=0;i<35;i++)append(pack,Recipe{i%32,1,0,i==0?180u:i==25?121u:0u,0,0,0,1,0});
         surface=pack.size();
         for(unsigned biome=0;biome<3;biome++)append(pack,SurfaceRecipe{biome,2,.2f,1,.8f,.7f,biome*6,6});
         surface_vertices=pack.size();
@@ -52,8 +52,7 @@ struct Fixture {
 };
 
 void valid_data(NaturalData const&data,unsigned surface_count=3){
-    check(((data.bodies.size()==22 && data.recipes.size()==25)||
-           (data.bodies.size()==32 && data.recipes.size()==35)) &&
+    check(data.bodies.size()==32 && data.recipes.size()==35 &&
            data.surface_recipes.size()==surface_count,"body/recipe count");
     check(data.surface_vertices.size()>=18 && data.surface_vertices.size()%3==0,"surface triangle count");
     check(data.fields[data.terrain[30]].sample(.25f,.25f)>0,"surface detail field");
@@ -95,6 +94,7 @@ int main(int argc,char**argv){try{
     unsigned rejected=0;
     auto reject=[&](Fixture const&bad){NaturalData invalid;check(!bad.load(invalid),"malformed input accepted");++rejected;};
     auto bad=fixture;bad.pack[0]='X';reject(bad);
+    bad=fixture;replace(bad.pack,16,22u);replace(bad.pack,20,25u);reject(bad);
     bad=fixture;replace(bad.pack,8,129u);reject(bad);
     bad=fixture;bad.pack[36]='/';reject(bad);
     bad=fixture;bad.dds.resize(147);reject(bad);

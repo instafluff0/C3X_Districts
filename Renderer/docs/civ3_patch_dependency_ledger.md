@@ -1,5 +1,38 @@
 # Civ III patch dependency ledger
 
+## Renderer64 asynchronous publication candidate
+
+`required_user_action: ["After candidate review, stage the three matching Renderer64 binaries and re-run INSTALL.bat"]`.
+This candidate has not been staged or installed. It supersedes the installed
+handoff described below. No new patch symbol, signature, supported-build address,
+or `civ_prog_objects.csv` entry is required.
+
+Reuses `Unit_tick_anim`, `Sprite_draw_unit_body_normal`,
+`Sprite_draw_unit_body_reduced`, `Map_Renderer_m71_Draw_Tiles`,
+`Map_Renderer_m19_Draw_Tile_by_XY_and_Flags`, the existing navigation patches and
+audited JGL image/Graphsy hooks. Unit bodies publish copied scene observations
+without acquiring native DCs. The old synchronous CPU unit fallback is removed.
+Renderer/startup failure keeps custom rendering enabled and reports the failure;
+only an explicit config-off transition returns ownership to native rendering.
+The approved injected compile smoke test passes.
+
+The DLL copies frame/image/unit inputs into a bounded transport queue, reserves
+image IDs locally, and polls copied camera results. Only its transport thread
+waits for Renderer64. The helper draws the sandbox resident scene on its own
+cadence. Queue exhaustion fails explicitly; automatic process/device recovery
+and the live gameplay checkpoint remain unqualified. See
+[scene and motion cutover](renderer64_scene_and_motion.md).
+
+## Pending fresh-frame handoff
+
+`required_user_action: ["Verify the installed candidate in Civ III"]`.
+The existing `Map_Renderer_m19_Draw_Tile_by_XY_and_Flags` hook retains the last
+completed map while a copied camera frame is pending. Renderer64 defers cursor
+and UI repaint work during that camera render so those transfers cannot cancel
+and repeatedly restart it. No new patch symbol, signature, supported-build
+address, or `civ_prog_objects.csv` entry is required. The injected compile check
+and `INSTALL.bat` were run for this candidate.
+
 ## Retire speculative camera-image requests
 
 `required_user_action: ["Re-run INSTALL.bat after staging the matching renderer"]`.

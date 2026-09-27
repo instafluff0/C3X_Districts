@@ -7531,7 +7531,7 @@ public:
                 shadow_basis=c3x_renderer::fidelity::light_frame(environment);
                 float shadow[20]={};std::copy(shadow_basis.begin(),shadow_basis.end(),shadow);
                 shadow[16]=fidelity_profile && fidelity_shadow_control?0.f:1.f;shadow[17]=1;
-                if(fidelity_profile){char detail[384];sprintf_s(detail,"authority=r13 adapter=natural-coverage-r3 mountain_mask=1 biome_field=1 coast_coverage=1 coast_height=1 trees=32 recipes=35 weight=301 msaa=4 anisotropy=16 scale=2 mip_bias=-1 scratch_max=3670016 river_pages_max=16 L=%.6f,%.6f,%.6f receive=%.0f",shadow_basis[8],shadow_basis[9],shadow_basis[10],shadow[16]);trace.write("source-fidelity",detail,true);}
+                if(fidelity_profile){char detail[384];sprintf_s(detail,"authority=r13 adapter=natural-coverage-r3 mountain_mask=1 biome_field=1 coast_coverage=1 coast_height=1 trees=%zu recipes=%zu weight=301 msaa=4 anisotropy=16 scale=2 mip_bias=-1 scratch_max=3670016 river_pages_max=16 L=%.6f,%.6f,%.6f receive=%.0f",natural.bodies.size(),natural.recipes.size(),shadow_basis[8],shadow_basis[9],shadow_basis[10],shadow[16]);trace.write("source-fidelity",detail,true);}
                 context->UpdateSubresource(shadow_settings_buffer, 0, nullptr, shadow, 0, 0);
                 if(fidelity_profile)natural.update(context,environment,shadow_basis.data()+8);
                 shadow_tile_width=frame.tile_width;shadow_tile_height=frame.tile_height;
@@ -9484,8 +9484,11 @@ public:
                         (tile.tile_x+tile.tile_y)/2,(tile.tile_x-tile.tile_y)/2,world_lookup,shore_sample_at,
                         [&](float x,float y){return natural.river_sample({x,y}).distance;},natural_height_at);
                 if(tile_city_composition && city_assets_ready && ground<11)++city_fallbacks_omitted;
+                float composed_wall_radius=tile_city_composition ?
+                    c3x_renderer::city_fidelity::metropolis_wall_radius(*tile_city_composition):0.0f;
                 if(!c3x_renderer::objects::select_improvements(tile,object_assets,ground,site_flags,
-                        mine_assets_ready,farm_assets_ready,city_assets_ready,tile_city_composition!=nullptr,plan))return false;
+                        mine_assets_ready,farm_assets_ready,city_assets_ready,
+                        tile_city_composition!=nullptr,composed_wall_radius,plan))return false;
                 if(farm_assets_ready && (tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_IRRIGATION)){
                     c3x_renderer::objects::settle_farm_fields(plan,tile,object_assets,relief_at_world);
                     c3x_renderer::objects::settle_farm_props(plan,tile,object_assets,relief_at_world);
@@ -10984,15 +10987,42 @@ public:
         std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);
         return adopt_gpu_camera_locked(lock,ticket,view,metadata);
     }
-    int poll_gpu_camera_view(c3x_renderer_i64 ticket,c3x_renderer_gpu_camera_view_v1& view){
+    int poll_gpu_camera_view(c3x_renderer_i64 ticket,c3x_renderer_gpu_camera_view_v1& view,bool inspect_only=false){
+#ifdef C3X_RENDERER64_FRESH
+        // Renderer64 is reached only by the asynchronous transport consumer.
+        // Acquire its short frame boundary once; repeated try-lock polls can
+        // phase-lock with the independent cadence and starve a ready camera.
+        std::unique_lock<std::mutex> calls(call_mutex);
+#else
         std::unique_lock<std::mutex> calls(call_mutex,std::try_to_lock);
         if(!calls.owns_lock())return C3X_RENDERER_RESULT_PENDING;
+#endif
         // Only callers allocate serials, under this gate. Stale identity can be
         // rejected without waiting for the worker's shorter state transition.
         if(ticket<=0 || ticket!=renderer_state.camera_serial)return C3X_RENDERER_RESULT_SUPERSEDED;
+#ifdef C3X_RENDERER64_FRESH
+        std::unique_lock<std::mutex> lock(state_mutex);
+#else
         std::unique_lock<std::mutex> lock(state_mutex,std::try_to_lock);
         if(!lock.owns_lock())return C3X_RENDERER_RESULT_PENDING;
+#endif
         c3x_renderer_gpu_camera_view_v1 next={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(next)};
+        if(inspect_only){
+            if(ticket!=camera_ticket)return C3X_RENDERER_RESULT_SUPERSEDED;
+            if(camera_result!=C3X_RENDERER_RESULT_OK)return camera_result;
+            if(camera_active||!camera_ready.resident.texture)return C3X_RENDERER_RESULT_PENDING;
+            next.camera.version=C3X_RENDERER_CAMERA_VIEW_VERSION;next.camera.struct_size=sizeof(next.camera);
+            next.camera.ticket=ticket;next.camera.identity=camera_ready.identity;
+            next.camera.frame=camera_ready.frame;next.camera.output=camera_ready.output;
+            next.image={sizeof(next.image)};next.image.width=camera_ready.output.width;
+            next.image.height=camera_ready.output.height;next.image.device_generation=camera_ready.output.device_generation;
+            next.image.content_revision=camera_ready.output.content_revision;
+            next.image.presentation_time_ticks=camera_ready.frame.presentation_time_ticks;
+            next.image.prepared=unsigned(camera_ready_prepared);
+            if(camera_ready.fresh){++next.camera.output.visible_animation_count;next.camera.output.request_continuous_redraw=1;}
+            next.pixel_phase_x=camera_ready.phase_x;next.pixel_phase_y=camera_ready.phase_y;
+            view=next;return C3X_RENDERER_RESULT_OK;
+        }
         int result=adopt_gpu_camera_locked(lock,ticket,next.image,next.camera.output,false);
         if(result==C3X_RENDERER_RESULT_OK){
             // The call gate holds both the adopted session and its copied
@@ -11051,7 +11081,12 @@ private:
 public:
     int images_gpu(c3x_renderer_gpu_images_v1 const& request,c3x_renderer_gpu_result_v1& result,unsigned* readback,unsigned capacity){
         std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);
-        start_locked();ForegroundCameraPause pause(*this,lock);
+        start_locked();
+        if(camera_active){char detail[160];std::snprintf(detail,sizeof(detail),
+            "action=%d commands=%u request_ticket=%lld camera_ticket=%lld",
+            request.action,request.command_count,request.ticket,camera_ticket);
+            renderer_state.trace.write("gpu-images-during-camera",detail,true);}
+        ForegroundCameraPause pause(*this,lock,"gpu-images");
         gpu_request=request;gpu_pixels.clear();gpu_commands.clear();
         if(request.action==C3X_GPU_UPLOAD)gpu_pixels.assign(request.pixels,request.pixels+request.pixel_count);
         for(unsigned n=0;n<request.command_count;++n){auto const& c=request.commands[n];
@@ -11069,7 +11104,7 @@ public:
     bool replay_display(std::vector<unsigned>& pixels,unsigned& width,unsigned& height){
         if(!c3x_inputs::replay_assets().enabled||c3x_inputs::runtime().active())return false;
         std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);
-        if(!running)return false;ForegroundCameraPause pause(*this,lock);
+        if(!running)return false;ForegroundCameraPause pause(*this,lock,"replay-display");
         input_display_readback=true;struct Clear {bool& flag;~Clear(){flag=false;}} clear{input_display_readback};
         int result=submit_locked(lock,Command::gpu_images);if(result!=C3X_RENDERER_RESULT_OK)return false;
         pixels.swap(gpu_readback);width=input_display_width;height=input_display_height;return true;
@@ -11317,7 +11352,7 @@ public:
         // animate the old display. Current demand gets the worker first.
         if(camera_active || camera_pending || (camera_gpu && camera_result==C3X_RENDERER_RESULT_OK &&
             camera_ticket!=gpu_camera_front_ticket))return C3X_RENDERER_RESULT_PENDING;
-        ForegroundCameraPause pause(*this,lock);
+        ForegroundCameraPause pause(*this,lock,"visual-frame");
         auto* session=renderer_state.gpu_composition.get();
         if(!session||!session->visual_active()||!gpu_presenter.view())return C3X_RENDERER_RESULT_PENDING;
         advance_visual_clock();
@@ -11351,6 +11386,10 @@ public:
             out(std::int32_t(request.action));out(request.ticket);out(request.image);out(std::int32_t(request.width));out(std::int32_t(request.height));for(auto v:request.area)out(std::int32_t(v));
             out.u32(gpu_presenter.caller_thread()?1:0);});
         int code=[&]()->int{
+        if(camera_active || camera_pending){char detail[160];std::snprintf(detail,sizeof(detail),
+            "action=%d request_ticket=%lld camera_ticket=%lld active=%u pending=%u",
+            request.action,request.ticket,camera_ticket,unsigned(camera_active),unsigned(camera_pending));
+            renderer_state.trace.write("ui-present-camera-state",detail,true);}
         start_locked();drain_camera_locked(lock,gpu_presentation);
         if(!gpu_presenter.caller_thread())return C3X_RENDERER_RESULT_BAD_ARGUMENT;
         if(request.action==1){stop_visual_delivery();if(renderer_state.gpu_composition)renderer_state.gpu_composition->stop_visuals();gpu_presenter.reset();return C3X_RENDERER_RESULT_OK;}
@@ -11384,7 +11423,13 @@ public:
             }else stop_visual_delivery();
             return result;
         }catch(...){stop_visual_delivery();session->stop_visuals();return C3X_RENDERER_RESULT_ERROR;}
-        }();if(code==C3X_RENDERER_RESULT_OK&&request.action==0)c3x_inputs::runtime().gameplay();return input.result(code);
+        }();
+        if(request.action==0){char detail[192];std::snprintf(detail,sizeof(detail),
+            "result=%d request_ticket=%lld front_ticket=%lld gpu_front_ticket=%lld visual_active=%u",
+            code,request.ticket,camera_front_ticket,gpu_camera_front_ticket,
+            unsigned(renderer_state.gpu_composition&&renderer_state.gpu_composition->visual_active()));
+            renderer_state.trace.write("ui-present-result",detail,true);}
+        if(code==C3X_RENDERER_RESULT_OK&&request.action==0)c3x_inputs::runtime().gameplay();return input.result(code);
     }
 
     // Native final transfer is independent of map publication. Existing CPU
@@ -11400,7 +11445,7 @@ public:
         if(!gpu_presenter.caller_thread())return input.result(C3X_RENDERER_RESULT_BAD_ARGUMENT);
         if(!screen){
             if(renderer_state.device){
-                ForegroundCameraPause pause(*this,lock);
+                ForegroundCameraPause pause(*this,lock,"native-screen-release");
                 gpu_present={sizeof(gpu_present)};gpu_present.action=2;
                 int result=submit_locked(lock,Command::gpu_present);
                 if(result!=C3X_RENDERER_RESULT_OK)return input.result(result);
@@ -11411,7 +11456,7 @@ public:
         // Final UI transfer has foreground ownership just like a demanded
         // unit. Interruptible preparation resumes with its immutable camera
         // request intact; GPU queue activity never selects a different presenter.
-        ForegroundCameraPause pause(*this,lock);
+        ForegroundCameraPause pause(*this,lock,"native-screen-upload");
         // Fence any bounded tile/helper work before reading the device on the
         // window thread. The queue remains paused through DXGI presentation.
         screen_upload=false;
@@ -11876,8 +11921,8 @@ public:
 
     int draw_tactical(c3x_renderer::tactical::Input const& capture,c3x_renderer_gpu_unit_v1 const& target){
         std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);
-        start_locked();ForegroundCameraPause pause(*this,lock);
         c3x_inputs::Call input(c3x_inputs::Kind::tactical,0,[&](auto& out){c3x_inputs::target_fields(out,target);c3x_inputs::tactical(out,capture);});
+        start_locked();ForegroundCameraPause pause(*this,lock,"tactical");
         tactical_input=capture;tactical_target=target;advance_visual_clock();
         return input.result(submit_locked(lock,Command::tactical));
     }
@@ -11887,6 +11932,12 @@ public:
         std::lock_guard<std::mutex> call_guard(call_mutex);
         std::unique_lock<std::mutex> lock(state_mutex);
         if(!renderer_state.unit_rendering_enabled)return C3X_RENDERER_RESULT_ERROR;
+#ifdef C3X_RENDERER64_FRESH
+        char legacy_unit_control[8]{};
+        bool const legacy_unit=GetEnvironmentVariableA("C3X_RENDERER64_LEGACY",
+            legacy_unit_control,sizeof(legacy_unit_control)) && !std::strcmp(legacy_unit_control,"1");
+        if(!legacy_unit&&!gpu_target)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+#endif
         if(playback_flags&C3X_RENDERER_UNIT_HIDDEN){
             if(!(playback_flags&C3X_RENDERER_UNIT_STATE_CAPTURED))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
             unit_instances.forget(request.unit_id);unit_pixels_queue.forget(request.unit_id);
@@ -11903,6 +11954,21 @@ public:
             renderer_state.trace.write("unit-capture-failed",detail,true);
             return C3X_RENDERER_RESULT_ERROR;
         }
+#ifdef C3X_RENDERER64_FRESH
+        if(!legacy_unit){
+            // Observation is independent of GPU canvas admission and never
+            // touches scratch storage belonging to an active camera render.
+            auto const& captured=gpu_publication.frame.api_version?gpu_publication.frame:
+                camera_pending?camera_pending_frame:job_frame;
+            unit_instances.bind_scene_camera(selection.id,captured);
+            if(bounds){bounds[0]=bounds[2]=request.body_x;bounds[1]=bounds[3]=request.body_y;}
+            char detail[128];std::snprintf(detail,sizeof(detail),
+                "id=%d action=%d generation=%llu separate_raster=0",
+                request.unit_id,request.action,static_cast<unsigned long long>(unit_instances.generation()));
+            renderer_state.trace.write("fresh-unit-accepted",detail,true);
+            return C3X_RENDERER_RESULT_OK;
+        }
+#endif
         job_unit_selection=selection;
         if(gpu_target){
             auto const& displayed=gpu_publication.frame.api_version?gpu_publication.frame:job_frame;
@@ -11921,31 +11987,6 @@ public:
                                    projection,definition->minimum_canvas))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
         }
         if(cpu_pixels){*cpu_x=job_unit.body_x;*cpu_y=job_unit.body_y;}
-#ifdef C3X_RENDERER64_FRESH
-        char legacy_unit_control[8]{};
-        bool const legacy_unit=GetEnvironmentVariableA("C3X_RENDERER64_LEGACY",
-            legacy_unit_control,sizeof(legacy_unit_control)) && !std::strcmp(legacy_unit_control,"1");
-        if(gpu_target && !legacy_unit){
-            if(!gpu_publication.fresh || renderer_state.fresh_path_failed){
-                renderer_state.trace.write("fresh-unit-required",
-                    "no fresh map publication; explicit legacy control required for recovery",true);
-                return C3X_RENDERER_RESULT_ERROR;
-            }
-            if(bounds){
-                int scale=job_unit.projection_scale_milli>0?job_unit.projection_scale_milli:
-                    (job_unit.reduced?500:1000);
-                bounds[0]=job_unit.body_x;bounds[1]=job_unit.body_y;
-                bounds[2]=job_unit.body_x+job_unit.sprite_width*scale/1000;
-                bounds[3]=job_unit.body_y+job_unit.sprite_height*scale/1000;
-            }
-            char detail[128];std::snprintf(detail,sizeof(detail),
-                "id=%d action=%d generation=%llu separate_raster=0",
-                job_unit.unit_id,job_unit.action,
-                static_cast<unsigned long long>(unit_instances.generation()));
-            renderer_state.trace.write("fresh-unit-accepted",detail,true);
-            return C3X_RENDERER_RESULT_OK;
-        }
-#endif
         LARGE_INTEGER started={},finished={};QueryPerformanceCounter(&started);
         // Cached unit pixels are an independent CPU publication. Do not cancel
         // an exact ambient map render merely to copy a pose already in memory.
@@ -11955,7 +11996,7 @@ public:
         }
         unit_gpu_preparation=gpu_target!=nullptr;
         if(gpu_target){
-            ForegroundCameraPause pause(*this,lock);gpu_unit=*gpu_target;
+            ForegroundCameraPause pause(*this,lock,"gpu-unit");gpu_unit=*gpu_target;
             int code=submit_locked(lock,Command::gpu_unit);
             auto const& pose=renderer_state.unit_bodies.resident_pose;
             if(code==C3X_RENDERER_RESULT_OK&&bounds){bounds[0]=job_unit.body_x;bounds[1]=job_unit.body_y;bounds[2]=job_unit.body_x+renderer_state.unit_bodies.image_width;bounds[3]=job_unit.body_y+renderer_state.unit_bodies.image_height;}
@@ -12008,7 +12049,7 @@ public:
                 renderer_state.unit_bodies.cached_pose_entries(),renderer_state.unit_bodies.cached_pose_bytes());
             renderer_state.trace.write("unit-cache-only-miss",detail,true);
         }
-        ForegroundCameraPause pause(*this,lock);
+        ForegroundCameraPause pause(*this,lock,"cpu-unit");
         int result=submit_locked(lock,Command::unit);
         lock.unlock();
         if(result==C3X_RENDERER_RESULT_OK){
@@ -12324,10 +12365,24 @@ private:
     struct ForegroundCameraPause {
         RendererWorker& owner;
         std::unique_lock<std::mutex>& lock;
-        ForegroundCameraPause(RendererWorker& worker,std::unique_lock<std::mutex>& gate):owner(worker),lock(gate) {
+        ForegroundCameraPause(RendererWorker& worker,std::unique_lock<std::mutex>& gate,char const* reason):owner(worker),lock(gate) {
             owner.camera_paused=true;
             owner.pause_ahead_locked(lock,owner.gpu_presentation);
+#ifdef C3X_RENDERER64_FRESH
+            // This caller is the renderer's transport consumer, never Civ III.
+            // Finish its current camera before servicing ordered image work;
+            // repeated UI draws must not cancel and restart the same render.
+            (void)reason;
+            owner.foreground_pending.store(true,std::memory_order_relaxed);
+            owner.completed.wait(lock,[&]{return !owner.camera_active;});
+            return;
+#endif
             bool const interrupted=owner.camera_active;
+            if(interrupted){char detail[192];std::snprintf(detail,sizeof(detail),
+                "reason=%s ticket=%lld pending=%u front=%lld gpu_front=%lld",
+                reason,owner.camera_ticket,unsigned(owner.camera_pending),
+                owner.camera_front_ticket,owner.gpu_camera_front_ticket);
+                owner.renderer_state.trace.write("camera-interrupt",detail,true);}
             owner.foreground_pending.store(true,std::memory_order_relaxed);
             if(interrupted)owner.camera_cancelled.store(true,std::memory_order_relaxed);
             owner.completed.wait(lock,[&]{return !owner.camera_active;});
@@ -12502,6 +12557,40 @@ private:
                 [](auto const& pose){return pose.animated;})?60:15;};
         auto origin=visual_ticks,clock=RendererState::resource_clock(gpu_publication.frame,water_samples());
         auto unit_generation=unit_instances.generation();
+#ifdef C3X_RENDERER64_FRESH
+        if(fresh_map){
+            // Match the sandbox's resident frame loop: scene preparation occurs
+            // on authoritative changes, never on an ambient display tick.
+            auto geometry=renderer_state.cached_signature.geometry;
+            auto epoch=renderer_state.tile_geometry_epoch;
+            auto settings=renderer_state.geometry_viewport_settings;
+            Microsoft::WRL::ComPtr<ID3D11Texture2D> texture=renderer_state.gpu_map_texture;
+            Microsoft::WRL::ComPtr<ID3D11RenderTargetView> target;
+            if(!texture||FAILED(renderer_state.device->CreateRenderTargetView(texture.Get(),nullptr,&target)))
+                throw std::runtime_error("fresh resident display target unavailable");
+            return [this,capture,selected,origin,x,y,w,h,geometry,epoch,settings,texture,target]
+                (long long ticks,long long frequency)->Sampled{
+                c3x_renderer_frame_v1 view={};
+                if(!capture->valid()||!selected->sample(ticks,frequency,origin,view))return {};
+                // A prepared replacement has a different owner. Keep the last
+                // coherent old sample until the ordered camera adoption.
+                if(renderer_state.cached_signature.geometry!=geometry||renderer_state.tile_geometry_epoch!=epoch)return {};
+                auto frame=capture->frame();frame.presentation_time_ticks=view.presentation_time_ticks;
+                frame.presentation_frequency=view.presentation_frequency;
+                snapshot_fresh_units(frame,ticks,frequency);
+                struct RestoreViewport {
+                    decltype(renderer_state.geometry_viewport_settings)& value;
+                    decltype(renderer_state.geometry_viewport_settings) previous;
+                    ~RestoreViewport(){value=previous;}
+                } restore{renderer_state.geometry_viewport_settings,renderer_state.geometry_viewport_settings};
+                renderer_state.geometry_viewport_settings=settings;
+                bool drawn=c3x_renderer64_render_fresh(frame,target.Get());
+                if(!drawn)throw std::runtime_error("fresh resident frame failed");
+                ++visual_map_samples;
+                return Sampled::bgra(texture.Get(),{x,y,x+w,y+h});
+            };
+        }
+#endif
         return [this,capture,selected,origin,clock,unit_generation,x,y,w,h,water_samples](long long ticks,long long frequency)mutable -> Sampled{
             c3x_renderer_frame_v1 frame={},view={};
             if(!capture->valid() || !selected->sample(ticks,frequency,origin,view)){
@@ -13794,6 +13883,11 @@ extern "C" __declspec(dllexport) int c3x_renderer_set_backend_mode(int renderer6
 extern "C" __declspec(dllexport) int c3x_renderer_backend_healthy(){
     return !remote_renderer||remote_renderer->healthy()?1:0;
 }
+extern "C" __declspec(dllexport) int c3x_renderer_async_progress(unsigned* accepted,unsigned* completed,unsigned* frames){
+    if(!accepted||!completed||!frames||!remote_renderer)return C3X_RENDERER_RESULT_PENDING;
+    remote_renderer->progress(*accepted,*completed,*frames);
+    return remote_renderer->healthy()?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_DEVICE_ERROR;
+}
 
 int c3x_renderer_world_update(int old_x,int old_y,int new_x,int new_y,bool force){
     try{
@@ -14301,6 +14395,13 @@ extern "C" __declspec(dllexport) int c3x_renderer_trial_world_query(c3x_renderer
     if(!page||page->struct_size!=sizeof(*page))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
     return get_renderer_worker().trial_world_query(*page);
 }
+extern "C" __declspec(dllexport) int c3x_renderer_trial_camera_ready(
+    c3x_renderer_i64 ticket,c3x_renderer_gpu_camera_view_v1* view){
+    if(!view||view->version!=C3X_RENDERER_CAMERA_VIEW_VERSION||view->struct_size!=sizeof(*view))
+        return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    try{return get_renderer_worker().poll_gpu_camera_view(ticket,*view,true);}
+    catch(...){return C3X_RENDERER_RESULT_ERROR;}
+}
 extern "C" __declspec(dllexport) int c3x_renderer_trial_world_submit(
     c3x_renderer_world_page_v1 const* page,int callback_result){
     if(!page||page->struct_size!=sizeof(*page)||page->count>128||(page->count&&!page->tiles))
@@ -14401,9 +14502,19 @@ extern "C" __declspec(dllexport) int c3x_renderer_gpu_present(c3x_renderer_gpu_p
 // exclusive owner; before that, completed CPU screens retain compatibility
 // presentation. A negative result denies CPU access after a failed barrier.
 int renderer_native_image_impl(int operation,void* image,void* source,void const* from,void const* to,unsigned color){
+    if(operation==C3X_NATIVE_UNIT_DRAW&&remote_renderer_requested()){
+        if(!from||!to)return -1;
+        auto const& unit=*static_cast<c3x_renderer_unit_v1 const*>(from);
+        if(unit.struct_size!=sizeof(unit)||unit.unit_key[63]||(color&~7u))return -1;
+        c3x_renderer_gpu_unit_v1 capture={sizeof(capture)};capture.playback_flags=color;
+        try{return remote_renderer_backend()->unit(unit,capture,
+            const_cast<int*>(static_cast<int const*>(to)))==C3X_RENDERER_RESULT_OK?1:-1;}
+        catch(...){return -1;}
+    }
     if(operation==C3X_NATIVE_TACTICAL_CAPABLE)return native_composition&&native_composition->active()?1:0;
     if(operation==C3X_NATIVE_VISUAL_POLICY)return remote_renderer_requested()?remote_renderer_backend()->visual_policy(color):
         renderer_worker?renderer_worker->visual_policy(color):0;
+    if(operation==C3X_NATIVE_STROKE && native_composition && native_composition->defer_cold_stroke(image,from))return 1;
     if(operation==C3X_NATIVE_IMAGE_DRAIN){if(!drain_native_composition())return -1;}
     else if(native_composition&&native_composition->active()){
         try{
@@ -14461,6 +14572,14 @@ extern "C" __declspec(dllexport) int c3x_renderer_native_image(int operation,voi
         c3x_native_access::window(source);
     auto token=c3x_recording::journal().native(c3x_recording::native_begin,operation,image,source,color);
     auto result=renderer_native_image_impl(operation,image,source,from,to,color);
+    if(operation==C3X_NATIVE_IMAGE_PRESENT||operation==C3X_NATIVE_UNIT_DRAW||
+       operation==C3X_NATIVE_TACTICAL_RING||operation==C3X_NATIVE_TACTICAL_GRID||
+       operation==C3X_NATIVE_TACTICAL_ROUTE_END){
+        char detail[176];std::snprintf(detail,sizeof(detail),
+            "[C3X renderer] stage=native-operation op=%d result=%d owner=%u color=%u source=%u\n",
+            operation,result,unsigned(native_composition&&native_composition->active()),color,unsigned(source!=nullptr));
+        OutputDebugStringA(detail);
+    }
     if(token)c3x_recording::event(c3x_recording::native_end,0,[&](auto& b){c3x_recording::u64(b,token);c3x_recording::u32(b,unsigned(result));});
     input.result(result,[&](auto& out){if(operation==C3X_NATIVE_UNIT_DRAW&&to&&result==1)for(unsigned n=0;n<4;++n)out(static_cast<int const*>(to)[n]);});
     // The lifetime notification and adapter destruction refer to the same
@@ -14471,8 +14590,10 @@ extern "C" __declspec(dllexport) int c3x_renderer_native_image(int operation,voi
 
 // Existing unit playback and pose cache, with GPU-native destination ownership.
 extern "C" __declspec(dllexport) int c3x_renderer_gpu_unit(c3x_renderer_unit_v1 const* unit,c3x_renderer_gpu_unit_v1 const* target,int* bounds){
+    bool const capture=target&&target->ticket==0&&target->destination==0&&target->background==0&&
+        target->detail==0&&target->background_detail==0&&target->clip[0]==0&&target->clip[1]==0&&target->clip[2]==0&&target->clip[3]==0;
     if(!unit||unit->struct_size!=sizeof(*unit)||unit->unit_key[63]!=0||!target||target->struct_size!=sizeof(*target)||!bounds||
-       target->ticket<=0||target->destination<=0||target->background<=0||target->detail<0||target->background_detail<0||
+       (!capture&&(target->ticket<=0||target->destination<=0||target->background<=0))||target->detail<0||target->background_detail<0||
        target->clip[0]>target->clip[2]||target->clip[1]>target->clip[3]||(target->playback_flags&~7u)||
        unit->body_x<-32768||unit->body_x>32768||unit->body_y<-32768||unit->body_y>32768)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
     if(!renderer_worker&&!remote_renderer_requested())return C3X_RENDERER_RESULT_ERROR;
@@ -14488,16 +14609,25 @@ int& native_lifetime_outcome(){thread_local int value=0;return value;}
 extern "C" __declspec(dllexport) int c3x_renderer_native_lifetime(int operation,void* image,int context){
     static c3x_native_images::Lifetimes lifetimes;
     c3x_inputs::Call input(c3x_inputs::Kind::native_operation,1,[&](auto& out){out(std::int32_t(operation));out.u32(c3x_inputs::runtime().object(image));out(std::int32_t(context));out.u32(c3x_inputs::runtime().thread());});
-    bool revoked=false;
-    bool eligible=lifetimes.observe(operation,image,context,GetCurrentThreadId(),&revoked);
+    bool revoked=false,early_escape=false;
+    bool eligible=lifetimes.observe(operation,image,context,GetCurrentThreadId(),&revoked,&early_escape);
     c3x_recording::journal().native(c3x_recording::lifetime,operation,image,nullptr,unsigned(context),int(eligible)|(int(revoked)<<1),operation==C3X_NATIVE_DESTROY);
-    // Only the first ownership loss of an admitted/demanded lifetime matters.
-    // Keep module-relative frames, never native pixels, paths or game pointers.
-    if(revoked){static std::atomic<unsigned> reports{0};
-        if(reports.fetch_add(1,std::memory_order_relaxed)<16){
+    // A fullscreen UI canvas may escape before its first map copy. Trace that
+    // first loss too; otherwise later admission only reports "lifetime".
+    // Keep bounded module-relative frames, never pixel contents or file paths.
+    if(revoked||early_escape){static std::atomic<unsigned> reports{0};
+        // Some contract probes deliberately use opaque integer identities.
+        // ReadProcessMemory makes this diagnostic optional for those values
+        // and never dereferences an unverified game pointer.
+        int width=0,height=0;SIZE_T bytes=0;
+        bool dimensions=!early_escape ||
+            (ReadProcessMemory(GetCurrentProcess(),reinterpret_cast<void const*>(reinterpret_cast<std::uintptr_t>(image)+0x38),&width,sizeof(width),&bytes)&&bytes==sizeof(width)&&
+             ReadProcessMemory(GetCurrentProcess(),reinterpret_cast<void const*>(reinterpret_cast<std::uintptr_t>(image)+0x3c),&height,sizeof(height),&bytes)&&bytes==sizeof(height));
+        if(dimensions&&(revoked||(width>=640&&height>=480))&&reports.fetch_add(1,std::memory_order_relaxed)<128){
             void* frames[16]={};USHORT count=CaptureStackBackTrace(0,16,frames,nullptr);
             char line[1024];int used=std::snprintf(line,sizeof(line),
-                "[C3X renderer] stage=native-ownership-revoked operation=%d context=%d stack=",operation,context);
+                "[C3X renderer] stage=native-ownership-escape phase=%s image=%p size=%d,%d operation=%d context=%d stack=",
+                revoked?"after-demand":"before-demand",image,width,height,operation,context);
             for(USHORT n=0;n<count&&used<int(sizeof(line))-64;++n){HMODULE module=nullptr;
                 GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
                     reinterpret_cast<char const*>(frames[n]),&module);

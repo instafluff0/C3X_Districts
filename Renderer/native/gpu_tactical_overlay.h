@@ -51,11 +51,10 @@ float glyph(float2 q,Primitive p){float2 uv=(q-p.shape.xy)/p.shape.zw;
  if(any(uv<0)||any(uv>1))return 0;uint g=(uint)p.style.y;
  return font.SampleLevel(linearClamp,(float2(g%16,g/16)+uv)/float2(16,6),0).r;}
 float4 pixel(V i):SV_Target{
- Primitive p=items[i.id];float a=0,shadow=0;
+ Primitive p=items[i.id];float a=0,marker=0,shadow=0;
  if(p.style.x<.5){float dist=segment(i.location,p.shape.xy,p.shape.zw);a=coverage(dist,p.style.y*.5);
-  if(p.style.z>0)shadow=coverage(segment(i.location-float2(0,1.3),p.shape.xy,p.shape.zw),p.style.y*.5+1.25)*.65;
- }else if(p.style.x<1.5){float phase=p.style.z>0?clock.x*.9:0;
-  a=max(ring(i.location,p),arrow(i.location,p,phase)*.88);
+ }else if(p.style.x<1.5){float phase=p.style.z>0?clock.x:0;
+  a=ring(i.location,p);marker=arrow(i.location,p,phase);
   shadow=max(ring(i.location-float2(0,1.4),p),arrow(i.location-float2(0,1.4),p,phase))*.5;
  }else if(p.style.x<2.5){a=glyph(i.location,p);shadow=max(max(glyph(i.location+float2(-1,0),p),glyph(i.location+float2(1,0),p)),max(glyph(i.location+float2(0,-1),p),glyph(i.location+float2(0,1.5),p)))*.9;
  }else {float2 v=p.shape.zw-p.shape.xy;float lengthV=max(length(v),.001);float along=dot(i.location-p.shape.xy,v)/lengthV;
@@ -64,7 +63,9 @@ float4 pixel(V i):SV_Target{
   if(p.style.z>.5&&p.style.z<1.5){float step=along*max(abs(v.x),abs(v.y))/lengthV;if(fmod(step,10)<5)a=0;}
   else if(p.style.z>1.5&&fmod(along,4*p.style.y)>=3*p.style.y)a=0;
  }
- float alpha=a*p.color.a;return over(float4(p.color.rgb*alpha,alpha),float4(.025,.035,.045,1)*shadow);
+ float alpha=a*p.color.a;float4 fill=float4(p.color.rgb*alpha,alpha);
+ float markAlpha=marker*.78;fill=over(float4(float3(.26,.27,.28)*markAlpha,markAlpha),fill);
+ return over(fill,float4(.025,.035,.045,1)*shadow);
 })";
         Ptr<ID3DBlob> v,p,error;
         auto compile=[&](char const* entry,char const* profile,Ptr<ID3DBlob>& out){
@@ -84,7 +85,7 @@ float4 pixel(V i):SV_Target{
         void* bits=nullptr;HBITMAP bitmap=CreateDIBSection(dc,&info,DIB_RGB_COLORS,&bits,nullptr,0);
         if(!dc||!bitmap||!bits)throw std::runtime_error("tactical font allocation");
         auto old=SelectObject(dc,bitmap);std::memset(bits,0,1024*384*4);
-        HFONT face=CreateFontW(-54,0,0,0,FW_SEMIBOLD,FALSE,FALSE,FALSE,ANSI_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,ANTIALIASED_QUALITY,DEFAULT_PITCH,L"Segoe UI");
+        HFONT face=CreateFontW(-54,0,0,0,FW_BOLD,FALSE,FALSE,FALSE,ANSI_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,ANTIALIASED_QUALITY,DEFAULT_PITCH,L"Arial");
         auto oldfont=SelectObject(dc,face);SetTextColor(dc,RGB(255,255,255));SetBkMode(dc,TRANSPARENT);
         for(unsigned n=0;n<95;++n){wchar_t c=wchar_t(n+32);RECT r={LONG(n%16*64),LONG(n/16*64),LONG(n%16*64+64),LONG(n/16*64+64)};DrawTextW(dc,&c,1,&r,DT_CENTER|DT_VCENTER|DT_SINGLELINE|DT_NOPREFIX);}
         GdiFlush();D3D11_TEXTURE2D_DESC td={};td.Width=1024;td.Height=384;td.MipLevels=td.ArraySize=1;td.Format=DXGI_FORMAT_B8G8R8A8_UNORM;td.SampleDesc.Count=1;td.Usage=D3D11_USAGE_IMMUTABLE;td.BindFlags=D3D11_BIND_SHADER_RESOURCE;
@@ -101,7 +102,7 @@ public:
         if(count>capacity){input.Reset();instances.Reset();capacity=std::max(64u,count);D3D11_BUFFER_DESC b={};b.ByteWidth=capacity*sizeof(Primitive);b.Usage=D3D11_USAGE_DYNAMIC;b.BindFlags=D3D11_BIND_SHADER_RESOURCE;b.CPUAccessFlags=D3D11_CPU_ACCESS_WRITE;b.MiscFlags=D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;b.StructureByteStride=sizeof(Primitive);
             check(d->CreateBuffer(&b,nullptr,&instances));check(d->CreateShaderResourceView(instances.Get(),nullptr,&input));}
         D3D11_MAPPED_SUBRESOURCE mapped={};check(c->Map(instances.Get(),0,D3D11_MAP_WRITE_DISCARD,0,&mapped));std::memcpy(mapped.pData,capture.primitives.data(),count*sizeof(Primitive));c->Unmap(instances.Get(),0);
-        float values[8]={float(area[0]),float(area[1]),float(w),float(h),float(std::fmod(seconds,6.981317007977318)),0,0,0};c->UpdateSubresource(params.Get(),0,nullptr,values,0,0);
+        float values[8]={float(area[0]),float(area[1]),float(w),float(h),cursor_phase(seconds),0,0,0};c->UpdateSubresource(params.Get(),0,nullptr,values,0,0);
         ID3D11RenderTargetView* rt=target.Get();float clear[4]={};c->ClearRenderTargetView(rt,clear);c->OMSetRenderTargets(1,&rt,nullptr);c->OMSetBlendState(blend.Get(),nullptr,~0u);c->OMSetDepthStencilState(nullptr,0);c->RSSetState(raster.Get());D3D11_VIEWPORT vp={0,0,float(w),float(h),0,1};c->RSSetViewports(1,&vp);
         c->IASetInputLayout(nullptr);c->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);c->VSSetShader(vs.Get(),nullptr,0);c->PSSetShader(ps.Get(),nullptr,0);auto buffer=params.Get();c->VSSetConstantBuffers(0,1,&buffer);c->PSSetConstantBuffers(0,1,&buffer);
         ID3D11ShaderResourceView* views[]={input.Get(),glyphs.Get()};c->VSSetShaderResources(0,1,views);c->PSSetShaderResources(0,2,views);auto sam=sampler.Get();c->PSSetSamplers(0,1,&sam);c->DrawInstanced(6,count,0,0);

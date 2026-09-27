@@ -39,7 +39,7 @@ struct Core {
     using CameraBegin=int(*)(c3x_renderer_camera_request_v1 const*,c3x_renderer_i64*);
     using CameraPoll=int(*)(c3x_renderer_i64,c3x_renderer_gpu_camera_view_v1*);
     using CameraCancel=int(*)(c3x_renderer_i64);
-    CameraBegin camera_begin=nullptr;CameraPoll camera_poll=nullptr;CameraCancel camera_cancel=nullptr;
+    CameraBegin camera_begin=nullptr;CameraPoll camera_poll=nullptr,camera_ready=nullptr;CameraCancel camera_cancel=nullptr;
     using Definitions=int(*)(char const*,char const*,char const*,char const*);
     Definitions definitions=nullptr;
     using Pack=int(*)(char const*);Pack pack=nullptr;
@@ -75,6 +75,7 @@ struct Core {
     VisualShared visual_shared=nullptr;
     using BindSurface=int(*)(std::uint64_t,unsigned,unsigned);
     BindSurface bind_surface=nullptr;bool direct_surface_bound=false,direct_display_ready=false;
+    Wire* telemetry=nullptr;
     c3x_renderer::VisualCadence direct_cadence{
         std::chrono::microseconds(16667),std::chrono::milliseconds(2)};
     using SurfacePixels=int(*)(unsigned*,unsigned,unsigned*,unsigned*);
@@ -86,6 +87,7 @@ struct Core {
         gpu_render=reinterpret_cast<GpuRender>(GetProcAddress(module,"c3x_renderer_gpu_render"));
         camera_begin=reinterpret_cast<CameraBegin>(GetProcAddress(module,"c3x_renderer_gpu_camera_begin"));
         camera_poll=reinterpret_cast<CameraPoll>(GetProcAddress(module,"c3x_renderer_gpu_camera_poll_view"));
+        camera_ready=reinterpret_cast<CameraPoll>(GetProcAddress(module,"c3x_renderer_trial_camera_ready"));
         camera_cancel=reinterpret_cast<CameraCancel>(GetProcAddress(module,"c3x_renderer_camera_cancel"));
         definitions=reinterpret_cast<Definitions>(GetProcAddress(module,"c3x_renderer_set_definition_paths"));
         pack=reinterpret_cast<Pack>(GetProcAddress(module,"c3x_renderer_set_pack_path"));
@@ -126,6 +128,8 @@ struct Core {
             if(!QueryPerformanceCounter(&now)||!QueryPerformanceFrequency(&frequency))return;
             std::uint64_t handle=0;unsigned width=0,height=0;
             int code=visual_shared(now.QuadPart,frequency.QuadPart,0,&handle,&width,&height);
+            if(code==C3X_RENDERER_RESULT_OK&&telemetry)
+                InterlockedIncrement(reinterpret_cast<volatile LONG*>(&telemetry->visual_frames));
             if(code==C3X_RENDERER_RESULT_ERROR||code==C3X_RENDERER_RESULT_DEVICE_ERROR){
                 OutputDebugStringA("[C3X renderer] Renderer64 visual surface unavailable\n");
                 direct_cadence.disable();
@@ -134,6 +138,7 @@ struct Core {
     }
     void stop_direct_cadence(){direct_cadence.stop();direct_display_ready=false;}
     void execute(Wire& wire){
+        if(!telemetry)telemetry=&wire;
         wire.status=0;wire.code=0;wire.executed=1;wire.reply_size=0;
         wire.width=wire.height=wire.rendered=wire.fallback=0;wire.shared_handle=0;
         wire.result_image=0;wire.result_pixels=0;
@@ -193,10 +198,12 @@ struct Core {
                 c3x_renderer_camera_request_v1 request={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(request),&frame_value.value,identity};
                 c3x_renderer_i64 ticket=0;wire.code=unsigned(camera_begin(&request,&ticket));
                 wire.recorded_ticket=ticket;
-            }else if(wire.live&&wire.kind==unsigned(Kind::camera)&&wire.subtype==3){
+            }else if(wire.live&&wire.kind==unsigned(Kind::camera)&&(wire.subtype==3||wire.subtype==5)){
                 c3x_renderer_i64 ticket=0;in(ticket);in.done();
                 c3x_renderer_gpu_camera_view_v1 view={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(view)};
-                wire.code=unsigned(camera_poll(ticket,&view));
+                auto query=wire.subtype==5?camera_ready:camera_poll;
+                require(query!=nullptr,"helper lacks non-adopting camera readiness");
+                wire.code=unsigned(query(ticket,&view));
                 if(wire.code==C3X_RENDERER_RESULT_OK){
                     Writer response;
                     response(view.camera.ticket);

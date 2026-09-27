@@ -25,20 +25,34 @@ def main():
                         help='Normalized pack produced with --source-report')
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--include-frame',action='store_true',help='Also decode the two tangent directions established by the installed rigid-model vertex shader')
+    parser.add_argument('--no-auxiliary-uvs',action='store_true',
+                        help='Match a normalized Lab intake compiled without auxiliary UV channels')
     a=parser.parse_args()
     if a.output.exists():raise ValueError('preserve existing normal-source evidence')
     if bool(a.source_report)!=bool(a.pack) or (a.source_report and not a.pool):
         parser.error('--source-report and --pack must accompany --pool together')
-    selected,pack,units,report=selection(a.pool,a.palace)
     if a.source_report:
         report=json.loads(a.source_report.read_text())
-        selected=next(p['selected'] for p in report['pools'] if p['pool']=='city/pool/'+a.pool)
+        pool_id=a.pool if a.pool.startswith('city/') else 'city/pool/'+a.pool
+        selected=next(p['selected'] for p in report['pools'] if p['pool']==pool_id)
         pack=a.pack
         units=100
+    else:
+        selected,pack,units,report=selection(a.pool,a.palace)
     manifest=json.loads((pack/'manifest.json').read_text());packages={};overrides={};records=[]
     for item in selected:
         if item['package'] not in packages:
-            packages[item['package']]=source.IndexedStaticPackage(source.MAC_ASSETS_ROOT/item['package'],item['entry'])
+            anchors=[record['entry'] for record in selected if record['package']==item['package']]
+            for anchor in anchors:
+                try:
+                    packages[item['package']]=source.IndexedStaticPackage(
+                        source.MAC_ASSETS_ROOT/item['package'],anchor)
+                    break
+                except ValueError as exc:
+                    if 'Expected target name once in package data' not in str(exc):
+                        raise
+            else:
+                raise ValueError('No unique source anchor in '+item['package'])
         package=packages[item['package']];package.select_direct_string(item['entry'])
         _,owner,model=source.landmark_base_model(package);states,_=source._decode_states(package,owner)
         primitive_array=package.pointer_fields(model,source.TYPE_PRIM_GROUP)[0][1]
@@ -54,7 +68,8 @@ def main():
                 raise ValueError('packed normal interpretation is only verified for static profile 0x315CFCD9 / stride 24')
             ie=source.decode_buffer_entry(package,package.unique_allocation(source.TYPE_INDEX_BUFFER),primitive['index_buffer'],False)
             vb=package.big_data(ve['offset'],ve['bytes']);ib=package.big_data(ie['offset'],ie['bytes'])
-            mesh,evidence=source._normalize_geometry(vb,ib,ve,ie,primitive,units,None,auxiliary_uvs=True)
+            mesh,evidence=source._normalize_geometry(vb,ib,ve,ie,primitive,units,None,
+                                                     auxiliary_uvs=not a.no_auxiliary_uvs)
             digest=geometry_digest(mesh)
             if digest not in targets:raise ValueError('source geometry does not match normalized study mesh')
             indices=[i+primitive['base_vertex'] for i in struct.unpack('<'+str(ie['count'])+'H',ib)[primitive['first_index']:primitive['first_index']+primitive['index_count']]]

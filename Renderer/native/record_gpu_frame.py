@@ -23,6 +23,7 @@ def main(argv=None):
     parser.add_argument('--x64-helper',type=Path,help='Opt-in x64 scene process for the same native fixture')
     parser.add_argument('--x64-dll',type=Path,help='Renderer DLL loaded only by the x64 scene process')
     parser.add_argument('--direct-surface-trial',action='store_true',help='Use Renderer64 direct presentation in the native fixture')
+    parser.add_argument('--async-bridge',action='store_true',help='Exercise the Renderer64 asynchronous native bridge and independent cadence without CPU map oracles')
     parser.add_argument('--present-phases',action='store_true',help='Diagnostic x86 presentation split; invalidates latency-baseline claims')
     parser.add_argument('--reserve-address-mib',type=int,choices=range(0,1537,64),default=0,help='Harness-only reservation simulating co-resident process address-space pressure')
     parser.add_argument('--input-soak-seconds', type=int, choices=(30, 600), help='Real wall-clock native recorder endurance; capture-on/off use identical input owners')
@@ -32,6 +33,7 @@ def main(argv=None):
     parser.add_argument('--width',type=int,default=640)
     parser.add_argument('--height',type=int,default=480)
     parser.add_argument('--tile-width',type=int,choices=(64,128,160,192),default=128)
+    parser.add_argument('--center',type=int,nargs=2,metavar=('X','Y'),help='Explicit Civ III tile center for a matched scene workload')
     parser.add_argument('--jgl',type=Path,default=Path('Renderer/native/build/gpu-composition/audit/jgl.dll'))
     parser.add_argument('--waves',choices=('0','1'),default='1',help='Enable the existing shoreline effect with identical controls in both comparison arms')
     parser.add_argument('--reflections',choices=('0','1'),default='1',help='Keep object reflections enabled; off is an explicit diagnostic control')
@@ -65,11 +67,12 @@ def main(argv=None):
     args=parser.parse_args(argv)
     if bool(args.x64_helper)!=bool(args.x64_dll):parser.error('x64 helper and DLL must be supplied together')
     if args.direct_surface_trial and not args.x64_helper:parser.error('direct surface requires the x64 helper')
+    if args.async_bridge and not args.x64_helper:parser.error('async bridge requires the x64 helper')
     if args.window_witness_seconds and args.benchmark:
         parser.error('Window evidence competes for GPU/CPU; use a separate witness run from the benchmark')
     if args.window_witness_seconds and args.present_phases:
         parser.error('presentation phase diagnostics use the ordinary fixture command')
-    if args.window_witness_seconds and (not args.input_soak_seconds or args.window_witness_seconds>args.input_soak_seconds-5):
+    if args.window_witness_seconds and not args.async_bridge and (not args.input_soak_seconds or args.window_witness_seconds>args.input_soak_seconds-5):
         parser.error('Window evidence requires an input soak at least five seconds longer than capture')
     if args.world_readiness_only:args.world_readiness=True
     if args.native_recovery:args.native_navigation=True
@@ -112,6 +115,7 @@ def main(argv=None):
             if not path.is_file():parser.error(f'missing x64 input: {path.name}')
     if not(64<=args.width<=2240 and 64<=args.height<=1260):parser.error('unsupported extent')
     header=scene.read_text().splitlines()[0].split(',');cx=int(header[1])//2;cy=int(header[2])//2
+    if args.center:cx,cy=args.center
     invocation=uuid.uuid4().hex;out=args.out.resolve() if args.out else ROOT/'Renderer/native/build/gpu-composition'/invocation;out.mkdir(parents=True,exist_ok=True)
     inputs={}
     for unit in DLL_UNITS:inputs.update(unit_inputs(unit))
@@ -136,10 +140,19 @@ def main(argv=None):
         for name in ('window_witness.cpp','BUILD_WINDOW_WITNESS.bat'):
             path=ROOT/'Renderer/tools'/name;inputs[path.relative_to(ROOT).as_posix()]=digest(path)
     # Runtime HLSL is part of the result identity even when the DLL is unchanged.
-    from Renderer.lab.preparation import require_current, receipt as shader_receipt
-    require_current(ROOT)
-    shader_record=shader_receipt(ROOT)
-    inputs.update(shader_record['inputs']);inputs.update(shader_record['outputs'])
+    if args.async_bridge:
+        # Renderer64 uses the pinned runtime shader pack. Lab-generated shaders
+        # are not consumed by this candidate and may be under active editing.
+        shader_root=ROOT/'Renderer/packs/Renderer64CutoverControl'
+        if not (shader_root/'Renderer/native/city_fidelity/terrain.hlsl').is_file():
+            parser.error('Renderer64 runtime shader pack is missing')
+        for path in sorted(shader_root.rglob('*')):
+            if path.is_file():inputs[path.relative_to(ROOT).as_posix()]=digest(path)
+    else:
+        from Renderer.lab.preparation import require_current, receipt as shader_receipt
+        require_current(ROOT)
+        shader_record=shader_receipt(ROOT)
+        inputs.update(shader_record['inputs']);inputs.update(shader_record['outputs'])
     from Renderer.native.native_ui_fixture import prepare
     prepare(ROOT,out/"native-ui.pack",inputs)
     win=windows_root();target=win/out.relative_to(ROOT)
@@ -167,6 +180,11 @@ def main(argv=None):
         settings.update({'C3X_RENDERER_DIRECT_SURFACE_TRIAL':'1',
                          'C3X_RENDERER_DIRECT_SURFACE_STRICT_TRIAL':'1'})
     if args.present_phases:settings['C3X_RENDERER_PRESENT_PHASES']='1'
+    if args.async_bridge:
+        settings.update({'C3X_RENDERER_ASYNC_NATIVE_TEST':'1','C3X_RENDERER_NATIVE_FRESH_MAP_TEST':'1',
+            'C3X_RENDERER_SHADER_SOURCE_ROOT':str(win/shader_root.relative_to(ROOT)),
+            'C3X_RENDERER_SHARED_SCENE_SURFACE':'1','C3X_RENDERER_MANUAL_VISUAL':'',
+            'C3X_RENDERER_TRACE_BUFFERED':'1','C3X_RENDERER_DIRECT_SURFACE_STRICT_TRIAL':'1'})
     settings['C3X_RENDERER_NATIVE_UI_PACK']=str(target/'native-ui.pack')
     settings['C3X_RENDERER_TEST_RESERVE_MIB']=str(args.reserve_address_mib)
     settings['C3X_RENDERER_INPUT_SOAK_SECONDS']=str(args.input_soak_seconds) if args.input_soak_seconds else ''
@@ -228,6 +246,7 @@ def main(argv=None):
     log=(out/'test.log').read_text(errors='replace') if (out/'test.log').exists() else ''
     unchanged=all(digest(ROOT/p)==h for p,h in inputs.items())
     passed=complete==[invocation,'0'] and unchanged and 'PASS resident map GPU worker:' in log and 'PASS native GPU worker transport:' in log and 'PASS native screen transfer:' in log and 'PASS live native screen:' in log and 'PASS production native map owner:' in log and 'PASS bounded GPU map demand:' in log
+    if args.async_bridge:passed=complete==[invocation,'0'] and unchanged and 'PASS async native independence:' in log
     if args.native_recovery:passed=passed and 'PASS native async recovery: cases=4 ' in log
     if args.native_navigation:passed=passed and 'PASS native navigation:' in log
     if args.native_camera_requests or args.native_navigation:passed=passed and 'PASS nonblocking native camera:' in log
@@ -257,7 +276,10 @@ def main(argv=None):
     receipt['resident_unit_proof']={'requests':len(resident_units),'cold_and_warm_without_body_readback_or_composition_upload':resident_proof}
     # The connected producer must finish real cold poses without the old CPU
     # round trip, not merely avoid reading its destination/background canvas.
-    passed=passed and resident_proof
+    if not args.async_bridge:passed=passed and resident_proof
+    else:
+        receipt['scope']='Renderer64 asynchronous native JGL bridge; independent progress while either process is paused; no CPU map readback; fixture presentation submissions are not physical scanout or gameplay FPS'
+        receipt['independent_progress']=[line for line in log.splitlines() if line.startswith('PASS async native independence:')]
     direct=[line for line in trace.splitlines() if 'stage=unit-scene ' in line]
     if direct:
         direct_proof=all('body_readbacks=0 composition_uploads=0' in line for line in direct)
