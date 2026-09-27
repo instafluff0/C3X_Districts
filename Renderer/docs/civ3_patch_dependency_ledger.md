@@ -2,36 +2,42 @@
 
 ## Renderer64 asynchronous publication candidate
 
-`required_user_action: ["Run CAPTURE_MAP_FAILURE.bat, launch Civ III, load the map and scroll briefly, then finish the capture"]`.
-The tested matching trio is staged and the updated injected executable is installed.
-The user's `20260927-100403` capture identifies startup UI transfers through
-JGL image slot 14 (RVA `0x1e20`, destination lease return `jgl+0x6c19`).
-Civ III's tiled UI background routine calls this indexed, destination-keyed
-transfer. Its private pixel borrow was unscoped, permanently disqualifying
-canvases from later GPU composition. The isolated JGL regression reproduces
-that loss with the original method and preserves admission with the new hook.
+`required_user_action: ["Run CAPTURE_MAP_FAILURE.bat, load the map and scroll briefly, then finish the capture"]`.
+The matching renderer trio is staged; the installed injected executable remains
+current because this change touches only Renderer files.
 
-Adds `patch_JGL_Image_keyed_region` to the existing hash-verified runtime JGL
-vtable hooks. Signature: `int __fastcall (JGL_Image*, int, JGL_Image*, int sx,
-int sy, int x, int y, int width, int height, int key)`. Slot 14 is verified against
-the installed JGL hash and RVA; it does not require a Civ III executable patch
-address. No `civ_prog_objects.csv` change is required. Config-off/startup calls
-retain native drawing inside a private lease scope. GPU-owned destinations use
-an ordered GPU key comparison/replacement over copied indexed UI source pixels;
-CPU map readback and unit raster fallback remain rejected. This hook change
-passed the approved injected compile test and matching `INSTALL.bat` run.
-The staged startup probe passes. Receipt `e5ec8b393f404609b9791258cb900cee`
-preserves the matching trio, hashes, prior staged binaries and install receipt:
-55.14 fixture submissions/sec, all 32 scrolling cases, independent process
-progress and zero CPU map readbacks. This is not yet live gameplay evidence.
+Capture `20260927-102412` has no HUD blend admission failures after the JGL
+slot-14 fix. Its first failure is final presentation (`result=2`, 11.666548 s),
+after successful GPU map publication. The failed presentation then requests a
+forbidden CPU map readback and poisons the image session. The later full-canvas
+pixel escape at 11.872399 s is not the first failure.
 
-The capture also shows a failed 36×30 HUD destination and a full-screen canvas.
-Its shared diagnostic quota filled before their specific escape events, so the
-slot-14 finding does not yet prove the entire live black-map failure is fixed.
-Large canvases and post-demand escapes now have separate bounded quotas.
-Earlier captures established that deferred world capture must not queue an
-empty page (`090553`) and that GPU map publication succeeds before a later HUD
-ownership failure (`092023`, `094257`). The async queue fix remains in place.
+The isolated fixture reproduces this failure when it presents the CPU-owned
+loading screen before map admission. That screen already owns the HWND's
+DirectComposition target. The bridge now releases that target before attaching
+the helper surface. Async presentation rejects the synchronous shared-texture
+route; a rejected window preserves GPU image ownership instead of attempting
+a readback. No injected hooks, patch addresses or CSV entries change.
+
+Negative receipt `eabcf57be9944e63b54135c4379972b9` fails with the staged old trio.
+Fixed receipt `3349fcf612244181a0cdaf7f5484fc24` passes loading-screen handoff,
+invalid-window recovery, all 32 scrolls, independent process progress and zero
+CPU map readbacks. It records 55.02 fixture frames/sec, not live-game FPS.
+It preserves the matching binaries, build evidence, hashes and previous trio.
+
+The post-failure pixel access comes through `FUN_00600340` / `FUN_00600b30`,
+called by form hit testing at GOG `0x6090c8`. Its specific form and behavior in
+a healthy session remain unconfirmed. Do not bypass native ownership checks or
+return stale map pixels. Existing bounded diagnostics remain enabled for the
+next live checkpoint. No speculative hit-test patch entry is requested.
+
+The preceding slot-14 change (`patch_JGL_Image_keyed_region`, JGL RVA `0x1e20`)
+remains installed. Its signature is `int __fastcall (JGL_Image*, int, JGL_Image*,
+int sx, int sy, int x, int y, int width, int height, int key)`; the existing
+hash-verified vtable hook requires no Civ III patch-table entry. It copies UI
+source assets and performs destination-key comparison/replacement on the GPU.
+The deferred-world-capture fix also remains: a pending callback cannot publish
+an empty page. CPU map readback and unit raster fallback remain rejected.
 
 Reuses `Unit_tick_anim`, `Sprite_draw_unit_body_normal`,
 `Sprite_draw_unit_body_reduced`, `Map_Renderer_m71_Draw_Tiles`,

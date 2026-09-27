@@ -199,6 +199,12 @@ public:
                 (GetEnvironmentVariableA("C3X_RENDERER_DIRECT_SURFACE_TRIAL",trial,sizeof(trial))==1&&trial[0]=='1');
             char strict_option[4]={};bool strict=GetEnvironmentVariableA("C3X_RENDERER_DIRECT_SURFACE_STRICT_TRIAL",strict_option,sizeof(strict_option))==1&&strict_option[0]=='1';
             if(requested&&full&&!direct_active&&!direct_unavailable){
+                // Loading/menu screens already attached the x86 presenter to
+                // this HWND. DirectComposition allows only one target at this
+                // layer: relinquish that target before attaching the helper's
+                // surface. The startup pixels are CPU-owned, so this handoff
+                // needs no map readback.
+                presenter.release_native();
                 direct_active=direct_surface.prepare(static_cast<HWND>(request.window),device.Get(),
                     unsigned(request.width),unsigned(request.height))&&
                     client.bind_surface(direct_surface.handle(),unsigned(request.width),unsigned(request.height))==C3X_RENDERER_RESULT_OK;
@@ -206,6 +212,12 @@ public:
             }
             if(!direct_active){
                 direct_surface.reset();
+                // Async present publishes commands and returns no shared
+                // texture. It cannot use the synchronous adoption route.
+                if(client.asynchronous()){
+                    OutputDebugStringA("[C3X renderer] stage=native-ui-present-rejected reason=async-surface-unavailable\n");
+                    return C3X_RENDERER_RESULT_DEVICE_ERROR;
+                }
                 if(requested&&full&&strict)return C3X_RENDERER_RESULT_DEVICE_ERROR;
                 if(!presenter.prepare(static_cast<HWND>(request.window),device.Get(),
                                       unsigned(request.width),unsigned(request.height),full))
@@ -216,6 +228,7 @@ public:
         if(code==C3X_RENDERER_RESULT_OK&&direct_active&&request.action==0&&!direct_surface.activate())
             code=C3X_RENDERER_RESULT_DEVICE_ERROR;
         if(code==C3X_RENDERER_RESULT_DEVICE_ERROR&&direct_active&&request.action==0){
+            if(client.asynchronous())return code;
             char strict_option[4]={};if(GetEnvironmentVariableA("C3X_RENDERER_DIRECT_SURFACE_STRICT_TRIAL",strict_option,sizeof(strict_option))==1&&strict_option[0]=='1')
                 return code;
             client.bind_surface(nullptr,0,0);direct_surface.reset();direct_active=false;direct_unavailable=true;

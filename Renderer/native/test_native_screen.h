@@ -136,7 +136,11 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
         };
         if(asynchronous){async_indexed=std::make_unique<NativeKeyedImage>(graph,reinterpret_cast<char*>(jgl));
             async_hud=std::make_unique<NativeUiAssets>(graph,reinterpret_cast<char*>(jgl));
-            verify(async_hud->pairs.size()==6,"async fixture includes actual Civ III HUD assets");draw_async_hud(false);}
+            verify(async_hud->pairs.size()==6,"async fixture includes actual Civ III HUD assets");draw_async_hud(false);
+            // Civ III presents its CPU-owned loading screen before the first
+            // map is ready. That already owns this HWND's composition target.
+            verify(live(C3X_NATIVE_IMAGE_PRESENT,canvases[1],graph,&full,nullptr,0)==1,
+                "loading screen presented before asynchronous map admission");}
         auto set_world_capture=reinterpret_cast<c3x_renderer_set_world_capture_fn>(
             GetProcAddress(renderer_module,"c3x_renderer_set_world_capture"));
         if(asynchronous){
@@ -207,11 +211,18 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
         RECT panel={46,38,136,74};
         verify(reinterpret_cast<Fill>(canvases[1]->vtable[17])(canvases[1],&panel,int(0x80007c00u))==0,
             "native UI fill above fresh map");
+        if(asynchronous){
+            *reinterpret_cast<HDC*>(static_cast<char*>(graph)+0x138)=nullptr;
+            verify(live(C3X_NATIVE_IMAGE_PRESENT,canvases[1],graph,&full,nullptr,0)==-1,
+                "invalid presentation target rejected without draining GPU map");
+            *reinterpret_cast<HDC*>(static_cast<char*>(graph)+0x138)=dc;
+        }
         final_ui_drawn=false;patch_JGL_present_screen(&full);
         verify(final_ui_drawn&&lifetime(C3X_NATIVE_MAP,canvases[0],0)&&lifetime(C3X_NATIVE_MAP,canvases[1],0)&&
             live(C3X_NATIVE_IMAGE_PRESENT,canvases[1],graph,&full,nullptr,0)==1,
             "fresh native map and UI presented without ownership loss");
         if(asynchronous){
+            std::puts("PASS loading-screen handoff: existing window target transferred; rejected target did not poison GPU ownership");
             verify(set_world_capture(nullptr)==C3X_RENDERER_RESULT_OK,"stop the startup world-capture witness");
             std::printf("PASS deferred world capture: callbacks=%u first_map_published=1\n",deferred_world_captures);
         }

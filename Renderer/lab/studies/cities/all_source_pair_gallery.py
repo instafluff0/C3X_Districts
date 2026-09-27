@@ -68,6 +68,33 @@ def facade_comparison(output):
     image.save(output)
 
 
+def correction_review(output):
+    examples = (
+        ("classical", "america", "America | City base", False),
+        ("classical", "america", "America | City capital", True),
+        ("classical", "baltic", "Baltic | City base", False),
+        ("classical", "scottish", "Scottish | City base", False),
+        ("classical", "vietnam", "Vietnam | Classical City base", False),
+        ("industrial", "default", "Industrial Default | City base", False),
+        ("industrial", "rowhouse", "Industrial RowHouse | City base", False),
+        ("unspecified", "vikings", "Vikings | City capital", True),
+        ("unspecified", "maori", "Māori | City capital", True),
+    )
+    width, height, header, gap = 760, 480, 42, 12
+    image = Image.new("RGB", (3*(width+gap)-gap,
+                              3*(height+header+gap)-gap), (31, 25, 38))
+    draw = ImageDraw.Draw(image)
+    for slot, (era, family, label, capital) in enumerate(examples):
+        row, column = divmod(slot, 3)
+        x, y = column*(width+gap), row*(height+header+gap)
+        draw.text((x+12, y+9), label, font=font(20), fill=(249, 236, 249))
+        with Image.open(OUT / "review" / era / family / "sheet.png") as sheet:
+            start = 1674 if capital else 154
+            image.paste(sheet.crop((start, 618, start+width, 1098)),
+                        (x, y+header))
+    image.save(output)
+
+
 def main():
     root = OUT / "review"
     collected = []
@@ -84,6 +111,7 @@ def main():
     if len(collected) != 46:
         raise ValueError(f"Expected 46 populated source pairs; found {len(collected)}")
     facade_comparison(root / "se-sw-facade-city-comparison.png")
+    correction_review(root / "alignment-and-foundations-review.png")
     (root / "index.json").write_text(json.dumps(collected, indent=2) + "\n")
     lines = ["# Civ VI city source-art auditions", "",
              "These 46 sheets cover every populated `Tag_Culture × Tag_Era` city-building",
@@ -108,6 +136,8 @@ def main():
              "remain untouched, and the runtime consumes ordinary normalized meshes.", "",
              "### SE/SW façade comparison", "",
              "![Vietnam, Vikings, and Māori City bases and capitals](se-sw-facade-city-comparison.png)", "",
+             "### Alignment and foundation review", "",
+             "![Nine corrected City examples](alignment-and-foundations-review.png)", "",
              "[Source-art era inventory](../../../../studies/cities/source_era_inventory.md)", ""]
     for era in ERAS:
         entries = [entry for entry in collected

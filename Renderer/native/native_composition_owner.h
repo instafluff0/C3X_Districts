@@ -325,6 +325,9 @@ public:
                 static_cast<long long>(id),rect.left,rect.top,rect.right,rect.bottom);
             OutputDebugStringA(line);
             if(result==C3X_RENDERER_RESULT_OK)return 1;
+            // Renderer64 owns these pixels. A window admission failure must
+            // not request a forbidden map readback and poison the image queue.
+            if(scene_units)throw std::runtime_error("asynchronous native presentation failed");
             // Admission rejection is safe only after the actual display and
             // current native source have separately returned to CPU ownership.
             release_window();adapter->operation(C3X_NATIVE_DC,image,nullptr,nullptr,nullptr,0);return 0;

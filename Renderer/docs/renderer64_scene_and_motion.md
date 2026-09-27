@@ -144,44 +144,42 @@ at the intended presentation time still need work.
 
 ### Current asynchronous bridge
 
-Latest capture `20260927-100403` identifies a missing startup UI transfer hook:
-JGL image slot 14 (RVA `0x1e20`) calls the destination pixel getter at `0x6c16`.
-The module-relative caller candidates match both that disassembly and Civ III's
-tiled background routine. The method copies indexed source pixels only where
-the destination matches the source palette's key color. Its private borrow
-previously revoked destination admission. The new `patch_JGL_Image_keyed_region`
-keeps native startup/config-off scopes private and translates GPU-owned draws
-through the existing ordered composition path. It uploads source UI data only;
-key comparison and destination replacement run on the GPU. Nonmatching pixels
-retain independent full-color map data. Genuine public pointer escapes still
-revoke ownership.
+Capture `20260927-102412` confirms the slot-14 UI fix removed HUD blend
+admission failures. The map publishes successfully with zero readbacks; the
+first failure is final window presentation, before the later canvas hit test.
 
-The original-method regression loses admission; the hook retains it. Receipt
-`fb295afa6eb0482e8e7e4a8d8637479e` passes 48 exact JGL/GPU comparisons covering
-source/destination clipping, duplicate palette colors, a full-word key,
-full-color preservation and zero execution readbacks for this operation.
-Lifetime receipt `d1f9cbdc40ab401aa8b2539c6a7d1f8a` and the approved injected
-compile smoke test pass. The async fixture now includes this real native
-transfer both before and after first map publication and during scrolling.
-Async receipt `e5ec8b393f404609b9791258cb900cee` passes with 442 submissions in
-8.016 seconds (55.14/sec), 121 frames during a two-second host pause and 77
-native publications during a renderer pause (p95/max 0.563/0.903 ms). All 32
-scrolling cases pass; readiness spans 31–312 ms, including polling. CPU map
-readbacks remain zero. The exact matching trio is preserved and staged, startup
-probe passes, and `INSTALL.bat` installed the updated injected hook. The isolated
-8/16-bit source-recording test passes guard-page, odd-size and padding checks;
-seven portable async/input tests pass. Three older source-text bridge assertions
-also fail on HEAD and are not evidence against this change; their comparison is
-saved beside the receipt. The next strategic checkpoint is the user's live map
-and scrolling capture with `CAPTURE_MAP_FAILURE.bat`. No manual reinstall is
-needed.
+The missing standalone-fixture step was presenting the loading screen first.
+Its x86 presenter already owns the HWND's DirectComposition target. Attempting
+to create the helper surface target at that same layer fails, as specified by
+[CreateTargetForHwnd](https://learn.microsoft.com/en-us/windows/win32/api/dcomp/nf-dcomp-idcompositiondevice-createtargetforhwnd).
+The bridge now relinquishes the loading-screen target before attaching the
+helper surface. Async presentation cannot enter the synchronous shared-texture
+adoption route. A presentation rejection also cannot drain GPU images through
+a forbidden CPU readback or poison their command queue.
 
-The capture's 128-entry diagnostic budget filled with small startup canvases
-before the rejected 36×30 button and full-screen HUD canvas escaped. The full
-live failure is therefore still unproven. Separate bounded budgets now preserve
-large-canvas and post-demand events. This is an integration correctness change;
-the sandbox performance target and the ban on CPU map/unit fallback remain.
+Negative receipt `eabcf57be9944e63b54135c4379972b9` reproduces the failure with
+the previous trio. Fixed receipt `3349fcf612244181a0cdaf7f5484fc24` passes the
+same startup sequence, recovery after an invalid presentation target, all 32
+scrolling cases, UI composition and zero CPU map readbacks. The renderer advances
+121 frames during a two-second native-host pause; the host publishes 76 updates
+during a two-second renderer pause (p95/max 1.212/2.385 ms). Warm cadence is 441
+frames in 8.015 seconds, or 55.02/sec. These are isolated fixture measurements,
+not physical scanout or live-game FPS. The matching trio is preserved and staged.
+No injected source changed, so another compile/injection or INSTALL is unnecessary.
 
+Live gameplay remains a strategic checkpoint. The later full-canvas read is
+Civ III form hit testing through `FUN_00600340` / `FUN_00600b30`, with the
+pixel-test return at GOG `0x6090c8`. It occurred after the presentation fault;
+its form identity and behavior with a healthy session are unconfirmed. Keep
+ownership checks strict and retain the bounded escape diagnostics. Use the next
+`CAPTURE_MAP_FAILURE.bat` map/scroll run to distinguish the corrected handoff
+from any remaining independent ownership problem.
+
+The earlier JGL slot-14 fix remains: indexed UI source data is copied privately,
+while destination-key comparison and replacement run on the GPU. Receipt
+`fb295afa6eb0482e8e7e4a8d8637479e` covers 48 exact JGL/GPU cases, clipping,
+duplicate palette colors, full-word keys and preservation of full-color map
+pixels. Lifetime and injected compile checks passed before its installation.
 
 `sandbox/async_scene_client.h` owns copied publications between the native
 composition owner and the existing process transport. The game reserves image
