@@ -10,7 +10,7 @@ from Renderer.lab.shared.cities.ground import footprint_alignment
 from Renderer.lab.shared.cities.growth import overlaps
 from Renderer.lab.studies.cities.build_layouts import (ROOT, COUNTS_BY_ERA, WALL_SEGMENTS,
                                                         build, footprint, inside_wall,
-                                                        wall_instances)
+                                                        wall_curve, wall_instances)
 
 
 class CityDesigns(unittest.TestCase):
@@ -106,13 +106,30 @@ class CityDesigns(unittest.TestCase):
         for kit in ("ancient", "medieval", "industrial"):
             for size, segments in enumerate(WALL_SEGMENTS):
                 wall = wall_instances(kit, size)
-                self.assertEqual(len(wall), segments+segments//4)
+                self.assertEqual(len(wall), segments*2)
                 centers = [item["offset"] for item in wall[:segments]]
                 self.assertEqual(len({(round(x, 5), round(y, 5)) for x, y in centers}),
                                  segments)
+                ring = wall_curve(size, segments)
+                for index, buttress in enumerate(wall[segments:]):
+                    self.assertLess(math.dist(buttress["offset"], ring[index][:2]), 1e-5)
                 for index in range(segments):
-                    self.assertLess(math.dist(centers[index],
-                                              centers[(index+1) % segments]), .26)
+                    item = wall[index]
+                    body = component(item["asset"], Path(item["pack"]))
+                    axis = 0 if index == 0 else 1
+                    other = 1 - axis
+                    middle = (body["lo"][other] + body["hi"][other]) / 2
+                    c, s = math.cos(item["rotation"]), math.sin(item["rotation"])
+                    start, finish = ring[index], ring[(index+1) % segments]
+                    dx, dy = finish[0]-start[0], finish[1]-start[1]
+                    for end, point in ((body["lo"][axis],
+                                        (start[0]-.03*dx,start[1]-.03*dy)),
+                                       (body["hi"][axis],
+                                        (finish[0]+.03*dx,finish[1]+.03*dy))):
+                        source_x, source_y = (end, middle) if axis == 0 else (middle, end)
+                        x = item["offset"][0] + item["scale"] * (source_x*c-source_y*s)
+                        y = item["offset"][1] + item["scale"] * (source_x*s+source_y*c)
+                        self.assertLess(math.dist((x, y), point), 1e-5)
                 if size == 0:
                     for item in wall:
                         asset = component(item["asset"], Path(item["pack"]))
@@ -120,6 +137,14 @@ class CityDesigns(unittest.TestCase):
                         # The wall sits outside the town's contained buildings.
                         # A small wall overhang is allowed for this Lab review.
                         self.assertLessEqual(max(abs(v) for v in box), .55, item["asset"])
+                        if kit == "medieval":
+                            cosine, sine = math.cos(item["rotation"]), math.sin(item["rotation"])
+                            for mesh, _ in asset["parts"]:
+                                for vertex in mesh["vertices"]:
+                                    x, y = vertex["position"][:2]
+                                    world_x = item["offset"][0] + item["scale"] * (x*cosine-y*sine)
+                                    world_y = item["offset"][1] + item["scale"] * (x*sine+y*cosine)
+                                    self.assertLessEqual(max(abs(world_x), abs(world_y)), .5)
 
 
 if __name__ == "__main__":

@@ -146,13 +146,15 @@ def _build(OUT, lab_layouts=None, lab_focus=None, lab_frames=None):
             foundation_source={'material':material(mat,asset),'uv':uv,'step':step}
         return foundation_source
     def template(pool,size,instances,capital=False,authority=None,environment=False,clearance=None,
-                 source_z_factor=1.0,ground_cover=None):
+                 source_z_factor=1.0,ground_cover=None,grounding='source'):
         culture,era=pool.removeprefix('city/pool/').split('/')
         if culture not in styles:raise ValueError('unknown normalized culture '+culture)
         out={'culture':styles.index(culture),'era':eras.index(era),'size':size,'capital':capital,'environment':environment,'authority':authority,
             'clearance':clearance or [.05,2.5,.12,12.4],'instances':[]}
-        if authority and authority.startswith('lab-fixed-'):
+        if grounding=='masonry':
             out['foundation']=foundation()
+        elif grounding not in ('source','terrain'):
+            raise ValueError('unknown city grounding mode')
         for inst in instances:
             asset=inst['asset'];pack=Path(inst.get('pack','Renderer/packs/CityStudyAuxiliaryUV'));b=body(asset,pack)
             ground_to_base=bool(ground_cover and inst.get('surface',True))
@@ -263,8 +265,8 @@ def _build(OUT, lab_layouts=None, lab_focus=None, lab_frames=None):
                     vertical_metric=design.get('vertical_metric',.648266978876)
                     template(pool,size,instances,capital,
                              f'lab-fixed-{culture}-{era}',era=='modern',
-                             [.04,18.0,0,4.0],.648266978876/vertical_metric,
-                             tier.get('ground_cover'))
+                             [.04,design.get('slope_limit',18.0),0,4.0],.648266978876/vertical_metric,
+                             tier.get('ground_cover'),design.get('grounding','masonry'))
     # The same bounded Lab growth solver and source-scale rule cover other
     # normalized pools. These are production adaptations, not new Lab witnesses.
     for pool,record in sorted(catalog['pools'].items()):

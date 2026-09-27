@@ -142,7 +142,8 @@ struct Library {
         for(auto&t:next.compositions){
             t.culture=r.number(4);t.era=r.number(3);t.size=r.number(2);t.capital=r.number(1);t.environment=r.number(1);
             t.authority=r.string();if(!r.floats(t.clearance,4))return false;
-            for(float v:t.clearance)if(v<0 || v>20)return false;
+            for(unsigned j=0;j<4;j++)
+                if(t.clearance[j]<0 || t.clearance[j]>(j==1?112.f:20.f))return false;
             unsigned ni=r.number(32);if(!r.valid || !ni)return false;t.instances.resize(ni);
             unsigned light_count=0,capital_count=0;
             for(auto&i:t.instances){

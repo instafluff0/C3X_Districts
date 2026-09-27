@@ -23,6 +23,14 @@ if not exist "Renderer\packs\UnitAnimationRuntime" (
   echo The copied Renderer packs are missing UnitAnimationRuntime. 1>&2
   goto fail
 )
+if not exist "Renderer\packs\NaturalFidelityCutoverControl\natural.bin" (
+  echo The pinned Renderer64 natural pack is missing. Copy the local NaturalFidelityCutoverControl pack before testing. 1>&2
+  goto fail
+)
+if not exist "Renderer\packs\Renderer64CutoverControl\Renderer\native\city_fidelity\terrain.hlsl" (
+  echo The pinned Renderer64 shader sources are missing. Copy the local Renderer64CutoverControl pack before testing. 1>&2
+  goto fail
+)
 tasklist /fi "imagename eq Civ3Conquests.exe" /nh 2>nul | find /i "Civ3Conquests.exe" >nul
 if not errorlevel 1 (
   echo Exit Civ III before rebuilding or installing C3X. 1>&2

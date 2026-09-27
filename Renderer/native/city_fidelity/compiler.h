@@ -59,10 +59,7 @@ Composition const* select(Library const& library,c3x_renderer_tile_v1 const& rec
             if(!legal || !clear_box(clear_box,x,y,dx+paving_margin,dy+paving_margin,0)){legal=false;break;}
             float low=height_natural(x,y),high=low;
             for(int sy:{-1,1})for(int sx:{-1,1}){float h=height_natural(x+float(sx)*dx,y+float(sy)*dy);low=std::min(low,h);high=std::max(high,h);}
-            float slope_limit=t.clearance[1];
-            if(record.real_terrain_type==5 && t.authority.rfind("lab-fixed-",0)==0)
-                slope_limit=std::max(slope_limit,64.f);
-            if(high-low>slope_limit){legal=false;break;}
+            if(high-low>t.clearance[1]){legal=false;break;}
         }
         if(legal)return &t;
     }
@@ -94,7 +91,7 @@ bool compile(Library const& library,Composition const& selected,int nc,int nr,
             ground_low=std::min(ground_low,ground);
             ground_high=std::max(ground_high,ground);
         }
-        bool terrace=composition->authority.rfind("lab-fixed-",0)==0 &&
+        bool terrace=composition->foundation_material!=~0u &&
             ground_high-ground_low>.75f;
         float lowest_source=std::min(0.f,m.low[2]*i.scale/source_z_metric);
         auto placement=place(i,float(nc)+.5f,float(nr)+.5f,

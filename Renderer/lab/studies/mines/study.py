@@ -85,7 +85,7 @@ def copy_sources() -> None:
 
 def build() -> Path:
     result = platform.native_command_result(
-        "Renderer/lab/out/mines/root/Renderer/sandbox",
+        (PRIVATE / "Renderer/sandbox").relative_to(ROOT).as_posix(),
         "call build_reference_x64.bat", timeout_seconds=600)
     dll = PRIVATE / "Renderer/sandbox/out/C3XReference_x64.dll"
     if result["status"] != "pass" or not dll.is_file():
@@ -310,7 +310,8 @@ def scenes() -> dict[str, Path]:
     return result
 
 
-def render(label: str, name: str, scene: Path, dll: Path, tile_width: int = 128) -> Path:
+def render(label: str, name: str, scene: Path, dll: Path, tile_width: int = 128,
+           hill_lift: float = 0.0) -> Path:
     x, y, _era, hour = SITES[name]
     output = OUT / label / name
     output.mkdir(parents=True, exist_ok=True)
@@ -329,6 +330,7 @@ def render(label: str, name: str, scene: Path, dll: Path, tile_width: int = 128)
         "set \"C3X_MINE_LAB_ONESHOT=1\"\n"
         "set \"C3X_RENDERER_PREVIEW_UNITS=1\"\n"
         "set \"C3X_SANDBOX_UNITS=1\"\n"
+        f"set \"C3X_MINE_HILL_LIFT={hill_lift:.1f}\"\n"
         f"set \"C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS={windows(PRIVATE / 'Renderer/custom.custom_rendering.txt')}\"\n"
         f'"{windows(exe)}" "{windows(dll)}" "{windows(PRIVATE)}" '
         f'"{windows(PRIVATE / "Renderer/default.custom_rendering.txt")}" '
@@ -345,7 +347,7 @@ def render(label: str, name: str, scene: Path, dll: Path, tile_width: int = 128)
         "test_biq_sha256": digest(BIQ), "scene_sha256": digest(scene),
         "dll_sha256": digest(dll), "camera": [x, y], "hour": hour,
         "pack_sha256": digest(PRIVATE / "Renderer/packs/ImprovementsNormalized/mine_runtime.bin"),
-        "tile_width": tile_width, "fallback": 0,
+        "tile_width": tile_width, "hill_lift": hill_lift, "fallback": 0,
     }, indent=2) + "\n")
     return image
 

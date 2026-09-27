@@ -26,8 +26,8 @@ int main(){
  objects::append_instance(p,wall,placement,.5f,.5f,0,1,21,.01f,false,false,
                           relief,height,vertices,shadows);
  assert(vertices.size()==3);
- assert(vertices[0].world_z>7.f/112.f);
- assert(vertices[1].world_z==vertices[0].world_z);
+ assert(std::abs(vertices[0].world_z-3.02f/112.f)<.0001f);
+ assert(std::abs(vertices[1].world_z-7.02f/112.f)<.0001f);
  assert(vertices[2].world_z>vertices[1].world_z);
  std::vector<objects::Vertex> next;
  objects::append_instance(p,wall,placement,.8f,.5f,0,1,21,.01f,false,false,

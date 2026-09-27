@@ -3,6 +3,15 @@
 #include <limits>
 #include <sstream>
 
+inline auto& sandbox_active_reflection() {
+#ifdef C3X_RENDERER64_FRESH
+    // The fresh path initializes the camera reflection, not legacy region targets.
+    return renderer.reflection;
+#else
+    return renderer.scene_region_size==128?renderer.reflection:renderer.region_reflection;
+#endif
+}
+
 // Keep production's material equations and preparation. Change only receiver
 // addressing from regional pages to the camera-framed field.
 struct SandboxVisualShaders {
@@ -82,6 +91,11 @@ float c3x_paged_visibility(Texture2DArray field,float4 world,float3 normal,bool 
         return true;
     }
     static bool compile(char const* file, char const* entry, ID3D11PixelShader** output) {
+        auto fail_source=[&](char const* reason){
+            char detail[192];sprintf_s(detail,"file=%s entry=%s reason=%s",file,entry,reason);
+            renderer.trace.write("fresh-shader-source",detail,true);
+            return false;
+        };
         bool water_variant = std::strcmp(file,"water_surface.hlsl")==0;
         std::string shader = source(water_variant?"hydrology.hlsl":file);
         bool albedo_variant=std::strcmp(entry,"PSSandboxMaterialAlbedo")==0;
@@ -106,18 +120,18 @@ float c3x_paged_visibility(Texture2DArray field,float4 world,float3 normal,bool 
                !replace("stone_height * 0.58 + rock * 0.42, 0.11);",
                     "stone_height * 0.58 + rock * 0.42, 0.08);") ||
                !replace("        alpha *= decal.a;",
-                    "        alpha *= decal.a * 0.75;"))return false;
+                    "        alpha *= decal.a * 0.75;"))return fail_source("terrain-markers");
             if(!replace("albedo = lerp(base, hill, rocky_band * 0.90);",
-                    "albedo = lerp(base, hill, rocky_band * 0.85);"))return false;
+                    "albedo = lerp(base, hill, rocky_band * 0.85);"))return fail_source("hill-marker");
             auto material=shader.find("#ifdef SANDBOX_TERRAIN_MATERIAL\n    // The sandbox retains");
-            if(material==std::string::npos)return false;
+            if(material==std::string::npos)return fail_source("terrain-material-marker");
             shader.insert(material,
                 "    float sandbox_hill = smoothstep(0.02, 0.22, input.material.x);\n"
                 "    geometric = normalize(lerp(geometric, normalize(input.normal), "
                 "sandbox_hill * 0.35));\n");
             auto cavity=shader.find("    float cavity = lerp(0.79, 1.0,",material);
             for(int branch=0;branch<2;++branch){
-                if(cavity==std::string::npos)return false;
+                if(cavity==std::string::npos)return fail_source("terrain-cavity-marker");
                 auto end=shader.find(';',cavity);
                 shader.insert(end+1,
                     "\n    cavity = lerp(cavity, max(cavity, 0.97), sandbox_hill);");
@@ -126,7 +140,7 @@ float c3x_paged_visibility(Texture2DArray field,float4 world,float3 normal,bool 
         }
         if(renderer.city_profile && std::strcmp(file,"objects.hlsl")==0){
             auto at=shader.find("    radiance += Ambient.rgb * rim * 0.08;");
-            if(at==std::string::npos)return false;
+            if(at==std::string::npos)return fail_source("object-rim-marker");
             shader.insert(at,
                 "    float low_sun=smoothstep(.10,.25,Sun.w)*"
                 "(1-smoothstep(.52,.69,Sun.w));\n"
@@ -137,7 +151,7 @@ float c3x_paged_visibility(Texture2DArray field,float4 world,float3 normal,bool 
         if(water_variant){
             std::ifstream variant(renderer.shader_root+
                 "/Renderer/sandbox/"+file,std::ios::binary);
-            if(!variant)return false;
+            if(!variant)return fail_source("water-variant-missing");
             shader.append(std::istreambuf_iterator<char>(variant),
                 std::istreambuf_iterator<char>());
         }
@@ -348,12 +362,18 @@ float4 PSSandboxAquaticFeature(FeaturePixelInput input) : SV_Target {
         if(!compile("feature.hlsl","PSSandboxAquaticFeature",&aquatic_feature))return false;
         char const* names[]={"hydrology.hlsl","feature.hlsl","terrain.hlsl",
             "mountain.hlsl","objects.hlsl"};
-        auto& reflection=renderer.scene_region_size==128?
-            renderer.reflection:renderer.region_reflection;
+        auto& reflection=sandbox_active_reflection();
         for (unsigned i=0;i<5;++i) {
             ID3D11PixelShader* replacement=nullptr;
             if (!compile(names[i],"PSReflection",&replacement)) return false;
-            if (!reflection.ps[i]) return false;
+            if (!reflection.ps[i]) {
+                char detail[160];
+                sprintf_s(detail,"index=%u main=%p region=%p frame=%p region_size=%u",
+                    i,renderer.reflection.ps[i],renderer.region_reflection.ps[i],
+                    renderer.reflection.frame,renderer.scene_region_size);
+                renderer.trace.write("fresh-reflection-slot",detail,true);
+                return false;
+            }
             reflection.ps[i]->Release();
             reflection.ps[i]=replacement;
         }
@@ -1084,8 +1104,7 @@ struct SandboxFreshPipeline {
         context->RSSetScissorRects(1,&scissor);
         context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         context->IASetInputLayout(renderer.feature_input_layout);
-        auto& active_reflection=renderer.scene_region_size==128?
-            renderer.reflection:renderer.region_reflection;
+        auto& active_reflection=sandbox_active_reflection();
         context->VSSetShader(mirrored?active_reflection.vs[1]:
             renderer.feature_vertex_shader,nullptr,0);
         context->PSSetShader(mirrored?active_reflection.ps[1]:
@@ -1172,8 +1191,7 @@ struct SandboxFreshPipeline {
                     unsigned(layer),rigid.size(),renderer.device->GetDeviceRemovedReason());
                 std::fflush(stdout);return false;
             }
-            auto& mirror=renderer.scene_region_size==128?
-                renderer.reflection:renderer.region_reflection;
+            auto& mirror=sandbox_active_reflection();
             for(unsigned i=0;i<selected.size();){
                 auto const& chunk=selected[i];
                 auto const& mesh=chunk.content();
@@ -1314,7 +1332,7 @@ struct SandboxFreshPipeline {
         context->RSSetScissorRects(1,&scissor);
         context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         context->IASetInputLayout(renderer.input_layout);
-        auto& mirror=renderer.scene_region_size==128?renderer.reflection:renderer.region_reflection;
+        auto& mirror=sandbox_active_reflection();
         context->VSSetShader(mirrored?mirror.vs[0]:renderer.vertex_shader,nullptr,0);
         context->PSSetShader(mirrored?mirror.ps[0]:renderer.pixel_shader,nullptr,0);
         context->PSSetConstantBuffers(0,1,&renderer.terrain_settings_buffer);
@@ -1376,7 +1394,7 @@ struct SandboxFreshPipeline {
         if (records[layer].empty()) return true;
         bind_common(settings,rect,target,depth,mirrored,scale);
         auto* context=renderer.context;
-        auto& mirror=renderer.scene_region_size==128?renderer.reflection:renderer.region_reflection;
+        auto& mirror=sandbox_active_reflection();
         if (layer>=geometry_natural_terrain) {
             unsigned provider=layer==geometry_natural_mountain?1:
                 layer>=geometry_natural_forest0?2:0;

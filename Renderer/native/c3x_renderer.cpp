@@ -2801,6 +2801,11 @@ public:
             shader_override,DWORD(std::size(shader_override)));
         if(shader_length>=std::size(shader_override))return false;
         if(shader_length)shader_root=shader_override;
+#ifdef C3X_RENDERER64_FRESH
+        // The game candidate compiles shaders at runtime. Keep its accepted
+        // shader sources paired with the DLL while Lab sources continue moving.
+        if(!shader_length)shader_root=fidelity_root+"/Renderer/packs/Renderer64CutoverControl";
+#endif
         bool use_pickup = std::strcmp(requested_profile, "frozen") != 0;
         if (pickup_profile != use_pickup) reset();
         pickup_profile = use_pickup;

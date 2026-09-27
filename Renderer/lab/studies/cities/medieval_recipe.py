@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Curated Mediterranean medieval flat-ground composition candidate."""
+"""Curated Mediterranean medieval buildings and terrain-following walls."""
 
 import argparse
 import json
@@ -117,15 +117,8 @@ def main():
                     if len(planted) == (2, 4, 6)[size]:
                         break
                 tier["capital_decorations" if capital else "decorations"] = planted
-        for tier in tiers:
-            tier["ground_cover"] = {
-                "texture": str(args.flat_pack / "textures/compound/base_color_07a9d1cc9983722e.dds"),
-                "normal_0": str(args.flat_pack / "textures/compound/normal_0_1afe4528aa33c1fd.dds"),
-                "gloss": str(args.flat_pack / "textures/compound/gloss_0c8f690bcd7c93b1.dds"),
-                "period": [.32, .32], "atlas_uv": [0, 0, 1, 1],
-                "margin": .105, "feather": .045, "lane_half_width": .065,
-            }
-    design.update(population_counts=[len(town), len(city), len(metro)],
+    design.update(grounding="terrain", slope_limit=64.0,
+                  population_counts=[len(town), len(city), len(metro)],
                   tier_designs=tiers, houses=metro, base_centerpiece=civic,
                   palace=palace, capital_replaces_centerpiece=False)
     for size, tier in enumerate(tiers):

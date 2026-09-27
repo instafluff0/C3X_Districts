@@ -62,7 +62,7 @@ inference; and compare close and gameplay views on real map terrain.
   Civ III eras; the Lab marker also changes the fixture's orientation between
   era rows, which should not be mistaken for a distinct authored building set.
 
-## Current central-building trial
+## Earlier central-building trial
 
 The later user-directed trial keeps only source variants 1 and 2 in each of
 the two authored art families. For each, it selects the largest attached
@@ -82,7 +82,7 @@ and river checks reject unsafe forward positions and retain the earlier base
 site where needed. The wooded mountain remains less legible than the exposed
 ridge and needs a further visibility or vegetation pass before production.
 
-The current witnesses are `test-biq-mine-central-grassland.png` for the two
+The original 3.0x witnesses are `test-biq-mine-central-grassland.png` for the two
 building variants in all four Civ III eras and
 `test-biq-mine-central-final.png` for inland/coastal hills and dense/wooded
 mountains against the earlier complete mine. `test-biq-mine-hill-support.png`
@@ -105,7 +105,29 @@ python3 Renderer/lab/studies/mines/central.py
 python3 Renderer/lab/studies/mines/mountain.py
 python3 Renderer/lab/studies/mines/hill.py
 python3 Renderer/lab/studies/mines/hill_support.py
+python3 Renderer/lab/studies/mines/terrain_refresh.py
+python3 Renderer/lab/studies/mines/hill_lift_probe.py
+python3 Renderer/lab/studies/mines/hill_comparison.py
 ```
 
 Generated outputs are ignored Lab artifacts. This is a visual Lab candidate;
 production integration and performance validation remain separate work.
+
+## Flatter-terrain hill size study
+
+`terrain_refresh.py` copies the current terrain and renderer sources into a
+separate Lab root, then compares 2.0x, 2.5x, 3.0x, and 3.5x main buildings on
+the same inland/coastal hills and shorter mountain cases. The larger hill
+buildings still intersected the foreground contour. A hill contact probe
+therefore tested 0, 10, and 20 units of body lift while retaining terrain-fit
+lower vertices. The 20-unit version exposed the main facade on both hills.
+
+`hill_comparison.py` compares smaller 1.5x and 1.8x assemblies at 192-pixel
+tile width. Its full columns contain every non-decal source component from
+variants 1 and 2, while the matched main-only columns use only the central
+component. The third runtime variant slot repeats variant 1 in both packs.
+The displayed hill comparisons use the same 20-unit body lift and terrain-fit
+lower vertices; `test-biq-hill-small-full-vs-main-raised.png` is the current
+close-view witness. The earlier 0-lift and larger-scale sheets remain Lab
+diagnostics, not approved art. The new comparison is still isolated Lab work;
+it does not alter `test.biq`, the production pack, or a staged game DLL.

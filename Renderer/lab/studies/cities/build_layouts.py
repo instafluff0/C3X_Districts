@@ -34,9 +34,8 @@ ERA_TARGETS = (
 )
 CULTURE_SHIFT = ((-.025, -.015), (.0, -.035), (.025, .015),
                  (-.015, .025), (.015, .0))
-WALL_SCALE = 2.3
 WALL_RADII = (.43, .58, .70)
-WALL_DRAW_RADII = (.48, .64, .76)
+WALL_DRAW_RADII = (.474, .625, .755)
 WALL_SEGMENTS = (16, 20, 24)
 WALL_ROUNDNESS = 6
 TIER_SCALES = (1.0, 1.22, 1.42)
@@ -91,14 +90,31 @@ def wall_instances(kit: str, size: int = 0) -> list[dict]:
                  parts["tower"][0])
     result = []
     ring = wall_curve(size, WALL_SEGMENTS[size])
-    for sector, (x, y, rotation) in enumerate(ring):
-        result.append({"asset": gate if sector == 0 else segment, "pack": pack,
-                       "scale": WALL_SCALE,
-                       "rotation": rotation+math.pi/2 if sector == 0 else rotation,
-                       "offset": [x, y]})
-    for sector in range(2, WALL_SEGMENTS[size], 4):
+    for sector, (x, y, _) in enumerate(ring):
+        next_x, next_y, _ = ring[(sector + 1) % len(ring)]
+        direction = math.atan2(next_y - y, next_x - x)
+        asset_id = gate if sector == 0 else segment
+        body = component(asset_id, Path(pack))
+        axis = 0 if sector == 0 else 1
+        length = body["hi"][axis] - body["lo"][axis]
+        if length <= 0:
+            raise ValueError("wall section has no length")
+        # A butt joint leaves a wedge at each turn because the masonry has
+        # thickness. A small overlap closes it without a broad footprint.
+        scale = math.dist((x, y), (next_x, next_y)) * 1.06 / length
+        rotation = direction if sector == 0 else direction - math.pi / 2
+        center = [(body["lo"][axis] + body["hi"][axis]) / 2 for axis in (0, 1)]
+        c, s = math.cos(rotation), math.sin(rotation)
+        result.append({"asset": asset_id, "pack": pack,
+                       "scale": scale, "rotation": rotation,
+                       "offset": [(x + next_x) / 2 - scale * (center[0] * c - center[1] * s),
+                                  (y + next_y) / 2 - scale * (center[0] * s + center[1] * c)]})
+    # The sourced straight sections have open cut ends. Put a small masonry
+    # buttress over every joint so the visible perimeter stays continuous.
+    for sector in range(WALL_SEGMENTS[size]):
         x, y, rotation = ring[sector]
-        result.append({"asset": tower, "pack": pack, "scale": 2.0,
+        result.append({"asset": tower, "pack": pack,
+                       "scale": 1.7 if sector % 4 == 2 else 1.5,
                        "rotation": rotation, "offset": [x, y]})
     return result
 

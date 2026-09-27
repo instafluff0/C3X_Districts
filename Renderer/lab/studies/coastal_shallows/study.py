@@ -1274,6 +1274,225 @@ def build_desert_direction_patches() -> None:
     bed.write_text(body)
 
 
+def build_desert_domain_warp() -> None:
+    """Bend one source dune field coherently instead of blending two fields."""
+    build_desert_ripple_broad()
+    source = OUT / "shader-desert-ripple-broad"
+    target = OUT / "shader-desert-domain-warp"
+    for path in source.rglob("*.hlsl"):
+        destination = target / path.relative_to(source)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, destination)
+    bed = target / "Renderer/native/city_fidelity/hydrology.hlsl"
+    body = bed.read_text()
+    anchor = "float3 q3_authored_bed_normal(PixelInput input) {"
+    helper = """float2 q3_coast_warped_sand_uv(float2 world) {
+ // A broad, periodic source-noise vector bends one continuous dune field.
+ // This remapping is inferred art direction; it does not place new decals.
+ float2 flow_uv=world*float2(q3_source_repeat(.025),q3_source_repeat(.031));
+ float2 bend=float2(
+  river_bank_noise_texture.Sample(material_sampler,flow_uv+float2(.13,.47)).r,
+  river_bank_noise_texture.Sample(material_sampler,flow_uv+float2(.61,.19)).r);
+ return world*q3_source_repeat(.26)+float2(.31,.17)+(bend-.5)*.55;
+}
+"""
+    if body.count(anchor) != 1:
+        raise ValueError("Warped dune helper anchor changed")
+    body = body.replace(anchor, helper + anchor)
+    old = "float2 sand_uv=world*q3_source_repeat(.26)+float2(.31,.17);"
+    if body.count(old) != 2:
+        raise ValueError("Warped dune sample anchors changed")
+    bed.write_text(body.replace(old, "float2 sand_uv=q3_coast_warped_sand_uv(world);"))
+
+
+def build_desert_shore_guided() -> None:
+    """Follow the prepared coast-distance field with source sand contours."""
+    build_desert_ripple_broad()
+    source = OUT / "shader-desert-ripple-broad"
+    target = OUT / "shader-desert-shore-guided"
+    for path in source.rglob("*.hlsl"):
+        destination = target / path.relative_to(source)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, destination)
+    bed = target / "Renderer/native/city_fidelity/hydrology.hlsl"
+    body = bed.read_text()
+    anchor = "float3 q3_authored_bed_normal(PixelInput input) {"
+    helper = """float2 q3_coast_shore_sand_uv(PixelInput input,float2 world) {
+ // Source desert ridges run approximately along constant (u+v). Make that
+ // source axis advance with the prepared signed shoreline distance, so dunes
+ // broadly track local land rather than one global compass direction.
+ float2 source_uv=world*q3_source_repeat(.26)+float2(.31,.17);
+ float along=source_uv.x-source_uv.y;
+ float outward=max(0,-input.hydrology_data.x);
+ float2 flow_uv=world*float2(q3_source_repeat(.025),q3_source_repeat(.031));
+ float bend=river_bank_noise_texture.Sample(material_sampler,
+  flow_uv+float2(.13,.47)).r-.5;
+ float across=outward*q3_source_repeat(.52)+.48+bend*.16;
+ return float2((across+along)*.5,(across-along)*.5);
+}
+"""
+    if body.count(anchor) != 1:
+        raise ValueError("Shore-guided dune helper anchor changed")
+    body = body.replace(anchor, helper + anchor)
+    old = "float2 sand_uv=world*q3_source_repeat(.26)+float2(.31,.17);"
+    if body.count(old) != 2:
+        raise ValueError("Shore-guided dune sample anchors changed")
+    bed.write_text(body.replace(old, "float2 sand_uv=q3_coast_shore_sand_uv(input,world);"))
+
+
+def build_desert_shore_fine() -> None:
+    """Refine shoreline-following dunes and attenuate them offshore."""
+    build_desert_shore_guided()
+    source = OUT / "shader-desert-shore-guided"
+    target = OUT / "shader-desert-shore-fine"
+    for path in source.rglob("*.hlsl"):
+        destination = target / path.relative_to(source)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, destination)
+    bed = target / "Renderer/native/city_fidelity/hydrology.hlsl"
+    body = bed.read_text()
+    changes = (
+        ("float2 source_uv=world*q3_source_repeat(.26)+float2(.31,.17);",
+         "float2 source_uv=world*q3_source_repeat(.40)+float2(.31,.17);"),
+        (" float across=outward*q3_source_repeat(.52)+.48+bend*.16;",
+         """ float spacing=river_bank_noise_texture.Sample(material_sampler,
+  flow_uv+float2(.61,.19)).r;
+ float across=outward*q3_source_repeat(.80)*lerp(.72,1.24,spacing)
+  +.48+bend*.24;"""),
+        ("float shelf=coast_family*(1-smoothstep(.28,.64,input.hydrology_data.w));",
+         "float shelf=coast_family*(1-smoothstep(.13,.49,input.hydrology_data.w));"),
+        ("color*=clamp(1+surface*coast_shelf,.65,1.26);",
+         """float dune_fade=coast_family*(1-smoothstep(.15,.52,input.hydrology_data.w));
+ color*=clamp(1+surface*dune_fade,.65,1.26);"""),
+    )
+    for old, new in changes:
+        if body.count(old) != 1:
+            raise ValueError("Fine shore dune anchor changed: " + old)
+        body = body.replace(old, new)
+    bed.write_text(body)
+
+
+def build_desert_broad_tuned() -> None:
+    """Retain broad's soft relief with restrained shore flow and depth fade."""
+    build_desert_ripple_broad()
+    source = OUT / "shader-desert-ripple-broad"
+    target = OUT / "shader-desert-broad-tuned"
+    for path in source.rglob("*.hlsl"):
+        destination = target / path.relative_to(source)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, destination)
+    bed = target / "Renderer/native/city_fidelity/hydrology.hlsl"
+    body = bed.read_text()
+    anchor = "float3 q3_authored_bed_normal(PixelInput input) {"
+    helper = """float2 q3_coast_broad_tuned_uv(PixelInput input,float2 world) {
+ // Keep most of the authored desert flow; bias its cross-ridge coordinate
+ // toward local coast distance so contours turn gently with the shoreline.
+ float2 base=world*q3_source_repeat(.33)+float2(.31,.17);
+ float2 flow_uv=world*float2(q3_source_repeat(.025),q3_source_repeat(.031));
+ float bend=river_bank_noise_texture.Sample(material_sampler,
+  flow_uv+float2(.13,.47)).r-.5;
+ float shore=max(0,-input.hydrology_data.x)*q3_source_repeat(.66)+.48+bend*.16;
+ float across=lerp(base.x+base.y,shore,.32);
+ float along=base.x-base.y;
+ return float2((across+along)*.5,(across-along)*.5);
+}
+"""
+    if body.count(anchor) != 1:
+        raise ValueError("Tuned broad helper anchor changed")
+    body = body.replace(anchor, helper + anchor)
+    old = "float2 sand_uv=world*q3_source_repeat(.26)+float2(.31,.17);"
+    if body.count(old) != 2:
+        raise ValueError("Tuned broad sample anchors changed")
+    body = body.replace(old, "float2 sand_uv=q3_coast_broad_tuned_uv(input,world);")
+    changes = (
+        ("float shelf=coast_family*(1-smoothstep(.28,.64,input.hydrology_data.w));",
+         "float shelf=coast_family*(1-smoothstep(.18,.55,input.hydrology_data.w));"),
+        ("color*=clamp(1+surface*coast_shelf,.65,1.26);",
+         """float dune_fade=coast_shelf*(1-smoothstep(.28,.57,input.hydrology_data.w));
+ color*=clamp(1+surface*dune_fade,.65,1.26);"""),
+    )
+    for old, new in changes:
+        if body.count(old) != 1:
+            raise ValueError("Tuned broad anchor changed: " + old)
+        body = body.replace(old, new)
+    bed.write_text(body)
+
+
+def build_desert_broad_irregular() -> None:
+    """Borrow the upper shelf's continuous irregular alpha to break sand bands."""
+    build_desert_ripple_broad()
+    source = OUT / "shader-desert-ripple-broad"
+    target = OUT / "shader-desert-broad-irregular"
+    for path in source.rglob("*.hlsl"):
+        destination = target / path.relative_to(source)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, destination)
+    bed = target / "Renderer/native/city_fidelity/hydrology.hlsl"
+    body = bed.read_text()
+    changes = (
+        ("float bed_alpha=shallow_bed_texture.Sample(material_sampler,bed_uv).a;",
+         "float bed_alpha=shallow_bed_texture.SampleBias(material_sampler,bed_uv,2).a;"),
+        ("float shelf=coast_family*(1-smoothstep(.28,.64,input.hydrology_data.w));",
+         "float shelf=coast_family*(1-smoothstep(.18,.55,input.hydrology_data.w));"),
+        ("sand_height*.48+broad_height*.52,.63);",
+         "sand_height*.38+bed_alpha*.16+broad_height*.46,.55);"),
+        ("float surface=(sand_height-sand_mean)*1.5+(broad_height-broad_mean)*2.7;",
+         "float surface=(sand_height-sand_mean)*.85+(broad_height-broad_mean)*2.7;"),
+        ("color*=clamp(1+surface*coast_shelf,.65,1.26);",
+         """float dune_fade=coast_shelf*(1-smoothstep(.27,.57,input.hydrology_data.w));
+ color*=clamp(1+surface*dune_fade,.65,1.26);"""),
+    )
+    for old, new in changes:
+        if body.count(old) != 1:
+            raise ValueError("Irregular broad anchor changed: " + old)
+        body = body.replace(old, new)
+    bed.write_text(body)
+
+
+def build_desert_broad_mosaic() -> None:
+    """Give broad coast regions either the irregular bed or clean control."""
+    build_desert_broad_irregular()
+    source = OUT / "shader-desert-broad-irregular"
+    target = OUT / "shader-desert-broad-mosaic"
+    for path in source.rglob("*.hlsl"):
+        destination = target / path.relative_to(source)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, destination)
+    bed = target / "Renderer/native/city_fidelity/hydrology.hlsl"
+    body = bed.read_text()
+    anchor = "float3 q3_authored_bed_normal(PixelInput input) {"
+    helper = """float q3_coast_irregular_region(float2 world) {
+ // Two low-frequency source-noise views choose broad, continuous stretches;
+ // no tile or decal owns a patch. The blend softens their boundaries.
+ float2 uv0=world*float2(q3_source_repeat(.022),q3_source_repeat(.029))
+  +float2(.19,.53);
+ float2 uv1=world*float2(q3_source_repeat(.014),q3_source_repeat(.017))
+  +float2(.61,.13);
+ float broad=river_bank_noise_texture.Sample(material_sampler,uv0).r;
+ float macro=river_bank_noise_texture.Sample(material_sampler,uv1).r;
+ return smoothstep(.44,.56,broad*.75+macro*.25);
+}
+"""
+    if body.count(anchor) != 1:
+        raise ValueError("Mosaic region helper anchor changed")
+    body = body.replace(anchor, helper + anchor)
+    old = " return normalize(lerp(decal_normal,continuous_normal,shelf));"
+    new = """ float3 irregular_normal=normalize(lerp(decal_normal,continuous_normal,shelf));
+ float control_alpha=shallow_bed_texture.Sample(material_sampler,bed_uv).a;
+ float3 control_detail=q3_margin_normal(input,control_alpha,.025);
+ float3 control_normal=normalize(lerp(decal_normal,control_detail,coast_family));
+ return normalize(lerp(control_normal,irregular_normal,
+  q3_coast_irregular_region(world)));"""
+    if body.count(old) != 1:
+        raise ValueError("Mosaic normal anchor changed")
+    body = body.replace(old, new)
+    old = "color*=clamp(1+surface*dune_fade,.65,1.26);"
+    new = "color*=clamp(1+surface*dune_fade*q3_coast_irregular_region(world),.65,1.26);"
+    if body.count(old) != 1:
+        raise ValueError("Mosaic color anchor changed")
+    bed.write_text(body.replace(old, new))
+
+
 def render(label: str, zoom: int = 128) -> None:
     if not (OUT / "snapshot.json").exists():
         raise ValueError("Run prepare first")
@@ -1286,7 +1505,7 @@ def render(label: str, zoom: int = 128) -> None:
     capture = rf"..\lab\out\coastal-shallows\{relative_output}\frame"
     executable = r"..\lab\out\coastal-shallows\client_x64.exe"
     dll_name = ("C3XReferenceShelf_x64.dll" if label in ("shelf-mesh", "shelf-mesh-lit", "bed-hidden-probe") else
-                "C3XReferenceCurrent_x64.dll" if label in ("shelf-mesh-control", "form-probe", "desert-ripple-bed", "desert-ripple-broad", "desert-direction-mix", "desert-direction-broad", "desert-direction-patches") else
+                "C3XReferenceCurrent_x64.dll" if label in ("shelf-mesh-control", "form-probe", "desert-ripple-bed", "desert-ripple-broad", "desert-direction-mix", "desert-direction-broad", "desert-direction-patches", "desert-domain-warp", "desert-shore-guided", "desert-shore-fine", "desert-broad-tuned", "desert-broad-irregular", "desert-broad-mosaic") else
                 "C3XReference_x64.dll")
     dll = rf"..\lab\out\coastal-shallows\{dll_name}"
     scene = r"..\lab\out\coastal-shallows\scene.csv"
@@ -1776,9 +1995,72 @@ def review_shelf(candidate: str = "shelf-relief") -> None:
     print(output)
 
 
+def review_mosaic() -> None:
+    """Verify matched control/irregular/mosaic captures at both useful zooms."""
+    from PIL import Image, ImageChops, ImageDraw, ImageEnhance, ImageStat
+    labels = ("shelf-mesh-control", "desert-broad-irregular", "desert-broad-mosaic")
+    reports = {}
+    for zoom, box, output in (
+        (256, (530, 120, 1080, 670), "control-irregular-mosaic-close.png"),
+        (128, (450, 250, 1050, 850), "control-irregular-mosaic-gameplay.png"),
+    ):
+        root = OUT / f"z{zoom}" if zoom != 128 else OUT
+        receipts = {label: json.loads((root / label / "result.json").read_text())
+                    for label in labels}
+        for label, receipt in receipts.items():
+            expected = {
+                "frame_sha256": digest(root / label / "frame-0000.jpg"),
+                "shader_sha256": digest(OUT / f"shader-{label}/Renderer/sandbox/water_surface.hlsl"),
+                "hydrology_sha256": digest(OUT / f"shader-{label}/Renderer/native/city_fidelity/hydrology.hlsl"),
+                "tile_width": zoom,
+            }
+            if any(receipt.get(key) != value for key, value in expected.items()):
+                raise ValueError(f"Stale mosaic capture: {zoom} {label}")
+        for field in ("scene_sha256", "client_sha256", "dll_sha256", "center", "size"):
+            if len({json.dumps(receipt[field]) for receipt in receipts.values()}) != 1:
+                raise ValueError(f"Mismatched mosaic input: {zoom} {field}")
+        frames = {label: Image.open(root / label / "frame-0000.jpg").convert("RGB")
+                  for label in labels}
+        if len({frame.size for frame in frames.values()}) != 1:
+            raise ValueError("Mismatched mosaic frame sizes")
+        control = frames[labels[0]]
+        ocean = (0, 50, 250, 280)
+        if any(ImageChops.difference(control.crop(ocean), frames[label].crop(ocean)).getbbox()
+               for label in labels[1:]):
+            raise ValueError(f"Open-ocean control changed at zoom {zoom}")
+        # Asset reads use the live pack checkout. Bare sand witnesses catch
+        # terrain drift without depending on animated vegetation or units.
+        if zoom == 128:
+            for dry_land in ((1100, 1030, 1200, 1100),
+                             (1200, 1050, 1300, 1130)):
+                for label in labels[1:]:
+                    change = ImageChops.difference(control.crop(dry_land),
+                                                   frames[label].crop(dry_land))
+                    if sum(ImageStat.Stat(change).mean) / 3 > .05:
+                        raise ValueError(f"Bare-sand witness drifted: {label}")
+        width, height = box[2] - box[0], box[3] - box[1]
+        sheet = Image.new("RGB", (width * len(labels), height + 30), "white")
+        pen = ImageDraw.Draw(sheet)
+        for index, label in enumerate(labels):
+            sheet.paste(frames[label].crop(box), (index * width, 30))
+            pen.text((index * width + 10, 8), label, fill="black")
+        sheet.save(root / output)
+        difference = ImageChops.difference(control.crop(box), frames[labels[-1]].crop(box))
+        ImageEnhance.Brightness(difference).enhance(8).save(root / "mosaic-difference-x8.png")
+        reports[str(zoom)] = {
+            "frames": {label: receipts[label]["frame_sha256"] for label in labels},
+            "open_ocean_identical": True,
+            "mosaic_vs_control_mean_abs_rgb": ImageStat.Stat(difference).mean,
+            "capture_format": "JPEG; per-pixel statistics are diagnostic",
+        }
+        print(root / output)
+    (OUT / "mosaic-review.json").write_text(json.dumps(reports, indent=2) + "\n")
+    print(OUT / "mosaic-review.json")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("build", "build-client", "build-shelf-mesh", "build-mesh-control", "prepare", "refine", "baseline", "candidate", "rich", "lagoon", "bed-only", "clearwater", "no-clutter", "scattered", "rockbeds", "continuous", "aquamarine", "aquamarine-no-margin", "aquamarine-clean-bed", "shelf-relief", "shelf-mesh", "shelf-mesh-lit", "shelf-mesh-control", "form-probe", "bed-hidden-probe", "desert-ripple-bed", "desert-ripple-broad", "desert-direction-mix", "desert-direction-broad", "desert-direction-patches", "reef-field", "reef-forms", "reef-ridges", "reef-relief", "reef-contrast", "reef-lit", "reef-stone", "reef-stone-grain", "reef-window", "reef-detail", "reef-composite", "recover-rich", "review", "review-rich", "review-zoom", "review-shelf", "review-mesh"))
+    parser.add_argument("action", choices=("build", "build-client", "build-shelf-mesh", "build-mesh-control", "prepare", "refine", "baseline", "candidate", "rich", "lagoon", "bed-only", "clearwater", "no-clutter", "scattered", "rockbeds", "continuous", "aquamarine", "aquamarine-no-margin", "aquamarine-clean-bed", "shelf-relief", "shelf-mesh", "shelf-mesh-lit", "shelf-mesh-control", "form-probe", "bed-hidden-probe", "desert-ripple-bed", "desert-ripple-broad", "desert-direction-mix", "desert-direction-broad", "desert-direction-patches", "desert-domain-warp", "desert-shore-guided", "desert-shore-fine", "desert-broad-tuned", "desert-broad-irregular", "desert-broad-mosaic", "reef-field", "reef-forms", "reef-ridges", "reef-relief", "reef-contrast", "reef-lit", "reef-stone", "reef-stone-grain", "reef-window", "reef-detail", "reef-composite", "recover-rich", "review", "review-rich", "review-zoom", "review-shelf", "review-mesh", "review-mosaic"))
     parser.add_argument("--zoom", type=int, choices=(128, 192, 256), default=128,
                         help="Sandbox tile width for a capture (default: 128)")
     args = parser.parse_args()
@@ -1811,6 +2093,24 @@ if __name__ == "__main__":
     elif args.action == "desert-direction-patches":
         build_desert_direction_patches()
         render(args.action, args.zoom)
+    elif args.action == "desert-domain-warp":
+        build_desert_domain_warp()
+        render(args.action, args.zoom)
+    elif args.action == "desert-shore-guided":
+        build_desert_shore_guided()
+        render(args.action, args.zoom)
+    elif args.action == "desert-shore-fine":
+        build_desert_shore_fine()
+        render(args.action, args.zoom)
+    elif args.action == "desert-broad-tuned":
+        build_desert_broad_tuned()
+        render(args.action, args.zoom)
+    elif args.action == "desert-broad-irregular":
+        build_desert_broad_irregular()
+        render(args.action, args.zoom)
+    elif args.action == "desert-broad-mosaic":
+        build_desert_broad_mosaic()
+        render(args.action, args.zoom)
     elif args.action == "prepare":
         prepare()
     elif args.action == "refine":
@@ -1825,6 +2125,8 @@ if __name__ == "__main__":
         review_shelf()
     elif args.action == "review-mesh":
         review_shelf("shelf-mesh")
+    elif args.action == "review-mosaic":
+        review_mosaic()
     elif args.action == "recover-rich":
         recover_rich_capture()
     else:

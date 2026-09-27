@@ -91,17 +91,12 @@ ring's inner clearance. The wall itself remains terrain-following and separate
 from the buildings. A future accepted style can encode its own wall perimeter;
 the current renderer still uses one radius per population tier.
 
-The focused flat-ground candidate uses the source block-paving base color,
-normal and gloss maps. Its paving envelope follows every building's raised
-footprint, including the civic building and palace, with short connecting
-lanes. The cover feathers into terrain instead of repeating rectangular
-decals. Each sourced building is grounded by its lowest vertex so the
-remaining stone base sits on paving rather than projecting through it. Small
-trees come from the existing farm source assets and stay outside the paving
-envelope. The software sheet shows paving color and spacing; the native replay
-also exercises the material channels and terrain compositing. Source
-cobblestones have a 256×256 base-color map, so texture detail remains limited
-at normal gameplay zoom despite the complete source material stack.
+The current Mediterranean medieval Lab candidate omits city ground decals and
+elevated masonry. Its buildings use the curated source meshes, with small
+trees from the existing farm assets. The compact wall sections follow terrain
+per vertex, overlap at turns, and use small sourced masonry buttresses at
+their joints. This keeps the visible perimeter connected while leaving the
+map terrain directly under the buildings.
 
 Use this process for other culture/era combinations: audition the entire
 available local source pool; identify landmark, roof-group and infill roles;
@@ -110,8 +105,8 @@ compile an isolated pack with source normals and material channels; compare
 the sheet with native-size D3D terrain replays. Treat a visually weak culture
 as an art-selection or layout problem before adjusting sharpening. The focused
 magenta sheet and map-backed replay are in ignored Lab output under
-`Renderer/lab/out/cities/medieval-art/sheet-v13/` and
-`Renderer/lab/out/cities/test-biq/gallery/medieval-candidate-v13-*.png`.
+`Renderer/lab/out/cities/medieval-art/sheet-no-ground-tight/` and
+`Renderer/lab/out/cities/test-biq/gallery/medieval-no-ground-tight-*.png`.
 The replay is not an in-game acceptance screenshot.
 
 ## Two-stage ground design
@@ -126,19 +121,12 @@ Walls remain a separate perimeter that follows the terrain contour. Roads,
 rivers, shorelines and neighboring relief are site constraints, not inputs to
 a prepainted city image.
 
-The current candidate already conforms paving vertices to the runtime terrain
-height, but its material is fixed in the compiled city pack. The source
-plains-hill and desert-hill color textures are useful Lab comparisons. Their
-base-color alpha is terrain material data rather than opacity, so
-`terrain_ground_color.py` makes disposable RGB-identical opaque swatches for
-the software sheet. A direct terrain texture pasted under the buildings still
-looks like a colored patch. The 4096² plains-hill swatch also exceeds the
-separate city texture budget when added to this candidate's existing assets.
-The runtime design should sample the already-loaded terrain material instead
-of duplicating that texture in the city pack. Its authored color, height and
-specular response should remain available to the ground shader. This method
-still needs flat and varied-hill D3D replays before it replaces the fixed
-cobblestone Lab candidate.
+Ground accents are deferred for this recipe. The terrain shader blends site
+materials with authored height and transition masks; the city decal shader
+used one fixed color texture, which read as a patch on mixed sites. The
+current recipe leaves the terrain visible. If accents return, they should
+sample the already-loaded site material and preserve its color, height and
+specular response rather than duplicate a swatch in the city pack.
 
 ## Reproduce
 

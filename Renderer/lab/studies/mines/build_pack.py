@@ -91,12 +91,14 @@ def local_part(mesh: dict) -> tuple[dict, float, float]:
 
 
 def build(pack: Path, *, include_ground: bool = True, scale: float = 1.34,
-          conform_parts: bool = False) -> dict:
+          conform_parts: bool = False, first_two_only: bool = False) -> dict:
     if conform_parts and include_ground:
         raise ValueError("Individual mine components require the no-decal trial")
     manifest = _load_json(pack / "manifest.json")
     catalog = _load_json(pack / manifest["improvement_catalog"])
-    roots = [variant for era in catalog["mine"]["eras"] for variant in era["variants"]]
+    roots = [variant for era in catalog["mine"]["eras"]
+             for variant in (era["variants"][:2] if first_two_only else era["variants"])]
+    slots = [roots[index] for index in (0, 1, 0, 2, 3, 2)] if first_two_only else roots
     all_parts = {asset_id: collect(pack, manifest, asset_id) for asset_id in roots}
     counts = defaultdict(int)
     for parts in all_parts.values():
@@ -111,7 +113,7 @@ def build(pack: Path, *, include_ground: bool = True, scale: float = 1.34,
     assets, groups = [], []
     stats = {"source_roots": len(roots), "source_parts": 0,
              "retained_parts": 0, "ground_decals": 0}
-    for index, asset_id in enumerate(roots):
+    for index, asset_id in enumerate(slots):
         merged = defaultdict(list)
         individual = []
         stats["source_parts"] += len(all_parts[asset_id])
@@ -166,5 +168,6 @@ def build(pack: Path, *, include_ground: bool = True, scale: float = 1.34,
     target.write_bytes(output)
     stats.update({"runtime_assets": len(assets), "bytes": len(output),
                   "include_ground": include_ground, "uniform_scale": scale,
-                  "conform_parts": conform_parts})
+                  "conform_parts": conform_parts,
+                  "first_two_only": first_two_only})
     return stats

@@ -43,7 +43,12 @@ struct NaturalData {
     bool load_data(std::vector<Texture>&textures,Read read,Upload upload){
         failure="catalog";
         std::vector<std::uint8_t>d;
-        if(!read("Renderer/packs/NaturalFidelityRuntime/natural.bin",d)||d.size()<32||std::memcmp(d.data(),"C3XNAT3\0",8))return false;
+#ifdef C3X_RENDERER64_FRESH
+        constexpr char const* natural_pack="Renderer/packs/NaturalFidelityCutoverControl/";
+#else
+        constexpr char const* natural_pack="Renderer/packs/NaturalFidelityRuntime/";
+#endif
+        if(!read(std::string(natural_pack)+"natural.bin",d)||d.size()<32||std::memcmp(d.data(),"C3XNAT3\0",8))return false;
         std::size_t pos=8;
         auto take=[&](void*out,std::size_t n){if(n>d.size()-pos)return false;std::memcpy(out,d.data()+pos,n);pos+=n;return true;};
         unsigned count[6]={};if(!take(count,24)||count[0]>128||count[1]>64||
@@ -56,7 +61,7 @@ struct NaturalData {
             if(path.find_first_not_of("0123456789abcdef.ds")!=std::string::npos)return false;
             failure="texture "+path;
             std::vector<std::uint8_t>bytes;
-            if(!read("Renderer/packs/NaturalFidelityRuntime/"+path,bytes)||bytes.size()<148)return false;
+            if(!read(std::string(natural_pack)+path,bytes)||bytes.size()<148)return false;
             unsigned format=0;std::memcpy(&format,bytes.data()+128,4);
             if(format==61 /* DDS R8_UNORM */){auto&f=fields[i];std::memcpy(&f.height,bytes.data()+12,4);std::memcpy(&f.width,bytes.data()+16,4);
                 if(!f.width||!f.height||f.width>4096||f.height>4096||148ull+std::uint64_t(f.width)*f.height>bytes.size())return false;

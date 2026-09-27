@@ -31,6 +31,14 @@ cl /nologo /std:c++17 /EHsc /O2 /W4 /WX /wd4191 helper_trial\scene_workload.cpp 
 if errorlevel 1 goto fail
 
 if /i "%~1"=="no-stage" goto done
+if not exist "..\packs\NaturalFidelityCutoverControl\natural.bin" (
+  echo The pinned Renderer64 natural pack is missing; refusing to stage a black-map build. 1>&2
+  goto fail
+)
+if not exist "..\packs\Renderer64CutoverControl\Renderer\native\city_fidelity\terrain.hlsl" (
+  echo The pinned Renderer64 shader sources are missing; refusing to stage a black-map build. 1>&2
+  goto fail
+)
 tasklist /fi "imagename eq Civ3Conquests.exe" /nh 2>nul | find /i "Civ3Conquests.exe" >nul
 if not errorlevel 1 (
   echo Exit Civ III before staging Renderer64. 1>&2

@@ -105,22 +105,6 @@ inline void append_shadow(Projection const& input,FeatureAsset const& asset,floa
     shadow_vertices.insert(shadow_vertices.end(),
                            std::begin(triangles), std::end(triangles));
 }
-template<class Height>
-float hill_wall_ground(FeatureAsset const& asset,c3x_renderer_tile_v1 const& tile,
-        float local_u,float local_v,float rotation,float scale,Height natural_height_at){
-    float world_u=float(tile.tile_x+tile.tile_y)*.5f;
-    float world_v=float(tile.tile_x-tile.tile_y)*.5f;
-    float highest=natural_height_at(world_u+local_u,world_v+1.f-local_v);
-    float lowest_source=0.f,cosine=std::cos(rotation),sine=std::sin(rotation);
-    for(auto const& source:asset.vertices){
-        float x=(source.position[0]*cosine-source.position[1]*sine)*scale;
-        float y=(source.position[0]*sine+source.position[1]*cosine)*scale;
-        highest=std::max(highest,natural_height_at(
-            world_u+local_u+x,world_v+1.f-local_v-y));
-        lowest_source=std::min(lowest_source,source.position[2]*scale);
-    }
-    return highest-2.5f-lowest_source*(150.f/.82f)+.02f;
-}
 template<class Relief,class Height>
 void append_instance(Projection const& input,FeatureBundle const& bundle,FeaturePlacement const& placement,
         float local_u,float local_v,float rotation,float scale,float material_offset,float owner_code,bool cast_shadow,
@@ -140,10 +124,14 @@ void append_instance(Projection const& input,FeatureBundle const& bundle,Feature
     std::array<float, 3> ground_sample = relief_at_world(
         tile_world_u + local_u, tile_world_v + (1.0f - local_v));
     bool farm_asset=asset.id.rfind("farm_",0)==0;
-    bool terrain_wall=asset.id.rfind("city/walls/",0)==0 &&
-        tile.real_terrain_type==5;
-    if(terrain_wall)ground_sample[0]=hill_wall_ground(
-        asset,tile,local_u,local_v,rotation,scale,natural_height_at);
+    bool terrain_wall=pickup_profile && asset.id.rfind("city/walls/",0)==0;
+    float wall_source_floor=0.f;
+    if(terrain_wall){
+        for(auto const& source:asset.vertices)
+            wall_source_floor=std::min(wall_source_floor,source.position[2]*scale);
+        ground_sample[0]=natural_height_at(tile_world_u+local_u,
+            tile_world_v+1.f-local_v)-2.5f-wall_source_floor*(150.f/.82f)+.02f;
+    }
     if (farm_asset && asset.id.find(":base:")!=std::string::npos && ground_sample[2]<.55f)
         return;
     if (farm_asset && asset.id.find(":building:")!=std::string::npos && ground_sample[2]<.14f)
@@ -180,6 +168,9 @@ void append_instance(Projection const& input,FeatureBundle const& bundle,Feature
             ? relief_at_world(tile_world_u + local_u + local_x,
                               tile_world_v + 1.0f - local_v - local_y)
             : ground_sample;
+        if(terrain_wall)vertex_ground[0]=natural_height_at(
+            tile_world_u+local_u+local_x,tile_world_v+1.f-local_v-local_y)-
+            2.5f-wall_source_floor*(150.f/.82f)+.02f;
         if (farm_decal) {
             farm_shore[vertex_index] = vertex_ground[2];
             farm_world[vertex_index] = {tile_world_u+local_u+local_x,
@@ -979,7 +970,7 @@ inline bool select_improvements(c3x_renderer_tile_v1 const& tile,Assets const& a
                 !gate->placements.empty() && !tower->placements.empty()) {
                 constexpr float pi = 3.14159265359f;
                 constexpr unsigned samples = 2048u;
-                float const radius[3] = {.48f, .64f, .76f};
+                float const radius[3] = {.474f, .625f, .755f};
                 unsigned const sectors[3] = {16u, 20u, 24u};
                 std::array<std::array<float, 2>, samples + 1u> points{};
                 std::array<float, samples + 1u> distances{};
@@ -1016,20 +1007,37 @@ inline bool select_improvements(c3x_renderer_tile_v1 const& tile,Assets const& a
                 }
                 for (unsigned sector = 0u; sector < sectors[size]; ++sector) {
                     auto const & position = ring[sector];
+                    auto const & next = ring[(sector+1u)%sectors[size]];
+                    float dx=next[0]-position[0],dy=next[1]-position[1];
+                    float direction=std::atan2(dy,dx);
+                    float middle_x=(position[0]+next[0])*.5f;
+                    float middle_y=(position[1]+next[1])*.5f;
                     auto const & part = sector == 0u ? gate->placements.front()
                                                      : segment->placements.front();
+                    auto const& asset=wall_bundle.assets[part.asset_index];
+                    float low=1e9f,high=-1e9f;
+                    unsigned axis=sector==0u?0u:1u;
+                    for(auto const& vertex:asset.vertices){
+                        low=std::min(low,vertex.position[axis]);
+                        high=std::max(high,vertex.position[axis]);
+                    }
+                    float length=high-low;
+                    if(length<=0.f)return false;
+                    float fitted_scale=std::hypot(dx,dy)*1.06f/length;
+                    // Overlap the ring vertices to close wedge gaps where
+                    // finite-width masonry turns, including at the gate.
                     append_feature_instance(wall_bundle, part,
-                        .5f + position[0], .5f + position[1],
-                        position[2] + (sector == 0u ? pi / 2.0f : 0.0f),
-                        part.scale, 29.0f,
+                        .5f + middle_x, .5f + middle_y,
+                        direction - (sector == 0u ? 0.0f : pi / 2.0f),
+                        fitted_scale, 29.0f,
                         .08f * static_cast<float>(owner + 1u), true, wall_vertices);
                 }
-                for (unsigned sector = 2u; sector < sectors[size]; sector += 4u) {
+                for (unsigned sector = 0u; sector < sectors[size]; ++sector) {
                     auto const & position = ring[sector];
                     auto const & part = tower->placements.front();
                     append_feature_instance(wall_bundle, part,
                         .5f + position[0], .5f + position[1], position[2],
-                        part.scale, 29.0f,
+                        sector % 4u == 2u ? part.scale * .85f : part.scale * .75f, 29.0f,
                         .08f * static_cast<float>(owner + 1u), true, wall_vertices);
                 }
             } else {

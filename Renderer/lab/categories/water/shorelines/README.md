@@ -11,8 +11,9 @@ approval, and does not change the category's production appearance.
 The [coastal-shallows study](../../../studies/coastal_shallows/README.md)
 compares coast-family clarity and submerged source-height detail against the
 current-code water baseline at 256-pixel close zoom and 128-pixel gameplay
-zoom. Its selected Lab direction transfers continuous desert sand and
-desert-hills height to the coast bed. It has not changed production appearance.
+zoom. Its selected Lab mosaic varies between the clean control and an
+irregular source-height bed across continuous coast regions. It has not changed
+production appearance.
 
 Rock geometry remains exclusive to hill tiles adjoining water. The shoreline
 witness includes both that rocky join and an ordinary lowland beach so changes
