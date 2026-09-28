@@ -23,10 +23,14 @@ int main(){try{
  checked(D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_HARDWARE,nullptr,0,nullptr,0,D3D11_SDK_VERSION,&device,&level,&context));
  float vertices[4][23]={};float xy[4][2]={{0,0},{1,0},{1,1},{0,1}};
  for(unsigned i=0;i<4;++i){vertices[i][3]=xy[i][0];vertices[i][4]=xy[i][1];vertices[i][5]=2.5f/112;}
+ float ground[4][42]={};for(unsigned i=0;i<4;++i){
+  ground[i][30]=xy[i][0];ground[i][31]=xy[i][1];ground[i][32]=2.5f/112;}
  unsigned indices[]={0,1,2,0,2,3};D3D11_BUFFER_DESC desc={};desc.ByteWidth=sizeof(vertices);desc.BindFlags=D3D11_BIND_VERTEX_BUFFER;
  D3D11_SUBRESOURCE_DATA data={vertices,0,0};ComPtr<ID3D11Buffer> vb,ib;
  checked(device->CreateBuffer(&desc,&data,&vb));desc.ByteWidth=sizeof(indices);desc.BindFlags=D3D11_BIND_INDEX_BUFFER;data.pSysMem=indices;
  checked(device->CreateBuffer(&desc,&data,&ib));
+ desc.ByteWidth=sizeof(ground);desc.BindFlags=D3D11_BIND_VERTEX_BUFFER;data.pSysMem=ground;
+ ComPtr<ID3D11Buffer> ground_vb;checked(device->CreateBuffer(&desc,&data,&ground_vb));
  std::array<Record,1> records;records[0].mesh.buffer=vb.Get();records[0].mesh.indices=ib.Get();
  Settings settings;c3x_renderer::TerritoryBorders borders;
  for(unsigned count:{1u,2u,4u}){
@@ -46,6 +50,9 @@ int main(){try{
   };
   records[0].territory_edges=15;records[0].territory_rgb=0x20c080;records[0].translation_x=0;
   auto shown=render(1,1),hidden=render(.3f,1);assert(shown[3]>100&&shown[1]>shown[2]&&shown[2]>shown[0]);
+  records[0].mesh.buffer=ground_vb.Get();records[0].mesh.vertex_stride=168;
+  auto shoreline=render(1,1);assert(std::abs(shoreline[3]-shown[3])<.01);
+  records[0].mesh.buffer=vb.Get();records[0].mesh.vertex_stride=92;
   assert(std::abs(hidden[3]/shown[3]-.34)<.002);
   auto zoomed=render(1,1.25f);assert(zoomed[3]>shown[3]*1.4&&zoomed[3]<shown[3]*1.7);
   records[0].translation_x=16;auto moved=render(1,1);assert(std::abs(moved[3]-shown[3])<.01);

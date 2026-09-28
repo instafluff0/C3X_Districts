@@ -622,8 +622,8 @@ public:
         if(direct.input_bytes>resident_budget-resident_bytes)throw std::runtime_error("retained direct input budget");
         auto paint=area;
         if(placement){
-            int dx=int(std::lround((anchor_x-int(target->second.width/2))*.5));
-            int dy=int(std::lround((anchor_y-int(target->second.height/2))*.5));
+            int dx=int(std::lround((anchor_x-int(target->second.width/2))*(c3x_renderer::ZoomTransition::maximum-1.)));
+            int dy=int(std::lround((anchor_y-int(target->second.height/2))*(c3x_renderer::ZoomTransition::maximum-1.)));
             area=intersect({area.left+std::min(0,dx),area.top+std::min(0,dy),area.right+std::max(0,dx),area.bottom+std::max(0,dy)},extent(target->second));
         }
         auto n=node();resident_bytes+=direct.input_bytes;n->operation=true;n->area=area;n->command=c;n->command.clip=paint;n->direct=std::move(direct);n->dynamic=n->direct.animated||bool(placement);

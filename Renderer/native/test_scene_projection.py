@@ -9,7 +9,7 @@ class SceneProjectionTests(unittest.TestCase):
 #include <cassert>
 struct Viewport {float TopLeftX,TopLeftY,Width,Height;};
 int main(){
- for(unsigned width:{2240u,2239u})for(float scale:{1.f,1.125f,1.25f,1.5f}){
+ for(unsigned width:{2240u,2239u})for(float scale:{1.f,1.125f,1.25f,1.5f,1.75f,2.f,2.5f,3.f}){
   c3x_renderer::SceneProjection p(width,1260,scale);
   assert(p.x(float(width/2))==float(width/2));
   for(float guard:{4.f,8.f})for(float margin:{0.f,320.f})for(float raster:{1.f,.375f}){
@@ -61,7 +61,7 @@ int main(){try{
   auto zoom=std::make_shared<c3x_renderer::ZoomTransition>();
   retained.view(screen,detail,zoom,view_words);
   Rect panel={0,0,5,7};retained.record({Kind::fill,screen,0,panel,full,0,0,0xff16ab42});retained.commit(screen,full);
-  for(float scale:{1.f,1.125f,1.25f,1.5f,1.25f,1.f}){
+  for(float scale:{1.f,1.125f,1.25f,1.5f,1.75f,2.f,2.5f,3.f,1.25f,1.f}){
    zoom->reset(scale);auto output=retained_read(device.Get(),context.Get(),retained.sample(100+view_samples,1000).Get());
    assert(requested==scale&&normal_samples==0);
    for(unsigned x=6;x<w;++x)assert(output[x]==raster[x]);
@@ -71,7 +71,7 @@ int main(){try{
    unsigned below=raster[y*w+x]&255,expected=unsigned(std::round(128+below*(127.f/255)));
    assert(std::abs(int(output[y*w+x]&255)-int(expected))<=1);
   }
-  assert(view_samples==6&&normal_samples==0);
+  assert(view_samples==10&&normal_samples==0);
   assert(retained_read(device.Get(),context.Get(),gpu.texture(world))==canonical);
   // A newer camera may supersede this publication before its first display.
   // It must retain the old complete pixels until the new world is adopted.

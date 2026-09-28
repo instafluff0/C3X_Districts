@@ -20,6 +20,7 @@ struct Natural : NaturalWorld {
     bool ready=false;
     template<class T>void drop(T*&p){if(p)p->Release();p=nullptr;}
     void reset(){
+        low_relief.fields={};
         instance_stream.clear();drop(instance_vs);drop(instance_layout);
         for(auto&m:instance_meshes){drop(m.vertices);drop(m.indices);drop(m.material);}instance_meshes.clear();instance_mesh_bytes=0;
         surface_bindings={};body_bindings.clear();

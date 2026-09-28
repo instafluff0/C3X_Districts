@@ -18,7 +18,9 @@
     "Renderer/native/source_fidelity/runtime.h",
     "Renderer/native/render_core/terrain_query.h",
     "Renderer/tools/asset_compiler/generic_decal_compiler.py",
-    "Renderer/native/world_preparation.h"
+    "Renderer/native/world_preparation.h",
+    "Renderer/lab/shared/natural/low_relief.h",
+    "Renderer/tools/asset_compiler/build_low_relief.py"
   ],
   "recipe": {
     "terrain": 2,
@@ -38,7 +40,8 @@
   "tests": [
     "Renderer.lab.test_natural",
     "Renderer.native.source_fidelity.test_contract",
-    "Renderer.native.test_render_core"
+    "Renderer.native.test_render_core",
+    "Renderer.native.test_low_relief"
   ],
   "references": {
     "d3d11": [

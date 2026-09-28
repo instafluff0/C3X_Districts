@@ -14,6 +14,7 @@
 
 #include "gpu_image_display.h"
 #include "gpu_view_transform.h"
+#include "scene_projection.h"
 #include "scene_detail_filter.h"
 #include "gpu_unit_scene.h"
 #include "composition_recording.h"
@@ -634,7 +635,7 @@ Texture2D<float4> input_image:register(t0);RWTexture2D<uint> output_image:regist
     bool transform_view(ImportTarget const& d,Id source,float scale,ImportTarget const* words=nullptr,Format format=Format::rgb555){
         auto s=find(source);
         if(!s||!d.texture||!d.write||d.texture.Get()==s->texture.Get()||s->format!=Format::bgra32||
-           d.width!=s->width||d.height!=s->height||!(scale>=1.f&&scale<=1.5f))return false;
+           d.width!=s->width||d.height!=s->height||!(scale>=c3x_renderer::SceneProjection::minimum&&scale<=c3x_renderer::SceneProjection::maximum))return false;
         if(words&&(!words->texture||!words->write||words->width!=d.width||words->height!=d.height||
             words->texture==d.texture||words->texture.Get()==s->texture.Get()||format==Format::bgra32))return false;
         if(scale==1.f&&!words)context->CopyResource(d.texture.Get(),s->texture.Get());
@@ -645,7 +646,7 @@ Texture2D<float4> input_image:register(t0);RWTexture2D<uint> output_image:regist
     bool transform_view(Id destination,Id source,float scale){
         auto d=find(destination),s=find(source);
         if(!d||!s||d==s||d->read_only||d->format!=Format::bgra32||s->format!=Format::bgra32||
-           d->width!=s->width||d->height!=s->height||!(scale>=1.f&&scale<=1.5f))return false;
+           d->width!=s->width||d->height!=s->height||!(scale>=c3x_renderer::SceneProjection::minimum&&scale<=c3x_renderer::SceneProjection::maximum))return false;
         return transform_view(ImportTarget{d->texture,d->write,d->width,d->height},source,scale);
     }
     bool display(Id id,ID3D11RenderTargetView* target,unsigned width,unsigned height,Rect area,

@@ -5396,13 +5396,27 @@ public:
                    !cities.library.materials[source_chunk.city_material].ground)
                     chunk.water_dependent=false;
                 chunk.tile_x=record.tile_x;chunk.tile_y=record.tile_y;
-                bool border_surface=record.terrain_type>=11?layer==geometry_water:
+                // The active natural scene's coast/water surface is rendered
+                // separately; its per-tile water layer can be empty. The
+                // complete underlay carries shoreline territory edges across
+                // both the wet and dry portions of the native tile.
+                bool border_surface=record.terrain_type>=11?layer==geometry_underlay:
                     layer==geometry_natural_terrain || layer==geometry_natural_mountain;
                 chunk.territory_edges=border_surface?record.territory_edge_mask:0;
                 chunk.territory_rgb=record.territory_color_rgb;
                 chunk.water_visible=!visibility_pass || (record.tile_flags&C3X_RENDERER_TILE_VISIBLE)!=0;
                 if(natural_world || source_chunk.projection_kind || source_chunk.instances)
                     chunk=project_natural_chunk(chunk,record);
+                else if(border_surface){
+                    // Native ground chunks already carry world coordinates,
+                    // but their ordinary color path uses projected vertices
+                    // and never initializes the world projection constants.
+                    // The border pass reprojects that same complete underlay.
+                    chunk.natural_projection[0]=float((record.tile_x+record.tile_y)/2);
+                    chunk.natural_projection[1]=float((record.tile_x-record.tile_y)/2);
+                    chunk.natural_projection[2]=float(shadow_tile_width);
+                    chunk.natural_projection[3]=float(content_view_height);
+                }
                 chunk.translation_x = anchor_x - source.anchor_x;
                 chunk.translation_y = anchor_y - source.anchor_y;
                 geometry_vertex_buffers[layer].push_back(chunk);

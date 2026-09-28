@@ -6,6 +6,112 @@ Improve detail at normal and close zoom while preserving the asynchronous scene,
 native camera anchors, fixed-size native HUD, city-view constraints and GPU-only
 map delivery. Fixed Lab references are unchanged.
 
+## Current standalone candidate
+
+The current graphics study adds real low relief to grassland and plains, a
+shared restrained HDR display curve, and seven main-map zoom endpoints through
+3×. It is an isolated evaluation candidate; the earlier staged/live measurements
+below describe the previous baseline. Fixed Lab reference images are unchanged.
+
+### Gentle ground relief
+
+`lab/shared/natural/low_relief.h` consumes optional, generic authored height
+fields from `NaturalFidelityRuntime/low-relief.bin`. The offline compiler selects
+the imported continental grassland/plains fields referenced by `StandardFlat`.
+It preserves every 2048×2048 R8 source sample. Runtime contains no source-game
+asset names. Missing optional data gives the original flat surface.
+
+The selected study uses height amplitude 64 in the existing natural-surface
+units and a nominal repeat span of 96 native tile-coordinate steps. These are
+C3X calibration choices, not confirmed Civ VI engine settings. A 28-unit control
+was too subtle. The authored values occupy only part of the normalized range;
+64 does not mean every tile acquires a 64-pixel hill. Integral repeat counts
+close world seams. Biome and river-neighborhood weights taper continuously;
+water and river beds keep their datum, with a smooth coastal approach.
+
+The shared query supplies foreground/prepared terrain, normals, object/city
+placement and border ground meshes. Unit bodies and selection centers sample
+the same low ground from authoritative captured anchors, including sub-tile
+travel; reflections mirror the vertical offset. Unit projected shadows share
+the raised anchor, but their existing planar projection is not yet a full
+terrain-conforming shadow implementation. The existing terrain grid is reused:
+this pass adds two bounded CPU height fields (8 MiB), not more triangles or GPU
+readback. Reload/reset releases the optional fields with the natural assets.
+
+### Display and material response
+
+The common map output mixes the existing neutral transfer with a restrained
+[Narkowicz ACES-like fit](https://knarkowicz.wordpress.com/2016/01/06/aces-filmic-tone-mapping-curve/).
+The default mixture is 0.5, controlled by `C3X_RENDERER_SCENE_FILMIC`; zero is
+exact legacy neutral output. This is not the complete ACES pipeline. The change
+shares the existing output pass and applies equally to terrain, units, cities
+and other scene geometry, before native HUD. The existing CAS amount remains
+0.35. No intermediate target or extra resolve is added.
+
+A zero-height shading control isolated the grass's dark fine speckles to
+excessive material-height response. The shared ground shader now uses one
+quarter of that micro-height strength, preserving authored color, geometric
+normals and broad material variation. Day, dusk and night captures retain
+warm local facade lighting and emissive detail.
+
+MSAA 2×/4× were compared on the actual shared scene. Neither is selected as the
+default: 4× improved silhouette coverage but increased the median in a mixed
+zoom/wrap workload from 16.70 to 31.40 ms. Native-resolution single-sample output
+remains selected. Alpha-to-coverage consequently remains unimplemented here.
+The private sprite box/Lanczos path is not the direct shared-unit path.
+
+Validation passes the current grassland suite (137 tests, one missing-source
+skip), extracted zoom/input and grounding contracts, actual GPU projection and
+HDR tests, and the complete retained-composition oracle. Extending HUD bounds
+to the new maximum fixed an exact-pixel clipping failure above 1.5×. Injected
+compilation and the matching bridge/DLL/helper `BUILD_RENDERER64.bat no-stage`
+build pass. Grassland and plains close-ups and a night view were inspected;
+these checks do not substitute for a live extended-zoom run.
+
+### Reproduction and bounds
+
+`tools/scene_quality_study.py` creates a complete small world, loads the actual
+Renderer64 DLL in its standalone Windows client, and records the precise DLL,
+shader and pack hashes. `--zoom 3` selects close detail; `--zoom-peak 3
+--start-ms 29500 --frames 90` exercises a 1×–3×–1× sweep. `--land plains` changes
+the ground family. `--hour 0` checks night. Do not launch Civ III for this study.
+Warm cases finish in about 6 seconds; a changed shader closure can require a
+roughly one-minute first compilation.
+
+For this candidate, pass `--dll
+Renderer/native/build/renderer64/C3XRenderer_x64.dll`, `--client
+Renderer/native/build/scene-quality/client_x64.exe` and `--shaders
+Renderer/native/build/scene-quality/candidate-shaders`. The tool defaults point
+at the earlier staged binaries/shaders. The shader directory contains the
+canonical generated terrain and water shaders; receipts record their closure.
+
+`--hdr` explicitly captures the standalone FP16 surfaces. The tool compresses
+them losslessly and verifies the bytes before removing raw data. The separate
+Mac analyzer reconstructs the selected GPU display curve within one 8-bit
+channel value, then compares alternate curves with the existing CAS filter.
+This is Mac image analysis, not a Metal scene renderer or a game CPU fallback.
+Raw `frame.png` is the standalone output before CAS; `mixed-050.png` is the
+verified analysis with the production 0.35 CAS treatment. No screenshot is
+resized to manufacture a closer view.
+
+At 1280×800, one sample, water/waves/reflections enabled, 87 measured frames
+after three warmups in each 90-frame fixture:
+
+| Fixture | Median frame ms | p95 frame ms |
+| --- | ---: | ---: |
+| 1×–3×–1×, neutral transfer, flat ground | 16.65 | 18.57 |
+| 1×–3×–1×, selected transfer, flat ground | 16.70 | 18.61 |
+| 1×–3×–1×, selected transfer, rolling ground | 16.66 | 18.73 |
+| Settled 3×, selected transfer, flat ground | 16.70 | 18.36 |
+
+These small, vsync-limited standalone runs are not live-game FPS qualification
+or evidence of Civ VI visual parity. Geometry/lighting calibration, unit shadow
+conformance and aliasing remain visible areas for further improvement.
+
+Keep generated evidence under `native/build/scene-quality`, below 1 GiB.
+Preserve the selected images, compact receipts and compressed HDR inputs;
+remove compiler intermediates and redundant derived variants when finished.
+
 ## Visual target
 
 The user's Civ VI reference sets a substantially higher bar than a sharpened
@@ -135,7 +241,7 @@ modest CAS over MSAA2; they are not a statistical performance study or Civ VI
 visual parity claim.
 
 
-## Combined candidate
+## Earlier integrated baseline
 
 The final candidate is qualified by async fixture
 `b71c8cee78144743bd2aac3ac7c7de4f`, with 59.88 FPS warm, 59.96 FPS during

@@ -26,11 +26,11 @@ void sandbox_camera_path(ULONGLONG elapsed,int& x,int& y){
     else if(elapsed>=33500 && elapsed<35000)x=6400;
 }
 
-float sandbox_zoom_path(ULONGLONG elapsed){
+float sandbox_zoom_path(ULONGLONG elapsed,float peak=1.2f){
     if(elapsed>=29500 && elapsed<31000)
-        return 1.f+.2f*float(elapsed-29500)/1500.f;
+        return 1.f+(peak-1.f)*float(elapsed-29500)/1500.f;
     if(elapsed>=31000 && elapsed<32500)
-        return 1.2f-.2f*float(elapsed-31000)/1500.f;
+        return peak-(peak-1.f)*float(elapsed-31000)/1500.f;
     return 1.f;
 }
 
@@ -88,11 +88,16 @@ int sandbox_client_run(HMODULE module, c3x_renderer_frame_v1 const& prepared_fra
         opening.unit_y=diagnostic_y;
     }
     auto prime_frame=prepared_frame;
+    char study_value[32]{};
+    float study_zoom=GetEnvironmentVariableA("C3X_SANDBOX_STUDY_ZOOM",study_value,sizeof(study_value))?
+        std::clamp(float(std::atof(study_value)),1.f,3.f):0.f;
+    float study_zoom_peak=GetEnvironmentVariableA("C3X_SANDBOX_STUDY_ZOOM_PEAK",study_value,sizeof(study_value))?
+        std::clamp(float(std::atof(study_value)),1.f,3.f):1.2f;
     prime_frame.presentation_frequency=1000;
     prime_frame.presentation_time_ticks=0;
     auto prime_begin=GetTickCount64();
     int prime_result=draw(&prime_frame,nullptr,0,0,opening.unit_x,opening.unit_y,
-        opening.unit_incarnation,opening.viewer,opening.unit_visible,1.f);
+        opening.unit_incarnation,opening.viewer,opening.unit_visible,study_zoom>0?study_zoom:1.f);
     if(!prime_result)prime_result=present(window,&prime_frame,opening.unit_x,opening.unit_y,
         opening.unit_incarnation,opening.viewer,opening.unit_visible,0,0);
     std::printf("CLIENT_PRIME scene_and_swapchain_ms=%llu result=%d\n",
@@ -115,13 +120,15 @@ int sandbox_client_run(HMODULE module, c3x_renderer_frame_v1 const& prepared_fra
             frame_limit=std::clamp(std::atoi(frame_limit_text),1,frame_limit);
         char move_at_text[16]{};
         int move_at=15000;
+        int start_ms=GetEnvironmentVariableA("C3X_SANDBOX_STUDY_START_MS",study_value,sizeof(study_value))?
+            std::clamp(std::atoi(study_value),0,34000):0;
         if(!day_night && GetEnvironmentVariableA("C3X_SANDBOX_MOVE_AT_MS",
                 move_at_text,sizeof(move_at_text)))
             move_at=std::clamp(std::atoi(move_at_text),0,32000);
         // Every source frame is rendered at 30 Hz. The first 15 seconds keep
         // the camera fixed so water and authored ambient clips are inspectable.
         for(int index=0;index<frame_limit;++index){
-            int t=int((std::int64_t(index)*1000+15)/30);
+            int t=start_ms+int((std::int64_t(index)*1000+15)/30);
             int x=0,y=0;
             if(!day_night)sandbox_camera_path(t,x,y);
             Snapshot actor=opening;
@@ -136,13 +143,13 @@ int sandbox_client_run(HMODULE module, c3x_renderer_frame_v1 const& prepared_fra
             QueryPerformanceCounter(&started);
             int result=flat_present?0:draw(&frame,nullptr,x,y,actor.unit_x,actor.unit_y,
                 actor.unit_incarnation,actor.viewer,actor.unit_visible,
-                day_night?1.f:sandbox_zoom_path(t));
+                study_zoom>0?study_zoom:day_night?1.f:sandbox_zoom_path(t,study_zoom_peak));
             QueryPerformanceCounter(&drawn);
             if(!result)result=present(window,&frame,actor.unit_x,actor.unit_y,
                 actor.unit_incarnation,actor.viewer,actor.unit_visible,x,y);
             QueryPerformanceCounter(&finished);
             if(result)return result;
-            if(day_night && index>=3){
+            if(index>=3){
                 double divisor=double(cycle_frequency.QuadPart)/1000.;
                 cycle_frames.push_back(double(finished.QuadPart-started.QuadPart)/divisor);
                 cycle_draws.push_back(double(drawn.QuadPart-started.QuadPart)/divisor);
@@ -156,9 +163,9 @@ int sandbox_client_run(HMODULE module, c3x_renderer_frame_v1 const& prepared_fra
             }
             if(index%30==0)std::printf("CLIENT_CLIP_FRAME time_ms=%d hour=%.2f camera=%d,%d zoom=%.3f\n",
                 t,day_night?12.f+24.f*float(t)/30000.f:float(frame.hour),x,y,
-                day_night?1.f:sandbox_zoom_path(t));
+                study_zoom>0?study_zoom:day_night?1.f:sandbox_zoom_path(t,study_zoom_peak));
         }
-        if(day_night){
+        if(!cycle_frames.empty()){
             auto report=[](char const* name,std::vector<double>& values){
                 std::sort(values.begin(),values.end());
                 auto at=[&](double fraction){return values.empty()?0.:values[std::min(

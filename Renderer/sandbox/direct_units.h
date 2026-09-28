@@ -42,6 +42,24 @@ struct SandboxDirectUnits {
     c3x_renderer_i64 move_started=-1,combat_started=-1;
     int combat_serial=0;
     unsigned draws=0,pose_builds=0,mesh_builds=0;
+    float low_ground(float column,float row){
+        if(renderer.natural.low_relief.fields[0].pixels.empty())return 0;
+        c3x_renderer::render_core::ExactPointCache<c3x_renderer::render_core::ShoreSample> samples;
+        auto ignore=[](auto,auto){};
+        int c=int(std::floor(column)),r=int(std::floor(row));
+        c3x_renderer::fidelity::SurfaceQueries query(renderer.world_coast,samples,c+r,c-r,ignore,ignore,true);
+        return query.low_height(renderer.natural,column,row);
+    }
+    float unit_low_ground(c3x_renderer_frame_v1 const& frame,float x,float y){
+        if(renderer.natural.low_relief.fields[0].pixels.empty()||!frame.tile_count)return 0;
+        // Invert the captured isometric basis from one authoritative tile.
+        // This also follows sub-tile movement without a per-unit tile search.
+        auto const& tile=frame.tiles[0];
+        float dx=(x-tile.anchor_x-frame.tile_width*.5f)/(frame.tile_width*.5f);
+        float dy=(y-tile.anchor_y-frame.tile_height*.5f)/(frame.tile_height*.5f);
+        return low_ground((tile.tile_x+tile.tile_y)*.5f+.5f+(dx+dy)*.5f,
+            (tile.tile_x-tile.tile_y)*.5f+.5f+(dx-dy)*.5f);
+    }
     template<class T>static void drop(T*& p){if(p)p->Release();p=nullptr;}
     ~SandboxDirectUnits(){drop(vertex);drop(pixel);drop(shadow_pixel);drop(height_pixel);drop(layout);drop(visible_depth);drop(material);drop(beauty);
         drop(placement);drop(unshadowed_view);drop(unshadowed);
@@ -330,6 +348,7 @@ float4 PSShadow(Output i):SV_Target {
             if(!anchor)continue;
             float x=float(anchor->anchor_x),y=float(anchor->anchor_y);
             float world_row=float(anchor->tile_y);
+            float world_column=float(anchor->tile_x);
             double move_seconds=0,travel=1;
             if(index==0&&move_started>=0)if(auto* from=locate(move_from_x,move_from_y)){
                 double dx=double(x-float(from->anchor_x))*zoom;
@@ -341,8 +360,11 @@ float4 PSShadow(Output i):SV_Target {
                 x=float(from->anchor_x)+(x-float(from->anchor_x))*float(travel);
                 y=float(from->anchor_y)+(y-float(from->anchor_y))*float(travel);
                 world_row=float(from->tile_y)+(world_row-float(from->tile_y))*float(travel);
+                world_column=float(from->tile_x)+(world_column-float(from->tile_x))*float(travel);
             }
             if(index==0&&move_started>=0&&travel>=1)move_started=-1;
+            float low=low_ground((world_column+world_row)*.5f+.5f,(world_column-world_row)*.5f+.5f);
+            float ground_pixels=low*frame.tile_width/224.f*.82f;
             int body_x=int(std::lround(x))+camera_x+frame.tile_width/2-95;
             int body_y=int(std::lround(y))+camera_y+frame.tile_height/2-95;
             if(frame.world_wrap_x && frame.world_width_tiles>0){
@@ -383,8 +405,8 @@ float4 PSShadow(Output i):SV_Target {
                     unsigned(std::floor(local/duration*double(source->frames-1)+1e-7)));
                 float angle=(unit->yaw_offset+float((index==1?5:index==3?1:3)%8)*45)*.01745329252f;
                 float placement_values[28]={float(body_x+(reflected?8:4))+95.5f,
-                    float(body_y+(reflected?8:4))+95.5f,
-                    float(scene.width),float(scene.height),float(scene_scale),ground_depth,0,0,
+                    float(body_y+(reflected?8:4))+95.5f+(reflected?ground_pixels:-ground_pixels),
+                    float(scene.width),float(scene.height),float(scene_scale),ground_depth+low*.0016f*frame.target_height,0,0,
                     float(frame_number),float(source->bones),std::cos(angle),std::sin(angle),
                     unit->scale,unit->offset_z,0,0,
                     reflected?2.f:0.f,0,0,part.cutout};
@@ -549,7 +571,8 @@ float4 PSShadow(Output i):SV_Target {
                     int span=frame.world_width_tiles*frame.tile_width/2;
                     if(span>0){while(x>frame.target_width+512)x-=span;while(x+512<0)x+=span;}
                 }
-                cursors.ring(float(x+4),float(y+4),draw.reduced?64.f:128.f,true);
+                float low=unit_low_ground(frame,float(x),float(y));
+                cursors.ring(float(x+4),float(y+4)-low*frame.tile_width/224.f*.82f,draw.reduced?64.f:128.f,true);
             }
             if(!cursors.primitives.empty())renderer.tactical_gpu.draw_into(renderer.device,context,cursors,
                 {0,0,int(scene.width/scene_scale),int(scene.height/scene_scale)},
@@ -622,6 +645,8 @@ float4 PSShadow(Output i):SV_Target {
             }
             if(draw.body_x>frame.target_width+512||draw.body_x+512<0||
                draw.body_y>frame.target_height+512||draw.body_y+512<0)continue;
+            float low=unit_low_ground(frame,float(pose.anchor_x),float(pose.anchor_y));
+            float ground_pixels=low*frame.tile_width/224.f*.82f;
             if(!renderer.prepare_unit_action(action))return false;
             float ground_depth=float(instance.tile_y)*frame.tile_height*.5f+
                 renderer.geometry_viewport_settings.depth_translation+
@@ -652,8 +677,8 @@ float4 PSShadow(Output i):SV_Target {
                 // The ground point is Civ III's captured center. Sprite size
                 // and expanded dirty canvases must not move the resident mesh.
                 float placement_values[28]={float(pose.anchor_x+guard)/pose.projection_scale,
-                    float(pose.anchor_y+guard)/pose.projection_scale,
-                    float(scene.width),float(scene.height),scale,ground_depth,0,0,
+                    (float(pose.anchor_y+guard)+(reflected?ground_pixels:-ground_pixels))/pose.projection_scale,
+                    float(scene.width),float(scene.height),scale,ground_depth+low*.0016f*frame.target_height,0,0,
                     float(blended?0:frame_number),float(source->bones),std::cos(angle),std::sin(angle),
                     unit.scale,unit.offset_z,0,0,
                     reflected?2.f:0.f,0,0,part.cutout,

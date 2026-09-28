@@ -55,7 +55,8 @@ float rounded_distance(float2 q,uint edges){
 }
 float4 PS(P p,uint sample:SV_SampleIndex):SV_Target{
  // Clip to this ownership tile even where a relief mesh extends beyond it.
- clip(min(min(p.local.x,p.local.y),min(1-p.local.x,1-p.local.y))+.00002);
+ if(metadata.w<.5 || metadata.w>1.5)clip(min(min(p.local.x,p.local.y),min(1-p.local.x,1-p.local.y))+.00002);
+ if(metadata.w>.5)return float4(1,0,1,1);
  float d=rounded_distance(p.local,(uint)metadata.x),w=metadata.y;
  float noise=.93+.05*sin(dot(p.world,float2(7.7,11.3)))+.025*sin(dot(p.world,float2(19.1,-13.4)));
  float reach=5*w*noise,aa=max(fwidth(d),.0001);
@@ -134,6 +135,8 @@ public:
             values[11]=settings.depth_translation+float(r.translation_y);
             values[12]=float(r.territory_edges);values[13]=4.2f*std::pow(values[6]/128.f,.65f)/(values[6]*.4472136f);
             values[14]=20.f*float(height)/800.f;
+            char debug[8]={};values[15]=chunk.vertex_stride==168 &&
+                GetEnvironmentVariableA("C3X_RENDERER_BORDER_DEBUG",debug,sizeof(debug))?float(std::atoi(debug)):0.f;
             context->UpdateSubresource(cb,0,nullptr,values,0,0);
             context->IASetInputLayout(chunk.vertex_stride==92?natural_layout.Get():ground_layout.Get());
             context->IASetVertexBuffers(0,1,&chunk.buffer,&chunk.vertex_stride,&chunk.vertex_offset);

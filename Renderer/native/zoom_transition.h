@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
+#include "scene_projection.h"
 
 namespace c3x_renderer {
 // Renderer-thread view state. Retargeting carries both position and velocity;
@@ -12,7 +13,7 @@ class ZoomTransition {
     bool initialized=false;
     double presented=1.;
 public:
-    static constexpr double minimum=1.,maximum=1.5;
+    static constexpr double minimum=SceneProjection::minimum,maximum=SceneProjection::maximum;
     double sample(long long ticks,long long frequency){
         if(frequency<=0)throw std::invalid_argument("zoom clock frequency");
         double now=double(ticks)/double(frequency);

@@ -4,6 +4,7 @@
 #include <memory>
 #include "tactical_overlay.h"
 #include "native_navigation.h"
+#include "scene_projection.h"
 #include <functional>
 namespace c3x_native_images {
 // Caller-thread owner for the native map/copy/save/display family. The existing
@@ -256,7 +257,7 @@ public:
         }
         if(!adapter)return 0;
         if(op==C3X_NATIVE_ZOOM_TARGET){
-            if(color<65536||color>98304)return -1;
+            if(color<c3x_renderer::SceneProjection::minimum_q16||color>c3x_renderer::SceneProjection::maximum_q16)return -1;
             Command command={Kind::zoom_target,0,0,{}, {},0,0,color};
             client->submit(&command,1);client->flush();return 1;
         }

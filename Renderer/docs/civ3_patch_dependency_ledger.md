@@ -1,5 +1,25 @@
 # Civ III patch dependency ledger
 
+## Extended close map zoom
+
+`required_user_action: []`. No patch-table entry or address changed.
+
+The existing `Main_Screen_Form_handle_key_down` hook
+(`int __fastcall(Main_Screen_Form *, int, int, int)`;
+GOG/Steam/PCGames.de `0x4E05F0` / `0x4E8F90` / `0x4E06B0`) and
+`Main_Screen_Form_process_mouse_wheel` vptr hook
+(`void __fastcall(Main_Screen_Form *, int, int, int, int)`;
+GOG `0x66B43C`, other builds unavailable) now select seven map zoom targets:
+1, 1.25, 1.5, 1.75, 2, 2.5 and 3. Renderer projection, smooth transition and
+inverse picking admit the same range. This remains a GOG-qualified integration.
+
+Captured anchors stay canonical, native HUD and notifications keep their font
+and sprite sizes, and city spotlight continues to use its two native views.
+Config-off and unavailable custom zoom delegate through the existing original
+calls. Extracted wheel/key/picking/HUD contracts, GPU composition through 3x and
+`TEST_INJECTED_CODE_COMPILE.bat` pass. These checks do not claim live-game visual
+acceptance for the newly extended range.
+
 ## Cities and territory borders Lab promotion
 
 `required_user_action: []`. This pass changes no patch-table entry.

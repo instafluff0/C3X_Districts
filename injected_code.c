@@ -23723,10 +23723,11 @@ advance_custom_renderer_zoom (Main_Screen_Form * this, int steps, bool wrap)
 	    p_bic_data->Map.Renderer.spotlight_on_city != NULL)
 		return false;
 
-	int levels[3] = {128, 160, 192};
+	int levels[7] = {128, 160, 192, 224, 256, 320, 384};
 	sync_custom_renderer_zoom_to_native ();
-	int current = is->custom_renderer_zoom_target_width == 192 ? 2 :
-		is->custom_renderer_zoom_target_width == 160 ? 1 : 0;
+	int current = 0;
+	for (int n = 1; n < ARRAY_LEN (levels); n += 1)
+		if (levels[n] == is->custom_renderer_zoom_target_width) current = n;
 	int next = current + steps;
 	if (wrap) next = (next + ARRAY_LEN (levels)) % ARRAY_LEN (levels);
 	else {
@@ -23914,7 +23915,7 @@ custom_renderer_zoom_inverse_point (int * x, int * y)
 	// successful Present, not a requested target or an unpresented GPU frame.
 	int scale = is->custom_renderer_native_image != NULL ?
 		is->custom_renderer_native_image (C3X_NATIVE_ZOOM_PRESENTED, NULL, NULL, NULL, NULL, 0) : 65536;
-	if (scale < 65536 || scale > 98304) scale = 65536;
+	if (scale < 65536 || scale > 196608) scale = 65536;
 	int center_x = p_bic_data->ScreenWidth / 2, center_y = p_bic_data->ScreenHeight / 2;
 	long long dx = (long long)(*x - center_x) * 65536;
 	long long dy = (long long)(*y - center_y) * 65536;

@@ -24,7 +24,7 @@ int main(){
  assert(!gpu.transform_view(source,source,1.25f));
  assert(!gpu.transform_view(native,source,1.25f));
  assert(!gpu.transform_view(wrong_extent,source,1.25f));
- for(float invalid:{.9f,1.6f,std::numeric_limits<float>::quiet_NaN()})assert(!gpu.transform_view(destination,source,invalid));
+ for(float invalid:{.9f,3.01f,std::numeric_limits<float>::quiet_NaN()})assert(!gpu.transform_view(destination,source,invalid));
  auto uploads=gpu.stats().uploads,snapshots=gpu.stats().snapshots;
  for(int n=0;n<4;++n)assert(gpu.transform_view(destination,source,1.25f));
  auto allocations=gpu.stats().allocations;
@@ -32,7 +32,7 @@ int main(){
  checked(device->CreateQuery(&desc,&disjoint));desc.Query=D3D11_QUERY_TIMESTAMP;
  checked(device->CreateQuery(&desc,&begin));checked(device->CreateQuery(&desc,&end));
  context->Begin(disjoint.Get());context->End(begin.Get());
- for(unsigned n=0;n<count;++n)assert(gpu.transform_view(destination,source,1.f+float(n+1)/float(count*2)));
+ for(unsigned n=0;n<count;++n)assert(gpu.transform_view(destination,source,1.f+2.f*float(n+1)/float(count)));
  context->End(end.Get());context->End(disjoint.Get());context->Flush();
  auto wait=[&](ID3D11Query* query,void* result,UINT bytes){
   auto deadline=GetTickCount64()+10000;HRESULT status;

@@ -780,8 +780,8 @@ int test_retained_composition(){
               {Kind::fill,units,0,full,full,0,0,0x7c1f},{Kind::fill,unit_detail,0,full,full,0,0,0xffff00ff},
               {Kind::fill,units,0,marker,full,0,0,0x07e0},{Kind::fill,unit_detail,0,marker,full,0,0,0xff00ff00}});
         for(int y=marker.top;y<marker.bottom;++y)for(int x=marker.left;x<marker.right;++x)pixels[y*w+x]=0xff00ff00;
-        Rect native_hud={9,8,14,11};
-        send({{Kind::hud_begin,units,0,{}, {},12,12,42,0,unit_detail,0,0x7c1f},
+        Rect native_hud={22,14,27,17};
+        send({{Kind::hud_begin,units,0,{}, {},24,18,42,0,unit_detail,0,0x7c1f},
               {Kind::fill,units,0,native_hud,full,0,0,0xffff},{Kind::fill,unit_detail,0,native_hud,full,0,0,0xffffffff},
               {Kind::hud_end}});
         unsigned boundaries=0;auto boundary=[&]{++boundaries;send({{Kind::copy,screen,map_words,full,part},
@@ -793,24 +793,28 @@ int test_retained_composition(){
         checked(device->CreateTexture2D(&desc,nullptr,&display));checked(device->CreateTexture2D(&desc,nullptr,&buffer));
         ComPtr<ID3D11RenderTargetView> target;checked(device->CreateRenderTargetView(display.Get(),nullptr,&target));
         LARGE_INTEGER now={},frequency={};QueryPerformanceFrequency(&frequency);QueryPerformanceCounter(&now);
-        send({{Kind::fill,detail,0,full,full,0,0,0xff123456},{Kind::zoom_target,0,0,{}, {},0,0,98304}});
+        send({{Kind::fill,detail,0,full,full,0,0,0xff123456},{Kind::zoom_target,0,0,{}, {},0,0,196608}});
         assert(session.commit_display(1,detail,w,h,full));
         assert(session.visual_frame(now.QuadPart+frequency.QuadPart,frequency.QuadPart,target.Get(),display.Get(),buffer.Get())==1);
         session.did_present();assert(session.presented_zoom()==65536); // target without an actual view must never change picking
         boundary();QueryPerformanceCounter(&now);
-        send({{Kind::zoom_target,0,0,{}, {},0,0,98304}});
+        send({{Kind::zoom_target,0,0,{}, {},0,0,196608}});
         for(unsigned frame=1;frame<=16;++frame){
             auto tick=now.QuadPart+frequency.QuadPart*frame/60;
             assert(session.visual_frame(tick,frequency.QuadPart,target.Get(),display.Get(),buffer.Get())==1);
             unsigned prior=session.presented_zoom();
             if(frame==1)assert(prior==65536); // Sampling alone cannot move picking.
-            session.did_present();double scale=session.presented_zoom()/65536.;assert(scale>=1&&scale<=1.5);
+            session.did_present();double scale=session.presented_zoom()/65536.;assert(scale>=1&&scale<=3);
             auto actual=retained_read(device.Get(),context.Get(),display.Get());
             for(unsigned y=0;y<h;++y)for(unsigned x=0;x<w;++x){
                 if(x<9&&y<7){assert(actual[y*w+x]==0xff17385a);continue;}
-                int hx=int(std::lround((12-int(w/2))*(scale-1))),hy=int(std::lround((12-int(h/2))*(scale-1)));
+                int hx=int(std::lround((24-int(w/2))*(scale-1))),hy=int(std::lround((18-int(h/2))*(scale-1)));
                 if(int(x)>=native_hud.left+hx&&int(x)<native_hud.right+hx&&int(y)>=native_hud.top+hy&&int(y)<native_hud.bottom+hy){
-                    assert(actual[y*w+x]==0xffffffff);continue;
+                    if(actual[y*w+x]!=0xffffffff){
+                        std::fprintf(stderr,"HUD mismatch frame=%u scale=%.8f pixel=%u,%u actual=%08x expected_rect=%d,%d,%d,%d\n",frame,scale,x,y,actual[y*w+x],native_hud.left+hx,native_hud.top+hy,native_hud.right+hx,native_hud.bottom+hy);
+                        for(unsigned yy=0;yy<h;++yy)for(unsigned xx=0;xx<w;++xx)if(actual[yy*w+xx]==0xffffffff)std::fprintf(stderr,"ink %u,%u\n",xx,yy);
+                        assert(false);
+                    }continue;
                 }
                 double sx=std::clamp(double(w/2)+(double(x)+.5-w/2)/scale-.5,0.,double(w-1));
                 double sy=std::clamp(double(h/2)+(double(y)+.5-h/2)/scale-.5,0.,double(h-1));
@@ -830,6 +834,10 @@ int test_retained_composition(){
         // A city repaint can arrive with a narrow native dirty rectangle.
         // The new map view retires every placement from the previous view,
         // including labels outside that native rectangle.
+        send({{Kind::zoom_target,0,0,{}, {},0,0,98304}});
+        QueryPerformanceCounter(&now);
+        assert(session.visual_frame(now.QuadPart+frequency.QuadPart,frequency.QuadPart,target.Get(),display.Get(),buffer.Get())==1);
+        session.did_present();
         send({{Kind::copy,units,blank,full,full},
               {Kind::copy,unit_detail,blank_detail,full,full},
               {Kind::hud_begin,units,0,{}, {},30,20,43,0,unit_detail,0,0x7c1f},

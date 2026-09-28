@@ -931,6 +931,7 @@ struct SandboxFreshPipeline {
     SandboxMirrorTarget reflection,reflection_static;
     GeometryDrawView::Records resident, static_visible, water_visible,
         reflection_visible, all_visible;
+    bool border_trace_done=false;
     std::uint64_t resident_signature=0;
     unsigned resident_builds=0;
     int wrap_pixels=0;
@@ -1520,7 +1521,7 @@ struct SandboxFreshPipeline {
     bool ensure_glow(unsigned width,unsigned height) {
         if(glow.linear.color && glow.native_extent==width &&
             glow.native_height==height && glow.linear.width==width*scene_scale &&
-            glow.linear.height==height*scene_scale && glow.linear.samples &&
+            glow.linear.height==height*scene_scale && glow.linear.sample_count==scene_samples && glow.linear.samples &&
             bloom.width==(width+1)/2 && bloom.height==(height+1)/2)return true;
         glow.reset();glow.native_extent=width;glow.native_height=height;
         if(!ensure_linear_target(glow.linear,width*scene_scale,
@@ -1594,7 +1595,7 @@ struct SandboxFreshPipeline {
         if(GetEnvironmentVariableA("C3X_SANDBOX_MSAA_2X",msaa_option,sizeof(msaa_option)) &&
             msaa_option[0]=='1')scene_samples=2;
         if(GetEnvironmentVariableA("C3X_RENDERER_SCENE_SAMPLES",msaa_option,sizeof(msaa_option)))
-            scene_samples=msaa_option[0]=='2'?2u:1u;
+            scene_samples=msaa_option[0]=='4'?4u:msaa_option[0]=='2'?2u:1u;
         reflection_scale=GetEnvironmentVariableA("C3X_SANDBOX_REFLECTION_FULL",value,sizeof(value)) &&
             std::strcmp(value,"1")==0?1.f:.375f;
         unsigned reflection_width=unsigned((width+8)*reflection_scale);
@@ -1888,7 +1889,7 @@ struct SandboxFreshPipeline {
             static_valid=false;reflection_valid=false;reflected_terrain_material_valid=false;
         }
         camera_x=next_camera_x;camera_y=next_camera_y;
-        projection_zoom=std::clamp(next_zoom,1.f,1.5f);display_zoom=1.f;
+        projection_zoom=std::clamp(next_zoom,c3x_renderer::SceneProjection::minimum,c3x_renderer::SceneProjection::maximum);display_zoom=1.f;
         renderer.water_material=c3x_renderer::render_core::water_material_frame(frame);
         int water_camera_x=frame.world_wrap_x && frame.world_width_tiles>0?
             camera_x%(frame.world_width_tiles*frame.tile_width/2):camera_x;
@@ -2121,8 +2122,31 @@ struct SandboxFreshPipeline {
             float(scene_scale),next_zoom,visual_hour))
             return fail("direct_units");
         QueryPerformanceCounter(&ticks[5]);
+        if(!border_trace_done){
+            char requested[8]={};
+            if(GetEnvironmentVariableA("C3X_RENDERER_BORDER_TRACE",requested,sizeof(requested))){
+                for(unsigned layer:{unsigned(geometry_underlay),unsigned(geometry_natural_terrain),
+                                    unsigned(geometry_natural_mountain),unsigned(geometry_water)})
+                    for(auto const* view:{&static_visible,&water_visible}){
+                        unsigned marked=0;for(auto const& record:(*view)[layer])
+                            if(record.territory_edges){
+                                if(marked<4)std::printf("BORDER_TILE layer=%u tile=%d,%d edges=%u stride=%u projection=%.2f,%.2f,%.2f,%.2f\n",
+                                    layer,record.tile_x,record.tile_y,record.territory_edges,
+                                    record.content().vertex_stride,record.natural_projection[0],
+                                    record.natural_projection[1],record.natural_projection[2],
+                                    record.natural_projection[3]);
+                                ++marked;
+                            }
+                        std::printf("BORDER_RECORDS layer=%u records=%zu marked=%u\n",
+                            layer,(*view)[layer].size(),marked);
+                    }
+                std::fflush(stdout);
+            }
+            border_trace_done=true;
+        }
         for(auto const* visible_scene:{&static_visible,&water_visible})
-          for(unsigned layer:{unsigned(geometry_natural_terrain),unsigned(geometry_natural_mountain),unsigned(geometry_water)})
+          for(unsigned layer:{unsigned(geometry_underlay),unsigned(geometry_natural_terrain),
+                              unsigned(geometry_natural_mountain),unsigned(geometry_water)})
             if(!territory_borders.draw(renderer.device,context,(*visible_scene)[layer],settings,glow.linear,
                     renderer.content_view_width,renderer.content_view_height,projection_zoom,float(scene_scale),
                     [&](auto const& r){return renderer.chunk_intersects_region(GeometryDrawReference(r),settings,full,false);}))

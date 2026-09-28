@@ -11,6 +11,46 @@
 #include "bloom.h"
 #include "fresh_pipeline.h"
 
+float sandbox_scene_filmic(){
+    char value[32]{};
+    if(!GetEnvironmentVariableA("C3X_RENDERER_SCENE_FILMIC",value,sizeof(value)))return .5f;
+    char* end=nullptr;float amount=std::strtof(value,&end);
+    return end!=value && *end==0 && std::isfinite(amount)?std::clamp(amount,0.f,1.f):.5f;
+}
+
+// Explicit standalone diagnostic only; never called by the game draw callback.
+// Keep FP16 values for repeatable Mac analysis without asset or image copies.
+bool sandbox_capture_linear(char const* path) {
+    FILE* file=nullptr;
+    if(fopen_s(&file,path,"wb") || !file)return false;
+    unsigned header[]={0x32485243u,3}; // CRH2, three RGBA16F surfaces
+    bool ok=fwrite(header,sizeof(header),1,file)==1;
+    float parameters[]={renderer.display_exposure,sandbox_fresh.glow.gain,sandbox_scene_filmic(),0.f};
+    ok=ok && fwrite(parameters,sizeof(parameters),1,file)==1;
+    ID3D11Texture2D* surfaces[]={sandbox_fresh.static_cache.resolved,
+        sandbox_fresh.glow.linear.resolved,sandbox_fresh.bloom.color[0]};
+    for(auto* surface:surfaces){
+        if(!ok || !surface){ok=false;break;}
+        D3D11_TEXTURE2D_DESC desc{};surface->GetDesc(&desc);
+        if(desc.Format!=DXGI_FORMAT_R16G16B16A16_FLOAT || desc.SampleDesc.Count!=1){ok=false;break;}
+        unsigned extent[]={desc.Width,desc.Height};
+        ok=fwrite(extent,sizeof(extent),1,file)==1;
+        desc.Usage=D3D11_USAGE_STAGING;desc.BindFlags=desc.MiscFlags=0;
+        desc.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
+        Microsoft::WRL::ComPtr<ID3D11Texture2D> staging;
+        if(FAILED(renderer.device->CreateTexture2D(&desc,nullptr,&staging))){ok=false;break;}
+        renderer.context->CopyResource(staging.Get(),surface);
+        D3D11_MAPPED_SUBRESOURCE mapped{};
+        if(FAILED(renderer.context->Map(staging.Get(),0,D3D11_MAP_READ,0,&mapped))){ok=false;break;}
+        for(unsigned y=0;y<desc.Height && ok;++y)
+            ok=fwrite(static_cast<char const*>(mapped.pData)+std::size_t(y)*mapped.RowPitch,
+                std::size_t(desc.Width)*8,1,file)==1;
+        renderer.context->Unmap(staging.Get(),0);
+    }
+    ok=fclose(file)==0 && ok;
+    return ok;
+}
+
 bool sandbox_capture_jpeg(char const* path,D3D11_MAPPED_SUBRESOURCE const& mapped,
         int width,int height){
     static Microsoft::WRL::ComPtr<IWICImagingFactory> factory;
@@ -53,6 +93,8 @@ bool sandbox_capture_jpeg(char const* path,D3D11_MAPPED_SUBRESOURCE const& mappe
     return true;
 }
 
+#include "../native/scene_display.h"
+
 // The production display transfer, with its source address offset by the
 // scene's four-pixel guard. Its destination is the swapchain backbuffer.
 struct SandboxBackbufferOutput {
@@ -75,7 +117,7 @@ Texture2D<float4> bloom : register(t2);
 SamplerState linear_clamp : register(s0);
 cbuffer OutputSettings : register(b0) {
  float exposure;float gain;float2 inverse_scene;
- float zoom;float3 padding;
+ float zoom;float filmic;float2 padding;
 };
 float4 VSOutput(uint id : SV_VertexID) : SV_Position {
  float2 p=float2((id<<1)&2,id&2); return float4(p*float2(2,-2)+float2(-1,1),0,1);
@@ -96,16 +138,14 @@ float4 PSOutput(float4 position : SV_Position) : SV_Target {
  }
  if(c.a<=.000001) return 0;
  c.rgb+=bloom.SampleLevel(linear_clamp,(source_position+.5)*inverse_scene,0).rgb*gain*c.a;
- float3 rgb=max(0,c.rgb/c.a*exposure);
- rgb/=1+max(rgb.r,max(rgb.g,rgb.b));
- rgb=float3(rgb.r<=.0031308?rgb.r*12.92:1.055*pow(rgb.r,1/2.4)-.055,
-            rgb.g<=.0031308?rgb.g*12.92:1.055*pow(rgb.g,1/2.4)-.055,
-            rgb.b<=.0031308?rgb.b*12.92:1.055*pow(rgb.b,1/2.4)-.055);
+ float3 rgb=scene_display_srgb(c.rgb/c.a*exposure,filmic);
  return float4(saturate(rgb),saturate(c.a));
 })";
+        std::string combined=c3x_renderer::scene_display_shader();
+        combined+=source;
         auto compile=[&](char const* entry,char const* target,ID3DBlob** blob) {
             ID3DBlob* errors=nullptr;
-            HRESULT result=D3DCompile(source,std::strlen(source),"sandbox_backbuffer_output",
+            HRESULT result=D3DCompile(combined.data(),combined.size(),"sandbox_backbuffer_output",
                 nullptr,nullptr,entry,target,D3DCOMPILE_OPTIMIZATION_LEVEL3,0,blob,&errors);
             if(errors){if(FAILED(result))std::printf("SANDBOX_OUTPUT_SHADER %s\n",
                 static_cast<char const*>(errors->GetBufferPointer()));errors->Release();}
@@ -141,7 +181,7 @@ float4 PSOutput(float4 position : SV_Position) : SV_Target {
         context->VSSetShader(vertex,nullptr,0);context->PSSetShader(pixel,nullptr,0);
         float values[8]={renderer.display_exposure,sandbox_fresh.glow.gain,
             1.f/sandbox_fresh.glow.native_extent,1.f/sandbox_fresh.glow.native_height,
-            sandbox_fresh.display_zoom,0,0,0};
+            sandbox_fresh.display_zoom,sandbox_scene_filmic(),0,0};
         context->UpdateSubresource(settings,0,nullptr,values,0,0);
         context->PSSetConstantBuffers(0,1,&settings);
         ID3D11ShaderResourceView* sources[]={sandbox_fresh.static_cache.view,
@@ -343,7 +383,8 @@ extern "C" __declspec(dllexport) int c3x_sandbox_present(HWND window,
     static bool captured_initial = false, captured_moved = false;
     static bool captured_jump=false,captured_return=false,captured_wrap=false;
     static bool captured_scroll=false;
-    bool initial_capture = unit_x == 19 && unit_y == 47 && !captured_initial;
+    // Capture the first requested view, including standalone custom fixtures.
+    bool initial_capture = !captured_initial;
     bool moved_capture = unit_x == 20 && unit_y == 48 && !captured_moved && frame &&
         frame->presentation_time_ticks>=2000;
     bool jump_capture=camera_x==-640 && camera_y==-256 && !captured_jump;
@@ -369,6 +410,11 @@ extern "C" __declspec(dllexport) int c3x_sandbox_present(HWND window,
         sprintf_s(capture_path,"%s-%04u.jpg",sequence_prefix,sequence_frame++);
     }
     if (sequence_capture || named_capture) {
+        char linear_path[4*MAX_PATH]{};
+        if(initial_capture && GetEnvironmentVariableA("C3X_SANDBOX_HDR_CAPTURE",linear_path,sizeof(linear_path))) {
+            if(!sandbox_capture_linear(linear_path))return 1;
+            std::puts("CLIENT_HDR_CAPTURE pass");
+        }
         D3D11_TEXTURE2D_DESC description{}; back->GetDesc(&description);
         description.Usage = D3D11_USAGE_STAGING;
         description.BindFlags = 0; description.CPUAccessFlags = D3D11_CPU_ACCESS_READ;

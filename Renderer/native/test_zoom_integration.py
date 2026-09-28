@@ -13,6 +13,44 @@ def function(source, name):
 
 
 class ZoomIntegrationTests(unittest.TestCase):
+    def test_bridge_target_and_helper_presented_range(self):
+        owner=(ROOT/'Renderer/native/native_composition_owner.h').read_text()
+        target=owner[owner.index('        if(op==C3X_NATIVE_ZOOM_TARGET){'):owner.index('        if(op==C3X_NATIVE_HUD_BEGIN||')]
+        helper=(ROOT/'Renderer/native/helper_trial/scene_client.h').read_text()
+        presented=helper[helper.index('    unsigned presented_zoom()const{'):helper.index('    SceneClient(SceneClient const&)=delete;')]
+        run_cpp(r'''
+#include <cassert>
+#include <cstdint>
+#include "Renderer/native/scene_projection.h"
+#include "Renderer/native/gpu_image_commands.h"
+using namespace c3x_gpu_images;
+constexpr int C3X_NATIVE_ZOOM_TARGET=129;
+using LONG=std::int32_t;
+LONG InterlockedCompareExchange(volatile LONG* address,LONG,LONG){return *address;}
+struct Client{unsigned queued=0,flushed=0,value=0;
+ void submit(Command const* command,int count){assert(count==1&&command->kind==Kind::zoom_target);value=command->color;++queued;}
+ void flush(){++flushed;}
+}transport;
+struct Owner {Client* client=&transport;int operation(int op,unsigned color){
+''' + target + r'''
+return 0;}};
+struct Helper {struct Wire {volatile LONG presented_zoom_q16;} state{0};Wire* wire=&state;
+''' + presented + r'''
+};
+int main(){Owner owner;Helper helper;
+ for(unsigned scale:{65536u,81920u,98304u,104857u,114688u,131072u,163840u,196608u}){
+  unsigned prior=transport.queued;assert(owner.operation(129,scale)==1);
+  assert(transport.queued==prior+1&&transport.flushed==transport.queued&&transport.value==scale);
+  helper.state.presented_zoom_q16=LONG(scale);assert(helper.presented_zoom()==scale);
+ }
+ for(unsigned bad:{0u,65535u,196609u,~0u}){
+  unsigned prior=transport.queued;assert(owner.operation(129,bad)==-1&&transport.queued==prior);
+  helper.state.presented_zoom_q16=LONG(bad);assert(helper.presented_zoom()==65536);
+ }
+ helper.wire=nullptr;assert(helper.presented_zoom()==65536);
+}
+''')
+
     def test_notification_scope_delegates_when_disabled_and_balances(self):
         body = function((ROOT/'injected_code.c').read_text(), 'patch_Main_GUI_draw_notifications')
         run_cpp(r'''
@@ -167,12 +205,12 @@ bool custom_renderer_zoom_enabled(){return enabled;}
 void sync_custom_renderer_zoom_to_native(){++syncs;}
 int custom_renderer_zoom_inverse_coordinate(int v,long long){return v;}
 void '''+body+r'''
-int main(){for(q=65536;q<=98304;q+=137)for(int px:{-120,0,517,1120,1720,2240})for(int py:{0,331,630,1100}){
+int main(){for(q=65536;q<=196608;q+=137)for(int px:{-120,0,517,1120,1720,2240})for(int py:{0,331,630,1100}){
  int x=int(std::round(1120+(px-1120)*q/65536.)),y=int(std::round(630+(py-630)*q/65536.));
  auto before=queries;custom_renderer_zoom_inverse_point(&x,&y);assert(queries==before+1&&std::abs(x-px)<=1&&std::abs(y-py)<=1);
  }
  enabled=false;int x=91,y=173,before=queries;custom_renderer_zoom_inverse_point(&x,&y);assert(x==91&&y==173&&queries==before);
- enabled=true;for(int value:{0,-1,65535,98305}){q=value;x=91;y=173;custom_renderer_zoom_inverse_point(&x,&y);assert(x==91&&y==173);}
+ enabled=true;for(int value:{0,-1,65535,196609}){q=value;x=91;y=173;custom_renderer_zoom_inverse_point(&x,&y);assert(x==91&&y==173);}
 }
 ''')
 

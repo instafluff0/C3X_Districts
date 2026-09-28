@@ -88,7 +88,7 @@
     },
     {
       "path": "generated/shaders/relief/beauty_terrain.hlsl",
-      "sha256": "d7bba1fe3b48a410acf52bf46a25ba6da4cbb7be944c30d20ccc780de5bf3981"
+      "sha256": "b6df41daf210b97c016a86bf863a32df130ca48e74c7c9616d63cbedafea25d9"
     },
     {
       "path": "generated/shaders/relief/coast_rocks.hlsl",

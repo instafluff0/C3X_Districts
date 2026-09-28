@@ -310,3 +310,14 @@ renderer has preserved the source silhouette, material channels, normals, UV
 addressing, texture resolution, lighting basis, shadow geometry, and final
 sampling path. Most apparent softness is lost or misinterpreted information
 upstream, and no final-image filter can faithfully restore it.
+
+## Gentle base-terrain relief
+
+The confirmed `StandardFlat` references include separate authored continental
+grassland/plains height fields; see `civ6_grassland_geometry_uv.json`. That is
+evidence that a flat gameplay terrain class need not imply a planar surface.
+It does not establish Civ VI's exact runtime amplitude or placement. Preserve
+those fields as source data and label C3X calibration explicitly. Shared ground
+queries must drive geometry, normals, object placement and unit grounding;
+stronger normal-map grain alone cannot produce rolling silhouettes. The current
+standalone experiment and its limits are recorded in `render_quality.md`.

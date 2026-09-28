@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 #include "scene_wire.h"
+#include "../scene_projection.h"
 
 namespace c3x_helper_trial {
 // Bounded, one-operation diagnostic transport shared by Gate 2 and the full
@@ -39,7 +40,8 @@ public:
     unsigned frames()const{return wire?unsigned(InterlockedCompareExchange(reinterpret_cast<volatile LONG*>(&wire->visual_frames),0,0)):0;}
     unsigned presented_zoom()const{
         auto value=wire?unsigned(InterlockedCompareExchange(reinterpret_cast<volatile LONG*>(&wire->presented_zoom_q16),0,0)):0;
-        return value>=65536&&value<=98304?value:65536;
+        return value>=c3x_renderer::SceneProjection::minimum_q16&&value<=c3x_renderer::SceneProjection::maximum_q16?
+            value:c3x_renderer::SceneProjection::minimum_q16;
     }
     SceneClient(SceneClient const&)=delete;
     SceneClient& operator=(SceneClient const&)=delete;

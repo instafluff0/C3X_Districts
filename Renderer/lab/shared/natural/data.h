@@ -10,6 +10,7 @@
 #include "../../../native/environment_runtime.h"
 #include "../../../native/scene_lighting.h"
 #include "../../../native/source_fidelity/kernels.h"
+#include "low_relief.h"
 namespace c3x_renderer { namespace fidelity {
 struct HeightField {
     unsigned width=0,height=0; float minimum=0,maximum=1;
@@ -31,6 +32,7 @@ struct SurfaceRecipe {unsigned biome;float scale,variation;unsigned weight;float
 struct SurfaceVertex {float x,y,u,v;};
 struct Frame {float sun[4],color[4],ambient[4],view[4],detail[4],quality[4];};
 struct NaturalData {
+    LowRelief low_relief;
     std::vector<HeightField> fields;
     std::vector<Material> materials;
     std::vector<Body> bodies;
@@ -96,6 +98,9 @@ struct NaturalData {
         for(auto const&v:surface_vertices)if(!std::isfinite(v.x)||!std::isfinite(v.y)||!std::isfinite(v.u)||!std::isfinite(v.v)||
                 v.u<-.02f||v.u>1.02f||v.v<-.02f||v.v>1.02f)return false;
         if(pos!=d.size()||!surface_weight[0]||!surface_weight[1]||!surface_weight[2])return false;
+        // Older/simple texture-only packs remain valid and exactly flat.
+        d.clear();read(std::string(natural_pack)+"low-relief.bin",d);
+        failure="low relief";if(!low_relief.load(d))return false;
         return true;
     }
     std::array<Frame,3> frame_settings(EnvironmentState const&e,float const*light)const{

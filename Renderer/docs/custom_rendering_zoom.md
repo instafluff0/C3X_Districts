@@ -2,7 +2,8 @@
 
 `enable_custom_rendering_zoom = true`, together with
 `enable_custom_rendering = true`, enables main-map wheel zoom. The endpoints
-are 128, 160 and 192 pixels per tile (1×, 1.25× and 1.5×). Wheel-up moves
+are 128, 160, 192, 224, 256, 320 and 384 pixels per tile
+(1×, 1.25×, 1.5×, 1.75×, 2×, 2.5× and 3×). Wheel-up moves
 closer; wheel-down moves outward. Small Windows wheel deltas accumulate to a
 120-unit notch. Z cycles outward and wraps. The viewport center stays fixed.
 Configuration-off, loading/menu and disabled custom zoom delegate to Civ III's
@@ -80,11 +81,16 @@ undo the existing native/canonical transform. Reading it submits no RPC and
 waits for no frame. Native map-clip queries retain their separate untransformed
 call sites; native city-screen input retains its native camera.
 
-The helper wire is version 10. The successful-presentation counter remains at
+The helper wire is version 11. The successful-presentation counter remains at
 byte 228; the presented zoom scale is at byte 232. The bridge, helper and x64
 DLL must be built and staged together. Scene teardown releases the view,
 notification snapshots and retained images; injected teardown resets wheel
 remainder and canonical/target state before another map is loaded.
+
+The current 3× extension is a standalone candidate. The prior live evidence
+below covers the earlier 1.5× limit; it does not qualify the extended range in
+Civ III. Bridge target admission, helper telemetry and GPU image transforms use
+the same limits as scene projection. City-view restrictions are unchanged.
 
 ## Verification
 

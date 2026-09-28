@@ -458,13 +458,15 @@ Output shade(P input) {
         albedo = lerp(base, hill, rocky_band * 0.90);
         height_detail = lerp(base_h, hill_h, rocky_band);
         specular_map = lerp(base_s, hill_s, rocky_band);
-        // Keep the full height response on plains and desert. Reduce only the
-        // grass share so its source specks do not read as near-black pits.
+        // Material height describes fine grain, far below the actual hill
+        // relief. Full normalized amplitude turns texels into steep dark pits
+        // at close zoom. Keep authored color and broad shape; bound only this
+        // shared micro-height amplitude across the ground materials.
         float grass_plains_detail = saturate(1 - tundra_weight - desert_weight) *
             (1 - smoothstep(0.06, 0.45, input.material.z));
         float grass_share = (1 - plains_weight) * (1 - desert_weight);
         geometric = detail_normal_strength(geometric, input.world, height_detail,
-                                           Detail.y * (1 + (0.9 - 0.6 * grass_share) *
+                                           Detail.y * 0.25 * (1 + (0.9 - 0.6 * grass_share) *
                                                        grass_plains_detail));
 
         // Source-backed detail supplies a continuous material-scale response.

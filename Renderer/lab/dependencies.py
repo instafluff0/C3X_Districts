@@ -10,7 +10,7 @@ import json
 def consumers(entries):
     objects = {key for key, value in entries.items() if value["recipe"].get("objects")}
     return {
-        "coastal-waves": set(entries), "natural": set(entries), "hill-cliff": set(entries),
+        "coastal-waves": set(entries), "natural": set(entries), "hill-cliff": set(entries), "low-relief": set(entries),
         "tile-sites": {"huts-camps", "goody-huts", "barbarian-camps", "shadows"} & entries.keys(),
         "cities": objects | ({"cities"} & entries.keys()),
         "units": {"units", "animation", "shadows", "tactical-overlays"} & entries.keys(),

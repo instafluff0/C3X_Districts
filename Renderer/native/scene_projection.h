@@ -7,10 +7,12 @@ namespace c3x_renderer {
 // Display projection only. Native anchors, scene geometry and gameplay camera
 // remain in their captured pixel coordinate system.
 struct SceneProjection {
+    static constexpr float minimum=1.f,maximum=3.f;
+    static constexpr unsigned minimum_q16=unsigned(minimum*65536.f),maximum_q16=unsigned(maximum*65536.f);
     float scale=1.f,cx=0.f,cy=0.f;
     SceneProjection(unsigned width,unsigned height,float zoom=1.f)
         :scale(zoom),cx(float(width/2)),cy(float(height/2)) {
-        if(!std::isfinite(scale)||scale<1.f||scale>1.5f)
+        if(!std::isfinite(scale)||scale<minimum||scale>maximum)
             throw std::invalid_argument("scene projection scale");
     }
     float x(float p)const{return cx+(p-cx)*scale;}

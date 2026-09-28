@@ -88,6 +88,30 @@ public:
         if(world.wrap_y && world.height>0)y=render_core::mod(y,world.height);
         return Tile{x,y,c,r,value.real};
     }
+    float low_height(NaturalData const& natural,float x,float y){
+        if(natural.low_relief.fields[0].pixels.empty())return 0;
+        auto world=coast.world().dimensions();
+        float gx=x-.5f,gy=y-.5f;int c=int(std::floor(gx)),r=int(std::floor(gy));
+        float tx=float(render_core::smoother(gx-c)),ty=float(render_core::smoother(gy-r));
+        float weights[2]={};
+        for(int dy=0;dy<2;++dy)for(int dx=0;dx<2;++dx){
+            auto t=tile(c+dx,r+dy);
+            if(!t.present)continue;
+            auto index=coast.world().index(c+dx,r+dy);
+            auto bits=coast.world().at(index);
+            // Existing authored hills, mountains and volcanoes keep their
+            // original profiles. Forest and jungle can still inherit the
+            // base terrain's gentler slope beneath their vegetation.
+            if((t.base!=1&&t.base!=2)||t.real==4||t.real==5||t.real==6||t.real==9||
+               t.real==10||((bits>>16)&255u))continue;
+            weights[t.base==2?0:1]+=(dx?tx:1-tx)*(dy?ty:1-ty);
+        }
+        if(weights[0]+weights[1]==0)return 0;
+        auto s=shore(x,y);
+        float inland=coast_ramp((float(s.distance)-.25f)/.65f);
+        return inland*(weights[0]*natural.low_relief.sample(0,x,y,world)+
+            weights[1]*natural.low_relief.sample(1,x,y,world));
+    }
     template<class Height>
     float height(NaturalData const& natural,Height pickup_height,float x,float y,float* support=nullptr) {
         render_core::ShoreSample sample{};
@@ -108,10 +132,11 @@ public:
             if(support)*support=s;
         }else authored=natural.height(x,y,[&](int nc,int nr){return natural_tile(nc,nr);},support);
         float pickup=pickup_height(x,y);
+        float low=low_height(natural,x,y);
         // Both coastal branches multiply displacement above the 2.5 datum.
-        // With both sources exactly flat the result is independent of shore;
-        // the source queries above still observe all height dependencies.
-        if(skip_flat_shore && authored==2.5f && pickup==0.f)return 2.5f;
+        // When the older relief sources are flat, low relief already includes
+        // its shore envelope. All source queries still observe dependencies.
+        if(skip_flat_shore && authored==2.5f && pickup==0.f)return 2.5f+low;
         if(skip_flat_shore)sample=shore(x,y);
         float coastal=coast_relief(float(sample.distance),float(sample.beach_width));
         float h=std::max(authored,2.5f+pickup);
@@ -120,10 +145,10 @@ public:
         // beach envelope must not flatten a hill behind the cliff faces.
         if(rocky>0){
             float cliff=coast_ramp((float(sample.distance)-.04f)/.14f);
-            return 2.5f+std::max((authored-2.5f)*(coastal+(1-coastal)*rocky*cliff),
+            return 2.5f+low+std::max((authored-2.5f)*(coastal+(1-coastal)*rocky*cliff),
                 pickup*(coastal+(1-coastal)*rocky));
         }
-        return 2.5f+(h-2.5f)*coastal;
+        return 2.5f+low+(h-2.5f)*coastal;
     }
 };
 }}
