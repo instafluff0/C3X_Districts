@@ -289,6 +289,7 @@ void rebuild_tile_animation_pcx_sprite_lookup ();
 void refresh_tile_animation_pcx_active_mask ();
 int pick_tile_animation_winner_for_tile (unsigned int * tile_mask);
 void unload_custom_renderer ();
+bool ensure_custom_renderer_loaded ();
 void settle_custom_renderer_navigation (int action);
 int capture_custom_renderer_world_page (struct c3x_renderer_world_page_v1 * page);
 bool parse_tile_animation_hour_list (struct string_slice const * value, unsigned int * out_mask);
@@ -19788,6 +19789,14 @@ void __fastcall
 patch_Map_Renderer_load_images (Map_Renderer *this, int edx)
 {
 	Map_Renderer_load_images(this, __);
+	if (is->current_config.enable_custom_rendering) {
+		char detail[256];
+		snprintf (detail, sizeof detail, "[C3X renderer] stage=load-view viewer=%d camera=%d,%d bounds=%d,%d,%d,%d world=%d,%d image=%p loading=%d\n",
+			p_main_screen_form->Player_CivID, p_main_screen_form->camera_x, p_main_screen_form->camera_y,
+			p_main_screen_form->TileX_Min, p_main_screen_form->TileY_Min, p_main_screen_form->TileX_Max, p_main_screen_form->TileY_Max,
+			p_bic_data->Map.Width, p_bic_data->Map.Height, ((PCX_Image *)this)->JGL.Image, *(char *)(p_main_screen_form->GUI.field_574 + 3));
+		(*p_OutputDebugStringA) (detail);
+	}
 
 	if (is->current_config.day_night_cycle_mode != DNCM_OFF || is->current_config.seasonal_cycle_mode != SCM_OFF) {
 		if (! allocate_day_night_cycle_runtime_storage ()) {
@@ -25018,6 +25027,12 @@ patch_load_scenario (BIC * this, int edx, char * param_1, unsigned * param_2)
 	}
 	load_tile_animation_configs ();
 
+	// The accepted scenario/configuration owns renderer assets, just like other C3X packs.
+	if (tr == 0 && is->current_config.enable_custom_rendering) {
+		Main_GUI_label_loading_bar (&p_main_screen_form->GUI, __, 0, "Loading renderer assets");
+		ensure_custom_renderer_loaded ();
+	}
+
 	// Initialize Trade Net X
 	if (is->current_config.enable_trade_net_x && (is->tnx_init_state == IS_UNINITED)) {
 		char path[MAX_PATH];
@@ -27793,9 +27808,14 @@ unload_custom_renderer ()
 		return;
 	}
 	set_custom_renderer_native_probe (NULL);
-	if ((is->custom_renderer_module != NULL) &&
-	    (is->custom_renderer_reset != NULL))
-		is->custom_renderer_reset ();
+	if (is->custom_renderer_module != NULL) {
+		int (*end_scene) (void) = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_end_scene");
+		if (end_scene == NULL || end_scene () != C3X_RENDERER_RESULT_OK) {
+			log_custom_renderer_event ("scene-unload-failed", C3X_RENDERER_RESULT_ERROR);
+			return;
+		}
+		log_custom_renderer_event ("scene-unloaded", C3X_RENDERER_RESULT_OK);
+	}
 	if (is->custom_renderer_module != NULL)
 		FreeLibrary (is->custom_renderer_module);
 	is->custom_renderer_module = NULL;
@@ -27829,6 +27849,7 @@ unload_custom_renderer ()
 	is->custom_renderer_unit_draw_playback = NULL;
 	is->custom_renderer_unit_visual = NULL;
 	is->custom_renderer_unit_move = NULL;
+	is->custom_renderer_unit_motion = NULL;
 	is->custom_renderer_unit_spawn = NULL;
 	is->custom_renderer_unit_state = NULL;
 	is->custom_renderer_unit_context = NULL;
@@ -27885,6 +27906,15 @@ unload_custom_renderer ()
 	is->custom_renderer_max_render_ticks = 0;
 	is->custom_renderer_max_blit_ticks = 0;
 	is->custom_renderer_max_map_pass_ticks = 0;
+}
+
+int __fastcall
+patch_Sprite_draw_main_menu_background (Sprite *this, int edx, PCX_Image *canvas, int x, int y, PCX_Color_Table *palette)
+{
+	if (! is->current_config.enable_custom_rendering)
+		return Sprite_draw (this, __, canvas, x, y, palette);
+	if (is->custom_renderer_module != NULL) unload_custom_renderer ();
+	return Sprite_draw (this, __, canvas, x, y, palette);
 }
 
 // Copy the existing native/C3X visibility decisions; the DLL never reads tiles.
@@ -28004,6 +28034,15 @@ forward_custom_unit_body (Sprite * sprite, PCX_Image * background, PCX_Image * c
 		visual.damage = unit->Body.Damage; visual.max_hp = Unit_get_max_hp (unit); visual.flags = flags;
 		visual.presentation_time_ticks = draw.presentation_time_ticks;
 		visual.presentation_frequency = draw.presentation_frequency;
+		if (draw.action == AT_RUN && is->custom_renderer_test_save[0] != '\0') {
+			char detail[384];
+			snprintf (detail, sizeof detail,
+				"[C3X renderer] stage=run-capture id=%d cursor=%d/%d pixel=%d,%d target=%d,%d body=%d,%d ticks=%lld frequency=%lld\n",
+				draw.unit_id, draw.action_cursor, draw.frame_count, visual.pixel_x, visual.pixel_y,
+				visual.target_x, visual.target_y, draw.body_x, draw.body_y,
+				draw.presentation_time_ticks, draw.presentation_frequency);
+			(*p_OutputDebugStringA) (detail);
+		}
 		is->custom_renderer_unit_visual (&visual);
 	}
 	// The resident path consumes native image identities before any CPU DC lease.
@@ -28169,6 +28208,7 @@ ensure_custom_renderer_loaded ()
 		is->custom_renderer_unit_draw_playback = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_draw_playback");
 		is->custom_renderer_unit_visual = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_visual");
 		is->custom_renderer_unit_move = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_move");
+		is->custom_renderer_unit_motion = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_motion");
 		is->custom_renderer_unit_spawn = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_spawn");
 		is->custom_renderer_unit_state = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_state");
 		is->custom_renderer_export_scene = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_export_scene");
@@ -28184,6 +28224,7 @@ ensure_custom_renderer_loaded ()
 		    (is->custom_renderer_unit_forget != NULL) &&
 		    (is->custom_renderer_unit_visual != NULL) &&
 		    (is->custom_renderer_unit_move != NULL) &&
+		    (is->custom_renderer_unit_motion != NULL) &&
 		    (is->custom_renderer_unit_spawn != NULL) &&
 		    (is->custom_renderer_unit_state != NULL) &&
 		    (is->custom_renderer_export_scene != NULL) &&
@@ -28933,6 +28974,25 @@ composite_custom_renderer_frame ()
 	int resident_result = C3X_RENDERER_RESULT_BAD_ARGUMENT;
 	if (is->custom_renderer_native_map != NULL && is->custom_renderer_native_lifetime != NULL && custom_renderer_native_probe_on ())
 		resident_result = is->custom_renderer_native_map (C3X_NATIVE_MAP_PREPARE, image, &request, &displayed);
+	// Cold start is part of loading. Submit once, then poll the same immutable
+	// demand until its GPU map is ready. Later camera/animation calls never wait.
+	if (is->custom_renderer_presented_frames == 0 && resident_result == C3X_RENDERER_RESULT_PENDING &&
+	    *(char *)(p_main_screen_form->GUI.field_574 + 3)) {
+		void (WINAPI * sleep_ms) (DWORD) = (void *)(*p_GetProcAddress) (is->kernel32, "Sleep");
+		LARGE_INTEGER started, now; QueryPerformanceCounter (&started);
+		log_custom_renderer_event ("first-map-wait", resident_result);
+		do {
+			sleep_ms (5);
+			resident_result = is->custom_renderer_native_map (C3X_NATIVE_MAP_PREPARE, image, &request, &displayed);
+			QueryPerformanceCounter (&now);
+		} while (resident_result == C3X_RENDERER_RESULT_PENDING &&
+			now.QuadPart - started.QuadPart < 60 * is->custom_renderer_qpc_frequency.QuadPart);
+		if (resident_result == C3X_RENDERER_RESULT_PENDING) {
+			is->custom_renderer_native_map (C3X_NATIVE_MAP_CANCEL, image, NULL, NULL);
+			resident_result = C3X_RENDERER_RESULT_ERROR;
+		}
+		log_custom_renderer_event ("first-map-ready", resident_result);
+	}
 	bool gpu_map = resident_result == C3X_RENDERER_RESULT_OK;
 	if (gpu_map) {
 		render_result = resident_result;
@@ -29378,9 +29438,23 @@ patch_Map_Renderer_m52_Draw_Railroads (Map_Renderer * this, int edx, int image_i
 void __fastcall patch_Main_Screen_Form_move_camera (Main_Screen_Form * this, int edx, int x, int y, int reason, bool update_bounds);
 #endif
 
+void run_custom_renderer_combat_test (Main_Screen_Form * form, int key);
+
 void __fastcall
 patch_Main_Screen_Form_m82_handle_key_event (Main_Screen_Form * this, int edx, int virtual_key_code, int is_down)
 {
+    // Combat fixture commands exist only in an explicitly launched disposable test.
+    if (is->current_config.enable_custom_rendering && is_down && this == p_main_screen_form &&
+        (virtual_key_code == 0x84 || virtual_key_code == 0x85)) {
+        DWORD (WINAPI * get_environment) (LPCSTR, LPSTR, DWORD) = (void *)(*p_GetProcAddress) (is->kernel32, "GetEnvironmentVariableA");
+        char mode[16] = {0};
+        DWORD length = get_environment != NULL ? get_environment ("C3X_RENDERER_GAME_TEST_SAVE", is->custom_renderer_test_save, MAX_PATH) : 0;
+        if (length > 0 && length < MAX_PATH && get_environment ("C3X_RENDERER_GAME_TEST_MODE", mode, sizeof mode) == 6 &&
+            strcmp (mode, "combat") == 0) {
+            run_custom_renderer_combat_test (this, virtual_key_code);
+            return;
+        }
+    }
 #ifdef Main_Screen_Form_move_camera
     // Only a diagnostic launch sets this environment variable. Posted F24
     // events run on the ordinary game thread, through existing load/camera paths.
@@ -33320,7 +33394,7 @@ patch_show_intro_after_load_popup (void * this, int edx, int param_1, int param_
 			(*p_OutputDebugStringA) ("[C3X renderer] stage=scripted-game-load ready=1\n");
             char mode[16] = {0};
             if (get_environment ("C3X_RENDERER_GAME_TEST_MODE", mode, sizeof mode) > 0 &&
-                strcmp (mode, "interaction") == 0)
+                (strcmp (mode, "interaction") == 0 || strcmp (mode, "combat") == 0))
                 return patch_show_popup (this, __, param_1, param_2);
 			return 0;
 		}
@@ -47285,6 +47359,47 @@ notify_custom_renderer_tile_change (int x, int y)
 	}
 }
 
+#ifdef FLC_Animation_set_pixel_target_with_offset
+// Only the two accepted movement-target calls in Unit::animate_move use this
+// wrapper. Other FLC targets (combat, cursors, effects) retain their behavior.
+void __fastcall
+patch_FLC_Animation_set_move_target (FLC_Animation * this, int edx, int x, int y)
+{
+	if (! is->current_config.enable_custom_rendering) {
+		FLC_Animation_set_pixel_target_with_offset (this, edx, x, y);
+		return;
+	}
+	FLC_Animation_set_pixel_target_with_offset (this, edx, x, y);
+	Unit * unit = this->Unit;
+	if (unit == NULL || is->custom_renderer_unit_motion == NULL) return;
+	struct c3x_renderer_unit_move_v1 move = {0};
+	move.struct_size = sizeof move; move.unit_id = unit->Body.ID;
+	move.old_x = unit->Body.X; move.old_y = unit->Body.Y;
+	move.new_x = x / 64; move.new_y = y / 32;
+	wrap_tile_coords (&p_bic_data->Map, &move.new_x, &move.new_y);
+	if (! Map_in_range (&p_bic_data->Map, __, move.old_x, move.old_y) ||
+	    ! Map_in_range (&p_bic_data->Map, __, move.new_x, move.new_y) ||
+	    (move.old_x == move.new_x && move.old_y == move.new_y)) return;
+	move.action = AT_RUN;
+	move.source_visible = custom_renderer_tile_visible_at (move.old_x, move.old_y);
+	move.target_visible = custom_renderer_tile_visible_at (move.new_x, move.new_y);
+	if (! move.source_visible || ! move.target_visible) return;
+	move.map_epoch = is->custom_renderer_map_epoch;
+	move.viewer_epoch = is->custom_renderer_viewer_epoch;
+	move.presentation_frequency = is->custom_renderer_qpc_frequency.QuadPart;
+	LARGE_INTEGER now;
+	if (! QueryPerformanceCounter (&now)) return;
+	move.presentation_time_ticks = now.QuadPart;
+	int result = is->custom_renderer_unit_motion (&move);
+	if (is->custom_renderer_test_save[0] != '\0') {
+		char detail[256];
+		snprintf (detail, sizeof detail, "[C3X renderer] stage=motion-start id=%d from=%d,%d to=%d,%d result=%d\n",
+			move.unit_id, move.old_x, move.old_y, move.new_x, move.new_y, result);
+		(*p_OutputDebugStringA) (detail);
+	}
+}
+#endif
+
 // Civ III owns the accepted move. Send one ordered value event, then refresh
 // only its sight neighborhoods; Renderer owns copying, batching and diffing.
 void
@@ -47390,10 +47505,76 @@ notify_custom_renderer_unit_state (Unit * unit, unsigned int kind)
 		if (QueryPerformanceCounter (&now)) state.presentation_time_ticks = now.QuadPart;
 	}
 	if (state.presentation_frequency > 0) {
+        if (is->custom_renderer_test_step == 100 || is->custom_renderer_test_step == 101) {
+            char message[256];
+            snprintf (message, sizeof message, "[C3X renderer] stage=combat-observation id=%d tile=%d,%d action=%d queued=%d damage=%d hp=%d kind=%u visible=%u ticks=%lld\n",
+                state.unit_id, state.tile_x, state.tile_y, state.action, unit->Body.Animation.summary.queued_anim_type,
+                state.damage, state.max_hp, state.kind, state.visible, state.presentation_time_ticks);
+            (*p_OutputDebugStringA) (message);
+        }
 		int result = is->custom_renderer_unit_state (&state);
 		if (result == C3X_RENDERER_RESULT_ERROR || result == C3X_RENDERER_RESULT_DEVICE_ERROR)
 			is->custom_renderer_world_audit_needed = true;
 	}
+}
+
+// F21 prepares one visible melee encounter; F22 invokes native movement/combat.
+// The caller requires both diagnostic environment variables. No turn or save is issued.
+void
+run_custom_renderer_combat_test (Main_Screen_Form * form, int key)
+{
+    if (! is->current_config.enable_custom_rendering || form != p_main_screen_form ||
+        form->is_now_loading_game || ! form->GUI.is_enabled || ! is->custom_renderer_display_valid ||
+        form->Current_Unit == NULL || is_online_game () || *p_is_offline_mp_game || *p_is_pbem_game) return;
+    Unit * attacker = form->Current_Unit;
+    int x = attacker->Body.X + 2, y = attacker->Body.Y;
+    wrap_tile_coords (&p_bic_data->Map, &x, &y);
+    if (! Map_in_range (&p_bic_data->Map, __, x, y) || tile_is_water (x, y) ||
+        ! custom_renderer_tile_visible_at (x, y) || city_at (x, y) != NULL) return;
+    if (key == 0x84 && is->custom_renderer_test_step == 1) {
+        FOR_UNITS_ON (occupant, tile_at (x, y)) if (occupant.unit != NULL) return;
+        attacker = NULL;
+        FOR_UNITS_ON (candidate, tile_at (form->Current_Unit->Body.X, form->Current_Unit->Body.Y)) {
+            Unit * unit = candidate.unit;
+            if (unit != NULL && unit->Body.CivID == form->Player_CivID && unit->Body.Container_Unit < 0 &&
+                p_bic_data->UnitTypes[unit->Body.UnitTypeID].Unit_Class == UTC_Land &&
+                p_bic_data->UnitTypes[unit->Body.UnitTypeID].Attack > 0) { attacker = unit; break; }
+        }
+        if (attacker == NULL) {
+            int type = p_bic_data->General.BarbarianBasicUnitID;
+            if (type < 0 || type >= p_bic_data->UnitTypeCount || p_bic_data->UnitTypes[type].Attack <= 0 ||
+                p_bic_data->UnitTypes[type].Unit_Class != UTC_Land) return;
+            attacker = patch_Leader_spawn_unit (&leaders[form->Player_CivID], __, type,
+                form->Current_Unit->Body.X, form->Current_Unit->Body.Y, -1, -1, false, 0, -1);
+        }
+        if (attacker == NULL) return;
+        Unit * defender = patch_Leader_spawn_unit (&leaders[0], __, attacker->Body.UnitTypeID, x, y, 0, -1, false, 0, -1);
+        if (defender == NULL) return;
+        is->custom_renderer_test_step = 100;
+        patch_Main_Screen_Form_set_selected_unit (form, __, attacker, true);
+        form->vtable->m73_call_m22_Draw ((Base_Form *)form);
+        char message[160];
+        snprintf (message, sizeof message, "[C3X renderer] stage=scripted-combat-ready attacker=%d defender=%d from=%d,%d to=%d,%d\n",
+            attacker->Body.ID, defender->Body.ID, attacker->Body.X, attacker->Body.Y, x, y);
+        (*p_OutputDebugStringA) (message);
+    } else if (key == 0x85 && is->custom_renderer_test_step == 100 && attacker->Body.CivID == form->Player_CivID &&
+               p_bic_data->UnitTypes[attacker->Body.UnitTypeID].Attack > 0) {
+        Unit * defender = NULL;
+        FOR_UNITS_ON (occupant, tile_at (x, y)) {
+            if (occupant.unit != NULL && occupant.unit->Body.CivID == 0) defender = occupant.unit;
+            else if (occupant.unit != NULL) return;
+        }
+        if (defender == NULL) return;
+        int attacker_id = attacker->Body.ID, defender_id = defender->Body.ID;
+        is->custom_renderer_test_step = 101;
+        (*p_OutputDebugStringA) ("[C3X renderer] stage=scripted-combat-start\n");
+        int result = patch_Unit_move_to_adjacent_tile (attacker, __, DIR_E, false, 0, 1);
+        attacker = get_unit_ptr (attacker_id); defender = get_unit_ptr (defender_id);
+        char message[160];
+        snprintf (message, sizeof message, "[C3X renderer] stage=scripted-combat-end result=%d attacker_alive=%d defender_alive=%d\n",
+            result, attacker != NULL, defender != NULL);
+        (*p_OutputDebugStringA) (message);
+    }
 }
 
 // TCC requires a main function be defined even though it's never used.

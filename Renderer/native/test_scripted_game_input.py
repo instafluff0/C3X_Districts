@@ -24,11 +24,12 @@ class ScriptedGameInputTests(unittest.TestCase):
 using DWORD=unsigned;using LPCSTR=char const*;using LPSTR=char*;
 using Env=DWORD(*)(LPCSTR,LPSTR,DWORD);
 struct Unit {struct {int X=42,Y=43;}Body;} unit;
-int messages=0;
+int messages=0,combats=0;bool combat_mode=false;
 void show_map_specific_text(int x,int y,char const* text,bool pause){assert(x==42&&y==43&&text&&!pause);++messages;}
 struct Main_Screen_Form {int field_2E194=0,camera_x=10,camera_y=20;bool is_now_loading_game=false;Unit* Current_Unit=nullptr;
  struct {bool is_enabled=false;} GUI;} form;
 auto p_main_screen_form=&form;
+void run_custom_renderer_combat_test(Main_Screen_Form* p,int key){assert(p==&form&&(key==0x84||key==0x85));++combats;}
 struct Bic {struct {void* Tiles=nullptr;} Map;} bic;auto p_bic_data=&bic;
 struct State {struct {bool enable_custom_rendering=false;} current_config;
  char custom_renderer_test_save[MAX_PATH]={};unsigned custom_renderer_test_step=0;
@@ -36,7 +37,7 @@ struct State {struct {bool enable_custom_rendering=false;} current_config;
  bool custom_renderer_display_valid=false;void* kernel32=nullptr;} state;auto is=&state;
 int env_calls=0,original_calls=0,moves=0;constexpr int __=0;
 int patch_show_popup(void*,int,int,int){return 81;}DWORD env_length=9;
-DWORD environment(LPCSTR key,LPSTR buffer,DWORD size){++env_calls;if(std::strcmp(key,"C3X_RENDERER_GAME_TEST_MODE")==0)return 0;
+DWORD environment(LPCSTR key,LPSTR buffer,DWORD size){++env_calls;if(std::strcmp(key,"C3X_RENDERER_GAME_TEST_MODE")==0){if(combat_mode){std::strcpy(buffer,"combat");return 6;}return 0;}
  assert(std::strcmp(key,"C3X_RENDERER_GAME_TEST_SAVE")==0&&size==MAX_PATH);
  std::strcpy(buffer,"input.SAV");return env_length;}
 Env proc(void*,char const*){return environment;}auto p_GetProcAddress=proc;
@@ -62,8 +63,9 @@ int main(){
  state.custom_renderer_test_step=0;state.current_config.enable_custom_rendering=false;env_calls=0;
  assert(command(&form,19,0x87)==73&&env_calls==0);
  assert(command(&form,19,0x86)==73&&env_calls==0&&messages==0);
+ assert(command(&form,19,0x84)==73&&env_calls==0&&combats==0);
  state.current_config.enable_custom_rendering=true;
- assert(command(&form,19,0x85)==73&&env_calls==0);
+ assert(command(&form,19,0x83)==73&&env_calls==0);
  assert(command(&form,19,0x87,0)==73&&env_calls==0);
  env_length=0;assert(command(&form,19,0x87)==73&&state.custom_renderer_test_step==0);
  env_length=MAX_PATH;assert(command(&form,19,0x87)==73&&state.custom_renderer_test_step==0);
@@ -79,6 +81,13 @@ int main(){
  form.Current_Unit=&unit;assert(command(&form,19,0x86)==1&&messages==2&&moves==32);
  form.is_now_loading_game=true;assert(command(&form,19,0x86)==1&&messages==2);
  form.is_now_loading_game=false;env_length=0;assert(command(&form,19,0x86)==73&&messages==2);
+ combat_mode=true;assert(command(&form,19,0x84)==73&&combats==0);
+ env_length=9;combat_mode=false;assert(command(&form,19,0x84)==73&&combats==0);
+ combat_mode=true;assert(command(&form,19,0x84)==1&&combats==1);
+ assert(command(&form,19,0x85)==1&&combats==2);
+ assert(command(&form,19,0x85,0)==73&&combats==2);
+ state.current_config.enable_custom_rendering=false;
+ assert(command(&form,19,0x84)==73&&combats==2);
 }
 ''')
 

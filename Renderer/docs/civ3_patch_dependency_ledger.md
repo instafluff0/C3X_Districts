@@ -124,6 +124,17 @@ were explicitly authorized. The new console installer wraps the existing
 [scripted diagnostic usage](../tools/scripted_game_test.md). Live rendering
 acceptance still depends on the captured map and camera results.
 
+## Disposable combat diagnostic
+
+The explicit `combat` test mode adds guarded F21/F22 branches to the existing
+main-screen key hook. It reuses `Leader_spawn_unit` (GOG `0x5694D0`),
+`Main_Screen_Form_set_selected_unit` (`0x4DBA70`) and
+`Unit_move_to_adjacent_tile` (`0x5B8FC0`) through their existing C3X wrappers.
+No patch-table entry or gameplay combat implementation changes. A single
+visible adjacent barbarian is spawned only in the diagnostic child, then
+native combat decides the result. Config-off, normal launches and multiplayer
+cannot enter the fixture. `required_user_action: []`.
+
 ## Empty native unit background copies
 
 `required_user_action: ["At the strategic game checkpoint, verify cold startup and scrolling with the staged empty-copy correction using the existing diagnostic"]`.
@@ -1778,3 +1789,59 @@ patch signature, supported-build address or CSV entry changes.
 consolidation bridge changes have not been installed, run `INSTALL.bat` before
 the next game test. Staging must preserve the matching qualified short-capture
 receipt; no new manual recording is required for these automated comparisons.
+
+### Renderer loading and main-menu lifetime
+
+`patch_load_scenario` loads renderer definitions, shaders and shared textures
+immediately after the accepted C3X configuration and tile-animation packs.
+Existing `load_scenario` addresses: GOG `0x59AB50`, Steam `0x5A8660`, PCGames
+`0x59A870`; signature `unsigned (__fastcall *)(BIC *, int, char *, unsigned *)`.
+Preview and recursive scenario reads retain their existing exclusions. Native
+`Map_Renderer_load_images` still performs its ordinary work. No additional
+loading form is created. Capture `20260927-162108` confirms that the map image
+exists during native asset loading, but the player camera and bounds are still
+zero; preparing the first visible map before the existing bar closes remains
+an outstanding integration check.
+
+The verified GOG replacement call `Sprite_draw_main_menu_background` at
+`0x54F7D0` uses existing `Sprite_draw` signature
+`int (__fastcall *)(Sprite *, int, PCX_Image *, int, int, PCX_Color_Table *)`.
+Original bytes `E8 0B 8B 0A 00` target `0x5F82E0`. Steam / PCGames addresses are
+`0 / 0` (unverified). The call is in the common menu loop, so canceled quit
+prompts do not unload the game. Config-off delegates immediately.
+
+`c3x_renderer_end_scene` closes the scene helper and releases its packs, GPU
+assets and pending work. The process-owned JGL hook reference remains alive.
+Helper destruction must stop its cadence callbacks before shared transport
+memory is unmapped. Same-process menu/reload validation remains pending; the
+first lifecycle capture ended before its second load and is not a pass.
+
+`required_user_action: []`. The user authorized tested matching-trio staging,
+console installation and bounded automated game tests.
+
+### Renderer-owned unit travel
+
+The accepted movement-target calls inside `Unit::animate_move` publish a copied
+source/destination event before native animation starts. Renderer64 owns the
+travel clock and run clip. Commit updates authoritative state without truncating
+an active visual step; queued neighboring steps preserve run phase. Retirement,
+fog loss and unrelated position correction retire the visual route. Ordinary
+native FLC body samples no longer predict motion from intermediate pixels.
+
+Verified GOG entries, edited under the user's explicit known-address approval:
+
+| Symbol | Capability | Signature | GOG | Steam / PCGames |
+| --- | --- | --- | --- | --- |
+| `FLC_Animation_set_pixel_target_with_offset` | define | `void (__fastcall *)(FLC_Animation *, int, int x, int y)` | `0x403A70` | `0 / 0` (unverified) |
+| `FLC_Animation_set_move_target` | repl call, unit and army member | same signature | `0x5BAFC2`, `0x5BB043` | `0 / 0` (unverified) |
+
+Call bytes are `E8 A9 8A E4 FF` and `E8 28 8A E4 FF`; both target `0x403A70`.
+Only these accepted-move calls are replaced. Other FLC targets remain native.
+The wrapper checks custom rendering first and delegates unchanged when disabled.
+Unverified builds retain native behavior and are not qualified for this custom
+movement path. No CPU rendering fallback is added. `required_user_action: []`.
+
+The existing unit-move wire payload has subtype 1 for begin and subtype 0 for
+commit. The bridge, helper and input replay consume both in order. The injected
+compile smoke and portable motion/config-off tests pass; live qualification is
+recorded in the current renderer status after the matching native build.

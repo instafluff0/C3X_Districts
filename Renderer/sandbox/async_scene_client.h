@@ -239,6 +239,7 @@ public:
     }
     void forget_unit(int id){if(enabled)post(sizeof(id),[this,id]{transport.forget_unit(id);});else transport.forget_unit(id);}
     int unit_visual(c3x_renderer_unit_visual_v1 value){return enabled?post(sizeof(value),[this,value]{accept_state(transport.unit_visual(value),"unit-visual");}):transport.unit_visual(value);}
+    int unit_motion(c3x_renderer_unit_move_v1 value){return enabled?post(sizeof(value),[this,value]{accept_state(transport.unit_motion(value),"unit-motion");}):transport.unit_motion(value);}
     int unit_move(c3x_renderer_unit_move_v1 value){return enabled?post(sizeof(value),[this,value]{accept_state(transport.unit_move(value),"unit-move");}):transport.unit_move(value);}
     int unit_spawn(c3x_renderer_unit_spawn_v1 value){return enabled?post(sizeof(value),[this,value]{accept_state(transport.unit_spawn(value),"unit-spawn");}):transport.unit_spawn(value);}
     int unit_state(c3x_renderer_unit_state_v1 value){return enabled?post(sizeof(value),[this,value]{accept_state(transport.unit_state(value),"unit-state");}):transport.unit_state(value);}

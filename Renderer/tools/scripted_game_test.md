@@ -15,7 +15,7 @@ The game executable must contain the current injected diagnostic hooks.
    Verify their hashes against the qualified candidate.
 4. After injected changes, run `TEST_INJECTED_CODE_COMPILE.bat`, then the console
    installer below. DLL-only changes do not require reinjection.
-5. Run the bounded game scenario. Read `result.json`, the complete renderer log
+5. Run the bounded game scenario. Read `result.json` (including early exit and exit code), the complete renderer log
    and window samples. Command delivery and an error-free log are necessary
    evidence, but do not establish correct visible output.
 6. Confirm cleanup and original-save hash before another run. Record remaining
@@ -139,3 +139,46 @@ unit-publication rejection; review images even when that summary is empty.
 The shared VM volume can cache directory listings. If a finished capture looks
 incomplete from macOS, copy it through guest PowerShell into the ignored
 `Renderer/native/build/` directory before diagnosing missing output.
+
+## Loading, main menu and reload
+
+`-Scenario lifecycle -Seconds 120` loads the disposable save, opens and confirms
+the normal quit prompt, loads the same copy again from the menu, publishes a
+map-text witness, then returns to the menu again. It never saves either game.
+The result requires two successful first-map `render-done` events, two completed scene unloads,
+the second map's text event, every scheduled command, and no native failures.
+Review the samples for a visible loading bar, complete maps, both menu returns
+and fresh unit/UI state. A script timeout or delivered Enter key does not prove
+that the native menu accepted it. Helpers may exist for menu presentation, but
+the previous scene helper must close before the menu is painted.
+
+### Movement evidence
+
+For the tile-travel implementation, use the interaction scenario with
+`-SampleHz 10`. Match `stage=motion-start` (unit ID and accepted source/destination)
+against `fresh-unit-snapshot` positions and the window timeline. Native
+`run-capture` records are diagnostic observations; they no longer drive travel.
+Require several intermediate displayed positions with a moving run pose and a
+coincident selection ring. Check the final idle endpoint, too. A delivered move
+key, endpoint-only picture, or empty error summary does not establish smooth
+movement. `Renderer/native/test_unit_motion.py` independently covers delayed
+admission, early completion, recapture, consecutive steps, wrapping, zoom,
+retirement, position correction and config-off delegation.
+
+## Combat diagnostic
+
+`-Scenario combat -Seconds 75 -SampleHz 10` loads the same disposable save,
+dismisses the welcome popup, prepares an encounter at 36 seconds and attacks
+at 44 seconds. It requires a selected stack containing an owned land attacker
+and an empty, visible land tile immediately east with no city. F21 creates one
+barbarian of that attacker's type through the existing native spawn function
+and selects the owned attacker. F22 requests an ordinary eastward native move,
+which invokes Civ III combat. Both commands require custom rendering, the
+explicit save and `combat` mode environment variables, and a single-player
+session. Each can run once. The fixture does not force a winner or save changes.
+
+The result requires both preparation and combat-return markers. Native unit
+observations include action, queued action, HP/damage, visibility, retirement
+and clock. Compare those with the window timeline and rendered action changes;
+command completion alone does not prove combat animation correctness. Missing
+fixture prerequisites make the test fail rather than change another tile.

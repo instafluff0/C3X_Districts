@@ -74,20 +74,34 @@ actions, audio, combat outcomes, turn processing and path legality stay in
 Civ III. The native 66 ms callback retains any gameplay/action advancement;
 custom rendering suppresses only superseded native drawing.
 
+## Camera and animation handoff
+
+A prepared camera retains its native request timestamp for exact duplicate
+request matching. Its unit scene samples the current visual clock. Scene sampling
+never moves that clock backward when an older captured view arrives.
+
+Preparing a replacement freezes the preceding camera's completed retained image.
+Native UI transfers must continue displaying that last sample even after its
+animation callback retires. The original native working canvas can contain an
+older unit pose. `Session::display_to` therefore uses any ready retained recipe,
+including a static one. The GPU regression advances eight poses, freezes the
+camera and repeats four native transfers; every transfer must preserve the
+last pose. The prior code fails that pixel comparison.
+
 ## Accepted unit motion
 
 Civ III validates and performs a move. C3X publishes an accepted visual segment
-with stable unit and event IDs, from/to tiles and authoritative screen anchors,
-direction, action/clip, start time, visual duration or native progress, camera
-generation, visibility and a monotonic sequence. Renderer64 samples the segment
+with a stable unit ID, from/to tiles, action, visibility, map/viewer scope and
+an ordered timestamp. Renderer64 owns the travel duration and run phase, and
+uses the current scene's copied tile centers to place the actor. It samples the segment
 at each display time. It never decides that a land Scout can enter water, moves
 the game unit, or invents a combat result. Native action timing can continue at
 its original cadence without quantizing the displayed travel to that cadence.
 
 The segment must have an explicit completion/correction rule. A newer native
 position, interrupted action, combat, death, teleport, embark/disembark, unit
-removal, fog loss, viewer change, save/load or reset supersedes it. Late messages
-are sampled at current time rather than queued as delayed frames. Rapid successive
+removal, fog loss, viewer change, save/load or reset supersedes it. Late movement messages start a visual segment when admitted; renderer frames
+are sampled at current time instead of queued as delayed pictures. Rapid successive
 segments have bounded per-unit state and may be shortened or coalesced to avoid
 visual lag behind authoritative play. Camera jumps reproject the same world-space
 endpoints; map wrapping uses Civ III's chosen occurrence. Selection underlay,
@@ -126,19 +140,29 @@ The event carries those authoritative identities, target tile and result. A miss
 intermediate HP revision is a capture defect; Renderer64 must never fill it in
 by dividing the final damage across imagined strikes. Losing visibility
 immediately removes combatants and bars from the map scene.
-The body hook now copies Civ III's current and accepted target pixel positions,
-draw anchor, damage, maximum HP and action into a separate observation. Renderer64 uses
-successive observations to smooth visible travel between native updates, bounded
-to 90 ms and corrected by each newer native pose. The first sample uses Civ III's
-ordinary movement-speed estimate and the copied target; subsequent samples use
-measured native progress. `Unit_move` also sends the accepted old/new tile pair,
-unit identity, viewer scope and endpoint visibility. Renderer64 discards the
-previous pixel prediction at that boundary; the next native observation fixes
-the new segment's screen anchor. A hidden destination retires the unit visual.
-This is a conservative visual refinement, not yet the full accepted segment
-contract above: durations, interruption IDs,
-selection/route attachment and proof that every combat HP revision is observed
-at the intended presentation time still need work.
+The accepted target hook now sends the source/destination tile pair before
+native animation starts. Native body captures supply identity, art and sprite
+dimensions; their screen coordinates do not determine scene travel or idle
+placement. Both use the copied tile center: the native target routine adds
+`(+64,+32)` at normal zoom. This avoids pairing a body captured after native
+camera recentering with a previous renderer camera. No per-unit camera binding
+is retained.
+Renderer64 starts the visual clock on its first scene sample, uses a uniform
+225 native map units/second pace, and loops the authored run clip. The catalog
+reads move timing from the 32-byte generic animation header during asset loading;
+older bindings record duration/frames only for ambient clips. Delayed
+transport therefore cannot consume the move before its first visible sample.
+The bounded queue retains up to eight neighboring steps and carries the same
+run-cycle origin across them. Tests use a nonzero clock origin to detect an
+accidental phase reset. The later `Unit_move` event confirms game state without truncating
+active travel. Hiding, retirement, incompatible actions and unrelated position
+corrections clear the route. The selection ring uses the same sampled body.
+
+This implements ordinary visible tile travel. Hidden-to-visible admission,
+combat/transport transitions, route overlays and the full action lifecycle
+still need their scoped live checks. Native status text/bars remain a separate
+map overlay integration concern; passing the travel clock tests does not
+certify those overlays.
 
 ## Surface and frame lifecycle
 

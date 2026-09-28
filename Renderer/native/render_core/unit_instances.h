@@ -17,7 +17,6 @@ public:
         std::uint64_t revision=0;
         c3x_renderer_unit_v1 occurrence{};
         c3x_renderer_unit_visual_v1 visual{};
-        c3x_renderer_unit_visual_v1 motion_origin{};
         bool has_visual=false;
     };
 private:
@@ -27,10 +26,18 @@ private:
         unsigned flags=0;
         std::size_t unit=0,action=0;
         std::uint64_t revision=0,used=0;
-        int camera_x=0,camera_y=0,tile_width=0,tile_height=0,tile_x=-1,tile_y=-1;
+        int tile_x=-1,tile_y=-1;
     };
     std::map<int,Instance> instances;
-    struct Observed {c3x_renderer_unit_visual_v1 value{},origin{};};
+    struct Motion {
+        c3x_renderer_unit_move_v1 event{};
+        Instance source{};
+        int dx=0,dy=0;
+        long long started=-1,cycle_started=-1,frequency=0;
+        bool committed=false;
+    };
+    std::map<int,std::deque<Motion>> motions;
+    struct Observed {c3x_renderer_unit_visual_v1 value{};};
     std::map<int,Observed> observations;
     std::map<int,c3x_renderer_unit_move_v1> accepted_moves;
     std::map<int,c3x_renderer_unit_spawn_v1> accepted_spawns;
@@ -38,6 +45,8 @@ private:
     UnitPlayback playback;
     std::uint64_t serial=0,access=0;
     std::uint64_t scene_generation=0;
+    long long scene_ticks=-1,scene_frequency=0;
+    long long motion_pause=-1;
     // CPU identity metadata only. Shared meshes and completed poses retain
     // their existing independent budgets. Eviction invalidates old selections.
     std::size_t capacity;
@@ -71,9 +80,21 @@ public:
     std::uint64_t captures=0,reused=0,bindings=0,evictions=0;
     explicit UnitInstances(std::size_t limit=4096):capacity(limit){}
     std::size_t size()const{return instances.size();}
+    std::size_t motion_count(int id)const{auto found=motions.find(id);return found==motions.end()?0:found->second.size();}
     std::uint64_t generation()const{return scene_generation;}
-    void forget(int id){instances.erase(id);observations.erase(id);accepted_moves.erase(id);accepted_spawns.erase(id);accepted_states.erase(id);playback.forget(id);++scene_generation;}
-    void clear(){instances.clear();observations.clear();accepted_moves.clear();accepted_spawns.clear();accepted_states.clear();playback.clear();++scene_generation;} // serial never reuses a token
+    void forget(int id){motions.erase(id);instances.erase(id);observations.erase(id);accepted_moves.erase(id);accepted_spawns.erase(id);accepted_states.erase(id);playback.forget(id);++scene_generation;}
+    void clear(){motions.clear();instances.clear();observations.clear();accepted_moves.clear();accepted_spawns.clear();accepted_states.clear();playback.clear();scene_ticks=-1;scene_frequency=0;motion_pause=-1;++scene_generation;} // serial never reuses a token
+
+    // Camera preparation freezes the displayed scene until ordered adoption.
+    // That interval must not consume travel that the player cannot yet see.
+    void pause_motion(long long ticks){if(motion_pause<0)motion_pause=std::max(ticks,scene_ticks);}
+    void resume_motion(long long ticks,long long frequency){
+        if(motion_pause<0)return;
+        auto held=std::max(0ll,ticks-motion_pause);
+        for(auto& pair:motions)for(auto& motion:pair.second)
+            if(motion.started>=0&&motion.frequency==frequency){motion.started+=held;motion.cycle_started+=held;}
+        motion_pause=-1;
+    }
 
     bool state(c3x_renderer_unit_state_v1 const& value){
         if(value.struct_size!=sizeof(value)||value.unit_id<0||value.tile_x<0||value.tile_y<0||
@@ -87,8 +108,9 @@ public:
         if(value.kind==C3X_RENDERER_UNIT_STATE_RETIRE||!value.visible){
             retire_at(value.unit_id,value.presentation_time_ticks,value.presentation_frequency);
         }else{
+            if(value.action!=1&&value.action!=2)motions.erase(value.unit_id);
             auto prior=accepted_states.find(value.unit_id);
-            if(prior!=accepted_states.end()&&prior->second.action!=value.action){
+            if(prior!=accepted_states.end()&&prior->second.action!=value.action&&motions.find(value.unit_id)==motions.end()){
                 instances.erase(value.unit_id);observations.erase(value.unit_id);playback.forget(value.unit_id);
             }
         }
@@ -128,6 +150,14 @@ public:
             ++scene_generation;
             return true;
         }
+        auto motion=motions.find(value.unit_id);
+        if(motion!=motions.end()){
+            auto pending=std::find_if(motion->second.begin(),motion->second.end(),[&](auto const& m){
+                return !m.committed&&m.event.old_x==value.old_x&&m.event.old_y==value.old_y&&
+                    m.event.new_x==value.new_x&&m.event.new_y==value.new_y;});
+            if(pending!=motion->second.end())pending->committed=true;
+            else motions.erase(motion); // Teleport/correction cancels stale travel.
+        }
         auto found=accepted_moves.find(value.unit_id);
         // An accepted move starts a new segment. Do not predict the previous
         // native observation across it; a subsequent body capture supplies the
@@ -136,6 +166,37 @@ public:
         if(found==accepted_moves.end()&&accepted_moves.size()>=capacity)accepted_moves.erase(accepted_moves.begin());
         accepted_moves[value.unit_id]=value;
         ++scene_generation;
+        return true;
+    }
+
+    // Called at Civ III's accepted movement target boundary, before its first
+    // animation tick. Playback starts on the first renderer sample, so transport
+    // delay cannot consume the entire visible movement before it reaches screen.
+    bool begin_motion(c3x_renderer_unit_move_v1 const& value,int width,int height,bool wrap_x,bool wrap_y){
+        if(value.struct_size!=sizeof(value)||value.unit_id<0||value.action!=2||
+           value.presentation_frequency<=0||value.presentation_time_ticks<0||
+           value.source_visible>1||value.target_visible>1||width<=0||height<=0||
+           value.old_x<0||value.old_x>=width||value.new_x<0||value.new_x>=width||
+           value.old_y<0||value.old_y>=height||value.new_y<0||value.new_y>=height||!capacity)return false;
+        if(newer_event(value.unit_id,value.presentation_time_ticks,value.presentation_frequency))return false;
+        auto found=instances.find(value.unit_id);
+        if(!value.source_visible||!value.target_visible||found==instances.end()||retired(value.unit_id))return true;
+        int dx=value.new_x-value.old_x,dy=value.new_y-value.old_y;
+        if(wrap_x){if(dx>width/2)dx-=width;else if(dx<-width/2)dx+=width;}
+        if(wrap_y){if(dy>height/2)dy-=height;else if(dy<-height/2)dy+=height;}
+        if((std::abs(dx)+std::abs(dy)!=2)||((dx+dy)&1))return false;
+        auto& queue=motions[value.unit_id];
+        if(!queue.empty()){
+            auto const& previous=queue.back().event;
+            if(previous.presentation_frequency==value.presentation_frequency&&
+               previous.presentation_time_ticks==value.presentation_time_ticks)return true;
+            if(previous.new_x!=value.old_x||previous.new_y!=value.old_y)queue.clear();
+        }
+        if(queue.size()>=8)return false; // Bounded directed-action admission.
+        Motion motion{};motion.event=value;motion.dx=dx;motion.dy=dy;
+        motion.source=queue.empty()?found->second:queue.back().source;
+        motion.source.tile_x=value.old_x;motion.source.tile_y=value.old_y;
+        queue.push_back(motion);++scene_generation;
         return true;
     }
 
@@ -152,14 +213,7 @@ public:
             return true;
         }
         auto found=observations.find(value.unit_id);
-        Observed next;next.value=value;next.origin=value;
-        if(value.action==2&&found!=observations.end()){
-            auto const& previous=found->second.value;
-            if(previous.action==2&&previous.target_x==value.target_x&&previous.target_y==value.target_y&&
-               previous.projection_scale_milli==value.projection_scale_milli&&
-               previous.presentation_frequency==value.presentation_frequency)
-                next.origin=found->second.origin;
-        }
+        Observed next;next.value=value;
         if(found==observations.end()&&observations.size()>=capacity)observations.erase(observations.begin());
         observations[value.unit_id]=next;
         ++scene_generation;
@@ -234,19 +288,9 @@ public:
            observed->second.value.presentation_frequency==request.presentation_frequency&&
            observed->second.value.body_x==request.body_x&&observed->second.value.body_y==request.body_y){
             selected.visual=observed->second.value;
-            selected.motion_origin=observed->second.origin;selected.has_visual=true;
+            selected.has_visual=true;
         }
         return true;
-    }
-
-    void bind_scene_camera(int id,c3x_renderer_frame_v1 const& frame){
-        auto found=instances.find(id);
-        if(found==instances.end()||!frame.tile_count||!frame.tiles)return;
-        auto const& first=frame.tiles[0];
-        found->second.camera_x=first.anchor_x-first.tile_x*frame.tile_width/2;
-        found->second.camera_y=first.anchor_y-first.tile_y*frame.tile_height/2;
-        found->second.tile_width=frame.tile_width;
-        found->second.tile_height=frame.tile_height;
     }
 
     struct ScenePose {
@@ -260,21 +304,54 @@ public:
     std::vector<ScenePose> scene_poses(c3x_renderer_frame_v1 const& frame,
             long long ticks,long long frequency,Catalog const& catalog){
         std::vector<ScenePose> result;
-        if(!frame.tile_count||!frame.tiles||frequency<=0)return result;
+        if(!frame.tile_count||!frame.tiles||frame.tile_width<=0||frame.tile_height<=0||frequency<=0)return result;
+        // Camera captures can arrive late. Their geometry may be new, but
+        // sampling that view must never rewind the current visual scene.
+        if(scene_frequency==frequency)ticks=std::max(ticks,scene_ticks);
+        scene_ticks=ticks;scene_frequency=frequency;
+        auto motion_ticks=motion_pause>=0?motion_pause:ticks;
         for(auto const& pair:instances){
-            auto const& item=pair.second;
+            Motion* motion=nullptr;
+            auto moving=motions.find(pair.first);
+            if(moving!=motions.end()){
+                auto& queue=moving->second;
+                while(!queue.empty()){
+                    auto& next=queue.front();
+                    if(next.started<0){next.started=next.cycle_started=motion_ticks;next.frequency=frequency;}
+                    double duration=std::hypot(double(next.dx)*64.,double(next.dy)*64.)/225.;
+                    bool finished=next.frequency==frequency&&double(motion_ticks-next.started)/frequency>=duration;
+                    if(finished&&next.committed&&(queue.size()>1||(pair.second.occurrence.action!=2&&
+                       pair.second.tile_x==next.event.new_x&&pair.second.tile_y==next.event.new_y))){
+                        long long continuation=next.started+static_cast<long long>(duration*frequency);
+                        long long cycle_started=next.cycle_started;
+                        queue.pop_front();
+                        if(!queue.empty()){
+                            queue.front().started=continuation;
+                            queue.front().cycle_started=cycle_started;
+                            queue.front().frequency=frequency;
+                        }
+                        continue;
+                    }
+                    motion=&next;break;
+                }
+                if(queue.empty())motions.erase(moving);
+            }
+            auto const& item=motion?motion->source:pair.second;
             if(!(item.flags&C3X_RENDERER_UNIT_STATE_CAPTURED)||
-               (item.flags&C3X_RENDERER_UNIT_HIDDEN)||item.tile_width<=0||item.tile_height<=0)
+               (item.flags&C3X_RENDERER_UNIT_HIDDEN))
                 continue;
             auto state=state_of(pair.first);
             if(!state||!state->visible||state->kind!=C3X_RENDERER_UNIT_STATE_OBSERVE||
-               state->tile_x!=item.tile_x||state->tile_y!=item.tile_y)continue;
+               (!motion&&(state->tile_x!=item.tile_x||state->tile_y!=item.tile_y)))continue;
             c3x_renderer_tile_v1 const* occurrence=nullptr;
             for(unsigned i=0;i<frame.tile_count;++i){auto const& tile=frame.tiles[i];
                 bool same_x=tile.tile_x==item.tile_x;
+                bool same_y=tile.tile_y==item.tile_y;
                 if(frame.world_wrap_x&&frame.world_width_tiles>0)
                     same_x=((tile.tile_x-item.tile_x)%frame.world_width_tiles)==0;
-                if(same_x&&tile.tile_y==item.tile_y&&
+                if(frame.world_wrap_y&&frame.world_height_tiles>0)
+                    same_y=((tile.tile_y-item.tile_y)%frame.world_height_tiles)==0;
+                if(same_x&&same_y&&
                    (tile.tile_flags&C3X_RENDERER_TILE_VISIBLE)&&
                    (tile.tile_flags&C3X_RENDERER_TILE_RENDER)){
                     occurrence=&tile;break;
@@ -291,31 +368,51 @@ public:
                observed->second.value.body_x==item.occurrence.body_x&&
                observed->second.value.body_y==item.occurrence.body_y){
                 selected.visual=observed->second.value;
-                selected.motion_origin=observed->second.origin;selected.has_visual=true;
+                selected.has_visual=true;
             }
             ScenePose pose{};
-            if(!sample(selected,ticks,frequency,catalog,pose.draw,pose.predict))continue;
-            // Native body anchors belong to the last displayed camera. Rebase
-            // that tile-relative offset for a newly copied pan, zoom or wrap
-            // without asking Civ III to rebuild the unit mesh or its pose.
-            double scale=double(frame.tile_width)/item.tile_width;
-            int old_x=item.camera_x+item.tile_x*item.tile_width/2;
-            int old_y=item.camera_y+item.tile_y*item.tile_height/2;
-            pose.draw.body_x=occurrence->anchor_x+int(std::lround((pose.draw.body_x-old_x)*scale));
-            pose.draw.body_y=occurrence->anchor_y+int(std::lround((pose.draw.body_y-old_y)*scale));
-            pose.draw.projection_scale_milli=int(std::lround(pose.draw.projection_scale_milli*scale));
+            double travel_x=0,travel_y=0;
+            if(motion){
+                if(item.unit>=catalog.size())continue;
+                auto const& actions=catalog[item.unit].actions;
+                auto clip=std::find_if(actions.begin(),actions.end(),[](auto const& a){return a.name=="move";});
+                if(clip==actions.end()||clip->duration<=0)continue;
+                pose.action=std::size_t(clip-actions.begin());
+                double seconds=motion->frequency==frequency?std::max(0.,double(motion_ticks-motion->started)/frequency):0.;
+                double duration=std::hypot(double(motion->dx)*64.,double(motion->dy)*64.)/225.;
+                double progress=std::min(1.,seconds/duration);
+                pose.draw=item.occurrence;pose.draw.action=2;
+                pose.draw.direction=motion->dx>0?(motion->dy<0?1:motion->dy>0?3:2):
+                    motion->dx<0?(motion->dy<0?7:motion->dy>0?5:6):(motion->dy>0?4:8);
+                travel_x=motion->dx*frame.tile_width*.5*progress;
+                travel_y=motion->dy*frame.tile_height*.5*progress;
+                pose.draw.frame_count=1000;
+                pose.draw.action_cursor=int(std::fmod(std::max(0.,double(motion_ticks-motion->cycle_started)/frequency),double(clip->duration))/clip->duration*1000.);
+                pose.draw.presentation_time_ticks=ticks;pose.draw.presentation_frequency=frequency;
+                pose.predict=1;
+            }else if(!sample(selected,ticks,frequency,catalog,pose.draw,pose.predict))continue;
+            // Native set_pixel_target_with_offset places the unit at the tile
+            // center (+64,+32 at normal zoom). Use the copied scene's centers
+            // for travel AND idle; a delayed native sprite capture can belong
+            // to a different camera and must not move the world-space actor.
+            int projection=frame.tile_width*1000/128;
+            pose.draw.body_x=occurrence->anchor_x+frame.tile_width/2+int(std::lround(travel_x))-
+                int(std::int64_t(pose.draw.sprite_width)*projection/2000);
+            pose.draw.body_y=occurrence->anchor_y+frame.tile_height/2+int(std::lround(travel_y))-
+                int(std::int64_t(pose.draw.sprite_height)*projection/2000);
+            pose.draw.projection_scale_milli=projection;
             pose.draw.hour=frame.hour;pose.draw.season=frame.season;
             pose.tile_x=occurrence->tile_x;pose.tile_y=occurrence->tile_y;
-            pose.unit=item.unit;pose.action=item.action;
-            pose.cursor=(item.flags&C3X_RENDERER_UNIT_CURSOR)&&(item.flags&C3X_RENDERER_UNIT_SELECTED);
-            pose.animated=pose.cursor||animated(selected,catalog);
+            pose.unit=item.unit;if(!motion)pose.action=item.action;
+            pose.cursor=(pair.second.flags&C3X_RENDERER_UNIT_CURSOR)&&(pair.second.flags&C3X_RENDERER_UNIT_SELECTED);
+            pose.animated=motion||pose.cursor||animated(selected,catalog);
             result.push_back(pose);
         }
         return result;
     }
 
-    // Clock sampling requires no new native body call. Directed actions retain
-    // their captured cursor/anchor; only authored eligible ambient loops advance.
+    // Ambient sampling requires no native callback. Tile movement is owned by
+    // scene_poses; ordinary native samples never extrapolate screen position.
     template<class Catalog>
     bool sample(Selection const& selected,long long ticks,long long frequency,Catalog const& catalog,
                 c3x_renderer_unit_v1& output,unsigned& predict) {
@@ -330,33 +427,6 @@ public:
             if(!playback.resolve(output,clip,selected_unit,predict))predict=0;
             if(!predict && !clip.ambient && output.action==1){output.action_cursor=0;output.frame_count=1;}
         }
-        if(selected.has_visual&&output.action==2&&selected.visual.action==2&&
-           selected.motion_origin.presentation_frequency==frequency&&
-           ticks>=selected.motion_origin.presentation_time_ticks){
-            // Civ III has already accepted this move and supplied its actual
-            // pixel target. Sample one continuous segment from the first body
-            // observation; later sparse native poses must not alter its pace.
-            auto const& origin=selected.motion_origin;
-            double dx=double(origin.target_x)-origin.pixel_x;
-            double dy=double(origin.target_y)-origin.pixel_y;
-            double distance=std::hypot(dx,2.0*dy);
-            double elapsed=double(ticks-origin.presentation_time_ticks)/double(frequency);
-            // One ordinary native step is at most a tile. A larger target
-            // delta means a camera/projection discontinuity, not travel to
-            // predict from this stale screen-space anchor.
-            // Use one presentation pace for every unit. Civ III's movement
-            // distance uses doubled Y; its stock ground art uses 225 for the
-            // corresponding speed. A new action/target retires this segment.
-            constexpr double unit_move_presentation_speed=225.0;
-            double progress=distance>0&&distance<=160.0?
-                std::clamp(unit_move_presentation_speed*elapsed/distance,0.0,1.0):0.0;
-            double scale=double(selected.visual.projection_scale_milli)/1000.0;
-            output.body_x+=int(std::lround((origin.pixel_x+dx*progress-selected.visual.pixel_x)*scale));
-            output.body_y+=int(std::lround((origin.pixel_y+dy*progress-selected.visual.pixel_y)*scale));
-            if(output.frame_count>1&&distance>0)
-                output.action_cursor=std::max(output.action_cursor,
-                    std::min(output.frame_count-1,int(progress*output.frame_count)));
-        }
         return true;
     }
     template<class Catalog> bool animated(Selection const& selected,Catalog const& catalog)const{
@@ -365,8 +435,6 @@ public:
         auto const& instance=found->second;
         if(!(instance.flags&C3X_RENDERER_UNIT_STATE_CAPTURED)||instance.unit>=catalog.size()||instance.action>=catalog[instance.unit].actions.size())return false;
         auto const& clip=catalog[instance.unit].actions[instance.action];int action=instance.content.action;
-        if(selected.has_visual&&action==2&&selected.visual.action==2&&
-           (selected.visual.pixel_x!=selected.visual.target_x||selected.visual.pixel_y!=selected.visual.target_y))return true;
         return clip.ambient&&clip.loop&&((action==1&&(instance.flags&C3X_RENDERER_UNIT_SELECTED))||action==11||(action>=13&&action<=18));
     }
     template<class Catalog>

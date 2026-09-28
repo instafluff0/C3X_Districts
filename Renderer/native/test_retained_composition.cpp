@@ -393,8 +393,9 @@ int test_retained_composition(){
         // The immutable original map stays unchanged; only its sampled source advances.
         ComPtr<ID3D11Texture2D> sampled;desc.BindFlags=D3D11_BIND_SHADER_RESOURCE;
         checked(device->CreateTexture2D(&desc,&initial,&sampled));
-        long long last_tick=0;unsigned samples=0;
+        long long last_tick=0;unsigned samples=0;bool freeze=false;
         assert(session.publish(source.Get(),2,0,0,w,h,[&](long long ticks,long long){
+            if(freeze)return RetainedComposition::SampledImage::frozen();
             if(ticks==last_tick)return RetainedComposition::SampledImage{};
             last_tick=ticks;++samples;return RetainedComposition::SampledImage::bgra(sampled.Get(),full);}));
         request.ticket=2;request.action=C3X_GPU_SUBMIT;commands={{Kind::copy,canvas,session.map_image(),full,full}};
@@ -414,6 +415,16 @@ int test_retained_composition(){
             assert(output==retained_read(device.Get(),context.Get(),source.Get()));
         }
         std::puts("PASS native transfer animation: eight native-only samples, one allocation, unchanged clocks reuse pixels, native versions preserved");
+        // Camera preparation retires the old map's callback before adoption.
+        // Subsequent native transfers must keep its last sampled pose, even
+        // though the retained recipe has become entirely static.
+        freeze=true;
+        for(unsigned tick=9;tick<=12;++tick){
+            assert(session.display_to(2,canvas,target.Get(),display.Get(),buffer.Get(),w,h,full,tick*66,1000));
+            assert(!session.visual_active());
+            assert(retained_read(device.Get(),context.Get(),display.Get())==pixels);
+        }
+        std::puts("PASS camera handoff: repeated native transfers preserve the last animated pose after freezing");
         assert(session.publish(source.Get(),3,0,0,w,h,[&](long long,long long){return RetainedComposition::Texture(source.Get());}));
         request.ticket=3;
         auto show_current=[&]{assert(session.display_to(3,canvas,target.Get(),display.Get(),buffer.Get(),w,h,full));};

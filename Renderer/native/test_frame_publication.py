@@ -122,6 +122,8 @@ struct Owner {
  bool ahead_active=false,unit_pixels_active=false,has_job=false,camera_active=false;
  bool camera_gpu=true,camera_ready_prepared=false,camera_ready_area=false,gpu_reused=false,nearby_presented=false,fail=true;
  int camera_result=C3X_RENDERER_RESULT_OK,imports=0;
+ long long visual_ticks=100,visual_frequency=1000;void advance_visual_clock(){}
+ struct {int resumes=0;void resume_motion(long long,long long){++resumes;}} unit_instances;
  c3x_renderer_i64 camera_ticket=2,gpu_camera_front_ticket=1;
  c3x_renderer_gpu_frame_v1 gpu_view={sizeof(gpu_view)};
  c3x_renderer_output_v1 gpu_metadata={};
@@ -153,13 +155,13 @@ int main(){
  c3x_renderer_gpu_camera_view_v1 result{};result.image.ticket=777;auto untouched=result;
  assert(owner.poll_gpu_camera_view(2,result)==C3X_RENDERER_RESULT_ERROR && !std::memcmp(&result,&untouched,sizeof(result)));
  assert(owner.gpu_publication.frame.tiles==old && old->city_id==7 && owner.gpu_publication.output.replacement_tile_flags==coverage);
- assert(owner.gpu_camera_front_ticket==1 && released==1 && !owner.camera_ready.has_image());
+ assert(owner.gpu_camera_front_ticket==1 && released==1 && !owner.camera_ready.has_image() && !owner.unit_instances.resumes);
  owner.camera_ticket=owner.renderer_state.camera_serial=3;owner.camera_result=C3X_RENDERER_RESULT_OK;owner.fail=false;capture(owner.camera_ready,11,&released);
  assert(owner.poll_gpu_camera_view(3,result)==C3X_RENDERER_RESULT_OK && released==2 && owner.gpu_camera_front_ticket==3);
  assert(result.camera.ticket==3 && result.image.ticket==99 && result.camera.identity.map_epoch==11);
  assert(result.camera.frame.tiles->city_id==11 && result.image.presentation_time_ticks==result.camera.frame.presentation_time_ticks);
  auto stable=result;assert(owner.poll_gpu_camera_view(3,result)==C3X_RENDERER_RESULT_OK && owner.imports==2);
- assert(!std::memcmp(&result,&stable,sizeof(result)));
+ assert(!std::memcmp(&result,&stable,sizeof(result)) && owner.unit_instances.resumes==1);
  owner.gpu_publication.clear();assert(released==3);
 }
 ''')

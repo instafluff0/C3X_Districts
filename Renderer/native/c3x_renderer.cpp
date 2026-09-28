@@ -2897,6 +2897,14 @@ public:
                 return false;
             }
         }
+        // Production definitions are loaded under the native loading bar.
+        // Pay shader compilation and shared texture uploads here; first view
+        // preparation should only have map-dependent work left to do.
+        if(production){
+            bool ready=initialize() && ensure_terrain_textures();
+            trace.write("assets-prepared",ready?"ready=1":"ready=0",true);
+            return ready;
+        }
         return true;
     }
 
@@ -3430,6 +3438,27 @@ public:
                     }
                     json_number_after(data,"material_model",record,part.material_model);
                     action.parts.push_back(part);
+                }
+                // Directed locomotion owns its clock too. Older packs store
+                // timing only in the generic animation header, not bindings.
+                // Read that tiny header during asset loading, before any map.
+                if(action.name=="move" && !action.ambient){
+                    unsigned char header[32]{};DWORD header_bytes=0;
+                    auto const& path=unit_bodies.meshes[action.parts.front().mesh].path;
+                    HANDLE file=CreateFileA(path.c_str(),GENERIC_READ,FILE_SHARE_READ,nullptr,
+                        OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,nullptr);
+                    if(file==INVALID_HANDLE_VALUE)return false;
+                    bool read=ReadFile(file,header,sizeof(header),&header_bytes,nullptr)!=FALSE;
+                    CloseHandle(file);
+                    if(!read||header_bytes!=sizeof(header)||
+                       (std::memcmp(header,"C3XANM1\0",8)&&std::memcmp(header,"C3XANM2\0",8)))return false;
+                    unsigned version=0;
+                    std::memcpy(&version,header+8,4);
+                    std::memcpy(&action.frames,header+24,4);
+                    std::memcpy(&action.duration,header+28,4);
+                    if((version!=1&&version!=2)||header[6]!=static_cast<unsigned char>('0'+version)||
+                       action.frames<2||action.frames>4096||!std::isfinite(action.duration)||
+                       action.duration<=0||action.duration>3600)return false;
                 }
                 unit.actions.push_back(std::move(action));
             }
@@ -11090,6 +11119,8 @@ private:
             }
             camera_ready.clear();
             gpu_camera_front_ticket=ticket;
+            advance_visual_clock();
+            unit_instances.resume_motion(visual_ticks,visual_frequency);
         }
         view=gpu_view;metadata=gpu_metadata;return C3X_RENDERER_RESULT_OK;
     }
@@ -11891,6 +11922,27 @@ public:
         return unit_instances.observe(value)?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_BAD_ARGUMENT;
     }
 
+    int begin_unit_motion(c3x_renderer_unit_move_v1 const& value){
+        std::lock_guard<std::mutex> call_guard(call_mutex);
+        std::lock_guard<std::mutex> lock(state_mutex);
+        auto state=scene_changes.state();
+        bool scoped=state&&state->identity.map_epoch==value.map_epoch&&
+            state->identity.viewer_epoch==value.viewer_epoch;
+        int result=!scoped?C3X_RENDERER_RESULT_SUPERSEDED:
+            unit_instances.begin_motion(value,state->metadata.world_width_tiles,
+                state->metadata.world_height_tiles,state->metadata.world_wrap_x!=0,
+                state->metadata.world_wrap_y!=0)?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        char detail[256];std::snprintf(detail,sizeof(detail),
+            "id=%d from=%d,%d to=%d,%d result=%d instances=%zu segments=%zu scope=%llu,%llu expected=%llu,%llu",
+            value.unit_id,value.old_x,value.old_y,value.new_x,value.new_y,result,
+            unit_instances.size(),unit_instances.motion_count(value.unit_id),
+            static_cast<unsigned long long>(value.map_epoch),static_cast<unsigned long long>(value.viewer_epoch),
+            static_cast<unsigned long long>(state?state->identity.map_epoch:0),
+            static_cast<unsigned long long>(state?state->identity.viewer_epoch:0));
+        renderer_state.trace.write("unit-motion-admitted",detail,true);
+        return result;
+    }
+
     int accept_unit_move(c3x_renderer_unit_move_v1 const& value){
         std::lock_guard<std::mutex> call_guard(call_mutex);
         std::lock_guard<std::mutex> lock(state_mutex);
@@ -11929,6 +11981,11 @@ public:
         bool changed=prior&&(prior->action!=value.action||prior->damage!=value.damage||
             prior->max_hp!=value.max_hp||prior->kind!=value.kind);
         if(!unit_instances.state(value))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        if(changed){char detail[192];std::snprintf(detail,sizeof(detail),
+            "id=%d tile=%d,%d action=%d kind=%u visible=%u segments=%zu",
+            value.unit_id,value.tile_x,value.tile_y,value.action,value.kind,value.visible,
+            unit_instances.motion_count(value.unit_id));
+            renderer_state.trace.write("unit-state-change",detail,true);}
         if(changed||value.kind==C3X_RENDERER_UNIT_STATE_RETIRE||!value.visible)
             unit_pixels_queue.forget(value.unit_id);
         return C3X_RENDERER_RESULT_OK;
@@ -11973,9 +12030,6 @@ public:
         if(!legacy_unit){
             // Observation is independent of GPU canvas admission and never
             // touches scratch storage belonging to an active camera render.
-            auto const& captured=gpu_publication.frame.api_version?gpu_publication.frame:
-                camera_pending?camera_pending_frame:job_frame;
-            unit_instances.bind_scene_camera(selection.id,captured);
             if(bounds){bounds[0]=bounds[2]=request.body_x;bounds[1]=bounds[3]=request.body_y;}
             char detail[128];std::snprintf(detail,sizeof(detail),
                 "id=%d action=%d generation=%llu separate_raster=0",
@@ -11985,10 +12039,6 @@ public:
         }
 #endif
         job_unit_selection=selection;
-        if(gpu_target){
-            auto const& displayed=gpu_publication.frame.api_version?gpu_publication.frame:job_frame;
-            unit_instances.bind_scene_camera(selection.id,displayed);
-        }
         if(gpu_target)advance_visual_clock();
         if(!unit_instances.sample(selection,gpu_target?visual_ticks:request.presentation_time_ticks,gpu_target?visual_frequency:request.presentation_frequency,
             catalog,job_unit,job_unit_predict))return C3X_RENDERER_RESULT_SUPERSEDED;
@@ -12873,8 +12923,10 @@ private:
                 camera_pending_tiles.clear();camera_pending_topology.clear();
                 job_frame.tiles=job_tiles.empty()?nullptr:job_tiles.data();
                 job_frame.world_topology=job_world_topology.empty()?nullptr:job_world_topology.data();
-                if(camera_gpu)snapshot_fresh_units(job_frame,job_frame.presentation_time_ticks,
-                    job_frame.presentation_frequency);
+                if(camera_gpu){
+                    unit_instances.pause_motion(visual_ticks);
+                    snapshot_fresh_units(job_frame,visual_ticks,visual_frequency);
+                }
                 world_schedule.prioritize(job_frame);
                 if(camera_gpu){
                     clear_ahead();
@@ -13522,13 +13574,9 @@ private:
                     auto& body=renderer_state.unit_bodies;auto reads=body.output_readbacks,uploads=renderer_state.gpu_composition->upload_count();
                     if(body.direct_scene){
                         unsigned scale=job_unit.projection_scale_milli?job_unit.projection_scale_milli:(job_unit.reduced?500:1000);
-                        // The retained command owns a fixed rectangle. Reserve
-                        // room for interpolated travel or the new body would
-                        // be clipped at its original native draw bounds.
-                        auto movement_margin=[&](int current,int origin,int target){return job_unit_selection.has_visual&&job_unit.action==2?
-                            int(std::ceil(std::min(160.0,double(std::max(std::abs(target-current),std::abs(origin-current))))*double(scale)/1000.0))+2:0;};
-                        int margin_x=movement_margin(job_unit_selection.visual.pixel_x,job_unit_selection.motion_origin.pixel_x,job_unit_selection.visual.target_x);
-                        int margin_y=movement_margin(job_unit_selection.visual.pixel_y,job_unit_selection.motion_origin.pixel_y,job_unit_selection.visual.target_y);
+                        // Tile travel belongs to Renderer64's scene pass. A native
+                        // body command uses only its captured raster footprint.
+                        int margin_x=0,margin_y=0;
                         int body_width=int(job_unit.sprite_width*scale/1000),body_height=int(job_unit.sprite_height*scale/1000);
                         c3x_gpu_images::Rect envelope={job_unit.body_x-margin_x,job_unit.body_y-margin_y,
                             job_unit.body_x-margin_x+body_width+2*margin_x,
@@ -14161,6 +14209,26 @@ extern "C" __declspec(dllexport) void c3x_renderer_reset(void) {
     c3x_inputs::reset_canvas_capture();native_reset_outcome()=drained?1:0;input.result(native_reset_outcome());
 }
 
+// A scene lifetime ends only at a load/menu boundary. Ordinary reset keeps
+// definitions for device recovery; this endpoint closes the helper so its CPU
+// packs, shader objects, GPU surfaces and queued jobs cannot cross into a game.
+extern "C" __declspec(dllexport) int c3x_renderer_end_scene(void) {
+    c3x_inputs::NativeCall input(9,[](auto&){});
+    if(!drain_native_composition())return input.result(C3X_RENDERER_RESULT_DEVICE_ERROR);
+    if(remote_world_timer){KillTimer(nullptr,remote_world_timer);remote_world_timer=0;}
+    remote_world_capture=nullptr;remote_world_snapshot_complete=false;
+    remote_world_map_epoch=remote_world_viewer_epoch=0;
+    remote_world_width=remote_world_height=remote_world_wrap_x=remote_world_wrap_y=0;
+    remote_map_blitter.reset_blit_surface();remote_unit_blitter.reset();
+    remote_blit_phase_x=remote_blit_phase_y=0;
+    remote_renderer.reset();
+    destroy_renderer_worker();
+    renderer.clear_terrain_assets();
+    c3x_inputs::reset_canvas_capture();
+    OutputDebugStringA("[C3X renderer] stage=scene-assets-released helper=0\n");
+    return input.result(C3X_RENDERER_RESULT_OK);
+}
+
 #ifdef C3X_RENDERER_BENCHMARK_ORACLE
 extern "C" __declspec(dllexport) int c3x_renderer_benchmark_session_reset_v1(
     std::uint32_t mode,c3x_renderer_benchmark_oracle_trim_v1* result) {
@@ -14232,6 +14300,16 @@ extern "C" __declspec(dllexport) int c3x_renderer_unit_visual(c3x_renderer_unit_
     c3x_inputs::Call input(c3x_inputs::Kind::unit_visual,0,[&](auto& out){auto value=*visual;c3x_inputs::unit_visual_fields(out,value);});
     try{return input.result(remote_renderer_requested()?remote_renderer_backend()->unit_visual(*visual):
         get_renderer_worker().observe_unit(*visual));}
+    catch(...){return input.result(C3X_RENDERER_RESULT_ERROR);}
+}
+
+// The same copied tile pair has a separate event for visual travel admission.
+// Commit remains authoritative state; this entry never changes world contents.
+extern "C" __declspec(dllexport) int c3x_renderer_unit_motion(c3x_renderer_unit_move_v1 const* move){
+    if(!move||move->struct_size!=sizeof(*move))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    c3x_inputs::Call input(c3x_inputs::Kind::unit_move,1,[&](auto& out){auto value=*move;c3x_inputs::unit_move_fields(out,value);});
+    try{return input.result(remote_renderer_requested()?remote_renderer_backend()->unit_motion(*move):
+        get_renderer_worker().begin_unit_motion(*move));}
     catch(...){return input.result(C3X_RENDERER_RESULT_ERROR);}
 }
 

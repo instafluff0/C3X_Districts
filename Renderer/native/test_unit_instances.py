@@ -62,16 +62,15 @@ int main(){
  tile.tile_flags=C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_VISIBLE;
  c3x_renderer_frame_v1 frame{};frame.tile_count=1;frame.tiles=&tile;
  frame.tile_width=128;frame.tile_height=64;frame.world_width_tiles=12;frame.world_wrap_x=1;
- world.bind_scene_camera(7,frame);
  auto poses=world.scene_poses(frame,0,1000000,catalog);
- assert(poses.size()==1&&poses[0].draw.body_x==112&&poses[0].draw.body_y==80);
+ assert(poses.size()==1&&poses[0].draw.body_x==69&&poses[0].draw.body_y==37);
  tile.anchor_x=120;tile.anchor_y=110;
  poses=world.scene_poses(frame,0,1000000,catalog);
- assert(poses.size()==1&&poses[0].draw.body_x==132&&poses[0].draw.body_y==90);
+ assert(poses.size()==1&&poses[0].draw.body_x==89&&poses[0].draw.body_y==47);
  tile.tile_x=16;tile.anchor_x=140;tile.anchor_y=120;
  frame.tile_width=160;frame.tile_height=80;
  poses=world.scene_poses(frame,0,1000000,catalog);
- assert(poses.size()==1&&poses[0].draw.body_x==155&&poses[0].draw.body_y==95&&
+ assert(poses.size()==1&&poses[0].draw.body_x==101&&poses[0].draw.body_y==41&&
         poses[0].draw.projection_scale_milli==1250);
  tile.tile_flags=C3X_RENDERER_TILE_RENDER;
  assert(world.scene_poses(frame,0,1000000,catalog).empty());
@@ -99,7 +98,6 @@ int main(){
  body.presentation_frequency=60000;std::strcpy(body.unit_key,"settler");
  auto capture=[&]{assert(world.state(state));UnitInstances::Selection selection;
   assert(world.capture(body,11,catalog,[](int){return "idle";},selection));
-  world.bind_scene_camera(body.unit_id,frame);
  };
  capture();
  for(int n=0;n<720;++n){
@@ -170,8 +168,8 @@ int main(){
  assert(!world.sample(old,0,1000000,catalog,out,step));
  old=b;world.clear();assert(capture(b));assert(!world.sample(old,0,1000000,catalog,out,step));
  old=b;std::strcpy(input.unit_key,"unknown");assert(!capture(a));assert(!world.sample(old,0,1000000,catalog,out,step));
- // Copied native movement samples refine only visible screen position. A
- // newer sample corrects travel; interruption and fog retire the segment.
+ // Native FLC samples are observations only. Directed tile motion has its
+ // own clock (test_unit_motion); late screen samples never extrapolate travel.
  UnitInstances motion;UnitInstances::Selection first,second;
  c3x_renderer_unit_v1 moving{};moving.struct_size=sizeof(moving);moving.unit_id=55;
  moving.action=2;moving.frame_count=16;moving.body_x=1000;moving.body_y=200;
@@ -185,29 +183,28 @@ int main(){
  visual.presentation_time_ticks=1000000;visual.presentation_frequency=1000000;
  assert(motion.observe(visual));
  assert(motion.capture(moving,1,catalog,name,first));
- assert(motion.animated(first,catalog));
- assert(motion.sample(first,1016000,1000000,catalog,out,step)&&out.body_x==1004);
+ assert(!motion.animated(first,catalog));
+ assert(motion.sample(first,1016000,1000000,catalog,out,step)&&out.body_x==1000);
  visual.pixel_x=106;visual.body_x=1006;visual.presentation_time_ticks=1066000;
  moving.body_x=1006;moving.presentation_time_ticks=1066000;
  assert(motion.observe(visual)&&motion.capture(moving,1,catalog,name,second));
- assert(motion.sample(second,1099000,1000000,catalog,out,step)&&out.body_x==1022 && out.action_cursor>=3);
- assert(motion.sample(second,1300000,1000000,catalog,out,step)&&out.body_x==1068);
- assert(motion.sample(second,2000000,1000000,catalog,out,step)&&out.body_x==1100); // accepted target reached without another native tick
+ assert(motion.sample(second,1099000,1000000,catalog,out,step)&&out.body_x==1006 && out.action_cursor==0);
+ assert(motion.sample(second,1300000,1000000,catalog,out,step)&&out.body_x==1006);
+ assert(motion.sample(second,2000000,1000000,catalog,out,step)&&out.body_x==1006); // observations do not own tile travel
  UnitInstances correction;UnitInstances::Selection corrected;
  visual.pixel_x=100;visual.body_x=1000;visual.presentation_time_ticks=1000000;
  moving.body_x=1000;moving.presentation_time_ticks=1000000;
  assert(correction.observe(visual)&&correction.capture(moving,1,catalog,name,corrected));
- assert(correction.sample(corrected,1300000,1000000,catalog,out,step)&&out.body_x==1068);
+ assert(correction.sample(corrected,1300000,1000000,catalog,out,step)&&out.body_x==1000);
  visual.pixel_x=110;visual.body_x=1010;visual.presentation_time_ticks=1300000;
  moving.body_x=1010;moving.presentation_time_ticks=1300000;
  assert(correction.observe(visual)&&correction.capture(moving,1,catalog,name,corrected));
- assert(correction.sample(corrected,1316000,1000000,catalog,out,step)&&out.body_x>=1071); // no snap back at a late native pose
- // An unusually advanced native sample does not accelerate the visible
- // segment; all units retain the same continuous presentation pace.
+ assert(correction.sample(corrected,1316000,1000000,catalog,out,step)&&out.body_x==1010); // direct observation, no extrapolation
+ // Only the directed tile-motion owner may smooth these sparse samples.
  visual.pixel_x=190;visual.body_x=1090;visual.presentation_time_ticks=1316000;
  moving.body_x=1090;moving.presentation_time_ticks=1316000;
  assert(correction.observe(visual)&&correction.capture(moving,1,catalog,name,corrected));
- assert(correction.sample(corrected,1332000,1000000,catalog,out,step)&&out.body_x==1075);
+ assert(correction.sample(corrected,1332000,1000000,catalog,out,step)&&out.body_x==1090);
  visual.pixel_x=106;visual.body_x=1006;visual.presentation_time_ticks=1066000;
  moving.body_x=1006;moving.presentation_time_ticks=1066000;
  auto stale=visual;stale.presentation_time_ticks=1000000;assert(!motion.observe(stale));

@@ -1,0 +1,155 @@
+{
+  "schema": "c3x.lab.city_culture_recipes.v1",
+  "description": "Review-only Civ III era compositions from normalized source-family art. A compiled art profile can later be selected by culture default or civilization override.",
+  "profiles": [
+    {
+      "id": "american",
+      "culture_group": 0,
+      "label": "American",
+      "eras": {
+        "ancient": {
+          "base": {"source_era": "ancient", "family": "CIVILIZATION_CREE"},
+          "layers": [
+            {"source_era": "ancient", "family": "CIVILIZATION_MAPUCHE", "role": "older_roofs", "region": "outer", "counts": [1, 2, 3]}
+          ]
+        },
+        "medieval": {
+          "base": {"source_era": "classical", "family": "CIVILIZATION_CREE"},
+          "layers": [
+            {"source_era": "classical", "family": "CIVILIZATION_MAYA", "role": "civic", "region": "inner", "counts": [1, 3, 5]}
+          ]
+        },
+        "industrial": {
+          "base": {"source_era": "industrial", "family": "DEFAULT"},
+          "layers": [
+            {"source_era": "classical", "family": "CIVILIZATION_CREE", "role": "heritage", "region": "outer", "counts": [0, 4, 6]}
+          ]
+        },
+        "modern": {
+          "base": {"source_era": "industrial", "family": "DEFAULT"},
+          "layers": [
+            {"source_era": "classical", "family": "CIVILIZATION_CREE", "role": "heritage", "region": "outer", "counts": [0, 4, 6]}
+          ]
+        }
+      }
+    },
+    {
+      "id": "european",
+      "culture_group": 1,
+      "label": "European",
+      "eras": {
+        "ancient": {
+          "base": {"source_era": "ancient", "family": "CIVILIZATION_GAUL"},
+          "layers": []
+        },
+        "medieval": {
+          "base": {"source_era": "classical", "family": "Scottish"},
+          "layers": [
+            {"source_era": "classical", "family": "DEFAULT", "role": "older_roofs", "region": "outer", "counts": [1, 2, 3]}
+          ]
+        },
+        "industrial": {
+          "base": {"source_era": "industrial", "family": "DEFAULT"},
+          "layers": [
+            {"source_era": "classical", "family": "Scottish", "role": "heritage", "region": "outer", "counts": [0, 4, 6]}
+          ]
+        },
+        "modern": {
+          "base": {"source_era": "industrial", "family": "DEFAULT"},
+          "layers": [
+            {"source_era": "classical", "family": "Scottish", "role": "heritage", "region": "outer", "counts": [0, 4, 6]}
+          ]
+        }
+      }
+    },
+    {
+      "id": "roman",
+      "culture_group": 2,
+      "label": "Roman",
+      "eras": {
+        "ancient": {
+          "base": {"source_era": "classical", "family": "Mediterranean"},
+          "layers": []
+        },
+        "medieval": {
+          "base": {"source_era": "classical", "family": "Mediterranean"},
+          "layers": [
+            {"source_era": "classical", "family": "CIVILIZATION_PORTUGAL", "role": "civic", "region": "inner", "counts": [1, 3, 5]}
+          ]
+        },
+        "industrial": {
+          "base": {"source_era": "industrial", "family": "Colonial"},
+          "layers": [
+            {"source_era": "classical", "family": "Mediterranean", "role": "heritage", "region": "outer", "counts": [0, 4, 6]}
+          ]
+        },
+        "modern": {
+          "base": {"source_era": "industrial", "family": "Colonial"},
+          "layers": [
+            {"source_era": "classical", "family": "Mediterranean", "role": "heritage", "region": "outer", "counts": [0, 4, 6]}
+          ]
+        }
+      }
+    },
+    {
+      "id": "middle_eastern",
+      "culture_group": 3,
+      "label": "Middle Eastern",
+      "eras": {
+        "ancient": {
+          "base": {"source_era": "ancient", "family": "DEFAULT"},
+          "layers": [
+            {"source_era": "classical", "family": "NorthAfrican", "role": "older_roofs", "region": "outer", "counts": [1, 2, 3]}
+          ]
+        },
+        "medieval": {
+          "base": {"source_era": "classical", "family": "NorthAfrican"},
+          "layers": [
+            {"source_era": "classical", "family": "Mughal", "role": "civic", "region": "inner", "counts": [1, 2, 3]}
+          ]
+        },
+        "industrial": {
+          "base": {"source_era": "industrial", "family": "Colonial"},
+          "layers": [
+            {"source_era": "classical", "family": "Mughal", "role": "heritage", "region": "outer", "counts": [0, 4, 6]}
+          ]
+        },
+        "modern": {
+          "base": {"source_era": "industrial", "family": "Colonial"},
+          "layers": [
+            {"source_era": "classical", "family": "Mughal", "role": "heritage", "region": "outer", "counts": [0, 4, 6]}
+          ]
+        }
+      }
+    },
+    {
+      "id": "asian",
+      "culture_group": 4,
+      "label": "Asian",
+      "eras": {
+        "ancient": {
+          "base": {"source_era": "classical", "family": "EastAsian"},
+          "layers": []
+        },
+        "medieval": {
+          "base": {"source_era": "classical", "family": "EastAsian"},
+          "layers": [
+            {"source_era": "classical", "family": "CIVILIZATION_KOREA", "role": "civic", "region": "inner", "counts": [1, 3, 5]}
+          ]
+        },
+        "industrial": {
+          "base": {"source_era": "industrial", "family": "DEFAULT"},
+          "layers": [
+            {"source_era": "classical", "family": "CIVILIZATION_KOREA", "role": "heritage", "region": "outer", "counts": [0, 4, 6]}
+          ]
+        },
+        "modern": {
+          "base": {"source_era": "industrial", "family": "DEFAULT"},
+          "layers": [
+            {"source_era": "classical", "family": "CIVILIZATION_KOREA", "role": "heritage", "region": "outer", "counts": [0, 4, 6]}
+          ]
+        }
+      }
+    }
+  ]
+}

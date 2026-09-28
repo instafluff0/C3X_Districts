@@ -1,7 +1,7 @@
 # Bounded real-game renderer diagnostic, enabled only in the child environment.
 param([Parameter(Mandatory=$true)][string]$SaveFile, [string]$ConquestsDirectory,
       [ValidateRange(35,120)][int]$Seconds = 75,
-      [ValidateSet('scroll','interaction')][string]$Scenario = 'scroll',
+      [ValidateSet('scroll','interaction','lifecycle','combat')][string]$Scenario = 'scroll',
       [ValidateRange(1,10)][int]$SampleHz = 2)
 $ErrorActionPreference = 'Stop'
 $renderer = Split-Path $PSScriptRoot -Parent
@@ -47,7 +47,7 @@ function Quote-Arguments([string[]]$Values) {
         '"' + $_ + '"'
     }) -join ' '
 }
-$collector=$null; $child=$null; $observer=$null
+$collector=$null; $child=$null; $observer=$null; $earlyExit=$false; $gameExitCode=$null
 $oldEnvironment=$env:C3X_RENDERER_GAME_TEST_SAVE
 $oldMode=$env:C3X_RENDERER_GAME_TEST_MODE
 $ini=Join-Path $ConquestsDirectory 'conquests.ini'
@@ -81,6 +81,12 @@ try {
     $cursorParked=$false
     $interactionIndex=0
     $interaction=@(@(28,13,'close-welcome'),@(36,90,'zoom-192'),@(39,0x86,'text-192'),@(43,90,'zoom-160'),@(46,0x86,'text-160'),@(50,90,'zoom-128'),@(53,0x86,'text-128'),@(57,0x66,'move-east'),@(65,0x70,'advisor'),@(74,27,'close-advisor'))
+    if ($Scenario -eq 'combat') {
+        $interaction=@(@(28,13,'close-welcome'),@(36,0x84,'prepare-combat'),@(44,0x85,'attack-east'))
+    }
+    if ($Scenario -eq 'lifecycle') {
+        $interaction=@(@(42,27,'quit-first-game'),@(44,40,'select-quit'),@(45,13,'confirm-quit'),@(55,13,'load-again'),@(58,13,'accept-save'),@(100,0x86,'text-second-game'),@(105,27,'quit-second-game'),@(107,40,'select-second-quit'),@(108,13,'confirm-second-quit'))
+    }
     while ([DateTime]::UtcNow -lt $end -and -not $child.HasExited) {
         $child.Refresh(); $window=$child.MainWindowHandle
         if ($window -ne [IntPtr]::Zero) {
@@ -102,7 +108,7 @@ try {
             $elapsed=([DateTime]::UtcNow-$started).TotalSeconds
             $key=if ($Scenario -eq 'scroll') {0x87} else {0}
             if ($enterCount -lt 2 -and $elapsed -ge (5+2*$enterCount)) { $key=13; ++$enterCount }
-            if ($Scenario -eq 'interaction' -and $interactionIndex -lt $interaction.Count -and $elapsed -ge $interaction[$interactionIndex][0]) {
+            if ($Scenario -ne 'scroll' -and $interactionIndex -lt $interaction.Count -and $elapsed -ge $interaction[$interactionIndex][0]) {
                 $key=$interaction[$interactionIndex][1]
                 Write-Host ('Interaction command: '+$interaction[$interactionIndex][2])
                 ++$interactionIndex
@@ -114,6 +120,7 @@ try {
         }
         Start-Sleep -Milliseconds 1000
     }
+    if ($child.HasExited) { $earlyExit=$true; $gameExitCode=$child.ExitCode }
     Write-Host ('Posted diagnostic commands: '+$sent)
 } finally {
     $env:C3X_RENDERER_GAME_TEST_SAVE=$oldEnvironment
@@ -135,10 +142,14 @@ try {
 }
 $log=Get-Content -LiteralPath (Join-Path $session 'renderer.log') -Raw
 $steps=@([regex]::Matches($log,'stage=scripted-game-scroll step=(\d+)') | ForEach-Object {[int]$_.Groups[1].Value})
+$combatReady=[regex]::Matches($log,'stage=scripted-combat-ready').Count
+$combatFinished=[regex]::Matches($log,'stage=scripted-combat-end').Count
 $textEvents=[regex]::Matches($log,'stage=scripted-game-map-text').Count
-$errors=@($log -split "`n" | Where-Object {$_ -match 'stage=native-operation-failed|budget exceeded|stage=visual-failure|stage=worker-error|stage=unit-publication-failed'})
-[ordered]@{ scenario=$Scenario; interaction_commands=$interactionIndex; map_text_events=$textEvents; posted_commands=$sent; load_requested=($log -match 'stage=scripted-game-load'); scroll_steps=$steps;
-    native_failures=$errors; original_save_unchanged=$true; scope='Real Civ III diagnostic; window samples require visual review; not an FPS benchmark' } |
+$readyEvents=[regex]::Matches($log,'stage=render-done result=1').Count
+$unloadEvents=[regex]::Matches($log,'stage=scene-unloaded result=1').Count
+$errors=@($log -split "`n" | Where-Object {$_ -match 'stage=native-operation-failed|stage=async-publication-failed|budget exceeded|stage=visual-failure|stage=worker-error|stage=unit-publication-failed|stage=motion-start[^\r\n]*result=[0235]|stage=scene-unload-failed|stage=first-map-ready result=[02345]'})
+[ordered]@{ scenario=$Scenario; interaction_commands=$interactionIndex; combat_ready=$combatReady; combat_finished=$combatFinished; map_text_events=$textEvents; posted_commands=$sent; load_requested=($log -match 'stage=scripted-game-load'); scroll_steps=$steps;
+    game_exited_early=$earlyExit; game_exit_code=$gameExitCode; first_map_ready=$readyEvents; scenes_unloaded=$unloadEvents; native_failures=$errors; original_save_unchanged=$true; scope='Real Civ III diagnostic; window samples require visual review; not an FPS benchmark' } |
     ConvertTo-Json -Depth 4 | Set-Content (Join-Path $session 'result.json')
 Write-Host ('Scripted diagnostic saved: '+$session)
-if (($Scenario -eq 'scroll' -and $steps.Count -ne 32) -or ($Scenario -eq 'interaction' -and ($interactionIndex -ne $interaction.Count -or $textEvents -ne 3)) -or $errors.Count) { exit 1 }
+if (($Scenario -eq 'combat' -and ($combatReady -ne 1 -or $combatFinished -ne 1)) -or $earlyExit -or ($Scenario -eq 'scroll' -and $steps.Count -ne 32) -or ($Scenario -eq 'interaction' -and ($interactionIndex -ne $interaction.Count -or $textEvents -ne 3)) -or ($Scenario -eq 'lifecycle' -and ($interactionIndex -ne $interaction.Count -or $readyEvents -ne 2 -or $unloadEvents -lt 2 -or $textEvents -ne 1)) -or $errors.Count) { exit 1 }

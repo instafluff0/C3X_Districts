@@ -2,6 +2,7 @@
 #include <cassert>
 #include <cstdint>
 #include <cstring>
+#include <cstdio>
 #include <vector>
 #include "c3x_renderer_api.h"
 #ifndef _MSC_VER
@@ -28,6 +29,7 @@ struct Unit {struct {Rect Rect;int ID=42,UnitTypeID=0,X=2,Y=4,Damage=2;int army_
 struct UnitType {char Civilipedia_Entry[32]="PRTO_Archer";};
 struct Bic {int UnitTypeCount=1;UnitType* UnitTypes;bool is_zoomed_out=false;};
 struct State {int custom_renderer_native_operation=123;Unit* custom_renderer_unit_context=nullptr;PCX_Image* custom_renderer_unit_canvas=nullptr;
+ char custom_renderer_test_save[1]={};
  c3x_renderer_unit_forget_fn custom_renderer_unit_forget=nullptr;
  c3x_renderer_unit_draw_background_fn custom_renderer_unit_draw=nullptr;
  c3x_renderer_unit_draw_playback_fn custom_renderer_unit_draw_playback=nullptr;
@@ -41,7 +43,8 @@ struct State {int custom_renderer_native_operation=123;Unit* custom_renderer_uni
  bool day_night_cycle_unstarted=false,seasonal_cycle_unstarted=false;int current_day_night_cycle=12,current_seasonal_cycle=0;
  c3x_renderer_visual_clock_fn custom_renderer_visual_clock=nullptr;
  LARGE_INTEGER custom_renderer_qpc_frequency={1000000},custom_renderer_animation_timestamp={},custom_renderer_animation_sample_at={};};
-constexpr int AT_DEFAULT=1,AT_PLANT=18,DNCM_OFF=0,SCM_OFF=0,CS_SUMMER=0,CS_SPRING=3,IS_OK=1,UTA_Army=1;
+constexpr int AT_DEFAULT=1,AT_RUN=2,AT_PLANT=18,DNCM_OFF=0,SCM_OFF=0,CS_SUMMER=0,CS_SPRING=3,IS_OK=1,UTA_Army=1;
+void debug_output(char const*){} auto p_OutputDebugStringA=debug_output;
 struct Screen {int Player_CivID=1;Unit* Current_Unit=nullptr;struct {int field_18E4[13]={};} animator;} screen;Screen* p_main_screen_form=&screen;
 unsigned playback_flags=0;
 State state;State* is=&state;Bic bic;Bic* p_bic_data=&bic;PCX_Color_Table fixture_palette;

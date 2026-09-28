@@ -60,6 +60,7 @@ struct ReplayState {
 
                 if(performance)expected.at=expected.bytes.size();else check_output(expected,output,action==C3X_NATIVE_MAP_PREPARE?actual:0);
             }else if(subtype==6){actual=measure_replay([&]{c3x_renderer_reset();return native_reset_outcome();});images.clear();tickets.clear();cameras.clear();formats.clear();displayed={};canvases.reset();native_pixels={};
+            }else if(subtype==9){actual=measure_replay([&]{return c3x_renderer_end_scene();});images.clear();tickets.clear();cameras.clear();formats.clear();displayed={};canvases.reset();native_pixels={};
             }else if(subtype==7){bool present;auto path=in.string(32768,&present);actual=measure_replay([&]{return c3x_renderer_set_pack_path(present?path.c_str():nullptr);});images.clear();tickets.clear();cameras.clear();
             }else if(subtype==8){bool present[4]={};std::string paths[4];for(unsigned n=0;n<4;++n)paths[n]=in.string(32768,&present[n]);actual=measure_replay([&]{return c3x_renderer_set_definition_paths(present[0]?paths[0].c_str():nullptr,present[1]?paths[1].c_str():nullptr,present[2]?paths[2].c_str():nullptr,present[3]?paths[3].c_str():nullptr);});images.clear();tickets.clear();cameras.clear();
             }else if(subtype==3||subtype==5){int action=0;if(subtype==5)in(action);auto image=NativeOperationInput::object(in.u32());custom_renderer_native_view native_view_value={};if(subtype==5)native_view(in,native_view_value);
@@ -167,9 +168,9 @@ struct ReplayState {
             c3x_renderer_unit_visual_v1 value={sizeof(value)};unit_visual_fields(in,value);
             actual=c3x_renderer_unit_visual(&value);
         }else if(kind==Kind::unit_move){
-            require(subtype==0,"unsupported unit move input");
+            require(subtype<=1,"unsupported unit move input");
             c3x_renderer_unit_move_v1 value={sizeof(value)};unit_move_fields(in,value);
-            actual=c3x_renderer_unit_move(&value);
+            actual=subtype==1?c3x_renderer_unit_motion(&value):c3x_renderer_unit_move(&value);
         }else if(kind==Kind::unit_spawn){
             require(subtype==0,"unsupported unit spawn input");
             c3x_renderer_unit_spawn_v1 value={sizeof(value)};unit_spawn_fields(in,value);

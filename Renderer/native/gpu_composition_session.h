@@ -72,7 +72,10 @@ public:
         // Native draws update the scene recipe, not its visual time. Both native
         // transfers and autonomous frames sample that same committed recipe.
         // Otherwise every native unit/UI transfer restores the old map sample.
-        if(frequency>0 && visual_active()){
+        // A retired camera becomes static, but its completed retained image
+        // still contains the latest unit poses. Drawing the original native
+        // canvas here would rewind them until the next map is adopted.
+        if(frequency>0 && layers.ready()){
             if(visual_frame(ticks,frequency,target,retained,buffer)!=0)return true;
             // Optional clock sampling may run out of scratch while the completed
             // native transfer is still valid. Discarded history can be rebuilt

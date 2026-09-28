@@ -22,3 +22,5 @@ EXPORTS
     c3x_renderer_schedule
     c3x_renderer_schedule_idle
     c3x_renderer_reset
+    c3x_renderer_end_scene
+    c3x_renderer_unit_motion

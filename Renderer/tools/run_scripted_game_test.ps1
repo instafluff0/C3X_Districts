@@ -1,6 +1,6 @@
 # An elevated interactive task preserves Civ III's required token and child
 # environment. The task exists only for this bounded diagnostic invocation.
-param([Parameter(Mandatory=$true)][string]$SaveFile, [ValidateRange(35,120)][int]$Seconds=75, [ValidateSet('scroll','interaction')][string]$Scenario='scroll', [ValidateRange(1,10)][int]$SampleHz=2)
+param([Parameter(Mandatory=$true)][string]$SaveFile, [ValidateRange(35,120)][int]$Seconds=75, [ValidateSet('scroll','interaction','lifecycle','combat')][string]$Scenario='scroll', [ValidateRange(1,10)][int]$SampleHz=2)
 $ErrorActionPreference='Stop'
 $user=(Get-CimInstance Win32_ComputerSystem).UserName
 if (-not $user) { throw 'An interactive Windows login is required.' }

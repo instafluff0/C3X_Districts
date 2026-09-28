@@ -10,35 +10,40 @@ the former 1,326-line roadmap.
 
 ## Current state
 
-- **Current staged candidate: consistent animation time and map attachments.**
-  Asynchronous fixture `8c7918bb0f2b4c0d927660c82c9b4b88` passes at **59.51 FPS**,
-  with 32 camera adoptions, 116 frames while the host pauses, 81 publications
-  while the renderer pauses, and zero CPU map readbacks. Submission p95 is
-  0.617 ms, maximum 1.689 ms. These are fixture measurements, not live-game FPS.
-  The qualified bridge, x64 DLL and helper are staged together. Preserve the
-  roughly 52 FPS sandbox baseline; further FPS tuning is deferred.
+- **Current staged candidate: Renderer-owned tile travel.** Asynchronous fixture
+  `bd70eb089bea41a6982e9bc41c587a16` passes at **59.76 FPS**, with 32 camera
+  adoptions, 119 frames while the host pauses, 70 publications while the renderer
+  pauses and zero CPU map readbacks. Submission p95 is 0.813 ms, maximum
+  1.433 ms. These are fixture measurements, not live-game FPS. The matching
+  bridge, x64 DLL and helper are staged together. Preserve the roughly 52 FPS
+  sandbox baseline; further FPS tuning is deferred.
 
-  Native presentation now samples the current visual clock instead of rewinding
-  to the captured map time. The white selected ring shares its unit's sampled
-  anchor and draws before the unit meshes. The bridge admits its explicit
-  cursor flag. Exact native unit centers replace the sandbox canvas assumption;
-  zoom preserves the pixel camera rather than repeatedly rounding a tile.
-  GPU visibility and borrowed publication lifetime regressions are covered.
-  Config-off and unrelated native UI remain on their existing paths.
+  The accepted native tile target starts a Renderer64-owned visual segment.
+  Its clock begins on first rendering, so delayed transport cannot consume the
+  whole move before display. Native completion does not truncate travel; queued
+  neighboring steps preserve run phase. Native intermediate pixel prediction
+  has been removed. The selected ring shares the sampled body anchor. The
+  scoped GOG hook, config-off behavior and other-build limitations are recorded
+  in the [patch ledger](civ3_patch_dependency_ledger.md).
 
-  The settler preview uses the native civilization palette and edge eligibility,
-  with copied endpoints transformed for custom zoom. Transient map messages
-  transform their native attachment/dirty rectangle while retaining native font
-  size, timing and overlap layout. The two scoped GOG hooks and their other-build
-  limitations are in the [patch ledger](civ3_patch_dependency_ledger.md).
+  Capture `20260927-161223` established the prior teleport: intermediate native
+  run samples existed, but Renderer64 still consumed old idle captures during
+  most of the move. The new portable tests cover delayed receipt, early commit,
+  sparse recapture, consecutive steps, wrapping, zoom, retirement and correction.
+  Thirty-one focused integration tests and the injected smoke pass. The current
+  live interaction `20260927-163645` delivered both accepted tile-motion events,
+  but the captured body remained at the source and then jumped. Capture `20260927-164307` then confirmed the motion stayed admitted. The
+  asset catalog left non-ambient run duration at zero, so the scene skipped it.
+  The corrected loader reads authored timing before gameplay; live validation
+  of that correction is pending. These earlier runs are not visual passes.
 
-  Live run `20260927-152331` exposed one remaining bridge flag rejection despite
-  its earlier empty error summary. The summary now includes unit-publication
-  errors, and the full GPU fixture exercises that selected-cursor path. A fresh
-  interaction and scrolling check is in progress. Do not claim live visual or
-  animation acceptance from the fixture. The [scripted game diagnostic](../tools/scripted_game_test.md)
-  documents disposable-save loading, elevated launch, zoom, transient text,
-  movement, UI, sampling and cleanup for future agents.
+  Shared renderer assets now load from `patch_load_scenario()` after the C3X
+  configuration. There is no separate progress form. Capture `20260927-162108`
+  confirms native image loading happens before the camera/bounds are initialized;
+  moving first-view preparation behind the existing loading bar remains open.
+  Menu/reload validation is also open. Helper teardown now joins visual callbacks
+  before unmapping their shared transport. The [scripted diagnostic](../tools/scripted_game_test.md)
+  documents autonomous disposable-save tests and reports premature game exit.
 - Milestones 1 and 2 and M3.7 have automated acceptance evidence. M3.8–M3.12
   and the integrated M3.13 acceptance are not complete. Existing x86 gameplay,
   native UI, visibility and config-off contracts remain authoritative.
@@ -86,22 +91,13 @@ the former 1,326-line roadmap.
   early-start probe confirms the x64 cache and its related retention profile
   enable after late configuration. The corrected bridge and Renderer64 binaries
   are staged together; the resulting live navigation latency is not measured.
-- The unit body now carries a separate copied native visual observation.
-  Renderer64 samples a visible move continuously from its first body anchor
-  to Civ III's accepted pixel target at one presentation pace for every unit;
-  later sparse native poses do not change that pace. The retained draw area
-  covers the complete segment. The x64 water predicate now admits visible
-  real-terrain water and rivers even when the base terrain field looks like
-  land. A live screenshot then showed a selected-unit ring with no unit body:
-  retained replay shifted the draw into a local scratch image while the unit
-  callback still used screen coordinates. The callback now rebases the body
-  within that image; a D3D pixel test keeps the unit visible over two animated
-  map samples. Focused unit/water tests and the units integration suite pass; live
-  movement, continuous water and selection/path alignment remain unproven.
-  Off-screen tile/city state starts from copied pages and receives bounded
-  notifications at existing move, city, improvement and worker transitions.
-  Other transitions rely on the post-interturn recovery pass; tile records
-  are not a complete unit roster.
+- Unit body observations still supply native identity, art, authoritative initial
+  screen anchors and visibility. Ordinary visible travel now uses the accepted
+  tile-motion owner described above. Complete combat, transport and first-reveal
+  lifecycle coverage remains pending. Off-screen tile/city state starts from
+  copied pages and receives bounded notifications at existing move, city,
+  improvement and worker transitions. Other transitions rely on the post-interturn
+  recovery pass; tile records are not a complete unit roster.
 - A later missing-unit screenshot was captured before the corrected Renderer64
   trio was staged. The staged files match their built artifacts, the normal
   helper startup probe passes, and the retained unit pixel oracle passes. A

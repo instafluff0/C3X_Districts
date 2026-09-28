@@ -242,6 +242,10 @@ public:
         c3x_inputs::Writer input;c3x_inputs::unit_visual_fields(input,value);
         return int(invoke(unsigned(c3x_inputs::Kind::unit_visual),0,input.bytes.data(),unsigned(input.bytes.size())).code);
     }
+    int unit_motion(c3x_renderer_unit_move_v1 value){
+        c3x_inputs::Writer input;c3x_inputs::unit_move_fields(input,value);
+        return int(invoke(unsigned(c3x_inputs::Kind::unit_move),1,input.bytes.data(),unsigned(input.bytes.size())).code);
+    }
     int unit_move(c3x_renderer_unit_move_v1 value){
         c3x_inputs::Writer input;c3x_inputs::unit_move_fields(input,value);
         return int(invoke(unsigned(c3x_inputs::Kind::unit_move),0,input.bytes.data(),unsigned(input.bytes.size())).code);

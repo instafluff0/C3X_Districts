@@ -52,7 +52,7 @@ struct Core {
     CpuUnit unit_cpu=nullptr;
     using UnitForget=void(*)(int);UnitForget unit_forget=nullptr;
     c3x_renderer_unit_visual_fn unit_visual=nullptr;
-    c3x_renderer_unit_move_fn unit_move=nullptr;
+    c3x_renderer_unit_move_fn unit_move=nullptr,unit_motion=nullptr;
     c3x_renderer_unit_spawn_fn unit_spawn=nullptr;
     c3x_renderer_unit_state_fn unit_state=nullptr;
     using Tactical=int(*)(c3x_renderer::tactical::Input const*,c3x_renderer_gpu_unit_v1 const*);
@@ -98,6 +98,7 @@ struct Core {
         unit_cpu=reinterpret_cast<CpuUnit>(GetProcAddress(module,"c3x_renderer_trial_unit_pixels"));
         unit_forget=reinterpret_cast<UnitForget>(GetProcAddress(module,"c3x_renderer_unit_forget"));
         unit_visual=reinterpret_cast<c3x_renderer_unit_visual_fn>(GetProcAddress(module,"c3x_renderer_unit_visual"));
+        unit_motion=reinterpret_cast<c3x_renderer_unit_move_fn>(GetProcAddress(module,"c3x_renderer_unit_motion"));
         unit_move=reinterpret_cast<c3x_renderer_unit_move_fn>(GetProcAddress(module,"c3x_renderer_unit_move"));
         unit_spawn=reinterpret_cast<c3x_renderer_unit_spawn_fn>(GetProcAddress(module,"c3x_renderer_unit_spawn"));
         unit_state=reinterpret_cast<c3x_renderer_unit_state_fn>(GetProcAddress(module,"c3x_renderer_unit_state"));
@@ -458,11 +459,12 @@ struct Core {
                 c3x_renderer_unit_visual_v1 value={sizeof(value)};
                 c3x_inputs::unit_visual_fields(in,value);in.done();
                 wire.code=unsigned(unit_visual(&value));
-            }else if(wire.kind==unsigned(Kind::unit_move)&&wire.subtype==0){
-                require(unit_move!=nullptr,"helper lacks unit move entry");
+            }else if(wire.kind==unsigned(Kind::unit_move)&&wire.subtype<=1){
+                auto receiver=wire.subtype==1?unit_motion:unit_move;
+                require(receiver!=nullptr,"helper lacks unit move entry");
                 c3x_renderer_unit_move_v1 value={sizeof(value)};
                 c3x_inputs::unit_move_fields(in,value);in.done();
-                wire.code=unsigned(unit_move(&value));
+                wire.code=unsigned(receiver(&value));
             }else if(wire.kind==unsigned(Kind::unit_spawn)&&wire.subtype==0){
                 require(unit_spawn!=nullptr,"helper lacks unit spawn entry");
                 c3x_renderer_unit_spawn_v1 value={sizeof(value)};
@@ -597,7 +599,7 @@ int wmain(int argc,wchar_t** argv){
         HANDLE response=OpenEventW(EVENT_MODIFY_STATE,FALSE,object_name(base,L"_response").c_str());
         require(mapping&&request&&response,"scene IPC objects missing");
         auto* wire=static_cast<Wire*>(MapViewOfFile(mapping,FILE_MAP_ALL_ACCESS,0,0,sizeof(Wire)));require(wire!=nullptr,"scene IPC map failed");
-        Core core(argv[3]);require(SetEvent(response)!=FALSE,"helper ready signal failed");
+        { Core core(argv[3]);require(SetEvent(response)!=FALSE,"helper ready signal failed");
         unsigned last=wire->sequence;
         HANDLE active[2]={request,parent.handle};
         while(WaitForMultipleObjects(2,active,FALSE,120000)==WAIT_OBJECT_0){
@@ -605,6 +607,7 @@ int wmain(int argc,wchar_t** argv){
             last=wire->sequence;if(wire->kind==0){wire->status=0;SetEvent(response);break;}
             core.execute(*wire);require(SetEvent(response)!=FALSE,"helper response signal failed");
         }
+        } // Stop/join visual callbacks before unmapping their shared counters.
         UnmapViewOfFile(wire);CloseHandle(response);CloseHandle(request);CloseHandle(mapping);return 0;
 #else
         require(argc>=5&&argc<=12,"driver usage: --local DLL CAPTURE REPORT | --remote DLL CAPTURE REPORT HELPER [--verify-pixels] [--raw-shared] [--crash-after N] [--reserve-mib N]");

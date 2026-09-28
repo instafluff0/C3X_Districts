@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def prepare():
-    source = (ROOT/"injected_code.c").read_bytes().decode()
+    source = (ROOT/"injected_code.c").read_text()
     start = source.index("bool\nforward_custom_unit_body")
     end = source.index("bool\nconfigure_custom_renderer_effects", start)
     output = ROOT/"Renderer/native/build/unit_bridge_capture.h"

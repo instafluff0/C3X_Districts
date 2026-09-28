@@ -144,6 +144,9 @@ public:
     int unit_visual(c3x_renderer_unit_visual_v1 const& value){
         std::lock_guard<std::mutex> lock(gate);return client.unit_visual(value);
     }
+    int unit_motion(c3x_renderer_unit_move_v1 const& value){
+        std::lock_guard<std::mutex> lock(gate);return client.unit_motion(value);
+    }
     int unit_move(c3x_renderer_unit_move_v1 const& value){
         std::lock_guard<std::mutex> lock(gate);unit_facts.erase(value.unit_id);return client.unit_move(value);
     }

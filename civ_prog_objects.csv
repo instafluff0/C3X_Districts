@@ -1054,3 +1054,11 @@ inlead,    0x4EEC40,	0x0,		0x0,		"Animator_update_display",	"void (__fastcall *)
 inlead,    0x4DF9E0,	0x0,		0x0,		"Main_Screen_Form_center_camera",	"void (__fastcall *) (Main_Screen_Form * this, int edx, int x, int y, int reason, bool update_bounds, bool force)"
 define,    0x00600340,    0x0,    0x0,    "PCX_Image_get_pixel",    "unsigned (__fastcall *) (PCX_Image * this, int edx, int x, int y)"
 repl call, 0x006090C3,    0x0,    0x0,    "PCX_Image_get_form_hit_pixel",    ""
+
+
+
+repl call, 0x54F7D0, 0x0, 0x0, "Sprite_draw_main_menu_background", ""
+
+define, 0x403A70, 0x0, 0x0, "FLC_Animation_set_pixel_target_with_offset", "void (__fastcall *) (FLC_Animation * this, int edx, int x, int y)"
+repl call, 0x5BAFC2, 0x0, 0x0, "FLC_Animation_set_move_target", ""
+repl call, 0x5BB043, 0x0, 0x0, "FLC_Animation_set_move_target", ""

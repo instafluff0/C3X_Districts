@@ -1,0 +1,138 @@
+"""Renderer-owned tile travel, independent of sparse or late native FLC samples."""
+import unittest
+from Renderer.native.native_cpp_test import ROOT, run_cpp
+
+class UnitMotionTests(unittest.TestCase):
+    def test_tile_travel_clock_queue_wrap_zoom_and_retirement(self):
+        run_cpp(r'''
+#include "Renderer/native/render_core/unit_instances.h"
+#include <cassert>
+#include <string>
+using namespace c3x_renderer::render_core;
+struct Clip {std::string name;bool ambient=true,loop=true;double duration=1;unsigned frames=31;};
+struct Unit {std::vector<std::string> keys={"settler"};std::vector<Clip> actions={{"idle"},{"move",false,true}};};
+struct Fixture {
+ UnitInstances world;std::vector<Unit> catalog{Unit{}};
+ c3x_renderer_unit_state_v1 state{};c3x_renderer_unit_v1 body{};
+ c3x_renderer_unit_move_v1 event{};c3x_renderer_tile_v1 tiles[2]{};
+ c3x_renderer_frame_v1 frame{};
+ Fixture(int x=4,int y=4){
+  state.struct_size=sizeof(state);state.kind=C3X_RENDERER_UNIT_STATE_OBSERVE;
+  state.unit_id=7;state.tile_x=x;state.tile_y=y;state.max_hp=3;
+  state.visible=1;state.action=1;state.presentation_frequency=1000000;
+  body.struct_size=sizeof(body);body.unit_id=7;body.action=1;body.frame_count=15;
+  body.body_x=1000;body.body_y=500;body.sprite_width=body.sprite_height=191;
+  body.projection_scale_milli=1000;body.presentation_frequency=1000000;
+  std::strcpy(body.unit_key,"settler");
+  frame.tile_count=2;frame.tiles=tiles;frame.tile_width=128;frame.tile_height=64;
+  frame.world_width_tiles=frame.world_height_tiles=12;frame.world_wrap_x=frame.world_wrap_y=1;
+  tiles[0].tile_x=x;tiles[0].tile_y=y;tiles[0].anchor_x=1031;tiles[0].anchor_y=563;
+  tiles[0].tile_flags=C3X_RENDERER_TILE_VISIBLE|C3X_RENDERER_TILE_RENDER;
+  tiles[1]=tiles[0];tiles[1].tile_x=(x+2)%12;tiles[1].anchor_x+=128;
+  capture();
+  event.struct_size=sizeof(event);event.unit_id=7;event.old_x=x;event.old_y=y;
+  event.new_x=(x+2)%12;event.new_y=y;event.action=2;
+  event.source_visible=event.target_visible=1;event.presentation_time_ticks=1;
+  event.presentation_frequency=1000000;
+ }
+ void capture(){
+  assert(world.state(state));UnitInstances::Selection selection;
+  assert(world.capture(body,11,catalog,[](int a){return a==2?"move":"idle";},selection));
+ }
+ void begin(){assert(world.begin_motion(event,12,12,true,true));}
+ UnitInstances::ScenePose pose(long long ticks){auto p=world.scene_poses(frame,ticks,1000000,catalog);assert(p.size()==1);return p[0];}
+ void commit(){event.presentation_time_ticks+=100;assert(world.move(event));}
+};
+int main(){
+ Fixture a;a.begin();
+ // Even a 10-second transport delay must display the source first.
+ auto p=a.pose(10000000);assert(p.draw.body_x==1000&&p.draw.action==2&&p.cursor);
+ p=a.pose(10200000);assert(p.draw.body_x==1045&&p.draw.action_cursor==200);
+ // An early commit and destination idle capture cannot truncate travel.
+ a.commit();a.state.tile_x=6;a.state.presentation_time_ticks=200;
+ a.body.body_x=1000; // Native camera already recentered; scene camera has not.
+ a.body.presentation_time_ticks=200;a.capture();
+ p=a.pose(10300000);assert(p.draw.body_x==1068&&p.draw.action==2&&p.draw.action_cursor==300);
+ p=a.pose(10600000);assert(p.draw.body_x==1128&&p.draw.action==1);
+ // A replacement camera can remain prepared while native composition catches
+ // up. Hidden elapsed time cannot consume the rest of an accepted move.
+ Fixture held;held.begin();held.pose(10000000);held.world.pause_motion(10300000);
+ p=held.pose(10900000);assert(p.draw.body_x==1068&&p.draw.action_cursor==300);
+ held.world.pause_motion(11000000); // supersession preserves the original pause
+ held.commit();held.state.tile_x=6;held.state.presentation_time_ticks=200;
+ held.body.presentation_time_ticks=200;held.capture();
+ held.world.resume_motion(12000000,1000000);
+ p=held.pose(12100000);assert(p.draw.body_x==1090&&p.draw.action==2&&p.draw.action_cursor==400);
+ p=held.pose(12300000);assert(p.draw.body_x==1128&&p.draw.action==1);
+ // Native intermediate body samples do not restart or accelerate playback.
+ Fixture b;b.begin();b.pose(0);
+ b.state.action=b.body.action=2;b.state.presentation_time_ticks=b.body.presentation_time_ticks=100;
+ b.body.body_x=1110;b.body.action_cursor=14;b.capture();
+ p=b.pose(200000);assert(p.draw.body_x==1045&&p.draw.action_cursor==200);
+ p=b.pose(300000);assert(p.draw.body_x==1068&&p.draw.action_cursor==300);
+ // A delayed camera snapshot cannot rewind the live scene's clock.
+ p=b.pose(100000);assert(p.draw.body_x==1068&&p.draw.action_cursor==300);
+ // Camera pan and zoom transform the same interpolated body and cursor anchor.
+ b.tiles[0].anchor_x+=50;b.tiles[0].anchor_y+=30;
+ b.frame.tile_width=192;b.frame.tile_height=96;
+ p=b.pose(300000);assert(p.draw.body_x==1135&&p.draw.body_y==498&&p.draw.projection_scale_milli==1500&&p.cursor);
+ // Consecutive accepted steps preserve run phase across tile boundaries.
+ constexpr long long origin=10250000;
+ Fixture c;c.begin();c.pose(origin);c.commit();
+ c.event.old_x=6;c.event.new_x=8;c.event.presentation_time_ticks=200;c.begin();c.commit();
+ p=c.pose(origin+600000);assert(p.draw.body_x==1135&&p.draw.action_cursor==600);
+ p=c.pose(origin+900000);assert(p.draw.body_x==1203&&p.draw.action_cursor==900);
+ // Horizontal and vertical seam crossings choose a neighboring copy.
+ Fixture w(10,4);w.begin();w.pose(0);p=w.pose(300000);assert(p.draw.body_x==1068);
+ w.commit();w.event.old_x=0;w.event.new_x=2;w.event.presentation_time_ticks=200;w.begin();
+ p=w.pose(600000);assert(p.draw.body_x==1135);
+ Fixture v(4,10);v.event.new_x=4;v.event.new_y=0;v.begin();v.pose(0);
+ p=v.pose(300000);assert(p.draw.body_x==1000&&p.draw.body_y==534);
+ // Hidden/retired actors and unrelated corrections end travel immediately.
+ c.state.visible=0;c.state.presentation_time_ticks=1000;assert(c.world.state(c.state));
+ assert(c.world.scene_poses(c.frame,910000,1000000,c.catalog).empty());
+ Fixture r;r.begin();r.pose(0);r.state.kind=C3X_RENDERER_UNIT_STATE_RETIRE;r.state.presentation_time_ticks=100;
+ assert(r.world.state(r.state));assert(r.world.scene_poses(r.frame,100000,1000000,r.catalog).empty());
+ Fixture correction;correction.begin();correction.pose(0);
+ correction.event.new_x=8;correction.commit();
+ assert(correction.pose(300000).draw.body_x==1000); // no stale travel after teleport
+ Fixture invalid;invalid.event.new_x=12;assert(!invalid.world.begin_motion(invalid.event,12,12,true,true));
+ invalid.event.new_x=8;assert(!invalid.world.begin_motion(invalid.event,12,12,true,true));
+}
+''')
+
+    def test_native_target_hook_delegates_when_disabled_and_copies_tiles(self):
+        source=(ROOT/'injected_code.c').read_text()
+        start=source.index('void __fastcall\npatch_FLC_Animation_set_move_target')
+        wrapper=source[start:source.index('\n}\n',start)+3].replace('this','self')
+        run_cpp(r'''
+#include "Renderer/native/c3x_renderer_api.h"
+#include <cassert>
+#include <cstdio>
+#define __fastcall
+constexpr int __=0,AT_RUN=2;
+struct Unit{struct{int ID=7,X=10,Y=4;}Body;};
+struct FLC_Animation{struct Unit* Unit;};
+struct LARGE_INTEGER{long long QuadPart;};
+struct {int Map;} bic,*p_bic_data=&bic;
+int natives=0,events=0;FLC_Animation* original=nullptr;
+void FLC_Animation_set_pixel_target_with_offset(FLC_Animation* a,int edx,int x,int y){assert(edx==123&&x==768&&y==128);original=a;++natives;}
+int receive(c3x_renderer_unit_move_v1 const* v){assert(natives>events);assert(v->old_x==10&&v->old_y==4&&v->new_x==0&&v->new_y==4&&v->unit_id==7&&v->action==2);++events;return 1;}
+struct {struct{bool enable_custom_rendering=false;}current_config;c3x_renderer_unit_move_fn custom_renderer_unit_motion=receive;
+ unsigned custom_renderer_map_epoch=2,custom_renderer_viewer_epoch=3;LARGE_INTEGER custom_renderer_qpc_frequency{1000};char custom_renderer_test_save[1]={};}state,*is=&state;
+void wrap_tile_coords(int*,int* x,int* y){*x=(*x+12)%12;*y=(*y+12)%12;}
+bool Map_in_range(int*,int,int x,int y){return x>=0&&x<12&&y>=0&&y<12;}
+bool visible=true;bool custom_renderer_tile_visible_at(int,int){return visible;}
+bool QueryPerformanceCounter(LARGE_INTEGER* now){now->QuadPart=100;return true;}
+void debug(char const*){}auto p_OutputDebugStringA=debug;
+'''+wrapper+r'''
+int main(){
+ Unit unit;FLC_Animation animation{&unit};
+ patch_FLC_Animation_set_move_target(&animation,123,768,128);assert(natives==1&&!events&&original==&animation);
+ state.current_config.enable_custom_rendering=true;
+ patch_FLC_Animation_set_move_target(&animation,123,768,128);assert(natives==2&&events==1);
+ visible=false;patch_FLC_Animation_set_move_target(&animation,123,768,128);assert(natives==3&&events==1);
+}
+''')
+
+if __name__=='__main__':unittest.main()
