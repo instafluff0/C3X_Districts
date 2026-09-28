@@ -5,6 +5,7 @@
 #include <d3dcompiler.h>
 #ifdef C3X_HELPER_TRIAL
 #include <dxgi1_4.h>
+#include "presentation_permit.h"
 #endif
 
 #include <algorithm>
@@ -12270,6 +12271,7 @@ private:
     HANDLE trial_surface_handle=nullptr;
     unsigned trial_surface_width=0,trial_surface_height=0;
     Microsoft::WRL::ComPtr<IDXGISwapChain1> trial_surface_swap;
+    c3x_renderer::PresentationPermit trial_surface_permit;
     Microsoft::WRL::ComPtr<ID3D11Texture2D> trial_surface_back;
     Microsoft::WRL::ComPtr<ID3D11RenderTargetView> trial_surface_view;
     Microsoft::WRL::ComPtr<ID3D11Texture2D> trial_surface_buffer;
@@ -13250,7 +13252,7 @@ private:
                 dynamic_inputs.invalidate();renderer_state.gpu_composition.reset();
 #ifdef C3X_HELPER_TRIAL
                 trial_display_view.Reset();trial_display_mutex.Reset();trial_display.Reset();trial_buffer.Reset();
-                trial_surface_view.Reset();trial_surface_back.Reset();trial_surface_buffer.Reset();trial_surface_swap.Reset();
+                trial_surface_view.Reset();trial_surface_back.Reset();trial_surface_buffer.Reset();trial_surface_permit.reset();trial_surface_swap.Reset();
                 trial_readback_pixels.clear();trial_readback_pixels.shrink_to_fit();
                 if(trial_surface_handle){CloseHandle(trial_surface_handle);trial_surface_handle=nullptr;}
 #endif
@@ -13338,7 +13340,7 @@ private:
             }else if(command==Command::trial_bind_surface){
                 // The HWND target stays in x86. This duplicated handle is the
                 // only window-related object admitted to the x64 renderer.
-                trial_surface_view.Reset();trial_surface_back.Reset();trial_surface_buffer.Reset();trial_surface_swap.Reset();
+                trial_surface_view.Reset();trial_surface_back.Reset();trial_surface_buffer.Reset();trial_surface_permit.reset();trial_surface_swap.Reset();
                 if(trial_surface_handle&&trial_surface_width>0&&trial_surface_height>0&&
                    trial_surface_width<=2240&&trial_surface_height<=1260&&renderer_state.initialize_device()){
                     Microsoft::WRL::ComPtr<IDXGIDevice> dxgi;
@@ -13351,8 +13353,18 @@ private:
                     desc.Format=DXGI_FORMAT_B8G8R8A8_UNORM;desc.SampleDesc.Count=1;
                     desc.BufferUsage=DXGI_USAGE_RENDER_TARGET_OUTPUT;desc.BufferCount=2;
                     desc.SwapEffect=DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;desc.AlphaMode=DXGI_ALPHA_MODE_IGNORE;
+                    desc.Flags=DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
                     if(SUCCEEDED(hr))hr=factory->CreateSwapChainForCompositionSurfaceHandle(
                         renderer_state.device,trial_surface_handle,&desc,nullptr,&trial_surface_swap);
+                    if(SUCCEEDED(hr)){
+                        Microsoft::WRL::ComPtr<IDXGISwapChain2> latency;
+                        hr=trial_surface_swap.As(&latency);
+                        if(SUCCEEDED(hr))hr=latency->SetMaximumFrameLatency(1);
+                        if(SUCCEEDED(hr)){
+                            auto signal=latency->GetFrameLatencyWaitableObject();
+                            if(signal)trial_surface_permit.reset(signal);else hr=E_FAIL;
+                        }
+                    }
                     if(SUCCEEDED(hr))hr=trial_surface_swap->GetBuffer(0,IID_PPV_ARGS(&trial_surface_back));
                     if(SUCCEEDED(hr))hr=renderer_state.device->CreateRenderTargetView(trial_surface_back.Get(),nullptr,&trial_surface_view);
                     if(SUCCEEDED(hr)){
@@ -13364,7 +13376,7 @@ private:
                     result=SUCCEEDED(hr)?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_DEVICE_ERROR;
                 }else result=!trial_surface_handle?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_BAD_ARGUMENT;
                 if(trial_surface_handle){CloseHandle(trial_surface_handle);trial_surface_handle=nullptr;}
-                if(result!=C3X_RENDERER_RESULT_OK){trial_surface_view.Reset();trial_surface_back.Reset();trial_surface_buffer.Reset();trial_surface_swap.Reset();}
+                if(result!=C3X_RENDERER_RESULT_OK){trial_surface_view.Reset();trial_surface_back.Reset();trial_surface_buffer.Reset();trial_surface_permit.reset();trial_surface_swap.Reset();}
             }else if(command==Command::trial_surface_pixels){
                 result=C3X_RENDERER_RESULT_BAD_ARGUMENT;trial_readback_pixels.clear();
                 if(trial_surface_buffer&&renderer_state.device&&renderer_state.context){
@@ -13394,7 +13406,7 @@ private:
                 auto const& p=gpu_present;
                 if(p.action==1||p.action==2){
                     trial_display_view.Reset();trial_display_mutex.Reset();trial_display.Reset();trial_buffer.Reset();
-                    trial_surface_view.Reset();trial_surface_back.Reset();trial_surface_buffer.Reset();trial_surface_swap.Reset();
+                    trial_surface_view.Reset();trial_surface_back.Reset();trial_surface_buffer.Reset();trial_surface_permit.reset();trial_surface_swap.Reset();
                     trial_readback_pixels.clear();
                     if(renderer_state.gpu_composition)renderer_state.gpu_composition->stop_visuals();
                     result=C3X_RENDERER_RESULT_OK;
@@ -13496,28 +13508,35 @@ private:
                     // Its full-screen draw replaces the swap-chain buffer;
                     // copying the old frame into it first only adds a GPU
                     // transfer to every ambient opportunity.
-                    int drawn=renderer_state.gpu_composition->visual_frame(visual_ticks,visual_frequency,
-                        trial_surface_view.Get(),trial_surface_back.Get(),trial_surface_buffer.Get());
+                    bool presentation_ready=trial_surface_permit.ready();
+                    int drawn=presentation_ready?renderer_state.gpu_composition->visual_frame(visual_ticks,visual_frequency,
+                        trial_surface_view.Get(),trial_surface_back.Get(),trial_surface_buffer.Get()):0;
                     if(phase_probe)QueryPerformanceCounter(&sampled);
-                    // A no-change sample has no new pixels to present. Native
-                    // UI transfers have their own exact presentation boundary.
+                    // New UI commits and animated map samples share this
+                    // cadence. Unchanged static fronts have nothing to present.
                     HRESULT hr=drawn==1?trial_surface_swap->Present(0,0):S_OK;
+                    if(drawn==1&&SUCCEEDED(hr))trial_surface_permit.presented();
                     if(phase_probe)QueryPerformanceCounter(&finished);
                     result=FAILED(hr)?C3X_RENDERER_RESULT_DEVICE_ERROR:
                         drawn==1?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_PENDING;
                     if(result==C3X_RENDERER_RESULT_OK){trial_width=trial_surface_width;trial_height=trial_surface_height;}
                     if(phase_probe && (++direct_visual_attempts<=3 || direct_visual_attempts%32==0 ||
                                        result==C3X_RENDERER_RESULT_DEVICE_ERROR)){
-                        char detail[256];std::snprintf(detail,sizeof(detail),
-                            "drawn=%d result=%d prepare_ms=%.3f sample_ms=%.3f present_ms=%.3f total_ms=%.3f ready=%d nodes=%zu bytes=%llu",
+                        auto work=renderer_state.gpu_composition->visual_work();
+                        char detail[512];std::snprintf(detail,sizeof(detail),
+                            "drawn=%d result=%d prepare_ms=%.3f sample_ms=%.3f present_ms=%.3f total_ms=%.3f ready=%d nodes=%zu bytes=%llu operations=%u assemblies=%u copies=%u copied_pixels=%llu attempts=%llu assembly_pixels=%llu display_busy=%u",
                             drawn,result,renderer_state.trace.milliseconds(prepared.QuadPart-started.QuadPart),
                             renderer_state.trace.milliseconds(sampled.QuadPart-prepared.QuadPart),
                             renderer_state.trace.milliseconds(finished.QuadPart-sampled.QuadPart),
                             renderer_state.trace.milliseconds(finished.QuadPart-started.QuadPart),
                             renderer_state.gpu_composition->visual_ready()?1:0,
                             renderer_state.gpu_composition->visual_nodes(),
-                            static_cast<unsigned long long>(renderer_state.gpu_composition->visual_bytes()));
+                            static_cast<unsigned long long>(renderer_state.gpu_composition->visual_bytes()),
+                            work.operations,work.assemblies,work.copies,static_cast<unsigned long long>(work.copied_pixels),
+                            static_cast<unsigned long long>(direct_visual_attempts),static_cast<unsigned long long>(work.assembly_pixels),unsigned(!presentation_ready));
                         renderer_state.trace.write("direct-visual",detail,true);
+                        if(direct_visual_attempts==128||direct_visual_attempts==1024)
+                            renderer_state.gpu_composition->describe_visual([&](char const* line){renderer_state.trace.write("retained-node",line,true);});
                     }
                 }else
                 if(trial_display&&trial_display_view&&trial_display_mutex&&trial_buffer&&
@@ -13558,6 +13577,10 @@ private:
                     auto area=tactical_input.extent({tactical_target.clip[0],tactical_target.clip[1],tactical_target.clip[2],tactical_target.clip[3]});
                     result=C3X_RENDERER_RESULT_OK;
                     if(area[0]<area[2]&&area[1]<area[3]&&!tactical_input.animated){
+                        if(renderer_state.trace.level>=2){char detail[192];sprintf_s(detail,
+                            "primitives=%zu area=%d,%d,%d,%d destination=%lld",tactical_input.primitives.size(),
+                            area[0],area[1],area[2],area[3],tactical_target.destination);
+                            renderer_state.trace.write("tactical-admission",detail,true);}
                         auto texture=renderer_state.tactical_gpu.packed(renderer_state.device,renderer_state.context,
                             tactical_input,area,double(visual_ticks)/double(std::max(1ll,visual_frequency)));
                         result=session->draw_overlay(tactical_target,texture,unsigned(area[2]-area[0]),unsigned(area[3]-area[1]),area[0],area[1]);

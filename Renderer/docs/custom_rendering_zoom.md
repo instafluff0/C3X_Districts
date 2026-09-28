@@ -95,12 +95,50 @@ view's blocks are not evicted by its own scan; over-budget blocks still render
 normally. Only static MSAA background/depth is retained, never posed pixels.
 Cache allocation failure skips admission rather than discarding a valid frame.
 
-This does not yet provide continuous animated zoom: GPU uploads and non-natural
-geometry still depend on the target projection. The next architectural step is
-retaining projection-independent GPU meshes, then presenting a resampled retained
-bitmap immediately while a high-quality target raster completes. Performance and
-pixel parity can be reproduced with `Renderer/native/BENCHMARK_ZOOM.bat` and
-`Renderer/native/compare_zoom_benchmark.py`; see [benchmark notes](zoom_performance.md).
+Continuous animated zoom is still pending. The current game adapter calls the
+sandbox scene with display zoom 1 and rebuilds the captured projection for each
+stepped level. The sandbox already scales its resolved terrain and moving layer
+together in the final GPU pass. Reusing that approach in the game requires fog,
+tactical primitives, native map HUD anchors and inverse picking to share the
+same displayed transform. Scaling the final window would also scale fixed HUD
+controls, so that is not an appropriate insertion point.
+
+The native map canvas and `Units_Control` are not clean world-only layers:
+`Main_GUI::FUN_00553b40` also paints fixed notification shadows into
+`Units_Control`. Existing city-HUD, unit-status and marker hooks expose map
+attachment points. Transient messages compute their rectangle at GOG
+`0x4D7DC0` and paint at `FUN_004d7d40` (`this`, canvas, background canvas);
+that painter is not currently hooked. These source findings identify the
+remaining separation work; they are not an activated patch or a completed
+continuous-camera implementation. Any new patch-table requirement must go
+through the dependency ledger before activation.
+
+The continuous implementation must keep these boundaries together:
+
+- Keep a canonical captured map and ease a renderer-owned display transform
+  around the viewport center. Wheel reversals begin at the current displayed
+  scale. Do not generate a native map capture for every intermediate scale.
+- Apply that transform to fog, terrain, units, selection, tactical primitives
+  and map-HUD attachment points in the same visual sample. Fixed UI and native
+  font/icon dimensions remain in screen pixels.
+- Publish the last presented transform back to the bridge for inverse picking;
+  the requested endpoint is not the displayed view during a transition.
+- Preserve native working-image versions separately from animated display
+  recipes. Native readback has exact submission semantics; evaluating an
+  animated display recipe in its place would change those semantics.
+- A moving HUD command must retain the background across its swept rectangle,
+  and retire its previous occurrence when native drawing replaces or erases it.
+  Merely changing a retained node's destination coordinates leaves stale pixels
+  outside its original recorded damage region.
+
+These are implementation constraints, not completed feature claims. The current
+three-level path stays active until the complete world/UI/picking transition
+passes executable overlap, erasure, reversal and live interaction checks.
+
+For the current stepped path, `-Scenario zoom` in the
+[scripted testing guide](../tools/scripted_game_test.md) covers wheel direction,
+rapid reversal, partial deltas and center preservation. Historical geometry
+benchmarks remain in [benchmark notes](zoom_performance.md).
 
 Automated checks cover affine anchor invariance, inverse picking, the three-level
 `Z` cycle, expanded capture, native overlay scaling and numeric unit projection.

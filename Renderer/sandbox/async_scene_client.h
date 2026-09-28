@@ -61,8 +61,8 @@ template<class Transport>class AsyncSceneClient {
         value.background=image(value.background);value.detail=image(value.detail);
         value.background_detail=image(value.background_detail);
     }
-    template<class Work>int post(std::size_t bytes,Work work,unsigned replace_key=0){
-        return publication.post(bytes,std::move(work),replace_key)?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_DEVICE_ERROR;
+    template<class Work>int post(std::size_t bytes,Work work,unsigned replace_key=0,char const* label=nullptr){
+        return publication.post(bytes,std::move(work),replace_key,label)?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_DEVICE_ERROR;
     }
     static std::shared_ptr<c3x_inputs::Frame> copy_frame(c3x_renderer_frame_v1 const& source){
         auto result=std::make_shared<c3x_inputs::Frame>();result->value=source;
@@ -120,6 +120,7 @@ public:
         transport(std::forward<Args>(args)...),enabled(asynchronous),publication(std::move(report)){}
     ~AsyncSceneClient(){publication.stop();}
     bool asynchronous()const{return enabled;}
+    void observe_publication(std::function<void(char const*,double,double)> observer){publication.observe(std::move(observer));}
     bool alive()const{return publication.healthy()&&transport.alive();}
     void progress(unsigned& accepted,unsigned& completed,unsigned& frames)const{
         accepted=publication.accepted();completed=publication.completed();frames=transport.frames();
@@ -247,7 +248,7 @@ public:
     int tactical(c3x_renderer::tactical::Input capture,c3x_renderer_gpu_unit_v1 destination){
         if(!enabled)return transport.tactical(capture,destination);
         auto size=sizeof(destination)+capture.primitives.size()*sizeof(capture.primitives[0]);
-        return post(size,[this,capture=std::move(capture),destination]()mutable{target(destination);require_result(transport.tactical(capture,destination),"tactical");});
+        return post(size,[this,capture=std::move(capture),destination]()mutable{target(destination);require_result(transport.tactical(capture,destination),"tactical");},0,"tactical");
     }
     int world_query(c3x_renderer_world_page_v1& page){return enabled?query_page(world_page,page,false):transport.world_query(page);}
     int world_delta_scope(c3x_renderer_world_page_v1& page){
@@ -281,7 +282,7 @@ public:
         frame={};return post(sizeof(value),[this,value]()mutable{
             if(!value.action){value.ticket=ticket(value.ticket);value.image=image(value.image);}
             Shared unused;require_result(transport.present(value,unused),"present");policy=transport.visual_policy(3);
-        });
+        },0,"present");
     }
     template<class Shared>int visual(std::int64_t ticks,std::int64_t frequency,Shared& frame){
         if(!enabled)return transport.visual(ticks,frequency,frame);

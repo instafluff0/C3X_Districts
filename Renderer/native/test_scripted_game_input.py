@@ -1,10 +1,22 @@
 """Opt-in diagnostic input delegates when disabled and stays within its test scope."""
 from pathlib import Path
+import re
 import unittest
 from Renderer.native.native_cpp_test import run_cpp
 
 
 class ScriptedGameInputTests(unittest.TestCase):
+    def test_diagnostic_presentation_counter_abi(self):
+        script = (Path(__file__).resolve().parents[1] / 'tools/scripted_game_test.ps1').read_text()
+        version, offset = re.search(r'WireVersion = (\d+), FrameOffset = (\d+)', script).groups()
+        run_cpp('''
+#include <cstddef>
+#include "Renderer/native/helper_trial/scene_wire.h"
+static_assert(c3x_helper_trial::wire_version == ''' + version + ''', "Diagnostic wire version");
+static_assert(offsetof(c3x_helper_trial::Wire, visual_frames) == ''' + offset + ''', "Diagnostic counter offset");
+int main() {}
+''')
+
     def test_guard_load_and_bounded_camera_commands(self):
         source = (Path(__file__).resolve().parents[2] / 'injected_code.c').read_text()
         block = source.split('patch_Main_Screen_Form_m82_handle_key_event (', 1)[1]

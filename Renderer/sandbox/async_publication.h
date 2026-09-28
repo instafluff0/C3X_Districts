@@ -8,13 +8,16 @@
 #include <thread>
 #include <utility>
 #include <string>
+#include <chrono>
 
 namespace c3x_async {
 // Only this transport thread may wait for the other process. Producers copy
 // their input before posting; neither the game nor the GPU loop joins a post.
 // The mutex protects queue bookkeeping, never transport or renderer execution.
 class Publication {
-    struct Entry {std::size_t bytes;std::function<void()> work;unsigned replace_key=0;};
+    using Clock=std::chrono::steady_clock;
+    using Observer=std::function<void(char const*,double,double)>;
+    struct Entry {std::size_t bytes;std::function<void()> work;unsigned replace_key=0;char const* label=nullptr;Clock::time_point posted;};
     std::mutex mutex;
     std::condition_variable wake;
     std::deque<Entry> entries;
@@ -23,17 +26,24 @@ class Publication {
     std::atomic<unsigned> submitted{0},consumed{0};
     bool stopping=false;
     std::function<void(char const*)> report;
+    Observer observer;
     std::thread thread;
     void run(){
         for(;;){
-            Entry next;
+            Entry next;Observer observe;
             {
                 std::unique_lock<std::mutex> lock(mutex);
                 wake.wait(lock,[&]{return stopping||!entries.empty();});
                 if(stopping&&entries.empty())return;
                 next=std::move(entries.front());entries.pop_front();
+                if(next.label && next.posted!=Clock::time_point{})observe=observer;
             }
-            try{if(healthy()){next.work();consumed.fetch_add(1,std::memory_order_release);}}
+            try{if(healthy()){
+                auto started=observe?Clock::now():Clock::time_point{};
+                next.work();consumed.fetch_add(1,std::memory_order_release);
+                if(observe)observe(next.label,std::chrono::duration<double,std::milli>(started-next.posted).count(),
+                    std::chrono::duration<double,std::milli>(Clock::now()-started).count());
+            }}
             catch(std::exception const& error){fail(error.what());}
             catch(...){fail("unknown asynchronous renderer failure");}
             {
@@ -55,10 +65,11 @@ public:
     bool healthy()const{return !fault.load(std::memory_order_acquire);}
     unsigned accepted()const{return submitted.load(std::memory_order_acquire);}
     unsigned completed()const{return consumed.load(std::memory_order_acquire);}
+    void observe(Observer value){std::lock_guard<std::mutex> lock(mutex);observer=std::move(value);}
     void fail(char const* reason){
         if(!fault.exchange(true,std::memory_order_acq_rel)&&report)report(reason);
     }
-    bool post(std::size_t size,std::function<void()> work,unsigned replace_key=0){
+    bool post(std::size_t size,std::function<void()> work,unsigned replace_key=0,char const* label=nullptr){
         bool accepted=false;
         std::size_t pending_bytes=0,pending_count=0;
         {
@@ -71,7 +82,7 @@ public:
                 else ++at;
             }
             if(!stopping&&healthy()&&size<=limit-bytes&&entries.size()<count_limit){
-                entries.push_back({size,std::move(work),replace_key});bytes+=size;submitted.fetch_add(1,std::memory_order_release);accepted=true;
+                entries.push_back({size,std::move(work),replace_key,label,observer&&label?Clock::now():Clock::time_point{}});bytes+=size;submitted.fetch_add(1,std::memory_order_release);accepted=true;
             }
             pending_bytes=bytes;pending_count=entries.size();
         }

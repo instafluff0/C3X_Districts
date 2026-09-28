@@ -8,6 +8,28 @@ ROOT=Path(__file__).resolve().parents[2]
 
 
 class NativeVisualCadenceTests(unittest.TestCase):
+    def test_presentation_permit_is_nonblocking_and_survives_noop(self):
+        run_cpp(r'''
+#include <windows.h>
+#include <cassert>
+#include "Renderer/native/presentation_permit.h"
+int main(){
+ c3x_renderer::PresentationPermit permit;
+ assert(!permit.ready());
+ auto signal=CreateEventW(nullptr,FALSE,FALSE,nullptr);assert(signal);
+ permit.reset(signal);
+ auto begin=GetTickCount64();
+ for(unsigned n=0;n<1000;++n)assert(!permit.ready());
+ assert(GetTickCount64()-begin<1000);
+ SetEvent(signal);assert(permit.ready());
+ for(unsigned n=0;n<1000;++n)assert(permit.ready()); // unchanged static front
+ permit.presented();assert(!permit.ready());
+ SetEvent(signal);assert(permit.ready());permit.reset();assert(!permit.ready());
+ auto replacement=CreateEventW(nullptr,FALSE,TRUE,nullptr);assert(replacement);
+ permit.reset(replacement);assert(permit.ready());permit.presented();assert(!permit.ready());
+}
+''')
+
     def test_authorized_gog_symbols_enable_the_native_branch(self):
         expected={
             'p_main_animation_timer':('define',0x009F6500),

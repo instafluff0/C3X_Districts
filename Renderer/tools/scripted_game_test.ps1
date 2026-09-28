@@ -1,9 +1,9 @@
 # Bounded real-game renderer diagnostic, enabled only in the child environment.
 param([Parameter(Mandatory=$true)][string]$SaveFile, [string]$ConquestsDirectory,
       [ValidateRange(35,120)][int]$Seconds = 75,
-      [ValidateSet('scroll','interaction','lifecycle','combat','turn','mouse')][string]$Scenario = 'scroll',
+      [ValidateSet('scroll','interaction','lifecycle','combat','turn','mouse','zoom')][string]$Scenario = 'scroll',
       [ValidatePattern('^[A-Za-z0-9_-]+$')][string]$UnitPack='UnitAnimationFidelity', [ValidateSet('melee','victory','retreat','bombard','army','air','capture')][string]$CombatCase='melee', [ValidateRange(1,10)][int]$SampleHz = 2,
-      [switch]$ProfileRenderer)
+      [switch]$ProfileRenderer, [switch]$MeasureCadence)
 $ErrorActionPreference = 'Stop'
 $renderer = Split-Path $PSScriptRoot -Parent
 if (-not $ConquestsDirectory) { $ConquestsDirectory = $env:C3X_RENDERER_CIV3_CONQUESTS }
@@ -44,6 +44,30 @@ public static class RendererGameCommand {
     [DllImport("user32.dll")] public static extern bool ClientToScreen(IntPtr window, ref Point point);
     [DllImport("kernel32.dll", CharSet=CharSet.Unicode)] public static extern bool WritePrivateProfileString(string section, string key, string value, string path);
 }
+// Read the helper's existing successful-presentation counter. This maps only
+// the IPC header read-only; it never requests pixels or submits renderer work.
+public sealed class RendererCadenceReader : IDisposable {
+    // Mirrored from helper_trial/scene_wire.h; executable test checks this ABI.
+    public const int WireVersion = 9, FrameOffset = 228;
+    [DllImport("kernel32.dll", CharSet=CharSet.Unicode)] static extern IntPtr OpenFileMapping(uint access, bool inherit, string name);
+    [DllImport("kernel32.dll")] static extern IntPtr MapViewOfFile(IntPtr mapping, uint access, uint high, uint low, UIntPtr bytes);
+    [DllImport("kernel32.dll")] static extern bool UnmapViewOfFile(IntPtr view);
+    [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);
+    IntPtr mapping, view;
+    public RendererCadenceReader(string name) {
+        mapping=OpenFileMapping(4, false, name);
+        if(mapping!=IntPtr.Zero) view=MapViewOfFile(mapping,4,0,0,(UIntPtr)(FrameOffset+4));
+        if(view==IntPtr.Zero) { Dispose(); throw new InvalidOperationException("Cannot read diagnostic helper telemetry"); }
+        if(Marshal.ReadInt32(view)!=0x32483343 || Marshal.ReadInt32(view,4)!=WireVersion) {
+            Dispose(); throw new InvalidOperationException("Renderer telemetry ABI changed");
+        }
+    }
+    public int Frames { get { return Marshal.ReadInt32(view,FrameOffset); } }
+    public void Dispose() {
+        if(view!=IntPtr.Zero) { UnmapViewOfFile(view); view=IntPtr.Zero; }
+        if(mapping!=IntPtr.Zero) { CloseHandle(mapping); mapping=IntPtr.Zero; }
+    }
+}
 '@
 function Quote-Arguments([string[]]$Values) {
     ($Values | ForEach-Object {
@@ -52,6 +76,7 @@ function Quote-Arguments([string[]]$Values) {
     }) -join ' '
 }
 $collector=$null; $child=$null; $observer=$null; $earlyExit=$false; $gameExitCode=$null
+$cadence=$null; $cadenceProcess=$null; $cadenceSamples=@(); $cadenceNext=20.0
 $oldEnvironment=$env:C3X_RENDERER_GAME_TEST_SAVE
 $oldMode=$env:C3X_RENDERER_GAME_TEST_MODE
 $oldCombat=$env:C3X_RENDERER_GAME_TEST_COMBAT
@@ -80,7 +105,8 @@ try {
     $env:C3X_RENDERER_GAME_TEST_MODE=$Scenario
     $env:C3X_RENDERER_GAME_TEST_COMBAT=$CombatCase
     $env:C3X_RENDERER_UNIT_PACK=$UnitPack
-    if ($Scenario -eq 'mouse') { $env:C3X_RENDERER_TRACE_INPUT='1' }
+    if ($Scenario -in @('mouse','zoom')) { $env:C3X_RENDERER_TRACE_INPUT='1' }
+    if ($MeasureCadence -and -not $ProfileRenderer) { $env:C3X_RENDERER_TRACE='0' }
     if ($ProfileRenderer) {
         $env:C3X_RENDERER_TRACE='2'
         $env:C3X_RENDERER_TRACE_BUFFERED='1'
@@ -104,13 +130,16 @@ try {
     $cursorParked=$false
     $mouseIndex=0; $mouseHeld=$false; $mouseEvents=@()
     $mouseSteps=@(@(30,0,0,0x800,240),@(36,0,0,2),@(38,32,0,0),@(39,64,0,0),@(40,96,0,0),@(41,128,0,0),@(43,128,0,4))
+    if ($Scenario -eq 'zoom') {
+        $mouseSteps=@(@(30,0,0,0x800,120),@(32,0,0,0x800,120),@(34,0,0,0x800,-120),@(36,0,0,0x800,-120),@(38,0,0,0x800,240),@(38.15,0,0,0x800,-120),@(40,0,0,0x800,-240),@(42,0,0,0x800,40),@(42.2,0,0,0x800,40),@(42.4,0,0,0x800,40))
+    }
     $interactionIndex=0
     $combatReadyAt=$null
     $combatAttackSent=$false
     $combatNextAttack=0.0
     $combatNextPrepare=36.0
     $interaction=@(@(28,13,'close-welcome'),@(36,90,'zoom-192'),@(39,0x86,'text-192'),@(43,90,'zoom-160'),@(46,0x86,'text-160'),@(50,90,'zoom-128'),@(53,0x86,'text-128'),@(57,0x66,'move-east'),@(65,0x70,'advisor'),@(74,27,'close-advisor'))
-    if ($Scenario -eq 'mouse') {
+    if ($Scenario -in @('mouse','zoom')) {
         $interaction=@()
     }
     if ($Scenario -eq 'turn') {
@@ -141,7 +170,29 @@ try {
             # Two Enter presses select Load Game and accept the copied save.
             # The opt-in post-load hook dismisses the known welcome popup.
             $elapsed=([DateTime]::UtcNow-$started).TotalSeconds
-            if ($Scenario -eq 'mouse' -and $mouseIndex -lt $mouseSteps.Count -and $elapsed -ge $mouseSteps[$mouseIndex][0]) {
+            if ($MeasureCadence -and $elapsed -ge $cadenceNext) {
+                $cadenceNext=$elapsed+1
+                if ($cadenceProcess -and $cadenceProcess.HasExited) {
+                    $cadence.Dispose(); $cadence=$null; $cadenceProcess=$null
+                }
+                if (-not $cadence) {
+                    # Match the helper's named channel to this disposable game's
+                    # PID. Never attach to another user's renderer session.
+                    $channelPattern='--child\s+"(Local\\C3XScene_'+$child.Id+'_\d+)"'
+                    $helper=Get-CimInstance Win32_Process -Filter "Name='C3XRendererHelper64.exe'" |
+                        Where-Object { $_.CommandLine -match $channelPattern } | Select-Object -First 1
+                    if ($helper -and $helper.CommandLine -match $channelPattern) {
+                        $cadence=New-Object RendererCadenceReader ($Matches[1]+'_map')
+                        $cadenceProcess=[System.Diagnostics.Process]::GetProcessById($helper.ProcessId)
+                    }
+                }
+                if ($cadence) {
+                    $cadenceSamples += [ordered]@{ qpc=[System.Diagnostics.Stopwatch]::GetTimestamp();
+                        helper_pid=$cadenceProcess.Id; frames=$cadence.Frames;
+                        foreground=([RendererGameCommand]::GetForegroundWindow() -eq $window) }
+                }
+            }
+            if ($Scenario -in @('mouse','zoom') -and $mouseIndex -lt $mouseSteps.Count -and $elapsed -ge $mouseSteps[$mouseIndex][0]) {
                 $step=$mouseSteps[$mouseIndex]
                 if ($mouseIndex -eq 0) { [void][RendererGameCommand]::SetForegroundWindow($window) }
                 if ([RendererGameCommand]::GetForegroundWindow() -ne $window) { throw 'Diagnostic game lost foreground before mouse input.' }
@@ -152,8 +203,9 @@ try {
                 [void][RendererGameCommand]::ClientToScreen($window,[ref]$point)
                 $inputTicks=[System.Diagnostics.Stopwatch]::GetTimestamp()
                 [void][RendererGameCommand]::SetCursorPos($point.X,$point.Y)
-                $wheelDelta=if ($step.Count -gt 4) { [uint32]$step[4] } else { 0 }
-                if ($step[3]) { [RendererGameCommand]::mouse_event($step[3],0,0,$wheelDelta,[UIntPtr]::Zero) }
+                $wheelDelta=if ($step.Count -gt 4) { [int]$step[4] } else { 0 }
+                $wheelData=[uint32]([long]$wheelDelta -band 4294967295)
+                if ($step[3]) { [RendererGameCommand]::mouse_event($step[3],0,0,$wheelData,[UIntPtr]::Zero) }
                 $mouseEvents += [ordered]@{ qpc=$inputTicks; client_x=([int]($rect.Right/2)+$step[1]); client_y=([int]($rect.Bottom/2)+$step[2]); flags=$step[3]; wheel_delta=$wheelDelta }
                 if ($step[3] -eq 2) { $mouseHeld=$true }
                 if ($step[3] -eq 4) { $mouseHeld=$false }
@@ -188,7 +240,10 @@ try {
                     }
                 }
             }
-            if ($key -eq 0) { Start-Sleep -Milliseconds 1000; continue }
+            if ($key -eq 0) {
+                $pollMs=if ($Scenario -eq 'zoom') {20} else {1000}
+                Start-Sleep -Milliseconds $pollMs; continue
+            }
             if (-not [RendererGameCommand]::PostMessage($window,0x100,[IntPtr]$key,[IntPtr]1)) { throw 'Cannot post diagnostic command.' }
             [void][RendererGameCommand]::PostMessage($window,0x101,[IntPtr]$key,[IntPtr](-1073741823))
             ++$sent
@@ -198,6 +253,7 @@ try {
     if ($child.HasExited) { $earlyExit=$true; $gameExitCode=$child.ExitCode }
     Write-Host ('Posted diagnostic commands: '+$sent)
 } finally {
+    if ($cadence) { $cadence.Dispose(); $cadence=$null }
     if ($mouseHeld) { [RendererGameCommand]::mouse_event(4,0,0,0,[UIntPtr]::Zero) }
     $env:C3X_RENDERER_GAME_TEST_SAVE=$oldEnvironment
     $env:C3X_RENDERER_GAME_TEST_MODE=$oldMode
@@ -220,8 +276,13 @@ try {
     }
     if ((Get-FileHash -LiteralPath $SaveFile).Hash -ne $originalSaveHash) { throw 'Original input save changed.' }
 }
+if ($MeasureCadence) {
+    [ordered]@{ qpc_frequency=[System.Diagnostics.Stopwatch]::Frequency; detailed_trace=[bool]$ProfileRenderer;
+        meaning='Successful Renderer64 presentations, not physical scanout'; samples=$cadenceSamples } |
+        ConvertTo-Json -Depth 4 | Set-Content (Join-Path $session 'cadence.json')
+}
 $log=Get-Content -LiteralPath (Join-Path $session 'renderer.log') -Raw
-if ($Scenario -eq 'mouse') {
+if ($Scenario -in @('mouse','zoom')) {
     [ordered]@{ qpc_frequency=[System.Diagnostics.Stopwatch]::Frequency; events=$mouseEvents } |
         ConvertTo-Json -Depth 4 | Set-Content (Join-Path $session 'mouse-events.json')
 }
@@ -240,5 +301,6 @@ $windowComplete=$null -ne $windowEvidence -and $windowEvidence.complete -and $wi
     game_exited_early=$earlyExit; game_exit_code=$gameExitCode; first_map_ready=$readyEvents; scenes_unloaded=$unloadEvents; native_failures=$errors; window_evidence=$windowEvidence; original_save_unchanged=$true; scope='Real Civ III diagnostic; window samples require visual review; not an FPS benchmark' } |
     ConvertTo-Json -Depth 4 | Set-Content (Join-Path $session 'result.json')
 Write-Host ('Scripted diagnostic saved: '+$session)
+if ($MeasureCadence -and $cadenceSamples.Count -lt 2) { Write-Error 'Insufficient renderer cadence samples; inspect cadence.json and the helper channel.'; exit 1 }
 if (-not $windowComplete) { Write-Error 'Window evidence did not complete; inspect window-errors.log and window/finished.json.'; exit 1 }
-if (($Scenario -eq 'mouse' -and $mouseIndex -ne $mouseSteps.Count) -or ($Scenario -eq 'turn' -and $turns.Count -lt 2) -or ($Scenario -eq 'combat' -and ($combatReady -ne 1 -or $combatFinished -ne 1)) -or $earlyExit -or ($Scenario -eq 'scroll' -and $steps.Count -ne 32) -or ($Scenario -eq 'interaction' -and ($interactionIndex -ne $interaction.Count -or $textEvents -ne 3)) -or ($Scenario -eq 'lifecycle' -and ($interactionIndex -ne $interaction.Count -or $readyEvents -ne 2 -or $unloadEvents -lt 2 -or $textEvents -ne 1)) -or $errors.Count) { exit 1 }
+if (($Scenario -in @('mouse','zoom') -and $mouseIndex -ne $mouseSteps.Count) -or ($Scenario -eq 'turn' -and $turns.Count -lt 2) -or ($Scenario -eq 'combat' -and ($combatReady -ne 1 -or $combatFinished -ne 1)) -or $earlyExit -or ($Scenario -eq 'scroll' -and $steps.Count -ne 32) -or ($Scenario -eq 'interaction' -and ($interactionIndex -ne $interaction.Count -or $textEvents -ne 3)) -or ($Scenario -eq 'lifecycle' -and ($interactionIndex -ne $interaction.Count -or $readyEvents -ne 2 -or $unloadEvents -lt 2 -or $textEvents -ne 1)) -or $errors.Count) { exit 1 }

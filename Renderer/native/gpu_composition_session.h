@@ -145,6 +145,8 @@ public:
     std::size_t allocation_bytes()const{return std::size_t(gpu.stats().resident_bytes+layers.bytes());}
     std::size_t visual_nodes()const{return layers.node_count();}
     std::size_t visual_sources()const{return layers.sampled_sources();}
+    RetainedComposition::Work visual_work()const{return layers.last_work();}
+    template<class Report> void describe_visual(Report report)const{layers.describe(report);}
     // Correct static pixels alone do not certify ambient delivery. A CPU
     // snapshot can sever map samples while unit animation remains reachable.
     // Let the existing native recovery demand run until map writes restore it.

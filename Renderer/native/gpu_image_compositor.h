@@ -467,14 +467,16 @@ Texture2D<uint> input_image:register(t0);Texture2D<uint> text_curves:register(t1
         auto id=attach_source_unrecorded(texture,format);
         if(recording&&id){auto image=find(id);c3x_recording::event(c3x_recording::create,recording,[&](auto& b){using namespace c3x_recording;u64(b,id);u32(b,image->width);u32(b,image->height);u32(b,unsigned(format));u32(b,1);});record_texture(id,c3x_recording::external);}return id;
     }
-    Id attach_source_unrecorded(ID3D11Texture2D* texture,Format format=Format::bgra32){
+    Id attach_source_unrecorded(ID3D11Texture2D* texture,Format format=Format::bgra32,ID3D11ShaderResourceView* retained_view=nullptr){
         if(!texture||(format!=Format::bgra32&&format!=Format::rgb555&&format!=Format::rgb565))return 0;D3D11_TEXTURE2D_DESC d={};texture->GetDesc(&d);
         ComPtr<ID3D11Device> owner;texture->GetDevice(&owner);
         make_room(std::uint64_t(d.Width)*d.Height*4);
         if(owner.Get()!=device||d.Format!=DXGI_FORMAT_R32_UINT||d.SampleDesc.Count!=1||d.ArraySize!=1||d.MipLevels!=1||
            !(d.BindFlags&D3D11_BIND_SHADER_RESOURCE)||!d.Width||!d.Height||d.Width>2240||d.Height>1260||std::uint64_t(d.Width)*d.Height*4>budget-counters.resident_bytes)return 0;
         for(auto& image:images)if(!image.id){Image next;next.texture=texture;next.width=d.Width;next.height=d.Height;next.format=format;next.read_only=true;
-            checked(device->CreateShaderResourceView(texture,nullptr,&next.read));next.id=++serial;counters.resident_bytes+=bytes(next);image=std::move(next);return image.id;
+            if(retained_view)next.read=retained_view;
+            else checked(device->CreateShaderResourceView(texture,nullptr,&next.read));
+            next.id=++serial;counters.resident_bytes+=bytes(next);image=std::move(next);return image.id;
         }return 0;
     }
     template<class Visit> void visit_images(Visit visit)const{

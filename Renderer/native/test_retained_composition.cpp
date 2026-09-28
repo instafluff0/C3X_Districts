@@ -184,6 +184,79 @@ int test_retained_composition(){
         retained.clear();assert(retained.bytes()==0&&retained.node_count()==0);
         std::printf("PASS fullscreen retained copy chain: transfers=17 pixels=%u retained_bytes=%u nodes=1 immutable_front=1 assembly_scratch=0\n",width*height,width*height*4);
     }
+    // JGL opaque paired transfers select versions; keyed full-window forms
+    // retain only painted regions. Compare both native words and color detail
+    // against the ordinary GPU interpreter across later animated map samples.
+    for(auto format:{Format::rgb555,Format::rgb565})for(bool scaled:{false,true}){
+        constexpr unsigned width=256,height=144;Rect bounds={0,0,width,height};unsigned key=0x7c1f;
+        Compositor live(device.Get(),context.Get());RetainedComposition retained(device.Get(),context.Get());
+        auto make=[&](Format f){auto id=live.create(width,height,f);assert(id);retained.create(id,width,height,f);return id;};
+        auto map=make(Format::bgra32),words=make(format),detail=make(Format::bgra32),
+            saved=make(format),saved_detail=make(Format::bgra32),hud=make(format),hud_detail=make(Format::bgra32);
+        auto draw=[&](Command command){assert(live.submit(&command,1));retained.record(command);};
+        std::vector<unsigned> pixels(width*height);RetainedComposition::Texture current;
+        auto next_map=[&](unsigned tick){for(unsigned i=0;i<pixels.size();++i)pixels[i]=0xff000000|((i*3127+tick*771)&0xffffff);
+            assert(live.upload(map,tick+1,pixels.data(),pixels.size()));
+            auto next=live.create(width,height,Format::bgra32);assert(next&&live.upload(next,1,pixels.data(),pixels.size()));
+            current=live.texture(next);live.destroy(next);};
+        next_map(0);retained.source(map,current.Get(),[&](long long,long long){return current;});
+        std::vector<Command> recipe={{Kind::quantize,words,map,bounds,bounds},{Kind::copy,detail,map,bounds,bounds}};
+        for(auto c:recipe)draw(c);
+        auto transfer=Command{Kind::native_image,saved,words,bounds,bounds,0,0,65536,0,saved_detail,detail,int(width),int(height)};
+        for(int i=0;i<20;++i)draw(transfer);
+        retained.commit(saved_detail,bounds);assert(retained.node_count()==2);
+        assert(retained_read(device.Get(),context.Get(),retained.sample(1,1000).Get())==pixels);
+        draw({Kind::fill,hud,0,bounds,bounds,0,0,key});
+        draw({Kind::fill,hud_detail,0,bounds,bounds,0,0,0xff00ff00});
+        // These fills remain known constants even after an earlier display
+        // has materialized and retired their static recipes.
+        retained.commit(hud,bounds);retained.sample(2,1000);
+        draw({Kind::fill,hud,0,{77,38,103,49},bounds,0,0,0x1234});
+        draw({Kind::fill,hud_detail,0,{77,38,103,49},bounds,0,0,0xff123abc});
+        Command keyed={Kind::native_image,saved,hud,{9,7,249,137},{20,14,232,120},0,0,scaled?65536u:key,0,saved_detail,hud_detail,scaled?120:240,scaled?65:130};
+        recipe.push_back(transfer);recipe.push_back(keyed);draw(keyed);
+        for(unsigned tick=1;tick<=12;++tick){next_map(tick);assert(live.submit(recipe.data(),recipe.size()));
+            for(auto id:{saved,saved_detail}){retained.commit(id,bounds);
+                auto actual=retained_read(device.Get(),context.Get(),retained.sample(tick+2,1000).Get());
+                auto expected=retained_read(device.Get(),context.Get(),live.texture(id));assert(actual==expected);}
+        }
+        // The large transparent field must not become another viewport-sized
+        // dynamic replay allocation. Source fills remain static and shared.
+        assert(retained.bytes()<std::uint64_t(width)*height*(scaled?36:24));
+        std::printf("PASS native form transfer simplification: format=%u scaled=%u paired_copies=20 keyed_offset=9,7 animation_samples=12 exact_words_and_color=1 bytes=%llu\n",
+            unsigned(format),unsigned(scaled),retained.bytes());
+    }
+    // Live HUD buttons read tiny regions of the animated full-screen map.
+    // Their coordinate domain stays full-screen; their actual read does not
+    // require clearing/reconstructing a full-screen source for each button.
+    {
+        constexpr unsigned width=2240,height=1260,count=32;Rect bounds={0,0,width,height};
+        Compositor live(device.Get(),context.Get());RetainedComposition retained(device.Get(),context.Get());
+        std::vector<unsigned> pixels(width*height,0xff123456);
+        auto original=live.create(width,height,Format::bgra32);assert(original&&live.upload(original,1,pixels.data(),pixels.size()));
+        D3D11_TEXTURE2D_DESC desc={};desc.Width=width;desc.Height=height;desc.MipLevels=desc.ArraySize=desc.SampleDesc.Count=1;
+        desc.Format=DXGI_FORMAT_B8G8R8A8_UNORM;desc.Usage=D3D11_USAGE_DEFAULT;desc.BindFlags=D3D11_BIND_SHADER_RESOURCE;
+        D3D11_SUBRESOURCE_DATA initial={pixels.data(),width*4,0};ComPtr<ID3D11Texture2D> source;
+        checked(device->CreateTexture2D(&desc,&initial,&source));
+        retained.create(1,width,height,Format::bgra32);retained.source(1,live.texture(original),[&](long long,long long){
+            return RetainedComposition::SampledImage::bgra(source.Get(),bounds);},true,true);
+        retained.create(2,width,height,Format::bgra32);retained.record({Kind::copy,2,1,bounds,bounds});
+        for(unsigned i=0;i<count;++i){Id id=10+i;Rect button={0,0,32,32};int x=10+int(i)*60,y=700;
+            retained.create(id,32,32,Format::bgra32);
+            retained.record({Kind::copy,id,1,button,button,x,y});
+            retained.record({Kind::invert,id,0,button,button,0,0,0xffffff});
+            retained.record({Kind::copy,2,id,{x,y,x+32,y+32},bounds});}
+        retained.commit(2,bounds);std::uint64_t warm_views=0;
+        for(unsigned tick=1;tick<=5;++tick){for(unsigned i=0;i<pixels.size();++i)pixels[i]=0xff000000|((i*3127+tick*771)&0xffffff);
+            context->UpdateSubresource(source.Get(),0,nullptr,pixels.data(),width*4,0);
+            auto expected=pixels;
+            for(unsigned i=0;i<count;++i)for(unsigned y=700;y<732;++y)for(unsigned x=10+i*60;x<42+i*60;++x)expected[y*width+x]^=0xffffff;
+            assert(retained_read(device.Get(),context.Get(),retained.sample(tick,1000).Get())==expected);
+            assert(retained.last_work().assembly_pixels<std::uint64_t(width)*height*2);
+            if(tick==1)warm_views=retained.source_view_creations();else assert(retained.source_view_creations()==warm_views);
+        }
+        std::printf("PASS tiny HUD background reads: buttons=32 full_screen_sources=0 exact_frames=5 assembly_pixels=%llu source_views_reused=1\n",retained.last_work().assembly_pixels);
+    }
     // Fullscreen native map, screen, saved UI and staging pairs remain alive
     // while the next immutable map is published. Eight packed/full-color pairs plus
     // old/new map overlap exercise the complete fullscreen family.

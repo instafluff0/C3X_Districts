@@ -1,0 +1,10 @@
+{
+  "schema": "c3x.source_city_ruin_texture_mapping.v0",
+  "source_root": "Base/Platforms/Windows/BLPs/SHARED_DATA",
+  "source_package_evidence": "Base/Platforms/Windows/BLPs/landmarks/tilebases.blp",
+  "textures": [
+    {"source_entry": "TEXTURE_Ruin_Debris_Decal", "asset_id": "city/ruins/debris_color", "usage": "ground_debris_color_candidate"},
+    {"source_entry": "TEXTURE_Ruin_Debris_Decal_H", "asset_id": "city/ruins/debris_auxiliary", "usage": "ground_debris_auxiliary_candidate"},
+    {"source_entry": "TEXTURE_Ruin_Debris_Decal_Light", "asset_id": "city/ruins/debris_light", "usage": "light_soil_debris_color_candidate"}
+  ]
+}

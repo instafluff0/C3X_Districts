@@ -239,9 +239,8 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
     }
     if(!sandbox_fresh.draw(frame,camera_x,camera_y,0,0,0,0,false,1.f))return false;
     renderer.trace.write("fresh-callback","scene-ready",true);
-    // Complete the resident HDR writes before using those textures in the
-    // final output pass; this submits work without waiting for GPU completion.
-    renderer.context->Flush();
+    // These passes share the immediate context. Resource dependencies are
+    // ordered there; submit once at publication instead of flushing mid-frame.
     if(renderer.trace.level) {
         char detail[384];
         sprintf_s(detail,"prepare=%.3f reflection=%.3f static=%.3f water=%.3f units=%.3f reconstruct=%.3f shadow_builds=%u reflection_draws=%u static_draws=%u visible=%u culled=%u camera=%d,%d translation=%.1f,%.1f",

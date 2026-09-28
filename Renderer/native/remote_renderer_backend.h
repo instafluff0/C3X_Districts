@@ -69,7 +69,15 @@ public:
     Backend(std::wstring const& helper,std::wstring const& dll,bool direct=false):
         client(direct,[](char const* reason){char line[512];
             std::snprintf(line,sizeof(line),"[C3X renderer] stage=async-publication-failed reason=%s\n",reason);
-            OutputDebugStringA(line);},helper,dll),direct_requested(direct){}
+            OutputDebugStringA(line);},helper,dll),direct_requested(direct){
+        char profile[8]={};
+        if(GetEnvironmentVariableA("C3X_RENDERER_TRACE",profile,sizeof(profile))&&profile[0]=='2')
+            client.observe_publication([](char const* operation,double queued,double service){
+                LARGE_INTEGER now={};QueryPerformanceCounter(&now);char line[256];
+                std::snprintf(line,sizeof(line),"[C3X renderer] qpc=%lld stage=publication-latency operation=%s queue_ms=%.3f service_ms=%.3f\n",
+                    now.QuadPart,operation,queued,service);OutputDebugStringA(line);
+            });
+    }
     ~Backend(){cadence.stop();}
     bool healthy()const{return client.alive();}
     void progress(unsigned& accepted,unsigned& completed,unsigned& frames)const{client.progress(accepted,completed,frames);}

@@ -293,8 +293,12 @@ checks the foreground window before every mouse action and releases the button
 in cleanup. Mouse/cursor state, native tile picks, and projected route targets
 are logged. This bounded path does not prove every physical mouse/VM input case.
 `mouse-events.json` records the injected input's QPC, client coordinates, flags
-and wheel delta. Compare these with `map-click` QPCs and window arrival timestamps
+and wheel delta. Compare these with `map-click` QPCs and window compositor timestamps
 to separate native input latency from visible renderer latency.
+`compositor_100ns` is WGC's QPC-based source timestamp in 100 ns units;
+`arrival_qpc` also includes delay in the observer. The contact-sheet tool uses
+the compositor timestamp when present. Pass `--input-event N` to align it to
+the Nth entry in `mouse-events.json`, rather than the first native drag message.
 
 Add `-ProfileRenderer` to collect detailed renderer timings in a bounded memory
 buffer, flushed by the helper at shutdown to `renderer-core.log.x64`. This avoids
@@ -303,6 +307,14 @@ one debugger round trip per rendering trace. Inspect that file as well as
 coverage. The x86 buffer can be lost when the diagnostic terminates its game
 process; injected input evidence remains in `renderer.log`. The script restores
 all three trace environment variables after child creation and during cleanup.
+For a lower-overhead cadence comparison, use `-MeasureCadence -SampleHz 1`
+without `-ProfileRenderer`. This disables detailed renderer tracing and reads
+the helper's existing successful-presentation counter once per second through
+a read-only IPC-header mapping. The helper channel must match this test's game
+PID. `cadence.json` records QPC, helper identity, frame count and foreground
+state. Compare counter differences only within one helper lifetime and the same
+input phase. This measures successful Renderer64 presentations, not physical
+scanout. A requested measurement with fewer than two samples fails explicitly.
 Keyboard release messages include the previous-state and transition flags;
 otherwise this game's JGL event dispatcher interprets a synthetic release as
 another press. Earlier scripted zoom labels therefore did not reliably identify
@@ -337,7 +349,71 @@ In `220100`, the five changed cursor positions reach native input handling in
 2.5–16.6 ms, while destination-marker presentation still lags. The latter is a
 renderer issue, not a claim that the mouse defect is fixed. The next candidate
 retains static route textures and prevents repeated UI commits from interrupting
-the independent frame deadline; its live result is pending.
+the independent frame deadline. Later `223106`, `225000` and `230614` complete
+the drag without renderer failures or save changes. Their logs separate native
+input handling, transport queue delay and rendering. Use every nearby 10 Hz
+sample when bounding response: sparse `+0.2/+0.6` selections overstated delay.
+For example, the first changed target in `223106` is absent at +140 ms and
+visible at +249 ms; `225000` is absent at +170 ms and visible at +280 ms.
+These are sampling bounds, not exact input-to-photon measurements.
+Those older bounds used observer arrival times. Capture `234056` gives a
+first-target bound of 74–191 ms using the compositor's source timestamps
+(145–261 ms using observer arrival). The route reaches the helper at +45 ms.
+Keep the timestamp basis with every reported bound.
+
+Use `-SampleHz 1` as a capture-overhead control when comparing renderer counters.
+At that setting, `231750` delivered 31.66 visual submissions/sec during dragging;
+`232845` delivered 44.09 after tiny background reads stopped reconstructing
+full-screen textures. Median sampled composition time fell 29.976 → 17.680 ms.
+Both runs completed all seven mouse commands with no native failure, early exit
+or save change. This does not measure scanout FPS or establish the 52 FPS target.
+Keep high-frequency capture for the separate visible-latency check.
+The low-overhead `234847` run records 43.56 successful presentations/sec during
+dragging and approximately 48–50/sec while stationary. It completes all seven
+commands without native errors or save changes. This confirms improvement over
+the old path, but does not establish the sandbox target or complete mouse UX.
+
+The presentation-limited candidate `c704bcc8bce5401294b88494fde7b312`
+retains a DXGI presentation permit across unchanged frames and polls readiness
+without waiting. Comparing identical windows relative to the first mouse-down
+(0–7 seconds), one-Hz runs `234847` and `20260928-000128` record 42.74 and
+42.46 presentations/sec. Use the mouse-down event, not the initial wheel event,
+as the phase origin. At ten-Hz sampling, `235859` bounds target changes at
+4–86 ms and 62–180 ms using compositor source times. The capture settings differ
+from the older profiled run, so this alone is not a controlled latency speedup.
+
+The same candidate's `20260928-000807` scrolling run completes all 32 steps;
+eight window samples retain the terrain, units and fixed HUD. Counter samples
+from the first 25 seconds after cadence collection starts record 32.57/sec;
+the 28–47 second interval after that origin records 46.08/sec. Collection begins
+at elapsed 20 seconds; the final camera command arrives at about 47 seconds.
+Wheel run `20260928-001129` records 38.54/sec in the first 14 seconds after the
+first wheel event and 47.50/sec in the 15–23 second interval. Both use one-Hz
+window capture, no detailed helper trace, and have no native errors, early exit
+or save changes. These measurements keep the navigation shortfall explicit.
+
+An additional opaque native-transfer GPU-copy trial passed the pixel oracles
+and async fixture (`4d1970a3d1e9480d82340855b661141e`), but live
+`20260928-002021` recorded 32.56/sec during the same scrolling interval and
+46.41/sec afterward. This does not establish a benefit over 32.57/46.08.
+The trial code was removed and the source-matched `c704` trio restored; its
+three staged binary hashes were rechecked with Civ III and its helper closed.
+
+### Wheel and transition diagnostic
+
+`-Scenario zoom -Seconds 55 -SampleHz 10` loads the disposable save and applies
+positive and negative wheel notches, both endpoint clamps, a quick reversal and
+three 40-unit partial deltas. Like `mouse`, it requires the diagnostic game to
+own the foreground before sending input. It records signed deltas and QPC times
+in `mouse-events.json`; Windows receives the equivalent unsigned event payload.
+It polls at 20 ms so the reversal and partial deltas do not become one-second
+steps. Check the actual event timestamps, zoom logs, centered tile and images.
+The initial `225844` witness verifies direction, clamping, accumulation and the
+unchanged camera, but predates that tighter polling. `233038` delivers the later
+ten-event sequence, including the 162 ms reversal and three partial deltas. Its
+center pick stays at the same tile, the native camera stays fixed, and returning
+to 128 restores zero translation. Neither run proves easing; that implementation
+is still pending.
 
 Capture `20260927-210000` also confirms that the go-to software cursor has no
 pixels. This matches the empty second 32 × 32 cell in the installed `cursor.pcx`
