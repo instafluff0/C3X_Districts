@@ -134,23 +134,56 @@ final fog pass reads that coverage and preserves the body silhouette, including
 weapons crossing a fog edge. Terrain, shadows, cutout holes and occluded body
 fragments retain normal fog. No extra body pass or CPU map readback is needed.
 
-### Requested pose transitions
+### Joint and direction transitions
 
-The user also requested smooth limb transitions from standing into travel and
-combat. This is separate from world-position interpolation and is not yet in
-the staged renderer. The current GPU path selects baked skin palettes and
-switches actions directly. Its generic `C3XANM1/2` payload stores those palettes
-but omits joint hierarchy and bind identity; matching bone counts alone is not
-enough to establish that two action skeletons can be blended.
+The GPU unit owner blends from the last displayed local joint pose into the
+new action for at most 120 ms (20% of a shorter clip). Destination time keeps
+advancing. Local quaternions use shortest-arc interpolation; position and
+scale/shear are blended before the hierarchy is rebuilt. GPU vertex skinning
+and the ordinary immutable animation palettes remain the rendering path.
+Interrupted transitions start from the currently mixed pose. All passes reuse
+one sampled pose at the same visual timestamp.
 
-Implement a short transition from the last displayed pose into the new action,
-while the destination action's clock keeps advancing normally. Preserve joint
-rotation and limb lengths with local rotation/translation/scale blending and
-an explicit compatible skeleton binding. Keep world travel, attack timing and
-native gameplay outcomes unchanged. An interrupted transition must start from
-the currently mixed pose. Fog loss, retirement, unit-ID reuse and scene unload
-must discard transition state. Verify intermediate joint transforms, endpoint
-continuity and the performance fixture before staging this additional change.
+Optional generic `C3XRIG1` metadata follows the existing `C3XANM1/2` palettes:
+parent indices, explicit skin-to-joint mapping, inverse binds, a SHA-256 binding
+identity, and local position/quaternion/scale-shear samples. The binding covers
+hierarchy, bone names, binds and component identity; equal bone counts alone
+never permit a blend. Rigid equipment carries its driver's hierarchy so it
+follows the blended hand. Old packs still use their original GPU palettes.
+Rig data is bounded and included in asset residency accounting.
+
+The same transition handles idle, run, fortify, attack variants, fidget,
+victory, death, capture and work actions when their component binding matches.
+Fidget, capture and build now use copied native timing between sparse body
+captures, as attack/death already did. Native outcomes and retirement still
+control visibility; blending cannot extend a dead unit's gameplay lifetime.
+Fog loss, retirement, ID reuse, changed art and scene unload discard old state.
+
+Heading turns over 120 ms along the shortest angle. The live path now shares
+Lab's calibrated `yaw_offset + (native_direction % 8) * 45 degrees` mapping;
+its previous subtraction of one produced a 45-degree error. Accepted movement
+selects the travel direction even when the preceding standing pose faced
+elsewhere. This smooths model heading; it does not invent authored turning steps.
+
+The 2,649-payload roster reconstruction check covers 85,968 used-joint samples
+with maximum palette error `5.96046e-7`. The asynchronous GPU fixture
+`d3c44c391c2546f39938ec917a4384b9` passes 24 action/direction changes at 59.89
+frame submissions per second, 32 camera changes, and zero CPU map readbacks.
+This is controlled fixture evidence, not live-game FPS. The rebuilt 78-definition,
+94-key roster now supplies the normal `UnitAnimationFidelity` pack. The old
+runtime manifests and preparation receipt are preserved under
+`native/build/pose-transition/previous-production/`; `promotion.json` records
+the evaluation staging. Reference images are unchanged. Live victory, retreat,
+army-member, capture and intercepted-aircraft evidence is in the
+[scripted testing guide](../tools/scripted_game_test.md#combat-diagnostic).
+
+Native impact FLCs can use a new scratch destination with the owned map as a
+separate background. The existing lifetime-checked image admission now covers
+both normal and reduced lookup-over variants. This removes the attempted CPU
+map borrow that previously failed bombardment and air combat. It is transport
+correctness only: the requested Civ VI-derived impact particles still require
+their own production pass and event ownership, as documented in the
+[effects contract](bombardment_and_explosion_effects.md).
 
 ## Accepted unit motion
 
@@ -219,7 +252,11 @@ transport therefore cannot consume the move before its first visible sample.
 The bounded queue retains up to eight neighboring steps and carries the same
 run-cycle origin across them. Tests use a nonzero clock origin to detect an
 accidental phase reset. The later `Unit_move` event confirms game state without truncating
-active travel. Hiding, retirement, incompatible actions and unrelated position
+active travel. Once both confirmation and displayed travel finish, the segment
+ends even if native stack selection never sends that mover an idle body draw.
+A remaining RUN presentation settles to the catalog's idle pose at the accepted
+endpoint and yields to the latest native stack owner. The capture regression
+covers this missing final draw; waiting for it left the attacker running in place. Hiding, retirement, incompatible actions and unrelated position
 corrections clear the route. The selection ring uses the same sampled body.
 
 This implements ordinary visible tile travel. Hidden-to-visible admission,

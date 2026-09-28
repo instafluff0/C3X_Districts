@@ -6,6 +6,11 @@ basis at tile widths 128, 160 and 192 pixels: 100%, 125% and 150% of native
 normal size. The user limited the supported envelope to these three closest
 levels on September 9, 2026; 64 and 96 are disabled in the custom zoom control.
 Starting at normal, successive `Z` presses select 192, 160 and 128 pixels.
+The main-map wheel now steps in either direction and clamps at these endpoints:
+wheel-up moves closer, wheel-down moves outward. Small wheel deltas accumulate
+until they total a Windows 120-unit notch. This GOG activation uses the audited
+main-form m25 slot; config-off, loading/menu and disabled custom zoom delegate
+to the original handler with unchanged arguments. Other forms are unaffected.
 The projected world point at the screen center stays fixed while the level
 changes. Native synchronization accepts only those three widths. A change to
 Civ III's native reduced-zoom flag retains its 64-pixel anchor basis but resets
@@ -35,9 +40,10 @@ single internal call replacement. `Unit_tick_anim` only scopes capture/canvas
 ownership, with unchanged offsets and no translation/undo state. Executable tests
 check call-site wiring, coordinate parity and argument preservation.
 
-Zoom is deliberately main-map-only. It uses the existing patched
-`Main_Screen_Form_handle_key_down` boundary and consumes `Z` before Civ III's
-native two-level toggle. No mouse-wheel vtable entry is required. The handler
+Zoom is deliberately main-map-only. The existing patched
+`Main_Screen_Form_handle_key_down` boundary consumes `Z` before Civ III's
+native two-level toggle. The authorized `Main_Screen_Form_process_mouse_wheel`
+vtable replacement uses the same zoom implementation. The handler
 retains the exact native pixel camera and uses `move_camera` to update bounds
 without rounding through a tile center. It then requests a complete traversal. A plain Animator dirty
 bit is insufficient because it may request only a one-tile damage redraw,

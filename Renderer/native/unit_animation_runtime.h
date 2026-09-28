@@ -49,6 +49,12 @@ inline char const * native_unit_action(int action) {
     }
 }
 
+// Native directions are NE=1, E=2, SE=3, S=4, SW=5, W=6, NW=7, N=8.
+// Pack yaw calibration already includes the source model's forward axis.
+inline float native_unit_yaw(float offset,int direction){
+    return (offset+float(direction%8)*45.f)*.01745329252f;
+}
+
 // Expand an off-screen body canvas while preserving the exact native anchor.
 // The caller must retain the returned rectangle as its next erase/dirty region.
 inline bool expand_unit_canvas(int& x,int& y,int& width,int& height,int scale_milli,int minimum) {

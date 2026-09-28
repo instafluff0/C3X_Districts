@@ -10,7 +10,11 @@
 #define __ 0
 struct JGL_Image {void** vtable;char pad[0x20];int BitCount;char dimensions[0x1c];RECT Clip_Rect,Image_Rect;char rest[0x4c8-0x64];int Bits_Data_Links,Current_Bits_Data;};
 static_assert(offsetof(JGL_Image,BitCount)==0x24 && offsetof(JGL_Image,Image_Rect)==0x54 && offsetof(JGL_Image,Bits_Data_Links)==0x4c8);
-struct JGLSprite {void** vtable;int a,b,c,d;void* bits;int f18,f1c,bit_count,f24,f28,stride,width,height;CRITICAL_SECTION lock;};
+struct JGLSprite {void** vtable;int a,b,c,d;union {void* bits;void* Bits_Data;};
+    union {int f18;int field_18;};int f1c;union {int bit_count;int BitCount;};int f24,f28,stride;
+    union {int width;int Width;};union {int height;int Height;};CRITICAL_SECTION lock;};
+static_assert(offsetof(JGLSprite,Bits_Data)==0x14&&offsetof(JGLSprite,Width)==0x30);
+struct Sprite {void** vtable;JGLSprite* jgl_sprite;};
 struct PCX_Image {struct {JGL_Image* Image;} JGL;};
 struct OpenGLRenderer;
 enum {LDO_NEVER,LDO_WINE,LDO_ALWAYS,IS_OK};
@@ -18,7 +22,7 @@ struct LoadedConfig {char const* name;LoadedConfig* next;};
 LoadedConfig fixture_file_config={"configured",nullptr},fixture_base_config={"(base)",&fixture_file_config};
 struct State {
     char const* mod_rel_dir=".";
-    bool custom_renderer_modal=false,paused_for_popup=false;int saved_tile_count=-1;
+    bool custom_renderer_modal=false,paused_for_popup=false,custom_renderer_trace_input=false;int saved_tile_count=-1;
     struct {bool enable_custom_rendering=true;int draw_lines_using_gdi_plus=LDO_NEVER;} current_config;
     LoadedConfig* loaded_config_names=&fixture_base_config;
     bool running_on_wine=false;unsigned ogl_color=0xffffffff;int ogl_line_width=1;bool ogl_line_stipple_enabled=false;
@@ -35,10 +39,11 @@ struct State {
 #include "build/native_probe_state.h"
 };
 State state={};State* is=&state;
-struct {bool is_now_loading_game=false;} main_screen_fixture;auto p_main_screen_form=&main_screen_fixture;
+struct {bool is_now_loading_game=false;struct {Sprite* Cursor_Image=nullptr;} Base_Data;} main_screen_fixture;auto p_main_screen_form=&main_screen_fixture;
 void custom_renderer_zoom_transform_point(int*,int*){}
 unsigned player_bits=1;unsigned* p_player_bits=&player_bits;
 auto p_GetModuleHandleA=&GetModuleHandleA;auto p_GetProcAddress=&GetProcAddress;
+auto p_OutputDebugStringA=&OutputDebugStringA;
 PCX_Image screen;PCX_Image* screen_canvas=&screen;
 #define p_jgl_screen_canvas screen_canvas
 std::vector<c3x_renderer_native_observation> events;

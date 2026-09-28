@@ -1,4 +1,4 @@
-param([switch]$CheckOnly)
+param([switch]$CheckOnly, [switch]$InputTrace)
 $ErrorActionPreference = 'Stop'
 $renderer = Split-Path $PSScriptRoot -Parent
 $arm = $env:PROCESSOR_ARCHITECTURE -eq 'ARM64' -or $env:PROCESSOR_ARCHITEW6432 -eq 'ARM64'
@@ -27,15 +27,32 @@ $binaries = foreach ($name in @('C3XRenderer.dll', 'C3XRenderer_x64.dll', 'C3XRe
 [ordered]@{ renderer_binaries = @($binaries) } | ConvertTo-Json -Depth 4 |
     Set-Content -LiteralPath (Join-Path $session 'binaries.json') -Encoding UTF8
 $arguments = @('--accepteula', '--no-banner', '--no-kernel', '--duration', '180',
-    '--max-lines', '50000', '--log', ('"' + $log + '"'), '--log-limit', '16') -join ' '
+    '--max-lines', '100000', '--log', ('"' + $log + '"'), '--log-limit', '32') -join ' '
 $collector = Start-Process -FilePath $debug -ArgumentList $arguments -PassThru -WindowStyle Hidden
-Start-Sleep -Milliseconds 400
-if ($collector.HasExited) { throw 'DebugView stopped before capture began.' }
-Write-Host 'Capture started. Launch Civ III normally and show the black map.'
-Write-Host 'Wait about 15 seconds, then return here and press Enter.'
-[void](Read-Host 'Press Enter to finish')
-if (-not $collector.HasExited) {
-    & $debug --stop | Out-Null
-    if (-not $collector.WaitForExit(5000)) { Stop-Process -Id $collector.Id -ErrorAction SilentlyContinue }
+try {
+    Start-Sleep -Milliseconds 400
+    if ($collector.HasExited) { throw 'DebugView stopped before capture began.' }
+    if ($InputTrace) {
+        $gameRoot=$env:C3X_RENDERER_CIV3_CONQUESTS
+        if (-not $gameRoot) { $gameRoot=Join-Path ${env:ProgramFiles(x86)} 'GOG Galaxy\Games\Civilization III Complete\Conquests' }
+        $old=$env:C3X_RENDERER_TRACE_INPUT
+        try {
+            $env:C3X_RENDERER_TRACE_INPUT='1'
+            $start=New-Object System.Diagnostics.ProcessStartInfo
+            $start.FileName=Join-Path $gameRoot 'Civ3Conquests.exe'
+            $start.WorkingDirectory=$gameRoot; $start.UseShellExecute=$false
+            [void][System.Diagnostics.Process]::Start($start)
+        } finally { $env:C3X_RENDERER_TRACE_INPUT=$old }
+        Write-Host 'Input capture started. Load your game and reproduce the cursor/destination issue.'
+    } else {
+        Write-Host 'Capture started. Launch Civ III normally and show the rendering issue.'
+    }
+    Write-Host 'Wait about 15 seconds, then return here and press Enter.'
+    [void](Read-Host 'Press Enter to finish')
+} finally {
+    if (-not $collector.HasExited) {
+        & $debug --stop | Out-Null
+        if (-not $collector.WaitForExit(5000)) { Stop-Process -Id $collector.Id -ErrorAction SilentlyContinue }
+    }
 }
 Write-Host ('Capture saved: ' + $log)

@@ -10,7 +10,23 @@ the former 1,326-line roadmap.
 
 ## Current state
 
-- **Current staged candidate: tile travel and combat presentation.**
+- **Current priority: held-mouse targeting, then wheel zoom, easing and navigation performance.**
+  Explosions and smoke are on hold at the user's request. The imported local
+  effect assets remain available for later work.
+  Candidate `17ae7fb6d2b14ba8b9551cf75516dc99` is staged: native UI offers commit
+  immutable versions, the independent cadence presents them, and static tactical
+  art is rasterized once while its blend follows the animated underlay.
+  Its async fixture passes at 59.89 FPS (59.98 during pose changes), with 32
+  adopted cameras, 121 frames during a host pause, 72 publications during a
+  renderer pause, p95 submission 1.011 ms and zero CPU map readbacks. These are
+  fixture measurements; live navigation must still meet the sandbox baseline.
+  Wheel activation was explicitly authorized and installed after the fixture:
+  the existing GOG m25 row changes only from `ignore` to `repl vptr`. Thirteen
+  zoom/input tests and the injected smoke pass. Smooth zoom remains pending.
+  The [scripted testing guide](../tools/scripted_game_test.md) records mouse
+  timestamps, buffered profiling and the remaining presentation-latency check.
+
+- **Earlier movement evidence: tile travel and combat presentation.**
   Asynchronous fixture `94050b8afeb4467f89518784e5ed8391` passes at **59.26 FPS**,
   with 32 camera adoptions, 120 frames while the host pauses, 79 publications
   while the renderer pauses and zero CPU map readbacks. Submission p95 is
@@ -26,7 +42,7 @@ the former 1,326-line roadmap.
   no longer position the actor. The scoped GOG hook, config-off behavior and
   other-build limitations are in the [patch ledger](civ3_patch_dependency_ledger.md).
 
-  Capture `20260927-183538` on the current staged build shows both units at intermediate run positions and
+  Capture `20260927-183538` on that movement build shows both units at intermediate run positions and
   then the destination, including the first move's terrain reveal. The earlier
   source-pose rewind and frozen second move are absent in these samples. Native
   transfers retain the latest completed image during a camera handoff. Travel

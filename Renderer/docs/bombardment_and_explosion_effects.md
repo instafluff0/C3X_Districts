@@ -1,8 +1,15 @@
 # Bombardment, Bombing, And Explosion Handoff
 
-Status: offline intake, event design, pixel-only suppression, and nuclear
-outcome boundaries are prepared for M7.5. Runtime effect ownership and native
-suppression are not enabled.
+Status: the user explicitly requested Civ VI-derived combat effects after the
+unit combat/pose work. Prepared textures and draft graphs exist; production
+particle rendering is still unfinished. Native Civ III impact pixels are not
+the intended custom-renderer presentation.
+
+Direct inspection of the normalized fireball, smoke and dust textures on
+2026-09-27 shows four large atlas cells (2×2), not the draft graph's 4×4 grid.
+The visual sheets establish cell layout, not authored emission timing or whether
+cells are sequential frames. The draft recipes require correction and a rendered
+lab sequence before promotion. Preserve that distinction when describing progress.
 
 ## Decision
 
@@ -201,11 +208,15 @@ families:
   explosion plasma and smoke sheets;
 - `VFX_C.blp`: a named water-explosion family.
 
-`combat_effect_texture_sets.json` selects 22 conservative standalone
-`SHARED_DATA` texture resources across muzzle, projectile, explosion, smoke,
-debris, water, and nuclear categories. Running
-`combat_effect_texture_importer.py` converts all 22 to a source-independent
-`c3x.combat_effect_texture_pack.v0`; the current local intake is 3,172,048
+`combat_effect_texture_sets.json` selects 50 standalone `SHARED_DATA` texture
+resources across muzzle, projectile, smoke, explosion, debris, splash, impact,
+and nuclear categories. The expanded smoke, explosion, and splash set includes
+cannon smoke variants, dust and blast smoke, explosion flipbooks and plasma,
+water plumes, spray, and vertical/radial splash sheets. Their names are present
+in the installed `VFX.blp` and `VFX_A/B/C.blp` package metadata; the exact
+particle bindings and sprite layouts remain unproven. Running
+`combat_effect_texture_importer.py` converts all 50 to a source-independent
+`c3x.combat_effect_texture_pack.v0`; the current local intake is 10,909,264
 bytes. Derived licensed pixels remain ignored and are not distributed.
 
 This is intentionally texture-only. The BLP VFX packages also contain named

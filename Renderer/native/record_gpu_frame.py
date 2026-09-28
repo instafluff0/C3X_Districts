@@ -23,6 +23,7 @@ def main(argv=None):
     parser.add_argument('--x64-helper',type=Path,help='Opt-in x64 scene process for the same native fixture')
     parser.add_argument('--x64-dll',type=Path,help='Renderer DLL loaded only by the x64 scene process')
     parser.add_argument('--direct-surface-trial',action='store_true',help='Use Renderer64 direct presentation in the native fixture')
+    parser.add_argument('--pose-transitions',action='store_true',help='Exercise repeated real unit pose/facing changes through the async GPU owner')
     parser.add_argument('--async-bridge',action='store_true',help='Exercise the Renderer64 asynchronous native bridge and independent cadence without CPU map oracles')
     parser.add_argument('--present-phases',action='store_true',help='Diagnostic x86 presentation split; invalidates latency-baseline claims')
     parser.add_argument('--reserve-address-mib',type=int,choices=range(0,1537,64),default=0,help='Harness-only reservation simulating co-resident process address-space pressure')
@@ -55,6 +56,7 @@ def main(argv=None):
     parser.add_argument('--dense-city-case',default='',help='Dense city culture,era,size,capital, for example 0,3,1,1; requires --dense-scene')
     parser.add_argument('--object-workers',choices=('0','1'),default='1',help='Use the identical object compiler on the foreground (0) or bounded worker (1)')
     parser.add_argument('--ground-workers',choices=('0','1'),default='1',help='Run the production ground compiler serially (0) or on its bounded worker (1)')
+    parser.add_argument("--unit-pack",default="UnitAnimationFidelity",help="Generic unit pack under Renderer/packs; hashed as part of this witness")
     parser.add_argument("--unit-count",type=int,choices=(1,8,16,32),default=8,help="Unit count in the complete native-frame workload")
     parser.add_argument("--visual-units",type=int,choices=(1,8,16,32),default=1,help="Actual retained units in independent visual frames")
     parser.add_argument("--visual-frames",type=int,choices=range(30,1201),default=30,help="Independent visual opportunities; use at least 100 for percentile acceptance")
@@ -68,6 +70,7 @@ def main(argv=None):
     if bool(args.x64_helper)!=bool(args.x64_dll):parser.error('x64 helper and DLL must be supplied together')
     if args.direct_surface_trial and not args.x64_helper:parser.error('direct surface requires the x64 helper')
     if args.async_bridge and not args.x64_helper:parser.error('async bridge requires the x64 helper')
+    if args.pose_transitions and not args.async_bridge:parser.error('pose transitions require the async bridge')
     if args.window_witness_seconds and args.benchmark:
         parser.error('Window evidence competes for GPU/CPU; use a separate witness run from the benchmark')
     if args.window_witness_seconds and args.present_phases:
@@ -118,6 +121,11 @@ def main(argv=None):
     if args.center:cx,cy=args.center
     invocation=uuid.uuid4().hex;out=args.out.resolve() if args.out else ROOT/'Renderer/native/build/gpu-composition'/invocation;out.mkdir(parents=True,exist_ok=True)
     inputs={}
+    if not re.fullmatch(r'[A-Za-z0-9_-]+',args.unit_pack):parser.error('unit pack must be a simple pack name')
+    unit_root=ROOT/'Renderer/packs'/args.unit_pack
+    if not (unit_root/'bindings.json').is_file():parser.error('unit pack is missing')
+    for path in sorted(unit_root.rglob('*')):
+        if path.is_file():inputs[path.relative_to(ROOT).as_posix()]=digest(path)
     for unit in DLL_UNITS:inputs.update(unit_inputs(unit))
     build_path=dll.parent/'build-evidence.json'
     build_record=json.loads(build_path.read_text()) if build_path.exists() else {}
@@ -178,6 +186,8 @@ def main(argv=None):
         'C3X_RENDERER_VISUAL_UNITS':str(args.visual_units),'C3X_RENDERER_VISUAL_UNIT_CASE':args.visual_unit_case,
         'C3X_RENDERER_TACTICAL_PREVIEW':str(target/'tactical') if args.tactical else '',
         'C3X_RENDERER_PREVIEW_SESSION':'','C3X_RENDERER_PREVIEW_REPLAY':'','C3X_RENDERER_PREVIEW_ANIMATION':''}
+    settings['C3X_RENDERER_UNIT_PACK']=args.unit_pack
+    settings['C3X_RENDERER_POSE_TRANSITIONS']='1' if args.pose_transitions else ''
     if helper64:
         settings.update({'C3X_RENDERER_HELPER64':'1','C3X_RENDERER_HELPER_EXE':str(win/helper64.relative_to(ROOT)),
             'C3X_RENDERER_X64_DLL':str(win/dll64.relative_to(ROOT))})
@@ -292,6 +302,12 @@ def main(argv=None):
             'scope':'native GPU composition; external map/pose snapshots; native ownership and visual observations',
             'performance_baseline':False}
     receipt['trace_coverage']={'dropped_lines':dropped,'complete':bool(trace) and dropped==0}
+    if args.pose_transitions:
+        samples=[{key:float(value) for key,value in re.findall(r'(\w+)=([0-9.]+)',line)}
+                 for line in log.splitlines() if line.startswith('ASYNC_POSE_TRANSITIONS ')]
+        passed=passed and len(samples)==1 and samples[0].get('changes')==24 and samples[0].get('frames',0)>100 and samples[0].get('cpu_map_readbacks')==0
+        receipt['pose_transitions']={'unit_pack':args.unit_pack,'samples':samples,
+            'scope':'Repeated native action and direction changes through the production GPU unit owner; frame submissions, not physical scanout or gameplay FPS'}
     resident_units=[line for line in trace.splitlines() if 'resident_pose=1' in line or 'direct_scene=1' in line]
     resident_proof=bool(resident_units) and any('cache_hit=0' in line for line in resident_units) and any('cache_hit=1' in line for line in resident_units) and all('body_readbacks=0 composition_uploads=0' in line for line in resident_units)
     receipt['resident_unit_proof']={'requests':len(resident_units),'cold_and_warm_without_body_readback_or_composition_upload':resident_proof}

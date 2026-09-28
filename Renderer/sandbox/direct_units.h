@@ -1,4 +1,5 @@
 #pragma once
+#include "../native/render_core/unit_pose_transition.h"
 
 // 0 A.D.'s GPUSkinnedModelRenderer keeps mesh inputs resident and updates only
 // the animation palette for visible models. Here each authored frame is already
@@ -14,6 +15,9 @@ struct SandboxDirectUnits {
         Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> palette_view;
     };
     std::vector<Mesh> meshes;
+    c3x_renderer::render_core::UnitPoseTransitions transitions;
+    Microsoft::WRL::ComPtr<ID3D11Buffer> transition_palette;
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> transition_view;
     ID3D11VertexShader* vertex=nullptr;
     ID3D11PixelShader* pixel=nullptr,*shadow_pixel=nullptr;
     ID3D11InputLayout* layout=nullptr;
@@ -425,6 +429,7 @@ float4 PSShadow(Output i):SV_Target {
         // The map fog pass consumes this exact body coverage after tone mapping.
         // Clearing just stencil preserves terrain depth and costs no readback.
         if(!reflected)renderer.context->ClearDepthStencilView(scene.depth,D3D11_CLEAR_STENCIL,1,0);
+        transitions.retain(visible);
         if(visible.empty())return true;
         if(!initialize())return false;
         if(!reflected&&!visible_depth){
@@ -525,6 +530,9 @@ float4 PSShadow(Output i):SV_Target {
             float ground_depth=float(instance.tile_y)*frame.tile_height*.5f+
                 renderer.geometry_viewport_settings.depth_translation+
                 frame.tile_height*.5f+4.f;
+            float target_angle=c3x_renderer::native_unit_yaw(unit.yaw_offset,draw.direction);
+            float angle=transitions.facing(draw.unit_id,instance.pose_identity,frame.presentation_time_ticks,
+                frame.presentation_frequency,target_angle);
             for(auto const& part:action.parts){
                 if(part.mesh>=bodies.meshes.size()||part.texture>=bodies.textures.size()||
                    !bodies.textures[part.texture].view||!prepare_mesh(part.mesh))return false;
@@ -533,7 +541,17 @@ float4 PSShadow(Output i):SV_Target {
                 auto& gpu=meshes[part.mesh];
                 unsigned frame_number=std::min(source->frames-1,
                     unsigned(std::floor(pose.phase*double(source->frames-1)+1e-7)));
-                float angle=(unit.yaw_offset+float((draw.direction-1)%8)*45)*.01745329252f;
+                auto* blended=transitions.sample(draw.unit_id,instance.pose_identity,draw.action,
+                    frame.presentation_time_ticks,frame.presentation_frequency,*source,frame_number);
+                if(blended&&!transition_palette){
+                    D3D11_BUFFER_DESC b={};b.ByteWidth=4096*4;b.BindFlags=D3D11_BIND_SHADER_RESOURCE;
+                    b.MiscFlags=D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;b.StructureByteStride=16;
+                    if(FAILED(renderer.device->CreateBuffer(&b,nullptr,&transition_palette)))return false;
+                    D3D11_SHADER_RESOURCE_VIEW_DESC v={};v.Format=DXGI_FORMAT_UNKNOWN;
+                    v.ViewDimension=D3D11_SRV_DIMENSION_BUFFER;v.Buffer.NumElements=1024;
+                    if(FAILED(renderer.device->CreateShaderResourceView(transition_palette.Get(),&v,&transition_view)))return false;
+                }
+                if(blended)context->UpdateSubresource(transition_palette.Get(),0,nullptr,blended,0,0);
                 float scale=pose.projection_scale*scene_scale;
                 float guard=reflected?8.f:4.f;
                 // The ground point is Civ III's captured center. Sprite size
@@ -541,7 +559,7 @@ float4 PSShadow(Output i):SV_Target {
                 float placement_values[20]={float(pose.anchor_x+guard)/pose.projection_scale,
                     float(pose.anchor_y+guard)/pose.projection_scale,
                     float(scene.width),float(scene.height),scale,ground_depth,0,0,
-                    float(frame_number),float(source->bones),std::cos(angle),std::sin(angle),
+                    float(blended?0:frame_number),float(source->bones),std::cos(angle),std::sin(angle),
                     unit.scale,unit.offset_z,0,0,
                     reflected?2.f:0.f,0,0,part.cutout};
                 float values[32]={part.tint[0],part.tint[1],part.tint[2],part.mask};
@@ -570,7 +588,7 @@ float4 PSShadow(Output i):SV_Target {
                 UINT stride=sizeof(Vertex),offset=0;
                 context->IASetVertexBuffers(0,1,&static_vertices,&stride,&offset);
                 context->IASetIndexBuffer(gpu.indices.Get(),DXGI_FORMAT_R32_UINT,0);
-                ID3D11ShaderResourceView* palette=gpu.palette_view.Get();
+                ID3D11ShaderResourceView* palette=blended?transition_view.Get():gpu.palette_view.Get();
                 context->VSSetShaderResources(0,1,&palette);
                 context->PSSetShaderResources(0,1,&bodies.textures[part.texture].view);
                 context->PSSetShaderResources(2,4,extra);
@@ -596,6 +614,7 @@ float4 PSShadow(Output i):SV_Target {
                 ++draws;
             }
         }
+        if(!reflected)transitions.finish(frame.presentation_time_ticks);
         ID3D11ShaderResourceView* empty[6]={};context->PSSetShaderResources(0,6,empty);
         context->VSSetShaderResources(0,1,empty);
         context->OMSetRenderTargets(0,nullptr,nullptr);

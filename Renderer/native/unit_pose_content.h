@@ -75,8 +75,8 @@ struct UnitPoseCompiler {
         auto result=std::make_unique<UnitPoseContent>(source.shadow_extent,input.gpu_shadow);
         result->shadow_triangles.reserve(caster_count);
         auto& shadow=result->shadow;
-        auto cosine=std::cos((source.yaw_offset+float(input.direction%8)*45)*.01745329252f);
-        auto sine=std::sin((source.yaw_offset+float(input.direction%8)*45)*.01745329252f);
+        auto cosine=std::cos(native_unit_yaw(source.yaw_offset,input.direction));
+        auto sine=std::sin(native_unit_yaw(source.yaw_offset,input.direction));
         float scale=source.scale,zoom=input.zoom;int w=input.width,h=input.height;
         std::vector<std::vector<FeatureSourceVertex>> poses(source.meshes.size());
         std::vector<std::vector<UnitShadow::Point>> positions(source.meshes.size());

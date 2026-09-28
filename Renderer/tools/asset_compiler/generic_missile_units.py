@@ -66,7 +66,7 @@ def compile_units(publish):
                 c,s=math.cos(angle)*scale,math.sin(angle)*scale
                 frames.append((c,0.,s,0.,0.,scale,0.,0.,-s,0.,c,0.,0.,0.,z,1.))
             cache=PoseCache(.5,30.,16,('body',),tuple(v for f in frames for v in f))
-            payload=encode(mesh,skeleton,cache)
+            payload=encode(mesh,skeleton,cache,rig={"skeleton":skeleton,"cache":cache,"identity":slug})
             unit['actions'][action]={'duration':.5,'frames':16,'presentation':'original_c3x_motion',
                 'loop':action in ('idle','move'),'parts':[{'asset':'unit/'+slug+'/body','mesh':publish(payload,'clips','bin'),
                 'bytes':len(payload),'material':{'alpha_mode':'opaque','source_tint':None,'tint_rgb':[.8,.83,.86],

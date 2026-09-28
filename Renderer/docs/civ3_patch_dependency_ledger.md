@@ -127,13 +127,27 @@ acceptance still depends on the captured map and camera results.
 ## Disposable combat diagnostic
 
 The explicit `combat` test mode adds guarded F21/F22 branches to the existing
-main-screen key hook. It reuses `Leader_spawn_unit` (GOG `0x5694D0`),
-`Main_Screen_Form_set_selected_unit` (`0x4DBA70`) and
-`Unit_move_to_adjacent_tile` (`0x5B8FC0`) through their existing C3X wrappers.
-No patch-table entry or gameplay combat implementation changes. A single
-visible adjacent barbarian is spawned only in the diagnostic child, then
-native combat decides the result. Config-off, normal launches and multiplayer
-cannot enter the fixture. `required_user_action: []`.
+main-screen key hook. Setup and orders reuse registered functions:
+
+| Symbol | GOG address | Capability |
+| --- | --- | --- |
+| `Leader_spawn_unit` | `0x5694D0` | Spawn disposable participants |
+| `Main_Screen_Form_set_selected_unit` | `0x4DBA70` | Select the test attacker |
+| `Unit_move_to_adjacent_tile` | `0x5B8FC0` | Let native movement enter combat/capture |
+| `Unit_bombard_tile` | `0x5C1410` | Native artillery/air order |
+| `Unit_load` | `0x5C5110` | Set member container/state and native army membership |
+| `Unit_set_state` | `0x5B3040` | Set native interception readiness |
+
+No patch-table entry or gameplay combat implementation changes. The fixture
+supports melee, victory, retreat, bombardment, army, air and capture setups;
+native rules and RNG still decide the outcome. Config-off, normal launches and
+multiplayer cannot enter it. Outcomes and sampled window evidence must be
+reviewed separately from command completion. `required_user_action: []`.
+
+Joint blending, shared eight-direction yaw mapping, and continuous native
+fidget/capture/build clocks use the existing copied unit records. They add no
+injected hook, address or native wait. The asynchronous GPU fixture is recorded
+in [the scene contract](renderer64_scene_and_motion.md#joint-and-direction-transitions).
 
 ## Combat presentation from existing unit hooks
 
@@ -1402,9 +1416,31 @@ Those existing symbols and capture/overlay hooks already carry numeric scales;
 this range change needs no new entry, signature or address.
 `required_user_action: []` for the range change itself. Shared-projection activation is recorded above.
 
-The experimental `Main_Screen_Form_process_mouse_wheel` row is currently
-`ignore`, so it cannot install the abandoned wheel patch. It may remain ignored
-or be removed by the maintainer. `required_user_action: []`.
+### Mouse-wheel zoom activation (September 27, 2026)
+
+The user requested wheel zoom for custom rendering. The implemented
+`patch_Main_Screen_Form_process_mouse_wheel` delegates immediately with unchanged
+arguments when custom rendering is off, or zoom is unavailable. Otherwise it
+accumulates 120-unit wheel notches and clamps the shared zoom control to
+128/160/192. Main-map wheel-up zooms in; wheel-down zooms out. Other forms keep
+their own wheel handlers. This activation is independent of smooth zoom.
+
+- Symbol: `Main_Screen_Form_process_mouse_wheel`.
+- Capability: `repl vptr` at the main-form m25 wheel slot.
+- Signature: `void (__fastcall *)(Main_Screen_Form *this, int edx, int wheel_delta, int mouse_x, int mouse_y)`.
+- GOG slot: `0x66B43C`; verified stored target `0x4DE3A0`. The native function
+  scrolls the camera, using Shift to choose its horizontal axis. The event
+  dispatcher passes wheel delta and both mouse coordinates through m25.
+- Steam/Complete slots: unverified; retain the existing zero addresses.
+- Activated with explicit user authorization: only the existing row's job
+  changed from `ignore` to `repl vptr`. Its signature and addresses are unchanged.
+- Reason: the ignored row cannot install the renderer-gated wheel handler.
+- Config-off fallback: native wheel scrolling with unchanged arguments.
+- `required_user_action: []`.
+
+The handler is conditionally compiled while its original-function symbol is
+absent. Executable tests cover disabled/loading/menu delegation, small deltas,
+both directions, endpoint clamping and camera-center preservation.
 
 The three GOG unit inleads below are already supplied; they are not outstanding
 requests. Other-build unit addresses remain unverified. The previously recorded
@@ -1868,3 +1904,17 @@ The existing unit-move wire payload has subtype 1 for begin and subtype 0 for
 commit. The bridge, helper and input replay consume both in order. The injected
 compile smoke and portable motion/config-off tests pass; live qualification is
 recorded in the current renderer status after the matching native build.
+
+### Native impact scratch canvases and mouse tracing
+
+Existing JGL sprite lookup-over hooks (normal and reduced) provide a sprite,
+scratch destination and map background. Admit a fresh destination through the
+existing lifetime/lease checks when its background already belongs to the GPU.
+The GPU fixture covers both variants with zero CPU map borrows; live bombardment
+and interception complete without the previous native bits request. This does
+not transfer impact art ownership; the Civ VI-derived effect pass remains open.
+
+The existing native-operation translator provides opt-in mouse timing and cursor
+draw evidence through `C3X_RENDERER_TRACE_INPUT`. Configuration-off and normal
+launch behavior are unchanged. No new patch symbols, signatures, supported-build
+addresses or CSV edits are needed. `required_user_action: []`.

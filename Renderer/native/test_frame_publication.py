@@ -40,36 +40,28 @@ int main(){
 }
 ''')
 
-    def test_direct_native_transfer_uses_current_visual_time(self):
+    def test_direct_native_transfer_only_commits_the_ui_version(self):
         source=(ROOT / 'Renderer/native/c3x_renderer.cpp').read_text()
         branch=source.split('}else if(command==Command::trial_present_shared){',1)[1]
-        call='bool drawn=session->display_to'+branch.split('bool drawn=session->display_to',1)[1].split(';',1)[0]+';'
+        call='bool committed=session->commit_display'+branch.split('bool committed=session->commit_display',1)[1].split(';',1)[0]+';'
         run_cpp(r'''
 #include <cassert>
 #include <array>
 #include <cstdint>
-using LONGLONG=long long;
-struct Handle {int Get(){return 1;}};
 struct Session {
- long long observed=0;
- bool display_to(long long,std::uint64_t,int,int,int,unsigned,unsigned,
-                 std::array<int,4>,long long ticks,long long frequency,
-                 std::array<LONGLONG,4>*,std::array<LONGLONG,8>*){
-  observed=frequency?ticks:0;return true;
+ unsigned commits=0;
+ bool commit_display(long long ticket,std::uint64_t image,unsigned w,unsigned h,std::array<int,4> area){
+  assert(ticket==17&&image==23&&w==2240&&h==1260&&area[0]==3&&area[3]==100);++commits;return true;
  }
 };
 int main(){
  Session state,*session=&state;
- struct {long long ticket=1,image=2;int area[4]={0,0,2240,1260};} p;
- Handle trial_surface_view,trial_surface_back,trial_surface_buffer;
- unsigned trial_surface_width=2240,trial_surface_height=1260;
- bool visual_allowed=true,phase_probe=false;long long visual_ticks=0,visual_frequency=1000;
- std::array<LONGLONG,4> display_phases{};std::array<LONGLONG,8> draw_phases{};
- for(int frame=1;frame<=600;++frame){
-  visual_ticks=frame*17;
+ struct {long long ticket=17,image=23;unsigned width=2240,height=1260;int area[4]={3,7,500,100};} p;
+ for(unsigned frame=0;frame<600;++frame){
   '''+call+r'''
-  assert(drawn&&state.observed==visual_ticks); // no capture-time rewind on native updates
+  assert(committed);
  }
+ assert(state.commits==600);
 }
 ''')
 
@@ -439,6 +431,7 @@ struct Session {
  template<class... T> bool publish(T...){return unexpected_gpu();}
  template<class... T> int execute(T&&...){return unexpected_gpu();}
  template<class... T> int draw_dynamic(T...){return unexpected_gpu();}
+ template<class... T> int draw_overlay(T...){return unexpected_gpu();}
  template<class... T> int compose_resident_unit(T...){return unexpected_gpu();}
  bool display_to(long long,std::uint64_t,int,int,int,int,int,Rect,long long,long long){return unexpected_gpu();}
 };

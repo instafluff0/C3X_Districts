@@ -87,6 +87,7 @@ def compile_unit(pack: Path, manifest: dict, recipe: dict, publish) -> dict:
                         raise ValueError('disabled inventory socket influences visible skin')
                 local=cache(skeleton,node_id) if component['binding_mode']=='vertex_skin' else drivers[node_id]
                 attachment=record.get('attachment_bone',SOCKET_PROFILE.get(component['attachment_point'],{}).get('bone'))
+                rig_skeleton = skeletons[node_id] if component['binding_mode']=='rigid_attachment' else skeleton
                 if component['binding_mode']=='rigid_attachment':
                     if attachment in disabled:raise ValueError('visible attachment uses disabled socket')
                     if attachment not in local.bone_names:
@@ -96,15 +97,17 @@ def compile_unit(pack: Path, manifest: dict, recipe: dict, publish) -> dict:
                         'local':{'position':[0.,0.,0.],'orientation':[0.,0.,0.,1.],
                                  'scale_shear':[1.,0.,0.,0.,1.,0.,0.,0.,1.]}}]}
                 composed=[]
+                rig_worlds=[]
                 for frame in range(count):
                     offset=(frame*len(drivers[root].bone_names)+root_index)*16
                     travel=[(drivers[root].matrices[offset+12+a]-root_rest[12+a])*nodes[root]['variation_scale'] for a in (0,1)]
-                    indices=[bone] if component['binding_mode']=='rigid_attachment' else range(len(local.bone_names))
+                    indices=range(len(local.bone_names))
                     for i in indices:
                         start=(frame*len(local.bone_names)+i)*16
                         matrix=list(_multiply(local.matrices[start:start+16],worlds[frame][node_id]))
                         matrix[12]-=travel[0];matrix[13]-=travel[1]
-                        composed.extend(matrix)
+                        rig_worlds.extend(matrix)
+                        if component['binding_mode']!='rigid_attachment' or i==bone:composed.extend(matrix)
                 bound=poses.PoseCache(duration,(count-1)/duration,count,tuple(b['name'] for b in skeleton['bones']),tuple(composed))
                 mesh_path=component['meshes'][draw['mesh']]
                 material_path=component['materials'][draw['material']]
@@ -115,7 +118,11 @@ def compile_unit(pack: Path, manifest: dict, recipe: dict, publish) -> dict:
                         v['joints']=[0,0,0,0];v['weights']=[1.,0.,0.,0.]
                 material=read(material_path)
                 channels={key:{**value,'texture':publish((pack/value['texture']).read_bytes(),'textures','dds')} for key,value in material['channels'].items()}
-                payload=encode(mesh,skeleton,bound)
+                rig_cache=poses.PoseCache(duration,(count-1)/duration,count,local.bone_names,tuple(rig_worlds))
+                rig={"skeleton":rig_skeleton,"cache":rig_cache,"identity":node_id+"/"+record["asset"]+"/"+mesh_path}
+                if component["binding_mode"]=="rigid_attachment":
+                    rig.update(skin_joints=[bone],inverse_bind=[IDENTITY])
+                payload=encode(mesh,skeleton,bound,rig=rig)
                 parts.append({'asset':record['asset'],'mesh':publish(payload,'clips','bin'),'bytes':len(payload),
                     'material':{'alpha_mode':material.get('alpha_mode','opaque'),'channels':channels,
                         'source_tint':component.get('tint'),'tint_rgb':component.get('tint_rgb'),

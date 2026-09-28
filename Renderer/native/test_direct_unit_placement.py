@@ -34,7 +34,7 @@ struct Part {float cutout=0;};
 float2 ground(Instance instance,int minimum,c3x_renderer_frame_v1 frame,
               float scene_scale,bool reflected,float x,float y,float z){
  Unit unit{minimum};Action action;Mesh mesh;auto* source=&mesh;Part part;
- float ground_depth=0;unsigned frame_number=0;float angle=0;
+ float ground_depth=0;unsigned frame_number=0;float angle=0;bool blended=false;
  struct {int width=2400,height=1400;} scene;
  for(auto const& unused:std::vector<int>{0}){
   (void)unused;auto draw=instance.draw;

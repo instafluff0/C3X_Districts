@@ -14,6 +14,16 @@ source geometry, material addressing and animation palettes. Edit source assets
 or `Renderer/native/environment_refresh/prepare_units.py`, not generated payloads.
 See `Renderer/native/environment_refresh/UNIT_FIDELITY.md` for current contracts.
 
+The runtime compiler also emits optional generic joint metadata for live pose
+transitions. It preserves the original baked palettes; the fidelity preparation
+step preserves the metadata when adding source normals and tangent frames.
+See [joint and direction transitions](../../../../docs/renderer64_scene_and_motion.md#joint-and-direction-transitions)
+for binding identity, lifecycle, timing and current GPU evidence. The whole-pack
+`Renderer/native/test_unit_rig_pack.cpp` oracle reconstructs first/middle/last
+palettes for every used joint; `test_unit_pose_transition.py` covers intermediate
+blends, interruption and retirement. Live-game evidence is recorded in the
+[scripted testing guide](../../../../tools/scripted_game_test.md#combat-diagnostic).
+
 The isolated [settler carrier study](../../../studies/units/README.md#single-settler-carrier-lab-study)
 selects one of Civ VI's two identical backpack members. Its private key and pack
 do not replace the current `PRTO_Settler` binding. The study builds the carrier's

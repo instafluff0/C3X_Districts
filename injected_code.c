@@ -19856,7 +19856,32 @@ translate_custom_renderer_native (int operation, JGL_Image * image, void * sourc
 	// Audited clip metadata only: its private HDC never exposes image pixels.
 	if (operation == C3X_NATIVE_DC && (is->custom_renderer_native_operation == C3X_NATIVE_IMAGE_CLIP || is->custom_renderer_native_operation == C3X_NATIVE_IMAGE_TEXT_STATE ||
 	    (is->custom_renderer_native_operation == C3X_NATIVE_IMAGE_PALETTE && image != NULL && image->BitCount == 16))) return 0;
-	return is->custom_renderer_native_image (operation, image, source, source_rect, destination_rect, color);
+	if (! is->custom_renderer_trace_input)
+		return is->custom_renderer_native_image (operation, image, source, source_rect, destination_rect, color);
+	LARGE_INTEGER begin = {0}, end = {0}, frequency = {0};
+	QueryPerformanceCounter (&begin);
+	int result = is->custom_renderer_native_image (operation, image, source, source_rect, destination_rect, color);
+	QueryPerformanceCounter (&end);
+	QueryPerformanceFrequency (&frequency);
+	long long micros = frequency.QuadPart > 0 ? (end.QuadPart - begin.QuadPart) * 1000000 / frequency.QuadPart : 0;
+	Sprite * cursor = (Sprite *)p_main_screen_form->Base_Data.Cursor_Image;
+	bool cursor_draw = operation == C3X_NATIVE_SPRITE && cursor != NULL && source == cursor->jgl_sprite;
+	if (micros >= 2000 || cursor_draw) {
+		char line[256];
+		snprintf (line, sizeof line, "[C3X renderer] qpc=%lld stage=input-render-cost op=%d us=%lld cursor=%d result=%d area=%d,%d,%d,%d\n",
+			end.QuadPart, operation, micros, cursor_draw, result,
+			destination_rect ? destination_rect->left : 0, destination_rect ? destination_rect->top : 0,
+			destination_rect ? destination_rect->right : 0, destination_rect ? destination_rect->bottom : 0);
+		(*p_OutputDebugStringA) (line);
+		if (cursor_draw) {
+			JGLSprite * sprite = (JGLSprite *)source;
+			snprintf (line, sizeof line, "[C3X renderer] stage=input-cursor-source canvas=%p size=%d,%d sprite=%d,%d bits=%d pixels=%p flags=%x\n",
+				image, image ? image->Image_Rect.right : 0, image ? image->Image_Rect.bottom : 0,
+				sprite->Width, sprite->Height, sprite->BitCount, sprite->Bits_Data, sprite->field_18);
+			(*p_OutputDebugStringA) (line);
+		}
+	}
+	return result;
 }
 
 int
@@ -23609,12 +23634,11 @@ is_command_button_active (Main_GUI * main_gui, enum Unit_Command_Values command)
 void sync_custom_renderer_zoom_to_native ();
 
 bool
-advance_custom_renderer_zoom_from_key (Main_Screen_Form * this, int char_code, int virtual_key_code)
+advance_custom_renderer_zoom (Main_Screen_Form * this, int steps, bool wrap)
 {
 	if (! is->current_config.enable_custom_rendering ||
 	    ! is->current_config.enable_custom_rendering_zoom ||
-	    (*p_player_bits == 0) || this->is_now_loading_game ||
-	    ((virtual_key_code != VK_Z) && (char_code != 'Z') && (char_code != 'z')))
+	    (*p_player_bits == 0) || this->is_now_loading_game)
 		return false;
 
 	int levels[3] = {128, 160, 192};
@@ -23628,9 +23652,14 @@ advance_custom_renderer_zoom_from_key (Main_Screen_Form * this, int char_code, i
 		if (candidate_delta < current_delta)
 			current = n;
 	}
-	// Keep normal and the two closer views. Z moves outward, then wraps
-	// from the supported minimum (128) to the closest view (192).
-	int next = current > 0 ? current - 1 : ARRAY_LEN (levels) - 1;
+	// Z cycles outward; the wheel clamps at the supported endpoints.
+	int next = current + steps;
+	if (wrap) next = (next + ARRAY_LEN (levels)) % ARRAY_LEN (levels);
+	else {
+		if (next < 0) next = 0;
+		if (next >= ARRAY_LEN (levels)) next = ARRAY_LEN (levels) - 1;
+	}
+	if (next == current) return true;
 	long long const fp_one = 65536;
 	int old_width = is->custom_renderer_zoom_tile_width;
 	int new_width = levels[next];
@@ -23659,6 +23688,32 @@ advance_custom_renderer_zoom_from_key (Main_Screen_Form * this, int char_code, i
 #endif
 	return true;
 }
+
+bool
+advance_custom_renderer_zoom_from_key (Main_Screen_Form * this, int char_code, int virtual_key_code)
+{
+	if ((virtual_key_code != VK_Z) && (char_code != 'Z') && (char_code != 'z')) return false;
+	return advance_custom_renderer_zoom (this, -1, true);
+}
+
+#ifdef Main_Screen_Form_process_mouse_wheel
+void __fastcall
+patch_Main_Screen_Form_process_mouse_wheel (Main_Screen_Form * this, int edx, int wheel_delta, int mouse_x, int mouse_y)
+{
+	if (! is->current_config.enable_custom_rendering) {
+		Main_Screen_Form_process_mouse_wheel (this, edx, wheel_delta, mouse_x, mouse_y);
+		return;
+	}
+	if (! is->current_config.enable_custom_rendering_zoom || *p_player_bits == 0 || this->is_now_loading_game) {
+		Main_Screen_Form_process_mouse_wheel (this, edx, wheel_delta, mouse_x, mouse_y);
+		return;
+	}
+	// Windows reports 120 units per notch; retain smaller trackpad deltas.
+	int delta = is->custom_renderer_zoom_wheel_remainder + wheel_delta;
+	is->custom_renderer_zoom_wheel_remainder = delta % 120;
+	if (delta / 120 != 0) advance_custom_renderer_zoom (this, delta / 120, false);
+}
+#endif
 
 int __fastcall
 patch_Main_Screen_Form_handle_key_down (Main_Screen_Form * this, int edx, int char_code, int virtual_key_code)
@@ -23898,6 +23953,14 @@ patch_Main_Screen_Form_draw_route_cursor (int x, int y)
 	if (is->current_config.enable_custom_rendering && is->custom_renderer_native_image != NULL &&
 	    is->custom_renderer_native_image (C3X_NATIVE_TACTICAL_CAPABLE, NULL, NULL, NULL, NULL, 0) == 1) {
 		if (is->custom_renderer_native_image != NULL) {
+			if (is->custom_renderer_trace_input) {
+				int projected_x = x, projected_y = y;
+				custom_renderer_zoom_transform_point (&projected_x, &projected_y);
+				char line[192];
+				snprintf (line, sizeof line, "[C3X renderer] stage=route-target native=%d,%d displayed=%d,%d\n",
+					x, y, projected_x, projected_y);
+				(*p_OutputDebugStringA) (line);
+			}
 			int point[2] = {x, y};
 			is->custom_renderer_native_image (C3X_NATIVE_TACTICAL_TARGET,
 				p_main_screen_form->Units_Control.Data.Canvas.JGL.Image, NULL, point, NULL, 0);
@@ -23955,9 +24018,13 @@ trace_custom_renderer_map_click (Main_Screen_Form * screen, char const * phase, 
 	City * city = pick == 0 ? city_at (tile_x, tile_y) : NULL;
 	LARGE_INTEGER now = {0};
 	QueryPerformanceCounter (&now);
+	struct { DWORD size, flags; void * cursor; POINT position; } cursor = {0};
+	cursor.size = sizeof cursor;
+	BOOL (WINAPI * cursor_info) (void *) = (void *)(*p_GetProcAddress) (is->user32, "GetCursorInfo");
+	if (cursor_info != NULL) cursor_info (&cursor);
 	char line[768];
 	snprintf (line, sizeof line,
-		"[C3X renderer] qpc=%lld stage=map-click phase=%s screen=%d,%d stored=%d,%d pick=%d tile=%d,%d city=%d selected_city=%d current_unit=%d mode=%d alternate=%d drag=%d,%d:%d,%d hold=%d click_timer=%d hold_timer=%d form_flags=%x,%x city_form=%d camera=%d,%d zoom=%d/%d translation=%lld,%lld\n",
+		"[C3X renderer] qpc=%lld stage=map-click phase=%s screen=%d,%d stored=%d,%d pick=%d tile=%d,%d city=%d selected_city=%d current_unit=%d mode=%d alternate=%d drag=%d,%d:%d,%d hold=%d click_timer=%d hold_timer=%d form_flags=%x,%x city_form=%d camera=%d,%d zoom=%d/%d translation=%lld,%lld cursor_flags=%u cursor_screen=%ld,%ld cursor_sprite=%x\n",
 		now.QuadPart, phase, x, y, screen->mouse_x, screen->mouse_y, pick, tile_x, tile_y,
 		city != NULL ? city->Body.ID : -1,
 		screen->Selected_City != NULL ? screen->Selected_City->Body.ID : -1,
@@ -23969,7 +24036,8 @@ trace_custom_renderer_map_click (Main_Screen_Form * screen, char const * phase, 
 		screen->Base_Data.Status1, screen->Base_Data.Status2, p_city_form->Base.Data.Status2 & 1,
 		screen->camera_x, screen->camera_y,
 		is->custom_renderer_zoom_tile_width, is->custom_renderer_zoom_native_tile_width,
-		is->custom_renderer_zoom_translate_x_fp, is->custom_renderer_zoom_translate_y_fp);
+		is->custom_renderer_zoom_translate_x_fp, is->custom_renderer_zoom_translate_y_fp,
+		cursor.flags, cursor.position.x, cursor.position.y, screen->Base_Data.Cursor_Image);
 	line[sizeof line - 1] = '\0';
 	(*p_OutputDebugStringA) (line);
 }
@@ -28162,6 +28230,11 @@ ensure_custom_renderer_loaded ()
 	if (is->custom_renderer_init_state == IS_INIT_FAILED)
 		return false;
 
+	DWORD (WINAPI * get_input_environment) (LPCSTR, LPSTR, DWORD) =
+		(void *)(*p_GetProcAddress) (is->kernel32, "GetEnvironmentVariableA");
+	char input_trace[2] = {0};
+	is->custom_renderer_trace_input = get_input_environment != NULL &&
+		get_input_environment ("C3X_RENDERER_TRACE_INPUT", input_trace, sizeof input_trace) == 1 && input_trace[0] == '1';
 	BOOL (WINAPI * set_environment) (char const *, char const *) =
 		(void *)(*p_GetProcAddress) (is->kernel32, "SetEnvironmentVariableA");
 	if (! configure_custom_renderer_effects (set_environment)) {
@@ -33565,7 +33638,17 @@ patch_perform_interturn_in_main_loop ()
 	if (is->current_config.measure_turn_times)
 		*p_preferences &= ~(P_ANIMATE_BATTLES | P_SHOW_FRIEND_MOVES | P_SHOW_ENEMY_MOVES);
 
+	if (is->current_config.enable_custom_rendering && is->custom_renderer_test_save[0]) {
+		char line[128];
+		snprintf (line, sizeof line, "[C3X renderer] stage=scripted-turn-begin turn=%d\n", *p_current_turn_no);
+		(*p_OutputDebugStringA) (line);
+	}
 	perform_interturn ();
+	if (is->current_config.enable_custom_rendering && is->custom_renderer_test_save[0]) {
+		char line[128];
+		snprintf (line, sizeof line, "[C3X renderer] stage=scripted-turn-end turn=%d\n", *p_current_turn_no);
+		(*p_OutputDebugStringA) (line);
+	}
 	// One full-world reconciliation after a turn catches terrain/visibility changes
 	// whose individual native transitions have not yet been given renderer hooks.
 	is->custom_renderer_world_audit_needed = true;
@@ -36411,7 +36494,7 @@ patch_Main_Screen_Form_process_mouse_hover (Main_Screen_Form * this, int edx, in
 {
 	int previous_action = this->Mode_Action;
 	Main_Screen_Form_process_mouse_hover (this, __, local_x, local_y);
-	if (this->Mode_Action != previous_action)
+	if (this->Mode_Action != previous_action || is->custom_renderer_trace_input || is->custom_renderer_test_save[0])
 		trace_custom_renderer_map_click (this, "hover-action", local_x, local_y);
 	update_combat_odds_hud_for_hover (this, local_x, local_y);
 	combat_odds_hud_request_redraw_if_layout_stale (this);
@@ -47485,6 +47568,12 @@ notify_custom_renderer_unit_spawn (Unit * unit)
 		LARGE_INTEGER now;
 		if (QueryPerformanceCounter (&now)) spawn.presentation_time_ticks = now.QuadPart;
 	}
+	if (is->custom_renderer_test_save[0]) {
+		char line[160];
+		snprintf (line, sizeof line, "[C3X renderer] stage=unit-birth id=%d tile=%d,%d ticks=%lld\n",
+			spawn.unit_id, spawn.tile_x, spawn.tile_y, spawn.presentation_time_ticks);
+		(*p_OutputDebugStringA) (line);
+	}
 	is->custom_renderer_unit_spawn (&spawn);
 	notify_custom_renderer_unit_state (unit, C3X_RENDERER_UNIT_STATE_OBSERVE);
 }
@@ -47535,14 +47624,25 @@ notify_custom_renderer_unit_state (Unit * unit, unsigned int kind)
 	}
 }
 
-// F21 prepares one visible melee encounter; F22 invokes native movement/combat.
-// The caller requires both diagnostic environment variables. No turn or save is issued.
+// F21 prepares a visible disposable-save encounter; F22 executes its native order.
+// Diagnostic setup changes only this unsaved test world, never the renderer's rules.
 void
 run_custom_renderer_combat_test (Main_Screen_Form * form, int key)
 {
-    if (! is->current_config.enable_custom_rendering || form != p_main_screen_form ||
-        form->is_now_loading_game || ! form->GUI.is_enabled || ! is->custom_renderer_display_valid ||
-        form->Current_Unit == NULL || is_online_game () || *p_is_offline_mp_game || *p_is_pbem_game) return;
+    if (! is->current_config.enable_custom_rendering || ! is->custom_renderer_test_save[0] ||
+        form != p_main_screen_form || form->is_now_loading_game || ! form->GUI.is_enabled ||
+        ! is->custom_renderer_display_valid || form->Current_Unit == NULL ||
+        is_online_game () || *p_is_offline_mp_game || *p_is_pbem_game) return;
+    char mode[24] = {0};
+    DWORD (WINAPI *get_environment)(LPCSTR, LPSTR, DWORD) = (void *)(*p_GetProcAddress) (is->kernel32, "GetEnvironmentVariableA");
+    if (get_environment != NULL) get_environment ("C3X_RENDERER_GAME_TEST_COMBAT", mode, sizeof mode);
+    mode[sizeof mode - 1] = 0;
+    bool victory = strcmp (mode, "victory") == 0;
+    bool retreat = strcmp (mode, "retreat") == 0;
+    bool bombard = strcmp (mode, "bombard") == 0;
+    bool air = strcmp (mode, "air") == 0;
+    bool army = strcmp (mode, "army") == 0;
+    bool capture = strcmp (mode, "capture") == 0;
     Unit * attacker = form->Current_Unit;
     int x = attacker->Body.X + 2, y = attacker->Body.Y;
     wrap_tile_coords (&p_bic_data->Map, &x, &y);
@@ -47550,46 +47650,73 @@ run_custom_renderer_combat_test (Main_Screen_Form * form, int key)
         ! custom_renderer_tile_visible_at (x, y) || city_at (x, y) != NULL) return;
     if (key == 0x84 && is->custom_renderer_test_step == 1) {
         FOR_UNITS_ON (occupant, tile_at (x, y)) if (occupant.unit != NULL) return;
-        attacker = NULL;
-        FOR_UNITS_ON (candidate, tile_at (form->Current_Unit->Body.X, form->Current_Unit->Body.Y)) {
-            Unit * unit = candidate.unit;
-            if (unit != NULL && unit->Body.CivID == form->Player_CivID && unit->Body.Container_Unit < 0 &&
-                p_bic_data->UnitTypes[unit->Body.UnitTypeID].Unit_Class == UTC_Land &&
-                p_bic_data->UnitTypes[unit->Body.UnitTypeID].Attack > 0) { attacker = unit; break; }
+        int type = p_bic_data->General.BarbarianBasicUnitID, defender_type = type, member_type = type;
+        int interceptor_type = -1;
+        char const * wanted = victory ? "PRTO_Modern_Armor" : retreat ? "PRTO_Horseman" :
+            bombard ? "PRTO_Artillery" : air ? "PRTO_Bomber" : army ? "PRTO_Army" : NULL;
+        if (wanted != NULL) type = -1;
+        if (capture) defender_type = -1;
+        for (int i = 0; i < p_bic_data->UnitTypeCount; i += 1) {
+            char const * entry = p_bic_data->UnitTypes[i].Civilipedia_Entry;
+            if (wanted != NULL && strcmp (entry, wanted) == 0) type = i;
+            if (capture && strcmp (entry, "PRTO_Worker") == 0) defender_type = i;
+            if (retreat && strcmp (entry, "PRTO_Infantry") == 0) defender_type = i;
+            if (air && strcmp (entry, "PRTO_Fighter") == 0) interceptor_type = i;
         }
-        if (attacker == NULL) {
-            int type = p_bic_data->General.BarbarianBasicUnitID;
-            if (type < 0 || type >= p_bic_data->UnitTypeCount || p_bic_data->UnitTypes[type].Attack <= 0 ||
-                p_bic_data->UnitTypes[type].Unit_Class != UTC_Land) return;
-            attacker = patch_Leader_spawn_unit (&leaders[form->Player_CivID], __, type,
-                form->Current_Unit->Body.X, form->Current_Unit->Body.Y, -1, -1, false, 0, -1);
-        }
+        if (type < 0 || type >= p_bic_data->UnitTypeCount || defender_type < 0 ||
+            defender_type >= p_bic_data->UnitTypeCount || (air && interceptor_type < 0)) return;
+        attacker = patch_Leader_spawn_unit (&leaders[form->Player_CivID], __, type,
+            form->Current_Unit->Body.X, form->Current_Unit->Body.Y, -1, -1, false, 0, -1);
         if (attacker == NULL) return;
-        Unit * defender = patch_Leader_spawn_unit (&leaders[0], __, attacker->Body.UnitTypeID, x, y, 0, -1, false, 0, -1);
+        Unit * defender = patch_Leader_spawn_unit (&leaders[0], __, defender_type, x, y, 0, -1, false, 0, -1);
         if (defender == NULL) return;
+        if (victory) defender->Body.Damage = not_below (0, Unit_get_max_hp (defender) - 1);
+        if (retreat) {
+            attacker->Body.Combat_Experience = 3;
+            attacker->Body.Damage = not_below (0, Unit_get_max_hp (attacker) - 2);
+        }
+        if (army) {
+            for (int member = 0; member < 2; member += 1) {
+                Unit * unit = patch_Leader_spawn_unit (&leaders[form->Player_CivID], __, member_type,
+                    attacker->Body.X, attacker->Body.Y, -1, -1, false, 0, -1);
+                if (unit == NULL) return;
+                patch_Unit_load (unit, __, attacker);
+                if (unit->Body.Container_Unit != attacker->Body.ID) return;
+            }
+        }
+        if (air) {
+            Unit * interceptor = patch_Leader_spawn_unit (&leaders[0], __, interceptor_type, x, y, 0, -1, false, 0, -1);
+            if (interceptor == NULL) return;
+            Unit_set_state (interceptor, __, UnitState_Intercept);
+        }
         is->custom_renderer_test_step = 100;
         patch_Main_Screen_Form_set_selected_unit (form, __, attacker, true);
         form->vtable->m73_call_m22_Draw ((Base_Form *)form);
-        char message[160];
-        snprintf (message, sizeof message, "[C3X renderer] stage=scripted-combat-ready attacker=%d defender=%d from=%d,%d to=%d,%d\n",
-            attacker->Body.ID, defender->Body.ID, attacker->Body.X, attacker->Body.Y, x, y);
+        char message[200];
+        snprintf (message, sizeof message, "[C3X renderer] stage=scripted-combat-ready attacker=%d defender=%d from=%d,%d to=%d,%d case=%s\n",
+            attacker->Body.ID, defender->Body.ID, attacker->Body.X, attacker->Body.Y, x, y, mode);
         (*p_OutputDebugStringA) (message);
-    } else if (key == 0x85 && is->custom_renderer_test_step == 100 && attacker->Body.CivID == form->Player_CivID &&
-               p_bic_data->UnitTypes[attacker->Body.UnitTypeID].Attack > 0) {
+    } else if (key == 0x85 && is->custom_renderer_test_step == 100 && attacker->Body.CivID == form->Player_CivID) {
         Unit * defender = NULL;
         FOR_UNITS_ON (occupant, tile_at (x, y)) {
-            if (occupant.unit != NULL && occupant.unit->Body.CivID == 0) defender = occupant.unit;
-            else if (occupant.unit != NULL) return;
+            if (occupant.unit != NULL && occupant.unit->Body.CivID == 0 &&
+                p_bic_data->UnitTypes[occupant.unit->Body.UnitTypeID].Unit_Class == UTC_Land) defender = occupant.unit;
+            else if (occupant.unit != NULL && occupant.unit->Body.CivID != 0) return;
         }
         if (defender == NULL) return;
         int attacker_id = attacker->Body.ID, defender_id = defender->Body.ID;
+        int damage_before = defender->Body.Damage;
         is->custom_renderer_test_step = 101;
         (*p_OutputDebugStringA) ("[C3X renderer] stage=scripted-combat-start\n");
-        int result = patch_Unit_move_to_adjacent_tile (attacker, __, DIR_E, false, 0, 1);
+        int result = 0;
+        if (bombard || air) patch_Unit_bombard_tile (attacker, __, x, y);
+        else result = patch_Unit_move_to_adjacent_tile (attacker, __, DIR_E, false, 0, 1);
         attacker = get_unit_ptr (attacker_id); defender = get_unit_ptr (defender_id);
-        char message[160];
-        snprintf (message, sizeof message, "[C3X renderer] stage=scripted-combat-end result=%d attacker_alive=%d defender_alive=%d\n",
-            result, attacker != NULL, defender != NULL);
+        char message[320];
+        snprintf (message, sizeof message, "[C3X renderer] stage=scripted-combat-end result=%d attacker_alive=%d defender_alive=%d case=%s attacker_tile=%d,%d defender_owner=%d damage_before=%d damage_after=%d\n",
+            result, attacker != NULL, defender != NULL, mode, attacker ? attacker->Body.X : -1,
+            attacker ? attacker->Body.Y : -1, defender ? defender->Body.CivID : -1,
+            damage_before, defender ? defender->Body.Damage : -1);
         (*p_OutputDebugStringA) (message);
     }
 }

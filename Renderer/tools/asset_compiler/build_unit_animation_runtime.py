@@ -42,7 +42,7 @@ def checked_cache(pack: Path, record: dict, skeleton: dict):
     return cache
 
 
-def socket_payload(mesh: dict, driver, bone_name: str, model_scale: float):
+def socket_payload(mesh: dict, driver, bone_name: str, model_scale: float, driver_skeleton=None, identity=""):
     """An attachment is a one-bone palette, evaluated by the same DLL skinner.
 
     Preserve its model-space origin. Recentring a weapon on each sampled pose
@@ -62,7 +62,9 @@ def socket_payload(mesh: dict, driver, bone_name: str, model_scale: float):
         {**vertex, "position": [v*model_scale for v in vertex["position"]],
          "joints": [0, 0, 0, 0], "weights": [1., 0., 0., 0.]}
         for vertex in mesh["vertices"]]}
-    return encode(bound, skeleton, cache)
+    rig = {"skeleton": driver_skeleton or skeleton, "cache": driver if driver_skeleton else cache,
+           "skin_joints": [index if driver_skeleton else 0], "inverse_bind": [IDENTITY], "identity": identity}
+    return encode(bound, skeleton, cache, rig=rig)
 
 
 def inverse_transform(matrix):
@@ -263,13 +265,15 @@ def build(packs: list[Path], output: Path, standard_roster: bool = False, reuse_
                         mode = binding.get("binding_mode", component["binding_mode"])
                         if mode == "vertex_skin":
                             mesh = normalized_skin.load_mesh(pack_path(pack, mesh_relative), len(skeletons[asset]["bones"]))
-                            payload = encode(mesh, skeletons[asset], caches[asset])
+                            payload = encode(mesh, skeletons[asset], caches[asset], rig={
+                                "skeleton": skeletons[asset], "cache": caches[asset], "identity": asset+"/"+mesh_relative})
                         elif mode == "rigid_attachment":
                             mesh = document(pack, mesh_relative)
                             attachment=attachment_bindings.get(asset,{})
                             local_driver = attachment.get('driver') or (asset if asset in caches and component.get("rigid_driver_bone") else driver_id)
                             payload = socket_payload(mesh, caches[local_driver],
-                                attachment.get("bone") or component.get("rigid_driver_bone") or sockets[component["attachment_point"]]["bone"], component["model_scale"])
+                                attachment.get("bone") or component.get("rigid_driver_bone") or sockets[component["attachment_point"]]["bone"], component["model_scale"],
+                                skeletons[local_driver], asset+"/"+mesh_relative)
                         else:
                             raise ValueError(f"unsupported complete-kit binding: {asset}")
                         material = document(pack, material_relative)

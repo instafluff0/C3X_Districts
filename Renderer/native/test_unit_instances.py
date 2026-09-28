@@ -260,6 +260,7 @@ int main(){
  state.presentation_frequency=1000000;state.presentation_time_ticks=1600000;
  assert(motion.state(state)&&motion.state_of(55)->damage==1);
  state.damage=2;state.presentation_time_ticks=1550000;
+ assert(motion.state_status(state)==C3X_RENDERER_RESULT_SUPERSEDED);
  assert(!motion.state(state)&&motion.state_of(55)->damage==1);
  moving.presentation_time_ticks=1550000;assert(!motion.capture(moving,1,catalog,name,first));
  state.damage=2;state.presentation_time_ticks=1700000;
@@ -269,12 +270,15 @@ int main(){
  state.kind=C3X_RENDERER_UNIT_STATE_OBSERVE;state.presentation_time_ticks=1750000;
  assert(!motion.state(state));
  state.presentation_time_ticks=1900000;
- assert(!motion.state(state)); // Only a new accepted birth can reuse a retired ID.
+ assert(motion.state_status(state)==C3X_RENDERER_RESULT_SUPERSEDED);
+ assert(!motion.state(state)); // Native construction can observe before its birth hook returns.
+ state.owner_id=32;assert(motion.state_status(state)==C3X_RENDERER_RESULT_BAD_ARGUMENT);
+ state.owner_id=2;
  visual.presentation_time_ticks=1900000;assert(!motion.observe(visual));
  moving.presentation_time_ticks=1900000;assert(!motion.capture(moving,1,catalog,name,first));
  accepted.presentation_time_ticks=1900000;assert(!motion.move(accepted));
  born.presentation_time_ticks=2000000;assert(motion.spawn(born));
- state.presentation_time_ticks=2000000;assert(motion.state(state));
+ state.presentation_time_ticks=2000000;assert(motion.state_status(state)==C3X_RENDERER_RESULT_OK&&motion.state(state));
  UnitFramePreparation queue;input.unit_key[0]=0;input.unit_id=12;input.action_cursor=1;input.frame_count=16;
  queue.observe(input,true);assert(!queue.empty());queue.forget(12);assert(queue.empty());
 }

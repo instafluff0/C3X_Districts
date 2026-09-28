@@ -63,6 +63,13 @@ public:
 #endif
     std::uint64_t upload_count()const{return gpu.stats().uploads;}
     std::int64_t current_ticket()const{return ticket;}
+    // Publish an immutable native screen version. The independent cadence
+    // samples it later; accepting a UI transfer does not render another map.
+    // Partial transfers retain exactly the previously committed outside area.
+    bool commit_display(std::int64_t requested,Id image,unsigned w,unsigned h,Rect area){
+        if(requested!=ticket||!gpu.displayable(image,w,h))return false;
+        layers.commit(image,area);return layers.ready();
+    }
     bool display_to(std::int64_t requested,Id image,ID3D11RenderTargetView* target,ID3D11Texture2D* retained,ID3D11Texture2D* buffer,unsigned w,unsigned h,Rect area,long long ticks=0,long long frequency=0,std::array<LONGLONG,4>* phase_ticks=nullptr,std::array<LONGLONG,8>* draw_ticks=nullptr){
         if(requested!=ticket||!target||!retained||!buffer||!gpu.displayable(image,w,h))return false;
         LARGE_INTEGER mark={};
@@ -102,6 +109,25 @@ public:
         Command draw={Kind::unit_over,Id(request.destination),resident_unit,{x,y,x+int(width),y+int(height)},
             {request.clip[0],request.clip[1],request.clip[2],request.clip[3]},0,0,0,Id(request.background),Id(request.detail),Id(request.background_detail)};
         bool ok=gpu.submit(&draw,1);if(ok)try{layers.record(draw);}catch(std::exception const& e){OutputDebugStringA("[C3X renderer] retained admission: ");OutputDebugStringA(e.what());OutputDebugStringA("\n");layers.discard();}
+        return ok?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    }
+    // Static route/grid art has no dependency on the animated map beneath it.
+    // Snapshot its small packed texture once, then replay only the blend when
+    // that underlay changes. The retained source owns its version and budget.
+    int draw_overlay(c3x_renderer_gpu_unit_v1 const& request,ID3D11Texture2D* texture,unsigned width,unsigned height,int x,int y){
+        if(request.ticket!=ticket)return C3X_RENDERER_RESULT_SUPERSEDED;
+        if(request.destination==std::int64_t(map)||request.detail==std::int64_t(map)||!texture)
+            return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        auto source=gpu.attach_source(texture);if(!source)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        bool ok=false;
+        try{
+            layers.create(source,width,height,Format::bgra32);layers.source(source,texture);
+            Command draw={Kind::unit_over,Id(request.destination),source,{x,y,x+int(width),y+int(height)},
+                {request.clip[0],request.clip[1],request.clip[2],request.clip[3]},0,0,0,
+                Id(request.background),Id(request.detail),Id(request.background_detail)};
+            ok=gpu.submit(&draw,1);if(ok)layers.record(draw);
+        }catch(...){layers.destroy(source);gpu.destroy(source);throw;}
+        layers.destroy(source);gpu.destroy(source);
         return ok?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_BAD_ARGUMENT;
     }
     int draw_dynamic(c3x_renderer_gpu_unit_v1 const& request,unsigned width,unsigned height,int x,int y,RetainedComposition::Direct operation){

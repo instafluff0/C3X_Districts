@@ -201,13 +201,30 @@ fixed schedule attempted preparation before the first map was ready and did
 not exercise combat.
 
 The fixture requires an empty, visible land tile immediately east of the
-selected stack, with no city. F21 selects an owned land attacker from the stack,
-or spawns the scenario's basic barbarian unit type as an owned test attacker
-when the stack contains only civilians. It then creates one barbarian defender
-of that type through the existing native spawn function. F22 requests an ordinary eastward native move,
-which invokes Civ III combat. Both commands require custom rendering, the
+selected stack, with no city. F21 spawns a disposable owned attacker and a
+barbarian defender using existing native functions. F22 sends the corresponding
+native move or bombard order. Both commands require custom rendering, the
 explicit save and `combat` mode environment variables, and a single-player
-session. Each can run once. The fixture does not force a winner or save changes.
+session. Each can run once. It never saves changes or forces a combat outcome.
+
+`-CombatCase` selects the setup:
+
+| Case | Native encounter |
+| --- | --- |
+| `melee` | Basic barbarian type against the same type |
+| `victory` | Modern Armor against a defender with one remaining HP |
+| `retreat` | Wounded elite Horseman against Infantry |
+| `bombard` | Artillery against a land defender |
+| `army` | Army with two loaded basic-unit members against a defender |
+| `air` | Bomber against a defender protected by an intercepting Fighter |
+| `capture` | Basic attacker against an enemy Worker |
+
+Retreat and interception depend on native rules and RNG. A completed command
+is not proof that either branch occurred. The return log records surviving
+IDs, attacker location, defender owner and before/after damage. Require the
+specific native outcome in that log and review its window samples. Use
+`-UnitPack <simple-pack-name>` to test an isolated generated pack; its default
+is `UnitAnimationFidelity`, and the override exists only in the child process.
 
 The result requires both preparation and combat-return markers. Native unit
 observations include action, queued action, HP/damage, visibility, retirement
@@ -242,3 +259,96 @@ preparation/return markers are present, no renderer failure was logged, and the
 original save is unchanged. This is a melee-defeat witness; it does not qualify
 victory, retreat, ranged or army combat, native audio alignment, or limb blending
 between clips.
+
+The rig-enabled roster and current bridge add these bounded native witnesses:
+
+| Capture | Observed branch |
+| --- | --- |
+| `20260927-200320` | Attacker victory, defender death, advance into the target |
+| `20260927-200759` | Wounded mounted attacker retreats; defender survives |
+| `20260927-202628` | Two correctly loaded army members fight; army dies and defender survives |
+| `20260927-202926` | Civilian capture, attacker arrival, stable idle after native selection changes |
+| `20260927-203325` | Bombardment applies two damage without the former scratch-canvas failure |
+| `20260927-203552` | Bomber is intercepted and dies; fighter returns to idle; default pack used |
+
+All six preserve the original save and report no renderer failures. Contact
+sheets qualify the observed land handoffs and army sequence. The air samples
+establish interception lifecycle, not continuous flight trajectory or altitude.
+Native audio alignment and the requested custom impact effects remain open.
+The earlier `201515` army setup was invalid: `Unit_load_into_army` only updates
+bookkeeping. Use the existing `patch_Unit_load` boundary so native container and
+state fields are set too. F22 now retries until the start marker is observed;
+the injected one-shot guard prevents duplicate attacks.
+
+## Turn and held-mouse regressions
+
+`-Scenario turn -Seconds 90` skips the two initial units and ends two turns in
+the disposable starting save. It requires two `scripted-turn-end` checkpoints
+and no renderer failures. Inspect the status panel as well: a completed native
+turn does not establish that its new HUD was presented.
+
+`-Scenario mouse -Seconds 55 -SampleHz 10` sends two wheel notches inward, holds the left mouse
+button at the selected unit, moves right in four steps, and releases it. It
+checks the foreground window before every mouse action and releases the button
+in cleanup. Mouse/cursor state, native tile picks, and projected route targets
+are logged. This bounded path does not prove every physical mouse/VM input case.
+`mouse-events.json` records the injected input's QPC, client coordinates, flags
+and wheel delta. Compare these with `map-click` QPCs and window arrival timestamps
+to separate native input latency from visible renderer latency.
+
+Add `-ProfileRenderer` to collect detailed renderer timings in a bounded memory
+buffer, flushed by the helper at shutdown to `renderer-core.log.x64`. This avoids
+one debugger round trip per rendering trace. Inspect that file as well as
+`renderer.log`; a `TRACE_BUFFER dropped=0` trailer establishes complete profile
+coverage. The x86 buffer can be lost when the diagnostic terminates its game
+process; injected input evidence remains in `renderer.log`. The script restores
+all three trace environment variables after child creation and during cleanup.
+Keyboard release messages include the previous-state and transition flags;
+otherwise this game's JGL event dispatcher interprets a synthetic release as
+another press. Earlier scripted zoom labels therefore did not reliably identify
+the actual zoom; use the `zoom-key` log values.
+
+For a manual reproduction, run `Renderer/CAPTURE_MOUSE_INPUT.bat` as administrator
+with the game closed. It launches Civ III normally with input tracing enabled
+only in that process. Load the desired save, reproduce the problem, then return
+to the capture console and press Enter. It leaves the game open and writes the
+log and binary hashes under `%TEMP%\C3XMapFailure`. It does not change game
+settings, select a save, move the mouse, or save gameplay. `-CheckOnly` validates
+the collector without starting a game. Input tracing records native/display
+coordinates, camera/zoom, drag endpoints, cursor flags, and the destination
+projection; normal launches do not enable the detailed trace.
+The opt-in trace also records renderer calls over 2 ms and software-cursor
+sprite draws. `game_test_contact_sheet.py --kind mouse` aligns sampled frames
+to the first recorded held-drag state. The script saves witness stderr and
+requires a completed, nonempty window capture; delivered commands with a failed
+observer do not pass.
+
+Capture `20260927-204831` isolated game-thread image-composition calls taking
+160–250 ms while the helper continued rendering. The input-coverage graph was
+repeatedly evaluating unchanged regions of full-screen keyed UI transfers.
+`test_native_hit_scene.py` now exercises that pattern alongside changing sprite
+uploads and retained copies. Uniform regions can be folded without reading any
+GPU map pixels. Its 400-transfer host comparison took 14.93 seconds before the
+change and 0.17 seconds afterward. Live `20260927-214917` confirms lower input
+coverage cost but exhausted the renderer publication queue. The subsequent
+`20260927-220100` and buffered `20260927-220551` runs complete without queue or
+native failures after UI publication stops forcing an immediate map render.
+In `220100`, the five changed cursor positions reach native input handling in
+2.5–16.6 ms, while destination-marker presentation still lags. The latter is a
+renderer issue, not a claim that the mouse defect is fixed. The next candidate
+retains static route textures and prevents repeated UI commits from interrupting
+the independent frame deadline; its live result is pending.
+
+Capture `20260927-210000` also confirms that the go-to software cursor has no
+pixels. This matches the empty second 32 × 32 cell in the installed `cursor.pcx`
+and native `load_cursor_images`/`set_mode_action` behavior. The destination ring
+serves as the held-drag cursor; a rejected empty sprite is not evidence of lost
+GPU cursor art. Judge response from mouse-to-route timing and sampled positions.
+
+Keep one full window sequence in the VM. Pass `--window-source` to the contact
+sheet helper to read that original `window/` folder while saving only the small
+sheet and frame index beside the local log. After making a contact sheet, retain
+its indexed source frames and the first/last local frames, then remove redundant
+local JPEG copies only after verifying their hashes against the VM originals.
+Keep `result.json`, logs, timestamps, hashes and contact sheets. Reuse that
+evidence before recording another large sequence.

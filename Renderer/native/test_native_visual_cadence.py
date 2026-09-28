@@ -90,6 +90,13 @@ int main(){
  std::this_thread::sleep_for(milliseconds(80));assert(calls==finished);
  cadence.enable([&]{++calls;});std::this_thread::sleep_for(milliseconds(100));
  cadence.disable();cadence.stop();assert(calls>finished);
+ // Publishing UI repeatedly must not interrupt the cadence's minimum pause.
+ c3x_renderer::VisualCadence stable(milliseconds(50),milliseconds(40));
+ calls=0;steady_clock::time_point prior;
+ auto sample=[&]{auto now=steady_clock::now();if(calls)assert(now-prior>=milliseconds(35));prior=now;++calls;};
+ stable.enable(sample);
+ for(unsigned n=0;n<100;++n){stable.enable(sample);std::this_thread::sleep_for(milliseconds(2));}
+ stable.stop();assert(calls>=2&&calls<=7);
 }
 ''')
 

@@ -125,7 +125,8 @@ struct Core {
         if(!direct_surface_bound||!direct_display_ready||!visual_shared||!native_image){direct_cadence.disable();return;}
         char manual[4]={};
         if(GetEnvironmentVariableA("C3X_RENDERER_MANUAL_VISUAL",manual,sizeof(manual))==1&&manual[0]=='1'){direct_cadence.disable();return;}
-        if(native_image(C3X_NATIVE_VISUAL_POLICY,nullptr,nullptr,nullptr,nullptr,3)<=0){direct_cadence.disable();return;}
+        // A newly committed static UI also needs its first sample. Unchanged
+        // static fronts return PENDING without drawing or presenting again.
         direct_cadence.enable([this]{
             LARGE_INTEGER now={},frequency={};
             if(!QueryPerformanceCounter(&now)||!QueryPerformanceFrequency(&frequency))return;

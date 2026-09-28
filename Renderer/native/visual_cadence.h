@@ -41,6 +41,7 @@ public:
     }
     void enable(std::function<void()> callback){
         std::lock_guard<std::mutex> lock(mutex);
+        if(enabled)return; // New UI commits do not restart the frame deadline.
         if(!thread.joinable()){
             stopping=false;
             thread=std::thread([this,callback]{

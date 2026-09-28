@@ -27,7 +27,7 @@ def pack_path(root: Path, relative: str) -> Path:
     return path
 
 
-def encode(mesh: dict, skeleton: dict, cache: normalized_pose_cache.PoseCache) -> bytes:
+def encode(mesh: dict, skeleton: dict, cache: normalized_pose_cache.PoseCache, *, rig=None) -> bytes:
     normalized_skin.validate_rest_pose(mesh, skeleton)
     normalized_pose_cache.validate_skeleton_binding(cache, skeleton)
     vertices, indices = mesh["vertices"], mesh["topology"]["indices"]
@@ -53,6 +53,11 @@ def encode(mesh: dict, skeleton: dict, cache: normalized_pose_cache.PoseCache) -
             output.extend(struct.pack("<16f", *palette))
     if len(output) != size:
         raise AssertionError("animation serialization length mismatch")
+    if rig is not None:
+        from Renderer.tools.asset_compiler.animation_rig import encode as encode_rig
+        output.extend(encode_rig(**rig))
+        if len(output) > 64 * 1024 * 1024:
+            raise ValueError("animation rig exceeds DLL byte budget")
     return bytes(output)
 
 

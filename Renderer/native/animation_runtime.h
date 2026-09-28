@@ -21,12 +21,26 @@ struct AnimationVertex {
     std::array<float, 4> weights;
 };
 
+struct AnimationJointPose {
+    std::array<float,3> position{};
+    std::array<float,4> rotation{};
+    std::array<float,9> scale{};
+};
+struct AnimationRig {
+    std::array<std::uint8_t,32> binding{};
+    std::vector<int> parents;
+    std::vector<unsigned> skin_joints;
+    std::vector<std::array<float,16>> inverse_bind;
+    std::vector<AnimationJointPose> poses;
+};
+
 struct AnimationMesh {
     float duration = 0;
     std::uint32_t bones = 0, frames = 0;
     std::vector<AnimationVertex> vertices;
     std::vector<std::uint32_t> indices;
     std::vector<float> palettes;
+    AnimationRig rig;
 };
 
 inline bool decode_animation_mesh(std::vector<std::uint8_t> const & data,
@@ -50,7 +64,15 @@ inline bool decode_animation_mesh(std::vector<std::uint8_t> const & data,
         !std::isfinite(duration) || duration <= 0 || duration > 3600) return false;
     std::uint64_t expected = 32ull + vertex_count * (version==2?88ull:64ull) + index_count * 4ull +
         std::uint64_t(bones) * frames * 64ull;
-    if (expected != data.size()) return false;
+    bool rig = expected < data.size();
+    unsigned rig_bones=0;
+    if (rig) {
+        if (expected+48 > data.size() || std::memcmp(data.data()+expected,"C3XRIG1\0",8)) return false;
+        auto offset=std::size_t(expected);
+        for(unsigned i=0;i<4;++i)rig_bones|=unsigned(data[offset+8+i])<<(8*i);
+        if(!rig_bones||rig_bones>256||data[offset+12]||data[offset+13]||data[offset+14]||data[offset+15]||
+           expected+48+rig_bones*4ull+bones*68ull+std::uint64_t(rig_bones)*frames*64ull!=data.size())return false;
+    } else if (expected != data.size()) return false;
     AnimationMesh decoded;
     decoded.duration = duration; decoded.bones = bones; decoded.frames = frames;
     decoded.vertices.resize(vertex_count);
@@ -77,6 +99,26 @@ inline bool decode_animation_mesh(std::vector<std::uint8_t> const & data,
         auto p = decoded.palettes.data() + i;
         if (std::abs(p[3]) > 0.0001f || std::abs(p[7]) > 0.0001f ||
             std::abs(p[11]) > 0.0001f || std::abs(p[15] - 1) > 0.0001f) return false;
+    }
+    if(rig){
+        cursor+=16;
+        std::copy_n(data.data()+cursor,32,decoded.rig.binding.begin());cursor+=32;
+        if(std::all_of(decoded.rig.binding.begin(),decoded.rig.binding.end(),[](auto v){return v==0;}))return false;
+        for(unsigned i=0;i<rig_bones;++i){auto p=u32();if(p!=UINT32_MAX&&p>=i)return false;
+            decoded.rig.parents.push_back(p==UINT32_MAX?-1:int(p));}
+        for(unsigned i=0;i<bones;++i){auto joint=u32();if(joint>=rig_bones)return false;decoded.rig.skin_joints.push_back(joint);}
+        decoded.rig.inverse_bind.resize(bones);
+        for(auto& bind:decoded.rig.inverse_bind){
+            for(auto& v:bind){v=f32();if(!std::isfinite(v))return false;}
+            if(std::abs(bind[3])+std::abs(bind[7])+std::abs(bind[11])+std::abs(bind[15]-1)>1e-4f)return false;
+        }
+        decoded.rig.poses.resize(std::size_t(rig_bones)*frames);
+        for(auto& pose:decoded.rig.poses){
+            for(auto& v:pose.position){v=f32();if(!std::isfinite(v))return false;}
+            float length=0;for(auto& v:pose.rotation){v=f32();if(!std::isfinite(v))return false;length+=v*v;}
+            if(std::abs(length-1)>1e-4f)return false;
+            for(auto& v:pose.scale){v=f32();if(!std::isfinite(v))return false;}
+        }
     }
     output = std::move(decoded); // A rejected payload never alters the live asset.
     return true;

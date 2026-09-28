@@ -2663,6 +2663,7 @@ struct district_button_image_set {
 	bool custom_renderer_async_drawing, custom_renderer_capture_only, custom_renderer_async_presented;
 	bool custom_renderer_timer_running;
 	// Opt-in scripted game diagnostics; inactive without the per-process save path.
+	bool custom_renderer_trace_input;
 	char custom_renderer_test_save[MAX_PATH];
 	unsigned custom_renderer_test_step;
 	c3x_renderer_blit_fn custom_renderer_blit;
@@ -2716,6 +2717,7 @@ struct district_button_image_set {
 	// authoritative camera; these fields scale its captured anchors and invert
 	// mouse coordinates back into the native projection for interaction.
 	int custom_renderer_zoom_tile_width;
+	int custom_renderer_zoom_wheel_remainder;
 	int custom_renderer_zoom_native_tile_width;
 	long long custom_renderer_zoom_translate_x_fp;
 	long long custom_renderer_zoom_translate_y_fp;

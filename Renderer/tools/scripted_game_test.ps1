@@ -1,8 +1,9 @@
 # Bounded real-game renderer diagnostic, enabled only in the child environment.
 param([Parameter(Mandatory=$true)][string]$SaveFile, [string]$ConquestsDirectory,
       [ValidateRange(35,120)][int]$Seconds = 75,
-      [ValidateSet('scroll','interaction','lifecycle','combat')][string]$Scenario = 'scroll',
-      [ValidateRange(1,10)][int]$SampleHz = 2)
+      [ValidateSet('scroll','interaction','lifecycle','combat','turn','mouse')][string]$Scenario = 'scroll',
+      [ValidatePattern('^[A-Za-z0-9_-]+$')][string]$UnitPack='UnitAnimationFidelity', [ValidateSet('melee','victory','retreat','bombard','army','air','capture')][string]$CombatCase='melee', [ValidateRange(1,10)][int]$SampleHz = 2,
+      [switch]$ProfileRenderer)
 $ErrorActionPreference = 'Stop'
 $renderer = Split-Path $PSScriptRoot -Parent
 if (-not $ConquestsDirectory) { $ConquestsDirectory = $env:C3X_RENDERER_CIV3_CONQUESTS }
@@ -30,6 +31,9 @@ Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
 public static class RendererGameCommand {
+    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr window);
+    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint x, uint y, uint data, UIntPtr extra);
     [StructLayout(LayoutKind.Sequential)] public struct Point { public int X, Y; }
     [StructLayout(LayoutKind.Sequential)] public struct Rect { public int Left, Top, Right, Bottom; }
     [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr window, uint message, IntPtr key, IntPtr detail);
@@ -50,6 +54,13 @@ function Quote-Arguments([string[]]$Values) {
 $collector=$null; $child=$null; $observer=$null; $earlyExit=$false; $gameExitCode=$null
 $oldEnvironment=$env:C3X_RENDERER_GAME_TEST_SAVE
 $oldMode=$env:C3X_RENDERER_GAME_TEST_MODE
+$oldCombat=$env:C3X_RENDERER_GAME_TEST_COMBAT
+$oldPack=$env:C3X_RENDERER_UNIT_PACK
+$oldInputTrace=$env:C3X_RENDERER_TRACE_INPUT
+$traceEnvironment=@{}
+foreach ($key in @('C3X_RENDERER_TRACE','C3X_RENDERER_TRACE_BUFFERED','C3X_RENDERER_TRACE_FILE')) {
+    $traceEnvironment[$key]=[Environment]::GetEnvironmentVariable($key)
+}
 $ini=Join-Path $ConquestsDirectory 'conquests.ini'
 $iniBytes=[IO.File]::ReadAllBytes($ini)
 $cursor=New-Object RendererGameCommand+Point
@@ -67,23 +78,44 @@ try {
     # Use direct process creation so the diagnostic environment reaches C3X.
     $env:C3X_RENDERER_GAME_TEST_SAVE=$save
     $env:C3X_RENDERER_GAME_TEST_MODE=$Scenario
+    $env:C3X_RENDERER_GAME_TEST_COMBAT=$CombatCase
+    $env:C3X_RENDERER_UNIT_PACK=$UnitPack
+    if ($Scenario -eq 'mouse') { $env:C3X_RENDERER_TRACE_INPUT='1' }
+    if ($ProfileRenderer) {
+        $env:C3X_RENDERER_TRACE='2'
+        $env:C3X_RENDERER_TRACE_BUFFERED='1'
+        $env:C3X_RENDERER_TRACE_FILE=Join-Path $session 'renderer-core.log'
+    }
     $start=New-Object System.Diagnostics.ProcessStartInfo
     $start.FileName=$game; $start.WorkingDirectory=$ConquestsDirectory; $start.UseShellExecute=$false
     $child=[System.Diagnostics.Process]::Start($start)
     $env:C3X_RENDERER_GAME_TEST_SAVE=$oldEnvironment
     $env:C3X_RENDERER_GAME_TEST_MODE=$oldMode
+    $env:C3X_RENDERER_GAME_TEST_COMBAT=$oldCombat
+    $env:C3X_RENDERER_UNIT_PACK=$oldPack
+    $env:C3X_RENDERER_TRACE_INPUT=$oldInputTrace
+    foreach ($key in $traceEnvironment.Keys) { [Environment]::SetEnvironmentVariable($key,$traceEnvironment[$key]) }
     Write-Host ('Scripted game PID='+$child.Id+' capture='+$session)
-    $observer=Start-Process $witness -ArgumentList (Quote-Arguments @([string]$child.Id,(Join-Path $session 'window'),[string]$Seconds,[string]$SampleHz,'sampled-window-evidence')) -PassThru -WindowStyle Hidden
+    $observer=Start-Process $witness -ArgumentList (Quote-Arguments @([string]$child.Id,(Join-Path $session 'window'),[string]$Seconds,[string]$SampleHz,'sampled-window-evidence')) -PassThru -WindowStyle Hidden -RedirectStandardError (Join-Path $session 'window-errors.log')
     $end=[DateTime]::UtcNow.AddSeconds($Seconds)
     $sent=0
     $started=[DateTime]::UtcNow
     $enterCount=0
     $cursorParked=$false
+    $mouseIndex=0; $mouseHeld=$false; $mouseEvents=@()
+    $mouseSteps=@(@(30,0,0,0x800,240),@(36,0,0,2),@(38,32,0,0),@(39,64,0,0),@(40,96,0,0),@(41,128,0,0),@(43,128,0,4))
     $interactionIndex=0
     $combatReadyAt=$null
     $combatAttackSent=$false
+    $combatNextAttack=0.0
     $combatNextPrepare=36.0
     $interaction=@(@(28,13,'close-welcome'),@(36,90,'zoom-192'),@(39,0x86,'text-192'),@(43,90,'zoom-160'),@(46,0x86,'text-160'),@(50,90,'zoom-128'),@(53,0x86,'text-128'),@(57,0x66,'move-east'),@(65,0x70,'advisor'),@(74,27,'close-advisor'))
+    if ($Scenario -eq 'mouse') {
+        $interaction=@()
+    }
+    if ($Scenario -eq 'turn') {
+        $interaction=@(@(36,32,'skip-first-unit'),@(39,32,'skip-second-unit'),@(42,13,'end-turn'),@(65,32,'skip-first-unit-next-turn'),@(68,32,'skip-second-unit-next-turn'),@(71,13,'end-second-turn'))
+    }
     if ($Scenario -eq 'combat') {
         $interaction=,@(28,13,'close-welcome')
     }
@@ -109,6 +141,24 @@ try {
             # Two Enter presses select Load Game and accept the copied save.
             # The opt-in post-load hook dismisses the known welcome popup.
             $elapsed=([DateTime]::UtcNow-$started).TotalSeconds
+            if ($Scenario -eq 'mouse' -and $mouseIndex -lt $mouseSteps.Count -and $elapsed -ge $mouseSteps[$mouseIndex][0]) {
+                $step=$mouseSteps[$mouseIndex]
+                if ($mouseIndex -eq 0) { [void][RendererGameCommand]::SetForegroundWindow($window) }
+                if ([RendererGameCommand]::GetForegroundWindow() -ne $window) { throw 'Diagnostic game lost foreground before mouse input.' }
+                $rect=New-Object RendererGameCommand+Rect
+                $point=New-Object RendererGameCommand+Point
+                [void][RendererGameCommand]::GetClientRect($window,[ref]$rect)
+                $point.X=[int]($rect.Right/2)+$step[1]; $point.Y=[int]($rect.Bottom/2)+$step[2]
+                [void][RendererGameCommand]::ClientToScreen($window,[ref]$point)
+                $inputTicks=[System.Diagnostics.Stopwatch]::GetTimestamp()
+                [void][RendererGameCommand]::SetCursorPos($point.X,$point.Y)
+                $wheelDelta=if ($step.Count -gt 4) { [uint32]$step[4] } else { 0 }
+                if ($step[3]) { [RendererGameCommand]::mouse_event($step[3],0,0,$wheelDelta,[UIntPtr]::Zero) }
+                $mouseEvents += [ordered]@{ qpc=$inputTicks; client_x=([int]($rect.Right/2)+$step[1]); client_y=([int]($rect.Bottom/2)+$step[2]); flags=$step[3]; wheel_delta=$wheelDelta }
+                if ($step[3] -eq 2) { $mouseHeld=$true }
+                if ($step[3] -eq 4) { $mouseHeld=$false }
+                Write-Host ('Mouse command: '+($step -join ',')); ++$mouseIndex
+            }
             $key=if ($Scenario -eq 'scroll') {0x87} else {0}
             if ($enterCount -lt 2 -and $elapsed -ge (5+2*$enterCount)) { $key=13; ++$enterCount }
             if ($Scenario -ne 'scroll' -and $interactionIndex -lt $interaction.Count -and $elapsed -ge $interaction[$interactionIndex][0]) {
@@ -127,13 +177,20 @@ try {
                         Write-Host 'Interaction command: prepare-combat'
                     }
                 } elseif ($elapsed -ge $combatReadyAt+4) {
-                    $key=0x85; $combatAttackSent=$true
-                    Write-Host 'Interaction command: attack-east'
+                    $liveLog=Get-Content -LiteralPath (Join-Path $session 'renderer.log') -Raw
+                    if ($liveLog -match 'stage=scripted-combat-start') { $combatAttackSent=$true }
+                    elseif ($elapsed -ge $combatNextAttack) {
+                        # The native hook rejects a command during a pending
+                        # map handoff. Its start marker, not key delivery,
+                        # acknowledges the once-only order.
+                        $key=0x85; $combatNextAttack=$elapsed+3
+                        Write-Host 'Interaction command: attack-east'
+                    }
                 }
             }
             if ($key -eq 0) { Start-Sleep -Milliseconds 1000; continue }
             if (-not [RendererGameCommand]::PostMessage($window,0x100,[IntPtr]$key,[IntPtr]1)) { throw 'Cannot post diagnostic command.' }
-            [void][RendererGameCommand]::PostMessage($window,0x101,[IntPtr]$key,[IntPtr]0)
+            [void][RendererGameCommand]::PostMessage($window,0x101,[IntPtr]$key,[IntPtr](-1073741823))
             ++$sent
         }
         Start-Sleep -Milliseconds 1000
@@ -141,14 +198,19 @@ try {
     if ($child.HasExited) { $earlyExit=$true; $gameExitCode=$child.ExitCode }
     Write-Host ('Posted diagnostic commands: '+$sent)
 } finally {
+    if ($mouseHeld) { [RendererGameCommand]::mouse_event(4,0,0,0,[UIntPtr]::Zero) }
     $env:C3X_RENDERER_GAME_TEST_SAVE=$oldEnvironment
     $env:C3X_RENDERER_GAME_TEST_MODE=$oldMode
+    $env:C3X_RENDERER_GAME_TEST_COMBAT=$oldCombat
+    $env:C3X_RENDERER_UNIT_PACK=$oldPack
+    $env:C3X_RENDERER_TRACE_INPUT=$oldInputTrace
+    foreach ($key in $traceEnvironment.Keys) { [Environment]::SetEnvironmentVariable($key,$traceEnvironment[$key]) }
     if ($observer -and -not $observer.HasExited) {
         if (Test-Path (Join-Path $session 'window')) { Set-Content -LiteralPath (Join-Path $session 'window\stop.txt') -Value 'stop' }
         if (-not $observer.WaitForExit(5000)) { $observer.Kill(); $observer.WaitForExit() }
     }
-    # Terminate only the process created above. The diagnostic never advances a
-    # turn or saves gameplay; the input save is a disposable copy.
+    # Terminate only the process created above. The input save is a disposable
+    # copy. No scenario saves its resulting gameplay.
     if ($child -and -not $child.HasExited) { $child.Kill(); $child.WaitForExit() }
     [IO.File]::WriteAllBytes($ini,$iniBytes)
     if ($restoreCursor) { [void][RendererGameCommand]::SetCursorPos($cursor.X,$cursor.Y) }
@@ -159,15 +221,24 @@ try {
     if ((Get-FileHash -LiteralPath $SaveFile).Hash -ne $originalSaveHash) { throw 'Original input save changed.' }
 }
 $log=Get-Content -LiteralPath (Join-Path $session 'renderer.log') -Raw
+if ($Scenario -eq 'mouse') {
+    [ordered]@{ qpc_frequency=[System.Diagnostics.Stopwatch]::Frequency; events=$mouseEvents } |
+        ConvertTo-Json -Depth 4 | Set-Content (Join-Path $session 'mouse-events.json')
+}
 $steps=@([regex]::Matches($log,'stage=scripted-game-scroll step=(\d+)') | ForEach-Object {[int]$_.Groups[1].Value})
+$turns=@([regex]::Matches($log,'stage=scripted-turn-end turn=(\d+)') | ForEach-Object {[int]$_.Groups[1].Value})
 $combatReady=[regex]::Matches($log,'stage=scripted-combat-ready').Count
 $combatFinished=[regex]::Matches($log,'stage=scripted-combat-end').Count
 $textEvents=[regex]::Matches($log,'stage=scripted-game-map-text').Count
 $readyEvents=[regex]::Matches($log,'stage=render-done result=1').Count
 $unloadEvents=[regex]::Matches($log,'stage=scene-unloaded result=1').Count
 $errors=@($log -split "`n" | Where-Object {$_ -match 'stage=native-operation-failed|stage=async-publication-failed|budget exceeded|stage=visual-failure|stage=worker-error|stage=unit-publication-failed|stage=unit-animation-failed|stage=motion-start[^\r\n]*result=[0235]|stage=scene-unload-failed|stage=first-map-ready result=[02345]'})
-[ordered]@{ scenario=$Scenario; interaction_commands=$interactionIndex; combat_ready=$combatReady; combat_finished=$combatFinished; map_text_events=$textEvents; posted_commands=$sent; load_requested=($log -match 'stage=scripted-game-load'); scroll_steps=$steps;
-    game_exited_early=$earlyExit; game_exit_code=$gameExitCode; first_map_ready=$readyEvents; scenes_unloaded=$unloadEvents; native_failures=$errors; original_save_unchanged=$true; scope='Real Civ III diagnostic; window samples require visual review; not an FPS benchmark' } |
+$windowResult=Join-Path $session 'window\finished.json'
+$windowEvidence=if (Test-Path -LiteralPath $windowResult) { Get-Content -LiteralPath $windowResult -Raw | ConvertFrom-Json } else { $null }
+$windowComplete=$null -ne $windowEvidence -and $windowEvidence.complete -and $windowEvidence.frames -gt 0
+[ordered]@{ scenario=$Scenario; combat_case=$CombatCase; unit_pack=$UnitPack; mouse_commands=$mouseIndex; completed_turns=$turns; interaction_commands=$interactionIndex; combat_ready=$combatReady; combat_finished=$combatFinished; map_text_events=$textEvents; posted_commands=$sent; load_requested=($log -match 'stage=scripted-game-load'); scroll_steps=$steps;
+    game_exited_early=$earlyExit; game_exit_code=$gameExitCode; first_map_ready=$readyEvents; scenes_unloaded=$unloadEvents; native_failures=$errors; window_evidence=$windowEvidence; original_save_unchanged=$true; scope='Real Civ III diagnostic; window samples require visual review; not an FPS benchmark' } |
     ConvertTo-Json -Depth 4 | Set-Content (Join-Path $session 'result.json')
 Write-Host ('Scripted diagnostic saved: '+$session)
-if (($Scenario -eq 'combat' -and ($combatReady -ne 1 -or $combatFinished -ne 1)) -or $earlyExit -or ($Scenario -eq 'scroll' -and $steps.Count -ne 32) -or ($Scenario -eq 'interaction' -and ($interactionIndex -ne $interaction.Count -or $textEvents -ne 3)) -or ($Scenario -eq 'lifecycle' -and ($interactionIndex -ne $interaction.Count -or $readyEvents -ne 2 -or $unloadEvents -lt 2 -or $textEvents -ne 1)) -or $errors.Count) { exit 1 }
+if (-not $windowComplete) { Write-Error 'Window evidence did not complete; inspect window-errors.log and window/finished.json.'; exit 1 }
+if (($Scenario -eq 'mouse' -and $mouseIndex -ne $mouseSteps.Count) -or ($Scenario -eq 'turn' -and $turns.Count -lt 2) -or ($Scenario -eq 'combat' -and ($combatReady -ne 1 -or $combatFinished -ne 1)) -or $earlyExit -or ($Scenario -eq 'scroll' -and $steps.Count -ne 32) -or ($Scenario -eq 'interaction' -and ($interactionIndex -ne $interaction.Count -or $textEvents -ne 3)) -or ($Scenario -eq 'lifecycle' -and ($interactionIndex -ne $interaction.Count -or $readyEvents -ne 2 -or $unloadEvents -lt 2 -or $textEvents -ne 1)) -or $errors.Count) { exit 1 }

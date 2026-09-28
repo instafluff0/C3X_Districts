@@ -3542,11 +3542,19 @@ public:
                                 decoded.palettes[at]-=travel_x*phase;
                                 decoded.palettes[at+1]-=travel_y*phase;
                             }
+                            for(std::size_t bone=0;bone<decoded.rig.parents.size();++bone)
+                                if(decoded.rig.parents[bone]<0){
+                                    auto& root=decoded.rig.poses[std::size_t(frame_index)*decoded.rig.parents.size()+bone];
+                                    root.position[0]-=travel_x*phase;root.position[1]-=travel_y*phase;
+                                }
                         }
                     }
                 }
                 std::size_t bytes=decoded.vertices.capacity()*sizeof(c3x_renderer::AnimationVertex)+
-                    decoded.indices.capacity()*sizeof(std::uint32_t)*2+decoded.palettes.capacity()*sizeof(float);
+                    decoded.indices.capacity()*sizeof(std::uint32_t)*2+decoded.palettes.capacity()*sizeof(float)+
+                    decoded.rig.poses.capacity()*sizeof(c3x_renderer::AnimationJointPose)+
+                    decoded.rig.parents.capacity()*sizeof(int)+decoded.rig.skin_joints.capacity()*sizeof(unsigned)+
+                    decoded.rig.inverse_bind.capacity()*sizeof(std::array<float,16>);
                 if(!reserve(bytes))return false;
                 mesh.animation=std::make_shared<c3x_renderer::AnimationMesh const>(std::move(decoded));mesh.bytes=bytes;bodies.resident_bytes+=bytes;++loads;
             }
@@ -11997,6 +12005,14 @@ public:
         if(value.tile_x>=state->metadata.world_width_tiles||
            value.tile_y>=state->metadata.world_height_tiles||
            ((value.tile_x+value.tile_y)&1))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        auto status=unit_instances.state_status(value);
+        if(status!=C3X_RENDERER_RESULT_OK){
+            char detail[192];std::snprintf(detail,sizeof(detail),
+                "id=%d tile=%d,%d action=%d kind=%u ticks=%lld result=%d",
+                value.unit_id,value.tile_x,value.tile_y,value.action,value.kind,
+                static_cast<long long>(value.presentation_time_ticks),status);
+            renderer_state.trace.write("unit-state-skipped",detail,true);return status;
+        }
         auto prior=unit_instances.state_of(value.unit_id);
         bool changed=prior&&(prior->action!=value.action||prior->damage!=value.damage||
             prior->max_hp!=value.max_hp||prior->kind!=value.kind);
@@ -13390,41 +13406,14 @@ private:
                         if(p.width!=int(trial_surface_width)||p.height!=int(trial_surface_height))
                             result=C3X_RENDERER_RESULT_BAD_ARGUMENT;
                         else{
-                            bool full=p.area[0]<=0&&p.area[1]<=0&&p.area[2]>=p.width&&p.area[3]>=p.height;
-                            if(!full)renderer_state.context->CopyResource(trial_surface_back.Get(),trial_surface_buffer.Get());
-                            LARGE_INTEGER phase_begin={},phase_display={},phase_present={};
-                            std::array<LONGLONG,4> display_phases={};
-                            std::array<LONGLONG,8> draw_phases={};
-                            bool phase_probe=renderer_state.trace.level>=2;
-                            if(phase_probe)QueryPerformanceCounter(&phase_begin);
-                            // Native transfers and autonomous frames must sample
-                            // one clock. Showing the original camera texture here
-                            // periodically rewinds moving units and selection to
-                            // their capture time between independent frames.
-                            bool drawn=session->display_to(p.ticket,std::uint64_t(p.image),trial_surface_view.Get(),
-                                trial_surface_back.Get(),trial_surface_buffer.Get(),trial_surface_width,trial_surface_height,
-                                {p.area[0],p.area[1],p.area[2],p.area[3]},visual_ticks,visual_allowed?visual_frequency:0,
-                                phase_probe?&display_phases:nullptr,phase_probe?&draw_phases:nullptr);
-                            if(phase_probe)QueryPerformanceCounter(&phase_display);
-                            HRESULT hr=drawn?trial_surface_swap->Present(0,0):S_OK;
-                            if(phase_probe){
-                                QueryPerformanceCounter(&phase_present);
-                                char detail[576];std::snprintf(detail,sizeof(detail),
-                                    "route=direct display_ms=%.3f present_ms=%.3f commit_ms=%.3f draw_ms=%.3f copy_ms=%.3f flush_ms=%.3f shader_ms=%.3f clear_ms=%.3f raster_ms=%.3f target_ms=%.3f shaders_ms=%.3f source_ms=%.3f issue_ms=%.3f unbind_ms=%.3f drawn=%u result=0x%08lx",
-                                    renderer_state.trace.milliseconds(phase_display.QuadPart-phase_begin.QuadPart),
-                                    renderer_state.trace.milliseconds(phase_present.QuadPart-phase_display.QuadPart),
-                                    renderer_state.trace.milliseconds(display_phases[0]),renderer_state.trace.milliseconds(display_phases[1]),
-                                    renderer_state.trace.milliseconds(display_phases[2]),renderer_state.trace.milliseconds(display_phases[3]),
-                                    renderer_state.trace.milliseconds(draw_phases[0]),renderer_state.trace.milliseconds(draw_phases[1]),
-                                    renderer_state.trace.milliseconds(draw_phases[2]),renderer_state.trace.milliseconds(draw_phases[3]),
-                                    renderer_state.trace.milliseconds(draw_phases[4]),renderer_state.trace.milliseconds(draw_phases[5]),
-                                    renderer_state.trace.milliseconds(draw_phases[6]),renderer_state.trace.milliseconds(draw_phases[7]),
-                                    unsigned(drawn),hr);
-                                renderer_state.trace.write("trial-present-phase",detail,true);
-                            }
-                            result=FAILED(hr)?C3X_RENDERER_RESULT_DEVICE_ERROR:
-                                drawn?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_BAD_ARGUMENT;
-                            if(result==C3X_RENDERER_RESULT_OK){trial_width=trial_surface_width;trial_height=trial_surface_height;}
+                            // Civ III publishes completed UI versions; Renderer64
+                            // samples the latest one on its independent cadence.
+                            // Rendering here as well makes every native redraw a
+                            // frame barrier and backs up input/camera publication.
+                            bool committed=session->commit_display(p.ticket,std::uint64_t(p.image),p.width,p.height,
+                                {p.area[0],p.area[1],p.area[2],p.area[3]});
+                            result=committed?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_BAD_ARGUMENT;
+                            if(committed){trial_width=trial_surface_width;trial_height=trial_surface_height;}
                         }
                     }else
                     if(session&&session->current_ticket()==p.ticket&&trial_consumer_pid&&p.width>0&&p.height>0&&
@@ -13568,7 +13557,11 @@ private:
                 if(session&&session->current_ticket()==tactical_target.ticket){
                     auto area=tactical_input.extent({tactical_target.clip[0],tactical_target.clip[1],tactical_target.clip[2],tactical_target.clip[3]});
                     result=C3X_RENDERER_RESULT_OK;
-                    if(area[0]<area[2]&&area[1]<area[3]){
+                    if(area[0]<area[2]&&area[1]<area[3]&&!tactical_input.animated){
+                        auto texture=renderer_state.tactical_gpu.packed(renderer_state.device,renderer_state.context,
+                            tactical_input,area,double(visual_ticks)/double(std::max(1ll,visual_frequency)));
+                        result=session->draw_overlay(tactical_target,texture,unsigned(area[2]-area[0]),unsigned(area[3]-area[1]),area[0],area[1]);
+                    }else if(area[0]<area[2]&&area[1]<area[3]){
                         auto capture=std::make_shared<c3x_renderer::tactical::Input>(std::move(tactical_input));
                         auto seconds=std::make_shared<double>(double(visual_ticks)/double(std::max(1ll,visual_frequency)));
                         c3x_gpu_images::RetainedComposition::Direct operation;operation.animated=capture->animated;
@@ -13584,7 +13577,7 @@ private:
                             char line[160];sprintf_s(line,"primitives=%zu animated=%u independent=%u primitive_bytes=%zu result=%u",
                                 capture->primitives.size(),unsigned(capture->animated),unsigned(job_command==Command::visual_frame),
                                 capture->primitives.capacity()*sizeof(c3x_renderer::tactical::Primitive),unsigned(ok));
-                            renderer_state.trace.write("tactical-execute",line,true);return ok;
+                            renderer_state.trace.write("tactical-execute",line);return ok;
                         };
                         result=session->draw_dynamic(tactical_target,unsigned(area[2]-area[0]),unsigned(area[3]-area[1]),area[0],area[1],std::move(operation));
                         char detail[192];sprintf_s(detail,"primitives=%zu animated=%u width=%d height=%d static_draws=0 geometry_builds=0 readbacks=0",
@@ -14712,6 +14705,14 @@ extern "C" __declspec(dllexport) int c3x_renderer_native_image(int operation,voi
         c3x_native_access::window(source);
     auto token=c3x_recording::journal().native(c3x_recording::native_begin,operation,image,source,color);
     auto result=renderer_native_image_impl(operation,image,source,from,to,color);
+    if(result<0&&(operation==C3X_NATIVE_BITS||operation==C3X_NATIVE_PIXEL||operation==C3X_NATIVE_DC)){
+        static unsigned reports=0;
+        if(reports++<8){char candidates[640],line[768];
+            c3x_native_diagnostic::callsite_candidates(candidates,sizeof(candidates));
+            std::snprintf(line,sizeof(line),"[C3X renderer] stage=native-cpu-rejection operation=%d candidates=%s\n",operation,candidates);
+            OutputDebugStringA(line);
+        }
+    }
     if(operation==C3X_NATIVE_IMAGE_PRESENT||operation==C3X_NATIVE_UNIT_DRAW||
        operation==C3X_NATIVE_TACTICAL_RING||operation==C3X_NATIVE_TACTICAL_GRID||
        operation==C3X_NATIVE_TACTICAL_ROUTE_END){

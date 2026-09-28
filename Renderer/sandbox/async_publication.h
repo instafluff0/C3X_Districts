@@ -7,6 +7,7 @@
 #include <mutex>
 #include <thread>
 #include <utility>
+#include <string>
 
 namespace c3x_async {
 // Only this transport thread may wait for the other process. Producers copy
@@ -59,6 +60,7 @@ public:
     }
     bool post(std::size_t size,std::function<void()> work,unsigned replace_key=0){
         bool accepted=false;
+        std::size_t pending_bytes=0,pending_count=0;
         {
             std::lock_guard<std::mutex> lock(mutex);
             // Replaceable observations move to the end, preserving the order
@@ -71,9 +73,13 @@ public:
             if(!stopping&&healthy()&&size<=limit-bytes&&entries.size()<count_limit){
                 entries.push_back({size,std::move(work),replace_key});bytes+=size;submitted.fetch_add(1,std::memory_order_release);accepted=true;
             }
+            pending_bytes=bytes;pending_count=entries.size();
         }
         if(accepted)wake.notify_one();
-        else fail("renderer publication queue exhausted; complete scene reconciliation required");
+        else fail(("renderer publication queue exhausted; bytes="+std::to_string(pending_bytes)+
+            " packets="+std::to_string(pending_count)+" incoming="+std::to_string(size)+
+            " accepted="+std::to_string(submitted.load())+" completed="+std::to_string(consumed.load())+
+            "; complete scene reconciliation required").c_str());
         return accepted;
     }
     // Configuration, teardown and explicit test witnesses may join transport.

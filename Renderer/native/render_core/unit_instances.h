@@ -25,7 +25,7 @@ private:
         c3x_renderer_unit_v1 occurrence{};
         unsigned flags=0;
         std::size_t unit=0,action=0;
-        std::uint64_t revision=0,used=0;
+        std::uint64_t revision=0,used=0,pose_identity=0;
         int tile_x=-1,tile_y=-1,display_id=-1;
     };
     std::map<int,Instance> instances;
@@ -109,15 +109,24 @@ public:
         motion_pause=-1;
     }
 
-    bool state(c3x_renderer_unit_state_v1 const& value){
+    // Late observations are expected across retirement and native ID reuse.
+    // They cannot resurrect a body, and are distinct from malformed input.
+    int state_status(c3x_renderer_unit_state_v1 const& value)const{
         if(value.struct_size!=sizeof(value)||value.unit_id<0||value.tile_x<0||value.tile_y<0||
            value.unit_type_id<0||value.owner_id<0||value.owner_id>=32||value.visible>1||
            (value.kind!=C3X_RENDERER_UNIT_STATE_OBSERVE&&value.kind!=C3X_RENDERER_UNIT_STATE_RETIRE)||
-           value.presentation_frequency<=0||value.presentation_time_ticks<0||!capacity)return false;
+           value.presentation_frequency<=0||value.presentation_time_ticks<0||!capacity)
+            return C3X_RENDERER_RESULT_BAD_ARGUMENT;
         if(value.kind==C3X_RENDERER_UNIT_STATE_OBSERVE&&
-           (value.action<-1||value.damage<0||value.max_hp<=0||value.damage>value.max_hp))return false;
-        if(newer_event(value.unit_id,value.presentation_time_ticks,value.presentation_frequency))return false;
-        if(value.kind==C3X_RENDERER_UNIT_STATE_OBSERVE&&retired(value.unit_id))return false;
+           (value.action<-1||value.damage<0||value.max_hp<=0||value.damage>value.max_hp))
+            return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        if(newer_event(value.unit_id,value.presentation_time_ticks,value.presentation_frequency)||
+           (value.kind==C3X_RENDERER_UNIT_STATE_OBSERVE&&retired(value.unit_id)))
+            return C3X_RENDERER_RESULT_SUPERSEDED;
+        return C3X_RENDERER_RESULT_OK;
+    }
+    bool state(c3x_renderer_unit_state_v1 const& value){
+        if(state_status(value)!=C3X_RENDERER_RESULT_OK)return false;
         if(value.kind==C3X_RENDERER_UNIT_STATE_RETIRE||!value.visible){
             retire_at(value.unit_id,value.presentation_time_ticks,value.presentation_frequency);
         }else{
@@ -265,6 +274,9 @@ public:
         Instance value{};
         bool bound=found!=instances.end() && found->second.content.action==request.action &&
             !std::memcmp(found->second.content.unit_key,request.unit_key,64);
+        if(found!=instances.end()&&!std::memcmp(found->second.content.unit_key,request.unit_key,64))
+            value.pose_identity=found->second.pose_identity;
+        else value.pose_identity=++serial;
         if(bound)value=found->second;
         else {
             auto name=action_name(request.action);
@@ -331,7 +343,7 @@ public:
         unsigned predict=0;
         bool animated=false,cursor=false;
         int display_id=-1;
-        std::uint64_t capture_order=0;
+        std::uint64_t capture_order=0,pose_identity=0;
         bool travelling=false;
     };
     template<class Catalog>
@@ -344,7 +356,7 @@ public:
         if(scene_frequency==frequency)ticks=std::max(ticks,scene_ticks);
         scene_ticks=ticks;scene_frequency=frequency;
         auto motion_ticks=motion_pause>=0?motion_pause:ticks;
-        for(auto const& pair:instances){
+        for(auto& pair:instances){
             Motion* motion=nullptr;
             auto moving=motions.find(pair.first);
             if(moving!=motions.end()){
@@ -354,8 +366,26 @@ public:
                     if(next.started<0){next.started=next.cycle_started=motion_ticks;next.frequency=frequency;}
                     double duration=std::hypot(double(next.dx)*64.,double(next.dy)*64.)/225.;
                     bool finished=next.frequency==frequency&&double(motion_ticks-next.started)/frequency>=duration;
-                    if(finished&&next.committed&&(queue.size()>1||(pair.second.occurrence.action!=2&&
-                       pair.second.tile_x==next.event.new_x&&pair.second.tile_y==next.event.new_y))){
+                    if(finished&&next.committed){
+                        if(queue.size()==1){
+                            // Native stack selection may stop drawing this
+                            // mover immediately after arrival (capture does
+                            // this). A confirmed endpoint must end travel even
+                            // without a later idle body sample.
+                            auto& body=pair.second;
+                            body.tile_x=next.event.new_x;body.tile_y=next.event.new_y;
+                            if(body.occurrence.action==2&&body.unit<catalog.size()){
+                                auto const& clips=catalog[body.unit].actions;
+                                auto idle=std::find_if(clips.begin(),clips.end(),[](auto const& c){return c.name=="idle";});
+                                if(idle!=clips.end()){
+                                    body.action=std::size_t(idle-clips.begin());
+                                    body.content.action=body.occurrence.action=1;
+                                    body.occurrence.action_cursor=0;body.occurrence.frame_count=1;
+                                    playback.forget(pair.first);
+                                }
+                            }
+                            body.revision=++serial;pose_offsets.erase(pair.first);
+                        }
                         long long continuation=next.started+static_cast<long long>(duration*frequency);
                         long long cycle_started=next.cycle_started;
                         queue.pop_front();
@@ -404,7 +434,7 @@ public:
                 selected.visual=observed->second.value;
                 selected.has_visual=true;
             }
-            ScenePose pose{};
+            ScenePose pose{};pose.pose_identity=item.pose_identity;
             double travel_x=0,travel_y=0;
             if(motion){
                 if(item.unit>=catalog.size())continue;

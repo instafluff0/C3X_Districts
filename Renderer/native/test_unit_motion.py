@@ -54,6 +54,18 @@ int main(){
  a.body.presentation_time_ticks=200;a.capture();
  p=a.pose(10300000);assert(p.draw.body_x==1068&&p.draw.action==2&&p.draw.action_cursor==300);
  p=a.pose(10600000);assert(p.draw.body_x==1128&&p.draw.action==1);
+ // Capture can select another body before the mover ever gets an idle draw.
+ // Confirmed arrival ends the segment and yields ownership to that new stack.
+ Fixture sparse;sparse.begin();sparse.pose(0);
+ sparse.state.action=sparse.body.action=2;
+ sparse.state.presentation_time_ticks=sparse.body.presentation_time_ticks=50;sparse.capture();
+ sparse.commit();sparse.state.tile_x=6;sparse.state.presentation_time_ticks=200;
+ assert(sparse.world.state(sparse.state));
+ p=sparse.pose(600000);assert(p.draw.body_x==1128&&p.draw.action==1&&!p.travelling);
+ assert(sparse.world.motion_count(7)==0);
+ sparse.state.unit_id=sparse.body.unit_id=8;sparse.state.action=sparse.body.action=1;
+ sparse.state.presentation_time_ticks=sparse.body.presentation_time_ticks=300;sparse.capture();
+ p=sparse.pose(700000);assert(p.draw.unit_id==8);
  // A replacement camera can remain prepared while native composition catches
  // up. Hidden elapsed time cannot consume the rest of an accepted move.
  Fixture held;held.begin();held.pose(10000000);held.world.pause_motion(10300000);
@@ -88,6 +100,14 @@ int main(){
  p=w.pose(600000);assert(p.draw.body_x==1135);
  Fixture v(4,10);v.event.new_x=4;v.event.new_y=0;v.begin();v.pose(0);
  p=v.pose(300000);assert(p.draw.body_x==1000&&p.draw.body_y==534);
+ // All eight accepted directions override a stale SE body observation.
+ int offsets[8][2]={{1,-1},{2,0},{1,1},{0,2},{-1,1},{-2,0},{-1,-1},{0,-2}};
+ for(int direction=1;direction<=8;++direction){
+  Fixture turn;turn.body.direction=3;turn.capture();
+  turn.event.new_x=4+offsets[direction-1][0];turn.event.new_y=4+offsets[direction-1][1];
+  turn.begin();assert(turn.pose(0).draw.direction==direction);
+  assert(turn.pose(100000).draw.direction==direction);
+ }
  // Hidden/retired actors and unrelated corrections end travel immediately.
  c.state.visible=0;c.state.presentation_time_ticks=1000;assert(c.world.state(c.state));
  assert(c.world.scene_poses(c.frame,910000,1000000,c.catalog).empty());

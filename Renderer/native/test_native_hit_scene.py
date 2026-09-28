@@ -173,6 +173,44 @@ int main(){Scene scene;Rect all{0,0,2240,1260};unsigned value=0;
 }
 ''')
 
+    def test_full_screen_keyed_ui_transfers_skip_uniform_regions(self):
+        run_cpp(r'''
+#include "Renderer/native/native_hit_scene.h"
+#include <cassert>
+#include <chrono>
+#include <cstdio>
+using namespace c3x_native_hit;
+int main(){Scene scene;Rect all{0,0,2240,1260};unsigned value=0;
+ scene.create(1,2240,1260,Format::rgb555,opaque_map);
+ scene.create(2,2240,1260,Format::rgb555);
+ scene.create(3,2240,1260,Format::rgb555);
+ std::vector<unsigned> hud(2240*1260,0x7c1f);
+ for(int y=1170;y<1260;++y)for(int x=1920;x<2240;++x)
+  hud[y*2240+x]=(x+y)%3?0x1234:0x7c1f;
+ scene.upload(2,hud.data(),hud.size());
+ Command overlay{Kind::native_image,1,2,all,all,0,0,0x7c1f};
+ overlay.source_width=2240;overlay.source_height=1260;
+ auto begin=std::chrono::steady_clock::now();
+ for(unsigned n=0;n<400;++n){
+  scene.submit(overlay);
+  scene.submit({Kind::copy,3,1,all,all});
+  assert(scene.pixel(3,1135,600,value)&&value==opaque_map);
+  assert(scene.pixel(3,1931,1201,value)&&value==opaque_map);
+  assert(scene.pixel(3,1932,1201,value)&&value==0x1234);
+  assert(scene.nodes()<2000&&scene.bytes()<2u*1024u*1024u);
+ }
+ auto ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count();
+ std::printf("INPUT_KEYED_UI transfers=400 total_ms=%.1f\n",ms);
+ assert(ms<3000);
+ // Uniform collapse must respect clipping, translation and source bounds.
+ scene.submit({Kind::fill,2,0,all,all,0,0,0x1234});
+ scene.submit({Kind::color_key,1,2,{-10,-10,22,22},{0,0,20,20},0,0,0x7c1f});
+ assert(scene.pixel(1,19,19,value)&&value==0x1234);
+ assert(scene.pixel(1,20,20,value)&&value==opaque_map);
+ scene.destroy(1);scene.destroy(2);scene.destroy(3);assert(scene.bytes()==0&&scene.nodes()==0);
+}
+''')
+
     def test_shared_blend_inputs_do_not_repeat_graph_traversal(self):
         run_cpp(r'''
 #include "Renderer/native/native_hit_scene.h"

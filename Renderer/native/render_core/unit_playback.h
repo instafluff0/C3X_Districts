@@ -28,7 +28,7 @@ public:
     void forget(int id){instances.erase(std::remove_if(instances.begin(),instances.end(),[&](auto const& s){return s.id==id;}),instances.end());actions.erase(std::remove_if(actions.begin(),actions.end(),[&](auto const& s){return s.id==id;}),actions.end());}
     bool observe(c3x_renderer_unit_animation_v1 const& value){
         auto const& v=value.visual;
-        bool directed=(v.action>=3&&v.action<=7)||v.action==9;
+        bool directed=(v.action>=3&&v.action<=10)||v.action==12;
         if(!directed)return true;
         if(value.frames<1||value.frames>4096||value.cursor<0||value.cursor>value.frames||
            !std::isfinite(value.frame_seconds)||value.frame_seconds<=0||value.frame_seconds>10||

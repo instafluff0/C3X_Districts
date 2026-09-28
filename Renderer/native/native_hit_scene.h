@@ -151,6 +151,37 @@ struct RetentionHash {
     }
 };
 using RetentionCache=std::unordered_map<RetentionKey,Ref,RetentionHash>;
+// Prove uniform input coverage from stored regions. This never samples a map
+// pixel: map regions contain only the opaque input sentinel. Keyed full-screen
+// UI transfers must not build (and periodically evaluate) a history for every
+// unchanged map/transparent cell.
+inline bool uniform(Ref const& node,Regions const& regions,unsigned& value){
+    if(!node||regions.empty())return false;
+    bool have=false;
+    for(auto r:regions){
+        if(!nonempty(r)||r.left<0||r.top<0||r.right>int(node->width)||r.bottom>int(node->height))return false;
+        if(node->grid_columns){
+            for(int y=r.top/tile_size;y<=(r.bottom-1)/tile_size;++y)
+            for(int x=r.left/tile_size;x<=(r.right-1)/tile_size;++x){
+                int col=x-node->grid_left,row=y-node->grid_top;
+                if(col<0||row<0||col>=node->grid_columns||row>=int(node->cells.size())/node->grid_columns)return false;
+                auto part=intersection(r,{x*tile_size,y*tile_size,(x+1)*tile_size,(y+1)*tile_size});unsigned next=0;
+                if(!uniform(node->cells[row*node->grid_columns+col],{part},next)||(have&&next!=value))return false;
+                value=next;have=true;
+            }
+        }else{
+            if(node->pixels)return false;
+            unsigned next=node->constant;
+            if(node->draw){
+                if(node->command.kind!=Kind::fill||r.left<node->bounds.left||r.top<node->bounds.top||
+                   r.right>node->bounds.right||r.bottom>node->bounds.bottom)return false;
+                next=node->command.color;
+            }
+            if(have&&next!=value)return false;value=next;have=true;
+        }
+    }
+    return have;
+}
 inline Ref retain(Ref const& node,Regions const& needed,RetentionCache& cache,unsigned depth=0){
     if(!node||needed.empty())return {};
     if(node->grid_columns){
@@ -197,6 +228,18 @@ inline Ref retain(Ref const& node,Regions const& needed,RetentionCache& cache,un
                             r.right-c.area.left+c.source_x,r.bottom-c.area.top+c.source_y});
     }
     auto from=c.kind==Kind::native_lookup?node->source:retain(node->source,source,cache,depth+1);
+    unsigned solid=0;
+    bool simple=c.kind==Kind::copy||c.kind==Kind::color_key||c.kind==Kind::invert||c.kind==Kind::native_image;
+    if(simple&&uniform(from,source,solid)){
+        if((c.kind==Kind::color_key||(c.kind==Kind::native_image&&solid!=opaque_map))&&solid==c.color)return save(before);
+        if(c.kind==Kind::invert&&solid!=opaque_map)solid^=65535;
+        auto n=std::make_shared<Node>(node->budget);n->draw=true;n->bounds=node->bounds;
+        n->command={Kind::fill,c.destination,0,c.area,c.clip,0,0,solid};
+        n->width=node->width;n->height=node->height;n->format=node->format;
+        bool covered=std::all_of(needed.begin(),needed.end(),[&](Rect r){return r.left>=n->bounds.left&&r.top>=n->bounds.top&&r.right<=n->bounds.right&&r.bottom<=n->bounds.bottom;});
+        if(!covered){n->prior=before;if(before){n->depth=before->depth+1;n->payload_cost=before->payload_cost;}}
+        return save(n);
+    }
     auto background=c.kind==Kind::native_text?node->background:retain(node->background,touched,cache,depth+1);
     auto program=retain(node->program,source,cache,depth+1);
     if(before==node->prior&&from==node->source&&background==node->background&&program==node->program)return save(node);
@@ -222,7 +265,24 @@ public:
         if(count!=std::size_t(i.width)*i.height)throw std::runtime_error("native input coverage upload size");
         if(count*sizeof(unsigned)>96u*1024u*1024u-budget->bytes)throw std::runtime_error("native input coverage byte budget exceeded");
         auto n=std::make_shared<Node>(budget);n->width=i.width;n->height=i.height;n->format=i.format;
-        n->pixels=std::make_shared<Values>(budget,std::vector<unsigned>(data,data+count));n->payload_cost=count*sizeof(unsigned);i.value=n;
+        if(i.format==Format::bgra32||count<=tile_size*tile_size){
+            n->pixels=std::make_shared<Values>(budget,std::vector<unsigned>(data,data+count));n->payload_cost=count*sizeof(unsigned);
+        }else{
+            n->grid_columns=(i.width+tile_size-1)/tile_size;
+            for(unsigned y=0;y<i.height;y+=tile_size)for(unsigned x=0;x<i.width;x+=tile_size){
+                Rect r={int(x),int(y),int(std::min(x+tile_size,i.width)),int(std::min(y+tile_size,i.height))};
+                auto cell=std::make_shared<Node>(budget);cell->width=i.width;cell->height=i.height;cell->format=i.format;
+                cell->draw=true;cell->bounds=r;cell->command={Kind::fill,id,0,r,r,0,0,data[std::size_t(y)*i.width+x]};
+                std::vector<unsigned> pixels;pixels.reserve((r.right-r.left)*(r.bottom-r.top));
+                for(int row=r.top;row<r.bottom;++row)pixels.insert(pixels.end(),data+std::size_t(row)*i.width+r.left,data+std::size_t(row)*i.width+r.right);
+                if(!std::all_of(pixels.begin(),pixels.end(),[&](unsigned v){return v==cell->command.color;})){
+                    cell->payload_cost=pixels.size()*sizeof(unsigned);cell->pixels=std::make_shared<Values>(budget,std::move(pixels));
+                }
+                n->payload_cost+=cell->payload_cost;n->cells.push_back(std::move(cell));
+            }
+            n->depth=1;
+        }
+        i.value=n;
     }
     void submit(Command const& c){
         auto found=images.find(c.destination);if(found==images.end()||found->second.format==Format::bgra32)return;

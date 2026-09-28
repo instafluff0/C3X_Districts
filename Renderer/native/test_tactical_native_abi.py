@@ -17,6 +17,8 @@ class TacticalNativeAbiTests(unittest.TestCase):
 #include <cassert>
 #include <cstdio>
 enum {C3X_NATIVE_TACTICAL_CAPABLE=1,C3X_NATIVE_TACTICAL_TARGET=2};
+void custom_renderer_zoom_transform_point(int*,int*){}
+void debug(char const*){}auto p_OutputDebugStringA=debug;
 int native_calls=0,custom_calls=0,capable=1,last_x=0,last_y=0;
 void __stdcall native_cursor(int x,int y){++native_calls;last_x=x;last_y=y;}
 // Keep the current patch-table type to exercise the forwarding ABI repair too.
@@ -30,6 +32,7 @@ int image(int op,void* target,void*,void const* data,void const*,unsigned){
 }
 struct State {struct {bool enable_custom_rendering;} current_config;
  int (*custom_renderer_native_image)(int,void*,void*,void const*,void const*,unsigned);
+ bool custom_renderer_trace_input=false;
 } state;
 auto is=&state;
 ''' + wrapper + r'''

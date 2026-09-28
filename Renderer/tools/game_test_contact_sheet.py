@@ -1,4 +1,4 @@
-"""Review sampled game-window frames around a recorded movement or combat event.
+"""Review sampled game-window frames around a recorded movement, combat or drag.
 
 Requires Pillow. Output is visual evidence, not a live-game FPS measurement.
 """
@@ -13,14 +13,18 @@ from PIL import Image, ImageDraw
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("capture", type=Path)
-    parser.add_argument("--kind", choices=("movement", "combat"), required=True)
+    parser.add_argument("--window-source", type=Path,
+                        help="Read original window evidence here without copying the full frame sequence")
+    parser.add_argument("--kind", choices=("movement", "combat", "mouse"), required=True)
     parser.add_argument("--event", type=int, default=1, help="One-based event occurrence")
     parser.add_argument("--crop", type=int, nargs=4, metavar=("LEFT", "TOP", "RIGHT", "BOTTOM"))
     parser.add_argument("--times", type=float, nargs="+")
     args = parser.parse_args()
     folder = args.capture
+    window = args.window_source or folder / "window"
     log = (folder / "renderer.log").read_text(errors="replace")
-    marker = "unit-motion-admitted" if args.kind == "movement" else "scripted-combat-start"
+    marker = {"movement": "unit-motion-admitted", "combat": "scripted-combat-start",
+              "mouse": r"map-click\b.*\bmode=1"}[args.kind]
     events = list(re.finditer(r"^.*stage=" + marker + r"\b.*$", log, re.MULTILINE))
     if not 1 <= args.event <= len(events):
         parser.error(f"Requested event {args.event}; found {len(events)} {marker} events")
@@ -33,11 +37,11 @@ def main():
     if clock is None:
         parser.error("No renderer QPC near the event")
     origin = int(clock[1])
-    metadata = json.loads((folder / "window/started.json").read_text())
+    metadata = json.loads((window / "started.json").read_text())
     frequency = int(metadata["qpc_frequency"])
     if frequency <= 0:
         parser.error("Invalid recorded QPC frequency")
-    rows = [json.loads(line) for line in (folder / "window/timeline.jsonl").read_text().splitlines()]
+    rows = [json.loads(line) for line in (window / "timeline.jsonl").read_text().splitlines()]
     frames = [row for row in rows if "frame" in row and "arrival_qpc" in row]
     if not frames:
         parser.error("No captured window frames")
@@ -57,7 +61,7 @@ def main():
     selected = []
     for index, seconds in enumerate(times):
         row = min(frames, key=lambda r: abs(r["arrival_qpc"] - origin - seconds * frequency))
-        source = folder / "window" / f"window-{row['frame']:06d}.jpg"
+        source = window / f"window-{row['frame']:06d}.jpg"
         with Image.open(source) as image:
             tile = image.crop(crop).resize((width, height), Image.Resampling.LANCZOS)
         x, y = index % columns * width, index // columns * (height + 20)

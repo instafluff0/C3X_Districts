@@ -48,6 +48,31 @@ int main(){
 }
 ''')
 
+    def test_all_one_shot_handoffs_keep_native_duration(self):
+        run_cpp(r'''
+#include "Renderer/native/render_core/unit_playback.h"
+#include <cassert>
+using namespace c3x_renderer::render_core;
+struct Clip {bool ambient=false,loop=false;double duration=2;unsigned frames=61;};
+int main(){
+ for(int action:{6,7,8,9,10,12}){
+  UnitPlayback player;Clip clip;c3x_renderer_unit_animation_v1 fact{};
+  fact.visual.unit_id=9;fact.visual.action=action;fact.visual.presentation_frequency=1000;
+  fact.frames=12;fact.frame_seconds=.1f;fact.cursor=2;fact.visual.presentation_time_ticks=100;
+  assert(player.observe(fact));
+  c3x_renderer_unit_v1 body{};body.unit_id=9;body.action=action;body.presentation_frequency=1000;
+  unsigned next=0;body.presentation_time_ticks=500;assert(player.resolve(body,clip,true,next));
+  assert(std::abs(body.action_cursor-32768)<=1&&next==1); // .2 source + .4 elapsed / 1.2 native duration
+  fact.cursor=0;fact.visual.presentation_time_ticks=500;assert(player.observe(fact));
+  assert(player.resolve(body,clip,true,next)&&std::abs(body.action_cursor-32768)<=1); // sparse recapture never restarts
+  body.presentation_time_ticks=1500;assert(player.resolve(body,clip,true,next));
+  assert(body.action_cursor==65535&&next==0);
+  player.forget(9);fact.visual.presentation_time_ticks=1500;assert(player.observe(fact));
+  assert(player.resolve(body,clip,true,next)&&body.action_cursor==0&&next==1); // actual next lifecycle may restart
+ }
+}
+''')
+
     def test_approach_hold_return_wrap_and_retirement(self):
         run_cpp(r'''
 #include "Renderer/native/render_core/unit_instances.h"

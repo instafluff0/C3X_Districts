@@ -101,7 +101,7 @@ int main(){OpenGLRenderer context;
 
     def test_repeated_zoom_keeps_exact_native_camera(self):
         source = (ROOT / "injected_code.c").read_text()
-        function = source[source.index("bool\nadvance_custom_renderer_zoom_from_key"):source.index("int __fastcall\npatch_Main_Screen_Form_handle_key_down")]
+        function = source[source.index("bool\nadvance_custom_renderer_zoom ("):source.index("int __fastcall\npatch_Main_Screen_Form_handle_key_down")]
         run_cpp(r'''
 #include <cassert>
 #include <cstdio>
@@ -183,13 +183,14 @@ int main(){
         functions = functions.replace("this", "screen")
         program = r'''
 #include <cassert>
+#include <cstdio>
 #include <cstddef>
 #include "Renderer/native/c3x_renderer_api.h"
 #define __fastcall
 #define __cdecl
 #define __stdcall
 constexpr int __=0;
-struct State {
+struct State {bool custom_renderer_trace_input=false;
  struct {bool enable_custom_rendering=false;} current_config;
  c3x_renderer_native_image_fn custom_renderer_native_image=nullptr;
  int custom_renderer_zoom_native_tile_width=128,custom_renderer_zoom_tile_width=128;
@@ -201,6 +202,7 @@ struct Main_Screen_Form {int mouse_x=0,mouse_y=0;struct {struct {struct {struct 
 struct Unit{};struct Animator{int field_18E4[32]{};};struct PCX_Image{};struct PCX_Color_Table{};
 void Main_Screen_Form_update_in_go_to_mode(Main_Screen_Form*,int){}
 void Main_Screen_Form_draw_route_cursor(int,int){}
+void debug(char const*){}auto p_OutputDebugStringA=debug;
 struct Sprite{int Width=95,Height=63;};
 struct Bic{bool is_zoomed_out=false;} bic,*p_bic_data=&bic;
 int status_calls=0,cursor_calls=0,marker_calls=0,overlay_x=0,overlay_y=0;
@@ -369,8 +371,8 @@ int main(){
 
     def test_actual_injected_cycle_and_close_zoom_survive_sync(self) -> None:
         source = (ROOT / "injected_code.c").read_text()
-        key = "bool\nadvance_custom_renderer_zoom_from_key" + source.split(
-            "bool\nadvance_custom_renderer_zoom_from_key", 1)[1].split(
+        key = "bool\nadvance_custom_renderer_zoom (" + source.split(
+            "bool\nadvance_custom_renderer_zoom (", 1)[1].split(
             "\nint __fastcall\npatch_Main_Screen_Form_handle_key_down", 1)[0]
         # 'this' is a valid identifier in the injected C, not in C++.
         key = key.replace("this", "screen")
@@ -383,10 +385,12 @@ int main(){
 #define ARRAY_LEN(a) (sizeof(a)/sizeof((a)[0]))
 enum {VK_Z=90,C3X_RENDERER_DIRTY_ALL=255,__=0};
 #define Main_Screen_Form_move_camera native_move
+#define Main_Screen_Form_process_mouse_wheel native_wheel
+#define __fastcall
 struct Main_Screen_Form {bool is_now_loading_game=false;int camera_x=3616,camera_y=394;};
 struct State {
  struct {bool enable_custom_rendering=true,enable_custom_rendering_zoom=true;} current_config;
- int custom_renderer_zoom_native_tile_width=0,custom_renderer_zoom_tile_width=0;
+ int custom_renderer_zoom_native_tile_width=0,custom_renderer_zoom_tile_width=0,custom_renderer_zoom_wheel_remainder=0;
  long long custom_renderer_zoom_translate_x_fp=0,custom_renderer_zoom_translate_y_fp=0;
  int custom_renderer_dirty_flags=0;bool custom_renderer_redraw_pending=false;
 } state,*is=&state;
@@ -394,6 +398,10 @@ struct Bic {bool is_zoomed_out=false;int ScreenWidth=1024,ScreenHeight=768;} bic
 int player_bits=1,*p_player_bits=&player_bits,redraws=0;
 void debug(char const*){} auto p_OutputDebugStringA=debug;
 void native_move(Main_Screen_Form* s,int,int x,int y,int reason,bool bounds){assert(x==s->camera_x&&y==s->camera_y&&reason==0&&bounds);++redraws;}
+int wheel_calls=0;
+void native_wheel(Main_Screen_Form*,int edx,int delta,int x,int y){
+ assert(edx==73&&delta==120&&x==413&&y==211);++wheel_calls;
+}
 ''' + sync + key + r'''
 int main(){
  Main_Screen_Form screen;
@@ -430,6 +438,26 @@ int main(){
  assert(bic.is_zoomed_out && state.custom_renderer_zoom_translate_x_fp==before);
  state.current_config.enable_custom_rendering=true;
  bic.is_zoomed_out=false;sync_custom_renderer_zoom_to_native();assert(state.custom_renderer_zoom_tile_width==128);
+ // Wheel keeps native arguments and behavior whenever custom zoom is unavailable.
+ for(int unavailable=0;unavailable<4;++unavailable){
+  state.current_config.enable_custom_rendering=unavailable!=0;
+  state.current_config.enable_custom_rendering_zoom=unavailable!=1;
+  player_bits=unavailable!=2;screen.is_now_loading_game=unavailable==3;
+  auto before=redraws;patch_Main_Screen_Form_process_mouse_wheel(&screen,73,120,413,211);
+  assert(wheel_calls==unavailable+1&&redraws==before&&state.custom_renderer_zoom_wheel_remainder==0);
+ }
+ state.current_config.enable_custom_rendering=state.current_config.enable_custom_rendering_zoom=true;
+ player_bits=1;screen.is_now_loading_game=false;
+ auto wheel=[&](int delta){patch_Main_Screen_Form_process_mouse_wheel(&screen,73,delta,413,211);};
+ wheel(40);wheel(40);assert(state.custom_renderer_zoom_tile_width==128);
+ wheel(40);assert(state.custom_renderer_zoom_tile_width==160&&state.custom_renderer_zoom_wheel_remainder==0);
+ wheel(240);assert(state.custom_renderer_zoom_tile_width==192);
+ auto at_limit=redraws;wheel(120);assert(redraws==at_limit&&state.custom_renderer_zoom_tile_width==192);
+ wheel(-120);assert(state.custom_renderer_zoom_tile_width==160);
+ wheel(-240);assert(state.custom_renderer_zoom_tile_width==128);
+ at_limit=redraws;wheel(-120);wheel(0);assert(redraws==at_limit);
+ assert(screen.camera_x==3616&&screen.camera_y==394&&wheel_calls==4);
+ assert(state.custom_renderer_zoom_translate_x_fp==0&&state.custom_renderer_zoom_translate_y_fp==0);
 }
 '''
         program = "#include <initializer_list>\n" + program
@@ -457,7 +485,7 @@ int main(){
 
     def test_key_handler_queues_native_redraw_without_indirect_dispatch(self) -> None:
         source = (ROOT / "injected_code.c").read_text()
-        handler = source.split("advance_custom_renderer_zoom_from_key", 1)[1]
+        handler = source.split("advance_custom_renderer_zoom (", 1)[1]
         handler = handler.split("patch_Main_Screen_Form_handle_key_down", 1)[0]
         self.assertIn("custom_renderer_redraw_pending = true", handler)
         self.assertIn("stage=zoom-key", handler)

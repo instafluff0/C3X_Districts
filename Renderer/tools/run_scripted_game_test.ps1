@@ -1,6 +1,6 @@
 # An elevated interactive task preserves Civ III's required token and child
 # environment. The task exists only for this bounded diagnostic invocation.
-param([Parameter(Mandatory=$true)][string]$SaveFile, [ValidateRange(35,120)][int]$Seconds=75, [ValidateSet('scroll','interaction','lifecycle','combat')][string]$Scenario='scroll', [ValidateRange(1,10)][int]$SampleHz=2)
+param([Parameter(Mandatory=$true)][string]$SaveFile, [ValidateRange(35,120)][int]$Seconds=75, [ValidateSet('scroll','interaction','lifecycle','combat','turn','mouse')][string]$Scenario='scroll', [ValidatePattern('^[A-Za-z0-9_-]+$')][string]$UnitPack='UnitAnimationFidelity', [ValidateSet('melee','victory','retreat','bombard','army','air','capture')][string]$CombatCase='melee', [ValidateRange(1,10)][int]$SampleHz=2, [switch]$ProfileRenderer)
 $ErrorActionPreference='Stop'
 $user=(Get-CimInstance Win32_ComputerSystem).UserName
 if (-not $user) { throw 'An interactive Windows login is required.' }
@@ -11,9 +11,10 @@ New-Item -ItemType Directory -Path $out | Out-Null
 $target=Join-Path $PSScriptRoot 'scripted_game_test.ps1'
 if ($target.Contains("'") -or $SaveFile.Contains("'") -or $out.Contains("'")) { throw 'Unsupported diagnostic path.' }
 $wrapper=Join-Path $out 'run.ps1'
+$profileArgument=if ($ProfileRenderer) { '-ProfileRenderer' } else { '' }
 @"
 Start-Transcript -Path '$out\launcher.log' -Force
-try { & '$target' -SaveFile '$SaveFile' -Seconds $Seconds -Scenario $Scenario -SampleHz $SampleHz; exit `$LASTEXITCODE }
+try { & '$target' -SaveFile '$SaveFile' -Seconds $Seconds -Scenario $Scenario -CombatCase $CombatCase -UnitPack $UnitPack -SampleHz $SampleHz $profileArgument; exit `$LASTEXITCODE }
 finally { Stop-Transcript }
 "@ | Set-Content -LiteralPath $wrapper
 $action=New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ('-NoProfile -ExecutionPolicy Bypass -File "'+$wrapper+'"')

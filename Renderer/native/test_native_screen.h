@@ -243,19 +243,44 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
                 "map message joins the native composition without CPU map access");
             reinterpret_cast<Destroy>(message->vtable[0])(message,1);
         }
+        if(asynchronous){
+            // Bombardment/bombing impacts use a newly created Animator canvas
+            // with the resident map as the FLC underlay, before any map copy.
+            JGLSprite impact={};auto base=reinterpret_cast<char*>(jgl);
+            reinterpret_cast<JGLSprite*(__thiscall*)(JGLSprite*,void*)>(base+0x7e80)(&impact,nullptr);
+            std::vector<unsigned char> pixels(16*16);
+            for(unsigned n=0;n<pixels.size();++n)pixels[n]=static_cast<unsigned char>(n);
+            impact.bit_count=8;impact.bits=pixels.data();impact.width=impact.stride=16;impact.height=16;
+            std::vector<unsigned short> lookup(31*32768);
+            for(unsigned n=0;n<lookup.size();++n)lookup[n]=static_cast<unsigned short>(n&32767);
+            for(bool reduced:{false,true}){
+                auto effect=create(graph,nullptr,1);
+                verify(reinterpret_cast<Init>(effect->vtable[1])(effect,w,h,16,1)==0,"impact scratch init");
+                verify(reinterpret_cast<Fill>(effect->vtable[17])(effect,&full,int(0x80007c1fu))==0,"impact scratch key fill");
+                c3x_renderer_native_lookup inputs={lookup.data(),palettes[0],0,canvases[0],{1,1,2}};
+                RECT anchor={w/2,h/2,w/2,h/2};
+                verify(live(reduced?C3X_NATIVE_SPRITE_LOOKUP_SCALED:C3X_NATIVE_SPRITE_LOOKUP_OVER,
+                    effect,&impact,&inputs,&anchor,0)==1,"impact FLC admits scratch from owned map underlay");
+                verify(reinterpret_cast<Copy>(effect->vtable[16])(effect,canvases[1],&full,&full)==0,
+                    "impact result composes without CPU map access");
+                reinterpret_cast<Destroy>(effect->vtable[0])(effect,1);
+            }
+            impact.bits=nullptr;reinterpret_cast<void(__thiscall*)(JGLSprite*)>(base+0x7ed0)(&impact);
+            std::puts("PASS impact FLC scratch admission: normal and reduced; no CPU map borrow");
+        }
         draw_async_hud(true);
         c3x_renderer_unit_v1 unit={};unit.struct_size=sizeof(unit);strcpy_s(unit.unit_key,"PRTO_Warrior");
         unit.unit_id=732;unit.action=1;unit.direction=3;unit.frame_count=16;unit.action_cursor=7;
         unit.sprite_width=unit.sprite_height=191;unit.projection_scale_milli=demand.frame->tile_width*1000/128;
         unit.body_x=w/2;unit.body_y=h/2;unit.hour=12;unit.display_color_rgb=0x205bdd;
         unit.presentation_frequency=1000000;unit.presentation_time_ticks=1000000;
+        auto unit_state=reinterpret_cast<c3x_renderer_unit_state_fn>(GetProcAddress(renderer_module,"c3x_renderer_unit_state"));
+        verify(unit_state!=nullptr,"unit state export");
+        c3x_renderer_unit_state_v1 facts={};facts.struct_size=sizeof(facts);facts.kind=C3X_RENDERER_UNIT_STATE_OBSERVE;
+        facts.unit_id=unit.unit_id;facts.action=unit.action;facts.max_hp=3;facts.visible=1;
+        facts.map_epoch=demand.identity.map_epoch;facts.viewer_epoch=demand.identity.viewer_epoch;
+        facts.presentation_time_ticks=unit.presentation_time_ticks;facts.presentation_frequency=unit.presentation_frequency;
         if(asynchronous){
-            auto unit_state=reinterpret_cast<c3x_renderer_unit_state_fn>(GetProcAddress(renderer_module,"c3x_renderer_unit_state"));
-            verify(unit_state!=nullptr,"unit state export");
-            c3x_renderer_unit_state_v1 facts={};facts.struct_size=sizeof(facts);facts.kind=C3X_RENDERER_UNIT_STATE_OBSERVE;
-            facts.unit_id=unit.unit_id;facts.action=unit.action;facts.max_hp=3;facts.visible=1;
-            facts.map_epoch=demand.identity.map_epoch;facts.viewer_epoch=demand.identity.viewer_epoch;
-            facts.presentation_time_ticks=unit.presentation_time_ticks;facts.presentation_frequency=unit.presentation_frequency;
             auto const* chosen=&demand.frame->tiles[0];long long distance=LLONG_MAX;
             for(unsigned n=0;n<demand.frame->tile_count;++n){auto const& tile=demand.frame->tiles[n];
                 if(!(tile.tile_flags&C3X_RENDERER_TILE_RENDER)||!(tile.tile_flags&C3X_RENDERER_TILE_VISIBLE))continue;
@@ -383,6 +408,39 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
             verify(progress(&accepted,&completed,&frames)==C3X_RENDERER_RESULT_OK,"warm renderer healthy");
             std::printf("ASYNC_WARM_CADENCE frames=%u elapsed_ms=%llu fps=%.2f\n",
                 frames-warm_frames,warm_ms,1000.*double(frames-warm_frames)/double(warm_ms));
+            if(GetEnvironmentVariableA("C3X_RENDERER_POSE_TRANSITIONS",nullptr,0)){
+                auto animation=reinterpret_cast<c3x_renderer_unit_animation_fn>(GetProcAddress(renderer_module,"c3x_renderer_unit_animation"));
+                verify(animation!=nullptr,"copied unit animation export");
+                auto phase=[&](int action,int direction){
+                    LARGE_INTEGER now={};QueryPerformanceCounter(&now);
+                    unit.action=action;unit.direction=direction;unit.action_cursor=0;unit.frame_count=16;
+                    unit.presentation_frequency=frequency.QuadPart;unit.presentation_time_ticks=now.QuadPart;
+                    facts.action=action;facts.presentation_frequency=unit.presentation_frequency;facts.presentation_time_ticks=unit.presentation_time_ticks;
+                    verify(unit_state(&facts)==C3X_RENDERER_RESULT_OK,"pose-transition state accepted");
+                    c3x_renderer_unit_animation_v1 clip={};clip.struct_size=sizeof(clip);clip.display_unit_id=unit.unit_id;
+                    clip.frames=16;clip.frame_seconds=.04f;
+                    auto& v=clip.visual;v.struct_size=sizeof(v);v.unit_id=unit.unit_id;v.action=action;
+                    v.max_hp=3;v.flags=C3X_RENDERER_UNIT_STATE_CAPTURED;v.projection_scale_milli=unit.projection_scale_milli;
+                    v.body_x=unit.body_x;v.body_y=unit.body_y;v.target_x=(facts.tile_x+1)*64;v.target_y=(facts.tile_y+1)*32;
+                    v.presentation_frequency=unit.presentation_frequency;v.presentation_time_ticks=unit.presentation_time_ticks;
+                    verify(animation(&clip)==C3X_RENDERER_RESULT_OK,"pose-transition cadence accepted");
+                    verify(live(C3X_NATIVE_UNIT_DRAW,canvases[1],canvases[1],&unit,bounds,
+                        C3X_RENDERER_UNIT_STATE_CAPTURED|C3X_RENDERER_UNIT_SELECTED)==1,"pose-transition body accepted");
+                };
+                // Warm every participating authored clip before timing. All
+                // three GPU passes consume the production transition sampler.
+                for(int action:{1,2,3,8,7,9}){phase(action,3);Sleep(450);}
+                verify(progress(&accepted,&completed,&frames)==C3X_RENDERER_RESULT_OK,"warm transition owner healthy");
+                auto blend_started=GetTickCount64();auto blend_frames=frames;
+                int actions[]={1,2,3,8,7,9};
+                for(int step=0;step<24;++step){phase(actions[step%6],step%8+1);Sleep(350);}
+                auto blend_ms=GetTickCount64()-blend_started;
+                verify(progress(&accepted,&completed,&frames)==C3X_RENDERER_RESULT_OK,"transition owner healthy");
+                verify(frames>blend_frames+100,"independent frames continue across repeated pose and direction changes");
+                std::printf("ASYNC_POSE_TRANSITIONS changes=24 frames=%u elapsed_ms=%llu fps=%.2f cpu_map_readbacks=0\n",
+                    frames-blend_frames,blend_ms,1000.*double(frames-blend_frames)/double(blend_ms));
+                phase(1,3);
+            }
             // Optional compositor evidence is separate from the timing above.
             struct Witness {HANDLE ready=nullptr,done=nullptr;~Witness(){if(ready)CloseHandle(ready);if(done)CloseHandle(done);}} witness;
             wchar_t witness_name[128]={};

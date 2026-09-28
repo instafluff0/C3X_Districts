@@ -566,7 +566,14 @@ public:
         // Lookup effects read the map under a CPU-created text canvas too.
         // Admit that destination from the same startup lifetime evidence as a
         // copy; otherwise an ordinary map message tries to read the map back.
-        if(op==C3X_NATIVE_COPY||op==C3X_NATIVE_IMAGE_DRAW||op==C3X_NATIVE_LOOKUP){auto input=find(source);if(input&&input->owned){
+        bool sprite_underlay=op==C3X_NATIVE_SPRITE_LOOKUP_OVER||op==C3X_NATIVE_SPRITE_LOOKUP_SCALED;
+        if(op==C3X_NATIVE_COPY||op==C3X_NATIVE_IMAGE_DRAW||op==C3X_NATIVE_LOOKUP||sprite_underlay){
+            auto inputs=sprite_underlay?static_cast<c3x_renderer_native_lookup const*>(source_rect):nullptr;
+            // Combat FLC effects can draw into a fresh Animator scratch image.
+            // Their source is a sprite; the owned map dependency is the separate
+            // underlay. Admit the scratch image before the native pixel borrow.
+            auto input=find(sprite_underlay?(inputs?inputs->background:nullptr):source);
+            if(input&&input->owned){
             char const* rejection=nullptr;
             if(!admit(object,&rejection)&&copy_rejection_reports++<16){
                 char line[384];auto from=source_rect?rect(source_rect):Rect{};auto to=target_rect?rect(target_rect):Rect{};

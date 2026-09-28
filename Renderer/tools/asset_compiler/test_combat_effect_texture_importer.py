@@ -12,10 +12,13 @@ class CombatEffectTextureImporterTests(unittest.TestCase):
     def test_mapping_covers_conventional_and_nuclear_effect_families(self) -> None:
         mapping = importer.load_mapping(importer.DEFAULT_MAPPING)
         ids = [item["asset_id"] for item in mapping["textures"]]
-        self.assertEqual(22, len(ids))
+        self.assertEqual(50, len(ids))
         self.assertEqual(len(ids), len(set(ids)))
         self.assertIn("effect/combat/projectile/artillery_shell", ids)
         self.assertIn("effect/combat/impact/water_wave", ids)
+        self.assertIn("effect/combat/smoke/cannon_01", ids)
+        self.assertIn("effect/combat/explosion/flipbook_08", ids)
+        self.assertIn("effect/combat/splash/radial_sheet", ids)
         self.assertIn("effect/combat/nuclear/scorch", ids)
 
     def test_rejects_source_specific_runtime_id(self) -> None:

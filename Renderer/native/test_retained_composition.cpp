@@ -415,6 +415,58 @@ int test_retained_composition(){
             assert(output==retained_read(device.Get(),context.Get(),source.Get()));
         }
         std::puts("PASS native transfer animation: eight native-only samples, one allocation, unchanged clocks reuse pixels, native versions preserved");
+        // Publishing UI versions must not sample, wait for a frame or expose
+        // subsequent uncommitted writes. The cadence sees the latest complete
+        // version, including ordered partial updates, exactly once.
+        auto before_commit_samples=samples;
+        for(unsigned n=0;n<1000;++n)assert(session.commit_display(2,canvas,w,h,full));
+        assert(samples==before_commit_samples);
+        request.action=C3X_GPU_SUBMIT;
+        Rect patch{1,1,4,4};
+        commands={{Kind::fill,canvas,0,patch,full,0,0,0xffabcdef}};
+        assert(session.execute(request,commands,{},result,output)==C3X_RENDERER_RESULT_OK);
+        assert(session.commit_display(2,canvas,w,h,patch));
+        commands[0].color=0xff010203;
+        assert(session.execute(request,commands,{},result,output)==C3X_RENDERER_RESULT_OK);
+        assert(retained_read(device.Get(),context.Get(),display.Get())==pixels);
+        assert(session.visual_frame(528,1000,target.Get(),display.Get(),buffer.Get())==1);
+        auto committed=pixels;
+        for(int y=patch.top;y<patch.bottom;++y)for(int x=patch.left;x<patch.right;++x)committed[y*w+x]=0xffabcdef;
+        assert(retained_read(device.Get(),context.Get(),display.Get())==committed);
+        assert(samples==before_commit_samples);
+        commands={{Kind::copy,canvas,session.map_image(),full,full}};
+        assert(session.execute(request,commands,{},result,output)==C3X_RENDERER_RESULT_OK);
+        assert(session.commit_display(2,canvas,w,h,full));
+        assert(session.visual_frame(528,1000,target.Get(),display.Get(),buffer.Get())==1);
+        assert(retained_read(device.Get(),context.Get(),display.Get())==pixels);
+        std::puts("PASS deferred UI publication: 1000 commits, zero map samples; partial and uncommitted versions remain ordered");
+        // A static tactical texture is copied once. Reusing its renderer
+        // scratch cannot mutate the committed version; transparent pixels
+        // must still follow every new animated map sample beneath it.
+        Compositor overlay_gpu(device.Get(),context.Get());
+        auto overlay=overlay_gpu.create(8,8,Format::bgra32);
+        std::vector<unsigned> ink(64,0);for(unsigned i=0;i<64;i+=2)ink[i]=0xffabcdef;
+        assert(overlay_gpu.upload(overlay,1,ink.data(),ink.size()));
+        request.action=C3X_GPU_CREATE;request.width=w;request.height=h;request.format=C3X_GPU_RGB555;
+        assert(session.execute(request,{}, {},result,output)==C3X_RENDERER_RESULT_OK);auto native_route=result.image;
+        request.action=C3X_GPU_SUBMIT;commands={{Kind::quantize,Id(native_route),session.map_image(),full,full}};
+        assert(session.execute(request,commands,{},result,output)==C3X_RENDERER_RESULT_OK);
+        c3x_renderer_gpu_unit_v1 route={};route.ticket=2;route.destination=native_route;route.background=native_route;
+        route.detail=canvas;route.background_detail=canvas;route.clip[2]=w;route.clip[3]=h;
+        assert(session.draw_overlay(route,overlay_gpu.texture(overlay),8,8,2,3)==C3X_RENDERER_RESULT_OK);
+        assert(session.commit_display(2,canvas,w,h,full));
+        std::fill(ink.begin(),ink.end(),0xff010203);assert(overlay_gpu.upload(overlay,2,ink.data(),ink.size()));
+        for(unsigned tick=0;tick<10;++tick){
+            std::fill(pixels.begin(),pixels.end(),0xff345600+tick);
+            context->UpdateSubresource(sampled.Get(),0,nullptr,pixels.data(),w*4,0);
+            assert(session.visual_frame(529+tick,1000,target.Get(),display.Get(),buffer.Get())==1);
+            auto actual=retained_read(device.Get(),context.Get(),display.Get());
+            for(unsigned y=0;y<h;++y)for(unsigned x=0;x<w;++x)
+                assert(actual[y*w+x]==(x>=2&&x<10&&y>=3&&y<11&&x%2==0?0xffabcdef:pixels[y*w+x]));
+        }
+        copy_map();assert(session.commit_display(2,canvas,w,h,full));
+        assert(session.visual_frame(539,1000,target.Get(),display.Get(),buffer.Get())==1);
+        std::puts("PASS retained static overlay: scratch reuse isolated; ten animated underlays exact");
         // Camera preparation retires the old map's callback before adoption.
         // Subsequent native transfers must keep its last sampled pose, even
         // though the retained recipe has become entirely static.
