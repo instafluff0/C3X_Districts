@@ -37,6 +37,10 @@ public:
     Stats stats()const{return wire?Stats{wire->sequence,wire->service_us,wire->private_bytes}:Stats{};}
     bool alive()const{return process&&WaitForSingleObject(process,0)==WAIT_TIMEOUT;}
     unsigned frames()const{return wire?unsigned(InterlockedCompareExchange(reinterpret_cast<volatile LONG*>(&wire->visual_frames),0,0)):0;}
+    unsigned presented_zoom()const{
+        auto value=wire?unsigned(InterlockedCompareExchange(reinterpret_cast<volatile LONG*>(&wire->presented_zoom_q16),0,0)):0;
+        return value>=65536&&value<=98304?value:65536;
+    }
     SceneClient(SceneClient const&)=delete;
     SceneClient& operator=(SceneClient const&)=delete;
     SceneClient(std::wstring const& helper,std::wstring const& dll){

@@ -1,9 +1,10 @@
 # Bounded real-game renderer diagnostic, enabled only in the child environment.
 param([Parameter(Mandatory=$true)][string]$SaveFile, [string]$ConquestsDirectory,
       [ValidateRange(35,120)][int]$Seconds = 75,
-      [ValidateSet('scroll','interaction','lifecycle','combat','turn','mouse','zoom')][string]$Scenario = 'scroll',
+      [ValidateSet('scroll','interaction','lifecycle','combat','turn','mouse','zoom','hud','city')][string]$Scenario = 'scroll',
       [ValidatePattern('^[A-Za-z0-9_-]+$')][string]$UnitPack='UnitAnimationFidelity', [ValidateSet('melee','victory','retreat','bombard','army','air','capture')][string]$CombatCase='melee', [ValidateRange(1,10)][int]$SampleHz = 2,
-      [switch]$ProfileRenderer, [switch]$MeasureCadence)
+      [switch]$ProfileRenderer, [switch]$MeasureCadence,
+      [ValidateSet(0,1,2)][int]$SceneSamples=0, [ValidateRange(-1,1)][double]$SceneSharpness=-1)
 $ErrorActionPreference = 'Stop'
 $renderer = Split-Path $PSScriptRoot -Parent
 if (-not $ConquestsDirectory) { $ConquestsDirectory = $env:C3X_RENDERER_CIV3_CONQUESTS }
@@ -48,7 +49,7 @@ public static class RendererGameCommand {
 // the IPC header read-only; it never requests pixels or submits renderer work.
 public sealed class RendererCadenceReader : IDisposable {
     // Mirrored from helper_trial/scene_wire.h; executable test checks this ABI.
-    public const int WireVersion = 9, FrameOffset = 228;
+    public const int WireVersion = 10, FrameOffset = 228, ZoomOffset = 232;
     [DllImport("kernel32.dll", CharSet=CharSet.Unicode)] static extern IntPtr OpenFileMapping(uint access, bool inherit, string name);
     [DllImport("kernel32.dll")] static extern IntPtr MapViewOfFile(IntPtr mapping, uint access, uint high, uint low, UIntPtr bytes);
     [DllImport("kernel32.dll")] static extern bool UnmapViewOfFile(IntPtr view);
@@ -56,13 +57,14 @@ public sealed class RendererCadenceReader : IDisposable {
     IntPtr mapping, view;
     public RendererCadenceReader(string name) {
         mapping=OpenFileMapping(4, false, name);
-        if(mapping!=IntPtr.Zero) view=MapViewOfFile(mapping,4,0,0,(UIntPtr)(FrameOffset+4));
+        if(mapping!=IntPtr.Zero) view=MapViewOfFile(mapping,4,0,0,(UIntPtr)(ZoomOffset+4));
         if(view==IntPtr.Zero) { Dispose(); throw new InvalidOperationException("Cannot read diagnostic helper telemetry"); }
         if(Marshal.ReadInt32(view)!=0x32483343 || Marshal.ReadInt32(view,4)!=WireVersion) {
             Dispose(); throw new InvalidOperationException("Renderer telemetry ABI changed");
         }
     }
     public int Frames { get { return Marshal.ReadInt32(view,FrameOffset); } }
+    public int ZoomQ16 { get { return Marshal.ReadInt32(view,ZoomOffset); } }
     public void Dispose() {
         if(view!=IntPtr.Zero) { UnmapViewOfFile(view); view=IntPtr.Zero; }
         if(mapping!=IntPtr.Zero) { CloseHandle(mapping); mapping=IntPtr.Zero; }
@@ -83,7 +85,7 @@ $oldCombat=$env:C3X_RENDERER_GAME_TEST_COMBAT
 $oldPack=$env:C3X_RENDERER_UNIT_PACK
 $oldInputTrace=$env:C3X_RENDERER_TRACE_INPUT
 $traceEnvironment=@{}
-foreach ($key in @('C3X_RENDERER_TRACE','C3X_RENDERER_TRACE_BUFFERED','C3X_RENDERER_TRACE_FILE')) {
+foreach ($key in @('C3X_RENDERER_TRACE','C3X_RENDERER_TRACE_BUFFERED','C3X_RENDERER_TRACE_FILE','C3X_RENDERER_SCENE_SAMPLES','C3X_RENDERER_SCENE_SHARPNESS')) {
     $traceEnvironment[$key]=[Environment]::GetEnvironmentVariable($key)
 }
 $ini=Join-Path $ConquestsDirectory 'conquests.ini'
@@ -105,7 +107,9 @@ try {
     $env:C3X_RENDERER_GAME_TEST_MODE=$Scenario
     $env:C3X_RENDERER_GAME_TEST_COMBAT=$CombatCase
     $env:C3X_RENDERER_UNIT_PACK=$UnitPack
-    if ($Scenario -in @('mouse','zoom')) { $env:C3X_RENDERER_TRACE_INPUT='1' }
+    if ($SceneSamples -gt 0) { $env:C3X_RENDERER_SCENE_SAMPLES=[string]$SceneSamples }
+    if ($SceneSharpness -ge 0) { $env:C3X_RENDERER_SCENE_SHARPNESS=$SceneSharpness.ToString([cultureinfo]::InvariantCulture) }
+    if ($Scenario -in @('mouse','zoom','hud','city')) { $env:C3X_RENDERER_TRACE_INPUT='1' }
     if ($MeasureCadence -and -not $ProfileRenderer) { $env:C3X_RENDERER_TRACE='0' }
     if ($ProfileRenderer) {
         $env:C3X_RENDERER_TRACE='2'
@@ -133,6 +137,9 @@ try {
     if ($Scenario -eq 'zoom') {
         $mouseSteps=@(@(30,0,0,0x800,120),@(32,0,0,0x800,120),@(34,0,0,0x800,-120),@(36,0,0,0x800,-120),@(38,0,0,0x800,240),@(38.15,0,0,0x800,-120),@(40,0,0,0x800,-240),@(42,0,0,0x800,40),@(42.2,0,0,0x800,40),@(42.4,0,0,0x800,40))
     }
+    if ($Scenario -eq 'city') {
+        $mouseSteps=@(@(54,0,0,0x800,240),@(56,-1100,0,0),@(58,0,0,0),@(66,0,0,0x800,-240),@(68,1100,0,0),@(70,0,0,0))
+    }
     $interactionIndex=0
     $combatReadyAt=$null
     $combatAttackSent=$false
@@ -141,6 +148,12 @@ try {
     $interaction=@(@(28,13,'close-welcome'),@(36,90,'zoom-192'),@(39,0x86,'text-192'),@(43,90,'zoom-160'),@(46,0x86,'text-160'),@(50,90,'zoom-128'),@(53,0x86,'text-128'),@(57,0x66,'move-east'),@(65,0x70,'advisor'),@(74,27,'close-advisor'))
     if ($Scenario -in @('mouse','zoom')) {
         $interaction=@()
+    }
+    if ($Scenario -eq 'hud') {
+        $interaction=@(@(31,66,'found-city'),@(34,13,'accept-city-name'),@(44,90,'city-native-zoom-out'),@(48,90,'city-native-zoom-in'),@(53,13,'close-new-city-screen'),@(61,90,'zoom-192'),@(64,0x86,'text-192'),@(68,0x87,'scroll-city-label'),@(72,90,'zoom-160'),@(75,0x86,'text-160'),@(79,0x87,'scroll-city-label-again'),@(83,90,'zoom-128'),@(86,0x86,'text-128'),@(92,0x70,'advisor'),@(101,27,'close-advisor'))
+    }
+    if ($Scenario -eq 'city') {
+        $interaction=@(@(31,66,'found-city'),@(34,13,'accept-city-name'),@(44,90,'city-native-zoom-out'),@(60,90,'city-native-zoom-in'),@(77,13,'close-city-screen'))
     }
     if ($Scenario -eq 'turn') {
         $interaction=@(@(36,32,'skip-first-unit'),@(39,32,'skip-second-unit'),@(42,13,'end-turn'),@(65,32,'skip-first-unit-next-turn'),@(68,32,'skip-second-unit-next-turn'),@(71,13,'end-second-turn'))
@@ -171,7 +184,7 @@ try {
             # The opt-in post-load hook dismisses the known welcome popup.
             $elapsed=([DateTime]::UtcNow-$started).TotalSeconds
             if ($MeasureCadence -and $elapsed -ge $cadenceNext) {
-                $cadenceNext=$elapsed+1
+                $cadenceNext=$elapsed+$(if ($Scenario -eq 'zoom') {0.02} else {1.0})
                 if ($cadenceProcess -and $cadenceProcess.HasExited) {
                     $cadence.Dispose(); $cadence=$null; $cadenceProcess=$null
                 }
@@ -188,11 +201,11 @@ try {
                 }
                 if ($cadence) {
                     $cadenceSamples += [ordered]@{ qpc=[System.Diagnostics.Stopwatch]::GetTimestamp();
-                        helper_pid=$cadenceProcess.Id; frames=$cadence.Frames;
+                        helper_pid=$cadenceProcess.Id; frames=$cadence.Frames; zoom_q16=$cadence.ZoomQ16;
                         foreground=([RendererGameCommand]::GetForegroundWindow() -eq $window) }
                 }
             }
-            if ($Scenario -in @('mouse','zoom') -and $mouseIndex -lt $mouseSteps.Count -and $elapsed -ge $mouseSteps[$mouseIndex][0]) {
+            if ($Scenario -in @('mouse','zoom','city') -and $mouseIndex -lt $mouseSteps.Count -and $elapsed -ge $mouseSteps[$mouseIndex][0]) {
                 $step=$mouseSteps[$mouseIndex]
                 if ($mouseIndex -eq 0) { [void][RendererGameCommand]::SetForegroundWindow($window) }
                 if ([RendererGameCommand]::GetForegroundWindow() -ne $window) { throw 'Diagnostic game lost foreground before mouse input.' }
@@ -291,16 +304,22 @@ $turns=@([regex]::Matches($log,'stage=scripted-turn-end turn=(\d+)') | ForEach-O
 $combatReady=[regex]::Matches($log,'stage=scripted-combat-ready').Count
 $combatFinished=[regex]::Matches($log,'stage=scripted-combat-end').Count
 $textEvents=[regex]::Matches($log,'stage=scripted-game-map-text').Count
+$cityZooms=@([regex]::Matches($log,'stage=city-native-zoom tile_width=(\d+)') | ForEach-Object {[int]$_.Groups[1].Value})
+$cityAnchors=@([regex]::Matches($log,'stage=city-native-zoom[^\r\n]*city_anchor=(-?\d+,-?\d+)') | ForEach-Object {$_.Groups[1].Value})
 $readyEvents=[regex]::Matches($log,'stage=render-done result=1').Count
 $unloadEvents=[regex]::Matches($log,'stage=scene-unloaded result=1').Count
 $errors=@($log -split "`n" | Where-Object {$_ -match 'stage=native-operation-failed|stage=async-publication-failed|budget exceeded|stage=visual-failure|stage=worker-error|stage=unit-publication-failed|stage=unit-animation-failed|stage=motion-start[^\r\n]*result=[0235]|stage=scene-unload-failed|stage=first-map-ready result=[02345]'})
 $windowResult=Join-Path $session 'window\finished.json'
 $windowEvidence=if (Test-Path -LiteralPath $windowResult) { Get-Content -LiteralPath $windowResult -Raw | ConvertFrom-Json } else { $null }
 $windowComplete=$null -ne $windowEvidence -and $windowEvidence.complete -and $windowEvidence.frames -gt 0
-[ordered]@{ scenario=$Scenario; combat_case=$CombatCase; unit_pack=$UnitPack; mouse_commands=$mouseIndex; completed_turns=$turns; interaction_commands=$interactionIndex; combat_ready=$combatReady; combat_finished=$combatFinished; map_text_events=$textEvents; posted_commands=$sent; load_requested=($log -match 'stage=scripted-game-load'); scroll_steps=$steps;
+[ordered]@{ scenario=$Scenario; scene_samples=$SceneSamples; scene_sharpness=$SceneSharpness; combat_case=$CombatCase; unit_pack=$UnitPack; mouse_commands=$mouseIndex; completed_turns=$turns; interaction_commands=$interactionIndex; combat_ready=$combatReady; combat_finished=$combatFinished; map_text_events=$textEvents; city_zoom_widths=$cityZooms; city_anchors=$cityAnchors; posted_commands=$sent; load_requested=($log -match 'stage=scripted-game-load'); scroll_steps=$steps;
     game_exited_early=$earlyExit; game_exit_code=$gameExitCode; first_map_ready=$readyEvents; scenes_unloaded=$unloadEvents; native_failures=$errors; window_evidence=$windowEvidence; original_save_unchanged=$true; scope='Real Civ III diagnostic; window samples require visual review; not an FPS benchmark' } |
     ConvertTo-Json -Depth 4 | Set-Content (Join-Path $session 'result.json')
 Write-Host ('Scripted diagnostic saved: '+$session)
 if ($MeasureCadence -and $cadenceSamples.Count -lt 2) { Write-Error 'Insufficient renderer cadence samples; inspect cadence.json and the helper channel.'; exit 1 }
 if (-not $windowComplete) { Write-Error 'Window evidence did not complete; inspect window-errors.log and window/finished.json.'; exit 1 }
-if (($Scenario -in @('mouse','zoom') -and $mouseIndex -ne $mouseSteps.Count) -or ($Scenario -eq 'turn' -and $turns.Count -lt 2) -or ($Scenario -eq 'combat' -and ($combatReady -ne 1 -or $combatFinished -ne 1)) -or $earlyExit -or ($Scenario -eq 'scroll' -and $steps.Count -ne 32) -or ($Scenario -eq 'interaction' -and ($interactionIndex -ne $interaction.Count -or $textEvents -ne 3)) -or ($Scenario -eq 'lifecycle' -and ($interactionIndex -ne $interaction.Count -or $readyEvents -ne 2 -or $unloadEvents -lt 2 -or $textEvents -ne 1)) -or $errors.Count) { exit 1 }
+if (($Scenario -in @('mouse','zoom','city') -and $mouseIndex -ne $mouseSteps.Count) -or ($Scenario -eq 'turn' -and $turns.Count -lt 2) -or ($Scenario -eq 'combat' -and ($combatReady -ne 1 -or $combatFinished -ne 1)) -or $earlyExit -or ($Scenario -eq 'scroll' -and $steps.Count -ne 32) -or ($Scenario -in @('interaction','hud') -and ($interactionIndex -ne $interaction.Count -or $textEvents -ne 3)) -or ($Scenario -eq 'hud' -and (($cityZooms -join ',') -ne '64,128' -or $steps.Count -ne 2)) -or ($Scenario -eq 'lifecycle' -and ($interactionIndex -ne $interaction.Count -or $readyEvents -ne 2 -or $unloadEvents -lt 2 -or $textEvents -ne 1)) -or ($Scenario -eq 'city' -and ($interactionIndex -ne $interaction.Count -or ($cityZooms -join ',') -ne '64,128')) -or ($Scenario -in @('hud','city') -and ($cityAnchors.Count -ne 2 -or $cityAnchors[0] -ne $cityAnchors[1])) -or $errors.Count) { exit 1 }
+
+# DebugView --stop may leave a nonzero native exit code after successful cleanup.
+# Only the explicit diagnostic checks above determine this scenario result.
+exit 0

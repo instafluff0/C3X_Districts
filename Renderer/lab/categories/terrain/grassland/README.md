@@ -1,11 +1,15 @@
 # Grassland
 
 The current C3X appearance combines complete source grass color, height and
-specular channels with source surface-detail shading and deterministic projected
-grass patches using their exact source triangles and atlas UVs. World-space sampling, continuous neighboring biome weights, the
+specular channels with source surface-detail shading. Optional disconnected
+grass triangles are omitted because their straight edges remained visible.
+The fine color sample is retained while its coarse repeated band is softened.
+World-space sampling, continuous neighboring biome weights, the
 shared production lighting and the coastline height join keep the result
 continuous across tile boundaries.
 The current implementation and render recipe are in `standard.json`.
+Renderer64's coordinated Terrain/Mountains import is recorded in
+`Renderer/docs/lab_material_integration.md`.
 
 The production mesh uses `Renderer/lab/shared/natural/ground.h` and its shared
 168-byte vertex layout. Shared `natural/queries.h`

@@ -39,6 +39,7 @@ struct Paving {
 };
 struct Composition {
     unsigned culture=0,era=0,size=0,capital=0,environment=0;
+    unsigned variant=0,walled=0,owns_walls=0,anchor_layout=0;
     std::string authority;
     float clearance[4]={}; // dry shore, height range, vegetation margin, river pixels
     std::vector<Instance> instances;
@@ -91,6 +92,20 @@ inline WorldInstance place(Instance const&i,float column,float row,float ground_
 struct Library {
     std::vector<Material> materials; std::vector<Model> models; std::vector<Composition> compositions;
     std::size_t byte_count=0;
+    bool complete_city_set()const{
+        unsigned variants=0;
+        for(auto const&t:compositions)variants=std::max(variants,t.variant+1);
+        if(!variants || variants>8)return false;
+        for(unsigned c=0;c<5;++c)for(unsigned e=0;e<4;++e)for(unsigned s=0;s<3;++s)
+          for(unsigned capital=0;capital<2;++capital)for(unsigned wall=0;wall<(s==0?2u:1u);++wall)
+            for(unsigned variant=0;variant<variants;++variant){
+                unsigned matches=0;
+                for(auto const&t:compositions)if(t.culture==c && t.era==e && t.size==s &&
+                    t.capital==capital && t.walled==wall && t.variant==variant && t.owns_walls && t.anchor_layout)++matches;
+                if(matches!=1)return false;
+            }
+        return true;
+    }
     struct Reader {
         std::vector<std::uint8_t> const&data; std::size_t cursor=8; bool valid=true;
         bool bytes(void*out,std::size_t n) {
@@ -128,11 +143,12 @@ struct Library {
     bool decode(std::vector<std::uint8_t> const&bytes) {
         // Decode transactionally: an incomplete/stale pack cannot replace a
         // usable library or cause native city suppression.
-        if(bytes.size()<20 || bytes.size()>32u*1024u*1024u ||
-            (std::memcmp(bytes.data(),"C3XCITY2",8) && std::memcmp(bytes.data(),"C3XCITY3",8)))return false;
-        bool with_foundations=bytes[7]=='3';
+        if(bytes.size()<20 || bytes.size()>128u*1024u*1024u ||
+            (std::memcmp(bytes.data(),"C3XCITY2",8) && std::memcmp(bytes.data(),"C3XCITY3",8) &&
+             std::memcmp(bytes.data(),"C3XCITY4",8)))return false;
+        bool with_foundations=bytes[7]>='3',with_variants=bytes[7]=='4';
         Library next;Reader r{bytes};
-        unsigned nm=r.number(512),nb=r.number(512),nt=r.number(256);
+        unsigned nm=r.number(1024),nb=r.number(1024),nt=r.number(1024);
         if(!r.valid || !nm || !nb || !nt)return false;
         next.materials.resize(nm);next.models.resize(nb);next.compositions.resize(nt);
         for(auto&m:next.materials){
@@ -154,10 +170,11 @@ struct Library {
         }
         for(auto&t:next.compositions){
             t.culture=r.number(4);t.era=r.number(3);t.size=r.number(2);t.capital=r.number(1);t.environment=r.number(1);
+            if(with_variants){t.variant=r.number(255);t.walled=r.number(1);t.owns_walls=r.number(1);t.anchor_layout=r.number(1);}
             t.authority=r.string();if(!r.floats(t.clearance,4))return false;
             for(unsigned j=0;j<4;j++)
                 if(t.clearance[j]<0 || t.clearance[j]>(j==1?112.f:20.f))return false;
-            unsigned ni=r.number(32);if(!r.valid || !ni)return false;t.instances.resize(ni);
+            unsigned ni=r.number(128);if(!r.valid || !ni)return false;t.instances.resize(ni);
             unsigned light_count=0,capital_count=0;
             for(auto&i:t.instances){
                 i.model=r.number(nb-1);i.capital=r.number(1);

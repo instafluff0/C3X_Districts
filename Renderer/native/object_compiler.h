@@ -781,13 +781,11 @@ void promote_river_crossings(c3x_renderer_tile_v1 const& tile,
     }
 }
 inline bool select_improvements(c3x_renderer_tile_v1 const& tile,Assets const& assets,int ground,unsigned site_flags,
-        bool mine_assets_ready,bool farm_assets_ready,bool city_assets_ready,bool composed_city,
-        float composed_wall_radius,Plan& plan){
+        bool mine_assets_ready,bool farm_assets_ready,Plan& plan){
     auto const& site_bundle=assets[site_family];
     auto const& mine_bundle=assets[mine_family];auto const& farm_bundle=assets[farm_family];
-    auto const& city_bundle=assets[city_family];auto const& wall_bundle=assets[wall_family];
     constexpr Layer site_vertices=site_layer,mine_vertices=mine_layer,
-        farm_vertices=farm_layer,city_vertices=city_layer,wall_vertices=wall_layer;
+        farm_vertices=farm_layer;
     auto append_feature_instance=[&](FeatureBundle const& bundle,FeaturePlacement const& placement,
             float u,float v,float rotation,float scale,float material,float owner,bool shadow,Layer layer){
         for(unsigned family=0;family<family_count;++family)if(assets.bundles[family]==&bundle){
@@ -921,147 +919,8 @@ inline bool select_improvements(c3x_renderer_tile_v1 const& tile,Assets const& a
             }
         }
     }
-    if (city_assets_ready && tile.city_id >= 0 && ground < 11) {
-        constexpr char const * era_names[] = {
-            "ancient", "medieval", "industrial", "modern"};
-        constexpr char const * wall_names[] = {
-            "wall_ancient", "wall_medieval", "wall_industrial", "wall_modern"};
-        constexpr unsigned counts[] = {4u, 7u, 11u};
-        constexpr float radii[] = {0.25f, 0.33f, 0.41f};
-        constexpr float size_scales[] = {0.92f, 1.00f, 1.08f};
-        constexpr float golden_angle = 2.39996322973f;
-        unsigned era = static_cast<unsigned>(std::clamp(tile.city_era, 0, 3));
-        unsigned size = static_cast<unsigned>(std::clamp(tile.city_size, 0, 2));
-        unsigned culture = static_cast<unsigned>(std::max(0, tile.city_culture_group));
-        unsigned owner = static_cast<unsigned>(std::max(0, tile.city_owner_id));
-        c3x_renderer::FeatureGroup const * group =
-            c3x_renderer::find_feature_group(city_bundle, era_names[era]);
-        if (!composed_city && group != nullptr && !group->placements.empty()) {
-            unsigned component_count = counts[size];
-            for (unsigned slot = 0; slot < component_count; ++slot) {
-                c3x_renderer::FeaturePlacement const & placement = group->placements[
-                    (culture + tile.variant_seed + slot) % group->placements.size()];
-                float angle = static_cast<float>(slot) * golden_angle +
-                    c3x_renderer::stable_random(tile.variant_seed * 53u + culture * 19u) * 0.72f;
-                float radius = slot == 0u ? 0.0f : radii[size] *
-                    std::sqrt(static_cast<float>(slot) /
-                              static_cast<float>(component_count - 1u));
-                float scale = placement.scale * size_scales[size] *
-                    (slot == 0u && (tile.city_flags & C3X_RENDERER_CITY_CAPITAL) != 0 ? 1.30f : 1.0f);
-                append_feature_instance(city_bundle, placement,
-                    0.5f + std::cos(angle) * radius,
-                    0.5f + std::sin(angle) * radius * 0.78f,
-                    angle + 0.55f, scale, 29.0f,
-                    0.08f * static_cast<float>(owner + 1u), true, city_vertices);
-            }
-        }
-        if (size == 0u && (tile.city_flags & C3X_RENDERER_CITY_WALLED) != 0) {
-            // A Lab wall bundle can provide the individual pieces used by the
-            // fixed city layouts. Ordinary bundles retain the legacy wall path.
-            char const * lab_era = era_names[era];
-            std::string lab_prefix = std::string("wall_lab_") + lab_era + "_";
-            auto const * segment = c3x_renderer::find_feature_group(
-                wall_bundle, (lab_prefix + "segment").c_str());
-            auto const * gate = c3x_renderer::find_feature_group(
-                wall_bundle, (lab_prefix + "gate").c_str());
-            auto const * tower = c3x_renderer::find_feature_group(
-                wall_bundle, (lab_prefix + "tower").c_str());
-            if (composed_city && segment != nullptr && gate != nullptr &&
-                tower != nullptr && !segment->placements.empty() &&
-                !gate->placements.empty() && !tower->placements.empty()) {
-                constexpr float pi = 3.14159265359f;
-                constexpr unsigned samples = 2048u;
-                float const radius[3] = {.474f, .625f,
-                    std::max(.70f, composed_wall_radius)};
-                unsigned const sectors[3] = {16u, 20u, 24u};
-                std::array<std::array<float, 2>, samples + 1u> points{};
-                std::array<float, samples + 1u> distances{};
-                for (unsigned index = 0u; index <= samples; ++index) {
-                    float angle = pi / 4.0f + float(index) * 2.0f * pi / float(samples);
-                    float cosine = std::cos(angle), sine = std::sin(angle);
-                    points[index] = {
-                        radius[size] * std::copysign(std::pow(std::abs(cosine), 1.0f / 3.0f), cosine),
-                        radius[size] * std::copysign(std::pow(std::abs(sine), 1.0f / 3.0f), sine)};
-                    if (index != 0u) {
-                        float du = points[index][0] - points[index - 1u][0];
-                        float dv = points[index][1] - points[index - 1u][1];
-                        distances[index] = distances[index - 1u] + std::sqrt(du * du + dv * dv);
-                    }
-                }
-                std::vector<std::array<float, 3>> ring;
-                ring.reserve(sectors[size]);
-                for (unsigned sector = 0u; sector < sectors[size]; ++sector) {
-                    float target = distances[samples] * float(sector) / float(sectors[size]);
-                    unsigned index = 0u;
-                    while (index < samples && distances[index] < target) ++index;
-                    float blend = index == 0u ? 0.0f :
-                        (target - distances[index - 1u]) /
-                        (distances[index] - distances[index - 1u]);
-                    float x = index == 0u ? points[0u][0] :
-                        points[index - 1u][0] * (1.0f - blend) + points[index][0] * blend;
-                    float y = index == 0u ? points[0u][1] :
-                        points[index - 1u][1] * (1.0f - blend) + points[index][1] * blend;
-                    unsigned before = index == 0u ? samples - 1u : index - 1u;
-                    unsigned after = std::min(index + 1u, samples);
-                    float tangent = std::atan2(points[after][1] - points[before][1],
-                                               points[after][0] - points[before][0]);
-                    ring.push_back({x, y, tangent - pi / 2.0f});
-                }
-                for (unsigned sector = 0u; sector < sectors[size]; ++sector) {
-                    auto const & position = ring[sector];
-                    auto const & next = ring[(sector+1u)%sectors[size]];
-                    float dx=next[0]-position[0],dy=next[1]-position[1];
-                    float direction=std::atan2(dy,dx);
-                    float middle_x=(position[0]+next[0])*.5f;
-                    float middle_y=(position[1]+next[1])*.5f;
-                    auto const & part = sector == 0u ? gate->placements.front()
-                                                     : segment->placements.front();
-                    auto const& asset=wall_bundle.assets[part.asset_index];
-                    float low=1e9f,high=-1e9f;
-                    unsigned axis=sector==0u?0u:1u;
-                    for(auto const& vertex:asset.vertices){
-                        low=std::min(low,vertex.position[axis]);
-                        high=std::max(high,vertex.position[axis]);
-                    }
-                    float length=high-low;
-                    if(length<=0.f)return false;
-                    float fitted_scale=std::hypot(dx,dy)*1.06f/length;
-                    // Overlap the ring vertices to close wedge gaps where
-                    // finite-width masonry turns, including at the gate.
-                    append_feature_instance(wall_bundle, part,
-                        .5f + middle_x, .5f + middle_y,
-                        direction - (sector == 0u ? 0.0f : pi / 2.0f),
-                        fitted_scale, 29.0f,
-                        .08f * static_cast<float>(owner + 1u), true, wall_vertices);
-                }
-                for (unsigned sector = 0u; sector < sectors[size]; ++sector) {
-                    auto const & position = ring[sector];
-                    auto const & part = tower->placements.front();
-                    append_feature_instance(wall_bundle, part,
-                        .5f + position[0], .5f + position[1], position[2],
-                        sector % 4u == 2u ? part.scale * .85f : part.scale * .75f, 29.0f,
-                        .08f * static_cast<float>(owner + 1u), true, wall_vertices);
-                }
-            } else {
-            c3x_renderer::FeatureGroup const * walls = c3x_renderer::find_feature_group(
-                wall_bundle, wall_names[era]);
-            if (walls != nullptr && !walls->placements.empty()) {
-                c3x_renderer::FeaturePlacement const & wall = walls->placements.front();
-                constexpr float offsets[4][3] = {
-                    {-0.29f, 0.00f, 0.785398163f},
-                    {0.29f, 0.00f, 0.785398163f},
-                    {0.00f, -0.23f, -0.785398163f},
-                    {0.00f, 0.23f, -0.785398163f},
-                };
-                for (auto const & offset : offsets)
-                    append_feature_instance(wall_bundle, wall,
-                        0.5f + offset[0], 0.5f + offset[1], offset[2],
-                        wall.scale * (size == 0u ? 0.82f : 1.0f), 29.0f,
-                        0.08f * static_cast<float>(owner + 1u), true, wall_vertices);
-            }
-            }
-        }
-    }
+    // CityCompositionRuntime owns complete authored city layouts and walls.
+    // Never substitute the retired procedural city or wall meshes.
     return true;
 }
 template<class Relief>

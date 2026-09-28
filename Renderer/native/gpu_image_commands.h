@@ -4,7 +4,7 @@
 namespace c3x_gpu_images {
 using Id=std::uint64_t;
 enum class Format { rgb555, rgb565, bgra32 };
-enum class Kind { copy, fill, color_key, invert, quantize, expand, native_sprite, unit_over, native_text, native_image, native_blend, native_lookup };
+enum class Kind { copy, fill, color_key, invert, quantize, expand, native_sprite, unit_over, native_text, native_image, native_blend, native_lookup, world_begin, world_end, zoom_target, fixed_ui_begin, fixed_ui_end, hud_begin, hud_end };
 struct Rect { int left,top,right,bottom; };
 inline Rect intersection(Rect a,Rect b){return {std::max(a.left,b.left),std::max(a.top,b.top),std::min(a.right,b.right),std::min(a.bottom,b.bottom)};}
 // Retained replay renders a command into a rectangle-local scratch image.

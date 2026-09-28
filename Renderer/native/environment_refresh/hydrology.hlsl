@@ -2969,6 +2969,18 @@ float3 q3_margin_normal(PixelInput input,float height,float strength) {
  gradient/=max(1,length(gradient)*.10);
  return normalize(n-gradient*strength);
 }
+float q3_coast_irregular_region(float2 world) {
+ // Two low-frequency source-noise views choose broad, continuous stretches;
+ // no tile or decal owns a patch. The blend softens their boundaries.
+ float2 uv0=world*float2(q3_source_repeat(.022),q3_source_repeat(.029))
+  +float2(.19,.53);
+ float2 uv1=world*float2(q3_source_repeat(.014),q3_source_repeat(.017))
+  +float2(.61,.13);
+ float broad=river_bank_noise_texture.Sample(material_sampler,uv0).r;
+ float macro=river_bank_noise_texture.Sample(material_sampler,uv1).r;
+ return smoothstep(.44,.56,broad*.75+macro*.25);
+}
+
 float3 q3_authored_bed_normal(PixelInput input) {
  float2 world=q3_source_world(input);
  float4 ocean=sample_water_clutter(world);
@@ -2981,7 +2993,24 @@ float3 q3_authored_bed_normal(PixelInput input) {
  float crack_coverage=cracks.a*(1-smoothstep(.16,.55,input.hydrology_data.w));
  height=lerp(height,crack_height,crack_coverage);
  height*=1-smoothstep(.30,.60,input.hydrology_data.w);
- return q3_margin_normal(input,height,.045);
+ float coast_family=1-smoothstep(.34,.63,saturate(input.surface_coordinate));
+ float2 bed_uv=world*q3_source_repeat(.75);
+ float bed_alpha=shallow_bed_texture.SampleBias(material_sampler,bed_uv,2).a;
+ float3 decal_normal=q3_margin_normal(input,height,.045);
+ // Desert's continuous authored sand height, transferred beneath coast water.
+ float2 sand_uv=world*q3_source_repeat(.26)+float2(.31,.17);
+ float sand_height=desert_height_texture.Sample(material_sampler,sand_uv).r;
+ float shelf=coast_family*(1-smoothstep(.18,.55,input.hydrology_data.w));
+ float2 broad_uv=float2(world.y,-world.x)*q3_source_repeat(.115)+float2(.43,.61);
+ float broad_height=desert_hills_height_texture.Sample(material_sampler,broad_uv).r;
+ float3 continuous_normal=q3_margin_normal(input,
+  sand_height*.38+bed_alpha*.16+broad_height*.46,.55);
+ float3 irregular_normal=normalize(lerp(decal_normal,continuous_normal,shelf));
+ float control_alpha=shallow_bed_texture.Sample(material_sampler,bed_uv).a;
+ float3 control_detail=q3_margin_normal(input,control_alpha,.025);
+ float3 control_normal=normalize(lerp(decal_normal,control_detail,coast_family));
+ return normalize(lerp(control_normal,irregular_normal,
+  q3_coast_irregular_region(world)));
 }
 float3 q3_scene_bed(PixelInput input) {
  float sd=input.hydrology_data.x,rocky=saturate(input.hydrology_data.z);
@@ -2993,15 +3022,24 @@ float3 q3_scene_bed(PixelInput input) {
  float desert=saturate(input.material_weights.z);
  float3 desert_sand=desert_base_texture.Sample(material_sampler,input.uv).rgb;
  sand=lerp(sand,desert_sand,desert);
- float3 bed=shallow_bed_texture.Sample(material_sampler,uv).rgb;
+ float coast_family=1-smoothstep(.34,.63,saturate(input.surface_coordinate));
+ float4 shallow=shallow_bed_texture.Sample(material_sampler,uv);
+ float3 bed=lerp(shallow.rgb,shallow_bed_texture.SampleLevel(material_sampler,uv,10).rgb,coast_family);
  float2 world=q3_source_world(input);
+
  float4 authored=q3_authored_bed_detail(input);
+ authored.a*=1-coast_family;
+ float2 second_uv=float2(uv.y,-uv.x)*.47+float2(.19,.37);
+ float second_alpha=shallow_bed_texture.Sample(material_sampler,second_uv).a;
+ float shelf=coast_family*(1-smoothstep(.16,.58,input.hydrology_data.w));
+ float structure=clamp((shallow.a-.34)*3.0+(second_alpha-.34)*1.6,-.42,.58);
+ bed*=1+structure*.22*shelf;
  bed=lerp(bed,authored.rgb,authored.a);
  bed*=1+(sample_water_clutter_height(world)-.5)*authored.a*.30;
  float3 rock=cliff_base_texture.Sample(material_sampler,uv).rgb;
  float fine_height,fine_cavity;
  float4 fine=q3_margin_detail(world,fine_height,fine_cavity);
- float margin=(1-smoothstep(.08,.38,input.hydrology_data.w))*lerp(.25,1.0,q3_margin_patch(world));
+ float margin=(1-smoothstep(.08,.38,input.hydrology_data.w))*lerp(.25,1.0,q3_margin_patch(world))*(1-coast_family);
  float3 rim=lerp(sand,bed,authored.a*desert*.34);
  float3 color=lerp(rim,bed,smoothstep(0,.40,-sd));
 #ifdef Q3_COAST_DETAIL
@@ -3015,8 +3053,24 @@ float3 q3_scene_bed(PixelInput input) {
  // Confirmed source height detail; no animated or inferred wave channels.
  // Spectral absorption tints the actual bed before coverage compositing.
  // This preserves authored contrast in shallows without a beige offshore plate.
- float3 absorption=exp(-input.hydrology_data.w*float3(9,5,3));
- return color*clamp(.86+(height-.426)*.55,.65,1.1)*absorption;
+ float coast_shelf=(1-smoothstep(.19,.65,input.hydrology_data.w))
+  *(1-smoothstep(.34,.68,input.surface_coordinate));
+ color*=1+beach_grain*.32*coast_shelf;
+ float2 sand_uv=world*q3_source_repeat(.26)+float2(.31,.17);
+ float sand_height=desert_height_texture.Sample(material_sampler,sand_uv).r;
+ float sand_mean=desert_height_texture.SampleBias(material_sampler,sand_uv,3).r;
+ // Source-height crest/cavity response, with no added stamps.
+ float2 broad_uv=float2(world.y,-world.x)*q3_source_repeat(.115)+float2(.43,.61);
+ float broad_height=desert_hills_height_texture.Sample(material_sampler,broad_uv).r;
+ float broad_mean=desert_hills_height_texture.SampleBias(material_sampler,broad_uv,3).r;
+ float surface=(sand_height-sand_mean)*.85+(broad_height-broad_mean)*2.7;
+ float dune_fade=coast_shelf*(1-smoothstep(.27,.57,input.hydrology_data.w));
+ color*=clamp(1+surface*dune_fade*q3_coast_irregular_region(world),.65,1.26);
+ float3 absorption=exp(-input.hydrology_data.w*float3(9,5,3)
+  *lerp(1,.42,coast_shelf));
+ float tint_strength=coast_shelf*smoothstep(.05,.22,input.hydrology_data.w);
+ float3 tint=lerp(1.0.xxx,float3(.48,1.12,1.80),tint_strength);
+ return color*clamp(.86+(height-.426)*.55,.65,1.1)*absorption*tint;
 }
 void q3_shore_material(PixelInput input,float2 world_position,inout float3 albedo,inout float3 material_normal) {
  float sd=input.hydrology_data.x,width=input.hydrology_data.y;

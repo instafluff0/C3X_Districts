@@ -100,6 +100,10 @@ def trim_skirt_and_ground(mesh: dict, floor_z: float) -> tuple[dict, dict[str, i
             "uv0": [a["uv0"][axis] * (1 - t) + b["uv0"][axis] * t
                     for axis in (0, 1)],
         }
+        for channel in ('uv1', 'uv2'):
+            if channel in a and channel in b:
+                vertex[channel] = [a[channel][axis] * (1 - t) + b[channel][axis] * t
+                                   for axis in (0, 1)]
         edge_vertices[key] = len(vertices)
         vertices.append(vertex)
         return edge_vertices[key]

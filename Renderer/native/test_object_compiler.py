@@ -168,7 +168,7 @@ int main(){
  c3x_renderer_tile_v1 tile{};tile.improvement_flags=C3X_RENDERER_IMPROVEMENT_IRRIGATION;
  tile.variant_seed=18;
  objects::Plan plan;
- assert(objects::select_improvements(tile,assets,0,0,false,true,false,false,plan));
+ assert(objects::select_improvements(tile,assets,0,0,false,true,plan));
  assert(plan.instances.size()==4);
  auto original=plan.instances;
  auto coast=[](float u,float){return std::array<float,3>{0,0,u-.15f};};
@@ -207,7 +207,7 @@ int main(){
  auto dry=[](float,float){return std::array<float,3>{0,0,1};};
  for(unsigned seed=0;seed<128;++seed){
   tile.variant_seed=seed;plan.instances.clear();
-  assert(objects::select_improvements(tile,assets,0,0,false,true,false,false,plan));
+  assert(objects::select_improvements(tile,assets,0,0,false,true,plan));
   objects::settle_farm_props(plan,tile,assets,dry);
   unsigned trees=0,buildings=0;
   for(auto const& instance:plan.instances){
@@ -216,7 +216,7 @@ int main(){
   assert(trees>=4 && trees<=6 && buildings==1);
  }
  tile.variant_seed=7;plan.instances.clear();
- assert(objects::select_improvements(tile,assets,0,0,false,true,false,false,plan));
+ assert(objects::select_improvements(tile,assets,0,0,false,true,plan));
  auto coast=[](float u,float v){return std::array<float,3>{0,0,u>.55f&&v<.83f?1.f:-1.f};};
  objects::settle_farm_props(plan,tile,assets,coast);
  unsigned trees=0,buildings=0;
@@ -256,7 +256,7 @@ int main(){
   for(int ground=0;ground<5;++ground){
    tile.variant_seed=seed;tile.irrigation_mask=mask;
    objects::Plan plan;
-   assert(objects::select_improvements(tile,assets,ground,0,false,true,false,false,plan));
+   assert(objects::select_improvements(tile,assets,ground,0,false,true,plan));
    assert(plan.instances.size()==4);
    std::array<std::array<float,4>,4> bounds{};
    bool used_palette[3]={};
@@ -380,13 +380,12 @@ int main(){
  tile.tile_x=48;tile.tile_y=32;
  for(int era=0;era<4;++era)for(int size=0;size<3;++size){
   tile.city_era=era;tile.city_size=size;tile.route_style=era;
-  objects::Plan legacy,composed;
-  assert(objects::select_improvements(tile,assets,2,0,true,true,true,false,legacy));
-  assert(objects::select_improvements(tile,assets,2,0,true,true,true,true,composed));
-  unsigned city=0,walls=0;for(auto const& i:legacy.instances){city+=i.layer==objects::city_layer;walls+=i.layer==objects::wall_layer;}
-  assert(city==unsigned(size==0?4:size==1?7:11) && walls==unsigned(size==0?4:0));
-  assert(legacy.instances.size()==composed.instances.size()+city);
-  for(auto const& i:composed.instances)assert(i.layer!=objects::city_layer);
+  objects::Plan composed;
+  assert(objects::select_improvements(tile,assets,2,0,true,true,composed));
+  // Cities and their walls belong exclusively to the complete city pack.
+  // Even available retired models must never enter this infrastructure pass.
+  for(auto const& i:composed.instances)
+   assert(i.layer!=objects::city_layer && i.layer!=objects::wall_layer);
   for(int width:{64,128,160,192}){
    objects::Projection input;input.tile=tile;input.tile_width=width;input.content_view_height=640;
    input.half_w=float(width)/2;input.half_h=float(width)/4;input.relief_projection_scale=float(width)/224*.82f;
@@ -401,7 +400,7 @@ int main(){
     for(unsigned i=0;i<indexed.indices[layer].size();++i)
      assert(std::memcmp(&out.layers[layer][i],&indexed.layers[layer][indexed.indices[layer][i]],sizeof(objects::Vertex))==0);
    }
-   assert(out.layers[objects::wall_layer].size()==12);
+   assert(out.layers[objects::wall_layer].empty());
    auto const& v=out.layers[objects::farm_layer].at(0);
    assert(v.u==.25f && v.v==.5f && v.world_valid==1 && v.world_z==7.5f/112);
    input.pickup_profile=false;input.world_objects=false;input.key_light={.5f,.5f,1};objects::Surfaces compatibility;
@@ -491,14 +490,15 @@ int main(){
  objects::append_route(projection,wet.routes[0],river_relief,river_bed,river_deck);
  float river_top=-1000;for(auto const& vertex:river_deck)river_top=std::max(river_top,vertex.world_z);
  assert(river_top>.10f);
- objects::Plan sites;assert(objects::select_improvements(tile,assets,2,C3X_RENDERER_IMPROVEMENT_GOODY_HUT|C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP,false,false,false,false,sites));
+ objects::Plan sites;assert(objects::select_improvements(tile,assets,2,C3X_RENDERER_IMPROVEMENT_GOODY_HUT|C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP,false,false,sites));
  assert(sites.instances.size()==2);bundles[objects::farm_family].groups.clear();objects::Plan failure;
- assert(!objects::select_improvements(tile,assets,2,0,true,true,true,false,failure));
+ assert(!objects::select_improvements(tile,assets,2,0,true,true,failure));
 }
 ''', sources=("Renderer/native/terrain_scene_runtime.cpp",))
 
     def test_prepared_objects_private_queries_owned_capture_and_packed_parity(self):
         run_cpp(r'''
+#define NOMINMAX
 #include "Renderer/native/object_preparation.h"
 #include "Renderer/native/render_core/captured_scene.h"
 #include <cassert>

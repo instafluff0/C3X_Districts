@@ -63,11 +63,12 @@ def facade_plane_proxy(points,normals,weights,offset=.012):
     return center+direction*(support-float(center@direction)+offset),direction
 
 
-def derive(augmentation,surface,light_budget=48,source_facade_slots=()):
+def derive(augmentation,surface,light_budget=48,source_facade_slots=(),source_frames=None):
     if augmentation['emissive_uv']!=2 or augmentation['grounding']!='source_z_zero':raise ValueError('probe requires verified UV2 emission and source ground zero')
     metric=1/augmentation['scene_world_z_per_source_unit'];pack=Path(augmentation['pack'])
     normal_binding=augmentation.get('source_normals') or {}
-    frames=city.read(normal_binding['mapping'])['meshes'] if normal_binding.get('mapping') else {}
+    frames=(source_frames if source_frames is not None else
+            city.read(normal_binding['mapping'])['meshes'] if normal_binding.get('mapping') else {})
     textures={};lights=[];boxes=[];bindings=[]
     for owner,instance in enumerate(augmentation['instances']):
         body_pack=Path(augmentation['capital']['mapping'].get('pack',pack)) if instance['slot']=='capital' else pack

@@ -31,7 +31,7 @@
 #ifdef C3X_RENDERER64_FRESH
 // Defined by the Renderer64 scene client after production's visual preparation.
 bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
-    ID3D11RenderTargetView* target);
+    ID3D11RenderTargetView* target,float zoom=1.f);
 #endif
 #include "terrain_scene_runtime.h"
 #include "object_compiler.h"
@@ -2414,34 +2414,9 @@ public:
             }
         }
 
-        std::string city_root = packs_root + "\\CityComponentsNormalized";
-        std::string wall_root = packs_root + "\\CityAdjunctsNormalized";
-        std::string city_runtime_path = city_root + "\\city_runtime.bin";
-        std::string wall_runtime_path = wall_root + "\\wall_runtime.bin";
-        std::vector<std::uint8_t> city_runtime_bytes, wall_runtime_bytes;
-        city_assets_ready = read_file(city_runtime_path.c_str(), city_runtime_bytes) &&
-            load_feature_bundle(city_runtime_path, city_bundle) &&
-            city_bundle.texture_paths.size() == 8u &&
-            read_file(wall_runtime_path.c_str(), wall_runtime_bytes) &&
-            load_feature_bundle(wall_runtime_path, wall_bundle) &&
-            !wall_bundle.texture_paths.empty() &&
-            wall_bundle.texture_paths.size() <= wall_texture_views.size();
-        if (city_assets_ready) {
-            mix_content_revision(city_runtime_bytes);
-            mix_content_revision(wall_runtime_bytes);
-            for (std::size_t index = 0; index < city_base_dds.size(); ++index) {
-                city_assets_ready = city_assets_ready && load_dds_bytes(
-                    city_root.c_str(), city_bundle.texture_paths[index].c_str(),
-                    city_base_dds[index], DXGI_FORMAT_BC1_UNORM_SRGB, DXGI_FORMAT_BC1_UNORM) &&
-                    load_dds_bytes(city_root.c_str(), city_bundle.texture_paths[index + 4u].c_str(),
-                                   city_emissive_dds[index], DXGI_FORMAT_BC1_UNORM_SRGB,
-                                   DXGI_FORMAT_BC1_UNORM);
-            }
-            for (std::size_t index = 0; index < wall_bundle.texture_paths.size(); ++index)
-                city_assets_ready = city_assets_ready && load_dds_bytes(
-                    wall_root.c_str(), wall_bundle.texture_paths[index].c_str(),
-                    wall_texture_dds[index], DXGI_FORMAT_BC1_UNORM_SRGB, DXGI_FORMAT_BC1_UNORM);
-        }
+        // CityCompositionRuntime owns every city body, tree and wall.
+        // The former CityComponents/CityAdjuncts runtime bundles are retired.
+        city_assets_ready = true;
 
         std::string site_root = packs_root + "\\TileSitesRuntime";
         std::vector<std::uint8_t> site_bytes;
@@ -3087,16 +3062,6 @@ public:
                 resource_assets_ready = resource_assets_ready && ensure_dds_texture(
                     resource_texture_dds[index], resource_texture_views[index], true);
         }
-        if (city_assets_ready) {
-            for (std::size_t index = 0; index < city_base_views.size(); ++index) {
-                city_assets_ready = city_assets_ready && ensure_dds_texture(
-                    city_base_dds[index], city_base_views[index], true) &&
-                    ensure_dds_texture(city_emissive_dds[index], city_emissive_views[index], true);
-            }
-            for (std::size_t index = 0; index < wall_bundle.texture_paths.size(); ++index)
-                city_assets_ready = city_assets_ready && ensure_dds_texture(
-                    wall_texture_dds[index], wall_texture_views[index], true);
-        }
         if (mine_assets_ready) {
             for (std::size_t index = 0; index < mine_base_views.size(); ++index)
                 mine_assets_ready = mine_assets_ready && ensure_dds_texture(
@@ -3595,7 +3560,7 @@ public:
     }
 
     int resource_animation_for(c3x_renderer_tile_v1 const & tile) const {
-        if (tile.resource_id < 0 || resource_animations.empty()) return -1;
+        if (tile.city_id >= 0 || tile.resource_id < 0 || resource_animations.empty()) return -1;
         std::string name(tile.resource_name, std::find(std::begin(tile.resource_name),std::end(tile.resource_name),'\0'));
         std::transform(name.begin(),name.end(),name.begin(),[](unsigned char c){return char(std::tolower(c));});
         for (unsigned i=0;i<resource_animations.size();++i)
@@ -5431,6 +5396,10 @@ public:
                    !cities.library.materials[source_chunk.city_material].ground)
                     chunk.water_dependent=false;
                 chunk.tile_x=record.tile_x;chunk.tile_y=record.tile_y;
+                bool border_surface=record.terrain_type>=11?layer==geometry_water:
+                    layer==geometry_natural_terrain || layer==geometry_natural_mountain;
+                chunk.territory_edges=border_surface?record.territory_edge_mask:0;
+                chunk.territory_rgb=record.territory_color_rgb;
                 chunk.water_visible=!visibility_pass || (record.tile_flags&C3X_RENDERER_TILE_VISIBLE)!=0;
                 if(natural_world || source_chunk.projection_kind || source_chunk.instances)
                     chunk=project_natural_chunk(chunk,record);
@@ -5836,6 +5805,7 @@ public:
             std::vector<D3D11_RECT> const & rectangles, ViewportShaderSettings const & viewport_settings,
             std::atomic<bool> const * cancellation, bool reflection_pass=false) {
         if(buffers[layer].empty())return true;
+        if(city_profile)cities.scene_lights.bind(context);
         auto issue_begin=std::chrono::steady_clock::now();
         AnimationGpu::Pass gpu_phase(animation_gpu,context,layer==geometry_shadow?AnimationGpu::shadow:AnimationGpu::body,
             profiling && (layer==geometry_shadow || layer==geometry_feature) && !buffers[layer].empty());
@@ -6857,7 +6827,9 @@ public:
                            tile.route_style, tile.resource_id, tile.resource_class, tile.barbarian_tribe_id,
                            tile.city_id, tile.city_owner_id, tile.city_size,
                            tile.city_culture_group, tile.city_era,
-                           static_cast<c3x_renderer_i32>(tile.city_flags)})
+                           static_cast<c3x_renderer_i32>(tile.city_flags),
+                           static_cast<c3x_renderer_i32>(tile.territory_edge_mask),
+                           static_cast<c3x_renderer_i32>(tile.territory_color_rgb)})
             mix(&value, sizeof(value));
         mix(tile.resource_name, sizeof(tile.resource_name));
         return hash;
@@ -6940,7 +6912,9 @@ public:
             left.city_size == right.city_size &&
             left.city_culture_group == right.city_culture_group &&
             left.city_era == right.city_era &&
-            left.city_flags == right.city_flags;
+            left.city_flags == right.city_flags &&
+            left.territory_edge_mask == right.territory_edge_mask &&
+            left.territory_color_rgb == right.territory_color_rgb;
     }
 
     bool same_terrain_record(c3x_renderer_tile_v1 const & left,
@@ -7154,8 +7128,12 @@ public:
             trace.write("reflection-failed","shader initialization",true);return false;
         }
         load_phase("load-reflection");
-        if(city_profile && !cities.load(device,shader_root,read_fidelity,upload_fidelity)){
-            trace.write("city-composition-failed","pack/material initialization; native fallback",true);return false;
+        char city_pack[4*MAX_PATH]={};
+        DWORD city_pack_length=GetEnvironmentVariableA("C3X_RENDERER_CITY_PACK",city_pack,sizeof(city_pack));
+        if(city_pack_length>=sizeof(city_pack))return false;
+        if(city_profile && !cities.load(device,shader_root,read_fidelity,upload_fidelity,
+                city_pack_length?city_pack:"Renderer/packs/CityCompositionRuntime")){
+            trace.write("city-composition-failed","required city pack/material initialization failed",true);return false;
         }
         load_phase("load-city");
         if(asset_bytes){char detail[192];sprintf_s(detail,"bytes=%zu read_ms=%.3f hash_ms=%.3f texture_ms=%.3f",asset_bytes,
@@ -9491,7 +9469,7 @@ public:
                     anchor.ground=relief_at_world(anchor.world_u+anchor.u,anchor.world_v+1-anchor.v)[0];
                     tile_resource_anchors.push_back(anchor);
                 }
-            } else if (resource_assets_ready && tile.resource_id >= 0) {
+            } else if (tile.city_id < 0 && resource_assets_ready && tile.resource_id >= 0) {
                 std::string resource_name = tile.resource_name;
                 std::transform(resource_name.begin(), resource_name.end(), resource_name.begin(),
                     [](unsigned char value) { return static_cast<char>(std::tolower(value)); });
@@ -9536,11 +9514,8 @@ public:
                         (tile.tile_x+tile.tile_y)/2,(tile.tile_x-tile.tile_y)/2,world_lookup,shore_sample_at,
                         [&](float x,float y){return natural.river_sample({x,y}).distance;},natural_height_at);
                 if(tile_city_composition && city_assets_ready && ground<11)++city_fallbacks_omitted;
-                float composed_wall_radius=tile_city_composition ?
-                    c3x_renderer::city_fidelity::metropolis_wall_radius(*tile_city_composition):0.0f;
                 if(!c3x_renderer::objects::select_improvements(tile,object_assets,ground,site_flags,
-                        mine_assets_ready,farm_assets_ready,city_assets_ready,
-                        tile_city_composition!=nullptr,composed_wall_radius,plan))return false;
+                        mine_assets_ready,farm_assets_ready,plan))return false;
                 if(farm_assets_ready && (tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_IRRIGATION)){
                     c3x_renderer::objects::settle_farm_fields(plan,tile,object_assets,relief_at_world);
                     c3x_renderer::objects::settle_farm_props(plan,tile,object_assets,relief_at_world);
@@ -11018,10 +10993,10 @@ public:
         // game-state or camera transaction merely to draw an older visual time.
         std::unique_lock<std::mutex> calls(call_mutex,std::defer_lock);
         if(consumer_pid)calls.lock();
-        else if(!calls.try_lock())return C3X_RENDERER_RESULT_PENDING;
+        else if(!calls.try_lock())return C3X_RENDERER_RESULT_BUSY;
         std::unique_lock<std::mutex> lock(state_mutex,std::defer_lock);
         if(consumer_pid)lock.lock();
-        else if(!lock.try_lock())return C3X_RENDERER_RESULT_PENDING;
+        else if(!lock.try_lock())return C3X_RENDERER_RESULT_BUSY;
         trial_consumer_pid=consumer_pid;trial_handle=0;trial_width=trial_height=0;
         visual_ticks=ticks;visual_frequency=frequency;
         int result=submit_locked(lock,Command::trial_visual_shared);
@@ -11148,6 +11123,7 @@ private:
         view=gpu_view;metadata=gpu_metadata;return C3X_RENDERER_RESULT_OK;
     }
 public:
+    unsigned presented_zoom()const{return presented_zoom_q16.load(std::memory_order_acquire);}
     int images_gpu(c3x_renderer_gpu_images_v1 const& request,c3x_renderer_gpu_result_v1& result,unsigned* readback,unsigned capacity){
         std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);
         start_locked();
@@ -12291,6 +12267,7 @@ private:
     bool replay_clock_seeded=false;
     bool visual_delivery=false,visual_present_pending=false,visual_allowed=true;
     long long visual_ticks=0,visual_last=0,visual_frequency=0;
+    std::atomic<unsigned> presented_zoom_q16{65536};
     std::uint64_t visual_frames=0,visual_map_samples=0,visual_unit_samples=0,visual_pose_changes=0;
     int last_visual_ready=-1;
 #ifdef C3X_HELPER_TRIAL
@@ -12665,6 +12642,11 @@ private:
         auto unit_generation=unit_instances.generation();
 #ifdef C3X_RENDERER64_FRESH
         if(fresh_map){
+            char detail_option[32]={};float sharpness=.35f;
+            if(GetEnvironmentVariableA("C3X_RENDERER_SCENE_SHARPNESS",detail_option,sizeof(detail_option))){
+                float requested=float(std::atof(detail_option));
+                if(std::isfinite(requested))sharpness=std::clamp(requested,0.f,1.f);
+            }
             // Match the sandbox's resident frame loop: scene preparation occurs
             // on authoritative changes, never on an ambient display tick.
             auto geometry=renderer_state.cached_signature.geometry;
@@ -12675,8 +12657,8 @@ private:
             Microsoft::WRL::ComPtr<ID3D11RenderTargetView> target;
             if(!texture||FAILED(renderer_state.device->CreateRenderTargetView(texture.Get(),nullptr,&target)))
                 throw std::runtime_error("fresh resident display target unavailable");
-            return [this,capture,selected,origin,x,y,w,h,geometry,epoch,map_publication_serial,settings,texture,target]
-                (long long ticks,long long frequency)->Sampled{
+            auto draw=[this,capture,selected,origin,x,y,w,h,geometry,epoch,map_publication_serial,settings,texture,target,sharpness]
+                (long long ticks,long long frequency,float zoom)->Sampled{
                 c3x_renderer_frame_v1 view={};
                 if(!capture->valid()||!selected->sample(ticks,frequency,origin,view))return {};
                 if(renderer_state.gpu_serial!=map_publication_serial)return Sampled::frozen();
@@ -12695,11 +12677,13 @@ private:
                     ~RestoreViewport(){value=previous;}
                 } restore{renderer_state.geometry_viewport_settings,renderer_state.geometry_viewport_settings};
                 if(!changed)renderer_state.geometry_viewport_settings=settings;
-                bool drawn=c3x_renderer64_render_fresh(frame,target.Get());
+                bool drawn=c3x_renderer64_render_fresh(frame,target.Get(),zoom);
                 if(!drawn)throw std::runtime_error("fresh resident frame failed");
                 ++visual_map_samples;
-                return Sampled::bgra(texture.Get(),{x,y,x+w,y+h});
+                return Sampled::bgra(texture.Get(),{x,y,x+w,y+h},sharpness);
             };
+            c3x_gpu_images::RetainedComposition::Sample sample=[draw](long long ticks,long long frequency){return draw(ticks,frequency,1.f);};
+            sample.projected=std::move(draw);return sample;
         }
 #endif
         return [this,capture,selected,origin,clock,unit_generation,x,y,w,h,water_samples](long long ticks,long long frequency)mutable -> Sampled{
@@ -13515,7 +13499,11 @@ private:
                     // New UI commits and animated map samples share this
                     // cadence. Unchanged static fronts have nothing to present.
                     HRESULT hr=drawn==1?trial_surface_swap->Present(0,0):S_OK;
-                    if(drawn==1&&SUCCEEDED(hr))trial_surface_permit.presented();
+                    if(drawn==1&&hr==S_OK){
+                        trial_surface_permit.presented();
+                        renderer_state.gpu_composition->did_present();
+                        presented_zoom_q16.store(renderer_state.gpu_composition->presented_zoom(),std::memory_order_release);
+                    }
                     if(phase_probe)QueryPerformanceCounter(&finished);
                     result=FAILED(hr)?C3X_RENDERER_RESULT_DEVICE_ERROR:
                         drawn==1?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_PENDING;
@@ -14664,6 +14652,8 @@ int renderer_native_image_impl(int operation,void* image,void* source,void const
             const_cast<int*>(static_cast<int const*>(to)))==C3X_RENDERER_RESULT_OK?1:-1;}
         catch(...){return -1;}
     }
+    if(operation==C3X_NATIVE_ZOOM_PRESENTED)return remote_renderer_requested()?int(remote_renderer_backend()->presented_zoom()):
+        renderer_worker?int(renderer_worker->presented_zoom()):65536;
     if(operation==C3X_NATIVE_TACTICAL_CAPABLE)return native_composition&&native_composition->active()?1:0;
     if(operation==C3X_NATIVE_VISUAL_POLICY)return remote_renderer_requested()?remote_renderer_backend()->visual_policy(color):
         renderer_worker?renderer_worker->visual_policy(color):0;

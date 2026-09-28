@@ -15,6 +15,7 @@
 #include <string>
 
 #include "c3x_renderer_api.h"
+#include "city_border_fixture.h"
 #include "gpu_frame_api.h"
 #include "native_frame_workload.h"
 #ifdef C3X_GPU_NATIVE_CONTRACT
@@ -532,6 +533,7 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
         if(boundary_mine && tile.tile_x==boundary_x && tile.tile_y==boundary_y-2)
             tile.improvement_flags=C3X_RENDERER_IMPROVEMENT_MINE;
     }
+    city_border_fixture(tiles,map_width);
     if(timing_enabled){QueryPerformanceCounter(&capture_end);fresh_capture=true;}
     return tiles;
     };

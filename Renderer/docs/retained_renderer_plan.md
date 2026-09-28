@@ -10,68 +10,78 @@ the former 1,326-line roadmap.
 
 ## Current state
 
-- **Current priority: held-mouse targeting, then wheel zoom, easing and navigation performance.**
-  Explosions and smoke are on hold at the user's request. The imported local
-  effect assets remain available for later work.
-  Candidate `c704bcc8bce5401294b88494fde7b312` is staged. Its async fixture
-  passes at 60.00 FPS (59.95 during pose changes), with 32 adopted cameras,
-  120 frames during a host pause, 73 publications during a renderer pause,
-  p95 submission 0.925 ms and zero CPU map readbacks. These are fixture
-  measurements, not live-game FPS.
+- **Graphics quality is the active work.** The user authorized completing the
+  quality changes without intermediate approval checkpoints. Shared geometry
+  now rasterizes at displayed zoom, with modest scene-wide CAS before native
+  HUD and pose-local GPU self shadows for every unit. Sampling comparisons keep
+  the native single-sample target; MSAA2 costs more during view changes. The
+  [quality note](render_quality.md) records source findings, tests, captures and
+  performance limits. Candidate `b71c8cee78144743bd2aac3ac7c7de4f` is staged;
+  its async fixture measures 60 FPS and zero CPU map readbacks. Corrected live
+  zoom capture `20260928-094902` measures 51.1 FPS at normal zoom, 35.1 over
+  repeated zoom changes, and 49.5 at settled 1.25x. The final scroll control
+  measures 44.6 FPS while moving and 50.5 afterward. HUD and city checks retain
+  fixed labels and both native city zoom levels with the same center. The cold
+  city-view preparation delay remains unresolved. These initial-save results
+  do not establish uniform frame pacing or Civ VI visual parity. No fixed
+  reference image has been replaced.
 
-  Small HUD background reads previously rebuilt full-screen source textures.
-  Retained reads now preserve their actual read footprint and reuse a source
-  view when it covers every needed pixel. Sparse and aliased inputs retain
-  exact assembly. The GPU regression checks 32 small HUD reads over five
-  changing 2240×1260 frames, with exact pixels and 2,920,704 assembled pixels
-  per frame. Paired native transfers share immutable versions; keyed form
-  transfers skip proven empty margins. No CPU map fallback was added.
 
-  At one-Hz window sampling, the profiled held-drag rate improved from
-  31.66 to 44.09 visual submissions/sec (`231750` → `232845`). Median sampled
-  composition time fell from 29.976 to 17.680 ms. A DXGI presentation permit
-  now bounds the display queue; its zero-timeout poll leaves command delivery
-  available when the compositor is busy. It retains admission across static
-  no-op frames. Matched one-Hz counter runs before/after that limit record
-  42.74/42.46 presentations/sec in the same held-drag phase: the queue limit
-  does not establish an FPS improvement.
+- **Previous functional baseline: smooth zoom.**
+  Explosions and smoke remain on hold. Native Civ III HUD keeps its pixel size;
+  city labels, status icons and map messages move with their attachment. Only
+  Renderer64 world graphics scale. Fixed panels retain their screen position.
 
-  Capture `20260927-235859` bounds two destination-marker changes at 4–86 ms
-  and 62–180 ms using compositor source timestamps. This is a bounded mouse
-  witness, not a frame-perfect latency measurement or complete UX acceptance.
-  All seven input commands complete, picks remain consistent, and no native
-  failure, early exit or save change occurs.
+  The renderer now receives a copied zoom target through the existing async
+  image queue. Canonical capture stays at 128 pixels; no camera recapture or
+  redraw is requested for intermediate views. Renderer64 samples one damped
+  view clock, and picking reads the scale of the last successful presentation.
+  The helper wire is version 10; stage the bridge, x64 DLL and helper together.
+  See [implementation and tests](custom_rendering_zoom.md).
 
-  Navigation remains below the sandbox target. `20260928-000807` completes
-  all 32 camera moves with the terrain, units and HUD visible in sampled
-  frames. It records about 32.6 presentations/sec during scrolling and 46.1
-  afterward. `20260928-001129` completes all ten wheel inputs at about 38.5/sec
-  during the input sequence and 47.5 afterward. Both use one-Hz capture and
-  the read-only presentation counter, with no renderer errors or save changes.
-  These counters do not measure physical scanout. The roughly 52 FPS target
-  is not yet met in these navigation workloads.
+  Live HUD capture `20260928-080539` completes both camera moves, three text
+  events, native city zoom and advisor open/close without renderer errors or
+  save changes. Sampled frames show fixed-size city labels at the new map
+  positions, no old-label copies and preserved fixed panels. Retained UI
+  backgrounds reference the current world/HUD selection; native UI commits
+  retain their actual dirty rectangles. GPU regressions reproduce the old
+  label and partial-panel failures and check the replacement pixels exactly.
 
-  Wheel activation was explicitly authorized and installed: the GOG m25 row
-  changes from `ignore` to `repl vptr`. Thirteen zoom/input tests and the injected
-  smoke passed at activation. Live `20260927-233038` delivers ten wheel events,
-  including a 162 ms reversal and three accumulated 40-unit deltas. The center
-  tile stays fixed and a round trip restores the original transform. There are
-  no native failures, early exit or save changes. Smooth zoom remains pending:
-  renderer-owned intermediate views must carry map HUD anchors and inverse
-  picking together, while fixed UI remains in screen coordinates.
+  City capture `20260928-082829` verifies native 64/128-pixel zoom with an
+  unchanged city anchor at both levels. The terrain is visible at both levels;
+  wheel input and attempts to scroll at either screen edge leave the city
+  centered. The native spotlight lifetime excludes custom zoom and manual
+  panning, including the first city draw. The existing native centering helper
+  now preserves both tile-row parity and the same vertical pixel offset.
 
-  A GPU completion gate never became busy and was removed. Removing the
-  mid-frame flush moved its wait to later work and did not itself establish a
-  speedup. A direct-to-retained-output experiment passed pixel checks but did
-  not establish a performance benefit and was discarded.
-  An opaque native GPU-copy trial also passed exact pixels but left matched
-  scrolling cadence unchanged (32.57 → 32.56/sec). It was removed, and the
-  source-matched `c704` trio was restored with all three hashes verified.
-  Final focused verification: 35 tests completed (one optional executable
-  audit skipped); the retained compositor has 126 exact GPU oracles. Injected
-  sources are unchanged in this iteration, so reinjection is unnecessary.
-  The [scripted testing guide](../tools/scripted_game_test.md) records mouse
-  timestamps, buffered profiling, presentation counters and visible-latency checks.
+  Evaluation candidate `248f18290d534006846bf930edd62dbe` is staged and console
+  installed. Its async fixture passes at 59.89 FPS (59.75 during pose changes),
+  with 32 adopted cameras, 121 frames during a host pause, 71 publications
+  during a renderer pause, p95 submission 0.894 ms and zero CPU map readbacks.
+  These are fixture measurements, not live-game FPS. Twenty-four focused tests,
+  the retained GPU suite, injected compilation and console installation pass.
+
+  Live performance remains open. One-Hz scroll control `20260928-083716`
+  measures 31.7 presentations/sec during scrolling and 40.7 afterward, with
+  all 32 camera steps completed and no renderer errors or save changes. The
+  selected-world GPU copy reduction and bounded busy-transaction retry have
+  not established a measured live FPS gain over the earlier 34.9/41.7 control.
+  The roughly 52 FPS sandbox target is **not yet established in the live game**.
+  Final zoom capture `20260928-083851` completes all ten wheel inputs with
+  no renderer errors or save changes. Presentation telemetry records 68 distinct
+  scales within 1.0–1.5, correct endpoints, reversal and three accumulated
+  40-unit deltas. Reviewed window frames show aligned terrain, units and
+  selection throughout, with fixed panels preserved. This is a functional zoom
+  pass, not a claim of uniform frame pacing at the sandbox target. The user
+  requested stopping once zoom passed, then authorized the graphics-quality
+  work above. Cold city-view preparation and broader menu/reload work remain
+  separate unresolved items.
+
+  The first reduced city view still prepares new terrain geometry and can take
+  about seven seconds. Centering and native zoom restrictions are verified;
+  this cold preparation delay is unresolved. Earlier advisor queue exhaustion
+  has not recurred in the recent HUD/advisor captures, but broader UI coverage
+  remains open. No reference image acceptance is implied.
 
 - **Earlier movement evidence: tile travel and combat presentation.**
   Asynchronous fixture `94050b8afeb4467f89518784e5ed8391` passes at **59.26 FPS**,

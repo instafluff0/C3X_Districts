@@ -68,12 +68,12 @@ struct Fresh {struct {struct {ID3D11Texture2D* depth_texture=nullptr;} linear;} 
 bool drawn=false,draw_ok=true,apply_ok=true;int masks=0;
 struct Output {bool draw(Target*,int,int){drawn=true;return draw_ok;}} sandbox_backbuffer_output;
 struct Renderer {bool visibility_pass=true;int device=0,context=0,visibility_coverage=123;
- struct Mask {bool apply(int,int,ID3D11Texture2D* texture,int coverage,ID3D11Texture2D* actors,unsigned guard){
-  assert(actors==sandbox_fresh.glow.linear.depth_texture&&guard==4);
+ struct Mask {bool apply(int,int,ID3D11Texture2D* texture,int coverage,ID3D11Texture2D* actors,unsigned guard,float zoom){
+  assert(actors==sandbox_fresh.glow.linear.depth_texture&&guard==4&&zoom==1.25f);
   assert(drawn&&texture->id==42&&coverage==123);++masks;return apply_ok;}} visibility_gpu;
 } renderer;
 struct Frame {int target_width=128,target_height=64;} frame;
-bool sample(Target* target){
+bool sample(Target* target,float zoom=1.25f){
  bool presented=sandbox_backbuffer_output.draw(''' + body + r'''
  return presented;
 }

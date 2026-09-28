@@ -23,7 +23,7 @@ int main(int argc,char** argv){try{
         }
         require(asset_file(asset_path(file.c_str())).exists&&!asset_file(asset_path(missing.c_str())).exists,"stable optional asset presence differs");}
 #endif
-    c3x_renderer_tile_v1 tile={};tile.tile_x=-8;tile.tile_y=3;tile.tile_flags=458752;tile.anchor_x=-71;tile.resource_id=29;
+    c3x_renderer_tile_v1 tile={};tile.tile_x=-8;tile.tile_y=3;tile.tile_flags=458752;tile.anchor_x=-71;tile.resource_id=29;tile.territory_edge_mask=13;tile.territory_color_rgb=0x31c4b8;
     std::memcpy(tile.resource_name,"cattle",7);std::memcpy(tile.city_owner,"test-owner",11);tile.barbarian_tribe_id=18;
     c3x_renderer_u32 topology[]={0x12345678,0xffffffff};c3x_renderer_frame_v1 frame={};frame.api_version=C3X_RENDERER_API_VERSION;frame.struct_size=sizeof(frame);
     frame.target_width=2240;frame.target_height=1260;frame.clip_right=2240;frame.clip_bottom=1260;frame.tile_count=1;frame.tiles=&tile;
@@ -32,6 +32,7 @@ int main(int argc,char** argv){try{
     Frame restored;Reader parser{encoded};c3x_inputs::frame(parser,restored);parser.done();
     require(restored.value.tiles!=&tile&&restored.value.world_topology!=topology,"replay must own arrays");
     require(restored.value.presentation_time_ticks==frame.presentation_time_ticks&&restored.tiles[0].tile_x==-8&&restored.topology[1]==0xffffffff,"scene values changed");
+    require(restored.tiles[0].territory_edge_mask==13&&restored.tiles[0].territory_color_rgb==0x31c4b8,"native border ownership/color lost");
     Writer roundtrip;c3x_inputs::frame(roundtrip,restored.value);require(roundtrip.bytes==encoded,"canonical scene roundtrip differs");
     auto bad=encoded;bad.pop_back();try{Reader r{bad};c3x_inputs::frame(r,restored);throw 1;}catch(std::runtime_error const&){}
     c3x_renderer_unit_v1 actor={};actor.struct_size=sizeof(actor);actor.unit_id=41;actor.action=8;actor.queued_action=3;

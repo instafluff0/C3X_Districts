@@ -14,6 +14,7 @@ class ScriptedGameInputTests(unittest.TestCase):
 #include "Renderer/native/helper_trial/scene_wire.h"
 static_assert(c3x_helper_trial::wire_version == ''' + version + ''', "Diagnostic wire version");
 static_assert(offsetof(c3x_helper_trial::Wire, visual_frames) == ''' + offset + ''', "Diagnostic counter offset");
+static_assert(offsetof(c3x_helper_trial::Wire, presented_zoom_q16) == 232, "Presented zoom counter offset");
 int main() {}
 ''')
 

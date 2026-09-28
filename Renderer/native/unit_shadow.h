@@ -16,7 +16,7 @@ struct UnitShadow {
     float left=0,top=0,width=1,height=1,dx=0,dy=0;
     using Point=std::array<float,3>;
     Point project(Point p) const {return {p[0]-dx*p[2],p[1]-dy*p[2],p[2]};}
-    bool fit(std::vector<Point> const& points,float light_x,float light_y) {
+    bool fit(std::vector<Point> const& points,float light_x,float light_y,bool include_below_ground=false) {
         for(auto const& p:points)for(float value:p)
             if(!std::isfinite(value) || std::abs(value)>1024.f)return false;
         if(!std::isfinite(light_x) || !std::isfinite(light_y))return false;
@@ -27,7 +27,7 @@ struct UnitShadow {
         dx=length>1e-5f?light_x/length*scale:0;
         dy=length>1e-5f?-light_y/length*scale:0;
         float right=-1e6f,bottom=-1e6f;left=top=1e6f;
-        for(auto p:points)if(p[2]>=0) {
+        for(auto p:points)if(include_below_ground || p[2]>=0) {
             p=project(p);left=std::min(left,p[0]);top=std::min(top,p[1]);
             right=std::max(right,p[0]);bottom=std::max(bottom,p[1]);
         }

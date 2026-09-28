@@ -1,5 +1,8 @@
 #pragma once
 #include "gpu_image_compositor.h"
+#include "zoom_transition.h"
+#include "scene_projection.h"
+#include "gpu_projected_layer.h"
 #include <map>
 #include <memory>
 #include <functional>
@@ -15,7 +18,7 @@ public:
     using Texture=ComPtr<ID3D11Texture2D>;
     struct SampledImage {
         enum class Kind { unchanged, immutable, bgra, frozen };
-        Kind kind=Kind::unchanged;Texture texture;Rect area{};
+        Kind kind=Kind::unchanged;Texture texture;Rect area{};float sharpness=0.f;
         SampledImage()=default;
         // The source owner has moved to another camera. Preserve this exact
         // completed image, but retire its animation callback and dependencies.
@@ -23,11 +26,19 @@ public:
         SampledImage(Texture value):kind(Kind::immutable),texture(std::move(value)){}
         // Borrow a working BGRA surface only until this sample is consumed.
         // The retained node imports it into its own reusable packed output.
-        static SampledImage bgra(ID3D11Texture2D* source,Rect region){
-            SampledImage result;result.kind=Kind::bgra;result.texture=source;result.area=region;return result;
+        static SampledImage bgra(ID3D11Texture2D* source,Rect region,float sharpness=0.f){
+            SampledImage result;result.kind=Kind::bgra;result.texture=source;result.area=region;result.sharpness=sharpness;return result;
         }
     };
-    using Sample=std::function<SampledImage(long long,long long)>;
+    struct Sample {
+        std::function<SampledImage(long long,long long)> canonical;
+        std::function<SampledImage(long long,long long,float)> projected;
+        Sample()=default;
+        template<class F,typename std::enable_if<!std::is_same<typename std::decay<F>::type,Sample>::value,int>::type=0>
+        Sample(F&& function):canonical(std::forward<F>(function)){}
+        explicit operator bool()const{return bool(canonical);}
+        SampledImage operator()(long long ticks,long long frequency)const{return canonical(ticks,frequency);}
+    };
     struct Direct {
         // Sample copied state once per frame, then execute against assembled
         // resident underlays in native order. No finished unit source image.
@@ -41,23 +52,34 @@ private:
     struct Patch {Rect area;std::shared_ptr<Node> node;unsigned output=0;};
     struct Picture {unsigned width=0,height=0;Format format=Format::bgra32;std::vector<Patch> patches;bool partitioned=true;std::uint64_t version=0;Rect required{};};
     struct Node {
-        Rect area{};Command command{};bool operation=false,dynamic=false,map_dynamic=false,constant=false;
+        Rect area{};Command command{};bool selected_world=false,operation=false,dynamic=false,map_dynamic=false,constant=false,view_dependent=false;
         Picture inputs[6];Id original[6]={};
         Texture output[2];std::uint64_t bytes[2]={},revision=0,seen=0,sampled=0,direct_revision=0;
         ComPtr<ID3D11ShaderResourceView> output_view[2];
         std::vector<std::uint64_t> dependencies;
         Sample sample;Direct direct;Compositor::ImportTarget sample_target;
+        std::shared_ptr<c3x_renderer::ZoomTransition> view;
+        std::shared_ptr<c3x_renderer::ZoomTransition> placement;
+        int anchor_x=0,anchor_y=0;
+        Compositor::ImportTarget view_words;
+        unsigned view_native_format=0;
+        float view_scale=0.f;
+        std::shared_ptr<Node> projected;
+        std::uint64_t projected_frame=0;
+        bool projects_scene=false;
     };
     ID3D11Device* device;ID3D11DeviceContext* context;
     Compositor replay;
     std::map<Id,Picture> images;
     Picture front;
+    std::shared_ptr<Node> world_selection;
     std::uint64_t serial=0,frame=0,front_revision=0,drawn_revision=0;
     std::vector<std::uint64_t> drawn_dependencies;
     bool admitted=true;
     std::size_t nodes=0;std::uint64_t resident_bytes=0;
     std::uint64_t sample_allocations=0,sample_imports=0,source_views=0;
-    Work work;
+    Work work;double selected_view_scale=1.;
+    ProjectedLayer projected_layer;
     // Match the bounded live native family, including saved packed/full-color
     // versions and old/new immutable map overlap at fullscreen.
     constexpr static std::uint64_t resident_budget=256u*1024u*1024u;
@@ -123,22 +145,28 @@ private:
     void write(Picture& image,Rect region,std::shared_ptr<Node> const& value,unsigned output){
         region=intersect(region,extent(image));if(!empty(region))replace(image,region,{{region,value,output}});
     }
-    void collect(std::shared_ptr<Node> const& n,long long ticks,long long frequency,unsigned depth){
-        if(n->sampled==frame)return;
+    void collect(std::shared_ptr<Node> const& n,long long ticks,long long frequency,unsigned depth,bool project=false){
+        project|=n->projects_scene;
+        bool marked=project&&n->projected_frame!=frame;
+        if(project)n->projected_frame=frame;
+        if(n->sampled==frame&&!marked)return;
         if(depth>256)throw std::runtime_error("retained composition dependency depth");
         // Collect authoritative direct samples before any map rendering or pose
         // joins. Revision callbacks may offer immutable CPU inputs to workers;
         // actual GPU execution remains in the original native command order.
         if(n->direct.revision)n->direct_revision=n->direct.revision(ticks,frequency);
         for(auto const& input:n->inputs)for(auto const& patch:input.patches)
-            collect(patch.node,ticks,frequency,depth+1);
+            collect(patch.node,ticks,frequency,depth+1,project);
         n->sampled=frame;
     }
     void evaluate(std::shared_ptr<Node> const& n,long long ticks,long long frequency,unsigned depth){
         if(n->seen==frame)return;
         if(depth>256)throw std::runtime_error("retained composition dependency depth");
         if(n->sample){
-            auto sampled=n->sample(ticks,frequency);
+            // The displayed scene is sampled at its projection below. Native
+            // save/restore images retain the canonical publication, so they
+            // cannot trigger a second geometry draw at the old zoom.
+            auto sampled=n->sample.projected&&n->projected_frame==frame?SampledImage{}:n->sample(ticks,frequency);
             if(sampled.kind==SampledImage::Kind::frozen){
                 n->sample={};n->sample_target={};n->dynamic=n->map_dynamic=false;
             }else if(sampled.kind==SampledImage::Kind::bgra){
@@ -152,7 +180,7 @@ private:
                     if(!canvas)throw std::runtime_error("retained sample admission failed");
                     n->sample_target=replay.release_import_target(canvas);++sample_allocations;
                 }
-                if(!replay.import_bgra(n->sample_target,sampled.texture.Get(),r.left,r.top))
+                if(!replay.import_bgra(n->sample_target,sampled.texture.Get(),r.left,r.top,sampled.sharpness))
                     throw std::runtime_error("retained sample import failed");
                 ++sample_imports;output(*n,0,n->sample_target.texture);n->revision=++serial;
             }else if(sampled.kind==SampledImage::Kind::immutable){
@@ -162,10 +190,76 @@ private:
                     output(*n,0,std::move(sampled.texture));n->revision=++serial;
                 }
             }
+        }else if(n->selected_world){
+            std::vector<std::uint64_t> versions={n->inputs[0].version,n->inputs[1].version};
+            n->map_dynamic=false;
+            for(unsigned i=0;i<2;++i)for(auto const& patch:n->inputs[i].patches){
+                evaluate(patch.node,ticks,frequency,depth+1);versions.push_back(patch.node->revision);
+                n->map_dynamic|=patch.node->map_dynamic;
+            }
+            if(!n->output[0]||versions!=n->dependencies){
+                for(unsigned i=0;i<2;++i){
+                    auto source=assemble(n->inputs[i],ticks,frequency,depth+1,{},true,true,n->output[i].Get());
+                    try{if(replay.texture(source)!=n->output[i].Get())capture_output(*n,i,replay.texture(source),n->area);}
+                    catch(...){replay.recycle(source);throw;}replay.recycle(source);
+                }
+                n->dependencies=std::move(versions);n->revision=++serial;
+            }
+        }else if(n->view&&n->projects_scene){
+            float scale=float(n->view->sample(ticks,frequency));
+            auto source=assemble_projected(n->inputs[0],ticks,frequency,depth+1,scale,extent(n->inputs[0]),n->inputs[0].width,n->inputs[0].height);
+            try{
+                for(unsigned i=0;i<(n->view_native_format?2u:1u);++i){
+                    auto& target=i?n->view_words:n->sample_target;
+                    if(!target.texture){
+                        auto id=replay.create(n->inputs[0].width,n->inputs[0].height,Format::bgra32,false);
+                        if(!id)throw std::runtime_error("projected world admission");
+                        target=replay.release_import_target(id);output(*n,i,target.texture);
+                    }
+                }
+                if(!replay.transform_view(n->sample_target,source,1.f,n->view_native_format?&n->view_words:nullptr,
+                    n->view_native_format==2?Format::rgb565:Format::rgb555))throw std::runtime_error("projected world rejected");
+            }catch(...){replay.recycle(source);throw;}
+            replay.recycle(source);n->view_scale=scale;n->revision=++serial;selected_view_scale=scale;
+        }else if(n->view){
+            std::vector<std::uint64_t> versions;
+            n->map_dynamic=false;
+            for(auto const& patch:n->inputs[0].patches){
+                evaluate(patch.node,ticks,frequency,depth+1);versions.push_back(patch.node->revision);
+                n->map_dynamic|=patch.node->map_dynamic;
+            }
+            float scale=float(n->view->sample(ticks,frequency));
+            if(!n->output[0]||n->view_scale!=scale||versions!=n->dependencies){
+                auto source=assemble(n->inputs[0],ticks,frequency,depth+1,{},true);
+                try{
+                    for(unsigned i=0;i<(n->view_native_format?2u:1u);++i){
+                        auto& target=i?n->view_words:n->sample_target;
+                        if(!target.texture){
+                            auto bytes=std::uint64_t(n->inputs[0].width)*n->inputs[0].height*4;
+                            if(bytes>resident_budget-(resident_bytes-n->bytes[i]))throw std::runtime_error("retained composition texture budget");
+                            auto id=replay.create(n->inputs[0].width,n->inputs[0].height,Format::bgra32,false);
+                            if(!id)throw std::runtime_error("retained view output admission failed");
+                            target=replay.release_import_target(id);output(*n,i,target.texture);
+                        }
+                    }
+                    if(!replay.transform_view(n->sample_target,source,scale,n->view_native_format?&n->view_words:nullptr,
+                        n->view_native_format==2?Format::rgb565:Format::rgb555))throw std::runtime_error("retained world view rejected");
+                }catch(...){replay.recycle(source);throw;}
+                replay.recycle(source);
+                n->view_scale=scale;n->dependencies=std::move(versions);n->revision=++serial;
+            }
+            selected_view_scale=n->view_scale;
         }else if(n->operation){
             std::vector<std::uint64_t> versions;
             if(n->direct.revision)versions.push_back(n->direct_revision);
-            n->dynamic=n->direct.animated;n->map_dynamic=false;
+            int dx=0,dy=0;
+            if(n->placement){
+                auto scale=n->placement->sample(ticks,frequency);
+                dx=int(std::lround((n->anchor_x-int(n->inputs[0].width/2))*(scale-1.)));
+                dy=int(std::lround((n->anchor_y-int(n->inputs[0].height/2))*(scale-1.)));
+                versions.push_back((std::uint64_t(unsigned(dx))<<32)|unsigned(dy));
+            }
+            n->dynamic=n->direct.animated||bool(n->placement);n->map_dynamic=false;
             for(auto const& p:n->inputs)for(auto const& patch:p.patches){
                 evaluate(patch.node,ticks,frequency,depth+1);versions.push_back(patch.node->revision);
                 n->dynamic|=patch.node->dynamic;n->map_dynamic|=patch.node->map_dynamic;
@@ -182,10 +276,10 @@ private:
                 // These native operations write every pixel of their local
                 // result. Their discarded before-image needs storage, not a
                 // clear followed by an immediate overwrite of the same pixels.
-                bool overwrite=local&&!n->direct.draw&&(original.kind==Kind::fill||original.kind==Kind::copy||
+                bool overwrite=!n->placement&&local&&!n->direct.draw&&(original.kind==Kind::fill||original.kind==Kind::copy||
                     original.kind==Kind::quantize||(original.kind==Kind::expand&&original.color==65536)||
                     (original.kind==Kind::native_image&&original.color==65536));
-                bool tight_source=local&&original.kind==Kind::native_image&&
+                bool tight_source=!n->placement&&local&&original.kind==Kind::native_image&&
                     original.source_width==original.area.right-original.area.left&&original.source_height==original.area.bottom-original.area.top;
                 Rect source_area={original.source_x+n->area.left-original.area.left,original.source_y+n->area.top-original.area.top,
                     original.source_x+n->area.right-original.area.left,original.source_y+n->area.bottom-original.area.top};
@@ -205,6 +299,10 @@ private:
                     c.detail=temporary[3];c.background_detail=temporary[4];c.program=temporary[5];
                     c.area={c.area.left-x,c.area.top-y,c.area.right-x,c.area.bottom-y};
                     c.clip={c.clip.left-x,c.clip.top-y,c.clip.right-x,c.clip.bottom-y};
+                    if(n->placement){
+                        c.area={c.area.left+dx,c.area.top+dy,c.area.right+dx,c.area.bottom+dy};
+                        c.clip={c.clip.left+dx,c.clip.top+dy,c.clip.right+dx,c.clip.bottom+dy};
+                    }
                     Rect result={n->area.left-x,n->area.top-y,n->area.right-x,n->area.bottom-y};
                     if(tight_source){c.area=c.clip=result;c.source_x=c.source_y=0;
                         c.source_width=result.right-result.left;c.source_height=result.bottom-result.top;}
@@ -221,7 +319,122 @@ private:
         }
         n->seen=frame;
     }
-    Id assemble(Picture const& p,long long ticks,long long frequency,unsigned depth,Rect region={},bool readonly=false,bool initialize=true){
+    bool projectable(Picture const& p,bool& scene,unsigned depth){
+        if(depth>256||p.format!=Format::bgra32)return false;
+        for(auto const& patch:p.patches){auto const& n=patch.node;
+            if(n->sample.projected){scene=true;continue;}
+            if(!n->map_dynamic)continue; // Immutable native overlay, same pixels and order.
+            if(!n->operation||n->command.kind!=Kind::unit_over||patch.output!=1||n->direct.draw||
+               n->inputs[1].format!=Format::bgra32||
+               !projectable(n->inputs[3],scene,depth+1))return false;
+            // The overlay source must be independent of its world underlay.
+            for(auto const& source:n->inputs[1].patches)if(source.node->map_dynamic)return false;
+        }
+        return true;
+    }
+    Rect project(Rect r,float scale,unsigned width,unsigned height)const{
+        c3x_renderer::SceneProjection p(width,height,scale);
+        return intersect({int(std::lround(p.x(float(r.left)))),int(std::lround(p.y(float(r.top)))),
+            int(std::lround(p.x(float(r.right)))),int(std::lround(p.y(float(r.bottom))))},
+            {0,0,int(width),int(height)});
+    }
+    void projected_output(Node& n,Rect area){
+        unsigned w=unsigned(area.right-area.left),h=unsigned(area.bottom-area.top);
+        if(n.sample_target.width!=w||n.sample_target.height!=h){
+            auto bytes=std::uint64_t(w)*h*4;
+            if(bytes>resident_budget-(resident_bytes-n.bytes[0]))throw std::runtime_error("projected scene budget");
+            auto id=replay.create(w,h,Format::bgra32,false);
+            if(!id)throw std::runtime_error("projected scene allocation");
+            n.sample_target=replay.release_import_target(id);output(n,0,n.sample_target.texture);
+        }
+        n.area=area;
+    }
+    std::shared_ptr<Node> evaluate_projected(Patch const& patch,long long ticks,long long frequency,
+            unsigned depth,float scale,unsigned width,unsigned height){
+        if(depth>256)throw std::runtime_error("projected scene depth");
+        auto const& original=patch.node;
+        if(!original->projected)original->projected=node();
+        auto n=original->projected;
+        if(n->seen==frame)return n;
+        Rect area=project(original->area,scale,width,height);
+        if(empty(area)){n->area=area;n->seen=frame;return n;}
+        if(original->sample.projected){
+            auto sampled=original->sample.projected(ticks,frequency,scale);
+            if(sampled.kind==SampledImage::Kind::frozen){
+                // A camera can retire before its first display. Preserve its
+                // completed publication rather than returning an empty image.
+                // If a prior projected pose exists, reproject that exact pose
+                // during the short handoff instead of rewinding its animation.
+                if(!n->output[0]||n->view_scale!=scale){
+                    auto source=n->output[0]?n->output[0]:original->output[patch.output];
+                    auto source_area=n->output[0]?n->area:original->area;
+                    float relative=n->output[0]?scale/n->view_scale:scale;
+                    auto id=replay.create(area.right-area.left,area.bottom-area.top,Format::bgra32,false);
+                    if(!id)throw std::runtime_error("retired projected scene admission");
+                    auto target=replay.release_import_target(id);
+                    auto input=replay.attach_source_unrecorded(source.Get(),Format::bgra32);
+                    try{projected_layer.draw(device,context,replay.view(input),nullptr,target.write.Get(),area,
+                        relative,float(width/2),float(height/2),-float(source_area.left),-float(source_area.top));}
+                    catch(...){replay.recycle(input);throw;}replay.recycle(input);
+                    n->sample_target=std::move(target);output(*n,0,n->sample_target.texture);
+                    n->area=area;n->view_scale=scale;n->revision=++serial;
+                }
+                n->seen=frame;return n;
+            }
+            if(sampled.kind!=SampledImage::Kind::bgra)throw std::runtime_error("projected scene unavailable");
+            projected_output(*n,area);
+            if(!replay.import_bgra(n->sample_target,sampled.texture.Get(),sampled.area.left,sampled.area.top,sampled.sharpness))
+                throw std::runtime_error("projected scene import");
+        }else if(original->operation&&original->map_dynamic){
+            // Project the retained underlay recursively. Native image ordering
+            // and version ownership are unchanged; only the world projection
+            // moves. The independent overlay remains a small immutable source.
+            auto below=assemble_projected(original->inputs[3],ticks,frequency,depth+1,scale,area,width,height);
+            Id source=0;
+            try{
+                source=assemble(original->inputs[1],ticks,frequency,depth+1,{},true);
+                projected_output(*n,area);auto const& c=original->command;
+                projected_layer.draw(device,context,replay.view(source),replay.view(below),n->sample_target.write.Get(),
+                    area,scale,float(width/2),float(height/2),float(c.source_x-c.area.left),float(c.source_y-c.area.top));
+            }catch(...){if(source)replay.recycle(source);replay.recycle(below);throw;}
+            replay.recycle(source);replay.recycle(below);
+        }else{
+            evaluate(original,ticks,frequency,depth+1);projected_output(*n,area);
+            auto texture=original->output[patch.output];
+            if(texture){
+                auto source=replay.attach_source_unrecorded(texture.Get(),Format::bgra32);
+                try{projected_layer.draw(device,context,replay.view(source),nullptr,n->sample_target.write.Get(),area,
+                    scale,float(width/2),float(height/2),-float(original->area.left),-float(original->area.top));}
+                catch(...){replay.recycle(source);throw;}replay.recycle(source);
+            }else{unsigned zero[4]={};context->ClearUnorderedAccessViewUint(n->sample_target.write.Get(),zero);}
+        }
+        n->view_scale=scale;n->seen=frame;n->revision=++serial;return n;
+    }
+    Id assemble_projected(Picture const& picture,long long ticks,long long frequency,unsigned depth,
+            float scale,Rect region,unsigned width,unsigned height){
+        std::vector<Patch> selected;
+        for(auto const& patch:picture.patches){
+            auto area=intersect(project(patch.area,scale,width,height),region);if(empty(area))continue;
+            auto n=evaluate_projected(patch,ticks,frequency,depth+1,scale,width,height);
+            if(n->output[0])selected.push_back({intersect(area,n->area),n,0});
+        }
+        if(selected.size()==1){auto const& p=selected.front();
+            if(p.area.left==region.left&&p.area.top==region.top&&p.area.right==region.right&&p.area.bottom==region.bottom&&
+               p.node->area.left==region.left&&p.node->area.top==region.top&&p.node->area.right==region.right&&p.node->area.bottom==region.bottom)
+                return replay.attach_source_unrecorded(p.node->output[0].Get(),Format::bgra32);
+        }
+        auto out=replay.create(region.right-region.left,region.bottom-region.top,Format::bgra32,true);
+        if(!out)throw std::runtime_error("projected assembly admission");
+        for(auto const& part:selected){auto a=part.area;if(empty(a))continue;
+            auto b=part.node->area;D3D11_BOX box={unsigned(a.left-b.left),unsigned(a.top-b.top),0,
+                unsigned(a.right-b.left),unsigned(a.bottom-b.top),1};
+            context->CopySubresourceRegion(replay.texture(out),0,a.left-region.left,a.top-region.top,0,part.node->output[0].Get(),0,&box);
+            ++work.copies;work.copied_pixels+=std::uint64_t(a.right-a.left)*(a.bottom-a.top);
+        }
+        ++work.assemblies;work.assembly_pixels+=std::uint64_t(region.right-region.left)*(region.bottom-region.top);
+        return out;
+    }
+    Id assemble(Picture const& p,long long ticks,long long frequency,unsigned depth,Rect region={},bool readonly=false,bool initialize=true,ID3D11Texture2D* destination=nullptr){
         // Evaluate children before reserving full-canvas scratch, so dependency
         // depth does not multiply the working-surface allocation.
         for(auto const& part:p.patches)evaluate(part.node,ticks,frequency,depth);
@@ -255,7 +468,13 @@ private:
                    !base->node->output[base->output])base=nullptr;
             }
         }
-        Id out=replay.create(region.right-region.left,region.bottom-region.top,p.format,initialize&&!base);if(!out)throw std::runtime_error("retained composition scratch budget");
+        // A complete partition can assemble directly into a live selection's
+        // persistent output. Its inputs never reference that selection, so
+        // these copies cannot overwrite a source version. Sparse reads still
+        // use cleared scratch; ordinary immutable native nodes are unchanged.
+        Id out=destination&&base?replay.attach_source_unrecorded(destination,p.format):
+            replay.create(region.right-region.left,region.bottom-region.top,p.format,initialize&&!base);
+        if(!out)throw std::runtime_error("retained composition scratch budget");
         ++work.assemblies;
         work.assembly_pixels+=std::uint64_t(region.right-region.left)*(region.bottom-region.top);
         try{
@@ -280,9 +499,9 @@ private:
     }
 public:
     RetainedComposition(ID3D11Device* d,ID3D11DeviceContext* c):device(d),context(c),replay(d,c,128u*1024u*1024u){}
-    ~RetainedComposition(){front={};images.clear();}
-    void clear(){front={};images.clear();replay.clear_recycled();admitted=true;}
-    void discard(){front={};images.clear();replay.clear_recycled();admitted=false;}
+    ~RetainedComposition(){front={};images.clear();world_selection.reset();}
+    void clear(){front={};images.clear();world_selection.reset();replay.clear_recycled();admitted=true;}
+    void discard(){front={};images.clear();world_selection.reset();replay.clear_recycled();admitted=false;}
     void uncommit(){front={};}
     std::uint64_t bytes()const{return resident_bytes;}
     Counts replay_stats()const{return replay.stats();}
@@ -306,12 +525,52 @@ public:
     bool animated_map()const{for(auto const& p:front.patches)if(p.node->map_dynamic)return true;return false;}
     bool ready()const{return admitted&&front.width!=0;}
     void create(Id id,unsigned w,unsigned h,Format format){if(admitted){images[id]={w,h,format,{}};images[id].version=++serial;}}
+    void snapshot(Id destination,Id source){images[destination]=images.at(source);images[destination].version=++serial;}
     void destroy(Id id){images.erase(id);} // committed versions retain their own source data
     void source(Id id,ID3D11Texture2D* texture,Sample sample={},bool immutable=false,bool map_source=false){
         if(!admitted)return;auto& p=images.at(id);auto n=node();n->area=extent(p);n->revision=++serial;
         output(*n,0,(sample||immutable)?Texture(texture):crop(texture,n->area));n->dynamic=bool(sample);n->map_dynamic=map_source&&n->dynamic;n->sample=std::move(sample);p.patches={{n->area,n,0}};p.version=++serial;
     }
-    void record(Command const& c,Direct direct={}){
+    // Select a complete world version at an explicit composition boundary.
+    // Later native writes to the source cannot change this selection. Fixed
+    // UI writes recorded over destination remain in screen coordinates.
+    // Native working textures are untouched: only the display recipe changes.
+    void view(Id destination,Id source,std::shared_ptr<c3x_renderer::ZoomTransition> transition,Id words=0){
+        if(!admitted)return;
+        auto& target=images.at(destination);auto const& input=images.at(source);
+        if(!transition||input.format!=Format::bgra32||target.format!=Format::bgra32||
+           input.width!=target.width||input.height!=target.height)
+            throw std::invalid_argument("retained world view extent or format");
+        for(auto const& patch:input.patches)if(patch.node->view_dependent)
+            throw std::invalid_argument("world view already transformed");
+        auto n=node();n->area=extent(input);n->view=std::move(transition);n->dynamic=n->view_dependent=true;
+        if(words){auto& native=images.at(words);
+            if(native.format==Format::bgra32||native.width!=input.width||native.height!=input.height)
+                throw std::invalid_argument("retained native view extent or format");
+            n->view_native_format=native.format==Format::rgb565?2:1;write(native,n->area,n,1);
+        }
+        n->inputs[0]=read(source,extent(input));
+        bool scene=false;n->projects_scene=projectable(n->inputs[0],scene,0)&&scene;
+        for(auto const& patch:n->inputs[0].patches)n->map_dynamic|=patch.node->map_dynamic;
+        write(target,n->area,n,0);
+    }
+    // Native UI versions retain their own pixels and dirty rectangles, but
+    // every map underlay samples the latest complete world and map HUD. This
+    // explicit live selection prevents stale labels without repainting or
+    // erasing native panels that Civ III did not redraw this time.
+    void select_world(Id words,Id detail,Id source_words,Id source_detail){
+        if(!admitted)return;
+        auto const& source=images.at(source_detail);
+        auto bounds=extent(source);
+        if(!world_selection||world_selection->area.right!=bounds.right||world_selection->area.bottom!=bounds.bottom)
+            world_selection=node();
+        auto n=world_selection;n->area=bounds;n->selected_world=n->dynamic=n->view_dependent=true;
+        n->inputs[0]=images.at(source_words);n->inputs[1]=source;
+        n->map_dynamic=false;
+        for(unsigned i=0;i<2;++i)for(auto const& patch:n->inputs[i].patches)n->map_dynamic|=patch.node->map_dynamic;
+        write(images.at(words),bounds,n,0);write(images.at(detail),bounds,n,1);
+    }
+    void record(Command const& c,Direct direct={},std::shared_ptr<c3x_renderer::ZoomTransition> placement={},int anchor_x=0,int anchor_y=0){
         if(!admitted)return;auto target=images.find(c.destination);if(target==images.end())throw std::runtime_error("retained target missing");
         auto area=intersect(intersect(c.area,c.clip),extent(target->second));if(empty(area))return;
         // Equal-coordinate copies select an immutable source version. Keeping
@@ -319,14 +578,14 @@ public:
         // full-canvas replay result for every map/screen/save transfer. Read
         // before replacing, including self-copies; later source writes cannot
         // alter this version. Shifted/converted/direct passes retain execution.
-        if(c.kind==Kind::copy&&!c.detail&&!direct.draw&&!direct.revision&&!direct.animated&&!direct.input_bytes&&
+        if(!placement&&c.kind==Kind::copy&&!c.detail&&!direct.draw&&!direct.revision&&!direct.animated&&!direct.input_bytes&&
            c.source_x==c.area.left&&c.source_y==c.area.top&&images.at(c.source).format==target->second.format){
             auto selected=read(c.source,area);replace(target->second,area,selected.patches);return;
         }
         // JGL's unscaled opaque transfer is the same version selection for
         // both its native words and full-color companion. Replaying it as a
         // stretch shader rebuilt entire animated map canvases every frame.
-        if(c.kind==Kind::native_image&&c.color==65536&&!direct.draw&&!direct.revision&&!direct.animated&&!direct.input_bytes&&
+        if(!placement&&c.kind==Kind::native_image&&c.color==65536&&!direct.draw&&!direct.revision&&!direct.animated&&!direct.input_bytes&&
            c.source_x==c.area.left&&c.source_y==c.area.top&&c.source_width==c.area.right-c.area.left&&
            c.source_height==c.area.bottom-c.area.top&&images.at(c.source).format==target->second.format&&
            (!c.detail||c.background_detail)){
@@ -340,7 +599,7 @@ public:
         // then paints a few HUD rectangles. Proven key-only patches do not
         // affect either destination. Keep only the actual painted rectangles;
         // no texture readback or guess about uploaded source pixels is needed.
-        if(c.kind==Kind::native_image&&c.color!=65536&&c.source!=c.destination&&
+        if(!placement&&c.kind==Kind::native_image&&c.color!=65536&&c.source!=c.destination&&
            c.source_width==c.area.right-c.area.left&&c.source_height==c.area.bottom-c.area.top&&
            !direct.draw&&!direct.revision&&!direct.animated&&!direct.input_bytes){
             int dx=c.area.left-c.source_x,dy=c.area.top-c.source_y;
@@ -361,11 +620,18 @@ public:
             }
         }
         if(direct.input_bytes>resident_budget-resident_bytes)throw std::runtime_error("retained direct input budget");
-        auto n=node();resident_bytes+=direct.input_bytes;n->operation=true;n->area=area;n->command=c;n->command.clip=area;n->direct=std::move(direct);n->dynamic=n->direct.animated;
-        n->constant=c.kind==Kind::fill&&!n->direct.draw&&!n->direct.revision&&!n->direct.animated;
+        auto paint=area;
+        if(placement){
+            int dx=int(std::lround((anchor_x-int(target->second.width/2))*.5));
+            int dy=int(std::lround((anchor_y-int(target->second.height/2))*.5));
+            area=intersect({area.left+std::min(0,dx),area.top+std::min(0,dy),area.right+std::max(0,dx),area.bottom+std::max(0,dy)},extent(target->second));
+        }
+        auto n=node();resident_bytes+=direct.input_bytes;n->operation=true;n->area=area;n->command=c;n->command.clip=paint;n->direct=std::move(direct);n->dynamic=n->direct.animated||bool(placement);
+        n->placement=std::move(placement);n->anchor_x=anchor_x;n->anchor_y=anchor_y;n->view_dependent=bool(n->placement);
+        n->constant=!n->placement&&c.kind==Kind::fill&&!n->direct.draw&&!n->direct.revision&&!n->direct.animated;
         Id ids[6]={c.destination,c.source,c.background,c.detail,c.background_detail,c.program};
-        bool opaque=c.kind==Kind::fill||c.kind==Kind::copy||c.kind==Kind::quantize||
-            (c.kind==Kind::expand&&c.color==65536)||(c.kind==Kind::native_image&&c.color==65536);
+        bool opaque=!n->placement&&(c.kind==Kind::fill||c.kind==Kind::copy||c.kind==Kind::quantize||
+            (c.kind==Kind::expand&&c.color==65536)||(c.kind==Kind::native_image&&c.color==65536));
         for(unsigned i=0;i<6;++i)if(ids[i]){
             n->original[i]=ids[i];auto& p=images.at(ids[i]);Rect region=extent(p);
             if(i==0||i==3)region=opaque?Rect{0,0,0,0}:area;
@@ -385,7 +651,7 @@ public:
         for(unsigned i=0;i<6;++i)if(ids[i])for(unsigned j=i+1;j<6;++j)if(ids[j]==ids[i]){
             n->inputs[i].patches.insert(n->inputs[i].patches.end(),n->inputs[j].patches.begin(),n->inputs[j].patches.end());n->inputs[i].partitioned=false;n->inputs[j]=n->inputs[i];
         }
-        for(auto const& input:n->inputs)for(auto const& p:input.patches){n->dynamic|=p.node->dynamic;n->map_dynamic|=p.node->map_dynamic;}
+        for(auto const& input:n->inputs)for(auto const& p:input.patches){n->dynamic|=p.node->dynamic;n->map_dynamic|=p.node->map_dynamic;n->view_dependent|=p.node->view_dependent;}
         write(images.at(c.destination),area,n,0);if(c.detail)write(images.at(c.detail),area,n,1);
     }
     void commit(Id image,Rect area){
@@ -421,7 +687,7 @@ public:
     // Caller has supplied a completed native transfer. Rendering only touches
     // private scratch and the existing presenter's retained display.
     int draw(long long ticks,long long frequency,ID3D11RenderTargetView* target,ID3D11Texture2D* display,ID3D11Texture2D* buffer){
-        work={};
+        work={};selected_view_scale=1.;
         if(!ready())return 0;++frame;
         for(auto const& part:front.patches)collect(part.node,ticks,frequency,0);
         std::vector<std::uint64_t> versions;
@@ -433,6 +699,7 @@ public:
         catch(...){replay.recycle(image);throw;}replay.recycle(image);
         if(ok){context->CopyResource(buffer,display);context->Flush();drawn_revision=front_revision;drawn_dependencies=std::move(versions);}return ok?1:0;
     }
+    double view_scale()const{return selected_view_scale;}
     Work last_work()const{return work;}
     template<class Report> void describe(Report report)const{
         std::vector<Node const*> ordered;
@@ -440,8 +707,8 @@ public:
         for(auto const& p:front.patches)add(p.node.get());
         for(unsigned i=0;i<ordered.size();++i)for(auto const& input:ordered[i]->inputs)for(auto const& p:input.patches)add(p.node.get());
         for(unsigned i=0;i<ordered.size();++i){auto n=ordered[i];auto const& c=n->command;char text[256];
-            std::snprintf(text,sizeof(text),"id=%u kind=%d operation=%u dynamic=%u sampled=%u area=%d,%d,%d,%d source=%d,%d,%d,%d color=%u",
-                i,int(c.kind),unsigned(n->operation),unsigned(n->dynamic),unsigned(bool(n->sample)),
+            std::snprintf(text,sizeof(text),"id=%u kind=%d operation=%u dynamic=%u sampled=%u projected=%u area=%d,%d,%d,%d source=%d,%d,%d,%d color=%u",
+                i,int(c.kind),unsigned(n->operation),unsigned(n->dynamic),unsigned(bool(n->sample)),unsigned(n->projects_scene),
                 n->area.left,n->area.top,n->area.right,n->area.bottom,c.source_x,c.source_y,c.source_width,c.source_height,c.color);
             std::string line=text;
             for(unsigned input=0;input<6;++input)if(!n->inputs[input].patches.empty()){

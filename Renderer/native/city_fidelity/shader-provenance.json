@@ -1,7 +1,6 @@
 {
   "authority": [
-    "r111-inland",
-    "r112-freshcanopy"
+    "current-selected-city-recipes"
   ],
   "source_sha256": {
     "Renderer/native/environment_refresh/feature.hlsl": "92b004074775bc254adce83a9be08b1b3cb8b66c842bfa8c6c39d4f9d18244c3",
@@ -13,22 +12,22 @@
     "Renderer/native/render_core/rigid_instance_geometry.hlsl": "a84ed7142d165614efc223d5105bf43f6c2dc6f3ed9380afda12eb76076d2469",
     "Renderer/native/render_core/rigid_feature.hlsl": "50e307dbd11b1b398b71d14dedf1ee02d5dfbcb5d839cb96f4d01ff36b4507dc",
     "Renderer/native/render_core/rigid_caster.hlsl": "a27c6568cfa10aa5c4a4552eec261004396814dd0ab438f0a35453a6bca6aa72",
-    "Renderer/native/environment_refresh/hydrology.hlsl": "bb07b78bd5fd550d31d0826cab6749ac3adbf10e4591e9882e30a416e0a115b6",
+    "Renderer/native/environment_refresh/hydrology.hlsl": "1ff7ea134e7f94bffa149f3e0136fbd1cdd721e3bcc2b0accc2f37106712de58",
     "Renderer/lab/shared/shaders/objects/resource_skinning.hlsl": "b11aa9a5dbefb8cac2145f425c9c671e35ff4c1ffa6608ea3d35234ba77280ee",
-    "Renderer/native/environment_refresh/terrain.hlsl": "4675386c42fdf366be71cd449a294b0398b1b3d05ef866df2deffded47a2598a",
-    "Renderer/native/environment_refresh/mountain.hlsl": "1b0345b5b35c82e30312a6d72d11d63e222f11a5c93211878c4126da78249168",
+    "Renderer/native/environment_refresh/terrain.hlsl": "3d598a484b87b0a546fdc839b7a52d82e4c7c46d25354e9fc5bb238376dcc22e",
+    "Renderer/native/environment_refresh/mountain.hlsl": "a1648ceb348d94012215d19c5e62252bd461c0669d55b57df1bd0dabc994c1ef",
     "Renderer/native/environment_refresh/objects.hlsl": "63ed98ea6fe8f3025642360808aeebacc21b706dd77563cb89914f927bf76392",
     "Renderer/lab/shared/shaders/common/hdr_glow_tiled.hlsl": "37495420a08faecabe803eae68302a831de663e01e7e0e1a8686aabab7d8af32",
     "Renderer/lab/shared/shaders/sampling/reconstruction_v1.hlsl": "00eb9245631bc22c04072622e577192cc0cb01ae83863cedaf1e86a5a75d8460",
-    "Renderer/native/render_core/source_caster.hlsl": "00ebc017793b7674d30c92ec7bd57ce9541d90e7b8a412134ba80da305cb1bee"
+    "Renderer/native/render_core/source_caster.hlsl": "00ebc017793b7674d30c92ec7bd57ce9541d90e7b8a412134ba80da305cb1bee",
+    "Renderer/native/city_fidelity/scene_lights.py": "a85ff02bd590ccdffb3d28af0aee3dd474a688dc9b75ce5872cac7f2d6cd6169"
   },
   "bindings": "Native full vertex, shared shadow atlas, explicit material/environment and atlas constants",
   "runtime": [
-    "bounded per-block facade light selection",
+    "scene-sized GPU facade lights and blockers",
     "guarded linear reconstruction and HDR glow"
   ],
   "pending": [
-    "user-run Civ III visual checkpoint",
-    "remaining palace styles and constrained-site coverage"
+    "broad live-game regression after Lab integration"
   ]
 }

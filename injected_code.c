@@ -670,7 +670,11 @@ int
 get_city_screen_center_y (City * city)
 {
 	int y = city->Body.Y;
-	if (p_bic_data->is_zoomed_out)
+	if (p_bic_data->is_zoomed_out && is->current_config.enable_custom_rendering)
+		// Preserve the normal city attachment in pixels. An even row offset also
+		// avoids bring_tile_into_view shifting X to repair tile-coordinate parity.
+		return y + (is->current_config.city_work_radius >= 3 ? 8 : 4);
+	else if (p_bic_data->is_zoomed_out)
 		return y + 7; // when zoomed out, shift map up to center city
 	else if (is->current_config.city_work_radius >= 3)
 		return y + 4; // when work radius is 3, shift map up one extra tile so as not to overlap citizen heads
@@ -17622,12 +17626,24 @@ patch_City_recompute_yields_and_happiness (City * this)
 		recompute_distribution_hub_totals ();
 
 	City_recompute_yields_and_happiness (this);
+	if (is->current_config.enable_custom_rendering) {
+		is->custom_renderer_world_audit_needed = true;
+		is->custom_renderer_dirty_flags |= C3X_RENDERER_DIRTY_SCENE;
+		is->custom_renderer_redraw_pending = true;
+	}
+
 }
 
 void __fastcall
 patch_City_update_culture (City * this)
 {
 	City_update_culture (this);
+	if (is->current_config.enable_custom_rendering) {
+		is->custom_renderer_world_audit_needed = true;
+		is->custom_renderer_dirty_flags |= C3X_RENDERER_DIRTY_SCENE;
+		is->custom_renderer_redraw_pending = true;
+	}
+
 
 	if ((this == NULL) || ! (is->current_config.enable_districts || is->current_config.enable_natural_wonders))
 		return;
@@ -19856,11 +19872,21 @@ translate_custom_renderer_native (int operation, JGL_Image * image, void * sourc
 	// Audited clip metadata only: its private HDC never exposes image pixels.
 	if (operation == C3X_NATIVE_DC && (is->custom_renderer_native_operation == C3X_NATIVE_IMAGE_CLIP || is->custom_renderer_native_operation == C3X_NATIVE_IMAGE_TEXT_STATE ||
 	    (is->custom_renderer_native_operation == C3X_NATIVE_IMAGE_PALETTE && image != NULL && image->BitCount == 16))) return 0;
-	if (! is->custom_renderer_trace_input)
-		return is->custom_renderer_native_image (operation, image, source, source_rect, destination_rect, color);
 	LARGE_INTEGER begin = {0}, end = {0}, frequency = {0};
-	QueryPerformanceCounter (&begin);
+	if (is->custom_renderer_trace_input) QueryPerformanceCounter (&begin);
 	int result = is->custom_renderer_native_image (operation, image, source, source_rect, destination_rect, color);
+	if (result > 0 && is->current_config.enable_custom_rendering_zoom && *p_player_bits != 0 &&
+	    ! p_main_screen_form->is_now_loading_game && p_bic_data->Map.Renderer.spotlight_on_city == NULL &&
+	    image == p_jgl_screen_canvas->JGL.Image) {
+		// Civ III composes main map, unit/map overlays, then fixed GUI forms.
+		// The worker reads complete source versions here: dirty screen clipping
+		// must not leave an older, already-zoomed fragment inside the new world.
+		if (operation == C3X_NATIVE_COPY && source == p_main_screen_form->Base_Data.Canvas.JGL.Image)
+			is->custom_renderer_native_image (C3X_NATIVE_WORLD_BEGIN, image, source, NULL, NULL, 0);
+		else if (operation == C3X_NATIVE_IMAGE_DRAW && source == p_main_screen_form->Units_Control.Data.Canvas.JGL.Image)
+			is->custom_renderer_native_image (C3X_NATIVE_WORLD_END, image, source, NULL, NULL, 0);
+	}
+	if (! is->custom_renderer_trace_input) return result;
 	QueryPerformanceCounter (&end);
 	QueryPerformanceFrequency (&frequency);
 	long long micros = frequency.QuadPart > 0 ? (end.QuadPart - begin.QuadPart) * 1000000 / frequency.QuadPart : 0;
@@ -19883,6 +19909,61 @@ translate_custom_renderer_native (int operation, JGL_Image * image, void * sourc
 	}
 	return result;
 }
+
+// Native HUD ink keeps its pixel size; only its attachment follows the view.
+int
+custom_renderer_hud_scope (JGL_Image * canvas, int x, int y, unsigned identity)
+{
+	if (! is->current_config.enable_custom_rendering || ! is->current_config.enable_custom_rendering_zoom ||
+	    ! custom_renderer_native_probe_on () || is->custom_renderer_native_image == NULL ||
+	    p_bic_data->Map.Renderer.spotlight_on_city != NULL) return 0;
+	if (canvas == NULL)
+		return is->custom_renderer_native_image (C3X_NATIVE_HUD_END, NULL, NULL, NULL, NULL, 0);
+	if (canvas != p_main_screen_form->Base_Data.Canvas.JGL.Image &&
+	    canvas != p_main_screen_form->Units_Control.Data.Canvas.JGL.Image &&
+	    canvas != ((PCX_Image *)&p_bic_data->Map.Renderer)->JGL.Image) return 0;
+	int anchor[2] = {x, y};
+	int result = is->custom_renderer_native_image (C3X_NATIVE_HUD_BEGIN, canvas, NULL, anchor, NULL, identity);
+	if (is->custom_renderer_trace_input && (identity & 0x80000000u)) {
+		char line[160];
+		snprintf (line, sizeof line, "[C3X renderer] stage=city-hud-capture identity=%x anchor=%d,%d accepted=%d\n", identity, x, y, result);
+		(*p_OutputDebugStringA) (line);
+	}
+	return result;
+}
+
+#ifdef MapMessage_draw
+void __fastcall
+patch_MapMessage_draw (MapMessage * this, int edx, PCX_Image * canvas, int shade)
+{
+	if (! is->current_config.enable_custom_rendering) {
+		MapMessage_draw (this, edx, canvas, shade);
+		return;
+	}
+	RECT * r = (RECT *)((char *)this + 0x28);
+	int scoped = canvas != NULL && custom_renderer_hud_scope (canvas->JGL.Image,
+		r->left + (r->right - r->left) / 2 + 2, r->bottom + 2, (unsigned)this);
+	MapMessage_draw (this, edx, canvas, shade);
+	if (scoped) custom_renderer_hud_scope (NULL, 0, 0, 0);
+}
+#endif
+
+#ifdef Main_GUI_draw_notifications
+void __fastcall
+patch_Main_GUI_draw_notifications (Main_GUI * this, int edx)
+{
+	if (! is->current_config.enable_custom_rendering) {
+		Main_GUI_draw_notifications (this, edx);
+		return;
+	}
+	bool scoped = is->current_config.enable_custom_rendering_zoom &&
+		custom_renderer_native_probe_on () && is->custom_renderer_native_image != NULL &&
+		is->custom_renderer_native_image (C3X_NATIVE_FIXED_UI_BEGIN,
+			p_main_screen_form->Units_Control.Data.Canvas.JGL.Image, NULL, NULL, NULL, 0) == 1;
+	Main_GUI_draw_notifications (this, edx);
+	if (scoped) is->custom_renderer_native_image (C3X_NATIVE_FIXED_UI_END, NULL, NULL, NULL, NULL, 0);
+}
+#endif
 
 int
 observe_custom_renderer_native (int operation, JGL_Image * image, void * peer, RECT * rect)
@@ -23638,21 +23719,14 @@ advance_custom_renderer_zoom (Main_Screen_Form * this, int steps, bool wrap)
 {
 	if (! is->current_config.enable_custom_rendering ||
 	    ! is->current_config.enable_custom_rendering_zoom ||
-	    (*p_player_bits == 0) || this->is_now_loading_game)
+	    (*p_player_bits == 0) || this->is_now_loading_game ||
+	    p_bic_data->Map.Renderer.spotlight_on_city != NULL)
 		return false;
 
 	int levels[3] = {128, 160, 192};
 	sync_custom_renderer_zoom_to_native ();
-	int current = 0;
-	for (int n = 1; n < ARRAY_LEN (levels); n++) {
-		int candidate_delta = levels[n] - is->custom_renderer_zoom_tile_width;
-		int current_delta = levels[current] - is->custom_renderer_zoom_tile_width;
-		if (candidate_delta < 0) candidate_delta = -candidate_delta;
-		if (current_delta < 0) current_delta = -current_delta;
-		if (candidate_delta < current_delta)
-			current = n;
-	}
-	// Z cycles outward; the wheel clamps at the supported endpoints.
+	int current = is->custom_renderer_zoom_target_width == 192 ? 2 :
+		is->custom_renderer_zoom_target_width == 160 ? 1 : 0;
 	int next = current + steps;
 	if (wrap) next = (next + ARRAY_LEN (levels)) % ARRAY_LEN (levels);
 	else {
@@ -23660,32 +23734,17 @@ advance_custom_renderer_zoom (Main_Screen_Form * this, int steps, bool wrap)
 		if (next >= ARRAY_LEN (levels)) next = ARRAY_LEN (levels) - 1;
 	}
 	if (next == current) return true;
-	long long const fp_one = 65536;
-	int old_width = is->custom_renderer_zoom_tile_width;
-	int new_width = levels[next];
-	long long anchor_x_fp = (long long)(p_bic_data->ScreenWidth / 2) * fp_one;
-	long long anchor_y_fp = (long long)(p_bic_data->ScreenHeight / 2) * fp_one;
-	is->custom_renderer_zoom_translate_x_fp = anchor_x_fp -
-		(anchor_x_fp - is->custom_renderer_zoom_translate_x_fp) * new_width / old_width;
-	is->custom_renderer_zoom_translate_y_fp = anchor_y_fp -
-		(anchor_y_fp - is->custom_renderer_zoom_translate_y_fp) * new_width / old_width;
-	is->custom_renderer_zoom_tile_width = new_width;
-	is->custom_renderer_dirty_flags |= C3X_RENDERER_DIRTY_ALL;
-	is->custom_renderer_redraw_pending = true;
-	char message[256];
+	// A copied target joins the existing ordered async stream. Captured map,
+	// HUD and unit anchors stay on the canonical 128-pixel basis throughout.
+	if (is->custom_renderer_native_image == NULL ||
+	    is->custom_renderer_native_image (C3X_NATIVE_ZOOM_TARGET, NULL, NULL, NULL, NULL,
+		levels[next] * 65536 / 128) != 1) return true;
+	is->custom_renderer_zoom_target_width = levels[next];
+	char message[192];
 	snprintf (message, sizeof message,
-		"[C3X renderer] stage=zoom-key old_width=%d new_width=%d anchor_x=%d anchor_y=%d queued=1\n",
-		old_width, new_width, p_bic_data->ScreenWidth / 2, p_bic_data->ScreenHeight / 2);
-	message[(sizeof message) - 1] = '\0';
+		"[C3X renderer] stage=zoom-target old_width=%d new_width=%d capture_width=128 queued=1\n",
+		levels[current], levels[next]);
 	(*p_OutputDebugStringA) (message);
-	// Custom zoom changes only the projection. Re-centering through rounded
-	// tile bounds loses sub-tile camera position on every key press.
-	// Ask native code to refresh bounds at the exact existing pixel camera.
-#ifdef Main_Screen_Form_move_camera
-	Main_Screen_Form_move_camera (this, __, this->camera_x, this->camera_y, 0, true);
-#else
-	*(bool *)(this->animator.field_18E4 + 10) = true;
-#endif
 	return true;
 }
 
@@ -23708,6 +23767,8 @@ patch_Main_Screen_Form_process_mouse_wheel (Main_Screen_Form * this, int edx, in
 		Main_Screen_Form_process_mouse_wheel (this, edx, wheel_delta, mouse_x, mouse_y);
 		return;
 	}
+	// The modal city view owns native Z zoom and its centered camera.
+	if (p_bic_data->Map.Renderer.spotlight_on_city != NULL) return;
 	// Windows reports 120 units per notch; retain smaller trackpad deltas.
 	int delta = is->custom_renderer_zoom_wheel_remainder + wheel_delta;
 	is->custom_renderer_zoom_wheel_remainder = delta % 120;
@@ -23769,7 +23830,8 @@ custom_renderer_zoom_enabled ()
 {
 	return is->current_config.enable_custom_rendering &&
 		is->current_config.enable_custom_rendering_zoom &&
-		(*p_player_bits != 0) && ! p_main_screen_form->is_now_loading_game;
+		(*p_player_bits != 0) && ! p_main_screen_form->is_now_loading_game &&
+		p_bic_data->Map.Renderer.spotlight_on_city == NULL;
 }
 
 void
@@ -23778,9 +23840,12 @@ sync_custom_renderer_zoom_to_native ()
 	int native_width = p_bic_data->is_zoomed_out ? 64 : 128;
 	int width = is->custom_renderer_zoom_tile_width;
 	if ((is->custom_renderer_zoom_native_tile_width != native_width) ||
-	    ((width != 128) && (width != 160) && (width != 192))) {
+	    width != 128) {
 		is->custom_renderer_zoom_native_tile_width = native_width;
 		is->custom_renderer_zoom_tile_width = 128;
+		is->custom_renderer_zoom_target_width = 128;
+		if (is->custom_renderer_native_image != NULL)
+			is->custom_renderer_native_image (C3X_NATIVE_ZOOM_TARGET, NULL, NULL, NULL, NULL, 65536);
 		// An existing native reduced-zoom state still supplies 64-pixel anchors.
 		// Clamp custom zoom to normal around the screen center, without changing
 		// Civ III's native camera flag or the configuration-off path.
@@ -23843,8 +23908,18 @@ custom_renderer_zoom_transform_point (int * x, int * y)
 void
 custom_renderer_zoom_inverse_point (int * x, int * y)
 {
-	if (! custom_renderer_zoom_transform_active ())
-		return;
+	if (! custom_renderer_zoom_enabled ()) return;
+	sync_custom_renderer_zoom_to_native ();
+	// One atomic display sample for both coordinates. This is the last
+	// successful Present, not a requested target or an unpresented GPU frame.
+	int scale = is->custom_renderer_native_image != NULL ?
+		is->custom_renderer_native_image (C3X_NATIVE_ZOOM_PRESENTED, NULL, NULL, NULL, NULL, 0) : 65536;
+	if (scale < 65536 || scale > 98304) scale = 65536;
+	int center_x = p_bic_data->ScreenWidth / 2, center_y = p_bic_data->ScreenHeight / 2;
+	long long dx = (long long)(*x - center_x) * 65536;
+	long long dy = (long long)(*y - center_y) * 65536;
+	*x = center_x + (int)((dx + (dx >= 0 ? scale / 2 : -scale / 2)) / scale);
+	*y = center_y + (int)((dy + (dy >= 0 ? scale / 2 : -scale / 2)) / scale);
 	*x = custom_renderer_zoom_inverse_coordinate (*x, is->custom_renderer_zoom_translate_x_fp);
 	*y = custom_renderer_zoom_inverse_coordinate (*y, is->custom_renderer_zoom_translate_y_fp);
 }
@@ -23864,6 +23939,10 @@ patch_Main_Screen_Form_city_hud_coords (Main_Screen_Form * this, int edx, int ti
 		*out_x -= width / 2;
 		*out_y -= width * 7 / 16;
 	}
+	int width = p_bic_data->is_zoomed_out ? 64 : 128;
+	if (is->custom_renderer_hud_canvas != NULL)
+		custom_renderer_hud_scope (is->custom_renderer_hud_canvas, *out_x + width / 2,
+			*out_y + width * 7 / 16, 0x80000000u | ((unsigned)tile_y << 16) | (unsigned)tile_x);
 }
 
 // MapMessage::compute_rect returns the native text/dirty rectangle at +0x28.
@@ -23891,6 +23970,10 @@ patch_MapMessage_compute_rect (MapMessage * this)
 void __fastcall
 patch_Unit_draw_map_status (Unit * this, int edx, PCX_Image * canvas, int x, int y, bool stack_marks)
 {
+	if (! is->current_config.enable_custom_rendering) {
+		Unit_draw_status (this, edx, canvas, x, y, stack_marks);
+		return;
+	}
 	if (custom_renderer_zoom_transform_active ()) {
 		// Native caller places status one quarter tile left/up of the center.
 		int offset = is->custom_renderer_zoom_native_tile_width / 4;
@@ -23898,7 +23981,10 @@ patch_Unit_draw_map_status (Unit * this, int edx, PCX_Image * canvas, int x, int
 		custom_renderer_zoom_transform_point (&x, &y);
 		x -= offset; y -= offset;
 	}
-	Unit_draw_status (this, __, canvas, x, y, stack_marks);
+	int offset = is->custom_renderer_zoom_native_tile_width / 4;
+	int scoped = canvas != NULL && custom_renderer_hud_scope (canvas->JGL.Image, x + offset, y + offset, (unsigned)this);
+	Unit_draw_status (this, edx, canvas, x, y, stack_marks);
+	if (scoped) custom_renderer_hud_scope (NULL, 0, 0, 0);
 }
 
 void __fastcall
@@ -23976,6 +24062,9 @@ int __fastcall
 patch_Sprite_draw_map_unit_marker (Sprite * this, int edx, PCX_Image * canvas, int x, int y,
 	int color, int scale_x, int scale_y, int divisor, PCX_Color_Table * palette)
 {
+	if (! is->current_config.enable_custom_rendering) {
+		return Sprite_draw_scaled_color (this, edx, canvas, x, y, color, scale_x, scale_y, divisor, palette);
+	}
 	if (custom_renderer_zoom_transform_active ()) {
 		// Keep native marker size; its top-left was derived from this center.
 		int native_divisor = p_bic_data->is_zoomed_out ? 4 : 2;
@@ -23984,7 +24073,11 @@ patch_Sprite_draw_map_unit_marker (Sprite * this, int edx, PCX_Image * canvas, i
 		custom_renderer_zoom_transform_point (&x, &y);
 		x -= half_width; y -= half_height;
 	}
-	return Sprite_draw_scaled_color (this, __, canvas, x, y, color, scale_x, scale_y, divisor, palette);
+	int scoped = canvas != NULL && custom_renderer_hud_scope (canvas->JGL.Image,
+		x + this->Width * scale_x / (2 * divisor), y + this->Height * scale_y / (2 * divisor), 0);
+	int result = Sprite_draw_scaled_color (this, edx, canvas, x, y, color, scale_x, scale_y, divisor, palette);
+	if (scoped) custom_renderer_hud_scope (NULL, 0, 0, 0);
+	return result;
 }
 
 int __fastcall
@@ -27643,6 +27736,16 @@ patch_City_Form_m82_handle_key_event (City_Form * this, int edx, int virtual_key
 		p_bic_data->is_zoomed_out = ! p_bic_data->is_zoomed_out;
 		Main_Screen_Form_bring_tile_into_view (p_main_screen_form, __, this->CurrentCity->Body.X, get_city_screen_center_y (this->CurrentCity), 0, true, false); // also redraws map
 		this->Base.vtable->m73_call_m22_Draw ((Base_Form *)this);
+		if (is->current_config.enable_custom_rendering && is->custom_renderer_trace_input) {
+			char line[224];
+			int width = p_bic_data->is_zoomed_out ? 64 : 128, x, y;
+			Main_Screen_Form_tile_to_screen_coords (p_main_screen_form, __,
+				this->CurrentCity->Body.X, this->CurrentCity->Body.Y, &x, &y);
+			snprintf (line, sizeof line, "[C3X renderer] stage=city-native-zoom tile_width=%d city=%d camera=%d,%d city_anchor=%d,%d\n",
+				width, this->CurrentCity->Body.ID, p_main_screen_form->camera_x, p_main_screen_form->camera_y,
+				x + width / 2, y + width / 4);
+			(*p_OutputDebugStringA) (line);
+		}
 	}
 
 	City_Form_m82_handle_key_event (this, __, virtual_key_code, is_down);
@@ -27886,6 +27989,10 @@ unload_custom_renderer ()
 	}
 	if (is->custom_renderer_module != NULL)
 		FreeLibrary (is->custom_renderer_module);
+	is->custom_renderer_zoom_tile_width = 0;
+	is->custom_renderer_zoom_target_width = 128;
+	is->custom_renderer_zoom_wheel_remainder = 0;
+	is->custom_renderer_hud_canvas = NULL;
 	is->custom_renderer_module = NULL;
 	is->custom_renderer_get_api_version = NULL;
 	is->custom_renderer_backend_healthy = NULL;
@@ -28381,7 +28488,7 @@ read_custom_renderer_tile (struct c3x_renderer_tile_v1 * record, int visible_to_
 	record->square_parts = 0;
 	record->terrain_overlays = 0;
 	record->visibility_mask = (unsigned int)visibility_mask;
-	record->variant_seed = (unsigned int)(p_bic_data->Map.Seed ^ (tile_x * 73856093) ^ (tile_y * 19349663));
+	record->variant_seed = (unsigned int)p_bic_data->Map.Seed ^ ((unsigned int)tile_x * 73856093u) ^ ((unsigned int)tile_y * 19349663u);
 	record->tile_flags = 0;
 	record->real_terrain_type = -1;
 	record->resource_id = -1;
@@ -28420,6 +28527,35 @@ read_custom_renderer_tile (struct c3x_renderer_tile_v1 * record, int visible_to_
 			if (topology_only) {
 				record->tile_flags |= C3X_RENDERER_TILE_TOPOLOGY_HALO;
 				return true;
+			}
+			// Match Map_Renderer::m17 exactly: four diagonal neighbors, native
+			// territory ownership, map wrapping, and no border at invalid map edges.
+			int owner = record->territory_owner_id;
+			Map_Renderer * view = &p_bic_data->Map.Renderer;
+			bool hidden_borders = view != NULL && (view->Flags & 0x200) &&
+				((char (__fastcall *) (Map_Renderer *, int))view->vtable->m05_Check_dword_9AFD34)(view, __);
+			if (owner > 0 && owner < 32 && ! hidden_borders && is->custom_renderer_unit_images != NULL) {
+				int palette_id = leaders[owner].Color_Table_ID;
+				PCX_Color_Table * palette = palette_id >= 0 && palette_id < 32 ?
+					is->custom_renderer_unit_images->Color_Tables[palette_id] : NULL;
+				if (palette != NULL && palette->JGL_Color_Table != NULL) {
+					unsigned char rgb[3] = {0};
+					JGL_Color_Table * table = palette->JGL_Color_Table;
+					// m55 uses palette entries 64/65 for the native territory sprite.
+					((int (__fastcall *) (JGL_Color_Table *, int, unsigned char *, int, int))table->vtable->m04_Get_Palette_Colors)
+						(table, __, rgb, 64, 1);
+					record->territory_color_rgb = (rgb[0] << 16) | (rgb[1] << 8) | rgb[2];
+					for (int edge = 0; edge < 4; edge++) {
+						int x = tile_x - 1 + (edge & 1) * 2, y = tile_y - 1 + (edge / 2) * 2;
+						wrap_tile_coords (&p_bic_data->Map, &x, &y);
+						if (Map_in_range (&p_bic_data->Map, __, x, y)) {
+							Tile * neighbor = tile_at (x, y);
+							if (neighbor != NULL && neighbor != p_null_tile &&
+							    neighbor->vtable->m38_Get_Territory_OwnerID (neighbor) != owner)
+								record->territory_edge_mask |= 1u << edge;
+						}
+					}
+				}
 			}
 			if (record->real_terrain_type == SQ_Forest) record->feature_flags |= C3X_RENDERER_FEATURE_FOREST;
 			if (record->real_terrain_type == SQ_Jungle) record->feature_flags |= C3X_RENDERER_FEATURE_JUNGLE;
@@ -31093,11 +31229,18 @@ patch_Main_Screen_Form_center_camera (Main_Screen_Form * this, int edx, int x, i
 void __fastcall
 patch_Main_Screen_Form_move_camera (Main_Screen_Form * this, int edx, int x, int y, int reason, bool update_bounds)
 {
+    if (! is->current_config.enable_custom_rendering) {
+        Main_Screen_Form_move_camera (this, edx, x, y, reason, update_bounds);
+        return;
+    }
+    // City focus/next-city/native Z use the exact centering path. Manual
+    // panning must never move the city away from that native attachment.
+    if (p_bic_data->Map.Renderer.spotlight_on_city != NULL &&
+        reason == 1 && ! update_bounds && ! is->custom_renderer_camera_exact) return;
     if (is->custom_renderer_camera_ticket != 0 && is->custom_renderer_camera_cancel != NULL)
         is->custom_renderer_camera_cancel (is->custom_renderer_camera_ticket);
     is->custom_renderer_camera_ticket = 0;
-    if (! is->current_config.enable_custom_rendering || ! is->custom_renderer_async_enabled ||
-        is->custom_renderer_navigation == NULL || is->custom_renderer_camera_exact) {
+    if (! is->custom_renderer_async_enabled || is->custom_renderer_navigation == NULL || is->custom_renderer_camera_exact) {
         struct custom_renderer_native_view unused = {0};
         if (is->custom_renderer_navigation != NULL)
             is->custom_renderer_navigation (C3X_NAV_DISCARD, NULL, &unused, NULL);
@@ -31434,11 +31577,13 @@ draw_map_tile_text (Main_Screen_Form * this, PCX_Image * canvas, char * text, in
 	int draw_y = screen_y - y_offset;
 	int text_top = draw_y + screen_height + tile_width / 32;
 
+	int scoped = canvas != NULL && custom_renderer_hud_scope (canvas->JGL.Image, screen_x + tile_width / 2, screen_y + tile_width / 4, 0);
 	Object_66C3FC * font = get_font (10, FSF_NONE);
 	if (font != NULL) {
 		PCX_Image_set_text_effects (canvas, __, 0x80FFFFFF, 0x80000000, 1, 1);
 		PCX_Image_draw_centered_text (canvas, __, font, text, text_left, text_top - 10, text_width, strlen (text));
 	}
+	if (scoped) custom_renderer_hud_scope (NULL, 0, 0, 0);
 }
 
 char const *
@@ -31879,7 +32024,12 @@ draw_combat_odds_hud (Main_Screen_Form * main_screen_form, PCX_Image * canvas)
 void __fastcall
 patch_Main_Screen_Form_draw_city_hud (Main_Screen_Form * this, int edx, PCX_Image * canvas)
 {
-	Main_Screen_Form_draw_city_hud (this, __, canvas);
+	JGL_Image * previous_hud = is->custom_renderer_hud_canvas;
+	if (is->current_config.enable_custom_rendering && is->current_config.enable_custom_rendering_zoom)
+		is->custom_renderer_hud_canvas = canvas != NULL ? canvas->JGL.Image : this->Base_Data.Canvas.JGL.Image;
+	Main_Screen_Form_draw_city_hud (this, edx, canvas);
+	if (is->custom_renderer_hud_canvas != NULL) custom_renderer_hud_scope (NULL, 0, 0, 0);
+	is->custom_renderer_hud_canvas = previous_hud;
 
 	bool draw_natural_wonders = is->current_config.enable_natural_wonders &&
 	                            is->current_config.show_natural_wonder_name_on_map;
@@ -32086,6 +32236,12 @@ grant_nearby_wonders_to_city (City * city)
 void
 on_gain_city (Leader * leader, City * city, enum city_gain_reason reason)
 {
+	if (is->current_config.enable_custom_rendering) {
+		is->custom_renderer_world_audit_needed = true;
+		is->custom_renderer_dirty_flags |= C3X_RENDERER_DIRTY_SCENE;
+		is->custom_renderer_redraw_pending = true;
+	}
+
 	if (reason == CGR_FOUNDED)
 		is->turn_no_of_last_founding_for_settler_perfume[leader->ID] = *p_current_turn_no;
 
@@ -32153,6 +32309,12 @@ on_gain_city (Leader * leader, City * city, enum city_gain_reason reason)
 void
 on_lose_city (Leader * leader, City * city, enum city_loss_reason reason)
 {
+	if (is->current_config.enable_custom_rendering) {
+		is->custom_renderer_world_audit_needed = true;
+		is->custom_renderer_dirty_flags |= C3X_RENDERER_DIRTY_SCENE;
+		is->custom_renderer_redraw_pending = true;
+	}
+
 	// If leader is an AI and AI MCS is enabled, remove any extra palaces the city has
 	if (((*p_human_player_bits & (1<<leader->ID)) == 0) &&
 	    (is->current_config.ai_multi_city_start > 1))
@@ -37220,6 +37382,12 @@ void __fastcall
 patch_Leader_enter_new_era (Leader * this, int edx, bool param_1, bool no_online_sync)
 {
 	Leader_enter_new_era (this, __, param_1, no_online_sync);
+	if (is->current_config.enable_custom_rendering) {
+		is->custom_renderer_world_audit_needed = true;
+		is->custom_renderer_dirty_flags |= C3X_RENDERER_DIRTY_SCENE;
+		is->custom_renderer_redraw_pending = true;
+	}
+
 	apply_era_specific_names (this);
 }
 
@@ -47276,7 +47444,12 @@ void __fastcall
 patch_Units_Image_Data_advance_animations (Units_Image_Data * this, int edx, float elapsed,
     Unit ** units, int count, void * effects)
 {
-    Units_Image_Data_advance_animations (this, __, elapsed, units, count, effects);
+    if (! is->current_config.enable_custom_rendering) {
+        Units_Image_Data_advance_animations (this, edx, elapsed, units, count, effects);
+        return;
+    }
+    is->custom_renderer_unit_images = this;
+    Units_Image_Data_advance_animations (this, edx, elapsed, units, count, effects);
 }
 #endif
 
@@ -47310,6 +47483,7 @@ patch_on_timer_0x9F6500 (void)
 void __fastcall
 patch_Units_Image_Data_load_animated_effect (Units_Image_Data * this, int edx, FLC_Animation * anim, int effect_id)
 {
+	if (is->current_config.enable_custom_rendering) is->custom_renderer_unit_images = this;
 	if (! is->current_config.enable_custom_animations || is->current_config.enable_custom_rendering) {
 		Units_Image_Data_load_animated_effect (this, __, anim, effect_id);
 		return;

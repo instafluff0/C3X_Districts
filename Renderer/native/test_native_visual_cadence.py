@@ -181,3 +181,53 @@ int main(){
  assert(failed.visual_frame(true)==C3X_RENDERER_RESULT_ERROR&&!failed.gpu_presenter.calls&&!failed.visual_delivery);
 }
 ''')
+
+    def test_busy_offer_retries_without_reducing_static_frame_period(self):
+        run_cpp(r'''
+#include <cassert>
+#include <atomic>
+#include "Renderer/native/visual_cadence.h"
+int main(){using namespace std::chrono;
+ c3x_renderer::VisualCadence cadence(milliseconds(200),milliseconds(5));
+ std::mutex mutex;std::condition_variable wake;std::atomic<unsigned> offers{0};bool complete=false;
+ cadence.enable_retrying([&]{auto n=++offers;if(n<4)return true;
+  {std::lock_guard<std::mutex> lock(mutex);complete=true;}wake.notify_one();return false;});
+ {std::unique_lock<std::mutex> lock(mutex);assert(wake.wait_for(lock,milliseconds(250),[&]{return complete;}));}
+ unsigned first=offers;assert(first==4);std::this_thread::sleep_for(milliseconds(70));
+ assert(offers==first); // Completed or static work does not poll at the busy cadence.
+ cadence.stop();unsigned stopped=offers;std::this_thread::sleep_for(milliseconds(30));assert(offers==stopped);
+}
+''')
+
+    def test_direct_visual_busy_is_distinct_from_unchanged(self):
+        source=(ROOT/'Renderer/native/c3x_renderer.cpp').read_text()
+        body='    int trial_visual_shared('+source.split('    int trial_visual_shared(',1)[1].split('    int trial_bind_surface(',1)[0]
+        run_cpp(r'''
+#include <cassert>
+#include <atomic>
+#include <thread>
+#include <chrono>
+#include <mutex>
+#include "Renderer/native/c3x_renderer_api.h"
+using DWORD=unsigned;
+struct State{std::mutex call_mutex,state_mutex;DWORD trial_consumer_pid=0;
+ std::uint64_t trial_handle=0;unsigned trial_width=0,trial_height=0,submits=0;
+ long long visual_ticks=0,visual_frequency=0;int result=C3X_RENDERER_RESULT_PENDING;
+ enum class Command{trial_visual_shared};
+ int submit_locked(std::unique_lock<std::mutex>&,Command){++submits;return result;}
+'''+body+r'''
+};
+int main(){State state;std::uint64_t handle=0;unsigned w=0,h=0;
+ for(auto* gate:{&state.call_mutex,&state.state_mutex}){
+  std::atomic<bool> held{false},release{false};std::thread owner([&]{std::lock_guard<std::mutex> lock(*gate);
+   held=true;while(!release)std::this_thread::yield();});
+  while(!held)std::this_thread::yield();
+  assert(state.trial_visual_shared(123,1000,0,handle,w,h)==C3X_RENDERER_RESULT_BUSY);
+  assert(state.submits==0&&state.visual_ticks==0);release=true;owner.join();
+ }
+ assert(state.trial_visual_shared(456,1000,0,handle,w,h)==C3X_RENDERER_RESULT_PENDING);
+ assert(state.submits==1&&state.visual_ticks==456);
+ state.result=C3X_RENDERER_RESULT_OK;assert(state.trial_visual_shared(789,1000,0,handle,w,h)==C3X_RENDERER_RESULT_OK);
+ assert(state.submits==2&&state.visual_ticks==789);
+}
+''')

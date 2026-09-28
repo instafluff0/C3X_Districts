@@ -9,8 +9,17 @@
     "Renderer/native/gpu_tactical_overlay.h",
     "Renderer/native/native_composition_owner.h",
     "Renderer/native/native_image_adapter.h",
+    "Renderer/native/zoom_transition.h",
+    "Renderer/native/gpu_view_transform.h",
+    "Renderer/native/retained_composition.h",
     "Renderer/native/c3x_renderer_api.h",
-    "Renderer/native/c3x_renderer.cpp"
+    "Renderer/native/c3x_renderer.cpp",
+    "Renderer/native/gpu_composition_session.h",
+    "Renderer/native/gpu_image_commands.h",
+    "Renderer/native/helper_trial/scene_wire.h",
+    "Renderer/native/scene_projection.h",
+    "Renderer/native/gpu_projected_layer.h",
+    "Renderer/native/scene_detail_filter.h"
   ],
   "recipe": {
     "terrain": 2,
@@ -32,7 +41,12 @@
   },
   "tests": [
     "Renderer.native.test_tactical_overlay",
-    "Renderer.native.test_retained_composition"
+    "Renderer.native.test_zoom_transition",
+    "Renderer.native.test_zoom_gpu",
+    "Renderer.native.test_retained_composition",
+    "Renderer.native.test_zoom_integration",
+    "Renderer.native.test_scene_projection",
+    "Renderer.native.test_scene_detail"
   ],
   "references": {
     "d3d11": []

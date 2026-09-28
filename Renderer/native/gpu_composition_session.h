@@ -12,6 +12,97 @@ class Session {
     Compositor gpu;RetainedComposition layers;Id map=0;std::int64_t ticket=0,identity=0;std::uint64_t readbacks=0;
     Id resident_unit=0;ID3D11Texture2D* resident_unit_texture=nullptr;
     bool map_animation_expected=false;
+    std::shared_ptr<c3x_renderer::ZoomTransition> zoom=std::make_shared<c3x_renderer::ZoomTransition>();
+    // Private retained IDs do not cross the image transport or own exact GPU
+    // working textures. Each frame starts from the complete canonical map.
+    static constexpr Id world_words=Id(1)<<63,world_detail=world_words+1,world_view_words=world_words+2,world_view_detail=world_words+3;
+    unsigned world_width=0,world_height=0;Id world_destination=0;
+    double rendered_zoom=1.;
+    Id fixed_words=0,fixed_detail=0;
+    std::vector<Command> fixed_shadows;
+    struct Hud {Id canvas=0,detail=0;unsigned identity=0;int x=0,y=0;unsigned key=0,key_detail=0;
+        std::vector<Command> draws;std::vector<Id> snapshots;};
+    std::vector<Hud> hud;
+    Id hud_canvas=0,hud_detail=0,next_snapshot=world_detail+4096;
+    void erase_hud(std::size_t at){for(auto id:hud[at].snapshots)layers.destroy(id);hud.erase(hud.begin()+at);}
+    void record(Command const& command){
+        if(!layers.accepting())return;
+        if(hud_canvas&&(command.destination==hud_canvas||command.destination==hud_detail)){
+            auto c=command;auto& item=hud.back();
+            if(c.kind==Kind::fill&&c.destination==item.canvas&&c.color==item.key)return;
+            if(c.kind==Kind::fill&&c.destination==item.detail&&c.color==item.key_detail)return;
+            auto snapshot=[&](Id& id){if(!id||id==hud_canvas||id==hud_detail)return;
+                auto next=++next_snapshot;layers.snapshot(next,id);item.snapshots.push_back(next);id=next;};
+            snapshot(c.source);snapshot(c.program);
+            if(c.kind==Kind::native_text)snapshot(c.background);
+            if(c.kind==Kind::native_image)snapshot(c.background_detail);
+            item.draws.push_back(c);return;
+        }
+        // A canvas rebuild retires its old labels. Each subsequent lexical
+        // draw scope supplies the current visible item and its native anchor.
+        if(command.kind==Kind::fill||command.kind==Kind::copy||command.kind==Kind::quantize||
+           (command.kind==Kind::native_image&&command.color==65536)){
+            auto erase=intersection(command.area,command.clip);
+            for(std::size_t at=hud.size();at-->0;)if(hud[at].canvas==command.destination){
+                auto& item=hud[at];std::vector<Command> remaining;
+                for(auto c:item.draws){auto a=intersection(c.area,c.clip),cut=intersection(a,erase);
+                    if(cut.left>=cut.right||cut.top>=cut.bottom){remaining.push_back(c);continue;}
+                    Rect pieces[]={{a.left,a.top,a.right,cut.top},{a.left,cut.bottom,a.right,a.bottom},
+                        {a.left,cut.top,cut.left,cut.bottom},{cut.right,cut.top,a.right,cut.bottom}};
+                    for(auto r:pieces)if(r.left<r.right&&r.top<r.bottom){c.clip=r;remaining.push_back(c);}
+                }
+                item.draws=std::move(remaining);if(item.draws.empty())erase_hud(at);
+            }
+        }
+        if(fixed_words&&(command.destination==fixed_words||command.destination==fixed_detail)){
+            // Notification text is in the GUI form, but Civ III writes its
+            // shadow into Units_Control. Keep that lexical scope out of the
+            // canonical world and replay each shadow over the displayed world.
+            if(command.kind==Kind::native_lookup){
+                auto copy=command;copy.source=world_detail+1024+fixed_shadows.size();
+                layers.snapshot(copy.source,command.source);fixed_shadows.push_back(copy);
+            }else if(command.kind!=Kind::fill)throw std::runtime_error("unexpected fixed notification canvas operation");
+            return;
+        }
+        layers.record(command);
+    }
+    void world(Command const& input){
+        if(!layers.accepting())return;
+        auto c=input;unsigned w=unsigned(c.area.right),h=unsigned(c.area.bottom);
+        if(!c.destination||!c.detail||!c.source||c.area.left||c.area.top||
+           !w||!h||w>2240||h>1260)throw std::runtime_error("invalid world composition boundary");
+        if(c.kind==Kind::world_begin){
+            auto format=gpu.format(c.destination);
+            if(world_width!=w||world_height!=h){
+                layers.destroy(world_words);layers.destroy(world_detail);layers.destroy(world_view_words);layers.destroy(world_view_detail);
+                layers.create(world_words,w,h,format);layers.create(world_detail,w,h,Format::bgra32);
+                layers.create(world_view_words,w,h,format);layers.create(world_view_detail,w,h,Format::bgra32);
+                world_width=w;world_height=h;
+            }
+            world_destination=c.destination;
+        }else if(world_destination!=c.destination||world_width!=w||world_height!=h)
+            return; // Loading can compose the unit form before its map form.
+        c.kind=Kind::native_image;c.destination=world_words;c.detail=world_detail;
+        layers.record(c);
+        if(input.kind==Kind::world_end){
+            layers.view(world_view_detail,world_detail,zoom,world_view_words);
+            for(auto const& item:hud)for(auto draw:item.draws){
+                draw.destination=draw.destination==item.detail?world_view_detail:world_view_words;
+                if(draw.detail)draw.detail=world_view_detail;
+                if(draw.source==item.canvas)draw.source=world_view_words;
+                else if(draw.source==item.detail)draw.source=world_view_detail;
+                if(draw.background&&draw.kind!=Kind::native_text)draw.background=world_view_words;
+                if(draw.background_detail&&draw.kind!=Kind::native_image)draw.background_detail=world_view_detail;
+                layers.record(draw,{},zoom,item.x,item.y);
+            }
+            for(auto shadow:fixed_shadows){
+                shadow.destination=shadow.background=world_view_words;
+                shadow.detail=shadow.background_detail=world_view_detail;
+                layers.record(shadow);
+            }
+            layers.select_world(input.destination,input.detail,world_view_words,world_view_detail);
+        }
+    }
 public:
     Session(ID3D11Device* d,ID3D11DeviceContext* c):device(d),context(c),gpu(d,c,live_image_budget,true),layers(d,c){}
     // Eight fullscreen packed/full-color native pairs and old/new immutable
@@ -37,7 +128,9 @@ public:
             // demand. Current native images become immutable static inputs;
             // subsequent map writes restore their dynamic dependencies.
             if(!layers.accepting()){
-                layers.clear();gpu.visit_images([&](Id id,unsigned w,unsigned h,Format format,ID3D11Texture2D* source){
+                layers.clear();world_width=world_height=0;world_destination=0;
+                hud.clear();hud_canvas=hud_detail=0;fixed_shadows.clear();
+                gpu.visit_images([&](Id id,unsigned w,unsigned h,Format format,ID3D11Texture2D* source){
                     layers.create(id,w,h,format);layers.source(id,source);
                 });
             }
@@ -61,6 +154,8 @@ public:
         return gpu.display(map,target,width,height,{0,0,int(width),int(height)});
     }
 #endif
+    unsigned presented_zoom()const{return unsigned(zoom->last_presented()*65536.+.5);}
+    void did_present(){zoom->did_present(rendered_zoom);}
     std::uint64_t upload_count()const{return gpu.stats().uploads;}
     std::int64_t current_ticket()const{return ticket;}
     // Publish an immutable native screen version. The independent cadence
@@ -125,7 +220,7 @@ public:
             Command draw={Kind::unit_over,Id(request.destination),source,{x,y,x+int(width),y+int(height)},
                 {request.clip[0],request.clip[1],request.clip[2],request.clip[3]},0,0,0,
                 Id(request.background),Id(request.detail),Id(request.background_detail)};
-            ok=gpu.submit(&draw,1);if(ok)layers.record(draw);
+            ok=gpu.submit(&draw,1);if(ok)record(draw);
         }catch(...){layers.destroy(source);gpu.destroy(source);throw;}
         layers.destroy(source);gpu.destroy(source);
         return ok?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_BAD_ARGUMENT;
@@ -156,6 +251,7 @@ public:
     int visual_frame(long long ticks,long long frequency,ID3D11RenderTargetView* target,ID3D11Texture2D* display,ID3D11Texture2D* buffer){
         try{auto result=layers.draw(ticks,frequency,target,display,buffer);
             c3x_recording::event(c3x_recording::visual,0,[&](auto& b){using namespace c3x_recording;u64(b,std::uint64_t(ticks));u64(b,std::uint64_t(frequency));u32(b,unsigned(result));u64(b,layers.bytes());u64(b,layers.node_count());u64(b,layers.sampled_sources());u32(b,visual_ready());});
+            if(result==1)rendered_zoom=layers.view_scale();
             return result;}catch(std::exception const& e){
             // A failed recipe cannot produce a frame. Release its outputs now;
             // the last completed display stays intact, and the next native map
@@ -173,8 +269,35 @@ public:
         // owner handoff. Submission order and explicit CPU readback stay exact.
         if(!commands.empty()){
             for(auto const& c:commands)if(c.destination==map||c.detail==map)return request.action==C3X_GPU_SUBMIT?C3X_RENDERER_RESULT_BAD_ARGUMENT:C3X_RENDERER_RESULT_ERROR;
-            if(!gpu.submit(commands.data(),commands.size()))return request.action==C3X_GPU_SUBMIT?C3X_RENDERER_RESULT_BAD_ARGUMENT:C3X_RENDERER_RESULT_ERROR;
-            try{for(auto const& command:commands)layers.record(command);}catch(std::exception const& e){OutputDebugStringA("[C3X renderer] retained admission: ");OutputDebugStringA(e.what());OutputDebugStringA("\n");layers.discard();}
+            for(std::size_t at=0;at<commands.size();){
+                auto const& c=commands[at];
+                if(c.kind>=Kind::world_begin){
+                    if(c.kind==Kind::zoom_target){LARGE_INTEGER now={},frequency={};
+                        QueryPerformanceCounter(&now);QueryPerformanceFrequency(&frequency);
+                        zoom->target(double(c.color)/65536.,now.QuadPart,frequency.QuadPart);
+                    }else if(c.kind==Kind::world_begin||c.kind==Kind::world_end)world(c);
+                    else if(c.kind==Kind::hud_begin){
+                        for(std::size_t i=hud.size();i-->0;)if(hud[i].canvas==c.destination&&hud[i].identity==c.color&&
+                            (c.color||(hud[i].x==c.source_x&&hud[i].y==c.source_y)))erase_hud(i);
+                        hud.push_back({c.destination,c.detail,c.color,c.source_x,c.source_y,unsigned(c.source_width)});
+                        auto& item=hud.back();unsigned k=item.key,r,g,b=((k&31)<<3)|((k&31)>>2);
+                        if(gpu.format(c.destination)==Format::rgb565){g=((k>>3)&252)|((k>>9)&3);r=((k>>8)&248)|((k>>13)&7);}
+                        else{g=((k>>2)&248)|((k>>7)&7);r=((k>>7)&248)|((k>>12)&7);}
+                        item.key_detail=0xff000000u|(r<<16)|(g<<8)|b;
+                        hud_canvas=c.destination;hud_detail=c.detail;
+                    }else if(c.kind==Kind::hud_end){hud_canvas=hud_detail=0;}
+                    else if(c.kind==Kind::fixed_ui_begin){
+                        for(auto const& shadow:fixed_shadows)layers.destroy(shadow.source);
+                        fixed_shadows.clear();fixed_words=c.destination;fixed_detail=c.detail;
+                    }else if(c.kind==Kind::fixed_ui_end){fixed_words=fixed_detail=0;}
+                    else return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+                    ++at;continue;
+                }
+                auto end=at+1;while(end<commands.size()&&commands[end].kind<Kind::world_begin)++end;
+                if(!gpu.submit(commands.data()+at,end-at))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+                for(;at<end;++at)try{record(commands[at]);}catch(std::exception const& e){
+                    OutputDebugStringA("[C3X renderer] retained admission: ");OutputDebugStringA(e.what());OutputDebugStringA("\n");layers.discard();}
+            }
         }
         bool ok=false;Id image=Id(request.image);
         if(request.action==C3X_GPU_CREATE){image=gpu.create(request.width,request.height,request.format==C3X_GPU_RGB555?Format::rgb555:request.format==C3X_GPU_RGB565?Format::rgb565:Format::bgra32);ok=image!=0;if(ok)layers.create(image,request.width,request.height,request.format==C3X_GPU_RGB555?Format::rgb555:request.format==C3X_GPU_RGB565?Format::rgb565:Format::bgra32);}

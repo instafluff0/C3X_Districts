@@ -1,6 +1,6 @@
 # An elevated interactive task preserves Civ III's required token and child
 # environment. The task exists only for this bounded diagnostic invocation.
-param([Parameter(Mandatory=$true)][string]$SaveFile, [ValidateRange(35,120)][int]$Seconds=75, [ValidateSet('scroll','interaction','lifecycle','combat','turn','mouse','zoom')][string]$Scenario='scroll', [ValidatePattern('^[A-Za-z0-9_-]+$')][string]$UnitPack='UnitAnimationFidelity', [ValidateSet('melee','victory','retreat','bombard','army','air','capture')][string]$CombatCase='melee', [ValidateRange(1,10)][int]$SampleHz=2, [switch]$ProfileRenderer, [switch]$MeasureCadence)
+param([Parameter(Mandatory=$true)][string]$SaveFile, [ValidateRange(35,120)][int]$Seconds=75, [ValidateSet('scroll','interaction','lifecycle','combat','turn','mouse','zoom','hud','city')][string]$Scenario='scroll', [ValidatePattern('^[A-Za-z0-9_-]+$')][string]$UnitPack='UnitAnimationFidelity', [ValidateSet('melee','victory','retreat','bombard','army','air','capture')][string]$CombatCase='melee', [ValidateRange(1,10)][int]$SampleHz=2, [switch]$ProfileRenderer, [switch]$MeasureCadence, [ValidateSet(0,1,2)][int]$SceneSamples=0, [ValidateRange(-1,1)][double]$SceneSharpness=-1)
 $ErrorActionPreference='Stop'
 $user=(Get-CimInstance Win32_ComputerSystem).UserName
 if (-not $user) { throw 'An interactive Windows login is required.' }
@@ -15,7 +15,7 @@ $profileArgument=if ($ProfileRenderer) { '-ProfileRenderer' } else { '' }
 $cadenceArgument=if ($MeasureCadence) { '-MeasureCadence' } else { '' }
 @"
 Start-Transcript -Path '$out\launcher.log' -Force
-try { & '$target' -SaveFile '$SaveFile' -Seconds $Seconds -Scenario $Scenario -CombatCase $CombatCase -UnitPack $UnitPack -SampleHz $SampleHz $profileArgument $cadenceArgument; exit `$LASTEXITCODE }
+try { & '$target' -SaveFile '$SaveFile' -Seconds $Seconds -Scenario $Scenario -CombatCase $CombatCase -UnitPack $UnitPack -SampleHz $SampleHz $profileArgument $cadenceArgument -SceneSamples $SceneSamples -SceneSharpness $($SceneSharpness.ToString([cultureinfo]::InvariantCulture)); exit `$LASTEXITCODE }
 finally { Stop-Transcript }
 "@ | Set-Content -LiteralPath $wrapper
 $action=New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ('-NoProfile -ExecutionPolicy Bypass -File "'+$wrapper+'"')

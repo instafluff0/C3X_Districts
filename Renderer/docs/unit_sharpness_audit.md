@@ -1,5 +1,10 @@
 # Unit sharpness audit
 
+Historical sprite-path audit. The live Renderer64 path now uses shared GPU
+geometry, source tangent/normal textures and different sampling. See
+[live scene quality](render_quality.md) before applying these findings to the
+game; the original measurements and source evidence below are preserved.
+
 Audit date: 2026-09-08. Scope: the current working checkout, local unit packs,
 the supplied two screenshots, and existing production Lab captures. Review only;
 no rendering behavior, staging, reference acceptance, or injected patches changed.

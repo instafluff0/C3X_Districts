@@ -154,7 +154,16 @@ struct P {
     float coast_coverage : TEXCOORD4;
     float coast_inland : TEXCOORD5;
 };
+#ifdef SANDBOX_TERRAIN_MATERIAL
+struct Output {
+    float4 color : SV_Target0;
+    float4 normal : SV_Target1;
+    float4 world : SV_Target2;
+    float4 properties : SV_Target3;
+};
+#else
 struct Output { float4 color : SV_Target0; float validity : SV_Target1; };
+#endif
 
 P VSMain(V input) {
     P output;
@@ -235,15 +244,14 @@ float coast_edge_coverage(float coverage,float grain) {
 }
 
 
-// Eight independently bounded city fields fit within one D3D11 constant
-// buffer. The CPU selects intersecting cities per guarded block; overflow
-// fails the candidate draw instead of truncating a city's emitting facades.
+// The scene-light adapter below replaces these regional declarations with
+// a growable GPU field while keeping the shared material equations.
 cbuffer NativeCityLights : register(b6) {
  float4 CityLightCounts;
  float4 Q8LocalEnvelopeLow4;float4 Q8LocalEnvelopeHigh4;
- float4 Q8LocalPositionRange[1024];float4 Q8LocalColorIntensity[1024];
- float4 Q8LocalDirectionOwner[1024];float4 Q8LocalBoxLow[256];float4 Q8LocalBoxHigh[256];
 };
+StructuredBuffer<float4> CityLightData : register(t127);
+
 #define Q8_LOCAL_LIGHT_COUNT int(CityLightCounts.x)
 #define Q8_LOCAL_BLOCKER_COUNT int(CityLightCounts.y)
 #define Q8LocalEnvelopeLow Q8LocalEnvelopeLow4.xyz
@@ -275,25 +283,25 @@ float3 q8_local_irradiance(float4 world,float3 normal,float ambient_visibility) 
  if(any(receiver_position<Q8LocalEnvelopeLow) || any(receiver_position>Q8LocalEnvelopeHigh))return 0;
  float3 light_sum=0;
  [loop]for(int i=0;i<Q8_LOCAL_LIGHT_COUNT;i++) {
-  float3 to_light=Q8LocalPositionRange[i].xyz-receiver_position;
+  float3 to_light=CityLightData[3*(i)+0].xyz-receiver_position;
   float distance2=dot(to_light,to_light);
-  float range=Q8LocalPositionRange[i].w;
+  float range=CityLightData[3*(i)+0].w;
   if(distance2>=range*range)continue;
   float3 direction=to_light*rsqrt(max(distance2,1e-8));
-  float face=saturate(dot(Q8LocalDirectionOwner[i].xyz,-direction));
+  float face=saturate(dot(CityLightData[3*(i)+2].xyz,-direction));
   float diffuse=saturate(dot(normal,direction));
   if(face*diffuse<=0)continue;
   bool blocked=false;
 #if Q8_LOCAL_OCCLUSION
   [loop]for(int j=0;j<Q8_LOCAL_BLOCKER_COUNT;j++) {
-   if(j==int(Q8LocalDirectionOwner[i].w))continue;
-   if(q8_local_box_blocks(Q8LocalPositionRange[i].xyz,receiver_position,Q8LocalBoxLow[j].xyz,Q8LocalBoxHigh[j].xyz)) {blocked=true;break;}
+   if(j==int(CityLightData[3*(i)+2].w))continue;
+   if(q8_local_box_blocks(CityLightData[3*(i)+0].xyz,receiver_position,CityLightData[3*int(CityLightCounts.x)+2*(j)+0].xyz,CityLightData[3*int(CityLightCounts.x)+2*(j)+1].xyz)) {blocked=true;break;}
   }
 #endif
   if(blocked)continue;
   float normalized_distance=distance2/(range*range);
   float attenuation=pow(1-normalized_distance,2)/(1+8*normalized_distance);
-  light_sum+=Q8LocalColorIntensity[i].rgb*Q8LocalColorIntensity[i].w*attenuation*face*diffuse;
+  light_sum+=CityLightData[3*(i)+1].rgb*CityLightData[3*(i)+1].w*attenuation*face*diffuse;
  }
  return light_sum*(Q8_LOCAL_LIGHT_GAIN*CityLightCounts.z*CityLightCounts.w*ambient_visibility);
 }
@@ -302,7 +310,13 @@ Output shade(P input) {
     Output output;
     if (input.material.y < 0.5) {
         output.color = float4(atmosphere(input.uv.y), 1);
+#ifdef SANDBOX_TERRAIN_MATERIAL
+        output.normal = float4(0.5, 0.5, 1, 1);
+        output.world = float4(input.world, 1);
+        output.properties = float4(1, 1, 1, 1);
+#else
         output.validity = 1;
+#endif
         return output;
     }
 
@@ -392,7 +406,16 @@ Output shade(P input) {
     } else {
         float2 uv0 = input.world.xy * Detail.x + float2(0.31, 0.17);
         float2 uv1 = float2(input.world.y, -input.world.x) * (Detail.x * 0.91) + float2(0.63, 0.29);
-        float3 grass = GrassColor.Sample(Wrap, uv0).rgb;
+        // Preserve the source's fine grit. Only its coarse color field has a
+        // broad dark band that repeats as a map line, so average that field
+        // across independent regions and leave the fine sample intact.
+        float3 grass_fine = GrassColor.Sample(Wrap, uv0).rgb;
+        float3 grass_low = GrassColor.SampleBias(Wrap, uv0, 7.0).rgb;
+        float3 grass_low_blend = (grass_low +
+            GrassColor.SampleBias(Wrap, uv0 + float2(.37, .11), 7.0).rgb +
+            GrassColor.SampleBias(Wrap, uv0 + float2(.13, .53), 7.0).rgb +
+            GrassColor.SampleBias(Wrap, uv0 + float2(.61, .71), 7.0).rgb) * .25;
+        float3 grass = grass_fine + grass_low_blend - grass_low;
         float3 plains = PlainsColor.Sample(Wrap, uv1).rgb;
         float2 tundra_uv = input.world.xy * (Detail.x * 0.84) + float2(0.19, 0.71);
         float3 tundra = TundraColor.Sample(Wrap, tundra_uv).rgb;
@@ -435,14 +458,34 @@ Output shade(P input) {
         albedo = lerp(base, hill, rocky_band * 0.90);
         height_detail = lerp(base_h, hill_h, rocky_band);
         specular_map = lerp(base_s, hill_s, rocky_band);
-        geometric = detail_normal(geometric, input.world, height_detail);
+        // Keep the full height response on plains and desert. Reduce only the
+        // grass share so its source specks do not read as near-black pits.
+        float grass_plains_detail = saturate(1 - tundra_weight - desert_weight) *
+            (1 - smoothstep(0.06, 0.45, input.material.z));
+        float grass_share = (1 - plains_weight) * (1 - desert_weight);
+        geometric = detail_normal_strength(geometric, input.world, height_detail,
+                                           Detail.y * (1 + (0.9 - 0.6 * grass_share) *
+                                                       grass_plains_detail));
 
         // Source-backed detail supplies a continuous material-scale response.
         // Cooler lows and warm dry highs add readable regional variation
         // without perturbing the flat-ground geometry or drawing tile borders.
         float broad = surface_shape(input.world.xy);
+        float broad_height = SurfaceDetail.SampleBias(Wrap,
+            input.world.xy * 0.071 + float2(0.13, 0.37), 3).r;
+        geometric = detail_normal_strength(geometric, input.world, broad_height,
+                                           0.35 * grass_plains_detail);
         albedo *= lerp(float3(0.88, 0.94, 0.97),
                        float3(1.09, 1.045, 0.91), broad);
+        albedo *= 1 + clamp((broad - 0.30) * 0.55, -0.12, 0.15) * grass_plains_detail;
+        // A second source-detail frequency breaks broad uniform areas without
+        // inventing a new texture or reusing the decal atlas as a tile stamp.
+        float2 grain_uv = input.world.xy * 0.61 + float2(0.41, 0.73);
+        float grain = SurfaceDetail.Sample(Wrap, grain_uv).r;
+        // 0.303 is the measured mean of this source R8 field. The small
+        // brightness swing retains its authored hills and hollows in material
+        // space while avoiding a new geometric relief field on flat game tiles.
+        albedo *= 1 + clamp((grain - 0.303) * 0.9, -0.16, 0.22) * grass_plains_detail;
     }
 
 #ifdef BEAUTY_COMPOSED_SHADOWS
@@ -475,6 +518,17 @@ Output shade(P input) {
 #ifdef BEAUTY_VOLCANO_MATERIAL
     albedo = volcano_albedo(albedo, input.volcano_owner, input.world.z);
 #endif
+#ifdef SANDBOX_TERRAIN_MATERIAL
+    // The sandbox retains source-composed material once per camera. Dynamic
+    // sun, shadow and local-light evaluation runs over the visible pixels.
+    float cavity = lerp(0.79, 1.0, smoothstep(0.02, 0.30, input.material.x));
+    output.color = float4(albedo * alpha, alpha);
+    output.normal = float4((geometric * 0.5 + 0.5) * alpha, alpha);
+    output.world = float4(input.world * alpha, alpha);
+    output.properties = float4(float3(cavity, surface_occlusion,
+                                      input.coast_inland) * alpha, alpha);
+    return output;
+#else
     float ndl = saturate(dot(geometric, light_direction));
     float wrap = saturate((dot(geometric, light_direction) + 0.20) / 1.20);
     float sky = saturate(geometric.z * 0.5 + 0.5);
@@ -498,6 +552,7 @@ Output shade(P input) {
     output.color = float4(max(radiance, 0) * alpha, alpha);
     output.validity = alpha;
     return output;
+#endif
 }
 
 Output PSMain(P input) { return shade(input); }

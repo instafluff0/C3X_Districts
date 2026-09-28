@@ -5,6 +5,11 @@ Connected mountains broaden along captured adjacency; shared-edge geometry and
 shadow coverage match. Grass, plains, tundra or desert climbs the lower slope
 before stone takes over. Terrain decals remain later.
 
+The shared mesh now uses the `lower` proposal (68% height, 108% spans).
+Its coordinated Renderer64 import with Terrain is recorded in
+`Renderer/docs/lab_material_integration.md`. Historical studies below describe
+their original isolated comparisons; fixed reference images are unchanged.
+
 ## Flat-ground handoff (Lab candidate)
 
 The mountain neighborhood uses one joined relief grid in place of ordinary

@@ -55,9 +55,9 @@ bool reference_relief(NaturalData const&natural,int real,Tile owner,GroundProjec
             pieces.push_back({natural.macro[variant][0],natural.macro[variant][1],
                 float(pc)+.5f+.09f*(int(east)-int(west)),
                 float(pr)+.5f+.09f*(int(south)-int(north)),
-                connected?(turn?2.08f:2.46f):1.85f,
-                connected?(turn?1.82f:1.34f):1.55f,
-                connected?142.f:165.f,connected,along_y>along_x});
+                (connected?(turn?2.08f:2.46f):1.85f)*1.08f,
+                (connected?(turn?1.82f:1.34f):1.55f)*1.08f,
+                (connected?142.f:165.f)*.68f,connected,along_y>along_x});
         }
         struct MountainSample {float displacement=0,dominant=0,height=0,blend=0,u=0,v=0;};
         auto mountain_at=[&](float world_x,float world_y){

@@ -24,7 +24,7 @@ template<class Backend> class Adapter {
     void* get_bits;void* release_bits;DWORD thread=GetCurrentThreadId();
     std::array<Image,32> images={};std::uint64_t cpu_bytes=0,source_age=0;
     static constexpr std::uint64_t cpu_budget=64u*1024u*1024u;
-    Counts counters;unsigned large_cpu_barrier_reports=0,copy_rejection_reports=0,sprite_rejection_reports=0,blend_rejection_reports=0,image_rejection_reports=0,lookup_rejection_reports=0;
+    Counts counters;unsigned large_cpu_barrier_reports=0,copy_rejection_reports=0,sprite_rejection_reports=0,blend_rejection_reports=0,image_rejection_reports=0,lookup_rejection_reports=0,source_evictions=0,large_uploads=0;
     Id sprite_image=0;SpriteCache<Backend> sprites;
     struct Lookup {Id image=0;std::uint64_t revision=0;std::vector<std::uint16_t> words;};
     std::array<Lookup,2> lookups; // Full effects and the small native shadow table coexist.
@@ -82,7 +82,11 @@ template<class Backend> class Adapter {
         while(count>images.size()-8 || cpu_bytes>48u*1024u*1024u){
             Image* oldest=nullptr;
             for(auto& i:images)if(i.native&&!i.owned&&!i.dirty&&(!oldest||i.used<oldest->used))oldest=&i;
-            if(!oldest)break;forget(*oldest);--count;
+            if(!oldest)break;
+            if(++source_evictions<=8){char line[192];std::snprintf(line,sizeof(line),
+                "[C3X renderer] stage=native-source-eviction width=%u height=%u images=%zu cpu_bytes=%llu\n",
+                oldest->width,oldest->height,count,cpu_bytes);OutputDebugStringA(line);}
+            forget(*oldest);--count;
         }
     }
     Image* create(void* p,bool owned){
@@ -130,6 +134,9 @@ template<class Backend> class Adapter {
             }
             counters.source_expanded_bytes+=content.size()*4;
         } // Release the private native lease before dispatching to the worker.
+        if(content.size()>=512u*512u&&++large_uploads<=8){char line[192];std::snprintf(line,sizeof(line),
+            "[C3X renderer] stage=native-source-upload width=%u height=%u cached=%u revision=%llu evictions=%u\n",
+            image.width,image.height,unsigned(image.cpu_uploaded),image.revision,source_evictions);OutputDebugStringA(line);}
         if(!gpu.upload(image.gpu,image.revision+1,content.data(),content.size()))return false;
         ++image.revision;image.cpu_uploaded=true;
         cpu_bytes-=image.cpu.size()*2;image.cpu=std::move(captured);cpu_bytes+=image.cpu.size()*2;
@@ -837,6 +844,40 @@ public:
         gpu.flush();int result=draw(request);
         if(result!=C3X_RENDERER_RESULT_OK)throw std::runtime_error("tactical composition failed");
         d->dirty=true;++counters.translated;return true;
+    }
+    unsigned transparency(void* source){
+        auto s=find(source);if(!s)throw std::runtime_error("native transparency source missing");
+        unsigned key=unsigned(field(source,0x4d0));
+        if(!(key&0x80000000u)){
+            auto palette=c3x_native_access::pointer(source,0x7c);
+            if(!palette)palette=c3x_native_access::palette();
+            if(palette){auto colors=c3x_native_access::colors(palette,s->format==Format::rgb565);
+                if(!colors)throw std::runtime_error("native transparency palette missing");key=colors[key&255];}
+        }
+        return key&65535;
+    }
+    bool world_transfer(int op,void* target,void* source){
+        auto d=find(target),s=find(source);
+        // The unit/HUD form can remain an ordinary CPU UI source. Its just-
+        // completed native transfer already uploaded the current words; only
+        // GPU-owned map canvases have a persistent full-color companion.
+        if(!d||!s||!d->owned||(!s->owned&&!s->cpu_uploaded)||d->width!=s->width||d->height!=s->height||
+           d->format!=s->format||(s->owned&&!full_color(*s))||!full_color(*d))return false;
+        unsigned key=65536;
+        if(op==C3X_NATIVE_WORLD_END){
+            key=unsigned(field(source,0x4d0));
+            if(!(key&0x80000000u)){
+                auto palette=c3x_native_access::pointer(target,0x7c);
+                if(!palette)palette=c3x_native_access::palette();
+                if(palette){auto colors=c3x_native_access::colors(palette,d->format==Format::rgb565);
+                    if(!colors)return false;key=colors[key&255];}
+            }
+            key&=65535;
+        }
+        Rect full={0,0,int(d->width),int(d->height)};
+        Command command={op==C3X_NATIVE_WORLD_BEGIN?Kind::world_begin:Kind::world_end,
+            d->gpu,s->gpu,full,full,0,0,key,0,d->detail,s->detail,int(s->width),int(s->height)};
+        return gpu.submit(&command,1);
     }
     Id display_image(void* p){
         if(GetCurrentThreadId()!=thread)throw std::runtime_error("native display adapter thread changed");

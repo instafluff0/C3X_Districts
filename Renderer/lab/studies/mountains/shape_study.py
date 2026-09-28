@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -65,6 +66,16 @@ def copy_sources() -> None:
 
 
 def shaped_mesh(source: str, height: float, width: float) -> str:
+    # Fresh studies use absolute factors from the original shape, even after
+    # the lower proposal is promoted. Historical frozen inputs still work.
+    if "constexpr float mountain_height_scale=" in source:
+        source, count = re.subn(
+            r"constexpr float mountain_height_scale=[.\d]+f, mountain_span_scale=[.\d]+f;",
+            f"constexpr float mountain_height_scale={height:.5f}f, mountain_span_scale={width:.5f}f;",
+            source)
+        if count != 1:
+            raise ValueError("Mountain shape calibration changed")
+        return source
     if (height, width) == (1.0, 1.0):
         return source
     replacements = {

@@ -12,8 +12,10 @@ The [coastal-shallows study](../../../studies/coastal_shallows/README.md)
 compares coast-family clarity and submerged source-height detail against the
 current-code water baseline at 256-pixel close zoom and 128-pixel gameplay
 zoom. Its selected Lab mosaic varies between the clean control and an
-irregular source-height bed across continuous coast regions. It has not changed
-production appearance.
+irregular source-height bed across continuous coast regions. The selected
+`desert-broad-mosaic` equations now feed the shared hydrology material and
+Renderer64 water surface; the separate seabed geometry experiments remain
+isolated. See [runtime import notes](../../../../docs/lab_material_integration.md#coast-and-water).
 
 Rock geometry remains exclusive to hill tiles adjoining water. The shoreline
 witness includes both that rocky join and an ordinary lowland beach so changes

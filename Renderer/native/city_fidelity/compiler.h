@@ -25,11 +25,26 @@ Composition const* select(Library const& library,c3x_renderer_tile_v1 const& rec
     unsigned culture=unsigned(std::clamp(record.city_culture_group,0,4));
     unsigned era=unsigned(std::clamp(record.city_era,0,3)),size=unsigned(std::clamp(record.city_size,0,2));
     bool capital=(record.city_flags&C3X_RENDERER_CITY_CAPITAL)!=0;
-    // Selected compositions precede generic growth. Do not fit a coastal site
-    // by moving vegetation, squashing a body, or searching during a draw.
-    for(unsigned pass=0;pass<2;pass++)for(auto const&t:library.compositions){
+    bool walled=size==0 && (record.city_flags&C3X_RENDERER_CITY_WALLED)!=0;
+    unsigned variants=1;
+    for(auto const&t:library.compositions)
+        if(t.culture==culture && t.era==era && t.size==size && t.capital==unsigned(capital) &&
+           (!t.owns_walls || t.walled==unsigned(walled)))variants=std::max(variants,t.variant+1);
+    // The capture seed is map seed + canonical tile coordinates. Ownership,
+    // population and capture order never reshuffle a city's variant.
+    unsigned chosen=record.variant_seed%variants;
+    // Version-four recipes accept native city anchors directly. The remaining
+    // clearance search supports older standalone study libraries only.
+    for(unsigned pass=0;pass<2;pass++)for(unsigned alternative=0;alternative<variants;++alternative)
+      for(auto const&t:library.compositions){
         if(t.culture!=culture || t.era!=era || t.size!=size ||
+            t.variant!=(chosen+alternative)%variants || (t.owns_walls && t.walled!=unsigned(walled)) ||
             (pass==0?t.capital!=unsigned(capital):t.capital!=0 || !capital))continue;
+        // Authored layouts use Civ III's legal city anchor. Their trees and
+        // outskirts may cross neighboring tile edges; reject neither the whole
+        // city nor its capital because a neighboring tile is coast or relief.
+        // Individual rigid buildings still use the terrain at their own anchor.
+        if(t.anchor_layout)return &t;
         bool legal=true;unsigned query_budget=4096;
         auto clear_box=[&](auto&&self,float x,float y,float dx,float dy,unsigned depth)->bool{
             if(!query_budget)return false;

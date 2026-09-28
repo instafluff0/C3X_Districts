@@ -2713,10 +2713,12 @@ struct district_button_image_set {
 	int custom_renderer_viewer_civ_id;
 	bool custom_renderer_capture_world_topology;
 	bool custom_renderer_world_audit_needed;
-	// Main-map stepped zoom is an injected camera transform. Civ III remains the
-	// authoritative camera; these fields scale its captured anchors and invert
-	// mouse coordinates back into the native projection for interaction.
+	Units_Image_Data * custom_renderer_unit_images;
+	// Stable native-to-canonical capture basis plus the requested display level.
+	// Renderer64 owns easing; picking reads its last successful presentation.
 	int custom_renderer_zoom_tile_width;
+	int custom_renderer_zoom_target_width;
+	JGL_Image * custom_renderer_hud_canvas;
 	int custom_renderer_zoom_wheel_remainder;
 	int custom_renderer_zoom_native_tile_width;
 	long long custom_renderer_zoom_translate_x_fp;

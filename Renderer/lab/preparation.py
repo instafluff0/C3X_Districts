@@ -32,6 +32,7 @@ def input_paths(root):
     paths = {step[0] for step in STEPS}
     paths.update(("Renderer/lab/preparation.py",
         "Renderer/native/render_core/generate_shaders.py",
+        "Renderer/native/city_fidelity/scene_lights.py",
         "Renderer/native/render_core/shadow_receiver.hlsl",
         "Renderer/native/render_core/world_projection.hlsl",
         "Renderer/native/render_core/rigid_instance_geometry.hlsl",

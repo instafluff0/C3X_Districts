@@ -13,6 +13,8 @@
 #include <algorithm>
 
 #include "gpu_image_display.h"
+#include "gpu_view_transform.h"
+#include "scene_detail_filter.h"
 #include "gpu_unit_scene.h"
 #include "composition_recording.h"
 namespace c3x_gpu_images {
@@ -38,6 +40,7 @@ class Compositor {
         }
     }
     ImageDisplay display_program;
+    ViewTransform view_program;
     ComPtr<ID3D11ComputeShader> shader,import_shader,unit_shader,image_shader,blend_shader,lookup_shader;ComPtr<ID3D11Buffer> constants,image_constants;
     c3x_renderer::GpuUnitScene unit_scene;
     Counts counters;std::uint64_t budget,recording=0;
@@ -595,35 +598,55 @@ Texture2D<uint> input_image:register(t0);Texture2D<uint> text_curves:register(t1
         if(!import_bgra({destination->texture,destination->write,destination->width,destination->height},source,x,y))return false;
         destination->cpu_current=false;return true;
     }
-    bool import_bgra(ImportTarget const& destination,ID3D11Texture2D* source,int x=0,int y=0){
-        if(!source||!destination.texture||!destination.write)return false;
+    bool import_bgra(ImportTarget const& destination,ID3D11Texture2D* source,int x=0,int y=0,float sharpness=0.f){
+        if(!source||!destination.texture||!destination.write||!(sharpness>=0.f&&sharpness<=1.f))return false;
         D3D11_TEXTURE2D_DESC desc={};source->GetDesc(&desc);
         if(x<0||y<0||desc.Width<destination.width||desc.Height<destination.height||
            unsigned(x)>desc.Width-destination.width||unsigned(y)>desc.Height-destination.height||desc.SampleDesc.Count!=1||
            desc.Format!=DXGI_FORMAT_B8G8R8A8_UNORM||!(desc.BindFlags&D3D11_BIND_SHADER_RESOURCE))return false;
         ComPtr<ID3D11Device> source_device;source->GetDevice(&source_device);if(source_device.Get()!=device)return false;
         if(!import_shader){
-            char const* hlsl=R"(
+            std::string hlsl=std::string(R"(
 cbuffer Params:register(b0){int4 area;int2 offset;uint mode;uint color;};
 Texture2D<float4> input_image:register(t0);RWTexture2D<uint> output_image:register(u0);
+)")+c3x_renderer::scene_detail_filter()+R"(
 [numthreads(8,8,1)] void main(uint3 at:SV_DispatchThreadID){
  uint w,h;output_image.GetDimensions(w,h);if(at.x>=w||at.y>=h)return;
- uint4 c=uint4(round(saturate(input_image.Load(int3(int2(at.xy)+offset,0)))*255.0));
+ uint4 c=uint4(round(saturate(scene_detail(int2(at.xy)+offset,float(color)/65536.))*255.0));
  output_image[at.xy]=c.b|(c.g<<8)|(c.r<<16)|(c.a<<24);
 })";
-            ComPtr<ID3DBlob> code,error;checked(D3DCompile(hlsl,std::strlen(hlsl),"resident map import",nullptr,nullptr,"main","cs_5_0",D3DCOMPILE_ENABLE_STRICTNESS,0,&code,&error));
+            ComPtr<ID3DBlob> code,error;checked(D3DCompile(hlsl.c_str(),hlsl.size(),"resident map import",nullptr,nullptr,"main","cs_5_0",D3DCOMPILE_ENABLE_STRICTNESS,0,&code,&error));
             checked(device->CreateComputeShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,&import_shader));
         }
         ComPtr<ID3D11ShaderResourceView> input;checked(device->CreateShaderResourceView(source,nullptr,&input));
         unbind();auto read=input.Get();auto write=destination.write.Get();context->CSSetShaderResources(0,1,&read);context->CSSetUnorderedAccessViews(0,1,&write,nullptr);
         if(!constants){D3D11_BUFFER_DESC d={};d.ByteWidth=sizeof(Constants);d.Usage=D3D11_USAGE_DEFAULT;d.BindFlags=D3D11_BIND_CONSTANT_BUFFER;checked(device->CreateBuffer(&d,nullptr,&constants));}
-        Constants params={};params.offset[0]=x;params.offset[1]=y;
+        Constants params={};params.offset[0]=x;params.offset[1]=y;params.color=unsigned(sharpness*65536.f+.5f);
         context->UpdateSubresource(constants.Get(),0,nullptr,&params,0,0);auto cb=constants.Get();context->CSSetConstantBuffers(0,1,&cb);
         context->CSSetShader(import_shader.Get(),nullptr,0);context->Dispatch((destination.width+7)/8,(destination.height+7)/8,1);unbind();
         return true;
     }
     bool displayable(Id id,unsigned width,unsigned height){
         auto image=find(id);return image&&image->format==Format::bgra32&&image->width==width&&image->height==height;
+    }
+    // Retained view outputs already own their storage. Write the display pair
+    // directly; a scratch view and a second quantization pass add no information.
+    bool transform_view(ImportTarget const& d,Id source,float scale,ImportTarget const* words=nullptr,Format format=Format::rgb555){
+        auto s=find(source);
+        if(!s||!d.texture||!d.write||d.texture.Get()==s->texture.Get()||s->format!=Format::bgra32||
+           d.width!=s->width||d.height!=s->height||!(scale>=1.f&&scale<=1.5f))return false;
+        if(words&&(!words->texture||!words->write||words->width!=d.width||words->height!=d.height||
+            words->texture==d.texture||words->texture.Get()==s->texture.Get()||format==Format::bgra32))return false;
+        if(scale==1.f&&!words)context->CopyResource(d.texture.Get(),s->texture.Get());
+        else view_program.draw(device,context,s->read.Get(),d.write.Get(),d.width,d.height,scale,
+            words?words->write.Get():nullptr,words?(format==Format::rgb565?2:1):0);
+        return true;
+    }
+    bool transform_view(Id destination,Id source,float scale){
+        auto d=find(destination),s=find(source);
+        if(!d||!s||d==s||d->read_only||d->format!=Format::bgra32||s->format!=Format::bgra32||
+           d->width!=s->width||d->height!=s->height||!(scale>=1.f&&scale<=1.5f))return false;
+        return transform_view(ImportTarget{d->texture,d->write,d->width,d->height},source,scale);
     }
     bool display(Id id,ID3D11RenderTargetView* target,unsigned width,unsigned height,Rect area,
                  std::array<LONGLONG,8>* phase_ticks=nullptr){
@@ -645,6 +668,7 @@ Texture2D<float4> input_image:register(t0);RWTexture2D<uint> output_image:regist
         unbind();context->UpdateSubresource(image->texture.Get(),0,&box,pixels,unsigned(area.right-area.left)*4,0);image->cpu_current=false;return true;
     }
 
+    Format format(Id id){auto image=find(id);if(!image)throw std::runtime_error("image format requested outside lifetime");return image->format;}
     ID3D11Texture2D* texture(Id id){auto image=find(id);return image?image->texture.Get():nullptr;}
     ID3D11ShaderResourceView* view(Id id){auto image=find(id);return image?image->read.Get():nullptr;}
     Counts stats()const{return counters;}

@@ -3,8 +3,10 @@
 This isolated Renderer Lab study tests clearer coast-family water and a more
 legible submerged shelf. It belongs to the existing **shorelines** category;
 sea and ocean are controls. The current checkout is the baseline. The chosen
-Lab variant is `desert-broad-mosaic`; it has not replaced production shaders,
-binaries, or fixed reference images.
+Lab variant is `desert-broad-mosaic`. Its material equations now live in the
+shared hydrology source and Renderer64 water surface. See
+[the runtime import notes](../../../docs/lab_material_integration.md#coast-and-water)
+for the bounded verification and staging evidence. Fixed references are unchanged.
 
 ## Selected visual direction
 

@@ -250,7 +250,8 @@ TerrainFrameSignature terrain_frame_signature(c3x_renderer_frame_v1 const & fram
                            static_cast<c3x_renderer_u32>(tile.city_owner_id),
                            static_cast<c3x_renderer_u32>(tile.city_size),
                            static_cast<c3x_renderer_u32>(tile.city_culture_group),
-                           static_cast<c3x_renderer_u32>(tile.city_era), tile.city_flags})
+                           static_cast<c3x_renderer_u32>(tile.city_era), tile.city_flags,
+                           tile.territory_edge_mask, tile.territory_color_rgb})
             hash_value(result.scene, value);
         for (auto value : {tile.variant_seed, tile.tile_flags & ~C3X_RENDERER_TILE_VISIBILITY_BITS, tile.feature_flags,
                            tile.improvement_flags, tile.irrigation_mask,
@@ -263,7 +264,8 @@ TerrainFrameSignature terrain_frame_signature(c3x_renderer_frame_v1 const & fram
                            static_cast<c3x_renderer_u32>(tile.city_owner_id),
                            static_cast<c3x_renderer_u32>(tile.city_size),
                            static_cast<c3x_renderer_u32>(tile.city_culture_group),
-                           static_cast<c3x_renderer_u32>(tile.city_era), tile.city_flags})
+                           static_cast<c3x_renderer_u32>(tile.city_era), tile.city_flags,
+                           tile.territory_edge_mask, tile.territory_color_rgb})
             hash_value(result.geometry, value);
         hash_bytes(result.scene, tile.resource_name, sizeof(tile.resource_name));
         hash_bytes(result.geometry, tile.resource_name, sizeof(tile.resource_name));

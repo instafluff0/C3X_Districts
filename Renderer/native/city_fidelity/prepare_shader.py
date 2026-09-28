@@ -1,5 +1,7 @@
 """Freeze the complete selected city shader with production input bindings."""
 from pathlib import Path
+import sys
+sys.path.insert(0,str(Path(__file__).resolve().parents[3]))
 import hashlib,json
 HERE=Path(__file__).resolve().parent
 ROOT=HERE.parents[2];LAB=ROOT/'Renderer/lab/shared'
@@ -35,9 +37,8 @@ def main():
         return p.read_text()
     source=read(HERE.parent/'environment_refresh/feature.hlsl')
     field='''
-// Eight independently bounded city fields fit within one D3D11 constant
-// buffer. The CPU selects intersecting cities per guarded block; overflow
-// fails the candidate draw instead of truncating a city's emitting facades.
+// The scene-light adapter below replaces these regional declarations with
+// a growable GPU field while keeping the shared material equations.
 cbuffer NativeCityLights : register(b6) {
  float4 CityLightCounts;
  float4 Q8LocalEnvelopeLow4;float4 Q8LocalEnvelopeHigh4;
@@ -206,8 +207,14 @@ float PSCutout(Pixel i):SV_TARGET {
 ''')
     (HERE/'source_caster.hlsl').write_text(caster)
 
-    (HERE/'shader-provenance.json').write_text(json.dumps({'authority':['r111-inland','r112-freshcanopy'],
+    from Renderer.native.city_fidelity.scene_lights import upgrade
+    pins['Renderer/native/city_fidelity/scene_lights.py']=hashlib.sha256((HERE/'scene_lights.py').read_bytes()).hexdigest()
+    for path in HERE.glob('*.hlsl'):
+        text=path.read_text();updated=upgrade(text)
+        if updated!=text:path.write_text(updated)
+
+    (HERE/'shader-provenance.json').write_text(json.dumps({'authority':['current-selected-city-recipes'],
         'source_sha256':pins,'bindings':'Native full vertex, shared shadow atlas, explicit material/environment and atlas constants',
-        'runtime':['bounded per-block facade light selection','guarded linear reconstruction and HDR glow'],
-        'pending':['user-run Civ III visual checkpoint','remaining palace styles and constrained-site coverage']},indent=2)+'\n')
+        'runtime':['scene-sized GPU facade lights and blockers','guarded linear reconstruction and HDR glow'],
+        'pending':['broad live-game regression after Lab integration']},indent=2)+'\n')
 if __name__=='__main__':main()

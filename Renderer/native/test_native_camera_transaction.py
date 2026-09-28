@@ -229,6 +229,7 @@ int main(){
     def test_unload_and_shared_reset_barriers_do_not_fail_open(self):
         injected=Path('injected_code.c').read_text()
         unload='void unload_custom_renderer ()'+injected.split('void\nunload_custom_renderer ()',1)[1].split('\tis->custom_renderer_module = NULL;',1)[0]+'}'
+        unload=unload.replace('(void *)(*p_GetProcAddress)', '(int (*)(void))(*p_GetProcAddress)')
         renderer=Path('Renderer/native/c3x_renderer.cpp').read_text()
         drain='bool drain_native_composition(){'+renderer.split('bool drain_native_composition(){',1)[1].split('\n}\nint remote_draw_cpu_unit',1)[0]+'\n}'
         run_cpp(r'''
@@ -240,12 +241,17 @@ constexpr int IS_INIT_FAILED=2;
 bool fail=true;int drains=0,resets=0,frees=0,detaches=0,settled=-1;
 int image(int,void*,void*,void const*,void const*,unsigned){++drains;return fail?-1:0;}
 void reset(){++resets;}
+int end_scene(){++resets;return C3X_RENDERER_RESULT_OK;}
+void* get_proc(void*,char const*){return reinterpret_cast<void*>(end_scene);}auto p_GetProcAddress=get_proc;
+void log_custom_renderer_event(char const*,int){}
 void FreeLibrary(void*){++frees;}
 void settle_custom_renderer_navigation(int action){settled=action;}
 void set_custom_renderer_native_probe(void*){++detaches;}
 struct State {
  struct {bool enable_custom_rendering=false;}current_config;
  int custom_renderer_init_state=1;
+ int custom_renderer_zoom_tile_width=192,custom_renderer_zoom_target_width=192,custom_renderer_zoom_wheel_remainder=80;
+ void* custom_renderer_hud_canvas=this;
  void* custom_renderer_module=this;
  c3x_renderer_native_image_fn custom_renderer_native_image=image;
  void (*custom_renderer_reset)()=reset;
@@ -262,6 +268,8 @@ namespace c3x_inputs {struct Assets{bool enabled=false;};Assets& replay_assets()
 int main(){
  unload_custom_renderer();assert(drains==1&&!resets&&!frees&&!detaches&&settled==C3X_NAV_BARRIER&&state.custom_renderer_init_state==IS_INIT_FAILED);
  fail=false;unload_custom_renderer();assert(drains==2&&resets==1&&frees==1&&detaches==1);
+ assert(state.custom_renderer_zoom_tile_width==0&&state.custom_renderer_zoom_target_width==128&&
+        state.custom_renderer_zoom_wheel_remainder==0&&!state.custom_renderer_hud_canvas);
  state.current_config.enable_custom_rendering=true;unload_custom_renderer();assert(settled==C3X_NAV_DISCARD);
  fail=true;native_composition=new Composition;
  assert(!drain_native_composition()&&native_composition); // failed readback keeps owner alive

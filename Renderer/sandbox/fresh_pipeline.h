@@ -2,6 +2,7 @@
 #include <fstream>
 #include <limits>
 #include <sstream>
+#include "../native/gpu_territory_borders.h"
 
 inline auto& sandbox_active_reflection() {
 #ifdef C3X_RENDERER64_FRESH
@@ -65,9 +66,8 @@ float c3x_paged_visibility(Texture2DArray field,float4 world,float3 normal,bool 
  float4 ShadowU,float4 ShadowV,float4 ShadowL,float4 ShadowFlags) {
  if(world.w<=.5 || ShadowFlags.x<=.5)return 1;
  float4 box=pickup_pages[0]; // minimum light-plane u/v and full u/v span
- // The 4096px shared frame spans roughly 140 world units in this BIQ view;
- // the earlier 0.006 world-unit offset was sub-texel and caused self-shadow bands.
- const float texel=.035;
+ // Scale bias with the current shadow texel, including close city views.
+ float texel=max(box.z,box.w)/4096.;
  float3 offset=world.xyz+normal*(water?6./1024.:texel*1.5);
  float2 uv=(float2(dot(offset,ShadowU.xyz),dot(offset,ShadowV.xyz))-box.xy)/box.zw*4096.;
  float z=dot(offset,ShadowL.xyz);
@@ -345,6 +345,16 @@ float4 PSSandboxAquaticFeature(FeaturePixelInput input) : SV_Target {
             if (!compile(target.file, target.entry, &replacement)) return false;
             (*target.slot)->Release();
             *target.slot = replacement;
+        }
+        if (renderer.city_profile) {
+            char const* entries[]={"PSNativeCity", "PSNativeCityEmission",
+                "PSNativeCityReflection", "PSNativeCityReflectionEmission"};
+            for (unsigned i=0;i<4;++i) {
+                ID3D11PixelShader* replacement=nullptr;
+                if (!compile("city.hlsl",entries[i],&replacement)) return false;
+                renderer.cities.ps[i]->Release();
+                renderer.cities.ps[i]=replacement;
+            }
         }
         if(!compile("water_surface.hlsl","PSWaterSurface",&water_surface) ||
            !compile("water_surface.hlsl","PSRiverSurface",&river_surface))return false;
@@ -898,40 +908,9 @@ struct SandboxMaterialChannel {
     }
 };
 
-// One screen-wide sun source lights the final composition. It is independent
-// of forest ownership, so every terrain and object type can catch the rays.
-struct SandboxSunShafts {
-    struct Band {float x=0,y=0,dx=0,dy=0,tile=0,phase=0,offscreen=0;};
-    std::array<Band,1> bands{};
-    unsigned count=0;
-    void prepare(unsigned width,unsigned height,float sun_intensity,
-                 std::array<float,12> const& shadow_basis) {
-        count=0;
-        auto smooth=[](float a,float b,float x){
-            float t=std::clamp((x-a)/(b-a),0.f,1.f);return t*t*(3-2*t);};
-        float phase=smooth(.10f,.25f,sun_intensity)*
-                    (1-smooth(.65f,.82f,sun_intensity));
-        if(phase<.02f)return;
-        float lx=shadow_basis[8],ly=shadow_basis[9],lz=shadow_basis[10];
-        float vx=-(lx+ly)*.5f;
-        float vy=-(lx-ly)*.25f+.16f*lz;
-        float length=std::hypot(vx,vy);
-        if(length<.01f)return;
-        vx/=length;vy/=length;
-        // Place the shared source well beyond the edge. The screen-entry point
-        // remains the reference for attenuation, so distant rays stay visible.
-        float offscreen=float(width)*.65f;
-        bands[0]={float(width)*(vy<0?.82f:.64f)-vx*offscreen,
-                  float(height)*(vy<0?1.06f:-.05f)-vy*offscreen,
-                  vx,vy,float(width)/16.f,phase,offscreen};
-        count=1;
-    }
-};
-
 struct SandboxFreshPipeline {
     SandboxVisualShaders visual;
     SandboxSceneShadow shadow;
-    SandboxSunShafts shafts;
     c3x_renderer::city_fidelity::Glow glow;
     SandboxBloom bloom;
     c3x_renderer::render_core::LinearTarget static_cache;
@@ -965,10 +944,11 @@ struct SandboxFreshPipeline {
     unsigned reflection_count=0;
     unsigned scene_scale=1,scene_samples=2;
     static constexpr int region_margin_x=320,region_margin_y=192;
-    // A close crop in the output pass keeps the static cache resident.
-    float display_zoom=1.f;
+    // Zoom changes raster projection; completed scene pixels stay at 1:1.
+    float display_zoom=1.f,projection_zoom=1.f;
     float reflection_scale=1;
     unsigned depth_copies=0,cache_scrolls=0,cache_full_draws=0;
+    c3x_renderer::TerritoryBorders territory_borders;
     unsigned reflection_reuses=0,reflection_draws=0;
     float visual_hour=12.f,visual_sun_intensity=0.f,previous_hour=-1.f;
     int previous_season=INT_MIN;
@@ -1098,6 +1078,9 @@ struct SandboxFreshPipeline {
                 region_target?static_region.width:glow.linear.width),
             float(mirrored?reflection.height:
                 region_target?static_region.height:glow.linear.height),0,1};
+        c3x_renderer::SceneProjection(renderer.content_view_width,renderer.content_view_height,projection_zoom)
+            .viewport(viewport,mirrored?8.f:4.f,region_target?float(region_margin_x):0.f,
+                region_target?float(region_margin_y):0.f,scale);
         context->RSSetViewports(1,&viewport);
         D3D11_RECT scissor={LONG(rect.left*scale),LONG(rect.top*scale),
             LONG(rect.right*scale),LONG(rect.bottom*scale)};
@@ -1326,6 +1309,9 @@ struct SandboxFreshPipeline {
                 region_target?static_region.width:glow.linear.width),
             float(mirrored?reflection.height:
                 region_target?static_region.height:glow.linear.height),0,1};
+        c3x_renderer::SceneProjection(renderer.content_view_width,renderer.content_view_height,projection_zoom)
+            .viewport(viewport,mirrored?8.f:4.f,region_target?float(region_margin_x):0.f,
+                region_target?float(region_margin_y):0.f,scale);
         context->RSSetViewports(1,&viewport);
         D3D11_RECT scissor={LONG(rect.left*scale),LONG(rect.top*scale),
             LONG(rect.right*scale),LONG(rect.bottom*scale)};
@@ -1459,6 +1445,7 @@ struct SandboxFreshPipeline {
             (layer>=geometry_cliff0 && layer<geometry_natural_terrain) ||
             (layer>=geometry_feature && layer<=geometry_site))
             context->PSSetShaderResources(17,1,&renderer.source_shadow.view);
+        if(renderer.city_profile)renderer.cities.scene_lights.bind(context);
         if(layer>=geometry_natural_forest0 && records[layer].front().content().instances)
             return draw_vegetation_instances(records,layer,settings,mirrored);
         if(!mirrored && layer==geometry_water){
@@ -1606,6 +1593,8 @@ struct SandboxFreshPipeline {
         char msaa_option[8]={};
         if(GetEnvironmentVariableA("C3X_SANDBOX_MSAA_2X",msaa_option,sizeof(msaa_option)) &&
             msaa_option[0]=='1')scene_samples=2;
+        if(GetEnvironmentVariableA("C3X_RENDERER_SCENE_SAMPLES",msaa_option,sizeof(msaa_option)))
+            scene_samples=msaa_option[0]=='2'?2u:1u;
         reflection_scale=GetEnvironmentVariableA("C3X_SANDBOX_REFLECTION_FULL",value,sizeof(value)) &&
             std::strcmp(value,"1")==0?1.f:.375f;
         unsigned reflection_width=unsigned((width+8)*reflection_scale);
@@ -1623,7 +1612,7 @@ struct SandboxFreshPipeline {
         if(!ensure_glow(width,height))return false;
         if(!aquatic_bounds_buffer){
             D3D11_BUFFER_DESC bounds={};
-            bounds.ByteWidth=sizeof(float)*4;
+            bounds.ByteWidth=sizeof(float)*8;
             bounds.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
             if(FAILED(renderer.device->CreateBuffer(&bounds,nullptr,&aquatic_bounds_buffer)))
                 return false;
@@ -1759,6 +1748,7 @@ struct SandboxFreshPipeline {
         context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         context->VSSetShader(static_restore.vertex,nullptr,0);
         context->PSSetShader(visual.terrain_relight,nullptr,0);
+        if(renderer.city_profile)renderer.cities.scene_lights.bind(context);
         context->PSSetConstantBuffers(0,1,&renderer.natural.frames[0]);
         context->PSSetConstantBuffers(2,1,&renderer.shadow_settings_buffer);
         context->PSSetConstantBuffers(4,1,&renderer.source_shadow.table);
@@ -1785,6 +1775,7 @@ struct SandboxFreshPipeline {
         context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         context->VSSetShader(static_restore.vertex,nullptr,0);
         context->PSSetShader(visual.terrain_relight,nullptr,0);
+        if(renderer.city_profile)renderer.cities.scene_lights.bind(context);
         context->PSSetConstantBuffers(0,1,&renderer.natural.frames[0]);
         context->PSSetConstantBuffers(2,1,&renderer.shadow_settings_buffer);
         context->PSSetConstantBuffers(4,1,&renderer.source_shadow.table);
@@ -1811,6 +1802,7 @@ struct SandboxFreshPipeline {
         context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         context->VSSetShader(static_restore.vertex,nullptr,0);
         context->PSSetShader(visual.material_relight,nullptr,0);
+        if(renderer.city_profile)renderer.cities.scene_lights.bind(context);
         context->PSSetConstantBuffers(0,1,&renderer.terrain_settings_buffer);
         context->PSSetConstantBuffers(2,1,&renderer.shadow_settings_buffer);
         context->PSSetConstantBuffers(3,1,&renderer.world_settings_buffer);
@@ -1851,7 +1843,6 @@ struct SandboxFreshPipeline {
         unsigned w=unsigned(width)+8,h=unsigned(height)+8;
         if (!ensure_targets(w,h)) return fail("targets");
         update_environment(frame);
-        shafts.prepare(w,h,visual_sun_intensity,renderer.shadow_basis);
         char reflection_diagnostic[8]{};
         if(GetEnvironmentVariableA("C3X_SANDBOX_SKIP_REFLECTION",
                 reflection_diagnostic,sizeof(reflection_diagnostic)) &&
@@ -1892,8 +1883,12 @@ struct SandboxFreshPipeline {
         renderer.geometry_viewport_settings.translation[1]+=float(next_camera_y-camera_y);
         renderer.geometry_viewport_settings.depth_translation+=float(next_camera_y-camera_y);
 #endif
+        if(projection_zoom!=next_zoom || (next_zoom!=1.f &&
+                (camera_x!=next_camera_x||camera_y!=next_camera_y))){
+            static_valid=false;reflection_valid=false;reflected_terrain_material_valid=false;
+        }
         camera_x=next_camera_x;camera_y=next_camera_y;
-        display_zoom=std::clamp(next_zoom,1.f,1.35f);
+        projection_zoom=std::clamp(next_zoom,1.f,1.5f);display_zoom=1.f;
         renderer.water_material=c3x_renderer::render_core::water_material_frame(frame);
         int water_camera_x=frame.world_wrap_x && frame.world_width_tiles>0?
             camera_x%(frame.world_width_tiles*frame.tile_width/2):camera_x;
@@ -1975,7 +1970,7 @@ struct SandboxFreshPipeline {
             }
 #ifdef C3X_RENDERER64_FRESH
             if(!sandbox_direct_units.draw_real(frame,renderer.fresh_unit_poses,reflection,
-                    reflection_scale,visual_hour,true))return fail("reflected_real_units");
+                    reflection_scale,visual_hour,true,projection_zoom))return fail("reflected_real_units");
 #endif
             if(units && !sandbox_direct_units.draw(frame,unit_x,unit_y,
                     incarnation,viewer,unit_visible,camera_x,camera_y,reflection,
@@ -2071,7 +2066,7 @@ struct SandboxFreshPipeline {
         ++depth_copies;
         bool const aquatic_visible=renderer.water_scene_active &&
             !renderer.sandbox_aquatic_resource_poses[geometry_feature].empty();
-        float aquatic_bounds[4]={float(w),float(h),0,0};
+        float aquatic_bounds[8]={float(w),float(h),0,0,float(width/2)+4,float(height/2)+4,0,0};
         if(aquatic_visible)for(auto const& record:
                 renderer.sandbox_aquatic_resource_poses[geometry_feature]){
             GeometryDrawReference chunk(record);
@@ -2119,13 +2114,19 @@ struct SandboxFreshPipeline {
         QueryPerformanceCounter(&ticks[4]);
 #ifdef C3X_RENDERER64_FRESH
         if(!sandbox_direct_units.draw_real(frame,renderer.fresh_unit_poses,glow.linear,
-                float(scene_scale),visual_hour))return fail("real_units");
+                float(scene_scale),visual_hour,false,projection_zoom))return fail("real_units");
 #endif
         if(units && !sandbox_direct_units.draw(frame,unit_x,unit_y,
             incarnation,viewer,unit_visible,camera_x,camera_y,glow.linear,
             float(scene_scale),next_zoom,visual_hour))
             return fail("direct_units");
         QueryPerformanceCounter(&ticks[5]);
+        for(auto const* visible_scene:{&static_visible,&water_visible})
+          for(unsigned layer:{unsigned(geometry_natural_terrain),unsigned(geometry_natural_mountain),unsigned(geometry_water)})
+            if(!territory_borders.draw(renderer.device,context,(*visible_scene)[layer],settings,glow.linear,
+                    renderer.content_view_width,renderer.content_view_height,projection_zoom,float(scene_scale),
+                    [&](auto const& r){return renderer.chunk_intersects_region(GeometryDrawReference(r),settings,full,false);}))
+                return fail("territory_borders");
         if(!reconstruct())return fail("reconstruct");
         renderer.context->OMSetRenderTargets(0,nullptr,nullptr);
         QueryPerformanceCounter(&ticks[6]);

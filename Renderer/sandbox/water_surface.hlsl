@@ -1,7 +1,19 @@
 // Appended to production's BIQ hydrology declarations. This is a D3D11
 // adaptation of 0 A.D.'s water_high.fs getNormal/getSpecular/getReflection
 // and main Fresnel blend. Prepared coast geometry and source textures remain.
-cbuffer SandboxAquaticBounds : register(b11) { float4 aquatic_bounds; };
+cbuffer SandboxAquaticBounds : register(b11) {
+    float4 aquatic_bounds;
+    float4 water_view; // guarded viewport center XY; reserved ZW
+};
+float3 water_view_direction(PixelInput input) {
+    // Recover the continuous water-plane offset from the actual projected
+    // world basis. Derivatives include zoom and each wrapped draw occurrence;
+    // a world-period jump in texture coordinates cannot switch this view ray.
+    float2 screen = input.position.xy - water_view.xy;
+    float2 delta = ddx(input.q6_world.xy) * screen.x +
+                   ddy(input.q6_world.xy) * screen.y;
+    return normalize(float3(float2(.43, -.43) * 2.5 - delta, 2.5));
+}
 float4 ShadeWaterSurface(PixelInput input) {
     clip(-input.hydrology_data.x - 0.0001);
     float depth = max(0, input.hydrology_data.w);
@@ -25,12 +37,8 @@ float4 ShadeWaterSurface(PixelInput input) {
     float flatten = .5 + smoothstep(.015, .32, depth) * .5;
     float3 normal = normalize(float3(-slope * flatten, 1));
 
-    // Civ III's pixel projection supplies a finite reflected view direction.
-    float2 delta = world - Q3_WATER_CAMERA.xy;
-    float2 wrapped = float2(delta.x + delta.y, delta.x - delta.y);
-    wrapped -= round(wrapped / max(Q3_WATER_CAMERA.zw, 1)) * Q3_WATER_CAMERA.zw;
-    delta = float2(wrapped.x + wrapped.y, wrapped.x - wrapped.y) * .5;
-    float3 eye = normalize(float3(float2(.43, -.43) * 2.5 - delta, 2.5));
+    // Only repeating source textures use wrapped coordinates.
+    float3 eye = water_view_direction(input);
     float shadow = 1;
     if (coastal_detail > 0)
         shadow = q6_receiver_visibility(input, float3(0, 0, 1), 1);
@@ -46,8 +54,10 @@ float4 ShadeWaterSurface(PixelInput input) {
     float family = saturate(input.surface_coordinate);
     float coast_family = 1 - smoothstep(.34, .63, family);
     float sea_family = (1 - coast_family) * (1 - smoothstep(.65, .99, family));
+    float clear_coast = coast_family * (1 - smoothstep(.25, .68, depth));
     refracted += light * (float3(.012, .058, .046) * coast_family +
-                          float3(.006, .026, .023) * sea_family);
+                          float3(.006, .026, .023) * sea_family +
+                          float3(.020, .125, .140) * clear_coast);
     refracted *= 1 + dot(normal.xy, float2(.85, -.65));
     // t123 is the water variant's marine-color layer. Sample it through the
     // moving normal so fish and whales inherit surface refraction, reflection
@@ -135,10 +145,12 @@ float4 ShadeWaterSurface(PixelInput input) {
     // becomes visible only as that breaker zone gives way to open water.
     float foam = foam_band * foam_pattern * coastal_detail * open_ocean * .34;
     color = lerp(color, light * float3(.46, .60, .63), foam);
-    float coverage = 1 - exp(-depth * lerp(2.3, 3.2,
+    float coverage = 1 - exp(-depth * lerp(2.3 - 1.55 * clear_coast, 3.2,
         smoothstep(.10, .32, depth)));
     float alpha = coverage + (1 - coverage) * blend;
     alpha = lerp(alpha, 1, foam * .65);
+    float bed_window = coast_family * (1 - smoothstep(.18, .58, depth));
+    alpha *= 1 - .62 * bed_window; // Reveal the authored coast bed
     return q6_scene_output(float4(color, alpha)).color;
 }
 float4 PSWaterSurface(PixelInput input) : SV_Target {

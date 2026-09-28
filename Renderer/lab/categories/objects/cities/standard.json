@@ -21,7 +21,15 @@
     "Renderer/native/object_compiler.h",
     "Renderer/native/object_preparation.h",
     "Renderer/native/city_fidelity/compiler.h",
-    "Renderer/native/world_preparation.h"
+    "Renderer/native/world_preparation.h",
+    "Renderer/tools/prepare_city_recipes.py",
+    "Renderer/native/city_fidelity/prepare_pack.py",
+    "Renderer/lab/studies/cities/civ3_culture_recipe_candidates.json",
+    "Renderer/native/city_fidelity/scene_lights.h",
+    "Renderer/native/city_fidelity/scene_lights.py",
+    "Renderer/native/city_fidelity/gpu.h",
+    "Renderer/lab/shared/cities/auxiliary.py",
+    "Renderer/tools/recover_city_auxiliary_uv.py"
   ],
   "recipe": {
     "terrain": 2,
@@ -46,7 +54,11 @@
     "Renderer.lab.test_city_growth",
     "Renderer.lab.test_city_ground",
     "Renderer.lab.test_city_facades",
-    "Renderer.native.test_object_compiler"
+    "Renderer.native.test_object_compiler",
+    "Renderer.native.test_city_recipes",
+    "Renderer.native.test_city_border_capture",
+    "Renderer.native.test_city_lighting",
+    "Renderer.tools.test_city_auxiliary_uv"
   ],
   "references": {
     "d3d11": [

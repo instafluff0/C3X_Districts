@@ -428,3 +428,63 @@ its indexed source frames and the first/last local frames, then remove redundant
 local JPEG copies only after verifying their hashes against the VM originals.
 Keep `result.json`, logs, timestamps, hashes and contact sheets. Reuse that
 evidence before recording another large sequence.
+
+## Smooth-zoom evidence
+
+The zoom scenario reads the version-10 helper header every 20 ms when
+`-MeasureCadence` is enabled. `cadence.json` includes `zoom_q16`: 65536 is 1×,
+81920 is 1.25×, and 98304 is 1.5×. Require intermediate values after each
+wheel change and compare them with window timestamps; a received target or a
+changed picking value alone does not establish a zoomed frame. Header reads
+are local and read-only. Other scenarios retain one-second counter sampling.
+The wrapper's final exit code now comes from the explicit scenario checks,
+not DebugView's last cleanup command.
+
+`stage=world-view-boundary` records the first map/unit boundary admissions.
+A native UI-only unit canvas may supply uploaded words without owning a GPU
+map. Notification drawing explicitly admits its canvas when eligible so its
+fixed lookup shadows can be replayed after world zoom. No map readback is
+allowed to satisfy this boundary.
+
+### Native HUD size during smooth zoom
+
+`-Scenario hud -Seconds 115` extends the interaction case with B and Enter on
+its disposable initial Settler save to found a city. It exercises both native city-screen zoom levels, closes the city screen with
+Enter after its load completes, then cycles world-map zoom, shows map messages,
+scrolls the founded city's label and opens/closes the advisor. Check the
+`stage=city-native-zoom` records for widths 64 and 128, three map-text events,
+and both scripted camera moves. Inspect the
+captured city name, production label, native status icons and map-message glyphs:
+only their map attachment moves; their pixel dimensions must remain unchanged.
+The test never saves the founded city. Check the screenshot that follows the
+name confirmation before treating this as city-HUD evidence; posted keys alone
+do not prove that founding succeeded.
+
+### Centered city view
+
+`-Scenario city -Seconds 88 -SampleHz 2 -MeasureCadence` founds a disposable
+city, holds each native zoom for 16 seconds, sends wheel input and moves the
+pointer toward both screen edges, then closes the city view. The longer hold
+separates initial projection preparation from the completed view. It checks
+native widths 64/128 and identical `city_anchor` pixel coordinates at both
+levels. Inspect the city terrain and fixed native panels in the window samples;
+passing input markers alone do not establish visible correctness. The same
+save-copy, process ownership and cleanup rules above apply.
+
+
+### Graphics-quality comparisons
+
+Use the same disposable save, camera sequence and capture rate. `-SceneSamples 1`
+is the production native-resolution sampling; `-SceneSamples 2` is the optional
+MSAA comparison. `-SceneSharpness 0` bypasses scene sharpening; `0.35` is the
+selected modest amount. Omit the options to exercise production defaults.
+These child-process settings are restored after the run and recorded in
+`result.json`. They do not alter native HUD/text or asset packs.
+
+For timings use `-SampleHz 1 -MeasureCadence` without `-ProfileRenderer`.
+Measure completed-presentation deltas over the same timestamp interval in
+`cadence.json`; report normal, changing and settled zoom separately. Window JPEGs
+are sampled visual evidence, not lossless pixel or physical scanout measurements.
+`test_scene_projection`, `test_scene_detail` and `test_skin_shadow` supply exact
+GPU/host oracles for the quality mechanisms. See
+[results and source findings](../docs/render_quality.md).

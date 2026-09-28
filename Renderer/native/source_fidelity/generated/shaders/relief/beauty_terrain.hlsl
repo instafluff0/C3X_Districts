@@ -208,10 +208,6 @@ Output shade(P input) {
         // authoritative biome field fades it at ecotones and terrain edits.
         alpha *= patch.a * smoothstep(0.015, 0.42, input.material.z) *
                  (desert_dune ? 0.62 : 1.0);
-        if (!desert_dune && !plains_surface) {
-            float edge = min(input.material.w, min(input.biome.x, input.biome.y));
-            alpha *= smoothstep(0.0, 0.18, edge);
-        }
     } else if (input.material.y > 2.5) {
         bool jungle_floor = input.material.y > 3.5;
         float4 floor_sample = jungle_floor ? JungleFloorColor.Sample(Clamp, input.uv) :
@@ -255,7 +251,16 @@ Output shade(P input) {
     } else {
         float2 uv0 = input.world.xy * Detail.x + float2(0.31, 0.17);
         float2 uv1 = float2(input.world.y, -input.world.x) * (Detail.x * 0.91) + float2(0.63, 0.29);
-        float3 grass = GrassColor.Sample(Wrap, uv0).rgb;
+        // Preserve the source's fine grit. Only its coarse color field has a
+        // broad dark band that repeats as a map line, so average that field
+        // across independent regions and leave the fine sample intact.
+        float3 grass_fine = GrassColor.Sample(Wrap, uv0).rgb;
+        float3 grass_low = GrassColor.SampleBias(Wrap, uv0, 7.0).rgb;
+        float3 grass_low_blend = (grass_low +
+            GrassColor.SampleBias(Wrap, uv0 + float2(.37, .11), 7.0).rgb +
+            GrassColor.SampleBias(Wrap, uv0 + float2(.13, .53), 7.0).rgb +
+            GrassColor.SampleBias(Wrap, uv0 + float2(.61, .71), 7.0).rgb) * .25;
+        float3 grass = grass_fine + grass_low_blend - grass_low;
         float3 plains = PlainsColor.Sample(Wrap, uv1).rgb;
         float2 tundra_uv = input.world.xy * (Detail.x * 0.84) + float2(0.19, 0.71);
         float3 tundra = TundraColor.Sample(Wrap, tundra_uv).rgb;
@@ -294,12 +299,14 @@ Output shade(P input) {
         albedo = lerp(base, hill, rocky_band * 0.90);
         height_detail = lerp(base_h, hill_h, rocky_band);
         specular_map = lerp(base_s, hill_s, rocky_band);
-        // Retain the source height response while making grass and plains
-        // grain legible under the shared sun. Hills keep their existing form.
+        // Keep the full height response on plains and desert. Reduce only the
+        // grass share so its source specks do not read as near-black pits.
         float grass_plains_detail = saturate(1 - tundra_weight) *
             (1 - smoothstep(0.06, 0.45, input.material.z));
+        float grass_share = (1 - plains_weight) * (1 - desert_weight);
         geometric = detail_normal_strength(geometric, input.world, height_detail,
-                                           Detail.y * (1 + 0.9 * grass_plains_detail));
+                                           Detail.y * (1 + (0.9 - 0.6 * grass_share) *
+                                                       grass_plains_detail));
 
         // Source-backed detail supplies a continuous material-scale response.
         // Cooler lows and warm dry highs add readable regional variation

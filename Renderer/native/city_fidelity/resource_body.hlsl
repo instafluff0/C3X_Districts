@@ -152,7 +152,7 @@ Texture2D resource_base_texture_7 : register(t123);
 Texture2D city_base_texture_0 : register(t124);
 Texture2D city_base_texture_1 : register(t125);
 Texture2D city_base_texture_2 : register(t126);
-Texture2D city_base_texture_3 : register(t127);
+
 SamplerState material_sampler : register(s0);
 SamplerState decal_sampler : register(s1);
 
@@ -951,15 +951,14 @@ float q6_world_visibility(Texture2DArray field,float4 world,float3 normal,bool w
 #endif
 
 
-// Eight independently bounded city fields fit within one D3D11 constant
-// buffer. The CPU selects intersecting cities per guarded block; overflow
-// fails the candidate draw instead of truncating a city's emitting facades.
+// The scene-light adapter below replaces these regional declarations with
+// a growable GPU field while keeping the shared material equations.
 cbuffer NativeCityLights : register(b6) {
  float4 CityLightCounts;
  float4 Q8LocalEnvelopeLow4;float4 Q8LocalEnvelopeHigh4;
- float4 Q8LocalPositionRange[1024];float4 Q8LocalColorIntensity[1024];
- float4 Q8LocalDirectionOwner[1024];float4 Q8LocalBoxLow[256];float4 Q8LocalBoxHigh[256];
 };
+StructuredBuffer<float4> CityLightData : register(t127);
+
 #define Q8_LOCAL_LIGHT_COUNT int(CityLightCounts.x)
 #define Q8_LOCAL_BLOCKER_COUNT int(CityLightCounts.y)
 #define Q8LocalEnvelopeLow Q8LocalEnvelopeLow4.xyz
@@ -991,25 +990,25 @@ float3 q8_local_irradiance(float4 world,float3 normal,float ambient_visibility) 
  if(any(receiver_position<Q8LocalEnvelopeLow) || any(receiver_position>Q8LocalEnvelopeHigh))return 0;
  float3 light_sum=0;
  [loop]for(int i=0;i<Q8_LOCAL_LIGHT_COUNT;i++) {
-  float3 to_light=Q8LocalPositionRange[i].xyz-receiver_position;
+  float3 to_light=CityLightData[3*(i)+0].xyz-receiver_position;
   float distance2=dot(to_light,to_light);
-  float range=Q8LocalPositionRange[i].w;
+  float range=CityLightData[3*(i)+0].w;
   if(distance2>=range*range)continue;
   float3 direction=to_light*rsqrt(max(distance2,1e-8));
-  float face=saturate(dot(Q8LocalDirectionOwner[i].xyz,-direction));
+  float face=saturate(dot(CityLightData[3*(i)+2].xyz,-direction));
   float diffuse=saturate(dot(normal,direction));
   if(face*diffuse<=0)continue;
   bool blocked=false;
 #if Q8_LOCAL_OCCLUSION
   [loop]for(int j=0;j<Q8_LOCAL_BLOCKER_COUNT;j++) {
-   if(j==int(Q8LocalDirectionOwner[i].w))continue;
-   if(q8_local_box_blocks(Q8LocalPositionRange[i].xyz,receiver_position,Q8LocalBoxLow[j].xyz,Q8LocalBoxHigh[j].xyz)) {blocked=true;break;}
+   if(j==int(CityLightData[3*(i)+2].w))continue;
+   if(q8_local_box_blocks(CityLightData[3*(i)+0].xyz,receiver_position,CityLightData[3*int(CityLightCounts.x)+2*(j)+0].xyz,CityLightData[3*int(CityLightCounts.x)+2*(j)+1].xyz)) {blocked=true;break;}
   }
 #endif
   if(blocked)continue;
   float normalized_distance=distance2/(range*range);
   float attenuation=pow(1-normalized_distance,2)/(1+8*normalized_distance);
-  light_sum+=Q8LocalColorIntensity[i].rgb*Q8LocalColorIntensity[i].w*attenuation*face*diffuse;
+  light_sum+=CityLightData[3*(i)+1].rgb*CityLightData[3*(i)+1].w*attenuation*face*diffuse;
  }
  return light_sum*(Q8_LOCAL_LIGHT_GAIN*CityLightCounts.z*CityLightCounts.w*ambient_visibility);
 }
@@ -1178,26 +1177,7 @@ float4 q6_raw_feature(FeaturePixelInput input)
         albedo = resource_base_texture_6.SampleBias(material_sampler, input.uv, resource_weight * -0.45).rgb;
     else if (input.material_index < 28.5)
         albedo = resource_base_texture_7.SampleBias(material_sampler, input.uv, resource_weight * -0.45).rgb;
-    else if (input.material_index < 29.5)
-    {
-        albedo = city_base_texture_0.Sample(material_sampler, input.uv).rgb;
-        emissive = resource_base_texture_0.Sample(material_sampler, input.uv).rgb;
-    }
-    else if (input.material_index < 30.5)
-    {
-        albedo = city_base_texture_1.Sample(material_sampler, input.uv).rgb;
-        emissive = resource_base_texture_1.Sample(material_sampler, input.uv).rgb;
-    }
-    else if (input.material_index < 31.5)
-    {
-        albedo = city_base_texture_2.Sample(material_sampler, input.uv).rgb;
-        emissive = resource_base_texture_2.Sample(material_sampler, input.uv).rgb;
-    }
-    else
-    {
-        albedo = city_base_texture_3.Sample(material_sampler, input.uv).rgb;
-        emissive = resource_base_texture_3.Sample(material_sampler, input.uv).rgb;
-    }
+    else { albedo=0; emissive=0; }
     float4 mine_sample = sample_reused_resource_slot(mine_slot, input.uv);
     clip(lerp(1.0, mine_sample.a - 0.08,
               source_decal_weight * (1.0 - unit_weight)));

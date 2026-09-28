@@ -40,6 +40,12 @@ public:
 #endif
     }
     void enable(std::function<void()> callback){
+        enable_retrying([callback=std::move(callback)]{callback();return false;});
+    }
+    // True means a transaction temporarily denied the opportunity. Retry after
+    // the minimum pause; an unchanged static frame still uses the full period.
+    // This never queues an old timestamp or spins behind the renderer gate.
+    void enable_retrying(std::function<bool()> callback){
         std::lock_guard<std::mutex> lock(mutex);
         if(enabled)return; // New UI commits do not restart the frame deadline.
         if(!thread.joinable()){
@@ -51,12 +57,12 @@ public:
                 while(!stopping){
                     wake.wait(guard,[this]{return stopping||enabled;});
                     if(stopping)break;
-                    guard.unlock();callback();guard.lock();
+                    guard.unlock();bool retry=callback();guard.lock();
                     auto now=Clock::now();
                     // Keep the deadline across frames. Restarting the period
                     // after every late wake adds scheduler jitter to every
                     // frame and steadily lowers the achieved frame rate.
-                    next=next+period>now+minimum_pause?next+period:now+minimum_pause;
+                    next=!retry&&next+period>now+minimum_pause?next+period:now+minimum_pause;
 #ifdef _WIN32
                     if(timer&&interrupt&&enabled){
                         auto nanoseconds=std::chrono::duration_cast<std::chrono::nanoseconds>(next-now).count();

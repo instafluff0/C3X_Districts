@@ -23,7 +23,7 @@ LoadedConfig fixture_file_config={"configured",nullptr},fixture_base_config={"(b
 struct State {
     char const* mod_rel_dir=".";
     bool custom_renderer_modal=false,paused_for_popup=false,custom_renderer_trace_input=false;int saved_tile_count=-1;
-    struct {bool enable_custom_rendering=true;int draw_lines_using_gdi_plus=LDO_NEVER;} current_config;
+    struct {bool enable_custom_rendering=true,enable_custom_rendering_zoom=false;int draw_lines_using_gdi_plus=LDO_NEVER;} current_config;
     LoadedConfig* loaded_config_names=&fixture_base_config;
     bool running_on_wine=false;unsigned ogl_color=0xffffffff;int ogl_line_width=1;bool ogl_line_stipple_enabled=false;
     struct {int init_state=IS_OK;void* gp_graphics=nullptr;
@@ -39,9 +39,12 @@ struct State {
 #include "build/native_probe_state.h"
 };
 State state={};State* is=&state;
-struct {bool is_now_loading_game=false;struct {Sprite* Cursor_Image=nullptr;} Base_Data;} main_screen_fixture;auto p_main_screen_form=&main_screen_fixture;
+struct {bool is_now_loading_game=false;struct {Sprite* Cursor_Image=nullptr;PCX_Image Canvas;} Base_Data;
+    struct {struct {PCX_Image Canvas;} Data;} Units_Control;} main_screen_fixture;auto p_main_screen_form=&main_screen_fixture;
 void custom_renderer_zoom_transform_point(int*,int*){}
 unsigned player_bits=1;unsigned* p_player_bits=&player_bits;
+struct {struct {struct {void* spotlight_on_city=nullptr;} Renderer;} Map;} bic_fixture;
+auto p_bic_data=&bic_fixture;
 auto p_GetModuleHandleA=&GetModuleHandleA;auto p_GetProcAddress=&GetProcAddress;
 auto p_OutputDebugStringA=&OutputDebugStringA;
 PCX_Image screen;PCX_Image* screen_canvas=&screen;

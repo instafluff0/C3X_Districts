@@ -10,7 +10,7 @@
 
 namespace c3x_inputs {
 using Bytes=std::vector<unsigned char>;
-constexpr std::uint32_t protocol_version=10;
+constexpr std::uint32_t protocol_version=11;
 constexpr std::size_t payload_limit=16u*1024u*1024u;
 inline void require(bool condition,char const* message){if(!condition)throw std::runtime_error(message);}
 struct Writer {
@@ -99,6 +99,8 @@ template<class IO,class Value>void c3x_renderer_tile_v1_fields(IO& io,Value& v){
     io(v.city_flags);
     io(v.has_effect);
     io(v.territory_owner_id);
+    io(v.territory_edge_mask);
+    io(v.territory_color_rgb);
     io(v.fog_status);
     io(v.tile_visibility);
     io(v.resource_name);

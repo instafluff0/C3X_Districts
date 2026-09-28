@@ -1,5 +1,10 @@
 # Current unit fidelity
 
+For the live shared-scene path, see [live scene quality](../../docs/render_quality.md).
+It draws GPU-skinned geometry at the displayed zoom with native scene sampling
+and pose-local GPU self shadows. The private sprite target and MSAA4 statements
+below describe the separate sprite/Lab route. Source-art findings still apply.
+
 The accepted C3X build uses `UnitAnimationFidelity`: 78 unit entries and 94
 standard Conquests native aliases. Civ III owns the action lifecycle and placement.
 Directed actions retain its cursor timing; selected idle and active work loops

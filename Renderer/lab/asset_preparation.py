@@ -41,11 +41,13 @@ def jobs():
             sources = json.loads(record.read_text())["inputs"]
         else:
             sources = json.loads((ROOT / "Renderer/packs/CityCompositionRuntime/manifest.json").read_text())["source_sha256"]
-        return dict(sources, **city_helpers())
+        from Renderer.tools.prepare_city_recipes import recipe_sources
+        sources={p:h for p,h in sources.items() if not p.startswith("Renderer/lab/out/cities/integration/")}
+        return dict(sources, **recipe_sources())
 
     def build_cities(stage):
-        from Renderer.native.city_fidelity import prepare_pack as cities
-        _, consumed = cities.build_pack(stage / "Renderer/packs/CityCompositionRuntime")
+        from Renderer.tools.prepare_city_recipes import build
+        _, consumed = build(stage / "Renderer/packs/CityCompositionRuntime", return_inputs=True)
         consumed.update(city_helpers())
         return consumed
 
@@ -111,7 +113,7 @@ def jobs():
         ("tile-sites", site_sources, build_sites, "Renderer/tools/asset_compiler/build_site_runtime.py"),
         ("natural", natural_sources, build_natural, "Renderer/native/source_fidelity/prepare.py"),
         ("hill-cliff", cliff_sources, build_cliffs, "Renderer/native/render_core/prepare_assets.py"),
-        ("cities", city_sources, build_cities, "Renderer/native/city_fidelity/prepare_pack.py"),
+        ("cities", city_sources, build_cities, "Renderer/tools/prepare_city_recipes.py"),
         ("units", unit_sources, build_units, "Renderer/native/environment_refresh/prepare_units.py"),
         ("resources", lambda: resource_sources("resources"), build_resources,
          "Renderer/tools/asset_compiler/build_resource_runtime.py"),

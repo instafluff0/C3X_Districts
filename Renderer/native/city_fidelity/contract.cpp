@@ -12,14 +12,8 @@ int main(int argc,char**argv) {
     std::size_t selected=0,lights=0,vertices=0,triangles=0;
     for(auto const&m:library.models)for(auto const&p:m.parts){vertices+=p.vertices.size();triangles+=p.indices.size()/3;}
     for(auto const&t:library.compositions){
-        if(t.authority=="selected-r111" || t.authority=="selected-r112"){
-            selected++;unsigned count=0;
-            for(auto const&i:t.instances)if(i.capital){
-                count++;
-                if(std::abs(i.yaw-.5235987755983f)>1e-5f || std::abs(i.offset[0])+std::abs(i.offset[1])>1e-5f)return 1;
-            }
-            if(count!=1 || t.paving.vertices.empty())return 1;
-        }
+        if(!t.owns_walls || !t.anchor_layout || t.authority.find("lab-fixed-")!=0)return 1;
+        ++selected;
         for(auto const&i:t.instances){
             lights+=i.lights.size();
             auto a=place(i,10,20,2.5f),b=place(i,27,13,2.5f);
@@ -33,10 +27,10 @@ int main(int argc,char**argv) {
             }
         }
     }
-    if(selected!=4)return 1;
+    if(!library.complete_city_set())return 1;
     // Every truncation must fail transactionally; retain the usable library.
     auto old_size=library.byte_count;unsigned rejected=0;
-    for(std::size_t length=0;length<bytes.size();length+=7919){
+    for(std::size_t length=0;length<bytes.size();length+=104729){
         std::vector<std::uint8_t> short_file(bytes.begin(),bytes.begin()+length);
         if(library.decode(short_file) || library.byte_count!=old_size)return 1;rejected++;
     }

@@ -1,69 +1,79 @@
-# City composition checkpoint
+# Current city integration
 
-The user requested ending this round once the implementation compiles and runs.
-The default profile now selects `city-fidelity`; normal `INSTALL.bat` uses the
-staged renderer DLL. Explicit `source-fidelity-r13` remains available for the
-previous natural presentation. The installer and game were not run by the agent.
+The runtime uses the Cities Lab's selected culture recipes, replacing the older
+selected/generic growth and procedural wall implementation completely. Build with
+`Renderer/tools/prepare_city_recipes.py`; `Renderer/renderer.py prepare` uses the
+same builder. No layout solver or source-format loader runs in the game.
 
-## Selected paths carried together
+## Selection and ownership
 
-- `city_central_capital_probe.py`, `city_scene_pass.py` and
-  `city_growth_layout.py`: source buildings, uniform transforms, single-era
-  growth and the selected r111 inland/r112 freshcanopy central modern palace.
-- `city_scene_material.hlsl`: authored texture coordinates, source frames,
-  full-resolution material channels, opacity and emissive windows.
-- `city_facade_light_probe.py`, `city_light_buffer_probe.py` and
-  `local_facade_lights.hlsl`: offline authored facade sampling and bounded
-  runtime light/blocker selection; the selected Asian medium keeps all 53 lights.
-- `settlement_ground_probe.py` and `settlement_ground.hlsl`: connected paving,
-  palace footprint alignment, source atlas coordinates and local illumination.
-- `city_environment.hlsl`, retained environment-refresh reflections and
-  `hdr_glow_tiled.hlsl`: selected modern environment response, water reflection,
-  guarded linear reconstruction and HDR glow before the final display transfer.
+- Five cultures, four eras, three population tiers, capital/noncapital and
+  town walls/nonwalls, with three deterministic variants: **480 compositions**.
+- The captured map seed and canonical tile coordinates choose variation.
+  Ownership, iteration order and population changes do not change that seed.
+- Native city state selects art again when population, culture, era, palace or
+  walls change. Capture, founding and razing invalidate the affected scene.
+- Selected layouts use the legal native city anchor, including coastal sites.
+  Each building sits on the terrain at its own anchor. No old city body, paving,
+  invented masonry foundation or procedural wall is retained as a fallback.
+- City-covered resource meshes and resource animations are suppressed. Resource
+  state remains native, allowing the resource to reappear after razing.
 
-The normalized pack contains 122 models, 37 materials and 72 templates. Twelve
-templates preserve selected Lab layouts; 60 use the Lab's generic growth solver
-across 20 culture/era pools and three sizes. Generic layouts are not additional
-Lab visual witnesses. Asset normalization stays offline; runtime consumes the
-generic binary and DDS material channels. `shader-provenance.json` pins sources.
+## Materials and shadows
 
-## Evidence and retained behavior
+The pack includes full-resolution base, normal, roughness, auxiliary AO, opacity
+and emissive channels where present in source materials. The selected derivatives
+originally omitted auxiliary texture coordinates in 56 mesh parts. The offline
+`recover_city_auxiliary_uv.py` tool recovers them against exact geometry witnesses;
+`CityRecipeAuxiliaryUV/uv.json` is a preserved normalized input. The compiler now
+reports **zero missing-coordinate material gaps**. Geometry and layouts are
+unchanged. Tangent frames are derived from the normalized mesh and UV0; they are
+not claimed to be recovered source packed tangents.
 
-All four pickup evidence validators passed before implementation. Six portable
-tests compare source hashes, selected transforms, facade lights, palace paving
-and growth prefixes. The binary contract rejects 915 truncated inputs without
-replacing a valid loaded library. Windows C++ compilation uses `/W4 /WX`;
-the D3D contract compiles and creates the city shaders. Inherited shader compiler
-warnings remain; they are not claimed to be a warning-free shader validation.
+All four city material passes use the same current scene shadow field as terrain,
+including reflections and emission passes. Receiver bias follows the actual
+shadow texel size. This fixes buildings casting shadows but failing to receive
+neighboring-building shadows because they were using the older regional lookup.
 
-Actual candidate-DLL day/night synthetic scenes render with zero terrain
-fallback and correct native ownership. The night replay returns to byte-identical
-pixels (zero changed bytes out of 1,228,800); its cached return takes about 3 ms.
-Cold rendering remains measured in seconds. Local probe output is written to
-`../../lab/out/verification/city_fidelity/`.
-for run reports and the final release checkpoint.
+Facade light proxies are derived offline from emissive windows. They are an
+approximation, not decoded source-engine light bindings. A growable GPU buffer
+holds the visible scene's complete lights and blockers; the old regional
+1,024-light/256-blocker limit no longer makes detailed walled-city views fail.
+Daylight skips uploading inactive facade lights. Existing material shading,
+normal maps, HDR reconstruction and analytic environment response remain shared.
 
-Geometry stays world-anchored in the existing bounded caches. The city pack is
-7.24 MB, full-mip source DDS data approximately 35 MB, and additional city render
-scratch approximately 9.08 MB. The existing geometry/shadow/viewport budgets,
-native animation bridge, unit sprite caches, dirty bounds, input, overlays,
-fog and fallback contracts remain in place. No injected source or patch-table
-change is needed. Diagnostics use the established OutputDebugStringA path;
-file traces are explicitly enabled only by the headless harness.
+## Verification and limits
 
-## Remaining limits
+- `test_city_recipes.py`: every selection combination, deterministic variation,
+  coastal anchors, wrapping, incomplete libraries and transactional decode.
+- `test_pickup.py`: selected Lab transforms, preserved source hashes and closed
+  runtime texture dependencies.
+- `test_city_lighting.py`: 2,400 GPU lights/1,260 blockers, owner indices,
+  daylight/reset/reuse, and all city shadow-pass connections.
+- `test_city_auxiliary_uv.py`: unchanged clipped geometry and interpolated UVs.
+- `capture_city_border_examples.py`: actual Renderer64 standalone day/night
+  examples, with binary, shader, pack and fixture hashes beside each capture.
 
-- Only the selected modern American palace body is included. Other capital
-  styles use ordinary city composition and the retained capital indicator.
-- A constrained shore/river/vegetation site can reject every composition and
-  retain the previous city appearance. An earlier real-map case demonstrated
-  this fallback; full real-map placement coverage is not claimed.
-- The full city/era/zoom/control matrix and wrapped local-light continuity are
-  not closed. The user requested wrapping up rather than extending this round.
-- Lab's coastal central-capital and inferred environment-response limitations
-  remain. This is not a recovery claim about the source game's entire lighting.
-- Existing frozen-profile boundary-parity and L19A fixture-hash workflow failures
-  remain separate from passing focused city checks; gates are not weakened.
-- Civ III launch, gameplay stability and visual acceptance remain user-run.
+The current standalone evidence does not certify live-game FPS, every city site,
+or the complete source game's lighting quality. Broad gameplay testing is deferred
+at the user's request while Lab systems are integrated. Reference images were not
+replaced. This pass adds no native patch-table symbols.
 
-No global Lab gate or deferred renderer milestone is closed by this checkpoint.
+## Current staged evidence
+
+The matched API-20 bridge/renderer/helper and complete pack are staged together;
+the command-line installer completed successfully with Civ III closed. The startup
+probe reports healthy. The final injected compile/injection smoke passes without
+compiler warnings. `Renderer/native/build/cities-borders/staged.json` records the
+binary, shader, pack and injected-source hashes.
+
+The pack contains 188 models, 84 materials and 480 compositions; `city.bin` is
+21,657,041 bytes. Full binary validation rejects 207 truncations transactionally.
+The focused native city/capture/invalidation/lighting group passes ten tests, the
+border GPU probes pass at 1/2/4 samples, pack/source parity passes, and 35 shared
+city-layout/ground/facade/wall tests pass. Four daytime captures and the modern
+Asian night capture complete with zero terrain fallback. Closer 512-pixel tile
+views use the same staged renderer through the standalone diagnostic client.
+
+No live gameplay or FPS result is claimed for this pass. Reference images remain
+unchanged. Normal game testing can proceed after the requested Lab import rounds.

@@ -69,6 +69,29 @@ int main(){
 }
 ''')
 
+    def test_city_and_border_changes_invalidate_retained_appearance(self):
+        run_cpp(r'''
+#include "Renderer/native/render_core/captured_scene.h"
+#include <cassert>
+int main(){
+ using c3x_renderer::render_core::CapturedScene;CapturedScene scene;
+ c3x_renderer_frame_v1 f{};f.world_width_tiles=f.world_height_tiles=20;
+ c3x_renderer_camera_identity_v1 camera{};scene.publication_scope(f,camera,1);
+ c3x_renderer_tile_v1 t{};t.tile_x=t.tile_y=4;t.tile_flags=C3X_RENDERER_TILE_RENDER;
+ t.city_id=-1;t.resource_id=7;bool changed=false;assert(scene.publish(t,changed));
+ auto key=scene.key(4,4),revision=scene.world_appearance_revision(key);
+ auto publish=[&]{changed=false;assert(scene.publish(t,changed)&&changed);
+   auto next=scene.world_appearance_revision(key);assert(next>revision);revision=next;};
+ t.city_id=71;publish();t.city_size=1;publish();t.city_culture_group=2;publish();
+ t.city_era=3;publish();t.city_flags=C3X_RENDERER_CITY_CAPITAL;publish();
+ t.city_flags|=C3X_RENDERER_CITY_WALLED;publish();t.city_owner_id=4;publish();
+ t.territory_edge_mask=13;publish();t.territory_color_rgb=0xff2030;publish();
+ t.territory_edge_mask=0;publish();t.city_id=-1;publish();
+ assert(scene.retained(key)->appearance.resource_id==7); // Razing restores the captured resource.
+ t.city_population=20;t.anchor_x=60;changed=false;assert(scene.publish(t,changed)&&!changed);
+}
+''')
+
     def test_world_appearance_dependency_survives_camera_departure(self):
         run_cpp(r'''
 #include "Renderer/native/render_core/captured_scene.h"

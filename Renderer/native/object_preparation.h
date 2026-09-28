@@ -169,9 +169,7 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
             return float(scratch.rivers.river_sample({x,y}).distance);
         },plan);
     unsigned sites=tile.improvement_flags&(C3X_RENDERER_IMPROVEMENT_GOODY_HUT|C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP);
-    float wall_radius=composition ? city_fidelity::metropolis_wall_radius(*composition):0.0f;
-    if(!select_improvements(tile,assets,input.ground,sites,input.mine_ready,input.farm_ready,
-            input.city_ready,composition!=nullptr,wall_radius,plan))return {};
+    if(!select_improvements(tile,assets,input.ground,sites,input.mine_ready,input.farm_ready,plan))return {};
     if(input.farm_ready && (tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_IRRIGATION)){
         settle_farm_fields(plan,tile,assets,relief);
         settle_farm_props(plan,tile,assets,relief);

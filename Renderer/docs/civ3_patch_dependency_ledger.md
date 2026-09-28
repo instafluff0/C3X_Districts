@@ -1,5 +1,33 @@
 # Civ III patch dependency ledger
 
+## Cities and territory borders Lab promotion
+
+`required_user_action: []`. This pass changes no patch-table entry.
+
+| Existing symbol | GOG / Steam / PCGames.de | Added renderer responsibility |
+| --- | --- | --- |
+| `Map_Renderer_m19_Draw_Tile_by_XY_and_Flags` | `0x66A554` / `0x687660` / `0x66A554` | Existing custom map ownership includes city art and territory borders |
+| `City_recompute_yields_and_happiness` | `0x4B0E80` / `0x4B7E30` / `0x4B0F10` | Coalesced scene audit after city population/state recomputation |
+| `City_update_culture` | `0x4B2680` / `0x4B9600` / `0x4B2710` | Coalesced city/territory audit after native culture update |
+| `Leader_enter_new_era` | `0x55E190` / `0x56A220` / `0x55E140` | Refresh era art after native transition |
+| `Units_Image_Data_advance_animations` | `0x405FC0` / unavailable / unavailable | Retain existing native palette owner for capture |
+| `Units_Image_Data_load_animated_effect` | `0x4069E0` / `0x406F40` / `0x406A10` | Retain the same palette owner during native resource setup |
+
+The first two city methods retain `void __fastcall(City *)` signatures. Era and
+image methods retain their registered signatures and unchanged native arguments.
+Shared C3X patches preserve unrelated features. The renderer-only animation
+wrapper immediately delegates when custom rendering is disabled.
+
+Border capture follows native tile ownership, four diagonal neighbors, map
+wrapping/range checks, native visibility flags and effective palette index 64.
+Existing founding/raze, building and interturn capture combines with the city gain/
+loss callbacks and the audits above. No new gameplay event or ownership rule is
+invented. City resources remain in authoritative state while their art is hidden.
+GPU borders use the actual terrain triangles and scene depth, including translucent
+occluded sections. See `Renderer/native/city_fidelity/CITY_FIDELITY.md` for the
+replacement city library and focused evidence. The existing full-custom game
+path remains GOG-qualified; these address records do not imply new build coverage.
+
 ## Transient map text at custom zoom
 
 `show_map_specific_text` and native map messages both use the native
@@ -1918,3 +1946,81 @@ The existing native-operation translator provides opt-in mouse timing and cursor
 draw evidence through `C3X_RENDERER_TRACE_INPUT`. Configuration-off and normal
 launch behavior are unchanged. No new patch symbols, signatures, supported-build
 addresses or CSV edits are needed. `required_user_action: []`.
+
+## Smooth zoom: fixed notification shadows
+
+- Symbol: `Main_GUI_draw_notifications` (`Main_GUI::FUN_00553b40`).
+- Capability: `inlead`; wrapper `patch_Main_GUI_draw_notifications`.
+- Signature: `void (__fastcall *) (Main_GUI * this, int edx)`.
+- Supported-build addresses: GOG `0x553B40`; Steam and Complete unverified (`0x0`, disabled).
+- Evidence: the decompiled function writes text to `GUI.Base.Data.Canvas`, but
+  clears and shades rectangles in `Units_Control.Data.Canvas` through
+  `FUN_00600090`. Those fixed screen rectangles must be excluded from the zoomed
+  world and replayed over it before the GUI text.
+- Implementation: an ordered, lexical fixed-UI scope captures only those native
+  lookup shadows. Native working images and configuration-off calls stay exact.
+- `required_user_action`: none. The user explicitly authorized this exact table
+  addition on September 28, 2026; the following row is installed:
+
+```csv
+inlead, 0x553B40, 0x0, 0x0, "Main_GUI_draw_notifications", "void (__fastcall *) (Main_GUI * this, int edx)"
+```
+
+On builds without this capability, ordinary world zoom still works, but notification
+shadows remain in the world canvas and scale away from their fixed text. The
+wrapper is compiled only when the symbol is present; no guessed address or
+runtime patch-table substitution is used.
+
+## Smooth zoom: native map HUD placement
+
+- Existing symbols: `Main_Screen_Form_city_hud_coords`,
+  `Main_Screen_Form_draw_city_hud`, `Unit_draw_map_status`,
+  `Sprite_draw_map_unit_marker`, `MapMessage_compute_rect`.
+- New symbol: `MapMessage_draw` (`FUN_004d7d40`), capability `inlead`.
+- Signature: `void (__fastcall *) (MapMessage * this, int edx, PCX_Image * canvas, int shade)`.
+- Addresses: GOG `0x4D7D40`; Steam and Complete unverified (`0x0`, disabled).
+- Evidence: the routine fills/shades the rectangle at `MapMessage + 0x28`, sets
+  text effects, and draws the message into its passed canvas. The existing
+  rectangle hook establishes its canonical map attachment.
+- Purpose: capture the complete native message drawing scope. Renderer64 moves
+  its attachment with the displayed view, while preserving glyph/icon dimensions.
+  The same placement operation handles the existing city/status hooks.
+- Config-off immediately calls the original function with unchanged arguments.
+  Without the new symbol, message drawing remains native and lacks this scoped
+  placement capability. No unverified address is used.
+- `required_user_action`: none. The user authorized table changes in this chat.
+
+```csv
+inlead, 0x4D7D40, 0x0, 0x0, "MapMessage_draw", "void (__fastcall *) (MapMessage * this, int edx, PCX_Image * canvas, int shade)"
+```
+
+## City view and retained HUD publication (2026-09-28)
+
+- Existing symbols: `City_Form_m82_handle_key_event`,
+  `Main_Screen_Form_move_camera`, `Main_Screen_Form_center_camera`, and the
+  existing JGL transfer hooks. No new patch-table row.
+- Native `Map_Renderer.spotlight_on_city` owns the city-view lifetime, including
+  its initial draw before the form is visible. Custom zoom, inverse projection,
+  native HUD extraction and world-view scaling are excluded during that lifetime.
+- Native city Z preserves 64/128-pixel tile sizes and existing centering. Manual
+  panning is ignored while exact native centering remains available.
+- The worker retires replaced HUD captures and makes native UI backgrounds
+  select the latest completed world/HUD layer. Native UI keeps its own dirty
+  rectangles, preserving unchanged panels while retiring old city labels.
+- `required_user_action`: none. These changes reuse installed hooks.
+
+## City-view centering and native zoom
+
+Reuses `City_Form_m82_handle_key_event` (replacement vptr, GOG `0x6659F8`,
+Steam `0x682A5C`, PCGames.de `0x6659F8`), signature
+`void (__fastcall *)(City_Form *, int, int virtual_key_code, int is_down)`,
+and `Main_Screen_Form_move_camera` (GOG `0x4DF700`; other builds unverified),
+signature `void (__fastcall *)(Main_Screen_Form *, int, int x, int y, int reason, bool update_bounds)`.
+The existing `get_city_screen_center_y` helper preserves the city pixel anchor
+between native 64/128 views when custom rendering is enabled. An even row
+offset prevents native `bring_tile_into_view` from correcting X for invalid
+tile parity. Opening/next-city hooks already use this helper. Manual panning
+is suppressed during native city spotlight; exact centering remains allowed.
+The move-camera wrapper delegates immediately with unchanged arguments when
+custom rendering is off. No new patch capability or table entry is required.
+`required_user_action: []`.

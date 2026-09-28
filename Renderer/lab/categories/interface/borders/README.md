@@ -1,5 +1,22 @@
 # Territory borders
 
+## Current game integration
+
+The selected brush treatment now runs in `Renderer/native/gpu_territory_borders.h`.
+Civ III supplies native four-edge ownership, wrapping, the border visibility flag,
+and the effective civilization palette color. Ownership/color changes invalidate
+the retained scene. Renderer64 draws directly on its existing terrain/mountain
+triangles and samples GPU scene depth to fade occluded sections. There is no CPU
+composition or normal-frame depth readback in this path.
+
+`test_city_border_capture.py` verifies native edge/palette/config-off capture;
+`test_territory_borders.py` verifies ownership removal/capture, zoom, translated
+occurrences and occlusion at 1/2/4 samples. `capture_city_border_examples.py`
+produces standalone Renderer64 examples. Broad live-game regression is deferred
+while Lab systems are integrated.
+
+## Original Lab study
+
 `python3 Renderer/renderer.py lab borders` draws a city and terrain through the
 current renderer, then composites three border drafts around a synthetic group
 of Civ III diamond tiles. The contact sheet is `Renderer/lab/out/borders/examples.png`.
@@ -24,10 +41,8 @@ the finished city pass checks which parts of the line are behind hills,
 mountains, trees, or other rendered foreground objects. Only those parts are
 made more transparent; the exposed line keeps its full opacity. Small depth
 differences and isolated samples do not trigger the fade, preventing spots on
-clear ground. This does not change game
-capture or native border ownership. If the design is later brought into game
-rendering, Civ III tile ownership and its effective civilization palette must
-supply the inputs.
+clear ground. This study fixture does not change game capture. The GPU integration above
+uses the same visual treatment with native ownership and palette inputs.
 
 First capture the `test.biq` city and its matching terrain mesh through the
 Windows VM (after building the isolated `city-preview` renderer):

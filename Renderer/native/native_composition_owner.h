@@ -28,7 +28,7 @@ class CompositionOwner {
     std::unique_ptr<Adapter<c3x_gpu_images::WorkerClient>> adapter;
     c3x_renderer_gpu_frame_v1 frame={sizeof(frame)};
     bool scene_units=false;
-    void* front_native=nullptr;void* display_native=nullptr;unsigned surface_copy_reports=0,surface_fill_reports=0,cold_stroke_reports=0;
+    void* front_native=nullptr;void* display_native=nullptr;unsigned surface_copy_reports=0,surface_fill_reports=0,cold_stroke_reports=0,world_reports=0;
     using Tactical=c3x_renderer::tactical::Input;
     std::function<int(Tactical const&,c3x_renderer_gpu_unit_v1 const&)> tactical;
     Tactical route;void* route_image=nullptr;c3x_renderer_tactical_view_v1 route_view={};
@@ -255,6 +255,37 @@ public:
             OutputDebugStringA(line);return 1;
         }
         if(!adapter)return 0;
+        if(op==C3X_NATIVE_ZOOM_TARGET){
+            if(color<65536||color>98304)return -1;
+            Command command={Kind::zoom_target,0,0,{}, {},0,0,color};
+            client->submit(&command,1);client->flush();return 1;
+        }
+        if(op==C3X_NATIVE_HUD_BEGIN||op==C3X_NATIVE_HUD_END){
+            Command command={op==C3X_NATIVE_HUD_BEGIN?Kind::hud_begin:Kind::hud_end};
+            if(op==C3X_NATIVE_HUD_BEGIN){
+                if(!from||(!adapter->owns(image)&&!adapter->admit(image)))return 0;
+                auto anchor=static_cast<int const*>(from);
+                command.detail=adapter->display_image(image);command.destination=adapter->image(image);
+                command.source_x=anchor[0];command.source_y=anchor[1];command.color=color;
+                command.source_width=int(adapter->transparency(image));
+            }
+            client->submit(&command,1);return 1;
+        }
+        if(op==C3X_NATIVE_FIXED_UI_BEGIN||op==C3X_NATIVE_FIXED_UI_END){
+            Command command={op==C3X_NATIVE_FIXED_UI_BEGIN?Kind::fixed_ui_begin:Kind::fixed_ui_end};
+            if(op==C3X_NATIVE_FIXED_UI_BEGIN){
+                if(!adapter->owns(image)&&!adapter->admit(image))return 0;
+                command.detail=adapter->display_image(image);command.destination=adapter->image(image);
+            }
+            client->submit(&command,1);return 1;
+        }
+        if(op==C3X_NATIVE_WORLD_BEGIN||op==C3X_NATIVE_WORLD_END){
+            int result=adapter->world_transfer(op,image,source)?1:0;
+            if(world_reports++<8){char line[192];std::snprintf(line,sizeof(line),
+                "[C3X renderer] stage=world-view-boundary operation=%d accepted=%d source_owned=%u destination_owned=%u\n",
+                op,result,unsigned(adapter->owns(source)),unsigned(adapter->owns(image)));OutputDebugStringA(line);}
+            return result;
+        }
         if(op==C3X_NATIVE_HIT_PIXEL){
             if(!scene_units||!adapter->owns(image))return 0;
             if(!from||!to)throw std::runtime_error("missing form input query");

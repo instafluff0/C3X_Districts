@@ -33,7 +33,13 @@ struct c3x_renderer_gpu_camera_view_v1 {
 enum c3x_renderer_gpu_action {C3X_GPU_CREATE=1,C3X_GPU_UPLOAD,C3X_GPU_SUBMIT,C3X_GPU_DESTROY,C3X_GPU_READBACK};
 enum c3x_renderer_gpu_format {C3X_GPU_BGRA32=0,C3X_GPU_RGB555=1,C3X_GPU_RGB565=2};
 struct c3x_renderer_gpu_command_v1 {
-    int kind; /* 0 copy, 1 fill, 2 color key, 3 invert, 4 ordered map quantization, 5 native UI expansion, 6 decoded native sprite, 7 premultiplied unit over native background, 8 native GDI text response, 9 paired native image transfer, 10 native blend, 11 native lookup */
+    int kind; /* 0 copy, 1 fill, 2 color key, 3 invert, 4 ordered map quantization, 5 native UI expansion, 6 decoded native sprite, 7 premultiplied unit over native background, 8 native GDI text response, 9 paired native image transfer, 10 native blend, 11 native lookup,
+       12 begin canonical world, 13 finish world and apply display view,
+       14 zoom target (color=Q16 scale; no images), 17/18 native HUD scope
+       (source_x/y=attachment, color=item identity, source_width=transparent key), 15/16 fixed UI scope
+       begin/end (destination/detail identify the mixed native canvas). World commands carry paired
+       destination/detail and source/background_detail IDs, full viewport area,
+       color=65536 for opaque or the native 16-bit transparency key. */
     c3x_renderer_i64 destination,source;
     int area[4],clip[4],source_x,source_y;
     unsigned color; /* quantize: phase_x&7 | (phase_y&7)<<3; expand: native key, or 65536 for opaque; sprite: 0 native words, 1/2 expand 555/565 */

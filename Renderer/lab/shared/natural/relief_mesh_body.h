@@ -28,6 +28,8 @@
     }
     {
         struct MountainPiece {unsigned height_field,blend_field;float center_x,center_y,long_span,cross_span,height_scale;bool connected,range_y;};
+        // Mountains Lab's lower shape; keep authored variants and ridge union.
+        constexpr float mountain_height_scale=.68f, mountain_span_scale=1.08f;
         std::vector<MountainPiece> pieces;
         for(int dr=-1;dr<=1;dr++)for(int dc=-1;dc<=1;dc++){
             int pc=nc+dc,pr=nr+dr;Tile piece_owner=lookup_natural(pc,pr);
@@ -40,9 +42,9 @@
             pieces.push_back({natural.macro[variant][0],natural.macro[variant][1],
                 float(pc)+.5f+.09f*(int(east)-int(west)),
                 float(pr)+.5f+.09f*(int(south)-int(north)),
-                connected?(turn?2.08f:2.46f):1.85f,
-                connected?(turn?1.82f:1.34f):1.55f,
-                connected?142.f:165.f,connected,along_y>along_x});
+                (connected?(turn?2.08f:2.46f):1.85f)*mountain_span_scale,
+                (connected?(turn?1.82f:1.34f):1.55f)*mountain_span_scale,
+                (connected?142.f:165.f)*mountain_height_scale,connected,along_y>along_x});
         }
         struct MountainSample {float displacement=0,dominant=0,height=0,blend=0,u=0,v=0;};
         auto mountain_at=[&](float world_x,float world_y){

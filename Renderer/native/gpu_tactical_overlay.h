@@ -1,5 +1,6 @@
 #pragma once
 #include "tactical_overlay.h"
+#include "scene_projection.h"
 #include <d3d11.h>
 #include <d3dcompiler.h>
 #include <wrl/client.h>
@@ -126,7 +127,7 @@ public:
     // The caller owns the target and ordering; preserve its existing pixels.
     void draw_into(ID3D11Device* d,ID3D11DeviceContext* c,Input const& capture,
                    std::array<int,4> area,double seconds,ID3D11RenderTargetView* rt,
-                   unsigned target_width,unsigned target_height){
+                   unsigned target_width,unsigned target_height,float zoom=1.f,float guard=0.f){
         if(capture.primitives.empty())return;
         initialize(d);unsigned w=unsigned(area[2]-area[0]),h=unsigned(area[3]-area[1]);
         if(!rt||!w||!h||!target_width||!target_height)throw std::runtime_error("tactical target");
@@ -135,7 +136,8 @@ public:
             check(d->CreateBuffer(&b,nullptr,&instances));check(d->CreateShaderResourceView(instances.Get(),nullptr,&input));}
         D3D11_MAPPED_SUBRESOURCE mapped={};check(c->Map(instances.Get(),0,D3D11_MAP_WRITE_DISCARD,0,&mapped));std::memcpy(mapped.pData,capture.primitives.data(),count*sizeof(Primitive));c->Unmap(instances.Get(),0);
         float values[8]={float(area[0]),float(area[1]),float(w),float(h),cursor_phase(seconds),0,0,0};c->UpdateSubresource(params.Get(),0,nullptr,values,0,0);
-        c->OMSetRenderTargets(1,&rt,nullptr);c->OMSetBlendState(blend.Get(),nullptr,~0u);c->OMSetDepthStencilState(nullptr,0);c->RSSetState(raster.Get());D3D11_VIEWPORT vp={0,0,float(target_width),float(target_height),0,1};c->RSSetViewports(1,&vp);
+        c->OMSetRenderTargets(1,&rt,nullptr);c->OMSetBlendState(blend.Get(),nullptr,~0u);c->OMSetDepthStencilState(nullptr,0);c->RSSetState(raster.Get());D3D11_VIEWPORT vp={0,0,float(target_width),float(target_height),0,1};
+        SceneProjection(w-unsigned(2*guard),h-unsigned(2*guard),zoom).viewport(vp,guard,0,0,float(target_width)/w);c->RSSetViewports(1,&vp);
         c->IASetInputLayout(nullptr);c->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);c->VSSetShader(vs.Get(),nullptr,0);c->PSSetShader(ps.Get(),nullptr,0);auto buffer=params.Get();c->VSSetConstantBuffers(0,1,&buffer);c->PSSetConstantBuffers(0,1,&buffer);
         ID3D11ShaderResourceView* views[]={input.Get(),glyphs.Get()};c->VSSetShaderResources(0,1,views);c->PSSetShaderResources(0,2,views);auto sam=sampler.Get();c->PSSetSamplers(0,1,&sam);c->DrawInstanced(6,count,0,0);
         views[0]=views[1]=nullptr;c->VSSetShaderResources(0,1,views);c->PSSetShaderResources(0,2,views);c->OMSetRenderTargets(0,nullptr,nullptr);

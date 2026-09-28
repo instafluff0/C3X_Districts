@@ -1,5 +1,7 @@
 #pragma once
 #include "../native/render_core/unit_pose_transition.h"
+#include "../native/scene_projection.h"
+#include "../native/render_core/skin_shadow_bounds.h"
 
 // 0 A.D.'s GPUSkinnedModelRenderer keeps mesh inputs resident and updates only
 // the animation palette for visible models. Here each authored frame is already
@@ -11,6 +13,7 @@ struct SandboxDirectUnits {
     };
     static_assert(sizeof(Vertex)==88);
     struct Mesh {
+        c3x_renderer::render_core::SkinShadowBounds shadow_bounds;
         Microsoft::WRL::ComPtr<ID3D11Buffer> vertices,indices,palettes;
         Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> palette_view;
     };
@@ -19,7 +22,13 @@ struct SandboxDirectUnits {
     Microsoft::WRL::ComPtr<ID3D11Buffer> transition_palette;
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> transition_view;
     ID3D11VertexShader* vertex=nullptr;
-    ID3D11PixelShader* pixel=nullptr,*shadow_pixel=nullptr;
+    ID3D11PixelShader* pixel=nullptr,*shadow_pixel=nullptr,*height_pixel=nullptr;
+    Microsoft::WRL::ComPtr<ID3D11Texture2D> self_shadow;
+    Microsoft::WRL::ComPtr<ID3D11RenderTargetView> self_shadow_target;
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> self_shadow_view;
+    Microsoft::WRL::ComPtr<ID3D11BlendState> shadow_maximum;
+    std::vector<c3x_renderer::UnitShadow::Point> shadow_points;
+    c3x_renderer::UnitShadow shadow_fit{512,false};
     ID3D11InputLayout* layout=nullptr;
     ID3D11DepthStencilState* visible_depth=nullptr;
     ID3D11Buffer *material=nullptr,*beauty=nullptr,*placement=nullptr;
@@ -34,7 +43,7 @@ struct SandboxDirectUnits {
     int combat_serial=0;
     unsigned draws=0,pose_builds=0,mesh_builds=0;
     template<class T>static void drop(T*& p){if(p)p->Release();p=nullptr;}
-    ~SandboxDirectUnits(){drop(vertex);drop(pixel);drop(shadow_pixel);drop(layout);drop(visible_depth);drop(material);drop(beauty);
+    ~SandboxDirectUnits(){drop(vertex);drop(pixel);drop(shadow_pixel);drop(height_pixel);drop(layout);drop(visible_depth);drop(material);drop(beauty);
         drop(placement);drop(unshadowed_view);drop(unshadowed);
         for(auto& sampler:samplers)drop(sampler);}
     c3x_renderer::UnitBodyRenderer::Unit const* unit_for(int subject){
@@ -62,7 +71,7 @@ StructuredBuffer<float4> Palettes:register(t0);
 cbuffer ScenePlacement:register(b2){
  float2 origin;float2 extent;float scale;float depth_base;float2 padding;
  float4 skin_frame;float4 skin_shape;
- float4 pass_control;
+ float4 pass_control;float4 shadow_rect;float4 shadow_light;
 };
 struct Input{float3 position:POSITION;float3 normal:NORMAL;float2 uv:TEXCOORD0;
  float3 tangent:TANGENT;float3 bitangent:BINORMAL;uint4 joints:BLENDINDICES;
@@ -93,7 +102,7 @@ Output VS(Input i){
  }
  float2 local=float2((x-y)*64,(x+y)*32-z*(150.0*128/224));
  float2 pixel=(origin+local)*scale;
- if(pass_control.x>1.5)pixel.y+=2*z*(150.0*128/224)*scale;
+ if(pass_control.x>1.5 && pass_control.x<2.5)pixel.y+=2*z*(150.0*128/224)*scale;
  Output o;o.p=float4(pixel/extent*float2(2,-2)+float2(-1,1),
   clamp(.5-(depth_base+(x+y)*5+z*.1)/16384,.001,.999),1);
  float3 n=float3(normal.x*c-normal.y*s,normal.x*s+normal.y*c,normal.z);
@@ -102,15 +111,23 @@ Output VS(Input i){
  o.n=normalize(float3(n.x,-n.y,n.z/(150.0/(112*.82))));
  o.tangent=normalize(float3(t.x,-t.y,t.z/(150.0/(112*.82))));
  o.bitangent=normalize(float3(b.x,-b.y,b.z/(150.0/(112*.82))));
- o.uv=i.uv;o.shadow=float3(z,.5,.5);return o;
+ float2 shadow_uv=(float2(x,y)-shadow_light.xy*z-shadow_rect.xy)*shadow_rect.zw;
+ o.uv=i.uv;o.shadow=float3(z,shadow_uv);
+ if(pass_control.x>2.5)o.p=float4(shadow_uv*float2(2,-2)+float2(-1,1),0,1);
+ return o;
 }
 Texture2D<float4> shadow_base:register(t0);
 SamplerState shadow_sampler:register(s0);
+float PSHeight(Output i):SV_Target {
+ clip(i.shadow.x-.002);
+ if(pass_control.w>.5)clip(shadow_base.Sample(shadow_sampler,i.uv).a-.5);
+ return i.shadow.x;
+}
 float4 PSShadow(Output i):SV_Target {
  if(pass_control.w>.5)clip(shadow_base.Sample(shadow_sampler,i.uv).a-.5);
  return float4(0,0,0,.28);
 })";
-        ID3DBlob *vs=nullptr,*ps=nullptr,*shadow_ps=nullptr,*errors=nullptr;
+        ID3DBlob *vs=nullptr,*ps=nullptr,*shadow_ps=nullptr,*height_ps=nullptr,*errors=nullptr;
         HRESULT hr=D3DCompile(source,std::strlen(source),"sandbox_gpu_skin",nullptr,nullptr,
             "VS","vs_5_0",D3DCOMPILE_OPTIMIZATION_LEVEL3,0,&vs,&errors);
         if(errors){if(FAILED(hr))std::printf("SANDBOX_UNIT_SHADER %s\n",
@@ -125,12 +142,18 @@ float4 PSShadow(Output i):SV_Target {
             &shadow_ps,&errors);
         if(errors){if(FAILED(hr))std::printf("SANDBOX_UNIT_SHADOW %s\n",
             static_cast<char const*>(errors->GetBufferPointer()));drop(errors);}
+        if(SUCCEEDED(hr))hr=D3DCompile(source,std::strlen(source),"resident_unit_self_shadow",
+            nullptr,nullptr,"PSHeight","ps_5_0",D3DCOMPILE_OPTIMIZATION_LEVEL3,0,&height_ps,&errors);
+        if(errors){if(FAILED(hr))std::printf("UNIT_SELF_SHADOW %s\n",
+            static_cast<char const*>(errors->GetBufferPointer()));drop(errors);}
         if(SUCCEEDED(hr))hr=renderer.device->CreateVertexShader(vs->GetBufferPointer(),
             vs->GetBufferSize(),nullptr,&vertex);
         if(SUCCEEDED(hr))hr=renderer.device->CreatePixelShader(ps->GetBufferPointer(),
             ps->GetBufferSize(),nullptr,&pixel);
         if(SUCCEEDED(hr))hr=renderer.device->CreatePixelShader(shadow_ps->GetBufferPointer(),
             shadow_ps->GetBufferSize(),nullptr,&shadow_pixel);
+        if(SUCCEEDED(hr))hr=renderer.device->CreatePixelShader(height_ps->GetBufferPointer(),
+            height_ps->GetBufferSize(),nullptr,&height_pixel);
         D3D11_INPUT_ELEMENT_DESC elements[]={
             {"POSITION",0,DXGI_FORMAT_R32G32B32_FLOAT,0,0,D3D11_INPUT_PER_VERTEX_DATA,0},
             {"NORMAL",0,DXGI_FORMAT_R32G32B32_FLOAT,0,12,D3D11_INPUT_PER_VERTEX_DATA,0},
@@ -141,11 +164,11 @@ float4 PSShadow(Output i):SV_Target {
             {"BLENDWEIGHT",0,DXGI_FORMAT_R32G32B32A32_FLOAT,0,72,D3D11_INPUT_PER_VERTEX_DATA,0}};
         if(SUCCEEDED(hr))hr=renderer.device->CreateInputLayout(elements,7,
             vs->GetBufferPointer(),vs->GetBufferSize(),&layout);
-        drop(vs);drop(ps);drop(shadow_ps);
+        drop(vs);drop(ps);drop(shadow_ps);drop(height_ps);
         D3D11_BUFFER_DESC b={};b.ByteWidth=128;b.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
         if(SUCCEEDED(hr))hr=renderer.device->CreateBuffer(&b,nullptr,&material);
         b.ByteWidth=80;if(SUCCEEDED(hr))hr=renderer.device->CreateBuffer(&b,nullptr,&beauty);
-        b.ByteWidth=80;if(SUCCEEDED(hr))hr=renderer.device->CreateBuffer(&b,nullptr,&placement);
+        b.ByteWidth=112;if(SUCCEEDED(hr))hr=renderer.device->CreateBuffer(&b,nullptr,&placement);
         float empty_height=-1.f;
         D3D11_TEXTURE2D_DESC t={};t.Width=t.Height=t.MipLevels=t.ArraySize=t.SampleDesc.Count=1;
         t.Format=DXGI_FORMAT_R32_FLOAT;t.BindFlags=D3D11_BIND_SHADER_RESOURCE;
@@ -195,6 +218,7 @@ float4 PSShadow(Output i):SV_Target {
         view.Buffer.NumElements=UINT(mesh->palettes.size()/4);
         if(FAILED(renderer.device->CreateShaderResourceView(gpu.palettes.Get(),&view,
             &gpu.palette_view)))return false;
+        gpu.shadow_bounds.prepare(*mesh);
         ++mesh_builds;return true;
     }
     bool prewarm(int,int){
@@ -252,6 +276,8 @@ float4 PSShadow(Output i):SV_Target {
         context->OMSetBlendState(nullptr,nullptr,0xffffffffu);
         context->RSSetState(renderer.rasterizer_state);
         D3D11_VIEWPORT viewport={0,0,float(scene.width),float(scene.height),0,1};
+        c3x_renderer::SceneProjection(frame.target_width,frame.target_height,zoom)
+            .viewport(viewport,reflected?8.f:4.f,0,0,scene_scale);
         D3D11_RECT scissor={0,0,LONG(scene.width),LONG(scene.height)};
         context->RSSetViewports(1,&viewport);context->RSSetScissorRects(1,&scissor);
         context->IASetInputLayout(layout);
@@ -356,7 +382,7 @@ float4 PSShadow(Output i):SV_Target {
                 unsigned frame_number=std::min(source->frames-1,
                     unsigned(std::floor(local/duration*double(source->frames-1)+1e-7)));
                 float angle=(unit->yaw_offset+float((index==1?5:index==3?1:3)%8)*45)*.01745329252f;
-                float placement_values[20]={float(body_x+(reflected?8:4))+95.5f,
+                float placement_values[28]={float(body_x+(reflected?8:4))+95.5f,
                     float(body_y+(reflected?8:4))+95.5f,
                     float(scene.width),float(scene.height),float(scene_scale),ground_depth,0,0,
                     float(frame_number),float(source->bones),std::cos(angle),std::sin(angle),
@@ -423,9 +449,77 @@ float4 PSShadow(Output i):SV_Target {
     }
 
 #ifdef C3X_RENDERER64_FRESH
+    template<class Unit,class Action,class Instance>bool draw_self_shadow(Unit const& unit,
+            Action const& action,Instance const& instance,c3x_renderer::UnitAnimationPose const& pose,
+            float angle,c3x_renderer_frame_v1 const& frame,float light_x,float light_y){
+        auto* context=renderer.context;auto& bodies=renderer.unit_bodies;
+        if(!self_shadow){
+            D3D11_TEXTURE2D_DESC t={};t.Width=t.Height=shadow_fit.extent;
+            t.MipLevels=t.ArraySize=t.SampleDesc.Count=1;t.Format=DXGI_FORMAT_R32_FLOAT;
+            t.BindFlags=D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE;
+            if(FAILED(renderer.device->CreateTexture2D(&t,nullptr,&self_shadow)) ||
+               FAILED(renderer.device->CreateRenderTargetView(self_shadow.Get(),nullptr,&self_shadow_target)) ||
+               FAILED(renderer.device->CreateShaderResourceView(self_shadow.Get(),nullptr,&self_shadow_view)))return false;
+            D3D11_BLEND_DESC b={};auto& r=b.RenderTarget[0];r.BlendEnable=TRUE;
+            r.SrcBlend=r.DestBlend=r.SrcBlendAlpha=r.DestBlendAlpha=D3D11_BLEND_ONE;
+            r.BlendOp=r.BlendOpAlpha=D3D11_BLEND_OP_MAX;r.RenderTargetWriteMask=D3D11_COLOR_WRITE_ENABLE_RED;
+            if(FAILED(renderer.device->CreateBlendState(&b,&shadow_maximum)))return false;
+        }
+        shadow_points.clear();
+        for(auto const& part:action.parts){
+            if(part.mesh>=bodies.meshes.size()||part.texture>=bodies.textures.size()||
+               !bodies.textures[part.texture].view||!prepare_mesh(part.mesh))return false;
+            auto const& source=*bodies.meshes[part.mesh].animation;
+            unsigned n=std::min(source.frames-1,unsigned(std::floor(pose.phase*double(source.frames-1)+1e-7)));
+            auto* blended=transitions.sample(instance.draw.unit_id,instance.pose_identity,instance.draw.action,
+                frame.presentation_time_ticks,frame.presentation_frequency,source,n);
+            auto* palette=blended?blended:source.palettes.data()+std::size_t(n)*source.bones*16;
+            meshes[part.mesh].shadow_bounds.append(palette,angle,unit.scale,unit.offset_z,shadow_points);
+        }
+        if(!shadow_fit.fit(shadow_points,light_x,light_y,true))return false;
+        ID3D11ShaderResourceView* empty=nullptr;context->PSSetShaderResources(1,1,&empty);
+        auto target=self_shadow_target.Get();float clear[4]={-1,-1,-1,-1};
+        context->ClearRenderTargetView(target,clear);context->OMSetRenderTargets(1,&target,nullptr);
+        context->OMSetBlendState(shadow_maximum.Get(),nullptr,~0u);
+        D3D11_VIEWPORT viewport={0,0,float(shadow_fit.extent),float(shadow_fit.extent),0,1};
+        D3D11_RECT scissor={0,0,shadow_fit.extent,shadow_fit.extent};
+        context->RSSetViewports(1,&viewport);context->RSSetScissorRects(1,&scissor);
+        context->PSSetShader(height_pixel,nullptr,0);
+        for(auto const& part:action.parts){
+            auto const& source=*bodies.meshes[part.mesh].animation;auto& gpu=meshes[part.mesh];
+            unsigned n=std::min(source.frames-1,unsigned(std::floor(pose.phase*double(source.frames-1)+1e-7)));
+            auto* blended=transitions.sample(instance.draw.unit_id,instance.pose_identity,instance.draw.action,
+                frame.presentation_time_ticks,frame.presentation_frequency,source,n);
+            if(!bind_palette(gpu,blended))return false;
+            float values[28]={0,0,1,1,1,0,0,0,float(blended?0:n),float(source.bones),
+                std::cos(angle),std::sin(angle),unit.scale,unit.offset_z,0,0,3,0,0,part.cutout,
+                shadow_fit.left,shadow_fit.top,1/shadow_fit.width,1/shadow_fit.height,shadow_fit.dx,shadow_fit.dy};
+            context->UpdateSubresource(placement,0,nullptr,values,0,0);
+            ID3D11Buffer* vertices=gpu.vertices.Get();UINT stride=sizeof(Vertex),offset=0;
+            context->IASetVertexBuffers(0,1,&vertices,&stride,&offset);
+            context->IASetIndexBuffer(gpu.indices.Get(),DXGI_FORMAT_R32_UINT,0);
+            context->PSSetShaderResources(0,1,&bodies.textures[part.texture].view);
+            context->PSSetSamplers(0,1,&samplers[part.address]);
+            context->DrawIndexed(UINT(source.indices.size()),0,0);
+        }
+        context->OMSetRenderTargets(0,nullptr,nullptr);return true;
+    }
+    bool bind_palette(Mesh const& mesh,float const* blended){
+        if(blended&&!transition_palette){
+            D3D11_BUFFER_DESC b={};b.ByteWidth=4096*4;b.BindFlags=D3D11_BIND_SHADER_RESOURCE;
+            b.MiscFlags=D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;b.StructureByteStride=16;
+            if(FAILED(renderer.device->CreateBuffer(&b,nullptr,&transition_palette)))return false;
+            D3D11_SHADER_RESOURCE_VIEW_DESC v={};v.Format=DXGI_FORMAT_UNKNOWN;
+            v.ViewDimension=D3D11_SRV_DIMENSION_BUFFER;v.Buffer.NumElements=1024;
+            if(FAILED(renderer.device->CreateShaderResourceView(transition_palette.Get(),&v,&transition_view)))return false;
+        }
+        if(blended)renderer.context->UpdateSubresource(transition_palette.Get(),0,nullptr,blended,0,0);
+        ID3D11ShaderResourceView* palette=blended?transition_view.Get():mesh.palette_view.Get();
+        renderer.context->VSSetShaderResources(0,1,&palette);return true;
+    }
     template<class Target>bool draw_real(c3x_renderer_frame_v1 const& frame,
             std::vector<c3x_renderer::render_core::UnitInstances::ScenePose> const& visible,
-            Target& scene,float scene_scale,float visual_hour,bool reflected=false){
+            Target& scene,float scene_scale,float visual_hour,bool reflected,float zoom){
         // The map fog pass consumes this exact body coverage after tone mapping.
         // Clearing just stencil preserves terrain depth and costs no readback.
         if(!reflected)renderer.context->ClearDepthStencilView(scene.depth,D3D11_CLEAR_STENCIL,1,0);
@@ -460,13 +554,15 @@ float4 PSShadow(Output i):SV_Target {
             if(!cursors.primitives.empty())renderer.tactical_gpu.draw_into(renderer.device,context,cursors,
                 {0,0,int(scene.width/scene_scale),int(scene.height/scene_scale)},
                 double(frame.presentation_time_ticks)/double(std::max(1ll,frame.presentation_frequency)),
-                scene.target,scene.width,scene.height);
+                scene.target,scene.width,scene.height,zoom,4.f);
         }
         context->OMSetRenderTargets(1,&scene.target,scene.depth);
         context->OMSetDepthStencilState(body_depth,reflected?0:1);
         context->OMSetBlendState(nullptr,nullptr,0xffffffffu);
         context->RSSetState(renderer.rasterizer_state);
         D3D11_VIEWPORT viewport={0,0,float(scene.width),float(scene.height),0,1};
+        c3x_renderer::SceneProjection(frame.target_width,frame.target_height,zoom)
+            .viewport(viewport,reflected?8.f:4.f,0,0,scene_scale);
         D3D11_RECT scissor={0,0,LONG(scene.width),LONG(scene.height)};
         context->RSSetViewports(1,&viewport);context->RSSetScissorRects(1,&scissor);
         context->IASetInputLayout(layout);
@@ -495,7 +591,7 @@ float4 PSShadow(Output i):SV_Target {
             (noon.sun_intensity+noon.moon_intensity);
         beauty_values[7]=1;beauty_values[11]=.62f;
         beauty_values[12]=.490290f;beauty_values[13]=-.735435f;
-        beauty_values[14]=.469979f;beauty_values[16]=1;
+        beauty_values[14]=.469979f;beauty_values[16]=float(shadow_fit.extent);
         context->UpdateSubresource(beauty,0,nullptr,beauty_values,0,0);
         for(auto const& instance:visible){
             if(instance.unit>=bodies.units.size())return false;
@@ -533,6 +629,13 @@ float4 PSShadow(Output i):SV_Target {
             float target_angle=c3x_renderer::native_unit_yaw(unit.yaw_offset,draw.direction);
             float angle=transitions.facing(draw.unit_id,instance.pose_identity,frame.presentation_time_ticks,
                 frame.presentation_frequency,target_angle);
+            if(!draw_self_shadow(unit,action,instance,pose,angle,frame,light[0],light[1]))return false;
+            context->OMSetRenderTargets(1,&scene.target,scene.depth);
+            context->OMSetDepthStencilState(body_depth,reflected?0:1);
+            context->OMSetBlendState(nullptr,nullptr,~0u);
+            context->RSSetViewports(1,&viewport);context->RSSetScissorRects(1,&scissor);
+            context->PSSetShader(pixel,nullptr,0);
+            auto* shadow_view=self_shadow_view.Get();context->PSSetShaderResources(1,1,&shadow_view);
             for(auto const& part:action.parts){
                 if(part.mesh>=bodies.meshes.size()||part.texture>=bodies.textures.size()||
                    !bodies.textures[part.texture].view||!prepare_mesh(part.mesh))return false;
@@ -543,25 +646,18 @@ float4 PSShadow(Output i):SV_Target {
                     unsigned(std::floor(pose.phase*double(source->frames-1)+1e-7)));
                 auto* blended=transitions.sample(draw.unit_id,instance.pose_identity,draw.action,
                     frame.presentation_time_ticks,frame.presentation_frequency,*source,frame_number);
-                if(blended&&!transition_palette){
-                    D3D11_BUFFER_DESC b={};b.ByteWidth=4096*4;b.BindFlags=D3D11_BIND_SHADER_RESOURCE;
-                    b.MiscFlags=D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;b.StructureByteStride=16;
-                    if(FAILED(renderer.device->CreateBuffer(&b,nullptr,&transition_palette)))return false;
-                    D3D11_SHADER_RESOURCE_VIEW_DESC v={};v.Format=DXGI_FORMAT_UNKNOWN;
-                    v.ViewDimension=D3D11_SRV_DIMENSION_BUFFER;v.Buffer.NumElements=1024;
-                    if(FAILED(renderer.device->CreateShaderResourceView(transition_palette.Get(),&v,&transition_view)))return false;
-                }
-                if(blended)context->UpdateSubresource(transition_palette.Get(),0,nullptr,blended,0,0);
+                if(!bind_palette(gpu,blended))return false;
                 float scale=pose.projection_scale*scene_scale;
                 float guard=reflected?8.f:4.f;
                 // The ground point is Civ III's captured center. Sprite size
                 // and expanded dirty canvases must not move the resident mesh.
-                float placement_values[20]={float(pose.anchor_x+guard)/pose.projection_scale,
+                float placement_values[28]={float(pose.anchor_x+guard)/pose.projection_scale,
                     float(pose.anchor_y+guard)/pose.projection_scale,
                     float(scene.width),float(scene.height),scale,ground_depth,0,0,
                     float(blended?0:frame_number),float(source->bones),std::cos(angle),std::sin(angle),
                     unit.scale,unit.offset_z,0,0,
-                    reflected?2.f:0.f,0,0,part.cutout};
+                    reflected?2.f:0.f,0,0,part.cutout,
+                    shadow_fit.left,shadow_fit.top,1/shadow_fit.width,1/shadow_fit.height,shadow_fit.dx,shadow_fit.dy};
                 float values[32]={part.tint[0],part.tint[1],part.tint[2],part.mask};
                 for(unsigned axis=0;axis<3;++axis){
                     float color=float((draw.display_color_rgb>>(16-axis*8))&255)/255;

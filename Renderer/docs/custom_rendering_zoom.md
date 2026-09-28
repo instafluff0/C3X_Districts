@@ -1,153 +1,127 @@
-# Custom-rendering stepped zoom
+# Smooth custom-renderer zoom
 
-`enable_custom_rendering_zoom = true` adds stepped main-map zoom when
-`enable_custom_rendering = true`. The current levels use Civ III's isometric
-basis at tile widths 128, 160 and 192 pixels: 100%, 125% and 150% of native
-normal size. The user limited the supported envelope to these three closest
-levels on September 9, 2026; 64 and 96 are disabled in the custom zoom control.
-Starting at normal, successive `Z` presses select 192, 160 and 128 pixels.
-The main-map wheel now steps in either direction and clamps at these endpoints:
-wheel-up moves closer, wheel-down moves outward. Small wheel deltas accumulate
-until they total a Windows 120-unit notch. This GOG activation uses the audited
-main-form m25 slot; config-off, loading/menu and disabled custom zoom delegate
-to the original handler with unchanged arguments. Other forms are unaffected.
-The projected world point at the screen center stays fixed while the level
-changes. Native synchronization accepts only those three widths. A change to
-Civ III's native reduced-zoom flag retains its 64-pixel anchor basis but resets
-the custom view to 128 around the screen center; it does not restore a disabled
-farther-out level. Configuration-off retains the original native zoom path.
+`enable_custom_rendering_zoom = true`, together with
+`enable_custom_rendering = true`, enables main-map wheel zoom. The endpoints
+are 128, 160 and 192 pixels per tile (1×, 1.25× and 1.5×). Wheel-up moves
+closer; wheel-down moves outward. Small Windows wheel deltas accumulate to a
+120-unit notch. Z cycles outward and wraps. The viewport center stays fixed.
+Configuration-off, loading/menu and disabled custom zoom delegate to Civ III's
+original wheel function with unchanged arguments.
 
-Civ III remains the camera and interaction authority. The injected bridge
-applies one affine scale and translation to captured map anchors, then supplies
-the selected tile width to the off-screen renderer. Native events and stored mouse coordinates remain in screen pixels. The shared
-`Main_Screen_Form_get_tile_coords_under_mouse` inlead applies the inverse at
-picking, so down/hover/release/right-click, held-click callbacks and C3X targeting
-agree. Four explicit call-site replacements preserve native map-traversal clip queries,
-including incremental draws outside m71. Visible city work-area input also bypasses
-the custom inverse. Per-caller inverse transforms are removed. Native map sprites, C3X tile
-highlights and map text receive the same forward transform; custom-rendered
-unit bodies receive an exact numeric projection scale rather than the old
-normal/reduced binary. While this zoom feature is enabled, native FLC unit bodies
-are never shown: if custom units are disabled or a custom body cannot render,
-that body is omitted. The selected white ring shares Renderer64's sampled unit anchor and draws
-before unit meshes. Native health, status and unit-HUD overlays keep their
-existing ownership. Map-specific calls for city-HUD coordinates, unit
-health/status, selection cursors and civilization markers transform attachment
-points directly, preserving native UI size and offsets. Ordinary and army paths
-are covered. Shared drawing functions and city-screen callers remain unpatched.
-The general tile-to-screen function is a callable `define`; the city HUD uses a
-single internal call replacement. `Unit_tick_anim` only scopes capture/canvas
-ownership, with unchanged offsets and no translation/undo state. Executable tests
-check call-site wiring, coordinate parity and argument preservation.
+## One canonical world, one displayed transform
 
-Zoom is deliberately main-map-only. The existing patched
-`Main_Screen_Form_handle_key_down` boundary consumes `Z` before Civ III's
-native two-level toggle. The authorized `Main_Screen_Form_process_mouse_wheel`
-vtable replacement uses the same zoom implementation. The handler
-retains the exact native pixel camera and uses `move_camera` to update bounds
-without rounding through a tile center. It then requests a complete traversal. A plain Animator dirty
-bit is insufficient because it may request only a one-tile damage redraw,
-leaving the exclusive custom terrain plane without a complete visible capture.
-The city screen retains its existing C3X `Z` handling. Changing Civ III's native
-zoom mode with another existing control resets the custom transform to the
-supported normal level around the screen center. Renderer failure retains the existing custom-map-plane policy.
-Custom-on map unit failure is reported and the body is omitted; CPU unit
-rasterization is not a fallback. Renderer-off units remain native.
+The game captures map, unit, label and tactical coordinates on a stable
+128-pixel basis. Civ III's reduced-zoom mode still supplies 64-pixel anchors;
+the existing center-preserving capture transform converts those to 128.
+Wheel input publishes only a copied Q16 target through the existing async image
+queue. It does not recapture terrain, invalidate world assets, call the native
+camera setter or wait for the renderer.
 
-The settler territory preview transforms only its audited native line call.
-Civ III still selects the legal edges and current civilization palette color;
-the GPU line pass receives that copied style. Transient `MapMessage` layout
-transforms the tile attachment and translates the complete native dirty rectangle.
-Its font size, overlap placement and lifetime stay native. This includes messages
-from `show_map_specific_text`; shared `PCX_Image_draw_text` UI calls are unchanged.
-Both hooks currently have verified GOG addresses only, recorded in the patch ledger.
+Renderer64 owns an elapsed-time, critically damped transition. Retargeting
+preserves velocity, so reversing the wheel decelerates naturally. A step reaches
+99% of its destination in about 166 ms. Animation, map and UI publication keep
+using the existing renderer worker and presentation cadence.
 
-Zoomed-out capture promotes only complete appearance records that can reach the
-scaled viewport. The outer topology ring remains non-renderable. Intermediate
-levels currently request a full map clip so native retained overlays cannot
-leave stale pixels; narrower damage tracking is a later performance refinement.
+The injected JGL transfer boundary identifies the actual main-map and
+`Units_Control` canvases by their native owners. The worker selects their
+complete retained source versions. The displayed scale is applied while the
+shared scene rasterizes geometry, so closer views acquire new geometric detail.
+Map overlays compose over that projected scene before fixed-size native HUD.
+Immutable native images keep their GPU image transform. It rebuilds this world from canonical sources even when
+Civ III requests a dirty subrectangle; an older zoomed screen is never used as
+the next world's input. Fixed GUI forms compose afterward in screen coordinates.
+Only Renderer64 graphics grow with the map. Native city labels, unit status
+icons and map messages retain their original pixel dimensions. Their scoped
+drawing commands replay after world scaling, translated by their canonical
+attachment at the same sampled zoom. Fixed panels retain their screen position
+and original size. All retained native UI backgrounds refer to one current
+world selection, including its map HUD. A new camera replaces that selection;
+old city-label placements cannot survive in earlier native screen fragments.
+Native UI pixels and partial screen publication retain Civ III's normal dirty
+rectangles, so unchanged panels remain visible. Canvas replacement copies and
+clears retire covered HUD captures. HUD capture admits the actual Map_Renderer
+canvas as well as Main_Screen_Form and Units_Control canvases.
 
-The GPU tile cache still includes target size and tile width. Natural terrain
-now has a separate indexed world/material mesh tier: changing zoom can reproject
-its retained vertices without repeating height, coast, relief, decal or forest
-construction. Reuse validates semantic, world-topology and coast dependencies;
-city composition retains its ordinary compiler. Center-prioritized admission
-keeps a useful working set when a wide view exceeds the cache. Natural mesh data
-has a 96 MiB cap and viewport bitmaps a 32 MiB cap, reallocating the former
-128 MiB bitmap allowance without increasing the combined CPU cache budget.
+A busy renderer transaction rejects an optional display offer immediately. The
+existing cadence retries that busy case after 2 ms instead of discarding the
+whole 16.7 ms frame opportunity. Completed and unchanged static frames keep
+the normal period; no old timestamp or frame is queued.
 
-Vertex indexing uses a contiguous lookup table with the same exact byte equality
-and first-occurrence ordering as the earlier node-based hash map. Its final hash
-mix disperses regular float grids across power-of-two buckets. Chunks with at
-most 65,535 vertices use lossless 16-bit triangle indices; larger chunks retain
-32-bit indices. Both map and source-shadow draws honor the stored format.
-Animated views
-can recover an exact cached terrain bitmap; they reassemble current geometry and
-resource anchors before composing poses and rebuilding any missing depth
-backdrops. Posed resource pixels never enter the immutable terrain cache.
+Native working images remain canonical. The display recipe carries both its
+full-color image and the matching packed native words, so subsequent native
+keyed UI reads the correct displayed underlay. No CPU map readback or software
+map fallback is used.
 
-Ground passes keep their unique grid corners and triangle indices through GPU
-upload, without expanding and deduplicating the triangle stream again. Mixed
-object-shadow geometry retains its ordinary indexing path. Resource color/depth
-backdrops now have a byte-bounded, complete-static-signature LRU across camera
-views: 32 MiB normally, 160 MiB in the larger-cache benchmark tier. The current
-view's blocks are not evicted by its own scan; over-budget blocks still render
-normally. Only static MSAA background/depth is retained, never posed pixels.
-Cache allocation failure skips admission rather than discarding a valid frame.
+Civ III writes notification text into the GUI canvas but writes its shadows
+into `Units_Control`. `patch_Main_GUI_draw_notifications` gives those shadow
+writes an explicit lexical scope. The worker preserves their lookup tables,
+excludes their rectangles from the world image, and reapplies the shadows over
+the displayed world before GUI text. See the exact GOG hook and other-build
+limitations in the [patch ledger](civ3_patch_dependency_ledger.md).
 
-Continuous animated zoom is still pending. The current game adapter calls the
-sandbox scene with display zoom 1 and rebuilds the captured projection for each
-stepped level. The sandbox already scales its resolved terrain and moving layer
-together in the final GPU pass. Reusing that approach in the game requires fog,
-tactical primitives, native map HUD anchors and inverse picking to share the
-same displayed transform. Scaling the final window would also scale fixed HUD
-controls, so that is not an appropriate insertion point.
+## City screen
 
-The native map canvas and `Units_Control` are not clean world-only layers:
-`Main_GUI::FUN_00553b40` also paints fixed notification shadows into
-`Units_Control`. Existing city-HUD, unit-status and marker hooks expose map
-attachment points. Transient messages compute their rectangle at GOG
-`0x4D7DC0` and paint at `FUN_004d7d40` (`this`, canvas, background canvas);
-that painter is not currently hooked. These source findings identify the
-remaining separation work; they are not an activated patch or a completed
-continuous-camera implementation. Any new patch-table requirement must go
-through the dependency ledger before activation.
+Civ III's `Map_Renderer.spotlight_on_city` excludes the modal city screen from
+custom zoom, HUD capture and world-view transformation, including its first
+centering draw before the form is visible. Native Z keeps the two 64/128-pixel
+tile sizes and calls the existing city-center routine. Manual panning is ignored;
+exact centering for opening, switching cities and native Z remains active.
+The custom path scales the city-center row offset with the native tile size,
+keeping its pixel attachment unchanged. Both offsets are even, avoiding native
+tile-parity correction of the horizontal camera. Config-off keeps the existing
+C3X city-centering behavior.
+World-map custom zoom resumes after Civ III clears its spotlight on exit.
 
-The continuous implementation must keep these boundaries together:
+## Picking and lifecycle
 
-- Keep a canonical captured map and ease a renderer-owned display transform
-  around the viewport center. Wheel reversals begin at the current displayed
-  scale. Do not generate a native map capture for every intermediate scale.
-- Apply that transform to fog, terrain, units, selection, tactical primitives
-  and map-HUD attachment points in the same visual sample. Fixed UI and native
-  font/icon dimensions remain in screen pixels.
-- Publish the last presented transform back to the bridge for inverse picking;
-  the requested endpoint is not the displayed view during a transition.
-- Preserve native working-image versions separately from animated display
-  recipes. Native readback has exact submission semantics; evaluating an
-  animated display recipe in its place would change those semantics.
-- A moving HUD command must retain the background across its swept rectangle,
-  and retire its previous occurrence when native drawing replaces or erases it.
-  Merely changing a retained node's destination coordinates leaves stale pixels
-  outside its original recorded damage region.
+Only a successful DXGI `Present` publishes the Q16 display scale to the helper's
+shared header. Both mouse coordinates use one atomic sample of that scale, then
+undo the existing native/canonical transform. Reading it submits no RPC and
+waits for no frame. Native map-clip queries retain their separate untransformed
+call sites; native city-screen input retains its native camera.
 
-These are implementation constraints, not completed feature claims. The current
-three-level path stays active until the complete world/UI/picking transition
-passes executable overlap, erasure, reversal and live interaction checks.
+The helper wire is version 10. The successful-presentation counter remains at
+byte 228; the presented zoom scale is at byte 232. The bridge, helper and x64
+DLL must be built and staged together. Scene teardown releases the view,
+notification snapshots and retained images; injected teardown resets wheel
+remainder and canonical/target state before another map is loaded.
 
-For the current stepped path, `-Scenario zoom` in the
-[scripted testing guide](../tools/scripted_game_test.md) covers wheel direction,
-rapid reversal, partial deltas and center preservation. Historical geometry
-benchmarks remain in [benchmark notes](zoom_performance.md).
+## Verification
 
-Automated checks cover affine anchor invariance, inverse picking, the three-level
-`Z` cycle, expanded capture, native overlay scaling and numeric unit projection.
-A live checkpoint should exercise repeated `Z` steps, hover/left/right selection,
-scrolling and wrapping, units and selection/status overlays, city-screen `Z`,
-the native zoom control reset, and configuration-off behavior.
+```sh
+python3 -m unittest Renderer.native.test_custom_zoom \
+  Renderer.native.test_zoom_transition Renderer.native.test_zoom_integration \
+  Renderer.native.test_zoom_gpu Renderer.native.test_retained_composition \
+  Renderer.native.test_async_publication Renderer.native.test_scripted_game_input
+```
 
-The regression checks include compiled injected function bodies across all three
-levels, both native bases and several camera offsets; consistent event picking;
-city-work-area/config-off bypass; unscaled HUD layout at a transformed attachment;
-and actual CSV activation. The approved GOG input, clip-query and map-UI hooks are active;
-see the patch ledger for addresses and other-build limitations.
+The clock tests cover frame-rate independence, rapid reversal, endpoints,
+repeated targets, reset and presented-only picking. Compiled injected wrappers
+cover wheel delegation, unchanged canonical capture, one display sample per
+mouse point and balanced notification scopes. GPU checks compare intermediate
+pixels, native 555/565 keying, fixed panels, marker alignment, source isolation,
+partial native copies and publications, exact paired quantization, repeated world
+boundaries and invariant native HUD ink through translated intermediate/reversed
+views. Existing compositor
+oracles remain in the suite.
+
+Use the bounded workflow in [scripted game testing](../tools/scripted_game_test.md).
+The zoom scenario sends ten wheel inputs, including a rapid reversal and three
+40-unit deltas. With `-MeasureCadence`, it samples the presentation counter and
+Q16 zoom value every 20 ms during that scenario, without a renderer command.
+Use actual window capture timestamps to inspect intermediate views; counters
+alone do not prove visible correctness. A one-Hz capture is the performance
+control; ten-Hz capture is a bounded visual diagnostic. Follow zoom with the
+scroll and interaction scenarios to check terrain, units, transient map text
+and fixed UI after changing view.
+
+Live zoom capture `20260928-083851` passes all ten wheel inputs, intermediate
+scales, reversal and small-delta accumulation. Window review confirms aligned
+terrain, units and selection. HUD capture `20260928-080539` verifies fixed-size
+labels with no stale copies after scrolling; city capture `20260928-082829`
+verifies an unchanged city anchor at both native zoom levels and ignored wheel/
+edge-scroll input. The subsequent graphics-quality work replaces image enlargement
+with shared geometry projection; see [quality and validation](render_quality.md).
+The [current status](retained_renderer_plan.md) records the installed candidate,
+measured live FPS and unresolved cold city-view delay. Earlier stepped-camera
+measurements remain in [zoom performance](zoom_performance.md) for comparison.

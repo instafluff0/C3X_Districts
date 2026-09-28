@@ -14,10 +14,11 @@ from Renderer.lab.shared.cities.growth import solve,bounds,expanded,overlaps
 from Renderer.lab.shared.cities.ground import footprint_alignment,convex_hull,grid,coverage,building_polygon,center_paths
 from Renderer.lab.shared.cities.fingerprint import geometry_digest
 from Renderer.lab.shared.cities.facades import derive
+from Renderer.lab.shared.cities.auxiliary import restore
 
 def read(p):return city.read(p)
 def sha(p):return hashlib.sha256(city.input_bytes(p)).hexdigest()
-def build_pack(output=OUT, lab_layouts=None, lab_focus=None, lab_frames=None):
+def build_pack(output=OUT, lab_layouts=None, lab_focus=None, lab_frames=None, *, layouts_only=False):
     output=Path(output).resolve()
     output.relative_to(ROOT/'Renderer')
     for source in (INPUT.parent,ROOT/city.PACK,ROOT/'Renderer/packs/CityStudyAuxiliaryUV',
@@ -29,10 +30,10 @@ def build_pack(output=OUT, lab_layouts=None, lab_focus=None, lab_frames=None):
     # multiple category builds run in the same Python process.
     city.component.cache_clear()
     with city.track_inputs(generated=(output/'frames.json',)) as consumed:
-        meta=_build(output, lab_layouts, lab_focus, lab_frames)
+        meta=_build(output, lab_layouts, lab_focus, lab_frames, layouts_only)
     return meta,consumed
 
-def _build(OUT, lab_layouts=None, lab_focus=None, lab_frames=None):
+def _build(OUT, lab_layouts=None, lab_focus=None, lab_frames=None, layouts_only=False):
     OUT.mkdir(parents=True,exist_ok=True)
     source=read('Renderer/packs/CityFidelitySources/manifest.json');catalog=read('Renderer/packs/CityStudyAuxiliaryUV/city_catalog.json')
     styles=['american','european','mediterranean','middle_eastern','asian'];eras=['ancient','medieval','industrial','modern']
@@ -60,14 +61,30 @@ def _build(OUT, lab_layouts=None, lab_focus=None, lab_frames=None):
     pins[str((INPUT/'ground-parts.json').relative_to(ROOT))]=sha(INPUT/'ground-parts.json')
     ground_binding=current['ground_binding']
     ground_reference=current['ground_reference']
+    auxiliary_path="Renderer/packs/CityRecipeAuxiliaryUV/uv.json"
+    auxiliary=read(auxiliary_path)["meshes"] if layouts_only else {}
+    if layouts_only:pins[auxiliary_path]=sha(auxiliary_path)
     body_cache={}
     def body(asset,pack=Path('Renderer/packs/CityStudyAuxiliaryUV')):
         key=str(pack)+'/'+asset
-        if key not in body_cache:body_cache[key]=city.component(asset,pack)
+        if key not in body_cache:
+            body_cache[key]=city.component(asset,pack)
+            if layouts_only:
+                body_cache[key]["parts"]=[(restore(mesh,auxiliary),mat) for mesh,mat in body_cache[key]["parts"]]
+                # Some selected Lab derivatives were imported without UV1/2.
+                # Keep their displayed base art; never sample an absent channel
+                # at (0,0) and turn an entire building into an emissive texel.
+                for mesh,mat in body_cache[key]['parts']:
+                    for uv,channel in [('uv1','ambient_occlusion'),('uv2','emissive')]:
+                        if channel in mat['channels'] and not all(uv in v for v in mesh['vertices']):
+                            del mat['channels'][channel]
+                            gaps.append({'asset':asset,'channel':channel,'reason':'selected Lab derivative lacks '+uv})
         return body_cache[key]
     def material(mat,asset,ground=False):
         channels={**mat['channels']};overlay=extra.get(asset+':'+mat.get('name',''))
-        if overlay:channels.update(overlay['channels'])
+        if overlay:
+            channels.update({k:v for k,v in overlay['channels'].items()
+                             if not layouts_only or k in channels})
         paths=[channels.get(k,{}).get('texture','') for k in ['base_color','emissive','ambient_occlusion','normal_0','gloss','metalness','opacity']]
         if ground and asset in ground_parts and paths[0]==ground_binding['expected']['texture']:
             if sha(paths[0])!=ground_binding['expected']['sha256']:raise ValueError('ground binding source changed')
@@ -146,22 +163,25 @@ def _build(OUT, lab_layouts=None, lab_focus=None, lab_frames=None):
             foundation_source={'material':material(mat,asset),'uv':uv,'step':step}
         return foundation_source
     def template(pool,size,instances,capital=False,authority=None,environment=False,clearance=None,
-                 source_z_factor=1.0,ground_cover=None,grounding='source'):
+                 source_z_factor=1.0,ground_cover=None,grounding='source',variant=0,walled=False):
         culture,era=pool.removeprefix('city/pool/').split('/')
         if culture not in styles:raise ValueError('unknown normalized culture '+culture)
         out={'culture':styles.index(culture),'era':eras.index(era),'size':size,'capital':capital,'environment':environment,'authority':authority,
-            'clearance':clearance or [.05,2.5,.12,12.4],'instances':[]}
+            'clearance':clearance or [.05,2.5,.12,12.4],'instances':[],
+            'variant':variant,'walled':walled,'owns_walls':layouts_only,
+            'anchor_layout':layouts_only}
         if grounding=='masonry':
             out['foundation']=foundation()
         elif grounding not in ('source','terrain'):
             raise ValueError('unknown city grounding mode')
         for inst in instances:
             asset=inst['asset'];pack=Path(inst.get('pack','Renderer/packs/CityStudyAuxiliaryUV'));b=body(asset,pack)
+            instance_z_factor=inst.get('source_z_factor',source_z_factor)
             ground_to_base=bool(ground_cover and inst.get('surface',True))
-            mid=model(asset,pack,source_z_factor,ground_to_base);rot=inst['rotation'];scale=inst['scale'];offset=inst['offset'];box=bounds(b,rot,scale)
+            mid=model(asset,pack,instance_z_factor,ground_to_base);rot=inst['rotation'];scale=inst['scale'];offset=inst['offset'];box=bounds(b,rot,scale)
             # The original quadrature and facade-plane rule run once offline;
             # all resulting positions are transformed with the same instance.
-            key=(str(pack),asset,scale,rot,inst['slot']=='capital',source_z_factor,ground_to_base)
+            key=(str(pack),asset,scale,rot,inst['slot']=='capital',instance_z_factor,ground_to_base)
             if key not in light_cache:
                 entry={'asset':asset,'slot':inst['slot'],'scale':scale,'rotation':rot,'offset':[0,0],'local_bounds':box,'sample_start':0}
                 aug={'emissive_uv':2,'grounding':'source_z_zero','scene_world_z_per_source_unit':1/0.648266978876,'pack':str(pack),'source_normals':None,'emissive_gain':8,'capital':{'mapping':{'pack':str(pack)}},'instances':[entry]}
@@ -169,13 +189,16 @@ def _build(OUT, lab_layouts=None, lab_focus=None, lab_frames=None):
                 mapping=OUT/'frames.json'
                 aug['source_normals']={'mapping':str(mapping.relative_to(ROOT))}
                 surface={'samples':[{'column':0,'row':0,'u':0,'v':1,'height':0}]}
-                try:derived=derive(aug,surface,128,source_facade_slots=('capital',))
+                try:
+                    derived=(derive(aug,surface,128,source_facade_slots=('capital',),source_frames=frames)
+                             if any(mat['channels'].get('emissive',{}).get('texture') for _,mat in b['parts'])
+                             else {'lights':[],'blockers':[]})
                 except ValueError as e:
                     if 'no emitting facade samples' not in str(e):raise
                     derived={'lights':[],'blockers':[]}
-                if source_z_factor!=1.0:
+                if instance_z_factor!=1.0:
                     for light in derived['lights']:
-                        light['position'][2]*=source_z_factor
+                        light['position'][2]*=instance_z_factor
                 if ground_to_base:
                     for light in derived['lights']:
                         light['position'][2]-=b['lo'][2]*source_z_factor
@@ -186,7 +209,7 @@ def _build(OUT, lab_layouts=None, lab_focus=None, lab_frames=None):
         # Lab. Store topology/coverage offline; runtime only conforms/clips it
         # against captured terrain and supplies a world-stable UV origin.
         out['paving']=None
-        if era=='modern' or ground_cover:
+        if (era=='modern' and not layouts_only) or ground_cover:
             ordinary=[i for i in out['instances'] if i['slot']!='capital' and i['surface']]
             scale=ordinary[0]['scale']
             if any(abs(i['scale']-scale)>1e-8 for i in ordinary):
@@ -231,7 +254,7 @@ def _build(OUT, lab_layouts=None, lab_focus=None, lab_frames=None):
                 'coverage_boxes':coverage_boxes,'coverage_polygons':polygons,'coverage_paths':paths}
         templates.append(out);return out
     (OUT/'frames.json').write_text(json.dumps({'meshes':frames},separators=(',',':'))+'\n')
-    for revision,a in selected.items():
+    for revision,a in ([] if layouts_only else selected.items()):
         inst=[{**i,**({'pack':a['capital']['mapping']['pack']} if i['slot']=='capital' else {})} for i in a['instances']]
         counts=a.get('stage_component_counts') or [4,7,11]
         for size in [0,1]:
@@ -244,8 +267,8 @@ def _build(OUT, lab_layouts=None, lab_focus=None, lab_frames=None):
         layouts=read(layout_path)
         if layouts.get('schema')!='c3x.lab.city_design.v1':raise ValueError('unsupported Lab city design')
         for design in layouts['designs']:
-            culture=design['culture_name'].lower().replace(' ','_')
-            era=design['era_name'].lower()
+            culture=styles[design['culture']]
+            era=eras[design['era']]
             if lab_focus is not None and (culture,era)!=lab_focus:continue
             pool=f'city/pool/{culture}/{era}'
             if pool not in catalog['pools']:raise ValueError('Lab city design has no source pool')
@@ -263,13 +286,17 @@ def _build(OUT, lab_layouts=None, lab_focus=None, lab_frames=None):
                     instances.extend({**item,'slot':len(houses)+1+index}
                                      for index,item in enumerate(tier.get('capital_decorations',[]) if capital else tier.get('decorations',[])))
                     vertical_metric=design.get('vertical_metric',.648266978876)
-                    template(pool,size,instances,capital,
-                             f'lab-fixed-{culture}-{era}',era=='modern',
-                             [.04,design.get('slope_limit',18.0),0,4.0],.648266978876/vertical_metric,
-                             tier.get('ground_cover'),design.get('grounding','masonry'))
+                    for walled in ((False,True) if layouts_only and size==0 else (False,)):
+                        chosen_instances=instances+([{**item,'slot':len(instances)+index}
+                            for index,item in enumerate(design['wall_instances'])] if walled else [])
+                        template(pool,size,chosen_instances,capital,
+                                 f'lab-fixed-{culture}-{era}',era=='modern',
+                                 [.04,design.get('slope_limit',18.0),0,4.0],.648266978876/vertical_metric,
+                                 tier.get('ground_cover'),design.get('grounding','masonry'),
+                                 design.get('variant',0),walled)
     # The same bounded Lab growth solver and source-scale rule cover other
     # normalized pools. These are production adaptations, not new Lab witnesses.
-    for pool,record in sorted(catalog['pools'].items()):
+    for pool,record in ([] if layouts_only else sorted(catalog['pools'].items())):
         culture,era=pool.removeprefix('city/pool/').split('/')
         assets=[body(a) for a in record['components']]
         reference=[city.component(a) for a in read(city.PACK/'city_catalog.json')['pools'][pool]['components']]
@@ -314,11 +341,23 @@ def _build(OUT, lab_layouts=None, lab_focus=None, lab_frames=None):
                     'rotation':0,'offset':[0,0]}],True,
                     'asian-ancientwood-capital',True)
         print('COMPOSED',pool,flush=True)
+    if layouts_only:
+        # Close the runtime pack over its textures. Identical source copies
+        # share one content-addressed DDS and one GPU allocation.
+        texture_dir=OUT/'textures';texture_dir.mkdir(exist_ok=True)
+        for m in materials:
+            for channel,path in enumerate(m['textures']):
+                if not path:continue
+                data=city.input_bytes(path)
+                name=hashlib.sha256(data).hexdigest()+'.dds'
+                target=texture_dir/name
+                if not target.exists():target.write_bytes(data)
+                m['textures'][channel]='Renderer/packs/CityCompositionRuntime/textures/'+name
     meta={'schema':'c3x.city_composition.v1','materials':materials,'models':[{k:v for k,v in m.items() if k!='parts'} for m in models],'templates':templates,'gaps':gaps,'source_sha256':pins}
     (OUT/'manifest.json').write_text(json.dumps(meta,indent=2)+'\n')
     # Generic binary: all paths are relative to the mod root; no source package
     # parser or Python runtime is needed by the game.
-    wire=bytearray(b'C3XCITY3' if lab_layouts is not None else b'C3XCITY2')
+    wire=bytearray(b'C3XCITY4' if layouts_only else b'C3XCITY3' if lab_layouts is not None else b'C3XCITY2')
     def u(n):wire.extend(struct.pack('<I',n))
     def f(values):wire.extend(struct.pack('<'+'f'*len(values),*values))
     def string(s):b=s.encode();u(len(b));wire.extend(b)
@@ -335,6 +374,8 @@ def _build(OUT, lab_layouts=None, lab_focus=None, lab_frames=None):
             for i in part['indices']:u(i)
     for t in templates:
         for k in ['culture','era','size','capital','environment']:u(int(t[k]))
+        if layouts_only:
+            for k in ['variant','walled','owns_walls','anchor_layout']:u(int(t[k]))
         string(t['authority']);f(t['clearance']);u(len(t['instances']))
         for i in t['instances']:
             u(i['model']);u(1 if i['slot']=='capital' else 0);f([i['scale'],i['rotation']]+i['offset']+i['bounds']);u(len(i['lights']))
@@ -354,7 +395,8 @@ def _build(OUT, lab_layouts=None, lab_focus=None, lab_frames=None):
     return meta
 
 def main():
-    return build_pack(OUT)[0]
+    from Renderer.tools.prepare_city_recipes import build
+    return build(OUT)
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output',type=Path,help='Build a disposable candidate without changing the runtime pack')

@@ -1,7 +1,9 @@
 {
   "id": "borders",
   "title": "Territory borders",
-  "depends_on": ["cities"],
+  "depends_on": [
+    "cities"
+  ],
   "implementation": [
     "Renderer/lab/studies/borders/preview.py",
     "Renderer/lab/studies/borders/mesh_surface.py",
@@ -9,20 +11,37 @@
     "Renderer/lab/studies/borders/depth_export.h",
     "Renderer/lab/studies/borders/capture_test_biq.py",
     "Renderer/native/source_fidelity/terrain_compiler.h",
-    "Renderer/renderer.py"
+    "Renderer/renderer.py",
+    "Renderer/native/gpu_territory_borders.h",
+    "Renderer/native/city_border_fixture.h"
   ],
   "recipe": {
     "terrain": 2,
     "feature": 2,
     "objects": true,
-    "hours": [12],
-    "zooms": [64, 128],
-    "cases": ["crimson-fine", "crimson-brush", "azure-brush"]
+    "hours": [
+      12
+    ],
+    "zooms": [
+      64,
+      128
+    ],
+    "cases": [
+      "crimson-fine",
+      "crimson-brush",
+      "azure-brush"
+    ]
   },
-  "tests": ["Renderer.lab.studies.borders.test_preview"],
-  "references": {"d3d11": []},
+  "tests": [
+    "Renderer.lab.studies.borders.test_preview",
+    "Renderer.native.test_territory_borders",
+    "Renderer.native.test_city_border_capture"
+  ],
+  "references": {
+    "d3d11": []
+  },
   "limitations": [
-    "The ownership and civ colors are invented Lab inputs; Civ III remains authoritative for borders in game.",
-    "The border is a Lab-only CPU stroke projected onto exported production ground triangles. Its occluded sections use the city renderer's depth readback; game border capture and compositing remain native."
+    "Lab fixture ownership and colors are synthetic; the game captures Civ III ownership and its effective palette.",
+    "The runtime border uses production GPU triangles and scene depth. Broad live-game regression is deferred while Lab systems are integrated."
   ]
 }

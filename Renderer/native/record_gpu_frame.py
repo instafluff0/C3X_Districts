@@ -25,6 +25,7 @@ def main(argv=None):
     parser.add_argument('--direct-surface-trial',action='store_true',help='Use Renderer64 direct presentation in the native fixture')
     parser.add_argument('--pose-transitions',action='store_true',help='Exercise repeated real unit pose/facing changes through the async GPU owner')
     parser.add_argument('--async-bridge',action='store_true',help='Exercise the Renderer64 asynchronous native bridge and independent cadence without CPU map oracles')
+    parser.add_argument('--shader-root',type=Path,help='Repository-local Renderer64 shader candidate; defaults to the staged runtime bundle')
     parser.add_argument('--present-phases',action='store_true',help='Diagnostic x86 presentation split; invalidates latency-baseline claims')
     parser.add_argument('--reserve-address-mib',type=int,choices=range(0,1537,64),default=0,help='Harness-only reservation simulating co-resident process address-space pressure')
     parser.add_argument('--input-soak-seconds', type=int, choices=(30, 600), help='Real wall-clock native recorder endurance; capture-on/off use identical input owners')
@@ -70,6 +71,7 @@ def main(argv=None):
     if bool(args.x64_helper)!=bool(args.x64_dll):parser.error('x64 helper and DLL must be supplied together')
     if args.direct_surface_trial and not args.x64_helper:parser.error('direct surface requires the x64 helper')
     if args.async_bridge and not args.x64_helper:parser.error('async bridge requires the x64 helper')
+    if args.shader_root and not args.async_bridge:parser.error('shader root requires the async bridge')
     if args.pose_transitions and not args.async_bridge:parser.error('pose transitions require the async bridge')
     if args.window_witness_seconds and args.benchmark:
         parser.error('Window evidence competes for GPU/CPU; use a separate witness run from the benchmark')
@@ -126,7 +128,9 @@ def main(argv=None):
     if not (unit_root/'bindings.json').is_file():parser.error('unit pack is missing')
     for path in sorted(unit_root.rglob('*')):
         if path.is_file():inputs[path.relative_to(ROOT).as_posix()]=digest(path)
-    for unit in DLL_UNITS:inputs.update(unit_inputs(unit))
+    runtime_inputs={}
+    for unit in DLL_UNITS:runtime_inputs.update(unit_inputs(unit))
+    inputs.update(runtime_inputs)
     build_path=dll.parent/'build-evidence.json'
     build_record=json.loads(build_path.read_text()) if build_path.exists() else {}
     build_sources={path:value for closure in build_record.get('unit_inputs',{}).values() for path,value in closure.items()}
@@ -139,7 +143,7 @@ def main(argv=None):
         parser.error('diagnostic controls require a verified benchmark-oracle DLL')
     binary_provenance={'build_receipt':build_path.relative_to(ROOT).as_posix() if build_record else None,
         'build_receipt_sha256':digest(build_path) if build_record else None,
-        'current_runtime_matches_build':bool(build_sources) and all(build_sources.get(path)==value for path,value in inputs.items()),
+        'current_runtime_matches_build':bool(build_sources) and all(build_sources.get(path)==value for path,value in runtime_inputs.items()),
         'purpose':'Candidate or explicitly selected historical binary; harness inputs are recorded separately.'}
     for path in (scene,dll,jgl,ROOT/'injected_code.c',ROOT/'C3X.h',ROOT/'civ_prog_objects.csv',*[ROOT/'Renderer/native'/n for n in ('gpu_frame_preview.h','input_recording_soak.h','world_readiness_preview.h','gpu_camera_identity_preview.h','native_frame_workload.h','native_frame_benchmark.h','test_native_screen.h','test_native_bootstrap.h','test_native_worker.cpp','test_gpu_unit_composition.h','test_native_image_adapter.cpp','test_native_ui_assets.h','native_ui_fixture.py','test_native_observation.cpp','test_native_line_bridge.h','native_image_adapter.h','native_sprite_diagnostics.h','native_composition_owner.h','native_observation.h','gpu_image_worker_client.h','gpu_image_commands.h','color_quantization.h','test_gpu_frame_api.c','biq_preview.cpp','BUILD.bat','record_gpu_frame.py')]):inputs[path.relative_to(ROOT).as_posix()]=digest(path)
     if helper64:
@@ -149,9 +153,9 @@ def main(argv=None):
             path=ROOT/'Renderer/tools'/name;inputs[path.relative_to(ROOT).as_posix()]=digest(path)
     # Runtime HLSL is part of the result identity even when the DLL is unchanged.
     if args.async_bridge:
-        # Renderer64 uses the pinned runtime shader pack. Lab-generated shaders
-        # are not consumed by this candidate and may be under active editing.
-        shader_root=ROOT/'Renderer/packs/Renderer64CutoverControl'
+        # Qualify a private category promotion before changing the live bundle.
+        shader_root=(ROOT/(args.shader_root or 'Renderer/packs/Renderer64CutoverControl')).resolve()
+        if not shader_root.is_relative_to(ROOT):parser.error('shader root must be inside the repository')
         if not (shader_root/'Renderer/native/city_fidelity/terrain.hlsl').is_file():
             parser.error('Renderer64 runtime shader pack is missing')
         for path in sorted(shader_root.rglob('*')):
@@ -259,6 +263,8 @@ def main(argv=None):
     process=subprocess.run(['prlctl','exec',os.environ.get('C3X_RENDERER_VM','Windows 11'),'--current-user','cmd','/d','/s','/c',f'call "{target/"run.cmd"}"'],capture_output=True,text=True,timeout=max(900 if args.benchmark else 480, (args.input_soak_seconds or 0)+480, (args.window_witness_seconds or 0)+480))
     complete=(out/'completion.txt').read_text().split() if (out/'completion.txt').exists() else []
     log=(out/'test.log').read_text(errors='replace') if (out/'test.log').exists() else ''
+    if args.window_witness_seconds and (out/'test.stderr.log').exists():
+        log+='\n'+(out/'test.stderr.log').read_text(errors='replace')
     unchanged=all(digest(ROOT/p)==h for p,h in inputs.items())
     passed=complete==[invocation,'0'] and unchanged and 'PASS resident map GPU worker:' in log and 'PASS native GPU worker transport:' in log and 'PASS native screen transfer:' in log and 'PASS live native screen:' in log and 'PASS production native map owner:' in log and 'PASS bounded GPU map demand:' in log
     native_errors=[line for line in log.splitlines() if line.startswith('DIRECT_NATIVE_ERROR ')]

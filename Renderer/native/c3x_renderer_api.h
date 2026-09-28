@@ -14,7 +14,7 @@ typedef int32_t c3x_renderer_i32;
 typedef int64_t c3x_renderer_i64;
 #endif
 
-#define C3X_RENDERER_API_VERSION 19u
+#define C3X_RENDERER_API_VERSION 20u
 
 enum c3x_renderer_result {
     C3X_RENDERER_RESULT_ERROR = 0,
@@ -23,7 +23,8 @@ enum c3x_renderer_result {
     C3X_RENDERER_RESULT_DEVICE_ERROR = 3,
     C3X_RENDERER_RESULT_PENDING = 4,
     C3X_RENDERER_RESULT_SUPERSEDED = 5,
-    C3X_RENDERER_RESULT_PREVIEW = 6
+    C3X_RENDERER_RESULT_PREVIEW = 6,
+    C3X_RENDERER_RESULT_BUSY = 7 // Optional display offer; retry without queuing.
 };
 
 enum c3x_renderer_tile_flags {
@@ -226,6 +227,9 @@ struct c3x_renderer_tile_v1 {
     c3x_renderer_u32 city_flags;
     c3x_renderer_u32 has_effect;
     c3x_renderer_i32 territory_owner_id;
+    /* Native m17 edges: NW, NE, SW, SE. Palette color is display RGB. */
+    c3x_renderer_u32 territory_edge_mask;
+    c3x_renderer_u32 territory_color_rgb;
     c3x_renderer_i32 fog_status;
     c3x_renderer_u32 tile_visibility;
     char resource_name[24];
@@ -523,6 +527,15 @@ enum { C3X_NATIVE_IMAGE_KEYED_REGION = 125 };
 // Read-only form input query: from=int[2] local point, to=unsigned result.
 // Returns 1 for owned input coverage, 0 for ordinary native CPU UI.
 enum { C3X_NATIVE_HIT_PIXEL = 126 };
+/* Ordered display-only world composition; native working canvases stay canonical.
+   WORLD_* carry destination/source JGL images. ZOOM_TARGET color is Q16 scale;
+   ZOOM_PRESENTED returns the last successful display scale without an RPC. */
+enum { C3X_NATIVE_WORLD_BEGIN = 127, C3X_NATIVE_WORLD_END = 128,
+       C3X_NATIVE_ZOOM_TARGET = 129, C3X_NATIVE_ZOOM_PRESENTED = 130,
+       C3X_NATIVE_FIXED_UI_BEGIN = 131, C3X_NATIVE_FIXED_UI_END = 132,
+       C3X_NATIVE_HUD_BEGIN = 133, C3X_NATIVE_HUD_END = 134 };
+/* HUD_BEGIN: image=canonical canvas, from=int[2] canonical map attachment,
+   color=opaque native item identity. The scoped native draws keep pixel size. */
 struct c3x_renderer_native_stroke { int x1,y1,x2,y2,width,dash; unsigned argb; };
 /* Process-lifetime, read-only tracking. No scene/device/configuration required.
    VERIFY with null image establishes the owner; MAP queries eligibility. */

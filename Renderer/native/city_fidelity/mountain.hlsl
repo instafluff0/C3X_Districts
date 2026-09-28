@@ -164,7 +164,16 @@ struct P {
     float3 material : TEXCOORD2;
 #endif
 };
+#ifdef SANDBOX_TERRAIN_MATERIAL
+struct Output {
+    float4 color : SV_Target0;
+    float4 normal : SV_Target1;
+    float4 world : SV_Target2;
+    float4 properties : SV_Target3;
+};
+#else
 struct Output { float4 color : SV_Target0; float validity : SV_Target1; };
+#endif
 
 P VSMain(V input) {
     P output;
@@ -333,6 +342,85 @@ float4 ground_surface_sample(Texture2D tex, P input, float scale, float2 offset,
     return lerp(top,sides,ground_side_projection(input));
 }
 
+// This is the native-prepared terrain shader's ground branch at its flat handoff.
+// The relief grid replaces that provider over a mountain neighborhood, so its
+// zero-rise pixels must evaluate the same source family, hill, and detail
+// response. Keep this in sync with beauty_terrain.hlsl's ordinary branch.
+void ordinary_flat_material(P input, float3 geometric, out float3 albedo,
+                            out float height_detail, out float specular_map,
+                            out float3 normal) {
+    float2 uv0 = input.world.xy * 0.43 + float2(0.31, 0.17);
+    float2 uv1 = float2(input.world.y, -input.world.x) * (0.43 * 0.91) + float2(0.63, 0.29);
+    float2 tundra_uv = input.world.xy * (0.43 * 0.84) + float2(0.19, 0.71);
+    float3 grass_fine = GrassColor.Sample(Wrap, uv0).rgb;
+    float3 grass_low = GrassColor.SampleBias(Wrap, uv0, 7.0).rgb;
+    float3 grass_low_blend = (grass_low +
+        GrassColor.SampleBias(Wrap, uv0 + float2(.37, .11), 7.0).rgb +
+        GrassColor.SampleBias(Wrap, uv0 + float2(.13, .53), 7.0).rgb +
+        GrassColor.SampleBias(Wrap, uv0 + float2(.61, .71), 7.0).rgb) * .25;
+    float3 grass = grass_fine + grass_low_blend - grass_low;
+    float3 plains = PlainsColor.Sample(Wrap, uv1).rgb;
+    float3 tundra = TundraColor.Sample(Wrap, tundra_uv).rgb;
+    float grass_h = GrassHeight.Sample(Wrap, uv0).r;
+    float plains_h = PlainsHeight.Sample(Wrap, uv1).r;
+    float tundra_h = TundraHeight.Sample(Wrap, tundra_uv).r;
+    float grass_s = GrassSpecular.Sample(Wrap, uv0).r;
+    float plains_s = PlainsSpecular.Sample(Wrap, uv1).r;
+    float tundra_s = TundraSpecular.Sample(Wrap, tundra_uv).r;
+    float desert_weight = saturate(input.biome.y);
+    float tundra_weight = saturate(input.material.w / max(1 - desert_weight, 0.00001));
+    float plains_weight = saturate(input.biome.x /
+        max(1 - desert_weight - input.material.w, 0.00001));
+    float3 base = lerp(lerp(grass, plains, plains_weight), tundra, tundra_weight);
+    float base_h = lerp(lerp(grass_h, plains_h, plains_weight), tundra_h, tundra_weight);
+    float base_s = lerp(lerp(grass_s, plains_s, plains_weight), tundra_s, tundra_weight);
+    base = lerp(base, DesertColor.Sample(Wrap, uv0).rgb, desert_weight);
+    base_h = lerp(base_h, DesertHeight.Sample(Wrap, uv0).r, desert_weight);
+    base_s = lerp(base_s, DesertSpecular.Sample(Wrap, uv0).r, desert_weight);
+
+    float slope = 1 - saturate(geometric.z);
+    float rocky_band = input.material.z * smoothstep(0.09, 0.43, input.material.x) *
+                       (1 - tundra_weight) * saturate(0.42 + slope * 2.2);
+    float3 hill = lerp(GrassHillColor.Sample(Wrap, uv0 * 1.08).rgb,
+                       PlainsHillColor.Sample(Wrap, uv1 * 1.08).rgb, plains_weight);
+    hill = lerp(hill, tundra, tundra_weight);
+    float hill_h = lerp(GrassHillHeight.Sample(Wrap, uv0 * 1.08).r,
+                        PlainsHillHeight.Sample(Wrap, uv1 * 1.08).r, plains_weight);
+    hill_h = lerp(hill_h, tundra_h, tundra_weight);
+    float hill_s = lerp(GrassHillSpecular.Sample(Wrap, uv0 * 1.08).r,
+                        PlainsHillSpecular.Sample(Wrap, uv1 * 1.08).r, plains_weight);
+    hill_s = lerp(hill_s, tundra_s, tundra_weight);
+    float hill_ratio = hill.r / max(hill.g, 0.025);
+    float hill_blue_ratio = hill.b / max(hill.g, 0.025);
+    float hill_rock = max(smoothstep(0.83, 1.02, hill_ratio),
+                          smoothstep(0.31, 0.62, hill_blue_ratio));
+    float hill_luma = dot(hill, float3(0.2126, 0.7152, 0.0722));
+    float3 hill_stone = lerp(hill_luma.xxx, hill, 0.16) * float3(0.91, 0.96, 1.10) * 1.20;
+    hill = lerp(hill, hill_stone, hill_rock * 0.82);
+    albedo = lerp(base, hill, rocky_band * 0.90);
+    height_detail = lerp(base_h, hill_h, rocky_band);
+    specular_map = lerp(base_s, hill_s, rocky_band);
+    float grass_plains_detail = saturate(1 - tundra_weight - desert_weight) *
+        (1 - smoothstep(0.06, 0.45, input.material.z));
+    normal = detail_normal(geometric, input.world, height_detail,
+        0.075 * (1 + lerp(0.3, 0.9, plains_weight) * grass_plains_detail));
+    float broad = GroundSurfaceDetail.Sample(Wrap,
+        input.world.xy * 0.071 + float2(0.13, 0.37)).r * 0.72;
+    broad += GroundSurfaceDetail.Sample(Wrap,
+        float2(input.world.y, -input.world.x) * 0.183 + float2(0.61, 0.29)).r * 0.28;
+    broad = saturate(broad);
+    float broad_height = GroundSurfaceDetail.SampleBias(Wrap,
+        input.world.xy * 0.071 + float2(0.13, 0.37), 3).r;
+    normal = detail_normal(normal, input.world, broad_height,
+        0.35 * grass_plains_detail);
+    albedo *= lerp(float3(0.88, 0.94, 0.97),
+                   float3(1.09, 1.045, 0.91), broad);
+    albedo *= 1 + clamp((broad - 0.30) * 0.55, -0.12, 0.15) * grass_plains_detail;
+    float grain = GroundSurfaceDetail.Sample(Wrap,
+        input.world.xy * 0.61 + float2(0.41, 0.73)).r;
+    albedo *= 1 + clamp((grain - 0.303) * 0.9, -0.16, 0.22) * grass_plains_detail;
+}
+
 #endif
 
 void ground_material(P input, out float3 albedo, out float height_detail,
@@ -346,7 +434,15 @@ void ground_material(P input, out float3 albedo, out float height_detail,
         max(1 - desert_weight, 0.00001));
     float plains_weight = saturate(input.biome.x /
         max(1 - desert_weight - input.material.w, 0.00001));
-    float3 grass = ground_surface_sample(GrassColor, input, 0.43, float2(.31,.17), false).rgb;
+    float3 grass_fine = ground_surface_sample(GrassColor, input, 0.43, float2(.31,.17), false).rgb;
+    float2 grass_uv = input.world.xy * 0.43 + float2(.31,.17);
+    float3 grass_low = GrassColor.SampleBias(Wrap, grass_uv, 7.0).rgb;
+    float3 grass_low_blend = (grass_low +
+        GrassColor.SampleBias(Wrap, grass_uv + float2(.37,.11), 7.0).rgb +
+        GrassColor.SampleBias(Wrap, grass_uv + float2(.13,.53), 7.0).rgb +
+        GrassColor.SampleBias(Wrap, grass_uv + float2(.61,.71), 7.0).rgb) * .25;
+    float3 grass = grass_fine + (grass_low_blend - grass_low) *
+        (1 - ground_side_projection(input));
     float3 plains = ground_surface_sample(PlainsColor, input, 0.43*.91, float2(.63,.29), true).rgb;
     float3 tundra = ground_surface_sample(TundraColor, input, 0.43*.84, float2(.19,.71), false).rgb;
     albedo = lerp(lerp(grass, plains, plains_weight), tundra, tundra_weight);
@@ -396,6 +492,17 @@ void ground_material(P input, out float3 albedo, out float height_detail,
         float2(input.world.y, -input.world.x) * 0.183 + float2(0.61, 0.29)).r * 0.28;
     albedo *= lerp(float3(0.88, 0.94, 0.97),
                    float3(1.09, 1.045, 0.91), saturate(broad));
+    // Keep the grass/plains detail response continuous where a relief patch
+    // takes over from the ordinary terrain mesh. Both paths sample the same
+    // world-space field; desert and tundra keep their original response.
+    float grass_plains_detail = saturate(1 - tundra_weight - desert_weight) *
+        (1 - smoothstep(0.06, 0.45, input.material.z));
+    albedo *= 1 + clamp((saturate(broad) - 0.30) * 0.55, -0.12, 0.15) *
+              grass_plains_detail;
+    float grain = GroundSurfaceDetail.Sample(Wrap,
+        input.world.xy * 0.61 + float2(0.41, 0.73)).r;
+    albedo *= 1 + clamp((grain - 0.303) * 0.9, -0.16, 0.22) *
+              grass_plains_detail;
 #else
     float2 uv = input.world.xy * 0.27 + 0.5;
     albedo = GrassColor.Sample(Wrap, uv).rgb;
@@ -405,15 +512,14 @@ void ground_material(P input, out float3 albedo, out float height_detail,
 }
 
 
-// Eight independently bounded city fields fit within one D3D11 constant
-// buffer. The CPU selects intersecting cities per guarded block; overflow
-// fails the candidate draw instead of truncating a city's emitting facades.
+// The scene-light adapter below replaces these regional declarations with
+// a growable GPU field while keeping the shared material equations.
 cbuffer NativeCityLights : register(b6) {
  float4 CityLightCounts;
  float4 Q8LocalEnvelopeLow4;float4 Q8LocalEnvelopeHigh4;
- float4 Q8LocalPositionRange[1024];float4 Q8LocalColorIntensity[1024];
- float4 Q8LocalDirectionOwner[1024];float4 Q8LocalBoxLow[256];float4 Q8LocalBoxHigh[256];
 };
+StructuredBuffer<float4> CityLightData : register(t127);
+
 #define Q8_LOCAL_LIGHT_COUNT int(CityLightCounts.x)
 #define Q8_LOCAL_BLOCKER_COUNT int(CityLightCounts.y)
 #define Q8LocalEnvelopeLow Q8LocalEnvelopeLow4.xyz
@@ -445,25 +551,25 @@ float3 q8_local_irradiance(float4 world,float3 normal,float ambient_visibility) 
  if(any(receiver_position<Q8LocalEnvelopeLow) || any(receiver_position>Q8LocalEnvelopeHigh))return 0;
  float3 light_sum=0;
  [loop]for(int i=0;i<Q8_LOCAL_LIGHT_COUNT;i++) {
-  float3 to_light=Q8LocalPositionRange[i].xyz-receiver_position;
+  float3 to_light=CityLightData[3*(i)+0].xyz-receiver_position;
   float distance2=dot(to_light,to_light);
-  float range=Q8LocalPositionRange[i].w;
+  float range=CityLightData[3*(i)+0].w;
   if(distance2>=range*range)continue;
   float3 direction=to_light*rsqrt(max(distance2,1e-8));
-  float face=saturate(dot(Q8LocalDirectionOwner[i].xyz,-direction));
+  float face=saturate(dot(CityLightData[3*(i)+2].xyz,-direction));
   float diffuse=saturate(dot(normal,direction));
   if(face*diffuse<=0)continue;
   bool blocked=false;
 #if Q8_LOCAL_OCCLUSION
   [loop]for(int j=0;j<Q8_LOCAL_BLOCKER_COUNT;j++) {
-   if(j==int(Q8LocalDirectionOwner[i].w))continue;
-   if(q8_local_box_blocks(Q8LocalPositionRange[i].xyz,receiver_position,Q8LocalBoxLow[j].xyz,Q8LocalBoxHigh[j].xyz)) {blocked=true;break;}
+   if(j==int(CityLightData[3*(i)+2].w))continue;
+   if(q8_local_box_blocks(CityLightData[3*(i)+0].xyz,receiver_position,CityLightData[3*int(CityLightCounts.x)+2*(j)+0].xyz,CityLightData[3*int(CityLightCounts.x)+2*(j)+1].xyz)) {blocked=true;break;}
   }
 #endif
   if(blocked)continue;
   float normalized_distance=distance2/(range*range);
   float attenuation=pow(1-normalized_distance,2)/(1+8*normalized_distance);
-  light_sum+=Q8LocalColorIntensity[i].rgb*Q8LocalColorIntensity[i].w*attenuation*face*diffuse;
+  light_sum+=CityLightData[3*(i)+1].rgb*CityLightData[3*(i)+1].w*attenuation*face*diffuse;
  }
  return light_sum*(Q8_LOCAL_LIGHT_GAIN*CityLightCounts.z*CityLightCounts.w*ambient_visibility);
 }
@@ -472,7 +578,13 @@ Output shade(P input) {
     Output output;
     if (input.material.y < 0.5) {
         output.color = float4(atmosphere(input.uv.y), 1);
+#ifdef SANDBOX_TERRAIN_MATERIAL
+        output.normal = float4(0.5, 0.5, 1, 1);
+        output.world = float4(input.world, 1);
+        output.properties = float4(3, 1, 1, 1);
+#else
         output.validity = 1;
+#endif
         return output;
     }
 
@@ -508,8 +620,6 @@ Output shade(P input) {
     ground_material(input, ground_albedo, ground_height, ground_specular);
     if (input.material.y < 1.5) {
         albedo = ground_albedo;
-        float ground_luma = dot(albedo, float3(0.2126, 0.7152, 0.0722));
-        albedo = lerp(albedo, ground_luma.xxx, 0.15) * float3(1.03, 1.0, 0.92);
         height_detail = ground_height;
         specular_map = ground_specular;
     } else if (Quality.x < 0.5) {
@@ -592,6 +702,47 @@ Output shade(P input) {
     // gradients. This changes shading only, never the geometric surface.
     float rock_normal_strength = Quality.z * lerp(1.0, 1.60, rock_detail_coverage);
     float3 normal = Quality.x > 0.5 ? height_derivative_normal(geometric, input.world, lerp(float2(ddx(ground_height), ddy(ground_height)), rock_derivatives, rock_detail_coverage), rock_normal_strength) : geometric;
+    // At zero rise, the replacement patch must evaluate the ordinary terrain
+    // material and normal exactly; blend into the mountain response uphill.
+#ifdef BEAUTY_TERRAIN_TRANSITIONS
+    float3 flat_albedo;
+    float flat_height, flat_specular;
+    float3 flat_normal;
+    ordinary_flat_material(input, geometric, flat_albedo, flat_height,
+                           flat_specular, flat_normal);
+    float rise_blend = smoothstep(0.001, 0.02, mountain_rise);
+    float flat_handoff = (1 - rise_blend) *
+        (1 - smoothstep(0.006, 0.03, input.base_relief));
+    albedo = lerp(albedo, flat_albedo, flat_handoff);
+    height_detail = lerp(height_detail, flat_height, flat_handoff);
+    specular_map = lerp(specular_map, flat_specular, flat_handoff);
+    normal = normalize(lerp(normal, flat_normal, flat_handoff));
+#endif
+#ifdef SANDBOX_TERRAIN_MATERIAL
+#ifdef BEAUTY_VOLCANO_MATERIAL
+    albedo = volcano_albedo(albedo, input.volcano_owner, input.world.z);
+#endif
+    float altitude = input.material.y > 1.5 ? input.material.x : 0;
+    float mountain_cavity = lerp(0.76, 1.0, smoothstep(0.03, 0.48, altitude));
+    float ground_cavity = lerp(0.79, 1.0,
+        smoothstep(0.02, 0.30, input.base_relief));
+    float cavity = lerp(ground_cavity, mountain_cavity, rock_albedo_coverage);
+    float crevice = lerp(1.0, rock_crevice, rock_albedo_coverage);
+    float coast_inland = smoothstep(0.18, 0.86, coast_alpha);
+    float rock_material_class = rock_albedo_coverage;
+#ifdef BEAUTY_TERRAIN_TRANSITIONS
+    // The flat replacement fringe is ground; a raised relief face keeps the
+    // established rock lighting even while its albedo eases into stone.
+    rock_material_class = smoothstep(0.001, 0.02, mountain_rise);
+#endif
+    output.color = float4(albedo * coast_alpha, coast_alpha);
+    output.normal = float4((normal * 0.5 + 0.5) * coast_alpha, coast_alpha);
+    output.world = float4(input.world * coast_alpha, coast_alpha);
+    // The offset marks the rock material for the common relight shader.
+    output.properties = float4(float3(2 * rock_material_class + cavity, crevice, coast_inland) *
+                               coast_alpha, coast_alpha);
+    return output;
+#else
 #ifdef BEAUTY_COMPOSED_SHADOWS
     // The shared shadow-frame light is authoritative for both the BRDF and
     // projection, so every mountain face and cast shadow agrees in direction.
@@ -651,6 +802,7 @@ Output shade(P input) {
     output.color = float4(max(radiance, 0) * coast_alpha, coast_alpha);
     output.validity = coast_alpha;
     return output;
+#endif
 }
 
 Output PSMain(P input) { return shade(input); }

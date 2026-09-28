@@ -17,7 +17,115 @@ std::vector<unsigned> retained_read(ID3D11Device* d,ID3D11DeviceContext* c,ID3D1
 int test_retained_composition(){
     ComPtr<ID3D11Device> device;ComPtr<ID3D11DeviceContext> context;D3D_FEATURE_LEVEL level;
     checked(D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_HARDWARE,nullptr,0,nullptr,0,D3D11_SDK_VERSION,&device,&level,&context));
-    constexpr unsigned w=48,h=32;Rect full={0,0,w,h},part={5,3,38,26};unsigned checks=0;
+    constexpr unsigned w=48,h=32;Rect full={0,0,int(w),int(h)},part={5,3,38,26};unsigned checks=0;
+    {
+        // One captured world, including its map-attached marker, moves under
+        // an opaque fixed panel. No new native command is needed for any of
+        // the intermediate frames or the rapid reversal.
+        Compositor native(device.Get(),context.Get());RetainedComposition retained(device.Get(),context.Get());
+        auto world=native.create(w,h,Format::bgra32),screen=native.create(w,h,Format::bgra32);
+        std::vector<unsigned> pixels(w*h);
+        for(unsigned y=0;y<h;++y)for(unsigned x=0;x<w;++x)
+            pixels[y*w+x]=0xff000000u|(x*4<<16)|(y*7<<8)|((x+y)*3);
+        for(unsigned y=10;y<14;++y)for(unsigned x=29;x<33;++x)pixels[y*w+x]=0xffffe040;
+        assert(native.upload(world,1,pixels.data(),pixels.size()));
+        retained.create(world,w,h,Format::bgra32);retained.source(world,native.texture(world));
+        retained.create(screen,w,h,Format::bgra32);
+        auto transition=std::make_shared<c3x_renderer::ZoomTransition>();
+        retained.view(screen,world,transition);
+        Rect panel={0,0,9,7};unsigned panel_color=0xff17385a;
+        retained.record({Kind::fill,screen,0,panel,full,0,0,panel_color});retained.commit(screen,full);
+        bool rejected=false;try{retained.view(screen,screen,transition);}catch(std::invalid_argument const&){rejected=true;}
+        assert(rejected); // a repeated boundary must not zoom an already zoomed picture
+        auto expected_pixel=[&](unsigned x,unsigned y,double scale){
+            double px=(double(x)+.5-double(w/2))/scale+double(w/2)-.5;
+            double py=(double(y)+.5-double(h/2))/scale+double(h/2)-.5;
+            int left=int(std::floor(px)),top=int(std::floor(py));double fx=px-left,fy=py-top;
+            unsigned out=0;
+            for(unsigned shift:{0,8,16,24}){
+                auto channel=[&](int dx,int dy){return double((pixels[std::clamp(top+dy,0,int(h)-1)*w+
+                    std::clamp(left+dx,0,int(w)-1)]>>shift)&255);};
+                double a=channel(0,0)*(1-fx)+channel(1,0)*fx,b=channel(0,1)*(1-fx)+channel(1,1)*fx;
+                out|=unsigned(std::floor(a*(1-fy)+b*fy+.5))<<shift;
+            }return out;
+        };
+        transition->target(1.5,0,1000);
+        std::uint64_t warm_bytes=0,warm_allocations=0;
+        for(int tick=0;tick<=420;tick+=7){
+            if(tick==70)transition->target(1.,tick,1000);
+            if(tick==112)transition->target(1.25,tick,1000);
+            auto output=retained_read(device.Get(),context.Get(),retained.sample(tick,1000).Get());
+            double scale=float(transition->current());
+            for(unsigned y=0;y<h;++y)for(unsigned x=0;x<w;++x){
+                unsigned expected=x<9&&y<7?panel_color:expected_pixel(x,y,scale),actual=output[y*w+x];
+                for(unsigned shift:{0,8,16,24})assert(std::abs(int((actual>>shift)&255)-int((expected>>shift)&255))<=1);
+            }
+            if(tick==14){warm_bytes=retained.bytes();warm_allocations=retained.replay_stats().allocations;}
+            if(tick>14){assert(retained.bytes()==warm_bytes);assert(retained.replay_stats().allocations==warm_allocations);}
+        }
+        assert(retained_read(device.Get(),context.Get(),native.texture(world))==pixels);
+        // Actual Civ III UI uses paired packed words and full-color pixels.
+        // Transparent pixels in a fixed native form must reveal the zoomed
+        // world; opaque pixels must remain fixed in both 555 and 565 modes.
+        for(auto format:{Format::rgb555,Format::rgb565}){
+            auto words=native.create(w,h,format),detail=native.create(w,h,Format::bgra32),sprite=native.create(8,6,format);
+            retained.create(words,w,h,format);retained.create(detail,w,h,Format::bgra32);retained.create(sprite,8,6,format);
+            unsigned key=format==Format::rgb555?0x7c1f:0xf81f,ink=format==Format::rgb555?0x03e0:0x07e0;
+            std::vector<unsigned> form(48);for(unsigned i=0;i<form.size();++i)form[i]=i%3?key:ink;
+            assert(native.upload(sprite,1,form.data(),form.size()));retained.source(sprite,native.texture(sprite));
+            auto ui_zoom=std::make_shared<c3x_renderer::ZoomTransition>();ui_zoom->target(1.5,0,1000);
+            retained.view(detail,world,ui_zoom,words);
+            retained.record({Kind::native_image,words,sprite,{2,2,10,8},full,0,0,key,0,detail,0,8,6});
+            retained.commit(detail,full);
+            for(int tick:{0,35,70,140,280}){
+                auto output=retained_read(device.Get(),context.Get(),retained.sample(tick,1000).Get());
+                for(unsigned y=0;y<h;++y)for(unsigned x=0;x<w;++x){
+                    bool fixed=x>=2&&x<10&&y>=2&&y<8&&form[(y-2)*8+x-2]==ink;
+                    unsigned expected=fixed?0xff00ff00:expected_pixel(x,y,float(ui_zoom->current())),actual=output[y*w+x];
+                    for(unsigned shift:{0,8,16,24})assert(std::abs(int((actual>>shift)&255)-int((expected>>shift)&255))<=1);
+                }
+            }
+            retained.commit(detail,full);
+            auto color=retained_read(device.Get(),context.Get(),retained.sample(300,1000).Get());
+            retained.commit(words,full);
+            auto packed=retained_read(device.Get(),context.Get(),retained.sample(300,1000).Get());
+            for(unsigned y=0;y<h;++y)for(unsigned x=0;x<w;++x){
+                unsigned threshold=0;for(unsigned bit=0;bit<3;++bit){auto a=(x>>bit)&1,b=(y>>bit)&1;threshold=(threshold<<2)|((a^b)<<1)|b;}
+                unsigned expected=0;for(unsigned channel=0;channel<3;++channel){
+                    unsigned levels=channel==1&&format==Format::rgb565?63:31;
+                    unsigned scaled=((color[y*w+x]>>(channel*8))&255)*levels;
+                    unsigned q=scaled/255+((scaled%255)*128>(threshold*2+1)*255);
+                    expected|=q<<(channel==0?0:channel==1?5:format==Format::rgb565?11:10);
+                }assert(packed[y*w+x]==expected);
+            }
+            retained.destroy(words);retained.destroy(detail);retained.destroy(sprite);
+            native.destroy(words);native.destroy(detail);native.destroy(sprite);
+        }
+        std::puts("PASS zoom with native keyed UI: 555/565 pairs, fixed ink and transparent holes over ten intermediate views");
+        // A new camera source remains animated through the view operation.
+        // Retiring that camera must also retire its map-animation readiness.
+        bool frozen=false;unsigned samples=0;
+        retained.source(world,native.texture(world),[&](long long,long long){
+            ++samples;return frozen?RetainedComposition::SampledImage::frozen():RetainedComposition::SampledImage(native.texture(world));
+        },true,true);
+        retained.view(screen,world,transition);retained.commit(screen,full);
+        retained.sample(421,1000);assert(retained.animated_map()&&samples==1);
+        frozen=true;retained.sample(422,1000);assert(!retained.animated_map()&&samples==2);
+        retained.sample(423,1000);assert(samples==2);
+        // Erasing a fixed panel and replacing the world version cannot leave
+        // its old rectangle behind as the map continues to zoom.
+        std::fill(pixels.begin(),pixels.end(),0xff345678);
+        assert(native.upload(world,2,pixels.data(),pixels.size()));retained.source(world,native.texture(world));
+        retained.view(screen,world,transition);retained.commit(screen,full);
+        auto erased=retained_read(device.Get(),context.Get(),retained.sample(427,1000).Get());
+        assert(erased==pixels);
+        // A subsequent canonical upload does not mutate the selected version.
+        std::fill(pixels.begin(),pixels.end(),0xffabcdef);
+        assert(native.upload(world,3,pixels.data(),pixels.size()));retained.source(world,native.texture(world));
+        assert(retained_read(device.Get(),context.Get(),retained.sample(434,1000).Get())==erased);
+        retained.clear();assert(!retained.ready()&&retained.node_count()==0&&retained.bytes()==0);
+        std::puts("PASS retained zoom: 61 GPU samples, fixed UI, reversal, bounded storage, erasure and native version isolation");
+    }
     {
         // A native unit is first submitted in screen coordinates, then replayed
         // into a rectangle-local image when the animated map changes. Its body
@@ -619,6 +727,130 @@ int test_retained_composition(){
                std::vector<unsigned>(width*height,0xff876543u));
         std::printf("MEASURE unchanged full-screen native transfers: noops=%u/80 submit_ms=%.3f\n",
             unchanged,1000.*double(end.QuadPart-begin.QuadPart)/frequency.QuadPart);
+    }
+    {
+        // Native glyphs move with a map attachment but never grow, including
+        // during reversal. Their old rectangles reveal the current world.
+        Compositor native(device.Get(),context.Get());RetainedComposition retained(device.Get(),context.Get());
+        auto world=native.create(w,h,Format::bgra32),screen=native.create(w,h,Format::bgra32);
+        std::vector<unsigned> bg(w*h,0xff123456);assert(native.upload(world,1,bg.data(),bg.size()));
+        retained.create(world,w,h,Format::bgra32);retained.source(world,native.texture(world));retained.create(screen,w,h,Format::bgra32);
+        auto zoom=std::make_shared<c3x_renderer::ZoomTransition>();zoom->target(1.5,0,1000);
+        retained.view(screen,world,zoom);
+        Rect glyph={32,20,39,23};retained.record({Kind::fill,screen,0,glyph,full,0,0,0xfff0e0d0},{},zoom,36,22);
+        retained.commit(screen,full);
+        for(int tick=0;tick<=400;tick+=11){
+            if(tick==110)zoom->target(1.,tick,1000);
+            auto pixels=retained_read(device.Get(),context.Get(),retained.sample(tick,1000).Get());
+            int dx=int(std::lround(12*(zoom->current()-1))),dy=int(std::lround(6*(zoom->current()-1))),ink=0;
+            for(int y=0;y<int(h);++y)for(int x=0;x<int(w);++x){
+                bool marked=x>=glyph.left+dx&&x<glyph.right+dx&&y>=glyph.top+dy&&y<glyph.bottom+dy;
+                assert(pixels[y*w+x]==(marked?0xfff0e0d0:0xff123456));ink+=marked;
+            }
+            assert(ink==21);
+        }
+        std::puts("PASS native HUD placement: 37 intermediate/reversed views, invariant 7x3 ink, exact moving anchor and erased old positions");
+    }
+    {
+        // Exercise the production Session boundary, not just its view helper.
+        // Native dirty copies stay canonical; full map/unit sources are selected
+        // before fixed UI and remain coherent while no game commands arrive.
+        std::vector<unsigned> pixels(w*h),output;
+        for(unsigned y=0;y<h;++y)for(unsigned x=0;x<w;++x)pixels[y*w+x]=0xff000000u|(x*4<<16)|(y*7<<8)|((x+y)*3);
+        D3D11_TEXTURE2D_DESC desc={};desc.Width=w;desc.Height=h;desc.MipLevels=desc.ArraySize=desc.SampleDesc.Count=1;
+        desc.Format=DXGI_FORMAT_B8G8R8A8_UNORM;desc.BindFlags=D3D11_BIND_SHADER_RESOURCE;
+        D3D11_SUBRESOURCE_DATA initial={pixels.data(),w*4,0};ComPtr<ID3D11Texture2D> source;
+        checked(device->CreateTexture2D(&desc,&initial,&source));
+        Session session(device.Get(),context.Get());assert(session.publish(source.Get(),1));
+        c3x_renderer_gpu_images_v1 request={};request.struct_size=sizeof(request);request.ticket=1;
+        c3x_renderer_gpu_result_v1 result={};
+        auto create=[&](int format){request.action=C3X_GPU_CREATE;request.width=w;request.height=h;request.format=format;
+            assert(session.execute(request,{}, {},result,output)==1);return Id(result.image);};
+        auto map_words=create(C3X_GPU_RGB565),units=create(C3X_GPU_RGB565),unit_detail=create(C3X_GPU_BGRA32);
+        auto screen=create(C3X_GPU_RGB565),detail=create(C3X_GPU_BGRA32);
+        auto gui=create(C3X_GPU_RGB565),gui_detail=create(C3X_GPU_BGRA32);
+        auto blank=create(C3X_GPU_RGB565),blank_detail=create(C3X_GPU_BGRA32);
+        auto send=[&](std::vector<Command> const& commands){request={};request.struct_size=sizeof(request);request.ticket=1;request.action=C3X_GPU_SUBMIT;
+            assert(session.execute(request,commands,{},result,output)==1);};
+        Rect marker={29,10,33,14},panel={0,0,9,7};
+        send({{Kind::fill,blank,0,full,full,0,0,0x7c1f},{Kind::fill,blank_detail,0,full,full,0,0,0xffff00ff},
+              {Kind::fill,gui,0,full,full,0,0,0x7c1f},{Kind::fill,gui_detail,0,full,full,0,0,0xffff00ff},
+              {Kind::fill,gui,0,panel,full,0,0,0x1738},{Kind::fill,gui_detail,0,panel,full,0,0,0xff17385a}});
+        send({{Kind::quantize,map_words,session.map_image(),full,full},
+              {Kind::fill,units,0,full,full,0,0,0x7c1f},{Kind::fill,unit_detail,0,full,full,0,0,0xffff00ff},
+              {Kind::fill,units,0,marker,full,0,0,0x07e0},{Kind::fill,unit_detail,0,marker,full,0,0,0xff00ff00}});
+        for(int y=marker.top;y<marker.bottom;++y)for(int x=marker.left;x<marker.right;++x)pixels[y*w+x]=0xff00ff00;
+        Rect native_hud={9,8,14,11};
+        send({{Kind::hud_begin,units,0,{}, {},12,12,42,0,unit_detail,0,0x7c1f},
+              {Kind::fill,units,0,native_hud,full,0,0,0xffff},{Kind::fill,unit_detail,0,native_hud,full,0,0,0xffffffff},
+              {Kind::hud_end}});
+        unsigned boundaries=0;auto boundary=[&]{++boundaries;send({{Kind::copy,screen,map_words,full,part},
+            {Kind::world_begin,screen,map_words,full,full,0,0,65536,0,detail,session.map_image(),int(w),int(h)},
+            {Kind::native_image,screen,units,full,part,0,0,0x7c1f,0,detail,unit_detail,int(w),int(h)},
+            {Kind::world_end,screen,units,full,full,0,0,0x7c1f,0,detail,boundaries%2?unit_detail:0,int(w),int(h)},
+            {Kind::native_image,screen,gui,full,boundaries==1?full:part,0,0,0x7c1f,0,detail,gui_detail,int(w),int(h)}});assert(session.commit_display(1,detail,w,h,boundaries==1?full:part));};
+        desc.BindFlags=D3D11_BIND_RENDER_TARGET;ComPtr<ID3D11Texture2D> display,buffer;
+        checked(device->CreateTexture2D(&desc,nullptr,&display));checked(device->CreateTexture2D(&desc,nullptr,&buffer));
+        ComPtr<ID3D11RenderTargetView> target;checked(device->CreateRenderTargetView(display.Get(),nullptr,&target));
+        LARGE_INTEGER now={},frequency={};QueryPerformanceFrequency(&frequency);QueryPerformanceCounter(&now);
+        send({{Kind::fill,detail,0,full,full,0,0,0xff123456},{Kind::zoom_target,0,0,{}, {},0,0,98304}});
+        assert(session.commit_display(1,detail,w,h,full));
+        assert(session.visual_frame(now.QuadPart+frequency.QuadPart,frequency.QuadPart,target.Get(),display.Get(),buffer.Get())==1);
+        session.did_present();assert(session.presented_zoom()==65536); // target without an actual view must never change picking
+        boundary();QueryPerformanceCounter(&now);
+        send({{Kind::zoom_target,0,0,{}, {},0,0,98304}});
+        for(unsigned frame=1;frame<=16;++frame){
+            auto tick=now.QuadPart+frequency.QuadPart*frame/60;
+            assert(session.visual_frame(tick,frequency.QuadPart,target.Get(),display.Get(),buffer.Get())==1);
+            unsigned prior=session.presented_zoom();
+            if(frame==1)assert(prior==65536); // Sampling alone cannot move picking.
+            session.did_present();double scale=session.presented_zoom()/65536.;assert(scale>=1&&scale<=1.5);
+            auto actual=retained_read(device.Get(),context.Get(),display.Get());
+            for(unsigned y=0;y<h;++y)for(unsigned x=0;x<w;++x){
+                if(x<9&&y<7){assert(actual[y*w+x]==0xff17385a);continue;}
+                int hx=int(std::lround((12-int(w/2))*(scale-1))),hy=int(std::lround((12-int(h/2))*(scale-1)));
+                if(int(x)>=native_hud.left+hx&&int(x)<native_hud.right+hx&&int(y)>=native_hud.top+hy&&int(y)<native_hud.bottom+hy){
+                    assert(actual[y*w+x]==0xffffffff);continue;
+                }
+                double sx=std::clamp(double(w/2)+(double(x)+.5-w/2)/scale-.5,0.,double(w-1));
+                double sy=std::clamp(double(h/2)+(double(y)+.5-h/2)/scale-.5,0.,double(h-1));
+                unsigned ix=unsigned(sx),iy=unsigned(sy),jx=std::min(ix+1,w-1),jy=std::min(iy+1,h-1);
+                for(unsigned shift:{0u,8u,16u}){auto q=[&](unsigned xx,unsigned yy){return double((pixels[yy*w+xx]>>shift)&255);};
+                    double upper=q(ix,iy)+(q(jx,iy)-q(ix,iy))*(sx-ix),lower=q(ix,jy)+(q(jx,jy)-q(ix,jy))*(sx-ix);
+                    int expected=int(std::round(upper+(lower-upper)*(sy-iy)));
+                    if(std::abs(int((actual[y*w+x]>>shift)&255)-expected)>1){
+                        std::fprintf(stderr,"ZOOM mismatch frame=%u scale=%.8f pixel=%u,%u channel=%u actual=%08x expected=%d\n",frame,scale,x,y,shift,actual[y*w+x],expected);assert(false);
+                    }
+                }
+            }
+            // Repeated native partial draws must never select the old zoomed
+            // screen as their world input or multiply its scale again.
+            if(frame%3==0)boundary();
+        }
+        // A city repaint can arrive with a narrow native dirty rectangle.
+        // The new map view retires every placement from the previous view,
+        // including labels outside that native rectangle.
+        send({{Kind::copy,units,blank,full,full},
+              {Kind::copy,unit_detail,blank_detail,full,full},
+              {Kind::hud_begin,units,0,{}, {},30,20,43,0,unit_detail,0,0x7c1f},
+              {Kind::fill,units,0,{28,20,33,23},full,0,0,0xffff},
+              {Kind::fill,unit_detail,0,{28,20,33,23},full,0,0,0xffffffff},{Kind::hud_end},
+              {Kind::world_begin,screen,map_words,full,full,0,0,65536,0,detail,session.map_image(),int(w),int(h)},
+              {Kind::world_end,screen,units,full,full,0,0,0x7c1f,0,detail,unit_detail,int(w),int(h)},
+              {Kind::native_image,screen,gui,full,{28,20,33,23},0,0,0x7c1f,0,detail,gui_detail,int(w),int(h)}});
+        assert(session.commit_display(1,detail,w,h,{28,20,33,23}));
+        assert(session.visual_frame(now.QuadPart+frequency.QuadPart,frequency.QuadPart,target.Get(),display.Get(),buffer.Get())==1);
+        auto moved=retained_read(device.Get(),context.Get(),display.Get());
+        unsigned ink=0;for(unsigned y=0;y<h;++y)for(unsigned x=0;x<w;++x){
+            if(moved[y*w+x]==0xffffffff){++ink;assert(x>=31&&x<36&&y>=22&&y<25);}
+            if(x<9&&y<7)assert(moved[y*w+x]==0xff17385a);
+        }assert(ink==15);
+        std::puts("PASS camera HUD replacement: partial native publication, one current label, erased old position, fixed panel preserved");
+        request={};request.struct_size=sizeof(request);request.ticket=1;request.action=C3X_GPU_READBACK;
+        request.image=unit_detail;request.pixel_count=w*h;
+        assert(session.execute(request,{}, {},result,output)==1);
+        assert(output[0]==0xffff00ff&&output[20*w+28]==0xffffffff);
+        std::puts("PASS live zoom Session: 16 intermediate GPU frames, partial native copies, fixed panel, marker alignment, present-only picking and canonical source preservation");
     }
     std::printf("PASS retained composition: %u exact GPU oracles, 120 independent clock frames, aliasing, paired 555/565/full color, UI versioning, partial publication, bounded overwrite and reset\n",checks);return 0;
 }

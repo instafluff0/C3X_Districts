@@ -127,17 +127,21 @@ struct Core {
         if(GetEnvironmentVariableA("C3X_RENDERER_MANUAL_VISUAL",manual,sizeof(manual))==1&&manual[0]=='1'){direct_cadence.disable();return;}
         // A newly committed static UI also needs its first sample. Unchanged
         // static fronts return PENDING without drawing or presenting again.
-        direct_cadence.enable([this]{
+        direct_cadence.enable_retrying([this]{
             LARGE_INTEGER now={},frequency={};
-            if(!QueryPerformanceCounter(&now)||!QueryPerformanceFrequency(&frequency))return;
+            if(!QueryPerformanceCounter(&now)||!QueryPerformanceFrequency(&frequency))return false;
             std::uint64_t handle=0;unsigned width=0,height=0;
             int code=visual_shared(now.QuadPart,frequency.QuadPart,0,&handle,&width,&height);
-            if(code==C3X_RENDERER_RESULT_OK&&telemetry)
+            if(code==C3X_RENDERER_RESULT_OK&&telemetry){
+                InterlockedExchange(reinterpret_cast<volatile LONG*>(&telemetry->presented_zoom_q16),
+                    native_image(C3X_NATIVE_ZOOM_PRESENTED,nullptr,nullptr,nullptr,nullptr,0));
                 InterlockedIncrement(reinterpret_cast<volatile LONG*>(&telemetry->visual_frames));
+            }
             if(code==C3X_RENDERER_RESULT_ERROR||code==C3X_RENDERER_RESULT_DEVICE_ERROR){
                 OutputDebugStringA("[C3X renderer] Renderer64 visual surface unavailable\n");
                 direct_cadence.disable();
             }
+            return code==C3X_RENDERER_RESULT_BUSY;
         });
     }
     void stop_direct_cadence(){direct_cadence.stop();direct_display_ready=false;}

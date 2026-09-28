@@ -25,7 +25,8 @@
     "Renderer/lab/shared/natural/queries.h",
     "Renderer/lab/shared/shaders/relief/beauty_terrain.hlsl",
     "Renderer/native/source_fidelity/prepare.py",
-    "Renderer/native/source_fidelity/geometry.h"
+    "Renderer/native/source_fidelity/geometry.h",
+    "Renderer/sandbox/water_surface.hlsl"
   ],
   "recipe": {
     "terrain": 2,

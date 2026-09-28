@@ -27,7 +27,7 @@ public:
     void reset(){vertex.Reset();pixel.Reset();settings.Reset();records.Reset();blend.Reset();raster.Reset();depth.Reset();buffer.Reset();view.Reset();actor_stencil.Reset();actors=nullptr;target=nullptr;width=height=capacity=0;}
     bool apply(ID3D11Device* device,ID3D11DeviceContext* context,ID3D11Texture2D* source,
                render_core::VisibilityCoverage const& coverage,
-               ID3D11Texture2D* visible_actors=nullptr,unsigned actor_guard=0){
+               ID3D11Texture2D* visible_actors=nullptr,unsigned actor_guard=0,float zoom=1.f){
         if(coverage.tiles.empty())return true;
         if(!source)return false;
         if(!vertex){
@@ -41,6 +41,7 @@ V vs(uint vertex:SV_VertexID,uint instance:SV_InstanceID){
  float2 uv[6]={float2(0,0),float2(1,0),float2(1,1),float2(0,0),float2(1,1),float2(0,1)};
  V v;v.uv=uv[vertex];Record r=records[instance];v.cells=r.cells;
  float2 p=r.anchor+float2(1+v.uv.x-v.uv.y,v.uv.x+v.uv.y)*size.zw*.5f;
+ p=(p-floor(size.xy*.5))*response.w+floor(size.xy*.5);
  v.position=float4(p.x*2/size.x-1,1-p.y*2/size.y,0,1);return v;
 }
 float value(uint cells,int x,int y,uint threshold){return ((cells>>(2*((y+1)*3+x+1)))&3)>=threshold?1.f:0.f;}
@@ -113,7 +114,7 @@ float4 ps(V v):SV_Target{
         }
         D3D11_BOX range={0,0,0,bytes,1,1};context->UpdateSubresource(buffer.Get(),0,&range,coverage.tiles.data(),0,0);
         float constants[]={float(width),float(height),float(coverage.tile_width),float(coverage.tile_height),
-            render_core::VisibilityCoverage::feather,render_core::VisibilityCoverage::gray,render_core::VisibilityCoverage::fog_alpha,0,
+            render_core::VisibilityCoverage::feather,render_core::VisibilityCoverage::gray,render_core::VisibilityCoverage::fog_alpha,zoom,
             float(actor_guard),float(actor_samples),0,0};
         context->UpdateSubresource(settings.Get(),0,nullptr,constants,0,0);
         context->OMSetRenderTargets(0,nullptr,nullptr);

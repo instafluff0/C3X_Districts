@@ -120,6 +120,7 @@ public:
         transport(std::forward<Args>(args)...),enabled(asynchronous),publication(std::move(report)){}
     ~AsyncSceneClient(){publication.stop();}
     bool asynchronous()const{return enabled;}
+    unsigned presented_zoom()const{return transport.presented_zoom();}
     void observe_publication(std::function<void(char const*,double,double)> observer){publication.observe(std::move(observer));}
     bool alive()const{return publication.healthy()&&transport.alive();}
     void progress(unsigned& accepted,unsigned& completed,unsigned& frames)const{

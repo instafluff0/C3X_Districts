@@ -108,28 +108,31 @@ int main(){OpenGLRenderer context;
 #include <array>
 #define Main_Screen_Form_move_camera native_move
 #define ARRAY_LEN(x) (sizeof(x)/sizeof((x)[0]))
-constexpr int VK_Z=90,__=0,C3X_RENDERER_DIRTY_ALL=255;
+constexpr int VK_Z=90,__=0,C3X_RENDERER_DIRTY_ALL=255,C3X_NATIVE_ZOOM_TARGET=129;
 struct Main_Screen_Form {bool is_now_loading_game=false;int camera_x=0,camera_y=0;};
 struct State {struct {bool enable_custom_rendering=true,enable_custom_rendering_zoom=true;} current_config;
+ int custom_renderer_zoom_target_width=128;
+ int (*custom_renderer_native_image)(int,void*,void*,void const*,void const*,unsigned)=nullptr;
  int custom_renderer_zoom_tile_width=128,custom_renderer_dirty_flags=0;bool custom_renderer_redraw_pending=false;
  long long custom_renderer_zoom_translate_x_fp=0,custom_renderer_zoom_translate_y_fp=0;} state,*is=&state;
-struct Bic {int ScreenWidth=2240,ScreenHeight=1260;} bic,*p_bic_data=&bic;
+struct Bic {struct{struct{void* spotlight_on_city=nullptr;}Renderer;}Map;int ScreenWidth=2240,ScreenHeight=1260;} bic,*p_bic_data=&bic;
 int players=1,*p_player_bits=&players,moves=0;
 void sync_custom_renderer_zoom_to_native(){}
 void debug(char const*){}auto p_OutputDebugStringA=debug;
+int target(int op,void*,void*,void const*,void const*,unsigned q){assert(op==129&&q>=65536&&q<=98304);return 1;}
 void native_move(Main_Screen_Form* screen,int,int x,int y,int reason,bool bounds){
  assert(x==screen->camera_x&&y==screen->camera_y&&reason==0&&bounds);++moves;
 }
 ''' + function.replace('this', 'screen') + r'''
 int main(){
  for(int x:{-129,0,3616,3679})for(int y:{-17,0,394,427}){
-  Main_Screen_Form screen;screen.camera_x=x;screen.camera_y=y;
+  Main_Screen_Form screen;state.custom_renderer_native_image=target;screen.camera_x=x;screen.camera_y=y;
   state.custom_renderer_zoom_tile_width=128;
   state.custom_renderer_zoom_translate_x_fp=state.custom_renderer_zoom_translate_y_fp=0;
   for(int n=0;n<120;++n){assert(advance_custom_renderer_zoom_from_key(&screen,0,VK_Z));
    assert(screen.camera_x==x&&screen.camera_y==y);
   }
-  assert(state.custom_renderer_zoom_tile_width==128);
+  assert(state.custom_renderer_zoom_tile_width==128&&state.custom_renderer_zoom_target_width==128&&moves==0);
   assert(state.custom_renderer_zoom_translate_x_fp==0&&state.custom_renderer_zoom_translate_y_fp==0);
   state.current_config.enable_custom_rendering=false;auto before=moves;
   assert(!advance_custom_renderer_zoom_from_key(&screen,0,VK_Z)&&moves==before);
@@ -182,6 +185,7 @@ int main(){
         functions=functions[:start]+functions[functions.index('\n}\n',start)+3:]
         functions = functions.replace("this", "screen")
         program = r'''
+#include <cstdint>
 #include <cassert>
 #include <cstdio>
 #include <cstddef>
@@ -193,26 +197,28 @@ constexpr int __=0;
 struct State {bool custom_renderer_trace_input=false;
  struct {bool enable_custom_rendering=false;} current_config;
  c3x_renderer_native_image_fn custom_renderer_native_image=nullptr;
- int custom_renderer_zoom_native_tile_width=128,custom_renderer_zoom_tile_width=128;
+ void* custom_renderer_hud_canvas=nullptr;int custom_renderer_zoom_native_tile_width=128,custom_renderer_zoom_tile_width=128;
  long long custom_renderer_zoom_translate_x_fp=0,custom_renderer_zoom_translate_y_fp=0;
 } state,*is=&state;
 struct CityForm {struct {struct {int Status2=0;} Data;} Base;} city,*p_city_form=&city;
 using JGL_Image=void;
 struct Main_Screen_Form {int mouse_x=0,mouse_y=0;struct {struct {struct {struct {JGL_Image* Image=nullptr;} JGL;} Canvas;} Data;} Units_Control;struct {struct {struct {JGL_Image* Image=nullptr;} JGL;} Canvas;} Base_Data;} main_screen,*p_main_screen_form=&main_screen;
-struct Unit{};struct Animator{int field_18E4[32]{};};struct PCX_Image{};struct PCX_Color_Table{};
+struct Unit{};struct Animator{int field_18E4[32]{};};struct PCX_Image{struct {void* Image=nullptr;} JGL;};struct PCX_Color_Table{};
 void Main_Screen_Form_update_in_go_to_mode(Main_Screen_Form*,int){}
 void Main_Screen_Form_draw_route_cursor(int,int){}
 void debug(char const*){}auto p_OutputDebugStringA=debug;
 struct Sprite{int Width=95,Height=63;};
-struct Bic{bool is_zoomed_out=false;} bic,*p_bic_data=&bic;
+struct Bic{bool is_zoomed_out=false;int ScreenWidth=2240,ScreenHeight=1260;} bic,*p_bic_data=&bic;
 int status_calls=0,cursor_calls=0,marker_calls=0,overlay_x=0,overlay_y=0;
 int ring_calls=0;
 int native_image(int op,void*,void*,void const* from,void const*,unsigned){
+ if(op==C3X_NATIVE_ZOOM_PRESENTED)return 65536;
  if(op==C3X_NATIVE_TACTICAL_CAPABLE)return 1;
  assert(op==C3X_NATIVE_TACTICAL_RING);
  auto ring=static_cast<int const*>(from);assert(ring[2]==(bic.is_zoomed_out?64:128)&&ring[3]==1);
  overlay_x=ring[0];overlay_y=ring[1];++ring_calls;return 1;
 }
+int custom_renderer_hud_scope(void*,int,int,unsigned){return 0;}
 PCX_Image canvas;PCX_Color_Table palette;
 void Unit_draw_status(Unit*,int,PCX_Image* c,int x,int y,bool stack){
  assert(c==&canvas&&stack);++status_calls;overlay_x=x;overlay_y=y;
@@ -230,7 +236,7 @@ int Main_Screen_Form_get_tile_coords_under_mouse(Main_Screen_Form*,int,int x,int
  passed_x=x;passed_y=y;*tx=x/64;*ty=y/32;return 0;
 }
 void Main_Screen_Form_tile_to_screen_coords(Main_Screen_Form*,int,int,int,int* x,int* y){*x=anchor_x;*y=anchor_y;}
-''' + functions + r'''
+''' + functions.replace('(unsigned)screen', '(unsigned)(uintptr_t)screen') + r'''
 int main(){
  Main_Screen_Form screen;
  state.current_config.enable_custom_rendering=true;
@@ -337,7 +343,7 @@ int main(){
 #include <cstddef>
 #define __fastcall
 constexpr int __=0,IS_OK=1;
-struct Unit{struct {int X=2,Y=4,ID=7,army_top_defender_id=-1;}Body;};struct PCX_Image{};
+struct Unit{struct {int X=2,Y=4,ID=7,army_top_defender_id=-1;}Body;};struct PCX_Image{struct {void* Image=nullptr;} JGL;};
 constexpr unsigned C3X_RENDERER_TILE_VISIBLE=1;constexpr int UTA_Army=1,C3X_RENDERER_UNIT_STATE_OBSERVE=1;
 void notify_custom_renderer_unit_state(Unit*,int){}
 struct Tile{};Tile tile;bool visible=true;Tile* tile_at(int,int){return &tile;}
@@ -380,22 +386,26 @@ int main(){
             "void\nsync_custom_renderer_zoom_to_native", 1)[1].split(
             "\nint\ncustom_renderer_zoom_transform_coordinate", 1)[0]
         program = r'''
+#include <cstdint>
 #include <cassert>
 #include <cstdio>
 #define ARRAY_LEN(a) (sizeof(a)/sizeof((a)[0]))
-enum {VK_Z=90,C3X_RENDERER_DIRTY_ALL=255,__=0};
+enum {VK_Z=90,C3X_RENDERER_DIRTY_ALL=255,__=0,C3X_NATIVE_ZOOM_TARGET=129};
 #define Main_Screen_Form_move_camera native_move
 #define Main_Screen_Form_process_mouse_wheel native_wheel
 #define __fastcall
 struct Main_Screen_Form {bool is_now_loading_game=false;int camera_x=3616,camera_y=394;};
 struct State {
  struct {bool enable_custom_rendering=true,enable_custom_rendering_zoom=true;} current_config;
+ int custom_renderer_zoom_target_width=128;
+ int (*custom_renderer_native_image)(int,void*,void*,void const*,void const*,unsigned)=nullptr;
  int custom_renderer_zoom_native_tile_width=0,custom_renderer_zoom_tile_width=0,custom_renderer_zoom_wheel_remainder=0;
  long long custom_renderer_zoom_translate_x_fp=0,custom_renderer_zoom_translate_y_fp=0;
  int custom_renderer_dirty_flags=0;bool custom_renderer_redraw_pending=false;
 } state,*is=&state;
-struct Bic {bool is_zoomed_out=false;int ScreenWidth=1024,ScreenHeight=768;} bic,*p_bic_data=&bic;
-int player_bits=1,*p_player_bits=&player_bits,redraws=0;
+struct Bic {struct{struct{void* spotlight_on_city=nullptr;}Renderer;}Map;bool is_zoomed_out=false;int ScreenWidth=1024,ScreenHeight=768;} bic,*p_bic_data=&bic;
+int player_bits=1,*p_player_bits=&player_bits,redraws=0,targets=0;
+int target(int op,void*,void*,void const*,void const*,unsigned q){assert(op==129&&q>=65536&&q<=98304);++targets;return 1;}
 void debug(char const*){} auto p_OutputDebugStringA=debug;
 void native_move(Main_Screen_Form* s,int,int x,int y,int reason,bool bounds){assert(x==s->camera_x&&y==s->camera_y&&reason==0&&bounds);++redraws;}
 int wheel_calls=0;
@@ -404,19 +414,19 @@ void native_wheel(Main_Screen_Form*,int edx,int delta,int x,int y){
 }
 ''' + sync + key + r'''
 int main(){
- Main_Screen_Form screen;
+ Main_Screen_Form screen;state.custom_renderer_native_image=target;
  sync_custom_renderer_zoom_to_native();assert(state.custom_renderer_zoom_tile_width==128);
  for(int cycle=0;cycle<3;cycle++)for(int width:{192,160,128}){
   assert(advance_custom_renderer_zoom_from_key(&screen,'z',VK_Z));
-  assert(state.custom_renderer_zoom_tile_width==width);
+  assert(state.custom_renderer_zoom_target_width==width&&state.custom_renderer_zoom_tile_width==128);
   auto x=state.custom_renderer_zoom_translate_x_fp,y=state.custom_renderer_zoom_translate_y_fp;
   sync_custom_renderer_zoom_to_native(); // Close zoom must not reset during rendering.
-  assert(state.custom_renderer_zoom_tile_width==width);
+  assert(state.custom_renderer_zoom_target_width==width&&state.custom_renderer_zoom_tile_width==128);
   assert(state.custom_renderer_zoom_translate_x_fp==x && state.custom_renderer_zoom_translate_y_fp==y);
  }
- assert(redraws==9);
+ assert(redraws==0);
  state.current_config.enable_custom_rendering_zoom=false;
- assert(!advance_custom_renderer_zoom_from_key(&screen,'z',VK_Z));assert(redraws==9);
+ assert(!advance_custom_renderer_zoom_from_key(&screen,'z',VK_Z));assert(redraws==0);
  state.current_config.enable_custom_rendering_zoom=true;
  screen.is_now_loading_game=true;assert(!advance_custom_renderer_zoom_from_key(&screen,'z',VK_Z));
  screen.is_now_loading_game=false;player_bits=0;assert(!advance_custom_renderer_zoom_from_key(&screen,'z',VK_Z));
@@ -426,7 +436,7 @@ int main(){
  assert(state.custom_renderer_zoom_translate_x_fp==-512LL*65536);
  assert(state.custom_renderer_zoom_translate_y_fp==-384LL*65536);
  assert(advance_custom_renderer_zoom_from_key(&screen,'z',VK_Z));
- sync_custom_renderer_zoom_to_native();assert(state.custom_renderer_zoom_tile_width==192);
+ sync_custom_renderer_zoom_to_native();assert(state.custom_renderer_zoom_target_width==192&&state.custom_renderer_zoom_tile_width==128);
  state.custom_renderer_zoom_tile_width=256;sync_custom_renderer_zoom_to_native();
  assert(state.custom_renderer_zoom_tile_width==128 && state.custom_renderer_zoom_translate_x_fp==-512LL*65536);
  for(int retired:{64,96}){state.custom_renderer_zoom_tile_width=retired;sync_custom_renderer_zoom_to_native();
@@ -450,12 +460,18 @@ int main(){
  player_bits=1;screen.is_now_loading_game=false;
  auto wheel=[&](int delta){patch_Main_Screen_Form_process_mouse_wheel(&screen,73,delta,413,211);};
  wheel(40);wheel(40);assert(state.custom_renderer_zoom_tile_width==128);
- wheel(40);assert(state.custom_renderer_zoom_tile_width==160&&state.custom_renderer_zoom_wheel_remainder==0);
- wheel(240);assert(state.custom_renderer_zoom_tile_width==192);
- auto at_limit=redraws;wheel(120);assert(redraws==at_limit&&state.custom_renderer_zoom_tile_width==192);
- wheel(-120);assert(state.custom_renderer_zoom_tile_width==160);
+ wheel(40);assert(state.custom_renderer_zoom_target_width==160&&state.custom_renderer_zoom_tile_width==128&&state.custom_renderer_zoom_wheel_remainder==0);
+ wheel(240);assert(state.custom_renderer_zoom_target_width==192&&state.custom_renderer_zoom_tile_width==128);
+ auto at_limit=targets;wheel(120);assert(targets==at_limit&&state.custom_renderer_zoom_target_width==192&&state.custom_renderer_zoom_tile_width==128);
+ wheel(-120);assert(state.custom_renderer_zoom_target_width==160&&state.custom_renderer_zoom_tile_width==128);
  wheel(-240);assert(state.custom_renderer_zoom_tile_width==128);
- at_limit=redraws;wheel(-120);wheel(0);assert(redraws==at_limit);
+ at_limit=targets;wheel(-120);wheel(0);assert(targets==at_limit);
+ bic.Map.Renderer.spotlight_on_city=&screen;
+ auto before_city=targets;wheel(120);assert(targets==before_city);
+ assert(!advance_custom_renderer_zoom_from_key(&screen,'z',VK_Z));
+ assert(state.custom_renderer_zoom_target_width==128&&state.custom_renderer_zoom_wheel_remainder==0);
+ bic.Map.Renderer.spotlight_on_city=nullptr;
+ assert(state.custom_renderer_dirty_flags==0&&!state.custom_renderer_redraw_pending&&redraws==0);
  assert(screen.camera_x==3616&&screen.camera_y==394&&wheel_calls==4);
  assert(state.custom_renderer_zoom_translate_x_fp==0&&state.custom_renderer_zoom_translate_y_fp==0);
 }
@@ -483,13 +499,13 @@ int main(){
             log.write_text("\n".join(lines).replace("error=0", "error=1",1))
             with self.assertRaisesRegex(ValueError,"exact"):run("inexact",folder,"zoom")
 
-    def test_key_handler_queues_native_redraw_without_indirect_dispatch(self) -> None:
+    def test_key_handler_only_publishes_a_zoom_target(self) -> None:
         source = (ROOT / "injected_code.c").read_text()
         handler = source.split("advance_custom_renderer_zoom (", 1)[1]
         handler = handler.split("patch_Main_Screen_Form_handle_key_down", 1)[0]
-        self.assertIn("custom_renderer_redraw_pending = true", handler)
-        self.assertIn("stage=zoom-key", handler)
-        self.assertIn("this->camera_x, this->camera_y, 0, true", handler)
+        self.assertNotIn("custom_renderer_redraw_pending = true", handler)
+        self.assertIn("stage=zoom-target", handler)
+        self.assertNotIn("Main_Screen_Form_move_camera", handler)
         self.assertNotIn("m73_call_m22_Draw", handler)
         self.assertNotIn("custom_renderer_original_mouse_wheel", handler)
         self.assertNotIn("ensure_custom_renderer_mouse_wheel_hook", source)

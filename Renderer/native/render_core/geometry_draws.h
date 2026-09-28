@@ -13,6 +13,7 @@ template<class Chunk> struct GeometryDrawRecord {
     int translation_x=0,translation_y=0;
     float natural_projection[4]={};
     int tile_x=0,tile_y=0;
+    unsigned territory_edges=0,territory_rgb=0;
     bool water_dependent=false,water_visible=true; // Per-occurrence visibility, never resident mesh state.
 
     GeometryDrawRecord()=default;
