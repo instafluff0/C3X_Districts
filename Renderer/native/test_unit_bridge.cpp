@@ -20,7 +20,7 @@ struct JGL_Image;
 struct PCXV {HDC (__fastcall *acquire_dc)(JGL_Image*);void (__fastcall *release_dc)(JGL_Image*,int,int);};
 struct JGL_Image {PCXV* vtable;};
 struct PCX_Image {struct {JGL_Image* Image;} JGL;};
-struct Animation_Info {int* Frame_Counts;};
+struct Animation_Info {int* Frame_Counts;float* anim_frame_time_seconds;};
 struct Summary {int current_anim_type=2,queued_anim_type=0,direction_2=3,pixel_loc_x=640,pixel_loc_y=480,pixel_target_x=720,pixel_target_y=520;};
 struct Animation {struct {void* Flic_Info;Sprite sprite;} Frame_1;Animation_Info* Animation_Info;Summary summary;int field_FC=7;};
 struct Rect {int left=20,top=30,right=45,bottom=55;};
@@ -29,11 +29,12 @@ struct Unit {struct {Rect Rect;int ID=42,UnitTypeID=0,X=2,Y=4,Damage=2;int army_
 struct UnitType {char Civilipedia_Entry[32]="PRTO_Archer";};
 struct Bic {int UnitTypeCount=1;UnitType* UnitTypes;bool is_zoomed_out=false;};
 struct State {int custom_renderer_native_operation=123;Unit* custom_renderer_unit_context=nullptr;PCX_Image* custom_renderer_unit_canvas=nullptr;
- char custom_renderer_test_save[1]={};
+ char custom_renderer_test_save[1]={};int custom_renderer_test_step=0;
  c3x_renderer_unit_forget_fn custom_renderer_unit_forget=nullptr;
  c3x_renderer_unit_draw_background_fn custom_renderer_unit_draw=nullptr;
  c3x_renderer_unit_draw_playback_fn custom_renderer_unit_draw_playback=nullptr;
  c3x_renderer_unit_visual_fn custom_renderer_unit_visual=nullptr;
+ c3x_renderer_unit_animation_fn custom_renderer_unit_animation=nullptr;
  c3x_renderer_unit_draw_expanded_fn custom_renderer_unit_draw_expanded=nullptr;int custom_renderer_init_state=1;
  struct {bool enable_custom_rendering=true,enable_custom_rendering_zoom=false;int day_night_cycle_mode=0,seasonal_cycle_mode=0;} current_config;
  int custom_renderer_zoom_tile_width=128,custom_renderer_zoom_native_tile_width=128;
@@ -50,12 +51,17 @@ unsigned playback_flags=0;
 State state;State* is=&state;Bic bic;Bic* p_bic_data=&bic;PCX_Color_Table fixture_palette;
 std::vector<int> calls;c3x_renderer_unit_v1 captured;bool success=true,fixture_reduced=false;int dc_count=0;PCX_Image* fixture_background=nullptr;JGL_Image* denied_dc=nullptr;
 c3x_renderer_unit_visual_v1 captured_visual{};int visual_calls=0;
-int state_calls=0;
+int state_calls=0,animation_calls=0;
+c3x_renderer_unit_animation_v1 captured_animation{};
 void notify_custom_renderer_unit_state(Unit* unit,unsigned kind){
  assert(unit&&kind==C3X_RENDERER_UNIT_STATE_OBSERVE);
  ++state_calls;
 }
 int capture_visual(c3x_renderer_unit_visual_v1 const* value){assert(value&&value->struct_size==sizeof(*value));captured_visual=*value;++visual_calls;return 1;}
+int capture_animation(c3x_renderer_unit_animation_v1 const* value){
+ assert(value&&value->struct_size==sizeof(*value));captured_animation=*value;++animation_calls;
+ return capture_visual(&value->visual);
+}
 int Unit_get_max_hp(Unit*){return 4;}
 int clamp(int a,int b,int v){return v<a?a:(v>b?b:v);}
 long long qpc=1000000;
@@ -130,7 +136,7 @@ void __fastcall Unit_tick_anim(Unit* u,int,PCX_Image* canvas,int x,int y,bool st
  calls.push_back(40);
 }
 int main(){
- UnitType type;bic.UnitTypes=&type;int counts[19];for(auto & c:counts)c=16;Animation_Info info={counts};
+ UnitType type;bic.UnitTypes=&type;int counts[19];for(auto & c:counts)c=16;float times[19];for(auto& t:times)t=.0625f;Animation_Info info={counts,times};
  Unit unit;unit.Body.Animation.Animation_Info=&info;unit.Body.Animation.Frame_1.Flic_Info=&info;
  JGLV table_v={reinterpret_cast<std::uintptr_t>(colors)};JGL_Color_Table table={&table_v};fixture_palette.JGL_Color_Table=&table;
  PCXV canvas_v={acquire,release_dc};JGL_Image image={&canvas_v};PCX_Image canvas={{&image}},other={{&image}};
@@ -146,6 +152,10 @@ int main(){
  assert(captured_visual.presentation_time_ticks==captured.presentation_time_ticks);
  invoke();assert(captured.presentation_time_ticks==66000);
  qpc+=1000000;invoke();assert(captured.presentation_time_ticks==66000); // interturn wall time is frozen
+ state.custom_renderer_unit_animation=capture_animation;
+ invoke();assert(animation_calls==1&&captured_animation.cursor==7&&captured_animation.frames==16&&captured_animation.frame_seconds==.0625f&&captured_animation.display_unit_id==42);
+ auto before_animation=animation_calls;state.current_config.enable_custom_rendering=false;invoke();assert(animation_calls==before_animation);
+ state.current_config.enable_custom_rendering=true;
  for(int zoom=0;zoom<2;++zoom){
   fixture_reduced=zoom!=0;success=true;invoke();assert((calls==std::vector<int>{10,20,40}));
   assert(unit.Body.Rect.left==11 && unit.Body.Rect.top==23);
@@ -164,6 +174,7 @@ int main(){
   Unit member=unit;member.army=false;member.Body.ID=84;member.Body.Animation.field_FC=4;
   member.Body.Rect={200,200,210,210};army_member=&member;unit.Body.army_top_defender_id=84;invoke();assert((calls==std::vector<int>{10,20,20,40}));
   assert(captured.unit_id==84 && captured.action_cursor==4);
+  assert(captured_animation.visual.unit_id==84&&captured_animation.display_unit_id==42);
   assert(member.Body.Rect.left==200 && member.Body.Rect.right==210); // Only parent's native dirty bounds own redraw.
   unit.Body.army_top_defender_id=-1;invoke();assert((calls==std::vector<int>{10,20,40}));
   army_member=nullptr;unit.army=false;

@@ -163,6 +163,9 @@ struct ReplayState {
             int bounds[4]={};actual=c3x_renderer_gpu_unit(&value,&dest,bounds);
             for(unsigned n=0;n<4;++n){int recorded=0;expected(recorded);if(wanted==C3X_RENDERER_RESULT_OK)require(bounds[n]==recorded,"replay unit bounds differ");}
         }else if(kind==Kind::unit_forget){int unit_id=0;in(unit_id);c3x_renderer_unit_forget(unit_id);actual=1;
+        }else if(kind==Kind::unit_visual&&subtype==1){
+            c3x_renderer_unit_animation_v1 value={sizeof(value)};value.visual.struct_size=sizeof(value.visual);
+            unit_animation_fields(in,value);actual=c3x_renderer_unit_animation(&value);
         }else if(kind==Kind::unit_visual){
             require(subtype==0,"unsupported unit visual input");
             c3x_renderer_unit_visual_v1 value={sizeof(value)};unit_visual_fields(in,value);

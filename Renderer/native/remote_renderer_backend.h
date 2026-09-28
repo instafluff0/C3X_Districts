@@ -141,6 +141,9 @@ public:
         std::lock_guard<std::mutex> lock(gate);return client.unit_cpu(unit,flags,bounds,pixels,x,y,width,height);
     }
     void forget_unit(int id){std::lock_guard<std::mutex> lock(gate);unit_facts.erase(id);client.forget_unit(id);}
+    int unit_animation(c3x_renderer_unit_animation_v1 const& value){
+        std::lock_guard<std::mutex> lock(gate);return client.unit_animation(value);
+    }
     int unit_visual(c3x_renderer_unit_visual_v1 const& value){
         std::lock_guard<std::mutex> lock(gate);return client.unit_visual(value);
     }

@@ -52,6 +52,7 @@ struct Core {
     CpuUnit unit_cpu=nullptr;
     using UnitForget=void(*)(int);UnitForget unit_forget=nullptr;
     c3x_renderer_unit_visual_fn unit_visual=nullptr;
+    c3x_renderer_unit_animation_fn unit_animation=nullptr;
     c3x_renderer_unit_move_fn unit_move=nullptr,unit_motion=nullptr;
     c3x_renderer_unit_spawn_fn unit_spawn=nullptr;
     c3x_renderer_unit_state_fn unit_state=nullptr;
@@ -97,6 +98,7 @@ struct Core {
         unit_gpu=reinterpret_cast<GpuUnit>(GetProcAddress(module,"c3x_renderer_gpu_unit"));
         unit_cpu=reinterpret_cast<CpuUnit>(GetProcAddress(module,"c3x_renderer_trial_unit_pixels"));
         unit_forget=reinterpret_cast<UnitForget>(GetProcAddress(module,"c3x_renderer_unit_forget"));
+        unit_animation=reinterpret_cast<c3x_renderer_unit_animation_fn>(GetProcAddress(module,"c3x_renderer_unit_animation"));
         unit_visual=reinterpret_cast<c3x_renderer_unit_visual_fn>(GetProcAddress(module,"c3x_renderer_unit_visual"));
         unit_motion=reinterpret_cast<c3x_renderer_unit_move_fn>(GetProcAddress(module,"c3x_renderer_unit_motion"));
         unit_move=reinterpret_cast<c3x_renderer_unit_move_fn>(GetProcAddress(module,"c3x_renderer_unit_move"));
@@ -454,6 +456,11 @@ struct Core {
             }else if(wire.live&&wire.kind==unsigned(Kind::unit_forget)&&wire.subtype==0){
                 require(unit_forget!=nullptr,"helper lacks unit retirement entry");
                 int id=0;in(id);in.done();unit_forget(id);wire.code=1;
+            }else if(wire.kind==unsigned(Kind::unit_visual)&&wire.subtype==1){
+                require(unit_animation!=nullptr,"helper lacks unit animation entry");
+                c3x_renderer_unit_animation_v1 value={sizeof(value)};value.visual.struct_size=sizeof(value.visual);
+                c3x_inputs::unit_animation_fields(in,value);in.done();
+                wire.code=unsigned(unit_animation(&value));
             }else if(wire.kind==unsigned(Kind::unit_visual)&&wire.subtype==0){
                 require(unit_visual!=nullptr,"helper lacks unit visual entry");
                 c3x_renderer_unit_visual_v1 value={sizeof(value)};

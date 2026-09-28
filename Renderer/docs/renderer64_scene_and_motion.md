@@ -80,13 +80,77 @@ A prepared camera retains its native request timestamp for exact duplicate
 request matching. Its unit scene samples the current visual clock. Scene sampling
 never moves that clock backward when an older captured view arrives.
 
-Preparing a replacement freezes the preceding camera's completed retained image.
+Preparing a different camera freezes the preceding camera's completed retained image.
 Native UI transfers must continue displaying that last sample even after its
 animation callback retires. The original native working canvas can contain an
 older unit pose. `Session::display_to` therefore uses any ready retained recipe,
 including a static one. The GPU regression advances eight poses, freezes the
 camera and repeats four native transfers; every transfer must preserve the
 last pose. The prior code fails that pixel comparison.
+
+Travel pauses for that interval and resumes on successful camera adoption. A
+superseding request keeps the original pause; failed adoption cannot consume
+undisplayed travel. The native request timestamp remains unchanged.
+
+World and visibility updates at the same camera continue sampling the newly
+prepared resident scene immediately. In particular, revealing terrain during a
+move must not wait for Civ III to adopt another map image. Compatibility requires
+the same map/viewer scope, target size, tile scale, world dimensions, wrapping
+and screen projection origin. A pan, zoom or viewer change still requires the
+ordered handoff. The projection and motion tests exercise these boundaries.
+
+## Combat presentation
+
+The existing body capture copies the accepted combat target and the native
+animation's cursor, frame count and frame period. `Animation_Info::get_field_1D8`
+returns that same period array in the native animation update. The new copied
+record travels through the existing bounded asynchronous queue; it neither
+waits for a render nor changes native action/audio timing. The older draw and
+visual records keep their layouts and replay paths.
+
+An in-tile target becomes an offset from the authoritative tile center. Renderer64
+interpolates that offset, holds it through fortify/attack/death, and interpolates
+a confirmed return target. Repeated native intermediate positions cannot steer
+or restart this travel. Full-tile movement remains owned by its accepted move
+segment. Wrapping and zoom use the same scene projection for both kinds.
+
+Attack clips advance on the visual clock at the copied native cycle duration.
+Repeated sparse captures do not restart a phase. Death, fortify and victory
+clamp at their last pose; native action changes and retirement control their
+handoff. The scene retains its last complete body while the new action's body
+capture arrives, while invalidating old native selection tokens. HP, visibility
+and retirement remain authoritative native events. These changes do not add
+combat decisions or CPU rendering.
+
+The capture also names the native display parent. The most recently captured
+stationary group owns its tile's displayed stack; an old retained civilian does
+not remain beside a newly selected combatant. An army commander and its member
+share the parent's group. An admitted travelling body remains visible until
+its segment finishes, even when native drawing selects the next source-stack
+unit. This controls presentation only; it never deletes a gameplay unit.
+
+Visible bodies mark stencil during their existing depth-tested GPU draw. The
+final fog pass reads that coverage and preserves the body silhouette, including
+weapons crossing a fog edge. Terrain, shadows, cutout holes and occluded body
+fragments retain normal fog. No extra body pass or CPU map readback is needed.
+
+### Requested pose transitions
+
+The user also requested smooth limb transitions from standing into travel and
+combat. This is separate from world-position interpolation and is not yet in
+the staged renderer. The current GPU path selects baked skin palettes and
+switches actions directly. Its generic `C3XANM1/2` payload stores those palettes
+but omits joint hierarchy and bind identity; matching bone counts alone is not
+enough to establish that two action skeletons can be blended.
+
+Implement a short transition from the last displayed pose into the new action,
+while the destination action's clock keeps advancing normally. Preserve joint
+rotation and limb lengths with local rotation/translation/scale blending and
+an explicit compatible skeleton binding. Keep world travel, attack timing and
+native gameplay outcomes unchanged. An interrupted transition must start from
+the currently mixed pose. Fog loss, retirement, unit-ID reuse and scene unload
+must discard transition state. Verify intermediate joint transforms, endpoint
+continuity and the performance fixture before staging this additional change.
 
 ## Accepted unit motion
 
@@ -172,8 +236,10 @@ The fresh-scene handoff now uses Civ III's captured unit center instead of the
 sandbox's fixed 191-pixel canvas center. The extracted production placement and
 shader math pass 8,640 size/zoom/wrap/reflection cases. The final fresh output
 also runs the existing GPU visibility pass on every publication target;
-resource-free scenes still refresh visibility. The GPU oracle checks 3,295,332
-pixels across zoom, scrolling offsets and reset (maximum channel error one).
+resource-free scenes still refresh visibility. The GPU oracle checks 8,787,552
+pixels across zoom, scrolling offsets, reset and visible-body stencil coverage
+(maximum channel error one). It checks depth occlusion, cutout holes, stencil
+clearing and both single-sample and two-sample targets.
 
 The borrowed-publication lifetime repair is covered by 780 completion operations;
 only map/configuration commands retire adopted camera records. The direct native

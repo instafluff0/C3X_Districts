@@ -139,6 +139,9 @@ template<class IO,class Value>void unit_visual_fields(IO& io,Value& v){
     io(v.damage);io(v.max_hp);io(v.flags);
     io(v.presentation_time_ticks);io(v.presentation_frequency);
 }
+template<class IO,class Value>void unit_animation_fields(IO& io,Value& v){
+    unit_visual_fields(io,v.visual);io(v.cursor);io(v.frames);io(v.frame_seconds);io(v.display_unit_id);
+}
 template<class IO,class Value>void unit_move_fields(IO& io,Value& v){
     io(v.unit_id);io(v.old_x);io(v.old_y);io(v.new_x);io(v.new_y);io(v.action);
     io(v.source_visible);io(v.target_visible);

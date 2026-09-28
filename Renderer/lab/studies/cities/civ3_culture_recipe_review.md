@@ -17,7 +17,8 @@ python3 -m Renderer.lab.studies.cities.civ3_culture_recipe_review --seed 1 --ove
 The ignored `Renderer/lab/out/cities/all-era-source-auditions/review/civ3-mixed-culture-candidates/seed-0/`
 directory holds an overview, a larger Industrial/Modern comparison, a manifest,
 and a full four-era variant sheet for each culture. Town walls use the previously
-selected era kit; City and Metropolis keep their unwalled sprawl. There are no
+selected era kit; City and Metropolis each show only Base and Capital, with no
+empty wall columns. There are no
 ground decals or artificial building foundations in these recipes. The sheets
 are software material previews; map-context rendering still needs review.
 

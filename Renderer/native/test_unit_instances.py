@@ -109,7 +109,7 @@ int main(){
  }
  body.unit_id=state.unit_id=8;body.presentation_time_ticks=state.presentation_time_ticks=720000;capture();
  auto poses=world.scene_poses(frame,720000,60000,catalog);
- assert(poses.size()==2&&!poses[0].cursor&&poses[1].cursor);
+ assert(poses.size()==1&&poses[0].draw.unit_id==8&&poses[0].cursor); // new native stack selection
  state.visible=0;state.presentation_time_ticks=721000;assert(world.state(state));
  poses=world.scene_poses(frame,721000,60000,catalog);assert(poses.size()==1&&!poses[0].cursor);
 }

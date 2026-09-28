@@ -238,6 +238,10 @@ public:
         c3x_inputs::Writer input;input(std::int32_t(id));
         invoke(unsigned(c3x_inputs::Kind::unit_forget),0,input.bytes.data(),unsigned(input.bytes.size()));
     }
+    int unit_animation(c3x_renderer_unit_animation_v1 value){
+        c3x_inputs::Writer input;c3x_inputs::unit_animation_fields(input,value);
+        return int(invoke(unsigned(c3x_inputs::Kind::unit_visual),1,input.bytes.data(),unsigned(input.bytes.size())).code);
+    }
     int unit_visual(c3x_renderer_unit_visual_v1 value){
         c3x_inputs::Writer input;c3x_inputs::unit_visual_fields(input,value);
         return int(invoke(unsigned(c3x_inputs::Kind::unit_visual),0,input.bytes.data(),unsigned(input.bytes.size())).code);

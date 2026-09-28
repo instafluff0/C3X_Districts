@@ -263,7 +263,8 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
         target->GetResource(&resource);
         presented=SUCCEEDED(resource.As(&texture)) &&
             renderer.visibility_gpu.apply(renderer.device,renderer.context,
-                texture.Get(),renderer.visibility_coverage);
+                texture.Get(),renderer.visibility_coverage,
+                sandbox_fresh.glow.linear.depth_texture,4);
     }
     renderer.trace.write("fresh-callback",presented?"map-ready":"map-failed",true);
     return presented;

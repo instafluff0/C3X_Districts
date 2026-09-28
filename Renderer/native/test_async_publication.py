@@ -79,7 +79,7 @@ int main(){
 using namespace std::chrono_literals;
 struct State {
  std::mutex mutex;std::condition_variable wake;bool held=false,entered=false;
- int creates=0,adoptions=0,reads=0,observations=0,pages=0;long long current=0;
+ int creates=0,adoptions=0,reads=0,observations=0,pages=0,animations=0;long long current=0;
  std::vector<unsigned> uploaded;std::vector<long long> sources;
  void barrier(){std::unique_lock<std::mutex> lock(mutex);entered=true;wake.notify_all();wake.wait(lock,[&]{return !held;});}
  void hold(){std::lock_guard<std::mutex> lock(mutex);held=true;entered=false;}
@@ -117,6 +117,10 @@ struct Fake {
   else if(value.action==C3X_GPU_READBACK)++state.reads;
   return C3X_RENDERER_RESULT_OK;
  }
+ int unit_animation(c3x_renderer_unit_animation_v1 const& value){
+  assert(value.visual.unit_id==7&&value.visual.target_x==384&&value.frames==10&&value.frame_seconds==.125f&&value.display_unit_id==7);
+  ++state.animations;return C3X_RENDERER_RESULT_OK;
+ }
  int unit(c3x_renderer_unit_v1 const& value,c3x_renderer_gpu_unit_v1 const& target,int*){
   assert(!target.ticket);assert(std::string(value.unit_key)=="copied");++state.observations;return C3X_RENDERER_RESULT_OK;
  }
@@ -135,7 +139,11 @@ int main(){
  c3x_renderer_unit_v1 unit={};unit.struct_size=sizeof(unit);std::strcpy(unit.unit_key,"copied");
  c3x_renderer_gpu_unit_v1 target={sizeof(target)};int bounds[4]={};
  assert(client.unit(unit,target,bounds)==C3X_RENDERER_RESULT_OK);std::strcpy(unit.unit_key,"reused");
- state.release();client.stats();assert(state.adoptions==0&&state.observations==1);
+ c3x_renderer_unit_animation_v1 animation{};animation.visual.unit_id=7;animation.visual.target_x=384;
+ animation.frames=10;animation.frame_seconds=.125f;animation.display_unit_id=7;
+ auto posted=std::chrono::steady_clock::now();assert(client.unit_animation(animation)==C3X_RENDERER_RESULT_OK);
+ assert(std::chrono::steady_clock::now()-posted<100ms);animation.visual.target_x=-1;animation.frames=999;animation.display_unit_id=999;
+ state.release();client.stats();assert(state.adoptions==0&&state.observations==1&&state.animations==1);
  // Civ III refuses background world capture until the first map is displayed.
  // This is a deferred capture, not an empty snapshot or a renderer failure.
  c3x_renderer_world_page_v1 page={};page.struct_size=sizeof(page);page.capacity=128;

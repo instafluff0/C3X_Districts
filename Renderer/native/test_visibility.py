@@ -64,10 +64,12 @@ struct ID3D11Resource {ID3D11Texture2D* value;
  int As(ID3D11Texture2D** output){*output=value;return 0;}};
 struct Target {ID3D11Resource resource;
  void GetResource(ID3D11Resource** output){*output=&resource;}};
+struct Fresh {struct {struct {ID3D11Texture2D* depth_texture=nullptr;} linear;} glow;} sandbox_fresh;
 bool drawn=false,draw_ok=true,apply_ok=true;int masks=0;
 struct Output {bool draw(Target*,int,int){drawn=true;return draw_ok;}} sandbox_backbuffer_output;
 struct Renderer {bool visibility_pass=true;int device=0,context=0,visibility_coverage=123;
- struct Mask {bool apply(int,int,ID3D11Texture2D* texture,int coverage){
+ struct Mask {bool apply(int,int,ID3D11Texture2D* texture,int coverage,ID3D11Texture2D* actors,unsigned guard){
+  assert(actors==sandbox_fresh.glow.linear.depth_texture&&guard==4);
   assert(drawn&&texture->id==42&&coverage==123);++masks;return apply_ok;}} visibility_gpu;
 } renderer;
 struct Frame {int target_width=128,target_height=64;} frame;

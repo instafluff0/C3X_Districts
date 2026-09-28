@@ -17,16 +17,53 @@ class UnitPlayback {
         bool advancing;int cursor,frames;
     };
     std::deque<Instance> instances;
+    struct Action {
+        int id,action,frames;
+        long long ticks,frequency;
+        double origin,duration;
+    };
+    std::deque<Action> actions;
 public:
-    void clear(){instances.clear();}
-    void forget(int id){instances.erase(std::remove_if(instances.begin(),instances.end(),[&](auto const& s){return s.id==id;}),instances.end());}
+    void clear(){instances.clear();actions.clear();}
+    void forget(int id){instances.erase(std::remove_if(instances.begin(),instances.end(),[&](auto const& s){return s.id==id;}),instances.end());actions.erase(std::remove_if(actions.begin(),actions.end(),[&](auto const& s){return s.id==id;}),actions.end());}
+    bool observe(c3x_renderer_unit_animation_v1 const& value){
+        auto const& v=value.visual;
+        bool directed=(v.action>=3&&v.action<=7)||v.action==9;
+        if(!directed)return true;
+        if(value.frames<1||value.frames>4096||value.cursor<0||value.cursor>value.frames||
+           !std::isfinite(value.frame_seconds)||value.frame_seconds<=0||value.frame_seconds>10||
+           v.presentation_frequency<=0||v.presentation_time_ticks<0)return false;
+        auto old=std::find_if(actions.begin(),actions.end(),[&](auto const& a){return a.id==v.unit_id;});
+        double duration=double(value.frames)*value.frame_seconds;
+        // Sparse native recaptures and native loop wrap never restart an
+        // already accepted phase. Action/identity transitions retire it.
+        if(old!=actions.end()&&old->action==v.action&&old->frequency==v.presentation_frequency&&
+           old->frames==value.frames&&old->duration==duration)return true;
+        if(old!=actions.end())actions.erase(old);
+        if(actions.size()==4096)actions.pop_front();
+        actions.push_back({v.unit_id,v.action,value.frames,v.presentation_time_ticks,
+            v.presentation_frequency,double(value.cursor)*value.frame_seconds,duration});
+        return true;
+    }
+    bool directed(int id,int action)const{
+        return std::any_of(actions.begin(),actions.end(),[&](auto const& a){return a.id==id&&a.action==action;});
+    }
     template<class Clip>
     bool resolve(c3x_renderer_unit_v1& request,Clip const& clip,bool selected,unsigned& next_step) {
         next_step=1;
         bool idle=request.action==1;
         bool work=request.action==11 || (request.action>=13 && request.action<=18);
         bool advancing=!idle || selected;
-        // One-shots (including movement/combat) keep native lifecycle sampling.
+        auto phase=std::find_if(actions.begin(),actions.end(),[&](auto const& a){return a.id==request.unit_id&&a.action==request.action;});
+        if(phase!=actions.end()&&phase->frequency==request.presentation_frequency){
+            double seconds=phase->origin+std::max(0.,double(request.presentation_time_ticks-phase->ticks)/phase->frequency);
+            bool loop=request.action>=3&&request.action<=5;
+            double progress=loop?std::fmod(seconds,phase->duration)/phase->duration:std::min(1.,seconds/phase->duration);
+            request.frame_count=65536;request.action_cursor=std::min(65535,int(progress*65536.));
+            next_step=loop||progress<1.?1u:0u;
+            return true;
+        }
+        // Legacy captures without explicit cadence keep native lifecycle sampling.
         if(!clip.ambient || (!idle && !work)) {
             instances.erase(std::remove_if(instances.begin(),instances.end(),[&](auto const& s){return s.id==request.unit_id;}),instances.end());
             return advancing;

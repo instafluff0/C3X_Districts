@@ -26,7 +26,7 @@ private:
         unsigned flags=0;
         std::size_t unit=0,action=0;
         std::uint64_t revision=0,used=0;
-        int tile_x=-1,tile_y=-1;
+        int tile_x=-1,tile_y=-1,display_id=-1;
     };
     std::map<int,Instance> instances;
     struct Motion {
@@ -37,7 +37,19 @@ private:
         bool committed=false;
     };
     std::map<int,std::deque<Motion>> motions;
-    struct Observed {c3x_renderer_unit_visual_v1 value{};};
+    // Native combat targets include a half-tile approach and a return to the
+    // tile center. Retain those accepted endpoints, never intermediate pixels.
+    struct PoseOffset {
+        double from_x=0,from_y=0,to_x=0,to_y=0;
+        long long started=-1,frequency=0;
+        std::pair<double,double> sample(long long ticks,long long clock) const {
+            double duration=std::hypot(to_x-from_x,to_y-from_y)/225.;
+            double t=duration>0&&clock==frequency?std::clamp(double(ticks-started)/clock/duration,0.,1.):1.;
+            return {from_x+(to_x-from_x)*t,from_y+(to_y-from_y)*t};
+        }
+    };
+    std::map<int,PoseOffset> pose_offsets;
+    struct Observed {c3x_renderer_unit_visual_v1 value{};int display_id=-1;};
     std::map<int,Observed> observations;
     std::map<int,c3x_renderer_unit_move_v1> accepted_moves;
     std::map<int,c3x_renderer_unit_spawn_v1> accepted_spawns;
@@ -82,8 +94,8 @@ public:
     std::size_t size()const{return instances.size();}
     std::size_t motion_count(int id)const{auto found=motions.find(id);return found==motions.end()?0:found->second.size();}
     std::uint64_t generation()const{return scene_generation;}
-    void forget(int id){motions.erase(id);instances.erase(id);observations.erase(id);accepted_moves.erase(id);accepted_spawns.erase(id);accepted_states.erase(id);playback.forget(id);++scene_generation;}
-    void clear(){motions.clear();instances.clear();observations.clear();accepted_moves.clear();accepted_spawns.clear();accepted_states.clear();playback.clear();scene_ticks=-1;scene_frequency=0;motion_pause=-1;++scene_generation;} // serial never reuses a token
+    void forget(int id){pose_offsets.erase(id);motions.erase(id);instances.erase(id);observations.erase(id);accepted_moves.erase(id);accepted_spawns.erase(id);accepted_states.erase(id);playback.forget(id);++scene_generation;}
+    void clear(){pose_offsets.clear();motions.clear();instances.clear();observations.clear();accepted_moves.clear();accepted_spawns.clear();accepted_states.clear();playback.clear();scene_ticks=-1;scene_frequency=0;motion_pause=-1;++scene_generation;} // serial never reuses a token
 
     // Camera preparation freezes the displayed scene until ordered adoption.
     // That interval must not consume travel that the player cannot yet see.
@@ -93,6 +105,7 @@ public:
         auto held=std::max(0ll,ticks-motion_pause);
         for(auto& pair:motions)for(auto& motion:pair.second)
             if(motion.started>=0&&motion.frequency==frequency){motion.started+=held;motion.cycle_started+=held;}
+        for(auto& pair:pose_offsets)if(pair.second.frequency==frequency)pair.second.started+=held;
         motion_pause=-1;
     }
 
@@ -111,7 +124,11 @@ public:
             if(value.action!=1&&value.action!=2)motions.erase(value.unit_id);
             auto prior=accepted_states.find(value.unit_id);
             if(prior!=accepted_states.end()&&prior->second.action!=value.action&&motions.find(value.unit_id)==motions.end()){
-                instances.erase(value.unit_id);observations.erase(value.unit_id);playback.forget(value.unit_id);
+                // Invalidate old native selections atomically, but keep the
+                // complete scene body until its replacement capture arrives.
+                auto body=instances.find(value.unit_id);
+                if(body!=instances.end())body->second.revision=++serial;
+                playback.forget(value.unit_id);
             }
         }
         if(accepted_states.size()>=capacity&&accepted_states.find(value.unit_id)==accepted_states.end())
@@ -185,6 +202,7 @@ public:
         if(wrap_x){if(dx>width/2)dx-=width;else if(dx<-width/2)dx+=width;}
         if(wrap_y){if(dy>height/2)dy-=height;else if(dy<-height/2)dy+=height;}
         if((std::abs(dx)+std::abs(dy)!=2)||((dx+dy)&1))return false;
+        pose_offsets.erase(value.unit_id);
         auto& queue=motions[value.unit_id];
         if(!queue.empty()){
             auto const& previous=queue.back().event;
@@ -218,6 +236,13 @@ public:
         observations[value.unit_id]=next;
         ++scene_generation;
         return true;
+    }
+
+    bool observe_animation(c3x_renderer_unit_animation_v1 const& value){
+        if(value.struct_size!=sizeof(value)||value.display_unit_id<0||!observe(value.visual))return false;
+        if(value.visual.flags&C3X_RENDERER_UNIT_HIDDEN)return true;
+        observations[value.visual.unit_id].display_id=value.display_unit_id;
+        return playback.observe(value);
     }
 
     template<class Catalog, class ActionName>
@@ -266,6 +291,12 @@ public:
         }else value.revision=++serial;
         value.content=content;value.flags=flags;value.used=++access;
         value.occurrence=request;
+        value.display_id=request.unit_id;
+        auto group=observations.find(request.unit_id);
+        if(group!=observations.end()&&group->second.display_id>=0&&
+           group->second.value.presentation_time_ticks==request.presentation_time_ticks&&
+           group->second.value.presentation_frequency==request.presentation_frequency)
+            value.display_id=group->second.display_id;
         if(auto state=state_of(request.unit_id)){
             value.tile_x=state->tile_x;value.tile_y=state->tile_y;
         }
@@ -299,6 +330,9 @@ public:
         std::size_t unit=0,action=0;
         unsigned predict=0;
         bool animated=false,cursor=false;
+        int display_id=-1;
+        std::uint64_t capture_order=0;
+        bool travelling=false;
     };
     template<class Catalog>
     std::vector<ScenePose> scene_poses(c3x_renderer_frame_v1 const& frame,
@@ -390,7 +424,39 @@ public:
                 pose.draw.action_cursor=int(std::fmod(std::max(0.,double(motion_ticks-motion->cycle_started)/frequency),double(clip->duration))/clip->duration*1000.);
                 pose.draw.presentation_time_ticks=ticks;pose.draw.presentation_frequency=frequency;
                 pose.predict=1;
-            }else if(!sample(selected,ticks,frequency,catalog,pose.draw,pose.predict))continue;
+            }else {
+                if(!sample(selected,ticks,frequency,catalog,pose.draw,pose.predict))continue;
+                auto offset=pose_offsets.find(pair.first);
+                if(observed!=observations.end()){
+                    auto const& native=observed->second.value;
+                    double target_x=double(native.target_x)-(double(state->tile_x)+1.)*64.;
+                    double target_y=double(native.target_y)-(double(state->tile_y)+1.)*32.;
+                    if(frame.world_wrap_x&&frame.world_width_tiles>0)
+                        target_x=std::remainder(target_x,double(frame.world_width_tiles)*64.);
+                    if(frame.world_wrap_y&&frame.world_height_tiles>0)
+                        target_y=std::remainder(target_y,double(frame.world_height_tiles)*32.);
+                    // Ordinary tile travel has its own accepted segment. This
+                    // owner only accepts native in-tile combat presentation.
+                    bool bounded=std::abs(target_x)+2.*std::abs(target_y)<=64.;
+                    if(bounded&&(target_x!=0||target_y!=0||offset!=pose_offsets.end())){
+                        if(offset==pose_offsets.end())offset=pose_offsets.emplace(pair.first,PoseOffset{}).first;
+                        auto& value=offset->second;
+                        if(value.started<0||value.to_x!=target_x||value.to_y!=target_y){
+                            auto previous=value.started<0?std::make_pair(0.,0.):value.sample(motion_ticks,frequency);
+                            value.from_x=previous.first;value.from_y=previous.second;
+                            value.to_x=target_x;value.to_y=target_y;
+                            value.started=motion_ticks;value.frequency=frequency;
+                        }
+                    }else if(!bounded&&offset!=pose_offsets.end()){
+                        pose_offsets.erase(offset);offset=pose_offsets.end();
+                    }
+                }
+                if(offset!=pose_offsets.end()){
+                    auto value=offset->second.sample(motion_ticks,frequency);
+                    travel_x=value.first*frame.tile_width/128.;travel_y=value.second*frame.tile_height/64.;
+                    pose.animated=value.first!=offset->second.to_x||value.second!=offset->second.to_y;
+                }
+            }
             // Native set_pixel_target_with_offset places the unit at the tile
             // center (+64,+32 at normal zoom). Use the copied scene's centers
             // for travel AND idle; a delayed native sprite capture can belong
@@ -403,11 +469,24 @@ public:
             pose.draw.projection_scale_milli=projection;
             pose.draw.hour=frame.hour;pose.draw.season=frame.season;
             pose.tile_x=occurrence->tile_x;pose.tile_y=occurrence->tile_y;
+            pose.display_id=item.display_id;pose.capture_order=item.used;pose.travelling=motion!=nullptr;
             pose.unit=item.unit;if(!motion)pose.action=item.action;
             pose.cursor=(pair.second.flags&C3X_RENDERER_UNIT_CURSOR)&&(pair.second.flags&C3X_RENDERER_UNIT_SELECTED);
-            pose.animated=motion||pose.cursor||animated(selected,catalog);
+            pose.animated=pose.animated||motion||pose.cursor||animated(selected,catalog);
             result.push_back(pose);
         }
+        // Native drawing chooses the displayed group on each tile. Retaining
+        // a body is not permission to show an older stack selection forever.
+        // Travel keeps its source body until arrival; army members share the
+        // parent's group instead of competing with their own commander.
+        std::map<std::pair<int,int>,std::pair<std::uint64_t,int>> owners;
+        for(auto const& pose:result)if(!pose.travelling){
+            auto& owner=owners[{pose.tile_x,pose.tile_y}];
+            if(pose.capture_order>=owner.first)owner={pose.capture_order,pose.display_id};
+        }
+        result.erase(std::remove_if(result.begin(),result.end(),[&](auto const& pose){
+            return !pose.travelling&&owners.at({pose.tile_x,pose.tile_y}).second!=pose.display_id;
+        }),result.end());
         return result;
     }
 
@@ -435,7 +514,8 @@ public:
         auto const& instance=found->second;
         if(!(instance.flags&C3X_RENDERER_UNIT_STATE_CAPTURED)||instance.unit>=catalog.size()||instance.action>=catalog[instance.unit].actions.size())return false;
         auto const& clip=catalog[instance.unit].actions[instance.action];int action=instance.content.action;
-        return clip.ambient&&clip.loop&&((action==1&&(instance.flags&C3X_RENDERER_UNIT_SELECTED))||action==11||(action>=13&&action<=18));
+        return playback.directed(selected.id,action)||
+            (clip.ambient&&clip.loop&&((action==1&&(instance.flags&C3X_RENDERER_UNIT_SELECTED))||action==11||(action>=13&&action<=18)));
     }
     template<class Catalog>
     auto definition(Selection const& selected,Catalog const& catalog)const -> typename Catalog::value_type const* {

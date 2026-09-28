@@ -254,7 +254,8 @@ def build(config: Path = RECIPE, destination: Path = DESTINATION,
         if full_sheets:
             render_culture({"styles": [item["label"] for item in profiles],
                             "designs": culture_designs},
-                           profile["culture_group"], folder / "sheet.png")
+                           profile["culture_group"], folder / "sheet.png",
+                           compact_unwalled=True)
         print(profile["id"], [entry["counts"] for row in report[-4:]
                               for entry in row["layers"]], flush=True)
     (output / "manifest.json").write_text(json.dumps(report, indent=2) + "\n",

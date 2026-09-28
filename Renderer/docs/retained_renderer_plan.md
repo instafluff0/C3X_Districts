@@ -10,32 +10,56 @@ the former 1,326-line roadmap.
 
 ## Current state
 
-- **Current staged candidate: Renderer-owned tile travel.** Asynchronous fixture
-  `bd70eb089bea41a6982e9bc41c587a16` passes at **59.76 FPS**, with 32 camera
-  adoptions, 119 frames while the host pauses, 70 publications while the renderer
-  pauses and zero CPU map readbacks. Submission p95 is 0.813 ms, maximum
-  1.433 ms. These are fixture measurements, not live-game FPS. The matching
-  bridge, x64 DLL and helper are staged together. Preserve the roughly 52 FPS
-  sandbox baseline; further FPS tuning is deferred.
+- **Current staged candidate: tile travel and combat presentation.**
+  Asynchronous fixture `94050b8afeb4467f89518784e5ed8391` passes at **59.26 FPS**,
+  with 32 camera adoptions, 120 frames while the host pauses, 79 publications
+  while the renderer pauses and zero CPU map readbacks. Submission p95 is
+  0.793 ms, maximum 7.451 ms. These are fixture measurements, not live-game FPS.
+  The matching bridge, x64 DLL and helper are staged together. Preserve the
+  roughly 52 FPS sandbox baseline; further FPS tuning is deferred.
 
   The accepted native tile target starts a Renderer64-owned visual segment.
-  Its clock begins on first rendering, so delayed transport cannot consume the
-  whole move before display. Native completion does not truncate travel; queued
-  neighboring steps preserve run phase. Native intermediate pixel prediction
-  has been removed. The selected ring shares the sampled body anchor. The
-  scoped GOG hook, config-off behavior and other-build limitations are recorded
-  in the [patch ledger](civ3_patch_dependency_ledger.md).
+  Its clock begins on first rendering; native completion cannot truncate it.
+  Neighboring steps preserve run phase. Run timing comes from the generic
+  compiled clip header during asset loading. Bodies and selection rings share
+  the copied scene's tile centers and visual clock. Native intermediate pixels
+  no longer position the actor. The scoped GOG hook, config-off behavior and
+  other-build limitations are in the [patch ledger](civ3_patch_dependency_ledger.md).
 
-  Capture `20260927-161223` established the prior teleport: intermediate native
-  run samples existed, but Renderer64 still consumed old idle captures during
-  most of the move. The new portable tests cover delayed receipt, early commit,
-  sparse recapture, consecutive steps, wrapping, zoom, retirement and correction.
-  Thirty-one focused integration tests and the injected smoke pass. The current
-  live interaction `20260927-163645` delivered both accepted tile-motion events,
-  but the captured body remained at the source and then jumped. Capture `20260927-164307` then confirmed the motion stayed admitted. The
-  asset catalog left non-ambient run duration at zero, so the scene skipped it.
-  The corrected loader reads authored timing before gameplay; live validation
-  of that correction is pending. These earlier runs are not visual passes.
+  Capture `20260927-183538` on the current staged build shows both units at intermediate run positions and
+  then the destination, including the first move's terrain reveal. The earlier
+  source-pose rewind and frozen second move are absent in these samples. Native
+  transfers retain the latest completed image during a camera handoff. Travel
+  pauses for genuine camera changes; same-camera world updates keep sampling
+  immediately. All 46 focused tests pass. The retained-composition GPU regression
+  also proves repeated native transfers preserve the final pose after freezing
+  its callback. Ten commands and three map-text events completed with no logged
+  native failure or early exit, and the original save stayed unchanged.
+  This is a bounded movement witness, not full gameplay acceptance: broader combat,
+  native unit-status placement and complete UI coverage remain open.
+
+  **Melee combat and presentation handoff now have a live witness.**
+  Capture `20260927-183323` shows the attacker advancing to its accepted
+  half-tile combat position, attack playback, death at that position, retirement
+  and return to normal unit selection. Native combat completed, the original
+  save stayed unchanged, and no renderer failures were logged. Native Warrior
+  attack/death duration is 15 × 0.083 = 1.245 seconds. Repeated native captures
+  no longer restart the copied action clock.
+
+  The earlier fog-edge weapon clipping and stale source-stack civilian are
+  absent in this capture. The existing GPU body draw marks depth-tested stencil
+  coverage for the final fog pass. Native display-parent IDs choose the current
+  stationary stack group, preserving grouped army bodies and admitted travel.
+  Forty-six focused tests, six visibility tests, the injected smoke and native
+  build pass. GPU coverage has 8,787,552 pixel checks; retained composition has
+  126 exact checks. No new patch-table address or CPU rendering fallback.
+
+  **Combat is not fully qualified.** Victory, retreat, ranged and army encounters
+  still need live witnesses. Native health-marker placement and audio alignment
+  remain separate checks. The user requested smooth limb transitions between
+  actions; the current path still switches clips directly. The required local
+  skeletal blending and binding metadata are documented in the scene/motion
+  contract. Sampled window frames do not establish frame-perfect smoothness.
 
   Shared renderer assets now load from `patch_load_scenario()` after the C3X
   configuration. There is no separate progress form. Capture `20260927-162108`

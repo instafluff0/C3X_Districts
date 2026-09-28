@@ -8,6 +8,38 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class PublicationTests(unittest.TestCase):
+    def test_world_update_requires_the_same_projection_and_viewer(self):
+        source=(ROOT/'Renderer/native/c3x_renderer.cpp').read_text()
+        body='bool matches_projection('+source.split('bool matches_projection(',1)[1].split('    bool matches_static_view',1)[0]
+        run_cpp(r'''
+#include <cstdint>
+#include <cassert>
+#include "Renderer/native/c3x_renderer_api.h"
+struct View {c3x_renderer_frame_v1 frame{};c3x_renderer_camera_identity_v1 identity{};
+'''+body+r'''
+};
+int main(){
+ View front;c3x_renderer_tile_v1 old{},next{};
+ old.tile_x=20;old.tile_y=10;old.anchor_x=100;old.anchor_y=50;next=old;
+ auto& a=front.frame;a.api_version=C3X_RENDERER_API_VERSION;a.tile_count=1;a.tiles=&old;
+ a.target_width=2240;a.target_height=1260;a.tile_width=128;a.tile_height=64;
+ a.world_width_tiles=a.world_height_tiles=100;a.world_wrap_x=1;
+ auto b=a;b.tiles=&next;auto scope=front.identity;
+ next.city_id=10;++next.visibility_mask;++b.world_topology_revision;++scope.scene_epoch;++scope.visibility_epoch;
+ assert(front.matches_projection(b,scope)); // Copied facts may change at a stable camera.
+ next.tile_x+=2;next.anchor_x+=128;next.tile_y+=2;next.anchor_y+=64;
+ assert(front.matches_projection(b,scope)); // Different first occurrence, same camera.
+ ++next.anchor_x;assert(!front.matches_projection(b,scope));--next.anchor_x;
+ ++next.anchor_y;assert(!front.matches_projection(b,scope));--next.anchor_y;
+ b.tile_width=192;assert(!front.matches_projection(b,scope));b.tile_width=128;
+ ++scope.viewer_epoch;assert(!front.matches_projection(b,scope));--scope.viewer_epoch;
+ ++scope.map_epoch;assert(!front.matches_projection(b,scope));--scope.map_epoch;
+ b.target_width=1920;assert(!front.matches_projection(b,scope));b.target_width=2240;
+ b.world_wrap_x=0;assert(!front.matches_projection(b,scope));b.world_wrap_x=1;
+ b.tile_count=0;assert(!front.matches_projection(b,scope));
+}
+''')
+
     def test_direct_native_transfer_uses_current_visual_time(self):
         source=(ROOT / 'Renderer/native/c3x_renderer.cpp').read_text()
         branch=source.split('}else if(command==Command::trial_present_shared){',1)[1]

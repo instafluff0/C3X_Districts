@@ -10713,6 +10713,20 @@ struct PublishedMapFrame {
             return true;
         } catch (...) {return false;}
     }
+    bool matches_projection(c3x_renderer_frame_v1 const& current,
+                            c3x_renderer_camera_identity_v1 const& scope) const {
+        if(!frame.api_version||!frame.tile_count||!current.tile_count||!frame.tiles||!current.tiles||
+           identity.map_epoch!=scope.map_epoch||identity.viewer_epoch!=scope.viewer_epoch||
+           frame.target_width!=current.target_width||frame.target_height!=current.target_height||
+           frame.tile_width!=current.tile_width||frame.tile_height!=current.tile_height||
+           frame.world_width_tiles!=current.world_width_tiles||frame.world_height_tiles!=current.world_height_tiles||
+           frame.world_wrap_x!=current.world_wrap_x||frame.world_wrap_y!=current.world_wrap_y)return false;
+        auto const& a=frame.tiles[0];auto const& b=current.tiles[0];
+        return std::int64_t(a.anchor_x)-std::int64_t(a.tile_x)*frame.tile_width/2==
+                   std::int64_t(b.anchor_x)-std::int64_t(b.tile_x)*current.tile_width/2&&
+               std::int64_t(a.anchor_y)-std::int64_t(a.tile_y)*frame.tile_height/2==
+                   std::int64_t(b.anchor_y)-std::int64_t(b.tile_y)*current.tile_height/2;
+    }
     bool matches_static_view(c3x_renderer_frame_v1 const& current) const {
         if(!frame.api_version || current.tile_count!=occurrences.size())return false;
         auto left=current,right=frame;
@@ -11916,6 +11930,12 @@ public:
         // themselves or restore the retired instance's selection.
     }
 
+    int observe_unit_animation(c3x_renderer_unit_animation_v1 const& value){
+        std::lock_guard<std::mutex> call_guard(call_mutex);
+        std::lock_guard<std::mutex> lock(state_mutex);
+        return unit_instances.observe_animation(value)?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    }
+
     int observe_unit(c3x_renderer_unit_visual_v1 const& value){
         std::lock_guard<std::mutex> call_guard(call_mutex);
         std::lock_guard<std::mutex> lock(state_mutex);
@@ -12641,11 +12661,14 @@ private:
                 (long long ticks,long long frequency)->Sampled{
                 c3x_renderer_frame_v1 view={};
                 if(!capture->valid()||!selected->sample(ticks,frequency,origin,view))return {};
-                // A prepared replacement has a different owner. Keep the last
-                // coherent old sample until the ordered camera adoption.
-                if(renderer_state.gpu_serial!=map_publication_serial||renderer_state.cached_signature.geometry!=geometry||
-                   renderer_state.tile_geometry_epoch!=epoch)return Sampled::frozen();
-                auto frame=capture->frame();frame.presentation_time_ticks=view.presentation_time_ticks;
+                if(renderer_state.gpu_serial!=map_publication_serial)return Sampled::frozen();
+                bool changed=renderer_state.cached_signature.geometry!=geometry||renderer_state.tile_geometry_epoch!=epoch;
+                // Authoritative world/visibility changes at the same camera
+                // update the resident scene immediately. Waiting for native
+                // map adoption would freeze every unit during movement reveal.
+                // A different camera or viewer still needs ordered adoption.
+                if(changed&&!gpu_publication.matches_projection(job_frame,job_camera_identity))return Sampled::frozen();
+                auto frame=changed?job_frame:capture->frame();frame.presentation_time_ticks=view.presentation_time_ticks;
                 frame.presentation_frequency=view.presentation_frequency;
                 snapshot_fresh_units(frame,ticks,frequency);
                 struct RestoreViewport {
@@ -12653,7 +12676,7 @@ private:
                     decltype(renderer_state.geometry_viewport_settings) previous;
                     ~RestoreViewport(){value=previous;}
                 } restore{renderer_state.geometry_viewport_settings,renderer_state.geometry_viewport_settings};
-                renderer_state.geometry_viewport_settings=settings;
+                if(!changed)renderer_state.geometry_viewport_settings=settings;
                 bool drawn=c3x_renderer64_render_fresh(frame,target.Get());
                 if(!drawn)throw std::runtime_error("fresh resident frame failed");
                 ++visual_map_samples;
@@ -12924,7 +12947,7 @@ private:
                 job_frame.tiles=job_tiles.empty()?nullptr:job_tiles.data();
                 job_frame.world_topology=job_world_topology.empty()?nullptr:job_world_topology.data();
                 if(camera_gpu){
-                    unit_instances.pause_motion(visual_ticks);
+                    if(!gpu_publication.matches_projection(job_frame,job_camera_identity))unit_instances.pause_motion(visual_ticks);
                     snapshot_fresh_units(job_frame,visual_ticks,visual_frequency);
                 }
                 world_schedule.prioritize(job_frame);
@@ -14293,6 +14316,14 @@ extern "C" __declspec(dllexport) void c3x_renderer_unit_forget(int unit_id) {
     try{if(remote_renderer_requested())remote_renderer_backend()->forget_unit(unit_id);
         else if(renderer_worker)renderer_worker->forget_unit(unit_id);}catch(...){}
     input.result(1);
+}
+
+extern "C" __declspec(dllexport) int c3x_renderer_unit_animation(c3x_renderer_unit_animation_v1 const* animation){
+    if(!animation||animation->struct_size!=sizeof(*animation))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    c3x_inputs::Call input(c3x_inputs::Kind::unit_visual,1,[&](auto& out){auto value=*animation;c3x_inputs::unit_animation_fields(out,value);});
+    try{return input.result(remote_renderer_requested()?remote_renderer_backend()->unit_animation(*animation):
+        get_renderer_worker().observe_unit_animation(*animation));}
+    catch(...){return input.result(C3X_RENDERER_RESULT_ERROR);}
 }
 
 extern "C" __declspec(dllexport) int c3x_renderer_unit_visual(c3x_renderer_unit_visual_v1 const* visual){

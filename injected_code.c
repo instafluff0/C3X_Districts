@@ -27848,6 +27848,7 @@ unload_custom_renderer ()
 	is->custom_renderer_unit_draw_expanded = NULL;
 	is->custom_renderer_unit_draw_playback = NULL;
 	is->custom_renderer_unit_visual = NULL;
+	is->custom_renderer_unit_animation = NULL;
 	is->custom_renderer_unit_move = NULL;
 	is->custom_renderer_unit_motion = NULL;
 	is->custom_renderer_unit_spawn = NULL;
@@ -28043,7 +28044,21 @@ forward_custom_unit_body (Sprite * sprite, PCX_Image * background, PCX_Image * c
 				draw.presentation_time_ticks, draw.presentation_frequency);
 			(*p_OutputDebugStringA) (detail);
 		}
-		is->custom_renderer_unit_visual (&visual);
+        struct c3x_renderer_unit_animation_v1 animation = {0};
+        animation.struct_size = sizeof animation; animation.visual = visual;
+        animation.cursor = draw.action_cursor; animation.frames = draw.frame_count;
+        animation.display_unit_id = display_unit->Body.ID;
+        animation.frame_seconds = info->anim_frame_time_seconds != NULL ? info->anim_frame_time_seconds[action] : 0;
+        int observed = is->custom_renderer_unit_animation != NULL ?
+            is->custom_renderer_unit_animation (&animation) : is->custom_renderer_unit_visual (&visual);
+        if (observed != C3X_RENDERER_RESULT_OK) log_custom_renderer_event ("unit-animation-failed", observed);
+        if (is->custom_renderer_test_step == 101) {
+            char detail[256];
+            snprintf (detail, sizeof detail, "[C3X renderer] stage=combat-animation id=%d action=%d cursor=%d/%d seconds=%f target=%d,%d ticks=%lld\n",
+                draw.unit_id, action, animation.cursor, animation.frames, animation.frame_seconds,
+                visual.target_x, visual.target_y, visual.presentation_time_ticks);
+            (*p_OutputDebugStringA) (detail);
+        }
 	}
 	// The resident path consumes native image identities before any CPU DC lease.
 	int submitted = translate_custom_renderer_native (C3X_NATIVE_UNIT_DRAW, image, underlay,
@@ -28206,6 +28221,7 @@ ensure_custom_renderer_loaded ()
 		is->custom_renderer_unit_draw = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_draw_background");
 		is->custom_renderer_unit_draw_expanded = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_draw_expanded");
 		is->custom_renderer_unit_draw_playback = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_draw_playback");
+		is->custom_renderer_unit_animation = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_animation");
 		is->custom_renderer_unit_visual = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_visual");
 		is->custom_renderer_unit_move = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_move");
 		is->custom_renderer_unit_motion = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_motion");
@@ -28223,6 +28239,7 @@ ensure_custom_renderer_loaded ()
 		    (is->custom_renderer_unit_draw_playback != NULL) &&
 		    (is->custom_renderer_unit_forget != NULL) &&
 		    (is->custom_renderer_unit_visual != NULL) &&
+		    (is->custom_renderer_unit_animation != NULL) &&
 		    (is->custom_renderer_unit_move != NULL) &&
 		    (is->custom_renderer_unit_motion != NULL) &&
 		    (is->custom_renderer_unit_spawn != NULL) &&

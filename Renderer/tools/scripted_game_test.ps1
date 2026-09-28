@@ -80,9 +80,12 @@ try {
     $enterCount=0
     $cursorParked=$false
     $interactionIndex=0
+    $combatReadyAt=$null
+    $combatAttackSent=$false
+    $combatNextPrepare=36.0
     $interaction=@(@(28,13,'close-welcome'),@(36,90,'zoom-192'),@(39,0x86,'text-192'),@(43,90,'zoom-160'),@(46,0x86,'text-160'),@(50,90,'zoom-128'),@(53,0x86,'text-128'),@(57,0x66,'move-east'),@(65,0x70,'advisor'),@(74,27,'close-advisor'))
     if ($Scenario -eq 'combat') {
-        $interaction=@(@(28,13,'close-welcome'),@(36,0x84,'prepare-combat'),@(44,0x85,'attack-east'))
+        $interaction=,@(28,13,'close-welcome')
     }
     if ($Scenario -eq 'lifecycle') {
         $interaction=@(@(42,27,'quit-first-game'),@(44,40,'select-quit'),@(45,13,'confirm-quit'),@(55,13,'load-again'),@(58,13,'accept-save'),@(100,0x86,'text-second-game'),@(105,27,'quit-second-game'),@(107,40,'select-second-quit'),@(108,13,'confirm-second-quit'))
@@ -112,6 +115,21 @@ try {
                 $key=$interaction[$interactionIndex][1]
                 Write-Host ('Interaction command: '+$interaction[$interactionIndex][2])
                 ++$interactionIndex
+            }
+            if ($Scenario -eq 'combat' -and $elapsed -ge 36 -and -not $combatAttackSent) {
+                # Preparation is idempotent and can be rejected until the first
+                # map is ready. Start the attack only after native confirmation.
+                if ($null -eq $combatReadyAt) {
+                    $liveLog=Get-Content -LiteralPath (Join-Path $session 'renderer.log') -Raw
+                    if ($liveLog -match 'stage=scripted-combat-ready') { $combatReadyAt=$elapsed }
+                    elseif ($elapsed -ge $combatNextPrepare) {
+                        $key=0x84; $combatNextPrepare=$elapsed+3
+                        Write-Host 'Interaction command: prepare-combat'
+                    }
+                } elseif ($elapsed -ge $combatReadyAt+4) {
+                    $key=0x85; $combatAttackSent=$true
+                    Write-Host 'Interaction command: attack-east'
+                }
             }
             if ($key -eq 0) { Start-Sleep -Milliseconds 1000; continue }
             if (-not [RendererGameCommand]::PostMessage($window,0x100,[IntPtr]$key,[IntPtr]1)) { throw 'Cannot post diagnostic command.' }
@@ -147,7 +165,7 @@ $combatFinished=[regex]::Matches($log,'stage=scripted-combat-end').Count
 $textEvents=[regex]::Matches($log,'stage=scripted-game-map-text').Count
 $readyEvents=[regex]::Matches($log,'stage=render-done result=1').Count
 $unloadEvents=[regex]::Matches($log,'stage=scene-unloaded result=1').Count
-$errors=@($log -split "`n" | Where-Object {$_ -match 'stage=native-operation-failed|stage=async-publication-failed|budget exceeded|stage=visual-failure|stage=worker-error|stage=unit-publication-failed|stage=motion-start[^\r\n]*result=[0235]|stage=scene-unload-failed|stage=first-map-ready result=[02345]'})
+$errors=@($log -split "`n" | Where-Object {$_ -match 'stage=native-operation-failed|stage=async-publication-failed|budget exceeded|stage=visual-failure|stage=worker-error|stage=unit-publication-failed|stage=unit-animation-failed|stage=motion-start[^\r\n]*result=[0235]|stage=scene-unload-failed|stage=first-map-ready result=[02345]'})
 [ordered]@{ scenario=$Scenario; interaction_commands=$interactionIndex; combat_ready=$combatReady; combat_finished=$combatFinished; map_text_events=$textEvents; posted_commands=$sent; load_requested=($log -match 'stage=scripted-game-load'); scroll_steps=$steps;
     game_exited_early=$earlyExit; game_exit_code=$gameExitCode; first_map_ready=$readyEvents; scenes_unloaded=$unloadEvents; native_failures=$errors; original_save_unchanged=$true; scope='Real Civ III diagnostic; window samples require visual review; not an FPS benchmark' } |
     ConvertTo-Json -Depth 4 | Set-Content (Join-Path $session 'result.json')

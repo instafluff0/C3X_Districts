@@ -20,17 +20,22 @@ class GpuVisibility {
     Ptr<ID3D11Buffer> buffer;
     ID3D11Texture2D* target=nullptr; // view owns the lifetime
     Ptr<ID3D11RenderTargetView> view;
+    ID3D11Texture2D* actors=nullptr; // stencil view owns the lifetime
+    Ptr<ID3D11ShaderResourceView> actor_stencil;
     unsigned width=0,height=0,capacity=0;
 public:
-    void reset(){vertex.Reset();pixel.Reset();settings.Reset();records.Reset();blend.Reset();raster.Reset();depth.Reset();buffer.Reset();view.Reset();target=nullptr;width=height=capacity=0;}
+    void reset(){vertex.Reset();pixel.Reset();settings.Reset();records.Reset();blend.Reset();raster.Reset();depth.Reset();buffer.Reset();view.Reset();actor_stencil.Reset();actors=nullptr;target=nullptr;width=height=capacity=0;}
     bool apply(ID3D11Device* device,ID3D11DeviceContext* context,ID3D11Texture2D* source,
-               render_core::VisibilityCoverage const& coverage){
+               render_core::VisibilityCoverage const& coverage,
+               ID3D11Texture2D* visible_actors=nullptr,unsigned actor_guard=0){
         if(coverage.tiles.empty())return true;
         if(!source)return false;
         if(!vertex){
             char const* shader=R"(
 struct Record{float2 anchor;uint cells,pad;};StructuredBuffer<Record> records:register(t0);
-cbuffer Settings:register(b0){float4 size;float4 response;};
+Texture2D<uint2> actor_stencil:register(t1);
+Texture2DMS<uint2> actor_samples:register(t2);
+cbuffer Settings:register(b0){float4 size;float4 response;float4 actors;};
 struct V{float4 position:SV_Position;float2 uv:TEXCOORD0;nointerpolation uint cells:TEXCOORD1;};
 V vs(uint vertex:SV_VertexID,uint instance:SV_InstanceID){
  float2 uv[6]={float2(0,0),float2(1,0),float2(1,1),float2(0,0),float2(1,1),float2(0,1)};
@@ -48,7 +53,16 @@ float coverage(uint cells,float2 uv,uint threshold){
 float4 ps(V v):SV_Target{
  float explored=coverage(v.cells,v.uv,1),visible=coverage(v.cells,v.uv,2);
  float fog=(explored-visible)*response.z;
- return float4((response.y*fog).xxx,1-explored+fog);
+ // Only depth-tested body fragments carry stencil 1. Ground, shadows,
+ // cutout holes and terrain in front of a body retain ordinary map coverage.
+ int2 at=int2(v.position.xy)+int(actors.x);
+ float actor_coverage=0;
+ if(actors.y==1)actor_coverage=actor_stencil.Load(int3(at,0)).y!=0;
+ else if(actors.y>1){
+  for(uint sample=0;sample<(uint)actors.y;++sample)
+   actor_coverage+=(actor_samples.Load(at,sample).y!=0)/actors.y;
+ }
+ return float4((response.y*fog).xxx,1-explored+fog)*(1-actor_coverage);
 }
 )";
             Ptr<ID3DBlob> vs,ps,error;
@@ -57,7 +71,7 @@ float4 ps(V v):SV_Target{
             Ptr<ID3D11VertexShader> next;
             if(FAILED(device->CreateVertexShader(vs->GetBufferPointer(),vs->GetBufferSize(),nullptr,&next)) ||
                FAILED(device->CreatePixelShader(ps->GetBufferPointer(),ps->GetBufferSize(),nullptr,&pixel)))return false;
-            D3D11_BUFFER_DESC cb={};cb.ByteWidth=32;cb.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
+            D3D11_BUFFER_DESC cb={};cb.ByteWidth=48;cb.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
             if(FAILED(device->CreateBuffer(&cb,nullptr,&settings)))return false;
             D3D11_BLEND_DESC b={};auto& rt=b.RenderTarget[0];rt.BlendEnable=TRUE;
             rt.SrcBlend=D3D11_BLEND_ONE;rt.DestBlend=D3D11_BLEND_INV_SRC_ALPHA;rt.BlendOp=D3D11_BLEND_OP_ADD;
@@ -71,6 +85,21 @@ float4 ps(V v):SV_Target{
         }
         D3D11_TEXTURE2D_DESC d={};source->GetDesc(&d);
         if(d.Width!=unsigned(coverage.width)||d.Height!=unsigned(coverage.height)||d.SampleDesc.Count!=1)return false;
+        unsigned actor_samples=0;
+        if(visible_actors){
+            D3D11_TEXTURE2D_DESC a={};visible_actors->GetDesc(&a);
+            if(a.Width!=d.Width+2*actor_guard||a.Height!=d.Height+2*actor_guard||
+               a.Format!=DXGI_FORMAT_R24G8_TYPELESS)return false;
+            if(actors!=visible_actors){
+                actor_stencil.Reset();actors=nullptr;
+                D3D11_SHADER_RESOURCE_VIEW_DESC s={};s.Format=DXGI_FORMAT_X24_TYPELESS_G8_UINT;
+                s.ViewDimension=a.SampleDesc.Count==1?D3D11_SRV_DIMENSION_TEXTURE2D:D3D11_SRV_DIMENSION_TEXTURE2DMS;
+                if(a.SampleDesc.Count==1)s.Texture2D.MipLevels=1;
+                if(FAILED(device->CreateShaderResourceView(visible_actors,&s,&actor_stencil)))return false;
+                actors=visible_actors;
+            }
+            actor_samples=a.SampleDesc.Count;
+        }
         if(target!=source){
             view.Reset();target=nullptr;width=height=0;
             if(FAILED(device->CreateRenderTargetView(source,nullptr,&view)))return false;
@@ -84,7 +113,8 @@ float4 ps(V v):SV_Target{
         }
         D3D11_BOX range={0,0,0,bytes,1,1};context->UpdateSubresource(buffer.Get(),0,&range,coverage.tiles.data(),0,0);
         float constants[]={float(width),float(height),float(coverage.tile_width),float(coverage.tile_height),
-            render_core::VisibilityCoverage::feather,render_core::VisibilityCoverage::gray,render_core::VisibilityCoverage::fog_alpha,0};
+            render_core::VisibilityCoverage::feather,render_core::VisibilityCoverage::gray,render_core::VisibilityCoverage::fog_alpha,0,
+            float(actor_guard),float(actor_samples),0,0};
         context->UpdateSubresource(settings.Get(),0,nullptr,constants,0,0);
         context->OMSetRenderTargets(0,nullptr,nullptr);
         auto output=view.Get();context->OMSetRenderTargets(1,&output,nullptr);context->OMSetBlendState(blend.Get(),nullptr,~0u);
@@ -92,12 +122,16 @@ float4 ps(V v):SV_Target{
         D3D11_VIEWPORT viewport={0,0,float(width),float(height),0,1};context->RSSetViewports(1,&viewport);
         auto cb=settings.Get();context->VSSetConstantBuffers(0,1,&cb);context->PSSetConstantBuffers(0,1,&cb);
         auto input=records.Get();context->VSSetShaderResources(0,1,&input);
+        ID3D11ShaderResourceView* protection[]={actor_samples==1?actor_stencil.Get():nullptr,
+            actor_samples>1?actor_stencil.Get():nullptr};
+        context->PSSetShaderResources(1,2,protection);
         context->IASetInputLayout(nullptr);context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         context->VSSetShader(vertex.Get(),nullptr,0);context->PSSetShader(pixel.Get(),nullptr,0);
         context->DrawInstanced(6,unsigned(coverage.tiles.size()),0,0);context->OMSetRenderTargets(0,nullptr,nullptr);
         input=nullptr;context->VSSetShaderResources(0,1,&input);
+        protection[0]=protection[1]=nullptr;context->PSSetShaderResources(1,2,protection);
         return true;
     }
-    std::size_t bytes()const{return capacity+(settings?32:0);}
+    std::size_t bytes()const{return capacity+(settings?48:0);}
 };
 }

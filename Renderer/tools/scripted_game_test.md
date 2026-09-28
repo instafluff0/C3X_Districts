@@ -165,14 +165,46 @@ movement. `Renderer/native/test_unit_motion.py` independently covers delayed
 admission, early completion, recapture, consecutive steps, wrapping, zoom,
 retirement, position correction and config-off delegation.
 
+Current capture `20260927-183538` exercises movement with the same build as the
+combat witness below. Both units have intermediate run positions and reach the
+new tile; the selection ring follows travel and the terrain reveal is retained.
+All ten commands and three map-text events completed, with no renderer failure
+or early game exit and no change to the original save.
+
+For repeatable visual review, copy the finished capture into the ignored
+`Renderer/native/build/` directory and run the contact-sheet helper with a Python
+environment containing Pillow:
+
+```sh
+python3 Renderer/tools/game_test_contact_sheet.py Renderer/native/build/game-test-example \
+  --kind movement --crop 950 510 1410 780
+python3 Renderer/tools/game_test_contact_sheet.py Renderer/native/build/game-test-example \
+  --kind combat --crop 990 510 1350 770
+```
+
+These crop examples fit the current 2240 × 1260 diagnostic window; choose the
+crop from the actual frame for a different save or window size, or omit it for
+the whole window. The helper reads the recorded QPC frequency and writes both
+the image and a frame/timestamp index. `--event` selects a later movement;
+`--times` selects custom offsets in seconds. For the combat marker, the origin
+is the first subsequent renderer QPC and is labeled as such. Inspect the native
+action/HP log alongside the sheet. Ten sampled pictures per second cannot prove
+that every rendered frame was smooth or measure live FPS.
+
 ## Combat diagnostic
 
-`-Scenario combat -Seconds 75 -SampleHz 10` loads the same disposable save,
-dismisses the welcome popup, prepares an encounter at 36 seconds and attacks
-at 44 seconds. It requires a selected stack containing an owned land attacker
-and an empty, visible land tile immediately east with no city. F21 creates one
-barbarian of that attacker's type through the existing native spawn function
-and selects the owned attacker. F22 requests an ordinary eastward native move,
+`-Scenario combat -Seconds 90 -SampleHz 10` loads the same disposable save
+and dismisses the welcome popup. Starting at 36 seconds, it retries the
+idempotent preparation command every three seconds until the native readiness
+marker appears. Four seconds after confirmation, it attacks once. An earlier
+fixed schedule attempted preparation before the first map was ready and did
+not exercise combat.
+
+The fixture requires an empty, visible land tile immediately east of the
+selected stack, with no city. F21 selects an owned land attacker from the stack,
+or spawns the scenario's basic barbarian unit type as an owned test attacker
+when the stack contains only civilians. It then creates one barbarian defender
+of that type through the existing native spawn function. F22 requests an ordinary eastward native move,
 which invokes Civ III combat. Both commands require custom rendering, the
 explicit save and `combat` mode environment variables, and a single-player
 session. Each can run once. The fixture does not force a winner or save changes.
@@ -182,3 +214,31 @@ observations include action, queued action, HP/damage, visibility, retirement
 and clock. Compare those with the window timeline and rendered action changes;
 command completion alone does not prove combat animation correctness. Missing
 fixture prerequisites make the test fail rather than change another tile.
+
+Capture `20260927-174627` is the initial combat baseline: preparation and native
+combat return completed, the original save was unchanged, and there were no
+logged renderer failures. The attacker lost. The trace records fortify, attack
+variants, five nonlethal HP changes, lethal damage, death, retirement and the
+survivor's idle handoff. Window samples show the attacker incorrectly fighting
+from its source tile while its native health marker advances to the combat
+stance. This baseline is not a combat visual pass. `combat-animation` records
+in newer candidates also include native cursor/count, frame period and accepted
+target so timing and placement can be checked against the same native events.
+
+Capture `20260927-180347` confirms the native Warrior periods: attack/death
+15 frames at 0.083 seconds (1.245 seconds per cycle), fortify 10 frames at
+0.066 seconds, and the attacker's accepted target 64 pixels east of its source
+center. Its renderer candidate failed because normalized phases exceeded the
+pose validator's 65,536-frame bound. The regression now passes each generated
+phase through `prepare_native_unit_pose`; this capture is retained as a failure,
+not visual acceptance.
+
+Capture `20260927-181008` completed the melee encounter, but showed fog-edge
+weapon clipping and a stale civilian from the source stack. The current
+`20260927-183323` capture removes those two defects: the weapon silhouette
+remains intact, the attacker approaches and fights at its accepted half-tile
+stance, dies there, retires, and native civilian selection resumes. Both
+preparation/return markers are present, no renderer failure was logged, and the
+original save is unchanged. This is a melee-defeat witness; it does not qualify
+victory, retreat, ranged or army combat, native audio alignment, or limb blending
+between clips.

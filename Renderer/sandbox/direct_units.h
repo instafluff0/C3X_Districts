@@ -17,6 +17,7 @@ struct SandboxDirectUnits {
     ID3D11VertexShader* vertex=nullptr;
     ID3D11PixelShader* pixel=nullptr,*shadow_pixel=nullptr;
     ID3D11InputLayout* layout=nullptr;
+    ID3D11DepthStencilState* visible_depth=nullptr;
     ID3D11Buffer *material=nullptr,*beauty=nullptr,*placement=nullptr;
     ID3D11Texture2D* unshadowed=nullptr;
     ID3D11ShaderResourceView* unshadowed_view=nullptr;
@@ -29,7 +30,7 @@ struct SandboxDirectUnits {
     int combat_serial=0;
     unsigned draws=0,pose_builds=0,mesh_builds=0;
     template<class T>static void drop(T*& p){if(p)p->Release();p=nullptr;}
-    ~SandboxDirectUnits(){drop(vertex);drop(pixel);drop(shadow_pixel);drop(layout);drop(material);drop(beauty);
+    ~SandboxDirectUnits(){drop(vertex);drop(pixel);drop(shadow_pixel);drop(layout);drop(visible_depth);drop(material);drop(beauty);
         drop(placement);drop(unshadowed_view);drop(unshadowed);
         for(auto& sampler:samplers)drop(sampler);}
     c3x_renderer::UnitBodyRenderer::Unit const* unit_for(int subject){
@@ -421,8 +422,20 @@ float4 PSShadow(Output i):SV_Target {
     template<class Target>bool draw_real(c3x_renderer_frame_v1 const& frame,
             std::vector<c3x_renderer::render_core::UnitInstances::ScenePose> const& visible,
             Target& scene,float scene_scale,float visual_hour,bool reflected=false){
+        // The map fog pass consumes this exact body coverage after tone mapping.
+        // Clearing just stencil preserves terrain depth and costs no readback.
+        if(!reflected)renderer.context->ClearDepthStencilView(scene.depth,D3D11_CLEAR_STENCIL,1,0);
         if(visible.empty())return true;
         if(!initialize())return false;
+        if(!reflected&&!visible_depth){
+            D3D11_DEPTH_STENCIL_DESC d={};renderer.depth_state->GetDesc(&d);
+            d.StencilEnable=TRUE;d.StencilReadMask=d.StencilWriteMask=0xff;
+            d.FrontFace.StencilFunc=D3D11_COMPARISON_ALWAYS;
+            d.FrontFace.StencilFailOp=d.FrontFace.StencilDepthFailOp=D3D11_STENCIL_OP_KEEP;
+            d.FrontFace.StencilPassOp=D3D11_STENCIL_OP_REPLACE;d.BackFace=d.FrontFace;
+            if(FAILED(renderer.device->CreateDepthStencilState(&d,&visible_depth)))return false;
+        }
+        auto* body_depth=reflected?renderer.depth_state:visible_depth;
         auto& bodies=renderer.unit_bodies;
         auto* context=renderer.context;
         if(!reflected){
@@ -445,7 +458,7 @@ float4 PSShadow(Output i):SV_Target {
                 scene.target,scene.width,scene.height);
         }
         context->OMSetRenderTargets(1,&scene.target,scene.depth);
-        context->OMSetDepthStencilState(renderer.depth_state,0);
+        context->OMSetDepthStencilState(body_depth,reflected?0:1);
         context->OMSetBlendState(nullptr,nullptr,0xffffffffu);
         context->RSSetState(renderer.rasterizer_state);
         D3D11_VIEWPORT viewport={0,0,float(scene.width),float(scene.height),0,1};
@@ -574,7 +587,7 @@ float4 PSShadow(Output i):SV_Target {
                     context->PSSetShader(shadow_pixel,nullptr,0);
                     context->DrawIndexed(UINT(source->indices.size()),0,0);
                     placement_values[16]=0;
-                    context->OMSetDepthStencilState(renderer.depth_state,0);
+                    context->OMSetDepthStencilState(body_depth,reflected?0:1);
                     context->OMSetBlendState(nullptr,nullptr,0xffffffffu);
                     context->PSSetShader(pixel,nullptr,0);
                 }

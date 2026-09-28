@@ -141,6 +141,18 @@ struct c3x_renderer_unit_visual_v1 {
     c3x_renderer_i64 presentation_time_ticks, presentation_frequency;
 };
 
+// Copied native action cadence. Kept separate from both established v1 ABIs
+// so old journals and unit body callers retain their exact layouts.
+struct c3x_renderer_unit_animation_v1 {
+    c3x_renderer_u32 struct_size;
+    struct c3x_renderer_unit_visual_v1 visual;
+    c3x_renderer_i32 cursor, frames;
+    float frame_seconds;
+    // The native parent whose map draw selected this body. An army commander
+    // and its representative member share one display group.
+    c3x_renderer_i32 display_unit_id;
+};
+
 // One accepted native move. The receiver never treats this as a gameplay
 // command; the tile and visibility outcomes have already been decided by Civ III.
 struct c3x_renderer_unit_move_v1 {
@@ -566,6 +578,7 @@ typedef int (*c3x_renderer_set_unit_rendering_fn)(int enabled);
 /* Retire a despawned visual identity before Civ III can reuse its ID. No drawing. */
 typedef void (*c3x_renderer_unit_forget_fn)(int unit_id);
 typedef int (*c3x_renderer_unit_visual_fn)(struct c3x_renderer_unit_visual_v1 const *);
+typedef int (*c3x_renderer_unit_animation_fn)(struct c3x_renderer_unit_animation_v1 const *);
 typedef int (*c3x_renderer_unit_move_fn)(struct c3x_renderer_unit_move_v1 const *);
 typedef int (*c3x_renderer_unit_spawn_fn)(struct c3x_renderer_unit_spawn_v1 const *);
 typedef int (*c3x_renderer_unit_state_fn)(struct c3x_renderer_unit_state_v1 const *);

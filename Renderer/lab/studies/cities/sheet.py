@@ -247,7 +247,8 @@ def variant_cell(design: dict, size: int, walls: bool, capital: bool,
     return image, art_pixels, True
 
 
-def render_culture(layouts: dict, culture: int, output: Path, only_era: int | None = None):
+def render_culture(layouts: dict, culture: int, output: Path, only_era: int | None = None,
+                   compact_unwalled: bool = False):
     designs = [d for d in layouts["designs"] if d["culture"] == culture
                and (only_era is None or d["era"] == only_era)]
     variants = ((False, False, "Base"), (True, False, "Walls"),
@@ -306,20 +307,25 @@ def render_culture(layouts: dict, culture: int, output: Path, only_era: int | No
                                      "palace": design["palace"]["asset"] if capital else None})
     else:
         # Civ III's three population columns and four era rows stay intact.
-        # Each population panel contains the four state variants in a 2x2
-        # inset, so the complete culture remains readable on one sheet.
+        # With compact_unwalled, City and Metropolis show only their two
+        # meaningful states, keeping the full culture readable on one sheet.
         cell, tile_pixels, caption = CELL, TILE_PIXELS, 23
-        panel_width, panel_height = cell[0]*2, (cell[1]+caption)*2
+        panel_widths = ([cell[0]*2, cell[0], cell[0]] if compact_unwalled
+                        else [cell[0]*2]*3)
+        panel_height = (cell[1]+caption)*2
         left, top = 112, 104
-        width = left+panel_width*3+16
+        width = left+sum(panel_widths)+16
         height = top+panel_height*len(designs)+18
         sheet = Image.new("RGB", (width, height), (33, 27, 42))
         draw = ImageDraw.Draw(sheet)
         draw.text((18, 12), title+" city designs", font=font(26), fill=(249, 240, 249))
-        draw.text((18, 48), "Era rows  |  population columns  |  four states per cell  |  flat grassland",
+        caption_text = ("Era rows  |  population columns  |  Town: four states; City/Metro: two  |  flat grassland"
+                        if compact_unwalled else
+                        "Era rows  |  population columns  |  four states per cell  |  flat grassland")
+        draw.text((18, 48), caption_text,
                   font=font(15), fill=(202, 186, 204))
         for size, population in enumerate(("Town 1-6", "City 7-12", "Metropolis 13+")):
-            draw.text((left+size*panel_width+14, 75), population,
+            draw.text((left+sum(panel_widths[:size])+14, 75), population,
                       font=font(18), fill=(250, 230, 247))
         for era_index, design in enumerate(designs):
             row_y = top+era_index*panel_height
@@ -327,10 +333,13 @@ def render_culture(layouts: dict, culture: int, output: Path, only_era: int | No
             draw.text((14, row_y+16), design["era_name"],
                       font=font(18), fill=(250, 235, 248))
             for size in range(3):
-                panel_x = left+size*panel_width
-                for variant, (walls, capital, name) in enumerate(variants):
-                    x = panel_x+(variant%2)*cell[0]
-                    y = row_y+(variant//2)*(cell[1]+caption)
+                panel_x = left+sum(panel_widths[:size])
+                shown = (variants if size == 0 or not compact_unwalled else
+                         (variants[0], variants[2]))
+                for variant, (walls, capital, name) in enumerate(shown):
+                    x = panel_x+((variant%2)*cell[0] if size == 0 or not compact_unwalled else 0)
+                    y = row_y+((variant//2) if size == 0 or not compact_unwalled
+                               else variant)*(cell[1]+caption)
                     draw.rectangle((x, y, x+cell[0]-2, y+caption-1), fill=(57, 43, 65))
                     draw.text((x+9, y+3), name, font=font(15), fill=(250, 230, 247))
                     image, art_pixels, available = variant_cell(

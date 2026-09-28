@@ -135,6 +135,29 @@ visible adjacent barbarian is spawned only in the diagnostic child, then
 native combat decides the result. Config-off, normal launches and multiplayer
 cannot enter the fixture. `required_user_action: []`.
 
+## Combat presentation from existing unit hooks
+
+`Unit_tick_anim`, `Sprite_draw_unit_body_normal` and the reduced body hook remain
+the capture boundary. The body hook now copies the native action cursor, frame
+count, `Animation_Info::anim_frame_time_seconds[action]` and native display-parent
+ID alongside its existing accepted pixel target. A separate `c3x_renderer_unit_animation_v1` export and
+unit-visual journal subtype preserve the older draw/visual ABI layouts.
+No new native symbol, patch-table entry or gameplay timing change is needed.
+Config-off continues through the existing native body path.
+`required_user_action: []`.
+
+Renderer64 converts the accepted in-tile target to an offset from the copied
+unit tile center, including wrap and zoom. It interpolates between endpoints
+and holds the stance across fortify, attack and death; native intermediate
+pixel samples do not steer travel. Ordinary tile movement keeps its separate
+accepted segment. Action playback uses the copied native cycle duration:
+repeated body captures cannot restart an attack, and death/victory hold their
+last pose until the next authoritative transition. HP and retirement remain
+native facts. Hidden or retired units cannot be revived by a late body sample.
+The parent ID groups an army's captured bodies and replaces stale stationary
+stack displays without deleting their cached identity or interrupting admitted
+travel. No additional hook is used for this ownership handoff.
+
 ## Empty native unit background copies
 
 `required_user_action: ["At the strategic game checkpoint, verify cold startup and scrolling with the staged empty-copy correction using the existing diagnostic"]`.
