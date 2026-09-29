@@ -21,7 +21,7 @@ OUT = ROOT / "Renderer/lab/out/units/settler-carrier"
 PACK = ROOT / "Renderer/packs/UnitSettlerCarrierLab"
 RUNTIME = ROOT / "Renderer/packs/UnitSettlerCarrierRuntime"
 STRATEGY = HERE / "settler_carrier_strategy.json"
-ACTIONS = ("idle", "move", "fidget", "fortify")
+ACTIONS = ("idle", "move", "fidget", "fortify", "capture", "build", "death")
 
 
 def _write(path: Path, value: dict) -> None:
@@ -43,7 +43,7 @@ def prepare() -> dict:
             raise ValueError("Carrier clip conversion failed")
         report = compile_unit_families(ASSETS_ROOT, STRATEGY, PACK, OUT / "import-report.json")
     if report["outputs"]["converted_actions"] != len(ACTIONS):
-        raise ValueError("The carrier's four clips have not all been converted")
+        raise ValueError("The carrier's seven clips have not all been converted")
     recipe = json.loads((PACK / "units/settler_recipe.json").read_text(encoding="utf-8"))
     if recipe["member"]["count"] != 1 or recipe["civ3_ids"] != ["PRTO_Lab_SettlerCarrier"]:
         raise ValueError("Lab recipe must contain exactly one private carrier")
@@ -63,7 +63,7 @@ def prepare() -> dict:
             for action, record in action_report["units"]["unit/settler"]["actions"].items()},
         "pose_caches": pose_report["unique_component_pose_caches"],
         "runtime_pack": str(RUNTIME.relative_to(ROOT)),
-        "backpack_socket": "Pelvis (inferred; visual calibration pending)",
+        "backpack_socket": "Pelvis (inferred; preview visually checked)",
     }
     _write(OUT / "receipt.json", receipt)
     return receipt
@@ -84,10 +84,11 @@ def preview_source() -> None:
     replace("int main(int argc, char** argv) {",
             'int main(int argc, char** argv) {\n'
             '    SetEnvironmentVariableA("C3X_RENDERER_UNIT_PACK", "UnitSettlerCarrierRuntime");')
-    replace("int count=sizing?18:shadows?2:6;", "int count=sizing?18:shadows?2:2;")
     replace('sprintf_s(unit.unit_key, "PRTO_%s", keys[index%6]);',
             'strcpy_s(unit.unit_key, "PRTO_Lab_SettlerCarrier");')
-    replace("unit.action = 2;", "unit.action = index == 0 ? 1 : 2;")
+    replace("unit.action = 2;",
+            "unit.action = index == 0 ? 1 : index == 1 ? 2 : index == 2 ? 8 : "
+            "index == 3 ? 10 : index == 4 ? 12 : 6;")
     replace("unit.action_cursor = cursor[0] ? std::atoi(cursor) : 7;",
             "unit.action_cursor = index == 0 ? 0 : (cursor[0] ? std::atoi(cursor) : 7);")
     OUT.mkdir(parents=True, exist_ok=True)

@@ -17,12 +17,12 @@ template<class T>void replace(std::vector<std::uint8_t>&out,std::size_t at,T con
     std::memcpy(out.data()+at,&value,sizeof(value));
 }
 struct Fixture {
-    std::vector<std::uint8_t> pack={'C','3','X','N','A','T','3',0},dds=std::vector<std::uint8_t>(152);
+    std::vector<std::uint8_t> pack={'C','3','X','N','A','T','4',0},dds=std::vector<std::uint8_t>(152);
     std::size_t bindings=0,material=0,body=0,recipe=0,surface=0,surface_vertices=0;
     Fixture(){
-        for(unsigned count:{1,1,32,35,3,18})append(pack,count);
+        for(unsigned count:{1,1,32,35,4,24})append(pack,count);
         append(pack,5u);for(char c:std::string("a.dds"))pack.push_back(std::uint8_t(c));
-        bindings=pack.size();for(unsigned i=0;i<54;i++)append(pack,0u);
+        bindings=pack.size();for(unsigned i=0;i<57;i++)append(pack,0u);
         material=pack.size();append(pack,Material{});
         body=pack.size();
         for(unsigned i=0;i<32;i++){
@@ -32,9 +32,9 @@ struct Fixture {
         recipe=pack.size();
         for(unsigned i=0;i<35;i++)append(pack,Recipe{i%32,1,0,i==0?180u:i==25?121u:0u,0,0,0,1,0});
         surface=pack.size();
-        for(unsigned biome=0;biome<3;biome++)append(pack,SurfaceRecipe{biome,2,.2f,1,.8f,.7f,biome*6,6});
+        for(unsigned biome=0;biome<4;biome++)append(pack,SurfaceRecipe{biome,2,.2f,1,.8f,.7f,biome*6,6});
         surface_vertices=pack.size();
-        for(unsigned biome=0;biome<3;biome++)for(auto const&vertex:std::array<SurfaceVertex,6>{{
+        for(unsigned biome=0;biome<4;biome++)for(auto const&vertex:std::array<SurfaceVertex,6>{{
             {-.4f,-.3f,.1f,.2f},{.4f,-.3f,.9f,.2f},{.4f,.3f,.9f,.8f},
             {-.4f,-.3f,.1f,.2f},{.4f,.3f,.9f,.8f},{-.4f,.3f,.1f,.8f}}})append(pack,vertex);
         replace(dds,12,2u);replace(dds,16,2u);replace(dds,128,61u);
@@ -51,7 +51,7 @@ struct Fixture {
     }
 };
 
-void valid_data(NaturalData const&data,unsigned surface_count=3){
+void valid_data(NaturalData const&data,unsigned surface_count=4){
     check(data.bodies.size()==32 && data.recipes.size()==35 &&
            data.surface_recipes.size()==surface_count,"body/recipe count");
     check(data.surface_vertices.size()>=18 && data.surface_vertices.size()%3==0,"surface triangle count");
@@ -106,7 +106,7 @@ int main(int argc,char**argv){try{
     bad=fixture;replace(bad.pack,bad.recipe+4,0.f);reject(bad);
     bad=fixture;replace(bad.pack,bad.recipe+24,8u);reject(bad);
     bad=fixture;replace(bad.pack,bad.recipe+12,179u);reject(bad);
-    bad=fixture;replace(bad.pack,bad.surface,3u);reject(bad);
+    bad=fixture;replace(bad.pack,bad.surface,4u);reject(bad);
     bad=fixture;replace(bad.pack,bad.surface+4,0.f);reject(bad);
     bad=fixture;replace(bad.pack,bad.surface+12,0u);reject(bad);
     bad=fixture;replace(bad.pack,bad.surface+16,0.f);reject(bad);
@@ -123,7 +123,7 @@ int main(int argc,char**argv){try{
             std::ifstream stream(std::string(argv[1])+"/"+path,std::ios::binary);
             if(!stream)return false;out.assign(std::istreambuf_iterator<char>(stream),{});return true;
         },[](std::vector<std::uint8_t>const&bytes,std::size_t&texture){texture=bytes.size();return true;}),"production payload rejected");
-        valid_data(real,35);
+        valid_data(real,39);
         std::cout<<"PASS production natural payload: textures="<<textures.size()<<" materials="<<real.materials.size()<<" bodies="<<real.bodies.size()<<" recipes="<<real.recipes.size()<<" surface="<<real.surface_recipes.size()<<"\n";
     }
     return 0;

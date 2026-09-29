@@ -4,7 +4,10 @@
 // ShowDecal flag. Exact engine scatter remains unavailable, so this generic
 // reconstruction preserves those associations, descriptor footprints,
 // ArtDef scale/variation, stable world seeds and feature clipping.
-    int floor_hill_canopy=c3x_renderer::native_hill_vegetation(tile.real_terrain_type,
+    // Raised forest/jungle variants use tree meshes only. Their rock surfaces
+    // must not inherit the lowland vegetation-floor decals.
+    int floor_hill_canopy=c3x_renderer::native_hill_vegetation(
+        tile.real_terrain_type==5?5:0,
         [&](int dx,int dy){return lookup_natural(nc+(dx+dy)/2,nr+(dx-dy)/2).real;},
         c3x_renderer::native_hill_seed(owner.source_x,owner.source_y));
     bool floor_hill_forest=floor_hill_canopy==7;

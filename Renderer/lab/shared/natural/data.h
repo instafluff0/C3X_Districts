@@ -39,19 +39,19 @@ struct NaturalData {
     std::vector<Recipe> recipes;
     std::vector<SurfaceRecipe> surface_recipes;
     std::vector<SurfaceVertex> surface_vertices;
-    unsigned terrain[31]={},mountain[13]={},macro[5][2]={};
+    unsigned terrain[31]={},floodplain[3]={},mountain[13]={},macro[5][2]={};
     std::string failure;
     template<class Texture,class Read,class Upload>
     bool load_data(std::vector<Texture>&textures,Read read,Upload upload){
         failure="catalog";
         std::vector<std::uint8_t>d;
         constexpr char const* natural_pack="Renderer/packs/NaturalFidelityRuntime/";
-        if(!read(std::string(natural_pack)+"natural.bin",d)||d.size()<32||std::memcmp(d.data(),"C3XNAT3\0",8))return false;
+        if(!read(std::string(natural_pack)+"natural.bin",d)||d.size()<32||std::memcmp(d.data(),"C3XNAT4\0",8))return false;
         std::size_t pos=8;
         auto take=[&](void*out,std::size_t n){if(n>d.size()-pos)return false;std::memcpy(out,d.data()+pos,n);pos+=n;return true;};
         unsigned count[6]={};if(!take(count,24)||count[0]>128||count[1]>64||
                 count[2]!=32||count[3]!=35||
-                count[4]<3||count[4]>64||count[5]<3||count[5]>100000||count[5]%3)return false;
+                count[4]<4||count[4]>64||count[5]<3||count[5]>100000||count[5]%3)return false;
         // Jungle bodies and decals use recipes 25..34. An older forest-only
         // pack cannot satisfy the current terrain compiler's input contract.
         textures.resize(count[0]);fields.resize(count[0]);
@@ -70,8 +70,9 @@ struct NaturalData {
             if(!upload(bytes,textures[i]))return false;
         }
         failure="bindings";
-        if(!take(terrain,sizeof(terrain))||!take(mountain,sizeof(mountain))||!take(macro,sizeof(macro)))return false;
+        if(!take(terrain,sizeof(terrain))||!take(floodplain,sizeof(floodplain))||!take(mountain,sizeof(mountain))||!take(macro,sizeof(macro)))return false;
         for(auto i:terrain)if(i>=textures.size())return false;
+        for(auto i:floodplain)if(i>=textures.size())return false;
         for(auto i:mountain)if(i>=textures.size())return false;
         for(auto const&r:macro)for(auto i:r)if(i>=fields.size()||fields[i].pixels.empty())return false;
         if(fields[terrain[14]].pixels.empty()||fields[terrain[30]].pixels.empty())return false;
@@ -88,16 +89,16 @@ struct NaturalData {
         recipes.resize(count[3]);unsigned weight=0;
         for(auto&r:recipes){if(!take(&r,sizeof(r))||r.object>=bodies.size()||!std::isfinite(r.scale)||r.scale<=0||!std::isfinite(r.variation)||r.variation<0||r.variation>2||r.flags>7)return false;weight+=r.count;}
         if(weight!=301u)return false;
-        surface_recipes.resize(count[4]);unsigned surface_weight[3]={};
-        for(auto&r:surface_recipes){if(!take(&r,sizeof(r))||r.biome>2||!std::isfinite(r.scale)||r.scale<=0||r.scale>16||
+        surface_recipes.resize(count[4]);unsigned surface_weight[4]={};
+        for(auto&r:surface_recipes){if(!take(&r,sizeof(r))||r.biome>3||!std::isfinite(r.scale)||r.scale<=0||r.scale>16||
                 !std::isfinite(r.variation)||r.variation<0||r.variation>2||!r.weight||r.weight>64||
                 !std::isfinite(r.width)||!std::isfinite(r.height)||r.width<=0||r.height<=0||r.width>4||r.height>4||
                 r.vertex_count<3||r.vertex_count%3||r.first>count[5]||r.vertex_count>count[5]-r.first)return false;
             surface_weight[r.biome]+=r.weight;}
         surface_vertices.resize(count[5]);if(!take(surface_vertices.data(),surface_vertices.size()*sizeof(SurfaceVertex)))return false;
         for(auto const&v:surface_vertices)if(!std::isfinite(v.x)||!std::isfinite(v.y)||!std::isfinite(v.u)||!std::isfinite(v.v)||
-                v.u<-.02f||v.u>1.02f||v.v<-.02f||v.v>1.02f)return false;
-        if(pos!=d.size()||!surface_weight[0]||!surface_weight[1]||!surface_weight[2])return false;
+                v.u<-.02f||v.u>1.05f||v.v<-.02f||v.v>1.05f)return false;
+        if(pos!=d.size()||!surface_weight[0]||!surface_weight[1]||!surface_weight[2]||!surface_weight[3])return false;
         // Older/simple texture-only packs remain valid and exactly flat.
         d.clear();read(std::string(natural_pack)+"low-relief.bin",d);
         failure="low relief";if(!low_relief.load(d))return false;

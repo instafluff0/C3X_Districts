@@ -33,7 +33,8 @@ def poses(blob):
     joints = np.array([v[8:12] for v in rows])
     weights = np.array([v[12:16] for v in rows])
     indices = np.frombuffer(blob, dtype='<u4', count=ni, offset=32+n*stride)
-    matrices = np.frombuffer(blob, dtype='<f4', offset=32+n*stride+ni*4).reshape(nf, nb, 4, 4)
+    matrices = np.frombuffer(blob, dtype='<f4', count=nf*nb*16,
+                             offset=32+n*stride+ni*4).reshape(nf, nb, 4, 4)
     for palette in matrices:
         yield sum(weights[:,i,None]*np.einsum('vi,vij->vj', positions, palette[joints[:,i]])
                   for i in range(4))[:,:3], indices

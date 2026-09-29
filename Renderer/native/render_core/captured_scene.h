@@ -90,6 +90,7 @@ public:
     static c3x_renderer_tile_v1 content(c3x_renderer_tile_v1 tile) {
         tile.tile_x=tile.tile_y=tile.anchor_x=tile.anchor_y=0;
         tile.tile_flags=tile.visibility_mask=tile.tile_visibility=0;
+        tile.city_site_grade=0; // Presentation overlay, never terrain content.
         tile.fog_status=tile.territory_owner_id=0;
         // These selectors/labels belong to native overlays or deferred owners.
         // Match the static frame identity: exact population is not city size.

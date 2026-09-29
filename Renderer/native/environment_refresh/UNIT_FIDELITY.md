@@ -30,6 +30,15 @@ The source importers and `refresh_unit_normals.py` remain the offline authority
 for those records. See `Renderer/docs/unit_asset_conversion.md` for source-format
 findings. The normal catalog covers 375 imported mesh primitives.
 
+The current `PRTO_Settler` recipe selects one `SettlerBuilder` carrier from
+`UNIT_SETTLER` (member index 2, count 1). Its four components are backpack,
+armor, body and head. Idle, movement, fidget and stop use the source backpack
+clips; capture uses the compatible basket gesture, city founding uses the
+leader's compatible humanoid gesture, and death uses the established Scout
+humanoid clip. The offline `Backpack` to `Pelvis` socket is inferred from the
+ArtDef point and checked visually; it is not a confirmed source-engine rule.
+The generic runtime key, native action lifecycle and unit capture stay the same.
+
 Category commands run unit preparation automatically when consumed catalogs,
 payloads, textures, normal records or the builder change. Generation occurs in
 disposable output, followed by source and output-conflict checks. Runtime payloads

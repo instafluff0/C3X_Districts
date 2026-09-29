@@ -30,6 +30,21 @@
         "fortify": {
           "source": "ANIMATION_Settler_Backpack_Run_Stop",
           "loop": false
+        },
+        "capture": {
+          "source": "ANIMATION_Settler_Basket_CaptureA",
+          "loop": false,
+          "source_match": "settler carrier humanoid rig; verify full pose and backpack attachment"
+        },
+        "build": {
+          "source": "ANIMATION_SettlerLeader_CITYA",
+          "loop": false,
+          "source_match": "compatible settler humanoid founding gesture; verify carrier pose"
+        },
+        "death": {
+          "source": "ANIMATION_Scout_DeathA",
+          "loop": false,
+          "source_match": "compatible humanoid death; source carrier has no death clip"
         }
       },
       "member_index": 2,
@@ -54,5 +69,5 @@
     "unsupported_policy": "complete_native_unit_body_fallback"
   },
   "runtime_integration": "not_enabled",
-  "selection_notes": "Lab-only single SettlerBuilder member. Civ VI declares two identical copies; this preview selects one. The inferred Backpack-to-Pelvis socket needs visual calibration before game use."
+  "selection_notes": "Private Lab preview of one SettlerBuilder member. Civ VI declares two identical copies; the game-facing UnitEarlyLab recipe separately binds one to PRTO_Settler. Backpack-to-Pelvis remains an inferred offline visual calibration."
 }

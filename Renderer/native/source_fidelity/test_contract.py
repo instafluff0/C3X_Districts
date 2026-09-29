@@ -20,6 +20,9 @@ int main() {
     assert(sheet(5,{8,8,5,5})==8);
     assert(sheet(5,{7,7,7,7})==7);
     assert(sheet(5,{8,8,8,8})==8);
+    assert(sheet(6,{7,7,6,6})==7);
+    assert(sheet(10,{8,8,10,10})==8);
+    assert(sheet(10,{7,7,2,10})==0);
     assert(sheet(5,{7,7,2,5})==0);
     assert(sheet(5,{5,6,5,10})==0);
     assert(sheet(7,{7,7,7,7})==0);

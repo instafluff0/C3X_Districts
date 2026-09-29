@@ -31,13 +31,14 @@ def grade(evaluation: int) -> int | None:
 def color(level: int) -> tuple[int, int, int]:
     if not 0 <= level < STEPS:
         raise ValueError("desirability grade outside the eleven-step palette")
-    t = level / (STEPS - 1)
+    # Keep adjacent top grades legible at the inset overlay's low opacity.
+    t = (level / (STEPS - 1)) ** 3
     return tuple(round(a + (b - a) * t) for a, b in zip(WHITE, GREEN))
 
 
 def invented_evaluation(x: int, y: int, case: str) -> int:
     """A bounded, deterministic visual fixture; zero stands for no highlight."""
-    if case not in ("wash", "outlined", "coastal"):
+    if case not in ("wash", "inset", "coastal"):
         raise ValueError("unknown city-site preview case")
     dx, dy = x - CENTER[0], y - CENTER[1]
     if abs(dx) > 6 or abs(dy) > 6 or (x + y) % 2:
@@ -66,7 +67,7 @@ def diamond(x: int, y: int, tile_width: int, image_size: tuple[int, int]) -> tup
 def compose(source: Image.Image, tile_width: int, case: str) -> Image.Image:
     if tile_width not in CUSTOM_TILE_WIDTHS:
         raise ValueError("unsupported study zoom")
-    if case not in ("wash", "outlined", "coastal"):
+    if case not in ("wash", "inset", "coastal"):
         raise ValueError("unknown city-site preview case")
     base = source.convert("RGBA")
     scale = 3
@@ -79,9 +80,13 @@ def compose(source: Image.Image, tile_width: int, case: str) -> Image.Image:
                 continue
             points = [(round(px * scale), round(py * scale)) for px, py in diamond(x, y, tile_width, base.size)]
             tint = color(level)
-            pen.polygon(points, fill=(*tint, 132 if case == "wash" else 106))
             if case != "wash":
-                pen.line(points + [points[0]], fill=(*tint, 210), width=2 * scale, joint="curve")
+                gap = scale
+                points = [(points[0][0], points[0][1] + gap),
+                          (points[1][0] - gap, points[1][1]),
+                          (points[2][0], points[2][1] - gap),
+                          (points[3][0] + gap, points[3][1])]
+            pen.polygon(points, fill=(*tint, 132 if case == "wash" else 106))
     layer = layer.resize(base.size, Image.Resampling.LANCZOS)
     return Image.alpha_composite(base, layer).convert("RGB")
 

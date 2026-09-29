@@ -24,11 +24,12 @@ palettes for every used joint; `test_unit_pose_transition.py` covers intermediat
 blends, interruption and retirement. Live-game evidence is recorded in the
 [scripted testing guide](../../../../tools/scripted_game_test.md#combat-diagnostic).
 
-The isolated [settler carrier study](../../../studies/units/README.md#single-settler-carrier-lab-study)
-selects one of Civ VI's two identical backpack members. Its private key and pack
-do not replace the current `PRTO_Settler` binding. The study builds the carrier's
-idle, run, fidget and run-stop clips and renders two poses with the production
-D3D11 unit renderer; backpack socket placement remains provisional.
+The [settler carrier study](../../../studies/units/README.md#single-settler-carrier-lab-study)
+selects one of Civ VI's two identical backpack members. Its private preview key
+remains separate; the current game-facing recipe also selects this one member
+for `PRTO_Settler`. The seven-action pack covers idle, run, fidget, run-stop,
+capture, founding and death. The backpack-to-pelvis socket is an offline visual
+calibration rather than confirmed source-engine attachment behavior.
 
 The opt-in `sizing`, `sizing-gameplay` and `sizing-move` cases compare a separate
 six-subject anatomy-sizing pack and 1x/2x material sampling. They use a larger

@@ -17,4 +17,10 @@ if errorlevel 1 exit /b %errorlevel%
 call "%TOOLS_DIR%CONVERT_UNIT_FAMILY_ANIMATION_ONE.bat" settler fidget ANIMATION_Settler_Backpack_FidgetA
 if errorlevel 1 exit /b %errorlevel%
 call "%TOOLS_DIR%CONVERT_UNIT_FAMILY_ANIMATION_ONE.bat" settler fortify ANIMATION_Settler_Backpack_Run_Stop
+if errorlevel 1 exit /b %errorlevel%
+call "%TOOLS_DIR%CONVERT_UNIT_FAMILY_ANIMATION_ONE.bat" settler capture ANIMATION_Settler_Basket_CaptureA
+if errorlevel 1 exit /b %errorlevel%
+call "%TOOLS_DIR%CONVERT_UNIT_FAMILY_ANIMATION_ONE.bat" settler build ANIMATION_SettlerLeader_CITYA
+if errorlevel 1 exit /b %errorlevel%
+call "%TOOLS_DIR%CONVERT_UNIT_FAMILY_ANIMATION_ONE.bat" settler death ANIMATION_Scout_DeathA
 exit /b %errorlevel%

@@ -15,9 +15,11 @@ ROOT = Path(__file__).resolve().parents[4]
 class SettlerDesirabilityStudyTests(unittest.TestCase):
     def test_scales_follow_c3x_source_and_sprite_sheet(self):
         source = (ROOT / "injected_code.c").read_text()
-        match = re.search(r"int levels\[3\]\s*=\s*\{([^}]+)\}", source)
+        match = re.search(r"int levels\[7\]\s*=\s*\{([^}]+)\}", source)
         self.assertIsNotNone(match)
-        self.assertEqual(CUSTOM_TILE_WIDTHS, tuple(int(value.strip()) for value in match.group(1).split(",")))
+        source_widths = tuple(int(value.strip()) for value in match.group(1).split(","))
+        self.assertEqual((128, 160, 192, 224, 256, 320, 384), source_widths)
+        self.assertEqual(CUSTOM_TILE_WIDTHS, source_widths[:3])
         self.assertRegex(source, r"Sprite_slice_pcx\s*\(&is->tile_highlights\[n\].*128\*n,\s*0,\s*128,\s*64")
         with Image.open(ROOT / "Art/TileHighlights.pcx") as sprites:
             self.assertEqual((11 * 128, 64), sprites.size)
@@ -26,7 +28,7 @@ class SettlerDesirabilityStudyTests(unittest.TestCase):
         self.assertEqual(((320, 208), (384, 240), (320, 272), (256, 240)),
                          diamond(16, 16, 128, (640, 480)))
         with self.assertRaises(ValueError):
-            compose(Image.new("RGB", (640, 480)), 64, "outlined")
+            compose(Image.new("RGB", (640, 480)), 64, "inset")
 
     def test_c3x_grade_and_eligibility(self):
         self.assertIsNone(grade(0))
@@ -39,12 +41,13 @@ class SettlerDesirabilityStudyTests(unittest.TestCase):
         self.assertEqual(WHITE, color(0))
         self.assertEqual(GREEN, color(10))
         colors = [color(i) for i in range(11)]
+        self.assertGreater(color(9)[0] - color(10)[0], 55)
         self.assertTrue(all(a[0] >= b[0] and a[1] >= b[1] and a[2] >= b[2]
                             for a, b in zip(colors, colors[1:])))
         self.assertTrue(all(r <= g + 3 for r, g, _ in colors[1:]))
 
     def test_fixture_has_ineligible_gaps_and_coastal_omission(self):
-        for case in ("wash", "outlined", "coastal"):
+        for case in ("wash", "inset", "coastal"):
             self.assertEqual(0, invented_evaluation(12, 16, case))
             self.assertGreater(invented_evaluation(16, 16, case), 0)
         self.assertGreater(invented_evaluation(20, 16, "wash"), 0)
@@ -77,12 +80,18 @@ class SettlerDesirabilityStudyTests(unittest.TestCase):
         center = (round(tile[0][0]), round((tile[0][1] + tile[2][1]) / 2))
         self.assertEqual(background.getpixel(center), compose(background, 128, "coastal").getpixel(center))
 
-    def test_outlined_treatment_is_distinct_and_coastal_uses_it(self):
+    def test_inset_treatment_leaves_gaps_and_coastal_uses_it(self):
         background = Image.new("RGB", (640, 480), (100, 80, 60))
-        self.assertNotEqual(compose(background, 128, "wash").tobytes(),
-                            compose(background, 128, "outlined").tobytes())
+        wash = compose(background, 128, "wash")
+        inset = compose(background, 128, "inset")
+        self.assertNotEqual(wash.tobytes(), inset.tobytes())
+        tile = diamond(16, 16, 128, background.size)
+        edge = (round((tile[0][0] + tile[1][0]) / 2), round((tile[0][1] + tile[1][1]) / 2))
+        original = background.getpixel(edge)
+        self.assertLess(sum(abs(a - b) for a, b in zip(inset.getpixel(edge), original)),
+                        sum(abs(a - b) for a, b in zip(wash.getpixel(edge), original)))
         self.assertEqual(compose(background, 128, "coastal").getpixel((320, 240)),
-                         compose(background, 128, "outlined").getpixel((320, 240)))
+                         inset.getpixel((320, 240)))
 
 
 if __name__ == "__main__":

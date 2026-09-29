@@ -3,6 +3,7 @@
 #include <limits>
 #include <sstream>
 #include "../native/gpu_territory_borders.h"
+#include "../native/gpu_city_site_overlay.h"
 
 inline auto& sandbox_active_reflection() {
 #ifdef C3X_RENDERER64_FRESH
@@ -912,6 +913,7 @@ struct SandboxFreshPipeline {
     SandboxVisualShaders visual;
     SandboxSceneShadow shadow;
     c3x_renderer::city_fidelity::Glow glow;
+    c3x_renderer::GpuCitySiteOverlay city_site_overlay;
     SandboxBloom bloom;
     c3x_renderer::render_core::LinearTarget static_cache;
     c3x_renderer::render_core::LinearTarget static_region;

@@ -1,63 +1,50 @@
 # Volcanoes
 
-Ordinary Civ III terrain volcanoes (`real_terrain_type == 10`). The user accepted
-the rock skin, existing shape, inherited relief detail, static crater lava and
-shared cast shadow on 2026-09-12, and authorized production staging. Smoke,
-particles, emissive glow and animation are excluded. Natural-wonder volcanoes
-remain deferred. No fixed reference has been replaced.
+Ordinary Civ III volcano terrain (`real_terrain_type == 10`) now has a
+current-code Renderer64 candidate with sixteen stable visual forms. Slot 00
+keeps the previous cone; the others combine the ordinary authored crater with
+the five existing mountain height fields, including the raised broad and eroded
+forms and their corrected B facings. The form is selected from canonical tile
+coordinates, independently of Civ III's four-neighbor PCX sprite mask. Wrapped
+occurrences keep the same form and rock orientation.
 
-The separate [ordinary-volcano variety study](../../../studies/volcanoes/README.md)
-keeps the accepted silhouette and explores orientations of the single authored
-volcano field on grassland. It has not changed the accepted renderer or staging.
+The staged evaluation build uses dormant rock without inner lava or smoke.
+When the four diagonal neighbors select forest or jungle, the fidelity
+renderer places four small natural trees toward the lower edge of the same
+rock mesh. Raised tiles receive no vegetation-floor decals. The fixed
+references have not been replaced. Snow-specific art and natural-wonder
+volcanoes remain deferred.
+
+The repeatable current-code [Lab capture script](../../../studies/volcanoes/current_port.py)
+produces [sixteen isolated grassland examples](../../../out/volcanoes/current-port/grassland-16-current.png),
+[forest context](../../../out/volcanoes/current-port/05-forest/preview.png) and
+[jungle context](../../../out/volcanoes/current-port/05-jungle/preview.png).
+Each capture records the exact DLL, preview, scene and image hashes and requires
+zero fallback tiles. The active-state check uses the same bare rock appearance.
+
+The current native bridge and 64-bit Renderer64 companion compile with
+`BUILD_RENDERER64.bat no-stage`. The private candidate shader bundle is built
+with `Renderer/tools/prepare_renderer64_materials.py terrain mountain` and
+keeps all other pinned shaders byte-identical. The connected asynchronous
+bridge witness ran against that bundle before staging. The matching bridge,
+64-bit renderer and helper plus the two changed shader sources are now staged
+for an in-game evaluation. Windows-side hashes match the checked candidate,
+and the staged startup probe is healthy. A small task-local backup under
+`Renderer/native/build/volcano-port/pre-stage-backup/` retains the five
+previous files for rollback. No injected code or fixed reference was changed
+for this stage. Source art is reused; the generic runtime pack format is
+unchanged.
+
+Portable checks:
 
 ```sh
-python3 Renderer/renderer.py lab volcanoes
-python3 Renderer/renderer.py test volcanoes
-python3 Renderer/renderer.py integration volcanoes --renderer-only
+python3 -m unittest Renderer.native.test_render_core Renderer.native.source_fidelity.test_contract Renderer.lab.test_volcano_fixture Renderer.lab.test_natural
 ```
 
-Every review case retains mountains for comparison. Detail/activity, gameplay
-and coastal cases use the accepted adjacent pair; `isolated` moves the pair away
-to exercise the ordinary ground surface. Noon previews use tile widths 128 and
-224. Static lava remains present in both activity states, as in the approved
-image; captured activity does not enable emission or attached effects.
-
-## Production implementation
-
-The legacy raised-land pass omits ordinary volcanoes in the natural fidelity
-profile. Their existing height survives in the natural ground and unified
-mountain meshes, but those replacements previously lost the volcano material.
-Both surface families now carry local volcano offsets from captured terrain
-identity through indexed GPU geometry and the CPU mesh cache. Queries observe
-the authoritative neighbor dependencies and preserve wrapped occurrence space.
-The shared material uses the already loaded rock and lava DDS textures; source
-art, height, normals, crater shape and inherited mountain detail are unchanged.
-
-The mountain caster formerly clipped the volcano body against mountain-only
-coverage. It now also accepts the raised volcano footprint using that same
-local ownership. Existing shared shadow pages and receiver lighting remain
-responsible for casting and receiving shadows.
-
-The native lifecycle witness removes a volcano, checks exact warm/cold image
-parity, creates one at a different captured placement, repeats parity, restores
-the original and checks exact cached repeat with no geometry upload. It also
-checks simultaneous volcanoes, scrolling and wrapped occurrences against cold
-renders. The ordinary
-terrain-edit witness and portable ownership/wrap tests also remain selected.
-Generated renders and verification receipts live under `lab/out/volcanoes/` and
-`lab/out/integration/`; the staging receipt records the exact tested DLL identity.
-
-## Preserved source evidence
-
-All four material DDS files and three macro channels reproduce exactly from
-installed Expansion2 source. This was a material-ownership defect, not an import
-resolution failure. The BC5 channels' intended source shader roles remain
-unconfirmed; no speculative normal decode has been added. The lava UV registration
-(+.015, -.002) is the accepted measured C3X calibration, not a recovered engine
-transform. Detailed source findings and the fixed-coordinate diagnostic controls
-remain in `lab/studies/volcanoes/`; those controls are not production code.
-
-The ordinary inland ground retains its existing 16 subdivisions per tile; the
-mountain neighborhood retains 64 and its inherited detail. This work preserves
-both geometry paths rather than redesigning their silhouettes. Actual injected
-Civ III observation remains the user's game check after staging.
+The ordinary category dispatcher remains available for routine category
+checks. It currently cannot complete its all-source preparation because an
+unrelated ignored city-study input is missing; the focused native captures
+above use the built candidate directly and do not reconstruct that input.
+Installed source evidence and older isolated studies remain in the
+[volcano study notes](../../../studies/volcanoes/README.md). Their images are
+exploration history, not this Renderer64 candidate or a live-game check.

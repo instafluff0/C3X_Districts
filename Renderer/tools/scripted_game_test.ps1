@@ -1,7 +1,7 @@
 # Bounded real-game renderer diagnostic, enabled only in the child environment.
 param([Parameter(Mandatory=$true)][string]$SaveFile, [string]$ConquestsDirectory,
       [ValidateRange(35,120)][int]$Seconds = 75,
-      [ValidateSet('scroll','interaction','lifecycle','combat','turn','mouse','zoom','hud','city')][string]$Scenario = 'scroll',
+      [ValidateSet('scroll','interaction','lifecycle','combat','turn','mouse','zoom','hud','city','settler','site-toggle')][string]$Scenario = 'scroll',
       [ValidatePattern('^[A-Za-z0-9_-]+$')][string]$UnitPack='UnitAnimationFidelity', [ValidateSet('melee','victory','retreat','bombard','army','air','capture')][string]$CombatCase='melee', [ValidateRange(1,10)][int]$SampleHz = 2,
       [switch]$ProfileRenderer, [switch]$MeasureCadence,
       [ValidateSet(0,1,2)][int]$SceneSamples=0, [ValidateRange(-1,1)][double]$SceneSharpness=-1)
@@ -149,6 +149,11 @@ try {
     $interaction=@(@(28,13,'close-welcome'),@(36,90,'zoom-192'),@(39,0x86,'text-192'),@(43,90,'zoom-160'),@(46,0x86,'text-160'),@(50,90,'zoom-128'),@(53,0x86,'text-128'),@(57,0x66,'move-east'),@(65,0x70,'advisor'),@(74,27,'close-advisor'))
     if ($Scenario -in @('mouse','zoom')) {
         $interaction=@()
+    }
+    if ($Scenario -eq 'settler') { $interaction=@() }
+    if ($Scenario -eq 'site-toggle') {
+        $interaction=@(@(37,76,'open-city-site-picker'),@(39,13,'choose-off'),
+            @(43,76,'reopen-city-site-picker'),@(45,40,'choose-player'),@(46,13,'accept-player'))
     }
     if ($Scenario -eq 'hud') {
         $interaction=@(@(31,66,'found-city'),@(34,13,'accept-city-name'),@(44,90,'city-native-zoom-out'),@(48,90,'city-native-zoom-in'),@(53,13,'close-new-city-screen'),@(61,90,'zoom-192'),@(64,0x86,'text-192'),@(68,0x87,'scroll-city-label'),@(72,90,'zoom-160'),@(75,0x86,'text-160'),@(79,0x87,'scroll-city-label-again'),@(83,90,'zoom-128'),@(86,0x86,'text-128'),@(92,0x70,'advisor'),@(101,27,'close-advisor'))
@@ -337,7 +342,7 @@ $windowComplete=$null -ne $windowEvidence -and $windowEvidence.complete -and $wi
 Write-Host ('Scripted diagnostic saved: '+$session)
 if ($MeasureCadence -and $cadenceSamples.Count -lt 2) { Write-Error 'Insufficient renderer cadence samples; inspect cadence.json and the helper channel.'; exit 1 }
 if (-not $windowComplete) { Write-Error 'Window evidence did not complete; inspect window-errors.log and window/finished.json.'; exit 1 }
-if (($Scenario -in @('mouse','zoom','city') -and $mouseIndex -ne $mouseSteps.Count) -or ($Scenario -eq 'turn' -and $turns.Count -lt 2) -or ($Scenario -eq 'combat' -and ($combatReady -ne 1 -or $combatFinished -ne 1)) -or $earlyExit -or ($Scenario -eq 'scroll' -and $steps.Count -ne 32) -or ($Scenario -in @('interaction','hud') -and ($interactionIndex -ne $interaction.Count -or $textEvents -ne 3)) -or ($Scenario -eq 'hud' -and (($cityZooms -join ',') -ne '64,128' -or $steps.Count -ne 2)) -or ($Scenario -eq 'lifecycle' -and ($interactionIndex -ne $interaction.Count -or $readyEvents -ne 2 -or $unloadEvents -lt 2 -or $textEvents -ne 1)) -or ($Scenario -eq 'city' -and ($interactionIndex -ne $interaction.Count -or ($cityZooms -join ',') -ne '64,128')) -or ($Scenario -in @('hud','city') -and ($cityAnchors.Count -ne 2 -or $cityAnchors[0] -ne $cityAnchors[1])) -or $errors.Count) { exit 1 }
+if (($Scenario -in @('mouse','zoom','city') -and $mouseIndex -ne $mouseSteps.Count) -or ($Scenario -eq 'turn' -and $turns.Count -lt 2) -or ($Scenario -eq 'combat' -and ($combatReady -ne 1 -or $combatFinished -ne 1)) -or $earlyExit -or ($Scenario -eq 'scroll' -and $steps.Count -ne 32) -or ($Scenario -in @('settler','site-toggle') -and $readyEvents -lt 1) -or ($Scenario -eq 'site-toggle' -and $interactionIndex -ne $interaction.Count) -or ($Scenario -in @('interaction','hud') -and ($interactionIndex -ne $interaction.Count -or $textEvents -ne 3)) -or ($Scenario -eq 'hud' -and (($cityZooms -join ',') -ne '64,128' -or $steps.Count -ne 2)) -or ($Scenario -eq 'lifecycle' -and ($interactionIndex -ne $interaction.Count -or $readyEvents -ne 2 -or $unloadEvents -lt 2 -or $textEvents -ne 1)) -or ($Scenario -eq 'city' -and ($interactionIndex -ne $interaction.Count -or ($cityZooms -join ',') -ne '64,128')) -or ($Scenario -in @('hud','city') -and ($cityAnchors.Count -ne 2 -or $cityAnchors[0] -ne $cityAnchors[1])) -or $errors.Count) { exit 1 }
 
 # DebugView --stop may leave a nonzero native exit code after successful cleanup.
 # Only the explicit diagnostic checks above determine this scenario result.

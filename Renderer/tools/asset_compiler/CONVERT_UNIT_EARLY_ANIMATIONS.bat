@@ -39,15 +39,15 @@ call "%TOOLS_DIR%CONVERT_UNIT_FAMILY_ANIMATION_ONE.bat" scout fortify ANIMATION_
 if errorlevel 1 exit /b %errorlevel%
 call "%TOOLS_DIR%CONVERT_UNIT_FAMILY_ANIMATION_ONE.bat" scout defend ANIMATION_Scout_DodgeBack
 if errorlevel 1 exit /b %errorlevel%
-call "%TOOLS_DIR%CONVERT_UNIT_FAMILY_ANIMATION_ONE.bat" settler idle ANIMATION_Scout_BreathingB
+call "%TOOLS_DIR%CONVERT_UNIT_FAMILY_ANIMATION_ONE.bat" settler idle ANIMATION_Settler_Backpack_IdleA
 if errorlevel 1 exit /b %errorlevel%
-call "%TOOLS_DIR%CONVERT_UNIT_FAMILY_ANIMATION_ONE.bat" settler move ANIMATION_Scout_Jog
+call "%TOOLS_DIR%CONVERT_UNIT_FAMILY_ANIMATION_ONE.bat" settler move ANIMATION_Settler_Backpack_Run
 if errorlevel 1 exit /b %errorlevel%
-call "%TOOLS_DIR%CONVERT_UNIT_FAMILY_ANIMATION_ONE.bat" settler fidget ANIMATION_Scout_IdleD
+call "%TOOLS_DIR%CONVERT_UNIT_FAMILY_ANIMATION_ONE.bat" settler fidget ANIMATION_Settler_Backpack_FidgetA
 if errorlevel 1 exit /b %errorlevel%
-call "%TOOLS_DIR%CONVERT_UNIT_FAMILY_ANIMATION_ONE.bat" settler fortify ANIMATION_Scout_FortifyB
+call "%TOOLS_DIR%CONVERT_UNIT_FAMILY_ANIMATION_ONE.bat" settler fortify ANIMATION_Settler_Backpack_Run_Stop
 if errorlevel 1 exit /b %errorlevel%
-call "%TOOLS_DIR%CONVERT_UNIT_FAMILY_ANIMATION_ONE.bat" settler capture ANIMATION_SettlerLeader_CaptureB
+call "%TOOLS_DIR%CONVERT_UNIT_FAMILY_ANIMATION_ONE.bat" settler capture ANIMATION_Settler_Basket_CaptureA
 if errorlevel 1 exit /b %errorlevel%
 call "%TOOLS_DIR%CONVERT_UNIT_FAMILY_ANIMATION_ONE.bat" worker idle ANIMATION_Builder_IdleRest01_2H
 if errorlevel 1 exit /b %errorlevel%

@@ -3,8 +3,8 @@
 #include <cstdint>
 #include <initializer_list>
 
-// Civ III keeps the hill as the visible terrain type. Its hill sprite sheet is
-// selected from the four diagonal neighbors: forest, jungle, or plain hill.
+// Civ III selects hill, mountain and volcano canopy sheets from their four
+// diagonal neighbors, keeping the raised terrain as the visible tile type.
 namespace c3x_renderer {
 inline unsigned native_hill_seed(int x,int y) {
     std::uint32_t value=std::uint32_t(x*0x193u)^std::uint32_t(y*0x217u);
@@ -14,7 +14,7 @@ inline unsigned native_hill_seed(int x,int y) {
 }
 template<class Lookup>
 int native_hill_vegetation(int center_real, Lookup neighbor_real, unsigned tie_seed) {
-    if (center_real != 5) return 0;
+    if (center_real != 5 && center_real != 6 && center_real != 10) return 0;
     int forest = 0, jungle = 0;
     for (int dy : {-1, 1}) for (int dx : {-1, 1}) {
         int real = neighbor_real(dx, dy);

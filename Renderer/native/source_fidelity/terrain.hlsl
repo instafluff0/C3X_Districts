@@ -1,5 +1,6 @@
 #define BEAUTY_COMPOSED_SHADOWS 1
 #define BEAUTY_VOLCANO_MATERIAL 1
+#define BEAUTY_FLOODPLAIN_DECAL 1
 #define BEAUTY_COAST_CLIFF 1
 cbuffer Frame : register(b0) {
     float4 Sun;
@@ -106,25 +107,25 @@ Texture2D PlainsSurfaceHeight : register(t27);
 Texture2D DesertDuneColor : register(t28);
 Texture2D DesertDuneHeight : register(t29);
 Texture2D SurfaceDetail : register(t30);
+#ifdef BEAUTY_FLOODPLAIN_DECAL
+Texture2D FloodplainColor : register(t98);
+Texture2D FloodplainHeight : register(t99);
+Texture2D FloodplainGloss : register(t100);
+#endif
 Texture2D DesertColor : register(t19);
 Texture2D DesertHeight : register(t20);
 Texture2D DesertSpecular : register(t21);
 SamplerState Wrap : register(s0);
 SamplerState Clamp : register(s1);
 #ifdef BEAUTY_VOLCANO_MATERIAL
-// Dedicated rock and static crater art share the ordinary scene lighting.
+// Dedicated dormant rock art shares the ordinary scene lighting.
 // Local offsets follow captured volcano tiles, including wrapped placements.
 Texture2D VolcanoColor : register(t69);
-Texture2D VolcanoLavaColor : register(t71);
 float3 volcano_albedo(float3 albedo, float4 owner, float height) {
     float coverage=owner.z*smoothstep(.025,.20,height)*
         (1-smoothstep(.60,.78,max(abs(owner.x),abs(owner.y))));
     float2 uv=.5+float2(owner.x,-owner.y)*.3875;
-    albedo=lerp(albedo,VolcanoColor.Sample(Clamp,uv).rgb,coverage);
-    // Measured local art registration; not a recovered source-engine transform.
-    float4 lava=VolcanoLavaColor.Sample(Clamp,uv+float2(.015,-.002));
-    float mask=smoothstep(.16,.52,max(lava.r,max(lava.g,lava.b)))*lava.a;
-    return lerp(albedo,lava.rgb,mask*coverage);
+    return lerp(albedo,VolcanoColor.Sample(Clamp,uv).rgb,coverage);
 }
 
 #endif
@@ -275,12 +276,25 @@ Output shade(P input) {
     clip(alpha-.001);
 
     if (input.material.y > 4.5) {
-        bool desert_dune = input.material.y > 6.5;
+#ifdef BEAUTY_FLOODPLAIN_DECAL
+        bool floodplain = input.material.y > 7.5;
+#else
+        bool floodplain = false;
+#endif
+        bool desert_dune = input.material.y > 6.5 && !floodplain;
         bool plains_surface = input.material.y > 5.5 && !desert_dune;
-        float4 patch = desert_dune ? DesertDuneColor.Sample(Clamp, input.uv) :
+        float4 patch =
+#ifdef BEAUTY_FLOODPLAIN_DECAL
+                       floodplain ? FloodplainColor.Sample(Clamp, input.uv) :
+#endif
+                       desert_dune ? DesertDuneColor.Sample(Clamp, input.uv) :
                        (plains_surface ? PlainsSurfaceColor.Sample(Clamp, input.uv) :
                                          HillDecalColor.Sample(Clamp, input.uv));
-        float2 packed = desert_dune ? DesertDuneHeight.Sample(Clamp, input.uv).rg :
+        float2 packed =
+#ifdef BEAUTY_FLOODPLAIN_DECAL
+                        floodplain ? FloodplainHeight.Sample(Clamp, input.uv).rg :
+#endif
+                        desert_dune ? DesertDuneHeight.Sample(Clamp, input.uv).rg :
                         (plains_surface ? PlainsSurfaceHeight.Sample(Clamp, input.uv).rg :
                                           HillDecalNormal.Sample(Clamp, input.uv).rg);
         clip(patch.a - 0.015);
@@ -294,12 +308,16 @@ Output shade(P input) {
         }
         geometric = decal_normal(input, packed);
         height_detail = packed.r;
-        specular_map = desert_dune ? 0.08 : 0.04;
+        specular_map =
+#ifdef BEAUTY_FLOODPLAIN_DECAL
+                       floodplain ? FloodplainGloss.Sample(Clamp, input.uv).r*0.12 :
+#endif
+                       desert_dune ? 0.08 : 0.04;
         surface_occlusion = lerp(1.0, 0.80, saturate(length(packed * 2 - 1)));
         // The source patch carries its own coverage. The interpolated
         // authoritative biome field fades it at ecotones and terrain edits.
         alpha *= patch.a * smoothstep(0.015, 0.42, input.material.z) *
-                 (desert_dune ? 0.62 : 1.0);
+                 (floodplain ? 0.48 : desert_dune ? 0.62 : 1.0);
     } else if (input.material.y > 2.5) {
         bool jungle_floor = input.material.y > 3.5;
         float4 floor_sample = jungle_floor ? JungleFloorColor.Sample(Clamp, input.uv) :

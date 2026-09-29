@@ -135,6 +135,10 @@ struct Natural : NaturalWorld {
         auto const& views=provider==2?body_bindings[body]:surface_bindings[provider];
         // t17 is always the shared atlas, never the source specular channel.
         c->PSSetShaderResources(0,17,views.data());c->PSSetShaderResources(18,13,views.data()+18);
+        if(provider==0){
+            ID3D11ShaderResourceView* flood_views[]={textures[floodplain[0]],textures[floodplain[1]],textures[floodplain[2]]};
+            c->PSSetShaderResources(98,3,flood_views);
+        }
     }
 };
 } }

@@ -112,6 +112,7 @@ template<class IO,class Value>void c3x_renderer_tile_v1_fields(IO& io,Value& v){
     io(v.unit_era_name);
     io(v.unit_type_name);
     io(v.barbarian_tribe_id);
+    io(v.city_site_grade);
 }
 // Explicit protocol fields; test coverage fails when the ABI adds a field.
 template<class IO,class Value>void c3x_renderer_unit_v1_fields(IO& io,Value& v){

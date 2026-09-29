@@ -31,16 +31,21 @@ class VolcanoFixtureTests(unittest.TestCase):
     def test_production_ownership_follows_tiles_and_wraps(self):
         import subprocess
         source = (renderer.ROOT / 'Renderer/native/source_fidelity/terrain_mesh_body.h').read_text()
-        body = source[source.index('    std::vector<std::array<float,2>> volcano_centers;'):
+        body = source[source.index('    struct VolcanoCenter {'):
                       source.index('    record_natural_phase(2);')]
         program = r'''#include <array>
 #include <vector>
 #include <cassert>
 #include <cmath>
 #include "Renderer/lab/shared/natural/vertex.h"
+#include "Renderer/native/render_core/terrain_query.h"
 using Vertex=c3x_renderer::fidelity::MapVertex;
 struct Tile {int real;};
+struct Dimensions {int width=32,height=32;bool wrap_x=false,wrap_y=false;};
+struct Coast {Dimensions size;Coast const& world()const{return *this;}
+    Dimensions dimensions()const{return size;}};
 void check(int nc,int nr,int owner_c,int owner_r,bool present,bool wrapped) {
+    Coast world_coast{{32,32,wrapped,false}};
     std::vector<Vertex> natural_vertices[3];
     for(unsigned layer:{0u,2u})for(int y=0;y<=16;y++)for(int x=0;x<=16;x++) {
         Vertex v{};v.world_x=nc+x/16.f;v.world_y=nr+y/16.f;v.world_z=.25;
@@ -62,8 +67,14 @@ void check(int nc,int nr,int owner_c,int owner_r,bool present,bool wrapped) {
         if(present) {
             int local_c=owner_c;
             if(wrapped)while(local_c<nc-1)local_c+=32;
-            assert(b.relief_owner_u==b.world_x-(local_c+.5f));
-            assert(b.relief_owner_v==b.world_y-(owner_r+.5f));
+            float dx=b.world_x-(local_c+.5f),dy=b.world_y-(owner_r+.5f);
+            int raw_x=local_c+owner_r,raw_y=local_c-owner_r;
+            if(wrapped)raw_x=c3x_renderer::render_core::mod(raw_x,32);
+            unsigned slot=c3x_renderer::render_core::volcano_slot(raw_x,raw_y);
+            auto oriented=c3x_renderer::render_core::volcano_source_offset(
+                dx,-dy,c3x_renderer::render_core::volcano_orientation(slot));
+            assert(b.relief_owner_u==oriented[0]);
+            assert(b.relief_owner_v==-oriented[1]);
         }
     }
 }

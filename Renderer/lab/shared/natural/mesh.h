@@ -6,9 +6,9 @@
 #include "hill_decals.h"
 #include "../../../native/hill_vegetation.h"
 namespace c3x_renderer { namespace fidelity {
-template<class Height,class Shore,class Weights,class Cancelled>
+template<class Lookup,class Height,class Shore,class Weights,class Cancelled>
 bool emit_surface_decals(NaturalData const&natural,Tile owner,GroundProjection project_natural,
-                         Height height_natural,Shore shore_sample_at,Weights material_weights_for,
+                         Lookup lookup_natural,Height height_natural,Shore shore_sample_at,Weights material_weights_for,
                          Cancelled cancelled,std::vector<MapVertex>&decals) {
     using Vertex=MapVertex;
     int nc=project_natural.column,nr=project_natural.row;
@@ -55,7 +55,7 @@ bool emit_forest(NaturalData const&natural,Tile owner,GroundProjection project_n
                  std::vector<BuildingBounds> const&buildings,Height height_natural,Shore shore_sample_at,
                  River river_at,Hash hash,Random random,Cancelled cancelled,Layers&natural_vertices) {
     int nc=project_natural.column,nr=project_natural.row;
-    bool hill_forest=false;
+    bool hill_forest=false,raised_canopy=false;
     auto emit_forest_instance=[](auto...){return false;};
     #include "forest_mesh_body.h"
     return true;

@@ -74,6 +74,14 @@ images and `result.json` are under `%TEMP%\C3XGameTest`. Launcher transcripts ar
 under `Renderer/native/build/C3XRendererGameTest-*`. These are local ignored
 diagnostics and can contain machine paths; do not commit them.
 
+`-Scenario settler -Seconds 35 -SampleHz 10` loads the disposable early-game
+save and leaves its selected settler idle. It requires a completed map and no
+renderer failures. Inspect the window samples for the automatic city-site
+overlays when that C3X setting is enabled, then confirm the reported cleanup.
+`-Scenario site-toggle -Seconds 55 -SampleHz 10` opens C3X's L-key picker,
+chooses Off, then reopens it and chooses the player. Inspect samples before
+and after both choices; key delivery alone does not prove the displayed state.
+
 Success requires all 32 camera commands and no recorded native/worker failure.
 Review the sampled images and camera adoption logs as well: accepted commands
 alone do not prove correct visible scrolling. Two-frame-per-second window

@@ -99,11 +99,23 @@ public:
             }
             footprint=(connected ? .50f : .68f)/scale;
         }
+        unsigned slot=0;
+        if(tile.real==10) {
+            slot=volcano_slot(coordinate[0],coordinate[1]);
+            auto offset=volcano_source_offset(x-.5f,y-.5f,
+                volcano_orientation(slot));
+            x=.5f+offset[0];y=.5f+offset[1];
+        }
         float u=.5f+(x-.5f)*footprint,v=.5f+(y-.5f)*footprint;
         if(u<0 || v<0 || u>1 || v>1) return result;
         float edge=smooth01(std::min({u,v,1-u,1-v})/.055f);
         result.height=source(tile.real,variant,0,u,v);
         result.blend=source(tile.real,variant,1,u,v)*edge;
+        if(tile.real==10)
+            volcano_variant(slot,x,y,result.height,result.blend,
+                [&](unsigned field,int channel,float fu,float fv) {
+                    return source(16,field,channel,fu,fv);
+                });
         return result;
     }
     ReliefSample chain(float x,float y,bool include_volcano,bool* contains_volcano=nullptr) const {
@@ -203,7 +215,11 @@ public:
             auto body_sample=body(owner_c,owner_r,owner_u,owner_v);
             float mask=body_sample.blend*float(relief_support(owner_u,owner_v))*coastal*compatibility;
             nearest=d;
-            result.owner={.5f+ox*float(volcano_footprint),.5f-oy*float(volcano_footprint),
+            auto coordinate=raw(owner_c,owner_r);
+            auto oriented=volcano_source_offset(ox,-oy,
+                volcano_orientation(volcano_slot(coordinate[0],coordinate[1])));
+            result.owner={.5f+oriented[0]*float(volcano_footprint),
+                          .5f+oriented[1]*float(volcano_footprint),
                           mask,activity(owner_c,owner_r)};
         }
         return result;

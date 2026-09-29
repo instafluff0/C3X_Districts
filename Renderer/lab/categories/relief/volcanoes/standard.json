@@ -10,6 +10,12 @@
   "implementation": [
     "Renderer/native/render_core/relief_query.h",
     "Renderer/native/render_core/terrain_query.h",
+    "Renderer/native/hill_vegetation.h",
+    "Renderer/native/source_fidelity/terrain_mesh_body.h",
+    "Renderer/lab/shared/natural/relief.h",
+    "Renderer/lab/shared/natural/forest_mesh_body.h",
+    "Renderer/lab/shared/natural/jungle_mesh_body.h",
+    "Renderer/lab/shared/natural/vegetation_floor_mesh_body.h",
     "Renderer/lab/shared/shaders/terrain/scene_material_v1.hlsl",
     "Renderer/lab/shared/shaders/lighting/generated/scene_linear_v1.hlsl",
     "Renderer/native/render_core/generate_shaders.py",
@@ -54,8 +60,8 @@
     "d3d11": []
   },
   "limitations": [
-    "User accepted the static lava and shadow appearance on 2026-09-12. Existing shape and inherited relief detail are preserved; no fixed reference replaced.",
-    "Ordinary terrain volcanoes only. Static crater lava; emissive glow, smoke and particles excluded.",
+    "The 16-form current-code candidate is staged for in-game evaluation. No fixed reference has been replaced.",
+    "Ordinary terrain volcanoes only. The staged candidate omits lava, smoke and vegetation-floor decals on raised tiles. Snow-specific art and natural-wonder volcanoes remain deferred.",
     "BC5 material-channel interpretation remains unresolved; see category notes."
   ]
 }

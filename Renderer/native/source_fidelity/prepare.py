@@ -82,7 +82,7 @@ def shaders():
     for name,category in [('terrain','relief'),('mountain','relief'),('objects','objects')]:
         p=LAB/f'shaders/{category}/beauty_{name}.hlsl'
         s=p.read_text()
-        if name=='terrain':s=terrain_boundaries(s)
+        if name=='terrain':s='#define BEAUTY_FLOODPLAIN_DECAL 1\n'+terrain_boundaries(s)
         if name in ('terrain','mountain'):
             s='#define BEAUTY_VOLCANO_MATERIAL 1\n'+s
             s=s.replace('#include "volcano_material.hlsl"',(LAB/'shaders/relief/volcano_material.hlsl').read_text())
@@ -220,6 +220,14 @@ def build_pack(output=PACK):
     terrain += [decal_channel('terrain/desert/dune/decal_01',c) for c in ['base_color','height']]
     terrain += [source('textures/relief_surface_detail.dds')]
     assert len(terrain)==31
+    flood_pack=ROOT/'Renderer/packs/FloodplainNormalized'
+    flood_manifest=metadata('Renderer/packs/FloodplainNormalized/manifest.json')
+    flood_group=flood_manifest['decal_groups']['terrain/floodplain/grassland_surface']
+    def flood_channel(role):
+        entry=flood_manifest['assets'][flood_group['placements'][0]['asset']]
+        document=metadata((flood_pack/entry['decal']).relative_to(ROOT).as_posix())
+        return asset((flood_pack/document['channels'][role]['texture']).relative_to(ROOT).as_posix())
+    floodplain=[flood_channel(role) for role in ('base_color','height','specular')]
     surface=[]
     surface_vertices=[]
     for biome,group in [(0,'terrain/grassland/surface'),(1,'terrain/plains/surface'),
@@ -235,7 +243,20 @@ def build_pack(output=PACK):
                 surface_vertices.append((*vertex['position'],*vertex['uv0']))
             surface.append((biome,float(placement['scale']),float(placement['scale_variation']),
                 int(placement['count']),float(x1-x0),float(y1-y0),first,len(mesh['indices'])))
-    assert surface and all(any(row[0]==biome for row in surface) for biome in range(3))
+    for placement in flood_group['placements']:
+        entry=flood_manifest['assets'][placement['asset']]
+        document=metadata((flood_pack/entry['decal']).relative_to(ROOT).as_posix())
+        for role,expected in zip(('base_color','height','specular'),floodplain):
+            channel=asset((flood_pack/document['channels'][role]['texture']).relative_to(ROOT).as_posix())
+            if channel!=expected:raise ValueError('Floodplain decal material channels differ')
+        x0,y0,x1,y1=document['footprint']['bounds_xy']
+        mesh=document['mesh'];first=len(surface_vertices)
+        for index in mesh['indices']:
+            vertex=mesh['vertices'][index]
+            surface_vertices.append((*vertex['position'],*vertex['uv0']))
+        surface.append((3,float(placement['scale']),float(placement['scale_variation']),
+            int(placement['count']),float(x1-x0),float(y1-y0),first,len(mesh['indices'])))
+    assert surface and all(any(row[0]==biome for row in surface) for biome in range(4))
     assert surface_vertices and len(surface_vertices)%3==0
     mountain=terrain[:3]
     for family in ['mtn_base','mtn_top','mtn_snow']:
@@ -246,11 +267,11 @@ def build_pack(output=PACK):
     for i in materials:
         paths,tint,repeat=mats[i]
         bindings.append(([asset(p) if p else 0xffffffff for p in paths],tint,repeat))
-    out=bytearray(b'C3XNAT3\0')
+    out=bytearray(b'C3XNAT4\0')
     out+=struct.pack('<6I',len(assets),len(bindings),len(trees),len(recipes),len(surface),len(surface_vertices))
     for path in assets:
         b=path.encode();out+=struct.pack('<I',len(b))+b
-    for row in [terrain,mountain,*macro]:out+=struct.pack('<'+'I'*len(row),*row)
+    for row in [terrain,floodplain,mountain,*macro]:out+=struct.pack('<'+'I'*len(row),*row)
     for channels,tint,repeat in bindings:out+=struct.pack('<9I',*channels,tint,repeat)
     for i in trees:
         _,_,mat,n,v=objs[i]

@@ -1,8 +1,8 @@
 // Shared statement body: deterministic source-decal composition on the joined
 // production ground. The normalized pack supplies biome-neutral placement
 // records; the renderer owns only stable selection and C3X world placement.
-    if(owner.real>=0 && owner.real<=2) {
-        unsigned biome=unsigned(2-owner.real); // grass, plains, desert
+    if((owner.real>=0 && owner.real<=2) || owner.real==4) {
+        unsigned biome=owner.real==4?3u:unsigned(2-owner.real); // grass, plains, desert, floodplain
         unsigned total=0;
         for(auto const&candidate:natural.surface_recipes)
             if(candidate.biome==biome)total+=candidate.weight;
@@ -19,7 +19,7 @@
             // straight mesh edges remain visible even when their color alpha
             // is faded. The continuous grass material supplies this detail.
             unsigned density=biome==0 || sparse_desert?0u:
-                (biome==2?3u:14u+random_u32(state)%9u);
+                (biome==2?3u:biome==3?4u+random_u32(state)%3u:14u+random_u32(state)%9u);
             auto owner_shore=shore_sample_at(float(nc)+.5f,float(nr)+.5f);
             float owner_coverage=biome==2
                 ? desert_coast_coverage(float(owner_shore.distance))
@@ -40,7 +40,7 @@
                 float angle=random01(state)*6.283185307f;
                 // Grass and plains need fine grain. Preserve the established
                 // desert dune footprint at biome boundaries.
-                float scale=recipe->scale*(biome==2?.32f:.18f)*
+                float scale=recipe->scale*(biome==2?.32f:biome==3?.50f:.18f)*
                     (1+recipe->variation*(random01(state)*2-1));
                 float co=std::cos(angle),si=std::sin(angle);
                 float patch_normal[]={0,0,1};
@@ -68,8 +68,20 @@
                         out.u=source.u;out.v=source.v;
                         auto weights=material_weights_for(world_x,world_y);
                         float source_weight=std::clamp(1-weights[3],0.f,1.f);
+                        float decal_weight=weights[biome==3?1:biome];
+                        if(biome==3) {
+                            float gx=world_x-.5f,gy=world_y-.5f;
+                            int x0=int(std::floor(gx)),y0=int(std::floor(gy));
+                            float tx=std::clamp((gx-float(x0)-.2f)/.6f,0.f,1.f);
+                            float ty=std::clamp((gy-float(y0)-.2f)/.6f,0.f,1.f);
+                            tx=tx*tx*(3-2*tx);ty=ty*ty*(3-2*ty);
+                            auto flood=[&](int x,int y){return lookup_natural(x,y).real==4?1.f:0.f;};
+                            float flood_upper=flood(x0,y0)*(1-tx)+flood(x0+1,y0)*tx;
+                            float flood_lower=flood(x0,y0+1)*(1-tx)+flood(x0+1,y0+1)*tx;
+                            decal_weight*=flood_upper*(1-ty)+flood_lower*ty;
+                        }
                         out.material_grass=0;out.material_plains=5+float(biome);
-                        out.material_desert=weights[biome];out.material_marsh=0;
+                        out.material_desert=decal_weight;out.material_marsh=0;
                         out.authored_relief_height=0;out.authored_relief_blend=0;
                         out.base_terrain=-10+owner_coverage*source_weight;
                         out.world_valid=1+coast_ramp((float(owner_shore.distance)-float(owner_shore.beach_width)-.10f)/.90f);

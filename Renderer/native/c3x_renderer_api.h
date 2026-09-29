@@ -14,7 +14,7 @@ typedef int32_t c3x_renderer_i32;
 typedef int64_t c3x_renderer_i64;
 #endif
 
-#define C3X_RENDERER_API_VERSION 20u
+#define C3X_RENDERER_API_VERSION 21u
 
 enum c3x_renderer_result {
     C3X_RENDERER_RESULT_ERROR = 0,
@@ -241,6 +241,8 @@ struct c3x_renderer_tile_v1 {
     char unit_era_name[64];
     char unit_type_name[32];
     c3x_renderer_i32 barbarian_tribe_id;
+    /* 0 means no city-site overlay; 1..11 are C3X's existing grade + 1. */
+    c3x_renderer_u32 city_site_grade;
 };
 
 struct c3x_renderer_frame_v1 {

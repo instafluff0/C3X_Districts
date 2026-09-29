@@ -15,8 +15,8 @@
       "sample_scale": 4
     },
     "unit/settler": {
-      "scale": 3.3982982074251056,
-      "offset_z": 0.0006745556460032486,
+      "scale": 3.9459979181604936,
+      "offset_z": 0.0012146322705784602,
       "minimum_canvas": 320,
       "sample_scale": 4
     },

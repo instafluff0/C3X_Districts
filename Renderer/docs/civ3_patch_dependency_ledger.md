@@ -122,6 +122,24 @@ without a renderer failure. Legacy colored diamonds are absent. Median native
 map time is 3.959 ms, down from about 1.1 seconds. This proves the bounded
 camera diagnostic, not full gameplay or live FPS.
 
+The subsequent city-site overlay reuses that m19 capture and the existing
+`Main_Screen_Form_set_selected_unit` and main-form L-key hooks. The game thread
+copies C3X's eleven-grade city evaluation into visible-scene tile occurrences;
+Renderer64 composites an inset green wash with a one-pixel inset per tile edge before its fog pass. A bounded
+per-map score cache is invalidated by perspective, turn, topology and notified
+tile changes. Grade is presentation data and is excluded from retained terrain
+content identity. API 21 carries the grade through the bridge and input codec.
+No new game symbol or patch-table entry is needed; `required_user_action: []`.
+The Lab fixture remains synthetic. The bounded early-game save scored all 12
+visible legal sites from 1,000,038 to 1,000,057: three in grade 9 and nine in
+grade 10 (zero-based). Automatic settler selection and L-key Off/player
+transitions appeared in captured game frames, with no failures during the
+focused 35- and 55-second runs; both preserved the original save. The palette
+uses a cubic ramp to distinguish those top two grades at translucent opacity,
+without border strokes.
+The longer HUD scenario still hit the previously observed asynchronous image
+queue limit after 60 seconds, so this evidence is scoped to the focused runs.
+
 ## Bounded changing-sprite input history and scripted game diagnostic
 
 Capture `20260927-132302` first fails at 18.221 s with

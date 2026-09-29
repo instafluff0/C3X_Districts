@@ -35,8 +35,11 @@ if(fidelity_profile) {
     }
     #include "../city_fidelity/geometry.h"
     record_natural_phase(4);
-    if(tile.real_terrain_type==7 || tile.real_terrain_type==8 || hill_vegetation==7 || hill_vegetation==8){
-        bool hill_forest=hill_vegetation==7;
+    if(tile.real_terrain_type==7 || tile.real_terrain_type==8 ||
+       hill_vegetation==7 || hill_vegetation==8 ||
+       raised_vegetation==7 || raised_vegetation==8){
+        bool raised_canopy=raised_vegetation==7 || raised_vegetation==8;
+        bool hill_forest=hill_vegetation==7 || raised_vegetation==7;
         // Exact current production building meshes/placement, used only as
         // exclusions. City appearance and its geometry path remain unchanged.
         std::vector<BuildingBounds> buildings;
@@ -89,7 +92,7 @@ if(fidelity_profile) {
         if(tile.real_terrain_type==7 || hill_forest){
             #include "../../lab/shared/natural/forest_mesh_body.h"
         }else{
-            bool hill_jungle=hill_vegetation==8;
+            bool hill_jungle=hill_vegetation==8 || raised_vegetation==8;
             #include "../../lab/shared/natural/jungle_mesh_body.h"
         }
     }

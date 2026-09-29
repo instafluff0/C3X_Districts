@@ -16,9 +16,24 @@ REPORTS={'UnitEarlyLab':'early','UnitFamilyLab':'family','UnitRosterLab':'roster
 def read(p):return json.loads(p.read_text())
 def sha(b):return hashlib.sha256(b).hexdigest()
 def main():
-    runtime=read(PACKS/'UnitAnimationRuntime/manifest.json');jobs=[];pins={};records={};anchors={}
+    runtime=read(PACKS/'UnitAnimationRuntime/manifest.json');jobs=[];anchors={}
+    existing=read(OUT/'manifest.json') if (OUT/'manifest.json').exists() else {'meshes':{},'source_reports':{}}
+    pins=dict(existing['source_reports']);records=dict(existing['meshes'])
     for name,report_name in REPORTS.items():
-        path=ROOT/f'Renderer/preview/out/units/{report_name}_build.json';report=read(path);pins[str(path.relative_to(ROOT))]=sha(path.read_bytes())
+        path=ROOT/f'Renderer/preview/out/units/{report_name}_build.json'
+        if not path.exists():
+            # Build reports are disposable. Retain only records whose current
+            # normalized meshes still match their fingerprinted source records.
+            used={(name+'/'+part['source_mesh']) for unit in runtime['units'].values()
+                  if unit['source_pack']==name for action in unit['actions'].values()
+                  for part in action['parts'] if part.get('source_mesh')}
+            for key in used:
+                if key not in records:raise ValueError('missing normal record and source report '+key)
+                record=read(ROOT/records[key])
+                if record['normalized_mesh_sha256']!=sha((PACKS/key).read_bytes()):
+                    raise ValueError('stale normal record and missing source report '+key)
+            continue
+        report=read(path);pins[str(path.relative_to(ROOT))]=sha(path.read_bytes())
         if report.get('strategy'):
             strategy=read(Path(report['strategy']['path']))
             for key,values in strategy.get('package_anchors',{}).items():
@@ -87,6 +102,9 @@ def main():
         unresolved=[j for j in unresolved if j[0]+'/'+j[1] not in done]
         del package
     if unresolved:raise ValueError('unresolved source primitives: '+str([(j[0],j[1]) for j in unresolved]))
+    active={(unit['source_pack']+'/'+part['source_mesh']) for unit in runtime['units'].values()
+            for action in unit['actions'].values() for part in action['parts'] if part.get('source_mesh')}
+    records={key:value for key,value in records.items() if key in active}
     OUT.mkdir(parents=True,exist_ok=True)
     (OUT/'manifest.json').write_text(json.dumps({'schema':'c3x.authored_normal_refresh.v1','meshes':records,'source_reports':pins},indent=2)+'\n')
     print('PASS',mesh_count,'meshes;',skin_count,'local skin palettes preserved')

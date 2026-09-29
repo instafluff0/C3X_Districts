@@ -64,8 +64,14 @@ struct ID3D11Resource {ID3D11Texture2D* value;
  int As(ID3D11Texture2D** output){*output=value;return 0;}};
 struct Target {ID3D11Resource resource;
  void GetResource(ID3D11Resource** output){*output=&resource;}};
-struct Fresh {struct {struct {ID3D11Texture2D* depth_texture=nullptr;} linear;} glow;} sandbox_fresh;
-bool drawn=false,draw_ok=true,apply_ok=true;int masks=0;
+bool drawn=false,draw_ok=true,apply_ok=true,overlay_ok=true;int masks=0,overlays=0;
+struct Fresh {struct {struct {ID3D11Texture2D* depth_texture=nullptr;} linear;} glow;
+ struct Overlay {template<class D,class C,class F>
+ bool draw(D,C,ID3D11Texture2D* texture,F const&,ID3D11Texture2D* actors,unsigned guard,float zoom){
+  assert(drawn&&texture->id==42&&actors==nullptr&&guard==4&&zoom==1.25f);
+  ++overlays;return overlay_ok;
+ }} city_site_overlay;
+} sandbox_fresh;
 struct Output {bool draw(Target*,int,int){drawn=true;return draw_ok;}} sandbox_backbuffer_output;
 struct Renderer {bool visibility_pass=true;int device=0,context=0,visibility_coverage=123;
  struct Mask {bool apply(int,int,ID3D11Texture2D* texture,int coverage,ID3D11Texture2D* actors,unsigned guard,float zoom){
@@ -80,10 +86,11 @@ bool sample(Target* target,float zoom=1.25f){
 int main(){
  ID3D11Texture2D texture{42};Target target{{&texture}};
  for(int i=0;i<60;++i){drawn=false;assert(sample(&target));}
- assert(masks==60); // each independent frame receives coverage exactly once
- renderer.visibility_pass=false;assert(sample(&target)&&masks==60);
- renderer.visibility_pass=true;draw_ok=false;assert(!sample(&target)&&masks==60);
- draw_ok=true;apply_ok=false;assert(!sample(&target)&&masks==61);
+ assert(masks==60&&overlays==60); // one overlay and fog pass per frame
+ renderer.visibility_pass=false;assert(sample(&target)&&masks==60&&overlays==61);
+ renderer.visibility_pass=true;draw_ok=false;assert(!sample(&target)&&masks==60&&overlays==61);
+ draw_ok=true;overlay_ok=false;assert(!sample(&target)&&masks==60&&overlays==62);
+ overlay_ok=true;apply_ok=false;assert(!sample(&target)&&masks==61&&overlays==63);
 }
 ''')
 

@@ -107,49 +107,45 @@
       "minimum_matching_tracks": 30,
       "actions": {
         "idle": {
-          "source": "ANIMATION_Scout_BreathingB",
+          "source": "ANIMATION_Settler_Backpack_IdleA",
           "loop": true,
-          "source_match": "compatible_staff_humanoid_rig; backpack carrier clips do not animate the leader staff socket"
+          "source_match": "settler carrier backpack rig"
         },
         "move": {
-          "source": "ANIMATION_Scout_Jog",
+          "source": "ANIMATION_Settler_Backpack_Run",
           "loop": true,
-          "source_match": "compatible_staff_humanoid_rig; backpack carrier clips do not animate the leader staff socket"
+          "source_match": "settler carrier backpack rig"
         }
       },
       "additional_actions": {
         "fidget": {
-          "source": "ANIMATION_Scout_IdleD",
+          "source": "ANIMATION_Settler_Backpack_FidgetA",
           "loop": false,
-          "source_match": "compatible_staff_humanoid_rig; backpack carrier clips do not animate the leader staff socket"
+          "source_match": "settler carrier backpack rig"
         },
         "fortify": {
-          "source": "ANIMATION_Scout_FortifyB",
+          "source": "ANIMATION_Settler_Backpack_Run_Stop",
           "loop": false,
-          "source_match": "compatible_staff_humanoid_rig; backpack carrier clips do not animate the leader staff socket"
+          "source_match": "settler carrier backpack rig"
         },
         "capture": {
-          "source": "ANIMATION_SettlerLeader_CaptureB",
-          "loop": false
+          "source": "ANIMATION_Settler_Basket_CaptureA",
+          "loop": false,
+          "source_match": "compatible settler carrier humanoid rig"
         },
         "build": {
           "source": "ANIMATION_SettlerLeader_CITYA",
           "loop": false,
-          "exclude_roles": [
-            "Staff"
-          ],
-          "presentation_note": "CITYA is a founding gesture; hide the staff that its source socket stows away from the hand."
+          "source_match": "compatible settler humanoid founding gesture"
         },
         "death": {
           "source": "ANIMATION_Scout_DeathA",
           "loop": false,
-          "exclude_roles": [
-            "Staff"
-          ],
           "source_match": "compatible_humanoid_death; source civilians otherwise only supply capture gestures"
         }
       },
-      "member_index": 0,
+      "member_index": 2,
+      "selected_member_count": 1,
       "action_scope": "civilian"
     },
     {

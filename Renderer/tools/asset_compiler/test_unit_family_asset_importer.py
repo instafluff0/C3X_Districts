@@ -113,10 +113,12 @@ class UnitFamilyAssetImporterTests(unittest.TestCase):
         warrior, scout, settler, worker = strategy["units"]
         self.assertEqual(["warrior", "scout", "settler", "worker"],
                          [unit["slug"] for unit in strategy["units"]])
-        self.assertEqual([0, 0, 0], [unit["member_index"] for unit in (scout, settler, worker)])
+        self.assertEqual([0, 2, 0], [unit["member_index"] for unit in (scout, settler, worker)])
+        self.assertEqual(1, settler["selected_member_count"])
         self.assertNotIn("exclude_roles", worker)
-        self.assertEqual(["Staff"], settler["additional_actions"]["build"]["exclude_roles"])
+        self.assertNotIn("exclude_roles", settler["additional_actions"]["build"])
         self.assertEqual("ANIMATION_SettlerLeader_CITYA", settler["additional_actions"]["build"]["source"])
+        self.assertEqual("ANIMATION_Settler_Basket_CaptureA", settler["additional_actions"]["capture"]["source"])
         self.assertEqual(["Builder_Shovel"], worker["additional_actions"]["road"]["tools"])
         self.assertEqual(["Builder_PickAxe"], worker["additional_actions"]["mine"]["tools"])
         self.assertEqual(["Builder_Axe"], worker["additional_actions"]["forest"]["tools"])

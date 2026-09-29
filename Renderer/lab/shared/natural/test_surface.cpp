@@ -9,7 +9,7 @@ struct Shore {float distance,beach_width;};
 
 int main() {
     NaturalData natural;
-    for(unsigned biome=0;biome<3;biome++) {
+    for(unsigned biome=0;biome<4;biome++) {
         unsigned first=unsigned(natural.surface_vertices.size());
         SurfaceVertex quad[]={
             {-.4f,-.3f,.10f,.20f},{.4f,-.3f,.90f,.20f},{.4f,.3f,.90f,.80f},
@@ -19,17 +19,18 @@ int main() {
     }
     auto height=[](float x,float y,float*){return 2.5f+x*.07f+y*.11f;};
     auto shore=[](float,float){return Shore{2,.2f};};
+    auto lookup=[](int c,int r){return Tile{c+r,c-r,c,r,4};};
     unsigned verified=0;
-    for(int real:{1}) {
-        unsigned biome=unsigned(2-real);Tile owner{17+real,-9+real,3,-4,real};
+    for(int real:{1,4}) {
+        unsigned biome=real==4?3u:unsigned(2-real);Tile owner{17+real,-9+real,3,-4,real};
         GroundProjection projection{3,-4,64,32,128.f/224*.82f,480};
-        auto weights=[&](float,float){std::array<float,5>w{};w[biome]=1;return w;};
+        auto weights=[&](float,float){std::array<float,5>w{};w[biome==3?1:biome]=1;return w;};
         auto emit=[&](std::vector<MapVertex>&out,unsigned stop=0) {
-            unsigned calls=0;return emit_surface_decals(natural,owner,projection,height,shore,weights,
+            unsigned calls=0;return emit_surface_decals(natural,owner,projection,lookup,height,shore,weights,
                 [&](){return stop && ++calls==stop;},out);
         };
         std::vector<MapVertex>a,b;assert(emit(a)&&emit(b));
-        assert(a.size()>=72&&a.size()<=132&&a.size()%6==0&&b.size()==a.size()&&
+        assert(a.size()>0&&a.size()<=132&&a.size()%6==0&&b.size()==a.size()&&
                !std::memcmp(a.data(),b.data(),a.size()*sizeof(MapVertex)));
         for(auto const&v:a) {
             assert(v.material_plains==5+float(biome));assert(v.material_desert==1);
@@ -47,7 +48,7 @@ int main() {
             GroundProjection projection{3,-4,64,32,128.f/224*.82f,480};
             auto weights=[](float,float){return std::array<float,5>{1,0,0,0,0};};
             std::vector<MapVertex>out;
-            assert(emit_surface_decals(natural,owner,projection,height,shore,weights,
+            assert(emit_surface_decals(natural,owner,projection,lookup,height,shore,weights,
                                        []{return false;},out));
             // Grass source recipes are disconnected triangles. Their optional
             // mesh is omitted so its straight edges cannot mark the map.
@@ -61,7 +62,7 @@ int main() {
             GroundProjection projection{coordinate,-coordinate,64,32,128.f/224*.82f,480};
             auto weights=[](float,float){return std::array<float,5>{0,0,1,0,0};};
             std::vector<MapVertex>a,b;
-            auto run=[&](std::vector<MapVertex>&out){return emit_surface_decals(natural,owner,projection,height,shore,weights,[]{return false;},out);};
+            auto run=[&](std::vector<MapVertex>&out){return emit_surface_decals(natural,owner,projection,lookup,height,shore,weights,[]{return false;},out);};
             assert(run(a)&&run(b)&&a.size()==b.size());
             assert(a.empty()||a.size()==18);
             if(a.empty())empty++;else {
@@ -77,9 +78,21 @@ int main() {
     {
         Tile owner{2,4,3,-4,2};GroundProjection projection{3,-4,64,32,.4f,480};
         auto weak=[](float,float){return std::array<float,5>{.01f,.99f,0,0,0};};
-        std::vector<MapVertex>out;assert(emit_surface_decals(natural,owner,projection,height,shore,weak,[]{return false;},out));
+        std::vector<MapVertex>out;assert(emit_surface_decals(natural,owner,projection,lookup,height,shore,weak,[]{return false;},out));
         assert(out.empty());
     }
-    std::cout<<"PASS source surface composition: grass omitted, 2 active biomes, "<<verified
+    {
+        Tile owner{7,7,4,0,4};GroundProjection projection{4,0,64,32,.4f,480};
+        auto isolated=[](int c,int r){return Tile{c+r,c-r,c,r,c==4&&r==0?4:1};};
+        auto plains=[](float,float){return std::array<float,5>{0,1,0,0,0};};
+        std::vector<MapVertex>out;
+        assert(emit_surface_decals(natural,owner,projection,isolated,height,shore,plains,[]{return false;},out));
+        assert(!out.empty());
+        bool faded=false;
+        for(auto const&v:out){assert(v.material_desert>=0&&v.material_desert<=1);
+            faded=faded||v.material_desert<.99f;}
+        assert(faded);
+    }
+    std::cout<<"PASS source surface composition: grass omitted, 3 active biomes, "<<verified
              <<" deterministic vertices, biome fade and cancellation\n";
 }

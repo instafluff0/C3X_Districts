@@ -36,20 +36,31 @@
     }
     // Carry local volcano ownership on both replacement surface families.
     // Lookup uses the authoritative dependency observer, including wrapped tiles.
-    // Geometry and inherited relief normals remain unchanged.
-    std::vector<std::array<float,2>> volcano_centers;
-    for(int dr=-1;dr<=1;dr++)for(int dc=-1;dc<=1;dc++)
-        if(lookup_natural(nc+dc,nr+dr).real==10)
-            volcano_centers.push_back({float(nc+dc)+.5f,float(nr+dr)+.5f});
+    // The rock lookup must follow the same rigid orientation as the height.
+    struct VolcanoCenter {float x,y;unsigned orientation;};
+    std::vector<VolcanoCenter> volcano_centers;
+    auto dimensions=world_coast.world().dimensions();
+    for(int dr=-1;dr<=1;dr++)for(int dc=-1;dc<=1;dc++) {
+        int pc=nc+dc,pr=nr+dr;
+        if(lookup_natural(pc,pr).real!=10)continue;
+        int raw_x=pc+pr,raw_y=pc-pr;
+        if(dimensions.wrap_x)raw_x=c3x_renderer::render_core::mod(raw_x,dimensions.width);
+        if(dimensions.wrap_y)raw_y=c3x_renderer::render_core::mod(raw_y,dimensions.height);
+        unsigned slot=c3x_renderer::render_core::volcano_slot(raw_x,raw_y);
+        volcano_centers.push_back({float(pc)+.5f,float(pr)+.5f,
+            c3x_renderer::render_core::volcano_orientation(slot)});
+    }
     if(!volcano_centers.empty())for(unsigned layer:{0u,2u})
         for(auto&v:natural_vertices[layer]) {
             float nearest=1e9f;
             for(auto const&center:volcano_centers) {
-                float dx=v.world_x-center[0],dy=v.world_y-center[1];
+                float dx=v.world_x-center.x,dy=v.world_y-center.y;
                 float distance=dx*dx+dy*dy;
                 if(distance<nearest) {
                     nearest=distance;
-                    v.relief_owner_u=dx;v.relief_owner_v=dy;
+                    auto oriented=c3x_renderer::render_core::volcano_source_offset(
+                        dx,-dy,center.orientation);
+                    v.relief_owner_u=oriented[0];v.relief_owner_v=-oriented[1];
                     v.relief_owner_coverage=1;v.relief_owner_state=0;
                 }
             }

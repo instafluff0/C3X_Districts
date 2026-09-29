@@ -8211,13 +8211,16 @@ public:
             // Ground generation always immediately reads the record it just
             // recorded as a dependency; combine both steps into one lookup.
             auto topology_lookup = [&](int x, int y) { return topology_cache.current(observed_coordinate_key(x, y)); };
-            int hill_vegetation = c3x_renderer::native_hill_vegetation(
-                tile.real_terrain_type,
-                [&](int dx, int dy) {
+            auto canopy_neighbor = [&](int dx, int dy) {
                     auto neighbor = topology_lookup(tile.tile_x + dx, tile.tile_y + dy);
                     return neighbor ? neighbor->occurrence.real_terrain_type : -1;
-                },
-                c3x_renderer::native_hill_seed(tile.tile_x,tile.tile_y));
+                };
+            unsigned canopy_seed=c3x_renderer::native_hill_seed(tile.tile_x,tile.tile_y);
+            int hill_vegetation=c3x_renderer::native_hill_vegetation(
+                tile.real_terrain_type==5?5:0,canopy_neighbor,canopy_seed);
+            int raised_vegetation=c3x_renderer::native_hill_vegetation(
+                tile.real_terrain_type==6 || tile.real_terrain_type==10?
+                    tile.real_terrain_type:0,canopy_neighbor,canopy_seed);
             float left = 0.0f; // mesh origin is local; Civ III supplies the draw anchor
             float top = 0.0f;
             // The source terrain materials are detail textures, not one enormous
@@ -8467,8 +8470,8 @@ public:
                     if (sample_base >= 11)
                         return;
                     int material = sample_surface == 9 ? 3 :
-                        (sample_base == 0 || sample_base == 4 ? 2 :
-                         (sample_base == 1 ? 1 : (sample_base == 3 ? 4 : 0)));
+                        (sample_base == 0 ? 2 :
+                         (sample_base == 1 || sample_base == 4 ? 1 : (sample_base == 3 ? 4 : 0)));
                     result[material] += amount;
                 };
                 if (base < 11)
@@ -8669,10 +8672,11 @@ public:
                 unsigned seed = static_cast<unsigned>(source_x) * 73856093u ^
                     static_cast<unsigned>(source_y) * 19349663u;
                 seed ^= seed >> 13;
-                if ((seed & 1u) != 0)
-                    std::swap(local_x, local_y);
-                if ((seed & 2u) != 0)
-                    local_x = 1.0f - local_x;
+                unsigned slot=c3x_renderer::render_core::volcano_slot(source_x,source_y);
+                auto oriented=c3x_renderer::render_core::volcano_source_offset(
+                    local_x-.5f,local_y-.5f,
+                    c3x_renderer::render_core::volcano_orientation(slot));
+                local_x=.5f+oriented[0];local_y=.5f+oriented[1];
                 constexpr int offsets[4][2] = {
                     {-1, 0}, {1, 0}, {0, -1}, {0, 1}};
                 bool has_relief_neighbor = false;
@@ -8701,6 +8705,20 @@ public:
                     volcano.height_width, volcano.height_height,
                     volcano.blend_minimum, volcano.blend_maximum,
                     source_u, source_v) * edge;
+                c3x_renderer::render_core::volcano_variant(slot,local_x,local_y,
+                    height,blend,[&](unsigned field,int channel,float fu,float fv) {
+                        TerrainTexture const & mountains=terrain_textures[6];
+                        auto const & pixels=channel==0?
+                            mountains.relief_height_variants[field]:
+                            mountains.relief_blend_variants[field];
+                        return sample_normalized_field(pixels,
+                            mountains.relief_variant_widths[field],
+                            mountains.relief_variant_heights[field],
+                            channel==0?mountains.relief_height_minimum[field]:
+                                       mountains.relief_blend_minimum[field],
+                            channel==0?mountains.relief_height_maximum[field]:
+                                       mountains.relief_blend_maximum[field],fu,fv);
+                    });
             };
             auto sample_relief_chain = [&](float world_u, float world_v,
                                            float & height, float & blend,
@@ -9220,7 +9238,7 @@ public:
             int vegetation_type = hill_vegetation ? hill_vegetation : tile.real_terrain_type;
             if (feature_assets_ready &&
                 (vegetation_type == 7 || vegetation_type == 8) &&
-                !(fidelity_profile && (vegetation_type == 7 || vegetation_type == 8))) {
+                !fidelity_profile) {
                 char const * group_name = vegetation_type == 7 ? "forest" : "jungle";
                 c3x_renderer::FeatureGroup const * group =
                     vegetation_type == 7 ? forest_group :
@@ -9228,7 +9246,8 @@ public:
                 // Forest uses a 6x6 canopy body and jungle a 7x7 body. Stable
                 // grid jitter prevents the random
                 // interior holes visible in the earlier in-game port.
-                unsigned instance_count = hill_vegetation ? 16u : vegetation_type == 7 ? 36u : 49u;
+                unsigned instance_count = hill_vegetation ? 16u :
+                    vegetation_type == 7 ? 36u : 49u;
                 char const * forest_anchors[] = {"pine_01", "pine_clump_01", "shrub_01"};
                 char const * jungle_anchors[] = {
                     "grass_04", "palm_01", "palm_02", "plant_01", "plant_02", "plant_03"};
@@ -9256,7 +9275,8 @@ public:
                             continue;
                         c3x_renderer::FeatureAsset const & asset =
                             feature_bundle.assets[placement->asset_index];
-                        unsigned grid_side = hill_vegetation ? 4u : vegetation_type == 7 ? 6u : 7u;
+                        unsigned grid_side = hill_vegetation ? 4u :
+                            vegetation_type == 7 ? 6u : 7u;
                         unsigned column = instance % grid_side;
                         unsigned row = instance / grid_side;
                         float jitter_u = c3x_renderer::stable_random(
@@ -9272,7 +9292,7 @@ public:
                         float scale_variation =
                             (c3x_renderer::stable_random(feature_seed + instance * 71u + 23u) * 2.0f - 1.0f) *
                             placement->scale_variation;
-                        float scene_feature_scale = hill_vegetation ? 0.34f :
+                        float scene_feature_scale = hill_vegetation ? .34f :
                             vegetation_type == 7 ? 0.42f : 0.40f;
                         float scale = placement->scale * (1.0f + scale_variation) *
                             scene_feature_scale;
@@ -9282,7 +9302,8 @@ public:
                         float sine = std::sin(rotation);
                         std::array<float, 3> ground_sample = relief_at_world(
                             tile_world_u + u, tile_world_v + (1.0f - v));
-                        if(hill_vegetation)ground_sample[0]=c3x_renderer::native_hill_plant_ground(
+                        if(hill_vegetation)
+                            ground_sample[0]=c3x_renderer::native_hill_plant_ground(
                             asset,tile_world_u+u,tile_world_v+1.0f-v,cosine,sine,scale,
                             150.0f*feature_projection_scale/relief_projection_scale,
                             [&](float x,float y){return natural_height_at(x,y);});

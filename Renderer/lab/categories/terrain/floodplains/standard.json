@@ -7,7 +7,11 @@
     "transitions"
   ],
   "implementation": [
+    "Renderer/lab/shared/natural/data.h",
+    "Renderer/lab/shared/natural/mesh.h",
+    "Renderer/lab/shared/natural/surface_mesh_body.h",
     "Renderer/lab/shared/shaders/relief/beauty_terrain.hlsl",
+    "Renderer/native/source_fidelity/prepare.py",
     "Renderer/native/city_fidelity/terrain.hlsl",
     "Renderer/native/source_fidelity/geometry.h",
     "Renderer/native/source_fidelity/runtime.h",
@@ -30,6 +34,7 @@
   },
   "tests": [
     "Renderer.native.source_fidelity.test_contract",
+    "Renderer.lab.test_natural",
     "Renderer.native.test_render_core"
   ],
   "references": {

@@ -28040,6 +28040,11 @@ unload_custom_renderer ()
 	is->custom_renderer_tiles = NULL;
 	is->custom_renderer_tile_count = 0;
 	is->custom_renderer_tile_capacity = 0;
+	if (is->custom_renderer_city_site_grades != NULL) free (is->custom_renderer_city_site_grades);
+	is->custom_renderer_city_site_grades = NULL;
+	is->custom_renderer_city_site_grade_count = 0;
+	is->custom_renderer_city_site_perspective = -1;
+	is->custom_renderer_city_site_turn = -1;
 	if (is->custom_renderer_world_topology != NULL) free (is->custom_renderer_world_topology);
 	is->custom_renderer_world_topology = NULL;
 	is->custom_renderer_world_topology_count = 0;
@@ -29061,7 +29066,11 @@ capture_custom_renderer_world_topology ()
 			}
 		}
 	}
-	if (changed || modified) is->custom_renderer_world_topology_revision++;
+	if (changed || modified) {
+		is->custom_renderer_world_topology_revision++;
+		if (is->custom_renderer_city_site_grades != NULL)
+			memset (is->custom_renderer_city_site_grades, 0xff, is->custom_renderer_city_site_grade_count);
+	}
 	if (observe_visibility && (changed || visibility_modified))
 		is->custom_renderer_visibility_revision = is->custom_renderer_visibility_revision < 0x7fffffffffffffffLL ?
 			is->custom_renderer_visibility_revision + 1 : 1;
@@ -29107,6 +29116,78 @@ prepare_custom_renderer_zoom_tiles (int target_width, int target_height)
 	}
 }
 
+// The same AI evaluation and eleven grades used by the native tile hook. A
+// selected settler or the L-key perspective activates it; zero means no draw.
+// Cache on the game thread so ambient redraws do not repeat AI work.
+void
+capture_custom_renderer_city_site_grades ()
+{
+	int perspective = is->city_loc_display_perspective;
+	if (perspective < 0 || perspective >= 32 ||
+	    ! (((unsigned int)*p_player_bits) & (1u << perspective))) return;
+	Map * map = &p_bic_data->Map;
+	long long cells = (long long)map->Width * map->Height;
+	if (cells <= 0 || cells > 2048LL * 2048) return;
+	int count = (int)((cells + 1) / 2);
+	if (is->custom_renderer_city_site_grade_count != count || is->custom_renderer_city_site_grades == NULL) {
+		unsigned char * next = realloc (is->custom_renderer_city_site_grades, count);
+		if (next == NULL) return;
+		is->custom_renderer_city_site_grades = next;
+		is->custom_renderer_city_site_grade_count = count;
+		is->custom_renderer_city_site_perspective = -1;
+	}
+	int turn = *p_current_turn_no;
+	if (is->custom_renderer_city_site_perspective != perspective ||
+	    is->custom_renderer_city_site_turn != turn) {
+		memset (is->custom_renderer_city_site_grades, 0xff, count);
+		is->custom_renderer_city_site_perspective = perspective;
+		is->custom_renderer_city_site_turn = turn;
+	}
+	int newly_evaluated = 0, positive = 0, min_eval = INT_MAX, max_eval = INT_MIN;
+	int grade_counts[COUNT_TILE_HIGHLIGHTS] = {0};
+	for (int n = 0; n < is->custom_renderer_tile_count; n++) {
+		struct c3x_renderer_tile_v1 * tile = &is->custom_renderer_tiles[n];
+		if (! (tile->tile_flags & C3X_RENDERER_TILE_RENDER) ||
+		    ! (tile->tile_flags & C3X_RENDERER_TILE_VISIBILITY_KNOWN) ||
+		    ! (tile->tile_flags & C3X_RENDERER_TILE_EXPLORED) ||
+		    ((tile->tile_x + tile->tile_y) & 1) ||
+		    tile->tile_x < 0 || tile->tile_x >= map->Width ||
+		    tile->tile_y < 0 || tile->tile_y >= map->Height) continue;
+		int index = (tile->tile_y * map->Width + tile->tile_x) / 2;
+		unsigned char * grade = &is->custom_renderer_city_site_grades[index];
+		if (*grade == 0xff) {
+			int eval = patch_Match_ai_eval_city_location (p_match, __, tile->tile_x, tile->tile_y, perspective, false, NULL);
+			newly_evaluated++;
+			*grade = 0;
+			if (eval > 0) {
+				positive++;
+				if (eval < min_eval) min_eval = eval;
+				if (eval > max_eval) max_eval = eval;
+				int step_size = 10;
+				int midpoint = (COUNT_TILE_HIGHLIGHTS % 2 == 0) ? 1000000 : (1000000 - step_size / 2);
+				int offset = (eval >= midpoint) ? (eval - midpoint) / step_size : (eval - midpoint) / step_size - 1;
+				*grade = 1 + clamp (0, COUNT_TILE_HIGHLIGHTS - 1, COUNT_TILE_HIGHLIGHTS / 2 + offset);
+				grade_counts[*grade - 1]++;
+			}
+		}
+		tile->city_site_grade = *grade;
+	}
+	if (newly_evaluated) {
+		DWORD (WINAPI * get_environment) (LPCSTR, LPSTR, DWORD) =
+			(void *)(*p_GetProcAddress) (is->kernel32, "GetEnvironmentVariableA");
+		char mode[16];
+		if (get_environment != NULL && get_environment ("C3X_RENDERER_GAME_TEST_MODE", mode, sizeof mode) > 0) {
+			char line[320];
+			snprintf (line, sizeof line,
+				"[C3X renderer] stage=city-site-scores evaluated=%d positive=%d min=%d max=%d grades=%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
+				newly_evaluated, positive, positive ? min_eval : 0, positive ? max_eval : 0,
+				grade_counts[0], grade_counts[1], grade_counts[2], grade_counts[3], grade_counts[4],
+				grade_counts[5], grade_counts[6], grade_counts[7], grade_counts[8], grade_counts[9], grade_counts[10]);
+			(*p_OutputDebugStringA) (line);
+		}
+	}
+}
+
 bool
 prepare_custom_renderer_frame (struct c3x_renderer_frame_v1 * prepared)
 {
@@ -29133,6 +29214,7 @@ prepare_custom_renderer_frame (struct c3x_renderer_frame_v1 * prepared)
 		clip = (RECT){0, 0, width, height};
 	bool zoomed_out = p_bic_data->Map.vtable->m10_Get_Map_Zoom (&p_bic_data->Map);
 	prepare_custom_renderer_zoom_tiles (width, height);
+	capture_custom_renderer_city_site_grades ();
 	if (is->custom_renderer_async_drawing || custom_renderer_zoom_transform_active ())
 		clip = (RECT){0, 0, width, height};
 	struct c3x_renderer_frame_v1 frame = {0};
@@ -47707,6 +47789,8 @@ custom_renderer_tile_near_view (int x, int y, int margin)
 void
 notify_custom_renderer_tile_change (int x, int y)
 {
+	if (is->custom_renderer_city_site_grades != NULL)
+		memset (is->custom_renderer_city_site_grades, 0xff, is->custom_renderer_city_site_grade_count);
 	if (! is->current_config.enable_custom_rendering ||
 	    is->custom_renderer_world_change == NULL || p_main_screen_form == NULL)
 		return;
@@ -47771,6 +47855,9 @@ notify_custom_renderer_unit_move (Unit * unit, int old_x, int old_y, bool source
 {
 	if (! is->current_config.enable_custom_rendering ||
 	    (old_x == unit->Body.X && old_y == unit->Body.Y)) return;
+	if (p_main_screen_form != NULL && unit == p_main_screen_form->Current_Unit &&
+	    is->custom_renderer_city_site_grades != NULL)
+		memset (is->custom_renderer_city_site_grades, 0xff, is->custom_renderer_city_site_grade_count);
 	bool target_visible = custom_renderer_tile_visible_at (unit->Body.X, unit->Body.Y);
 	if (Map_in_range (&p_bic_data->Map, __, old_x, old_y) &&
 	    Map_in_range (&p_bic_data->Map, __, unit->Body.X, unit->Body.Y) &&

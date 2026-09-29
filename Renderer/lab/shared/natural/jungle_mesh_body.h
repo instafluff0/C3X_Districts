@@ -1,7 +1,7 @@
 // Source jungle's ten weighted desktop bodies share the forest material and
 // shadow pipeline. Match the forest's varied spiral placement across tiles.
         std::uint32_t seed=std::uint32_t(owner.source_x*0x193u)^std::uint32_t(owner.source_y*0x217u);
-        unsigned density=hill_jungle?16u:31u+hash(seed^0xa53du)%11u;
+        unsigned density=raised_canopy?4u:hill_jungle?16u:31u+hash(seed^0xa53du)%11u;
         for(unsigned i=0;i<density;i++){
             if(cancelled())return false;
             unsigned selected=hash(seed+i*31u)%121u;Recipe const*recipe=nullptr;
@@ -11,7 +11,11 @@
             float angle=2.39996323f*float(i)+random(seed^0x71b3u)*6.283185307f;
             float u=.5f+std::cos(angle)*ring*.43f;
             float v=.5f+std::sin(angle)*ring*.43f;
-            float scale=recipe->scale*(1+recipe->variation*(random(seed+i*71u+23u)*2-1))*(hill_jungle?.34f:.40f);
+            if(raised_canopy){
+                constexpr float foot[][2]={{.06f,.90f},{.34f,.97f},{.69f,.97f},{.95f,.79f}};
+                u=foot[i][0];v=foot[i][1];
+            }
+            float scale=recipe->scale*(1+recipe->variation*(random(seed+i*71u+23u)*2-1))*(raised_canopy?.25f:hill_jungle?.34f:.40f);
             float yaw=random(seed+i*97u+47u)*6.283185307f;
             float co=std::cos(yaw),si=std::sin(yaw);auto const&body=natural.bodies[recipe->object];
             auto const&mat=natural.materials[body.material];

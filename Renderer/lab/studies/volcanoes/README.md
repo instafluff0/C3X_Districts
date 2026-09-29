@@ -1,5 +1,122 @@
 # Volcano source and ownership diagnosis
 
+## Current-code Renderer64 candidate
+
+`current_port.py` captures the current native renderer's coordinate-selected
+sixteen forms on separate grassland tiles, plus forest and jungle neighbors.
+Unlike `slot_study.py`, it does not force slot numbers into the renderer: the
+fixture finds a real tile coordinate for each form. The [current-code sheet](../../out/volcanoes/current-port/grassland-16-current.png)
+and [forest](../../out/volcanoes/current-port/05-forest/preview.png) and
+[jungle](../../out/volcanoes/current-port/05-jungle/preview.png) examples use
+one frozen native DLL. Raised tiles use a few natural trees near the foot,
+without vegetation-floor decals, inner lava or smoke. The active-state
+[bare-rock check](../../out/volcanoes/current-port/05-active/preview.png) is
+also lava-free. Capture receipts store scene and binary hashes and zero fallback.
+
+The current code also has a private Renderer64 shader bundle under
+`native/build/volcano-port/candidate-shaders`, changing only terrain and
+mountain materials. It passed the connected asynchronous bridge witness with
+the current x86 bridge and x64 companion, without staging or replacing fixed
+references. The natural-wonder and snow-specific art remain outside this
+candidate. Earlier studies below retain their original, narrower scope.
+
+## Explicit Civ III slot study (Lab only)
+
+`slot_study.py` assigns IDs 00–15 to the PCX's row-major 4×4 layout. It tests
+eight silhouettes in pairs: the preserved cone, a smoother cone, broad crater cone,
+offset steep cone, broken ridge, breached rim, paired shoulders and eroded
+cone. Each pair uses a different orientation of the same authored field
+combination. These are C3X Lab forms, not eight named Civ VI models. The study
+does not yet reproduce or change Civ III's native per-tile slot selector.
+The decompiled Civ III `Map_Renderer::impl_m10_Draw_Tile_Mountains_Hills_Volcano`
+passes a four-bit `sprite_index` to `m45_Draw_Volcano`: each bit comes from a
+diagonal mountain/hill/volcano neighbor, subject to a deterministic coordinate
+test. It selects the plain, forest or jungle sheet from the four neighbors as
+well. Thus an isolated volcano surrounded by grassland selects native cell 00.
+This Lab grid deliberately forces all 16 *visual forms* onto grassland for
+comparison; an in-game variety selector should choose form separately from
+the native adjacency mask, using a stable captured tile seed. Connectivity
+still governs how the continuous relief joins neighboring terrain.
+Slots 04–05 and 14–15 now retain more of the current cone's height while
+keeping their broad crater and eroded silhouettes. The
+[before-and-after comparison](../../out/volcanoes/slot-study/raised-comparison.png)
+shows those four against unchanged slot 00.
+The [eight-orientation probe](../../out/volcanoes/slot-study/orientation-probe.png)
+showed that the former B facing hid the crater. Slots 05 and 15 now use
+orientation 7, exposing the opening while retaining their distinct flanks;
+their [focused comparison](../../out/volcanoes/slot-study/b-facing-comparison.png)
+includes the unchanged standard cone. Run `slot_study.py --orientation-probe`
+to repeat the diagnostic, then run the normal study to restore the final
+16-slot captures.
+
+The native D3D11 Lab candidate renders [bare](../../out/volcanoes/slot-study/bare-slots.png),
+[forest](../../out/volcanoes/slot-study/forest-slots.png), and
+[jungle](../../out/volcanoes/slot-study/jungle-slots.png) 16-cell sheets. The
+forest and jungle treatments keep exactly the same volcano geometry, using the
+mountain-canopy study's approach: small, sparse trees at the visible foot with
+the rocky crater exposed. [Neighbor-context examples](../../out/volcanoes/slot-study/neighbor-contexts.png)
+put slot 05 among four actual forest or jungle tiles. The marker used to add a
+foot ring exists only in the private Lab CSV/preview source; it is not a new
+Civ III terrain type or production feature.
+
+Installed Civ VI data permits ordinary volcanoes on snow mountains, but the
+ArtDefs and BLP package metadata have no separate ordinary snow-volcano field
+or skin. This experiment leaves the 16 Civ III snow appearances unfilled.
+The three natural-wonder volcano fields stay reserved. All five native captures
+completed with zero fallback; `slots.json` and the per-render capture receipts
+record exact slot labels, source/DLL identities, scenes and image hashes. The
+isolated frozen x86 candidate is a Lab art witness, not current Renderer64
+production or a live Civ III game test. No sandbox, staged DLL or fixed
+reference changed.
+
+Run with a Python containing Pillow and the configured Windows VM:
+
+```sh
+python3 Renderer/lab/studies/volcanoes/slot_study.py
+```
+
+## Current Lab foundation study and installed asset inventory
+
+[`CIV6_INVENTORY.md`](CIV6_INVENTORY.md) records every named volcano found in
+the installed Civ VI Data XML, the ordinary and natural-wonder feature flags,
+and the matching ArtDef/BLP metadata. Regenerate it without extracting art:
+
+```sh
+python3 Renderer/lab/studies/volcanoes/inventory.py
+```
+
+`source_gallery.py` reads the installed source height field for the single
+ordinary volcano and for the three reserved natural wonders. Its four-panel
+`lab/out/volcanoes/source-gallery/source-heightfields.png` uses diagnostic
+shading to expose their shapes; it is not a Civ VI screenshot or textured
+renderer output. The companion JSON records source package, entry, dimensions
+and exact height-byte hashes. Run with Pillow and NumPy:
+
+```sh
+python3 Renderer/lab/studies/volcanoes/source_gallery.py
+```
+
+`foundation_study.py` makes an isolated native D3D11 Lab candidate from the
+earlier lava-free variety candidate. It retains the current cone in four of
+16 flat-grassland placements, then tests a lower broad form, a steep asymmetric
+form and a ridge complex using the existing five authored mountain fields as
+foundations. These are C3X combinations inspired by the range of named
+volcanoes, not individual Civ VI Fuji, Asama or Haleakalā models. The source
+does not provide such per-name ordinary art. Smoke and inner lava are absent.
+
+Run with a Python containing Pillow:
+
+```sh
+python3 Renderer/lab/studies/volcanoes/foundation_study.py
+```
+
+The review images are `lab/out/volcanoes/foundation-study/grassland-16.png`,
+`four-forms-closeup.png`, and `comparison.png`. Each native render has a DLL,
+scene and image hash receipt, plus the renderer's zero-fallback completion.
+The frozen x86 renderer is a standalone Lab art witness, not a current
+Renderer64 production baseline or in-game acceptance. No category reference,
+sandbox asset or staged DLL was replaced.
+
 ## Ordinary-volcano variety study
 
 The installed Expansion2 source has one dedicated ordinary-volcano terrain

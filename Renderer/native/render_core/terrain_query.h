@@ -34,6 +34,82 @@ inline int mod(int x, int n) { return (x%n+n)%n; }
 inline std::uint32_t hash(std::uint32_t x) {
     x^=x>>16; x*=0x7feb352du; x^=x>>15; x*=0x846ca68bu; return x^(x>>16);
 }
+inline unsigned volcano_slot(int raw_x,int raw_y) {
+    return hash(std::uint32_t(raw_x)*73856093u ^
+                std::uint32_t(raw_y)*19349663u)&15u;
+}
+inline unsigned volcano_orientation(unsigned slot) {
+    return (slot==5u || slot==15u)?7u:(slot&1u)?5u:0u;
+}
+inline std::array<float,2> volcano_source_offset(float x,float y,unsigned orientation) {
+    if(orientation&4u)x=-x;
+    switch(orientation&3u) {
+        case 1:return {-y,x};
+        case 2:return {-x,-y};
+        case 3:return {y,-x};
+        default:return {x,y};
+    }
+}
+inline float volcano_smooth01(float x) {
+    x=std::clamp(x,0.f,1.f);return x*x*(3-2*x);
+}
+// The mountain fields reshape the outer cone; the authored volcano retains its
+// crater. Height and material callers use the same slot and rigid orientation.
+template<class Foundation>
+void volcano_variant(unsigned slot,float x,float y,float& height,float& blend,
+                     Foundation foundation) {
+    unsigned family=slot>>1;
+    if(family==0)return;
+    float dx=x-.5f,dy=y-.5f;
+    float radius=std::sqrt(dx*dx+dy*dy);
+    float crater_clear=volcano_smooth01((radius-.10f)/.18f);
+    float outer=1-volcano_smooth01((radius-.50f)/.24f);
+    float gate=crater_clear*outer;
+    auto field_at=[&](unsigned variant,float shift_x,float shift_y,float span,float exponent) {
+        float fu=.5f+(dx+shift_x)*span;
+        float fv=.5f+(dy+shift_y)*span;
+        float h=foundation(variant,0,fu,fv);
+        float b=foundation(variant,1,fu,fv);
+        return std::array<float,2>{std::pow(std::max(0.f,h),exponent),b};
+    };
+    unsigned field=(slot*3u)%5u;
+    if(family==1) {
+        float cone=(1-volcano_smooth01((radius-.08f)/.49f))*
+            volcano_smooth01((radius-.045f)/.11f);
+        height=std::max(height*.28f,cone*.82f);
+        blend=std::max(blend,cone*.83f);
+    } else if(family==2) {
+        auto broad=field_at(field,.04f,-.03f,.36f,.72f);
+        height=std::max(height*.82f,broad[0]*.78f*gate);
+        blend=std::max(blend,broad[1]*.86f*gate);
+    } else if(family==3) {
+        auto steep=field_at(field,.15f,.03f,.52f,1.12f);
+        float lean=std::clamp(1.f+.70f*dx-.25f*dy,.55f,1.30f);
+        height=std::max(height*lean*.88f,steep[0]*.92f*gate);
+        blend=std::max(blend,steep[1]*.82f*gate);
+    } else if(family==4) {
+        auto west=field_at(field,-.14f,.07f,.43f,.84f);
+        auto east=field_at((field+2)%5,.13f,-.09f,.45f,.88f);
+        height=std::max({height*.72f,west[0]*.90f*gate,east[0]*.82f*gate});
+        blend=std::max({blend,west[1]*.75f*gate,east[1]*.60f*gate});
+    } else if(family==5) {
+        float breach=volcano_smooth01((dx+dy+.04f)/.20f);
+        float upper=1-volcano_smooth01((radius-.13f)/.34f);
+        auto flank=field_at(field,-.12f,.11f,.46f,.87f);
+        height=std::max(height*(1-.62f*breach*upper),flank[0]*.60f*gate);
+        blend=std::max(blend,flank[1]*.65f*gate);
+    } else if(family==6) {
+        auto left=field_at(field,-.18f,.06f,.45f,.85f);
+        auto right=field_at((field+3)%5,.17f,-.10f,.47f,.88f);
+        height=std::max({height*.77f,left[0]*.82f*gate,right[0]*.79f*gate});
+        blend=std::max({blend,left[1]*.79f*gate,right[1]*.76f*gate});
+    } else {
+        auto eroded=field_at(field,.10f,-.04f,.38f,.73f);
+        float broad=(1-volcano_smooth01((radius-.11f)/.55f))*.64f*gate;
+        height=std::max({height*.82f,eroded[0]*.68f*gate,broad});
+        blend=std::max(blend,eroded[1]*.72f*gate);
+    }
+}
 inline bool water(Tile t) { return t.base>=11 && t.base<=13; }
 inline int material(Tile t) {
     return t.real==9 ? 3 : t.real==4 ? 1 : t.base==0 ? 2 : t.base==1 ? 1 : t.base==3 ? 4 : 0;

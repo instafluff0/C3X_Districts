@@ -57,8 +57,10 @@ float relief_source(Assets const& terrain_textures,bool fidelity_profile,
                     int kind,unsigned variant,int channel,float u,float v) {
                 if(fidelity_profile && (kind==5 || kind==6))return 0.f; // replaced exact natural providers
 
-                auto const & asset = terrain_textures[kind];
-                if (kind == 6) {
+                // Kind 16 is a volcano-only mountain foundation. The separate
+                // natural mountain mesh still owns ordinary kind 6 samples.
+                auto const & asset = terrain_textures[kind == 16 ? 6 : kind];
+                if (kind == 6 || kind == 16) {
                     auto const & pixels = channel == 0 ? asset.relief_height_variants[variant] : asset.relief_blend_variants[variant];
                     return sample_normalized_field(pixels, asset.relief_variant_widths[variant],
                         asset.relief_variant_heights[variant], channel == 0 ? asset.relief_height_minimum[variant] : asset.relief_blend_minimum[variant],
