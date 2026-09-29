@@ -26,6 +26,8 @@ def main():
     p.add_argument('--hour', type=int, default=12)
     p.add_argument('--land', choices=['grassland', 'plains'], default='grassland')
     p.add_argument('--biq', action='store_true', help='Use the unchanged local test.biq map')
+    p.add_argument('--view-only', action='store_true',
+                   help='Prepare the bounded camera neighborhood for a focused still')
     p.add_argument('--city-site', type=int, nargs=2, metavar=('X', 'Y'),
                    help='Add a disclosed synthetic city/border fixture at this map tile')
     p.add_argument('--tile', type=int, default=256)
@@ -78,7 +80,8 @@ def main():
         'C3X_RENDERER_TRACE': '0',
         'C3X_RENDERER_SHARED_SCENE_SURFACE': '1',
         'C3X_RENDERER_WATER_MOTION': '1', 'C3X_RENDERER_WAVES': '1',
-        'C3X_SANDBOX_SHADOW_PATCHES': '1', 'C3X_SANDBOX_WHOLE_WORLD': '1',
+        'C3X_SANDBOX_SHADOW_PATCHES': '1',
+        'C3X_SANDBOX_WHOLE_WORLD': '0' if args.view_only else '1',
         'C3X_SANDBOX_UNITS': '1', 'C3X_RENDERER_PREVIEW_UNITS': '1',
         'C3X_RENDERER_CITY_PACK': 'Renderer/packs/CityCompositionRuntime',
         'C3X_RENDERER_SHADER_SOURCE_ROOT': win(ROOT / args.shaders),

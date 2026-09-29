@@ -34,10 +34,11 @@ struct PatchLayouts {
 };
 // Zero is exact compatibility. Positive values are explicitly selected visual
 // candidates: approximate maximum native-pixel edge length, before supersampling.
-// A view uses one common mountain lattice, including every collar/edge neighbor.
+// A view uses one common relief/edge lattice. Flat ground can use a cheaper
+// interior, but samples every boundary point on this same lattice.
 struct PatchDetail {
-    unsigned mountain=64,rocky_ground=48;
-    unsigned identity() const{return mountain*64+rocky_ground;}
+    unsigned mountain=64;
+    unsigned identity() const{return mountain;}
     bool operator==(PatchDetail const& b)const{return identity()==b.identity();}
     PatchDetail()=default;
     PatchDetail(int tile_width,unsigned pixels) {
@@ -46,7 +47,7 @@ struct PatchDetail {
         // Power-of-two levels give exact binary world coordinates and stable
         // shared edges. Adjacent patches never independently choose a level.
         unsigned level=8;while(level<cells && level<64)level*=2;
-        mountain=level;rocky_ground=std::min(48u,level);
+        mountain=level;
     }
 };
 } }

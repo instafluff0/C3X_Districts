@@ -3,17 +3,21 @@
     // terrain-relief surface below. Do not leave the ordinary ground mesh
     // underneath it: two coincident surfaces can never share depth, normals
     // and shadow reception exactly and were the source of the visible lips.
-    bool unified_mountain_surface=false;
-    for(int dr=-1;dr<=1;dr++)for(int dc=-1;dc<=1;dc++)
-        unified_mountain_surface|=lookup_natural(nc+dc,nr+dr).real==6;
+    bool unified_mountain_surface=false,hill_surface=false;
+    for(int dr=-1;dr<=1;dr++)for(int dc=-1;dc<=1;dc++){
+        int real=lookup_natural(nc+dc,nr+dr).real;
+        unified_mountain_surface|=real==6;
+        hill_surface|=real==5;
+    }
     if(!unified_mountain_surface &&
        (ground<11 || shore_sample_at(float(nc)+.5f,float(nr)+.5f).distance>-.8f)){
         auto coastal=shore_sample_at(float(nc)+.5f,float(nr)+.5f);
-        unsigned divisions=coastal.rocky>.55 && std::abs(coastal.distance)<1.25 ? patch_detail.rocky_ground : 16;
-        if(river_terrain_near && project_natural.half_width>=48)
-            divisions=std::max(divisions,32u);
+        bool detailed=hill_surface || (coastal.rocky>.55 && std::abs(coastal.distance)<1.25) ||
+            (river_terrain_near && project_natural.half_width>=48);
+        unsigned divisions=detailed?patch_detail.mountain:std::min(16u,patch_detail.mountain);
         if(!emit_ground_grid(natural_vertices[0],surface,cancelled,divisions,
-                             index_natural_grids?&natural_grid_indices[0]:nullptr,&patch_layouts.get(divisions),false))return false;
+                             index_natural_grids?&natural_grid_indices[0]:nullptr,&patch_layouts.get(divisions),false,
+                             patch_detail.mountain))return false;
         // Territory edges cross the wet portion of land-classified shore
         // tiles too. Keep the complete ground mesh for that pass; the terrain
         // and shadow shaders retain their existing optical coast clipping.

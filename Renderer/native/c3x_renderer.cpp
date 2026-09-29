@@ -10160,8 +10160,8 @@ public:
                 ground_stats.evicted-ground_batch_before.evicted,ground_batch_fallbacks,ground_batch_enabled?2u:0u,
                 ground_schedule_ms,ground_drain_ms,ground_stats.cpu_ms-ground_batch_before.cpu_ms,ground_stats.peak_bytes);
             trace.write("ground-selected",detail,true);
-            sprintf_s(detail,"pixels=%u mountain_cells=%u rocky_cells=%u shared_layouts=%zu shared_index_bytes=%zu shared_index_reuses=%u",
-                patch_pixels,patch_detail.mountain,patch_detail.rocky_ground,terrain_patch_indices.size(),terrain_patch_index_bytes,frame_patch_index_reuses);
+            sprintf_s(detail,"pixels=%u relief_edge_cells=%u shared_layouts=%zu shared_index_bytes=%zu shared_index_reuses=%u",
+                patch_pixels,patch_detail.mountain,terrain_patch_indices.size(),terrain_patch_index_bytes,frame_patch_index_reuses);
             trace.write("terrain-patches",detail,true);
             if(profiling){
                 sprintf_s(detail,"ground_ms=%.3f surface_decals_ms=%.3f relief_ms=%.3f vegetation_floor_ms=%.3f city_ms=%.3f forest_ms=%.3f",

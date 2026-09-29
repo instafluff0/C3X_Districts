@@ -105,14 +105,74 @@ inline void append_surface_grid(std::vector<MapVertex>&out,std::vector<MapVertex
 template<class Surface,class Cancel>
 bool emit_ground_grid(std::vector<MapVertex>&out,Surface surface,Cancel cancelled,unsigned divisions=16,
                       std::vector<unsigned>*indices=nullptr,PatchTopology const*topology=nullptr,
-                      bool clip_coast=true) {
+                      bool clip_coast=true,unsigned edge_divisions=0) {
     unsigned stride=divisions+1;
     std::vector<MapVertex> grid(stride*stride);
     for(unsigned y=0;y<=divisions;y++){
         if(cancelled())return false;
         for(unsigned x=0;x<=divisions;x++)grid[y*stride+x]=surface(float(x)/divisions,float(y)/divisions);
     }
-    append_surface_grid(out,grid,divisions,clip_coast,indices,topology);
+    if(edge_divisions<=divisions){
+        append_surface_grid(out,grid,divisions,clip_coast,indices,topology);
+        return true;
+    }
+    if(edge_divisions%divisions)return false;
+    // Use the same boundary lattice as neighboring relief patches without
+    // paying for its density across flat interiors. Split only boundary cells,
+    // using actual surface samples, so their edges meet the dense mesh exactly.
+    // A center fan covers each convex cell without degenerate edge triangles.
+    unsigned ratio=edge_divisions/divisions;
+    std::vector<unsigned> elements;
+    std::array<std::vector<unsigned>,4> edges;
+    for(unsigned side=0;side<4;++side){
+        auto& edge=edges[side];edge.resize(edge_divisions+1);
+        for(unsigned i=0;i<=edge_divisions;++i){
+            if(cancelled())return false;
+            if(i%ratio==0){
+                unsigned j=i/ratio;
+                edge[i]=side==0?j:side==1?j*stride+divisions:
+                    side==2?divisions*stride+divisions-j:(divisions-j)*stride;
+            }else{
+                float t=float(i)/edge_divisions;
+                edge[i]=unsigned(grid.size());
+                grid.push_back(surface(side==0?t:side==1?1:side==2?1-t:0,
+                                       side==0?0:side==1?t:side==2?1:1-t));
+            }
+        }
+    }
+    auto triangle=[&](unsigned a,unsigned b,unsigned c){
+        if(clip_coast && std::max({grid[a].base_terrain,grid[b].base_terrain,
+                                   grid[c].base_terrain})<=-9.999f)return;
+        elements.insert(elements.end(),{a,b,c});
+    };
+    for(unsigned y=0;y<divisions;++y)for(unsigned x=0;x<divisions;++x){
+        if(cancelled())return false;
+        unsigned a=y*stride+x,b=a+1,d=a+stride,c=d+1;
+        bool split[]={y==0,x+1==divisions,y+1==divisions,x==0};
+        if(!split[0]&&!split[1]&&!split[2]&&!split[3]){
+            triangle(a,b,c);triangle(a,c,d);continue;
+        }
+        unsigned center=unsigned(grid.size());
+        grid.push_back(surface((x+.5f)/divisions,(y+.5f)/divisions));
+        unsigned corners[]={a,b,c,d,a};
+        unsigned starts[]={x,y,divisions-1-x,divisions-1-y};
+        for(unsigned side=0;side<4;++side){
+            if(!split[side]){triangle(center,corners[side],corners[side+1]);continue;}
+            unsigned start=starts[side]*ratio;
+            for(unsigned i=0;i<ratio;++i)
+                triangle(center,edges[side][start+i],edges[side][start+i+1]);
+        }
+    }
+    // Commit only after sampling succeeds; cancellation cannot leave half a
+    // patch. Preserve first-reference ordering for indexed/expanded parity.
+    std::vector<unsigned> remap;
+    if(indices)remap.assign(grid.size(),~0u);
+    for(auto corner:elements){
+        if(indices){
+            if(remap[corner]==~0u){remap[corner]=unsigned(out.size());out.push_back(grid[corner]);}
+            indices->push_back(remap[corner]);
+        }else out.push_back(grid[corner]);
+    }
     return true;
 }
 }}

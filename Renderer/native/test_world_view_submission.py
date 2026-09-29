@@ -23,12 +23,14 @@ struct CachedTileGeometry {
 };
 struct State {
  int shadow_tile_width=128;
+ unsigned frame_tile_invalid_shared=0,frame_tile_invalid_appearance=0,frame_tile_invalid_semantic=0;
+ unsigned frame_tile_invalid_coast=0,frame_tile_invalid_world=0,frame_tile_invalid_anchor=0,frame_tile_invalid_river=0;
  std::uint64_t tile_geometry_epoch=1;
  struct Residents {CachedTileGeometry shared;bool alive=true;Residents(){shared.shared_natural=true;}
   CachedTileGeometry* resolve(Handle){return alive?&shared:nullptr;}}resident_content;
- struct Topology {std::uint64_t observation_epoch=1;
+ struct Topology {std::uint64_t observation_epoch=1;unsigned appearance=1;
   std::uint64_t observation_sequence()const{return observation_epoch;}struct Record{unsigned semantic=42;struct {int anchor_x=13,anchor_y=24;}occurrence;}record;
-  unsigned appearance_revision(unsigned){return 1;}Record*current(unsigned){return &record;}}topology_cache;
+  unsigned world_appearance_revision(unsigned){return appearance;}Record*current(unsigned){return &record;}}topology_cache;
  struct World {unsigned value=7,reads=0;unsigned node_revision(unsigned){++reads;return 1;}
   World&world(){return *this;}unsigned at(unsigned){++reads;return value;}}world_coast;
  struct Rivers {int calls=0;bool valid(int){++calls;return true;}}natural;
@@ -39,13 +41,18 @@ int main(){
  assert(state.tile_content_valid(cached,tile));auto reads=state.world_coast.reads;
  assert(state.tile_content_valid(cached,tile));assert(state.world_coast.reads==reads && state.natural.calls==1);
  ++tile.anchor_x;assert(!state.tile_content_valid(cached,tile));
- --tile.anchor_x;assert(state.tile_content_valid(cached,tile));assert(state.natural.calls==2);
+ assert(state.frame_tile_invalid_anchor==1 && state.natural.calls==2);
+ --tile.anchor_x;assert(state.tile_content_valid(cached,tile));assert(state.natural.calls==3);
  state.resident_content.alive=false;assert(!state.tile_content_valid(cached,tile));
  state.resident_content.alive=true;assert(state.tile_content_valid(cached,tile));
  // New observations invalidate proofs without unpinning resident geometry.
  assert(state.tile_geometry_epoch==1);
  ++state.topology_cache.observation_epoch;state.world_coast.value=8;assert(!state.tile_content_valid(cached,tile));
  ++state.topology_cache.observation_epoch;state.world_coast.value=7;assert(state.tile_content_valid(cached,tile));
+ ++state.topology_cache.observation_epoch;state.topology_cache.appearance=2;
+ assert(!state.tile_content_valid(cached,tile) && state.frame_tile_invalid_appearance==1);
+ ++state.topology_cache.observation_epoch;state.topology_cache.appearance=1;
+ assert(state.tile_content_valid(cached,tile));
  state.topology_cache.observation_epoch=0;reads=state.world_coast.reads;
  assert(state.tile_content_valid(cached,tile));assert(state.tile_content_valid(cached,tile));assert(state.world_coast.reads>reads);
  // A world binding follows exact native anchor ratios across projection changes.

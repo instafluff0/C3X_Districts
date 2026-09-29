@@ -36,8 +36,8 @@ placement and border ground meshes. Unit bodies and selection centers sample
 the same low ground from authoritative captured anchors, including sub-tile
 travel; reflections mirror the vertical offset. Unit projected shadows share
 the raised anchor, but their existing planar projection is not yet a full
-terrain-conforming shadow implementation. The existing terrain grid is reused:
-this pass adds two bounded CPU height fields (128 KiB). Coastal tiles retain
+terrain-conforming shadow implementation. The low-relief data consists of two
+bounded CPU height fields (128 KiB). Coastal tiles retain
 complete existing grid topology for border receivers; their terrain color still
 clips at the coast. There is no GPU readback. Reload/reset releases the optional fields with the natural assets.
 
@@ -54,7 +54,31 @@ replacement mountain surfaces. Their rotated source footprint is clipped in UV
 space. The previous independent decal grid could intersect the hill and produce
 angular gaps and inconsistent lighting at close zoom.
 
-The final correction was checked at 3× on the unchanged `test.biq` river/hill
+The remaining square facets and dotted hill edges were isolated with rock-off,
+shadow-off, plain-albedo and geometric-normal controls on the same `test.biq`
+view. Increasing ground tessellation removed them. Hills and their neighbors,
+river corridors and rocky shores now use the shared 64-cell relief lattice.
+Flatter interiors keep 16 cells, with boundary cells split to meet that exact
+64-cell edge. This preserves real height/normal samples across neighbors without
+flattening edges or adding skirts. The optional patch-detail study setting still
+selects a common lower lattice. No material blur or sharpening change is involved.
+
+The hill category suite passes 128 tests with one missing-source skip. Added
+mesh checks cover curvature error, complete triangle coverage, exact coarse/dense
+boundary samples, indexed/expanded parity and cancellation. Ground preparation,
+river invalidation and low-relief tests also pass. The final 3× hill view and
+1.5× shoreline fixture use the actual standalone Renderer64; this is not a live
+gameplay pass. Borders remain continuous across the shore.
+
+A paired 87-frame `test.biq` zoom sweep measured median frame time of 16.68 ms
+before and 16.69 ms after; p95 was 33.43/33.63 ms, dominated by presentation waits.
+Draw submission rose from 5.13 to 6.05 ms median. Full-map retained geometry uses
+about 262 MiB more GPU storage in this fixture. Refinement therefore has a real
+memory/draw cost even though this short vsync-limited run held its frame rate.
+The before/after pictures and exact input receipts live in
+`native/build/scene-quality/hill-*`.
+
+The earlier river/decal correction was checked at 3× on the unchanged `test.biq` river/hill
 view and at 1.5× on its coastal city/border fixture. The map is real BIQ input;
 the example unit, city and territory ownership are standalone fixture additions.
 Forty-two focused surface, river, hill-decal, render-core and border tests passed,
@@ -108,9 +132,12 @@ roughly one-minute first compilation.
 For this candidate, pass `--dll
 Renderer/native/build/renderer64/C3XRenderer_x64.dll`, `--client
 Renderer/native/build/scene-quality/client_x64.exe` and `--shaders
-Renderer/native/build/scene-quality/candidate-shaders`. The tool defaults point
-at the earlier staged binaries/shaders. The shader directory contains the
+Renderer/native/build/scene-quality/candidate-shaders`. The tool defaults use
+the currently staged binaries/shaders. The shader directory contains the
 canonical generated terrain and water shaders; receipts record their closure.
+
+`--view-only` limits preparation to the camera neighborhood for focused stills
+and bounded zoom studies. Omit it for full-map preparation/memory checks.
 
 `--hdr` explicitly captures the standalone FP16 surfaces. The tool compresses
 them losslessly and verifies the bytes before removing raw data. The separate

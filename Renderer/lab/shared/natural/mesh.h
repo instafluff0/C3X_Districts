@@ -38,7 +38,7 @@ bool emit_relief_meshes(NaturalData const&natural,int real,Tile owner,GroundProj
         if(mountains.empty()){
             auto surface=[&](float u,float v){return ground_surface(project_natural,u,v,
                 height_natural,shore_sample_at,material_weights_for);};
-            if(!emit_ground_grid(ground,surface,cancelled,16,nullptr,nullptr,false))return false;
+            if(!emit_ground_grid(ground,surface,cancelled,patch_detail.mountain,nullptr,nullptr,false))return false;
         }
         emit_hill_decals(owner,nc,nr,mountains.empty()?ground:mountains,
             mountains.empty()?nullptr:mountain_indices,decals);

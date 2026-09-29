@@ -42,7 +42,8 @@
     "Renderer.native.source_fidelity.test_contract",
     "Renderer.native.test_render_core",
     "Renderer.tools.asset_compiler.test_hill_height_import",
-    "Renderer.native.test_hill_decals"
+    "Renderer.native.test_hill_decals",
+    "Renderer.native.test_ground_tessellation"
   ],
   "references": {
     "d3d11": [

@@ -6,6 +6,11 @@ builder selects the normalized field even when a local Hillier Hills import is
 present. A different generic R8 field can still be tried in an isolated study
 without creating a runtime dependency on its source game or mod.
 
+Close-zoom ground uses 64 cells per hill patch and its neighbors. Flat interiors
+retain 16 cells, with refined boundary triangles meeting the same 64-cell edge.
+Rock decals share those receiver triangles. This removes coarse square facets
+and cracks without changing authored hill heights or blurring their materials.
+
 Native Civ III chooses forested or jungled hill art from the four diagonal
 neighbors of a hill tile. The renderer now applies that selection to captured
 terrain and places the resulting plants on the authored hill surface, checking
