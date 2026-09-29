@@ -67,7 +67,7 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
     scratch.pickup.clear();scratch.heights.clear();
     auto observe_world=[&](std::size_t index,std::uint32_t value){result->world.emplace(index,value);};
     auto observe_coast=[&](std::uint64_t index,std::uint64_t revision){result->coast.emplace(index,revision);};
-    SurfaceQueries queries(world_coast,scratch.shores,input.projection.tile.tile_x,input.projection.tile.tile_y,observe_world,observe_coast,input.skip_flat_shore);
+    SurfaceQueries queries(world_coast,scratch.shores,input.projection.tile.tile_x,input.projection.tile.tile_y,observe_world,observe_coast,input.skip_flat_shore,&scratch.rivers);
     auto world_lookup=[&](int c,int r){return queries.tile(c,r);};
     auto lookup_natural=[&](int c,int r){return queries.natural_tile(c,r);};
     auto shore_sample_at=[&](float x,float y){return queries.shore(x,y);};

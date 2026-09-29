@@ -3,7 +3,7 @@
 // and scratch storage belong to the caller; observations retain native cache
 // invalidation authority. Construct a fresh query scope for each owner tile.
 #include <unordered_map>
-#include "data.h"
+#include "world.h"
 #include "../../../native/source_fidelity/coast_join.h"
 #include "../../../native/render_core/world_coast.h"
 #include "../../../native/render_core/exact_point_cache.h"
@@ -18,6 +18,7 @@ template<class ObserveWorld,class ObserveCoast> class SurfaceQueries {
     std::array<bool,81> nearby_ready{};
     int nearby_c,nearby_r;
     bool skip_flat_shore;
+    NaturalWorld* rivers;
     render_core::ShoreSample center{};
     bool center_ready=false,patch_attempted=false;
     render_core::WorldCoast::Patch patch;
@@ -31,10 +32,10 @@ public:
     SurfaceQueries(render_core::WorldCoast const& world,
                    render_core::ExactPointCache<render_core::ShoreSample>& scratch,
                    int tile_x,int tile_y,ObserveWorld observe,ObserveCoast nodes,
-                   bool skip_flat=true)
+                   bool skip_flat=true,NaturalWorld* river_world=nullptr)
         :coast(world),samples(scratch),observe_world(observe),observe_coast(nodes),
          nearby_c((tile_x+tile_y)/2-4),nearby_r((tile_x-tile_y)/2-4),
-         skip_flat_shore(skip_flat),
+         skip_flat_shore(skip_flat),rivers(river_world),
          center_u(float(tile_x+tile_y)*.5f+.5f),center_v(float(tile_x-tile_y)*.5f+.5f) {
         samples.clear();
     }
@@ -97,18 +98,21 @@ public:
         for(int dy=0;dy<2;++dy)for(int dx=0;dx<2;++dx){
             auto t=tile(c+dx,r+dy);
             if(!t.present)continue;
-            auto index=coast.world().index(c+dx,r+dy);
-            auto bits=coast.world().at(index);
             // Existing authored hills, mountains and volcanoes keep their
             // original profiles. Forest and jungle can still inherit the
             // base terrain's gentler slope beneath their vegetation.
             if((t.base!=1&&t.base!=2)||t.real==4||t.real==5||t.real==6||t.real==9||
-               t.real==10||((bits>>16)&255u))continue;
+               t.real==10)continue;
             weights[t.base==2?0:1]+=(dx?tx:1-tx)*(dy?ty:1-ty);
         }
         if(weights[0]+weights[1]==0)return 0;
         auto s=shore(x,y);
         float inland=coast_ramp((float(s.distance)-.25f)/.65f);
+        // Stored river bits identify topology edges, while the drawn channel
+        // curves across neighboring tiles. Flatten against that same continuous
+        // corridor so raised ground cannot cover or shadow alternating reaches.
+        if(rivers && rivers->river_world)
+            inland*=coast_ramp((float(rivers->river_sample({x,y}).distance)-20.f)/32.f);
         return inland*(weights[0]*natural.low_relief.sample(0,x,y,world)+
             weights[1]*natural.low_relief.sample(1,x,y,world));
     }

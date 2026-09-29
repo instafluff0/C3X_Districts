@@ -1,31 +1,5 @@
 // Shared statement body: retain the native x86 calling context and float rounding.
 // Included by the native tile compiler and the portable typed adapter in mesh.h.
-    if(tile.real_terrain_type==5){
-        Hill hill=composed_hill(owner);std::uint32_t state=hill.seed;
-        constexpr unsigned cells[]={0,0,0,0,1,1,1,2,2,2};
-        for(unsigned ordinal=0;ordinal<10;ordinal++){
-            float keep=random01(state),angle=random01(state)*6.283185307f;
-            float radius=std::sqrt(random01(state))*.22f,phase=random01(state)*6.283185307f,scale=.90f+.20f*random01(state);
-            if(keep>hill.rockiness)continue;
-            float cu=.5f+std::cos(phase)*radius,cv=.5f+std::sin(phase)*radius;
-            auto point=[&](unsigned x,unsigned y){
-                float du=(x/8.f-.5f)*.42f*scale,dv=(y/8.f-.5f)*.37f*scale;
-                float u=cu+std::cos(angle)*du-std::sin(angle)*dv,v=cv+std::sin(angle)*du+std::cos(angle)*dv;
-                float support=0;float h=height_natural(float(nc)+u,float(nr)+1-v,&support)+.45f;
-                auto out=project_natural(float(nc)+u,float(nr)+1-v,h);
-                out.u=(float(cells[ordinal])+.0012f+x/8.f*(1-2*.0012f))*.25f;
-                out.v=(.0012f+y/8.f*(1-2*.0012f))*.25f;
-                out.material_grass=std::max(0.f,(h-2.5f)/112);out.material_plains=2;out.material_desert=angle;
-                auto shore=shore_sample_at(float(nc)+u,float(nr)+1-v);
-                out.base_terrain=-10+coast_coverage(float(shore.distance),float(shore.beach_width));
-                return out;
-            };
-            for(unsigned y=0;y<8;y++)for(unsigned x=0;x<8;x++){
-                auto a=point(x,y),b=point(x+1,y),c=point(x+1,y+1),d=point(x,y+1);
-                triangle(natural_vertices[1],a,b,c);triangle(natural_vertices[1],a,c,d);
-            }
-        }
-    }
     {
         struct MountainPiece {unsigned height_field,blend_field;float center_x,center_y,long_span,cross_span,height_scale;bool connected,range_y;};
         // Mountains Lab's lower shape; keep authored variants and ridge union.

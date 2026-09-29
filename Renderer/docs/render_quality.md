@@ -10,15 +10,17 @@ map delivery. Fixed Lab references are unchanged.
 
 The current graphics study adds real low relief to grassland and plains, a
 shared restrained HDR display curve, and seven main-map zoom endpoints through
-3×. It is an isolated evaluation candidate; the earlier staged/live measurements
-below describe the previous baseline. Fixed Lab reference images are unchanged.
+3×. It is staged for evaluation; the earlier live measurements below describe the
+previous baseline. Fixed Lab reference images are unchanged.
 
 ### Gentle ground relief
 
 `lab/shared/natural/low_relief.h` consumes optional, generic authored height
 fields from `NaturalFidelityRuntime/low-relief.bin`. The offline compiler selects
 the imported continental grassland/plains fields referenced by `StandardFlat`.
-It preserves every 2048×2048 R8 source sample. Runtime contains no source-game
+It filters each 2048×2048 R8 source to a periodic 256×256 field, then smooths
+approximately three native tiles and restores broad height variation. This
+removes fine corrugations from the geometry while keeping source texture detail. Runtime contains no source-game
 asset names. Missing optional data gives the original flat surface.
 
 The selected study uses height amplitude 64 in the existing natural-surface
@@ -26,7 +28,7 @@ units and a nominal repeat span of 96 native tile-coordinate steps. These are
 C3X calibration choices, not confirmed Civ VI engine settings. A 28-unit control
 was too subtle. The authored values occupy only part of the normalized range;
 64 does not mean every tile acquires a 64-pixel hill. Integral repeat counts
-close world seams. Biome and river-neighborhood weights taper continuously;
+close world seams. Biome weights and distance to the actual curved river corridor taper continuously;
 water and river beds keep their datum, with a smooth coastal approach.
 
 The shared query supplies foreground/prepared terrain, normals, object/city
@@ -35,8 +37,33 @@ the same low ground from authoritative captured anchors, including sub-tile
 travel; reflections mirror the vertical offset. Unit projected shadows share
 the raised anchor, but their existing planar projection is not yet a full
 terrain-conforming shadow implementation. The existing terrain grid is reused:
-this pass adds two bounded CPU height fields (8 MiB), not more triangles or GPU
-readback. Reload/reset releases the optional fields with the natural assets.
+this pass adds two bounded CPU height fields (128 KiB). Coastal tiles retain
+complete existing grid topology for border receivers; their terrain color still
+clips at the coast. There is no GPU readback. Reload/reset releases the optional fields with the natural assets.
+
+### Surface consistency
+
+River channels and their outer bank/gravel footprint keep a flat datum, with
+rolling land easing up outside it. Stored river flags alone were insufficient:
+curved reaches also cross unmarked neighboring tiles. Terrain, object and unit
+height queries now use the same river field and its existing invalidation proof.
+Authored hill/mountain profiles remain separate from low-relief shaping.
+
+Hill rock patches reuse the receiver's exact triangles and normals, including
+replacement mountain surfaces. Their rotated source footprint is clipped in UV
+space. The previous independent decal grid could intersect the hill and produce
+angular gaps and inconsistent lighting at close zoom.
+
+The final correction was checked at 3× on the unchanged `test.biq` river/hill
+view and at 1.5× on its coastal city/border fixture. The map is real BIQ input;
+the example unit, city and territory ownership are standalone fixture additions.
+Forty-two focused surface, river, hill-decal, render-core and border tests passed,
+including actual D3D ownership/color/occlusion checks at 1×/2×/4× sampling. The
+matching bridge/helper build and injected compilation also passed. This does
+not claim a live-game pass. The final 1×–3×–1× standalone zoom cycle measured
+16.67 ms median and 18.44 ms p95 across 87 frames, with water, waves and units
+enabled and zero fallback. Final binary/shader/pack hashes and pictures are in
+`native/build/scene-quality/`; fixed references remain unchanged.
 
 ### Display and material response
 

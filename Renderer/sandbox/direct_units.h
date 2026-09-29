@@ -47,7 +47,7 @@ struct SandboxDirectUnits {
         c3x_renderer::render_core::ExactPointCache<c3x_renderer::render_core::ShoreSample> samples;
         auto ignore=[](auto,auto){};
         int c=int(std::floor(column)),r=int(std::floor(row));
-        c3x_renderer::fidelity::SurfaceQueries query(renderer.world_coast,samples,c+r,c-r,ignore,ignore,true);
+        c3x_renderer::fidelity::SurfaceQueries query(renderer.world_coast,samples,c+r,c-r,ignore,ignore,true,&renderer.natural);
         return query.low_height(renderer.natural,column,row);
     }
     float unit_low_ground(c3x_renderer_frame_v1 const& frame,float x,float y){

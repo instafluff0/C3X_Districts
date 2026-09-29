@@ -9,6 +9,12 @@ the retained scene. Renderer64 draws directly on its existing terrain/mountain
 triangles and samples GPU scene depth to fade occluded sections. There is no CPU
 composition or normal-frame depth readback in this path.
 
+Coastal border receivers retain the whole tile grid, including triangles whose
+terrain color is fully transparent on the wet side. Open-water borders reuse the
+flat underlay. Each tile chooses one receiver, preventing double opacity where
+natural ground and underlay coexist. The terrain/shadow coast clipping remains
+unchanged; border coverage depends on native ownership rather than land alpha.
+
 `test_city_border_capture.py` verifies native edge/palette/config-off capture;
 `test_territory_borders.py` verifies ownership removal/capture, zoom, translated
 occurrences and occlusion at 1/2/4 samples. `capture_city_border_examples.py`

@@ -103,7 +103,7 @@ std::unique_ptr<PreparedGround> prepare_ground(GroundCompileInput const& ground_
     auto ground_observe_world=[&](std::size_t i,std::uint32_t value){ground_world_dependencies.emplace(i,value);};
     auto ground_observe_coast=[&](auto id,auto revision){ground_coast_dependencies.emplace(id,revision);};
     c3x_renderer::fidelity::SurfaceQueries<decltype(ground_observe_world),decltype(ground_observe_coast)> ground_queries(world_coast,ground_query_scratch.shore_samples,
-        tile.tile_x,tile.tile_y,ground_observe_world,ground_observe_coast,skip_flat_shore);
+        tile.tile_x,tile.tile_y,ground_observe_world,ground_observe_coast,skip_flat_shore,&ground_query_scratch.rivers);
     ground_queries.prime_center(tile_center_shore);
     auto ground_world_lookup=[&](int c,int r){ return ground_queries.tile(c,r); };
     auto ground_shore_sample_at=[&](float u,float v){ return ground_queries.shore(u,v); };

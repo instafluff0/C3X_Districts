@@ -383,7 +383,9 @@ Output shade(P input) {
         specular_map = 0.04;
         alpha *= floor_sample.a;
     } else if (input.material.y > 1.5) {
-        float4 decal = HillDecalColor.Sample(Clamp, input.uv);
+        clip(min(input.uv,1-input.uv));
+        float2 decal_uv=(float2(input.material.z,0)+.0012+input.uv*.9976)*.25;
+        float4 decal = HillDecalColor.Sample(Clamp, decal_uv);
         clip(decal.a - 0.015);
         // The decal defines the irregular authored patch footprint. Its paired
         // hill-top material supplies the denser exposed-stone field visible in

@@ -5377,6 +5377,12 @@ public:
         if (tile.byte_count != 0) geometry_footprints.push_back(tile_footprint(tile, record));
         tile.last_used = tile_geometry_epoch;
         if(animated_view)tile.animation_epoch=tile_geometry_epoch;
+        auto natural_tile=resident_content.resolve(tile.natural_content);
+        bool natural_border_surface=!tile.buffers[geometry_natural_terrain].empty() ||
+            !tile.buffers[geometry_natural_mountain].empty() ||
+            (natural_tile && natural_tile->shared_natural &&
+             (!natural_tile->buffers[geometry_natural_terrain].empty() ||
+              !natural_tile->buffers[geometry_natural_mountain].empty()));
         auto append=[&](CachedTileGeometry& source,bool natural_world){
         source.last_used=tile_geometry_epoch;
         if(animated_view)source.animation_epoch=tile_geometry_epoch;
@@ -5396,12 +5402,11 @@ public:
                    !cities.library.materials[source_chunk.city_material].ground)
                     chunk.water_dependent=false;
                 chunk.tile_x=record.tile_x;chunk.tile_y=record.tile_y;
-                // The active natural scene's coast/water surface is rendered
-                // separately; its per-tile water layer can be empty. The
-                // complete underlay carries shoreline territory edges across
-                // both the wet and dry portions of the native tile.
-                bool border_surface=record.terrain_type>=11?layer==geometry_underlay:
-                    layer==geometry_natural_terrain || layer==geometry_natural_mountain;
+                // The complete natural surface covers dry and wet portions
+                // of each coastal tile. Open water has only the flat underlay.
+                bool border_surface=natural_border_surface?
+                    layer==geometry_natural_terrain || layer==geometry_natural_mountain:
+                    layer==geometry_underlay;
                 chunk.territory_edges=border_surface?record.territory_edge_mask:0;
                 chunk.territory_rgb=record.territory_color_rgb;
                 chunk.water_visible=!visibility_pass || (record.tile_flags&C3X_RENDERER_TILE_VISIBLE)!=0;
@@ -5426,8 +5431,7 @@ public:
         }
         };
         append(tile,false);
-        if(auto natural_tile=resident_content.resolve(tile.natural_content))
-            if(natural_tile->shared_natural){index_world_content(*natural_tile);append(*natural_tile,true);}
+        if(natural_tile && natural_tile->shared_natural){index_world_content(*natural_tile);append(*natural_tile,true);}
         topology_cache.attach(record,tile.binding);
     }
 
@@ -8172,7 +8176,7 @@ public:
             auto observe_world = [&](std::size_t i, std::uint32_t value) { world_dependencies.emplace(i,value); };
             auto observe_coast = [&](auto id,auto revision) { coast_dependencies.emplace(id,revision); };
             c3x_renderer::fidelity::SurfaceQueries queries(world_coast,shore_samples,
-                tile.tile_x,tile.tile_y,observe_world,observe_coast,skip_flat_shore);
+                tile.tile_x,tile.tile_y,observe_world,observe_coast,skip_flat_shore,&natural);
             auto world_lookup = [&](int c,int r) { return queries.tile(c,r); };
             float shore_center_u=queries.center_u,shore_center_v=queries.center_v;
             pickup_ground_samples.clear();
@@ -9566,7 +9570,7 @@ public:
                 auto cliff_observe_coast=[&](auto id,auto revision){cliff_result.coast.emplace(id,revision);};
                 cliff_query_scratch.reset_tile();
                 c3x_renderer::fidelity::SurfaceQueries cliff_queries(world_coast,cliff_query_scratch.shore_samples,
-                    tile.tile_x,tile.tile_y,cliff_observe_world,cliff_observe_coast,skip_flat_shore);
+                    tile.tile_x,tile.tile_y,cliff_observe_world,cliff_observe_coast,skip_flat_shore,&cliff_query_scratch.rivers);
                 cliff_queries.prime_center(tile_center_shore);
                 auto cliff_world_lookup=[&](int c,int r){ return cliff_queries.tile(c,r); };
                 auto cliff_shore_sample_at=[&](float u,float v){ return cliff_queries.shore(u,v); };

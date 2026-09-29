@@ -931,7 +931,6 @@ struct SandboxFreshPipeline {
     SandboxMirrorTarget reflection,reflection_static;
     GeometryDrawView::Records resident, static_visible, water_visible,
         reflection_visible, all_visible;
-    bool border_trace_done=false;
     std::uint64_t resident_signature=0;
     unsigned resident_builds=0;
     int wrap_pixels=0;
@@ -2122,28 +2121,6 @@ struct SandboxFreshPipeline {
             float(scene_scale),next_zoom,visual_hour))
             return fail("direct_units");
         QueryPerformanceCounter(&ticks[5]);
-        if(!border_trace_done){
-            char requested[8]={};
-            if(GetEnvironmentVariableA("C3X_RENDERER_BORDER_TRACE",requested,sizeof(requested))){
-                for(unsigned layer:{unsigned(geometry_underlay),unsigned(geometry_natural_terrain),
-                                    unsigned(geometry_natural_mountain),unsigned(geometry_water)})
-                    for(auto const* view:{&static_visible,&water_visible}){
-                        unsigned marked=0;for(auto const& record:(*view)[layer])
-                            if(record.territory_edges){
-                                if(marked<4)std::printf("BORDER_TILE layer=%u tile=%d,%d edges=%u stride=%u projection=%.2f,%.2f,%.2f,%.2f\n",
-                                    layer,record.tile_x,record.tile_y,record.territory_edges,
-                                    record.content().vertex_stride,record.natural_projection[0],
-                                    record.natural_projection[1],record.natural_projection[2],
-                                    record.natural_projection[3]);
-                                ++marked;
-                            }
-                        std::printf("BORDER_RECORDS layer=%u records=%zu marked=%u\n",
-                            layer,(*view)[layer].size(),marked);
-                    }
-                std::fflush(stdout);
-            }
-            border_trace_done=true;
-        }
         for(auto const* visible_scene:{&static_visible,&water_visible})
           for(unsigned layer:{unsigned(geometry_underlay),unsigned(geometry_natural_terrain),
                               unsigned(geometry_natural_mountain),unsigned(geometry_water)})

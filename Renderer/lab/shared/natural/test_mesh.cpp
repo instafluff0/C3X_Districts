@@ -13,34 +13,8 @@ bool reference_relief(NaturalData const&natural,int real,Tile owner,GroundProjec
     Lookup lookup_natural,Height height_natural,Shore shore_sample_at,
     River river_at,Weights material_weights_for,Cancelled cancelled,Layers&natural_vertices) {
     int nc=project_natural.column,nr=project_natural.row;
-    struct {int real_terrain_type;}tile{real};
+    (void)real; (void)owner;
     auto triangle=[](std::vector<Vertex>&out,Vertex const&a,Vertex const&b,Vertex const&c){out.push_back(a);out.push_back(b);out.push_back(c);};
-    if(tile.real_terrain_type==5){
-        Hill hill=composed_hill(owner);std::uint32_t state=hill.seed;
-        constexpr unsigned cells[]={0,0,0,0,1,1,1,2,2,2};
-        for(unsigned ordinal=0;ordinal<10;ordinal++){
-            float keep=random01(state),angle=random01(state)*6.283185307f;
-            float radius=std::sqrt(random01(state))*.22f,phase=random01(state)*6.283185307f,scale=.90f+.20f*random01(state);
-            if(keep>hill.rockiness)continue;
-            float cu=.5f+std::cos(phase)*radius,cv=.5f+std::sin(phase)*radius;
-            auto point=[&](unsigned x,unsigned y){
-                float du=(x/8.f-.5f)*.42f*scale,dv=(y/8.f-.5f)*.37f*scale;
-                float u=cu+std::cos(angle)*du-std::sin(angle)*dv,v=cv+std::sin(angle)*du+std::cos(angle)*dv;
-                float support=0;float h=height_natural(float(nc)+u,float(nr)+1-v,&support)+.45f;
-                auto out=project_natural(float(nc)+u,float(nr)+1-v,h);
-                out.u=(float(cells[ordinal])+.0012f+x/8.f*(1-2*.0012f))*.25f;
-                out.v=(.0012f+y/8.f*(1-2*.0012f))*.25f;
-                out.material_grass=std::max(0.f,(h-2.5f)/112);out.material_plains=2;out.material_desert=angle;
-                auto shore=shore_sample_at(float(nc)+u,float(nr)+1-v);
-                out.base_terrain=-10+coast_coverage(float(shore.distance),float(shore.beach_width));
-                return out;
-            };
-            for(unsigned y=0;y<8;y++)for(unsigned x=0;x<8;x++){
-                auto a=point(x,y),b=point(x+1,y),c=point(x+1,y+1),d=point(x,y+1);
-                triangle(natural_vertices[1],a,b,c);triangle(natural_vertices[1],a,c,d);
-            }
-        }
-    }
     {
         struct MountainPiece {unsigned height_field,blend_field;float center_x,center_y,long_span,cross_span,height_scale;bool connected,range_y;};
         std::vector<MountainPiece> pieces;
@@ -241,7 +215,7 @@ struct Probe {
         observations.push_back({0,x,y});if(support)*support=.25f;
         return 2.5f+x*.17f+y*.23f;
     }
-    struct Shore {float distance,beach_width;};
+    struct Shore {float distance,beach_width,rocky=0;};
     Shore shore(float x,float y) {
         observations.push_back({1,x,y});
         return {mode==2 ? .1f : 100.f,.2f};
@@ -292,7 +266,7 @@ int main(){
     for(unsigned i=0;i<25;i++)data.recipes.push_back({i%22,.4f+i*.01f,.2f,i==24?12u:7u,0,0,i%8,.1f,.2f});
     std::size_t vertices=0,observations=0;unsigned scopes=0;bool variants[5]={};
     std::array<float,20> open_mountain_peaks{},river_valley_peaks{};
-    for(int seed=0;seed<20;seed++)for(int real:{2,5,6,7})for(int mode=0;mode<4;mode++){
+    for(int seed=0;seed<20;seed++)for(int real:{2,6,7})for(int mode=0;mode<4;mode++){
         int c=seed-10,r=3-seed;Tile owner{seed*2,seed*4,c,r,real};
         variants[mountain_seed(owner)%5]=true;
         GroundProjection projection{c,r,seed%2?32.f:64.f,seed%2?16.f:32.f,

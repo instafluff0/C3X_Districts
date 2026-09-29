@@ -87,6 +87,16 @@ int main() {
     mesh.clear();
     assert(emit_ground_grid(mesh,[](float,float){MapVertex p={};p.base_terrain=-10;return p;},[]{return false;}));
     assert(mesh.empty());
+    // Border receivers retain even fully wet triangles. Optical terrain
+    // coverage remains zero; indexed and expanded draws cover the whole tile.
+    auto wet=[](float u,float v){MapVertex p={};p.world_x=u;p.world_y=v;
+        p.base_terrain=u<.5f?-10.f:-9.f;return p;};
+    std::vector<MapVertex> complete;std::vector<unsigned> complete_indices;
+    PatchLayouts layouts;
+    assert(emit_ground_grid(complete,wet,[]{return false;},16,&complete_indices,&layouts.get(16),false));
+    assert(complete.size()==289 && complete_indices.size()==1536);
+    unsigned wet_count=0;for(auto const&v:complete)wet_count+=v.base_terrain==-10;
+    assert(wet_count==8*17);
     // The narrow cliff rise needs more than the ordinary two-sample span.
     // Compare triangle interpolation with the continuous curve at its midpoint.
     auto coast=[](float u,float){MapVertex p={};p.u=u;p.base_terrain=-9;

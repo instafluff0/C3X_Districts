@@ -104,14 +104,15 @@ inline void append_surface_grid(std::vector<MapVertex>&out,std::vector<MapVertex
 
 template<class Surface,class Cancel>
 bool emit_ground_grid(std::vector<MapVertex>&out,Surface surface,Cancel cancelled,unsigned divisions=16,
-                      std::vector<unsigned>*indices=nullptr,PatchTopology const*topology=nullptr) {
+                      std::vector<unsigned>*indices=nullptr,PatchTopology const*topology=nullptr,
+                      bool clip_coast=true) {
     unsigned stride=divisions+1;
     std::vector<MapVertex> grid(stride*stride);
     for(unsigned y=0;y<=divisions;y++){
         if(cancelled())return false;
         for(unsigned x=0;x<=divisions;x++)grid[y*stride+x]=surface(float(x)/divisions,float(y)/divisions);
     }
-    append_surface_grid(out,grid,divisions,true,indices,topology);
+    append_surface_grid(out,grid,divisions,clip_coast,indices,topology);
     return true;
 }
 }}

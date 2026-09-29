@@ -14,7 +14,7 @@ class NaturalInputs(unittest.TestCase):
         self.shared_probe("patterns", "200000 hashes/random values, 132612 exact dune samples")
 
     def test_mesh_emission_and_exclusion_queries(self):
-        self.shared_probe("mesh", "328 scopes")
+        self.shared_probe("mesh", "248 scopes")
 
     def test_source_surface_composition(self):
         self.shared_probe("surface", "grass omitted, 2 active biomes")

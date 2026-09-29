@@ -13,7 +13,10 @@
         if(river_terrain_near && project_natural.half_width>=48)
             divisions=std::max(divisions,32u);
         if(!emit_ground_grid(natural_vertices[0],surface,cancelled,divisions,
-                             index_natural_grids?&natural_grid_indices[0]:nullptr,&patch_layouts.get(divisions)))return false;
+                             index_natural_grids?&natural_grid_indices[0]:nullptr,&patch_layouts.get(divisions),false))return false;
+        // Territory edges cross the wet portion of land-classified shore
+        // tiles too. Keep the complete ground mesh for that pass; the terrain
+        // and shadow shaders retain their existing optical coast clipping.
     }
     auto*mountain_indices=index_natural_grids?&natural_grid_indices[1]:nullptr;
 
@@ -22,6 +25,11 @@
     record_natural_phase(1);
 
     #include "../../lab/shared/natural/relief_mesh_body.h"
+    if(tile.real_terrain_type==5){
+        unsigned layer=unified_mountain_surface?2u:0u;
+        auto indices=index_natural_grids?&natural_grid_indices[unified_mountain_surface?1:0]:nullptr;
+        emit_hill_decals(owner,nc,nr,natural_vertices[layer],indices,natural_vertices[1]);
+    }
     // Carry local volcano ownership on both replacement surface families.
     // Lookup uses the authoritative dependency observer, including wrapped tiles.
     // Geometry and inherited relief normals remain unchanged.

@@ -3,6 +3,7 @@
 // includes those bodies in its existing tile compiler to preserve x86 rounding.
 #include "data.h"
 #include "ground.h"
+#include "hill_decals.h"
 #include "../../../native/hill_vegetation.h"
 namespace c3x_renderer { namespace fidelity {
 template<class Height,class Shore,class Weights,class Cancelled>
@@ -25,15 +26,23 @@ bool emit_relief_meshes(NaturalData const&natural,int real,Tile owner,GroundProj
                        std::vector<unsigned>*mountain_indices=nullptr) {
     using Vertex=MapVertex;
     int nc=project_natural.column,nr=project_natural.row;
-    struct {int real_terrain_type;} tile{real};
     std::array<std::vector<Vertex>*,3> layers{{nullptr,&decals,&mountains}};
     struct LayerView {
         decltype(layers)&values;
         std::vector<Vertex>&operator[](unsigned index){return *values[index];}
     } natural_vertices{layers};
-    auto triangle=[](std::vector<Vertex>&out,Vertex const&a,Vertex const&b,Vertex const&c){out.push_back(a);out.push_back(b);out.push_back(c);};
     PatchDetail patch_detail;PatchLayouts patch_layouts;
     #include "relief_mesh_body.h"
+    if(real==5){
+        std::vector<MapVertex> ground;
+        if(mountains.empty()){
+            auto surface=[&](float u,float v){return ground_surface(project_natural,u,v,
+                height_natural,shore_sample_at,material_weights_for);};
+            if(!emit_ground_grid(ground,surface,cancelled,16,nullptr,nullptr,false))return false;
+        }
+        emit_hill_decals(owner,nc,nr,mountains.empty()?ground:mountains,
+            mountains.empty()?nullptr:mountain_indices,decals);
+    }
     return true;
 }
 struct BuildingBounds {float x0,y0,x1,y1;};

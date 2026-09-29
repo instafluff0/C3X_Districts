@@ -31,8 +31,6 @@ def main():
     p.add_argument('--tile', type=int, default=256)
     p.add_argument('--frames', type=int, default=1)
     p.add_argument('--hdr', action='store_true')
-    p.add_argument('--trace-borders', action='store_true')
-    p.add_argument('--debug-borders', type=int, choices=[1, 2])
     p.add_argument('--zoom', type=float)
     p.add_argument('--zoom-peak', type=float, default=1.2)
     p.add_argument('--start-ms', type=int, default=0)
@@ -104,10 +102,6 @@ def main():
         options['C3X_RENDERER_CITY_BORDER_FIXTURE'] = '24,54,2,1,1,1,0,1'
     if args.hdr:
         options['C3X_SANDBOX_HDR_CAPTURE'] = win(case / 'scene.crh')
-    if args.trace_borders:
-        options['C3X_RENDERER_BORDER_TRACE'] = '1'
-    if args.debug_borders:
-        options['C3X_RENDERER_BORDER_DEBUG'] = str(args.debug_borders)
     if args.zoom:
         options['C3X_SANDBOX_STUDY_ZOOM'] = str(args.zoom)
     options['C3X_SANDBOX_STUDY_START_MS'] = str(args.start_ms)

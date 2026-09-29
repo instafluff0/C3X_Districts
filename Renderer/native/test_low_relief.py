@@ -12,7 +12,7 @@ class LowReliefTests(unittest.TestCase):
 #include "Renderer/lab/shared/natural/queries.h"
 #include "Renderer/native/c3x_renderer_api.h"
 #include <cassert>
-struct Renderer {c3x_renderer::fidelity::NaturalData natural;c3x_renderer::render_core::WorldCoast world_coast;} renderer;
+struct Renderer {c3x_renderer::fidelity::NaturalWorld natural;c3x_renderer::render_core::WorldCoast world_coast;} renderer;
 struct UnitGround {
 ''' + methods + r'''
 };
@@ -38,6 +38,46 @@ int main(){
 }
 ''')
 
+    def test_curved_river_flattens_unmarked_neighbors_and_invalidates(self):
+        run_cpp(r'''
+#include "Renderer/lab/shared/natural/queries.h"
+#include <cassert>
+using namespace c3x_renderer;
+int main(){
+ fidelity::NaturalWorld natural;
+ for(auto&f:natural.low_relief.fields){f.width=f.height=2;f.amplitude=64;f.span=96;f.pixels={128,128,128,128};}
+ render_core::World dims{48,64,true,true};
+ std::vector<unsigned> tiles(48*64/2,2|(2<<8));
+ for(int y=6;y<=20;y+=2)tiles[(y*48+16)/2]|=10u<<16;
+ render_core::WorldCoast coast;coast.update(dims,tiles.data(),tiles.size(),1);
+ natural.update_rivers(coast.world(),1);
+ auto observe=[](auto,auto){};fidelity::NaturalWorld::CellInputs inputs;
+ unsigned unmarked=0,rising=0;float picked_x=0,picked_y=0;
+ {
+  fidelity::NaturalWorld::DependencyScope scope(natural,&inputs);
+  render_core::ExactPointCache<render_core::ShoreSample> scratch;
+  fidelity::SurfaceQueries query(coast,scratch,16,12,observe,observe,true,&natural);
+  for(float y=-3;y<=6;y+=.125f)for(float x=10;x<=18;x+=.125f){
+   float d=float(natural.river_sample({x,y}).distance),h=query.low_height(natural,x,y);
+   if(d<=20){
+    assert(h==0);
+    if(!(coast.world().at(coast.world().index(int(std::floor(x)),int(std::floor(y))))>>16&170)){
+     ++unmarked;picked_x=x;picked_y=y;
+    }
+   }else if(d>52){assert(h>0);++rising;}
+  }
+ }
+ assert(unmarked>0 && rising>0);
+ fidelity::NaturalWorld::CellProof proof(inputs.begin(),inputs.end());assert(!proof.empty());assert(natural.valid(proof));
+ for(auto&t:tiles)t&=~(255u<<16);
+ coast.update(dims,tiles.data(),tiles.size(),2);natural.update_rivers(coast.world(),2);
+ assert(!natural.valid(proof));
+ render_core::ExactPointCache<render_core::ShoreSample> scratch;
+ fidelity::SurfaceQueries changed(coast,scratch,16,12,observe,observe,true,&natural);
+ assert(changed.low_height(natural,picked_x,picked_y)>0);
+}
+''')
+
     def test_wrapping_continuity_biomes_rivers_and_surface_agreement(self):
         run_cpp(r'''
 #include "Renderer/lab/shared/natural/queries.h"
@@ -52,6 +92,8 @@ int main(){
   for(unsigned y=0;y<16;++y)for(unsigned x=0;x<16;++x)data.push_back((x*11+y*7+biome*31)%256);
  }
  assert(natural.low_relief.load(data));
+ natural.fields.resize(1);natural.fields[0].width=natural.fields[0].height=2;
+ natural.fields[0].pixels={64,128,192,96};
  render_core::World dims{48,64,true,true};
  for(float x:{-1.21f,.1f,5.3f,24.73f})for(float y:{-7.19f,3.2f,18.91f})for(unsigned b:{0u,1u}){
   float h=natural.low_relief.sample(b,x,y,dims);assert(h>=0&&h<=28);
@@ -69,13 +111,14 @@ int main(){
    float h=query.low_height(natural,x,.6f);
    assert(positive?h>0:h==0);
    float support=-1;
-   assert(std::abs(query.height(natural,[](float,float){return 0.f;},x,.6f,&support)-(2.5f+h))<.0001f);
+   auto flat=natural;flat.low_relief.fields={};
+   float original=query.height(flat,[](float,float){return 0.f;},x,.6f);
+   assert(std::abs(query.height(natural,[](float,float){return 0.f;},x,.6f,&support)-(original+h))<.0001f);
    float next=query.low_height(natural,x+.0001f,.6f);assert(std::abs(next-h)<.005f);
   }
  };
  check(2|(2<<8),true);check(1|(1<<8),true); // both supported biomes
  check(0,false);check(11|(11<<8),false); // desert and water unchanged
- check(2|(2<<8)|(2<<16),false); // a river bed cannot be raised
  for(unsigned real:{4u,5u,6u,10u})check(2|(real<<8),false); // lowland and authored relief remain intact
  auto bad=data;bad.pop_back();assert(!natural.low_relief.load(bad));
  bad=data;float huge=100;std::memcpy(bad.data()+16,&huge,4);assert(!natural.low_relief.load(bad));
