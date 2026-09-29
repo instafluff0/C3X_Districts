@@ -13,7 +13,10 @@ bool reference_relief(NaturalData const&natural,int real,Tile owner,GroundProjec
     Lookup lookup_natural,Height height_natural,Shore shore_sample_at,
     River river_at,Weights material_weights_for,Cancelled cancelled,Layers&natural_vertices) {
     int nc=project_natural.column,nr=project_natural.row;
-    (void)real; (void)owner;
+    (void)real;
+    HillMaterialFootprint hill_material={owner.real==5,
+        lookup_natural(nc-1,nr).real==5,lookup_natural(nc+1,nr).real==5,
+        lookup_natural(nc,nr+1).real==5,lookup_natural(nc,nr-1).real==5};
     auto triangle=[](std::vector<Vertex>&out,Vertex const&a,Vertex const&b,Vertex const&c){out.push_back(a);out.push_back(b);out.push_back(c);};
     {
         struct MountainPiece {unsigned height_field,blend_field;float center_x,center_y,long_span,cross_span,height_scale;bool connected,range_y;};
@@ -33,7 +36,7 @@ bool reference_relief(NaturalData const&natural,int real,Tile owner,GroundProjec
                 (connected?(turn?1.82f:1.34f):1.55f)*1.08f,
                 (connected?142.f:165.f)*.68f,connected,along_y>along_x});
         }
-        struct MountainSample {float displacement=0,dominant=0,height=0,blend=0,u=0,v=0;};
+        struct MountainSample {float displacement=0,dominant=0,height=0,u=0,v=0;};
         auto mountain_at=[&](float world_x,float world_y){
             MountainSample result;
             for(auto const&piece:pieces){
@@ -58,7 +61,6 @@ bool reference_relief(NaturalData const&natural,int real,Tile owner,GroundProjec
                         result.displacement=high+ridge*ridge/40.f;
                     }
                 }
-                result.blend=std::max(result.blend,blend);
             }
             return result;
         };
@@ -80,7 +82,7 @@ bool reference_relief(NaturalData const&natural,int real,Tile owner,GroundProjec
                 float b=river_scales[(y+1)*river_count+x]*(1-tx)+river_scales[(y+1)*river_count+x+1]*tx;
                 return a*(1-ty)+b*ty;
             };
-            std::vector<float> surface_height(span*span);
+            std::vector<float> surface_height(span*span),surface_hill_support(span*span);
             for(unsigned y=0;y<span;y++){
                 if(cancelled())return false;
                 for(unsigned x=0;x<span;x++){
@@ -90,8 +92,10 @@ bool reference_relief(NaturalData const&natural,int real,Tile owner,GroundProjec
                     auto shore=shore_sample_at(world_x,world_y);
                     float scale=coast_relief(float(shore.distance),float(shore.beach_width))*
                         mountain_river_scale(world_x,world_y);
-                    surface_height[y*span+x]=height_natural(world_x,world_y,nullptr)+
+                    float support=0;
+                    surface_height[y*span+x]=height_natural(world_x,world_y,&support)+
                         sample.displacement*scale;
+                    surface_hill_support[y*span+x]=support;
                 }
             }
             std::vector<Vertex> grid(count*count);
@@ -103,7 +107,6 @@ bool reference_relief(NaturalData const&natural,int real,Tile owner,GroundProjec
                     auto shore=shore_sample_at(world_x,world_y);
                     float relief=coast_relief(float(shore.distance),float(shore.beach_width));
                     float river_scale=mountain_river_scale(world_x,world_y);
-                    sample.blend*=relief*river_scale;
                     unsigned at=(y+1)*span+x+1;
                     float elevation=surface_height[at];
                     auto out=project_natural(world_x,world_y,elevation);
@@ -111,11 +114,9 @@ bool reference_relief(NaturalData const&natural,int real,Tile owner,GroundProjec
                     out.world_valid=1+std::max(0.f,(elevation-mountain_height-2.5f)/112);
                     float n[]={-(surface_height[at+1]-surface_height[at-1])/(2*step*112),
                         (surface_height[at+span]-surface_height[at-span])/(2*step*112),1};normalize3(n);
-                    float ground_support=0;
                     float flat_blend=smooth01(mountain_height/1.f);
                     if(mountain_height<1.f){
                         constexpr float e=.006f;
-                        height_natural(world_x,world_y,&ground_support);
                         float ground_n[]={-(height_natural(world_x+e,world_y,nullptr)-
                             height_natural(world_x-e,world_y,nullptr))/(2*e*128),
                             -(height_natural(world_x,world_y+e,nullptr)-
@@ -126,7 +127,8 @@ bool reference_relief(NaturalData const&natural,int real,Tile owner,GroundProjec
                     out.normal_x=n[0];out.normal_y=n[1];out.normal_z=n[2];out.u=sample.u;out.v=sample.v;
                     out.material_grass=std::max(0.f,(elevation-2.5f)/112)*(1-flat_blend)+sample.height*flat_blend;
                     out.material_plains=2;
-                    out.material_desert=ground_support*(1-flat_blend)+sample.blend*flat_blend;
+                    out.material_desert=surface_hill_support[at]*hill_material(world_x-float(nc),
+                        float(nr)+1-world_y);
                     auto weights=material_weights_for(world_x,world_y);
                     float source_weight=std::clamp(1-weights[3],0.f,1.f);
                     float desert_weight=std::clamp(weights[2]/std::max(source_weight,.00001f),0.f,1.f);
@@ -359,8 +361,22 @@ int main(){
             assert(std::abs(vertex.normal_z-expected_n[2])<1e-5f);
             assert(std::abs(vertex.material_grass-
                 std::max(0.f,(vertex.world_x*.17f+vertex.world_y*.23f)/112))<1e-5f);
-            assert(std::abs(vertex.material_desert-.25f)<1e-5f);
+            assert(vertex.material_desert==0);
         }
+    }
+    {
+        // A neighboring mountain can replace part of an ordinary tile. Its
+        // source blend must not turn that non-hill tile into hill stone.
+        auto topology=[](int c,int r){return Tile{c+r,c-r,c,r,c==1&&r==0?6:2};};
+        Probe probe{{},0,0,0};GroundProjection projection{0,0,64,32,.4f,480};
+        Layers out;
+        assert(emit_relief_meshes(data,2,topology(0,0),projection,topology,
+            [&](float x,float y,float*s){return probe.height(x,y,s);},
+            [&](float x,float y){return probe.shore(x,y);},
+            [&](float x,float y){return probe.river(x,y);},weights,
+            [&](){return probe.cancelled();},out[1],out[2]));
+        assert(!out[2].empty());
+        for(auto const&vertex:out[2])assert(vertex.material_desert==0);
     }
     for(unsigned i=0;i<open_mountain_peaks.size();i++){
         assert(open_mountain_peaks[i]>0);

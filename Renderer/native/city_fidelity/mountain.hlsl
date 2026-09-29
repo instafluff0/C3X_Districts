@@ -461,11 +461,10 @@ void ground_material(P input, out float3 albedo, out float height_detail,
                          desert_weight);
     specular_map = lerp(specular_map, ground_surface_sample(DesertSpecular, input, 0.43, float2(.31,.17), false).r,
                         desert_weight);
-    // The fourth world component carries only the underlying authored relief.
-    // Reconstruct the same hill-top family response at the mountain collar so
-    // an adjacent hill cannot look like a separate mesh pushed through it.
+    // Underlying relief also includes low grassland contours. Only the
+    // hill-owned material support may select the exposed-stone family here.
     float slope = 1 - saturate(normalize(input.normal).z);
-    float hill_weight = smoothstep(0.008, 0.18, input.base_relief) *
+    float hill_weight = input.material.z * smoothstep(0.09, 0.43, input.base_relief) *
                         saturate(0.42 + slope * 2.2) * (1 - tundra_weight);
     float3 hill = lerp(ground_surface_sample(GrassHillColor, input, (0.43)*1.08, float2(.31,.17)*1.08, false).rgb,
                        ground_surface_sample(PlainsHillColor, input, (0.43*.91)*1.08, float2(.63,.29)*1.08, true).rgb,

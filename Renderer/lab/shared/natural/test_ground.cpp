@@ -8,6 +8,14 @@ using namespace c3x_renderer::fidelity;
 int main() {
     static_assert(offsetof(MapVertex,world_x)==120, "world layout");
     static_assert(offsetof(MapVertex,relief_owner_u)==152, "relief layout");
+    // Relief height can cross tile ownership, while exposed hill material
+    // stays on hill tiles and meets neighboring hill material without a seam.
+    HillMaterialFootprint flat={false,true,true,true,true};
+    HillMaterialFootprint isolated={true,false,false,false,false};
+    HillMaterialFootprint joined={true,true,false,true,true};
+    assert(flat(.5f,.5f)==0 && isolated(.5f,.5f)==1);
+    assert(isolated(0,.5f)==0 && isolated(1,.5f)==0);
+    assert(joined(0,.5f)==1 && joined(1,.5f)==0);
     unsigned comparisons=0;
     for(float zoom:{64.f,128.f})for(float target:{480.f,640.f})for(int column:{-17,0,29}) {
         GroundProjection project{column,-5,zoom*.5f,zoom*.25f,zoom/224.f*.82f,target};

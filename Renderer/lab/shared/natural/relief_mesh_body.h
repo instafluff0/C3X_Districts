@@ -20,7 +20,7 @@
                 (connected?(turn?1.82f:1.34f):1.55f)*mountain_span_scale,
                 (connected?142.f:165.f)*mountain_height_scale,connected,along_y>along_x});
         }
-        struct MountainSample {float displacement=0,dominant=0,height=0,blend=0,u=0,v=0;};
+        struct MountainSample {float displacement=0,dominant=0,height=0,u=0,v=0;};
         auto mountain_at=[&](float world_x,float world_y){
             MountainSample result;
             for(auto const&piece:pieces){
@@ -49,7 +49,6 @@
                         result.displacement=high+ridge*ridge/40.f;
                     }
                 }
-                result.blend=std::max(result.blend,blend);
             }
             return result;
         };
@@ -79,7 +78,7 @@
             // A haloed scalar grid supplies joined height and normals with one
             // authoritative height/shore/river query per point. Shared world
             // coordinates still produce identical patch-edge samples.
-            std::vector<float> surface_height(span*span);
+            std::vector<float> surface_height(span*span),surface_hill_support(span*span);
             for(unsigned y=0;y<span;y++){
                 if(cancelled())return false;
                 for(unsigned x=0;x<span;x++){
@@ -89,8 +88,10 @@
                     auto shore=shore_sample_at(world_x,world_y);
                     float scale=coast_relief(float(shore.distance),float(shore.beach_width))*
                         mountain_river_scale(world_x,world_y);
-                    surface_height[y*span+x]=height_natural(world_x,world_y,nullptr)+
+                    float support=0;
+                    surface_height[y*span+x]=height_natural(world_x,world_y,&support)+
                         sample.displacement*scale;
+                    surface_hill_support[y*span+x]=support;
                 }
             }
             std::vector<Vertex> grid(count*count);
@@ -102,7 +103,6 @@
                     auto shore=shore_sample_at(world_x,world_y);
                     float coast_scale=coast_relief(float(shore.distance),float(shore.beach_width));
                     float river_scale=mountain_river_scale(world_x,world_y);
-                    sample.blend*=coast_scale*river_scale;
                     unsigned at=(y+1)*span+x+1;
                     float elevation=surface_height[at];
                     auto out=project_natural(world_x,world_y,elevation);
@@ -110,14 +110,12 @@
                     out.world_valid=1+std::max(0.f,(elevation-mountain_height-2.5f)/112);
                     float n[]={-(surface_height[at+1]-surface_height[at-1])/(2*step*112),
                         (surface_height[at+span]-surface_height[at-span])/(2*step*112),1};normalize3(n);
-                    float ground_support=0;
                     float flat_blend=smooth01(mountain_height/1.f);
                     // The flat fringe replaces ordinary terrain. At its outer
                     // handoff use that provider's exact finite-difference
                     // normal; blend into the joined mountain normal on rise.
                     if(mountain_height<1.f){
                         constexpr float e=.006f;
-                        height_natural(world_x,world_y,&ground_support);
                         float ground_n[]={-(height_natural(world_x+e,world_y,nullptr)-
                             height_natural(world_x-e,world_y,nullptr))/(2*e*128),
                             -(height_natural(world_x,world_y+e,nullptr)-
@@ -128,7 +126,10 @@
                     out.normal_x=n[0];out.normal_y=n[1];out.normal_z=n[2];out.u=sample.u;out.v=sample.v;
                     out.material_grass=std::max(0.f,(elevation-2.5f)/112)*(1-flat_blend)+sample.height*flat_blend;
                     out.material_plains=2;
-                    out.material_desert=ground_support*(1-flat_blend)+sample.blend*flat_blend;
+                    // Mountain stone follows mountain rise in the shader;
+                    // this channel exclusively marks hill-owned ground.
+                    out.material_desert=surface_hill_support[at]*hill_material(world_x-float(nc),
+                        float(nr)+1-world_y);
                     auto weights=material_weights_for(world_x,world_y);
                     // Match the terrain provider's normalized source-family
                     // weights. Native marsh remains underneath at its boundary;

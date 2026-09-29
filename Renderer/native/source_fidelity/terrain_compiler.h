@@ -94,6 +94,10 @@ bool emit_terrain_surfaces(NaturalData const& natural,Assets const& assets,
     auto activity=[&](int c,int r){auto const& world=world_coast.world();auto i=world.index(c,r);auto value=world.at(i);
         if(i!=std::size_t(-1))observe_world(i,value);return value!=0xffffffffu && (value>>24)!=0?1.f:0.f;};
     int nc=(input.tile_x+input.tile_y)/2,nr=(input.tile_x-input.tile_y)/2;
+    auto const& tile=input;int ground=input.ground;auto owner=lookup_natural(nc,nr);
+    HillMaterialFootprint hill_material={owner.real==5,
+        lookup_natural(nc-1,nr).real==5,lookup_natural(nc+1,nr).real==5,
+        lookup_natural(nc,nr+1).real==5,lookup_natural(nc,nr-1).real==5};
     std::size_t height_queries=0;
     ReliefSurface pickup_surface(world_coast.world().dimensions(),nc,nr,
         shore_sample_at(queries.center_u,queries.center_v).distance,world_lookup,relief_sample,shore_sample_at,river,dune,activity,
@@ -112,11 +116,11 @@ bool emit_terrain_surfaces(NaturalData const& natural,Assets const& assets,
         float(input.tile_width)/224.f*.82f,float(input.target_height)};
     auto surface=[&](float u,float v){
         auto out=ground_surface(project_natural,u,v,height_natural,shore_sample_at,material_weights_for);
+        out.material_desert*=hill_material(u,v);
         out.river_distance=river_terrain_near ? float(river_at(out.world_x,out.world_y)) : 1000.f;
         return out;
     };
     auto triangle=[](std::vector<Vertex>& out,Vertex const& a,Vertex const& b,Vertex const& c){out.push_back(a);out.push_back(b);out.push_back(c);};
-    auto const& tile=input;int ground=input.ground;auto owner=lookup_natural(nc,nr);
     auto patch_detail=input.detail;auto& patch_layouts=scratch.layouts;
     bool index_natural_grids=input.indexed;
     auto record_natural_phase=[](unsigned){}; // Worker CPU time is recorded by its queue.

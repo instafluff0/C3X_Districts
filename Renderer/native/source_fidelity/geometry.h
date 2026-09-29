@@ -8,6 +8,9 @@ if(fidelity_profile) {
         return queries.natural_tile(c,r);
     };
     Tile owner=lookup_natural(nc,nr);
+    HillMaterialFootprint hill_material={owner.real==5,
+        lookup_natural(nc-1,nr).real==5,lookup_natural(nc+1,nr).real==5,
+        lookup_natural(nc,nr+1).real==5,lookup_natural(nc,nr-1).real==5};
     auto const river_field=natural.bind_river_page(float(nc)+.5,float(nr)+.5);
     auto river_at=[&](float x,float y){return river_field.sample({x,y}).distance;};
     bool river_terrain_near=river_assets_ready && natural.river_affects(nc,nr);
@@ -23,6 +26,7 @@ if(fidelity_profile) {
     auto triangle=[](std::vector<Vertex>&out,Vertex const&a,Vertex const&b,Vertex const&c){out.push_back(a);out.push_back(b);out.push_back(c);};
     auto surface=[&](float u,float v){
         auto out=ground_surface(project_natural,u,v,height_natural,shore_sample_at,material_weights_for);
+        out.material_desert*=hill_material(u,v);
         out.river_distance=river_terrain_near ? float(river_at(out.world_x,out.world_y)) : 1000.f;
         return out;
     };

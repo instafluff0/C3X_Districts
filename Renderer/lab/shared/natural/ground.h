@@ -34,6 +34,23 @@ struct GroundProjection {
     }
 };
 
+// Hills may raise the ground across tile edges, but their exposed-stone
+// material belongs to hill tiles. Fade it only at edges facing other terrain
+// so joined hills keep a continuous rock surface.
+struct HillMaterialFootprint {
+    bool owner,west,east,south,north;
+    float operator()(float u,float v) const {
+        if(!owner)return 0;
+        auto edge=[](float distance){float t=std::clamp(distance/.12f,0.f,1.f);return t*t*(3-2*t);};
+        float coverage=1;
+        if(!west)coverage*=edge(u);
+        if(!east)coverage*=edge(1-u);
+        if(!south)coverage*=edge(v);
+        if(!north)coverage*=edge(1-v);
+        return coverage;
+    }
+};
+
 template<class Height,class Shore,class Weights>
 MapVertex ground_surface(GroundProjection const&project,float u,float v,
                          Height height,Shore shore_at,Weights weights_at) {

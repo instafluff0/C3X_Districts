@@ -324,6 +324,10 @@ private:
         for(auto const& patch:p.patches){auto const& n=patch.node;
             if(n->sample.projected){scene=true;continue;}
             if(!n->map_dynamic)continue; // Immutable native overlay, same pixels and order.
+            if(n->operation&&n->command.kind==Kind::native_image&&patch.output==1&&!n->direct.draw&&
+               n->command.color<=65535&&n->inputs[1].width&&n->inputs[4].width&&
+               n->inputs[1].format!=Format::bgra32&&n->inputs[4].format==Format::bgra32&&
+               projectable(n->inputs[3],scene,depth+1))continue;
             if(!n->operation||n->command.kind!=Kind::unit_over||patch.output!=1||n->direct.draw||
                n->inputs[1].format!=Format::bgra32||
                !projectable(n->inputs[3],scene,depth+1))return false;
@@ -387,17 +391,22 @@ private:
                 throw std::runtime_error("projected scene import");
         }else if(original->operation&&original->map_dynamic){
             // Project the retained underlay recursively. Native image ordering
-            // and version ownership are unchanged; only the world projection
-            // moves. The independent overlay remains a small immutable source.
+            // and version ownership are unchanged. For a keyed native image,
+            // use its native words as a mask over its full-color source. The
+            // pathfinder can draw into that source without resampling the map.
             auto below=assemble_projected(original->inputs[3],ticks,frequency,depth+1,scale,area,width,height);
-            Id source=0;
+            Id source=0,key=0;
             try{
-                source=assemble(original->inputs[1],ticks,frequency,depth+1,{},true);
                 projected_output(*n,area);auto const& c=original->command;
+                if(c.kind==Kind::native_image){
+                    source=assemble(original->inputs[4],ticks,frequency,depth+1,{},true);
+                    key=assemble(original->inputs[1],ticks,frequency,depth+1,{},true);
+                }else source=assemble(original->inputs[1],ticks,frequency,depth+1,{},true);
                 projected_layer.draw(device,context,replay.view(source),replay.view(below),n->sample_target.write.Get(),
-                    area,scale,float(width/2),float(height/2),float(c.source_x-c.area.left),float(c.source_y-c.area.top));
-            }catch(...){if(source)replay.recycle(source);replay.recycle(below);throw;}
-            replay.recycle(source);replay.recycle(below);
+                    area,scale,float(width/2),float(height/2),float(c.source_x-c.area.left),float(c.source_y-c.area.top),
+                    key?replay.view(key):nullptr,c.color);
+            }catch(...){if(source)replay.recycle(source);if(key)replay.recycle(key);replay.recycle(below);throw;}
+            replay.recycle(source);if(key)replay.recycle(key);replay.recycle(below);
         }else{
             evaluate(original,ticks,frequency,depth+1);projected_output(*n,area);
             auto texture=original->output[patch.output];

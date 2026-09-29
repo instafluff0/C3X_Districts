@@ -89,6 +89,56 @@ int main(){try{
 }
 ''', timeout=90)
 
+    def test_keyed_pathfinder_keeps_projected_map_detail(self):
+        run_cpp(r'''
+#define NOMINMAX
+#include <windows.h>
+#include "Renderer/native/test_retained_composition.cpp"
+int main(){try{
+ ComPtr<ID3D11Device> device;ComPtr<ID3D11DeviceContext> context;D3D_FEATURE_LEVEL level;
+ checked(D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_HARDWARE,nullptr,0,nullptr,0,D3D11_SDK_VERSION,&device,&level,&context));
+ constexpr unsigned w=64,h=48;Rect full={0,0,w,h},mark={36,22,40,26};
+ for(auto format:{Format::rgb555,Format::rgb565}){
+  Compositor gpu(device.Get(),context.Get());RetainedComposition retained(device.Get(),context.Get());
+  auto world=gpu.create(w,h,Format::bgra32),words=gpu.create(w,h,format),detail=gpu.create(w,h,Format::bgra32);
+  auto route=gpu.create(w,h,format),route_detail=gpu.create(w,h,Format::bgra32);
+  auto screen=gpu.create(w,h,Format::bgra32);
+  unsigned key=format==Format::rgb555?0x7c1f:0xf81f,ink=format==Format::rgb555?0x03e0:0x07e0;
+  std::vector<unsigned> canonical(w*h,0xff808080),raster(w*h),route_words(w*h,key),route_pixels(w*h,0xffff00ff);
+  for(unsigned y=0;y<h;++y)for(unsigned x=0;x<w;++x)raster[y*w+x]=x%2?0xffe0e0e0:0xff202020;
+  for(int y=mark.top;y<mark.bottom;++y)for(int x=mark.left;x<mark.right;++x){route_words[y*w+x]=ink;route_pixels[y*w+x]=0xff00ff00;}
+  assert(gpu.upload(world,1,canonical.data(),canonical.size()));
+  assert(gpu.upload(route,1,route_words.data(),route_words.size()));
+  assert(gpu.upload(route_detail,1,route_pixels.data(),route_pixels.size()));
+  for(auto id:{world,detail,route_detail,screen})retained.create(id,w,h,Format::bgra32);
+  for(auto id:{words,route})retained.create(id,w,h,format);
+  D3D11_TEXTURE2D_DESC d={};d.Width=w;d.Height=h;d.MipLevels=d.ArraySize=d.SampleDesc.Count=1;
+  d.Format=DXGI_FORMAT_B8G8R8A8_UNORM;d.Usage=D3D11_USAGE_IMMUTABLE;d.BindFlags=D3D11_BIND_SHADER_RESOURCE;
+  D3D11_SUBRESOURCE_DATA data={raster.data(),w*4,0};ComPtr<ID3D11Texture2D> texture;
+  checked(device->CreateTexture2D(&d,&data,&texture));
+  unsigned projected=0,canonical_samples=0;
+  RetainedComposition::Sample sample=[&](long long,long long){++canonical_samples;return RetainedComposition::SampledImage{};};
+  sample.projected=[&](long long,long long,float){++projected;return RetainedComposition::SampledImage::bgra(texture.Get(),full);};
+  retained.source(world,gpu.texture(world),sample,true,true);
+  retained.source(route,gpu.texture(route));retained.source(route_detail,gpu.texture(route_detail));
+  retained.record({Kind::copy,detail,world,full,full});
+  retained.record({Kind::quantize,words,world,full,full});
+  retained.record({Kind::native_image,words,route,full,full,0,0,key,0,detail,route_detail,int(w),int(h)});
+  auto zoom=std::make_shared<c3x_renderer::ZoomTransition>();retained.view(screen,detail,zoom);
+  retained.commit(screen,full);
+  for(float scale:{1.f,1.5f,2.f}){
+   zoom->reset(scale);auto output=retained_read(device.Get(),context.Get(),retained.sample(100+projected,1000).Get());
+   assert(output[4*w+8]==raster[4*w+8]); // map keeps one-pixel detail through the route
+   c3x_renderer::SceneProjection p(w,h,scale);
+   unsigned x=unsigned(p.x(38)),y=unsigned(p.y(24));
+   assert((output[y*w+x]&0x00ffffff)==0x0000ff00);
+  }
+  assert(projected==3&&canonical_samples==0);
+ }
+ }catch(std::exception const& e){std::printf("FAIL keyed route projection: %s\n",e.what());return 1;}
+}
+''', timeout=90)
+
 
 if __name__ == "__main__":
     unittest.main()

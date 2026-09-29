@@ -32,12 +32,16 @@ bool emit_relief_meshes(NaturalData const&natural,int real,Tile owner,GroundProj
         std::vector<Vertex>&operator[](unsigned index){return *values[index];}
     } natural_vertices{layers};
     PatchDetail patch_detail;PatchLayouts patch_layouts;
+    HillMaterialFootprint hill_material={owner.real==5,
+        lookup_natural(nc-1,nr).real==5,lookup_natural(nc+1,nr).real==5,
+        lookup_natural(nc,nr+1).real==5,lookup_natural(nc,nr-1).real==5};
     #include "relief_mesh_body.h"
     if(real==5){
         std::vector<MapVertex> ground;
         if(mountains.empty()){
-            auto surface=[&](float u,float v){return ground_surface(project_natural,u,v,
-                height_natural,shore_sample_at,material_weights_for);};
+            auto surface=[&](float u,float v){auto out=ground_surface(project_natural,u,v,
+                height_natural,shore_sample_at,material_weights_for);
+                out.material_desert*=hill_material(u,v);return out;};
             if(!emit_ground_grid(ground,surface,cancelled,patch_detail.mountain,nullptr,nullptr,false))return false;
         }
         emit_hill_decals(owner,nc,nr,mountains.empty()?ground:mountains,
