@@ -2877,10 +2877,78 @@ public:
         // Pay shader compilation and shared texture uploads here; first view
         // preparation should only have map-dependent work left to do.
         if(production){
-            bool ready=initialize() && ensure_terrain_textures();
+            bool ready=ensure_scene_assets();
             trace.write("assets-prepared",ready?"ready=1":"ready=0",true);
             return ready;
         }
+        return true;
+    }
+
+    // Both definition loading and device recovery use the same map-independent
+    // assets. In the game this runs under Civ III's existing loading bar, before
+    // a camera request can expose an empty map while compiling a cold shader.
+    bool ensure_scene_assets() {
+        if(!initialize())return false;
+        LARGE_INTEGER load_mark={};QueryPerformanceCounter(&load_mark);
+        auto load_phase=[&](char const* stage){
+            LARGE_INTEGER now={};QueryPerformanceCounter(&now);
+            if(!cache_valid){char detail[96];sprintf_s(detail,"ms=%.3f",trace.milliseconds(now.QuadPart-load_mark.QuadPart));
+                trace.write(stage,detail,true);}
+            load_mark=now;
+        };
+        for (int index = 0; index < c3x_renderer::terrain_type_count; ++index)
+            if (terrain_textures[index].configured && !ensure_pack_texture(index))
+                terrain_textures[index].configured = false;
+        load_phase("load-device-terrain");
+        c3x_renderer_i64 read_ticks=0,hash_ticks=0,texture_ticks=0;
+        std::size_t asset_bytes=0;
+        auto read_fidelity=[&](std::string const& relative,std::vector<std::uint8_t>& bytes){
+                LARGE_INTEGER begin={},read_end={},hash_end={};QueryPerformanceCounter(&begin);
+                char path[4*MAX_PATH];
+                bool ok=pack_path(fidelity_root.c_str(),relative.c_str(),path,std::size(path)) && read_file(path,bytes);
+                QueryPerformanceCounter(&read_end);
+                if(ok){mix_content_revision(bytes);asset_bytes+=bytes.size();}
+                QueryPerformanceCounter(&hash_end);
+                read_ticks+=read_end.QuadPart-begin.QuadPart;hash_ticks+=hash_end.QuadPart-read_end.QuadPart;return ok;
+        };
+        auto upload_fidelity=[&](auto const& bytes,auto&view){
+            LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
+            bool ok=ensure_dds_texture(bytes,view,true,true);
+            QueryPerformanceCounter(&end);texture_ticks+=end.QuadPart-begin.QuadPart;return ok;
+        };
+        if(environment_profile && !wave_attempted){
+            wave_attempted=true;std::vector<std::uint8_t> header;
+            char control[16]={};GetEnvironmentVariableA("C3X_RENDERER_WAVES",control,sizeof(control));
+            if(std::strcmp(control,"0") && read_fidelity("Renderer/packs/CoastalWavesRuntime/waves.bin",header) &&
+               header.size()==16 && !std::memcmp(header.data(),"CWV1",4) && read_u32(header,4)==1 && read_u32(header,8)==1){
+                wave_ready=true;char const* files[]={"crest.dds","auxiliary.dds","delays.dds"};
+                for(unsigned i=0;i<3;++i){std::vector<std::uint8_t> bytes;
+                    wave_ready=wave_ready && read_fidelity(std::string("Renderer/packs/CoastalWavesRuntime/")+files[i],bytes) && upload_fidelity(bytes,wave_views[i]);}
+            }
+            trace.write("coastal-wave-pack",wave_ready?"enabled":"disabled or unavailable; terrain retained",true);
+        }
+        if(fidelity_profile && !natural.load(device,shader_root,read_fidelity,upload_fidelity,city_profile?"city_fidelity":environment_profile?"environment_refresh":"source_fidelity")) {
+            trace.write("source-fidelity-failed",natural.failure.c_str(),true);return false;
+        }
+        load_phase("load-natural");
+        if(environment_profile && !reflection.ensure(device,shader_root,city_profile?"city_fidelity":"environment_refresh",city_profile?144:136)){
+            trace.write("reflection-failed","shader initialization",true);return false;
+        }
+        load_phase("load-reflection");
+        char city_pack[4*MAX_PATH]={};
+        DWORD city_pack_length=GetEnvironmentVariableA("C3X_RENDERER_CITY_PACK",city_pack,sizeof(city_pack));
+        if(city_pack_length>=sizeof(city_pack))return false;
+        if(city_profile && !cities.load(device,shader_root,read_fidelity,upload_fidelity,
+                city_pack_length?city_pack:"Renderer/packs/CityCompositionRuntime")){
+            trace.write("city-composition-failed","required city pack/material initialization failed",true);return false;
+        }
+        load_phase("load-city");
+        if(asset_bytes){char detail[192];sprintf_s(detail,"bytes=%zu read_ms=%.3f hash_ms=%.3f texture_ms=%.3f",asset_bytes,
+            trace.milliseconds(read_ticks),trace.milliseconds(hash_ticks),trace.milliseconds(texture_ticks));trace.write("load-assets",detail,true);}
+        if(!ensure_terrain_textures()){
+            trace.write("native-failure","terrain-textures",true);return false;
+        }
+        load_phase("load-retained-textures");
         return true;
     }
 
@@ -7107,55 +7175,7 @@ public:
                 sequence,unsigned(valid),draw_ms,copy_ms,gpu_telemetry.last_frequency,gpu_telemetry.last_draw_ticks,gpu_telemetry.last_copy_ticks,skipped);
             trace.write("gpu-timing",detail,true);
         });
-        for (int index = 0; index < c3x_renderer::terrain_type_count; ++index)
-            if (terrain_textures[index].configured && !ensure_pack_texture(index))
-                terrain_textures[index].configured = false;
-        load_phase("load-device-terrain");
-        c3x_renderer_i64 read_ticks=0,hash_ticks=0,texture_ticks=0;
-        std::size_t asset_bytes=0;
-        auto read_fidelity=[&](std::string const& relative,std::vector<std::uint8_t>& bytes){
-                LARGE_INTEGER begin={},read_end={},hash_end={};QueryPerformanceCounter(&begin);
-                char path[4*MAX_PATH];
-                bool ok=pack_path(fidelity_root.c_str(),relative.c_str(),path,std::size(path)) && read_file(path,bytes);
-                QueryPerformanceCounter(&read_end);
-                if(ok){mix_content_revision(bytes);asset_bytes+=bytes.size();}
-                QueryPerformanceCounter(&hash_end);
-                read_ticks+=read_end.QuadPart-begin.QuadPart;hash_ticks+=hash_end.QuadPart-read_end.QuadPart;return ok;
-        };
-        auto upload_fidelity=[&](auto const& bytes,auto&view){
-            LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
-            bool ok=ensure_dds_texture(bytes,view,true,true);
-            QueryPerformanceCounter(&end);texture_ticks+=end.QuadPart-begin.QuadPart;return ok;
-        };
-        if(environment_profile && !wave_attempted){
-            wave_attempted=true;std::vector<std::uint8_t> header;
-            char control[16]={};GetEnvironmentVariableA("C3X_RENDERER_WAVES",control,sizeof(control));
-            if(std::strcmp(control,"0") && read_fidelity("Renderer/packs/CoastalWavesRuntime/waves.bin",header) &&
-               header.size()==16 && !std::memcmp(header.data(),"CWV1",4) && read_u32(header,4)==1 && read_u32(header,8)==1){
-                wave_ready=true;char const* files[]={"crest.dds","auxiliary.dds","delays.dds"};
-                for(unsigned i=0;i<3;++i){std::vector<std::uint8_t> bytes;
-                    wave_ready=wave_ready && read_fidelity(std::string("Renderer/packs/CoastalWavesRuntime/")+files[i],bytes) && upload_fidelity(bytes,wave_views[i]);}
-            }
-            trace.write("coastal-wave-pack",wave_ready?"enabled":"disabled or unavailable; terrain retained",true);
-        }
-        if(fidelity_profile && !natural.load(device,shader_root,read_fidelity,upload_fidelity,city_profile?"city_fidelity":environment_profile?"environment_refresh":"source_fidelity")) {
-            trace.write("source-fidelity-failed",natural.failure.c_str(),true);return false;
-        }
-        load_phase("load-natural");
-        if(environment_profile && !reflection.ensure(device,shader_root,city_profile?"city_fidelity":"environment_refresh",city_profile?144:136)){
-            trace.write("reflection-failed","shader initialization",true);return false;
-        }
-        load_phase("load-reflection");
-        char city_pack[4*MAX_PATH]={};
-        DWORD city_pack_length=GetEnvironmentVariableA("C3X_RENDERER_CITY_PACK",city_pack,sizeof(city_pack));
-        if(city_pack_length>=sizeof(city_pack))return false;
-        if(city_profile && !cities.load(device,shader_root,read_fidelity,upload_fidelity,
-                city_pack_length?city_pack:"Renderer/packs/CityCompositionRuntime")){
-            trace.write("city-composition-failed","required city pack/material initialization failed",true);return false;
-        }
-        load_phase("load-city");
-        if(asset_bytes){char detail[192];sprintf_s(detail,"bytes=%zu read_ms=%.3f hash_ms=%.3f texture_ms=%.3f",asset_bytes,
-            trace.milliseconds(read_ticks),trace.milliseconds(hash_ticks),trace.milliseconds(texture_ticks));trace.write("load-assets",detail,true);}
+        if(!ensure_scene_assets())return false;
         // The fresh map has its own native-size glow targets. Retain the old
         // guarded/region targets only for a recovery render; their allocation
         // has no consumer on the normal scene path.
@@ -7166,11 +7186,6 @@ public:
             trace.write("region-scratch-failed","bounded guarded region initialization",true);return false;
         }
         load_phase("load-glow");
-        if (!ensure_terrain_textures()) {
-            trace.write("native-failure","terrain-textures",true);
-            return false;
-        }
-        load_phase("load-retained-textures");
         if (pickup_profile) {
             if (!frame.world_topology_count) {
                 trace.write("profile-incomplete", "pickup requires authoritative world topology", true);

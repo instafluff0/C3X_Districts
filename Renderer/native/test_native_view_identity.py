@@ -56,6 +56,8 @@ int main() {
         dispatch = '\tstruct c3x_renderer_camera_request_v1 request = {0};' + source.split('\tstruct c3x_renderer_camera_request_v1 request = {0};', 1)[1].split('\tif (is->custom_renderer_presented_frames == 0)', 1)[0]
         dispatch = dispatch.replace('(void *)(*p_GetProcAddress)',
             '(DWORD (*)(char const *, char *, DWORD))(*p_GetProcAddress)')
+        dispatch = dispatch.replace('(DWORD (*)(char const *, char *, DWORD))(*p_GetProcAddress) (is->kernel32, "Sleep")',
+            '(void (*)(DWORD))(*p_GetProcAddress) (is->kernel32, "Sleep")')
         run_cpp(r'''
 #include "Renderer/native/c3x_renderer_api.h"
 #include <cassert>
@@ -103,7 +105,9 @@ int modern(c3x_renderer_camera_request_v1 const* r,c3x_renderer_output_v1*){
  assert(r->version==C3X_RENDERER_CAMERA_VIEW_VERSION && r->struct_size==sizeof(*r));received=r->identity;++modern_calls;return 7;
 }
 int legacy(c3x_renderer_frame_v1 const*,c3x_renderer_output_v1*){++legacy_calls;return 9;}
+struct LoadingForm {struct {int field_574[4]{};}GUI;} form;auto p_main_screen_form=&form;
 struct State {
+ unsigned custom_renderer_presented_frames=1;
  void* kernel32=nullptr;
  bool custom_renderer_async_drawing=false;
  c3x_renderer_camera_present_view_fn custom_renderer_camera_present=nullptr;
@@ -202,7 +206,7 @@ int main(){
         helpers = 'struct custom_renderer_native_view\ncustom_renderer_native_view' + source.split('struct custom_renderer_native_view\ncustom_renderer_native_view', 1)[1].split('void __fastcall\npatch_Map_Renderer_m71_Draw_Tiles', 1)[0]
         body = source.split('void __fastcall\npatch_Map_Renderer_m71_Draw_Tiles', 1)[1]
         start = '\tif (custom_renderer_zoom_enabled ()) sync_custom_renderer_zoom_to_native ();' + body.split('\tif (custom_renderer_zoom_enabled ()) sync_custom_renderer_zoom_to_native ();', 1)[1].split('\tis->custom_renderer_draw_in_progress = true;', 1)[0]
-        finish = '\tif (async_view) {' + body.split('\tif (async_view) {', 1)[1].split('\tis->custom_renderer_frame_active = false;', 1)[0]
+        finish = '\t// Loading disables custom zoom/navigation' + body.split('\t// Loading disables custom zoom/navigation', 1)[1].split('\tis->custom_renderer_frame_active = false;', 1)[0]
         program = r'''
 #include "Renderer/native/c3x_renderer_api.h"
 #include <cassert>
@@ -220,13 +224,13 @@ JGL_Image image{&image_vtable};
 struct JGL {JGL_Image* Image=&image;};
 struct Map_Renderer;
 struct Vtable {void* m21_Draw_Tiles_by_Flags;};
-struct Map_Renderer {Vtable* vtable;struct JGL JGL;};
+struct Map_Renderer {Vtable* vtable;struct JGL JGL;void* spotlight_on_city=nullptr;};
 struct PCX_Image {void* vtable;struct JGL JGL;};
 struct MapData {Map_Renderer Renderer;};
 struct Bic {MapData Map;bool is_zoomed_out=false;} bic;
 Bic* p_bic_data=&bic;
 struct Animator {int fields[32]{};int* field_18E4=fields;int Units2_Count=0;};
-struct Main_Screen_Form {Animator animator;bool turn_end_flag=false;int Player_CivID=2;int camera_x=0,camera_y=0,TileX_Min=0,TileX_Max=20,TileY_Min=0,TileY_Max=20;} screen;
+struct Main_Screen_Form {struct {char field_574[4]{};}GUI;struct {PCX_Image Canvas{};}Base_Data;Animator animator;bool is_now_loading_game=false,turn_end_flag=false;int Player_CivID=2;int camera_x=0,camera_y=0,TileX_Min=0,TileX_Max=20,TileY_Min=0,TileY_Max=20;} screen;
 Main_Screen_Form* p_main_screen_form=&screen;
 struct Clock {long long QuadPart=0;};
 
@@ -240,6 +244,8 @@ struct State {
  bool custom_renderer_capture_only=false,custom_renderer_capture_failed=false,custom_renderer_capture_world_topology=true;
  int custom_renderer_zoom_tile_width=128,custom_renderer_tile_count=0,custom_renderer_viewer_civ_id=2;
  long long custom_renderer_zoom_translate_x_fp=0,custom_renderer_zoom_translate_y_fp=0;
+ unsigned custom_renderer_presented_frames=0;
+ c3x_renderer_native_image_fn custom_renderer_native_image=nullptr;
  long long custom_renderer_camera_ticket=0,custom_renderer_display_clock=0;
  long long custom_renderer_map_epoch=1,custom_renderer_viewer_epoch=2,custom_renderer_visibility_revision=3;
  struct custom_renderer_native_view custom_renderer_display_view{},custom_renderer_queued_view{};
@@ -250,8 +256,10 @@ struct State {
  c3x_renderer_camera_poll_view_fn custom_renderer_camera_poll;
  c3x_renderer_camera_cancel_fn custom_renderer_camera_cancel;
 } state;State* is=&state;
-bool custom_renderer_zoom_enabled(){return true;}
+bool custom_renderer_zoom_enabled(){return !screen.is_now_loading_game;}
+void log_custom_renderer_event(char const*,int){}
 void sync_custom_renderer_zoom_to_native(){}
+void prepare_custom_renderer_loading_view(Main_Screen_Form*){}
 void native_move(Main_Screen_Form* s,int,int x,int y,int,bool){
  s->camera_x=(x%8192+8192)%8192;s->camera_y=(y%4096+4096)%4096;
  s->TileX_Min=s->camera_x/64;s->TileX_Max=s->TileX_Min+20;
@@ -343,6 +351,12 @@ int main(){
  assert(screen.camera_x==8180);call();assert(displayed_x==8180);
  unsigned before=begins;call(false);assert(!state.custom_renderer_display_valid && begins==before);
  state.custom_renderer_async_enabled=false;call();assert(!state.custom_renderer_display_valid && !state.custom_renderer_camera_ticket);
+ // Saved-game loading disables navigation, but the complete publication still
+ // needs its camera identity when native startup clears the main canvas.
+ state.custom_renderer_async_enabled=true;screen.is_now_loading_game=true;
+ native_move(&screen,0,3616,394,0,true);call();
+ assert(!state.custom_renderer_display_valid && state.custom_renderer_display_view.camera_x==3616 &&
+        state.custom_renderer_display_view.camera_y==394);
 }
 '''
         run_cpp(program)
@@ -355,7 +369,7 @@ int main(){
         enabled = enabled.replace('s->camera_x=(x%8192', 's->animator.fields[10]=1;s->camera_x=(x%8192')
         enabled = enabled[:enabled.index('int main(){')]+r'''
 void native_center(Main_Screen_Form* s,int,int x,int y,int reason,bool bounds,bool){
- assert(state.custom_renderer_camera_exact);patch_Main_Screen_Form_move_camera(s,0,x,y,reason,bounds);
+ assert(!state.current_config.enable_custom_rendering || state.custom_renderer_camera_exact);patch_Main_Screen_Form_move_camera(s,0,x,y,reason,bounds);
 }
 struct custom_renderer_native_view desired{};bool nav_pending=false,nav_ready=false;unsigned barriers=0;
 int navigation(int action,void*,struct custom_renderer_native_view* v,c3x_renderer_camera_request_v1 const*){
@@ -429,6 +443,28 @@ int main(){
  assert(native_work==before_work+20);
  nav_ready=true;patch_Animator_update_display(&screen.animator,0);
  assert(screen.camera_x==500&&overlay_x==500&&native_work==before_work+21);
+ // Startup clears the main form after the loading bar. An unchanged camera
+ // must copy its already prepared map before HUD presentation, with no wait.
+ static unsigned loading_copies=0;
+ state.custom_renderer_native_image=[](int op,void* destination,void* source,void const* from,void const* to,unsigned)->int {
+  assert(op==C3X_NATIVE_COPY && destination==screen.Base_Data.Canvas.JGL.Image && source==bic.Map.Renderer.JGL.Image);
+  assert(from && to && ((RECT const*)from)->right==2240);++loading_copies;return 1;
+ };
+ state.custom_renderer_display_view=custom_renderer_native_view(&bic.Map.Renderer);
+ state.custom_renderer_presented_frames=2;screen.is_now_loading_game=true;
+ patch_Main_Screen_Form_center_camera(&screen,0,500,100,0,false,false);
+ assert(loading_copies==1);
+ screen.GUI.field_574[3]=1;
+ patch_Main_Screen_Form_center_camera(&screen,0,500,100,0,false,false);
+ assert(loading_copies==1);screen.GUI.field_574[3]=0;
+ patch_Main_Screen_Form_center_camera(&screen,0,600,100,0,false,false);
+ assert(loading_copies==1); // A different camera cannot reuse these pixels.
+ state.current_config.enable_custom_rendering=false;
+ patch_Main_Screen_Form_center_camera(&screen,0,500,100,0,false,false);
+ assert(loading_copies==1&&!state.custom_renderer_camera_exact&&screen.camera_x==500);
+ state.current_config.enable_custom_rendering=true;screen.is_now_loading_game=false;
+ patch_Main_Screen_Form_center_camera(&screen,0,500,100,0,false,false);
+ assert(loading_copies==1);
 }
 '''
         run_cpp(enabled)

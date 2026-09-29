@@ -44,8 +44,18 @@ inline HRESULT compile_cached(wchar_t const* path,char const* entry,char const* 
         }
         if(file)std::fclose(file);
     }
+    LARGE_INTEGER started={},finished={},frequency={};
+    QueryPerformanceCounter(&started);QueryPerformanceFrequency(&frequency);
+    char detail[256];
+    std::snprintf(detail,sizeof(detail),"[C3X renderer] stage=shader-cache-compile phase=begin entry=%s target=%s\n",entry,target);
+    OutputDebugStringA(detail);
     HRESULT result=D3DCompile(source.data(),source.size(),nullptr,nullptr,nullptr,
         entry,target,D3DCOMPILE_OPTIMIZATION_LEVEL3,0,output,errors);
+    QueryPerformanceCounter(&finished);
+    std::snprintf(detail,sizeof(detail),"[C3X renderer] stage=shader-cache-compile phase=end entry=%s target=%s result=0x%08lx ms=%.3f\n",
+        entry,target,static_cast<unsigned long>(result),
+        frequency.QuadPart?1000.0*double(finished.QuadPart-started.QuadPart)/double(frequency.QuadPart):0.0);
+    OutputDebugStringA(detail);
     if(FAILED(result))return result;
     std::memcpy(header.magic,"C3XCSO1",8);header.source=signature;header.size=(*output)->GetBufferSize();
     header.bytes=hash((*output)->GetBufferPointer(),static_cast<std::size_t>(header.size));

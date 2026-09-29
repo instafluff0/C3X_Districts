@@ -35,6 +35,7 @@ public static class RendererGameCommand {
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr window);
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint x, uint y, uint data, UIntPtr extra);
+    [DllImport("user32.dll")] public static extern void keybd_event(byte key, byte scan, uint flags, UIntPtr extra);
     [StructLayout(LayoutKind.Sequential)] public struct Point { public int X, Y; }
     [StructLayout(LayoutKind.Sequential)] public struct Rect { public int Left, Top, Right, Bottom; }
     [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr window, uint message, IntPtr key, IntPtr detail);
@@ -49,7 +50,7 @@ public static class RendererGameCommand {
 // the IPC header read-only; it never requests pixels or submits renderer work.
 public sealed class RendererCadenceReader : IDisposable {
     // Mirrored from helper_trial/scene_wire.h; executable test checks this ABI.
-    public const int WireVersion = 10, FrameOffset = 228, ZoomOffset = 232;
+    public const int WireVersion = 11, FrameOffset = 228, ZoomOffset = 232;
     [DllImport("kernel32.dll", CharSet=CharSet.Unicode)] static extern IntPtr OpenFileMapping(uint access, bool inherit, string name);
     [DllImport("kernel32.dll")] static extern IntPtr MapViewOfFile(IntPtr mapping, uint access, uint high, uint low, UIntPtr bytes);
     [DllImport("kernel32.dll")] static extern bool UnmapViewOfFile(IntPtr view);
@@ -162,7 +163,7 @@ try {
         $interaction=,@(28,13,'close-welcome')
     }
     if ($Scenario -eq 'lifecycle') {
-        $interaction=@(@(42,27,'quit-first-game'),@(44,40,'select-quit'),@(45,13,'confirm-quit'),@(55,13,'load-again'),@(58,13,'accept-save'),@(100,0x86,'text-second-game'),@(105,27,'quit-second-game'),@(107,40,'select-second-quit'),@(108,13,'confirm-second-quit'))
+        $interaction=@(@(42,81,'return-first-game-to-menu'),@(44,40,'select-quit'),@(45,13,'confirm-quit'),@(55,13,'load-again'),@(58,13,'accept-save'),@(100,0x86,'text-second-game'),@(105,81,'return-second-game-to-menu'),@(107,40,'select-second-quit'),@(108,13,'confirm-second-quit'))
     }
     while ([DateTime]::UtcNow -lt $end -and -not $child.HasExited) {
         $child.Refresh(); $window=$child.MainWindowHandle
@@ -257,8 +258,25 @@ try {
                 $pollMs=if ($Scenario -eq 'zoom') {20} else {1000}
                 Start-Sleep -Milliseconds $pollMs; continue
             }
-            if (-not [RendererGameCommand]::PostMessage($window,0x100,[IntPtr]$key,[IntPtr]1)) { throw 'Cannot post diagnostic command.' }
-            [void][RendererGameCommand]::PostMessage($window,0x101,[IntPtr]$key,[IntPtr](-1073741823))
+            if ($Scenario -eq 'lifecycle' -and $key -eq 81) {
+                # Native Ctrl+Shift+Q returns to the menu; Escape exits the application.
+                # Modifiers must reach the keyboard state used by JGL's handler.
+                [void][RendererGameCommand]::SetForegroundWindow($window)
+                if ([RendererGameCommand]::GetForegroundWindow() -ne $window) { throw 'Diagnostic game lost foreground before Ctrl+Shift+Q.' }
+                try {
+                    [RendererGameCommand]::keybd_event(0x11,0,0,[UIntPtr]::Zero)
+                    [RendererGameCommand]::keybd_event(0x10,0,0,[UIntPtr]::Zero)
+                    [RendererGameCommand]::keybd_event(81,0,0,[UIntPtr]::Zero)
+                    Start-Sleep -Milliseconds 100
+                } finally {
+                    [RendererGameCommand]::keybd_event(81,0,2,[UIntPtr]::Zero)
+                    [RendererGameCommand]::keybd_event(0x10,0,2,[UIntPtr]::Zero)
+                    [RendererGameCommand]::keybd_event(0x11,0,2,[UIntPtr]::Zero)
+                }
+            } else {
+                if (-not [RendererGameCommand]::PostMessage($window,0x100,[IntPtr]$key,[IntPtr]1)) { throw 'Cannot post diagnostic command.' }
+                [void][RendererGameCommand]::PostMessage($window,0x101,[IntPtr]$key,[IntPtr](-1073741823))
+            }
             ++$sent
         }
         Start-Sleep -Milliseconds 1000
@@ -307,13 +325,14 @@ $textEvents=[regex]::Matches($log,'stage=scripted-game-map-text').Count
 $cityZooms=@([regex]::Matches($log,'stage=city-native-zoom tile_width=(\d+)') | ForEach-Object {[int]$_.Groups[1].Value})
 $cityAnchors=@([regex]::Matches($log,'stage=city-native-zoom[^\r\n]*city_anchor=(-?\d+,-?\d+)') | ForEach-Object {$_.Groups[1].Value})
 $readyEvents=[regex]::Matches($log,'stage=render-done result=1').Count
+$loadingMaps=[regex]::Matches($log,'stage=loading-map-complete result=1').Count
 $unloadEvents=[regex]::Matches($log,'stage=scene-unloaded result=1').Count
-$errors=@($log -split "`n" | Where-Object {$_ -match 'stage=native-operation-failed|stage=async-publication-failed|budget exceeded|stage=visual-failure|stage=worker-error|stage=unit-publication-failed|stage=unit-animation-failed|stage=motion-start[^\r\n]*result=[0235]|stage=scene-unload-failed|stage=first-map-ready result=[02345]'})
+$errors=@($log -split "`n" | Where-Object {$_ -match 'stage=native-operation-failed|stage=async-publication-failed|budget exceeded|stage=visual-failure|stage=worker-error|stage=unit-publication-failed|stage=unit-animation-failed|stage=motion-start[^\r\n]*result=[0235]|stage=scene-unload-failed|stage=(?:first-map-ready|loading-map-complete) result=[02345]|stage=assets-prepared ready=0'})
 $windowResult=Join-Path $session 'window\finished.json'
 $windowEvidence=if (Test-Path -LiteralPath $windowResult) { Get-Content -LiteralPath $windowResult -Raw | ConvertFrom-Json } else { $null }
 $windowComplete=$null -ne $windowEvidence -and $windowEvidence.complete -and $windowEvidence.frames -gt 0
 [ordered]@{ scenario=$Scenario; scene_samples=$SceneSamples; scene_sharpness=$SceneSharpness; combat_case=$CombatCase; unit_pack=$UnitPack; mouse_commands=$mouseIndex; completed_turns=$turns; interaction_commands=$interactionIndex; combat_ready=$combatReady; combat_finished=$combatFinished; map_text_events=$textEvents; city_zoom_widths=$cityZooms; city_anchors=$cityAnchors; posted_commands=$sent; load_requested=($log -match 'stage=scripted-game-load'); scroll_steps=$steps;
-    game_exited_early=$earlyExit; game_exit_code=$gameExitCode; first_map_ready=$readyEvents; scenes_unloaded=$unloadEvents; native_failures=$errors; window_evidence=$windowEvidence; original_save_unchanged=$true; scope='Real Civ III diagnostic; window samples require visual review; not an FPS benchmark' } |
+    game_exited_early=$earlyExit; game_exit_code=$gameExitCode; first_map_ready=$readyEvents; loading_maps_ready=$loadingMaps; scenes_unloaded=$unloadEvents; native_failures=$errors; window_evidence=$windowEvidence; original_save_unchanged=$true; scope='Real Civ III diagnostic; window samples require visual review; not an FPS benchmark' } |
     ConvertTo-Json -Depth 4 | Set-Content (Join-Path $session 'result.json')
 Write-Host ('Scripted diagnostic saved: '+$session)
 if ($MeasureCadence -and $cadenceSamples.Count -lt 2) { Write-Error 'Insufficient renderer cadence samples; inspect cadence.json and the helper channel.'; exit 1 }

@@ -142,15 +142,29 @@ incomplete from macOS, copy it through guest PowerShell into the ignored
 
 ## Loading, main menu and reload
 
-`-Scenario lifecycle -Seconds 120` loads the disposable save, opens and confirms
-the normal quit prompt, loads the same copy again from the menu, publishes a
+`-Scenario lifecycle -Seconds 120` loads the disposable save, uses native Ctrl+Shift+Q and confirms
+the return-to-menu prompt, loads the same copy again from the menu, publishes a
 map-text witness, then returns to the menu again. It never saves either game.
 The result requires two successful first-map `render-done` events, two completed scene unloads,
 the second map's text event, every scheduled command, and no native failures.
+Escape confirms application exit; it cannot test same-process reloading. The
+Ctrl+Shift+Q sequence verifies foreground ownership and releases all keys in `finally`.
 Review the samples for a visible loading bar, complete maps, both menu returns
 and fresh unit/UI state. A script timeout or delivered Enter key does not prove
 that the native menu accepted it. Helpers may exist for menu presentation, but
 the previous scene helper must close before the menu is painted.
+
+For startup regressions, inspect `assets-prepared`, `loading-map-start`,
+`first-map-ready` and `loading-map-complete` before `scripted-game-load`.
+`loading_maps_ready` counts completed loading views; the saved camera and native
+startup camera may differ. The failure filter includes rejected loading views
+and failed shared-asset preparation. Inspect timestamped window samples around
+bar dismissal: successful preparation alone does not prove a correct handoff.
+On saved-game startup, `loading-map-restore` confirms that the prepared GPU
+canvas was restored after the native main-form clear. Review the first HUD frame
+as well as the terrain-only frame, and check that menu return has no stale bar.
+Shader cache misses log `shader-cache-compile` begin/end and elapsed milliseconds.
+A cold compilation is loading work, never a reason to expose a pending map.
 
 ### Movement evidence
 

@@ -192,7 +192,7 @@ public:
     int tactical(c3x_renderer::tactical::Input const& capture,c3x_renderer_gpu_unit_v1 const& target){
         std::lock_guard<std::mutex> lock(gate);return client.tactical(capture,target);
     }
-    int present(c3x_renderer_gpu_present_v1 const& request){
+    int present(c3x_renderer_gpu_present_v1 request){
         std::lock_guard<std::mutex> lock(gate);
         char phase_option[4]={};bool phase_probe=GetEnvironmentVariableA("C3X_RENDERER_PRESENT_PHASES",phase_option,sizeof(phase_option))==1&&phase_option[0]=='1';
         LARGE_INTEGER phase_begin={},phase_remote={},phase_adopt={},phase_end={},phase_rate={};
@@ -209,6 +209,13 @@ public:
             if(direct_active&&!direct_surface.matches(static_cast<HWND>(request.window),
                unsigned(request.width),unsigned(request.height))){
                 if(!detach_direct(true))return C3X_RENDERER_RESULT_DEVICE_ERROR;
+            }
+            // The first native transfer may be only the loading bar's dirty
+            // rectangle. Its display image already contains the complete GPU
+            // canvas; seed the new surface with that canvas before partial updates.
+            if(client.asynchronous()&&!direct_active){
+                request.area[0]=request.area[1]=0;
+                request.area[2]=request.width;request.area[3]=request.height;full=true;
             }
             char trial[4]={};bool requested=direct_requested||
                 (GetEnvironmentVariableA("C3X_RENDERER_DIRECT_SURFACE_TRIAL",trial,sizeof(trial))==1&&trial[0]=='1');

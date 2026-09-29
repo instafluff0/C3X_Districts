@@ -36,7 +36,7 @@ the former 1,326-line roadmap.
   image queue. Canonical capture stays at 128 pixels; no camera recapture or
   redraw is requested for intermediate views. Renderer64 samples one damped
   view clock, and picking reads the scale of the last successful presentation.
-  The helper wire is version 10; stage the bridge, x64 DLL and helper together.
+  The helper wire is version 11; stage the bridge, x64 DLL and helper together.
   See [implementation and tests](custom_rendering_zoom.md).
 
   Live HUD capture `20260928-080539` completes both camera moves, three text
@@ -134,13 +134,23 @@ the former 1,326-line roadmap.
   skeletal blending and binding metadata are documented in the scene/motion
   contract. Sampled window frames do not establish frame-perfect smoothness.
 
-  Shared renderer assets now load from `patch_load_scenario()` after the C3X
-  configuration. There is no separate progress form. Capture `20260927-162108`
-  confirms native image loading happens before the camera/bounds are initialized;
-  moving first-view preparation behind the existing loading bar remains open.
-  Menu/reload validation is also open. Helper teardown now joins visual callbacks
-  before unmapping their shared transport. The [scripted diagnostic](../tools/scripted_game_test.md)
-  documents autonomous disposable-save tests and reports premature game exit.
+  **Startup preparation now runs under the existing native loading bar.**
+  `patch_load_scenario()` blocks on the common Renderer64 asset loader, including
+  the reflection/city resources previously deferred to the first draw. Existing
+  save/camera/scenario hooks prepare map-dependent geometry once native bounds
+  and the viewer exist. Ordinary gameplay remains asynchronous.
+  Capture `20260928-183616` completes 32 scroll steps without renderer errors.
+  Capture `20260928-192558` completes two loads and two menu unloads in one
+  process. Its reviewed 4 Hz samples retain terrain through native HUD startup;
+  the prepared camera identity survives loading even with custom zoom disabled.
+  This does not establish every display frame or live FPS. New-scenario loading
+  still needs a live witness. Final capture `20260928-193732` confirms both
+  menu returns repaint cleanly after scene unload, with zero renderer failures.
+  Units begin appearing when native startup supplies their first observations,
+  after the terrain handoff.
+  Helper teardown joins visual callbacks before unmapping shared transport.
+  The [scripted diagnostic](../tools/scripted_game_test.md) documents disposable
+  save tests, menu/reload checks and premature-exit reporting.
 - **Runtime boundaries.** Custom-on uses the matching 32-bit bridge, x64 DLL
   and helper, copied scene publication, retained GPU composition and an
   independent presentation clock. Native gameplay, pathfinding, turn logic and

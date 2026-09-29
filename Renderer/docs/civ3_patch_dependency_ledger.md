@@ -1899,16 +1899,63 @@ receipt; no new manual recording is required for these automated comparisons.
 
 ### Renderer loading and main-menu lifetime
 
-`patch_load_scenario` loads renderer definitions, shaders and shared textures
-immediately after the accepted C3X configuration and tile-animation packs.
-Existing `load_scenario` addresses: GOG `0x59AB50`, Steam `0x5A8660`, PCGames
+`patch_load_scenario` synchronously loads renderer definitions and all shared
+scene assets after the accepted C3X configuration and tile-animation packs.
+Renderer64's `ensure_scene_assets()` includes natural geometry, reflection
+shaders, cities and terrain/water textures; ordinary rendering and device
+recovery reuse the same loader. Cold shader compilation logs entry and elapsed
+time. Existing `load_scenario` addresses: GOG `0x59AB50`, Steam `0x5A8660`, PCGames
 `0x59A870`; signature `unsigned (__fastcall *)(BIC *, int, char *, unsigned *)`.
-Preview and recursive scenario reads retain their existing exclusions. Native
-`Map_Renderer_load_images` still performs its ordinary work. No additional
-loading form is created. Capture `20260927-162108` confirms that the map image
-exists during native asset loading, but the player camera and bounds are still
-zero; preparing the first visible map before the existing bar closes remains
-an outstanding integration check.
+Preview and recursive reads retain their existing exclusions.
+
+Map-dependent preparation must occur later: native image loading has no valid
+viewer/camera/bounds yet. The existing hooks below call the same native tile draw
+and wait for its immutable GPU request **only while the native loading bar is
+active**. Gameplay camera/animation requests remain asynchronous. No second
+progress window, CPU map fallback, new patch-table row or injected state is added.
+
+| Existing symbol | Loading role | GOG | Steam / PCGames |
+| --- | --- | --- | --- |
+| `MappedFile_deinit_after_saving_or_loading` | Save read completed; prepare saved view, then native startup view | load `0x592322`, save `0x591D9F` | load `0x59F973` / `0x592042`; save `0x59F3D0` / `0x591ABF` |
+| `Main_Screen_Form_center_camera` | Use native centering/clamping for startup tile | `0x4DF9E0` | `0 / 0` (unverified) |
+| `Main_Screen_Form_move_camera` | Prepare valid loading cameras for new scenarios | `0x4DF700` | `0 / 0` (unverified) |
+| `Map_place_scenario_things` | Prepare final scenario objects before loading ends | `0x5D1EA0` | `0x5E1140` / `0x5D1DD0` |
+| `Map_Renderer_m71_Draw_Tiles` | Existing tile capture/composite pipeline | `0x66A624` | `0x687730` / `0x66A624` |
+
+Signatures are unchanged: `void (__fastcall *)(MappedFile *)`,
+`void (__fastcall *)(Main_Screen_Form *, int, int, int, int, bool, bool)` for
+centering, the same without the final bool for moving,
+`void (__fastcall *)(Map *)` for placement, and
+`void (__fastcall *)(Map_Renderer *, int, int, int, int)` for drawing.
+The shared save hook preserves its original cleanup and gates only the renderer
+addition; saving/config-off never prepares a map.
+
+Native startup `FUN_004f61b0` centers on the selected unit or the native starting
+tile after save loading closes its bar. Preparation uses that same native helper
+under the bar, then restores the saved camera fields. Preparing this view last
+leaves the correct completed map available for the handoff. The first GPU display
+transfer seeds the whole existing canvas even if the loading bar dirtied only a
+small rectangle; later transfers retain their dirty rectangles.
+Native startup subsequently clears the main form. The existing centering hook
+copies the prepared GPU map back for the same camera/projection/viewer before
+HUD composition; it does not wait or reuse pixels from a different view.
+The completed view identity is recorded during loading too: custom zoom is
+intentionally disabled there, so it cannot guard that identity update.
+
+A cold-reflection-cache bootstrap probe completed in 33.352 seconds, regenerated
+the identical shader bytecode, and returned ready only after shared assets were
+prepared. The original failure deferred this compilation until after loading.
+
+Capture `20260928-183616` completed all 32 scroll steps without renderer
+failures. The later `20260928-192558` load/menu/reload witness completed two
+loads, four prepared views and two scene unloads, with no renderer errors and an
+unchanged source save. Reviewed 4 Hz samples 79–85 and 225–234 keep terrain
+visible through the HUD handoff. Sampling does not prove every display frame or
+live FPS. GOG save loading is verified; new-scenario loading still lacks a live
+scenario witness. Final capture `20260928-193732` repeats both loads with zero
+renderer failures and an unchanged source save. Windows 43–51 and 121–129 keep
+terrain visible through HUD startup; windows 90 and 201 show clean menu returns
+without the stale loading bar.
 
 The verified GOG replacement call `Sprite_draw_main_menu_background` at
 `0x54F7D0` uses existing `Sprite_draw` signature
@@ -1916,12 +1963,19 @@ The verified GOG replacement call `Sprite_draw_main_menu_background` at
 Original bytes `E8 0B 8B 0A 00` target `0x5F82E0`. Steam / PCGames addresses are
 `0 / 0` (unverified). The call is in the common menu loop, so canceled quit
 prompts do not unload the game. Config-off delegates immediately.
+After a successful custom-scene unload, the existing `PCX_Image_fill_area`
+helper initializes the native menu canvas before the original sprite draw.
+Signature `int (__fastcall *)(PCX_Image *, int, RECT *, int)`; GOG `0x600070`,
+Steam `0x615570`, PCGames `0x5FFF50`. This is ordinary native menu repainting,
+not a CPU fallback for the custom map. No new patch or address is needed.
 
 `c3x_renderer_end_scene` closes the scene helper and releases its packs, GPU
 assets and pending work. The process-owned JGL hook reference remains alive.
 Helper destruction must stop its cadence callbacks before shared transport
-memory is unmapped. Same-process menu/reload validation remains pending; the
-first lifecycle capture ended before its second load and is not a pass.
+memory is unmapped. The same-process load/menu/reload witness completes both
+scene lifetimes. Menu cleanup also needs to discard the old native canvas
+contents left behind while the GPU owned that canvas; the menu then redraws
+through its ordinary native sprite path.
 
 `required_user_action: []`. The user authorized tested matching-trio staging,
 console installation and bounded automated game tests.
