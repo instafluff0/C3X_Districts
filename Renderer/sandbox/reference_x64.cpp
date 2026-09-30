@@ -24,6 +24,7 @@ bool native_worker_contract(char const*,c3x_renderer_gpu_images_fn,c3x_renderer_
 #include "benchmark_oracle.h"
 #include "busy_session_plan.h"
 #ifdef C3X_SANDBOX_CLIENT
+#include "capture_model.h"
 int sandbox_client_run(HMODULE module, c3x_renderer_frame_v1 const& frame);
 #endif
 
@@ -729,12 +730,25 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
     };
     LARGE_INTEGER initial_begin={},initial_done={},initial_frequency={};QueryPerformanceFrequency(&initial_frequency);
     QueryPerformanceCounter(&initial_begin);
-    int result = render_checked(&frame, &output);
+    auto initial_frame=frame;
+#ifdef C3X_SANDBOX_CLIENT
+    char witness_option[8]={};std::vector<c3x_renderer_tile_v1> initial_tiles;
+    if(GetEnvironmentVariableA("C3X_SANDBOX_CAMERA_WITNESS",witness_option,sizeof(witness_option)) && witness_option[0]=='1'){
+        char endpoint[32]={};SandboxCameraWitness::View first_view={0,0,1,"origin"};
+        GetEnvironmentVariableA("C3X_SANDBOX_WITNESS_ENDPOINT",endpoint,sizeof(endpoint));
+        if(!std::strcmp(endpoint,"equivalent"))first_view={192,96,1,"equivalent"};
+        if(!std::strcmp(endpoint,"wrap"))first_view={frame.world_width_tiles*frame.tile_width/2+192,96,1,"wrap"};
+        if(!std::strcmp(endpoint,"negative_wrap"))first_view={-frame.world_width_tiles*frame.tile_width/2+192,96,1,"negative_wrap"};
+        initial_tiles=SandboxCameraWitness(frame).capture(first_view);
+        initial_frame.tiles=initial_tiles.data();initial_frame.tile_count=unsigned(initial_tiles.size());
+    }
+#endif
+    int result = render_checked(&initial_frame, &output);
     QueryPerformanceCounter(&initial_done);
     double initial_render_ms=double(initial_done.QuadPart-initial_begin.QuadPart)*1000/initial_frequency.QuadPart;
     std::size_t expected_rendered = 0;
-    for (c3x_renderer_tile_v1 const & tile : tiles)
-        if ((tile.tile_flags & C3X_RENDERER_TILE_RENDER) != 0)
+    for (unsigned i=0;i<initial_frame.tile_count;++i)
+        if ((initial_frame.tiles[i].tile_flags & C3X_RENDERER_TILE_RENDER) != 0)
             ++expected_rendered;
     bool ok = result == C3X_RENDERER_RESULT_OK &&
               (pickup ? output.rendered_tile_count >= expected_rendered : output.rendered_tile_count == expected_rendered) &&
@@ -748,7 +762,7 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
         return 1;
     }
     std::printf("CLIENT_PREPARE reference_and_scene_ms=%.1f tiles=%u built=%u upload_bytes=%u fallback=%u\n",
-        initial_render_ms,frame.tile_count,output.geometry_tiles_built,
+        initial_render_ms,initial_frame.tile_count,output.geometry_tiles_built,
         output.geometry_upload_bytes,output.fallback_tile_count);
     return sandbox_client_run(module, frame);
 #endif

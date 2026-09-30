@@ -1,0 +1,1416 @@
+{
+  "schema": "c3x.lab.seasonal_source_findings.v1",
+  "source_inputs_sha256": {
+    "Base/Platforms/Windows/BLPs/environment/clutter.blp": "51b21369afa354869bff06eaef4101d9df7c5064cc7cdc35ee545007225bed87",
+    "Base/ArtDefs/Clutter.artdef": "b2c3e8cb893df91c4266ee6df70aecc713f57bff06597327fec8110b7b71ca7c",
+    "Base/ArtDefs/Features.artdef": "02f80fc471e3a5347f45f061fc7f34debdbfed0c2a273976c295cd27dd1e960c",
+    "Base/ArtDefs/TerrainStyle.artdef": "7f86888e539487d673d91ef3a91e92c74050d017232f74fd902fe8433cff751d",
+    "Base/ArtDefs/VFX.artdef": "b6574d72b54010fc1321b67604f4b7945c46ad30a8543dd9cbef61f1f5ec34d6",
+    "DLC/CivRoyaleScenario/ArtDefs/Clutter.artdef": "451c154d7ff431a1bb3e689e388a1f63ccc86dd78fc03b3c11f34ceb5ab2666f",
+    "DLC/CivRoyaleScenario/ArtDefs/TerrainStyle.artdef": "492fb31c4b94d0d4f1d197f5bdd998b430ac48ae6e27f03bd36ae69508e3542f",
+    "DLC/CivRoyaleScenario/ArtDefs/VFX.artdef": "cf7f3c619f177be66a74f2bfd40ef2f60c185c5f8cbe25958866b4cad8cde910",
+    "DLC/Expansion1/ArtDefs/Clutter.artdef": "b804a55df464372c32507e05164c3cb452a3c223b11e469591b57164956db940",
+    "DLC/Expansion2/ArtDefs/VFX.artdef": "af657307b09d43e6b2d7b528ded0194d72d9ab397cdbf924cba9211c6ee39bcd",
+    "DLC/GranColombia_Maya/ArtDefs/Clutter.artdef": "f82e322570bfdc40fd09317a9e61081f62ccf80675cf46ef4536e7d48201d73c",
+    "DLC/NubiaScenario/ArtDefs/TerrainStyle.artdef": "a12f00e6859067b7ff0901ff5de71f290dc34f5419618993ceb945e98dd138d4",
+    "DLC/PiratesScenario/ArtDefs/Features.artdef": "ba8e7a73fca8199f75c8c360e8623872d0eddcfd67668102d6f86804cccb1a7d",
+    "DLC/PiratesScenario/ArtDefs/TerrainStyle.artdef": "58fe64591bdf63c091ae2557508dc2e64ff8d8ba9a30984642e31503985b9c10"
+  },
+  "census": {
+    "schema": "c3x.lab.seasonal_census.v1",
+    "artdefs": [
+      {
+        "path": "Base/ArtDefs/Clutter.artdef",
+        "names": [
+          "Boulder_Clump_Snow_01",
+          "Boulder_Clump_Snow_02",
+          "CLUTTER_FOREST_IOS_SNOW",
+          "CLUTTER_FOREST_SNOW",
+          "CLUTTER_SNOW",
+          "CLUTTER_SNOW_TUNDRA_HILLS",
+          "CLUTTER_SNOW_TUNDRA_VFX",
+          "CLUTTER_SNOW_VFX",
+          "FX_Env_Snow",
+          "FX_Env_Tundra_Snow",
+          "FXc_env_snow",
+          "FXc_env_snow_tundra",
+          "RES_Silk_Snow_01",
+          "RES_Silk_Snow_02",
+          "RES_Silk_Snow_03",
+          "RES_Silk_Snow_04",
+          "RES_Silk_Snow_05",
+          "Snow  Small Ice02",
+          "Snow  Small Ice03",
+          "Snow Large Ice01",
+          "Snow Large Ice02",
+          "Snow Large Ice03",
+          "Snow Large Ice04",
+          "Snow Large Ice05",
+          "Snow Small Ice01",
+          "Snow Small Ice04",
+          "Snow large dark01",
+          "Snow large dark02",
+          "Snow_Hill_01",
+          "Snow_Hill_02",
+          "TER_Snow_Decal01",
+          "TER_Snow_Decal02",
+          "TER_Snow_Decal03",
+          "TER_Snow_Decal04",
+          "TER_Snow_Decal05",
+          "TER_Snow_Decal06",
+          "TER_Snow_Decal07",
+          "TER_Snow_Decal08",
+          "TER_Snow_Decal09",
+          "TER_Snow_Decal_Dark01",
+          "TER_Snow_Decal_Dark02",
+          "Tree_Pine_Clump_Snow_01",
+          "Tree_Pine_Clump_Snow_02",
+          "Tree_Pine_Snow_01",
+          "Tree_Pine_Snow_02",
+          "Tree_Pine_Snow_03"
+        ]
+      },
+      {
+        "path": "Base/ArtDefs/Features.artdef",
+        "names": [
+          "CLUTTER_FOREST_SNOW"
+        ]
+      },
+      {
+        "path": "Base/ArtDefs/TerrainStyle.artdef",
+        "names": [
+          "ART_DEF_TERRAIN_ELEMENT_CONTINENTAL_HILL_SNOW",
+          "ART_DEF_TERRAIN_MATERIAL_MTN_SNOW",
+          "ART_DEF_TERRAIN_MATERIAL_SNOW",
+          "SnowBeach",
+          "TER_MTN_SNOW"
+        ]
+      },
+      {
+        "path": "Base/ArtDefs/VFX.artdef",
+        "names": [
+          "FX_AoE_Hit_Snow",
+          "FX_GDR_Foot_Snow",
+          "FX_GDR_Jump_GroundShock_Snow",
+          "FX_Hit_Bullet_Snow",
+          "FX_Hit_GDR_AoE_Snow",
+          "TERRAIN_SNOW",
+          "TERRAIN_SNOW_HILLS",
+          "TERRAIN_SNOW_MOUNTAIN"
+        ]
+      },
+      {
+        "path": "DLC/CivRoyaleScenario/ArtDefs/Clutter.artdef",
+        "names": [
+          "Boulder_Clump_Snow_01",
+          "Boulder_Clump_Snow_02",
+          "CLUTTER_FOREST_SNOW",
+          "CR Clutter Snow",
+          "CR_TER_Snow_Decal01",
+          "CR_TER_Snow_Decal02",
+          "CR_TER_Snow_Decal03",
+          "CR_TER_Snow_Decal04",
+          "CR_TER_Snow_Decal05",
+          "CR_TER_Snow_Decal06",
+          "CR_TER_Snow_Decal07",
+          "CR_TER_Snow_Decal08",
+          "CR_TER_Snow_Decal09",
+          "CR_TER_Snow_Decal_Dark01",
+          "CR_TER_Snow_Decal_Dark02",
+          "CR_ter_Snow_Decal_Rock04",
+          "Snow  Small Ice02",
+          "Snow  Small Ice03",
+          "Snow Large Ice01",
+          "Snow Large Ice02",
+          "Snow Large Ice03",
+          "Snow Large Ice04",
+          "Snow Large Ice05",
+          "Snow Small Ice01",
+          "Snow Small Ice04",
+          "Snow large dark01",
+          "Snow large dark01001",
+          "Snow large dark02"
+        ]
+      },
+      {
+        "path": "DLC/CivRoyaleScenario/ArtDefs/TerrainStyle.artdef",
+        "names": [
+          "ART_DEF_TERRAIN_MATERIAL_MTN_SNOW",
+          "ART_DEF_TERRAIN_MATERIAL_SNOW"
+        ]
+      },
+      {
+        "path": "DLC/CivRoyaleScenario/ArtDefs/VFX.artdef",
+        "names": [
+          "TERRAIN_SNOW",
+          "TERRAIN_SNOW_HILLS",
+          "TERRAIN_SNOW_MOUNTAIN"
+        ]
+      },
+      {
+        "path": "DLC/Expansion1/ArtDefs/Clutter.artdef",
+        "names": [
+          "CLUTTER_AMBER_FOREST_SNOW",
+          "Tree_Pine_Clump_Snow_01",
+          "Tree_Pine_Clump_Snow_02",
+          "Tree_Pine_Snow_01",
+          "Tree_Pine_Snow_02",
+          "Tree_Pine_Snow_03"
+        ]
+      },
+      {
+        "path": "DLC/Expansion2/ArtDefs/VFX.artdef",
+        "names": [
+          "FX_AoE_Hit_Snow",
+          "FX_GDR_Foot_Snow",
+          "FX_GDR_Jump_GroundShock_Snow",
+          "FX_Hit_Bullet_Snow",
+          "FX_Hit_GDR_AoE_Snow",
+          "TERRAIN_SNOW",
+          "TERRAIN_SNOW_HILLS",
+          "TERRAIN_SNOW_MOUNTAIN"
+        ]
+      },
+      {
+        "path": "DLC/GranColombia_Maya/ArtDefs/Clutter.artdef",
+        "names": [
+          "CLUTTER_SNOW",
+          "CLUTTER_SNOW_TUNDRA_HILLS"
+        ]
+      },
+      {
+        "path": "DLC/NubiaScenario/ArtDefs/TerrainStyle.artdef",
+        "names": [
+          "ART_DEF_TERRAIN_ELEMENT_CONTINENTAL_HILL_SNOW",
+          "ART_DEF_TERRAIN_MATERIAL_SNOW"
+        ]
+      },
+      {
+        "path": "DLC/PiratesScenario/ArtDefs/Features.artdef",
+        "names": [
+          "CLUTTER_FOREST_SNOW"
+        ]
+      },
+      {
+        "path": "DLC/PiratesScenario/ArtDefs/TerrainStyle.artdef",
+        "names": [
+          "ART_DEF_TERRAIN_ELEMENT_CONTINENTAL_HILL_SNOW",
+          "ART_DEF_TERRAIN_MATERIAL_MTN_SNOW",
+          "ART_DEF_TERRAIN_MATERIAL_SNOW",
+          "SnowBeach",
+          "TER_MTN_SNOW"
+        ]
+      }
+    ],
+    "texture_payloads": [
+      {
+        "path": "Base/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_DiffuseTint_Foliage_Bld_Flowered_Color_B_null",
+        "sha256": "160d45a922f785aaaad4ef43aeafec4eba6becbc140c32b454d90fe24bb24fe7",
+        "width": 512,
+        "height": 512,
+        "format": 72
+      },
+      {
+        "path": "Base/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_DiffuseTint_Foliage_Bld_Flowered_White_B_null",
+        "sha256": "aebe6a0f0d6638599073d38dac81e6e823fefa628dd923cc344ecd063287fc2a",
+        "width": 512,
+        "height": 512,
+        "format": 72
+      },
+      {
+        "path": "Base/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_DiffuseTint_TER_Snow_Decal_B_null",
+        "sha256": "29aa45205f0b6cc223c9417c36ceae822ff894843a8675deeb0f0050af28d31d",
+        "width": 1024,
+        "height": 1024,
+        "format": 72
+      },
+      {
+        "path": "Base/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_DiffuseTint_Tree_Dirt_Snow_Decal_B_null",
+        "sha256": "27ca8c515389b3013357af1461a228ce0d827ec0cb995372c84613821b97485d",
+        "width": 512,
+        "height": 512,
+        "format": 72
+      },
+      {
+        "path": "Base/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_DiffuseTint_Trees_Pine_Snow_B_null",
+        "sha256": "6b3a365c6bd38c5fa6b6dfdcdc3ce646878e21783b9e50a58937a37ba042a943",
+        "width": 512,
+        "height": 512,
+        "format": 72
+      },
+      {
+        "path": "Base/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_FX_Rose_Petals",
+        "sha256": "4b90e846cac3ef45d5c8fbbbf13030e3a963d842b0678d2fcb00509f04f709d7",
+        "width": 256,
+        "height": 256,
+        "format": 78
+      },
+      {
+        "path": "Base/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_FX_SnowDrift_RGB",
+        "sha256": "253c600419ec0b00baa5a698e44e0e4dbfd23045ef68286f0940e24484f8b957",
+        "width": 64,
+        "height": 64,
+        "format": 72
+      },
+      {
+        "path": "Base/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_FX_SnowDrift_a",
+        "sha256": "8c17c9773a18e062d3f05f7a51624313e553e4fd91a7fd2b152100664381363b",
+        "width": 2048,
+        "height": 512,
+        "format": 80
+      },
+      {
+        "path": "Base/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_FX_SnowDrift_a_still",
+        "sha256": "c9f3df8f85801c62be25cc20d000efa7c404cbf7a91b5b08e852f89391893636",
+        "width": 128,
+        "height": 128,
+        "format": 80
+      },
+      {
+        "path": "Base/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_FX_SnowDrift_a_still2",
+        "sha256": "7396bbe39aceff1223f8efd12f234bb9894637e9c512c86bd67c2f3040b6eecc",
+        "width": 128,
+        "height": 128,
+        "format": 80
+      },
+      {
+        "path": "Base/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_FX_env_snow_a",
+        "sha256": "d54fce866f64dfe591734842df75dbf92c348b0fd02222ec154a11c2855b4302",
+        "width": 512,
+        "height": 512,
+        "format": 80
+      },
+      {
+        "path": "Base/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_FX_env_snow_b",
+        "sha256": "6e5f253888dba3fb2033dd39b7bb6aaa492b805bbc80d1d07520cea2183e85e7",
+        "width": 512,
+        "height": 512,
+        "format": 80
+      },
+      {
+        "path": "Base/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_FX_env_snow_rgb",
+        "sha256": "2b79159847bc1140f37d1af939bd1f20583dfabef3323ca69576919893dd7dd7",
+        "width": 512,
+        "height": 512,
+        "format": 72
+      },
+      {
+        "path": "Base/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_FX_env_snow_rgb_dark",
+        "sha256": "dadb36d059073bd41a4966ef84519f5df9de9aa8c827be5e97a358f648bb29ba",
+        "width": 512,
+        "height": 512,
+        "format": 72
+      },
+      {
+        "path": "Base/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_FXt_SnowChunk_Anim_64",
+        "sha256": "aed103ce2ecff44ed25553b8a1fc6c6fa8962273363f5caa27eb643e64d09a51",
+        "width": 256,
+        "height": 256,
+        "format": 78
+      },
+      {
+        "path": "Base/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_FXt_SpraySnow_Centered_01",
+        "sha256": "59e287ffb4b410e887ff05ecd76d8e1bcb2a98100a5dc2629e56655af335649c",
+        "width": 256,
+        "height": 256,
+        "format": 78
+      },
+      {
+        "path": "Base/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_FXt_SpraySnow_Centered_02",
+        "sha256": "6bd60e460e7d83fafae8cba17fd7db9684bb77ddf846e38aa84c8cf6adb45669",
+        "width": 256,
+        "height": 256,
+        "format": 78
+      },
+      {
+        "path": "Base/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_Foliage_Bld_Flowered_N0",
+        "sha256": "e63ec0e5177f8db34a54c233084b620bcd7578650737edfb96bfac5306f177ac",
+        "width": 512,
+        "height": 512,
+        "format": 83
+      },
+      {
+        "path": "Base/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_Foliage_Bld_Flowered_N1",
+        "sha256": "ac27af7ed4777f080effbfb1a0fdd16accdca4a43810a1cbf2588df89bcce6ae",
+        "width": 256,
+        "height": 256,
+        "format": 80
+      },
+      {
+        "path": "Base/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_TER_Snow_Decal_B",
+        "sha256": "bd82f3bc477f613b5b6ab2073c13bb8090972cd573db94d64103808470619d22",
+        "width": 1024,
+        "height": 1024,
+        "format": 78
+      },
+      {
+        "path": "Base/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_TER_Snow_Decal_FOW",
+        "sha256": "fc79b56e42faf4f5388a0ef9374757e9060a1be06561177df72c5b54c5f768fc",
+        "width": 1024,
+        "height": 1024,
+        "format": 78
+      },
+      {
+        "path": "Base/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_TER_Snow_Decal_G",
+        "sha256": "1a57bdc437dd0fed4dbaaa046cc5cfddd41ae79a440f6ab9c57e417f43966df4",
+        "width": 1024,
+        "height": 1024,
+        "format": 80
+      },
+      {
+        "path": "Base/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_TER_Snow_Decal_H",
+        "sha256": "358aead48b11ebd240bbda3510ab53dca0c73682116397730670947afcb83ecf",
+        "width": 1024,
+        "height": 1024,
+        "format": 83
+      },
+      {
+        "path": "Base/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_Terrain_Snow",
+        "sha256": "3162c63b4f2d7008a167aef4be9f0b0b3577283e0841c751bdd8151ed07eea27",
+        "width": 128,
+        "height": 128,
+        "format": 78
+      },
+      {
+        "path": "Base/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_Terrain_Snow_Hills",
+        "sha256": "016399af10d31fa2a7bbf23e7e342ec9decf9445ea7ff3cd2c860bb7d72da8e9",
+        "width": 128,
+        "height": 128,
+        "format": 78
+      },
+      {
+        "path": "Base/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_Terrain_Snow_Mountain",
+        "sha256": "5ac6c353e718d28b01da183287c3b9bf2a9706b5b6a241a0a060630999e77237",
+        "width": 128,
+        "height": 128,
+        "format": 78
+      },
+      {
+        "path": "Base/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_Tree_Dirt_Snow_Decal_B",
+        "sha256": "b9e1abc2708231e10f832aa5cfc24cea26421f5542c6825dcae0733d7c03ec09",
+        "width": 512,
+        "height": 512,
+        "format": 78
+      },
+      {
+        "path": "DLC/Byzantium_Gaul/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_DiffuseTint_Foliage_Bld_Flowered_Color_B_null",
+        "sha256": "d3127469041277b2e4579e0fee79b50e674592b6ff458ec5000a269bc1c898a7",
+        "width": 512,
+        "height": 512,
+        "format": 72
+      },
+      {
+        "path": "DLC/Byzantium_Gaul/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_DiffuseTint_Foliage_Bld_Flowered_White_B_null",
+        "sha256": "bacfe95a12de3a34393e84aa470779ef19fc6882c1b7a2eb4054beeb61f99c2b",
+        "width": 512,
+        "height": 512,
+        "format": 72
+      },
+      {
+        "path": "DLC/Byzantium_Gaul/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_Foliage_Bld_Flowered_N0",
+        "sha256": "82fef95b6b9b8e48bcf01dd0f25cdb898d8c816377d7008196f66af39aaddef1",
+        "width": 512,
+        "height": 512,
+        "format": 83
+      },
+      {
+        "path": "DLC/Byzantium_Gaul/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_Foliage_Bld_Flowered_N1",
+        "sha256": "701427cba8670a07cfb9ea54a666c3fd4bed0ecc64c0d0eff4f990cc648f6f99",
+        "width": 256,
+        "height": 256,
+        "format": 80
+      },
+      {
+        "path": "DLC/CivRoyaleScenario/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_CR_TER_Snow_Decal_G",
+        "sha256": "0fba43c5961933933a3aaf225fccd1bf4cecdd926b3941149fde5f98e86b25e4",
+        "width": 1024,
+        "height": 1024,
+        "format": 80
+      },
+      {
+        "path": "DLC/CivRoyaleScenario/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_TER_Snow_Decal_FOW",
+        "sha256": "9bdc8b5d829e5a49f3c8ea2ff537765b260b456b0bbb6cf4de007024a1681b46",
+        "width": 1024,
+        "height": 1024,
+        "format": 78
+      },
+      {
+        "path": "DLC/Ethiopia/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_DiffuseTint_Foliage_Bld_Flowered_Color_B_null",
+        "sha256": "d3127469041277b2e4579e0fee79b50e674592b6ff458ec5000a269bc1c898a7",
+        "width": 512,
+        "height": 512,
+        "format": 72
+      },
+      {
+        "path": "DLC/Ethiopia/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_Foliage_Bld_Flowered_N0",
+        "sha256": "82fef95b6b9b8e48bcf01dd0f25cdb898d8c816377d7008196f66af39aaddef1",
+        "width": 512,
+        "height": 512,
+        "format": 83
+      },
+      {
+        "path": "DLC/Ethiopia/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_Foliage_Bld_Flowered_N1",
+        "sha256": "701427cba8670a07cfb9ea54a666c3fd4bed0ecc64c0d0eff4f990cc648f6f99",
+        "width": 256,
+        "height": 256,
+        "format": 80
+      },
+      {
+        "path": "DLC/Expansion1/platforms/windows/BLPs/SHARED_DATA/TEXTURE_Decals_Parts_Snow",
+        "sha256": "a5a8748bcef6881ab8432de2bab2c05881525475c0d20a31d5cfdbd86635757c",
+        "width": 512,
+        "height": 128,
+        "format": 78
+      },
+      {
+        "path": "DLC/Expansion1/platforms/windows/BLPs/SHARED_DATA/TEXTURE_Decals_Parts_Snow_H",
+        "sha256": "824827f3cd07b74017da1422223afb7fe8ce2a2505d12d5ce8cc597386d0625b",
+        "width": 512,
+        "height": 128,
+        "format": 83
+      },
+      {
+        "path": "DLC/Expansion1/platforms/windows/BLPs/SHARED_DATA/TEXTURE_DiffuseTint_Decals_Parts_Snow_null",
+        "sha256": "fd13341d173ad9ee183b72d2983604b02fffc5caf7c7cafb3d871638e5826730",
+        "width": 512,
+        "height": 128,
+        "format": 72
+      },
+      {
+        "path": "DLC/Expansion1/platforms/windows/BLPs/SHARED_DATA/TEXTURE_DiffuseTint_Foliage_Bld_Flowered_Color_B_null",
+        "sha256": "d3127469041277b2e4579e0fee79b50e674592b6ff458ec5000a269bc1c898a7",
+        "width": 512,
+        "height": 512,
+        "format": 72
+      },
+      {
+        "path": "DLC/Expansion1/platforms/windows/BLPs/SHARED_DATA/TEXTURE_DiffuseTint_Foliage_Bld_Flowered_White_B_null",
+        "sha256": "bacfe95a12de3a34393e84aa470779ef19fc6882c1b7a2eb4054beeb61f99c2b",
+        "width": 512,
+        "height": 512,
+        "format": 72
+      },
+      {
+        "path": "DLC/Expansion1/platforms/windows/BLPs/SHARED_DATA/TEXTURE_FX_Blossoms",
+        "sha256": "e269bef71c59395df42b10671c62648e7d8bcff2b04185f3e416967b7f3db248",
+        "width": 128,
+        "height": 128,
+        "format": 78
+      },
+      {
+        "path": "DLC/Expansion1/platforms/windows/BLPs/SHARED_DATA/TEXTURE_Foliage_Bld_Flowered_N0",
+        "sha256": "82fef95b6b9b8e48bcf01dd0f25cdb898d8c816377d7008196f66af39aaddef1",
+        "width": 512,
+        "height": 512,
+        "format": 83
+      },
+      {
+        "path": "DLC/Expansion1/platforms/windows/BLPs/SHARED_DATA/TEXTURE_Foliage_Bld_Flowered_N1",
+        "sha256": "701427cba8670a07cfb9ea54a666c3fd4bed0ecc64c0d0eff4f990cc648f6f99",
+        "width": 256,
+        "height": 256,
+        "format": 80
+      },
+      {
+        "path": "DLC/Expansion2/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_Decals_Parts_Snow_B",
+        "sha256": "c025d0ed8f92f56bc37e59dfa8c889eaed3ad4356b894554851fd52ad091282e",
+        "width": 512,
+        "height": 512,
+        "format": 78
+      },
+      {
+        "path": "DLC/Expansion2/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_Decals_Snow_Ski_Resort_B",
+        "sha256": "be16302c5e8479d722861fa93acad26cebbbe7e1611f30cfcfab014c8fe35bbf",
+        "width": 512,
+        "height": 512,
+        "format": 78
+      },
+      {
+        "path": "DLC/Expansion2/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_Decals_Snow_Ski_Resort_G",
+        "sha256": "242a7f3bc92bbbdeb673d129c62558de87a0664b99890c376b29be0d83b463c2",
+        "width": 512,
+        "height": 512,
+        "format": 80
+      },
+      {
+        "path": "DLC/Expansion2/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_Decals_Snow_Ski_Resort_H",
+        "sha256": "a7477342852e838ebc1e08d37438b0009a2b734a37b89a907aec98ace1d9b831",
+        "width": 512,
+        "height": 512,
+        "format": 83
+      },
+      {
+        "path": "DLC/Expansion2/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_DiffuseTint_Decals_Parts_Snow_B_null",
+        "sha256": "c572601b2a85affbcad4304968ae79ed38b580eca9bf74d61dc5b78c1e1216fc",
+        "width": 512,
+        "height": 512,
+        "format": 72
+      },
+      {
+        "path": "DLC/Expansion2/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_DiffuseTint_Decals_Snow_Ski_Resort_B_null",
+        "sha256": "e5a4fa63359e64ce4c3babe24ea7f33e8667e3a536ffd4531be0580a8a416fae",
+        "width": 512,
+        "height": 512,
+        "format": 72
+      },
+      {
+        "path": "DLC/Expansion2/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_DiffuseTint_Foliage_Bld_Flowered_Color_B_null",
+        "sha256": "160d45a922f785aaaad4ef43aeafec4eba6becbc140c32b454d90fe24bb24fe7",
+        "width": 512,
+        "height": 512,
+        "format": 72
+      },
+      {
+        "path": "DLC/Expansion2/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_DiffuseTint_Foliage_Bld_Flowered_White_B_null",
+        "sha256": "aebe6a0f0d6638599073d38dac81e6e823fefa628dd923cc344ecd063287fc2a",
+        "width": 512,
+        "height": 512,
+        "format": 72
+      },
+      {
+        "path": "DLC/Expansion2/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_DiffuseTint_Foliage_Bld_Snow_B_null",
+        "sha256": "d94f49cba415766ec31c216883eae6f79b41ec8b8194448538067403dfa537f2",
+        "width": 512,
+        "height": 512,
+        "format": 72
+      },
+      {
+        "path": "DLC/Expansion2/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_DiffuseTint_TER_Snow_Decal_B_null",
+        "sha256": "29aa45205f0b6cc223c9417c36ceae822ff894843a8675deeb0f0050af28d31d",
+        "width": 1024,
+        "height": 1024,
+        "format": 72
+      },
+      {
+        "path": "DLC/Expansion2/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_FX_Blossoms",
+        "sha256": "f1a9a12ea0dcecd05b083f244ac94976d20ab7f2c248e88361bc6d386f877138",
+        "width": 128,
+        "height": 128,
+        "format": 78
+      },
+      {
+        "path": "DLC/Expansion2/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_FX_SnowDrift_a_still2",
+        "sha256": "7396bbe39aceff1223f8efd12f234bb9894637e9c512c86bd67c2f3040b6eecc",
+        "width": 128,
+        "height": 128,
+        "format": 80
+      },
+      {
+        "path": "DLC/Expansion2/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_FX_env_snow_rgb",
+        "sha256": "2b79159847bc1140f37d1af939bd1f20583dfabef3323ca69576919893dd7dd7",
+        "width": 512,
+        "height": 512,
+        "format": 72
+      },
+      {
+        "path": "DLC/Expansion2/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_FXt_SnowChunk_Anim_64",
+        "sha256": "aed103ce2ecff44ed25553b8a1fc6c6fa8962273363f5caa27eb643e64d09a51",
+        "width": 256,
+        "height": 256,
+        "format": 78
+      },
+      {
+        "path": "DLC/Expansion2/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_FXt_SpraySnow_Centered_01",
+        "sha256": "59e287ffb4b410e887ff05ecd76d8e1bcb2a98100a5dc2629e56655af335649c",
+        "width": 256,
+        "height": 256,
+        "format": 78
+      },
+      {
+        "path": "DLC/Expansion2/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_FXt_SpraySnow_Centered_02",
+        "sha256": "6bd60e460e7d83fafae8cba17fd7db9684bb77ddf846e38aa84c8cf6adb45669",
+        "width": 256,
+        "height": 256,
+        "format": 78
+      },
+      {
+        "path": "DLC/Expansion2/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_Foliage_Bld_Flowered_N0",
+        "sha256": "e63ec0e5177f8db34a54c233084b620bcd7578650737edfb96bfac5306f177ac",
+        "width": 512,
+        "height": 512,
+        "format": 83
+      },
+      {
+        "path": "DLC/Expansion2/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_Foliage_Bld_Flowered_N1",
+        "sha256": "ac27af7ed4777f080effbfb1a0fdd16accdca4a43810a1cbf2588df89bcce6ae",
+        "width": 256,
+        "height": 256,
+        "format": 80
+      },
+      {
+        "path": "DLC/Expansion2/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_TER_Snow_Decal_B",
+        "sha256": "bd82f3bc477f613b5b6ab2073c13bb8090972cd573db94d64103808470619d22",
+        "width": 1024,
+        "height": 1024,
+        "format": 78
+      },
+      {
+        "path": "DLC/Expansion2/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_TER_Snow_Decal_FOW",
+        "sha256": "fc79b56e42faf4f5388a0ef9374757e9060a1be06561177df72c5b54c5f768fc",
+        "width": 1024,
+        "height": 1024,
+        "format": 78
+      },
+      {
+        "path": "DLC/Expansion2/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_TER_Snow_Decal_G",
+        "sha256": "1a57bdc437dd0fed4dbaaa046cc5cfddd41ae79a440f6ab9c57e417f43966df4",
+        "width": 1024,
+        "height": 1024,
+        "format": 80
+      },
+      {
+        "path": "DLC/Expansion2/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_TER_Snow_Decal_H",
+        "sha256": "358aead48b11ebd240bbda3510ab53dca0c73682116397730670947afcb83ecf",
+        "width": 1024,
+        "height": 1024,
+        "format": 83
+      },
+      {
+        "path": "DLC/GranColombia_Maya/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_DiffuseTint_Foliage_Bld_Flowered_Color_B_null",
+        "sha256": "d3127469041277b2e4579e0fee79b50e674592b6ff458ec5000a269bc1c898a7",
+        "width": 512,
+        "height": 512,
+        "format": 72
+      },
+      {
+        "path": "DLC/GranColombia_Maya/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_DiffuseTint_Foliage_Bld_Flowered_White_B_null",
+        "sha256": "bacfe95a12de3a34393e84aa470779ef19fc6882c1b7a2eb4054beeb61f99c2b",
+        "width": 512,
+        "height": 512,
+        "format": 72
+      },
+      {
+        "path": "DLC/GranColombia_Maya/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_Foliage_Bld_Flowered_N0",
+        "sha256": "82fef95b6b9b8e48bcf01dd0f25cdb898d8c816377d7008196f66af39aaddef1",
+        "width": 512,
+        "height": 512,
+        "format": 83
+      },
+      {
+        "path": "DLC/GranColombia_Maya/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_Foliage_Bld_Flowered_N1",
+        "sha256": "701427cba8670a07cfb9ea54a666c3fd4bed0ecc64c0d0eff4f990cc648f6f99",
+        "width": 256,
+        "height": 256,
+        "format": 80
+      },
+      {
+        "path": "DLC/KublaiKhan_Vietnam/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_DiffuseTint_Foliage_Bld_Flowered_White_B_null",
+        "sha256": "bacfe95a12de3a34393e84aa470779ef19fc6882c1b7a2eb4054beeb61f99c2b",
+        "width": 512,
+        "height": 512,
+        "format": 72
+      },
+      {
+        "path": "DLC/KublaiKhan_Vietnam/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_Foliage_Bld_Flowered_N0",
+        "sha256": "82fef95b6b9b8e48bcf01dd0f25cdb898d8c816377d7008196f66af39aaddef1",
+        "width": 512,
+        "height": 512,
+        "format": 83
+      },
+      {
+        "path": "DLC/KublaiKhan_Vietnam/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_Foliage_Bld_Flowered_N1",
+        "sha256": "701427cba8670a07cfb9ea54a666c3fd4bed0ecc64c0d0eff4f990cc648f6f99",
+        "width": 256,
+        "height": 256,
+        "format": 80
+      },
+      {
+        "path": "DLC/Portugal/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_DiffuseTint_Foliage_Bld_Flowered_White_B_null",
+        "sha256": "aebe6a0f0d6638599073d38dac81e6e823fefa628dd923cc344ecd063287fc2a",
+        "width": 512,
+        "height": 512,
+        "format": 72
+      },
+      {
+        "path": "DLC/Portugal/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_Foliage_Bld_Flowered_N0",
+        "sha256": "e63ec0e5177f8db34a54c233084b620bcd7578650737edfb96bfac5306f177ac",
+        "width": 512,
+        "height": 512,
+        "format": 83
+      },
+      {
+        "path": "DLC/Portugal/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_Foliage_Bld_Flowered_N1",
+        "sha256": "ac27af7ed4777f080effbfb1a0fdd16accdca4a43810a1cbf2588df89bcce6ae",
+        "width": 256,
+        "height": 256,
+        "format": 80
+      }
+    ],
+    "scope": "Installed Base and DLC ArtDefs named above and matching shared texture payloads; source names prove availability, not suitability or engine bindings."
+  },
+  "snow_decals": {
+    "schema": "c3x.lab.snow_decal_evidence.v1",
+    "package": "Base/Platforms/Windows/BLPs/environment/clutter.blp",
+    "artdef": {
+      "set": "CLUTTER_SNOW",
+      "collection": "Plants",
+      "mapped_sources": [
+        "TER_Snow_Decal01",
+        "TER_Snow_Decal02",
+        "TER_Snow_Decal03",
+        "TER_Snow_Decal04",
+        "TER_Snow_Decal05",
+        "TER_Snow_Decal06",
+        "TER_Snow_Decal07",
+        "TER_Snow_Decal08",
+        "TER_Snow_Decal09",
+        "TER_Snow_Decal_Dark01",
+        "TER_Snow_Decal_Dark02"
+      ],
+      "collection_source_count": 11
+    },
+    "assets": [
+      {
+        "source_asset": "TER_Snow_Decal01",
+        "placement": {
+          "asset": "TER_Snow_Decal01",
+          "scale": 3.0,
+          "count": 1,
+          "scale_variation": 0.0,
+          "low_end_reduction": 0.0,
+          "show_decal": true,
+          "priority": 3,
+          "width": 0.0,
+          "rotate_mode": "RotateZ",
+          "is_center_model": false,
+          "allow_overlap": true,
+          "min_count": 0
+        },
+        "descriptors": [
+          {
+            "footprint": [
+              -0.55097075,
+              -0.55097075,
+              0.55097075,
+              0.55097075
+            ],
+            "content": [
+              -0.5163221,
+              -0.31991603,
+              0.48820396,
+              0.3177531
+            ],
+            "uv_bounds": [
+              0.0,
+              0.0,
+              1.0,
+              1.0
+            ],
+            "channels": {
+              "base_color": {
+                "name": "TEXTURE_TER_Snow_Decal_B",
+                "class": "Decal_BaseColor"
+              },
+              "height": {
+                "name": "TEXTURE_TER_Snow_Decal_H",
+                "class": "Decal_Heightmap"
+              },
+              "specular": {
+                "name": "TEXTURE_TER_Snow_Decal_G",
+                "class": "Decal_Spec"
+              },
+              "fog_color": {
+                "name": "TEXTURE_TER_Snow_Decal_FOW",
+                "class": "Decal_FOWColor"
+              }
+            },
+            "vertices": 10,
+            "indices": 12
+          }
+        ]
+      },
+      {
+        "source_asset": "TER_Snow_Decal02",
+        "placement": {
+          "asset": "TER_Snow_Decal02",
+          "scale": 3.0,
+          "count": 1,
+          "scale_variation": 0.0,
+          "low_end_reduction": 0.0,
+          "show_decal": true,
+          "priority": 3,
+          "width": 0.0,
+          "rotate_mode": "RotateZ",
+          "is_center_model": false,
+          "allow_overlap": true,
+          "min_count": 0
+        },
+        "descriptors": [
+          {
+            "footprint": [
+              -0.50564607,
+              -0.50564607,
+              0.50564607,
+              0.50564607
+            ],
+            "content": [
+              -0.4362934,
+              -0.34880078,
+              0.4773893,
+              0.3415455
+            ],
+            "uv_bounds": [
+              0.0,
+              0.0,
+              1.0,
+              1.0
+            ],
+            "channels": {
+              "base_color": {
+                "name": "TEXTURE_TER_Snow_Decal_B",
+                "class": "Decal_BaseColor"
+              },
+              "height": {
+                "name": "TEXTURE_TER_Snow_Decal_H",
+                "class": "Decal_Heightmap"
+              },
+              "specular": {
+                "name": "TEXTURE_TER_Snow_Decal_G",
+                "class": "Decal_Spec"
+              },
+              "fog_color": {
+                "name": "TEXTURE_TER_Snow_Decal_FOW",
+                "class": "Decal_FOWColor"
+              }
+            },
+            "vertices": 11,
+            "indices": 15
+          }
+        ]
+      },
+      {
+        "source_asset": "TER_Snow_Decal03",
+        "placement": {
+          "asset": "TER_Snow_Decal03",
+          "scale": 3.0,
+          "count": 1,
+          "scale_variation": 0.0,
+          "low_end_reduction": 0.0,
+          "show_decal": true,
+          "priority": 3,
+          "width": 0.0,
+          "rotate_mode": "RotateZ",
+          "is_center_model": false,
+          "allow_overlap": true,
+          "min_count": 0
+        },
+        "descriptors": [
+          {
+            "footprint": [
+              -0.54088247,
+              -0.54088247,
+              0.54088247,
+              0.54088247
+            ],
+            "content": [
+              -0.49617223,
+              -0.35542075,
+              0.50095379,
+              0.40801811
+            ],
+            "uv_bounds": [
+              0.0,
+              0.0,
+              1.0,
+              1.0
+            ],
+            "channels": {
+              "base_color": {
+                "name": "TEXTURE_TER_Snow_Decal_B",
+                "class": "Decal_BaseColor"
+              },
+              "height": {
+                "name": "TEXTURE_TER_Snow_Decal_H",
+                "class": "Decal_Heightmap"
+              },
+              "specular": {
+                "name": "TEXTURE_TER_Snow_Decal_G",
+                "class": "Decal_Spec"
+              },
+              "fog_color": {
+                "name": "TEXTURE_TER_Snow_Decal_FOW",
+                "class": "Decal_FOWColor"
+              }
+            },
+            "vertices": 12,
+            "indices": 18
+          }
+        ]
+      },
+      {
+        "source_asset": "TER_Snow_Decal04",
+        "placement": {
+          "asset": "TER_Snow_Decal04",
+          "scale": 3.0,
+          "count": 1,
+          "scale_variation": 0.0,
+          "low_end_reduction": 0.0,
+          "show_decal": true,
+          "priority": 3,
+          "width": 0.0,
+          "rotate_mode": "RotateZ",
+          "is_center_model": false,
+          "allow_overlap": true,
+          "min_count": 0
+        },
+        "descriptors": [
+          {
+            "footprint": [
+              -0.49204707,
+              -0.49204707,
+              0.49204707,
+              0.49204707
+            ],
+            "content": [
+              -0.39575907,
+              -0.3367639,
+              0.49139074,
+              0.32241911
+            ],
+            "uv_bounds": [
+              0.0,
+              0.0,
+              1.0,
+              0.5
+            ],
+            "channels": {
+              "base_color": {
+                "name": "TEXTURE_TER_Snow_Decal_B",
+                "class": "Decal_BaseColor"
+              },
+              "height": {
+                "name": "TEXTURE_TER_Snow_Decal_H",
+                "class": "Decal_Heightmap"
+              },
+              "specular": {
+                "name": "TEXTURE_TER_Snow_Decal_G",
+                "class": "Decal_Spec"
+              },
+              "fog_color": {
+                "name": "TEXTURE_TER_Snow_Decal_FOW",
+                "class": "Decal_FOWColor"
+              }
+            },
+            "vertices": 11,
+            "indices": 15
+          }
+        ]
+      },
+      {
+        "source_asset": "TER_Snow_Decal05",
+        "placement": {
+          "asset": "TER_Snow_Decal05",
+          "scale": 3.0,
+          "count": 1,
+          "scale_variation": 0.0,
+          "low_end_reduction": 0.0,
+          "show_decal": true,
+          "priority": 3,
+          "width": 0.0,
+          "rotate_mode": "RotateZ",
+          "is_center_model": false,
+          "allow_overlap": true,
+          "min_count": 0
+        },
+        "descriptors": [
+          {
+            "footprint": [
+              -0.55707181,
+              -0.55707181,
+              0.55707181,
+              0.55707181
+            ],
+            "content": [
+              -0.46270116,
+              -0.44649533,
+              0.29322358,
+              0.36759925
+            ],
+            "uv_bounds": [
+              0.0,
+              0.0,
+              1.0,
+              0.5
+            ],
+            "channels": {
+              "base_color": {
+                "name": "TEXTURE_TER_Snow_Decal_B",
+                "class": "Decal_BaseColor"
+              },
+              "height": {
+                "name": "TEXTURE_TER_Snow_Decal_H",
+                "class": "Decal_Heightmap"
+              },
+              "specular": {
+                "name": "TEXTURE_TER_Snow_Decal_G",
+                "class": "Decal_Spec"
+              },
+              "fog_color": {
+                "name": "TEXTURE_TER_Snow_Decal_FOW",
+                "class": "Decal_FOWColor"
+              }
+            },
+            "vertices": 11,
+            "indices": 15
+          }
+        ]
+      },
+      {
+        "source_asset": "TER_Snow_Decal06",
+        "placement": {
+          "asset": "TER_Snow_Decal06",
+          "scale": 3.0,
+          "count": 0,
+          "scale_variation": 0.0,
+          "low_end_reduction": 0.0,
+          "show_decal": true,
+          "priority": 3,
+          "width": 0.0,
+          "rotate_mode": "RotateZ",
+          "is_center_model": false,
+          "allow_overlap": true,
+          "min_count": 0
+        },
+        "descriptors": [
+          {
+            "footprint": [
+              -0.32932516,
+              -0.32932516,
+              0.32932516,
+              0.32932516
+            ],
+            "content": [
+              -0.31817424,
+              -0.20039399,
+              0.09538473,
+              0.1875693
+            ],
+            "uv_bounds": [
+              0.0,
+              0.49951172,
+              0.50097656,
+              1.0
+            ],
+            "channels": {
+              "base_color": {
+                "name": "TEXTURE_TER_Snow_Decal_B",
+                "class": "Decal_BaseColor"
+              },
+              "height": {
+                "name": "TEXTURE_TER_Snow_Decal_H",
+                "class": "Decal_Heightmap"
+              },
+              "specular": {
+                "name": "TEXTURE_TER_Snow_Decal_G",
+                "class": "Decal_Spec"
+              },
+              "fog_color": {
+                "name": "TEXTURE_TER_Snow_Decal_FOW",
+                "class": "Decal_FOWColor"
+              }
+            },
+            "vertices": 8,
+            "indices": 12
+          }
+        ]
+      },
+      {
+        "source_asset": "TER_Snow_Decal07",
+        "placement": {
+          "asset": "TER_Snow_Decal07",
+          "scale": 3.0,
+          "count": 2,
+          "scale_variation": 0.0,
+          "low_end_reduction": 0.0,
+          "show_decal": true,
+          "priority": 3,
+          "width": 0.0,
+          "rotate_mode": "RotateZ",
+          "is_center_model": false,
+          "allow_overlap": true,
+          "min_count": 0
+        },
+        "descriptors": [
+          {
+            "footprint": [
+              -0.34911811,
+              -0.34911811,
+              0.34911811,
+              0.34911811
+            ],
+            "content": [
+              -0.30534973,
+              -0.19306562,
+              0.11736997,
+              0.22970756
+            ],
+            "uv_bounds": [
+              0.01235962,
+              0.01942444,
+              1.0,
+              1.0
+            ],
+            "channels": {
+              "base_color": {
+                "name": "TEXTURE_TER_Snow_Decal_B",
+                "class": "Decal_BaseColor"
+              },
+              "height": {
+                "name": "TEXTURE_TER_Snow_Decal_H",
+                "class": "Decal_Heightmap"
+              },
+              "specular": {
+                "name": "TEXTURE_TER_Snow_Decal_G",
+                "class": "Decal_Spec"
+              },
+              "fog_color": {
+                "name": "TEXTURE_TER_Snow_Decal_FOW",
+                "class": "Decal_FOWColor"
+              }
+            },
+            "vertices": 7,
+            "indices": 9
+          }
+        ]
+      },
+      {
+        "source_asset": "TER_Snow_Decal08",
+        "placement": {
+          "asset": "TER_Snow_Decal08",
+          "scale": 3.0,
+          "count": 1,
+          "scale_variation": 0.0,
+          "low_end_reduction": 0.0,
+          "show_decal": true,
+          "priority": 3,
+          "width": 0.0,
+          "rotate_mode": "RotateZ",
+          "is_center_model": false,
+          "allow_overlap": true,
+          "min_count": 0
+        },
+        "descriptors": [
+          {
+            "footprint": [
+              -0.36601432,
+              -0.36601432,
+              0.36601432,
+              0.36601432
+            ],
+            "content": [
+              -0.35298423,
+              -0.23153967,
+              0.10271327,
+              0.22054708
+            ],
+            "uv_bounds": [
+              0.00609207,
+              0.01942444,
+              0.50097656,
+              1.0
+            ],
+            "channels": {
+              "base_color": {
+                "name": "TEXTURE_TER_Snow_Decal_B",
+                "class": "Decal_BaseColor"
+              },
+              "height": {
+                "name": "TEXTURE_TER_Snow_Decal_H",
+                "class": "Decal_Heightmap"
+              },
+              "specular": {
+                "name": "TEXTURE_TER_Snow_Decal_G",
+                "class": "Decal_Spec"
+              },
+              "fog_color": {
+                "name": "TEXTURE_TER_Snow_Decal_FOW",
+                "class": "Decal_FOWColor"
+              }
+            },
+            "vertices": 10,
+            "indices": 12
+          }
+        ]
+      },
+      {
+        "source_asset": "TER_Snow_Decal09",
+        "placement": {
+          "asset": "TER_Snow_Decal09",
+          "scale": 3.0,
+          "count": 0,
+          "scale_variation": 0.0,
+          "low_end_reduction": 0.0,
+          "show_decal": true,
+          "priority": 3,
+          "width": 0.0,
+          "rotate_mode": "RotateZ",
+          "is_center_model": false,
+          "allow_overlap": true,
+          "min_count": 0
+        },
+        "descriptors": [
+          {
+            "footprint": [
+              -0.32108072,
+              -0.32108072,
+              0.32108072,
+              0.32108072
+            ],
+            "content": [
+              -0.31267808,
+              -0.22237919,
+              0.08072805,
+              0.2168829
+            ],
+            "uv_bounds": [
+              0.00159645,
+              0.37890625,
+              0.30859375,
+              0.97460938
+            ],
+            "channels": {
+              "base_color": {
+                "name": "TEXTURE_TER_Snow_Decal_B",
+                "class": "Decal_BaseColor"
+              },
+              "height": {
+                "name": "TEXTURE_TER_Snow_Decal_H",
+                "class": "Decal_Heightmap"
+              },
+              "specular": {
+                "name": "TEXTURE_TER_Snow_Decal_G",
+                "class": "Decal_Spec"
+              },
+              "fog_color": {
+                "name": "TEXTURE_TER_Snow_Decal_FOW",
+                "class": "Decal_FOWColor"
+              }
+            },
+            "vertices": 10,
+            "indices": 12
+          }
+        ]
+      },
+      {
+        "source_asset": "TER_Snow_Decal_Dark01",
+        "placement": {
+          "asset": "TER_Snow_Decal_Dark01",
+          "scale": 5.0,
+          "count": 2,
+          "scale_variation": 0.15,
+          "low_end_reduction": 0.0,
+          "show_decal": true,
+          "priority": 3,
+          "width": 0.0,
+          "rotate_mode": "RotateZ",
+          "is_center_model": false,
+          "allow_overlap": true,
+          "min_count": 0
+        },
+        "descriptors": [
+          {
+            "footprint": [
+              -0.60214611,
+              -0.60214611,
+              0.60214611,
+              0.60214611
+            ],
+            "content": [
+              -0.5449295,
+              -0.36780957,
+              0.46613721,
+              0.29996059
+            ],
+            "uv_bounds": [
+              0.04150391,
+              0.54101562,
+              0.45581055,
+              0.95849609
+            ],
+            "channels": {
+              "base_color": {
+                "name": "TEXTURE_TER_Snow_Decal_B",
+                "class": "Decal_BaseColor"
+              },
+              "height": {
+                "name": "TEXTURE_TER_Snow_Decal_H",
+                "class": "Decal_Heightmap"
+              },
+              "specular": {
+                "name": "TEXTURE_TER_Snow_Decal_G",
+                "class": "Decal_Spec"
+              },
+              "fog_color": {
+                "name": "TEXTURE_TER_Snow_Decal_FOW",
+                "class": "Decal_FOWColor"
+              }
+            },
+            "vertices": 8,
+            "indices": 12
+          }
+        ]
+      },
+      {
+        "source_asset": "TER_Snow_Decal_Dark02",
+        "placement": {
+          "asset": "TER_Snow_Decal_Dark02",
+          "scale": 6.0,
+          "count": 3,
+          "scale_variation": 0.15,
+          "low_end_reduction": 0.0,
+          "show_decal": true,
+          "priority": 3,
+          "width": 0.0,
+          "rotate_mode": "RotateZ",
+          "is_center_model": false,
+          "allow_overlap": true,
+          "min_count": 0
+        },
+        "descriptors": [
+          {
+            "footprint": [
+              -0.60030266,
+              -0.60030266,
+              0.60030266,
+              0.60030266
+            ],
+            "content": [
+              -0.47926915,
+              -0.42192407,
+              0.53398609,
+              0.36064112
+            ],
+            "uv_bounds": [
+              0.03286743,
+              0.05175781,
+              0.45581055,
+              0.95849609
+            ],
+            "channels": {
+              "base_color": {
+                "name": "TEXTURE_TER_Snow_Decal_B",
+                "class": "Decal_BaseColor"
+              },
+              "height": {
+                "name": "TEXTURE_TER_Snow_Decal_H",
+                "class": "Decal_Heightmap"
+              },
+              "specular": {
+                "name": "TEXTURE_TER_Snow_Decal_G",
+                "class": "Decal_Spec"
+              },
+              "fog_color": {
+                "name": "TEXTURE_TER_Snow_Decal_FOW",
+                "class": "Decal_FOWColor"
+              }
+            },
+            "vertices": 8,
+            "indices": 12
+          }
+        ]
+      }
+    ],
+    "interpretation": "Confirmed descriptors, UVs and ArtDef placement parameters; original engine blending is not inferred."
+  },
+  "interpretation": "Confirmed source data and availability; no source engine seasonal behavior or redistribution of art."
+}

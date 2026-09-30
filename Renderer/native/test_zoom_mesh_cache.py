@@ -736,8 +736,10 @@ int main(){
 using Handle=c3x_renderer::render_core::ContentHandle;
 #include <unordered_map>
 #include <vector>
-constexpr int geometry_layer_count=2,C3X_RENDERER_TILE_RENDER=1,C3X_RENDERER_TILE_VISIBLE=2;
-constexpr int geometry_water=2,geometry_river=3,geometry_shadow=4,geometry_route=5,geometry_feature=6,geometry_natural_terrain=7;
+constexpr int geometry_layer_count=3,C3X_RENDERER_TILE_RENDER=1,C3X_RENDERER_TILE_VISIBLE=2;
+// Compact fixture layers retain the current underlay/terrain/mountain slots.
+constexpr int geometry_underlay=0,geometry_natural_terrain=1,geometry_natural_mountain=2;
+constexpr int geometry_water=3,geometry_river=4,geometry_shadow=5,geometry_route=6,geometry_feature=7;
 struct Ref {int references=1;void AddRef(){++references;}void Release(){--references;}};
 struct CachedVertexChunk {
  CachedVertexChunk(Ref* b=nullptr,Ref* i=nullptr):buffer(b),indices(i){}
@@ -745,22 +747,24 @@ struct CachedVertexChunk {
  CachedVertexChunk& operator=(CachedVertexChunk const&)=delete;
  CachedVertexChunk(CachedVertexChunk&&)=default;
  struct {float low[3]={},high[3]={};} world_bounds;
- Ref *buffer=nullptr,*indices=nullptr;int translation_x=0,translation_y=0;struct {long left=0,top=0,right=0,bottom=0;} bounds;float natural_projection[4]={}; unsigned city_material=0xffffffffu,projection_kind=0;int source_tile_width=128;};
+ Ref *buffer=nullptr,*indices=nullptr;void* instances=nullptr;int translation_x=0,translation_y=0;struct {long left=0,top=0,right=0,bottom=0;} bounds;float natural_projection[4]={}; unsigned city_material=0xffffffffu,projection_kind=0;int source_tile_width=128;};
 #include "Renderer/native/render_core/geometry_draws.h"
 using GeometryDrawRecord=c3x_renderer::render_core::GeometryDrawRecord<CachedVertexChunk>;
 using GeometryDrawView=c3x_renderer::render_core::GeometryDrawView<CachedVertexChunk,geometry_layer_count>;
 using GeometryDrawReference=GeometryDrawView::Reference;
 
-struct c3x_renderer_tile_v1 {int tile_flags=1,anchor_x=0,anchor_y=0,tile_x=0,tile_y=0;};
+struct c3x_renderer_tile_v1 {int tile_flags=1,anchor_x=0,anchor_y=0,tile_x=0,tile_y=0;unsigned territory_edge_mask=0,territory_color_rgb=0;};
 struct Anchor {int anchor_x=0,anchor_y=0,tile_x=0,tile_y=0;};
 struct CachedTileGeometry {
- bool prefetched=false,shared_natural=false;std::size_t byte_count=0;
+ bool prefetched=false,shared_natural=false,world_ground=false;int tile_x=0,tile_y=0;std::size_t byte_count=0;
  std::uint64_t last_used=0,animation_epoch=0;Handle binding,natural_content;
  int anchor_x=0,anchor_y=0;std::vector<Anchor> resource_anchors;
- std::array<std::vector<CachedVertexChunk>,geometry_layer_count> buffers;
+ struct Mesh {std::array<std::vector<CachedVertexChunk>,geometry_layer_count> layers;};
+ std::shared_ptr<Mesh> mesh=std::make_shared<Mesh>();
 };
 struct State {
  bool visibility_pass=true,city_profile=false;
+ int shadow_tile_width=128,content_view_height=1260;
  struct {struct {struct Material{bool ground=false;};std::vector<Material> materials;} library;} cities;
  struct {c3x_renderer::render_core::WorldTopology value;auto const& world()const{return value;}} world_coast;
  std::size_t prefetched_geometry_bytes=20;std::uint64_t tile_geometry_epoch=5;
@@ -769,6 +773,7 @@ struct State {
  struct Scene {void attach(c3x_renderer_tile_v1 const&,Handle){}} topology_cache;
  std::vector<Anchor> resource_anchors;std::vector<int> geometry_footprints;
  GeometryDrawView::Records geometry_vertex_buffers;
+ c3x_renderer::render_core::ResidentSelection geometry_content;
  void index_world_content(CachedTileGeometry const&){}
  int tile_footprint(CachedTileGeometry const&,c3x_renderer_tile_v1 const&){return 1;}
  GeometryDrawRecord project_natural_chunk(GeometryDrawRecord chunk,c3x_renderer_tile_v1 const&){chunk.natural_projection[0]=1;return chunk;}
@@ -776,11 +781,11 @@ struct State {
 };
 int main(){
  Ref ground,world,indices;State state;CachedTileGeometry tile;
- tile.prefetched=true;tile.byte_count=20;tile.binding=state.resident_content.bind(tile);
- tile.buffers[0].push_back({&ground,&indices});tile.resource_anchors.push_back({1,2});
+ tile.prefetched=true;tile.byte_count=20;tile.binding=state.resident_content.bind(tile,tile.mesh);
+ tile.mesh->layers[0].push_back({&ground,&indices});tile.resource_anchors.push_back({1,2});
  auto& owner=state.tile_geometry_cache[99];owner.shared_natural=true;owner.byte_count=100;
- owner.buffers[1].push_back({&world,&indices});
- tile.natural_content=state.resident_content.bind(owner);
+ owner.mesh->layers[1].push_back({&world,&indices});
+ owner.binding=state.resident_content.bind(owner,owner.mesh);tile.natural_content=owner.binding;
  std::size_t copied_capacity=0;
  for(int i=0;i<4000;i++){
   auto old=state.geometry_vertex_buffers[0].capacity();
@@ -794,12 +799,12 @@ int main(){
  assert(state.resource_anchors.size()==4000 && state.resource_anchors.back().anchor_x==7999);
  assert(state.resource_anchors.back().tile_x==3999 && state.resource_anchors.back().tile_y==3);
  assert(state.geometry_vertex_buffers[1].back().translation_x==7998);
- assert(state.geometry_vertex_buffers[1].back().natural_projection[0]==1 && !owner.buffers[1][0].natural_projection[0]);
- assert(state.geometry_vertex_buffers[1].back().source==&owner.buffers[1][0]);
+ assert(state.geometry_vertex_buffers[1].back().natural_projection[0]==1 && !owner.mesh->layers[1][0].natural_projection[0]);
+ assert(state.geometry_vertex_buffers[1].back().source==&owner.mesh->layers[1][0]);
  GeometryDrawView view(state.geometry_vertex_buffers);assert(view.is(state.geometry_vertex_buffers));
- int count=0;for(auto const& draw:view[1]){assert(&draw.content()==&owner.buffers[1][0]);++count;}
+ int count=0;for(auto const& draw:view[1]){assert(&draw.content()==&owner.mesh->layers[1][0]);++count;}
  assert(count==4000 && view[0].size()==4000);
- GeometryDrawView direct(owner.buffers);assert(direct.is(owner.buffers));
+ GeometryDrawView direct(owner.mesh->layers);assert(direct.is(owner.mesh->layers));
  assert(direct[0].empty() && direct[1][0].content().buffer==&world);
  assert(!GeometryDrawView{});
  for(auto& layer:state.geometry_vertex_buffers)layer.clear();
@@ -833,7 +838,7 @@ using Handle=c3x_renderer::render_core::ContentHandle;
 #include <unordered_map>
 #include <vector>
 constexpr int geometry_layer_count=3,geometry_natural_terrain=1;
-struct CachedVertexChunk {int id,translation_x=0,translation_y=0;struct {long left=0,top=0,right=0,bottom=0;} bounds;float natural_projection[4]={}; unsigned city_material=0xffffffffu,projection_kind=0;int source_tile_width=128;};
+struct CachedVertexChunk {int id,translation_x=0,translation_y=0;struct {long left=0,top=0,right=0,bottom=0;} bounds;float natural_projection[4]={}; unsigned city_material=0xffffffffu,projection_kind=0;int source_tile_width=128;void* instances=nullptr;};
 #include "Renderer/native/render_core/geometry_draws.h"
 using GeometryDrawRecord=c3x_renderer::render_core::GeometryDrawRecord<CachedVertexChunk>;
 using GeometryDrawView=c3x_renderer::render_core::GeometryDrawView<CachedVertexChunk,geometry_layer_count>;
@@ -843,7 +848,8 @@ struct c3x_renderer_tile_v1 {int tile_x=0,tile_y=0;};
 struct Entry {
  bool shared_natural=false;std::uint64_t version=0;Handle binding,natural_content;
  int tile_x=0,tile_y=0;
- std::array<std::vector<CachedVertexChunk>,geometry_layer_count> buffers;
+ struct Mesh {std::array<std::vector<CachedVertexChunk>,geometry_layer_count> layers;};
+ std::shared_ptr<Mesh> mesh=std::make_shared<Mesh>();
 };
 struct State {
  std::unordered_multimap<int,Entry> tile_geometry_cache;
@@ -862,9 +868,9 @@ struct State {
 };
 int main(){
  State s;Entry camera;camera.version=7;
- camera.tile_x=15;camera.tile_y=47;camera.buffers[0].push_back({1});
- Entry world;world.version=7;world.shared_natural=true;world.buffers[1].push_back({2});
- world.buffers[0].push_back({3}); // Migrated ground/objects can precede natural terrain.
+ camera.tile_x=15;camera.tile_y=47;camera.mesh->layers[0].push_back({1});
+ Entry world;world.version=7;world.shared_natural=true;world.mesh->layers[1].push_back({2});
+ world.mesh->layers[0].push_back({3}); // Migrated ground/objects can precede natural terrain.
  s.tile_geometry_cache.emplace(42,std::move(camera));s.tile_geometry_cache.emplace(99,std::move(world));
  s.tile_geometry_cache.find(99)->second.binding=s.resident_content.bind(s.tile_geometry_cache.find(99)->second);
  s.tile_geometry_cache.find(42)->second.natural_content=s.tile_geometry_cache.find(99)->second.binding;
@@ -876,7 +882,7 @@ int main(){
  assert(s.buffers[0][0].content().id==1 && !s.buffers[0][0].natural_projection[0]);
  assert(s.buffers[1][0].content().id==2 && s.buffers[1][0].natural_projection[0]==1547);
  assert(s.buffers[1][0].translation_x==120 && s.buffers[1][0].translation_y==60);
- assert(!s.tile_geometry_cache.find(99)->second.buffers[1][0].natural_projection[0]);
+ assert(!s.tile_geometry_cache.find(99)->second.mesh->layers[1][0].natural_projection[0]);
  // An evicted owner must cancel preparation, never cache incomplete pixels.
  s.resident_content.release(s.tile_geometry_cache.find(99)->second.binding);
  s.tile_geometry_cache.erase(99);s.buffers={};
@@ -1047,6 +1053,8 @@ int main(){
  std::vector<CachedGroundGrid> grids;
  std::vector<CachedGroundGrid> const* cached_grid_source=&grids;
  unsigned ground_grid_hit_counter=0;
+ bool river_near=false; // This independent grid witness has no river field.
+ auto river_channel_cut=[](float){assert(false && "unexpected river query");return 0.f;};
  auto river_node_distance=[](float,float,unsigned){return 1000.f;};
  struct Point {float relief[3]={},normal_delta[2]={};} point;
  auto ground_point_at=[&](float,float)->Point&{return point;};
@@ -1146,13 +1154,14 @@ using Handle=c3x_renderer::render_core::ContentHandle;
 #include <unordered_map>
 template<std::size_t N,class... A> int sprintf_s(char(&out)[N],char const*format,A...args){return std::snprintf(out,N,format,args...);}
 struct State {
-    struct Item {std::size_t byte_count;unsigned last_used;bool prefetched;int buffers=0;std::uint64_t animation_epoch=0;Handle binding;int signature=0;};
+    struct Item {std::size_t byte_count;unsigned last_used;bool prefetched;int buffers=0;std::uint64_t animation_epoch=0;Handle binding;int signature=0;std::shared_ptr<int> mesh=std::make_shared<int>(0);};
     using CachedTileGeometry=Item;
     c3x_renderer::render_core::ResidentContent<Item> resident_content{2048};
     c3x_renderer::render_core::ResidencyCandidates residency_candidates;
     unsigned viewport_cache_capacity=32;
     struct Trace {void write(char const*,char const*,bool){}} trace;
     std::unordered_map<int,Item> tile_geometry_cache;
+    std::shared_ptr<c3x_renderer::render_core::ResidentRetirement> retired_content=std::make_shared<c3x_renderer::render_core::ResidentRetirement>();
     std::size_t terrain_patch_index_bytes=0;
     std::size_t tile_geometry_cache_bytes=60,prefetched_geometry_bytes=10;
     std::size_t tile_geometry_runtime_budget=100,tile_geometry_cache_capacity=2048;

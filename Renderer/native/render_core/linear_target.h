@@ -51,7 +51,7 @@ struct LinearTarget {
         width=w; height=h; sample_count=count; return true;
     }
     std::size_t bytes() const { return std::size_t(width)*height*
-        (8*sample_count+(resolved?8:0)+4*sample_count); }
+        (8*sample_count+(resolved && resolved!=color?8:0)+4*sample_count); }
 };
 // Sample-preserving translation of a resident static scene. Newly exposed or
 // invalidated rectangles are cleared in the same draw, before selected geometry.

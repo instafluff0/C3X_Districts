@@ -60,7 +60,8 @@
     "Renderer.native.test_city_border_capture",
     "Renderer.native.test_city_lighting",
     "Renderer.tools.test_city_auxiliary_uv",
-    "Renderer.native.test_light_spatial_index"
+    "Renderer.native.test_light_spatial_index",
+    "Renderer.native.test_city_submission"
   ],
   "references": {
     "d3d11": [

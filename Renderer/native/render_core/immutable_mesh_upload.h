@@ -22,7 +22,9 @@ public:
         desc.Usage=D3D11_USAGE_IMMUTABLE;
         desc.BindFlags=D3D11_BIND_VERTEX_BUFFER|D3D11_BIND_INDEX_BUFFER;
         D3D11_SUBRESOURCE_DATA initial={};initial.pSysMem=data.data();
-        return SUCCEEDED(device->CreateBuffer(&desc,&initial,result));
+        auto hr=device->CreateBuffer(&desc,&initial,result);
+        if(FAILED(hr)){std::printf("MESH_ALLOCATION_FAILED bytes=%u hr=0x%08lx device_reason=0x%08lx\n",desc.ByteWidth,hr,device->GetDeviceRemovedReason());std::fflush(stdout);}
+        return SUCCEEDED(hr);
     }
 };
 }}

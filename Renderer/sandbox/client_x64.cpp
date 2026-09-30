@@ -8,7 +8,11 @@
 #include <string>
 #include <vector>
 #include "../native/c3x_renderer_api.h"
+#include "../native/gpu_frame_api.h"
 #include "exchange.h"
+#include "pass_counts.h"
+#include <cmath>
+#include "camera_witness.h"
 
 int sandbox_reference_main(int argc, char** argv);
 
@@ -46,6 +50,9 @@ int sandbox_client_run(HMODULE module, c3x_renderer_frame_v1 const& prepared_fra
     auto metrics = reinterpret_cast<void(*)(double*,unsigned*,unsigned*,unsigned*,
         std::size_t*,float*)>(
         GetProcAddress(module,"c3x_sandbox_fresh_metrics"));
+    auto pass_counts=reinterpret_cast<void(*)(SandboxPassCounts*)>(GetProcAddress(module,"c3x_sandbox_pass_counts"));
+    char counts_option[8]={};
+    if(!GetEnvironmentVariableA("C3X_SANDBOX_PASS_COUNTS",counts_option,sizeof(counts_option)) || counts_option[0]!='1')pass_counts=nullptr;
     auto present_metrics = reinterpret_cast<void(*)(double*)>(
         GetProcAddress(module,"c3x_sandbox_present_metrics"));
     auto cache_metrics=reinterpret_cast<void(*)(unsigned*,unsigned*,unsigned*,unsigned*,unsigned*,unsigned*)>(
@@ -71,12 +78,37 @@ int sandbox_client_run(HMODULE module, c3x_renderer_frame_v1 const& prepared_fra
     window_class.hInstance = GetModuleHandleA(nullptr);
     window_class.lpszClassName = "C3XSandboxClientWindow";
     if (!RegisterClassA(&window_class)) return 3;
+    char display_option[16]={};
+    bool full_guest=GetEnvironmentVariableA("C3X_SANDBOX_DISPLAY",display_option,sizeof(display_option)) &&
+        std::strcmp(display_option,"full_guest")==0;
+    // A bounded standalone presentation control. The renderer target and
+    // workload stay fixed; this uses the existing HWND, without exclusive mode.
+    if(full_guest)SetProcessDPIAware();
     HWND window = CreateWindowExA(0, window_class.lpszClassName, "C3X Sandbox x64",
-        WS_OVERLAPPEDWINDOW | WS_VISIBLE, CW_USEDEFAULT, CW_USEDEFAULT,
-        prepared_frame.target_width / 2, prepared_frame.target_height / 2,
+        (full_guest?WS_POPUP:WS_OVERLAPPEDWINDOW) | WS_VISIBLE,
+        full_guest?0:CW_USEDEFAULT,full_guest?0:CW_USEDEFAULT,
+        full_guest?GetSystemMetrics(SM_CXSCREEN):prepared_frame.target_width / 2,
+        full_guest?GetSystemMetrics(SM_CYSCREEN):prepared_frame.target_height / 2,
         nullptr, nullptr, window_class.hInstance, nullptr);
     if (!window) return 4;
     ShowWindow(window, SW_SHOW);
+    RECT client={};GetClientRect(window,&client);
+    DEVMODEA display={};display.dmSize=sizeof(display);
+    if(!EnumDisplaySettingsA(nullptr,ENUM_CURRENT_SETTINGS,&display))return 4;
+    auto user=GetModuleHandleA("user32.dll");
+    auto dpi=reinterpret_cast<UINT(WINAPI*)(HWND)>(GetProcAddress(user,"GetDpiForWindow"));
+    auto awareness_context=reinterpret_cast<HANDLE(WINAPI*)(HWND)>(GetProcAddress(user,"GetWindowDpiAwarenessContext"));
+    auto awareness=reinterpret_cast<int(WINAPI*)(HANDLE)>(GetProcAddress(user,"GetAwarenessFromDpiAwarenessContext"));
+    char present_mode[16]={};GetEnvironmentVariableA("C3X_SANDBOX_PRESENT_MODE",present_mode,sizeof(present_mode));
+    std::printf("CLIENT_DISPLAY mode=%s desktop=%lux%lu refresh_hz=%lu client=%ldx%ld scene_target=%dx%d dpi=%u awareness=%d present=%s\n",
+        full_guest?"full_guest_borderless":"windowed",display.dmPelsWidth,display.dmPelsHeight,display.dmDisplayFrequency,
+        client.right,client.bottom,prepared_frame.target_width,prepared_frame.target_height,dpi?dpi(window):0,
+        awareness_context&&awareness?awareness(awareness_context(window)):-1,present_mode[0]?present_mode:"vsync_1");
+    std::fflush(stdout);
+    char camera_witness[8]={};
+    if(GetEnvironmentVariableA("C3X_SANDBOX_CAMERA_WITNESS",camera_witness,sizeof(camera_witness)) && camera_witness[0]=='1'){
+        int result=sandbox_camera_witness(module,window,prepared_frame);DestroyWindow(window);return result;
+    }
     Snapshot opening{0,1,1,7,19,47,1,0};
     char move_start_tile[32]{};
     int diagnostic_x=0,diagnostic_y=0;
@@ -111,6 +143,7 @@ int sandbox_client_run(HMODULE module, c3x_renderer_frame_v1 const& prepared_fra
             sizeof(day_night_option)) && std::strcmp(day_night_option,"1")==0;
         std::vector<double> cycle_frames,cycle_draws,cycle_presents;
         std::array<std::vector<double>,6> cycle_stages;
+        std::vector<SandboxPassCounts> submissions;
         LARGE_INTEGER cycle_frequency{};
         QueryPerformanceFrequency(&cycle_frequency);
         char frame_limit_text[16]{};
@@ -148,6 +181,7 @@ int sandbox_client_run(HMODULE module, c3x_renderer_frame_v1 const& prepared_fra
             if(!result)result=present(window,&frame,actor.unit_x,actor.unit_y,
                 actor.unit_incarnation,actor.viewer,actor.unit_visible,x,y);
             QueryPerformanceCounter(&finished);
+            if(pass_counts){submissions.emplace_back();pass_counts(&submissions.back());}
             if(result)return result;
             // Keep camera adoption/first-raster stalls visible separately from
             // the warmed distribution. Map-jump qualification needs both.
@@ -178,6 +212,8 @@ int sandbox_client_run(HMODULE module, c3x_renderer_frame_v1 const& prepared_fra
             for(std::size_t i=0;i<cycle_frames.size();++i)
                 std::printf("CLIENT_FRAME_TIMING frame=%zu total_ms=%.6f draw_ms=%.6f present_ms=%.6f\n",
                     i+3,cycle_frames[i],cycle_draws[i],cycle_presents[i]);
+        for(std::size_t frame=0;frame<submissions.size();++frame)
+            sandbox_report_pass_counts(submissions[frame],frame);
         if(!cycle_frames.empty()){
             auto report=[](char const* name,std::vector<double>& values){
                 std::sort(values.begin(),values.end());

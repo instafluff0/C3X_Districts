@@ -1,8 +1,10 @@
 #pragma once
+#include "pass_workload.h"
 
 // Half-resolution HDR highlight response. The scene is resolved once, then
 // extracted and blurred in two small targets before final backbuffer shading.
 struct SandboxBloom {
+    SandboxPassWorkload* work=nullptr;
     ID3D11Texture2D* color[2]={};
     ID3D11RenderTargetView* target[2]={};
     ID3D11ShaderResourceView* view[2]={};
@@ -119,11 +121,13 @@ float4 PSBlur(float4 position:SV_Position):SV_Target{
                 ID3D11ShaderResourceView* moving,ID3D11PixelShader* shader,float x,float y){
             float values[]={float(width),float(height),x,y};
             context->UpdateSubresource(settings,0,nullptr,values,0,0);
+            work->upload_buffer(settings);
             context->OMSetRenderTargets(1,&output,nullptr);
             context->PSSetShader(shader,nullptr,0);
             ID3D11ShaderResourceView* inputs[]={input,moving};
             context->PSSetShaderResources(0,2,inputs);
-            context->Draw(3,0);
+            context->Draw(3,0);work->draw(3);
+            if(work->enabled)work->row().target_pixels+=std::uint64_t(width)*height;
             ID3D11ShaderResourceView* empty[]={nullptr,nullptr};
             context->PSSetShaderResources(0,2,empty);
         };

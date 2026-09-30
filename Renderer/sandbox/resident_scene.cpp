@@ -10,6 +10,12 @@
 #include "direct_units.h"
 #include "bloom.h"
 #include "fresh_pipeline.h"
+#include "world_content_receipt.h"
+
+extern "C" __declspec(dllexport) int c3x_sandbox_world_content(char const* path){
+    return sandbox_world_content_receipt(renderer,path,[](auto const& owner)->auto const& {return owner.mesh->layers;},
+        renderer.retired_content->bytes.load(),renderer.retired_content->peak.load(),renderer.geometry_content.size());
+}
 
 float sandbox_scene_filmic(){
     char value[32]{};
@@ -189,6 +195,9 @@ float4 PSOutput(float4 position : SV_Position) : SV_Target {
         context->PSSetShaderResources(0,3,sources);
         context->PSSetSamplers(0,1,&sandbox_fresh.bloom.sampler);
         context->Draw(3,0);
+        {SandboxPassWorkload::Scope pass(sandbox_fresh.work,SandboxPassWorkload::publication);
+         sandbox_fresh.work.draw(3);sandbox_fresh.work.upload(sizeof(values));
+         if(sandbox_fresh.work.enabled)sandbox_fresh.work.row().target_pixels+=std::uint64_t(width)*height;}
         ID3D11ShaderResourceView* empty[]={nullptr,nullptr,nullptr};
         context->PSSetShaderResources(0,3,empty);
         context->OMSetRenderTargets(0,nullptr,nullptr);
@@ -196,6 +205,49 @@ float4 PSOutput(float4 position : SV_Position) : SV_Target {
     }
 };
 static SandboxBackbufferOutput sandbox_backbuffer_output;
+
+// Explicit untimed witness capture only. The color view uses the ordinary final
+// output shader; depth is exact packed D24/S8 from the completed scene target.
+extern "C" __declspec(dllexport) int c3x_sandbox_witness_capture(char const* prefix) {
+    if(!prefix)return 1;
+    D3D11_TEXTURE2D_DESC d={};d.Width=renderer.content_view_width;d.Height=renderer.content_view_height;
+    d.MipLevels=d.ArraySize=d.SampleDesc.Count=1;d.Format=DXGI_FORMAT_B8G8R8A8_UNORM;
+    d.BindFlags=D3D11_BIND_RENDER_TARGET;
+    Microsoft::WRL::ComPtr<ID3D11Texture2D> color;
+    Microsoft::WRL::ComPtr<ID3D11RenderTargetView> target;
+    if(FAILED(renderer.device->CreateTexture2D(&d,nullptr,&color)) ||
+       FAILED(renderer.device->CreateRenderTargetView(color.Get(),nullptr,&target)) ||
+       !sandbox_backbuffer_output.draw(target.Get(),d.Width,d.Height))return 2;
+    renderer.context->OMSetRenderTargets(0,nullptr,nullptr);
+    ID3D11Texture2D* textures[]={color.Get(),sandbox_fresh.glow.linear.depth_texture};
+    for(unsigned surface=0;surface<2;++surface){
+        textures[surface]->GetDesc(&d);
+        if(d.SampleDesc.Count!=1)return 3;
+        d.Usage=D3D11_USAGE_STAGING;d.BindFlags=d.MiscFlags=0;d.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
+        Microsoft::WRL::ComPtr<ID3D11Texture2D> staging;
+        if(FAILED(renderer.device->CreateTexture2D(&d,nullptr,&staging)))return 4;
+        renderer.context->CopyResource(staging.Get(),textures[surface]);
+        D3D11_MAPPED_SUBRESOURCE mapped={};
+        if(FAILED(renderer.context->Map(staging.Get(),0,D3D11_MAP_READ,0,&mapped)))return 5;
+        char path[4*MAX_PATH]={};sprintf_s(path,"%s.%s",prefix,surface?"depth":"bmp");
+        FILE* file=nullptr;bool ok=!fopen_s(&file,path,"wb") && file;
+        if(ok && !surface){
+            BITMAPFILEHEADER header={};BITMAPINFOHEADER info={};
+            header.bfType=0x4d42;header.bfOffBits=sizeof(header)+sizeof(info);header.bfSize=header.bfOffBits+d.Width*d.Height*4;
+            info.biSize=sizeof(info);info.biWidth=d.Width;info.biHeight=-int(d.Height);info.biPlanes=1;info.biBitCount=32;
+            ok=fwrite(&header,sizeof(header),1,file)==1 && fwrite(&info,sizeof(info),1,file)==1;
+        }else if(ok){unsigned extent[]={d.Width,d.Height,unsigned(d.Format)};ok=fwrite(extent,sizeof(extent),1,file)==1;}
+        for(unsigned y=0;y<d.Height && ok;++y)
+            ok=fwrite(static_cast<char const*>(mapped.pData)+std::size_t(y)*mapped.RowPitch,std::size_t(d.Width)*4,1,file)==1;
+        if(file)ok=fclose(file)==0 && ok;
+        renderer.context->Unmap(staging.Get(),0);if(!ok)return 6;
+    }
+    std::printf("CAMERA_CAPTURE prefix=%s translation=%.6f,%.6f depth_translation=%.6f geometry_epoch=%llu projection_zoom=%.6f\n",
+        prefix,renderer.geometry_viewport_settings.translation[0],renderer.geometry_viewport_settings.translation[1],
+        renderer.geometry_viewport_settings.depth_translation,static_cast<unsigned long long>(renderer.tile_geometry_epoch),sandbox_fresh.projection_zoom);
+    std::fflush(stdout);
+    return 0;
+}
 
 #ifdef C3X_RENDERER64_FRESH
 // Renderer64 supplies the copied Civ III frame and owns GPU publication. This
@@ -373,6 +425,12 @@ extern "C" __declspec(dllexport) int c3x_sandbox_present(HWND window,
         if(SUCCEEDED(result))result=renderer.device->CreateRenderTargetView(back,nullptr,&target);
         if(FAILED(result))return 3;
         bound_window = window;
+        DXGI_SWAP_CHAIN_DESC1 actual={};BOOL fullscreen=FALSE;
+        if(FAILED(swap->GetDesc1(&actual)) || FAILED(swap->GetFullscreenState(&fullscreen,nullptr)))return 3;
+        std::printf("SANDBOX_SWAPCHAIN width=%u height=%u samples=%u buffers=%u format=%u swap_effect=%u scaling=%u exclusive=%d\n",
+            actual.Width,actual.Height,actual.SampleDesc.Count,actual.BufferCount,unsigned(actual.Format),
+            unsigned(actual.SwapEffect),unsigned(actual.Scaling),int(fullscreen));
+        std::fflush(stdout);
     }
     int width = renderer.content_view_width, height = renderer.content_view_height;
     if(flat_present) {

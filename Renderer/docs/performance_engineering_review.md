@@ -40,6 +40,121 @@ blanket statements about temporary detail reductions in earlier audit guidance.
 
 ## Evidence and limitations
 
+### Implementation review: spatial city lighting
+
+The bounded [city-light indexing step](city_light_spatial_index.md) is accepted
+after independent source review, receipt/hash checks, recomputation of the raw
+timing distributions, visual comparison inspection, and reruns of four focused
+CPU/adapter/D3D tests. GPU indexed/full-scan irradiance matched exactly at the
+tested receivers. Conservative ranges, original accumulation order, cross-city
+blockers, count-aware copied-content identity and complete-scan fallback are
+preserved. No correctness blocker was found in this review.
+
+Two uninterrupted six-city night pairs reduce mean draw-plus-Present time from
+610.04/631.58 ms to 148.04/143.63 ms: about 76–77%. Complete warmed trace time
+falls from 53.07/54.95 seconds to 12.88/12.50 seconds. The original second pair
+has a misleading 43.40 ms median because short calls alternate with very long
+waits; use the complete distribution and trace, not its median alone. Candidate
+p95 is 299.77/230.69 ms. Noon/no-city means remain about 130–136 ms. Every
+measured nighttime candidate frame still misses 16.67 ms.
+
+This acceptance covers the lighting optimization, not 60 FPS, live scrolling,
+many-unit qualification or all city densities. The broader category still has
+a documented missing historical provenance artifact. Cold preparation/priming
+and first-transition stalls remain significant. The richer recipe changes only
+620 to 622 lights and is not evidence for substantially more city sites.
+
+**Priority following the lighting step:** establish a correct production-camera witness
+and identify/reduce the remaining main/reflection redraw work. The roughly
+130–150 ms floor already occurs while zooming an already prepared scene, so
+separating world mesh lifetime from camera selection cannot alone explain or
+remove that floor. Retain the world-lifetime work for production navigation,
+but choose the next rendering change from actual submitted work and bounded
+causal measurements. Lighting's per-frame serialized field comparison remains
+a smaller follow-up opportunity, rather than the next major target.
+
+Evidence remains in `Renderer/.cache/city-light-index-step/`; the evaluated
+candidate is `ec7c439db5d802dbfe79eb25c19c8192567c50c4d1ae87c4e9853aa918709b9a`.
+
+### Implementation review: redraw accounting and HDR copies
+
+The [redraw/navigation step](redraw_navigation_step.md) passes independent review
+for its single-sample HDR alias and submitted-work accounting. The existing color
+texture already supports shader reads. Each alias holds its own COM reference;
+reset, resize and swap preserve ownership, and the multisample path retains a
+separate resolve texture. This removes 45,607,424 bytes of duplicate HDR storage
+and the corresponding logical copy footprint on each changing-zoom frame at
+2240×1260. It does not reduce geometry or change the lighting equations.
+
+Review verified all 192 compiled source hashes, both candidate binary hashes,
+1,514 evidence-file hashes and the unchanged staged Renderer64 tuple. Independent
+raw-log calculations reproduce the paired results. All 14 same-frame color/depth
+file pairs are byte-identical. Both focused camera/HDR tests pass on rerun. The
+small HDR test proves single-sample pixel equality and separate two-sample
+allocation; it does not test multisample resolved pixel equality.
+
+Two reversed-order full-guest-area pairs give these warmed frame-call results:
+
+| Workload | Copy-reference mean | Alias mean | Alias p95 | Alias worst |
+| --- | ---: | ---: | ---: | ---: |
+| Noon changing zoom | 144.46 ms | 132.15 ms | 165.94 ms | 408.20 ms |
+| Night changing zoom | 143.00 ms | 141.23 ms | 268.78 ms | 446.94 ms |
+
+All 174 samples per candidate case miss 16.67 ms. The noon mean difference is
+mostly reference-run stalls; medians are essentially unchanged. This is an exact
+work/storage reduction, not evidence of a large consistent speedup. Borderless
+client area and swapchain are both 2240×1260 on the 60 Hz guest. The smaller
+windowed control retains a similar redraw floor. Submission counters are enabled
+in these runs, so their overhead is included; collect diagnostic counts separately
+from primary timings in the next step.
+
+The new camera witness submits changed copied anchors through the production
+preparation/readiness/adoption APIs, verifies returned frame/ticket identity, and
+shows the expected depth translation. It fixes the old witness's unused-offset
+problem. Its capture scope remains a stress approximation: it retains RENDER
+flags throughout a halo of twelve full tile widths/heights. Native capture uses
+twelve tile-coordinate units and distinguishes topology-only and appearance
+prefetch records from RENDER occurrences. The measured 1.7–21.4 second first-view
+waits therefore establish expensive preparation in this fixture, not equivalent
+gameplay latency. They include legitimately new or possibly evicted content;
+aggregate upload bytes alone do not prove redundant uploads. The fixture still
+has only four synthetic actors and does not qualify busy native composition.
+
+**Priority assigned after the redraw step: begin the persistent-world/view
+ownership split.** The bounded implementation and independent review are recorded
+at the end of this document; that first slice is now accepted.
+Existing world preparation, shared meshes, dependency tracking and generational
+handles are prerequisites, not a completed separation. `ResidentContent` is
+explicitly non-owning; `GeometryDrawRecord` borrows raw chunk pointers. Changes
+to occurrence membership still replace the selected geometry generation, whose
+epoch also invalidates FRESH's references and pixel/shadow state. Preserve that
+safety until explicit content ownership and view lifetime replace it.
+
+The next bounded implementation should retain immutable world mesh generations
+independently of camera occurrence lists in the active FRESH path. Correct the
+fixture's native capture roles, establish baseline rebuild reasons, then implement
+one complete, measured slice. Resident unchanged content must keep its generation
+and avoid geometry construction/uploads when the camera changes. Canonical world
+identity and per-occurrence anchors/wrap/visibility must remain distinct. Real
+content changes, procedural detail requirements and neighborhood dependencies
+still invalidate the required content; a weaker key is not a substitute for
+correct ownership. Active/pending view leases must remain within the existing
+memory budget and retire safely on cancellation, eviction and reset.
+
+This is the next major structural priority, not a promise to remove the roughly
+130–150 ms rerasterization floor by itself. Full-detail changing zoom already
+exposes a separate rendering/queue cost with prepared geometry. Pass batching,
+valid fixed-zoom pixel reuse and reliable asynchronous GPU/queue attribution remain
+subsequent targets. Preserve a continuous-zoom control to detect regressions while
+working on navigation preparation.
+
+Evidence remains in `Renderer/.cache/redraw-navigation-step/`; candidate DLL
+`6b68d398331a8552e1b376e5a3d9767aec3b62a73995c9e418a23a16a8f6efd1`
+and common client
+`76ddbe9cdf194faa376a81b23a963e6701d7ba545a8bfa9f442eb52fcca78cd7`
+were reviewed. This step is not staged or installed. Earlier measurements and
+findings below describe the original audited build unless marked otherwise.
+
 Reviewed paths include injected map capture and camera handoff, scene publication,
 x86/x64 transport, worker scheduling, geometry preparation and residency, main/
 reflection/shadow/water passes, unit selection and animation, city lights,
@@ -295,6 +410,10 @@ Sources: `sandbox/fresh_pipeline.h` (`capture`, `reflected_water_bounds`,
 `native/render_core/instance_stream.h`, `draw_parameter_stream.h`.
 
 ### 4. Nighttime city lighting has a multiplicative worst case
+
+**Update:** the conservative spatial index described above now replaces the
+global loops on the indexed path. The analysis below records the original
+bottleneck and rationale; complete scan remains the correctness fallback.
 
 **Confirmed algorithm; high priority for a developed nighttime map.**
 
@@ -570,10 +689,12 @@ The full uncached path must remain fast enough for continuous zoom and mutations
 
 | Order | Work | Expected reach | Effort / principal risk |
 | --- | --- | --- | --- |
-| 0 | Correct the production-path camera witness; use a dense acceptance scene and bounded CPU/GPU/queue counters | Makes subsequent claims reliable; keep this a small extension of existing tools | Small–medium; timestamp validity and workload identity |
-| 1 | Separate world-content/mesh lifetime from view selection; tighter pass selection and persistent compatible batches | General scroll/zoom/jump cost; busy terrain/cities/foliage | Large, incremental; pointer lifetime, wrapping, cross-tile contributors |
-| 1, alongside | Spatial city-light/blocker lists | Confirmed large cost on developed nighttime views | Medium; exact influence bounds, occlusion and cross-city contribution |
-| 2 | Recover valid fixed-zoom scrolling reuse while making full rerasterization cheaper | Specific 1.25×+ pan cliff and continuous zoom | Medium; fractional pixel/depth phase and cache validity |
+| 0, partly complete | Production preparation/adoption witness and submitted-work counters now execute; align capture roles with native behavior and add busy-scene qualification | Makes subsequent claims reliable; keep this a small extension of existing tools | Remaining timestamp validity, workload identity and live coverage |
+| Bounded slice accepted | Immutable mesh generations and bounded view leases; canonical shared FRESH world construction | Removes duplicate equivalent-wrap construction at native 128; resident ordinary returns were already retained | Native 64, all-map appearance and complete physical GPU budgeting remain unqualified |
+| Bounded step accepted | Spatial city-light/blocker lists | Night mean reduced about 76–77% in the six-city fixture; wider qualification remains | Implemented; preserve fallback and regression coverage |
+| Bounded step accepted | Single-sample HDR aliases | Removes about 43.5 MiB of duplicate storage/copy footprint on zoom redraw; no consistent large timing gain | Implemented; preserve independent alias references and multisample resolve |
+| Next assignment | Attribute and reduce full-detail redraw cost, starting with compatible terrain/pass submission | Continuous zoom still averages about 137–148 ms with prepared meshes | Preserve pass ordering and full quality; validate GPU/queue measurements on the VM |
+| Following | Recover valid fixed-zoom scrolling reuse | Specific 1.25×+ pan cliff | Fractional pixel/depth phase and cache validity |
 | 3 | Indexed unit occurrence selection and shared dense-unit preparation | Many visible unit parts, main/reflected passes | Medium; native actions, incarnation and self-shadow lifetime |
 | 4 | Compact the native composition execution plan; reduce full-surface copies; batch ordered IPC and coordinate cadence | Sparse and busy live integration; input responsiveness | Medium–large; native alias/order/format contracts |
 | 5 | Bounded cold preparation, residency and native scale reuse | First jumps, city zoom, large maps and long sessions | Large; incomplete authority/residency and memory pressure |
@@ -618,9 +739,11 @@ does not pass this contract. The existing
 tops out at 32, and older native benchmark modes must be qualified against the
 current asynchronous fresh path before their results are used.
 
-Target a 16.7 ms steady visual frame budget, with p50/p95/p99 and worst intervals
-reported separately, and the existing under-33 ms p95 target for coherent prepared
-navigation. Cold/evicted views get explicit first-correct-frame timings. Report
+Target a 16.7 ms visual frame budget during stationary views and every supported
+action, with p50/p95/p99 and worst intervals reported separately. The older
+under-33 ms p95 prepared-navigation target is a historical diagnostic threshold,
+not an exception to the user's 60 FPS objective. Cold/evicted views get explicit
+first-correct-frame and full-quality timings. Report
 initial preparation and memory peaks separately; never omit transition frames
 from the latency result. Use enough frames for tail statistics; a 90-frame
 diagnostic is not a p99 qualification.
@@ -653,3 +776,77 @@ the reviewed working tree and are navigation aids, not stable identifiers.
 | Native composition and retained copy | [retained_composition.h](../native/retained_composition.h), `collect` at 148; draw and full copy at 704–725 |
 | Standalone workload and timings | [client_x64.cpp](../sandbox/client_x64.cpp), study options, draw loop and `CLIENT_CYCLE` aggregation |
 | Authoritative native capture | [injected_code.c](../../injected_code.c), `patch_Map_Renderer_m71_Draw_Tiles`, `capture_custom_renderer_topology`, `prepare_custom_renderer_frame` |
+
+### Persistent world generations: independent review completed
+
+The bounded ownership slice is accepted for the measured native-128 FRESH path; see
+[world_ownership_step.md](world_ownership_step.md) for ownership, parity, lifetime,
+input identities and the isolated evidence. Immutable cached chunk generations now
+outlive camera occurrence metadata through bounded leases. Bitmap history stays
+weak, the geometry epoch guard remains, and active/retired selection charges stay
+under the existing logical cache budget. Canonical world seeds remove the former
+occurrence-dependent wrap reconstruction; the sampled seam geometry correction
+and shadow-field response are explicit visual differences, not reference acceptance.
+
+At 2240×1260, counters/traces off, first equivalent wraps avoid about 302 MB of
+uploads: mean preparation wait falls from 5.92–7.58 seconds to 90–97 ms and first
+full-quality draw/present submission to 113–121 ms. New strips, local dependency
+edits and evicted returns still incur legitimate construction. Most ordinary
+resident returns were already cheap in the control. A cold candidate FRESH draw
+cost 36 seconds in one primary run; its entire delay is retained in the result.
+Full-detail zoom remains about 137.5 ms noon / 147.7 ms night, so the 16.67 ms goal
+is unmet. Native-64 full-guest probes fail in both arms, not at the deadline;
+source-grounded standalone capture and four synthetic actors are still not native
+busy-session or many-unit qualification. No injected changes or staging occurred.
+
+Independent review checked the isolated runtime changes, resource retirement and
+budget admission, canonical construction and river coordinates, shader shadow
+queries, and the corrected harness. All 200 frozen source files, final binaries,
+3,212 evidence files and 1,514 protected prior-step evidence files match their
+recorded hashes. Eight focused ownership/camera/HDR/shadow tests pass on rerun,
+including the hardware shader-coordinate test. Recalculation of the raw paired
+timings reproduces the reported wrap and continuous-zoom results.
+
+Independent pixel calculations confirm exact cold endpoint D24 equality for
+ordinary/positive/negative equivalent wraps against the ordinary control. Their
+RGB differences are 120/176/248 pixels, with 3/4/3 above eight channel levels.
+At the sampled seam midpoint, all 59,112 depth changes lie on the wrapped bank,
+x=0–851; the positive bank has no changed depth. Both arms' 2,404 animated return
+depth changes match exactly. The noon contact sheet was inspected. This supports
+the deterministic wrapped-world correction within the tested scene; it is not
+blanket pixel equivalence, proof of every shadow interaction, or reference-image
+acceptance. Wider and vertical map appearances remain explicit qualification work.
+
+Raw generation snapshots retain the same existing owners through positive and
+negative equivalent wraps. Observed normal cache peaks reproduce 513,962,415
+candidate versus 1,263,005,746 control bytes. The pressure snapshots' cache plus
+retired/selection charges remain under their 768 MiB cap. This confirms the tested
+logical admission contract, not a complete physical VRAM bound. The immutable
+resource owner and weak registry remain distinct, and the epoch protection is
+preserved. No new correctness blocker was found for this bounded slice.
+
+**Revised priority:** move to full-detail redraw cost. The lifetime change has
+removed substantial duplicate world work, but zero static uploads still leave
+roughly 90 ms of preparation/readiness and 110 ms to a resident view in this
+harness. Continuous zoom remains 137.49 ms noon / 147.70 ms night. Further cache
+retention alone cannot meet the deadline. `issue_records` still submits most
+non-instanced records separately; existing `batch_terrain_casters` only batches
+shadow casters. Main terrain, reflected materials and water submission therefore
+remain concrete candidates, subject to current measurements. Do not credit a
+shadow-only batch improvement as a main-scene batching change.
+
+The next bounded assignment should validate asynchronous GPU/queue attribution
+and implement one resulting full-redraw reduction, keeping the present control
+and all effects. Prefer persistent compatible opaque terrain submission if its
+driver/submission cost is confirmed. Preserve ordering for transparency and
+coplanar surfaces, and charge any additional batch storage and retirement. GPU
+timestamps must pass a VM calibration; failed calibration leaves GPU attribution
+unknown. Do not substitute pass serialization or a faster stale image for a
+normal-frame performance result.
+
+The cold first-view outlier and native-64 probe failure stay open. The latter
+fails in both arms; the available trace ends during geometry allocation and does
+not establish the cause. Classify it with bounded diagnostics before treating
+native-64 as a usable acceptance workload or claiming a gameplay regression.
+Real-time navigation latency, populated unit scaling and native composition still
+need their own qualification after the standalone frame becomes fast enough.

@@ -1,4 +1,5 @@
 #pragma once
+#include "pass_workload.h"
 #include "../native/render_core/unit_pose_transition.h"
 #include "../native/scene_projection.h"
 #include "../native/render_core/skin_shadow_bounds.h"
@@ -7,6 +8,7 @@
 // the animation palette for visible models. Here each authored frame is already
 // an immutable palette: the vertex shader selects one exact source frame.
 struct SandboxDirectUnits {
+    SandboxPassWorkload* work=nullptr;
     struct Vertex {
         float position[3],normal[3],uv[2],tangent[3],bitangent[3];
         std::uint32_t joints[4];float weights[4];
@@ -268,6 +270,7 @@ float4 PSShadow(Output i):SV_Target {
             int incarnation,int viewer,bool visible,int camera_x,int camera_y,
             Target& scene,float scene_scale,float zoom,float visual_hour,
             bool reflected=false){
+        SandboxPassWorkload::Scope pass(*work,reflected?SandboxPassWorkload::reflected_units:SandboxPassWorkload::units);
         if(!initialize())return false;
         auto& bodies=renderer.unit_bodies;
         if(incarnation!=previous_incarnation || viewer!=previous_viewer || previous_x==INT_MIN){
@@ -325,7 +328,7 @@ float4 PSShadow(Output i):SV_Target {
         beauty_values[7]=1;beauty_values[11]=.62f;
         beauty_values[12]=.490290f;beauty_values[13]=-.735435f;
         beauty_values[14]=.469979f;beauty_values[16]=1;
-        context->UpdateSubresource(beauty,0,nullptr,beauty_values,0,0);
+        context->UpdateSubresource(beauty,0,nullptr,beauty_values,0,0);work->upload_buffer(beauty);
         double seconds=double(frame.presentation_time_ticks)/
             double(std::max<c3x_renderer_i64>(1,frame.presentation_frequency));
         double combat_seconds=combat_started<0?-1:double(frame.presentation_time_ticks-combat_started)/
@@ -431,7 +434,7 @@ float4 PSShadow(Output i):SV_Target {
                         extra[channel]=bodies.textures[texture].view;values[28+channel]=1;
                     }
                 values[23]=part.material_model;
-                context->UpdateSubresource(material,0,nullptr,values,0,0);
+                context->UpdateSubresource(material,0,nullptr,values,0,0);work->upload_buffer(material);
                 ID3D11Buffer* static_vertices=gpu.vertices.Get();
                 UINT stride=sizeof(Vertex),offset=0;
                 context->IASetVertexBuffers(0,1,&static_vertices,&stride,&offset);
@@ -449,18 +452,18 @@ float4 PSShadow(Output i):SV_Target {
                     // resource and terrain shadow projection.
                     placement_values[18]=key_light.direction[1]/key_light.direction[2]*
                         c3x_renderer::lighting::object_height_to_world;
-                    context->UpdateSubresource(placement,0,nullptr,placement_values,0,0);
+                    context->UpdateSubresource(placement,0,nullptr,placement_values,0,0);work->upload_buffer(placement);
                     context->OMSetDepthStencilState(renderer.natural.decal_depth,0);
                     context->OMSetBlendState(renderer.blend_state,nullptr,0xffffffffu);
                     context->PSSetShader(shadow_pixel,nullptr,0);
-                    context->DrawIndexed(UINT(source->indices.size()),0,0);
+                    context->DrawIndexed(UINT(source->indices.size()),0,0);work->draw(source->indices.size());
                     placement_values[16]=0;
                     context->OMSetDepthStencilState(renderer.depth_state,0);
                     context->OMSetBlendState(nullptr,nullptr,0xffffffffu);
                     context->PSSetShader(pixel,nullptr,0);
                 }
-                context->UpdateSubresource(placement,0,nullptr,placement_values,0,0);
-                context->DrawIndexed(UINT(source->indices.size()),0,0);
+                context->UpdateSubresource(placement,0,nullptr,placement_values,0,0);work->upload_buffer(placement);
+                context->DrawIndexed(UINT(source->indices.size()),0,0);work->draw(source->indices.size());
                 ++draws;
             }
         }
@@ -474,6 +477,7 @@ float4 PSShadow(Output i):SV_Target {
     template<class Unit,class Action,class Instance>bool draw_self_shadow(Unit const& unit,
             Action const& action,Instance const& instance,c3x_renderer::UnitAnimationPose const& pose,
             float angle,c3x_renderer_frame_v1 const& frame,float light_x,float light_y){
+        SandboxPassWorkload::Scope pass(*work,SandboxPassWorkload::unit_shadow);
         auto* context=renderer.context;auto& bodies=renderer.unit_bodies;
         if(!self_shadow){
             D3D11_TEXTURE2D_DESC t={};t.Width=t.Height=shadow_fit.extent;
@@ -501,7 +505,7 @@ float4 PSShadow(Output i):SV_Target {
         if(!shadow_fit.fit(shadow_points,light_x,light_y,true))return false;
         ID3D11ShaderResourceView* empty=nullptr;context->PSSetShaderResources(1,1,&empty);
         auto target=self_shadow_target.Get();float clear[4]={-1,-1,-1,-1};
-        context->ClearRenderTargetView(target,clear);context->OMSetRenderTargets(1,&target,nullptr);
+        context->ClearRenderTargetView(target,clear);work->clear(target);context->OMSetRenderTargets(1,&target,nullptr);
         context->OMSetBlendState(shadow_maximum.Get(),nullptr,~0u);
         D3D11_VIEWPORT viewport={0,0,float(shadow_fit.extent),float(shadow_fit.extent),0,1};
         D3D11_RECT scissor={0,0,shadow_fit.extent,shadow_fit.extent};
@@ -516,13 +520,13 @@ float4 PSShadow(Output i):SV_Target {
             float values[28]={0,0,1,1,1,0,0,0,float(blended?0:n),float(source.bones),
                 std::cos(angle),std::sin(angle),unit.scale,unit.offset_z,0,0,3,0,0,part.cutout,
                 shadow_fit.left,shadow_fit.top,1/shadow_fit.width,1/shadow_fit.height,shadow_fit.dx,shadow_fit.dy};
-            context->UpdateSubresource(placement,0,nullptr,values,0,0);
+            context->UpdateSubresource(placement,0,nullptr,values,0,0);work->upload_buffer(placement);
             ID3D11Buffer* vertices=gpu.vertices.Get();UINT stride=sizeof(Vertex),offset=0;
             context->IASetVertexBuffers(0,1,&vertices,&stride,&offset);
             context->IASetIndexBuffer(gpu.indices.Get(),DXGI_FORMAT_R32_UINT,0);
             context->PSSetShaderResources(0,1,&bodies.textures[part.texture].view);
             context->PSSetSamplers(0,1,&samplers[part.address]);
-            context->DrawIndexed(UINT(source.indices.size()),0,0);
+            context->DrawIndexed(UINT(source.indices.size()),0,0);work->draw(source.indices.size());
         }
         context->OMSetRenderTargets(0,nullptr,nullptr);return true;
     }
@@ -535,16 +539,17 @@ float4 PSShadow(Output i):SV_Target {
             v.ViewDimension=D3D11_SRV_DIMENSION_BUFFER;v.Buffer.NumElements=1024;
             if(FAILED(renderer.device->CreateShaderResourceView(transition_palette.Get(),&v,&transition_view)))return false;
         }
-        if(blended)renderer.context->UpdateSubresource(transition_palette.Get(),0,nullptr,blended,0,0);
+        if(blended){renderer.context->UpdateSubresource(transition_palette.Get(),0,nullptr,blended,0,0);work->upload_buffer(transition_palette.Get());}
         ID3D11ShaderResourceView* palette=blended?transition_view.Get():mesh.palette_view.Get();
         renderer.context->VSSetShaderResources(0,1,&palette);return true;
     }
     template<class Target>bool draw_real(c3x_renderer_frame_v1 const& frame,
             std::vector<c3x_renderer::render_core::UnitInstances::ScenePose> const& visible,
             Target& scene,float scene_scale,float visual_hour,bool reflected,float zoom){
+        SandboxPassWorkload::Scope pass(*work,reflected?SandboxPassWorkload::reflected_units:SandboxPassWorkload::units);
         // The map fog pass consumes this exact body coverage after tone mapping.
         // Clearing just stencil preserves terrain depth and costs no readback.
-        if(!reflected)renderer.context->ClearDepthStencilView(scene.depth,D3D11_CLEAR_STENCIL,1,0);
+        if(!reflected){renderer.context->ClearDepthStencilView(scene.depth,D3D11_CLEAR_STENCIL,1,0);work->clear(scene.depth);}
         transitions.retain(visible);
         if(visible.empty())return true;
         if(!initialize())return false;
@@ -615,7 +620,7 @@ float4 PSShadow(Output i):SV_Target {
         beauty_values[7]=1;beauty_values[11]=.62f;
         beauty_values[12]=.490290f;beauty_values[13]=-.735435f;
         beauty_values[14]=.469979f;beauty_values[16]=float(shadow_fit.extent);
-        context->UpdateSubresource(beauty,0,nullptr,beauty_values,0,0);
+        context->UpdateSubresource(beauty,0,nullptr,beauty_values,0,0);work->upload_buffer(beauty);
         for(auto const& instance:visible){
             if(instance.unit>=bodies.units.size())return false;
             auto const& unit=bodies.units[instance.unit];
@@ -704,7 +709,7 @@ float4 PSShadow(Output i):SV_Target {
                         extra[channel]=bodies.textures[texture].view;values[28+channel]=1;
                     }
                 values[23]=part.material_model;
-                context->UpdateSubresource(material,0,nullptr,values,0,0);
+                context->UpdateSubresource(material,0,nullptr,values,0,0);work->upload_buffer(material);
                 ID3D11Buffer* static_vertices=gpu.vertices.Get();
                 UINT stride=sizeof(Vertex),offset=0;
                 context->IASetVertexBuffers(0,1,&static_vertices,&stride,&offset);
@@ -720,18 +725,18 @@ float4 PSShadow(Output i):SV_Target {
                         c3x_renderer::lighting::object_height_to_world;
                     placement_values[18]=key_light.direction[1]/key_light.direction[2]*
                         c3x_renderer::lighting::object_height_to_world;
-                    context->UpdateSubresource(placement,0,nullptr,placement_values,0,0);
+                    context->UpdateSubresource(placement,0,nullptr,placement_values,0,0);work->upload_buffer(placement);
                     context->OMSetDepthStencilState(renderer.natural.decal_depth,0);
                     context->OMSetBlendState(renderer.blend_state,nullptr,0xffffffffu);
                     context->PSSetShader(shadow_pixel,nullptr,0);
-                    context->DrawIndexed(UINT(source->indices.size()),0,0);
+                    context->DrawIndexed(UINT(source->indices.size()),0,0);work->draw(source->indices.size());
                     placement_values[16]=0;
                     context->OMSetDepthStencilState(body_depth,reflected?0:1);
                     context->OMSetBlendState(nullptr,nullptr,0xffffffffu);
                     context->PSSetShader(pixel,nullptr,0);
                 }
-                context->UpdateSubresource(placement,0,nullptr,placement_values,0,0);
-                context->DrawIndexed(UINT(source->indices.size()),0,0);
+                context->UpdateSubresource(placement,0,nullptr,placement_values,0,0);work->upload_buffer(placement);
+                context->DrawIndexed(UINT(source->indices.size()),0,0);work->draw(source->indices.size());
                 ++draws;
             }
         }

@@ -74,3 +74,109 @@ hashes; its preserved original DLL is the control. The interrupted observation
 is excluded. `recovery.json` records the limitation; new paired receipts use fully
 fingerprinted pack inputs, binaries, shader bundles and raw logs. Fixed visual
 reference images remain unchanged.
+
+## Current result
+
+The conservative index removes most of the additional nighttime zoom cost in
+this fixture. Two uninterrupted paired runs reduce warmed mean total call time
+by 75.7% and 77.3%. Noon and no-city means remain around 130–136 ms. The scene
+still misses the 16.67 ms target on every measured nighttime frame; this step
+does not establish sustained 60 FPS or qualify live scrolling and many units.
+
+Each row contains 87 warmed frames, excluding the first three transitions.
+Values are milliseconds, including `Present` and resulting GPU backpressure:
+
+| Workload / pair | Arm | Mean | p50 | p95 | Worst | Missed 16.67 ms |
+|---|---|---:|---:|---:|---:|---:|
+| Night / 1 | Original | 610.04 | 616.65 | 1283.66 | 1933.89 | 87 |
+| Night / 1 | Indexed | 148.04 | 133.93 | 299.77 | 547.64 | 87 |
+| Night / 3 | Original | 631.58 | 43.40 | 1407.18 | 1860.65 | 87 |
+| Night / 3 | Indexed | 143.63 | 149.37 | 230.69 | 455.17 | 87 |
+| Rich night / 1 | Original | 634.30 | 611.53 | 1327.55 | 2345.74 | 87 |
+| Rich night / 1 | Indexed | 143.15 | 148.57 | 268.92 | 397.37 | 87 |
+| Noon / 1 | Original | 133.98 | 133.33 | 151.62 | 388.10 | 87 |
+| Noon / 1 | Indexed | 132.04 | 133.28 | 150.45 | 423.31 | 87 |
+| Noon / 2 | Original | 135.99 | 133.31 | 249.57 | 316.45 | 87 |
+| Noon / 2 | Indexed | 133.40 | 133.32 | 261.13 | 393.58 | 87 |
+| No city / 1 | Original | 129.79 | 133.26 | 150.55 | 351.71 | 86 |
+| No city / 1 | Indexed | 130.83 | 133.18 | 151.56 | 417.76 | 85 |
+| No city / 2 | Original | 131.43 | 133.36 | 153.29 | 286.01 | 86 |
+| No city / 2 | Indexed | 134.21 | 133.34 | 245.42 | 343.87 | 86 |
+
+Original night pair 3 alternates short calls with long waits, making its median
+misleading. The full warmed trace falls from 54.95 s to 12.50 s; pair 1 falls
+from 53.07 s to 12.88 s. Raw draw/present samples and descriptive p99 are retained
+in `timings-summary.json`; these CPU/driver spans are not GPU timestamp results
+or scanout latency. Supplemental pair 2 crossed a VM suspension and is marked
+separately: original mean 624.74 ms, indexed 140.28 ms. It is not needed for the
+two uninterrupted pairs above.
+
+Cold preparation and transitions remain material costs. Pair 1 original/indexed
+preparation is 27.08/42.99 s and priming 34.28/37.28 s. Its first three indexed
+calls are 5918.92, 432.57 and 48.27 ms. With warmed shader caches, pair 3
+preparation is 26.29/19.46 s, priming 2.45/2.56 s, and first three calls are
+17.89/200.04, 97.15/371.27 and 98.64/85.32 ms (original/indexed). These values
+remain separate from the steady trace; the optimization does not remove cold
+compilation, upload or first-zoom stalls.
+
+The developed field retains all 620 lights and 222 blockers. Its 8,400 grid
+cells contain 8,079 light entries; per-light lists contain 4,795 blocker entries,
+with maxima of 49 lights per cell and 25 blockers per light. The original
+36,864-byte field gains 195,824 index bytes. Main-field build spans are
+1.149–2.134 ms and upload spans 0.030–0.087 ms. The larger preparation field
+(1,641 lights, 591 blockers) uses 1,000,800 index bytes and leaves a 2 MiB GPU
+buffer high-water allocation. Main selection uploads once after preparation and
+reuses data throughout the trace. These counts bound candidate work; they do
+not measure actual per-pixel light/ray invocations. The richer supported recipe
+has 622 lights, 222 blockers, 8,430/5,228 entries and maxima 50/29. It exercises
+a second recipe at the same six legal city sites, not a substantially denser
+city-count stress case. Unit preview contains only four synthetic actors.
+
+## Correctness, identity and staging
+
+CPU differential coverage checks 19,465 deterministic/random cases, including
+range/grid boundaries, negative and independent wrapped positions, neighboring
+city blockers, owner exclusion and fallback. D3D runs the actual generated
+local-light equations over 8,192 receivers at night, dusk and day: maximum
+indexed/full-scan error is zero. Upload tests cover identical bytes, same-pointer
+mutation, changed count layout, new object lifetime, empty/day and full-scan
+fallback. Adapter tests cover all ten shader routes and idempotence.
+
+Full-effect 2240×1260 captures cover noon/dusk/night at 1× and 1.25×, no-city and
+the richer recipe. Developed and rich night comparisons differ on 74–154 pixels,
+with mean channel differences below 0.000051 on the 0–255 scale. Dusk differs
+on 112–128 pixels. Complete PNGs and amplified difference sheets are retained.
+The first 1× noon comparison differs on 39,938 pixels; an original/original
+repeat reproduces 39,918 of this scale of difference. Warmed original/indexed
+noon differs on 125 pixels. Thus capture/startup variability is established,
+but full-scene bit equality is not claimed. The shader irradiance comparison
+remains exact. Visual inspection shows preserved city illumination and shadows.
+
+The focused correctness/facade runs pass. The Cities dispatcher resolves to
+157 passing tests after rerunning one Parallels transport failure, one optional
+skip, and one unresolved historical provenance input:
+`Renderer/lab/out/cities/integration/frames.json` (expected SHA-256
+`cc6413f7361051c31949a10bc0744a81243b5f7cc7a075914075ece131196661`).
+The runtime pack's different manifest cannot replace this missing original
+source artifact. Category-definition validation passes all 28 categories.
+
+Qualification uses Windows 11 build 26200, eight Apple Silicon virtual logical
+processors, 14 GiB VM RAM, Parallels WDDM driver 20.18.2702.58673 and D3D feature
+level 0xb000. Viewport is 2240×1260, scene samples 1, default reflection scale
+0.375, all normal effects enabled and `Present(1,0)`. Both arms use the same
+diagnostic client and source-time trace. The complete pack/definition/scene
+superset remains identical before/after qualification: 47,224 files,
+12,238,654,673 bytes, manifest fingerprint
+`d5d272ea7ffff8249029193aa4eda32b9cdc044f80994866baa89f92077d9bdf`.
+Receipts include every consumed shader source route and all binary hashes.
+
+The measured candidate x64 DLL is
+`ec7c439db5d802dbfe79eb25c19c8192567c50c4d1ae87c4e9853aa918709b9a`;
+the preserved original is
+`bafb4e85359286ac61957e0e8d513fdbce70ca3be4609d58c12fccb03a411821`.
+After confirming Civ III closed, the candidate was staged with matching current
+bridge/helper and the ten exact evaluated shader changes. The full 86-source
+control shader bundle matches the evaluated candidate. Previous binaries and
+shaders remain in `pre-stage/`; `stage-evidence.json` and startup-probe receipts
+record hashes and health. No injected source, patch symbol, game installation
+or fixed visual reference was changed by this step.

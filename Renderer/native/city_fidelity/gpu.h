@@ -85,6 +85,17 @@ struct Gpu {
         if(emit)context->OMSetBlendState(emission,nullptr,0xffffffffu);
         if(emit || library.materials[material].ground)context->OMSetDepthStencilState(readonly_depth,0);
     }
+    // Body and emission consume the same geometry/material bindings. The
+    // emission shader adds RGB only, preserves alpha, and writes no depth.
+    bool emits(unsigned material)const {
+        return material<materials.size() && materials[material][1]!=nullptr &&
+            night!=0.f && emissive_scale!=0.f;
+    }
+    void bind_emission(ID3D11DeviceContext*context,bool reflect){
+        context->PSSetShader(ps[reflect?3:1],nullptr,0);
+        context->OMSetBlendState(emission,nullptr,0xffffffffu);
+        context->OMSetDepthStencilState(readonly_depth,0);
+    }
     bool lights(ID3D11DeviceContext*context,std::vector<Lighting const*>const&cities){
         return scene_lights.upload(context,cities,night,emissive_scale);
     }
