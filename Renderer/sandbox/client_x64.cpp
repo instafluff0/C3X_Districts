@@ -13,6 +13,7 @@
 #include "pass_counts.h"
 #include <cmath>
 #include "camera_witness.h"
+#include "scroll_witness.h"
 
 int sandbox_reference_main(int argc, char** argv);
 
@@ -106,6 +107,10 @@ int sandbox_client_run(HMODULE module, c3x_renderer_frame_v1 const& prepared_fra
         awareness_context&&awareness?awareness(awareness_context(window)):-1,present_mode[0]?present_mode:"vsync_1");
     std::fflush(stdout);
     char camera_witness[8]={};
+    char scroll_witness[8]={};
+    if(GetEnvironmentVariableA("C3X_SANDBOX_SCROLL_WITNESS",scroll_witness,sizeof(scroll_witness)) && scroll_witness[0]=='1'){
+        int result=sandbox_scroll_witness(module,window,prepared_frame);DestroyWindow(window);return result;
+    }
     if(GetEnvironmentVariableA("C3X_SANDBOX_CAMERA_WITNESS",camera_witness,sizeof(camera_witness)) && camera_witness[0]=='1'){
         int result=sandbox_camera_witness(module,window,prepared_frame);DestroyWindow(window);return result;
     }

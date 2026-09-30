@@ -80,7 +80,8 @@ Output PS(float4 position:SV_Position,uint sample:SV_SampleIndex){
  bool valid=all(p>=0)&&all(p<move_extent.zw);
  for(int i=0;i<metadata.x;++i)if(all(destination>=dirty[i].xy*2)&&all(destination<dirty[i].zw*2))valid=false;
  Output result;result.color=valid?scene.Load(p,sample):float4(0,0,0,0);
- result.depth=valid?scene_depth.Load(p,sample)+depth_adjust.x:1;
+ float retained_depth=valid?scene_depth.Load(p,sample):1;
+ result.depth=retained_depth<1?retained_depth+depth_adjust.x:1;
  if(metadata.z!=0){result.color=0;result.depth=1;}return result;
 })";
         std::string shader=source;
