@@ -1,4 +1,4 @@
-"""Loading waits for the first camera publication; ordinary map drawing never waits."""
+"""Startup leaves camera/UI sequencing to Civ III; native draws own publication."""
 from pathlib import Path
 import unittest
 from Renderer.native.native_cpp_test import run_cpp
@@ -7,114 +7,114 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class LoadingViewTests(unittest.TestCase):
-    def test_only_complete_loading_camera_prepares_view(self):
+    def test_loading_has_no_speculative_camera_or_progress_ui(self):
         source = (ROOT / 'injected_code.c').read_text()
-        helper = 'void\nprepare_custom_renderer_loading_view' + source.split('void\nprepare_custom_renderer_loading_view', 1)[1].split('\nstruct custom_renderer_native_view', 1)[0]
-        # The injected ABI is 32-bit; preserve pointer width in this host fixture.
-        helper = helper.replace('(Map_Renderer *, int, int, int, int)', '(Map_Renderer *, int, int, std::intptr_t, int)')
-        helper = helper.replace('(int)&form->Base_Data.Canvas', '(std::intptr_t)&form->Base_Data.Canvas')
+        self.assertNotIn('prepare_custom_renderer_loading_view', source)
+        load = source.split('patch_load_scenario (', 1)[1].split('// Initialize Trade Net X', 1)[0]
+        self.assertIn('ensure_custom_renderer_loaded ();', load)
+        self.assertNotIn('Main_GUI_label_loading_bar', load)
+        hook = 'void patch_MappedFile_deinit_after_saving_or_loading' + source.split(
+            'patch_MappedFile_deinit_after_saving_or_loading', 1)[1].split('bool __fastcall', 1)[0]
         run_cpp(r'''
-#include "Renderer/native/c3x_renderer_api.h"
 #include <cassert>
-#include <cstdint>
-#include <cstdio>
-#include <cstring>
-#include <initializer_list>
-#define __fastcall
-#define __ 0
-struct PCX_Image {struct {void* Image=this;}JGL;};
-struct Main_GUI {int field_574[4]{};};
-struct Main_Screen_Form {Main_GUI GUI;struct {PCX_Image Canvas;}Base_Data;
- int camera_x=0,camera_y=0,Player_CivID=2,TileX_Min=0,TileX_Max=20,TileY_Min=0,TileY_Max=20;} screen;
-auto p_main_screen_form=&screen;
-struct Map_Renderer;
-struct Vtable {void(*m71_Draw_Tiles)(Map_Renderer*,int,int,std::intptr_t,int);};
-struct Map_Renderer : PCX_Image {Vtable* vtable;};
-struct Bic {struct {Map_Renderer Renderer;int Width=100,Height=100;}Map;} bic;
-auto p_bic_data=&bic;
-struct State {struct {bool enable_custom_rendering=true;}current_config;
- unsigned custom_renderer_presented_frames=0;bool custom_renderer_draw_in_progress=false,custom_renderer_async_presented=false;} state;
-auto is=&state;
-unsigned draws=0,labels=0;int last_result=-1;
-void Main_GUI_label_loading_bar(Main_GUI* gui,int,int increment,char const* text){
- assert(gui==&screen.GUI && increment==0 && std::strcmp(text,"Preparing map")==0);++labels;
+#include <cstddef>
+struct MappedFile{};
+struct {void* accessing_save_file;} state,*is=&state;
+unsigned deinits=0;
+void MappedFile_deinit(MappedFile* file){assert(file&&!state.accessing_save_file);++deinits;}
+''' + hook.replace('this', 'file') + r'''
+int main(){MappedFile file;state.accessing_save_file=&file;
+ patch_MappedFile_deinit_after_saving_or_loading(&file);assert(deinits==1);}
+''')
+
+    def test_offscreen_preparation_requires_exploration(self):
+        source = (ROOT / 'injected_code.c').read_text()
+        decision = source.split('bool prepare_appearance =', 1)[1].split(';', 1)[0]
+        run_cpp(r'''
+#include <cassert>
+constexpr unsigned C3X_RENDERER_TILE_EXPLORED=2;
+unsigned visibility=0;int calls=0;
+unsigned capture_custom_renderer_visibility(void*,int,int,int){++calls;return visibility;}
+bool prepare(int dx,int dy){int warm_min_x=-8,warm_max_x=8,warm_min_y=-8,warm_max_y=8;
+ void* tile=nullptr;int viewer=2,x=dx,y=dy;
+ return ''' + decision + r''';
 }
-void debug(char const*){}auto p_OutputDebugStringA=&debug;
-void log_custom_renderer_event(char const*,int result){last_result=result;}
-void draw(Map_Renderer* renderer,int,int viewer,std::intptr_t canvas,int flags){
- assert(renderer==&bic.Map.Renderer && viewer==2 && canvas==(std::intptr_t)&screen.Base_Data.Canvas && flags==0);
- assert(screen.GUI.field_574[3] && !state.custom_renderer_draw_in_progress);
- ++draws;++state.custom_renderer_presented_frames;state.custom_renderer_async_presented=true;
-}
-''' + helper + r'''
 int main(){
- Vtable vt{draw};bic.Map.Renderer.vtable=&vt;
- prepare_custom_renderer_loading_view(&screen);assert(!draws&&!labels); // Regular gameplay cannot block.
- screen.GUI.field_574[3]=1;state.current_config.enable_custom_rendering=false;
- prepare_custom_renderer_loading_view(&screen);assert(!draws); // Vanilla remains untouched.
- state.current_config.enable_custom_rendering=true;
- Main_Screen_Form other;prepare_custom_renderer_loading_view(&other);assert(!draws);
- for(int* field:{&screen.Player_CivID,&screen.TileX_Max,&screen.TileY_Max,&bic.Map.Width,&bic.Map.Height}){
-  int saved=*field;*field=0;prepare_custom_renderer_loading_view(&screen);assert(!draws);*field=saved;
- }
- state.custom_renderer_draw_in_progress=true;prepare_custom_renderer_loading_view(&screen);assert(!draws);
- state.custom_renderer_draw_in_progress=false;
- void* image=bic.Map.Renderer.JGL.Image;bic.Map.Renderer.JGL.Image=nullptr;
- prepare_custom_renderer_loading_view(&screen);assert(!draws);bic.Map.Renderer.JGL.Image=image;
- image=screen.Base_Data.Canvas.JGL.Image;screen.Base_Data.Canvas.JGL.Image=nullptr;
- prepare_custom_renderer_loading_view(&screen);assert(!draws);screen.Base_Data.Canvas.JGL.Image=image;
- prepare_custom_renderer_loading_view(&screen);assert(draws==1 && labels==1 && last_result==C3X_RENDERER_RESULT_OK);
- screen.camera_x=128;prepare_custom_renderer_loading_view(&screen);assert(draws==2); // Native loading can still recenter.
- screen.GUI.field_574[3]=0;prepare_custom_renderer_loading_view(&screen);assert(draws==2); // Gameplay never enters preparation.
- screen.GUI.field_574[3]=1;state.custom_renderer_presented_frames=0;prepare_custom_renderer_loading_view(&screen);assert(draws==3); // New map.
+ assert(!prepare(0,0));visibility=2;assert(prepare(0,0));
+ assert(prepare(-8,8));assert(!prepare(-9,0));assert(calls==3);
+ visibility=0;assert(!prepare(8,-8));
 }
 ''')
 
-    def test_save_loader_warms_native_start_view_and_restores_saved_camera(self):
-        source = (ROOT / 'injected_code.c').read_text()
-        hook = 'void patch_MappedFile_deinit_after_saving_or_loading' + source.split('patch_MappedFile_deinit_after_saving_or_loading', 1)[1].split('bool __fastcall', 1)[0]
+    def test_world_pages_admit_the_native_debug_viewer(self):
+        source = (ROOT / 'injected_code.c').read_text().split(
+            'capture_custom_renderer_world_page (struct c3x_renderer_world_page_v1 * page)\n{', 1)[1]
+        gate = source.split('\tMap * map =', 1)[0]
         run_cpp(r'''
 #include <cassert>
-#include <vector>
-#define __ 0
-#define Main_Screen_Form_center_camera native_center
-struct MappedFile{};
-unsigned deinits=0;
-void MappedFile_deinit(MappedFile*){++deinits;}
-struct Unit {struct {int X=73,Y=31;}Body;};
-struct Map_Renderer{};
-struct Main_Screen_Form {bool is_now_loading_game=true;
- struct {int field_574[4]{0,0,0,1};}GUI;
- int Player_CivID=1,camera_x=10,camera_y=20;Unit* Current_Unit=nullptr;}form;
-auto p_main_screen_form=&form;
-struct Bic {struct {int Width=100,Height=100;int Starting_Locations[32]{0,1586};Map_Renderer Renderer;}Map;}bic;
-auto p_bic_data=&bic;
-struct State {void* accessing_save_file=&form;struct {bool enable_custom_rendering=true;}current_config;}state;
-auto is=&state;
-struct custom_renderer_native_view {int x,y;};
-struct custom_renderer_native_view custom_renderer_native_view(Map_Renderer*){return {form.camera_x,form.camera_y};}
-void apply_custom_renderer_native_view(struct custom_renderer_native_view* v){form.camera_x=v->x;form.camera_y=v->y;}
-bool Map_in_range(decltype(bic.Map)*,int,int x,int y){return x>=0&&x<100&&y>=0&&y<100;}
-void native_center(Main_Screen_Form* f,int,int x,int y,int reason,bool bounds,bool force){
- assert(f==&form&&reason==0&&bounds&&!force);f->camera_x=x;f->camera_y=y;
+constexpr int IS_OK=1,C3X_RENDERER_RESULT_PENDING=4;
+struct {struct {bool enable_custom_rendering=true;}current_config;
+ int custom_renderer_init_state=IS_OK,custom_renderer_viewer_civ_id=2;
+ bool custom_renderer_draw_in_progress=false,custom_renderer_frame_active=false,
+ custom_renderer_capture_only=false,custom_renderer_display_valid=true;}state,*is=&state;
+struct {bool is_now_loading_game=false;int Player_CivID=2;}form,*p_main_screen_form=&form;
+unsigned debug=0;auto p_debug_mode_bits=&debug;bool online=false;
+bool is_online_game(){return online;}
+int admit(){''' + gate + r'''
+ return 1;
 }
-std::vector<int> views;
-void prepare_custom_renderer_loading_view(Main_Screen_Form* f){views.push_back(f->camera_x);views.push_back(f->camera_y);}
-''' + hook.replace('this', 'file_arg') + r'''
 int main(){
- MappedFile file;
- patch_MappedFile_deinit_after_saving_or_loading(&file);
- assert((views==std::vector<int>{10,20,73,31})); // Saved view and native startup view, with no saved-camera mutation.
- assert(form.camera_x==10&&form.camera_y==20&&!state.accessing_save_file&&deinits==1);
- views.clear();Unit unit;unit.Body.X=45;unit.Body.Y=67;form.Current_Unit=&unit;
- patch_MappedFile_deinit_after_saving_or_loading(&file);
- assert((views==std::vector<int>{10,20,45,67}));
- views.clear();state.current_config.enable_custom_rendering=false;
- patch_MappedFile_deinit_after_saving_or_loading(&file);assert(views.empty()&&deinits==3);
- state.current_config.enable_custom_rendering=true;form.is_now_loading_game=false;
- patch_MappedFile_deinit_after_saving_or_loading(&file);assert(views.empty()&&deinits==4); // Saving never prepares.
- form.is_now_loading_game=true;form.GUI.field_574[3]=0;
- patch_MappedFile_deinit_after_saving_or_loading(&file);assert(views.empty()&&deinits==5);
+ assert(admit()==1);debug=8;assert(admit()==4);
+ state.custom_renderer_viewer_civ_id=0;assert(admit()==1);
+ online=true;assert(admit()==4);state.custom_renderer_viewer_civ_id=2;assert(admit()==1);
+ online=false;debug=0;form.is_now_loading_game=true;assert(admit()==4);
+ form.is_now_loading_game=false;state.current_config.enable_custom_rendering=false;assert(admit()==4);
+}
+''')
+
+    def test_native_capture_survives_debug_pass_masks(self):
+        source = (ROOT / 'injected_code.c').read_text().split(
+            'patch_Map_Renderer_m19_Draw_Tile_by_XY_and_Flags', 1)[1]
+        block = source[source.index('\tif (is->current_config.enable_custom_rendering && is->custom_renderer_frame_active'):]
+        block = block.split('\n\t// Custom rendering owns', 1)[0].replace('this', 'renderer')
+        run_cpp(r'''
+#include <cassert>
+#include <cstddef>
+#include <initializer_list>
+#define __fastcall
+#define __ 0
+constexpr int C3X_RENDERER_RESULT_ERROR=0;
+struct Map_Renderer;
+struct Vtable {void (*m21_Draw_Tiles_by_Flags)(Map_Renderer*,int,int,int,int,Map_Renderer*,void*,int,int,int);};
+struct Map_Renderer {Vtable* vtable;};
+struct {struct {bool enable_custom_rendering=true;}current_config;
+ bool custom_renderer_frame_active=true,custom_renderer_composited=false,
+ custom_renderer_capture_only=false,custom_renderer_capture_failed=false;}state,*is=&state;
+int captures=0,composites=0,tiles=0,errors=0;
+void capture(Map_Renderer* renderer,int,int viewer,int x,int y,Map_Renderer* target,void* clip,int tx,int ty,int flags){
+ assert(state.custom_renderer_capture_only&&state.custom_renderer_composited);
+ assert(renderer==target&&viewer==0&&x==-1&&y==-1&&!clip&&tx==-1&&ty==-1&&flags==9);
+ ++captures;tiles=12;
+}
+void capture_custom_renderer_topology(int viewer,int mask){assert(viewer==0&&mask==15&&tiles==12);}
+void composite_custom_renderer_frame(){assert(!state.custom_renderer_capture_only&&tiles==12);++composites;}
+void log_custom_renderer_event(char const*,int){++errors;}
+void draw(Map_Renderer* renderer,int param_8){int param_1=0,param_5=15;auto map_renderer=renderer;
+''' + block + r'''
+}
+int main(){Vtable vt{capture};Map_Renderer renderer{&vt};
+ // Native debug mode applies ~Flags to its first four passes. Test default,
+ // individual hidden layers, and every layer hidden; final fog is unmasked.
+ for(int mask:{0,0x1ae80,9,0x1fef0,0x1ffff}){
+  state.custom_renderer_composited=false;captures=composites=tiles=errors=0;
+  for(int pass:{9&~mask,4&~mask,0x1fef0&~mask,2&~mask,0x100})
+   for(int tile=0;tile<12;++tile)draw(&renderer,pass);
+  assert(captures==1&&composites==1&&!errors&&!state.custom_renderer_capture_only);
+ }
+ state.custom_renderer_composited=false;state.custom_renderer_capture_failed=true;
+ draw(&renderer,9);assert(errors==1&&composites==1);
+ state.custom_renderer_composited=false;state.current_config.enable_custom_rendering=false;
+ draw(&renderer,9);assert(!state.custom_renderer_composited&&errors==1);
 }
 ''')
 

@@ -149,6 +149,13 @@ int sandbox_client_run(HMODULE module, c3x_renderer_frame_v1 const& prepared_fra
                 actor.unit_incarnation,actor.viewer,actor.unit_visible,x,y);
             QueryPerformanceCounter(&finished);
             if(result)return result;
+            // Keep camera adoption/first-raster stalls visible separately from
+            // the warmed distribution. Map-jump qualification needs both.
+            if(index<3)std::printf("CLIENT_TRANSITION frame=%d time_ms=%d camera=%d,%d zoom=%.3f total_ms=%.2f draw_ms=%.2f present_ms=%.2f\n",
+                index,t,x,y,study_zoom>0?study_zoom:day_night?1.f:sandbox_zoom_path(t,study_zoom_peak),
+                1000.*double(finished.QuadPart-started.QuadPart)/cycle_frequency.QuadPart,
+                1000.*double(drawn.QuadPart-started.QuadPart)/cycle_frequency.QuadPart,
+                1000.*double(finished.QuadPart-drawn.QuadPart)/cycle_frequency.QuadPart);
             if(index>=3){
                 double divisor=double(cycle_frequency.QuadPart)/1000.;
                 cycle_frames.push_back(double(finished.QuadPart-started.QuadPart)/divisor);
@@ -165,13 +172,19 @@ int sandbox_client_run(HMODULE module, c3x_renderer_frame_v1 const& prepared_fra
                 t,day_night?12.f+24.f*float(t)/30000.f:float(frame.hour),x,y,
                 study_zoom>0?study_zoom:day_night?1.f:sandbox_zoom_path(t,study_zoom_peak));
         }
+        // Opt-in records are emitted after the loop, outside measured spans.
+        char timing_records[8]{};
+        if(GetEnvironmentVariableA("C3X_SANDBOX_FRAME_TIMINGS",timing_records,sizeof(timing_records)) && timing_records[0]=='1')
+            for(std::size_t i=0;i<cycle_frames.size();++i)
+                std::printf("CLIENT_FRAME_TIMING frame=%zu total_ms=%.6f draw_ms=%.6f present_ms=%.6f\n",
+                    i+3,cycle_frames[i],cycle_draws[i],cycle_presents[i]);
         if(!cycle_frames.empty()){
             auto report=[](char const* name,std::vector<double>& values){
                 std::sort(values.begin(),values.end());
                 auto at=[&](double fraction){return values.empty()?0.:values[std::min(
                     values.size()-1,std::size_t(fraction*double(values.size()-1)))];};
-                std::printf("CLIENT_CYCLE name=%s frames=%zu median_ms=%.2f p95_ms=%.2f\n",
-                    name,values.size(),at(.5),at(.95));
+                std::printf("CLIENT_CYCLE name=%s frames=%zu median_ms=%.2f p95_ms=%.2f worst_ms=%.2f\n",
+                    name,values.size(),at(.5),at(.95),at(1.));
             };
             report("total",cycle_frames);report("draw",cycle_draws);
             report("present",cycle_presents);

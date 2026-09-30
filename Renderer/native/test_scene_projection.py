@@ -8,10 +8,26 @@ class SceneProjectionTests(unittest.TestCase):
 #include "Renderer/native/scene_projection.h"
 #include <cassert>
 struct Viewport {float TopLeftX,TopLeftY,Width,Height;};
+struct Rect {int left,top,right,bottom;};
 int main(){
  for(unsigned width:{2240u,2239u})for(float scale:{1.f,1.125f,1.25f,1.5f,1.75f,2.f,2.5f,3.f}){
   c3x_renderer::SceneProjection p(width,1260,scale);
   assert(p.x(float(width/2))==float(width/2));
+  for(float guard:{4.f,8.f})for(float margin:{0.f,320.f}){
+   Rect display{int(margin),0,int(width+2*guard+margin),int(1260+2*guard)};
+   auto source=p.source_rect(display,guard,margin);
+   // Every canonical pixel whose transformed footprint touches the target
+   // remains selected, including odd viewport centers and guarded edges.
+   for(int x=-2;x<int(width+2*margin)+18;++x){
+    float left=p.x(float(x)-guard-margin)+guard+margin,right=p.x(float(x+1)-guard-margin)+guard+margin;
+    if(right>display.left&&left<display.right)assert(x>=source.left&&x<source.right);
+   }
+   for(int y=-2;y<1278;++y){
+    float top=p.y(float(y)-guard)+guard,bottom=p.y(float(y+1)-guard)+guard;
+    if(bottom>display.top&&top<display.bottom)assert(y>=source.top&&y<source.bottom);
+   }
+   assert(scale==1.f||source.right-source.left<int(width));
+  }
   for(float guard:{4.f,8.f})for(float margin:{0.f,320.f})for(float raster:{1.f,.375f}){
    float extent=float(width)+2*guard+2*margin;
    Viewport v{0,0,extent*raster,(1260+2*guard)*raster};p.viewport(v,guard,margin,0,raster);

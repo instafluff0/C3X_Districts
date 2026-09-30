@@ -684,6 +684,12 @@ int test_retained_composition(){
         request.ticket=5;copy_map();
         assert(session.display_to(5,canvas,target.Get(),display.Get(),buffer.Get(),w,h,full,660,1000));
         assert(failed_samples==1 && !session.visual_ready());
+        // The asynchronous presenter only commits here. A discarded visual
+        // recipe must not poison transport before the next map rebuilds it.
+        assert(session.commit_display(5,canvas,w,h,full));
+        assert(!session.commit_display(4,canvas,w,h,full));
+        assert(!session.commit_display(5,0,w,h,full));
+        assert(!session.visual_ready());
         assert(retained_read(device.Get(),context.Get(),display.Get())==retained_read(device.Get(),context.Get(),source.Get()));
         request.action=C3X_GPU_READBACK;request.image=std::int64_t(canvas);request.pixel_count=w*h;
         assert(session.execute(request,{}, {},result,output)==C3X_RENDERER_RESULT_OK);

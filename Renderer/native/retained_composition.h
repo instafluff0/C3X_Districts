@@ -52,7 +52,7 @@ private:
     struct Patch {Rect area;std::shared_ptr<Node> node;unsigned output=0;};
     struct Picture {unsigned width=0,height=0;Format format=Format::bgra32;std::vector<Patch> patches;bool partitioned=true;std::uint64_t version=0;Rect required{};};
     struct Node {
-        Rect area{};Command command{};bool selected_world=false,operation=false,dynamic=false,map_dynamic=false,constant=false,view_dependent=false;
+        Rect area{};Command command{};bool selected_world=false,operation=false,dynamic=false,map_dynamic=false,constant=false,view_dependent=false,retired=false;
         Picture inputs[6];Id original[6]={};
         Texture output[2];std::uint64_t bytes[2]={},revision=0,seen=0,sampled=0,direct_revision=0;
         ComPtr<ID3D11ShaderResourceView> output_view[2];
@@ -162,13 +162,14 @@ private:
     void evaluate(std::shared_ptr<Node> const& n,long long ticks,long long frequency,unsigned depth){
         if(n->seen==frame)return;
         if(depth>256)throw std::runtime_error("retained composition dependency depth");
+        bool had_map=n->map_dynamic;
         if(n->sample){
             // The displayed scene is sampled at its projection below. Native
             // save/restore images retain the canonical publication, so they
             // cannot trigger a second geometry draw at the old zoom.
             auto sampled=n->sample.projected&&n->projected_frame==frame?SampledImage{}:n->sample(ticks,frequency);
             if(sampled.kind==SampledImage::Kind::frozen){
-                n->sample={};n->sample_target={};n->dynamic=n->map_dynamic=false;
+                n->sample={};n->sample_target={};n->dynamic=n->map_dynamic=false;n->retired=true;
             }else if(sampled.kind==SampledImage::Kind::bgra){
                 auto r=sampled.area;unsigned w=unsigned(n->area.right-n->area.left),h=unsigned(n->area.bottom-n->area.top);
                 if(r.left<0||r.top<0||r.right-r.left!=int(w)||r.bottom-r.top!=int(h))
@@ -221,6 +222,8 @@ private:
                     n->view_native_format==2?Format::rgb565:Format::rgb555))throw std::runtime_error("projected world rejected");
             }catch(...){replay.recycle(source);throw;}
             replay.recycle(source);n->view_scale=scale;n->revision=++serial;selected_view_scale=scale;
+            n->map_dynamic=false;
+            for(auto const& patch:n->inputs[0].patches)n->map_dynamic|=patch.node->map_dynamic;
         }else if(n->view){
             std::vector<std::uint64_t> versions;
             n->map_dynamic=false;
@@ -317,6 +320,13 @@ private:
             // its recipe even then, so HUD holes do not keep every old camera.
             if(!n->dynamic){for(auto& input:n->inputs)input={};n->dependencies.clear();n->operation=false;}
         }
+        if(n->view&&had_map&&!n->map_dynamic){
+            // Native HUD/save copies keep these completed pixels after the
+            // camera retires. Release both projected and ordinary view recipes
+            // so they cannot retain old scenes or follow subsequent zooms.
+            n->inputs[0]={};n->view.reset();n->sample_target={};n->view_words={};
+            n->dynamic=n->view_dependent=n->projects_scene=false;
+        }
         n->seen=frame;
     }
     bool projectable(Picture const& p,bool& scene,unsigned depth){
@@ -362,9 +372,10 @@ private:
         if(n->seen==frame)return n;
         Rect area=project(original->area,scale,width,height);
         if(empty(area)){n->area=area;n->seen=frame;return n;}
-        if(original->sample.projected){
-            auto sampled=original->sample.projected(ticks,frequency,scale);
+        if(original->sample.projected||original->retired){
+            auto sampled=original->retired?SampledImage::frozen():original->sample.projected(ticks,frequency,scale);
             if(sampled.kind==SampledImage::Kind::frozen){
+                original->retired=true;original->sample={};original->dynamic=original->map_dynamic=false;
                 // A camera can retire before its first display. Preserve its
                 // completed publication rather than returning an empty image.
                 // If a prior projected pose exists, reproject that exact pose
@@ -407,6 +418,9 @@ private:
                     key?replay.view(key):nullptr,c.color);
             }catch(...){if(source)replay.recycle(source);if(key)replay.recycle(key);replay.recycle(below);throw;}
             replay.recycle(source);if(key)replay.recycle(key);replay.recycle(below);
+            original->map_dynamic=false;
+            for(auto const& input:original->inputs)for(auto const& part:input.patches)
+                original->map_dynamic|=part.node->map_dynamic;
         }else{
             evaluate(original,ticks,frequency,depth+1);projected_output(*n,area);
             auto texture=original->output[patch.output];
@@ -706,18 +720,21 @@ public:
         bool ok=false;
         try{ok=replay.display(image,target,front.width,front.height,extent(front));}
         catch(...){replay.recycle(image);throw;}replay.recycle(image);
-        if(ok){context->CopyResource(buffer,display);context->Flush();drawn_revision=front_revision;drawn_dependencies=std::move(versions);}return ok?1:0;
+        // The caller publishes with Present or a keyed release followed by
+        // Flush. Keep the retained copy in that same submission batch.
+        if(ok){context->CopyResource(buffer,display);drawn_revision=front_revision;drawn_dependencies=std::move(versions);}return ok?1:0;
     }
     double view_scale()const{return selected_view_scale;}
     Work last_work()const{return work;}
-    template<class Report> void describe(Report report)const{
+    template<class Report> void describe(Report report,bool all_images=false)const{
         std::vector<Node const*> ordered;
-        auto add=[&](Node const* n){if(std::find(ordered.begin(),ordered.end(),n)==ordered.end()&&ordered.size()<256)ordered.push_back(n);};
+        auto add=[&](Node const* n){if(std::find(ordered.begin(),ordered.end(),n)==ordered.end()&&ordered.size()<(all_images?1024u:256u))ordered.push_back(n);};
         for(auto const& p:front.patches)add(p.node.get());
+        if(all_images)for(auto const& image:images)for(auto const& p:image.second.patches)add(p.node.get());
         for(unsigned i=0;i<ordered.size();++i)for(auto const& input:ordered[i]->inputs)for(auto const& p:input.patches)add(p.node.get());
-        for(unsigned i=0;i<ordered.size();++i){auto n=ordered[i];auto const& c=n->command;char text[256];
-            std::snprintf(text,sizeof(text),"id=%u kind=%d operation=%u dynamic=%u sampled=%u projected=%u area=%d,%d,%d,%d source=%d,%d,%d,%d color=%u",
-                i,int(c.kind),unsigned(n->operation),unsigned(n->dynamic),unsigned(bool(n->sample)),unsigned(n->projects_scene),
+        for(unsigned i=0;i<ordered.size();++i){auto n=ordered[i];auto const& c=n->command;char text[384];
+            std::snprintf(text,sizeof(text),"id=%u bytes=%llu kind=%d operation=%u dynamic=%u map_dynamic=%u retired=%u sampled=%u projected=%u view=%u seen=%llu area=%d,%d,%d,%d source=%d,%d,%d,%d color=%u",
+                i,n->bytes[0]+n->bytes[1]+n->direct.input_bytes,int(c.kind),unsigned(n->operation),unsigned(n->dynamic),unsigned(n->map_dynamic),unsigned(n->retired),unsigned(bool(n->sample)),unsigned(n->projects_scene),unsigned(bool(n->view)),n->seen,
                 n->area.left,n->area.top,n->area.right,n->area.bottom,c.source_x,c.source_y,c.source_width,c.source_height,c.color);
             std::string line=text;
             for(unsigned input=0;input<6;++input)if(!n->inputs[input].patches.empty()){

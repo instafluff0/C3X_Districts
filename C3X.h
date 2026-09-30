@@ -2714,6 +2714,7 @@ struct district_button_image_set {
 	unsigned long long * custom_renderer_world_visibility;
 	long long custom_renderer_visibility_revision;
 	long long custom_renderer_map_epoch, custom_renderer_viewer_epoch;
+	long long custom_renderer_display_viewer_epoch; // Last successfully composed viewer scope.
 	int custom_renderer_viewer_civ_id;
 	bool custom_renderer_capture_world_topology;
 	bool custom_renderer_world_audit_needed;

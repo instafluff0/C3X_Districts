@@ -12,14 +12,40 @@ def jobs():
     from Renderer.native.render_core import prepare_assets as cliffs
 
     def natural_sources():
-        return json.loads((natural.HERE / "provenance.json").read_text())["source_sha256"]
+        sources=json.loads((natural.HERE / "provenance.json").read_text())["source_sha256"]
+        # These local importers share the generic normalized terrain contract.
+        # Compile a separate payload per pack; runtime selection never rebuilds
+        # or rewrites the other pack's art.
+        for name in ("TerrainNormalized", "Civ5EnvironmentSkin"):
+            manifest=ROOT / "Renderer/packs" / name / "natural_runtime/manifest.json"
+            if manifest.exists():
+                sources.update(json.loads(manifest.read_text())["source_sha256"])
+            else:
+                sources.update({p.replace("Renderer/packs/Civ5EnvironmentSkin/",
+                    "Renderer/packs/"+name+"/"): h for p,h in list(sources.items())
+                    if p.startswith("Renderer/packs/Civ5EnvironmentSkin/")})
+            sources.update(low_relief.sources(ROOT / "Renderer/packs" / name))
+        sources["Renderer/tools/asset_compiler/build_low_relief.py"]=None
+        return sources
 
     def build_natural(stage):
         record = natural.build_pack(stage / "Renderer/packs/NaturalFidelityRuntime")
         metadata = stage / "Renderer/native/source_fidelity/provenance.json"
         metadata.parent.mkdir(parents=True)
         metadata.write_text(json.dumps(record, indent=2) + "\n")
-        return record["source_sha256"]
+        consumed=dict(record["source_sha256"])
+        for name in ("TerrainNormalized", "Civ5EnvironmentSkin"):
+            pack=ROOT / "Renderer/packs" / name
+            output=stage / "Renderer/packs" / name / "natural_runtime"
+            compiled=natural.build_pack(output, terrain_pack=pack)
+            compiled["source_sha256"].update(low_relief.build(output, terrain_pack=pack))
+            compiled["schema"]="c3x.natural_runtime.v1"
+            compiled["terrain_pack"]=pack.relative_to(ROOT).as_posix()
+            (output / "manifest.json").write_text(json.dumps(compiled,indent=2)+"\n")
+            consumed.update(compiled["source_sha256"])
+        consumed["Renderer/tools/asset_compiler/build_low_relief.py"]=digest(
+            ROOT / "Renderer/tools/asset_compiler/build_low_relief.py")
+        return consumed
 
     def cliff_sources():
         record = json.loads((cliffs.OUTPUT / "manifest.json").read_text())

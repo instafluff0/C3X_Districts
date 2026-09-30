@@ -30,6 +30,7 @@ struct SandboxVisualShaders {
     ID3D11PixelShader* reflected_mountain_material = nullptr;
     ID3D11PixelShader* terrain_relight = nullptr;
     ID3D11PixelShader* aquatic_feature = nullptr;
+    ID3D11PixelShader* vegetation_depth[2] = {};
     ~SandboxVisualShaders() {
         if(water_surface) water_surface->Release();
         if(river_surface) river_surface->Release();
@@ -43,6 +44,7 @@ struct SandboxVisualShaders {
         if(reflected_mountain_material) reflected_mountain_material->Release();
         if(terrain_relight) terrain_relight->Release();
         if(aquatic_feature) aquatic_feature->Release();
+        for(auto* shader:vegetation_depth)if(shader)shader->Release();
     }
     static std::string source(std::string const& relative) {
         char const* profile=renderer.city_profile?"city_fidelity":
@@ -156,6 +158,17 @@ float c3x_paged_visibility(Texture2DArray field,float4 world,float3 normal,bool 
             shader.append(std::istreambuf_iterator<char>(variant),
                 std::istreambuf_iterator<char>());
         }
+        if(std::strcmp(entry,"PSSandboxVegetationDepth")==0 ||
+           std::strcmp(entry,"PSSandboxReflectedVegetationDepth")==0)
+            shader.append(R"(
+void PSSandboxVegetationDepth(P input) {
+    if(input.secondary.y>.5)clip(Opacity.Sample(Wrap,input.uv).r-.5);
+}
+void PSSandboxReflectedVegetationDepth(P input) {
+    clip(input.world.z-NativeReflection.z-.0001);
+    PSSandboxVegetationDepth(input);
+}
+)");
         if(std::strcmp(entry,"PSSandboxUnderlay")==0)
             shader.append(R"(
 float4 PSSandboxUnderlay(PixelInput input) : SV_Target {
@@ -371,6 +384,8 @@ float4 PSSandboxAquaticFeature(FeaturePixelInput input) : SV_Target {
            !compile("mountain.hlsl","PSSandboxReflectionTerrainMaterial",
                 &reflected_mountain_material))return false;
         if(!compile("feature.hlsl","PSSandboxAquaticFeature",&aquatic_feature))return false;
+        if(!compile("objects.hlsl","PSSandboxVegetationDepth",&vegetation_depth[0]) ||
+           !compile("objects.hlsl","PSSandboxReflectedVegetationDepth",&vegetation_depth[1]))return false;
         char const* names[]={"hydrology.hlsl","feature.hlsl","terrain.hlsl",
             "mountain.hlsl","objects.hlsl"};
         auto& reflection=sandbox_active_reflection();
@@ -429,7 +444,7 @@ struct SandboxSceneShadow {
     ID3D11ShaderResourceView* production_view = nullptr;
     float box[4] = {};
     std::uint64_t signature = 0;
-    std::uint64_t caster_signature = ~std::uint64_t(0);
+    std::uint64_t caster_signature = ~std::uint64_t(0), receiver_revision = 0;
     std::array<float,12> light_basis{};
     unsigned builds = 0, draws = 0;
     template<class T> static void drop(T*& pointer) {if (pointer) pointer->Release(); pointer=nullptr;}
@@ -749,7 +764,9 @@ struct SandboxSceneShadow {
             views[0]=renderer.cliff_views[renderer.cliff_bundle.assets[layer-geometry_cliff0].texture_index];
         context->PSSetShaderResources(0,33,views.data());return true;
     }
-    bool render(GeometryDrawView::Records const& receivers,std::uint64_t scene) {
+    bool render(GeometryDrawView::Records const& receivers,std::uint64_t scene,std::uint64_t revision) {
+        if(view && signature==scene && light_basis==renderer.shadow_basis &&
+                receiver_revision==revision)return true;
         if (!ensure() || !refresh_casters(scene)) return false;
         float needed[4]={std::numeric_limits<float>::max(),std::numeric_limits<float>::max(),
             -std::numeric_limits<float>::max(),-std::numeric_limits<float>::max()};
@@ -764,6 +781,7 @@ struct SandboxSceneShadow {
                 any=true;
             }
         if (!any) return false;
+        receiver_revision=revision;
         if (signature==scene &&
             light_basis==renderer.shadow_basis &&
             needed[0]>box[0]+1 && needed[1]>box[1]+1 &&
@@ -937,6 +955,7 @@ struct SandboxFreshPipeline {
     unsigned resident_builds=0;
     int wrap_pixels=0;
     bool visibility_valid=false;
+    std::uint64_t visibility_revision=0;
     std::array<std::uint64_t,5> visibility_scene_key{};
     std::array<float,5> visibility_view_key{};
     ID3D11ShaderResourceView* production_reflection=nullptr;
@@ -1060,7 +1079,7 @@ struct SandboxFreshPipeline {
             }
         }
         visibility_scene_key=scene_key;visibility_view_key=view_key;
-        visibility_valid=true;
+        visibility_valid=true;++visibility_revision;
         return visible>0;
     }
     bool draw_features(GeometryDrawView::Records const& features,
@@ -1140,6 +1159,36 @@ struct SandboxFreshPipeline {
     // Like CPatchRData::RenderBases, visible records are submitted from resident
     // buffers after the pass has bound its material variant. The producer owns
     // meshes and materials; this pipeline owns per-camera selection and draws.
+    D3D11_RECT source_bounds(ViewportShaderSettings const& settings,D3D11_RECT rect,bool mirrored)const {
+        float guard=mirrored?8.f:4.f;
+        return c3x_renderer::SceneProjection(renderer.content_view_width,
+            renderer.content_view_height,projection_zoom).source_rect(rect,guard,
+                (1.f/settings.inverse_size[0]-renderer.content_view_width-2*guard)*.5f,
+                (1.f/settings.inverse_size[1]-renderer.content_view_height-2*guard)*.5f);
+    }
+    D3D11_RECT reflected_water_bounds(ViewportShaderSettings const& settings,int width,int height)const {
+        D3D11_RECT result={width+8,height+8,0,0};
+        c3x_renderer::SceneProjection projection(renderer.content_view_width,
+            renderer.content_view_height,projection_zoom);
+        for(auto layer:{geometry_water,geometry_river})for(auto const& record:water_visible[layer]){
+            auto const& b=GeometryDrawReference(record).bounds();
+            float dx=settings.translation[0]+record.translation_x-4;
+            float dy=settings.translation[1]+record.translation_y-4;
+            int left=std::max(0,int(std::floor(projection.x(b.left+dx)+4)));
+            int top=std::max(0,int(std::floor(projection.y(b.top+dy)+4)));
+            int right=std::min(width,int(std::ceil(projection.x(b.right+dx)+4)));
+            int bottom=std::min(height,int(std::ceil(projection.y(b.bottom+dy)+4)));
+            if(left>=right || top>=bottom)continue;
+            // Water uses a four-pixel reflection guard. Its bounded normal
+            // distortion reaches at most 60x30 display pixels; retain another
+            // four/six pixels for filtering at the .375 reflection scale.
+            result.left=std::min<LONG>(result.left,std::max(0,left+4-64));
+            result.top=std::min<LONG>(result.top,std::max(0,top+4-36));
+            result.right=std::max<LONG>(result.right,std::min(width+8,right+4+64));
+            result.bottom=std::max<LONG>(result.bottom,std::min(height+8,bottom+4+36));
+        }
+        return result;
+    }
     bool issue_records(GeometryDrawView::Records const& records,GeometryLayer layer,
             ViewportShaderSettings const& viewport,D3D11_RECT rect,bool mirrored) {
         auto* context=renderer.context;
@@ -1276,10 +1325,11 @@ struct SandboxFreshPipeline {
             }
             selected.clear();return true;
         };
+        auto clip=source_bounds(viewport,rect,mirrored);
         for(auto const& record:records[layer]){
             GeometryDrawReference chunk(record);
             if(mirrored && chunk.content().animation_texture)continue;
-            if(!renderer.chunk_intersects_region(chunk,viewport,rect,mirrored))continue;
+            if(!renderer.chunk_intersects_region(chunk,viewport,clip,mirrored))continue;
             ViewportShaderSettings settings=viewport;
             std::copy(std::begin(chunk.natural_projection()),
                 std::end(chunk.natural_projection()),settings.natural_projection);
@@ -1299,7 +1349,7 @@ struct SandboxFreshPipeline {
     }
     void bind_common(ViewportShaderSettings const& settings,D3D11_RECT rect,
             ID3D11RenderTargetView* target,ID3D11DepthStencilView* depth,
-            bool mirrored,float scale) {
+            bool mirrored,float scale,bool default_materials=true) {
         auto* context=renderer.context;
         context->OMSetRenderTargets(1,&target,depth);
         context->OMSetDepthStencilState(renderer.depth_state,0);
@@ -1331,8 +1381,13 @@ struct SandboxFreshPipeline {
         ID3D11SamplerState* samplers[]={renderer.natural_wrap,renderer.natural_clamp};
         context->PSSetSamplers(0,2,samplers);
         auto const& materials=renderer.compiled_material_views();
-        context->PSSetShaderResources(0,UINT(materials.size()),materials.data());
-        context->PSSetShaderResources(25,1,&renderer.source_shadow.view);
+        // Natural providers immediately bind their complete material closure;
+        // rebinding the generic 128-slot table first adds unused descriptors
+        // for every tree body. Their shared/extended inputs are bound below.
+        if(default_materials){
+            context->PSSetShaderResources(0,UINT(materials.size()),materials.data());
+            context->PSSetShaderResources(25,1,&renderer.source_shadow.view);
+        }
         ID3D11ShaderResourceView* reflection_view=mirrored?nullptr:reflection.view;
         context->PSSetShaderResources(121,1,&reflection_view);
         mirror.bind(context,unsigned(reflection.width/reflection_scale),
@@ -1340,7 +1395,7 @@ struct SandboxFreshPipeline {
         (void)settings;
     }
     bool draw_vegetation_instances(GeometryDrawView::Records const& records,
-            GeometryLayer layer,ViewportShaderSettings const& settings,bool mirrored) {
+            GeometryLayer layer,ViewportShaderSettings const& settings,D3D11_RECT rect,bool mirrored) {
         using Stream=c3x_renderer::render_core::InstanceStream;
         auto& group=records[layer];
         if(group.empty())return true;
@@ -1358,10 +1413,22 @@ struct SandboxFreshPipeline {
             UINT strides[]={32,64},offsets[]={0,renderer.natural.instance_stream.offset};
             context->IASetVertexBuffers(0,2,streams,strides,offsets);
             context->IASetIndexBuffer(mesh.indices,mesh.index_format,0);
+            // Cutout foliage is opaque after its authored opacity test. Find
+            // the nearest leaf first, then shade only fragments that survive
+            // depth. The same instance stream, alpha cutoff and draw order are
+            // used by both passes, including equal-depth ties.
+            char skip_depth[8]{};
+            if(!(GetEnvironmentVariableA("C3X_SANDBOX_SKIP_VEGETATION_DEPTH",skip_depth,sizeof(skip_depth)) && skip_depth[0]=='1')){
+                context->PSSetShader(visual.vegetation_depth[mirrored?1:0],nullptr,0);
+                context->DrawIndexedInstanced(mesh.index_count,UINT(batch.size()),0,0,0);
+                context->PSSetShader(mirrored?sandbox_active_reflection().ps[4]:renderer.natural.ps[2],nullptr,0);
+            }
             context->DrawIndexedInstanced(mesh.index_count,UINT(batch.size()),0,0,0);
             batch.clear();return true;
         };
+        auto clip=source_bounds(settings,rect,mirrored);
         for(auto const& record:group){
+            if(!renderer.chunk_intersects_region(GeometryDrawReference(record),settings,clip,mirrored))continue;
             auto const& content=record.content();
             if(!content.instances || content.buffer!=mesh.buffer)return false;
             for(auto instance:*content.instances){
@@ -1380,7 +1447,41 @@ struct SandboxFreshPipeline {
             ID3D11RenderTargetView* target,ID3D11DepthStencilView* depth,
             bool mirrored,float scale,bool capture_terrain_material=false) {
         if (records[layer].empty()) return true;
-        bind_common(settings,rect,target,depth,mirrored,scale);
+        // Opt-in attribution only: virtual adapters may return retrieval-clock
+        // timestamps. A bounded completion probe includes driver submission and
+        // GPU work, and deliberately serializes passes. Never use for FPS claims.
+        struct CompletionProbe {
+            ID3D11DeviceContext* context=nullptr;
+            Microsoft::WRL::ComPtr<ID3D11Query> query;
+            LARGE_INTEGER start{},frequency{};
+            unsigned layer;bool mirrored;
+            bool wait() {
+                context->End(query.Get());context->Flush();
+                ULONGLONG deadline=GetTickCount64()+2000;
+                HRESULT result;
+                while((result=context->GetData(query.Get(),nullptr,0,
+                        D3D11_ASYNC_GETDATA_DONOTFLUSH))==S_FALSE && GetTickCount64()<deadline)Sleep(0);
+                return result==S_OK;
+            }
+            CompletionProbe(unsigned l,bool m):layer(l),mirrored(m) {
+                char option[8]{};
+                if(!GetEnvironmentVariableA("C3X_SANDBOX_PROFILE_COMPLETION",option,sizeof(option)) || option[0]!='1')return;
+                D3D11_QUERY_DESC desc={D3D11_QUERY_EVENT,0};
+                if(FAILED(renderer.device->CreateQuery(&desc,&query)))return;
+                context=renderer.context;
+                if(!wait()){context=nullptr;return;}
+                QueryPerformanceFrequency(&frequency);QueryPerformanceCounter(&start);
+            }
+            ~CompletionProbe(){if(context){
+                bool valid=wait();LARGE_INTEGER end{};QueryPerformanceCounter(&end);
+                double ms=1000.*double(end.QuadPart-start.QuadPart)/frequency.QuadPart;
+                if(ms>1 || !valid){
+                    std::printf("SANDBOX_COMPLETION layer=%u mirror=%u valid=%u ms=%.3f\n",layer,unsigned(mirrored),unsigned(valid),ms);
+                    std::fflush(stdout);
+                }
+            }}
+        } completion_probe(unsigned(layer),mirrored);
+        bind_common(settings,rect,target,depth,mirrored,scale,layer<geometry_natural_terrain);
         auto* context=renderer.context;
         auto& mirror=sandbox_active_reflection();
         if (layer>=geometry_natural_terrain) {
@@ -1449,7 +1550,7 @@ struct SandboxFreshPipeline {
             context->PSSetShaderResources(17,1,&renderer.source_shadow.view);
         if(renderer.city_profile)renderer.cities.scene_lights.bind(context);
         if(layer>=geometry_natural_forest0 && records[layer].front().content().instances)
-            return draw_vegetation_instances(records,layer,settings,mirrored);
+            return draw_vegetation_instances(records,layer,settings,rect,mirrored);
         if(!mirrored && layer==geometry_water){
             char full_water[8]{};
             if(!(GetEnvironmentVariableA("C3X_SANDBOX_WATER_FULL_SHADER",
@@ -1927,7 +2028,7 @@ struct SandboxFreshPipeline {
         region_settings.inverse_size[1]=1.f/static_region.height;
         D3D11_RECT region_rect={region_margin_x,region_margin_y,
             LONG(region_margin_x+w),LONG(region_margin_y+h)};
-        if(!update_city_lights() || !shadow.render(all_visible,scene_revision()))return fail("lights_or_shadow");
+        if(!update_city_lights() || !shadow.render(all_visible,scene_revision(),visibility_revision))return fail("lights_or_shadow");
         QueryPerformanceCounter(&ticks[1]);
         D3D11_RECT full={0,0,LONG(w),LONG(h)};
         char unit_control[8]{};
@@ -1935,8 +2036,8 @@ struct SandboxFreshPipeline {
             sizeof(unit_control)) && std::strcmp(unit_control,"1")==0;
         // One BIQ water plane currently consumes this mirror target. Each
         // additional authored water level can own another target and pass.
-        if (renderer.reflection.enabled &&
-            (!water_visible[geometry_water].empty() || !water_visible[geometry_river].empty())) {
+        auto mirror=reflected_water_bounds(settings,int(w),int(h));
+        if (renderer.reflection.enabled && mirror.left<mirror.right && mirror.top<mirror.bottom) {
             bool redraw=!reflection_valid ||
                 reflection_signature!=scene_revision() ||
                 reflection_shadow_builds!=shadow.builds ||
@@ -1945,7 +2046,6 @@ struct SandboxFreshPipeline {
             else {
             ID3D11ShaderResourceView* none=nullptr;
             renderer.context->PSSetShaderResources(121,1,&none);
-            D3D11_RECT mirror={0,0,LONG(w+8),LONG(h+8)};
             if(!prepare_reflected_terrain_material(reflected,mirror))return fail("reflected_terrain");
             float mirror_clear[4]={};
             renderer.context->ClearRenderTargetView(reflection_static.target,mirror_clear);
@@ -2010,11 +2110,12 @@ struct SandboxFreshPipeline {
             auto fill_strip=[&](D3D11_RECT strip){
                 if(strip.left>=strip.right || strip.top>=strip.bottom)return true;
                 GeometryDrawView::Records selected{};
+                auto clip=source_bounds(region_settings,strip,false);
                 for(unsigned layer=0;layer<geometry_layer_count;++layer)
                     for(auto const& record:resident[layer]){
                         if(renderer.water_scene_active && record.water_dependent)continue;
                         if(renderer.chunk_intersects_region(GeometryDrawReference(record),
-                                region_settings,strip,false))selected[layer].push_back(record);
+                                region_settings,clip,false))selected[layer].push_back(record);
                     }
                 return draw_scene(selected,region_settings,strip,static_region.target,
                     static_region.depth,false,float(scene_scale));

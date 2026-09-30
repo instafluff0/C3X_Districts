@@ -117,10 +117,14 @@ int main(int argc,char**argv){try{
     bad=fixture;bad.pack.pop_back();reject(bad);
     bad=fixture;bad.pack.push_back(0);reject(bad);
     std::cout<<"PASS natural CPU data: "<<rejected<<" invalid inputs, height sampling and 24 lighting phases\n";
-    if(argc==2){
+    if(argc==2 || argc==3){
         NaturalData real;std::vector<std::size_t> textures;
         check(real.load_data(textures,[&](std::string const&path,std::vector<std::uint8_t>&out){
-            std::ifstream stream(std::string(argv[1])+"/"+path,std::ios::binary);
+            std::string resolved=path;
+            std::string const prefix="Renderer/packs/NaturalFidelityRuntime/";
+            if(argc==3 && path.compare(0,prefix.size(),prefix)==0)
+                resolved=std::string(argv[2])+"/"+path.substr(prefix.size());
+            std::ifstream stream(std::string(argv[1])+"/"+resolved,std::ios::binary);
             if(!stream)return false;out.assign(std::istreambuf_iterator<char>(stream),{});return true;
         },[](std::vector<std::uint8_t>const&bytes,std::size_t&texture){texture=bytes.size();return true;}),"production payload rejected");
         valid_data(real,39);

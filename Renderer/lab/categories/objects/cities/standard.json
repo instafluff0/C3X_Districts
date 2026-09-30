@@ -29,7 +29,8 @@
     "Renderer/native/city_fidelity/scene_lights.py",
     "Renderer/native/city_fidelity/gpu.h",
     "Renderer/lab/shared/cities/auxiliary.py",
-    "Renderer/tools/recover_city_auxiliary_uv.py"
+    "Renderer/tools/recover_city_auxiliary_uv.py",
+    "Renderer/native/city_fidelity/light_spatial_index.h"
   ],
   "recipe": {
     "terrain": 2,
@@ -58,7 +59,8 @@
     "Renderer.native.test_city_recipes",
     "Renderer.native.test_city_border_capture",
     "Renderer.native.test_city_lighting",
-    "Renderer.tools.test_city_auxiliary_uv"
+    "Renderer.tools.test_city_auxiliary_uv",
+    "Renderer.native.test_light_spatial_index"
   ],
   "references": {
     "d3d11": [

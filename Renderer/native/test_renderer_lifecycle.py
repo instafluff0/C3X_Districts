@@ -5,9 +5,9 @@ from Renderer.native.native_cpp_test import run_cpp
 ROOT = Path(__file__).resolve().parents[2]
 
 class RendererLifecycleTests(unittest.TestCase):
-    def test_first_map_wait_has_one_loading_scope_and_a_deadline(self):
+    def test_first_native_map_waits_once_with_a_deadline(self):
         source=(ROOT/'injected_code.c').read_text()
-        block=source.split('// Cold start is part of loading.',1)[1].split('\n\tbool gpu_map',1)[0]
+        block=source.split('// Complete the first native map draw',1)[1].split('\n\tbool gpu_map',1)[0]
         block=block[block.index('if ('):].replace('(void *)(*p_GetProcAddress)', '(Sleeper)(*p_GetProcAddress)')
         run_cpp(r'''
 #include <cassert>
@@ -24,7 +24,7 @@ void QueryPerformanceCounter(LARGE_INTEGER* t){t->QuadPart=ticks;}
 Sleeper get_proc(void*,char const*){return sleep_ms;}auto p_GetProcAddress=get_proc;
 void log_custom_renderer_event(char const*,int){}
 int native_map(int action,void*,void*,void*){if(action==C3X_NATIVE_MAP_CANCEL){++cancels;return 1;}++polls;return --remaining>0?4:reply;}
-struct {unsigned custom_renderer_presented_frames=0;LARGE_INTEGER custom_renderer_qpc_frequency{1000};void* kernel32=nullptr;decltype(&native_map)custom_renderer_native_map=native_map;} state,*is=&state;
+struct {long long custom_renderer_viewer_epoch=1,custom_renderer_display_viewer_epoch=0;LARGE_INTEGER custom_renderer_qpc_frequency{1000};void* kernel32=nullptr;decltype(&native_map)custom_renderer_native_map=native_map;} state,*is=&state;
 int execute(int resident_result){void* image=nullptr;int request=0,displayed=0;
 '''+block+r'''
  return resident_result;
@@ -32,15 +32,36 @@ int execute(int resident_result){void* image=nullptr;int request=0,displayed=0;
 int main(){
  form.GUI.field_574[3]=1;remaining=8;
  assert(execute(4)==1&&sleeps==8&&polls==8&&!cancels);
- state.custom_renderer_presented_frames=1;remaining=2;
- assert(execute(4)==1&&sleeps==10); // A second loading view must also finish.
+ state.custom_renderer_display_viewer_epoch=1;remaining=2;
+ assert(execute(4)==4&&sleeps==8); // Later redraws never wait, even under a loading bar.
  auto before=sleeps;
- state.custom_renderer_presented_frames=0;form.GUI.field_574[3]=0;
- assert(execute(4)==4&&sleeps==before); // never wait behind a black screen
+ state.custom_renderer_viewer_epoch=2;form.GUI.field_574[3]=0;
+ remaining=2;assert(execute(4)==1&&sleeps==before+2); // New viewer waits independently of the loading bar.
+ before=sleeps;
  form.GUI.field_574[3]=1;remaining=2;reply=3;
  assert(execute(4)==3&&sleeps==before+2); // failure exits promptly
  remaining=100000;reply=1;ticks=0;
  assert(execute(4)==0&&ticks==60000&&cancels==1); // bounded cold-start failure
+}
+''')
+
+    def test_retired_viewer_keeps_completed_pixels(self):
+        source=(ROOT/'Renderer/native/c3x_renderer.cpp').read_text()
+        gate=source.split('// A viewer change retires the old copied scene',1)[1]
+        gate=gate[gate.index('if(!capture->valid()'):].split('if(renderer_state.gpu_serial',1)[0]
+        run_cpp(r'''
+#include <cassert>
+struct Sampled {int kind=0;static Sampled frozen(){return {2};}};
+struct Capture {bool current=true;bool valid(){return current;}} captured,*capture=&captured;
+struct Selected {bool current=true;bool sample(long long,long long,long long,int&){return current;}} selection,*selected=&selection;
+Sampled draw(){long long ticks=1,frequency=1000,origin=0;int view=0;
+''' + gate + r'''
+ return {1};
+}
+int main(){
+ assert(draw().kind==1);captured.current=false;assert(draw().kind==2);
+ captured.current=true;selection.current=false;assert(draw().kind==2);
+ selection.current=true;assert(draw().kind==1);
 }
 ''')
 

@@ -287,6 +287,14 @@ Prefixes:
 
 Pack paths and any paths inside manifests must be normalized and prevented from escaping their pack root. Renderer rules reference asset IDs, not arbitrary model paths.
 
+The current terrain/mountain pipeline reads `natural_runtime/natural.bin`, its
+material payloads and optional `natural_runtime/low-relief.bin` beneath the
+selected terrain pack. Definition reload retires the previous pack's textures,
+height fields and resident geometry. Lab preparation compiles this payload for
+both local normalized terrain packs; switching their `#Pack` paths requires only
+a game restart after preparation. The shared `NaturalFidelityRuntime` folder is
+a compiler compatibility fixture and does not override production pack selection.
+
 ## Section Types
 
 The v0 grammar uses the same style as `default.tile_animations.txt`: a directive starts a section and following `key = value` lines populate it.

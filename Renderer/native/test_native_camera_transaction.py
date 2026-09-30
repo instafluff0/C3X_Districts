@@ -19,7 +19,8 @@ class NativeCameraTransactionTests(unittest.TestCase):
 using DWORD=unsigned;
 DWORD caller_thread=1;
 DWORD GetCurrentThreadId(){return caller_thread;}
-void OutputDebugStringA(char const*){}
+std::vector<std::string> debug_lines;
+void OutputDebugStringA(char const* line){debug_lines.emplace_back(line);}
 using Id=unsigned long long;
 struct Rect {int left=0,top=0,right=0,bottom=0;};
 int creates=0,imports=0,inserts=0,flushes=0,polls=0,cancels=0;
@@ -59,7 +60,7 @@ struct Owner {
  std::unique_ptr<c3x_gpu_images::WorkerClient> client;
  std::unique_ptr<Adapter<c3x_gpu_images::WorkerClient>> adapter;
  c3x_renderer_gpu_frame_v1 frame={sizeof(frame)};
- bool scene_units=false,tactical=true;void* front_native=nullptr;void* display_native=nullptr;unsigned surface_copy_reports=0,surface_fill_reports=0,cold_stroke_reports=0;
+ bool scene_units=false,trace_success=false,tactical=true;void* front_native=nullptr;void* display_native=nullptr;unsigned surface_copy_reports=0,surface_fill_reports=0,cold_stroke_reports=0;
  void check_thread(){}
  static int field(void* p,unsigned offset){return *reinterpret_cast<int*>(static_cast<char*>(p)+offset);}
 ''' + methods.replace('CompositionOwner(', 'Owner(') + r'''
@@ -77,6 +78,18 @@ int poll(long long ticket,c3x_renderer_gpu_camera_view_v1* out){
 int cancel(long long){++cancels;return C3X_RENDERER_RESULT_OK;}
 int life(int,void*,int){return eligible_native?1:0;}
 int main(){
+ // Routine transaction status is opt-in; failures remain diagnosable even
+ // when the native hot path is otherwise quiet.
+ Owner quiet(nullptr,nullptr,nullptr,nullptr,life,nullptr,nullptr);
+ for(int code:{C3X_RENDERER_RESULT_OK,C3X_RENDERER_RESULT_PENDING,
+     C3X_RENDERER_RESULT_SUPERSEDED,C3X_RENDERER_RESULT_BUSY})quiet.trace_map("probe",code,nullptr);
+ assert(debug_lines.empty());
+ quiet.trace_map("probe",C3X_RENDERER_RESULT_ERROR,nullptr);
+ quiet.trace_map("probe",C3X_RENDERER_RESULT_BAD_ARGUMENT,nullptr);
+ assert(debug_lines.size()==2);
+ Owner traced(nullptr,nullptr,nullptr,nullptr,life,nullptr,nullptr,false,true);
+ traced.trace_map("probe",C3X_RENDERER_RESULT_PENDING,nullptr);
+ assert(debug_lines.size()==3);
  Owner owner(nullptr,nullptr,nullptr,nullptr,life,nullptr,nullptr);owner.set_camera(begin,poll,cancel);
  alignas(int) char image[0x500]={},other[0x500]={};
  *reinterpret_cast<int*>(image+0x24)=16;*reinterpret_cast<int*>(image+0x38)=640;*reinterpret_cast<int*>(image+0x3c)=480;

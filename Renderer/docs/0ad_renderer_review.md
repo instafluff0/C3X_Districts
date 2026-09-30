@@ -17,6 +17,39 @@ the only active task queue; this review is supporting evidence.
 
 ## Observed mechanisms and their transfer
 
+### September 29: camera-history lifetime
+
+Revisited the local 0 A.D. checkout at
+`0ed48b3a1fb1b4b718a78869fa497185af55e086` while investigating the live freeze.
+`SceneRenderer::EndFrame` clears frame submission references;
+`VertexBufferManager::Handle::Reset` releases its allocation through the owner.
+The Vulkan `CTexture` destructor schedules image/view destruction, and
+`CDevice::ProcessObjectToDestroyQueue` waits for frames in flight before freeing
+them. These illustrate explicit ownership and safe retirement. C3X uses D3D11
+reference lifetimes for submitted GPU work; it does not need a second Vulkan-style
+retirement queue. No upstream code was copied.
+
+Applied here: freeze an expired camera view's completed pixels and release
+its scene inputs, callbacks and projection scratch. Native HUD copies can retain
+those pixels without retaining every prior camera's rendering history.
+The 80-camera GPU reproduction preserves exact native HUD output: retained
+projected-view storage previously grew to 16,441,344 bytes and now stays at
+270,336 bytes. Ordinary views stay at 221,184 bytes under the same test.
+The existing 256 MiB production limit is unchanged.
+
+The inspected `TextureManager` still owns a strong texture cache with an explicit
+TODO to expire unused entries. Its hotload index uses weak references; that is
+not evidence of a complete bounded eviction policy to copy.
+
+Source locations at this revision:
+`source/renderer/SceneRenderer.cpp:999`,
+`source/renderer/VertexBufferManager.cpp:102`,
+`source/renderer/backend/vulkan/Texture.cpp:366`,
+`source/renderer/backend/vulkan/Device.cpp:1058`, and
+`source/graphics/TextureManager.cpp:908`.
+
+### Original review
+
 | Mechanism | Observed upstream implementation | Implication for C3X |
 | --- | --- | --- |
 | Shared immutable meshes | `InstancingModelRenderer::CreateModelData` attaches GPU render data to a shared model definition once. Static model update/upload methods do no per-frame geometry work. | Separate reusable asset buffers from instance placement and visible wrapped occurrences. Camera changes should change projection/selection, not rebuild the asset. |

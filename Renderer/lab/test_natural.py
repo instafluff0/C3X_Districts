@@ -3,6 +3,7 @@ from pathlib import Path
 import subprocess
 import json
 import struct
+import hashlib
 import tempfile
 import unittest
 
@@ -116,6 +117,44 @@ class NaturalInputs(unittest.TestCase):
             self.assertIn("23 invalid inputs, height sampling and 24 lighting phases", result.stdout)
             if local_pack.exists():
                 self.assertIn("PASS production natural payload:", result.stdout)
+            for pack in ("TerrainNormalized", "Civ5EnvironmentSkin"):
+                relative="Renderer/packs/"+pack+"/natural_runtime"
+                if (ROOT / relative / "natural.bin").exists():
+                    result=subprocess.run([str(binary),str(ROOT),relative],check=True,capture_output=True,text=True)
+                    self.assertIn("PASS production natural payload:",result.stdout)
+
+    def test_terrain_pack_materials_and_height_fields_are_selected_independently(self):
+        signatures=[]
+        for name in ("TerrainNormalized", "Civ5EnvironmentSkin"):
+            pack=ROOT / "Renderer/packs" / name
+            runtime=pack / "natural_runtime"
+            if not (runtime / "natural.bin").exists():
+                self.skipTest("Prepared local terrain packs are unavailable")
+            data=(runtime / "natural.bin").read_bytes()
+            count=struct.unpack_from('<6I',data,8)[0]
+            paths=[];cursor=32
+            for _ in range(count):
+                length=struct.unpack_from('<I',data,cursor)[0];cursor+=4
+                paths.append(data[cursor:cursor+length].decode());cursor+=length
+            bindings=struct.unpack_from('<57I',data,cursor)
+            # Grass, hill tops, plains, tundra, desert, mountain material and
+            # all five macro fields must come from this pack, even where one
+            # pack deduplicates channels that the other keeps distinct.
+            channels={14:'relief/hills/standard/height_lod0',30:'relief_surface_detail'}
+            for first,family in ((0,'grassland'),(3,'grasshill_top'),(6,'plains'),
+                    (9,'plainshill_top'),(15,'tundra_blend'),(19,'desert'),
+                    (37,'mtn_base'),(40,'mtn_top'),(43,'mtn_snow')):
+                for offset,role in enumerate(('base_color','height','specular')):
+                    channels[first+offset]=family+'_'+role
+            for variant in range(5):
+                for offset,role in enumerate(('height','blend')):
+                    channels[47+2*variant+offset]=f'relief/mountains/standard/variant_{variant+1:02d}/{role}_lod0'
+            for slot,source in channels.items():
+                expected=(pack / ('textures/'+source+'.dds')).read_bytes()
+                actual=(runtime / paths[bindings[slot]]).read_bytes()
+                self.assertEqual(actual,expected,name+': '+source)
+            signatures.append(hashlib.sha256((runtime / paths[bindings[0]]).read_bytes()).hexdigest())
+        self.assertNotEqual(*signatures)
 
 
 if __name__ == "__main__":

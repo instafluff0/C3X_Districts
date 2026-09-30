@@ -28,7 +28,7 @@ class CompositionOwner {
     std::unique_ptr<c3x_gpu_images::WorkerClient> client;
     std::unique_ptr<Adapter<c3x_gpu_images::WorkerClient>> adapter;
     c3x_renderer_gpu_frame_v1 frame={sizeof(frame)};
-    bool scene_units=false;
+    bool scene_units=false,trace_success=false;
     void* front_native=nullptr;void* display_native=nullptr;unsigned surface_copy_reports=0,surface_fill_reports=0,cold_stroke_reports=0,world_reports=0;
     using Tactical=c3x_renderer::tactical::Input;
     std::function<int(Tactical const&,c3x_renderer_gpu_unit_v1 const&)> tactical;
@@ -49,6 +49,9 @@ class CompositionOwner {
     static int field(void* p,unsigned offset){return c3x_native_access::field(p,offset);}
     void clear_camera_capture(){camera_capture={};camera_tiles.clear();camera_topology.clear();}
     void trace_map(char const* phase,int result,void* image,c3x_renderer_camera_request_v1 const* request=nullptr)const{
+        if(!trace_success && (result==C3X_RENDERER_RESULT_OK ||
+                result==C3X_RENDERER_RESULT_PENDING || result==C3X_RENDERER_RESULT_SUPERSEDED ||
+                result==C3X_RENDERER_RESULT_BUSY))return;
         char line[320];int anchor_x=0,anchor_y=0;
         if(request&&request->frame&&request->frame->tile_count&&request->frame->tiles){
             anchor_x=request->frame->tiles[0].anchor_x;anchor_y=request->frame->tiles[0].anchor_y;
@@ -93,7 +96,7 @@ public:
     }
 public:
     CompositionOwner(c3x_renderer_gpu_render_fn r,c3x_renderer_gpu_images_fn i,c3x_renderer_gpu_present_fn p,
-        c3x_renderer_gpu_unit_fn u,c3x_renderer_native_lifetime_fn l,void* b,void* end,bool direct_scene_units=false):render(r),images(i),present(p),unit(u),lifetime(l),bits(b),release(end),scene_units(direct_scene_units){}
+        c3x_renderer_gpu_unit_fn u,c3x_renderer_native_lifetime_fn l,void* b,void* end,bool direct_scene_units=false,bool diagnostic_trace=false):render(r),images(i),present(p),unit(u),lifetime(l),bits(b),release(end),scene_units(direct_scene_units),trace_success(diagnostic_trace){}
     void set_camera(c3x_renderer_gpu_camera_begin_fn begin,c3x_renderer_gpu_camera_poll_view_fn poll,c3x_renderer_camera_cancel_fn cancel){
         camera_begin=begin;camera_poll=poll;camera_cancel=cancel;
     }
@@ -374,11 +377,13 @@ public:
             c3x_renderer_gpu_present_v1 r={sizeof(r)};r.ticket=frame.ticket;r.image=std::int64_t(id);r.window=window;
             r.width=width;r.height=height;r.area[0]=rect.left;r.area[1]=rect.top;r.area[2]=rect.right;r.area[3]=rect.bottom;
             client->flush();auto result=present(&r);
-            char line[256];std::snprintf(line,sizeof(line),
+            if(trace_success || result!=C3X_RENDERER_RESULT_OK){
+                char line[256];std::snprintf(line,sizeof(line),
                 "[C3X renderer] stage=native-ui-present result=%d ticket=%lld map_image=%lld display_image=%lld area=%ld,%ld,%ld,%ld\n",
                 result,static_cast<long long>(frame.ticket),static_cast<long long>(frame.map_image),
                 static_cast<long long>(id),rect.left,rect.top,rect.right,rect.bottom);
-            OutputDebugStringA(line);
+                OutputDebugStringA(line);
+            }
             if(result==C3X_RENDERER_RESULT_OK)return 1;
             // Renderer64 owns these pixels. A window admission failure must
             // not request a forbidden map readback and poison the image queue.
@@ -399,10 +404,12 @@ public:
                 target.clip[3]=frame.height;target.playback_flags=color;
                 int result=unit(static_cast<c3x_renderer_unit_v1 const*>(from),&target,
                     const_cast<int*>(static_cast<int const*>(to)));
-                char line[160];std::snprintf(line,sizeof(line),
+                if(trace_success || result!=C3X_RENDERER_RESULT_OK){
+                    char line[160];std::snprintf(line,sizeof(line),
                     "[C3X renderer] stage=native-unit-capture result=%d accepted=%u front_ticket=%lld\n",
                     result,unsigned(result==C3X_RENDERER_RESULT_OK),static_cast<long long>(frame.ticket));
-                OutputDebugStringA(line);
+                    OutputDebugStringA(line);
+                }
                 if(result!=C3X_RENDERER_RESULT_OK)
                     throw std::runtime_error("fresh map unit capture failed");
                 return 1;

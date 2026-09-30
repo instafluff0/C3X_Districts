@@ -21,11 +21,17 @@ float4 unpack(uint p){return float4(p&255,(p>>8)&255,(p>>16)&255,p>>24);}
 float4 pixel(int2 p){return unpack(source_image.Load(int3(clamp(p,int2(0,0),int2(width-1,height-1)),0)));}
 [numthreads(8,8,1)] void main(uint3 at:SV_DispatchThreadID){
  if(at.x>=width||at.y>=height)return;
- float2 center=float2(width/2,height/2);
- float2 p=(float2(at.xy)+.5-center)/scale+center-.5;
- int2 lo=int2(floor(p));float2 f=frac(p);
- uint4 c=uint4(round(lerp(lerp(pixel(lo),pixel(lo+int2(1,0)),f.x),
-                            lerp(pixel(lo+int2(0,1)),pixel(lo+int2(1,1)),f.x),f.y)));
+ uint4 c;
+ // Geometry-projected scenes already have display-resolution pixels. Preserve
+ // their exact bytes with one fetch while producing the native color pair.
+ [branch] if(scale==1) c=uint4(unpack(source_image.Load(int3(at.xy,0))));
+ else {
+  float2 center=float2(width/2,height/2);
+  float2 p=(float2(at.xy)+.5-center)/scale+center-.5;
+  int2 lo=int2(floor(p));float2 f=frac(p);
+  c=uint4(round(lerp(lerp(pixel(lo),pixel(lo+int2(1,0)),f.x),
+                     lerp(pixel(lo+int2(0,1)),pixel(lo+int2(1,1)),f.x),f.y)));
+ }
  destination_image[at.xy]=c.x|(c.y<<8)|(c.z<<16)|(c.w<<24);
  if(native_format){
   uint threshold=0;

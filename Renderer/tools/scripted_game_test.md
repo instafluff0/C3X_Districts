@@ -82,6 +82,38 @@ overlays when that C3X setting is enabled, then confirm the reported cleanup.
 chooses Off, then reopens it and chooses the player. Inspect samples before
 and after both choices; key delivery alone does not prove the displayed state.
 
+`-Scenario debug -Seconds 55 -SampleHz 4` loads the disposable save, activates
+C3X debug mode, scrolls, restores normal visibility and scrolls again. The
+shortcut letters use key-up messages so individual letters do not issue unit
+orders. Up selects Yes in the activation prompt. Require one `debug-reveal`,
+one `debug-hide`, both scroll checkpoints and a completed first map; inspect
+window samples to verify terrain and restored fog. A delivered shortcut or
+closed prompt alone is insufficient.
+
+`-Scenario debug-scroll -Seconds 190 -SampleHz 2 -MeasureCadence -ProfileRenderer`
+keeps debug reveal enabled through the full 32-step camera loop.
+`-Scenario turn-stress -Seconds 285 -SampleHz 2 -MeasureCadence -ProfileRenderer`
+repeatedly moves the starting units east and west, skips any remaining moves,
+and ends eight turns. Require eight distinct native turn-completion markers
+and successful `motion-start` records across the run. Inspect the samples for
+actual movement; posted keys alone do not establish gameplay progress.
+Both use the same disposable-save and exact configuration/cursor cleanup.
+The maximum diagnostic duration is six minutes. Cadence samples include both
+processes' private/working bytes and CPU time; the window witness also records
+the game's free address space and largest free region. Compare these with
+completed presentations and publication latency to distinguish memory pressure
+from a worker that stopped consuming commands.
+Stress scenarios stop at the first recorded renderer failure and preserve their
+evidence. Detailed stress traces write to disk during the run because forced
+cleanup cannot flush a stalled helper's in-memory trace buffer.
+
+`-Scenario newgame -Seconds 55 -SampleHz 4` chooses New Game in the temporary
+native menu settings and accepts the normal world/rules forms. It creates no
+user save and restores the original configuration/cursor with the same cleanup.
+Require a completed first map and inspect the starting-unit camera and welcome
+handoff. The input save is still copied and checked by the shared harness but
+is not loaded in this scenario.
+
 Success requires all 32 camera commands and no recorded native/worker failure.
 Review the sampled images and camera adoption logs as well: accepted commands
 alone do not prove correct visible scrolling. Two-frame-per-second window
@@ -162,17 +194,34 @@ and fresh unit/UI state. A script timeout or delivered Enter key does not prove
 that the native menu accepted it. Helpers may exist for menu presentation, but
 the previous scene helper must close before the menu is painted.
 
-For startup regressions, inspect `assets-prepared`, `loading-map-start`,
-`first-map-ready` and `loading-map-complete` before `scripted-game-load`.
-`loading_maps_ready` counts completed loading views; the saved camera and native
-startup camera may differ. The failure filter includes rejected loading views
-and failed shared-asset preparation. Inspect timestamped window samples around
-bar dismissal: successful preparation alone does not prove a correct handoff.
-On saved-game startup, `loading-map-restore` confirms that the prepared GPU
-canvas was restored after the native main-form clear. Review the first HUD frame
-as well as the terrain-only frame, and check that menu return has no stale bar.
+For startup regressions, inspect `assets-prepared`, `first-map-wait`,
+`first-map-ready` and `render-done`. Asset preparation blocks in scenario load;
+the first native map draw waits for the actual native camera's completed map.
+The renderer no longer creates or restores speculative loading views, so
+`loading_maps_ready` remains zero. Debug viewer changes also use the first-map
+barrier. Inspect timestamped window samples around bar dismissal and the native
+welcome popup: completed requests alone do not prove a correct visible handoff.
 Shader cache misses log `shader-cache-compile` begin/end and elapsed milliseconds.
-A cold compilation is loading work, never a reason to expose a pending map.
+A cold compilation remains part of blocking asset preparation.
+
+### September 29 freeze reproduction
+
+Capture `20260929-162535` reproduced the reported frozen display after 14
+accepted unit moves. At 140.405 seconds the retained compositor hit its
+256 MiB texture budget; the next native presentation poisoned the asynchronous
+transport. The successful-presentation counter stopped at 4,776 while some
+native turn logic continued. Available pagefile was about 7.4 GiB and the device
+reported no removal. The original save remained unchanged. This establishes a
+renderer lifetime/admission failure, rather than process address-space exhaustion.
+
+The small GPU reproduction in `test_retained_view_lifetime.py` isolates native
+HUD copies retaining expired ordinary and projected cameras. Before the fix, 80 camera
+replacements retained 16,441,344 bytes and 322 nodes. The corrected version
+stays at 270,336 bytes and seven nodes for projected views, or 221,184 bytes
+and six nodes for ordinary views, with exact native HUD pixel comparisons.
+The existing 256 MiB limit stays unchanged. `test_retained_composition.cpp` also
+checks that a discarded optional history accepts valid GPU transfers until a
+fresh map restores animation, while invalid tickets/images remain rejected.
 
 ### Movement evidence
 

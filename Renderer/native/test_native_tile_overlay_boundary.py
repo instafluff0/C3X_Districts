@@ -14,9 +14,12 @@ class TileOverlayBoundaryTests(unittest.TestCase):
 #include <cstddef>
 #include <initializer_list>
 #define __ 0
+#define __fastcall
 #define C3X_RENDERER_RESULT_ERROR 0
 struct Tile {} tile;
-struct Map_Renderer {} renderer;
+struct Map_Renderer;
+struct Vtable {void (*m21_Draw_Tiles_by_Flags)(Map_Renderer*,int,int,int,int,Map_Renderer*,void*,int,int,int);};
+struct Map_Renderer {Vtable* vtable=nullptr;} renderer;
 struct Map {};
 struct Bic {struct Map Map;} bic;auto p_bic_data=&bic;
 struct State {
@@ -41,6 +44,8 @@ void tile_draw(Map_Renderer* self,int param_1,int pixel_x,int pixel_y,Map_Render
 void pass(int flags){for(int n=0;n<6;++n)tile_draw(&renderer,1,n*64,0,&renderer,0,n*2,0,flags);}
 void traversal(){for(int flags:{9,4,0x1FEF0,2,0x100})pass(flags);}
 int main(){
+ Vtable vt{[](Map_Renderer*,int,int,int,int,Map_Renderer*,void*,int,int,int flags){pass(flags);}};
+ renderer.vtable=&vt;
  state.custom_renderer_frame_active=true;
  // Even stale renderer bookkeeping must not suppress config-off native work.
  state.custom_renderer_capture_only=true;traversal();

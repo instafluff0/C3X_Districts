@@ -10,7 +10,18 @@ the former 1,326-line roadmap.
 
 ## Current state
 
-- **Graphics quality is the active work.** The user authorized completing the
+- **Current focus: 50–60 FPS during idle, scrolling, zoom and map jumps.**
+  The September 29 startup and camera-history fixes are staged. Native camera
+  centering is preserved, speculative startup map draws are removed, and retired
+  views release their rendering history. Both camera paths pass the 80-replacement
+  GPU pixel/memory regression; the full retained compositor and projection checks
+  pass. At the user's request, the final longer live freeze runs were cancelled,
+  so sustained live qualification of the complete fix remains pending.
+  Performance work uses preserved controls and standalone full-resolution
+  measurements first, with water, waves, reflections and detail unchanged.
+
+
+- **Previous graphics-quality work.** The user authorized completing the
   quality changes without intermediate approval checkpoints. Shared geometry
   now rasterizes at displayed zoom, with modest scene-wide CAS before native
   HUD and pose-local GPU self shadows for every unit. Sampling comparisons keep
@@ -134,20 +145,15 @@ the former 1,326-line roadmap.
   skeletal blending and binding metadata are documented in the scene/motion
   contract. Sampled window frames do not establish frame-perfect smoothness.
 
-  **Startup preparation now runs under the existing native loading bar.**
-  `patch_load_scenario()` blocks on the common Renderer64 asset loader, including
-  the reflection/city resources previously deferred to the first draw. Existing
-  save/camera/scenario hooks prepare map-dependent geometry once native bounds
-  and the viewer exist. Ordinary gameplay remains asynchronous.
-  Capture `20260928-183616` completes 32 scroll steps without renderer errors.
-  Capture `20260928-192558` completes two loads and two menu unloads in one
-  process. Its reviewed 4 Hz samples retain terrain through native HUD startup;
-  the prepared camera identity survives loading even with custom zoom disabled.
-  This does not establish every display frame or live FPS. New-scenario loading
-  still needs a live witness. Final capture `20260928-193732` confirms both
-  menu returns repaint cleanly after scene unload, with zero renderer failures.
-  Units begin appearing when native startup supplies their first observations,
-  after the terrain handoff.
+  **Startup follows the native camera and draw sequence.**
+  `patch_load_scenario()` still blocks on the shared Renderer64 asset loader.
+  Save cleanup, scenario placement and camera hooks no longer prepare extra
+  maps or manipulate the loading bar. The first ordinary map draw completes
+  its GPU request before native composition; later draws remain asynchronous.
+  Capture uses an explicit native traversal, independent of debug-mode pass
+  masks. Off-screen art preparation skips never-explored tiles while retaining
+  their topology. The scripted diagnostic covers saved starts, new games and
+  debug reveal/hide; see its guide for measured evidence and limitations.
   Helper teardown joins visual callbacks before unmapping shared transport.
   The [scripted diagnostic](../tools/scripted_game_test.md) documents disposable
   save tests, menu/reload checks and premature-exit reporting.

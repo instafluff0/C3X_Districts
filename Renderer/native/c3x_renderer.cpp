@@ -578,7 +578,7 @@ public:
     c3x_renderer::city_fidelity::Glow region_glow;
     c3x_renderer::environment_refresh::Reflection reflection;
     c3x_renderer::environment_refresh::Reflection region_reflection;
-    std::string fidelity_root,shader_root;
+    std::string fidelity_root,shader_root,natural_pack_root;
     c3x_renderer::fidelity::Natural natural;
     c3x_renderer::fidelity::TerrainPreparation terrain_preparation;
     c3x_renderer::fidelity::GroundTask::Queue ground_preparation;
@@ -2032,6 +2032,10 @@ public:
 
     void configure_integrated_assets(char const * terrain_root,
                                      c3x_renderer::RendererPackRoots const & companion_packs) {
+        natural_pack_root=terrain_root == nullptr ? "" : std::string(terrain_root)+"\\natural_runtime";
+        std::string pack_name=terrain_root == nullptr ? "" : terrain_root;
+        pack_name=pack_name.substr(pack_name.find_last_of("\\/")+1);
+        trace.write("natural-pack",pack_name.c_str(),true);
         std::string packs_root = terrain_root == nullptr ? "" : terrain_root;
         std::size_t slash = packs_root.find_last_of("\\/");
         if (slash == std::string::npos)
@@ -2066,9 +2070,11 @@ public:
             terrain_root, "textures\\relief\\hills\\standard\\height_lod0.dds",
             hills.height_pixels, hill_width, hill_height);
         if (pickup_profile) {
-            std::string root = packs_root + "\\TerrainProfileR1";
-            hill_geometry = load_r8_field(root.c_str(), "height.dds",
-                hills.height_pixels, hill_width, hill_height);
+            if (!fidelity_profile) {
+                std::string root = packs_root + "\\TerrainProfileR1";
+                hill_geometry = load_r8_field(root.c_str(), "height.dds",
+                    hills.height_pixels, hill_width, hill_height);
+            }
             std::string path = shore_root + "\\cliff_runtime.bin";
             std::vector<std::uint8_t> bytes;
             cliff_assets_ready = read_file(path.c_str(), bytes) &&
@@ -2803,14 +2809,20 @@ public:
         std::string diagnostic;
         if (!c3x_renderer::load_terrain_definition_layers(
                 mod_root, default_path, scenario_path, custom_path, bindings,
-                companion_packs, diagnostic))
+                companion_packs, diagnostic)) {
+            trace.write("definition-failed",diagnostic.c_str(),true);
             return false;
+        }
         std::string default_name = default_path == nullptr ? "" : default_path;
         std::replace(default_name.begin(), default_name.end(), '/', '\\');
         std::size_t default_separator = default_name.find_last_of('\\');
         std::string default_filename = default_separator == std::string::npos
             ? default_name : default_name.substr(default_separator + 1);
         bool production = default_filename == "default.custom_rendering.txt";
+        // Definition reload can switch packs without switching visual profile.
+        // Retire borrowed natural textures/height fields and resident geometry
+        // before loading the newly selected pack.
+        reset();
         clear_terrain_assets();
         previous_content_revision = content_revision;
         content_revision = 0;
@@ -2905,7 +2917,11 @@ public:
         auto read_fidelity=[&](std::string const& relative,std::vector<std::uint8_t>& bytes){
                 LARGE_INTEGER begin={},read_end={},hash_end={};QueryPerformanceCounter(&begin);
                 char path[4*MAX_PATH];
-                bool ok=pack_path(fidelity_root.c_str(),relative.c_str(),path,std::size(path)) && read_file(path,bytes);
+                std::string const natural_prefix="Renderer/packs/NaturalFidelityRuntime/";
+                bool selected_natural=!natural_pack_root.empty() && relative.compare(0,natural_prefix.size(),natural_prefix)==0;
+                std::string payload=selected_natural?relative.substr(natural_prefix.size()):relative;
+                bool ok=pack_path(selected_natural?natural_pack_root.c_str():fidelity_root.c_str(),
+                    payload.c_str(),path,std::size(path)) && read_file(path,bytes);
                 QueryPerformanceCounter(&read_end);
                 if(ok){mix_content_revision(bytes);asset_bytes+=bytes.size();}
                 QueryPerformanceCounter(&hash_end);
@@ -12714,7 +12730,9 @@ private:
             auto draw=[this,capture,selected,origin,x,y,w,h,geometry,epoch,map_publication_serial,settings,texture,target,sharpness]
                 (long long ticks,long long frequency,float zoom)->Sampled{
                 c3x_renderer_frame_v1 view={};
-                if(!capture->valid()||!selected->sample(ticks,frequency,origin,view))return {};
+                // A viewer change retires the old copied scene before native
+                // adoption. Keep its completed pixels through that handoff.
+                if(!capture->valid()||!selected->sample(ticks,frequency,origin,view))return Sampled::frozen();
                 if(renderer_state.gpu_serial!=map_publication_serial)return Sampled::frozen();
                 bool changed=renderer_state.cached_signature.geometry!=geometry||renderer_state.tile_geometry_epoch!=epoch;
                 // Authoritative world/visibility changes at the same camera
@@ -14780,9 +14798,10 @@ extern "C" __declspec(dllexport) int c3x_renderer_native_image(int operation,voi
             OutputDebugStringA(line);
         }
     }
-    if(operation==C3X_NATIVE_IMAGE_PRESENT||operation==C3X_NATIVE_UNIT_DRAW||
+    if((renderer.trace.level>=2 || result<=C3X_RENDERER_RESULT_ERROR) &&
+       (operation==C3X_NATIVE_IMAGE_PRESENT||operation==C3X_NATIVE_UNIT_DRAW||
        operation==C3X_NATIVE_TACTICAL_RING||operation==C3X_NATIVE_TACTICAL_GRID||
-       operation==C3X_NATIVE_TACTICAL_ROUTE_END){
+       operation==C3X_NATIVE_TACTICAL_ROUTE_END)){
         char detail[176];std::snprintf(detail,sizeof(detail),
             "[C3X renderer] stage=native-operation op=%d result=%d owner=%u color=%u source=%u\n",
             operation,result,unsigned(native_composition&&native_composition->active()),color,unsigned(source!=nullptr));
@@ -14906,7 +14925,7 @@ bool ensure_native_composition(void* image){
         !(GetEnvironmentVariableA("C3X_RENDERER64_LEGACY",legacy_scene,sizeof(legacy_scene)) &&
           !std::strcmp(legacy_scene,"1"));
     native_composition=new c3x_native_images::CompositionOwner(c3x_renderer_gpu_render,c3x_renderer_gpu_images,c3x_renderer_gpu_present,
-        c3x_renderer_gpu_unit,c3x_renderer_native_lifetime,replay?nullptr:base+0x1b70,replay?nullptr:base+0x1b90,scene_units);
+        c3x_renderer_gpu_unit,c3x_renderer_native_lifetime,replay?nullptr:base+0x1b70,replay?nullptr:base+0x1b90,scene_units,renderer.trace.level>=2);
     native_composition->set_tactical([](auto const& capture,auto const& target){return remote_renderer_requested()?
         remote_renderer_backend()->tactical(capture,target):get_renderer_worker().draw_tactical(capture,target);});
     native_composition->set_camera(begin_native_gpu_camera,c3x_renderer_gpu_camera_poll_view,c3x_renderer_camera_cancel);

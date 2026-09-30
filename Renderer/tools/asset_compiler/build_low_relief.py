@@ -9,8 +9,18 @@ INPUTS = [f'Renderer/packs/Civ5EnvironmentSkin/textures/relief/hills/{family}/he
           for family in ('continental', 'continental_plains')]
 
 
-def sources():
-    return {name: hashlib.sha256((ROOT/name).read_bytes()).hexdigest() for name in INPUTS}
+def input_paths(terrain_pack=None):
+    if terrain_pack is None:
+        return INPUTS
+    root=Path(terrain_pack).resolve()
+    root.relative_to(ROOT)
+    return [(root/f'textures/relief/hills/{family}/height_lod0.dds').relative_to(ROOT).as_posix()
+            for family in ('continental', 'continental_plains')]
+
+
+def sources(terrain_pack=None):
+    return {name: hashlib.sha256((ROOT/name).read_bytes()).hexdigest()
+            for name in input_paths(terrain_pack)}
 
 
 def broad_field(source, width, height):
@@ -41,13 +51,13 @@ def broad_field(source, width, height):
     return bytes(result), target, target
 
 
-def build(output, variant='broad'):
+def build(output, variant='broad', terrain_pack=None):
     if variant not in ('broad', 'source'):
         raise ValueError('Unknown low-relief variant')
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
     data = bytearray(b'C3XLOW1\0')
-    for name in INPUTS:
+    for name in input_paths(terrain_pack):
         raw = (ROOT/name).read_bytes()
         height, width = struct.unpack_from('<II', raw, 12)
         if raw[:4] != b'DDS ' or raw[84:88] != b'DX10' or struct.unpack_from('<I', raw, 128)[0] != 61:
@@ -61,7 +71,7 @@ def build(output, variant='broad'):
         # proprietary engine settings. The source variant is an A/B control.
         data += struct.pack('<IIff', width, height, 64., 96.) + field
     (output/'low-relief.bin').write_bytes(data)
-    inputs = sources()
+    inputs = sources(terrain_pack)
     (output/'low-relief.json').write_text(json.dumps({
         'schema': 'c3x.low_relief.v1', 'source_sha256': inputs,
         'amplitude_pixels': 64, 'repeat_native_tiles': 96, 'variant': variant,

@@ -8,7 +8,8 @@ ROOT=Path(__file__).resolve().parents[3]
 HERE=Path(__file__).resolve().parent
 LAB=ROOT/'Renderer/lab/shared'
 PACK=ROOT/'Renderer/packs/NaturalFidelityRuntime'
-HILL_HEIGHT=ROOT/'Renderer/packs/Civ5EnvironmentSkin/textures/relief/hills/standard/height_lod0.dds'
+TERRAIN_PACK=ROOT/'Renderer/packs/Civ5EnvironmentSkin'
+HILL_HEIGHT=TERRAIN_PACK/'textures/relief/hills/standard/height_lod0.dds'
 TREE_HEIGHT_SCALE=.50
 JUNGLE_HEIGHT_SCALE=.50
 
@@ -122,9 +123,12 @@ P VSNative(V input) {
             (HERE/'instance_caster.hlsl').write_text('#define C3X_INSTANCE_CASTER 1\n'+instance)
         (HERE/f'{name}.hlsl').write_text(s)
 
-def build_pack(output=PACK):
+def build_pack(output=PACK, terrain_pack=None):
     """Compile local source art into a separate output directory."""
     output=Path(output)
+    terrain_pack=Path(terrain_pack) if terrain_pack is not None else TERRAIN_PACK
+    terrain_pack=terrain_pack.resolve()
+    terrain_pack.relative_to(ROOT)
     output.mkdir(parents=True,exist_ok=True)
     # Shader freshness is checked by the workbench preparation cache; CPU code
     # by the candidate build. This record describes only inputs to the pack.
@@ -197,7 +201,7 @@ def build_pack(output=PACK):
     if len(trees)!=32 or len(recipes)!=35 or sum(r[3] for r in recipes[25:])!=121:
         raise ValueError('Jungle source recipe count changed')
     materials=sorted({objs[i][2] for i in trees})
-    def source(path):return asset('Renderer/packs/Civ5EnvironmentSkin/'+path)
+    def source(path):return asset((terrain_pack/path).relative_to(ROOT).as_posix())
     decal_pack=ROOT/'Renderer/packs/DecalsNormalized'
     decal_manifest=metadata('Renderer/packs/DecalsNormalized/manifest.json')
     def decal_channel(asset_id,role):
@@ -208,9 +212,9 @@ def build_pack(output=PACK):
     for family in ['grassland','grasshill_top','plains','plainshill_top']:
         terrain += [source(f'textures/{family}_{c}.dds') for c in ['base_color','height','specular']]
     terrain += [asset('Renderer/packs/DecalsNormalized/textures/decals/'+p) for p in ['base_color_c996c6a9d015eebe.dds','height_31eb0f0117ea3beb.dds']]
-    # Use the standard normalized Civ VI hill field for the Lab and runtime
-    # pack. Loose authored imports remain available for isolated studies.
-    terrain += [asset(HILL_HEIGHT.relative_to(ROOT).as_posix())]
+    # Use this pack's standard normalized hill field for the Lab and runtime.
+    # Loose authored imports remain available for isolated studies.
+    terrain += [source('textures/relief/hills/standard/height_lod0.dds')]
     terrain += [source(f'textures/tundra_blend_{c}.dds') for c in ['base_color','height','specular']]
     terrain += [terrain[-1]]
     terrain += [source(f'textures/desert_{c}.dds') for c in ['base_color','height','specular']]

@@ -8,8 +8,9 @@
 
 int main(int argc, char** argv) {
     bool late_cache = argc == 4 && std::strcmp(argv[3], "--late-cache") == 0;
-    if (argc != 3 && !late_cache) {
-        std::fprintf(stderr, "usage: renderer64_startup_probe <mod-relative-dir> <bridge-dll> [--late-cache]\n");
+    bool no_custom = argc == 4 && std::strcmp(argv[3], "--no-custom") == 0;
+    if (argc != 3 && !late_cache && !no_custom) {
+        std::fprintf(stderr, "usage: renderer64_startup_probe <mod-relative-dir> <bridge-dll> [--late-cache|--no-custom]\n");
         return 2;
     }
     if (late_cache) {
@@ -64,7 +65,7 @@ int main(int argc, char** argv) {
         FreeLibrary(bridge);
         return 1;
     }
-    if (GetFileAttributesA(custom) == INVALID_FILE_ATTRIBUTES) custom[0] = '\0';
+    if (no_custom || GetFileAttributesA(custom) == INVALID_FILE_ATTRIBUTES) custom[0] = '\0';
     int configured = definitions(argv[1], defaults, nullptr, custom);
     int alive = healthy();
     std::printf("renderer64-bootstrap select=%d definitions=%d healthy=%d\n", selected, configured, alive);

@@ -267,8 +267,8 @@ int main() {
     def test_bridge_uses_proven_pass_boundary_and_bounded_capture(self) -> None:
         injected = (C3X_ROOT / "injected_code.c").read_text(encoding="utf-8")
         api = (Path(__file__).parent / "c3x_renderer_api.h").read_text(encoding="utf-8")
-        self.assertIn("param_8 == 9", injected)
-        self.assertIn("param_8 == 0x1FEF0", injected)
+        self.assertNotIn("param_8 == 0x1FEF0", injected)
+        self.assertIn("this->vtable->m21_Draw_Tiles_by_Flags) (this, __, param_1", injected)
         self.assertLess(injected.index("composite_custom_renderer_frame ()"), injected.index("Map_Renderer_m19_Draw_Tile_by_XY_and_Flags (this"))
         self.assertIn("int const max_tiles = 8192", injected)
         self.assertNotIn("restore_civ3_terrain_for_custom_renderer_frame", injected)
@@ -282,7 +282,7 @@ int main() {
         self.assertIn("output->fallback_tile_count != 0", injected[:ownership_mark])
         m19 = injected[injected.index("patch_Map_Renderer_m19_Draw_Tile_by_XY_and_Flags") :]
         m19 = m19[:m19.index("void __fastcall\npatch_Map_Renderer_m08_Draw_Tile_Forests_Jungle_Swamp")]
-        self.assertIn("if (! is->custom_renderer_frame_active)", m19)
+        self.assertIn("if (! is->current_config.enable_custom_rendering || ! is->custom_renderer_frame_active)", m19)
         self.assertEqual(1, m19.count("Map_Renderer_m19_Draw_Tile_by_XY_and_Flags (this"))
         self.assertNotIn("draw_flags &=", m19)
 

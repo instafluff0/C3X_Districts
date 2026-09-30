@@ -25191,7 +25191,6 @@ patch_load_scenario (BIC * this, int edx, char * param_1, unsigned * param_2)
 
 	// The accepted scenario/configuration owns renderer assets, just like other C3X packs.
 	if (tr == 0 && is->current_config.enable_custom_rendering) {
-		Main_GUI_label_loading_bar (&p_main_screen_form->GUI, __, 0, "Loading renderer assets");
 		ensure_custom_renderer_loaded ();
 	}
 
@@ -28056,6 +28055,7 @@ unload_custom_renderer ()
 	is->custom_renderer_map_epoch = is->custom_renderer_map_epoch < 0x7fffffffffffffffLL ?
 		is->custom_renderer_map_epoch + 1 : 1;
 	is->custom_renderer_viewer_epoch = 0;
+	is->custom_renderer_display_viewer_epoch = 0;
 	is->custom_renderer_viewer_civ_id = -1;
 	is->custom_renderer_capture_world_topology = false;
 	is->custom_renderer_world_audit_needed = true;
@@ -28767,7 +28767,8 @@ capture_custom_renderer_world_page (struct c3x_renderer_world_page_v1 * page)
 	    is->custom_renderer_draw_in_progress || is->custom_renderer_frame_active ||
 	    is->custom_renderer_capture_only || ! is->custom_renderer_display_valid ||
 	    p_main_screen_form->is_now_loading_game ||
-	    p_main_screen_form->Player_CivID != is->custom_renderer_viewer_civ_id)
+	    (((*p_debug_mode_bits & 8) && ! is_online_game ()) ? 0 : p_main_screen_form->Player_CivID) !=
+	    is->custom_renderer_viewer_civ_id)
 		return C3X_RENDERER_RESULT_PENDING;
 	Map * map = &p_bic_data->Map;
 	if (page->identity.map_epoch != is->custom_renderer_map_epoch ||
@@ -28907,8 +28908,11 @@ capture_custom_renderer_topology (int viewer, int visibility_mask)
 			Tile * tile = tile_at (x, y);
 			if (tile == NULL || tile == p_null_tile) continue;
 			Main_Screen_Form_tile_to_screen_coords (p_main_screen_form, __, x, y, &native_x, &native_y);
+			// Keep hidden topology for coast/transition queries without building
+			// off-screen art the current viewer has never explored.
 			bool prepare_appearance = dx >= warm_min_x && dx <= warm_max_x &&
-				dy >= warm_min_y && dy <= warm_max_y;
+				dy >= warm_min_y && dy <= warm_max_y &&
+				(capture_custom_renderer_visibility (tile, viewer, x, y) & C3X_RENDERER_TILE_EXPLORED);
 			if (! capture_custom_renderer_tile (viewer, native_x + offset_x, native_y + offset_y,
 				is->custom_renderer_target, visibility_mask, x, y, tile, ! prepare_appearance)) {
 				is->custom_renderer_tile_count = count;
@@ -29294,11 +29298,12 @@ composite_custom_renderer_frame ()
 	int resident_result = C3X_RENDERER_RESULT_BAD_ARGUMENT;
 	if (is->custom_renderer_native_map != NULL && is->custom_renderer_native_lifetime != NULL && custom_renderer_native_probe_on ())
 		resident_result = is->custom_renderer_native_map (C3X_NATIVE_MAP_PREPARE, image, &request, &displayed);
-	// Cold start is part of loading. Submit once, then poll the same immutable
-	// demand until its GPU map is ready. The loader can recenter more than once;
-	// every loading view must complete. Gameplay camera/animation calls never wait.
+	// Complete the first native map draw before its canvas is handed to the UI.
+	// A new viewer (including debug reveal/hide) is the same scope boundary:
+	// do not flood the worker with unit/UI updates while it builds that scene.
+	// Ordinary redraws within the completed scope remain asynchronous.
 	if (resident_result == C3X_RENDERER_RESULT_PENDING &&
-	    *(char *)(p_main_screen_form->GUI.field_574 + 3)) {
+	    is->custom_renderer_display_viewer_epoch != is->custom_renderer_viewer_epoch) {
 		void (WINAPI * sleep_ms) (DWORD) = (void *)(*p_GetProcAddress) (is->kernel32, "Sleep");
 		LARGE_INTEGER started, now; QueryPerformanceCounter (&started);
 		log_custom_renderer_event ("first-map-wait", resident_result);
@@ -29428,6 +29433,7 @@ composite_custom_renderer_frame ()
 	}
 	if (result == C3X_RENDERER_RESULT_OK) {
 		is->custom_renderer_async_presented = true;
+		is->custom_renderer_display_viewer_epoch = is->custom_renderer_viewer_epoch;
 		// Transfer category ownership only after this exact frame has rendered and
 		// composited successfully. Mapping intent alone never suppresses native art.
 		for (int n = 0; n < is->custom_renderer_tile_count; n++)
@@ -29538,22 +29544,23 @@ patch_Map_Renderer_m19_Draw_Tile_by_XY_and_Flags (Map_Renderer * this, int edx, 
 	is->current_render_tile_district = get_district_instance (tile);
 
 	int draw_flags = param_8;
-	if (is->current_config.enable_custom_rendering && is->custom_renderer_frame_active) {
-		if (param_8 == 9) {
-			if (! is->custom_renderer_capture_failed)
-				is->custom_renderer_capture_failed = ! capture_custom_renderer_tile (
-					param_1, pixel_x, pixel_y, map_renderer, param_5, tile_x, tile_y, tile, false);
-		} else if ((param_8 == 0x1FEF0) && ! is->custom_renderer_composited) {
-			is->custom_renderer_composited = true;
-			if (is->custom_renderer_capture_failed)
-				log_custom_renderer_event ("capture", C3X_RENDERER_RESULT_ERROR);
-			else {
-				capture_custom_renderer_topology (param_1, param_5);
-				composite_custom_renderer_frame ();
-			}
-			// A pending fresh frame leaves the last completed map in this canvas.
-			// Clearing it here made routine asynchronous redraws alternate with black.
+	if (is->current_config.enable_custom_rendering && is->custom_renderer_frame_active &&
+	    ! is->custom_renderer_composited) {
+		// The first native tile call is after the map clear and before HUD/fog.
+		// Capture one complete native traversal explicitly: debug mode masks the
+		// normal pass flags, so those flags cannot identify our composite boundary.
+		is->custom_renderer_composited = true;
+		is->custom_renderer_capture_only = true;
+		((void (__fastcall *) (Map_Renderer *, int, int, int, int, Map_Renderer *, void *, int, int, int))
+			this->vtable->m21_Draw_Tiles_by_Flags) (this, __, param_1, -1, -1, map_renderer, NULL, -1, -1, 9);
+		is->custom_renderer_capture_only = false;
+		if (is->custom_renderer_capture_failed)
+			log_custom_renderer_event ("capture", C3X_RENDERER_RESULT_ERROR);
+		else {
+			capture_custom_renderer_topology (param_1, param_5);
+			composite_custom_renderer_frame ();
 		}
+		// Pending redraws preserve the last completed map in this canvas.
 	}
 
 	// Custom rendering owns the complete m19 map plane.  Keep the authoritative
@@ -29857,6 +29864,7 @@ patch_Main_Screen_Form_m82_handle_key_event (Main_Screen_Form * this, int edx, i
 	} else if (is->current_config.enable_debug_mode_switch &&
 		   (in_game && ! is_down) &&
 		   (last_events[4] == VK_D) && (last_events[3] == VK_E) && (last_events[2] == VK_B) && (last_events[1] == VK_U) && (last_events[0] == VK_G)) {
+		unsigned previous_debug = *p_debug_mode_bits & 0xC;
 		PopupForm * popup = get_popup_form ();
 		if ((*p_debug_mode_bits & 0xC) != 0) { // Consider debug mode on if either bit is set
 			*p_debug_mode_bits &= ~0xC;
@@ -29870,6 +29878,10 @@ patch_Main_Screen_Form_m82_handle_key_event (Main_Screen_Form * this, int edx, i
 				*p_debug_mode_bits |= 0xC;
 				*(bool *)((int)p_human_player_bits + 37) = true; // Set MegaTrainerXL flag indicating edited save
 			}
+		}
+		if (is->current_config.enable_custom_rendering && previous_debug != (*p_debug_mode_bits & 0xC)) {
+			is->custom_renderer_world_audit_needed = true;
+			log_custom_renderer_event ((*p_debug_mode_bits & 8) ? "debug-reveal" : "debug-hide", C3X_RENDERER_RESULT_OK);
 		}
 		this->vtable->m73_call_m22_Draw ((Base_Form *)this); // Trigger map redraw
 
@@ -31199,33 +31211,6 @@ patch_Unit_do_capture_units (Unit * this, int edx, int tile_x, int tile_y, int o
 	return tr;
 }
 
-// Native camera initialization is the first loading boundary with a complete
-// viewer, map, viewport and tile bounds. Prepare the actual first frame before
-// returning to the loader; later camera changes retain asynchronous publication.
-void
-prepare_custom_renderer_loading_view (Main_Screen_Form * form)
-{
-    if (! is->current_config.enable_custom_rendering || form != p_main_screen_form ||
-        ! *(char *)(form->GUI.field_574 + 3) ||
-        is->custom_renderer_draw_in_progress || form->Player_CivID <= 0 ||
-        form->TileX_Max <= form->TileX_Min || form->TileY_Max <= form->TileY_Min ||
-        p_bic_data->Map.Width <= 0 || p_bic_data->Map.Height <= 0 ||
-        ((PCX_Image *)&p_bic_data->Map.Renderer)->JGL.Image == NULL ||
-        form->Base_Data.Canvas.JGL.Image == NULL)
-        return;
-    Main_GUI_label_loading_bar (&form->GUI, __, 0, "Preparing map");
-    char message[160];
-    snprintf (message, sizeof message, "[C3X renderer] stage=loading-camera camera=%d,%d viewer=%d frames=%u\n",
-        form->camera_x, form->camera_y, form->Player_CivID, is->custom_renderer_presented_frames);
-    (*p_OutputDebugStringA) (message);
-    log_custom_renderer_event ("loading-map-start", C3X_RENDERER_RESULT_OK);
-    void (__fastcall * draw_tiles) (Map_Renderer *, int, int, int, int) =
-        p_bic_data->Map.Renderer.vtable->m71_Draw_Tiles;
-    draw_tiles (&p_bic_data->Map.Renderer, __, form->Player_CivID, (int)&form->Base_Data.Canvas, 0);
-    log_custom_renderer_event ("loading-map-complete", is->custom_renderer_async_presented ?
-        C3X_RENDERER_RESULT_OK : C3X_RENDERER_RESULT_ERROR);
-}
-
 struct custom_renderer_native_view
 custom_renderer_native_view (Map_Renderer * target)
 {
@@ -31255,6 +31240,9 @@ custom_renderer_same_projection (struct custom_renderer_native_view * a, struct 
 bool
 capture_custom_renderer_native_view (Map_Renderer * target, int viewer, struct custom_renderer_native_view * view, bool navigation)
 {
+	// Native m20 uses viewer zero for offline debug reveal. Navigation must
+	// capture that same scope rather than alternate between player and debug.
+	if ((*p_debug_mode_bits & 8) && ! is_online_game ()) viewer = 0;
 	// One active request survives intervening calls. The next available slot
 	// captures the newest demand, so there is no stale FIFO or cancellation storm.
 	if (! navigation && (is->custom_renderer_camera_ticket != 0 || ! is->custom_renderer_async_presented)) return false;
@@ -31327,7 +31315,8 @@ settle_custom_renderer_navigation (int action)
     if (is->custom_renderer_navigation == NULL) return;
     Map_Renderer * renderer = &p_bic_data->Map.Renderer;
     struct custom_renderer_native_view view = custom_renderer_native_view (renderer);
-    if (p_main_screen_form->Player_CivID != is->custom_renderer_viewer_civ_id) action = C3X_NAV_DISCARD;
+    if ((((*p_debug_mode_bits & 8) && ! is_online_game ()) ? 0 : p_main_screen_form->Player_CivID) !=
+        is->custom_renderer_viewer_civ_id) action = C3X_NAV_DISCARD;
     if (is->custom_renderer_navigation (action, ((PCX_Image *)renderer)->JGL.Image, &view, NULL) == C3X_RENDERER_RESULT_OK) {
         apply_custom_renderer_native_view (&view);
         *(bool *)(p_main_screen_form->animator.field_18E4 + 10) = true;
@@ -31348,23 +31337,7 @@ patch_Main_Screen_Form_center_camera (Main_Screen_Form * this, int edx, int x, i
     is->custom_renderer_camera_exact = true;
     Main_Screen_Form_center_camera (this, __, x, y, reason, update_bounds, force);
     is->custom_renderer_camera_exact = prior;
-    // Saved-game startup clears the main form after closing its loading bar,
-    // even when centering leaves the camera unchanged. Restore the prepared
-    // map through the existing GPU copy before the native HUD is composed.
-    if (this == p_main_screen_form && this->is_now_loading_game &&
-        ! *(char *)(this->GUI.field_574 + 3) && is->custom_renderer_presented_frames > 0 &&
-        is->custom_renderer_native_image != NULL && this->Player_CivID == is->custom_renderer_viewer_civ_id) {
-        PCX_Image * map = (PCX_Image *)&p_bic_data->Map.Renderer;
-        struct custom_renderer_native_view current = custom_renderer_native_view (&p_bic_data->Map.Renderer);
-        if (current.camera_x == is->custom_renderer_display_view.camera_x &&
-            current.camera_y == is->custom_renderer_display_view.camera_y &&
-            custom_renderer_same_projection (&current, &is->custom_renderer_display_view)) {
-            RECT area = map->JGL.Image->Image_Rect;
-            int result = is->custom_renderer_native_image (C3X_NATIVE_COPY, this->Base_Data.Canvas.JGL.Image,
-                map->JGL.Image, &area, &area, 0);
-            log_custom_renderer_event ("loading-map-restore", result);
-        }
-    }
+
 }
 #endif
 
@@ -31389,7 +31362,6 @@ patch_Main_Screen_Form_move_camera (Main_Screen_Form * this, int edx, int x, int
             is->custom_renderer_navigation (C3X_NAV_DISCARD, NULL, &unused, NULL);
         is->custom_renderer_display_valid = false;
         Main_Screen_Form_move_camera (this, __, x, y, reason, update_bounds);
-        if (! this->is_now_loading_game) prepare_custom_renderer_loading_view (this);
         return;
     }
     Map_Renderer * renderer = &p_bic_data->Map.Renderer;
@@ -31404,7 +31376,6 @@ patch_Main_Screen_Form_move_camera (Main_Screen_Form * this, int edx, int x, int
 #endif
     // Native selection/centering, clamping, wrapping and bounds remain authoritative.
     Main_Screen_Form_move_camera (this, __, x, y, reason, update_bounds);
-    if (! this->is_now_loading_game) prepare_custom_renderer_loading_view (this);
     struct custom_renderer_native_view requested = custom_renderer_native_view (renderer);
     if (defer && requested.camera_x == displayed.camera_x && requested.camera_y == displayed.camera_y) {
         // Native clamping at a map edge must not turn a no-op into another frame.
@@ -31552,8 +31523,7 @@ patch_Map_Renderer_m71_Draw_Tiles (Map_Renderer * this, int edx, int param_1, in
 	Map_Renderer_m71_Draw_Tiles (this, __, param_1, param_2, 0);
 	if (expanded_zoom_clip)
 		zoom_canvas->Clip_Rect = saved_zoom_clip;
-	// Loading disables custom zoom/navigation, but still publishes a complete
-	// GPU view. Keep its identity for the native startup canvas handoff.
+	// Keep the completed native view identity even when custom zoom is disabled.
 	if (is->custom_renderer_async_presented)
 		is->custom_renderer_display_view = custom_renderer_native_view (this);
 	if (async_view) {
@@ -38267,7 +38237,6 @@ patch_Map_place_scenario_things (Map * this)
 	if (is->current_config.enable_custom_animations && ! is->current_config.enable_custom_rendering)
 		rebuild_tile_animation_rule_match_cache ();
 	is->is_placing_scenario_things = false;
-	prepare_custom_renderer_loading_view (p_main_screen_form);
 }
 
 void
@@ -39696,28 +39665,6 @@ patch_MappedFile_deinit_after_saving_or_loading (MappedFile * this)
 	is->accessing_save_file = NULL;
 	MappedFile_deinit (this);
 
-    // Native startup (0x4F61B0) centers on the selected unit or starting tile
-    // after closing the save-load bar. Warm that exact view while loading, then
-    // restore the saved camera so loading in an existing game stays unchanged.
-    Main_Screen_Form * form = p_main_screen_form;
-    if (is->current_config.enable_custom_rendering && form->is_now_loading_game &&
-        *(char *)(form->GUI.field_574 + 3) && p_bic_data->Map.Width >= 2 &&
-        form->Player_CivID > 0 && form->Player_CivID < 32) {
-        struct custom_renderer_native_view saved = custom_renderer_native_view (&p_bic_data->Map.Renderer);
-        prepare_custom_renderer_loading_view (form);
-        Unit * selected = form->Current_Unit;
-        int index = p_bic_data->Map.Starting_Locations[form->Player_CivID] & 0xFFFF;
-        int row = index / (p_bic_data->Map.Width / 2);
-        int x = selected != NULL ? selected->Body.X : 2 * (index % (p_bic_data->Map.Width / 2)) + (row & 1);
-        int y = selected != NULL ? selected->Body.Y : row;
-#ifdef Main_Screen_Form_center_camera
-        if (Map_in_range (&p_bic_data->Map, __, x, y)) {
-            Main_Screen_Form_center_camera (form, __, x, y, 0, true, false);
-            prepare_custom_renderer_loading_view (form);
-            apply_custom_renderer_native_view (&saved);
-        }
-#endif
-    }
 }
 
 bool __fastcall

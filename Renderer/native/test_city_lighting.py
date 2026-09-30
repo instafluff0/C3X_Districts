@@ -30,10 +30,26 @@ int main(){
  auto field=read(gpu.frame.Get());assert(field[0]==2400&&field[1]==1260&&field[2]==1);
  auto data=read(gpu.data.Get());assert(data[(2399*3+1)*4+3]==79);assert(data[(2399*3+2)*4+3]==float(79%42+29*42));
  assert(data[(2400*3+1259*2)*4]==41);
+ auto before=gpu.cached;
+ assert(gpu.upload(context.Get(),cities,1,.5f));assert(gpu.cached==before);
+ auto list_before=gpu.spatial.records;
+ city.lights[0].position[0]=.25f;
+ assert(gpu.upload(context.Get(),cities,1,1));assert(gpu.cached!=before);assert(gpu.spatial.records!=list_before);
+ // Full-scan fallback for a grid too large, without any dropped lights.
+ city.lights[0].range=10000;
+ assert(gpu.upload(context.Get(),cities,1,1));assert(!gpu.indexed);
+ field=read(gpu.frame.Get());assert(field[0]==2400&&field[19]==0);
+ city.lights[0].range=1;
+ assert(gpu.upload(context.Get(),cities,1,1));assert(gpu.indexed);
  auto capacity=gpu.capacity;assert(gpu.upload(context.Get(),cities,0,1));field=read(gpu.frame.Get());
  assert(field[0]==0&&field[1]==0&&field[2]==0&&gpu.capacity==capacity);
  assert(gpu.upload(context.Get(),{},1,1));field=read(gpu.frame.Get());assert(field[0]==0&&field[1]==0);
  assert(gpu.upload(context.Get(),{&city},1,1));field=read(gpu.frame.Get());assert(field[0]==80&&field[1]==42);
+ Lighting layout_a,layout_b;layout_a.lights.resize(3);layout_b.lights.resize(1);layout_b.blockers.resize(3);
+ SceneLights layout_gpu;assert(layout_gpu.upload(context.Get(),{&layout_a},1,1));
+ auto counts_before=layout_gpu.cached_lights;auto old_records=layout_gpu.spatial.records;
+ assert(layout_gpu.upload(context.Get(),{&layout_b},1,1));assert(layout_gpu.cached_lights!=counts_before);assert(layout_gpu.spatial.records!=old_records);
+ assert(layout_gpu.cached_lights==1&&layout_gpu.cached_blockers==3);
  std::puts("PASS city lighting: 2400 lights, 1260 blockers, complete owner indices, daylight/empty/reuse");
 }
 ''',timeout=120)

@@ -31,8 +31,9 @@ cl /nologo /std:c++17 /EHsc /O2 /W4 /WX /wd4191 helper_trial\scene_workload.cpp 
 if errorlevel 1 goto fail
 
 if /i "%~1"=="no-stage" goto done
-if not exist "..\packs\NaturalFidelityRuntime\natural.bin" (
-  echo The complete Renderer64 natural pack is missing; refusing to stage a black-map build. 1>&2
+if not exist "..\packs\TerrainNormalized\natural_runtime\natural.bin" (
+  echo The default terrain pack's Renderer64 payload is missing; refusing to stage a black-map build. 1>&2
+  echo Run python3 Renderer/renderer.py prepare from the checkout first. 1>&2
   goto fail
 )
 if not exist "..\packs\Renderer64CutoverControl\Renderer\native\city_fidelity\terrain.hlsl" (

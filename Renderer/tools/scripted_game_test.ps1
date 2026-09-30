@@ -1,7 +1,7 @@
 # Bounded real-game renderer diagnostic, enabled only in the child environment.
 param([Parameter(Mandatory=$true)][string]$SaveFile, [string]$ConquestsDirectory,
-      [ValidateRange(35,120)][int]$Seconds = 75,
-      [ValidateSet('scroll','interaction','lifecycle','combat','turn','mouse','zoom','hud','city','settler','site-toggle')][string]$Scenario = 'scroll',
+      [ValidateRange(35,360)][int]$Seconds = 75,
+      [ValidateSet('scroll','interaction','lifecycle','combat','turn','mouse','zoom','hud','city','settler','site-toggle','debug','debug-scroll','newgame','turn-stress')][string]$Scenario = 'scroll',
       [ValidatePattern('^[A-Za-z0-9_-]+$')][string]$UnitPack='UnitAnimationFidelity', [ValidateSet('melee','victory','retreat','bombard','army','air','capture')][string]$CombatCase='melee', [ValidateRange(1,10)][int]$SampleHz = 2,
       [switch]$ProfileRenderer, [switch]$MeasureCadence,
       [ValidateSet(0,1,2)][int]$SceneSamples=0, [ValidateRange(-1,1)][double]$SceneSharpness=-1)
@@ -86,7 +86,7 @@ $oldCombat=$env:C3X_RENDERER_GAME_TEST_COMBAT
 $oldPack=$env:C3X_RENDERER_UNIT_PACK
 $oldInputTrace=$env:C3X_RENDERER_TRACE_INPUT
 $traceEnvironment=@{}
-foreach ($key in @('C3X_RENDERER_TRACE','C3X_RENDERER_TRACE_BUFFERED','C3X_RENDERER_TRACE_FILE','C3X_RENDERER_SCENE_SAMPLES','C3X_RENDERER_SCENE_SHARPNESS')) {
+foreach ($key in @('C3X_RENDERER_TRACE','C3X_RENDERER_TRACE_BUFFERED','C3X_RENDERER_TRACE_FILE','C3X_RENDERER_TRACE_MIB','C3X_RENDERER_SCENE_SAMPLES','C3X_RENDERER_SCENE_SHARPNESS')) {
     $traceEnvironment[$key]=[Environment]::GetEnvironmentVariable($key)
 }
 $ini=Join-Path $ConquestsDirectory 'conquests.ini'
@@ -97,10 +97,10 @@ try {
     # Restore these exact bytes in finally. Native menu/file-picker loading is
     # necessary because C3X reads the renderer setting during scenario load.
     $latestSave=Join-Path (Split-Path $save -Parent) ([IO.Path]::GetFileNameWithoutExtension($save))
-    foreach ($item in @(@('Top Menu','3'),@('Latest Save',$latestSave),@('WindowsFileBox','0'),@('PlayIntro','0'))) {
+    foreach ($item in @(@('Top Menu',$(if ($Scenario -eq 'newgame') {'1'} else {'3'})),@('Latest Save',$latestSave),@('WindowsFileBox','0'),@('PlayIntro','0'))) {
         if (-not [RendererGameCommand]::WritePrivateProfileString('Conquests',$item[0],$item[1],$ini)) { throw 'Cannot prepare native load menu.' }
     }
-    $collector=Start-Process $debug -ArgumentList (Quote-Arguments @('--accepteula','--no-banner','--no-kernel','--duration','180','--max-lines','100000','--log',(Join-Path $session 'renderer.log'),'--log-limit','32')) -PassThru -WindowStyle Hidden
+    $collector=Start-Process $debug -ArgumentList (Quote-Arguments @('--accepteula','--no-banner','--no-kernel','--duration',[string]($Seconds+30),'--max-lines','1000000','--log',(Join-Path $session 'renderer.log'),'--log-limit','128')) -PassThru -WindowStyle Hidden
     Start-Sleep -Milliseconds 400
     if ($collector.HasExited) { throw 'Diagnostic collector exited before launch.' }
     # Use direct process creation so the diagnostic environment reaches C3X.
@@ -115,6 +115,11 @@ try {
     if ($ProfileRenderer) {
         $env:C3X_RENDERER_TRACE='2'
         $env:C3X_RENDERER_TRACE_BUFFERED='1'
+        if ($Scenario -in @('turn-stress','debug-scroll')) {
+            # Preserve failure evidence even when a stalled helper must be killed.
+            $env:C3X_RENDERER_TRACE_BUFFERED='0'
+            $env:C3X_RENDERER_TRACE_MIB='64'
+        }
         $env:C3X_RENDERER_TRACE_FILE=Join-Path $session 'renderer-core.log'
     }
     $start=New-Object System.Diagnostics.ProcessStartInfo
@@ -146,11 +151,27 @@ try {
     $combatAttackSent=$false
     $combatNextAttack=0.0
     $combatNextPrepare=36.0
+    $failureCheck=20.0
     $interaction=@(@(28,13,'close-welcome'),@(36,90,'zoom-192'),@(39,0x86,'text-192'),@(43,90,'zoom-160'),@(46,0x86,'text-160'),@(50,90,'zoom-128'),@(53,0x86,'text-128'),@(57,0x66,'move-east'),@(65,0x70,'advisor'),@(74,27,'close-advisor'))
     if ($Scenario -in @('mouse','zoom')) {
         $interaction=@()
     }
     if ($Scenario -eq 'settler') { $interaction=@() }
+    if ($Scenario -eq 'newgame') {
+        $interaction=@(@(12,13,'accept-new-game-rules'),@(35,13,'start-new-game'),@(46,13,'dismiss-new-game-welcome'))
+    }
+    if ($Scenario -in @('debug','debug-scroll')) {
+        # Exercise the existing C3X DEBUG shortcut through normal key events.
+        $interaction=@(@(25,68,'debug-D'),@(26,69,'debug-E'),@(27,66,'debug-B'),
+            @(28,85,'debug-U'),@(29,71,'debug-G'),@(30,38,'choose-debug-yes'),@(31,13,'confirm-debug'),
+            @(35,0x87,'scroll-revealed-map'),@(39,68,'normal-D'),@(40,69,'normal-E'),
+            @(41,66,'normal-B'),@(42,85,'normal-U'),@(43,71,'normal-G'),
+            @(45,13,'dismiss-debug-off'),@(49,0x87,'scroll-normal-map'))
+    }
+    if ($Scenario -eq 'debug-scroll') {
+        $interaction=$interaction[0..6]
+        for ($step=0; $step -lt 32; ++$step) { $interaction+=,@((45+4*$step),0x87,('scroll-revealed-'+$step)) }
+    }
     if ($Scenario -eq 'site-toggle') {
         $interaction=@(@(37,76,'open-city-site-picker'),@(39,13,'choose-off'),
             @(43,76,'reopen-city-site-picker'),@(45,40,'choose-player'),@(46,13,'accept-player'))
@@ -163,6 +184,19 @@ try {
     }
     if ($Scenario -eq 'turn') {
         $interaction=@(@(36,32,'skip-first-unit'),@(39,32,'skip-second-unit'),@(42,13,'end-turn'),@(65,32,'skip-first-unit-next-turn'),@(68,32,'skip-second-unit-next-turn'),@(71,13,'end-second-turn'))
+    }
+    if ($Scenario -eq 'turn-stress') {
+        $interaction=@()
+        for ($turn=0; $turn -lt 8; ++$turn) {
+            $offset=29*$turn
+            $interaction+=,@((36+$offset),0x66,'move-east')
+            $interaction+=,@((39+$offset),0x64,'move-west')
+            $interaction+=,@((42+$offset),0x66,'move-east-again')
+            $interaction+=,@((45+$offset),0x64,'move-west-again')
+            $interaction+=,@((48+$offset),32,'skip-remaining-first-unit')
+            $interaction+=,@((51+$offset),32,'skip-remaining-second-unit')
+            $interaction+=,@((54+$offset),13,('end-turn-'+($turn+1)))
+        }
     }
     if ($Scenario -eq 'combat') {
         $interaction=,@(28,13,'close-welcome')
@@ -189,6 +223,14 @@ try {
             # Two Enter presses select Load Game and accept the copied save.
             # The opt-in post-load hook dismisses the known welcome popup.
             $elapsed=([DateTime]::UtcNow-$started).TotalSeconds
+            if ($Scenario -in @('turn-stress','debug-scroll') -and $elapsed -ge $failureCheck) {
+                $failureCheck=$elapsed+5
+                $recent=Get-Content -LiteralPath (Join-Path $session 'renderer.log') -Tail 1000
+                if ($recent -match 'stage=async-publication-failed|stage=visual-failure|stage=native-operation-failed') {
+                    Write-Host 'Renderer failure detected; preserving evidence and stopping the disposable test.'
+                    break
+                }
+            }
             if ($MeasureCadence -and $elapsed -ge $cadenceNext) {
                 $cadenceNext=$elapsed+$(if ($Scenario -eq 'zoom') {0.02} else {1.0})
                 if ($cadenceProcess -and $cadenceProcess.HasExited) {
@@ -206,8 +248,13 @@ try {
                     }
                 }
                 if ($cadence) {
+                    $child.Refresh(); $cadenceProcess.Refresh()
                     $cadenceSamples += [ordered]@{ qpc=[System.Diagnostics.Stopwatch]::GetTimestamp();
                         helper_pid=$cadenceProcess.Id; frames=$cadence.Frames; zoom_q16=$cadence.ZoomQ16;
+                        elapsed_seconds=$elapsed;
+                        game_private_bytes=$child.PrivateMemorySize64; game_working_bytes=$child.WorkingSet64;
+                        helper_private_bytes=$cadenceProcess.PrivateMemorySize64; helper_working_bytes=$cadenceProcess.WorkingSet64;
+                        game_cpu_seconds=$child.TotalProcessorTime.TotalSeconds; helper_cpu_seconds=$cadenceProcess.TotalProcessorTime.TotalSeconds;
                         foreground=([RendererGameCommand]::GetForegroundWindow() -eq $window) }
                 }
             }
@@ -278,6 +325,10 @@ try {
                     [RendererGameCommand]::keybd_event(0x10,0,2,[UIntPtr]::Zero)
                     [RendererGameCommand]::keybd_event(0x11,0,2,[UIntPtr]::Zero)
                 }
+            } elseif ($Scenario -in @('debug','debug-scroll') -and $key -in @(68,69,66,85,71)) {
+                # C3X recognizes the key-up history. Avoid triggering each
+                # letter's native unit order before the full shortcut exists.
+                [void][RendererGameCommand]::PostMessage($window,0x101,[IntPtr]$key,[IntPtr](-1073741823))
             } else {
                 if (-not [RendererGameCommand]::PostMessage($window,0x100,[IntPtr]$key,[IntPtr]1)) { throw 'Cannot post diagnostic command.' }
                 [void][RendererGameCommand]::PostMessage($window,0x101,[IntPtr]$key,[IntPtr](-1073741823))
@@ -324,6 +375,7 @@ if ($Scenario -in @('mouse','zoom')) {
 }
 $steps=@([regex]::Matches($log,'stage=scripted-game-scroll step=(\d+)') | ForEach-Object {[int]$_.Groups[1].Value})
 $turns=@([regex]::Matches($log,'stage=scripted-turn-end turn=(\d+)') | ForEach-Object {[int]$_.Groups[1].Value})
+$moves=[regex]::Matches($log,'stage=motion-start[^\r\n]*result=1').Count
 $combatReady=[regex]::Matches($log,'stage=scripted-combat-ready').Count
 $combatFinished=[regex]::Matches($log,'stage=scripted-combat-end').Count
 $textEvents=[regex]::Matches($log,'stage=scripted-game-map-text').Count
@@ -333,16 +385,23 @@ $readyEvents=[regex]::Matches($log,'stage=render-done result=1').Count
 $loadingMaps=[regex]::Matches($log,'stage=loading-map-complete result=1').Count
 $unloadEvents=[regex]::Matches($log,'stage=scene-unloaded result=1').Count
 $errors=@($log -split "`n" | Where-Object {$_ -match 'stage=native-operation-failed|stage=async-publication-failed|budget exceeded|stage=visual-failure|stage=worker-error|stage=unit-publication-failed|stage=unit-animation-failed|stage=motion-start[^\r\n]*result=[0235]|stage=scene-unload-failed|stage=(?:first-map-ready|loading-map-complete) result=[02345]|stage=assets-prepared ready=0'})
+$debugReveals=([regex]::Matches($log,'stage=debug-reveal result=1')).Count
+$debugHides=([regex]::Matches($log,'stage=debug-hide result=1')).Count
 $windowResult=Join-Path $session 'window\finished.json'
 $windowEvidence=if (Test-Path -LiteralPath $windowResult) { Get-Content -LiteralPath $windowResult -Raw | ConvertFrom-Json } else { $null }
 $windowComplete=$null -ne $windowEvidence -and $windowEvidence.complete -and $windowEvidence.frames -gt 0
-[ordered]@{ scenario=$Scenario; scene_samples=$SceneSamples; scene_sharpness=$SceneSharpness; combat_case=$CombatCase; unit_pack=$UnitPack; mouse_commands=$mouseIndex; completed_turns=$turns; interaction_commands=$interactionIndex; combat_ready=$combatReady; combat_finished=$combatFinished; map_text_events=$textEvents; city_zoom_widths=$cityZooms; city_anchors=$cityAnchors; posted_commands=$sent; load_requested=($log -match 'stage=scripted-game-load'); scroll_steps=$steps;
+[ordered]@{ scenario=$Scenario; debug_reveals=$debugReveals; debug_hides=$debugHides; scene_samples=$SceneSamples; scene_sharpness=$SceneSharpness; combat_case=$CombatCase; unit_pack=$UnitPack; mouse_commands=$mouseIndex; completed_turns=$turns; accepted_moves=$moves; interaction_commands=$interactionIndex; combat_ready=$combatReady; combat_finished=$combatFinished; map_text_events=$textEvents; city_zoom_widths=$cityZooms; city_anchors=$cityAnchors; posted_commands=$sent; load_requested=($log -match 'stage=scripted-game-load'); scroll_steps=$steps;
     game_exited_early=$earlyExit; game_exit_code=$gameExitCode; first_map_ready=$readyEvents; loading_maps_ready=$loadingMaps; scenes_unloaded=$unloadEvents; native_failures=$errors; window_evidence=$windowEvidence; original_save_unchanged=$true; scope='Real Civ III diagnostic; window samples require visual review; not an FPS benchmark' } |
     ConvertTo-Json -Depth 4 | Set-Content (Join-Path $session 'result.json')
 Write-Host ('Scripted diagnostic saved: '+$session)
 if ($MeasureCadence -and $cadenceSamples.Count -lt 2) { Write-Error 'Insufficient renderer cadence samples; inspect cadence.json and the helper channel.'; exit 1 }
+if ($Scenario -eq 'turn-stress' -and $moves -lt 8) { Write-Error 'Insufficient accepted unit movement; inspect the native movement records.'; exit 1 }
+if ($MeasureCadence -and $Scenario -in @('turn-stress','debug-scroll')) {
+    $tail=@($cadenceSamples | Where-Object { $_.elapsed_seconds -ge $cadenceSamples[-1].elapsed_seconds-10 })
+    if ($tail.Count -lt 2 -or $tail[-1].frames -le $tail[0].frames) { Write-Error 'Renderer stopped presenting at the end of the stress run.'; exit 1 }
+}
 if (-not $windowComplete) { Write-Error 'Window evidence did not complete; inspect window-errors.log and window/finished.json.'; exit 1 }
-if (($Scenario -in @('mouse','zoom','city') -and $mouseIndex -ne $mouseSteps.Count) -or ($Scenario -eq 'turn' -and $turns.Count -lt 2) -or ($Scenario -eq 'combat' -and ($combatReady -ne 1 -or $combatFinished -ne 1)) -or $earlyExit -or ($Scenario -eq 'scroll' -and $steps.Count -ne 32) -or ($Scenario -in @('settler','site-toggle') -and $readyEvents -lt 1) -or ($Scenario -eq 'site-toggle' -and $interactionIndex -ne $interaction.Count) -or ($Scenario -in @('interaction','hud') -and ($interactionIndex -ne $interaction.Count -or $textEvents -ne 3)) -or ($Scenario -eq 'hud' -and (($cityZooms -join ',') -ne '64,128' -or $steps.Count -ne 2)) -or ($Scenario -eq 'lifecycle' -and ($interactionIndex -ne $interaction.Count -or $readyEvents -ne 2 -or $unloadEvents -lt 2 -or $textEvents -ne 1)) -or ($Scenario -eq 'city' -and ($interactionIndex -ne $interaction.Count -or ($cityZooms -join ',') -ne '64,128')) -or ($Scenario -in @('hud','city') -and ($cityAnchors.Count -ne 2 -or $cityAnchors[0] -ne $cityAnchors[1])) -or $errors.Count) { exit 1 }
+if (($Scenario -in @('mouse','zoom','city') -and $mouseIndex -ne $mouseSteps.Count) -or ($Scenario -eq 'turn' -and $turns.Count -lt 2) -or ($Scenario -eq 'combat' -and ($combatReady -ne 1 -or $combatFinished -ne 1)) -or $earlyExit -or ($Scenario -eq 'scroll' -and $steps.Count -ne 32) -or ($Scenario -in @('settler','site-toggle','debug','debug-scroll','newgame','turn-stress') -and $readyEvents -lt 1) -or ($Scenario -in @('site-toggle','debug','debug-scroll','newgame','turn-stress') -and $interactionIndex -ne $interaction.Count) -or ($Scenario -in @('interaction','hud') -and ($interactionIndex -ne $interaction.Count -or $textEvents -ne 3)) -or ($Scenario -eq 'hud' -and (($cityZooms -join ',') -ne '64,128' -or $steps.Count -ne 2)) -or ($Scenario -eq 'lifecycle' -and ($interactionIndex -ne $interaction.Count -or $readyEvents -ne 2 -or $unloadEvents -lt 2 -or $textEvents -ne 1)) -or ($Scenario -eq 'city' -and ($interactionIndex -ne $interaction.Count -or ($cityZooms -join ',') -ne '64,128')) -or ($Scenario -in @('hud','city') -and ($cityAnchors.Count -ne 2 -or $cityAnchors[0] -ne $cityAnchors[1])) -or ($Scenario -eq 'debug' -and ($steps.Count -ne 2 -or $debugReveals -ne 1 -or $debugHides -ne 1)) -or ($Scenario -eq 'debug-scroll' -and ($steps.Count -ne 32 -or $debugReveals -ne 1 -or $debugHides -ne 0)) -or ($Scenario -eq 'turn-stress' -and ($turns.Count -lt 8 -or @($turns | Select-Object -Unique).Count -lt 8)) -or $errors.Count) { exit 1 }
 
 # DebugView --stop may leave a nonzero native exit code after successful cleanup.
 # Only the explicit diagnostic checks above determine this scenario result.

@@ -163,7 +163,11 @@ public:
     // Partial transfers retain exactly the previously committed outside area.
     bool commit_display(std::int64_t requested,Id image,unsigned w,unsigned h,Rect area){
         if(requested!=ticket||!gpu.displayable(image,w,h))return false;
-        layers.commit(image,area);return layers.ready();
+        layers.commit(image,area);
+        // A discarded optional history still has valid native GPU canvases.
+        // Keep transport alive while visual_ready() requests a fresh map;
+        // rejecting this transfer would prevent that recovery from arriving.
+        return !layers.accepting()||layers.ready();
     }
     bool display_to(std::int64_t requested,Id image,ID3D11RenderTargetView* target,ID3D11Texture2D* retained,ID3D11Texture2D* buffer,unsigned w,unsigned h,Rect area,long long ticks=0,long long frequency=0,std::array<LONGLONG,4>* phase_ticks=nullptr,std::array<LONGLONG,8>* draw_ticks=nullptr){
         if(requested!=ticket||!target||!retained||!buffer||!gpu.displayable(image,w,h))return false;
@@ -188,7 +192,7 @@ public:
         if(phase_ticks){LARGE_INTEGER next={};QueryPerformanceCounter(&next);(*phase_ticks)[1]=next.QuadPart-mark.QuadPart;mark=next;}
         context->CopyResource(buffer,retained);
         if(phase_ticks){LARGE_INTEGER next={};QueryPerformanceCounter(&next);(*phase_ticks)[2]=next.QuadPart-mark.QuadPart;mark=next;}
-        context->Flush();
+        // Submission belongs to the caller's Present/keyed-surface boundary.
         if(phase_ticks){LARGE_INTEGER next={};QueryPerformanceCounter(&next);(*phase_ticks)[3]=next.QuadPart-mark.QuadPart;}
         return true;
     }
@@ -259,7 +263,9 @@ public:
             MEMORYSTATUSEX memory={};memory.dwLength=sizeof(memory);GlobalMemoryStatusEx(&memory);
             char status[224];sprintf_s(status,"[C3X renderer] stage=visual-failure-memory device_reason=0x%08lx available_virtual=%llu available_pagefile=%llu\n",
                 device->GetDeviceRemovedReason(),memory.ullAvailVirtual,memory.ullAvailPageFile);
-            OutputDebugStringA(status);OutputDebugStringA(e.what());OutputDebugStringA("\n");layers.discard();return false;}
+            OutputDebugStringA(status);OutputDebugStringA(e.what());OutputDebugStringA("\n");
+            layers.describe([](char const* line){OutputDebugStringA("[C3X renderer] stage=failed-retained-node ");OutputDebugStringA(line);OutputDebugStringA("\n");},true);
+            layers.discard();return false;}
     }
     int execute(c3x_renderer_gpu_images_v1 const& request,std::vector<Command> const& commands,
                 std::vector<unsigned> const& pixels,c3x_renderer_gpu_result_v1& result,std::vector<unsigned>& output){

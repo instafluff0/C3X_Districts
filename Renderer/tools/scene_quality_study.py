@@ -22,6 +22,12 @@ def main():
     p.add_argument('--dll', default='Renderer/bin/renderer64/C3XRenderer_x64.dll')
     p.add_argument('--client', default='Renderer/sandbox/out/client_x64.exe')
     p.add_argument('--shaders', default='Renderer/packs/Renderer64CutoverControl')
+    p.add_argument('--width', type=int, default=1280)
+    p.add_argument('--height', type=int, default=800)
+    p.add_argument('--diagnostic-skip', choices=['water', 'reflection', 'vegetation-depth'],
+                   help='Attribution only; never a quality or throughput acceptance run')
+    p.add_argument('--profile-completion', action='store_true',
+                   help='Serialize layers for cost attribution; not an FPS measurement')
     p.add_argument('--samples', type=int, choices=[1, 2, 4], default=1)
     p.add_argument('--hour', type=int, default=12)
     p.add_argument('--land', choices=['grassland', 'plains'], default='grassland')
@@ -43,6 +49,7 @@ def main():
         p.error('Use a simple case name')
     if not (0 <= args.hour <= 23 and 64 <= args.tile <= 512 and
             1 <= args.frames <= 300 and 0 <= args.start_ms <= 34000 and
+            64 <= args.width <= 2240 and 64 <= args.height <= 1260 and
             math.isfinite(args.filmic) and 0 <= args.filmic <= 1 and
             math.isfinite(args.zoom_peak) and 1 <= args.zoom_peak <= 3 and
             (args.zoom is None or math.isfinite(args.zoom) and 1 <= args.zoom <= 3)):
@@ -76,6 +83,10 @@ def main():
         scene.write_text('C3X_BIQ_TERRAIN_V3,48,64,1536\n' + '\n'.join(rows) + '\n')
     win = lambda path: str(windows_root() / path.relative_to(ROOT).as_posix())
     options = {
+        'C3X_SANDBOX_PROFILE_COMPLETION': '1' if args.profile_completion else '',
+        'C3X_SANDBOX_SKIP_VEGETATION_DEPTH': '1' if args.diagnostic_skip == 'vegetation-depth' else '',
+        'C3X_SANDBOX_SKIP_WATER_PASS': '1' if args.diagnostic_skip == 'water' else '',
+        'C3X_SANDBOX_SKIP_REFLECTION': '1' if args.diagnostic_skip == 'reflection' else '',
         'C3X_RENDERER_VISUAL_PROFILE': 'city-fidelity',
         'C3X_RENDERER_TRACE': '0',
         'C3X_RENDERER_SHARED_SCENE_SURFACE': '1',
@@ -110,7 +121,7 @@ def main():
     options['C3X_SANDBOX_STUDY_START_MS'] = str(args.start_ms)
     paths = [ROOT / args.client, ROOT / args.dll, ROOT,
              ROOT / 'Renderer/default.custom_rendering.txt', scene, case / 'initial.bmp']
-    command = ' '.join('"' + win(f) + '"' for f in paths) + f' 1280 800 {args.center[0]} {args.center[1]} {args.tile} {args.hour}'
+    command = ' '.join('"' + win(f) + '"' for f in paths) + f' {args.width} {args.height} {args.center[0]} {args.center[1]} {args.tile} {args.hour}'
     script = case / 'run.bat'
     script.write_text('@echo off\nsetlocal\n' + '\n'.join(f'set "{k}={v}"' for k, v in options.items()) + '\n' + command + '\nexit /b %errorlevel%\n')
     for stale in ('frame.bmp', 'initial.bmp', 'frame.png', 'scene.crh', 'scene.crh.gz'):

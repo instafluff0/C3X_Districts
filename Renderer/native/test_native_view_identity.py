@@ -116,11 +116,12 @@ struct State {
  c3x_renderer_render_fn custom_renderer_render=legacy;
  c3x_renderer_native_map_view_fn custom_renderer_native_map=nullptr;
  c3x_renderer_native_lifetime_fn custom_renderer_native_lifetime=nullptr;
+ int* custom_renderer_city_site_grades=nullptr;int custom_renderer_city_site_grade_count=0;
  unsigned* custom_renderer_world_topology=nullptr;
  unsigned long long* custom_renderer_world_visibility=nullptr;
  int custom_renderer_world_topology_count=0,custom_renderer_tile_count=0,custom_renderer_viewer_civ_id=-1;
  long long custom_renderer_world_topology_revision=0,custom_renderer_visibility_revision=0;
- long long custom_renderer_map_epoch=0,custom_renderer_viewer_epoch=0;
+ long long custom_renderer_map_epoch=0,custom_renderer_viewer_epoch=0,custom_renderer_display_viewer_epoch=0;
  bool custom_renderer_world_audit_needed=true;
  c3x_renderer_world_reconcile_fn custom_renderer_world_reconcile=nullptr;
  unsigned custom_renderer_requested_frames=0;LARGE_INTEGER custom_renderer_qpc_frequency{1000};
@@ -194,6 +195,7 @@ int main(){
  resident_result=C3X_RENDERER_RESULT_BAD_ARGUMENT;
  assert(demand()==C3X_RENDERER_RESULT_BAD_ARGUMENT&&!modern_calls&&resident_calls==3);
  resident_result=C3X_RENDERER_RESULT_PENDING;
+ state.custom_renderer_display_viewer_epoch=state.custom_renderer_viewer_epoch;
  assert(demand()==0&&state.custom_renderer_redraw_pending&&
         (state.custom_renderer_dirty_flags&C3X_RENDERER_DIRTY_SCENE));
  probe=false;assert(demand()==C3X_RENDERER_RESULT_BAD_ARGUMENT&&!modern_calls&&resident_calls==4);
@@ -206,7 +208,7 @@ int main(){
         helpers = 'struct custom_renderer_native_view\ncustom_renderer_native_view' + source.split('struct custom_renderer_native_view\ncustom_renderer_native_view', 1)[1].split('void __fastcall\npatch_Map_Renderer_m71_Draw_Tiles', 1)[0]
         body = source.split('void __fastcall\npatch_Map_Renderer_m71_Draw_Tiles', 1)[1]
         start = '\tif (custom_renderer_zoom_enabled ()) sync_custom_renderer_zoom_to_native ();' + body.split('\tif (custom_renderer_zoom_enabled ()) sync_custom_renderer_zoom_to_native ();', 1)[1].split('\tis->custom_renderer_draw_in_progress = true;', 1)[0]
-        finish = '\t// Loading disables custom zoom/navigation' + body.split('\t// Loading disables custom zoom/navigation', 1)[1].split('\tis->custom_renderer_frame_active = false;', 1)[0]
+        finish = '\t// Keep the completed native view identity' + body.split('\t// Keep the completed native view identity', 1)[1].split('\tis->custom_renderer_frame_active = false;', 1)[0]
         program = r'''
 #include "Renderer/native/c3x_renderer_api.h"
 #include <cassert>
@@ -256,10 +258,11 @@ struct State {
  c3x_renderer_camera_poll_view_fn custom_renderer_camera_poll;
  c3x_renderer_camera_cancel_fn custom_renderer_camera_cancel;
 } state;State* is=&state;
+unsigned debug_mode_bits=0;auto p_debug_mode_bits=&debug_mode_bits;
+bool online=false;bool is_online_game(){return online;}
 bool custom_renderer_zoom_enabled(){return !screen.is_now_loading_game;}
 void log_custom_renderer_event(char const*,int){}
 void sync_custom_renderer_zoom_to_native(){}
-void prepare_custom_renderer_loading_view(Main_Screen_Form*){}
 void native_move(Main_Screen_Form* s,int,int x,int y,int,bool){
  s->camera_x=(x%8192+8192)%8192;s->camera_y=(y%4096+4096)%4096;
  s->TileX_Min=s->camera_x/64;s->TileX_Max=s->TileX_Min+20;
@@ -267,12 +270,12 @@ void native_move(Main_Screen_Form* s,int,int x,int y,int,bool){
 }
 unsigned captures=0,begins=0,cancels=0;int queued_x=-1,poll_status=C3X_RENDERER_RESULT_PENDING;
 void capture(Map_Renderer* target,int,int viewer,int,int,Map_Renderer* output,void* clip,int x,int y,int flags){
- assert(state.custom_renderer_capture_only && !clip && x==-1 && y==-1 && flags==9 && output==target && viewer==2);
+ assert(state.custom_renderer_capture_only && !clip && x==-1 && y==-1 && flags==9 && output==target && viewer==((debug_mode_bits&8)&&!online?0:2));
  ++captures;state.custom_renderer_tile_count=2;
  state.storage[0]={};state.storage[0].visibility_mask=8;state.storage[0].anchor_x=-screen.camera_x;
  image.Clip_Rect.left=7; // The real traversal may change clipping; the bridge restores it.
 }
-void capture_custom_renderer_topology(int viewer,int mask){assert(viewer==2 && mask==8);}
+void capture_custom_renderer_topology(int viewer,int mask){assert(viewer==((debug_mode_bits&8)&&!online?0:2) && mask==8);}
 bool prepare_custom_renderer_frame(c3x_renderer_frame_v1* frame){
  *frame={};frame->tiles=state.storage;frame->tile_count=2;
  frame->world_topology_revision=4;frame->presentation_time_ticks=state.custom_renderer_animation_timestamp.QuadPart;return true;
@@ -443,28 +446,32 @@ int main(){
  assert(native_work==before_work+20);
  nav_ready=true;patch_Animator_update_display(&screen.animator,0);
  assert(screen.camera_x==500&&overlay_x==500&&native_work==before_work+21);
- // Startup clears the main form after the loading bar. An unchanged camera
- // must copy its already prepared map before HUD presentation, with no wait.
+ // Loading and gameplay centering use the same native path without GPU copies.
  static unsigned loading_copies=0;
- state.custom_renderer_native_image=[](int op,void* destination,void* source,void const* from,void const* to,unsigned)->int {
-  assert(op==C3X_NATIVE_COPY && destination==screen.Base_Data.Canvas.JGL.Image && source==bic.Map.Renderer.JGL.Image);
-  assert(from && to && ((RECT const*)from)->right==2240);++loading_copies;return 1;
+ state.custom_renderer_native_image=[](int,void*,void*,void const*,void const*,unsigned)->int {
+  ++loading_copies;return 1;
  };
+ for(bool custom:{false,true})for(bool loading:{false,true})for(char bar:{0,1}){
+  state.current_config.enable_custom_rendering=custom;screen.is_now_loading_game=loading;
+  screen.GUI.field_574[3]=bar;
+  patch_Main_Screen_Form_center_camera(&screen,0,600,100,0,false,false);
+  assert(!loading_copies&&!state.custom_renderer_camera_exact&&screen.camera_x==600);
+ }
+ // A debug pan captures viewer zero and is adopted in that same scope.
+ screen.is_now_loading_game=false;screen.GUI.field_574[3]=0;
+ state.custom_renderer_display_valid=true;screen.animator.fields[10]=0;
  state.custom_renderer_display_view=custom_renderer_native_view(&bic.Map.Renderer);
- state.custom_renderer_presented_frames=2;screen.is_now_loading_game=true;
- patch_Main_Screen_Form_center_camera(&screen,0,500,100,0,false,false);
- assert(loading_copies==1);
- screen.GUI.field_574[3]=1;
- patch_Main_Screen_Form_center_camera(&screen,0,500,100,0,false,false);
- assert(loading_copies==1);screen.GUI.field_574[3]=0;
- patch_Main_Screen_Form_center_camera(&screen,0,600,100,0,false,false);
- assert(loading_copies==1); // A different camera cannot reuse these pixels.
- state.current_config.enable_custom_rendering=false;
- patch_Main_Screen_Form_center_camera(&screen,0,500,100,0,false,false);
- assert(loading_copies==1&&!state.custom_renderer_camera_exact&&screen.camera_x==500);
- state.current_config.enable_custom_rendering=true;screen.is_now_loading_game=false;
- patch_Main_Screen_Form_center_camera(&screen,0,500,100,0,false,false);
- assert(loading_copies==1);
+ debug_mode_bits=8;state.custom_renderer_viewer_civ_id=0;
+ patch_Main_Screen_Form_move_camera(&screen,0,700,100,1,false);
+ assert(nav_pending&&screen.camera_x==600);nav_ready=true;
+ patch_Animator_update_display(&screen.animator,0);assert(screen.camera_x==700&&!nav_pending);
+ // Online games must retain the real player even with stale debug bits.
+ online=true;state.custom_renderer_viewer_civ_id=2;screen.animator.fields[10]=0;
+ state.custom_renderer_display_view=custom_renderer_native_view(&bic.Map.Renderer);
+ patch_Main_Screen_Form_move_camera(&screen,0,800,100,1,false);
+ assert(nav_pending);patch_Animator_update_display(&screen.animator,0);assert(screen.camera_x==800);
+
+
 }
 '''
         run_cpp(enabled)

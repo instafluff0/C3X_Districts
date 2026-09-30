@@ -10,6 +10,10 @@ continuous across tile boundaries.
 The current implementation and render recipe are in `standard.json`.
 Renderer64's coordinated Terrain/Mountains import is recorded in
 `Renderer/docs/lab_material_integration.md`.
+Terrain and mountain material/height inputs now come from the selected terrain
+pack's `natural_runtime/` payload. Both local normalized packs are prepared;
+default definitions select the Civ VI import and the local custom layer can
+select the Civ V skin without rebuilding or replacing the other pack.
 
 The production mesh uses `Renderer/lab/shared/natural/ground.h` and its shared
 168-byte vertex layout. Shared `natural/queries.h`

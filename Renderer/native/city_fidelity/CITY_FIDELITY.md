@@ -39,6 +39,13 @@ Facade light proxies are derived offline from emissive windows. They are an
 approximation, not decoded source-engine light bindings. A growable GPU buffer
 holds the visible scene's complete lights and blockers; the old regional
 1,024-light/256-blocker limit no longer makes detailed walled-city views fail.
+A conservative XY grid selects lights per receiver in the existing Y-inverted,
+Z-scaled light metric. Stable per-light blocker lists retain every possible slab
+intersection, including neighboring cities. Both lists share the complete light
+buffer; resource/index failure uses the original complete scan. Exact serialized
+content, counts and ordering govern reuse; night/emission constants update
+separately. No borrowed pointers survive upload. The same shader adapter covers
+main and reflection receivers and the frozen Renderer64 control bundle.
 Daylight skips uploading inactive facade lights. Existing material shading,
 normal maps, HDR reconstruction and analytic environment response remain shared.
 
@@ -50,6 +57,8 @@ normal maps, HDR reconstruction and analytic environment response remain shared.
   runtime texture dependencies.
 - `test_city_lighting.py`: 2,400 GPU lights/1,260 blockers, owner indices,
   daylight/reset/reuse, and all city shadow-pass connections.
+- `test_light_spatial_index.py`: deterministic/random CPU candidate and illumination
+  comparisons, native D3D full-scan equality, mutation/lifetime and shader routes.
 - `test_city_auxiliary_uv.py`: unchanged clipped geometry and interpolated UVs.
 - `capture_city_border_examples.py`: actual Renderer64 standalone day/night
   examples, with binary, shader, pack and fixture hashes beside each capture.
