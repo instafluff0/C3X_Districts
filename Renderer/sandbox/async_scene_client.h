@@ -92,7 +92,9 @@ template<class Transport>class AsyncSceneClient {
         c3x_inputs::require(replies.size()==batch.operations.size(),"image batch lost reliable suffix");
     }
     template<class Work>int post(std::size_t bytes,Work work,unsigned replace_key=0,char const* label=nullptr){
-        return publication.post(bytes,std::move(work),replace_key,label?label:"state")?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_DEVICE_ERROR;
+        bool accepted=publication.post(bytes,std::move(work),replace_key,label?label:"state");
+        transport.publication_pressure(publication.status().records);
+        return accepted?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_DEVICE_ERROR;
     }
     static std::shared_ptr<c3x_inputs::Frame> copy_frame(c3x_renderer_frame_v1 const& source){
         auto result=std::make_shared<c3x_inputs::Frame>();result->value=source;
@@ -147,11 +149,18 @@ template<class Transport>class AsyncSceneClient {
     }
 public:
     template<class... Args>AsyncSceneClient(bool asynchronous,std::function<void(char const*)> report,Args&&... args):
-        transport(std::forward<Args>(args)...),enabled(asynchronous),publication(std::move(report)){}
+        transport(std::forward<Args>(args)...),enabled(asynchronous),publication(std::move(report)){
+        observe_publication({});
+    }
     ~AsyncSceneClient(){publication.stop();}
     bool asynchronous()const{return enabled;}
     unsigned presented_zoom()const{return transport.presented_zoom();}
-    void observe_publication(std::function<void(char const*,double,double)> observer){publication.observe(std::move(observer));}
+    void observe_publication(std::function<void(char const*,double,double)> observer){
+        publication.observe([this,observer=std::move(observer)](char const* label,double queued,double service){
+            transport.publication_pressure(publication.status().records);
+            if(observer)observer(label,queued,service);
+        });
+    }
     bool alive()const{return publication.healthy()&&transport.alive();}
     void progress(unsigned& accepted,unsigned& completed,unsigned& frames)const{
         accepted=publication.accepted();completed=publication.completed();frames=transport.frames();
@@ -258,6 +267,7 @@ public:
             [this](ImageBatch& value){execute_images(value);},
             [](ImageBatch& target,ImageBatch& incoming){target.operations.push_back(std::move(incoming.operations[0]));},
             ImageBatch::join_bytes,ImageBatch::work_limit,ImageBatch::operation_limit,"images");
+        transport.publication_pressure(publication.status().records);
         result={sizeof(result)};result.image=created?created:request.image;
         return accepted?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_DEVICE_ERROR;
     }

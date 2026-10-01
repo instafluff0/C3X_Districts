@@ -5,6 +5,53 @@ from Renderer.native.native_cpp_test import run_cpp
 
 
 class OrderedColdServiceTests(unittest.TestCase):
+    def test_helper_cadence_waits_for_the_whole_native_batch_receipt(self):
+        source=(ROOT/'Renderer/native/helper_trial/scene_workload.cpp').read_text()
+        body='    void start_direct_cadence(){'+source.split('    void start_direct_cadence(){',1)[1].split('    void stop_direct_cadence()',1)[0]
+        run_cpp(r'''
+#include <cassert>
+#include <functional>
+#include <cstdint>
+using LONG=long;struct LARGE_INTEGER{long long QuadPart=0;};
+long long ticks=123;bool QueryPerformanceCounter(LARGE_INTEGER* value){value->QuadPart=ticks;return true;}
+bool QueryPerformanceFrequency(LARGE_INTEGER* value){value->QuadPart=1000;return true;}
+unsigned GetEnvironmentVariableA(char const*,char*,unsigned){return 0;}
+void InterlockedExchange(volatile LONG* p,LONG v){*p=v;}void InterlockedIncrement(volatile LONG* p){++*p;}
+LONG InterlockedCompareExchange(volatile LONG* p,LONG v,LONG match){auto old=*p;if(old==match)*p=v;return old;}
+void OutputDebugStringA(char const*){}
+constexpr int C3X_RENDERER_RESULT_OK=1,C3X_RENDERER_RESULT_ERROR=-1,C3X_RENDERER_RESULT_DEVICE_ERROR=5,C3X_RENDERER_RESULT_BUSY=6,C3X_NATIVE_ZOOM_PRESENTED=1;
+struct Owner{
+ bool direct_surface_bound=true,direct_display_ready=true;
+ long long pressure_present_ticks=0;
+ struct{std::function<bool()> offer;bool stopped=false;void disable(){stopped=true;}
+  template<class F>void enable_retrying(F f){offer=f;}}direct_cadence;
+ struct Batch{std::size_t bytes=0;Batch status(){return *this;}}batch;
+ Batch* image_batches=&batch;
+ struct{LONG presented_zoom_q16=0,visual_frames=0,native_queue_records=0;}values;
+ decltype(values)* telemetry=&values;
+ std::function<int(long long,long long,unsigned,std::uint64_t*,unsigned*,unsigned*)> visual_shared;
+ std::function<int(int,void*,void*,void*,void*,unsigned)> native_image;
+'''+body+r'''
+};
+int main(){Owner owner;unsigned samples=0;
+ owner.visual_shared=[&](auto...){++samples;return C3X_RENDERER_RESULT_OK;};
+ owner.native_image=[](auto...){return 65536;};owner.start_direct_cadence();
+ // Individual renderer calls may finish, but the admitted batch still owns
+ // its reliable suffix. Thousands of cadence ticks do not enter that suffix.
+ owner.batch.bytes=100;for(unsigned n=0;n<1000;++n)assert(owner.direct_cadence.offer());
+ assert(!samples&&!owner.values.visual_frames);
+ owner.batch.bytes=0;assert(!owner.direct_cadence.offer());
+ assert(samples==1&&owner.values.visual_frames==1&&owner.values.presented_zoom_q16==65536);
+ owner.values.native_queue_records=512;ticks+=249;
+ assert(owner.direct_cadence.offer()&&samples==1); // reliable prefix has priority
+ ++ticks;assert(!owner.direct_cadence.offer()&&samples==2); // periodic UI/front refresh
+ owner.values.native_queue_records=0;++ticks;
+ assert(!owner.direct_cadence.offer()&&samples==3); // normal cadence resumes immediately
+ owner.visual_shared=[&](auto...){++samples;return C3X_RENDERER_RESULT_BUSY;};
+ assert(owner.direct_cadence.offer()&&samples==4&&owner.values.visual_frames==3);
+}
+''')
+
     def test_admission_does_not_wait_for_execution_and_aliases_keep_order(self):
         run_cpp(r'''
 #include "Renderer/native/ordered_image_batch.h"
@@ -13,7 +60,7 @@ class OrderedColdServiceTests(unittest.TestCase):
 using namespace c3x_remote_scene;
 using namespace std::chrono_literals;
 int main(){
- std::promise<void> entered,release;auto held=release.get_future();
+ std::promise<void> entered,release,notified;auto held=release.get_future();
  std::vector<int> order;std::vector<long long> sources;
  ImageBatchService service([&](auto& work){entered.set_value();held.wait();
   return ImageBatch::execute(work,[&](auto const& request,auto& result){
@@ -24,7 +71,7 @@ int main(){
    if(request.action==C3X_GPU_DESTROY)assert(request.image==71);
    return C3X_RENDERER_RESULT_OK;
   });
- });
+ },[&]{assert(service.status().ready);notified.set_value();});
  std::vector<ImageBatch::Operation> work(4);
  work[0].created=1;work[0].image.value.action=C3X_GPU_CREATE;
  work[1].image.value.action=C3X_GPU_UPLOAD;work[1].image.value.image=-1;
@@ -40,7 +87,7 @@ int main(){
  std::vector<ImageBatch::Reply> replies;std::string error;double ms=0;
  assert(!service.poll(11,replies,error,ms));assert(order.empty());
  std::this_thread::sleep_for(30ms);release.set_value();
- while(!service.poll(11,replies,error,ms))std::this_thread::yield();
+ notified.get_future().get();assert(service.poll(11,replies,error,ms));
  assert(error.empty()&&replies.size()==4&&ms>=30);assert(service.status().bytes==0);
  assert(order==std::vector<int>({C3X_GPU_CREATE,C3X_GPU_UPLOAD,C3X_GPU_SUBMIT,C3X_GPU_DESTROY}));
  assert(sources==std::vector<long long>({71}));
@@ -112,6 +159,8 @@ int main(){
 #include <atomic>
 #include <cassert>
 #include <condition_variable>
+#include <chrono>
+#include <thread>
 #include <cstdio>
 #include <cstring>
 #include <mutex>
@@ -124,7 +173,7 @@ struct Owner {
  std::atomic<long long> camera_obsolete_through{0};std::atomic<bool> camera_cancelled{false},foreground_pending{false};
  long long job_camera_ticket=7;std::mutex state_mutex;bool has_job=false;Command job_command=Command::none;
  unsigned long long latest_job_sequence=0,completed_job_sequence=0,camera_service_turns=0;
- int last_job_result=0;std::condition_variable completed;
+ int last_job_result=0;std::condition_variable completed,wake;
  struct {unsigned frame_tiles_built=0,frame_tiles_reused=0;struct {double milliseconds(long long){return 0;}void write(char const*,char const*,bool){}}trace;}renderer_state;
  std::vector<int> chunks;int draws=0;
  int execute_command(Command,c3x_renderer_output_v1&){++draws;return 1;}
@@ -138,6 +187,18 @@ int main(){Owner owner;
  owner.camera_obsolete_through=6;owner.service_camera_preparation();assert(!owner.camera_cancelled);
  owner.camera_obsolete_through=7;owner.service_camera_preparation();assert(owner.camera_cancelled);
  assert(owner.chunks.size()==20&&owner.draws==20);
+ // A real producer offers consecutive operations only after each receipt. A
+ // preparation boundary drains the admitted prefix, including the small gap
+ // between receipts, instead of interleaving a tile upload with every request.
+ Owner burst;std::atomic<bool> entered{false},done{false};
+ std::thread producer([&]{for(unsigned i=0;i<20;++i){
+  std::unique_lock<std::mutex> lock(burst.state_mutex);burst.job_command=Owner::Command::gpu_images;
+  burst.has_job=true;burst.foreground_pending=true;auto sequence=++burst.latest_job_sequence;
+  entered=true;burst.wake.notify_one();burst.completed.wait(lock,[&]{return burst.completed_job_sequence==sequence;});
+ }done=true;});
+ while(!entered)std::this_thread::yield();burst.service_camera_preparation();
+ assert(burst.draws>1);while(!done){burst.service_camera_preparation();std::this_thread::yield();}
+ producer.join();assert(burst.draws==20&&burst.completed_job_sequence==20&&!burst.camera_cancelled);
 }
 ''')
 

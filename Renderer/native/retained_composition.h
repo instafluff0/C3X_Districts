@@ -18,12 +18,15 @@ public:
     using Texture=ComPtr<ID3D11Texture2D>;
     struct Placed {Command command;int x=0,y=0;};
     struct SampledImage {
-        enum class Kind { unchanged, immutable, bgra, frozen };
+        enum class Kind { unchanged, immutable, bgra, frozen, held };
         Kind kind=Kind::unchanged;Texture texture;Rect area{};float sharpness=0.f;
         SampledImage()=default;
         // The source owner has moved to another camera. Preserve this exact
         // completed image, but retire its animation callback and dependencies.
         static SampledImage frozen(){SampledImage result;result.kind=Kind::frozen;return result;}
+        // Preparation is still pending. Keep completed pixels and the live
+        // dependency, allowing native UI and future preparation to progress.
+        static SampledImage held(){SampledImage result;result.kind=Kind::held;return result;}
         SampledImage(Texture value):kind(Kind::immutable),texture(std::move(value)){}
         // Borrow a working BGRA surface only until this sample is consumed.
         // The retained node imports it into its own reusable packed output.
@@ -34,6 +37,7 @@ public:
     struct Sample {
         std::function<SampledImage(long long,long long)> canonical;
         std::function<SampledImage(long long,long long,float)> projected;
+        std::function<void(long long,long long,float)> prepare;
         Sample()=default;
         template<class F,typename std::enable_if<!std::is_same<typename std::decay<F>::type,Sample>::value,int>::type=0>
         Sample(F&& function):canonical(std::forward<F>(function)){}
@@ -69,7 +73,7 @@ private:
         unsigned view_native_format=0;
         float view_scale=0.f;
         std::shared_ptr<Node> projected;
-        std::uint64_t projected_frame=0;
+        std::uint64_t projected_frame=0,prepared_frame=0,prepared_projected_frame=0;
         bool projects_scene=false;
     };
     ID3D11Device* device;ID3D11DeviceContext* context;
@@ -176,6 +180,23 @@ private:
         for(auto const& draw:n->batch)for(auto const& input:draw.inputs)for(auto const& patch:input.patches)
             collect(patch.node,ticks,frequency,depth+1,project);
         n->sampled=frame;
+    }
+    // Run preparation before evaluating the stable native graph. This callback
+    // may adopt ready CPU content and render private frame scratch, but must
+    // never recursively execute native commands or mutate this graph.
+    void prepare(std::shared_ptr<Node> const& n,long long ticks,long long frequency,unsigned depth,
+            bool project=false,float scale=1.f){
+        if(depth>256)throw std::runtime_error("retained preparation dependency depth");
+        if(n->view&&n->projects_scene){project=true;scale=float(n->view->sample(ticks,frequency));}
+        auto& visited=project?n->prepared_projected_frame:n->prepared_frame;
+        if(visited==frame)return;visited=frame;
+        if(n->sample.prepare && (!n->sample.projected || n->projected_frame!=frame || project)){
+            n->sample.prepare(ticks,frequency,scale);
+        }
+        for(auto const& input:n->inputs)for(auto const& patch:input.patches)
+            prepare(patch.node,ticks,frequency,depth+1,project,scale);
+        for(auto const& draw:n->batch)for(auto const& input:draw.inputs)for(auto const& patch:input.patches)
+            prepare(patch.node,ticks,frequency,depth+1,project,scale);
     }
     void evaluate(std::shared_ptr<Node> const& n,long long ticks,long long frequency,unsigned depth){
         if(n->seen==frame)return;
@@ -463,8 +484,10 @@ private:
         if(empty(area)){n->area=area;n->seen=frame;return n;}
         if(original->sample.projected||original->retired){
             auto sampled=original->retired?SampledImage::frozen():original->sample.projected(ticks,frequency,scale);
-            if(sampled.kind==SampledImage::Kind::frozen){
-                original->retired=true;original->sample={};original->dynamic=original->map_dynamic=false;
+            if(sampled.kind==SampledImage::Kind::frozen||sampled.kind==SampledImage::Kind::held){
+                if(sampled.kind==SampledImage::Kind::frozen){
+                    original->retired=true;original->sample={};original->dynamic=original->map_dynamic=false;
+                }
                 // A camera can retire before its first display. Preserve its
                 // completed publication rather than returning an empty image.
                 // If a prior projected pose exists, reproject that exact pose
@@ -816,6 +839,7 @@ public:
         work={};
         if(!ready())return {};++frame;
         for(auto const& part:front.patches)collect(part.node,ticks,frequency,0);
+        for(auto const& part:front.patches)prepare(part.node,ticks,frequency,0);
         auto image=assemble(front,ticks,frequency,0,{},true);
         Texture result;
         try{result=crop(replay.texture(image),extent(front));}
@@ -827,6 +851,7 @@ public:
         work={};selected_view_scale=1.;
         if(!ready())return 0;++frame;
         for(auto const& part:front.patches)collect(part.node,ticks,frequency,0);
+        for(auto const& part:front.patches)prepare(part.node,ticks,frequency,0);
         std::vector<std::uint64_t> versions;
         for(auto const& part:front.patches){evaluate(part.node,ticks,frequency,0);versions.push_back(part.node->revision);}
         if(drawn_revision==front_revision&&versions==drawn_dependencies)return 2; // no new source sample

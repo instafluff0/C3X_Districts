@@ -45,6 +45,7 @@ struct Core {
     CameraSupersede camera_supersede=nullptr;
     HANDLE control_stop=nullptr;std::thread control_thread;
     std::mutex control_lifetime;
+    long long pressure_present_ticks=0;
     using Definitions=int(*)(char const*,char const*,char const*,char const*);
     Definitions definitions=nullptr;
     using Pack=int(*)(char const*);Pack pack=nullptr;
@@ -88,7 +89,7 @@ struct Core {
     using SurfacePixels=int(*)(unsigned*,unsigned,unsigned*,unsigned*);
     SurfacePixels surface_pixels=nullptr;
     std::map<std::int64_t,std::int64_t> ticket_ids,image_ids;
-    explicit Core(wchar_t const* dll,bool verify=false):verify_pixels(verify){module=LoadLibraryW(dll);require(module!=nullptr,"renderer DLL load failed");
+    explicit Core(wchar_t const* dll,bool verify=false,HANDLE image_completed=nullptr):verify_pixels(verify){module=LoadLibraryW(dll);require(module!=nullptr,"renderer DLL load failed");
         render=reinterpret_cast<c3x_renderer_render_fn>(GetProcAddress(module,"c3x_renderer_render"));
         render_view=reinterpret_cast<c3x_renderer_render_view_fn>(GetProcAddress(module,"c3x_renderer_render_view"));
         gpu_render=reinterpret_cast<GpuRender>(GetProcAddress(module,"c3x_renderer_gpu_render"));
@@ -133,7 +134,7 @@ struct Core {
             return c3x_remote_scene::ImageBatch::execute(work,[this](auto const& request,auto& result){
                 return images(&request,&result,nullptr,0);
             });
-        });}
+        },[image_completed]{if(image_completed)SetEvent(image_completed);});}
     ~Core(){if(control_stop)SetEvent(control_stop);if(control_thread.joinable())control_thread.join();
         if(control_stop)CloseHandle(control_stop);
         image_batches.reset();direct_cadence.stop();if(module){reset();auto trace_flush=reinterpret_cast<void(*)()>(GetProcAddress(module,"c3x_renderer_trial_trace_flush"));
@@ -166,10 +167,22 @@ struct Core {
         // A newly committed static UI also needs its first sample. Unchanged
         // static fronts return PENDING without drawing or presenting again.
         direct_cadence.enable_retrying([this]{
+            // The admitted image batch is one reliable prefix. Its operations
+            // release the renderer call gate individually, but those gaps are
+            // not ambient presentation opportunities. Let the receipt complete
+            // before sampling the newly committed native front.
+            if(image_batches->status().bytes)return true;
             LARGE_INTEGER now={},frequency={};
             if(!QueryPerformanceCounter(&now)||!QueryPerformanceFrequency(&frequency))return false;
+            // Optional display cannot consume the reliable prefix's service
+            // budget during a native burst. Keep periodic completed-front/UI
+            // presentations while pressure drains, then restore normal cadence.
+            bool pressure=telemetry&&InterlockedCompareExchange(
+                reinterpret_cast<volatile LONG*>(&telemetry->native_queue_records),0,0)>=512;
+            if(pressure&&pressure_present_ticks&&now.QuadPart-pressure_present_ticks<frequency.QuadPart/4)return true;
             std::uint64_t handle=0;unsigned width=0,height=0;
             int code=visual_shared(now.QuadPart,frequency.QuadPart,0,&handle,&width,&height);
+            if(code==C3X_RENDERER_RESULT_OK)pressure_present_ticks=now.QuadPart;
             if(code==C3X_RENDERER_RESULT_OK&&telemetry){
                 InterlockedExchange(reinterpret_cast<volatile LONG*>(&telemetry->presented_zoom_q16),
                     native_image(C3X_NATIVE_ZOOM_PRESENTED,nullptr,nullptr,nullptr,nullptr,0));
@@ -687,10 +700,11 @@ int wmain(int argc,wchar_t** argv){
         std::wstring base=argv[2];HANDLE mapping=OpenFileMappingW(FILE_MAP_ALL_ACCESS,FALSE,object_name(base,L"_map").c_str());
         HANDLE request=OpenEventW(SYNCHRONIZE,FALSE,object_name(base,L"_request").c_str());
         HANDLE response=OpenEventW(EVENT_MODIFY_STATE,FALSE,object_name(base,L"_response").c_str());
+        HANDLE image_completed=OpenEventW(EVENT_MODIFY_STATE,FALSE,object_name(base,L"_images_complete").c_str());
         HANDLE control=OpenEventW(SYNCHRONIZE,FALSE,object_name(base,L"_control").c_str());
         require(mapping&&request&&response,"scene IPC objects missing");
         auto* wire=static_cast<Wire*>(MapViewOfFile(mapping,FILE_MAP_ALL_ACCESS,0,0,sizeof(Wire)));require(wire!=nullptr,"scene IPC map failed");
-        { Core core(argv[3]);core.start_control(*wire,control,parent.handle);require(SetEvent(response)!=FALSE,"helper ready signal failed");
+        { Core core(argv[3],false,image_completed);core.start_control(*wire,control,parent.handle);require(SetEvent(response)!=FALSE,"helper ready signal failed");
         unsigned last=wire->sequence;
         HANDLE active[2]={request,parent.handle};
         while(WaitForMultipleObjects(2,active,FALSE,120000)==WAIT_OBJECT_0){
@@ -699,7 +713,7 @@ int wmain(int argc,wchar_t** argv){
             core.execute(*wire);require(SetEvent(response)!=FALSE,"helper response signal failed");
         }
         } // Stop/join visual callbacks before unmapping their shared counters.
-        UnmapViewOfFile(wire);if(control)CloseHandle(control);CloseHandle(response);CloseHandle(request);CloseHandle(mapping);return 0;
+        UnmapViewOfFile(wire);if(image_completed)CloseHandle(image_completed);if(control)CloseHandle(control);CloseHandle(response);CloseHandle(request);CloseHandle(mapping);return 0;
 #else
         require(argc>=5&&argc<=12,"driver usage: --local DLL CAPTURE REPORT | --remote DLL CAPTURE REPORT HELPER [--verify-pixels] [--raw-shared] [--crash-after N] [--reserve-mib N]");
         bool remote=std::wstring(argv[1])==L"--remote",verify_pixels=false,raw_shared=false;unsigned crash_after=0,reserve_mib=0;

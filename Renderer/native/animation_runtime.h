@@ -44,7 +44,7 @@ struct AnimationMesh {
 };
 
 inline bool decode_animation_mesh(std::vector<std::uint8_t> const & data,
-                                  AnimationMesh & output) {
+                                  AnimationMesh & output,std::size_t resident_limit=std::size_t(-1)) {
     // Validate the complete byte budget before allocating any count-sized array.
     if (data.size() < 32 || data.size() > 64u * 1024u * 1024u ||
         (std::memcmp(data.data(), "C3XANM1\0", 8) != 0 && std::memcmp(data.data(), "C3XANM2\0", 8) != 0)) return false;
@@ -73,6 +73,11 @@ inline bool decode_animation_mesh(std::vector<std::uint8_t> const & data,
         if(!rig_bones||rig_bones>256||data[offset+12]||data[offset+13]||data[offset+14]||data[offset+15]||
            expected+48+rig_bones*4ull+bones*68ull+std::uint64_t(rig_bones)*frames*64ull!=data.size())return false;
     } else if (expected != data.size()) return false;
+    auto resident=sizeof(AnimationMesh)+2*sizeof(void*)+std::uint64_t(vertex_count)*sizeof(AnimationVertex)+
+        std::uint64_t(index_count)*sizeof(std::uint32_t)+std::uint64_t(bones)*frames*64ull;
+    if(rig)resident+=std::uint64_t(rig_bones)*sizeof(int)+std::uint64_t(bones)*68ull+
+        std::uint64_t(rig_bones)*frames*sizeof(AnimationJointPose);
+    if(resident>resident_limit)return false;
     AnimationMesh decoded;
     decoded.duration = duration; decoded.bones = bones; decoded.frames = frames;
     decoded.vertices.resize(vertex_count);

@@ -252,9 +252,7 @@ extern "C" __declspec(dllexport) int c3x_sandbox_witness_capture(char const* pre
 #ifdef C3X_RENDERER64_FRESH
 // Renderer64 supplies the copied Civ III frame and owns GPU publication. This
 // adapter writes the sandbox scene into its map image, never an HWND or RPC page.
-bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
-        ID3D11RenderTargetView* target,float zoom) {
-    renderer.trace.write("fresh-callback","enter",true);
+void c3x_renderer64_frame_device(){
     static unsigned device_generation=0;
     if(device_generation!=renderer.device_generation) {
         if(device_generation) {
@@ -267,6 +265,25 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
         }
         device_generation=renderer.device_generation;
     }
+}
+void c3x_renderer64_begin_unit_assets(){
+    c3x_renderer64_frame_device();
+    // Completed fronts own pixels, not these borrowed per-pass palette leases.
+    // Release them before the next frame can evict or adopt any GPU mesh.
+    sandbox_direct_units.prepared_units.clear();
+    static std::uint64_t revision=0;
+    if(revision!=renderer.content_revision){
+        sandbox_direct_units.meshes.clear();sandbox_direct_units.mesh_bytes=0;
+        sandbox_direct_units.transitions.clear();revision=renderer.content_revision;
+    }
+}
+int c3x_renderer64_prepare_unit_meshes(){
+    c3x_renderer64_frame_device();return sandbox_direct_units.prepare_frame_meshes();
+}
+bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
+        ID3D11RenderTargetView* target,float zoom) {
+    renderer.trace.write("fresh-callback","enter",true);
+    c3x_renderer64_frame_device();
     int camera_x=0,camera_y=0;
     if(frame.tile_count && frame.tiles) {
         auto const& first=frame.tiles[0];

@@ -5,6 +5,31 @@ from Renderer.native.native_cpp_test import run_cpp
 
 
 class AsyncPublicationTests(unittest.TestCase):
+    def test_busy_native_burst_has_independent_work_and_packet_bounds(self):
+        run_cpp(r'''
+#include "Renderer/sandbox/async_publication.h"
+#include <cassert>
+int main(){
+ std::promise<void> entered,release;auto held=release.get_future();unsigned executed=0;
+ c3x_async::Publication queue;
+ assert(queue.post(1,[&]{entered.set_value();held.wait();}));entered.get_future().get();
+ // Three measured startup-sized bursts while the consumer is preparing: each
+ // is about 2200 packets, 7400 operations and 6 MiB. Operations != packets.
+ for(unsigned burst=0;burst<3;++burst)for(unsigned packet=0;packet<2196;++packet)
+  assert(queue.post(2734,[&]{++executed;},0,"native-busy",packet<803?4:3));
+ auto status=queue.status();assert(status.records==6589 && status.units==22174);
+ assert(status.bytes<128u*1024u*1024u && status.rejected==0 && queue.healthy());
+ release.set_value();queue.stop();status=queue.status();
+ assert(executed==6588 && status.accepted==status.executed && !status.records && !status.units && !status.bytes);
+ // Retain the independent packet ceiling even when semantic work is tiny.
+ std::promise<void> entered2,release2;auto held2=release2.get_future();c3x_async::Publication bounded;
+ assert(bounded.post(1,[&]{entered2.set_value();held2.wait();}));entered2.get_future().get();
+ for(unsigned n=1;n<8192;++n)assert(bounded.post(1,[]{}));
+ assert(!bounded.post(1,[]{}));assert(bounded.status().peak_records==8192);
+ release2.set_value();bounded.stop();assert(bounded.status().rejected==1);
+}
+''')
+
     def test_consumer_failure_releases_an_already_queued_setup_waiter(self):
         run_cpp(r'''
 #include "Renderer/sandbox/async_publication.h"
@@ -91,6 +116,7 @@ struct Fake {
  explicit Fake(State& value):state(value){}
  bool alive()const{return true;}
  void supersede_pending_camera(){}
+ void publication_pressure(std::size_t){}
  int stats(){return state.creates;}
  int camera_begin(c3x_renderer_camera_request_v1 const& value,long long& ticket){
   state.barrier();frame=*value.frame;tile=frame.tiles[0];frame.tiles=&tile;ticket=++next;return C3X_RENDERER_RESULT_PENDING;

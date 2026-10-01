@@ -79,6 +79,7 @@ constexpr int C3X_RENDERER_RESULT_OK=0, C3X_RENDERER_RESULT_ERROR=-1,
     C3X_RENDERER_RESULT_PENDING=1;
 bool FAILED(int value){return value<0;}
 struct LARGE_INTEGER {long long QuadPart=0;};
+void Sleep(unsigned){}
 void QueryPerformanceCounter(LARGE_INTEGER* value){static long long now=1;value->QuadPart=now++;}
 struct D3D11_TEXTURE2D_DESC {
     UINT Width=0,Height=0,MipLevels=0,ArraySize=0;
@@ -104,7 +105,7 @@ template<class T>void release(T*& value){if(value){value->Release();value=nullpt
 struct Frame {unsigned visible_animation_count=0,tile_count=0;int const* tiles=nullptr;};
 struct Output {unsigned version=0,size=0;bool filled=false;};
 struct Trace {int writes=0;void write(char const*,char const*,bool){++writes;}};
-enum class CancelAt {none,before,wave,texture,rtv,draw};
+enum class CancelAt {none,before,wave,texture,rtv,assets,meshes,draw};
 struct Harness;
 struct Device {
     Harness* owner;
@@ -139,7 +140,10 @@ struct Harness {
     Texture* gpu_map_texture=nullptr;
     long long frame_geometry_ticks=0,frame_draw_ticks=0;
     char const* frame_cache_path="prior";
-    int waves=0,draws=0,fills=0,captures=0;
+    int waves=0,draws=0,fills=0,captures=0,assets=0,meshes=0;
+    std::vector<int> fresh_unit_poses;
+    int prepare_frame_unit_assets(std::vector<int> const&){++assets;event(CancelAt::assets);return C3X_RENDERER_RESULT_OK;}
+    int c3x_renderer64_prepare_unit_meshes(){++meshes;event(CancelAt::meshes);return C3X_RENDERER_RESULT_OK;}
     // Resident data and the last completed map keep independent owners.
     std::shared_ptr<int> resident_lease=std::make_shared<int>(73);
     Published gpu_publication{41,std::make_shared<int>(41)};
@@ -252,7 +256,7 @@ int main(){
         assert(h.fresh_path_failed&&h.draws==0&&h.fills==0);
     }
     assert(Texture::alive==0&&ID3D11RenderTargetView::alive==0);
-    std::puts("fresh preparation cancellation: PASS (9 cancelled stages, success, 4 real failures)");
+    std::puts("fresh preparation cancellation: PASS (11 cancelled stages, success, 4 real failures)");
 }
 '''
 

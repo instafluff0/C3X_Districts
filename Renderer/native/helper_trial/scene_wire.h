@@ -2,7 +2,7 @@
 #include <cstdint>
 
 namespace c3x_helper_trial {
-constexpr unsigned wire_magic=0x32483343,wire_version=12,wire_capacity=16*1024*1024;
+constexpr unsigned wire_magic=0x32483343,wire_version=13,wire_capacity=16*1024*1024;
 struct Wire {
     unsigned magic,version,sequence,kind,subtype,size,reply_size,status,code,shared_raw,expected_code,executed,live;
     unsigned width,height,rendered,fallback,hash[4],gpu_hash[4],gpu_hash_valid;
@@ -16,6 +16,8 @@ struct Wire {
     unsigned consumer_pid;
     alignas(4) volatile std::int32_t visual_frames;
     alignas(4) volatile std::int32_t presented_zoom_q16;
+    // Advisory admission pressure, independent of the ordered command payload.
+    alignas(4) volatile std::int32_t native_queue_records;
     // Receipt-only cancellation mailbox. No reliable resource/action command
     // is displaced; the ordered request wire still owns admission/adoption.
     alignas(8) volatile std::int64_t obsolete_camera_through;

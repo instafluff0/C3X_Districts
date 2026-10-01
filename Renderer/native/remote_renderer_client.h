@@ -38,6 +38,7 @@ public:
     unsigned frames()const{return transport.frames();}
     unsigned presented_zoom()const{return transport.presented_zoom();}
     void supersede_pending_camera(){transport.supersede_pending_camera();}
+    void publication_pressure(std::size_t records){transport.publication_pressure(records);}
     c3x_helper_trial::SceneClient::Stats stats()const{return transport.stats();}
     int definitions(char const* root,char const* fallback,char const* scenario,char const* custom){
         transport.retire_camera_receipt();
@@ -220,6 +221,7 @@ public:
     }
     int images_batch(std::vector<ImageBatch::Operation> const& operations,std::vector<ImageBatch::Reply>& replies){
         c3x_inputs::Writer input;ImageBatch::encode(input,operations);
+        transport.begin_image_receipt();
         auto const& admitted=invoke(unsigned(c3x_inputs::Kind::image_commands),1,input.bytes.data(),unsigned(input.bytes.size()));
         c3x_inputs::require(admitted.code==C3X_RENDERER_RESULT_PENDING&&!admitted.executed,"image batch was not admitted");
         unsigned sequence=admitted.sequence;c3x_inputs::Writer query;query(sequence);
@@ -228,7 +230,7 @@ public:
             auto const& executed=invoke(unsigned(c3x_inputs::Kind::image_commands),2,query.bytes.data(),unsigned(query.bytes.size()));
             if(executed.code==C3X_RENDERER_RESULT_PENDING){
                 c3x_inputs::require(std::chrono::steady_clock::now()<deadline,"image batch execution deadline");
-                std::this_thread::sleep_for(std::chrono::milliseconds(1));continue;
+                transport.wait_image_receipt();continue;
             }
             if(executed.code!=C3X_RENDERER_RESULT_OK)return int(executed.code);
             auto bytes=reply(executed);c3x_inputs::Reader reader{bytes};unsigned count=0;reader(count);

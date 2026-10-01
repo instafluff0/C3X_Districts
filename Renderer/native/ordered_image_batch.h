@@ -70,6 +70,7 @@ class ImageBatchService {
     std::mutex mutex;std::condition_variable wake;
     std::vector<ImageBatch::Operation> pending;std::vector<ImageBatch::Reply> result;
     std::function<std::vector<ImageBatch::Reply>(std::vector<ImageBatch::Operation>&)> execute;
+    std::function<void()> notify;
     bool stopping=false,occupied=false,ready=false;
     unsigned sequence=0;std::size_t bytes=0,units=0,operations=0;
     std::string error;double service_ms=0;std::thread worker;
@@ -82,12 +83,14 @@ class ImageBatchService {
             catch(...){failure="unknown image batch execution failure";}
             auto elapsed=std::chrono::duration<double,std::milli>(Clock::now()-begin).count();
             work.clear();lock.lock();result=std::move(replies);error=std::move(failure);service_ms=elapsed;ready=true;
+            lock.unlock();if(notify)notify();lock.lock();
             if(stopping)return;
         }
     }
 public:
     struct Status {unsigned sequence;std::size_t bytes,units,operations;bool ready;double service_ms;};
-    template<class Execute>explicit ImageBatchService(Execute value):execute(std::move(value)),worker([this]{run();}){}
+    template<class Execute>explicit ImageBatchService(Execute value,std::function<void()> complete={}):
+        execute(std::move(value)),notify(std::move(complete)),worker([this]{run();}){}
     ~ImageBatchService(){{std::lock_guard<std::mutex> lock(mutex);stopping=true;}wake.notify_all();worker.join();}
     bool admit(unsigned id,std::size_t size,std::vector<ImageBatch::Operation> work){
         std::size_t semantic=0;for(auto const& op:work)semantic+=ImageBatch::work(op.image.value);

@@ -1,5 +1,18 @@
 # Civ III patch dependency ledger
 
+## Shared frame preparation and delivery
+
+`required_user_action: []`. No injected source, patch-table entry or address
+changes. The existing `Map_Renderer_m71_Draw_Tiles`,
+`Map_Renderer_m19_Draw_Tile_by_XY_and_Flags`,
+`Units_Image_Data_advance_animations` and `Animator_update_display` integration
+continues supplying authoritative captures and native composition operations.
+
+Unit asset preparation, completed-frame sampling, ordered image receipts and
+display scheduling change inside `Renderer/`. The bridge and helper use matching
+wire version 13 binaries. Existing config-off delegation and native ownership
+remain applicable; this delivery adds no supported-build coverage.
+
 ## Extended close map zoom
 
 `required_user_action: []`. No patch-table entry or address changed.

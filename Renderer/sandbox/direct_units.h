@@ -16,11 +16,13 @@ struct SandboxDirectUnits {
     };
     static_assert(sizeof(Vertex)==88);
     struct Mesh {
+        std::size_t bytes=0;std::uint64_t used=0;
         c3x_renderer::render_core::SkinShadowBounds shadow_bounds;
         Microsoft::WRL::ComPtr<ID3D11Buffer> vertices,indices,palettes;
         Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> palette_view;
     };
     std::vector<Mesh> meshes;
+    std::size_t mesh_bytes=0,mesh_peak_bytes=0;std::uint64_t mesh_serial=0,mesh_evictions=0;
     c3x_renderer::render_core::UnitPoseTransitions transitions;
     Microsoft::WRL::ComPtr<ID3D11Buffer> transition_palette;
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> transition_view;
@@ -93,7 +95,7 @@ struct SandboxDirectUnits {
         auto add=[&](auto const& texture){if(texture)textures.insert(texture.Get());};
         add(self_shadow);add(working_shadow.texture);
         for(unsigned i=0;i<shared_shadows.size();++i)add(shared_shadows[i].value.texture);
-        std::size_t bytes=textures.size()*512u*512u*4u;
+        std::size_t bytes=mesh_bytes+textures.size()*512u*512u*4u;
         for(auto const& palette:prepared_palettes)if(palette.buffer)bytes+=16384u;
         if(transition_palette)bytes+=16384u;
         return bytes;
@@ -265,9 +267,20 @@ float4 PSShadow(Output i):SV_Target {
         auto& bodies=renderer.unit_bodies;
         if(index>=bodies.meshes.size())return false;
         if(meshes.size()<bodies.meshes.size())meshes.resize(bodies.meshes.size());
-        auto& gpu=meshes[index];if(gpu.vertices)return true;
+        auto& gpu=meshes[index];if(gpu.vertices){gpu.used=++mesh_serial;return true;}
         auto const& mesh=bodies.meshes[index].animation;
         if(!mesh||mesh->vertices.empty()||mesh->indices.empty()||mesh->palettes.empty())return false;
+        auto bytes=mesh->vertices.size()*sizeof(Vertex)+(mesh->indices.size()+mesh->palettes.size())*4;
+        constexpr std::size_t limit=192u*1024u*1024u;
+        if(bytes>limit)return false;
+        while(mesh_bytes>limit-bytes){
+            unsigned victim=UINT_MAX;std::uint64_t oldest=UINT64_MAX;
+            for(unsigned i=0;i<meshes.size();++i)if(meshes[i].bytes &&
+                (i>=renderer.frame_mesh_leases.size()||!renderer.frame_mesh_leases[i]) && meshes[i].used<oldest){victim=i;oldest=meshes[i].used;}
+            if(victim==UINT_MAX)return false;
+            mesh_bytes-=meshes[victim].bytes;meshes[victim]=Mesh{};++mesh_evictions;
+        }
+        Mesh next;
         std::vector<Vertex> input(mesh->vertices.size());
         for(std::size_t n=0;n<input.size();++n){
             auto const& source=mesh->vertices[n];auto& output=input[n];
@@ -282,22 +295,41 @@ float4 PSShadow(Output i):SV_Target {
         D3D11_BUFFER_DESC b={};D3D11_SUBRESOURCE_DATA data={};
         b.ByteWidth=UINT(input.size()*sizeof(Vertex));b.Usage=D3D11_USAGE_IMMUTABLE;
         b.BindFlags=D3D11_BIND_VERTEX_BUFFER;data.pSysMem=input.data();
-        if(FAILED(renderer.device->CreateBuffer(&b,&data,&gpu.vertices)))return false;
+        if(FAILED(renderer.device->CreateBuffer(&b,&data,&next.vertices)))return false;
         b.ByteWidth=UINT(mesh->indices.size()*4);b.BindFlags=D3D11_BIND_INDEX_BUFFER;
         data.pSysMem=mesh->indices.data();
-        if(FAILED(renderer.device->CreateBuffer(&b,&data,&gpu.indices)))return false;
+        if(FAILED(renderer.device->CreateBuffer(&b,&data,&next.indices)))return false;
         b.ByteWidth=UINT(mesh->palettes.size()*4);b.BindFlags=D3D11_BIND_SHADER_RESOURCE;
         b.MiscFlags=D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;b.StructureByteStride=16;
         data.pSysMem=mesh->palettes.data();
-        if(FAILED(renderer.device->CreateBuffer(&b,&data,&gpu.palettes)))return false;
+        if(FAILED(renderer.device->CreateBuffer(&b,&data,&next.palettes)))return false;
         D3D11_SHADER_RESOURCE_VIEW_DESC view={};view.Format=DXGI_FORMAT_UNKNOWN;
         view.ViewDimension=D3D11_SRV_DIMENSION_BUFFER;
         view.Buffer.NumElements=UINT(mesh->palettes.size()/4);
-        if(FAILED(renderer.device->CreateShaderResourceView(gpu.palettes.Get(),&view,
-            &gpu.palette_view)))return false;
-        gpu.shadow_bounds.prepare(*mesh);
+        if(FAILED(renderer.device->CreateShaderResourceView(next.palettes.Get(),&view,
+            &next.palette_view)))return false;
+        next.shadow_bounds.prepare(*mesh);next.bytes=bytes;next.used=++mesh_serial;
+        gpu=std::move(next);mesh_bytes+=bytes;mesh_peak_bytes=std::max(mesh_peak_bytes,mesh_bytes);
         ++mesh_builds;return true;
     }
+#ifdef C3X_RENDERER64_FRESH
+    int prepare_frame_meshes(){
+        if(!initialize())return C3X_RENDERER_RESULT_ERROR;
+        auto began=std::chrono::steady_clock::now();unsigned adopted=0;bool ready=true;
+        for(unsigned i=0;i<renderer.frame_mesh_leases.size();++i)if(renderer.frame_mesh_leases[i]){
+            if(i<meshes.size()&&meshes[i].vertices)continue;
+            if(adopted>=2 || (adopted&&std::chrono::steady_clock::now()-began>std::chrono::milliseconds(3))){ready=false;continue;}
+            if(!prepare_mesh(i))return C3X_RENDERER_RESULT_ERROR;
+            ++adopted;
+        }
+        if(adopted){char detail[256];std::snprintf(detail,sizeof(detail),
+            "adopted=%u resident_bytes=%zu peak_bytes=%zu evictions=%llu ms=%.3f complete=%u",
+            adopted,mesh_bytes,mesh_peak_bytes,mesh_evictions,
+            std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-began).count(),unsigned(ready));
+            renderer.trace.write("frame-mesh-turn",detail,true);}
+        return ready?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_PENDING;
+    }
+#endif
     bool prewarm(int,int){
         if(!initialize())return false;
         char moving[16]{};
@@ -692,7 +724,7 @@ float4 PSShadow(Output i):SV_Target {
             sample.low=unit_low_ground(frame,float(pose.anchor_x),float(pose.anchor_y));
             sample.ground_pixels=sample.low*frame.tile_width/224.f*.82f;
             sample.ground_depth=float(instance.tile_y)*frame.tile_height*.5f+renderer.geometry_viewport_settings.depth_translation+frame.tile_height*.5f+4.f;
-            if(!renderer.prepare_unit_action(action))return false;
+            // Payloads and mesh buffers are admitted before this frame starts.
             sample.angle=transitions.facing(draw.unit_id,instance.pose_identity,frame.presentation_time_ticks,
                 frame.presentation_frequency,c3x_renderer::native_unit_yaw(unit.yaw_offset,draw.direction));
             auto bits=[](float value){std::uint32_t result;std::memcpy(&result,&value,sizeof(result));return std::uint64_t(result);};
@@ -703,7 +735,7 @@ float4 PSShadow(Output i):SV_Target {
                 player_color[axis]=color<=.04045f?color/12.92f:std::pow((color+.055f)/1.055f,2.4f);}
             for(auto const& part:action.parts){
                 if(part.mesh>=bodies.meshes.size() || part.texture>=bodies.textures.size() ||
-                    !bodies.textures[part.texture].view || !prepare_mesh(part.mesh))return false;
+                    !bodies.textures[part.texture].view || part.mesh>=meshes.size() || !meshes[part.mesh].vertices)return false;
                 auto const& source=*bodies.meshes[part.mesh].animation;
                 PartSample prepared;prepared.frame=std::min(source.frames-1,unsigned(std::floor(pose.phase*double(source.frames-1)+1e-7)));
                 prepared.blended=transitions.sample(draw.unit_id,instance.pose_identity,draw.action,frame.presentation_time_ticks,

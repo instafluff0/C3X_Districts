@@ -90,7 +90,12 @@ public:
         gpu_content.clear();gpu_content_bytes=0;scene_output_width=scene_output_height=scene_output_scale=0;
         scene_resolve.reset();resident_pose={};scene_sample={};resident_cache.clear();resident_pose_bytes=0;gpu_finish.reset();gpu_shadow.reset();
         for(auto & mesh:meshes) release(mesh.indices);
-        for(auto & texture:textures) release(texture.view);
+        for(auto & texture:textures) {
+            release(texture.view);
+            // Asynchronous frame uploads discard their staging DDS. Device
+            // retirement makes those GPU-only entries absent for the next lease.
+            if(texture.bytes && texture.dds.empty()){resident_bytes-=texture.bytes;texture.bytes=0;}
+        }
         release(vertex);release(pixel);release(layout);release(settings);release(beauty_frame);release(vertices);
         release(shadow_target);release(shadow_view);release(shadow_texture);
         for(auto & sampler:samplers)release(sampler);

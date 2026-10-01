@@ -50,7 +50,7 @@ public static class RendererGameCommand {
 // the IPC header read-only; it never requests pixels or submits renderer work.
 public sealed class RendererCadenceReader : IDisposable {
     // Mirrored from helper_trial/scene_wire.h; executable test checks this ABI.
-    public const int WireVersion = 12, FrameOffset = 228, ZoomOffset = 232;
+    public const int WireVersion = 13, FrameOffset = 228, ZoomOffset = 232;
     [DllImport("kernel32.dll", CharSet=CharSet.Unicode)] static extern IntPtr OpenFileMapping(uint access, bool inherit, string name);
     [DllImport("kernel32.dll")] static extern IntPtr MapViewOfFile(IntPtr mapping, uint access, uint high, uint low, UIntPtr bytes);
     [DllImport("kernel32.dll")] static extern bool UnmapViewOfFile(IntPtr view);
@@ -63,7 +63,7 @@ public sealed class RendererCadenceReader : IDisposable {
         // Version 12 adds the cancellation mailbox after these counters; the
         // accepted control's version 11 has the same read-only telemetry ABI.
         int version=Marshal.ReadInt32(view,4);
-        if(Marshal.ReadInt32(view)!=0x32483343 || (version!=WireVersion && version!=11)) {
+        if(Marshal.ReadInt32(view)!=0x32483343 || (version!=WireVersion && version!=12 && version!=11)) {
             Dispose(); throw new InvalidOperationException("Renderer telemetry ABI changed");
         }
     }

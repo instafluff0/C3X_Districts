@@ -84,8 +84,11 @@ class Publication {
 public:
     struct Status {unsigned accepted,executed,superseded,abandoned,rejected;
         std::size_t bytes,records,units,peak_bytes,peak_records,peak_units;double oldest_ms;};
+    // Allow eight semantic operations per packet at the full packet watermark.
+    // Work, packet and byte bounds are independent; merging changes none of them.
+    static constexpr std::size_t default_work_limit=65536;
     explicit Publication(std::function<void(char const*)> diagnostic={},
-        std::size_t byte_limit=128u*1024u*1024u,std::size_t packet_limit=8192,std::size_t semantic_limit=8192):
+        std::size_t byte_limit=128u*1024u*1024u,std::size_t packet_limit=8192,std::size_t semantic_limit=default_work_limit):
         limit(byte_limit),count_limit(packet_limit),work_limit(semantic_limit),report(std::move(diagnostic)),thread([this]{run();}){}
     ~Publication(){stop();}
     void stop(){{std::lock_guard<std::mutex> lock(mutex);stopping=true;}wake.notify_one();if(thread.joinable())thread.join();}

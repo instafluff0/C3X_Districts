@@ -15,7 +15,7 @@ namespace c3x_helper_trial {
 // interleaved replay. Both payload and response contain values, never native
 // pointers; the helper owns the renderer DLL and all of its scene allocations.
 class SceneClient {
-    HANDLE mapping=nullptr,request=nullptr,response=nullptr,control=nullptr,process=nullptr;
+    HANDLE mapping=nullptr,request=nullptr,response=nullptr,control=nullptr,image_completed=nullptr,process=nullptr;
     Wire* wire=nullptr;
     unsigned sequence=0;
     std::atomic<std::int64_t> admitted_camera{0};
@@ -32,6 +32,7 @@ class SceneClient {
         }
         if(wire){UnmapViewOfFile(wire);wire=nullptr;}
         if(response){CloseHandle(response);response=nullptr;}
+        if(image_completed){CloseHandle(image_completed);image_completed=nullptr;}
         if(control){CloseHandle(control);control=nullptr;}
         if(request){CloseHandle(request);request=nullptr;}
         if(mapping){CloseHandle(mapping);mapping=nullptr;}
@@ -41,6 +42,15 @@ public:
     Stats stats()const{return wire?Stats{wire->sequence,wire->service_us,wire->private_bytes}:Stats{};}
     bool alive()const{return process&&WaitForSingleObject(process,0)==WAIT_TIMEOUT;}
     unsigned frames()const{return wire?unsigned(InterlockedCompareExchange(reinterpret_cast<volatile LONG*>(&wire->visual_frames),0,0)):0;}
+    void publication_pressure(std::size_t records){
+        if(wire)InterlockedExchange(reinterpret_cast<volatile LONG*>(&wire->native_queue_records),LONG(records));
+    }
+    void begin_image_receipt(){if(!ResetEvent(image_completed))throw std::runtime_error("image receipt reset failed");}
+    void wait_image_receipt(){
+        HANDLE ready[2]={image_completed,process};
+        if(WaitForMultipleObjects(2,ready,FALSE,120000)!=WAIT_OBJECT_0)
+            throw std::runtime_error("image execution receipt unavailable");
+    }
     unsigned presented_zoom()const{
         auto value=wire?unsigned(InterlockedCompareExchange(reinterpret_cast<volatile LONG*>(&wire->presented_zoom_q16),0,0)):0;
         return value>=c3x_renderer::SceneProjection::minimum_q16&&value<=c3x_renderer::SceneProjection::maximum_q16?
@@ -57,7 +67,8 @@ public:
             request=CreateEventW(nullptr,FALSE,FALSE,name(base,L"_request").c_str());
             response=CreateEventW(nullptr,FALSE,FALSE,name(base,L"_response").c_str());
             control=CreateEventW(nullptr,FALSE,FALSE,name(base,L"_control").c_str());
-            if(!mapping||!request||!response||!control)throw std::runtime_error("x64 scene IPC creation failed");
+            image_completed=CreateEventW(nullptr,FALSE,FALSE,name(base,L"_images_complete").c_str());
+            if(!mapping||!request||!response||!control||!image_completed)throw std::runtime_error("x64 scene IPC creation failed");
             wire=static_cast<Wire*>(MapViewOfFile(mapping,FILE_MAP_ALL_ACCESS,0,0,sizeof(Wire)));
             if(!wire)throw std::runtime_error("x64 scene IPC view failed");
             std::wstring command=L"\""+helper+L"\" --child \""+base+L"\" \""+dll+L"\" "+std::to_wstring(GetCurrentProcessId());

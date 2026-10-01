@@ -30,12 +30,15 @@
 #include "c3x_renderer_api.h"
 #ifdef C3X_RENDERER64_FRESH
 // Defined by the Renderer64 scene client after production's visual preparation.
+int c3x_renderer64_prepare_unit_meshes();
+void c3x_renderer64_begin_unit_assets();
 bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
     ID3D11RenderTargetView* target,float zoom=1.f);
 #endif
 #include "terrain_scene_runtime.h"
 #include "object_compiler.h"
 #include "animation_runtime.h"
+#include "unit_asset_content.h"
 #include "benchmark_oracle.h"
 #include "environment_runtime.h"
 #include "terrain_definition_runtime.h"
@@ -531,6 +534,11 @@ public:
     std::size_t viewport_cache_budget=default_viewport_cache_budget;
     std::size_t resource_backdrop_cache_budget=default_resource_backdrop_cache_budget;
     c3x_renderer::UnitBodyRenderer unit_bodies;
+    c3x_renderer::UnitAssetPreparation unit_asset_preparation;
+    std::vector<bool> frame_mesh_leases,frame_texture_leases;
+    std::uint64_t unit_asset_adoptions=0,unit_asset_evictions=0,unit_asset_turns=0;
+    std::size_t unit_asset_frame_bytes=0,unit_asset_peak_bytes=0;
+
     // Immutable selections sampled from ordered Civ III unit events before a
     // fresh scene job releases the worker gate. The sandbox pass consumes them
     // with the same depth target as water, resources, and terrain.
@@ -1236,6 +1244,7 @@ public:
         render_regions.clear();reflection_regions.clear();region_context.clear();retained_region_casters={};
         gpu_telemetry.reset();animation_gpu.reset();
         sampled_geometry_bucket=~std::size_t(0);
+        unit_asset_preparation.clear();frame_mesh_leases.clear();frame_texture_leases.clear();
         unit_bodies.reset_gpu();
         fresh_unit_poses.clear();
         reset_resource_buffers();
@@ -1653,12 +1662,12 @@ public:
         return true;
     }
 
-    static bool read_file(char const * path, std::vector<std::uint8_t> & output) {
+    static bool read_file(char const * path, std::vector<std::uint8_t> & output, std::size_t limit=256u*1024u*1024u) {
         HANDLE file = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
                                   FILE_ATTRIBUTE_NORMAL, nullptr);
         if (file == INVALID_HANDLE_VALUE){c3x_inputs::runtime().asset(path,nullptr,0,false);return false;}
         LARGE_INTEGER size = {};
-        bool ok = GetFileSizeEx(file, &size) != 0 && size.QuadPart > 0 && size.QuadPart <= 256ll * 1024ll * 1024ll;
+        bool ok = GetFileSizeEx(file, &size) != 0 && size.QuadPart > 0 && std::uint64_t(size.QuadPart) <= limit;
         if (ok) {
             output.resize(static_cast<std::size_t>(size.QuadPart));
             DWORD bytes_read = 0;
@@ -1932,6 +1941,7 @@ public:
         route_assets_ready = false;
         resource_assets_ready = false;
         reset_resource_buffers(); resource_animations.clear();
+        unit_asset_preparation.clear();frame_mesh_leases.clear();frame_texture_leases.clear();
         unit_bodies.clear();
         city_assets_ready = false;
         mine_assets_ready = false;
@@ -3666,6 +3676,98 @@ public:
             trace.write("unit-payload",message,true);
         }
         return true;
+    }
+
+    // Pre-composition adoption. Pin the union before admitting any later unit:
+    // eviction can never invalidate resources of earlier members of this frame.
+    bool reserve_frame_unit_asset(std::size_t bytes){
+        constexpr std::size_t limit=96u*1024u*1024u;
+        auto& bodies=unit_bodies;
+        if(bytes>limit)return false;
+        while(bodies.resident_bytes>limit-bytes){
+            std::uint64_t oldest=UINT64_MAX;int mesh=-1,texture=-1;
+            for(unsigned i=0;i<bodies.meshes.size();++i){auto const& value=bodies.meshes[i];
+                if(value.bytes && !frame_mesh_leases[i] && value.animation.use_count()<=1 && value.used<oldest){
+                    oldest=value.used;mesh=int(i);texture=-1;}}
+            for(unsigned i=0;i<bodies.textures.size();++i){auto const& value=bodies.textures[i];
+                if(value.bytes && !frame_texture_leases[i] && value.used<oldest){oldest=value.used;mesh=-1;texture=int(i);}}
+            if(mesh>=0){auto& value=bodies.meshes[mesh];bodies.resident_bytes-=value.bytes;value.bytes=0;
+                bodies.release(value.indices);value.animation.reset();}
+            else if(texture>=0){auto& value=bodies.textures[texture];bodies.resident_bytes-=value.bytes;value.bytes=0;
+                bodies.release(value.view);std::vector<std::uint8_t>().swap(value.dds);}
+            else return false;
+            ++unit_asset_evictions;
+        }
+        return true;
+    }
+    int prepare_frame_unit_assets(std::vector<c3x_renderer::render_core::UnitInstances::ScenePose> const& poses){
+#ifdef C3X_RENDERER64_FRESH
+        c3x_renderer64_begin_unit_assets();
+#endif
+        auto& bodies=unit_bodies;
+        frame_mesh_leases.assign(bodies.meshes.size(),false);frame_texture_leases.assign(bodies.textures.size(),false);
+        std::map<unsigned,bool> meshes;std::unordered_set<unsigned> colors;std::vector<std::uint64_t> needed;
+        for(auto const& pose:poses){
+            if(pose.unit>=bodies.units.size() || pose.action>=bodies.units[pose.unit].actions.size())return C3X_RENDERER_RESULT_ERROR;
+            auto const& action=bodies.units[pose.unit].actions[pose.action];
+            for(auto const& part:action.parts){
+                if(part.mesh>=bodies.meshes.size() || part.texture>=bodies.textures.size())return C3X_RENDERER_RESULT_ERROR;
+                frame_mesh_leases[part.mesh]=true;meshes[part.mesh]|=action.name=="move";colors.insert(part.texture);
+                unsigned textures[]={part.texture,part.material_textures[0],part.material_textures[1],part.material_textures[2],part.material_textures[3]};
+                for(auto id:textures)if(id!=UINT32_MAX){if(id>=bodies.textures.size())return C3X_RENDERER_RESULT_ERROR;frame_texture_leases[id]=true;}
+            }
+        }
+        std::deque<c3x_renderer::UnitAssetPreparation::Job> jobs;
+        for(auto const& entry:meshes){auto& mesh=bodies.meshes[entry.first];
+            if(mesh.failed)return C3X_RENDERER_RESULT_ERROR;
+            if(!mesh.animation){auto key=std::uint64_t(entry.first)*2;needed.push_back(key);
+                jobs.push_back({key,{mesh.path,true,entry.second}});}}
+        for(unsigned i=0;i<bodies.textures.size();++i)if(frame_texture_leases[i]){
+            auto& texture=bodies.textures[i];if(texture.failed)return C3X_RENDERER_RESULT_ERROR;
+            if(!texture.view){auto key=std::uint64_t(i)*2+1;needed.push_back(key);
+                jobs.push_back({key,{texture.path,false,false}});}}
+        unit_asset_preparation.schedule(std::move(jobs),[](auto const& input,auto const& cancelled,unsigned){
+            return c3x_renderer::compile_unit_asset(input,cancelled,[](char const* path,std::vector<std::uint8_t>& bytes){
+                return RendererState::read_file(path,bytes,c3x_renderer::UnitAssetPreparation::byte_limit);
+            });
+        },4,needed,64u*1024u*1024u,true);
+        auto began=std::chrono::steady_clock::now();unsigned adopted=0;
+        for(auto key:needed){
+            if(adopted>=4 || (adopted && std::chrono::steady_clock::now()-began>std::chrono::milliseconds(3)))break;
+            auto content=unit_asset_preparation.take_ready(key);if(!content)continue;
+            if(content->failed){trace.write("frame-asset-error","invalid immutable mesh/texture payload",true);return C3X_RENDERER_RESULT_ERROR;}
+            auto index=unsigned(key/2);
+            if(!(key&1)){
+                auto& mesh=bodies.meshes[index];auto bytes=c3x_renderer::UnitAssetContent::mesh_bytes(*content->mesh);
+                if(!reserve_frame_unit_asset(bytes)){trace.write("frame-asset-error","frame mesh/texture union exceeds payload budget",true);return C3X_RENDERER_RESULT_ERROR;}
+                mesh.animation=std::move(content->mesh);mesh.bytes=bytes;mesh.used=++bodies.payload_serial;bodies.resident_bytes+=bytes;
+            }else{
+                auto& texture=bodies.textures[index];auto bytes=content->dds.size();
+                if(colors.count(index) && read_u32(content->dds,128)!=DXGI_FORMAT_BC3_UNORM_SRGB &&
+                    read_u32(content->dds,128)!=DXGI_FORMAT_BC1_UNORM_SRGB)return C3X_RENDERER_RESULT_ERROR;
+                // The worker owns the staging DDS. After upload only its GPU
+                // compressed allocation is retained, avoiding duplicate DDS residency.
+                if(!reserve_frame_unit_asset(bytes) || !ensure_dds_texture(content->dds,texture.view,true,true)){
+                    trace.write("frame-asset-error","frame texture adoption/budget failed",true);return C3X_RENDERER_RESULT_ERROR;}
+                if(texture.bytes)bodies.resident_bytes-=texture.bytes;
+                texture.bytes=bytes;texture.used=++bodies.payload_serial;bodies.resident_bytes+=bytes;
+                std::vector<std::uint8_t>().swap(texture.dds);
+            }
+            ++adopted;++unit_asset_adoptions;
+        }
+        unit_asset_frame_bytes=0;bool complete=true;
+        for(unsigned i=0;i<bodies.meshes.size();++i)if(frame_mesh_leases[i]){auto const& mesh=bodies.meshes[i];complete&=bool(mesh.animation);unit_asset_frame_bytes+=mesh.bytes;}
+        for(unsigned i=0;i<bodies.textures.size();++i)if(frame_texture_leases[i]){auto const& texture=bodies.textures[i];complete&=texture.view!=nullptr;unit_asset_frame_bytes+=texture.bytes;}
+        unit_asset_peak_bytes=std::max(unit_asset_peak_bytes,bodies.resident_bytes);++unit_asset_turns;
+        if(adopted || (!complete && unit_asset_turns%32==0)){
+            auto stats=unit_asset_preparation.statistics();char detail[320];std::snprintf(detail,sizeof(detail),
+                "turn=%llu units=%zu adopted=%u total=%llu pending=%zu ready_bytes=%zu resident_bytes=%zu union_bytes=%zu peak_bytes=%zu evictions=%llu ms=%.3f complete=%u",
+                unit_asset_turns,poses.size(),adopted,unit_asset_adoptions,stats.pending,stats.bytes,bodies.resident_bytes,
+                unit_asset_frame_bytes,unit_asset_peak_bytes,unit_asset_evictions,
+                std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-began).count(),unsigned(complete));
+            trace.write("frame-asset-turn",detail,true);
+        }
+        return complete?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_PENDING;
     }
 
     int resource_animation_for(c3x_renderer_tile_v1 const & tile) const {
@@ -10468,6 +10570,16 @@ public:
                 return false;
             }
             if(cancelled()){target->Release();return false;}
+            for(;;){
+                if(cancelled()){target->Release();return false;}
+                auto ready=prepare_frame_unit_assets(fresh_unit_poses);
+                if(cancelled()){target->Release();return false;}
+                if(ready==C3X_RENDERER_RESULT_OK)ready=c3x_renderer64_prepare_unit_meshes();
+                if(cancelled()){target->Release();return false;}
+                if(ready==C3X_RENDERER_RESULT_OK)break;
+                if(ready!=C3X_RENDERER_RESULT_PENDING){target->Release();return false;}
+                Sleep(1);
+            }
             LARGE_INTEGER draw_start={},draw_end={};QueryPerformanceCounter(&draw_start);
             bool drawn=c3x_renderer64_render_fresh(frame,target);
             target->Release();QueryPerformanceCounter(&draw_end);
@@ -12854,6 +12966,33 @@ private:
         }
         ~GpuOutputMode(){state.gpu_output_mode=previous;}
     };
+#ifdef C3X_RENDERER64_FRESH
+    struct PreparedMapFrame {
+        c3x_inputs::Frame input;
+        std::vector<c3x_renderer::render_core::UnitInstances::ScenePose> poses;
+        Microsoft::WRL::ComPtr<ID3D11Texture2D> front,back;
+        Microsoft::WRL::ComPtr<ID3D11RenderTargetView> front_target,back_target;
+        std::uint64_t geometry=0,epoch=0;std::int64_t serial=0;
+        unsigned device_generation=0;
+        long long pending_since=0,completed_ticks=0,turns=0;
+        float zoom=1.f;
+        bool ready=false;
+        std::size_t bytes()const{
+            D3D11_TEXTURE2D_DESC d={};if(back)back->GetDesc(&d);
+            return std::size_t(d.Width)*d.Height*4+input.tiles.capacity()*sizeof(c3x_renderer_tile_v1)+
+                input.topology.capacity()*4+poses.capacity()*sizeof(poses[0]);
+        }
+        void capture(c3x_renderer_frame_v1 const& frame){
+            input.value=frame;if(frame.tile_count)input.tiles.assign(frame.tiles,frame.tiles+frame.tile_count);else input.tiles.clear();
+            if(frame.world_topology_count)input.topology.assign(frame.world_topology,frame.world_topology+frame.world_topology_count);
+            else input.topology.clear();input.bind();
+        }
+    };
+    // One preparation owner for the current map. Archived native versions own
+    // completed imported pixels; their weak sampler cannot retain extra frame
+    // scratch or silently animate a newer camera.
+    std::shared_ptr<PreparedMapFrame> prepared_map;
+#endif
     c3x_gpu_images::RetainedComposition::Sample retain_visual_map(c3x_renderer_frame_v1 input){
         using Sampled=c3x_gpu_images::RetainedComposition::SampledImage;
         // A native prepare is not a displayed-front replacement. Each retained
@@ -12889,43 +13028,69 @@ private:
             auto epoch=renderer_state.tile_geometry_epoch;
             auto map_publication_serial=renderer_state.gpu_serial+1;
             auto settings=renderer_state.geometry_viewport_settings;
-            Microsoft::WRL::ComPtr<ID3D11Texture2D> texture=renderer_state.gpu_map_texture;
-            Microsoft::WRL::ComPtr<ID3D11RenderTargetView> target;
-            if(!texture||FAILED(renderer_state.device->CreateRenderTargetView(texture.Get(),nullptr,&target)))
-                throw std::runtime_error("fresh resident display target unavailable");
-            auto draw=[this,capture,selected,origin,x,y,w,h,geometry,epoch,map_publication_serial,settings,texture,target,sharpness]
-                (long long ticks,long long frequency,float zoom)->Sampled{
-                // Cold preparation owns mutable scene scratch. Retained native
-                // UI can still commit/present the completed map; its ambient
-                // callback must never draw the partially prepared destination.
-                if(camera_active)return Sampled::frozen();
-                c3x_renderer_frame_v1 view={};
-                // A viewer change retires the old copied scene before native
-                // adoption. Keep its completed pixels through that handoff.
-                if(!capture->valid()||!selected->sample(ticks,frequency,origin,view))return Sampled::frozen();
-                if(renderer_state.gpu_serial!=map_publication_serial)return Sampled::frozen();
-                bool changed=renderer_state.cached_signature.geometry!=geometry||renderer_state.tile_geometry_epoch!=epoch;
-                // Authoritative world/visibility changes at the same camera
-                // update the resident scene immediately. Waiting for native
-                // map adoption would freeze every unit during movement reveal.
-                // A different camera or viewer still needs ordered adoption.
-                if(changed&&!gpu_publication.matches_projection(job_frame,job_camera_identity))return Sampled::frozen();
-                auto frame=changed?job_frame:capture->frame();frame.presentation_time_ticks=view.presentation_time_ticks;
-                frame.presentation_frequency=view.presentation_frequency;
-                snapshot_fresh_units(frame,ticks,frequency);
+            auto prepared=std::make_shared<PreparedMapFrame>();
+            prepared->front=renderer_state.gpu_map_texture;prepared->capture(capture->frame());
+            prepared->geometry=geometry;prepared->epoch=epoch;prepared->serial=map_publication_serial;
+            prepared->device_generation=renderer_state.device_generation;prepared_map=prepared;
+            std::weak_ptr<PreparedMapFrame> weak=prepared;
+            auto prepare=[this,weak,capture,selected,origin,settings,geometry](long long ticks,long long frequency,float zoom){
+                auto job=weak.lock();if(!job)return;job->ready=false;
+                if(camera_active || !capture->valid() || renderer_state.device_generation!=job->device_generation ||
+                    renderer_state.gpu_serial!=job->serial)return;
+                c3x_renderer_frame_v1 view={};if(!selected->sample(ticks,frequency,origin,view))return;
+                bool changed=renderer_state.cached_signature.geometry!=job->geometry||renderer_state.tile_geometry_epoch!=job->epoch;
+                if(changed&&!gpu_publication.matches_projection(job_frame,job_camera_identity))return;
+                if(changed){job->capture(job_frame);job->geometry=renderer_state.cached_signature.geometry;job->epoch=renderer_state.tile_geometry_epoch;}
+                // A pending content job survives later display ticks. Sample the
+                // current native action/visibility immediately before adoption;
+                // workers keep compiling the immutable asset keys they own.
+                auto& frame=job->input.value;
+                frame.presentation_time_ticks=view.presentation_time_ticks;frame.presentation_frequency=view.presentation_frequency;
+                job->poses=unit_instances.scene_poses(frame,ticks,frequency,renderer_state.unit_bodies.units);
+                if(!job->pending_since)job->pending_since=ticks;++job->turns;
+                auto ready=renderer_state.prepare_frame_unit_assets(job->poses);
+                if(ready==C3X_RENDERER_RESULT_OK)ready=c3x_renderer64_prepare_unit_meshes();
+                if(ready==C3X_RENDERER_RESULT_PENDING)return;
+                if(ready!=C3X_RENDERER_RESULT_OK)throw std::runtime_error("ready frame resource preparation failed");
+                if(!job->back){
+                    D3D11_TEXTURE2D_DESC d={};job->front->GetDesc(&d);
+                    if(std::uint64_t(d.Width)*d.Height*4>32u*1024u*1024u ||
+                        FAILED(renderer_state.device->CreateTexture2D(&d,nullptr,&job->back)) ||
+                        FAILED(renderer_state.device->CreateRenderTargetView(job->front.Get(),nullptr,&job->front_target)) ||
+                        FAILED(renderer_state.device->CreateRenderTargetView(job->back.Get(),nullptr,&job->back_target)))
+                        throw std::runtime_error("ready frame scratch admission failed");
+                }
                 struct RestoreViewport {
                     decltype(renderer_state.geometry_viewport_settings)& value;
                     decltype(renderer_state.geometry_viewport_settings) previous;
                     ~RestoreViewport(){value=previous;}
                 } restore{renderer_state.geometry_viewport_settings,renderer_state.geometry_viewport_settings};
-                if(!changed)renderer_state.geometry_viewport_settings=settings;
-                bool drawn=c3x_renderer64_render_fresh(frame,target.Get(),zoom);
-                if(!drawn)throw std::runtime_error("fresh resident frame failed");
-                ++visual_map_samples;
-                return Sampled::bgra(texture.Get(),{x,y,x+w,y+h},sharpness);
+                if(renderer_state.cached_signature.geometry==geometry)renderer_state.geometry_viewport_settings=settings;
+                renderer_state.fresh_unit_poses=job->poses;
+                LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
+                if(!c3x_renderer64_render_fresh(frame,job->back_target.Get(),zoom))
+                    throw std::runtime_error("ready resident frame failed");
+                QueryPerformanceCounter(&end);
+                // Publish only the completed back. Native composition never
+                // borrows unfinished scene scratch, and sampling does no asset work.
+                std::swap(job->front,job->back);std::swap(job->front_target,job->back_target);
+                job->zoom=zoom;job->completed_ticks=ticks;job->ready=true;++visual_map_samples;
+                char detail[256];std::snprintf(detail,sizeof(detail),
+                    "units=%zu turns=%lld age_ms=%.3f render_ms=%.3f bytes=%zu zoom=%.6f",
+                    job->poses.size(),job->turns,frequency>0?double(ticks-job->pending_since)*1000/frequency:0.,
+                    renderer_state.trace.milliseconds(end.QuadPart-begin.QuadPart),job->bytes(),zoom);
+                renderer_state.trace.write("frame-preparation-ready",detail,true);job->pending_since=0;job->turns=0;
+            };
+            auto draw=[this,weak,capture,selected,x,y,w,h,sharpness](long long,long long,float zoom)->Sampled{
+                auto job=weak.lock();
+                if(!job || camera_active || !capture->valid() || !selected->valid() ||
+                    renderer_state.device_generation!=job->device_generation || renderer_state.gpu_serial!=job->serial)
+                    return Sampled::frozen();
+                if(!job->ready || job->zoom!=zoom)return Sampled::held();
+                return Sampled::bgra(job->front.Get(),{x,y,x+w,y+h},sharpness);
             };
             c3x_gpu_images::RetainedComposition::Sample sample=[draw](long long ticks,long long frequency){return draw(ticks,frequency,1.f);};
-            sample.projected=std::move(draw);return sample;
+            sample.prepare=std::move(prepare);sample.projected=std::move(draw);return sample;
         }
 #endif
         return [this,capture,selected,origin,clock,unit_generation,x,y,w,h,water_samples](long long ticks,long long frequency)mutable -> Sampled{
@@ -13622,14 +13787,17 @@ private:
 
     // Preparation retains its stack, immutable leases and completed chunks.
     // Only the immediate-context owner services a borrowed native canvas here.
-    // One command turn cannot restart or publish the partially prepared scene.
+    // A bounded service batch cannot restart or publish the partial scene.
     void service_camera_preparation() {
+        auto started=std::chrono::steady_clock::now();unsigned commands=0;
+        for(;;){
         auto obsolete=camera_obsolete_through.load(std::memory_order_acquire);
         if(job_camera_ticket>0 && job_camera_ticket<=obsolete)
             camera_cancelled.store(true,std::memory_order_relaxed);
         if(camera_cancelled.load(std::memory_order_relaxed) ||
-           !foreground_pending.load(std::memory_order_relaxed))return;
+           (!commands&&!foreground_pending.load(std::memory_order_relaxed)))return;
         std::unique_lock<std::mutex> lock(state_mutex);
+        if(!has_job && commands)wake.wait_for(lock,std::chrono::microseconds(250),[&]{return has_job||camera_cancelled.load(std::memory_order_relaxed);});
         if(!has_job)return;
         auto command=job_command;
         bool independent=command==Command::gpu_images || command==Command::tactical
@@ -13655,6 +13823,8 @@ private:
             renderer_state.trace.milliseconds(end.QuadPart-begin.QuadPart),
             renderer_state.frame_tiles_built,renderer_state.frame_tiles_reused,result);
         renderer_state.trace.write("camera-service-turn",detail,true);
+        if(++commands>=64 || std::chrono::steady_clock::now()-started>=std::chrono::milliseconds(4))return;
+        }
     }
 
     void run() {
@@ -13663,7 +13833,11 @@ private:
             // Count simultaneous current/ready fronts and the next immutable
             // publication before optional work can consume cache headroom.
             renderer_state.publication_working_bytes=publication.bytes()+gpu_publication.bytes()+camera_ready.bytes()+ahead_bytes()+
-                (gpu_presentation?32u*1024u*1024u:0);
+                (gpu_presentation?32u*1024u*1024u:0)
+#ifdef C3X_RENDERER64_FRESH
+                +(prepared_map?prepared_map->bytes():0)
+#endif
+                ;
             renderer_state.preserve_process_headroom();
             // Adopt accepted content even when its camera ticket was cancelled.
             // No frame helpers are active here; observations/mesh leases remain
