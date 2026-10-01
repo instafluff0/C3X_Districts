@@ -14,7 +14,7 @@
 
 extern "C" __declspec(dllexport) int c3x_sandbox_world_content(char const* path){
     return sandbox_world_content_receipt(renderer,path,[](auto const& owner)->auto const& {return owner.mesh->layers;},
-        renderer.retired_content->bytes.load(),renderer.retired_content->peak.load(),renderer.geometry_content.size());
+        renderer.retired_content->bytes.load(),renderer.retired_content->peak.load(),renderer.geometry_vertex_buffers.content_size());
 }
 
 float sandbox_scene_filmic(){
@@ -278,14 +278,22 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
     // These passes share the immediate context. Resource dependencies are
     // ordered there; submit once at publication instead of flushing mid-frame.
     if(renderer.trace.level) {
-        char detail[384];
-        sprintf_s(detail,"prepare=%.3f reflection=%.3f static=%.3f water=%.3f units=%.3f reconstruct=%.3f shadow_builds=%u reflection_draws=%u static_draws=%u visible=%u culled=%u camera=%d,%d translation=%.1f,%.1f",
+        char detail[1024];
+        auto const& rejects=renderer.raster_proof_rejections;
+        sprintf_s(detail,"prepare=%.3f reflection=%.3f static=%.3f water=%.3f units=%.3f reconstruct=%.3f shadow_builds=%u reflection_draws=%u static_draws=%u visible=%u culled=%u camera=%d,%d translation=%.1f,%.1f pose_samples=%u part_samples=%u self_shadow_samples=%u self_shadow_reuses=%u self_shadow_overflow=%u main_units=%u reflected_units=%u palette_uploads=%u instance_builds=%u instance_reuses=%u instance_bytes=%zu unit_preparation_gpu_bytes=%zu proof_rejects=%u,%u,%u,%u,%u,%u,%u",
             sandbox_fresh.phases[0],sandbox_fresh.phases[1],sandbox_fresh.phases[2],
             sandbox_fresh.phases[3],sandbox_fresh.phases[4],sandbox_fresh.phases[5],
             sandbox_fresh.shadow.builds,sandbox_fresh.reflection_draws,
             sandbox_fresh.cache_full_draws,sandbox_fresh.visible,sandbox_fresh.culled,
             camera_x,camera_y,renderer.geometry_viewport_settings.translation[0],
-            renderer.geometry_viewport_settings.translation[1]);
+            renderer.geometry_viewport_settings.translation[1],
+            sandbox_direct_units.required_samples,sandbox_direct_units.part_samples,
+            sandbox_direct_units.shadow_samples,sandbox_direct_units.shadow_reuses,
+            sandbox_direct_units.shadow_overflow,sandbox_direct_units.main_contributors,
+            sandbox_direct_units.reflection_contributors,sandbox_direct_units.palette_uploads,
+            sandbox_fresh.instance_plan_builds,sandbox_fresh.instance_plan_reuses,sandbox_fresh.instance_plan_bytes,
+            sandbox_direct_units.gpu_preparation_bytes(),
+            rejects[0],rejects[1],rejects[2],rejects[3],rejects[4],rejects[5],rejects[6]);
         renderer.trace.write("fresh-scene-phases",detail,true);
     }
     bool presented=sandbox_backbuffer_output.draw(target,frame.target_width,frame.target_height);

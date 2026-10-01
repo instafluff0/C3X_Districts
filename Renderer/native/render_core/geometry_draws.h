@@ -2,6 +2,7 @@
 #include <array>
 #include <cstddef>
 #include <vector>
+#include "resident_content.h"
 
 namespace c3x_renderer { namespace render_core {
 // The active view borrows immutable content from its epoch-protected owner.
@@ -12,6 +13,8 @@ template<class Chunk> struct GeometryDrawRecord {
     decltype(((Chunk*)nullptr)->bounds) bounds={};
     int translation_x=0,translation_y=0;
     float natural_projection[4]={};
+    ContentHandle owner; // immutable mesh generation, not a view epoch
+    unsigned ordinal=0;
     int tile_x=0,tile_y=0;
     unsigned territory_edges=0,territory_rgb=0;
     bool water_dependent=false,water_visible=true; // Per-occurrence visibility, never resident mesh state.
@@ -82,9 +85,11 @@ public:
     GeometryDrawView(std::nullptr_t=nullptr){}
     GeometryDrawView(Records const& value):records(&value){}
     GeometryDrawView(Chunks const& value):chunks(&value){}
+    template<class Storage>GeometryDrawView(Storage const& value):records(&value.records()){}
     explicit operator bool() const {return records || chunks;}
     bool is(Records const& value) const {return records==&value;}
     bool is(Chunks const& value) const {return chunks==&value;}
+    template<class Storage>bool is(Storage const& value)const{return records==&value.records();}
     Layer operator[](std::size_t i) const {
         if(chunks)return {(*chunks)[i].data(),nullptr,(*chunks)[i].size()};
         return {nullptr,(*records)[i].data(),(*records)[i].size()};

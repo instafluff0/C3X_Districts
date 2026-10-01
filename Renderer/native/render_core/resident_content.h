@@ -64,6 +64,11 @@ public:
     }
     void clear(){owners.reset();}
     std::size_t size()const{return owners?owners->size():0;}
+    std::shared_ptr<void> get(ContentHandle handle)const{
+        if(!owners)return {};
+        auto found=owners->find(handle.generation);
+        return found==owners->end()?std::shared_ptr<void>{}:found->second;
+    }
     std::size_t bytes()const{return owners?owners->bytes():0;}
 };
 

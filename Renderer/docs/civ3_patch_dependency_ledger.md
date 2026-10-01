@@ -2126,3 +2126,16 @@ custom rendering is off. No new patch capability or table entry is required.
 - No injected source, native signature, patch capability or address changes.
 - `required_user_action`: none. See
   [bounded HUD composition](bounded_hud_composition.md) for ownership and tests.
+
+## Persistent scene ownership and shared passes (2026-10-01)
+
+- Existing symbols: `Map_Renderer_m71_Draw_Tiles`,
+  `Main_Screen_Form_move_camera`, `Main_Screen_Form_draw_city_hud`,
+  `Unit_draw_map_status`, `Sprite_draw_map_unit_marker`, `MapMessage_draw` and
+  the existing JGL composition bridge.
+- This delivery changes only renderer content ownership, dependency proofs,
+  contributor selection and shared pass preparation. Existing injected capture,
+  native anchors, suppression, config-off delegation and hook signatures remain
+  unchanged. No protected source or patch-table entry is edited.
+- `required_user_action: []`. The candidate and its integration limitations are
+  recorded in [persistent scene and shared passes](persistent_scene_shared_passes.md).

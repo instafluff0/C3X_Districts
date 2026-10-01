@@ -69,6 +69,34 @@ int main(){
 }
 ''')
 
+    def test_published_visibility_and_halo_topology_are_independent_of_camera_and_art(self):
+        run_cpp(r'''
+#include "Renderer/native/render_core/captured_scene.h"
+#include <cassert>
+using namespace c3x_renderer::render_core;
+int main(){
+ CapturedScene scene;c3x_renderer_frame_v1 frame{};frame.world_width_tiles=frame.world_height_tiles=64;
+ frame.world_wrap_x=1;c3x_renderer_camera_identity_v1 identity{};scene.publication_scope(frame,identity,1);
+ c3x_renderer_tile_v1 tile{};tile.tile_x=3;tile.tile_y=5;tile.road_mask=1;
+ tile.tile_flags=C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_VISIBLE;bool changed=false;
+ assert(scene.publish(tile,changed));auto id=scene.key(3,5);auto appearance=scene.appearance_sequence();
+ auto visibility=scene.visibility_sequence(),semantic=scene.retained(id)->semantic_revision;
+ tile.tile_x-=64;tile.anchor_x=1000;tile.unit_state=7;changed=false;assert(scene.publish(tile,changed));
+ assert(!changed && scene.appearance_sequence()==appearance && scene.visibility_sequence()==visibility);
+ assert(scene.retained(id)->semantic_revision==semantic);
+ tile.tile_flags&=~C3X_RENDERER_TILE_VISIBLE;assert(scene.publish(tile,changed));
+ assert(!changed && scene.appearance_sequence()==appearance && scene.visibility_sequence()>visibility);
+ visibility=scene.visibility_sequence();tile.tile_flags=C3X_RENDERER_TILE_TOPOLOGY_HALO;++tile.road_mask;
+ assert(scene.publish(tile,changed));assert(!changed && scene.appearance_sequence()==appearance);
+ assert(scene.retained(id)->semantic_revision>semantic && scene.retained(id)->semantic==CapturedScene::topology(tile));
+ assert(scene.visibility_sequence()==visibility);
+ // A preparation camera cannot rewrite published authority.
+ auto published=scene.retained(id)->semantic;frame.tiles=&tile;frame.tile_count=1;
+ ++tile.road_mask;assert(scene.begin(frame));assert(scene.update(tile,2,2,2,CapturedScene::topology(tile)));scene.finish();
+ assert(scene.retained(id)->semantic==published && scene.current(id)->semantic!=published);
+}
+''')
+
     def test_city_and_border_changes_invalidate_retained_appearance(self):
         run_cpp(r'''
 #include "Renderer/native/render_core/captured_scene.h"

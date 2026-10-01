@@ -42,6 +42,7 @@ public:
         unsigned vertex_offset=0,index_offset=0;
         unsigned binding=0xffffffffu;
         std::uint64_t version=0;
+        std::uint64_t content_generation=0;
         Bounds bounds;
         std::vector<fidelity::MeshInstance> const* instances=nullptr;float instance_material=40;
         bool rigid=false;

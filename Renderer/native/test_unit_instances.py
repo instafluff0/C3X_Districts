@@ -14,10 +14,12 @@ class UnitInstanceTests(unittest.TestCase):
 #include <cassert>
 struct Remote {
  unsigned flags=0,calls=0;
+ unsigned presented_zoom(){return 65536;}
  int unit(c3x_renderer_unit_v1 const&,c3x_renderer_gpu_unit_v1 const& capture,int* bounds){
   flags=capture.playback_flags;++calls;bounds[0]=123;return C3X_RENDERER_RESULT_OK;
  }
 } remote;
+Remote* renderer_worker=nullptr;
 bool remote_renderer_requested(){return true;}
 Remote* remote_renderer_backend(){return &remote;}
 int invoke(''' + body + r'''return 0;}

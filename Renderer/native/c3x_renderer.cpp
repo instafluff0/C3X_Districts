@@ -74,6 +74,7 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
 #include "render_core/captured_scene.h"
 #include "render_core/scene_publication.h"
 #include "render_core/geometry_draws.h"
+#include "render_core/scene_membership.h"
 #include "render_core/foreground_selection.h"
 #include "render_core/draw_parameter_stream.h"
 #include "render_core/immutable_mesh_upload.h"
@@ -358,10 +359,26 @@ using GeometryDrawView=c3x_renderer::render_core::GeometryDrawView<CachedVertexC
 using GeometryDrawReference=GeometryDrawView::Reference;
 static_assert(sizeof(GeometryDrawRecord)<=sizeof(CachedVertexChunk)/2,"occurrence metadata must be smaller than owned content");
 
-// Immutable after bind; selected views own the chunk array once per generation.
-// A cache entry's dependencies/usage metadata remain exclusively worker-owned.
+// Validity is part of immutable content. Retained pixels borrow this proof
+// without keeping evicted GPU meshes alive; selected scene generations lease
+// the meshes themselves. Usage/priority metadata remains render-owner state.
+struct CachedGeometryProof {
+    std::vector<std::pair<std::uint64_t,std::uint64_t>> appearance_dependencies,dependencies,coast_dependencies;
+    std::vector<std::pair<std::size_t,std::uint32_t>> world_dependencies;
+    c3x_renderer::fidelity::NaturalWorld::CellProof river_dependencies;
+    std::vector<std::pair<std::uint64_t,std::array<int,2>>> anchor_dependencies;
+    std::uint64_t scope=0,assets=0,tile=0;
+    c3x_renderer::render_core::ResidentRetirementToken retirement;
+    std::size_t bytes()const{
+        return sizeof(*this)+appearance_dependencies.capacity()*sizeof(appearance_dependencies[0])+
+            dependencies.capacity()*sizeof(dependencies[0])+coast_dependencies.capacity()*sizeof(coast_dependencies[0])+
+            world_dependencies.capacity()*sizeof(world_dependencies[0])+river_dependencies.capacity()*sizeof(river_dependencies[0])+
+            anchor_dependencies.capacity()*sizeof(anchor_dependencies[0]);
+    }
+};
 struct CachedMeshGeneration {
     std::array<std::vector<CachedVertexChunk>,geometry_layer_count> layers;
+    std::shared_ptr<CachedGeometryProof> proof=std::make_shared<CachedGeometryProof>();
     c3x_renderer::render_core::ResidentRetirementToken retirement;
     ~CachedMeshGeneration(){for(auto& layer:layers)for(auto& chunk:layer){
         if(chunk.buffer)chunk.buffer->Release();
@@ -370,6 +387,7 @@ struct CachedMeshGeneration {
 };
 
 struct CachedTileGeometry {
+    std::shared_ptr<CachedMeshGeneration> mesh=std::make_shared<CachedMeshGeneration>();
     std::uint64_t signature = 0, version = 0;
     std::array<std::uint64_t,20> compile_context={};
     std::uint64_t validity_epoch=0;
@@ -380,7 +398,7 @@ struct CachedTileGeometry {
     bool shared_natural = false;
     bool world_objects=false,world_ground=false;
     int source_tile_width=0;
-    std::vector<std::pair<std::uint64_t,std::uint64_t>> appearance_dependencies;
+    decltype(CachedGeometryProof::appearance_dependencies)& appearance_dependencies=mesh->proof->appearance_dependencies;
     int tile_x = 0, tile_y = 0;
     std::vector<ResourceAnchor> resource_anchors;
     bool replaces_resource = false;
@@ -388,12 +406,11 @@ struct CachedTileGeometry {
     CachedTileGeometry() = default;
     CachedTileGeometry(CachedTileGeometry const &) = delete;
     CachedTileGeometry(CachedTileGeometry &&) noexcept = default;
-    std::vector<std::pair<std::uint64_t, std::uint64_t>> dependencies;
-    std::vector<std::pair<std::uint64_t, std::uint64_t>> coast_dependencies;
-    std::vector<std::pair<std::size_t, std::uint32_t>> world_dependencies;
-    c3x_renderer::fidelity::NaturalWorld::CellProof river_dependencies;
-    std::shared_ptr<CachedMeshGeneration> mesh=std::make_shared<CachedMeshGeneration>();
-    std::vector<std::pair<std::uint64_t, std::array<int, 2>>> anchor_dependencies;
+    decltype(CachedGeometryProof::dependencies)& dependencies=mesh->proof->dependencies;
+    decltype(CachedGeometryProof::coast_dependencies)& coast_dependencies=mesh->proof->coast_dependencies;
+    decltype(CachedGeometryProof::world_dependencies)& world_dependencies=mesh->proof->world_dependencies;
+    decltype(CachedGeometryProof::river_dependencies)& river_dependencies=mesh->proof->river_dependencies;
+    decltype(CachedGeometryProof::anchor_dependencies)& anchor_dependencies=mesh->proof->anchor_dependencies;
     std::size_t byte_count = 0;
     std::uint64_t last_used = 0;
     std::uint64_t animation_epoch = 0;
@@ -968,10 +985,9 @@ public:
     std::vector<CachedViewport> viewport_cache;
     std::size_t viewport_cache_bytes = 0;
     CachedGeometry geometry_cache;
-    GeometryDrawView::Records geometry_vertex_buffers;
     std::shared_ptr<c3x_renderer::render_core::ResidentRetirement> retired_content=
         std::make_shared<c3x_renderer::render_core::ResidentRetirement>();
-    c3x_renderer::render_core::ResidentSelection geometry_content{retired_content};
+    c3x_renderer::render_core::SceneMembership<CachedVertexChunk,geometry_layer_count> geometry_vertex_buffers{retired_content};
     struct SceneSubmission {
         struct Batch {
             GeometryDrawView::Records records;
@@ -3846,8 +3862,12 @@ public:
         if(visibility_pass && !visibility_coverage.capture(frame))return false;
         // Visibility is deliberately absent from geometry identities. Refresh
         // occurrence samples without rebuilding/reuploading immutable meshes.
-        for(auto layer:{geometry_water,geometry_river})for(auto& item:geometry_vertex_buffers[layer])
-            item.water_visible=!visibility_pass || visibility_coverage.state(item.tile_x,item.tile_y)==2;
+        for(auto layer:{geometry_water,geometry_river}){
+            auto state=[&](auto const& item){return !visibility_pass || visibility_coverage.state(item.tile_x,item.tile_y)==2;};
+            bool changed=false;
+            for(auto const& item:geometry_vertex_buffers[layer])changed=changed || item.water_visible!=state(item);
+            if(changed)for(auto& item:geometry_vertex_buffers.edit(layer))item.water_visible=state(item);
+        }
         if(pose_only && resource_anchors.empty()){
             sandbox_resource_poses={};sandbox_aquatic_resource_poses={};
             sandbox_pose_chunks={};return true;
@@ -5175,8 +5195,7 @@ public:
         region_contributors.clear();
         resource_anchors.clear();
         geometry_footprints.clear();
-        for(auto& layer:geometry_vertex_buffers)std::vector<GeometryDrawRecord>().swap(layer);
-        geometry_content.clear();
+        geometry_vertex_buffers.clear();
     }
 
     // An abandoned view has no complete contributor set. Keep compiled world
@@ -5191,6 +5210,8 @@ public:
     void release_resident_content(CachedTileGeometry& owner){
         if(owner.shared_natural)world_pass_index.erase(owner.version);
         resident_content.release(owner.binding);
+        if(owner.mesh->proof.use_count()>1 || owner.mesh.use_count()>1)
+            owner.mesh->proof->retirement.retire(retired_content,owner.mesh->proof->bytes());
         if(owner.mesh.use_count()>1){
             // Cache proofs and occurrence metadata retire here. Only the
             // immutable payload survives in a selected view's resource lease.
@@ -5496,13 +5517,15 @@ public:
               !natural_tile->mesh->layers[geometry_natural_mountain].empty()));
         auto append=[&](CachedTileGeometry& source,bool natural_world){
         source.last_used=tile_geometry_epoch;
-        if(!geometry_content.retain(source.binding,resident_content.lease(source.binding)))throw std::bad_alloc();
+        if(!geometry_vertex_buffers.retain(source.binding,resident_content.lease(source.binding)))throw std::bad_alloc();
         if(animated_view)source.animation_epoch=tile_geometry_epoch;
         for (std::size_t layer = 0; layer < geometry_layer_count; ++layer) {
             // Let push_back grow geometrically. Reserving exactly one tile at
             // a time copied the entire layer again for every visible tile.
             for (auto const& source_chunk : source.mesh->layers[layer]) {
                 GeometryDrawRecord chunk(source_chunk);
+                chunk.owner=source.binding;
+                chunk.ordinal=unsigned(&source_chunk-source.mesh->layers[layer].data());
                 chunk.water_dependent=layer==geometry_water || layer==geometry_river ||
                     ((layer==geometry_shadow || layer==geometry_route || (layer>=geometry_feature && layer<geometry_natural_terrain)) &&
                      c3x_renderer::render_core::water_under_projection(world_coast.world(),source_chunk.world_bounds));
@@ -5537,7 +5560,7 @@ public:
                 }
                 chunk.translation_x = anchor_x - source.anchor_x;
                 chunk.translation_y = anchor_y - source.anchor_y;
-                geometry_vertex_buffers[layer].push_back(chunk);
+                geometry_vertex_buffers.edit(layer).push_back(chunk);
                 // The current epoch protects this immutable owner from eviction.
                 // Draw records acquire no buffer or material references.
             }
@@ -5673,6 +5696,26 @@ public:
         result.gpu_bytes=upload.size();
         if(buffer)result.buffer=std::shared_ptr<void>(buffer,[](void* p){static_cast<ID3D11Buffer*>(p)->Release();});
         return true;
+    }
+
+    std::array<unsigned,7> raster_proof_rejections{};
+    bool raster_content_valid(CachedGeometryProof const& proof){
+        auto reject=[&](unsigned reason){++raster_proof_rejections[reason];return false;};
+        if(proof.scope!=topology_cache.scope_sequence() || proof.assets!=content_revision)return reject(0);
+        for(auto const& input:proof.appearance_dependencies)
+            if(topology_cache.world_appearance_revision(input.first)!=input.second)return reject(1);
+        for(auto const& input:proof.dependencies){
+            if(!input.second)continue; // Absence is rechecked by selected generation validity.
+            auto retained=topology_cache.retained(input.first);
+            if(!retained || !retained->semantic_revision || retained->semantic!=input.second)return reject(2);
+        }
+        for(auto const& input:proof.coast_dependencies)if(world_coast.node_revision(input.first)!=input.second)return reject(3);
+        for(auto const& input:proof.world_dependencies)if(world_coast.world().at(input.first)!=input.second)return reject(4);
+        // Native anchor dependencies are validated during scene assembly by
+        // tile_content_valid. Retained pixels compare the resulting immutable
+        // generation and normalized occurrence in raster_dependencies. A later
+        // prewarm camera's mutable observations cannot invalidate that view.
+        return natural.valid(proof.river_dependencies) || reject(6);
     }
 
     bool tile_content_valid(CachedTileGeometry& cached,c3x_renderer_tile_v1 const& tile) {
@@ -6140,6 +6183,7 @@ public:
                     c.instances=chunk.content().instances.get();c.instance_material=chunk.content().instance_material;
                     c.rigid=chunk.content().rigid_source;
                     c.stride=chunk.content().vertex_stride;c.layer=layer;c.version=chunk.content().version;c.bounds=chunk.content().world_bounds;
+                    if(chunk.occurrence)c.content_generation=chunk.occurrence->owner.generation;
                     if(chunk.content().city_material!=0xffffffffu)c.binding=10000+chunk.content().city_material;
                     c.offset[0]=float(wx*dims.width+wy*dims.height)*.5f;
                     c.offset[1]=float(wx*dims.width-wy*dims.height)*.5f;casters.push_back(c);
@@ -6967,16 +7011,7 @@ public:
     }
 
     std::uint64_t tile_topology_signature(c3x_renderer_tile_v1 const & tile) const {
-        // Neighbor sampling consumes terrain, river and route connectivity.
-        // Retained units and unrelated city/resource changes do not alter it;
-        // a lightweight halo supplies exactly these same authoritative fields.
-        std::uint64_t hash = 1469598103934665603ull;
-        for (auto value : {tile.terrain_type, tile.real_terrain_type,
-                static_cast<c3x_renderer_i32>(tile.river_code),
-                static_cast<c3x_renderer_i32>(tile.road_mask),
-                static_cast<c3x_renderer_i32>(tile.railroad_mask)})
-            hash = (hash ^ static_cast<std::uint32_t>(value)) * 1099511628211ull;
-        return hash;
+        return c3x_renderer::render_core::CapturedScene::topology(tile);
     }
 
     int canonical_world_component(int value, int size, c3x_renderer_u32 wraps) const {
@@ -7010,7 +7045,15 @@ public:
         for (c3x_renderer_u32 index = 0; index < frame.tile_count; ++index) {
             c3x_renderer_tile_v1 const & current = frame.tiles[index];
             c3x_renderer_tile_v1 const & cached = candidate.tiles[index];
-            if (!same_terrain_content(current, cached) || !selection.preserves(cached,current) ||
+            bool same=same_terrain_content(current,cached);
+#ifdef C3X_RENDERER64_FRESH
+            if(gpu_output_mode && scene_surface_requested){
+                auto a=c3x_renderer::render_core::CapturedScene::content(current);
+                auto b=c3x_renderer::render_core::CapturedScene::content(cached);
+                same=current.tile_x==cached.tile_x && current.tile_y==cached.tile_y && !std::memcmp(&a,&b,sizeof(a));
+            }
+#endif
+            if (!same || !selection.preserves(cached,current) ||
                 current.anchor_x - cached.anchor_x != translation_x ||
                 current.anchor_y - cached.anchor_y != translation_y)
                 return false;
@@ -9910,7 +9953,7 @@ public:
                 ? compiled.coast_dependencies.capacity() * sizeof(compiled.coast_dependencies[0]) +
                   compiled.world_dependencies.capacity() * sizeof(compiled.world_dependencies[0]) : 0;
             metadata_bytes += natural.proof_bytes(compiled.river_dependencies);
-            metadata_bytes += sizeof(CachedMeshGeneration)+sizeof(compiled.compile_context)+24; // per-frame validity receipt, including padding
+            metadata_bytes += sizeof(CachedMeshGeneration)+sizeof(CachedGeometryProof)+24+sizeof(compiled.compile_context)+24; // per-frame validity receipt, including padding
             metadata_bytes += compiled.appearance_dependencies.capacity()*sizeof(compiled.appearance_dependencies[0]);
             metadata_bytes += compiled.resource_anchors.capacity()*sizeof(ResourceAnchor)+sizeof(compiled.binding);
             if(!city_chunks.empty())metadata_bytes+=sizeof(c3x_renderer::city_fidelity::Lighting)+
@@ -10180,7 +10223,7 @@ public:
                         tile_geometry_cache_bytes-=compiled.byte_count;return false;
                     }
                     // Count this owner's metadata separately from camera metadata.
-                    std::size_t metadata=sizeof(CachedTileGeometry)+sizeof(CachedMeshGeneration)+natural.proof_bytes(shared.river_dependencies)+
+                    std::size_t metadata=sizeof(CachedTileGeometry)+sizeof(CachedMeshGeneration)+sizeof(CachedGeometryProof)+24+natural.proof_bytes(shared.river_dependencies)+
                         shared.appearance_dependencies.capacity()*sizeof(shared.appearance_dependencies[0])+
                         shared.dependencies.capacity()*sizeof(shared.dependencies[0])+
                         shared.coast_dependencies.capacity()*sizeof(shared.coast_dependencies[0])+
@@ -10205,6 +10248,9 @@ public:
                     try {
                         auto inserted=tile_geometry_cache.emplace(natural_key,std::move(shared));
                         try {
+                            inserted->second.mesh->proof->scope=topology_cache.scope_sequence();
+                            inserted->second.mesh->proof->assets=content_revision;
+                            inserted->second.mesh->proof->tile=topology_cache.key(inserted->second.tile_x,inserted->second.tile_y);
                             inserted->second.binding=resident_content.bind(inserted->second,inserted->second.mesh);
                             if(!inserted->second.binding.generation)throw std::bad_alloc();
                             compiled.natural_content=inserted->second.binding;
@@ -10221,6 +10267,9 @@ public:
             try {
                 inserted = tile_geometry_cache.emplace(tile_signature, std::move(compiled));
                 try {
+                    inserted->second.mesh->proof->scope=topology_cache.scope_sequence();
+                    inserted->second.mesh->proof->assets=content_revision;
+                    inserted->second.mesh->proof->tile=topology_cache.key(inserted->second.tile_x,inserted->second.tile_y);
                     inserted->second.binding=resident_content.bind(inserted->second,inserted->second.mesh);
                     if(!inserted->second.binding.generation)throw std::bad_alloc();
                 }catch(...){tile_geometry_cache.erase(inserted);throw;}
@@ -10369,7 +10418,7 @@ public:
             // composing resource animations, which this path bypasses.
             // Drop borrowed legacy wave records before replacing their buffers;
             // the fresh pass draws the new ribbons from wave_chunks below.
-            geometry_vertex_buffers[geometry_wave].clear();
+            if(!geometry_vertex_buffers[geometry_wave].empty())geometry_vertex_buffers.edit(geometry_wave).clear();
             if(visibility_pass && !visibility_coverage.capture(frame))return false;
             trace.write("fresh-wave", "begin", true);
             bool waves_ready=prepare_wave_chunks(frame);

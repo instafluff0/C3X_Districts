@@ -126,7 +126,10 @@ struct Harness {
     unsigned cached_signature=0,previous_signature=0,cached_rendered_tile_count=0,
         cached_fallback_tile_count=0,cached_textured_tile_count=0,cached_visible_animation_count=0;
     std::vector<int> cached_tiles,cached_replacement_tile_flags;
-    std::vector<int> geometry_vertex_buffers[1];
+    struct Records {std::vector<int> layers[1];
+        auto& operator[](unsigned layer){return layers[layer];}
+        auto& edit(unsigned layer){return layers[layer];}
+    } geometry_vertex_buffers;
     static constexpr int geometry_wave=0;
     Coverage visibility_coverage;
     Trace trace;

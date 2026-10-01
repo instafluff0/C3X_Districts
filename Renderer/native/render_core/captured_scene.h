@@ -15,6 +15,7 @@ public:
         c3x_renderer_tile_v1 appearance={};
         std::uint64_t revision=0;
         bool authoritative=false;
+        std::uint64_t semantic=0,semantic_revision=0;
         std::uint64_t visibility_revision=0;
         unsigned visibility_flags=0,visibility_mask=0,tile_visibility=0;
         int fog_status=0;
@@ -35,7 +36,7 @@ public:
 private:
     std::unordered_map<std::uint64_t,Record> records;
     std::unordered_map<std::uint64_t,Observation> observations;
-    std::uint64_t serial=0,epoch=0,appearance_epoch=0,scope_epoch=0;
+    std::uint64_t serial=0,epoch=0,appearance_epoch=0,scope_epoch=0,visibility_epoch=0;
     std::size_t authoritative_records=0;
     int width=0,height=0;
     bool wrap_x=false,wrap_y=false,valid=false;
@@ -50,7 +51,7 @@ public:
         bool changed=!published || configuration!=config || map_epoch!=identity.map_epoch ||
             viewer_epoch!=identity.viewer_epoch || width!=frame.world_width_tiles || height!=frame.world_height_tiles ||
             wrap_x!=(frame.world_wrap_x!=0) || wrap_y!=(frame.world_wrap_y!=0);
-        if(changed){records.clear();observations.clear();valid=false;authoritative_records=0;++appearance_epoch;++scope_epoch;}
+        if(changed){records.clear();observations.clear();valid=false;authoritative_records=0;++appearance_epoch;++scope_epoch;++visibility_epoch;}
         published=true;configuration=config;map_epoch=identity.map_epoch;viewer_epoch=identity.viewer_epoch;
         width=frame.world_width_tiles;height=frame.world_height_tiles;
         wrap_x=frame.world_wrap_x!=0;wrap_y=frame.world_wrap_y!=0;return changed;
@@ -62,6 +63,11 @@ public:
             found=records.try_emplace(id).first;
         }
         auto& record=found->second;auto next=content(tile);
+        auto semantic=topology(tile);
+        if(!record.semantic_revision || record.semantic!=semantic){
+            if(serial==UINT64_MAX)return false;
+            record.semantic=semantic;record.semantic_revision=++serial;
+        }
         bool full=(tile.tile_flags&(C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_PREFETCH))!=0;
         if(full && (!record.revision || std::memcmp(&next,&record.appearance,sizeof(next)))){
             if(serial==UINT64_MAX)return false;
@@ -75,6 +81,7 @@ public:
             if(serial==UINT64_MAX)return false;
             record.visibility_flags=flags;record.visibility_mask=tile.visibility_mask;
             record.tile_visibility=tile.tile_visibility;record.fog_status=tile.fog_status;record.visibility_revision=++serial;
+            ++visibility_epoch;
         }
         if(full && !record.authoritative){record.authoritative=true;++authoritative_records;}
         return bytes()<=budget;
@@ -86,6 +93,16 @@ public:
         };
         return (std::uint64_t(std::uint32_t(canonical(x,width,wrap_x)))<<32) |
             std::uint32_t(canonical(y,height,wrap_y));
+    }
+    // Full records and lightweight halo observations carry these same world
+    // inputs. Persist them independently of art eligibility and camera anchors.
+    static std::uint64_t topology(c3x_renderer_tile_v1 const& tile){
+        std::uint64_t value=1469598103934665603ull;
+        for(auto input:{tile.terrain_type,tile.real_terrain_type,
+                static_cast<c3x_renderer_i32>(tile.river_code),static_cast<c3x_renderer_i32>(tile.road_mask),
+                static_cast<c3x_renderer_i32>(tile.railroad_mask)})
+            value=(value^static_cast<std::uint32_t>(input))*1099511628211ull;
+        return value;
     }
     static c3x_renderer_tile_v1 content(c3x_renderer_tile_v1 tile) {
         tile.tile_x=tile.tile_y=tile.anchor_x=tile.anchor_y=0;
@@ -157,6 +174,12 @@ public:
             observation.occurrence=tile;
             observation.ground=ground;observation.real=tile.real_terrain_type;
             observation.relief=relief;observation.surface=surface;observation.semantic=semantic;
+        }
+        if(!published){auto& record=found->second;
+            if(!record.semantic_revision || record.semantic!=semantic){
+                if(serial==UINT64_MAX)return false;
+                record.semantic=semantic;record.semantic_revision=++serial;
+            }
         }
         if(full){
             auto& record=found->second;auto next=content(tile);
@@ -244,6 +267,7 @@ public:
     std::size_t size() const{return records.size();}
     std::size_t authoritative_size() const{return authoritative_records;}
     std::uint64_t appearance_sequence() const{return appearance_epoch;}
+    std::uint64_t visibility_sequence() const{return visibility_epoch;}
     std::uint64_t scope_sequence() const{return scope_epoch;}
     std::uint64_t observation_sequence() const{return epoch;}
     bool matches_world(c3x_renderer_frame_v1 const& frame) const {

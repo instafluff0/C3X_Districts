@@ -19,6 +19,7 @@ class ResidentMeshOwnership(unittest.TestCase):
 constexpr unsigned geometry_layer_count=2;
 struct Resource {unsigned references=1;void Release(){assert(references);--references;}};
 struct CachedVertexChunk {Resource* buffer=nullptr;Resource* indices=nullptr;};
+struct CachedGeometryProof {};
 ''' + generation + r'''
 struct Metadata {std::shared_ptr<CachedMeshGeneration> mesh=std::make_shared<CachedMeshGeneration>();};
 using namespace c3x_renderer::render_core;

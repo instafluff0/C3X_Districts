@@ -12,6 +12,7 @@ class VisibilityTests(unittest.TestCase):
         body=prefix.split('{',1)[1]
         run_cpp(r'''
 #include "Renderer/native/render_core/visibility_coverage.h"
+#include "Renderer/native/render_core/scene_membership.h"
 #include <cassert>
 #include <vector>
 using namespace c3x_renderer::render_core;
@@ -20,8 +21,10 @@ struct Renderer {
  long long resource_composite_ticks=1;
  std::vector<int> resource_anchors,sandbox_resource_poses,sandbox_aquatic_resource_poses,sandbox_pose_chunks;
  enum {geometry_water,geometry_river};
- struct Chunk {int tile_x=0,tile_y=0;bool water_visible=true;};
- std::vector<Chunk> geometry_vertex_buffers[2]={{Chunk{}},{Chunk{}}};
+ struct Chunk {struct {int left=0,top=0,right=0,bottom=0;} bounds;
+  int translation_x=0,translation_y=0;float natural_projection[4]={};};
+ Chunk sources[2];SceneMembership<Chunk,2> geometry_vertex_buffers;
+ Renderer(){for(unsigned i=0;i<2;++i)geometry_vertex_buffers.edit(i).emplace_back(sources[i]);}
  bool sample(c3x_renderer_frame_v1 const& frame,bool pose_only){
 ''' + body + r'''
  return false;
