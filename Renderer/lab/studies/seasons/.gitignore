@@ -1,0 +1,3 @@
+# Preserved local licensed art inputs, not disposable preview/build output.
+/assets/
+.DS_Store

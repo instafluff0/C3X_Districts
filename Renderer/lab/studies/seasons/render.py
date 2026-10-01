@@ -134,7 +134,9 @@ def material_source(name):
             "float alpha = saturate(input.coast_coverage+10)*lab_land_coverage(input.world.xy);")
         needle = "#ifdef SANDBOX_TERRAIN_MATERIAL\n    // The sandbox retains"
         source = replace_once(source, needle,
-            "lab_season_ground(albedo,geometric,specular_map,normalize(input.normal),input.world,0,height_detail);\n" + needle)
+            "lab_season_ground(albedo,geometric,specular_map,normalize(input.normal),input.world,0,height_detail);\n"
+            "if(input.material.y>2.5 && input.material.y<3.5)season_leaf_litter(albedo,input.world,"
+            "smoothstep(.015,.15,lab_surface(input.world.xy).x)*lab_land_coverage(input.world.xy),input.uv);\n" + needle)
     elif name == "mountain":
         needle = "#ifdef SANDBOX_TERRAIN_MATERIAL\n#ifdef BEAUTY_VOLCANO_MATERIAL\n    albedo ="
         source = replace_once(source, needle,
@@ -142,11 +144,25 @@ def material_source(name):
         source = replace_once(source, "clip(coast_alpha - 0.001);",
             "coast_alpha *= lab_land_coverage(input.world.xy);\n    clip(coast_alpha - 0.001);")
     else:
+        # A per-instance appearance value is added only to this Lab adapter.
+        # Position, UV, opacity, normals and existing secondary metadata survive.
+        source = source.replace("float2 secondary : TEXCOORD3;", "float2 secondary : TEXCOORD3;\n    float appearance : TEXCOORD4;\n    float4 crown : TEXCOORD5;")
+        source = replace_once(source, "output.secondary = input.secondary;",
+            "output.secondary = input.secondary;\n    output.appearance = input.appearance;\n    output.crown = input.crown;")
         needle = "#ifdef BEAUTY_COMPOSED_SHADOWS\n    // Use the exact vector"
         source = replace_once(source, needle,
-            "if(kind>.5 && kind<1.5)season_foliage(albedo,normal,gloss,geometric,input.world,input.uv);\n"
+            "float seasonal_leaf=0;\n"
+            "if(kind>.5 && kind<1.5)seasonal_leaf=season_foliage(albedo,normal,gloss,geometric,input.world,input.uv,input.appearance,input.crown.w);\n"
             "if(kind>1.5)lab_season_ground(albedo,normal,gloss,geometric,input.world,1);\n" + needle)
+        source = replace_once(source,"float diffuse = ndl;",
+            "float diffuse = ndl;\n"
+            "if(season_autumn_match())diffuse=season_crown_diffuse(diffuse,normal,input.crown.xyz,light_direction,seasonal_leaf);\n"
+            "else if(season_autumn_beauty())diffuse=lerp(diffuse,saturate((dot(normal,light_direction)+.20)/1.20),seasonal_leaf*.55);")
+        source = replace_once(source,"float roughness = lerp(0.91, 0.31, saturate(gloss));",
+            "radiance+=season_crown_transmission(albedo,normal,input.crown.xyz,light_direction,SunColorExposure.rgb*Sun.w,shadow,seasonal_leaf);\n"
+            "float roughness = lerp(0.91, 0.31, saturate(gloss));")
     source = source.replace("SunColorExposure.rgb", "season_key(SunColorExposure.rgb)")
+    source = source.replace("Ambient.rgb", "season_ambient(Ambient.rgb)")
     return prefix + source
 
 
@@ -154,8 +170,8 @@ def compile_lab(work):
     cache = Cache(work / "cache")
     translated = work / "shaders"
     inputs = {}
-    for name in ("terrain", "mountain", "objects", "water", "shadow", "probe"):
-        if name in ("water", "shadow", "probe"):
+    for name in ("terrain", "mountain", "objects", "water", "shadow", "probe", "winter_decals"):
+        if name in ("water", "shadow", "probe", "winter_decals"):
             path = HERE / f"{name}.hlsl"
         else:
             path = work / f"{name}.hlsl"
@@ -197,15 +213,23 @@ def synthetic_map(path):
     path.write_text("\n".join(lines) + "\n")
 
 
-def source_guard(pack, evidence):
+def source_guard(pack, evidence, winter_wonderland=False):
     paths = set((pack / "natural_runtime").glob("*.dds"))
     paths.add(pack / "natural_runtime/natural.bin")
     paths.add(ROOT / "Renderer/packs/BeautyStudies/beauty_objects.bin")
-    for name in ("snow_base_color", "snow_height", "snow_specular", "water/terrain/snow_decal_base"):
+    for name in ("snow_base_color", "snow_height", "snow_specular", "water/terrain/snow_decal_base", "water/terrain/snow_decal_height"):
         path = pack / "textures" / (name + ".dds")
         if path.exists(): paths.add(path)
+    if winter_wonderland:
+        paths.update(p for n in ("large","small","small_secondary","river")
+            if (p := pack / f"textures/water/surface/{n}_lean0.dds").is_file())
     for row in evidence["authored_winter_bodies"]:
         paths.update(ROOT / c["path"] for c in row["channels"])
+    if evidence.get("winter_exposure"):
+        paths.update(ROOT / p for p in evidence["winter_exposure"]["inputs"])
+        paths.update(ROOT / r["path"] for r in evidence["winter_exposure"]["masks"])
+    if evidence.get("winter_decals"):
+        paths.update(ROOT / r["path"] for r in evidence["winter_decals"]["inputs"])
     cliff = ROOT / "Renderer/packs/ShoreNormalized/cliff_runtime.bin"
     paths.add(cliff)
     data = cliff.read_bytes();count, = struct.unpack_from("<I", data, 12);at = 24
@@ -225,10 +249,27 @@ def main():
     parser.add_argument("--width", type=int, default=1600)
     parser.add_argument("--height", type=int, default=900)
     parser.add_argument("--hour", type=float, default=12)
+    parser.add_argument("--zoom",type=int,choices=(64,128),default=128,help="Actual projection zoom; mesh proportions remain fixed")
     parser.add_argument("--camera-x", type=float)
     parser.add_argument("--camera-y", type=float)
     parser.add_argument("--compile-only", action="store_true")
+    parser.add_argument("--winter-focus", action="store_true", help="Keep only a bounded winter comparison image")
+    parser.add_argument("--fall-focus", action="store_true", help="Refine autumn on original materials/trees; keep one bounded comparison image")
+    parser.add_argument("--fall-beauty", action="store_true", help="Target-led autumn treatment with a corrected coast/water preview; keeps its own Summer baseline")
+    parser.add_argument("--fall-target", action="store_true", help="Crown irradiance, tissue/value reskin and source-derived turf; original proportions unchanged")
+    parser.add_argument("--winter-exposure", action="store_true", help="Bake/reuse Blender snow-exposure masks on the existing forest meshes")
+    parser.add_argument("--winter-decals", action="store_true", help="Use the eleven authored snow-decal meshes over existing ground")
+    parser.add_argument("--winter-wonderland", action="store_true", help="Layer wind drifts, deposition edges and an improved winter-only diagnostic shadow field")
     args = parser.parse_args()
+    if args.fall_target:args.fall_beauty=True
+    if args.fall_beauty:
+        args.fall_focus=True
+        if args.winter_wonderland or args.winter_exposure or args.winter_decals:
+            parser.error("The corrected beauty harness uses a separate baseline; run saved Winter regression with --fall-focus")
+    if args.winter_focus and args.all_packs:
+        parser.error("Winter focus renders one explicitly selected pack")
+    if args.fall_focus and (args.all_packs or args.winter_focus):
+        parser.error("Fall focus renders one pack and is separate from winter focus")
     try:
         from PIL import Image
     except ImportError:
@@ -243,9 +284,20 @@ def main():
         if not (pack / "natural_runtime/natural.bin").is_file():
             raise ValueError("Run the existing terrain asset preparation before this Lab: " + portable(pack))
     receipt = {"schema": "c3x.lab.seasonal_programmatic.v1", "backend": "headless Metal",
+        "harness_sha256":{p.name:file_hash(p) for p in (HERE/"scene.mm",HERE/"render.py",HERE/"lab_geometry.h")},
         "case": args.case, "production_parity": False, "packs": [], "vm_used": False,
         "limitations": ["Diagnostic water/field interpolation/shadow atlas; not the production render graph.",
             "Buildings and units are omitted from this scene harness."]}
+    if args.winter_focus:
+        receipt["winter_study"] = {"exposure_masks":args.winter_exposure, "authored_decals":args.winter_decals,
+            "layered_snow":args.winter_wonderland,
+            "geometry_policy": "Original configured forest bodies and placements; material and surface effects only."}
+    if args.fall_focus:
+        receipt["autumn_study"] = {"per_tree_palette":True, "existing_floor_litter":True,
+            "diagnostic_shadow_and_water":True, "new_geometry":False}
+        receipt["autumn_study"]["corrected_preview_harness"]=args.fall_beauty
+        receipt["autumn_study"]["crown_irradiance_and_source_turf"]=args.fall_target
+        receipt["autumn_study"]["tree_proportions_unchanged"]=True
     with tempfile.TemporaryDirectory(prefix="work-", dir=OUT) as directory:
         work = Path(directory)
         exe, programs, identities = compile_lab(work)
@@ -256,7 +308,9 @@ def main():
         roles = work / "roles.txt"
         receipt["foliage_evidence"] = foliage_roles(roles)
         from Renderer.lab.studies.seasons.asset_inputs import prepare
-        receipt["optional_art_inputs"] = prepare(work, receipt["foliage_evidence"])
+        receipt["optional_art_inputs"] = prepare(work, receipt["foliage_evidence"], args.winter_exposure, args.winter_decals)
+        from Renderer.lab.studies.seasons.autumn_inputs import prepare as prepare_autumn
+        receipt["autumn_inputs"] = prepare_autumn(work, receipt["foliage_evidence"])
         recipe = json.loads((HERE / "recipes.json").read_text())
         receipt["recipe_sha256"] = file_hash(HERE / "recipes.json")
         scene = work / "scene.csv"
@@ -271,34 +325,92 @@ def main():
                   args.camera_y if args.camera_y is not None else camera[1])
         receipt["camera"] = list(camera)
         receipt["hour"] = args.hour
+        receipt["zoom"] = args.zoom
         receipt["scene_sha256"] = file_hash(scene)
         receipt["map_wrapping"] = [bool(int(v)) for v in scene.read_text().splitlines()[0].split(",")[4:6]]
         for pack in packs:
-            destination = OUT / args.case / pack.name
+            destination = OUT / "fall-focus" / args.case if args.fall_focus else OUT / "winter-focus" / args.case if args.winter_focus else OUT / args.case / pack.name
+            if args.fall_target:
+                base=OUT/"fall-focus"
+                if pack.name!="Civ5EnvironmentSkin":base/=pack.name
+                if args.hour!=12 or args.zoom!=128:base/=f"h{args.hour:g}-z{args.zoom}"
+                destination=base/args.case
             destination.mkdir(parents=True, exist_ok=True)
             identity = file_hash(pack / "natural_runtime/natural.bin")
-            inputs_before = source_guard(pack, receipt["optional_art_inputs"])
+            quality = args.winter_wonderland or args.fall_focus
+            inputs_before = source_guard(pack, receipt["optional_art_inputs"], quality)
             fall = recipe["pack_calibrations"].get(pack.name, recipe["default_fall_grass"])
-            (work / "policy.txt").write_text(" ".join(str(v) for key in (recipe["snow_atlas"],fall,recipe["flower_atlas"]) for v in key) + "\n")
-            run([exe, ROOT, pack, scene, programs, work, args.width, args.height, *camera, roles,args.hour])
+            if args.fall_focus:
+                fall = recipe["autumn_refined_grass"].get(pack.name,recipe["autumn_refined_grass"]["default"])
+            if args.fall_beauty:fall=recipe["autumn_beauty_grass"]
+            values = [v for key in (recipe["snow_atlas"],fall,recipe["flower_atlas"]) for v in key]
+            values.append(recipe.get("winter_display_exposure",1.0))
+            values.extend(recipe["winter_layers"] if args.winter_wonderland else [0,0,0,0])
+            values.extend(recipe["autumn_beauty"] if args.fall_beauty else recipe["autumn_refinement"] if args.fall_focus else [0,0,0,0])
+            if args.fall_target:values[-4:]=recipe["autumn_target"]
+            values.extend(recipe["autumn_crown"] if args.fall_target else [0,0,0,0])
+            (work / "policy.txt").write_text(" ".join(str(v) for v in values) + "\n")
+            run([exe, ROOT, pack, scene, programs, work, args.width, args.height, *camera, roles,args.hour,args.zoom])
             row = {"pack": portable(pack), "natural_payload_sha256": identity, "images": {},
                 "fall_grass_tint": fall, "gpu_checks": json.loads((work / "gpu-checks.json").read_text()),
                 "read_only_inputs": inputs_before}
             for index, name in enumerate(("summer", "fall", "winter", "spring")):
                 raw = work / f"season-{index}.bgra"
+                if (args.winter_focus and index != 2) or (args.fall_focus and index != 1):
+                    if index == 0:
+                        if args.fall_beauty:
+                            target=destination/("target-summer.png" if args.fall_target else "beauty-summer.png")
+                            Image.frombytes("RGBA",(args.width,args.height),raw.read_bytes(),"raw","BGRA").convert("RGB").save(target,optimize=True)
+                            row["images"]["summer"]={"path":portable(target),"sha256":file_hash(target)}
+                        previous = OUT / args.case / pack.name / "summer.png"
+                        if previous.is_file() and not args.fall_beauty:
+                            image = Image.frombytes("RGBA", (args.width, args.height), raw.read_bytes(), "raw", "BGRA").convert("RGB")
+                            original = Image.open(previous).convert("RGB")
+                            if image.size == original.size:
+                                if image.tobytes() != original.tobytes():
+                                    raise ValueError("Seasonal focus changed the preceding Summer scene")
+                                row["preceding_summer_pixel_exact"] = True
+                    if index == 2 and args.fall_focus and args.winter_wonderland and args.winter_exposure and args.winter_decals:
+                        previous = OUT / "winter-focus" / args.case / "wonderland.png"
+                        if previous.is_file():
+                            image = Image.frombytes("RGBA", (args.width,args.height),raw.read_bytes(),"raw","BGRA").convert("RGB")
+                            original = Image.open(previous).convert("RGB")
+                            if image.size == original.size:
+                                from PIL import ImageChops
+                                difference = ImageChops.difference(image,original)
+                                histogram = difference.histogram()
+                                maximum = max((i%256 for i,n in enumerate(histogram) if n),default=0)
+                                changed = sum(any(pixel) for pixel in difference.getdata())
+                                # A changed shader layout can round a few half-float
+                                # samples across one display code. Reject visual drift.
+                                tolerance = maximum <= 1 and changed <= args.width*args.height*.00001
+                                row["preceding_winter_comparison"] = {"pixel_exact":changed==0,
+                                    "maximum_rgb_code_difference":maximum,"changed_pixels":changed,
+                                    "bounded_rounding_pass":tolerance}
+                                if not tolerance:
+                                    image.save(destination / "winter-regression.png",optimize=True)
+                                    raise ValueError("Autumn refinement changed the preceding winter wonderland")
+                    raw.unlink()
+                    continue
                 image = Image.frombytes("RGBA", (args.width, args.height), raw.read_bytes(), "raw", "BGRA").convert("RGB")
-                target = destination / f"{name}.png"
+                winter_name = "wonderland.png" if args.winter_wonderland else "exposure-decals.png" if args.winter_decals else "exposure.png" if args.winter_exposure else "materials.png"
+                target = destination / "target.png" if args.fall_target else destination / "beauty.png" if args.fall_beauty else destination / "refined.png" if args.fall_focus else destination / winter_name if args.winter_focus else destination / f"{name}.png"
                 image.save(target, optimize=True)
                 raw.unlink()
                 row["images"][name] = {"path": portable(target), "sha256": file_hash(target)}
             raw = work / "fall-hue-blend.bgra"
-            Image.frombytes("RGBA", (args.width,args.height),raw.read_bytes(),"raw","BGRA").convert("RGB").save(destination / "fall-hue-blend.png",optimize=True)
+            if not (args.winter_focus or args.fall_focus):
+                Image.frombytes("RGBA", (args.width,args.height),raw.read_bytes(),"raw","BGRA").convert("RGB").save(destination / "fall-hue-blend.png",optimize=True)
             raw.unlink()
-            row["images"]["fall-hue-blend"] = {"path": portable(destination / "fall-hue-blend.png"), "sha256": file_hash(destination / "fall-hue-blend.png")}
-            if source_guard(pack, receipt["optional_art_inputs"]) != inputs_before:
+            if not (args.winter_focus or args.fall_focus):
+                row["images"]["fall-hue-blend"] = {"path": portable(destination / "fall-hue-blend.png"), "sha256": file_hash(destination / "fall-hue-blend.png")}
+            if source_guard(pack, receipt["optional_art_inputs"], quality) != inputs_before:
                 raise ValueError("Read-only terrain pack changed during Lab rendering")
             receipt["packs"].append(row)
-    (OUT / f"{args.case}-receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
+    winter_label = "wonderland" if args.winter_wonderland else "exposure-decals" if args.winter_decals else "exposure" if args.winter_exposure else "materials"
+    receipt_path = destination.parent / f"{args.case}-target-receipt.json" if args.fall_target else OUT / "fall-focus" / f"{args.case}-beauty-receipt.json" if args.fall_beauty else OUT / "fall-focus" / f"{args.case}-receipt.json" if args.fall_focus else OUT / "winter-focus" / f"{args.case}-{winter_label}-receipt.json" if args.winter_focus else OUT / f"{args.case}-receipt.json"
+    receipt_path.parent.mkdir(parents=True, exist_ok=True)
+    receipt_path.write_text(json.dumps(receipt, indent=2) + "\n")
     print("PASS source-based seasonal scenes; temporary builds and raw frames removed", flush=True)
     return 0
 

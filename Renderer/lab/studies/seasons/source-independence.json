@@ -1,0 +1,148 @@
+{
+  "schema": "c3x.lab.seasonal_source_independence.v1",
+  "source_installation_unavailable": true,
+  "backend": "headless Metal",
+  "vm_used": false,
+  "case": "test-biq",
+  "preserved_cache": "Renderer/lab/studies/seasons/assets",
+  "cache_bytes": 5330901,
+  "flower_input": {
+    "source": "DLC/Expansion2/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_FX_Blossoms",
+    "sha256": "f1a9a12ea0dcecd05b083f244ac94976d20ab7f2c248e88361bc6d386f877138",
+    "input_storage": "Renderer/lab/studies/seasons/assets/flowers/blossoms.source",
+    "components": [
+      [
+        33,
+        0,
+        56,
+        26
+      ],
+      [
+        69,
+        1,
+        94,
+        26
+      ],
+      [
+        102,
+        7,
+        125,
+        31
+      ],
+      [
+        36,
+        32,
+        61,
+        57
+      ]
+    ],
+    "adaptation": "Four isolated complete heads; grayscale petal shading for recipe tint; transparent padding and premultiplied-alpha filtering."
+  },
+  "result": "All ten scene images for both terrain packs are byte-identical to renders made before switching to cached art; recorded pack inputs unchanged.",
+  "image_hashes": [
+    {
+      "path": "Renderer/lab/out/seasons/programmatic/test-biq/TerrainNormalized/summer.png",
+      "sha256": "077a8997a772afe7f2adaaf78d501d0c555e62065c4d3c8208821b28d0dafef9"
+    },
+    {
+      "path": "Renderer/lab/out/seasons/programmatic/test-biq/TerrainNormalized/fall.png",
+      "sha256": "7c8b10f0d851a6e3682b67b368896438645e1912629de9e0e16f844b075e72bf"
+    },
+    {
+      "path": "Renderer/lab/out/seasons/programmatic/test-biq/TerrainNormalized/winter.png",
+      "sha256": "73e19516547bd3fdd1cf3e3d5f68a147db6316d12e53cc54b0e792561a3b56cc"
+    },
+    {
+      "path": "Renderer/lab/out/seasons/programmatic/test-biq/TerrainNormalized/spring.png",
+      "sha256": "038043eded5ac36d80444234e6c305b5b3d0ac18214ec76f78b866d19a8aa611"
+    },
+    {
+      "path": "Renderer/lab/out/seasons/programmatic/test-biq/TerrainNormalized/fall-hue-blend.png",
+      "sha256": "3b8c29c523fb37bf8875b17f46cda2fe81dfe8ef343d187b46412b386436cff6"
+    },
+    {
+      "path": "Renderer/lab/out/seasons/programmatic/test-biq/Civ5EnvironmentSkin/summer.png",
+      "sha256": "6d274a9e9d3f34bf27f8b502c538d421784ed19b5e4428627a75aea7967a5707"
+    },
+    {
+      "path": "Renderer/lab/out/seasons/programmatic/test-biq/Civ5EnvironmentSkin/fall.png",
+      "sha256": "dac614d9f9e3792211e840d8e06fe4dcb15d9fa990a4006f2205e18658a15369"
+    },
+    {
+      "path": "Renderer/lab/out/seasons/programmatic/test-biq/Civ5EnvironmentSkin/winter.png",
+      "sha256": "8f08ee4321c0229927a21c9de3c7c3041c053e55fa42f283d4afcce614c825c1"
+    },
+    {
+      "path": "Renderer/lab/out/seasons/programmatic/test-biq/Civ5EnvironmentSkin/spring.png",
+      "sha256": "e6f8f5422382d85fb89d449f19fa1b20b39acceb00553cdd84bf3dd94b2565a5"
+    },
+    {
+      "path": "Renderer/lab/out/seasons/programmatic/test-biq/Civ5EnvironmentSkin/fall-hue-blend.png",
+      "sha256": "5e3e56c94f670fa2e0d8782c87550d4af67c1b3022a3cc2aa141d7641fee8a1d"
+    }
+  ],
+  "material_adapters": {
+    "terrain": "d26616c17726f8eb5110942a420f2c881da1ac7af59bb483b682deaf832005b6",
+    "mountain": "8347ebdec6142ca9e14b27b52165d87e065699f46a1007b0beca6f4935ac1fa5",
+    "objects": "171f2ed31154f8154e06e717846c83a6d8ca36f9f4e5e61788d41a296c38984c",
+    "water": "05928fa8cf239324603478d20de2535d0c71cc2fe092ba499334ff7505bd0b22",
+    "shadow": "22221949aab16d2be94cf28390dcfa53c4c134c35fcb4f49dfb1e31dcd813e15",
+    "probe": "3faa3c27273e65e490c60c5e071f089e7fdb620b30940ed040a91c9b09f9e0c6"
+  },
+  "gpu_checks": [
+    {
+      "pack": "Renderer/packs/TerrainNormalized",
+      "checks": {
+        "summer_round_trip_linear_exact": true,
+        "disabled_linear_exact": true,
+        "coverage_unchanged": true,
+        "evergreen_autumn_unchanged": true,
+        "wood_protected": true,
+        "desert_and_stone_spring_excluded": true,
+        "snow_normals_finite_unit": true,
+        "noise_wrap_max_error": 0.000488281,
+        "flower_wrap_max_error": 0.000244141,
+        "flower_probe_peak_coverage": 0.494629,
+        "tiles": 453,
+        "vertices": 10047726,
+        "peak_reported_gpu_allocation_bytes": 1443250176,
+        "gpu_ms": [
+          63.8078,
+          68.3371,
+          82.0226,
+          82.9937,
+          54.5418,
+          54.3378,
+          58.6426
+        ]
+      }
+    },
+    {
+      "pack": "Renderer/packs/Civ5EnvironmentSkin",
+      "checks": {
+        "summer_round_trip_linear_exact": true,
+        "disabled_linear_exact": true,
+        "coverage_unchanged": true,
+        "evergreen_autumn_unchanged": true,
+        "wood_protected": true,
+        "desert_and_stone_spring_excluded": true,
+        "snow_normals_finite_unit": true,
+        "noise_wrap_max_error": 0.000488281,
+        "flower_wrap_max_error": 0.000244141,
+        "flower_probe_peak_coverage": 0.494629,
+        "tiles": 453,
+        "vertices": 10047726,
+        "peak_reported_gpu_allocation_bytes": 1462829056,
+        "gpu_ms": [
+          68.2732,
+          67.6781,
+          81.4543,
+          78.5303,
+          55.0537,
+          61.1287,
+          61.992
+        ]
+      }
+    }
+  ]
+}

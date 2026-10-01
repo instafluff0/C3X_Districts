@@ -54,13 +54,36 @@ on a game's name. Unknown packs use a restrained default and can supply their ow
 calibration. Spring also uses source multiplication, with a separate floodplain
 profile to prevent floodplains and plains from merging.
 
+The [refined Civ V autumn study](FALL.md) carries one stable palette value per
+original tree: gold-dominant crowns with amber and occasional russet. Retain that
+value in generic instance appearance data in production, rather than sampling a
+palette field across each crown. Existing forest-floor decals receive a broken
+gold/amber litter tint with water-boundary eligibility. The ground is quieter
+olive with distinct honey-straw plains. The target-led `--fall-beauty` candidate
+now uses stronger leaf tint and brightness, normalized original-atlas leaf
+eligibility, restrained wrapped leaf light and broader bronze/olive variation.
+Its noon grassland/plains separation is 16.30; the smallest pair is 11.72.
+These are material diagnostics, not beauty acceptance. It still falls short of
+the selected concept's canopy light/shape and rich terrain treatment. The Lab
+coast/validity/water corrections have a separate corrected Summer baseline and
+must not replace production shared providers. The older table below describes
+the preceding four-season gallery; current autumn/winter notes carry refinement
+evidence and open visual gaps.
+
 ## Winter: snow without losing the summer landscape
+
+The [current Civ V winter study](WINTER.md) adds exposure masks, authored snow
+decals, local drift relief, stronger canopy shelter and retained summer texture
+contrast, with unchanged tree meshes. Snow decals derive their bump response
+from red height; their unresolved green channel is retained and unused. Its
+separate review is the current winter material experiment; the original gallery
+preserves the preceding four-season scenes.
 
 The current authored trial coverage targets are grassland `.93`, plains `.86`,
 desert `.73`, tundra `.985`, floodplains `.965`, varied continuously by two noise
 scales. These are C3X recipe values, not recovered Civ VI engine settings. A
 slope envelope reduces the coat on vertical faces; exposed stone scales the
-remaining coverage by `.62`. This leaves recognizable rock faces and granular
+remaining coverage by `.56`. This leaves recognizable rock faces and granular
 outcrops beneath luminous snow rather than burying everything in white paint.
 
 Biome identity uses several cues together:
@@ -87,9 +110,19 @@ a flat canopy normal. Normalize safely after blending. Existing crevice, AO,
 sun/moon directions and shadow providers remain authoritative. Snow coating
 must not erase the forest's light/shade separation or flatten hill relief.
 
-The Lab applies a small winter key-color correction to counter the source's warm
-response. It holds the same noon lighting frame across all four images to isolate
-materials. In the real game, seasonal lighting must remain part of the shared
+The layered recipe distinguishes cooler grassland, lighter pearl-gray plains,
+pale ivory desert, teal-white floodplains and stronger ice-blue tundra. Ground
+and decorative snow patches share one palette. Local jittered pillows add
+material normals at a middle scale; deposition follows source material highs,
+slope and shelter. Keep actual elevations, tree recipes and anchors fixed.
+The Mac study's second shadow atlas omits ground decal carriers and uses actual
+receiver-plane derivatives. Its water adds cached slope textures and restrained
+bank frost. Those are diagnostic adapters: production should keep its existing
+shared shadow/water providers and consume only the seasonal material policy.
+
+The Lab corrects the source material's warm key response, cools skylight and
+uses recipe-controlled winter display exposure. It holds the same noon sun
+direction. In the real game, seasonal lighting must remain part of the shared
 environment policy, governed by
 [the existing lighting contract](../../../docs/environment_lighting_and_ambient_effects.md).
 Apply any agreed correction consistently to terrain, foliage and reflections;
@@ -145,18 +178,23 @@ The confirmed names, hashes, descriptors and UV findings are preserved in
 | Input | Evidence and current use | Decision |
 | --- | --- | --- |
 | Ground and mountain snow albedo/height/gloss | Already present in both terrain packs and declared by source terrain ArtDefs. Ground snow is sampled by the executable policy. | Reuse local channels; provide generic optional material slots. |
-| Snow surface decal B/H/G/FOW channels | All 11 decoded source decals bind `TEXTURE_TER_Snow_Decal_*`; the existing water catalog already contains the normalized DDS files. | The Lab uses only selected granular texture regions as a material detail layer. Its four-cell crop recipe is an adaptation, **not** a recovered four-cell source placement rule. For richer decals, compile the confirmed authored meshes/UVs with the existing generic decal compiler. |
+| Snow surface decal B/H/G/FOW channels | All 11 decoded source decals bind `TEXTURE_TER_Snow_Decal_*`; the existing water catalog already contains the normalized DDS files. Full authored meshes/UVs/placements are now preserved in the local `assets/snow-decals/` generic pack. | The Lab uses only selected granular texture regions as a material detail layer. Its four-cell crop recipe is an adaptation, **not** a recovered four-cell source placement rule. For richer decals, consume the preserved generic descriptors and meshes. |
 | Five snowy pine bodies/clumps | Existing pair probes confirm equal positions, UVs and topology. Current foliage comes from the alternate vegetation pack; some snowy normals differ and extra opacity is present. | Reuse authored winter color/gloss while retaining original geometry, normals and opacity. Do not silently swap whole material descriptors. |
 | Snow hill macro height | Already present in the local relief assets. | Preserve summer macro relief; use a surface coat instead of moving the landscape. |
-| Blossom sprite | Installed payload decoded; four complete alpha components isolated and used. | Tiny local atlas, generic runtime metadata, analytic fallback. |
-| Colored/white flowered foliage atlases | Confirmed 512×512 payloads with carrier regions. | Do not repeat whole atlases over terrain. Use only with proven UV/material bindings; unnecessary for the first meadow pass. |
+| Blossom sprite | Preserved original payload and DDS; four complete alpha components isolated and used. | Tiny local atlas, generic runtime metadata, analytic fallback. No installed-game dependency for adaptation. |
+| Colored/white flowered foliage atlases | Preserved 512×512 DDS payloads with carrier regions. | Do not repeat whole atlases over terrain. Use only with proven UV/material bindings; unnecessary for the first meadow pass. |
 | Snowy rocks, floor marks and DLC variants | Source census confirms candidates; some are duplicate payloads or source-specific structures. | Use selectively when they improve a demonstrated gap. Existing rocks retain their shape/material detail under the coat; no need to import every snowy object. |
 | Fall/spring four-season art | No established four-season terrain recipe was found in the inspected source data. | C3X tint/placement policy supplies these treatments. No original engine seasonal behavior is claimed. |
 
 We are using the most useful confirmed channels, and have identified the next
 useful decal route. Importing every asset would add storage/residency and often
 bring unrelated carrier regions, snow boulders or duplicate textures. The
-source probe leaves installed packages and ignored normalized packs untouched.
+source probe leaves installed packages and existing normalized packs untouched.
+The bounded `cache_assets.py` compiler preserves the next useful decal route and
+flower inputs in `assets/`, outside disposable output. It adds only 5.08 MiB;
+full source packages and raw compiler reports are not copied. Its manifest hashes
+every retained file. `cache_assets.py --verify` validates all saved inputs and
+the source-independent generic snow pack without opening the source installation.
 Licensed inputs stay local. A distributable C3X pack can replace every optional
 input with original art; runtime consumes DDS/material IDs/semantic roles, never
 BLP/ArtDef data or installation paths.
@@ -328,13 +366,24 @@ Shader tools are the existing Lab tools, not a new Windows build dependency.
 Optional asset probes are `asset_inputs.census()` and
 `asset_inputs.snow_decal_evidence()`; store their small JSON reports in the same
 output directory. `C3X_CIV6_ASSETS` can point to another local installed Assets
-tree. Flower extraction occurs in memory; only the tiny adapted atlas is written
-into the temporary work directory. A run refuses to start below 8 GiB free.
+tree. These optional source probes still require the installation; rendering
+uses the preserved `assets/flowers/blossoms.source` first. Flower adaptation
+occurs in memory; only the tiny adapted atlas is written into the temporary work
+directory. A run refuses to start below 8 GiB free.
 Builds, temporary DDS, raw BGRA frames and exported CSVs are removed on completion
-or failure. Packs are read in place; no clones, extraction trees or geometry
-files are created.
+or failure. Packs and the protected seasonal cache are read in place; ordinary
+renders create no persistent extracted art or geometry.
 
-Keep code/recipes and the selected concepts/source inputs. Generated outputs
+Keep code/recipes, the selected concepts, **`Renderer/packs/` and this study's
+ignored `assets/` directory**, even when removing Civ VI to reclaim disk space.
+The cache preserves selected seasonal inputs, not the full source-art library;
+new source research may require reinstalling the game. Generated outputs
 under `Renderer/lab/out/seasons/programmatic/` are reproducible and disposable;
 delete that exact directory when these comparisons are no longer useful.
 Do not clean other agents' outputs or source packs to reclaim space.
+
+The [source-independence receipt](source-independence.json) records a successful
+Mac GPU `test.biq` run with `C3X_CIV6_ASSETS` set to an absent tree. All ten image
+hashes across both packs matched the preceding renders, and the recorded pack
+inputs were unchanged. This proves this Lab path's independence from the source
+installation, not that every future source-art investigation is already cached.

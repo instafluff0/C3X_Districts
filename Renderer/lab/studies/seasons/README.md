@@ -6,6 +6,27 @@ spring with both Civ VI and Civ V-style terrain packs, preserving existing
 geometry and source material detail. It remains a Lab experiment, not an
 implemented game feature; no Windows VM, game staging or injected build was used.
 
+Autumn now has a [refined Civ V skin study](FALL.md) and
+[direct target comparison](../../out/seasons/programmatic/fall-focus/beauty.html):
+coherent golden crowns, quieter olive grass, distinct honey-straw plains,
+existing forest-floor litter and improved diagnostic shadows/water. All original
+terrain/tree geometry and source material detail remain. Use `--fall-focus` to
+repeat the preceding refinement. The current `--fall-beauty` candidate corrects
+the preview's coast/water gaps and uses stronger gold/amber foliage with quieter
+bronze/olive ground. It has its own corrected Summer baseline and remains short
+of the selected target; preservation checks are not visual acceptance. The
+original four-season gallery retains the earlier comparisons.
+
+Winter now has a [Civ V skin material/decal study](WINTER.md) with a separate
+[before/after review](../../out/seasons/programmatic/winter-focus/index.html).
+It preserves every existing tree mesh and placement. Blender supplies small
+read-only exposure masks; eleven saved snow decals add relief over existing
+ground. The current layered winter adds local drifts, retained summer texture
+contrast, stronger canopy shelter and corrected height-based decal relief.
+Its diagnostic shadows and water are improved; the four-season gallery below
+retains the preceding comparisons. Use the `--winter-wonderland` commands in the
+winter study to reproduce the current result.
+
 Read the [real-game implementation playbook](PLAYBOOK.md) and inspect the
 [full-scene gallery with tint comparisons](../../out/seasons/programmatic/index.html).
 `seasonal_policy.hlsl`, `render.py` and `scene.mm` are the working prototypes;
@@ -72,7 +93,21 @@ flowers; test a tiny authored flower decal if the shader marks look like confett
 
 These licensed inputs remain local. Runtime policy should use generic seasonal
 roles and pack metadata, with an authored snow material fallback, rather than
-Civ VI names or package formats. No upstream art needs to be copied for this study.
+Civ VI names or package formats.
+
+The seasonal work can now run after uninstalling Civ VI. Keep **`Renderer/packs/`
+and this study's ignored `assets/` directory**: these are preserved inputs, not
+disposable previews. The latter adds 5.08 MiB and contains all eleven normalized
+snow decal meshes/UVs/placements and their four shared DDS channels, both flowered
+foliage atlases, a blossom DDS and the tiny original blossom payload needed for
+exact adaptation. The renderer prefers this integrity-checked blossom cache.
+Existing ground/mountain snow and winter trees remain in the larger local packs.
+This preserves the seasonal candidates selected here, not every possible future
+asset from the game; new source exploration would require its installation again.
+`cache_assets.py --verify` checks the saved cache without accessing Civ VI.
+The [source-independence receipt](source-independence.json) records a Mac render
+with the installation unavailable: all ten images across both terrain packs
+match the previous renders byte for byte.
 
 ## Integration feasibility and remaining work
 
@@ -106,13 +141,15 @@ python3 Renderer/lab/studies/seasons/render.py --all-packs --case biomes --width
 python3 Renderer/lab/studies/seasons/compare.py
 python3 Renderer/lab/studies/seasons/study.py
 python3 Renderer/lab/studies/seasons/study.py --inventory-only
+python3 Renderer/lab/studies/seasons/cache_assets.py --verify
 python3 Renderer/renderer.py check
 ```
 
 The full study selects the bundled Pillow/NumPy Python when system Python lacks
 them; `C3X_RENDERER_PYTHON` can override it. Set `C3X_CIV6_ASSETS` or pass
-`--assets-root` for another installed Assets tree. Reports store relative paths.
-There are no persistent extracted DDS files, cloned packs, builds or staging.
+`--assets-root` for source inventory or rebuilding the small cache from another
+installed Assets tree. Reports store relative paths. The protected seasonal cache
+contains persistent art inputs; there are no cloned terrain packs or staged builds.
 The GPU runner reads existing packs in place, removes temporary builds/raw frames,
 and refuses a run with less than 8 GiB free. Repeated runs overwrite the same
 case outputs. Only reproducible PNG/HTML comparisons and small JSON receipts are

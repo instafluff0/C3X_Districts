@@ -15,7 +15,7 @@ def assets_root():
         "Library/Application Support/Steam/steamapps/common/Sid Meier's Civilization VI/Civ6.app/Contents/Assets"))
 
 
-def prepare(work, bodies):
+def prepare(work, bodies, winter_exposure=False, winter_decals=False):
     from PIL import Image
     import numpy as np
     from Renderer.lab.studies.seasons.study import dds_image
@@ -36,10 +36,94 @@ def prepare(work, bodies):
                 "policy": "Use authored color/gloss with original geometry, normals and opacity."})
         lines.append("|".join(p.relative_to(ROOT).as_posix() for p in paths) if paths else "-")
     (work / "winter-materials.txt").write_text("\n".join(lines) + "\n")
+    mask_paths = ["-"] * len(bodies)
+    if winter_exposure:
+        import shutil
+        import subprocess
+        cache = HERE / "assets/winter-exposure"
+        inputs, identities = [], {}
+        for index, body in enumerate(bodies):
+            if body["role"] != 1:
+                continue
+            suffix = body["source_evidence"].split("/")[-1]
+            mesh = vegetation / f"meshes/features/forest_{suffix}.json"
+            material_path = vegetation / f"materials/features/forest_{suffix}.json"
+            material = json.loads(material_path.read_text())
+            opacity = vegetation / material["opacity"]["texture"] if material.get("opacity") else None
+            for path in (mesh, material_path, opacity):
+                if path:
+                    identities[path.relative_to(ROOT).as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
+            inputs.append({"body":index, "mesh":str(mesh), "opacity_source":opacity})
+        generator = HERE / "winter_exposure.py"
+        identities[generator.relative_to(ROOT).as_posix()] = hashlib.sha256(generator.read_bytes()).hexdigest()
+        manifest_path = cache / "manifest.json"
+        manifest = json.loads(manifest_path.read_text()) if manifest_path.is_file() else None
+        valid = manifest and manifest["inputs"] == identities and all((cache / r["path"]).is_file() and
+            hashlib.sha256((cache / r["path"]).read_bytes()).hexdigest() == r["sha256"] for r in manifest["masks"])
+        if not valid:
+            for row in inputs:
+                opacity = row.pop("opacity_source")
+                row["opacity"] = None
+                if opacity:
+                    image = dds_image(opacity.read_bytes());image.thumbnail((512,512))
+                    png = work / f"opacity-{row['body']:02d}.png";image.save(png)
+                    row["opacity"] = str(png)
+            specification = work / "winter-exposure-inputs.json"
+            specification.write_text(json.dumps(inputs))
+            generated = work / "winter-exposure"
+            blender = os.environ.get("C3X_BLENDER", "/Applications/Blender.app/Contents/MacOS/Blender")
+            subprocess.run([blender, "--background", "--factory-startup", "--python-exit-code", "1", "--python", str(generator),
+                "--", "--inputs", str(specification), "--output", str(generated)], check=True)
+            manifest = json.loads((generated / "bake.json").read_text())
+            manifest.update(schema="c3x.lab.winter_exposure.v1", inputs=identities,
+                policy="Reproducible opacity-aware BVH snow exposure masks for unchanged source meshes; overlapping UV exposure is an averaged C3X approximation.")
+            for row in manifest["masks"]:
+                row["sha256"] = hashlib.sha256((generated / row["path"]).read_bytes()).hexdigest()
+            cache.mkdir(parents=True,exist_ok=True)
+            for row in manifest["masks"]:
+                shutil.copyfile(generated / row["path"], cache / row["path"])
+            manifest_path.write_text(json.dumps(manifest,indent=2)+"\n")
+        for row in manifest["masks"]:
+            mask_paths[row["body"]] = (cache / row["path"]).relative_to(ROOT).as_posix()
+        evidence["winter_exposure"] = {"manifest":manifest_path.relative_to(ROOT).as_posix(),
+            "blender_version":manifest["blender_version"], "inputs":identities,
+            "masks":[dict(row,path=(cache / row["path"]).relative_to(ROOT).as_posix()) for row in manifest["masks"]],
+            "policy":manifest["policy"]}
+    (work / "winter-exposure.txt").write_text("\n".join(mask_paths)+"\n")
+    (work / "winter-decals.txt").write_text("0\n")
+    if winter_decals:
+        pack = HERE / "assets/snow-decals"
+        manifest = json.loads((pack / "manifest.json").read_text())
+        payload = bytearray(b"C3XSND1\0" + struct.pack("<I",len(manifest["assets"])))
+        paths = [pack / "manifest.json"]
+        channel_paths = None
+        for asset in manifest["assets"].values():
+            path = pack / asset["decal"];descriptor = json.loads(path.read_text());paths.append(path)
+            channels = [pack / descriptor["channels"][c]["texture"] for c in ("base_color","height","specular")]
+            if channel_paths is not None and channels != channel_paths:
+                raise ValueError("Bounded snow-decal adapter requires one shared material")
+            channel_paths = channels
+            vertices = descriptor["mesh"]["vertices"];indices = descriptor["mesh"]["indices"]
+            payload.extend(struct.pack("<I",len(indices)))
+            for index in indices:
+                vertex=vertices[index];payload.extend(struct.pack("<4f",*vertex["position"],*vertex["uv0"]))
+        paths.extend(channel_paths)
+        (work / "winter-decals.bin").write_bytes(payload)
+        (work / "winter-decals.txt").write_text("1\n"+"\n".join(p.relative_to(ROOT).as_posix() for p in channel_paths)+"\n")
+        evidence["winter_decals"] = {"variants":len(manifest["assets"]),
+            "inputs":[{"path":p.relative_to(ROOT).as_posix(),"sha256":hashlib.sha256(p.read_bytes()).hexdigest()} for p in paths],
+            "policy":"Actual normalized authored meshes and UVs conformed to existing ground; C3X world-stable scatter and inferred packed slope response. No original terrain or tree changes."}
     # Isolate complete blossom heads from transparent connected components;
     # retain authored petal light/dark structure, normalize only their tint.
     source_name = "DLC/Expansion2/Platforms/Windows/BLPs/SHARED_DATA/TEXTURE_FX_Blossoms"
-    path = assets_root() / source_name
+    cached = HERE / "assets/flowers/blossoms.source"
+    cache_manifest = HERE / "assets/manifest.json"
+    path = cached if cache_manifest.is_file() else assets_root() / source_name
+    if cache_manifest.is_file():
+        manifest = json.loads(cache_manifest.read_text())
+        admitted = next(row for row in manifest["files"] if row["path"] == "flowers/blossoms.source")
+        if hashlib.sha256(cached.read_bytes()).hexdigest() != admitted["sha256"]:
+            raise ValueError("Preserved blossom source failed its integrity check")
     atlas = Image.new("RGBA", (128, 32))
     enabled = path.is_file()
     if enabled:
@@ -68,6 +152,7 @@ def prepare(work, bodies):
             crop.thumbnail((26,26),Image.Resampling.LANCZOS)
             atlas.alpha_composite(crop,(i*32+(32-crop.width)//2,(32-crop.height)//2))
         evidence["flower_atlas"]={"source": source_name, "sha256": hashlib.sha256(raw).hexdigest(),
+            "input_storage": cached.relative_to(ROOT).as_posix() if path == cached else "installed source",
             "components": [list(box) for _,box in chosen], "adaptation": "Four isolated complete heads; grayscale petal shading for recipe tint; transparent padding and premultiplied-alpha filtering."}
     else:
         # Portable recipe remains usable without licensed flower assets.

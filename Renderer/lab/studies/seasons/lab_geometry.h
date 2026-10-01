@@ -10,7 +10,10 @@ namespace fidelity {
 template<class Lookup,class Height,class Shore,class River,class Cancelled,class Layers>
 bool lab_vegetation(NaturalData const&natural,Tile owner,GroundProjection project_natural,
                    Lookup lookup_natural,Height height_natural,Shore shore_sample_at,
-                   River river_at,Cancelled cancelled,Layers&natural_vertices){
+                   River river_at,Cancelled cancelled,Layers&natural_vertices,
+                   std::array<std::vector<float>,35>&appearance,
+                   std::vector<std::vector<std::array<float,4>>>const&crown_fields,
+                   std::array<std::vector<std::array<float,4>>,35>&crowns){
     using Vertex=MapVertex;int nc=project_natural.column,nr=project_natural.row;
     struct {int real_terrain_type;}tile{owner.real};
     auto hash=patterns::feature_hash;
@@ -20,7 +23,22 @@ bool lab_vegetation(NaturalData const&natural,Tile owner,GroundProjection projec
     int inherited=native_hill_vegetation(owner.real,[&](int dx,int dy){return lookup_natural(nc+(dx+dy)/2,nr+(dx-dy)/2).real;},native_hill_seed(owner.source_x,owner.source_y));
     bool hill_forest=owner.real==5 && inherited==7,hill_jungle=owner.real==5 && inherited==8;
     bool raised_canopy=(owner.real==6 || owner.real==10) && inherited;
-    std::vector<BuildingBounds> buildings;auto emit_forest_instance=[](auto...){return false;};
+    std::vector<BuildingBounds> buildings;
+    auto emit_forest_instance=[&](unsigned body,int,int,float u,float v,float co,float si,float,float){
+        // Read the original placement before the shared body emits it unchanged.
+        // Canonical owner coordinates keep one palette across wrapped instances.
+        unsigned seed=unsigned(owner.source_x)*0x193u ^ unsigned(owner.source_y)*0x217u;
+        seed^=unsigned(u*65536)*173u ^ unsigned(v*65536)*179u ^ body*181u;
+        appearance[3+body].insert(appearance[3+body].end(),natural.bodies[body].vertices.size(),
+                                  patterns::stable_random(seed));
+        auto const&field=crown_fields[body];
+        for(unsigned i=0;i<natural.bodies[body].vertices.size();i++){
+            auto value=field.empty()?std::array<float,4>{0,0,1,-1}:field[i];
+            crowns[3+body].push_back({value[0]*co-value[1]*si,
+                                    -(value[0]*si+value[1]*co),value[2],value[3]});
+        }
+        return false;
+    };
     if(owner.real==7 || inherited==7){
         #include "../../shared/natural/forest_mesh_body.h"
     }

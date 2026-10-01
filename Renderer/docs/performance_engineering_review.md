@@ -13,6 +13,363 @@ The work is to finish their separation and remove repeated work, while keeping
 the current graphics and authoritative Civ III behavior. A new graphics API,
 larger caches, or more rendering threads are not prerequisites.
 
+The user reaffirmed that useful production changes and the applicable 0 A.D.
+architecture are the priority. Track that alignment through persistent GPU world
+data, camera-only view selection, content-based invalidation and preparation
+shared across passes. Cached zoom previews and resumable refinement address
+responsiveness; they do not close the separate full-quality rendering-cost goal.
+Treat the reviewed 0 A.D. ownership and frame organization as the default
+reference: persistent terrain/model data, rebuilds on content changes, selected
+pass contributors, compatible material/mesh grouping and model preparation shared
+across passes. D3D11 does not block those mechanisms. Civ III-specific requirements
+belong at authoritative capture, exact native projection/visibility and ordered
+composition boundaries; they do not establish a necessary slow full-render floor.
+Existing retained owners should be completed and reused rather than duplicated.
+Cached camera images improve responsiveness, while reducing the cost of a genuine
+full-quality draw remains a separate required outcome. Directly importing 0 A.D.'s
+renderer would also require adapting its terrain, asset/material/shader and scene
+interfaces; this review does not authorize a wholesale engine replacement.
+
+Each bounded experiment must decide a concrete runtime change. Stop broad
+measurement expansion once a production blocker is established. Pixel/depth
+identity is diagnostic: the acceptance policy requires preserved visual quality,
+correct visibility/occlusion and native ownership, not elimination of every
+imperceptible numerical difference.
+
+### Civ III turn and visibility behavior
+
+Optimization follows the game's actual lifecycle: a persistent world, a player's
+visible/explored/unseen areas, player actions, and interturn AI actions that are
+often hidden. Caches can be included in the solution; architecture and delivered
+performance remain the objective. Use the reviewed 0 A.D. persistent data,
+dirty-update, pass selection and shared-preparation mechanisms as the reference.
+
+- Preserve authoritative gameplay, turn progression and native action timing.
+  Avoidable renderer work is separate from simulation work that must still run.
+- Hidden AI moves and offscreen changes need not generate poses, draws, map
+  publications or full-view invalidations when they cannot affect any permitted
+  visible output. Keep required lifecycle/visibility facts current, and coalesce
+  intermediate visual-only updates where intermediate states need not be shown.
+  Do not coalesce visible movement/combat events or erase required ordering.
+- Select work using actual output dependencies, including eligible shadows,
+  reflections, lights, terrain boundaries and attached UI. Offscreen bounds alone
+  do not prove that an object cannot affect the view. Hidden objects must not
+  reveal themselves through these passes.
+- Distinguish content changes from a turn boundary, new capture, changed selection
+  or camera movement. Invalidate affected regions/objects and their dependency
+  closure; do not rebuild a view merely because another player's hidden unit
+  moved. Preserve last-known explored appearance and visibility-frozen animation;
+  background preparation never grants visibility or leaks hidden changes.
+- Maintain current visible water, effects and eligible animation during interturns.
+  When the visible output has not changed and no eligible animation is active,
+  reuse the completed frame. On reveal, update newly visible content from
+  authoritative observations and validate its dependencies before display.
+- Use initialization/background preparation for stable world content when useful,
+  subordinate to current player-visible work. A native reconciliation/audit may
+  still be required for mutation coverage; do not mistake its occurrence for a
+  requirement to recompile or redraw all of its unchanged observations.
+
+These rules guide the substantive camera and rendering changes. They do not
+expand the currently frozen zoom comparison into another benchmark campaign.
+
+### Delivery sequence and end state
+
+The auditor owns convergence toward the end architecture and tangible game
+improvements. The user explicitly permits caches when they serve that design;
+cache count is neither progress nor a reason to reject useful work. Judge each
+change by the responsibility it improves, the repeated work or latency it removes,
+its measured user-visible result and its integration path. Keep individual slices
+bounded while allowing evidence to change the sequence. The cancellation guard
+may be deferred and resumed later if finishing it would delay the main delivery.
+Closing every small patch is not a prerequisite for delivering the larger result.
+
+The end state is an ordinary fast frame path: authoritative changes update one
+persistent render world; a camera selects existing geometry; main/shadow/reflection
+passes share preparation; the completed map enters the existing native compositor.
+Camera-image reuse is an optional saving. Its misses must not expose the current
+roughly 100-plus-ms full-render cost. No wholesale engine replacement is assigned.
+
+1. **Close and deliver the current navigation work.** Review the combined live-
+   dynamic zoom plus integrated scrolling patch, then stage the matching tuple
+   and run the already authorized bounded game check. Close or defer the small
+   cancellation fix separately, preserving its patch and evidence. Keep this
+   delivery's agreed scope; any additional camera-image cache or refinement
+   mechanism needs a specific architectural role and expected user-visible gain. A failed acceptance test must name the remaining
+   blocker and stop that slice; preserve useful tested gains for integration.
+2. **Make the normal rendering and camera paths fast.** Implementer next owns
+   full-quality terrain/material/pass execution; Implementer 2 next owns native
+   camera preparation, readiness and adoption. Treat these as two parts of one
+   delivery. The earlier scissor and underlay probes locate substantial raster/
+   shading work; they are diagnostic upper bounds, not recoverable-time promises.
+   Prioritize a coherent reduction of repeated/hidden terrain shading and
+   camera-independent preparation. Do not return to draw-count polishing or the
+   rejected global-coarsening prototype without new evidence. Keep normal water,
+   lighting, shadows and settled quality. On the camera side, reuse existing world
+   owners and prove first-visit preparation coverage; remove avoidable waits and
+   duplicate processing while preserving native action timing, projection,
+   canonical publications and ordered UI. A tiny cancellation fix is not this
+   delivery. A missing frame budget cannot be declared solved by adding another
+   image cache.
+3. **Qualify and install the combined game build.** Use the representative
+   2240x1260 VM with fixed, disclosed busy city/unit counts, normal effects and
+   day/night, covering idle, pan, zoom/reversal/settle, map jumps, wrap and updates
+   during motion. Reuse the existing busy-scene contract and tools. Scrolling and
+   idle target sustained 60 FPS; zoom accepts 40–50 FPS. Report missed deadlines,
+   consequential stalls, first-correct destination and full-quality recovery,
+   including cold/evicted cases. A held image, a warm subset, reduced effects or
+   average FPS alone cannot pass. Cold destination work must be prepared ahead
+   or use the user-permitted brief transition detail reduction with measured
+   recovery. Keep the installed/source/evidence identities explicit.
+
+After the current navigation delivery, completion is measured against outcomes
+2 and 3, rather than the number of local patches or caches. If a chosen structural
+change cannot materially close its assigned cost, reassess that rendering or
+camera stage as a whole and state the remaining gap. Do not open an indefinite
+sequence of nearby experiments. This is a finite acceptance sequence, not a claim
+that the exact patch count or a completion date is already known.
+
+### Preparing user playtesting
+
+Before asking the user to test a staged build, verify that the existing Renderer64
+short-capture launcher/receipt matches the exact bridge, DLL and helper, using the
+established capture qualification and preflight. Reuse these tools; no new profiler
+project is assigned. Timestamped game-window samples, renderer inputs, presentation
+intervals, camera handoffs and process memory let the auditor correlate the user's
+visible symptom with recorded work. Preserve a lightweight timing control because
+recording/profiling has overhead. Guest presentation counts are not physical host
+scanout, and current VM GPU pass timestamps are unqualified. State any remaining
+attribution gaps; replay does not reproduce every native scheduling decision.
+
+### Progress reporting
+
+Lead user updates with concrete implementation progress and direction: what
+runtime behavior changed, which repeated work was removed, whether the change
+is implemented, validated, merged or installed, and the next useful game delivery.
+State remaining blockers and any evidence that changed the approach. Apply the
+relevant 0 A.D. lessons to C3X's constraints without treating its design as a recipe.
+
+Include the latest comparable performance by activity when available: idle
+animation, scrolling at relevant zooms, zoom transitions, map jumps and busy
+scenes at the representative full VM size. Distinguish fresh measurements from
+unchanged prior results, and state what remains unmeasured. Report FPS only when
+the measurement supports it; include frame times, consequential stalls and time
+to the correct destination. Held-image presentation does not certify fresh scene
+animation. Summarize experiments when they decide a production change or expose
+a blocker; routine fixture work and test counts are supporting evidence, not the
+main progress report. No additional benchmark matrix is required solely to fill
+every reporting category.
+
+**Current delivery: reduce full-quality terrain/material/pass cost and measure
+native camera handoff latency. Live-dynamic zoom is preserved but unqualified.**
+The [private presentation experiment](zoom_presentation_step.md) covers each
+observed guest refresh with a cheap retained preview, but refinement still causes
+133–150 ms observed delivery gaps and admission waits up to 164 ms. Animation
+can remain about 540 ms old. The game already has the tested frame-readiness
+contract; this experiment does not qualify a new installed-game optimization.
+The current zoom comparison uses the game's independent cadence and
+unchanged-frame suppression. A preliminary paced synchronous pilot still found
+long full-detail submissions, and the shared runtime now has a bounded-refinement
+candidate. Its first GPU oracle completed 389 batches across 390 paced
+opportunities in 6.606 seconds, which fails useful full-detail recovery latency.
+It also differs from the synchronous output at 23,456 color pixels and 11 D24
+samples; stencil and all 117 submitted-work rows match. Equal submission counts
+do not establish correct state or ordering. The repeated-unsliced same-time
+control differs at 789 color pixels and one D24 sample; comparison of the repeat
+against the bounded result still differs at 23,230 color pixels and 12 D24
+samples. The broader color discrepancy remains unexplained. This candidate is
+stopped before a performance matrix or integration. The batch count alone imposes approximately
+6.5 seconds when only one batch advances per 60 Hz opportunity; diagnose that
+scheduling cost separately from total rendering work. Treat the earlier paced
+pilot as provisional: missing start times for two accidental VM test dispatches
+prevent conclusively excluding overlap. Guest cleanup is verified; the new
+candidate oracle ran after the quiet-process audit. Preserve the distinction between
+API returns, guest delivery observations and physical scanout.
+
+Independent rejection review verified all 31 source identities and the review
+patch hash, and reproduced both oracle timing/counter totals from raw logs.
+The receipt is `Renderer/.cache/zoom-refinement-step/auditor-review.json`.
+Readiness at the next paced query observation does not establish immediate GPU
+completion after submission. The next zoom slice starts from the accepted
+runtime without the failed emission-plan refactor: transform retained static
+HDR color/depth, draw current units and effects through shared dynamic routines,
+and wire the native projected-map sampler. Preserve canonical native output,
+reflection correctness, visibility, picking and original pass ordering. The
+first slice retains synchronous full-quality refresh and must report its
+remaining interruption; neither lower-resolution variants nor another scheduler
+sweep is assigned. The static/live split is implemented privately, with native projected-map wiring.
+Review caught a settled-view regression that restored unchanged terrain each
+animation frame. The correction preserves ordinary full-viewport reuse and
+retires only the shared writer proof after a transformed preview. Combined
+source and host checks passed, and the isolated Windows builds compiled. The
+focused GPU diagnostic then exposed severe horizontal striping in live water
+at 1.25x retained zoom; the same-pose full render was smooth. The suspected
+interaction between transformed static depth and current water remains an
+explanation to verify. The candidate is not visually qualified, merged or
+installed. Implementer stopped before the native busy matched comparison and
+released its VM reservation after confirming both owned clients absent.
+Independent review verified 34 source files, 21 evidence files and the review
+patch, inspected the water comparison and recomputed final raw-log intervals.
+There are six intervals above 100 ms, maximum 169.158 ms, all on frames with no
+new full static draw. Five are dominated by Present-return spans; another has
+140.278 ms in unit calls. This corrects the earlier attribution to full-quality
+refreshes. Earlier GPU submissions may contribute to later stalls; the observed
+CPU phase does not establish GPU causality. No delivered FPS is established.
+The review receipt is `Renderer/.cache/zoom-live-step/auditor-review.json`.
+This zoom slice is closed without integration; further depth/preview tuning is
+deferred while the normal full-quality rendering path becomes the priority.
+
+Full-quality redraw cost remains a separate measurement. The private underlay
+correction saves 15.8–22.2 ms, leaving 123.5–129.0 ms per changing-projection
+redraw; promotion remains pending on its unexplained depth-pixel exception.
+Preview work continues from C7. Density and further underlay tuning stay stopped.
+
+### Parallel implementation and integration
+
+The user authorized a second implementation task for scrolling and map jumps,
+using GPT-6.1 Sol with Ultra reasoning. The work divides as follows:
+
+- **Implementer:** one coherent reduction of repeated or hidden terrain/material
+  evaluation in the executed full-quality path, starting from accepted source.
+  Share camera-independent preparation where its dependencies permit, preserve
+  depth/coverage and current visual quality, and validate complete-frame cost.
+  Failed zoom/refinement candidates remain isolated.
+- **Implementer 2:** two bounded canonical/display static-region states to remove
+  projection thrash, followed by remaining scrolling and map-jump preparation,
+  residency and adoption latency. Uses an isolated managed worktree from the
+  authoritative project commit, with required current source hashes checked.
+- **Astra Perf Auditor:** reviews evidence, coordinates changes to shared files
+  and integrates successful patches into the authoritative runtime. Neither
+  implementer overwrites the other's checkout, private sources or output folder.
+
+Only one task may run Windows VM builds, GPU fixtures or performance tests at a
+time. Implementer 2 completed the two-state validation and explicitly released
+its reservation after all 17 owned launcher children exited and the guest process
+inventory was clean. The reviewed patch is integrated as `37688c1f` (from
+`a519be23`); all six integrated file identities match the tested candidate.
+Independent review verified frozen sources, binaries, shaders and scene identity,
+recomputed the raw timing/count results, and inspected the moving-unit crops.
+The review receipt is
+`Renderer/.cache/static-raster-step/auditor-source-review/final-review.json`.
+
+Both matched 18-view traces reduce full static draws from 36 to 18, with one
+additional 54.599 MiB region at the measured sample setting. Ordinary 4/2 camera
+steps at 1.25x still require display redraws because the projected Y step is
+fractional; integral 8/4 steps reuse both regions. Quiet request-through-Present-
+return means improve from 438 to 307 ms at noon and 332 to 292 ms at night for
+ordinary steps, and from 214 to 115 ms / 208 to 110 ms for integral steps. These
+are tiny samples with mixed results in other groups and substantial stalls,
+not FPS or a general speedup estimate. The admitted 16-actor diagnostic checks
+current movement, reflections, shadows and vegetation occlusion during reuse;
+it does not qualify realistic worst-case busy performance. Nothing was staged
+or installed. See [the scrolling result](scroll_reuse_step.md) for limits.
+
+Implementer released `zoom-live-dynamics-01` after the focused water visual
+failure. Its completed evidence handoff passes source/evidence identity review;
+the candidate fails visual qualification. The intended busy native comparison
+of zoom reversal, settling and pan-after-zoom remains unexecuted. Implementer
+completed the bounded full-quality material comparison and explicitly released
+`full-quality-frame-01` after owned client/compiler cleanup. No installation or
+gameplay launch occurred. Its final source/evidence handoff remains pending.
+The selected implementation skips texture contributors whose material weights
+are exactly zero in the executed full-quality shaders. It preserves blend order
+and keeps biased anisotropic samples unchanged. Source review caught unrelated
+terrain-feature branches disappearing during shader regeneration. The correction
+restores the richer Lab shader and delegates the affected variants to original
+sampling; independent source checks confirm the restored directives/includes
+and unchanged older native generator/output. Implementer reports 15 host tests
+passing, repeat generation identical across 140 files, and an optimized hardware
+D3D11 shore-support probe passing all 16 quad masks (64 pixels, zero mismatches).
+The auditor inspected those receipts; final full-scene appearance review is pending.
+Explicit gradients do not alone establish identical filtering, so material
+boundaries, shore support and atlas/wrap edges remain part of the focused
+appearance check. The first control completed its timed loop but failed before
+fixed-pose captures: the common test harness retired units and then attempted to
+observe the same IDs without spawning a new lifecycle. Independent source review
+confirmed that production correctly rejects this sequence regardless of timestamp.
+The bounded correction uses the existing spawn API in both arms and fixes the
+analyzer's API success value (`OK=1`, distinct from harness completion `0`).
+Attempt 01 is preserved; its 1087.441 ms control pan API span includes two actual
+full/reflection draws but does not establish their causal GPU cost. The corrected control completes with
+seven cities and 64 admitted units, with no additional synthetic actors. Its 74
+API opportunities contain 15 successful and 59 pending returns, independently
+recounted from the raw log. Full-repeat and warm depth/stencil are exact; color
+repeat differs at 144 pixels (maximum channel difference 10), and warm versus
+full differs at 50 pixels (maximum 10). The largest API span is 396.16025 ms;
+zero one-second spans in this invocation does not establish a tail improvement.
+An initial candidate fails before workload admission on a reserved
+`sampler_state` parameter; an identifier-only correction and shader regeneration
+allow the final comparison. The unchanged successful control is reused with
+linkage to its original manifest; final identity verification remains pending.
+The candidate is unqualified: seven successful and 80 pending API returns, a
+1367.094833 ms pan call and a 1417.870 ms successful-return gap. During the
+requested zoom window it returns successfully twice versus eight control and
+holds its presented projection near the starting scale for most of that window.
+Lower successful-call averages therefore do not show smoother zoom or a gain.
+Matched depth/stencil is exact at 1.0 and 1.25; color differs at 398,670 and
+507,382 pixels respectively, exceeding within-arm repeat noise. Initial coast
+and biome crops show mostly subtle differences, not evidence of a large visual
+failure; spatial characterization is pending. Keep this candidate isolated,
+with no more shader tuning or VM runs in this assignment. The preliminary
+raw-log review is `Renderer/.cache/full-quality-material-step/auditor-preliminary-review.json`.
+Implementer 2 completed the narrow canonical
+FRESH cancellation guard as `01cfd914`. Independent source/identity review and
+execution of its actual production branch passed nine cancellation cases, normal
+success and four real failures. The candidate remains isolated: native build,
+performance benefit and integration are pending. It does not block zoom delivery
+or receive a separate performance campaign. The primary review receipt is
+`Renderer/.cache/map-jump-preparation-step/auditor-review.json`.
+
+The first-jump ownership fixture's `WHOLE_WORLD` option supplied a complete source
+inventory and compact topology, but only selected appearances reached the runtime.
+It registered no appearance-page bootstrap and logged no background-region work.
+The 385 new owners / 81.6 MB upload therefore describe a deliberately unprepared
+fixture destination, not installed behavior after world readiness. Installed code
+has paged appearance capture and background preparation; its completion, capacity
+and interrupted/evicted cases still need actual evidence. Resident fixture returns
+already build/upload zero, so their remaining costs stay relevant.
+
+Implementer 2 completed source review in `77bf2be6`: canonical rendering has
+required consumers, adoption does not duplicate that draw, and the bridge's
+ready inspection followed by a later caller poll is real but unmeasured. The
+auditor verified all 20 source/document and four evidence hashes and reviewed
+the three guarded host-contract receipts. No production shortcut was selected.
+The opt-in correlation is now implemented in `59b35656`, from request through
+readiness/adoption to the committed screen's first successful Present return.
+Independent review verified all 16 source and nine evidence hashes and reran
+seven host contracts successfully. Superseded requests, older retained screens,
+actual projected samples and unresolved/mixed origins remain distinguishable.
+Present return is not GPU completion or scanout. Source review accepts the
+diagnostic design; Windows compilation, PowerShell execution and real composed
+screen coverage remain pending. Native overlays may leave the complete screen's
+origin unresolved, and the bounded first-event ledger may overflow; either must
+remain explicit rather than attributing a screen to the newest camera request.
+The next native checkpoint must establish useful correlation and complete
+buffered trace coverage before interpreting latency. One existing developed-save
+scroll scenario and a quiet control are specified, with native menu teardown
+outside the measured window and exact owned-child cleanup. Default scenarios
+remain unchanged. No performance improvement is claimed for this instrumentation.
+Implementer 2 now owns `camera-handoff-native-01` after the material comparison's
+explicit release. The assignment covers affected Windows/PowerShell checks,
+matched three-binary evaluation staging, and the single documented 75-second
+developed-save trace/control scroll pair. Use the reviewed scroll/cancellation/
+diagnostic source only; unqualified zoom/material candidates stay excluded.
+Require complete trace coverage, inspect actual window samples, report supported
+latency attribution and remaining gaps, then clean up, release and stop. No new
+production camera optimization is assigned. The primary source audit receipt is
+`Renderer/.cache/camera-handoff-markers-step/auditor-review.json`.
+
+Host-only work uses a verified process guard that rejects VM dispatch. A slot
+ends after exact child-process cleanup and a completion report; a timeout does
+not automatically transfer ownership.
+
+Keep each candidate as a small production-source patch with focused tests and
+private benchmark evidence. Review and integrate independently successful changes
+without waiting for both streams to finish. Changes touching the shared FRESH
+pipeline require review of overlapping sections, followed by combined zoom/pan/
+ownership checks. Stage a matching bridge/DLL/helper tuple only after that review;
+preserve existing staging/installation rules, game-session safety and references.
+No task may treat a private diagnostic gain as an installed game improvement.
+
 This review supplements the [earlier measurements](renderer_performance_audit.md)
 and [0 A.D. review](0ad_renderer_review.md). It checks the current working tree,
 including pre-existing uncommitted work. It does not implement performance fixes
@@ -21,10 +378,14 @@ deferred.
 
 ### Performance and perceptual quality target
 
-The user clarified that the target is sustained 60 FPS across supported scenes
-and actions, including realistic busy cases. Intermediate improvements do not
-complete that goal. Report missed 16.67 ms frame deadlines, stalls and time to
-the correct new view, alongside frame-time distributions.
+The current acceptance target is sustained 60 FPS for scrolling, idle animation
+and other supported activity in realistic busy scenes. The user subsequently
+accepted 40–50 FPS during zoom as good enough (20–25 ms per displayed frame);
+60 FPS zoom remains desirable. Preserve live animation and full settled quality.
+Report cadence, stalls and time to the correct/full-quality view separately:
+an acceptable average does not hide long refresh interruptions. Use 16.67 ms
+frame deadlines for scrolling and idle, and the accepted zoom band when judging
+zoom delivery. Intermediate improvements do not establish either target.
 
 The user also permits imperceptible differences and very brief detail reductions
 during transitions, such as showing a less detailed destination for a few frames
@@ -37,6 +398,26 @@ input that might otherwise prevent refinement. Preserve authoritative placement,
 visibility, selection and interaction correctness throughout. Persistent visible
 degradation does not meet this policy. These clarifications supersede stricter
 blanket statements about temporary detail reductions in earlier audit guidance.
+
+The user specifically proposed scaling the last completed image during zoom,
+then refreshing full quality as the motion settles. A private standalone prototype
+now demonstrates a substantial interaction gain, with exact settled same-process
+color checks. Native composition and sustained 60 FPS remain unqualified.
+Keep map preview transforms, authoritative anchors and hit testing aligned, with
+HUD/text/selection handled by their existing ownership contracts. Prefer current
+dynamic objects over retained static terrain where the depth/composition contract
+allows it. Zoom-out needs valid surrounding coverage; an unrelated map jump
+cannot be synthesized by stretching the previous view.
+
+Separate requested display transform from completed scene quality. Coalesce
+obsolete zoom requests, retain a valid preview while a current full-quality result
+is prepared, and prevent that expensive work from blocking presentation on the
+same GPU. Continued/reversed input must not leave the scene indefinitely stale.
+Measure input-to-display delay, displayed cadence, dynamic-state age, and both
+frames and milliseconds to settled full quality. The full-redraw benchmark remains
+a separate cost measurement. A 60 FPS transformed preview can satisfy transition
+responsiveness without requiring a fresh full-quality scene every 16.67 ms, but
+does not certify settled busy-unit, mutation, scrolling or map-jump performance.
 
 ## Evidence and limitations
 
@@ -355,20 +736,23 @@ projection zoom changes **and whenever the camera moves at any zoom other than
 exactly 1×**. Consequently, even a settled 1.25× view abandons the scrolling cache
 on the next camera step.
 
-Changing zoom requires reprojecting geometry; reusing old projected color/depth
-as if it were current would be wrong. At a fixed zoom, however, an orthographic
-camera translation is still a translation. Investigate a cache in projected
-coordinates with correct fractional phase, guarded coverage and depth offsets.
-Only reuse pixels when those conditions match. Do not round away subpixel motion
-or stretch a completed image to simulate geometry zoom.
+Full-quality zoom requires a render at the new projection. A temporary affine
+preview of retained map pixels is explicitly allowed during the transition,
+provided its coverage, dynamic-state age and recovery are measured and it is not
+reported as a fresh scene render. At a fixed zoom, an orthographic camera
+translation is still a translation. Investigate a cache in projected coordinates
+with correct fractional phase, guarded coverage and depth offsets. Preserve
+subpixel motion and distinguish transformed preview depth from current geometry.
 
 This is a potentially focused improvement beside the larger world-data work.
-Even perfect scrolling reuse will not make continuous zoom cheap: the renderer
-must also draw the fully rerasterized scene within budget.
+Full-redraw cost still matters for refinement, newly exposed content and mutations;
+presentation and refinement need separate scheduling budgets.
 
 **Acceptance:** fixed 1.25×/1.5×/3× pans match independent renders for seams,
 depth, wrap and fractional phases; distinguish reused pixels from full redraws.
-Continuous zoom must separately meet the frame budget with real geometry.
+Continuous zoom must meet the displayed-frame budget, with preview age and time
+to current full quality reported separately. Real-geometry redraw timings remain
+part of the performance report.
 
 Source: `sandbox/fresh_pipeline.h`, invalidation near line 1990 and region fill/
 restore near lines 2075–2150; `native/scene_projection.h`.
@@ -693,8 +1077,13 @@ The full uncached path must remain fast enough for continuous zoom and mutations
 | Bounded slice accepted | Immutable mesh generations and bounded view leases; canonical shared FRESH world construction | Removes duplicate equivalent-wrap construction at native 128; resident ordinary returns were already retained | Native 64, all-map appearance and complete physical GPU budgeting remain unqualified |
 | Bounded step accepted | Spatial city-light/blocker lists | Night mean reduced about 76–77% in the six-city fixture; wider qualification remains | Implemented; preserve fallback and regression coverage |
 | Bounded step accepted | Single-sample HDR aliases | Removes about 43.5 MiB of duplicate storage/copy footprint on zoom redraw; no consistent large timing gain | Implemented; preserve independent alias references and multisample resolve |
-| Next assignment | Attribute and reduce full-detail redraw cost, starting with compatible terrain/pass submission | Continuous zoom still averages about 137–148 ms with prepared meshes | Preserve pass ordering and full quality; validate GPU/queue measurements on the VM |
-| Following | Recover valid fixed-zoom scrolling reuse | Specific 1.25×+ pan cliff | Fractional pixel/depth phase and cache validity |
+| Private gain reviewed; promotion pending | Underlay coverage with early depth/stencil rejection | Saves 15.8–22.2 ms per zoom redraw and 21.6 ms at 1.25× pan | One unreproduced depth-pixel exception; two roughly one-second Present stalls remain in reported tails |
+| Private prototype reviewed; unpromoted | Affine cached-map preview with full-quality refinement | Ordinary gesture averages 21.2–21.4 ms; bounded busy case 22.4 ms | Roughly 160 ms stalls, content age up to 556 ms, native composition not wired |
+| Private experiment reviewed | Existing frame-readiness contract in the private preview presenter | Cheap preview covers observed guest refreshes; refinement still has 133–150 ms delivery gaps | Game already has this contract; private submission cadence differs from production |
+| Unqualified zoom slice; preserved | Retained static color/depth with current dynamic rendering, wired into native projected sampling | Avoids intermediate static redraws and whole-map animation freezing in the source fixture | Visible water striping; six >100 ms return intervals without new static draws; native busy comparison stopped |
+| Rejected zoom candidate | Fine-grained whole-scene refinement plan | Diagnostic establishes excessive scheduling and repeated setup | 389 batches across 390 paced opportunities take 6.606 seconds; broader color differences unresolved; isolated and unmerged |
+| Correctness fix integrated | Restore cached scenery using its actual depth basis and preserve clear depth | Removes broad baseline occlusion corruption during tested native 1× pans | Sparse edge residuals remain; no non-1× performance qualification |
+| Integrated as `37688c1f` | Keep canonical and display static regions resident independently | Full static draws reduced 36 to 18 in each matched trace | Not installed; fractional phase and preparation/presentation costs remain |
 | 3 | Indexed unit occurrence selection and shared dense-unit preparation | Many visible unit parts, main/reflected passes | Medium; native actions, incarnation and self-shadow lifetime |
 | 4 | Compact the native composition execution plan; reduce full-surface copies; batch ordered IPC and coordinate cadence | Sparse and busy live integration; input responsiveness | Medium–large; native alias/order/format contracts |
 | 5 | Bounded cold preparation, residency and native scale reuse | First jumps, city zoom, large maps and long sessions | Large; incomplete authority/residency and memory pressure |
@@ -739,8 +1128,9 @@ does not pass this contract. The existing
 tops out at 32, and older native benchmark modes must be qualified against the
 current asynchronous fresh path before their results are used.
 
-Target a 16.7 ms visual frame budget during stationary views and every supported
-action, with p50/p95/p99 and worst intervals reported separately. The older
+Target a 16.7 ms visual frame budget for stationary views and scrolling, and the
+accepted 20–25 ms band during zoom, with p50/p95/p99 and worst intervals reported
+separately. The older
 under-33 ms p95 prepared-navigation target is a historical diagnostic threshold,
 not an exception to the user's 60 FPS objective. Cold/evicted views get explicit
 first-correct-frame and full-quality timings. Report
@@ -850,3 +1240,271 @@ not establish the cause. Classify it with bounded diagnostics before treating
 native-64 as a usable acceptance workload or claiming a gameplay regression.
 Real-time navigation latency, populated unit scaling and native composition still
 need their own qualification after the standalone frame becomes fast enough.
+
+### Redraw submission: independent review
+
+The [redraw submission step](redraw_submission_step.md) passes technical review as
+a small cleanup. Skipping provably zero city emission and inheriting the body's
+bindings removes 701.77 noon / 334.78 night draws. Complete captured-frame means
+are 142.049→141.625 ms noon and 151.386→151.615 ms night. **No useful redraw speedup
+is established.** Every warmed captured frame misses 16.67 ms. The rejected
+raw-fetch terrain batch also failed to improve complete-frame time; that rejects
+the trial implementation, not all persistent batching.
+
+Independent checks matched 207 frozen source files, five binary identities,
+14 completion-linked manifests and all 1,840 evidence files (3.80 GB). All 3,690
+raw timing rows and warm mean/p95/worst/miss statistics reproduce. Ninety-six
+full BMP pairs and available D24 fields reproduce the submitted comparisons;
+zoom depth is exact, while navigation and seam each differ at one depth pixel
+per hour. The contact sheet shows no visible reduction at its displayed scale.
+Ten focused tests were rerun successfully, including the positive-control D3D
+emission proof, camera/HDR checks and mesh lifetime/budget contracts. Review
+receipts are in `.cache/redraw-submission-step/auditor-review.json` and its linked
+files. Sparse color differences remain documented; there is no global pixel
+identity, visual reference approval, staging or live-game qualification.
+
+The timestamp calibration source and results do not establish valid GPU pass
+durations: reported intervals depend on time between CPU retrievals, and several
+samples remain unavailable. Native64 fails at the existing occurrence-wave cap
+in both arms; the candidate trace shows 16,644,096 active bytes plus a 198,144-byte
+chunk exceeding 16 MiB by 65,024 bytes, with no device removal. Keep that bounded
+representation fix open. Missing historical city layout/provenance inputs also
+remain recorded rather than replaced with fabricated artifacts.
+
+**Completed diagnostic assignment:** use a private diagnostic build to distinguish raster work,
+geometry submission and common frame overhead on the corrected capture. Keep
+the full-size targets, selected geometry, source clock and normal presentation
+fixed. Compare late small-scissor raster restriction, suppressed geometry draws
+with CPU selection/bind/update work retained, and the existing whole-reflection
+omission control against the normal candidate. These are deliberately altered
+images for causal diagnosis, not acceptable production output or additive GPU
+timings. Verify which operations actually change and retain all raw durations.
+Use a small repeated matrix and stop with the supported next code intervention;
+do not build a broad telemetry system or spend another full qualification cycle
+on a marginal candidate.
+
+Conservative water-coverage selection remains plausible, but the previous
+reflection-off controls still cost 120–134 ms. Its 4.60 million reflected triangles
+do not prove that it owns most of the frame. Implementing coverage bins waits
+for useful measured opportunity on the current capture. Preserve the 64×36
+sampling margins, reflected provider/deformation bounds, order, wrap and cache
+validity if that intervention is subsequently selected. Full-quality changing
+views, populated unit scaling and native composition remain the acceptance work.
+
+### Redraw causal isolation: independent review
+
+The [causal step](redraw_causal_step.md) passes independent review. Normal complete
+redraw costs 134.346 ms noon / 145.850 ms night. Empty late geometry scissors
+reduce this to 26.269/28.189 ms; suppressing those draws reduces it to
+23.929/23.470 ms. The altered outputs are deliberately blank, and drivers may
+eliminate geometry work as well as fragments. The results do not attribute
+108–118 ms solely to pixel shaders or prove a quality-preserving path to 60 FPS.
+Whole-reflection omission saves 12.842/16.268 ms. A constant main-ground material
+probe saves about 10.6 ms while retaining depth. None is a production improvement.
+
+Independent raw-log, hash, work-ledger and image/depth calculations reproduce the
+results; four focused tests pass. The 39,600 verified scissor scopes belong to
+separate instrumented runs, not primary timings; that wording is corrected in
+the report. Evidence and the review receipt remain in
+`.cache/redraw-causal-step/`.
+
+The next bounded intervention targets terrain representation. Detailed patches
+default to 64 subdivisions per side, while ordinary flat interiors already use
+16 or fewer. Main natural terrain, decals and mountains account for roughly
+1.76 million, 798,000 and 665,000 triangles respectively, with similar material
+geometry submitted again for reflection. Compare the existing 32/16 lattice
+controls against full quality before writing a new LOD system. Meaningful
+complete-frame savings, followed by projected-error and appearance checks, are
+the gate to one production candidate. Stable world ownership, accurate edges
+and full material/effect output stay required. If the opportunity is small,
+stop that branch; do not spend a qualification cycle polishing it. The exact
+assignment and remaining limitations are in the causal report above.
+
+### Terrain density: independent review
+
+The [density step](redraw_density_step.md) passes review as a bounded experiment;
+its candidate is not promoted. Global 16-subdivision geometry cuts total
+submitted triangles from about 10.0 to 4.7 million and saves 27.705/26.007 ms
+noon/night, but visibly changes the terrain. The refinement candidate removes
+only about 7.5% of triangles and saves 5.225/3.958 ms, with no consistent tail
+improvement and slower preparation. Three executable tests pass; independent
+timing, identity, work/ownership and six image/depth comparisons reproduce the
+report. Review receipts remain with the evidence. Hill-decal geometry also scales
+with its receiver lattice; the prior expectation that it would stay unchanged
+under global coarsening is corrected.
+
+The next intervention targets hidden shading. `draw_scene` first draws the
+underlay through the extensive hydrology `PSMain`, then replacement natural
+terrain/mountains. The earlier ~10 ms probe altered only the latter ground
+shader. A small constant-underlay diagnostic will establish this layer's cost
+before one conservative coverage/depth implementation. Preserve the original
+underlay wherever it contributes through coastlines or partial transparency.
+Do not equate a constant-color or omitted-layer diagnostic with a production
+gain. More LOD tuning and smaller material endpoint work remain deferred.
+
+### Terrain underlay: independent review
+
+The [underlay step](redraw_underlay_step.md) passes review as a diagnostic and
+rejected implementation. Full-density normal→constant-shader means are
+141.710→77.086 ms noon and 152.212→85.235 ms night. Geometry, work rows and D24
+remain exact, but coast/river/lake colors are visibly wrong. These deltas include
+visible and hidden underlay shading; they are not guaranteed recoverable savings.
+
+The conservative stencil/depth candidate is 3.322 ms slower than its matched
+control and remains unpromoted. Its sampled output is close with exact D24, but
+it adds roughly 3 million triangles and 1,168 draws per frame. Actual S8 coverage
+at use and reduced shader invocations remain unknown. Independent timing,
+source/evidence identities, full-row ownership/work and six color/depth comparisons
+reproduce the report; the 24-case D3D test passes on rerun.
+
+One bounded follow-up will capture the real mask before it is overwritten, verify
+state/shader bindings and test whether rejection occurs before expensive shading.
+If supported, correct the dedicated opaque underlay entry; do not annotate the
+discard-based coverage shaders for early stencil updates. No further general LOD
+or prepass redesign is assigned. Full-quality continuous zoom remains around
+7 FPS, and even the invalid constant-shader output is far above 16.67 ms.
+
+### Underlay rejection correction: independent review
+
+The [follow-up](redraw_underlay_rejection_step.md) establishes actual mask coverage
+of 36.5–42.8% of underlay pixels and useful early rejection on the VM. The private
+correction reduces mean full redraws from 139.376 to 123.546 ms at noon and
+151.280 to 129.037 ms at night. Fixed 1.25× pan improves from 133.875 to
+112.257 ms; retained 1× pan stays about 21 ms. Every warmed expensive frame
+still misses 16.67 ms. Two roughly one-second candidate Present stalls remain
+included and unexplained.
+
+Independent review verifies 1,275 evidence files, source/binary identities,
+2,880 raw timings, all distributions, 93 image/depth comparisons, ownership
+multiplicity, actual masks/bindings and the shader's sole early-test flag change.
+Both focused D3D tests pass on rerun. The frame141 depth exception is confirmed
+and did not reproduce; its cause remains unknown. Keep the candidate preserved
+and unpromoted while the next assignment works from C7. This closes the bounded
+underlay investigation for now.
+
+The next assignment must measure wall-clock zoom input, visible presentation
+cadence, displayed scale, dynamic-state age and time to current full quality.
+Exercise refinement overlapping new/reversed input: submitting an expensive
+frame to the same GPU can stall the preview. Existing output scaling, retained
+composition, elapsed-time zoom and presented-only picking provide starting
+points. A cheap isolated texture stretch is only an initial performance control.
+Keep the scope to one zoom implementation; fixed-zoom scrolling, many-unit
+preparation and cold map jumps retain their separate work and qualification.
+
+### Retained-image zoom preview: independent review
+
+The [prototype](zoom_preview_step.md) demonstrates the user's proposed interaction
+gain. Review verified 1,320 evidence files, 193 unchanged runtime sources, both
+219-file candidate/QA snapshots and binary identities. Independent calculations
+reproduce 1,528 frame records across 18 runs, per-run and pooled distributions,
+input/recovery timing, source age and eight color/depth comparisons. All six new
+policy/WARP tests pass on rerun. Same-process settled RGBA is exact; native
+HUD/fog/picking integration remains future work.
+
+Ordinary full-trace intervals fall from 55.1/52.9 ms to 21.2/21.4 ms noon/night;
+the busy case falls from 78.3 to 22.4 ms. These traces mix motion and holds.
+During ordinary input, candidate intervals average 24.3/23.8 ms. Whole-map
+animation remains frozen between refreshes, including settled holds; the 250 ms
+refresh-due threshold allows actual age up to 556 ms. Sixteen admitted moving
+actors plus four original actors are a useful bounded test, below the planned
+32/64/128 visible-body qualification. The prototype remains unpromoted.
+
+The synchronous redraw/snapshot call costs 26.59 ms on average and reaches
+56.33 ms. However, the largest 140–161 ms gaps occur in later presentation calls,
+after the EVENT reports ready. For example, noon block A reports ready at
+677.954 ms; a later no-redraw presentation spans 698.844–858.644 ms. That pattern
+does not identify the cause or validate an isolated GPU duration. Frozen preview
+also misses refreshes with 35–36 ms tails.
+
+This review led to the frame-readiness experiment below. The old witness's
+`present_ms` covered its output/presentation wrapper, not an isolated DXGI call;
+the new four-phase split corrects that attribution.
+
+### Private presentation admission: independent review
+
+The [completed experiment](zoom_presentation_step.md) preserves the existing
+renderer and refinement policy while using waitable maximum-one-latency admission
+in its private HWND presenter. Independent review verifies 728 evidence files
+(791,699,208 bytes), 193 unchanged runtime sources, 221 private sources, the
+219-source preceding snapshot and two binaries. Raw logs and both CSVs reproduce
+all 97,501 records across 22 quiet runs, observation timelines, pooled statistics,
+quality recovery and source age. All four host permit tests pass on rerun.
+The reported 29-test run includes WARP/composition checks; independent GPU reruns
+are deferred while Implementer 2 holds the VM. The review receipt is
+`Renderer/.cache/zoom-presentation-step/auditor-review.json`.
+
+Cheap preview observations average 16.668/16.674 ms noon/night, with no skipped
+observed refreshes and worst intervals below 18.7 ms. With refinement, means are
+18.894/19.152 ms and worst intervals 133.342/149.943 ms. Refresh/image-ID steps
+establish at least 20/23 opportunities without a new image in those paired runs.
+Busy refinement reaches a 150.015 ms observed interval and a 164.213 ms admission
+wait. Source age reaches about 540 ms, so independently fresh animation is still
+required. Guest observations do not establish host physical scanout; control
+observations can miss intermediate deliveries, and final submission delivery
+remains unclosed after the bounded observation tail.
+
+The private candidate submits thousands of held images, with roughly 0.23 ms
+cheap API return intervals. Those returns are not displayed FPS. The game already
+combines the readiness permit with `VisualCadence` and unchanged-frame suppression.
+Consequently this is a reviewed private experiment, not a qualified production
+improvement. The next comparison must use that production scheduling behavior in
+both arms. Include a small paced synchronous-refinement control before attributing
+any remaining gap to the proposed resumable renderer.
+
+Exact deadline counts should compare integer QPC differences against the clock
+frequency. Floating subtraction changes one control count at exactly 1/60 second
+(64 versus 65); this does not affect the cadence or long-stall conclusions.
+Corrected setup/output/capture/Present phases place cheap control cost mostly in
+output drawing and candidate stalls in admission. They do not identify which GPU
+operation caused backpressure. Candidate full redraw/snapshot submission averages
+about 11.8 ms and reaches 29.4 ms; GPU batch duration remains unmeasured.
+
+The next zoom slice should implement a resumable full-quality job through shared
+production drawing routines. Bound examined records, issued work and nested
+vegetation batches; keep depth/color ordering and immutable job inputs. Present
+the newest valid preview before submitting more refinement, allow at most one
+bounded refinement batch outstanding, and publish only a completed coherent result.
+Use observed frame deadlines and source recovery to judge success. If one
+indivisible operation still blocks presentation, identify that operation before
+expanding the refactor. Native preview integration and fresh dynamics follow;
+no game staging is qualified by the presentation experiment alone.
+
+### Parallel scrolling: native handoff qualification
+
+Implementer 2's reviewed patch adds fixed-projection static-region reuse with
+integral projected shifts and safe fractional-phase fallback. It is integrated
+as a bounded retained-depth correctness improvement; no binary staging or game
+installation occurred. Normal settled zoom targets
+are 1, 1.25, 1.5, 1.75, 2, 2.5 and 3; transient scales remain separate controls.
+
+Source review and the corrected camera pilot confirm two conflicting uses of the single FRESH
+pipeline: native camera preparation calls `c3x_renderer64_render_fresh` at default
+1×, while retained projected composition later supplies display zoom. Native
+preparation discards the retained non-1× raster. All six preparation and six
+display stages fully draw static scenery, with no scrolling restores. Occurrence
+membership also affects the geometry epoch, independently of projection thrash.
+The five changing-view quiet samples average 264.82 ms candidate versus 277.90 ms
+control through the first completed draw/Present call. They do not establish a
+reliable speedup, continuous FPS or physical display delivery. No units execute
+in this pilot; busy actors, night and injected gameplay remain unmeasured.
+
+Independent review verifies five run/source/binary/shader identities, raw timing
+summaries and 18 color/depth comparisons, plus both focused host tests on rerun.
+The positive 4/2 pan baseline has 2,643,796 changed depth samples and visibly loses
+farm/route regions. Using the captured depth basis and preserving clear depth
+reduces that to 187,984 samples, all but 31 differing by one D24 code. Candidate
+mean absolute BGRA error is 0.01427 versus 9.21710 for control. Sparse edge and
+coverage residuals remain; exact output is not claimed. The reviewed hardware
+test exercises 18 sample-preserving restore cases and failing legacy controls;
+it was not rerun during Implementer's exclusive VM reservation. Evidence and
+scope are in [the scrolling step](scroll_reuse_step.md); the independent receipt
+is `Renderer/.cache/scroll-reuse-review/auditor-review.json`.
+
+The next implementation retains exactly two static regions: canonical 1× and one
+current display projection, with one shared world, asset owner and drawing path.
+Viewport restore scratch and reflections remain shared with explicit writer
+validity. Lazy display storage adds 54.599 MiB at the measured one-sample layout.
+Canonical native publication remains a completed owned image for save/restore
+and camera retirement. Normal 4/2 movement at 1.25× still has fractional projected
+Y; removing projection thrash does not by itself eliminate that display redraw.
+Measure both causes rather than treating two caches as a 60 FPS solution.
