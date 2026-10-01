@@ -2112,3 +2112,17 @@ is suppressed during native city spotlight; exact centering remains allowed.
 The move-camera wrapper delegates immediately with unchanged arguments when
 custom rendering is off. No new patch capability or table entry is required.
 `required_user_action: []`.
+
+## Bounded worker HUD composition (2026-09-30)
+
+- Existing symbols: `Main_Screen_Form_draw_city_hud`,
+  `Unit_draw_map_status`, `Sprite_draw_map_unit_marker`, `MapMessage_draw`,
+  and the existing JGL transfer hooks supply the same lexical HUD scopes,
+  screen anchors and ordered native commands.
+- `Session::world/world_end` compiles those commands into a generation-owned
+  packed/full-color pair recipe instead of retaining a backdrop per primitive.
+  Saved native versions, clipping, paired self-copy, partial commits and
+  config-off delegation use their existing contracts.
+- No injected source, native signature, patch capability or address changes.
+- `required_user_action`: none. See
+  [bounded HUD composition](bounded_hud_composition.md) for ownership and tests.
