@@ -2,6 +2,7 @@
 #include <fstream>
 #include "pass_workload.h"
 #include "scroll_region.h"
+#include "static_raster_state.h"
 #include <limits>
 #include <sstream>
 #include "../native/gpu_territory_borders.h"
@@ -981,7 +982,12 @@ struct SandboxFreshPipeline {
     c3x_renderer::GpuCitySiteOverlay city_site_overlay;
     SandboxBloom bloom;
     c3x_renderer::render_core::LinearTarget static_cache;
-    c3x_renderer::render_core::LinearTarget static_region;
+    using StaticRasters=c3x_renderer::render_core::StaticRasterStates<c3x_renderer::render_core::LinearTarget>;
+    StaticRasters static_rasters;
+    // Slot selection is fixed for this synchronous draw. A resumable owner must
+    // capture this slot address before its batches and hold it through retirement.
+    auto& current_raster(){return static_rasters.current();}
+    auto& static_region(){return current_raster().region;}
     c3x_renderer::render_core::LinearTarget material_albedo;
     SandboxMaterialChannel material_normal,material_world;
     c3x_renderer::render_core::LinearTarget terrain_albedo;
@@ -1016,26 +1022,15 @@ struct SandboxFreshPipeline {
     float display_zoom=1.f,projection_zoom=1.f;
     float reflection_scale=1;
     unsigned depth_copies=0,cache_scrolls=0,cache_full_draws=0;
-    // Fractional phase, guard, scene, environment, lights, shadow, depth,
-    // anchor transform, executed strip fills, diagnostic reset, projection.
-    std::array<unsigned,11> scroll_reasons{};
     c3x_renderer::TerritoryBorders territory_borders;
     unsigned reflection_reuses=0,reflection_draws=0;
     float visual_hour=12.f,visual_sun_intensity=0.f,previous_hour=-1.f;
     int previous_season=INT_MIN;
-    std::uint64_t static_signature=0;
-    std::uint64_t reflection_signature=0;
-    unsigned static_shadow_builds=0;
-    unsigned reflection_shadow_builds=0;
-    int static_camera_x=0,static_camera_y=0;
-    int region_camera_x=0,region_camera_y=0;
-    float region_depth_translation=0,static_depth_translation=0;
-    std::array<float,2> region_translation{};
-    std::int64_t region_depth_origin=0;
-    std::vector<c3x_renderer::city_fidelity::Lighting const*> region_lighting;
-    D3D11_RECT region_covered{};
-    int reflection_camera_x=0,reflection_camera_y=0;
-    bool static_valid=false;
+    std::uint64_t lighting_revision=0;
+    std::vector<c3x_renderer::city_fidelity::Lighting const*> selected_lighting;
+    bool resident_water_scene=false;
+    c3x_renderer::render_core::RasterScratchIdentity reflection_key,reflected_terrain_key;
+    bool reflection_dynamic_written=false;
     bool material_valid=false;
     std::uint64_t material_signature=0;
     int material_camera_x=0,material_camera_y=0;
@@ -1043,8 +1038,6 @@ struct SandboxFreshPipeline {
     std::uint64_t terrain_material_signature=0;
     int terrain_material_camera_x=0,terrain_material_camera_y=0;
     bool reflected_terrain_material_valid=false;
-    std::uint64_t reflected_terrain_material_signature=0;
-    int reflected_terrain_camera_x=0,reflected_terrain_camera_y=0;
     bool reflection_valid=false;
     double phases[6]={};
     bool active=false;
@@ -1077,9 +1070,9 @@ struct SandboxFreshPipeline {
             ViewportShaderSettings const& reflected,int width,int height,int next_wrap_pixels) {
         if (resident_signature!=scene_revision() ||
                 wrap_pixels!=next_wrap_pixels) {
-            if(cache_full_draws)++scroll_reasons[2];
+            static_rasters.invalidate_all(c3x_renderer::render_core::raster_scene);
             visibility_valid=false;
-            static_valid=false;
+            reflection_valid=false;reflected_terrain_material_valid=false;
             resident={};content_lease=renderer.geometry_content;wrap_pixels=next_wrap_pixels;
             for (unsigned layer=0;layer<geometry_layer_count;++layer) {
 #ifdef C3X_RENDERER64_FRESH
@@ -1097,6 +1090,11 @@ struct SandboxFreshPipeline {
             resident_signature=scene_revision();
             ++resident_builds;
             shadow.signature=0;
+        }
+        if(resident_water_scene!=renderer.water_scene_active){
+            static_rasters.invalidate_all(c3x_renderer::render_core::raster_classification);
+            resident_water_scene=renderer.water_scene_active;
+            reflection_valid=false;reflected_terrain_material_valid=false;
         }
         std::array<std::uint64_t,5> scene_key={scene_revision(),
             std::uint64_t(next_wrap_pixels),std::uint64_t(width),
@@ -1152,12 +1150,12 @@ struct SandboxFreshPipeline {
             aquatic_depth:renderer.depth_state,0);
         context->OMSetBlendState(renderer.blend_state,nullptr,0xffffffffu);
         context->RSSetState(renderer.rasterizer_state);
-        bool region_target=target==static_region.target ||
+        bool region_target=target==static_region().target ||
             target==material_albedo.target || target==terrain_albedo.target;
         D3D11_VIEWPORT viewport={0,0,float(mirrored?reflection.width:
-                region_target?static_region.width:glow.linear.width),
+                region_target?static_region().width:glow.linear.width),
             float(mirrored?reflection.height:
-                region_target?static_region.height:glow.linear.height),0,1};
+                region_target?static_region().height:glow.linear.height),0,1};
         c3x_renderer::SceneProjection(renderer.content_view_width,renderer.content_view_height,projection_zoom)
             .viewport(viewport,mirrored?8.f:4.f,region_target?float(region_margin_x):0.f,
                 region_target?float(region_margin_y):0.f,scale);
@@ -1423,12 +1421,12 @@ struct SandboxFreshPipeline {
         context->OMSetDepthStencilState(renderer.depth_state,0);
         context->OMSetBlendState(renderer.blend_state,nullptr,0xffffffffu);
         context->RSSetState(renderer.rasterizer_state);
-        bool region_target=target==static_region.target ||
+        bool region_target=target==static_region().target ||
             target==material_albedo.target || target==terrain_albedo.target;
         D3D11_VIEWPORT viewport={0,0,float(mirrored?reflection.width:
-                region_target?static_region.width:glow.linear.width),
+                region_target?static_region().width:glow.linear.width),
             float(mirrored?reflection.height:
-                region_target?static_region.height:glow.linear.height),0,1};
+                region_target?static_region().height:glow.linear.height),0,1};
         c3x_renderer::SceneProjection(renderer.content_view_width,renderer.content_view_height,projection_zoom)
             .viewport(viewport,mirrored?8.f:4.f,region_target?float(region_margin_x):0.f,
                 region_target?float(region_margin_y):0.f,scale);
@@ -1719,8 +1717,8 @@ struct SandboxFreshPipeline {
             float(frame.hour);
         visual_hour=hour;
         if(previous_hour==hour && previous_season==frame.season)return;
-        if(previous_hour!=-1.f)++scroll_reasons[3];
-        static_valid=false;reflection_valid=false;
+        static_rasters.invalidate_all(c3x_renderer::render_core::raster_environment);
+        ++lighting_revision;reflection_valid=false;reflected_terrain_material_valid=false;
         previous_hour=hour;previous_season=frame.season;
         auto environment=c3x_renderer::evaluate_environment(hour,frame.season);
         visual_sun_intensity=environment.sun_intensity;
@@ -1766,11 +1764,11 @@ struct SandboxFreshPipeline {
             }
         // Selected immutable generations own these light payloads. Changing the
         // field can relight already covered pixels even if shadows still fit.
-        if(selected!=region_lighting){
-            if(cache_full_draws)++scroll_reasons[4];
-            static_valid=false;reflection_valid=false;
+        if(selected!=selected_lighting){
+            static_rasters.invalidate_all(c3x_renderer::render_core::raster_lights);
+            ++lighting_revision;reflection_valid=false;reflected_terrain_material_valid=false;
         }
-        region_lighting=selected;
+        selected_lighting=selected;
         return renderer.cities.lights(renderer.context,selected);
     }
     bool ensure_linear_target(c3x_renderer::render_core::LinearTarget& target,
@@ -1805,10 +1803,12 @@ struct SandboxFreshPipeline {
         unsigned reflection_height=unsigned((height+8)*reflection_scale);
         unsigned region_width=width+2*region_margin_x;
         unsigned region_height=height+2*region_margin_y;
-        if(static_cache.width!=width || static_cache.height!=height ||
-            static_cache.sample_count!=scene_samples)static_valid=false;
-        if(static_region.width!=region_width || static_region.height!=region_height)
-            static_valid=false;
+        static_rasters.set_layout(width,height,scene_samples);
+        if(static_region().width!=region_width || static_region().height!=region_height ||
+                static_region().sample_count!=scene_samples)
+            static_rasters.invalidate(static_rasters.selected,c3x_renderer::render_core::raster_layout);
+        if(static_cache.width!=width || static_cache.height!=height || static_cache.sample_count!=scene_samples)
+            static_rasters.begin_restore();
         if(reflection.width!=reflection_width || reflection.height!=reflection_height){
             reflection_valid=false;
             reflected_terrain_material_valid=false;
@@ -1823,7 +1823,7 @@ struct SandboxFreshPipeline {
         }
         if(!ensure_linear_target(static_cache,width*scene_scale,
                 height*scene_scale,scene_samples,true) ||
-           !ensure_linear_target(static_region,region_width*scene_scale,
+           !ensure_linear_target(static_region(),region_width*scene_scale,
                 region_height*scene_scale,scene_samples,false) ||
            !static_restore.ensure(renderer.device,scene_samples))
             return false;
@@ -1914,13 +1914,24 @@ struct SandboxFreshPipeline {
         terrain_material_valid=true;
         return true;
     }
+    c3x_renderer::render_core::RasterScratchIdentity reflection_writer(
+            ViewportShaderSettings const& settings,D3D11_RECT rect)const{
+        c3x_renderer::render_core::RasterScratchIdentity key;
+        key.scene={scene_revision(),renderer.tile_geometry_epoch,
+            std::uint64_t(renderer.scene_depth_origin),lighting_revision,shadow.builds,
+            std::uint64_t(camera_x),std::uint64_t(camera_y),reflection.width,
+            reflection.height,scene_samples};
+        key.view={projection_zoom,reflection_scale,settings.translation[0],
+            settings.translation[1],settings.depth_translation,renderer.reflection.height_pixels,
+            settings.inverse_size[0],settings.inverse_size[1],visual_hour,float(previous_season)};
+        key.area={rect.left,rect.top,rect.right,rect.bottom};return key;
+    }
     bool prepare_reflected_terrain_material(ViewportShaderSettings const& settings,
             D3D11_RECT rect) {
         SandboxPassWorkload::Scope pass(work,SandboxPassWorkload::reflection_material);
-        if(reflected_terrain_material_valid &&
-           reflected_terrain_material_signature==scene_revision() &&
-           reflected_terrain_camera_x==camera_x &&
-           reflected_terrain_camera_y==camera_y)return true;
+        auto key=reflection_writer(settings,rect);
+        if(reflected_terrain_material_valid && reflected_terrain_key==key)return true;
+        reflected_terrain_material_valid=false;
         auto* context=renderer.context;
         float clear[4]={};
         context->ClearRenderTargetView(reflected_terrain_albedo.target,clear);work.clear(reflected_terrain_albedo.target);
@@ -1935,9 +1946,7 @@ struct SandboxFreshPipeline {
                     reflected_terrain_albedo.target,reflected_terrain_albedo.depth,
                     true,reflection_scale,true))return false;
         context->OMSetRenderTargets(0,nullptr,nullptr);
-        reflected_terrain_material_signature=scene_revision();
-        reflected_terrain_camera_x=camera_x;reflected_terrain_camera_y=camera_y;
-        reflected_terrain_material_valid=true;
+        reflected_terrain_key=key;reflected_terrain_material_valid=true;
         return true;
     }
     void relight_reflected_terrain() {
@@ -1973,11 +1982,11 @@ struct SandboxFreshPipeline {
     void relight_terrain(D3D11_RECT rect) {
         SandboxPassWorkload::Scope pass(work,SandboxPassWorkload::relight);
         auto* context=renderer.context;
-        context->OMSetRenderTargets(1,&static_region.target,static_region.depth);
+        context->OMSetRenderTargets(1,&static_region().target,static_region().depth);
         context->OMSetBlendState(renderer.blend_state,nullptr,0xffffffffu);
         context->OMSetDepthStencilState(renderer.depth_state,0);
         context->RSSetState(renderer.rasterizer_state);
-        D3D11_VIEWPORT viewport={0,0,float(static_region.width),float(static_region.height),0,1};
+        D3D11_VIEWPORT viewport={0,0,float(static_region().width),float(static_region().height),0,1};
         context->RSSetViewports(1,&viewport);
         context->RSSetScissorRects(1,&rect);
         context->IASetInputLayout(nullptr);
@@ -2000,11 +2009,11 @@ struct SandboxFreshPipeline {
     }
     void relight_underlay(D3D11_RECT rect) {
         auto* context=renderer.context;
-        context->OMSetRenderTargets(1,&static_region.target,nullptr);
+        context->OMSetRenderTargets(1,&static_region().target,nullptr);
         context->OMSetBlendState(nullptr,nullptr,0xffffffffu);
         context->OMSetDepthStencilState(nullptr,0);
         context->RSSetState(renderer.rasterizer_state);
-        D3D11_VIEWPORT viewport={0,0,float(static_region.width),float(static_region.height),0,1};
+        D3D11_VIEWPORT viewport={0,0,float(static_region().width),float(static_region().height),0,1};
         context->RSSetViewports(1,&viewport);
         context->RSSetScissorRects(1,&rect);
         context->IASetInputLayout(nullptr);
@@ -2024,7 +2033,7 @@ struct SandboxFreshPipeline {
         ID3D11ShaderResourceView* empty[3]={};
         context->PSSetShaderResources(116,3,empty);
         context->OMSetRenderTargets(0,nullptr,nullptr);
-        context->CopyResource(static_region.depth_texture,material_albedo.depth_texture);work.copy(static_region.depth_texture,true);
+        context->CopyResource(static_region().depth_texture,material_albedo.depth_texture);work.copy(static_region().depth_texture,true);
     }
     bool reconstruct() {
         SandboxPassWorkload::Scope pass(work,SandboxPassWorkload::reconstruction);
@@ -2046,7 +2055,10 @@ struct SandboxFreshPipeline {
             scroll_diagnostics,sizeof(scroll_diagnostics)) && scroll_diagnostics[0]=='1';
         auto scroll_before=cache_scrolls,full_before=cache_full_draws;
 
-        auto fail=[](char const* stage){
+        auto fail=[this](char const* stage){
+            static_rasters.invalidate_all(c3x_renderer::render_core::raster_error);
+            reflection_valid=false;reflected_terrain_material_valid=false;
+            material_valid=false;terrain_material_valid=false;
             renderer.trace.write("fresh-draw-failed",stage,true);
             std::printf("SANDBOX_DRAW_ERROR stage=%s\n",stage);
             std::fflush(stdout);
@@ -2055,7 +2067,15 @@ struct SandboxFreshPipeline {
         LARGE_INTEGER frequency{},ticks[7]={};
         QueryPerformanceFrequency(&frequency);QueryPerformanceCounter(&ticks[0]);
         int width=renderer.content_view_width,height=renderer.content_view_height;
-        if (!renderer.device || !renderer.context || width<1 || height<1) return false;
+        if (!renderer.device || !renderer.context || width<1 || height<1)return fail("viewport");
+        if(!std::isfinite(next_zoom))return fail("projection");
+        float zoom=std::clamp(next_zoom,c3x_renderer::SceneProjection::minimum,c3x_renderer::SceneProjection::maximum);
+        if(projection_zoom!=zoom){
+            reflection_valid=false;reflected_terrain_material_valid=false;
+            material_valid=false;terrain_material_valid=false;
+        }
+        projection_zoom=zoom;display_zoom=1.f;
+        auto& raster=static_rasters.select(projection_zoom);
         bool cold_setup=!visual.installed;LARGE_INTEGER setup[4]={};
         QueryPerformanceCounter(&setup[0]);
         if (!visual.install()) return fail("visual_setup");QueryPerformanceCounter(&setup[1]);
@@ -2107,12 +2127,7 @@ struct SandboxFreshPipeline {
         renderer.geometry_viewport_settings.translation[1]+=float(next_camera_y-camera_y);
         renderer.geometry_viewport_settings.depth_translation+=float(next_camera_y-camera_y);
 #endif
-        if(projection_zoom!=next_zoom){
-            if(cache_full_draws)++scroll_reasons[10];
-            static_valid=false;reflection_valid=false;reflected_terrain_material_valid=false;
-        }
         camera_x=next_camera_x;camera_y=next_camera_y;
-        projection_zoom=std::clamp(next_zoom,c3x_renderer::SceneProjection::minimum,c3x_renderer::SceneProjection::maximum);display_zoom=1.f;
         renderer.water_material=c3x_renderer::render_core::water_material_frame(frame);
         int water_camera_x=frame.world_wrap_x && frame.world_width_tiles>0?
             camera_x%(frame.world_width_tiles*frame.tile_width/2):camera_x;
@@ -2134,34 +2149,39 @@ struct SandboxFreshPipeline {
             frame.world_width_tiles*frame.tile_width/2:0;
         if (!capture(settings,reflected,int(w),int(h),next_wrap_pixels))return fail("visibility_capture");
         auto region_shift=c3x_renderer::render_core::StaticRegionShift::between(
-            projection_zoom,camera_x,camera_y,region_camera_x,region_camera_y,
+            projection_zoom,camera_x,camera_y,current_raster().camera_x,current_raster().camera_y,
             region_margin_x,region_margin_y);
-        bool recenter_region=!static_valid ||
-            static_signature!=scene_revision() ||
-            region_depth_origin!=renderer.scene_depth_origin ||
-            settings.translation[0]!=region_translation[0]+float(std::int64_t(camera_x)-region_camera_x) ||
-            settings.translation[1]!=region_translation[1]+float(std::int64_t(camera_y)-region_camera_y) ||
+        bool recenter_region=!current_raster().valid ||
+            current_raster().signature!=scene_revision() ||
+            current_raster().geometry_epoch!=renderer.tile_geometry_epoch ||
+            current_raster().lighting_revision!=lighting_revision ||
+            current_raster().environment_hour!=visual_hour ||
+            current_raster().environment_season!=previous_season ||
+            current_raster().depth_origin!=renderer.scene_depth_origin ||
+            settings.translation[0]!=current_raster().translation[0]+float(std::int64_t(camera_x)-current_raster().camera_x) ||
+            settings.translation[1]!=current_raster().translation[1]+float(std::int64_t(camera_y)-current_raster().camera_y) ||
             !region_shift.reusable;
         if(recenter_region){
             if(cache_full_draws){
-                if(static_valid && region_shift.reason==c3x_renderer::render_core::StaticRegionShift::fractional_phase)++scroll_reasons[0];
-                if(static_valid && region_shift.reason==c3x_renderer::render_core::StaticRegionShift::guard_bounds)++scroll_reasons[1];
-                if(region_depth_origin!=renderer.scene_depth_origin)++scroll_reasons[6];
-                if(settings.translation[0]!=region_translation[0]+float(std::int64_t(camera_x)-region_camera_x) ||
-                        settings.translation[1]!=region_translation[1]+float(std::int64_t(camera_y)-region_camera_y))++scroll_reasons[7];
+                if(current_raster().valid && region_shift.reason==c3x_renderer::render_core::StaticRegionShift::fractional_phase)++raster.metrics.reasons[c3x_renderer::render_core::raster_fractional_phase];
+                if(current_raster().valid && region_shift.reason==c3x_renderer::render_core::StaticRegionShift::guard_bounds)++raster.metrics.reasons[c3x_renderer::render_core::raster_guard_bounds];
+                if(current_raster().depth_origin!=renderer.scene_depth_origin)++raster.metrics.reasons[c3x_renderer::render_core::raster_depth_origin];
+                if(settings.translation[0]!=current_raster().translation[0]+float(std::int64_t(camera_x)-current_raster().camera_x) ||
+                        settings.translation[1]!=current_raster().translation[1]+float(std::int64_t(camera_y)-current_raster().camera_y))++raster.metrics.reasons[c3x_renderer::render_core::raster_anchors];
             }
-            static_valid=false;
-            region_camera_x=camera_x;region_camera_y=camera_y;
+            current_raster().valid=false;
+            static_rasters.begin_restore();
+            current_raster().camera_x=camera_x;current_raster().camera_y=camera_y;
         }
         auto region_settings=settings;
-        region_settings.translation[0]+=float(region_margin_x-(camera_x-region_camera_x));
-        region_settings.translation[1]+=float(region_margin_y-(camera_y-region_camera_y));
+        region_settings.translation[0]+=float(region_margin_x-(camera_x-current_raster().camera_x));
+        region_settings.translation[1]+=float(region_margin_y-(camera_y-current_raster().camera_y));
         // Captured world depth can stay constant while screen anchors move.
         // Refill in the retained basis, then translate to the current basis.
-        region_settings.depth_translation=static_valid?
-            region_depth_translation:settings.depth_translation;
-        region_settings.inverse_size[0]=1.f/static_region.width;
-        region_settings.inverse_size[1]=1.f/static_region.height;
+        region_settings.depth_translation=current_raster().valid?
+            current_raster().depth_translation:settings.depth_translation;
+        region_settings.inverse_size[0]=1.f/static_region().width;
+        region_settings.inverse_size[1]=1.f/static_region().height;
         D3D11_RECT region_rect={region_margin_x,region_margin_y,
             LONG(region_margin_x+w),LONG(region_margin_y+h)};
         if(!update_city_lights() || !shadow.render(all_visible,scene_revision(),visibility_revision))return fail("lights_or_shadow");
@@ -2175,13 +2195,12 @@ struct SandboxFreshPipeline {
         auto mirror=reflected_water_bounds(settings,int(w),int(h));
         work.pass=SandboxPassWorkload::reflection_scene;
         if (renderer.reflection.enabled && mirror.left<mirror.right && mirror.top<mirror.bottom) {
-            bool redraw=!reflection_valid ||
-                reflection_signature!=scene_revision() ||
-                reflection_shadow_builds!=shadow.builds ||
-                reflection_camera_x!=camera_x || reflection_camera_y!=camera_y;
+            auto key=reflection_writer(reflected,mirror);
+            bool redraw=!reflection_valid || reflection_key!=key;
             if(!redraw){++reflection_reuses;if(work.enabled)++work.row().reuses;}
             else {
             if(work.enabled)++work.row().rebuilds;
+            reflection_valid=false;
             ID3D11ShaderResourceView* none=nullptr;
             renderer.context->PSSetShaderResources(121,1,&none);
             if(!prepare_reflected_terrain_material(reflected,mirror))return fail("reflected_terrain");
@@ -2193,17 +2212,15 @@ struct SandboxFreshPipeline {
             if(!draw_scene(reflection_visible,reflected,mirror,reflection_static.target,
                     reflection_static.depth,true,reflection_scale,false,true))return fail("reflection_scene");
             renderer.context->OMSetRenderTargets(0,nullptr,nullptr);
-            reflection_signature=scene_revision();
-            reflection_shadow_builds=shadow.builds;
-            reflection_camera_x=camera_x;reflection_camera_y=camera_y;
-            reflection_valid=true;
+            reflection_key=key;reflection_valid=true;
             ++reflection_draws;
             }
-            if(redraw || units
+            bool dynamic_reflection=units
 #ifdef C3X_RENDERER64_FRESH
                 || !renderer.fresh_unit_poses.empty()
 #endif
-                ){
+                ;
+            if(redraw || dynamic_reflection || reflection_dynamic_written){
                 renderer.context->OMSetRenderTargets(0,nullptr,nullptr);
                 renderer.context->CopyResource(reflection.color,reflection_static.color);work.copy(reflection.color,true);
                 renderer.context->CopyResource(reflection.depth_texture,reflection_static.depth_texture);work.copy(reflection.depth_texture,true);
@@ -2215,43 +2232,52 @@ struct SandboxFreshPipeline {
             if(units && !sandbox_direct_units.draw(frame,unit_x,unit_y,
                     incarnation,viewer,unit_visible,camera_x,camera_y,reflection,
                     reflection_scale,next_zoom,visual_hour,true))return fail("reflected_units");
+            reflection_dynamic_written=dynamic_reflection;
         }
         QueryPerformanceCounter(&ticks[2]);
         work.pass=SandboxPassWorkload::main_scene;
         auto* context=renderer.context;
-        bool const cache_ready=scene_scale==1 && static_valid &&
-            static_signature==scene_revision() &&
-            static_shadow_builds==shadow.builds;
-        if(cache_full_draws && static_shadow_builds!=shadow.builds)++scroll_reasons[5];
+        bool const cache_ready=scene_scale==1 && current_raster().valid &&
+            current_raster().signature==scene_revision() &&
+            current_raster().shadow_builds==shadow.builds;
+        if(raster.metrics.full_draws && raster.shadow_builds!=shadow.builds)
+            ++raster.metrics.reasons[c3x_renderer::render_core::raster_shadow];
+        if(cache_ready)++raster.metrics.reuses;
         if(work.enabled){if(cache_ready)++work.row().reuses;else ++work.row().rebuilds;}
         if(!cache_ready){
             // A light or scene change replaces the whole resident image at
             // the current camera; its center is the first covered rectangle.
-            region_camera_x=camera_x;region_camera_y=camera_y;
+            current_raster().camera_x=camera_x;current_raster().camera_y=camera_y;
             region_settings.translation[0]=settings.translation[0]+region_margin_x;
             region_settings.translation[1]=settings.translation[1]+region_margin_y;
             region_settings.depth_translation=settings.depth_translation;
-            region_depth_translation=settings.depth_translation;
-            region_depth_origin=renderer.scene_depth_origin;
-            region_translation={settings.translation[0],settings.translation[1]};
+            current_raster().depth_translation=settings.depth_translation;
+            current_raster().depth_origin=renderer.scene_depth_origin;
+            current_raster().translation={settings.translation[0],settings.translation[1]};
+            static_rasters.begin_write();
             float clear[4]={};
-            context->ClearRenderTargetView(static_region.target,clear);work.clear(static_region.target);
-            context->ClearDepthStencilView(static_region.depth,
-                D3D11_CLEAR_DEPTH|D3D11_CLEAR_STENCIL,1,0);work.clear(static_region.depth);
+            context->ClearRenderTargetView(static_region().target,clear);work.clear(static_region().target);
+            context->ClearDepthStencilView(static_region().depth,
+                D3D11_CLEAR_DEPTH|D3D11_CLEAR_STENCIL,1,0);work.clear(static_region().depth);
             if(!draw_scene(static_visible,region_settings,region_rect,
-                    static_region.target,static_region.depth,false,float(scene_scale)))return fail("static_scene");
-            region_covered=region_rect;
-            ++cache_full_draws;
-            static_signature=scene_revision();
-            static_shadow_builds=shadow.builds;
-            static_valid=true;
+                    static_region().target,static_region().depth,false,float(scene_scale)))return fail("static_scene");
+            current_raster().covered={region_rect.left,region_rect.top,region_rect.right,region_rect.bottom};
+            ++cache_full_draws;++raster.metrics.full_draws;
+            current_raster().signature=scene_revision();
+            current_raster().shadow_builds=shadow.builds;
+            raster.geometry_epoch=renderer.tile_geometry_epoch;
+            raster.lighting_revision=lighting_revision;
+            raster.environment_hour=visual_hour;raster.environment_season=previous_season;
+            current_raster().valid=true;
         }
         if(cache_ready){
             auto needed=region_shift.needed<D3D11_RECT>(int(w),int(h),
                 region_margin_x,region_margin_y);
             auto fill_strip=[&](D3D11_RECT strip){
                 if(strip.left>=strip.right || strip.top>=strip.bottom)return true;
-                ++scroll_reasons[8];
+                ++raster.metrics.reasons[c3x_renderer::render_core::raster_strip_fills];
+                ++raster.metrics.strip_fills;
+                static_rasters.begin_write();
                 GeometryDrawView::Records selected{};
                 auto clip=source_bounds(region_settings,strip,false);
                 for(unsigned layer=0;layer<geometry_layer_count;++layer)
@@ -2260,45 +2286,46 @@ struct SandboxFreshPipeline {
                         if(renderer.chunk_intersects_region(GeometryDrawReference(record),
                                 region_settings,clip,false))selected[layer].push_back(record);
                     }
-                return draw_scene(selected,region_settings,strip,static_region.target,
-                    static_region.depth,false,float(scene_scale));
+                if(!draw_scene(selected,region_settings,strip,static_region().target,
+                    static_region().depth,false,float(scene_scale)))return false;
+                raster.valid=true;return true;
             };
             constexpr LONG ahead=128;
-            if(needed.left<region_covered.left){
+            if(needed.left<current_raster().covered.left){
                 LONG left=std::max<LONG>(0,needed.left-ahead);
-                if(!fill_strip({left,region_covered.top,region_covered.left,
-                        region_covered.bottom}))return false;
-                region_covered.left=left;
+                if(!fill_strip({left,current_raster().covered.top,current_raster().covered.left,
+                        current_raster().covered.bottom}))return fail("static_strip");
+                current_raster().covered.left=left;
             }
-            if(needed.right>region_covered.right){
-                LONG right=std::min<LONG>(LONG(static_region.width),needed.right+ahead);
-                if(!fill_strip({region_covered.right,region_covered.top,right,
-                        region_covered.bottom}))return false;
-                region_covered.right=right;
+            if(needed.right>current_raster().covered.right){
+                LONG right=std::min<LONG>(LONG(static_region().width),needed.right+ahead);
+                if(!fill_strip({current_raster().covered.right,current_raster().covered.top,right,
+                        current_raster().covered.bottom}))return fail("static_strip");
+                current_raster().covered.right=right;
             }
-            if(needed.top<region_covered.top){
+            if(needed.top<current_raster().covered.top){
                 LONG top=std::max<LONG>(0,needed.top-ahead);
-                if(!fill_strip({region_covered.left,top,region_covered.right,
-                        region_covered.top}))return false;
-                region_covered.top=top;
+                if(!fill_strip({current_raster().covered.left,top,current_raster().covered.right,
+                        current_raster().covered.top}))return fail("static_strip");
+                current_raster().covered.top=top;
             }
-            if(needed.bottom>region_covered.bottom){
-                LONG bottom=std::min<LONG>(LONG(static_region.height),needed.bottom+ahead);
-                if(!fill_strip({region_covered.left,region_covered.bottom,
-                        region_covered.right,bottom}))return false;
-                region_covered.bottom=bottom;
+            if(needed.bottom>current_raster().covered.bottom){
+                LONG bottom=std::min<LONG>(LONG(static_region().height),needed.bottom+ahead);
+                if(!fill_strip({current_raster().covered.left,current_raster().covered.bottom,
+                        current_raster().covered.right,bottom}))return fail("static_strip");
+                current_raster().covered.bottom=bottom;
             }
         }
-        if(!cache_ready || camera_x!=static_camera_x || camera_y!=static_camera_y ||
-                static_depth_translation!=settings.depth_translation){
+        if(static_rasters.needs_restore(cache_ready,camera_x,camera_y,settings.depth_translation)){
+            static_rasters.begin_restore();
             region_shift=c3x_renderer::render_core::StaticRegionShift::between(
-                projection_zoom,camera_x,camera_y,region_camera_x,region_camera_y,
+                projection_zoom,camera_x,camera_y,current_raster().camera_x,current_raster().camera_y,
                 region_margin_x,region_margin_y);
-            if(!static_restore.draw(context,static_cache,static_region.samples,
-                    static_region.depth_samples,region_shift.x-region_margin_x,
-                    region_shift.y-region_margin_y,{},nullptr,static_region.width,
-                    static_region.height,false,false,0,nullptr,1,
-                    -(settings.depth_translation-region_depth_translation)/16384.f))return fail("static_restore");
+            if(!static_restore.draw(context,static_cache,static_region().samples,
+                    static_region().depth_samples,region_shift.x-region_margin_x,
+                    region_shift.y-region_margin_y,{},nullptr,static_region().width,
+                    static_region().height,false,false,0,nullptr,1,
+                    -(settings.depth_translation-current_raster().depth_translation)/16384.f))return fail("static_restore");
             work.draw(3);if(work.enabled)work.row().target_pixels+=std::uint64_t(static_cache.width)*static_cache.height;
             context->OMSetRenderTargets(0,nullptr,nullptr);
             if(scene_samples==1){
@@ -2307,8 +2334,7 @@ struct SandboxFreshPipeline {
             else context->ResolveSubresource(static_cache.resolved,0,static_cache.color,0,
                 DXGI_FORMAT_R16G16B16A16_FLOAT);
             if(cache_ready)++cache_scrolls;
-            static_camera_x=camera_x;static_camera_y=camera_y;
-            static_depth_translation=settings.depth_translation;
+            static_rasters.restored(camera_x,camera_y,settings.depth_translation);
         }
         QueryPerformanceCounter(&ticks[3]);
         if(trace_scroll){
@@ -2316,7 +2342,7 @@ struct SandboxFreshPipeline {
                 camera_x,camera_y,projection_zoom,frame.tile_width,
                 static_cast<unsigned long long>(renderer.tile_geometry_epoch),
                 settings.translation[0]-4,settings.translation[1]-4,settings.depth_translation,
-                static_cast<long long>(renderer.scene_depth_origin),region_camera_x,region_camera_y,
+                static_cast<long long>(renderer.scene_depth_origin),current_raster().camera_x,current_raster().camera_y,
                 cache_scrolls-scroll_before,cache_full_draws-full_before);
             std::fflush(stdout);
         }
@@ -2414,7 +2440,7 @@ extern "C" __declspec(dllexport) void c3x_sandbox_fresh_metrics(double* phases,
     if (shadows) *shadows=sandbox_fresh.shadow.builds;
     if (resident_builds) *resident_builds=sandbox_fresh.resident_builds;
     if (gpu_bytes) *gpu_bytes=sandbox_fresh.static_cache.bytes()+
-        sandbox_fresh.static_region.bytes()+
+        sandbox_fresh.static_rasters.bytes()+
         sandbox_fresh.material_albedo.bytes()+
         std::size_t(sandbox_fresh.material_normal.width)*sandbox_fresh.material_normal.height*4+
         std::size_t(sandbox_fresh.material_world.width)*sandbox_fresh.material_world.height*8+
@@ -2436,6 +2462,22 @@ extern "C" __declspec(dllexport) void c3x_sandbox_fresh_metrics(double* phases,
         sandbox_fresh.bloom.bytes()+std::size_t(sandbox_fresh.shadow.resolution)*
             sandbox_fresh.shadow.resolution*4;
     if (shadow_box) std::copy(sandbox_fresh.shadow.box,sandbox_fresh.shadow.box+4,shadow_box);
+}
+
+// Diagnostic snapshot only; ownership stays in the fixed pipeline slots.
+extern "C" __declspec(dllexport) int c3x_sandbox_static_state_metrics(unsigned slot,
+        c3x_renderer::render_core::StaticRasterMetrics* output) {
+    if(!output || slot>=sandbox_fresh.static_rasters.states.size())return 0;
+    auto const& state=sandbox_fresh.static_rasters.states[slot];
+    *output=state.metrics;output->version=1;output->slot=slot;
+    output->valid=unsigned(state.valid);output->projection=state.projection;
+    output->region_revision=state.revision;output->region_bytes=state.region.bytes();
+    output->total_region_bytes=sandbox_fresh.static_rasters.bytes();
+    output->shared_viewport_bytes=sandbox_fresh.static_cache.bytes();
+    output->sample_count=state.region.sample_count;
+    std::size_t gpu_bytes=0;
+    c3x_sandbox_fresh_metrics(nullptr,nullptr,nullptr,nullptr,&gpu_bytes,nullptr);
+    output->total_gpu_bytes=gpu_bytes;return 1;
 }
 
 extern "C" __declspec(dllexport) void c3x_sandbox_cache_metrics(unsigned* depth_copies,
@@ -2461,10 +2503,10 @@ extern "C" __declspec(dllexport) void c3x_sandbox_combat_event(int serial,
 // Untimed witnesses can force an independent raster without rebuilding world
 // generations or rewinding animation. Ordinary production draws never call it.
 extern "C" __declspec(dllexport) void c3x_sandbox_scroll_cache_invalidate() {
-    sandbox_fresh.static_valid=false;sandbox_fresh.reflection_valid=false;
+    sandbox_fresh.static_rasters.invalidate_all(c3x_renderer::render_core::raster_explicit_reset);
+    sandbox_fresh.reflection_valid=false;
     sandbox_fresh.material_valid=false;sandbox_fresh.terrain_material_valid=false;
     sandbox_fresh.reflected_terrain_material_valid=false;
-    ++sandbox_fresh.scroll_reasons[9];
 }
 extern "C" __declspec(dllexport) void c3x_sandbox_scroll_cache_metrics(unsigned* depth_copies,
         unsigned* scrolls,unsigned* full_draws,unsigned* reflection_reuses,
@@ -2472,7 +2514,8 @@ extern "C" __declspec(dllexport) void c3x_sandbox_scroll_cache_metrics(unsigned*
     c3x_sandbox_cache_metrics(depth_copies,scrolls,full_draws,reflection_reuses,reflection_draws,pose_builds);
 }
 extern "C" __declspec(dllexport) void c3x_sandbox_scroll_reasons(unsigned* values) {
-    std::copy(sandbox_fresh.scroll_reasons.begin(),sandbox_fresh.scroll_reasons.end(),values);
+    if(values)for(unsigned i=0;i<11;++i)values[i]=sandbox_fresh.static_rasters.states[0].metrics.reasons[i]+
+        sandbox_fresh.static_rasters.states[1].metrics.reasons[i];
 }
 
 extern "C" __declspec(dllexport) int c3x_sandbox_draw_fresh(
