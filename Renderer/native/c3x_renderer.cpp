@@ -10350,6 +10350,7 @@ public:
         }
 #ifdef C3X_RENDERER64_FRESH
         if (fresh_scene_path) {
+            if(cancelled())return false;
             // The authoritative scene has been prepared. Publish one native-size
             // GPU image; the fresh passes own all raster work from here onward.
             cached_signature=signature;
@@ -10371,7 +10372,9 @@ public:
             geometry_vertex_buffers[geometry_wave].clear();
             if(visibility_pass && !visibility_coverage.capture(frame))return false;
             trace.write("fresh-wave", "begin", true);
-            if(!prepare_wave_chunks(frame)){
+            bool waves_ready=prepare_wave_chunks(frame);
+            if(cancelled())return false;
+            if(!waves_ready){
                 fresh_path_failed=true;
                 trace.write("fresh-path-required","coastal wave preparation failed",true);
                 return false;
@@ -10386,6 +10389,7 @@ public:
                 description.Format=DXGI_FORMAT_B8G8R8A8_UNORM;
                 description.BindFlags=D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE;
                 if(FAILED(device->CreateTexture2D(&description,nullptr,&gpu_map_texture))){
+                    if(cancelled())return false;
                     fresh_path_failed=true;
                     trace.write("fresh-path-required","native map target allocation failed",true);
                     return false;
@@ -10393,13 +10397,16 @@ public:
             }
             ID3D11RenderTargetView* target=nullptr;
             if(FAILED(device->CreateRenderTargetView(gpu_map_texture,nullptr,&target))){
+                if(cancelled())return false;
                 fresh_path_failed=true;
                 trace.write("fresh-path-required","native map target view failed",true);
                 return false;
             }
+            if(cancelled()){target->Release();return false;}
             LARGE_INTEGER draw_start={},draw_end={};QueryPerformanceCounter(&draw_start);
             bool drawn=c3x_renderer64_render_fresh(frame,target);
             target->Release();QueryPerformanceCounter(&draw_end);
+            if(cancelled())return false;
             if(!drawn){
                 fresh_path_failed=true;
                 trace.write("fresh-path-required","scene draw failed; explicit legacy control required for recovery",true);
