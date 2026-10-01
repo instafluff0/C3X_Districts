@@ -2,6 +2,7 @@
 // Ordered packed-pixel operations on a borrowed D3D device/context. No presenter,
 // native pointers, GDI leases, worker scheduling or implicit readback lives here.
 #include "gpu_image_commands.h"
+#include "composition_storage.h"
 #include <d3d11.h>
 #include <d3dcompiler.h>
 #include <wrl/client.h>
@@ -23,7 +24,7 @@ using Microsoft::WRL::ComPtr;
 struct Counts {std::uint64_t uploads=0,upload_bytes=0,commands=0,snapshots=0,resident_bytes=0,allocations=0,reuses=0;};
 inline void checked(HRESULT hr){if(FAILED(hr))throw std::runtime_error("GPU image operation failed");}
 class Compositor {
-    struct Image {Id id=0;unsigned width=0,height=0;Format format=Format::rgb555;std::uint64_t revision=0;bool cpu_current=false,read_only=false;
+    struct Image {Id id=0;unsigned width=0,height=0;Format format=Format::rgb555;std::uint64_t revision=0;bool cpu_current=false,read_only=false,borrowed=false;CompositionStorage::Lease storage;
         ComPtr<ID3D11Texture2D> texture;ComPtr<ID3D11ShaderResourceView> read;ComPtr<ID3D11UnorderedAccessView> write;};
     struct Constants {int area[4],offset[2];unsigned mode,color;};
     ID3D11Device* device;ID3D11DeviceContext* context;
@@ -44,7 +45,7 @@ class Compositor {
     ViewTransform view_program;
     ComPtr<ID3D11ComputeShader> shader,import_shader,unit_shader,image_shader,blend_shader,lookup_shader;ComPtr<ID3D11Buffer> constants,image_constants;
     c3x_renderer::GpuUnitScene unit_scene;
-    Counts counters;std::uint64_t budget,recording=0;
+    Counts counters;std::uint64_t budget,recording=0;CompositionStorage storage;
     unsigned recorded_displays=0;
     void record_texture(Id id,c3x_recording::Event kind,Rect area={})noexcept{
         if(!recording||!c3x_recording::journal().snapshot_allowed())return;
@@ -71,7 +72,7 @@ class Compositor {
     void make(Image& image,unsigned width,unsigned height){
         D3D11_TEXTURE2D_DESC d={};d.Width=width;d.Height=height;d.MipLevels=d.ArraySize=d.SampleDesc.Count=1;
         d.Format=DXGI_FORMAT_R32_UINT;d.Usage=D3D11_USAGE_DEFAULT;d.BindFlags=D3D11_BIND_SHADER_RESOURCE|D3D11_BIND_UNORDERED_ACCESS;
-        checked(device->CreateTexture2D(&d,nullptr,&image.texture));++counters.allocations;
+        checked(device->CreateTexture2D(&d,nullptr,&image.texture));image.storage=storage.retain(image.texture.Get());++counters.allocations;
         checked(device->CreateShaderResourceView(image.texture.Get(),nullptr,&image.read));
         checked(device->CreateUnorderedAccessView(image.texture.Get(),nullptr,&image.write));image.width=width;image.height=height;
     }
@@ -454,10 +455,12 @@ Texture2D<uint> input_image:register(t0);Texture2D<uint> text_curves:register(t1
             image=std::move(next);return image.id;}return 0;
     }
     void clear_recycled(){for(auto const& image:recycled)counters.resident_bytes-=bytes(image);recycled.clear();recycled_bytes=0;}
+    void clear_working(){clear_recycled();unbind();
+        counters.resident_bytes-=bytes(scratch)+bytes(detail_scratch);scratch={};detail_scratch={};}
     bool recycle(Id id){
         auto image=find(id);if(!image)return false;
         constexpr std::uint64_t cap=32u*1024u*1024u;
-        if(image->read_only||bytes(*image)>cap)return destroy(id);
+        if(image->borrowed||bytes(*image)>cap)return destroy(id);
         unbind();auto size=bytes(*image);
         while(!recycled.empty()&&(recycled.size()>=32||recycled_bytes+size>cap)){
             auto released=bytes(recycled.back());counters.resident_bytes-=released;recycled_bytes-=released;recycled.pop_back();
@@ -477,12 +480,22 @@ Texture2D<uint> input_image:register(t0);Texture2D<uint> text_curves:register(t1
         make_room(std::uint64_t(d.Width)*d.Height*4);
         if(owner.Get()!=device||d.Format!=DXGI_FORMAT_R32_UINT||d.SampleDesc.Count!=1||d.ArraySize!=1||d.MipLevels!=1||
            !(d.BindFlags&D3D11_BIND_SHADER_RESOURCE)||!d.Width||!d.Height||d.Width>2240||d.Height>1260||std::uint64_t(d.Width)*d.Height*4>budget-counters.resident_bytes)return 0;
-        for(auto& image:images)if(!image.id){Image next;next.texture=texture;next.width=d.Width;next.height=d.Height;next.format=format;next.read_only=true;
+        for(auto& image:images)if(!image.id){Image next;next.texture=texture;next.width=d.Width;next.height=d.Height;next.format=format;next.read_only=next.borrowed=true;next.storage=storage.retain(texture);
             if(retained_view)next.read=retained_view;
             else checked(device->CreateShaderResourceView(texture,nullptr,&next.read));
             next.id=++serial;counters.resident_bytes+=bytes(next);image=std::move(next);return image.id;
         }return 0;
     }
+    // Borrow owned retained output as a writable working target. It never
+    // enters the replay pool; the immutable recipe generation owns its lease.
+    Id attach_target_unrecorded(ID3D11Texture2D* texture,Format format){
+        auto id=attach_source_unrecorded(texture,format);auto image=find(id);
+        if(!image)return 0;
+        D3D11_TEXTURE2D_DESC d={};texture->GetDesc(&d);
+        if(!(d.BindFlags&D3D11_BIND_UNORDERED_ACCESS)){destroy(id);return 0;}
+        checked(device->CreateUnorderedAccessView(texture,nullptr,&image->write));image->read_only=false;return id;
+    }
+    void share_storage(CompositionStorage const& tracker){storage=tracker;}
     template<class Visit> void visit_images(Visit visit)const{
         for(auto const& image:images)if(image.id)visit(image.id,image.width,image.height,image.format,image.texture.Get());
     }

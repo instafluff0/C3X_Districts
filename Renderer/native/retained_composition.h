@@ -16,6 +16,7 @@ class RetainedComposition {
 public:
     struct Work {unsigned operations=0,assemblies=0,copies=0;std::uint64_t copied_pixels=0,assembly_pixels=0;};
     using Texture=ComPtr<ID3D11Texture2D>;
+    struct Placed {Command command;int x=0,y=0;};
     struct SampledImage {
         enum class Kind { unchanged, immutable, bgra, frozen };
         Kind kind=Kind::unchanged;Texture texture;Rect area{};float sharpness=0.f;
@@ -51,9 +52,12 @@ private:
     struct Node;
     struct Patch {Rect area;std::shared_ptr<Node> node;unsigned output=0;};
     struct Picture {unsigned width=0,height=0;Format format=Format::bgra32;std::vector<Patch> patches;bool partitioned=true;std::uint64_t version=0;Rect required{};};
+    struct BatchOp {Placed placed;Picture inputs[6];};
     struct Node {
         Rect area{};Command command{};bool selected_world=false,operation=false,dynamic=false,map_dynamic=false,constant=false,view_dependent=false,retired=false;
         Picture inputs[6];Id original[6]={};
+        std::vector<BatchOp> batch;
+        CompositionStorage::Lease storage[2],owned_storage[2];
         Texture output[2];std::uint64_t bytes[2]={},revision=0,seen=0,sampled=0,direct_revision=0;
         ComPtr<ID3D11ShaderResourceView> output_view[2];
         std::vector<std::uint64_t> dependencies;
@@ -76,7 +80,8 @@ private:
     std::uint64_t serial=0,frame=0,front_revision=0,drawn_revision=0;
     std::vector<std::uint64_t> drawn_dependencies;
     bool admitted=true;
-    std::size_t nodes=0;std::uint64_t resident_bytes=0;
+    std::size_t nodes=0;std::uint64_t direct_bytes=0;
+    CompositionStorage storage,owned_storage;
     std::uint64_t sample_allocations=0,sample_imports=0,source_views=0;
     Work work;double selected_view_scale=1.;
     ProjectedLayer projected_layer;
@@ -89,14 +94,25 @@ private:
     std::shared_ptr<Node> node(){
         if(nodes>=32768)throw std::runtime_error("retained composition node budget");
         auto value=new Node;++nodes;return std::shared_ptr<Node>(value,[this](Node* p){
-            resident_bytes-=p->bytes[0]+p->bytes[1]+p->direct.input_bytes;delete p;--nodes;});
+            direct_bytes-=p->direct.input_bytes;delete p;--nodes;});
+    }
+    std::uint64_t resident_bytes()const{return owned_storage.bytes()+direct_bytes;}
+    void reserve(std::uint64_t bytes,char const* site){
+        if(bytes<=resident_budget-resident_bytes())return;
+        char line[256];std::snprintf(line,sizeof(line),
+            "[C3X renderer] stage=retained-admission-rejected site=%s requested=%llu resident=%llu cap=%llu physical=%llu peak=%llu\n",
+            site,bytes,resident_bytes(),resident_budget,storage.bytes(),storage.peak());OutputDebugStringA(line);
+        throw std::runtime_error("retained composition texture budget");
     }
     void output(Node& n,unsigned index,Texture texture){
         D3D11_TEXTURE2D_DESC d={};if(texture)texture->GetDesc(&d);
         auto bytes=std::uint64_t(d.Width)*d.Height*4;
-        if(bytes>resident_budget-(resident_bytes-n.bytes[index]))throw std::runtime_error("retained composition texture budget");
+        if(texture&&!owned_storage.contains(texture.Get()))reserve(bytes,"output");
+        // Acquire before dropping the old allocation: peak includes overlap.
+        auto owned=owned_storage.retain(texture.Get()),physical=storage.retain(texture.Get());
         if(n.output[index].Get()!=texture.Get())n.output_view[index].Reset();
-        resident_bytes=resident_bytes-n.bytes[index]+bytes;n.bytes[index]=bytes;n.output[index]=std::move(texture);
+        n.bytes[index]=bytes;n.output[index]=std::move(texture);
+        n.owned_storage[index]=std::move(owned);n.storage[index]=std::move(physical);
     }
     Texture crop(ID3D11Texture2D* source,Rect r){
         if(empty(r))return {};D3D11_TEXTURE2D_DESC d={};source->GetDesc(&d);
@@ -116,7 +132,7 @@ private:
             // Reject optional history before allocating another texture. A
             // full budget must not transiently consume the game's remaining VA.
             auto bytes=std::uint64_t(r.right-r.left)*(r.bottom-r.top)*4;
-            if(bytes>resident_budget-(resident_bytes-n.bytes[index]))throw std::runtime_error("retained composition texture budget");
+            reserve(bytes,"capture-output");
             output(n,index,crop(source,r));return;
         }
         D3D11_BOX box={unsigned(r.left),unsigned(r.top),0,unsigned(r.right),unsigned(r.bottom),1};
@@ -157,6 +173,8 @@ private:
         if(n->direct.revision)n->direct_revision=n->direct.revision(ticks,frequency);
         for(auto const& input:n->inputs)for(auto const& patch:input.patches)
             collect(patch.node,ticks,frequency,depth+1,project);
+        for(auto const& draw:n->batch)for(auto const& input:draw.inputs)for(auto const& patch:input.patches)
+            collect(patch.node,ticks,frequency,depth+1,project);
         n->sampled=frame;
     }
     void evaluate(std::shared_ptr<Node> const& n,long long ticks,long long frequency,unsigned depth){
@@ -176,7 +194,7 @@ private:
                     throw std::runtime_error("retained sample extent changed");
                 if(!n->sample_target.texture){
                     auto bytes=std::uint64_t(w)*h*4;
-                    if(bytes>resident_budget-(resident_bytes-n->bytes[0]))throw std::runtime_error("retained composition texture budget");
+                    reserve(bytes,"sample-view-output");
                     auto canvas=replay.create(w,h,Format::bgra32,false);
                     if(!canvas)throw std::runtime_error("retained sample admission failed");
                     n->sample_target=replay.release_import_target(canvas);++sample_allocations;
@@ -239,7 +257,7 @@ private:
                         auto& target=i?n->view_words:n->sample_target;
                         if(!target.texture){
                             auto bytes=std::uint64_t(n->inputs[0].width)*n->inputs[0].height*4;
-                            if(bytes>resident_budget-(resident_bytes-n->bytes[i]))throw std::runtime_error("retained composition texture budget");
+                            reserve(bytes,"sample-view-output");
                             auto id=replay.create(n->inputs[0].width,n->inputs[0].height,Format::bgra32,false);
                             if(!id)throw std::runtime_error("retained view output admission failed");
                             target=replay.release_import_target(id);output(*n,i,target.texture);
@@ -252,6 +270,77 @@ private:
                 n->view_scale=scale;n->dependencies=std::move(versions);n->revision=++serial;
             }
             selected_view_scale=n->view_scale;
+        }else if(!n->batch.empty()){
+            std::vector<std::uint64_t> versions;
+            n->map_dynamic=false;bool dynamic=false;
+            auto visit=[&](Picture const& input){
+                versions.push_back(input.version);
+                for(auto const& patch:input.patches){evaluate(patch.node,ticks,frequency,depth+1);
+                    versions.push_back(patch.node->revision);n->map_dynamic|=patch.node->map_dynamic;dynamic|=patch.node->dynamic;}
+            };
+            visit(n->inputs[0]);visit(n->inputs[1]);
+            double scale=n->placement->sample(ticks,frequency);
+            for(auto const& draw:n->batch){
+                int dx=int(std::lround((draw.placed.x-int(n->inputs[0].width/2))*(scale-1.)));
+                int dy=int(std::lround((draw.placed.y-int(n->inputs[0].height/2))*(scale-1.)));
+                versions.push_back((std::uint64_t(unsigned(dx))<<32)|unsigned(dy));
+                for(auto const& input:draw.inputs)if(input.width)visit(input);
+            }
+            if((!n->output[0]||versions!=n->dependencies)&&!(had_map&&!n->map_dynamic&&n->output[0])){
+                // One pair per immutable HUD generation. Reserve both growths
+                // before initializing either result; old/new overlap counts.
+                auto bytes=std::uint64_t(n->inputs[0].width)*n->inputs[0].height*4;
+                reserve((!n->output[0]?bytes:0)+(!n->output[1]?bytes:0),"hud-pair");
+                for(unsigned i=0;i<2;++i)if(!n->output[i]){
+                    auto id=replay.create(n->inputs[i].width,n->inputs[i].height,Format::bgra32,false);
+                    if(!id)throw std::runtime_error("retained HUD pair admission");
+                    auto target=replay.release_import_target(id);output(*n,i,target.texture);
+                }
+                Id pair[2]={};
+                try{
+                    for(unsigned i=0;i<2;++i){
+                        pair[i]=replay.attach_target_unrecorded(n->output[i].Get(),n->inputs[i].format);
+                        if(!pair[i])throw std::runtime_error("retained HUD target admission");
+                        auto base=assemble(n->inputs[i],ticks,frequency,depth+1,{},true);
+                        context->CopyResource(n->output[i].Get(),replay.texture(base));replay.recycle(base);
+                        ++work.copies;work.copied_pixels+=bytes/4;
+                    }
+                    for(auto const& draw:n->batch){
+                        auto c=draw.placed.command;
+                        Id original[6]={c.destination,c.source,c.background,c.detail,c.background_detail,c.program},ids[6]={};
+                        try{
+                            for(unsigned i=0;i<6;++i)if(original[i]){
+                                if(original[i]==n->original[0])ids[i]=pair[0];
+                                else if(original[i]==n->original[1])ids[i]=pair[1];
+                                else{
+                                    for(unsigned prior=0;prior<i;++prior)if(original[prior]==original[i])ids[i]=ids[prior];
+                                    if(!ids[i])ids[i]=assemble(draw.inputs[i],ticks,frequency,depth+1,{},true);
+                                }
+                            }
+                            c.destination=ids[0];c.source=ids[1];c.background=ids[2];
+                            c.detail=ids[3];c.background_detail=ids[4];c.program=ids[5];
+                            int dx=int(std::lround((draw.placed.x-int(n->inputs[0].width/2))*(scale-1.)));
+                            int dy=int(std::lround((draw.placed.y-int(n->inputs[0].height/2))*(scale-1.)));
+                            c.area={c.area.left+dx,c.area.top+dy,c.area.right+dx,c.area.bottom+dy};
+                            c.clip={c.clip.left+dx,c.clip.top+dy,c.clip.right+dx,c.clip.bottom+dy};
+                            ++work.operations;
+                            if(!replay.submit(&c,1))throw std::runtime_error("retained HUD operation rejected");
+                        }catch(...){for(unsigned i=0;i<6;++i)if(ids[i]&&ids[i]!=pair[0]&&ids[i]!=pair[1]&&
+                            std::find(ids,ids+i,ids[i])==ids+i)replay.recycle(ids[i]);throw;}
+                        for(unsigned i=0;i<6;++i)if(ids[i]&&ids[i]!=pair[0]&&ids[i]!=pair[1]&&
+                            std::find(ids,ids+i,ids[i])==ids+i)replay.recycle(ids[i]);
+                    }
+                }catch(...){for(auto id:pair)if(id)replay.recycle(id);throw;}
+                for(auto id:pair)replay.recycle(id);
+                n->dependencies=std::move(versions);n->revision=++serial;
+            }
+            n->dynamic=dynamic||bool(n->placement);
+            if(had_map&&!n->map_dynamic){
+                // Saved generations keep their completed pixels, never a
+                // mutable live selection or a future camera's zoom placement.
+                n->batch.clear();n->inputs[0]={};n->inputs[1]={};n->placement.reset();
+                n->dependencies.clear();n->dynamic=n->view_dependent=false;n->retired=true;
+            }
         }else if(n->operation){
             std::vector<std::uint64_t> versions;
             if(n->direct.revision)versions.push_back(n->direct_revision);
@@ -356,7 +445,7 @@ private:
         unsigned w=unsigned(area.right-area.left),h=unsigned(area.bottom-area.top);
         if(n.sample_target.width!=w||n.sample_target.height!=h){
             auto bytes=std::uint64_t(w)*h*4;
-            if(bytes>resident_budget-(resident_bytes-n.bytes[0]))throw std::runtime_error("projected scene budget");
+            reserve(bytes,"projected-output");
             auto id=replay.create(w,h,Format::bgra32,false);
             if(!id)throw std::runtime_error("projected scene allocation");
             n.sample_target=replay.release_import_target(id);output(n,0,n.sample_target.texture);
@@ -521,12 +610,15 @@ private:
         return out;
     }
 public:
-    RetainedComposition(ID3D11Device* d,ID3D11DeviceContext* c):device(d),context(c),replay(d,c,128u*1024u*1024u){}
+    RetainedComposition(ID3D11Device* d,ID3D11DeviceContext* c):device(d),context(c),replay(d,c,128u*1024u*1024u){replay.share_storage(storage);}
     ~RetainedComposition(){front={};images.clear();world_selection.reset();}
-    void clear(){front={};images.clear();world_selection.reset();replay.clear_recycled();admitted=true;}
-    void discard(){front={};images.clear();world_selection.reset();replay.clear_recycled();admitted=false;}
+    void clear(){front={};images.clear();world_selection.reset();replay.clear_working();admitted=true;}
+    void discard(){front={};images.clear();world_selection.reset();replay.clear_working();admitted=false;}
     void uncommit(){front={};}
-    std::uint64_t bytes()const{return resident_bytes;}
+    std::uint64_t bytes()const{return resident_bytes();}
+    std::uint64_t allocation_bytes()const{return storage.bytes()+direct_bytes;}
+    std::uint64_t allocation_peak()const{return storage.peak();}
+    void share_storage(CompositionStorage const& tracker){storage=tracker;replay.share_storage(tracker);}
     Counts replay_stats()const{return replay.stats();}
     std::uint64_t sampling_allocations()const{return sample_allocations;}
     std::uint64_t sampling_imports()const{return sample_imports;}
@@ -542,6 +634,7 @@ public:
             if(std::find(visited.begin(),visited.end(),n)!=visited.end())continue;
             visited.push_back(n);if(n->sample)++count;
             for(auto const& input:n->inputs)for(auto const& patch:input.patches)pending.push_back(patch.node.get());
+            for(auto const& draw:n->batch)for(auto const& input:draw.inputs)for(auto const& patch:input.patches)pending.push_back(patch.node.get());
         }return count;
     }
     bool animated()const{for(auto const& p:front.patches)if(p.node->dynamic)return true;return false;}
@@ -593,6 +686,27 @@ public:
         for(unsigned i=0;i<2;++i)for(auto const& patch:n->inputs[i].patches)n->map_dynamic|=patch.node->map_dynamic;
         write(images.at(words),bounds,n,0);write(images.at(detail),bounds,n,1);
     }
+    void placed_batch(Id words,Id detail,std::vector<Placed> const& commands,
+                      std::shared_ptr<c3x_renderer::ZoomTransition> placement){
+        if(!admitted||commands.empty())return;
+        auto n=node();n->area=extent(images.at(words));n->placement=std::move(placement);
+        n->original[0]=words;n->original[1]=detail;
+        n->inputs[0]=images.at(words);n->inputs[1]=images.at(detail);
+        n->dynamic=n->view_dependent=true;
+        for(auto const& placed:commands){
+            if(placed.command.destination!=words&&placed.command.destination!=detail)
+                throw std::invalid_argument("retained HUD destination outside pair");
+            BatchOp draw;draw.placed=placed;auto const& c=placed.command;
+            Id ids[6]={c.destination,c.source,c.background,c.detail,c.background_detail,c.program};
+            for(unsigned i=0;i<6;++i)if(ids[i]&&ids[i]!=words&&ids[i]!=detail){
+                draw.inputs[i]=images.at(ids[i]); // immutable operand version
+                for(auto const& patch:draw.inputs[i].patches)n->map_dynamic|=patch.node->map_dynamic;
+            }
+            n->batch.push_back(std::move(draw));
+        }
+        for(unsigned i=0;i<2;++i)for(auto const& patch:n->inputs[i].patches)n->map_dynamic|=patch.node->map_dynamic;
+        write(images.at(words),n->area,n,0);write(images.at(detail),n->area,n,1);
+    }
     void record(Command const& c,Direct direct={},std::shared_ptr<c3x_renderer::ZoomTransition> placement={},int anchor_x=0,int anchor_y=0){
         if(!admitted)return;auto target=images.find(c.destination);if(target==images.end())throw std::runtime_error("retained target missing");
         auto area=intersect(intersect(c.area,c.clip),extent(target->second));if(empty(area))return;
@@ -642,14 +756,14 @@ public:
                 }
             }
         }
-        if(direct.input_bytes>resident_budget-resident_bytes)throw std::runtime_error("retained direct input budget");
+        reserve(direct.input_bytes,"direct-input");
         auto paint=area;
         if(placement){
             int dx=int(std::lround((anchor_x-int(target->second.width/2))*(c3x_renderer::ZoomTransition::maximum-1.)));
             int dy=int(std::lround((anchor_y-int(target->second.height/2))*(c3x_renderer::ZoomTransition::maximum-1.)));
             area=intersect({area.left+std::min(0,dx),area.top+std::min(0,dy),area.right+std::max(0,dx),area.bottom+std::max(0,dy)},extent(target->second));
         }
-        auto n=node();resident_bytes+=direct.input_bytes;n->operation=true;n->area=area;n->command=c;n->command.clip=paint;n->direct=std::move(direct);n->dynamic=n->direct.animated||bool(placement);
+        auto n=node();direct_bytes+=direct.input_bytes;n->operation=true;n->area=area;n->command=c;n->command.clip=paint;n->direct=std::move(direct);n->dynamic=n->direct.animated||bool(placement);
         n->placement=std::move(placement);n->anchor_x=anchor_x;n->anchor_y=anchor_y;n->view_dependent=bool(n->placement);
         n->constant=!n->placement&&c.kind==Kind::fill&&!n->direct.draw&&!n->direct.revision&&!n->direct.animated;
         Id ids[6]={c.destination,c.source,c.background,c.detail,c.background_detail,c.program};
@@ -731,11 +845,15 @@ public:
         auto add=[&](Node const* n){if(std::find(ordered.begin(),ordered.end(),n)==ordered.end()&&ordered.size()<(all_images?1024u:256u))ordered.push_back(n);};
         for(auto const& p:front.patches)add(p.node.get());
         if(all_images)for(auto const& image:images)for(auto const& p:image.second.patches)add(p.node.get());
-        for(unsigned i=0;i<ordered.size();++i)for(auto const& input:ordered[i]->inputs)for(auto const& p:input.patches)add(p.node.get());
+        for(unsigned i=0;i<ordered.size();++i){
+            for(auto const& input:ordered[i]->inputs)for(auto const& p:input.patches)add(p.node.get());
+            if(ordered[i]->projected)add(ordered[i]->projected.get());
+            for(auto const& draw:ordered[i]->batch)for(auto const& input:draw.inputs)for(auto const& p:input.patches)add(p.node.get());
+        }
         for(unsigned i=0;i<ordered.size();++i){auto n=ordered[i];auto const& c=n->command;char text[384];
-            std::snprintf(text,sizeof(text),"id=%u bytes=%llu kind=%d operation=%u dynamic=%u map_dynamic=%u retired=%u sampled=%u projected=%u view=%u seen=%llu area=%d,%d,%d,%d source=%d,%d,%d,%d color=%u",
+            std::snprintf(text,sizeof(text),"id=%u bytes=%llu kind=%d operation=%u dynamic=%u map_dynamic=%u retired=%u sampled=%u projected=%u view=%u seen=%llu batch=%u area=%d,%d,%d,%d source=%d,%d,%d,%d color=%u",
                 i,n->bytes[0]+n->bytes[1]+n->direct.input_bytes,int(c.kind),unsigned(n->operation),unsigned(n->dynamic),unsigned(n->map_dynamic),unsigned(n->retired),unsigned(bool(n->sample)),unsigned(n->projects_scene),unsigned(bool(n->view)),n->seen,
-                n->area.left,n->area.top,n->area.right,n->area.bottom,c.source_x,c.source_y,c.source_width,c.source_height,c.color);
+                unsigned(n->batch.size()),n->area.left,n->area.top,n->area.right,n->area.bottom,c.source_x,c.source_y,c.source_width,c.source_height,c.color);
             std::string line=text;
             for(unsigned input=0;input<6;++input)if(!n->inputs[input].patches.empty()){
                 std::snprintf(text,sizeof(text)," input%u=",input);line+=text;

@@ -9,6 +9,7 @@ namespace c3x_gpu_images {
 class Session {
     static constexpr unsigned live_image_budget=256u*1024u*1024u;
     ID3D11Device* device;ID3D11DeviceContext* context;
+    CompositionStorage storage;
     Compositor gpu;RetainedComposition layers;Id map=0;std::int64_t ticket=0,identity=0;std::uint64_t readbacks=0;
     Id resident_unit=0;ID3D11Texture2D* resident_unit_texture=nullptr;
     bool map_animation_expected=false;
@@ -86,6 +87,7 @@ class Session {
         layers.record(c);
         if(input.kind==Kind::world_end){
             layers.view(world_view_detail,world_detail,zoom,world_view_words);
+            std::vector<RetainedComposition::Placed> placed;
             for(auto const& item:hud)for(auto draw:item.draws){
                 draw.destination=draw.destination==item.detail?world_view_detail:world_view_words;
                 if(draw.detail)draw.detail=world_view_detail;
@@ -93,8 +95,9 @@ class Session {
                 else if(draw.source==item.detail)draw.source=world_view_detail;
                 if(draw.background&&draw.kind!=Kind::native_text)draw.background=world_view_words;
                 if(draw.background_detail&&draw.kind!=Kind::native_image)draw.background_detail=world_view_detail;
-                layers.record(draw,{},zoom,item.x,item.y);
+                placed.push_back({draw,item.x,item.y});
             }
+            layers.placed_batch(world_view_words,world_view_detail,placed,zoom);
             for(auto shadow:fixed_shadows){
                 shadow.destination=shadow.background=world_view_words;
                 shadow.detail=shadow.background_detail=world_view_detail;
@@ -104,7 +107,7 @@ class Session {
         }
     }
 public:
-    Session(ID3D11Device* d,ID3D11DeviceContext* c):device(d),context(c),gpu(d,c,live_image_budget,true),layers(d,c){}
+    Session(ID3D11Device* d,ID3D11DeviceContext* c):device(d),context(c),gpu(d,c,live_image_budget,true),layers(d,c){gpu.share_storage(storage);layers.share_storage(storage);}
     // Eight fullscreen packed/full-color native pairs and old/new immutable
     // maps require about 194 MiB at 2240x1260. Bound live images at 256 MiB,
     // including small UI sources; retained replay has its separate budget.
@@ -154,6 +157,7 @@ public:
         return gpu.display(map,target,width,height,{0,0,int(width),int(height)});
     }
 #endif
+    double visual_scale()const{return layers.view_scale();}
     unsigned presented_zoom()const{return unsigned(zoom->last_presented()*65536.+.5);}
     void did_present(){zoom->did_present(rendered_zoom);}
     std::uint64_t upload_count()const{return gpu.stats().uploads;}
@@ -241,7 +245,8 @@ public:
     std::uint64_t visual_sample_allocations()const{return layers.sampling_allocations();}
     std::uint64_t visual_sample_imports()const{return layers.sampling_imports();}
     std::uint64_t visual_bytes()const{return layers.bytes();}
-    std::size_t allocation_bytes()const{return std::size_t(gpu.stats().resident_bytes+layers.bytes());}
+    std::size_t allocation_bytes()const{return std::size_t(layers.allocation_bytes());}
+    std::uint64_t allocation_peak()const{return storage.peak();}
     std::size_t visual_nodes()const{return layers.node_count();}
     std::size_t visual_sources()const{return layers.sampled_sources();}
     RetainedComposition::Work visual_work()const{return layers.last_work();}
