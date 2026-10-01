@@ -51,3 +51,55 @@ a diagnostic wall time, not displayed FPS or causal GPU timing.
 Raw sources, binaries, logs, manifests and comparison receipts live in the
 private `Renderer/.cache/composition-storage-step` evidence directory. Gameplay
 qualification and installed identity are recorded separately at completion.
+
+## Integrated game qualification
+
+Composition and cancellation were merged into the authoritative checkout at
+`43c6523b595546cf4183cc5f3ea40aa5b4a04c98`; the material-plan candidate remains
+outside this integration because its native gate demonstrated little actual
+coverage and no useful frame benefit. The final renderer build, fullscreen HUD
+and cancellation regressions, config-off delegation check, asynchronous bridge
+fixture and staged startup probe pass. The asynchronous fixture adopts all 32
+camera transitions without composition errors and reports 59.89 successful
+fixture presentations/sec during its warm interval. This is a fixture result,
+not game FPS or physical scanout.
+
+The matching staged binaries are:
+
+| Binary | SHA-256 |
+| --- | --- |
+| `C3XRenderer.dll` | `d27666ec6ba0415de36e8f16319b9bea3b10f00141a0164f05fddd3e597c6058` |
+| `C3XRenderer_x64.dll` | `3cf70de3e5aa262e697b0dde054b32440d09809abb9a9e15a71a1bb5d8651432` |
+| `C3XRendererHelper64.exe` | `fd32c36deee58878fa74d340892bf247e4b5dd41f758144ea2447d8e303ffbc1` |
+
+One bounded 120-second automated game run uses the user-accepted 1498 AD save,
+normal effects and the 2240x1260 game window. It completes all 32 scroll commands
+with no recorded renderer failure or early game exit. The sampled coastline and
+city positions change, while city labels, population/production text, units,
+selection, minimap and HUD remain visible. Eight representative samples and two
+full-resolution frames were reviewed. This establishes the composition repair's
+functional game qualification; it is sampled inspection, not new art acceptance.
+
+The read-only successful-presentation counter measures 5.57 presentations/sec
+during the scroll command window and 13.34 during the subsequent stationary
+interval. Detailed trace and a 2 Hz window observer are enabled. These are
+instrumented game measurements, not physical scanout, a paired speedup ratio or
+an uninstrumented ceiling. Zoom stays at its normal scale, so this run makes no
+live zoom-cadence claim. The 60 FPS idle/scroll target remains unmet. Logged
+retained composition charge peaks at 210,089,468 bytes, below its unchanged cap;
+this logged charge is distinct from the fullscreen oracle's unique texture peak.
+Successful sampled composition calls have a 36.321 ms median, while final API
+presentation calls have a 0.126 ms median. Remaining composition work and scene
+preparation/drawing require further performance work; these CPU submission
+intervals do not establish causal GPU time.
+
+Private evidence is preserved under
+`Renderer/.cache/composition-integration-step/`: source/shader/binary identities,
+original and corrected fixture receipts, original capture, cadence analysis,
+loaded helper/DLL identities, and cleanup receipts. The complete original game
+capture contains 221 verified files / 293,027,325 bytes. All 22,072 frozen runtime
+dependencies and original/disposable save bytes remain unchanged. The installed
+game executable, JGL DLL and INI bytes match their pre-test hashes; the cursor and
+environment are restored; game, helper, collector, observer and temporary test
+tasks are absent. The previous matching binary trio is retained privately for
+rollback. No injected source or patch-table changes were needed.
