@@ -4,6 +4,45 @@ from Renderer.native.native_cpp_test import run_cpp
 
 
 class WorldReadinessTests(unittest.TestCase):
+    def test_hidden_reconciliation_preserves_authority_and_rejects_partial_reveal(self):
+        run_cpp(r'''
+#include "Renderer/native/render_core/world_input_capture.h"
+#include "Renderer/native/render_core/world_preparation_region.h"
+#include <cassert>
+using namespace c3x_renderer::render_core;
+int main(){
+ ScenePublication journal;CapturedScene scene;WorldInputCapture capture;
+ std::vector<unsigned> topology(800,2);
+ c3x_renderer_frame_v1 f{};f.world_width_tiles=f.world_height_tiles=40;
+ f.world_topology=topology.data();f.world_topology_count=800;
+ assert(journal.capture(f,{1,1,1,1}));bool changed=false;assert(journal.apply(scene,changed));
+ auto fill=[](auto& p){p.count=128;for(unsigned i=0;i<p.count;++i){auto& t=p.tiles[i];t={};
+  t.tile_y=int(i/20);t.tile_x=int(i%20)*2+(t.tile_y&1);t.terrain_type=t.real_terrain_type=2;
+  t.tile_flags=C3X_RENDERER_TILE_TOPOLOGY_HALO|C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_EXPLORED;}};
+ auto p=capture.page(*journal.state());fill(p);
+ p.tiles[0].tile_flags|=C3X_RENDERER_TILE_VISIBLE;
+ assert(!capture.accept(p,journal)&&capture.cursor==0); // Visible art must be complete.
+ p.tiles[0].tile_flags|=C3X_RENDERER_TILE_PREFETCH;
+ p.tiles[0].city_id=7;p.tiles[0].road_mask=3;
+ assert(capture.accept(p,journal)&&journal.apply(scene,changed));
+ assert(scene.authoritative_size()==1&&!scene.retained(scene.key(2,0))->authoritative);
+ auto old=scene.world_snapshot();
+ capture.reset();p=capture.page(*journal.state());fill(p);
+ p.tiles[0].city_id=99;p.tiles[0].road_mask=15; // Hidden live facts cannot replace remembered art.
+ assert(capture.accept(p,journal)&&journal.apply(scene,changed));
+ auto known=scene.retained(scene.key(0,0));
+ assert(known->appearance.city_id==7&&known->appearance.road_mask==3);
+ assert(!(known->visibility_flags&C3X_RENDERER_TILE_VISIBLE)&&scene.authoritative_size()==1);
+ assert(old->current(scene.key(0,0))->occurrence.city_id==7);
+ c3x_renderer_tile_v1 reveal{};reveal.tile_x=2;reveal.tile_y=0;reveal.city_id=8;
+ reveal.tile_flags=C3X_RENDERER_TILE_TOPOLOGY_HALO|C3X_RENDERER_TILE_VISIBILITY_KNOWN|
+  C3X_RENDERER_TILE_EXPLORED|C3X_RENDERER_TILE_VISIBLE|C3X_RENDERER_TILE_PREFETCH;
+ auto delta=f;delta.tiles=&reveal;delta.tile_count=1;
+ assert(journal.capture(delta,{1,1,1,1})&&journal.apply(scene,changed));
+ assert(scene.authoritative_size()==2&&scene.retained(scene.key(2,0))->appearance.city_id==8);
+}
+''')
+
     def test_fog_delta_preserves_last_visible_content_until_reveal(self):
         run_cpp(r'''
 #include "Renderer/native/render_core/scene_publication.h"
@@ -24,7 +63,8 @@ int main(){
  tile.tile_flags&=~(C3X_RENDERER_TILE_PREFETCH|C3X_RENDERER_TILE_VISIBLE);
  tile.city_id=99;tile.resource_id=8; // hidden live values must not replace memory
  changed_tiles.clear();assert(journal.capture(frame,id)&&journal.apply(scene,changed,&changed_tiles));
- assert(changed_tiles.empty());
+ assert(changed_tiles.size()==1&&changed_tiles[0]==std::make_pair(4,4)&&!changed);
+ // Visibility changes reopen local eligibility; unchanged retained art keeps its revision.
  auto hidden=scene.retained(key);assert(hidden->appearance.city_id==7&&hidden->appearance.resource_id==3);
  assert(!(hidden->visibility_flags&C3X_RENDERER_TILE_VISIBLE));
  tile.tile_flags|=C3X_RENDERER_TILE_PREFETCH|C3X_RENDERER_TILE_VISIBLE;

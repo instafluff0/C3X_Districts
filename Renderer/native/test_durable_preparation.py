@@ -55,21 +55,48 @@ int main(){
  assert(entered==4);release=true;q.clear();
 }''')
 
-    def test_observation_snapshot_isolated_from_reveal_wrap_and_reset(self):
+    def test_world_lease_survives_retarget_but_changed_inputs_refuse_adoption(self):
         run_cpp(r'''
 #include "Renderer/native/render_core/captured_scene.h"
+#include "Renderer/native/render_core/content_preparation.h"
+#include "Renderer/native/render_core/prepared_world_validity.h"
 #include <cassert>
 using namespace c3x_renderer::render_core;
+struct Part {
+ std::unordered_map<std::size_t,std::uint32_t> world;
+ std::unordered_map<std::uint64_t,std::uint64_t> topology,coast;
+ std::vector<int> rivers;
+};
+struct Result {std::unique_ptr<Part> ground,terrain,objects;std::size_t bytes()const{return 1024;}};
+struct Coast {Coast const& world()const{return *this;}unsigned at(std::size_t)const{return 0;}
+ std::uint64_t node_revision(std::uint64_t)const{return 0;}};
+struct Rivers {using CellProof=std::vector<int>;bool valid(CellProof const&)const{return true;}};
 int main(){
  CapturedScene source;c3x_renderer_frame_v1 frame={};frame.world_width_tiles=16;frame.world_height_tiles=16;frame.world_wrap_x=1;
- c3x_renderer_tile_v1 tile={};tile.tile_x=2;tile.tile_y=2;tile.tile_flags=C3X_RENDERER_TILE_RENDER;tile.anchor_x=20;
- frame.tiles=&tile;frame.tile_count=1;assert(source.begin(frame));assert(source.update(tile,1,2,3,17));source.finish();
- CapturedScene::ObservationSnapshot owned(source);auto id=owned.key(18,2);assert(id==source.key(2,2));
- tile.anchor_x=55;tile.tile_flags|=C3X_RENDERER_TILE_VISIBLE;
- assert(source.begin(frame));assert(source.update(tile,1,2,3,23));source.finish();
- assert(owned.current(id)->semantic==17&&owned.current(id)->occurrence.anchor_x==20);
- assert(source.current(id)->semantic==23);source={};assert(owned.current(id)->semantic==17);
- assert(!owned.current(owned.key(4,4)));
+ c3x_renderer_camera_identity_v1 identity{};source.publication_scope(frame,identity,1);
+ c3x_renderer_tile_v1 tile={};tile.tile_x=2;tile.tile_y=2;tile.tile_flags=C3X_RENDERER_TILE_RENDER;
+ tile.anchor_x=20;tile.road_mask=1;bool changed=false;assert(source.publish(tile,changed));
+ auto owned=source.world_snapshot();auto id=owned->key(18,2);assert(id==source.key(2,2));
+ using Input=std::shared_ptr<CapturedScene::WorldSnapshot const>;using Queue=ContentPreparation<int,Input,Result>;
+ Queue q;std::atomic<bool> entered{false},release{false};auto semantic=owned->current(id)->semantic;
+ std::weak_ptr<CapturedScene::WorldSnapshot const> lifetime=owned;
+ q.schedule({{1,owned}},[&](Input const& input,auto const& stop,unsigned){
+  entered=true;while(!release && !stop)std::this_thread::yield();
+  assert(input->current(id)->semantic==semantic && input->current(id)->occurrence.anchor_x==0);
+  auto result=std::make_unique<Result>();result->ground=std::make_unique<Part>();
+  result->terrain=std::make_unique<Part>();result->objects=std::make_unique<Part>();
+  result->ground->topology[id]=input->current(id)->semantic;return result;
+ },1,{1},Queue::byte_limit);owned.reset();while(!entered)std::this_thread::yield();
+ // Published local change replaces world input while the old job continues.
+ tile.road_mask=2;assert(source.publish(tile,changed));auto latest=source.world_snapshot();
+ tile.anchor_x=55;frame.tiles=&tile;frame.tile_count=1;assert(source.begin(frame));
+ assert(source.update(tile,1,2,3,CapturedScene::topology(tile)));source.finish();
+ frame.tile_count=0;assert(source.begin(frame));source.finish();
+ assert(!source.current(id) && source.world_snapshot()==latest && !lifetime.expired());
+ release=true;auto result=q.take(1);q.pause();assert(result);
+ Coast coast;Rivers rivers;assert(!prepared_world_valid(*result,coast,*latest,rivers));
+ assert(lifetime.expired());q.clear();source={};assert(latest->current(id)->occurrence.road_mask==2);
+ assert(!latest->current(latest->key(4,4)));
 }
 ''')
 

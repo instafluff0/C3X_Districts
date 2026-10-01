@@ -2165,3 +2165,31 @@ custom rendering is off. No new patch capability or table entry is required.
   Config-off delegation retains its existing executable contract.
 - `required_user_action: []`. See [ordered cold preparation](ordered_cold_preparation.md)
   for ordering, bounds, cancellation and validation evidence.
+
+## Persistent world inputs and local changes (2026-10-01)
+
+- Existing symbols: `Map_Renderer_m19_Draw_Tile_by_XY_and_Flags`,
+  `Map_Renderer_m71_Draw_Tiles`, `City_update_culture`,
+  `City_recompute_yields_and_happiness`, `Unit_tick_anim`, `Unit_draw_map_status`,
+  `Sprite_draw_map_unit_marker`, `Animator_draw_map_unit_cursor`, and the
+  existing sprite/JGL composition bridge. Signatures and installed addresses
+  are unchanged; no patch-table entry was added or edited.
+- The first certified native tile traversal copies the map/viewer world through
+  an explicitly scoped caller-thread bootstrap. Ordinary loading/display
+  guards remain in force. Native unit selection, wrapped anchors and body
+  draws initialize the same retained unit owner before first-map preparation;
+  temporary native state is restored and actions are not advanced.
+- Yield and culture hooks compare captured city body/visibility facts. Matching
+  facts preserve resident geometry; changed facts request local copied input.
+  Explored cities use native current body eligibility; improvements use the
+  viewer-aware remembered overlay accessors. Partial facts grant no full-art
+  authority. Culture territory fill and unknown interturn changes retain
+  bounded copied reconciliation. Shared C3X gameplay logic remains outside
+  the renderer gate.
+- Config-off immediately delegates renderer-specific wrappers and gates only
+  the renderer additions in shared hooks. Executable delegation tests remain.
+- Renderer API adds optional `c3x_renderer_seed_world`; integration requires a
+  matching bridge/core/helper and the tested injected executable. The delivery
+  restores the prior executable together with its matching control trio.
+- `required_user_action: []`. See [world inputs and local updates](world_local_delivery.md)
+  for ownership, native bootstrap, measurements and remaining limitations.

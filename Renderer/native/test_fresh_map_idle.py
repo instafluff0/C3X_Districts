@@ -1,0 +1,236 @@
+"""Execute the resident fresh-map callback without a GPU or display clock."""
+from pathlib import Path
+import unittest
+
+from Renderer.native.native_cpp_test import run_cpp
+from Renderer.native.source_fidelity.prepare import function
+
+
+class FreshMapIdleTests(unittest.TestCase):
+    def test_retained_prepare_observes_visible_facts_before_gpu_work(self):
+        source = Path(__file__).with_name("c3x_renderer.cpp").read_text()
+        prepared = source.split("    struct PreparedMapFrame {", 1)[1].split(
+            "    // One preparation owner", 1)[0]
+        callback = source.split("        if(fresh_map){", 1)[1].split(
+            "\n        }\n#endif", 1)[0]
+        eligibility = function(source, "frame_has_resource_animation")
+        run_cpp(r'''
+#include <algorithm>
+#include <cassert>
+#include <cstdio>
+#include <cstring>
+#include <functional>
+#include <memory>
+#include <string>
+#include <vector>
+#include "Renderer/native/input_recording/codec.h"
+#include "Renderer/native/render_core/dynamic_scene_input.h"
+#include "Renderer/native/render_core/unit_instances.h"
+#include "Renderer/native/render_core/water_material_frame.h"
+using namespace c3x_renderer::render_core;
+struct D3D11_TEXTURE2D_DESC {unsigned Width=128,Height=64;};
+struct ID3D11Texture2D {void GetDesc(D3D11_TEXTURE2D_DESC* d){*d={};}};
+struct ID3D11RenderTargetView {};
+namespace Microsoft {namespace WRL {template<class T>struct ComPtr {
+ T* value=nullptr;ComPtr()=default;ComPtr(T* p):value(p){}
+ T* Get()const{return value;}T* operator->()const{return value;}
+ explicit operator bool()const{return value!=nullptr;}T** operator&(){return &value;}
+ ComPtr& operator=(T* p){value=p;return *this;}
+};}}
+bool FAILED(int result){return result<0;}
+struct Device {
+ ID3D11Texture2D texture;ID3D11RenderTargetView target;
+ unsigned allocations=0;
+ int CreateTexture2D(D3D11_TEXTURE2D_DESC*,void*,ID3D11Texture2D** out){++allocations;*out=&texture;return 0;}
+ int CreateRenderTargetView(ID3D11Texture2D*,void*,ID3D11RenderTargetView** out){*out=&target;return 0;}
+};
+struct LARGE_INTEGER {long long QuadPart=0;};
+void QueryPerformanceCounter(LARGE_INTEGER* value){value->QuadPart=1;}
+unsigned GetEnvironmentVariableA(char const*,char*,unsigned){return 0;}
+unsigned renders=0,mesh_prepares=0;
+int c3x_renderer64_prepare_unit_meshes(){++mesh_prepares;return C3X_RENDERER_RESULT_OK;}
+bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const&,ID3D11RenderTargetView*,float){++renders;return true;}
+namespace c3x_gpu_images {struct RetainedComposition {
+ struct SampledImage {
+  enum class Kind {unchanged,bgra,frozen,held};Kind kind=Kind::unchanged;
+  static SampledImage frozen(){return {Kind::frozen};}
+  static SampledImage held(){return {Kind::held};}
+  struct Rect {int left,top,right,bottom;};
+  static SampledImage bgra(ID3D11Texture2D*,Rect,float){return {Kind::bgra};}
+ };
+ struct Sample {
+  std::function<SampledImage(long long,long long)> canonical;
+  std::function<SampledImage(long long,long long,float)> projected;
+  std::function<void(long long,long long,float)> prepare;
+  template<class F>Sample(F f):canonical(std::move(f)){}
+  SampledImage operator()(long long t,long long f){return canonical(t,f);}
+ };
+};}
+struct Clip {std::string name="idle";bool ambient=true,loop=true;double duration=1.;unsigned frames=16;};
+struct Unit {std::vector<std::string> keys={"warrior"};std::vector<Clip> actions={Clip{},Clip{"move"}};};
+struct RendererState {
+ struct {std::uint64_t geometry=1,complete=1;} cached_signature;
+ std::uint64_t tile_geometry_epoch=1;std::int64_t gpu_serial=0;unsigned device_generation=1;
+ struct {int value=1;} geometry_viewport_settings;
+ Device owned,*device=&owned;ID3D11Texture2D initial;ID3D11Texture2D* gpu_map_texture=&initial;
+ struct {std::vector<Unit> units=std::vector<Unit>(1);} unit_bodies;
+ std::vector<UnitInstances::ScenePose> fresh_unit_poses;
+ unsigned moving_resources=0,visible_wave_animations=0,visible_water_animations=0,asset_prepares=0;
+ bool water_scene_active=true,wave_ready=true,visibility_pass=true;
+ std::vector<int> resource_animations;
+ int resource_animation_for(c3x_renderer_tile_v1 const& tile)const{return tile.resource_id==101?0:-1;}
+ bool assets_pending=false;
+ unsigned ambient_count()const{return moving_resources+visible_wave_animations+visible_water_animations;}
+ int prepare_frame_unit_assets(std::vector<UnitInstances::ScenePose> const&){++asset_prepares;
+  return assets_pending?C3X_RENDERER_RESULT_PENDING:C3X_RENDERER_RESULT_OK;}
+ struct {void write(char const*,char const*,bool){}double milliseconds(long long){return 0.;}} trace;
+''' + eligibility + r'''
+};
+struct Worker {
+ RendererState renderer_state;UnitInstances unit_instances;DynamicSceneInputs dynamic_inputs;
+ bool camera_active=false;
+ c3x_renderer_frame_v1 job_frame{};c3x_renderer_camera_identity_v1 job_camera_identity{};
+ struct Publication {bool projection_matches=true;bool matches_projection(c3x_renderer_frame_v1 const&,
+  c3x_renderer_camera_identity_v1 const&)const{return projection_matches;}} gpu_publication;
+ unsigned visual_map_samples=0;
+ struct PreparedMapFrame {''' + prepared + r'''
+ std::shared_ptr<PreparedMapFrame> prepared_map;
+ c3x_gpu_images::RetainedComposition::Sample make(){
+  using Sampled=c3x_gpu_images::RetainedComposition::SampledImage;
+  auto capture=dynamic_inputs.capture(job_frame,job_camera_identity);
+  auto selected=dynamic_inputs.capture(job_frame,job_camera_identity);assert(capture&&selected);
+  long long origin=1000;int x=0,y=0,w=128,h=64;
+''' + callback + r'''
+ }
+ void ambient(){renderer_state.visible_water_animations=0;
+  for(unsigned i=0;i<job_frame.tile_count;++i)
+   renderer_state.visible_water_animations+=water_scene_tile(job_frame.tiles[i],job_frame,true);
+ }
+ void body(int id,int x,int y,unsigned flags=C3X_RENDERER_UNIT_STATE_CAPTURED,unsigned color=0){
+  c3x_renderer_unit_state_v1 state{};state.struct_size=sizeof(state);state.kind=C3X_RENDERER_UNIT_STATE_OBSERVE;
+  state.unit_id=id;state.tile_x=x;state.tile_y=y;state.action=1;state.max_hp=3;
+  state.visible=1;state.presentation_frequency=1000;assert(unit_instances.state(state));
+  c3x_renderer_unit_v1 draw{};draw.struct_size=sizeof(draw);draw.unit_id=id;draw.action=1;draw.frame_count=16;
+  draw.sprite_width=draw.sprite_height=191;draw.projection_scale_milli=1000;draw.presentation_frequency=1000;
+  draw.display_color_rgb=color;
+  std::strcpy(draw.unit_key,"warrior");UnitInstances::Selection selected;
+  bool accepted=unit_instances.capture(draw,flags,renderer_state.unit_bodies.units,[](int){return "idle";},selected);
+  assert(accepted==!(flags&C3X_RENDERER_UNIT_HIDDEN));
+ }
+};
+int main(){
+ using Kind=c3x_gpu_images::RetainedComposition::SampledImage::Kind;
+ Worker worker;c3x_renderer_tile_v1 tile{};tile.tile_x=tile.tile_y=4;tile.terrain_type=tile.real_terrain_type=12;
+ tile.tile_flags=C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_VISIBILITY_KNOWN;
+ auto& frame=worker.job_frame;frame.api_version=C3X_RENDERER_API_VERSION;frame.struct_size=sizeof(frame);
+ frame.tiles=&tile;frame.tile_count=1;frame.target_width=frame.tile_width=128;frame.target_height=frame.tile_height=64;
+ frame.presentation_time_ticks=1000;frame.presentation_frequency=1000;
+ worker.ambient();auto sample=worker.make();++worker.renderer_state.gpu_serial;
+ worker.renderer_state.visible_water_animations=1; // A cached different view grants no eligibility.
+ unsigned imports=0;long long tick=1000;
+ auto step=[&](Kind expected,float zoom=1.f){tick+=100;
+  sample.prepare(tick,1000,zoom);auto canonical=sample(tick,1000);
+  assert(canonical.kind==(zoom==1.f||expected==Kind::frozen||expected==Kind::held?expected:Kind::unchanged));
+  auto projected=sample.projected(tick,1000,zoom);
+  assert(projected.kind==(expected==Kind::unchanged?Kind::held:expected));
+  imports+=projected.kind==Kind::bgra;
+ };
+ // Unknown water and its later clock samples do not touch assets or GPU output.
+ for(int i=0;i<3;++i)step(Kind::unchanged);
+ assert(!renders&&!imports&&!mesh_prepares&&!worker.renderer_state.asset_prepares&&!worker.renderer_state.owned.allocations);
+ // Offscreen-only explored water remains idle after its authoritative adoption.
+ tile.tile_flags|=C3X_RENDERER_TILE_EXPLORED;tile.anchor_x=128;
+ ++worker.renderer_state.cached_signature.complete;worker.ambient();step(Kind::bgra);
+ unsigned before=renders,assets=worker.renderer_state.asset_prepares;
+ worker.renderer_state.visible_water_animations=1;
+ for(int i=0;i<3;++i)step(Kind::unchanged);
+ assert(renders==before&&worker.renderer_state.asset_prepares==assets);
+ // Prefetch alone never makes the current view animate either.
+ tile.tile_flags=C3X_RENDERER_TILE_PREFETCH|C3X_RENDERER_TILE_EXPLORED;tile.anchor_x=0;
+ ++worker.renderer_state.cached_signature.complete;worker.ambient();step(Kind::bgra);before=renders;
+ step(Kind::unchanged);assert(renders==before);
+ // Actual on-screen explored water continually adopts the current cosmetic clock.
+ tile.tile_flags=C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_EXPLORED;
+ ++worker.renderer_state.cached_signature.complete;worker.ambient();
+ for(int i=0;i<3;++i)step(Kind::bgra);
+ assert(worker.prepared_map->input.value.presentation_time_ticks==tick);
+ // Settle a visible static land map. A later native body needs just one adoption.
+ tile.terrain_type=tile.real_terrain_type=2;tile.tile_flags|=C3X_RENDERER_TILE_VISIBLE;
+ ++worker.renderer_state.cached_signature.complete;worker.ambient();step(Kind::bgra);
+ before=renders;worker.body(7,4,4);step(Kind::bgra);step(Kind::unchanged);
+ assert(renders==before+1&&worker.prepared_map->poses.size()==1);
+ // Repeat native captures change ordering/generation, not the displayed body proof.
+ worker.body(7,4,4);before=renders;step(Kind::unchanged);assert(renders==before);
+ worker.body(7,4,4,C3X_RENDERER_UNIT_STATE_CAPTURED,0xabcdef);
+ before=renders;step(Kind::bgra);step(Kind::unchanged);assert(renders==before+1);
+ // Hidden/offscreen-only records never wake GPU work on this static view.
+ worker.body(8,6,6);worker.body(9,4,4,C3X_RENDERER_UNIT_STATE_CAPTURED|C3X_RENDERER_UNIT_HIDDEN);
+ before=renders;assets=worker.renderer_state.asset_prepares;step(Kind::unchanged);
+ assert(renders==before&&worker.renderer_state.asset_prepares==assets);
+ // Changed visible body facts are adopted, and removing that body is adopted once.
+ worker.body(7,4,4,C3X_RENDERER_UNIT_STATE_CAPTURED|C3X_RENDERER_UNIT_SELECTED);
+ step(Kind::bgra);step(Kind::bgra); // admitted selected idle animation
+ worker.unit_instances.forget(7);step(Kind::bgra);before=renders;step(Kind::unchanged);assert(renders==before);
+ // An unfinished visible asset cannot settle merely because the next pose matches.
+ worker.body(7,4,4);worker.renderer_state.assets_pending=true;
+ before=renders;step(Kind::held);step(Kind::held);assert(renders==before&&worker.prepared_map->poses.empty());
+ worker.renderer_state.assets_pending=false;step(Kind::bgra);step(Kind::unchanged);
+ // Traveling native units and ambient resources keep their existing delivery.
+ c3x_renderer_unit_move_v1 move{};move.struct_size=sizeof(move);move.unit_id=7;
+ move.old_x=move.old_y=4;move.new_x=6;move.new_y=4;move.action=2;
+ move.source_visible=move.target_visible=1;move.presentation_frequency=1000;move.presentation_time_ticks=tick;
+ assert(worker.unit_instances.begin_motion(move,100,100,false,false));
+ step(Kind::bgra);assert(worker.prepared_map->poses[0].travelling);step(Kind::bgra);
+ worker.unit_instances.forget(7);step(Kind::bgra);
+ worker.renderer_state.moving_resources=1;worker.renderer_state.resource_animations={1};tile.resource_id=101;
+ ++worker.renderer_state.cached_signature.complete;step(Kind::bgra);step(Kind::bgra);
+ worker.renderer_state.moving_resources=0;step(Kind::unchanged);
+ // Projection zoom and compatible authoritative content each get one new front.
+ step(Kind::bgra,.75f);before=renders;step(Kind::unchanged,.75f);assert(renders==before);
+ ++worker.renderer_state.tile_geometry_epoch;step(Kind::bgra,.75f);step(Kind::unchanged,.75f);
+ ++worker.renderer_state.cached_signature.complete;worker.gpu_publication.projection_matches=false;
+ before=renders;step(Kind::unchanged,.75f);assert(renders==before);
+ worker.gpu_publication.projection_matches=true;step(Kind::bgra,.75f);step(Kind::unchanged,.75f);
+ // Capture retirement freezes the dependency; idleness alone never freezes it.
+ worker.dynamic_inputs.invalidate();step(Kind::frozen,.75f);
+ assert(imports==renders&&worker.visual_map_samples==renders);
+}
+''')
+
+    def test_fresh_metadata_reports_actual_animation_demand(self):
+        source = Path(__file__).with_name("c3x_renderer.cpp").read_text()
+        poll = source.split("int poll_gpu_camera_view(", 1)[1].split("if(inspect_only){", 1)[1].split(
+            "int result=adopt_gpu_camera_locked", 1)[0]
+        metadata = source.split("gpu_metadata.visible_animation_count=job_frame.visible_animation_count+", 1)[1].split(
+            "gpu_metadata.clip_left=", 1)[0]
+        run_cpp(r'''
+#include <cassert>
+#include "Renderer/native/c3x_renderer_api.h"
+#include "Renderer/native/gpu_frame_api.h"
+struct Worker {
+ long long camera_ticket=7;int camera_result=C3X_RENDERER_RESULT_OK;bool camera_active=false,camera_ready_prepared=true;
+ struct {c3x_renderer_camera_identity_v1 identity{};c3x_renderer_frame_v1 frame{};c3x_renderer_output_v1 output{};
+  struct {bool texture=true;}resident;int phase_x=0,phase_y=0;bool fresh=true;}camera_ready;
+ c3x_renderer_frame_v1 job_frame{};
+ struct {c3x_renderer_frame_v1 frame{};c3x_renderer_output_v1 output{};bool fresh=true;}gpu_publication;
+ c3x_renderer_output_v1 gpu_metadata{};
+ int inspect(long long ticket,c3x_renderer_gpu_camera_view_v1& view){
+  c3x_renderer_gpu_camera_view_v1 next={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(next)};
+  {''' + poll + r'''
+  return C3X_RENDERER_RESULT_PENDING;
+ }
+ void published(){gpu_metadata.visible_animation_count=job_frame.visible_animation_count+''' + metadata + r'''
+ }
+};
+int main(){
+ Worker worker;c3x_renderer_gpu_camera_view_v1 view{};
+ assert(worker.inspect(7,view)==C3X_RENDERER_RESULT_OK);
+ assert(!view.camera.output.visible_animation_count&&!view.camera.output.request_continuous_redraw);
+ worker.published();assert(!worker.gpu_metadata.visible_animation_count&&!worker.gpu_metadata.request_continuous_redraw);
+ worker.camera_ready.output.visible_animation_count=2;worker.camera_ready.output.request_continuous_redraw=1;
+ assert(worker.inspect(7,view)==C3X_RENDERER_RESULT_OK&&view.camera.output.visible_animation_count==2);
+ worker.job_frame.visible_animation_count=3;worker.gpu_publication.frame.visible_animation_count=4;
+ worker.gpu_publication.output.visible_animation_count=6;worker.published();
+ assert(worker.gpu_metadata.visible_animation_count==5&&worker.gpu_metadata.request_continuous_redraw==1);
+}
+''')

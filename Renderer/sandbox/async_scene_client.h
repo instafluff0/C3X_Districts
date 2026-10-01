@@ -292,6 +292,21 @@ public:
         auto size=sizeof(destination)+capture.primitives.size()*sizeof(capture.primitives[0]);
         return post(size,[this,capture=std::move(capture),destination]()mutable{target(destination);require_result(transport.tactical(capture,destination),"tactical");},0,"tactical");
     }
+    // Loading admission stays ordered, but returns only after ownership transfer.
+    // The native callback itself remains on the caller/game thread between pages.
+    int seed_world_scope(c3x_renderer_camera_request_v1 const& request){
+        auto frame=copy_frame(*request.frame);auto identity=request.identity;
+        return enabled?publication.setup([this,frame,identity]{
+            c3x_renderer_camera_request_v1 value={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(value),&frame->value,identity};
+            return transport.seed_world_scope(value);
+        }):transport.seed_world_scope(request);
+    }
+    int world_seed_query(c3x_renderer_world_page_v1& page){
+        return enabled?publication.setup([&]{return transport.world_query(page);}):transport.world_query(page);
+    }
+    int world_seed_submit(c3x_renderer_world_page_v1 const& page,int code){
+        return enabled?publication.setup([&]{return transport.world_submit(page,code);}):transport.world_submit(page,code);
+    }
     int world_query(c3x_renderer_world_page_v1& page){return enabled?query_page(world_page,page,false):transport.world_query(page);}
     int world_delta_scope(c3x_renderer_world_page_v1& page){
         if(!enabled)return transport.world_delta_scope(page);

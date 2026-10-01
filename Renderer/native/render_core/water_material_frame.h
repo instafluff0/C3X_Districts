@@ -9,12 +9,15 @@ struct WaterMaterialFrame {
     float time=0, drift[3]={};
     float camera[4]={}; // natural-world center XY, wrapped raw-world periods XY
 };
-inline bool water_scene_tile(c3x_renderer_tile_v1 const& tile,bool visibility_pass){
+inline bool water_scene_tile(c3x_renderer_tile_v1 const& tile,c3x_renderer_frame_v1 const& frame,bool visibility_pass){
     // Civ III m49 is the underlying biome; m50 is the visible square category.
     // A coast can have a land-like m49 value even though its rendered surface
-    // is water. Fogged tiles must not keep the material clock running.
+    // is water. Explored water shares the current cosmetic clock under fog;
+    // prefetch records and offscreen occurrences cannot start that clock.
     return (tile.tile_flags&C3X_RENDERER_TILE_RENDER) &&
-        (!visibility_pass || (tile.tile_flags&C3X_RENDERER_TILE_VISIBLE)) &&
+        c3x_renderer_i64(tile.anchor_x)+frame.tile_width>0 && tile.anchor_x<frame.target_width &&
+        c3x_renderer_i64(tile.anchor_y)+frame.tile_height>0 && tile.anchor_y<frame.target_height &&
+        (!visibility_pass || (tile.tile_flags&C3X_RENDERER_TILE_EXPLORED)) &&
         (tile.real_terrain_type>=11 || tile.terrain_type>=11 || (tile.river_code&170u));
 }
 inline WaterMaterialFrame water_material_frame(c3x_renderer_frame_v1 const& frame) {

@@ -57,11 +57,16 @@ public:
             auto const& tile=page.tiles[i];auto n=cursor+i;
             int y=int(n/unsigned(width/2)),x=int(2*(n%unsigned(width/2)))+(y&1);
             bool explored=(tile.tile_flags&C3X_RENDERER_TILE_EXPLORED)!=0;
+            bool visible=(tile.tile_flags&C3X_RENDERER_TILE_VISIBLE)!=0;
             bool full=(tile.tile_flags&C3X_RENDERER_TILE_PREFETCH)!=0;
             if(tile.tile_x!=x || tile.tile_y!=y ||
                !(tile.tile_flags&C3X_RENDERER_TILE_VISIBILITY_KNOWN) ||
                !(tile.tile_flags&C3X_RENDERER_TILE_TOPOLOGY_HALO) ||
-               (explored&&!full) || (tile.tile_flags&C3X_RENDERER_TILE_RENDER))return false;
+               (visible&&!full) || (tile.tile_flags&C3X_RENDERER_TILE_RENDER))return false;
+            // Reconciliation may supply visibility-only explored fog. It must
+            // preserve previously permitted art, never acquire hidden live art.
+            // CapturedScene keeps missing full authority unavailable until a
+            // later permitted capture; visible records require that full copy.
             if(!explored){
                 // Older input journals carried full hidden art. Strip it at the
                 // adoption boundary while preserving their replayable fog facts.

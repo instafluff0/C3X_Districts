@@ -95,16 +95,17 @@ Tile null_tile{&vtable};Tile* p_null_tile=&null_tile;
 std::vector<Tile> tiles(5000,Tile{&vtable});int absent=-1;
 Tile* tile_at(int x,int y){int at=(y*bic.Map.Width+x)/2;return at==absent?p_null_tile:&tiles.at(at);}
 unsigned modern_calls=0,legacy_calls=0,resident_calls=0;c3x_renderer_camera_identity_v1 received{};
+std::vector<int> order;
 int resident_result=C3X_RENDERER_RESULT_OK;bool probe=true;
 bool custom_renderer_native_probe_on(){return probe;}
 int resident(int action,void* image,c3x_renderer_camera_request_v1 const* r,c3x_renderer_camera_view_v1* v){
  v->frame.presentation_time_ticks=55;
- assert(action==C3X_NATIVE_MAP_PREPARE&&image&&r);++resident_calls;received=r->identity;return resident_result;
+ assert(action==C3X_NATIVE_MAP_PREPARE&&image&&r);order.push_back(3);++resident_calls;received=r->identity;return resident_result;
 }
 int modern(c3x_renderer_camera_request_v1 const* r,c3x_renderer_output_v1*){
- assert(r->version==C3X_RENDERER_CAMERA_VIEW_VERSION && r->struct_size==sizeof(*r));received=r->identity;++modern_calls;return 7;
+ assert(r->version==C3X_RENDERER_CAMERA_VIEW_VERSION && r->struct_size==sizeof(*r));order.push_back(4);received=r->identity;++modern_calls;return 7;
 }
-int legacy(c3x_renderer_frame_v1 const*,c3x_renderer_output_v1*){++legacy_calls;return 9;}
+int legacy(c3x_renderer_frame_v1 const*,c3x_renderer_output_v1*){order.push_back(5);++legacy_calls;return 9;}
 struct LoadingForm {struct {int field_574[4]{};}GUI;} form;auto p_main_screen_form=&form;
 struct State {
  unsigned custom_renderer_presented_frames=1;
@@ -123,10 +124,23 @@ struct State {
  long long custom_renderer_world_topology_revision=0,custom_renderer_visibility_revision=0;
  long long custom_renderer_map_epoch=0,custom_renderer_viewer_epoch=0,custom_renderer_display_viewer_epoch=0;
  bool custom_renderer_world_audit_needed=true;
+ bool custom_renderer_capture_world_topology=false;
  c3x_renderer_world_reconcile_fn custom_renderer_world_reconcile=nullptr;
  unsigned custom_renderer_requested_frames=0;LARGE_INTEGER custom_renderer_qpc_frequency{1000};
  unsigned custom_renderer_dirty_flags=0;bool custom_renderer_redraw_pending=false;
 } state;State* is=&state;
+// The helpers have their own extracted-body tests. Here their controlled
+// results exercise the actual composite dispatch's ordering and early return.
+int seed_result=1,bootstrap_result=1;
+int seed_custom_renderer_initial_world(c3x_renderer_camera_request_v1 const* request){
+ assert(request&&request->version==C3X_RENDERER_CAMERA_VIEW_VERSION&&request->frame);
+ assert(request->identity.map_epoch==state.custom_renderer_map_epoch&&
+        request->identity.viewer_epoch==state.custom_renderer_viewer_epoch&&
+        request->identity.visibility_epoch==state.custom_renderer_visibility_revision&&
+        request->identity.scene_epoch==request->frame->world_topology_revision);
+ order.push_back(1);return seed_result;
+}
+int bootstrap_custom_renderer_initial_units(){order.push_back(2);return bootstrap_result;}
 ''' + world + '\nbool viewer(int visible_to_civ_id){\n' + viewer + '\nreturn true;}\nvoid retire(){\n' + retire + r'''
 }
 int demand(){void* image=is;c3x_renderer_frame_v1 frame={};frame.presentation_time_ticks=77;frame.world_topology_revision=is->custom_renderer_world_topology_revision;c3x_renderer_output_v1 output={};
@@ -199,6 +213,24 @@ int main(){
  assert(demand()==0&&state.custom_renderer_redraw_pending&&
         (state.custom_renderer_dirty_flags&C3X_RENDERER_DIRTY_SCENE));
  probe=false;assert(demand()==C3X_RENDERER_RESULT_BAD_ARGUMENT&&!modern_calls&&resident_calls==4);
+ // A first-view camera may never race initial world/body admission. Failure
+ // requests a later native redraw and leaves both modern and legacy paths idle.
+ probe=true;resident_result=C3X_RENDERER_RESULT_OK;
+ state.custom_renderer_capture_world_topology=true;
+ auto before_resident=resident_calls;
+ seed_result=C3X_RENDERER_RESULT_BAD_ARGUMENT;order.clear();
+ state.custom_renderer_dirty_flags=0;state.custom_renderer_redraw_pending=false;
+ assert(demand()==0&&order==std::vector<int>{1}&&resident_calls==before_resident);
+ assert(state.custom_renderer_redraw_pending&&(state.custom_renderer_dirty_flags&C3X_RENDERER_DIRTY_SCENE));
+ seed_result=C3X_RENDERER_RESULT_OK;bootstrap_result=C3X_RENDERER_RESULT_PENDING;order.clear();
+ state.custom_renderer_dirty_flags=0;state.custom_renderer_redraw_pending=false;
+ assert(demand()==0&&order==std::vector<int>({1,2})&&resident_calls==before_resident);
+ assert(state.custom_renderer_redraw_pending&&(state.custom_renderer_dirty_flags&C3X_RENDERER_DIRTY_SCENE));
+ bootstrap_result=C3X_RENDERER_RESULT_OK;order.clear();
+ assert(demand()==C3X_RENDERER_RESULT_OK&&order==std::vector<int>({1,2,3}));
+ // Frozen/legacy profiles skip both initial helpers, preserving their dispatch.
+ state.custom_renderer_capture_world_topology=false;order.clear();
+ assert(demand()==C3X_RENDERER_RESULT_OK&&order==std::vector<int>{3});
  std::free(state.custom_renderer_world_topology);
 }
 ''')

@@ -17,7 +17,7 @@ template<class Chunk> struct GeometryDrawRecord {
     unsigned ordinal=0;
     int tile_x=0,tile_y=0;
     unsigned territory_edges=0,territory_rgb=0;
-    bool water_dependent=false,water_visible=true; // Per-occurrence visibility, never resident mesh state.
+    bool water_dependent=false,water_visible=true; // Per-occurrence explored cosmetic eligibility, never resident mesh state.
 
     GeometryDrawRecord()=default;
     GeometryDrawRecord(Chunk const& chunk):source(&chunk),bounds(chunk.bounds),

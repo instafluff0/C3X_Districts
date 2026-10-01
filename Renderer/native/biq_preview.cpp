@@ -830,9 +830,12 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
         auto saved_tiles=tiles;
         for(auto& tile:tiles){tile.tile_flags|=C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_EXPLORED;tile.tile_flags&=~C3X_RENDERER_TILE_VISIBLE;}
         ok=ok && draw();auto fog=pixels();ok=ok && save(".water-fog.bmp");
+        unsigned fog_changes=0;
         for(int second:{3,7,11}){frame.presentation_time_ticks=second*frame.presentation_frequency;
-            ok=ok && draw() && pixels()==fog && output.visible_animation_count==0;}
-        std::printf("WATER fog: %s frozen_frames=3\n",ok?"pass":"FAIL");
+            ok=ok && draw() && output.visible_animation_count && output.request_continuous_redraw;
+            auto current=pixels();fog_changes+=current!=fog;fog=std::move(current);}
+        ok=ok && fog_changes==3;
+        std::printf("WATER fog: %s animated_frames=%u current_cosmetic_clock=1\n",ok?"pass":"FAIL",fog_changes);
         tiles=saved_tiles;frame.tiles=tiles.data();
         frame.presentation_time_ticks=frame.presentation_frequency;
         ok=ok && draw() && pixels()==initial;
@@ -2227,16 +2230,21 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
                 std::abs(t.anchor_x-frame.target_width/2)+std::abs(t.anchor_y-frame.target_height/2):INT_MAX;};return distance(a)<distance(b);});
         if(animal!=tiles.end()){animal->resource_id=101;animal->resource_class=0;strcpy_s(animal->resource_name,"Cattle");}
         for(auto& tile:tiles){tile.tile_flags|=C3X_RENDERER_TILE_EXPLORED;tile.tile_flags&=~C3X_RENDERER_TILE_VISIBLE;}
-        ok=render_checked(&frame,&output)==C3X_RENDERER_RESULT_OK && output.visible_animation_count==0 && !output.request_continuous_redraw;
-        auto frozen_start=static_cast<unsigned char const*>(output.bgra_pixels);
-        std::vector<unsigned char> frozen(frozen_start,frozen_start+output.stride_bytes*output.height);
+        ok=render_checked(&frame,&output)==C3X_RENDERER_RESULT_OK;
+        bool fog_water=output.visible_animation_count!=0;
+        ok=ok && bool(output.request_continuous_redraw)==fog_water;
+        auto fog_start=static_cast<unsigned char const*>(output.bgra_pixels);
+        std::vector<unsigned char> fog_sample(fog_start,fog_start+output.stride_bytes*output.height);
         for(int step=0;ok && step<3;++step){frame.presentation_time_ticks+=frame.presentation_frequency/3;
             ok=render_checked(&frame,&output)==C3X_RENDERER_RESULT_OK && !output.geometry_tiles_built && !output.geometry_upload_bytes &&
-                !output.visible_animation_count && !std::memcmp(frozen.data(),output.bgra_pixels,frozen.size());}
+                bool(output.visible_animation_count)==fog_water && bool(output.request_continuous_redraw)==fog_water &&
+                (std::memcmp(fog_sample.data(),output.bgra_pixels,fog_sample.size())!=0)==fog_water;
+            if(ok){auto current=static_cast<unsigned char const*>(output.bgra_pixels);
+                fog_sample.assign(current,current+output.stride_bytes*output.height);}}
         reset();
         ok=ok && set_definitions(argv[2],argv[3],nullptr,custom_path)==C3X_RENDERER_RESULT_OK && render_checked(&frame,&output)==C3X_RENDERER_RESULT_OK &&
-            !std::memcmp(frozen.data(),output.bgra_pixels,frozen.size());
-        std::printf("VISIBILITY fogged motion: %s frozen_frames=3 cold_exact=1 animations=%u\n",ok?"pass":"FAIL",output.visible_animation_count);
+            !std::memcmp(fog_sample.data(),output.bgra_pixels,fog_sample.size());
+        std::printf("VISIBILITY fogged motion: %s cosmetic_water=%u sampled_frames=3 cold_exact=1 animations=%u\n",ok?"pass":"FAIL",unsigned(fog_water),output.visible_animation_count);
         auto first=static_cast<unsigned char const*>(output.bgra_pixels);
         std::vector<unsigned char> before(first,first+output.stride_bytes*output.height);
         // Authoritative reveal only: anchors, geometry and object state stay fixed.

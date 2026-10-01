@@ -547,7 +547,7 @@ struct RendererState {
     bool shared_scene_surface=false,water_scene_active=false;unsigned visible_wave_animations=0;
     bool throw_cancellation=false,throw_failure=false;
     bool render(c3x_renderer_frame_v1 const& f,c3x_renderer_output_v1& out,int=-1,
-                std::atomic<bool> const* stop=nullptr,std::uint64_t=0,unsigned const* =nullptr,unsigned=0,c3x_renderer_frame_v1 const* =nullptr,D3D11_RECT const* =nullptr){
+                std::atomic<bool> const* stop=nullptr,std::uint64_t=0,unsigned const* =nullptr,unsigned=0,c3x_renderer_frame_v1 const* =nullptr,std::function<void()> service={},D3D11_RECT const* =nullptr){
         ++entered;
         if(throw_failure)throw std::runtime_error("fixture runtime failure");
         if(f.presentation_time_ticks==101)++target_clock_entries;

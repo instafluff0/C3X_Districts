@@ -153,7 +153,7 @@ struct State {
  struct World {int at(int)const{return 2;}};
  struct Coast {World world()const{return {};}int node_revision(int)const{return 3;}} world_coast;
  struct Record {int semantic=4;} record;
- struct Topology {Record value;Record const* current(int key)const{return key?&value:nullptr;}} topology_cache;
+ struct Topology {Record value;Record const* current(int key)const{return key?&value:nullptr;}Topology const& world_view()const{return *this;}} topology_cache;
  c3x_renderer::fidelity::NaturalWorld natural;
  bool terrain_result_valid(c3x_renderer::Part const& p){
   for(auto x:p.world)if(x.second!=2)return false;
@@ -185,5 +185,77 @@ int main(){
  for(unsigned i=0;i<context.size();++i){++context[i];assert(first!=c3x_renderer::world_preparation_key(context,frame));--context[i];}
  ++frame.tile_width;assert(first!=c3x_renderer::world_preparation_key(context,frame));--frame.tile_width;
  ++frame.target_width;assert(first!=c3x_renderer::world_preparation_key(context,frame));
+}
+''')
+
+
+class PersistentTileProofTests(unittest.TestCase):
+    def test_production_proof_separates_world_dependencies_native_anchors_and_gpu_residency(self):
+        source=(ROOT/'Renderer/native/c3x_renderer.cpp').read_text()
+        method='bool tile_content_valid('+source.split('bool tile_content_valid(',1)[1].split('\n    bool restore_viewport_geometry',1)[0]
+        run_cpp(r'''
+#include "Renderer/native/render_core/scene_publication.h"
+#include <cassert>
+#include <map>
+#include <vector>
+using namespace c3x_renderer::render_core;
+struct CachedTileGeometry {
+ bool shared_natural=false,world_ground=true,world_objects=true,validity=false;
+ ContentHandle natural_content{};
+ std::uint64_t validity_epoch=0,validity_world_sequence=0;
+ int validity_anchor_x=0,validity_anchor_y=0,source_tile_width=128;
+ std::vector<std::pair<std::uint64_t,std::uint64_t>> appearance_dependencies,dependencies,coast_dependencies;
+ std::vector<std::pair<std::size_t,std::uint32_t>> world_dependencies;
+ std::vector<std::pair<std::uint64_t,std::array<int,2>>> anchor_dependencies;
+ std::vector<int> river_dependencies;
+};
+struct State {
+ CapturedScene topology_cache;
+ struct Resident {bool available=true;struct Value{bool shared_natural=true;} value;
+  Value const* resolve(ContentHandle)const{return available?&value:nullptr;}} resident_content;
+ struct World{unsigned at(std::size_t)const{return 7;}};
+ struct Coast{World world()const{return {};}std::uint64_t node_revision(std::uint64_t)const{return 8;}} world_coast;
+ struct Rivers{bool valid(std::vector<int>const&)const{return true;}} natural;
+ unsigned frame_tile_invalid_shared=0,frame_tile_invalid_appearance=0,frame_tile_invalid_semantic=0,
+  frame_tile_invalid_coast=0,frame_tile_invalid_world=0,frame_tile_invalid_anchor=0,frame_tile_invalid_river=0;
+ int shadow_tile_width=128;
+'''+method+r'''
+};
+int main(){
+ State state;ScenePublication journal;c3x_renderer_camera_identity_v1 identity{};identity.map_epoch=identity.viewer_epoch=1;
+ c3x_renderer_frame_v1 f{};f.world_width_tiles=f.world_height_tiles=16;f.world_wrap_x=1;
+ c3x_renderer_tile_v1 tiles[3]{};
+ for(int i=0;i<3;++i){tiles[i].tile_x=2+2*i;tiles[i].tile_y=2;tiles[i].terrain_type=tiles[i].real_terrain_type=2;
+  tiles[i].city_id=-1;tiles[i].tile_flags=C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_TOPOLOGY_HALO|
+   C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_EXPLORED|C3X_RENDERER_TILE_VISIBLE;
+  tiles[i].anchor_x=100+128*i;tiles[i].anchor_y=200;}
+ f.tiles=tiles;f.tile_count=3;bool changed=false;assert(journal.capture(f,identity)&&journal.apply(state.topology_cache,changed));
+ auto observe=[&]{assert(state.topology_cache.begin(f));for(unsigned i=0;i<f.tile_count;++i)
+  assert(state.topology_cache.update(f.tiles[i],2,-1,2,CapturedScene::topology(f.tiles[i])));state.topology_cache.finish();};observe();
+ auto proof=[&](int input){CachedTileGeometry value;value.natural_content={1,1};
+  auto key=state.topology_cache.key(tiles[input].tile_x,2);value.dependencies={{key,CapturedScene::topology(tiles[input])}};
+  value.appearance_dependencies={{key,state.topology_cache.world_appearance_revision(key)}};
+  value.coast_dependencies={{1,8}};value.world_dependencies={{1,7}};return value;};
+ auto related=proof(1),unrelated=proof(2);auto world=state.topology_cache.world_snapshot();
+ assert(state.tile_content_valid(related,tiles[0])&&state.tile_content_valid(unrelated,tiles[0]));
+ // World dependencies retain authority when a camera no longer observes them.
+ f.tile_count=1;tiles[0].anchor_x+=500;observe();assert(world==state.topology_cache.world_snapshot());
+ assert(!state.topology_cache.current(state.topology_cache.key(4,2)));
+ assert(state.tile_content_valid(related,tiles[0])&&state.tile_content_valid(unrelated,tiles[0]));
+ // Native anchor proofs still fail when their actual occurrence is absent.
+ auto native=related;native.anchor_dependencies={{state.topology_cache.key(4,2),{128,0}}};native.validity_epoch=0;
+ assert(!state.tile_content_valid(native,tiles[0])&&state.frame_tile_invalid_anchor==1);
+ // A copied local mutation invalidates precisely its dependency closure.
+ auto edit=tiles[1];edit.road_mask=3;f.tiles=&edit;assert(journal.capture(f,identity)&&journal.apply(state.topology_cache,changed));
+ f.tiles=tiles;observe();assert(!state.tile_content_valid(related,tiles[0]));assert(state.tile_content_valid(unrelated,tiles[0]));
+ assert(world->current(world->key(4,2))->semantic==CapturedScene::topology(tiles[1]));
+ // An explicitly absent input is a dependency: later admission cannot reuse it.
+ auto absent=unrelated;auto key=state.topology_cache.key(8,2);absent.dependencies={{key,0}};absent.validity_epoch=0;
+ assert(state.tile_content_valid(absent,tiles[0]));edit.tile_x=8;f.tiles=&edit;
+ assert(journal.capture(f,identity)&&journal.apply(state.topology_cache,changed));f.tiles=tiles;observe();
+ assert(!state.tile_content_valid(absent,tiles[0]));
+ // GPU residency is independent from unchanged world input authority.
+ state.resident_content.available=false;assert(!state.tile_content_valid(unrelated,tiles[0]));
+ assert(state.frame_tile_invalid_shared==1);
 }
 ''')

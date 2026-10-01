@@ -61,6 +61,8 @@ int main(){
 using RECT=int;
 constexpr int C3X_NATIVE_UNIT_DRAW=1,C3X_RENDERER_RESULT_OK=1,C3X_RENDERER_RESULT_ERROR=0;
 int reply=0,errors=0;
+struct State {bool custom_renderer_unit_bootstrap=false,custom_renderer_unit_bootstrap_failed=false;
+ unsigned custom_renderer_unit_bootstrap_copies=0;} state,*is=&state;
 int translate_custom_renderer_native(int,int*,int*,RECT*,RECT*,unsigned){return reply;}
 void log_custom_renderer_event(char const*,int){++errors;}
 struct Unit {struct {struct {int left=0,top=0,right=0,bottom=0;}Rect;}Body;}unit;
@@ -73,6 +75,10 @@ int main(){
  reply=0;assert(!forward()&&errors==1&&unit.Body.Rect.right==0);
  reply=-1;assert(!forward()&&errors==2&&unit.Body.Rect.right==0);
  reply=1;assert(forward()&&errors==2&&unit.Body.Rect.left==-1&&unit.Body.Rect.bottom==4);
+ state.custom_renderer_unit_bootstrap=true;reply=0;
+ assert(!forward()&&state.custom_renderer_unit_bootstrap_failed&&!state.custom_renderer_unit_bootstrap_copies);
+ state.custom_renderer_unit_bootstrap_failed=false;reply=1;
+ assert(forward()&&!state.custom_renderer_unit_bootstrap_failed&&state.custom_renderer_unit_bootstrap_copies==1);
 }
 ''')
 

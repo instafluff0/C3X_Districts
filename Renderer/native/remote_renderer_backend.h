@@ -121,15 +121,24 @@ public:
     }
     int camera_begin(c3x_renderer_camera_request_v1 const& request,c3x_renderer_i64& ticket){
         std::lock_guard<std::mutex> lock(gate);
-        // Facts observed before the first scoped camera may be superseded by
-        // its adoption. The next native traversal republishes those facts.
-        unit_facts.clear();return client.camera_begin(request,ticket);
+        // World seed established the scope before native representative capture.
+        // Camera movement preserves those copied facts and their incarnation.
+        return client.camera_begin(request,ticket);
     }
     int camera_poll(c3x_renderer_i64 ticket,c3x_renderer_gpu_camera_view_v1& view){
         std::lock_guard<std::mutex> lock(gate);return client.camera_poll(ticket,view);
     }
     int camera_cancel(c3x_renderer_i64 ticket){
         std::lock_guard<std::mutex> lock(gate);return client.camera_cancel(ticket);
+    }
+    int seed_world_scope(c3x_renderer_camera_request_v1 const& request){
+        std::lock_guard<std::mutex> lock(gate);unit_facts.clear();return client.seed_world_scope(request);
+    }
+    int world_seed_query(c3x_renderer_world_page_v1& page){
+        std::lock_guard<std::mutex> lock(gate);return client.world_seed_query(page);
+    }
+    int world_seed_submit(c3x_renderer_world_page_v1 const& page,int result){
+        std::lock_guard<std::mutex> lock(gate);return client.world_seed_submit(page,result);
     }
     int world_query(c3x_renderer_world_page_v1& page){
         std::lock_guard<std::mutex> lock(gate);return client.world_query(page);

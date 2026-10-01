@@ -206,31 +206,67 @@ int main(){
  NaturalData natural;natural.fields.resize(1);auto& field=natural.fields[0];
  field.width=field.height=16;field.pixels.resize(256);
  for(unsigned i=0;i<256;++i)field.pixels[i]=std::uint8_t(i*31);field.minimum=0;field.maximum=1;
+ // The actual jungle-floor compiler selects recipes25..34 and reads its
+ // selected body's hull. A height field alone is not a valid natural source.
+ natural.bodies.resize(1);natural.bodies[0].vertices={
+  {{-.5f,-.5f,0},{0,0,1},{0,0}},{{.5f,-.5f,0},{0,0,1},{1,0}},{{.5f,.5f,0},{0,0,1},{1,1}}};
+ natural.recipes.resize(35);
+ natural.recipes[0]={0,1,0,180,0,0,2,1,0};natural.recipes[25]={0,1,0,121,0,0,2,1,0};
  std::array<ReliefFields,14> assets;render_core::World dimensions{16,16,false,false};
  std::vector<std::uint32_t> data(128,2+(2<<8));render_core::WorldCoast world;
  TerrainCompileScratch foreground;std::array<TerrainCompileScratch,4> scratch;
  TerrainPreparation pool;
- for(int real:{2,5,6,8}){
+ auto equal=[](TerrainSurfaces const& result,TerrainSurfaces const& expected){
+  assert(result.world==expected.world && result.coast==expected.coast);
+  assert(result.rivers.size()==expected.rivers.size());
+  for(unsigned i=0;i<result.rivers.size();++i){auto const& a=result.rivers[i];auto const& b=expected.rivers[i];
+   assert(a.first==b.first && a.second->values==b.second->values);
+   assert(a.second->inputs->values==b.second->inputs->values && a.second->inputs->flow==b.second->inputs->flow);}
+  for(unsigned layer=0;layer<3;++layer){auto const& a=result.meshes[layer];auto const& b=expected.meshes[layer];
+   assert(a.vertices==b.vertices && a.indices==b.indices && a.bounds==b.bounds);
+   assert(a.world_low==b.world_low && a.world_high==b.world_high && a.projected_bounds.extent==b.projected_bounds.extent);
+   assert(a.vertex_stride==b.vertex_stride && a.index_stride==b.index_stride && a.shared_grid==b.shared_grid);}
+ };
+ // Keep exact default-lattice recovery parity, and exercise admitted bounded
+ // work separately. The uniform64-lattice hill exceeds the compiler's8MiB
+ // raw transient bound even though its packed result fits the queue budget.
+ for(bool bounded:{false,true})for(int real:{2,5,6,8}){
   std::fill(data.begin(),data.end(),2+(real<<8));world.update(dimensions,data.data(),data.size(),real);
   TerrainCompileInput input;input.tile_x=8;input.tile_y=4;input.real_terrain_type=real;input.ground=2;
   input.tile_width=128;input.tile_height=64;input.target_height=480;input.world_revision=real;
-  input.key[0]=real;
-  auto expected=compile_terrain_surfaces(natural,assets,world,input,foreground,[]{return false;},false);
+  input.detail.mountain=bounded?32:64;input.key[0]=real;input.key[2]=input.detail.identity();
+  auto expected=compile_terrain_surfaces(natural,assets,world,input,foreground,[]{return false;},bounded);
   assert(expected && !expected->meshes[real==6?2:0].empty());
+  assert(expected->bytes()<TerrainPreparation::byte_limit);
+  if(real==6 || real==8)assert(!expected->rivers.empty()); // Includes empty river-bucket proofs.
   std::deque<TerrainPreparation::Job> jobs;
   for(int i=0;i<12;++i){auto job=input;job.key[1]=i;jobs.push_back({job.key,job});}
   pool.configure(jobs,[&](auto const& job,auto const& stop,unsigned worker){
-   return compile_terrain_surfaces(natural,assets,world,job,scratch[worker],[&]{return stop.load();});
+   return compile_terrain_surfaces(natural,assets,world,job,scratch[worker],[&]{return stop.load();},bounded);
   },4);pool.resume();
   for(auto const& job:jobs){auto result=pool.take(job.key);assert(result);
-   assert(result->world==expected->world && result->coast==expected->coast);
-   for(unsigned layer=0;layer<3;++layer){auto const& a=result->meshes[layer];auto const& b=expected->meshes[layer];
-    assert(a.vertices==b.vertices && a.indices==b.indices && a.bounds==b.bounds);
-    assert(a.world_low==b.world_low && a.world_high==b.world_high && a.projected_bounds.extent==b.projected_bounds.extent);
-    assert(a.vertex_stride==b.vertex_stride && a.index_stride==b.index_stride && a.shared_grid==b.shared_grid);}
+   equal(*result,*expected);
   }
   pool.clear();
  }
+ // Rejection is admission, not a geometry discrepancy or an oversized ready
+ // result. Foreground recovery still runs the very same production compiler.
+ std::fill(data.begin(),data.end(),2+(5<<8));world.update(dimensions,data.data(),data.size(),20);
+ TerrainCompileInput oversized;oversized.tile_x=8;oversized.tile_y=4;oversized.real_terrain_type=5;
+ oversized.ground=2;oversized.tile_width=128;oversized.tile_height=64;oversized.target_height=480;
+ oversized.world_revision=20;oversized.key[0]=20;
+ auto recovery=compile_terrain_surfaces(natural,assets,world,oversized,foreground,[]{return false;},false);
+ assert(recovery && recovery->bytes()<TerrainPreparation::byte_limit);
+ assert(!compile_terrain_surfaces(natural,assets,world,oversized,foreground,[]{return false;},true));
+ pool.configure({{oversized.key,oversized}},[&](auto const& job,auto const& stop,unsigned worker){
+  return compile_terrain_surfaces(natural,assets,world,job,scratch[worker],[&]{return stop.load();},true);
+ });pool.resume();assert(!pool.take(oversized.key));pool.pause();assert(pool.statistics().rejected==1);pool.clear();
+ // Cancel after mesh generation has begun; private scratch must be reusable.
+ unsigned checks=0;
+ assert(!compile_terrain_surfaces(natural,assets,world,oversized,foreground,[&]{return ++checks==20;},false));
+ assert(checks==20);
+ auto retried=compile_terrain_surfaces(natural,assets,world,oversized,foreground,[]{return false;},false);
+ assert(retried);equal(*retried,*recovery);
  auto cancelled=compile_terrain_surfaces(natural,assets,world,TerrainCompileInput{},foreground,[]{return true;});
  assert(!cancelled);
 }

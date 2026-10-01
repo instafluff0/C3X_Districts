@@ -15,17 +15,18 @@ struct WorldPreparationTopology {
     render_core::WorldCoast coast;
     std::shared_ptr<WorldPreparationMemory> memory;
     std::size_t size;
-    WorldPreparationTopology(render_core::WorldCoast const& world,std::shared_ptr<WorldPreparationMemory> account)
-        :coast(world),memory(std::move(account)),size(coast.bytes()){memory->add(size);}
+    std::uint64_t scope;
+    WorldPreparationTopology(render_core::WorldCoast const& world,std::shared_ptr<WorldPreparationMemory> account,std::uint64_t generation)
+        :coast(world),memory(std::move(account)),size(coast.bytes()),scope(generation){memory->add(size);}
     WorldPreparationTopology(WorldPreparationTopology const&)=delete;
     ~WorldPreparationTopology(){memory->bytes-=size;}
 };
 struct WorldPreparationSources {
     std::shared_ptr<WorldPreparationTopology const> topology;
-    render_core::CapturedScene::ObservationSnapshot observations;
+    std::shared_ptr<render_core::CapturedScene::WorldSnapshot const> observations;
     std::size_t size;
     WorldPreparationSources(std::shared_ptr<WorldPreparationTopology const> world,render_core::CapturedScene const& scene)
-        :topology(std::move(world)),observations(scene),size(observations.bytes()+sizeof(*this)){topology->memory->add(size);}
+        :topology(std::move(world)),observations(scene.world_snapshot()),size(sizeof(*this)){topology->memory->add(size);}
     WorldPreparationSources(WorldPreparationSources const&)=delete;
     ~WorldPreparationSources(){topology->memory->bytes-=size;}
 };

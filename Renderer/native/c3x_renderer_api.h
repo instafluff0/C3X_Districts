@@ -52,7 +52,11 @@ enum c3x_renderer_tile_flags {
     C3X_RENDERER_TILE_VISIBILITY_KNOWN = 65536u,
     C3X_RENDERER_TILE_EXPLORED = 131072u,
     C3X_RENDERER_TILE_VISIBLE = 262144u,
-    C3X_RENDERER_TILE_VISIBILITY_BITS = 458752u
+    C3X_RENDERER_TILE_VISIBILITY_BITS = 458752u,
+    // Per-field native authority on explored tiles, including explicit absence.
+    // Neither flag authorizes unrelated art, full prefetch or draw eligibility.
+    C3X_RENDERER_TILE_CITY_BODY_KNOWN = 524288u,
+    C3X_RENDERER_TILE_NATIVE_OVERLAYS_KNOWN = 1048576u
 };
 
 enum c3x_renderer_invalidation_flags {
@@ -471,6 +475,9 @@ typedef int (*c3x_renderer_camera_cancel_fn)(c3x_renderer_i64 ticket);
 // joined, never restarted. Replacement flags index this request's ordered tiles.
 // Legacy render is equivalent to zero epochs. No notification/redraw is emitted.
 typedef int (*c3x_renderer_render_view_fn)(struct c3x_renderer_camera_request_v1 const *, struct c3x_renderer_output_v1 *);
+// Explicit initialized caller-thread boundary: copy the compact/permitted world
+// before the first playable view. It does not authorize a draw or unit roster.
+typedef int (*c3x_renderer_seed_world_fn)(struct c3x_renderer_camera_request_v1 const *);
 typedef int (*c3x_renderer_camera_begin_view_fn)(struct c3x_renderer_camera_request_v1 const *, c3x_renderer_i64 * ticket);
 typedef int (*c3x_renderer_camera_poll_view_fn)(c3x_renderer_i64 ticket, struct c3x_renderer_camera_view_v1 *);
 // Validate a freshly recaptured displayed view against the immutable front.

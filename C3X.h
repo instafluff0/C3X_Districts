@@ -2678,6 +2678,12 @@ struct district_button_image_set {
 	c3x_renderer_world_move_fn custom_renderer_world_move;
 	c3x_renderer_world_change_fn custom_renderer_world_change;
 	c3x_renderer_world_reconcile_fn custom_renderer_world_reconcile;
+	c3x_renderer_seed_world_fn custom_renderer_seed_world;
+	bool custom_renderer_initial_world_capture;
+	long long custom_renderer_seeded_viewer_epoch;
+	bool custom_renderer_unit_bootstrap, custom_renderer_unit_bootstrap_failed;
+	Unit * custom_renderer_unit_bootstrap_selected;
+	unsigned custom_renderer_unit_bootstrap_copies;
 	c3x_renderer_unit_move_fn custom_renderer_unit_move;
 	c3x_renderer_unit_move_fn custom_renderer_unit_motion;
 	c3x_renderer_unit_spawn_fn custom_renderer_unit_spawn;

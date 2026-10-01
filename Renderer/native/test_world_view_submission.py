@@ -16,8 +16,8 @@ class WorldViewSubmissionTests(unittest.TestCase):
 struct c3x_renderer_tile_v1 {int anchor_x=3,anchor_y=4;};
 struct Handle {int generation=1;};
 struct CachedTileGeometry {
- bool shared_natural=false,world_ground=false;int source_tile_width=128;Handle natural_content;
- std::uint64_t validity_epoch=0;int validity_anchor_x=0,validity_anchor_y=0;bool validity=false;
+ bool shared_natural=false,world_ground=false,world_objects=false;int source_tile_width=128;Handle natural_content;
+ std::uint64_t validity_epoch=0,validity_world_sequence=0;int validity_anchor_x=0,validity_anchor_y=0;bool validity=false;
  std::vector<std::pair<unsigned,unsigned>> appearance_dependencies{{0,1}},dependencies{{0,42}},coast_dependencies{{0,1}},world_dependencies{{0,7}};
  std::vector<std::pair<unsigned,std::array<int,2>>> anchor_dependencies{{0,{10,20}}};int river_dependencies=1;
 };
@@ -28,9 +28,10 @@ struct State {
  std::uint64_t tile_geometry_epoch=1;
  struct Residents {CachedTileGeometry shared;bool alive=true;Residents(){shared.shared_natural=true;}
   CachedTileGeometry* resolve(Handle){return alive?&shared:nullptr;}}resident_content;
- struct Topology {std::uint64_t observation_epoch=1;unsigned appearance=1;
-  std::uint64_t observation_sequence()const{return observation_epoch;}struct Record{unsigned semantic=42;struct {int anchor_x=13,anchor_y=24;}occurrence;}record;
-  unsigned world_appearance_revision(unsigned){return appearance;}Record*current(unsigned){return &record;}}topology_cache;
+ struct Topology {std::uint64_t observation_epoch=1,world_sequence=1;unsigned appearance=1;
+  std::uint64_t observation_sequence()const{return observation_epoch;}
+  std::uint64_t world_input_sequence()const{return world_sequence;}Topology const&compilation_view(bool)const{return *this;}struct Record{unsigned semantic=42;struct {int anchor_x=13,anchor_y=24;}occurrence;}record;
+  unsigned world_appearance_revision(unsigned){return appearance;}Record const*current(unsigned)const{return &record;}}topology_cache;
  struct World {unsigned value=7,reads=0;unsigned node_revision(unsigned){++reads;return 1;}
   World&world(){return *this;}unsigned at(unsigned){++reads;return value;}}world_coast;
  struct Rivers {int calls=0;bool valid(int){++calls;return true;}}natural;
@@ -45,6 +46,12 @@ int main(){
  --tile.anchor_x;assert(state.tile_content_valid(cached,tile));assert(state.natural.calls==3);
  state.resident_content.alive=false;assert(!state.tile_content_valid(cached,tile));
  state.resident_content.alive=true;assert(state.tile_content_valid(cached,tile));
+ // Copied world changes invalidate the proof even in the same observation.
+ ++state.topology_cache.world_sequence;state.topology_cache.appearance=2;
+ assert(!state.tile_content_valid(cached,tile));
+ ++state.topology_cache.world_sequence;state.topology_cache.appearance=1;
+ assert(state.tile_content_valid(cached,tile));
+ state.frame_tile_invalid_appearance=0;
  // New observations invalidate proofs without unpinning resident geometry.
  assert(state.tile_geometry_epoch==1);
  ++state.topology_cache.observation_epoch;state.world_coast.value=8;assert(!state.tile_content_valid(cached,tile));

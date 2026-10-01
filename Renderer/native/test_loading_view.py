@@ -49,26 +49,109 @@ int main(){
     def test_world_pages_admit_the_native_debug_viewer(self):
         source = (ROOT / 'injected_code.c').read_text().split(
             'capture_custom_renderer_world_page (struct c3x_renderer_world_page_v1 * page)\n{', 1)[1]
-        gate = source.split('\tMap * map =', 1)[0]
+        # Execute the complete callback: page validation and the initial seed's
+        # narrow loading exception must remain coupled to the ordinary guards.
+        callback = 'int capture_custom_renderer_world_page(c3x_renderer_world_page_v1* page) {\n' + source.split('\n}\n', 1)[0] + '\n}\n'
         run_cpp(r'''
+#include "Renderer/native/c3x_renderer_api.h"
 #include <cassert>
-constexpr int IS_OK=1,C3X_RENDERER_RESULT_PENDING=4;
+#include <cstddef>
+#include <initializer_list>
+constexpr int IS_OK=1;
+struct Map_Renderer {};
+struct Tile {struct {unsigned Fog_Of_War=0,FOWStatus=0,V3=0,Visibility=0,field_D0_Visibility=0;}Body;};
+struct Map {int Width=4,Height=4,Flags=1;Tile* Tiles;Map_Renderer Renderer;}map;
+struct {Map Map;}bic;auto p_bic_data=&bic;
+Tile tiles[8],null_tile;auto p_null_tile=&null_tile;
+unsigned topology[8]={};unsigned long long visibility[8]={};
+c3x_renderer_tile_v1 captured[1]{},output[8]{};
+unsigned thread=9;
+unsigned current_thread(){return thread;}
 struct {struct {bool enable_custom_rendering=true;}current_config;
  int custom_renderer_init_state=IS_OK,custom_renderer_viewer_civ_id=2;
  bool custom_renderer_draw_in_progress=false,custom_renderer_frame_active=false,
- custom_renderer_capture_only=false,custom_renderer_display_valid=true;}state,*is=&state;
+ custom_renderer_capture_only=false,custom_renderer_display_valid=true,
+ custom_renderer_initial_world_capture=false,custom_renderer_capture_failed=false;
+ unsigned (*custom_renderer_probe_thread_id)()=current_thread;
+ unsigned custom_renderer_probe_owner=9;
+ Map_Renderer* custom_renderer_target=&bic.Map.Renderer;
+ c3x_renderer_tile_v1* custom_renderer_tiles=captured;
+ int custom_renderer_tile_count=1,custom_renderer_world_topology_count=8;
+ unsigned* custom_renderer_world_topology=topology;
+ unsigned long long* custom_renderer_world_visibility=visibility;
+ long long custom_renderer_map_epoch=1,custom_renderer_viewer_epoch=2,
+ custom_renderer_display_viewer_epoch=1,custom_renderer_world_topology_revision=3,
+ custom_renderer_visibility_revision=4;}state,*is=&state;
 struct {bool is_now_loading_game=false;int Player_CivID=2;}form,*p_main_screen_form=&form;
 unsigned debug=0;auto p_debug_mode_bits=&debug;bool online=false;
 bool is_online_game(){return online;}
-int admit(){''' + gate + r'''
- return 1;
+int reads=0;
+Tile* tile_at(int x,int y){return &tiles[(y*bic.Map.Width+x)/2];}
+bool read_custom_renderer_world_record(c3x_renderer_tile_v1* record,int viewer,int mask,
+ int x,int y,Tile*){
+ assert(viewer==state.custom_renderer_viewer_civ_id&&mask==77);
+ *record={};record->tile_x=x;record->tile_y=y;++reads;return true;
+}
+''' + callback + r'''
+c3x_renderer_world_page_v1 page{};
+void reset(){
+ state={};form={};debug=0;online=false;thread=9;
+ bic.Map.Width=4;bic.Map.Height=4;bic.Map.Flags=1;bic.Map.Tiles=tiles;
+ captured[0].visibility_mask=77;reads=0;
+ page={};page.struct_size=sizeof page;page.tiles=output;page.capacity=8;
+ page.identity={1,2,4,3};page.frame.world_width_tiles=4;page.frame.world_height_tiles=4;
+ page.frame.world_wrap_x=1;page.frame.world_topology_revision=3;
+}
+int admit(){return capture_custom_renderer_world_page(&page);}
+void initial(){
+ reset();state.custom_renderer_initial_world_capture=true;
+ state.custom_renderer_draw_in_progress=state.custom_renderer_frame_active=true;
+ state.custom_renderer_display_valid=false;form.is_now_loading_game=true;
 }
 int main(){
+ reset();
  assert(admit()==1);debug=8;assert(admit()==4);
  state.custom_renderer_viewer_civ_id=0;assert(admit()==1);
  online=true;assert(admit()==4);state.custom_renderer_viewer_civ_id=2;assert(admit()==1);
  online=false;debug=0;form.is_now_loading_game=true;assert(admit()==4);
  form.is_now_loading_game=false;state.current_config.enable_custom_rendering=false;assert(admit()==4);
+ // Ordinary reads never borrow loading, drawing, or unpublished-view access.
+ for(auto flag:{&decltype(state)::custom_renderer_draw_in_progress,
+               &decltype(state)::custom_renderer_frame_active,
+               &decltype(state)::custom_renderer_capture_only}){
+  reset();state.*flag=true;assert(admit()==4&&!reads);
+ }
+ reset();state.custom_renderer_display_valid=false;assert(admit()==4&&!reads);
+ reset();assert(admit()==1&&reads==8);
+ initial();assert(admit()==1&&reads==8);
+ // The flag alone cannot relax any guard: only a completed capture on its
+ // owner thread, still within the new viewer's synchronous seed, can do so.
+ initial();thread=10;assert(admit()==4&&!reads);
+ initial();state.custom_renderer_probe_thread_id=nullptr;assert(admit()==4&&!reads);
+ initial();state.custom_renderer_capture_only=true;assert(admit()==4&&!reads);
+ initial();state.custom_renderer_capture_failed=true;assert(admit()==4&&!reads);
+ initial();state.custom_renderer_target=nullptr;assert(admit()==4&&!reads);
+ initial();state.custom_renderer_tiles=nullptr;assert(admit()==4&&!reads);
+ initial();state.custom_renderer_tile_count=0;assert(admit()==4&&!reads);
+ initial();state.custom_renderer_display_viewer_epoch=2;assert(admit()==4&&!reads);
+ initial();state.custom_renderer_draw_in_progress=false;assert(admit()==4&&!reads);
+ initial();state.custom_renderer_frame_active=false;assert(admit()==4&&!reads);
+ initial();state.custom_renderer_viewer_civ_id=0;assert(admit()==4&&!reads);
+ initial();bic.Map.Tiles=nullptr;assert(admit()==4&&!reads);
+ initial();state.custom_renderer_init_state=0;assert(admit()==4&&!reads);
+ initial();state.current_config.enable_custom_rendering=false;assert(admit()==4&&!reads);
+ // Identity and indexed full-world shape remain mandatory in the exception.
+ initial();++page.identity.map_epoch;assert(admit()==5&&!reads);
+ initial();++page.identity.viewer_epoch;assert(admit()==5&&!reads);
+ initial();++page.identity.scene_epoch;assert(admit()==5&&!reads);
+ initial();++page.identity.visibility_epoch;assert(admit()==5&&!reads);
+ initial();++page.frame.world_topology_revision;assert(admit()==5&&!reads);
+ initial();page.frame.world_width_tiles=6;assert(admit()==5&&!reads);
+ initial();page.frame.world_wrap_x=0;assert(admit()==5&&!reads);
+ initial();page.first=0xfffffffeu;assert(admit()==5&&!reads);
+ initial();state.custom_renderer_world_topology_count=7;assert(admit()==4&&!reads);
+ reset();page.capacity=129;assert(admit()==2&&!reads);
+ assert(capture_custom_renderer_world_page(nullptr)==2);
 }
 ''')
 

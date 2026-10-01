@@ -87,7 +87,8 @@ int main(){
  tile.tile_flags&=~C3X_RENDERER_TILE_VISIBLE;assert(scene.publish(tile,changed));
  assert(!changed && scene.appearance_sequence()==appearance && scene.visibility_sequence()>visibility);
  visibility=scene.visibility_sequence();tile.tile_flags=C3X_RENDERER_TILE_TOPOLOGY_HALO;++tile.road_mask;
- assert(scene.publish(tile,changed));assert(!changed && scene.appearance_sequence()==appearance);
+ // Halo topology changes content dependencies without rewriting permitted art.
+ assert(scene.publish(tile,changed));assert(changed && scene.appearance_sequence()==appearance);
  assert(scene.retained(id)->semantic_revision>semantic && scene.retained(id)->semantic==CapturedScene::topology(tile));
  assert(scene.visibility_sequence()==visibility);
  // A preparation camera cannot rewrite published authority.

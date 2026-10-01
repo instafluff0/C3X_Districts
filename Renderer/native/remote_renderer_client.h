@@ -120,6 +120,11 @@ public:
         auto bytes=reply(response);c3x_inputs::Reader reader{bytes};decode(reader,scene_result);
         output=scene_result.value;return C3X_RENDERER_RESULT_OK;
     }
+    int seed_world_scope(c3x_renderer_camera_request_v1 const& request){
+        c3x_inputs::Writer input;auto identity=request.identity;
+        c3x_inputs::c3x_renderer_camera_identity_v1_fields(input,identity);c3x_inputs::frame(input,*request.frame);
+        return int(invoke(unsigned(c3x_inputs::Kind::scene),4,input.bytes.data(),unsigned(input.bytes.size())).code);
+    }
     int camera_begin(c3x_renderer_camera_request_v1 const& request,c3x_renderer_i64& ticket){
         c3x_inputs::Writer input;auto identity=request.identity;
         c3x_inputs::c3x_renderer_camera_identity_v1_fields(input,identity);

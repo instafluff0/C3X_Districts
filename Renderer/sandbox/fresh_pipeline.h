@@ -1548,6 +1548,8 @@ struct SandboxFreshPipeline {
                         renderer.resource_body_vertex_shader,nullptr,0);
                 }
                 if(renderer.environment_profile && (layer==geometry_water || layer==geometry_river)){
+                    // Occurrence eligibility includes explored fog; only unknown
+                    // coverage and explicit still controls use phase zero.
                     auto sample=renderer.water_material;
                     if(!renderer.water_scene_active || !chunk.water_visible() || mesh.visual_time>=0){
                         sample.time=0;sample.drift[0]=sample.drift[1]=sample.drift[2]=0;

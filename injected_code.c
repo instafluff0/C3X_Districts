@@ -224,6 +224,8 @@ unsigned int capture_custom_renderer_visibility (Tile * tile, int viewer, int x,
 bool custom_renderer_tile_visible_at (int x, int y);
 bool custom_renderer_tile_near_view (int x, int y, int margin);
 void notify_custom_renderer_tile_change (int x, int y);
+void notify_custom_renderer_city_change (City * city, int previous_cultural_level);
+Unit * __fastcall patch_Main_Screen_Form_find_visible_unit (Main_Screen_Form * this, int edx, int tile_x, int tile_y, Unit * excluded);
 void notify_custom_renderer_unit_move (Unit * unit, int old_x, int old_y, bool source_visible);
 void notify_custom_renderer_unit_spawn (Unit * unit);
 void notify_custom_renderer_unit_state (Unit * unit, unsigned int kind);
@@ -17626,46 +17628,33 @@ patch_City_recompute_yields_and_happiness (City * this)
 		recompute_distribution_hub_totals ();
 
 	City_recompute_yields_and_happiness (this);
-	if (is->current_config.enable_custom_rendering) {
-		is->custom_renderer_world_audit_needed = true;
-		is->custom_renderer_dirty_flags |= C3X_RENDERER_DIRTY_SCENE;
-		is->custom_renderer_redraw_pending = true;
-	}
-
+	notify_custom_renderer_city_change (this, -1);
 }
 
 void __fastcall
 patch_City_update_culture (City * this)
 {
+	int previous_cultural_level = is->current_config.enable_custom_rendering && this != NULL ?
+		this->Body.cultural_level : -1;
 	City_update_culture (this);
-	if (is->current_config.enable_custom_rendering) {
-		is->custom_renderer_world_audit_needed = true;
-		is->custom_renderer_dirty_flags |= C3X_RENDERER_DIRTY_SCENE;
-		is->custom_renderer_redraw_pending = true;
+
+	if (this != NULL && (is->current_config.enable_districts || is->current_config.enable_natural_wonders)) {
+		int culture_bonus = 0;
+		calculate_district_culture_science_bonuses (this, &culture_bonus, NULL);
+		if (culture_bonus != 0) {
+			int culture_income = this->Body.CultureIncome + culture_bonus;
+			if (culture_income < 0) culture_income = 0;
+			this->Body.CultureIncome = culture_income;
+
+			int civ_id = this->Body.CivID;
+			int total_culture = this->Body.Total_Cultures[civ_id] + culture_bonus;
+			if (total_culture < 0) total_culture = 0;
+			this->Body.Total_Cultures[civ_id] = total_culture;
+			City_recompute_cultural_level (this, __, '\0', '\0', '\0');
+		}
 	}
-
-
-	if ((this == NULL) || ! (is->current_config.enable_districts || is->current_config.enable_natural_wonders))
-		return;
-
-	int culture_bonus = 0;
-	calculate_district_culture_science_bonuses (this, &culture_bonus, NULL);
-
-	if (culture_bonus == 0)
-		return;
-
-	int culture_income = this->Body.CultureIncome + culture_bonus;
-	if (culture_income < 0)
-		culture_income = 0;
-	this->Body.CultureIncome = culture_income;
-
-	int civ_id = this->Body.CivID;
-	int total_culture = this->Body.Total_Cultures[civ_id] + culture_bonus;
-	if (total_culture < 0)
-		total_culture = 0;
-	this->Body.Total_Cultures[civ_id] = total_culture;
-
-	City_recompute_cultural_level (this, __, '\0', '\0', '\0');
+	// Compare only after native and existing C3X culture changes have finished.
+	notify_custom_renderer_city_change (this, previous_cultural_level);
 }
 
 void __fastcall
@@ -23971,6 +23960,7 @@ patch_MapMessage_compute_rect (MapMessage * this)
 void __fastcall
 patch_Unit_draw_map_status (Unit * this, int edx, PCX_Image * canvas, int x, int y, bool stack_marks)
 {
+	if (is->current_config.enable_custom_rendering && is->custom_renderer_unit_bootstrap) return;
 	if (! is->current_config.enable_custom_rendering) {
 		Unit_draw_status (this, edx, canvas, x, y, stack_marks);
 		return;
@@ -23991,6 +23981,7 @@ patch_Unit_draw_map_status (Unit * this, int edx, PCX_Image * canvas, int x, int
 void __fastcall
 patch_Animator_draw_map_unit_cursor (Animator * this, int edx, int x, int y)
 {
+	if (is->current_config.enable_custom_rendering && is->custom_renderer_unit_bootstrap) return;
 	if (is->current_config.enable_custom_rendering && is->custom_renderer_native_image != NULL &&
 	    is->custom_renderer_native_image (C3X_NATIVE_TACTICAL_CAPABLE, NULL, NULL, NULL, NULL, 0) == 1) {
 		// Native cursor eligibility is Animator+0x1914 bit 0 (GOG).
@@ -28009,6 +28000,13 @@ unload_custom_renderer ()
 	is->custom_renderer_world_move = NULL;
 	is->custom_renderer_world_change = NULL;
 	is->custom_renderer_world_reconcile = NULL;
+	is->custom_renderer_seed_world = NULL;
+	is->custom_renderer_initial_world_capture = false;
+	is->custom_renderer_seeded_viewer_epoch = 0;
+	is->custom_renderer_unit_bootstrap = false;
+	is->custom_renderer_unit_bootstrap_failed = false;
+	is->custom_renderer_unit_bootstrap_selected = NULL;
+	is->custom_renderer_unit_bootstrap_copies = 0;
 	is->custom_renderer_camera_ticket = 0;
 	is->custom_renderer_display_clock = 0;
 	is->custom_renderer_async_enabled = false;
@@ -28209,9 +28207,10 @@ forward_custom_unit_body (Sprite * sprite, PCX_Image * background, PCX_Image * c
 	if (!(capture_custom_renderer_visibility (tile_at (display_unit->Body.X, display_unit->Body.Y),
 		p_main_screen_form->Player_CivID, display_unit->Body.X, display_unit->Body.Y) & C3X_RENDERER_TILE_VISIBLE))
 		flags |= C3X_RENDERER_UNIT_HIDDEN;
-	if (display_unit == p_main_screen_form->Current_Unit) {
+	if (display_unit == (is->custom_renderer_unit_bootstrap ?
+	    is->custom_renderer_unit_bootstrap_selected : p_main_screen_form->Current_Unit)) {
 		flags |= C3X_RENDERER_UNIT_SELECTED;
-		if ((p_main_screen_form->animator.field_18E4[12] & 1) == 0)
+		if (! is->custom_renderer_unit_bootstrap && (p_main_screen_form->animator.field_18E4[12] & 1) == 0)
 			flags |= C3X_RENDERER_UNIT_CURSOR;
 	}
 	if (is->custom_renderer_unit_visual != NULL) {
@@ -28256,10 +28255,12 @@ forward_custom_unit_body (Sprite * sprite, PCX_Image * background, PCX_Image * c
 	int submitted = translate_custom_renderer_native (C3X_NATIVE_UNIT_DRAW, image, underlay,
 		(RECT *)&draw, (RECT *)body_bounds, flags);
 	if (submitted != 1) {
+		if (is->custom_renderer_unit_bootstrap) is->custom_renderer_unit_bootstrap_failed = true;
 		log_custom_renderer_event ("unit-publication-failed", C3X_RENDERER_RESULT_ERROR);
 		return false;
 	}
 	// The renderer returns an empty raster envelope for resident scene bodies.
+	if (is->custom_renderer_unit_bootstrap) is->custom_renderer_unit_bootstrap_copies++;
 	// Preserve Animator's native bookkeeping for overlays in the same Rect.
 	if (display_unit->Body.Rect.left > body_bounds[0]) display_unit->Body.Rect.left = body_bounds[0];
 	if (display_unit->Body.Rect.top > body_bounds[1]) display_unit->Body.Rect.top = body_bounds[1];
@@ -28298,6 +28299,8 @@ patch_Sprite_draw_unit_body_normal (Sprite * this, int edx, PCX_Image * backgrou
 				  int x, int y, char * palette_path, PCX_Color_Table * palette)
 {
 	if (forward_custom_unit_body (this, background, canvas, x, y, 0, palette)) return 0;
+	if (is->custom_renderer_unit_bootstrap && canvas == is->custom_renderer_unit_canvas)
+		is->custom_renderer_unit_bootstrap_failed = true;
 	// These body hooks also draw UI portraits. Suppress native map bodies only
 	// inside tick_anim's canvas scope. Custom-on map bodies are exclusively 3D.
 	if (is->current_config.enable_custom_rendering && canvas != NULL && canvas == is->custom_renderer_unit_canvas) return 0;
@@ -28310,6 +28313,8 @@ patch_Sprite_draw_unit_body_reduced (Sprite * this, int edx, PCX_Image * backgro
 {
 	if (scale_x == 1 && scale_y == 1 && divisor == 2 &&
 	    forward_custom_unit_body (this, background, canvas, x, y, 1, palette)) return 0;
+	if (is->custom_renderer_unit_bootstrap && canvas == is->custom_renderer_unit_canvas)
+		is->custom_renderer_unit_bootstrap_failed = true;
 	if (is->current_config.enable_custom_rendering && canvas != NULL && canvas == is->custom_renderer_unit_canvas) return 0;
 	return Sprite_draw_unit_body_reduced (this, __, background, canvas, x, y, scale_x, scale_y, divisor, palette_path, palette);
 }
@@ -28471,6 +28476,7 @@ ensure_custom_renderer_loaded ()
 			is->custom_renderer_world_move = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_world_move");
 			is->custom_renderer_world_change = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_world_change");
 			is->custom_renderer_world_reconcile = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_world_reconcile");
+			is->custom_renderer_seed_world = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_seed_world");
 			c3x_renderer_set_world_capture_fn set_world_capture = (void *)(*p_GetProcAddress) (
 				is->custom_renderer_module, "c3x_renderer_set_world_capture");
 			if (set_world_capture != NULL)
@@ -28490,6 +28496,90 @@ ensure_custom_renderer_loaded ()
 	is->custom_renderer_init_state = IS_INIT_FAILED;
 	log_custom_renderer_event ("dll-load", C3X_RENDERER_RESULT_ERROR);
 	return false;
+}
+
+// One copied city-body recipe is shared by capture and local mutation hooks.
+void
+capture_custom_renderer_city_body (struct c3x_renderer_tile_v1 * record, City * city)
+{
+	// Absence is an authoritative city result on an explored native tile too.
+	record->city_id = record->city_owner_id = record->city_size = -1;
+	record->city_culture_group = record->city_era = -1;
+	record->city_population = 0; record->city_flags = 0;
+	memset (record->city_owner, 0, sizeof record->city_owner);
+	memset (record->city_civilization, 0, sizeof record->city_civilization);
+	memset (record->city_era_name, 0, sizeof record->city_era_name);
+	if (city != NULL) {
+		int civ_id = city->Body.CivID;
+		record->city_id = city->Body.ID;
+		record->city_owner_id = civ_id;
+		record->city_population = city->Body.Population.Size;
+		record->city_size = (record->city_population > p_bic_data->General.MaximumSize_City) ? 2 :
+			((record->city_population > p_bic_data->General.MaximumSize_Town) ? 1 : 0);
+		if ((civ_id >= 0) && (civ_id < 32)) {
+			Leader * leader = &leaders[civ_id];
+			if ((leader->RaceID >= 0) && (leader->RaceID < p_bic_data->RacesCount)) {
+				Race * race = &p_bic_data->Races[leader->RaceID];
+				record->city_culture_group = race->CultureGroupID;
+				strncpy (record->city_owner, race->CountryName, sizeof record->city_owner);
+				strncpy (record->city_civilization, race->SingularName, sizeof record->city_civilization);
+			}
+			record->city_era = leader->Era;
+			if ((leader->Era >= 0) && (leader->Era < p_bic_data->ErasCount))
+				strncpy (record->city_era_name, p_bic_data->Eras[leader->Era].Name.S, sizeof record->city_era_name);
+			record->city_flags = (leader->CapitalID == city->Body.ID) ? C3X_RENDERER_CITY_CAPITAL : 0;
+			if (record->city_size == 0) {
+				for (int improvement_id = 0; improvement_id < p_bic_data->ImprovementsCount; improvement_id++) {
+					if ((p_bic_data->Improvements[improvement_id].Combat_Bombard > 0) &&
+					    has_active_building (city, improvement_id)) {
+						record->city_flags |= C3X_RENDERER_CITY_WALLED;
+						break;
+					}
+				}
+			}
+		}
+	}
+	record->city_owner[(sizeof record->city_owner) - 1] = '\0';
+	record->city_civilization[(sizeof record->city_civilization) - 1] = '\0';
+	record->city_era_name[(sizeof record->city_era_name) - 1] = '\0';
+}
+
+// Native improvement queries use m42_Get_Overlays(viewer), including its
+// remembered-overlay branch. Raw tile-building and active-effect facts are
+// separate fields and cannot acquire authority through this partial recipe.
+void
+capture_custom_renderer_overlay_body (struct c3x_renderer_tile_v1 * record,
+	Tile * tile, int visible_to_civ_id, int tile_x, int tile_y)
+{
+	record->improvement_flags &= ~(C3X_RENDERER_IMPROVEMENT_IRRIGATION |
+		C3X_RENDERER_IMPROVEMENT_MINE | C3X_RENDERER_IMPROVEMENT_POLLUTION |
+		C3X_RENDERER_IMPROVEMENT_CRATER | C3X_RENDERER_IMPROVEMENT_GOODY_HUT |
+		C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP);
+	record->irrigation_mask = 0;
+	if (tile->vtable->m17_Check_Irrigation (tile, __, visible_to_civ_id)) {
+		record->improvement_flags |= C3X_RENDERER_IMPROVEMENT_IRRIGATION;
+		int neighbor_x[4] = {tile_x - 1, tile_x + 1, tile_x - 1, tile_x + 1};
+		int neighbor_y[4] = {tile_y - 1, tile_y - 1, tile_y + 1, tile_y + 1};
+		for (int neighbor_index = 0; neighbor_index < 4; neighbor_index++) {
+			wrap_tile_coords (&p_bic_data->Map, &neighbor_x[neighbor_index], &neighbor_y[neighbor_index]);
+			Tile * neighbor = tile_at (neighbor_x[neighbor_index], neighbor_y[neighbor_index]);
+			if ((neighbor != NULL) && (neighbor != p_null_tile) &&
+			    neighbor->vtable->m17_Check_Irrigation (neighbor, __, visible_to_civ_id))
+			record->irrigation_mask |= 1u << neighbor_index;
+		}
+	}
+	record->barbarian_tribe_id = -1;
+	if (tile->vtable->m15_Check_Goody_Hut (tile, __, visible_to_civ_id))
+		record->improvement_flags |= C3X_RENDERER_IMPROVEMENT_GOODY_HUT;
+	// Native m12 first requires a currently present camp, then viewer admission.
+	if (tile->vtable->m7_Check_Barbarian_Camp (tile, __, 0) &&
+	    tile->vtable->m7_Check_Barbarian_Camp (tile, __, visible_to_civ_id)) {
+		record->improvement_flags |= C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP;
+		record->barbarian_tribe_id = tile->vtable->m44_Get_Barbarian_TribeID (tile);
+	}
+	if (tile->vtable->m18_Check_Mines (tile, __, visible_to_civ_id)) record->improvement_flags |= C3X_RENDERER_IMPROVEMENT_MINE;
+	if (tile->vtable->m20_Check_Pollution (tile, __, visible_to_civ_id)) record->improvement_flags |= C3X_RENDERER_IMPROVEMENT_POLLUTION;
+	if (tile->vtable->m21_Check_Crates (tile, __, visible_to_civ_id)) record->improvement_flags |= C3X_RENDERER_IMPROVEMENT_CRATER;
 }
 
 bool
@@ -28578,29 +28668,8 @@ read_custom_renderer_tile (struct c3x_renderer_tile_v1 * record, int visible_to_
 			if (record->real_terrain_type == SQ_Jungle) record->feature_flags |= C3X_RENDERER_FEATURE_JUNGLE;
 			if (record->real_terrain_type == SQ_Swamp) record->feature_flags |= C3X_RENDERER_FEATURE_MARSH;
 			if (record->real_terrain_type == SQ_Volcano) record->feature_flags |= C3X_RENDERER_FEATURE_VOLCANO;
-			if (tile->vtable->m17_Check_Irrigation (tile, __, visible_to_civ_id)) {
-				record->improvement_flags |= C3X_RENDERER_IMPROVEMENT_IRRIGATION;
-				int neighbor_x[4] = {tile_x - 1, tile_x + 1, tile_x - 1, tile_x + 1};
-				int neighbor_y[4] = {tile_y - 1, tile_y - 1, tile_y + 1, tile_y + 1};
-				for (int neighbor_index = 0; neighbor_index < 4; neighbor_index++) {
-					wrap_tile_coords (&p_bic_data->Map, &neighbor_x[neighbor_index], &neighbor_y[neighbor_index]);
-					Tile * neighbor = tile_at (neighbor_x[neighbor_index], neighbor_y[neighbor_index]);
-					if ((neighbor != NULL) && (neighbor != p_null_tile) &&
-					    neighbor->vtable->m17_Check_Irrigation (neighbor, __, visible_to_civ_id))
-						record->irrigation_mask |= 1u << neighbor_index;
-				}
-			}
-			record->barbarian_tribe_id = -1;
-			if (tile->vtable->m15_Check_Goody_Hut (tile, __, visible_to_civ_id))
-				record->improvement_flags |= C3X_RENDERER_IMPROVEMENT_GOODY_HUT;
-			if (tile->vtable->m7_Check_Barbarian_Camp (tile, __, visible_to_civ_id)) {
-				record->improvement_flags |= C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP;
-				record->barbarian_tribe_id = tile->vtable->m44_Get_Barbarian_TribeID (tile);
-			}
-			if (tile->vtable->m18_Check_Mines (tile, __, visible_to_civ_id)) record->improvement_flags |= C3X_RENDERER_IMPROVEMENT_MINE;
+			capture_custom_renderer_overlay_body (record, tile, visible_to_civ_id, tile_x, tile_y);
 			if (tile->vtable->m26_Check_Tile_Building (tile)) record->improvement_flags |= C3X_RENDERER_IMPROVEMENT_TILE_BUILDING;
-			if (tile->vtable->m20_Check_Pollution (tile, __, visible_to_civ_id)) record->improvement_flags |= C3X_RENDERER_IMPROVEMENT_POLLUTION;
-			if (tile->vtable->m21_Check_Crates (tile, __, visible_to_civ_id)) record->improvement_flags |= C3X_RENDERER_IMPROVEMENT_CRATER;
 			record->tile_building_id = tile->vtable->m47_Get_Tile_BuildingID (tile);
 			record->has_effect = tile->Body.active_tile_effect != NULL;
 
@@ -28614,37 +28683,9 @@ read_custom_renderer_tile (struct c3x_renderer_tile_v1 * record, int visible_to_
 				record->resource_name[(sizeof record->resource_name) - 1] = '\0';
 			}
 
-			City * city = get_city_ptr (tile->vtable->m45_Get_City_ID (tile));
-			if (city != NULL) {
-				int civ_id = city->Body.CivID;
-				record->city_id = city->Body.ID;
-				record->city_owner_id = civ_id;
-				record->city_population = city->Body.Population.Size;
-				record->city_size = (record->city_population > p_bic_data->General.MaximumSize_City) ? 2 :
-					((record->city_population > p_bic_data->General.MaximumSize_Town) ? 1 : 0);
-				if ((civ_id >= 0) && (civ_id < 32)) {
-					Leader * leader = &leaders[civ_id];
-					if ((leader->RaceID >= 0) && (leader->RaceID < p_bic_data->RacesCount)) {
-						Race * race = &p_bic_data->Races[leader->RaceID];
-						record->city_culture_group = race->CultureGroupID;
-						strncpy (record->city_owner, race->CountryName, sizeof record->city_owner);
-						strncpy (record->city_civilization, race->SingularName, sizeof record->city_civilization);
-					}
-					record->city_era = leader->Era;
-					if ((leader->Era >= 0) && (leader->Era < p_bic_data->ErasCount))
-						strncpy (record->city_era_name, p_bic_data->Eras[leader->Era].Name.S, sizeof record->city_era_name);
-					record->city_flags = (leader->CapitalID == city->Body.ID) ? C3X_RENDERER_CITY_CAPITAL : 0;
-					if (record->city_size == 0) {
-						for (int improvement_id = 0; improvement_id < p_bic_data->ImprovementsCount; improvement_id++) {
-							if ((p_bic_data->Improvements[improvement_id].Combat_Bombard > 0) &&
-							    has_active_building (city, improvement_id)) {
-								record->city_flags |= C3X_RENDERER_CITY_WALLED;
-								break;
-							}
-						}
-					}
-				}
-			}
+			capture_custom_renderer_city_body (record, get_city_ptr (tile->vtable->m45_Get_City_ID (tile)));
+			if (record->tile_flags & C3X_RENDERER_TILE_EXPLORED)
+				record->tile_flags |= C3X_RENDERER_TILE_CITY_BODY_KNOWN | C3X_RENDERER_TILE_NATIVE_OVERLAYS_KNOWN;
 
 			if (capture_units) {
 			struct unit_tile_iter unit_iter = uti_init (tile);
@@ -28730,19 +28771,15 @@ capture_custom_renderer_tile (int visible_to_civ_id, int pixel_x, int pixel_y,
 // only reads current game values on the game thread, never a worker thread.
 bool
 read_custom_renderer_world_record (struct c3x_renderer_tile_v1 * record, int viewer, int mask,
-	int x, int y, Tile * tile, bool visibility_only_when_hidden)
+	int x, int y, Tile * tile)
 {
 	unsigned int visibility = capture_custom_renderer_visibility (tile, viewer, x, y);
 	if (! (visibility & C3X_RENDERER_TILE_VISIBILITY_KNOWN)) return false;
-	if ((visibility & C3X_RENDERER_TILE_EXPLORED) &&
-	    (! visibility_only_when_hidden || (visibility & C3X_RENDERER_TILE_VISIBLE))) {
+	if (visibility & C3X_RENDERER_TILE_VISIBLE) {
 		if (! read_custom_renderer_tile (record, viewer, 0, 0, mask, x, y, tile, false, false)) return false;
-		record->tile_flags = visibility | C3X_RENDERER_TILE_TOPOLOGY_HALO | C3X_RENDERER_TILE_PREFETCH;
+		record->tile_flags |= C3X_RENDERER_TILE_TOPOLOGY_HALO | C3X_RENDERER_TILE_PREFETCH;
+		record->tile_flags &= ~C3X_RENDERER_TILE_RENDER;
 	} else {
-		// On a delta, a hidden tile only updates fog status. Its last visible
-		// appearance stays in Renderer; reading live hidden objects would leak
-		// changes that the player has not seen. Initial explored snapshots still
-		// carry Civ III's available explored appearance.
 		unsigned int topology = is->custom_renderer_world_topology[(y * p_bic_data->Map.Width + x) / 2];
 		*record = (struct c3x_renderer_tile_v1){0};
 		record->tile_x = x; record->tile_y = y;
@@ -28753,9 +28790,23 @@ read_custom_renderer_world_record (struct c3x_renderer_tile_v1 * record, int vie
 		record->tile_visibility = tile->Body.Visibility;
 		record->fog_status = tile->Body.FOWStatus;
 		record->resource_id = record->resource_class = record->tile_building_id = -1;
-		record->city_id = record->city_owner_id = record->unit_type_id = record->unit_owner_id = -1;
-		record->barbarian_tribe_id = -1;
+		record->city_id = record->city_owner_id = record->city_size = -1;
+		record->city_culture_group = record->city_era = -1;
+		record->unit_type_id = record->unit_owner_id = record->unit_class = -1;
+		record->unit_state = record->unit_damage = record->unit_direction = -1;
+		record->territory_owner_id = record->barbarian_tribe_id = -1;
 		record->tile_flags = visibility | C3X_RENDERER_TILE_TOPOLOGY_HALO;
+		if (visibility & C3X_RENDERER_TILE_EXPLORED) {
+			// Native m25 draws the current city recipe on explored fog. Improvement
+			// methods independently choose remembered m42 overlays for this viewer.
+			// Neither permission admits live resources, units, buildings or effects.
+			capture_custom_renderer_city_body (record, get_city_ptr (tile->vtable->m45_Get_City_ID (tile)));
+			record->road_mask = tile->vtable->m25_Check_Roads (tile, __, viewer) ? 1u : 0u;
+			record->railroad_mask = tile->vtable->m23_Check_Railroads (tile, __, viewer) ? 1u : 0u;
+			record->route_style = viewer >= 0 && viewer < 32 ? clamp (0, 3, leaders[viewer].Era) : 0;
+			capture_custom_renderer_overlay_body (record, tile, viewer, x, y);
+			record->tile_flags |= C3X_RENDERER_TILE_CITY_BODY_KNOWN | C3X_RENDERER_TILE_NATIVE_OVERLAYS_KNOWN;
+		}
 	}
 	return true;
 }
@@ -28764,22 +28815,44 @@ int
 capture_custom_renderer_world_page (struct c3x_renderer_world_page_v1 * page)
 {
 	if (! is->current_config.enable_custom_rendering || is->custom_renderer_init_state != IS_OK ||
-	    is->custom_renderer_draw_in_progress || is->custom_renderer_frame_active ||
-	    is->custom_renderer_capture_only || ! is->custom_renderer_display_valid ||
-	    p_main_screen_form->is_now_loading_game ||
-	    (((*p_debug_mode_bits & 8) && ! is_online_game ()) ? 0 : p_main_screen_form->Player_CivID) !=
-	    is->custom_renderer_viewer_civ_id)
+	    p_main_screen_form == NULL)
 		return C3X_RENDERER_RESULT_PENDING;
+	if (page == NULL || page->struct_size != sizeof *page || page->tiles == NULL ||
+	    page->capacity == 0 || page->capacity > 128)
+		return C3X_RENDERER_RESULT_BAD_ARGUMENT;
 	Map * map = &p_bic_data->Map;
+	// Only the synchronous seed owns this exception. A timer or later page may
+	// not use loading/native-draw state as a general world-read permission.
+	bool initial_capture = is->custom_renderer_initial_world_capture &&
+		is->custom_renderer_probe_thread_id != NULL &&
+		is->custom_renderer_probe_thread_id () == is->custom_renderer_probe_owner &&
+		is->custom_renderer_draw_in_progress && is->custom_renderer_frame_active &&
+		! is->custom_renderer_capture_only && ! is->custom_renderer_capture_failed &&
+		is->custom_renderer_target == &map->Renderer &&
+		is->custom_renderer_tiles != NULL && is->custom_renderer_tile_count > 0 &&
+		is->custom_renderer_display_viewer_epoch != is->custom_renderer_viewer_epoch;
+	if ((! initial_capture && (is->custom_renderer_draw_in_progress || is->custom_renderer_frame_active ||
+	     is->custom_renderer_capture_only || ! is->custom_renderer_display_valid ||
+	     p_main_screen_form->is_now_loading_game)) ||
+	    (((*p_debug_mode_bits & 8) && ! is_online_game ()) ? 0 : p_main_screen_form->Player_CivID) !=
+	    is->custom_renderer_viewer_civ_id || map->Tiles == NULL || map->Width <= 0 ||
+	    map->Height <= 0 || (map->Width & 1) || map->Width > 2048 || map->Height > 2048)
+		return C3X_RENDERER_RESULT_PENDING;
 	if (page->identity.map_epoch != is->custom_renderer_map_epoch ||
 	    page->identity.viewer_epoch != is->custom_renderer_viewer_epoch ||
 	    page->frame.world_width_tiles != map->Width || page->frame.world_height_tiles != map->Height ||
+	    page->frame.world_wrap_x != ((map->Flags & 1) != 0) ||
+	    page->frame.world_wrap_y != ((map->Flags & 2) != 0) ||
 	    page->frame.world_topology_revision != is->custom_renderer_world_topology_revision)
 		return C3X_RENDERER_RESULT_SUPERSEDED;
 	unsigned int count = map->Width * map->Height / 2;
 	if (is->custom_renderer_world_topology == NULL ||
 	    is->custom_renderer_world_topology_count != (int)count)
 		return C3X_RENDERER_RESULT_PENDING;
+	if (initial_capture && (page->first >= count ||
+	    page->identity.scene_epoch != is->custom_renderer_world_topology_revision ||
+	    page->identity.visibility_epoch != is->custom_renderer_visibility_revision))
+		return C3X_RENDERER_RESULT_SUPERSEDED;
 	int mask = is->custom_renderer_tile_count > 0 ? is->custom_renderer_tiles[0].visibility_mask : 0;
 	if (page->first == 0xffffffffu || page->first == 0xfffffffeu) {
 		if (page->count == 0 || page->count > page->capacity || page->capacity > 128 || page->tiles == NULL)
@@ -28801,7 +28874,7 @@ capture_custom_renderer_world_page (struct c3x_renderer_world_page_v1 * page)
 			int index = (y * map->Width + x) / 2;
 			if (page->first == 0xffffffffu && compare && is->custom_renderer_world_visibility[index] == value) continue;
 			if (! read_custom_renderer_world_record (&page->tiles[selected],
-			        is->custom_renderer_viewer_civ_id, mask, x, y, tile, true)) return C3X_RENDERER_RESULT_ERROR;
+			        is->custom_renderer_viewer_civ_id, mask, x, y, tile)) return C3X_RENDERER_RESULT_ERROR;
 			indices[selected] = index;
 			values[selected++] = value;
 		}
@@ -28821,7 +28894,7 @@ capture_custom_renderer_world_page (struct c3x_renderer_world_page_v1 * page)
 		if (tile == NULL || tile == p_null_tile) return C3X_RENDERER_RESULT_ERROR;
 		struct c3x_renderer_tile_v1 * record = &page->tiles[page->count++];
 		if (! read_custom_renderer_world_record (record, is->custom_renderer_viewer_civ_id,
-			mask, x, y, tile, false)) return C3X_RENDERER_RESULT_ERROR;
+			mask, x, y, tile)) return C3X_RENDERER_RESULT_ERROR;
 	}
 	return C3X_RENDERER_RESULT_OK;
 }
@@ -29263,6 +29336,224 @@ prepare_custom_renderer_frame (struct c3x_renderer_frame_v1 * prepared)
 	return true;
 }
 
+// Adapt only the native view producer and its already-established wrap offsets.
+// No Animator update, animation tick, action queue or presentation is replayed.
+int
+bootstrap_custom_renderer_initial_units ()
+{
+	if (! is->current_config.enable_custom_rendering ||
+	    (is->custom_renderer_display_viewer_epoch == is->custom_renderer_viewer_epoch &&
+	     is->custom_renderer_viewer_epoch != 0)) return C3X_RENDERER_RESULT_OK;
+	if (p_main_screen_form == NULL || ! custom_renderer_native_probe_on () ||
+	    ! is->custom_renderer_draw_in_progress || ! is->custom_renderer_frame_active ||
+	    is->custom_renderer_capture_only || is->custom_renderer_capture_failed ||
+	    is->custom_renderer_unit_bootstrap || is->custom_renderer_tile_count <= 0 ||
+	    is->custom_renderer_tiles == NULL || is->custom_renderer_unit_draw == NULL ||
+	    p_main_screen_form->Units_Control.Data.Canvas.JGL.Image == NULL)
+		return C3X_RENDERER_RESULT_PENDING;
+	Main_Screen_Form * screen = p_main_screen_form;
+	Animator * animator = &screen->animator;
+	Map * map = &p_bic_data->Map;
+	int span_x = screen->TileX_Max - screen->TileX_Min, span_y = screen->TileY_Max - screen->TileY_Min + 1;
+	if (span_x < 0 || span_y < 0 || span_x > 256 || span_y > 256)
+		return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+	Unit * units[1024];
+	int count = 0, result = C3X_RENDERER_RESULT_OK;
+	Unit * selected = screen->Current_Unit;
+	int selected_member = selected != NULL ? selected->Body.army_top_defender_id : -1;
+	is->custom_renderer_unit_bootstrap_copies = 0;
+	is->custom_renderer_unit_bootstrap_failed = false;
+	bool online = is_online_game ();
+	bool reveal = (*p_debug_mode_bits & 8) && ! online;
+	int viewer = screen->Player_CivID;
+	if (viewer < 0 || viewer >= 32) return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+
+	// Animator::FUN_004ef410 order: rows ascending, columns descending,
+	// eligible secondary before primary, always-on-top entries last.
+	for (int y = screen->TileY_Min; y <= screen->TileY_Max; y++) {
+		for (int x = screen->TileX_Max - 1; x >= screen->TileX_Min; x--) {
+			int xx = x, yy = y;
+			wrap_tile_coords (map, &xx, &yy);
+			if (((xx + yy) & 1) || ! Map_in_range (map, __, xx, yy) ||
+			    ! custom_renderer_tile_visible_at (xx, yy)) continue;
+			Unit * primary = patch_Main_Screen_Form_find_visible_unit (screen, __, xx, yy, NULL);
+			if (primary == NULL || primary->Body.field_23D != 0 ||
+			    (online && *(char *)primary->Body.field_234 != '\0')) continue;
+			Tile * tile = tile_at (xx, yy);
+			bool appearance_visible = reveal || primary->Body.field_233 != 0 || primary->Body.always_on_top ||
+				((tile->Body.FOWStatus | tile->Body.V3 | tile->Body.Visibility | tile->Body.field_D0_Visibility) &
+				 (1u << (leaders[viewer].ID & 31))) ||
+				(primary->Body.CivID >= 0 && primary->Body.CivID < 32 &&
+				 (leaders[viewer].Contacts[primary->Body.CivID] & 0x40));
+			if (! appearance_visible) continue;
+			if (count >= 1023) { result = C3X_RENDERER_RESULT_BAD_ARGUMENT; goto finished; }
+			if (((primary->Body.Active >> 8) != 0) || primary->Body.always_on_top) {
+				Unit * secondary = patch_Main_Screen_Form_find_visible_unit (screen, __, xx, yy, primary);
+				if (secondary != NULL && secondary->Body.Container_Unit == -1 &&
+				    (reveal || patch_Leader_is_tile_visible (&leaders[viewer], __, xx, yy) ||
+				     (secondary->Body.CivID >= 0 && secondary->Body.CivID < 32 &&
+				      (leaders[viewer].Contacts[secondary->Body.CivID] & 0x40))))
+					units[count++] = secondary;
+			}
+			if (! primary->Body.always_on_top) units[count++] = primary;
+		}
+	}
+	unsigned long top_begin = (unsigned long)animator->field_18E4[7];
+	unsigned long top_end = (unsigned long)animator->field_18E4[8];
+	if (top_begin != 0) {
+		if (top_end < top_begin || (top_end - top_begin) % sizeof(Unit *) != 0 ||
+		    (top_end - top_begin) / sizeof(Unit *) > 1024) {
+			result = C3X_RENDERER_RESULT_BAD_ARGUMENT; goto finished;
+		}
+		Unit ** top = (Unit **)top_begin;
+		for (unsigned long n = 0; n < (top_end - top_begin) / sizeof(Unit *); n++) {
+			Unit * unit = top[n];
+			if (unit == NULL || unit->Body.ID < 0 || ! custom_renderer_tile_visible_at (unit->Body.X, unit->Body.Y)) continue;
+			if (count >= 1024) { result = C3X_RENDERER_RESULT_BAD_ARGUMENT; goto finished; }
+			units[count++] = unit;
+		}
+	}
+	int width = map->vtable->m10_Get_Map_Zoom (map) ? 64 : 128;
+	bool wrap_x = (map->Flags & 1) && screen->camera_x >
+		width / 2 * map->Width - (map->Renderer.field_3EA4 - map->Renderer.field_3E98[1]);
+	bool wrap_y = (map->Flags & 2) && screen->camera_y >
+		width / 4 * map->Height - (map->Renderer.field_3EA8 - map->Renderer.field_3E98[2]);
+	is->custom_renderer_unit_bootstrap = true;
+	is->custom_renderer_unit_bootstrap_selected = selected;
+	is->custom_renderer_unit_bootstrap_failed = false;
+	is->custom_renderer_unit_bootstrap_copies = 0;
+	for (int n = 0; n < count; n++) {
+		Unit * unit = units[n];
+		if (! Map_in_range (map, __, unit->Body.X, unit->Body.Y)) continue;
+		if (! reveal && ! patch_Unit_is_visible_to_civ (unit, __, viewer, 1)) continue;
+		Tile * tile = tile_at (unit->Body.X, unit->Body.Y);
+		int action = unit->Body.Animation.summary.current_anim_type;
+		if (! (*p_preferences & 0x2000) && tile->vtable->m45_Get_City_ID (tile) >= 0 &&
+		    unit != selected && ! unit->Body.always_on_top &&
+		    (! unit->Body.Animation.field_111 || action < AT_ATTACK1 || action > AT_DEATH)) continue;
+		Animation_Info * info = unit->Body.Animation.Animation_Info;
+		if (unit->Body.Animation.Frame_1.Flic_Info == NULL || info == NULL || info->Frame_Counts == NULL ||
+		    unit->Body.Animation.Frame_1.sprite.Width <= 0 || unit->Body.Animation.Frame_1.sprite.Height <= 0 ||
+		    action < AT_DEFAULT || action > AT_PLANT || info->Frame_Counts[action] <= 0) {
+			result = C3X_RENDERER_RESULT_PENDING; break;
+		}
+		Unit * member = Unit_has_ability (unit, __, UTA_Army) ? get_unit_ptr (unit->Body.army_top_defender_id) : NULL;
+		if (member != NULL) {
+			Animation_Info * member_info = member->Body.Animation.Animation_Info;
+			int member_action = member->Body.Animation.summary.current_anim_type;
+			if (member->Body.Animation.Frame_1.Flic_Info == NULL || member_info == NULL ||
+			    member_info->Frame_Counts == NULL || member->Body.Animation.Frame_1.sprite.Width <= 0 ||
+			    member->Body.Animation.Frame_1.sprite.Height <= 0 || member_action < AT_DEFAULT ||
+			    member_action > AT_PLANT || member_info->Frame_Counts[member_action] <= 0) {
+				result = C3X_RENDERER_RESULT_PENDING; break;
+			}
+		}
+		int pair = 14;
+		if (wrap_x) {
+			if (! wrap_y) pair = unit->Body.X >= map->Width / 2 ? 14 : 16;
+			else if (unit->Body.X >= map->Width / 2 && unit->Body.Y >= map->Height / 2) pair = 14;
+			else if (unit->Body.Y < map->Height / 2) pair = unit->Body.X >= map->Width / 2 ? 18 : 20;
+			else pair = 16;
+		} else if (wrap_y && unit->Body.Y < map->Height / 2) pair = 16;
+		int offset_x = animator->field_18E4[pair], offset_y = animator->field_18E4[pair + 1];
+		int anchor_x = unit->Body.X * width / 2 - offset_x;
+		int anchor_y = unit->Body.Y * width / 4 - offset_y;
+		custom_renderer_zoom_transform_point (&anchor_x, &anchor_y);
+		bool anchored = false;
+		for (int t = 0; t < is->custom_renderer_tile_count; t++) {
+			struct c3x_renderer_tile_v1 const * occurrence = &is->custom_renderer_tiles[t];
+			if ((occurrence->tile_flags & C3X_RENDERER_TILE_RENDER) &&
+			    occurrence->tile_x == unit->Body.X && occurrence->tile_y == unit->Body.Y &&
+			    occurrence->anchor_x == anchor_x && occurrence->anchor_y == anchor_y) { anchored = true; break; }
+		}
+		if (! anchored) { result = C3X_RENDERER_RESULT_PENDING; break; }
+		RECT rect = unit->Body.Rect, member_rect = member != NULL ? member->Body.Rect : rect;
+		AnimationSummary summary = unit->Body.Animation.summary;
+		int cursor = unit->Body.Animation.field_FC, marks = unit->Body.Animation.field_12C;
+		FLC_Frame_Image frame = unit->Body.Animation.Frame_1;
+		AnimationSummary member_summary;
+		FLC_Frame_Image member_frame;
+		int member_cursor = 0, member_marks = 0;
+		if (member != NULL) {
+			member_summary = member->Body.Animation.summary;
+			member_frame = member->Body.Animation.Frame_1;
+			member_cursor = member->Body.Animation.field_FC;
+			member_marks = member->Body.Animation.field_12C;
+		}
+		unsigned saved_preferences = *p_preferences;
+		// Preserve native city-body eligibility for the selected unit, while
+		// suppressing cursor, map marker, status and selected-unit GUI updates.
+		screen->Current_Unit = NULL;
+		*p_preferences = (saved_preferences & ~0x800u) | (unit == selected ? 0x2000u : 0u);
+		patch_Unit_tick_anim (unit, __, &screen->Units_Control.Data.Canvas, offset_x, offset_y, false);
+		*p_preferences = saved_preferences;
+		screen->Current_Unit = selected;
+		unit->Body.Rect = rect;
+		unit->Body.Animation.summary = summary;
+		unit->Body.Animation.field_FC = cursor;
+		unit->Body.Animation.field_12C = marks;
+		unit->Body.Animation.Frame_1 = frame;
+		if (member != NULL) {
+			member->Body.Rect = member_rect;
+			member->Body.Animation.summary = member_summary;
+			member->Body.Animation.Frame_1 = member_frame;
+			member->Body.Animation.field_FC = member_cursor;
+			member->Body.Animation.field_12C = member_marks;
+		}
+		if (is->custom_renderer_unit_bootstrap_failed) { result = C3X_RENDERER_RESULT_ERROR; break; }
+	}
+	is->custom_renderer_unit_bootstrap = false;
+	is->custom_renderer_unit_bootstrap_selected = NULL;
+finished:
+	is->custom_renderer_unit_bootstrap = false;
+	is->custom_renderer_unit_bootstrap_selected = NULL;
+	if (selected != NULL) selected->Body.army_top_defender_id = selected_member;
+	{
+		char detail[160];
+		snprintf (detail, sizeof detail, "[C3X renderer] stage=unit-bootstrap representatives=%d copied=%u result=%d\n",
+			count, is->custom_renderer_unit_bootstrap_copies, result);
+		(*p_OutputDebugStringA) (detail);
+	}
+	return result;
+}
+
+// The first completed tile traversal certifies map/viewer/anchors while native
+// loading still owns initialization. The flag is never left set between calls.
+int
+seed_custom_renderer_initial_world (struct c3x_renderer_camera_request_v1 const * request)
+{
+	if ((is->custom_renderer_display_viewer_epoch == is->custom_renderer_viewer_epoch ||
+	     is->custom_renderer_seeded_viewer_epoch == is->custom_renderer_viewer_epoch) &&
+	    is->custom_renderer_viewer_epoch != 0)
+		return C3X_RENDERER_RESULT_OK;
+	Map * map = &p_bic_data->Map;
+	if (! is->current_config.enable_custom_rendering || ! is->custom_renderer_capture_world_topology ||
+	    is->custom_renderer_seed_world == NULL || ! custom_renderer_native_probe_on () ||
+	    ! is->custom_renderer_draw_in_progress || ! is->custom_renderer_frame_active ||
+	    is->custom_renderer_capture_only || is->custom_renderer_capture_failed ||
+	    is->custom_renderer_initial_world_capture || is->custom_renderer_target != &map->Renderer ||
+	    is->custom_renderer_tile_count <= 0 || is->custom_renderer_tiles == NULL ||
+	    map->Tiles == NULL || is->custom_renderer_viewer_epoch == 0 ||
+	    is->custom_renderer_viewer_civ_id < 0 || is->custom_renderer_viewer_civ_id >= 32 ||
+	    request == NULL || request->version != C3X_RENDERER_CAMERA_VIEW_VERSION ||
+	    request->struct_size != sizeof *request || request->frame == NULL ||
+	    request->frame->tiles != is->custom_renderer_tiles ||
+	    request->frame->world_topology != is->custom_renderer_world_topology ||
+	    request->frame->world_topology_count != (unsigned int)is->custom_renderer_world_topology_count ||
+	    request->identity.map_epoch != is->custom_renderer_map_epoch ||
+	    request->identity.viewer_epoch != is->custom_renderer_viewer_epoch ||
+	    request->identity.visibility_epoch != is->custom_renderer_visibility_revision ||
+	    request->identity.scene_epoch != is->custom_renderer_world_topology_revision)
+		return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+	is->custom_renderer_initial_world_capture = true;
+	int result = is->custom_renderer_seed_world (request);
+	is->custom_renderer_initial_world_capture = false;
+	if (result == C3X_RENDERER_RESULT_OK)
+		is->custom_renderer_seeded_viewer_epoch = is->custom_renderer_viewer_epoch;
+	log_custom_renderer_event ("initial-world-seed", result);
+	return result;
+}
+
 bool
 composite_custom_renderer_frame ()
 {
@@ -29291,6 +29582,15 @@ composite_custom_renderer_frame ()
 	request.identity.visibility_epoch = is->custom_renderer_visibility_revision;
 	// Local object/anchor changes remain certified by the complete ordered capture.
 	request.identity.scene_epoch = frame.world_topology_revision;
+	if (is->custom_renderer_capture_world_topology) {
+		int initialized = seed_custom_renderer_initial_world (&request);
+		if (initialized == C3X_RENDERER_RESULT_OK) initialized = bootstrap_custom_renderer_initial_units ();
+		if (initialized != C3X_RENDERER_RESULT_OK) {
+			is->custom_renderer_dirty_flags |= C3X_RENDERER_DIRTY_SCENE;
+			is->custom_renderer_redraw_pending = true;
+			return false;
+		}
+	}
 	int render_result = C3X_RENDERER_RESULT_PENDING;
 	struct c3x_renderer_camera_view_v1 displayed = {0};
 	displayed.version = C3X_RENDERER_CAMERA_VIEW_VERSION;
@@ -47747,6 +48047,77 @@ notify_custom_renderer_tile_change (int x, int y)
 	// the displayed view needs Civ III's redraw/capture gate immediately.
 	if (custom_renderer_tile_near_view (x, y, 6) &&
 	    custom_renderer_tile_visible_at (x, y)) {
+		is->custom_renderer_dirty_flags |= C3X_RENDERER_DIRTY_SCENE;
+		is->custom_renderer_redraw_pending = true;
+		if (p_main_screen_form->animator.field_18E4 != NULL)
+			*(bool *)(p_main_screen_form->animator.field_18E4 + 10) = true;
+	}
+}
+
+// The last native capture is a view observation, not another world cache.
+// Comparing its copied body fields also catches mutations made before yields.
+void
+notify_custom_renderer_city_change (City * city, int previous_cultural_level)
+{
+	if (! is->current_config.enable_custom_rendering || city == NULL ||
+	    is->custom_renderer_init_state != IS_OK || p_main_screen_form == NULL ||
+	    is->custom_renderer_viewer_civ_id < 0 || is->custom_renderer_viewer_epoch == 0)
+		return;
+	if (previous_cultural_level >= 0 && previous_cultural_level != city->Body.cultural_level) {
+		// Native culture ownership includes an iterative enclosed-territory fill.
+		// A fixed city radius is insufficient; keep bounded copied reconciliation.
+		if (is->custom_renderer_world_reconcile == NULL ||
+		    is->custom_renderer_world_reconcile () != C3X_RENDERER_RESULT_OK)
+			is->custom_renderer_world_audit_needed = true;
+		// Territory and sight can change beyond the city's native redraw radius.
+		// Recapture the completed viewer once; paged reconciliation refreshes the rest.
+		if (is->custom_renderer_display_viewer_epoch == is->custom_renderer_viewer_epoch) {
+			is->custom_renderer_dirty_flags |= C3X_RENDERER_DIRTY_SCENE;
+			is->custom_renderer_redraw_pending = true;
+			if (p_main_screen_form->animator.field_18E4 != NULL)
+				*(bool *)(p_main_screen_form->animator.field_18E4 + 10) = true;
+		}
+	}
+	int x = city->Body.X, y = city->Body.Y;
+	if (((x + y) & 1) || ! Map_in_range (&p_bic_data->Map, __, x, y)) return;
+	struct c3x_renderer_tile_v1 const * captured = NULL;
+	for (int n = 0; n < is->custom_renderer_tile_count; n++) {
+		struct c3x_renderer_tile_v1 const * tile = &is->custom_renderer_tiles[n];
+		if (tile->tile_x == x && tile->tile_y == y) { captured = tile; break; }
+	}
+	unsigned visibility = capture_custom_renderer_visibility (tile_at (x, y),
+		is->custom_renderer_viewer_civ_id, x, y);
+	bool visibility_changed = captured != NULL &&
+		(captured->tile_flags & C3X_RENDERER_TILE_VISIBILITY_BITS) != visibility;
+	if (visibility_changed) {
+		// Copy the sight closure as well as the separately permitted city/overlay
+		// fields. An unexplored result still omits all body facts.
+		if (is->custom_renderer_world_move == NULL ||
+		    is->custom_renderer_world_move (x, y, x, y) != C3X_RENDERER_RESULT_OK)
+			is->custom_renderer_world_audit_needed = true;
+		if (custom_renderer_tile_near_view (x, y, 6)) {
+			is->custom_renderer_dirty_flags |= C3X_RENDERER_DIRTY_SCENE;
+			is->custom_renderer_redraw_pending = true;
+			if (p_main_screen_form->animator.field_18E4 != NULL)
+				*(bool *)(p_main_screen_form->animator.field_18E4 + 10) = true;
+		}
+	}
+	if (! (visibility & C3X_RENDERER_TILE_EXPLORED)) return;
+	struct c3x_renderer_tile_v1 facts = {0};
+	facts.city_id = facts.city_owner_id = facts.city_size = facts.city_culture_group = facts.city_era = -1;
+	capture_custom_renderer_city_body (&facts, city);
+	if (captured != NULL && (captured->tile_flags & C3X_RENDERER_TILE_EXPLORED) &&
+	    captured->city_id == facts.city_id && captured->city_owner_id == facts.city_owner_id &&
+	    captured->city_size == facts.city_size && captured->city_culture_group == facts.city_culture_group &&
+	    captured->city_era == facts.city_era && captured->city_flags == facts.city_flags)
+		return;
+
+	// Unknown off-screen facts are copied locally; the world owner decides if
+	// anything changed. Explored fog permits current native city body facts.
+	if (! visibility_changed && (is->custom_renderer_world_change == NULL ||
+	    is->custom_renderer_world_change (x, y) != C3X_RENDERER_RESULT_OK))
+		is->custom_renderer_world_audit_needed = true;
+	if (captured != NULL && custom_renderer_tile_near_view (x, y, 6)) {
 		is->custom_renderer_dirty_flags |= C3X_RENDERER_DIRTY_SCENE;
 		is->custom_renderer_redraw_pending = true;
 		if (p_main_screen_form->animator.field_18E4 != NULL)

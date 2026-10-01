@@ -42,7 +42,7 @@ int main(){
   unsigned wanted=(flags&C3X_RENDERER_TILE_VISIBLE)?2:(flags&C3X_RENDERER_TILE_EXPLORED)?1:0;
   assert(renderer.visibility_coverage.state(0,0)==wanted);
   for(auto const& layer:renderer.geometry_vertex_buffers)
-   assert(layer[0].water_visible==(wanted==2));
+   assert(layer[0].water_visible==(wanted!=0));
   assert(!renderer.visibility_coverage.tiles.empty());
  }
  tile.tile_flags=C3X_RENDERER_TILE_RENDER;

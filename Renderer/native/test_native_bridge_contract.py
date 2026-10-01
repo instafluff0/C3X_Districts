@@ -416,13 +416,16 @@ int main() {
         self.assertIn("renderer_state.render(job_frame, output)", worker)
         self.assertIn("renderer_state.reset()", worker)
         self.assertIn("renderer_worker->blit", worker)
-        unload = injected[injected.index("unload_custom_renderer ()") :]
-        unload = unload[: unload.index("bool\nensure_custom_renderer_loaded")]
-        self.assertIn("is->custom_renderer_reset ();", unload)
-        self.assertLess(
-            unload.index("is->custom_renderer_reset ();"),
-            unload.index("FreeLibrary (is->custom_renderer_module)"),
-        )
+        unload = injected[injected.index("\nunload_custom_renderer ()\n{") :]
+        unload = unload[: unload.index("\n}\n")]
+        # Current end-scene retirement drains native images before retiring
+        # the module, and preserves it if either ownership barrier fails.
+        self.assertIn("C3X_NATIVE_IMAGE_DRAIN", unload)
+        self.assertIn("end_scene () != C3X_RENDERER_RESULT_OK", unload)
+        self.assertLess(unload.index("C3X_NATIVE_IMAGE_DRAIN"),
+                        unload.index("FreeLibrary (is->custom_renderer_module)"))
+        self.assertLess(unload.index("end_scene () != C3X_RENDERER_RESULT_OK"),
+                        unload.index("FreeLibrary (is->custom_renderer_module)"))
 
     def test_m6_7_feature_ownership_is_exact_and_post_composite(self) -> None:
         injected = (C3X_ROOT / "injected_code.c").read_text(encoding="utf-8")

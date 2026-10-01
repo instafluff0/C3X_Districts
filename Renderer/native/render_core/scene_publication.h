@@ -30,9 +30,22 @@ private:
     static void merge_tile(c3x_renderer_tile_v1& old,c3x_renderer_tile_v1 const& next){
         if(next.tile_flags&(C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_PREFETCH))old=next;
         else {
+            auto partial=CapturedScene::known_partial_flags(next);
             // Halo visibility is authoritative; its omitted object fields are not.
             old.tile_flags=(old.tile_flags&~C3X_RENDERER_TILE_VISIBILITY_BITS)|(next.tile_flags&C3X_RENDERER_TILE_VISIBILITY_BITS);
+            old.tile_flags|=partial;
             old.visibility_mask=next.visibility_mask;old.tile_visibility=next.tile_visibility;old.fog_status=next.fog_status;
+            old.terrain_type=next.terrain_type;old.real_terrain_type=next.real_terrain_type;
+            old.river_code=next.river_code;
+            if(partial&C3X_RENDERER_TILE_CITY_BODY_KNOWN)CapturedScene::copy_city_facts(old,next);
+            if(partial&C3X_RENDERER_TILE_NATIVE_OVERLAYS_KNOWN)CapturedScene::copy_native_overlays(old,next);
+            // A hidden visibility delta omits routes. Preserve the last
+            // permitted appearance rather than treating omitted zeros as removal.
+            bool hidden_delta=(next.tile_flags&C3X_RENDERER_TILE_VISIBILITY_KNOWN) &&
+                !(next.tile_flags&C3X_RENDERER_TILE_VISIBLE);
+            if(!hidden_delta && !(partial&C3X_RENDERER_TILE_NATIVE_OVERLAYS_KNOWN)){
+                old.road_mask=next.road_mask;old.railroad_mask=next.railroad_mask;
+            }
         }
     }
     static bool same_scope(State const& prior,c3x_renderer_frame_v1 const& f,
@@ -90,8 +103,8 @@ public:
             else {
                 auto tiles=std::make_shared<std::vector<c3x_renderer_tile_v1>>();tiles->reserve(f.tile_count);
                 for(unsigned i=0;i<f.tile_count;++i){auto tile=normalize(f.tiles[i]);tiles->push_back(tile);
-                    // A lightweight halo never removes a city/resource. Full prefetch
-                    // is authoritative content, but still grants no draw eligibility.
+                    // Only explicit partial authority can replace halo city or
+                    // native overlay facts; unrelated art keeps its own authority.
                     if(!(tile.tile_flags&(C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_PREFETCH|C3X_RENDERER_TILE_TOPOLOGY_HALO)))continue;
                     auto key=(std::uint64_t(std::uint32_t(tile.tile_x))<<32)|std::uint32_t(tile.tile_y);
                     auto found=staged.find(key);
@@ -130,11 +143,11 @@ public:
             // device reset can restore authority without allocating a new journal.
             if(content_changed)tile_pending=true;
             if(tile_pending)for(auto const& item:updates){
-                auto before=scene.appearance_sequence();
+                auto before=scene.world_input_sequence();
                 if(!scene.publish(item.second,content_changed)){
                     pending=false;return false;
                 }
-                if(changed_tiles && !scope_changed && scene.appearance_sequence()!=before)
+                if(changed_tiles && !scope_changed && scene.world_input_sequence()!=before)
                     changed_tiles->emplace_back(item.second.tile_x,item.second.tile_y);
             }
         }catch(...){pending=false;return false;}

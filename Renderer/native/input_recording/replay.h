@@ -40,6 +40,7 @@ struct ReplayState {
             if(subtype==3){c3x_renderer_gpu_frame_v1 view={sizeof(view)};actual=c3x_renderer_gpu_render(&request,&view,&output);map_result(expected,view,output,actual);}
             else if(subtype==1)actual=c3x_renderer_render(&owned.value,&output);
             else if(subtype==2)actual=c3x_renderer_render_view(&request,&output);
+            else if(subtype==4)actual=c3x_renderer_seed_world(&request);
             else throw std::runtime_error("unknown scene input");
             if(subtype==1||subtype==2)check_output(expected,output,actual);
         }else if(kind==Kind::native_bridge){

@@ -35,6 +35,7 @@ struct Core {
     HMODULE module=nullptr;
     c3x_renderer_render_fn render=nullptr;
     c3x_renderer_render_view_fn render_view=nullptr;
+    c3x_renderer_seed_world_fn seed_world=nullptr;
     using GpuRender=int(*)(c3x_renderer_camera_request_v1 const*,c3x_renderer_gpu_frame_v1*,c3x_renderer_output_v1*);
     GpuRender gpu_render=nullptr;
     using CameraBegin=int(*)(c3x_renderer_camera_request_v1 const*,c3x_renderer_i64*);
@@ -91,6 +92,7 @@ struct Core {
     std::map<std::int64_t,std::int64_t> ticket_ids,image_ids;
     explicit Core(wchar_t const* dll,bool verify=false,HANDLE image_completed=nullptr):verify_pixels(verify){module=LoadLibraryW(dll);require(module!=nullptr,"renderer DLL load failed");
         render=reinterpret_cast<c3x_renderer_render_fn>(GetProcAddress(module,"c3x_renderer_render"));
+        seed_world=reinterpret_cast<c3x_renderer_seed_world_fn>(GetProcAddress(module,"c3x_renderer_seed_world"));
         render_view=reinterpret_cast<c3x_renderer_render_view_fn>(GetProcAddress(module,"c3x_renderer_render_view"));
         gpu_render=reinterpret_cast<GpuRender>(GetProcAddress(module,"c3x_renderer_gpu_render"));
         camera_begin=reinterpret_cast<CameraBegin>(GetProcAddress(module,"c3x_renderer_gpu_camera_begin"));
@@ -260,6 +262,12 @@ struct Core {
                 wire.code=unsigned(pack(present?path.c_str():nullptr));
                 direct_surface_bound=false;
                 ticket_ids.clear();image_ids.clear();
+            }else if(wire.kind==unsigned(Kind::scene)&&wire.subtype==4){
+                require(seed_world!=nullptr,"helper lacks world seed entry");
+                c3x_renderer_camera_identity_v1 identity={};c3x_renderer_camera_identity_v1_fields(in,identity);
+                Frame frame_value;frame(in,frame_value);in.done();
+                c3x_renderer_camera_request_v1 request={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(request),&frame_value.value,identity};
+                wire.code=unsigned(seed_world(&request));
             }else if(wire.live&&wire.kind==unsigned(Kind::camera)&&wire.subtype==1){
                 c3x_renderer_camera_identity_v1 identity={};c3x_renderer_camera_identity_v1_fields(in,identity);
                 Frame frame_value;frame(in,frame_value);in.done();

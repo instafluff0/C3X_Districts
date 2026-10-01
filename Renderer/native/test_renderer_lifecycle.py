@@ -47,21 +47,58 @@ int main(){
 
     def test_retired_viewer_keeps_completed_pixels(self):
         source=(ROOT/'Renderer/native/c3x_renderer.cpp').read_text()
-        gate=source.split('// A viewer change retires the old copied scene',1)[1]
-        gate=gate[gate.index('if(!capture->valid()'):].split('if(renderer_state.gpu_serial',1)[0]
+        start=source.index('auto draw=[this,weak,capture,selected,x,y,w,h,sharpness]')
+        draw=source[start:source.index('\n            c3x_gpu_images::RetainedComposition::Sample sample=',start)]
         run_cpp(r'''
 #include <cassert>
-struct Sampled {int kind=0;static Sampled frozen(){return {2};}};
-struct Capture {bool current=true;bool valid(){return current;}} captured,*capture=&captured;
-struct Selected {bool current=true;bool sample(long long,long long,long long,int&){return current;}} selection,*selected=&selection;
-Sampled draw(){long long ticks=1,frequency=1000,origin=0;int view=0;
-''' + gate + r'''
- return {1};
-}
+#include <memory>
+struct Rect {int left,top,right,bottom;};
+int samples=0;
+struct Sampled {
+ int kind=0;
+ static Sampled frozen(){return {2};}
+ static Sampled held(){return {3};}
+ static Sampled bgra(void* texture,Rect rect,float sharpness){
+  assert(texture&&rect.left==4&&rect.top==9&&rect.right==24&&rect.bottom==39&&sharpness==.75f);
+  ++samples;return {1};
+ }
+};
+struct Capture {bool current=true;bool valid(){return current;}};
+struct Selected {bool current=true;bool valid(){return current;}};
+struct Texture {void* Get(){return this;}};
+struct Prepared {
+ bool ready=true;float zoom=1.f;int device_generation=5,serial=7;Texture front;
+};
+struct Harness {
+ bool camera_active=false;
+ struct {int device_generation=5,gpu_serial=7;} renderer_state;
+ Capture captured;Selected selection;
+ std::shared_ptr<Prepared> prepared=std::make_shared<Prepared>();
+ auto make_draw(){
+  std::weak_ptr<Prepared> weak=prepared;
+  auto* capture=&captured;auto* selected=&selection;
+  int x=4,y=9,w=20,h=30;float sharpness=.75f;
+''' + draw + r'''
+  return draw;
+ }
+};
 int main(){
- assert(draw().kind==1);captured.current=false;assert(draw().kind==2);
- captured.current=true;selection.current=false;assert(draw().kind==2);
- selection.current=true;assert(draw().kind==1);
+ Harness owner;auto draw=owner.make_draw();
+ assert(draw(1,1000,1.f).kind==1&&samples==1);
+ owner.captured.current=false;assert(draw(2,1000,1.f).kind==2&&samples==1);
+ owner.captured.current=true;owner.selection.current=false;
+ assert(draw(3,1000,1.f).kind==2&&samples==1);
+ owner.selection.current=true;assert(draw(4,1000,1.f).kind==1&&samples==2);
+ owner.camera_active=true;assert(draw(5,1000,1.f).kind==2&&samples==2);
+ owner.camera_active=false;owner.renderer_state.device_generation=6;
+ assert(draw(6,1000,1.f).kind==2&&samples==2);
+ owner.renderer_state.device_generation=5;owner.renderer_state.gpu_serial=8;
+ assert(draw(7,1000,1.f).kind==2&&samples==2);
+ owner.renderer_state.gpu_serial=7;owner.prepared->ready=false;
+ assert(draw(8,1000,1.f).kind==3&&samples==2);
+ owner.prepared->ready=true;assert(draw(9,1000,.5f).kind==3&&samples==2);
+ assert(draw(10,1000,1.f).kind==1&&samples==3);
+ owner.prepared.reset();assert(draw(11,1000,1.f).kind==2&&samples==3);
 }
 ''')
 
