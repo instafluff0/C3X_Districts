@@ -4,6 +4,44 @@ from Renderer.native.native_cpp_test import run_cpp
 from Renderer.lab.platform import ROOT
 
 class SharedPassOwnershipTests(unittest.TestCase):
+    def test_production_shadow_identity_preserves_distinct_index_and_instance_draws(self):
+        source=(ROOT/"Renderer/sandbox/fresh_pipeline.h").read_text()
+        key="    AtlasInputs::Key caster_key("+source.split("    AtlasInputs::Key caster_key(",1)[1].split("    bool atlas_dependencies(",1)[0]
+        run_cpp(r'''
+#include "Renderer/native/render_core/raster_contributors.h"
+#include <cassert>
+#include <cstring>
+#include <vector>
+struct Proof {};
+struct Shadow {struct Caster {
+ std::uint64_t content_generation=7,version=2;unsigned layer=3,binding=40,count=6,vertex_offset=0,index_offset=0,index_format=42,stride=80;
+ struct {float low[3]={},high[3]={1,1,1};}bounds;float offset[3]={};
+ void* vertices=nullptr;void* indices=nullptr;std::vector<int> const* instances=nullptr;
+ float instance_material=40;bool rigid=false;
+};};
+struct State {using AtlasInputs=c3x_renderer::render_core::RasterContributors<Proof,20>;
+'''+key+r'''
+};
+int main(){State state;int vertices=0,index_a=0,index_b=0;std::vector<int> instance_a={1},instance_b={2};
+ Shadow::Caster a;a.vertices=&vertices;a.indices=&index_a;a.instances=&instance_a;
+ auto original=state.caster_key(a);std::unordered_set<State::AtlasInputs::Key,State::AtlasInputs::Hash> unique;
+ unique.insert(original);auto b=a;
+ // Adversarial shared vertices, bounds and index count: different ranges and
+ // instance streams must survive deduplication and retained-atlas validation.
+ b.index_offset=3;assert(unique.insert(state.caster_key(b)).second);b=a;
+ b.indices=&index_b;assert(unique.insert(state.caster_key(b)).second);b=a;
+ b.index_format=57;assert(unique.insert(state.caster_key(b)).second);b=a;
+ b.stride=96;assert(unique.insert(state.caster_key(b)).second);b=a;
+ b.instances=&instance_b;assert(unique.insert(state.caster_key(b)).second);b=a;
+ b.instance_material=41;assert(unique.insert(state.caster_key(b)).second);b=a;
+ b.rigid=true;assert(unique.insert(state.caster_key(b)).second);
+ assert(unique.size()==8);assert(state.caster_key(a)==original);
+ State::AtlasInputs pixels;auto proof=std::make_shared<Proof>();assert(pixels.add(original,proof,9,1));
+ b=a;b.index_offset=3;assert(!pixels.contains(state.caster_key(b)));
+ b=a;b.instances=&instance_b;assert(!pixels.contains(state.caster_key(b)));
+}
+''')
+
     def test_production_selection_reopens_zoomed_out_edges_without_world_edits(self):
         source=(ROOT/"Renderer/sandbox/fresh_pipeline.h").read_text()
         import re

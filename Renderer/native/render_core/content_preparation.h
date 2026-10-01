@@ -271,20 +271,29 @@ public:
         // One consumer owns GPU adoption. Its demand bypasses speculative
         // backpressure and is protected from eviction while being joined.
         demanded=true;demand_key=key;
+        // Cancellation may service a bounded renderer-owner turn. Never call
+        // external code under the content mutex: workers must keep publishing
+        // immutable results while the consumer yields to native image work.
+        auto obsolete_now=[&]{
+            if(!obsolete)return false;
+            lock.unlock();bool result=false;
+            try{result=obsolete();}catch(...){lock.lock();throw;}
+            lock.lock();return result;
+        };
         auto running=[&]{for(unsigned i=0;i<active.size();++i)if(active[i] && active_key[i]==key)return true;return false;};
         if(!paused && (queued || running())){
             wake.notify_all();
             auto complete=[&]{
-                if(paused || stopping || (obsolete && obsolete()))return true;
+                if(paused || stopping || obsolete_now())return true;
                 if(running())return false;
                 return std::none_of(pending.begin(),pending.end(),[&](auto const& j){return j.key==key;});
             };
             if(obsolete)while(!complete())completed.wait_for(lock,std::chrono::milliseconds(1));
             else completed.wait(lock,complete);
         }
-        demanded=false;
         stats.wait_ms+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count();
-        if(obsolete && obsolete())return {};
+        bool cancelled=obsolete_now();demanded=false;
+        if(cancelled)return {};
         for(auto it=ready.begin();it!=ready.end();++it)if(it->key==key){
             stats.bytes-=it->value->bytes();auto value=std::move(it->value);ready.erase(it);++stats.consumed;wake.notify_all();return value;
         }

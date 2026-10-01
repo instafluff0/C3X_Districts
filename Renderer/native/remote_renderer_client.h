@@ -3,6 +3,7 @@
 #include "input_recording/journal.h"
 #include "input_recording/runtime.h"
 #include "remote_scene_output.h"
+#include "ordered_image_batch.h"
 #include <memory>
 
 namespace c3x_remote_scene {
@@ -36,8 +37,10 @@ public:
     bool alive()const{return transport.alive();}
     unsigned frames()const{return transport.frames();}
     unsigned presented_zoom()const{return transport.presented_zoom();}
+    void supersede_pending_camera(){transport.supersede_pending_camera();}
     c3x_helper_trial::SceneClient::Stats stats()const{return transport.stats();}
     int definitions(char const* root,char const* fallback,char const* scenario,char const* custom){
+        transport.retire_camera_receipt();
         c3x_inputs::Writer input;
         input.string(root,32768);input.string(fallback,32768);
         input.string(scenario,32768);input.string(custom,32768);
@@ -49,11 +52,13 @@ public:
             unsigned(input.bytes.size())).code);
     }
     int pack(char const* path){
+        transport.retire_camera_receipt();
         c3x_inputs::Writer input;input.string(path,32768);
         return int(invoke(unsigned(c3x_inputs::Kind::native_bridge),7,input.bytes.data(),
             unsigned(input.bytes.size())).code);
     }
     int reset(){
+        transport.retire_camera_receipt();
         direct_surface_bound=false;
         return int(invoke(unsigned(c3x_inputs::Kind::native_bridge),6,nullptr,0).code);
     }
@@ -120,7 +125,7 @@ public:
         c3x_inputs::frame(input,*request.frame);
         auto const& response=invoke(unsigned(c3x_inputs::Kind::camera),1,input.bytes.data(),
             unsigned(input.bytes.size()));
-        if(response.code==C3X_RENDERER_RESULT_PENDING)ticket=response.recorded_ticket;
+        if(response.code==C3X_RENDERER_RESULT_PENDING){ticket=response.recorded_ticket;transport.remember_camera(ticket);}
         return int(response.code);
     }
     int camera_query(c3x_renderer_i64 ticket,c3x_renderer_gpu_camera_view_v1& view,unsigned kind){
@@ -212,6 +217,25 @@ public:
             std::memcpy(pixels,response.payload,response.reply_size);
         }
         return C3X_RENDERER_RESULT_OK;
+    }
+    int images_batch(std::vector<ImageBatch::Operation> const& operations,std::vector<ImageBatch::Reply>& replies){
+        c3x_inputs::Writer input;ImageBatch::encode(input,operations);
+        auto const& admitted=invoke(unsigned(c3x_inputs::Kind::image_commands),1,input.bytes.data(),unsigned(input.bytes.size()));
+        c3x_inputs::require(admitted.code==C3X_RENDERER_RESULT_PENDING&&!admitted.executed,"image batch was not admitted");
+        unsigned sequence=admitted.sequence;c3x_inputs::Writer query;query(sequence);
+        auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(120);
+        for(;;){
+            auto const& executed=invoke(unsigned(c3x_inputs::Kind::image_commands),2,query.bytes.data(),unsigned(query.bytes.size()));
+            if(executed.code==C3X_RENDERER_RESULT_PENDING){
+                c3x_inputs::require(std::chrono::steady_clock::now()<deadline,"image batch execution deadline");
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));continue;
+            }
+            if(executed.code!=C3X_RENDERER_RESULT_OK)return int(executed.code);
+            auto bytes=reply(executed);c3x_inputs::Reader reader{bytes};unsigned count=0;reader(count);
+            c3x_inputs::require(count<=operations.size(),"image batch execution prefix exceeds admission");
+            replies.resize(count);for(auto& value:replies)ImageBatch::reply_fields(reader,value);reader.done();
+            return C3X_RENDERER_RESULT_OK;
+        }
     }
     int unit(c3x_renderer_unit_v1 const& unit,c3x_renderer_gpu_unit_v1 const& target,int* bounds){
         c3x_inputs::Writer input;c3x_inputs::unit(input,unit);auto value=target;

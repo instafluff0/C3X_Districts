@@ -64,8 +64,19 @@ The final 18-view witness at matched 1.25x projection has exact retained/full
 depth agreement; RGB differences reach 8,785 pixels / maximum channel delta 46 /
 mean 0.00305. Independent final-versus-baseline full output also has exact depth,
 with up to 319,105 changed RGB pixels / maximum delta 107 / mean 0.66125. These
-larger RGB differences concentrate around foliage/shadow pixels after projection
-selection changes and are retained for review; this is not a claim of bit-identical color.
+larger RGB differences concentrate around foliage/shadow pixels. A subsequent
+exact-clock receiver-selection ablation establishes their cause: projection-aware
+main selection and water-bounded reflection receivers shrink the fixed-resolution
+shadow atlas's world region, changing its texel mapping. At the origin the old
+region is 42 by 32 world units and the new region 38 by 28. Restoring only the
+old receiver bounds reduces six matched independent full-frame comparisons from
+up to 267,952 changed pixels to 158, with exact depth in both arms. Reverting
+immutable vegetation submission changes at most 171 pixels in the 18-view
+witness, and closing the shadow-key omission does not remove the bulk difference.
+This is an explained change in shadow sampling, not a claim of imperceptibility
+or bit-identical color. The receipts are in
+`Renderer/.cache/ordered-cold-step/receiver-ablation-comparison.json` and
+`instance-ablation-comparison.json`.
 Full-frame comparisons and enlarged difference views preserve the geometry,
 water, cities and coverage. An earlier comparison with mismatched base zoom is
 explicitly excluded from quality claims.

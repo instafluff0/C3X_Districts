@@ -72,15 +72,23 @@ public:
             OutputDebugStringA(line);},helper,dll),direct_requested(direct){
         char profile[8]={};
         if(GetEnvironmentVariableA("C3X_RENDERER_TRACE",profile,sizeof(profile))&&profile[0]=='2')
-            client.observe_publication([](char const* operation,double queued,double service){
-                LARGE_INTEGER now={};QueryPerformanceCounter(&now);char line[256];
-                std::snprintf(line,sizeof(line),"[C3X renderer] qpc=%lld stage=publication-latency operation=%s queue_ms=%.3f service_ms=%.3f\n",
-                    now.QuadPart,operation,queued,service);OutputDebugStringA(line);
+            client.observe_publication([this](char const* operation,double queued,double service){
+                LARGE_INTEGER now={};QueryPerformanceCounter(&now);char line[512];
+                auto s=client.publication_status();
+                std::snprintf(line,sizeof(line),"[C3X renderer] qpc=%lld stage=publication-latency operation=%s queue_ms=%.3f service_ms=%.3f accepted=%u executed=%u superseded=%u abandoned=%u rejected=%u records=%zu work=%zu bytes=%zu peak_records=%zu peak_work=%zu peak_bytes=%zu oldest_ms=%.3f\n",
+                    now.QuadPart,operation,queued,service,s.accepted,s.executed,s.superseded,s.abandoned,s.rejected,
+                    s.records,s.units,s.bytes,s.peak_records,s.peak_units,s.peak_bytes,s.oldest_ms);OutputDebugStringA(line);
             });
     }
     ~Backend(){cadence.stop();}
     bool healthy()const{return client.alive();}
     void progress(unsigned& accepted,unsigned& completed,unsigned& frames)const{client.progress(accepted,completed,frames);}
+    void service_status(unsigned* values)const{
+        auto s=client.publication_status();unsigned data[16]={s.accepted,s.executed,s.superseded,s.abandoned,s.rejected,
+            client.executed_adoptions(),client.presented_frames(),unsigned(s.records),unsigned(s.units),unsigned(s.bytes),
+            unsigned(s.peak_records),unsigned(s.peak_units),unsigned(s.peak_bytes),unsigned(s.oldest_ms),1,0};
+        std::copy(std::begin(data),std::end(data),values);
+    }
     void abandon(){
         cadence.stop();std::lock_guard<std::mutex> lock(gate);
         direct_surface.reset();direct_active=false;visual_active=false;active_window=nullptr;

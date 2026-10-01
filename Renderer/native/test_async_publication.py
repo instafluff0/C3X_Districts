@@ -66,7 +66,7 @@ int main(){
  assert(queue.post(32,[&]{seen.push_back(10000);},1));
  release.set_value();queue.stop();
  assert(queue.healthy());assert(seen==std::vector<int>({-1,-2,10000}));
- assert(queue.accepted()==queue.completed());
+ assert(queue.accepted()==queue.completed()+queue.status().superseded);
 }
 ''')
 
@@ -90,6 +90,7 @@ struct Fake {
  State& state;long long next=0; c3x_renderer_frame_v1 frame={};c3x_renderer_tile_v1 tile={};
  explicit Fake(State& value):state(value){}
  bool alive()const{return true;}
+ void supersede_pending_camera(){}
  int stats(){return state.creates;}
  int camera_begin(c3x_renderer_camera_request_v1 const& value,long long& ticket){
   state.barrier();frame=*value.frame;tile=frame.tiles[0];frame.tiles=&tile;ticket=++next;return C3X_RENDERER_RESULT_PENDING;
@@ -116,6 +117,9 @@ struct Fake {
   else if(value.action==C3X_GPU_UPLOAD){assert(value.image>=2001);state.uploaded.assign(value.pixels,value.pixels+value.pixel_count);}
   else if(value.action==C3X_GPU_READBACK)++state.reads;
   return C3X_RENDERER_RESULT_OK;
+ }
+ int images_batch(std::vector<c3x_remote_scene::ImageBatch::Operation>& operations,std::vector<c3x_remote_scene::ImageBatch::Reply>& replies){
+  replies=c3x_remote_scene::ImageBatch::execute(operations,[&](auto const& request,auto& result){return images(request,result,nullptr,0);});return C3X_RENDERER_RESULT_OK;
  }
  int unit_animation(c3x_renderer_unit_animation_v1 const& value){
   assert(value.visual.unit_id==7&&value.visual.target_x==384&&value.frames==10&&value.frame_seconds==.125f&&value.display_unit_id==7);
@@ -173,7 +177,7 @@ int main(){
  std::this_thread::sleep_for(2s);state.release();client.stats();assert(state.uploaded[0]==11);
  // Inspecting a new camera leaves the old ticket usable until adoption is
  // explicitly queued. Old draws precede adoption; new draws use its new map.
- assert(client.camera_begin(request,camera)==C3X_RENDERER_RESULT_PENDING);client.stats();
+ tile.tile_x=3;assert(client.camera_begin(request,camera)==C3X_RENDERER_RESULT_PENDING);client.stats();
  assert(client.camera_poll(camera,view)==C3X_RENDERER_RESULT_PENDING);client.stats();assert(state.adoptions==1);
  c3x_renderer_gpu_command_v1 draw={};draw.source=first.map_image;draw.destination=reserved;
  image={};image.struct_size=sizeof(image);image.action=C3X_GPU_SUBMIT;image.ticket=first.ticket;image.commands=&draw;image.command_count=1;

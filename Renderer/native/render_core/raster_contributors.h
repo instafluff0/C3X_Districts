@@ -9,8 +9,8 @@ namespace c3x_renderer { namespace render_core {
 // Retained pixels depend on contributing content, not the camera's entire
 // selection. Proofs contain no GPU resources. Admission is bounded; rejection
 // makes the caller draw again rather than silently omit a dependency.
-template<class Proof> struct RasterContributors {
-    using Key=std::array<std::uint64_t,14>;
+template<class Proof,std::size_t KeyWords=14> struct RasterContributors {
+    using Key=std::array<std::uint64_t,KeyWords>;
     struct Hash {std::size_t operator()(Key const& key)const{
         std::uint64_t h=14695981039346656037ull;
         for(auto value:key){h^=value;h*=1099511628211ull;}return std::size_t(h);

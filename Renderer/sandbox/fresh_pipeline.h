@@ -484,7 +484,7 @@ struct SandboxSceneShadow {
     std::vector<Shadow::Caster> caster_inputs;
     using Membership=c3x_renderer::render_core::SceneMembership<CachedVertexChunk,geometry_layer_count>;
     Membership::Lease caster_lease;
-    using AtlasInputs=c3x_renderer::render_core::RasterContributors<CachedGeometryProof>;
+    using AtlasInputs=c3x_renderer::render_core::RasterContributors<CachedGeometryProof,20>;
     AtlasInputs atlas_inputs;
     std::uint64_t prepared_signature=~std::uint64_t(0);
     std::array<float,4> prepared_box{};
@@ -800,7 +800,14 @@ struct SandboxSceneShadow {
             bits(caster.bounds.low[0]),bits(caster.bounds.low[1]),bits(caster.bounds.low[2]),
             bits(caster.bounds.high[0]),bits(caster.bounds.high[1]),bits(caster.bounds.high[2]),
             bits(caster.offset[0]),bits(caster.offset[1]),bits(caster.offset[2]),
-            (std::uint64_t(caster.count)<<32)|caster.vertex_offset,std::uint64_t(reinterpret_cast<std::uintptr_t>(caster.vertices))};
+            (std::uint64_t(caster.count)<<32)|caster.vertex_offset,std::uint64_t(reinterpret_cast<std::uintptr_t>(caster.vertices)),
+            std::uint64_t(reinterpret_cast<std::uintptr_t>(caster.indices)),
+            (std::uint64_t(caster.index_offset)<<32)|unsigned(caster.index_format),caster.stride,
+            // Instances belong to the immutable content generation held by
+            // caster_lease. Include their identity and every draw variant;
+            // sharing a vertex buffer never proves equal index/instance work.
+            std::uint64_t(reinterpret_cast<std::uintptr_t>(caster.instances)),
+            bits(caster.instance_material),std::uint64_t(caster.rigid)};
     }
     bool atlas_dependencies(bool append){
 #ifdef C3X_RENDERER64_FRESH

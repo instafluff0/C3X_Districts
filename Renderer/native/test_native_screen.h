@@ -347,13 +347,22 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
         if(asynchronous){
             using Progress=int(*)(unsigned*,unsigned*,unsigned*);
             auto progress=reinterpret_cast<Progress>(GetProcAddress(renderer_module,"c3x_renderer_async_progress"));
+
             verify(progress!=nullptr,"asynchronous progress export");
             unsigned accepted=0,completed=0,frames=0;
+            using ServiceStatus=int(*)(unsigned*,unsigned);
+            auto service_status=reinterpret_cast<ServiceStatus>(GetProcAddress(renderer_module,"c3x_renderer_async_service_status"));
+            auto publication_drained=[&]{
+                if(!service_status)return accepted==completed;
+                unsigned status[16]={};verify(service_status(status,16)==C3X_RENDERER_RESULT_OK,"ordered service healthy");
+                verify(!status[3]&&!status[4],"reliable publication has no retired or rejected work");
+                return !status[7]&&status[0]==status[1]+status[2];
+            };
             auto settled=GetTickCount64()+30000;
             do{verify(progress(&accepted,&completed,&frames)==C3X_RENDERER_RESULT_OK,"asynchronous consumer healthy");
-                if(accepted==completed&&frames>=5)break;Sleep(10);
+                if(publication_drained()&&frames>=5)break;Sleep(10);
             }while(GetTickCount64()<settled);
-            verify(accepted==completed&&frames>=5,"queued map and UI actually consumed, autonomous frames running");
+            verify(publication_drained()&&frames>=5,"queued map and UI actually consumed, autonomous frames running");
             unsigned before=frames;Sleep(2000);
             verify(progress(&accepted,&completed,&frames)==C3X_RENDERER_RESULT_OK&&frames>before+10,
                 "renderer advances while the native host is paused");
@@ -394,9 +403,9 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
             paused.resume();
             settled=GetTickCount64()+30000;
             do{verify(progress(&accepted,&completed,&frames)==C3X_RENDERER_RESULT_OK,"resumed consumer healthy");
-                if(accepted==completed)break;Sleep(10);
+                if(publication_drained())break;Sleep(10);
             }while(GetTickCount64()<settled);
-            verify(accepted==completed,"resumed renderer consumes complete ordered UI updates");
+            verify(publication_drained(),"resumed renderer consumes complete ordered UI updates");
             std::sort(submission_ms.begin(),submission_ms.end());
             std::printf("PASS async native independence: host_pause_frames=%u renderer_pause_publications=%zu submit_p95_ms=%.3f submit_max_ms=%.3f cpu_map_readbacks=0\n",
                 independent_frames,submission_ms.size(),submission_ms[submission_ms.size()*95/100],submission_ms.back());
@@ -455,6 +464,26 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
             auto moved=*demand.frame;auto moving=demand;
             std::vector<c3x_renderer_tile_v1> moving_tiles(moved.tiles,moved.tiles+moved.tile_count);
             moved.tiles=moving_tiles.data();moving.frame=&moved;
+            if(GetEnvironmentVariableA("C3X_RENDERER_ORDERED_SUPERSESSION_TEST",nullptr,0)){
+                unsigned before_frames=frames;
+                for(unsigned burst=0;burst<8;++burst){
+                    int offset=512+int(burst)*32;
+                    for(unsigned n=0;n<moved.tile_count;++n){
+                        moving_tiles[n]=demand.frame->tiles[n];moving_tiles[n].anchor_x-=offset;
+                        moving_tiles[n].anchor_y+=offset/2;}
+                    verify(reinterpret_cast<Fill>(canvases[1]->vtable[17])(canvases[1],&panel,int(0x80007c00u))==0,
+                        "supersession keeps reliable UI updates");
+                    verify(map_view(C3X_NATIVE_MAP_PREPARE,canvases[0],&moving,&view)==C3X_RENDERER_RESULT_PENDING,
+                        "burst camera admitted without adopting an intermediate view");
+                    verify(live(C3X_NATIVE_IMAGE_PRESENT,canvases[1],graph,&full,nullptr,0)==1,
+                        "completed old map remains presentable during supersession");
+                    Sleep(burst?4:60);
+                }
+                verify(progress(&accepted,&completed,&frames)==C3X_RENDERER_RESULT_OK,
+                    "superseding producer stays healthy");
+                std::printf("ASYNC_CAMERA_BURST demands=8 accepted=%u executed=%u old_view_frames=%u\n",
+                    accepted,completed,frames-before_frames);
+            }
             for(unsigned step=0;step<32;++step){
                 int offset=step<16?int(step+1)*4:int(31-step)*4;
                 for(unsigned n=0;n<moved.tile_count;++n){
@@ -479,6 +508,8 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
                         step,ready,GetTickCount64()-camera_started,accepted,completed,frames);
                 }
                 verify(ready==C3X_RENDERER_RESULT_OK,"asynchronous scrolling camera ready");
+                verify(view.frame.tiles && view.frame.tiles[0].anchor_x==moving_tiles[0].anchor_x &&
+                    view.frame.tiles[0].anchor_y==moving_tiles[0].anchor_y,"latest camera anchors survive supersession");
                 verify(map_view(C3X_NATIVE_MAP_COMMIT,canvases[0],nullptr,nullptr)==C3X_RENDERER_RESULT_OK,"scrolling map commit");
                 RECT empty_background={unit.body_x-offset,unit.body_y+offset/2,unit.body_x-offset,unit.body_y+offset/2};
                 verify(reinterpret_cast<Copy>(canvases[0]->vtable[16])(canvases[0],canvases[1],&empty_background,&empty_background)==0,"empty unit background restore after camera adoption");
@@ -501,9 +532,12 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
             }
             settled=GetTickCount64()+30000;
             do{verify(progress(&accepted,&completed,&frames)==C3X_RENDERER_RESULT_OK,"scrolling consumer healthy");
-                if(accepted==completed)break;Sleep(10);
+                if(publication_drained())break;Sleep(10);
             }while(GetTickCount64()<settled);
-            verify(accepted==completed,"all scrolling map, tactical and UI publications consumed before shutdown");
+            verify(publication_drained(),"all scrolling map, tactical and UI publications consumed before shutdown");
+            if(service_status){unsigned status[16]={};verify(service_status(status,16)==C3X_RENDERER_RESULT_OK,"final ordered status");
+                std::printf("ASYNC_SERVICE_STATUS accepted=%u executed=%u superseded=%u abandoned=%u rejected=%u adopted=%u frames=%u records=%u work=%u bytes=%u peak_records=%u peak_work=%u peak_bytes=%u oldest_ms=%u\n",
+                    status[0],status[1],status[2],status[3],status[4],status[5],status[6],status[7],status[8],status[9],status[10],status[11],status[12],status[13]);}
             std::puts("PASS asynchronous camera ordering: 32 adopted maps; queued UI; alternating clears; grid and selection; empty unit copies; consumer drained");
             if(witness.done)verify(WaitForSingleObject(witness.done,30000)==WAIT_OBJECT_0,"async window evidence finished");
         }

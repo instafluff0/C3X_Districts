@@ -1,6 +1,7 @@
 #pragma once
 #include "async_publication.h"
 #include "../native/remote_scene_output.h"
+#include "../native/ordered_image_batch.h"
 #include <map>
 #include <memory>
 
@@ -17,10 +18,11 @@ template<class Transport>class AsyncSceneClient {
     Id next_image=0,next_camera=0,session=1;
     std::map<Id,Id> image_ids,ticket_ids; // transport thread only
     Id remote_camera=0,worker_camera=0,worker_map=0;
+    std::atomic<unsigned> adopted_cameras{0};
     struct Camera {
         Id ticket=0;
         std::mutex mutex;
-        bool query=false,adopted=false;
+        bool query=false,adopted=false; // local reservation; execution counted separately
         int code=C3X_RENDERER_RESULT_PENDING;
         std::unique_ptr<CameraOutput> ready;
     };
@@ -61,8 +63,36 @@ template<class Transport>class AsyncSceneClient {
         value.background=image(value.background);value.detail=image(value.detail);
         value.background_detail=image(value.background_detail);
     }
+    static bool same_camera_source(c3x_renderer_frame_v1 const& a,c3x_renderer_camera_identity_v1 const& ai,
+                                   c3x_renderer_frame_v1 const& b,c3x_renderer_camera_identity_v1 const& bi){
+        auto left=a,right=b;left.tiles=right.tiles=nullptr;left.world_topology=right.world_topology=nullptr;
+        left.presentation_time_ticks=right.presentation_time_ticks=0;
+        left.visible_animation_count=right.visible_animation_count=0;
+        return !std::memcmp(&ai,&bi,sizeof(ai))&&!std::memcmp(&left,&right,sizeof(left))&&
+            (!a.tile_count||!std::memcmp(a.tiles,b.tiles,std::size_t(a.tile_count)*sizeof(*a.tiles)))&&
+            (!a.world_topology_count||!std::memcmp(a.world_topology,b.world_topology,std::size_t(a.world_topology_count)*sizeof(*a.world_topology)));
+    }
+    void execute_images(ImageBatch& batch){
+        std::vector<ImageBatch::Operation> mapped;std::map<Id,bool> created_here;
+        auto resolve=[&](Id local){return created_here.count(local)?-local:image(local);};
+        for(auto const& operation:batch.operations){
+            mapped.push_back(operation);auto& packet=mapped.back().image;auto& value=packet.value;
+            value.ticket=ticket(value.ticket);value.image=resolve(value.image);
+            for(auto& draw:packet.commands){draw.destination=resolve(draw.destination);draw.source=resolve(draw.source);
+                draw.background=resolve(draw.background);draw.detail=resolve(draw.detail);
+                draw.background_detail=resolve(draw.background_detail);draw.program=resolve(draw.program);}
+            packet.bind();if(operation.created)created_here[operation.created]=true;
+        }
+        std::vector<ImageBatch::Reply> replies;require_result(transport.images_batch(mapped,replies),"image-batch-transport");
+        for(std::size_t i=0;i<replies.size();++i){auto const& operation=batch.operations[i];
+            require_result(replies[i].code,"image-batch-operation");
+            if(operation.created)image_ids[operation.created]=replies[i].value.image;
+            if(operation.image.value.action==C3X_GPU_DESTROY)image_ids.erase(operation.image.value.image);
+        }
+        c3x_inputs::require(replies.size()==batch.operations.size(),"image batch lost reliable suffix");
+    }
     template<class Work>int post(std::size_t bytes,Work work,unsigned replace_key=0,char const* label=nullptr){
-        return publication.post(bytes,std::move(work),replace_key,label)?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_DEVICE_ERROR;
+        return publication.post(bytes,std::move(work),replace_key,label?label:"state")?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_DEVICE_ERROR;
     }
     static std::shared_ptr<c3x_inputs::Frame> copy_frame(c3x_renderer_frame_v1 const& source){
         auto result=std::make_shared<c3x_inputs::Frame>();result->value=source;
@@ -126,6 +156,9 @@ public:
     void progress(unsigned& accepted,unsigned& completed,unsigned& frames)const{
         accepted=publication.accepted();completed=publication.completed();frames=transport.frames();
     }
+    auto publication_status()const{return publication.status();}
+    unsigned executed_adoptions()const{return adopted_cameras.load(std::memory_order_acquire);}
+    unsigned presented_frames()const{return transport.frames();}
     auto stats(){return enabled?publication.setup([this]{return transport.stats();}):transport.stats();}
     int definitions(char const* root,char const* fallback,char const* scenario,char const* custom){
         camera.reset();displayed.reset();published_frame.reset();++session;
@@ -137,7 +170,7 @@ public:
     }
     int reset(){
         camera.reset();displayed.reset();published_frame.reset();++session;
-        return enabled?publication.setup([&]{clear();return transport.reset();}):transport.reset();
+        return enabled?publication.reconcile([&]{int code=transport.reset();require_result(code,"reset");clear();return code;}):transport.reset();
     }
     int set_units(int value){return enabled?post(sizeof(value),[this,value]{require_result(transport.set_units(value),"unit-configuration");}):transport.set_units(value);}
     int visual_policy(unsigned value){
@@ -147,6 +180,11 @@ public:
     }
     int camera_begin(c3x_renderer_camera_request_v1 const& request,Id& result){
         if(!enabled)return transport.camera_begin(request,result);
+        // Clock/UI repetitions do not cancel an immutable pending destination.
+        if(camera&&published_frame&&same_camera_source(*request.frame,request.identity,published_frame->value,published_identity)){
+            result=camera->ticket;return C3X_RENDERER_RESULT_PENDING;
+        }
+        transport.supersede_pending_camera();
         auto slot=std::make_shared<Camera>();slot->ticket=++next_camera;
         auto frame=copy_frame(*request.frame);auto identity=request.identity;
         int code=post(sizeof(*frame)+frame->tiles.size()*sizeof(frame->tiles[0])+frame->topology.size()*4,
@@ -155,7 +193,7 @@ public:
                 Id actual=0;int accepted=transport.camera_begin(value,actual);
                 if(accepted!=C3X_RENDERER_RESULT_PENDING)require_result(accepted,"camera-begin");
                 worker_camera=slot->ticket;remote_camera=actual;
-            },1); // latest camera wins; reliable image/unit commands stay ordered
+            },1,"camera-begin"); // latest camera wins; reliable image/unit commands stay ordered
         if(code!=C3X_RENDERER_RESULT_OK)return code;
         camera=slot;published_frame=frame;published_identity=identity;
         result=slot->ticket;return C3X_RENDERER_RESULT_PENDING;
@@ -172,17 +210,12 @@ public:
             int code=post(sizeof(CameraOutput),[this,wanted,map]{
                 if(worker_camera!=wanted)throw std::runtime_error("camera changed before ordered adoption");
                 c3x_renderer_gpu_camera_view_v1 actual={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(actual)};
-                int accepted;
-                auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(30);
-                do{
-                    accepted=transport.camera_poll(remote_camera,actual);
-                    if(accepted!=C3X_RENDERER_RESULT_PENDING)break;
-                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
-                }while(std::chrono::steady_clock::now()<deadline);
+                int accepted=transport.camera_poll(remote_camera,actual);
                 require_result(accepted,"camera-adopt");
                 if(worker_map)image_ids.erase(worker_map);
                 ticket_ids.clear();ticket_ids[wanted]=actual.image.ticket;
                 image_ids[map]=actual.image.map_image;worker_map=map;
+                adopted_cameras.fetch_add(1,std::memory_order_release);
             });
             if(code!=C3X_RENDERER_RESULT_OK)return code;
             displayed=std::move(slot->ready);slot->adopted=true;
@@ -206,7 +239,7 @@ public:
     }
     int camera_cancel(Id wanted){
         if(!enabled)return transport.camera_cancel(wanted);
-        if(camera&&camera->ticket==wanted)camera.reset();
+        if(camera&&camera->ticket==wanted){transport.supersede_pending_camera();camera.reset();}
         return post(sizeof(wanted),[this,wanted]{if(worker_camera==wanted){
             accept_state(transport.camera_cancel(remote_camera),"camera-cancel");worker_camera=remote_camera=0;}});
     }
@@ -215,22 +248,20 @@ public:
         // A game-thread CPU lease cannot be satisfied asynchronously. Report the
         // unsupported ownership transition; never read the custom map back.
         if(request.action==C3X_GPU_READBACK)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
-        auto packet=std::make_shared<c3x_inputs::Images>();packet->value=request;
-        if(request.pixel_count)packet->pixels.assign(request.pixels,request.pixels+request.pixel_count);
-        if(request.command_count)packet->commands.assign(request.commands,request.commands+request.command_count);
-        packet->bind();Id created=request.action==C3X_GPU_CREATE?++next_image:0;
-        int code=post(sizeof(*packet)+packet->pixels.size()*4+packet->commands.size()*sizeof(packet->commands[0]),[this,packet,created]{
-            auto& value=packet->value;value.ticket=ticket(value.ticket);value.image=image(value.image);
-            for(auto& draw:packet->commands){draw.destination=image(draw.destination);draw.source=image(draw.source);
-                draw.background=image(draw.background);draw.detail=image(draw.detail);draw.background_detail=image(draw.background_detail);draw.program=image(draw.program);}
-            c3x_renderer_gpu_result_v1 output={sizeof(output)};
-            require_result(transport.images(value,output,nullptr,0),"images");
-            if(created)image_ids[created]=output.image;
-            if(value.action==C3X_GPU_DESTROY){for(auto at=image_ids.begin();at!=image_ids.end();++at)
-                if(at->second==value.image){image_ids.erase(at);break;}}
-        });
-        result={sizeof(result)};result.image=created?created:request.image;return code;
+        auto batch=std::make_shared<ImageBatch>();batch->operations.resize(1);
+        auto& operation=batch->operations[0];auto& packet=operation.image;packet.value=request;
+        if(request.pixel_count)packet.pixels.assign(request.pixels,request.pixels+request.pixel_count);
+        if(request.command_count)packet.commands.assign(request.commands,request.commands+request.command_count);
+        packet.bind();Id created=request.action==C3X_GPU_CREATE?++next_image:0;operation.created=created;
+        auto bytes=sizeof(packet)+packet.pixels.size()*4+packet.commands.size()*sizeof(packet.commands[0]);
+        bool accepted=publication.post_group(bytes,ImageBatch::work(request),2,batch,
+            [this](ImageBatch& value){execute_images(value);},
+            [](ImageBatch& target,ImageBatch& incoming){target.operations.push_back(std::move(incoming.operations[0]));},
+            ImageBatch::join_bytes,ImageBatch::work_limit,ImageBatch::operation_limit,"images");
+        result={sizeof(result)};result.image=created?created:request.image;
+        return accepted?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_DEVICE_ERROR;
     }
+
     int unit(c3x_renderer_unit_v1 value,c3x_renderer_gpu_unit_v1 destination,int* bounds){
         if(!enabled)return transport.unit(value,destination,bounds);
         // Bodies live in the retained 3D scene. Native animation must not erase

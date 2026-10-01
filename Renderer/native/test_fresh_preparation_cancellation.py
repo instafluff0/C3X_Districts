@@ -53,8 +53,9 @@ def extract(source):
     if begin < 0:
         raise ValueError('Production fresh preparation branch missing')
     branch = block_at(source, begin)
-    capture_begin = source.index('bool complete=renderer_state.render(job_frame,output,-1,&camera_cancelled)')
-    capture_end = source.index(';', capture_begin) + 1
+    capture_begin = source.index('bool complete=renderer_state.render(job_frame,output,-1,&camera_cancelled')
+    marker='capture_gpu(ready,output,job_frame,job_camera_identity);'
+    capture_end = source.index(marker,capture_begin)+len(marker)
     capture = source[capture_begin:capture_end]
     guard_begin = source.index('if(gpu_ticket==camera_ticket && camera_result==C3X_RENDERER_RESULT_PENDING && !camera_cancelled.load', capture_end)
     guard = block_at(source, guard_begin)
@@ -67,6 +68,7 @@ PRELUDE = r'''
 #include <cstdint>
 #include <cstdio>
 #include <memory>
+#include <functional>
 #include <utility>
 #include <vector>
 using UINT=unsigned;
@@ -153,7 +155,8 @@ struct Harness {
     bool capture_gpu(Published& ready,Output const&,Frame const&,unsigned){
         ++captures;ready={61,std::make_shared<int>(61)};return true;
     }
-    bool render(Frame const& frame,Output& output,int,std::atomic<bool>* pending){
+    void service_camera_preparation(){}
+    bool render(Frame const& frame,Output& output,int,std::atomic<bool>* pending,unsigned=0,void const* =nullptr,unsigned=0,void const* =nullptr,std::function<void()> ={}){
         auto cancelled=[&]{return pending&&pending->load(std::memory_order_relaxed);};
         unsigned signature=97,textured_tile_count=2,fallback_tile_count=0,invalidations=0;
         int width=128,height=64;

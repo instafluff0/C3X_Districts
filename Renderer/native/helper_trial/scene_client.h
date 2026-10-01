@@ -6,6 +6,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include <atomic>
 #include "scene_wire.h"
 #include "../scene_projection.h"
 
@@ -14,9 +15,10 @@ namespace c3x_helper_trial {
 // interleaved replay. Both payload and response contain values, never native
 // pointers; the helper owns the renderer DLL and all of its scene allocations.
 class SceneClient {
-    HANDLE mapping=nullptr,request=nullptr,response=nullptr,process=nullptr;
+    HANDLE mapping=nullptr,request=nullptr,response=nullptr,control=nullptr,process=nullptr;
     Wire* wire=nullptr;
     unsigned sequence=0;
+    std::atomic<std::int64_t> admitted_camera{0};
     std::wstring base;
     static std::wstring name(std::wstring const& value,wchar_t const* suffix){return value+suffix;}
     void stop()noexcept{
@@ -30,6 +32,7 @@ class SceneClient {
         }
         if(wire){UnmapViewOfFile(wire);wire=nullptr;}
         if(response){CloseHandle(response);response=nullptr;}
+        if(control){CloseHandle(control);control=nullptr;}
         if(request){CloseHandle(request);request=nullptr;}
         if(mapping){CloseHandle(mapping);mapping=nullptr;}
     }
@@ -53,7 +56,8 @@ public:
             mapping=CreateFileMappingW(INVALID_HANDLE_VALUE,nullptr,PAGE_READWRITE,0,sizeof(Wire),name(base,L"_map").c_str());
             request=CreateEventW(nullptr,FALSE,FALSE,name(base,L"_request").c_str());
             response=CreateEventW(nullptr,FALSE,FALSE,name(base,L"_response").c_str());
-            if(!mapping||!request||!response)throw std::runtime_error("x64 scene IPC creation failed");
+            control=CreateEventW(nullptr,FALSE,FALSE,name(base,L"_control").c_str());
+            if(!mapping||!request||!response||!control)throw std::runtime_error("x64 scene IPC creation failed");
             wire=static_cast<Wire*>(MapViewOfFile(mapping,FILE_MAP_ALL_ACCESS,0,0,sizeof(Wire)));
             if(!wire)throw std::runtime_error("x64 scene IPC view failed");
             std::wstring command=L"\""+helper+L"\" --child \""+base+L"\" \""+dll+L"\" "+std::to_wstring(GetCurrentProcessId());
@@ -68,6 +72,18 @@ public:
         }catch(...){stop();throw;}
     }
     ~SceneClient(){stop();}
+    void remember_camera(std::int64_t ticket){admitted_camera.store(ticket,std::memory_order_release);}
+    void retire_camera_receipt(){
+        admitted_camera.store(0,std::memory_order_release);
+        if(wire)InterlockedExchange64(&wire->obsolete_camera_through,0);
+    }
+    void supersede_pending_camera(){
+        auto ticket=admitted_camera.load(std::memory_order_acquire);
+        if(ticket>0 && wire && control){
+            InterlockedExchange64(&wire->obsolete_camera_through,ticket);
+            SetEvent(control);
+        }
+    }
     std::uint64_t duplicate_into_helper(HANDLE source){
         if(!source||!process)throw std::runtime_error("invalid surface handle");
         HANDLE remote=nullptr;

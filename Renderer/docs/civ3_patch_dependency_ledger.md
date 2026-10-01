@@ -2139,3 +2139,16 @@ custom rendering is off. No new patch capability or table entry is required.
   unchanged. No protected source or patch-table entry is edited.
 - `required_user_action: []`. The candidate and its integration limitations are
   recorded in [persistent scene and shared passes](persistent_scene_shared_passes.md).
+
+## Ordered publication and cold preparation (2026-10-01)
+
+- Existing symbols: `Map_Renderer_m71_Draw_Tiles`,
+  `Main_Screen_Form_move_camera`, `Main_Screen_Form_draw_city_hud`,
+  `Unit_draw_map_status`, `Sprite_draw_map_unit_marker`, `MapMessage_draw`, and
+  the existing JGL composition bridge.
+- Renderer-only transport, immutable preparation, service checkpoints and
+  generation reconciliation reuse their current captures and native anchors.
+  No injected source, signature, address or patch-table capability changes.
+  Config-off delegation retains its existing executable contract.
+- `required_user_action: []`. See [ordered cold preparation](ordered_cold_preparation.md)
+  for ordering, bounds, cancellation and validation evidence.

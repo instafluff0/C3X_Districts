@@ -20,6 +20,7 @@
 #include "../asset_content_hash.h"
 #include "../gpu_composition_session.h"
 #include "../remote_scene_output.h"
+#include "../ordered_image_batch.h"
 #include "../visual_cadence.h"
 #include "scene_wire.h"
 
@@ -40,11 +41,16 @@ struct Core {
     using CameraPoll=int(*)(c3x_renderer_i64,c3x_renderer_gpu_camera_view_v1*);
     using CameraCancel=int(*)(c3x_renderer_i64);
     CameraBegin camera_begin=nullptr;CameraPoll camera_poll=nullptr,camera_ready=nullptr;CameraCancel camera_cancel=nullptr;
+    using CameraSupersede=void(*)(std::int64_t);
+    CameraSupersede camera_supersede=nullptr;
+    HANDLE control_stop=nullptr;std::thread control_thread;
+    std::mutex control_lifetime;
     using Definitions=int(*)(char const*,char const*,char const*,char const*);
     Definitions definitions=nullptr;
     using Pack=int(*)(char const*);Pack pack=nullptr;
     using Reset=void(*)();Reset reset=nullptr;
     c3x_renderer_gpu_images_fn images=nullptr;
+    std::unique_ptr<c3x_remote_scene::ImageBatchService> image_batches;
     c3x_renderer_native_image_fn native_image=nullptr;
     using GpuUnit=int(*)(c3x_renderer_unit_v1 const*,c3x_renderer_gpu_unit_v1 const*,int*);
     GpuUnit unit_gpu=nullptr;
@@ -90,6 +96,7 @@ struct Core {
         camera_poll=reinterpret_cast<CameraPoll>(GetProcAddress(module,"c3x_renderer_gpu_camera_poll_view"));
         camera_ready=reinterpret_cast<CameraPoll>(GetProcAddress(module,"c3x_renderer_trial_camera_ready"));
         camera_cancel=reinterpret_cast<CameraCancel>(GetProcAddress(module,"c3x_renderer_camera_cancel"));
+        camera_supersede=reinterpret_cast<CameraSupersede>(GetProcAddress(module,"c3x_renderer_trial_camera_supersede"));
         definitions=reinterpret_cast<Definitions>(GetProcAddress(module,"c3x_renderer_set_definition_paths"));
         pack=reinterpret_cast<Pack>(GetProcAddress(module,"c3x_renderer_set_pack_path"));
         reset=reinterpret_cast<Reset>(GetProcAddress(module,"c3x_renderer_reset"));
@@ -118,9 +125,40 @@ struct Core {
         visual_shared=reinterpret_cast<VisualShared>(GetProcAddress(module,"c3x_renderer_trial_visual_shared"));
         bind_surface=reinterpret_cast<BindSurface>(GetProcAddress(module,"c3x_renderer_trial_bind_surface"));
         surface_pixels=reinterpret_cast<SurfacePixels>(GetProcAddress(module,"c3x_renderer_trial_surface_pixels"));
-        require(render&&render_view&&gpu_render&&camera_begin&&camera_poll&&camera_cancel&&definitions&&reset,"renderer DLL entries missing");}
-    ~Core(){direct_cadence.stop();if(module){reset();auto trace_flush=reinterpret_cast<void(*)()>(GetProcAddress(module,"c3x_renderer_trial_trace_flush"));
+        require(render&&render_view&&gpu_render&&camera_begin&&camera_poll&&camera_cancel&&definitions&&reset,"renderer DLL entries missing");
+        image_batches=std::make_unique<c3x_remote_scene::ImageBatchService>([this](auto& work){
+            char delay[16]={};
+            if(GetEnvironmentVariableA("C3X_RENDERER_HELPER_IMAGE_DELAY_MS",delay,sizeof(delay)))
+                Sleep(DWORD(std::clamp(std::atoi(delay),0,250)));
+            return c3x_remote_scene::ImageBatch::execute(work,[this](auto const& request,auto& result){
+                return images(&request,&result,nullptr,0);
+            });
+        });}
+    ~Core(){if(control_stop)SetEvent(control_stop);if(control_thread.joinable())control_thread.join();
+        if(control_stop)CloseHandle(control_stop);
+        image_batches.reset();direct_cadence.stop();if(module){reset();auto trace_flush=reinterpret_cast<void(*)()>(GetProcAddress(module,"c3x_renderer_trial_trace_flush"));
         if(trace_flush)trace_flush();FreeLibrary(module);}}
+    void start_control(Wire& wire,HANDLE event,HANDLE parent){
+        require(camera_supersede!=nullptr,"helper lacks cancellation receipt entry");
+        camera_supersede(0); // construct the worker on this ordered owner first
+        if(!event)return; // legacy replay driver has no asynchronous producer
+        control_stop=CreateEventW(nullptr,TRUE,FALSE,nullptr);
+        require(control_stop!=nullptr,"helper control stop creation failed");
+        control_thread=std::thread([this,&wire,event,parent]{
+            HANDLE events[3]={event,control_stop,parent};
+            while(WaitForMultipleObjects(3,events,FALSE,INFINITE)==WAIT_OBJECT_0){
+                std::lock_guard<std::mutex> lifetime(control_lifetime);
+                auto ticket=InterlockedCompareExchange64(&wire.obsolete_camera_through,0,0);
+                camera_supersede(ticket);
+                char option[4]={};
+                if(ticket>0&&GetEnvironmentVariableA("C3X_RENDERER_TRACE",option,sizeof(option))&&option[0]=='2'){
+                    LARGE_INTEGER now={};QueryPerformanceCounter(&now);auto slot=image_batches->status();char line[256];
+                    std::snprintf(line,sizeof(line),"[C3X renderer] qpc=%lld stage=camera-supersession-received ticket=%lld image_sequence=%u image_work=%zu image_bytes=%zu\n",
+                        now.QuadPart,ticket,slot.sequence,slot.units,slot.bytes);OutputDebugStringA(line);
+                }
+            }
+        });
+    }
     void start_direct_cadence(){
         if(!direct_surface_bound||!direct_display_ready||!visual_shared||!native_image){direct_cadence.disable();return;}
         char manual[4]={};
@@ -154,6 +192,15 @@ struct Core {
         std::fill(std::begin(wire.bounds),std::end(wire.bounds),0);
         std::fill(std::begin(wire.hash),std::end(wire.hash),0);std::fill(std::begin(wire.gpu_hash),std::end(wire.gpu_hash),0);wire.gpu_hash_valid=0;
         try{
+            // Cancellation receipt never races destruction/recreation of the
+            // DLL worker at a configuration or native generation boundary.
+            std::unique_lock<std::mutex> lifetime(control_lifetime,std::defer_lock);
+            bool retirement=wire.kind==unsigned(Kind::native_bridge)&&
+                (wire.subtype==6||wire.subtype==7||wire.subtype==8);
+            if(retirement)lifetime.lock();
+            require(!image_batches->status().bytes||
+                (wire.kind==unsigned(Kind::image_commands)&&wire.subtype==2),
+                "reliable prefix requires image execution receipt");
             require(wire.magic==wire_magic&&wire.version==wire_version&&wire.size<=wire_capacity&&
                 wire.live<=1&&wire.replay_clock<=1,"invalid scene wire header");
             if(wire.replay_clock){require(set_clock!=nullptr,"helper lacks recorded clock entry");
@@ -328,6 +375,36 @@ struct Core {
                     wire.reply_size=unsigned(response.bytes.size());
                     std::memcpy(wire.payload,response.bytes.data(),wire.reply_size);
                 }
+            }else if(wire.live&&wire.kind==unsigned(Kind::image_commands)&&wire.subtype==1){
+                auto work=c3x_remote_scene::ImageBatch::decode(in);
+                unsigned units=0;for(auto const& op:work)units+=c3x_remote_scene::ImageBatch::work(op.image.value);
+                char option[4]={};
+                if(GetEnvironmentVariableA("C3X_RENDERER_TRACE",option,sizeof(option))&&option[0]=='2'){
+                    char detail[256];std::snprintf(detail,sizeof(detail),
+                        "[C3X renderer] stage=helper-image-admitted sequence=%u operations=%zu work=%u bytes=%u\n",
+                        wire.sequence,work.size(),units,wire.size);OutputDebugStringA(detail);
+                }
+                require(image_batches->admit(wire.sequence,wire.size,std::move(work)),"image admission slot occupied");
+                wire.code=C3X_RENDERER_RESULT_PENDING;wire.executed=0;
+            }else if(wire.live&&wire.kind==unsigned(Kind::image_commands)&&wire.subtype==2){
+                unsigned sequence=0;in(sequence);in.done();
+                std::vector<c3x_remote_scene::ImageBatch::Reply> replies;std::string failure;double elapsed=0;
+                if(!image_batches->poll(sequence,replies,failure,elapsed)){
+                    wire.code=C3X_RENDERER_RESULT_PENDING;wire.executed=0;
+                }else{
+                    require(failure.empty(),failure.c_str());
+                    Writer response;response.u32(unsigned(replies.size()));
+                    for(auto& value:replies)c3x_remote_scene::ImageBatch::reply_fields(response,value);
+                    require(response.bytes.size()<=wire_capacity,"image batch reply limit");
+                    wire.reply_size=unsigned(response.bytes.size());std::memcpy(wire.payload,response.bytes.data(),wire.reply_size);
+                    wire.code=C3X_RENDERER_RESULT_OK;wire.executed=unsigned(replies.size());
+                    char option[4]={};
+                    if(elapsed>=250 || (GetEnvironmentVariableA("C3X_RENDERER_TRACE",option,sizeof(option))&&option[0]=='2')){
+                        char detail[256];std::snprintf(detail,sizeof(detail),
+                            "[C3X renderer] stage=helper-image-executed admitted_sequence=%u operations=%u service_ms=%.3f\n",
+                            sequence,unsigned(replies.size()),elapsed);OutputDebugStringA(detail);
+                    }
+                }
             }else if(wire.kind==unsigned(Kind::image_commands)&&wire.subtype==0){
                 require(images!=nullptr,"helper lacks GPU image entry");
                 Images owned;c3x_inputs::images(in,owned);in.done();
@@ -494,6 +571,7 @@ struct Core {
                 wire.code=unsigned(tactical_gpu(&capture,&target));
             }else throw std::runtime_error("unsupported scene wire operation");
             wire.service_us=std::uint64_t((milliseconds()-started)*1000.0);
+            if(retirement&&camera_supersede)camera_supersede(0);
             wire.private_bytes=private_bytes();
         }catch(std::exception const& error){wire.status=1;strncpy_s(wire.error,error.what(),_TRUNCATE);}
     }
@@ -609,9 +687,10 @@ int wmain(int argc,wchar_t** argv){
         std::wstring base=argv[2];HANDLE mapping=OpenFileMappingW(FILE_MAP_ALL_ACCESS,FALSE,object_name(base,L"_map").c_str());
         HANDLE request=OpenEventW(SYNCHRONIZE,FALSE,object_name(base,L"_request").c_str());
         HANDLE response=OpenEventW(EVENT_MODIFY_STATE,FALSE,object_name(base,L"_response").c_str());
+        HANDLE control=OpenEventW(SYNCHRONIZE,FALSE,object_name(base,L"_control").c_str());
         require(mapping&&request&&response,"scene IPC objects missing");
         auto* wire=static_cast<Wire*>(MapViewOfFile(mapping,FILE_MAP_ALL_ACCESS,0,0,sizeof(Wire)));require(wire!=nullptr,"scene IPC map failed");
-        { Core core(argv[3]);require(SetEvent(response)!=FALSE,"helper ready signal failed");
+        { Core core(argv[3]);core.start_control(*wire,control,parent.handle);require(SetEvent(response)!=FALSE,"helper ready signal failed");
         unsigned last=wire->sequence;
         HANDLE active[2]={request,parent.handle};
         while(WaitForMultipleObjects(2,active,FALSE,120000)==WAIT_OBJECT_0){
@@ -620,7 +699,7 @@ int wmain(int argc,wchar_t** argv){
             core.execute(*wire);require(SetEvent(response)!=FALSE,"helper response signal failed");
         }
         } // Stop/join visual callbacks before unmapping their shared counters.
-        UnmapViewOfFile(wire);CloseHandle(response);CloseHandle(request);CloseHandle(mapping);return 0;
+        UnmapViewOfFile(wire);if(control)CloseHandle(control);CloseHandle(response);CloseHandle(request);CloseHandle(mapping);return 0;
 #else
         require(argc>=5&&argc<=12,"driver usage: --local DLL CAPTURE REPORT | --remote DLL CAPTURE REPORT HELPER [--verify-pixels] [--raw-shared] [--crash-after N] [--reserve-mib N]");
         bool remote=std::wstring(argv[1])==L"--remote",verify_pixels=false,raw_shared=false;unsigned crash_after=0,reserve_mib=0;
