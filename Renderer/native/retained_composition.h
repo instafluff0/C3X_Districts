@@ -18,6 +18,7 @@ class RetainedComposition {
 public:
     struct Work {unsigned operations=0,assemblies=0,copies=0;std::uint64_t copied_pixels=0,assembly_pixels=0;};
     struct RecipeReuse {std::uint64_t eligible=0,probed=0,reused=0;};
+    struct PlanReuse {std::uint64_t builds=0,reuses=0,source_binds=0,source_reuses=0,batch_builds=0,batch_reuses=0;std::size_t nodes=0;};
     using Texture=ComPtr<ID3D11Texture2D>;
     struct Placed {Command command;int x=0,y=0;};
     struct SampledImage {
@@ -62,10 +63,30 @@ private:
     struct Patch {Rect area;std::shared_ptr<Node> node;unsigned output=0;};
     struct Picture {unsigned width=0,height=0;Format format=Format::bgra32;std::vector<Patch> patches;bool partitioned=true;std::uint64_t version=0;Rect required{};};
     struct BatchOp {Placed placed;Picture inputs[6];};
+    struct BatchSource {Picture picture;Texture texture;CompositionStorage::Lease owned,physical;std::vector<std::uint64_t> revisions,pending;};
+    struct BatchPreparation {
+        // This exact HUD program owns only external immutable operands. Each
+        // native publication keeps its own before-images and output pair.
+        std::vector<BatchOp> batch;
+        Id original[2]={};unsigned width[2]={},height[2]={};Format formats[2]={};Rect area{};
+        std::weak_ptr<c3x_renderer::ZoomTransition> placement;
+        // Operand versions are immutable. Bind each distinct picture once,
+        // rather than assembling the same glyph/table for every HUD command.
+        std::vector<BatchSource> batch_sources;
+        std::vector<Compositor::SpatialSource> batch_views;
+        std::vector<std::array<unsigned,6>> batch_operands;
+        std::vector<Command> batch_commands;
+        std::vector<std::uint64_t> batch_offsets;
+        Compositor::SpatialPlan spatial_plan;
+        std::uint64_t spatial_allowance=0,binding_allowance=0;
+        bool batch_compiled=false,batch_bound=false,binding_refused=false,spatial_attempted=false,spatial_ready=false;
+    };
     struct Node {
         Rect area{},recipe_clip{};Command command{};bool selected_world=false,operation=false,dynamic=false,map_dynamic=false,constant=false,view_dependent=false,retired=false;
         Picture inputs[6];Id original[6]={};
         std::vector<BatchOp> batch;
+        std::shared_ptr<BatchPreparation> batch_preparation;
+        std::vector<std::uint64_t> pending_dependencies;
         CompositionStorage::Lease storage[2],owned_storage[2];
         Texture output[2];std::uint64_t bytes[2]={},revision=0,seen=0,sampled=0,direct_revision=0;
         std::uint64_t publication=0,source_generation=0;bool map_source=false;
@@ -89,6 +110,17 @@ private:
     std::shared_ptr<Node> world_selection;
     std::uint64_t serial=0,frame=0,front_revision=0,drawn_revision=0;
     std::vector<std::uint64_t> drawn_dependencies;
+    std::vector<std::uint64_t> pending_drawn_dependencies;
+    struct PlanNode {std::weak_ptr<Node> node;bool project=false;};
+    struct PrepareNode {std::weak_ptr<Node> node;bool project=false;std::weak_ptr<c3x_renderer::ZoomTransition> scale;};
+    std::vector<PlanNode> collect_plan;
+    std::vector<PrepareNode> prepare_plan;
+    std::uint64_t topology_revision=0,planned_front=~std::uint64_t(0),planned_topology=~std::uint64_t(0);
+    PlanReuse plan_counts;bool compiled_enabled=true;
+    // Reuse the latest live exact HUD program across native world-end nodes.
+    // A weak index neither pins an old base nor adds saved recipe history.
+    std::weak_ptr<BatchPreparation> recent_batch;
+    unsigned batch_inventories=0;
     bool admitted=true;
     std::size_t nodes=0;std::uint64_t direct_bytes=0;
     CompositionStorage storage,owned_storage;
@@ -102,9 +134,9 @@ private:
     unsigned recipe_cursor=0;
     RecipeReuse recipe_counts;
     static bool same_rect(Rect a,Rect b){return a.left==b.left&&a.top==b.top&&a.right==b.right&&a.bottom==b.bottom;}
-    static bool same_picture(Picture const& a,Picture const& b){
+    static bool same_picture(Picture const& a,Picture const& b,bool require_version=true){
         if(a.width!=b.width||a.height!=b.height||a.format!=b.format||a.partitioned!=b.partitioned||
-           a.version!=b.version||!same_rect(a.required,b.required)||a.patches.size()!=b.patches.size())return false;
+           (require_version&&a.version!=b.version)||!same_rect(a.required,b.required)||a.patches.size()!=b.patches.size())return false;
         for(std::size_t i=0;i<a.patches.size();++i){auto const& x=a.patches[i];auto const& y=b.patches[i];
             if(x.node!=y.node||x.output!=y.output||!same_rect(x.area,y.area))return false;
         }return true;
@@ -146,12 +178,18 @@ private:
     Rect intersect(Rect a,Rect b)const{return {std::max(a.left,b.left),std::max(a.top,b.top),std::min(a.right,b.right),std::min(a.bottom,b.bottom)};}
     bool empty(Rect r)const{return r.left>=r.right||r.top>=r.bottom;}
     Rect extent(Picture const& p)const{return {0,0,int(p.width),int(p.height)};}
+    bool directly_bindable(Picture const& p)const{
+        if(!p.partitioned||p.patches.size()!=1)return false;
+        auto const& patch=p.patches.front();auto needed=empty(p.required)?extent(p):intersect(extent(p),p.required);
+        return !empty(needed)&&patch.area.left<=needed.left&&patch.area.top<=needed.top&&patch.area.right>=needed.right&&patch.area.bottom>=needed.bottom&&
+            same_rect(patch.node->area,extent(p))&&bool(patch.node->output[patch.output]);
+    }
     std::shared_ptr<Node> node(){
         if(nodes>=32768)throw std::runtime_error("retained composition node budget");
         auto value=new Node;++nodes;return std::shared_ptr<Node>(value,[this](Node* p){
             direct_bytes-=p->direct.input_bytes;delete p;--nodes;});
     }
-    std::uint64_t resident_bytes()const{return owned_storage.bytes()+direct_bytes;}
+    std::uint64_t resident_bytes()const{return owned_storage.bytes()+direct_bytes+replay.spatial_bytes();}
     void reserve(std::uint64_t bytes,char const* site){
         if(bytes<=resident_budget-resident_bytes())return;
         char line[384];std::snprintf(line,sizeof(line),
@@ -216,6 +254,229 @@ private:
     void write(Picture& image,Rect region,std::shared_ptr<Node> const& value,unsigned output){
         region=intersect(region,extent(image));if(!empty(region))replace(image,region,{{region,value,output}});
     }
+    void invalidate_plan(){++topology_revision;}
+    void compile_plan(){
+        if(planned_front==front_revision&&planned_topology==topology_revision){++plan_counts.reuses;return;}
+        collect_plan.clear();prepare_plan.clear();
+        std::map<Node const*,unsigned> collected,prepared;
+        std::function<void(std::shared_ptr<Node> const&,unsigned,bool)> gather;
+        gather=[&](std::shared_ptr<Node> const& n,unsigned depth,bool project){
+            if(depth>256)throw std::runtime_error("retained composition dependency depth");
+            project|=n->projects_scene;unsigned bit=project?2:1;auto& seen=collected[n.get()];
+            if(seen&bit)return;seen|=bit;
+            if(collected.size()>32768)throw std::runtime_error("retained composition plan budget");
+            collect_plan.push_back({n,project});
+            for(auto const& input:n->inputs)for(auto const& patch:input.patches)gather(patch.node,depth+1,project);
+            for(auto const& draw:n->batch)for(auto const& input:draw.inputs)for(auto const& patch:input.patches)gather(patch.node,depth+1,project);
+        };
+        for(auto const& patch:front.patches)gather(patch.node,0,false);
+        std::function<void(std::shared_ptr<Node> const&,unsigned,bool,std::shared_ptr<c3x_renderer::ZoomTransition>)> preparation;
+        preparation=[&](std::shared_ptr<Node> const& n,unsigned depth,bool project,std::shared_ptr<c3x_renderer::ZoomTransition> scale){
+            if(depth>256)throw std::runtime_error("retained preparation dependency depth");
+            if(n->view&&n->projects_scene){project=true;scale=n->view;}
+            unsigned bit=project?2:1;auto& seen=prepared[n.get()];if(seen&bit)return;seen|=bit;
+            prepare_plan.push_back({n,project,scale});
+            for(auto const& input:n->inputs)for(auto const& patch:input.patches)preparation(patch.node,depth+1,project,scale);
+            for(auto const& draw:n->batch)for(auto const& input:draw.inputs)for(auto const& patch:input.patches)preparation(patch.node,depth+1,project,scale);
+        };
+        for(auto const& patch:front.patches)preparation(patch.node,0,false,{});
+        planned_front=front_revision;planned_topology=topology_revision;
+        ++plan_counts.builds;plan_counts.nodes=collected.size();
+    }
+    void prepare_front(long long ticks,long long frequency){
+        if(!compiled_enabled){
+            for(auto const& part:front.patches)collect(part.node,ticks,frequency,0);
+            for(auto const& part:front.patches)prepare(part.node,ticks,frequency,0);
+            return;
+        }
+        compile_plan();
+        // Mark all projection paths before any source callback, just as the
+        // interpreter's complete collect pass does before preparation.
+        for(auto const& entry:collect_plan)if(entry.project)if(auto n=entry.node.lock())n->projected_frame=frame;
+        for(auto const& entry:collect_plan)if(auto n=entry.node.lock())if(n->sampled!=frame){
+            if(n->direct.revision)n->direct_revision=n->direct.revision(ticks,frequency);
+            n->sampled=frame;
+        }
+        for(auto const& entry:prepare_plan)if(auto n=entry.node.lock()){
+            auto& visited=entry.project?n->prepared_projected_frame:n->prepared_frame;
+            if(visited==frame)continue;visited=frame;
+            if(n->sample.prepare&&(!n->sample.projected||n->projected_frame!=frame||entry.project)){
+                auto owner=entry.scale.lock();float scale=owner?float(owner->sample(ticks,frequency)):1.f;
+                n->sample.prepare(ticks,frequency,scale);
+            }
+        }
+    }
+    static bool same_batch(BatchPreparation const& old,Node const& next){
+        if(!same_rect(old.area,next.area)||old.placement.owner_before(next.placement)||next.placement.owner_before(old.placement)||old.batch.size()!=next.batch.size())return false;
+        for(unsigned i=0;i<2;++i)if(old.width[i]!=next.inputs[i].width||old.height[i]!=next.inputs[i].height||old.formats[i]!=next.inputs[i].format)return false;
+        for(std::size_t index=0;index<old.batch.size();++index){auto const& a=old.batch[index];auto const& b=next.batch[index];
+            auto const& x=a.placed.command;auto const& y=b.placed.command;
+            if(a.placed.x!=b.placed.x||a.placed.y!=b.placed.y||x.kind!=y.kind||!same_rect(x.area,y.area)||
+               !same_rect(x.clip,y.clip)||x.source_x!=y.source_x||x.source_y!=y.source_y||x.color!=y.color||
+               x.source_width!=y.source_width||x.source_height!=y.source_height)return false;
+            Id left[6]={x.destination,x.source,x.background,x.detail,x.background_detail,x.program};
+            Id right[6]={y.destination,y.source,y.background,y.detail,y.background_detail,y.program};
+            for(unsigned i=0;i<6;++i){
+                unsigned l=!left[i]?0:left[i]==old.original[0]?1:left[i]==old.original[1]?2:3;
+                unsigned r=!right[i]?0:right[i]==next.original[0]?1:right[i]==next.original[1]?2:3;
+                if(l!=r||(l==3&&!same_picture(a.inputs[i],b.inputs[i],false)))return false;
+                for(unsigned j=0;j<i;++j)if((left[i]==left[j])!=(right[i]==right[j]))return false;
+            }
+        }return true;
+    }
+    void prepare_batch(Node& n){
+        if(n.batch_preparation)return;
+        if(auto old=recent_batch.lock())if(same_batch(*old,n)){
+            n.batch_preparation=std::move(old);++plan_counts.batch_reuses;return;
+        }
+        auto next=std::make_shared<BatchPreparation>();next->batch=n.batch;
+        for(auto& draw:next->batch){auto const& c=draw.placed.command;
+            Id ids[6]={c.destination,c.source,c.background,c.detail,c.background_detail,c.program};
+            for(unsigned i=0;i<6;++i)if(!ids[i]||ids[i]==n.original[0]||ids[i]==n.original[1])draw.inputs[i]={};
+        }
+        next->original[0]=n.original[0];next->original[1]=n.original[1];
+        for(unsigned i=0;i<2;++i){next->width[i]=n.inputs[i].width;next->height[i]=n.inputs[i].height;next->formats[i]=n.inputs[i].format;}
+        next->area=n.area;next->placement=n.placement;
+        n.batch_preparation=next;recent_batch=next;++plan_counts.batch_builds;
+    }
+    void compile_batch(Node& n){
+        prepare_batch(n);
+        auto& b=*n.batch_preparation;
+        if(b.batch_compiled)return;
+        b.batch_operands.reserve(n.batch.size());b.batch_commands.reserve(n.batch.size());b.batch_offsets.resize(n.batch.size(),~std::uint64_t(0));
+        for(auto const& draw:n.batch){
+            auto const& c=draw.placed.command;Id original[6]={c.destination,c.source,c.background,c.detail,c.background_detail,c.program};
+            std::array<unsigned,6> operands={};
+            for(unsigned i=0;i<6;++i)if(original[i]){
+                if(original[i]==n.original[0])operands[i]=1;
+                else if(original[i]==n.original[1])operands[i]=2;
+                else{
+                    // Snapshot wrappers have fresh serials, but exact node/output/
+                    // patch identities still certify the same immutable pixels.
+                    // Deduplication changes no
+                    // read-before-write relation: these inputs are read-only.
+                    unsigned source=0;for(;source<b.batch_sources.size();++source)
+                        if(same_picture(b.batch_sources[source].picture,draw.inputs[i],false))break;
+                    if(source==b.batch_sources.size())b.batch_sources.push_back({draw.inputs[i]});
+                    operands[i]=source+3;
+                }
+            }
+            b.batch_operands.push_back(operands);b.batch_commands.push_back(c);
+        }
+        b.batch_views.resize(b.batch_sources.size());
+        for(unsigned index=0;index<b.batch_sources.size();++index){auto const& p=b.batch_sources[index].picture;
+            b.batch_views[index]={Compositor::spatial_source_id(index),{},p.width,p.height,p.format};
+        }
+        b.batch_compiled=true;
+        if(n.batch.size()>=256&&!batch_inventories){batch_inventories=1;
+            std::array<unsigned,12> kinds={};std::vector<unsigned> readers(b.batch_sources.size());
+            std::uint64_t affected=0,source_pixels=0;unsigned aliases=0,cross_reads=0,dynamic_sources=0,fanout=0;
+            for(std::size_t index=0;index<n.batch.size();++index){auto const& c=n.batch[index].placed.command;
+                if(unsigned(c.kind)<kinds.size())++kinds[unsigned(c.kind)];
+                auto r=intersect(intersect(c.area,c.clip),n.area);if(!empty(r))affected+=std::uint64_t(r.right-r.left)*(r.bottom-r.top);
+                if(c.source==n.original[0]||c.source==n.original[1]){
+                    ++aliases;if(!(c.kind==Kind::native_blend&&c.color==2)&&
+                        (c.source_x!=c.area.left||c.source_y!=c.area.top))++cross_reads;
+                }
+                for(unsigned binding:b.batch_operands[index])if(binding>=3)++readers[binding-3];
+            }
+            for(auto const& source:b.batch_sources){source_pixels+=std::uint64_t(source.picture.width)*source.picture.height;
+                bool dynamic=false;for(auto const& patch:source.picture.patches)dynamic|=patch.node->dynamic;
+                dynamic_sources+=dynamic;
+            }
+            for(auto count:readers)fanout=std::max(fanout,count);
+            char line[512];std::snprintf(line,sizeof(line),
+                "[C3X renderer] stage=retained-batch-inventory commands=%zu sources=%zu source_pixels=%llu affected_pixels=%llu max_source_fanout=%u pair_source_aliases=%u cross_position_reads=%u dynamic_sources=%u area=%d,%d,%d,%d kinds=%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u\n",
+                n.batch.size(),b.batch_sources.size(),source_pixels,affected,fanout,aliases,cross_reads,dynamic_sources,
+                n.area.left,n.area.top,n.area.right,n.area.bottom,kinds[0],kinds[1],kinds[2],kinds[3],kinds[4],kinds[5],kinds[6],kinds[7],kinds[8],kinds[9],kinds[10],kinds[11]);
+            OutputDebugStringA(line);
+        }
+    }
+    void release_batch(Node& n){n.batch_preparation.reset();}
+    bool bind_batch(Node& n,long long ticks,long long frequency,unsigned depth,Id const (&pair)[2],double scale){
+        compile_batch(n);auto& b=*n.batch_preparation;bool changed=!b.spatial_attempted;
+        // Sources use private plan identities, never hundreds of live image
+        // handles. Only the current assembly or fallback operation binds the
+        // compositor's existing bounded handle table.
+        if(b.batch_sources.size()>8192){b.batch_bound=false;return false;}
+        bool revisions_changed=false;
+        for(auto& source:b.batch_sources){
+            source.pending.clear();source.pending.push_back(source.picture.version);
+            for(auto const& patch:source.picture.patches)source.pending.push_back(patch.node->revision);
+            revisions_changed|=source.pending!=source.revisions;
+        }
+        auto available=resident_bytes()<resident_budget?resident_budget-resident_bytes():0;
+        if(b.binding_refused&&!revisions_changed&&available==b.binding_allowance){b.batch_bound=false;return false;}
+        if(revisions_changed){
+            // Generation changes retire copied atlas inputs before recycling
+            // their exact source handles. Unchanged sources keep their binds.
+            b.spatial_plan={};b.spatial_ready=b.spatial_attempted=false;
+            for(unsigned index=0;index<b.batch_sources.size();++index){auto& source=b.batch_sources[index];
+                if(source.texture&&source.pending!=source.revisions){
+                    b.batch_views[index].texture.Reset();source.texture.Reset();source.owned={};source.physical={};
+                }
+            }
+        }
+        std::uint64_t needed=0;
+        for(auto const& source:b.batch_sources)if(!source.texture&&!directly_bindable(source.picture))
+            needed+=std::uint64_t(source.picture.width)*source.picture.height*4;
+        available=resident_bytes()<resident_budget?resident_budget-resident_bytes():0;
+        if(needed>available){
+            // Binding is optional. Roll it back as a unit and use the existing
+            // transient interpreter rather than rejecting the native front.
+            b.spatial_plan={};b.spatial_ready=b.spatial_attempted=b.batch_bound=false;
+            for(auto& view:b.batch_views)view.texture.Reset();
+            for(auto& source:b.batch_sources){source.texture.Reset();source.owned={};source.physical={};source.revisions.swap(source.pending);}
+            b.binding_refused=true;b.binding_allowance=resident_bytes()<resident_budget?resident_budget-resident_bytes():0;return false;
+        }
+        b.binding_refused=false;
+        for(unsigned index=0;index<b.batch_sources.size();++index){auto& source=b.batch_sources[index];
+            if(source.texture&&source.pending==source.revisions){++plan_counts.source_reuses;continue;}
+            auto image=assemble(source.picture,ticks,frequency,depth+1,{},true);
+            try{source.texture=replay.texture(image);source.owned=owned_storage.retain(source.texture.Get());source.physical=storage.retain(source.texture.Get());}
+            catch(...){replay.destroy(image);throw;}
+            // An assembled sparse source can own replay scratch. Destroy its
+            // handle rather than recycling it: the captured texture must not
+            // enter a writable pool while this plan can still read it.
+            replay.destroy(image);b.batch_views[index].texture=source.texture;
+            source.revisions.swap(source.pending);++plan_counts.source_binds;changed=true;
+        }
+        auto resident=resident_bytes();auto allowance=resident<resident_budget?resident_budget-resident:0;
+        // Failed admission is an exact plan state too. Retry when its command
+        // placement, immutable operands or real available budget changes.
+        if(!b.spatial_ready&&allowance!=b.spatial_allowance)changed=true;
+        for(std::size_t index=0;index<n.batch.size();++index){
+            auto const& placed=n.batch[index].placed;
+            int dx=int(std::lround((placed.x-int(n.inputs[0].width/2))*(scale-1.)));
+            int dy=int(std::lround((placed.y-int(n.inputs[0].height/2))*(scale-1.)));
+            auto offset=(std::uint64_t(unsigned(dx))<<32)|unsigned(dy);
+            if(offset!=b.batch_offsets[index])changed=true;
+        }
+        if(changed)for(std::size_t index=0;index<n.batch.size();++index){
+            auto const& placed=n.batch[index].placed;
+            int dx=int(std::lround((placed.x-int(n.inputs[0].width/2))*(scale-1.)));
+            int dy=int(std::lround((placed.y-int(n.inputs[0].height/2))*(scale-1.)));
+            auto offset=(std::uint64_t(unsigned(dx))<<32)|unsigned(dy);
+            auto c=placed.command;Id ids[6]={};
+            for(unsigned i=0;i<6;++i){auto binding=b.batch_operands[index][i];
+                ids[i]=binding==0?0:binding<=2?pair[binding-1]:b.batch_views[binding-3].id;
+            }
+            c.destination=ids[0];c.source=ids[1];c.background=ids[2];c.detail=ids[3];c.background_detail=ids[4];c.program=ids[5];
+            c.area={c.area.left+dx,c.area.top+dy,c.area.right+dx,c.area.bottom+dy};
+            c.clip={c.clip.left+dx,c.clip.top+dy,c.clip.right+dx,c.clip.bottom+dy};
+            b.batch_commands[index]=c;b.batch_offsets[index]=offset;
+        }
+        if(changed){
+            // Offset/zoom updates retain the atlas of immutable glyphs/tables.
+            // The compositor replaces command/tile metadata atomically while
+            // checking exact source descriptors; source changes cleared above.
+            b.spatial_ready=replay.compile_spatial_sources(b.spatial_plan,b.batch_commands.data(),b.batch_commands.size(),pair[0],pair[1],
+                allowance,b.batch_views,true);
+            b.spatial_attempted=true;b.spatial_allowance=allowance;
+        }
+        b.batch_bound=true;
+        return b.spatial_ready;
+    }
     void collect(std::shared_ptr<Node> const& n,long long ticks,long long frequency,unsigned depth,bool project=false){
         project|=n->projects_scene;
         bool marked=project&&n->projected_frame!=frame;
@@ -260,6 +521,7 @@ private:
             auto sampled=n->sample.projected&&n->projected_frame==frame?SampledImage{}:n->sample(ticks,frequency);
             if(sampled.kind==SampledImage::Kind::frozen){
                 n->sample={};n->sample_target={};n->dynamic=n->map_dynamic=false;n->retired=true;
+                invalidate_plan();
             }else if(sampled.kind==SampledImage::Kind::bgra){
                 auto r=sampled.area;unsigned w=unsigned(n->area.right-n->area.left),h=unsigned(n->area.bottom-n->area.top);
                 if(r.left<0||r.top<0||r.right-r.left!=int(w)||r.bottom-r.top!=int(h))
@@ -283,7 +545,7 @@ private:
                 }
             }
         }else if(n->selected_world){
-            std::vector<std::uint64_t> versions={n->inputs[0].version,n->inputs[1].version};
+            auto& versions=n->pending_dependencies;versions.clear();versions.push_back(n->inputs[0].version);versions.push_back(n->inputs[1].version);
             n->map_dynamic=false;
             for(unsigned i=0;i<2;++i)for(auto const& patch:n->inputs[i].patches){
                 evaluate(patch.node,ticks,frequency,depth+1);versions.push_back(patch.node->revision);
@@ -295,7 +557,7 @@ private:
                     try{if(replay.texture(source)!=n->output[i].Get())capture_output(*n,i,replay.texture(source),n->area);}
                     catch(...){replay.recycle(source);throw;}replay.recycle(source);
                 }
-                n->dependencies=std::move(versions);n->revision=++serial;
+                n->dependencies.swap(versions);n->revision=++serial;
             }
         }else if(n->view&&n->projects_scene){
             float scale=float(n->view->sample(ticks,frequency));
@@ -316,7 +578,7 @@ private:
             n->map_dynamic=false;
             for(auto const& patch:n->inputs[0].patches)n->map_dynamic|=patch.node->map_dynamic;
         }else if(n->view){
-            std::vector<std::uint64_t> versions;
+            auto& versions=n->pending_dependencies;versions.clear();
             n->map_dynamic=false;
             for(auto const& patch:n->inputs[0].patches){
                 evaluate(patch.node,ticks,frequency,depth+1);versions.push_back(patch.node->revision);
@@ -340,11 +602,11 @@ private:
                         n->view_native_format==2?Format::rgb565:Format::rgb555))throw std::runtime_error("retained world view rejected");
                 }catch(...){replay.recycle(source);throw;}
                 replay.recycle(source);
-                n->view_scale=scale;n->dependencies=std::move(versions);n->revision=++serial;
+                n->view_scale=scale;n->dependencies.swap(versions);n->revision=++serial;
             }
             selected_view_scale=n->view_scale;
         }else if(!n->batch.empty()){
-            std::vector<std::uint64_t> versions;
+            auto& versions=n->pending_dependencies;versions.clear();
             n->map_dynamic=false;bool dynamic=false;
             auto visit=[&](Picture const& input){
                 versions.push_back(input.version);
@@ -353,11 +615,12 @@ private:
             };
             visit(n->inputs[0]);visit(n->inputs[1]);
             double scale=n->placement->sample(ticks,frequency);
+            if(compiled_enabled){compile_batch(*n);for(auto const& source:n->batch_preparation->batch_sources)visit(source.picture);}
             for(auto const& draw:n->batch){
                 int dx=int(std::lround((draw.placed.x-int(n->inputs[0].width/2))*(scale-1.)));
                 int dy=int(std::lround((draw.placed.y-int(n->inputs[0].height/2))*(scale-1.)));
                 versions.push_back((std::uint64_t(unsigned(dx))<<32)|unsigned(dy));
-                for(auto const& input:draw.inputs)if(input.width)visit(input);
+                if(!compiled_enabled)for(auto const& input:draw.inputs)if(input.width)visit(input);
             }
             if((!n->output[0]||versions!=n->dependencies)&&!(had_map&&!n->map_dynamic&&n->output[0])){
                 // One pair per immutable HUD generation. Reserve both growths
@@ -378,7 +641,21 @@ private:
                         context->CopyResource(n->output[i].Get(),replay.texture(base));replay.recycle(base);
                         ++work.copies;work.copied_pixels+=bytes/4;
                     }
-                    for(auto const& draw:n->batch){
+                    bool spatial=compiled_enabled&&bind_batch(*n,ticks,frequency,depth,pair,scale);
+                    if(spatial){
+                        work.operations+=unsigned(n->batch.size());
+                        if(!replay.submit_spatial_sources(n->batch_preparation->spatial_plan,pair[0],pair[1],n->batch_preparation->batch_views))throw std::runtime_error("retained spatial HUD operation rejected");
+                    }else if(compiled_enabled&&n->batch_preparation->batch_bound){
+                        work.operations+=unsigned(n->batch_preparation->batch_commands.size());
+                        for(std::size_t index=0;index<n->batch_preparation->batch_commands.size();++index){
+                            auto c=n->batch_preparation->batch_commands[index];Id ids[6]={};
+                            for(unsigned i=0;i<6;++i){auto binding=n->batch_preparation->batch_operands[index][i];
+                                ids[i]=binding==0?0:binding<=2?pair[binding-1]:n->batch_preparation->batch_views[binding-3].id;
+                            }
+                            c.destination=ids[0];c.source=ids[1];c.background=ids[2];c.detail=ids[3];c.background_detail=ids[4];c.program=ids[5];
+                            if(!replay.submit_source_commands(&c,1,n->batch_preparation->batch_views))throw std::runtime_error("retained bound HUD operation rejected");
+                        }
+                    }else for(auto const& draw:n->batch){
                         auto c=draw.placed.command;
                         Id original[6]={c.destination,c.source,c.background,c.detail,c.background_detail,c.program},ids[6]={};
                         try{
@@ -405,17 +682,18 @@ private:
                     }
                 }catch(...){for(auto id:pair)if(id)replay.recycle(id);throw;}
                 for(auto id:pair)replay.recycle(id);
-                n->dependencies=std::move(versions);n->revision=++serial;
+                n->dependencies.swap(versions);n->revision=++serial;
             }
             n->dynamic=dynamic||bool(n->placement);
             if(had_map&&!n->map_dynamic){
                 // Saved generations keep their completed pixels, never a
                 // mutable live selection or a future camera's zoom placement.
-                n->batch.clear();n->inputs[0]={};n->inputs[1]={};n->placement.reset();
+                release_batch(*n);n->batch.clear();n->inputs[0]={};n->inputs[1]={};n->placement.reset();
                 n->dependencies.clear();n->dynamic=n->view_dependent=false;n->retired=true;
+                invalidate_plan();
             }
         }else if(n->operation){
-            std::vector<std::uint64_t> versions;
+            auto& versions=n->pending_dependencies;versions.clear();
             if(n->direct.revision)versions.push_back(n->direct_revision);
             int dx=0,dy=0;
             if(n->placement){
@@ -474,13 +752,13 @@ private:
                     if(!(n->direct.draw?n->direct.draw(replay,c):replay.submit(&c,1)))throw std::runtime_error("retained operation rejected");
                     capture_output(*n,0,replay.texture(c.destination),result);
                     if(c.detail)capture_output(*n,1,replay.texture(c.detail),result);
-                    n->dependencies=std::move(versions);n->revision=++serial;
+                    n->dependencies.swap(versions);n->revision=++serial;
                 }catch(...){for(unsigned i=0;i<6;++i)if(temporary[i]&&std::find(temporary,temporary+i,temporary[i])==temporary+i)replay.recycle(temporary[i]);throw;}
                 for(unsigned i=0;i<6;++i)if(temporary[i]&&std::find(temporary,temporary+i,temporary[i])==temporary+i)replay.recycle(temporary[i]);
             }
             // A frozen source can leave the output revision unchanged. Retire
             // its recipe even then, so HUD holes do not keep every old camera.
-            if(!n->dynamic){for(auto& input:n->inputs)input={};n->dependencies.clear();n->operation=false;}
+            if(!n->dynamic){for(auto& input:n->inputs)input={};n->dependencies.clear();n->operation=false;invalidate_plan();}
         }
         if(n->view&&had_map&&!n->map_dynamic){
             // Native HUD/save copies keep these completed pixels after the
@@ -488,6 +766,7 @@ private:
             // so they cannot retain old scenes or follow subsequent zooms.
             n->inputs[0]={};n->view.reset();n->sample_target={};n->view_words={};
             n->dynamic=n->view_dependent=n->projects_scene=false;
+            invalidate_plan();
         }
         n->seen=frame;
     }
@@ -539,6 +818,7 @@ private:
             if(sampled.kind==SampledImage::Kind::frozen||sampled.kind==SampledImage::Kind::held){
                 if(sampled.kind==SampledImage::Kind::frozen){
                     original->retired=true;original->sample={};original->dynamic=original->map_dynamic=false;
+                    invalidate_plan();
                 }
                 // A camera can retire before its first display. Preserve its
                 // completed publication rather than returning an empty image.
@@ -689,9 +969,12 @@ private:
 public:
     RetainedComposition(ID3D11Device* d,ID3D11DeviceContext* c):device(d),context(c),replay(d,c,128u*1024u*1024u){replay.share_storage(storage);}
     ~RetainedComposition(){front={};images.clear();world_selection.reset();}
-    void clear(){recent_recipes={};recipe_cursor=0;recipe_counts={};front={};images.clear();world_selection.reset();replay.clear_working();admitted=true;}
-    void discard(){recent_recipes={};recipe_cursor=0;recipe_counts={};front={};images.clear();world_selection.reset();replay.clear_working();admitted=false;}
-    void uncommit(){front={};}
+    void clear(){recent_batch.reset();recent_recipes={};recipe_cursor=0;recipe_counts={};collect_plan.clear();prepare_plan.clear();plan_counts={};batch_inventories=0;invalidate_plan();front={};images.clear();world_selection.reset();replay.clear_working();admitted=true;}
+    void discard(){recent_batch.reset();recent_recipes={};recipe_cursor=0;recipe_counts={};collect_plan.clear();prepare_plan.clear();plan_counts={};batch_inventories=0;invalidate_plan();front={};images.clear();world_selection.reset();replay.clear_working();admitted=false;}
+    void uncommit(){collect_plan.clear();prepare_plan.clear();invalidate_plan();front={};}
+    // The interpreter remains executable at the same clock for pixel oracles.
+    // This switch changes execution only, never captured native semantics.
+    void set_compiled_enabled(bool value){compiled_enabled=value;invalidate_plan();}
     std::uint64_t bytes()const{return resident_bytes();}
     std::uint64_t allocation_bytes()const{return storage.bytes()+direct_bytes;}
     std::uint64_t allocation_peak()const{return storage.peak();}
@@ -702,6 +985,7 @@ public:
     std::uint64_t source_view_creations()const{return source_views;}
     std::size_t node_count()const{return nodes;}
     RecipeReuse recipe_reuse()const{return recipe_counts;}
+    PlanReuse plan_reuse()const{return plan_counts;}
     bool accepting()const{return admitted;}
     std::size_t sampled_sources()const{
         std::vector<Node const*> visited;std::vector<Node const*> pending;
@@ -779,6 +1063,7 @@ public:
             world_selection=node();
         auto n=world_selection;n->area=bounds;n->selected_world=n->dynamic=n->view_dependent=true;
         n->inputs[0]=images.at(source_words);n->inputs[1]=source;
+        invalidate_plan();
         n->map_dynamic=false;
         for(unsigned i=0;i<2;++i)for(auto const& patch:n->inputs[i].patches)n->map_dynamic|=patch.node->map_dynamic;
         write(images.at(words),bounds,n,0);write(images.at(detail),bounds,n,1);
@@ -801,6 +1086,9 @@ public:
             }
             n->batch.push_back(std::move(draw));
         }
+        // Match before replacing the old published pair, while its weak
+        // preparation can still be locked. Before-images never enter the key.
+        if(compiled_enabled)prepare_batch(*n);
         for(unsigned i=0;i<2;++i)for(auto const& patch:n->inputs[i].patches)n->map_dynamic|=patch.node->map_dynamic;
         write(images.at(words),n->area,n,0);write(images.at(detail),n->area,n,1);
     }
@@ -913,8 +1201,7 @@ public:
     Texture sample(long long ticks,long long frequency){
         work={};
         if(!ready())return {};++frame;
-        for(auto const& part:front.patches)collect(part.node,ticks,frequency,0);
-        for(auto const& part:front.patches)prepare(part.node,ticks,frequency,0);
+        prepare_front(ticks,frequency);
         auto image=assemble(front,ticks,frequency,0,{},true);
         Texture result;
         try{result=crop(replay.texture(image),extent(front));}
@@ -925,9 +1212,8 @@ public:
     int draw(long long ticks,long long frequency,ID3D11RenderTargetView* target,ID3D11Texture2D* display,ID3D11Texture2D* buffer){
         work={};selected_view_scale=1.;
         if(!ready())return 0;++frame;
-        for(auto const& part:front.patches)collect(part.node,ticks,frequency,0);
-        for(auto const& part:front.patches)prepare(part.node,ticks,frequency,0);
-        std::vector<std::uint64_t> versions;
+        prepare_front(ticks,frequency);
+        auto& versions=pending_drawn_dependencies;versions.clear();
         for(auto const& part:front.patches){evaluate(part.node,ticks,frequency,0);versions.push_back(part.node->revision);}
         if(drawn_revision==front_revision&&versions==drawn_dependencies)return 2; // no new source sample
         auto image=assemble(front,ticks,frequency,0,{},true);
@@ -936,7 +1222,7 @@ public:
         catch(...){replay.recycle(image);throw;}replay.recycle(image);
         // The caller publishes with Present or a keyed release followed by
         // Flush. Keep the retained copy in that same submission batch.
-        if(ok){context->CopyResource(buffer,display);drawn_revision=front_revision;drawn_dependencies=std::move(versions);}return ok?1:0;
+        if(ok){context->CopyResource(buffer,display);drawn_revision=front_revision;drawn_dependencies.swap(versions);}return ok?1:0;
     }
     double view_scale()const{return selected_view_scale;}
     Work last_work()const{return work;}

@@ -357,6 +357,12 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
             rejects[0],rejects[1],rejects[2],rejects[3],rejects[4],rejects[5],rejects[6]);
         renderer.trace.write("fresh-scene-phases",detail,true);
         auto const& spans=sandbox_fresh.prepare_subspans;auto const& placements=renderer.shared_instances;
+        auto validation=sandbox_fresh.static_validation_counts();char validation_detail[512];
+        sprintf_s(validation_detail,"raster_full=%llu raster_content=%llu raster_visibility=%llu raster_membership=%llu raster_regions=%llu raster_reuses=%llu raster_changes=%llu atlas_full=%llu atlas_content=%llu atlas_membership=%llu atlas_regions=%llu atlas_reuses=%llu receiver_visits=%llu receiver_builds=%llu receiver_reuses=%llu placement_probes=%llu placement_reuses=%llu",
+            validation.raster.full,validation.raster.content,validation.raster.visibility,validation.raster.membership,validation.raster.regions,validation.raster.reused,validation.raster.changes,
+            validation.atlas.full,validation.atlas.content,validation.atlas.membership,validation.atlas.regions,validation.atlas.reused,
+            validation.receiver_visits,validation.receiver_builds,validation.receiver_reuses,validation.placement_probes,validation.placement_reuses);
+        renderer.trace.write("static-validation-counts",validation_detail,true);
         auto const& requirements=sandbox_fresh.body_requirements;
         sprintf_s(detail,"setup_resources_ms=%.3f capture_ms=%.3f raster_proof_ms=%.3f body_requirements_ms=%.3f city_shadow_ms=%.3f unit_selection_ms=%.3f unit_pose_ms=%.3f body_builds=%u body_reuses=%u body_visits=%u body_unique=%zu body_duplicates=%u coverage_probes=%u requirement_bytes=%zu unit_plan_reused=%u unit_reselected=%u range_reuses=%llu carry_visits=%llu carried_ranges=%llu packed_records=%llu gpu_copies=%llu copied_bytes=%llu allocated_bytes=%llu host_uploaded_bytes=%llu",
             spans[0],spans[1],spans[2],spans[3],spans[4],spans[5],spans[6],

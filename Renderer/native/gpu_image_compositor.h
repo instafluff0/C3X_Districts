@@ -3,6 +3,7 @@
 // native pointers, GDI leases, worker scheduling or implicit readback lives here.
 #include "gpu_image_commands.h"
 #include "composition_storage.h"
+#include "gpu_spatial_composition.h"
 #include <d3d11.h>
 #include <d3dcompiler.h>
 #include <wrl/client.h>
@@ -21,7 +22,8 @@
 #include "composition_recording.h"
 namespace c3x_gpu_images {
 using Microsoft::WRL::ComPtr;
-struct Counts {std::uint64_t uploads=0,upload_bytes=0,commands=0,snapshots=0,resident_bytes=0,allocations=0,reuses=0;};
+struct Counts {std::uint64_t uploads=0,upload_bytes=0,commands=0,snapshots=0,resident_bytes=0,allocations=0,reuses=0;
+    std::uint64_t interpreter_dispatches=0,interpreter_copies=0,interpreter_copied_pixels=0,spatial_dispatches=0,spatial_commands=0,spatial_compilations=0,spatial_source_copies=0;};
 inline void checked(HRESULT hr){if(FAILED(hr))throw std::runtime_error("GPU image operation failed");}
 class Compositor {
     struct Image {Id id=0;unsigned width=0,height=0;Format format=Format::rgb555;std::uint64_t revision=0;bool cpu_current=false,read_only=false,borrowed=false;CompositionStorage::Lease storage;
@@ -36,8 +38,9 @@ class Compositor {
     // Only explicitly retired replay scratch enters this pool. Published or
     // borrowed textures never do; reuse follows ordered work on this context.
     std::vector<Image> recycled;std::uint64_t recycled_bytes=0;
+    std::uint64_t remaining_budget()const{auto used=counters.resident_bytes+spatial.bytes();return used<budget?budget-used:0;}
     void make_room(std::uint64_t needed){
-        while(!recycled.empty()&&needed>budget-counters.resident_bytes){
+        while(!recycled.empty()&&needed>remaining_budget()){
             auto size=bytes(recycled.back());recycled_bytes-=size;counters.resident_bytes-=size;recycled.pop_back();
         }
     }
@@ -45,6 +48,7 @@ class Compositor {
     ViewTransform view_program;
     ComPtr<ID3D11ComputeShader> shader,import_shader,unit_shader,image_shader,blend_shader,lookup_shader;ComPtr<ID3D11Buffer> constants,image_constants;
     c3x_renderer::GpuUnitScene unit_scene;
+    SpatialComposition spatial;
     Counts counters;std::uint64_t budget,recording=0;CompositionStorage storage;
     unsigned recorded_displays=0;
     void record_texture(Id id,c3x_recording::Event kind,Rect area={})noexcept{
@@ -81,8 +85,8 @@ class Compositor {
     static Rect selected(Command const& command,Image const& image){return {
         std::max({0,command.area.left,command.clip.left}),std::max({0,command.area.top,command.clip.top}),
         std::min({int(image.width),command.area.right,command.clip.right}),std::min({int(image.height),command.area.bottom,command.clip.bottom})};}
-    bool valid(Command const& command,Image* direct=nullptr){
-        auto d=find(command.destination);if(!d||d->read_only)return false;
+    template<class Resolve> bool valid_resolved(Command const& command,Resolve resolve,Image* direct=nullptr){
+        auto d=resolve(command.destination);if(!d||d->read_only)return false;
         if(command.area.left>command.area.right || command.area.top>command.area.bottom ||
            command.clip.left>command.clip.right || command.clip.top>command.clip.bottom)return false;
         if(command.kind!=Kind::copy&&command.kind!=Kind::fill&&command.kind!=Kind::color_key&&command.kind!=Kind::invert&&command.kind!=Kind::quantize&&command.kind!=Kind::expand&&command.kind!=Kind::native_sprite&&command.kind!=Kind::unit_over&&command.kind!=Kind::native_text&&command.kind!=Kind::native_image&&command.kind!=Kind::native_blend&&command.kind!=Kind::native_lookup)return false;
@@ -90,9 +94,9 @@ class Compositor {
         if(command.kind!=Kind::native_image&&!(command.kind==Kind::native_blend&&command.color==2)&&(command.source_width||command.source_height))return false;
         if(command.kind!=Kind::native_lookup&&command.program)return false;
         if(command.kind==Kind::fill||command.kind==Kind::invert)return d->format==Format::bgra32||command.color<=65535;
-        auto s=direct?direct:find(command.source);if(!s)return false;
+        auto s=direct?direct:resolve(command.source);if(!s)return false;
         if(command.kind==Kind::native_lookup){
-            auto b=find(command.background),detail=find(command.detail),bd=find(command.background_detail),program=find(command.program);
+            auto b=resolve(command.background),detail=resolve(command.detail),bd=resolve(command.background_detail),program=resolve(command.program);
             if(d->format==Format::bgra32||s==d||s->format!=Format::bgra32||s->width!=1024||(s->height!=1024&&(s->height!=128||command.color!=32||!command.program))||
                !b||b->format!=d->format||b->width!=d->width||b->height!=d->height||(command.color>15&&!(command.program&&command.color==32)))return false;
             if(command.detail&&(!detail||detail==s||detail->read_only||detail->format!=Format::bgra32||detail->width!=d->width||detail->height!=d->height))return false;
@@ -102,7 +106,7 @@ class Compositor {
             return program&&program!=d&&program!=detail&&program->format==Format::bgra32&&x>=0&&y>=0&&x+r.right-r.left<=program->width&&y+r.bottom-r.top<=program->height;
         }
         if(command.kind==Kind::native_blend){
-            auto b=find(command.background),detail=find(command.detail),bd=find(command.background_detail);
+            auto b=resolve(command.background),detail=resolve(command.detail),bd=resolve(command.background_detail);
             if(d->format==Format::bgra32||!b||b->format!=d->format||command.color>4||
                (command.color==2?(s!=d||b!=d||command.source_width<0||command.source_width>65535||command.source_height<0||command.source_height>256):(s->format!=Format::bgra32||s==d)))return false;
             if(command.detail&&(!detail||detail->read_only||detail->format!=Format::bgra32||detail->width!=d->width||detail->height!=d->height||detail==s))return false;
@@ -111,7 +115,7 @@ class Compositor {
             if(r.right>int(b->width)||r.bottom>int(b->height))return false;
             if(command.color==2)return true;
         }else if(command.kind==Kind::native_image){
-            auto detail=find(command.detail),sd=find(command.background_detail);
+            auto detail=resolve(command.detail),sd=resolve(command.background_detail);
             auto dw=std::int64_t(command.area.right)-command.area.left,dh=std::int64_t(command.area.bottom)-command.area.top;
             if(d->format==Format::bgra32||s->format!=d->format||command.background||command.color>65536||
                command.source_width<=0||command.source_height<=0||dw<=0||dh<=0||dw>65535||dh>65535||
@@ -123,10 +127,10 @@ class Compositor {
             return true;
         }
         if(command.kind==Kind::native_text){
-            auto lut=find(command.background);
+            auto lut=resolve(command.background);
             if(!lut||lut==d||s==d||s->format!=Format::bgra32||lut->format!=Format::bgra32||lut->width!=17||lut->height>1024||command.detail||command.background_detail||command.color)return false;
         }else if(command.kind==Kind::unit_over){
-            auto b=find(command.background),detail=find(command.detail),bd=find(command.background_detail);
+            auto b=resolve(command.background),detail=resolve(command.detail),bd=resolve(command.background_detail);
             if(s->format!=Format::bgra32||d->format==Format::bgra32||!b||b->format!=d->format||command.color)return false;
             if(command.detail&&(!detail||detail->format!=Format::bgra32||detail->width!=d->width||detail->height!=d->height||detail==s))return false;
             if(command.background_detail&&(!detail||!bd||bd->format!=Format::bgra32||bd->width!=b->width||bd->height!=b->height))return false;
@@ -146,6 +150,7 @@ class Compositor {
         auto y=std::int64_t(command.source_y)+r.top-command.area.top;
         return x>=0&&y>=0&&x+(r.right-r.left)<=s->width&&y+(r.bottom-r.top)<=s->height;
     }
+    bool valid(Command const& command,Image* direct=nullptr){return valid_resolved(command,[&](Id id){return find(id);},direct);}
     void unit_over(Command const& op,Rect r,c3x_renderer::UnitSceneSample const* scene=nullptr){
         if(!scene && !unit_shader){
             char const* source=R"(
@@ -187,16 +192,16 @@ uint blend(uint source,uint below,uint alpha){
         unbind();D3D11_BOX box={unsigned(r.left),unsigned(r.top),0,unsigned(r.right),unsigned(r.bottom),1};
         // Unit snapshots use rectangle-local coordinates; scratch capacity follows
         // the selected body/shadow extent, not the entire native map surface.
-        context->CopySubresourceRegion(scratch.texture.Get(),0,0,0,0,d->texture.Get(),0,&box);++counters.snapshots;
-        if(detail){context->CopySubresourceRegion(detail_scratch.texture.Get(),0,0,0,0,detail->texture.Get(),0,&box);++counters.snapshots;}
+        context->CopySubresourceRegion(scratch.texture.Get(),0,0,0,0,d->texture.Get(),0,&box);++counters.snapshots;++counters.interpreter_copies;counters.interpreter_copied_pixels+=std::uint64_t(r.right-r.left)*(r.bottom-r.top);
+        if(detail){context->CopySubresourceRegion(detail_scratch.texture.Get(),0,0,0,0,detail->texture.Get(),0,&box);++counters.snapshots;++counters.interpreter_copies;counters.interpreter_copied_pixels+=std::uint64_t(r.right-r.left)*(r.bottom-r.top);}
         auto ground=b==d?&scratch:b;auto full_ground=bd==detail?&detail_scratch:bd;
         ID3D11ShaderResourceView* reads[5]={scene?scene->body:find(op.source)->read.Get(),scratch.read.Get(),ground->read.Get(),detail?detail_scratch.read.Get():nullptr,bd?full_ground->read.Get():nullptr};
         ID3D11UnorderedAccessView* writes[2]={d->write.Get(),detail?detail->write.Get():nullptr};
         Constants p={{r.left,r.top,r.right,r.bottom},{int(std::int64_t(op.source_x)-op.area.left),int(std::int64_t(op.source_y)-op.area.top)},d->format==Format::rgb565?1u:0u,(detail?1u:0u)|(bd?2u:0u)|(b==d?4u:0u)|(bd&&bd==detail?8u:0u)};
         context->UpdateSubresource(constants.Get(),0,nullptr,&p,0,0);auto cb=constants.Get();context->CSSetConstantBuffers(0,1,&cb);
         context->CSSetShaderResources(0,5,reads);context->CSSetUnorderedAccessViews(0,2,writes,nullptr);
-        if(scene)unit_scene.draw(device,context,*scene,unsigned(r.right-r.left),unsigned(r.bottom-r.top));
-        else {context->CSSetShader(unit_shader.Get(),nullptr,0);context->Dispatch(unsigned(r.right-r.left+7)/8,unsigned(r.bottom-r.top+7)/8,1);}unbind();
+        if(scene){unit_scene.draw(device,context,*scene,unsigned(r.right-r.left),unsigned(r.bottom-r.top));++counters.interpreter_dispatches;}
+        else {context->CSSetShader(unit_shader.Get(),nullptr,0);context->Dispatch(unsigned(r.right-r.left+7)/8,unsigned(r.bottom-r.top+7)/8,1);++counters.interpreter_dispatches;}unbind();
         d->cpu_current=false;if(detail)detail->cpu_current=false;++counters.commands;
     }
     void native_lookup(Command const& op,Rect r){
@@ -248,7 +253,7 @@ float3 graded(uint full,uint block){
         ID3D11ShaderResourceView* reads[4]={find(op.source)->read.Get(),b==d?nullptr:b->read.Get(),bd&&bd!=detail?bd->read.Get():nullptr,op.program?find(op.program)->read.Get():nullptr};
         ID3D11UnorderedAccessView* writes[2]={d->write.Get(),detail?detail->write.Get():nullptr};
         context->CSSetShaderResources(0,4,reads);context->CSSetUnorderedAccessViews(0,2,writes,nullptr);context->CSSetShader(lookup_shader.Get(),nullptr,0);
-        context->Dispatch(unsigned(r.right-r.left+7)/8,unsigned(r.bottom-r.top+7)/8,1);unbind();
+        context->Dispatch(unsigned(r.right-r.left+7)/8,unsigned(r.bottom-r.top+7)/8,1);++counters.interpreter_dispatches;unbind();
         d->cpu_current=false;if(detail)detail->cpu_current=false;++counters.commands;
     }
     void native_blend(Command const& op,Rect r){
@@ -304,15 +309,15 @@ uint packed(uint3 rgb){uint3 q=rgb>>uint3(3,mode==1?2:3,3);return q.x|(q.y<<5)|(
         }
         auto d=find(op.destination),b=find(op.background),detail=find(op.detail),bd=find(op.background_detail);unbind();
         D3D11_BOX box={unsigned(r.left),unsigned(r.top),0,unsigned(r.right),unsigned(r.bottom),1};
-        if(b==d){context->CopySubresourceRegion(scratch.texture.Get(),0,r.left,r.top,0,b->texture.Get(),0,&box);b=&scratch;++counters.snapshots;}
-        if(bd&&bd==detail){context->CopySubresourceRegion(detail_scratch.texture.Get(),0,r.left,r.top,0,bd->texture.Get(),0,&box);bd=&detail_scratch;++counters.snapshots;}
+        if(b==d){context->CopySubresourceRegion(scratch.texture.Get(),0,r.left,r.top,0,b->texture.Get(),0,&box);b=&scratch;++counters.snapshots;++counters.interpreter_copies;counters.interpreter_copied_pixels+=std::uint64_t(r.right-r.left)*(r.bottom-r.top);}
+        if(bd&&bd==detail){context->CopySubresourceRegion(detail_scratch.texture.Get(),0,r.left,r.top,0,bd->texture.Get(),0,&box);bd=&detail_scratch;++counters.snapshots;++counters.interpreter_copies;counters.interpreter_copied_pixels+=std::uint64_t(r.right-r.left)*(r.bottom-r.top);}
         Constants params={{r.left,r.top,r.right,r.bottom},{int(std::int64_t(op.source_x)-op.area.left),int(std::int64_t(op.source_y)-op.area.top)},d->format==Format::rgb565?1u:0u,(detail?1u:0u)|(bd?2u:0u)|(op.color==4?32u:op.color==3?16u:op.color==2?8u:op.color?4u:0u)};
         if(op.color==2){params.offset[0]=op.source_width;params.offset[1]=op.source_height;}
         context->UpdateSubresource(constants.Get(),0,nullptr,&params,0,0);auto cb=constants.Get();context->CSSetConstantBuffers(0,1,&cb);
         ID3D11ShaderResourceView* reads[3]={op.color==2?nullptr:find(op.source)->read.Get(),b->read.Get(),bd?bd->read.Get():nullptr};
         ID3D11UnorderedAccessView* writes[2]={d->write.Get(),detail?detail->write.Get():nullptr};
         context->CSSetShaderResources(0,3,reads);context->CSSetUnorderedAccessViews(0,2,writes,nullptr);context->CSSetShader(blend_shader.Get(),nullptr,0);
-        context->Dispatch(unsigned(r.right-r.left+7)/8,unsigned(r.bottom-r.top+7)/8,1);unbind();
+        context->Dispatch(unsigned(r.right-r.left+7)/8,unsigned(r.bottom-r.top+7)/8,1);++counters.interpreter_dispatches;unbind();
         d->cpu_current=false;if(detail)detail->cpu_current=false;++counters.commands;
     }
     void native_image(Command const& op,Rect r){
@@ -354,14 +359,14 @@ uint expanded(uint c){uint b=((c&31)<<3)|((c&31)>>2),r,g;
             checked(device->CreateBuffer(&desc,nullptr,&image_constants));
         }
         auto d=find(op.destination),s=find(op.source),detail=find(op.detail),sd=find(op.background_detail);unbind();
-        if(s==d){D3D11_BOX box={0,0,0,d->width,d->height,1};context->CopySubresourceRegion(scratch.texture.Get(),0,0,0,0,d->texture.Get(),0,&box);s=&scratch;++counters.snapshots;
-            if(sd){context->CopySubresourceRegion(detail_scratch.texture.Get(),0,0,0,0,sd->texture.Get(),0,&box);sd=&detail_scratch;++counters.snapshots;}}
+        if(s==d){D3D11_BOX box={0,0,0,d->width,d->height,1};context->CopySubresourceRegion(scratch.texture.Get(),0,0,0,0,d->texture.Get(),0,&box);s=&scratch;++counters.snapshots;++counters.interpreter_copies;counters.interpreter_copied_pixels+=std::uint64_t(d->width)*d->height;
+            if(sd){context->CopySubresourceRegion(detail_scratch.texture.Get(),0,0,0,0,sd->texture.Get(),0,&box);sd=&detail_scratch;++counters.snapshots;++counters.interpreter_copies;counters.interpreter_copied_pixels+=std::uint64_t(sd->width)*sd->height;}}
         ImageConstants params={{r.left,r.top,r.right,r.bottom},{op.area.left,op.area.top,op.area.right-op.area.left,op.area.bottom-op.area.top},
             {op.source_x,op.source_y,op.source_width,op.source_height},d->format==Format::rgb565?1u:0u,op.color,(detail?1u:0u)|(sd?2u:0u),0};
         context->UpdateSubresource(image_constants.Get(),0,nullptr,&params,0,0);auto cb=image_constants.Get();context->CSSetConstantBuffers(0,1,&cb);
         ID3D11ShaderResourceView* reads[2]={s->read.Get(),sd?sd->read.Get():nullptr};ID3D11UnorderedAccessView* writes[2]={d->write.Get(),detail?detail->write.Get():nullptr};
         context->CSSetShaderResources(0,2,reads);context->CSSetUnorderedAccessViews(0,2,writes,nullptr);context->CSSetShader(image_shader.Get(),nullptr,0);
-        context->Dispatch(unsigned(r.right-r.left+7)/8,unsigned(r.bottom-r.top+7)/8,1);unbind();
+        context->Dispatch(unsigned(r.right-r.left+7)/8,unsigned(r.bottom-r.top+7)/8,1);++counters.interpreter_dispatches;unbind();
         d->cpu_current=false;if(detail)detail->cpu_current=false;++counters.commands;
     }
 
@@ -372,7 +377,7 @@ public:
     };
     // R32_UINT stores native 16-bit words exactly too. Its explicit 4-byte budget
     // avoids format-dependent typed-UAV support and rounding intermediate images.
-    Compositor(ID3D11Device* d,ID3D11DeviceContext* c,std::uint64_t cap=64u*1024u*1024u,bool record=false):device(d),context(c),budget(cap){
+    Compositor(ID3D11Device* d,ID3D11DeviceContext* c,std::uint64_t cap=64u*1024u*1024u,bool record=false):device(d),context(c),spatial(d,c),budget(cap){
         if(record)recording=c3x_recording::journal().open(cap);
         if(!d||!c||d->GetFeatureLevel()<D3D_FEATURE_LEVEL_11_0)throw std::runtime_error("GPU image operations require feature level 11");
         char const* source=R"(
@@ -447,7 +452,7 @@ Texture2D<uint> input_image:register(t0);Texture2D<uint> text_curves:register(t1
                 next=std::move(*cached);recycled_bytes-=bytes(next);recycled.erase(cached);++counters.reuses;
             }else{
                 auto size=std::uint64_t(width)*height*4;make_room(size);
-                if(size>budget-counters.resident_bytes)return 0;
+                if(size>remaining_budget())return 0;
                 make(next,width,height);counters.resident_bytes+=bytes(next);
             }
             next.id=++serial;next.format=format;next.revision=0;next.cpu_current=false;
@@ -479,7 +484,7 @@ Texture2D<uint> input_image:register(t0);Texture2D<uint> text_curves:register(t1
         ComPtr<ID3D11Device> owner;texture->GetDevice(&owner);
         make_room(std::uint64_t(d.Width)*d.Height*4);
         if(owner.Get()!=device||d.Format!=DXGI_FORMAT_R32_UINT||d.SampleDesc.Count!=1||d.ArraySize!=1||d.MipLevels!=1||
-           !(d.BindFlags&D3D11_BIND_SHADER_RESOURCE)||!d.Width||!d.Height||d.Width>2240||d.Height>1260||std::uint64_t(d.Width)*d.Height*4>budget-counters.resident_bytes)return 0;
+           !(d.BindFlags&D3D11_BIND_SHADER_RESOURCE)||!d.Width||!d.Height||d.Width>2240||d.Height>1260||std::uint64_t(d.Width)*d.Height*4>remaining_budget())return 0;
         for(auto& image:images)if(!image.id){Image next;next.texture=texture;next.width=d.Width;next.height=d.Height;next.format=format;next.read_only=next.borrowed=true;next.storage=storage.retain(texture);
             if(retained_view)next.read=retained_view;
             else checked(device->CreateShaderResourceView(texture,nullptr,&next.read));
@@ -495,7 +500,65 @@ Texture2D<uint> input_image:register(t0);Texture2D<uint> text_curves:register(t1
         if(!(d.BindFlags&D3D11_BIND_UNORDERED_ACCESS)){destroy(id);return 0;}
         checked(device->CreateUnorderedAccessView(texture,nullptr,&image->write));image->read_only=false;return id;
     }
-    void share_storage(CompositionStorage const& tracker){storage=tracker;}
+    void share_storage(CompositionStorage const& tracker){storage=tracker;spatial.share_storage(tracker);}
+    using SpatialPlan=SpatialComposition::Plan;
+    // Immutable retained operands have their own leases. Atlas compilation
+    // resolves them without occupying the bounded interpreter handle table.
+    struct SpatialSource {Id id=0;ComPtr<ID3D11Texture2D> texture;unsigned width=0,height=0;Format format=Format::bgra32;};
+    static Id spatial_source_id(std::size_t index){return ~Id(0)-Id(index);}
+    std::uint64_t spatial_bytes()const{return spatial.bytes();}
+    bool compile_spatial(SpatialPlan& plan,Command const* commands,std::size_t count,Id words,Id detail,std::uint64_t allowance,bool reuse_sources=false){
+        return compile_spatial_sources(plan,commands,count,words,detail,allowance,{},reuse_sources);
+    }
+    bool compile_spatial_sources(SpatialPlan& plan,Command const* commands,std::size_t count,Id words,Id detail,
+            std::uint64_t allowance,std::vector<SpatialSource> const& sources,bool reuse_sources=false){
+        if(!commands||!count||sources.size()>8192)return false;
+        std::vector<Image> inputs(sources.size());
+        for(std::size_t i=0;i<sources.size();++i){auto const& source=sources[i];
+            if(source.id!=spatial_source_id(i)||find(source.id)||!source.texture)return false;
+            D3D11_TEXTURE2D_DESC desc={};source.texture->GetDesc(&desc);ComPtr<ID3D11Device> owner;source.texture->GetDevice(&owner);
+            if(owner.Get()!=device||desc.Format!=DXGI_FORMAT_R32_UINT||desc.ArraySize!=1||desc.MipLevels!=1||desc.SampleDesc.Count!=1||
+               !(desc.BindFlags&D3D11_BIND_SHADER_RESOURCE)||desc.Width!=source.width||desc.Height!=source.height||!source.width||!source.height||
+               source.width>2240||source.height>1260||(source.format!=Format::bgra32&&source.format!=Format::rgb555&&source.format!=Format::rgb565))return false;
+            auto& image=inputs[i];image.id=source.id;image.texture=source.texture;image.width=source.width;image.height=source.height;image.format=source.format;image.read_only=true;
+        }
+        auto resolve=[&](Id id)->Image*{auto index=~id;return index<inputs.size()?&inputs[std::size_t(index)]:find(id);};
+        for(std::size_t i=0;i<count;++i)if(!valid_resolved(commands[i],resolve))return false;
+        unbind();
+        return spatial.compile(plan,commands,count,words,detail,[&](Id id){auto image=resolve(id);
+            return image?SpatialComposition::Image{image->texture.Get(),image->width,image->height,image->format}:SpatialComposition::Image{};
+        },[&](std::uint64_t bytes){return bytes<=allowance&&bytes<=remaining_budget();},reuse_sources);
+    }
+    bool submit_source_commands(Command const* commands,std::size_t count,std::vector<SpatialSource> const& sources){
+        if(!commands||sources.size()>8192)return false;
+        for(std::size_t n=0;n<count;++n){auto command=commands[n];Id* operands[]={&command.destination,&command.source,&command.background,&command.detail,&command.background_detail,&command.program};
+            std::array<Id,6> virtual_ids={},bound_ids={};unsigned bound=0;bool ok=true;
+            try{
+                for(auto operand:operands){auto index=~*operand;if(index>=sources.size())continue;
+                    auto const& source=sources[std::size_t(index)];if(source.id!=*operand||!source.texture){ok=false;break;}
+                    unsigned existing=0;while(existing<bound&&virtual_ids[existing]!=*operand)++existing;
+                    if(existing==bound){auto id=attach_source_unrecorded(source.texture.Get(),source.format);if(!id){ok=false;break;}
+                        virtual_ids[bound]=*operand;bound_ids[bound++]=id;}
+                    *operand=bound_ids[existing];
+                }
+                if(ok)ok=submit_unrecorded(&command,1);
+            }catch(...){for(unsigned i=0;i<bound;++i)destroy(bound_ids[i]);throw;}
+            for(unsigned i=0;i<bound;++i)destroy(bound_ids[i]);if(!ok)return false;
+        }return true;
+    }
+    template<class Legacy> bool submit_spatial_resolved(SpatialPlan const& plan,Id words,Id detail,Legacy legacy){
+        auto w=find(words),d=find(detail);if(!w||!d||w->read_only||d->read_only||w->format!=plan.words_format||d->format!=Format::bgra32||w->texture.Get()==d->texture.Get()||w->width!=plan.width||w->height!=plan.height||d->width!=plan.width||d->height!=plan.height)return false;
+        for(auto source:plan.external_allocations)if(w->texture.Get()==source||d->texture.Get()==source)return false;
+        auto before=spatial.commands();
+        bool result=spatial.submit(plan,words,detail,w->write.Get(),d->write.Get(),legacy);
+        counters.commands+=spatial.commands()-before;w->cpu_current=d->cpu_current=false;return result;
+    }
+    bool submit_spatial(SpatialPlan const& plan,Id words,Id detail){
+        return submit_spatial_resolved(plan,words,detail,[&](Command const& command){return submit_unrecorded(&command,1);});
+    }
+    bool submit_spatial_sources(SpatialPlan const& plan,Id words,Id detail,std::vector<SpatialSource> const& sources){
+        return submit_spatial_resolved(plan,words,detail,[&](Command const& command){return submit_source_commands(&command,1,sources);});
+    }
     template<class Visit> void visit_images(Visit visit)const{
         for(auto const& image:images)if(image.id)visit(image.id,image.width,image.height,image.format,image.texture.Get());
     }
@@ -563,7 +626,7 @@ Texture2D<uint> input_image:register(t0);Texture2D<uint> text_curves:register(t1
         bool grow_detail=detail_width&&(detail_scratch.width<detail_width||detail_scratch.height<detail_height);
         auto needed=(grow?std::uint64_t(width)*height*4:0)+(grow_detail?std::uint64_t(detail_width)*detail_height*4:0);
         make_room(needed);
-        if(needed>budget-counters.resident_bytes){
+        if(needed>remaining_budget()){
             OutputDebugStringA("[C3X renderer] stage=gpu-composition-reject reason=scratch-budget\n");return false;
         }
         Image next,next_detail;if(grow)make(next,width,height);if(grow_detail)make(next_detail,detail_width,detail_height);
@@ -581,12 +644,12 @@ Texture2D<uint> input_image:register(t0);Texture2D<uint> text_curves:register(t1
             if(op.kind==Kind::native_blend){native_blend(op,r);continue;}
             if(op.kind==Kind::native_lookup){native_lookup(op,r);continue;}
             auto s=op.kind==Kind::invert?d:find(op.source);unbind();
-            if(s==d){D3D11_BOX box={0,0,0,d->width,d->height,1};context->CopySubresourceRegion(scratch.texture.Get(),0,0,0,0,d->texture.Get(),0,&box);s=&scratch;++counters.snapshots;}
+            if(s==d){D3D11_BOX box={0,0,0,d->width,d->height,1};context->CopySubresourceRegion(scratch.texture.Get(),0,0,0,0,d->texture.Get(),0,&box);s=&scratch;++counters.snapshots;++counters.interpreter_copies;counters.interpreter_copied_pixels+=std::uint64_t(d->width)*d->height;}
             if(op.kind==Kind::copy){
                 unsigned x=unsigned(std::int64_t(op.source_x)+r.left-op.area.left),y=unsigned(std::int64_t(op.source_y)+r.top-op.area.top);
                 D3D11_BOX box={x,y,0,x+unsigned(r.right-r.left),y+unsigned(r.bottom-r.top),1};
                 context->CopySubresourceRegion(d->texture.Get(),0,r.left,r.top,0,s->texture.Get(),0,&box);
-                d->cpu_current=false;++counters.commands;continue;
+                d->cpu_current=false;++counters.commands;++counters.interpreter_copies;counters.interpreter_copied_pixels+=std::uint64_t(r.right-r.left)*(r.bottom-r.top);continue;
             }
             if(op.kind==Kind::fill && r.left==0 && r.top==0 && r.right==int(d->width) && r.bottom==int(d->height)){
                 unsigned value[4]={op.color,op.color,op.color,op.color};context->ClearUnorderedAccessViewUint(d->write.Get(),value);
@@ -596,7 +659,7 @@ Texture2D<uint> input_image:register(t0);Texture2D<uint> text_curves:register(t1
             if(op.kind!=Kind::fill&&op.kind!=Kind::invert){p.offset[0]=int(std::int64_t(op.source_x)-op.area.left);p.offset[1]=int(std::int64_t(op.source_y)-op.area.top);}
             context->UpdateSubresource(constants.Get(),0,nullptr,&p,0,0);auto cb=constants.Get();context->CSSetConstantBuffers(0,1,&cb);
             auto read=s?s->read.Get():nullptr;auto write=d->write.Get();ID3D11ShaderResourceView* reads[2]={read,op.kind==Kind::native_text?find(op.background)->read.Get():nullptr};context->CSSetShaderResources(0,2,reads);context->CSSetUnorderedAccessViews(0,1,&write,nullptr);
-            context->CSSetShader(shader.Get(),nullptr,0);context->Dispatch(unsigned(r.right-r.left+7)/8,unsigned(r.bottom-r.top+7)/8,1);unbind();
+            context->CSSetShader(shader.Get(),nullptr,0);context->Dispatch(unsigned(r.right-r.left+7)/8,unsigned(r.bottom-r.top+7)/8,1);++counters.interpreter_dispatches;unbind();
             // GPU mutation invalidates a prior CPU revision; the caller must supply
             // a strictly newer revision to replace this image from CPU content.
             d->cpu_current=false;++counters.commands;
@@ -685,6 +748,8 @@ Texture2D<float4> input_image:register(t0);RWTexture2D<uint> output_image:regist
     Format format(Id id){auto image=find(id);if(!image)throw std::runtime_error("image format requested outside lifetime");return image->format;}
     ID3D11Texture2D* texture(Id id){auto image=find(id);return image?image->texture.Get():nullptr;}
     ID3D11ShaderResourceView* view(Id id){auto image=find(id);return image?image->read.Get():nullptr;}
-    Counts stats()const{return counters;}
+    Counts stats()const{auto result=counters;result.resident_bytes+=spatial.bytes();
+        result.spatial_dispatches=spatial.dispatches();result.spatial_commands=spatial.commands();
+        result.spatial_compilations=spatial.compilations();result.spatial_source_copies=spatial.source_copies();return result;}
 };
 } // namespace c3x_gpu_images

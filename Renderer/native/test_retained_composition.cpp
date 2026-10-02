@@ -1017,5 +1017,255 @@ int test_retained_composition(){
         std::printf("PASS paired recipe budget: targets=%u size=%ux%u eligible=%llu reused=%llu retained_bytes=%llu exact_oracles=64 weak_expiry=1 cap=268435456\n",
             count,width,height,reuse.eligible,reuse.reused,warm_bytes);
     }
+    // The production HUD stores thousands of placed commands over an animated
+    // packed/detail pair. Compare its compiled path with the retained interpreter
+    // at exactly the same clock, including response text and alias boundaries.
+    for(auto format:{Format::rgb555,Format::rgb565}){
+        auto live_owner=std::make_unique<Compositor>(device.Get(),context.Get());auto& live=*live_owner;
+        auto fast_owner=std::make_unique<RetainedComposition>(device.Get(),context.Get());auto& fast=*fast_owner;
+        auto oracle_owner=std::make_unique<RetainedComposition>(device.Get(),context.Get());auto& oracle=*oracle_owner;
+        oracle.set_compiled_enabled(false);
+        constexpr unsigned width=128,height=96;Rect bounds={0,0,width,height};
+        auto create=[&](unsigned x,unsigned y,Format f){auto id=live.create(x,y,f);assert(id);fast.create(id,x,y,f);oracle.create(id,x,y,f);return id;};
+        auto map=create(width,height,Format::bgra32),words=create(width,height,format),detail=create(width,height,Format::bgra32),
+            ink=create(8,8,format),ink_detail=create(8,8,Format::bgra32),glyph=create(8,8,Format::bgra32),
+            curves=create(17,32,Format::bgra32),blend=create(8,8,Format::bgra32);
+        auto upload=[&](Id id,std::vector<unsigned> const& pixels){assert(live.upload(id,1,pixels.data(),pixels.size()));
+            fast.source(id,live.texture(id));oracle.source(id,live.texture(id));};
+        unsigned key=format==Format::rgb555?0x7c1f:0xf81f;std::vector<unsigned> pixels(64);
+        for(unsigned i=0;i<64;++i)pixels[i]=i%3?key:(i*731u)&65535;upload(ink,pixels);
+        for(unsigned i=0;i<64;++i)pixels[i]=0xff000000u|((i*5371)&0xffffff);upload(ink_detail,pixels);
+        for(unsigned i=0;i<64;++i)pixels[i]=(i%32)|((i*3%32)<<10)|((i*7%32)<<20)|(i%2?0x40000000u:0);upload(glyph,pixels);
+        pixels.resize(17*32);for(unsigned i=0;i<pixels.size();++i)pixels[i]=(i/17*3+i%17*13)%256;upload(curves,pixels);
+        pixels.resize(64);for(unsigned i=0;i<64;++i)pixels[i]=((i*41%256)<<24)|((i*3719)&0xffffff);upload(blend,pixels);
+        RetainedComposition::Texture current;std::vector<unsigned> ground(width*height);unsigned map_revision=0;
+        auto advance=[&]{++map_revision;for(unsigned i=0;i<ground.size();++i)ground[i]=0xff000000u|((i*3127+map_revision*771)&0xffffff);
+            auto next=live.create(width,height,Format::bgra32);assert(next&&live.upload(next,1,ground.data(),ground.size()));current=live.texture(next);live.destroy(next);};
+        advance();for(auto retained:{&fast,&oracle})retained->source(map,current.Get(),[&](long long,long long){return current;},true,true);
+        auto zoom=std::make_shared<c3x_renderer::ZoomTransition>();
+        std::vector<RetainedComposition::Placed> placed;
+        for(unsigned i=0;i<320;++i){int x=12+int(i*7%101),y=12+int(i*11%69);Rect area={x,y,x+8,y+8};Rect clip={x+int(i%2),y,x+7,y+7};
+            auto add=[&](Command c){placed.push_back({c,x+3,y+3});};
+            add({Kind::native_text,words,glyph,area,clip,0,0,0,curves});
+            add({Kind::native_text,detail,glyph,area,clip,0,0,0,curves});
+            add({Kind::native_image,words,ink,area,clip,0,0,key,0,detail,ink_detail,8,8});
+            add({Kind::native_blend,words,blend,area,clip,0,0,i%5==2?1u:i%5,words,detail,detail});
+            add({Kind::invert,words,0,area,clip,0,0,0x421});
+            add({Kind::native_blend,words,words,area,clip,0,0,2,words,detail,detail,0x1234,141});
+        }
+        // A cross-position pair read is a real boundary. Commands after it
+        // must observe its completed words and full-color companion.
+        placed.push_back({{Kind::native_image,words,words,{20,20,28,28},bounds,10,10,65536,0,detail,detail,8,8},23,23});
+        placed.push_back({{Kind::fill,detail,0,{19,19,24,24},bounds,0,0,0xffa13758},21,21});
+        for(auto retained:{&fast,&oracle}){retained->view(detail,map,zoom,words);retained->placed_batch(words,detail,placed,zoom);retained->commit(detail,bounds);}
+        std::uint64_t bound=0,plan_builds=0;
+        for(unsigned tick=0;tick<24;++tick){
+            if(tick==6)zoom->target(1.5,tick*17,1000);if(tick==12)zoom->target(1.,tick*17,1000);if(tick==18)zoom->target(1.25,tick*17,1000);
+            advance();for(auto id:{words,detail}){
+                fast.commit(id,bounds);oracle.commit(id,bounds);
+                auto actual=retained_read(device.Get(),context.Get(),fast.sample(tick*17+1,1000).Get());
+                auto expected=retained_read(device.Get(),context.Get(),oracle.sample(tick*17+1,1000).Get());
+                if(actual!=expected){for(unsigned p=0;p<actual.size();++p)if(actual[p]!=expected[p]){
+                    std::fprintf(stderr,"compiled HUD mismatch format=%u tick=%u target=%llu pixel=%u actual=%08x expected=%08x\n",unsigned(format),tick,id,p,actual[p],expected[p]);break;}assert(false);}++checks;
+            }
+            auto plan=fast.plan_reuse();if(tick==2){bound=plan.source_binds;plan_builds=plan.builds;}
+            if(tick>2)assert(plan.source_binds==bound); // map/zoom never rebind immutable glyphs and tables
+        }
+        auto before=fast.plan_reuse();fast.sample(410,1000);fast.sample(411,1000);auto after=fast.plan_reuse();
+        assert(after.builds==before.builds&&after.reuses>=before.reuses+2&&after.source_binds==bound&&plan_builds>0);
+        // Updating a working source cannot rewrite captured HUD operands or
+        // an old saved reader. A newly captured batch sees the new generation.
+        fast.snapshot(500,detail);oracle.snapshot(500,detail);
+        std::fill(pixels.begin(),pixels.end(),0xff543210u);assert(live.upload(blend,2,pixels.data(),pixels.size()));
+        for(auto retained:{&fast,&oracle})retained->source(blend,live.texture(blend));
+        for(auto retained:{&fast,&oracle})retained->commit(500,bounds);
+        assert(retained_read(device.Get(),context.Get(),fast.sample(412,1000).Get())==retained_read(device.Get(),context.Get(),oracle.sample(412,1000).Get()));++checks;
+        auto old_program=fast.plan_reuse();
+        for(auto retained:{&fast,&oracle}){retained->view(detail,map,zoom,words);retained->placed_batch(words,detail,placed,zoom);retained->commit(detail,bounds);}
+        assert(fast.plan_reuse().batch_builds==old_program.batch_builds+1&&fast.plan_reuse().batch_reuses==old_program.batch_reuses);
+        assert(retained_read(device.Get(),context.Get(),fast.sample(413,1000).Get())==retained_read(device.Get(),context.Get(),oracle.sample(413,1000).Get()));++checks;
+        fast.clear();oracle.clear();assert(!fast.bytes()&&!fast.node_count()&&!oracle.bytes()&&!oracle.node_count());
+        std::printf("PASS compiled retained HUD: format=%u commands=%zu same_clock_pairs=24 text_response=1 blends=5 alias_boundary=1 zoom_reversal=1 immutable_binds=%llu old_reader=1 reset=1\n",unsigned(format),placed.size(),bound);
+    }
+    // A normal busy native HUD has 750 independently captured sources. Source
+    // identities must not consume the compositor's 512 live image handles.
+    for(auto format:{Format::rgb555,Format::rgb565}){
+        auto live_owner=std::make_unique<Compositor>(device.Get(),context.Get());auto& live=*live_owner;
+        auto fast_owner=std::make_unique<RetainedComposition>(device.Get(),context.Get());auto& fast=*fast_owner;
+        auto oracle_owner=std::make_unique<RetainedComposition>(device.Get(),context.Get());auto& oracle=*oracle_owner;
+        oracle.set_compiled_enabled(false);
+        constexpr unsigned width=128,height=96,sources=900;Rect bounds={0,0,width,height};
+        std::vector<Id> captured_ids;
+        auto create=[&](unsigned x,unsigned y,Format f){auto id=live.create(x,y,f);assert(id);fast.create(id,x,y,f);oracle.create(id,x,y,f);captured_ids.push_back(id);return id;};
+        auto map=create(width,height,Format::bgra32),words=create(width,height,format),detail=create(width,height,Format::bgra32);
+        RetainedComposition::Texture current;std::vector<unsigned> pixels(width*height);unsigned revision=0;
+        auto advance=[&]{++revision;for(unsigned i=0;i<pixels.size();++i)pixels[i]=0xff000000u|((i*3127+revision*771)&0xffffff);
+            auto next=live.create(width,height,Format::bgra32);assert(next&&live.upload(next,1,pixels.data(),pixels.size()));current=live.texture(next);live.destroy(next);};
+        advance();for(auto retained:{&fast,&oracle})retained->source(map,current.Get(),[&](long long,long long){return current;},true,true);
+        std::vector<RetainedComposition::Placed> placed;
+        auto capture=[&](std::vector<unsigned> const& body){auto id=create(2,2,Format::bgra32);assert(live.upload(id,1,body.data(),body.size()));
+            fast.source(id,live.texture(id));oracle.source(id,live.texture(id));assert(live.destroy(id));return id;};
+        for(unsigned index=0;index<sources;++index){unsigned ink=(index*731+17)&(format==Format::rgb565?65535:32767);
+            auto source=capture({ink|65536u,0,(ink^0x421u)|65536u,ink|65536u});
+            int x=8+int(index*7%108),y=8+int(index*11%76);Rect area={x,y,x+2,y+2};
+            placed.push_back({{Kind::native_sprite,words,source,area,bounds},x+1,y+1});
+            placed.push_back({{Kind::native_sprite,detail,source,area,bounds,0,0,format==Format::rgb565?2u:1u},x+1,y+1});
+        }
+        // External ground is a real interpreter boundary. Its source and
+        // both ground handles retire before replay; captured versions remain.
+        auto fallback=capture({0xff443388u,0x80204060u,0xff123456u,0});
+        auto ground_words=create(width,height,format),ground_detail=create(width,height,Format::bgra32);
+        for(auto id:{ground_words,ground_detail}){std::fill(pixels.begin(),pixels.end(),id==ground_words?0x1234u:0xff2468acu);
+            assert(live.upload(id,1,pixels.data(),pixels.size()));fast.source(id,live.texture(id));oracle.source(id,live.texture(id));assert(live.destroy(id));}
+        placed.push_back({{Kind::unit_over,words,fallback,{31,27,33,29},bounds,0,0,0,ground_words,detail,ground_detail},32,28});
+        placed.push_back({{Kind::native_image,words,words,{35,29,39,33},bounds,30,25,65536,0,detail,detail,4,4},37,31});
+        placed.push_back({{Kind::fill,detail,0,{35,29,37,31},bounds,0,0,0xffa13758},36,30});
+        auto zoom=std::make_shared<c3x_renderer::ZoomTransition>();
+        for(auto retained:{&fast,&oracle}){retained->view(detail,map,zoom,words);retained->placed_batch(words,detail,placed,zoom);retained->commit(detail,bounds);}
+        std::uint64_t bindings=0,source_copies=0,compilations=0;
+        for(unsigned tick=0;tick<8;++tick){advance();
+            // Every native world-end constructs a fresh view/batch Node. Its
+            // changed before-image must reuse the exact immutable HUD program.
+            if(tick)for(auto retained:{&fast,&oracle}){retained->view(detail,map,zoom,words);retained->placed_batch(words,detail,placed,zoom);}
+            for(auto id:{words,detail}){
+            fast.commit(id,bounds);oracle.commit(id,bounds);
+            assert(retained_read(device.Get(),context.Get(),fast.sample(tick+1,1000).Get())==
+                   retained_read(device.Get(),context.Get(),oracle.sample(tick+1,1000).Get()));++checks;
+            auto counters=fast.replay_stats();assert(counters.spatial_commands>=sources*2&&counters.spatial_dispatches&&counters.interpreter_dispatches);
+        }
+            auto plan=fast.plan_reuse();auto counters=fast.replay_stats();
+            if(tick==1){bindings=plan.source_binds;source_copies=counters.spatial_source_copies;compilations=counters.spatial_compilations;}
+            if(tick>1)assert(plan.source_binds==bindings&&counters.spatial_source_copies==source_copies&&counters.spatial_compilations==compilations);
+        }
+        assert(bindings==sources+3&&source_copies==sources&&fast.plan_reuse().batch_builds==1&&fast.plan_reuse().batch_reuses==7);
+        fast.snapshot(50000,detail);oracle.snapshot(50000,detail);
+        for(auto retained:{&fast,&oracle})retained->commit(50000,bounds);
+        assert(retained_read(device.Get(),context.Get(),fast.sample(9,1000).Get())==retained_read(device.Get(),context.Get(),oracle.sample(9,1000).Get()));++checks;
+        // A different native target pair can share the program: every paired
+        // alias is rebound while the saved reader keeps its own before-image.
+        auto other_words=create(width,height,format),other_detail=create(width,height,Format::bgra32);auto other=placed;
+        for(auto& draw:other){auto& c=draw.command;Id* operands[]={&c.destination,&c.source,&c.background,&c.detail,&c.background_detail,&c.program};
+            for(auto id:operands)if(*id==words)*id=other_words;else if(*id==detail)*id=other_detail;}
+        auto warm=fast.replay_stats();auto reused=fast.plan_reuse();
+        for(auto retained:{&fast,&oracle}){retained->view(other_detail,map,zoom,other_words);retained->placed_batch(other_words,other_detail,other,zoom);retained->commit(other_detail,bounds);}
+        assert(retained_read(device.Get(),context.Get(),fast.sample(10,1000).Get())==retained_read(device.Get(),context.Get(),oracle.sample(10,1000).Get()));++checks;
+        auto reused_now=fast.plan_reuse();auto warm_now=fast.replay_stats();
+        assert(reused_now.batch_reuses==reused.batch_reuses+1&&reused_now.source_binds==bindings&&warm_now.spatial_compilations==warm.spatial_compilations&&warm_now.spatial_source_copies==source_copies);
+        // An equal scale with a different live placement owner is a miss.
+        auto other_zoom=std::make_shared<c3x_renderer::ZoomTransition>();
+        for(auto retained:{&fast,&oracle}){retained->view(other_detail,map,other_zoom,other_words);retained->placed_batch(other_words,other_detail,other,other_zoom);retained->commit(other_detail,bounds);}
+        assert(fast.plan_reuse().batch_builds==reused_now.batch_builds+1);
+        assert(retained_read(device.Get(),context.Get(),fast.sample(11,1000).Get())==retained_read(device.Get(),context.Get(),oracle.sample(11,1000).Get()));++checks;
+        for(auto retained:{&fast,&oracle}){retained->destroy(fallback);retained->commit(50000,bounds);}
+        assert(retained_read(device.Get(),context.Get(),fast.sample(12,1000).Get())==retained_read(device.Get(),context.Get(),oracle.sample(12,1000).Get()));++checks;
+        fast.uncommit();oracle.uncommit();for(auto id:captured_ids)for(auto retained:{&fast,&oracle})retained->destroy(id);
+        fast.destroy(50000);oracle.destroy(50000);
+        assert(!fast.bytes()&&!fast.node_count()&&!oracle.bytes()&&!oracle.node_count()); // latest weak artifact cannot pin sources
+        fast.clear();oracle.clear();assert(!fast.bytes()&&!fast.node_count()&&!oracle.bytes()&&!oracle.node_count());
+        std::printf("PASS many-source retained HUD: format=%u unique_sources=%u commands=%zu world_publications=8 bound=%llu source_copies=%llu warm_rebinds=0 pair_rebind=1 placement_owner_miss=1 external_fallback_after_retirement=1 old_reader=1 weak_expiry=1 reset=1\n",
+            unsigned(format),sources+3,placed.size(),bindings,source_copies);
+    }
+    // Sharing a HUD artifact must not retain an obsolete immutable base. The
+    // current artifact stays live while successive unsaved base nodes expire.
+    for(auto format:{Format::rgb555,Format::rgb565}){
+        constexpr unsigned width=32,height=24;Rect bounds={0,0,width,height};
+        auto live_owner=std::make_unique<Compositor>(device.Get(),context.Get());auto& live=*live_owner;
+        auto fast_owner=std::make_unique<RetainedComposition>(device.Get(),context.Get());auto& fast=*fast_owner;
+        auto oracle_owner=std::make_unique<RetainedComposition>(device.Get(),context.Get());auto& oracle=*oracle_owner;oracle.set_compiled_enabled(false);
+        constexpr Id map=60000,words=60001,detail=60002,saved_words=60003,saved_detail=60004;
+        auto sprite=live.create(2,2,Format::bgra32);std::vector<unsigned> ink={0x11234u,0,0x10421u,0x107e0u};assert(live.upload(sprite,1,ink.data(),ink.size()));
+        for(auto retained:{&fast,&oracle}){retained->create(map,width,height,Format::bgra32);retained->create(words,width,height,format);
+            retained->create(detail,width,height,Format::bgra32);retained->create(sprite,2,2,Format::bgra32);retained->source(sprite,live.texture(sprite));}
+        auto zoom=std::make_shared<c3x_renderer::ZoomTransition>();
+        std::vector<RetainedComposition::Placed> placed={{{Kind::native_sprite,words,sprite,{12,10,14,12},bounds},13,11},
+            {{Kind::native_sprite,detail,sprite,{12,10,14,12},bounds,0,0,format==Format::rgb555?1u:2u},13,11}};
+        std::vector<unsigned> pixels(width*height),saved[2];std::uint64_t warm_bytes=0;std::size_t warm_nodes=0;
+        for(unsigned publication=0;publication<10;++publication){for(unsigned i=0;i<pixels.size();++i)pixels[i]=0xff000000u|((i*3127+publication*771)&0xffffff);
+            auto id=live.create(width,height,Format::bgra32);assert(id&&live.upload(id,1,pixels.data(),pixels.size()));RetainedComposition::Texture texture=live.texture(id);live.destroy(id);
+            for(auto retained:{&fast,&oracle}){retained->source(map,texture.Get(),{},true);retained->view(detail,map,zoom,words);retained->placed_batch(words,detail,placed,zoom);}
+            for(unsigned output=0;output<2;++output){auto target=output?detail:words;fast.commit(target,bounds);oracle.commit(target,bounds);
+                auto actual=retained_read(device.Get(),context.Get(),fast.sample(publication+1,1000).Get());
+                assert(actual==retained_read(device.Get(),context.Get(),oracle.sample(publication+1,1000).Get()));++checks;if(publication==9)saved[output]=actual;}
+            if(!publication){warm_bytes=fast.bytes();warm_nodes=fast.node_count();}
+            else assert(fast.bytes()==warm_bytes&&fast.node_count()==warm_nodes);
+            assert(fast.plan_reuse().source_binds==1&&fast.replay_stats().spatial_compilations==1&&fast.replay_stats().spatial_source_copies==1);
+        }
+        assert(fast.plan_reuse().batch_builds==1&&fast.plan_reuse().batch_reuses==9);
+        for(auto retained:{&fast,&oracle}){retained->snapshot(saved_words,words);retained->snapshot(saved_detail,detail);}
+        std::fill(pixels.begin(),pixels.end(),0xffabcdefu);auto replacement=live.create(width,height,Format::bgra32);assert(replacement&&live.upload(replacement,1,pixels.data(),pixels.size()));
+        for(auto retained:{&fast,&oracle}){retained->source(map,live.texture(replacement),{},true);retained->view(detail,map,zoom,words);retained->placed_batch(words,detail,placed,zoom);}
+        live.destroy(replacement);
+        for(unsigned output=0;output<2;++output){auto target=output?detail:words;fast.commit(target,bounds);oracle.commit(target,bounds);
+            auto current=retained_read(device.Get(),context.Get(),fast.sample(11,1000).Get());assert(current!=saved[output]);
+            assert(current==retained_read(device.Get(),context.Get(),oracle.sample(11,1000).Get()));++checks;
+            target=output?saved_detail:saved_words;fast.commit(target,bounds);oracle.commit(target,bounds);
+            assert(retained_read(device.Get(),context.Get(),fast.sample(12,1000).Get())==saved[output]);
+            assert(retained_read(device.Get(),context.Get(),oracle.sample(12,1000).Get())==saved[output]);++checks;
+        }
+        assert(fast.plan_reuse().source_binds==1&&fast.replay_stats().spatial_compilations==1);
+        fast.uncommit();oracle.uncommit();for(auto id:{map,words,detail,saved_words,saved_detail,sprite})for(auto retained:{&fast,&oracle})retained->destroy(id);
+        assert(!fast.bytes()&&!fast.node_count()&&!oracle.bytes()&&!oracle.node_count());
+        std::printf("PASS shared HUD immutable bases: format=%u publications=11 steady_bytes=%llu steady_nodes=%zu base_expiry=1 independent_saved_pair=1 source_rebinds=0 metadata_rebuilds=0 weak_expiry=1\n",unsigned(format),warm_bytes,warm_nodes);
+    }
+    // The real native world-end path creates fresh retained nodes while the
+    // lexical HUD is redrawn from the same immutable sources. New snapshot
+    // wrappers must reuse exact preparation, with changing unit before-images.
+    for(int native_format:{C3X_GPU_RGB555,C3X_GPU_RGB565}){
+        constexpr unsigned width=32,height=32,sources=150;Rect bounds={0,0,width,height};
+        std::vector<unsigned> pixels(width*height,0xff2468acu),output;
+        D3D11_TEXTURE2D_DESC desc={};desc.Width=width;desc.Height=height;desc.MipLevels=desc.ArraySize=desc.SampleDesc.Count=1;
+        desc.Format=DXGI_FORMAT_B8G8R8A8_UNORM;desc.BindFlags=D3D11_BIND_SHADER_RESOURCE;
+        D3D11_SUBRESOURCE_DATA initial={pixels.data(),width*4,0};ComPtr<ID3D11Texture2D> map_texture;
+        checked(device->CreateTexture2D(&desc,&initial,&map_texture));
+        auto owner=std::make_unique<Session>(device.Get(),context.Get());auto& session=*owner;assert(session.publish(map_texture.Get(),1));
+        c3x_renderer_gpu_images_v1 request={};c3x_renderer_gpu_result_v1 result={};
+        auto execute=[&](unsigned action,Id id,std::vector<Command> const& commands={},std::vector<unsigned> const& body={}){
+            request.struct_size=sizeof(request);request.ticket=1;request.action=action;request.image=std::int64_t(id);
+            assert(session.execute(request,commands,body,result,output)==1);
+        };
+        auto create=[&](unsigned x,unsigned y,int format){request={};request.width=x;request.height=y;request.format=format;
+            execute(C3X_GPU_CREATE,0);return Id(result.image);};
+        auto map_words=create(width,height,native_format),units=create(width,height,native_format),unit_detail=create(width,height,C3X_GPU_BGRA32),
+            screen=create(width,height,native_format),detail=create(width,height,C3X_GPU_BGRA32);
+        unsigned key=native_format==C3X_GPU_RGB555?0x7c1f:0xf81f;
+        execute(C3X_GPU_SUBMIT,0,{{Kind::quantize,map_words,session.map_image(),bounds,bounds},
+            {Kind::fill,units,0,bounds,bounds,0,0,key},{Kind::fill,unit_detail,0,bounds,bounds,0,0,0xffff00ff},
+            {Kind::hud_begin,units,0,{}, {},16,16,42,0,unit_detail,0,int(key)}});
+        std::vector<Id> hud_sources;std::vector<Command> redraw;
+        for(unsigned index=0;index<sources;++index){auto source=create(2,2,C3X_GPU_BGRA32);hud_sources.push_back(source);
+            unsigned ink=(index*731+17)&(native_format==C3X_GPU_RGB555?32767:65535);
+            request.revision=1;execute(C3X_GPU_UPLOAD,source,{}, {ink|65536u,0,(ink^0x421u)|65536u,ink|65536u});
+            int x=1+int(index*7%23),y=1+int(index*11%23);Rect area={x,y,x+2,y+2};
+            std::vector<Command> draws={{Kind::native_sprite,units,source,area,bounds},
+                {Kind::native_sprite,unit_detail,source,area,bounds,0,0,native_format==C3X_GPU_RGB555?1u:2u}};
+            redraw.insert(redraw.end(),draws.begin(),draws.end());execute(C3X_GPU_SUBMIT,0,draws);
+        }
+        execute(C3X_GPU_SUBMIT,0,{{Kind::hud_end}});
+        desc.BindFlags=D3D11_BIND_RENDER_TARGET;ComPtr<ID3D11Texture2D> display,buffer;
+        checked(device->CreateTexture2D(&desc,nullptr,&display));checked(device->CreateTexture2D(&desc,nullptr,&buffer));
+        ComPtr<ID3D11RenderTargetView> target;checked(device->CreateRenderTargetView(display.Get(),nullptr,&target));
+        Counts warm={};RetainedComposition::PlanReuse plan={};
+        for(unsigned publication=0;publication<8;++publication){
+            if(publication){execute(C3X_GPU_SUBMIT,0,{{Kind::hud_begin,units,0,{}, {},16,16,42,0,unit_detail,0,int(key)}});
+                execute(C3X_GPU_SUBMIT,0,redraw);execute(C3X_GPU_SUBMIT,0,{{Kind::hud_end}});}
+            execute(C3X_GPU_SUBMIT,0,{{Kind::fill,units,0,{29,29,31,31},bounds,0,0,publication+0x1234u},
+                {Kind::fill,unit_detail,0,{29,29,31,31},bounds,0,0,0xff345670u+publication},
+                {Kind::copy,screen,map_words,bounds,bounds},
+                {Kind::copy,detail,session.map_image(),bounds,bounds},
+                {Kind::world_begin,screen,map_words,bounds,bounds,0,0,65536,0,detail,session.map_image(),int(width),int(height)},
+                {Kind::native_image,screen,units,bounds,bounds,0,0,key,0,detail,unit_detail,int(width),int(height)},
+                {Kind::world_end,screen,units,bounds,bounds,0,0,key,0,detail,unit_detail,int(width),int(height)}});
+            assert(session.commit_display(1,detail,width,height,bounds));
+            assert(session.visual_frame(publication+1,1000,target.Get(),display.Get(),buffer.Get())==1);
+            request.pixel_count=width*height;execute(C3X_GPU_READBACK,detail);
+            assert(retained_read(device.Get(),context.Get(),display.Get())==output);++checks;
+            auto current=session.visual_gpu_counts();auto current_plan=session.visual_plan_reuse();
+            if(!publication){warm=current;plan=current_plan;assert(plan.source_binds==sources&&warm.spatial_source_copies==sources&&plan.batch_builds==1);}
+            else assert(current_plan.source_binds==plan.source_binds&&current_plan.batch_builds==plan.batch_builds&&
+                current_plan.batch_reuses==publication&&current.spatial_source_copies==warm.spatial_source_copies&&current.spatial_compilations==warm.spatial_compilations);
+        }
+        for(auto id:hud_sources)execute(C3X_GPU_DESTROY,id);
+        std::printf("PASS Session world-end HUD reuse: format=%d publications=8 lexical_redraws=8 sources=%u commands=300 exact=8 source_rebinds=0 atlas_recopies=0 metadata_rebuilds=0 distinct_snapshot_versions=1 distinct_before_images=1\n",native_format,sources);
+    }
     std::printf("PASS retained composition: %u exact GPU oracles, 120 independent clock frames, aliasing, paired 555/565/full color, UI versioning, partial publication, bounded overwrite and reset\n",checks);return 0;
 }

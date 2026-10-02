@@ -1,6 +1,7 @@
 #pragma once
 #include "../c3x_renderer_api.h"
 #include "resident_content.h"
+#include "raster_dependency_revisions.h"
 #include <algorithm>
 #include <atomic>
 #include <cstdint>
@@ -32,6 +33,9 @@ public:
     struct Observation {
         c3x_renderer_tile_v1 occurrence={};
         std::uint64_t semantic=0,seen=0;
+        // Last completed native-observation compatibility, separate from the
+        // immutable world lease and native anchors.
+        std::uint64_t raster_appearance=0;
         int ground=-1, real=-1, relief=-1, surface=-1;
     };
 private:
@@ -108,9 +112,17 @@ private:
     std::shared_ptr<WorldMemory> world_memory=std::make_shared<WorldMemory>();
     mutable std::shared_ptr<WorldSnapshot const> world_inputs;
     mutable std::unordered_map<std::uint64_t,std::shared_ptr<WorldBlock>> world_changes;
+    RasterDependencyRevisions* raster_dependencies=nullptr;
+    void touch_raster(RasterDependencyRevisions::Domain domain,std::uint64_t id){
+        if(raster_dependencies)raster_dependencies->touch(domain,id);
+    }
+    std::uint64_t retained_raster_appearance(std::uint64_t id)const{
+        auto record=retained(id);return record && record->authoritative?record->revision:0;
+    }
     void reset_world_inputs(){
         if(world_input_epoch==UINT64_MAX)throw std::length_error("world input sequence exhausted");
         world_changes.clear();world_inputs.reset();++world_input_epoch;
+        if(raster_dependencies)raster_dependencies->invalidate();
     }
     bool update_world_input(std::uint64_t id,c3x_renderer_tile_v1 const& tile,Record const& record){
         Observation next{};
@@ -173,6 +185,11 @@ public:
     CapturedScene& operator=(CapturedScene const&)=delete;
     CapturedScene(CapturedScene&&)=default;
     CapturedScene& operator=(CapturedScene&&)=default;
+    void bind_raster_dependencies(RasterDependencyRevisions* next){
+        if(raster_dependencies==next)return;
+        if(raster_dependencies)raster_dependencies->invalidate();
+        raster_dependencies=next;if(next)next->invalidate();
+    }
     // Called only by the render owner between jobs. Camera cancellation cannot
     // discard these updates; selected observations remain a separate concern.
     bool publication_scope(c3x_renderer_frame_v1 const& frame,
@@ -214,12 +231,14 @@ public:
             if(serial==UINT64_MAX)return false;
             if(record.semantic_revision || (tile.tile_flags&C3X_RENDERER_TILE_VISIBILITY_KNOWN))changed=true;
             record.semantic=semantic;record.semantic_revision=++serial;
+            touch_raster(RasterDependencyRevisions::Domain::semantic,id);
         }
         if((full || partial) && (!record.revision || std::memcmp(&next,&record.appearance,sizeof(next)))){
             if(serial==UINT64_MAX)return false;
             record.appearance=next;record.revision=++serial;record.compiled={};
             for(auto& variant:record.compiled_views)variant={};changed=true;
             ++appearance_epoch;
+            touch_raster(RasterDependencyRevisions::Domain::appearance,id);
         }
         record.partial_flags|=partial|(full?C3X_RENDERER_TILE_PREFETCH:0u);
         auto flags=tile.tile_flags&C3X_RENDERER_TILE_VISIBILITY_BITS;
@@ -229,8 +248,10 @@ public:
             record.visibility_flags=flags;record.visibility_mask=tile.visibility_mask;
             record.tile_visibility=tile.tile_visibility;record.fog_status=tile.fog_status;record.visibility_revision=++serial;
             ++visibility_epoch;
+            touch_raster(RasterDependencyRevisions::Domain::visibility,id);
         }
-        if(full && !record.authoritative){record.authoritative=true;++authoritative_records;}
+        if(full && !record.authoritative){record.authoritative=true;++authoritative_records;
+            touch_raster(RasterDependencyRevisions::Domain::appearance,id);}
         return update_world_input(id,effective,record) && bytes()<=budget;
     }
     std::uint64_t key(int x,int y) const {
@@ -315,7 +336,11 @@ public:
         }
         if(observations.size()+missing>occurrence_limit){
             for(auto it=observations.begin();it!=observations.end();){
-                if(it->second.seen!=epoch)it=observations.erase(it);else ++it;
+                if(it->second.seen!=epoch){
+                    if(it->second.raster_appearance!=retained_raster_appearance(it->first))
+                        touch_raster(RasterDependencyRevisions::Domain::appearance,it->first);
+                    it=observations.erase(it);
+                }else ++it;
             }
         }
         if(observations.empty())observations.reserve(occurrence_limit);
@@ -333,6 +358,7 @@ public:
         if(observed==observations.end()){
             if(observations.size()==occurrence_limit)return false;
             observed=observations.try_emplace(id).first;
+            observed->second.raster_appearance=retained_raster_appearance(id);
         }
         auto& observation=observed->second;observation.seen=epoch;
         // Full appearance wins over a lightweight duplicate halo irrespective
@@ -347,6 +373,7 @@ public:
             if(!record.semantic_revision || record.semantic!=semantic){
                 if(serial==UINT64_MAX)return false;
                 record.semantic=semantic;record.semantic_revision=++serial;
+                touch_raster(RasterDependencyRevisions::Domain::semantic,id);
             }
         }
         auto partial=known_partial_flags(tile);
@@ -362,17 +389,33 @@ public:
                 if(serial==~std::uint64_t(0))return false;
                 record.appearance=next;record.revision=++serial;record.compiled={};
                 for(auto& variant:record.compiled_views)variant={};
+                touch_raster(RasterDependencyRevisions::Domain::appearance,id);
             }
         }
         if(!published){auto& record=found->second;
             record.partial_flags|=partial|(full?C3X_RENDERER_TILE_PREFETCH:0u);
+            auto flags=tile.tile_flags&C3X_RENDERER_TILE_VISIBILITY_BITS;
+            bool visibility_changed=!record.visibility_revision || record.visibility_flags!=flags ||
+                record.visibility_mask!=tile.visibility_mask || record.tile_visibility!=tile.tile_visibility || record.fog_status!=tile.fog_status;
+            if(visibility_changed){
+                if(serial==UINT64_MAX)return false;
+                record.visibility_revision=++serial;++visibility_epoch;
+                touch_raster(RasterDependencyRevisions::Domain::visibility,id);
+            }
             record.visibility_flags=tile.tile_flags&C3X_RENDERER_TILE_VISIBILITY_BITS;
             record.visibility_mask=tile.visibility_mask;record.tile_visibility=tile.tile_visibility;record.fog_status=tile.fog_status;
             if(!update_world_input(id,tile,record))return false;
         }
         return bytes()<=budget;
     }
-    void finish(){valid=true;}
+    void finish(){
+        valid=true;
+        if(raster_dependencies)for(auto& item:observations){
+            auto revision=world_appearance_revision(item.first);
+            if(item.second.raster_appearance!=revision)touch_raster(RasterDependencyRevisions::Domain::appearance,item.first);
+            item.second.raster_appearance=revision;
+        }
+    }
     Observation const* current(std::uint64_t id) const {
         if(!valid)return nullptr;
         auto found=observations.find(id);

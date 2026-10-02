@@ -107,6 +107,16 @@ wrapping, zoom, compositing, device recovery and timing. Unit animation follows
 Civ III's action director and native lifecycle; visuals do not drive gameplay.
 Lab owns assets, shared geometry/shading, material response and visual approval.
 
+Retained composition compiles compatible native HUD operations into bounded
+spatial programs and shares immutable operands across map publications; ordered
+interpreter boundaries preserve dependent reads. Static raster proofs reuse
+exact producer keys, including absent inputs, within a 4096-entry change window.
+Local edits invalidate their consumers; view/assets/device/light contexts,
+owner changes and window overruns require the complete proof. Receiver grids
+reuse unchanged ordered contributors, and coverage memoization holds completed
+generations weakly. See [composition performance](docs/composition_performance.md)
+for current measurement and verification limits.
+
 Runtime packs are generic C3X data. Source-specific extraction remains offline.
 Licensed source/derived art stays local and must not be redistributed with C3X.
 Keep source normals, transforms, texture coordinates and material channels

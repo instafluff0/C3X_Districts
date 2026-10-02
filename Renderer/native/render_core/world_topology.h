@@ -1,5 +1,6 @@
 #pragma once
 #include "terrain_query.h"
+#include "raster_dependency_revisions.h"
 #include <stdexcept>
 
 namespace c3x_renderer { namespace render_core {
@@ -9,10 +10,16 @@ class WorldTopology {
     World world;
     std::vector<std::uint32_t> values;
     std::vector<unsigned char> flow; // Two bits per native edge: still, forward, reverse.
+    RasterDependencyRevisions* raster_dependencies=nullptr;
 public:
     struct Change { int column,row; std::uint32_t before,after; };
     World dimensions() const { return world; }
-    void clear() { values.clear();flow.clear(); }
+    void bind_raster_dependencies(RasterDependencyRevisions* next){
+        if(raster_dependencies==next)return;
+        if(raster_dependencies)raster_dependencies->invalidate();
+        raster_dependencies=next;if(next)next->invalidate();
+    }
+    void clear() { values.clear();flow.clear();if(raster_dependencies)raster_dependencies->invalidate(); }
     bool empty() const { return values.empty(); }
     std::size_t bytes()const{return sizeof(*this)+values.capacity()*sizeof(values[0])+flow.capacity();}
     std::vector<Change> update(World next,std::uint32_t const* data,std::size_t count) {
@@ -25,7 +32,7 @@ public:
                 throw std::invalid_argument("invalid authoritative terrain category");
         bool reset=values.size()!=count || world.width!=next.width || world.height!=next.height ||
             world.wrap_x!=next.wrap_x || world.wrap_y!=next.wrap_y;
-        if(reset) values.assign(count,0xffffffffu);
+        if(reset){values.assign(count,0xffffffffu);if(raster_dependencies)raster_dependencies->invalidate();}
         world=next;
         std::vector<Change> changes;
         for(std::size_t i=0;i<count;i++) {
@@ -34,6 +41,7 @@ public:
             int x=int(i%std::size_t(world.width/2))*2+(y&1);
             changes.push_back({(x+y)/2,(x-y)/2,values[i],data[i]});
             values[i]=data[i];
+            if(raster_dependencies)raster_dependencies->touch(RasterDependencyRevisions::Domain::world,i);
         }
         bool flow_changed=reset;
         for(auto const& change:changes)flow_changed=flow_changed ||
@@ -45,7 +53,11 @@ public:
     // Use shortest connected distance to water; closed components have a stable
     // canonical sink. No height/gameplay mutation and no per-frame traversal.
     void rebuild_flow() {
+        std::vector<unsigned char> previous;if(raster_dependencies)previous=flow;
         flow.assign(values.size(),0);
+        // The bounded graph fallback also changes previously flowing cells.
+        // Compare the completed field, not just cells with raw topology edits.
+        auto build=[&]{
         struct Node {int x,y,head=-1,distance=-1;};
         struct Arc {unsigned to;int next;};
         struct Edge {unsigned a,b;std::size_t tile;unsigned slot;};
@@ -87,6 +99,9 @@ public:
             bool forward=b.distance<a.distance || (b.distance==a.distance && std::make_pair(b.x,b.y)<std::make_pair(a.x,a.y));
             flow[edge.tile]|=(forward?1u:2u)<<(edge.slot*2);
         }
+        };build();
+        if(raster_dependencies)for(std::size_t i=0;i<flow.size();++i)
+            if(flow[i]!=(i<previous.size()?previous[i]:0))raster_dependencies->touch(RasterDependencyRevisions::Domain::flow,i);
     }
     unsigned river_flow(std::size_t i) const {return i<flow.size()?flow[i]:0;}
     // Raw parity-lattice index, independent of wrapped occurrence/anchor.

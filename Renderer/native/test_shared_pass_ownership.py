@@ -132,7 +132,11 @@ int main(){
 
     def test_production_pixel_proof_separates_native_basis_and_retained_world_authority(self):
         source=(ROOT/"Renderer/native/c3x_renderer.cpp").read_text()
-        validate="    std::array<unsigned,7> raster_proof_rejections"+source.split("    std::array<unsigned,7> raster_proof_rejections",1)[1].split("    bool tile_content_valid(",1)[0]
+        start=source.index("    bool raster_content_valid(")
+        opening=source.index("{",start);depth=1;end=opening+1
+        while depth:
+            depth+=(source[end]=="{")-(source[end]=="}");end+=1
+        validate="    std::array<unsigned,7> raster_proof_rejections{};\n"+source[start:end]
         run_cpp(r'''
 #include "Renderer/native/render_core/captured_scene.h"
 #include <cassert>
@@ -188,6 +192,12 @@ int main(){
  submit();assert(state.raster_content_valid(proof));
  proof.river_dependencies=1;assert(!state.raster_content_valid(proof));
  assert(state.raster_proof_rejections[2]==2 && state.raster_proof_rejections[5]==0 && state.raster_proof_rejections[6]==1);
+ // A missing semantic dependency must cease validating as soon as the actual
+ // producer publishes it, even before selected membership changes.
+ CachedGeometryProof missing;missing.scope=state.topology_cache.scope_sequence();
+ auto absent=state.topology_cache.key(8,2);missing.dependencies={{absent,0}};
+ assert(state.raster_content_valid(missing));auto inserted=b;inserted.tile_x=8;
+ assert(state.topology_cache.publish(inserted,changed));assert(!state.raster_content_valid(missing));
 }
 ''')
 

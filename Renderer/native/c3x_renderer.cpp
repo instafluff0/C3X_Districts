@@ -824,6 +824,7 @@ public:
             static_cast<unsigned long long>(backing.bytes),static_cast<unsigned long long>(backing.live),static_cast<unsigned long long>(backing.limit));
         trace.write("memory-resident-owners",detail,true);
     }
+    c3x_renderer::render_core::RasterDependencyRevisions raster_dependency_revisions;
     SceneTopology topology_cache;
     bool retained_world=true;
     c3x_renderer::fidelity::PatchLayouts patch_layouts;
@@ -1100,6 +1101,10 @@ public:
     bool mine_assets_ready = false;
     bool farm_assets_ready = false;
 
+    RendererState(){
+        topology_cache.bind_raster_dependencies(&raster_dependency_revisions);
+        world_coast.bind_raster_dependencies(&raster_dependency_revisions);
+    }
     ~RendererState() {
         reset();
     }
@@ -1261,6 +1266,7 @@ public:
     }
 
     void reset() {
+        raster_dependency_revisions.invalidate();
         material_views={};material_views_valid=false;
         gpu_composition.reset();tactical_gpu=c3x_renderer::tactical::Gpu{};visibility_gpu.reset();visibility_pixels.clear();
         world_preparation_queue.clear();terrain_preparation.clear();world_backing.clear();
@@ -5455,7 +5461,8 @@ public:
         natural_mesh_cache.clear();natural_mesh_cache_bytes=0;
         ground_grid_cache.clear();ground_grid_cache_bytes=0;
         world_input_sources.reset();world_input_topology.reset();
-        topology_cache = {};
+        raster_dependency_revisions.invalidate();topology_cache = {};
+        topology_cache.bind_raster_dependencies(&raster_dependency_revisions);
         resident_content.clear();world_pass_index.clear();world_pass_occurrences.clear();world_pass_affine=false;
         cancel_pixel_preparation();
         pixel_blocks.clear();
@@ -5930,15 +5937,28 @@ public:
     }
 
     std::array<unsigned,7> raster_proof_rejections{};
+    template<class Inputs>bool watch_raster_dependencies(CachedGeometryProof const& proof,Inputs& inputs){
+        using Domain=c3x_renderer::render_core::RasterDependencyRevisions::Domain;
+        for(auto const& input:proof.appearance_dependencies)if(!inputs.watch(Domain::appearance,input.first))return false;
+        for(auto const& input:proof.dependencies)if(!inputs.watch(Domain::semantic,input.first))return false;
+        for(auto const& input:proof.coast_dependencies)if(!inputs.watch(Domain::coast,input.first))return false;
+        for(auto const& input:proof.world_dependencies)if(!inputs.watch(Domain::world,input.first))return false;
+        for(auto const& input:proof.river_dependencies){
+            if(!input.second||!input.second->inputs)return false;
+            for(auto const& value:input.second->inputs->values)
+                if(!inputs.watch(Domain::world,value.first)||!inputs.watch(Domain::flow,value.first))return false;
+        }
+        return inputs.watch(Domain::visibility,proof.tile);
+    }
     bool raster_content_valid(CachedGeometryProof const& proof){
         auto reject=[&](unsigned reason){++raster_proof_rejections[reason];return false;};
         if(proof.scope!=topology_cache.scope_sequence() || proof.assets!=content_revision)return reject(0);
         for(auto const& input:proof.appearance_dependencies)
             if(topology_cache.world_appearance_revision(input.first)!=input.second)return reject(1);
         for(auto const& input:proof.dependencies){
-            if(!input.second)continue; // Absence is rechecked by selected generation validity.
             auto retained=topology_cache.retained(input.first);
-            if(!retained || !retained->semantic_revision || retained->semantic!=input.second)return reject(2);
+            auto semantic=retained&&retained->semantic_revision?retained->semantic:0;
+            if(semantic!=input.second)return reject(2);
         }
         for(auto const& input:proof.coast_dependencies)if(world_coast.node_revision(input.first)!=input.second)return reject(3);
         for(auto const& input:proof.world_dependencies)if(world_coast.world().at(input.first)!=input.second)return reject(4);
@@ -13985,7 +14005,11 @@ private:
                             renderer_state.trace.write("route-frame-budget",detail,true);
                         }
                     }
+                    // A DXGI permit denial is temporary delivery backpressure.
+                    // Keep unchanged fronts on the ordinary opportunity period,
+                    // but retry a denied presentation after the bounded pause.
                     result=FAILED(hr)?C3X_RENDERER_RESULT_DEVICE_ERROR:
+                        !presentation_ready?C3X_RENDERER_RESULT_BUSY:
                         drawn==1?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_PENDING;
                     if(result==C3X_RENDERER_RESULT_OK){trial_width=trial_surface_width;trial_height=trial_surface_height;}
                     if(phase_probe && (++direct_visual_attempts<=3 || direct_visual_attempts%32==0 ||
@@ -14009,6 +14033,12 @@ private:
                             static_cast<unsigned long long>(recipes.reused),static_cast<unsigned long long>(renderer_state.gpu_composition->visual_bytes()),
                             renderer_state.gpu_composition->visual_nodes());
                         renderer_state.trace.write("retained-recipe-reuse",detail,true);
+                        auto plans=renderer_state.gpu_composition->visual_plan_reuse();auto gpu=renderer_state.gpu_composition->visual_gpu_counts();
+                        std::snprintf(detail,sizeof(detail),"topology_builds=%llu topology_reuses=%llu batch_builds=%llu batch_reuses=%llu source_binds=%llu source_reuses=%llu plan_nodes=%zu spatial_plans=%llu spatial_dispatches=%llu spatial_commands=%llu source_copies=%llu interpreter_dispatches=%llu interpreter_copies=%llu interpreter_copied_pixels=%llu",
+                            plans.builds,plans.reuses,plans.batch_builds,plans.batch_reuses,plans.source_binds,plans.source_reuses,plans.nodes,
+                            gpu.spatial_compilations,gpu.spatial_dispatches,gpu.spatial_commands,gpu.spatial_source_copies,
+                            gpu.interpreter_dispatches,gpu.interpreter_copies,gpu.interpreter_copied_pixels);
+                        renderer_state.trace.write("retained-execution-counts",detail,true);
                         if(direct_visual_attempts==128||direct_visual_attempts==1024)
                             renderer_state.gpu_composition->describe_visual([&](char const* line){renderer_state.trace.write("retained-node",line,true);});
                     }

@@ -2278,3 +2278,31 @@ certify that camera immediately. Presented zoom/pixels remain a separate
 completion endpoint. Ordinary input and the existing relative diagnostic route
 retain their behavior when this mode is absent; load/unload reset its bounded
 state. `required_user_action: []`.
+
+
+## Compiled composition and unchanged static validation
+
+This renderer-only optimization consumes the existing captured scene and native
+image/composite operations. Existing `Map_Renderer_m71_Draw_Tiles`,
+`Main_Screen_Form_move_camera`, `Main_Screen_Form_draw_city_hud`,
+`Unit_draw_map_status`, `Sprite_draw_map_unit_marker`, `MapMessage_draw`
+and JGL image hooks
+remain the capture and insertion boundaries already listed above. No injected
+source, patch-table symbol, signature, supported-build address or DLL export
+changes are required. `required_user_action: []`.
+
+The renderer shares exact compiled HUD preparation across world publications,
+retaining each publication's before-images independently. Unsupported or
+capacity-refused operations keep their ordered interpreter path. Spatial atlas
+and metadata allocations remain charged within the existing native/replay
+budgets; the 512 image-handle and eight recipe-history caps remain unchanged.
+The single immediate-context owner and completed-front publication rules stay
+in force. Unavailable presentation permits use the existing bounded BUSY retry.
+
+Static consumers register exact producer keys, including missing values, in a
+resource-free 4096-entry change window. Local changes invalidate only consumers
+whose registered dependencies intersect; scope/reset/owner changes, overruns,
+and changed view/assets/device/light contexts require complete proof validation.
+The receiver grid follows ordered actual contributors, and completed-generation
+coverage memoization is weak. Current evidence and measurement limitations are
+in [composition performance](composition_performance.md).

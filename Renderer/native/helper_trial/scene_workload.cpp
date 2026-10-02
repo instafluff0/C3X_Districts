@@ -49,6 +49,12 @@ struct Core {
     HANDLE control_stop=nullptr;std::thread control_thread;
     std::mutex control_lifetime;
     long long pressure_present_ticks=0;
+    struct CadenceCounters {
+        unsigned long long attempts=0,prefix_active=0,prefix_ready_unretired=0,pressure_holds=0;
+        unsigned long long dll_busy=0,pending=0,presented=0,errors=0,clock_failures=0;
+    } cadence_counts;
+    bool cadence_diagnostics=false;
+    std::chrono::steady_clock::time_point cadence_reported{};
     using Definitions=int(*)(char const*,char const*,char const*,char const*);
     Definitions definitions=nullptr;
     using Pack=int(*)(char const*);Pack pack=nullptr;
@@ -93,6 +99,9 @@ struct Core {
     SurfacePixels surface_pixels=nullptr;
     std::map<std::int64_t,std::int64_t> ticket_ids,image_ids;
     explicit Core(wchar_t const* dll,bool verify=false,HANDLE image_completed=nullptr):verify_pixels(verify){module=LoadLibraryW(dll);require(module!=nullptr,"renderer DLL load failed");
+        char cadence_option[8]={};
+        cadence_diagnostics=GetEnvironmentVariableA("C3X_RENDERER_TRACE",cadence_option,sizeof(cadence_option)) &&
+            cadence_option[0]>='1' && cadence_option[0]<='9';
         render=reinterpret_cast<c3x_renderer_render_fn>(GetProcAddress(module,"c3x_renderer_render"));
         seed_world=reinterpret_cast<c3x_renderer_seed_world_fn>(GetProcAddress(module,"c3x_renderer_seed_world"));
         render_view=reinterpret_cast<c3x_renderer_render_view_fn>(GetProcAddress(module,"c3x_renderer_render_view"));
@@ -165,6 +174,27 @@ struct Core {
             }
         });
     }
+    // Cumulative CPU/API accounting only. Live batch state is the opportunity's
+    // admission snapshot; trace level zero performs no diagnostic output.
+    void report_direct_cadence(c3x_remote_scene::ImageBatchService::Status const& batch){
+        if(!cadence_diagnostics)return;
+        auto now=std::chrono::steady_clock::now();
+        if(now-cadence_reported<std::chrono::seconds(1))return;
+        cadence_reported=now;LARGE_INTEGER qpc={},frequency={};
+        if(!QueryPerformanceCounter(&qpc)||!QueryPerformanceFrequency(&frequency))return;
+        auto const& c=cadence_counts;auto const& t=batch.timing;char line[1536];
+        std::snprintf(line,sizeof(line),
+            "[C3X renderer] qpc=%lld stage=helper-cadence-summary frequency=%lld attempts=%llu prefix_active=%llu prefix_ready_unretired=%llu pressure_holds=%llu dll_busy=%llu pending=%llu presented=%llu errors=%llu clock_failures=%llu batch_admitted=%llu batch_started=%llu batch_completed=%llu batch_retired=%llu batch_queue_ns=%llu batch_queue_max_ns=%llu batch_execution_ns=%llu batch_execution_max_ns=%llu batch_ready_ns=%llu batch_ready_max_ns=%llu batch_sequence=%u batch_bytes=%zu batch_operations=%zu batch_work=%zu batch_ready=%u\n",
+            qpc.QuadPart,frequency.QuadPart,c.attempts,c.prefix_active,c.prefix_ready_unretired,c.pressure_holds,
+            c.dll_busy,c.pending,c.presented,c.errors,c.clock_failures,
+            static_cast<unsigned long long>(t.admitted),static_cast<unsigned long long>(t.started),
+            static_cast<unsigned long long>(t.completed),static_cast<unsigned long long>(t.retired),
+            static_cast<unsigned long long>(t.admission_to_start.total_ns),static_cast<unsigned long long>(t.admission_to_start.max_ns),
+            static_cast<unsigned long long>(t.execution.total_ns),static_cast<unsigned long long>(t.execution.max_ns),
+            static_cast<unsigned long long>(t.ready_to_retirement.total_ns),static_cast<unsigned long long>(t.ready_to_retirement.max_ns),
+            batch.sequence,batch.bytes,batch.operations,batch.units,unsigned(batch.ready));
+        OutputDebugStringA(line);
+    }
     void start_direct_cadence(){
         if(!direct_surface_bound||!direct_display_ready||!visual_shared||!native_image){direct_cadence.disable();return;}
         char manual[4]={};
@@ -172,21 +202,34 @@ struct Core {
         // A newly committed static UI also needs its first sample. Unchanged
         // static fronts return PENDING without drawing or presenting again.
         direct_cadence.enable_retrying([this]{
+            ++cadence_counts.attempts;
             // The admitted image batch is one reliable prefix. Its operations
             // release the renderer call gate individually, but those gaps are
             // not ambient presentation opportunities. Let the receipt complete
             // before sampling the newly committed native front.
-            if(image_batches->status().bytes)return true;
+            auto batch=image_batches->status();
+            if(batch.bytes){
+                if(batch.ready)++cadence_counts.prefix_ready_unretired;else ++cadence_counts.prefix_active;
+                report_direct_cadence(batch);return true;
+            }
             LARGE_INTEGER now={},frequency={};
-            if(!QueryPerformanceCounter(&now)||!QueryPerformanceFrequency(&frequency))return false;
+            if(!QueryPerformanceCounter(&now)||!QueryPerformanceFrequency(&frequency)){
+                ++cadence_counts.clock_failures;report_direct_cadence(batch);return false;
+            }
             // Optional display cannot consume the reliable prefix's service
             // budget during a native burst. Keep periodic completed-front/UI
             // presentations while pressure drains, then restore normal cadence.
             bool pressure=telemetry&&InterlockedCompareExchange(
                 reinterpret_cast<volatile LONG*>(&telemetry->native_queue_records),0,0)>=512;
-            if(pressure&&pressure_present_ticks&&now.QuadPart-pressure_present_ticks<frequency.QuadPart/4)return true;
+            if(pressure&&pressure_present_ticks&&now.QuadPart-pressure_present_ticks<frequency.QuadPart/4){
+                ++cadence_counts.pressure_holds;report_direct_cadence(batch);return true;
+            }
             std::uint64_t handle=0;unsigned width=0,height=0;
             int code=visual_shared(now.QuadPart,frequency.QuadPart,0,&handle,&width,&height);
+            if(code==C3X_RENDERER_RESULT_OK)++cadence_counts.presented;
+            else if(code==C3X_RENDERER_RESULT_BUSY)++cadence_counts.dll_busy;
+            else if(code==C3X_RENDERER_RESULT_PENDING)++cadence_counts.pending;
+            else ++cadence_counts.errors;
             if(code==C3X_RENDERER_RESULT_OK)pressure_present_ticks=now.QuadPart;
             if(code==C3X_RENDERER_RESULT_OK&&telemetry){
                 InterlockedExchange(reinterpret_cast<volatile LONG*>(&telemetry->presented_zoom_q16),
@@ -197,6 +240,7 @@ struct Core {
                 OutputDebugStringA("[C3X renderer] Renderer64 visual surface unavailable\n");
                 direct_cadence.disable();
             }
+            report_direct_cadence(batch);
             return code==C3X_RENDERER_RESULT_BUSY;
         });
     }

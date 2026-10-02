@@ -1,5 +1,6 @@
 #pragma once
 #include "terrain_query.h"
+#include "raster_dependency_revisions.h"
 #include <cstring>
 #include <limits>
 #include <unordered_map>
@@ -15,6 +16,7 @@ class CoastIndex {
         std::vector<CoastSegment> segments;
     };
     std::unordered_map<std::uint64_t,Node> nodes;
+    RasterDependencyRevisions* raster_dependencies=nullptr;
     int origin_x,origin_y,side;
     std::uint64_t fold(std::uint64_t h,std::uint64_t value) const {
         for(int i=0;i<8;i++) { h=(h^(value&255))*1099511628211ull; value>>=8; }
@@ -29,9 +31,11 @@ class CoastIndex {
         return h ? h : 1;
     }
     void set(std::uint64_t id,int x,int y,int size,int c,int r,std::vector<CoastSegment> const& segments) {
+        auto before=revision(id);
         if(size==1) {
             auto h=segment_revision(segments);
             if(h) nodes[id]={h,segments}; else nodes.erase(id);
+            if(raster_dependencies && before!=revision(id))raster_dependencies->touch(RasterDependencyRevisions::Domain::coast,id);
             return;
         }
         int half=size/2;
@@ -40,6 +44,7 @@ class CoastIndex {
         std::uint64_t h=14695981039346656037ull; bool any=false;
         for(int i=0;i<4;i++) { auto value=revision(id*4+i); any=any || value!=0; h=fold(h,value); }
         if(any) nodes[id].revision=h ? h : 1; else nodes.erase(id);
+        if(raster_dependencies && before!=revision(id))raster_dependencies->touch(RasterDependencyRevisions::Domain::coast,id);
     }
     double box_distance_squared(Point p,int x,int y,int size) const {
         double dx=std::max({double(x)-p.x,0.,p.x-(x+size)});
@@ -69,7 +74,12 @@ public:
         if(size<=0 || (size&(size-1)) || size>65536)
             throw std::invalid_argument("coast index requires a bounded power-of-two domain");
     }
-    void clear() { nodes.clear(); }
+    void bind_raster_dependencies(RasterDependencyRevisions* next){
+        if(raster_dependencies==next)return;
+        if(raster_dependencies)raster_dependencies->invalidate();
+        raster_dependencies=next;if(next)next->invalidate();
+    }
+    void clear() { nodes.clear();if(raster_dependencies)raster_dependencies->invalidate(); }
     std::uint64_t revision(std::uint64_t id) const {
         auto found=nodes.find(id); return found==nodes.end() ? 0 : found->second.revision;
     }

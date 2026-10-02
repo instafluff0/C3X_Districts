@@ -58,8 +58,8 @@ struct Sampled {
  int kind=0;
  static Sampled frozen(){return {2};}
  static Sampled held(){return {3};}
- static Sampled bgra(void* texture,Rect rect,float sharpness){
-  assert(texture&&rect.left==4&&rect.top==9&&rect.right==24&&rect.bottom==39&&sharpness==.75f);
+ static Sampled bgra(void* texture,Rect rect,float sharpness,unsigned long long generation){
+  assert(texture&&rect.left==4&&rect.top==9&&rect.right==24&&rect.bottom==39&&sharpness==.75f&&generation==31);
   ++samples;return {1};
  }
 };
@@ -68,6 +68,7 @@ struct Selected {bool current=true;bool valid(){return current;}};
 struct Texture {void* Get(){return this;}};
 struct Prepared {
  bool ready=true;float zoom=1.f;int device_generation=5,serial=7;Texture front;
+ unsigned long long source_generation=31;long long pending_since=99;
 };
 struct Harness {
  bool camera_active=false;
@@ -96,6 +97,8 @@ int main(){
  assert(draw(7,1000,1.f).kind==2&&samples==2);
  owner.renderer_state.gpu_serial=7;owner.prepared->ready=false;
  assert(draw(8,1000,1.f).kind==3&&samples==2);
+ owner.prepared->pending_since=0;assert(draw(8,1000,1.f).kind==0&&samples==2);
+ owner.prepared->pending_since=99;
  owner.prepared->ready=true;assert(draw(9,1000,.5f).kind==3&&samples==2);
  assert(draw(10,1000,1.f).kind==1&&samples==3);
  owner.prepared.reset();assert(draw(11,1000,1.f).kind==2&&samples==3);

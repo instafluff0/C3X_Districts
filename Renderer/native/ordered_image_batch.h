@@ -66,6 +66,19 @@ struct ImageBatch {
 // for this batch's explicit execution receipt.
 namespace c3x_remote_scene {
 class ImageBatchService {
+public:
+    struct Span {
+        std::uint64_t total_ns=0,max_ns=0;
+        void add(std::chrono::steady_clock::duration elapsed){
+            auto raw=std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count();
+            if(raw>0){auto ns=std::uint64_t(raw);total_ns+=ns;if(ns>max_ns)max_ns=ns;}
+        }
+    };
+    struct Timing {
+        std::uint64_t admitted=0,started=0,completed=0,retired=0;
+        Span admission_to_start,execution,ready_to_retirement;
+    };
+private:
     using Clock=std::chrono::steady_clock;
     std::mutex mutex;std::condition_variable wake;
     std::vector<ImageBatch::Operation> pending;std::vector<ImageBatch::Reply> result;
@@ -73,22 +86,26 @@ class ImageBatchService {
     std::function<void()> notify;
     bool stopping=false,occupied=false,ready=false;
     unsigned sequence=0;std::size_t bytes=0,units=0,operations=0;
-    std::string error;double service_ms=0;std::thread worker;
+    std::string error;double service_ms=0;
+    Timing timing;Clock::time_point admitted_at{},ready_at{};
+    std::thread worker;
     void run(){std::unique_lock<std::mutex> lock(mutex);
         for(;;){wake.wait(lock,[&]{return stopping||(!ready&&occupied);});
             if(stopping&&(!occupied||ready))return;
-            auto work=std::move(pending);lock.unlock();auto begin=Clock::now();
+            auto work=std::move(pending);auto begin=Clock::now();
+            ++timing.started;timing.admission_to_start.add(begin-admitted_at);lock.unlock();
             std::vector<ImageBatch::Reply> replies;std::string failure;
             try{replies=execute(work);}catch(std::exception const& e){failure=e.what();}
             catch(...){failure="unknown image batch execution failure";}
-            auto elapsed=std::chrono::duration<double,std::milli>(Clock::now()-begin).count();
+            auto ended=Clock::now();auto elapsed=std::chrono::duration<double,std::milli>(ended-begin).count();
             work.clear();lock.lock();result=std::move(replies);error=std::move(failure);service_ms=elapsed;ready=true;
+            ++timing.completed;timing.execution.add(ended-begin);ready_at=Clock::now();
             lock.unlock();if(notify)notify();lock.lock();
             if(stopping)return;
         }
     }
 public:
-    struct Status {unsigned sequence;std::size_t bytes,units,operations;bool ready;double service_ms;};
+    struct Status {unsigned sequence;std::size_t bytes,units,operations;bool ready;double service_ms;Timing timing;};
     template<class Execute>explicit ImageBatchService(Execute value,std::function<void()> complete={}):
         execute(std::move(value)),notify(std::move(complete)),worker([this]{run();}){}
     ~ImageBatchService(){{std::lock_guard<std::mutex> lock(mutex);stopping=true;}wake.notify_all();worker.join();}
@@ -97,6 +114,7 @@ public:
         c3x_inputs::require(size<=ImageBatch::payload_limit&&work.size()<=ImageBatch::operation_limit&&semantic<=ImageBatch::work_limit,"image admission capacity");
         std::lock_guard<std::mutex> lock(mutex);if(stopping||occupied)return false;
         sequence=id;bytes=size;units=semantic;operations=work.size();pending=std::move(work);result.clear();error.clear();
+        admitted_at=Clock::now();++timing.admitted;
         occupied=true;ready=false;wake.notify_one();return true;
     }
     bool poll(unsigned id,std::vector<ImageBatch::Reply>& replies,std::string& failure,double& elapsed){
@@ -104,8 +122,9 @@ public:
         c3x_inputs::require(occupied&&sequence==id,"image execution receipt outside admission");
         if(!ready)return false;
         replies=std::move(result);failure=std::move(error);elapsed=service_ms;
+        ++timing.retired;timing.ready_to_retirement.add(Clock::now()-ready_at);
         occupied=false;ready=false;bytes=units=operations=0;return true;
     }
-    Status status(){std::lock_guard<std::mutex> lock(mutex);return {sequence,bytes,units,operations,ready,service_ms};}
+    Status status(){std::lock_guard<std::mutex> lock(mutex);return {sequence,bytes,units,operations,ready,service_ms,timing};}
 };
 }

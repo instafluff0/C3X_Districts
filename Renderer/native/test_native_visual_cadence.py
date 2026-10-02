@@ -1,6 +1,7 @@
 """Execute the production timer/advancement split without launching Civ III."""
 import unittest
 import csv
+import os
 from pathlib import Path
 from Renderer.native.native_cpp_test import run_cpp
 from Renderer.tools.audit_native_visual_cadence import audit
@@ -179,6 +180,89 @@ int main(){
  unsigned stopped=s.draws;assert(s.visual_frame(true)==C3X_RENDERER_RESULT_PENDING&&s.draws==stopped);
  State failed;failed.draw_result=C3X_RENDERER_RESULT_ERROR;
  assert(failed.visual_frame(true)==C3X_RENDERER_RESULT_ERROR&&!failed.gpu_presenter.calls&&!failed.visual_delivery);
+}
+''')
+
+    @unittest.skipUnless(os.name == 'posix', 'host-only presentation stubs')
+    def test_actual_direct_surface_readiness_controls_retry_and_grant_consumption(self):
+        source = (ROOT/'Renderer/native/c3x_renderer.cpp').read_text()
+        branch = source.split('}else if(command==Command::trial_visual_shared){', 1)[1]
+        block = 'bool presentation_ready=' + branch.split('bool presentation_ready=', 1)[1].split(
+            'if(result==C3X_RENDERER_RESULT_OK){trial_width=', 1)[0]
+        run_cpp(r'''
+#include <cassert>
+#include <atomic>
+#include <cstdio>
+#include <memory>
+#include <utility>
+#include "Renderer/native/c3x_renderer_api.h"
+using HRESULT=int;constexpr HRESULT S_OK=0;bool FAILED(HRESULT code){return code<0;}
+struct LARGE_INTEGER{long long QuadPart=0;};
+void QueryPerformanceCounter(LARGE_INTEGER* value){++value->QuadPart;}
+template<std::size_t N,class... Args>int sprintf_s(char (&buffer)[N],char const* format,Args... args){
+ return std::snprintf(buffer,N,format,args...);
+}
+struct Session{
+ int draw=1;unsigned samples=0,published=0;
+ int visual_frame(long long ticks,long long frequency,void*,void*,void*){
+  assert(ticks==17&&frequency==1000);++samples;return draw;
+ }
+ void did_present(){++published;}
+ unsigned presented_zoom(){return 81920;}
+ std::pair<unsigned,unsigned> visual_publication(){return {7,8};}
+ struct Work{unsigned operations=3,assemblies=1,copies=2,copied_pixels=64,assembly_pixels=32;};
+ Work visual_work(){return {};}
+};
+struct Swap{HRESULT result=S_OK;unsigned presents=0;
+ HRESULT Present(unsigned sync,unsigned flags){assert(!sync&&!flags);++presents;return result;}
+};
+struct Surface{void* Get(){return nullptr;}};
+struct Owner{
+ struct Permit{bool admitted=false;unsigned polls=0,consumed=0;
+  bool ready(){++polls;return admitted;}void presented(){assert(admitted);admitted=false;++consumed;}
+ }trial_surface_permit;
+ struct Trace{LARGE_INTEGER frequency{1000};unsigned rows=0;
+  double milliseconds(long long ticks){return double(ticks);}
+  void write(char const*,char const*,bool){++rows;}
+ };
+ struct{std::unique_ptr<Session> gpu_composition=std::make_unique<Session>();Trace trace;}renderer_state;
+ Surface trial_surface_view,trial_surface_back,trial_surface_buffer;
+ std::unique_ptr<Swap> trial_surface_swap=std::make_unique<Swap>();
+ std::atomic<unsigned> presented_zoom_q16{65536};unsigned route_present_index=0;
+ long long visual_ticks=17,visual_frequency=1000;
+ int offer(){
+  bool phase_probe=true,route_witness=true;
+  LARGE_INTEGER started{},prepared{},sampled{},finished{};
+  int result=C3X_RENDERER_RESULT_ERROR;
+''' + block + r'''
+  return result;
+ }
+};
+int main(){
+ Owner denied;assert(denied.offer()==C3X_RENDERER_RESULT_BUSY);
+ assert(denied.trial_surface_permit.polls==1&&!denied.renderer_state.gpu_composition->samples);
+ assert(!denied.trial_surface_swap->presents&&!denied.trial_surface_permit.consumed);
+ assert(denied.presented_zoom_q16==65536&&!denied.route_present_index&&!denied.renderer_state.trace.rows);
+ Owner noop;noop.trial_surface_permit.admitted=true;noop.renderer_state.gpu_composition->draw=0;
+ for(unsigned i=0;i<3;++i)assert(noop.offer()==C3X_RENDERER_RESULT_PENDING);
+ assert(noop.trial_surface_permit.admitted&&!noop.trial_surface_permit.consumed);
+ assert(noop.renderer_state.gpu_composition->samples==3&&!noop.renderer_state.gpu_composition->published);
+ assert(!noop.trial_surface_swap->presents&&noop.presented_zoom_q16==65536);
+ Owner drawn;drawn.trial_surface_permit.admitted=true;
+ assert(drawn.offer()==C3X_RENDERER_RESULT_OK);
+ assert(drawn.renderer_state.gpu_composition->samples==1&&drawn.renderer_state.gpu_composition->published==1);
+ assert(drawn.trial_surface_swap->presents==1&&drawn.trial_surface_permit.consumed==1&&!drawn.trial_surface_permit.admitted);
+ assert(drawn.presented_zoom_q16==81920&&drawn.route_present_index==1&&drawn.renderer_state.trace.rows==2);
+ assert(drawn.offer()==C3X_RENDERER_RESULT_BUSY&&drawn.renderer_state.gpu_composition->samples==1);
+ Owner failed;failed.trial_surface_permit.admitted=true;failed.trial_surface_swap->result=-1;
+ assert(failed.offer()==C3X_RENDERER_RESULT_DEVICE_ERROR);
+ assert(failed.renderer_state.gpu_composition->samples==1&&failed.trial_surface_swap->presents==1);
+ assert(failed.trial_surface_permit.admitted&&!failed.trial_surface_permit.consumed);
+ assert(!failed.renderer_state.gpu_composition->published&&failed.presented_zoom_q16==65536&&!failed.route_present_index);
+ // Existing positive DXGI statuses are not successful publication evidence.
+ Owner status;status.trial_surface_permit.admitted=true;status.trial_surface_swap->result=1;
+ assert(status.offer()==C3X_RENDERER_RESULT_OK&&status.trial_surface_permit.admitted);
+ assert(!status.renderer_state.gpu_composition->published&&!status.route_present_index&&status.presented_zoom_q16==65536);
 }
 ''')
 

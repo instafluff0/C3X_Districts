@@ -8,10 +8,14 @@ class OrderedColdServiceTests(unittest.TestCase):
     def test_helper_cadence_waits_for_the_whole_native_batch_receipt(self):
         source=(ROOT/'Renderer/native/helper_trial/scene_workload.cpp').read_text()
         body='    void start_direct_cadence(){'+source.split('    void start_direct_cadence(){',1)[1].split('    void stop_direct_cadence()',1)[0]
+        counters='    struct CadenceCounters {'+source.split('    struct CadenceCounters {',1)[1].split('    using Definitions=',1)[0]
+        report='    void report_direct_cadence('+source.split('    void report_direct_cadence(',1)[1].split('    void start_direct_cadence()',1)[0]
         run_cpp(r'''
+#include "Renderer/native/ordered_image_batch.h"
 #include <cassert>
 #include <functional>
 #include <cstdint>
+#include <cstdio>
 using LONG=long;struct LARGE_INTEGER{long long QuadPart=0;};
 long long ticks=123;bool QueryPerformanceCounter(LARGE_INTEGER* value){value->QuadPart=ticks;return true;}
 bool QueryPerformanceFrequency(LARGE_INTEGER* value){value->QuadPart=1000;return true;}
@@ -19,19 +23,19 @@ unsigned GetEnvironmentVariableA(char const*,char*,unsigned){return 0;}
 void InterlockedExchange(volatile LONG* p,LONG v){*p=v;}void InterlockedIncrement(volatile LONG* p){++*p;}
 LONG InterlockedCompareExchange(volatile LONG* p,LONG v,LONG match){auto old=*p;if(old==match)*p=v;return old;}
 void OutputDebugStringA(char const*){}
-constexpr int C3X_RENDERER_RESULT_OK=1,C3X_RENDERER_RESULT_ERROR=-1,C3X_RENDERER_RESULT_DEVICE_ERROR=5,C3X_RENDERER_RESULT_BUSY=6,C3X_NATIVE_ZOOM_PRESENTED=1;
 struct Owner{
  bool direct_surface_bound=true,direct_display_ready=true;
  long long pressure_present_ticks=0;
  struct{std::function<bool()> offer;bool stopped=false;void disable(){stopped=true;}
   template<class F>void enable_retrying(F f){offer=f;}}direct_cadence;
- struct Batch{std::size_t bytes=0;Batch status(){return *this;}}batch;
+ struct Batch{std::size_t bytes=0;bool ready=false;
+  c3x_remote_scene::ImageBatchService::Status status(){return {1,bytes,0,0,ready,0,{}};}}batch;
  Batch* image_batches=&batch;
  struct{LONG presented_zoom_q16=0,visual_frames=0,native_queue_records=0;}values;
  decltype(values)* telemetry=&values;
  std::function<int(long long,long long,unsigned,std::uint64_t*,unsigned*,unsigned*)> visual_shared;
  std::function<int(int,void*,void*,void*,void*,unsigned)> native_image;
-'''+body+r'''
+'''+counters+report+body+r'''
 };
 int main(){Owner owner;unsigned samples=0;
  owner.visual_shared=[&](auto...){++samples;return C3X_RENDERER_RESULT_OK;};

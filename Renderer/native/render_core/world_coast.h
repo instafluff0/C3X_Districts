@@ -85,6 +85,9 @@ public:
         return result;
     }
     struct Update { std::size_t topology_changes=0,cells_built=0,bytes=0; };
+    void bind_raster_dependencies(RasterDependencyRevisions* next){
+        topology.bind_raster_dependencies(next);coast.bind_raster_dependencies(next);
+    }
     void clear() { topology.clear(); coast.clear(); source_revision=-1; ready=false; }
     WorldTopology const& world() const { return topology; }
     std::int64_t revision()const{return source_revision;}

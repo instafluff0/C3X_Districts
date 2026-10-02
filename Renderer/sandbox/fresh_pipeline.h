@@ -502,6 +502,12 @@ struct SandboxSceneShadow {
     std::uint64_t signature = 0;
     std::uint64_t caster_signature = ~std::uint64_t(0), receiver_revision = 0;
     std::array<float,12> light_basis{};
+    Grid receiver_grid;
+    std::array<float,4> receiver_wrap{};
+    std::array<std::uint64_t,9> receiver_key{};
+    std::array<float,12> receiver_light{};
+    bool receiver_grid_valid=false;
+    std::uint64_t receiver_visits=0,receiver_builds=0,receiver_reuses=0;
     unsigned builds = 0, draws = 0;
     template<class T> static void drop(T*& pointer) {if (pointer) pointer->Release(); pointer=nullptr;}
     ~SandboxSceneShadow() {
@@ -945,10 +951,12 @@ struct SandboxSceneShadow {
     }
     bool atlas_dependencies(bool append){
 #ifdef C3X_RENDERER64_FRESH
+        auto exact=[&](){
         if(!append && !atlas_inputs.valid([&](auto const& proof){return renderer.raster_content_valid(proof);},
             [&](auto tile){auto record=renderer.topology_cache.retained(tile);return record?record->visibility_revision:0;}))return false;
         bool valid=true;
         for(auto const& caster:caster_inputs){
+            ++atlas_inputs.validation_counts.membership;
             auto p=Shadow::project(caster.bounds,caster.offset,renderer.shadow_basis);
             if(p[2]<box[0] || p[3]<box[1] || p[0]>box[0]+box[2] || p[1]>box[1]+box[3])continue;
             auto key=caster_key(caster);
@@ -957,10 +965,25 @@ struct SandboxSceneShadow {
             auto tile=mesh?mesh->proof->tile:0;
             auto observed=renderer.topology_cache.retained(tile);
             valid=atlas_inputs.add(key,mesh?mesh->proof:nullptr,tile,observed?observed->visibility_revision:0) && valid;
-        }return valid;
+            if(mesh&&mesh->proof)valid=renderer.watch_raster_dependencies(*mesh->proof,atlas_inputs)&&valid;
+        }
+        if(append)atlas_inputs.finish_dependencies();return valid;
+        };
+        if(append)return exact();
+        AtlasInputs::ValidationKey key={caster_signature,renderer.topology_cache.scope_sequence(),renderer.content_revision,
+            renderer.device_generation,unsigned(renderer.geometry_canonical_world)};
+        auto bits=[](float value){std::uint32_t result;std::memcpy(&result,&value,sizeof(result));return std::uint64_t(result);};
+        for(unsigned i=0;i<4;++i)key[5+i]=bits(box[i]);
+        for(unsigned i=0;i<renderer.shadow_basis.size();++i)key[9+i]=bits(renderer.shadow_basis[i]);
+        return atlas_inputs.validate(renderer.raster_dependency_revisions,key,exact);
 #else
         return true;
 #endif
+    }
+    std::array<std::uint64_t,9> receiver_identity(std::uint64_t revision,std::uint64_t scene)const{
+        auto dims=renderer.world_coast.world().dimensions();
+        return {revision,scene,renderer.content_revision,renderer.device_generation,unsigned(renderer.geometry_canonical_world),
+            std::uint64_t(dims.width),std::uint64_t(dims.height),unsigned(dims.wrap_x),unsigned(dims.wrap_y)};
     }
     template<class BodyInputs,class RetireCompletedPlans> bool render(GeometryDrawView::Records const& receivers,std::uint64_t scene,std::uint64_t revision,std::uint64_t membership,BodyInputs const& inputs,RetireCompletedPlans const& retire_completed_plans) {
         SandboxPassWorkload::Scope pass(*work,SandboxPassWorkload::shadow);
@@ -970,11 +993,16 @@ struct SandboxSceneShadow {
         bool any=false;
         float zero[3]={};
         std::array<float,4> wrap_query{};
+        Grid query_grid;
+        auto next_receiver_key=receiver_identity(revision,scene);
+        bool receiver_reused=receiver_grid_valid&&receiver_key==next_receiver_key&&receiver_light==renderer.shadow_basis;
+        if(receiver_reused){query_grid=receiver_grid;wrap_query=receiver_wrap;++receiver_reuses;}
+        else{
         if(renderer.geometry_canonical_world){
             auto dims=renderer.world_coast.world().dimensions();
             float low[2]={1e9f,1e9f},high[2]={-1e9f,-1e9f};
             float occurrence_low[2]={1e9f,1e9f},occurrence_high[2]={-1e9f,-1e9f};
-            for(unsigned layer=0;layer<geometry_layer_count;++layer)for(auto const& record:receivers[layer]){if(layer==geometry_shadow)continue;auto const& b=record.content().world_bounds;
+            for(unsigned layer=0;layer<geometry_layer_count;++layer)for(auto const& record:receivers[layer]){if(layer==geometry_shadow)continue;++receiver_visits;auto const& b=record.content().world_bounds;
                 low[0]=std::min(low[0],b.low[0]+b.low[1]);high[0]=std::max(high[0],b.high[0]+b.high[1]);
                 low[1]=std::min(low[1],b.low[0]-b.high[1]);high[1]=std::max(high[1],b.high[0]-b.low[1]);
                 occurrence_low[0]=std::min(occurrence_low[0],float(record.tile_x));occurrence_high[0]=std::max(occurrence_high[0],float(record.tile_x));
@@ -990,6 +1018,7 @@ struct SandboxSceneShadow {
         for (unsigned layer=0;layer<geometry_layer_count;++layer)
             for (auto const& record:receivers[layer]) {
                 if (layer==geometry_shadow) continue;
+                ++receiver_visits;
                 auto const& b=record.content().world_bounds;float offset[3]={};
                 float u=(b.low[0]+b.high[0])*.5f,v=(b.low[1]+b.high[1])*.5f;
                 if(wrap_query[2]){auto shift=std::floor((u+v-wrap_query[0]+wrap_query[2]*.5f)/wrap_query[2])*wrap_query[2]*.5f;offset[0]-=shift;offset[1]-=shift;}
@@ -1000,10 +1029,12 @@ struct SandboxSceneShadow {
                 any=true;
             }
         if (!any) return false;
-        Grid query_grid;
         if(!query_grid.configure(needed,renderer.shadow_basis))return false;
+        receiver_grid=query_grid;receiver_wrap=wrap_query;receiver_key=next_receiver_key;receiver_light=renderer.shadow_basis;
+        receiver_grid_valid=true;++receiver_builds;
+        }
         receiver_revision=revision;
-        bool body_covered=renderer.shared_instances.valid(shared_front) && body_placements_covered(*shared_front,inputs);
+        bool body_covered=renderer.shared_instances.valid(shared_front) && inputs.covers(shared_front);
         if (renderer.shared_instances.valid(shared_front) && prepared_signature==membership &&
             signature==scene && wrap_basis==wrap_query &&
             light_basis==renderer.shadow_basis &&
@@ -1216,6 +1247,7 @@ struct SandboxFreshPipeline {
     std::array<RasterInputs,2> raster_inputs;
     float resident_basis_x=0,resident_basis_y=0;
     std::vector<RasterInputs::Key> reflection_inputs;
+    std::uint64_t static_receiver_revision=0;
     std::uint64_t reflection_revision=0;
     std::uint64_t resident_signature=0;
     unsigned resident_builds=0;
@@ -1254,6 +1286,22 @@ struct SandboxFreshPipeline {
     bool body_requirements_valid=false;
     unsigned body_requirement_builds=0,body_requirement_reuses=0,body_requirement_visits=0;
     double body_requirement_ms=0;
+    struct StaticValidationCounts {
+        RasterInputs::ValidationCounts raster;
+        SandboxSceneShadow::AtlasInputs::ValidationCounts atlas;
+        std::uint64_t receiver_visits=0,receiver_builds=0,receiver_reuses=0,placement_probes=0,placement_reuses=0;
+    };
+    StaticValidationCounts static_validation_counts()const{
+        StaticValidationCounts result;
+        for(auto const& inputs:raster_inputs){auto const& counts=inputs.validation_counts;
+            result.raster.full+=counts.full;result.raster.content+=counts.content;result.raster.visibility+=counts.visibility;
+            result.raster.membership+=counts.membership;result.raster.regions+=counts.regions;result.raster.reused+=counts.reused;result.raster.changes+=counts.changes;
+        }
+        result.atlas=shadow.atlas_inputs.validation_counts;result.receiver_visits=shadow.receiver_visits;
+        result.receiver_builds=shadow.receiver_builds;result.receiver_reuses=shadow.receiver_reuses;
+        result.placement_probes=body_requirements.coverage_total_probes;result.placement_reuses=body_requirements.coverage_total_reuses;
+        return result;
+    }
     enum PrepareSpan {prepare_setup_resources,prepare_capture,prepare_raster_proof,
         prepare_body_requirements,prepare_city_shadow,prepare_unit_selection,prepare_unit_pose,prepare_span_count};
     std::array<double,prepare_span_count> prepare_subspans{};
@@ -1349,7 +1397,8 @@ struct SandboxFreshPipeline {
         if(visibility_valid && scene_key==visibility_scene_key &&
                 view_key==visibility_view_key){if(work.enabled)++work.counts[SandboxPassWorkload::selection][SandboxPassWorkload::screen].reuses;return visible>0;}
         if(work.enabled)++work.counts[SandboxPassWorkload::selection][SandboxPassWorkload::screen].rebuilds;
-        static_visible={};water_visible={};reflection_visible={};all_visible={};
+        static_visible={};water_visible={};reflection_visible={};
+        auto prior_receivers=std::move(all_visible);all_visible={};
         visible=culled=reflection_count=0;
         D3D11_RECT rect=source_bounds(settings,{0,0,width,height},false);
         contributors(settings,rect,false,[&](unsigned layer,auto const& record) {
@@ -1380,6 +1429,13 @@ struct SandboxFreshPipeline {
         for(unsigned layer=0;layer<geometry_layer_count;++layer)
             for(auto const& record:reflection_visible[layer])next_reflection.push_back(contributor_key(layer,record));
         if(next_reflection!=reflection_inputs){reflection_inputs=std::move(next_reflection);++reflection_revision;}
+        bool same_receivers=true;
+        for(unsigned layer=0;same_receivers&&layer<geometry_layer_count;++layer)if(layer!=geometry_shadow){
+            if(prior_receivers[layer].size()!=all_visible[layer].size()){same_receivers=false;break;}
+            for(std::size_t i=0;i<all_visible[layer].size();++i)
+                if(contributor_key(layer,prior_receivers[layer][i])!=contributor_key(layer,all_visible[layer][i])){same_receivers=false;break;}
+        }
+        if(!same_receivers)++static_receiver_revision;
         visibility_scene_key=scene_key;visibility_view_key=view_key;
         visibility_valid=true;++visibility_revision;
         return visible>0;
@@ -1411,6 +1467,15 @@ struct SandboxFreshPipeline {
         for(unsigned layer=0;layer<geometry_layer_count;++layer)
             each_resident(layer,[&](auto const& record){visit(layer,record);});
     }
+    RasterInputs::ValidationKey raster_validation_key(ViewportShaderSettings const& settings,D3D11_RECT rect)const{
+        auto bits=[](float value){std::uint32_t result;std::memcpy(&result,&value,sizeof(result));return std::uint64_t(result);};
+        return {view_revision(),renderer.topology_cache.scope_sequence(),renderer.content_revision,renderer.device_generation,
+            unsigned(renderer.water_scene_active),std::uint64_t(wrap_pixels),std::uint64_t(rect.left),std::uint64_t(rect.top),
+            std::uint64_t(rect.right),std::uint64_t(rect.bottom),bits(projection_zoom),bits(settings.translation[0]),bits(settings.translation[1]),
+            bits(settings.depth_translation),bits(settings.inverse_size[0]),bits(settings.inverse_size[1]),bits(settings.natural_projection[0]),
+            bits(settings.natural_projection[1]),bits(settings.natural_projection[2]),bits(settings.natural_projection[3]),
+            std::uint64_t(renderer.scene_depth_origin),bits(resident_basis_x),bits(resident_basis_y),unsigned(renderer.geometry_canonical_world)};
+    }
     RasterInputs::Key contributor_key(unsigned layer,GeometryDrawRecord const& record)const{
         auto bits=[](float value){std::uint32_t result;std::memcpy(&result,&value,sizeof(result));return std::uint64_t(result);};
         auto const& b=record.bounds;
@@ -1425,10 +1490,12 @@ struct SandboxFreshPipeline {
     }
     bool raster_dependencies(RasterInputs& inputs,ViewportShaderSettings const& settings,D3D11_RECT rect,bool append)const{
 #ifdef C3X_RENDERER64_FRESH
+        auto exact=[&](){
         if(!append && !inputs.valid([&](auto const& proof){return renderer.raster_content_valid(proof);},
                 [&](auto tile){auto record=renderer.topology_cache.retained(tile);return record?record->visibility_revision:0;}))return false;
         bool valid=true;auto clip=source_bounds(settings,rect,false);
         contributors(settings,clip,false,[&](unsigned layer,auto const& record){
+            ++inputs.validation_counts.membership;
             if(renderer.water_scene_active && record.water_dependent)return;
             if(!renderer.chunk_intersects_region(GeometryDrawReference(record),settings,clip,false))return;
             auto key=contributor_key(layer,record);
@@ -1437,7 +1504,12 @@ struct SandboxFreshPipeline {
             auto tile=renderer.topology_cache.key(record.tile_x,record.tile_y);
             auto observed=renderer.topology_cache.retained(tile);
             valid=inputs.add(key,mesh?mesh->proof:nullptr,tile,observed?observed->visibility_revision:0) && valid;
-        });return valid;
+            if(mesh&&mesh->proof)valid=renderer.watch_raster_dependencies(*mesh->proof,inputs)&&valid;
+            valid=inputs.watch(RasterInputs::Revisions::Domain::visibility,tile)&&valid;
+        });
+        if(append)inputs.finish_dependencies();return valid;
+        };
+        return append?exact():inputs.validate(renderer.raster_dependency_revisions,raster_validation_key(settings,rect),exact);
 #else
         return true;
 #endif
@@ -2646,7 +2718,7 @@ struct SandboxFreshPipeline {
             instance_plans={};instance_plans.begin();instance_plan_bytes=0;
 #endif
         };
-        if(!update_city_lights() || !shadow.render(all_visible,raster_scope(),visibility_revision,view_revision(),body_inputs,retire_completed_instance_plans))return fail("lights_or_shadow");
+        if(!update_city_lights() || !shadow.render(all_visible,raster_scope(),static_receiver_revision,view_revision(),body_inputs,retire_completed_instance_plans))return fail("lights_or_shadow");
 #ifdef C3X_RENDERER64_FRESH
         if(shared_front!=shadow.shared_front){instance_plans={};instance_plans.begin();instance_plan_bytes=0;shared_front=shadow.shared_front;}
 #else

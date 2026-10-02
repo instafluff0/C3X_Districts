@@ -252,6 +252,8 @@ public:
     std::size_t visual_sources()const{return layers.sampled_sources();}
     RetainedComposition::Work visual_work()const{return layers.last_work();}
     RetainedComposition::RecipeReuse visual_recipe_reuse()const{return layers.recipe_reuse();}
+    RetainedComposition::PlanReuse visual_plan_reuse()const{return layers.plan_reuse();}
+    Counts visual_gpu_counts()const{return layers.replay_stats();}
     std::pair<std::uint64_t,std::uint64_t> visual_publication()const{return layers.front_publication();}
     template<class Report> void describe_visual(Report report)const{layers.describe(report);}
     // Correct static pixels alone do not certify ambient delivery. A CPU
