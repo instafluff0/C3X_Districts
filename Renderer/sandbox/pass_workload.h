@@ -3,23 +3,27 @@
 struct SandboxPassWorkload : SandboxPassCounts {
     bool enabled=false;
     unsigned pass=main_scene;
+    struct CallCounts {std::uint64_t draws=0,copies=0,uploads=0;};
+    CallCounts calls;
     void begin() {
         char option[8]={};
         enabled=GetEnvironmentVariableA("C3X_SANDBOX_PASS_COUNTS",option,sizeof(option)) && option[0]=='1';
         if(enabled)counts={};
-        pass=main_scene;
+        pass=main_scene;calls={};
     }
     Counts& row(unsigned layer=screen){return counts[pass][layer];}
     void draw(std::uint64_t indices,std::uint64_t instances=1,unsigned layer=screen) {
-        if(!enabled)return;
+        ++calls.draws;if(!enabled)return;
         auto& c=row(layer);++c.draws;c.submitted_instances+=instances;
         c.index_vertices+=indices*instances;c.triangles+=(indices/3)*instances;
     }
-    void upload(std::size_t bytes,unsigned layer=screen){if(enabled)row(layer).upload_bytes+=bytes;}
+    void upload(std::size_t bytes,unsigned layer=screen){++calls.uploads;if(enabled)row(layer).upload_bytes+=bytes;}
     void upload_buffer(ID3D11Buffer* buffer) {
-        if(!enabled || !buffer)return;D3D11_BUFFER_DESC d={};buffer->GetDesc(&d);upload(d.ByteWidth);
+        if(buffer)++calls.uploads;
+        if(!enabled || !buffer)return;D3D11_BUFFER_DESC d={};buffer->GetDesc(&d);row().upload_bytes+=d.ByteWidth;
     }
     void copy(ID3D11Resource* resource,bool copied) {
+        if(resource && copied)++calls.copies;
         if(!enabled || !resource)return;
         Microsoft::WRL::ComPtr<ID3D11Texture2D> texture;
         if(FAILED(resource->QueryInterface(IID_PPV_ARGS(&texture))))return;

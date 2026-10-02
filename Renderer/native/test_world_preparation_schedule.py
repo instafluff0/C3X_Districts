@@ -75,7 +75,8 @@ int main(){
   t.tile_flags=C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_EXPLORED;
   assert(scene.publish(t,changed));
  }
- assert(!region.build(scene,f,0,true)); // Explored minimal facts are not full appearance.
+ assert(region.build(scene,f,0,true) && region.selected.size()==32); // Permitted terrain recipe; native authority stays partial.
+ assert(scene.authoritative_size()==0);
  for(int y=0;y<64;++y)for(int x=y&1;x<64;x+=2){
   c3x_renderer_tile_v1 t{};t.tile_x=x;t.tile_y=y;t.terrain_type=t.real_terrain_type=2;
   t.tile_flags=C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_EXPLORED|C3X_RENDERER_TILE_PREFETCH;

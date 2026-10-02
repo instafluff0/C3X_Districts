@@ -1,5 +1,34 @@
 # Civ III patch dependency ledger
 
+## Busy-frame preparation and completed-front delivery
+
+`required_user_action: []`. No patch-table entry, registered signature or
+supported-build address changes. Existing `Map_Renderer_m71_Draw_Tiles`,
+`Map_Renderer_m19_Draw_Tile_by_XY_and_Flags`, world capture/update callbacks,
+`Units_Image_Data_advance_animations` and `Animator_update_display` retain their
+capture and composition responsibilities.
+
+The existing `read_custom_renderer_world_record` helper now copies the same
+canonical map seed and terrain feature flags as foreground terrain capture.
+These fields derive from permitted topology; they add no hidden object facts or
+native draw authority. The matching renderer prepares those permitted recipes
+and distinguishes successful regions from unavailable attempts. The approved
+`TEST_INJECTED_CODE_COMPILE.bat` smoke test and console evaluation installation
+passed for this producer change.
+
+The renderer DLL also exports the optional internal helper query
+`int c3x_renderer_trial_priority_front_pending()`. It reports whether the current
+committed front has yet to be successfully presented. The helper can bypass its
+ambient pressure hold only after the reliable image prefix has retired; the DXGI
+permit and queue bounds still apply. An older DLL without this export retains
+the existing pressure hold. This adds no Civ III patch or address dependency.
+
+The optional trial export `c3x_renderer_trial_untimed_witness` runs a standalone
+diagnostic callback on the existing renderer worker. The callback may draw and
+capture while holding that worker's ownership; it must not reenter worker-locking
+APIs. Only the untimed correctness client calls it. Production presentation and
+map publication are unchanged, and no Civ III patch depends on this export.
+
 ## Prepared world content and shared submission
 
 `required_user_action: []`. No injected source, patch-table symbol, signature or

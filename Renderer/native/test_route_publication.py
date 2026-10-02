@@ -72,6 +72,10 @@ struct RetainedComposition {
     std::map<Id,Picture> images;Picture front;
     std::uint64_t serial=0,frame=0,front_revision=0,sample_allocations=0,sample_imports=0;
     bool admitted=true;
+    // This fixture evaluates publication graphs directly, without compiling
+    // the production collect/prepare plans. Keep their invalidation boundary.
+    std::vector<int> collect_plan,prepare_plan;
+    void invalidate_plan(){}
     std::shared_ptr<Node> node(){return std::make_shared<Node>();}
     void reserve(std::uint64_t,char const*){}
     void output(Node& n,unsigned i,Texture texture){n.output[i]=std::move(texture);}
@@ -159,6 +163,8 @@ template<std::size_t N,class... Args>
 void sprintf_s(char(&out)[N],char const* format,Args... args){std::snprintf(out,N,format,args...);}
 void OutputDebugStringA(char const*){}
 struct Compositor {
+    struct SpatialSource {};
+    struct SpatialPlan {};
     struct ImportTarget {
         Texture texture;ComPtr<ID3D11ShaderResourceView> write;
         unsigned width=0,height=0;

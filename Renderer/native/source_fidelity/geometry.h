@@ -51,7 +51,7 @@ if(fidelity_profile) {
         constexpr char const*eras[]={"ancient","medieval","industrial","modern"};
         constexpr unsigned counts[]={4,7,11};constexpr float radii[]={.25f,.33f,.41f},scales[]={.92f,1,1.08f};
         for(int r=nr-2;r<=nr+2;r++)for(int c=nc-2;c<=nc+2;c++){
-            auto it=topology_cache.current(observed_coordinate_key(c+r,c-r));if(!it)continue;
+            auto it=ground_observations.current(observed_coordinate_key(c+r,c-r));if(!it)continue;
             auto const&city=it->occurrence;if(city.city_id<0)continue;
             if(auto composition=selected_city(city,c,r)){
                 for(auto const&i:composition->instances)buildings.push_back({

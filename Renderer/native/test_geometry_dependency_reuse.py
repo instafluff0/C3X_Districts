@@ -84,10 +84,10 @@ int main(){
 
     def test_admission_uses_current_quality_and_selected_source_lifetimes(self):
         source=(ROOT/'Renderer/native/c3x_renderer.cpp').read_text()
-        self.assertIn('        if(reuse_geometry && fresh_scene_path)',source)
+        self.assertIn('        if(reuse_geometry && fresh_scene_path && !covered_membership)',source)
         valid=method(source,'    bool tile_content_valid(CachedTileGeometry& cached,')
         raster=method(source,'    bool raster_content_valid(CachedGeometryProof const& proof)')
-        guard=method(source,'        if(reuse_geometry && fresh_scene_path)')
+        guard=method(source,'        if(reuse_geometry && fresh_scene_path && !covered_membership)')
         quality_start=source.index('        std::array<std::uint64_t,2> const compile_quality=')
         quality_end=source.index(';',quality_start)+1
         quality=source[quality_start:quality_end]
@@ -119,7 +119,7 @@ struct CachedTileGeometry {
  std::vector<int> river_dependencies;
 };
 struct Harness {
- bool fresh_scene_path=true,world_ground=true,world_objects=true,canonical_world_content=true;
+ bool fresh_scene_path=true,covered_membership=false,world_ground=true,world_objects=true,canonical_world_content=true;
  unsigned shadow_tile_width=128,content_revision=7,base_ground_grid=16,draw_record_count=648;
  struct Detail {unsigned value=3;unsigned identity()const{return value;}} patch_detail;
  unsigned frame_tile_invalid_shared=0,frame_tile_invalid_appearance=0,frame_tile_invalid_semantic=0,frame_tile_invalid_coast=0,frame_tile_invalid_world=0,frame_tile_invalid_anchor=0,frame_tile_invalid_river=0;

@@ -1267,5 +1267,117 @@ int test_retained_composition(){
         for(auto id:hud_sources)execute(C3X_GPU_DESTROY,id);
         std::printf("PASS Session world-end HUD reuse: format=%d publications=8 lexical_redraws=8 sources=%u commands=300 exact=8 source_rebinds=0 atlas_recopies=0 metadata_rebuilds=0 distinct_snapshot_versions=1 distinct_before_images=1\n",native_format,sources);
     }
+    // Exact live selection can share complete source planes. Its first
+    // multipart write must acquire private storage, preserving the old source.
+    for(auto format:{Format::rgb555,Format::rgb565}){
+        auto live_owner=std::make_unique<Compositor>(device.Get(),context.Get());auto& live=*live_owner;
+        auto fast_owner=std::make_unique<RetainedComposition>(device.Get(),context.Get());auto& fast=*fast_owner;
+        auto oracle_owner=std::make_unique<RetainedComposition>(device.Get(),context.Get());auto& oracle=*oracle_owner;oracle.set_compiled_enabled(false);
+        auto create=[&](Format f){auto id=live.create(w,h,f);assert(id);fast.create(id,w,h,f);oracle.create(id,w,h,f);return id;};
+        auto base=create(format),base_detail=create(Format::bgra32),selected=create(format),selected_detail=create(Format::bgra32),
+            old=create(format),old_detail=create(Format::bgra32);
+        std::vector<unsigned> words(w*h),colors(w*h);for(unsigned i=0;i<words.size();++i){words[i]=(i*31+7)&(format==Format::rgb555?32767:65535);colors[i]=0xff000000u|((i*731+17)&0xffffff);}
+        assert(live.upload(base,1,words.data(),words.size())&&live.upload(base_detail,1,colors.data(),colors.size()));
+        for(auto retained:{&fast,&oracle}){retained->source(base,live.texture(base));retained->source(base_detail,live.texture(base_detail));
+            retained->snapshot(old,base);retained->snapshot(old_detail,base_detail);retained->select_world(selected,selected_detail,base,base_detail);}
+        auto compare=[&](Id id,std::vector<unsigned> const& expected,unsigned tick){fast.commit(id,full);oracle.commit(id,full);
+            assert(retained_read(device.Get(),context.Get(),fast.sample(tick,1000).Get())==expected);
+            assert(retained_read(device.Get(),context.Get(),oracle.sample(tick,1000).Get())==expected);++checks;};
+        compare(selected,words,1);assert(fast.last_work().selected_borrows==2&&fast.last_work().selected_owned==0);
+        assert(fast.last_work().avoided_copy_pixels==std::uint64_t(w)*h*2);
+        assert(oracle.last_work().copied_pixels-fast.last_work().copied_pixels==std::uint64_t(w)*h*2);
+        compare(selected_detail,colors,2);
+        Rect edit={7,9,19,23};auto changed_words=words,changed_colors=colors;
+        for(unsigned y=edit.top;y<unsigned(edit.bottom);++y)for(unsigned x=edit.left;x<unsigned(edit.right);++x){changed_words[y*w+x]=0x1234;changed_colors[y*w+x]=0xffabcdef;}
+        for(auto retained:{&fast,&oracle}){retained->record({Kind::fill,base,0,edit,full,0,0,0x1234});
+            retained->record({Kind::fill,base_detail,0,edit,full,0,0,0xffabcdef});retained->select_world(selected,selected_detail,base,base_detail);}
+        compare(selected,changed_words,3);assert(fast.last_work().selected_owned==2&&!fast.last_work().selected_borrows);
+        compare(selected_detail,changed_colors,4);compare(old,words,5);compare(old_detail,colors,6);
+        // Return from owned multipart storage to exact source leases.
+        for(auto retained:{&fast,&oracle}){retained->source(base,live.texture(base));retained->source(base_detail,live.texture(base_detail));
+            retained->select_world(selected,selected_detail,base,base_detail);}
+        compare(selected,words,7);assert(fast.last_work().selected_borrows==2);compare(selected_detail,colors,8);
+        fast.clear();oracle.clear();assert(!fast.bytes()&&!fast.node_count()&&!oracle.bytes()&&!oracle.node_count());
+        std::printf("PASS selected-world leases: format=%u borrowed_to_owned=1 owned_to_borrowed=1 old_source_preserved=1 exact_planes=8 saved_source=1 reset=1\n",unsigned(format));
+    }
+    // Independent keyed native images write their admitted generation pair
+    // directly. Compare both output planes with the ordinary interpreter,
+    // including clipped extents, changing source revisions and saved readers.
+    for(auto format:{Format::rgb555,Format::rgb565})for(bool source_detail:{false,true}){
+        auto live_owner=std::make_unique<Compositor>(device.Get(),context.Get());auto& live=*live_owner;
+        auto fast_owner=std::make_unique<RetainedComposition>(device.Get(),context.Get());auto& fast=*fast_owner;
+        auto oracle_owner=std::make_unique<RetainedComposition>(device.Get(),context.Get());auto& oracle=*oracle_owner;oracle.set_compiled_enabled(false);
+        auto create=[&](Format f){auto id=live.create(w,h,f);assert(id);fast.create(id,w,h,f);oracle.create(id,w,h,f);return id;};
+        auto base=create(format),base_color=create(Format::bgra32),ink=create(format),ink_color=create(Format::bgra32),
+            screen=create(format),detail=create(Format::bgra32),saved=create(format),saved_color=create(Format::bgra32),
+            checkpoint=create(format),checkpoint_color=create(Format::bgra32);
+        auto old_ink=live.create(w,h,format),old_ink_color=live.create(w,h,Format::bgra32);assert(old_ink&&old_ink_color);
+        unsigned key=format==Format::rgb555?0x7c1f:0xf81f;
+        std::vector<unsigned> words(w*h),colors(w*h),art(w*h),art_colors(w*h);
+        // Packed uploads admit native 16-bit words. Exercise the upper native
+        // bit without supplying out-of-domain uint32 data to that API.
+        for(unsigned i=0;i<art.size();++i){art[i]=(i%3?key:0x1234u)|((i%7==0)?0x8000u:0);art_colors[i]=0xff000000u|((i*771+0x34567)&0xffffff);}
+        assert(live.upload(ink,1,art.data(),art.size())&&live.upload(ink_color,1,art_colors.data(),art_colors.size()));
+        assert(live.upload(old_ink,1,art.data(),art.size())&&live.upload(old_ink_color,1,art_colors.data(),art_colors.size()));
+        RetainedComposition::Texture current[2];
+        auto map=[&](unsigned tick){for(unsigned i=0;i<words.size();++i){words[i]=(i*31+tick*47)&(format==Format::rgb555?32767:65535);colors[i]=0xff000000u|((i*3127+tick*771)&0xffffff);}
+            assert(live.upload(base,tick,words.data(),words.size())&&live.upload(base_color,tick,colors.data(),colors.size()));
+            for(unsigned i=0;i<2;++i){auto id=live.create(w,h,i?Format::bgra32:format);assert(id);
+                auto const& pixels=i?colors:words;assert(live.upload(id,1,pixels.data(),pixels.size()));current[i]=live.texture(id);live.destroy(id);}};
+        map(1);
+        for(auto retained:{&fast,&oracle}){retained->source(base,current[0].Get(),[&](long long,long long){return current[0];},true,true);
+            retained->source(base_color,current[1].Get(),[&](long long,long long){return current[1];},true,true);
+            retained->source(ink,live.texture(ink));retained->source(ink_color,live.texture(ink_color));
+            retained->select_world(screen,detail,base,base_color);}
+        Command recipe={Kind::native_image,screen,ink,full,full,0,0,key,0,detail,source_detail?ink_color:0,int(w),int(h)};
+        for(auto retained:{&fast,&oracle})retained->record(recipe);
+        auto compare=[&](Id actual,Command command,unsigned tick,bool color){
+            Command reset[2]={{Kind::copy,screen,base,full,full},{Kind::copy,detail,base_color,full,full}};
+            assert(live.submit(reset,2)&&live.submit(&command,1));auto expected=retained_read(device.Get(),context.Get(),live.texture(color?detail:screen));
+            fast.commit(actual,full);oracle.commit(actual,full);
+            assert(retained_read(device.Get(),context.Get(),fast.sample(tick,1000).Get())==expected);
+            assert(retained_read(device.Get(),context.Get(),oracle.sample(tick,1000).Get())==expected);++checks;
+        };
+        compare(screen,recipe,1,false);assert(fast.last_work().selected_borrows==2&&fast.last_work().direct_native_images==1);
+        assert(fast.last_work().avoided_copy_pixels==std::uint64_t(w)*h*4);
+        assert(oracle.last_work().copied_pixels-fast.last_work().copied_pixels==std::uint64_t(w)*h*4);
+        compare(detail,recipe,2,true);
+        for(auto retained:{&fast,&oracle}){retained->snapshot(saved,screen);retained->snapshot(saved_color,detail);}
+        // Replacing artwork creates a new recipe generation; the saved native
+        // reader retains the old artwork while its live world still animates.
+        for(unsigned i=0;i<art.size();++i){art[i]=i%2?key:0x0421u;art_colors[i]=0xffa45612u;}
+        assert(live.upload(ink,2,art.data(),art.size())&&live.upload(ink_color,2,art_colors.data(),art_colors.size()));
+        map(3);
+        auto clipped=recipe;clipped.clip=part;
+        for(auto retained:{&fast,&oracle}){retained->source(ink,live.texture(ink));retained->source(ink_color,live.texture(ink_color));
+            retained->select_world(screen,detail,base,base_color);retained->record(clipped);}
+        compare(screen,clipped,3,false);assert(fast.last_work().direct_native_images==1); // current generation; saved reader is evaluated separately
+        compare(detail,clipped,4,true);
+        auto old_recipe=recipe;old_recipe.source=old_ink;old_recipe.background_detail=source_detail?old_ink_color:0;
+        compare(saved,old_recipe,5,false);compare(saved_color,old_recipe,6,true);
+        // Cross-position aliased reads retain the original assembled interpreter.
+        Command aliased={Kind::native_image,screen,screen,{3,2,43,30},full,1,1,65536,0,detail,detail,40,28};
+        for(auto retained:{&fast,&oracle}){retained->select_world(screen,detail,base,base_color);retained->record(aliased);}
+        compare(screen,aliased,7,false);assert(!fast.last_work().direct_native_images);
+        compare(detail,aliased,8,true);
+        // A new full pair cannot be partially admitted when only one plane's
+        // capacity remains. Synthetic direct payload is an existing budget
+        // charge, kept outside the front so no extra GPU allocations are used.
+        for(auto retained:{&fast,&oracle}){retained->select_world(screen,detail,base,base_color);
+            retained->snapshot(checkpoint,screen);retained->snapshot(checkpoint_color,detail);}
+        fast.commit(checkpoint,full);assert(retained_read(device.Get(),context.Get(),fast.sample(9,1000).Get())==words);
+        auto stable_bytes=fast.bytes();constexpr Id pressure=900001;fast.create(pressure,1,1,Format::bgra32);
+        RetainedComposition::Direct charge;charge.input_bytes=256u*1024u*1024u-stable_bytes-std::uint64_t(w)*h*4;
+        fast.record({Kind::fill,pressure,0,{0,0,1,1},{0,0,1,1}},charge);
+        auto charged_bytes=fast.bytes();auto refused=recipe;refused.color=0x4567;
+        fast.record(refused);fast.commit(screen,full);bool rejected=false;
+        try{fast.sample(10,1000);}catch(std::runtime_error const&){rejected=true;}
+        assert(rejected&&fast.bytes()==charged_bytes);fast.destroy(pressure);assert(fast.bytes()==stable_bytes);
+        fast.commit(checkpoint,full);assert(retained_read(device.Get(),context.Get(),fast.sample(11,1000).Get())==words);++checks;
+        oracle.record(refused);compare(screen,refused,12,false);compare(detail,refused,13,true);
+        assert(fast.last_work().direct_native_images==0); // already completed same generation
+        fast.clear();oracle.clear();assert(!fast.bytes()&&!fast.node_count()&&!oracle.bytes()&&!oracle.node_count());
+        std::printf("PASS owned native-image outputs: format=%u source_detail=%u paired_exact=12 keyed_holes=1 clipped=1 saved_reader=1 source_revision=1 alias_fallback=1 atomic_pair_refusal=1 reset=1\n",unsigned(format),unsigned(source_detail));
+    }
     std::printf("PASS retained composition: %u exact GPU oracles, 120 independent clock frames, aliasing, paired 555/565/full color, UI versioning, partial publication, bounded overwrite and reset\n",checks);return 0;
 }

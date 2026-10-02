@@ -36,6 +36,9 @@ public:
         // Last completed native-observation compatibility, separate from the
         // immutable world lease and native anchors.
         std::uint64_t raster_appearance=0;
+        // Immutable permitted world recipe identity, including topology-only
+        // terrain and whitelisted fog bodies; never grants native authority.
+        std::uint64_t content_revision=0;
         int ground=-1, real=-1, relief=-1, surface=-1;
     };
 private:
@@ -116,8 +119,27 @@ private:
     void touch_raster(RasterDependencyRevisions::Domain domain,std::uint64_t id){
         if(raster_dependencies)raster_dependencies->touch(domain,id);
     }
-    std::uint64_t retained_raster_appearance(std::uint64_t id)const{
-        auto record=retained(id);return record && record->authoritative?record->revision:0;
+    Observation const* permitted_world_input(std::uint64_t id) const {
+        auto changed=world_changes.find(world_block(id));
+        if(changed!=world_changes.end()){
+            auto found=changed->second->values.find(id);
+            return found==changed->second->values.end()?nullptr:&found->second;
+        }
+        return world_inputs?world_inputs->current(id):nullptr;
+    }
+    std::uint64_t matching_permitted_revision(std::uint64_t id,c3x_renderer_tile_v1 const& appearance) const {
+        auto input=permitted_world_input(id);
+        if(!input || (input->occurrence.tile_flags&(C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_EXPLORED))!=
+            (C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_EXPLORED))return 0;
+        auto permitted=content(input->occurrence);
+        return !std::memcmp(&appearance,&permitted,sizeof(appearance))?input->content_revision:0;
+    }
+    std::uint64_t retained_raster_appearance(std::uint64_t id) const {
+        auto record=retained(id);
+        if(record && record->authoritative)return record->revision;
+        auto input=permitted_world_input(id);
+        return input && (input->occurrence.tile_flags&(C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_EXPLORED))==
+            (C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_EXPLORED)?input->content_revision:0;
     }
     void reset_world_inputs(){
         if(world_input_epoch==UINT64_MAX)throw std::length_error("world input sequence exhausted");
@@ -139,6 +161,13 @@ private:
             std::memset(next.occurrence.resource_name,0,sizeof(next.occurrence.resource_name));
             next.occurrence.barbarian_tribe_id=-1;next.occurrence.improvement_flags=0;
             next.occurrence.irrigation_mask=next.occurrence.has_effect=0;
+            // The minimal native producer supplies real terrain and the map
+            // seed before returning its halo. Derive the same terrain features
+            // without reading omitted resources, effects or unit fields.
+            next.occurrence.feature_flags=tile.real_terrain_type==7?C3X_RENDERER_FEATURE_FOREST:
+                tile.real_terrain_type==8?C3X_RENDERER_FEATURE_JUNGLE:
+                tile.real_terrain_type==9?C3X_RENDERER_FEATURE_MARSH:
+                tile.real_terrain_type==10?C3X_RENDERER_FEATURE_VOLCANO:0u;
         }
         // Halo topology is authoritative even when its object fields are omitted.
         next.occurrence.terrain_type=tile.terrain_type;next.occurrence.real_terrain_type=tile.real_terrain_type;
@@ -167,17 +196,30 @@ private:
         if(changed!=world_changes.end())prior=changed->second.get();
         else if(world_inputs){auto found=world_inputs->blocks.find(block_id);
             if(found!=world_inputs->blocks.end())prior=found->second.get();}
+        std::uint64_t same_recipe_revision=0;
         if(prior){auto value=prior->values.find(id);
-            if(value!=prior->values.end() && !std::memcmp(&value->second.occurrence,&next.occurrence,sizeof(next.occurrence)) &&
-               value->second.semantic==next.semantic && value->second.ground==next.ground &&
-               value->second.real==next.real && value->second.relief==next.relief && value->second.surface==next.surface)return true;}
+            if(value!=prior->values.end()){
+                if(!std::memcmp(&value->second.occurrence,&next.occurrence,sizeof(next.occurrence)) &&
+                   value->second.semantic==next.semantic && value->second.ground==next.ground &&
+                   value->second.real==next.real && value->second.relief==next.relief && value->second.surface==next.surface)return true;
+                auto before=content(value->second.occurrence),after=content(next.occurrence);
+                if(!std::memcmp(&before,&after,sizeof(before)))same_recipe_revision=value->second.content_revision;
+            }}
         if(world_input_epoch==UINT64_MAX)return false;
         if(changed==world_changes.end()){
             auto allowance=sizeof(WorldBlock)+64*(sizeof(Observation)+64)+128*sizeof(void*);
             if(bytes()>budget || allowance>budget-bytes())return false;
             changed=world_changes.emplace(block_id,std::make_shared<WorldBlock>(world_memory,prior)).first;
         }
-        changed->second->values[id]=std::move(next);changed->second->charge();++world_input_epoch;return bytes()<=budget;
+        if(serial==UINT64_MAX)return false;
+        next.content_revision=full?record.revision:same_recipe_revision?same_recipe_revision:++serial;
+        if(!full && !same_recipe_revision){auto retained=records.find(id);if(retained!=records.end()){
+            retained->second.compiled={};for(auto& variant:retained->second.compiled_views)variant={};
+        }
+            touch_raster(RasterDependencyRevisions::Domain::appearance,id);
+        }
+        changed->second->values[id]=std::move(next);changed->second->charge();++world_input_epoch;
+        return bytes()<=budget;
     }
 public:
     CapturedScene()=default;
@@ -235,10 +277,14 @@ public:
         }
         if((full || partial) && (!record.revision || std::memcmp(&next,&record.appearance,sizeof(next)))){
             if(serial==UINT64_MAX)return false;
-            record.appearance=next;record.revision=++serial;record.compiled={};
-            for(auto& variant:record.compiled_views)variant={};changed=true;
-            ++appearance_epoch;
-            touch_raster(RasterDependencyRevisions::Domain::appearance,id);
+            // A first foreground capture may grant full authority without
+            // changing the exact permitted recipe already prepared offscreen.
+            // Keep that identity and its attachment only on byte equality.
+            auto prepared_revision=full && !record.authoritative?matching_permitted_revision(id,next):0;
+            record.appearance=next;record.revision=prepared_revision?prepared_revision:++serial;
+            if(!prepared_revision){record.compiled={};for(auto& variant:record.compiled_views)variant={};
+                ++appearance_epoch;touch_raster(RasterDependencyRevisions::Domain::appearance,id);}
+            changed=true;
         }
         record.partial_flags|=partial|(full?C3X_RENDERER_TILE_PREFETCH:0u);
         auto flags=tile.tile_flags&C3X_RENDERER_TILE_VISIBILITY_BITS;
@@ -387,9 +433,10 @@ public:
             }
             if(!record.authoritative && (!record.revision || std::memcmp(&next,&record.appearance,sizeof(next)))){
                 if(serial==~std::uint64_t(0))return false;
-                record.appearance=next;record.revision=++serial;record.compiled={};
-                for(auto& variant:record.compiled_views)variant={};
-                touch_raster(RasterDependencyRevisions::Domain::appearance,id);
+                auto prepared_revision=full?matching_permitted_revision(id,next):0;
+                record.appearance=next;record.revision=prepared_revision?prepared_revision:++serial;
+                if(!prepared_revision){record.compiled={};for(auto& variant:record.compiled_views)variant={};
+                    touch_raster(RasterDependencyRevisions::Domain::appearance,id);}
             }
         }
         if(!published){auto& record=found->second;
@@ -469,6 +516,8 @@ public:
         auto observed=current(id);
         if(!observed || !(observed->occurrence.tile_flags&(C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_PREFETCH)))return 0;
         auto record=retained(id);auto appearance=content(observed->occurrence);
+        if(record && record->authoritative && !std::memcmp(&appearance,&record->appearance,sizeof(appearance)))return record->revision;
+        if(auto revision=matching_permitted_revision(id,appearance))return revision;
         return record && !std::memcmp(&appearance,&record->appearance,sizeof(appearance))?record->revision:0;
     }
     // A compiled world tile may depend on art outside the current camera's
@@ -479,15 +528,33 @@ public:
         if(observed && (observed->occurrence.tile_flags&
                 (C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_PREFETCH)))
             return appearance_revision(id);
-        auto record=retained(id);
-        return record && record->authoritative?record->revision:0;
+        return retained_raster_appearance(id);
     }
-    void attach(c3x_renderer_tile_v1 const& tile,ContentHandle handle) {
-        if(!(tile.tile_flags&(C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_PREFETCH)))return;
+    // A batch-prepared recipe borrows the immutable permitted input exactly.
+    // Its attachment is storage only: it never promotes native authority or
+    // grants eligibility to draw hidden bodies.
+    void attach(c3x_renderer_tile_v1 const& tile,ContentHandle handle,bool prepared_recipe=false) {
         auto id=key(tile.tile_x,tile.tile_y);auto found=records.find(id);
-        if(!current(id) || found==records.end() || !found->second.revision)return;
+        if(found==records.end())return;
         auto appearance=content(tile);
-        if(!std::memcmp(&appearance,&found->second.appearance,sizeof(appearance))){
+        bool matches=false;
+        if(prepared_recipe){
+            auto input=permitted_world_input(id);
+            if(!input || (input->occurrence.tile_flags&(C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_EXPLORED))!=
+                (C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_EXPLORED))return;
+            auto permitted=content(input->occurrence);
+            matches=!std::memcmp(&appearance,&permitted,sizeof(appearance));
+        }else{
+            if(!(tile.tile_flags&(C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_PREFETCH)) ||
+                !current(id) || !found->second.revision)return;
+            matches=!std::memcmp(&appearance,&found->second.appearance,sizeof(appearance));
+            if(!matches && appearance_revision(id)){
+                auto input=permitted_world_input(id);
+                if(input){auto permitted=content(input->occurrence);
+                    matches=!std::memcmp(&appearance,&permitted,sizeof(appearance));}
+            }
+        }
+        if(matches){
             auto& record=found->second;record.compiled=handle;
             unsigned position=2;
             for(unsigned i=0;i<3;++i)if(record.compiled_views[i]==handle){position=i;break;}

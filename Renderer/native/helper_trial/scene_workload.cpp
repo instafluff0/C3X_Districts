@@ -90,6 +90,8 @@ struct Core {
     PresentShared present_shared=nullptr;
     using VisualShared=int(*)(std::int64_t,std::int64_t,DWORD,std::uint64_t*,unsigned*,unsigned*);
     VisualShared visual_shared=nullptr;
+    using PriorityFrontPending=int(*)();
+    PriorityFrontPending priority_front_pending=nullptr;
     using BindSurface=int(*)(std::uint64_t,unsigned,unsigned);
     BindSurface bind_surface=nullptr;bool direct_surface_bound=false,direct_display_ready=false;
     Wire* telemetry=nullptr;
@@ -138,6 +140,7 @@ struct Core {
         shared_raw=reinterpret_cast<Shared>(GetProcAddress(module,"c3x_renderer_trial_export_shared_raw"));
         present_shared=reinterpret_cast<PresentShared>(GetProcAddress(module,"c3x_renderer_trial_present_shared"));
         visual_shared=reinterpret_cast<VisualShared>(GetProcAddress(module,"c3x_renderer_trial_visual_shared"));
+        priority_front_pending=reinterpret_cast<PriorityFrontPending>(GetProcAddress(module,"c3x_renderer_trial_priority_front_pending"));
         bind_surface=reinterpret_cast<BindSurface>(GetProcAddress(module,"c3x_renderer_trial_bind_surface"));
         surface_pixels=reinterpret_cast<SurfacePixels>(GetProcAddress(module,"c3x_renderer_trial_surface_pixels"));
         require(render&&render_view&&gpu_render&&camera_begin&&camera_poll&&camera_cancel&&definitions&&reset,"renderer DLL entries missing");
@@ -221,7 +224,11 @@ struct Core {
             // presentations while pressure drains, then restore normal cadence.
             bool pressure=telemetry&&InterlockedCompareExchange(
                 reinterpret_cast<volatile LONG*>(&telemetry->native_queue_records),0,0)>=512;
-            if(pressure&&pressure_present_ticks&&now.QuadPart-pressure_present_ticks<frequency.QuadPart/4){
+            // Only an actually changed, completed native front bypasses the
+            // ambient pressure throttle. Duplicate native commits do not. The
+            // DLL clears this hint after successful Present, never on BUSY.
+            bool priority=pressure&&priority_front_pending&&priority_front_pending()>0;
+            if(pressure&&!priority&&pressure_present_ticks&&now.QuadPart-pressure_present_ticks<frequency.QuadPart/4){
                 ++cadence_counts.pressure_holds;report_direct_cadence(batch);return true;
             }
             std::uint64_t handle=0;unsigned width=0,height=0;
@@ -244,7 +251,7 @@ struct Core {
             return code==C3X_RENDERER_RESULT_BUSY;
         });
     }
-    void stop_direct_cadence(){direct_cadence.stop();direct_display_ready=false;}
+    void stop_direct_cadence(){direct_cadence.stop();direct_display_ready=false;pressure_present_ticks=0;}
     void execute(Wire& wire){
         if(!telemetry)telemetry=&wire;
         wire.status=0;wire.code=0;wire.executed=1;wire.reply_size=0;

@@ -18,6 +18,83 @@ def method(source, signature):
 
 
 class StaticDependencyReuseTests(unittest.TestCase):
+    def test_production_capture_retires_both_rasters_only_after_draw_order_changes(self):
+        source = (ROOT / "Renderer/sandbox/fresh_pipeline.h").read_text()
+        begin = source.index("    bool capture(ViewportShaderSettings const& settings,")
+        begin = source.index("{", begin) + 1
+        end = source.index("        if (resident_signature!=view_revision() ||", begin)
+        run_cpp(r'''
+#define C3X_RENDERER64_FRESH
+#include "Renderer/native/render_core/scene_membership.h"
+#include "Renderer/sandbox/static_raster_state.h"
+#include <cassert>
+using namespace c3x_renderer::render_core;
+struct Chunk {struct Bounds {int left,top,right,bottom;} bounds{};int translation_x=0,translation_y=0;float natural_projection[4]={};};
+struct Target {};
+struct Pipeline {
+ struct Renderer {SceneMembership<Chunk,2> geometry_vertex_buffers;} renderer;
+ StaticRasterStates<Target> static_rasters;std::uint64_t resident_order_revision=0;
+ void capture_order(){
+''' + source[begin:end] + r'''
+ }
+};
+int main(){
+ Pipeline p;for(auto& state:p.static_rasters.states){state.valid=true;state.metrics.full_draws=1;}
+ p.static_rasters.restored(0,0,0);p.capture_order();
+ assert(p.static_rasters.states[0].valid && p.static_rasters.states[1].valid && p.static_rasters.writer.slot==0);
+ Chunk chunk;GeometryDrawRecord<Chunk> first(chunk),second(chunk);first.tile_x=2;second.tile_x=0;
+ p.renderer.geometry_vertex_buffers.edit(0)={first,second};
+ assert(p.renderer.geometry_vertex_buffers.order_occurrences([](auto const& draw){return draw.tile_x;}));
+ p.capture_order();assert(!p.static_rasters.states[0].valid && !p.static_rasters.states[1].valid && p.static_rasters.writer.slot==2);
+ auto revision=p.static_rasters.states[0].revision;
+ for(auto& state:p.static_rasters.states)state.valid=true;p.static_rasters.restored(0,0,0);
+ for(unsigned i=0;i<1000;++i)p.capture_order();
+ assert(p.static_rasters.states[0].valid && p.static_rasters.states[1].valid && p.static_rasters.states[0].revision==revision);
+ assert(p.static_rasters.writer.slot==0 && p.static_rasters.states[0].metrics.reasons[raster_scene]==1);
+ // Full reconstruction can supply the same keys in a different native order
+ // without a boundary sort, so it retires order through clear as well.
+ p.renderer.geometry_vertex_buffers.clear();p.capture_order();
+ assert(!p.static_rasters.states[0].valid && !p.static_rasters.states[1].valid && p.static_rasters.writer.slot==2);
+ assert(p.static_rasters.states[0].metrics.reasons[raster_scene]==2);
+}
+''')
+
+    def test_bounded_exact_membership_rejects_removals_duplicate_visits_and_stamp_wrap(self):
+        run_cpp(r'''
+#include "Renderer/native/render_core/raster_contributors.h"
+#include <cassert>
+using namespace c3x_renderer::render_core;
+struct Proof {};
+int main(){
+ using Inputs=RasterContributors<Proof>;Inputs pixels;auto proof=std::make_shared<Proof>();
+ Inputs::Key first{},second{},strip{};first[0]=second[0]=strip[0]=17;second[1]=1;strip[1]=2;
+ assert(pixels.add(first,proof,55,3) && pixels.add(second,proof,55,3));
+ auto bytes=pixels.bytes();pixels.begin_membership();
+ assert(pixels.visit_membership(first) && pixels.visit_membership(first));
+ assert(!pixels.exact_membership()); // duplicates cannot hide the removed second key.
+ assert(pixels.visit_membership(second) && pixels.exact_membership() && pixels.bytes()==bytes);
+ // Strip append admits a union of logical contributors, not another count for
+ // each draw intersecting multiple raster writes. Complete covered validation
+ // must still visit every member of that admitted union.
+ assert(pixels.add(first,proof,55,3) && pixels.add(strip,proof,55,3));
+ assert(pixels.draws.size()==3);pixels.begin_membership();
+ assert(pixels.visit_membership(first) && pixels.visit_membership(second));
+ assert(!pixels.exact_membership());assert(pixels.visit_membership(strip) && pixels.exact_membership());
+ // A wrap cannot confuse an ancient visitation stamp with the current scan.
+ pixels.membership_epoch=UINT64_MAX;pixels.begin_membership();assert(pixels.membership_epoch==1);
+ assert(pixels.visit_membership(first) && !pixels.exact_membership());
+ assert(pixels.visit_membership(second) && pixels.visit_membership(strip) && pixels.exact_membership());
+ pixels.clear();assert(!pixels.membership_epoch && !pixels.membership_seen && pixels.draws.empty());
+ assert(!pixels.visit_membership(first) && !pixels.exact_membership());
+ pixels.begin_membership();assert(pixels.exact_membership());
+ assert(pixels.add(second,proof,55,3));pixels.begin_membership();
+ assert(!pixels.visit_membership(first) && !pixels.exact_membership());
+ assert(pixels.visit_membership(second) && pixels.exact_membership());
+ assert(!pixels.add(first,nullptr,55,3));pixels.begin_membership();
+ assert(!pixels.visit_membership(second) && !pixels.exact_membership());
+}
+''')
+
     def test_production_registration_keeps_missing_and_river_input_keys(self):
         source = (ROOT / "Renderer/native/c3x_renderer.cpp").read_text()
         proof = method(source, "struct CachedGeometryProof {") + ";"
@@ -35,8 +112,9 @@ struct State {
 ''' + registration + r'''
 };
 struct RecordingInputs {
- unsigned calls=0,refuse=~0u;
+ unsigned calls=0,refuse=~0u;bool complete=true;
  bool watch(Domain,std::uint64_t){return ++calls!=refuse;}
+ template<class Source,class Register>bool watch_source(std::shared_ptr<Source> const& source,Register register_inputs){return source&&register_inputs(*source);}
 };
 int main(){
  State state;auto proof=std::make_shared<CachedGeometryProof>();
@@ -92,12 +170,93 @@ int main(){
  CachedGeometryProof incomplete;incomplete.river_dependencies={{{0,0,0,0},nullptr}};
  RasterContributors<CachedGeometryProof> refused;
  assert(!state.watch_raster_dependencies(incomplete,refused));
- auto empty=std::make_shared<NaturalWorld::CellContent>();incomplete.river_dependencies[0].second=empty;
+ refused.clear();auto empty=std::make_shared<NaturalWorld::CellContent>();incomplete.river_dependencies[0].second=empty;
  assert(!state.watch_raster_dependencies(incomplete,refused));
  // A valid empty query is distinct from a missing PageInputs owner.
- empty->inputs=std::make_shared<NaturalWorld::PageInputs>();
+ refused.clear();empty->inputs=std::make_shared<NaturalWorld::PageInputs>();
  assert(state.watch_raster_dependencies(incomplete,refused));
  assert(refused.dependencies.size()==1&&refused.dependencies.count({Domain::visibility,0})==1);
+}
+''')
+
+    def test_registration_visits_unique_proofs_and_shared_pages_once(self):
+        source = (ROOT / "Renderer/native/c3x_renderer.cpp").read_text()
+        proof = method(source, "struct CachedGeometryProof {") + ";"
+        registration = method(source, "    template<class Inputs>bool watch_raster_dependencies(")
+        run_cpp(r'''
+#include "Renderer/native/render_core/raster_contributors.h"
+#include "Renderer/native/render_core/resident_content.h"
+#include "Renderer/lab/shared/natural/world.h"
+#include <cassert>
+using namespace c3x_renderer::render_core;
+using NaturalWorld=c3x_renderer::fidelity::NaturalWorld;
+using Domain=RasterDependencyRevisions::Domain;
+''' + proof + r'''
+struct State {
+''' + registration + r'''
+};
+int main(){
+ State state;using Inputs=RasterContributors<CachedGeometryProof>;Inputs pixels;
+ decltype(pixels.dependencies) expected;std::weak_ptr<NaturalWorld::PageInputs> lifetime;
+ {
+  std::vector<std::shared_ptr<NaturalWorld::PageInputs>> pages;
+  for(unsigned page=0;page<4;++page){auto p=std::make_shared<NaturalWorld::PageInputs>();
+   for(unsigned i=0;i<512;++i){auto id=page*512+i;p->values.push_back({id,0});
+    expected.insert({Domain::world,id});expected.insert({Domain::flow,id});}
+   pages.push_back(p);
+  }
+  lifetime=pages.front();std::vector<std::shared_ptr<CachedGeometryProof>> proofs;
+  for(unsigned i=0;i<100;++i){auto p=std::make_shared<CachedGeometryProof>();
+   p->tile=55;p->appearance_dependencies={{0,0}};p->dependencies={{3000+i,0}};
+   for(unsigned cell=0;cell<8;++cell){auto content=std::make_shared<NaturalWorld::CellContent>();
+    content->inputs=pages[cell%4];p->river_dependencies.push_back({{int(cell),0,0,0},content});}
+   proofs.push_back(p);expected.insert({Domain::semantic,3000+i});
+  }
+  expected.insert({Domain::appearance,0});expected.insert({Domain::visibility,55});
+  for(unsigned occurrence=0;occurrence<10000;++occurrence){auto& p=proofs[occurrence%100];
+   Inputs::Key draw{};draw[0]=1+occurrence%100;draw[1]=occurrence;
+   bool first=false;assert(pixels.add(draw,p,55,0,&first));
+   if(first)assert(state.watch_raster_dependencies(*p,pixels));
+   // Occurrence visibility is independent of shared immutable mesh identity.
+   assert(pixels.watch(Domain::visibility,55));
+  }
+ }
+ pixels.finish_dependencies();assert(pixels.complete&&pixels.dependencies_complete);
+ assert(pixels.draws.size()==10000&&pixels.proofs.size()==100&&pixels.dependencies==expected);
+ auto const& counts=pixels.validation_counts;
+ assert(counts.proof_registrations==100&&counts.source_expansions==4&&counts.source_reuses==796);
+ assert(counts.dependency_watch_calls==10000+100*3+4*512*2);
+ assert(!lifetime.expired());
+ RasterDependencyRevisions revisions;Inputs::ValidationKey key{};unsigned calls=0;bool current=true;
+ auto exact=[&]{++calls;return current;};assert(pixels.validate(revisions,key,exact));
+ for(unsigned i=0;i<1000;++i)assert(pixels.validate(revisions,key,exact));assert(calls==1);
+ // Missing->present insertion and present->missing removal both reach exact validation.
+ for(auto domain:{Domain::world,Domain::flow,Domain::semantic,Domain::appearance,Domain::visibility}){
+  auto id=domain==Domain::semantic?3000:domain==Domain::visibility?55:0;
+  current=false;revisions.touch(domain,id);auto prior=calls;assert(!pixels.validate(revisions,key,exact)&&calls==prior+1);
+  current=true;revisions.touch(domain,id);assert(pixels.validate(revisions,key,exact));
+ }
+ pixels.clear();assert(lifetime.expired());assert(pixels.dependency_sources.empty());
+ // A replacement owner is expanded anew, with no old registration left behind.
+ auto replacement=std::make_shared<CachedGeometryProof>();replacement->tile=56;
+ auto cell=std::make_shared<NaturalWorld::CellContent>();cell->inputs=std::make_shared<NaturalWorld::PageInputs>();
+ cell->inputs->values={{9000,1}};replacement->river_dependencies={{{0,0,0,0},cell}};
+ Inputs::Key draw{};draw[0]=101;bool first=false;assert(pixels.add(draw,replacement,56,1,&first)&&first);
+ auto expansions=counts.source_expansions;assert(state.watch_raster_dependencies(*replacement,pixels));
+ assert(counts.source_expansions==expansions+1&&pixels.dependencies.count({Domain::world,9000}));
+ assert(!pixels.dependencies.count({Domain::world,0}));
+ // Failed source expansion cannot be certified, cached or retried as success.
+ Inputs failed;unsigned attempts=0;
+ assert(!failed.watch_source(cell->inputs,[&](auto const&){++attempts;return false;}));
+ assert(!failed.complete&&!failed.watch_source(cell->inputs,[&](auto const&){++attempts;return true;}));
+ assert(attempts==1);failed.finish_dependencies();assert(!failed.dependencies_complete);
+ assert(!failed.validate(revisions,key,[]{return true;}));
+ failed.clear();assert(failed.watch_source(cell->inputs,[](auto const&){return true;}));
+ std::shared_ptr<NaturalWorld::PageInputs> missing;assert(!failed.watch_source(missing,[](auto const&){return true;}));
+ // Metadata budget refusal remains sticky and cannot acquire another source owner.
+ failed.clear();for(unsigned i=0;failed.complete&&i<500000;++i)failed.watch(Domain::world,i);
+ assert(!failed.complete);auto owners=failed.dependency_sources.size();
+ assert(!failed.watch_source(cell->inputs,[](auto const&){return true;}));assert(failed.dependency_sources.size()==owners);
 }
 ''')
 
@@ -221,6 +380,21 @@ int main(){State state;State::RasterInputs pixels;ViewportShaderSettings setting
  dirty([&]{settings.translation[0]=.25f;});dirty([&]{settings.depth_translation=3;});dirty([&]{settings.natural_projection[2]=64;});
  dirty([&]{state.projection_zoom=1.5f;});dirty([&]{state.wrap_pixels=4096;});dirty([&]{++state.renderer.device_generation;});
  dirty([&]{++state.renderer.content_revision;});dirty([&]{region.left=1;});dirty([&]{state.renderer.water_scene_active=false;});
+ // Add-only strip expansion becomes reusable after its exact union is known.
+ auto extra=state.records.front();++extra.ordinal;state.records.push_back(extra);++state.membership;
+ assert(!state.raster_dependencies(pixels,settings,region,false));
+ assert(state.raster_dependencies(pixels,settings,region,true));assert(state.raster_dependencies(pixels,settings,region,false));
+ visits=state.contributor_visits;for(unsigned i=0;i<1000;++i)assert(state.raster_dependencies(pixels,settings,region,false));
+ assert(state.contributor_visits==visits);
+ // Duplicate current keys cannot disguise a dropped retained contribution.
+ state.records.push_back(state.records.front());++state.membership;
+ assert(state.raster_dependencies(pixels,settings,region,true));assert(state.raster_dependencies(pixels,settings,region,false));
+ assert(pixels.draws.size()==2);state.records.erase(state.records.begin()+1);++state.membership;
+ assert(!state.raster_dependencies(pixels,settings,region,false));
+ state.records.push_back(extra);++state.membership;assert(state.raster_dependencies(pixels,settings,region,false));
+ auto saved=state.records;state.records.clear();++state.membership;
+ assert(!state.raster_dependencies(pixels,settings,region,false));
+ state.records=saved;++state.membership;assert(state.raster_dependencies(pixels,settings,region,false));
  // Local visibility is separately watched, even with otherwise valid content.
  ++state.renderer.topology_cache.record.visibility_revision;
  state.renderer.raster_dependency_revisions.touch(RasterDependencyRevisions::Domain::visibility,55);
@@ -325,6 +499,15 @@ int main(){State state;assert(state.atlas_dependencies(true));assert(state.atlas
  state.renderer.semantic=7;state.renderer.raster_dependency_revisions.touch(RasterDependencyRevisions::Domain::semantic,77);assert(state.atlas_dependencies(false));
  ++state.caster_signature;++state.caster_inputs[0].index_offset;assert(!state.atlas_dependencies(false));
  state.atlas_inputs.clear();assert(state.atlas_dependencies(true));assert(state.atlas_dependencies(false));
+ // Dropping an exact, still-permitted caster must invalidate its old maximum-
+ // height pixels even when every remaining caster is contained in the atlas.
+ auto extra=state.caster_inputs.front();++extra.index_offset;state.caster_inputs.push_back(extra);++state.caster_signature;
+ assert(!state.atlas_dependencies(false));assert(state.atlas_dependencies(true));assert(state.atlas_dependencies(false));
+ state.caster_inputs.push_back(state.caster_inputs.front());++state.caster_signature;
+ assert(state.atlas_dependencies(false));state.caster_inputs.erase(state.caster_inputs.begin()+1);++state.caster_signature;
+ assert(!state.atlas_dependencies(false));state.caster_inputs.push_back(extra);++state.caster_signature;
+ assert(state.atlas_dependencies(false));auto saved=state.caster_inputs;state.caster_inputs.clear();++state.caster_signature;
+ assert(!state.atlas_dependencies(false));state.caster_inputs=saved;++state.caster_signature;assert(state.atlas_dependencies(false));
  ++state.renderer.topology_cache.record.visibility_revision;state.renderer.raster_dependency_revisions.touch(RasterDependencyRevisions::Domain::visibility,55);assert(!state.atlas_dependencies(false));
 }
 ''')

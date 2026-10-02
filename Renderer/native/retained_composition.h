@@ -16,7 +16,8 @@ namespace c3x_gpu_images {
 // All execution uses the production packed/full-color compositor.
 class RetainedComposition {
 public:
-    struct Work {unsigned operations=0,assemblies=0,copies=0;std::uint64_t copied_pixels=0,assembly_pixels=0;};
+    struct Work {unsigned operations=0,assemblies=0,copies=0,selected_borrows=0,selected_owned=0,direct_native_images=0;
+        std::uint64_t copied_pixels=0,assembly_pixels=0,avoided_copy_pixels=0;};
     struct RecipeReuse {std::uint64_t eligible=0,probed=0,reused=0;};
     struct PlanReuse {std::uint64_t builds=0,reuses=0,source_binds=0,source_reuses=0,batch_builds=0,batch_reuses=0;std::size_t nodes=0;};
     using Texture=ComPtr<ID3D11Texture2D>;
@@ -88,7 +89,7 @@ private:
         std::shared_ptr<BatchPreparation> batch_preparation;
         std::vector<std::uint64_t> pending_dependencies;
         CompositionStorage::Lease storage[2],owned_storage[2];
-        Texture output[2];std::uint64_t bytes[2]={},revision=0,seen=0,sampled=0,direct_revision=0;
+        Texture output[2];bool borrowed_output[2]={};Format selected_format[2]={};std::uint64_t bytes[2]={},revision=0,seen=0,sampled=0,direct_revision=0;
         std::uint64_t publication=0,source_generation=0;bool map_source=false;
         ComPtr<ID3D11ShaderResourceView> output_view[2];
         std::vector<std::uint64_t> dependencies;
@@ -206,6 +207,30 @@ private:
         if(n.output[index].Get()!=texture.Get())n.output_view[index].Reset();
         n.bytes[index]=bytes;n.output[index]=std::move(texture);
         n.owned_storage[index]=std::move(owned);n.storage[index]=std::move(physical);
+        n.borrowed_output[index]=false;
+    }
+    bool exact_plane(Picture const& p,Rect area)const{
+        if(!p.partitioned||p.patches.size()!=1||!same_rect(extent(p),area))return false;
+        auto const& patch=p.patches.front();
+        if(!same_rect(patch.area,area)||!same_rect(patch.node->area,area)||!patch.node->output[patch.output])return false;
+        D3D11_TEXTURE2D_DESC desc={};patch.node->output[patch.output]->GetDesc(&desc);
+        return desc.Format==DXGI_FORMAT_R32_UINT&&desc.Width==unsigned(area.right-area.left)&&desc.Height==unsigned(area.bottom-area.top);
+    }
+    void admit_owned_outputs(Node& n,unsigned count){
+        // Admission and allocation of both planes precede either write. A
+        // borrowed plane is never a target, even if its dimensions match.
+        auto bytes=std::uint64_t(n.area.right-n.area.left)*(n.area.bottom-n.area.top)*4;
+        Texture next[2];unsigned replace=0;
+        for(unsigned i=0;i<count;++i){D3D11_TEXTURE2D_DESC desc={};if(n.output[i])n.output[i]->GetDesc(&desc);
+            if(!n.borrowed_output[i]&&desc.Width==unsigned(n.area.right-n.area.left)&&desc.Height==unsigned(n.area.bottom-n.area.top))continue;
+            replace|=1u<<i;
+        }
+        reserve(bytes*((replace&1u)+((replace>>1)&1u)),"owned-pair");
+        D3D11_TEXTURE2D_DESC desc={};desc.Width=unsigned(n.area.right-n.area.left);desc.Height=unsigned(n.area.bottom-n.area.top);
+        desc.MipLevels=desc.ArraySize=desc.SampleDesc.Count=1;desc.Format=DXGI_FORMAT_R32_UINT;
+        desc.BindFlags=D3D11_BIND_SHADER_RESOURCE|D3D11_BIND_UNORDERED_ACCESS;
+        for(unsigned i=0;i<count;++i)if(replace&(1u<<i))checked(device->CreateTexture2D(&desc,nullptr,&next[i]));
+        for(unsigned i=0;i<count;++i)if(replace&(1u<<i))output(n,i,std::move(next[i]));
     }
     Texture crop(ID3D11Texture2D* source,Rect r){
         if(empty(r))return {};D3D11_TEXTURE2D_DESC d={};source->GetDesc(&d);
@@ -221,12 +246,12 @@ private:
         // Re-evaluation changes that recipe's result in GPU order. Other native
         // versions have distinct nodes, so matching storage can stay allocated.
         D3D11_TEXTURE2D_DESC desc={};if(n.output[index])n.output[index]->GetDesc(&desc);
-        if(desc.Width!=unsigned(r.right-r.left)||desc.Height!=unsigned(r.bottom-r.top)){
+        if(n.borrowed_output[index]||desc.Width!=unsigned(r.right-r.left)||desc.Height!=unsigned(r.bottom-r.top)){
             // Reject optional history before allocating another texture. A
             // full budget must not transiently consume the game's remaining VA.
             auto bytes=std::uint64_t(r.right-r.left)*(r.bottom-r.top)*4;
             reserve(bytes,"capture-output");
-            output(n,index,crop(source,r));return;
+            output(n,index,crop(source,r));++work.copies;work.copied_pixels+=bytes/4;return;
         }
         D3D11_BOX box={unsigned(r.left),unsigned(r.top),0,unsigned(r.right),unsigned(r.bottom),1};
         context->CopySubresourceRegion(n.output[index].Get(),0,0,0,0,source,0,&box);
@@ -553,6 +578,24 @@ private:
             }
             if(!n->output[0]||versions!=n->dependencies){
                 for(unsigned i=0;i<2;++i){
+                    if(compiled_enabled&&n->inputs[i].format==n->selected_format[i]&&exact_plane(n->inputs[i],n->area)){
+                        auto const& patch=n->inputs[i].patches.front();
+                        // The full dependency proof above includes both the
+                        // picture version and source revision. Pointer reuse
+                        // alone cannot leave a newly sampled plane unchanged.
+                        output(*n,i,patch.node->output[patch.output]);n->borrowed_output[i]=true;
+                        ++work.selected_borrows;work.avoided_copy_pixels+=std::uint64_t(n->area.right-n->area.left)*(n->area.bottom-n->area.top);
+                        continue;
+                    }
+                    // Acquire private storage before supplying an assembly
+                    // target; a previous exact selection may share its source.
+                    if(n->borrowed_output[i]){
+                        auto bytes=std::uint64_t(n->area.right-n->area.left)*(n->area.bottom-n->area.top)*4;
+                        reserve(bytes,"selected-owned-output");
+                        auto texture=n->output[i];D3D11_TEXTURE2D_DESC desc={};texture->GetDesc(&desc);
+                        Texture target;checked(device->CreateTexture2D(&desc,nullptr,&target));output(*n,i,std::move(target));
+                    }
+                    ++work.selected_owned;
                     auto source=assemble(n->inputs[i],ticks,frequency,depth+1,{},true,true,n->output[i].Get());
                     try{if(replay.texture(source)!=n->output[i].Get())capture_output(*n,i,replay.texture(source),n->area);}
                     catch(...){replay.recycle(source);throw;}replay.recycle(source);
@@ -724,10 +767,40 @@ private:
                     (original.kind==Kind::native_image&&original.color==65536));
                 bool tight_source=!n->placement&&local&&original.kind==Kind::native_image&&
                     original.source_width==original.area.right-original.area.left&&original.source_height==original.area.bottom-original.area.top;
+                bool owned_native=compiled_enabled&&tight_source&&!n->direct.draw&&!n->direct.revision&&!n->direct.animated&&!n->direct.input_bytes&&
+                    !original.background&&!original.program&&n->inputs[0].format!=Format::bgra32&&n->inputs[1].format==n->inputs[0].format&&
+                    (!original.detail||(original.detail!=original.destination&&n->inputs[3].format==Format::bgra32));
+                // Preserve the interpreter's aliased-before-image rules. An
+                // independent source can bind readonly only after all of its
+                // reads have been resolved, before either output is written.
+                for(unsigned i:{1u,4u})if(n->original[i]&&(n->original[i]==n->original[0]||n->original[i]==n->original[3]))owned_native=false;
                 Rect source_area={original.source_x+n->area.left-original.area.left,original.source_y+n->area.top-original.area.top,
                     original.source_x+n->area.right-original.area.left,original.source_y+n->area.bottom-original.area.top};
                 int x=local?n->area.left:0,y=local?n->area.top:0;
                 try{
+                    if(owned_native){
+                        // Retain every before-image first. They may share a
+                        // live selection; none is mutated by pair admission.
+                        Id before[2]={};
+                        try{
+                            for(unsigned i=0;i<6;++i)if(n->original[i]){
+                                if(i==0||i==3){if(!overwrite)before[i==3]=assemble(n->inputs[i],ticks,frequency,depth+1,n->area,true);}
+                                else temporary[i]=assemble(n->inputs[i],ticks,frequency,depth+1,
+                                    i==1||i==4?source_area:Rect{},true);
+                            }
+                            admit_owned_outputs(*n,original.detail?2u:1u);
+                            for(unsigned i=0;i<(original.detail?2u:1u);++i){
+                                unsigned slot=i?3:0;
+                                temporary[slot]=replay.attach_target_unrecorded(n->output[i].Get(),n->inputs[slot].format);
+                                if(!temporary[slot])throw std::runtime_error("retained native owned target admission");
+                            }
+                            for(unsigned i=0;i<(original.detail?2u:1u);++i){
+                                if(before[i]){context->CopyResource(n->output[i].Get(),replay.texture(before[i]));
+                                    ++work.copies;work.copied_pixels+=std::uint64_t(n->area.right-n->area.left)*(n->area.bottom-n->area.top);}
+                            }
+                        }catch(...){for(auto id:before)if(id)replay.recycle(id);throw;}
+                        for(auto id:before)if(id)replay.recycle(id);
+                    }else
                     for(unsigned i=0;i<6;++i)if(n->original[i]){
                         for(unsigned prior=0;prior<i;++prior)if(n->original[prior]==n->original[i])temporary[i]=temporary[prior];
                         if(!temporary[i]){
@@ -750,8 +823,10 @@ private:
                     if(tight_source){c.area=c.clip=result;c.source_x=c.source_y=0;
                         c.source_width=result.right-result.left;c.source_height=result.bottom-result.top;}
                     if(!(n->direct.draw?n->direct.draw(replay,c):replay.submit(&c,1)))throw std::runtime_error("retained operation rejected");
-                    capture_output(*n,0,replay.texture(c.destination),result);
-                    if(c.detail)capture_output(*n,1,replay.texture(c.detail),result);
+                    if(owned_native){++work.direct_native_images;work.avoided_copy_pixels+=
+                        std::uint64_t(result.right-result.left)*(result.bottom-result.top)*(c.detail?2u:1u);}
+                    else{capture_output(*n,0,replay.texture(c.destination),result);
+                        if(c.detail)capture_output(*n,1,replay.texture(c.detail),result);}
                     n->dependencies.swap(versions);n->revision=++serial;
                 }catch(...){for(unsigned i=0;i<6;++i)if(temporary[i]&&std::find(temporary,temporary+i,temporary[i])==temporary+i)replay.recycle(temporary[i]);throw;}
                 for(unsigned i=0;i<6;++i)if(temporary[i]&&std::find(temporary,temporary+i,temporary[i])==temporary+i)replay.recycle(temporary[i]);
@@ -1063,6 +1138,7 @@ public:
             world_selection=node();
         auto n=world_selection;n->area=bounds;n->selected_world=n->dynamic=n->view_dependent=true;
         n->inputs[0]=images.at(source_words);n->inputs[1]=source;
+        n->selected_format[0]=images.at(words).format;n->selected_format[1]=images.at(detail).format;
         invalidate_plan();
         n->map_dynamic=false;
         for(unsigned i=0;i<2;++i)for(auto const& patch:n->inputs[i].patches)n->map_dynamic|=patch.node->map_dynamic;
@@ -1226,6 +1302,8 @@ public:
     }
     double view_scale()const{return selected_view_scale;}
     Work last_work()const{return work;}
+    // Native completed-front identity; visual clock samples do not advance it.
+    std::uint64_t committed_revision()const{return front_revision;}
     template<class Report> void describe(Report report,bool all_images=false)const{
         std::vector<Node const*> ordered;
         auto add=[&](Node const* n){if(std::find(ordered.begin(),ordered.end(),n)==ordered.end()&&ordered.size()<(all_images?1024u:256u))ordered.push_back(n);};

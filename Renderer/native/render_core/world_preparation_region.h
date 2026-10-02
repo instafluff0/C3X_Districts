@@ -39,6 +39,7 @@ struct WorldPreparationRegion {
         auto x_core=core(region%columns,source.world_width_tiles,horizontal);
         auto y_core=core(region/columns,source.world_height_tiles,vertical);
         int left=x_core[0],top=y_core[0];
+        auto inputs=scene.world_snapshot();
         std::unordered_set<std::uint64_t> seen;
         // Proven canonical content compiles each core once. Legacy projection
         // content retains bounded edge cores. Halo coordinates stay unwrapped,
@@ -54,15 +55,15 @@ struct WorldPreparationRegion {
             // an arbitrary duplicate. They are handled by the demand path until
             // the whole-world lease can prove that projection unambiguously.
             if(!seen.insert(key).second)return false;
-            auto record=scene.retained(key);
-            if(!record || !(record->visibility_flags&C3X_RENDERER_TILE_VISIBILITY_KNOWN))return false;
-            bool explored=(record->visibility_flags&C3X_RENDERER_TILE_EXPLORED)!=0;
-            if(explored && !record->authoritative)return false;
+            auto input=inputs->current(key);
+            bool known=input && (input->occurrence.tile_flags&C3X_RENDERER_TILE_VISIBILITY_KNOWN);
+            bool explored=known && (input->occurrence.tile_flags&C3X_RENDERER_TILE_EXPLORED);
             c3x_renderer_tile_v1 tile{};
-            if(explored)tile=record->appearance;
+            if(explored)tile=input->occurrence;
             else {
-                // Unseen halo contributes topology to neighboring explored art,
-                // without importing objects or becoming a compiler core.
+                // Unknown/unseen halo supplies only the independently copied
+                // topology. Optional body/visibility omissions cannot reject a
+                // known core or turn this halo into drawable art.
                 auto canonical_x=x%source.world_width_tiles,canonical_y=y%source.world_height_tiles;
                 if(canonical_x<0)canonical_x+=source.world_width_tiles;
                 if(canonical_y<0)canonical_y+=source.world_height_tiles;
@@ -78,17 +79,18 @@ struct WorldPreparationRegion {
             tile.tile_x=x+x_core[1];tile.tile_y=y+y_core[1];
             tile.anchor_x=(x-left)*source.tile_width/2;
             tile.anchor_y=(y-top)*source.tile_height/2;
-            tile.visibility_mask=record->visibility_mask;tile.tile_visibility=record->tile_visibility;
-            tile.fog_status=record->fog_status;
-            tile.tile_flags=record->visibility_flags|C3X_RENDERER_TILE_TOPOLOGY_HALO|
-                (explored?C3X_RENDERER_TILE_PREFETCH:0u);
+            // Use only producer permissions. Explicit selected indices admit
+            // a background recipe; they do not manufacture PREFETCH/RENDER.
+            tile.tile_flags=(explored?input->occurrence.tile_flags:
+                known?input->occurrence.tile_flags&C3X_RENDERER_TILE_VISIBILITY_BITS:0u)|
+                C3X_RENDERER_TILE_TOPOLOGY_HALO;
             if(x>=left && x<left+extent && y>=top && y<top+extent &&
                x<source.world_width_tiles && y<source.world_height_tiles && explored)
                 selected.push_back(unsigned(tiles.size()));
             tiles.push_back(tile);
         }
         frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());
-        return tiles.size()<=CapturedScene::occurrence_limit;
+        return !selected.empty() && tiles.size()<=CapturedScene::occurrence_limit;
     }
 };
 
@@ -104,8 +106,8 @@ class WorldPreparationSchedule {
     bool reorder=true;
     bool canonical=false;
 public:
-    unsigned completed=0,unavailable=0;
-    void clear(){pending.clear();state.clear();scope={};completed=unavailable=0;reorder=true;}
+    unsigned attempted=0,completed=0,unavailable=0;
+    void clear(){pending.clear();state.clear();scope={};attempted=completed=unavailable=0;reorder=true;}
     void prioritize(c3x_renderer_frame_v1 const& f){
         std::int64_t distance=INT64_MAX;int next_x=center_x,next_y=center_y;
         for(unsigned i=0;i<f.tile_count;++i){auto const& tile=f.tiles[i];
@@ -173,13 +175,14 @@ public:
             auto y=WorldPreparationRegion::core(region/columns,f.world_height_tiles,vertical);
             if(!contains(tile_x,x[0],f.world_width_tiles,f.world_wrap_x!=0) ||
                !contains(tile_y,y[0],f.world_height_tiles,f.world_wrap_y!=0) || !state[region])continue;
-            if(state[region]==2)--unavailable;
-            --completed;state[region]=0;pending.push_back(region);reorder=true;
+            if(state[region]==2)--unavailable;else --completed;
+            --attempted;state[region]=0;pending.push_back(region);reorder=true;
         }
     }
     bool empty()const{return pending.empty();}
     unsigned regions()const{return unsigned(state.size());}
     unsigned next()const{return pending.back();}
-    void finish(bool success){state[pending.back()]=success?1:2;pending.pop_back();++completed;if(!success)++unavailable;}
+    void finish(bool success){state[pending.back()]=success?1:2;pending.pop_back();++attempted;
+        if(success)++completed;else ++unavailable;}
 };
 }}

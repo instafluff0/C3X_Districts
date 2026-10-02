@@ -28800,6 +28800,12 @@ read_custom_renderer_world_record (struct c3x_renderer_tile_v1 * record, int vie
 		record->tile_x = x; record->tile_y = y;
 		record->terrain_type = topology & 255u;
 		record->real_terrain_type = (topology >> 8) & 255u;
+		// Match the foreground terrain recipe without reading hidden object facts.
+		record->variant_seed = (unsigned int)p_bic_data->Map.Seed ^ ((unsigned int)x * 73856093u) ^ ((unsigned int)y * 19349663u);
+		if (record->real_terrain_type == SQ_Forest) record->feature_flags |= C3X_RENDERER_FEATURE_FOREST;
+		if (record->real_terrain_type == SQ_Jungle) record->feature_flags |= C3X_RENDERER_FEATURE_JUNGLE;
+		if (record->real_terrain_type == SQ_Swamp) record->feature_flags |= C3X_RENDERER_FEATURE_MARSH;
+		if (record->real_terrain_type == SQ_Volcano) record->feature_flags |= C3X_RENDERER_FEATURE_VOLCANO;
 		record->river_code = (topology >> 16) & 255u;
 		record->visibility_mask = mask;
 		record->tile_visibility = tile->Body.Visibility;

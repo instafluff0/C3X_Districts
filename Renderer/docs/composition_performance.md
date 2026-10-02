@@ -1,98 +1,103 @@
-# Compiled composition and static validation
+# Busy-frame preparation and delivery
 
-Current qualification: 2026-10-02, against renderer commit `ef5f612a`.
-This step improves stationary delivery but regresses ordinary camera redraws;
-the accepted installed runtime has been restored. The candidate is retained as
-source and a locally qualified build, pending the next performance step.
+Current implementation: 2026-10-02, compared with `6cd7763a`. The short busy
+route improves idle cadence and matched scroll/zoom latency. Startup regresses
+and the full route fails a far-view deadline. The candidate remains evaluation
+source; the 60 FPS goal and practical 40–50 FPS zoom target remain unmet.
 
 ## Implementation
 
-Compatible native image/HUD operations execute as ordered per-pixel spatial
-programs. Immutable operands, source atlases and compiled preparation survive
-equivalent map publications; each publication retains independent before-images
-and rebinds its current output pair. Unsupported dependent reads and capacity
-refusals preserve ordered interpreter execution. Exact source identity and
-revision checks govern reuse, including lexical HUD redraws whose wrapper
-serials change while their immutable patch contents remain identical.
+Dependency registration expands each immutable producer proof and shared page
+input once per consumer build. Strong ownership, missing-input watches, revision
+checks and bounded refusal remain. Selected compositor planes borrow exact owned
+sources and obtain owned storage before writes. Independent 555/565 unscaled
+image operations retain atomic paired admission; unsupported aliases/callbacks
+use the ordered interpreter. Counters include avoided copies and initial crops.
 
-Static raster consumers watch exact producer keys, including missing inputs,
-through a resource-free 4096-entry change window. Unchanged proofs avoid repeated
-content, visibility and membership scans; changed contexts, reset/overrun and
-ownership changes require complete validation. River flow and coast producers
-participate. Ordered receiver grids reuse unchanged contributors, and coverage
-memoization weakly references completed generations.
+Water/wave constants reuse identical bytes within a layer call. Unit materials
+retain bounded GPU constant-buffer slots. Dynamic diagnostics separate depth,
+aquatic resources, water submission, resources and waves with draw/copy/upload
+counts. These are CPU/API measurements, not GPU duration or physical scanout.
 
-Denied presentation permits return BUSY for the existing bounded retry; unchanged
-static fronts remain PENDING. Once-per-second helper counters distinguish attempt
-outcomes and report batch queue/execution/retirement wall spans. The renderer
-keeps one immediate-context owner, no new production readback or GPU wait, the
-256 MiB native and 128 MiB replay budgets, 512 public image handles and eight
-recipe-history entries. No injected source, patch symbol or export changed.
-`required_user_action: []`.
+Permitted explored terrain uses the foreground seed/feature recipe; hidden
+objects remain omitted and unknown halo facts grant no draw authority. Attempts,
+successful preparation and unavailable regions have separate counts. Canonical
+occurrences retain immutable world owners across camera changes while pruning
+departed members and preserving native order. Newly selected guards remain:
+offscreen records can cast world-space shadows. Raster/shadow proofs reject
+removed contributors.
 
-## Matched results and limits
+Newly committed fronts receive priority after the reliable image prefix retires.
+DXGI permits and queue bounds remain; BUSY distinguishes call gate, state gate
+and permit denial. One immediate-context owner and existing geometry limits,
+256 MiB native/128 MiB replay budgets, 512 image handles and eight history entries
+remain. No new Civ III patch symbol is required; `required_user_action: []`.
 
-Both arms used the same disposable save, route, common diagnostic injected
-executable, 2240×1260 client and normal water/waves/reflections. Busy idle had
-77 main/shadow/reflected units and 438 part samples; the fixed initial-4000BC
-fixture had one unit and four part samples. Actual source/workload witnesses
-matched throughout idle and at all 29 busy / 12 early-game noncanceled endpoints.
-The intentionally canceled outward request is excluded.
+## Measured results and limits
 
-| Measurement | Control | Candidate |
+Busy arms use the same disposable 1498 AD save, common injected executable,
+2240×1260 client and normal water/waves/reflections. Idle has 77 main/shadow/
+reflected units and 438 part samples.
+
+| Short busy measurement | Control | Candidate |
 | --- | ---: | ---: |
-| Busy idle successful presentations/s | 14.61 | 21.12 (+44.5%) |
-| Busy idle mean / p95 Present interval, ms | 68.54 / 103.51 | 47.27 / 78.39 |
-| Early-game idle successful presentations/s | 45.08 | 54.63 (+21.2%) |
-| Early-game idle mean / p95 Present interval, ms | 22.13 / 38.93 | 18.31 / 34.37 |
-| Busy ordinary-scroll mean correct-view latency, ms | 1117.94 | 1799.94 |
-| Busy zoom mean correct-view latency, ms | 743.62 | 1594.38 |
-| Early-game scroll / zoom mean correct-view latency, ms | 543.97 / 517.98 | 701.80 / 556.13 |
+| Successful idle presentations/s | 19.454 | 22.028 |
+| Mean / p95 Present interval, ms | 51.244 / 90.356 | 45.480 / 76.852 |
+| Matched scroll destination latency, ms | 1889.750 | 941.567 |
+| Matched zoom destination latency, ms | 1512.778 | 762.439 |
+| Startup, s | 35.766 | 53.275 |
 
-Correct-view latency runs from native acceptance to successful Present of an
-explicitly identified map source at the requested projection. Most additional
-busy-scroll latency precedes camera adoption; zoom adoption is immediate but
-delivery regresses afterward. The parallel audit identifies expensive dependency
-registration during redraws as the next investigation. This step does not claim
-a confirmed single cause or improved interactive responsiveness.
+Eleven of twelve noncanceled short endpoints qualify. Reverse-return has different
+native adoption history and unit membership; its timing is excluded. Startup
+prepares 289 permitted regions instead of counting 279 unavailable attempts as
+completed preparation. That useful additional work does not make startup fast.
 
-Busy idle preparation overlap fell from 29.36 to 20.81 ms, residual composition
-from 25.23 to 16.28 ms, and the unclassified cadence/ownership gap from 13.83 to
-10.05 ms. Warm counters show no additional source binds, atlas copies or spatial
-plan builds; the compatible live HUD block has approximately 2125 commands per
-spatial dispatch. Whole-route intervals over 100 ms fell from 338/1371 to
-223/1826, but the maximum interval rose from 881 to 1050 ms. Cold/warm/far-return
-endpoint results are mixed; no eviction is inferred from camera distance.
+The full route completes 25 of 30 planned destinations, then times out at
+far-sweep-2. The camera worker subsequently succeeds 19.277 seconds after
+acceptance; preparation reports 18.801 seconds worker work, including 14.160
+seconds terrain and 2.826 seconds upload. The helper drains without core errors.
+The failed route is excluded from primary comparisons; completed endpoints are
+diagnostic evidence. No full-route speedup is claimed.
 
-Quiet-counter cross-checks were 14.57→20.63/s busy and 50.19→53.98/s early-game.
-They omit source-qualified successful-Present witnesses and cannot certify
-same-frame correctness or causal speedup. The smaller quiet early-game gain
-shows sensitivity to detailed tracing. Present intervals and helper spans are
-CPU/API wall measurements, not GPU duration or physical scanout. BUSY combines
-permit denial and call-gate contention; no OS timer-quantum attribution is made.
+The fixed light-game comparison qualifies all twelve noncanceled endpoints and
+idle. Idle improves 55.186→57.782 presentations/s (mean/p95 intervals
+18.105/33.430→17.308/31.161 ms); scroll mean improves 785.384→630.655 ms.
+Zoom mean regresses 518.726→527.142 ms and reverse-return 9.102→110.462 ms.
+Startup is effectively unchanged at 17.356→17.297 s. These are single paired
+runs; the improved short-route measurements do not erase the failures or tails.
 
-## Verification and local evidence
+## Verification and evidence
 
-The frozen candidate passed 556 exact Windows GPU oracles and 120 independent
-clock frames, covering native 555/565/full color, clipping, aliasing, mutable
-writes, paired operations, 900+ immutable sources, publication/pair rebinding,
-lexical redraw reuse, weak retirement, refusal and unchanged caps. Host groups
-passed 34 static/dependency tests, 19 cadence/protocol tests and 22 lifecycle,
-camera, scroll, preparation and config-off tests. These groups can overlap.
+Windows checks pass 616 exact compositor GPU cases, 120 independent clock frames
+and 24 exact unit-material color/depth/reflection cases. Focused host contracts
+cover dependency reuse, membership/removal/order, permitted fog preparation,
+constant bytes, ownership, lifecycle and config-off delegation. The six-line
+injected terrain-recipe change passes the approved compilation/injection smoke.
 
-Bounded gameplay exercised zoom/text and visibly opened/closed the advisor.
-The movement command left the unit on the same sampled tile, so actual movement
-is unverified. Disposable saves and game configuration remained unchanged;
-all owned processes/tasks closed. The exact accepted executable/trio, directory
-link, cursor and renderer environment were restored and hash-verified.
+The untimed scene client uses native anchors and queues drawing/capture together
+on the existing worker. All twelve ownership assertions pass. Its strict
+seven-pair pixel oracle fails: worst mean BGR error <0.038/255, RMS <0.65/255;
+189 pixels exceed 32 codes (0.0067%). Alpha/stencil agree. Almost all changed
+depth samples differ by one D24 bit; larger differences sit at existing depth
+edges. Reviewed crops retain terrain/canopy silhouettes. This bounded numerical
+result is not an exact pixel pass or visual acceptance. Earlier relative-camera
+diagnostics are not production qualification. A corrected pre-change control
+reproduces the pan depth/edge variance exactly. All fourteen cross-arm depth
+surfaces agree; later color surfaces differ by only 31–65 pixels. The candidate's
+initial-origin color differs from control at 47,859 pixels; that seed outlier is
+new and remains documented, rather than labeled inherited or a strict pass.
 
-Private evidence is under `Renderer/.cache/compiled-composition-step/`:
-`current-build-r4-source.json`, `current-build-r4-build.json`,
-`gpu-oracles-r5.json`, `full-busy-r4-paired-analysis.json`,
-`light-r4-paired-analysis.json`, both `quiet-*-r4-paired-analysis.json` files,
-capture manifests/cleanup receipts and `accepted-runtime-final-verification.json`.
-All 802 frozen inputs remain identical except the subsequently corrected
-lifecycle test fixture, whose current version passed the 22-test host group.
-Failed trials and original evidence remain local. Only verified rebuildable
-compiler intermediates and hash-identical VM capture duplicates were removed;
-source assets and archived captures were preserved. No reference image changed.
+Disposable gameplay records eighteen accepted motions and eight distinct turns.
+Reviewed samples show visible worker/settler movement and a 4000→3600 BC HUD.
+Intermediate samples include transient terrain patches; the final sample is
+resolved. Native unit tiles and anchors change, presentations continue after the final
+turn, and no native failure or early game exit occurs. The exact accepted
+executable/trio, installed files, directory link, configuration, cursor and
+environment are restored and verified; input saves remain unchanged and owned
+processes/tasks close.
+
+Private source/build receipts, paired analyses, capture manifests, cleanup and
+restoration evidence live under `Renderer/.cache/busy-performance-step/`.
+Superseded relative-camera bulk captures and redundant generated inventories are
+removed; unique inputs, packs, current/control evidence and failure diagnostics
+remain. No reference image changed.

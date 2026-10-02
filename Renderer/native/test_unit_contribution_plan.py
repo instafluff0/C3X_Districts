@@ -88,30 +88,45 @@ def direct_stub():
 #define FALSE 0
 #define TRUE 1
 #define FAILED(x) ((x)<0)
+#define SUCCEEDED(x) ((x)>=0)
 using UINT=unsigned;using LONG=long;
 struct D3D11_RECT{LONG left=0,top=0,right=0,bottom=0;};
 struct D3D11_VIEWPORT{float TopLeftX,TopLeftY,Width,Height,MinDepth,MaxDepth;};
 struct D3D11_DEPTH_STENCIL_DESC{bool StencilEnable=false;unsigned StencilReadMask=0,StencilWriteMask=0;
  struct Face{int StencilFunc,StencilFailOp,StencilDepthFailOp,StencilPassOp;};Face FrontFace{},BackFace{};};
-struct D3D11_BUFFER_DESC{unsigned ByteWidth=0,BindFlags=0,MiscFlags=0,StructureByteStride=0;};
+struct D3D11_BUFFER_DESC{unsigned ByteWidth=0,BindFlags=0,MiscFlags=0,StructureByteStride=0,Usage=0;};
+struct D3D11_SUBRESOURCE_DATA{void const* pSysMem=nullptr;};
 struct D3D11_SHADER_RESOURCE_VIEW_DESC{int ViewDimension=0;struct{unsigned NumElements=0;}Buffer;};
 enum {D3D11_BIND_SHADER_RESOURCE=1,D3D11_RESOURCE_MISC_BUFFER_STRUCTURED=2,D3D11_SRV_DIMENSION_BUFFER=3,
  D3D11_CLEAR_STENCIL=4,D3D11_COMPARISON_ALWAYS=5,D3D11_STENCIL_OP_KEEP=6,D3D11_STENCIL_OP_REPLACE=7,
- D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST=8,DXGI_FORMAT_R32_UINT=9};
-struct ID3D11Buffer{};struct ID3D11ShaderResourceView{};struct ID3D11Texture2D{};struct ID3D11RenderTargetView{};
+ D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST=8,DXGI_FORMAT_R32_UINT=9,D3D11_USAGE_DEFAULT=10,D3D11_BIND_CONSTANT_BUFFER=11};
+struct ID3D11Buffer{unsigned references=1;bool heap=false,immutable=false;std::array<float,32> values{};
+ static inline unsigned live_heap=0;
+ void retain(){++references;}void release(){if(!--references&&heap){--live_heap;delete this;}}};
+struct ID3D11ShaderResourceView{};struct ID3D11Texture2D{};struct ID3D11RenderTargetView{};
 struct ID3D11DepthStencilState{void GetDesc(D3D11_DEPTH_STENCIL_DESC* out){*out={};}};
 namespace Microsoft{namespace WRL{template<class T>struct ComPtr{
- T* pointer=nullptr;ComPtr()=default;ComPtr(T* p):pointer(p){};T* Get()const{return pointer;}
+ T* pointer=nullptr;
+ static void retain(T* p){if constexpr(std::is_same<T,ID3D11Buffer>::value)if(p)p->retain();}
+ static void release(T* p){if constexpr(std::is_same<T,ID3D11Buffer>::value)if(p)p->release();}
+ ComPtr()=default;ComPtr(T* p):pointer(p){retain(pointer);}ComPtr(ComPtr const& p):pointer(p.pointer){retain(pointer);}
+ ComPtr& operator=(ComPtr const& p){retain(p.pointer);release(pointer);pointer=p.pointer;return *this;}
+ ~ComPtr(){release(pointer);}T* Get()const{return pointer;}
  explicit operator bool()const{return pointer!=nullptr;}T** operator&(){return &pointer;}
- ComPtr& operator=(T* p){pointer=p;return *this;}void Reset(){pointer=nullptr;}
+ ComPtr& operator=(T* p){retain(p);release(pointer);pointer=p;return *this;}void Reset(){release(pointer);pointer=nullptr;}
 };}}
 struct Device{
- template<class Desc,class T>int CreateBuffer(Desc*,void*,T** p){static T value;*p=&value;return 0;}
+ bool fail_material=false;unsigned material_creates=0;
+ int CreateBuffer(D3D11_BUFFER_DESC* d,D3D11_SUBRESOURCE_DATA const* initial,ID3D11Buffer** p){
+  if(d->BindFlags==D3D11_BIND_CONSTANT_BUFFER){if(fail_material)return -1;auto* b=new ID3D11Buffer;b->heap=true;
+   ++ID3D11Buffer::live_heap;++material_creates;assert(!initial&&d->ByteWidth==128&&d->Usage==D3D11_USAGE_DEFAULT);*p=b;return 0;}
+  static ID3D11Buffer value;*p=&value;return 0;}
  template<class T,class Desc,class U>int CreateShaderResourceView(T*,Desc*,U** p){static U value;*p=&value;return 0;}
  int CreateDepthStencilState(D3D11_DEPTH_STENCIL_DESC*,ID3D11DepthStencilState** p){static ID3D11DepthStencilState value;*p=&value;return 0;}
 };
 struct Context{
- void* shader=nullptr;unsigned bodies=0,shadows=0,uploads=0;void* shadow_shader=nullptr;
+ void* shader=nullptr;unsigned bodies=0,shadows=0,uploads=0,material_uploads=0;void* shadow_shader=nullptr;
+ ID3D11Buffer* legacy_material=nullptr;ID3D11Buffer* bound_material=nullptr;std::vector<std::array<float,32>> body_materials;
  template<class... A>void ClearDepthStencilView(A&&...){}
  template<class... A>void OMSetRenderTargets(A&&...){}
  template<class... A>void OMSetDepthStencilState(A&&...){}
@@ -124,14 +139,15 @@ struct Context{
  template<class... A>void VSSetShader(A&&...){}
  template<class T>void PSSetShader(T* p,void*,unsigned){shader=p;}
  template<class... A>void VSSetConstantBuffers(A&&...){}
- template<class... A>void PSSetConstantBuffers(A&&...){}
+ void PSSetConstantBuffers(unsigned slot,unsigned,ID3D11Buffer* const* b){if(slot==0)bound_material=*b;}
  template<class... A>void PSSetShaderResources(A&&...){}
  template<class... A>void VSSetShaderResources(A&&...){}
  template<class... A>void PSSetSamplers(A&&...){}
- template<class... A>void UpdateSubresource(A&&...){++uploads;}
+ void UpdateSubresource(ID3D11Buffer* buffer,unsigned,void const*,void const* source,unsigned,unsigned){
+  ++uploads;if(buffer->heap||buffer==legacy_material){++material_uploads;std::memcpy(buffer->values.data(),source,128);}}
  template<class... A>void IASetVertexBuffers(A&&...){}
  template<class... A>void IASetIndexBuffer(A&&...){}
- void DrawIndexed(unsigned,unsigned,int){if(shader==shadow_shader)++shadows;else ++bodies;}
+ void DrawIndexed(unsigned,unsigned,int){if(shader==shadow_shader)++shadows;else{++bodies;assert(bound_material);body_materials.push_back(bound_material->values);}}
 };
 struct ScenePose{c3x_renderer_unit_v1 draw{};unsigned unit=0,action=0;std::uint64_t pose_identity=1;int tile_x=0,tile_y=0;bool cursor=false;};
 namespace c3x_renderer{namespace tactical{
@@ -167,8 +183,8 @@ struct Direct{
  Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> self_shadow_view;
  std::vector<UnitShadow::Point> shadow_points;unsigned draws=0,ground_queries=0,self_maps=0;
  ID3D11DepthStencilState* visible_depth=nullptr;void* layout=nullptr;void* vertex=nullptr;int pixel_value=0,shadow_value=1;
- int* pixel=&pixel_value;int* shadow_pixel=&shadow_value;ID3D11Buffer buffer;
- ID3D11Buffer* placement=&buffer;ID3D11Buffer* material=&buffer;ID3D11Buffer* beauty=&buffer;
+ int* pixel=&pixel_value;int* shadow_pixel=&shadow_value;ID3D11Buffer placement_value,material_value,beauty_value;
+ ID3D11Buffer* placement=&placement_value;ID3D11Buffer* material=&material_value;ID3D11Buffer* beauty=&beauty_value;
  ID3D11ShaderResourceView srv;ID3D11ShaderResourceView* unshadowed_view=&srv;void* samplers[4]={};
  SandboxPassWorkload work_value;SandboxPassWorkload* work=&work_value;
  bool initialize(){return true;}
@@ -188,7 +204,7 @@ void setup(Direct& direct){
  static ID3D11ShaderResourceView texture;renderer.unit_bodies.textures[0].view=&texture;
  direct.meshes.resize(1);static ID3D11Buffer buffer;direct.meshes[0].vertices=&buffer;direct.meshes[0].indices=&buffer;
  direct.meshes[0].palette_view=&texture;direct.meshes[0].shadow_bounds.prepare(*renderer.unit_bodies.meshes[0].animation);
- renderer.context->shadow_shader=direct.shadow_pixel;
+ renderer.context->shadow_shader=direct.shadow_pixel;renderer.context->legacy_material=direct.material;
 }
 ScenePose occurrence(int id,int x,int y){ScenePose p;p.draw.unit_id=id;p.draw.action=1;p.draw.direction=1;
  p.draw.frame_count=10;p.draw.sprite_width=128;p.draw.sprite_height=64;p.draw.body_x=x-64;p.draw.body_y=y-32;
@@ -333,6 +349,88 @@ int main(){Direct direct;setup(direct);c3x_renderer_frame_v1 frame{};frame.targe
  ++frame.presentation_time_ticks;assert(direct.prepare_real(frame,poses,12,plan));assert(direct.material_builds==0);
  renderer.unit_bodies.catalogue_generation++;
  ++frame.presentation_time_ticks;assert(direct.prepare_real(frame,poses,12,plan));assert(direct.material_builds==1);
+}
+''', sources=("Renderer/native/environment_runtime.cpp",))
+
+    def test_material_gpu_slots_share_exact_values_across_passes_and_changes(self):
+        host_cpp(direct_stub() + r'''
+int main(){
+ assert(ID3D11Buffer::live_heap==0);
+ {
+ Direct direct;setup(direct);c3x_renderer_frame_v1 frame{};frame.target_width=1000;frame.target_height=800;
+ frame.tile_width=128;frame.tile_height=64;frame.presentation_frequency=1000;frame.presentation_time_ticks=1;
+ std::vector<ScenePose> poses;UnitContributionPlan plan;
+ for(unsigned i=0;i<438;++i){auto p=occurrence(i+1,100+i,300);p.draw.display_color_rgb=(i%9)*12000;
+  poses.push_back(p);plan.entries.push_back({i,unit_main_body|unit_ground_shadow|unit_reflection});}
+ assert(direct.prepare_real(frame,poses,12,plan));
+ assert(direct.material_buffer_builds==9&&direct.material_buffer_uploads==9&&direct.material_buffer_reuses==429);
+ auto creates=renderer.device->material_creates,uploads=renderer.context->material_uploads;
+ std::vector<std::array<float,32>> expected;
+ for(auto const& prepared:direct.prepared_units)expected.push_back(prepared.parts[0].material);
+ Target target;assert(direct.draw_real(frame,poses,target,1,12,true,1));
+ assert(direct.draw_real(frame,poses,target,1,12,false,1));
+ assert(direct.material_upload_fallbacks==0&&renderer.context->material_uploads==uploads);
+ assert(renderer.context->bodies==876&&renderer.context->shadows==438);
+ assert(renderer.context->body_materials.size()==876);
+ for(unsigned pass=0;pass<2;++pass)for(unsigned i=0;i<438;++i)
+  assert(renderer.context->body_materials[pass*438+i]==expected[i]);
+ // Movement, direction, frame selection and zoom preserve exact material ownership.
+ for(auto& pose:poses){pose.draw.body_x+=17;pose.draw.body_y-=8;pose.draw.direction=2;pose.draw.action_cursor=3;}
+ ++frame.presentation_time_ticks;assert(direct.prepare_real(frame,poses,12,plan));
+ assert(direct.material_buffer_builds==0&&direct.material_buffer_uploads==0&&direct.material_buffer_reuses==438);
+ assert(direct.draw_real(frame,poses,target,1,12,true,2));assert(direct.draw_real(frame,poses,target,1,12,false,2));
+ assert(renderer.device->material_creates==creates&&renderer.context->material_uploads==uploads);
+ // Lighting and tint/catalogue changes select new exact values; draw sees every changed byte.
+ for(auto& p:poses)p.draw.display_color_rgb^=0x404040;
+ renderer.unit_bodies.catalogue_generation++;
+ ++frame.presentation_time_ticks;assert(direct.prepare_real(frame,poses,19,plan));
+ assert(direct.material_buffer_uploads==9);
+ renderer.context->body_materials.clear();assert(direct.draw_real(frame,poses,target,1,19,false,1));
+ for(unsigned i=0;i<438;++i)assert(renderer.context->body_materials[i]==direct.prepared_units[i].parts[0].material);
+ }
+ assert(ID3D11Buffer::live_heap==0);
+}
+''', sources=("Renderer/native/environment_runtime.cpp",))
+
+    def test_material_gpu_slot_overflow_replacement_and_failure_keep_all_draws(self):
+        host_cpp(direct_stub() + r'''
+int main(){
+ {
+ Direct direct;setup(direct);c3x_renderer_frame_v1 frame{};frame.target_width=1000;frame.target_height=800;
+ frame.tile_width=128;frame.tile_height=64;frame.presentation_frequency=1000;frame.presentation_time_ticks=1;
+ std::vector<ScenePose> poses;UnitContributionPlan plan;
+ for(unsigned i=0;i<300;++i){auto p=occurrence(i+1,500,400);p.draw.display_color_rgb=i;
+  poses.push_back(p);plan.entries.push_back({i,unit_main_body|unit_ground_shadow|unit_reflection});}
+ assert(direct.prepare_real(frame,poses,12,plan));
+ assert(direct.material_samples.size()==256&&direct.material_buffer_builds==256&&direct.material_buffer_uploads==256);
+ assert(ID3D11Buffer::live_heap==256);
+ for(unsigned i=0;i<300;++i)assert(bool(direct.prepared_units[i].parts[0].material_buffer)==(i<256));
+ Target target;assert(direct.draw_real(frame,poses,target,1,12,true,1));assert(direct.draw_real(frame,poses,target,1,12,false,1));
+ assert(direct.material_upload_fallbacks==88&&renderer.context->bodies==600&&renderer.context->shadows==300);
+ for(unsigned pass=0;pass<2;++pass)for(unsigned i=0;i<300;++i)
+  assert(renderer.context->body_materials[pass*300+i]==direct.prepared_units[i].parts[0].material);
+ // Next frame may replace unpinned slots, reusing GPU buffers instead of allocating.
+ for(auto& p:poses)p.draw.display_color_rgb+=1000;
+ ++frame.presentation_time_ticks;assert(direct.prepare_real(frame,poses,12,plan));
+ assert(direct.material_buffer_builds==0&&direct.material_buffer_uploads==256&&ID3D11Buffer::live_heap==256);
+ renderer.context->body_materials.clear();assert(direct.draw_real(frame,poses,target,1,12,false,1));
+ for(unsigned i=0;i<300;++i)assert(renderer.context->body_materials[i]==direct.prepared_units[i].parts[0].material);
+ }
+ assert(ID3D11Buffer::live_heap==0);
+ {
+ Direct direct;setup(direct);renderer.device->fail_material=true;
+ c3x_renderer_frame_v1 frame{};frame.target_width=1000;frame.target_height=800;
+ frame.tile_width=128;frame.tile_height=64;frame.presentation_frequency=1000;
+ std::vector<ScenePose> poses={occurrence(1,500,400)};UnitContributionPlan plan;plan.entries={{0,7}};
+ assert(direct.prepare_real(frame,poses,12,plan));assert(!direct.prepared_units[0].parts[0].material_buffer);
+ assert(direct.material_buffer_builds==0&&direct.material_buffer_uploads==0);
+ Target target;auto bodies=renderer.context->bodies;
+ assert(direct.draw_real(frame,poses,target,1,12,true,1));assert(direct.draw_real(frame,poses,target,1,12,false,1));
+ assert(renderer.context->bodies==bodies+2&&direct.material_upload_fallbacks==2);
+ ++frame.presentation_time_ticks;assert(direct.prepare_real(frame,poses,12,plan));
+ assert(direct.material_builds==0&&direct.material_buffer_builds==0);
+ }
+ assert(ID3D11Buffer::live_heap==0);
 }
 ''', sources=("Renderer/native/environment_runtime.cpp",))
 

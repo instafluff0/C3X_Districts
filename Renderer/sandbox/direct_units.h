@@ -50,11 +50,16 @@ struct SandboxDirectUnits {
     unsigned draws=0,pose_builds=0,mesh_builds=0;
 #ifdef C3X_RENDERER64_FRESH
     using ScenePose=c3x_renderer::render_core::UnitInstances::ScenePose;
+    struct MaterialSample {
+        std::array<float,32> values{};
+        Microsoft::WRL::ComPtr<ID3D11Buffer> constants;
+    };
     struct PartSample {
         unsigned frame=0;
         float const* blended=nullptr;
         Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> palette;
         std::array<float,32> material{};
+        Microsoft::WRL::ComPtr<ID3D11Buffer> material_buffer;
         std::array<ID3D11ShaderResourceView*,4> textures{};
     };
     struct ShadowSlot {
@@ -80,8 +85,9 @@ struct SandboxDirectUnits {
     std::vector<PreparedUnit> prepared_units;
     c3x_renderer::render_core::FrameSampleCache<std::vector<std::uint64_t>,ShadowSlot,64> shared_shadows;
     ShadowSlot working_shadow;
-    c3x_renderer::render_core::FrameSampleCache<std::vector<std::uint64_t>,std::array<float,32>,256> material_samples;
+    c3x_renderer::render_core::FrameSampleCache<std::vector<std::uint64_t>,MaterialSample,256> material_samples;
     unsigned material_builds=0,material_reuses=0,shadow_contributors=0;
+    unsigned material_buffer_builds=0,material_buffer_reuses=0,material_buffer_uploads=0,material_upload_fallbacks=0;
     std::vector<PaletteSlot> prepared_palettes;
     static constexpr unsigned palette_slot_limit=1024;
     unsigned required_samples=0,part_samples=0,shadow_samples=0,shadow_reuses=0,
@@ -100,6 +106,7 @@ struct SandboxDirectUnits {
         std::size_t bytes=mesh_bytes+textures.size()*512u*512u*4u;
         for(auto const& palette:prepared_palettes)if(palette.buffer)bytes+=16384u;
         if(transition_palette)bytes+=16384u;
+        for(unsigned i=0;i<material_samples.size();++i)if(material_samples[i].value.constants)bytes+=128u;
         return bytes;
 #else
         return 0;
@@ -722,6 +729,7 @@ float4 PSShadow(Output i):SV_Target {
         prepared_units.clear();transitions.retain(required);shared_shadows.begin();material_samples.begin();
         required_samples=part_samples=shadow_samples=shadow_reuses=shadow_overflow=0;
         main_contributors=reflection_contributors=shadow_contributors=palette_uploads=material_builds=material_reuses=0;
+        material_buffer_builds=material_buffer_reuses=material_buffer_uploads=material_upload_fallbacks=0;
         if(plan.entries.empty())return true;
         if(plan.entries.size()>4096 || !initialize())return false;
         auto environment=c3x_renderer::evaluate_environment(visual_hour,frame.season);
@@ -819,7 +827,10 @@ float4 PSShadow(Output i):SV_Target {
                 for(auto texture:part.material_textures)material_key.push_back(texture);
                 auto material_slot=material_samples.select(material_key);
                 auto& values=prepared.material;
-                if(material_slot!=UINT_MAX&&material_samples[material_slot].valid){values=material_samples[material_slot].value;++material_reuses;}
+                bool material_ready=material_slot!=UINT_MAX&&material_samples[material_slot].valid;
+                if(material_ready){values=material_samples[material_slot].value.values;
+                    prepared.material_buffer=material_samples[material_slot].value.constants;
+                    material_buffer_reuses+=unsigned(bool(prepared.material_buffer));++material_reuses;}
                 else {
                     float player_color[3]={};
                     for(unsigned axis=0;axis<3;++axis){float color=float((draw.display_color_rgb>>(16-axis*8))&255)/255;
@@ -833,13 +844,33 @@ float4 PSShadow(Output i):SV_Target {
                     values[7]=part.strength;values[11]=environment.sun_intensity;values[19]=environment.moon_intensity;
                     values[23]=part.material_model;values[27]=part.cutout;
                     for(unsigned channel=0;channel<4;++channel)values[28+channel]=part.material_textures[channel]!=UINT32_MAX;
-                    if(material_slot!=UINT_MAX){material_samples[material_slot].value=values;material_samples[material_slot].valid=true;}
                     ++material_builds;
                 }
                 for(unsigned channel=0;channel<4;++channel)if(part.material_textures[channel]!=UINT32_MAX){
                     auto texture=part.material_textures[channel];
                     if(texture>=bodies.textures.size() || !bodies.textures[texture].view)return false;
                     prepared.textures[channel]=bodies.textures[texture].view;values[28+channel]=1;
+                }
+                if(material_slot!=UINT_MAX&&!material_ready){
+                    auto& cached=material_samples[material_slot];cached.value.values=values;
+                    // The existing sample cache pins selected slots for this
+                    // entire frame. A slot is updated only when its exact
+                    // material changes; both passes borrow the prepared value.
+                    if(!cached.value.constants){
+                        D3D11_BUFFER_DESC desc={};desc.ByteWidth=sizeof(values);
+                        desc.Usage=D3D11_USAGE_DEFAULT;desc.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
+                        if(SUCCEEDED(renderer.device->CreateBuffer(&desc,nullptr,&cached.value.constants)))
+                            ++material_buffer_builds;
+                    }
+                    if(cached.value.constants){
+                        renderer.context->UpdateSubresource(cached.value.constants.Get(),0,nullptr,values.data(),0,0);
+                        prepared.material_buffer=cached.value.constants;++material_buffer_uploads;
+                        work->upload_buffer(cached.value.constants.Get());
+                    }
+                    // Allocation failure and the bounded sample overflow keep
+                    // the existing per-draw upload path without retrying this
+                    // failed sample on every animation frame.
+                    cached.valid=true;
                 }
                 sample.parts.push_back(std::move(prepared));++part_samples;
             }
@@ -943,6 +974,7 @@ float4 PSShadow(Output i):SV_Target {
         auto const& environment=prepared_environment;
         auto key_light=c3x_renderer::lighting::key_light(environment);
         context->UpdateSubresource(beauty,0,nullptr,prepared_beauty.data(),0,0);work->upload_buffer(beauty);
+        ID3D11Buffer* bound_material=nullptr;
         for(auto& prepared:prepared_units){
             if(reflected?!prepared.reflected:!(prepared.main||prepared.shadow))continue;
             auto const& instance=prepared.instance;auto const& unit=bodies.units[instance.unit];
@@ -975,7 +1007,14 @@ float4 PSShadow(Output i):SV_Target {
                     unit.scale,unit.offset_z,0,0,
                     reflected?2.f:0.f,0,0,part.cutout,
                     shadow_fit.left,shadow_fit.top,1/shadow_fit.width,1/shadow_fit.height,shadow_fit.dx,shadow_fit.dy};
-                context->UpdateSubresource(material,0,nullptr,part_sample.material.data(),0,0);work->upload_buffer(material);
+                auto* material_constants=part_sample.material_buffer.Get();
+                if(!material_constants){
+                    context->UpdateSubresource(material,0,nullptr,part_sample.material.data(),0,0);work->upload_buffer(material);
+                    material_constants=material;++material_upload_fallbacks;
+                }
+                if(bound_material!=material_constants){
+                    context->PSSetConstantBuffers(0,1,&material_constants);bound_material=material_constants;
+                }
                 ID3D11Buffer* static_vertices=gpu.vertices.Get();
                 UINT stride=sizeof(Vertex),offset=0;
                 context->IASetVertexBuffers(0,1,&static_vertices,&stride,&offset);

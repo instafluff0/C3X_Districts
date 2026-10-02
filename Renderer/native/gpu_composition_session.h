@@ -243,6 +243,7 @@ public:
         if(ok)try{layers.record(draw,std::move(operation));}catch(std::exception const& e){OutputDebugStringA(e.what());layers.discard();}
         return ok?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_BAD_ARGUMENT;
     }
+    std::uint64_t committed_revision()const{return layers.committed_revision();}
     std::uint64_t visual_sample_allocations()const{return layers.sampling_allocations();}
     std::uint64_t visual_sample_imports()const{return layers.sampling_imports();}
     std::uint64_t visual_bytes()const{return layers.bytes();}

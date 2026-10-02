@@ -954,22 +954,26 @@ struct SandboxSceneShadow {
         auto exact=[&](){
         if(!append && !atlas_inputs.valid([&](auto const& proof){return renderer.raster_content_valid(proof);},
             [&](auto tile){auto record=renderer.topology_cache.retained(tile);return record?record->visibility_revision:0;}))return false;
-        bool valid=true;
+        bool valid=true;if(!append)atlas_inputs.begin_membership();
         for(auto const& caster:caster_inputs){
             ++atlas_inputs.validation_counts.membership;
             auto p=Shadow::project(caster.bounds,caster.offset,renderer.shadow_basis);
             if(p[2]<box[0] || p[3]<box[1] || p[0]>box[0]+box[2] || p[1]>box[1]+box[3])continue;
             auto key=caster_key(caster);
-            if(!append){if(!atlas_inputs.contains(key)){valid=false;++renderer.raster_proof_rejections[5];}continue;}
+            if(!append){if(!atlas_inputs.visit_membership(key)){valid=false;++renderer.raster_proof_rejections[5];}continue;}
             auto mesh=std::static_pointer_cast<CachedMeshGeneration>(caster_lease->content.get({0,caster.content_generation}));
             auto tile=mesh?mesh->proof->tile:0;
             auto observed=renderer.topology_cache.retained(tile);
-            valid=atlas_inputs.add(key,mesh?mesh->proof:nullptr,tile,observed?observed->visibility_revision:0) && valid;
-            if(mesh&&mesh->proof)valid=renderer.watch_raster_dependencies(*mesh->proof,atlas_inputs)&&valid;
+            bool new_proof=false;
+            valid=atlas_inputs.add(key,mesh?mesh->proof:nullptr,tile,observed?observed->visibility_revision:0,&new_proof) && valid;
+            if(new_proof)valid=renderer.watch_raster_dependencies(*mesh->proof,atlas_inputs)&&valid;
         }
-        if(append)atlas_inputs.finish_dependencies();return valid;
+        if(append)atlas_inputs.finish_dependencies();
+        else if(!atlas_inputs.exact_membership()){valid=false;++renderer.raster_proof_rejections[5];}
+        return valid;
         };
-        if(append)return exact();
+        if(append){auto begin=std::chrono::steady_clock::now();bool valid=exact();
+            atlas_inputs.validation_counts.append_ms+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count();return valid;}
         AtlasInputs::ValidationKey key={caster_signature,renderer.topology_cache.scope_sequence(),renderer.content_revision,
             renderer.device_generation,unsigned(renderer.geometry_canonical_world)};
         auto bits=[](float value){std::uint32_t result;std::memcpy(&result,&value,sizeof(result));return std::uint64_t(result);};
@@ -1213,6 +1217,10 @@ struct SandboxMaterialChannel {
 
 struct SandboxFreshPipeline {
     SandboxPassWorkload work;
+    struct PhaseConstantCounts {
+        std::uint64_t water_records=0,water_updates=0,water_hits=0;
+        std::uint64_t wave_records=0,wave_updates=0,wave_hits=0;
+    } phase_constant_counts;
     SandboxVisualShaders visual;
     SandboxSceneShadow shadow;
     c3x_renderer::city_fidelity::Glow glow;
@@ -1250,6 +1258,7 @@ struct SandboxFreshPipeline {
     std::uint64_t static_receiver_revision=0;
     std::uint64_t reflection_revision=0;
     std::uint64_t resident_signature=0;
+    std::uint64_t resident_order_revision=0;
     unsigned resident_builds=0;
     int wrap_pixels=0;
     bool visibility_valid=false;
@@ -1296,6 +1305,8 @@ struct SandboxFreshPipeline {
         for(auto const& inputs:raster_inputs){auto const& counts=inputs.validation_counts;
             result.raster.full+=counts.full;result.raster.content+=counts.content;result.raster.visibility+=counts.visibility;
             result.raster.membership+=counts.membership;result.raster.regions+=counts.regions;result.raster.reused+=counts.reused;result.raster.changes+=counts.changes;
+            result.raster.proof_registrations+=counts.proof_registrations;result.raster.dependency_watch_calls+=counts.dependency_watch_calls;
+            result.raster.source_expansions+=counts.source_expansions;result.raster.source_reuses+=counts.source_reuses;result.raster.append_ms+=counts.append_ms;
         }
         result.atlas=shadow.atlas_inputs.validation_counts;result.receiver_visits=shadow.receiver_visits;
         result.receiver_builds=shadow.receiver_builds;result.receiver_reuses=shadow.receiver_reuses;
@@ -1305,6 +1316,9 @@ struct SandboxFreshPipeline {
     enum PrepareSpan {prepare_setup_resources,prepare_capture,prepare_raster_proof,
         prepare_body_requirements,prepare_city_shadow,prepare_unit_selection,prepare_unit_pose,prepare_span_count};
     std::array<double,prepare_span_count> prepare_subspans{};
+    enum DynamicSpan {dynamic_depth_setup,dynamic_aquatic,dynamic_water_scene,dynamic_resources,dynamic_waves,dynamic_span_count};
+    std::array<double,dynamic_span_count> dynamic_subspans{};
+    std::array<SandboxPassWorkload::CallCounts,dynamic_span_count> dynamic_calls{};
     unsigned prepare_unit_plan_reused=0,prepare_unit_reselected=0;
     double phases[6]={};
 #ifdef C3X_RENDERER64_FRESH
@@ -1353,6 +1367,16 @@ struct SandboxFreshPipeline {
     }
     bool capture(ViewportShaderSettings const& settings,
             ViewportShaderSettings const& reflected,int width,int height,int next_wrap_pixels) {
+#ifdef C3X_RENDERER64_FRESH
+        // A set proof can certify additions/removals, but alpha pixels also
+        // depend on primitive order. Retire both pixel owners once after an
+        // actual boundary reorder; unchanged camera frames only compare epochs.
+        auto order=renderer.geometry_vertex_buffers.order_revision();
+        if(resident_order_revision!=order){
+            static_rasters.invalidate_all(c3x_renderer::render_core::raster_scene);
+            resident_order_revision=order;
+        }
+#endif
         if (resident_signature!=view_revision() ||
                 wrap_pixels!=next_wrap_pixels) {
 #ifndef C3X_RENDERER64_FRESH
@@ -1493,23 +1517,28 @@ struct SandboxFreshPipeline {
         auto exact=[&](){
         if(!append && !inputs.valid([&](auto const& proof){return renderer.raster_content_valid(proof);},
                 [&](auto tile){auto record=renderer.topology_cache.retained(tile);return record?record->visibility_revision:0;}))return false;
-        bool valid=true;auto clip=source_bounds(settings,rect,false);
+        bool valid=true;if(!append)inputs.begin_membership();auto clip=source_bounds(settings,rect,false);
         contributors(settings,clip,false,[&](unsigned layer,auto const& record){
             ++inputs.validation_counts.membership;
             if(renderer.water_scene_active && record.water_dependent)return;
             if(!renderer.chunk_intersects_region(GeometryDrawReference(record),settings,clip,false))return;
             auto key=contributor_key(layer,record);
-            if(!append){if(!inputs.contains(key)){valid=false;++renderer.raster_proof_rejections[5];}return;}
+            if(!append){if(!inputs.visit_membership(key)){valid=false;++renderer.raster_proof_rejections[5];}return;}
             auto mesh=std::static_pointer_cast<CachedMeshGeneration>(resident_lease->content.get(record.owner));
             auto tile=renderer.topology_cache.key(record.tile_x,record.tile_y);
             auto observed=renderer.topology_cache.retained(tile);
-            valid=inputs.add(key,mesh?mesh->proof:nullptr,tile,observed?observed->visibility_revision:0) && valid;
-            if(mesh&&mesh->proof)valid=renderer.watch_raster_dependencies(*mesh->proof,inputs)&&valid;
+            bool new_proof=false;
+            valid=inputs.add(key,mesh?mesh->proof:nullptr,tile,observed?observed->visibility_revision:0,&new_proof) && valid;
+            if(new_proof)valid=renderer.watch_raster_dependencies(*mesh->proof,inputs)&&valid;
             valid=inputs.watch(RasterInputs::Revisions::Domain::visibility,tile)&&valid;
         });
-        if(append)inputs.finish_dependencies();return valid;
+        if(append)inputs.finish_dependencies();
+        else if(!inputs.exact_membership()){valid=false;++renderer.raster_proof_rejections[5];}
+        return valid;
         };
-        return append?exact():inputs.validate(renderer.raster_dependency_revisions,raster_validation_key(settings,rect),exact);
+        if(append){auto begin=std::chrono::steady_clock::now();bool valid=exact();
+            inputs.validation_counts.append_ms+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count();return valid;}
+        return inputs.validate(renderer.raster_dependency_revisions,raster_validation_key(settings,rect),exact);
 #else
         return true;
 #endif
@@ -1705,6 +1734,19 @@ struct SandboxFreshPipeline {
         bool original_emission=GetEnvironmentVariableA("C3X_SANDBOX_CITY_SUBMISSION_REFERENCE",emission_control,sizeof(emission_control)) && emission_control[0]=='1';
         ViewportShaderSettings previous{};
         bool previous_valid=false;
+        // Each layer invocation owns its last upload across parameter flushes.
+        // Other passes can change these buffers, so no value survives the call.
+        using WaterSample=c3x_renderer::render_core::WaterMaterialFrame;
+        WaterSample last_water{};
+        std::array<float,4> last_wave{};
+        bool last_water_valid=false,last_wave_valid=false,water_bound=false;
+        auto same_float=[](float a,float b){return !std::memcmp(&a,&b,sizeof(float));};
+        auto same_water=[&](WaterSample const& a,WaterSample const& b){
+            if(!same_float(a.time,b.time))return false;
+            for(unsigned i=0;i<3;++i)if(!same_float(a.drift[i],b.drift[i]))return false;
+            for(unsigned i=0;i<4;++i)if(!same_float(a.camera[i],b.camera[i]))return false;
+            return true;
+        };
         std::array<ViewportShaderSettings,c3x_renderer::render_core::DrawParameterStream::limit> values{};
         std::vector<GeometryDrawReference> selected;
         selected.reserve(values.size());
@@ -1840,12 +1882,22 @@ struct SandboxFreshPipeline {
                     if(!renderer.water_scene_active || !chunk.water_visible() || mesh.visual_time>=0){
                         sample.time=0;sample.drift[0]=sample.drift[1]=sample.drift[2]=0;
                     }
-                    context->UpdateSubresource(renderer.water_frame,0,nullptr,&sample,0,0);work.upload_buffer(renderer.water_frame);
-                    context->PSSetConstantBuffers(10,1,&renderer.water_frame);
+                    ++phase_constant_counts.water_records;
+                    if(!last_water_valid || !same_water(sample,last_water)){
+                        context->UpdateSubresource(renderer.water_frame,0,nullptr,&sample,0,0);work.upload_buffer(renderer.water_frame);
+                        last_water=sample;last_water_valid=true;++phase_constant_counts.water_updates;
+                    }else ++phase_constant_counts.water_hits;
+                    if(!water_bound){context->PSSetConstantBuffers(10,1,&renderer.water_frame);water_bound=true;}
                 }
                 if(layer==geometry_wave){
-                    float sample[]={mesh.visual_time<0?renderer.wave_time_seconds:mesh.visual_time,0,0,0};
-                    context->UpdateSubresource(renderer.wave_frame,0,nullptr,sample,0,0);work.upload_buffer(renderer.wave_frame);
+                    std::array<float,4> sample={mesh.visual_time<0?renderer.wave_time_seconds:mesh.visual_time,0,0,0};
+                    bool same=last_wave_valid;
+                    for(unsigned j=0;same && j<sample.size();++j)same=same_float(sample[j],last_wave[j]);
+                    ++phase_constant_counts.wave_records;
+                    if(!same){
+                        context->UpdateSubresource(renderer.wave_frame,0,nullptr,sample.data(),0,0);work.upload_buffer(renderer.wave_frame);
+                        last_wave=sample;last_wave_valid=true;++phase_constant_counts.wave_updates;
+                    }else ++phase_constant_counts.wave_hits;
                 }
                 context->DrawIndexed(mesh.index_count,0,0);work.draw(mesh.index_count,1,unsigned(layer));++renderer.frame_draw_calls;
                 if(mesh.resource_instance){
@@ -2498,7 +2550,7 @@ struct SandboxFreshPipeline {
         work.begin();shadow.work=&work;sandbox_direct_units.work=&work;bloom.work=&work;
         body_requirement_builds=body_requirement_reuses=body_requirement_visits=0;body_requirement_ms=0;
         body_requirements.coverage_probes=0;
-        prepare_subspans={};prepare_unit_plan_reused=prepare_unit_reselected=0;
+        prepare_subspans={};dynamic_subspans={};dynamic_calls={};prepare_unit_plan_reused=prepare_unit_reselected=0;
         char scroll_diagnostics[8]={};
         bool trace_scroll=GetEnvironmentVariableA("C3X_SANDBOX_SCROLL_CALLS",
             scroll_diagnostics,sizeof(scroll_diagnostics)) && scroll_diagnostics[0]=='1';
@@ -2923,6 +2975,15 @@ struct SandboxFreshPipeline {
                 cache_scrolls-scroll_before,cache_full_draws-full_before);
             std::fflush(stdout);
         }
+        LARGE_INTEGER dynamic_previous=ticks[3];auto dynamic_previous_calls=work.calls;
+        auto mark_dynamic=[&](DynamicSpan span){
+            if(!renderer.trace.level)return;
+            LARGE_INTEGER now{};QueryPerformanceCounter(&now);
+            dynamic_subspans[span]=double(now.QuadPart-dynamic_previous.QuadPart)*1000/frequency.QuadPart;
+            dynamic_calls[span]={work.calls.draws-dynamic_previous_calls.draws,work.calls.copies-dynamic_previous_calls.copies,
+                work.calls.uploads-dynamic_previous_calls.uploads};
+            dynamic_previous=now;dynamic_previous_calls=work.calls;
+        };
         context->OMSetRenderTargets(0,nullptr,nullptr);
         float dynamic_clear[4]={};
         context->ClearRenderTargetView(glow.linear.target,dynamic_clear);work.clear(glow.linear.target);
@@ -2943,6 +3004,7 @@ struct SandboxFreshPipeline {
             aquatic_bounds[3]=std::min(float(h),std::max(aquatic_bounds[3],box.bottom+dy+8));
         }
         context->UpdateSubresource(aquatic_bounds_buffer,0,nullptr,aquatic_bounds,0,0);work.upload_buffer(aquatic_bounds_buffer);
+        mark_dynamic(dynamic_depth_setup);
         if(aquatic_visible) {
             if(!aquatic_scene.ensure(renderer.device,w,h,DXGI_FORMAT_R8G8B8A8_UNORM))
                 return false;
@@ -2953,6 +3015,7 @@ struct SandboxFreshPipeline {
                     aquatic_scene.target,nullptr,true))return fail("aquatic_resources");
             context->OMSetRenderTargets(0,nullptr,nullptr);
         }
+        mark_dynamic(dynamic_aquatic);
         work.pass=SandboxPassWorkload::water;
         char water_diagnostic[8]{};
         bool skip_water=GetEnvironmentVariableA("C3X_SANDBOX_SKIP_WATER_PASS",
@@ -2962,9 +3025,11 @@ struct SandboxFreshPipeline {
             if(!draw_scene(water_visible,settings,full,glow.linear.target,
                     glow.linear.depth,false,float(scene_scale)))return fail("water_scene");
         }
+        mark_dynamic(dynamic_water_scene);
         if(!draw_resource_poses(renderer.sandbox_resource_poses,settings,full,
                 glow.linear.target,glow.linear.depth))
             return fail("resource_scene");
+        mark_dynamic(dynamic_resources);
         char wave_diagnostic[8]{};
         bool skip_wave=GetEnvironmentVariableA("C3X_SANDBOX_SKIP_WAVE",
             wave_diagnostic,sizeof(wave_diagnostic)) &&
@@ -2981,6 +3046,7 @@ struct SandboxFreshPipeline {
             if(!draw_layer(waves,geometry_wave,settings,full,glow.linear.target,
                     glow.linear.depth,false,float(scene_scale)))return fail("coastal_waves");
         }
+        mark_dynamic(dynamic_waves);
         QueryPerformanceCounter(&ticks[4]);
 #ifdef C3X_RENDERER64_FRESH
         gpu_phases.pass_end(renderer.context);gpu_phases.pass_begin(renderer.context,GpuPhases::body);

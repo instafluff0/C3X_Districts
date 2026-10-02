@@ -60,6 +60,8 @@ int main(){
     def test_native_and_fresh_water_bind_current_fogged_material(self):
         native=Path('Renderer/native/c3x_renderer.cpp').read_text()
         fresh=Path('Renderer/sandbox/fresh_pipeline.h').read_text()
+        phase_cache=fresh.split('        using WaterSample=',1)[1].split('        std::array<ViewportShaderSettings',1)[0]
+        phase_cache='        using WaterSample='+phase_cache
         blocks=[]
         for source,start,end in [(native,'if(environment_profile && (layer==geometry_water || layer==geometry_river)){','if(layer==geometry_wave)'),
                                  (fresh,'if(renderer.environment_profile && (layer==geometry_water || layer==geometry_river)){','if(layer==geometry_wave)')]:
@@ -67,6 +69,7 @@ int main(){
             blocks.append(start+block)
         run_cpp(r'''
 #include <cassert>
+#include <array>
 #include <initializer_list>
 #include <cstring>
 #include "Renderer/native/render_core/water_material_frame.h"
@@ -76,6 +79,7 @@ struct Context {WaterMaterialFrame copied;unsigned updates=0;
  void PSSetConstantBuffers(int,int,int*){}
 } context_value,*context=&context_value;
 struct Work {void upload_buffer(int){}} work;
+struct PhaseCounts {unsigned water_records=0,water_updates=0,water_hits=0;} phase_constant_counts;
 struct Renderer {bool environment_profile=true,water_scene_active=true;WaterMaterialFrame water_material;int water_frame=1;} renderer;
 struct Mesh {float visual_time=-1;} mesh;
 struct Chunk {bool explored=true;bool water_visible()const{return explored;}Mesh const& content()const{return mesh;}} chunk;
@@ -85,7 +89,7 @@ void native_bind(int layer){
 ''' + blocks[0] + r'''
 }
 void fresh_bind(int layer){
-''' + blocks[1] + r'''
+''' + phase_cache + blocks[1] + r'''
 }
 int main(){
  c3x_renderer_frame_v1 frame{};frame.presentation_time_ticks=7000;frame.presentation_frequency=1000;

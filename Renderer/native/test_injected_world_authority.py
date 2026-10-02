@@ -27,6 +27,7 @@ PRELUDE = r'''
 #include <string.h>
 #include "Renderer/native/c3x_renderer_api.h"
 #define __ 0
+/*PRODUCTION_SQUARE_TYPES*/
 typedef struct c3x_renderer_tile_v1 c3x_renderer_tile_v1;
 typedef unsigned uint;
 typedef unsigned char byte;
@@ -57,7 +58,7 @@ struct Tile {
 };
 typedef struct Map Map;
 typedef struct MapVtable {char (*m10_Get_Map_Zoom)(Map*);} MapVtable;
-struct Map {MapVtable* vtable;int Width,Height,Flags;Map_Renderer Renderer;};
+struct Map {MapVtable* vtable;int Width,Height,Flags,Seed;Map_Renderer Renderer;};
 typedef struct Leader {int ID,RaceID,Era,CapitalID;} Leader;
 typedef struct Race {int CultureGroupID;char CountryName[64],SingularName[64];} Race;
 typedef struct Era {struct {char S[64];}Name;} Era;
@@ -106,10 +107,16 @@ static unsigned capture_custom_renderer_visibility(Tile* tile,int viewer,int x,i
     return result;
 }
 static bool read_custom_renderer_tile(c3x_renderer_tile_v1* record,int viewer,int px,int py,
-    int mask,int x,int y,Tile* tile,bool topology_only,bool capture_units){
-    assert(viewer==1&&px==0&&py==0&&mask==77&&x==2&&y==2&&tile==tile_at(x,y));
+    int mask,int tile_x,int tile_y,Tile* tile,bool topology_only,bool capture_units){
+    assert(viewer==1&&px==0&&py==0&&mask==77&&tile_x==2&&tile_y==2&&tile==tile_at(tile_x,tile_y));
     assert(!topology_only&&!capture_units);++full_reads;
-    *record=(c3x_renderer_tile_v1){0};record->tile_flags=capture_custom_renderer_visibility(tile,viewer,x,y)|C3X_RENDERER_TILE_RENDER;
+    *record=(c3x_renderer_tile_v1){0};record->tile_flags=capture_custom_renderer_visibility(tile,viewer,tile_x,tile_y)|C3X_RENDERER_TILE_RENDER;
+    unsigned ground=topology[(tile_y*bic_data.Map.Width+tile_x)/2];
+    record->tile_x=tile_x;record->tile_y=tile_y;
+    record->terrain_type=ground&255u;record->real_terrain_type=(ground>>8)&255u;
+    record->river_code=(ground>>16)&255u;
+    /*PRODUCTION_FOREGROUND_SEED*/
+    /*PRODUCTION_FOREGROUND_FEATURES*/
     record->resource_id=tile->live_resource;record->tile_building_id=tile->live_building;record->has_effect=tile->live_effect;
     return true;
 }
@@ -135,7 +142,7 @@ static void reset(void){
     memset(tiles,0,sizeof tiles);memset(topology,0,sizeof topology);
     memset(&bic_data,0,sizeof bic_data);memset(leaders,0,sizeof leaders);
     memset(races,0,sizeof races);memset(eras,0,sizeof eras);
-    bic_data.Map=(Map){&map_vtable,8,8,0,{1}};
+    bic_data.Map=(Map){&map_vtable,8,8,0,0x13579bdf,{1}};
     bic_data.General.MaximumSize_Town=6;bic_data.General.MaximumSize_City=12;
     bic_data.RacesCount=2;bic_data.ErasCount=4;bic_data.ImprovementsCount=1;
     bic_data.Races=races;bic_data.Eras=eras;bic_data.Improvements=improvements;
@@ -158,7 +165,9 @@ static c3x_renderer_tile_v1 read_record(void){c3x_renderer_tile_v1 result;
 static void omitted(c3x_renderer_tile_v1 const* record){
     assert(!(record->tile_flags&(C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_PREFETCH)));
     assert(record->resource_id==-1&&record->resource_class==-1&&record->tile_building_id==-1&&!record->has_effect);
-    assert(record->unit_type_id==-1&&record->unit_owner_id==-1&&record->unit_state==-1);
+    assert(record->unit_type_id==-1&&record->unit_owner_id==-1&&record->unit_class==-1&&record->unit_state==-1);
+    assert(record->unit_damage==-1&&record->unit_direction==-1&&!record->unit_type_name[0]);
+    assert(!record->resource_name[0]&&record->territory_owner_id==-1);
     assert(full_reads==0);
 }
 static void hidden_city(void){
@@ -222,6 +231,46 @@ static void full_visible(void){
     assert(record.tile_flags&C3X_RENDERER_TILE_VISIBLE);assert(!(record.tile_flags&C3X_RENDERER_TILE_RENDER));
     assert(record.resource_id==91&&record.tile_building_id==92&&record.has_effect);
 }
+static void deterministic_seed(void){
+    int const seeds[]={0,0x13579bdf,-1};
+    unsigned const expected[]={0x0a836984u,0x19d4f25bu,0xf57c967bu};
+    for(unsigned i=0;i<sizeof seeds/sizeof *seeds;++i){
+        reset();bic_data.Map.Seed=seeds[i];
+        c3x_renderer_tile_v1 record=read_record(),again=read_record();omitted(&record);
+        assert(record.variant_seed==expected[i]&&again.variant_seed==record.variant_seed);
+        Tile* neighbor=tile_at(3,3);neighbor->Body.Fog_Of_War=2;
+        c3x_renderer_tile_v1 moved;
+        assert(read_custom_renderer_world_record(&moved,1,77,3,3,neighbor));omitted(&moved);
+        assert(moved.variant_seed!=record.variant_seed);
+        visible=true;c3x_renderer_tile_v1 foreground=read_record();
+        assert(foreground.variant_seed==record.variant_seed);
+    }
+}
+static void terrain_recipe(void){
+    int const terrains[]={SQ_Forest,SQ_Jungle,SQ_Swamp,SQ_Volcano,SQ_Grassland};
+    unsigned const features[]={C3X_RENDERER_FEATURE_FOREST,C3X_RENDERER_FEATURE_JUNGLE,
+        C3X_RENDERER_FEATURE_MARSH,C3X_RENDERER_FEATURE_VOLCANO,0};
+    for(unsigned i=0;i<sizeof terrains/sizeof *terrains;++i){
+        reset();topology[(2*bic_data.Map.Width+2)/2]=SQ_Grassland|((unsigned)terrains[i]<<8)|(9u<<16);
+        c3x_renderer_tile_v1 fog=read_record();omitted(&fog);
+        assert((fog.tile_flags&(C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_EXPLORED))==
+            (C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_EXPLORED));
+        assert(!(fog.tile_flags&C3X_RENDERER_TILE_VISIBLE));
+        assert(fog.terrain_type==SQ_Grassland&&fog.real_terrain_type==terrains[i]&&fog.feature_flags==features[i]);
+        visible=true;c3x_renderer_tile_v1 foreground=read_record();
+        assert(foreground.terrain_type==fog.terrain_type&&foreground.real_terrain_type==fog.real_terrain_type);
+        assert(foreground.feature_flags==fog.feature_flags&&foreground.variant_seed==fog.variant_seed);
+        assert(foreground.river_code==fog.river_code);
+    }
+}
+static void hidden_objects(void){
+    reset();c3x_renderer_tile_v1 before=read_record();omitted(&before);
+    Tile* tile=tile_at(2,2);tile->live_resource=123;tile->live_building=456;tile->live_effect=0;
+    c3x_renderer_tile_v1 after=read_record();omitted(&after);
+    assert(!memcmp(&before,&after,sizeof before));
+    visible=true;after=read_record();
+    assert(full_reads==1&&after.resource_id==123&&after.tile_building_id==456&&!after.has_effect);
+}
 int main(int argc,char** argv){
     assert(argc==2);
     if(!strcmp(argv[1],"city"))hidden_city();
@@ -229,6 +278,9 @@ int main(int argc,char** argv){
     else if(!strcmp(argv[1],"remembered"))remembered();
     else if(!strcmp(argv[1],"camp"))camp_admission();
     else if(!strcmp(argv[1],"visible"))full_visible();
+    else if(!strcmp(argv[1],"seed"))deterministic_seed();
+    else if(!strcmp(argv[1],"terrain"))terrain_recipe();
+    else if(!strcmp(argv[1],"hidden"))hidden_objects();
     else assert(false);
 }
 '''
@@ -245,11 +297,23 @@ class InjectedWorldAuthorityTests(unittest.TestCase):
         directory = Path(temporary.name)
         injected = (ROOT / "injected_code.c").read_text()
         native = (ROOT / "ref/Civ3Conquests_master.exe.c").read_text()
+        header = (ROOT / "Civ3Conquests.h").read_text()
+        square_types = "enum SquareTypes" + header.split("enum SquareTypes", 1)[1].split("};", 1)[0] + "};"
+        foreground = production_function(injected, "read_custom_renderer_tile").splitlines()
+        seed = [line for line in foreground if "record->variant_seed =" in line]
+        features = [line for line in foreground if "record->real_terrain_type ==" in line and "record->feature_flags |=" in line]
+        if len(seed) != 1 or len(features) != 4:
+            raise AssertionError("Current foreground terrain recipe extraction changed")
+        # Use the real foreground expressions rather than duplicating their
+        # seed formula or feature mapping in the authored full-reader mock.
+        prelude = PRELUDE.replace("/*PRODUCTION_SQUARE_TYPES*/", square_types)
+        prelude = prelude.replace("/*PRODUCTION_FOREGROUND_SEED*/", seed[0])
+        prelude = prelude.replace("/*PRODUCTION_FOREGROUND_FEATURES*/", "\n".join(features))
         overlays = native_body(native, "Tile::impl_m42_Get_Overlays")
         overlays = overlays.replace("this", "tile")
         city = native_body(native, "Map_Renderer::impl_m25_Draw_City_Image")
         city = city.replace("Map::get_tile", "native_get_tile").replace("City::draw_on_map", "native_draw_city")
-        program = PRELUDE + "\nstatic unsigned native_overlays(Tile* tile,byte visible_to_civ){\n" + overlays + "\n}\n"
+        program = prelude + "\nstatic unsigned native_overlays(Tile* tile,byte visible_to_civ){\n" + overlays + "\n}\n"
         program += "static void native_city(int param_1,int tile_x,int tile_y,Map_Renderer* map_renderer,int pixel_x,int pixel_y){\n" + city + "\n}\n"
         for name in ("capture_custom_renderer_city_body", "capture_custom_renderer_overlay_body", "read_custom_renderer_world_record"):
             program += production_function(injected, name)
@@ -283,6 +347,15 @@ class InjectedWorldAuthorityTests(unittest.TestCase):
 
     def test_visible_world_copy_preserves_full_route_and_disables_units(self):
         self.contract("visible")
+
+    def test_explored_fog_seed_is_repeatable_and_matches_foreground(self):
+        self.contract("seed")
+
+    def test_explored_fog_terrain_features_match_foreground_recipe(self):
+        self.contract("terrain")
+
+    def test_hidden_optional_objects_do_not_change_explored_fog_record(self):
+        self.contract("hidden")
 
 
 if __name__ == "__main__":

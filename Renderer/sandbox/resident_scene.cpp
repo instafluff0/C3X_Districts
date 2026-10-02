@@ -356,12 +356,20 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
             sandbox_direct_units.gpu_preparation_bytes(),
             rejects[0],rejects[1],rejects[2],rejects[3],rejects[4],rejects[5],rejects[6]);
         renderer.trace.write("fresh-scene-phases",detail,true);
+        sprintf_s(detail,"part_samples=%u main_units=%u reflected_units=%u material_buffer_builds=%u material_buffer_reuses=%u material_buffer_uploads=%u material_upload_fallbacks=%u unit_preparation_gpu_bytes=%zu",
+            sandbox_direct_units.part_samples,sandbox_direct_units.main_contributors,sandbox_direct_units.reflection_contributors,
+            sandbox_direct_units.material_buffer_builds,sandbox_direct_units.material_buffer_reuses,
+            sandbox_direct_units.material_buffer_uploads,sandbox_direct_units.material_upload_fallbacks,
+            sandbox_direct_units.gpu_preparation_bytes());
+        renderer.trace.write("fresh-unit-material-work",detail,true);
         auto const& spans=sandbox_fresh.prepare_subspans;auto const& placements=renderer.shared_instances;
-        auto validation=sandbox_fresh.static_validation_counts();char validation_detail[512];
-        sprintf_s(validation_detail,"raster_full=%llu raster_content=%llu raster_visibility=%llu raster_membership=%llu raster_regions=%llu raster_reuses=%llu raster_changes=%llu atlas_full=%llu atlas_content=%llu atlas_membership=%llu atlas_regions=%llu atlas_reuses=%llu receiver_visits=%llu receiver_builds=%llu receiver_reuses=%llu placement_probes=%llu placement_reuses=%llu",
+        auto validation=sandbox_fresh.static_validation_counts();char validation_detail[1024];
+        sprintf_s(validation_detail,"raster_full=%llu raster_content=%llu raster_visibility=%llu raster_membership=%llu raster_regions=%llu raster_reuses=%llu raster_changes=%llu atlas_full=%llu atlas_content=%llu atlas_membership=%llu atlas_regions=%llu atlas_reuses=%llu receiver_visits=%llu receiver_builds=%llu receiver_reuses=%llu placement_probes=%llu placement_reuses=%llu raster_registrations=%llu raster_watches=%llu raster_source_expansions=%llu raster_source_reuses=%llu raster_append_ms=%.3f atlas_registrations=%llu atlas_watches=%llu atlas_source_expansions=%llu atlas_source_reuses=%llu atlas_append_ms=%.3f",
             validation.raster.full,validation.raster.content,validation.raster.visibility,validation.raster.membership,validation.raster.regions,validation.raster.reused,validation.raster.changes,
             validation.atlas.full,validation.atlas.content,validation.atlas.membership,validation.atlas.regions,validation.atlas.reused,
-            validation.receiver_visits,validation.receiver_builds,validation.receiver_reuses,validation.placement_probes,validation.placement_reuses);
+            validation.receiver_visits,validation.receiver_builds,validation.receiver_reuses,validation.placement_probes,validation.placement_reuses,
+            validation.raster.proof_registrations,validation.raster.dependency_watch_calls,validation.raster.source_expansions,validation.raster.source_reuses,validation.raster.append_ms,
+            validation.atlas.proof_registrations,validation.atlas.dependency_watch_calls,validation.atlas.source_expansions,validation.atlas.source_reuses,validation.atlas.append_ms);
         renderer.trace.write("static-validation-counts",validation_detail,true);
         auto const& requirements=sandbox_fresh.body_requirements;
         sprintf_s(detail,"setup_resources_ms=%.3f capture_ms=%.3f raster_proof_ms=%.3f body_requirements_ms=%.3f city_shadow_ms=%.3f unit_selection_ms=%.3f unit_pose_ms=%.3f body_builds=%u body_reuses=%u body_visits=%u body_unique=%zu body_duplicates=%u coverage_probes=%u requirement_bytes=%zu unit_plan_reused=%u unit_reselected=%u range_reuses=%llu carry_visits=%llu carried_ranges=%llu packed_records=%llu gpu_copies=%llu copied_bytes=%llu allocated_bytes=%llu host_uploaded_bytes=%llu",
@@ -374,6 +382,15 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
             static_cast<unsigned long long>(placements.gpu_copies),static_cast<unsigned long long>(placements.copied_bytes),
             static_cast<unsigned long long>(placements.allocated_bytes),static_cast<unsigned long long>(placements.uploaded_bytes));
         renderer.trace.write("fresh-prepare-work",detail,true);
+        auto const& dynamic=sandbox_fresh.dynamic_subspans;auto const& calls=sandbox_fresh.dynamic_calls;
+        auto const& constants=sandbox_fresh.phase_constant_counts;
+        sprintf_s(detail,"depth_setup_ms=%.3f aquatic_ms=%.3f water_scene_ms=%.3f resources_ms=%.3f waves_ms=%.3f depth_draws=%llu depth_copies=%llu depth_uploads=%llu aquatic_draws=%llu aquatic_copies=%llu aquatic_uploads=%llu water_draws=%llu water_copies=%llu water_uploads=%llu resource_draws=%llu resource_copies=%llu resource_uploads=%llu wave_draws=%llu wave_copies=%llu wave_uploads=%llu water_records=%llu water_constant_updates=%llu water_constant_hits=%llu wave_records=%llu wave_constant_updates=%llu wave_constant_hits=%llu",
+            dynamic[0],dynamic[1],dynamic[2],dynamic[3],dynamic[4],
+            calls[0].draws,calls[0].copies,calls[0].uploads,calls[1].draws,calls[1].copies,calls[1].uploads,
+            calls[2].draws,calls[2].copies,calls[2].uploads,calls[3].draws,calls[3].copies,calls[3].uploads,
+            calls[4].draws,calls[4].copies,calls[4].uploads,
+            constants.water_records,constants.water_updates,constants.water_hits,constants.wave_records,constants.wave_updates,constants.wave_hits);
+        renderer.trace.write("fresh-dynamic-work",detail,true);
         sprintf_s(detail,"builds=%llu reuses=%llu schedules=%llu probes=%llu proof_bytes=%zu proof_cap_bytes=98304",
             static_cast<unsigned long long>(renderer.unit_asset_union_builds),static_cast<unsigned long long>(renderer.unit_asset_union_reuses),
             static_cast<unsigned long long>(renderer.unit_asset_schedules),static_cast<unsigned long long>(renderer.unit_asset_union_probes),

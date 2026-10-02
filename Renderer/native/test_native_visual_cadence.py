@@ -208,9 +208,11 @@ struct Session{
   assert(ticks==17&&frequency==1000);++samples;return draw;
  }
  void did_present(){++published;}
+ std::uint64_t committed_revision()const{return 9;}
  unsigned presented_zoom(){return 81920;}
  std::pair<unsigned,unsigned> visual_publication(){return {7,8};}
- struct Work{unsigned operations=3,assemblies=1,copies=2,copied_pixels=64,assembly_pixels=32;};
+ struct Work{unsigned operations=3,assemblies=1,copies=2,copied_pixels=64,assembly_pixels=32;
+  unsigned selected_borrows=1,selected_owned=0,direct_native_images=1,avoided_copy_pixels=128;};
  Work visual_work(){return {};}
 };
 struct Swap{HRESULT result=S_OK;unsigned presents=0;
@@ -229,6 +231,8 @@ struct Owner{
  Surface trial_surface_view,trial_surface_back,trial_surface_buffer;
  std::unique_ptr<Swap> trial_surface_swap=std::make_unique<Swap>();
  std::atomic<unsigned> presented_zoom_q16{65536};unsigned route_present_index=0;
+ std::atomic<bool> trial_front_pending{true};std::uint64_t trial_presented_front_revision=0;
+ std::atomic<std::uint64_t> trial_visual_permit_denials{0};
  long long visual_ticks=17,visual_frequency=1000;
  int offer(){
   bool phase_probe=true,route_witness=true;
@@ -242,27 +246,35 @@ int main(){
  Owner denied;assert(denied.offer()==C3X_RENDERER_RESULT_BUSY);
  assert(denied.trial_surface_permit.polls==1&&!denied.renderer_state.gpu_composition->samples);
  assert(!denied.trial_surface_swap->presents&&!denied.trial_surface_permit.consumed);
+ assert(denied.trial_front_pending&&denied.trial_presented_front_revision==0);
+ assert(denied.trial_visual_permit_denials==1);
  assert(denied.presented_zoom_q16==65536&&!denied.route_present_index&&!denied.renderer_state.trace.rows);
  Owner noop;noop.trial_surface_permit.admitted=true;noop.renderer_state.gpu_composition->draw=0;
  for(unsigned i=0;i<3;++i)assert(noop.offer()==C3X_RENDERER_RESULT_PENDING);
  assert(noop.trial_surface_permit.admitted&&!noop.trial_surface_permit.consumed);
  assert(noop.renderer_state.gpu_composition->samples==3&&!noop.renderer_state.gpu_composition->published);
  assert(!noop.trial_surface_swap->presents&&noop.presented_zoom_q16==65536);
+ assert(noop.trial_front_pending&&noop.trial_presented_front_revision==0);
+ assert(noop.trial_visual_permit_denials==0);
  Owner drawn;drawn.trial_surface_permit.admitted=true;
  assert(drawn.offer()==C3X_RENDERER_RESULT_OK);
  assert(drawn.renderer_state.gpu_composition->samples==1&&drawn.renderer_state.gpu_composition->published==1);
  assert(drawn.trial_surface_swap->presents==1&&drawn.trial_surface_permit.consumed==1&&!drawn.trial_surface_permit.admitted);
  assert(drawn.presented_zoom_q16==81920&&drawn.route_present_index==1&&drawn.renderer_state.trace.rows==2);
+ assert(!drawn.trial_front_pending&&drawn.trial_presented_front_revision==9);
  assert(drawn.offer()==C3X_RENDERER_RESULT_BUSY&&drawn.renderer_state.gpu_composition->samples==1);
+ assert(drawn.trial_visual_permit_denials==1);
  Owner failed;failed.trial_surface_permit.admitted=true;failed.trial_surface_swap->result=-1;
  assert(failed.offer()==C3X_RENDERER_RESULT_DEVICE_ERROR);
  assert(failed.renderer_state.gpu_composition->samples==1&&failed.trial_surface_swap->presents==1);
  assert(failed.trial_surface_permit.admitted&&!failed.trial_surface_permit.consumed);
  assert(!failed.renderer_state.gpu_composition->published&&failed.presented_zoom_q16==65536&&!failed.route_present_index);
+ assert(failed.trial_front_pending&&failed.trial_presented_front_revision==0);
  // Existing positive DXGI statuses are not successful publication evidence.
  Owner status;status.trial_surface_permit.admitted=true;status.trial_surface_swap->result=1;
  assert(status.offer()==C3X_RENDERER_RESULT_OK&&status.trial_surface_permit.admitted);
  assert(!status.renderer_state.gpu_composition->published&&!status.route_present_index&&status.presented_zoom_q16==65536);
+ assert(status.trial_front_pending&&status.trial_presented_front_revision==0);
 }
 ''')
 
@@ -285,7 +297,7 @@ int main(){using namespace std::chrono;
 
     def test_direct_visual_busy_is_distinct_from_unchanged(self):
         source=(ROOT/'Renderer/native/c3x_renderer.cpp').read_text()
-        body='    int trial_visual_shared('+source.split('    int trial_visual_shared(',1)[1].split('    int trial_bind_surface(',1)[0]
+        body='    int trial_visual_shared('+source.split('    int trial_visual_shared(',1)[1].split('    int trial_priority_front_pending(',1)[0]
         run_cpp(r'''
 #include <cassert>
 #include <atomic>
@@ -295,6 +307,7 @@ int main(){using namespace std::chrono;
 #include "Renderer/native/c3x_renderer_api.h"
 using DWORD=unsigned;
 struct State{std::mutex call_mutex,state_mutex;DWORD trial_consumer_pid=0;
+ std::atomic<std::uint64_t> trial_visual_call_busy{0},trial_visual_state_busy{0};
  std::uint64_t trial_handle=0;unsigned trial_width=0,trial_height=0,submits=0;
  long long visual_ticks=0,visual_frequency=0;int result=C3X_RENDERER_RESULT_PENDING;
  enum class Command{trial_visual_shared};
@@ -309,6 +322,7 @@ int main(){State state;std::uint64_t handle=0;unsigned w=0,h=0;
   assert(state.trial_visual_shared(123,1000,0,handle,w,h)==C3X_RENDERER_RESULT_BUSY);
   assert(state.submits==0&&state.visual_ticks==0);release=true;owner.join();
  }
+ assert(state.trial_visual_call_busy==1&&state.trial_visual_state_busy==1);
  assert(state.trial_visual_shared(456,1000,0,handle,w,h)==C3X_RENDERER_RESULT_PENDING);
  assert(state.submits==1&&state.visual_ticks==456);
  state.result=C3X_RENDERER_RESULT_OK;assert(state.trial_visual_shared(789,1000,0,handle,w,h)==C3X_RENDERER_RESULT_OK);
