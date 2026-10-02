@@ -4,6 +4,80 @@ from Renderer.native.native_cpp_test import run_cpp
 
 
 class WorldBackingTests(unittest.TestCase):
+    def test_portable_allocation_reuses_generations_and_recovers_fragmentation(self):
+        run_cpp(r'''
+#include "Renderer/native/render_core/backing_allocation.h"
+#include <cassert>
+#include <map>
+using c3x_renderer::render_core::BackingAllocation;
+int main(){
+ BackingAllocation a(100);std::uint64_t offsets[5]{};
+ for(auto& offset:offsets)assert(a.allocate(20,offset));
+ assert(a.high_water()==100 && a.live_bytes()==100);
+ a.release(offsets[0],20);a.release(offsets[2],20);
+ std::uint64_t p=999;assert(!a.allocate(30,p)); // Enough free bytes, fragmented.
+ assert(a.reset_layout({{0,20},{20,20},{40,20}}));
+ assert(a.high_water()==60 && a.live_bytes()==60 && a.allocate(30,p) && p==60);
+ assert(!a.reset_layout({{0,30},{20,30}})); // Overlap cannot replace a valid layout.
+ assert(a.high_water()==90 && a.live_bytes()==90);
+ a.release(60,30);a.release(40,20);a.release(20,20);a.release(0,20);
+ assert(!a.high_water() && !a.live_bytes());
+ assert(a.allocate(100,p) && p==0);a.release(p,100);
+ assert(!a.allocate(101,p) && !a.allocate(0,p));
+ BackingAllocation ring(1024);std::map<unsigned,std::pair<std::uint64_t,std::uint64_t>> records;
+ std::uint32_t random=57;
+ for(unsigned sweep=0;sweep<1000;++sweep){
+  for(unsigned key=0;key<16;++key){
+   auto found=records.find(key);if(found!=records.end()){ring.release(found->second.first,found->second.second);records.erase(found);}
+   random=random*1664525u+1013904223u;auto size=std::uint64_t(16+(random%32));
+   std::uint64_t offset=0;
+   if(!ring.allocate(size,offset)){
+    std::uint64_t cursor=0;std::vector<std::pair<std::uint64_t,std::uint64_t>> compacted;
+    for(auto& item:records){item.second.first=cursor;compacted.emplace_back(cursor,item.second.second);cursor+=item.second.second;}
+    assert(ring.reset_layout(compacted) && ring.allocate(size,offset));
+   }
+   records.emplace(key,std::make_pair(offset,size));
+   std::vector<std::pair<std::uint64_t,std::uint64_t>> ranges;std::uint64_t live=0;
+   for(auto const& item:records){ranges.push_back(item.second);live+=item.second.second;}
+   std::sort(ranges.begin(),ranges.end());std::uint64_t end=0;
+   for(auto const& range:ranges){assert(range.first>=end);end=range.first+range.second;}
+   assert(end<=ring.high_water() && ring.high_water()<=1024 && ring.live_bytes()==live);
+  }
+ }
+ for(auto const& item:records)ring.release(item.second.first,item.second.second);
+ assert(!ring.high_water() && !ring.live_bytes());
+}
+''')
+
+    def test_windows_small_capacity_compaction_and_generation_plateau(self):
+        run_cpp(r'''
+#include <windows.h>
+#include "Renderer/native/render_core/compressed_world_store.h"
+#include <cassert>
+using Store=c3x_renderer::render_core::CompressedWorldStore<unsigned>;
+int main(){
+ auto noise=[](unsigned n,unsigned seed){std::vector<unsigned char> v(n);
+  for(auto& b:v){seed^=seed<<13;seed^=seed>>17;seed^=seed<<5;b=seed>>24;}return v;};
+ Store store(30000);std::vector<std::vector<unsigned char>> raw;
+ for(unsigned i=0;i<16;++i){auto bytes=noise(4096,99+i);
+  if(!store.put(i,bytes))break;raw.push_back(bytes);}
+ assert(raw.size()>=5 && raw.size()<=7);
+ for(unsigned i=0;i+1<raw.size();i+=2)store.invalidate(i);
+ auto big=noise(8192,171);assert(store.put(100,big));
+ auto compacted=store.statistics();assert(compacted.compactions && compacted.bytes<=compacted.limit);
+ assert(store.get(100)==big);
+ for(unsigned i=1;i<raw.size();i+=2)assert(store.get(i)==raw[i]);
+ assert(store.get(unsigned(raw.size()-1))==raw.back());
+ for(unsigned generation=0;generation<500;++generation){
+  store.invalidate(100);big=noise(8192,171+generation);assert(store.put(100,big));assert(store.get(100)==big);
+  auto s=store.statistics();assert(s.bytes<=30000 && s.live<=s.bytes && s.limit==30000);
+ }
+ for(unsigned i=0;i<raw.size();++i)store.invalidate(i);store.invalidate(100);
+ auto retired=store.statistics();assert(!retired.records && !retired.bytes && !retired.raw && !retired.live);
+ assert(store.put(7,noise(16000,887)) && store.get(7)==noise(16000,887));
+}
+''')
+
     def test_windows_compression_concurrent_roundtrip_and_retirement(self):
         run_cpp(r'''
 #include <windows.h>

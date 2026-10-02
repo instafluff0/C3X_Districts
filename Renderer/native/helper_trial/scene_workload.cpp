@@ -18,6 +18,7 @@
 #include <vector>
 #include "../input_recording/journal.h"
 #include "../asset_content_hash.h"
+#include "../benchmark_oracle.h"
 #include "../gpu_composition_session.h"
 #include "../remote_scene_output.h"
 #include "../ordered_image_batch.h"
@@ -33,6 +34,7 @@ std::uint64_t private_bytes(){PROCESS_MEMORY_COUNTERS_EX m={};m.cb=sizeof(m);if(
 std::wstring object_name(std::wstring const& base,wchar_t const* suffix){return base+suffix;}
 struct Core {
     HMODULE module=nullptr;
+    c3x_renderer_benchmark_session_reset_v1_fn benchmark_reset=nullptr;
     c3x_renderer_render_fn render=nullptr;
     c3x_renderer_render_view_fn render_view=nullptr;
     c3x_renderer_seed_world_fn seed_world=nullptr;
@@ -120,6 +122,7 @@ struct Core {
         world_delta_scope=reinterpret_cast<WorldQuery>(GetProcAddress(module,"c3x_renderer_trial_world_delta_scope"));
         world_delta_submit=reinterpret_cast<WorldSubmit>(GetProcAddress(module,"c3x_renderer_trial_world_delta_submit"));
         world_status=reinterpret_cast<WorldStatus>(GetProcAddress(module,"c3x_renderer_world_status"));
+        benchmark_reset=reinterpret_cast<c3x_renderer_benchmark_session_reset_v1_fn>(GetProcAddress(module,"c3x_renderer_benchmark_session_reset_v1"));
         set_units=reinterpret_cast<SetUnits>(GetProcAddress(module,"c3x_renderer_set_unit_rendering"));
         set_clock=reinterpret_cast<TrialClock>(GetProcAddress(module,"c3x_renderer_trial_set_clock"));
         shared=reinterpret_cast<Shared>(GetProcAddress(module,"c3x_renderer_trial_export_shared"));
@@ -233,6 +236,11 @@ struct Core {
                 if(color==0)stop_direct_cadence();
                 wire.code=unsigned(native_image(operation,nullptr,nullptr,nullptr,nullptr,color));
                 if(color==1&&wire.code>0)start_direct_cadence();
+            }else if(wire.live&&wire.kind==unsigned(Kind::native_bridge)&&wire.subtype==9){
+                unsigned mode=0;in(mode);in.done();stop_direct_cadence();
+                c3x_renderer_benchmark_oracle_trim_v1 trim{};trim.version=C3X_RENDERER_BENCHMARK_ORACLE_VERSION;trim.struct_size=sizeof(trim);
+                wire.code=benchmark_reset?unsigned(benchmark_reset(mode,&trim)):C3X_RENDERER_RESULT_BAD_ARGUMENT;
+                if(wire.code==C3X_RENDERER_RESULT_OK){ticket_ids.clear();image_ids.clear();wire.reply_size=sizeof(trim);std::memcpy(wire.payload,&trim,sizeof(trim));}
             }else if(wire.kind==unsigned(Kind::native_bridge)&&wire.subtype==6){
                 in.done();stop_direct_cadence();reset();ticket_ids.clear();image_ids.clear();direct_surface_bound=false;wire.code=1;
             }else if(wire.kind==unsigned(Kind::native_bridge)&&wire.subtype==8){

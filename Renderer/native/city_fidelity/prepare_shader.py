@@ -146,12 +146,15 @@ float4 PSNativeCityReflectionEmission(FeaturePixelInput p):SV_Target {
     (HERE/'city.hlsl').write_text(source)
     (HERE/'feature.hlsl').write_text(source)
     rigid_geometry=read(HERE.parent/'render_core/rigid_instance_geometry.hlsl')
+    resident_geometry=read(LAB/'shaders/objects/resident_instance.hlsl')
     rigid=read(HERE.parent/'render_core/rigid_feature.hlsl')
     rigid=rigid.replace('#include "../city_fidelity/feature.hlsl"',source)
     rigid=rigid.replace('#include "rigid_instance_geometry.hlsl"',rigid_geometry)
+    rigid=rigid.replace('#include "../../lab/shared/shaders/objects/resident_instance.hlsl"',resident_geometry)
     (HERE/'rigid_feature.hlsl').write_text(rigid)
     rigid_caster=read(HERE.parent/'render_core/rigid_caster.hlsl')
-    (HERE/'rigid_caster.hlsl').write_text(rigid_caster.replace('#include "rigid_instance_geometry.hlsl"',rigid_geometry))
+    (HERE/'rigid_caster.hlsl').write_text(rigid_caster.replace('#include "rigid_instance_geometry.hlsl"',rigid_geometry).replace(
+        '#include "../../lab/shared/shaders/objects/resident_instance.hlsl"',resident_geometry))
     hydro=read(HERE.parent/'environment_refresh/hydrology.hlsl')
     marker='float q6_receiver_visibility(PixelInput input,float3 normal,float legacy_shadow) {'
     assert hydro.count(marker)==1

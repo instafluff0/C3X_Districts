@@ -101,6 +101,14 @@ if(ok && !std::strcmp(gpu_frame_test,"1")) {
             for(auto& tile:records)tile.tile_flags&=~C3X_RENDERER_TILE_PREFETCH;
             if(!capture_map(input,warm))return 1;
             gpu_reset();if(!capture_map(input,cold))return 1;
+            if(warm!=cold){
+                std::size_t changed=0;for(std::size_t i=0;i<warm.size();++i)changed+=warm[i]!=cold[i];
+                std::printf("WAVE_INITIAL changed_pixels=%zu\n",changed);std::fflush(stdout);
+                c3x_renderer_output_v1 image={C3X_RENDERER_API_VERSION,sizeof(image)};
+                image.width=input.target_width;image.height=input.target_height;image.stride_bytes=image.width*4;
+                image.bgra_pixels=warm.data();write_bmp((std::string(argv[5])+".initial.warm.bmp").c_str(),image);
+                image.bgra_pixels=cold.data();write_bmp((std::string(argv[5])+".initial.cold.bmp").c_str(),image);
+            }
             if(!verify_gpu(warm==cold,"same visible clock before and after reset"))return 1;
             auto begin_camera=reinterpret_cast<c3x_renderer_gpu_camera_begin_fn>(GetProcAddress(module,"c3x_renderer_gpu_camera_begin"));
             auto cancel_camera=reinterpret_cast<c3x_renderer_camera_cancel_fn>(GetProcAddress(module,"c3x_renderer_camera_cancel"));
@@ -112,7 +120,17 @@ if(ok && !std::strcmp(gpu_frame_test,"1")) {
                 c3x_renderer_i64 ticket=0;
                 if(!begin_camera||!cancel_camera||begin_camera(&request,&ticket)!=C3X_RENDERER_RESULT_PENDING)return 1;
                 Sleep(delay);cancel_camera(ticket);
-                if(!capture_map(input,warm)||!verify_gpu(warm==cold,"same wave sample after cancelled camera"))return 1;
+                if(!capture_map(input,warm))return 1;
+                if(warm!=cold){
+                    std::size_t changed=0;for(std::size_t i=0;i<warm.size();++i)changed+=warm[i]!=cold[i];
+                    std::printf("WAVE_CANCEL delay_ms=%u changed_pixels=%zu\n",delay,changed);std::fflush(stdout);
+                    auto prefix=std::string(argv[5])+".cancel-"+std::to_string(delay);
+                    c3x_renderer_output_v1 image={C3X_RENDERER_API_VERSION,sizeof(image)};
+                    image.width=input.target_width;image.height=input.target_height;image.stride_bytes=image.width*4;
+                    image.bgra_pixels=warm.data();write_bmp((prefix+".warm.bmp").c_str(),image);
+                    image.bgra_pixels=cold.data();write_bmp((prefix+".cold.bmp").c_str(),image);
+                }
+                if(!verify_gpu(warm==cold,"same wave sample after cancelled camera"))return 1;
             }
             auto moved=input;auto translated=records;moved.tiles=translated.data();
             for(auto& tile:translated){tile.anchor_x-=52;tile.anchor_y+=28;}

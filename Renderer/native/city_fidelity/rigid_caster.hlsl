@@ -24,6 +24,18 @@ RigidPoint rigid_point(RigidInput i){
  p.normal=length>1e-6f?n/length:float3(0,0,1);return p;
 }
 
+#ifndef C3X_RESIDENT_INSTANCE_INPUT
+#define C3X_RESIDENT_INSTANCE_INPUT
+// One immutable 64-byte world/occurrence placement owner. Selected passes send
+// four-byte indices; the authored source mesh remains the vertex stream.
+struct ResidentInstanceInput {
+ float3 source_position:POSITION;float3 source_normal:NORMAL;float2 source_uv:TEXCOORD0;
+ uint selection:TEXCOORD1;
+};
+struct ResidentPlacement {float4 place0;float4 place1;float4 projection;float4 placement_view;};
+StructuredBuffer<ResidentPlacement> C3XResidentPlacements:register(t15);
+#endif
+
 cbuffer Caster:register(b0){float4 U;float4 V;float4 L;float4 page;float4 offset;};
 struct RigidPixel {float4 position:SV_POSITION;float2 uv:TEXCOORD0;nointerpolation float material:TEXCOORD1;
  float depth:TEXCOORD2;float coverage:TEXCOORD3;float boundary:TEXCOORD4;float4 volcano:TEXCOORD5;};
@@ -31,4 +43,20 @@ RigidPixel VSSharedCaster(RigidInput i){
  float3 world=rigid_point(i).world+i.placement_view.xyz;
  RigidPixel o;o.position=float4((dot(world,U.xyz)/6-page.x)*2-1,1-(dot(world,V.xyz)/6-page.y)*2,.5,1);
  o.uv=i.source_uv;o.material=i.placement_view.w;o.depth=dot(world,L.xyz);o.coverage=1;o.boundary=o.material;o.volcano=0;return o;
+}
+// Page/wrap offsets belong to the shadow pass, not another placement upload.
+RigidPixel VSResidentSharedCaster(ResidentInstanceInput input){
+ ResidentPlacement p=C3XResidentPlacements[input.selection];RigidInput i;
+ i.source_position=input.source_position;i.source_normal=input.source_normal;i.source_uv=input.source_uv;
+ i.place0=p.place0;i.place1=p.place1;i.projection=p.projection;i.placement_view=p.placement_view;
+ i.placement_view.xyz=offset.xyz;return VSSharedCaster(i);
+}
+// The frame union can also own already selected wrapped shadow occurrences.
+// Their copied offsets stay in the immutable placement instead of b0, allowing
+// one ordered mesh group to contain more than one permitted wrap occurrence.
+RigidPixel VSResidentPlacedCaster(ResidentInstanceInput input){
+ ResidentPlacement p=C3XResidentPlacements[input.selection];RigidInput i;
+ i.source_position=input.source_position;i.source_normal=input.source_normal;i.source_uv=input.source_uv;
+ i.place0=p.place0;i.place1=p.place1;i.projection=p.projection;i.placement_view=p.placement_view;
+ return VSSharedCaster(i);
 }

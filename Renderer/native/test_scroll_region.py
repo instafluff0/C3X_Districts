@@ -21,8 +21,12 @@ int main(){
     double px=double(zoom)*dx,py=double(zoom)*dy;
     bool phase=px==std::floor(px)&&py==std::floor(py);
     bool fits=px>=-320&&px<=320&&py>=-192&&py<=192;
-    assert(shift.reusable==(phase&&fits));
-    if(!shift.reusable){assert(shift.reason==(phase?Shift::guard_bounds:Shift::fractional_phase));continue;}
+    bool same_quad=std::fmod(px,2.)==0&&std::fmod(py,2.)==0;
+    assert(shift.reusable==(phase&&fits&&same_quad));
+    if(!shift.reusable){
+     auto reason=!phase?Shift::fractional_phase:!fits?Shift::guard_bounds:Shift::derivative_phase;
+     assert(shift.reason==reason);continue;
+    }
     auto needed=shift.needed<Rect>(width+8,1268,320,192);
     assert(needed.left>=0&&needed.top>=0&&needed.right<=width+648&&needed.bottom<=1652);
     assert(needed.right-needed.left==width+8&&needed.bottom-needed.top==1268);
@@ -42,9 +46,14 @@ int main(){
  }
  assert(Shift::between(3,64,64,0,0,320,192).reusable);
  assert(!Shift::between(3,65,65,0,0,320,192).reusable);
- assert(Shift::between(1.25f,4,-4,0,0,320,192).reusable);
+ assert(Shift::between(1.25f,8,-8,0,0,320,192).reusable);
+ assert(!Shift::between(1.25f,4,-4,0,0,320,192).reusable);
  assert(!Shift::between(1.25f,2,-2,0,0,320,192).reusable);
  assert(!Shift::between(1.1f,32,0,0,0,320,192).reusable);
+ // A completed (-23,+11) camera followed by its original view must redraw;
+ // whole-pixel coverage alone does not preserve shader derivative pairing.
+ assert(!Shift::between(1.f,-2784,-1312,-2807,-1301,320,192).reusable);
+ assert(!Shift::between(1.f,-2807,-1301,-2784,-1312,320,192).reusable);
  // Large jumps and equivalent/negative wraps must never overflow into reuse.
  assert(!Shift::between(3,INT_MAX,INT_MIN,INT_MIN,INT_MAX,320,192).reusable);
  for(int wrap:{-8192,8192})assert(!Shift::between(1.25f,wrap,0,0,0,320,192).reusable);

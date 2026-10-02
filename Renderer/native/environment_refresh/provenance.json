@@ -12,7 +12,7 @@
     "Renderer/lab/shared/shaders/relief/coast_rocks.hlsl": "39ba4ada0ad6567b0fb75827495b55f727a98c563f13d4a762f087deba2a9398",
     "Renderer/native/source_fidelity/terrain.hlsl": "0c0990255458ba4c2e838aa3d422e6d8e3894c8702a676b9ee42dac4bce96d67",
     "Renderer/native/source_fidelity/mountain.hlsl": "efca0b8254c551c884efdeed60b5d638b3b13cf0ffd161e346821151b092eb48",
-    "Renderer/native/source_fidelity/objects.hlsl": "042e6e976f031b14c1bfdc44e31898fa41ae656c3b9d9f42136b937bfe0b3956",
+    "Renderer/native/source_fidelity/objects.hlsl": "443939acba0aa485541f2b854d811336457abcab93aef303cbc2b09a4accf65c",
     "Renderer/native/render_core/source_caster.hlsl": "00ebc017793b7674d30c92ec7bd57ce9541d90e7b8a412134ba80da305cb1bee"
   }
 }

@@ -163,7 +163,7 @@ if /i "%~1"=="city-preview" (
 
 if /i "%~1"=="city-lab-renderer" (
   if not exist "build\city-preview" mkdir "build\city-preview"
-  cl /nologo /std:c++17 /EHsc /O2 /W4 /WX /bigobj /LD c3x_renderer.cpp terrain_scene_runtime.cpp environment_runtime.cpp terrain_definition_runtime.cpp scene_export.cpp frame_scheduler.cpp /Fo:build\city-preview\ /Fe:build\city-preview\C3XRenderer.dll /link /DEF:c3x_renderer.def /IMPLIB:build\city-preview\C3XRenderer.lib d3d11.lib d3dcompiler.lib dxgi.lib dcomp.lib gdi32.lib msimg32.lib user32.lib bcrypt.lib
+  cl /nologo /std:c++17 /EHsc /O2 /W4 /WX /bigobj %C3X_RENDERER_ORACLE_FLAGS% /LD c3x_renderer.cpp terrain_scene_runtime.cpp environment_runtime.cpp terrain_definition_runtime.cpp scene_export.cpp frame_scheduler.cpp /Fo:build\city-preview\ /Fe:build\city-preview\C3XRenderer.dll /link /DEF:c3x_renderer.def /IMPLIB:build\city-preview\C3XRenderer.lib d3d11.lib d3dcompiler.lib dxgi.lib dcomp.lib gdi32.lib msimg32.lib user32.lib bcrypt.lib
   if errorlevel 1 exit /b 1
   exit /b 0
 )
@@ -177,7 +177,7 @@ if /i "%~1"=="unit-bridge" (
   exit /b 0
 )
 
-cl /nologo /std:c++17 /EHsc /O2 /W4 /WX /bigobj /LD c3x_renderer.cpp terrain_scene_runtime.cpp environment_runtime.cpp terrain_definition_runtime.cpp scene_export.cpp frame_scheduler.cpp /Fo:build\ /Fe:build\candidate\C3XRenderer.dll /link /DEF:c3x_renderer.def /IMPLIB:build\candidate\C3XRenderer.lib d3d11.lib d3dcompiler.lib dxgi.lib dcomp.lib gdi32.lib msimg32.lib user32.lib bcrypt.lib
+cl /nologo /std:c++17 /EHsc /O2 /W4 /WX /bigobj %C3X_RENDERER_ORACLE_FLAGS% /LD c3x_renderer.cpp terrain_scene_runtime.cpp environment_runtime.cpp terrain_definition_runtime.cpp scene_export.cpp frame_scheduler.cpp /Fo:build\ /Fe:build\candidate\C3XRenderer.dll /link /DEF:c3x_renderer.def /IMPLIB:build\candidate\C3XRenderer.lib d3d11.lib d3dcompiler.lib dxgi.lib dcomp.lib gdi32.lib msimg32.lib user32.lib bcrypt.lib
 if errorlevel 1 exit /b 1
 
 cl /nologo /std:c++17 /EHsc /O2 /W4 /WX test_asset_content_hash.cpp /Fo:build\ /Fe:build\test_asset_content_hash.exe

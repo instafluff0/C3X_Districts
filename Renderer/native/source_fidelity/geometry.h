@@ -30,6 +30,11 @@ if(fidelity_profile) {
         out.river_distance=river_terrain_near ? float(river_at(out.world_x,out.world_y)) : 1000.f;
         return out;
     };
+    auto emit_hill_decal_surface=[](Tile source,int column,int row,
+            std::vector<Vertex> const& receiver,std::vector<unsigned> const* indices,
+            std::vector<Vertex>& output){
+        emit_hill_decals(source,column,row,receiver,indices,output);return true;
+    };
     if(!cpu_terrain_enabled) {
         #include "terrain_mesh_body.h"
     }

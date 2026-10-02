@@ -113,6 +113,12 @@ P VSReflectionInstance(InstanceInput input) {
  o.position.z=clamp(.5-(floor((base-h*NativeReflection.y)*256+.5)/256+input.placement_view.z)/16384,.001,.999);
  return o;
 }
+P VSResidentReflectionInstance(ResidentInstanceInput source) {
+ InstanceInput input=resident_natural_input(source);
+ input.placement_view.xy=translation+input.placement_view.xy;
+ input.placement_view.z=depth_translation+input.placement_view.z;
+ return VSReflectionInstance(input);
+}
 '''
         (HERE/(name+'.hlsl')).write_text(source)
     (HERE/'source_caster.hlsl').write_text(read(HERE.parent/'render_core/source_caster.hlsl'))

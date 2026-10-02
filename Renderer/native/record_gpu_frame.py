@@ -51,6 +51,7 @@ def main(argv=None):
     parser.add_argument('--half-pixels',action='store_true',help='Diagnostic-only half geometry coverage; retains full finishing and is never visual/performance acceptance')
     parser.add_argument('--world-readiness-only',action='store_true',help='Run only the complete world-navigation workload and independent cold-pixel oracles')
     parser.add_argument('--world-readiness',action='store_true',help='Page the complete world through the production caller callback, prepare it independently of the route, and measure 100 distributed GPU requests')
+    parser.add_argument('--world-readiness-samples',type=int,choices=(12,13,14,15,16,100),default=100,help='100 original requests, or bounded first/evict/restore/repeat qualification with six independent cold oracles')
     parser.add_argument('--world-geometry-mib',type=int,choices=(384,512,640,768),help='Isolated Huge-world residency budget control; leaves other budgets and detail unchanged')
     parser.add_argument('--rigid-sources',choices=('0','1'),default='1',help='Shared rigid infrastructure geometry (1) or exact expanded compiler control (0)')
     parser.add_argument('--dense-scene',action='store_true',help='Use the existing world-fixed dense city/infrastructure/resource fixture in both comparison arms')
@@ -71,7 +72,7 @@ def main(argv=None):
     if bool(args.x64_helper)!=bool(args.x64_dll):parser.error('x64 helper and DLL must be supplied together')
     if args.direct_surface_trial and not args.x64_helper:parser.error('direct surface requires the x64 helper')
     if args.async_bridge and not args.x64_helper:parser.error('async bridge requires the x64 helper')
-    if args.shader_root and not args.async_bridge:parser.error('shader root requires the async bridge')
+    if args.shader_root and not args.x64_helper:parser.error('shader root requires the x64 renderer')
     if args.pose_transitions and not args.async_bridge:parser.error('pose transitions require the async bridge')
     if args.window_witness_seconds and args.benchmark:
         parser.error('Window evidence competes for GPU/CPU; use a separate witness run from the benchmark')
@@ -152,7 +153,7 @@ def main(argv=None):
         for name in ('window_witness.cpp','BUILD_WINDOW_WITNESS.bat'):
             path=ROOT/'Renderer/tools'/name;inputs[path.relative_to(ROOT).as_posix()]=digest(path)
     # Runtime HLSL is part of the result identity even when the DLL is unchanged.
-    if args.async_bridge:
+    if helper64:
         # Qualify a private category promotion before changing the live bundle.
         shader_root=(ROOT/(args.shader_root or 'Renderer/packs/Renderer64CutoverControl')).resolve()
         if not shader_root.is_relative_to(ROOT):parser.error('shader root must be inside the repository')
@@ -194,7 +195,11 @@ def main(argv=None):
     settings['C3X_RENDERER_POSE_TRANSITIONS']='1' if args.pose_transitions else ''
     if helper64:
         settings.update({'C3X_RENDERER_HELPER64':'1','C3X_RENDERER_HELPER_EXE':str(win/helper64.relative_to(ROOT)),
-            'C3X_RENDERER_X64_DLL':str(win/dll64.relative_to(ROOT))})
+            'C3X_RENDERER_X64_DLL':str(win/dll64.relative_to(ROOT)),
+            'C3X_RENDERER_SHADER_SOURCE_ROOT':str(win/shader_root.relative_to(ROOT))})
+        if args.world_readiness:
+            settings.update({'C3X_RENDERER_SHARED_SCENE_SURFACE':'1',
+                'C3X_RENDERER_MANUAL_VISUAL':'','C3X_RENDERER_DIRECT_SURFACE_STRICT_TRIAL':'1'})
     if args.direct_surface_trial:
         settings.update({'C3X_RENDERER_DIRECT_SURFACE_TRIAL':'1',
                          'C3X_RENDERER_DIRECT_SURFACE_STRICT_TRIAL':'1'})
@@ -213,6 +218,7 @@ def main(argv=None):
     settings['C3X_RENDERER_RECORD_FILE']=str(target/'composition.c3xr') if args.record_composition else ''
     settings['C3X_RENDERER_WORLD_READINESS_ONLY']='1' if args.world_readiness_only else ''
     settings['C3X_RENDERER_WORLD_READINESS_TEST']='1' if args.world_readiness else ''
+    settings['C3X_RENDERER_WORLD_READINESS_SAMPLES']=str(args.world_readiness_samples) if args.world_readiness else ''
     settings['C3X_RENDERER_WORLD_GEOMETRY_MIB']=str(args.world_geometry_mib) if args.world_geometry_mib else ''
     settings['C3X_RENDERER_RIGID_SOURCES']=args.rigid_sources
     if args.benchmark or args.visual_only or args.scroll_coverage or args.world_readiness:
@@ -399,16 +405,40 @@ def main(argv=None):
               for line in log.splitlines() if line.startswith('WORLD_JUMP ')]
         readiness=[{key:float(value) for key,value in re.findall(r'(\w+)=([0-9.]+)',line)}
                    for line in log.splitlines() if line.startswith('WORLD_READINESS ')]
+        phase_rows=[line for line in log.splitlines() if line.startswith('WORLD_JUMP ')]
+        for row,line in zip(rows,phase_rows):
+            phase=re.search(r'\bphase=(\w+)',line);row['phase']=phase.group(1) if phase else 'legacy'
+        evictions=[{key:float(value) for key,value in re.findall(r'(\w+)=([0-9.]+)',line)}
+                   for line in log.splitlines() if line.startswith('WORLD_EVICTION ')]
+        sweeps=[{key:float(value) for key,value in re.findall(r'(\w+)=([0-9.]+)',line)}
+                for line in log.splitlines() if line.startswith('WORLD_SWEEP ')]
+        bounded=args.world_readiness_samples!=100
         values=sorted(row['request_ms'] for row in rows)
         desktop=sorted(row['desktop_ms'] for row in rows)
         oracles=[line for line in log.splitlines() if line.startswith('WORLD_ORACLE ')]
         if args.world_readiness_only:passed=complete==[invocation,'0'] and unchanged and bool(trace) and dropped==0
         backing=[{key:int(value) for key,value in re.findall(r'(\w+)=(\d+)',line)}
                  for line in trace.splitlines() if 'stage=world-backing ' in line]
+        checkpoints=[{key:int(value) for key,value in re.findall(r'(\w+)=(\d+)',line)}
+                     for line in trace.splitlines() if 'stage=world-compiler-checkpoint ' in line]
         for row in rows:
             operations=[event for event in backing if row.get('begin_qpc',0)<=event.get('qpc',-1)<=row.get('end_qpc',-2)]
             row['world_compiler_calls']=sum(event['compiler_calls'] for event in operations) if operations else None
             row['world_restore_calls']=sum(event['restore_calls'] for event in operations) if operations else None
+            if bounded:
+                before=[event for event in checkpoints if event.get('qpc',-1)<row.get('begin_qpc',0)]
+                after=[event for event in checkpoints if event.get('qpc',-1)>row.get('end_qpc',0)]
+                low=max(before,key=lambda event:event['qpc']) if before else None
+                high=min(after,key=lambda event:event['qpc']) if after else None
+                required=('pid','scope','device','canonical','compiler_total','recovery_total','restore_total')
+                valid=bool(low and high and all(key in low and key in high for key in required) and
+                           all(low[key]==high[key] for key in ('pid','scope','device')) and
+                           low.get('canonical')==high.get('canonical')==1 and all(
+                           high.get(key,-1)>=low.get(key,0) for key in ('compiler_total','recovery_total','restore_total')))
+                row['compiler_checkpoint_coverage']=valid
+                row['world_compiler_calls']=(high['compiler_total']-low['compiler_total']+
+                    high['recovery_total']-low['recovery_total']) if valid else None
+                row['world_restore_calls']=high['restore_total']-low['restore_total'] if valid else None
         receipt['world_readiness']={'preparation':readiness,'samples':rows,
             'scope':'GPU request submission and request through actual desktop completion; CSV capture, native overlay composition and live trigger-to-display are excluded',
             'zero_world_compiler_calls':bool(rows) and all(row['world_compiler_calls']==0 for row in rows),
@@ -417,10 +447,19 @@ def main(argv=None):
             'desktop_latency':{'mean':statistics.mean(desktop),'p95':desktop[int(len(desktop)*.95)],'max':max(desktop)} if desktop else None,
             'minimum_largest_free':min((row['largest_free'] for row in rows),default=0),'cold_oracles':oracles,
             'over_100_ms':sum(value>100 for value in desktop),'distinct_destinations':len({(row['x'],row['y']) for row in rows})}
-        passed=passed and len(rows)==100 and len(oracles)==6 and 'PASS world readiness workload:' in log
+        receipt['world_readiness'].update(evictions=evictions,sweeps=sweeps,
+            initialization_complete=bool(readiness) and all(row.get('unavailable',1)==0 and row.get('regions')==row.get('attempted') for row in readiness),
+            bounded_backing_recovery=bounded,
+            restored_contributors=sum(row.get('world_restore_calls') or 0 for row in rows if row['phase']=='restore'),
+            zero_repeat_adoption_or_upload=any(row['phase']=='repeat' for row in rows) and all(row['built']==0 and row['uploads']==0 for row in rows if row['phase']=='repeat'))
+        passed=passed and len(rows)==args.world_readiness_samples and len(oracles)==6 and 'PASS world readiness workload:' in log
+        if bounded:
+            passed=passed and len(evictions)==1 and len(sweeps)>=2 and all(row.get('plateau',0)==1 for row in sweeps) and \
+                receipt['world_readiness']['zero_world_compiler_calls'] and receipt['world_readiness']['restored_contributors']>0 and receipt['world_readiness']['zero_repeat_adoption_or_upload'] and \
+                any(row['phase']=='restore' and row['uploads']>0 for row in rows)
         if args.world_readiness_only and args.x64_helper:
             passed=passed and receipt['world_readiness']['zero_world_compiler_calls'] and \
-                receipt['world_readiness']['zero_geometry_adoption_or_upload']
+                (bounded or receipt['world_readiness']['zero_geometry_adoption_or_upload'])
         receipt['status']='pass' if passed else 'fail'
     if args.input_soak_seconds:
         soak_samples=[{key:float(value) for key,value in re.findall(r'(\w+)=([0-9.]+)', line)}

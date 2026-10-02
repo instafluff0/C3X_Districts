@@ -78,16 +78,67 @@ if(GetEnvironmentVariableA("C3X_RENDERER_WORLD_READINESS_TEST",world_test_option
     unsigned samples=GetEnvironmentVariableA("C3X_RENDERER_WORLD_READINESS_SAMPLES",
         short_workload_option,sizeof(short_workload_option))?
         unsigned(std::clamp(std::atoi(short_workload_option),1,100)):100u;
-    for(unsigned n=0;n<samples;++n){
-        random=random*1664525u+1013904223u;center_x=int(random%unsigned(map_width));
-        random=random*1664525u+1013904223u;center_y=int(random%unsigned(map_height));
-        center_x=(center_x&~1)|(center_y&1);
-        if(!n){first_x=center_x;first_y=center_y;}
-        if(samples>=3 && n==samples-2){center_x=first_x;center_y=first_y;}
-        if(samples>=3 && n==samples-1){center_x=home_x;center_y=home_y;}
+    bool bounded=samples>=12 && samples<=16;
+    // BEGIN bounded readiness route contract (also exercised on the host).
+    struct WorldReadinessRoute {
+        enum {first_visits=6,sweep_size=3};
+        std::vector<std::pair<int,int>> origins;
+        std::pair<int,int> destination(unsigned n)const{return origins[n<first_visits?n:(n-first_visits)%sweep_size];}
+        bool oracle(unsigned n)const{return n==0 || n==2 || n==4 || (n>=first_visits && n<first_visits+sweep_size);}
+        bool sweep_end(unsigned n)const{return n>=first_visits && (n-first_visits+1)%sweep_size==0;}
+        char const* phase(unsigned n)const{return n<first_visits?"first":n<first_visits+sweep_size?"restore":"repeat";}
+    };
+    // END bounded readiness route contract.
+    WorldReadinessRoute route;
+    auto evict_world=reinterpret_cast<c3x_renderer_benchmark_session_reset_v1_fn>(
+        GetProcAddress(module,"c3x_renderer_benchmark_session_reset_v1"));
+    unsigned evictions=0,sweeps=0,restored_requests=0;
+    std::uint64_t plateau_geometry=0;std::size_t plateau_available=0;
+    if(bounded){
+        // Pick six distinct explored destinations only after initialization.
+        // The producer and preparation policy never see this route or seed.
+        for(std::size_t attempt=0;route.origins.size()<WorldReadinessRoute::first_visits &&
+            attempt<world_records.size()*8;++attempt){
+            random=random*1664525u+1013904223u;auto const& candidate=world_records[random%world_records.size()];
+            if(!(candidate.tile_flags&C3X_RENDERER_TILE_EXPLORED))continue;
+            std::pair<int,int> at{candidate.tile_x,candidate.tile_y};
+            if(at==std::make_pair(home_x,home_y) || std::find(route.origins.begin(),route.origins.end(),at)!=route.origins.end())continue;
+            route.origins.push_back(at);
+        }
+        if(route.origins.size()!=WorldReadinessRoute::first_visits || !evict_world){
+            std::printf("FAIL bounded world readiness: explored destinations or ordered eviction endpoint unavailable\n");ok=false;
+        }
+        std::printf("WORLD_ROUTE fixture=bounded samples=%u first_visits=6 revisit_routes=3 oracle_samples=0,2,4,6,7,8\n",samples);
+    }
+    auto compiler_checkpoint=[&](){
+        c3x_renderer_world_status_v1 snapshot{sizeof(snapshot)};auto deadline=GetTickCount64()+1000;
+        do{if(get_world(&snapshot)==C3X_RENDERER_RESULT_OK)return true;Sleep(1);}while(GetTickCount64()<deadline);
+        return false;
+    };
+    for(unsigned n=0;ok && n<samples;++n){
+        if(bounded){
+            if(n==WorldReadinessRoute::first_visits){
+                c3x_renderer_benchmark_oracle_trim_v1 retired={C3X_RENDERER_BENCHMARK_ORACLE_VERSION,sizeof(retired)};
+                LARGE_INTEGER begin{},end{};QueryPerformanceCounter(&begin);
+                int code=evict_world(3,&retired);QueryPerformanceCounter(&end);
+                std::printf("WORLD_EVICTION sample=%u result=%d evicted=%u geometry_bytes=%llu begin_qpc=%lld end_qpc=%lld\n",
+                    n,code,retired.capacity_geometry_evictions,retired.cleared_viewport_bytes,begin.QuadPart,end.QuadPart);
+                if(code!=C3X_RENDERER_RESULT_OK || !retired.capacity_geometry_evictions || !retired.cleared_viewport_bytes){ok=false;break;}
+                ++evictions;
+            }
+            auto destination=route.destination(n);center_x=destination.first;center_y=destination.second;
+        }else{
+            random=random*1664525u+1013904223u;center_x=int(random%unsigned(map_width));
+            random=random*1664525u+1013904223u;center_y=int(random%unsigned(map_height));
+            center_x=(center_x&~1)|(center_y&1);
+            if(!n){first_x=center_x;first_y=center_y;}
+            if(samples>=3 && n==samples-2){center_x=first_x;center_y=first_y;}
+            if(samples>=3 && n==samples-1){center_x=home_x;center_y=home_y;}
+        }
         auto next_tiles=capture_view();auto next=frame;next.tiles=next_tiles.data();next.tile_count=unsigned(next_tiles.size());
         next.presentation_time_ticks+=c3x_renderer_i64(n+1)*next.presentation_frequency/30;
         request.frame=&next;world_output={C3X_RENDERER_API_VERSION,sizeof(world_output)};image={sizeof(image)};
+        if(bounded && !compiler_checkpoint()){ok=false;break;}
         LARGE_INTEGER begin{},end{};QueryPerformanceCounter(&begin);
         int code=gpu_world(&request,&image,&world_output);QueryPerformanceCounter(&end);
         c3x_renderer_gpu_present_v1 show{};show.struct_size=sizeof(show);show.ticket=image.ticket;
@@ -97,16 +148,43 @@ if(GetEnvironmentVariableA("C3X_RENDERER_WORLD_READINESS_TEST",world_test_option
         LARGE_INTEGER presented{};QueryPerformanceCounter(&presented);
         if(code!=C3X_RENDERER_RESULT_OK || presented_code!=C3X_RENDERER_RESULT_OK || FAILED(desktop_complete())){ok=false;break;}
         LARGE_INTEGER displayed{};QueryPerformanceCounter(&displayed);auto memory_now=camera_memory_values();
-        std::printf("WORLD_JUMP sample=%u x=%d y=%d result=%d request_ms=%.3f present_ms=%.3f desktop_wait_ms=%.3f desktop_ms=%.3f built=%u reused=%u uploads=%u readbacks=%u largest_free=%zu available_va=%zu geometry_bytes=%u begin_qpc=%lld end_qpc=%lld\n",
+        if(bounded && !compiler_checkpoint()){ok=false;break;}
+        std::printf("WORLD_JUMP sample=%u x=%d y=%d result=%d request_ms=%.3f present_ms=%.3f desktop_wait_ms=%.3f desktop_ms=%.3f built=%u reused=%u uploads=%u readbacks=%u largest_free=%zu available_va=%zu geometry_bytes=%u begin_qpc=%lld end_qpc=%lld phase=%s\n",
             n,center_x,center_y,code,1000.*double(end.QuadPart-begin.QuadPart)/double(frequency.QuadPart),
             1000.*double(presented.QuadPart-end.QuadPart)/double(frequency.QuadPart),
             1000.*double(displayed.QuadPart-presented.QuadPart)/double(frequency.QuadPart),
             1000.*double(displayed.QuadPart-begin.QuadPart)/double(frequency.QuadPart),
             world_output.geometry_tiles_built,world_output.geometry_tiles_reused,world_output.geometry_upload_bytes,
-            image.map_readbacks,std::size_t(memory_now.second),std::size_t(memory_now.first),world_output.geometry_cache_bytes,begin.QuadPart,displayed.QuadPart);
-        if(samples==100 && (n==0 || n==2 || n==4 || n==9 || n==14 || n==25)){
+            image.map_readbacks,std::size_t(memory_now.second),std::size_t(memory_now.first),world_output.geometry_cache_bytes,begin.QuadPart,displayed.QuadPart,
+            bounded?route.phase(n):"ordinary");
+        if(bounded){
+            // The parser separately requires zero compiler calls in every
+            // interval and backing restore calls during the restoration sweep.
+            if(n==WorldReadinessRoute::first_visits){
+                if((!world_output.geometry_tiles_reused && !world_output.geometry_tiles_built) ||
+                   !world_output.geometry_upload_bytes){ok=false;break;}
+                ++restored_requests;
+            }
+            if(n>=WorldReadinessRoute::first_visits+WorldReadinessRoute::sweep_size &&
+               (world_output.geometry_tiles_built || world_output.geometry_upload_bytes)){ok=false;break;}
+        }
+        if((bounded && route.oracle(n)) ||
+           (!bounded && (n==0 || n==2 || n==4 || n==9 || n==14 || n==25))){
             WorldOracle oracle{center_x,center_y,next.presentation_time_ticks,{}};
             if(!read_world(oracle.pixels)){ok=false;break;}oracles.push_back(std::move(oracle));
+        }
+        // Account diagnostic snapshots before the plateau baseline; their
+        // retained pixels must not appear as renderer growth on the next sweep.
+        if(bounded && route.sweep_end(n)){
+            auto sweep_memory=camera_memory_values();
+            ++sweeps;auto geometry=std::uint64_t(world_output.geometry_cache_bytes);
+            auto geometry_growth=geometry>plateau_geometry?geometry-plateau_geometry:0;
+            auto va_growth=plateau_available>std::size_t(sweep_memory.first)?plateau_available-std::size_t(sweep_memory.first):0;
+            bool plateau=sweeps==1 || (geometry_growth<=1024u*1024u && va_growth<=8u*1024u*1024u);
+            std::printf("WORLD_SWEEP sweep=%u sample=%u geometry_bytes=%llu available_va=%zu largest_free=%zu geometry_growth=%llu va_growth=%zu plateau=%u\n",
+                sweeps,n,geometry,std::size_t(sweep_memory.first),std::size_t(sweep_memory.second),geometry_growth,va_growth,unsigned(plateau));
+            if(sweeps==1){plateau_geometry=geometry;plateau_available=std::size_t(sweep_memory.first);}
+            if(!plateau){ok=false;break;}
         }
     }
     c3x_renderer_gpu_present_v1 discard{};discard.struct_size=sizeof(discard);discard.action=1;discard.window=world_window;
@@ -127,16 +205,18 @@ if(GetEnvironmentVariableA("C3X_RENDERER_WORLD_READINESS_TEST",world_test_option
         ULONGLONG reference_start=GetTickCount64();c3x_renderer_world_status_v1 reference={sizeof(reference)};
         while(GetTickCount64()-reference_start<30000){
             MSG message{};while(PeekMessageA(&message,nullptr,0,0,PM_REMOVE)){TranslateMessage(&message);DispatchMessageA(&message);}
-            if(get_world(&reference)==C3X_RENDERER_RESULT_OK && reference.authoritative==reference.total &&
+            if(get_world(&reference)==C3X_RENDERER_RESULT_OK &&
+               reference.authoritative==(bounded?state.authoritative:reference.total) &&
                reference.total==world_records.size() && reference.capture_passes>0 &&
-               reference.preparation_sequence==reference.appearance_sequence &&
-               reference.prepared_regions==reference.regions)break;
+               (bounded || (reference.preparation_sequence==reference.appearance_sequence &&
+               reference.prepared_regions==reference.regions)))break;
             MsgWaitForMultipleObjectsEx(0,nullptr,16,QS_ALLINPUT,MWMO_INPUTAVAILABLE);
         }
         image={sizeof(image)};world_output={C3X_RENDERER_API_VERSION,sizeof(world_output)};
-        if(reference.authoritative!=reference.total || reference.total!=world_records.size() ||
-           reference.preparation_sequence!=reference.appearance_sequence ||
-           reference.prepared_regions!=reference.regions || reference.unavailable_regions ||
+        if(!reference.capture_passes || reference.authoritative!=(bounded?state.authoritative:reference.total) ||
+           reference.total!=world_records.size() ||
+           (!bounded && (reference.preparation_sequence!=reference.appearance_sequence ||
+           reference.prepared_regions!=reference.regions || reference.unavailable_regions)) ||
            gpu_world(&request,&image,&world_output)!=C3X_RENDERER_RESULT_OK || !read_world(pixels)){ok=false;break;}
         set_world(nullptr);
         unsigned differences=0,maximum=0;
@@ -144,7 +224,8 @@ if(GetEnvironmentVariableA("C3X_RENDERER_WORLD_READINESS_TEST",world_test_option
             unsigned delta=unsigned(std::abs(int((pixels[i]>>shift)&255)-int((oracle.pixels[i]>>shift)&255)));
             differences+=delta!=0;maximum=(std::max)(maximum,delta);
         }
-        std::printf("WORLD_ORACLE x=%d y=%d differing_channels=%u max_channel_delta=%u\n",center_x,center_y,differences,maximum);
+        std::printf("WORLD_ORACLE x=%d y=%d differing_channels=%u max_channel_delta=%u independent=1 clock=%lld\n",
+            center_x,center_y,differences,maximum,oracle.clock);
         world_output.width=image.width;world_output.height=image.height;world_output.stride_bytes=image.width*4;
         world_output.bgra_pixels=pixels.data();
         write_bmp((std::string(argv[5])+".world-"+std::to_string(oracle_index++)+".bmp").c_str(),world_output);
@@ -155,7 +236,9 @@ if(GetEnvironmentVariableA("C3X_RENDERER_WORLD_READINESS_TEST",world_test_option
     }
     set_world(nullptr);world_records.clear();
     center_x=home_x;center_y=home_y;
-    std::printf("%s world readiness workload: samples=%u live_input=unmeasured desktop=measured oracles=%zu\n",ok?"PASS":"FAIL",samples,oracles.size());
+    if(bounded && (evictions!=1 || !restored_requests || sweeps<2 || oracles.size()!=6))ok=false;
+    std::printf("%s world readiness workload: samples=%u live_input=unmeasured desktop=measured oracles=%zu fixture=%s evictions=%u sweeps=%u\n",
+        ok?"PASS":"FAIL",samples,oracles.size(),bounded?"bounded":"ordinary",evictions,sweeps);
     char only[8]={};if(GetEnvironmentVariableA("C3X_RENDERER_WORLD_READINESS_ONLY",only,sizeof(only))){
         world_reset();
         auto finish_inputs=reinterpret_cast<void(*)()>(GetProcAddress(module,"c3x_renderer_input_recording_finish"));

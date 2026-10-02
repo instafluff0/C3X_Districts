@@ -152,6 +152,12 @@ public:
     int world_delta_submit(c3x_renderer_world_page_v1 const& page,int callback_result){
         std::lock_guard<std::mutex> lock(gate);return client.world_delta_submit(page,callback_result);
     }
+#ifdef C3X_RENDERER_BENCHMARK_ORACLE
+    int benchmark_reset(unsigned mode,c3x_renderer_benchmark_oracle_trim_v1& result){
+        cadence.stop();std::lock_guard<std::mutex> lock(gate);
+        return client.benchmark_reset(mode,result);
+    }
+#endif
     int world_status(c3x_renderer_world_status_v1& status){
         std::lock_guard<std::mutex> lock(gate);return client.world_status(status);
     }

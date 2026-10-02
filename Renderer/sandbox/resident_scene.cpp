@@ -272,11 +272,17 @@ void c3x_renderer64_begin_unit_assets(){
     // Release them before the next frame can evict or adopt any GPU mesh.
     sandbox_direct_units.prepared_units.clear();
     static std::uint64_t revision=0;
-    if(revision!=renderer.content_revision){
+    if(revision!=renderer.unit_bodies.catalogue_generation){
         sandbox_direct_units.meshes.clear();sandbox_direct_units.mesh_bytes=0;
-        sandbox_direct_units.transitions.clear();revision=renderer.content_revision;
+        sandbox_direct_units.transitions.clear();revision=renderer.unit_bodies.catalogue_generation;
     }
 }
+bool c3x_renderer64_select_units(c3x_renderer_frame_v1 const& frame,
+        std::vector<c3x_renderer::render_core::UnitInstances::ScenePose> const& candidates,
+        std::vector<c3x_renderer::render_core::UnitInstances::ScenePose>& required,float zoom){
+    c3x_renderer64_frame_device();return sandbox_fresh.select_unit_contributors(frame,candidates,required,zoom);
+}
+std::uint64_t c3x_renderer64_unit_selection_revision(){return sandbox_fresh.unit_contribution_revision;}
 int c3x_renderer64_prepare_unit_meshes(){
     c3x_renderer64_frame_device();return sandbox_direct_units.prepare_frame_meshes();
 }

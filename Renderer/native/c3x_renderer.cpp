@@ -88,6 +88,7 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
 #include "render_core/scene_surface.h"
 #include "render_core/frame_working_set.h"
 #include "render_core/coastal_waves.h"
+#include "render_core/indexed_wave_ribbon.h"
 #include "render_core/relief_query.h"
 #include "render_core/exact_point_cache.h"
 #include "render_core/frame_telemetry.h"
@@ -109,6 +110,12 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
 #include "unit_body_renderer.h"
 #include "render_core/unit_frame_preparation.h"
 #include "render_core/unit_instances.h"
+#ifdef C3X_RENDERER64_FRESH
+std::uint64_t c3x_renderer64_unit_selection_revision();
+bool c3x_renderer64_select_units(c3x_renderer_frame_v1 const& frame,
+    std::vector<c3x_renderer::render_core::UnitInstances::ScenePose> const& candidates,
+    std::vector<c3x_renderer::render_core::UnitInstances::ScenePose>& required,float zoom);
+#endif
 #include "city_fidelity/gpu.h"
 #include "city_fidelity/compiler.h"
 #include "world_preparation.h"
@@ -273,6 +280,7 @@ struct CachedVertexChunk {
     ID3D11ShaderResourceView * animation_texture = nullptr; // borrowed, dynamic pass only
     ID3D11Buffer * resource_instance = nullptr; // borrowed instance constants, dynamic pass only
     std::shared_ptr<std::vector<c3x_renderer::fidelity::MeshInstance> const> instances;
+    std::shared_ptr<void const> shared_source_lease;
     float instance_material=40;
     bool rigid_source=false;
     float visual_time=-1; // Optional wave sample; negative follows the visible clock.
@@ -619,10 +627,11 @@ public:
     std::shared_ptr<c3x_renderer::WorldPreparationTopology const> world_input_topology;
     std::shared_ptr<c3x_renderer::WorldPreparationSources const> world_input_sources;
     c3x_renderer::render_core::CompressedWorldStore<c3x_renderer::WorldPreparationKey> world_backing;
-    std::atomic<std::uint64_t> world_uploaded_bytes{0},world_uploads{0},world_compiles{0},world_restores{0};
+    std::atomic<std::uint64_t> world_uploaded_bytes{0},world_uploads{0},world_compiles{0},world_restores{0},world_recoveries{0};
     std::array<std::atomic<std::uint64_t>,4> world_upload_layers{};
     std::atomic<std::uint64_t> world_restore_microseconds{0};
     c3x_renderer::objects::RigidSourceGpu rigid_sources;
+    c3x_renderer::render_core::SharedInstanceSubmission shared_instances;
     std::array<c3x_renderer::fidelity::TerrainCompileScratch,6> terrain_scratch;
     std::array<c3x_renderer::fidelity::SurfaceQueryScratch,6> world_ground_scratch;
     c3x_renderer::fidelity::TerrainCompileScratch foreground_terrain_scratch;
@@ -636,6 +645,8 @@ public:
     // Ground owns query scratch per task; the scoped join precedes source mutation.
     unsigned cpu_terrain_workers=0;
     bool world_preparation=false;
+    bool canonical_world_preparation=false;
+    std::uint64_t initial_unit_bound_catalogue=0;
     std::size_t cpu_preparation_budget=16u*1024u*1024u;
     RendererTrace trace;
     c3x_renderer::render_core::GpuFrameTelemetry gpu_telemetry;
@@ -671,16 +682,18 @@ public:
     bool memory_pressured=false;
     ULONGLONG last_memory_control=0,last_unit_work=0;
     std::size_t publication_working_bytes=0;
+    // Includes the fixed fresh field and its still-owned production field.
+    std::size_t fresh_shadow_working_bytes=0;
     std::size_t composition_working_bytes()const{
         return publication_working_bytes+(gpu_composition?gpu_composition->allocation_bytes():0);
     }
     std::size_t frame_working_bytes()const{
-        return region_glow.linear.bytes()+std::size_t(region_glow.native_extent)*region_glow.native_height*(region_glow.native?16:0)+
+        return fresh_shadow_working_bytes+region_glow.linear.bytes()+std::size_t(region_glow.native_extent)*region_glow.native_height*(region_glow.native?16:0)+
             std::size_t(scene_reflection_width)*scene_reflection_height*(scene_reflection_texture?32:0)+
             unit_scene_work.bytes()+reflection.linear.bytes();
     }
-    void preserve_process_headroom(){
-        auto now=GetTickCount64();if(now-last_memory_control<250)return;last_memory_control=now;
+    void preserve_process_headroom(bool force=false){
+        auto now=GetTickCount64();if(!force && now-last_memory_control<250)return;last_memory_control=now;
         MEMORYSTATUSEX memory={};memory.dwLength=sizeof(memory);if(!GlobalMemoryStatusEx(&memory))return;
 #if defined(_WIN64)
         // Virtual address space is effectively unbounded in Renderer64; use
@@ -788,12 +801,19 @@ public:
         auto preparation=world_preparation_queue.statistics();
         sprintf_s(detail,"input_bytes=%zu input_peak=%zu ready_bytes=%zu ready_peak=%zu preparation_cap=%zu active=%u scratch_reserve=%zu",
             world_input_memory->bytes.load(),world_input_memory->peak.load(),preparation.bytes,preparation.peak_bytes,cpu_preparation_budget,
-            preparation.active,std::size_t(cpu_terrain_workers)*16u*1024u*1024u);
+            preparation.active,std::size_t(cpu_terrain_workers)*48u*1024u*1024u);
         trace.write("memory-content",detail,true);
         sprintf_s(detail,"source_bytes=%zu source_allocations=%u instance_capacity=%zu",
             rigid_sources.bytes,rigid_sources.allocations,rigid_sources.stream.buffer?
                 std::size_t(c3x_renderer::render_core::InstanceStream::limit)*sizeof(c3x_renderer::fidelity::MeshInstance):0);
         trace.write("memory-rigid-sources",detail,true);
+        auto backing=world_backing.statistics();
+        sprintf_s(detail,"shared_joint=%zu shared_cpu=%zu shared_gpu=%zu shared_peak=%zu rigid_joint=%zu rigid_gpu=%zu natural_joint=%zu natural_gpu=%zu retired_world=%zu unit_bounds=%zu backing_physical=%llu backing_live=%llu backing_limit=%llu",
+            shared_instances.bytes(),shared_instances.cpu_bytes(),shared_instances.gpu_bytes(),shared_instances.peak_bytes(),
+            rigid_sources.resident_bytes(),rigid_sources.resident_gpu_bytes(),natural.resident_instance_bytes(),natural.resident_instance_gpu_bytes(),
+            retired_content->bytes.load(),unit_bodies.contribution_bytes,
+            static_cast<unsigned long long>(backing.bytes),static_cast<unsigned long long>(backing.live),static_cast<unsigned long long>(backing.limit));
+        trace.write("memory-resident-owners",detail,true);
     }
     SceneTopology topology_cache;
     bool retained_world=true;
@@ -1252,7 +1272,7 @@ public:
         if (context != nullptr)
             context->ClearState();
         reset_targets();
-        world_coast.clear();center_shore_cache.clear(); geometry_world_revision = -1; source_shadow.clear(); natural.reset(); reflection.reset();cities.reset();city_glow.reset();rigid_sources.clear();
+        shared_instances.clear();world_coast.clear();center_shore_cache.clear(); geometry_world_revision = -1; source_shadow.clear(); natural.reset(); reflection.reset();cities.reset();city_glow.reset();rigid_sources.clear();
         region_reflection.reset();region_glow.reset();
         for (TerrainTexture & texture : terrain_textures)
         {
@@ -3642,7 +3662,8 @@ public:
                     decoded.rig.parents.capacity()*sizeof(int)+decoded.rig.skin_joints.capacity()*sizeof(unsigned)+
                     decoded.rig.inverse_bind.capacity()*sizeof(std::array<float,16>);
                 if(!reserve(bytes))return false;
-                mesh.animation=std::make_shared<c3x_renderer::AnimationMesh const>(std::move(decoded));mesh.bytes=bytes;bodies.resident_bytes+=bytes;++loads;
+                mesh.animation=std::make_shared<c3x_renderer::AnimationMesh const>(std::move(decoded));
+                bodies.remember_contribution_bounds(part.mesh);mesh.bytes=bytes;bodies.resident_bytes+=bytes;++loads;
             }
             mesh.used=used;
             unsigned material_ids[]={part.texture,part.material_textures[0],part.material_textures[1],part.material_textures[2],part.material_textures[3]};
@@ -3701,6 +3722,38 @@ public:
         }
         return true;
     }
+#ifdef C3X_RENDERER64_FRESH
+    bool select_frame_units(c3x_renderer_frame_v1 const& frame,
+            std::vector<c3x_renderer::render_core::UnitInstances::ScenePose> const& candidates,
+            std::vector<c3x_renderer::render_core::UnitInstances::ScenePose>& selected,float zoom){
+        auto begin=std::chrono::steady_clock::now();
+        auto reads=unit_bodies.contribution_reads;bool loading=initial_unit_bound_catalogue!=unit_bodies.catalogue_generation;
+        auto deadline=begin+(loading?std::chrono::milliseconds(1500):std::chrono::milliseconds(3));
+        bool complete=false;
+        do {auto progress_reads=unit_bodies.contribution_reads,progress_sequence=unit_bodies.contribution_sequence;
+        complete=unit_bodies.ensure_contribution_bounds(candidates,[this](unsigned index,bool strip,
+                c3x_renderer::render_core::UnitMeshContributionBounds& out){
+            if(index>=unit_bodies.meshes.size())return false;
+            std::atomic<bool> stop{false};auto const& mesh=unit_bodies.meshes[index];
+            auto input=c3x_renderer::UnitAssetInput{mesh.path,true,false};
+            (void)strip; // The certificate covers authored and stripped variants.
+            auto content=c3x_renderer::compile_unit_asset(input,stop,[](char const* path,std::vector<std::uint8_t>& bytes){
+                return RendererState::read_file(path,bytes,c3x_renderer::UnitAssetPreparation::byte_limit);
+            });
+            if(!content || content->failed || !content->mesh)return false;
+            return out.prepare(*content->mesh);
+        },[&]{return std::chrono::steady_clock::now()>=deadline;});
+        if(progress_reads==unit_bodies.contribution_reads && progress_sequence==unit_bodies.contribution_sequence)break;
+        }while(loading && !complete && std::chrono::steady_clock::now()<deadline);
+        if(loading)initial_unit_bound_catalogue=unit_bodies.catalogue_generation;
+        if(loading || reads!=unit_bodies.contribution_reads){char detail[256];sprintf_s(detail,
+            "initialization=%u candidates=%zu reads=%llu retained_bytes=%zu complete=%u ms=%.3f",
+            unsigned(loading),candidates.size(),unit_bodies.contribution_reads-reads,unit_bodies.contribution_bytes,unsigned(complete),
+            std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count());
+            trace.write("unit-bound-preparation",detail,true);}
+        return c3x_renderer64_select_units(frame,candidates,selected,zoom);
+    }
+#endif
     int prepare_frame_unit_assets(std::vector<c3x_renderer::render_core::UnitInstances::ScenePose> const& poses){
 #ifdef C3X_RENDERER64_FRESH
         c3x_renderer64_begin_unit_assets();
@@ -3741,7 +3794,7 @@ public:
             if(!(key&1)){
                 auto& mesh=bodies.meshes[index];auto bytes=c3x_renderer::UnitAssetContent::mesh_bytes(*content->mesh);
                 if(!reserve_frame_unit_asset(bytes)){trace.write("frame-asset-error","frame mesh/texture union exceeds payload budget",true);return C3X_RENDERER_RESULT_ERROR;}
-                mesh.animation=std::move(content->mesh);mesh.bytes=bytes;mesh.used=++bodies.payload_serial;bodies.resident_bytes+=bytes;
+                mesh.animation=std::move(content->mesh);bodies.remember_contribution_bounds(index);mesh.bytes=bytes;mesh.used=++bodies.payload_serial;bodies.resident_bytes+=bytes;
             }else{
                 auto& texture=bodies.textures[index];auto bytes=content->dds.size();
                 if(colors.count(index) && read_u32(content->dds,128)!=DXGI_FORMAT_BC3_UNORM_SRGB &&
@@ -3844,14 +3897,14 @@ public:
                 if(identity!=std::size_t(-1)) {
                     auto hash=c3x_renderer::stable_hash(unsigned(identity)*193u+71u);
                     float seed=c3x_renderer::stable_random(hash),seed2=c3x_renderer::stable_random(hash+23u);
-                    auto ribbon=coastal_wave_ribbon(world_coast,c,r,.30f+.70f*seed);
-                    cell.bytes=ribbon.size()*(sizeof(Vertex)+sizeof(unsigned));
+                    auto ribbon=indexed_wave_ribbon(coastal_wave_ribbon(world_coast,c,r,.30f+.70f*seed));
+                    cell.bytes=ribbon.vertices.size()*sizeof(Vertex)+ribbon.indices.size()*sizeof(unsigned);
                     if(!make_wave_cell_room(cell.bytes)){trace.write("coastal-wave-budget","active cells exceed 32 MiB/16384 entries; no truncation",true);return false;}
                     if(!ribbon.empty()) {
-                        std::vector<Vertex> vertices;vertices.reserve(ribbon.size());
+                        std::vector<Vertex> vertices;vertices.reserve(ribbon.vertices.size());
                         auto& chunk=cell.chunk;chunk.bounds={LONG_MAX,LONG_MAX,LONG_MIN,LONG_MIN};
                         for(unsigned axis=0;axis<3;++axis){chunk.world_bounds.low[axis]=1e9f;chunk.world_bounds.high[axis]=-1e9f;}
-                        for(auto const& point:ribbon) {
+                        for(auto const& point:ribbon.vertices) {
                             float u=float(point.position.x)-float(c),v=1-(float(point.position.y)-float(r));
                             Vertex out={};out.x=hw+(u-v)*hw;out.y=(u+v)*hh;out.z=out.y+.08f;
                             out.u=point.distance;out.v=point.along;out.panel=1;out.normal_z=1;
@@ -3864,7 +3917,7 @@ public:
                             float world[]={out.world_x,out.world_y,out.world_z};for(unsigned axis=0;axis<3;++axis){
                                 chunk.world_bounds.low[axis]=std::min(chunk.world_bounds.low[axis],world[axis]);chunk.world_bounds.high[axis]=std::max(chunk.world_bounds.high[axis],world[axis]);}
                         }
-                        std::vector<unsigned> indices(vertices.size());for(unsigned i=0;i<indices.size();++i)indices[i]=i;
+                        auto const& indices=ribbon.indices;
                         D3D11_BUFFER_DESC desc={};desc.ByteWidth=unsigned(vertices.size()*sizeof(Vertex));desc.Usage=D3D11_USAGE_IMMUTABLE;desc.BindFlags=D3D11_BIND_VERTEX_BUFFER;
                         D3D11_SUBRESOURCE_DATA data={};data.pSysMem=vertices.data();
                         if(FAILED(device->CreateBuffer(&desc,&data,&chunk.buffer)))return false;
@@ -3918,11 +3971,11 @@ public:
             auto identity=world_coast.world().index(c,r);if(identity==std::size_t(-1))continue;
             auto hash=c3x_renderer::stable_hash(unsigned(identity)*193u+71u);
             float seed=c3x_renderer::stable_random(hash),seed2=c3x_renderer::stable_random(hash+23u);
-            auto ribbon=coastal_wave_ribbon(world_coast,c,r,.30f+.70f*seed);if(ribbon.empty())continue;
-            std::vector<Vertex> vertices;vertices.reserve(ribbon.size());
+            auto ribbon=indexed_wave_ribbon(coastal_wave_ribbon(world_coast,c,r,.30f+.70f*seed));if(ribbon.empty())continue;
+            std::vector<Vertex> vertices;vertices.reserve(ribbon.vertices.size());
             CachedVertexChunk chunk;chunk.visual_time=-1.f;chunk.bounds={LONG_MAX,LONG_MAX,LONG_MIN,LONG_MIN};
             for(unsigned a=0;a<3;++a){chunk.world_bounds.low[a]=1e9f;chunk.world_bounds.high[a]=-1e9f;}
-            for(auto const& point:ribbon){
+            for(auto const& point:ribbon.vertices){
                 float u=float(point.position.x)-cu,v=1-(float(point.position.y)-rv);
                 Vertex out={};out.x=first.anchor_x+hw+(u-v)*hw-dx;
                 out.y=first.anchor_y+(u+v)*hh-dy;out.z=out.y+.08f;
@@ -3938,15 +3991,15 @@ public:
             }
             if(chunk.bounds.right+dx<=0 || chunk.bounds.left+dx>=width || chunk.bounds.bottom+dy<=0 || chunk.bounds.top+dy>=height)continue;
             auto size=unsigned(vertices.size()*sizeof(Vertex));
-            if(bytes+size+vertices.size()*4>16u*1024u*1024u){
+            if(bytes+size+ribbon.indices.size()*sizeof(unsigned)>16u*1024u*1024u){
                 char detail[256];sprintf_s(detail,"native_width=%d active_bytes=%zu next_bytes=%zu cap=16777216 cells=%zu submitted_chunks=%zu cell=%d,%d device_reason=0x%08lx; no truncation",
-                    frame.tile_width,bytes,size+vertices.size()*4,cells.size(),wave_chunks.size(),c,r,device->GetDeviceRemovedReason());
+                    frame.tile_width,bytes,size+ribbon.indices.size()*sizeof(unsigned),cells.size(),wave_chunks.size(),c,r,device->GetDeviceRemovedReason());
                 trace.write("coastal-wave-budget",detail,true);reset_waves();return false;
             }
             D3D11_BUFFER_DESC desc={};desc.ByteWidth=size;desc.Usage=D3D11_USAGE_IMMUTABLE;desc.BindFlags=D3D11_BIND_VERTEX_BUFFER;
             D3D11_SUBRESOURCE_DATA data={};data.pSysMem=vertices.data();
             if(FAILED(device->CreateBuffer(&desc,&data,&chunk.buffer))){reset_waves();return false;}
-            std::vector<unsigned> indices(vertices.size());for(unsigned i=0;i<indices.size();++i)indices[i]=i;
+            auto const& indices=ribbon.indices;
             desc.ByteWidth=unsigned(indices.size()*4);desc.BindFlags=D3D11_BIND_INDEX_BUFFER;data.pSysMem=indices.data();
             if(FAILED(device->CreateBuffer(&desc,&data,&chunk.indices))){release(chunk.buffer);reset_waves();return false;}
             chunk.vertex_stride=sizeof(Vertex);chunk.index_count=unsigned(indices.size());chunk.version=cached_signature.complete;
@@ -4686,7 +4739,8 @@ public:
                        ((!dynamic_pass && item.water_dependent()) || (material_pass && !item.water_dependent())))continue;
                     bool visible=false;for(auto const& rect:rectangles)visible=visible || chunk_intersects_region(item,pass_settings,rect,false);
                     if(!visible)continue;
-                    GeometryDrawRecord record(item.content());
+                    // Retain immutable owner identity when borrowing a selected occurrence.
+                    GeometryDrawRecord record=item.occurrence?*item.occurrence:GeometryDrawRecord(item.content());
                     record.water_visible=item.water_visible();record.water_dependent=item.water_dependent();
                     record.bounds=item.bounds();record.translation_x=item.translation_x();record.translation_y=item.translation_y();
                     std::copy(item.natural_projection(),item.natural_projection()+4,record.natural_projection);
@@ -5327,6 +5381,22 @@ public:
                 bytes+=sizeof(light)+light.lights.capacity()*sizeof(light.lights[0])+light.blockers.capacity()*sizeof(light.blockers[0]);}
             owner.mesh->retirement.retire(retired_content,bytes);
         }
+    }
+
+    void evict_prepared_geometry() {
+        // Capacity retirement keeps the authoritative world, immutable sources and
+        // compressed prepared backing. Selected fronts hold their old leases until
+        // release, and retired_content accounts those generations in admission.
+        world_preparation_queue.clear();discard_scene_view();
+        residency_candidates.clear();natural_mesh_cache.clear();natural_mesh_cache_bytes=0;
+        ground_grid_cache.clear();ground_grid_cache_bytes=0;
+        for(auto& entry:tile_geometry_cache)release_resident_content(entry.second);
+        tile_geometry_cache.clear();resident_content.clear();world_pass_index.clear();
+        world_pass_occurrences.clear();world_pass_affine=false;
+        for(auto& entry:terrain_patch_indices)release(entry.second);
+        terrain_patch_indices.clear();terrain_patch_index_bytes=0;
+        tile_geometry_cache_bytes=prefetched_geometry_bytes=0;
+        sandbox_shadow_meshes.clear();source_shadow.clear_cached_pages();
     }
 
     void clear_tile_geometry_cache() {
@@ -6088,11 +6158,72 @@ public:
         return key.size()<=c3x_renderer::render_core::RenderRegionCache<ID3D11Texture2D>::key_words_limit;
     }
 
+
+    c3x_renderer::render_core::SharedInstanceSubmission::Key shared_instance_draw_key(
+            unsigned layer,GeometryDrawReference const& draw) const {
+        using Owner=c3x_renderer::render_core::SharedInstanceSubmission;
+        Owner::Key key{};auto const& mesh=draw.content();
+        key[0]=draw.occurrence?draw.occurrence->owner.generation:mesh.version;
+        key[1]=std::uint64_t(layer)<<32;
+        key[2]=reinterpret_cast<std::uintptr_t>(mesh.instances.get());
+        std::memcpy(&key[3],draw.natural_projection(),16);
+        std::int32_t anchor[]={draw.translation_x(),draw.translation_y()};std::memcpy(&key[5],anchor,8);
+        float parameter[]={float(draw.translation_y()),mesh.instance_material};std::memcpy(&key[6],parameter,8);
+        key[7]=mesh.version;return key;
+    }
+
+    bool reject_shared_instance_range(unsigned layer,GeometryDrawReference const& draw,
+            c3x_renderer::render_core::SharedInstanceSubmission::Lease const& front,
+            c3x_renderer::render_core::SharedInstanceSubmission::Range range) {
+        auto key=shared_instance_draw_key(layer,draw);char detail[384];
+        sprintf_s(detail,"layer=%u expected=%zu retained=%u first=%u owner_generation=%llu mesh_version=%llu material_bits=%llu union_records=%u union_ranges=%zu translation_x=%d translation_y=%d",
+            layer,draw.content().instances?draw.content().instances->size():0,range.count,range.first,
+            key[0],key[7],key[6]>>32,front?front->records:0,front?front->ranges.size():0,draw.translation_x(),draw.translation_y());
+        trace.write("shared-instance-range-missing",detail,true);return false;
+    }
+
+    bool prepare_shared_instances(c3x_renderer::render_core::SharedInstanceSubmission::Lease& front) {
+        using Owner=c3x_renderer::render_core::SharedInstanceSubmission;
+#ifdef C3X_RENDERER_BENCHMARK_ORACLE
+        char control[8]={};
+        if(GetEnvironmentVariableA("C3X_RENDERER_SHARED_INSTANCE_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0){front={};return true;}
+#endif
+        Owner::Key identity={geometry_vertex_buffers.revision(),device_generation,content_revision,
+            std::uint64_t(shadow_tile_width),std::uint64_t(content_view_height),topology_cache.scope_sequence(),
+            std::uint64_t(reinterpret_cast<std::uintptr_t>(&geometry_vertex_buffers.records())),0};
+        if((front=shared_instances.select(identity)))return true;
+        if((front=shared_instances.find_covering([&](Owner::Generation const& candidate){
+            if(candidate.identity[1]!=device_generation || candidate.identity[2]!=content_revision)return false;
+            GeometryDrawView inputs=geometry_vertex_buffers;
+            for(unsigned layer=0;layer<geometry_layer_count;++layer)for(auto const& draw:inputs[layer]){
+                auto const& mesh=draw.content();if(!mesh.instances || mesh.instances->empty())continue;
+                auto range=candidate.find(shared_instance_draw_key(layer,draw));
+                if(range.count!=mesh.instances->size())return false;
+            }return true;
+        })))return true;
+        auto lease=geometry_vertex_buffers.publish();
+        auto builder=shared_instances.begin(identity,lease);if(!builder)return false;
+        GeometryDrawView inputs=geometry_vertex_buffers;
+        for(unsigned layer=0;layer<geometry_layer_count;++layer)for(auto const& draw:inputs[layer]){
+            auto const& mesh=draw.content();if(!mesh.instances || mesh.instances->empty())continue;
+            Owner::Range range;
+            if(!shared_instances.append(builder,shared_instance_draw_key(layer,draw),mesh.instances.get(),
+                mesh.instances->data(),unsigned(mesh.instances->size()),draw.natural_projection(),
+                float(draw.translation_x()),float(draw.translation_y()),float(draw.translation_y()),mesh.instance_material,range))return false;
+        }
+        auto uploads=shared_instances.uploads;auto bytes=shared_instances.uploaded_bytes;
+        front=shared_instances.upload(builder,device);
+        frame_content_uploads+=shared_instances.uploads-uploads;frame_upload_bytes+=shared_instances.uploaded_bytes-bytes;
+        return bool(front);
+    }
+
     bool draw_cached_geometry(GeometryLayer layer,
             GeometryDrawView buffers,
             std::vector<D3D11_RECT> const & rectangles, ViewportShaderSettings const & viewport_settings,
             std::atomic<bool> const * cancellation, bool reflection_pass=false) {
         if(buffers[layer].empty())return true;
+        c3x_renderer::render_core::SharedInstanceSubmission::Lease shared_front;
+        if(!prepare_shared_instances(shared_front))return false;
         if(city_profile)cities.scene_lights.bind(context);
         auto issue_begin=std::chrono::steady_clock::now();
         AnimationGpu::Pass gpu_phase(animation_gpu,context,layer==geometry_shadow?AnimationGpu::shadow:AnimationGpu::body,
@@ -6114,6 +6245,33 @@ public:
 #endif
         context->RSSetScissorRects(1, &scaled);
         if(layer>=geometry_natural_forest0 && !buffers[layer].empty() && buffers[layer][0].content().instances){
+
+            if(shared_front){
+                using Owner=c3x_renderer::render_core::SharedInstanceSubmission;
+                std::vector<unsigned> indices;indices.reserve(256);auto const& mesh=buffers[layer][0].content();
+                context->UpdateSubresource(viewport_settings_buffer,0,nullptr,&viewport_settings,0,0);++frame_parameter_updates;
+                natural.bind_instances(context,unsigned(layer-geometry_natural_forest0),true);
+                if(reflection_pass)context->VSSetShader(reflection.resident_instance_vs,nullptr,0);
+                context->VSSetShaderResources(15,1,&shared_front->view);
+                auto flush_instances=[&](){
+                    if(indices.empty())return true;
+                    if(!shared_instances.select_indices(device,context,shared_front,indices.data(),unsigned(indices.size())))return false;
+                    frame_upload_bytes+=indices.size()*sizeof(unsigned);
+                    ID3D11Buffer* streams[]={mesh.buffer,shared_instances.selection_buffer};UINT strides[]={32,4},offsets[]={0,shared_instances.selection_offset};
+                    context->IASetVertexBuffers(0,2,streams,strides,offsets);context->IASetIndexBuffer(mesh.indices,mesh.index_format,0);
+                    context->DrawIndexedInstanced(mesh.index_count,UINT(indices.size()),0,0,0);++frame_draw_calls;indices.clear();return true;
+                };
+                for(auto const& chunk:buffers[layer]){
+                    ++frame_bounds_tests;if(cancellation && cancellation->load(std::memory_order_relaxed))return false;
+                    if(!chunk_intersects_region(chunk,viewport_settings,rect,reflection_pass))continue;
+                    if(!chunk.content().instances || chunk.content().buffer!=mesh.buffer)return false;
+                    auto range=shared_front->find(shared_instance_draw_key(unsigned(layer),chunk));
+                    if(!range || range.count!=chunk.content().instances->size())return reject_shared_instance_range(unsigned(layer),chunk,shared_front,range);
+                    for(unsigned n=0;n<range.count;++n){if(indices.size()==Owner::record_limit && !flush_instances())return false;indices.push_back(range.first+n);}
+                }
+                if(!flush_instances())return false;first=true;continue;
+            }
+            // Preserved solely for the explicit old-submission oracle control.
             using Stream=c3x_renderer::render_core::InstanceStream;
             std::vector<Stream::Instance> selected;selected.reserve(256);
             auto const&mesh=buffers[layer][0].content();
@@ -6152,9 +6310,15 @@ public:
             if(selected.empty())return true;
             if(streamed && !draw_parameters.upload(parameters.data(),unsigned(selected.size())))return false;
             std::vector<c3x_renderer::fidelity::MeshInstance> rigid_instances;
+            std::vector<unsigned> rigid_indices;
             std::array<unsigned,Parameters::limit> rigid_offsets{};
             for(unsigned i=0;i<selected.size();++i){auto const& chunk=selected[i];if(!chunk.content().rigid_source)continue;
                 if(!chunk.content().instances || chunk.content().instances->size()!=1)return false;
+                if(shared_front){
+                    auto range=shared_front->find(shared_instance_draw_key(unsigned(layer),chunk));
+                    if(!range || range.count!=1)return reject_shared_instance_range(unsigned(layer),chunk,shared_front,range);
+                    rigid_offsets[i]=unsigned(rigid_indices.size());rigid_indices.push_back(range.first);continue;
+                }
                 auto instance=chunk.content().instances->front();
                 std::copy(std::begin(chunk.natural_projection()),std::end(chunk.natural_projection()),instance.projection);
                 instance.view[0]=parameters[i].translation[0];instance.view[1]=parameters[i].translation[1];
@@ -6162,8 +6326,18 @@ public:
                 rigid_offsets[i]=unsigned(rigid_instances.size());rigid_instances.push_back(instance);
             }
             if(!rigid_instances.empty() && !rigid_sources.stream.upload(device,context,rigid_instances))return false;
+            if(!rigid_indices.empty()){
+                if(!shared_instances.select_indices(device,context,shared_front,rigid_indices.data(),unsigned(rigid_indices.size())))return false;
+                frame_upload_bytes+=rigid_indices.size()*sizeof(unsigned);context->VSSetShaderResources(15,1,&shared_front->view);
+            }
             auto issue=[&](GeometryDrawReference const& chunk,ViewportShaderSettings const& settings,unsigned index,unsigned instances){
-                if(streamed)draw_parameters.bind(1,index);
+                if(shared_front && chunk.content().rigid_source){
+                    if(first || std::memcmp(&previous,&viewport_settings,sizeof(viewport_settings))!=0){
+                        context->UpdateSubresource(viewport_settings_buffer,0,nullptr,&viewport_settings,0,0);
+                        ++frame_parameter_updates;previous=viewport_settings;first=false;
+                    }
+                    context->VSSetConstantBuffers(1,1,&viewport_settings_buffer);
+                }else if(streamed)draw_parameters.bind(1,index);
                 else if(first || std::memcmp(&previous,&settings,sizeof(settings))!=0){
                     context->UpdateSubresource(viewport_settings_buffer,0,nullptr,&settings,0,0);
                     ++frame_parameter_updates;previous=settings;first=false;
@@ -6172,15 +6346,16 @@ public:
                 context->IASetVertexBuffers(0, 1, &chunk.content().buffer, &stride, &offset);
                 context->IASetIndexBuffer(chunk.content().indices, chunk.content().index_format, chunk.content().index_offset);
                 if(chunk.content().rigid_source){
-                    context->IASetInputLayout(rigid_sources.layout);
-                    context->VSSetShader(rigid_sources.vertex[reflection_pass?1:0],nullptr,0);
+                    context->IASetInputLayout(shared_front?rigid_sources.resident_layout:rigid_sources.layout);
+                    context->VSSetShader(shared_front?rigid_sources.resident_vertex[reflection_pass?1:0]:rigid_sources.vertex[reflection_pass?1:0],nullptr,0);
                     if(layer==geometry_city){
                         context->PSSetShader(reflection_pass?reflection.ps[1]:feature_pixel_shader,nullptr,0);
                         context->PSSetShaderResources(116,4,city_emissive_views.data());context->PSSetShaderResources(124,4,city_base_views.data());
                         ID3D11SamplerState*samplers[]={terrain_sampler,decal_sampler};context->PSSetSamplers(0,2,samplers);
                     }
-                    ID3D11Buffer* streams[]={chunk.content().buffer,rigid_sources.stream.buffer};
-                    UINT strides[]={32,64},offsets[]={chunk.content().vertex_offset,rigid_sources.stream.offset+rigid_offsets[index]*64};
+                    ID3D11Buffer* streams[]={chunk.content().buffer,shared_front?shared_instances.selection_buffer:rigid_sources.stream.buffer};
+                    UINT strides[]={32,shared_front?4u:64u},offsets[]={chunk.content().vertex_offset,
+                        shared_front?shared_instances.selection_offset+rigid_offsets[index]*4:rigid_sources.stream.offset+rigid_offsets[index]*64};
                     context->IASetVertexBuffers(0,2,streams,strides,offsets);
                     context->DrawIndexedInstanced(chunk.content().index_count,instances,0,0,0);++frame_draw_calls;
                     context->IASetInputLayout(feature_input_layout);
@@ -6371,7 +6546,17 @@ public:
             context->PSSetShaderResources(0,33,views.data());return true;
         };
         LARGE_INTEGER start={},end={};QueryPerformanceCounter(&start);
-        if(!source_shadow.prepare(context,shadow_basis,receivers,casters,bind,cancellation,prepared_casters_ptr,selected_pages)) {
+        c3x_renderer::render_core::SharedInstanceSubmission::Lease shared_front;
+        if(!prepare_shared_instances(shared_front))return false;
+        if(!source_shadow.prepare(context,shadow_basis,receivers,casters,bind,cancellation,prepared_casters_ptr,selected_pages,shared_front,&shared_instances)) {
+            if(source_shadow.missing_instance_source.present){
+                auto const& missing=source_shadow.missing_instance_source;std::uint32_t material=0;
+                std::memcpy(&material,&missing.material,sizeof(material));char detail[320];
+                sprintf_s(detail,"caster=%u layer=%u expected=%u retained=%u material_bits=%u mesh_version=%llu content_generation=%llu union_records=%u union_sources=%zu",
+                    missing.caster,missing.layer,missing.expected,missing.retained,material,missing.version,missing.generation,
+                    shared_front?shared_front->records:0,shared_front?shared_front->sources.size():0);
+                trace.write("source-shadow-instance-source-missing",detail,true);
+            }
             trace.write("source-shadow-failed","caster pages exceeded budget or preparation interrupted",true);return false;
         }
         QueryPerformanceCounter(&end);
@@ -6403,8 +6588,8 @@ public:
         context->PSSetConstantBuffers(2,1,&shadow_settings_buffer);
         context->PSSetConstantBuffers(3,1,&world_settings_buffer);
         context->PSSetConstantBuffers(4,1,&source_shadow.table);
-        context->PSSetShaderResources(17,1,&source_shadow.view);
-        context->PSSetShaderResources(25,1,&source_shadow.view);
+        context->PSSetShaderResources(17,1,&source_shadow.sampled_view());
+        context->PSSetShaderResources(25,1,&source_shadow.sampled_view());
         context->PSSetShaderResources(116,8,resource_texture_views.data());
         ID3D11SamplerState* shadow_samplers[]={natural_wrap,natural_clamp};
         context->PSSetSamplers(0,2,shadow_samplers);
@@ -6787,14 +6972,14 @@ public:
                 context->PSSetConstantBuffers(2, 1, &shadow_settings_buffer);
                 context->PSSetConstantBuffers(3, 1, &world_settings_buffer);
                 context->PSSetConstantBuffers(4, 1, &source_shadow.table);
-                context->PSSetShaderResources(25,1,&source_shadow.view);
+                context->PSSetShaderResources(25,1,&source_shadow.sampled_view());
             }
             // Geometry buffers are immutable until an authoritative geometry
             // fingerprint changes. Camera-only translation therefore issues
             // draws without regenerating or re-uploading the world vertices.
             if (!draw(geometry_underlay) || !draw(geometry_land))return false;
             if(fidelity_profile){
-                context->PSSetShaderResources(17,1,&source_shadow.view);
+                context->PSSetShaderResources(17,1,&source_shadow.sampled_view());
                 // Relief-neighborhood chunks now own their complete terrain
                 // surface. Draw them before the independent decal/clutter
                 // layer so those assets remain genuinely layered on top.
@@ -6826,7 +7011,7 @@ public:
                 if(base_pass){
                 context->OMSetDepthStencilState(depth_state,0);
                 context->PSSetShaderResources(0,UINT(views.size()),views.data());
-                context->PSSetShaderResources(25,1,&source_shadow.view);
+                context->PSSetShaderResources(25,1,&source_shadow.sampled_view());
                 context->PSSetConstantBuffers(0,1,&terrain_settings_buffer);
                 context->VSSetShader(vertex_shader,nullptr,0);context->PSSetShader(pixel_shader,nullptr,0);
                 }
@@ -6852,7 +7037,7 @@ public:
             }
             if(environment_profile)context->PSSetShaderResources(121,1,views.data()+121);
             if(fidelity_profile){ID3D11SamplerState*retained[]={terrain_sampler,decal_sampler};context->PSSetSamplers(0,2,retained);}
-            if(pickup_profile)context->PSSetShaderResources(17,1,&source_shadow.view);
+            if(pickup_profile)context->PSSetShaderResources(17,1,&source_shadow.sampled_view());
             if (pickup_profile && cliff_pass) {
                 context->VSSetShader(feature_vertex_shader, nullptr, 0);
                 context->PSSetShader(feature_pixel_shader, nullptr, 0);
@@ -7485,6 +7670,7 @@ public:
 #else
         bool const canonical_world_content=false;
 #endif
+        if(!prewarming)canonical_world_preparation=canonical_world_content;
         char grid_control[8]={};
         bool const index_natural_grids=!(GetEnvironmentVariableA("C3X_RENDERER_GRID_INDEX_CONTROL",grid_control,sizeof(grid_control)) &&
             std::strcmp(grid_control,"1")==0);
@@ -7657,6 +7843,18 @@ public:
             dirty_rect(overlap.right, overlap.top, width, overlap.bottom);
             raster_reused_pixels = static_cast<c3x_renderer_u32>(width * height) - raster_draw_pixels;
         } else dirty_rect(0, 0, width, height);
+        c3x_renderer_u32 draw_record_count = 0;
+        for (c3x_renderer_u32 i = 0; i < content_source.tile_count; ++i)
+            if ((content_source.tiles[i].tile_flags & C3X_RENDERER_TILE_TOPOLOGY_HALO) == 0 ||
+                (content_source.tiles[i].tile_flags & C3X_RENDERER_TILE_RENDER) != 0) ++draw_record_count;
+        int const base_ground_grid = frame.tile_width >= 96 ?
+            (draw_record_count <= 768 ? 16 : 12) : 8;
+        bool const world_objects=city_profile && retained_world && share_world_meshes &&
+            frame.tile_height*2==frame.tile_width;
+        bool const world_ground=world_objects && frame.tile_width>=96;
+        std::array<std::uint64_t,2> const compile_quality={
+            (std::uint64_t(world_ground?0:base_ground_grid)<<32)|(std::uint64_t(canonical_world_content)<<48)|patch_detail.identity(),
+            std::uint64_t(canonical_world_content?4:(frame.tile_width>=96?8:0)+(draw_record_count<=512?0:draw_record_count<=768?1:draw_record_count<=2048?2:3))};
         int geometry_translation_x = 0;
         int geometry_translation_y = 0;
         bool reuse_geometry = !prewarming && reuse_geometry_for_translation(
@@ -7668,6 +7866,27 @@ public:
             (!pickup_profile || frame.world_topology_revision==geometry_world_revision))
             reuse_geometry=geometry_matches(geometry_cache,frame,signature,selection,
                 geometry_translation_x,geometry_translation_y,false);
+        if(reuse_geometry && fresh_scene_path){
+            // Matching native view facts do not prove unchanged cross-tile
+            // world appearance. Revalidate only the selected cache owners;
+            // their existing epoch/anchor memo makes unchanged reuse cheap.
+            if(geometry_cache.tile_keys.size()!=frame.tile_count)reuse_geometry=false;
+            for(std::size_t i=0;reuse_geometry && i<geometry_cache.tile_keys.size();++i){
+                auto handle=geometry_cache.tile_keys[i];if(!handle.generation)continue;
+                auto owner=resident_content.resolve(handle);
+                auto const& tile=frame.tiles[i];
+                if(!owner || !owner->mesh || !owner->mesh->proof ||
+                    owner->world_ground!=world_ground || owner->world_objects!=world_objects ||
+                    owner->compile_context[14]!=compile_quality[0] || owner->compile_context[15]!=compile_quality[1] ||
+                    owner->mesh->proof->scope!=topology_cache.scope_sequence() || owner->mesh->proof->assets!=content_revision ||
+                    !tile_content_valid(*owner,tile))reuse_geometry=false;
+                if(reuse_geometry && owner->natural_content.generation){
+                    auto source=resident_content.resolve(owner->natural_content);
+                    if(!source || !source->mesh || !source->mesh->proof ||
+                        !raster_content_valid(*source->mesh->proof))reuse_geometry=false;
+                }
+            }
+        }
         if (reuse_geometry) {
             frame_cache_path = "geometry-translation";
             if (cache_hits != 0xffffffffu)
@@ -7685,12 +7904,6 @@ public:
         std::vector<c3x_renderer_u32> prewarm_replacement, prewarm_fallback;
         auto & build_replacement = prewarming ? prewarm_replacement : replacement_tile_flags;
         auto & build_fallback = prewarming ? prewarm_fallback : fallback_tile_indices;
-        c3x_renderer_u32 draw_record_count = 0;
-        for (c3x_renderer_u32 i = 0; i < content_source.tile_count; ++i)
-            if ((content_source.tiles[i].tile_flags & C3X_RENDERER_TILE_TOPOLOGY_HALO) == 0 ||
-                (content_source.tiles[i].tile_flags & C3X_RENDERER_TILE_RENDER) != 0) ++draw_record_count;
-        int const base_ground_grid = frame.tile_width >= 96 ?
-            (draw_record_count <= 768 ? 16 : 12) : 8;
         c3x_renderer_i64 ground_ticks=0,feature_ticks=0,cliff_ticks=0,upload_ticks=0,terrain_prep_ticks=0;
         // One frame-local compile lane, accessed only by the single ground
         // task (or serial control) until its join. No cache survives a frame's
@@ -7742,9 +7955,6 @@ public:
             &cliff_vertices[0], &cliff_vertices[1], &cliff_vertices[2], &cliff_vertices[3],
             &cliff_vertices[4], &cliff_vertices[5], &cliff_vertices[6], &cliff_vertices[7]};
         for(unsigned i=0;i<35;i++)tile_layers[geometry_natural_terrain+i]=&natural_vertices[i];
-        bool const world_objects=city_profile && retained_world && share_world_meshes &&
-            frame.tile_height*2==frame.tile_width;
-        bool const world_ground=world_objects && frame.tile_width>=96;
         float half_w = static_cast<float>(frame.tile_width) * 0.5f;
         float half_h = static_cast<float>(frame.tile_height) * 0.5f;
         auto ndc_x = [](float x) { return x; };
@@ -8010,7 +8220,7 @@ public:
         auto compile_context_for=[&](c3x_renderer_tile_v1 const& occurrence,std::uint64_t river_context){
             auto tile=content_tile_for(occurrence);
             auto persistent_instance=topology_cache.retained(coordinate_key(tile.tile_x,tile.tile_y));
-            return std::array<std::uint64_t,20>{std::uint64_t(tile.tile_x),std::uint64_t(tile.tile_y),std::uint64_t(world_ground?0:content_view_width),std::uint64_t(world_ground?0:content_view_height),std::uint64_t(world_ground?96:frame.tile_width),std::uint64_t(world_ground?48:frame.tile_height),std::uint64_t(frame.world_width_tiles),std::uint64_t(frame.world_height_tiles),std::uint64_t(frame.world_wrap_x),std::uint64_t(frame.world_wrap_y),std::uint64_t(content_revision),std::uint64_t(device_generation),std::uint64_t(pickup_profile?0:frame.hour),std::uint64_t(pickup_profile?0:frame.season),(std::uint64_t(world_ground?0:base_ground_grid)<<32)|patch_detail.identity(),std::uint64_t(world_ground?0:draw_record_count<=512?0:draw_record_count<=768?1:draw_record_count<=2048?2:3),std::uint64_t(river_context),std::uint64_t(persistent_instance?persistent_instance->revision:0),std::uint64_t(c3x_renderer::render_core::render_core_revision),std::uint64_t(pickup_profile)};
+            return std::array<std::uint64_t,20>{std::uint64_t(tile.tile_x),std::uint64_t(tile.tile_y),std::uint64_t(world_ground?0:content_view_width),std::uint64_t(world_ground?0:content_view_height),std::uint64_t(world_ground?96:frame.tile_width),std::uint64_t(world_ground?48:frame.tile_height),std::uint64_t(frame.world_width_tiles),std::uint64_t(frame.world_height_tiles),std::uint64_t(frame.world_wrap_x),std::uint64_t(frame.world_wrap_y),std::uint64_t(content_revision),std::uint64_t(device_generation),std::uint64_t(pickup_profile?0:frame.hour),std::uint64_t(pickup_profile?0:frame.season),compile_quality[0],compile_quality[1],std::uint64_t(river_context),std::uint64_t(persistent_instance?persistent_instance->revision:0),std::uint64_t(c3x_renderer::render_core::render_core_revision),std::uint64_t(pickup_profile)};
         };
         auto selected_tile=[&](unsigned index){
             auto const& tile=frame.tiles[index];
@@ -8030,7 +8240,7 @@ public:
             input.ground=ground_type(tile);input.half_w=half_w;input.half_h=half_h;
             input.uv_scale=.26f;input.relief_projection_scale=float(frame.tile_width)/224.f*.82f;
             std::copy(key_light,key_light+3,input.key_light);
-            job.tile_width=frame.tile_width;job.tile_height=frame.tile_height;
+            job.tile_width=canonical_world_content?128:frame.tile_width;job.tile_height=canonical_world_content?64:frame.tile_height;
             job.world_width=frame.world_width_tiles;job.world_height=frame.world_height_tiles;
             job.wrap_x=frame.world_wrap_x!=0;job.wrap_y=frame.world_wrap_y!=0;job.topology_revision=frame.world_topology_revision;
             job.skip_flat_shore=skip_flat_shore;job.separate_natural_relief=separate_natural_relief;
@@ -8045,11 +8255,11 @@ public:
             int relief=relief_type(tile);
             if((relief==10 && !volcano_assets_ready) || relief<0 || relief>=c3x_renderer::terrain_type_count || !terrain_textures[relief].view)relief=-1;
             input.tile_ground_grid=c3x_renderer::fidelity::ground_grid_detail(tile,relief,
-                dune_assets_ready && tile.real_terrain_type==0 && tile.terrain_type==0,pickup_profile,frame.tile_width,draw_record_count,
+                dune_assets_ready && tile.real_terrain_type==0 && tile.terrain_type==0,pickup_profile,job.tile_width,canonical_world_content?512u:draw_record_count,
                 [&](int x,int y){return ground_observations.current(ground_observations.key(x,y));},
                 [&](int c,int r){return world_coast.world().tile(c,r);});
-            input.flat_grid=std::abs(job.center.distance)<1.5 && frame.tile_width>=96?16:8;
-            input.shadow_grid=frame.tile_width>=96 && draw_record_count<=512?16:8;
+            input.flat_grid=std::abs(job.center.distance)<1.5 && job.tile_width>=96?16:8;
+            input.shadow_grid=canonical_world_content?16:(frame.tile_width>=96 && draw_record_count<=512?16:8);
             return job;
         };
         c3x_renderer::objects::Assets object_assets{{&bridge_bundle,&site_bundle,&mine_bundle,&farm_bundle,&city_bundle,&wall_bundle}};
@@ -8071,10 +8281,9 @@ public:
         // Beyond the nearby GPU working set, prepare all core tiles into the
         // bounded backing file without allocating GPU buffers or evicting the
         // displayed scene. Ordinary demands restore through the same compiler.
-        bool const backing_only=batch_preparing && world_batch_enabled &&
-            tile_geometry_cache_bytes>(sizeof(void*)==8?
+        bool const backing_only=batch_preparing && world_batch_enabled && (tile_geometry_cache_bytes>(sizeof(void*)==8?
                 tile_geometry_runtime_budget-std::min(tile_geometry_runtime_budget,std::size_t(64u)*1024u*1024u):
-                tile_geometry_runtime_budget*3/4);
+                tile_geometry_runtime_budget*3/4));
         auto& world_queue=world_preparation_queue;
         auto world_bytes_before=world_uploaded_bytes.load(),world_uploads_before=world_uploads.load();
         auto world_compiles_before=world_compiles.load(),world_restores_before=world_restores.load();
@@ -8187,11 +8396,12 @@ public:
             std::vector<c3x_renderer::fidelity::TerrainCompileInput::Key> needed;
             std::set<c3x_renderer::fidelity::TerrainCompileInput::Key> keys;
             for(unsigned i=0;i<frame.tile_count;++i){
-                auto const& tile=frame.tiles[i];
+                auto tile=content_tile_for(frame.tiles[i]);
                 if(!(tile.tile_flags&(C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_PREFETCH)))continue;
                 auto instance=topology_cache.retained(coordinate_key(tile.tile_x,tile.tile_y));
                 auto cached=instance?resident_content.resolve(instance->compiled):nullptr;
-                if(cached && cached->compile_context[17]==instance->revision && tile_content_valid(*cached,tile))continue;
+                auto nodes=select_river_nodes(tile);auto expected=compile_context_for(tile,river_context_for(nodes));
+                if(cached && cached->compile_context==expected && tile_content_valid(*cached,tile))continue;
                 auto input=terrain_compile_input(tile,frame,ground_type(tile),skip_flat_shore,separate_natural_relief,index_natural_grids,retain_height_samples,world_objects);
                 if(tile.tile_flags&C3X_RENDERER_TILE_RENDER)needed.push_back(input.key);
                 if(keys.insert(input.key).second && !terrain_preparation.contains(input.key,
@@ -8228,7 +8438,7 @@ public:
             auto tile=content_tile_for(occurrence);
             return c3x_renderer::WorldPreparationInput{make_ground_job(tile,nodes),
                 terrain_compile_input(tile,frame,ground_type(tile),skip_flat_shore,separate_natural_relief,index_natural_grids,retain_height_samples,world_objects),
-                make_object_job(tile),c3x_renderer::world_preparation_key(compile_context_for(tile,river_context_for(nodes)),content_source),backing_only};
+                make_object_job(tile),c3x_renderer::world_preparation_key(compile_context_for(tile,river_context_for(nodes)),content_source,canonical_world_content),backing_only};
         };
         if(world_batch_enabled){
             terrain_preparation.clear(); // superseded producers must not compete for this request
@@ -8248,7 +8458,7 @@ public:
                 if(instance)for(auto handle:instance->compiled_views){auto cached=resident_content.resolve(handle);
                     if(cached && cached->compile_context==expected && tile_content_valid(*cached,tile)){resident=true;break;}}
                 if(!resident){
-                    auto key=c3x_renderer::world_preparation_key(expected,content_source);
+                    auto key=c3x_renderer::world_preparation_key(expected,content_source,canonical_world_content);
                     if(backing_only)backing_keys.push_back(key);
                     if(std::binary_search(demanded_tiles.begin(),demanded_tiles.end(),coordinate_key(tile.tile_x,tile.tile_y)))needed.push_back(key);
                     if(world_queue.contains(key,[&](auto& result){
@@ -8494,7 +8704,7 @@ public:
             float surface_slot = static_cast<float>(draw_marsh ? 9 :
                 (relief >= 0 ? relief : ground));
             int const tile_ground_grid=c3x_renderer::fidelity::ground_grid_detail(tile,relief,draw_dunes,
-                pickup_profile,frame.tile_width,draw_record_count,topology_lookup,world_lookup);
+                pickup_profile,canonical_world_content?128:frame.tile_width,canonical_world_content?512u:draw_record_count,topology_lookup,world_lookup);
             bool coast_detail=false;
             c3x_renderer::render_core::ShoreSample tile_center_shore{};
             if(pickup_profile){
@@ -8507,8 +8717,7 @@ public:
                 frame_center_shore_ms+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-shore_started).count();
             }
             int const flat_grid=pickup_profile ? (coast_detail && frame.tile_width>=96?16:8) : tile_ground_grid;
-            int const shadow_grid = frame.tile_width >= 96 && draw_record_count <= 512
-                ? 16 : 8;
+            int const shadow_grid = canonical_world_content?16:(frame.tile_width >= 96 && draw_record_count <= 512?16:8);
             std::uint64_t tile_signature = 1469598103934665603ull;
             auto mix_tile = [&](auto value) {
                 auto bytes = reinterpret_cast<std::uint8_t const *>(&value);
@@ -8528,13 +8737,20 @@ public:
                 mix_tile(frame.world_width_tiles); mix_tile(frame.world_height_tiles);
             }
             if (!pickup_profile) { mix_tile(frame.hour); mix_tile(frame.season); }
-            mix_tile(tile_ground_grid); mix_tile(world_ground?0:shadow_grid);
+            // Physical grid quality and canonical policy belong to content,
+            // even when projection-independent world ground is enabled.
+            mix_tile(tile_ground_grid);mix_tile(shadow_grid);mix_tile(canonical_world_content);
             if(pickup_profile)mix_tile(flat_grid);
             for(auto node:local_river_nodes){mix_tile(node->lattice_x);mix_tile(node->lattice_y);
                 mix_tile(node->degree);mix_tile(node->touches_water);}
             auto validation_started=std::chrono::steady_clock::now();
             auto reuse_tile = [&](CachedTileGeometry& cached) {
-                bool valid=tile_content_valid(cached,tile);
+                // A restored authority revision can renew the exact content
+                // proof. It cannot convert a different compiler policy or
+                // quality into this request merely by replacing its context.
+                auto prior_context=cached.compile_context;
+                prior_context[17]=compile_context[17];
+                bool valid=prior_context==compile_context && tile_content_valid(cached,tile);
                 if (valid) {
                     // The exact content key and dependency proof can survive a
                     // publication revision (including restored authority). Refresh
@@ -9315,7 +9531,7 @@ public:
             for(auto value:{std::uint64_t(std::uint32_t(tile.tile_x)),std::uint64_t(std::uint32_t(tile.tile_y)),
                     tile_content_signature(tile),content_revision,retained_world?std::uint64_t(0):std::uint64_t(frame.world_topology_revision),
                     std::uint64_t(frame.world_width_tiles),std::uint64_t(frame.world_height_tiles),
-                    std::uint64_t(frame.world_wrap_x),std::uint64_t(frame.world_wrap_y),std::uint64_t(world_ground),std::uint64_t(patch_detail.identity()),world_ground?river_context:std::uint64_t(0)})
+                    std::uint64_t(frame.world_wrap_x),std::uint64_t(frame.world_wrap_y),std::uint64_t(world_ground),std::uint64_t(patch_detail.identity()),std::uint64_t(tile_ground_grid),std::uint64_t(flat_grid),std::uint64_t(shadow_grid),std::uint64_t(canonical_world_content),world_ground?river_context:std::uint64_t(0)})
                 natural_key=(natural_key^value)*1099511628211ull;
             // Forest exclusions consume neighboring city composition, while
             // the ordinary topology dependency map intentionally omits it.
@@ -9370,7 +9586,7 @@ public:
             std::unique_ptr<c3x_renderer::PreparedWorld> prepared_world;
             if(world_batch_enabled && !shared_hit){
                 auto begin=std::chrono::steady_clock::now();
-                prepared_world=world_queue.take(c3x_renderer::world_preparation_key(compile_context,content_source),false,cancelled);
+                prepared_world=world_queue.take(c3x_renderer::world_preparation_key(compile_context,content_source,canonical_world_content),false,cancelled);
                 if(prepared_world && !world_result_valid(*prepared_world))prepared_world.reset();
                 world_join_ms+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count();
                 if(cancelled())return false;
@@ -9383,7 +9599,7 @@ public:
                     // Oversized/failed combined work uses the established
                     // per-component compilers below. Do not impose one buffer's
                     // size limit on a valid tile that previously used several.
-                    ++world_recovery;
+                    ++world_recovery;++world_recoveries;
                 }
             }
             QueryPerformanceCounter(&phase_time);
@@ -9761,8 +9977,8 @@ public:
                         vertex.world_z = (ground_sample[0] + 2.5f + feature_height_tiles) / 112.0f;
                         vertex.world_valid = 1.0f;
                         if(world_objects){
-                            vertex.x=float(owner->anchor_x-tile.anchor_x)*128.f/frame.tile_width+64.f+(local_u-local_v)*64.f+(local_x-local_y)*64.f;
-                            vertex.y=float(owner->anchor_y-tile.anchor_y)*128.f/frame.tile_width+((local_u+local_v)*32.f-ground_sample[0]*(128.f/224.f*.82f))+(local_x+local_y)*32.f-local_z*150.f*(128.f/224.f);
+                            vertex.x=float(relative_x)*128.f/frame.tile_width+64.f+(local_u-local_v)*64.f+(local_x-local_y)*64.f;
+                            vertex.y=float(relative_y)*128.f/frame.tile_width+((local_u+local_v)*32.f-ground_sample[0]*(128.f/224.f*.82f))+(local_x+local_y)*32.f-local_z*150.f*(128.f/224.f);
                             vertex.z=feature_height_tiles;
                         }
                         auto normal=c3x_renderer::lighting::object_normal(normal_x,normal_y,source.normal[2]);
@@ -10162,7 +10378,7 @@ public:
                             chunk.instances=std::make_shared<std::vector<c3x_renderer::fidelity::MeshInstance> const>(1,instance.instance);
                             chunk.byte_count=sizeof(chunk)+sizeof(c3x_renderer::fidelity::MeshInstance);
                             if(!make_tile_cache_room(chunk.byte_count)){tile_geometry_cache_bytes-=compiled.byte_count;return false;}
-                            chunk.rigid_source=true;chunk.instance_material=instance.material;
+                            chunk.rigid_source=true;chunk.instance_material=instance.material;chunk.shared_source_lease=rigid_sources.pin();
                             chunk.bounds={instance.bounds[0],instance.bounds[1],instance.bounds[2],instance.bounds[3]};
                             std::copy(instance.low.begin(),instance.low.end(),chunk.world_bounds.low);
                             std::copy(instance.high.begin(),instance.high.end(),chunk.world_bounds.high);
@@ -10220,7 +10436,7 @@ public:
                     if(!make_tile_cache_room(chunk.byte_count))return false;
                     chunk.instances=std::make_shared<std::vector<c3x_renderer::fidelity::MeshInstance> const>(std::move(instances));
                     compiled.mesh->layers[layer].reserve(1);
-                    auto const&mesh=natural.instance_meshes[body];chunk.buffer=mesh.vertices;chunk.indices=mesh.indices;
+                    auto const&mesh=natural.instance_meshes[body];chunk.buffer=mesh.vertices;chunk.indices=mesh.indices;chunk.shared_source_lease=natural.pin_instances();
                     chunk.buffer->AddRef();chunk.indices->AddRef();chunk.index_count=mesh.count;chunk.vertex_stride=32;
                     chunk.version=compiled.version;chunk.world_bounds=forest_bounds[body];chunk.projected_bounds=forest_projected[body];
                     chunk.instance_material=natural.materials[natural.bodies[body].material].repeat?41.f:40.f;
@@ -10341,6 +10557,7 @@ public:
                 if(!shared_hit){
                     CachedTileGeometry shared;
                     shared.shared_natural=true;shared.signature=natural_key;
+                    shared.compile_context=compiled.compile_context;
                     shared.world_objects=world_objects;shared.world_ground=world_ground;shared.source_tile_width=frame.tile_width;
                     shared.tile_x=tile.tile_x;shared.tile_y=tile.tile_y;
                     shared.version=compiled.version;shared.last_used=tile_geometry_epoch;
@@ -10586,6 +10803,8 @@ public:
                 return false;
             }
             if(cancelled()){target->Release();return false;}
+            auto candidates=fresh_unit_poses;
+            if(!select_frame_units(frame,candidates,fresh_unit_poses,1.f)){target->Release();return false;}
             for(;;){
                 if(cancelled()){target->Release();return false;}
                 auto ready=prepare_frame_unit_assets(fresh_unit_poses);
@@ -11272,6 +11491,9 @@ public:
 
     ~RendererWorker() {
         reset_and_stop();
+#ifdef C3X_HELPER_TRIAL
+        if(trial_display_handle){CloseHandle(trial_display_handle);trial_display_handle=nullptr;}
+#endif
         // No queue lock: a finishing helper may still be delivering readiness.
         renderer_state.unit_bodies.set_pose_ready_notification({});
     }
@@ -11574,14 +11796,22 @@ public:
         if(!calls.owns_lock())return C3X_RENDERER_RESULT_PENDING;
         std::unique_lock<std::mutex> lock(state_mutex,std::try_to_lock);
         if(!lock.owns_lock())return C3X_RENDERER_RESULT_PENDING;
+        if(camera_active)return C3X_RENDERER_RESULT_PENDING;
         auto state=scene_changes.state();status={sizeof(status)};
         if(!state)return C3X_RENDERER_RESULT_PENDING;
         status.total=state->metadata.world_topology_count;status.authoritative=world_authoritative;
         status.capture_cursor=world_input.cursor;status.capture_passes=c3x_renderer_i64(world_input.passes);
-        status.regions=c3x_renderer::render_core::WorldPreparationRegion::count(state->metadata);
+        status.regions=world_schedule.regions();
         status.prepared_regions=world_schedule.completed;status.unavailable_regions=world_schedule.unavailable;
         status.appearance_sequence=c3x_renderer_i64(world_appearance_sequence);
         status.preparation_sequence=c3x_renderer_i64(world_prepare_sequence);
+#ifdef C3X_RENDERER_BENCHMARK_ORACLE
+        char detail[320];sprintf_s(detail,"pid=%lu scope=%llu device=%u canonical=%u compiler_total=%llu recovery_total=%llu restore_total=%llu",
+            GetCurrentProcessId(),renderer_state.topology_cache.scope_sequence(),renderer_state.device_generation,
+            unsigned(renderer_state.canonical_world_preparation),renderer_state.world_compiles.load(),
+            renderer_state.world_recoveries.load(),renderer_state.world_restores.load());
+        renderer_state.trace.write("world-compiler-checkpoint",detail,true);
+#endif
         return C3X_RENDERER_RESULT_OK;
     }
     int world_delta_scope(c3x_renderer_world_page_v1& page){
@@ -12643,6 +12873,11 @@ private:
     Microsoft::WRL::ComPtr<ID3D11Texture2D> trial_display,trial_buffer;
     Microsoft::WRL::ComPtr<ID3D11RenderTargetView> trial_display_view;
     Microsoft::WRL::ComPtr<IDXGIKeyedMutex> trial_display_mutex;
+    HANDLE trial_display_handle=nullptr;
+    void retire_trial_display(){
+        if(trial_display_handle){CloseHandle(trial_display_handle);trial_display_handle=nullptr;}
+        trial_display_view.Reset();trial_display_mutex.Reset();trial_display.Reset();trial_buffer.Reset();
+    }
     HANDLE trial_surface_handle=nullptr;
     unsigned trial_surface_width=0,trial_surface_height=0;
     Microsoft::WRL::ComPtr<IDXGISwapChain1> trial_surface_swap;
@@ -12677,11 +12912,11 @@ private:
     c3x_renderer::render_core::WorldInputCapture world_input;
     c3x_renderer_world_capture_fn world_capture=nullptr;
     UINT_PTR world_timer=0;DWORD world_capture_thread=0;
-    std::uint64_t world_prepare_sequence=0;
+    std::uint64_t world_prepare_sequence=0,world_initialization_scope=0;
     std::uint64_t world_appearance_sequence=0;
     unsigned world_authoritative=0;
     c3x_renderer::render_core::WorldPreparationSchedule world_schedule;
-    bool scene_changes_ok=true;
+    bool scene_changes_ok=true,world_content_turn=true;
     c3x_renderer::render_core::UnitInstances::Selection job_unit_selection;
     RendererState & renderer_state;
     LARGE_INTEGER job_timing_begin={},job_timing_rendered={},job_timing_published={};
@@ -13021,6 +13256,7 @@ private:
     };
 #ifdef C3X_RENDERER64_FRESH
     struct PreparedMapFrame {
+        std::uint64_t unit_contribution_revision=0;
         c3x_inputs::Frame input;
         std::vector<c3x_renderer::render_core::UnitInstances::ScenePose> poses;
         Microsoft::WRL::ComPtr<ID3D11Texture2D> front,back;
@@ -13084,7 +13320,7 @@ private:
             auto prepared=std::make_shared<PreparedMapFrame>();
             prepared->front=renderer_state.gpu_map_texture;prepared->capture(capture->frame());
             prepared->signature=renderer_state.cached_signature.complete;prepared->epoch=epoch;prepared->serial=map_publication_serial;
-            prepared->poses=renderer_state.fresh_unit_poses;
+            prepared->poses=renderer_state.fresh_unit_poses;prepared->unit_contribution_revision=c3x_renderer64_unit_selection_revision();
             prepared->device_generation=renderer_state.device_generation;prepared_map=prepared;
             std::weak_ptr<PreparedMapFrame> weak=prepared;
             auto prepare=[this,weak,capture,selected,origin,settings,geometry](long long ticks,long long frequency,float zoom){
@@ -13100,8 +13336,11 @@ private:
                 // workers keep compiling the immutable asset keys they own.
                 auto& frame=job->input.value;
                 frame.presentation_time_ticks=view.presentation_time_ticks;frame.presentation_frequency=view.presentation_frequency;
-                auto poses=unit_instances.scene_poses(frame,ticks,frequency,renderer_state.unit_bodies.units);
-                bool poses_changed=poses.size()!=job->poses.size()||!std::equal(poses.begin(),poses.end(),job->poses.begin(),
+                auto candidates=unit_instances.scene_poses(frame,ticks,frequency,renderer_state.unit_bodies.units);
+                decltype(candidates) poses;
+                if(!renderer_state.select_frame_units(frame,candidates,poses,zoom))throw std::runtime_error("unit contribution selection failed");
+                auto contribution_revision=c3x_renderer64_unit_selection_revision();
+                bool poses_changed=contribution_revision!=job->unit_contribution_revision || poses.size()!=job->poses.size()||!std::equal(poses.begin(),poses.end(),job->poses.begin(),
                     [](auto const& a,auto const& b){
                         auto left=a.draw,right=b.draw;
                         left.presentation_time_ticks=left.presentation_frequency=0;
@@ -13145,7 +13384,7 @@ private:
                 // Publish only the completed back. Native composition never
                 // borrows unfinished scene scratch, and sampling does no asset work.
                 std::swap(job->front,job->back);std::swap(job->front_target,job->back_target);
-                job->poses=std::move(poses);
+                job->poses=std::move(poses);job->unit_contribution_revision=contribution_revision;
                 job->zoom=zoom;job->completed_ticks=ticks;job->ready=true;++visual_map_samples;
                 char detail[256];std::snprintf(detail,sizeof(detail),
                     "units=%zu turns=%lld age_ms=%.3f render_ms=%.3f bytes=%zu zoom=%.6f",
@@ -13372,7 +13611,7 @@ private:
             if(command==Command::configure_pack || command==Command::configure_definitions || command==Command::reset){
                 dynamic_inputs.invalidate();renderer_state.gpu_composition.reset();
 #ifdef C3X_HELPER_TRIAL
-                trial_display_view.Reset();trial_display_mutex.Reset();trial_display.Reset();trial_buffer.Reset();
+                retire_trial_display();
                 trial_surface_view.Reset();trial_surface_back.Reset();trial_surface_buffer.Reset();trial_surface_permit.reset();trial_surface_swap.Reset();
                 trial_readback_pixels.clear();trial_readback_pixels.shrink_to_fit();
                 if(trial_surface_handle){CloseHandle(trial_surface_handle);trial_surface_handle=nullptr;}
@@ -13524,7 +13763,7 @@ private:
             }else if(command==Command::trial_present_shared){
                 auto const& p=gpu_present;
                 if(p.action==1||p.action==2){
-                    trial_display_view.Reset();trial_display_mutex.Reset();trial_display.Reset();trial_buffer.Reset();
+                    retire_trial_display();
                     trial_surface_view.Reset();trial_surface_back.Reset();trial_surface_buffer.Reset();trial_surface_permit.reset();trial_surface_swap.Reset();
                     trial_readback_pixels.clear();
                     if(renderer_state.gpu_composition)renderer_state.gpu_composition->stop_visuals();
@@ -13551,8 +13790,10 @@ private:
                        p.width<=2240&&p.height<=1260&&p.image>0){
                         bool full=p.area[0]<=0&&p.area[1]<=0&&p.area[2]>=p.width&&p.area[3]>=p.height;
                         if(trial_display){D3D11_TEXTURE2D_DESC previous={};trial_display->GetDesc(&previous);
-                            if((previous.Width!=unsigned(p.width)||previous.Height!=unsigned(p.height))&&full){
-                                trial_display_view.Reset();trial_display_mutex.Reset();trial_display.Reset();trial_buffer.Reset();
+                            Microsoft::WRL::ComPtr<ID3D11Device> previous_device;trial_display->GetDevice(&previous_device);
+                            if(previous_device.Get()!=renderer_state.device||
+                               ((previous.Width!=unsigned(p.width)||previous.Height!=unsigned(p.height))&&full)){
+                                retire_trial_display();
                             }}
                         if(!trial_display){
                             if(!full)result=C3X_RENDERER_RESULT_BAD_ARGUMENT;
@@ -13567,7 +13808,11 @@ private:
                                 if(SUCCEEDED(hr))hr=trial_display.As(&trial_display_mutex);
                                 desc.MiscFlags=0;
                                 if(SUCCEEDED(hr))hr=renderer_state.device->CreateTexture2D(&desc,nullptr,&trial_buffer);
-                                if(FAILED(hr)){trial_display_view.Reset();trial_display_mutex.Reset();trial_display.Reset();trial_buffer.Reset();result=C3X_RENDERER_RESULT_DEVICE_ERROR;}
+                                Microsoft::WRL::ComPtr<IDXGIResource1> resource;
+                                if(SUCCEEDED(hr))hr=trial_display.As(&resource);
+                                if(SUCCEEDED(hr))hr=resource->CreateSharedHandle(nullptr,
+                                    DXGI_SHARED_RESOURCE_READ|DXGI_SHARED_RESOURCE_WRITE,nullptr,&trial_display_handle);
+                                if(FAILED(hr)){retire_trial_display();result=C3X_RENDERER_RESULT_DEVICE_ERROR;}
                             }
                         }
                         if(trial_display){
@@ -13578,7 +13823,8 @@ private:
                                 if(renderer_state.trace.level>=2)QueryPerformanceCounter(&phase_begin);
                                 HRESULT hr=trial_display_mutex->AcquireSync(0,1000);
                                 if(renderer_state.trace.level>=2)QueryPerformanceCounter(&phase_acquire);
-                                if(hr!=S_OK){phase_display=phase_flush=phase_acquire;result=C3X_RENDERER_RESULT_DEVICE_ERROR;}
+                                if(hr!=S_OK){phase_display=phase_flush=phase_acquire;result=C3X_RENDERER_RESULT_DEVICE_ERROR;
+                                    retire_trial_display();}
                                 else{
                                     bool drawn=session->display_to(p.ticket,std::uint64_t(p.image),trial_display_view.Get(),
                                         trial_display.Get(),trial_buffer.Get(),unsigned(p.width),unsigned(p.height),
@@ -13588,22 +13834,21 @@ private:
                                     hr=trial_display_mutex->ReleaseSync(drawn?1:0);renderer_state.context->Flush();
                                     if(renderer_state.trace.level>=2)QueryPerformanceCounter(&phase_flush);
                                     result=drawn&&SUCCEEDED(hr)?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_BAD_ARGUMENT;
+                                    if(FAILED(hr))retire_trial_display();
                                     if(result==C3X_RENDERER_RESULT_OK){
                                         trial_width=desc.Width;trial_height=desc.Height;
                                     }
                                     if(result==C3X_RENDERER_RESULT_OK){
-                                        Microsoft::WRL::ComPtr<IDXGIResource1> resource;
-                                        HANDLE own=nullptr,duplicated=nullptr;
+                                        HANDLE duplicated=nullptr;
                                         HANDLE consumer=OpenProcess(PROCESS_DUP_HANDLE,FALSE,trial_consumer_pid);
-                                        hr=consumer?trial_display.As(&resource):E_FAIL;
-                                        if(SUCCEEDED(hr))hr=resource->CreateSharedHandle(nullptr,
-                                            DXGI_SHARED_RESOURCE_READ|DXGI_SHARED_RESOURCE_WRITE,nullptr,&own);
-                                        if(SUCCEEDED(hr)&&!DuplicateHandle(GetCurrentProcess(),own,consumer,&duplicated,0,FALSE,DUPLICATE_SAME_ACCESS))hr=E_FAIL;
-                                        if(own)CloseHandle(own);if(consumer)CloseHandle(consumer);
+                                        hr=consumer&&trial_display_handle?S_OK:E_FAIL;
+                                        if(SUCCEEDED(hr)&&!DuplicateHandle(GetCurrentProcess(),trial_display_handle,consumer,&duplicated,0,FALSE,DUPLICATE_SAME_ACCESS))hr=E_FAIL;
+                                        if(consumer)CloseHandle(consumer);
                                         if(SUCCEEDED(hr))trial_handle=std::uint64_t(reinterpret_cast<std::uintptr_t>(duplicated));
                                         else result=C3X_RENDERER_RESULT_DEVICE_ERROR;
                                     }
                                 }
+                                if(result==C3X_RENDERER_RESULT_DEVICE_ERROR){retire_trial_display();}
                                 if(renderer_state.trace.level>=2){QueryPerformanceCounter(&phase_duplicate);
                                     char detail[256];std::snprintf(detail,sizeof(detail),
                                         "acquire_ms=%.3f display_ms=%.3f release_flush_ms=%.3f duplicate_ms=%.3f result=%d",
@@ -13664,6 +13909,9 @@ private:
                 }else
                 if(trial_display&&trial_display_view&&trial_display_mutex&&trial_buffer&&
                    renderer_state.gpu_composition&&visual_frequency>0&&trial_consumer_pid){
+                    Microsoft::WRL::ComPtr<ID3D11Device> previous_device;trial_display->GetDevice(&previous_device);
+                    if(previous_device.Get()!=renderer_state.device){retire_trial_display();result=C3X_RENDERER_RESULT_DEVICE_ERROR;}
+                    if(trial_display){
                     HRESULT hr=trial_display_mutex->AcquireSync(0,1000);
                     if(hr!=S_OK)result=C3X_RENDERER_RESULT_DEVICE_ERROR;
                     else{
@@ -13679,18 +13927,17 @@ private:
                             trial_width=desc.Width;trial_height=desc.Height;
                         }
                         if(result==C3X_RENDERER_RESULT_OK){
-                            Microsoft::WRL::ComPtr<IDXGIResource1> resource;
-                            HANDLE own=nullptr,duplicated=nullptr;
+                            HANDLE duplicated=nullptr;
                             HANDLE consumer=OpenProcess(PROCESS_DUP_HANDLE,FALSE,trial_consumer_pid);
-                            hr=consumer?trial_display.As(&resource):E_FAIL;
-                            if(SUCCEEDED(hr))hr=resource->CreateSharedHandle(nullptr,
-                                DXGI_SHARED_RESOURCE_READ|DXGI_SHARED_RESOURCE_WRITE,nullptr,&own);
-                            if(SUCCEEDED(hr)&&!DuplicateHandle(GetCurrentProcess(),own,consumer,&duplicated,0,FALSE,DUPLICATE_SAME_ACCESS))hr=E_FAIL;
-                            if(own)CloseHandle(own);if(consumer)CloseHandle(consumer);
+                            hr=consumer&&trial_display_handle?S_OK:E_FAIL;
+                            if(SUCCEEDED(hr)&&!DuplicateHandle(GetCurrentProcess(),trial_display_handle,consumer,&duplicated,0,FALSE,DUPLICATE_SAME_ACCESS))hr=E_FAIL;
+                            if(consumer)CloseHandle(consumer);
                             if(SUCCEEDED(hr))trial_handle=std::uint64_t(reinterpret_cast<std::uintptr_t>(duplicated));
                             else result=C3X_RENDERER_RESULT_DEVICE_ERROR;
                         }
                     }
+                    }
+                    if(result==C3X_RENDERER_RESULT_DEVICE_ERROR){retire_trial_display();}
                 }
 #endif
             }else if(command==Command::tactical){
@@ -13813,7 +14060,19 @@ private:
             } else if(command==Command::benchmark_trim) {
                 auto publication_bytes=publication.bytes()+camera_ready.bytes();
                 publication.clear();camera_ready.clear();
+                auto evicted=renderer_state.tile_geometry_cache.size();auto bytes=renderer_state.tile_geometry_cache_bytes;
                 renderer_state.trim_to_prepared(benchmark_trim_result,benchmark_reset_mode==0);
+                if(benchmark_reset_mode==3){
+                    renderer_state.evict_prepared_geometry();
+#ifdef C3X_RENDERER64_FRESH
+                    prepared_map.reset();
+#endif
+                    gpu_publication.clear();gpu_presentation=false;
+                    benchmark_trim_result.capacity_geometry_evictions=unsigned(std::min<std::size_t>(evicted,UINT_MAX));
+                    benchmark_trim_result.cleared_viewport_bytes=bytes;
+                    benchmark_trim_result.retained_geometry_bytes=renderer_state.retired_content->bytes.load();
+                    benchmark_trim_result.retained_geometry_entries=0;
+                }
                 if(benchmark_reset_mode==1) {
                     // Retire all scene-dependent content through its current
                     // owners. Keep immutable assets, shader objects and device.
@@ -13845,6 +14104,9 @@ private:
                 result = C3X_RENDERER_RESULT_OK;
             }
             } catch (...) {
+#ifdef C3X_HELPER_TRIAL
+                if(command==Command::trial_present_shared||command==Command::trial_visual_shared)retire_trial_display();
+#endif
                 MEMORYSTATUSEX memory={};memory.dwLength=sizeof(memory);GlobalMemoryStatusEx(&memory);
                 char failure[192];sprintf_s(failure,"command=%u device_reason=0x%08lx available_virtual=%llu available_pagefile=%llu",
                     unsigned(command),renderer_state.device?renderer_state.device->GetDeviceRemovedReason():S_OK,
@@ -13927,7 +14189,7 @@ private:
                 scene_changes_ok=scene_changes.apply(renderer_state.topology_cache,changed,&changed_tiles);
                 if(scope!=renderer_state.topology_cache.scope_sequence()){
                     renderer_state.world_preparation_queue.clear();renderer_state.world_backing.clear();
-                    world_schedule.clear();
+                    world_schedule.clear();world_initialization_scope=0;
                 }else if(scene_changes_ok){
                     auto state=scene_changes.state();
                     for(auto const& tile:changed_tiles)
@@ -13940,6 +14202,64 @@ private:
                 std::snprintf(detail,sizeof(detail),"sequence=%llu configuration=%llu applied=%llu changed=%u ok=%u bytes=%zu peak_bytes=%zu tiles_reused=%llu",
                     state->sequence,state->configuration,scene_changes.applied,unsigned(changed),unsigned(scene_changes_ok),scene_changes.bytes(),scene_changes.peak,scene_changes.tiles_reused);
                 renderer_state.trace.write("scene-publication",detail,true);
+            }
+            if(!has_job && !stop_requested && !camera_pending && !camera_paused && scene_changes_ok &&
+               renderer_state.world_preparation && renderer_state.cache_valid && (world_content_turn ||
+                (!ahead_pending() && !unit_preparation_pending() && !renderer_state.pixel_work_pending()))){
+                // Pressure reduces the geometry admission budget in render().
+                // Pausing this queue on pressure alone can deadlock readiness:
+                // retained geometry may be the memory keeping pressure active.
+                auto state=scene_changes.state();auto const& scene=renderer_state.topology_cache;
+                // Build camera-independent regions from one complete authority
+                // snapshot. Starting while pages are still arriving repeats
+                // regions against partial topology and can retain incomplete
+                // cross-tile natural features.
+                if(state && state->topology && state->metadata.world_topology_count &&
+                   world_input.passes>0){
+                    world_prepare_sequence=scene.appearance_sequence();
+                    world_schedule.configure(state->metadata,scene.scope_sequence(),
+                        renderer_state.content_revision,renderer_state.device_generation,
+                        renderer_state.canonical_world_preparation,renderer_state.patch_detail.identity());
+                    unsigned count=c3x_renderer::render_core::WorldPreparationRegion::count(state->metadata,renderer_state.canonical_world_preparation);
+                    if(!world_schedule.empty()){
+                        if(wake.wait_for(lock,std::chrono::milliseconds(2),[this]{return has_job || camera_pending || stop_requested || scene_changes.ready();}))continue;
+                        auto frame=state->metadata;frame.world_topology=state->topology->data();
+                        auto sequence=world_prepare_sequence;auto region=world_schedule.next();
+                        foreground_pending.store(false,std::memory_order_relaxed);lock.unlock();
+                        LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
+                        bool ok=false,lease_built=false;unsigned built=0,reused=0,selected_count=0;
+                        try{
+                            c3x_renderer::render_core::WorldPreparationRegion input;
+                            lease_built=input.build(scene,frame,region,renderer_state.canonical_world_preparation);
+                            if(lease_built){
+                                selected_count=unsigned(input.selected.size());
+                                if(input.selected.empty())ok=true;
+                                else {
+                                    c3x_renderer_output_v1 unused{};
+                                    // Nonzero signature forces the observation lease to
+                                    // switch when visiting another preparation region.
+                                    auto signature=c3x_renderer::terrain_frame_signature(input.frame,renderer_state.content_revision,renderer_state.device_generation).complete;
+                                    GpuOutputMode mode(renderer_state,true,true);
+                                    ok=renderer_state.render(input.frame,unused,int(input.selected.front()),&foreground_pending,
+                                        signature,input.selected.data(),unsigned(input.selected.size()),&frame);
+                                    built=renderer_state.frame_tiles_built;reused=renderer_state.frame_tiles_reused;
+                                }
+                            }
+                        }catch(...){ok=false;}
+                        QueryPerformanceCounter(&end);lock.lock();
+                        bool cancelled=foreground_pending.load(std::memory_order_relaxed);
+                        if(!cancelled){world_schedule.finish(ok);world_content_turn=false;}
+                        preparation_ticks+=end.QuadPart-begin.QuadPart;
+                        prepared_tiles+=built;if(cancelled)++cancelled_tiles;
+                        unavailable_tiles=world_schedule.unavailable;
+                        publish_preparation_progress();
+                        char detail[320];sprintf_s(detail,"sequence=%llu region=%u regions=%u ok=%u lease=%u selected=%u retained=%zu authoritative=%zu cancelled=%u built=%u reused=%u unavailable=%u geometry_bytes=%zu ms=%.3f",
+                            sequence,region,count,unsigned(ok),unsigned(lease_built),selected_count,scene.size(),scene.authoritative_size(),unsigned(cancelled),built,reused,world_schedule.unavailable,
+                            renderer_state.tile_geometry_cache_bytes,renderer_state.trace.milliseconds(end.QuadPart-begin.QuadPart));
+                        renderer_state.trace.write("world-region-prepared",detail,true);
+                        continue;
+                    }
+                }
             }
             // The next displayed map bucket is due before optional future unit
             // poses; the second ambient bucket can share the remaining window.
@@ -13971,7 +14291,7 @@ private:
                     static_cast<unsigned long long>(unit_pixels_hits),unsigned(!unit_pixels_queue.empty()),
                     renderer_state.trace.milliseconds(end.QuadPart-begin.QuadPart),unsigned(resident_units),resident_units?0u:8388608u);
                 renderer_state.trace.write("unit-pixels-prepared",detail,true);
-                completed.notify_all();continue;
+                world_content_turn=true;completed.notify_all();continue;
             }
             if(!has_job && !stop_requested && camera_pending && !camera_paused) {
                 unit_pixels_turn=true;
@@ -13987,8 +14307,9 @@ private:
                     if(!gpu_publication.matches_projection(job_frame,job_camera_identity))unit_instances.pause_motion(visual_ticks);
                     snapshot_fresh_units(job_frame,visual_ticks,visual_frequency);
                 }
-                world_schedule.prioritize(job_frame);
+                world_schedule.prioritize(job_frame);world_content_turn=true;
                 if(camera_gpu){
+                    auto initial_world=world_input.passes && world_initialization_scope!=renderer_state.topology_cache.scope_sequence()?scene_changes.state():nullptr;
                     clear_ahead();
                     auto const gpu_ticket=ticket;
                     PublishedMapFrame ready;
@@ -14011,8 +14332,40 @@ private:
                             GpuOutputMode mode(renderer_state,true);
                             c3x_renderer_output_v1 output={C3X_RENDERER_API_VERSION,sizeof(output)};
                             bool complete=renderer_state.render(job_frame,output,-1,&camera_cancelled,0,nullptr,0,nullptr,
-                                [this]{service_camera_preparation();}) &&
-                                !camera_cancelled.load(std::memory_order_relaxed) &&
+                                [this]{service_camera_preparation();});
+                            if(complete && initial_world && renderer_state.world_preparation){
+                                // Loading prepares known permitted cores into the existing bounded
+                                // backing owner. It leaves the displayed GPU working set pinned.
+                                // Missing authority stays explicit; later native deltas retry it.
+                                auto const& scene=renderer_state.topology_cache;
+                                auto frame=initial_world->metadata;frame.world_topology=initial_world->topology->data();
+                                world_schedule.configure(frame,scene.scope_sequence(),renderer_state.content_revision,
+                                    renderer_state.device_generation,renderer_state.canonical_world_preparation,renderer_state.patch_detail.identity());
+                                world_prepare_sequence=scene.appearance_sequence();
+                                auto begin=std::chrono::steady_clock::now();
+                                while(!world_schedule.empty() && !camera_cancelled.load(std::memory_order_relaxed) &&
+                                      std::chrono::steady_clock::now()-begin<std::chrono::seconds(60)){
+                                    c3x_renderer::render_core::WorldPreparationRegion input;
+                                    bool ok=input.build(scene,frame,world_schedule.next(),renderer_state.canonical_world_preparation);
+                                    if(ok && !input.selected.empty()){
+                                        c3x_renderer_output_v1 unused{};GpuOutputMode preparation_mode(renderer_state,true,true);
+                                        auto signature=c3x_renderer::terrain_frame_signature(input.frame,renderer_state.content_revision,renderer_state.device_generation).complete;
+                                        ok=renderer_state.render(input.frame,unused,int(input.selected.front()),&camera_cancelled,
+                                            signature,input.selected.data(),unsigned(input.selected.size()),&frame);
+                                    }
+                                    if(camera_cancelled.load(std::memory_order_relaxed))break;
+                                    world_schedule.finish(ok);
+                                }
+                                if(world_schedule.empty())world_initialization_scope=scene.scope_sequence();
+                                char detail[256];sprintf_s(detail,"regions=%u prepared=%u unavailable=%u pending=%u backing_bytes=%zu geometry_bytes=%zu ms=%.3f",
+                                    world_schedule.regions(),world_schedule.completed,world_schedule.unavailable,unsigned(!world_schedule.empty()),
+                                    std::size_t(renderer_state.world_backing.statistics().bytes),renderer_state.tile_geometry_cache_bytes,
+                                    std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count());
+                                renderer_state.trace.write("world-initialization",detail,true);
+                                complete=renderer_state.render(job_frame,output,-1,&camera_cancelled,0,nullptr,0,nullptr,
+                                    [this]{service_camera_preparation();});
+                            }
+                            complete=complete && !camera_cancelled.load(std::memory_order_relaxed) &&
                                 capture_gpu(ready,output,job_frame,job_camera_identity);
                             result=complete?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_ERROR;
                         }
@@ -14161,7 +14514,7 @@ private:
                 // Allow bursty foreground callers to take priority before a new
                 // non-preemptible GPU submission. Demand wakes this wait early.
                 wake.wait_for(lock,std::chrono::milliseconds(2),[this]{return has_job || camera_pending || stop_requested;});
-                if(!has_job && !camera_pending && !stop_requested){unit_pixels_turn=true;prepare_ahead(lock);}
+                if(!has_job && !camera_pending && !stop_requested){unit_pixels_turn=true;prepare_ahead(lock);world_content_turn=true;}
                 continue;
             }
             // Scene pixels are produced only for actual view damage. Optional
@@ -14175,7 +14528,7 @@ private:
                 try { ok=renderer_state.prepare_pixel_block(foreground_pending); } catch (...) { ok=false; }
                 lock.lock();
                 if (!ok) renderer_state.cancel_pixel_preparation();
-                publish_preparation_progress();
+                world_content_turn=true;publish_preparation_progress();
                 if (!renderer_state.pixel_work_pending()) {
                     char detail[160];
                     std::snprintf(detail,sizeof(detail),"result=%s built=%u bytes=%zu",ok?"ready":"unavailable",
@@ -14183,62 +14536,6 @@ private:
                     renderer_state.trace.write("pixel-prewarm",detail,true);
                 }
                 continue;
-            }
-            if(!has_job && !stop_requested && !camera_pending && !camera_paused && scene_changes_ok &&
-               renderer_state.world_preparation && renderer_state.cache_valid){
-                // Pressure reduces the geometry admission budget in render().
-                // Pausing this queue on pressure alone can deadlock readiness:
-                // retained geometry may be the memory keeping pressure active.
-                auto state=scene_changes.state();auto const& scene=renderer_state.topology_cache;
-                // Build camera-independent regions from one complete authority
-                // snapshot. Starting while pages are still arriving repeats
-                // regions against partial topology and can retain incomplete
-                // cross-tile natural features.
-                if(state && state->topology && state->metadata.world_topology_count &&
-                   world_input.passes>0){
-                    world_prepare_sequence=scene.appearance_sequence();
-                    world_schedule.configure(state->metadata,scene.scope_sequence(),
-                        renderer_state.content_revision,renderer_state.device_generation);
-                    unsigned count=c3x_renderer::render_core::WorldPreparationRegion::count(state->metadata);
-                    if(!world_schedule.empty()){
-                        if(wake.wait_for(lock,std::chrono::milliseconds(2),[this]{return has_job || camera_pending || stop_requested || scene_changes.ready();}))continue;
-                        auto frame=state->metadata;frame.world_topology=state->topology->data();
-                        auto sequence=world_prepare_sequence;auto region=world_schedule.next();
-                        foreground_pending.store(false,std::memory_order_relaxed);lock.unlock();
-                        LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
-                        bool ok=false,lease_built=false;unsigned built=0,reused=0,selected_count=0;
-                        try{
-                            c3x_renderer::render_core::WorldPreparationRegion input;
-                            lease_built=input.build(scene,frame,region);
-                            if(lease_built){
-                                selected_count=unsigned(input.selected.size());
-                                if(input.selected.empty())ok=true;
-                                else {
-                                    c3x_renderer_output_v1 unused{};
-                                    // Nonzero signature forces the observation lease to
-                                    // switch when visiting another preparation region.
-                                    auto signature=c3x_renderer::terrain_frame_signature(input.frame,renderer_state.content_revision,renderer_state.device_generation).complete;
-                                    GpuOutputMode mode(renderer_state,true,true);
-                                    ok=renderer_state.render(input.frame,unused,int(input.selected.front()),&foreground_pending,
-                                        signature,input.selected.data(),unsigned(input.selected.size()),&frame);
-                                    built=renderer_state.frame_tiles_built;reused=renderer_state.frame_tiles_reused;
-                                }
-                            }
-                        }catch(...){ok=false;}
-                        QueryPerformanceCounter(&end);lock.lock();
-                        bool cancelled=foreground_pending.load(std::memory_order_relaxed);
-                        if(!cancelled)world_schedule.finish(ok);
-                        preparation_ticks+=end.QuadPart-begin.QuadPart;
-                        prepared_tiles+=built;if(cancelled)++cancelled_tiles;
-                        unavailable_tiles=world_schedule.unavailable;
-                        publish_preparation_progress();
-                        char detail[320];sprintf_s(detail,"sequence=%llu region=%u regions=%u ok=%u lease=%u selected=%u retained=%zu authoritative=%zu cancelled=%u built=%u reused=%u unavailable=%u geometry_bytes=%zu ms=%.3f",
-                            sequence,region,count,unsigned(ok),unsigned(lease_built),selected_count,scene.size(),scene.authoritative_size(),unsigned(cancelled),built,reused,world_schedule.unavailable,
-                            renderer_state.tile_geometry_cache_bytes,renderer_state.trace.milliseconds(end.QuadPart-begin.QuadPart));
-                        renderer_state.trace.write("world-region-prepared",detail,true);
-                        continue;
-                    }
-                }
             }
             wake.wait(lock, [this] { return scene_changes.ready() || has_job || (camera_pending && !camera_paused) || (!camera_paused && (ahead_pending() || unit_preparation_pending())) || stop_requested; });
             if(scene_changes.ready())continue;
@@ -14311,8 +14608,9 @@ private:
                 c3x_renderer::terrain_frame_signature(job_frame,output.content_revision,output.device_generation).complete:0;
             completed_result = result;
             }
-            if(command==Command::render && result==C3X_RENDERER_RESULT_OK)start_ahead();
+            if(command==Command::render && result==C3X_RENDERER_RESULT_OK){world_content_turn=true;start_ahead();}
             else if(changes_map_publication && command!=Command::gpu_render){gpu_publication.clear();gpu_presentation=false;}
+            if(result==C3X_RENDERER_RESULT_OK)world_content_turn=true;
             last_job_result=result;
             completed_job_sequence = sequence;
             job_command = Command::none;
@@ -14867,9 +15165,11 @@ extern "C" __declspec(dllexport) int c3x_renderer_end_scene(void) {
 #ifdef C3X_RENDERER_BENCHMARK_ORACLE
 extern "C" __declspec(dllexport) int c3x_renderer_benchmark_session_reset_v1(
     std::uint32_t mode,c3x_renderer_benchmark_oracle_trim_v1* result) {
-    if(!renderer_worker || !result || (mode!=1 && mode!=2) ||
+    if(!result || (mode!=1 && mode!=2 && mode!=3) ||
        result->version!=C3X_RENDERER_BENCHMARK_ORACLE_VERSION || result->struct_size!=sizeof(*result))
         return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    if(remote_renderer_requested())return remote_renderer_backend()->benchmark_reset(mode,*result);
+    if(!renderer_worker)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
     return renderer_worker->benchmark_trim_to_prepared(*result,mode);
 }
 

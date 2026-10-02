@@ -1,5 +1,8 @@
 #pragma once
 #include "helper_trial/scene_client.h"
+#ifdef C3X_RENDERER_BENCHMARK_ORACLE
+#include "benchmark_oracle.h"
+#endif
 #include "input_recording/journal.h"
 #include "input_recording/runtime.h"
 #include "remote_scene_output.h"
@@ -58,6 +61,15 @@ public:
         return int(invoke(unsigned(c3x_inputs::Kind::native_bridge),7,input.bytes.data(),
             unsigned(input.bytes.size())).code);
     }
+#ifdef C3X_RENDERER_BENCHMARK_ORACLE
+    int benchmark_reset(unsigned mode,c3x_renderer_benchmark_oracle_trim_v1& result){
+        transport.retire_camera_receipt();c3x_inputs::Writer input;input(mode);
+        auto const& response=invoke(unsigned(c3x_inputs::Kind::native_bridge),9,input.bytes.data(),unsigned(input.bytes.size()));
+        if(response.code!=C3X_RENDERER_RESULT_OK)return int(response.code);
+        auto bytes=reply(response);if(bytes.size()!=sizeof(result))return C3X_RENDERER_RESULT_ERROR;
+        std::memcpy(&result,bytes.data(),sizeof(result));return C3X_RENDERER_RESULT_OK;
+    }
+#endif
     int reset(){
         transport.retire_camera_receipt();
         direct_surface_bound=false;

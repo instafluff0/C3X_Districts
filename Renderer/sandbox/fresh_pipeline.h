@@ -4,6 +4,7 @@
 #include "scroll_region.h"
 #include "static_raster_state.h"
 #include "../native/render_core/raster_contributors.h"
+#include "../native/render_core/shadow_sampling_grid.h"
 #include <limits>
 #include <sstream>
 #include "../native/gpu_territory_borders.h"
@@ -80,17 +81,27 @@ float3 sandbox_shadow_world(float3 world) {
   world.xy-=float2(turn,-turn);}
  return world;
 }
+// Global cell coordinates precede physical page lookup. The same canonical
+// page has the same caster projection regardless of its physical array slice.
+float sandbox_shadow_load(Texture2DArray field,int2 cell) {
+ float4 range=pickup_pages[0]; // integer low page x/y and resident page count x/y
+ int2 page=int2(floor(float2(cell)/1024.));
+ int2 local_page=page-int2(range.xy);
+ if(any(local_page<0) || any(local_page>=int2(range.zw)))return -1e6;
+ int layer=local_page.y*int(range.z)+local_page.x;
+ int2 local=cell-page*1024;
+ return field.Load(int4(local,layer,0)).r;
+}
 float c3x_paged_visibility(Texture2DArray field,float4 world,float3 normal,bool water,
  float4 ShadowU,float4 ShadowV,float4 ShadowL,float4 ShadowFlags) {
  if(world.w<=.5 || ShadowFlags.x<=.5)return 1;
  world.xyz=sandbox_shadow_world(world.xyz);
- float4 box=pickup_pages[0]; // minimum light-plane u/v and full u/v span
- // Scale bias with the current shadow texel, including close city views.
- float texel=max(box.z,box.w)/4096.;
+ float2 inverse_pitch=pickup_pages[2].xy;
+ float texel=1/min(inverse_pitch.x,inverse_pitch.y);
  float3 offset=world.xyz+normal*(water?6./1024.:texel*1.5);
- float2 uv=(float2(dot(offset,ShadowU.xyz),dot(offset,ShadowV.xyz))-box.xy)/box.zw*4096.;
+ float2 uv=float2(dot(offset,ShadowU.xyz),dot(offset,ShadowV.xyz))*inverse_pitch;
  float z=dot(offset,ShadowL.xyz);
- float2 plane=(float2(dot(world.xyz,ShadowU.xyz),dot(world.xyz,ShadowV.xyz))-box.xy)/box.zw*4096.;
+ float2 plane=float2(dot(world.xyz,ShadowU.xyz),dot(world.xyz,ShadowV.xyz))*inverse_pitch;
  float plane_z=dot(world.xyz,ShadowL.xyz);
  float2 ux=ddx(plane),uy=ddy(plane);float zx=ddx(plane_z),zy=ddy(plane_z);
  float determinant=ux.x*uy.y-ux.y*uy.x;
@@ -99,12 +110,11 @@ float c3x_paged_visibility(Texture2DArray field,float4 world,float3 normal,bool 
  int2 center=int2(floor(uv));float sum=0;
  [unroll]for(int y=-1;y<=1;y++)[unroll]for(int x=-1;x<=1;x++) {
   int2 sample=center+int2(x,y);
-  float blocker=all(sample>=0)&&all(sample<4096)?field.Load(int4(sample,0,0)).r:-1e6;
+  float blocker=sandbox_shadow_load(field,sample);
   float receiver=z+dot(gradient,float2(sample)+.5-uv);
   sum+=step(blocker,receiver+(water?.00060:texel*.35));
  }
- float soft=sum/9;
- return soft;
+ return sum/9;
 }
 )");
         return true;
@@ -244,11 +254,8 @@ Texture2D<float> SandboxTerrainDepth : register(t120);
 struct SandboxTerrainLit { float4 color : SV_Target0; float depth : SV_Depth; };
 float sandbox_shadow_blocker(float3 world) {
     world=sandbox_shadow_world(world);
-    float2 uv=(float2(dot(world,ShadowU.xyz),dot(world,ShadowV.xyz))-
-               pickup_pages[0].xy)/pickup_pages[0].zw*4096;
-    int2 cell=int2(floor(uv));
-    return all(cell>=0) && all(cell<4096) ?
-        ShadowField.Load(int4(cell,0,0)).r : -1e6;
+    float2 uv=float2(dot(world,ShadowU.xyz),dot(world,ShadowV.xyz))*pickup_pages[2].xy;
+    return sandbox_shadow_load(ShadowField,int2(floor(uv)));
 }
 SandboxTerrainLit PSSandboxTerrainRelight(float4 position : SV_Position) {
     int3 pixel = int3(position.xy, 0);
@@ -424,22 +431,10 @@ float4 PSSandboxAquaticFeature(FeaturePixelInput input) : SV_Target {
         // Keep the authored projection and equations. Only the shared camera
         // is a draw constant; stable instance placement stays in immutable GPU data.
         auto instance_source=source("objects.hlsl");
-        instance_source.append(R"(
-P VSSandboxInstance(InstanceInput input) {
- input.placement_view.xy+=translation;
- input.placement_view.z+=depth_translation;
- return VSInstance(input);
-}
-P VSSandboxReflectionInstance(InstanceInput input) {
- input.placement_view.xy+=translation;
- input.placement_view.z+=depth_translation;
- return VSReflectionInstance(input);
-}
-)");
         for(unsigned i=0;i<2;++i){
             Microsoft::WRL::ComPtr<ID3DBlob> code,errors;
             HRESULT hr=D3DCompile(instance_source.data(),instance_source.size(),"fresh_instances",nullptr,nullptr,
-                i?"VSSandboxReflectionInstance":"VSSandboxInstance","vs_5_0",D3DCOMPILE_OPTIMIZATION_LEVEL3,0,&code,&errors);
+                i?"VSResidentReflectionInstance":"VSResidentInstance","vs_5_0",D3DCOMPILE_OPTIMIZATION_LEVEL3,0,&code,&errors);
             if(errors)OutputDebugStringA(static_cast<char const*>(errors->GetBufferPointer()));
             if(FAILED(hr) || FAILED(renderer.device->CreateVertexShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,&vegetation_instances[i])))return false;
         }
@@ -454,9 +449,11 @@ P VSSandboxReflectionInstance(InstanceInput input) {
 // sandbox owns target selection, residency and the field's lifetime.
 struct SandboxSceneShadow {
     using Shadow = c3x_renderer::render_core::SourceShadow;
+    using Grid = c3x_renderer::render_core::ShadowSamplingGrid;
+    Grid sampling_grid;
     SandboxPassWorkload* work=nullptr;
     ID3D11Texture2D* texture = nullptr;
-    ID3D11RenderTargetView* target = nullptr;
+    std::array<ID3D11RenderTargetView*,Grid::max_pages> targets{};
     ID3D11ShaderResourceView* view = nullptr;
     ID3D11VertexShader* vertex = nullptr;
     ID3D11VertexShader* instance_vertex = nullptr;
@@ -476,9 +473,12 @@ struct SandboxSceneShadow {
         struct Part {Shadow::Bounds bounds;unsigned first=0,count=0;};
         Shadow::Caster source;
         std::vector<Part> parts;
-        std::vector<Instance> prepared,selected;
+
     };
-    c3x_renderer::render_core::InstanceStream instance_stream;
+    using Submission=c3x_renderer::render_core::SharedInstanceSubmission;
+    Submission::Lease shared_front;
+    Submission::CpuLease shared_metadata;
+    std::uint64_t submission_generation=0;
     std::vector<InstanceGroup> instance_groups;
     std::vector<Shadow::Caster> casters;
     std::vector<Shadow::Caster> caster_inputs;
@@ -490,7 +490,11 @@ struct SandboxSceneShadow {
     std::array<float,4> prepared_box{};
     std::array<float,12> prepared_light{};
     std::vector<ID3D11Buffer*> patch_buffers;
-    unsigned resolution=4096;
+    unsigned resolution=Grid::page_texels;
+    bool ready=false;
+    std::size_t production_field_bytes=0;
+    std::size_t bytes()const{return (texture?Grid::texture_bytes:0)+(constants?80u:0)+production_field_bytes;}
+    std::size_t metadata_bytes()const{return sizeof(sampling_grid)+sizeof(targets);}
     ID3D11ShaderResourceView* production_view = nullptr;
     float box[4] = {};
     std::array<float,4> wrap_basis{};
@@ -500,15 +504,39 @@ struct SandboxSceneShadow {
     unsigned builds = 0, draws = 0;
     template<class T> static void drop(T*& pointer) {if (pointer) pointer->Release(); pointer=nullptr;}
     ~SandboxSceneShadow() {
-        if (production_view) renderer.source_shadow.view = production_view;
-        instance_stream.clear();
+        if(renderer.source_shadow.borrowed_view==view)renderer.source_shadow.borrowed_view=nullptr;
+        renderer.fresh_shadow_working_bytes=0;
+        drop(production_view);production_field_bytes=0;
+        shared_front.reset();
         for(auto* buffer:patch_buffers)drop(buffer);
-        drop(texture); drop(target); drop(view); drop(vertex); drop(instance_vertex); drop(rigid_vertex);
+        drop(texture); for(auto*& target:targets)drop(target); drop(view); drop(vertex); drop(instance_vertex); drop(rigid_vertex);
         drop(opaque); drop(cutout); drop(layout); drop(feature_layout); drop(natural_layout);
         drop(city_layout); drop(instance_layout); drop(constants); drop(maximum); drop(raster);
     }
     bool ensure() {
-        if (view) return true;
+        if (ready) return true;
+        // An interrupted setup keeps its actual owners charged. It cannot
+        // silently create another field generation on a subsequent request.
+        if(texture || view || vertex || instance_vertex || rigid_vertex || constants || maximum || raster || production_view)return false;
+        // Pin the original SRV independently across renderer device reset.
+        // The original field and this fixed field keep separate owning views;
+        // only the sampling binding is temporarily borrowed.
+        production_view=renderer.source_shadow.view;
+        if(production_view)production_view->AddRef();
+        production_field_bytes=0;
+        if(renderer.source_shadow.view){
+            ID3D11Resource* resource=nullptr;ID3D11Texture2D* held=nullptr;
+            renderer.source_shadow.view->GetResource(&resource);
+            if(resource && SUCCEEDED(resource->QueryInterface(__uuidof(ID3D11Texture2D),reinterpret_cast<void**>(&held)))){
+                D3D11_TEXTURE2D_DESC desc{};held->GetDesc(&desc);
+                if(desc.Format!=DXGI_FORMAT_R32_FLOAT){drop(held);drop(resource);return false;}
+                for(unsigned mip=0;mip<desc.MipLevels;++mip)
+                    production_field_bytes+=std::size_t(std::max(1u,desc.Width>>mip))*std::max(1u,desc.Height>>mip)*desc.ArraySize*desc.SampleDesc.Count*4;
+            }
+            drop(held);drop(resource);
+        }
+        renderer.fresh_shadow_working_bytes=Grid::texture_bytes+80u+production_field_bytes;
+        renderer.preserve_process_headroom(true);
         auto root = renderer.shader_root + "/Renderer/native/";
         auto shader = [&](std::string const& path, char const* entry, char const* profile,
                 ID3DBlob** result) {
@@ -554,26 +582,29 @@ struct SandboxSceneShadow {
             hr=renderer.device->CreatePixelShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,&cutout);
         else hr=E_FAIL;
         drop(code);
-        if (SUCCEEDED(hr) && shader(root+"source_fidelity/instance_caster.hlsl","VSInstance","vs_5_0",&code)) {
+        if (SUCCEEDED(hr) && shader(root+"source_fidelity/instance_caster.hlsl","VSResidentPlacedInstance","vs_5_0",&code)) {
             hr=renderer.device->CreateVertexShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,&instance_vertex);
-            if (SUCCEEDED(hr)) hr=c3x_renderer::render_core::create_instance_layout(renderer.device,code,&instance_layout);
+            if (SUCCEEDED(hr)) hr=c3x_renderer::render_core::create_resident_instance_layout(renderer.device,code,&instance_layout);
         } else hr=E_FAIL;
         drop(code);
-        if (SUCCEEDED(hr) && shader(root+"city_fidelity/rigid_caster.hlsl","VSSharedCaster","vs_5_0",&code))
+        if (SUCCEEDED(hr) && shader(root+"city_fidelity/rigid_caster.hlsl","VSResidentPlacedCaster","vs_5_0",&code))
             hr=renderer.device->CreateVertexShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,&rigid_vertex);
         else hr=E_FAIL;
         drop(code);
-        D3D11_TEXTURE2D_DESC d={};d.Width=d.Height=resolution;d.ArraySize=d.MipLevels=d.SampleDesc.Count=1;
+        D3D11_TEXTURE2D_DESC d={};d.Width=d.Height=resolution;d.ArraySize=Grid::max_pages;d.MipLevels=d.SampleDesc.Count=1;
         d.Format=DXGI_FORMAT_R32_FLOAT;
         d.BindFlags=D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE;
         if (SUCCEEDED(hr)) hr=renderer.device->CreateTexture2D(&d,nullptr,&texture);
         D3D11_RENDER_TARGET_VIEW_DESC rt={};rt.Format=d.Format;
         rt.ViewDimension=D3D11_RTV_DIMENSION_TEXTURE2DARRAY;
         rt.Texture2DArray.ArraySize=1;
-        if (SUCCEEDED(hr)) hr=renderer.device->CreateRenderTargetView(texture,&rt,&target);
+        for(unsigned page=0;page<Grid::max_pages && SUCCEEDED(hr);++page){
+            rt.Texture2DArray.FirstArraySlice=page;
+            hr=renderer.device->CreateRenderTargetView(texture,&rt,&targets[page]);
+        }
         D3D11_SHADER_RESOURCE_VIEW_DESC sr={};sr.Format=d.Format;
         sr.ViewDimension=D3D11_SRV_DIMENSION_TEXTURE2DARRAY;
-        sr.Texture2DArray.ArraySize=1;sr.Texture2DArray.MipLevels=1;
+        sr.Texture2DArray.ArraySize=Grid::max_pages;sr.Texture2DArray.MipLevels=1;
         if (SUCCEEDED(hr)) hr=renderer.device->CreateShaderResourceView(texture,&sr,&view);
         D3D11_BUFFER_DESC b={};b.ByteWidth=80;b.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
         if (SUCCEEDED(hr)) hr=renderer.device->CreateBuffer(&b,nullptr,&constants);
@@ -590,8 +621,8 @@ struct SandboxSceneShadow {
             renderer.trace.write("fresh-shadow-setup-failed",detail,true);
             return false;
         }
-        production_view=renderer.source_shadow.view;
-        renderer.source_shadow.view=view;
+        renderer.source_shadow.borrowed_view=view;
+        ready=true;
         return true;
     }
     bool refresh_casters(std::uint64_t scene) {
@@ -618,46 +649,128 @@ struct SandboxSceneShadow {
         caster_signature=scene;
         return true;
     }
-    bool prepare_instances() {
-        using Instance=c3x_renderer::fidelity::MeshInstance;
+    Submission::Key shared_caster_placement_key(Shadow::Caster const& caster)const{
+        Submission::Key result{};auto facts=caster_key(caster);std::copy(facts.begin(),facts.end(),result.begin());
+        result.back()=1;return result;
+    }
+    template<class BodyInputs> bool body_placements_covered(Submission::Generation const& candidate,BodyInputs const& inputs)const {
+        bool covered=true;
+        inputs([&](unsigned layer,GeometryDrawReference const& draw){
+            auto const& mesh=draw.content();if(!mesh.instances || mesh.instances->empty())return;
+            auto range=candidate.find(renderer.shared_instance_draw_key(layer,draw));
+            if(range.count!=mesh.instances->size())covered=false;
+        });return covered;
+    }
+    template<class BodyInputs> bool append_body_placements(Submission::Builder& builder,BodyInputs const& inputs) {
+        bool complete=true;
+        inputs([&](unsigned layer,GeometryDrawReference const& draw){
+            auto const& mesh=draw.content();if(!complete || !mesh.instances || mesh.instances->empty())return;
+            Submission::Range range;
+            complete=renderer.shared_instances.append(builder,renderer.shared_instance_draw_key(layer,draw),mesh.instances.get(),
+                mesh.instances->data(),unsigned(mesh.instances->size()),draw.natural_projection(),
+                float(draw.translation_x()),float(draw.translation_y()),float(draw.translation_y()),mesh.instance_material,range);
+        });return complete;
+    }
+    template<class BodyInputs,class RetireCompletedPlans> bool prepare_instances(BodyInputs const& inputs,RetireCompletedPlans const& retire_completed_plans) {
+        // Close one body/reflection/shadow placement union before any pass.
+        // A serial identifies a new exact prepared caster selection; its input
+        // equality is already checked by membership/box/light preparation.
+        Submission::Key identity={caster_signature,renderer.device_generation,renderer.content_revision,
+            renderer.geometry_vertex_buffers.revision(),++submission_generation,0,0,1};
+        auto reused=renderer.shared_instances.find_covering([&](Submission::Generation const& candidate){
+            if(candidate.identity[1]!=renderer.device_generation || candidate.identity[2]!=renderer.content_revision)return false;
+            if(!body_placements_covered(candidate,inputs))return false;
+            for(auto const& caster:casters)if(caster.instances && !caster.instances->empty()){
+                auto range=candidate.find(shared_caster_placement_key(caster));if(range.count!=caster.instances->size())return false;
+            }return true;
+        });
+        // Completed pass selections pin the old placement generation.
+        // Retire them before charging a replacement, while preserving
+        // the active union and any independently held consumer leases.
+        if(!reused)retire_completed_plans();
+        if(!renderer.shared_instances.reserve_index_scratch())return false;
+        shared_metadata.reset();std::size_t parts=0;
+        for(auto const& caster:casters)if(caster.instances && !caster.instances->empty())++parts;
+        auto metadata=renderer.shared_instances.retain_metadata(parts*(sizeof(InstanceGroup)*2+sizeof(InstanceGroup::Part)*2+sizeof(std::array<std::uintptr_t,9>)+96u));
+        if(!metadata)return false;
+        // Packed placements own no draw sources. The current resident/caster
+        // publications below each pass already own the actually bound meshes.
+        auto builder=reused?Submission::Builder{}:renderer.shared_instances.begin_retained(identity);
+        if(!reused && !builder)return false;
+        if(!reused && !append_body_placements(builder,inputs))return false;
+        // Only the required current membership owns source meshes. Reusable
+        // placement ranges retain weak, epoch-protected identities instead.
+        std::map<std::uint64_t,c3x_renderer::render_core::ContentHandle> source_handles;
+        Submission::CpuLease source_handle_metadata;
+        if(!reused){
+            using SourceHandle=decltype(source_handles)::value_type;
+            source_handle_metadata=renderer.shared_instances.retain_metadata(sizeof(source_handles)+
+                caster_lease->content.size()*(sizeof(SourceHandle)+64u));
+            if(!source_handle_metadata)return false;
+            for(auto const& layer:caster_lease->records)for(auto const& record:layer)
+                if(record.owner.generation && record.content().instances && !record.content().instances->empty())
+                    source_handles.emplace(record.owner.generation,record.owner);
+        }
+        auto retain_source=[&](Submission::Key const& key,
+                c3x_renderer::render_core::ContentHandle owner,void const* instances,float material){
+            auto source=renderer.resident_content.lease(owner);
+            if(!source)return true; // Dynamic/unproved ranges are never carried.
+            Submission::RetainedSource proof;proof.source=source;proof.owner={owner.slot,owner.generation};
+            proof.canonical_source=Submission::Generation::source_key(instances,material);
+            auto canonical=builder->sources.find(proof.canonical_source);
+            auto range=builder->find(key);
+            proof.canonical=canonical!=builder->sources.end() && canonical->second.first==range.first;
+            return renderer.shared_instances.retain_source(builder,key,std::move(proof));
+        };
+        if(!reused){bool retained=true;
+            inputs([&](unsigned layer,GeometryDrawReference const& draw){
+                auto const& mesh=draw.content();if(!retained || !draw.occurrence || !mesh.instances || mesh.instances->empty())return;
+                retained=retain_source(renderer.shared_instance_draw_key(layer,draw),draw.occurrence->owner,
+                    mesh.instances.get(),mesh.instance_material);
+            });if(!retained)return false;
+        }
         std::map<std::array<std::uintptr_t,9>,std::size_t> lookup;
         std::size_t total=0;
         for(auto const& caster:casters){
             if(!caster.instances || caster.instances->empty())continue;
-            std::array<std::uintptr_t,9> key={
-                reinterpret_cast<std::uintptr_t>(caster.vertices),
-                reinterpret_cast<std::uintptr_t>(caster.indices),
-                caster.vertex_offset,caster.index_offset,caster.count,
-                std::uintptr_t(caster.index_format),
-                caster.binding==0xffffffffu?caster.layer:caster.binding,
+            std::array<std::uintptr_t,9> key={reinterpret_cast<std::uintptr_t>(caster.vertices),
+                reinterpret_cast<std::uintptr_t>(caster.indices),caster.vertex_offset,caster.index_offset,caster.count,
+                std::uintptr_t(caster.index_format),caster.binding==0xffffffffu?caster.layer:caster.binding,
                 std::uintptr_t(caster.rigid),caster.stride};
             auto found=lookup.find(key);
             if(found==lookup.end()){
-                found=lookup.emplace(key,instance_groups.size()).first;
-                instance_groups.emplace_back();
-                instance_groups.back().source=caster;
+                found=lookup.emplace(key,instance_groups.size()).first;instance_groups.emplace_back();instance_groups.back().source=caster;
             }
             auto& group=instance_groups[found->second];
-            if(group.prepared.size()+caster.instances->size()>std::numeric_limits<UINT>::max())return false;
-            InstanceGroup::Part part;part.first=UINT(group.prepared.size());
-            part.count=UINT(caster.instances->size());
-            for(int axis=0;axis<3;++axis){
-                part.bounds.low[axis]=caster.bounds.low[axis]+caster.offset[axis];
-                part.bounds.high[axis]=caster.bounds.high[axis]+caster.offset[axis];
+            auto placement_key=shared_caster_placement_key(caster);
+            auto range=reused?reused->find(placement_key):Submission::Range{};
+            if(!reused && !renderer.shared_instances.append(builder,placement_key,caster.instances,caster.instances->data(),
+                unsigned(caster.instances->size()),caster.instances->front().projection,
+                caster.offset[0],caster.offset[1],caster.offset[2],caster.instance_material,range))return false;
+            if(!reused && caster.content_generation){
+                auto owner=source_handles.find(caster.content_generation);
+                if(owner!=source_handles.end() && !retain_source(placement_key,owner->second,caster.instances,caster.instance_material))return false;
             }
-            group.parts.push_back(part);
-            for(auto instance:*caster.instances){
-                std::copy(caster.offset,caster.offset+3,instance.view);
-                instance.view[3]=caster.instance_material;
-                group.prepared.push_back(instance);
-            }
-            total+=caster.instances->size();
+            InstanceGroup::Part part;part.first=range.first;part.count=range.count;
+            for(int axis=0;axis<3;++axis){part.bounds.low[axis]=caster.bounds.low[axis]+caster.offset[axis];
+                part.bounds.high[axis]=caster.bounds.high[axis]+caster.offset[axis];}
+            group.parts.push_back(part);total+=range.count;
         }
-        for(auto& group:instance_groups)group.selected.reserve(group.prepared.size());
+        if(!reused && !renderer.shared_instances.carry_forward(builder,[&](Submission::RetainedSource const& proof){
+            auto source=proof.source.lock();
+            auto cached=renderer.resident_content.resolve({std::size_t(proof.owner[0]),proof.owner[1]});
+            return source && cached && cached->mesh && cached->mesh->proof && cached->mesh.get()==source.get() &&
+                renderer.raster_content_valid(*cached->mesh->proof);
+        }))return false;
+        auto uploads=renderer.shared_instances.uploads;auto bytes=renderer.shared_instances.uploaded_bytes;
+        shared_front=reused?reused:renderer.shared_instances.upload(builder,renderer.device);
+        if(!shared_front)return false;
+        shared_metadata=std::move(metadata);
+        renderer.frame_content_uploads+=renderer.shared_instances.uploads-uploads;
+        renderer.frame_upload_bytes+=renderer.shared_instances.uploaded_bytes-bytes;
+        work->upload(renderer.shared_instances.uploaded_bytes-bytes);
         std::printf("SANDBOX_SHADOW_INSTANCES casters=%zu groups=%zu instances=%zu bytes=%zu\n",
-            casters.size(),instance_groups.size(),total,total*sizeof(Instance));
-        std::fflush(stdout);
-        return true;
+            casters.size(),instance_groups.size(),total,total*sizeof(unsigned));std::fflush(stdout);return true;
     }
     void batch_terrain_casters() {
         auto& captured=renderer.sandbox_shadow_meshes;
@@ -828,10 +941,8 @@ struct SandboxSceneShadow {
         return true;
 #endif
     }
-    bool render(GeometryDrawView::Records const& receivers,std::uint64_t scene,std::uint64_t revision,std::uint64_t membership) {
+    template<class BodyInputs,class RetireCompletedPlans> bool render(GeometryDrawView::Records const& receivers,std::uint64_t scene,std::uint64_t revision,std::uint64_t membership,BodyInputs const& inputs,RetireCompletedPlans const& retire_completed_plans) {
         SandboxPassWorkload::Scope pass(*work,SandboxPassWorkload::shadow);
-        if(view && signature==scene && caster_signature==membership && light_basis==renderer.shadow_basis &&
-                receiver_revision==revision)return true;
         if (!ensure() || !refresh_casters(membership)) return false;
         float needed[4]={std::numeric_limits<float>::max(),std::numeric_limits<float>::max(),
             -std::numeric_limits<float>::max(),-std::numeric_limits<float>::max()};
@@ -868,19 +979,21 @@ struct SandboxSceneShadow {
                 any=true;
             }
         if (!any) return false;
+        Grid query_grid;
+        if(!query_grid.configure(needed,renderer.shadow_basis))return false;
         receiver_revision=revision;
-        if (signature==scene && wrap_basis==wrap_query &&
+        if (renderer.shared_instances.valid(shared_front) && prepared_signature==membership &&
+            signature==scene && wrap_basis==wrap_query &&
             light_basis==renderer.shadow_basis &&
-            needed[0]>box[0]+1 && needed[1]>box[1]+1 &&
-            needed[2]<box[0]+box[2]-1 && needed[3]<box[1]+box[3]-1 && atlas_dependencies(false)){if(work->enabled)++work->row().reuses;return true;}
+            sampling_grid.covers(query_grid) && atlas_dependencies(false) && body_placements_covered(*shared_front,inputs)){if(work->enabled)++work->row().reuses;return true;}
         if(work->enabled)++work->row().rebuilds;
-        box[0]=std::floor((needed[0]-4)/2)*2;box[1]=std::floor((needed[1]-4)/2)*2;
-        box[2]=std::ceil((needed[2]+4-box[0])/2)*2;
-        box[3]=std::ceil((needed[3]+4-box[1])/2)*2;
-        if (box[2]<=0 || box[3]<=0) return false;
+        sampling_grid=query_grid;
+        auto coverage=sampling_grid.coverage();
+        std::copy(coverage.begin(),coverage.end(),box);
         atlas_inputs.clear();if(!atlas_dependencies(true))atlas_inputs.complete=false;
         std::array<float,4> next_box={box[0],box[1],box[2],box[3]};
-        if(prepared_signature!=membership || prepared_box!=next_box || prepared_light!=renderer.shadow_basis){
+        if(!renderer.shared_instances.valid(shared_front) || prepared_signature!=membership || prepared_box!=next_box || prepared_light!=renderer.shadow_basis ||
+                !body_placements_covered(*shared_front,inputs)){
             instance_groups.clear();
             ID3D11Buffer* empty[]={nullptr,nullptr};UINT cleared_strides[2]={};
             renderer.context->IASetVertexBuffers(0,2,empty,cleared_strides,cleared_strides);
@@ -892,7 +1005,7 @@ struct SandboxSceneShadow {
                 casters.push_back(caster);
             }
             batch_terrain_casters();
-            if(!prepare_instances())return false;
+            if(!prepare_instances(inputs,retire_completed_plans))return false;
             prepared_signature=membership;prepared_box=next_box;prepared_light=renderer.shadow_basis;
         }
         auto* context=renderer.context;
@@ -905,23 +1018,27 @@ struct SandboxSceneShadow {
         context->OMSetDepthStencilState(nullptr,0);
         context->OMSetBlendState(maximum,nullptr,0xffffffffu);
         float clear[4]={-1e6f,-1e6f,-1e6f,-1e6f};
+        draws=0;
+        for(unsigned page_slot=0;page_slot<sampling_grid.pages();++page_slot){
+        auto* target=targets[page_slot];
         context->ClearRenderTargetView(target,clear);work->clear(target);
         context->OMSetRenderTargets(1,&target,nullptr);
-        draws=0;
+        auto page_box=sampling_grid.page_box(page_slot);
+        auto page= sampling_grid.page(page_slot);
         for (auto const& caster:casters) {
             if(caster.instances)continue;
             if(work->enabled)++work->row(caster.layer).tested_records;
             auto bounds=Shadow::project(caster.bounds,caster.offset,renderer.shadow_basis);
-            if(bounds[2]<box[0] || bounds[0]>box[0]+box[2] ||
-               bounds[3]<box[1] || bounds[1]>box[1]+box[3])continue;
+            if(bounds[2]<page_box[0] || bounds[0]>page_box[0]+page_box[2] ||
+               bounds[3]<page_box[1] || bounds[1]>page_box[1]+page_box[3])continue;
             if(work->enabled)++work->row(caster.layer).accepted_records;
             float settings[20]={};
             std::copy(renderer.shadow_basis.begin(),renderer.shadow_basis.end(),settings);
             for (int i=0;i<3;++i) {
-                settings[i]*=6/box[2];settings[4+i]*=6/box[3];
+                settings[i]*=6/page_box[2];settings[4+i]*=6/page_box[3];
                 settings[16+i]=caster.offset[i];
             }
-            settings[12]=box[0]/box[2];settings[13]=box[1]/box[3];
+            settings[12]=float(page[0]);settings[13]=float(page[1]);
             context->UpdateSubresource(constants,0,nullptr,settings,0,0);work->upload_buffer(constants);
             context->PSSetShader(bind_cutout(caster.binding==0xffffffffu?
                 caster.layer:caster.binding)?cutout:opaque,nullptr,0);
@@ -934,48 +1051,50 @@ struct SandboxSceneShadow {
             context->DrawIndexed(caster.count,0,0);work->draw(caster.count,1,caster.layer);
             ++draws;
         }
+        std::vector<unsigned> selected;
         for(auto& group:instance_groups){
-            group.selected.clear();
+            selected.clear();
             for(auto const& part:group.parts){
                 if(work->enabled){++work->row(group.source.layer).tested_records;work->row(group.source.layer).tested_instances+=part.count;}
                 auto bounds=Shadow::project(part.bounds,zero,renderer.shadow_basis);
-                if(bounds[2]<box[0] || bounds[0]>box[0]+box[2] ||
-                   bounds[3]<box[1] || bounds[1]>box[1]+box[3])continue;
+                if(bounds[2]<page_box[0] || bounds[0]>page_box[0]+page_box[2] ||
+                   bounds[3]<page_box[1] || bounds[1]>page_box[1]+page_box[3])continue;
                 if(work->enabled){++work->row(group.source.layer).accepted_records;work->row(group.source.layer).accepted_instances+=part.count;}
-                group.selected.insert(group.selected.end(),
-                    group.prepared.begin()+part.first,
-                    group.prepared.begin()+part.first+part.count);
+                for(unsigned i=0;i<part.count;++i)selected.push_back(part.first+i);
             }
-            if(group.selected.empty())continue;
+            if(selected.empty())continue;
             auto const& caster=group.source;
             float settings[20]={};
             std::copy(renderer.shadow_basis.begin(),renderer.shadow_basis.end(),settings);
             for(int axis=0;axis<3;++axis){
-                settings[axis]*=6/box[2];settings[4+axis]*=6/box[3];
+                settings[axis]*=6/page_box[2];settings[4+axis]*=6/page_box[3];
             }
-            settings[12]=box[0]/box[2];settings[13]=box[1]/box[3];
+            settings[12]=float(page[0]);settings[13]=float(page[1]);
             context->UpdateSubresource(constants,0,nullptr,settings,0,0);work->upload_buffer(constants);
             context->PSSetShader(bind_cutout(caster.binding==0xffffffffu?
                 caster.layer:caster.binding)?cutout:opaque,nullptr,0);
             context->VSSetShader(caster.rigid?rigid_vertex:instance_vertex,nullptr,0);
             context->IASetInputLayout(instance_layout);
+            context->VSSetShaderResources(15,1,&shared_front->view);
             context->IASetIndexBuffer(caster.indices,caster.index_format,caster.index_offset);
-            for(std::size_t begin=0;begin<group.selected.size();
-                    begin+=c3x_renderer::render_core::InstanceStream::limit){
-                auto count=std::min(group.selected.size()-begin,
-                    std::size_t(c3x_renderer::render_core::InstanceStream::limit));
-                if(!instance_stream.upload(nullptr,context,group.selected.data()+begin,count))return false;
-                ID3D11Buffer* streams[]={caster.vertices,instance_stream.buffer};
-                UINT strides[]={32,64},offsets[]={caster.vertex_offset,instance_stream.offset};
+            for(std::size_t begin=0;begin<selected.size();begin+=Submission::record_limit){
+                auto count=std::min(selected.size()-begin,std::size_t(Submission::record_limit));
+                if(!renderer.shared_instances.select_indices(renderer.device,context,shared_front,selected.data()+begin,unsigned(count)))return false;
+                ID3D11Buffer* streams[]={caster.vertices,renderer.shared_instances.selection_buffer};
+                UINT strides[]={32,4},offsets[]={caster.vertex_offset,renderer.shared_instances.selection_offset};
                 context->IASetVertexBuffers(0,2,streams,strides,offsets);
                 context->DrawIndexedInstanced(caster.count,UINT(count),0,0,0);work->draw(caster.count,count,caster.layer);
-                work->upload(count*sizeof(c3x_renderer::fidelity::MeshInstance),caster.layer);
+                work->upload(count*sizeof(unsigned),caster.layer);
                 ++draws;
             }
         }
+        }
         context->OMSetRenderTargets(0,nullptr,nullptr);
         std::array<std::array<float,4>,64> table{};
-        std::copy(box,box+4,table[0].begin());
+        table[0]={float(sampling_grid.low[0]),float(sampling_grid.low[1]),
+            float(sampling_grid.count[0]),float(sampling_grid.count[1])};
+        table[2]={sampling_grid.inverse_pitch(0),sampling_grid.inverse_pitch(1),
+            sampling_grid.page_span(0),sampling_grid.page_span(1)};
         table[1]=wrap_query;
         wrap_basis=wrap_query;
         context->UpdateSubresource(renderer.source_shadow.table,0,nullptr,table.data(),0,0);work->upload_buffer(renderer.source_shadow.table);
@@ -1103,17 +1222,14 @@ struct SandboxFreshPipeline {
     bool resident_water_scene=false;
     c3x_renderer::render_core::RasterScratchIdentity reflection_key,reflected_terrain_key;
     bool reflection_dynamic_written=false;
-    bool material_valid=false;
-    std::uint64_t material_signature=0;
-    int material_camera_x=0,material_camera_y=0;
-    bool terrain_material_valid=false;
-    std::uint64_t terrain_material_signature=0;
-    int terrain_material_camera_x=0,terrain_material_camera_y=0;
     bool reflected_terrain_material_valid=false;
     bool reflection_valid=false;
+    using Submission=c3x_renderer::render_core::SharedInstanceSubmission;
+    Submission::Lease shared_front;
     double phases[6]={};
 #ifdef C3X_RENDERER64_FRESH
-    struct InstancePlan {Microsoft::WRL::ComPtr<ID3D11Buffer> buffer;std::size_t bytes=0;unsigned count=0;};
+
+    struct InstancePlan {Submission::SelectionLease selection;std::size_t bytes=0;unsigned count=0;};
     c3x_renderer::render_core::FrameSampleCache<std::vector<std::uint64_t>,InstancePlan,128> instance_plans;
     std::size_t instance_plan_bytes=0;
     unsigned instance_plan_builds=0,instance_plan_reuses=0;
@@ -1350,7 +1466,7 @@ struct SandboxFreshPipeline {
         context->VSSetConstantBuffers(1,1,&renderer.viewport_settings_buffer);
         auto const& materials=renderer.compiled_material_views();
         context->PSSetShaderResources(0,UINT(materials.size()),materials.data());
-        context->PSSetShaderResources(17,1,&renderer.source_shadow.view);
+        context->PSSetShaderResources(17,1,&renderer.source_shadow.sampled_view());
         // Terrain uses t25 for shadow depth; feature materials reuse t25-t28.
         // Bind them for this pass even when no cliff draw preceded the feature.
         context->PSSetShaderResources(25,4,renderer.feature_texture_views.data());
@@ -1375,8 +1491,8 @@ struct SandboxFreshPipeline {
             bind_common(settings,rect,target,depth,false,float(scene_scale));
             auto* context=renderer.context;
             context->PSSetShader(renderer.resource_shadow_shader,nullptr,0);
-            context->PSSetShaderResources(17,1,&renderer.source_shadow.view);
-            context->PSSetShaderResources(25,1,&renderer.source_shadow.view);
+            context->PSSetShaderResources(17,1,&renderer.source_shadow.sampled_view());
+            context->PSSetShaderResources(25,1,&renderer.source_shadow.sampled_view());
             context->PSSetShaderResources(116,8,renderer.resource_texture_views.data());
             ID3D11SamplerState* shadow_samplers[]={renderer.natural_wrap,renderer.natural_clamp};
             context->PSSetSamplers(0,2,shadow_samplers);
@@ -1403,6 +1519,54 @@ struct SandboxFreshPipeline {
                 (1.f/settings.inverse_size[0]-renderer.content_view_width-2*guard)*.5f,
                 (1.f/settings.inverse_size[1]-renderer.content_view_height-2*guard)*.5f);
     }
+#ifdef C3X_RENDERER64_FRESH
+    SandboxDirectUnits::ContributionPlan unit_contribution_plan;
+    std::vector<SandboxDirectUnits::ScenePose> unit_contribution_candidates,unit_contribution_required;
+    std::uint64_t unit_contribution_revision=1,unit_contribution_scope=0;
+    int unit_plan_x=0,unit_plan_y=0,unit_plan_season=0;float unit_plan_zoom=0,unit_plan_hour=-1;
+    std::uint64_t unit_plan_bounds=0;bool unit_plan_reflection=false;
+    static bool same_unit_inputs(std::vector<SandboxDirectUnits::ScenePose> const& a,
+            std::vector<SandboxDirectUnits::ScenePose> const& b){
+        return a.size()==b.size() && std::equal(a.begin(),a.end(),b.begin(),[](auto const& left,auto const& right){
+            return !std::memcmp(&left.draw,&right.draw,sizeof(left.draw)) && left.pose_identity==right.pose_identity &&
+                left.tile_x==right.tile_x && left.tile_y==right.tile_y && left.unit==right.unit && left.action==right.action &&
+                left.cursor==right.cursor && left.predict==right.predict && left.animated==right.animated && left.travelling==right.travelling;
+        });
+    }
+    bool select_unit_contributors(c3x_renderer_frame_v1 const& frame,
+            std::vector<SandboxDirectUnits::ScenePose> const& candidates,
+            std::vector<SandboxDirectUnits::ScenePose>& required,float next_zoom){
+        if(!std::isfinite(next_zoom))return false;
+        auto old_zoom=projection_zoom;auto old_x=camera_x,old_y=camera_y;
+        struct Restore {SandboxFreshPipeline& owner;float zoom;int x,y;
+            ~Restore(){owner.projection_zoom=zoom;owner.camera_x=x;owner.camera_y=y;}} restore{*this,old_zoom,old_x,old_y};
+        projection_zoom=std::clamp(next_zoom,c3x_renderer::SceneProjection::minimum,c3x_renderer::SceneProjection::maximum);
+        camera_x=camera_y=0;
+        if(frame.tile_count && frame.tiles){auto const& first=frame.tiles[0];
+            camera_x=first.anchor_x-first.tile_x*frame.tile_width/2;
+            camera_y=first.anchor_y-first.tile_y*frame.tile_height/2;}
+        int w=renderer.content_view_width+8,h=renderer.content_view_height+8;
+        auto settings=renderer.geometry_viewport_settings,reflected=settings;
+        settings.translation[0]=float(camera_x)+4;settings.translation[1]=float(camera_y)+4;
+        reflected.translation[0]=float(camera_x)+8;reflected.translation[1]=float(camera_y)+8;
+        settings.depth_translation=reflected.depth_translation=-float(renderer.scene_depth_origin);
+        settings.inverse_size[0]=1.f/w;settings.inverse_size[1]=1.f/h;
+        reflected.inverse_size[0]=1.f/(w+8);reflected.inverse_size[1]=1.f/(h+8);
+        if(!capture(settings,reflected,w,h,frame.world_wrap_x?frame.world_width_tiles*frame.tile_width/2:0))return false;
+        std::vector<D3D11_RECT> receivers;reflected_water_bounds(settings,w,h,&receivers);
+        char cycle[8]{};bool day_night=GetEnvironmentVariableA("C3X_SANDBOX_DAY_NIGHT",cycle,sizeof(cycle)) && cycle[0]=='1';
+        float hour=day_night?12.f+24.f*float(frame.presentation_time_ticks)/float(std::max<c3x_renderer_i64>(1,frame.presentation_frequency))/30.f:float(frame.hour);
+        SandboxDirectUnits::ContributionPlan next;
+        if(!sandbox_direct_units.select_real(frame,candidates,hour,projection_zoom,receivers,next))return false;
+        bool same=next.entries.size()==unit_contribution_plan.entries.size() &&
+            std::equal(next.entries.begin(),next.entries.end(),unit_contribution_plan.entries.begin(),[](auto const& a,auto const& b){return a.candidate==b.candidate && a.mask==b.mask;});
+        if(!same)++unit_contribution_revision;
+        unit_contribution_plan=std::move(next);unit_contribution_candidates=candidates;
+        required=unit_contribution_plan.required(candidates);unit_contribution_required=required;
+        unit_contribution_scope=view_revision();unit_plan_x=camera_x;unit_plan_y=camera_y;unit_plan_zoom=projection_zoom;unit_plan_hour=hour;unit_plan_season=frame.season;
+        unit_plan_bounds=renderer.unit_bodies.contribution_sequence;unit_plan_reflection=renderer.reflection.enabled;return true;
+    }
+#endif
     D3D11_RECT reflected_water_bounds(ViewportShaderSettings const& settings,int width,int height,
             std::vector<D3D11_RECT>* receivers=nullptr)const {
         D3D11_RECT result={width+8,height+8,0,0};
@@ -1442,39 +1606,59 @@ struct SandboxFreshPipeline {
         selected.reserve(values.size());
         auto flush=[&]() {
             if(selected.empty())return true;
-            if(streamed && !parameters.upload(values.data(),unsigned(selected.size()))){
+            auto opaque=[](GeometryDrawReference const& draw){auto const& mesh=draw.content();
+                return mesh.rigid_source && !mesh.animation_texture && !mesh.resource_instance && mesh.city_material==0xffffffffu &&
+                    c3x_renderer::render_core::opaque_rigid_material(mesh.instance_material);};
+            auto compatible=[](GeometryDrawReference const& a,GeometryDrawReference const& b){auto const& x=a.content();auto const& y=b.content();
+                return x.buffer==y.buffer && x.indices==y.indices && x.vertex_offset==y.vertex_offset && x.index_offset==y.index_offset &&
+                    x.index_count==y.index_count && x.index_format==y.index_format && x.projection_kind==y.projection_kind &&
+                    x.instance_material==y.instance_material;};
+            auto conflict=[&](GeometryDrawReference const& a,GeometryDrawReference const& b){
+                auto coverage=[&](GeometryDrawReference const& draw,bool reflected){auto const& bounds=draw.bounds();auto const& world=draw.content().world_bounds;
+                    float low=reflected?2*renderer.reflection.height_pixels*std::max(0.f,world.low[2]-2.5f/112.f):0;
+                    float high=reflected?2*renderer.reflection.height_pixels*std::max(0.f,world.high[2]-2.5f/112.f):0;
+                    return std::array<double,4>{double(bounds.left)+draw.translation_x()-4,double(bounds.top)+draw.translation_y()+low-4,
+                        double(bounds.right)+draw.translation_x()+4,double(bounds.bottom)+draw.translation_y()+high+4};};
+                for(bool reflected:{false,true}){auto x=coverage(a,reflected),y=coverage(b,reflected);
+                    if(!(x[2]<y[0] || x[0]>y[2] || x[3]<y[1] || x[1]>y[3]))return true;}return false;};
+            c3x_renderer::render_core::group_independent_opaque(selected,compatible,opaque,conflict);
+            for(unsigned i=0;i<selected.size();++i){auto const& chunk=selected[i];auto settings=viewport;
+                std::copy(std::begin(chunk.natural_projection()),std::end(chunk.natural_projection()),settings.natural_projection);
+                settings.padding=float(chunk.content().projection_kind);
+                if(renderer.pickup_profile)settings.reserved[1]=layer==geometry_underlay?.5f:layer==geometry_bed?4.f:layer==geometry_water?5.f:0.f;
+                settings.translation[0]+=float(chunk.translation_x());settings.translation[1]+=float(chunk.translation_y());
+                settings.depth_translation=renderer.city_profile?viewport.depth_translation+float(chunk.translation_y()):settings.translation[1];values[i]=settings;
+            }
+            std::array<unsigned,c3x_renderer::render_core::DrawParameterStream::limit> parameter_index{};
+            std::array<ViewportShaderSettings,c3x_renderer::render_core::DrawParameterStream::limit> nonrigid_parameters{};unsigned parameter_count=0;
+            for(unsigned i=0;i<selected.size();++i)if(!selected[i].content().rigid_source){parameter_index[i]=parameter_count;nonrigid_parameters[parameter_count++]=values[i];}
+            if(streamed && parameter_count && !parameters.upload(nonrigid_parameters.data(),parameter_count)){
                 std::printf("SANDBOX_RECORD_UPLOAD_ERROR layer=%u records=%zu reason=0x%08lx\n",
                     unsigned(layer),selected.size(),renderer.device->GetDeviceRemovedReason());
                 std::fflush(stdout);return false;
             }
-            if(streamed)work.upload(selected.size()*((sizeof(ViewportShaderSettings)+255)/256)*256,unsigned(layer));
-            std::vector<c3x_renderer::fidelity::MeshInstance> rigid;
+            if(streamed)work.upload(parameter_count*((sizeof(ViewportShaderSettings)+255)/256)*256,unsigned(layer));
+            std::vector<unsigned> rigid;
             std::array<unsigned,c3x_renderer::render_core::DrawParameterStream::limit> rigid_offset{};
-            for(unsigned i=0;i<selected.size();++i){
-                auto const& chunk=selected[i];
-                if(!chunk.content().rigid_source)continue;
-                if(!chunk.content().instances || chunk.content().instances->size()!=1)return false;
-                auto instance=chunk.content().instances->front();
-                std::copy(std::begin(chunk.natural_projection()),
-                    std::end(chunk.natural_projection()),instance.projection);
-                instance.view[0]=values[i].translation[0];
-                instance.view[1]=values[i].translation[1];
-                instance.view[2]=values[i].depth_translation;
-                instance.view[3]=chunk.content().instance_material;
-                rigid_offset[i]=unsigned(rigid.size());rigid.push_back(instance);
+            for(unsigned i=0;i<selected.size();++i){auto const& chunk=selected[i];if(!chunk.content().rigid_source)continue;
+                auto range=shared_front->find(renderer.shared_instance_draw_key(unsigned(layer),chunk));
+                if(!range || range.count!=1)return renderer.reject_shared_instance_range(unsigned(layer),chunk,shared_front,range);
+                rigid_offset[i]=unsigned(rigid.size());rigid.push_back(range.first);}
+            if(!rigid.empty()){
+                if(!renderer.shared_instances.select_indices(renderer.device,context,shared_front,rigid.data(),unsigned(rigid.size())))return false;
+                work.upload(rigid.size()*sizeof(unsigned),unsigned(layer));context->VSSetShaderResources(15,1,&shared_front->view);
             }
-            if(!rigid.empty() && !renderer.rigid_sources.stream.upload(renderer.device,context,rigid)){
-                std::printf("SANDBOX_RECORD_RIGID_ERROR layer=%u records=%zu reason=0x%08lx\n",
-                    unsigned(layer),rigid.size(),renderer.device->GetDeviceRemovedReason());
-                std::fflush(stdout);return false;
-            }
-            work.upload(rigid.size()*sizeof(c3x_renderer::fidelity::MeshInstance),unsigned(layer));
             auto& mirror=sandbox_active_reflection();
             for(unsigned i=0;i<selected.size();){
                 auto const& chunk=selected[i];
                 auto const& mesh=chunk.content();
                 auto const& settings=values[i];
-                if(streamed)parameters.bind(1,i);
+                if(mesh.rigid_source){
+                    if(!previous_valid || std::memcmp(&previous,&viewport,sizeof(viewport))){
+                        context->UpdateSubresource(renderer.viewport_settings_buffer,0,nullptr,&viewport,0,0);work.upload_buffer(renderer.viewport_settings_buffer);
+                        previous=viewport;previous_valid=true;
+                    }context->VSSetConstantBuffers(1,1,&renderer.viewport_settings_buffer);
+                }else if(streamed)parameters.bind(1,parameter_index[i]);
                 else if(!previous_valid || std::memcmp(&previous,&settings,sizeof(settings))){
                     context->UpdateSubresource(renderer.viewport_settings_buffer,0,nullptr,&settings,0,0);work.upload_buffer(renderer.viewport_settings_buffer);
                     previous=settings;previous_valid=true;
@@ -1492,8 +1676,8 @@ struct SandboxFreshPipeline {
                             next.index_format!=mesh.index_format ||
                             next.projection_kind!=mesh.projection_kind)break;
                     }
-                    context->IASetInputLayout(renderer.rigid_sources.layout);
-                    context->VSSetShader(renderer.rigid_sources.vertex[mirrored?1:0],nullptr,0);
+                    context->IASetInputLayout(renderer.rigid_sources.resident_layout);
+                    context->VSSetShader(renderer.rigid_sources.resident_vertex[mirrored?1:0],nullptr,0);
                     if(layer==geometry_city){
                         context->PSSetShader(mirrored?mirror.ps[1]:renderer.feature_pixel_shader,nullptr,0);
                         context->PSSetShaderResources(116,4,renderer.city_emissive_views.data());
@@ -1501,10 +1685,8 @@ struct SandboxFreshPipeline {
                         ID3D11SamplerState* samplers[]={renderer.terrain_sampler,renderer.decal_sampler};
                         context->PSSetSamplers(0,2,samplers);
                     }
-                    ID3D11Buffer* streams[]={mesh.buffer,renderer.rigid_sources.stream.buffer};
-                    UINT strides[]={32,64};
-                    UINT offsets[]={mesh.vertex_offset,
-                        renderer.rigid_sources.stream.offset+rigid_offset[i]*64};
+                    ID3D11Buffer* streams[]={mesh.buffer,renderer.shared_instances.selection_buffer};
+                    UINT strides[]={32,4};UINT offsets[]={mesh.vertex_offset,renderer.shared_instances.selection_offset+rigid_offset[i]*4};
                     context->IASetVertexBuffers(0,2,streams,strides,offsets);
                     context->DrawIndexedInstanced(mesh.index_count,end-i,0,0,0);
                     work.draw(mesh.index_count,end-i,unsigned(layer));
@@ -1581,17 +1763,7 @@ struct SandboxFreshPipeline {
             if(mirrored && chunk.content().animation_texture)continue;
             if(!renderer.chunk_intersects_region(chunk,viewport,clip,mirrored))continue;
             if(work.enabled)++work.row(unsigned(layer)).accepted_records;
-            ViewportShaderSettings settings=viewport;
-            std::copy(std::begin(chunk.natural_projection()),
-                std::end(chunk.natural_projection()),settings.natural_projection);
-            settings.padding=float(chunk.content().projection_kind);
-            if(renderer.pickup_profile)settings.reserved[1]=layer==geometry_underlay?.5f:
-                layer==geometry_bed?4.f:layer==geometry_water?5.f:0.f;
-            settings.translation[0]+=float(chunk.translation_x());
-            settings.translation[1]+=float(chunk.translation_y());
-            settings.depth_translation=renderer.city_profile?
-                viewport.depth_translation+float(chunk.translation_y()):settings.translation[1];
-            values[selected.size()]=settings;selected.push_back(chunk);
+            selected.push_back(chunk);
             if(selected.size()==values.size() && !flush())return false;
         }
         if(!flush())return false;
@@ -1637,7 +1809,7 @@ struct SandboxFreshPipeline {
         // for every tree body. Their shared/extended inputs are bound below.
         if(default_materials){
             context->PSSetShaderResources(0,UINT(materials.size()),materials.data());
-            context->PSSetShaderResources(25,1,&renderer.source_shadow.view);
+            context->PSSetShaderResources(25,1,&renderer.source_shadow.sampled_view());
         }
         ID3D11ShaderResourceView* reflection_view=mirrored?nullptr:reflection.view;
         context->PSSetShaderResources(121,1,&reflection_view);
@@ -1681,25 +1853,21 @@ struct SandboxFreshPipeline {
         auto slot=admissible?instance_plans.select(key):UINT_MAX;
         if(slot!=UINT_MAX){
             auto& cached=instance_plans[slot];auto& plan=cached.value;
-            auto bytes=count*sizeof(Stream::Instance);
-            if(cached.valid || instance_plan_bytes-plan.bytes+bytes<=64u*1024u*1024u){
-                if(!cached.valid){
-                    std::vector<Stream::Instance> prepared;prepared.reserve(count);
-                    for(auto const* record:selected)for(auto instance:*record->content().instances){
-                        std::copy(record->natural_projection,record->natural_projection+4,instance.projection);
-                        instance.view[0]=float(record->translation_x);instance.view[1]=float(record->translation_y);
-                        instance.view[2]=float(record->translation_y);prepared.push_back(instance);
-                    }
-                    D3D11_BUFFER_DESC desc={};desc.ByteWidth=UINT(bytes);desc.Usage=D3D11_USAGE_IMMUTABLE;
-                    desc.BindFlags=D3D11_BIND_VERTEX_BUFFER;D3D11_SUBRESOURCE_DATA initial={prepared.data(),0,0};
-                    Microsoft::WRL::ComPtr<ID3D11Buffer> buffer;
-                    if(FAILED(renderer.device->CreateBuffer(&desc,&initial,&buffer)))return false;
-                    instance_plan_bytes=instance_plan_bytes-plan.bytes+bytes;plan.buffer=std::move(buffer);
-                    plan.bytes=bytes;plan.count=unsigned(count);cached.valid=true;
-                    ++instance_plan_builds;work.upload(bytes,unsigned(layer));
-                }else ++instance_plan_reuses;
-                context->VSSetShader(visual.vegetation_instances[mirrored?1:0],nullptr,0);
-                ID3D11Buffer* streams[]={mesh.buffer,plan.buffer.Get()};UINT strides[]={32,64},offsets[]={0,0};
+            if(!cached.valid || !renderer.shared_instances.valid(plan.selection) || plan.selection->content!=shared_front){
+                std::vector<unsigned> prepared;prepared.reserve(count);
+                for(auto const* record:selected){auto draw=GeometryDrawReference(*record);auto range=shared_front->find(renderer.shared_instance_draw_key(unsigned(layer),draw));
+                    if(!range || range.count!=record->content().instances->size())return renderer.reject_shared_instance_range(unsigned(layer),draw,shared_front,range);
+                    for(unsigned i=0;i<range.count;++i)prepared.push_back(range.first+i);}
+                auto candidate=renderer.shared_instances.prepare_selection(renderer.device,shared_front,prepared.data(),unsigned(prepared.size()),
+                    key.capacity()*sizeof(key[0])+sizeof(typename decltype(instance_plans)::Entry));
+                if(candidate){instance_plan_bytes=instance_plan_bytes-plan.bytes+candidate->bytes();plan.selection=std::move(candidate);
+                    plan.bytes=plan.selection->bytes();plan.count=unsigned(count);cached.valid=true;++instance_plan_builds;work.upload(count*sizeof(unsigned),unsigned(layer));}
+                else cached.valid=false;
+            }else ++instance_plan_reuses;
+            if(cached.valid){
+                context->IASetInputLayout(renderer.natural.resident_instance_layout);
+                context->VSSetShader(visual.vegetation_instances[mirrored?1:0],nullptr,0);context->VSSetShaderResources(15,1,&shared_front->view);
+                ID3D11Buffer* streams[]={mesh.buffer,plan.selection->buffer};UINT strides[]={32,4},offsets[]={0,0};
                 context->IASetVertexBuffers(0,2,streams,strides,offsets);context->IASetIndexBuffer(mesh.indices,mesh.index_format,0);
                 char skip_depth[8]{};
                 if(!(GetEnvironmentVariableA("C3X_SANDBOX_SKIP_VEGETATION_DEPTH",skip_depth,sizeof(skip_depth)) && skip_depth[0]=='1')){
@@ -1707,61 +1875,34 @@ struct SandboxFreshPipeline {
                     context->DrawIndexedInstanced(mesh.index_count,plan.count,0,0,0);work.draw(mesh.index_count,plan.count,unsigned(layer));++renderer.frame_draw_calls;
                     context->PSSetShader(mirrored?sandbox_active_reflection().ps[4]:renderer.natural.ps[2],nullptr,0);
                 }
-                context->DrawIndexedInstanced(mesh.index_count,plan.count,0,0,0);work.draw(mesh.index_count,plan.count,unsigned(layer));++renderer.frame_draw_calls;
-                return true;
+                context->DrawIndexedInstanced(mesh.index_count,plan.count,0,0,0);work.draw(mesh.index_count,plan.count,unsigned(layer));++renderer.frame_draw_calls;return true;
             }
         }
-        // Capacity pressure retains the established append-only stream path.
-        // No rejected admission changes contributors, alpha ordering or quality.
+        // Admission pressure still submits identical selected indices through
+        // the bounded scratch stream; no source placements are repacked.
 #endif
-        context->VSSetShader(mirrored?renderer.reflection.instance_vs:renderer.natural.instance_vs,nullptr,0);
-        std::vector<Stream::Instance> batch;batch.reserve(Stream::limit);
-        auto flush=[&]() {
-            if(batch.empty())return true;
-            if(!renderer.natural.instance_stream.upload(renderer.device,context,batch))return false;
-            work.upload(batch.size()*sizeof(Stream::Instance),unsigned(layer));
-            ID3D11Buffer* streams[]={mesh.buffer,renderer.natural.instance_stream.buffer};
-            UINT strides[]={32,64},offsets[]={0,renderer.natural.instance_stream.offset};
-            context->IASetVertexBuffers(0,2,streams,strides,offsets);
-            context->IASetIndexBuffer(mesh.indices,mesh.index_format,0);
-            // Cutout foliage is opaque after its authored opacity test. Find
-            // the nearest leaf first, then shade only fragments that survive
-            // depth. The same instance stream, alpha cutoff and draw order are
-            // used by both passes, including equal-depth ties.
+        context->IASetInputLayout(renderer.natural.resident_instance_layout);
+        context->VSSetShader(mirrored?renderer.reflection.resident_instance_vs:renderer.natural.resident_instance_vs,nullptr,0);
+        context->VSSetShaderResources(15,1,&shared_front->view);
+        std::vector<unsigned> batch;batch.reserve(Submission::record_limit);
+        auto flush=[&](){if(batch.empty())return true;
+            if(!renderer.shared_instances.select_indices(renderer.device,context,shared_front,batch.data(),unsigned(batch.size())))return false;
+            work.upload(batch.size()*sizeof(unsigned),unsigned(layer));
+            ID3D11Buffer* streams[]={mesh.buffer,renderer.shared_instances.selection_buffer};UINT strides[]={32,4},offsets[]={0,renderer.shared_instances.selection_offset};
+            context->IASetVertexBuffers(0,2,streams,strides,offsets);context->IASetIndexBuffer(mesh.indices,mesh.index_format,0);
             char skip_depth[8]{};
             if(!(GetEnvironmentVariableA("C3X_SANDBOX_SKIP_VEGETATION_DEPTH",skip_depth,sizeof(skip_depth)) && skip_depth[0]=='1')){
                 context->PSSetShader(visual.vegetation_depth[mirrored?1:0],nullptr,0);
-                context->DrawIndexedInstanced(mesh.index_count,UINT(batch.size()),0,0,0);
-                work.draw(mesh.index_count,batch.size(),unsigned(layer));++renderer.frame_draw_calls;
+                context->DrawIndexedInstanced(mesh.index_count,UINT(batch.size()),0,0,0);work.draw(mesh.index_count,batch.size(),unsigned(layer));++renderer.frame_draw_calls;
                 context->PSSetShader(mirrored?sandbox_active_reflection().ps[4]:renderer.natural.ps[2],nullptr,0);
             }
-            context->DrawIndexedInstanced(mesh.index_count,UINT(batch.size()),0,0,0);
-            work.draw(mesh.index_count,batch.size(),unsigned(layer));++renderer.frame_draw_calls;
-            batch.clear();return true;
-        };
+            context->DrawIndexedInstanced(mesh.index_count,UINT(batch.size()),0,0,0);work.draw(mesh.index_count,batch.size(),unsigned(layer));++renderer.frame_draw_calls;batch.clear();return true;};
         auto clip=source_bounds(settings,rect,mirrored);
         for(auto const& record:group){
-#ifndef C3X_RENDERER64_FRESH
-            if(work.enabled)++work.row(unsigned(layer)).tested_records;
-#endif
             if(!renderer.chunk_intersects_region(GeometryDrawReference(record),settings,clip,mirrored))continue;
-#ifndef C3X_RENDERER64_FRESH
-            if(work.enabled)++work.row(unsigned(layer)).accepted_records;
-#endif
-            auto const& content=record.content();
-            if(!content.instances || content.buffer!=mesh.buffer)return false;
-#ifndef C3X_RENDERER64_FRESH
-            if(work.enabled){work.row(unsigned(layer)).tested_instances+=content.instances->size();
-                work.row(unsigned(layer)).accepted_instances+=content.instances->size();}
-#endif
-            for(auto instance:*content.instances){
-                if(batch.size()==Stream::limit && !flush())return false;
-                std::copy(record.natural_projection,record.natural_projection+4,instance.projection);
-                instance.view[0]=settings.translation[0]+float(record.translation_x);
-                instance.view[1]=settings.translation[1]+float(record.translation_y);
-                instance.view[2]=settings.depth_translation+float(record.translation_y);
-                batch.push_back(instance);
-            }
+            auto draw=GeometryDrawReference(record);auto range=shared_front->find(renderer.shared_instance_draw_key(unsigned(layer),draw));
+            if(!range || range.count!=record.content().instances->size())return renderer.reject_shared_instance_range(unsigned(layer),draw,shared_front,range);
+            for(unsigned i=0;i<range.count;++i){if(batch.size()==Submission::record_limit && !flush())return false;batch.push_back(range.first+i);}
         }
         return flush();
     }
@@ -1872,7 +2013,7 @@ struct SandboxFreshPipeline {
         if(layer>=geometry_natural_terrain ||
             (layer>=geometry_cliff0 && layer<geometry_natural_terrain) ||
             (layer>=geometry_feature && layer<=geometry_site))
-            context->PSSetShaderResources(17,1,&renderer.source_shadow.view);
+            context->PSSetShaderResources(17,1,&renderer.source_shadow.sampled_view());
         if(renderer.city_profile)renderer.cities.scene_lights.bind(context);
         if(layer>=geometry_natural_forest0 && records[layer].front().content().instances)
             return draw_vegetation_instances(records,layer,settings,rect,mirrored);
@@ -1917,7 +2058,9 @@ struct SandboxFreshPipeline {
             bool cached_terrain=false) {
         SandboxPassWorkload::Scope pass(work,mirrored?SandboxPassWorkload::reflection_scene:work.pass);
         auto draw=[&](GeometryLayer layer) {
-            return draw_layer(records,layer,settings,rect,target,depth,mirrored,scale);
+            if(draw_layer(records,layer,settings,rect,target,depth,mirrored,scale))return true;
+            char detail[128];sprintf_s(detail,"layer=%u mirrored=%u records=%zu",unsigned(layer),unsigned(mirrored),records[layer].size());
+            renderer.trace.write("fresh-layer-draw-failed",detail,true);return false;
         };
         if(!mirrored && ((!skip_underlay && !draw(geometry_underlay)) ||
                 !draw(geometry_land)))return false;
@@ -1936,7 +2079,10 @@ struct SandboxFreshPipeline {
         }
         for(unsigned i=0;i<renderer.cliff_bundle.assets.size();++i)
             if(!draw(static_cast<GeometryLayer>(geometry_cliff0+i)))return false;
-        if(!draw_features(records,settings,rect,target,depth,mirrored,scale))return false;
+        if(!draw_features(records,settings,rect,target,depth,mirrored,scale)){
+            char detail[128];sprintf_s(detail,"layer=%u mirrored=%u records=%zu",unsigned(geometry_feature),unsigned(mirrored),records[geometry_feature].size());
+            renderer.trace.write("fresh-layer-draw-failed",detail,true);return false;
+        }
         for(auto layer:{geometry_site,geometry_mine,geometry_farm,geometry_city,geometry_wall})
             if(!draw(layer))return false;
         char wave_diagnostic[8]{};
@@ -2110,60 +2256,6 @@ struct SandboxFreshPipeline {
         return reflection.ensure(renderer.device,reflection_width,reflection_height) &&
             reflection_static.ensure(renderer.device,reflection_width,reflection_height);
     }
-    bool prepare_material_cache(ViewportShaderSettings const& settings,D3D11_RECT rect) {
-        SandboxPassWorkload::Scope pass(work,SandboxPassWorkload::main_material);
-        if(material_valid && material_signature==scene_revision() &&
-           material_camera_x==camera_x && material_camera_y==camera_y)return true;
-        auto* context=renderer.context;
-        float clear[4]={};
-        context->ClearRenderTargetView(material_albedo.target,clear);work.clear(material_albedo.target);
-        context->ClearRenderTargetView(material_normal.target,clear);work.clear(material_normal.target);
-        context->ClearRenderTargetView(material_world.target,clear);work.clear(material_world.target);
-        context->ClearDepthStencilView(material_albedo.depth,
-            D3D11_CLEAR_DEPTH|D3D11_CLEAR_STENCIL,1,0);work.clear(material_albedo.depth);
-        auto const& records=static_visible[geometry_underlay];
-        if(!records.empty()){
-            bind_common(settings,rect,material_albedo.target,material_albedo.depth,
-                false,float(scene_scale));
-            context->PSSetShader(visual.material_albedo,nullptr,0);
-            if(!issue_records(static_visible,geometry_underlay,settings,rect,false))return false;
-            bind_common(settings,rect,material_normal.target,material_albedo.depth,
-                false,float(scene_scale));
-            ID3D11RenderTargetView* outputs[]={material_normal.target,material_world.target};
-            context->OMSetRenderTargets(2,outputs,material_albedo.depth);
-            context->PSSetShader(visual.material_normal_world,nullptr,0);
-            if(!issue_records(static_visible,geometry_underlay,settings,rect,false))return false;
-        }
-        context->OMSetRenderTargets(0,nullptr,nullptr);
-        material_signature=scene_revision();
-        material_camera_x=camera_x;material_camera_y=camera_y;
-        material_valid=true;
-        return true;
-    }
-    bool prepare_terrain_material(ViewportShaderSettings const& settings,D3D11_RECT rect) {
-        SandboxPassWorkload::Scope pass(work,SandboxPassWorkload::main_material);
-        if(terrain_material_valid &&
-           terrain_material_signature==scene_revision() &&
-           terrain_material_camera_x==camera_x && terrain_material_camera_y==camera_y)
-            return true;
-        auto* context=renderer.context;
-        float clear[4]={};
-        context->ClearRenderTargetView(terrain_albedo.target,clear);work.clear(terrain_albedo.target);
-        context->ClearRenderTargetView(terrain_normal.target,clear);work.clear(terrain_normal.target);
-        context->ClearRenderTargetView(terrain_world.target,clear);work.clear(terrain_world.target);
-        context->ClearRenderTargetView(terrain_properties.target,clear);work.clear(terrain_properties.target);
-        context->OMSetRenderTargets(0,nullptr,nullptr);
-        context->CopyResource(terrain_albedo.depth_texture,material_albedo.depth_texture);work.copy(terrain_albedo.depth_texture,true);
-        for(auto layer:{geometry_natural_terrain,geometry_natural_mountain,
-                        geometry_natural_decal})
-            if(!draw_layer(static_visible,layer,settings,rect,terrain_albedo.target,
-                    terrain_albedo.depth,false,float(scene_scale),true))return false;
-        context->OMSetRenderTargets(0,nullptr,nullptr);
-        terrain_material_signature=scene_revision();
-        terrain_material_camera_x=camera_x;terrain_material_camera_y=camera_y;
-        terrain_material_valid=true;
-        return true;
-    }
     c3x_renderer::render_core::RasterScratchIdentity reflection_writer(
             ViewportShaderSettings const& settings,D3D11_RECT rect)const{
         c3x_renderer::render_core::RasterScratchIdentity key;
@@ -2219,7 +2311,7 @@ struct SandboxFreshPipeline {
         context->PSSetConstantBuffers(0,1,&renderer.natural.frames[0]);
         context->PSSetConstantBuffers(2,1,&renderer.shadow_settings_buffer);
         context->PSSetConstantBuffers(4,1,&renderer.source_shadow.table);
-        context->PSSetShaderResources(17,1,&renderer.source_shadow.view);
+        context->PSSetShaderResources(17,1,&renderer.source_shadow.sampled_view());
         ID3D11ShaderResourceView* inputs[]={reflected_terrain_albedo.samples,
             reflected_terrain_normal.view,reflected_terrain_world.view,
             reflected_terrain_properties.view,reflected_terrain_albedo.depth_samples};
@@ -2247,7 +2339,7 @@ struct SandboxFreshPipeline {
         context->PSSetConstantBuffers(0,1,&renderer.natural.frames[0]);
         context->PSSetConstantBuffers(2,1,&renderer.shadow_settings_buffer);
         context->PSSetConstantBuffers(4,1,&renderer.source_shadow.table);
-        context->PSSetShaderResources(17,1,&renderer.source_shadow.view);
+        context->PSSetShaderResources(17,1,&renderer.source_shadow.sampled_view());
         ID3D11ShaderResourceView* inputs[]={terrain_albedo.samples,
             terrain_normal.view,terrain_world.view,terrain_properties.view,
             terrain_albedo.depth_samples};
@@ -2278,7 +2370,7 @@ struct SandboxFreshPipeline {
         ID3D11ShaderResourceView* inputs[]={material_albedo.samples,
             material_normal.view,material_world.view};
         context->PSSetShaderResources(116,3,inputs);
-        context->PSSetShaderResources(25,1,&renderer.source_shadow.view);
+        context->PSSetShaderResources(25,1,&renderer.source_shadow.sampled_view());
         context->Draw(3,0);work.draw(3);
         ID3D11ShaderResourceView* empty[3]={};
         context->PSSetShaderResources(116,3,empty);
@@ -2308,7 +2400,6 @@ struct SandboxFreshPipeline {
         auto fail=[this](char const* stage){
             static_rasters.invalidate_all(c3x_renderer::render_core::raster_error);
             reflection_valid=false;reflected_terrain_material_valid=false;
-            material_valid=false;terrain_material_valid=false;
             renderer.trace.write("fresh-draw-failed",stage,true);
             std::printf("SANDBOX_DRAW_ERROR stage=%s\n",stage);
             std::fflush(stdout);
@@ -2325,7 +2416,6 @@ struct SandboxFreshPipeline {
         float zoom=std::clamp(next_zoom,c3x_renderer::SceneProjection::minimum,c3x_renderer::SceneProjection::maximum);
         if(projection_zoom!=zoom){
             reflection_valid=false;reflected_terrain_material_valid=false;
-            material_valid=false;terrain_material_valid=false;
         }
         projection_zoom=zoom;display_zoom=1.f;
         auto& raster=static_rasters.select(projection_zoom);
@@ -2452,7 +2542,9 @@ struct SandboxFreshPipeline {
 #endif
         if(recenter_region){
             if(cache_full_draws){
-                if(current_raster().valid && region_shift.reason==c3x_renderer::render_core::StaticRegionShift::fractional_phase)++raster.metrics.reasons[c3x_renderer::render_core::raster_fractional_phase];
+                // Existing phase counter includes fractional and derivative-quad lattice misses.
+                if(current_raster().valid && (region_shift.reason==c3x_renderer::render_core::StaticRegionShift::fractional_phase ||
+                    region_shift.reason==c3x_renderer::render_core::StaticRegionShift::derivative_phase))++raster.metrics.reasons[c3x_renderer::render_core::raster_fractional_phase];
                 if(current_raster().valid && region_shift.reason==c3x_renderer::render_core::StaticRegionShift::guard_bounds)++raster.metrics.reasons[c3x_renderer::render_core::raster_guard_bounds];
                 if(current_raster().depth_origin!=renderer.scene_depth_origin)++raster.metrics.reasons[c3x_renderer::render_core::raster_depth_origin];
                 if(settings.translation[0]!=current_raster().translation[0]+float(std::int64_t(camera_x)-current_raster().camera_x) ||
@@ -2473,7 +2565,34 @@ struct SandboxFreshPipeline {
         region_settings.inverse_size[1]=1.f/static_region().height;
         D3D11_RECT region_rect={region_margin_x,region_margin_y,
             LONG(region_margin_x+w),LONG(region_margin_y+h)};
-        if(!update_city_lights() || !shadow.render(all_visible,raster_scope(),visibility_revision,view_revision()))return fail("lights_or_shadow");
+        auto body_inputs=[&](auto visit){
+            // Original ranges remain available to the legacy CPU oracle. The
+            // selected occurrences additionally close reflection and wrapped
+            // placements, including subsequent guarded static strip fills.
+            GeometryDrawView original=renderer.geometry_vertex_buffers;
+            for(unsigned layer=0;layer<geometry_layer_count;++layer)
+                for(auto const& draw:original[layer])visit(layer,draw);
+            for(unsigned layer=0;layer<geometry_layer_count;++layer)
+                for(auto const& record:all_visible[layer])visit(layer,GeometryDrawReference(record));
+            auto clip=source_bounds(region_settings,{0,0,LONG(static_region().width),LONG(static_region().height)},false);
+            contributors(region_settings,clip,false,[&](unsigned layer,auto const& record){
+                if(renderer.water_scene_active && record.water_dependent)return;
+                auto draw=GeometryDrawReference(record);
+                if(renderer.chunk_intersects_region(draw,region_settings,clip,false))visit(layer,draw);
+            });
+        };
+        auto retire_completed_instance_plans=[&]{
+#ifdef C3X_RENDERER64_FRESH
+            instance_plans={};instance_plans.begin();instance_plan_bytes=0;
+#endif
+        };
+        if(!update_city_lights() || !shadow.render(all_visible,raster_scope(),visibility_revision,view_revision(),body_inputs,retire_completed_instance_plans))return fail("lights_or_shadow");
+#ifdef C3X_RENDERER64_FRESH
+        if(shared_front!=shadow.shared_front){instance_plans={};instance_plans.begin();instance_plan_bytes=0;shared_front=shadow.shared_front;}
+#else
+        shared_front=shadow.shared_front;
+#endif
+        if(!renderer.shared_instances.valid(shared_front))return fail("shared_submission");
         D3D11_RECT full={0,0,LONG(w),LONG(h)};
         char unit_control[8]{};
         bool units=GetEnvironmentVariableA("C3X_SANDBOX_UNITS",unit_control,
@@ -2483,7 +2602,16 @@ struct SandboxFreshPipeline {
         std::vector<D3D11_RECT> water_receivers;
         auto mirror=reflected_water_bounds(settings,int(w),int(h),&water_receivers);
 #ifdef C3X_RENDERER64_FRESH
-        if(!sandbox_direct_units.prepare_real(frame,renderer.fresh_unit_poses,visual_hour,projection_zoom,water_receivers))return fail("shared_unit_preparation");
+        // Standalone callers can supply a fresh captured occurrence vector
+        // directly; production calls this same preselection before asset work.
+        bool unit_input_changed=!same_unit_inputs(renderer.fresh_unit_poses,unit_contribution_required);
+        if(unit_input_changed || unit_contribution_scope!=view_revision() || unit_plan_x!=camera_x || unit_plan_y!=camera_y || unit_plan_zoom!=projection_zoom || unit_plan_hour!=visual_hour || unit_plan_season!=frame.season ||
+                unit_plan_bounds!=renderer.unit_bodies.contribution_sequence || unit_plan_reflection!=renderer.reflection.enabled){
+            auto candidates=unit_input_changed?renderer.fresh_unit_poses:unit_contribution_candidates;
+            std::vector<SandboxDirectUnits::ScenePose> required;
+            if(!select_unit_contributors(frame,candidates,required,projection_zoom))return fail("unit_preselection");
+        }
+        if(!sandbox_direct_units.prepare_real(frame,unit_contribution_candidates,visual_hour,unit_contribution_plan))return fail("shared_unit_preparation");
 #endif
         QueryPerformanceCounter(&ticks[1]);
 #ifdef C3X_RENDERER64_FRESH
@@ -2522,7 +2650,7 @@ struct SandboxFreshPipeline {
                 renderer.context->CopyResource(reflection.depth_texture,reflection_static.depth_texture);work.copy(reflection.depth_texture,true);
             }
 #ifdef C3X_RENDERER64_FRESH
-            if(!sandbox_direct_units.draw_real(frame,renderer.fresh_unit_poses,reflection,
+            if(!sandbox_direct_units.draw_real(frame,unit_contribution_candidates,reflection,
                     reflection_scale,visual_hour,true,projection_zoom))return fail("reflected_real_units");
 #endif
             if(units && !sandbox_direct_units.draw(frame,unit_x,unit_y,
@@ -2718,7 +2846,7 @@ struct SandboxFreshPipeline {
         gpu_phases.pass_end(renderer.context);gpu_phases.pass_begin(renderer.context,GpuPhases::body);
 #endif
 #ifdef C3X_RENDERER64_FRESH
-        if(!sandbox_direct_units.draw_real(frame,renderer.fresh_unit_poses,glow.linear,
+        if(!sandbox_direct_units.draw_real(frame,unit_contribution_candidates,glow.linear,
                 float(scene_scale),visual_hour,false,projection_zoom))return fail("real_units");
 #endif
         if(units && !sandbox_direct_units.draw(frame,unit_x,unit_y,
@@ -2786,8 +2914,7 @@ extern "C" __declspec(dllexport) void c3x_sandbox_fresh_metrics(double* phases,
             sandbox_fresh.aquatic_scene.height*4+
         sandbox_fresh.glow.linear.bytes()+
         sandbox_fresh.reflection.bytes()+sandbox_fresh.reflection_static.bytes()+
-        sandbox_fresh.bloom.bytes()+std::size_t(sandbox_fresh.shadow.resolution)*
-            sandbox_fresh.shadow.resolution*4;
+        sandbox_fresh.bloom.bytes()+sandbox_fresh.shadow.bytes();
     if (shadow_box) std::copy(sandbox_fresh.shadow.box,sandbox_fresh.shadow.box+4,shadow_box);
 }
 
@@ -2819,6 +2946,10 @@ extern "C" __declspec(dllexport) void c3x_sandbox_cache_metrics(unsigned* depth_
 }
 
 extern "C" __declspec(dllexport) int c3x_sandbox_prewarm_units(int hour,int season) {
+#ifdef C3X_RENDERER64_FRESH
+    // Synchronize the device and catalogue before adopting prewarmed meshes.
+    c3x_renderer64_begin_unit_assets();
+#endif
     return sandbox_direct_units.prewarm(hour,season)?0:1;
 }
 
@@ -2832,7 +2963,6 @@ extern "C" __declspec(dllexport) void c3x_sandbox_combat_event(int serial,
 extern "C" __declspec(dllexport) void c3x_sandbox_scroll_cache_invalidate() {
     sandbox_fresh.static_rasters.invalidate_all(c3x_renderer::render_core::raster_explicit_reset);
     sandbox_fresh.reflection_valid=false;
-    sandbox_fresh.material_valid=false;sandbox_fresh.terrain_material_valid=false;
     sandbox_fresh.reflected_terrain_material_valid=false;
 }
 extern "C" __declspec(dllexport) void c3x_sandbox_scroll_cache_metrics(unsigned* depth_copies,

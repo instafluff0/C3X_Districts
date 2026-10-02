@@ -16,7 +16,9 @@ struct WorldPreparationRegion {
         if(!wrap || tile<=0)return 0;
         return std::min((cells+extent-1)/extent,((pixels+tile-1)/tile+halo+extent-1)/extent);
     }
-    static unsigned count(c3x_renderer_frame_v1 const& f){
+    static unsigned count(c3x_renderer_frame_v1 const& f,bool canonical=false){
+        if(canonical)return unsigned((f.world_width_tiles+extent-1)/extent)*
+            unsigned((f.world_height_tiles+extent-1)/extent);
         return unsigned((f.world_width_tiles+extent-1)/extent+2*bands(f.world_width_tiles,f.target_width,f.tile_width,f.world_wrap_x!=0))*
             unsigned((f.world_height_tiles+extent-1)/extent+2*bands(f.world_height_tiles,f.target_height,f.tile_height,f.world_wrap_y!=0));
     }
@@ -27,19 +29,19 @@ struct WorldPreparationRegion {
         if(index<unsigned(band))return {int(index)*extent,cells};
         return {int(columns-unsigned(band)+index-unsigned(band))*extent,-cells};
     }
-    bool build(CapturedScene const& scene,c3x_renderer_frame_v1 const& source,unsigned region){
+    bool build(CapturedScene const& scene,c3x_renderer_frame_v1 const& source,unsigned region,bool canonical=false){
         tiles.clear();selected.clear();frame=source;
         if(!scene.matches_world(source) || source.world_width_tiles<=0 || source.world_height_tiles<=0 ||
-           source.world_width_tiles>2048 || source.world_height_tiles>2048 || region>=count(source))return false;
-        int horizontal=bands(source.world_width_tiles,source.target_width,source.tile_width,source.world_wrap_x!=0);
-        int vertical=bands(source.world_height_tiles,source.target_height,source.tile_height,source.world_wrap_y!=0);
+           source.world_width_tiles>2048 || source.world_height_tiles>2048 || region>=count(source,canonical))return false;
+        int horizontal=canonical?0:bands(source.world_width_tiles,source.target_width,source.tile_width,source.world_wrap_x!=0);
+        int vertical=canonical?0:bands(source.world_height_tiles,source.target_height,source.tile_height,source.world_wrap_y!=0);
         unsigned columns=unsigned((source.world_width_tiles+extent-1)/extent+2*horizontal);
         auto x_core=core(region%columns,source.world_width_tiles,horizontal);
         auto y_core=core(region/columns,source.world_height_tiles,vertical);
         int left=x_core[0],top=y_core[0];
         std::unordered_set<std::uint64_t> seen;
-        // Canonical cores plus bounded edge occurrences cover native wrapping
-        // independently of navigation history. Halo coordinates stay unwrapped,
+        // Proven canonical content compiles each core once. Legacy projection
+        // content retains bounded edge cores. Halo coordinates stay unwrapped,
         // matching the authoritative occurrence lattice around each core.
         // Ground and rigid geometry use world units; anchors only supply relative
         // neighbor placement, with the native viewport's projection/detail inputs.
@@ -95,11 +97,12 @@ struct WorldPreparationRegion {
 // another copy of tile/topology inputs. Missing authority is retried on the next
 // appearance revision. A cancelled lease leaves its region pending.
 class WorldPreparationSchedule {
-    std::array<std::uint64_t,9> scope{};
+    std::array<std::uint64_t,13> scope{};
     std::vector<unsigned> pending;
     std::vector<unsigned char> state;
     int center_x=0,center_y=0;
     bool reorder=true;
+    bool canonical=false;
 public:
     unsigned completed=0,unavailable=0;
     void clear(){pending.clear();state.clear();scope={};completed=unavailable=0;reorder=true;}
@@ -115,33 +118,45 @@ public:
         reorder|=center_x!=next_x || center_y!=next_y;center_x=next_x;center_y=next_y;
     }
     void configure(c3x_renderer_frame_v1 const& f,std::uint64_t lifetime,
-                   std::uint64_t assets,unsigned device){
-        std::array<std::uint64_t,9> next={lifetime,assets,device,
+                   std::uint64_t assets,unsigned device,bool canonical_content=false,
+                   std::uint64_t quality=0){
+        // The caller proves canonical compiler inputs and supplies their real
+        // quality/detail identity. Legacy payloads still track projection.
+        std::array<std::uint64_t,13> next={lifetime,assets,device,
             std::uint64_t(f.world_width_tiles),std::uint64_t(f.world_height_tiles),
-            std::uint64_t(f.tile_width),std::uint64_t(f.tile_height),
-            std::uint64_t(f.target_width),std::uint64_t(f.target_height)};
+            std::uint64_t(canonical_content?0:f.tile_width),std::uint64_t(canonical_content?0:f.tile_height),
+            std::uint64_t(canonical_content?0:f.target_width),std::uint64_t(canonical_content?0:f.target_height),
+            std::uint64_t(f.world_wrap_x),std::uint64_t(f.world_wrap_y),std::uint64_t(canonical_content),quality};
         if(scope!=next){
-            clear();scope=next;pending.resize(WorldPreparationRegion::count(f));
+            clear();canonical=canonical_content;scope=next;pending.resize(WorldPreparationRegion::count(f,canonical));
             state.resize(pending.size());
             for(unsigned i=0;i<pending.size();++i)pending[i]=i;
         }
         if(!reorder)return;
         reorder=false;
-        int horizontal=WorldPreparationRegion::bands(f.world_width_tiles,f.target_width,f.tile_width,f.world_wrap_x!=0);
-        int vertical=WorldPreparationRegion::bands(f.world_height_tiles,f.target_height,f.tile_height,f.world_wrap_y!=0);
+        int horizontal=canonical?0:WorldPreparationRegion::bands(f.world_width_tiles,f.target_width,f.tile_width,f.world_wrap_x!=0);
+        int vertical=canonical?0:WorldPreparationRegion::bands(f.world_height_tiles,f.target_height,f.tile_height,f.world_wrap_y!=0);
         constexpr int extent=WorldPreparationRegion::extent;
         unsigned columns=unsigned((f.world_width_tiles+extent-1)/extent+2*horizontal);
         auto distance=[&](unsigned region){
             auto x=WorldPreparationRegion::core(region%columns,f.world_width_tiles,horizontal);
             auto y=WorldPreparationRegion::core(region/columns,f.world_height_tiles,vertical);
             auto dx=std::int64_t(x[0])+x[1]+extent/2-center_x,dy=std::int64_t(y[0])+y[1]+extent/2-center_y;
+            if(canonical){
+                auto distance=[](std::int64_t value,int period,bool wraps){
+                    value=value<0?-value:value;
+                    if(wraps && period>0){value%=period;value=std::min(value,std::int64_t(period)-value);}
+                    return value;
+                };
+                return distance(dx,f.world_width_tiles,f.world_wrap_x!=0)+distance(dy,f.world_height_tiles,f.world_wrap_y!=0);
+            }
             return (dx<0?-dx:dx)+(dy<0?-dy:dy);
         };
         // Pop the nearest first. Stable ties keep preparation deterministic.
         std::stable_sort(pending.begin(),pending.end(),[&](unsigned a,unsigned b){return distance(a)>distance(b);});
     }
     void invalidate(c3x_renderer_frame_v1 const& f,int tile_x,int tile_y){
-        if(state.size()!=WorldPreparationRegion::count(f))return;
+        if(state.size()!=WorldPreparationRegion::count(f,canonical))return;
         auto contains=[](int coordinate,int left,int world,bool wrap){
             for(int offset=wrap?-2:0;offset<=(wrap?2:0);++offset){
                 int occurrence=coordinate+offset*world;
@@ -150,8 +165,8 @@ public:
             }
             return false;
         };
-        int horizontal=WorldPreparationRegion::bands(f.world_width_tiles,f.target_width,f.tile_width,f.world_wrap_x!=0);
-        int vertical=WorldPreparationRegion::bands(f.world_height_tiles,f.target_height,f.tile_height,f.world_wrap_y!=0);
+        int horizontal=canonical?0:WorldPreparationRegion::bands(f.world_width_tiles,f.target_width,f.tile_width,f.world_wrap_x!=0);
+        int vertical=canonical?0:WorldPreparationRegion::bands(f.world_height_tiles,f.target_height,f.tile_height,f.world_wrap_y!=0);
         unsigned columns=unsigned((f.world_width_tiles+WorldPreparationRegion::extent-1)/WorldPreparationRegion::extent+2*horizontal);
         for(unsigned region=0;region<state.size();++region){
             auto x=WorldPreparationRegion::core(region%columns,f.world_width_tiles,horizontal);
@@ -163,6 +178,7 @@ public:
         }
     }
     bool empty()const{return pending.empty();}
+    unsigned regions()const{return unsigned(state.size());}
     unsigned next()const{return pending.back();}
     void finish(bool success){state[pending.back()]=success?1:2;pending.pop_back();++completed;if(!success)++unavailable;}
 };

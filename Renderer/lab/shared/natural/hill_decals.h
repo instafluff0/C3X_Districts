@@ -1,13 +1,15 @@
 #pragma once
 #include "data.h"
 #include "ground.h"
+#include "../../../native/render_core/prepared_mesh.h"
 namespace c3x_renderer { namespace fidelity {
 // Draw the authored rock patches on the exact receiver triangles. Independent
 // rotated grids intersect steep hills and give the patches unrelated normals.
 // UV clipping in the material keeps the footprint without cutting the mesh.
-inline void emit_hill_decals(Tile owner,int column,int row,
+template<class Emit>
+inline bool emit_hill_decal_triangles(Tile owner,int column,int row,
         std::vector<MapVertex> const& surface,std::vector<unsigned> const* indices,
-        std::vector<MapVertex>& decals) {
+        Emit emit) {
     Hill hill=composed_hill(owner);std::uint32_t state=hill.seed;
     constexpr unsigned cells[]={0,0,0,0,1,1,1,2,2,2};
     for(unsigned ordinal=0;ordinal<10;++ordinal){
@@ -32,8 +34,73 @@ inline void emit_hill_decals(Tile owner,int column,int row,
             for(unsigned j=0;j<3;++j)v[j]=project(surface[indices?(*indices)[i+j]:i+j]);
             if(std::max({v[0].u,v[1].u,v[2].u})<0 || std::min({v[0].u,v[1].u,v[2].u})>1 ||
                std::max({v[0].v,v[1].v,v[2].v})<0 || std::min({v[0].v,v[1].v,v[2].v})>1)continue;
-            decals.insert(decals.end(),std::begin(v),std::end(v));
+            if(!emit(v))return false;
         }
     }
+    return true;
+}
+
+// The actual full triangle corner identity and first-reference ordering match
+// PreparedMesh's original expanded-input hash/equality contract. The flat
+// table, outputs and caller's other live arrays share the existing8MiB gate.
+class HillDecalOutput {
+    std::vector<MapVertex>& vertices;
+    std::vector<unsigned>& elements;
+    std::vector<unsigned> slots;
+    std::size_t maximum=0;
+    bool failed=false;
+    bool reject(){failed=true;return false;}
+public:
+    HillDecalOutput(std::vector<MapVertex>& v,std::vector<unsigned>& e):vertices(v),elements(e){}
+    std::size_t scratch_bytes()const{return slots.capacity()*sizeof(unsigned);}
+    bool rejected()const{return failed;}
+    void release_scratch(){std::vector<unsigned>().swap(slots);}
+    template<class Admit> bool initialize(std::size_t corners,Admit admit){
+        constexpr std::size_t limit=8u*1024u*1024u;
+        if(!slots.empty() || !vertices.empty() || !elements.empty() || corners>limit/8)return reject();
+        std::size_t capacity=1;while(capacity<corners*2)capacity*=2;
+        if(!admit(capacity*sizeof(unsigned)))return reject();
+        slots.assign(capacity,~0u);maximum=corners;return admit(0) || reject();
+    }
+    template<class Admit> bool append(MapVertex const* triangle,Admit admit){
+        constexpr std::size_t limit=8u*1024u*1024u;
+        if(failed || slots.empty() || maximum<3 || elements.size()>maximum-3 || !admit(0))return reject();
+        render_core::VertexHash hash{sizeof(MapVertex),false};
+        render_core::VertexEqual equal{sizeof(MapVertex),false};
+        for(unsigned i=0;i<3;++i){
+            auto slot=hash(triangle[i])&(slots.size()-1);
+            while(slots[slot]!=~0u && !equal(vertices[slots[slot]],triangle[i]))slot=(slot+1)&(slots.size()-1);
+            bool added=slots[slot]==~0u;
+            auto v=vertices.capacity(),e=elements.capacity();
+            if(added && vertices.size()==v)v=v?v*2:1;
+            if(elements.size()==e)e=e?e*2:3;
+            if(v>limit/sizeof(MapVertex) || e>limit/sizeof(unsigned))return reject();
+            // reserve temporarily owns both old and new arrays. Charge the
+            // entire replacement allocation; the prior allocation retires
+            // before the second array grows.
+            if(v>vertices.capacity()){
+                if(!admit(v*sizeof(MapVertex)))return reject();
+                vertices.reserve(v);
+                if(!admit(0))return reject();
+            }
+            if(e>elements.capacity()){
+                if(!admit(e*sizeof(unsigned)))return reject();
+                elements.reserve(e);
+            }
+            if(!admit(0))return reject();
+            if(added){slots[slot]=unsigned(vertices.size());vertices.push_back(triangle[i]);}
+            elements.push_back(slots[slot]);
+        }
+        return true;
+    }
+};
+
+
+inline void emit_hill_decals(Tile owner,int column,int row,
+        std::vector<MapVertex> const& surface,std::vector<unsigned> const* indices,
+        std::vector<MapVertex>& decals){
+    emit_hill_decal_triangles(owner,column,row,surface,indices,[&](MapVertex const* v){
+        decals.insert(decals.end(),v,v+3);return true;
+    });
 }
 }}

@@ -4,9 +4,10 @@
 
 namespace c3x_renderer { namespace render_core {
 // Native anchors stay unchanged. A retained raster may move only by whole
-// display pixels at the same zoom: filtering would change coverage and depth.
+// display pixels at the same zoom and derivative quad phase: filtering would
+// change coverage/depth, while an odd shift changes sampled material normals.
 struct StaticRegionShift {
-    enum Reason { ready,fractional_phase,guard_bounds };
+    enum Reason { ready,fractional_phase,guard_bounds,derivative_phase };
     int x=0,y=0;
     bool reusable=false;
     Reason reason=fractional_phase;
@@ -22,6 +23,12 @@ struct StaticRegionShift {
                 px!=std::floor(px)||py!=std::floor(py))return result;
         if(px < -margin_x || px > margin_x ||
                 py < -margin_y || py > margin_y){result.reason=guard_bounds;return result;}
+        // Material normals use screen-space ddx/ddy. At native scene scale 1,
+        // odd pixel shifts change the 2x2 derivative pairing even though every
+        // destination sample has a covered source. Preserve both quad phases.
+        if(std::fmod(px,2.)!=0 || std::fmod(py,2.)!=0){
+            result.reason=derivative_phase;return result;
+        }
         result.x=int(px);result.y=int(py);
         result.reusable=true;
         result.reason=ready;

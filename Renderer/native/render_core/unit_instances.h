@@ -417,7 +417,7 @@ public:
                     same_y=((tile.tile_y-item.tile_y)%frame.world_height_tiles)==0;
                 if(same_x&&same_y&&
                    (tile.tile_flags&C3X_RENDERER_TILE_VISIBLE)&&
-                   (tile.tile_flags&C3X_RENDERER_TILE_RENDER)){
+                   (tile.tile_flags&(C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_PREFETCH))){
                     occurrence=&tile;break;
                 }
             }
@@ -504,6 +504,22 @@ public:
             pose.cursor=(pair.second.flags&C3X_RENDERER_UNIT_CURSOR)&&(pair.second.flags&C3X_RENDERER_UNIT_SELECTED);
             pose.animated=pose.animated||motion||pose.cursor||animated(selected,catalog);
             result.push_back(pose);
+            // Each native captured wrap occurrence is a separate placement; all
+            // borrow the same immutable asset and pose preparation identity.
+            for(unsigned i=0;i<frame.tile_count;++i){auto const& tile=frame.tiles[i];
+                if(&tile==occurrence || !(tile.tile_flags&C3X_RENDERER_TILE_VISIBLE) ||
+                   !(tile.tile_flags&(C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_PREFETCH)))continue;
+                bool same_x=tile.tile_x==item.tile_x,same_y=tile.tile_y==item.tile_y;
+                if(frame.world_wrap_x&&frame.world_width_tiles>0)same_x=((tile.tile_x-item.tile_x)%frame.world_width_tiles)==0;
+                if(frame.world_wrap_y&&frame.world_height_tiles>0)same_y=((tile.tile_y-item.tile_y)%frame.world_height_tiles)==0;
+                if(!same_x||!same_y)continue;
+                auto dx=std::int64_t(tile.anchor_x)-occurrence->anchor_x,dy=std::int64_t(tile.anchor_y)-occurrence->anchor_y;
+                auto x=std::int64_t(pose.draw.body_x)+dx,y=std::int64_t(pose.draw.body_y)+dy;
+                if(x<INT_MIN||x>INT_MAX||y<INT_MIN||y>INT_MAX)continue;
+                if(std::any_of(result.begin(),result.end(),[&](auto const& old){return old.draw.unit_id==pose.draw.unit_id&&old.draw.body_x==x&&old.draw.body_y==y;}))continue;
+                auto wrapped=pose;wrapped.draw.body_x=int(x);wrapped.draw.body_y=int(y);
+                wrapped.tile_x=tile.tile_x;wrapped.tile_y=tile.tile_y;result.push_back(wrapped);
+            }
         }
         // Native drawing chooses the displayed group on each tile. Retaining
         // a body is not permission to show an older stack selection forever.

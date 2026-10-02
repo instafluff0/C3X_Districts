@@ -9,10 +9,13 @@ class DirectUnitPlacementTests(unittest.TestCase):
     def test_native_center_survives_canvas_size_zoom_and_wrap(self):
         source = (Path(__file__).parents[1] / "sandbox/direct_units.h").read_text()
         real = source.split("template<class Target>bool draw_real", 1)[1]
-        preparation = real.split("auto draw=instance.draw;", 1)[1].split(
-            "if(!renderer.prepare_unit_action(action))", 1)[0]
+        # Placement now borrows the pose prepared once for the independent
+        # contributor union. Execute that production preparation and the actual
+        # draw constants/shader arithmetic; dirty-canvas expansion is separate.
+        preparation = source.split("auto& draw=sample.draw;auto& pose=sample.pose;", 1)[1].split(
+            "// Native occurrences carry their own exact wrap/anchor.", 1)[0]
         placement = real.split("float scale=pose.projection_scale*scene_scale;", 1)[1].split(
-            "float values[32]", 1)[0]
+            "context->UpdateSubresource(material", 1)[0]
         shader = source.split("float2 local=", 1)[1].split("Output o;", 1)[0]
         run_cpp(r'''
 #include "Renderer/native/c3x_renderer_api.h"
@@ -20,6 +23,7 @@ class DirectUnitPlacementTests(unittest.TestCase):
 #include <cassert>
 #include <cmath>
 #include <vector>
+#include <limits>
 struct float2 {
  float x,y;
  float2(float a,float b):x(a),y(b){}
@@ -31,14 +35,21 @@ struct Unit {int minimum_canvas;};
 struct Action {bool loop=true;};
 struct Mesh {unsigned bones=1;};
 struct Part {float cutout=0;};
+struct Prepared {c3x_renderer_unit_v1 draw{};c3x_renderer::UnitAnimationPose pose;};
 float2 ground(Instance instance,int minimum,c3x_renderer_frame_v1 frame,
               float scene_scale,bool reflected,float x,float y,float z){
  Unit unit{minimum};Action action;Mesh mesh;auto* source=&mesh;Part part;
- float ground_depth=0;unsigned frame_number=0;float angle=0;bool blended=false;
+ float ground_depth=0,ground_pixels=0,low=0;unsigned frame_number=0;float angle=0;bool blended=false;
  struct {int width=2400,height=1400;} scene;
+ struct {float left=0,top=0,width=1,height=1,dx=0,dy=0;} shadow_fit;
  for(auto const& unused:std::vector<int>{0}){
-  (void)unused;auto draw=instance.draw;
+  (void)unused;Prepared sample;sample.draw=instance.draw;
+  auto& draw=sample.draw;auto& pose=sample.pose;
 ''' + preparation.replace("return false;", "return {-99999,-99999};") + r'''
+  // The native center was formed before minimum-canvas expansion, and no
+  // camera/wrap heuristic may relocate this captured occurrence afterward.
+  assert(pose.anchor_x==instance.draw.body_x+instance.draw.sprite_width*projection/2000);
+  assert(pose.anchor_y==instance.draw.body_y+instance.draw.sprite_height*projection/2000);
   float scale=pose.projection_scale*scene_scale;
 ''' + placement.replace("unit.scale,unit.offset_z", "1,0") + r'''
   float2 origin(placement_values[0],placement_values[1]);
@@ -66,9 +77,12 @@ int main(){
   for(float z:{0.f,.75f}){
    auto pixel=ground(instance,minimum,frame,resolution,reflected,.25f,-.5f,z);
    float guard=reflected?8.f:4.f,scale=projection/1000.f;
-   float ex=(1120+guard+(.25f+.5f)*64*scale)*resolution;
+   // Distinct native wrap occurrences retain their captured centers, including
+   // off-screen casters. They are not folded back to the primary center.
+   float ex=(1120+wrap*span+guard+(.25f+.5f)*64*scale)*resolution;
    float ey=(630+guard+(-.25f*32+(reflected?1:-1)*z*(150.f*128/224))*scale)*resolution;
-   assert(std::abs(pixel.x-ex)<.001f&&std::abs(pixel.y-ey)<.001f);
+   float tolerance=4*std::numeric_limits<float>::epsilon()*std::max({1.f,std::abs(ex),std::abs(ey)});
+   assert(std::abs(pixel.x-ex)<=tolerance&&std::abs(pixel.y-ey)<=tolerance);
    ++cases;
   }
  }

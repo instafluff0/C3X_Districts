@@ -68,7 +68,11 @@
     },
     {
       "path": "generated/shaders/objects/instance_geometry.hlsl",
-      "sha256": "1f529aa78bb8819a874b970de6127e7ca8119fc08b3c201d01b53fea7ac3fad1"
+      "sha256": "8f1823c19f53695df73703df5ceee8f7bc2ffd6b7ea4950c50f5e102bbc11b69"
+    },
+    {
+      "path": "generated/shaders/objects/resident_instance.hlsl",
+      "sha256": "bc8c8c8930fb3e90b870ddff3d41d4e717f1624c839e33983e9e25d4e713bc6c"
     },
     {
       "path": "generated/shaders/objects/resource_skinning.hlsl",

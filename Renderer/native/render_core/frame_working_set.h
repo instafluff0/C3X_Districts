@@ -36,7 +36,9 @@ struct FrameWorkingSet {
         // this allowance under pressure serializes demanded compilation as soon
         // as even a small ready result occupies the pool; cap growth instead.
         auto preparation=std::max(2u,std::min(workers,6u)+1u)*16u*mib;
-        auto reserve=512u*mib+preparation+std::min(workers,6u)*16u*mib;
+        // A backing lane can simultaneously hold bounded packed bytes, decoded
+        // raw bytes and compiler/output scratch (three 16 MiB allocations).
+        auto reserve=512u*mib+preparation+std::min(workers,6u)*48u*mib;
         auto growth=available>reserve?available-reserve:0;
         auto shortfall=available<reserve?reserve-available:0;
         auto capacity=resident>shortfall?resident-shortfall:0;

@@ -4,6 +4,7 @@
 #include "../native/render_core/unit_pose_transition.h"
 #include "../native/scene_projection.h"
 #include "../native/render_core/skin_shadow_bounds.h"
+#include "../native/render_core/unit_contribution_plan.h"
 
 // 0 A.D.'s GPUSkinnedModelRenderer keeps mesh inputs resident and updates only
 // the animation palette for visible models. Here each authored frame is already
@@ -61,7 +62,6 @@ struct SandboxDirectUnits {
         Microsoft::WRL::ComPtr<ID3D11RenderTargetView> target;
         Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> view;
         c3x_renderer::UnitShadow fit{512,false};
-        std::array<float,6> bounds{};
     };
     struct PreparedUnit {
         ScenePose instance;
@@ -69,7 +69,7 @@ struct SandboxDirectUnits {
         c3x_renderer::UnitAnimationPose pose{};
         float low=0,ground_pixels=0,ground_depth=0,angle=0;
         std::vector<PartSample> parts;
-        bool main=false,reflected=false;
+        bool main=false,shadow=false,reflected=false;
         unsigned shadow_slot=UINT_MAX;
         c3x_renderer::UnitShadow fit{512,false};
     };
@@ -80,6 +80,8 @@ struct SandboxDirectUnits {
     std::vector<PreparedUnit> prepared_units;
     c3x_renderer::render_core::FrameSampleCache<std::vector<std::uint64_t>,ShadowSlot,64> shared_shadows;
     ShadowSlot working_shadow;
+    c3x_renderer::render_core::FrameSampleCache<std::vector<std::uint64_t>,std::array<float,32>,256> material_samples;
+    unsigned material_builds=0,material_reuses=0,shadow_contributors=0;
     std::vector<PaletteSlot> prepared_palettes;
     static constexpr unsigned palette_slot_limit=1024;
     unsigned required_samples=0,part_samples=0,shadow_samples=0,shadow_reuses=0,
@@ -665,13 +667,63 @@ float4 PSShadow(Output i):SV_Target {
         ID3D11ShaderResourceView* palette=blended?transition_view.Get():mesh.palette_view.Get();
         renderer.context->VSSetShaderResources(0,1,&palette);return true;
     }
+    using ContributionPlan=c3x_renderer::render_core::UnitContributionPlan;
+    // Selection runs before payload admission. No body palette, ground query,
+    // GPU allocation or material evaluation is required to form the union.
+    bool select_real(c3x_renderer_frame_v1 const& frame,std::vector<ScenePose> const& candidates,
+            float visual_hour,float zoom,std::vector<D3D11_RECT> const& water_receivers,ContributionPlan& plan){
+        using namespace c3x_renderer::render_core;
+        UnitContributionView view;view.width=renderer.content_view_width;view.height=renderer.content_view_height;view.zoom=zoom;
+        auto environment=c3x_renderer::evaluate_environment(visual_hour,frame.season);
+        auto light=c3x_renderer::lighting::key_light(environment);
+        view.shadow=light.intensity>.001f;view.reflection=renderer.reflection.enabled;
+        view.shadow_x=-light.direction[0]/light.direction[2]*c3x_renderer::lighting::object_height_to_world;
+        view.shadow_y=light.direction[1]/light.direction[2]*c3x_renderer::lighting::object_height_to_world;
+        for(auto const& r:water_receivers)view.receivers.push_back({double(r.left),double(r.top),double(r.right),double(r.bottom)});
+        // low_height is a convex nonnegative two-field sum, multiplied by
+        // clamped coast/river ramps. The retained field amplitudes bound every
+        // camera/anchor without constructing per-unit terrain query scratch.
+        double maximum=0;bool ground_known=true;
+        if(frame.tile_count&&!renderer.natural.low_relief.fields[0].pixels.empty())
+            for(auto const& field:renderer.natural.low_relief.fields){
+                ground_known&=std::isfinite(field.amplitude)&&field.amplitude>=0;
+                maximum=std::max(maximum,double(field.amplitude));}
+        double ground=maximum*frame.tile_width/224.*.82;
+        ground_known&=std::isfinite(ground)&&ground>=0;
+        std::vector<UnitContributionCandidate> inputs;inputs.reserve(candidates.size());
+        auto& bodies=renderer.unit_bodies;
+        for(auto const& instance:candidates){
+            if(instance.unit>=bodies.units.size()||instance.action>=bodies.units[instance.unit].actions.size()){plan={};plan.valid=false;return false;}
+            auto const& unit=bodies.units[instance.unit];auto const& action=unit.actions[instance.action];auto const& d=instance.draw;
+            c3x_renderer::NativeUnitDraw native{};native.expected_sprite=native.sprite=native.expected_canvas=native.canvas=1;
+            native.unit_id=d.unit_id;native.action=d.action;native.direction=d.direction;
+            native.action_cursor=d.action_cursor;native.frame_count=d.frame_count;native.body_x=d.body_x;native.body_y=d.body_y;
+            native.sprite_width=d.sprite_width;native.sprite_height=d.sprite_height;native.reduced=d.reduced!=0;
+            native.projection_scale_milli=d.projection_scale_milli;
+            c3x_renderer::UnitAnimationPose pose;
+            if(!c3x_renderer::prepare_native_unit_pose(native,action.loop,pose)){plan={};plan.valid=false;return false;}
+            UnitContributionCandidate input;input.visible=true; // caller's native VISIBLE occurrence contract
+            input.anchor_x=pose.anchor_x;input.anchor_y=pose.anchor_y;input.projection_scale=pose.projection_scale;
+            input.model_scale=unit.scale;input.offset_z=unit.offset_z;input.bounds=bodies.contribution_bound(instance.unit);
+            input.ground_known=ground_known;input.ground_min=0;input.ground_max=ground*1.0001+1e-4;
+            inputs.push_back(input);
+        }
+        plan=ContributionPlan::build(inputs,view);return true;
+    }
     bool prepare_real(c3x_renderer_frame_v1 const& frame,std::vector<ScenePose> const& visible,
             float visual_hour,float zoom,std::vector<D3D11_RECT> const& water_receivers){
-        prepared_units.clear();transitions.retain(visible);shared_shadows.begin();
+        ContributionPlan plan;if(!select_real(frame,visible,visual_hour,zoom,water_receivers,plan))return false;
+        return prepare_real(frame,visible,visual_hour,plan);
+    }
+    bool prepare_real(c3x_renderer_frame_v1 const& frame,std::vector<ScenePose> const& visible,
+            float visual_hour,ContributionPlan const& plan){
+        if(!plan.valid)return false;
+        auto required=plan.required(visible);
+        prepared_units.clear();transitions.retain(required);shared_shadows.begin();material_samples.begin();
         required_samples=part_samples=shadow_samples=shadow_reuses=shadow_overflow=0;
-        main_contributors=reflection_contributors=palette_uploads=0;
-        if(visible.empty())return true;
-        if(visible.size()>4096 || !initialize())return false;
+        main_contributors=reflection_contributors=shadow_contributors=palette_uploads=material_builds=material_reuses=0;
+        if(plan.entries.empty())return true;
+        if(plan.entries.size()>4096 || !initialize())return false;
         auto environment=c3x_renderer::evaluate_environment(visual_hour,frame.season);
         prepared_environment=environment;
         auto light=c3x_renderer::fidelity::light_frame(environment);
@@ -696,8 +748,9 @@ float4 PSShadow(Output i):SV_Target {
         beauty_values[14]=.469979f;beauty_values[16]=float(shadow_fit.extent);
         std::copy(std::begin(beauty_values),std::end(beauty_values),prepared_beauty.begin());
         auto& bodies=renderer.unit_bodies;unsigned palette_slot=0;
-        c3x_renderer::SceneProjection projection_view(renderer.content_view_width,renderer.content_view_height,zoom);
-        for(auto const& instance:visible){
+        for(auto const& entry:plan.entries){
+            if(entry.candidate>=visible.size())return false;
+            auto const& instance=visible[entry.candidate];
             if(instance.unit>=bodies.units.size())return false;
             auto const& unit=bodies.units[instance.unit];
             if(instance.action>=unit.actions.size())return false;
@@ -714,13 +767,13 @@ float4 PSShadow(Output i):SV_Target {
             source_draw.projection_scale_milli=projection;
             if(!c3x_renderer::prepare_native_unit_pose(source_draw,action.loop,pose) ||
                 !c3x_renderer::expand_unit_canvas(draw.body_x,draw.body_y,draw.sprite_width,draw.sprite_height,projection,unit.minimum_canvas))return false;
-            if(frame.world_wrap_x&&frame.world_width_tiles>0){
-                int span=frame.world_width_tiles*frame.tile_width/2;
-                if(span>0){while(draw.body_x>frame.target_width+512){draw.body_x-=span;pose.anchor_x-=span;}
-                    while(draw.body_x+512<0){draw.body_x+=span;pose.anchor_x+=span;}}
-            }
-            if(draw.body_x>frame.target_width+512||draw.body_x+512<0||draw.body_y>frame.target_height+512||draw.body_y+512<0)continue;
-            sample.main=true;++main_contributors;++required_samples;
+            // Native occurrences carry their own exact wrap/anchor. A canvas
+            // heuristic must neither relocate nor discard a pass contributor.
+            sample.main=bool(entry.mask&c3x_renderer::render_core::unit_main_body);
+            sample.shadow=bool(entry.mask&c3x_renderer::render_core::unit_ground_shadow);
+            sample.reflected=bool(entry.mask&c3x_renderer::render_core::unit_reflection);
+            main_contributors+=sample.main;shadow_contributors+=sample.shadow;
+            reflection_contributors+=sample.reflected;++required_samples;
             sample.low=unit_low_ground(frame,float(pose.anchor_x),float(pose.anchor_y));
             sample.ground_pixels=sample.low*frame.tile_width/224.f*.82f;
             sample.ground_depth=float(instance.tile_y)*frame.tile_height*.5f+renderer.geometry_viewport_settings.depth_translation+frame.tile_height*.5f+4.f;
@@ -728,18 +781,15 @@ float4 PSShadow(Output i):SV_Target {
             sample.angle=transitions.facing(draw.unit_id,instance.pose_identity,frame.presentation_time_ticks,
                 frame.presentation_frequency,c3x_renderer::native_unit_yaw(unit.yaw_offset,draw.direction));
             auto bits=[](float value){std::uint32_t result;std::memcpy(&result,&value,sizeof(result));return std::uint64_t(result);};
-            std::vector<std::uint64_t> shadow_key={renderer.content_revision,bits(unit.scale),bits(unit.offset_z),
+            std::vector<std::uint64_t> shadow_key={bodies.catalogue_generation,bits(unit.scale),bits(unit.offset_z),
                 bits(sample.angle),bits(light[0]),bits(light[1]),action.parts.size()};
-            float player_color[3]={};
-            for(unsigned axis=0;axis<3;++axis){float color=float((draw.display_color_rgb>>(16-axis*8))&255)/255;
-                player_color[axis]=color<=.04045f?color/12.92f:std::pow((color+.055f)/1.055f,2.4f);}
             for(auto const& part:action.parts){
                 if(part.mesh>=bodies.meshes.size() || part.texture>=bodies.textures.size() ||
-                    !bodies.textures[part.texture].view || part.mesh>=meshes.size() || !meshes[part.mesh].vertices)return false;
+                    !bodies.textures[part.texture].view || !bodies.meshes[part.mesh].animation || part.mesh>=meshes.size() || !meshes[part.mesh].vertices)return false;
                 auto const& source=*bodies.meshes[part.mesh].animation;
                 PartSample prepared;prepared.frame=std::min(source.frames-1,unsigned(std::floor(pose.phase*double(source.frames-1)+1e-7)));
                 prepared.blended=transitions.sample(draw.unit_id,instance.pose_identity,draw.action,frame.presentation_time_ticks,
-                    frame.presentation_frequency,source,prepared.frame);
+                    frame.presentation_frequency,source,prepared.frame,std::uint64_t(part.mesh)+1);
                 prepared.palette=meshes[part.mesh].palette_view;
                 if(prepared.blended){
                     if(palette_slot==palette_slot_limit){prepared.palette.Reset();}
@@ -757,17 +807,35 @@ float4 PSShadow(Output i):SV_Target {
                     prepared.palette=slot.view;++palette_uploads;
                     }
                 }
-                shadow_key.insert(shadow_key.end(),{part.mesh,part.texture,part.address,bits(part.cutout),prepared.frame,source.bones,std::uint64_t(prepared.blended!=nullptr)});
-                if(prepared.blended)for(unsigned i=0;i<source.bones*16;++i)shadow_key.push_back(bits(prepared.blended[i]));
-                auto& values=prepared.material;
-                std::copy(std::begin(part.tint),std::end(part.tint),values.begin());values[3]=part.mask;
-                for(unsigned axis=0;axis<3;++axis){
-                    values[4+axis]=player_color[axis];values[8+axis]=environment.sun_direction[axis];
-                    values[12+axis]=environment.sun_color[axis];values[16+axis]=environment.moon_direction[axis];
-                    values[20+axis]=environment.moon_color[axis];values[24+axis]=environment.ambient_color[axis];
+                if(sample.main||sample.reflected){
+                    shadow_key.insert(shadow_key.end(),{part.mesh,part.texture,part.address,bits(part.cutout),prepared.frame,source.bones,std::uint64_t(prepared.blended!=nullptr)});
+                    if(prepared.blended)for(unsigned i=0;i<source.bones*16;++i)shadow_key.push_back(bits(prepared.blended[i]));
                 }
-                values[7]=part.strength;values[11]=environment.sun_intensity;values[19]=environment.moon_intensity;
-                values[23]=part.material_model;values[27]=part.cutout;
+                std::vector<std::uint64_t> material_key={bodies.catalogue_generation,part.mesh,part.texture,part.address,
+                    draw.display_color_rgb,bits(part.tint[0]),bits(part.tint[1]),bits(part.tint[2]),bits(part.mask),bits(part.strength),
+                    bits(part.material_model),bits(part.cutout),bits(environment.sun_intensity),bits(environment.moon_intensity)};
+                for(unsigned axis=0;axis<3;++axis)material_key.insert(material_key.end(),{bits(environment.sun_direction[axis]),
+                    bits(environment.sun_color[axis]),bits(environment.moon_direction[axis]),bits(environment.moon_color[axis]),bits(environment.ambient_color[axis])});
+                for(auto texture:part.material_textures)material_key.push_back(texture);
+                auto material_slot=material_samples.select(material_key);
+                auto& values=prepared.material;
+                if(material_slot!=UINT_MAX&&material_samples[material_slot].valid){values=material_samples[material_slot].value;++material_reuses;}
+                else {
+                    float player_color[3]={};
+                    for(unsigned axis=0;axis<3;++axis){float color=float((draw.display_color_rgb>>(16-axis*8))&255)/255;
+                        player_color[axis]=color<=.04045f?color/12.92f:std::pow((color+.055f)/1.055f,2.4f);}
+                    std::copy(std::begin(part.tint),std::end(part.tint),values.begin());values[3]=part.mask;
+                    for(unsigned axis=0;axis<3;++axis){
+                        values[4+axis]=player_color[axis];values[8+axis]=environment.sun_direction[axis];
+                        values[12+axis]=environment.sun_color[axis];values[16+axis]=environment.moon_direction[axis];
+                        values[20+axis]=environment.moon_color[axis];values[24+axis]=environment.ambient_color[axis];
+                    }
+                    values[7]=part.strength;values[11]=environment.sun_intensity;values[19]=environment.moon_intensity;
+                    values[23]=part.material_model;values[27]=part.cutout;
+                    for(unsigned channel=0;channel<4;++channel)values[28+channel]=part.material_textures[channel]!=UINT32_MAX;
+                    if(material_slot!=UINT_MAX){material_samples[material_slot].value=values;material_samples[material_slot].valid=true;}
+                    ++material_builds;
+                }
                 for(unsigned channel=0;channel<4;++channel)if(part.material_textures[channel]!=UINT32_MAX){
                     auto texture=part.material_textures[channel];
                     if(texture>=bodies.textures.size() || !bodies.textures[texture].view)return false;
@@ -775,44 +843,33 @@ float4 PSShadow(Output i):SV_Target {
                 }
                 sample.parts.push_back(std::move(prepared));++part_samples;
             }
-            // One exact pose-local result can serve many occurrences and both
-            // consumers. Native identity/timing still selects every sample.
-            if(shadow_key.size()*sizeof(shadow_key[0])<=64u*1024u)sample.shadow_slot=shared_shadows.select(shadow_key);
-            if(sample.shadow_slot==UINT_MAX)++shadow_overflow;
-            bool cached=sample.shadow_slot!=UINT_MAX && shared_shadows[sample.shadow_slot].prepared;
-            std::array<float,6> local_bounds={FLT_MAX,FLT_MAX,FLT_MAX,-FLT_MAX,-FLT_MAX,-FLT_MAX};
-            if(cached){sample.fit=shared_shadows[sample.shadow_slot].value.fit;local_bounds=shared_shadows[sample.shadow_slot].value.bounds;}
-            else {
-                shadow_points.clear();unsigned part_index=0;
-                for(auto const& part:action.parts){auto const& source=*bodies.meshes[part.mesh].animation;
-                    auto const& p=sample.parts[part_index++];
-                    auto* palette=p.blended?p.blended:source.palettes.data()+std::size_t(p.frame)*source.bones*16;
-                    meshes[part.mesh].shadow_bounds.append(palette,sample.angle,unit.scale,unit.offset_z,shadow_points);
+            if(sample.main||sample.reflected){
+                // One exact pose-local result can serve many occurrences and both
+                // consumers. Native identity/timing still selects every sample.
+                if(shadow_key.size()*sizeof(shadow_key[0])<=64u*1024u)sample.shadow_slot=shared_shadows.select(shadow_key);
+                if(sample.shadow_slot==UINT_MAX)++shadow_overflow;
+                bool cached=sample.shadow_slot!=UINT_MAX && shared_shadows[sample.shadow_slot].prepared;
+                if(cached)sample.fit=shared_shadows[sample.shadow_slot].value.fit;
+                else {
+                    shadow_points.clear();unsigned part_index=0;
+                    for(auto const& part:action.parts){auto const& source=*bodies.meshes[part.mesh].animation;
+                        auto const& p=sample.parts[part_index++];
+                        auto* palette=p.blended?p.blended:source.palettes.data()+std::size_t(p.frame)*source.bones*16;
+                        meshes[part.mesh].shadow_bounds.append(palette,sample.angle,unit.scale,unit.offset_z,shadow_points);
+                    }
+                    if(!sample.fit.fit(shadow_points,light[0],light[1],true))return false;
+                    if(sample.shadow_slot!=UINT_MAX){auto& cached_shadow=shared_shadows[sample.shadow_slot];auto& slot=cached_shadow.value;
+                        slot.fit=sample.fit;cached_shadow.prepared=true;}
                 }
-                if(!sample.fit.fit(shadow_points,light[0],light[1],true))return false;
-                for(auto const& p:shadow_points)for(unsigned axis=0;axis<3;++axis){
-                    local_bounds[axis]=std::min(local_bounds[axis],p[axis]);local_bounds[axis+3]=std::max(local_bounds[axis+3],p[axis]);}
-                if(sample.shadow_slot!=UINT_MAX){auto& entry=shared_shadows[sample.shadow_slot];auto& slot=entry.value;
-                    slot.fit=sample.fit;slot.bounds=local_bounds;entry.prepared=true;}
             }
-            // Convex skin bounds conservatively select water-reflection consumers.
-            // The receiver rectangles already include distortion/filter reach.
-            D3D11_RECT mirror={LONG_MAX,LONG_MAX,LONG_MIN,LONG_MIN};
-            for(unsigned corner=0;corner<8;++corner){
-                c3x_renderer::UnitShadow::Point point={local_bounds[(corner&1)?3:0],local_bounds[(corner&2)?4:1],local_bounds[(corner&4)?5:2]};
-                float x=pose.anchor_x+(point[0]-point[1])*64*pose.projection_scale;
-                float y=pose.anchor_y+sample.ground_pixels+((point[0]+point[1])*32+point[2]*(150.f*128/224))*pose.projection_scale;
-                mirror.left=std::min(mirror.left,LONG(std::floor(projection_view.x(x)+8))-4);
-                mirror.top=std::min(mirror.top,LONG(std::floor(projection_view.y(y)+8))-4);
-                mirror.right=std::max(mirror.right,LONG(std::ceil(projection_view.x(x)+8))+4);
-                mirror.bottom=std::max(mirror.bottom,LONG(std::ceil(projection_view.y(y)+8))+4);
-            }
-            sample.reflected=renderer.reflection.enabled&&std::any_of(water_receivers.begin(),water_receivers.end(),[&](auto const& r){
-                return mirror.left<r.right&&mirror.right>r.left&&mirror.top<r.bottom&&mirror.bottom>r.top;});
-            if(sample.reflected)++reflection_contributors;
             prepared_units.push_back(std::move(sample));
         }
         return true;
+    }
+    std::size_t material_sample_bytes()const{
+        std::size_t bytes=material_samples.size()*sizeof(decltype(material_samples)::Entry);
+        for(unsigned i=0;i<material_samples.size();++i)bytes+=material_samples[i].key.capacity()*sizeof(std::uint64_t);
+        return bytes;
     }
     bool borrow_shadow(PreparedUnit& sample,c3x_renderer_frame_v1 const& frame){
         auto const& unit=renderer.unit_bodies.units[sample.instance.unit];auto const& action=unit.actions[sample.instance.action];
@@ -857,10 +914,6 @@ float4 PSShadow(Output i):SV_Target {
                 // Same native center and sampled travel as the body below.
                 int x=draw.body_x+int(std::int64_t(draw.sprite_width)*projection/2000);
                 int y=draw.body_y+int(std::int64_t(draw.sprite_height)*projection/2000);
-                if(frame.world_wrap_x&&frame.world_width_tiles>0){
-                    int span=frame.world_width_tiles*frame.tile_width/2;
-                    if(span>0){while(x>frame.target_width+512)x-=span;while(x+512<0)x+=span;}
-                }
                 float low=unit_low_ground(frame,float(x),float(y));
                 cursors.ring(float(x+4),float(y+4)-low*frame.tile_width/224.f*.82f,draw.reduced?64.f:128.f,true);
             }
@@ -891,17 +944,17 @@ float4 PSShadow(Output i):SV_Target {
         auto key_light=c3x_renderer::lighting::key_light(environment);
         context->UpdateSubresource(beauty,0,nullptr,prepared_beauty.data(),0,0);work->upload_buffer(beauty);
         for(auto& prepared:prepared_units){
-            if(reflected?!prepared.reflected:!prepared.main)continue;
+            if(reflected?!prepared.reflected:!(prepared.main||prepared.shadow))continue;
             auto const& instance=prepared.instance;auto const& unit=bodies.units[instance.unit];
             auto const& action=unit.actions[instance.action];auto const& pose=prepared.pose;
             float low=prepared.low,ground_pixels=prepared.ground_pixels,ground_depth=prepared.ground_depth,angle=prepared.angle;
-            if(!borrow_shadow(prepared,frame))return false;
+            if((prepared.main||prepared.reflected)&&!borrow_shadow(prepared,frame))return false;
             context->OMSetRenderTargets(1,&scene.target,scene.depth);
             context->OMSetDepthStencilState(body_depth,reflected?0:1);
             context->OMSetBlendState(nullptr,nullptr,~0u);
             context->RSSetViewports(1,&viewport);context->RSSetScissorRects(1,&scissor);
             context->PSSetShader(pixel,nullptr,0);
-            auto* shadow_view=self_shadow_view.Get();context->PSSetShaderResources(1,1,&shadow_view);
+            auto* shadow_view=(prepared.main||prepared.reflected)?self_shadow_view.Get():unshadowed_view;context->PSSetShaderResources(1,1,&shadow_view);
             unsigned part_index=0;
             for(auto const& part:action.parts){
                 if(part.mesh>=bodies.meshes.size()||part.texture>=bodies.textures.size()||
@@ -933,7 +986,7 @@ float4 PSShadow(Output i):SV_Target {
                 context->PSSetShaderResources(0,1,&bodies.textures[part.texture].view);
                 context->PSSetShaderResources(2,4,part_sample.textures.data());
                 context->PSSetSamplers(0,1,&samplers[part.address]);
-                if(!reflected&&key_light.intensity>.001f){
+                if(!reflected&&prepared.shadow&&key_light.intensity>.001f){
                     placement_values[16]=1;
                     placement_values[17]=-key_light.direction[0]/key_light.direction[2]*
                         c3x_renderer::lighting::object_height_to_world;
@@ -949,9 +1002,11 @@ float4 PSShadow(Output i):SV_Target {
                     context->OMSetBlendState(nullptr,nullptr,0xffffffffu);
                     context->PSSetShader(pixel,nullptr,0);
                 }
-                context->UpdateSubresource(placement,0,nullptr,placement_values,0,0);work->upload_buffer(placement);
-                context->DrawIndexed(UINT(source->indices.size()),0,0);work->draw(source->indices.size());
-                ++draws;
+                if(reflected||prepared.main){
+                    context->UpdateSubresource(placement,0,nullptr,placement_values,0,0);work->upload_buffer(placement);
+                    context->DrawIndexed(UINT(source->indices.size()),0,0);work->draw(source->indices.size());
+                    ++draws;
+                }
             }
         }
         if(!reflected)transitions.finish(frame.presentation_time_ticks);

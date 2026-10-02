@@ -46,6 +46,7 @@ class UnitPoseTransitions {
         int action=-1;
         long long started=0,ticks=-1,frequency=0;
         bool blending=false;
+        unsigned sampled_frame=UINT32_MAX;std::uint64_t sampled_source=0;
         std::vector<JointPose> from,current;
         std::array<float,4096> palette{};
     };
@@ -92,7 +93,7 @@ public:
     // A null palette uses the original immutable GPU frame, including legacy
     // packs without rig metadata. This never invokes CPU vertex rendering.
     float const* sample(int id,std::uint64_t incarnation,int action,
-            long long ticks,long long frequency,AnimationMesh const& mesh,unsigned frame){
+            long long ticks,long long frequency,AnimationMesh const& mesh,unsigned frame,std::uint64_t source_identity=0){
         auto const& rig=mesh.rig;std::size_t count=rig.parents.size();
         if(!count||frame>=mesh.frames||frequency<=0||ticks<0)return nullptr;
         auto key=Key{id,rig.binding};auto found=states.find(key);
@@ -105,10 +106,15 @@ public:
         if(fresh)state=State{};
         if(!fresh&&state.ticks==ticks&&state.action==action)
             return state.blending?state.palette.data():nullptr;
+        // Caller identity is an immutable catalogue mesh, independent of the
+        // camera and native occurrence. Touch before finish() can retire it.
+        if(!fresh&&source_identity&&state.sampled_source==source_identity&&state.sampled_frame==frame&&
+                state.action==action&&!state.blending){state.ticks=ticks;return nullptr;}
         bool changed=!fresh&&state.action!=action;
         if(changed){state.from=state.current;state.started=ticks;state.blending=true;}
         state.incarnation=incarnation;state.action=action;state.ticks=ticks;state.frequency=frequency;
         state.current.assign(rig.poses.begin()+frame*count,rig.poses.begin()+(frame+1)*count);
+        state.sampled_frame=frame;state.sampled_source=source_identity;
         // Destination time advances during the blend. A new interruption takes
         // the last displayed mixed pose as its source, not an old clip endpoint.
         double duration=std::min(.12,double(mesh.duration)*.2);

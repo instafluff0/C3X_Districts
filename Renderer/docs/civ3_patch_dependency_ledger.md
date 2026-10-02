@@ -1,5 +1,19 @@
 # Civ III patch dependency ledger
 
+## Prepared world content and shared submission
+
+`required_user_action: []`. No injected source, patch-table symbol, signature or
+supported-build address changes. Existing `Map_Renderer_m71_Draw_Tiles`,
+`Map_Renderer_m19_Draw_Tile_by_XY_and_Flags`, native world capture/update callbacks,
+`Units_Image_Data_advance_animations` and `Animator_update_display` continue
+supplying authoritative facts and composition operations.
+
+Preparation, compact unit contribution bounds, capacity recovery and shared
+mesh/instance submission change within `Renderer/`. The matching bridge/helper
+wire retains version 13; bounded eviction is a diagnostic-only request handled
+through its existing native bridge envelope. Config-off delegation, visibility,
+stack selection and supported-build coverage retain their existing contracts.
+
 ## Shared frame preparation and delivery
 
 `required_user_action: []`. No injected source, patch-table entry or address

@@ -42,6 +42,31 @@ int main(){
 }
 ''')
 
+    def test_prepared_world_projection_identity_preserves_real_detail_and_legacy(self):
+        source=(ROOT/'Renderer/native/world_preparation.h').read_text()
+        method='inline WorldPreparationKey world_preparation_key('+source.split(
+            'inline WorldPreparationKey world_preparation_key(',1)[1].split('\nusing WorldPreparation=',1)[0]
+        run_cpp(r'''
+#include "Renderer/native/c3x_renderer_api.h"
+#include <array>
+#include <algorithm>
+#include <cassert>
+#include <cstdint>
+using WorldPreparationKey=std::array<std::uint64_t,24>;
+'''+method+r'''
+int main(){
+ std::array<std::uint64_t,20> context{};context[14]=64;context[15]=4;context[17]=91;
+ c3x_renderer_frame_v1 frame{};frame.tile_width=128;frame.tile_height=64;frame.target_width=2240;frame.target_height=1260;
+ auto canonical=world_preparation_key(context,frame,true),legacy=world_preparation_key(context,frame);
+ for(int width:{96,128,160,192,224}){frame.tile_width=width;frame.tile_height=width/2;frame.target_width=1400;
+  assert(canonical==world_preparation_key(context,frame,true));assert(legacy!=world_preparation_key(context,frame));}
+ // Actual shader/terrain detail and changed authoritative facts remain identity.
+ context[14]++;assert(canonical!=world_preparation_key(context,frame,true));context[14]--;
+ context[15]++;assert(canonical!=world_preparation_key(context,frame,true));context[15]--;
+ context[17]++;assert(canonical!=world_preparation_key(context,frame,true));
+}
+''')
+
     def test_preparation_key_preserves_content_and_detail_across_camera_changes(self):
         source=(ROOT/'Renderer/native/c3x_renderer.cpp').read_text()
         method='c3x_renderer::fidelity::TerrainCompileInput terrain_compile_input('+source.split(

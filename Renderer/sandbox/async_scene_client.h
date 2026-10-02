@@ -177,6 +177,12 @@ public:
         camera.reset();displayed.reset();published_frame.reset();++session;
         return enabled?publication.setup([&]{clear();return transport.pack(path);}):transport.pack(path);
     }
+#ifdef C3X_RENDERER_BENCHMARK_ORACLE
+    int benchmark_reset(unsigned mode,c3x_renderer_benchmark_oracle_trim_v1& result){
+        camera.reset();displayed.reset();published_frame.reset();++session;
+        return enabled?publication.reconcile([&]{int code=transport.benchmark_reset(mode,result);clear();return code;}):transport.benchmark_reset(mode,result);
+    }
+#endif
     int reset(){
         camera.reset();displayed.reset();published_frame.reset();++session;
         return enabled?publication.reconcile([&]{int code=transport.reset();require_result(code,"reset");clear();return code;}):transport.reset();

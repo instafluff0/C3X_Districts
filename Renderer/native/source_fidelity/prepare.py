@@ -119,6 +119,8 @@ P VSNative(V input) {
 '''
         if name=='objects':
             instance=(LAB/'shaders/objects/instance_geometry.hlsl').read_text()
+            instance=instance.replace('#include "resident_instance.hlsl"',
+                (LAB/'shaders/objects/resident_instance.hlsl').read_text())
             s+='\n'+instance
             (HERE/'instance_caster.hlsl').write_text('#define C3X_INSTANCE_CASTER 1\n'+instance)
         (HERE/f'{name}.hlsl').write_text(s)

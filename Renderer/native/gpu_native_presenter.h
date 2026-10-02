@@ -16,6 +16,26 @@ class NativePresenter {
     ComPtr<IDCompositionTarget> composition_target;
     ComPtr<IDCompositionVisual> visual;
     ComPtr<ID3D11Texture2D> back,display;
+    // One logical frame alias, not an additional physical GPU allocation.
+    // Queued CopyResource work retains its operands independently of this owner.
+    struct SharedImport {
+        ComPtr<ID3D11Texture2D> texture;ComPtr<IDXGIKeyedMutex> mutex;
+        ComPtr<ID3D11Device1> device;HANDLE identity=nullptr;std::uint64_t bytes=0;
+        void reset(){mutex.Reset();texture.Reset();device.Reset();
+            if(identity)CloseHandle(identity);identity=nullptr;bytes=0;}
+        ~SharedImport(){reset();}
+    } shared_import;
+    auto shared_compare()const{
+        using Compare=BOOL (WINAPI*)(HANDLE,HANDLE);
+        static Compare compare=[] {
+            auto module=GetModuleHandleW(L"kernelbase.dll");
+            auto address=module?GetProcAddress(module,"CompareObjectHandles"):nullptr;
+            if(!address){module=GetModuleHandleW(L"kernel32.dll");
+                address=module?GetProcAddress(module,"CompareObjectHandles"):nullptr;}
+            return reinterpret_cast<Compare>(address);
+        }();
+        return compare;
+    }
     ComPtr<ID3D11RenderTargetView> target;
     std::vector<unsigned short> native_pixels;
     std::vector<unsigned> fallback_pixels;
@@ -27,6 +47,7 @@ public:
     bool initialized=false;
     bool caller_thread()const{return !owner||owner==GetCurrentThreadId();}
     void reset(){
+        shared_import.reset();
         if(composition_target){composition_target->SetRoot(nullptr);if(composition){composition->Commit();composition->WaitForCommitCompletion();}}
         visual.Reset();composition_target.Reset();composition.Reset();
         fallback_pixels.clear();native_pixels.clear();native_view.Reset();native_upload.Reset();target.Reset();display.Reset();back.Reset();swap.Reset();window=nullptr;owner=0;width=height=0;initialized=false;
@@ -117,19 +138,54 @@ public:
         if(!device||!context||!display||!back||w!=width||h!=height||
            (!independent&&owner!=GetCurrentThreadId())||(independent&&!initialized)||!swap)
             return C3X_RENDERER_RESULT_BAD_ARGUMENT;
-        ComPtr<ID3D11Texture2D> source;
-        if(FAILED(device->OpenSharedResource1(handle,IID_PPV_ARGS(&source))))return C3X_RENDERER_RESULT_DEVICE_ERROR;
+        ComPtr<ID3D11Device> destination_device,context_device;
+        back->GetDevice(&destination_device);context->GetDevice(&context_device);
+        if(destination_device.Get()!=device||context_device.Get()!=device){
+            shared_import.reset();return C3X_RENDERER_RESULT_BAD_ARGUMENT;}
+        auto compare=shared_compare();
+        bool reused=compare&&shared_import.identity&&shared_import.device.Get()==device&&
+            compare(handle,shared_import.identity)!=FALSE;
+        ComPtr<ID3D11Texture2D> source;ComPtr<IDXGIKeyedMutex> mutex;
+        if(reused){source=shared_import.texture;mutex=shared_import.mutex;}
+        else{
+            shared_import.reset();
+            if(FAILED(device->OpenSharedResource1(handle,IID_PPV_ARGS(&source))))
+                return C3X_RENDERER_RESULT_DEVICE_ERROR;
+        }
         D3D11_TEXTURE2D_DESC desc={};source->GetDesc(&desc);
-        if(desc.Width!=w||desc.Height!=h||desc.Format!=DXGI_FORMAT_B8G8R8A8_UNORM)
-            return C3X_RENDERER_RESULT_BAD_ARGUMENT;
-        ComPtr<IDXGIKeyedMutex> mutex;
-        if(FAILED(source.As(&mutex))||mutex->AcquireSync(1,1000)!=S_OK)
-            return C3X_RENDERER_RESULT_DEVICE_ERROR;
+        if(desc.Width!=w||desc.Height!=h||desc.Format!=DXGI_FORMAT_B8G8R8A8_UNORM){
+            shared_import.reset();return C3X_RENDERER_RESULT_BAD_ARGUMENT;}
+        if(!mutex&&FAILED(source.As(&mutex))){
+            shared_import.reset();return C3X_RENDERER_RESULT_DEVICE_ERROR;}
+        // The existing native frame dimensions bound this owner. Other valid
+        // descriptors keep the original uncached route, including unavailable
+        // comparison support or failure to duplicate a private identity handle.
+        constexpr std::uint64_t import_budget=16u*1024u*1024u;
+        bool eligible=compare&&w&&h&&std::uint64_t(w)<=import_budget/4/h&&
+            desc.MipLevels==1&&desc.ArraySize==1&&desc.SampleDesc.Count==1&&desc.SampleDesc.Quality==0;
+        HANDLE identity=nullptr;
+        struct IdentityClose {HANDLE& value;~IdentityClose(){if(value)CloseHandle(value);}} identity_close{identity};
+        if(!reused&&eligible&&!DuplicateHandle(GetCurrentProcess(),handle,GetCurrentProcess(),&identity,
+            0,FALSE,DUPLICATE_SAME_ACCESS))eligible=false;
+        if(mutex->AcquireSync(1,1000)!=S_OK){
+            shared_import.reset();return C3X_RENDERER_RESULT_DEVICE_ERROR;}
         context->CopyResource(display.Get(),source.Get());
         context->CopyResource(back.Get(),display.Get());
-        auto released=mutex->ReleaseSync(0);context->Flush();
-        if(FAILED(released)||FAILED(device->GetDeviceRemovedReason()))return C3X_RENDERER_RESULT_DEVICE_ERROR;
-        gpu_written();return present(independent);
+        auto released=mutex->ReleaseSync(0);
+        if(SUCCEEDED(released)&&!reused&&eligible){
+            shared_import.texture=source;shared_import.mutex=mutex;shared_import.device=device;
+            shared_import.identity=identity;identity=nullptr;shared_import.bytes=std::uint64_t(w)*h*4;
+        }
+        if(FAILED(released))shared_import.reset();
+        mutex.Reset();source.Reset();
+        context->Flush();
+        if(FAILED(released)||FAILED(device->GetDeviceRemovedReason())){
+            shared_import.reset();return C3X_RENDERER_RESULT_DEVICE_ERROR;}
+        gpu_written();
+        try{auto result=present(independent);
+            if(result==C3X_RENDERER_RESULT_ERROR||result==C3X_RENDERER_RESULT_DEVICE_ERROR)shared_import.reset();
+            return result;
+        }catch(...){shared_import.reset();throw;}
     }
     // Worker-only upload of a completed native CPU surface. Keep pixels outside
     // the native transfer rectangle from the previous displayed frame.

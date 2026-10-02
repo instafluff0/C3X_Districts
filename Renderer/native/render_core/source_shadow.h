@@ -3,6 +3,7 @@
 #include <map>
 #include "shader_cache.h"
 #include "instance_stream.h"
+#include "shared_instance_submission.h"
 #include <array>
 #include <atomic>
 #include <vector>
@@ -20,10 +21,10 @@ class SourceShadow {
     std::uint64_t epoch=0;
     ID3D11Texture2D* texture=nullptr;
     std::array<ID3D11RenderTargetView*,32> targets{};
-    ID3D11VertexShader* vertex=nullptr,*instance_vertex=nullptr;
-    ID3D11InputLayout* instance_layout=nullptr;
+    ID3D11VertexShader* vertex=nullptr,*instance_vertex=nullptr,*resident_instance_vertex=nullptr;
+    ID3D11InputLayout* instance_layout=nullptr,*resident_instance_layout=nullptr;
     ID3D11PixelShader *opaque=nullptr,*cutout=nullptr;
-    ID3D11VertexShader* rigid_vertex=nullptr;
+    ID3D11VertexShader* rigid_vertex=nullptr,*resident_rigid_vertex=nullptr;
     ID3D11InputLayout *layout=nullptr,*feature_layout=nullptr,*natural_layout=nullptr,*city_layout=nullptr;
     ID3D11Buffer* caster_settings=nullptr;
     ID3D11RasterizerState* raster=nullptr;
@@ -31,9 +32,19 @@ class SourceShadow {
     template<class T> void drop(T*& p){if(p)p->Release();p=nullptr;}
 public:
     ID3D11ShaderResourceView* view=nullptr;
+    // Borrowed sampling overrides never transfer ownership of either SRV.
+    ID3D11ShaderResourceView* borrowed_view=nullptr;
+    ID3D11ShaderResourceView* const& sampled_view()const{return borrowed_view?borrowed_view:view;}
     ID3D11Buffer* table=nullptr;
     unsigned hits=0,rebuilt=0,draws=0;
     InstanceStream instance_stream;
+    struct MissingInstanceSource {
+        bool present=false;
+        unsigned caster=0,layer=0,expected=0,retained=0;
+        float material=0;
+        std::uint64_t version=0,generation=0;
+    };
+    MissingInstanceSource missing_instance_source;
     struct Bounds { float low[3]={},high[3]={}; };
     struct Caster {
         DXGI_FORMAT index_format=DXGI_FORMAT_R32_UINT;
@@ -53,7 +64,8 @@ public:
     ~SourceShadow(){clear();}
     void clear_cached_pages(){pages={};basis={};epoch=0;}
     void clear(){
-        instance_stream.clear();drop(instance_vertex);drop(instance_layout);drop(rigid_vertex);
+        borrowed_view=nullptr;
+        instance_stream.clear();drop(instance_vertex);drop(resident_instance_vertex);drop(instance_layout);drop(resident_instance_layout);drop(rigid_vertex);drop(resident_rigid_vertex);
         drop(view);drop(texture);for(auto& t:targets)drop(t);
         drop(vertex);drop(opaque);drop(cutout);drop(layout);drop(feature_layout);drop(natural_layout);drop(city_layout);drop(caster_settings);
         drop(table);drop(raster);drop(maximum);clear_cached_pages();
@@ -100,12 +112,23 @@ public:
             if(SUCCEEDED(hr))hr=device->CreateVertexShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,&instance_vertex);
             if(SUCCEEDED(hr))hr=create_instance_layout(device,code,&instance_layout);
             if(SUCCEEDED(hr)){
+                drop(code);drop(errors);hr=compile_cached(instance_path.c_str(),"VSResidentInstance","vs_5_0",&code,&errors);
+                if(errors)OutputDebugStringA(static_cast<char const*>(errors->GetBufferPointer()));
+                if(SUCCEEDED(hr))hr=device->CreateVertexShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,&resident_instance_vertex);
+                if(SUCCEEDED(hr))hr=create_resident_instance_layout(device,code,&resident_instance_layout);
+            }
+            if(SUCCEEDED(hr)){
                 std::wstring rigid_path(path);auto rigid_slash=rigid_path.find_last_of(L"/\\");
                 rigid_path=rigid_path.substr(0,rigid_slash)+L"/../city_fidelity/rigid_caster.hlsl";
                 drop(code);drop(errors);
                 hr=compile_cached(rigid_path.c_str(),"VSSharedCaster","vs_5_0",&code,&errors);
                 if(errors)OutputDebugStringA(static_cast<char const*>(errors->GetBufferPointer()));
                 if(SUCCEEDED(hr))hr=device->CreateVertexShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,&rigid_vertex);
+                if(SUCCEEDED(hr)){
+                    drop(code);drop(errors);hr=compile_cached(rigid_path.c_str(),"VSResidentSharedCaster","vs_5_0",&code,&errors);
+                    if(errors)OutputDebugStringA(static_cast<char const*>(errors->GetBufferPointer()));
+                    if(SUCCEEDED(hr))hr=device->CreateVertexShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,&resident_rigid_vertex);
+                }
             }
         }
         if(SUCCEEDED(hr) && compile("PSOpaque","ps_5_0"))
@@ -300,8 +323,10 @@ public:
     bool prepare(ID3D11DeviceContext* context,std::array<float,12> const& next_basis,
                  std::vector<Bounds> const& receivers,std::vector<Caster> const& casters,
                  Bind bind,std::atomic<bool> const* cancellation,PreparedCasters* prepared=nullptr,
-                 std::set<std::pair<int,int>> const* selected_pages=nullptr) {
-        hits=rebuilt=draws=0;++epoch;
+                 std::set<std::pair<int,int>> const* selected_pages=nullptr,
+                 SharedInstanceSubmission::Lease const& shared_instances={},
+                 SharedInstanceSubmission* instance_selection=nullptr) {
+        hits=rebuilt=draws=0;missing_instance_source={};++epoch;
         if(basis!=next_basis){basis=next_basis;pages={};}
         // A prepared pass may share the exact receiver-page union across regions.
         // The ordinary receiver query and the same 32-page residency cap remain.
@@ -357,6 +382,40 @@ public:
                 context->UpdateSubresource(caster_settings,0,nullptr,settings,0,0);
                 bool alpha=bind(c.binding==0xffffffffu?c.layer:c.binding);context->PSSetShader(alpha?cutout:opaque,nullptr,0);
                 if(c.instances){
+                    if(shared_instances){
+                        auto range=shared_instances->source(c.instances,c.instance_material,unsigned(c.instances->size()));
+                        if(!range){
+                            auto retained=shared_instances->source(c.instances,c.instance_material);
+                            missing_instance_source={true,unsigned(i),c.layer,unsigned(c.instances->size()),retained.count,
+                                c.instance_material,c.version,c.content_generation};
+                            return false;
+                        }
+                        if(!shared_instances->view || !instance_selection)return false;
+                        // Reuse the union allocation; shadow page/wrap offsets
+                        // come from b0. Preserve the selected index sequence
+                        // while merging only adjacent compatible state.
+                        auto compatible=[&](Caster const& next){return next.instances && next.vertices==c.vertices &&
+                            next.indices==c.indices && next.count==c.count && next.index_format==c.index_format &&
+                            next.binding==c.binding && next.layer==c.layer && next.rigid==c.rigid &&
+                            next.vertex_offset==c.vertex_offset && next.index_offset==c.index_offset &&
+                            !std::memcmp(next.offset,c.offset,sizeof(c.offset));};
+                        std::vector<unsigned> indices;indices.reserve(range.count);
+                        for(unsigned n=0;n<range.count;++n)indices.push_back(range.first+n);
+                        auto next=ordinal+1;
+                        for(;next<selected.size();++next){auto const& part=casters[selected[next]];
+                            if(!compatible(part))break;
+                            auto following=shared_instances->source(part.instances,part.instance_material,unsigned(part.instances->size()));
+                            if(!following || following.count>SharedInstanceSubmission::record_limit-indices.size())break;
+                            for(unsigned n=0;n<following.count;++n)indices.push_back(following.first+n);
+                        }
+                        ordinal=next-1;
+                        if(!instance_selection->select_indices(nullptr,context,shared_instances,indices.data(),unsigned(indices.size())))return false;
+                        context->VSSetShader(c.rigid?resident_rigid_vertex:resident_instance_vertex,nullptr,0);context->IASetInputLayout(resident_instance_layout);
+                        context->VSSetShaderResources(15,1,&shared_instances->view);
+                        ID3D11Buffer* streams[]={c.vertices,instance_selection->selection_buffer};UINT strides[]={32,4},offsets[]={c.vertex_offset,instance_selection->selection_offset};
+                        context->IASetVertexBuffers(0,2,streams,strides,offsets);context->IASetIndexBuffer(c.indices,c.index_format,c.index_offset);
+                        context->DrawIndexedInstanced(c.count,UINT(indices.size()),0,0,0);++draws;continue;
+                    }
                     std::vector<fidelity::MeshInstance> data;
                     std::size_t next=ordinal;
                     for(;next<selected.size();++next){

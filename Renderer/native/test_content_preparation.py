@@ -227,9 +227,8 @@ int main(){
    assert(a.world_low==b.world_low && a.world_high==b.world_high && a.projected_bounds.extent==b.projected_bounds.extent);
    assert(a.vertex_stride==b.vertex_stride && a.index_stride==b.index_stride && a.shared_grid==b.shared_grid);}
  };
- // Keep exact default-lattice recovery parity, and exercise admitted bounded
- // work separately. The uniform64-lattice hill exceeds the compiler's8MiB
- // raw transient bound even though its packed result fits the queue budget.
+ // Exercise exact foreground/worker geometry and dependency parity at both
+ // lattice sizes. Default64 hill admission is checked separately below.
  for(bool bounded:{false,true})for(int real:{2,5,6,8}){
   std::fill(data.begin(),data.end(),2+(real<<8));world.update(dimensions,data.data(),data.size(),real);
   TerrainCompileInput input;input.tile_x=8;input.tile_y=4;input.real_terrain_type=real;input.ground=2;
@@ -249,18 +248,42 @@ int main(){
   }
   pool.clear();
  }
- // Rejection is admission, not a geometry discrepancy or an oversized ready
- // result. Foreground recovery still runs the very same production compiler.
+ // The same default64 hill used to fail because expanded rock triangles
+ // exceeded the raw transient cap. Indexed emission now admits it without
+ // changing any packed byte or dependency; unbounded recovery stays expanded.
  std::fill(data.begin(),data.end(),2+(5<<8));world.update(dimensions,data.data(),data.size(),20);
  TerrainCompileInput oversized;oversized.tile_x=8;oversized.tile_y=4;oversized.real_terrain_type=5;
  oversized.ground=2;oversized.tile_width=128;oversized.tile_height=64;oversized.target_height=480;
  oversized.world_revision=20;oversized.key[0]=20;
  auto recovery=compile_terrain_surfaces(natural,assets,world,oversized,foreground,[]{return false;},false);
  assert(recovery && recovery->bytes()<TerrainPreparation::byte_limit);
- assert(!compile_terrain_surfaces(natural,assets,world,oversized,foreground,[]{return false;},true));
+ auto bounded_hill=compile_terrain_surfaces(natural,assets,world,oversized,foreground,[]{return false;},true);
+ assert(bounded_hill);equal(*bounded_hill,*recovery);
+ auto before_hill=pool.statistics();
  pool.configure({{oversized.key,oversized}},[&](auto const& job,auto const& stop,unsigned worker){
   return compile_terrain_surfaces(natural,assets,world,job,scratch[worker],[&]{return stop.load();},true);
- });pool.resume();assert(!pool.take(oversized.key));pool.pause();assert(pool.statistics().rejected==1);pool.clear();
+ });pool.resume();auto prepared_hill=pool.take(oversized.key);assert(prepared_hill);equal(*prepared_hill,*recovery);
+ pool.pause();auto after_hill=pool.statistics();
+ assert(after_hill.rejected==before_hill.rejected && after_hill.consumed==before_hill.consumed+1);pool.clear();
+ // Preserve explicit bounded rejection independently of redundant triangle
+ // expansion. No denied table allocation may enter the ready queue.
+ std::vector<MapVertex> rejected_vertices;std::vector<unsigned> rejected_indices;
+ HillDecalOutput rejected_output(rejected_vertices,rejected_indices);
+ assert(!rejected_output.initialize(8u*1024u*1024u,[](std::size_t){return true;}));
+ assert(rejected_output.rejected() && rejected_output.scratch_bytes()==0);
+ assert(rejected_vertices.empty() && rejected_indices.empty());
+ // A supported default64 legacy expanded input still rejects through the
+ // actual compiler and queue; unbounded recovery remains available and exact.
+ auto excessive=oversized;excessive.indexed=false;excessive.key[0]=21;
+ auto large_recovery=compile_terrain_surfaces(natural,assets,world,excessive,foreground,[]{return false;},false);
+ assert(large_recovery && large_recovery->bytes()<TerrainPreparation::byte_limit);
+ auto before_rejection=pool.statistics();
+ pool.configure({{excessive.key,excessive}},[&](auto const& job,auto const& stop,unsigned worker){
+  return compile_terrain_surfaces(natural,assets,world,job,scratch[worker],[&]{return stop.load();},true);
+ });pool.resume();assert(!pool.take(excessive.key));pool.pause();auto after_rejection=pool.statistics();
+ assert(after_rejection.rejected==before_rejection.rejected+1 && after_rejection.consumed==before_rejection.consumed);pool.clear();
+ auto large_retry=compile_terrain_surfaces(natural,assets,world,excessive,foreground,[]{return false;},false);
+ assert(large_retry);equal(*large_retry,*large_recovery);
  // Cancel after mesh generation has begun; private scratch must be reusable.
  unsigned checks=0;
  assert(!compile_terrain_surfaces(natural,assets,world,oversized,foreground,[&]{return ++checks==20;},false));

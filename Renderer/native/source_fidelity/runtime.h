@@ -2,6 +2,7 @@
 #include "../../lab/shared/natural/world.h"
 #include "coast_join.h"
 #include "../render_core/instance_stream.h"
+#include "../render_core/shared_instance_submission.h"
 // Generic natural payload. Source-specific names and recipes are compiled offline.
 namespace c3x_renderer { namespace fidelity {
 struct Natural : NaturalWorld {
@@ -12,7 +13,11 @@ struct Natural : NaturalWorld {
     struct InstanceMesh {ID3D11Buffer*vertices=nullptr,*indices=nullptr;unsigned count=0;ID3D11Buffer*material=nullptr;};
     std::vector<InstanceMesh> instance_meshes;
     std::size_t instance_mesh_bytes=0;
-    ID3D11VertexShader*instance_vs=nullptr;ID3D11InputLayout*instance_layout=nullptr;
+    render_core::SharedSourceResidency instance_residency;
+    std::shared_ptr<void const> pin_instances()const{return instance_residency.pin();}
+    std::size_t resident_instance_bytes()const{return instance_residency.bytes();}
+    std::size_t resident_instance_gpu_bytes()const{return instance_residency.gpu_bytes();}
+    ID3D11VertexShader*instance_vs=nullptr,*resident_instance_vs=nullptr;ID3D11InputLayout*instance_layout=nullptr,*resident_instance_layout=nullptr;
     std::array<std::array<ID3D11ShaderResourceView*,31>,2> surface_bindings{};
     std::vector<std::array<ID3D11ShaderResourceView*,31>> body_bindings;
     render_core::InstanceStream instance_stream;
@@ -21,8 +26,8 @@ struct Natural : NaturalWorld {
     template<class T>void drop(T*&p){if(p)p->Release();p=nullptr;}
     void reset(){
         low_relief.fields={};
-        instance_stream.clear();drop(instance_vs);drop(instance_layout);
-        for(auto&m:instance_meshes){drop(m.vertices);drop(m.indices);drop(m.material);}instance_meshes.clear();instance_mesh_bytes=0;
+        instance_stream.clear();drop(instance_vs);drop(resident_instance_vs);drop(instance_layout);drop(resident_instance_layout);
+        for(auto&m:instance_meshes){drop(m.vertices);drop(m.indices);drop(m.material);}instance_meshes.clear();instance_mesh_bytes=0;instance_residency.clear();
         surface_bindings={};body_bindings.clear();
         drop(decal_depth);reset_world();for(auto&p:textures)drop(p);textures.clear();fields.clear();materials.clear();bodies.clear();recipes.clear();surface_recipes.clear();surface_vertices.clear();
         for(int i=0;i<3;i++){drop(vs[i]);drop(ps[i]);drop(layout[i]);drop(frames[i]);}ready=false;}
@@ -77,9 +82,20 @@ struct Natural : NaturalWorld {
             if(SUCCEEDED(hr))hr=render_core::create_instance_layout(device,code,&instance_layout);
             drop(code);
             if(FAILED(hr)){drop(instance_vs);drop(instance_layout);return false;}
+            code=nullptr;errors=nullptr;
+            hr=render_core::compile_cached(instance_path.c_str(),"VSResidentInstance","vs_5_0",&code,&errors);
+            if(errors){OutputDebugStringA(static_cast<char const*>(errors->GetBufferPointer()));drop(errors);}
+            if(SUCCEEDED(hr))hr=device->CreateVertexShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,&resident_instance_vs);
+            if(SUCCEEDED(hr))hr=render_core::create_resident_instance_layout(device,code,&resident_instance_layout);
+            drop(code);
+            if(FAILED(hr)){drop(instance_vs);drop(resident_instance_vs);drop(instance_layout);drop(resident_instance_layout);return false;}
         }
         if(instance_meshes.empty())instance_meshes.resize(bodies.size());
         auto&m=instance_meshes[body];if(m.vertices)return true;
+        auto staging=bodies[body].vertices.size()*(sizeof(BodyVertex)*2+sizeof(unsigned)*2+sizeof(std::array<unsigned,8>)+96u);
+        if(!instance_residency.reserve(staging,instance_mesh_bytes))return false;
+        struct RetireStaging {render_core::SharedSourceResidency& account;std::size_t& committed;
+            ~RetireStaging(){account.reserve(0,committed);}} retire_staging{instance_residency,instance_mesh_bytes};
         std::map<std::array<unsigned,8>,unsigned> lookup;std::vector<BodyVertex> vertices;std::vector<unsigned> indices;
         for(auto const&v:bodies[body].vertices){
             std::array<unsigned,8> key;std::memcpy(key.data(),&v,sizeof(v));auto found=lookup.find(key);
@@ -87,7 +103,7 @@ struct Natural : NaturalWorld {
             indices.push_back(found->second);
         }
         std::size_t bytes=vertices.size()*sizeof(BodyVertex)+indices.size()*sizeof(unsigned);
-        if(instance_mesh_bytes+bytes+32>32u*1024u*1024u)return false;
+        if(instance_mesh_bytes+bytes+32>32u*1024u*1024u || !instance_residency.reserve(staging,instance_mesh_bytes+bytes+32))return false;
         D3D11_BUFFER_DESC d={};d.ByteWidth=UINT(vertices.size()*sizeof(BodyVertex));d.Usage=D3D11_USAGE_IMMUTABLE;d.BindFlags=D3D11_BIND_VERTEX_BUFFER;
         D3D11_SUBRESOURCE_DATA input={};input.pSysMem=vertices.data();
         if(FAILED(device->CreateBuffer(&d,&input,&m.vertices)))return false;
@@ -102,8 +118,8 @@ struct Natural : NaturalWorld {
         if(FAILED(device->CreateBuffer(&d,&input,&m.material))){drop(m.vertices);drop(m.indices);return false;}
         m.count=unsigned(indices.size());instance_mesh_bytes+=bytes+sizeof(values);return true;
     }
-    void bind_instances(ID3D11DeviceContext*c,unsigned body){
-        c->VSSetConstantBuffers(9,1,&instance_meshes[body].material);c->VSSetShader(instance_vs,nullptr,0);c->IASetInputLayout(instance_layout);
+    void bind_instances(ID3D11DeviceContext*c,unsigned body,bool resident=false){
+        c->VSSetConstantBuffers(9,1,&instance_meshes[body].material);c->VSSetShader(resident?resident_instance_vs:instance_vs,nullptr,0);c->IASetInputLayout(resident?resident_instance_layout:instance_layout);
     }
     void update(ID3D11DeviceContext*c,EnvironmentState const&e,float const*light){
         auto values=frame_settings(e,light);

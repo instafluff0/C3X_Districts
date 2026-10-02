@@ -3,13 +3,13 @@
 namespace c3x_renderer { namespace environment_refresh {
 struct Reflection {
     render_core::LinearTarget linear;
-    ID3D11VertexShader*vs[5]={};ID3D11VertexShader*instance_vs=nullptr;ID3D11PixelShader*ps[5]={};
+    ID3D11VertexShader*vs[5]={};ID3D11VertexShader*instance_vs=nullptr,*resident_instance_vs=nullptr;ID3D11PixelShader*ps[5]={};
     ID3D11Buffer*frame=nullptr;
     float height_pixels=0,depth_metric=0;
     bool enabled=true;
     unsigned native_extent=136,native_height=136;
     template<class T>void drop(T*&p){if(p)p->Release();p=nullptr;}
-    void reset(){linear.reset();drop(instance_vs);for(auto&p:vs)drop(p);for(auto&p:ps)drop(p);drop(frame);}
+    void reset(){linear.reset();drop(instance_vs);drop(resident_instance_vs);for(auto&p:vs)drop(p);for(auto&p:ps)drop(p);drop(frame);}
     ~Reflection(){reset();}
     bool ensure(ID3D11Device*device,std::string const&root,char const*directory="environment_refresh",unsigned extent=136,unsigned height=0){
         if(!height)height=extent;
@@ -31,6 +31,12 @@ struct Reflection {
                 if(errors){OutputDebugStringA(static_cast<char const*>(errors->GetBufferPointer()));drop(errors);}
                 if(SUCCEEDED(hr))hr=device->CreateVertexShader(v->GetBufferPointer(),v->GetBufferSize(),nullptr,&instance_vs);
                 drop(v);
+                if(SUCCEEDED(hr)){
+                    hr=render_core::compile_cached(wide.c_str(),"VSResidentReflectionInstance","vs_5_0",&v,&errors);
+                    if(errors){OutputDebugStringA(static_cast<char const*>(errors->GetBufferPointer()));drop(errors);}
+                    if(SUCCEEDED(hr))hr=device->CreateVertexShader(v->GetBufferPointer(),v->GetBufferSize(),nullptr,&resident_instance_vs);
+                    drop(v);
+                }
             }
             if(FAILED(hr)){reset();return false;}
         }

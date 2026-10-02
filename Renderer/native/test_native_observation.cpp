@@ -17,6 +17,7 @@ static_assert(offsetof(JGLSprite,Bits_Data)==0x14&&offsetof(JGLSprite,Width)==0x
 struct Sprite {void** vtable;JGLSprite* jgl_sprite;};
 struct PCX_Image {struct {JGL_Image* Image;} JGL;};
 struct OpenGLRenderer;
+struct Unit; // Native capture keeps an opaque selected-unit identity.
 enum {LDO_NEVER,LDO_WINE,LDO_ALWAYS,IS_OK};
 struct LoadedConfig {char const* name;LoadedConfig* next;};
 LoadedConfig fixture_file_config={"configured",nullptr},fixture_base_config={"(base)",&fixture_file_config};

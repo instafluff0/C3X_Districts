@@ -32,7 +32,7 @@
     if(tile.real_terrain_type==5){
         unsigned layer=unified_mountain_surface?2u:0u;
         auto indices=index_natural_grids?&natural_grid_indices[unified_mountain_surface?1:0]:nullptr;
-        emit_hill_decals(owner,nc,nr,natural_vertices[layer],indices,natural_vertices[1]);
+        if(!emit_hill_decal_surface(owner,nc,nr,natural_vertices[layer],indices,natural_vertices[1]))return false;
     }
     // Carry local volcano ownership on both replacement surface families.
     // Lookup uses the authoritative dependency observer, including wrapped tiles.

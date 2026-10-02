@@ -1,4 +1,5 @@
 // Shared source-to-world instance transform for color and shadow passes.
+#include "resident_instance.hlsl"
 struct InstanceInput {
  float3 source_position:POSITION;float3 source_normal:NORMAL;float2 source_uv:TEXCOORD0;
  float4 place0:TEXCOORD1;float4 place1:TEXCOORD2;
@@ -12,6 +13,11 @@ float3 instance_world(InstanceInput i) {
  precise float height=i.place1.w+i.source_position.z*scale*z_basis*112;
  return float3(x,y,height/112);
 }
+InstanceInput resident_natural_input(ResidentInstanceInput input){
+ ResidentPlacement p=C3XResidentPlacements[input.selection];InstanceInput i;
+ i.source_position=input.source_position;i.source_normal=input.source_normal;i.source_uv=input.source_uv;
+ i.place0=p.place0;i.place1=p.place1;i.projection=p.projection;i.placement_view=p.placement_view;return i;
+}
 #ifdef C3X_INSTANCE_CASTER
 cbuffer Caster:register(b0){float4 U;float4 V;float4 L;float4 page;float4 offset;};
 struct InstancePixel {float4 position:SV_POSITION;float2 uv:TEXCOORD0;nointerpolation float material:TEXCOORD1;
@@ -20,6 +26,13 @@ InstancePixel VSInstance(InstanceInput i){
  float3 world=instance_world(i)+i.placement_view.xyz;
  InstancePixel o;o.position=float4((dot(world,U.xyz)/6-page.x)*2-1,1-(dot(world,V.xyz)/6-page.y)*2,.5,1);
  o.uv=i.source_uv;o.material=i.placement_view.w;o.depth=dot(world,L.xyz);o.coverage=1;o.boundary=o.material;o.volcano=0;return o;
+}
+InstancePixel VSResidentInstance(ResidentInstanceInput input){
+ InstanceInput i=resident_natural_input(input);
+ i.placement_view.xyz=offset.xyz;return VSInstance(i);
+}
+InstancePixel VSResidentPlacedInstance(ResidentInstanceInput input){
+ return VSInstance(resident_natural_input(input));
 }
 #else
 cbuffer InstanceMaterial:register(b9){float4 instance_material;float4 instance_secondary;};
@@ -35,5 +48,11 @@ P VSInstance(InstanceInput i){
  o.position.xy=(floor(v.position.xy*256+.5)/256+i.placement_view.xy)*inverse_size*float2(2,-2)+float2(-1,1);
  o.position.z=clamp(.5-(floor(v.position.z*256+.5)/256+i.placement_view.z)/16384.,.001,.999);
  return o;
+}
+P VSResidentInstance(ResidentInstanceInput input){
+ InstanceInput i=resident_natural_input(input);
+ i.placement_view.xy=translation+i.placement_view.xy;
+ i.placement_view.z=depth_translation+i.placement_view.z;
+ return VSInstance(i);
 }
 #endif

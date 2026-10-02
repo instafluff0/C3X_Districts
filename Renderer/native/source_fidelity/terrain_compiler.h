@@ -65,11 +65,21 @@ bool emit_terrain_surfaces(NaturalData const& natural,Assets const& assets,
     auto result=&destination;
     std::array<std::vector<Vertex>,3> natural_vertices;
     std::array<std::vector<unsigned>,2> natural_grid_indices;
+    bool const compact_hill_decals=input.indexed && bounded;
+    std::vector<unsigned> hill_decal_indices;
+    HillDecalOutput hill_decals(natural_vertices[1],hill_decal_indices);
     auto cancelled=[&]{
         std::size_t bytes=result->buffer_bytes();
         for(auto const& layer:natural_vertices)bytes+=layer.capacity()*sizeof(Vertex);
         for(auto const& index:natural_grid_indices)bytes+=index.capacity()*sizeof(unsigned);
-        return stop() || (bounded && bytes>8u*1024u*1024u);
+        bytes+=hill_decal_indices.capacity()*sizeof(unsigned)+hill_decals.scratch_bytes();
+        return stop() || hill_decals.rejected() || (bounded && bytes>8u*1024u*1024u);
+    };
+    auto admit_hill=[&](std::size_t extra){
+        std::size_t bytes=result->buffer_bytes()+hill_decal_indices.capacity()*sizeof(unsigned)+hill_decals.scratch_bytes();
+        for(auto const& layer:natural_vertices)bytes+=layer.capacity()*sizeof(Vertex);
+        for(auto const& index:natural_grid_indices)bytes+=index.capacity()*sizeof(unsigned);
+        return !stop() && bytes<=8u*1024u*1024u && extra<=8u*1024u*1024u-bytes;
     };
     if(cancelled())return {};
     scratch.bind(natural,world_coast.world(),input.world_revision);
@@ -120,18 +130,34 @@ bool emit_terrain_surfaces(NaturalData const& natural,Assets const& assets,
         out.river_distance=river_terrain_near ? float(river_at(out.world_x,out.world_y)) : 1000.f;
         return out;
     };
-    auto triangle=[](std::vector<Vertex>& out,Vertex const& a,Vertex const& b,Vertex const& c){out.push_back(a);out.push_back(b);out.push_back(c);};
+    auto triangle=[&](std::vector<Vertex>& out,Vertex const& a,Vertex const& b,Vertex const& c){
+        if(input.real_terrain_type==5 && compact_hill_decals && &out==&natural_vertices[1]){Vertex v[]={a,b,c};hill_decals.append(v,admit_hill);}
+        else{out.push_back(a);out.push_back(b);out.push_back(c);}
+    };
+    auto emit_hill_decal_surface=[&](Tile source,int column,int row,
+            std::vector<Vertex> const& receiver,std::vector<unsigned> const* indices,
+            std::vector<Vertex>& output){
+        if(!compact_hill_decals){emit_hill_decals(source,column,row,receiver,indices,output);return true;}
+        // Ten rock patches plus at most16 hill-canopy floor patches of8x8 quads.
+        auto source_count=indices?indices->size():receiver.size();
+        if(source_count>(8u*1024u*1024u/8-6144u)/10u ||
+           !hill_decals.initialize(source_count*10u+6144u,admit_hill))return false;
+        return emit_hill_decal_triangles(source,column,row,receiver,indices,
+            [&](Vertex const* v){return hill_decals.append(v,admit_hill);});
+    };
     auto patch_detail=input.detail;auto& patch_layouts=scratch.layouts;
     bool index_natural_grids=input.indexed;
     auto record_natural_phase=[](unsigned){}; // Worker CPU time is recorded by its queue.
     #include "terrain_mesh_body.h"
     if(cancelled())return false;
+    hill_decals.release_scratch();
     if(!export_border_ground_mesh(input.tile_x,input.tile_y,
                                   natural_vertices,natural_grid_indices))return false;
     for(unsigned layer=0;layer<3;++layer){
-        auto topology=input.indexed && layer!=1?&natural_grid_indices[layer==0?0:1]:nullptr;
+        auto topology=layer==1 && tile.real_terrain_type==5 && compact_hill_decals?&hill_decal_indices:
+            input.indexed && layer!=1?&natural_grid_indices[layer==0?0:1]:nullptr;
         render_core::MeshFormat format;format.natural=true;
-        format.shared_grid=render_core::shared_mesh_grid(natural_vertices[layer].size(),topology,patch_layouts);
+        format.shared_grid=layer==1?0:render_core::shared_mesh_grid(natural_vertices[layer].size(),topology,patch_layouts);
         if(!render_core::prepare_mesh(natural_vertices[layer],topology,format,result->meshes[layer],stop))return false;
         // Ready storage replaces raw compiler output before the next layer.
         // A worker owns at most one layer's packing transient in addition to

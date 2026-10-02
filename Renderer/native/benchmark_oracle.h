@@ -38,6 +38,9 @@ using c3x_renderer_benchmark_trim_to_prepared_v1_fn = int (*) (
 
 // Separate from the legacy budget-changing oracle: 1 clears scene/content with
 // assets/device retained; 2 retains prepared content but clears completed images.
+// 3 deliberately evicts GPU geometry while retaining authoritative copied world
+// and prepared backing. The receipt uses capacity_geometry_evictions for retired
+// owners and cleared_viewport_bytes for their bytes; pinned leases remain counted.
 using c3x_renderer_benchmark_session_reset_v1_fn = int (*) (
     std::uint32_t, c3x_renderer_benchmark_oracle_trim_v1 *);
 
