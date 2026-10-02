@@ -2666,6 +2666,9 @@ struct district_button_image_set {
 	bool custom_renderer_trace_input;
 	char custom_renderer_test_save[MAX_PATH];
 	unsigned custom_renderer_test_step;
+	unsigned custom_renderer_test_route_step;
+	int custom_renderer_test_route_x, custom_renderer_test_route_y, custom_renderer_test_route_width;
+	bool custom_renderer_test_route_adopted, custom_renderer_test_route_resolving;
 	c3x_renderer_blit_fn custom_renderer_blit;
 	c3x_renderer_native_observe_fn custom_renderer_native_observe;
 	c3x_renderer_native_lifetime_fn custom_renderer_native_lifetime;
@@ -2676,12 +2679,15 @@ struct district_button_image_set {
 	c3x_renderer_native_map_view_fn custom_renderer_native_map;
 	c3x_renderer_native_navigation_fn custom_renderer_navigation;
 	c3x_renderer_world_move_fn custom_renderer_world_move;
+	c3x_renderer_world_move_sight_fn custom_renderer_world_move_sight;
 	c3x_renderer_world_change_fn custom_renderer_world_change;
 	c3x_renderer_world_reconcile_fn custom_renderer_world_reconcile;
 	c3x_renderer_seed_world_fn custom_renderer_seed_world;
 	bool custom_renderer_initial_world_capture;
 	long long custom_renderer_seeded_viewer_epoch;
 	bool custom_renderer_unit_bootstrap, custom_renderer_unit_bootstrap_failed;
+	bool custom_renderer_unit_representatives_dirty;
+	int custom_renderer_unit_display_action;
 	Unit * custom_renderer_unit_bootstrap_selected;
 	unsigned custom_renderer_unit_bootstrap_copies;
 	c3x_renderer_unit_move_fn custom_renderer_unit_move;

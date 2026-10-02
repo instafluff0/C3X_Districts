@@ -11,13 +11,14 @@ GPU_STUB = r'''
 #include <memory>
 using UINT=unsigned;using HRESULT=int;
 #define FAILED(value) ((value)<0)
-enum {D3D11_USAGE_IMMUTABLE=1,D3D11_BIND_VERTEX_BUFFER=2,D3D11_BIND_SHADER_RESOURCE=4,
+enum {D3D11_USAGE_DEFAULT=0,D3D11_USAGE_IMMUTABLE=1,D3D11_BIND_VERTEX_BUFFER=2,D3D11_BIND_SHADER_RESOURCE=4,
  D3D11_RESOURCE_MISC_BUFFER_STRUCTURED=8,D3D11_USAGE_DYNAMIC=16,D3D11_CPU_ACCESS_WRITE=32,
  D3D11_MAP_WRITE_DISCARD=64,D3D11_MAP_WRITE_NO_OVERWRITE=128,DXGI_FORMAT_R32G32B32_FLOAT=1,
  DXGI_FORMAT_R32G32_FLOAT=2,DXGI_FORMAT_R32_UINT=3,D3D11_INPUT_PER_VERTEX_DATA=4,D3D11_INPUT_PER_INSTANCE_DATA=5};
 struct D3D11_BUFFER_DESC {UINT ByteWidth=0,Usage=0,BindFlags=0,MiscFlags=0,StructureByteStride=0,CPUAccessFlags=0;};
 struct D3D11_SUBRESOURCE_DATA {void const* pSysMem=nullptr;};
 struct D3D11_MAPPED_SUBRESOURCE {void* pData=nullptr;};
+struct D3D11_BOX {UINT left=0,top=0,front=0,right=0,bottom=0,back=0;};
 struct ID3D11Buffer {std::vector<unsigned char> data;unsigned* freed;
  void Release(){++*freed;delete this;}};
 struct ID3D11ShaderResourceView {void Release(){delete this;}};
@@ -37,9 +38,19 @@ struct ID3D11Device {bool fail=false,view_fail=false;unsigned creates=0,freed=0,
  void Release(){--refs;}
 };
 struct ID3D11DeviceContext {ID3D11Device* device;bool fail=false;std::vector<UINT> modes;
+ unsigned copies=0,updates=0;std::size_t copied_bytes=0,uploaded_bytes=0;
  void GetDevice(ID3D11Device** output){*output=device;++device->refs;}
  HRESULT Map(ID3D11Buffer* buffer,UINT,UINT mode,UINT,D3D11_MAPPED_SUBRESOURCE* mapped){if(fail)return -1;modes.push_back(mode);mapped->pData=buffer->data.data();return 0;}
  void Unmap(ID3D11Buffer*,UINT){}
+ void CopySubresourceRegion(ID3D11Buffer* target,UINT,UINT x,UINT y,UINT z,ID3D11Buffer* source,UINT,D3D11_BOX const* box){
+  assert(source!=target && !y && !z && box && box->top==0 && box->front==0 && box->bottom==1 && box->back==1);
+  auto bytes=box->right-box->left;assert(x+bytes<=target->data.size() && box->right<=source->data.size());
+  std::memcpy(target->data.data()+x,source->data.data()+box->left,bytes);++copies;copied_bytes+=bytes;
+ }
+ void UpdateSubresource(ID3D11Buffer* target,UINT,D3D11_BOX const* box,void const* data,UINT,UINT){
+  assert(box && box->top==0 && box->front==0 && box->bottom==1 && box->back==1 && box->right<=target->data.size());
+  auto bytes=box->right-box->left;std::memcpy(target->data.data()+box->left,data,bytes);++updates;uploaded_bytes+=bytes;
+ }
 };
 #include "Renderer/native/render_core/shared_instance_submission.h"
 using Owner=c3x_renderer::render_core::SharedInstanceSubmission;
@@ -47,6 +58,63 @@ using Owner=c3x_renderer::render_core::SharedInstanceSubmission;
 
 
 class SharedInstanceSubmissionTests(unittest.TestCase):
+    def test_delta_replacement_packs_changed_only_and_preserves_indexed_old_bytes(self):
+        run_cpp(GPU_STUB + r'''
+int main(){
+ ID3D11Device device;ID3D11DeviceContext context{&device};Owner owner;Owner::Range range;
+ float projection[]={17,23,128,1260};std::vector<Owner::Instance> values(3);
+ auto a=std::make_shared<int>(11),b=std::make_shared<int>(12),c=std::make_shared<int>(13);
+ auto proof=[](auto const& source,unsigned generation){Owner::RetainedSource value;value.source=source;
+  value.owner={generation,generation};value.canonical_source=Owner::Generation::source_key(source.get(),40);return value;};
+ auto pa=proof(a,11),pb=proof(b,12),pc=proof(c,13);
+ auto builder=owner.begin_retained(Owner::Key{1},{},true);assert(builder);
+ for(unsigned n=0;n<3;++n){values[0].place[0]=float(100+n);
+  auto source=n==0?a:n==1?b:c;auto p=n==0?pa:n==1?pb:pc;
+  assert(owner.append(builder,Owner::Key{11+n},source.get(),values.data(),3,projection,n*10,n*20,n*20,40,range));
+  assert(owner.retain_source(builder,Owner::Key{11+n},p));
+ }
+ auto old=owner.upload(builder,&device,&context);builder.reset();assert(old && old->records==9);
+ assert(old->placements.empty() && old->staging.empty() && owner.uploaded_bytes==9*64 && owner.packed_records==9);
+ auto old_bytes=old->buffer->data;unsigned index=0;auto selected=owner.prepare_selection(&device,old,&index,1,64);assert(selected);
+ builder=owner.begin_retained(Owner::Key{2},{},true);
+ assert(owner.reuse_range(builder,Owner::Key{11},3,pa,range) && range.first==0 && builder->staging.empty());
+ auto recycled=pa;++recycled.owner[1];assert(!owner.reuse_range(builder,Owner::Key{11},3,recycled,range));
+ assert(!owner.reuse_range(builder,Owner::Key{12},2,pb,range));
+ values[0].place[0]=999;
+ assert(owner.append(builder,Owner::Key{22},b.get(),values.data(),3,projection,9,8,8,40,range));
+ assert(owner.retain_source(builder,Owner::Key{22},pb));
+ assert(owner.carry_forward(builder,[](auto const& source){return source.owner[1]==13;}));
+ assert(builder->records==9 && builder->staging.size()==3 && builder->copies.size()==2);
+ assert(owner.range_reuses==1 && owner.carried_ranges==1 && owner.packed_records==12);
+ auto uploaded=owner.uploaded_bytes,copied=owner.copied_bytes;
+ auto next=owner.upload(builder,&device,&context);builder.reset();assert(next);
+ assert(owner.uploaded_bytes-uploaded==3*64 && owner.copied_bytes-copied==6*64 && owner.allocated_bytes==18*64);
+ assert(context.copies==2 && context.copied_bytes==6*64 && context.uploaded_bytes==12*64);
+ assert(next->buffer!=old->buffer && old->buffer->data==old_bytes && owner.valid(selected));
+ auto next_a=next->find(Owner::Key{11}),next_b=next->find(Owner::Key{22}),next_c=next->find(Owner::Key{13});
+ assert(!std::memcmp(next->buffer->data.data()+next_a.first*64,old_bytes.data(),3*64));
+ assert(!std::memcmp(next->buffer->data.data()+next_c.first*64,old_bytes.data()+6*64,3*64));
+ Owner::Instance changed;std::memcpy(&changed,next->buffer->data.data()+next_b.first*64,64);
+ assert(changed.place[0]==999 && changed.view[0]==9 && changed.view[1]==8 && changed.view[3]==40);
+ assert(next->placements.empty() && next->copies.empty() && next->updates.empty() && !next->copy_source);
+ // Required ranges in a later replacement can reuse a generation that owns
+ // GPU placements only, and the old indexed selection remains independent.
+ builder=owner.begin_retained(Owner::Key{3},{},true);
+ assert(owner.reuse_range(builder,Owner::Key{11},3,pa,range));
+ auto operations=context.copies+context.updates;auto bytes=owner.bytes();device.view_fail=true;
+ assert(!owner.upload(builder,&device,&context));device.view_fail=false;
+ assert(context.copies+context.updates==operations && owner.select(Owner::Key{2})==next);
+ assert(old->buffer->data==old_bytes && owner.bytes()<=bytes);
+ ID3D11Device other_device;ID3D11DeviceContext other_context{&other_device};
+ assert(!owner.upload(builder,&device,&other_context) && context.copies+context.updates==operations);
+ auto third=owner.upload(builder,&device,&context);builder.reset();assert(third && third->records==3);
+ assert(owner.valid(selected) && selected->content->buffer->data==old_bytes);
+ assert(owner.bytes()<=Owner::budget && owner.peak_bytes()<=Owner::budget);
+ owner.clear();assert(!owner.valid(selected) && owner.bytes()>0);
+ next.reset();third.reset();old.reset();selected.reset();assert(!owner.bytes() && device.creates==device.freed);
+}
+''')
+
     def test_carried_source_fallback_survives_skipped_original_canonical_range(self):
         run_cpp(GPU_STUB + r'''
 int main(){

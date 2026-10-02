@@ -18,7 +18,7 @@ class NativeViewIdentityTests(unittest.TestCase):
 #include <cstring>
 struct State {
  struct {bool enable_custom_rendering=true;} current_config;
- bool custom_renderer_camera_exact=false;
+ bool custom_renderer_camera_exact=false,custom_renderer_unit_representatives_dirty=false;
  c3x_renderer_native_navigation_fn custom_renderer_navigation=nullptr;
  c3x_renderer_visual_clock_fn custom_renderer_visual_clock=nullptr;
  bool custom_renderer_async_enabled=false;
@@ -249,6 +249,8 @@ int main(){
 #define __fastcall
 #define __ 0
 #define Main_Screen_Form_move_camera native_move
+int resolved_x=-1,resolved_y=-1;
+void log_custom_renderer_test_route_resolved(int x,int y){resolved_x=x;resolved_y=y;}
 struct RECT {int left=0,top=0,right=2240,bottom=1192;};
 struct JGL_Image;
 struct ImageVtable {int(*m54_Get_Width)(JGL_Image*);int(*m55_Get_Height)(JGL_Image*);};
@@ -270,7 +272,7 @@ struct Clock {long long QuadPart=0;};
 
 struct State {
  struct {bool enable_custom_rendering=true;} current_config;
- bool custom_renderer_camera_exact=false;
+ bool custom_renderer_camera_exact=false,custom_renderer_unit_representatives_dirty=false;
  c3x_renderer_native_navigation_fn custom_renderer_navigation=nullptr;
  c3x_renderer_visual_clock_fn custom_renderer_visual_clock=nullptr;
  bool custom_renderer_async_enabled=true,custom_renderer_display_valid=false;
@@ -426,6 +428,8 @@ int main(){
  // The requested camera is normalized by native code, but input, unit culling,
  // wrap canvases and picking still observe the displayed camera while pending.
  patch_Main_Screen_Form_move_camera(&screen,0,96,64,1,false);
+ assert(state.custom_renderer_unit_representatives_dirty);
+ assert(resolved_x==96&&resolved_y==64);
  assert(nav_pending&&screen.camera_x==0&&screen.camera_y==0&&desired.camera_x==96&&desired.min_x==1);
  for(int i=0;i<20;++i){patch_Animator_update_display(&screen.animator,0);assert(screen.camera_x==0&&overlay_x==0);}
  assert(native_calls==20&&native_work==0); // Native early returns, never skipped calls.

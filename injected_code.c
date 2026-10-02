@@ -229,6 +229,7 @@ Unit * __fastcall patch_Main_Screen_Form_find_visible_unit (Main_Screen_Form * t
 void notify_custom_renderer_unit_move (Unit * unit, int old_x, int old_y, bool source_visible);
 void notify_custom_renderer_unit_spawn (Unit * unit);
 void notify_custom_renderer_unit_state (Unit * unit, unsigned int kind);
+void notify_custom_renderer_unit_selection (bool changed);
 
 // Declare various functions needed for districts and hard to untangle and reorder here
 void __fastcall patch_City_recompute_yields_and_happiness (City * this);
@@ -23797,6 +23798,7 @@ patch_Main_Screen_Form_handle_key_down (Main_Screen_Form * this, int edx, int ch
 
 	char original_turn_end_flag = this->turn_end_flag;
 	int tr = Main_Screen_Form_handle_key_down (this, __, char_code, virtual_key_code);
+	notify_custom_renderer_unit_selection (false);
 	if ((original_turn_end_flag == 1) && (this->turn_end_flag == 0))
 		intercept_end_of_turn ();
 
@@ -23812,7 +23814,9 @@ patch_handle_cursor_change_in_jgl ()
 	    (p_main_screen_form->Mode_Action != UMA_Air_Bombard))
 		is->sb_activated_by_button = 0;
 
-	return handle_cursor_change_in_jgl ();
+	int result = handle_cursor_change_in_jgl ();
+	notify_custom_renderer_unit_selection (false);
+	return result;
 }
 
 bool
@@ -27998,6 +28002,7 @@ unload_custom_renderer ()
 	is->custom_renderer_camera_cancel = NULL;
 	is->custom_renderer_navigation = NULL;
 	is->custom_renderer_world_move = NULL;
+	is->custom_renderer_world_move_sight = NULL;
 	is->custom_renderer_world_change = NULL;
 	is->custom_renderer_world_reconcile = NULL;
 	is->custom_renderer_seed_world = NULL;
@@ -28007,6 +28012,11 @@ unload_custom_renderer ()
 	is->custom_renderer_unit_bootstrap_failed = false;
 	is->custom_renderer_unit_bootstrap_selected = NULL;
 	is->custom_renderer_unit_bootstrap_copies = 0;
+	is->custom_renderer_unit_representatives_dirty = false;
+	is->custom_renderer_unit_display_action = -1;
+	is->custom_renderer_test_route_step = 0;
+	is->custom_renderer_test_route_adopted = false;
+	is->custom_renderer_test_route_resolving = false;
 	is->custom_renderer_camera_ticket = 0;
 	is->custom_renderer_display_clock = 0;
 	is->custom_renderer_async_enabled = false;
@@ -28153,6 +28163,10 @@ forward_custom_unit_body (Sprite * sprite, PCX_Image * background, PCX_Image * c
 	if (info == NULL || info->Frame_Counts == NULL || action < AT_DEFAULT || action > AT_PLANT ||
 	    type < 0 || type >= p_bic_data->UnitTypeCount)
 		return false;
+	// State must precede the body clock: a later observation would make this
+	// member's animation/capture stale against its own ordered state event.
+	if (unit != display_unit)
+		notify_custom_renderer_unit_state (unit, C3X_RENDERER_UNIT_STATE_OBSERVE);
 	struct c3x_renderer_unit_v1 draw = {0};
 	draw.struct_size = sizeof draw;
 	draw.unit_id = unit->Body.ID;
@@ -28474,6 +28488,7 @@ ensure_custom_renderer_loaded ()
 			is->custom_renderer_init_state = IS_OK;
 			is->custom_renderer_navigation = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_native_navigation");
 			is->custom_renderer_world_move = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_world_move");
+			is->custom_renderer_world_move_sight = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_world_move_sight");
 			is->custom_renderer_world_change = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_world_change");
 			is->custom_renderer_world_reconcile = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_world_reconcile");
 			is->custom_renderer_seed_world = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_seed_world");
@@ -29343,7 +29358,8 @@ bootstrap_custom_renderer_initial_units ()
 {
 	if (! is->current_config.enable_custom_rendering ||
 	    (is->custom_renderer_display_viewer_epoch == is->custom_renderer_viewer_epoch &&
-	     is->custom_renderer_viewer_epoch != 0)) return C3X_RENDERER_RESULT_OK;
+	     is->custom_renderer_viewer_epoch != 0 &&
+	     ! is->custom_renderer_unit_representatives_dirty)) return C3X_RENDERER_RESULT_OK;
 	if (p_main_screen_form == NULL || ! custom_renderer_native_probe_on () ||
 	    ! is->custom_renderer_draw_in_progress || ! is->custom_renderer_frame_active ||
 	    is->custom_renderer_capture_only || is->custom_renderer_capture_failed ||
@@ -29367,6 +29383,7 @@ bootstrap_custom_renderer_initial_units ()
 	bool reveal = (*p_debug_mode_bits & 8) && ! online;
 	int viewer = screen->Player_CivID;
 	if (viewer < 0 || viewer >= 32) return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+	is->custom_renderer_unit_bootstrap = true;
 
 	// Animator::FUN_004ef410 order: rows ascending, columns descending,
 	// eligible secondary before primary, always-on-top entries last.
@@ -29508,6 +29525,7 @@ finished:
 	is->custom_renderer_unit_bootstrap = false;
 	is->custom_renderer_unit_bootstrap_selected = NULL;
 	if (selected != NULL) selected->Body.army_top_defender_id = selected_member;
+	if (result == C3X_RENDERER_RESULT_OK) is->custom_renderer_unit_representatives_dirty = false;
 	{
 		char detail[160];
 		snprintf (detail, sizeof detail, "[C3X renderer] stage=unit-bootstrap representatives=%d copied=%u result=%d\n",
@@ -29732,6 +29750,22 @@ composite_custom_renderer_frame ()
 		(*p_OutputDebugStringA) (message);
 	}
 	if (result == C3X_RENDERER_RESULT_OK) {
+        /* Local image identity and the exact native camera at its commit.
+           This opt-in witness never reads native pixels or changes adoption. */
+        if (gpu_map && displayed.ticket > 0) {
+            DWORD (WINAPI * get_environment) (LPCSTR, LPSTR, DWORD) =
+                (void *)(*p_GetProcAddress) (is->kernel32, "GetEnvironmentVariableA");
+            char witness[8] = {0};
+            if (get_environment != NULL && get_environment ("C3X_RENDERER_ROUTE_WITNESS", witness, sizeof witness) &&
+                strcmp (witness, "1") == 0) {
+                char detail[320];
+                snprintf (detail, sizeof detail,
+                    "[C3X renderer] stage=route-native-source local_image_ticket=%lld camera=%d,%d qpc=%lld frequency=%lld valid=1 genuine=1\n",
+                    displayed.ticket, p_main_screen_form->camera_x, p_main_screen_form->camera_y,
+                    blit_finished.QuadPart, is->custom_renderer_qpc_frequency.QuadPart);
+                (*p_OutputDebugStringA) (detail);
+            }
+        }
 		is->custom_renderer_async_presented = true;
 		is->custom_renderer_display_viewer_epoch = is->custom_renderer_viewer_epoch;
 		// Transfer category ownership only after this exact frame has rendered and
@@ -30068,6 +30102,156 @@ void __fastcall patch_Main_Screen_Form_move_camera (Main_Screen_Form * this, int
 
 void run_custom_renderer_combat_test (Main_Screen_Form * form, int key);
 
+/* Result: 1 valid; -1 length, -2 syntax, -3 count, -4 coordinates,
+   -5 zoom width, -6 requested step, -7 map dimensions. */
+int
+parse_custom_renderer_test_route (char const * route, unsigned step,
+                                int map_width, int map_height,
+                                int * out_x, int * out_y, int * out_width,
+                                unsigned * out_count)
+{
+    if (route == NULL) return -1;
+    unsigned length = 0;
+    while (length < 2048 && route[length] != '\0') length++;
+    if (length == 0 || length >= 2048) return -1;
+    if (map_width <= 0 || map_height <= 0 ||
+        map_width > 2147483647 / 64 || map_height > 2147483647 / 32)
+        return -7;
+    unsigned count = 0;
+    int selected_x = 0, selected_y = 0, selected_width = 0;
+    char const * cursor = route;
+    while (*cursor != '\0') {
+        if (++count > 32) return -3;
+        int values[3];
+        for (unsigned field = 0; field < 3; field++) {
+            /* Only unsigned, canonical native-pixel coordinates are admitted.
+               Native wrap/clamp is still authoritative after the request. */
+            if (*cursor < '0' || *cursor > '9') return -2;
+            unsigned value = 0;
+            do {
+                unsigned digit = (unsigned)(*cursor++ - '0');
+                if (value > 214748364 || (value == 214748364 && digit > 7)) return -2;
+                value = value * 10 + digit;
+            } while (*cursor >= '0' && *cursor <= '9');
+            values[field] = (int)value;
+            if (field < 2 && *cursor++ != ',') return -2;
+        }
+        if (values[0] >= map_width * 64 || values[1] >= map_height * 32) return -4;
+        if (!(values[2] == 128 || values[2] == 160 || values[2] == 192 ||
+              values[2] == 224 || values[2] == 256 || values[2] == 320 || values[2] == 384))
+            return -5;
+        if (count == step) {
+            selected_x = values[0]; selected_y = values[1]; selected_width = values[2];
+        }
+        if (*cursor == '\0') break;
+        if (*cursor++ != ';' || *cursor == '\0') return -2;
+    }
+    if (step == 0 || step > count) return -6;
+    *out_x = selected_x; *out_y = selected_y; *out_width = selected_width;
+    *out_count = count;
+    return 1;
+}
+
+void
+log_custom_renderer_test_route_resolved (int x, int y)
+{
+    if (! is->current_config.enable_custom_rendering || ! is->custom_renderer_test_save[0] ||
+        is->custom_renderer_test_route_step == 0 || ! is->custom_renderer_test_route_resolving) return;
+    LARGE_INTEGER now;
+    if (! QueryPerformanceCounter (&now)) return;
+    char message[320];
+    snprintf (message, sizeof message,
+        "[C3X renderer] stage=scripted-route-resolved step=%u qpc=%lld frequency=%lld requested=%d,%d native=%d,%d target_width=%d capture_width=128\n",
+        is->custom_renderer_test_route_step, now.QuadPart, is->custom_renderer_qpc_frequency.QuadPart,
+        is->custom_renderer_test_route_x, is->custom_renderer_test_route_y, x, y,
+        is->custom_renderer_test_route_width);
+    (*p_OutputDebugStringA) (message);
+}
+
+void
+log_custom_renderer_test_route_adopted (int requested_x, int requested_y, bool already)
+{
+    if (! is->current_config.enable_custom_rendering || ! is->custom_renderer_test_save[0] ||
+        is->custom_renderer_test_route_step == 0 || is->custom_renderer_test_route_adopted ||
+        ! is->custom_renderer_display_valid || requested_x != is->custom_renderer_test_route_x ||
+        requested_y != is->custom_renderer_test_route_y ||
+        is->custom_renderer_display_view.camera_x != requested_x ||
+        is->custom_renderer_display_view.camera_y != requested_y) return;
+    LARGE_INTEGER now;
+    if (! QueryPerformanceCounter (&now)) return;
+    char message[320];
+    snprintf (message, sizeof message,
+        "[C3X renderer] stage=scripted-route-adopted step=%u qpc=%lld frequency=%lld requested=%d,%d displayed=%d,%d valid=1 camera_already_adopted=%d\n",
+        is->custom_renderer_test_route_step, now.QuadPart, is->custom_renderer_qpc_frequency.QuadPart,
+        requested_x, requested_y, is->custom_renderer_display_view.camera_x,
+        is->custom_renderer_display_view.camera_y, already);
+    is->custom_renderer_test_route_adopted = true;
+    (*p_OutputDebugStringA) (message);
+}
+
+#ifdef Main_Screen_Form_move_camera
+void
+run_custom_renderer_test_route (Main_Screen_Form * form, int edx)
+{
+    if (! is->current_config.enable_custom_rendering || form != p_main_screen_form ||
+        ! is->custom_renderer_test_save[0]) return;
+    DWORD (WINAPI * get_environment) (LPCSTR, LPSTR, DWORD) =
+        (void *)(*p_GetProcAddress) (is->kernel32, "GetEnvironmentVariableA");
+    char route[2048] = {0};
+    DWORD length = get_environment != NULL ?
+        get_environment ("C3X_RENDERER_GAME_TEST_ROUTE", route, sizeof route) : 0;
+    int x = 0, y = 0, width = 0;
+    unsigned count = 0, step = is->custom_renderer_test_step;
+    int result = length > 0 && length < sizeof route ?
+        parse_custom_renderer_test_route (route, step, p_bic_data->Map.Width, p_bic_data->Map.Height,
+            &x, &y, &width, &count) : -1;
+    if (result == 1 && (form->is_now_loading_game || ! form->GUI.is_enabled ||
+        p_bic_data->Map.Tiles == NULL || ! is->custom_renderer_display_valid ||
+        ! custom_renderer_zoom_enabled () || p_bic_data->is_zoomed_out)) result = -8;
+    LARGE_INTEGER started;
+    if (result == 1 && (is->custom_renderer_qpc_frequency.QuadPart <= 0 ||
+        ! QueryPerformanceCounter (&started))) result = -9;
+    if (result != 1) {
+        char message[160];
+        snprintf (message, sizeof message,
+            "[C3X renderer] stage=scripted-route-refused step=%u reason=%d\n", step, result);
+        (*p_OutputDebugStringA) (message);
+        return;
+    }
+    int levels[7] = {128, 160, 192, 224, 256, 320, 384};
+    int current = 0, next = 0;
+    for (int n = 0; n < ARRAY_LEN (levels); n++) {
+        if (levels[n] == is->custom_renderer_zoom_target_width) current = n;
+        if (levels[n] == width) next = n;
+    }
+    is->custom_renderer_test_route_step = step;
+    is->custom_renderer_test_route_x = x; is->custom_renderer_test_route_y = y;
+    is->custom_renderer_test_route_width = width;
+    is->custom_renderer_test_route_adopted = false;
+    is->custom_renderer_test_step++;
+    char message[384];
+    snprintf (message, sizeof message,
+        "[C3X renderer] stage=scripted-route-accepted step=%u count=%u qpc=%lld frequency=%lld requested=%d,%d target_width=%d capture_width=128 map_width=%d map_height=%d\n",
+        step, count, started.QuadPart, is->custom_renderer_qpc_frequency.QuadPart,
+        x, y, width, p_bic_data->Map.Width, p_bic_data->Map.Height);
+    // Acceptance precedes either call, including any nested native map boundary.
+    (*p_OutputDebugStringA) (message);
+    if (! advance_custom_renderer_zoom (form, next - current, false) ||
+        is->custom_renderer_zoom_target_width != width) {
+        is->custom_renderer_test_route_step = 0;
+        snprintf (message, sizeof message,
+            "[C3X renderer] stage=scripted-route-refused step=%u reason=-10\n", step);
+        (*p_OutputDebugStringA) (message);
+        return;
+    }
+    // This only certifies the camera. Presented zoom/pixels have their own endpoint.
+    log_custom_renderer_test_route_adopted (x, y, true);
+    is->custom_renderer_test_route_resolving = true;
+    patch_Main_Screen_Form_move_camera (form, edx, x, y, 1, false);
+    is->custom_renderer_test_route_resolving = false;
+}
+#endif
+
 void __fastcall
 patch_Main_Screen_Form_m82_handle_key_event (Main_Screen_Form * this, int edx, int virtual_key_code, int is_down)
 {
@@ -30095,10 +30279,36 @@ patch_Main_Screen_Form_m82_handle_key_event (Main_Screen_Form * this, int edx, i
                 if (! this->is_now_loading_game && this->GUI.is_enabled &&
                     is->custom_renderer_display_valid && this->Current_Unit != NULL) {
                     Unit * unit = this->Current_Unit;
+                    char message_mode[8] = {0}, message_key[32] = {0};
+                    if (get_environment ("C3X_RENDERER_GAME_TEST_MODE", message_mode, sizeof message_mode) == 3 &&
+                        strcmp (message_mode, "hud") == 0 &&
+                        get_environment ("C3X_RENDERER_GAME_TEST_MESSAGE", message_key, sizeof message_key) == 12 &&
+                        strcmp (message_key, "NEWSCILEADER") == 0) {
+                        // Replay an official message through native layout and ink;
+                        // this does not spawn a leader or identify an earlier failure.
+                        Leader * leader = this->Player_CivID > 0 && this->Player_CivID < 32 ? &leaders[this->Player_CivID] : NULL;
+                        Race * race = leader != NULL && p_bic_data->Races != NULL && leader->RaceID >= 0 &&
+                            leader->RaceID < p_bic_data->RacesCount ? &p_bic_data->Races[leader->RaceID] : NULL;
+                        char * name = race != NULL && race->ScientificLeadersCount > 0 && race->ScientificLeaders != 0 ?
+                            (char *)race->ScientificLeaders : NULL;
+                        if (name != NULL && strcmp (race->CountryName, "Japan") == 0 && strcmp (name, "Aida Yasuki") == 0) {
+                            set_popup_str_param (0, name, -1, -1);
+                            patch_Main_Screen_Form_show_map_message (this, __, unit->Body.X, unit->Body.Y, message_key, false);
+                            (*p_OutputDebugStringA) ("[C3X renderer] stage=scripted-game-map-text key=NEWSCILEADER original_attribution=unproved\n");
+                        } else
+                            (*p_OutputDebugStringA) ("[C3X renderer] stage=scripted-game-map-text-refused reason=fixture-source-mismatch\n");
+                        return;
+                    }
                     show_map_specific_text (unit->Body.X, unit->Body.Y, "Renderer map text", false);
                     show_map_specific_text (unit->Body.X, unit->Body.Y, "Second map message", false);
                     (*p_OutputDebugStringA) ("[C3X renderer] stage=scripted-game-map-text\n");
                 }
+                return;
+            }
+            char route_mode[16] = {0};
+            if (get_environment ("C3X_RENDERER_GAME_TEST_MODE", route_mode, sizeof route_mode) == 13 &&
+                strcmp (route_mode, "matched-route") == 0) {
+                run_custom_renderer_test_route (this, edx);
                 return;
             }
             if (is->custom_renderer_test_step > 0 && is->custom_renderer_test_step <= 32 && ! this->is_now_loading_game &&
@@ -31661,7 +31871,11 @@ patch_Main_Screen_Form_move_camera (Main_Screen_Form * this, int edx, int x, int
         if (is->custom_renderer_navigation != NULL)
             is->custom_renderer_navigation (C3X_NAV_DISCARD, NULL, &unused, NULL);
         is->custom_renderer_display_valid = false;
+        int old_x = this->camera_x, old_y = this->camera_y;
         Main_Screen_Form_move_camera (this, __, x, y, reason, update_bounds);
+        if (this->camera_x != old_x || this->camera_y != old_y)
+            is->custom_renderer_unit_representatives_dirty = true;
+        log_custom_renderer_test_route_resolved (this->camera_x, this->camera_y);
         return;
     }
     Map_Renderer * renderer = &p_bic_data->Map.Renderer;
@@ -31677,6 +31891,9 @@ patch_Main_Screen_Form_move_camera (Main_Screen_Form * this, int edx, int x, int
     // Native selection/centering, clamping, wrapping and bounds remain authoritative.
     Main_Screen_Form_move_camera (this, __, x, y, reason, update_bounds);
     struct custom_renderer_native_view requested = custom_renderer_native_view (renderer);
+    if (requested.camera_x != displayed.camera_x || requested.camera_y != displayed.camera_y)
+        is->custom_renderer_unit_representatives_dirty = true;
+    log_custom_renderer_test_route_resolved (requested.camera_x, requested.camera_y);
     if (defer && requested.camera_x == displayed.camera_x && requested.camera_y == displayed.camera_y) {
         // Native clamping at a map edge must not turn a no-op into another frame.
         is->custom_renderer_navigation (C3X_NAV_DISCARD, ((PCX_Image *)renderer)->JGL.Image, &requested, NULL);
@@ -31867,6 +32084,7 @@ patch_Map_Renderer_m71_Draw_Tiles (Map_Renderer * this, int edx, int param_1, in
 			is->custom_renderer_camera_ticket, map_pass_ticks * scale,
 			(is->custom_renderer_animation_timestamp.QuadPart - is->custom_renderer_display_clock) * scale);
 		detail[(sizeof detail) - 1] = '\0'; (*p_OutputDebugStringA) (detail);
+		log_custom_renderer_test_route_adopted (requested_view.camera_x, requested_view.camera_y, false);
 	}
 	is->custom_renderer_draw_in_progress = false;
 }
@@ -34061,6 +34279,9 @@ patch_show_intro_after_load_popup (void * this, int edx, int param_1, int param_
 		DWORD length = get_environment != NULL ? get_environment ("C3X_RENDERER_GAME_TEST_SAVE", is->custom_renderer_test_save, MAX_PATH) : 0;
 		if (length > 0 && length < MAX_PATH) {
 			is->custom_renderer_test_step = 1;
+			is->custom_renderer_test_route_step = 0;
+			is->custom_renderer_test_route_adopted = false;
+			is->custom_renderer_test_route_resolving = false;
 			(*p_OutputDebugStringA) ("[C3X renderer] stage=scripted-game-load ready=1\n");
             char mode[16] = {0};
             if (get_environment ("C3X_RENDERER_GAME_TEST_MODE", mode, sizeof mode) > 0 &&
@@ -35385,9 +35606,11 @@ patch_Main_Screen_Form_find_visible_unit (Main_Screen_Form * this, int edx, int 
 					if ((atk_member != NULL) &&
 					    unit_has_valid_type_id (atk_member) &&
 					    (atk_member->Body.Container_Unit ==
-					     this->Current_Unit->Body.ID))
-						this->Current_Unit->Body.army_top_defender_id =
-							atk_member->Body.ID;
+					     this->Current_Unit->Body.ID)) {
+						bool changed = this->Current_Unit->Body.army_top_defender_id != atk_member->Body.ID;
+						this->Current_Unit->Body.army_top_defender_id = atk_member->Body.ID;
+						if (changed) notify_custom_renderer_unit_selection (true);
+					}
 				}
 			}
 			return combat_best;
@@ -37074,6 +37297,7 @@ patch_Main_Screen_Form_process_mouse_hover (Main_Screen_Form * this, int edx, in
 {
 	int previous_action = this->Mode_Action;
 	Main_Screen_Form_process_mouse_hover (this, __, local_x, local_y);
+	notify_custom_renderer_unit_selection (false);
 	if (this->Mode_Action != previous_action || is->custom_renderer_trace_input || is->custom_renderer_test_save[0])
 		trace_custom_renderer_map_click (this, "hover-action", local_x, local_y);
 	update_combat_odds_hud_for_hover (this, local_x, local_y);
@@ -45923,7 +46147,10 @@ patch_Main_Screen_Form_set_selected_unit (Main_Screen_Form * this, int edx, Unit
 		}
 	}
 
+	Unit * previous_selected = this->Current_Unit;
 	Main_Screen_Form_set_selected_unit (this, __, unit, param_2);
+	if (this == p_main_screen_form)
+		notify_custom_renderer_unit_selection (this->Current_Unit != previous_selected);
 
 	// If selecting a new unit, must insert it into the list to ensure it's actually selected.
 	if (is->current_config.unit_cycle_search_criteria != UCSC_STANDARD && unit != NULL) {
@@ -48031,6 +48258,56 @@ custom_renderer_tile_near_view (int x, int y, int margin)
 	return false;
 }
 
+// The native neighbor prefix is the configured (2R+1)^2 sight closure.
+// Ring R extends 2R raw coordinates along either isometric axis.
+bool
+custom_renderer_sight_near_view (int x, int y, int rings)
+{
+	if (rings < 0 || rings > 7) return false;
+	int count = (2 * rings + 1) * (2 * rings + 1);
+	for (int n = 0; n < count; n++) {
+		int dx, dy;
+		neighbor_index_to_diff (n, &dx, &dy);
+		int xx = x + dx, yy = y + dy;
+		wrap_tile_coords (&p_bic_data->Map, &xx, &yy);
+		if (Map_in_range (&p_bic_data->Map, __, xx, yy) && ! ((xx + yy) & 1) &&
+		    custom_renderer_tile_near_view (xx, yy, 0)) return true;
+	}
+	return false;
+}
+
+int
+refresh_custom_renderer_sight (int old_x, int old_y, int new_x, int new_y, int rings)
+{
+	if (is->custom_renderer_world_move_sight != NULL)
+		return is->custom_renderer_world_move_sight (old_x, old_y, new_x, new_y, rings);
+	if (rings <= 3 && is->custom_renderer_world_move != NULL)
+		return is->custom_renderer_world_move (old_x, old_y, new_x, new_y);
+	// An older DLL cannot certify a configured outer ring. Its existing paged
+	// reconciliation keeps native correctness until the matching pair is installed.
+	return is->custom_renderer_world_reconcile != NULL ?
+		is->custom_renderer_world_reconcile () : C3X_RENDERER_RESULT_ERROR;
+}
+
+// Native selection and action mode choose the stack representative. Reuse the
+// bounded view producer at the next capture, without replaying the director.
+void
+notify_custom_renderer_unit_selection (bool changed)
+{
+	if (! is->current_config.enable_custom_rendering || p_main_screen_form == NULL ||
+	    is->custom_renderer_init_state != IS_OK || is->custom_renderer_unit_draw == NULL ||
+	    is->custom_renderer_unit_bootstrap) return;
+	int action = p_main_screen_form->Mode_Action;
+	bool action_changed = is->custom_renderer_unit_display_action != action;
+	is->custom_renderer_unit_display_action = action;
+	if (! changed && (! action_changed || ! is->current_config.enable_unit_counters)) return;
+	is->custom_renderer_unit_representatives_dirty = true;
+	is->custom_renderer_dirty_flags |= C3X_RENDERER_DIRTY_SCENE;
+	is->custom_renderer_redraw_pending = true;
+	if (p_main_screen_form->animator.field_18E4 != NULL)
+		*(bool *)(p_main_screen_form->animator.field_18E4 + 10) = true;
+}
+
 // Renderer owns paging, immutable storage and preparation. This hook only
 // reports a changed location on the game thread.
 void
@@ -48092,10 +48369,10 @@ notify_custom_renderer_city_change (City * city, int previous_cultural_level)
 	if (visibility_changed) {
 		// Copy the sight closure as well as the separately permitted city/overlay
 		// fields. An unexplored result still omits all body facts.
-		if (is->custom_renderer_world_move == NULL ||
-		    is->custom_renderer_world_move (x, y, x, y) != C3X_RENDERER_RESULT_OK)
+		int rings = calc_max_visibility_range ();
+		if (refresh_custom_renderer_sight (x, y, x, y, rings) != C3X_RENDERER_RESULT_OK)
 			is->custom_renderer_world_audit_needed = true;
-		if (custom_renderer_tile_near_view (x, y, 6)) {
+		if (custom_renderer_sight_near_view (x, y, rings)) {
 			is->custom_renderer_dirty_flags |= C3X_RENDERER_DIRTY_SCENE;
 			is->custom_renderer_redraw_pending = true;
 			if (p_main_screen_form->animator.field_18E4 != NULL)
@@ -48198,13 +48475,12 @@ notify_custom_renderer_unit_move (Unit * unit, int old_x, int old_y, bool source
 		}
 		is->custom_renderer_unit_move (&move);
 	}
-	if (is->custom_renderer_world_move != NULL &&
-	    (unit->Body.CivID == is->custom_renderer_viewer_civ_id ||
-	     source_visible || target_visible)) {
-		if (is->custom_renderer_world_move (old_x, old_y, unit->Body.X, unit->Body.Y) != C3X_RENDERER_RESULT_OK)
+	if (unit->Body.CivID == is->custom_renderer_viewer_civ_id || source_visible || target_visible) {
+		int rings = calc_max_visibility_range ();
+		if (refresh_custom_renderer_sight (old_x, old_y, unit->Body.X, unit->Body.Y, rings) != C3X_RENDERER_RESULT_OK)
 			is->custom_renderer_world_audit_needed = true;
-		if (custom_renderer_tile_near_view (old_x, old_y, 6) ||
-		    custom_renderer_tile_near_view (unit->Body.X, unit->Body.Y, 6)) {
+		if (custom_renderer_sight_near_view (old_x, old_y, rings) ||
+		    custom_renderer_sight_near_view (unit->Body.X, unit->Body.Y, rings)) {
 			is->custom_renderer_dirty_flags |= C3X_RENDERER_DIRTY_SCENE;
 			is->custom_renderer_redraw_pending = true;
 			if (p_main_screen_form->animator.field_18E4 != NULL)

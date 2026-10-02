@@ -137,7 +137,8 @@ public:
                     layers.create(id,w,h,format);layers.source(id,source);
                 });
             }
-            layers.create(map,width,height,Format::bgra32);layers.source(map,gpu.texture(map),std::move(sample),true,true);}catch(std::exception const& e){OutputDebugStringA("[C3X renderer] retained admission: ");OutputDebugStringA(e.what());OutputDebugStringA("\n");layers.discard();}
+            auto generation=sample.source_generation;
+            layers.create(map,width,height,Format::bgra32);layers.source(map,gpu.texture(map),std::move(sample),true,true,std::uint64_t(serial),generation);}catch(std::exception const& e){OutputDebugStringA("[C3X renderer] retained admission: ");OutputDebugStringA(e.what());OutputDebugStringA("\n");layers.discard();}
         ticket=serial;if(!identity)identity=serial;return true;
     }
     bool publish(ID3D11Texture2D* texture,std::int64_t serial,int x=0,int y=0,int width=0,int height=0,RetainedComposition::Sample sample={}){
@@ -250,6 +251,8 @@ public:
     std::size_t visual_nodes()const{return layers.node_count();}
     std::size_t visual_sources()const{return layers.sampled_sources();}
     RetainedComposition::Work visual_work()const{return layers.last_work();}
+    RetainedComposition::RecipeReuse visual_recipe_reuse()const{return layers.recipe_reuse();}
+    std::pair<std::uint64_t,std::uint64_t> visual_publication()const{return layers.front_publication();}
     template<class Report> void describe_visual(Report report)const{layers.describe(report);}
     // Correct static pixels alone do not certify ambient delivery. A CPU
     // snapshot can sever map samples while unit animation remains reachable.

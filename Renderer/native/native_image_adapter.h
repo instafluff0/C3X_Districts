@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <stdexcept>
 #include <climits>
+#include <cstdio>
 
 namespace c3x_native_images {
 using namespace c3x_gpu_images;
@@ -30,40 +31,85 @@ template<class Backend> class Adapter {
     std::array<Lookup,2> lookups; // Full effects and the small native shadow table coexist.
     struct Text {c3x_native_text::State font_state;std::string text;
         Id pixels=0,curves=0;Rect area={};int advance=0,ascent=0,height=0;std::uint64_t age=0,bytes=0;};
-    std::array<Text,32> texts={};std::uint64_t text_age=0,text_bytes=0;
+    std::array<Text,32> texts={};std::uint64_t text_age=0,text_bytes=0;unsigned text_refusal_reports=0,text_candidate_reports=0;
     void retire_text(Text& text){if(text.pixels)gpu.destroy(text.pixels);if(text.curves)gpu.destroy(text.curves);text_bytes-=text.bytes;text={};}
+    void text_record(char const* stage,Image const& destination,void const* text,void const* target,unsigned count,c3x_native_text::Diagnostic const& diagnostic,bool capture,bool known){
+        // Failure metadata stays on the native/DC owner thread. A bounded,
+        // explicitly requested capture can reproduce the refused GDI operation;
+        // it contains no destination pixels and submits no extra GPU work.
+        char line[4096]={};int length=std::snprintf(line,sizeof(line),
+            "[C3X renderer] stage=%s version=1 reason=%s count=%u raster=%u,%u curves=%u destination=%u,%u known=%u owned=%u dirty=%u detail=%u capture=%u",
+            stage,c3x_native_text::refusal_name(diagnostic.reason),count,diagnostic.width,diagnostic.height,diagnostic.curves,
+            destination.width,destination.height,unsigned(known),unsigned(destination.owned),unsigned(destination.dirty),unsigned(destination.detail!=0),unsigned(capture));
+        if(capture){
+            auto dc=c3x_native_access::dc(destination.native);LOGFONTA font={};POINT viewport={},window={};RECT clip={},anchor={};XFORM transform={1,0,0,1,0,0};
+            bool font_valid=dc&&GetObjectA(GetCurrentObject(dc,OBJ_FONT),sizeof(font),&font)==sizeof(font);
+            bool viewport_valid=dc&&GetViewportOrgEx(dc,&viewport),window_valid=dc&&GetWindowOrgEx(dc,&window);
+            int graphics=dc?GetGraphicsMode(dc):0;bool transform_valid=graphics!=GM_ADVANCED||(dc&&GetWorldTransform(dc,&transform));
+            int clip_kind=dc?GetClipBox(dc,&clip):ERROR;if(target)anchor=*static_cast<RECT const*>(target);
+            char font_hex[sizeof(font)*2+1]={},text_hex[2049]={};char const digits[]="0123456789abcdef";
+            auto encode=[&](void const* input,unsigned bytes,char* output){auto p=static_cast<unsigned char const*>(input);for(unsigned n=0;n<bytes;++n){output[n*2]=digits[p[n]>>4];output[n*2+1]=digits[p[n]&15];}};
+            encode(&font,sizeof(font),font_hex);unsigned copied=text?std::min(count,1024u):0;if(copied)encode(text,copied,text_hex);
+            length+=std::snprintf(line+length,sizeof(line)-std::size_t(length),
+                " dc=%u font_valid=%u font=%s text_valid=%u text_complete=%u text=%s foreground=%u background=%u align=%u mode=%d mapping=%d layout=%u extra=%d graphics=%d origins_valid=%u viewport=%ld,%ld window=%ld,%ld transform_valid=%u transform=%.9g,%.9g,%.9g,%.9g,%.9g,%.9g clip_kind=%d clip=%ld,%ld,%ld,%ld anchor=%ld,%ld",
+                unsigned(dc!=nullptr),unsigned(font_valid),font_hex,unsigned(text!=nullptr),unsigned(copied==count),text_hex,
+                unsigned(dc?GetTextColor(dc):CLR_INVALID),unsigned(dc?GetBkColor(dc):CLR_INVALID),unsigned(dc?GetTextAlign(dc):GDI_ERROR),dc?GetBkMode(dc):0,
+                dc?GetMapMode(dc):0,unsigned(dc?GetLayout(dc):GDI_ERROR),dc?GetTextCharacterExtra(dc):0,graphics,unsigned(viewport_valid&&window_valid),
+                viewport.x,viewport.y,window.x,window.y,unsigned(transform_valid),double(transform.eM11),double(transform.eM12),double(transform.eM21),double(transform.eM22),double(transform.eDx),double(transform.eDy),
+                clip_kind,clip.left,clip.top,clip.right,clip.bottom,anchor.left,anchor.top);
+        }
+        if(length<0||std::size_t(length)+2>sizeof(line))throw std::runtime_error("native text refusal receipt exceeded bound");
+        line[length]='\n';line[length+1]=0;OutputDebugStringA(line);
+    }
+    bool text_refused(Image const& destination,void const* text,void const* target,unsigned count,c3x_native_text::Diagnostic const& diagnostic){
+        if(text_refusal_reports>=4)return false;++text_refusal_reports;
+        char gate[8]={};bool capture=GetEnvironmentVariableA("C3X_RENDERER_TEXT_REFUSAL_CAPTURE",gate,sizeof(gate))&&gate[0]=='1';
+        text_record("native-text-refused",destination,text,target,count,diagnostic,capture,true);return false;
+    }
+    void text_candidate(Image const* destination,void* native,void const* text,void const* target,unsigned count){
+        if(text_candidate_reports>=4||!native||!text||!target||count<96||count>1024)return;
+        char gate[8]={};if(!GetEnvironmentVariableA("C3X_RENDERER_TEXT_CANDIDATE_CAPTURE",gate,sizeof(gate))||gate[0]!='1')return;
+        char length[8]={};unsigned wanted=106;
+        if(GetEnvironmentVariableA("C3X_RENDERER_TEXT_CANDIDATE_LENGTH",length,sizeof(length))){
+            wanted=0;for(auto c:length){if(!c)break;if(c<'0'||c>'9')return;wanted=wanted*10+unsigned(c-'0');}
+        }
+        if(!wanted||count!=wanted)return;
+        Image observed;observed.native=native;observed.width=unsigned(field(native,0x38));observed.height=unsigned(field(native,0x3c));
+        ++text_candidate_reports;text_record("native-text-candidate",destination?*destination:observed,text,target,count,{},true,destination!=nullptr);
+    }
     bool draw_text(Image& destination,void* text,void const* target,unsigned count){
-        if(!target||(!text&&count)||count>1024)return false;if(!count)return true;
+        c3x_native_text::Diagnostic diagnostic;
+        auto refused=[&](c3x_native_text::Refusal reason){diagnostic.reason=reason;return text_refused(destination,text,target,count,diagnostic);};
+        if(!target||(!text&&count)||count>1024)return refused(c3x_native_text::Refusal::arguments);if(!count)return true;
         auto dc=c3x_native_access::dc(destination.native);
-        c3x_native_text::State font_state;if(!c3x_native_text::capture(dc,font_state)||(font_state.align&(TA_UPDATECP|TA_RTLREADING)))return false;
-        RECT clip={};auto clip_kind=GetClipBox(dc,&clip);if(clip_kind==ERROR||clip_kind==COMPLEXREGION)return false;if(clip_kind==NULLREGION)return true;
+        c3x_native_text::State font_state;if(!c3x_native_text::capture(dc,font_state,&diagnostic))return text_refused(destination,text,target,count,diagnostic);
+        if(font_state.align&(TA_UPDATECP|TA_RTLREADING))return refused(c3x_native_text::Refusal::alignment);
+        RECT clip={};auto clip_kind=GetClipBox(dc,&clip);if(clip_kind==ERROR||clip_kind==COMPLEXREGION)return refused(c3x_native_text::Refusal::clip);if(clip_kind==NULLREGION)return true;
         Text* cached=nullptr;for(auto& entry:texts)if(entry.age&&entry.font_state==font_state&&entry.text.size()==count&&!std::memcmp(entry.text.data(),text,count)){cached=&entry;break;}
         if(cached)++counters.text_hits;
         else {
             ++counters.text_builds;c3x_native_text::Raster raster;
-            if(!c3x_native_text::compile(dc,font_state,static_cast<char const*>(text),count,raster))return false;
+            if(!c3x_native_text::compile(dc,font_state,static_cast<char const*>(text),count,raster,&diagnostic))return text_refused(destination,text,target,count,diagnostic);
             auto bytes=(raster.pixels.size()+raster.curves.size())*4;
-            if(bytes>8u*1024u*1024u)return false;
+            if(bytes>8u*1024u*1024u)return refused(c3x_native_text::Refusal::cache_bytes);
             while(text_bytes+bytes>8u*1024u*1024u){auto oldest=std::min_element(texts.begin(),texts.end(),[](Text const& a,Text const& b){return (a.age?a.age:UINT64_MAX)<(b.age?b.age:UINT64_MAX);});retire_text(*oldest);}
             cached=&*std::min_element(texts.begin(),texts.end(),[](Text const& a,Text const& b){return a.age<b.age;});retire_text(*cached);
-            auto pixels=gpu.create(raster.width,raster.height,Format::bgra32);if(!pixels)return false;
-            auto curves=gpu.create(17,unsigned(raster.curves.size()/17),Format::bgra32);if(!curves){gpu.destroy(pixels);return false;}
-            if(!gpu.upload(pixels,1,raster.pixels.data(),raster.pixels.size())||!gpu.upload(curves,1,raster.curves.data(),raster.curves.size())){gpu.destroy(pixels);gpu.destroy(curves);return false;}
+            auto pixels=gpu.create(raster.width,raster.height,Format::bgra32);if(!pixels)return refused(c3x_native_text::Refusal::gpu_admission);
+            auto curves=gpu.create(17,unsigned(raster.curves.size()/17),Format::bgra32);if(!curves){gpu.destroy(pixels);return refused(c3x_native_text::Refusal::gpu_admission);}
+            if(!gpu.upload(pixels,1,raster.pixels.data(),raster.pixels.size())||!gpu.upload(curves,1,raster.curves.data(),raster.curves.size())){gpu.destroy(pixels);gpu.destroy(curves);return refused(c3x_native_text::Refusal::gpu_upload);}
             SIZE extent={};TEXTMETRICA metrics={};GetTextExtentPoint32A(dc,static_cast<char const*>(text),int(count),&extent);GetTextMetricsA(dc,&metrics);
             cached->font_state=font_state;cached->text.assign(static_cast<char const*>(text),count);
             cached->pixels=pixels;cached->curves=curves;cached->area={raster.left,raster.top,raster.left+int(raster.width),raster.top+int(raster.height)};
             cached->advance=extent.cx;cached->ascent=metrics.tmAscent;cached->height=metrics.tmHeight;cached->bytes=bytes;text_bytes+=bytes;
         }
-        cached->age=++text_age;auto anchor=rect(target);int x=anchor.left,y=anchor.top;
-        if((font_state.align&TA_CENTER)==TA_CENTER)x-=cached->advance/2;else if(font_state.align&TA_RIGHT)x-=cached->advance;
-        if((font_state.align&TA_BASELINE)==TA_BASELINE)y-=cached->ascent;else if(font_state.align&TA_BOTTOM)y-=cached->height;
-        auto area=cached->area;
-        if(std::int64_t(x)+area.left<INT_MIN||std::int64_t(x)+area.right>INT_MAX||std::int64_t(y)+area.top<INT_MIN||std::int64_t(y)+area.bottom>INT_MAX)return false;
-        area={area.left+x,area.top+y,area.right+x,area.bottom+y};
+        cached->age=++text_age;auto anchor=rect(target);RECT placed={};auto area=cached->area;
+        if(!c3x_native_text::place(font_state.align,cached->advance,cached->ascent,cached->height,anchor.left,anchor.top,
+            area.left,area.top,unsigned(area.right-area.left),unsigned(area.bottom-area.top),placed))return refused(c3x_native_text::Refusal::anchor_range);
+        area=rect(&placed);
         Command command={Kind::native_text,destination.gpu,cached->pixels,area,rect(&clip),0,0,0,cached->curves};
         Command commands[2]={command,command};unsigned n=1;
         if(destination.detail){commands[1].destination=destination.detail;n=2;}
-        if(!gpu.submit(commands,n))return false;destination.dirty=true;++counters.translated;return true;
+        if(!gpu.submit(commands,n))return refused(c3x_native_text::Refusal::submission);destination.dirty=true;++counters.translated;return true;
     }
     using Get=std::uint16_t*(__thiscall*)(void*);
     using Release=void(__thiscall*)(void*,int);
@@ -547,6 +593,7 @@ public:
         if(GetCurrentThreadId()!=thread)throw std::runtime_error("native GPU adapter thread changed");
         trim_cpu_sources();
         auto destination=find(object);
+        if(op==C3X_NATIVE_TEXT)text_candidate(destination,object,source,target_rect,color);
         if(op==C3X_NATIVE_IMAGE_DRAIN){drain();return 0;}
         if(op==C3X_NATIVE_DESTROY){if(destination)forget(*destination);return 0;}
         if(op==C3X_NATIVE_IMAGE_REINIT){if(destination){cpu_ownership(*destination,op);forget(*destination);}return 0;}

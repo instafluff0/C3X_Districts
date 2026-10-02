@@ -23,6 +23,7 @@ FUNCTIONS = (
     "patch_Unit_draw_map_status",
     "patch_Animator_draw_map_unit_cursor",
     "bootstrap_custom_renderer_initial_units",
+    "notify_custom_renderer_unit_selection",
 )
 
 
@@ -106,6 +107,7 @@ struct Map {
 typedef struct Animator { intptr_t field_18E4[22]; } Animator;
 typedef struct Main_Screen_Form {
     int Player_CivID, TileX_Min, TileX_Max, TileY_Min, TileY_Max, camera_x, camera_y;
+    int Mode_Action;
     Unit *Current_Unit;
     Animator animator;
     struct { struct { PCX_Image Canvas; } Data; } Units_Control;
@@ -116,7 +118,7 @@ typedef struct UnitType { char Civilipedia_Entry[32]; } UnitType;
 typedef struct Bic { Map Map; int UnitTypeCount; UnitType *UnitTypes; bool is_zoomed_out; } Bic;
 typedef struct State {
     struct {
-        bool enable_custom_rendering, enable_custom_rendering_zoom;
+        bool enable_custom_rendering, enable_custom_rendering_zoom, enable_unit_counters;
         int day_night_cycle_mode, seasonal_cycle_mode;
     } current_config;
     int custom_renderer_init_state, custom_renderer_viewer_civ_id;
@@ -128,6 +130,9 @@ typedef struct State {
     bool custom_renderer_draw_in_progress, custom_renderer_frame_active;
     bool custom_renderer_capture_only, custom_renderer_capture_failed;
     bool custom_renderer_unit_bootstrap, custom_renderer_unit_bootstrap_failed;
+    bool custom_renderer_unit_representatives_dirty, custom_renderer_redraw_pending;
+    int custom_renderer_unit_display_action;
+    unsigned custom_renderer_dirty_flags;
     unsigned custom_renderer_unit_bootstrap_copies;
     Unit *custom_renderer_unit_bootstrap_selected, *custom_renderer_unit_context;
     PCX_Image *custom_renderer_unit_canvas;
@@ -166,7 +171,10 @@ static unsigned owner_thread;
 static bool online, submission_success, palette_ready, producer_changes_member;
 static int tick_count, status_count, cursor_count, hud_scope_count, gui_count, marker_count;
 static int original_bodies, observations, forget_count, errors, debug_count, query_count;
+static int native_selection_calls; static bool native_selection_accepts;
 static int draw_count, animation_count, visual_count, last_edx, last_status_x, last_status_y;
+static bool observed_ids[12];
+static long long observed_ticks[12];
 static int tick_ids[2048], tick_offsets[2048][2], query_xy[2048][2];
 static unsigned draw_flags[2048];
 static struct c3x_renderer_unit_v1 draws[2048];
@@ -219,6 +227,7 @@ int clamp(int minimum, int maximum, int value) {
     return value < minimum ? minimum : value > maximum ? maximum : value;
 }
 bool QueryPerformanceCounter(LARGE_INTEGER *value) { value->QuadPart = qpc; qpc += 1000; return true; }
+long long advancing_visual_clock(void) { qpc += 1000; return qpc; }
 bool custom_renderer_zoom_enabled(void) { return state.current_config.enable_custom_rendering_zoom; }
 bool custom_renderer_zoom_transform_active(void) { return custom_renderer_zoom_enabled(); }
 void sync_custom_renderer_zoom_to_native(void) {}
@@ -238,6 +247,12 @@ void Animator_draw_unit_cursor(Animator *animator, int unused, int x, int y) {
 }
 void notify_custom_renderer_unit_state(Unit *unit, unsigned kind) {
     assert(unit != NULL && kind == C3X_RENDERER_UNIT_STATE_OBSERVE); ++observations;
+    assert(unit->Body.ID >= 100 && unit->Body.ID < 112); observed_ids[unit->Body.ID - 100] = true;
+    if (state.custom_renderer_visual_clock) observed_ticks[unit->Body.ID - 100] = state.custom_renderer_visual_clock();
+}
+void Main_Screen_Form_set_selected_unit(Main_Screen_Form *form,int unused,Unit *unit,bool flag) {
+    (void)unused;(void)flag;++native_selection_calls;
+    if (native_selection_accepts) form->Current_Unit=unit;
 }
 void forget_unit(int id) { assert(id >= 0); ++forget_count; }
 void log_custom_renderer_event(char const *event, int result) {
@@ -254,6 +269,7 @@ int capture_visual(struct c3x_renderer_unit_visual_v1 const *visual) {
 }
 int capture_animation(struct c3x_renderer_unit_animation_v1 const *animation) {
     assert(animation->struct_size == sizeof *animation && animation_count < 2048);
+    assert(animation->visual.presentation_time_ticks >= observed_ticks[animation->visual.unit_id - 100]);
     animations[animation_count++] = *animation; return capture_visual(&animation->visual);
 }
 int unused_draw(struct c3x_renderer_unit_v1 const *draw, void *destination, void *underlay) {
@@ -264,6 +280,7 @@ int translate_custom_renderer_native(int operation, JGL_Image *destination, void
     assert(operation == C3X_NATIVE_UNIT_DRAW && destination == &image && underlay == &background_image);
     assert(source != NULL && bounds != NULL && draw_count < 2048);
     draws[draw_count] = *(struct c3x_renderer_unit_v1 *)source;
+    assert(observed_ids[draws[draw_count].unit_id - 100]); // Every copied body has its own ordered visible state.
     draw_flags[draw_count++] = flags;
     return submission_success ? 1 : -1;
 }
@@ -382,7 +399,10 @@ void reset(void) {
     online = producer_changes_member = false; submission_success = palette_ready = true;
     tick_count = status_count = cursor_count = hud_scope_count = gui_count = marker_count = 0;
     original_bodies = observations = forget_count = errors = debug_count = query_count = 0;
-    draw_count = animation_count = visual_count = 0;
+    draw_count = animation_count = visual_count = native_selection_calls = 0;
+    native_selection_accepts = true;
+    memset(observed_ids, 0, sizeof observed_ids);
+    memset(observed_ticks, 0, sizeof observed_ticks);
 }
 void place(int index, int x, int y) {
     Unit *unit = &units[index]; unit->Body.X = x; unit->Body.Y = y;
@@ -539,7 +559,7 @@ void readiness_case(void) {
     }
 }
 void army_restore_case(void) {
-    reset(); place(0, 2, 2); occurrence(0, 2, 2, 14); screen.Current_Unit = &units[0];
+    reset(); state.custom_renderer_visual_clock = advancing_visual_clock; place(0, 2, 2); occurrence(0, 2, 2, 14); screen.Current_Unit = &units[0];
     tile_at(2, 2)->city_id = 42; units[0].army = true;
     units[0].Body.army_top_defender_id = -1; producer_changes_member = true;
     units[1].Body.X = units[1].Body.Y = 2;
@@ -550,6 +570,7 @@ void army_restore_case(void) {
     assert(bootstrap_custom_renderer_initial_units() == C3X_RENDERER_RESULT_OK);
     assert(tick_count == 1 && draw_count == 2 && state.custom_renderer_unit_bootstrap_copies == 2);
     assert(draws[0].unit_id == 100 && draws[1].unit_id == 101);
+    assert(observations == 2 && observed_ids[0] && observed_ids[1]);
     assert(animations[0].display_unit_id == 100 && animations[1].display_unit_id == 100);
     for (int n = 0; n < 2; ++n) {
         assert((draw_flags[n] & C3X_RENDERER_UNIT_SELECTED) != 0);
@@ -597,6 +618,73 @@ void failure_config_case(void) {
     units[0].army = true; units[0].Body.army_top_defender_id = 101;
     patch_Unit_tick_anim(&units[0], 0, &screen.Units_Control.Data.Canvas, 0, 0, true);
     assert(tick_count == 0 && draw_count == 0 && forget_count == 1);
+}
+void selection_refresh_case(void) {
+    reset(); place(0, 2, 2); occurrence(0, 2, 2, 14);
+    state.custom_renderer_display_viewer_epoch = state.custom_renderer_viewer_epoch;
+    state.custom_renderer_unit_display_action = screen.Mode_Action;
+    state.current_config.enable_unit_counters = true;
+    assert(bootstrap_custom_renderer_initial_units() == C3X_RENDERER_RESULT_OK);
+    assert(query_count == 0 && draw_count == 0);
+    // The accepted attacker changes without either stack moving. Its authoritative
+    // native representative changes at the same anchor before the next capture.
+    screen.Current_Unit = &units[8];
+    place(1, 2, 2); notify_custom_renderer_unit_selection(true);
+    assert(state.custom_renderer_unit_representatives_dirty && state.custom_renderer_redraw_pending);
+    assert(state.custom_renderer_dirty_flags & C3X_RENDERER_DIRTY_SCENE);
+    assert(bootstrap_custom_renderer_initial_units() == C3X_RENDERER_RESULT_OK);
+    assert(draw_count == 1 && draws[0].unit_id == 101 && !state.custom_renderer_unit_representatives_dirty);
+    int before = query_count;
+    notify_custom_renderer_unit_selection(false);
+    assert(bootstrap_custom_renderer_initial_units() == C3X_RENDERER_RESULT_OK && query_count == before);
+    // A bombard/precision mode can select another representative without movement.
+    screen.Mode_Action = 7; place(2, 2, 2); notify_custom_renderer_unit_selection(false);
+    assert(bootstrap_custom_renderer_initial_units() == C3X_RENDERER_RESULT_OK);
+    assert(draw_count == 2 && draws[1].unit_id == 102);
+    // Native frame availability defers exactly once; the request survives retry.
+    screen.Mode_Action = 8; notify_custom_renderer_unit_selection(false);
+    units[2].Body.Animation.Frame_1.Flic_Info = NULL;
+    assert(bootstrap_custom_renderer_initial_units() == C3X_RENDERER_RESULT_PENDING);
+    assert(state.custom_renderer_unit_representatives_dirty && draw_count == 2);
+    units[2].Body.Animation.Frame_1.Flic_Info = &animation_info;
+    assert(bootstrap_custom_renderer_initial_units() == C3X_RENDERER_RESULT_OK);
+    assert(!state.custom_renderer_unit_representatives_dirty && draw_count == 3);
+    // Hidden stacks remain excluded even during this explicit refresh.
+    tile_at(2, 2)->visible = false; notify_custom_renderer_unit_selection(true);
+    assert(bootstrap_custom_renderer_initial_units() == C3X_RENDERER_RESULT_OK && draw_count == 3);
+    // Camera entry requests the same producer only after new anchors are captured.
+    tile_at(2, 2)->visible = true; state.custom_renderer_unit_representatives_dirty = true;
+    state.custom_renderer_capture_only = true;
+    assert(bootstrap_custom_renderer_initial_units() == C3X_RENDERER_RESULT_PENDING && draw_count == 3);
+    state.custom_renderer_capture_only = false;
+    assert(bootstrap_custom_renderer_initial_units() == C3X_RENDERER_RESULT_OK && draw_count == 4);
+    // Configuration off leaves native selection/UI ownership untouched.
+    state.current_config.enable_custom_rendering = false;
+    state.custom_renderer_unit_representatives_dirty = state.custom_renderer_redraw_pending = false;
+    state.custom_renderer_dirty_flags = 0; screen.Mode_Action = 9;
+    notify_custom_renderer_unit_selection(true);
+    assert(!state.custom_renderer_unit_representatives_dirty && !state.custom_renderer_redraw_pending && !state.custom_renderer_dirty_flags);
+}
+void accepted_selection_case(void) {
+    reset();state.custom_renderer_unit_display_action=screen.Mode_Action;
+    screen.Current_Unit=&units[0];native_selection_accepts=false;
+    execute_native_selection_hook(&screen, &units[1], true);
+    assert(native_selection_calls==1&&screen.Current_Unit==&units[0]);
+    assert(!state.custom_renderer_unit_representatives_dirty&&!state.custom_renderer_redraw_pending);
+    native_selection_accepts=true;
+    execute_native_selection_hook(&screen, &units[1], true);
+    assert(native_selection_calls==2&&screen.Current_Unit==&units[1]);
+    assert(state.custom_renderer_unit_representatives_dirty&&state.custom_renderer_redraw_pending);
+    state.custom_renderer_unit_representatives_dirty=state.custom_renderer_redraw_pending=false;
+    execute_native_selection_hook(&screen, &units[1], true);
+    assert(native_selection_calls==3&&!state.custom_renderer_unit_representatives_dirty);
+    execute_native_selection_hook(&screen, NULL, false);
+    assert(native_selection_calls==4&&screen.Current_Unit==NULL&&state.custom_renderer_unit_representatives_dirty);
+    state.current_config.enable_custom_rendering=false;
+    state.custom_renderer_unit_representatives_dirty=state.custom_renderer_redraw_pending=false;
+    execute_native_selection_hook(&screen, &units[0], true);
+    assert(native_selection_calls==5&&screen.Current_Unit==&units[0]);
+    assert(!state.custom_renderer_unit_representatives_dirty&&!state.custom_renderer_redraw_pending);
 }
 void guards_case(void) {
     for (int condition = 0; condition < 15; ++condition) {
@@ -648,6 +736,8 @@ int main(int argc, char **argv) {
     else if (!strcmp(argv[1], "army_restore")) army_restore_case();
     else if (!strcmp(argv[1], "failure_config")) failure_config_case();
     else if (!strcmp(argv[1], "guards")) guards_case();
+    else if (!strcmp(argv[1], "selection_refresh")) selection_refresh_case();
+    else if (!strcmp(argv[1], "accepted_selection")) accepted_selection_case();
     else assert(!"Unknown contract case");
     return 0;
 }
@@ -665,11 +755,15 @@ class InjectedUnitBootstrapTests(unittest.TestCase):
         directory = Path(cls.temporary.name)
         source = (ROOT / "injected_code.c").read_text()
         contract = directory / "contract.c"
-        contract.write_text(PRELUDE + "\n".join(production_function(source, name) for name in FUNCTIONS) + CASES)
+        native_hook = production_function(source, "patch_Main_Screen_Form_set_selected_unit")
+        start = native_hook.index("Unit * previous_selected = this->Current_Unit;")
+        end = native_hook.index("\n\n", start)
+        selected_capture = "void execute_native_selection_hook(Main_Screen_Form *this, Unit *unit, bool param_2) {\n" + native_hook[start:end] + "\n}\n"
+        contract.write_text(PRELUDE + "\n".join(production_function(source, name) for name in FUNCTIONS) + selected_capture + CASES)
         cls.executable = directory / "contract"
         result = subprocess.run(
             [compiler, "-std=c17", "-O1", "-Wall", "-Wextra", "-Werror",
-             "-Wno-unused-parameter", "-Wno-pointer-to-int-cast", "-I", str(ROOT),
+             "-Wno-unused-parameter", "-Wno-pointer-to-int-cast", "-Wno-tautological-pointer-compare", "-I", str(ROOT),
              str(contract), "-o", str(cls.executable)],
             text=True, capture_output=True, timeout=30,
         )
@@ -697,6 +791,12 @@ class InjectedUnitBootstrapTests(unittest.TestCase):
 
     def test_capture_failures_restore_scope_and_config_off_delegates(self):
         self.contract("failure_config")
+
+    def test_actual_selection_hook_observes_native_acceptance_and_config_off(self):
+        self.contract("accepted_selection")
+
+    def test_selection_action_mode_and_camera_refresh_is_one_shot(self):
+        self.contract("selection_refresh")
 
     def test_bootstrap_guards_and_bounded_top_list(self):
         self.contract("guards")

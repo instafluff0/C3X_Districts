@@ -17,6 +17,10 @@ int main(){
  f.world_topology=&topology;f.world_topology_count=1;f.presentation_frequency=1000;f.presentation_time_ticks=125;
  f.hour=20;f.season=3;f.tile_width=192;f.tile_height=96;
  DynamicSceneInputs owner;auto a=owner.capture(f,{1,2,3,4});assert(a && owner.bytes()==a->bytes() && a->identity().visibility_epoch==3);
+ auto identical=owner.capture(f,{1,2,3,4});assert(identical==a && owner.captures==1 && owner.reused==1);identical.reset();
+ // Pointer replacement may share; exact authoritative byte changes must not.
+ auto copied_tile=tile;auto copied_topology=topology;auto copied=f;copied.tiles=&copied_tile;copied.world_topology=&copied_topology;
+ assert(owner.capture(copied,{1,2,3,4})==a);
  tile.resource_id=19;tile.tile_flags=0;tile.anchor_x=384;topology=9;f.hour=12;f.presentation_time_ticks=500;
  c3x_renderer_frame_v1 sample={};assert(a->sample(3000,10000,1000,sample));
  assert(sample.presentation_time_ticks==325 && sample.hour==20 && sample.season==3 && sample.tile_width==192);
@@ -31,7 +35,9 @@ int main(){
  temporary_frame.tiles=temporary.data();return owner.capture(temporary_frame,{5,6,7,8});}();
  assert(after_caller && after_caller->frame().tiles[0].resource_id==19 && after_caller->identity().viewer_epoch==6);
  after_caller.reset();
- DynamicSceneInputs bounded(owner.peak/2);a=bounded.capture(f,{1,2,3,4});assert(a);assert(!bounded.capture(f,{1,2,3,4}));a.reset();assert(bounded.capture(f,{1,2,3,4}));
+ DynamicSceneInputs bounded(owner.peak/2);a=bounded.capture(f,{1,2,3,4});assert(a);
+ assert(bounded.capture(f,{1,2,3,4})==a && bounded.captures==1 && bounded.reused==1);
+ assert(!bounded.capture(f,{1,2,3,5}));a.reset();assert(bounded.capture(f,{1,2,3,4}));
  f.tile_count=8193;assert(!owner.capture(f,{1,2,3,4}));f.tile_count=1;f.world_topology=nullptr;assert(!owner.capture(f,{1,2,3,4}));
  f.world_topology=&topology;f.presentation_frequency=0;assert(!owner.capture(f,{1,2,3,4}));f.presentation_frequency=1000;f.presentation_time_ticks=INT64_MAX;
  a=owner.capture(f,{1,2,3,4});assert(a && !a->sample(1000,1000,0,sample));

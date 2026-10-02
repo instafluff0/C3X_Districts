@@ -5,6 +5,7 @@
 #include "static_raster_state.h"
 #include "../native/render_core/raster_contributors.h"
 #include "../native/render_core/shadow_sampling_grid.h"
+#include "../native/render_core/body_placement_requirements.h"
 #include <limits>
 #include <sstream>
 #include "../native/gpu_territory_borders.h"
@@ -654,24 +655,31 @@ struct SandboxSceneShadow {
         result.back()=1;return result;
     }
     template<class BodyInputs> bool body_placements_covered(Submission::Generation const& candidate,BodyInputs const& inputs)const {
-        bool covered=true;
-        inputs([&](unsigned layer,GeometryDrawReference const& draw){
-            auto const& mesh=draw.content();if(!mesh.instances || mesh.instances->empty())return;
-            auto range=candidate.find(renderer.shared_instance_draw_key(layer,draw));
-            if(range.count!=mesh.instances->size())covered=false;
-        });return covered;
+        return inputs.covers(candidate);
     }
     template<class BodyInputs> bool append_body_placements(Submission::Builder& builder,BodyInputs const& inputs) {
         bool complete=true;
-        inputs([&](unsigned layer,GeometryDrawReference const& draw){
-            auto const& mesh=draw.content();if(!complete || !mesh.instances || mesh.instances->empty())return;
+        inputs.visit([&](unsigned,Submission::Key const& key,GeometryDrawRecord const& record,unsigned count){
+            auto draw=GeometryDrawReference(record);auto const& mesh=draw.content();if(!complete)return;
             Submission::Range range;
-            complete=renderer.shared_instances.append(builder,renderer.shared_instance_draw_key(layer,draw),mesh.instances.get(),
-                mesh.instances->data(),unsigned(mesh.instances->size()),draw.natural_projection(),
+            if(builder->delta && draw.occurrence){
+                auto owner=draw.occurrence->owner;auto source=renderer.resident_content.lease(owner);
+                auto cached=renderer.resident_content.resolve(owner);
+                if(source && cached && cached->mesh && cached->mesh.get()==source.get() && cached->mesh->proof &&
+                        renderer.raster_content_valid(*cached->mesh->proof)){
+                    Submission::RetainedSource proof;proof.source=source;proof.owner={owner.slot,owner.generation};
+                    proof.canonical_source=Submission::Generation::source_key(mesh.instances.get(),mesh.instance_material);
+                    if(renderer.shared_instances.reuse_range(builder,key,count,proof,range))return;
+                    if(builder->complete){complete=false;return;}
+                }
+            }
+            complete=renderer.shared_instances.append(builder,key,mesh.instances.get(),
+                mesh.instances->data(),count,draw.natural_projection(),
                 float(draw.translation_x()),float(draw.translation_y()),float(draw.translation_y()),mesh.instance_material,range);
         });return complete;
     }
-    template<class BodyInputs,class RetireCompletedPlans> bool prepare_instances(BodyInputs const& inputs,RetireCompletedPlans const& retire_completed_plans) {
+    template<class BodyInputs,class RetireCompletedPlans> bool prepare_instances(BodyInputs const& inputs,RetireCompletedPlans const& retire_completed_plans,
+            Submission::Generation const* checked=nullptr,bool covered=false) {
         // Close one body/reflection/shadow placement union before any pass.
         // A serial identifies a new exact prepared caster selection; its input
         // equality is already checked by membership/box/light preparation.
@@ -679,7 +687,7 @@ struct SandboxSceneShadow {
             renderer.geometry_vertex_buffers.revision(),++submission_generation,0,0,1};
         auto reused=renderer.shared_instances.find_covering([&](Submission::Generation const& candidate){
             if(candidate.identity[1]!=renderer.device_generation || candidate.identity[2]!=renderer.content_revision)return false;
-            if(!body_placements_covered(candidate,inputs))return false;
+            if(!(checked==&candidate?covered:body_placements_covered(candidate,inputs)))return false;
             for(auto const& caster:casters)if(caster.instances && !caster.instances->empty()){
                 auto range=candidate.find(shared_caster_placement_key(caster));if(range.count!=caster.instances->size())return false;
             }return true;
@@ -695,7 +703,7 @@ struct SandboxSceneShadow {
         if(!metadata)return false;
         // Packed placements own no draw sources. The current resident/caster
         // publications below each pass already own the actually bound meshes.
-        auto builder=reused?Submission::Builder{}:renderer.shared_instances.begin_retained(identity);
+        auto builder=reused?Submission::Builder{}:renderer.shared_instances.begin_retained(identity,{},true);
         if(!reused && !builder)return false;
         if(!reused && !append_body_placements(builder,inputs))return false;
         // Only the required current membership owns source meshes. Reusable
@@ -723,9 +731,9 @@ struct SandboxSceneShadow {
             return renderer.shared_instances.retain_source(builder,key,std::move(proof));
         };
         if(!reused){bool retained=true;
-            inputs([&](unsigned layer,GeometryDrawReference const& draw){
-                auto const& mesh=draw.content();if(!retained || !draw.occurrence || !mesh.instances || mesh.instances->empty())return;
-                retained=retain_source(renderer.shared_instance_draw_key(layer,draw),draw.occurrence->owner,
+            inputs.visit([&](unsigned,Submission::Key const& key,GeometryDrawRecord const& record,unsigned){
+                auto draw=GeometryDrawReference(record);auto const& mesh=draw.content();if(!retained || !draw.occurrence)return;
+                retained=retain_source(key,draw.occurrence->owner,
                     mesh.instances.get(),mesh.instance_material);
             });if(!retained)return false;
         }
@@ -744,7 +752,20 @@ struct SandboxSceneShadow {
             auto& group=instance_groups[found->second];
             auto placement_key=shared_caster_placement_key(caster);
             auto range=reused?reused->find(placement_key):Submission::Range{};
-            if(!reused && !renderer.shared_instances.append(builder,placement_key,caster.instances,caster.instances->data(),
+            if(!reused && caster.content_generation){
+                auto owner=source_handles.find(caster.content_generation);
+                if(owner!=source_handles.end()){
+                    auto source=renderer.resident_content.lease(owner->second);auto cached=renderer.resident_content.resolve(owner->second);
+                    if(source && cached && cached->mesh && cached->mesh.get()==source.get() && cached->mesh->proof &&
+                            renderer.raster_content_valid(*cached->mesh->proof)){
+                        Submission::RetainedSource proof;proof.source=source;proof.owner={owner->second.slot,owner->second.generation};
+                        proof.canonical_source=Submission::Generation::source_key(caster.instances,caster.instance_material);
+                        renderer.shared_instances.reuse_range(builder,placement_key,unsigned(caster.instances->size()),proof,range);
+                        if(builder->complete)return false;
+                    }
+                }
+            }
+            if(!reused && !range && !renderer.shared_instances.append(builder,placement_key,caster.instances,caster.instances->data(),
                 unsigned(caster.instances->size()),caster.instances->front().projection,
                 caster.offset[0],caster.offset[1],caster.offset[2],caster.instance_material,range))return false;
             if(!reused && caster.content_generation){
@@ -763,7 +784,7 @@ struct SandboxSceneShadow {
                 renderer.raster_content_valid(*cached->mesh->proof);
         }))return false;
         auto uploads=renderer.shared_instances.uploads;auto bytes=renderer.shared_instances.uploaded_bytes;
-        shared_front=reused?reused:renderer.shared_instances.upload(builder,renderer.device);
+        shared_front=reused?reused:renderer.shared_instances.upload(builder,renderer.device,renderer.context);
         if(!shared_front)return false;
         shared_metadata=std::move(metadata);
         renderer.frame_content_uploads+=renderer.shared_instances.uploads-uploads;
@@ -982,10 +1003,11 @@ struct SandboxSceneShadow {
         Grid query_grid;
         if(!query_grid.configure(needed,renderer.shadow_basis))return false;
         receiver_revision=revision;
+        bool body_covered=renderer.shared_instances.valid(shared_front) && body_placements_covered(*shared_front,inputs);
         if (renderer.shared_instances.valid(shared_front) && prepared_signature==membership &&
             signature==scene && wrap_basis==wrap_query &&
             light_basis==renderer.shadow_basis &&
-            sampling_grid.covers(query_grid) && atlas_dependencies(false) && body_placements_covered(*shared_front,inputs)){if(work->enabled)++work->row().reuses;return true;}
+            sampling_grid.covers(query_grid) && atlas_dependencies(false) && body_covered){if(work->enabled)++work->row().reuses;return true;}
         if(work->enabled)++work->row().rebuilds;
         sampling_grid=query_grid;
         auto coverage=sampling_grid.coverage();
@@ -993,7 +1015,7 @@ struct SandboxSceneShadow {
         atlas_inputs.clear();if(!atlas_dependencies(true))atlas_inputs.complete=false;
         std::array<float,4> next_box={box[0],box[1],box[2],box[3]};
         if(!renderer.shared_instances.valid(shared_front) || prepared_signature!=membership || prepared_box!=next_box || prepared_light!=renderer.shadow_basis ||
-                !body_placements_covered(*shared_front,inputs)){
+                !body_covered){
             instance_groups.clear();
             ID3D11Buffer* empty[]={nullptr,nullptr};UINT cleared_strides[2]={};
             renderer.context->IASetVertexBuffers(0,2,empty,cleared_strides,cleared_strides);
@@ -1005,7 +1027,7 @@ struct SandboxSceneShadow {
                 casters.push_back(caster);
             }
             batch_terrain_casters();
-            if(!prepare_instances(inputs,retire_completed_plans))return false;
+            if(!prepare_instances(inputs,retire_completed_plans,shared_front.get(),body_covered))return false;
             prepared_signature=membership;prepared_box=next_box;prepared_light=renderer.shadow_basis;
         }
         auto* context=renderer.context;
@@ -1226,6 +1248,16 @@ struct SandboxFreshPipeline {
     bool reflection_valid=false;
     using Submission=c3x_renderer::render_core::SharedInstanceSubmission;
     Submission::Lease shared_front;
+    c3x_renderer::render_core::BodyPlacementRequirements<CachedVertexChunk> body_requirements;
+    std::array<std::uint64_t,4> body_requirement_scene{};
+    std::array<float,7> body_requirement_view{};
+    bool body_requirements_valid=false;
+    unsigned body_requirement_builds=0,body_requirement_reuses=0,body_requirement_visits=0;
+    double body_requirement_ms=0;
+    enum PrepareSpan {prepare_setup_resources,prepare_capture,prepare_raster_proof,
+        prepare_body_requirements,prepare_city_shadow,prepare_unit_selection,prepare_unit_pose,prepare_span_count};
+    std::array<double,prepare_span_count> prepare_subspans{};
+    unsigned prepare_unit_plan_reused=0,prepare_unit_reselected=0;
     double phases[6]={};
 #ifdef C3X_RENDERER64_FRESH
 
@@ -2392,6 +2424,9 @@ struct SandboxFreshPipeline {
             int unit_x,int unit_y,int incarnation,int viewer,bool unit_visible,
             float next_zoom) {
         work.begin();shadow.work=&work;sandbox_direct_units.work=&work;bloom.work=&work;
+        body_requirement_builds=body_requirement_reuses=body_requirement_visits=0;body_requirement_ms=0;
+        body_requirements.coverage_probes=0;
+        prepare_subspans={};prepare_unit_plan_reused=prepare_unit_reselected=0;
         char scroll_diagnostics[8]={};
         bool trace_scroll=GetEnvironmentVariableA("C3X_SANDBOX_SCROLL_CALLS",
             scroll_diagnostics,sizeof(scroll_diagnostics)) && scroll_diagnostics[0]=='1';
@@ -2410,6 +2445,10 @@ struct SandboxFreshPipeline {
 #endif
         LARGE_INTEGER frequency{},ticks[7]={};
         QueryPerformanceFrequency(&frequency);QueryPerformanceCounter(&ticks[0]);
+        LARGE_INTEGER prepare_previous=ticks[0];
+        auto mark_prepare=[&](PrepareSpan span){LARGE_INTEGER now{};QueryPerformanceCounter(&now);
+            prepare_subspans[span]=double(now.QuadPart-prepare_previous.QuadPart)*1000/frequency.QuadPart;
+            prepare_previous=now;};
         int width=renderer.content_view_width,height=renderer.content_view_height;
         if (!renderer.device || !renderer.context || width<1 || height<1)return fail("viewport");
         if(!std::isfinite(next_zoom))return fail("projection");
@@ -2495,6 +2534,7 @@ struct SandboxFreshPipeline {
         renderer.water_time_seconds=renderer.water_material.time;
         renderer.wave_time_seconds=renderer.water_material.time;
         if(!renderer.compose_resource_animations(frame,true))return fail("resource_poses");
+        mark_prepare(prepare_setup_resources);
         auto settings=renderer.geometry_viewport_settings;
 #ifdef C3X_RENDERER64_FRESH
         // Static occurrences use a stable world pixel basis. View translation
@@ -2515,6 +2555,7 @@ struct SandboxFreshPipeline {
         int next_wrap_pixels=frame.world_wrap_x?
             frame.world_width_tiles*frame.tile_width/2:0;
         if (!capture(settings,reflected,int(w),int(h),next_wrap_pixels))return fail("visibility_capture");
+        mark_prepare(prepare_capture);
         auto region_shift=c3x_renderer::render_core::StaticRegionShift::between(
             projection_zoom,camera_x,camera_y,current_raster().camera_x,current_raster().camera_y,
             region_margin_x,region_margin_y);
@@ -2565,13 +2606,26 @@ struct SandboxFreshPipeline {
         region_settings.inverse_size[1]=1.f/static_region().height;
         D3D11_RECT region_rect={region_margin_x,region_margin_y,
             LONG(region_margin_x+w),LONG(region_margin_y+h)};
-        auto body_inputs=[&](auto visit){
-            // Original ranges remain available to the legacy CPU oracle. The
-            // selected occurrences additionally close reflection and wrapped
-            // placements, including subsequent guarded static strip fills.
+        mark_prepare(prepare_raster_proof);
+        std::array<std::uint64_t,4> body_scene={view_revision(),visibility_revision,
+            (std::uint64_t(static_region().width)<<32)|static_region().height,std::uint64_t(renderer.water_scene_active)};
+        std::array<float,7> body_view={region_settings.translation[0],region_settings.translation[1],
+            region_settings.inverse_size[0],region_settings.inverse_size[1],projection_zoom,resident_basis_x,resident_basis_y};
+        if(!body_requirements_valid || body_scene!=body_requirement_scene || body_view!=body_requirement_view){
+            auto started=std::chrono::steady_clock::now();body_requirements.clear();body_requirements_valid=false;
+            bool complete=true;
+            auto visit=[&](unsigned layer,GeometryDrawReference const& draw){
+                if(complete && draw.content().instances && !draw.content().instances->empty())
+                    complete=body_requirements.add(renderer.shared_instances,layer,draw,renderer.shared_instance_draw_key(layer,draw));
+            };
+#ifndef C3X_RENDERER64_FRESH
+            // Legacy consumers submit the original native ranges. Renderer64
+            // production uses the selected occurrences and guarded strips;
+            // its explicit CPU oracle prepares its own original-range union.
             GeometryDrawView original=renderer.geometry_vertex_buffers;
             for(unsigned layer=0;layer<geometry_layer_count;++layer)
                 for(auto const& draw:original[layer])visit(layer,draw);
+#endif
             for(unsigned layer=0;layer<geometry_layer_count;++layer)
                 for(auto const& record:all_visible[layer])visit(layer,GeometryDrawReference(record));
             auto clip=source_bounds(region_settings,{0,0,LONG(static_region().width),LONG(static_region().height)},false);
@@ -2580,7 +2634,13 @@ struct SandboxFreshPipeline {
                 auto draw=GeometryDrawReference(record);
                 if(renderer.chunk_intersects_region(draw,region_settings,clip,false))visit(layer,draw);
             });
-        };
+            if(!complete)return fail("body_requirements");
+            body_requirement_scene=body_scene;body_requirement_view=body_view;body_requirements_valid=true;
+            ++body_requirement_builds;body_requirement_visits=body_requirements.visits;
+            body_requirement_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-started).count();
+        }else ++body_requirement_reuses;
+        auto const& body_inputs=body_requirements;
+        mark_prepare(prepare_body_requirements);
         auto retire_completed_instance_plans=[&]{
 #ifdef C3X_RENDERER64_FRESH
             instance_plans={};instance_plans.begin();instance_plan_bytes=0;
@@ -2593,6 +2653,7 @@ struct SandboxFreshPipeline {
         shared_front=shadow.shared_front;
 #endif
         if(!renderer.shared_instances.valid(shared_front))return fail("shared_submission");
+        mark_prepare(prepare_city_shadow);
         D3D11_RECT full={0,0,LONG(w),LONG(h)};
         char unit_control[8]{};
         bool units=GetEnvironmentVariableA("C3X_SANDBOX_UNITS",unit_control,
@@ -2607,13 +2668,20 @@ struct SandboxFreshPipeline {
         bool unit_input_changed=!same_unit_inputs(renderer.fresh_unit_poses,unit_contribution_required);
         if(unit_input_changed || unit_contribution_scope!=view_revision() || unit_plan_x!=camera_x || unit_plan_y!=camera_y || unit_plan_zoom!=projection_zoom || unit_plan_hour!=visual_hour || unit_plan_season!=frame.season ||
                 unit_plan_bounds!=renderer.unit_bodies.contribution_sequence || unit_plan_reflection!=renderer.reflection.enabled){
+            ++prepare_unit_reselected;
             auto candidates=unit_input_changed?renderer.fresh_unit_poses:unit_contribution_candidates;
             std::vector<SandboxDirectUnits::ScenePose> required;
             if(!select_unit_contributors(frame,candidates,required,projection_zoom))return fail("unit_preselection");
-        }
+        }else ++prepare_unit_plan_reused;
+#endif
+        // This span includes consumer receiver setup and any selection missed
+        // by the caller's preselection; source pose preparation is separate.
+        mark_prepare(prepare_unit_selection);
+#ifdef C3X_RENDERER64_FRESH
         if(!sandbox_direct_units.prepare_real(frame,unit_contribution_candidates,visual_hour,unit_contribution_plan))return fail("shared_unit_preparation");
 #endif
         QueryPerformanceCounter(&ticks[1]);
+        prepare_subspans[prepare_unit_pose]=double(ticks[1].QuadPart-prepare_previous.QuadPart)*1000/frequency.QuadPart;
 #ifdef C3X_RENDERER64_FRESH
         gpu_phases.pass_end(renderer.context);gpu_phases.pass_begin(renderer.context,GpuPhases::import);
 #endif

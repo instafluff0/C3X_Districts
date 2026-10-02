@@ -179,6 +179,13 @@ public:
     void set_tactical(std::function<int(Tactical const&,c3x_renderer_gpu_unit_v1 const&)> draw){tactical=std::move(draw);}
     bool active()const{return adapter!=nullptr;}
     c3x_renderer_i64 sample_ticks()const{return frame.presentation_time_ticks;}
+    // Diagnostic identity of the image actually prepared by this caller-thread
+    // owner. A navigation fallback/barrier never grants an offered GPU source.
+    // The async bridge reserves this ticket locally; it is not an x64 source
+    // serial. Only its ordered adoption knows the remote map identity.
+    c3x_renderer_i64 local_image_ticket()const{return frame.ticket;}
+    c3x_renderer_i64 requested_ticket()const{return camera_ticket;}
+    bool offered_navigation()const{return navigation.available();}
     // Native validation occurs between prepare and commit. Preparation never
     // inserts pixels or claims category replacement on the game's behalf.
     int map(int action,void* image,c3x_renderer_camera_request_v1 const* request,c3x_renderer_output_v1* output){

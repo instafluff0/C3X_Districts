@@ -505,7 +505,8 @@ struct Bodies {
     bool restore_cached(c3x_renderer_unit_v1 const&){cache_hit=cached;return cached;}
     std::size_t cached_pose_entries()const{return cached?1u:0u;}
     template<class F> bool render(Device*,Context*,c3x_renderer_unit_v1 const&,F,void* =nullptr,unsigned=1,bool=false,c3x_renderer::UnitSceneSample* =nullptr){demand_executed=true;return true;}
-    bool blit(HDC,int,int,HDC){return true;}void reset_gpu(){}
+    unsigned gpu_resets=0;
+    bool blit(HDC,int,int,HDC){return true;}void reset_gpu(){++gpu_resets;}
 };
 struct TacticalGPU {template<class... T> ID3D11Texture2D* packed(T&&...){unexpected_gpu();return nullptr;}};
 struct D3D11_RECT {int left,top,right,bottom;};
@@ -515,7 +516,12 @@ struct RendererState {
     void gpu_failure(char const*){} // Failure diagnostics do not initialize or mutate GPU ownership.
     std::size_t publication_working_bytes=0;bool memory_pressured=false;void preserve_process_headroom(){}
     struct Scene : c3x_renderer::render_core::CapturedScene {std::uint64_t signature=0;} topology_cache;
-    struct WorldStorage {unsigned clears=0;void clear(){++clears;}} world_preparation_queue,world_backing;
+    struct WorldStorage {
+        struct Statistics {std::size_t bytes=0;};
+        unsigned clears=0;void clear(){++clears;}
+        Statistics statistics()const{return {};}
+    } world_preparation_queue,world_backing;
+    struct {std::uint64_t identity()const{return 0;}} patch_detail;
     TacticalGPU tactical_gpu;
     std::uint64_t unit_scene_rejections=0;
     struct {std::size_t bytes(){return 0;}} unit_scene_work;
@@ -543,7 +549,8 @@ struct RendererState {
     std::atomic<bool> hold{false};
     std::atomic<long long> hold_clock{-1};
     std::atomic<unsigned> target_clock_entries{0};
-    bool animate_pixels=false,fail_render=false,world_preparation=false;
+    bool animate_pixels=false,fail_render=false,world_preparation=false,canonical_world_preparation=false;
+    bool frame_unit_asset_union_valid=false;
     bool shared_scene_surface=false,water_scene_active=false;unsigned visible_wave_animations=0;
     bool throw_cancellation=false,throw_failure=false;
     bool render(c3x_renderer_frame_v1 const& f,c3x_renderer_output_v1& out,int=-1,
@@ -572,7 +579,7 @@ struct RendererState {
     static long long resource_clock(c3x_renderer_frame_v1 const& f,int=15){return f.presentation_time_ticks;}
     bool configure_pack(char const*){reset();return true;}
     bool configure_definitions(char const*,char const*,char const*,char const*){reset();return true;}
-    void reset(){demand_executed=true;++resets;pixels.clear();flags.clear();}
+    void reset(){demand_executed=true;++resets;frame_unit_asset_union_valid=false;pixels.clear();flags.clear();}
     void clear_geometry_vertex_buffers(){}
     void discard_scene_view(){geometry_cache.clear();clear_geometry_vertex_buffers();}
     template<class T> bool prepare_unit_action(T const&){return true;}
@@ -834,7 +841,8 @@ int main(){
     // Reset also joins an active cancellation, and never hangs on a pending job.
     state.hold=true;entered=state.entered.load();assert(worker.camera_begin(f,last)==C3X_RENDERER_RESULT_PENDING);
     until([&]{return state.entered.load()>entered;});
-    worker.reset_and_stop();assert(state.resets==1);
+    state.frame_unit_asset_union_valid=true;
+    worker.reset_and_stop();assert(state.resets==1 && !state.frame_unit_asset_union_valid);
     assert(worker.camera_poll(last,out)==C3X_RENDERER_RESULT_SUPERSEDED);
     // A completed CPU UI transfer preempts active camera work without losing
     // its ticket or immutable input. No map publication is needed for UI output.

@@ -17,6 +17,89 @@ def method(text, signature):
 
 
 class ReflectionClosureTests(unittest.TestCase):
+    def test_production_list_deduplicates_real_consumers_and_reuses_unchanged_selection(self):
+        fresh = (ROOT/'Renderer/sandbox/fresh_pipeline.h').read_text()
+        cpp = (ROOT/'Renderer/native/c3x_renderer.cpp').read_text()
+        key = method(cpp, '    c3x_renderer::render_core::SharedInstanceSubmission::Key shared_instance_draw_key(')
+        start = fresh.index('        std::array<std::uint64_t,4> body_scene=')
+        end = fresh.index('        auto retire_completed_instance_plans=', start)
+        production = fresh[start:end]
+        run_cpp(GPU_STUB + r'''
+#define C3X_RENDERER64_FRESH 1
+#include <chrono>
+#include "Renderer/native/render_core/body_placement_requirements.h"
+using LONG=int;struct D3D11_RECT {LONG left,top,right,bottom;};
+struct Settings {float translation[2]={},inverse_size[2]={};};
+struct Mesh {std::array<int,4> bounds{};int translation_x=0,translation_y=0;float natural_projection[4]={};
+ std::uint64_t version=1;std::shared_ptr<std::vector<Owner::Instance> const> instances;float instance_material=40;};
+using GeometryDrawView=c3x_renderer::render_core::GeometryDrawView<Mesh,2>;
+using GeometryDrawReference=GeometryDrawView::Reference;
+using GeometryDrawRecord=GeometryDrawView::Record;
+constexpr unsigned geometry_layer_count=2;
+struct Renderer {Owner shared_instances;bool water_scene_active=true;GeometryDrawView::Records geometry_vertex_buffers;
+ unsigned tests=0;
+ bool chunk_intersects_region(GeometryDrawReference const& draw,Settings const&,D3D11_RECT clip,bool){++tests;
+  return draw.bounds()[0]<clip.right && draw.bounds()[2]>clip.left;}
+''' + key + r'''
+};
+struct Harness {
+ Renderer renderer;GeometryDrawView::Records all_visible,guard;
+ c3x_renderer::render_core::BodyPlacementRequirements<Mesh> body_requirements;
+ std::array<std::uint64_t,4> body_requirement_scene{};std::array<float,7> body_requirement_view{};
+ bool body_requirements_valid=false;unsigned body_requirement_builds=0,body_requirement_reuses=0,body_requirement_visits=0;
+ double body_requirement_ms=0;float projection_zoom=1,resident_basis_x=0,resident_basis_y=0;
+ std::uint64_t membership=1,visibility_revision=1;unsigned queries=0;
+ enum {prepare_body_requirements};void mark_prepare(unsigned){}
+ struct Region {unsigned width=1200,height=900;}region;
+ Region& static_region(){return region;}
+ std::uint64_t view_revision(){return membership;}
+ D3D11_RECT source_bounds(Settings const&,D3D11_RECT clip,bool){return clip;}
+ template<class Visit>void contributors(Settings const&,D3D11_RECT,bool,Visit visit){++queries;
+  for(unsigned layer=0;layer<geometry_layer_count;++layer)for(auto const& draw:guard[layer])visit(layer,draw);}
+ bool prepare(Settings region_settings){auto fail=[](char const*){return false;};
+''' + production + r'''
+  return body_inputs.entries.size()!=0;
+ }
+};
+int main(){
+ Harness h;Mesh mesh;mesh.instances=std::make_shared<std::vector<Owner::Instance>>(3);mesh.bounds={0,0,100,100};
+ GeometryDrawRecord original(mesh);original.owner={1,9};original.translation_x=-6400;
+ h.renderer.geometry_vertex_buffers[1].push_back(original);
+ auto main=original;main.translation_x=0;auto reflected=main;reflected.translation_x=6400;
+ auto guarded=main;guarded.translation_x=12800;auto irrelevant=guarded;irrelevant.translation_x=25600;irrelevant.bounds={2000,0,2100,100};
+ auto aquatic=guarded;aquatic.translation_x=19200;aquatic.water_dependent=true;
+ h.all_visible[1]={main,reflected,main};h.guard[1]={main,guarded,irrelevant,aquatic};Settings settings;
+ assert(h.prepare(settings) && h.queries==1 && h.renderer.tests==3);
+ assert(h.body_requirements.entries.size()==3 && h.body_requirements.visits==5 && h.body_requirements.duplicates==2);
+ auto has=[&](GeometryDrawRecord const& draw){auto expected=h.renderer.shared_instance_draw_key(1,GeometryDrawReference(draw));
+  for(auto const& entry:h.body_requirements.entries)if(entry.key==expected)return true;return false;};
+ assert(has(main) && has(reflected) && has(guarded) && !has(original) && !has(irrelevant) && !has(aquatic));
+ // Unchanged canonical/display/camera requests reuse the prepared list:
+ // no receiver query, key construction or extra metadata growth occurs.
+ auto retained=h.renderer.shared_instances.bytes();assert(h.prepare(settings));
+ assert(h.body_requirement_builds==1 && h.body_requirement_reuses==1 && h.queries==1 && h.renderer.tests==3);
+ assert(h.renderer.shared_instances.bytes()==retained);
+ // Changes irrelevant to the real consumers remain cheap until their
+ // membership/view changes; guard/water classification rebuilds exactly once.
+ ++irrelevant.ordinal;assert(h.prepare(settings) && h.queries==1);
+ ++h.visibility_revision;assert(h.prepare(settings) && h.queries==2);
+ settings.translation[0]=128;assert(h.prepare(settings) && h.queries==3);
+ ++h.membership;assert(h.prepare(settings) && h.queries==4);
+ h.renderer.water_scene_active=false;assert(h.prepare(settings) && h.queries==5 && has(aquatic));
+ // Contradictory counts under one exact key fail, and admission is charged
+ // against the existing owner allowance rather than an independent cache.
+ auto mutable_values=std::make_shared<std::vector<Owner::Instance>>(3);Mesh unstable=mesh;unstable.instances=mutable_values;
+ GeometryDrawRecord draw(unstable);auto exact=h.renderer.shared_instance_draw_key(1,GeometryDrawReference(draw));
+ c3x_renderer::render_core::BodyPlacementRequirements<Mesh> list;
+ assert(list.add(h.renderer.shared_instances,1,GeometryDrawReference(draw),exact));mutable_values->push_back({});
+ assert(!list.add(h.renderer.shared_instances,1,GeometryDrawReference(draw),exact));list.clear();
+ auto pressure=h.renderer.shared_instances.retain_metadata(Owner::budget-h.renderer.shared_instances.bytes()-256);assert(pressure);
+ assert(!list.add(h.renderer.shared_instances,1,GeometryDrawReference(main),h.renderer.shared_instance_draw_key(1,GeometryDrawReference(main))));
+ assert(h.renderer.shared_instances.bytes()<=Owner::budget);
+ pressure.reset();h.body_requirements.clear();assert(!h.renderer.shared_instances.bytes());
+}
+''')
+
     def test_shift_wrap_guard_and_unchanged_lighting_use_exact_persistent_ranges(self):
         fresh = (ROOT/'Renderer/sandbox/fresh_pipeline.h').read_text()
         cpp = (ROOT/'Renderer/native/c3x_renderer.cpp').read_text()
@@ -25,6 +108,10 @@ class ReflectionClosureTests(unittest.TestCase):
         append = method(fresh, '    template<class BodyInputs> bool append_body_placements(')
         run_cpp(GPU_STUB + r'''
 #include "Renderer/native/render_core/geometry_draws.h"
+#include "Renderer/native/render_core/body_placement_requirements.h"
+#include "Renderer/native/render_core/resident_content.h"
+struct Proof {};
+struct Content {struct Generation {std::shared_ptr<Proof> proof;};std::shared_ptr<Generation> mesh;};
 struct Mesh {
  std::array<int,4> bounds{};int translation_x=0,translation_y=0;float natural_projection[4]={};
  std::uint64_t version=0;std::shared_ptr<std::vector<Owner::Instance> const> instances;float instance_material=40;
@@ -34,6 +121,8 @@ using GeometryDrawReference=GeometryDrawView::Reference;
 using GeometryDrawRecord=GeometryDrawView::Record;
 struct Renderer {
  Owner shared_instances;
+ c3x_renderer::render_core::ResidentContent<Content> resident_content{1};
+ bool raster_content_valid(Proof const&){return true;}
 ''' + key + r'''
 };
 struct Harness {
@@ -50,7 +139,10 @@ int main(){
  GeometryDrawRecord reflected=shifted;reflected.translation_x-=6400;
  GeometryDrawRecord guarded=shifted;guarded.translation_x+=6400;
  std::vector<GeometryDrawRecord> required={canonical,shifted,reflected,guarded,reflected};
- auto inputs=[&](auto visit){for(auto const& record:required)visit(1,GeometryDrawReference(record));};
+ c3x_renderer::render_core::BodyPlacementRequirements<Mesh> inputs;
+ auto select=[&]{inputs.clear();for(auto const& record:required)
+  assert(inputs.add(renderer.shared_instances,1,GeometryDrawReference(record),renderer.shared_instance_draw_key(1,GeometryDrawReference(record))));};
+ select();assert(inputs.entries.size()==4 && inputs.visits==5 && inputs.duplicates==1 && inputs.bytes()>0);
  auto builder=renderer.shared_instances.begin(Owner::Key{1});Owner::Range range;
  assert(renderer.shared_instances.append(builder,renderer.shared_instance_draw_key(1,GeometryDrawReference(canonical)),mesh.instances.get(),mesh.instances->data(),3,projection,-771,281,281,21.18f,range));
  auto old=renderer.shared_instances.upload(builder,&device);builder.reset();
@@ -66,10 +158,12 @@ int main(){
  }
  auto uploads=renderer.shared_instances.uploads;
  std::reverse(required.begin(),required.end());++required[0].ordinal;
+ select();
  // Reordering and light/page changes do not change the placement owner.
  assert(renderer.shared_instances.find_covering([&](auto const& generation){return harness.body_placements_covered(generation,inputs);})==front);
  assert(renderer.shared_instances.uploads==uploads);
- ++required[0].translation_y;assert(!harness.body_placements_covered(*front,inputs));
+ ++required[0].translation_y;select();assert(!harness.body_placements_covered(*front,inputs));
+ inputs.clear();
  renderer.shared_instances.clear();old.reset();front.reset();assert(!renderer.shared_instances.bytes());
 }
 ''')

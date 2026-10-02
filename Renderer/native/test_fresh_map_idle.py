@@ -48,6 +48,7 @@ struct LARGE_INTEGER {long long QuadPart=0;};
 void QueryPerformanceCounter(LARGE_INTEGER* value){value->QuadPart=1;}
 unsigned GetEnvironmentVariableA(char const*,char*,unsigned){return 0;}
 unsigned renders=0,mesh_prepares=0;
+std::uint64_t c3x_renderer64_unit_selection_revision(){return 1;}
 int c3x_renderer64_prepare_unit_meshes(){++mesh_prepares;return C3X_RENDERER_RESULT_OK;}
 bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const&,ID3D11RenderTargetView*,float){++renders;return true;}
 namespace c3x_gpu_images {struct RetainedComposition {
@@ -56,12 +57,13 @@ namespace c3x_gpu_images {struct RetainedComposition {
   static SampledImage frozen(){return {Kind::frozen};}
   static SampledImage held(){return {Kind::held};}
   struct Rect {int left,top,right,bottom;};
-  static SampledImage bgra(ID3D11Texture2D*,Rect,float){return {Kind::bgra};}
+  static SampledImage bgra(ID3D11Texture2D*,Rect,float,std::uint64_t=0){return {Kind::bgra};}
  };
  struct Sample {
   std::function<SampledImage(long long,long long)> canonical;
   std::function<SampledImage(long long,long long,float)> projected;
   std::function<void(long long,long long,float)> prepare;
+  std::uint64_t source_generation=0;
   template<class F>Sample(F f):canonical(std::move(f)){}
   SampledImage operator()(long long t,long long f){return canonical(t,f);}
  };
@@ -71,6 +73,8 @@ struct Unit {std::vector<std::string> keys={"warrior"};std::vector<Clip> actions
 struct RendererState {
  struct {std::uint64_t geometry=1,complete=1;} cached_signature;
  std::uint64_t tile_geometry_epoch=1;std::int64_t gpu_serial=0;unsigned device_generation=1;
+ std::int64_t route_map_serial=0;
+ std::uint64_t route_frame_sequence=0;
  struct {int value=1;} geometry_viewport_settings;
  Device owned,*device=&owned;ID3D11Texture2D initial;ID3D11Texture2D* gpu_map_texture=&initial;
  struct {std::vector<Unit> units=std::vector<Unit>(1);} unit_bodies;
@@ -80,10 +84,20 @@ struct RendererState {
  std::vector<int> resource_animations;
  int resource_animation_for(c3x_renderer_tile_v1 const& tile)const{return tile.resource_id==101?0:-1;}
  bool assets_pending=false;
+ // Contributor selection has separate executable geometry fixtures. This
+ // adapter fixture supplies their visible-tile result to test ownership/idle.
+ bool select_frame_units(c3x_renderer_frame_v1 const& frame,
+  std::vector<UnitInstances::ScenePose> const& candidates,
+  std::vector<UnitInstances::ScenePose>& selected,float){
+  selected.clear();for(auto const& pose:candidates)for(unsigned i=0;i<frame.tile_count;++i){
+   auto const& tile=frame.tiles[i];if(tile.tile_x==pose.tile_x && tile.tile_y==pose.tile_y &&
+     (tile.tile_flags&C3X_RENDERER_TILE_VISIBLE)){selected.push_back(pose);break;}
+  }return true;
+ }
  unsigned ambient_count()const{return moving_resources+visible_wave_animations+visible_water_animations;}
  int prepare_frame_unit_assets(std::vector<UnitInstances::ScenePose> const&){++asset_prepares;
   return assets_pending?C3X_RENDERER_RESULT_PENDING:C3X_RENDERER_RESULT_OK;}
- struct {void write(char const*,char const*,bool){}double milliseconds(long long){return 0.;}} trace;
+ struct {LARGE_INTEGER frequency{1000};void write(char const*,char const*,bool){}double milliseconds(long long){return 0.;}} trace;
 ''' + eligibility + r'''
 };
 struct Worker {
@@ -153,7 +167,7 @@ int main(){
  tile.tile_flags=C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_EXPLORED;
  ++worker.renderer_state.cached_signature.complete;worker.ambient();
  for(int i=0;i<3;++i)step(Kind::bgra);
- assert(worker.prepared_map->input.value.presentation_time_ticks==tick);
+ assert(worker.prepared_map->input.presentation_time_ticks==tick);
  // Settle a visible static land map. A later native body needs just one adoption.
  tile.terrain_type=tile.real_terrain_type=2;tile.tile_flags|=C3X_RENDERER_TILE_VISIBLE;
  ++worker.renderer_state.cached_signature.complete;worker.ambient();step(Kind::bgra);

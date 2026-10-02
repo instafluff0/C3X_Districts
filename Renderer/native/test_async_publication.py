@@ -224,6 +224,98 @@ int main(){
 }
 ''')
 
+    def test_adoption_observer_binds_local_remote_and_source_tickets_after_cancellation(self):
+        run_cpp(r'''
+#include "Renderer/sandbox/async_scene_client.h"
+#include <cassert>
+#include <chrono>
+using namespace std::chrono_literals;
+struct Receipt {long long camera,image,remote,source,session;int anchor;};
+struct State {
+ std::mutex mutex;std::condition_variable wake;bool held=false,entered=false,refuse=false;
+ long long cancelled=0;unsigned attempts=0;std::atomic<unsigned> observed{0},errors{0};
+ std::vector<Receipt> receipts;
+ void barrier(){std::unique_lock<std::mutex> lock(mutex);entered=true;wake.notify_all();wake.wait(lock,[&]{return !held;});}
+ void wait(){std::unique_lock<std::mutex> lock(mutex);assert(wake.wait_for(lock,2s,[&]{return entered;}));}
+ void release(){std::lock_guard<std::mutex> lock(mutex);held=false;wake.notify_all();}
+};
+struct Fake {
+ State& state;long long next=40,source=700;c3x_renderer_frame_v1 frame={};c3x_renderer_tile_v1 tile={};
+ explicit Fake(State& value):state(value){}
+ bool alive()const{return true;}
+ void supersede_pending_camera(){}
+ void publication_pressure(std::size_t){}
+ int stats(){return 0;}
+ int camera_begin(c3x_renderer_camera_request_v1 const& request,long long& ticket){
+  frame=*request.frame;tile=frame.tiles[0];frame.tiles=&tile;ticket=++next;return C3X_RENDERER_RESULT_PENDING;
+ }
+ int camera_ready(long long ticket,c3x_renderer_gpu_camera_view_v1& value){
+  value={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(value)};
+  value.camera.ticket=ticket;value.camera.frame=frame;
+  value.camera.output={C3X_RENDERER_API_VERSION,sizeof(value.camera.output)};
+  value.camera.output.width=640;value.camera.output.height=480;
+  value.image={sizeof(value.image)};value.image.width=640;value.image.height=480;
+  return C3X_RENDERER_RESULT_OK;
+ }
+ int camera_poll(long long ticket,c3x_renderer_gpu_camera_view_v1& value){
+  ++state.attempts;state.barrier();
+  if(state.refuse)return C3X_RENDERER_RESULT_SUPERSEDED;
+  camera_ready(ticket,value);value.image.ticket=++source;
+  value.image.map_image=1000+source;value.image.session=9001;return C3X_RENDERER_RESULT_OK;
+ }
+ int camera_cancel(long long ticket){state.cancelled=ticket;return C3X_RENDERER_RESULT_OK;}
+};
+int main(){
+ c3x_renderer_tile_v1 tile={};tile.anchor_x=17;
+ c3x_renderer_frame_v1 frame={};frame.tiles=&tile;frame.tile_count=1;
+ c3x_renderer_camera_request_v1 request={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(request),&frame,{}};
+ c3x_renderer_gpu_camera_view_v1 view={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(view)};
+ State state;
+ {
+  c3x_remote_scene::AsyncSceneClient<Fake> client(true,[&](char const*){++state.errors;},state);
+  client.observe_camera_adoption([&](long long local_camera,long long local_image,auto const& actual){
+   assert(state.attempts==1);
+   state.receipts.push_back({local_camera,local_image,actual.camera.ticket,
+    actual.image.ticket,actual.image.session,actual.camera.frame.tiles[0].anchor_x});
+   ++state.observed;
+  });
+  long long camera=0;assert(client.camera_begin(request,camera)==C3X_RENDERER_RESULT_PENDING&&camera==1);
+  client.stats();assert(state.observed==0);
+  assert(client.camera_cancel(camera)==C3X_RENDERER_RESULT_OK);client.stats();
+  assert(state.cancelled==41&&state.observed==0&&state.attempts==0);
+  assert(client.camera_poll(camera,view)==C3X_RENDERER_RESULT_SUPERSEDED);
+  tile.anchor_x=33;
+  assert(client.camera_begin(request,camera)==C3X_RENDERER_RESULT_PENDING&&camera==2);client.stats();
+  assert(client.camera_poll(camera,view)==C3X_RENDERER_RESULT_PENDING);client.stats();
+  assert(state.observed==0&&state.attempts==0); // Readiness is not adoption.
+  state.held=true;
+  assert(client.camera_poll(camera,view)==C3X_RENDERER_RESULT_OK);
+  state.wait();assert(state.observed==0); // Caller admission only queued the helper adoption.
+  assert(view.camera.ticket==2&&view.image.ticket==2&&view.image.session!=9001);
+  state.release();client.stats();
+  assert(state.observed==1&&state.receipts.size()==1&&state.errors==0);
+  auto receipt=state.receipts[0];
+  assert(receipt.camera==2&&receipt.image==2&&receipt.remote==42&&receipt.source==701);
+  assert(receipt.camera!=receipt.remote&&receipt.remote!=receipt.source&&receipt.camera!=receipt.source);
+  assert(receipt.session==9001&&receipt.anchor==33);
+  assert(client.camera_poll(camera,view)==C3X_RENDERER_RESULT_OK);client.stats();
+  assert(state.observed==1&&state.attempts==1); // Repeated polls never execute another adoption.
+ }
+ State refused;refused.refuse=true;
+ {
+  c3x_remote_scene::AsyncSceneClient<Fake> client(true,[&](char const*){++refused.errors;},refused);
+  client.observe_camera_adoption([&](long long,long long,auto const&){++refused.observed;});
+  long long camera=0;assert(client.camera_begin(request,camera)==C3X_RENDERER_RESULT_PENDING);client.stats();
+  assert(client.camera_poll(camera,view)==C3X_RENDERER_RESULT_PENDING);client.stats();
+  assert(client.camera_poll(camera,view)==C3X_RENDERER_RESULT_OK);
+  auto deadline=std::chrono::steady_clock::now()+2s;
+  while(!refused.errors&&std::chrono::steady_clock::now()<deadline)std::this_thread::yield();
+  assert(refused.errors==1&&refused.observed==0&&!client.alive());
+ }
+ assert(refused.attempts==1&&refused.observed==0);
+}
+''')
+
     def test_bounded_overflow_stops_publication_without_wait_or_partial_frame(self):
         run_cpp(r'''
 #include "Renderer/sandbox/async_publication.h"

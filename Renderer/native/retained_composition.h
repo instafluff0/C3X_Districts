@@ -3,9 +3,11 @@
 #include "zoom_transition.h"
 #include "scene_projection.h"
 #include "gpu_projected_layer.h"
+#include <array>
 #include <map>
 #include <memory>
 #include <functional>
+#include <unordered_set>
 
 namespace c3x_gpu_images {
 // Versioned rectangular writes preserve the native composition order. A copy
@@ -15,11 +17,13 @@ namespace c3x_gpu_images {
 class RetainedComposition {
 public:
     struct Work {unsigned operations=0,assemblies=0,copies=0;std::uint64_t copied_pixels=0,assembly_pixels=0;};
+    struct RecipeReuse {std::uint64_t eligible=0,probed=0,reused=0;};
     using Texture=ComPtr<ID3D11Texture2D>;
     struct Placed {Command command;int x=0,y=0;};
     struct SampledImage {
         enum class Kind { unchanged, immutable, bgra, frozen, held };
         Kind kind=Kind::unchanged;Texture texture;Rect area{};float sharpness=0.f;
+        std::uint64_t generation=0;
         SampledImage()=default;
         // The source owner has moved to another camera. Preserve this exact
         // completed image, but retire its animation callback and dependencies.
@@ -30,14 +34,15 @@ public:
         SampledImage(Texture value):kind(Kind::immutable),texture(std::move(value)){}
         // Borrow a working BGRA surface only until this sample is consumed.
         // The retained node imports it into its own reusable packed output.
-        static SampledImage bgra(ID3D11Texture2D* source,Rect region,float sharpness=0.f){
-            SampledImage result;result.kind=Kind::bgra;result.texture=source;result.area=region;result.sharpness=sharpness;return result;
+        static SampledImage bgra(ID3D11Texture2D* source,Rect region,float sharpness=0.f,std::uint64_t generation=0){
+            SampledImage result;result.kind=Kind::bgra;result.texture=source;result.area=region;result.sharpness=sharpness;result.generation=generation;return result;
         }
     };
     struct Sample {
         std::function<SampledImage(long long,long long)> canonical;
         std::function<SampledImage(long long,long long,float)> projected;
         std::function<void(long long,long long,float)> prepare;
+        std::uint64_t source_generation=0;
         Sample()=default;
         template<class F,typename std::enable_if<!std::is_same<typename std::decay<F>::type,Sample>::value,int>::type=0>
         Sample(F&& function):canonical(std::forward<F>(function)){}
@@ -58,11 +63,12 @@ private:
     struct Picture {unsigned width=0,height=0;Format format=Format::bgra32;std::vector<Patch> patches;bool partitioned=true;std::uint64_t version=0;Rect required{};};
     struct BatchOp {Placed placed;Picture inputs[6];};
     struct Node {
-        Rect area{};Command command{};bool selected_world=false,operation=false,dynamic=false,map_dynamic=false,constant=false,view_dependent=false,retired=false;
+        Rect area{},recipe_clip{};Command command{};bool selected_world=false,operation=false,dynamic=false,map_dynamic=false,constant=false,view_dependent=false,retired=false;
         Picture inputs[6];Id original[6]={};
         std::vector<BatchOp> batch;
         CompositionStorage::Lease storage[2],owned_storage[2];
         Texture output[2];std::uint64_t bytes[2]={},revision=0,seen=0,sampled=0,direct_revision=0;
+        std::uint64_t publication=0,source_generation=0;bool map_source=false;
         ComPtr<ID3D11ShaderResourceView> output_view[2];
         std::vector<std::uint64_t> dependencies;
         Sample sample;Direct direct;Compositor::ImportTarget sample_target;
@@ -89,6 +95,51 @@ private:
     std::uint64_t sample_allocations=0,sample_imports=0,source_views=0;
     Work work;double selected_view_scale=1.;
     ProjectedLayer projected_layer;
+    // Index only the last eight eligible live recipes. Weak entries cannot
+    // extend an image/version lifetime, and proof traversal has a fixed cap.
+    static constexpr unsigned recipe_limit=8,recipe_patch_limit=256;
+    std::array<std::weak_ptr<Node>,recipe_limit> recent_recipes{};
+    unsigned recipe_cursor=0;
+    RecipeReuse recipe_counts;
+    static bool same_rect(Rect a,Rect b){return a.left==b.left&&a.top==b.top&&a.right==b.right&&a.bottom==b.bottom;}
+    static bool same_picture(Picture const& a,Picture const& b){
+        if(a.width!=b.width||a.height!=b.height||a.format!=b.format||a.partitioned!=b.partitioned||
+           a.version!=b.version||!same_rect(a.required,b.required)||a.patches.size()!=b.patches.size())return false;
+        for(std::size_t i=0;i<a.patches.size();++i){auto const& x=a.patches[i];auto const& y=b.patches[i];
+            if(x.node!=y.node||x.output!=y.output||!same_rect(x.area,y.area))return false;
+        }return true;
+    }
+    bool eligible_recipe(Node const& n)const{
+        auto const& c=n.command;
+        if(!n.operation||n.retired||n.direct.draw||n.direct.revision||n.direct.input_bytes||n.direct.animated||n.placement||
+           !same_rect(n.area,extent(n.inputs[0]))||!same_rect(c.area,n.area)||c.source_x||c.source_y||
+           n.inputs[1].width!=n.inputs[0].width||n.inputs[1].height!=n.inputs[0].height)return false;
+        bool keyed=c.kind==Kind::native_image&&c.color<=65535&&
+            c.source_width==int(n.inputs[0].width)&&c.source_height==int(n.inputs[0].height);
+        bool expanded=c.kind==Kind::expand&&c.color==65536&&n.inputs[0].format==Format::bgra32&&n.inputs[1].format!=Format::bgra32;
+        if(!keyed&&!expanded)return false;
+        std::size_t patches=0;for(auto const& input:n.inputs){patches+=input.patches.size();if(patches>recipe_patch_limit)return false;}
+        return true;
+    }
+    static bool same_recipe(Node const& a,Node const& b){
+        auto const& x=a.command;auto const& y=b.command;
+        if(x.kind!=y.kind||!same_rect(x.area,y.area)||!same_rect(x.clip,y.clip)||!same_rect(a.area,b.area)||
+           !same_rect(a.recipe_clip,b.recipe_clip)||x.source_x!=y.source_x||x.source_y!=y.source_y||x.color!=y.color||
+           x.source_width!=y.source_width||x.source_height!=y.source_height)return false;
+        for(unsigned i=0;i<6;++i){
+            if(bool(a.original[i])!=bool(b.original[i])||!same_picture(a.inputs[i],b.inputs[i]))return false;
+            for(unsigned j=0;j<6;++j)if((a.original[i]==a.original[j])!=(b.original[i]==b.original[j]))return false;
+        }return true;
+    }
+    std::shared_ptr<Node> reuse_recipe(std::shared_ptr<Node> const& next){
+        if(!eligible_recipe(*next))return next;++recipe_counts.eligible;
+        auto selected=next;
+        for(unsigned i=0;i<recipe_limit;++i){unsigned slot=(recipe_cursor+recipe_limit-1-i)%recipe_limit;
+            auto old=recent_recipes[slot].lock();if(!old||!eligible_recipe(*old))continue;++recipe_counts.probed;
+            if(same_recipe(*old,*next)){selected=std::move(old);recent_recipes[slot].reset();++recipe_counts.reused;break;}
+        }
+        recent_recipes[recipe_cursor]=selected;recipe_cursor=(recipe_cursor+1)%recipe_limit;return selected;
+    }
     // Match the bounded live native family, including saved packed/full-color
     // versions and old/new immutable map overlap at fullscreen.
     constexpr static std::uint64_t resident_budget=256u*1024u*1024u;
@@ -103,9 +154,9 @@ private:
     std::uint64_t resident_bytes()const{return owned_storage.bytes()+direct_bytes;}
     void reserve(std::uint64_t bytes,char const* site){
         if(bytes<=resident_budget-resident_bytes())return;
-        char line[256];std::snprintf(line,sizeof(line),
-            "[C3X renderer] stage=retained-admission-rejected site=%s requested=%llu resident=%llu cap=%llu physical=%llu peak=%llu\n",
-            site,bytes,resident_bytes(),resident_budget,storage.bytes(),storage.peak());OutputDebugStringA(line);
+        char line[384];std::snprintf(line,sizeof(line),
+            "[C3X renderer] stage=retained-admission-rejected site=%s requested=%llu resident=%llu cap=%llu physical=%llu peak=%llu recipe_eligible=%llu recipe_probed=%llu recipe_reused=%llu\n",
+            site,bytes,resident_bytes(),resident_budget,storage.bytes(),storage.peak(),recipe_counts.eligible,recipe_counts.probed,recipe_counts.reused);OutputDebugStringA(line);
         throw std::runtime_error("retained composition texture budget");
     }
     void output(Node& n,unsigned index,Texture texture){
@@ -222,9 +273,10 @@ private:
                 }
                 if(!replay.import_bgra(n->sample_target,sampled.texture.Get(),r.left,r.top,sampled.sharpness))
                     throw std::runtime_error("retained sample import failed");
-                ++sample_imports;output(*n,0,n->sample_target.texture);n->revision=++serial;
+                ++sample_imports;output(*n,0,n->sample_target.texture);n->source_generation=sampled.generation;n->revision=++serial;
             }else if(sampled.kind==SampledImage::Kind::immutable){
                 if(!sampled.texture)throw std::runtime_error("retained visual selection retired");
+                n->source_generation=sampled.generation;
                 if(sampled.texture.Get()!=n->output[0].Get()){
                     n->sample_target={};
                     output(*n,0,std::move(sampled.texture));n->revision=++serial;
@@ -493,6 +545,7 @@ private:
                 // If a prior projected pose exists, reproject that exact pose
                 // during the short handoff instead of rewinding its animation.
                 if(!n->output[0]||n->view_scale!=scale){
+                    if(!n->output[0]){n->publication=original->publication;n->source_generation=original->source_generation;n->map_source=original->map_source;}
                     auto source=n->output[0]?n->output[0]:original->output[patch.output];
                     auto source_area=n->output[0]?n->area:original->area;
                     float relative=n->output[0]?scale/n->view_scale:scale;
@@ -512,6 +565,7 @@ private:
             projected_output(*n,area);
             if(!replay.import_bgra(n->sample_target,sampled.texture.Get(),sampled.area.left,sampled.area.top,sampled.sharpness))
                 throw std::runtime_error("projected scene import");
+            n->publication=original->publication;n->source_generation=sampled.generation;n->map_source=original->map_source;
         }else if(original->operation&&original->map_dynamic){
             // Project the retained underlay recursively. Native image ordering
             // and version ownership are unchanged. For a keyed native image,
@@ -635,8 +689,8 @@ private:
 public:
     RetainedComposition(ID3D11Device* d,ID3D11DeviceContext* c):device(d),context(c),replay(d,c,128u*1024u*1024u){replay.share_storage(storage);}
     ~RetainedComposition(){front={};images.clear();world_selection.reset();}
-    void clear(){front={};images.clear();world_selection.reset();replay.clear_working();admitted=true;}
-    void discard(){front={};images.clear();world_selection.reset();replay.clear_working();admitted=false;}
+    void clear(){recent_recipes={};recipe_cursor=0;recipe_counts={};front={};images.clear();world_selection.reset();replay.clear_working();admitted=true;}
+    void discard(){recent_recipes={};recipe_cursor=0;recipe_counts={};front={};images.clear();world_selection.reset();replay.clear_working();admitted=false;}
     void uncommit(){front={};}
     std::uint64_t bytes()const{return resident_bytes();}
     std::uint64_t allocation_bytes()const{return storage.bytes()+direct_bytes;}
@@ -647,6 +701,7 @@ public:
     std::uint64_t sampling_imports()const{return sample_imports;}
     std::uint64_t source_view_creations()const{return source_views;}
     std::size_t node_count()const{return nodes;}
+    RecipeReuse recipe_reuse()const{return recipe_counts;}
     bool accepting()const{return admitted;}
     std::size_t sampled_sources()const{
         std::vector<Node const*> visited;std::vector<Node const*> pending;
@@ -660,15 +715,34 @@ public:
             for(auto const& draw:n->batch)for(auto const& input:draw.inputs)for(auto const& patch:input.patches)pending.push_back(patch.node.get());
         }return count;
     }
+    // Optional route witness: identify copied source versions reachable from
+    // the actual composed front. Mixed or absent map sources do not certify a
+    // destination. This inspection neither samples nor prepares any source.
+    std::pair<std::uint64_t,std::uint64_t> front_publication()const{
+        std::unordered_set<Node const*> visited;std::vector<Node const*> pending;
+        for(auto const& patch:front.patches)pending.push_back(patch.node.get());
+        std::pair<std::uint64_t,std::uint64_t> found{};
+        while(!pending.empty()){
+            auto n=pending.back();pending.pop_back();
+            if(n->projected_frame==frame && n->projected && n->projected->map_source)n=n->projected.get();
+            if(!visited.insert(n).second)continue;
+            if(visited.size()>32768)return {};
+            if(n->map_source && (!n->publication||!n->source_generation))return {};
+            if(n->publication){auto proof=std::make_pair(n->publication,n->source_generation);
+                if(found.first&&found!=proof)return {};found=proof;}
+            for(auto const& input:n->inputs)for(auto const& patch:input.patches)pending.push_back(patch.node.get());
+            for(auto const& draw:n->batch)for(auto const& input:draw.inputs)for(auto const& patch:input.patches)pending.push_back(patch.node.get());
+        }return found;
+    }
     bool animated()const{for(auto const& p:front.patches)if(p.node->dynamic)return true;return false;}
     bool animated_map()const{for(auto const& p:front.patches)if(p.node->map_dynamic)return true;return false;}
     bool ready()const{return admitted&&front.width!=0;}
     void create(Id id,unsigned w,unsigned h,Format format){if(admitted){images[id]={w,h,format,{}};images[id].version=++serial;}}
     void snapshot(Id destination,Id source){images[destination]=images.at(source);images[destination].version=++serial;}
     void destroy(Id id){images.erase(id);} // committed versions retain their own source data
-    void source(Id id,ID3D11Texture2D* texture,Sample sample={},bool immutable=false,bool map_source=false){
+    void source(Id id,ID3D11Texture2D* texture,Sample sample={},bool immutable=false,bool map_source=false,std::uint64_t publication=0,std::uint64_t generation=0){
         if(!admitted)return;auto& p=images.at(id);auto n=node();n->area=extent(p);n->revision=++serial;
-        output(*n,0,(sample||immutable)?Texture(texture):crop(texture,n->area));n->dynamic=bool(sample);n->map_dynamic=map_source&&n->dynamic;n->sample=std::move(sample);p.patches={{n->area,n,0}};p.version=++serial;
+        output(*n,0,(sample||immutable)?Texture(texture):crop(texture,n->area));n->dynamic=bool(sample);n->map_dynamic=map_source&&n->dynamic;n->map_source=map_source;n->publication=map_source?publication:0;n->source_generation=generation;n->sample=std::move(sample);p.patches={{n->area,n,0}};p.version=++serial;
     }
     // Select a complete world version at an explicit composition boundary.
     // Later native writes to the source cannot change this selection. Fixed
@@ -786,7 +860,7 @@ public:
             int dy=int(std::lround((anchor_y-int(target->second.height/2))*(c3x_renderer::ZoomTransition::maximum-1.)));
             area=intersect({area.left+std::min(0,dx),area.top+std::min(0,dy),area.right+std::max(0,dx),area.bottom+std::max(0,dy)},extent(target->second));
         }
-        auto n=node();direct_bytes+=direct.input_bytes;n->operation=true;n->area=area;n->command=c;n->command.clip=paint;n->direct=std::move(direct);n->dynamic=n->direct.animated||bool(placement);
+        auto n=node();direct_bytes+=direct.input_bytes;n->operation=true;n->area=area;n->command=c;n->recipe_clip=c.clip;n->command.clip=paint;n->direct=std::move(direct);n->dynamic=n->direct.animated||bool(placement);
         n->placement=std::move(placement);n->anchor_x=anchor_x;n->anchor_y=anchor_y;n->view_dependent=bool(n->placement);
         n->constant=!n->placement&&c.kind==Kind::fill&&!n->direct.draw&&!n->direct.revision&&!n->direct.animated;
         Id ids[6]={c.destination,c.source,c.background,c.detail,c.background_detail,c.program};
@@ -812,6 +886,7 @@ public:
             n->inputs[i].patches.insert(n->inputs[i].patches.end(),n->inputs[j].patches.begin(),n->inputs[j].patches.end());n->inputs[i].partitioned=false;n->inputs[j]=n->inputs[i];
         }
         for(auto const& input:n->inputs)for(auto const& p:input.patches){n->dynamic|=p.node->dynamic;n->map_dynamic|=p.node->map_dynamic;n->view_dependent|=p.node->view_dependent;}
+        n=reuse_recipe(n);
         write(images.at(c.destination),area,n,0);if(c.detail)write(images.at(c.detail),area,n,1);
     }
     void commit(Id image,Rect area){

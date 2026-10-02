@@ -19,6 +19,7 @@ template<class Transport>class AsyncSceneClient {
     std::map<Id,Id> image_ids,ticket_ids; // transport thread only
     Id remote_camera=0,worker_camera=0,worker_map=0;
     std::atomic<unsigned> adopted_cameras{0};
+    std::function<void(Id,Id,c3x_renderer_gpu_camera_view_v1 const&)> camera_adoption_observer;
     struct Camera {
         Id ticket=0;
         std::mutex mutex;
@@ -161,6 +162,11 @@ public:
             if(observer)observer(label,queued,service);
         });
     }
+    // Executed on the transport thread after adoption; the view is borrowed
+    // only during the callback. Local tickets are aliases, not helper sources.
+    void observe_camera_adoption(std::function<void(Id,Id,c3x_renderer_gpu_camera_view_v1 const&)> observer){
+        camera_adoption_observer=std::move(observer);
+    }
     bool alive()const{return publication.healthy()&&transport.alive();}
     void progress(unsigned& accepted,unsigned& completed,unsigned& frames)const{
         accepted=publication.accepted();completed=publication.completed();frames=transport.frames();
@@ -222,11 +228,12 @@ public:
         if(slot->ready){
             Id map=++next_image;
             // This command precedes every operation using the returned ticket.
-            int code=post(sizeof(CameraOutput),[this,wanted,map]{
+            int code=post(sizeof(CameraOutput),[this,wanted,map,observer=camera_adoption_observer]{
                 if(worker_camera!=wanted)throw std::runtime_error("camera changed before ordered adoption");
                 c3x_renderer_gpu_camera_view_v1 actual={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(actual)};
                 int accepted=transport.camera_poll(remote_camera,actual);
                 require_result(accepted,"camera-adopt");
+                if(observer)observer(wanted,wanted,actual);
                 if(worker_map)image_ids.erase(worker_map);
                 ticket_ids.clear();ticket_ids[wanted]=actual.image.ticket;
                 image_ids[map]=actual.image.map_image;worker_map=map;

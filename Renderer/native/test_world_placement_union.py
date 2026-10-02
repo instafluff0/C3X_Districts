@@ -20,7 +20,7 @@ def run_cpp_quiet(program, **options):
             return execute(command, *args, **kwargs)
         except subprocess.CalledProcessError as error:
             output = (error.stdout or b"") + (error.stderr or b"")
-            raise AssertionError(output.decode(errors="replace")) from error
+            raise AssertionError(output.decode(errors="replace")[-6000:]) from error
 
     # Keep repeated production console telemetry quiet after success. Any
     # executable assertion/error still returns its complete captured output.
@@ -42,6 +42,7 @@ class PreparedWorldPlacementUnionTests(unittest.TestCase):
         run_cpp_quiet(GPU_STUB + r'''
 #include <cstdio>
 #include "Renderer/native/render_core/scene_membership.h"
+#include "Renderer/native/render_core/body_placement_requirements.h"
 struct CachedGeometryProof {bool valid=true;};
 struct CachedMeshGeneration {
  std::shared_ptr<std::vector<Owner::Instance> const> instances;
@@ -66,7 +67,7 @@ struct Caster {
 };
 struct Work {std::size_t bytes=0;void upload(std::size_t value){bytes+=value;}};
 struct Renderer {
- Owner shared_instances;ID3D11Device* device=nullptr;Membership geometry_vertex_buffers;
+ Owner shared_instances;ID3D11Device* device=nullptr;ID3D11DeviceContext* context=nullptr;Membership geometry_vertex_buffers;
  c3x_renderer::render_core::ResidentContent<CachedTileGeometry> resident_content{32};
  unsigned device_generation=42,content_revision=7,frame_content_uploads=0;std::size_t frame_upload_bytes=0;
  bool raster_content_valid(CachedGeometryProof const& proof){return proof.valid;}
@@ -83,7 +84,7 @@ struct Harness {
 ''' + methods + r'''
 };
 int main(){
- ID3D11Device device;Renderer renderer;renderer.device=&device;Work work;Harness harness{renderer,&work};
+ ID3D11Device device;ID3D11DeviceContext context{&device};Renderer renderer;renderer.device=&device;renderer.context=&context;Work work;Harness harness{renderer,&work};
  unsigned retire_completed_calls=0;
  std::array<CachedTileGeometry,3> tiles;std::array<Mesh,3> meshes;
  std::array<c3x_renderer::render_core::ContentHandle,3> handles;
@@ -102,7 +103,8 @@ int main(){
   harness.casters.clear();Caster caster;caster.content_generation=handles[camera].generation;caster.version=meshes[camera].version;
   caster.instances=meshes[camera].instances.get();caster.vertices=reinterpret_cast<ID3D11Buffer*>(std::uintptr_t(512+camera));caster.count=64;
   harness.casters.push_back(caster);harness.instance_groups.clear();++harness.caster_signature;
-  auto inputs=[&](auto visit){visit(1,GeometryDrawReference(draw));};
+  c3x_renderer::render_core::BodyPlacementRequirements<Mesh> inputs;
+  assert(inputs.add(renderer.shared_instances,1,GeometryDrawReference(draw),renderer.shared_instance_draw_key(1,GeometryDrawReference(draw))));
   // This fixture owns no cached per-pass selection plans. Count the actual
   // production retirement boundary; lease/cache retirement is covered by
   // test_instance_selection_retirement using the production callback.
@@ -128,7 +130,11 @@ int main(){
   assert(renderer.shared_instances.bytes()<=Owner::budget);
   return renderer.frame_upload_bytes;
  };
- assert(request(0)==64384);assert(request(1)>0);assert(request(2)>0);
+ assert(request(0)==64384);assert(request(1)==80768);assert(request(2)==66688);
+ // Each replacement uploads its new request only. The unchanged resident
+ // ranges incur charged GPU copies, never another CPU placement packing.
+ assert(renderer.shared_instances.copied_bytes>0 && renderer.shared_instances.carried_ranges==6);
+ assert(renderer.shared_instances.packed_records==2*(503+631+521));
  assert(retire_completed_calls==3);
  assert(harness.shared_front->records==2*(503+631+521));
  auto uploads=renderer.shared_instances.uploads,creates=device.creates;auto plateau=renderer.shared_instances.bytes();
@@ -143,7 +149,9 @@ int main(){
  for(auto const& entry:harness.shared_front->retained_sources)assert(entry.second.owner[1]!=old_handle.generation);
  // Unchanged source residency alone cannot admit changed dependency proof.
  tiles[1].mesh->proof->valid=false;tiles[0].mesh->proof.reset();++meshes[2].translation_y;
- renderer.content_revision=8;assert(request(2)>0);
+ renderer.content_revision=8;auto allocation=renderer.shared_instances.allocated_bytes;
+ auto copied=renderer.shared_instances.copied_bytes;
+ assert(request(2)==0 && renderer.shared_instances.allocated_bytes>allocation && renderer.shared_instances.copied_bytes>copied);
  for(auto const& entry:harness.shared_front->retained_sources)assert(entry.second.owner[1]!=handles[1].generation && entry.second.owner[1]!=handles[0].generation);
  // Source residency remains alive only through the cache/current required
  // selection, never through carried weak placement entries.

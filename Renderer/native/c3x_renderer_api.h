@@ -368,6 +368,9 @@ typedef int (*c3x_renderer_set_world_capture_fn)(c3x_renderer_world_capture_fn);
 // are authoritative old/new tile positions; the DLL copies the bounded affected
 // neighborhood through the registered game-thread callback.
 typedef int (*c3x_renderer_world_move_fn)(int old_x, int old_y, int new_x, int new_y);
+// Optional configured sight closure, in Civ III rings rather than raw coordinates.
+// Existing callers retain the vanilla three-ring contract above.
+typedef int (*c3x_renderer_world_move_sight_fn)(int old_x, int old_y, int new_x, int new_y, int sight_rings);
 typedef int (*c3x_renderer_world_change_fn)(int tile_x, int tile_y);
 typedef int (*c3x_renderer_world_reconcile_fn)(void);
 struct c3x_renderer_world_status_v1 {

@@ -298,6 +298,44 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
     }
     if(!sandbox_fresh.draw(frame,camera_x,camera_y,0,0,0,0,false,zoom))return false;
     renderer.trace.write("fresh-callback","scene-ready",true);
+    ++renderer.route_frame_sequence;
+    char route[8]={};
+    if(GetEnvironmentVariableA("C3X_RENDERER_ROUTE_WITNESS",route,sizeof(route))&&route[0]=='1'){
+        std::uint64_t facts=14695981039346656037ull,poses=facts;
+        auto hash=[](std::uint64_t& value,void const* data,std::size_t size){
+            auto bytes=static_cast<unsigned char const*>(data);
+            for(std::size_t i=0;i<size;++i){value^=bytes[i];value*=1099511628211ull;}
+        };
+        auto const& records=sandbox_direct_units.prepared_units;
+        for(auto const& unit:records){
+            auto draw=unit.draw;draw.presentation_time_ticks=draw.presentation_frequency=0;
+            hash(poses,&draw,sizeof(draw));
+            // Sampled cursor/clock vary with asynchronous display opportunities.
+            // The representative proof keeps identity, action, anchors, art,
+            // palette and pass membership; sampled pose has its own digest.
+            draw.action_cursor=0;hash(facts,&draw,sizeof(draw));
+            unsigned mask=(unit.main?1u:0u)|(unit.shadow?2u:0u)|(unit.reflected?4u:0u);
+            hash(facts,&mask,sizeof(mask));hash(facts,&unit.instance.unit,sizeof(unit.instance.unit));
+            hash(facts,&unit.instance.action,sizeof(unit.instance.action));
+        }
+        char detail[896];sprintf_s(detail,
+            "source_serial=%lld source_generation=%llu complete=1 overflow=%u count=%zu main_units=%u reflected_units=%u shadow_units=%u part_samples=%u facts_digest=%016llx pose_digest=%016llx camera_x=%d camera_y=%d zoom=%.6f",
+            renderer.route_map_serial,static_cast<unsigned long long>(renderer.route_frame_sequence),unsigned(records.size()>4096),records.size(),
+            sandbox_direct_units.main_contributors,sandbox_direct_units.reflection_contributors,sandbox_direct_units.shadow_contributors,
+            sandbox_direct_units.part_samples,static_cast<unsigned long long>(facts),static_cast<unsigned long long>(poses),camera_x,camera_y,zoom);
+        renderer.trace.write("route-workload",detail,true);
+        unsigned segments=unsigned((std::min<std::size_t>(records.size(),4096)+31)/32);
+        for(unsigned segment=0;segment<segments;++segment){
+            std::string ids,masks;auto end=std::min<std::size_t>(records.size(),(segment+1)*32);
+            for(std::size_t i=segment*32;i<end;++i){auto const& unit=records[i];
+                if(!ids.empty()){ids+=",";masks+=",";}
+                ids+=std::to_string(unit.draw.unit_id);masks+=std::to_string((unit.main?1u:0u)|(unit.shadow?2u:0u)|(unit.reflected?4u:0u));
+            }
+            sprintf_s(detail,"source_serial=%lld source_generation=%llu segment=%u total_segments=%u unit_ids=%s pass_masks=%s",
+                renderer.route_map_serial,static_cast<unsigned long long>(renderer.route_frame_sequence),segment,segments,ids.c_str(),masks.c_str());
+            renderer.trace.write("route-workload-members",detail,true);
+        }
+    }
     // These passes share the immediate context. Resource dependencies are
     // ordered there; submit once at publication instead of flushing mid-frame.
     if(renderer.trace.level) {
@@ -318,6 +356,23 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
             sandbox_direct_units.gpu_preparation_bytes(),
             rejects[0],rejects[1],rejects[2],rejects[3],rejects[4],rejects[5],rejects[6]);
         renderer.trace.write("fresh-scene-phases",detail,true);
+        auto const& spans=sandbox_fresh.prepare_subspans;auto const& placements=renderer.shared_instances;
+        auto const& requirements=sandbox_fresh.body_requirements;
+        sprintf_s(detail,"setup_resources_ms=%.3f capture_ms=%.3f raster_proof_ms=%.3f body_requirements_ms=%.3f city_shadow_ms=%.3f unit_selection_ms=%.3f unit_pose_ms=%.3f body_builds=%u body_reuses=%u body_visits=%u body_unique=%zu body_duplicates=%u coverage_probes=%u requirement_bytes=%zu unit_plan_reused=%u unit_reselected=%u range_reuses=%llu carry_visits=%llu carried_ranges=%llu packed_records=%llu gpu_copies=%llu copied_bytes=%llu allocated_bytes=%llu host_uploaded_bytes=%llu",
+            spans[0],spans[1],spans[2],spans[3],spans[4],spans[5],spans[6],
+            sandbox_fresh.body_requirement_builds,sandbox_fresh.body_requirement_reuses,sandbox_fresh.body_requirement_visits,
+            requirements.entries.size(),requirements.duplicates,requirements.coverage_probes,requirements.bytes(),
+            sandbox_fresh.prepare_unit_plan_reused,sandbox_fresh.prepare_unit_reselected,
+            static_cast<unsigned long long>(placements.range_reuses),static_cast<unsigned long long>(placements.carry_visits),
+            static_cast<unsigned long long>(placements.carried_ranges),static_cast<unsigned long long>(placements.packed_records),
+            static_cast<unsigned long long>(placements.gpu_copies),static_cast<unsigned long long>(placements.copied_bytes),
+            static_cast<unsigned long long>(placements.allocated_bytes),static_cast<unsigned long long>(placements.uploaded_bytes));
+        renderer.trace.write("fresh-prepare-work",detail,true);
+        sprintf_s(detail,"builds=%llu reuses=%llu schedules=%llu probes=%llu proof_bytes=%zu proof_cap_bytes=98304",
+            static_cast<unsigned long long>(renderer.unit_asset_union_builds),static_cast<unsigned long long>(renderer.unit_asset_union_reuses),
+            static_cast<unsigned long long>(renderer.unit_asset_schedules),static_cast<unsigned long long>(renderer.unit_asset_union_probes),
+            renderer.unit_asset_union_bytes);
+        renderer.trace.write("unit-asset-union-work",detail,true);
     }
     bool presented=sandbox_backbuffer_output.draw(target,frame.target_width,frame.target_height);
     if(presented){

@@ -93,6 +93,21 @@ and screen-space UI calls stay unchanged. The scoped F23 diagnostic publishes
 two ordinary map messages through `show_map_specific_text` at each custom zoom;
 it is active only in a custom-renderer diagnostic launch.
 
+An explicitly selected F23 fixture additionally requires
+`C3X_RENDERER_GAME_TEST_SAVE`, `C3X_RENDERER_GAME_TEST_MODE=hud` and
+`C3X_RENDERER_GAME_TEST_MESSAGE=NEWSCILEADER`. It validates the loaded Japanese
+scientific-leader name `Aida Yasuki`, then uses the existing
+`set_popup_str_param` and `Main_Screen_Form_show_map_message` calls with the
+official script key. Native font, alignment, clipping, background, ordering and
+owner-thread drawing remain the qualification inputs. This fixture does not
+spawn a unit, award technology, change RNG or save gameplay, and it does not
+attribute the earlier interturn text failure. Default F23 messages and config-off
+delegation remain unchanged. Existing `Main_Screen_Form_m82_handle_key_event`
+(`void __fastcall(Main_Screen_Form *, int, int, int)`; GOG/Steam/PCGames.de
+`0x66B520` / `0x688620` / `0x66B520`), `Main_Screen_Form_show_map_message` and
+`MapMessage_draw` symbols retain their signatures and addresses.
+`required_user_action: []`; no patch-table entry is needed.
+
 ## Settler preview, zoom and continuous selection (current repair)
 
 The user authorized the new CSV entry. The installed, unmodded GOG executable
@@ -597,10 +612,20 @@ addresses are already in the table) now forwards old/new accepted tile
 coordinates after Civ III finishes `Unit::update_visibility`, along with a
 stable unit ID, endpoint visibility and presentation timestamp. Renderer64
 retires the previous pixel prediction on a new move. No new CSV symbol
-or address is needed. `c3x_renderer_world_move` asks the registered game-thread
-page callback for at most 128 records per request, scoped to the old and new
-three-ring sight areas. Renderer64 validates map/viewer scope and publishes
-through its existing journal. Other-civ moves with a visible endpoint also
+or address is needed. The optional `c3x_renderer_world_move_sight` DLL export
+transports `calc_max_visibility_range()` from the same configured ring limit
+used by the native visibility iterator patches. `neighbor_index_to_diff` maps
+abstract offsets `(u,v)` to raw isometric `(u-v,u+v)`: the `(2R+1)^2` prefix
+therefore reaches `2R` raw coordinates along either axis, with valid parity.
+The old/new union is wrapped/clipped and deduplicated, at most 450 records for
+C3X's existing `R<=7` limit, copied in pages of at most 128. The redraw gate
+intersects that same native neighbor prefix with wrapped view occurrences.
+`c3x_renderer_world_move` retains the vanilla three-ring ABI. When an older DLL
+lacks the optional export, ranges up to three use its conservative vanilla
+closure; larger configured ranges request the existing paged reconciliation
+rather than omitting outer-ring visibility. The physical appearance export
+keeps its independent 13-tile connectivity halo. Renderer64 validates
+map/viewer scope and publishes through its existing journal. Other-civ moves with a visible endpoint also
 request a native view capture, including hidden-to-visible entry. After an
 interturn, the existing `perform_interturn` hook schedules an audited topology
 scan and the `c3x_renderer_world_reconcile` export requests one paged appearance
@@ -2207,3 +2232,49 @@ custom rendering is off. No new patch capability or table entry is required.
   restores the prior executable together with its matching control trio.
 - `required_user_action: []`. See [world inputs and local updates](world_local_delivery.md)
   for ownership, native bootstrap, measurements and remaining limitations.
+
+
+## Renderer configured sight and selected stack capture freshness
+
+`required_user_action: []`. Existing `Main_Screen_Form_set_selected_unit`,
+`Main_Screen_Form_handle_key_down`, `Main_Screen_Form_process_mouse_hover`, and
+`handle_cursor_change_in_jgl` hooks schedule a one-shot representative capture
+when an accepted selection or actual action mode changes. The existing patched
+`Main_Screen_Form_find_visible_unit` schedules the same capture when its native
+army aiming preview changes the selected member. Existing native camera hooks
+mark effective camera changes, including offscreen-to-visible entry; capture-only
+speculation leaves the request pending until the actual view anchors are ready.
+The bounded initial-unit producer is reused at that frame boundary and clears
+the request only after successful native body capture. It preserves primary,
+secondary, and always-on-top ordering, authoritative normal/bombardment stack
+selection, visibility, native frame availability, HUD order, and temporary
+army/animation state. It does not replay Animator/action advancement.
+
+The existing audited army sprite hooks now observe each member's authoritative
+ordered state before sampling its body clock. This permits a newly displayed
+member to enter `UnitInstances` without sending an animation timestamp older
+than its own state. Hidden bodies remain excluded, and configuration-off keeps
+the existing original native calls and unrelated C3X selection features. These
+changes use only existing game symbols and DLL exports; no patch-table entry or
+native-reference edit is needed. Host contracts execute the native neighbor
+prefix at all configured ranges/wrap combinations and production selection,
+body-clock, visibility, camera, and configuration-off capture paths. The matching
+candidate's evaluation records integrated first-frame, selection and army
+gameplay witnesses separately from those host contracts. Configured-range-7
+seam movement remains unobserved in the actual game; the host range/wrap
+contracts do not replace that scenario.
+
+
+The existing disposable-save F24 diagnostic also accepts an explicit
+`C3X_RENDERER_GAME_TEST_MODE=matched-route` with
+`C3X_RENDERER_GAME_TEST_ROUTE=x,y,width;...`: at most 2047 ASCII bytes and 32
+complete validated commands, native pixel coordinates bounded by actual map
+dimensions, and one of the seven existing zoom widths. It uses the existing
+absolute native camera path and zoom setter, with no new game symbol. Accepted
+requests log raw QPC/frequency before either call; native resolution is logged
+before deferred camera restoration, and exact valid camera adoption is a
+separate one-shot record at the existing handoff. An unchanged camera may
+certify that camera immediately. Presented zoom/pixels remain a separate
+completion endpoint. Ordinary input and the existing relative diagnostic route
+retain their behavior when this mode is absent; load/unload reset its bounded
+state. `required_user_action: []`.

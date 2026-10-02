@@ -17,6 +17,8 @@ FUNCTIONS = (
     "capture_custom_renderer_city_body",
     "custom_renderer_tile_visible_at",
     "custom_renderer_tile_near_view",
+    "custom_renderer_sight_near_view",
+    "refresh_custom_renderer_sight",
     "notify_custom_renderer_city_change",
     "patch_City_recompute_yields_and_happiness",
     "patch_City_update_culture",
@@ -98,6 +100,7 @@ typedef struct State {
     unsigned custom_renderer_dirty_flags;
     c3x_renderer_world_change_fn custom_renderer_world_change;
     c3x_renderer_world_move_fn custom_renderer_world_move;
+    c3x_renderer_world_move_sight_fn custom_renderer_world_move_sight;
     c3x_renderer_world_reconcile_fn custom_renderer_world_reconcile;
     c3x_renderer_seed_world_fn custom_renderer_seed_world;
     bool custom_renderer_initial_world_capture, custom_renderer_capture_world_topology;
@@ -132,6 +135,20 @@ static int last_changed_x, last_changed_y, read_failure_at;
 static int hidden_delta_reads, initial_appearance_reads;
 static struct c3x_renderer_frame_v1 frame;
 static struct c3x_renderer_camera_request_v1 request;
+int calc_max_visibility_range(void) { return 3; }
+void neighbor_index_to_diff(int n, int *x, int *y) {
+    if (!n) { *x = *y = 0; return; }
+    int r = 1; while ((2*r+1)*(2*r+1) <= n) ++r;
+    int k = n - (2*r-1)*(2*r-1);
+    int edge = k / (2*r), step = k % (2*r);
+    int u = edge == 0 ? -r + step : edge == 1 ? r : edge == 2 ? r-step : -r;
+    int v = edge == 0 ? -r : edge == 1 ? -r + step : edge == 2 ? r : r-step;
+    *x = u-v; *y = u+v;
+}
+void wrap_tile_coords(Map *map, int *x, int *y) {
+    if (map->Flags & 1) *x = (*x % map->Width + map->Width) % map->Width;
+    if (map->Flags & 2) *y = (*y % map->Height + map->Height) % map->Height;
+}
 bool Map_in_range(Map *map, int unused, int x, int y) {
     (void)unused; return x >= 0 && y >= 0 && x < map->Width && y < map->Height;
 }

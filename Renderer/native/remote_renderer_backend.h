@@ -79,6 +79,16 @@ public:
                     now.QuadPart,operation,queued,service,s.accepted,s.executed,s.superseded,s.abandoned,s.rejected,
                     s.records,s.units,s.bytes,s.peak_records,s.peak_units,s.peak_bytes,s.oldest_ms);OutputDebugStringA(line);
             });
+        char witness[8]={};
+        if(GetEnvironmentVariableA("C3X_RENDERER_ROUTE_WITNESS",witness,sizeof(witness))&&!std::strcmp(witness,"1"))
+            client.observe_camera_adoption([](c3x_renderer_i64 local_camera,c3x_renderer_i64 local_image,
+                                              c3x_renderer_gpu_camera_view_v1 const& actual){
+                LARGE_INTEGER now={},frequency={};QueryPerformanceCounter(&now);QueryPerformanceFrequency(&frequency);
+                char line[512];std::snprintf(line,sizeof(line),
+                    "[C3X renderer] stage=route-ticket-binding local_camera_ticket=%lld local_image_ticket=%lld remote_camera_ticket=%lld map_ticket=%lld remote_session=%lld qpc=%lld frequency=%lld valid=1 genuine=1\n",
+                    local_camera,local_image,actual.camera.ticket,actual.image.ticket,actual.image.session,
+                    now.QuadPart,frequency.QuadPart);OutputDebugStringA(line);
+            });
     }
     ~Backend(){cadence.stop();}
     bool healthy()const{return client.alive();}

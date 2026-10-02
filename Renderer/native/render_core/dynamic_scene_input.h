@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cstdint>
+#include <cstring>
 #include <limits>
 #include <memory>
 #include <vector>
@@ -51,23 +52,39 @@ public:
         }
         c3x_renderer_camera_identity_v1 identity()const{return captured_identity;}
         std::size_t bytes()const{return charged;}
+        bool matches(c3x_renderer_frame_v1 input,c3x_renderer_camera_identity_v1 identity)const{
+            input.tiles=nullptr;input.world_topology=nullptr;
+            return valid() && !std::memcmp(&input,&captured,sizeof(input)) &&
+                !std::memcmp(&identity,&captured_identity,sizeof(identity));
+        }
+        bool contents_match(c3x_renderer_frame_v1 const& input)const{
+            return (!input.tile_count || !std::memcmp(input.tiles,tiles.data(),tiles.size()*sizeof(tiles[0]))) &&
+                (!input.world_topology_count || !std::memcmp(input.world_topology,topology.data(),topology.size()*sizeof(topology[0])));
+        }
     };
 private:
     std::shared_ptr<Budget> budget=std::make_shared<Budget>();
+    std::weak_ptr<Map const> current;
     std::size_t limit;
 public:
-    std::size_t peak=0;std::uint64_t captures=0,rejected=0;
+    std::size_t peak=0;std::uint64_t captures=0,reused=0,rejected=0;
     explicit DynamicSceneInputs(std::size_t maximum=16u*1024u*1024u):limit(maximum){}
     std::size_t bytes()const{return budget->bytes.load();}
     // Caller gate serializes captures/reset; retained destruction may be remote.
     // Old retained fronts stay charged until the compositor releases them.
-    void invalidate(){auto epoch=budget->epoch.load();if(epoch!=UINT64_MAX)budget->epoch.store(epoch+1);}
+    void invalidate(){current.reset();auto epoch=budget->epoch.load();if(epoch!=UINT64_MAX)budget->epoch.store(epoch+1);}
     std::shared_ptr<Map const> capture(c3x_renderer_frame_v1 const& input,c3x_renderer_camera_identity_v1 identity){
         auto reject=[&]()->std::shared_ptr<Map const>{++rejected;return {};};
         if(input.api_version!=C3X_RENDERER_API_VERSION || input.struct_size!=sizeof(input) ||
            input.tile_count>8192 || (input.tile_count&&!input.tiles) ||
            input.world_topology_count>1024u*1024u || (input.world_topology_count&&!input.world_topology) ||
            input.presentation_time_ticks<0 || input.presentation_frequency<=0 || budget->epoch.load()==UINT64_MAX)return reject();
+        // The adapter's native, selected and prepared consumers borrow one
+        // exact copied capture. This weak reference adds no retained history;
+        // changed facts or clocks still admit a separate immutable owner.
+        if(auto prior=current.lock())if(prior->matches(input,identity) && prior->contents_match(input)){
+            ++reused;return prior;
+        }
         // Include object/control storage, not just the copied arrays. Preflight
         // bounds the one in-flight copy as well as admitted retained records.
         std::size_t needed=sizeof(Map)+64+std::size_t(input.tile_count)*sizeof(c3x_renderer_tile_v1)+std::size_t(input.world_topology_count)*4;
@@ -75,7 +92,7 @@ public:
         auto result=std::shared_ptr<Map>(new Map(budget,input,identity));
         auto actual=sizeof(Map)+64+result->tiles.capacity()*sizeof(c3x_renderer_tile_v1)+result->topology.capacity()*4;
         if(actual>limit || bytes()>limit-actual)return reject();
-        result->charged=actual;budget->bytes.fetch_add(actual);peak=std::max(peak,bytes());++captures;
+        result->charged=actual;budget->bytes.fetch_add(actual);peak=std::max(peak,bytes());++captures;current=result;
         return result;
     }
 };

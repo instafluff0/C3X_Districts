@@ -71,6 +71,12 @@ public:
         std::map<std::array<std::uint64_t,2>,Range> sources;
         std::vector<Instance> staging;
         std::vector<Instance> placements;
+        struct Transfer {unsigned first=0,source=0,count=0;};
+        // Replacement staging contains changed values only. An old immutable
+        // generation stays pinned until its validated ranges are copied.
+        std::vector<Transfer> copies,updates;
+        std::shared_ptr<Generation const> copy_source;
+        bool delta=false;
         // A range already owns the exact 24-word key. Its unique starting
         // record indexes the weak source proof without storing that key twice.
         std::map<unsigned,RetainedSource> retained_sources;
@@ -91,6 +97,7 @@ public:
                 source_count*(sizeof(std::array<std::uint64_t,2>)+sizeof(Range)+64u)+
                 retained_count*(sizeof(unsigned)+sizeof(RetainedSource)+64u);
         }
+        std::size_t transfer_bytes()const{return (copies.capacity()+updates.capacity())*sizeof(Transfer);}
     public:
         ~Generation(){if(view)view->Release();if(buffer)buffer->Release();}
         Range find(Key const& key)const{auto found=ranges.find(key);return found==ranges.end()?Range{}:found->second;}
@@ -147,6 +154,8 @@ public:
     std::size_t selection_uploaded_bytes=0;
     unsigned uploads=0,reuses=0,rejected=0;
     std::size_t uploaded_bytes=0;
+    unsigned range_reuses=0,carry_visits=0,carried_ranges=0,gpu_copies=0;
+    std::size_t packed_records=0,copied_bytes=0,allocated_bytes=0;
     unsigned plan_uploads=0;
     std::size_t plan_uploaded_bytes=0;
     SharedInstanceSubmission()=default;
@@ -167,9 +176,9 @@ public:
             return next;
         }catch(...){++rejected;return {};}
     }
-    Builder begin_retained(Key const& identity,std::shared_ptr<void const> content={}){
+    Builder begin_retained(Key const& identity,std::shared_ptr<void const> content={},bool delta=false){
         auto next=begin(identity,std::move(content));
-        if(next)next->retain_placements=true;
+        if(next){next->retain_placements=true;next->delta=delta;}
         return next;
     }
     bool append(Builder const& next,Key const& key,void const* source,
@@ -177,21 +186,31 @@ public:
             float x,float y,float depth,float material,Range& range){
         if(!next || next->charge.ledger!=ledger || next->owner_epoch!=owner_epoch || next->complete || !instances || !count || !source || !projection)return false;
         auto found=next->ranges.find(key);
-        if(found!=next->ranges.end()){range=found->second;return true;}
+        if(found!=next->ranges.end()){range=found->second;return range.count==count;}
         if(next->ranges.size()==entry_limit || count>record_limit-next->records){++rejected;return false;}
         auto source_key=Generation::source_key(source,material);
         bool new_source=next->sources.find(source_key)==next->sources.end();
         auto records=next->records+count;
         auto capacity=next->staging.capacity();
-        if(records>capacity)capacity=std::min<std::size_t>(record_limit,std::max<std::size_t>(records,std::max<std::size_t>(64,capacity*2)));
+        auto staged=next->staging.size()+count;
+        if(staged>capacity)capacity=std::min<std::size_t>(record_limit,std::max<std::size_t>(staged,std::max<std::size_t>(64,capacity*2)));
+        auto update_capacity=next->updates.capacity();
+        bool merge_update=next->delta && !next->updates.empty() &&
+            next->updates.back().first+next->updates.back().count==next->records;
+        if(next->delta && !merge_update && next->updates.size()==update_capacity)
+            update_capacity=std::min<std::size_t>(entry_limit,std::max<std::size_t>(64,update_capacity*2));
         auto old_cpu=next->charge.cpu;
         auto metadata=next->metadata(next->ranges.size()+1,next->sources.size()+unsigned(new_source),next->retained_sources.size());
-        // Prepared-world placements keep their packed CPU values for bounded
-        // replacement. Reserve the future GPU copy during staging as well.
-        if(!reserve(next->charge,metadata+capacity*sizeof(Instance),
+        // Legacy retained unions keep CPU placements; delta unions stage only
+        // changed records. Charge either replacement's future GPU buffer now.
+        if(!reserve(next->charge,metadata+capacity*sizeof(Instance)+
+                (next->copies.capacity()+update_capacity)*sizeof(Generation::Transfer),
                 next->retain_placements?records*sizeof(Instance):0)){++rejected;return false;}
         try{
             next->staging.reserve(capacity);
+            if(next->delta){next->updates.reserve(update_capacity);
+                if(merge_update)next->updates.back().count+=count;
+                else next->updates.push_back({next->records,unsigned(next->staging.size()),count});}
             range={next->records,count};
             next->ranges.emplace(key,range);
             if(new_source)next->sources.emplace(source_key,range);
@@ -200,20 +219,60 @@ public:
                 value.view[0]=x;value.view[1]=y;value.view[2]=depth;value.view[3]=material;
                 next->staging.push_back(value);
             }
-            next->records=records;return true;
+            next->records=records;packed_records+=count;return true;
         }catch(...){
             // A partially built generation cannot be published or reused.
             next->complete=true;next->charge.resize(std::max(old_cpu,next->metadata(next->ranges.size(),next->sources.size(),next->retained_sources.size())+
-                next->staging.capacity()*sizeof(Instance)),next->charge.gpu);++rejected;return false;
+                next->staging.capacity()*sizeof(Instance)+next->transfer_bytes()),next->charge.gpu);++rejected;return false;
         }
     }
+    // The caller supplies its current resident/dependency proof. Equal source
+    // pointers alone never authorize reuse after eviction or slot recycling.
+    bool reuse_range(Builder const& next,Key const& key,unsigned count,RetainedSource const& proof,Range& range){
+        if(!next || next->charge.ledger!=ledger || next->owner_epoch!=owner_epoch || next->complete || !next->delta ||
+                !valid(current) || !current->retain_placements || !count)return false;
+        auto source=proof.source.lock();if(!source || !proof.owner[1])return false;
+        auto old=current->find(key);if(old.count!=count || old.first>current->records || count>current->records-old.first)return false;
+        auto retained=current->retained_sources.find(old.first);
+        if(retained==current->retained_sources.end() || retained->second.owner!=proof.owner ||
+                retained->second.canonical_source!=proof.canonical_source || retained->second.source.lock()!=source)return false;
+        if(auto present=next->find(key)){range=present;return present.count==count;}
+        if(!copy_range(next,key,old,proof,false,range))return false;
+        ++range_reuses;return true;
+    }
+private:
+    bool copy_range(Builder const& next,Key const& key,Range old,RetainedSource const& proof,bool optional,Range& range){
+        if(next->copy_source && next->copy_source!=current)return false;
+        if(next->ranges.size()==entry_limit || old.count>record_limit-next->records)return false;
+        bool new_source=!next->sources.count(proof.canonical_source);
+        auto copy_capacity=next->copies.capacity();
+        bool merge_copy=!next->copies.empty() && next->copies.back().first+next->copies.back().count==next->records &&
+            next->copies.back().source+next->copies.back().count==old.first;
+        if(!merge_copy && next->copies.size()==copy_capacity)
+            copy_capacity=std::min<std::size_t>(entry_limit,std::max<std::size_t>(64,copy_capacity*2));
+        auto records=next->records+old.count;
+        auto metadata=next->metadata(next->ranges.size()+1,next->sources.size()+unsigned(new_source),next->retained_sources.size()+1);
+        auto cpu=metadata+next->staging.capacity()*sizeof(Instance)+
+            (copy_capacity+next->updates.capacity())*sizeof(Generation::Transfer);
+        if(optional && cpu+records*sizeof(Instance)>budget/4)return false;
+        if(!reserve(next->charge,cpu,records*sizeof(Instance)))return false;
+        try{
+            next->copies.reserve(copy_capacity);range={next->records,old.count};
+            next->ranges.emplace(key,range);next->retained_sources.emplace(range.first,proof);
+            if(new_source)next->sources.emplace(proof.canonical_source,range);
+            if(merge_copy)next->copies.back().count+=old.count;
+            else next->copies.push_back({range.first,old.first,old.count});next->copy_source=current;
+            next->records=records;return true;
+        }catch(...){next->complete=true;++rejected;return false;}
+    }
+public:
     bool retain_source(Builder const& next,Key const& key,RetainedSource proof){
         if(!next || next->charge.ledger!=ledger || next->owner_epoch!=owner_epoch || next->complete ||
             !next->retain_placements || !proof.owner[1] || proof.source.expired())return false;
         auto range=next->find(key);if(!range)return false;
         if(next->retained_sources.count(range.first))return true;
         auto metadata=next->metadata(next->ranges.size(),next->sources.size(),next->retained_sources.size()+1);
-        if(!reserve(next->charge,metadata+next->staging.capacity()*sizeof(Instance),next->charge.gpu))return false;
+        if(!reserve(next->charge,metadata+next->staging.capacity()*sizeof(Instance)+next->transfer_bytes(),next->charge.gpu))return false;
         try{next->retained_sources.emplace(range.first,std::move(proof));return true;}
         catch(...){next->complete=true;++rejected;return false;}
     }
@@ -222,11 +281,12 @@ public:
     // There is one current immutable union, not a collection of camera views.
     template<class Valid>bool carry_forward(Builder const& next,Valid valid_source){
         if(!next || next->charge.ledger!=ledger || next->owner_epoch!=owner_epoch || next->complete || !next->retain_placements)return false;
-        if(!valid(current) || !current->retain_placements || current->placements.size()!=current->records)return true;
+        if(!valid(current) || !current->retain_placements || (!next->delta && current->placements.size()!=current->records))return true;
         if(current->retained_sources.empty())return true;
         // Keep exact-key order: optional admission and canonical fallback must
         // select the same first eligible range as the previous representation.
         for(auto const& entry:current->ranges){
+            ++carry_visits;
             auto retained=current->retained_sources.find(entry.second.first);
             if(retained==current->retained_sources.end())continue;
             auto const& proof=retained->second;
@@ -234,6 +294,11 @@ public:
             auto range=entry.second;
             if(!range || range.first>current->records || range.count>current->records-range.first)return false;
             if(next->ranges.size()==entry_limit || range.count>record_limit-next->records)continue;
+            if(next->delta){Range copied;
+                if(copy_range(next,entry.first,range,proof,true,copied))++carried_ranges;
+                else if(next->complete)return false;
+                continue;
+            }
             // Any validated carried representative supplies the canonical
             // caster values; caster shaders replace occurrence view.xyz.
             // Required source entries were appended first and always win.
@@ -253,13 +318,13 @@ public:
                 if(new_source)next->sources.emplace(proof.canonical_source,copied);
                 next->staging.insert(next->staging.end(),current->placements.begin()+range.first,
                     current->placements.begin()+range.first+range.count);
-                next->records=records;
+                next->records=records;++carried_ranges;packed_records+=range.count;
             }catch(...){next->complete=true;++rejected;return false;}
         }
         return true;
     }
     Lease upload(Builder const& next,ID3D11Device* device){
-        if(!next || next->charge.ledger!=ledger || next->owner_epoch!=owner_epoch || next->complete || !device ||
+        if(!next || next->charge.ledger!=ledger || next->owner_epoch!=owner_epoch || next->complete || next->delta || !device ||
             (current && current->device_cookie!=device) || next->staging.size()!=next->records)return {};
         auto gpu=std::size_t(next->records)*sizeof(Instance);
         if(!reserve(next->charge,next->charge.cpu,gpu)){++rejected;return {};}
@@ -272,12 +337,61 @@ public:
             if(FAILED(device->CreateBuffer(&desc,&initial,&buffer))){next->charge.resize(next->charge.cpu,0);++rejected;return {};}
             ID3D11ShaderResourceView* view=nullptr;
             if(FAILED(device->CreateShaderResourceView(buffer,nullptr,&view))){buffer->Release();next->charge.resize(next->charge.cpu,0);++rejected;return {};}
-            next->buffer=buffer;next->view=view;++uploads;uploaded_bytes+=gpu;
+            next->buffer=buffer;next->view=view;++uploads;uploaded_bytes+=gpu;allocated_bytes+=gpu;
         }
         if(next->retain_placements)next->placements.swap(next->staging);
         else std::vector<Instance>().swap(next->staging);
         next->charge.resize(next->metadata(next->ranges.size(),next->sources.size(),next->retained_sources.size())+
             next->placements.capacity()*sizeof(Instance),gpu);
+        next->complete=true;next->device_cookie=device;current=next;return current;
+    }
+    Lease upload(Builder const& next,ID3D11Device* device,ID3D11DeviceContext* context){
+        if(next && !next->delta)return upload(next,device);
+        if(!next || next->charge.ledger!=ledger || next->owner_epoch!=owner_epoch || next->complete || !device || !context ||
+                (current && current->device_cookie!=device))return {};
+        ID3D11Device* context_device=nullptr;context->GetDevice(&context_device);
+        bool matches=context_device==device;if(context_device)context_device->Release();if(!matches)return {};
+        if(!next->copies.empty() && (!valid(next->copy_source) || next->copy_source->device_cookie!=device))return {};
+        std::size_t transferred=0;
+        for(auto const& part:next->copies){
+            if(!part.count || part.first>next->records || part.count>next->records-part.first ||
+                    part.source>next->copy_source->records || part.count>next->copy_source->records-part.source)return {};
+            transferred+=part.count;
+        }
+        for(auto const& part:next->updates){
+            if(!part.count || part.first>next->records || part.count>next->records-part.first ||
+                    part.source>next->staging.size() || part.count>next->staging.size()-part.source)return {};
+            transferred+=part.count;
+        }
+        if(transferred!=next->records)return {};
+        auto gpu=std::size_t(next->records)*sizeof(Instance);
+        if(!reserve(next->charge,next->charge.cpu,gpu)){++rejected;return {};}
+        if(gpu){
+            D3D11_BUFFER_DESC desc{};desc.ByteWidth=unsigned(gpu);desc.Usage=D3D11_USAGE_DEFAULT;
+            desc.BindFlags=D3D11_BIND_SHADER_RESOURCE;desc.MiscFlags=D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+            desc.StructureByteStride=sizeof(Instance);
+            ID3D11Buffer* buffer=nullptr;
+            if(FAILED(device->CreateBuffer(&desc,nullptr,&buffer))){next->charge.resize(next->charge.cpu,0);++rejected;return {};}
+            ID3D11ShaderResourceView* view=nullptr;
+            if(FAILED(device->CreateShaderResourceView(buffer,nullptr,&view))){buffer->Release();next->charge.resize(next->charge.cpu,0);++rejected;return {};}
+            // Queue copies before publishing. D3D retains resources for queued
+            // commands; no wait or mutation of an old consumer's buffer occurs.
+            for(auto const& part:next->copies){
+                D3D11_BOX box{part.source*unsigned(sizeof(Instance)),0,0,(part.source+part.count)*unsigned(sizeof(Instance)),1,1};
+                context->CopySubresourceRegion(buffer,0,part.first*unsigned(sizeof(Instance)),0,0,next->copy_source->buffer,0,&box);
+                ++gpu_copies;copied_bytes+=std::size_t(part.count)*sizeof(Instance);
+            }
+            for(auto const& part:next->updates){
+                D3D11_BOX box{part.first*unsigned(sizeof(Instance)),0,0,(part.first+part.count)*unsigned(sizeof(Instance)),1,1};
+                context->UpdateSubresource(buffer,0,&box,next->staging.data()+part.source,0,0);
+                uploaded_bytes+=std::size_t(part.count)*sizeof(Instance);
+            }
+            next->buffer=buffer;next->view=view;++uploads;allocated_bytes+=gpu;
+        }
+        std::vector<Instance>().swap(next->staging);
+        std::vector<Generation::Transfer>().swap(next->copies);std::vector<Generation::Transfer>().swap(next->updates);
+        next->copy_source.reset();
+        next->charge.resize(next->metadata(next->ranges.size(),next->sources.size(),next->retained_sources.size()),gpu);
         next->complete=true;next->device_cookie=device;current=next;return current;
     }
     bool valid(Lease const& content)const{
@@ -294,6 +408,10 @@ public:
             if(!reserve(allocation->charge,bytes+sizeof(CpuAllocation),0)){++rejected;return {};}
             return allocation;
         }catch(...){++rejected;return {};}
+    }
+    bool resize_metadata(CpuLease const& allocation,std::size_t bytes){
+        if(!allocation || allocation->charge.ledger!=ledger || bytes>budget-sizeof(CpuAllocation))return false;
+        return const_cast<CpuAllocation*>(allocation.get())->charge.resize(bytes+sizeof(CpuAllocation),0);
     }
     // Warm selection plans keep their four-byte indices. Their GPU storage,
     // caller cache-key metadata and temporary input scratch share the same
@@ -344,7 +462,8 @@ public:
     }
     void clear(){current.reset();++owner_epoch;if(selection_buffer)selection_buffer->Release();selection_buffer=nullptr;selection_charge.resize(0,0);
         selection_cursor=record_limit;selection_offset=selection_uploads=selection_discards=0;selection_uploaded_bytes=0;
-        uploads=reuses=rejected=plan_uploads=0;uploaded_bytes=plan_uploaded_bytes=0;}
+        uploads=reuses=rejected=plan_uploads=0;uploaded_bytes=plan_uploaded_bytes=0;
+        range_reuses=carry_visits=carried_ranges=gpu_copies=0;packed_records=copied_bytes=allocated_bytes=0;}
     std::size_t bytes()const{return ledger->bytes.load();}
     std::size_t cpu_bytes()const{return ledger->cpu.load();}
     std::size_t gpu_bytes()const{return ledger->gpu.load();}

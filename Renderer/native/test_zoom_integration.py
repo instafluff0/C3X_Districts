@@ -161,9 +161,9 @@ struct custom_renderer_native_view{int camera_x=0,camera_y=0;};
 struct PCX_Image{struct{void* Image=nullptr;}JGL;};
 struct Map_Renderer:PCX_Image{void* spotlight_on_city=nullptr;};
 struct{struct{Map_Renderer Renderer;}Map;}bic,*p_bic_data=&bic;
-struct Main_Screen_Form{int Player_CivID=1;struct{char field_18E4[64];}animator;}screen;
+struct Main_Screen_Form{int Player_CivID=1,camera_x=0,camera_y=0;struct{char field_18E4[64];}animator;}screen;
 struct State{struct{bool enable_custom_rendering=true;}current_config;
- bool custom_renderer_camera_exact=false,custom_renderer_async_enabled=false,custom_renderer_display_valid=false;
+ bool custom_renderer_camera_exact=false,custom_renderer_async_enabled=false,custom_renderer_display_valid=false,custom_renderer_unit_representatives_dirty=false;
  long long custom_renderer_camera_ticket=17;void(*custom_renderer_camera_cancel)(long long)=nullptr;
  void(*custom_renderer_navigation)(int,void*,struct custom_renderer_native_view*,void*)=nullptr;
 }state,*is=&state;
@@ -173,6 +173,7 @@ void Main_Screen_Form_move_camera(Main_Screen_Form* value,int edx,int x,int y,in
  assert(value==&screen&&x==123&&y==456);++calls;last_edx=edx;}
 struct custom_renderer_native_view custom_renderer_native_view(Map_Renderer*){return {};}
 bool capture_custom_renderer_native_view(Map_Renderer*,int,struct custom_renderer_native_view*,bool){return false;}
+void log_custom_renderer_test_route_resolved(int,int){}
 void apply_custom_renderer_native_view(struct custom_renderer_native_view*){assert(false);}
 void '''+body+r'''
 int main(){state.custom_renderer_camera_cancel=cancel;bic.Map.Renderer.spotlight_on_city=&screen;

@@ -38,7 +38,7 @@ class InstanceSelectionRetirementTests(unittest.TestCase):
         callback, conditional = production_retirement()
         run_cpp(PREAMBLE + r'''
 int main(){
- ID3D11Device device;Owner owner;Plans instance_plans;instance_plans.begin();
+ ID3D11Device device;ID3D11DeviceContext context{&device};Owner owner;Plans instance_plans;instance_plans.begin();
  std::size_t instance_plan_bytes=0;auto& plans=instance_plans;
  float projection[]={0,0,128,1260};Owner::Range range;
  std::vector<Owner::Instance> values(16384);
@@ -57,7 +57,7 @@ int main(){
  // A borrowed consumer independently pins its selection and old generation.
  auto consumer=plans[0].value.selection;
  auto pressure=owner.retain_metadata(Owner::budget-owner.bytes()-256u*1024u);assert(pressure);
- builder=owner.begin_retained(Owner::Key{2});assert(builder);
+ builder=owner.begin_retained(Owner::Key{2},{},true);assert(builder);
  assert(!owner.append(builder,Owner::Key{12},values.data(),values.data(),unsigned(values.size()),projection,4,0,0,40,range));
  builder.reset();assert(owner.valid(front) && owner.valid(consumer));
  assert(front->buffer->data==old_bytes);
@@ -70,9 +70,9 @@ int main(){
  assert(plans.size()==0 && instance_plan_bytes==0 && owner.bytes()<before);
  assert(owner.valid(consumer) && owner.valid(pinned_front));
  assert(pinned_front->buffer->data==old_bytes);
- builder=owner.begin_retained(Owner::Key{2});assert(builder);
+ builder=owner.begin_retained(Owner::Key{2},{},true);assert(builder);
  assert(owner.append(builder,Owner::Key{12},values.data(),values.data(),unsigned(values.size()),projection,4,0,0,40,range));
- auto next=owner.upload(builder,&device);builder.reset();assert(next);
+ auto next=owner.upload(builder,&device,&context);builder.reset();assert(next);
  assert(next->find(Owner::Key{12}).count==values.size());
  assert(owner.valid(consumer) && owner.valid(pinned_front));
  assert(owner.bytes()<=Owner::budget && owner.peak_bytes()<=Owner::budget);
@@ -128,7 +128,7 @@ int main(){
             self.assertLess(retire, method.index(charge))
         self.assertNotIn("shared_front.reset()", method)
         self.assertNotIn("shared_instances.clear()", method)
-        self.assertIn("prepare_instances(inputs,retire_completed_plans)", source)
+        self.assertIn("prepare_instances(inputs,retire_completed_plans,shared_front.get(),body_covered)", source)
         self.assertIn("body_inputs,retire_completed_instance_plans)", source)
 
 

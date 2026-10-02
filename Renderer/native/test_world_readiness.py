@@ -1,5 +1,6 @@
 """Whole-world pages and compiler leases preserve authority and visibility."""
 import unittest
+from pathlib import Path
 from Renderer.native.native_cpp_test import run_cpp
 
 
@@ -88,7 +89,7 @@ int main(){
  auto first=world_move_footprint(frame,10,10,12,10);
  auto second=world_move_footprint(frame,12,10,14,10);
  assert(!first.empty()&&first.size()<=128&&second.size()<=128);
- auto changed_tile=world_move_footprint(frame,12,10,12,10,2);
+ auto changed_tile=world_change_footprint(frame,12,10);
  assert(changed_tile.size()==13); // one tile plus immediate connectivity neighborhood
  auto publish=[&](auto const& coords,int reveal_x){
   std::vector<c3x_renderer_tile_v1> tiles;
@@ -102,14 +103,64 @@ int main(){
  };
  publish(first,18);auto first_tile=scene.retained(scene.key(18,10));
  assert(first_tile&&(first_tile->visibility_flags&C3X_RENDERER_TILE_VISIBLE));
- publish(second,20);auto second_tile=scene.retained(scene.key(20,10));
+ publish(second,20);assert(!(scene.retained(scene.key(18,10))->visibility_flags&C3X_RENDERER_TILE_VISIBLE));
+ auto second_tile=scene.retained(scene.key(20,10));
  assert(second_tile&&(second_tile->visibility_flags&C3X_RENDERER_TILE_VISIBLE));
  frame.world_wrap_x=frame.world_wrap_y=1;
  auto wrapped=world_move_footprint(frame,0,0,38,0);
  assert(!wrapped.empty()&&wrapped.size()<=128);
  for(auto [x,y]:wrapped)assert(x>=0&&x<40&&y>=0&&y<40&&!((x+y)&1));
  frame.world_wrap_x=frame.world_wrap_y=0;
- auto far=world_move_footprint(frame,6,6,34,34);assert(far.size()>128&&far.size()<=170);
+ auto far=world_move_footprint(frame,6,6,30,30);assert(far.size()==98);
+ auto configured=world_move_footprint(frame,14,14,34,34,7);assert(configured.size()>128&&configured.size()<=450);
+}
+''')
+
+    def test_configured_sight_matches_executed_native_neighbor_prefix(self):
+        native = (Path(__file__).resolve().parents[2] / "ref/Civ3Conquests_master.exe.c").read_text()
+        start = native.index("void __cdecl neighbor_index_to_diff(")
+        end = native.index("\n}\n", start) + 3
+        function = native[start:end]
+        run_cpp(r'''
+#include "Renderer/native/render_core/world_move_footprint.h"
+#include <cassert>
+#include <climits>
+#include <set>
+#define __cdecl
+#define SBORROW4(a,b) ((static_cast<long long>(a)-(b)<INT_MIN)||(static_cast<long long>(a)-(b)>INT_MAX))
+''' + function + r'''
+using namespace c3x_renderer::render_core;
+std::set<std::pair<int,int>> native_closure(c3x_renderer_frame_v1 const& f,int cx,int cy,int r){
+ std::set<std::pair<int,int>> result;
+ for(int n=0;n<(2*r+1)*(2*r+1);++n){
+  int dx=0,dy=0;neighbor_index_to_diff(n,&dx,&dy);int x=cx+dx,y=cy+dy;
+  if(f.world_wrap_x)x=(x%f.world_width_tiles+f.world_width_tiles)%f.world_width_tiles;
+  if(f.world_wrap_y)y=(y%f.world_height_tiles+f.world_height_tiles)%f.world_height_tiles;
+  if(x>=0&&x<f.world_width_tiles&&y>=0&&y<f.world_height_tiles&&!((x+y)&1))result.emplace(x,y);
+ }
+ return result;
+}
+int main(){
+ for(int r=0;r<=7;++r)for(int wrap=0;wrap<4;++wrap){
+  c3x_renderer_frame_v1 f{};f.world_width_tiles=100;f.world_height_tiles=80;
+  f.world_wrap_x=wrap&1;f.world_wrap_y=(wrap>>1)&1;
+  for(auto center:{std::pair{30,30},std::pair{0,0},std::pair{98,78}}){
+   auto actual=world_move_footprint(f,center.first,center.second,70,50,r);
+   auto expected=native_closure(f,center.first,center.second,r);
+   auto next=native_closure(f,70,50,r);expected.insert(next.begin(),next.end());
+   assert(std::set(actual.begin(),actual.end())==expected&&actual.size()<=450);
+   for(std::size_t offset=0;offset<actual.size();offset+=128)assert(std::min<std::size_t>(128,actual.size()-offset)<=128);
+  }
+ }
+ c3x_renderer_frame_v1 f{};f.world_width_tiles=f.world_height_tiles=100;
+ auto one=world_move_footprint(f,30,30,30,30,7);assert(one.size()==225);
+ assert(std::binary_search(one.begin(),one.end(),std::pair{44,30}));
+ assert(!std::binary_search(one.begin(),one.end(),std::pair{44,32})); // Outside native sight diamond.
+ auto both=world_move_footprint(f,30,30,70,70,7);assert(both.size()==450);
+ f.world_width_tiles=f.world_height_tiles=4;f.world_wrap_x=f.world_wrap_y=1;
+ auto small=world_move_footprint(f,0,0,2,2,7);assert(small.size()==8);
+ assert(world_move_footprint(f,0,0,2,2,-1).empty()&&world_move_footprint(f,0,0,2,2,8).empty());
+ assert(world_change_footprint(f,0,0).size()==8); // Independent appearance halo, deduplicated at wrap.
 }
 ''')
 

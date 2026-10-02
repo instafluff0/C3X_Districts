@@ -184,6 +184,7 @@ int main(){
 #define __stdcall
 constexpr int __=0;
 struct State {bool custom_renderer_trace_input=false;
+ bool custom_renderer_unit_bootstrap=false;
  struct {bool enable_custom_rendering=false;} current_config;
  c3x_renderer_native_image_fn custom_renderer_native_image=nullptr;
  void* custom_renderer_hud_canvas=nullptr;int custom_renderer_zoom_native_tile_width=128,custom_renderer_zoom_tile_width=128;

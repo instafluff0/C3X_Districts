@@ -866,5 +866,156 @@ int test_retained_composition(){
         assert(output[0]==0xffff00ff&&output[20*w+28]==0xffffffff);
         std::puts("PASS live zoom Session: 16 intermediate GPU frames, partial native copies, fixed panel, marker alignment, present-only picking and canonical source preservation");
     }
+    // Independent native targets can select the same complete before-images.
+    // Share an exact keyed recipe, while keeping genuinely different saved
+    // versions, source mappings and alias relationships independent.
+    for(auto format:{Format::rgb555,Format::rgb565}){
+        auto live_owner=std::make_unique<Compositor>(device.Get(),context.Get());
+        auto retained_owner=std::make_unique<RetainedComposition>(device.Get(),context.Get());
+        auto& live=*live_owner;auto& retained=*retained_owner;
+        std::vector<Id> ids;unsigned revision=0;long long clock=10000;
+        auto make=[&](Format f,unsigned width=0,unsigned height=0){if(!width)width=w;if(!height)height=h;
+            auto id=live.create(width,height,f);assert(id);
+            retained.create(id,width,height,f);ids.push_back(id);return id;};
+        struct Pair {Id words,detail;};
+        auto pair=[&](){return Pair{make(format),make(Format::bgra32)};};
+        auto map=make(Format::bgra32),base=make(format),base_detail=make(Format::bgra32),
+            artwork=make(format),artwork_detail=make(Format::bgra32),old_artwork=make(format),old_detail=make(Format::bgra32);
+        unsigned key=format==Format::rgb555?0x7c1f:0xf81f,ink=format==Format::rgb555?0x03e0:0x07e0;
+        std::vector<unsigned> pixels(w*h),words(w*h),colors(w*h);
+        for(unsigned i=0;i<words.size();++i){words[i]=i%3?key:ink;colors[i]=0xff12a456u+i;}
+        assert(live.upload(artwork,1,words.data(),words.size()));assert(live.upload(old_artwork,1,words.data(),words.size()));
+        assert(live.upload(artwork_detail,1,colors.data(),colors.size()));assert(live.upload(old_detail,1,colors.data(),colors.size()));
+        retained.source(artwork,live.texture(artwork));retained.source(artwork_detail,live.texture(artwork_detail));
+        RetainedComposition::Texture current;
+        auto next_map=[&](){++revision;for(unsigned i=0;i<pixels.size();++i)pixels[i]=0xff000000u|((i*3127+revision*771)&0xffffff);
+            assert(live.upload(map,revision,pixels.data(),pixels.size()));auto next=live.create(w,h,Format::bgra32);assert(next);
+            assert(live.upload(next,1,pixels.data(),pixels.size()));current=live.texture(next);live.destroy(next);};
+        next_map();retained.source(map,current.Get(),[&](long long,long long){return current;},true,true);
+        Command quantize={Kind::quantize,base,map,full,full},copy_detail={Kind::copy,base_detail,map,full,full};
+        retained.record(quantize);retained.record(copy_detail);
+        auto restore=[&](Pair p,Id detail_base=0){retained.snapshot(p.words,base);retained.snapshot(p.detail,detail_base?detail_base:base_detail);};
+        auto recipe=[&](Pair p,unsigned color){return Command{Kind::native_image,p.words,artwork,full,full,0,0,color,0,p.detail,artwork_detail,int(w),int(h)};};
+        auto compare=[&](Pair p,Command c,Id detail_base=0,Id word_base=0){
+            assert(live.submit(&quantize,1));assert(live.submit(&copy_detail,1));
+            Command reset_words={Kind::copy,p.words,word_base?word_base:base,full,full};
+            Command reset_detail={Kind::copy,p.detail,detail_base?detail_base:base_detail,full,full};
+            assert(live.submit(&reset_words,1));assert(live.submit(&reset_detail,1));
+            c.destination=p.words;if(c.detail)c.detail=p.detail;assert(live.submit(&c,1));
+            for(auto id:{p.words,p.detail}){retained.commit(id,full);
+                assert(retained_read(device.Get(),context.Get(),retained.sample(++clock,1000).Get())==
+                       retained_read(device.Get(),context.Get(),live.texture(id)));++checks;}
+        };
+        auto a=pair(),b=pair(),again=pair(),saved=pair();restore(a);restore(b);restore(again);
+        retained.record(recipe(a,key));retained.record(recipe(b,key^1u));auto nodes=retained.node_count();
+        retained.record(recipe(again,key));assert(retained.node_count()==nodes);
+        auto reuse=retained.recipe_reuse();assert(reuse.eligible==3&&reuse.reused==1&&reuse.probed<=reuse.eligible*8);
+        retained.snapshot(saved.words,a.words);retained.snapshot(saved.detail,a.detail);
+        compare(a,recipe(a,key));compare(b,recipe(b,key^1u));compare(again,recipe(again,key));
+        auto warm_bytes=retained.bytes(),warm_allocations=retained.replay_stats().allocations;nodes=retained.node_count();
+        for(unsigned tick=0;tick<24;++tick){next_map();restore(again);auto before=retained.recipe_reuse();retained.record(recipe(again,key));
+            assert(retained.recipe_reuse().reused==before.reused+1);compare(again,recipe(again,key));
+            assert(retained.bytes()==warm_bytes&&retained.node_count()==nodes&&retained.replay_stats().allocations==warm_allocations);}
+        auto miss=[&](Pair p,Command c,Id detail_base=0,Id word_base=0){auto before=retained.recipe_reuse();
+            retained.record(c);assert(retained.recipe_reuse().reused==before.reused);compare(p,c,detail_base,word_base);};
+        // A raw clip change remains a miss even when its effective extent is full.
+        auto raw_clip=pair();restore(raw_clip);auto c=recipe(raw_clip,key);c.clip={-1,-1,int(w)+1,int(h)+1};miss(raw_clip,c);
+        auto clipped=pair();restore(clipped);c=recipe(clipped,key);c.clip={1,0,int(w),int(h)};miss(clipped,c);
+        auto changed_key=pair();restore(changed_key);miss(changed_key,recipe(changed_key,key^2u));
+        auto no_detail=pair();restore(no_detail);c=recipe(no_detail,key);c.detail=c.background_detail=0;miss(no_detail,c);
+        auto other_detail=make(Format::bgra32);std::fill(colors.begin(),colors.end(),0xff765432u);
+        assert(live.upload(other_detail,1,colors.data(),colors.size()));retained.source(other_detail,live.texture(other_detail));
+        auto changed_underlay=pair();restore(changed_underlay,other_detail);miss(changed_underlay,recipe(changed_underlay,key),other_detail);
+        auto wider=make(format,w+1,h);std::vector<unsigned> wide((w+1)*h,ink);for(unsigned i=0;i<wide.size();i+=3)wide[i]=key;
+        assert(live.upload(wider,1,wide.data(),wide.size()));retained.source(wider,live.texture(wider));
+        auto shifted=pair();restore(shifted);c=recipe(shifted,key);c.source=wider;c.source_x=1;c.background_detail=0;miss(shifted,c);
+        // Equal copied pictures do not make self-aliasing the same operation.
+        auto cloned=pair();retained.snapshot(cloned.words,base);retained.snapshot(cloned.detail,base_detail);
+        assert(live.submit(&quantize,1));assert(live.submit(&copy_detail,1));
+        Command clone_words={Kind::copy,cloned.words,base,full,full},clone_detail={Kind::copy,cloned.detail,base_detail,full,full};
+        assert(live.submit(&clone_words,1));assert(live.submit(&clone_detail,1));
+        auto separate=pair();restore(separate);c=recipe(separate,key);c.source=cloned.words;c.background_detail=cloned.detail;
+        retained.record(c);compare(separate,c);
+        auto aliased=pair();restore(aliased);c=recipe(aliased,key);c.source=aliased.words;c.background_detail=aliased.detail;miss(aliased,c);
+        // Packed format is part of every operand proof, including before-images.
+        auto alternate=format==Format::rgb555?Format::rgb565:Format::rgb555;
+        auto alternate_base=make(alternate),alternate_artwork=make(alternate);Pair alternate_target{make(alternate),make(Format::bgra32)};
+        Command alternate_quantize={Kind::quantize,alternate_base,map,full,full};assert(live.submit(&alternate_quantize,1));retained.record(alternate_quantize);
+        std::fill(words.begin(),words.end(),0x1234u);assert(live.upload(alternate_artwork,1,words.data(),words.size()));
+        retained.source(alternate_artwork,live.texture(alternate_artwork));retained.snapshot(alternate_target.words,alternate_base);retained.snapshot(alternate_target.detail,base_detail);
+        c=recipe(alternate_target,key);c.source=alternate_artwork;c.background_detail=0;miss(alternate_target,c,0,alternate_base);
+        // Republish the same artwork handle. The saved old result still owns
+        // its original pixels, while its shared map underlay keeps animating.
+        // Put its matching live proof back in the recent index before changing
+        // the source; a miss must not merely be caused by index eviction.
+        restore(again);retained.record(recipe(again,key));compare(again,recipe(again,key));
+        for(unsigned i=0;i<words.size();++i)words[i]=i%2?key:0x1234u;
+        assert(live.upload(artwork,2,words.data(),words.size()));retained.source(artwork,live.texture(artwork));
+        auto republished=pair();restore(republished);miss(republished,recipe(republished,key));
+        next_map();c=recipe(saved,key);c.source=old_artwork;c.background_detail=old_detail;compare(saved,c);
+        retained.uncommit();for(auto id:ids)retained.destroy(id);
+        assert(!retained.node_count()&&!retained.bytes()); // weak recipe index remains alive
+        std::printf("PASS keyed recipe reuse: format=%u dynamic_pairs=2 repeats=24 exact_words_and_detail=1 saved_source_version=1 divergence=9 weak_expiry=1\n",unsigned(format));
+    }
+    // The static expand is shared while its complete proof is still present.
+    // Once evaluated, its frozen output cannot serve as a recipe proof.
+    for(auto format:{Format::rgb555,Format::rgb565}){
+        auto live_owner=std::make_unique<Compositor>(device.Get(),context.Get());
+        auto retained_owner=std::make_unique<RetainedComposition>(device.Get(),context.Get());
+        auto& live=*live_owner;auto& retained=*retained_owner;
+        auto source=live.create(w,h,format),oracle=live.create(w,h,Format::bgra32);assert(source&&oracle);
+        std::vector<unsigned> pixels(w*h);for(unsigned i=0;i<pixels.size();++i)pixels[i]=(i*31)&32767;
+        assert(live.upload(source,1,pixels.data(),pixels.size()));retained.create(source,w,h,format);retained.source(source,live.texture(source));
+        constexpr Id first=100001,second=100002,third=100003;
+        for(auto id:{first,second,third})retained.create(id,w,h,Format::bgra32);
+        Command expand={Kind::expand,first,source,full,full,0,0,65536};retained.record(expand);expand.destination=second;retained.record(expand);
+        assert(retained.recipe_reuse().eligible==2&&retained.recipe_reuse().reused==1&&retained.node_count()==2);
+        expand.destination=oracle;assert(live.submit(&expand,1));auto expected=retained_read(device.Get(),context.Get(),live.texture(oracle));
+        for(auto id:{first,second}){retained.commit(id,full);assert(retained_read(device.Get(),context.Get(),retained.sample(1,1000).Get())==expected);++checks;}
+        auto before=retained.recipe_reuse();auto nodes=retained.node_count();expand.destination=third;retained.record(expand);
+        assert(retained.recipe_reuse().reused==before.reused&&retained.node_count()==nodes+1);
+        retained.commit(third,full);assert(retained_read(device.Get(),context.Get(),retained.sample(2,1000).Get())==expected);++checks;
+        retained.uncommit();for(auto id:{source,first,second,third})retained.destroy(id);assert(!retained.node_count()&&!retained.bytes());
+        std::printf("PASS expand recipe reuse: format=%u queued_shared=1 retired_proof_rejected=1 exact=1 weak_expiry=1\n",unsigned(format));
+    }
+    // Thirty-two legitimate saved native pairs would demand 256 MiB of
+    // duplicate outputs alone. Keep their exact shared recipe under the same
+    // production cap; the live oracle owns only one working destination pair.
+    {
+        constexpr unsigned width=1024,height=1024,count=32;Rect bounds={0,0,int(width),int(height)};
+        auto live_owner=std::make_unique<Compositor>(device.Get(),context.Get());
+        auto retained_owner=std::make_unique<RetainedComposition>(device.Get(),context.Get());
+        auto& live=*live_owner;auto& retained=*retained_owner;
+        auto make=[&](Format f){auto id=live.create(width,height,f);assert(id);retained.create(id,width,height,f);return id;};
+        auto map=make(Format::bgra32),base=make(Format::rgb555),base_detail=make(Format::bgra32),
+            artwork=make(Format::rgb555),artwork_detail=make(Format::bgra32),oracle=live.create(width,height,Format::rgb555),oracle_detail=live.create(width,height,Format::bgra32);
+        assert(oracle&&oracle_detail);std::vector<unsigned> pixels(width*height),words(width*height),colors(width*height);
+        for(unsigned i=0;i<pixels.size();++i){pixels[i]=0xff000000u|((i*3127)&0xffffff);words[i]=i%3?0x7c1fu:0x03e0u;colors[i]=0xff12a456u;}
+        assert(live.upload(map,1,pixels.data(),pixels.size()));assert(live.upload(artwork,1,words.data(),words.size()));
+        assert(live.upload(artwork_detail,1,colors.data(),colors.size()));
+        retained.source(map,live.texture(map),[&](long long,long long){return RetainedComposition::Texture(live.texture(map));},true,true);
+        retained.source(artwork,live.texture(artwork));retained.source(artwork_detail,live.texture(artwork_detail));
+        Command quantize={Kind::quantize,base,map,bounds,bounds},detail_copy={Kind::copy,base_detail,map,bounds,bounds};
+        assert(live.submit(&quantize,1));assert(live.submit(&detail_copy,1));retained.record(quantize);retained.record(detail_copy);
+        Command oracle_words={Kind::copy,oracle,base,bounds,bounds},oracle_color={Kind::copy,oracle_detail,base_detail,bounds,bounds};
+        assert(live.submit(&oracle_words,1));assert(live.submit(&oracle_color,1));
+        Command keyed={Kind::native_image,oracle,artwork,bounds,bounds,0,0,0x7c1f,0,oracle_detail,artwork_detail,int(width),int(height)};
+        assert(live.submit(&keyed,1));auto expected_words=retained_read(device.Get(),context.Get(),live.texture(oracle));
+        auto expected_color=retained_read(device.Get(),context.Get(),live.texture(oracle_detail));
+        for(unsigned i=0;i<count;++i){Id destination=200000+i*2,detail=destination+1;
+            retained.create(destination,width,height,Format::rgb555);retained.create(detail,width,height,Format::bgra32);
+            retained.snapshot(destination,base);retained.snapshot(detail,base_detail);auto command=keyed;command.destination=destination;command.detail=detail;retained.record(command);}
+        auto reuse=retained.recipe_reuse();assert(reuse.eligible==count&&reuse.reused==count-1&&reuse.probed<=count*8);
+        auto nodes=retained.node_count();std::uint64_t warm_bytes=0;
+        for(unsigned i=0;i<count;++i)for(unsigned output=0;output<2;++output){Id id=200000+i*2+output;retained.commit(id,bounds);
+            assert(retained_read(device.Get(),context.Get(),retained.sample(i+1,1000).Get())==(output?expected_color:expected_words));++checks;
+            if(!warm_bytes)warm_bytes=retained.bytes();assert(retained.bytes()==warm_bytes&&retained.node_count()==nodes);}
+        assert(warm_bytes==std::uint64_t(width)*height*4*6); // three sources, quantize and one output pair
+        retained.uncommit();for(unsigned i=0;i<count*2;++i)retained.destroy(200000+i);
+        for(auto id:{map,base,base_detail,artwork,artwork_detail})retained.destroy(id);
+        assert(!retained.node_count()&&!retained.bytes());
+        std::printf("PASS paired recipe budget: targets=%u size=%ux%u eligible=%llu reused=%llu retained_bytes=%llu exact_oracles=64 weak_expiry=1 cap=268435456\n",
+            count,width,height,reuse.eligible,reuse.reused,warm_bytes);
+    }
     std::printf("PASS retained composition: %u exact GPU oracles, 120 independent clock frames, aliasing, paired 555/565/full color, UI versioning, partial publication, bounded overwrite and reset\n",checks);return 0;
 }
