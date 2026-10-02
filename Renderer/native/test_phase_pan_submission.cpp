@@ -72,6 +72,27 @@ int oracle_witness(void* context){
     return 1;
 }
 struct OracleCaptures {std::string prefix,forced;};
+using OracleComponentCounts=int(*)(unsigned long long*);
+struct OracleComponentWitness {
+    c3x_renderer_frame_v1 const* frame;
+    OracleDraw draw;OracleComponentCounts counts;
+    int native_x,native_y;float zoom;unsigned draws;
+    DWORD caller_thread,owner_thread=0;
+    unsigned long long values[7]{};
+    char error[192]{};
+};
+int oracle_component_witness(void* context){
+    auto& job=*static_cast<OracleComponentWitness*>(context);job.owner_thread=GetCurrentThreadId();
+    try{
+        oracle_require(job.owner_thread!=job.caller_thread,"component witness render owner");
+        for(unsigned i=0;i<job.draws;++i)
+            oracle_require(!job.draw(job.frame,nullptr,job.native_x,job.native_y,24,56,1,47,0,job.zoom),"component fresh draw");
+        oracle_require(job.counts(job.values)==C3X_RENDERER_RESULT_OK,"component counters");
+        return 0;
+    }catch(std::exception const& error){std::snprintf(job.error,sizeof(job.error),"%s",error.what());}
+    catch(...){std::snprintf(job.error,sizeof(job.error),"unknown component witness exception");}
+    return 1;
+}
 
 int sandbox_client_run(HMODULE module,c3x_renderer_frame_v1 const& original){
     try{
@@ -186,6 +207,64 @@ int sandbox_client_run(HMODULE module,c3x_renderer_frame_v1 const& original){
             std::printf("PHASE_PAN_SAMPLE view=%s tick=%lld camera=%d,%d zoom=%.3f exact_source=1 units=0 normal_effects=1\n",
                 sample.view.name,static_cast<long long>(sample.tick),sample.view.x,sample.view.y,sample.view.zoom);
             std::fflush(stdout);flush();
+        }
+        char component_check[8]{};
+        if(GetEnvironmentVariableA("C3X_PHASE_COMPONENT_CHECK",component_check,sizeof(component_check)) &&
+           !std::strcmp(component_check,"1")){
+            char routes[8]{};GetEnvironmentVariableA("C3X_RENDERER_DIAGNOSTIC_ROUTES",routes,sizeof(routes));
+            oracle_require(std::strcmp(routes,"draw") && std::strcmp(routes,"all"),"component normal route rendering");
+            auto counts=reinterpret_cast<OracleComponentCounts>(GetProcAddress(module,"c3x_renderer_trial_component_counts"));
+            oracle_require(counts!=nullptr,"component counter export");
+            auto view=samples.back().view;auto tiles=witness.capture(view);
+            oracle_require(!tiles.empty(),"component copied capture");
+            auto frame=original;frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());
+            frame.presentation_frequency=1000;frame.presentation_time_ticks=samples.back().tick;
+            frame.dirty_flags=C3X_RENDERER_DIRTY_ALL;select(frame);
+            int native_x=frame.tiles[0].anchor_x-frame.tiles[0].tile_x*frame.tile_width/2;
+            int native_y=frame.tiles[0].anchor_y-frame.tiles[0].tile_y*frame.tile_height/2;
+            auto run=[&](unsigned draws){
+                OracleComponentWitness job{&frame,draw,counts,native_x,native_y,view.zoom,draws,GetCurrentThreadId()};
+                int result=untimed(oracle_component_witness,&job);
+                oracle_require(result==C3X_RENDERER_RESULT_OK,job.error[0]?job.error:"queued component witness");
+                oracle_require(job.owner_thread==witness_owner,"component same render owner");
+                return job;
+            };
+            auto before=run(2);
+            oracle_require(!before.values[5]&&!before.values[6],"component warm required queue drained");
+            auto canonical=[](int value,int extent,bool wrap){return wrap&&extent>0?(value%extent+extent)%extent:value;};
+            auto same_tile=[&](auto const& tile,int x,int y){return
+                canonical(tile.tile_x,frame.world_width_tiles,frame.world_wrap_x!=0)==canonical(x,frame.world_width_tiles,frame.world_wrap_x!=0) &&
+                canonical(tile.tile_y,frame.world_height_tiles,frame.world_wrap_y!=0)==canonical(y,frame.world_height_tiles,frame.world_wrap_y!=0);};
+            constexpr unsigned authority=C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_VISIBILITY_KNOWN|
+                C3X_RENDERER_TILE_EXPLORED|C3X_RENDERER_TILE_VISIBLE;
+            constexpr int offsets[8][2]={{1,-1},{2,0},{1,1},{0,2},{-1,1},{-2,0},{-1,-1},{0,-2}};
+            auto changed=tiles.end();
+            for(auto tile=tiles.begin();tile!=tiles.end();++tile){
+                if((tile->tile_flags&authority)!=authority || tile->terrain_type<0 || tile->terrain_type>=11 ||
+                   tile->real_terrain_type==6 || tile->city_id>=0 || tile->railroad_mask)continue;
+                bool neighbor=false;
+                for(auto const& offset:offsets)if(std::any_of(tiles.begin(),tiles.end(),[&](auto const& other){return
+                    other.road_mask && (other.tile_flags&C3X_RENDERER_TILE_EXPLORED) &&
+                    same_tile(other,tile->tile_x+offset[0],tile->tile_y+offset[1]);})){neighbor=true;break;}
+                if(neighbor){changed=tile;break;}
+            }
+            oracle_require(changed!=tiles.end(),"visible land road-neighbor mutation fixture");
+            int x=changed->tile_x,y=changed->tile_y;unsigned old_road=changed->road_mask,new_road=old_road?0u:1u,aliases=0;
+            // Road facts change ordinary/route proofs; terrain, rivers, effects,
+            // visibility and ground recipes retain their exact warm inputs.
+            for(auto& tile:tiles)if(same_tile(tile,x,y)){tile.road_mask=new_road;++aliases;}
+            auto original_identity=identity;
+            ++identity.scene_epoch;select(frame); // source admission stays outside the owner callback
+            auto after=run(1);
+            std::printf("PHASE_COMPONENT tile=%d,%d road=%u->%u aliases=%u ground_compile=%llu->%llu terrain_compile=%llu->%llu object_compile=%llu->%llu ground_upload=%llu->%llu object_upload=%llu->%llu active_required=%llu pending=%llu captures=0\n",
+                x,y,old_road,new_road,aliases,before.values[0],after.values[0],before.values[1],after.values[1],
+                before.values[2],after.values[2],before.values[3],after.values[3],before.values[4],after.values[4],after.values[5],after.values[6]);
+            std::fflush(stdout);flush();
+            oracle_require(after.values[0]==before.values[0] && after.values[1]==before.values[1] &&
+                after.values[3]==before.values[3],"object-only change performs zero ground compile/upload work");
+            oracle_require(after.values[2]>before.values[2],"object-only change compiles changed objects");
+            oracle_require(!after.values[5]&&!after.values[6],"component changed required queue drained");
+            identity=original_identity;
         }
         // A new renderer/device/owner state prepares the same small-pan source.
         // The original copied input remains caller-owned during the reset.

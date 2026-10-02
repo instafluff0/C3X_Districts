@@ -2335,3 +2335,16 @@ and changed view/assets/device/light contexts require complete proof validation.
 The receiver grid follows ordered actual contributors, and completed-generation
 coverage memoization is weak. Current evidence and measurement limitations are
 in [composition performance](composition_performance.md).
+
+## Independent navigation preparation
+
+Ground and object preparation now use the existing captured-scene, camera and
+composition boundaries listed above. Owner selection, component jobs, backing
+records and GPU residency change only inside `Renderer/`; injected sources and
+native patch-table entries are unchanged. `required_user_action: []`.
+
+The helper's test build adds `c3x_renderer_trial_component_counts` for the
+executable object-only invalidation check. It reads CPU counters and synchronized
+queue statistics; production callers, presentation and native signatures remain
+unchanged. Current verification is recorded in
+[navigation preparation](navigation_preparation.md).

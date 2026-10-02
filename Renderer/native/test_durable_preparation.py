@@ -67,7 +67,7 @@ struct Part {
  std::unordered_map<std::uint64_t,std::uint64_t> topology,coast;
  std::vector<int> rivers;
 };
-struct Result {std::unique_ptr<Part> ground,terrain,objects;std::size_t bytes()const{return 1024;}};
+struct Result {std::unique_ptr<Part> ground,terrain,objects;c3x_renderer::WorldPreparationKind kind=c3x_renderer::WorldPreparationKind::combined;std::size_t bytes()const{return 1024;}};
 struct Coast {Coast const& world()const{return *this;}unsigned at(std::size_t)const{return 0;}
  std::uint64_t node_revision(std::uint64_t)const{return 0;}};
 struct Rivers {using CellProof=std::vector<int>;bool valid(CellProof const&)const{return true;}};

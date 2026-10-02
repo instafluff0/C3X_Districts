@@ -58,7 +58,8 @@ class WorldBackingCodec {
     }
     template<class Proof> static void write_rivers(Writer& w,Proof const& proof){
         w.pod(unsigned(proof.size()));
-        for(auto const& p:proof){w.pod(p.first);w.vector(p.second->values);
+        for(auto const& p:proof){if(!p.second || !p.second->inputs)throw std::length_error("world backing river");
+            w.pod(p.first);w.vector(p.second->values);
             auto const& inputs=*p.second->inputs;w.pod(unsigned(inputs.values.size()));
             for(auto const& input:inputs.values){w.pod(input.first);w.pod(input.second);}w.vector(inputs.flow);}
     }
@@ -79,57 +80,68 @@ class WorldBackingCodec {
     }
 public:
     static std::vector<unsigned char> encode(PreparedWorld const& source){
-        if(!source.ground || !source.terrain || !source.objects ||
-           !source.ground->pending_grids.empty() || !source.ground->legacy_shadow.empty())return {};
-        Writer w;w.pod(std::uint32_t(3));
-        auto const& g=*source.ground;auto const& t=*source.terrain;auto const& o=*source.objects;
-        for(auto const& m:g.meshes)write_mesh(w,m);
-        w.pod(g.water_coverage);w.map(g.world);w.map(g.coast);w.map(g.topology);write_rivers(w,g.rivers);
-        for(auto const& m:t.meshes)write_mesh(w,m);
-        w.map(t.world);w.map(t.coast);write_rivers(w,t.rivers);
-        for(auto const& p:o.layers)write_part(w,p);
-        w.vector(o.rigid);
-        w.vector(o.draws);
-        w.pod(unsigned(o.city.size()));for(auto const& p:o.city)write_part(w,p);
-        bool lighting=!o.city.empty() && bool(o.city.front().lighting);w.pod(lighting);
-        if(lighting){w.vector(o.city.front().lighting->lights);w.vector(o.city.front().lighting->blockers);}
-        w.pod(o.composition);w.pod(o.instances);w.pod(o.routes);
-        w.map(o.world);w.map(o.coast);w.map(o.topology);write_rivers(w,o.rivers);
-        return std::move(w.bytes);
-    }
-    static std::unique_ptr<PreparedWorld> decode(std::vector<unsigned char> const& bytes){
-        if(bytes.empty() || bytes.size()>limit)return {};
+        if(!source.complete())return {};
         try {
-            Reader r{bytes.data(),bytes.size()};unsigned version=0;r.pod(version);if(version!=3)return {};
-            auto result=std::make_unique<PreparedWorld>();
-            result->ground=std::make_unique<fidelity::PreparedGround>();
-            result->terrain=std::make_unique<fidelity::TerrainSurfaces>();
-            result->objects=std::make_unique<objects::PreparedObjects>();
-            auto& g=*result->ground;auto& t=*result->terrain;auto& o=*result->objects;
-            for(auto& m:g.meshes)read_mesh(r,m);
-            r.pod(g.water_coverage);r.map(g.world);r.map(g.coast);r.map(g.topology);
-            auto ground_rivers=read_rivers(r);g.rivers.insert(ground_rivers.begin(),ground_rivers.end());
-            for(auto& m:t.meshes)read_mesh(r,m);
-            r.map(t.world);r.map(t.coast);t.rivers=read_rivers(r);
-            for(auto& p:o.layers)read_part(r,p);
-            r.vector(o.rigid);
-            r.vector(o.draws);
-            for(auto const& instance:o.rigid)if(instance.family>=objects::family_count || instance.layer>=objects::layer_count)return {};
-            for(auto const& draw:o.draws){
-                if(draw.layer>=objects::layer_count)return {};
-                if(draw.rigid!=~0u){if(draw.rigid>=o.rigid.size() || o.rigid[draw.rigid].layer!=draw.layer)return {};}
-                else if(draw.first>o.layers[draw.layer].mesh.index_count || draw.count>o.layers[draw.layer].mesh.index_count-draw.first)return {};
+            Writer w;w.pod(std::uint32_t(4));w.pod(source.kind);
+            if(world_preparation_needs_ground(source.kind)){
+                auto const& g=*source.ground;auto const& t=*source.terrain;
+                if(!g.pending_grids.empty() || !g.legacy_shadow.empty())return {};
+                for(auto const& m:g.meshes)write_mesh(w,m);
+                w.pod(g.water_coverage);w.map(g.world);w.map(g.coast);w.map(g.topology);write_rivers(w,g.rivers);
+                for(auto const& m:t.meshes)write_mesh(w,m);
+                w.map(t.world);w.map(t.coast);write_rivers(w,t.rivers);
             }
-            o.city.resize(r.count());for(auto& p:o.city)read_part(r,p);
-            bool lighting=false;r.pod(lighting);
-            if(lighting){auto light=std::make_shared<city_fidelity::Lighting>();r.vector(light->lights);r.vector(light->blockers);
-                for(auto& p:o.city)p.lighting=light;}
-            else if(!o.city.empty())return {};
-            r.pod(o.composition);r.pod(o.instances);r.pod(o.routes);
-            r.map(o.world);r.map(o.coast);r.map(o.topology);o.rivers=read_rivers(r);
+            if(world_preparation_needs_objects(source.kind)){
+                auto const& o=*source.objects;
+                for(auto const& p:o.layers)write_part(w,p);
+                w.vector(o.rigid);w.vector(o.draws);
+                w.pod(unsigned(o.city.size()));for(auto const& p:o.city)write_part(w,p);
+                bool lighting=!o.city.empty() && bool(o.city.front().lighting);w.pod(lighting);
+                if(lighting){w.vector(o.city.front().lighting->lights);w.vector(o.city.front().lighting->blockers);}
+                w.pod(o.composition);w.pod(o.instances);w.pod(o.routes);
+                w.map(o.world);w.map(o.coast);w.map(o.topology);write_rivers(w,o.rivers);
+            }
+            return std::move(w.bytes);
+        }catch(...){return {};}
+    }
+    static std::unique_ptr<PreparedWorld> decode(std::vector<unsigned char> const& bytes,
+            WorldPreparationKind expected=WorldPreparationKind::combined){
+        if(bytes.empty() || bytes.size()>limit || !world_preparation_kind_valid(expected))return {};
+        try {
+            Reader r{bytes.data(),bytes.size()};std::uint32_t version=0;r.pod(version);if(version!=4)return {};
+            auto result=std::make_unique<PreparedWorld>();
+            r.pod(result->kind);if(result->kind!=expected)return {};
             fidelity::NaturalWorld accounting;
-            t.proof_bytes=accounting.proof_bytes(t.rivers);o.proof_bytes=accounting.proof_bytes(o.rivers);
-            if(r.left || result->bytes()>32u*1024u*1024u)return {};
+            if(world_preparation_needs_ground(result->kind)){
+                result->ground=std::make_unique<fidelity::PreparedGround>();
+                result->terrain=std::make_unique<fidelity::TerrainSurfaces>();
+                auto& g=*result->ground;auto& t=*result->terrain;
+                for(auto& m:g.meshes)read_mesh(r,m);
+                r.pod(g.water_coverage);r.map(g.world);r.map(g.coast);r.map(g.topology);
+                auto ground_rivers=read_rivers(r);g.rivers.insert(ground_rivers.begin(),ground_rivers.end());
+                if(g.rivers.size()!=ground_rivers.size())return {};
+                for(auto& m:t.meshes)read_mesh(r,m);
+                r.map(t.world);r.map(t.coast);t.rivers=read_rivers(r);t.proof_bytes=accounting.proof_bytes(t.rivers);
+            }
+            if(world_preparation_needs_objects(result->kind)){
+                result->objects=std::make_unique<objects::PreparedObjects>();auto& o=*result->objects;
+                for(auto& p:o.layers)read_part(r,p);
+                r.vector(o.rigid);r.vector(o.draws);
+                for(auto const& instance:o.rigid)if(instance.family>=objects::family_count || instance.layer>=objects::layer_count)return {};
+                for(auto const& draw:o.draws){
+                    if(draw.layer>=objects::layer_count)return {};
+                    if(draw.rigid!=~0u){if(draw.rigid>=o.rigid.size() || o.rigid[draw.rigid].layer!=draw.layer)return {};}
+                    else if(draw.first>o.layers[draw.layer].mesh.index_count || draw.count>o.layers[draw.layer].mesh.index_count-draw.first)return {};
+                }
+                o.city.resize(r.count());for(auto& p:o.city)read_part(r,p);
+                bool lighting=false;r.pod(lighting);
+                if(lighting){auto light=std::make_shared<city_fidelity::Lighting>();r.vector(light->lights);r.vector(light->blockers);
+                    for(auto& p:o.city)p.lighting=light;}
+                else if(!o.city.empty())return {};
+                r.pod(o.composition);r.pod(o.instances);r.pod(o.routes);
+                r.map(o.world);r.map(o.coast);r.map(o.topology);o.rivers=read_rivers(r);o.proof_bytes=accounting.proof_bytes(o.rivers);
+            }
+            if(r.left || !result->complete() || result->bytes()>32u*1024u*1024u)return {};
             return result;
         }catch(...){return {};}
     }

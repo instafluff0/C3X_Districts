@@ -78,6 +78,34 @@ int main(){
 }
 ''')
 
+    def test_windows_optional_backing_skips_fragmentation_and_cancellation(self):
+        run_cpp(r"""
+#include <windows.h>
+#include "Renderer/native/render_core/compressed_world_store.h"
+#include <cassert>
+using Store=c3x_renderer::render_core::CompressedWorldStore<unsigned>;
+int main(){
+ auto noise=[](unsigned n,unsigned seed){std::vector<unsigned char> raw(n);
+  for(auto& b:raw){seed^=seed<<13;seed^=seed>>17;seed^=seed<<5;b=seed>>24;}return raw;};
+ Store store(30000);unsigned count=0;
+ for(;count<16;++count)if(!store.put(count,noise(4096,99+count)))break;
+ assert(count>=5 && count<=7);
+ for(unsigned i=0;i+1<count;i+=2)store.invalidate(i);
+ auto big=noise(8192,171);auto before=store.statistics();
+ assert(!store.put_optional(100,big));auto skipped=store.statistics();
+ assert(skipped.compactions==before.compactions && skipped.writes==before.writes && !store.contains(100));
+ std::atomic<bool> stop{true};assert(!store.put_optional(101,noise(512,123),&stop));
+ // Explicit persistence retains its synchronous compaction policy.
+ assert(store.put(100,big) && store.get(100)==big);
+ auto compacted=store.statistics();assert(compacted.compactions>before.compactions);
+ stop=false;auto small_blob=noise(512,123);assert(store.put_optional(101,small_blob,&stop));
+ assert(store.get(101)==small_blob);auto written=store.statistics();
+ assert(written.optional_writes==1 && written.optional_skips>=2 && written.compactions==compacted.compactions);
+ for(unsigned i=1;i<count;i+=2)assert(store.get(i)==noise(4096,99+i));
+ store.clear();auto empty=store.statistics();assert(!empty.bytes && !empty.optional_writes && !empty.optional_skips);
+}
+""")
+
     def test_windows_compression_concurrent_roundtrip_and_retirement(self):
         run_cpp(r'''
 #include <windows.h>

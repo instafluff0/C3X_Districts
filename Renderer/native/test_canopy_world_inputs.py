@@ -74,7 +74,7 @@ int main(){
         end=source.index('            float left =',start)
         proof=source[start:end]
         start=source.index('            if(canopy_city_dependencies)for')
-        end=source.index('            // World-space GPU data',start)
+        end=source.index('            }\n',start)+len('            }\n')
         key=source[start:end]
         run_cpp(r'''
 #include "Renderer/native/render_core/captured_scene.h"

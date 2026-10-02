@@ -46,14 +46,17 @@ int main(){
         source=(ROOT/'Renderer/native/world_preparation.h').read_text()
         method='inline WorldPreparationKey world_preparation_key('+source.split(
             'inline WorldPreparationKey world_preparation_key(',1)[1].split('\nusing WorldPreparation=',1)[0]
+        key='struct GroundRecipeKey {'+source.split('struct GroundRecipeKey {',1)[1].split('inline GroundRecipeKey ground_recipe_key',1)[0]
         run_cpp(r'''
 #include "Renderer/native/c3x_renderer_api.h"
 #include <array>
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
-using WorldPreparationKey=std::array<std::uint64_t,24>;
-'''+method+r'''
+#include <vector>
+#include "Renderer/native/render_core/prepared_world_validity.h"
+using c3x_renderer::WorldPreparationKind;
+'''+key+method+r'''
 int main(){
  std::array<std::uint64_t,20> context{};context[14]=64;context[15]=4;context[17]=91;
  c3x_renderer_frame_v1 frame{};frame.tile_width=128;frame.tile_height=64;frame.target_width=2240;frame.target_height=1260;
@@ -154,7 +157,7 @@ class PreparedWorldLifetimeTests(unittest.TestCase):
         source=(ROOT/'Renderer/native/c3x_renderer.cpp').read_text()
         method='bool world_result_valid('+source.split('bool world_result_valid(',1)[1].split('\n    std::unique_ptr<c3x_renderer::fidelity::TerrainSurfaces> compile_terrain',1)[0]
         header=(ROOT/'Renderer/native/world_preparation.h').read_text()
-        key='using WorldPreparationKey=std::array<std::uint64_t,24>;\ninline WorldPreparationKey world_preparation_key('+header.split('inline WorldPreparationKey world_preparation_key(',1)[1].split('\nusing WorldPreparation=',1)[0]
+        key='struct GroundRecipeKey {'+header.split('struct GroundRecipeKey {',1)[1].split('inline GroundRecipeKey ground_recipe_key',1)[0]+'inline WorldPreparationKey world_preparation_key('+header.split('inline WorldPreparationKey world_preparation_key(',1)[1].split('\nusing WorldPreparation=',1)[0]
         run_cpp(r'''
 #include "Renderer/native/c3x_renderer_api.h"
 #include "Renderer/native/render_core/prepared_world_validity.h"
@@ -171,13 +174,13 @@ struct Part {
  std::map<int,int> world,coast,topology;
  std::vector<std::pair<int,int>> rivers;
 };
-struct PreparedWorld {std::unique_ptr<Part> ground,terrain,objects;};
+struct PreparedWorld {std::unique_ptr<Part> ground,terrain,objects;WorldPreparationKind kind=WorldPreparationKind::combined;};
 '''+key+r'''
 }
 struct State {
  struct World {int at(int)const{return 2;}};
  struct Coast {World world()const{return {};}int node_revision(int)const{return 3;}} world_coast;
- struct Record {int semantic=4;} record;
+ struct Record {int semantic=4,ground=3;} record;
  struct Topology {Record value;Record const* current(int key)const{return key?&value:nullptr;}Topology const& world_view()const{return *this;}} topology_cache;
  c3x_renderer::fidelity::NaturalWorld natural;
  bool terrain_result_valid(c3x_renderer::Part const& p){
@@ -236,7 +239,8 @@ struct CachedTileGeometry {
 };
 struct State {
  CapturedScene topology_cache;
- struct Resident {bool available=true;struct Value{bool shared_natural=true;} value;
+ struct Resident {bool available=true;struct Mesh{CachedTileGeometry proof_value;CachedTileGeometry const* proof=&proof_value;};
+  struct Value{bool shared_natural=true,ground_component=false;std::shared_ptr<Mesh> mesh=std::make_shared<Mesh>();} value;
   Value const* resolve(ContentHandle)const{return available?&value:nullptr;}} resident_content;
  struct World{unsigned at(std::size_t)const{return 7;}};
  struct Coast{World world()const{return {};}std::uint64_t node_revision(std::uint64_t)const{return 8;}} world_coast;
@@ -244,6 +248,8 @@ struct State {
  unsigned frame_tile_invalid_shared=0,frame_tile_invalid_appearance=0,frame_tile_invalid_semantic=0,
   frame_tile_invalid_coast=0,frame_tile_invalid_world=0,frame_tile_invalid_anchor=0,frame_tile_invalid_river=0;
  int shadow_tile_width=128;
+ bool ground_proof_current=true;
+ bool raster_content_valid(CachedTileGeometry const&){return ground_proof_current;}
 '''+method+r'''
 };
 int main(){
@@ -263,6 +269,9 @@ int main(){
   value.coast_dependencies={{1,8}};value.world_dependencies={{1,7}};return value;};
  auto related=proof(1),unrelated=proof(2);auto world=state.topology_cache.world_snapshot();
  assert(state.tile_content_valid(related,tiles[0])&&state.tile_content_valid(unrelated,tiles[0]));
+ state.resident_content.value.ground_component=true;state.ground_proof_current=false;
+ assert(!state.tile_content_valid(related,tiles[0]));state.ground_proof_current=true;
+ assert(state.tile_content_valid(related,tiles[0]));state.frame_tile_invalid_shared=0;
  // World dependencies retain authority when a camera no longer observes them.
  f.tile_count=1;tiles[0].anchor_x+=500;observe();assert(world==state.topology_cache.world_snapshot());
  assert(!state.topology_cache.current(state.topology_cache.key(4,2)));

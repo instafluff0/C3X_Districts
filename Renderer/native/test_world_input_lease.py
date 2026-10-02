@@ -144,7 +144,7 @@ struct Part {
  std::unordered_map<std::uint64_t,std::uint64_t> topology,coast;
  std::vector<int> rivers;
 };
-struct Result {std::unique_ptr<Part> ground,terrain,objects;};
+struct Result {std::unique_ptr<Part> ground,terrain,objects;c3x_renderer::WorldPreparationKind kind=c3x_renderer::WorldPreparationKind::combined;};
 struct Coast {
  std::uint32_t at(std::size_t)const{return 0;}
  Coast const& world()const{return *this;}

@@ -5,6 +5,137 @@ from Renderer.lab.platform import ROOT
 
 
 class ContentPreparationTests(unittest.TestCase):
+    def test_exact_required_retargets_near_full_ready_without_duplicate_dispatch(self):
+        run_cpp(r"""
+#include "Renderer/native/render_core/content_preparation.h"
+#include <cassert>
+#include <map>
+using namespace c3x_renderer::render_core;
+struct Input {int key;std::shared_ptr<int const> lease;};
+struct Result {int key;std::size_t bytes()const{return 8u*1024u*1024u;}};
+using Queue=ContentPreparation<int,Input,Result>;
+int main(){
+ Queue queue;std::atomic<unsigned> first{0},retargeted{0},cancelling{0};
+ std::atomic<bool> release_first{false},release_retarget{false};std::mutex calls_mutex;std::map<int,unsigned> calls;
+ auto lease=std::make_shared<int const>(73);std::weak_ptr<int const> lifetime=lease;
+ auto compiler=[&](Input const& input,auto const& stop,unsigned){
+  assert(*input.lease==73);{std::lock_guard<std::mutex> guard(calls_mutex);++calls[input.key];}
+  if(input.key<100){++first;while(!release_first && !stop)std::this_thread::yield();}
+  else if(input.key<200){++retargeted;while(!release_retarget && !stop)std::this_thread::yield();}
+  else if(input.key>=300){++cancelling;while(!stop)std::this_thread::yield();}
+  return std::make_unique<Result>(Result{input.key});
+ };
+ auto until=[&](auto predicate){auto end=std::chrono::steady_clock::now()+std::chrono::seconds(5);
+  while(!predicate()){assert(std::chrono::steady_clock::now()<end);std::this_thread::yield();}};
+ std::deque<Queue::Job> initial;std::vector<int> required;
+ for(int i=1;i<=20;++i){initial.push_back({i,{i,lease}});required.push_back(i);}
+ queue.schedule(std::move(initial),compiler,4,required,{},64u*1024u*1024u,true);
+ until([&]{return first==4;});release_first=true;
+ until([&]{auto stats=queue.statistics();assert(stats.bytes+stats.active*Queue::byte_limit<=64u*1024u*1024u);
+  return stats.bytes==56u*1024u*1024u && !stats.active;});
+ std::this_thread::sleep_for(std::chrono::milliseconds(5));
+ std::deque<Queue::Job> next;
+ for(unsigned i=0;i<500;++i)next.push_back({100,{100,lease}}); // shared recipe occurrences
+ for(int i:{7,101,102,103,999})next.push_back({i,{i,lease}});
+ queue.schedule(std::move(next),compiler,4,{7,100,101,102,103},{},64u*1024u*1024u,true);
+ until([&]{return retargeted>=3;});
+ // A resident owner now supplies two components. Their active immutable
+ // inputs survive, but their eventual unused results must not occupy ready.
+ queue.schedule({{100,{100,lease}},{200,{200,lease}},{201,{201,lease}},{202,{202,lease}}},
+  compiler,4,{7,100,200,201,202},{200},64u*1024u*1024u,true);
+ lease.reset();assert(!lifetime.expired());release_retarget=true;
+ for(int key:{7,100,200,201,202}){auto result=queue.take(key);assert(result && result->key==key);}
+ queue.finish_lease();auto stats=queue.statistics();
+ assert(lifetime.expired() && stats.active_peak==4 && stats.bytes==0 && stats.pending==0);
+ assert(stats.unneeded_ready_bytes==0 && stats.retired_ready==6 && stats.retired_active>=2);
+ assert(stats.required_keys==5 && stats.expected_consumed_keys==5 && stats.consumed_required_keys==5);
+ assert(stats.needed_result_evictions==0 && stats.rejected==0 && stats.capacity_wait_ms>0);
+ assert(calls[100]==1 && calls[999]==0 && calls[200]==1 && calls[201]==1 && calls[202]==1);
+ for(auto const& row:calls)assert(row.second<=1);
+ // Cancellation still joins all four active owners before reset can retire inputs.
+ auto last=std::make_shared<int const>(73);std::weak_ptr<int const> cancelled_lifetime=last;
+ queue.schedule({{300,{300,last}},{301,{301,last}},{302,{302,last}},{303,{303,last}}},
+  compiler,4,{300,301,302,303},{},64u*1024u*1024u,true);
+ last.reset();until([&]{return cancelling==4;});queue.finish_lease();
+ assert(cancelled_lifetime.expired() && queue.statistics().active==0 && queue.statistics().cancelled==4);
+}
+""")
+
+    def test_required_ready_pressure_joins_missing_component_and_retires_obsolete_join(self):
+        run_cpp(r"""
+#include "Renderer/native/render_core/content_preparation.h"
+#include <cassert>
+#include <map>
+using namespace c3x_renderer::render_core;
+struct Input {int key;std::shared_ptr<int const> lease;};
+struct Result {int key;std::size_t bytes()const{return key>=100?16u*1024u*1024u:8u*1024u*1024u;}};
+using Queue=ContentPreparation<int,Input,Result>;
+int main(){
+ Queue queue;std::atomic<bool> entered{false},release{false},obsolete{false},abandoned{false};
+ std::mutex mutex;std::map<int,unsigned> calls;
+ auto compiler=[&](Input const& input,auto const& stop,unsigned){
+  {std::lock_guard<std::mutex> lock(mutex);++calls[input.key];}
+  if(input.key==100){entered=true;while(!release && !stop)std::this_thread::yield();assert(*input.lease==42);}
+  return std::make_unique<Result>(Result{input.key});
+ };
+ auto until=[&](auto predicate){auto end=std::chrono::steady_clock::now()+std::chrono::seconds(5);
+  while(!predicate()){assert(std::chrono::steady_clock::now()<end);std::this_thread::yield();}};
+ std::deque<Queue::Job> jobs;std::vector<int> required;
+ for(int key=1;key<=20;++key){jobs.push_back({key,{key,{}}});required.push_back(key);}
+ queue.schedule(std::move(jobs),compiler,4,required,{},64u*1024u*1024u,true);
+ until([&]{auto stats=queue.statistics();return stats.bytes==56u*1024u*1024u && !stats.active;});
+ // All seven ready results remain required, but a partial tile needs key8.
+ auto missing=queue.take(8);assert(missing && missing->key==8);
+ auto stats=queue.statistics();assert(stats.join_dispatches==1 && stats.join_peak_bytes==8u*1024u*1024u);
+ assert(stats.bytes==56u*1024u*1024u && !stats.join_bytes && !stats.active_join);
+ auto lease=std::make_shared<int const>(42);std::weak_ptr<int const> lifetime=lease;
+ queue.schedule({{100,{100,lease}}},compiler,4,{1,2,3,4,5,6,7,100},{},64u*1024u*1024u,true);
+ lease.reset();std::thread consumer([&]{abandoned=!queue.take(100,false,[&]{return obsolete.load();});});
+ until([&]{return entered.load();});stats=queue.statistics();
+ assert(stats.active_join==1 && stats.bytes+stats.reserved_bytes<=stats.capacity);
+ queue.schedule({{101,{101,{}}}},compiler,4,{1,2,3,4,5,6,7,101},{},64u*1024u*1024u,true);
+ obsolete=true;consumer.join();assert(abandoned && !lifetime.expired());
+ release=true;until([&]{return queue.statistics().active_join==0;});assert(lifetime.expired());
+ auto next=queue.take(101);assert(next && next->key==101);stats=queue.statistics();
+ assert(stats.join_peak_bytes==Queue::byte_limit && !stats.join_bytes && stats.join_cancelled==1);
+ for(int key=1;key<=7;++key){auto result=queue.take(key);assert(result && result->key==key);}
+ queue.finish_lease();stats=queue.statistics();
+ assert(stats.needed_result_evictions==0 && stats.rejected==0 && stats.bytes==0 && stats.join_bytes==0);
+ assert(stats.expected_consumed_keys==8 && stats.consumed_required_keys==8);
+ for(auto const& item:calls)assert(item.second==1);
+}
+""")
+
+    def test_optional_owned_backing_does_not_hold_publication_or_all_lanes(self):
+        run_cpp(r"""
+#include "Renderer/native/render_core/content_preparation.h"
+#include <cassert>
+using namespace c3x_renderer::render_core;
+struct Result {int key;std::shared_ptr<int const> cpu;std::size_t bytes()const{return 16;}};
+using Queue=ContentPreparation<int,int,Result>;
+int main(){
+ Queue queue;std::atomic<bool> entered{false},release{false},written{false};
+ auto compiler=[](int key,auto const&,unsigned){return std::make_unique<Result>(Result{key,std::make_shared<int const>(42)});};
+ queue.schedule({{1,1}},compiler,4,{1},{},64u*1024u*1024u,true);
+ auto adopted=queue.take(1);assert(adopted && adopted->key==1);
+ auto snapshot=std::move(adopted->cpu);std::weak_ptr<int const> lifetime=snapshot;adopted.reset();
+ assert(queue.offer_optional({[snapshot,&entered,&release,&written](auto const&,unsigned){
+  entered=true;while(!release)std::this_thread::yield();assert(*snapshot==42);written=true;
+ },Queue::optional_byte_limit}));snapshot.reset();
+ auto until=[&](auto predicate){auto end=std::chrono::steady_clock::now()+std::chrono::seconds(5);
+  while(!predicate()){assert(std::chrono::steady_clock::now()<end);std::this_thread::yield();}};
+ until([&]{return entered.load();});assert(!lifetime.expired());
+ assert(!queue.offer_optional({[](auto const&,unsigned){assert(false);},1}));
+ auto stats=queue.statistics();assert(stats.active_optional==1 && stats.optional_bytes==Queue::optional_byte_limit);
+ queue.schedule({{2,2}},compiler,4,{2},{},64u*1024u*1024u,true);
+ auto demanded=queue.take(2);assert(demanded && demanded->key==2 && !written);
+ // Optional snapshot does not borrow either moved result. Retirement joins it.
+ release=true;queue.finish_lease();stats=queue.statistics();
+ assert(written && lifetime.expired() && stats.active_optional==0 && stats.optional_bytes==0);
+ assert(stats.optional_skipped==1 && stats.optional_cancelled==1 && stats.consumed==2);
+}
+""")
+
     def test_bounded_world_results_do_not_evict_unconsumed_demand(self):
         run_cpp(r'''
 #include "Renderer/native/render_core/content_preparation.h"
