@@ -368,6 +368,7 @@ public:
             return tactical_draw(image,capture);
         }
         if(op==C3X_NATIVE_IMAGE_PRESENT){
+            if(color>1)throw std::runtime_error("invalid native presentation requirement");
             display_native=image;
             auto id=adapter->display_image(image);
             if(!id){
@@ -375,6 +376,7 @@ public:
                 // Materialize it before the caller's private CPU snapshot;
                 // ordinary CPU UI sources simply pass through this barrier.
                 adapter->operation(C3X_NATIVE_BITS,image,nullptr,nullptr,nullptr,0);
+                if(color)throw std::runtime_error("required native display image unavailable");
                 OutputDebugStringA("[C3X renderer] stage=native-ui-present result=0 reason=missing-display-image\n");return 0;
             }
             if(!source)throw std::runtime_error("native transfer has no Graphsy owner");
@@ -383,6 +385,7 @@ public:
             RECT rect=from?*static_cast<RECT const*>(from):RECT{0,0,width,height};
             c3x_renderer_gpu_present_v1 r={sizeof(r)};r.ticket=frame.ticket;r.image=std::int64_t(id);r.window=window;
             r.width=width;r.height=height;r.area[0]=rect.left;r.area[1]=rect.top;r.area[2]=rect.right;r.area[3]=rect.bottom;
+            r.action=color?3:0;
             client->flush();auto result=present(&r);
             if(trace_success || result!=C3X_RENDERER_RESULT_OK){
                 char line[256];std::snprintf(line,sizeof(line),

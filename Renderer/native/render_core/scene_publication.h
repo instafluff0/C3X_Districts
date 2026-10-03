@@ -10,6 +10,9 @@ namespace c3x_renderer { namespace render_core {
 // The existing CapturedScene remains the only persistent world/mesh owner.
 class ScenePublication {
 public:
+    struct IgnorePublicationTile {
+        template<class Scene> void operator()(Scene const&,c3x_renderer_tile_v1 const&)const{}
+    };
     struct State {
         std::uint64_t sequence=0,configuration=0;
         c3x_renderer_camera_identity_v1 identity{};
@@ -130,8 +133,8 @@ public:
             pending=true;return true;
         }catch(...){return reject();}
     }
-    template<class Scene> bool apply(Scene& scene,bool& content_changed,
-                                     std::vector<std::pair<int,int>>* changed_tiles=nullptr){
+    template<class Scene,class BeforePublish=IgnorePublicationTile> bool apply(Scene& scene,bool& content_changed,
+                                     std::vector<std::pair<int,int>>* changed_tiles=nullptr,BeforePublish before_publish={}){
         if(!pending)return true;
         // Retained-world admission may allocate. A partial adoption cannot
         // authorize output; keep the journal for retry instead of killing the
@@ -144,6 +147,7 @@ public:
             if(content_changed)tile_pending=true;
             if(tile_pending)for(auto const& item:updates){
                 auto before=scene.world_input_sequence();
+                if(!scope_changed)before_publish(scene,item.second);
                 if(!scene.publish(item.second,content_changed)){
                     pending=false;return false;
                 }

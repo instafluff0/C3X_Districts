@@ -481,6 +481,15 @@ typedef int (*c3x_renderer_render_view_fn)(struct c3x_renderer_camera_request_v1
 // Explicit initialized caller-thread boundary: copy the compact/permitted world
 // before the first playable view. It does not authorize a draw or unit roster.
 typedef int (*c3x_renderer_seed_world_fn)(struct c3x_renderer_camera_request_v1 const *);
+// Optional loading-only entry: zero viewport/occurrences, real world facts and
+// copied topology. OK certifies all permitted region recipes in owned RAM;
+// it creates no display/front and captures no native unit instances.
+typedef int (*c3x_renderer_prepare_world_loading_fn)(struct c3x_renderer_camera_request_v1 const *);
+// Explicit changed-world caller boundary: synchronously copy/adopt fresh pages
+// and arm required region preparation. OK requires a successful synchronous
+// current-camera draw before returning player control; this call alone is not
+// completed preparation and never authorizes display.
+typedef int (*c3x_renderer_require_world_changes_fn)(struct c3x_renderer_camera_request_v1 const *);
 typedef int (*c3x_renderer_camera_begin_view_fn)(struct c3x_renderer_camera_request_v1 const *, c3x_renderer_i64 * ticket);
 typedef int (*c3x_renderer_camera_poll_view_fn)(c3x_renderer_i64 ticket, struct c3x_renderer_camera_view_v1 *);
 // Validate a freshly recaptured displayed view against the immutable front.

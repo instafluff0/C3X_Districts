@@ -38,10 +38,10 @@ int main(){using namespace c3x_renderer;
 #include <climits>
 #include <cassert>
 struct Owner {
- struct Mesh {std::size_t bytes=0;std::uint64_t used=0;int* indices=nullptr;std::shared_ptr<int> animation;};
- struct Texture {std::size_t bytes=0;std::uint64_t used=0;int* view=nullptr;std::vector<std::uint8_t> dds;};
+ struct Mesh {std::size_t bytes=0;std::uint64_t used=0;int* indices=nullptr;std::shared_ptr<int> animation;bool source_pinned=false;};
+ struct Texture {std::size_t bytes=0;std::uint64_t used=0;int* view=nullptr;std::vector<std::uint8_t> dds;bool source_pinned=false;};
  struct Bodies {std::vector<Mesh> meshes;std::vector<Texture> textures;std::size_t resident_bytes=0;
-   void release(int*& value){value=nullptr;}}unit_bodies;
+   std::size_t payload_budget()const{return 96u*1024u*1024u;}void release(int*& value){value=nullptr;}}unit_bodies;
  std::vector<bool> frame_mesh_leases,frame_texture_leases;std::uint64_t unit_asset_evictions=0;
 '''+body+r'''
 };

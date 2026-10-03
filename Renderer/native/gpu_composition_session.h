@@ -108,6 +108,11 @@ class Session {
     }
 public:
     Session(ID3D11Device* d,ID3D11DeviceContext* c):device(d),context(c),gpu(d,c,live_image_budget,true),layers(d,c){gpu.share_storage(storage);layers.share_storage(storage);}
+    // Existing live/replay owners retain their shared programs before a real
+    // view creates its targets; no map identity or native image is admitted.
+    bool prepare_assets(std::function<bool()> cancelled={}){
+        return gpu.prepare_assets(cancelled) && layers.prepare_assets(cancelled);
+    }
     // Eight fullscreen packed/full-color native pairs and old/new immutable
     // maps require about 194 MiB at 2240x1260. Bound live images at 256 MiB,
     // including small UI sources; retained replay has its separate budget.

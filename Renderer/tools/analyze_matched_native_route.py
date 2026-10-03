@@ -264,7 +264,68 @@ def workload_signature(row,members=None):
     # their ordered entries/masks; the facts digest includes their exact anchors.
     for key,bit in (("main_units",1),("shadow_units",2),("reflected_units",4)):
         if integer(row[key])!=sum(bool(mask&bit) for mask in masks):return None
-    return {**{key:row[key] for key in keys},"unit_ids":ids,"pass_masks":masks,"part_samples":row.get("part_samples")}
+    signature={**{key:row[key] for key in keys},"unit_ids":ids,"pass_masks":masks,"part_samples":row.get("part_samples")}
+    certificate_fields=("ordered_facts_version","ordered_facts_digest","source_complete","source_digest","camera_x","camera_y","zoom")
+    # Old captures remain usable in strict mode. New certificates are optional
+    # metadata here; the explicit removal mode validates every required field.
+    if any(field in row for field in certificate_fields[:4]):
+        signature.update({field:row.get(field) for field in certificate_fields})
+    return signature
+
+
+def reflection_removal_certificate(baseline,candidate):
+    reasons=[]
+    fields=("ordered_facts_digest","source_digest","camera_x","camera_y","zoom","part_samples")
+    for name,signature in (("baseline",baseline),("candidate",candidate)):
+        if signature is None:
+            reasons.append(name+" complete workload unavailable");continue
+        if signature.get("ordered_facts_version")!="1" or signature.get("source_complete")!="1":
+            reasons.append(name+" authoritative/source certificate unavailable or unsupported")
+        if any(not re.fullmatch(r"[0-9a-f]{16}",str(signature.get(field,""))) for field in ("ordered_facts_digest","source_digest")):
+            reasons.append(name+" certificate digest unavailable or malformed")
+        if any(integer(signature.get(field)) is None for field in ("camera_x","camera_y","part_samples")) or (integer(signature.get("part_samples")) or 0)<0:
+            reasons.append(name+" camera/part coverage unavailable")
+        try:zoom=float(signature["zoom"])
+        except (KeyError,TypeError,ValueError):zoom=math.nan
+        if not math.isfinite(zoom) or not 1<=zoom<=3:reasons.append(name+" exact projection unavailable")
+    if reasons:return {"eligible":False,"reasons":reasons,"removed_reflection_occurrences":None}
+    if any(baseline.get(field)!=candidate.get(field) for field in fields):
+        reasons.append("ordered authoritative draw/action, copied source, camera, projection or part coverage changed")
+    if baseline["unit_ids"]!=candidate["unit_ids"] or len(baseline["pass_masks"])!=len(candidate["pass_masks"]):
+        reasons.append("ordered native occurrence membership changed")
+    removed=[]
+    for index,(old,new) in enumerate(zip(baseline["pass_masks"],candidate["pass_masks"])):
+        if old&3!=new&3:reasons.append("main/shadow membership changed at occurrence "+str(index))
+        if new&4 and not old&4:reasons.append("reflection added at occurrence "+str(index))
+        if old&4 and not new&4:removed.append(index)
+    return {"eligible":not reasons,"reasons":reasons,"removed_reflection_occurrences":len(removed) if not reasons else None,
+            "removed_occurrence_indices":removed if not reasons else [],
+            "scope":"ordered authoritative draw/action facts and copied supplied frame source exact; sampled pose clock/cursor excluded; fixed-pose pixel qualification remains separate"}
+
+
+def idle_reflection_removal_certificate(baseline,candidate):
+    left=baseline["idle_actual_workloads"];right=candidate["idle_actual_workloads"]
+    if not baseline["idle_workload_eligible"] or not candidate["idle_workload_eligible"] or not left or not right:
+        return {"eligible":False,"reasons":["complete source/workload coverage of every idle Present unavailable"]}
+    # Idle pose sampling may change only the reflection bits. Requiring every
+    # variant to match one authoritative/main-shadow set avoids proximity joins
+    # or choosing a favorable subset of animation frames.
+    reference=left[0];proofs=[]
+    for signature in left+right:
+        proof=reflection_removal_certificate(reference,signature)
+        if not proof["eligible"]:return {"eligible":False,"reasons":proof["reasons"]}
+        proofs.append(proof)
+    allowed=list(reference["pass_masks"])
+    for signature in left:
+        allowed=[a&b for a,b in zip(allowed,signature["pass_masks"])]
+    if any(new&4 and not old&4 for signature in right for old,new in zip(allowed,signature["pass_masks"])):
+        return {"eligible":False,"reasons":["candidate adds reflection relative to a baseline idle variant"]}
+    old_counts=[integer(signature["reflected_units"]) for signature in left]
+    new_counts=[integer(signature["reflected_units"]) for signature in right]
+    return {"eligible":True,"reasons":[],"baseline_workload_variants":len(left),"candidate_workload_variants":len(right),
+            "removed_reflection_occurrences_min":min(old_counts)-max(new_counts),
+            "removed_reflection_occurrences_max":max(old_counts)-min(new_counts),
+            "scope":"every idle Present has an exact source/workload join; every candidate variant removes only reflections relative to every baseline variant"}
 
 
 def analyze_capture(plan,result,inputs,cadence,native,core):
@@ -329,7 +390,7 @@ def analyze_capture(plan,result,inputs,cadence,native,core):
             if generation is None or generation<=0:continue
             key=(serial,generation)
             # Only identical facts/actual contributor lists can share one source.
-            if key in workloads and any(workloads[key].get(field)!=row.get(field) for field in ("facts_digest","count","main_units","reflected_units","shadow_units","camera_x","camera_y","zoom")):
+            if key in workloads and any(workloads[key].get(field)!=row.get(field) for field in ("facts_digest","count","main_units","reflected_units","shadow_units","camera_x","camera_y","zoom","part_samples","ordered_facts_version","ordered_facts_digest","source_complete","source_digest")):
                 ambiguous_workloads.add(key)
             workloads.setdefault(key,row)
         elif row.get("stage")=="route-workload-members":
@@ -456,6 +517,13 @@ def analyze_capture(plan,result,inputs,cadence,native,core):
             if not workload or integer(workload.get("qpc")) is None or integer(workload["qpc"])>integer(present["qpc"]):continue
             signature=workload_signature(workload,members.get((serial,generation)))
             if signature is None:continue
+            if integer(publication.get("width"))!=plan["client_width"] or integer(publication.get("height"))!=plan["client_height"]:continue
+            if integer(publication.get("tile_width"))!=128 or integer(publication.get("tile_height"))!=64:continue
+            if integer(publication.get("qpc")) is None or integer(publication["qpc"])>integer(present["qpc"]):continue
+            if integer(workload.get("camera_x"))!=integer(publication.get("anchor_x")) or integer(workload.get("camera_y"))!=integer(publication.get("anchor_y")):continue
+            try:workload_zoom=float(workload["zoom"])
+            except (KeyError,TypeError,ValueError):continue
+            if workload_zoom!=plan.get("initial_width",128)/128:continue
             idle_joined_count+=1
             if signature not in idle_workloads:idle_workloads.append(signature)
     ready=integer(result.get("ready_map_qpc"))
@@ -481,25 +549,36 @@ def analyze_capture(plan,result,inputs,cadence,native,core):
         "frame_budget":budget,
         "long_present_intervals":{str(limit):sum(value>limit for value in intervals) for limit in (1000/60,1000/30,50,100)},
         "present_interval_scope":"consecutive present_index witnesses use exact successful Present returns where present_qpc exists; older logs use explicitly labeled diagnostic-write boundaries; missing indices remain aggregated spans; physical scanout unavailable",
-        "identity":{key:inputs.get(key) for key in ("game_sha256","save_sha256","plan_sha256","binaries","common_injected_diagnostic_delta","baseline_full_system_pristine")}}
+        "identity":{key:inputs.get(key) for key in ("game_sha256","save_sha256","plan_sha256","binaries","renderer_environment","shader_root","common_injected_diagnostic_delta","baseline_full_system_pristine")}}
 
 
-def compare(baseline,candidate):
+def compare(baseline,candidate,*,workload_mode="strict"):
+    if workload_mode not in {"strict","reflection-removal"}:raise ValueError("Unsupported workload comparison mode")
     identity_keys=("game_sha256","save_sha256","plan_sha256")
     fixture_match=all(baseline["identity"].get(key) and baseline["identity"].get(key)==candidate["identity"].get(key) for key in identity_keys)
+    settings_match=all(isinstance(arm["identity"].get("renderer_environment"),dict) and
+        isinstance(arm["identity"].get("shader_root"),str) and bool(arm["identity"]["shader_root"]) for arm in (baseline,candidate)) and all(
+        baseline["identity"].get(key)==candidate["identity"].get(key) for key in ("renderer_environment","shader_root"))
+    settings_eligible=settings_match if workload_mode=="reflection-removal" else True
     capture_integrity=all(arm["capture_passed"] and arm["integrity_passed"] and arm["native_failures"]==0 for arm in (baseline,candidate))
     paired=[]
     for left,right in zip(baseline["route"],candidate["route"]):
         target_match=all(left.get(key)==right.get(key) for key in ("step","name","requested_camera","requested_width"))
         workload_match=left.get("actual_workload") is not None and left.get("actual_workload")==right.get("actual_workload")
-        eligible=capture_integrity and fixture_match and target_match and workload_match and left["route_eligible"] and right["route_eligible"]
+        certificate=reflection_removal_certificate(left.get("actual_workload"),right.get("actual_workload")) if workload_mode=="reflection-removal" else None
+        supported_workload=certificate["eligible"] if certificate is not None else workload_match
+        eligible=capture_integrity and fixture_match and settings_eligible and target_match and supported_workload and left["route_eligible"] and right["route_eligible"]
         paired.append({"step":left["step"],"name":left["name"],"same_actual_route":target_match,
                        "same_actual_workload":workload_match,"performance_comparison_eligible":eligible,
                        "baseline_present_latency":left.get("correct_destination_present"),"candidate_present_latency":right.get("correct_destination_present")})
+        if certificate is not None:paired[-1]["reflection_removal_certificate"]=certificate
     complete=len(baseline["route"])==len(candidate["route"])==len(paired)
     idle_match=baseline["idle_workload_eligible"] and candidate["idle_workload_eligible"] and baseline["idle_actual_workloads"]==candidate["idle_actual_workloads"]
-    return {"same_save_plan_common_injected_executable":fixture_match,"capture_integrity_passed":capture_integrity,"paired_steps":paired,
-        "idle_performance_comparison_eligible":capture_integrity and fixture_match and idle_match,"same_actual_idle_workload":idle_match,
+    idle_certificate=idle_reflection_removal_certificate(baseline,candidate) if workload_mode=="reflection-removal" else None
+    idle_supported=idle_certificate["eligible"] if idle_certificate is not None else idle_match
+    return {"workload_comparison_mode":workload_mode,"same_save_plan_common_injected_executable":fixture_match,"capture_integrity_passed":capture_integrity,"same_renderer_environment_and_shader_root":settings_match,"paired_steps":paired,
+        "idle_performance_comparison_eligible":capture_integrity and fixture_match and settings_eligible and idle_supported,"same_actual_idle_workload":idle_match,
+        **({"idle_reflection_removal_certificate":idle_certificate} if idle_certificate is not None else {}),
         "all_step_comparisons_eligible":complete and bool(paired) and all(row["performance_comparison_eligible"] for row in paired),
         "baseline_full_system_pristine":False,"scope":"common explicitly instrumented injected executable; renderer-side comparison only; no causal speedup inferred from unequal or missing workload"}
 
@@ -523,12 +602,15 @@ def read_capture(directory,receipts):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--baseline",type=Path,required=True);parser.add_argument("--candidate",type=Path,required=True)
-    parser.add_argument("--output",type=Path,required=True);args=parser.parse_args()
+    parser.add_argument("--output",type=Path,required=True)
+    parser.add_argument("--workload-mode",choices=("strict","reflection-removal"),default="strict",
+                        help="Explicit reflection-removal certificate; all other workload/source/camera guards remain required")
+    args=parser.parse_args()
     receipts={};baseline=read_capture(args.baseline,receipts);candidate=read_capture(args.candidate,receipts)
     for relative,receipt in receipts.items():
         if hashlib.sha256((ROOT/relative).read_bytes()).hexdigest()!=receipt["sha256"]:raise ValueError("Input changed during analysis")
     report={"schema":"c3x.matched_native_route_analysis.v1","baseline":baseline,"candidate":candidate,
-            "comparison":compare(baseline,candidate),"inputs":receipts,
+            "comparison":compare(baseline,candidate,workload_mode=args.workload_mode),"inputs":receipts,
             "timing_policy":"raw QPC endpoints; event stages separately summarized; no summed overlapping CPU/GPU/background spans",
             "gpu_duration":"unavailable unless separate supported nonblocking GPU timestamp witness is supplied"}
     args.output.parent.mkdir(parents=True,exist_ok=True);args.output.write_text(json.dumps(report,indent=2)+"\n")

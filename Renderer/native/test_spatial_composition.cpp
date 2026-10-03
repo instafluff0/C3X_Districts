@@ -132,6 +132,26 @@ int test_spatial_composition(){
    require(!b.submit_spatial(plan,wrong_format,new_detail)&&!b.submit_spatial(plan,new_words,new_words),"pair format/alias rebinding refused");
    Compositor::SpatialPlan refused;require(!b.compile_spatial(refused,commands.data(),commands.size(),words,detail,1),"budget refusal retains existing plan");
    require(plan&&plan.spatial_commands==384,"previous bounded plan remains usable");
+   // Ragged dimensions exercise all sixteen 8x8 blocks and partial edge
+   // groups. Each full-frame operation admits the edge tile itself.
+   for(auto extent:std::array<std::array<unsigned,2>,4>{{{1,1},{33,17},{65,33},{257,193}}}){
+    unsigned w=extent[0],h=extent[1];Rect area={0,0,int(w),int(h)};
+    auto edge_a=std::make_unique<Compositor>(device.Get(),context.Get(),8u*1024u*1024u);
+    auto edge_b=std::make_unique<Compositor>(device.Get(),context.Get(),8u*1024u*1024u);
+    auto edge_words=edge_a->create(w,h,format),edge_detail=edge_a->create(w,h,Format::bgra32);
+    require(edge_words&&edge_detail&&edge_b->create(w,h,format)==edge_words&&
+        edge_b->create(w,h,Format::bgra32)==edge_detail,"ragged paired fixture handles");
+    Command edge[]={{Kind::fill,edge_words,0,area,area,0,0,0x3517},
+        {Kind::fill,edge_detail,0,area,area,0,0,0xff6192ac},
+        {Kind::native_blend,edge_words,edge_words,area,area,0,0,2,edge_words,edge_detail,edge_detail,0x731b,91},
+        {Kind::invert,edge_detail,0,{int(w/2),int(h/2),int(w),int(h)},area,0,0,0x183c72}};
+    Compositor::SpatialPlan edge_plan;
+    require(edge_b->compile_spatial(edge_plan,edge,4,edge_words,edge_detail,64u*1024u*1024u),"ragged spatial compile");
+    require(edge_a->submit(edge,4)&&edge_b->submit_spatial(edge_plan,edge_words,edge_detail),"ragged spatial execution");
+    exact(device.Get(),context.Get(),*edge_a,*edge_b,edge_words,"ragged packed");
+    exact(device.Get(),context.Get(),*edge_a,*edge_b,edge_detail,"ragged detail");
+    require(edge_a->destroy(edge_words)&&edge_a->destroy(edge_detail)&&edge_b->destroy(edge_words)&&edge_b->destroy(edge_detail),"ragged resources retire");
+   }
    // Match the live HUD's independent glyph/image operands without adding
    // public image handles. Interpreter boundaries bind one command at a time.
    std::vector<Compositor::SpatialSource> inputs;std::vector<Command> many;

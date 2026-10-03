@@ -1,5 +1,62 @@
 # Civ III patch dependency ledger
 
+## Required RAM preparation and first completed presentation
+
+`required_user_action: []`. No patch-table edits, signatures or supported-build
+addresses change. Existing `load_scenario`, `move_game_data`,
+`Map_process_after_placing`, `Map_place_scenario_things`, `initialize_map_music`,
+`Leader_unlock_technology`, `Leader_enter_new_era`,
+`perform_interturn_in_main_loop` and `Map_Renderer_m71_Draw_Tiles` retain native
+arguments and unrelated C3X behavior. The existing JGL Graphsy transfer remains
+the completed-screen presentation boundary. Config-off delegates normally.
+
+Accepted scenario loading prepares shared shaders/assets and the unit-source
+catalogue through the existing renderer worker. Definition admission copies
+paths and settings into the existing reliable queue
+so native setup forms can progress; world-loading barriers join actual source
+completion before map input. Object recipes compare exact copied worker inputs;
+territory and resource appearance retain their separate drawing and invalidation.
+Known unexplored bodies are excluded from foreground work; captured anchors,
+topology and native fog coverage remain intact. Legacy captures without native
+visibility classification retain their existing selection.
+Saved-world preparation runs only after successful native restoration and
+complete recognized C3X extension
+restoration, including season state. Old saves without an extension remain
+supported. New games use the existing final players-ready music and
+reveal/placement boundaries; technology/era initialization is excluded. Debug
+scenarios retain their later effective-viewer boundary. No new loading UI is
+introduced.
+
+The optional DLL entry `c3x_renderer_prepare_world_loading(request)` accepts
+camera-independent world facts, pages permitted native records on the registered
+game thread, and drains canonical region recipes into owned compact RAM.
+Generated-world file reads/writes remain zero. Physical/DXGI measurements govern
+residency; required preparation ends on completeness or explicit failure.
+Sources and shared shader programs prepare before gameplay. View targets,
+anchors, wrap pairs and unit instances still come from the first genuine native
+traversal. After native interturn processing, the existing synchronous world
+preparation contract recaptures permitted facts and completes changed RAM recipes
+before control returns; unchanged recipes remain reusable. Readiness is certified
+by the preparation result and seeded viewer epoch. The pending native redraw
+supplies later anchors and composition; requesting a draw is not readiness proof.
+Validated world-only preparation retires the old foreground preparation owner
+before source setup or canonical recipes change shared view scratch. Its weak
+samplers freeze; retained native composition keeps the completed pixels and
+publication proof until a genuine foreground frame supplies a new owner. Invalid
+or incomplete world scopes retain the existing owner, and current-frame unit
+selection failures remain explicit errors.
+
+The optional matching-backend capability
+`c3x_renderer_native_required_present_supported` permits the existing final
+Graphsy transfer to wait for the current revision's reliable composition prefix
+and actual successful owner-thread Present. Cancellation and scope replacement
+retire the old transaction. There is no production readback, additional
+presenter, queue expansion or superseding of reliable native operations.
+Older backends retain their existing transfer behavior. Matching bridge/DLL/
+helper binaries are required for evaluation. Native smoke and live qualification
+are recorded with their source and binary hashes in the current implementation
+receipt.
+
 ## Busy-frame preparation and completed-front delivery
 
 `required_user_action: []`. No patch-table entry, registered signature or

@@ -143,6 +143,47 @@ unsigned compare_case(Direct& direct,c3x_renderer_frame_v1& frame,unsigned count
         frame.presentation_time_ticks,hour,zoom,count,direct.part_samples,direct.material_samples.size(),builds,uploads,cached_fallbacks);
     return 4;
 }
+
+unsigned compare_reflection_selection(Direct& direct,c3x_renderer_frame_v1& frame,float zoom,unsigned revision){
+    using namespace c3x_renderer::render_core;
+    std::vector<Direct::ScenePose> poses;UnitContributionPlan plan;
+    for(unsigned i=0;i<12;++i){Direct::ScenePose pose;pose.unit=pose.action=0;pose.pose_identity=100+i;
+        auto& draw=pose.draw;draw.struct_size=sizeof(draw);draw.unit_id=100+int(i);draw.action=1;
+        draw.direction=1+int(revision%8);draw.frame_count=2;draw.action_cursor=int(revision%2);
+        draw.sprite_width=128;draw.sprite_height=64;draw.projection_scale_milli=1000;
+        draw.body_x=-80+int(i%4)*110;draw.body_y=65+int(i/4)*35;
+        draw.display_color_rgb=0x00010101u*(i+1);
+        poses.push_back(pose);plan.entries.push_back({i,unit_main_body|unit_ground_shadow|unit_reflection});}
+    require_gpu(direct.prepare_real(frame,poses,12,plan),"conservative reflected unit preparation");
+    auto baseline=render_passes(direct,frame,poses,12,zoom);
+    auto baseline_draws=direct.draws;
+    plan.view.width=plan.view.height=256;plan.view.zoom=zoom;plan.view.reflection=true;
+    plan.view.receivers={{64,96,128,220},{160,180,184,240}};
+    require_gpu(direct.prepare_real(frame,poses,12,plan),"current-pose reflected unit preparation");
+    unsigned removed=direct.reflection_bounds_rejected;
+    require_gpu(removed>0&&removed<poses.size(),"both retained and rejected reflected units");
+    require_gpu(direct.main_contributors==poses.size()&&direct.shadow_contributors==poses.size(),
+        "reflection selection preserves main and shadow contributors");
+    auto selected=render_passes(direct,frame,poses,12,zoom);
+    require_gpu(baseline.main_color==selected.main_color&&baseline.main_depth==selected.main_depth,
+        "main HDR/depth/stencil unchanged by reflected-unit selection");
+    unsigned checked=0;
+    for(unsigned y=0;y<256;++y)for(unsigned x=0;x<256;++x){
+        bool receiver=std::any_of(plan.view.receivers.begin(),plan.view.receivers.end(),[&](auto const& rect){
+            return x>=rect.left&&x<rect.right&&y>=rect.top&&y<rect.bottom;});
+        if(!receiver)continue;auto offset=std::size_t(y)*256+x;
+        require_gpu(!std::memcmp(baseline.reflection_color.data()+offset*8,
+            selected.reflection_color.data()+offset*8,8)&&
+            !std::memcmp(baseline.reflection_depth.data()+offset*4,
+            selected.reflection_depth.data()+offset*4,4),"receiver HDR and raw depth unchanged");
+        ++checked;
+    }
+    require_gpu(direct.draws-baseline_draws==(poses.size()*2-removed)*2,
+        "rejected reflected multipart bodies reduce actual draws");
+    std::printf("PASS current-pose reflection selection: ticks=%lld zoom=%.2f direction=%u removed=%u receiver_pixels=%u main_hdr_depth_exact=1 receiver_hdr_depth_exact=1\n",
+        frame.presentation_time_ticks,zoom,revision%8+1,removed,checked);
+    return 4;
+}
 }
 
 int main(){
@@ -160,6 +201,10 @@ int main(){
         frame.presentation_time_ticks=1600;comparisons+=compare_case(direct,frame,36,9,19,1,2);
         frame.presentation_time_ticks=2000;comparisons+=compare_case(direct,frame,300,300,6,1,3);
         frame.presentation_time_ticks=2033;comparisons+=compare_case(direct,frame,300,300,6,1,4);
+        for(unsigned revision=0;revision<8;++revision){
+            frame.presentation_time_ticks=3000+33*revision;
+            comparisons+=compare_reflection_selection(direct,frame,revision%2?1.5f:1.f,revision);
+        }
         std::printf("PASS actual Renderer64 unit material oracle: exact_surfaces=%u sample_count=1 synthetic_generic_assets=1 production_prepare_draw=1 untimed_readback=1\n",comparisons);
         return 0;
     }catch(std::exception const& error){std::fprintf(stderr,"UNIT_MATERIAL_ORACLE_FAILED %s\n",error.what());return 1;}

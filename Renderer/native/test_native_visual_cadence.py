@@ -186,7 +186,7 @@ int main(){
     @unittest.skipUnless(os.name == 'posix', 'host-only presentation stubs')
     def test_actual_direct_surface_readiness_controls_retry_and_grant_consumption(self):
         source = (ROOT/'Renderer/native/c3x_renderer.cpp').read_text()
-        branch = source.split('}else if(command==Command::trial_visual_shared){', 1)[1]
+        branch = source.split('}else if(command==Command::trial_visual_shared||command==Command::trial_required_visual_shared){', 1)[1]
         block = 'bool presentation_ready=' + branch.split('bool presentation_ready=', 1)[1].split(
             'if(result==C3X_RENDERER_RESULT_OK){trial_width=', 1)[0]
         run_cpp(r'''
@@ -220,6 +220,8 @@ struct Swap{HRESULT result=S_OK;unsigned presents=0;
 };
 struct Surface{void* Get(){return nullptr;}};
 struct Owner{
+ enum class Command{trial_visual_shared,trial_required_visual_shared};
+ Command command=Command::trial_visual_shared;
  struct Permit{bool admitted=false;unsigned polls=0,consumed=0;
   bool ready(){++polls;return admitted;}void presented(){assert(admitted);admitted=false;++consumed;}
  }trial_surface_permit;
@@ -275,6 +277,12 @@ int main(){
  assert(status.offer()==C3X_RENDERER_RESULT_OK&&status.trial_surface_permit.admitted);
  assert(!status.renderer_state.gpu_composition->published&&!status.route_present_index&&status.presented_zoom_q16==65536);
  assert(status.trial_front_pending&&status.trial_presented_front_revision==0);
+ // Required startup reuses the prepared front after a non-S_OK receipt. It
+ // actually presents despite unchanged source work; ordinary static no-op does not.
+ status.command=Owner::Command::trial_required_visual_shared;status.renderer_state.gpu_composition->draw=2;
+ status.trial_surface_swap->result=S_OK;assert(status.offer()==C3X_RENDERER_RESULT_OK);
+ assert(status.trial_surface_swap->presents==2&&status.renderer_state.gpu_composition->published==1);
+ assert(!status.trial_front_pending&&status.trial_presented_front_revision==9&&status.trial_surface_permit.consumed==1);
 }
 ''')
 

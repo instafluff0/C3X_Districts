@@ -47,6 +47,20 @@ def budget_fixture():
     return args
 
 
+def certificate_fixture():
+    args=fixture()
+    args[2].update(renderer_environment={},shader_root="fixture-shaders")
+    args[-1][1].update(ordered_facts_version="1",ordered_facts_digest="a"*16,
+                      source_complete="1",source_digest="b"*16,part_samples="3")
+    return args
+
+
+def remove_reflection(args):
+    args[-1][1].update(reflected_units="0",facts_digest="c"*16)
+    args[-1][2]["pass_masks"]="3,1"
+    return args
+
+
 def binding_fixture():
     args=fixture()
     source=args[-2][-1];source.pop("source_serial");source["local_image_ticket"]="20"
@@ -59,6 +73,84 @@ def binding_fixture():
 
 
 class MatchedNativeRouteAnalysis(unittest.TestCase):
+    def test_reflection_removal_is_explicit_and_keeps_strict_default(self):
+        baseline=analyze_capture(*certificate_fixture())
+        candidate=analyze_capture(*remove_reflection(certificate_fixture()))
+        self.assertFalse(compare(baseline,candidate)["all_step_comparisons_eligible"])
+        comparison=compare(baseline,candidate,workload_mode="reflection-removal")
+        self.assertTrue(comparison["all_step_comparisons_eligible"])
+        self.assertFalse(comparison["paired_steps"][0]["same_actual_workload"])
+        proof=comparison["paired_steps"][0]["reflection_removal_certificate"]
+        self.assertTrue(proof["eligible"])
+        self.assertEqual(proof["removed_reflection_occurrences"],1)
+        self.assertEqual(proof["removed_occurrence_indices"],[0])
+        old=analyze_capture(*fixture())
+        self.assertTrue(compare(old,copy.deepcopy(old))["all_step_comparisons_eligible"])
+        self.assertFalse(compare(old,copy.deepcopy(old),workload_mode="reflection-removal")["all_step_comparisons_eligible"])
+        with self.assertRaisesRegex(ValueError,"Unsupported"):compare(baseline,candidate,workload_mode="anything")
+
+    def test_reflection_certificate_missing_invalid_and_changed_authoritative_inputs_refuse(self):
+        baseline=analyze_capture(*certificate_fixture())
+        changes=(("ordered_facts_version",None),("ordered_facts_version","2"),("ordered_facts_digest",None),
+                 ("ordered_facts_digest","a"*15),("ordered_facts_digest","d"*16),("source_complete","0"),
+                 ("source_digest",None),("source_digest","e"*16),("part_samples",None),("part_samples","4"),
+                 ("part_samples","-1"))
+        for field,value in changes:
+            with self.subTest(field=field,value=value):
+                args=remove_reflection(certificate_fixture())
+                if value is None:args[-1][1].pop(field,None)
+                else:args[-1][1][field]=value
+                candidate=analyze_capture(*args)
+                self.assertFalse(compare(baseline,candidate,workload_mode="reflection-removal")["all_step_comparisons_eligible"])
+        args=remove_reflection(certificate_fixture());args[-1][0]["anchor_x"]="-101";args[-1][1]["camera_x"]="-101"
+        self.assertTrue(analyze_capture(*args)["all_route_endpoints_eligible"])
+        self.assertFalse(compare(baseline,analyze_capture(*args),workload_mode="reflection-removal")["all_step_comparisons_eligible"])
+
+    def test_reflection_certificate_refuses_order_main_shadow_additions_and_other_guards(self):
+        baseline=analyze_capture(*certificate_fixture())
+        for ids,masks,main,shadow,reflected in (("43,42","3,1","2","1","0"),
+              ("42,44","3,1","2","1","0"),("42,43","2,1","1","1","0"),
+              ("42,43","1,1","2","0","0"),("42,43","7,5","2","1","2")):
+            with self.subTest(ids=ids,masks=masks):
+                args=certificate_fixture();args[-1][1].update(main_units=main,shadow_units=shadow,reflected_units=reflected)
+                args[-1][2].update(unit_ids=ids,pass_masks=masks)
+                self.assertFalse(compare(baseline,analyze_capture(*args),workload_mode="reflection-removal")["all_step_comparisons_eligible"])
+        for target,field,value in ((1,"passed",False),(1,"original_save_unchanged",False),(2,"game_sha256","d"*64),(2,"renderer_environment",None),(2,"renderer_environment",{"C3X_RENDERER_UNIT_MODE":"different"}),(2,"shader_root",None),(2,"shader_root","different")):
+            args=remove_reflection(certificate_fixture());args[target][field]=value
+            self.assertFalse(compare(baseline,analyze_capture(*args),workload_mode="reflection-removal")["all_step_comparisons_eligible"])
+        args=remove_reflection(certificate_fixture());args[-1][2]["total_segments"]="2"
+        self.assertFalse(compare(baseline,analyze_capture(*args),workload_mode="reflection-removal")["all_step_comparisons_eligible"])
+
+    def test_reflection_certificate_preserves_wrapped_duplicate_occurrences_and_digest_ambiguity(self):
+        args=certificate_fixture();args[-1][2]["unit_ids"]="42,42";baseline=analyze_capture(*args)
+        args=remove_reflection(certificate_fixture());args[-1][2]["unit_ids"]="42,42";candidate=analyze_capture(*args)
+        self.assertTrue(compare(baseline,candidate,workload_mode="reflection-removal")["all_step_comparisons_eligible"])
+        for field in ("ordered_facts_digest","source_digest","source_complete","part_samples"):
+            args=certificate_fixture();conflict=dict(args[-1][1]);conflict[field]="9";args[-1].append(conflict)
+            report=analyze_capture(*args)
+            self.assertEqual(report["source_generation_refusals"],[[7,3]])
+            self.assertFalse(compare(baseline,report,workload_mode="reflection-removal")["all_step_comparisons_eligible"])
+
+    def test_idle_reflection_variants_require_all_present_coverage_and_all_baseline_variants(self):
+        args=certificate_fixture();args[0].update(initial_camera=[100,200],initial_width=160)
+        args[1].update(idle_begin_qpc=1150,idle_end_qpc=1601);baseline=analyze_capture(*args)
+        candidate_args=copy.deepcopy(args);later_work=dict(candidate_args[-1][1]);later_work.update(source_generation="4",qpc="1250",reflected_units="0",facts_digest="c"*16)
+        later_members=dict(candidate_args[-1][2]);later_members.update(source_generation="4",qpc="1251",pass_masks="3,1")
+        candidate_args[-1].extend((later_work,later_members));candidate_args[-1][4]["source_generation"]="4"
+        candidate=analyze_capture(*candidate_args)
+        self.assertFalse(compare(baseline,candidate)["idle_performance_comparison_eligible"])
+        proof=compare(baseline,candidate,workload_mode="reflection-removal")
+        self.assertTrue(proof["idle_performance_comparison_eligible"])
+        self.assertEqual(proof["idle_reflection_removal_certificate"]["removed_reflection_occurrences_min"],0)
+        self.assertEqual(proof["idle_reflection_removal_certificate"]["removed_reflection_occurrences_max"],1)
+        # Reversing arms would add a reflection relative to the zero-reflection variant.
+        self.assertFalse(compare(candidate,baseline,workload_mode="reflection-removal")["idle_performance_comparison_eligible"])
+        candidate_args[-1][3]["mixed"]="1"
+        self.assertFalse(compare(baseline,analyze_capture(*candidate_args),workload_mode="reflection-removal")["idle_performance_comparison_eligible"])
+        for field in ("ordered_facts_digest","source_digest"):
+            broken=copy.deepcopy(candidate_args);broken[-1][3]["mixed"]="0";broken[-1][-2][field]="f"*16
+            self.assertFalse(compare(baseline,analyze_capture(*broken),workload_mode="reflection-removal")["idle_performance_comparison_eligible"])
+
     def test_exact_serial_join_keeps_three_latencies_separate(self):
         report=analyze_capture(*fixture());row=report["route"][0]
         self.assertTrue(row["route_eligible"])

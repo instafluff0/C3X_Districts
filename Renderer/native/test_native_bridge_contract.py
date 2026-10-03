@@ -15,6 +15,21 @@ C3X_ROOT = RENDERER_ROOT.parent
 
 
 class NativeBridgeContractTests(unittest.TestCase):
+    maxDiff = 2000
+
+    def assertIn(self, member, container, msg=None):
+        # unittest's default membership failure includes the complete source.
+        if isinstance(container, str) and len(container) > 4096:
+            self.assertTrue(member in container, msg or f"Missing source fragment {member!r}")
+        else:
+            super().assertIn(member, container, msg)
+
+    def assertNotIn(self, member, container, msg=None):
+        if isinstance(container, str) and len(container) > 4096:
+            self.assertFalse(member in container, msg or f"Unexpected source fragment {member!r}")
+        else:
+            super().assertNotIn(member, container, msg)
+
     def test_color_rounding_has_world_stable_balanced_coverage(self) -> None:
         compiler = shutil.which("c++")
         if compiler is None:
@@ -191,7 +206,8 @@ int main() {
         # INSTALL cannot retain a TCC-resolved Windows API thunk from the
         # installer process. The original game import survives normal loading.
         injected = (C3X_ROOT / "injected_code.c").read_text(encoding="utf-8")
-        self.assertNotRegex(injected, r"\bOutputDebugString[AW]\s*\(")
+        self.assertIsNone(re.search(r"\bOutputDebugString[AW]\s*\(", injected),
+                          "Injected debug output must use the game import pointer")
         world = injected.split("stage=world-topology", 1)[1].split("return true;", 1)[0]
         self.assertIn("(*p_OutputDebugStringA) (detail)", world)
         self.assertIn("detail[(sizeof detail) - 1] = '\\0'", world)
@@ -286,7 +302,7 @@ int main() {
         self.assertEqual(1, m19.count("Map_Renderer_m19_Draw_Tile_by_XY_and_Flags (this"))
         self.assertNotIn("draw_flags &=", m19)
 
-    def test_i12_consumes_integrated_generic_assets_without_runtime_handoff_files(self) -> None:
+    def test_integrated_generic_assets_do_not_depend_on_lab_handoff_files(self) -> None:
         native = (Path(__file__).parent / "terrain_scene_runtime.cpp").read_text(
             encoding="utf-8"
         )
@@ -337,14 +353,19 @@ int main() {
         self.assertIn("water_decal_base_texture : register(t73)", shader)
         self.assertIn("views[69] = volcano_base_view", renderer)
         self.assertIn("views[73] = water_clutter_base_view", renderer)
-        self.assertIn("instance_count = tile.real_terrain_type == 7 ? 36u : 49u", renderer)
+        # Current canopy assembly consumes the shared authored bodies. Its
+        # neighboring-city proofs execute in test_canopy_world_inputs; legacy
+        # feature counts and scales are not an integration contract.
+        from Renderer.renderer import source_inputs
+        sources = source_inputs([Path(__file__).parent / "c3x_renderer.cpp"])
+        for body in ("forest_mesh_body.h", "jungle_mesh_body.h"):
+            self.assertIn(f"Renderer/lab/shared/natural/{body}", sources)
         self.assertIn('"feature/forest/leafy"', renderer)
         self.assertIn("texture_count > 32", native)
         self.assertIn("feature_base_texture_7 : register(t97)", shader)
         self.assertIn("PSSetShaderResources(94, 4, feature_texture_views.data() + 4)", renderer)
-        self.assertIn("tile.real_terrain_type == 7 ? 0.42f : 0.40f", renderer)
 
-    def test_m6_7_cache_key_is_terrain_specific_and_revision_aware(self) -> None:
+    def test_cache_key_is_terrain_specific_and_revision_aware(self) -> None:
         runtime = (Path(__file__).parent / "terrain_scene_runtime.cpp").read_text(
             encoding="utf-8"
         )
@@ -377,12 +398,26 @@ int main() {
         self.assertIn("frame_invalidation_flags", api)
         self.assertIn("result.geometry = fnv_offset", signature)
         self.assertIn("reuse_geometry_for_translation", renderer)
-        self.assertTrue("#define C3X_RENDERER_GPU_GEOMETRY_MIB 768" in renderer,
-                        "The user-authorized modern default must be explicit")
-        self.assertIn("C3X_RENDERER_GPU_GEOMETRY_MIB<=(sizeof(void*)==8?2048:1024)", renderer,
-                      "Pressure-test overrides must respect each process's address space")
-        self.assertTrue("tile_geometry_cache_budget = C3X_RENDERER_GPU_GEOMETRY_MIB * 1024u * 1024u" in renderer)
-        self.assertTrue("tile_geometry_cache_capacity = C3X_RENDERER_GPU_GEOMETRY_MIB / 192u * 4096u" in renderer)
+        # Compile the actual admission constants, including their overflow and
+        # address-space guards. Pinning the former ceiling missed wide-tier
+        # arithmetic wrapping at 4 GiB.
+        compiler = shutil.which("c++")
+        if compiler is None:
+            self.skipTest("C++ compiler unavailable")
+        start = renderer.index("#ifndef C3X_RENDERER_GPU_GEOMETRY_MIB")
+        end = renderer.index("\n#endif", renderer.index("constexpr std::size_t tile_geometry_cache_capacity", start))
+        constants = renderer[start:end]
+        with tempfile.TemporaryDirectory() as folder:
+            cpp = Path(folder) / "geometry_capacity.cpp"
+            cpp.write_text("#include <cstddef>\n" + constants)
+            for mib, accepted in ((4096, True), (8192, True), (128, False), (32768, False)):
+                result = subprocess.run(
+                    [compiler, "-std=c++17", "-fsyntax-only",
+                     f"-DC3X_RENDERER_GPU_GEOMETRY_MIB={mib}", str(cpp)],
+                    capture_output=True, text=True, check=False,
+                )
+                self.assertEqual(result.returncode == 0, accepted,
+                                 f"Geometry admission {mib} MiB: {result.stderr[:2000]}")
         self.assertIn("observed_coordinate_key", renderer)
         self.assertIn("context->DrawIndexed", renderer)
         self.assertIn("tile_geometry_epoch", renderer)
@@ -470,8 +505,9 @@ int main() {
         self.assertIn("vegetation_runtime.bin", renderer)
         self.assertIn("DXGI_FORMAT_BC1_UNORM", renderer)
         self.assertIn("find_feature_placement_by_suffix", renderer)
-        self.assertIn("instance_count = tile.real_terrain_type == 7 ? 36u : 49u", renderer)
-        self.assertIn("scene_feature_scale = tile.real_terrain_type == 7 ? 0.42f : 0.40f", renderer)
+        assembly = (Path(__file__).parent / "source_fidelity/geometry.h").read_text()
+        self.assertIn("forest_instances[body].push_back(instance)", assembly)
+        self.assertIn("forest_projected[body].include", assembly)
         self.assertIn("feature_vertices", renderer)
         self.assertIn("terrain_marsh_decal_01.json", renderer)
         for literal in ("0.48, 0.52", "1.42", "0.24, 0.70", "0.86", "1.91", "0.76, 0.28", "0.72", "1.37", "0.88"):
@@ -619,7 +655,7 @@ int main() {
         self.assertIn("resource_base_texture_0", shader)
         self.assertIn("city_base_texture_0", shader)
 
-    def test_i14_i17_consume_approved_routes_resources_and_cities(self) -> None:
+    def test_generic_routes_resources_and_cities_use_current_owners(self) -> None:
         renderer = (Path(__file__).parent / "c3x_renderer.cpp").read_text(
             encoding="utf-8"
         )
@@ -634,11 +670,13 @@ int main() {
             encoding="utf-8"
         )
 
-        for runtime_pack in (
-            "bridge_runtime.bin", "resource_runtime.bin", "city_runtime.bin",
-            "wall_runtime.bin",
-        ):
+        for runtime_pack in ("bridge_runtime.bin", "resource_runtime.bin"):
             self.assertIn(runtime_pack, renderer)
+        city_gpu = (Path(__file__).parent / "city_fidelity/gpu.h").read_text()
+        self.assertIn("cities.load(device,shader_root", renderer)
+        self.assertIn("Renderer/packs/CityCompositionRuntime/city.bin", city_gpu)
+        self.assertIn("library.decode(bytes)", city_gpu)
+        self.assertIn("library.complete_city_set()", city_gpu)
         for pack_id in (
             "route_styles_normalized", "route_doodads_normalized",
             "resource_normalized", "city_components_normalized",
@@ -655,10 +693,11 @@ int main() {
             self.assertIn(register, shader)
         for implementation in (
             "append_route_segment", "bridge_", "resource_name.find(candidate)",
-            "constexpr unsigned counts[] = {4u, 7u, 11u}",
-            "C3X_RENDERER_CITY_WALLED", "city_emissive_views",
+            "city_emissive_views",
         ):
             self.assertIn(implementation, renderer + (C3X_ROOT / "Renderer/native/object_compiler.h").read_text())
+        self.assertIn("C3X_RENDERER_CITY_WALLED",
+                      (Path(__file__).parent / "city_fidelity/compiler.h").read_text())
         for ownership in (
             "C3X_RENDERER_TILE_CUSTOM_ROAD_REPLACED",
             "C3X_RENDERER_TILE_CUSTOM_RAILROAD_REPLACED",
@@ -716,7 +755,7 @@ int main() {
         self.assertIn("float material_tundra;", (C3X_ROOT / vertex).read_text())
         self.assertIn("feature_base_texture_4", shader)
 
-    def test_live_terrain_mesh_reuses_shared_corners_and_bounds_shadow_density(self) -> None:
+    def test_live_terrain_mesh_reuses_shared_corners_and_dependency_proofs(self) -> None:
         renderer = (Path(__file__).parent / "c3x_renderer.cpp").read_text(
             encoding="utf-8"
         )
@@ -740,8 +779,9 @@ int main() {
         self.assertIn("grid_u <= subdivisions", ground_compiler)
         self.assertIn("bool river_surface = layer > 8.5f", ground_compiler)
         self.assertIn("river_surface ? river_node_distance", ground_compiler)
-        self.assertIn("draw_record_count <= 512", renderer)
-        self.assertIn("? 16 : 8", renderer)
+        # Grid detail and compiler proof ownership execute against the shared
+        # production job in test_ground_preparation. Do not freeze a legacy
+        # per-viewport shadow density here.
 
     def test_static_terrain_cache_survives_partial_unit_redraw_traversals(self) -> None:
         renderer = (Path(__file__).parent / "c3x_renderer.cpp").read_text(
@@ -764,10 +804,10 @@ int main() {
         self.assertIn("fill_output(frame, output, 0, 0)", renderer)
 
         injected = (C3X_ROOT / "injected_code.c").read_text(encoding="utf-8")
-        custom_draw = injected[
-            injected.index("is->custom_renderer_draw_in_progress = true;"):
-            injected.index("is->custom_renderer_frame_active = false;", injected.index("is->custom_renderer_draw_in_progress = true;"))
-        ]
+        draw_start = injected.index("is->custom_renderer_draw_in_progress = true;")
+        # Setup cancellation may release the frame before the ordinary full
+        # traversal; inspect the owning method rather than its first exit.
+        custom_draw = injected[draw_start:injected.index("\nstruct named_tile_entry", draw_start)]
         self.assertIn(
             "Map_Renderer_m71_Draw_Tiles (this, __, param_1, param_2, 0);",
             custom_draw,
@@ -796,22 +836,24 @@ int main() {
         injected = (C3X_ROOT / "injected_code.c").read_text(encoding="utf-8")
         state = (C3X_ROOT / "C3X.h").read_text(encoding="utf-8")
 
+        map_draw = injected[injected.index("void __fastcall\npatch_Map_Renderer_m71_Draw_Tiles (") :]
+        map_draw = map_draw[:map_draw.index("\nvoid", 1)]
         reentrant = re.search(
             r"if \(is->custom_renderer_draw_in_progress\) \{(.*?)\n\t\}",
-            injected,
+            map_draw,
             re.DOTALL,
         )
         self.assertIsNotNone(reentrant)
         self.assertNotIn("Map_Renderer_m71_Draw_Tiles", reentrant.group(1))
         self.assertNotIn("custom_renderer_vanilla_base_restored", state)
         self.assertNotIn("restore_civ3_fallback_terrain", injected)
-        enabled = injected[injected.index("if (! is->current_config.enable_custom_rendering)") :]
+        enabled = map_draw[map_draw.index("if (! is->current_config.enable_custom_rendering)") :]
         unavailable = enabled[enabled.index("if (! ensure_custom_renderer_loaded ()") :]
         unavailable = unavailable[:unavailable.index("is->custom_renderer_draw_in_progress = true;")]
         self.assertNotIn("\n\t\tMap_Renderer_m71_Draw_Tiles (", unavailable)
         failed_load = unavailable[:unavailable.index("performance-counter")]
-        self.assertLess(failed_load.index("enable_custom_rendering = false"),
-                        failed_load.index("patch_Map_Renderer_m71_Draw_Tiles ("))
+        self.assertNotIn("enable_custom_rendering = false", failed_load)
+        self.assertNotIn("patch_Map_Renderer_m71_Draw_Tiles (", failed_load)
         self.assertIn('log_custom_renderer_event ("performance-counter"', unavailable)
         self.assertIn("render_result == C3X_RENDERER_RESULT_DEVICE_ERROR", injected)
         self.assertIn("is->custom_renderer_reset ()", injected)

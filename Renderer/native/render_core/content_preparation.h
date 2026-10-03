@@ -22,6 +22,8 @@ template<class Key,class Input,class Result> class ContentPreparation {
 public:
     struct Job {Key key;Input input;bool urgent=false;};
     using Compile=std::function<std::unique_ptr<Result>(Input const&,std::atomic<bool> const&,unsigned)>;
+    using KeyOwnedBytes=std::function<std::size_t(Key const&)>;
+    using InputOwnedBytes=std::function<std::size_t(Input const&)>;
     // The callback owns a CPU-only snapshot, never a result that take() can move.
     struct OptionalWork {std::function<void(std::atomic<bool> const&,unsigned)> run;std::size_t bytes=0;};
     struct Statistics {
@@ -32,6 +34,7 @@ public:
         double cpu_ms=0,wait_ms=0;
         std::size_t required_ready_bytes=0,unneeded_ready_bytes=0,optional_bytes=0;
         std::size_t required_keys=0,expected_consumed_keys=0,consumed_required_keys=0;
+        std::size_t owner_metadata_bytes=0,peak_observed_owner_metadata_bytes=0;
         unsigned active_required=0,active_unneeded=0,active_optional=0;
         std::uint64_t retired_pending=0,retired_ready=0,retired_active=0,needed_result_evictions=0;
         std::uint64_t optional_completed=0,optional_cancelled=0,optional_skipped=0;
@@ -57,6 +60,7 @@ private:
     Key demand_key{};
     std::array<bool,6> active{};
     std::array<Key,6> active_key{};
+    std::array<std::size_t,6> active_job_owned_bytes{};
     std::array<bool,6> active_urgent{};
     std::array<bool,6> active_join{};
     std::array<bool,6> optional_active{},capacity_waiting{};
@@ -65,6 +69,8 @@ private:
     std::vector<Key> required_keys,consumed_keys;
     std::deque<OptionalWork> optional;
     Compile compile;
+    KeyOwnedBytes key_owned_bytes;
+    InputOwnedBytes input_owned_bytes;
     // Notification owns no content lease. Unregister joins any callback before
     // its consumer can disappear; callbacks may acquire the consumer's mutex.
     std::mutex notification_mutex;
@@ -73,6 +79,29 @@ private:
     std::deque<Ready> ready;
     Ready joined{Key{},{},false};
     Statistics stats;
+    std::size_t owned_metadata_bytes()const{
+        // Deque blocks/maps have implementation-specific spare storage. Keep a
+        // conservative fixed allowance and per-element overhead beside exact
+        // copied key/input capacities. Results/optional payloads are separate.
+        std::size_t bytes=sizeof(*this)+3*4096+
+            4*(2*job_limit+optional_job_limit)*sizeof(void*)+
+            16*(sizeof(Job)+sizeof(Ready)+sizeof(OptionalWork))+
+            workers.capacity()*sizeof(std::thread)+
+            required_keys.capacity()*sizeof(Key)+consumed_keys.capacity()*sizeof(Key)+
+            pending.size()*(sizeof(Job)+64)+ready.size()*(sizeof(Ready)+64)+
+            optional.size()*(sizeof(OptionalWork)+64);
+        auto key_bytes=[&](Key const& key){return key_owned_bytes?key_owned_bytes(key):0;};
+        for(auto const& key:required_keys)bytes+=key_bytes(key);
+        for(auto const& key:consumed_keys)bytes+=key_bytes(key);
+        for(auto const& job:pending)bytes+=key_bytes(job.key)+(input_owned_bytes?input_owned_bytes(job.input):0);
+        for(auto const& item:ready)bytes+=key_bytes(item.key);
+        bytes+=key_bytes(joined.key)+key_bytes(demand_key);
+        for(unsigned i=0;i<active.size();++i){
+            bytes+=key_bytes(active_key[i]);
+            if(active[i])bytes+=sizeof(Job)+active_job_owned_bytes[i];
+        }
+        return bytes;
+    }
     bool required(Key const& key)const{
         return !exact_required || std::binary_search(required_keys.begin(),required_keys.end(),key);
     }
@@ -154,6 +183,8 @@ private:
                     stats.bytes+reserved>capacity_limit-byte_limit;
                 if(active_join[worker])++stats.join_dispatches;
                 active[worker]=true;active_key[worker]=job.key;active_urgent[worker]=job.urgent;
+                active_job_owned_bytes[worker]=(key_owned_bytes?key_owned_bytes(job.key):0)+
+                    (input_owned_bytes?input_owned_bytes(job.input):0);
                 stats.active_peak=std::max(stats.active_peak,unsigned(std::count(active.begin(),active.end(),true)));
                 lock.unlock();auto begin=std::chrono::steady_clock::now();
                 std::unique_ptr<Result> value;
@@ -190,6 +221,7 @@ private:
                     }else ++stats.rejected;
                 }catch(...){++stats.rejected;}
             } // Release job input leases before pause/clear can observe completion.
+            active_job_owned_bytes[worker]=0;
             active[worker]=active_join[worker]=false;completed.notify_all();wake.notify_all();
             if(published){
                 lock.unlock();
@@ -202,6 +234,13 @@ private:
 
 public:
     ContentPreparation()=default;
+    void set_owned_bytes(KeyOwnedBytes keys,InputOwnedBytes inputs){
+        // Pure size queries: no mutation, allocation, reentry or exceptions.
+        std::lock_guard<std::mutex> lock(mutex);
+        if(!paused || std::any_of(active.begin(),active.end(),[](bool value){return value;}))
+            throw std::logic_error("preparation ownership hooks require a paused owner");
+        key_owned_bytes=std::move(keys);input_owned_bytes=std::move(inputs);
+    }
     void set_ready_notification(std::function<void()> next){
         std::lock_guard<std::mutex> guard(notification_mutex);ready_notification=std::move(next);
     }
@@ -443,7 +482,10 @@ public:
         return {};
     }
     Statistics statistics(){
-        std::lock_guard<std::mutex> lock(mutex);auto result=stats;result.pending=pending.size();
+        std::lock_guard<std::mutex> lock(mutex);
+        auto metadata=owned_metadata_bytes();
+        stats.peak_observed_owner_metadata_bytes=std::max(stats.peak_observed_owner_metadata_bytes,metadata);
+        auto result=stats;result.pending=pending.size();result.owner_metadata_bytes=metadata;
         result.active=unsigned(std::count(active.begin(),active.end(),true));
         result.capacity=capacity_limit;
         result.required_keys=result.expected_consumed_keys=exact_required?required_keys.size():0;

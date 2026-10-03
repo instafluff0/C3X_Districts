@@ -90,7 +90,9 @@ struct WorldPreparationRegion {
             tiles.push_back(tile);
         }
         frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());
-        return !selected.empty() && tiles.size()<=CapturedScene::occurrence_limit;
+        // A valid region with no permitted core has no required recipe. It is
+        // an empty owned lease, not a failed snapshot or permission to draw.
+        return tiles.size()<=CapturedScene::occurrence_limit;
     }
 };
 
@@ -178,6 +180,16 @@ public:
             if(state[region]==2)--unavailable;else --completed;
             --attempted;state[region]=0;pending.push_back(region);reorder=true;
         }
+    }
+    unsigned retry_unavailable(){
+        if(!unavailable)return 0;
+        // Reserve before changing state so allocation failure cannot strand a
+        // partially rearmed required stage. Completed recipes stay completed.
+        pending.reserve(pending.size()+unavailable);unsigned retried=0;
+        for(unsigned region=0;region<state.size();++region)if(state[region]==2){
+            pending.push_back(region);state[region]=0;--attempted;--unavailable;++retried;
+        }
+        reorder=true;return retried;
     }
     bool empty()const{return pending.empty();}
     unsigned regions()const{return unsigned(state.size());}

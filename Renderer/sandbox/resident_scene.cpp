@@ -266,6 +266,18 @@ void c3x_renderer64_frame_device(){
         device_generation=renderer.device_generation;
     }
 }
+bool c3x_renderer64_prepare_scene_assets(){
+    c3x_renderer64_frame_device();
+    bool cold=!sandbox_fresh.visual.installed || !sandbox_fresh.shadow.ready || !sandbox_fresh.bloom.blur ||
+        !sandbox_fresh.static_restore.pixel || !sandbox_direct_units.pixel || !sandbox_backbuffer_output.pixel;
+    LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
+    bool ready=sandbox_fresh.prepare_assets() && sandbox_direct_units.initialize() && sandbox_backbuffer_output.ensure();
+    QueryPerformanceCounter(&end);
+    char detail[160];sprintf_s(detail,"ready=%u cold=%u shadow_bytes=%zu ms=%.3f",unsigned(ready),unsigned(cold),
+        sandbox_fresh.shadow.bytes(),renderer.trace.milliseconds(end.QuadPart-begin.QuadPart));
+    renderer.trace.write("load-fresh-programs",detail,true);
+    return ready;
+}
 void c3x_renderer64_begin_unit_assets(){
     c3x_renderer64_frame_device();
     // Completed fronts own pixels, not these borrowed per-pass palette leases.
@@ -286,6 +298,16 @@ std::uint64_t c3x_renderer64_unit_selection_revision(){return sandbox_fresh.unit
 int c3x_renderer64_prepare_unit_meshes(){
     c3x_renderer64_frame_device();return sandbox_direct_units.prepare_frame_meshes();
 }
+std::size_t c3x_renderer64_unit_source_meshes_ready(){
+    auto const& sources=renderer.unit_bodies.meshes;auto const& meshes=sandbox_direct_units.meshes;
+    std::size_t ready=0;
+    for(std::size_t i=0;i<sources.size() && i<meshes.size();++i)if(sources[i].source_pinned &&
+            meshes[i].vertices && meshes[i].indices && meshes[i].palette_view)++ready;
+    return ready;
+}
+std::size_t c3x_renderer64_unit_source_mesh_bytes(){
+    c3x_renderer64_frame_device();return sandbox_direct_units.mesh_bytes;
+}
 bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
         ID3D11RenderTargetView* target,float zoom) {
     renderer.trace.write("fresh-callback","enter",true);
@@ -301,11 +323,23 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
     ++renderer.route_frame_sequence;
     char route[8]={};
     if(GetEnvironmentVariableA("C3X_RENDERER_ROUTE_WITNESS",route,sizeof(route))&&route[0]=='1'){
-        std::uint64_t facts=14695981039346656037ull,poses=facts;
+        std::uint64_t facts=14695981039346656037ull,poses=facts,ordered=facts,source=facts;
         auto hash=[](std::uint64_t& value,void const* data,std::size_t size){
             auto bytes=static_cast<unsigned char const*>(data);
             for(std::size_t i=0;i<size;++i){value^=bytes[i];value*=1099511628211ull;}
         };
+        // The copied frame/ordered occurrences certify supplied source facts.
+        // Pointer addresses and asynchronous scheduling are not source content.
+        auto captured=frame;captured.tiles=nullptr;captured.world_topology=nullptr;
+        captured.presentation_time_ticks=captured.presentation_frequency=0;
+        captured.dirty_flags=captured.visible_animation_count=0;
+        bool source_complete=frame.tile_count<=8192&&(!frame.tile_count||frame.tiles)&&
+            frame.world_topology_count<=1024u*1024u&&(!frame.world_topology_count||frame.world_topology);
+        hash(source,&captured,sizeof(captured));
+        if(source_complete){
+            hash(source,frame.tiles,std::size_t(frame.tile_count)*sizeof(*frame.tiles));
+            hash(source,frame.world_topology,std::size_t(frame.world_topology_count)*sizeof(*frame.world_topology));
+        }
         auto const& records=sandbox_direct_units.prepared_units;
         for(auto const& unit:records){
             auto draw=unit.draw;draw.presentation_time_ticks=draw.presentation_frequency=0;
@@ -314,15 +348,20 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
             // The representative proof keeps identity, action, anchors, art,
             // palette and pass membership; sampled pose has its own digest.
             draw.action_cursor=0;hash(facts,&draw,sizeof(draw));
+            // Version 1 preserves the existing authoritative draw/action
+            // normalization and native occurrence order BEFORE pass membership.
+            hash(ordered,&draw,sizeof(draw));
+            hash(ordered,&unit.instance.unit,sizeof(unit.instance.unit));
+            hash(ordered,&unit.instance.action,sizeof(unit.instance.action));
             unsigned mask=(unit.main?1u:0u)|(unit.shadow?2u:0u)|(unit.reflected?4u:0u);
             hash(facts,&mask,sizeof(mask));hash(facts,&unit.instance.unit,sizeof(unit.instance.unit));
             hash(facts,&unit.instance.action,sizeof(unit.instance.action));
         }
         char detail[896];sprintf_s(detail,
-            "source_serial=%lld source_generation=%llu complete=1 overflow=%u count=%zu main_units=%u reflected_units=%u shadow_units=%u part_samples=%u facts_digest=%016llx pose_digest=%016llx camera_x=%d camera_y=%d zoom=%.6f",
+            "source_serial=%lld source_generation=%llu complete=1 overflow=%u count=%zu main_units=%u reflected_units=%u shadow_units=%u part_samples=%u facts_digest=%016llx pose_digest=%016llx ordered_facts_version=1 ordered_facts_digest=%016llx source_complete=%u source_digest=%016llx camera_x=%d camera_y=%d zoom=%.6f",
             renderer.route_map_serial,static_cast<unsigned long long>(renderer.route_frame_sequence),unsigned(records.size()>4096),records.size(),
             sandbox_direct_units.main_contributors,sandbox_direct_units.reflection_contributors,sandbox_direct_units.shadow_contributors,
-            sandbox_direct_units.part_samples,static_cast<unsigned long long>(facts),static_cast<unsigned long long>(poses),camera_x,camera_y,zoom);
+            sandbox_direct_units.part_samples,static_cast<unsigned long long>(facts),static_cast<unsigned long long>(poses),static_cast<unsigned long long>(ordered),unsigned(source_complete),static_cast<unsigned long long>(source),camera_x,camera_y,zoom);
         renderer.trace.write("route-workload",detail,true);
         unsigned segments=unsigned((std::min<std::size_t>(records.size(),4096)+31)/32);
         for(unsigned segment=0;segment<segments;++segment){
@@ -362,6 +401,11 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
             sandbox_direct_units.material_buffer_uploads,sandbox_direct_units.material_upload_fallbacks,
             sandbox_direct_units.gpu_preparation_bytes());
         renderer.trace.write("fresh-unit-material-work",detail,true);
+        sprintf_s(detail,"bounds_builds=%u bounds_reuses=%u reflections_removed=%u main_units=%u shadow_units=%u reflected_units=%u",
+            sandbox_direct_units.reflection_bounds_builds,sandbox_direct_units.reflection_bounds_reuses,
+            sandbox_direct_units.reflection_bounds_rejected,sandbox_direct_units.main_contributors,
+            sandbox_direct_units.shadow_contributors,sandbox_direct_units.reflection_contributors);
+        renderer.trace.write("fresh-unit-reflection-selection",detail,true);
         auto const& spans=sandbox_fresh.prepare_subspans;auto const& placements=renderer.shared_instances;
         auto validation=sandbox_fresh.static_validation_counts();char validation_detail[1024];
         sprintf_s(validation_detail,"raster_full=%llu raster_content=%llu raster_visibility=%llu raster_membership=%llu raster_regions=%llu raster_reuses=%llu raster_changes=%llu atlas_full=%llu atlas_content=%llu atlas_membership=%llu atlas_regions=%llu atlas_reuses=%llu receiver_visits=%llu receiver_builds=%llu receiver_reuses=%llu placement_probes=%llu placement_reuses=%llu raster_registrations=%llu raster_watches=%llu raster_source_expansions=%llu raster_source_reuses=%llu raster_append_ms=%.3f atlas_registrations=%llu atlas_watches=%llu atlas_source_expansions=%llu atlas_source_reuses=%llu atlas_append_ms=%.3f",
@@ -391,6 +435,21 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
             calls[4].draws,calls[4].copies,calls[4].uploads,
             constants.water_records,constants.water_updates,constants.water_hits,constants.wave_records,constants.wave_updates,constants.wave_hits);
         renderer.trace.write("fresh-dynamic-work",detail,true);
+        auto const& prepared=sandbox_fresh.water_parameters;
+        sprintf_s(detail,"prepared_misses=%llu prepared_builds=%llu prepared_reuses=%llu prepared_fallbacks=%llu prepared_batches=%u prepared_records=%llu reused_records=%llu prepared_uploads=%llu prepared_bytes=%llu resident_bytes=%zu metadata_bytes=%zu cold_upload_ms=%.3f",
+            static_cast<unsigned long long>(prepared.misses),static_cast<unsigned long long>(prepared.builds),static_cast<unsigned long long>(prepared.reuses),
+            static_cast<unsigned long long>(prepared.fallbacks),prepared.batch_count,
+            static_cast<unsigned long long>(prepared.prepared_records),static_cast<unsigned long long>(prepared.reused_records),
+            static_cast<unsigned long long>(prepared.uploads),static_cast<unsigned long long>(prepared.uploaded_bytes),
+            prepared.gpu_bytes(),prepared.metadata_bytes(),prepared.cold_upload_ms);
+        renderer.trace.write("fresh-water-submission",detail,true);
+        auto const& packets=renderer.ordered_rigid_packets;
+        sprintf_s(detail,"builds=%llu reuses=%llu refusals=%llu draws=%llu submitted_records=%llu uploaded_bytes=%llu placement_copies=%llu pages=%u resident_bytes=%zu metadata_bytes=%zu peak_bytes=%zu",
+            static_cast<unsigned long long>(packets.builds),static_cast<unsigned long long>(packets.reuses),
+            static_cast<unsigned long long>(packets.refusals),static_cast<unsigned long long>(packets.draws),
+            static_cast<unsigned long long>(packets.drawn_records),static_cast<unsigned long long>(packets.uploaded_bytes),
+            static_cast<unsigned long long>(packets.placement_copies),packets.page_count(),packets.gpu_bytes(),packets.metadata_bytes(),packets.peak_bytes());
+        renderer.trace.write("fresh-ordered-rigid-submission",detail,true);
         sprintf_s(detail,"builds=%llu reuses=%llu schedules=%llu probes=%llu proof_bytes=%zu proof_cap_bytes=98304",
             static_cast<unsigned long long>(renderer.unit_asset_union_builds),static_cast<unsigned long long>(renderer.unit_asset_union_reuses),
             static_cast<unsigned long long>(renderer.unit_asset_schedules),static_cast<unsigned long long>(renderer.unit_asset_union_probes),
@@ -417,6 +476,37 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
             renderer.visibility_gpu.apply(renderer.device,renderer.context,
                 texture.Get(),renderer.visibility_coverage,
                 sandbox_fresh.glow.linear.depth_texture,4,zoom);
+    }
+    if(presented && renderer.trace.level && sandbox_fresh.work.enabled){
+        char census[8]{};
+        bool requested=GetEnvironmentVariableA("C3X_RENDERER_SUBMISSION_CENSUS",census,sizeof(census)) && census[0]=='1';
+        unsigned zoom_bits=0;std::memcpy(&zoom_bits,&zoom,sizeof(zoom_bits));
+        std::array<std::uint64_t,12> key={std::uint64_t(renderer.route_map_serial),
+            sandbox_fresh.view_revision(),sandbox_fresh.visibility_revision,renderer.device_generation,
+            renderer.content_revision,std::uint32_t(camera_x),std::uint32_t(camera_y),
+            (std::uint64_t(frame.target_width)<<32)|frame.target_height,zoom_bits,
+            std::uint64_t(renderer.water_scene_active),sandbox_fresh.reflection_revision,
+            std::uint64_t(renderer.city_profile)*2+unsigned(renderer.pickup_profile)};
+        if(sandbox_fresh.submission_census.observe(requested,key)){
+            char detail[640];
+            sprintf_s(detail,"source_serial=%lld source_generation=%llu camera_x=%d camera_y=%d zoom=%.6f view_revision=%llu visibility_revision=%llu complete=1 stable_callbacks=3 water_active=%u wave_pack_ready=%u reflection_enabled=%u",
+                renderer.route_map_serial,static_cast<unsigned long long>(renderer.route_frame_sequence),camera_x,camera_y,zoom,
+                static_cast<unsigned long long>(sandbox_fresh.view_revision()),static_cast<unsigned long long>(sandbox_fresh.visibility_revision),
+                unsigned(renderer.water_scene_active),unsigned(renderer.wave_ready),unsigned(renderer.reflection.enabled));
+            renderer.trace.write("submission-census",detail,true);
+            for(unsigned pass=0;pass<SandboxPassCounts::pass_count;++pass)
+                for(unsigned layer=0;layer<SandboxPassCounts::layers;++layer){
+                    auto const& row=sandbox_fresh.work.counts[pass][layer];
+                    if(!row.tested_records && !row.tested_instances && !row.draws && !row.upload_bytes &&
+                       !row.target_pixels && !row.copy_pixels && !row.rebuilds && !row.reuses)continue;
+                    sprintf_s(detail,"source_serial=%lld source_generation=%llu pass=%u layer=%u tested=%llu accepted=%llu tested_instances=%llu accepted_instances=%llu submitted_instances=%llu index_vertices=%llu triangles=%llu draws=%llu upload_bytes=%llu target_pixels=%llu copy_pixels=%llu rebuilds=%llu reuses=%llu",
+                        renderer.route_map_serial,static_cast<unsigned long long>(renderer.route_frame_sequence),pass,layer,
+                        row.tested_records,row.accepted_records,row.tested_instances,row.accepted_instances,
+                        row.submitted_instances,row.index_vertices,row.triangles,row.draws,row.upload_bytes,
+                        row.target_pixels,row.copy_pixels,row.rebuilds,row.reuses);
+                    renderer.trace.write("submission-census-layer",detail,true);
+                }
+        }
     }
     renderer.trace.write("fresh-callback",presented?"map-ready":"map-failed",true);
     return presented;

@@ -53,6 +53,7 @@ struct SandboxDirectUnits {
  std::vector<int> prepared_units;
  struct Transitions {void clear(){}} transitions;
  bool initialize(){return true;}
+ bool reserve_mesh_bytes(std::size_t){return true;} // Actual budget/pin contract has its own executable fixture.
  Unit const* unit_for(int subject){
   return unsigned(subject)<renderer.unit_bodies.units.size()?&renderer.unit_bodies.units[subject]:nullptr;
  }

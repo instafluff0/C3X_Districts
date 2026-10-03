@@ -6,6 +6,8 @@
 #include "../native/render_core/raster_contributors.h"
 #include "../native/render_core/shadow_sampling_grid.h"
 #include "../native/render_core/body_placement_requirements.h"
+#include "../native/render_core/prepared_draw_parameters.h"
+#include "../native/render_core/submission_census.h"
 #include <limits>
 #include <sstream>
 #include "../native/gpu_territory_borders.h"
@@ -1246,6 +1248,9 @@ struct SandboxFreshPipeline {
     ID3D11DepthStencilState* aquatic_depth=nullptr;
     c3x_renderer::render_core::LinearRestore static_restore;
     c3x_renderer::render_core::DrawParameterStream parameters;
+    using PreparedParameters=c3x_renderer::render_core::PreparedDrawParameters<ViewportShaderSettings,geometry_layer_count>;
+    PreparedParameters water_parameters;
+    c3x_renderer::render_core::SubmissionCensus<std::array<std::uint64_t,12>> submission_census;
     SandboxMirrorTarget reflection,reflection_static;
     GeometryDrawView::Records resident, static_visible, water_visible,
         reflection_visible, all_visible;
@@ -1730,6 +1735,20 @@ struct SandboxFreshPipeline {
             ViewportShaderSettings const& viewport,D3D11_RECT rect,bool mirrored) {
         auto* context=renderer.context;
         bool streamed=parameters.available(renderer.device,context);
+        PreparedParameters::Entry* prepared_entry=nullptr;
+        // Only this immutable captured membership has a stable visibility epoch.
+        // Animation/resource passes and reflection retain their existing path.
+#ifdef C3X_RENDERER64_FRESH
+        if(streamed && !mirrored && &records==&water_visible){
+            PreparedParameters::Key key;
+            key.scope={view_revision(),visibility_revision,renderer.device_generation,renderer.content_revision};
+            key.scene={unsigned(records[layer].size()),unsigned(renderer.content_view_width),
+                unsigned(renderer.content_view_height),unsigned(renderer.city_profile)*2+unsigned(renderer.pickup_profile)};
+            key.viewport=viewport;key.rect={rect.left,rect.top,rect.right,rect.bottom};key.view={projection_zoom,renderer.reflection.height_pixels};
+            prepared_entry=water_parameters.begin(unsigned(layer),key);
+        }
+#endif
+        bool prepared_hit=prepared_entry && prepared_entry->complete;
         char emission_control[8]={};
         bool original_emission=GetEnvironmentVariableA("C3X_SANDBOX_CITY_SUBMISSION_REFERENCE",emission_control,sizeof(emission_control)) && emission_control[0]=='1';
         ViewportShaderSettings previous{};
@@ -1747,43 +1766,64 @@ struct SandboxFreshPipeline {
             for(unsigned i=0;i<4;++i)if(!same_float(a.camera[i],b.camera[i]))return false;
             return true;
         };
-        std::array<ViewportShaderSettings,c3x_renderer::render_core::DrawParameterStream::limit> values{};
+        std::array<ViewportShaderSettings,c3x_renderer::render_core::DrawParameterStream::limit> generated_values{};
         std::vector<GeometryDrawReference> selected;
-        selected.reserve(values.size());
-        auto flush=[&]() {
+        selected.reserve(generated_values.size());
+        auto flush=[&](PreparedParameters::Batch const* prepared=nullptr) {
             if(selected.empty())return true;
-            auto opaque=[](GeometryDrawReference const& draw){auto const& mesh=draw.content();
-                return mesh.rigid_source && !mesh.animation_texture && !mesh.resource_instance && mesh.city_material==0xffffffffu &&
-                    c3x_renderer::render_core::opaque_rigid_material(mesh.instance_material);};
-            auto compatible=[](GeometryDrawReference const& a,GeometryDrawReference const& b){auto const& x=a.content();auto const& y=b.content();
-                return x.buffer==y.buffer && x.indices==y.indices && x.vertex_offset==y.vertex_offset && x.index_offset==y.index_offset &&
-                    x.index_count==y.index_count && x.index_format==y.index_format && x.projection_kind==y.projection_kind &&
-                    x.instance_material==y.instance_material;};
-            auto conflict=[&](GeometryDrawReference const& a,GeometryDrawReference const& b){
-                auto coverage=[&](GeometryDrawReference const& draw,bool reflected){auto const& bounds=draw.bounds();auto const& world=draw.content().world_bounds;
-                    float low=reflected?2*renderer.reflection.height_pixels*std::max(0.f,world.low[2]-2.5f/112.f):0;
-                    float high=reflected?2*renderer.reflection.height_pixels*std::max(0.f,world.high[2]-2.5f/112.f):0;
-                    return std::array<double,4>{double(bounds.left)+draw.translation_x()-4,double(bounds.top)+draw.translation_y()+low-4,
-                        double(bounds.right)+draw.translation_x()+4,double(bounds.bottom)+draw.translation_y()+high+4};};
-                for(bool reflected:{false,true}){auto x=coverage(a,reflected),y=coverage(b,reflected);
-                    if(!(x[2]<y[0] || x[0]>y[2] || x[3]<y[1] || x[1]>y[3]))return true;}return false;};
-            c3x_renderer::render_core::group_independent_opaque(selected,compatible,opaque,conflict);
-            for(unsigned i=0;i<selected.size();++i){auto const& chunk=selected[i];auto settings=viewport;
-                std::copy(std::begin(chunk.natural_projection()),std::end(chunk.natural_projection()),settings.natural_projection);
-                settings.padding=float(chunk.content().projection_kind);
-                if(renderer.pickup_profile)settings.reserved[1]=layer==geometry_underlay?.5f:layer==geometry_bed?4.f:layer==geometry_water?5.f:0.f;
-                settings.translation[0]+=float(chunk.translation_x());settings.translation[1]+=float(chunk.translation_y());
-                settings.depth_translation=renderer.city_profile?viewport.depth_translation+float(chunk.translation_y()):settings.translation[1];values[i]=settings;
+            auto const& values=prepared?prepared->values:generated_values;
+            if(!prepared){
+                auto opaque=[](GeometryDrawReference const& draw){auto const& mesh=draw.content();
+                    return mesh.rigid_source && !mesh.animation_texture && !mesh.resource_instance && mesh.city_material==0xffffffffu &&
+                        c3x_renderer::render_core::opaque_rigid_material(mesh.instance_material);};
+                auto compatible=[](GeometryDrawReference const& a,GeometryDrawReference const& b){auto const& x=a.content();auto const& y=b.content();
+                    return x.buffer==y.buffer && x.indices==y.indices && x.vertex_offset==y.vertex_offset && x.index_offset==y.index_offset &&
+                        x.index_count==y.index_count && x.index_format==y.index_format && x.projection_kind==y.projection_kind &&
+                        x.instance_material==y.instance_material;};
+                auto conflict=[&](GeometryDrawReference const& a,GeometryDrawReference const& b){
+                    auto coverage=[&](GeometryDrawReference const& draw,bool reflected){auto const& bounds=draw.bounds();auto const& world=draw.content().world_bounds;
+                        float low=reflected?2*renderer.reflection.height_pixels*std::max(0.f,world.low[2]-2.5f/112.f):0;
+                        float high=reflected?2*renderer.reflection.height_pixels*std::max(0.f,world.high[2]-2.5f/112.f):0;
+                        return std::array<double,4>{double(bounds.left)+draw.translation_x()-4,double(bounds.top)+draw.translation_y()+low-4,
+                            double(bounds.right)+draw.translation_x()+4,double(bounds.bottom)+draw.translation_y()+high+4};};
+                    for(bool reflected:{false,true}){auto x=coverage(a,reflected),y=coverage(b,reflected);
+                        if(!(x[2]<y[0] || x[0]>y[2] || x[3]<y[1] || x[1]>y[3]))return true;}return false;};
+                c3x_renderer::render_core::group_independent_opaque(selected,compatible,opaque,conflict);
+                for(unsigned i=0;i<selected.size();++i){auto const& chunk=selected[i];auto settings=viewport;
+                    std::copy(std::begin(chunk.natural_projection()),std::end(chunk.natural_projection()),settings.natural_projection);
+                    settings.padding=float(chunk.content().projection_kind);
+                    if(renderer.pickup_profile)settings.reserved[1]=layer==geometry_underlay?.5f:layer==geometry_bed?4.f:layer==geometry_water?5.f:0.f;
+                    settings.translation[0]+=float(chunk.translation_x());settings.translation[1]+=float(chunk.translation_y());
+                    settings.depth_translation=renderer.city_profile?viewport.depth_translation+float(chunk.translation_y()):settings.translation[1];generated_values[i]=settings;
+                }
             }
             std::array<unsigned,c3x_renderer::render_core::DrawParameterStream::limit> parameter_index{};
             std::array<ViewportShaderSettings,c3x_renderer::render_core::DrawParameterStream::limit> nonrigid_parameters{};unsigned parameter_count=0;
-            for(unsigned i=0;i<selected.size();++i)if(!selected[i].content().rigid_source){parameter_index[i]=parameter_count;nonrigid_parameters[parameter_count++]=values[i];}
-            if(streamed && parameter_count && !parameters.upload(nonrigid_parameters.data(),parameter_count)){
+            if(prepared){parameter_index=prepared->parameter_index;parameter_count=prepared->parameter_count;}
+            else {
+                for(unsigned i=0;i<selected.size();++i)if(!selected[i].content().rigid_source){parameter_index[i]=parameter_count;nonrigid_parameters[parameter_count++]=values[i];}
+                if(prepared_entry){
+                    std::array<unsigned,PreparedParameters::limit> order{};
+                    for(unsigned i=0;i<selected.size();++i)order[i]=unsigned(selected[i].occurrence-records[layer].data());
+                    prepared=water_parameters.append(*prepared_entry,renderer.device,order,unsigned(selected.size()),
+                        values,parameter_index,nonrigid_parameters.data(),parameter_count);
+                    if(!prepared)prepared_entry=nullptr; // Bounded admission/allocation failure keeps the streaming path.
+                    else work.upload(parameter_count*PreparedParameters::stride,unsigned(layer));
+                }
+            }
+            if(!prepared && streamed && parameter_count && !parameters.upload(nonrigid_parameters.data(),parameter_count)){
                 std::printf("SANDBOX_RECORD_UPLOAD_ERROR layer=%u records=%zu reason=0x%08lx\n",
                     unsigned(layer),selected.size(),renderer.device->GetDeviceRemovedReason());
                 std::fflush(stdout);return false;
             }
-            if(streamed)work.upload(parameter_count*((sizeof(ViewportShaderSettings)+255)/256)*256,unsigned(layer));
+            if(!prepared && streamed)work.upload(parameter_count*((sizeof(ViewportShaderSettings)+255)/256)*256,unsigned(layer));
+            std::array<decltype(renderer.ordered_rigid_packets)::Range,c3x_renderer::render_core::DrawParameterStream::limit> packets{};
+            auto packet_bytes=renderer.ordered_rigid_packets.uploaded_bytes;
+            auto packet_copies=renderer.ordered_rigid_packets.placement_copies;
+            renderer.prepare_ordered_rigid_packets(unsigned(layer),selected,shared_front,packets);
+            auto uploaded=renderer.ordered_rigid_packets.uploaded_bytes-packet_bytes;
+            if(uploaded)work.upload(unsigned(uploaded),unsigned(layer));
+            work.calls.copies+=renderer.ordered_rigid_packets.placement_copies-packet_copies;
             std::vector<unsigned> rigid;
             std::array<unsigned,c3x_renderer::render_core::DrawParameterStream::limit> rigid_offset{};
             for(unsigned i=0;i<selected.size();++i){auto const& chunk=selected[i];if(!chunk.content().rigid_source)continue;
@@ -1804,10 +1844,25 @@ struct SandboxFreshPipeline {
                         context->UpdateSubresource(renderer.viewport_settings_buffer,0,nullptr,&viewport,0,0);work.upload_buffer(renderer.viewport_settings_buffer);
                         previous=viewport;previous_valid=true;
                     }context->VSSetConstantBuffers(1,1,&renderer.viewport_settings_buffer);
-                }else if(streamed)parameters.bind(1,parameter_index[i]);
+                }else if(prepared)prepared->bind(parameters.context,1,i);
+                else if(streamed)parameters.bind(1,parameter_index[i]);
                 else if(!previous_valid || std::memcmp(&previous,&settings,sizeof(settings))){
                     context->UpdateSubresource(renderer.viewport_settings_buffer,0,nullptr,&settings,0,0);work.upload_buffer(renderer.viewport_settings_buffer);
                     previous=settings;previous_valid=true;
+                }
+                if(packets[i]){
+                    unsigned end=i+1;while(end<selected.size() && packets[end-1].contiguous(packets[end]))++end;
+                    renderer.ordered_rigid_packets.issue(context,renderer.ordered_rigid_layout,
+                        renderer.rigid_sources.resident_vertex[mirrored?1:0],packets.data()+i,end-i,
+                        [&](unsigned indices,unsigned records){
+                            work.draw(indices,1,unsigned(layer));
+                            if(work.enabled)work.row(unsigned(layer)).submitted_instances+=records-1;
+                            ++renderer.frame_draw_calls;
+                        });
+                    context->VSSetShaderResources(15,1,&shared_front->view);
+                    context->IASetInputLayout(renderer.feature_input_layout);
+                    context->VSSetShader(mirrored?mirror.vs[1]:renderer.feature_vertex_shader,nullptr,0);
+                    i=end;continue;
                 }
                 UINT stride=mesh.vertex_stride,offset=mesh.vertex_offset;
                 context->IASetVertexBuffers(0,1,&mesh.buffer,&stride,&offset);
@@ -1816,7 +1871,7 @@ struct SandboxFreshPipeline {
                     unsigned end=i+1;
                     for(;end<selected.size();++end){
                         auto const& next=selected[end].content();
-                        if(!next.rigid_source || next.buffer!=mesh.buffer ||
+                        if(packets[end] || !next.rigid_source || next.buffer!=mesh.buffer ||
                             next.indices!=mesh.indices || next.vertex_offset!=mesh.vertex_offset ||
                             next.index_offset!=mesh.index_offset || next.index_count!=mesh.index_count ||
                             next.index_format!=mesh.index_format ||
@@ -1912,17 +1967,29 @@ struct SandboxFreshPipeline {
             }
             selected.clear();return true;
         };
-        auto clip=source_bounds(viewport,rect,mirrored);
-        for(auto const& record:records[layer]){
-            if(work.enabled)++work.row(unsigned(layer)).tested_records;
-            GeometryDrawReference chunk(record);
-            if(mirrored && chunk.content().animation_texture)continue;
-            if(!renderer.chunk_intersects_region(chunk,viewport,clip,mirrored))continue;
-            if(work.enabled)++work.row(unsigned(layer)).accepted_records;
-            selected.push_back(chunk);
-            if(selected.size()==values.size() && !flush())return false;
+        if(prepared_hit){
+            for(auto const& batch:prepared_entry->batches){
+                // Resolve only after the exact generation/view check. Cached
+                // order contains indices, never pointers into retired records.
+                for(unsigned i=0;i<batch.count;++i)selected.emplace_back(records[layer][batch.order[i]]);
+                water_parameters.reused_records+=batch.count;
+                if(work.enabled)work.row(unsigned(layer)).accepted_records+=batch.count;
+                if(!flush(&batch))return false;
+            }
+        }else{
+            auto clip=source_bounds(viewport,rect,mirrored);
+            for(auto const& record:records[layer]){
+                if(work.enabled)++work.row(unsigned(layer)).tested_records;
+                GeometryDrawReference chunk(record);
+                if(mirrored && chunk.content().animation_texture)continue;
+                if(!renderer.chunk_intersects_region(chunk,viewport,clip,mirrored))continue;
+                if(work.enabled)++work.row(unsigned(layer)).accepted_records;
+                selected.push_back(chunk);
+                if(selected.size()==generated_values.size() && !flush())return false;
+            }
+            if(!flush())return false;
+            if(prepared_entry)prepared_entry->complete=true;
         }
-        if(!flush())return false;
         if(streamed)context->VSSetConstantBuffers(1,1,&renderer.viewport_settings_buffer);
         return true;
     }
@@ -2341,14 +2408,20 @@ struct SandboxFreshPipeline {
         }
         return target.ensure(renderer.device,width,height,true,resolved,samples);
     }
+    unsigned configured_samples() const {
+        unsigned samples=1;char option[8]={};
+        if(GetEnvironmentVariableA("C3X_SANDBOX_MSAA_2X",option,sizeof(option)) && option[0]=='1')samples=2;
+        if(GetEnvironmentVariableA("C3X_RENDERER_SCENE_SAMPLES",option,sizeof(option)))
+            samples=option[0]=='4'?4u:option[0]=='2'?2u:1u;
+        return samples;
+    }
+    bool prepare_assets() {
+        return visual.install() && shadow.ensure() && bloom.ensure_shaders() &&
+            static_restore.ensure(renderer.device,configured_samples());
+    }
     bool ensure_targets(unsigned width,unsigned height) {
         char value[8]{};
-        scene_scale=1;scene_samples=1;
-        char msaa_option[8]={};
-        if(GetEnvironmentVariableA("C3X_SANDBOX_MSAA_2X",msaa_option,sizeof(msaa_option)) &&
-            msaa_option[0]=='1')scene_samples=2;
-        if(GetEnvironmentVariableA("C3X_RENDERER_SCENE_SAMPLES",msaa_option,sizeof(msaa_option)))
-            scene_samples=msaa_option[0]=='4'?4u:msaa_option[0]=='2'?2u:1u;
+        scene_scale=1;scene_samples=configured_samples();
         reflection_scale=GetEnvironmentVariableA("C3X_SANDBOX_REFLECTION_FULL",value,sizeof(value)) &&
             std::strcmp(value,"1")==0?1.f:.375f;
         unsigned reflection_width=unsigned((width+8)*reflection_scale);
@@ -3100,6 +3173,7 @@ extern "C" __declspec(dllexport) void c3x_sandbox_fresh_metrics(double* phases,
 #ifdef C3X_RENDERER64_FRESH
         sandbox_fresh.instance_plan_bytes+sandbox_direct_units.gpu_preparation_bytes()+
 #endif
+        sandbox_fresh.water_parameters.gpu_bytes()+
         sandbox_fresh.static_cache.bytes()+
         sandbox_fresh.static_rasters.bytes()+
         sandbox_fresh.material_albedo.bytes()+

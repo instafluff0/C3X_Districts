@@ -4,6 +4,34 @@ from Renderer.native.native_cpp_test import ROOT, run_cpp
 
 
 class WorldPreparationScheduleTests(unittest.TestCase):
+    def test_required_retry_rearms_failed_regions_without_rebuilding_completed(self):
+        run_cpp(r'''
+#include "Renderer/native/render_core/world_preparation_region.h"
+#include <cassert>
+#include <set>
+using namespace c3x_renderer::render_core;
+int main(){
+ c3x_renderer_frame_v1 f{};f.world_width_tiles=f.world_height_tiles=16;
+ f.tile_width=128;f.tile_height=64;f.target_width=800;f.target_height=600;
+ WorldPreparationSchedule q;q.configure(f,1,2,3,true,4);assert(q.regions()==4);
+ while(!q.empty()){auto region=q.next();q.finish(region!=0 && region!=2);}
+ assert(q.empty() && q.completed==2 && q.unavailable==2 && q.attempted==4);
+ // Empty pending alone cannot certify the required stage.
+ auto ready=[&]{return q.empty() && !q.unavailable && q.completed==q.regions();};assert(!ready());
+ assert(q.retry_unavailable()==2 && q.completed==2 && !q.unavailable && q.attempted==2);
+ assert(!q.empty() && !ready() && !q.retry_unavailable());
+ q.configure(f,1,2,3,true,4);std::set<unsigned> retried;
+ while(!q.empty()){auto region=q.next();assert((region==0 || region==2) && retried.insert(region).second);
+  q.finish(region!=2);}
+ assert(retried.size()==2 && q.completed==3 && q.unavailable==1 && !ready());
+ assert(q.retry_unavailable()==1 && q.completed==3 && q.attempted==3 && q.next()==2);
+ // A canceled attempt is still pending; reconfiguration cannot lose it.
+ q.configure(f,1,2,3,true,4);assert(q.next()==2 && !ready());q.finish(true);
+ assert(ready() && q.completed==4 && q.attempted==4 && !q.retry_unavailable());
+ q.configure(f,1,2,3,true,4);assert(ready());
+}
+''')
+
     def test_bounded_readiness_route_keeps_cold_oracles_and_repeated_sweeps(self):
         preview=(ROOT/'Renderer/native/world_readiness_preview.h').read_text()
         route=preview.split('// BEGIN bounded readiness route contract (also exercised on the host).',1)[1].split(
@@ -69,7 +97,7 @@ int main(){
  std::vector<std::uint32_t> topology(2048,2|(2<<8));
  f.world_topology=topology.data();f.world_topology_count=unsigned(topology.size());
  bool changed=false;WorldPreparationRegion region;
- assert(!region.build(scene,f,0,true)); // No implicit authority.
+ assert(region.build(scene,f,0,true) && region.selected.empty()); // No implicit authority; valid empty work.
  for(int y=0;y<64;++y)for(int x=y&1;x<64;x+=2){
   c3x_renderer_tile_v1 t{};t.tile_x=x;t.tile_y=y;t.terrain_type=t.real_terrain_type=2;
   t.tile_flags=C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_EXPLORED;

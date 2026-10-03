@@ -14,6 +14,10 @@ struct ForegroundSelection {
             pickup==other.pickup&&offload==other.offload;
     }
     bool selects(c3x_renderer_tile_v1 const& tile)const {
+        // Native anchors still describe fog coverage; body work requires
+        // explored permission. Older lab inputs have no visibility contract.
+        if((tile.tile_flags&C3X_RENDERER_TILE_VISIBILITY_KNOWN) &&
+           !(tile.tile_flags&C3X_RENDERER_TILE_EXPLORED))return false;
         auto x=c3x_renderer_i64(tile.anchor_x),y=c3x_renderer_i64(tile.anchor_y);
         auto inside=[&](int radius){auto mx=c3x_renderer_i64(tile_width)*radius,my=c3x_renderer_i64(tile_height)*radius;
             return x+tile_width>=-mx&&x<=width+mx&&y+tile_height>=-my&&y<=height+my;};

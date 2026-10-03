@@ -47,7 +47,7 @@ int main(){
 
     def test_actual_ordinary_context_renewal_requires_exact_normalized_facts(self):
         source=(ROOT/'Renderer/native/c3x_renderer.cpp').read_text()
-        start=source.index('                    auto context=cached->compile_context;')
+        start=source.index('                    auto candidate_context=cached->compile_context;')
         end=source.index('                    if(tile_content_valid(*cached,tile)){',start)
         decision=source[start:end]
         run_cpp(r'''
@@ -117,7 +117,7 @@ int main(){
  std::uint64_t tile_geometry_epoch=19;
  auto coordinate_key=[&](int x,int y){return topology_cache.key(x,y);};
  std::vector<std::uint64_t> demanded_tiles{coordinate_key(tile.tile_x,tile.tile_y)};
- bool backing_only=false,component_preparation=true;
+ bool backing_only=false,component_preparation=true,loading_preparation=false,batch_preparing=false;
  WorldPreparationInput input;input.ground.compile.tile=tile;
  input.ground.compile.world_ground=input.ground.compile.pickup_profile=input.ground.compile.fidelity_profile=true;
  input.ground.compile.ground=2;input.ground.compile.flat_grid=input.ground.compile.tile_ground_grid=8;

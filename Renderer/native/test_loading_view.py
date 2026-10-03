@@ -71,7 +71,7 @@ struct {struct {bool enable_custom_rendering=true;}current_config;
  int custom_renderer_init_state=IS_OK,custom_renderer_viewer_civ_id=2;
  bool custom_renderer_draw_in_progress=false,custom_renderer_frame_active=false,
  custom_renderer_capture_only=false,custom_renderer_display_valid=true,
- custom_renderer_initial_world_capture=false,custom_renderer_capture_failed=false;
+ custom_renderer_initial_world_capture=false,custom_renderer_loading_world_capture=false,custom_renderer_capture_failed=false;
  unsigned (*custom_renderer_probe_thread_id)()=current_thread;
  unsigned custom_renderer_probe_owner=9;
  Map_Renderer* custom_renderer_target=&bic.Map.Renderer;
@@ -89,7 +89,7 @@ int reads=0;
 Tile* tile_at(int x,int y){return &tiles[(y*bic.Map.Width+x)/2];}
 bool read_custom_renderer_world_record(c3x_renderer_tile_v1* record,int viewer,int mask,
  int x,int y,Tile*){
- assert(viewer==state.custom_renderer_viewer_civ_id&&mask==77);
+ assert(viewer==state.custom_renderer_viewer_civ_id&&mask==(state.custom_renderer_loading_world_capture?0:77));
  *record={};record->tile_x=x;record->tile_y=y;++reads;return true;
 }
 ''' + callback + r'''
@@ -124,6 +124,11 @@ int main(){
  reset();state.custom_renderer_display_valid=false;assert(admit()==4&&!reads);
  reset();assert(admit()==1&&reads==8);
  initial();assert(admit()==1&&reads==8);
+ reset();form.is_now_loading_game=true;state.custom_renderer_display_valid=false;
+ state.custom_renderer_loading_world_capture=true;state.custom_renderer_tiles=nullptr;state.custom_renderer_tile_count=0;
+ assert(admit()==1&&reads==8);
+ reset();form.is_now_loading_game=true;state.custom_renderer_loading_world_capture=true;thread=10;assert(admit()==4&&!reads);
+ reset();form.is_now_loading_game=true;state.custom_renderer_loading_world_capture=true;state.custom_renderer_draw_in_progress=true;assert(admit()==4&&!reads);
  // The flag alone cannot relax any guard: only a completed capture on its
  // owner thread, still within the new viewer's synchronous seed, can do so.
  initial();thread=10;assert(admit()==4&&!reads);

@@ -69,8 +69,10 @@ int main(){
         source=(ROOT / 'Renderer/native/c3x_renderer.cpp').read_text()
         publication='struct PublishedMapFrame {'+source.split('struct PublishedMapFrame {',1)[1].split('// Cheap, deliberately provisional',1)[0]
         commands='enum class Command {'+source.split('enum class Command {',1)[1].split('};',1)[0]+'};'
-        cleanup='if(command==Command::render && result==C3X_RENDERER_RESULT_OK)start_ahead();'+source.split(
-            'if(command==Command::render && result==C3X_RENDERER_RESULT_OK)start_ahead();',1)[1].split('last_job_result=result;',1)[0]
+        run_start=source.index('    void run() {',source.index('class RendererWorker {'))
+        publication_end=source.index('completed_result = result;',run_start)
+        cleanup_start=source.index('if(command==Command::render && result==C3X_RENDERER_RESULT_OK)',publication_end)
+        cleanup=source[cleanup_start:source.index('last_job_result=result;',cleanup_start)]
         classification=''
         if 'bool const changes_map_publication=' in source:
             classification='bool const changes_map_publication='+source.split(
@@ -86,7 +88,7 @@ int main(){
 #include "Renderer/native/c3x_renderer_api.h"
 '''+publication+commands+r'''
 struct Worker {
- PublishedMapFrame gpu_publication;bool gpu_presentation=true;int ahead=0;
+ PublishedMapFrame gpu_publication;bool gpu_presentation=true,world_content_turn=false;int ahead=0;
  void start_ahead(){++ahead;}
  void finish(Command command,int result){
 '''+classification+cleanup+r'''
@@ -312,6 +314,15 @@ int main(){
         publication = publication.replace("auto first=static_cast<std::uint32_t const*>(source.bgra_pixels);",
                                           "publication_checkpoint(); auto first=static_cast<std::uint32_t const*>(source.bgra_pixels);")
         worker = "class RendererWorker {" + source.split("class RendererWorker {", 1)[1].split("RendererWorker * renderer_worker", 1)[0]
+        # Source setup is independently executed by the loading integration
+        # fixture. Keep this worker test about publication and queue takeover.
+        loading_start=worker.index('    bool prepare_loading_sources(')
+        loading_end=worker.index('    // One GPU owner',loading_start)
+        worker=worker[:loading_start]+'''    bool prepare_loading_sources(std::atomic<bool> const* cancel=nullptr,
+                std::function<void()> service={}) {
+            if(service)service();return !cancel || !cancel->load();
+        }
+'''+worker[loading_end:]
         worker = worker.replace("c3x_renderer::UnitBodyRenderer::PublishedPose", "Bodies::PublishedPose")
         worker = worker.replace("completed.wait(lock,[this,ticket]", "adoption_checkpoint(); completed.wait(lock,[this,ticket]")
         program = r'''
@@ -342,6 +353,7 @@ int main(){
 #include "Renderer/native/render_core/world_input_capture.h"
 #include "Renderer/native/render_core/world_move_footprint.h"
 #include "Renderer/native/render_core/world_preparation_region.h"
+#include "Renderer/lab/shared/natural/patch.h"
 #include "Renderer/native/render_core/cliff_placement.h"
 #include "Renderer/native/gpu_frame_api.h"
 #include "Renderer/native/visual_cadence.h"
@@ -521,7 +533,7 @@ struct RendererState {
         unsigned clears=0;void clear(){++clears;}
         Statistics statistics()const{return {};}
     } world_preparation_queue,world_backing;
-    struct {std::uint64_t identity()const{return 0;}} patch_detail;
+    c3x_renderer::fidelity::PatchDetail patch_detail;unsigned patch_pixels=0;
     TacticalGPU tactical_gpu;
     std::uint64_t unit_scene_rejections=0;
     struct {std::size_t bytes(){return 0;}} unit_scene_work;
@@ -529,7 +541,9 @@ struct RendererState {
     struct Terrain {bool configured=false;std::vector<std::uint8_t> dds;};
     std::array<Terrain,14> terrain_textures;
     Trace trace;Bodies unit_bodies;bool unit_rendering_enabled=true,pickup_profile=false,cache_valid=false,profiling=false;
+    bool loading_preparation=false,loading_world_only=false,unit_sources_ready=false;unsigned unit_source_device=0;
     bool initialize_device(){assert(native_transfer_test);return true;}
+    bool prepare_world_sources(c3x_renderer_frame_v1 const&){return true;} // Source topology initialization is exercised by the loading-world fixture.
     Device owned_device;Context owned_context;Device* device=&owned_device;Context* context=&owned_context;
     bool gpu_output_mode=false,gpu_map_valid=false,cpu_output_stale=false,scene_surface_requested=false,city_profile=false;
     ID3D11Texture2D* gpu_map_texture=nullptr;unsigned frame_output_readbacks=0;std::uint64_t gpu_serial=0;std::int64_t camera_serial=0;

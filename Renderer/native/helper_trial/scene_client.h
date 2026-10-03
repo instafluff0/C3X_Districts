@@ -105,7 +105,7 @@ public:
     Wire const& call(unsigned kind,unsigned subtype,unsigned char const* bytes,unsigned count,
                      unsigned expected_code=0,std::int64_t recorded_ticket=0,std::int64_t recorded_image=0,
                      std::int64_t clock_ticks=0,std::int64_t clock_frequency=0,bool final_image=false,
-                     bool live=false,bool raw_shared=false,bool replay_override=false){
+                     bool live=false,bool raw_shared=false,bool replay_override=false,bool required_loading=false){
         if(!wire||!process||count>wire_capacity||(!bytes&&count))throw std::runtime_error("invalid scene request");
         wire->magic=wire_magic;wire->version=wire_version;wire->sequence=++sequence;
         wire->kind=kind;wire->subtype=subtype;wire->size=count;wire->reply_size=0;
@@ -116,7 +116,7 @@ public:
         if(count)std::memcpy(wire->payload,bytes,count);
         HANDLE ready[2]={response,process};
         if(!SetEvent(request))throw std::runtime_error("x64 scene helper request signal failed");
-        DWORD const wait=WaitForMultipleObjects(2,ready,FALSE,120000);
+        DWORD const wait=WaitForMultipleObjects(2,ready,FALSE,required_loading?INFINITE:120000);
         if(wait==WAIT_OBJECT_0+1){
             DWORD exit_code=0;
             GetExitCodeProcess(process,&exit_code);
@@ -134,8 +134,8 @@ public:
     }
     Wire const& call_live(unsigned kind,unsigned subtype,unsigned char const* bytes,unsigned count,
                           bool shared_frame=false,bool raw_shared=false,
-                          std::int64_t ticks=0,std::int64_t frequency=0,bool replay_override=false){
-        return call(kind,subtype,bytes,count,0,0,0,ticks,frequency,shared_frame,true,raw_shared,replay_override);
+                          std::int64_t ticks=0,std::int64_t frequency=0,bool replay_override=false,bool required_loading=false){
+        return call(kind,subtype,bytes,count,0,0,0,ticks,frequency,shared_frame,true,raw_shared,replay_override,required_loading);
     }
 };
 }

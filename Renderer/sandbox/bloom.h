@@ -17,15 +17,16 @@ struct SandboxBloom {
     unsigned width=0,height=0;
     template<class T> static void drop(T*& value){if(value)value->Release();value=nullptr;}
     ~SandboxBloom(){reset();}
-    void reset(){
+    void reset_targets(){
         for(unsigned i=0;i<2;++i){drop(view[i]);drop(target[i]);drop(color[i]);}
-        drop(vertex);drop(extract);drop(blur);drop(settings);drop(sampler);drop(rasterizer);
         width=height=0;
     }
-    bool ensure(unsigned source_width,unsigned source_height){
-        unsigned w=(source_width+1)/2,h=(source_height+1)/2;
-        if(view[0] && width==w && height==h)return true;
-        reset();width=w;height=h;
+    void reset(){
+        reset_targets();
+        drop(vertex);drop(extract);drop(blur);drop(settings);drop(sampler);drop(rasterizer);
+    }
+    bool ensure_shaders(){
+        if(blur)return true;
         char const* source=R"(
 Texture2D<float4> input_image:register(t0);
 Texture2D<float4> dynamic_image:register(t1);
@@ -91,6 +92,15 @@ float4 PSBlur(float4 position:SV_Position):SV_Target{
         D3D11_RASTERIZER_DESC raster{};raster.FillMode=D3D11_FILL_SOLID;
         raster.CullMode=D3D11_CULL_NONE;raster.DepthClipEnable=true;
         if(SUCCEEDED(hr))hr=renderer.device->CreateRasterizerState(&raster,&rasterizer);
+        if(FAILED(hr)){reset();return false;}
+        return true;
+    }
+    bool ensure(unsigned source_width,unsigned source_height){
+        unsigned w=(source_width+1)/2,h=(source_height+1)/2;
+        if(view[0] && width==w && height==h)return true;
+        reset_targets();width=w;height=h;
+        if(!ensure_shaders())return false;
+        HRESULT hr=S_OK;
         D3D11_TEXTURE2D_DESC texture{};texture.Width=w;texture.Height=h;
         texture.ArraySize=texture.MipLevels=texture.SampleDesc.Count=1;
         texture.Format=DXGI_FORMAT_R16G16B16A16_FLOAT;
@@ -100,7 +110,7 @@ float4 PSBlur(float4 position:SV_Position):SV_Target{
             if(SUCCEEDED(hr))hr=renderer.device->CreateRenderTargetView(color[i],nullptr,&target[i]);
             if(SUCCEEDED(hr))hr=renderer.device->CreateShaderResourceView(color[i],nullptr,&view[i]);
         }
-        if(FAILED(hr)){reset();return false;}
+        if(FAILED(hr)){reset_targets();return false;}
         return true;
     }
     bool draw(ID3D11ShaderResourceView* static_resolved,

@@ -21,10 +21,9 @@ class GpuUnitScene {
     Microsoft::WRL::ComPtr<ID3D11ComputeShader> shader;
     Microsoft::WRL::ComPtr<ID3D11Buffer> projection;
 public:
-    void draw(ID3D11Device* device,ID3D11DeviceContext* context,UnitSceneSample const& sample,
-              unsigned width,unsigned height){
+    void prepare_assets(ID3D11Device* device){
         auto check=[](HRESULT hr){if(FAILED(hr))throw std::runtime_error("unit scene composition failed");};
-        if(!shader){char const* source=R"(
+        if(!shader || !projection){char const* source=R"(
 cbuffer Params:register(b0){int4 area;int2 offset;uint mode;uint color;};
 cbuffer Ground:register(b1){float4 pose,bounds,quality;int4 canvas;};
 Texture2D<float4> body:register(t0);Texture2D<uint> native_below:register(t1);Texture2D<uint> native_ground:register(t2);
@@ -74,6 +73,10 @@ uint blend(uint source,uint below,uint alpha){
             check(device->CreateComputeShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,&shader));
             D3D11_BUFFER_DESC d={};d.ByteWidth=64;d.BindFlags=D3D11_BIND_CONSTANT_BUFFER;check(device->CreateBuffer(&d,nullptr,&projection));
         }
+    }
+    void draw(ID3D11Device* device,ID3D11DeviceContext* context,UnitSceneSample const& sample,
+              unsigned width,unsigned height){
+        prepare_assets(device);
         struct Constants {float ground[12];int canvas[4];} values;
         std::memcpy(values.ground,sample.ground.data(),sizeof(values.ground));
         values.canvas[0]=sample.origin[0];values.canvas[1]=sample.origin[1];values.canvas[2]=int(sample.width);values.canvas[3]=int(sample.height);

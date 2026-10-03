@@ -52,8 +52,9 @@ int main(){
 
     def test_fresh_output_masks_the_actual_publication_target(self):
         text=Path('Renderer/sandbox/resident_scene.cpp').read_text()
-        body=text.split('bool presented=sandbox_backbuffer_output.draw(',1)[1].split(
-            'renderer.trace.write("fresh-callback",presented?',1)[0]
+        start=text.index('bool presented=sandbox_backbuffer_output.draw(')+len('bool presented=sandbox_backbuffer_output.draw(')
+        mask=text.index('if(presented && renderer.visibility_pass){',start)
+        body=text[start:text.index('\n    }',mask)+len('\n    }')]
         run_cpp(r'''
 #include <cassert>
 #define SUCCEEDED(x) ((x)>=0)

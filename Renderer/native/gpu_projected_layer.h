@@ -6,13 +6,9 @@ class ProjectedLayer {
     Microsoft::WRL::ComPtr<ID3D11ComputeShader> shader;
     Microsoft::WRL::ComPtr<ID3D11Buffer> constants;
 public:
-    void draw(ID3D11Device* device,ID3D11DeviceContext* context,
-            ID3D11ShaderResourceView* source,ID3D11ShaderResourceView* below,
-            ID3D11UnorderedAccessView* target,Rect area,float scale,
-            float cx,float cy,float source_x,float source_y,
-            ID3D11ShaderResourceView* key=nullptr,unsigned color_key=0){
+    void prepare_assets(ID3D11Device* device){
         auto check=[](HRESULT h){if(FAILED(h))throw std::runtime_error("projected layer failed");};
-        if(!shader){
+        if(!shader || !constants){
             char const* code=R"(
 Texture2D<uint> source_image:register(t0),below_image:register(t1),key_image:register(t2);
 RWTexture2D<uint> output_image:register(u0);
@@ -37,6 +33,13 @@ float4 pixel(int2 p){uint w,h;source_image.GetDimensions(w,h);
             D3D11_BUFFER_DESC d={};d.ByteWidth=48;d.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
             check(device->CreateBuffer(&d,nullptr,&constants));
         }
+    }
+    void draw(ID3D11Device* device,ID3D11DeviceContext* context,
+            ID3D11ShaderResourceView* source,ID3D11ShaderResourceView* below,
+            ID3D11UnorderedAccessView* target,Rect area,float scale,
+            float cx,float cy,float source_x,float source_y,
+            ID3D11ShaderResourceView* key=nullptr,unsigned color_key=0){
+        prepare_assets(device);
         struct Parameters{float mapping[4],region[4],offset[2];unsigned blend,key_mode;} p={
             {cx,cy,scale,0},{float(area.left),float(area.top),float(area.right-area.left),float(area.bottom-area.top)},
             {source_x,source_y},below?1u:0u,key?65536u|(color_key&65535u):0u};

@@ -51,7 +51,11 @@ void exact_diff(){
     current[0].city_size=2;assert(diff.build(old,frame,selection,same,admitted) && diff.entering==2);
     current[0]=old[0];current[0].anchor_x+=17;current[0].anchor_y+=9;
     current[0].tile_flags&=~C3X_RENDERER_TILE_EXPLORED;
-    assert(diff.build(old,frame,selection,same,admitted) && diff.entering==2);
+    // Losing body permission retires the old occurrence; it cannot enter
+    // merely because the native fog traversal still provides its anchor.
+    assert(diff.build(old,frame,selection,same,admitted));
+    assert(diff.required==3 && diff.entering==1 && diff.leaving==2);
+    assert(diff.previous[0]==CanonicalMembershipDiff::absent && !diff.keep[0]);
     current[0]=old[0];current[0].anchor_x+=17;current[0].anchor_y+=10;
     assert(!diff.build(old,frame,selection,same,admitted)); // inconsistent native lattice.
     current[0].anchor_y-=1;

@@ -3,6 +3,7 @@
 #include "object_preparation.h"
 #include "render_core/captured_scene.h"
 #include "render_core/prepared_world_validity.h"
+#include <type_traits>
 namespace c3x_renderer {
 // One selected tile component is the scheduling and immutable GPU allocation unit.
 // Assets live until the device/content reset barrier; mutable world inputs are owned.
@@ -113,6 +114,7 @@ struct WorldPreparationInput {
     bool backing_only=false;
     std::shared_ptr<WorldPreparationSources const> sources;
     WorldPreparationKind kind=WorldPreparationKind::combined;
+    bool retain_prepared=false;
 };
 struct PreparedWorld {
     std::unique_ptr<fidelity::PreparedGround> ground;
@@ -142,6 +144,30 @@ inline WorldPreparationKey world_preparation_key(std::array<std::uint64_t,20> co
     key.identity[20]=canonical?0:frame.tile_width;key.identity[21]=canonical?0:frame.tile_height;
     key.identity[22]=canonical?0:frame.target_width;key.identity[23]=canonical?0:frame.target_height;
     key.identity[24]=std::uint64_t(kind);return key;
+}
+inline WorldPreparationKey object_world_preparation_key(std::array<std::uint64_t,20> const& context,
+        c3x_renderer_frame_v1 const& frame,bool canonical,c3x_renderer_tile_v1 const& tile){
+    auto key=world_preparation_key(context,frame,canonical,WorldPreparationKind::objects);
+    auto facts=render_core::CapturedScene::object_inputs(tile);
+    // Scalars use fixed little-endian words; labels use their exact bytes.
+    // Reject a future ABI with padding rather than silently keying padding.
+    static_assert(std::has_unique_object_representations<c3x_renderer_tile_v1>::value,"object input padding");
+    constexpr auto text_begin=offsetof(c3x_renderer_tile_v1,resource_name);
+    constexpr auto text_end=offsetof(c3x_renderer_tile_v1,barbarian_tribe_id);
+    static_assert(text_begin%4==0 && sizeof(facts)==text_end+8,"object input layout");
+    key.recipe.words.reserve((sizeof(facts)+7)/8);
+    unsigned shift=0;
+    auto byte=[&](unsigned char value){
+        if(!shift)key.recipe.words.push_back(0);
+        key.recipe.words.back()|=std::uint64_t(value)<<shift;shift=(shift+8)%64;
+    };
+    auto scalar=[&](std::uint32_t value){for(unsigned n=0;n<4;++n)byte(static_cast<unsigned char>(value>>(8*n)));};
+    auto input=reinterpret_cast<unsigned char const*>(&facts);
+    for(std::size_t at=0;at<text_begin;at+=4){std::uint32_t value=0;std::memcpy(&value,input+at,4);scalar(value);}
+    for(std::size_t at=text_begin;at<text_end;++at)byte(input[at]);
+    scalar(std::uint32_t(facts.barbarian_tribe_id));scalar(facts.city_site_grade);
+    // Hash selects the map bucket; full normalized words resolve collisions.
+    key.identity[17]=key.recipe.lookup_hash();return key;
 }
 using WorldPreparation=render_core::ContentPreparation<WorldPreparationKey,WorldPreparationInput,PreparedWorld>;
 }

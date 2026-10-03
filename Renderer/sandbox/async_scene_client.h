@@ -177,7 +177,14 @@ public:
     auto stats(){return enabled?publication.setup([this]{return transport.stats();}):transport.stats();}
     int definitions(char const* root,char const* fallback,char const* scenario,char const* custom){
         camera.reset();displayed.reset();published_frame.reset();++session;
-        return enabled?publication.setup([&]{clear();return transport.definitions(root,fallback,scenario,custom);}):transport.definitions(root,fallback,scenario,custom);
+        if(!enabled)return transport.definitions(root,fallback,scenario,custom);
+        // Admission lets native setup forms progress. The existing loading-scope
+        // setup barrier joins actual source readiness before world capture.
+        auto input=transport.definition_input(root,fallback,scenario,custom);
+        auto bytes=input.capacity();
+        return post(bytes,[this,input=std::move(input)]{
+            clear();require_result(transport.definitions(input),"definition-preparation");
+        },0,"definition-preparation");
     }
     int pack(char const* path){
         camera.reset();displayed.reset();published_frame.reset();++session;
@@ -270,17 +277,22 @@ public:
         // A game-thread CPU lease cannot be satisfied asynchronously. Report the
         // unsupported ownership transition; never read the custom map back.
         if(request.action==C3X_GPU_READBACK)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
-        auto batch=std::make_shared<ImageBatch>();batch->operations.resize(1);
-        auto& operation=batch->operations[0];auto& packet=operation.image;packet.value=request;
-        if(request.pixel_count)packet.pixels.assign(request.pixels,request.pixels+request.pixel_count);
-        if(request.command_count)packet.commands.assign(request.commands,request.commands+request.command_count);
-        packet.bind();Id created=request.action==C3X_GPU_CREATE?++next_image:0;operation.created=created;
-        auto bytes=sizeof(packet)+packet.pixels.size()*4+packet.commands.size()*sizeof(packet.commands[0]);
-        bool accepted=publication.post_group(bytes,ImageBatch::work(request),2,batch,
+        auto bytes=sizeof(c3x_inputs::Images)+std::size_t(request.pixel_count)*4+
+            std::size_t(request.command_count)*sizeof(c3x_renderer_gpu_command_v1);
+        Id created=0;
+        bool accepted=publication.post_group_wait<ImageBatch>(bytes,ImageBatch::work(request),2,[&]{
+            auto batch=std::make_shared<ImageBatch>();batch->operations.resize(1);
+            auto& operation=batch->operations[0];auto& packet=operation.image;packet.value=request;
+            if(request.pixel_count)packet.pixels.assign(request.pixels,request.pixels+request.pixel_count);
+            if(request.command_count)packet.commands.assign(request.commands,request.commands+request.command_count);
+            packet.bind();created=request.action==C3X_GPU_CREATE?next_image+1:0;operation.created=created;
+            return batch;
+        },
             [this](ImageBatch& value){execute_images(value);},
             [](ImageBatch& target,ImageBatch& incoming){target.operations.push_back(std::move(incoming.operations[0]));},
             ImageBatch::join_bytes,ImageBatch::work_limit,ImageBatch::operation_limit,"images");
         transport.publication_pressure(publication.status().records);
+        if(accepted&&created)next_image=created;
         result={sizeof(result)};result.image=created?created:request.image;
         return accepted?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_DEVICE_ERROR;
     }
@@ -314,11 +326,24 @@ public:
             return transport.seed_world_scope(value);
         }):transport.seed_world_scope(request);
     }
+    int seed_world_loading_scope(c3x_renderer_camera_request_v1 const& request){
+        auto frame=copy_frame(*request.frame);auto identity=request.identity;
+        return enabled?publication.setup([this,frame,identity]{
+            c3x_renderer_camera_request_v1 value={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(value),&frame->value,identity};
+            return transport.seed_world_scope(value,true);
+        }):transport.seed_world_scope(request,true);
+    }
+    int prepare_world_loading(c3x_renderer_camera_identity_v1 const& identity){
+        return enabled?publication.setup([this,identity]{return transport.prepare_world_loading(identity);}):transport.prepare_world_loading(identity);
+    }
     int world_seed_query(c3x_renderer_world_page_v1& page){
         return enabled?publication.setup([&]{return transport.world_query(page);}):transport.world_query(page);
     }
     int world_seed_submit(c3x_renderer_world_page_v1 const& page,int code){
         return enabled?publication.setup([&]{return transport.world_submit(page,code);}):transport.world_submit(page,code);
+    }
+    int arm_world_changes(c3x_renderer_camera_identity_v1 const& identity){
+        return enabled?publication.setup([this,identity]{return transport.arm_world_changes(identity);}):transport.arm_world_changes(identity);
     }
     int world_query(c3x_renderer_world_page_v1& page){return enabled?query_page(world_page,page,false):transport.world_query(page);}
     int world_delta_scope(c3x_renderer_world_page_v1& page){
@@ -353,6 +378,16 @@ public:
             if(!value.action){value.ticket=ticket(value.ticket);value.image=image(value.image);}
             Shared unused;require_result(transport.present(value,unused),"present");policy=transport.visual_policy(3);
         },0,"present");
+    }
+    // Startup joins the same reliable publication prefix. The transport owns
+    // this copied request until the exact committed front has been presented.
+    template<class Shared>int present_required(c3x_renderer_gpu_present_v1 value,Shared& frame){
+        if(!enabled)return transport.present_required(value,frame);
+        frame={};return publication.setup([this,value,&frame]()mutable{
+            value.ticket=ticket(value.ticket);value.image=image(value.image);
+            int code=transport.present_required(value,frame);policy=transport.visual_policy(3);
+            return code;
+        });
     }
     template<class Shared>int visual(std::int64_t ticks,std::int64_t frequency,Shared& frame){
         if(!enabled)return transport.visual(ticks,frequency,frame);

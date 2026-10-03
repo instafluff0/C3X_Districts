@@ -117,9 +117,66 @@ struct UnitContributionView {
     double shadow_x=0,shadow_y=0;
     std::vector<UnitContributionRect> receivers; // already include water distortion/filter reach
 };
+// A current palette gives a tighter conservative certificate than the
+// all-action admission sphere. Coordinates are pose-local reflected pixels;
+// placement and water overlap are evaluated separately for each occurrence.
+struct UnitReflectionBounds {
+    UnitContributionRect local;
+    bool complete=true,has_points=false;
+    template<class Points> void append(Points const& points,std::size_t first,
+            bool known,double weight_low,double weight_high,double offset_z){
+        if(!known||first>=points.size()||!std::isfinite(weight_low)||!std::isfinite(weight_high)||
+            weight_low<=0||weight_high<weight_low||!std::isfinite(offset_z)){complete=false;return;}
+        constexpr double h=150.*128/224;
+        UnitContributionRect part{INFINITY,INFINITY,-INFINITY,-INFINITY};
+        for(auto i=first;i<points.size();++i){auto const& p=points[i];
+            double x=(double(p[0])-p[1])*64,y=(double(p[0])+p[1])*32+double(p[2])*h;
+            if(!std::isfinite(x)||!std::isfinite(y)){complete=false;return;}
+            part.left=std::min(part.left,x);part.right=std::max(part.right,x);
+            part.top=std::min(part.top,y);part.bottom=std::max(part.bottom,y);
+        }
+        // The decoder permits small weight-sum error. The weighted palette
+        // position scales by that sum; the model's Z offset is applied after it.
+        double y0=offset_z*h;
+        auto weighted=[](double lo,double hi,double a,double b){return std::array<double,2>{
+            std::min({lo*a,lo*b,hi*a,hi*b}),std::max({lo*a,lo*b,hi*a,hi*b})};};
+        auto x=weighted(part.left,part.right,weight_low,weight_high);
+        auto y=weighted(part.top-y0,part.bottom-y0,weight_low,weight_high);
+        part={x[0],y[0]+y0,x[1],y[1]+y0};
+        double margin=1e-3+1e-4*std::max({std::abs(part.left),std::abs(part.top),std::abs(part.right),std::abs(part.bottom)});
+        if(!std::isfinite(margin)){complete=false;return;}
+        part.left-=margin;part.top-=margin;part.right+=margin;part.bottom+=margin;
+        if(!has_points)local=part;
+        else {local.left=std::min(local.left,part.left);local.top=std::min(local.top,part.top);
+            local.right=std::max(local.right,part.right);local.bottom=std::max(local.bottom,part.bottom);}
+        has_points=true;
+    }
+    bool overlaps(UnitContributionView const& view,double anchor_x,double anchor_y,
+            double projection_scale,double ground_pixels)const{
+        // Hand-authored plans and unavailable certificates retain the early
+        // conservative choice. No missing metadata may discard a reflection.
+        if(!complete||!has_points||local.left>local.right||local.top>local.bottom||!view.width||!view.height||!std::isfinite(view.zoom)||view.zoom<1||view.zoom>3||
+            !std::isfinite(anchor_x)||!std::isfinite(anchor_y)||!std::isfinite(projection_scale)||projection_scale<=0||
+            !std::isfinite(ground_pixels))return true;
+        double cx=view.width/2,cy=view.height/2;
+        UnitContributionRect screen{
+            cx+(anchor_x+local.left*projection_scale-cx)*view.zoom+8-4,
+            cy+(anchor_y+ground_pixels+local.top*projection_scale-cy)*view.zoom+8-4,
+            cx+(anchor_x+local.right*projection_scale-cx)*view.zoom+8+4,
+            cy+(anchor_y+ground_pixels+local.bottom*projection_scale-cy)*view.zoom+8+4};
+        if(!std::isfinite(screen.left)||!std::isfinite(screen.top)||!std::isfinite(screen.right)||!std::isfinite(screen.bottom))return true;
+        for(auto const& receiver:view.receivers){
+            if(!std::isfinite(receiver.left)||!std::isfinite(receiver.top)||!std::isfinite(receiver.right)||!std::isfinite(receiver.bottom)||
+                receiver.left>receiver.right||receiver.top>receiver.bottom)return true;
+            if(screen.left<receiver.right&&screen.right>receiver.left&&screen.top<receiver.bottom&&screen.bottom>receiver.top)return true;
+        }
+        return false;
+    }
+};
 struct UnitContributionPlan {
     struct Entry {unsigned candidate=0,mask=0;};
     std::vector<Entry> entries;
+    UnitContributionView view; // receiver/camera snapshot for current-pose refinement
     unsigned main=0,shadow=0,reflection=0;
     bool valid=true;
     static bool overlap(UnitContributionRect const& a,UnitContributionRect const& b){
@@ -160,7 +217,7 @@ struct UnitContributionPlan {
         return mask;
     }
     static UnitContributionPlan build(std::vector<UnitContributionCandidate> const& candidates,UnitContributionView const& view){
-        UnitContributionPlan plan;
+        UnitContributionPlan plan;plan.view=view;
         for(unsigned i=0;i<candidates.size();++i){auto mask=select(candidates[i],view);if(!mask)continue;
             plan.entries.push_back({i,mask});plan.main+=bool(mask&unit_main_body);
             plan.shadow+=bool(mask&unit_ground_shadow);plan.reflection+=bool(mask&unit_reflection);}

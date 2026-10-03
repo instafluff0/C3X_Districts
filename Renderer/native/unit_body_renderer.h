@@ -38,8 +38,8 @@ public:
     std::size_t resident_pose_bytes=0;
     std::uint64_t resident_pose_builds=0,resident_pose_hits=0,output_readbacks=0;
     std::uint64_t gpu_shadow_passes=0,gpu_shadow_input_bytes=0,cpu_shadow_upload_bytes=0;
-    struct Mesh { std::shared_ptr<AnimationMesh const> animation; ID3D11Buffer *indices=nullptr; std::string path; std::size_t bytes=0; std::uint64_t used=0; bool failed=false; render_core::UnitMeshContributionBounds contribution_bounds; bool contribution_attempted=false; };
-    struct Texture { std::vector<std::uint8_t> dds; ID3D11ShaderResourceView *view=nullptr; std::string path; std::size_t bytes=0; std::uint64_t used=0; bool failed=false; };
+    struct Mesh { std::shared_ptr<AnimationMesh const> animation; ID3D11Buffer *indices=nullptr; std::string path; std::size_t bytes=0; std::uint64_t used=0; bool failed=false; render_core::UnitMeshContributionBounds contribution_bounds; bool contribution_attempted=false,source_pinned=false,source_motion_checked=false,source_motion_compatible=false; };
+    struct Texture { std::vector<std::uint8_t> dds; ID3D11ShaderResourceView *view=nullptr; std::string path; std::size_t bytes=0; std::uint64_t used=0; bool failed=false,source_pinned=false; };
     struct Part { unsigned mesh=0,texture=0,address=0; unsigned material_textures[4]={UINT32_MAX,UINT32_MAX,UINT32_MAX,UINT32_MAX}; float material_model=0; float tint[3]={1,1,1}; float mask=0,strength=0,cutout=0; };
     struct Action { std::string name; bool loop=false,ambient=false,allow_exit_clip=false;
         float duration=0;unsigned frames=0;std::vector<Part> parts; };
@@ -47,6 +47,19 @@ public:
     std::vector<Mesh> meshes;
     std::vector<Texture> textures;
     std::vector<Unit> units;
+    // Explicit loading admission allowances; the source union remains pinned
+    // independently of the smaller current-frame action leases.
+    std::size_t payload_limit=96u*1024u*1024u,source_gpu_limit=192u*1024u*1024u;
+    bool source_admission=false;
+    std::size_t payload_budget()const{return !source_admission?payload_limit:
+        (payload_limit>=contribution_bytes?payload_limit-contribution_bytes:0);}
+    bool adopt_contribution_bounds(unsigned index,render_core::UnitMeshContributionBounds&& proof){
+        if(index>=meshes.size() || !proof.known)return false;
+        auto& mesh=meshes[index];if(mesh.contribution_bounds.known)return true;
+        auto charge=proof.bytes();if(charge>contribution_limit-contribution_bytes)return false;
+        mesh.contribution_bounds=std::move(proof);mesh.contribution_attempted=true;
+        contribution_bytes+=charge;++contribution_sequence;return true;
+    }
     // Compact all-clip proof survives payload eviction, with a separate hard
     // allowance. It owns neither decoded animations nor GPU resources.
     std::size_t contribution_bytes=0;
@@ -166,7 +179,8 @@ public:
         {std::lock_guard<std::recursive_mutex> guard(cache_mutex);cache.clear();cache_bytes=0;}pixels.clear();release(batch_readback);
     }
     ~UnitBodyRenderer() {reset_gpu();reset_blit();}
-    void clear() {reset_gpu();meshes.clear();textures.clear();units.clear();resident_bytes=0;payload_serial=0;contribution_bytes=0;++contribution_sequence;++catalogue_generation;}
+    void clear() {reset_gpu();meshes.clear();textures.clear();units.clear();resident_bytes=0;payload_serial=0;contribution_bytes=0;
+        payload_limit=96u*1024u*1024u;source_gpu_limit=192u*1024u*1024u;source_admission=false;++contribution_sequence;++catalogue_generation;}
 
     // A completed pose is CPU-owned and needs neither the D3D context nor a
     // map-worker takeover. The caller serializes this unit sub-owner while a

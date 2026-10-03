@@ -141,8 +141,14 @@ public:
     int camera_cancel(c3x_renderer_i64 ticket){
         std::lock_guard<std::mutex> lock(gate);return client.camera_cancel(ticket);
     }
-    int seed_world_scope(c3x_renderer_camera_request_v1 const& request){
-        std::lock_guard<std::mutex> lock(gate);unit_facts.clear();return client.seed_world_scope(request);
+    int seed_world_scope(c3x_renderer_camera_request_v1 const& request,bool reset_units=true,bool loading=false){
+        std::lock_guard<std::mutex> lock(gate);if(reset_units)unit_facts.clear();return loading?client.seed_world_loading_scope(request):client.seed_world_scope(request);
+    }
+    int prepare_world_loading(c3x_renderer_camera_identity_v1 const& identity){
+        std::lock_guard<std::mutex> lock(gate);return client.prepare_world_loading(identity);
+    }
+    int arm_world_changes(c3x_renderer_camera_identity_v1 const& identity){
+        std::lock_guard<std::mutex> lock(gate);return client.arm_world_changes(identity);
     }
     int world_seed_query(c3x_renderer_world_page_v1& page){
         std::lock_guard<std::mutex> lock(gate);return client.world_seed_query(page);
@@ -227,6 +233,7 @@ public:
     }
     int present(c3x_renderer_gpu_present_v1 request){
         std::lock_guard<std::mutex> lock(gate);
+        bool required=request.action==3;if(required)request.action=0;
         char phase_option[4]={};bool phase_probe=GetEnvironmentVariableA("C3X_RENDERER_PRESENT_PHASES",phase_option,sizeof(phase_option))==1&&phase_option[0]=='1';
         LARGE_INTEGER phase_begin={},phase_remote={},phase_adopt={},phase_end={},phase_rate={};
         if(phase_probe){QueryPerformanceCounter(&phase_begin);QueryPerformanceFrequency(&phase_rate);}
@@ -279,7 +286,7 @@ public:
                     return C3X_RENDERER_RESULT_BAD_ARGUMENT;
             }
         }
-        SharedFrame frame;int code=client.present(request,frame);
+        SharedFrame frame;int code=required?client.present_required(request,frame):client.present(request,frame);
         if(code==C3X_RENDERER_RESULT_OK&&direct_active&&request.action==0&&!direct_surface.activate())
             code=C3X_RENDERER_RESULT_DEVICE_ERROR;
         if(code==C3X_RENDERER_RESULT_DEVICE_ERROR&&direct_active&&request.action==0){

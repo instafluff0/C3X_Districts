@@ -37,7 +37,7 @@ struct Cities {bool ready=false;
 struct State {
  bool cache_valid=false,environment_profile=true,fidelity_profile=true,city_profile=true;
  bool wave_attempted=false,wave_ready=false;
- int device=1,wave_views[3]={};std::string fidelity_root="packs",shader_root="shaders";
+ int device=1,wave_views[3]={};std::string fidelity_root="packs",natural_pack_root="natural",shader_root="shaders";
  struct {bool configured=true;}terrain_textures[2];
  struct Trace {double milliseconds(long long n){return double(n);}void write(char const*,char const*,bool){}}trace;
  Natural natural;Reflection reflection;Cities cities;

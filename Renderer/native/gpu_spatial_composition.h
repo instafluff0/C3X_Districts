@@ -33,7 +33,7 @@ class SpatialComposition {
     static bool empty(Rect r){return r.left>=r.right||r.top>=r.bottom;}
     static bool same(Rect a,Rect b){return a.left==b.left&&a.top==b.top&&a.right==b.right&&a.bottom==b.bottom;}
     void program(){
-        if(shader)return;
+        if(shader && constants)return;
         char const* source=R"(
 struct Op {int4 area;int4 source;int4 auxiliary;uint kind,color,target,source_page,auxiliary_page,flags,mode,padding;};
 struct Tile {uint x,y,offset,count;};
@@ -176,6 +176,7 @@ public:
         explicit operator bool()const{return !original.empty();}
     };
     SpatialComposition(ID3D11Device* d,ID3D11DeviceContext* c):device(d),context(c){}
+    void prepare_assets(){program();}
     void share_storage(CompositionStorage const& tracker){physical=tracker;}
     std::uint64_t bytes()const{return allocations.bytes();}
     std::uint64_t dispatches()const{return dispatches_;}

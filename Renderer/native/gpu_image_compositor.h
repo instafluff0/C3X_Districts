@@ -29,6 +29,7 @@ class Compositor {
     struct Image {Id id=0;unsigned width=0,height=0;Format format=Format::rgb555;std::uint64_t revision=0;bool cpu_current=false,read_only=false,borrowed=false;CompositionStorage::Lease storage;
         ComPtr<ID3D11Texture2D> texture;ComPtr<ID3D11ShaderResourceView> read;ComPtr<ID3D11UnorderedAccessView> write;};
     struct Constants {int area[4],offset[2];unsigned mode,color;};
+    struct ImageConstants {int area[4],target[4],source[4];unsigned mode,key,flags,padding;};
     ID3D11Device* device;ID3D11DeviceContext* context;
     // The native adapter retains 256 immutable sprite sources, up to 64
     // native/detail images, 64 text images and two lookup tables. Keep handles
@@ -151,8 +152,8 @@ class Compositor {
         return x>=0&&y>=0&&x+(r.right-r.left)<=s->width&&y+(r.bottom-r.top)<=s->height;
     }
     bool valid(Command const& command,Image* direct=nullptr){return valid_resolved(command,[&](Id id){return find(id);},direct);}
-    void unit_over(Command const& op,Rect r,c3x_renderer::UnitSceneSample const* scene=nullptr){
-        if(!scene && !unit_shader){
+    void prepare_unit_program(){
+        if(!unit_shader){
             char const* source=R"(
 cbuffer Params:register(b0){int4 area;int2 offset;uint mode;uint color;};
 Texture2D<uint> body:register(t0);Texture2D<uint> native_below:register(t1);Texture2D<uint> native_ground:register(t2);
@@ -188,23 +189,8 @@ uint blend(uint source,uint below,uint alpha){
             ComPtr<ID3DBlob> code,error;checked(D3DCompile(source,std::strlen(source),"native unit composition",nullptr,nullptr,"main","cs_5_0",D3DCOMPILE_ENABLE_STRICTNESS,0,&code,&error));
             checked(device->CreateComputeShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,&unit_shader));
         }
-        auto d=find(op.destination),b=find(op.background),detail=find(op.detail),bd=find(op.background_detail);
-        unbind();D3D11_BOX box={unsigned(r.left),unsigned(r.top),0,unsigned(r.right),unsigned(r.bottom),1};
-        // Unit snapshots use rectangle-local coordinates; scratch capacity follows
-        // the selected body/shadow extent, not the entire native map surface.
-        context->CopySubresourceRegion(scratch.texture.Get(),0,0,0,0,d->texture.Get(),0,&box);++counters.snapshots;++counters.interpreter_copies;counters.interpreter_copied_pixels+=std::uint64_t(r.right-r.left)*(r.bottom-r.top);
-        if(detail){context->CopySubresourceRegion(detail_scratch.texture.Get(),0,0,0,0,detail->texture.Get(),0,&box);++counters.snapshots;++counters.interpreter_copies;counters.interpreter_copied_pixels+=std::uint64_t(r.right-r.left)*(r.bottom-r.top);}
-        auto ground=b==d?&scratch:b;auto full_ground=bd==detail?&detail_scratch:bd;
-        ID3D11ShaderResourceView* reads[5]={scene?scene->body:find(op.source)->read.Get(),scratch.read.Get(),ground->read.Get(),detail?detail_scratch.read.Get():nullptr,bd?full_ground->read.Get():nullptr};
-        ID3D11UnorderedAccessView* writes[2]={d->write.Get(),detail?detail->write.Get():nullptr};
-        Constants p={{r.left,r.top,r.right,r.bottom},{int(std::int64_t(op.source_x)-op.area.left),int(std::int64_t(op.source_y)-op.area.top)},d->format==Format::rgb565?1u:0u,(detail?1u:0u)|(bd?2u:0u)|(b==d?4u:0u)|(bd&&bd==detail?8u:0u)};
-        context->UpdateSubresource(constants.Get(),0,nullptr,&p,0,0);auto cb=constants.Get();context->CSSetConstantBuffers(0,1,&cb);
-        context->CSSetShaderResources(0,5,reads);context->CSSetUnorderedAccessViews(0,2,writes,nullptr);
-        if(scene){unit_scene.draw(device,context,*scene,unsigned(r.right-r.left),unsigned(r.bottom-r.top));++counters.interpreter_dispatches;}
-        else {context->CSSetShader(unit_shader.Get(),nullptr,0);context->Dispatch(unsigned(r.right-r.left+7)/8,unsigned(r.bottom-r.top+7)/8,1);++counters.interpreter_dispatches;}unbind();
-        d->cpu_current=false;if(detail)detail->cpu_current=false;++counters.commands;
     }
-    void native_lookup(Command const& op,Rect r){
+    void prepare_lookup_program(){
         if(!lookup_shader){
             char const* program=R"(
 cbuffer Params:register(b0){int4 area;int2 offset;uint mode;uint flags;};
@@ -246,17 +232,8 @@ float3 graded(uint full,uint block){
             ComPtr<ID3DBlob> code,error;checked(D3DCompile(program,std::strlen(program),"native lookup composition",nullptr,nullptr,"main","cs_5_0",D3DCOMPILE_ENABLE_STRICTNESS,0,&code,&error));
             checked(device->CreateComputeShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,&lookup_shader));
         }
-        auto d=find(op.destination),b=find(op.background),detail=find(op.detail),bd=find(op.background_detail);unbind();
-        Constants params={{r.left,r.top,r.right,r.bottom},{op.program?op.source_x-op.area.left:0,op.program?op.source_y-op.area.top:0},d->format==Format::rgb565?1u:0u,
-            (detail?1u:0u)|(bd?2u:0u)|(op.program?4u:0u)|(b==d?8u:0u)|(op.color==32?16u:op.color<<8)};
-        context->UpdateSubresource(constants.Get(),0,nullptr,&params,0,0);auto cb=constants.Get();context->CSSetConstantBuffers(0,1,&cb);
-        ID3D11ShaderResourceView* reads[4]={find(op.source)->read.Get(),b==d?nullptr:b->read.Get(),bd&&bd!=detail?bd->read.Get():nullptr,op.program?find(op.program)->read.Get():nullptr};
-        ID3D11UnorderedAccessView* writes[2]={d->write.Get(),detail?detail->write.Get():nullptr};
-        context->CSSetShaderResources(0,4,reads);context->CSSetUnorderedAccessViews(0,2,writes,nullptr);context->CSSetShader(lookup_shader.Get(),nullptr,0);
-        context->Dispatch(unsigned(r.right-r.left+7)/8,unsigned(r.bottom-r.top+7)/8,1);++counters.interpreter_dispatches;unbind();
-        d->cpu_current=false;if(detail)detail->cpu_current=false;++counters.commands;
     }
-    void native_blend(Command const& op,Rect r){
+    void prepare_blend_program(){
         if(!blend_shader){
             char const* program=R"(
 cbuffer Params:register(b0){int4 area;int2 offset;uint mode;uint flags;};
@@ -307,25 +284,9 @@ uint packed(uint3 rgb){uint3 q=rgb>>uint3(3,mode==1?2:3,3);return q.x|(q.y<<5)|(
             ComPtr<ID3DBlob> code,error;checked(D3DCompile(program,std::strlen(program),"native HUD blend",nullptr,nullptr,"main","cs_5_0",D3DCOMPILE_ENABLE_STRICTNESS,0,&code,&error));
             checked(device->CreateComputeShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,&blend_shader));
         }
-        auto d=find(op.destination),b=find(op.background),detail=find(op.detail),bd=find(op.background_detail);unbind();
-        D3D11_BOX box={unsigned(r.left),unsigned(r.top),0,unsigned(r.right),unsigned(r.bottom),1};
-        if(b==d){context->CopySubresourceRegion(scratch.texture.Get(),0,r.left,r.top,0,b->texture.Get(),0,&box);b=&scratch;++counters.snapshots;++counters.interpreter_copies;counters.interpreter_copied_pixels+=std::uint64_t(r.right-r.left)*(r.bottom-r.top);}
-        if(bd&&bd==detail){context->CopySubresourceRegion(detail_scratch.texture.Get(),0,r.left,r.top,0,bd->texture.Get(),0,&box);bd=&detail_scratch;++counters.snapshots;++counters.interpreter_copies;counters.interpreter_copied_pixels+=std::uint64_t(r.right-r.left)*(r.bottom-r.top);}
-        Constants params={{r.left,r.top,r.right,r.bottom},{int(std::int64_t(op.source_x)-op.area.left),int(std::int64_t(op.source_y)-op.area.top)},d->format==Format::rgb565?1u:0u,(detail?1u:0u)|(bd?2u:0u)|(op.color==4?32u:op.color==3?16u:op.color==2?8u:op.color?4u:0u)};
-        if(op.color==2){params.offset[0]=op.source_width;params.offset[1]=op.source_height;}
-        context->UpdateSubresource(constants.Get(),0,nullptr,&params,0,0);auto cb=constants.Get();context->CSSetConstantBuffers(0,1,&cb);
-        ID3D11ShaderResourceView* reads[3]={op.color==2?nullptr:find(op.source)->read.Get(),b->read.Get(),bd?bd->read.Get():nullptr};
-        ID3D11UnorderedAccessView* writes[2]={d->write.Get(),detail?detail->write.Get():nullptr};
-        context->CSSetShaderResources(0,3,reads);context->CSSetUnorderedAccessViews(0,2,writes,nullptr);context->CSSetShader(blend_shader.Get(),nullptr,0);
-        context->Dispatch(unsigned(r.right-r.left+7)/8,unsigned(r.bottom-r.top+7)/8,1);++counters.interpreter_dispatches;unbind();
-        d->cpu_current=false;if(detail)detail->cpu_current=false;++counters.commands;
     }
-    void native_image(Command const& op,Rect r){
-        // JGL StretchBlt uses BLACKONWHITE. Shrink combines the pixels preceding
-        // each center sample; enlargement takes the center sample alone. Clip
-        // after deriving the original mapping, so scrolling preserves its phase.
-        struct ImageConstants {int area[4],target[4],source[4];unsigned mode,key,flags,padding;};
-        if(!image_shader){
+    void prepare_image_program(){
+        if(!image_shader || !image_constants){
             char const* program=R"(
 cbuffer Params:register(b0){int4 area;int4 target;int4 source;uint mode;uint key;uint flags;uint padding;};
 Texture2D<uint> native_input:register(t0);Texture2D<uint> detail_input:register(t1);
@@ -358,6 +319,72 @@ uint expanded(uint c){uint b=((c&31)<<3)|((c&31)>>2),r,g;
             D3D11_BUFFER_DESC desc={};desc.ByteWidth=sizeof(ImageConstants);desc.Usage=D3D11_USAGE_DEFAULT;desc.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
             checked(device->CreateBuffer(&desc,nullptr,&image_constants));
         }
+    }
+    void prepare_import_program(){
+        if(!import_shader){
+            std::string hlsl=std::string(R"(
+cbuffer Params:register(b0){int4 area;int2 offset;uint mode;uint color;};
+Texture2D<float4> input_image:register(t0);RWTexture2D<uint> output_image:register(u0);
+)")+c3x_renderer::scene_detail_filter()+R"(
+[numthreads(8,8,1)] void main(uint3 at:SV_DispatchThreadID){
+ uint w,h;output_image.GetDimensions(w,h);if(at.x>=w||at.y>=h)return;
+ uint4 c=uint4(round(saturate(scene_detail(int2(at.xy)+offset,float(color)/65536.))*255.0));
+ output_image[at.xy]=c.b|(c.g<<8)|(c.r<<16)|(c.a<<24);
+})";
+            ComPtr<ID3DBlob> code,error;checked(D3DCompile(hlsl.c_str(),hlsl.size(),"resident map import",nullptr,nullptr,"main","cs_5_0",D3DCOMPILE_ENABLE_STRICTNESS,0,&code,&error));
+            checked(device->CreateComputeShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,&import_shader));
+        }
+    }
+    void unit_over(Command const& op,Rect r,c3x_renderer::UnitSceneSample const* scene=nullptr){
+        if(!scene)prepare_unit_program();
+        auto d=find(op.destination),b=find(op.background),detail=find(op.detail),bd=find(op.background_detail);
+        unbind();D3D11_BOX box={unsigned(r.left),unsigned(r.top),0,unsigned(r.right),unsigned(r.bottom),1};
+        // Unit snapshots use rectangle-local coordinates; scratch capacity follows
+        // the selected body/shadow extent, not the entire native map surface.
+        context->CopySubresourceRegion(scratch.texture.Get(),0,0,0,0,d->texture.Get(),0,&box);++counters.snapshots;++counters.interpreter_copies;counters.interpreter_copied_pixels+=std::uint64_t(r.right-r.left)*(r.bottom-r.top);
+        if(detail){context->CopySubresourceRegion(detail_scratch.texture.Get(),0,0,0,0,detail->texture.Get(),0,&box);++counters.snapshots;++counters.interpreter_copies;counters.interpreter_copied_pixels+=std::uint64_t(r.right-r.left)*(r.bottom-r.top);}
+        auto ground=b==d?&scratch:b;auto full_ground=bd==detail?&detail_scratch:bd;
+        ID3D11ShaderResourceView* reads[5]={scene?scene->body:find(op.source)->read.Get(),scratch.read.Get(),ground->read.Get(),detail?detail_scratch.read.Get():nullptr,bd?full_ground->read.Get():nullptr};
+        ID3D11UnorderedAccessView* writes[2]={d->write.Get(),detail?detail->write.Get():nullptr};
+        Constants p={{r.left,r.top,r.right,r.bottom},{int(std::int64_t(op.source_x)-op.area.left),int(std::int64_t(op.source_y)-op.area.top)},d->format==Format::rgb565?1u:0u,(detail?1u:0u)|(bd?2u:0u)|(b==d?4u:0u)|(bd&&bd==detail?8u:0u)};
+        context->UpdateSubresource(constants.Get(),0,nullptr,&p,0,0);auto cb=constants.Get();context->CSSetConstantBuffers(0,1,&cb);
+        context->CSSetShaderResources(0,5,reads);context->CSSetUnorderedAccessViews(0,2,writes,nullptr);
+        if(scene){unit_scene.draw(device,context,*scene,unsigned(r.right-r.left),unsigned(r.bottom-r.top));++counters.interpreter_dispatches;}
+        else {context->CSSetShader(unit_shader.Get(),nullptr,0);context->Dispatch(unsigned(r.right-r.left+7)/8,unsigned(r.bottom-r.top+7)/8,1);++counters.interpreter_dispatches;}unbind();
+        d->cpu_current=false;if(detail)detail->cpu_current=false;++counters.commands;
+    }
+    void native_lookup(Command const& op,Rect r){
+        prepare_lookup_program();
+        auto d=find(op.destination),b=find(op.background),detail=find(op.detail),bd=find(op.background_detail);unbind();
+        Constants params={{r.left,r.top,r.right,r.bottom},{op.program?op.source_x-op.area.left:0,op.program?op.source_y-op.area.top:0},d->format==Format::rgb565?1u:0u,
+            (detail?1u:0u)|(bd?2u:0u)|(op.program?4u:0u)|(b==d?8u:0u)|(op.color==32?16u:op.color<<8)};
+        context->UpdateSubresource(constants.Get(),0,nullptr,&params,0,0);auto cb=constants.Get();context->CSSetConstantBuffers(0,1,&cb);
+        ID3D11ShaderResourceView* reads[4]={find(op.source)->read.Get(),b==d?nullptr:b->read.Get(),bd&&bd!=detail?bd->read.Get():nullptr,op.program?find(op.program)->read.Get():nullptr};
+        ID3D11UnorderedAccessView* writes[2]={d->write.Get(),detail?detail->write.Get():nullptr};
+        context->CSSetShaderResources(0,4,reads);context->CSSetUnorderedAccessViews(0,2,writes,nullptr);context->CSSetShader(lookup_shader.Get(),nullptr,0);
+        context->Dispatch(unsigned(r.right-r.left+7)/8,unsigned(r.bottom-r.top+7)/8,1);++counters.interpreter_dispatches;unbind();
+        d->cpu_current=false;if(detail)detail->cpu_current=false;++counters.commands;
+    }
+    void native_blend(Command const& op,Rect r){
+        prepare_blend_program();
+        auto d=find(op.destination),b=find(op.background),detail=find(op.detail),bd=find(op.background_detail);unbind();
+        D3D11_BOX box={unsigned(r.left),unsigned(r.top),0,unsigned(r.right),unsigned(r.bottom),1};
+        if(b==d){context->CopySubresourceRegion(scratch.texture.Get(),0,r.left,r.top,0,b->texture.Get(),0,&box);b=&scratch;++counters.snapshots;++counters.interpreter_copies;counters.interpreter_copied_pixels+=std::uint64_t(r.right-r.left)*(r.bottom-r.top);}
+        if(bd&&bd==detail){context->CopySubresourceRegion(detail_scratch.texture.Get(),0,r.left,r.top,0,bd->texture.Get(),0,&box);bd=&detail_scratch;++counters.snapshots;++counters.interpreter_copies;counters.interpreter_copied_pixels+=std::uint64_t(r.right-r.left)*(r.bottom-r.top);}
+        Constants params={{r.left,r.top,r.right,r.bottom},{int(std::int64_t(op.source_x)-op.area.left),int(std::int64_t(op.source_y)-op.area.top)},d->format==Format::rgb565?1u:0u,(detail?1u:0u)|(bd?2u:0u)|(op.color==4?32u:op.color==3?16u:op.color==2?8u:op.color?4u:0u)};
+        if(op.color==2){params.offset[0]=op.source_width;params.offset[1]=op.source_height;}
+        context->UpdateSubresource(constants.Get(),0,nullptr,&params,0,0);auto cb=constants.Get();context->CSSetConstantBuffers(0,1,&cb);
+        ID3D11ShaderResourceView* reads[3]={op.color==2?nullptr:find(op.source)->read.Get(),b->read.Get(),bd?bd->read.Get():nullptr};
+        ID3D11UnorderedAccessView* writes[2]={d->write.Get(),detail?detail->write.Get():nullptr};
+        context->CSSetShaderResources(0,3,reads);context->CSSetUnorderedAccessViews(0,2,writes,nullptr);context->CSSetShader(blend_shader.Get(),nullptr,0);
+        context->Dispatch(unsigned(r.right-r.left+7)/8,unsigned(r.bottom-r.top+7)/8,1);++counters.interpreter_dispatches;unbind();
+        d->cpu_current=false;if(detail)detail->cpu_current=false;++counters.commands;
+    }
+    void native_image(Command const& op,Rect r){
+        // JGL StretchBlt uses BLACKONWHITE. Shrink combines the pixels preceding
+        // each center sample; enlargement takes the center sample alone. Clip
+        // after deriving the original mapping, so scrolling preserves its phase.
+        prepare_image_program();
         auto d=find(op.destination),s=find(op.source),detail=find(op.detail),sd=find(op.background_detail);unbind();
         if(s==d){D3D11_BOX box={0,0,0,d->width,d->height,1};context->CopySubresourceRegion(scratch.texture.Get(),0,0,0,0,d->texture.Get(),0,&box);s=&scratch;++counters.snapshots;++counters.interpreter_copies;counters.interpreter_copied_pixels+=std::uint64_t(d->width)*d->height;
             if(sd){context->CopySubresourceRegion(detail_scratch.texture.Get(),0,0,0,0,sd->texture.Get(),0,&box);sd=&detail_scratch;++counters.snapshots;++counters.interpreter_copies;counters.interpreter_copied_pixels+=std::uint64_t(sd->width)*sd->height;}}
@@ -435,6 +462,20 @@ Texture2D<uint> input_image:register(t0);Texture2D<uint> text_curves:register(t1
         checked(device->CreateComputeShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,&shader));
         D3D11_BUFFER_DESC bd={};bd.ByteWidth=sizeof(Constants);bd.Usage=D3D11_USAGE_DEFAULT;bd.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
         checked(device->CreateBuffer(&bd,nullptr,&constants));
+    }
+    // Source-only preparation: no images, viewport, draws or native anchors.
+    bool prepare_assets(std::function<bool()> cancelled={}){
+        auto ready=[&]{return !cancelled || !cancelled();};
+        if(!ready())return false;prepare_unit_program();
+        if(!ready())return false;prepare_lookup_program();
+        if(!ready())return false;prepare_blend_program();
+        if(!ready())return false;prepare_image_program();
+        if(!ready())return false;prepare_import_program();
+        if(!ready())return false;spatial.prepare_assets();
+        if(!ready())return false;unit_scene.prepare_assets(device);
+        if(!ready())return false;display_program.prepare_assets(device);
+        if(!ready())return false;view_program.prepare_assets(device);
+        return ready();
     }
     ~Compositor(){if(recording)c3x_recording::event(c3x_recording::end,recording,[](auto&){});unbind();}
     Compositor(Compositor const&)=delete;Compositor& operator=(Compositor const&)=delete;
@@ -682,19 +723,7 @@ Texture2D<uint> input_image:register(t0);Texture2D<uint> text_curves:register(t1
            unsigned(x)>desc.Width-destination.width||unsigned(y)>desc.Height-destination.height||desc.SampleDesc.Count!=1||
            desc.Format!=DXGI_FORMAT_B8G8R8A8_UNORM||!(desc.BindFlags&D3D11_BIND_SHADER_RESOURCE))return false;
         ComPtr<ID3D11Device> source_device;source->GetDevice(&source_device);if(source_device.Get()!=device)return false;
-        if(!import_shader){
-            std::string hlsl=std::string(R"(
-cbuffer Params:register(b0){int4 area;int2 offset;uint mode;uint color;};
-Texture2D<float4> input_image:register(t0);RWTexture2D<uint> output_image:register(u0);
-)")+c3x_renderer::scene_detail_filter()+R"(
-[numthreads(8,8,1)] void main(uint3 at:SV_DispatchThreadID){
- uint w,h;output_image.GetDimensions(w,h);if(at.x>=w||at.y>=h)return;
- uint4 c=uint4(round(saturate(scene_detail(int2(at.xy)+offset,float(color)/65536.))*255.0));
- output_image[at.xy]=c.b|(c.g<<8)|(c.r<<16)|(c.a<<24);
-})";
-            ComPtr<ID3DBlob> code,error;checked(D3DCompile(hlsl.c_str(),hlsl.size(),"resident map import",nullptr,nullptr,"main","cs_5_0",D3DCOMPILE_ENABLE_STRICTNESS,0,&code,&error));
-            checked(device->CreateComputeShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,&import_shader));
-        }
+        prepare_import_program();
         ComPtr<ID3D11ShaderResourceView> input;checked(device->CreateShaderResourceView(source,nullptr,&input));
         unbind();auto read=input.Get();auto write=destination.write.Get();context->CSSetShaderResources(0,1,&read);context->CSSetUnorderedAccessViews(0,1,&write,nullptr);
         if(!constants){D3D11_BUFFER_DESC d={};d.ByteWidth=sizeof(Constants);d.Usage=D3D11_USAGE_DEFAULT;d.BindFlags=D3D11_BIND_CONSTANT_BUFFER;checked(device->CreateBuffer(&d,nullptr,&constants));}

@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cmath>
 #include <vector>
+#include <new>
 
 namespace c3x_renderer { namespace render_core {
 // Serialized by RendererWorker's caller gate. Instances own copied content and
@@ -356,6 +357,57 @@ public:
         if(scene_frequency==frequency)ticks=std::max(ticks,scene_ticks);
         scene_ticks=ticks;scene_frequency=frequency;
         auto motion_ticks=motion_pause>=0?motion_pause:ticks;
+        // One native capture supplies both visibility and ordered wrap
+        // occurrences. Index it once for a busy scene; a few retained actors
+        // use the allocation-free linear iterator over the same authority.
+        struct Occurrences {
+            struct Bucket {std::uint64_t key=0;unsigned first=UINT_MAX,last=UINT_MAX;};
+            c3x_renderer_frame_v1 const& frame;
+            std::vector<Bucket> table;
+            std::vector<unsigned> links;
+            std::uint64_t key(int x,int y)const{
+                auto canonical=[](int value,int extent,bool wraps){
+                    if(!wraps||extent<=0)return value;
+                    auto r=value%extent;return r<0?r+extent:r;
+                };
+                return (std::uint64_t(std::uint32_t(canonical(x,frame.world_width_tiles,frame.world_wrap_x!=0)))<<32)|
+                    std::uint32_t(canonical(y,frame.world_height_tiles,frame.world_wrap_y!=0));
+            }
+            bool visible(unsigned i)const{auto const& tile=frame.tiles[i];
+                return (tile.tile_flags&C3X_RENDERER_TILE_VISIBLE)&&
+                    (tile.tile_flags&(C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_PREFETCH));
+            }
+            std::size_t slot(std::uint64_t value)const{
+                // Mix both lattice coordinates before power-of-two masking.
+                auto hash=value;hash^=hash>>30;hash*=0xbf58476d1ce4e5b9ull;
+                hash^=hash>>27;hash*=0x94d049bb133111ebull;hash^=hash>>31;
+                auto i=std::size_t(hash)&(table.size()-1);
+                while(table[i].first!=UINT_MAX&&table[i].key!=value)i=(i+1)&(table.size()-1);
+                return i;
+            }
+            Occurrences(c3x_renderer_frame_v1 const& capture,bool indexed):frame(capture){
+                if(!indexed||frame.tile_count>8192)return;
+                std::size_t count=1;while(count<std::size_t(frame.tile_count)*2)count*=2;
+                try {table.resize(count);links.assign(frame.tile_count,UINT_MAX);}
+                catch(std::bad_alloc const&){
+                    // Index admission is optional; retain the exact native
+                    // linear iterator if the bounded metadata cannot fit.
+                    std::vector<Bucket>().swap(table);std::vector<unsigned>().swap(links);return;
+                }
+                for(unsigned i=0;i<frame.tile_count;++i)if(visible(i)){
+                    auto id=key(frame.tiles[i].tile_x,frame.tiles[i].tile_y);auto& bucket=table[slot(id)];
+                    if(bucket.first==UINT_MAX){bucket.key=id;bucket.first=i;}
+                    else links[bucket.last]=i;
+                    bucket.last=i;
+                }
+            }
+            unsigned next(std::uint64_t id,unsigned previous=UINT_MAX)const{
+                if(!table.empty())return previous==UINT_MAX?table[slot(id)].first:links[previous];
+                for(unsigned i=previous==UINT_MAX?0:previous+1;i<frame.tile_count;++i)
+                    if(visible(i)&&key(frame.tiles[i].tile_x,frame.tiles[i].tile_y)==id)return i;
+                return UINT_MAX;
+            }
+        } occurrences(frame,instances.size()>4);
         for(auto& pair:instances){
             Motion* motion=nullptr;
             auto moving=motions.find(pair.first);
@@ -407,21 +459,10 @@ public:
             auto state=state_of(pair.first);
             if(!state||!state->visible||state->kind!=C3X_RENDERER_UNIT_STATE_OBSERVE||
                (!motion&&(state->tile_x!=item.tile_x||state->tile_y!=item.tile_y)))continue;
-            c3x_renderer_tile_v1 const* occurrence=nullptr;
-            for(unsigned i=0;i<frame.tile_count;++i){auto const& tile=frame.tiles[i];
-                bool same_x=tile.tile_x==item.tile_x;
-                bool same_y=tile.tile_y==item.tile_y;
-                if(frame.world_wrap_x&&frame.world_width_tiles>0)
-                    same_x=((tile.tile_x-item.tile_x)%frame.world_width_tiles)==0;
-                if(frame.world_wrap_y&&frame.world_height_tiles>0)
-                    same_y=((tile.tile_y-item.tile_y)%frame.world_height_tiles)==0;
-                if(same_x&&same_y&&
-                   (tile.tile_flags&C3X_RENDERER_TILE_VISIBLE)&&
-                   (tile.tile_flags&(C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_PREFETCH))){
-                    occurrence=&tile;break;
-                }
-            }
-            if(!occurrence)continue;
+            auto occurrence_key=occurrences.key(item.tile_x,item.tile_y);
+            auto occurrence_index=occurrences.next(occurrence_key);
+            if(occurrence_index==UINT_MAX)continue;
+            auto* occurrence=&frame.tiles[occurrence_index];
             Selection selected{};selected.id=pair.first;selected.revision=item.revision;
             selected.occurrence=item.occurrence;
             auto observed=observations.find(pair.first);
@@ -506,13 +547,8 @@ public:
             result.push_back(pose);
             // Each native captured wrap occurrence is a separate placement; all
             // borrow the same immutable asset and pose preparation identity.
-            for(unsigned i=0;i<frame.tile_count;++i){auto const& tile=frame.tiles[i];
-                if(&tile==occurrence || !(tile.tile_flags&C3X_RENDERER_TILE_VISIBLE) ||
-                   !(tile.tile_flags&(C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_PREFETCH)))continue;
-                bool same_x=tile.tile_x==item.tile_x,same_y=tile.tile_y==item.tile_y;
-                if(frame.world_wrap_x&&frame.world_width_tiles>0)same_x=((tile.tile_x-item.tile_x)%frame.world_width_tiles)==0;
-                if(frame.world_wrap_y&&frame.world_height_tiles>0)same_y=((tile.tile_y-item.tile_y)%frame.world_height_tiles)==0;
-                if(!same_x||!same_y)continue;
+            for(auto i=occurrences.next(occurrence_key,occurrence_index);i!=UINT_MAX;i=occurrences.next(occurrence_key,i)){
+                auto const& tile=frame.tiles[i];
                 auto dx=std::int64_t(tile.anchor_x)-occurrence->anchor_x,dy=std::int64_t(tile.anchor_y)-occurrence->anchor_y;
                 auto x=std::int64_t(pose.draw.body_x)+dx,y=std::int64_t(pose.draw.body_y)+dy;
                 if(x<INT_MIN||x>INT_MAX||y<INT_MIN||y>INT_MAX)continue;

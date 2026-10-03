@@ -6,12 +6,9 @@ class ViewTransform {
     Microsoft::WRL::ComPtr<ID3D11ComputeShader> shader;
     Microsoft::WRL::ComPtr<ID3D11Buffer> constants;
 public:
-    void draw(ID3D11Device* device,ID3D11DeviceContext* context,
-              ID3D11ShaderResourceView* source,ID3D11UnorderedAccessView* destination,
-              unsigned width,unsigned height,float scale,
-              ID3D11UnorderedAccessView* native_words=nullptr,unsigned native_format=0){
+    void prepare_assets(ID3D11Device* device){
         auto check=[](HRESULT hr){if(FAILED(hr))throw std::runtime_error("world view transform failed");};
-        if(!shader){
+        if(!shader || !constants){
             char const* code=R"(
 Texture2D<uint> source_image:register(t0);
 RWTexture2D<uint> destination_image:register(u0);
@@ -51,6 +48,12 @@ float4 pixel(int2 p){return unpack(source_image.Load(int3(clamp(p,int2(0,0),int2
             D3D11_BUFFER_DESC desc={};desc.ByteWidth=16;desc.Usage=D3D11_USAGE_DEFAULT;desc.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
             check(device->CreateBuffer(&desc,nullptr,&constants));
         }
+    }
+    void draw(ID3D11Device* device,ID3D11DeviceContext* context,
+              ID3D11ShaderResourceView* source,ID3D11UnorderedAccessView* destination,
+              unsigned width,unsigned height,float scale,
+              ID3D11UnorderedAccessView* native_words=nullptr,unsigned native_format=0){
+        prepare_assets(device);
         struct Parameters {unsigned width,height;float scale;unsigned native_format;} parameters={width,height,scale,native_format};
         context->ClearState();
         context->UpdateSubresource(constants.Get(),0,nullptr,&parameters,0,0);

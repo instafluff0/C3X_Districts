@@ -3,6 +3,20 @@
 #include <array>
 
 namespace c3x_renderer { namespace render_core {
+// Loading owns native world facts, never a pretend viewport or display ticket.
+inline bool valid_loading_world(c3x_renderer_camera_request_v1 const* request){
+    if(!request || request->version!=C3X_RENDERER_CAMERA_VIEW_VERSION || request->struct_size!=sizeof(*request) || !request->frame)return false;
+    auto const& f=*request->frame;
+    return f.api_version==C3X_RENDERER_API_VERSION && f.struct_size==sizeof(f) &&
+        !f.tiles && !f.tile_count && !f.target_width && !f.target_height && !f.tile_width && !f.tile_height &&
+        f.world_width_tiles>0 && f.world_width_tiles<=2048 && !(f.world_width_tiles&1) &&
+        f.world_height_tiles>0 && f.world_height_tiles<=2048 && (!f.world_wrap_y || !(f.world_height_tiles&1)) &&
+        (f.world_wrap_x==0 || f.world_wrap_x==1) && (f.world_wrap_y==0 || f.world_wrap_y==1) &&
+        f.world_topology && f.world_topology_count==unsigned(f.world_width_tiles*f.world_height_tiles/2) &&
+        f.world_topology_revision>0 && request->identity.map_epoch>0 && request->identity.viewer_epoch>0 &&
+        request->identity.visibility_epoch>0 && request->identity.scene_epoch==f.world_topology_revision &&
+        f.hour>=0 && f.hour<24 && f.season>=0 && f.season<4;
+}
 // Caller-thread paging state, not another world. Accepted records enter the
 // existing publication journal and CapturedScene; a rejected page is retried.
 class WorldInputCapture {

@@ -33,7 +33,10 @@ class Client {
            !c3x_inputs::realtime_replay().enabled&&clock->at<clock->values.size()){
             replay_override=clock->sample(ticks,frequency);
         }
-        return transport.call_live(kind,subtype,bytes,count,shared_frame,raw_shared,ticks,frequency,replay_override);
+        bool required_loading=(kind==unsigned(c3x_inputs::Kind::scene) && subtype==6) ||
+            (kind==unsigned(c3x_inputs::Kind::world_page) && subtype==7) ||
+            (kind==unsigned(c3x_inputs::Kind::native_bridge) && subtype==8);
+        return transport.call_live(kind,subtype,bytes,count,shared_frame,raw_shared,ticks,frequency,replay_override,required_loading);
     }
 public:
     Client(std::wstring const& helper,std::wstring const& dll):transport(helper,dll){}
@@ -43,8 +46,7 @@ public:
     void supersede_pending_camera(){transport.supersede_pending_camera();}
     void publication_pressure(std::size_t records){transport.publication_pressure(records);}
     c3x_helper_trial::SceneClient::Stats stats()const{return transport.stats();}
-    int definitions(char const* root,char const* fallback,char const* scenario,char const* custom){
-        transport.retire_camera_receipt();
+    static c3x_inputs::Bytes definition_input(char const* root,char const* fallback,char const* scenario,char const* custom){
         c3x_inputs::Writer input;
         input.string(root,32768);input.string(fallback,32768);
         input.string(scenario,32768);input.string(custom,32768);
@@ -52,8 +54,14 @@ public:
         // for early native-screen ownership. Publish the current renderer
         // settings with the definitions that consume them.
         c3x_inputs::settings_fields(input,c3x_inputs::input_settings());
-        return int(invoke(unsigned(c3x_inputs::Kind::native_bridge),8,input.bytes.data(),
-            unsigned(input.bytes.size())).code);
+        return std::move(input.bytes);
+    }
+    int definitions(c3x_inputs::Bytes const& input){
+        transport.retire_camera_receipt();
+        return int(invoke(unsigned(c3x_inputs::Kind::native_bridge),8,input.data(),unsigned(input.size())).code);
+    }
+    int definitions(char const* root,char const* fallback,char const* scenario,char const* custom){
+        return definitions(definition_input(root,fallback,scenario,custom));
     }
     int pack(char const* path){
         transport.retire_camera_receipt();
@@ -132,10 +140,14 @@ public:
         auto bytes=reply(response);c3x_inputs::Reader reader{bytes};decode(reader,scene_result);
         output=scene_result.value;return C3X_RENDERER_RESULT_OK;
     }
-    int seed_world_scope(c3x_renderer_camera_request_v1 const& request){
+    int seed_world_scope(c3x_renderer_camera_request_v1 const& request,bool loading=false){
         c3x_inputs::Writer input;auto identity=request.identity;
         c3x_inputs::c3x_renderer_camera_identity_v1_fields(input,identity);c3x_inputs::frame(input,*request.frame);
-        return int(invoke(unsigned(c3x_inputs::Kind::scene),4,input.bytes.data(),unsigned(input.bytes.size())).code);
+        return int(invoke(unsigned(c3x_inputs::Kind::scene),loading?6:4,input.bytes.data(),unsigned(input.bytes.size())).code);
+    }
+    int prepare_world_loading(c3x_renderer_camera_identity_v1 const& identity){
+        c3x_inputs::Writer input;auto value=identity;c3x_inputs::c3x_renderer_camera_identity_v1_fields(input,value);
+        return int(invoke(unsigned(c3x_inputs::Kind::world_page),7,input.bytes.data(),unsigned(input.bytes.size())).code);
     }
     int camera_begin(c3x_renderer_camera_request_v1 const& request,c3x_renderer_i64& ticket){
         c3x_inputs::Writer input;auto identity=request.identity;
@@ -208,6 +220,11 @@ public:
         for(unsigned n=0;n<page.count;++n){auto tile=page.tiles[n];c3x_inputs::c3x_renderer_tile_v1_fields(input,tile);}
         return int(invoke(unsigned(c3x_inputs::Kind::world_page),5,input.bytes.data(),
             unsigned(input.bytes.size())).code);
+    }
+    int arm_world_changes(c3x_renderer_camera_identity_v1 const& identity){
+        c3x_inputs::Writer input;auto value=identity;
+        c3x_inputs::c3x_renderer_camera_identity_v1_fields(input,value);
+        return int(invoke(unsigned(c3x_inputs::Kind::world_page),6,input.bytes.data(),unsigned(input.bytes.size())).code);
     }
     int world_status(c3x_renderer_world_status_v1& status){
         auto const& response=invoke(unsigned(c3x_inputs::Kind::world_page),3,nullptr,0);
@@ -318,6 +335,13 @@ public:
         auto const& response=invoke(unsigned(c3x_inputs::Kind::presentation),0,input.bytes.data(),
             unsigned(input.bytes.size()),value.action==0&&!direct_surface_bound);
         if(value.action)direct_surface_bound=false;
+        frame={response.shared_handle,response.width,response.height};return int(response.code);
+    }
+    int present_required(c3x_renderer_gpu_present_v1 const& value,SharedFrame& frame){
+        c3x_inputs::Writer input;input(value.action);input(value.ticket);input(value.image);
+        input(value.width);input(value.height);for(auto x:value.area)input(x);input.u32(1);
+        auto const& response=invoke(unsigned(c3x_inputs::Kind::presentation),3,input.bytes.data(),
+            unsigned(input.bytes.size()),false);
         frame={response.shared_handle,response.width,response.height};return int(response.code);
     }
     int visual(std::int64_t ticks,std::int64_t frequency,SharedFrame& frame){

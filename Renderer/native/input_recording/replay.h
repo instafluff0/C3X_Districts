@@ -41,6 +41,8 @@ struct ReplayState {
             else if(subtype==1)actual=c3x_renderer_render(&owned.value,&output);
             else if(subtype==2)actual=c3x_renderer_render_view(&request,&output);
             else if(subtype==4)actual=c3x_renderer_seed_world(&request);
+            else if(subtype==5)actual=c3x_renderer_require_world_changes(&request);
+            else if(subtype==6)actual=c3x_renderer_prepare_world_loading(&request);
             else throw std::runtime_error("unknown scene input");
             if(subtype==1||subtype==2)check_output(expected,output,actual);
         }else if(kind==Kind::native_bridge){
@@ -109,6 +111,10 @@ struct ReplayState {
             actual=remote_renderer_requested()?
                 (remote_renderer_backend()->world_delta_submit(page,callback_result)==C3X_RENDERER_RESULT_OK?1:0):
                 (get_renderer_worker().world_delta_submit(page,callback_result)==C3X_RENDERER_RESULT_OK?1:0);
+        }else if(kind==Kind::world_page&&(subtype==3||subtype==4)){
+            c3x_renderer_camera_identity_v1 identity={};c3x_renderer_camera_identity_v1_fields(in,identity);
+            actual=subtype==4?c3x_renderer_trial_prepare_world_loading(&identity):(remote_renderer_requested()?remote_renderer_backend()->arm_world_changes(identity):
+                get_renderer_worker().arm_world_changes(identity));
         }else if(kind==Kind::world_page){
             c3x_renderer_world_page_v1 page={};page.struct_size=sizeof(page);in(page.first);in(page.capacity);in(page.count);c3x_renderer_camera_identity_v1_fields(in,page.identity);
             Frame owned;frame(in,owned);page.frame=owned.value;int callback_result=0;in(callback_result);
@@ -187,9 +193,11 @@ struct ReplayState {
             c3x_renderer::tactical::Input value;tactical(in,value);actual=remote_renderer_requested()?
                 remote_renderer_backend()->tactical(value,dest):get_renderer_worker().draw_tactical(value,dest);
         }else if(kind==Kind::presentation){
+            require(subtype==0||subtype==3,"unsupported presentation input");
             c3x_renderer_gpu_present_v1 value={sizeof(value)};in(value.action);in(value.ticket);in(value.image);in(value.width);in(value.height);for(auto& x:value.area)in(x);auto owner=in.u32();require(owner<=1,"invalid presentation caller role");
             value.ticket=id(tickets,value.ticket);value.image=id(images,value.image);value.window=window;
-            if(value.action==0){require(window!=nullptr,"replay requires presentation window");SetWindowPos(window,nullptr,0,0,value.width,value.height,SWP_NOZORDER|SWP_NOACTIVATE);}
+            if(subtype==3){require(value.action==0,"required presentation must commit a front");value.action=3;}
+            if(value.action==0||value.action==3){require(window!=nullptr,"replay requires presentation window");SetWindowPos(window,nullptr,0,0,value.width,value.height,SWP_NOZORDER|SWP_NOACTIVATE);}
             if(owner)actual=c3x_renderer_gpu_present(&value);
             else{require(replay_clock()->values.empty(),"nonowner presentation consumed a visual clock");
                 std::thread caller([&]{actual=c3x_renderer_gpu_present(&value);});caller.join();}

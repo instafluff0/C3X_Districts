@@ -4,6 +4,41 @@ from Renderer.native.native_cpp_test import run_cpp
 from Renderer.lab.platform import ROOT
 
 class DurablePreparationTests(unittest.TestCase):
+    def test_measured_residency_balances_ram_gpu_and_pressure(self):
+        run_cpp(r'''#include "Renderer/native/render_core/frame_working_set.h"
+#include <cassert>
+using F=c3x_renderer::render_core::FrameWorkingSet;
+int main(){
+ auto ample=F::residency(12ull*1024*F::mib,16ull*1024*F::mib,2ull*1024*F::mib,200ull*F::mib,4ull*1024*F::mib,8ull*1024*F::mib,4);
+ assert(ample.geometry>2ull*1024*F::mib && ample.prepared>200ull*F::mib);
+ auto adapter_full=F::residency(12ull*1024*F::mib,16ull*1024*F::mib,2ull*1024*F::mib,200ull*F::mib,0,8ull*1024*F::mib,4);
+ assert(adapter_full.geometry==2ull*1024*F::mib);
+ auto pressure=F::residency(128ull*F::mib,16ull*1024*F::mib,2ull*1024*F::mib,200ull*F::mib,4ull*1024*F::mib,8ull*1024*F::mib,4);
+ assert(pressure.geometry<2ull*1024*F::mib && pressure.prepared==200ull*F::mib);
+ auto explicit_cap=F::residency(12ull*1024*F::mib,16ull*1024*F::mib,128ull*F::mib,0,4ull*1024*F::mib,384ull*F::mib,4);
+ assert(explicit_cap.geometry<=384ull*F::mib);
+ // A future compact byte costs one physical byte; future GPU geometry uses
+ // the conservative two-byte charge for allocation and driver/CPU mirrors.
+ for(unsigned workers:{0u,1u,4u,6u,12u})for(unsigned free_mib:{0u,128u,2048u,4096u,12288u})
+ for(unsigned gpu_mib:{0u,128u,1024u,4096u}){
+  auto lanes=std::min(workers,6u);auto physical=16ull*1024*F::mib;
+  auto reserve=std::max(2048ull*F::mib,physical/6)+512ull*F::mib+
+      std::max(2u,lanes+1u)*16ull*F::mib+lanes*48ull*F::mib;
+  auto available=free_mib*F::mib,headroom=gpu_mib*F::mib;
+  auto before_geometry=2ull*1024*F::mib,before_prepared=200ull*F::mib;
+  auto result=F::residency(available,physical,before_geometry,before_prepared,headroom,8ull*1024*F::mib,workers);
+  auto usable=available>reserve?available-reserve:0;
+  auto compact_growth=result.prepared-before_prepared;
+  auto geometry_growth=result.geometry>before_geometry?result.geometry-before_geometry:0;
+  assert(result.prepared>=before_prepared && result.geometry<=8ull*1024*F::mib);
+  assert(compact_growth+2*geometry_growth<=usable && geometry_growth<=headroom-headroom/5);
+  if(available<=reserve)assert(!compact_growth && result.geometry<=before_geometry);
+  if(workers>6){auto clamped=F::residency(available,physical,before_geometry,before_prepared,headroom,8ull*1024*F::mib,6);
+   assert(result.geometry==clamped.geometry && result.prepared==clamped.prepared);}
+ }
+}
+''')
+
     def test_retarget_does_not_join_or_duplicate_active_work(self):
         run_cpp(r'''
 #include "Renderer/native/render_core/content_preparation.h"
@@ -102,7 +137,13 @@ int main(){
 
     def test_rigid_batching_preserves_adjacent_draw_order(self):
         source=(ROOT/'Renderer/native/c3x_renderer.cpp').read_text()
-        loop='            for(unsigned i=0;i<selected.size();){'+source.split('            for(unsigned i=0;i<selected.size();){',1)[1].split('            selected.clear();return true;',1)[0]
+        start=source.index('    bool draw_cached_geometry(')
+        loop_start=source.index('            for(unsigned i=0;i<selected.size();){',start)
+        fallback=source.index('                auto const& first_chunk=selected[i].content();',loop_start)
+        end=source.index('            selected.clear();return true;',fallback)
+        # Execute the existing fallback merge after packet selection. The
+        # packet consumer itself has its separate actual-shader native oracle.
+        loop=source[loop_start:source.index('\n',loop_start)]+ '\n'+source[fallback:end]
         run_cpp(r'''#include <vector>
 #include <cassert>
 struct Mesh {bool rigid_source;int buffer,indices,vertex_offset,index_offset,index_count,index_format,projection_kind;};
@@ -111,6 +152,7 @@ int main(){
  Mesh a={true,1,2,0,0,36,1,2},b=a;b.rigid_source=false;
  Mesh c=a;c.index_offset=128;
  std::vector<Draw> selected={{a},{a},{b},{a},{c},{c}};
+ std::vector<bool> packets(selected.size(),false);
  std::vector<int> parameters={0,1,2,3,4,5};std::vector<unsigned> sizes,order;
  auto issue=[&](Draw const&,int first,unsigned index,unsigned count){assert(first==int(index));sizes.push_back(count);for(unsigned n=0;n<count;++n)order.push_back(index+n);};
 '''+loop+r'''

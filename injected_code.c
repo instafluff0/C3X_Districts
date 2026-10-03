@@ -20357,6 +20357,24 @@ patch_JGL_Sprite_alpha_onto (JGLSprite * sprite, int edx, JGLSprite * alpha, JGL
 	return result;
 }
 
+void
+log_custom_renderer_event (char const * stage, int result)
+{
+	char message[384];
+	int last_error = GetLastError ();
+	LARGE_INTEGER now;
+	QueryPerformanceCounter (&now);
+	snprintf (message, sizeof message,
+		"[C3X renderer] qpc=%lld frame=%u stage=%s result=%d win32=%d tiles=%d capture_failed=%d composited=%d\n",
+		now.QuadPart, is->custom_renderer_presented_frames, stage, result, last_error, is->custom_renderer_tile_count,
+		is->custom_renderer_capture_failed ? 1 : 0,
+		is->custom_renderer_composited ? 1 : 0);
+	message[(sizeof message) - 1] = '\0';
+	(*p_OutputDebugStringA) (message);
+}
+
+
+
 int __fastcall
 patch_JGL_Graphsy_present (void * graph, int edx, RECT * rect)
 {
@@ -20393,7 +20411,40 @@ patch_JGL_Graphsy_present (void * graph, int edx, RECT * rect)
         bool animate = ! p_main_screen_form->is_now_loading_game;
         is->custom_renderer_native_image (C3X_NATIVE_VISUAL_POLICY, NULL, NULL, NULL, NULL, animate ? 1 : 0);
     }
-	if (translate_custom_renderer_native (C3X_NATIVE_IMAGE_PRESENT, image, graph, rect, NULL, 0)) return 0;
+	if (! is->current_config.enable_custom_rendering) is->custom_renderer_first_front_pending = false;
+	bool required_front = is->custom_renderer_first_front_pending &&
+		! is->custom_renderer_draw_in_progress && ! is->custom_renderer_frame_active &&
+		! is->custom_renderer_capture_only && p_main_screen_form != NULL &&
+		! p_main_screen_form->is_now_loading_game && is->custom_renderer_init_state == IS_OK &&
+		p_bic_data != NULL && p_bic_data->Map.Tiles != NULL &&
+		is->custom_renderer_display_viewer_epoch == is->custom_renderer_viewer_epoch &&
+		is->custom_renderer_module != NULL && is->custom_renderer_native_module == is->custom_renderer_module &&
+		(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_native_required_present_supported") != NULL;
+	HMODULE front_module = is->custom_renderer_module;
+	Main_Screen_Form * front_screen = p_main_screen_form;
+	void * front_bic = p_bic_data;
+	void * front_tiles = required_front ? p_bic_data->Map.Tiles : NULL;
+	long long front_map = is->custom_renderer_map_epoch, front_viewer = is->custom_renderer_viewer_epoch;
+	int front_civ = is->custom_renderer_viewer_civ_id;
+	int transferred = translate_custom_renderer_native (C3X_NATIVE_IMAGE_PRESENT, image, graph, rect, NULL, required_front ? 1 : 0);
+	if (required_front) {
+		// Only this exact transfer's successful renderer-owner Present completes
+		// startup. Replacement/config-off retires the old transaction instead.
+		if (is->custom_renderer_module == front_module && p_main_screen_form == front_screen &&
+		    p_bic_data == front_bic && p_bic_data->Map.Tiles == front_tiles && is->custom_renderer_map_epoch == front_map &&
+		    is->custom_renderer_viewer_epoch == front_viewer && is->custom_renderer_viewer_civ_id == front_civ &&
+		    is->current_config.enable_custom_rendering && is->custom_renderer_init_state == IS_OK) {
+			if (transferred > 0) {
+				is->custom_renderer_first_front_pending = false;
+				log_custom_renderer_event ("required-first-front-presented", C3X_RENDERER_RESULT_OK);
+			} else {
+				log_custom_renderer_event ("required-first-front-present-failed", C3X_RENDERER_RESULT_ERROR);
+				is->custom_renderer_init_state = IS_INIT_FAILED;
+			}
+		}
+		return 0; // Required renderer ownership never falls through to a native CPU replay.
+	}
+	if (transferred) return 0;
 	// JGL 0x3baa0 borrows/releases the screen DC inside this scalar-returning
 	// transfer. Keep startup/config-off presentation from looking like a game
 	// DC escape; the ordinary DC ownership barrier still runs before BitBlt.
@@ -27945,24 +27996,6 @@ patch_Sprite_draw_on_map (Sprite * this, int edx, Map_Renderer * map_renderer, i
 }
 
 void
-log_custom_renderer_event (char const * stage, int result)
-{
-	char message[384];
-	int last_error = GetLastError ();
-	LARGE_INTEGER now;
-	QueryPerformanceCounter (&now);
-	snprintf (message, sizeof message,
-		"[C3X renderer] qpc=%lld frame=%u stage=%s result=%d win32=%d tiles=%d capture_failed=%d composited=%d\n",
-		now.QuadPart, is->custom_renderer_presented_frames, stage, result, last_error, is->custom_renderer_tile_count,
-		is->custom_renderer_capture_failed ? 1 : 0,
-		is->custom_renderer_composited ? 1 : 0);
-	message[(sizeof message) - 1] = '\0';
-	(*p_OutputDebugStringA) (message);
-}
-
-
-
-void
 unload_custom_renderer ()
 {
 	settle_custom_renderer_navigation (is->current_config.enable_custom_rendering ? C3X_NAV_DISCARD : C3X_NAV_BARRIER);
@@ -28007,6 +28040,10 @@ unload_custom_renderer ()
 	is->custom_renderer_world_reconcile = NULL;
 	is->custom_renderer_seed_world = NULL;
 	is->custom_renderer_initial_world_capture = false;
+	is->custom_renderer_loading_world_capture = false;
+	is->custom_renderer_loading_players_ready = false;
+	is->custom_renderer_loading_technology = false;
+	is->custom_renderer_first_front_pending = false;
 	is->custom_renderer_seeded_viewer_epoch = 0;
 	is->custom_renderer_unit_bootstrap = false;
 	is->custom_renderer_unit_bootstrap_failed = false;
@@ -28844,6 +28881,11 @@ capture_custom_renderer_world_page (struct c3x_renderer_world_page_v1 * page)
 	Map * map = &p_bic_data->Map;
 	// Only the synchronous seed owns this exception. A timer or later page may
 	// not use loading/native-draw state as a general world-read permission.
+	bool loading_capture = is->custom_renderer_loading_world_capture &&
+		is->custom_renderer_probe_thread_id != NULL &&
+		is->custom_renderer_probe_thread_id () == is->custom_renderer_probe_owner &&
+		! is->custom_renderer_draw_in_progress && ! is->custom_renderer_frame_active &&
+		! is->custom_renderer_capture_only;
 	bool initial_capture = is->custom_renderer_initial_world_capture &&
 		is->custom_renderer_probe_thread_id != NULL &&
 		is->custom_renderer_probe_thread_id () == is->custom_renderer_probe_owner &&
@@ -28852,7 +28894,7 @@ capture_custom_renderer_world_page (struct c3x_renderer_world_page_v1 * page)
 		is->custom_renderer_target == &map->Renderer &&
 		is->custom_renderer_tiles != NULL && is->custom_renderer_tile_count > 0 &&
 		is->custom_renderer_display_viewer_epoch != is->custom_renderer_viewer_epoch;
-	if ((! initial_capture && (is->custom_renderer_draw_in_progress || is->custom_renderer_frame_active ||
+	if ((! initial_capture && ! loading_capture && (is->custom_renderer_draw_in_progress || is->custom_renderer_frame_active ||
 	     is->custom_renderer_capture_only || ! is->custom_renderer_display_valid ||
 	     p_main_screen_form->is_now_loading_game)) ||
 	    (((*p_debug_mode_bits & 8) && ! is_online_game ()) ? 0 : p_main_screen_form->Player_CivID) !=
@@ -28870,11 +28912,11 @@ capture_custom_renderer_world_page (struct c3x_renderer_world_page_v1 * page)
 	if (is->custom_renderer_world_topology == NULL ||
 	    is->custom_renderer_world_topology_count != (int)count)
 		return C3X_RENDERER_RESULT_PENDING;
-	if (initial_capture && (page->first >= count ||
+	if ((initial_capture || loading_capture) && (page->first >= count ||
 	    page->identity.scene_epoch != is->custom_renderer_world_topology_revision ||
 	    page->identity.visibility_epoch != is->custom_renderer_visibility_revision))
 		return C3X_RENDERER_RESULT_SUPERSEDED;
-	int mask = is->custom_renderer_tile_count > 0 ? is->custom_renderer_tiles[0].visibility_mask : 0;
+	int mask = ! loading_capture && is->custom_renderer_tile_count > 0 ? is->custom_renderer_tiles[0].visibility_mask : 0;
 	if (page->first == 0xffffffffu || page->first == 0xfffffffeu) {
 		if (page->count == 0 || page->count > page->capacity || page->capacity > 128 || page->tiles == NULL)
 			return C3X_RENDERER_RESULT_ERROR;
@@ -29541,6 +29583,80 @@ finished:
 	return result;
 }
 
+// Accepted restoration, completed new-game and completed interturn stages own
+// this synchronous read. No canvas, draw state or unit occurrence is manufactured.
+int
+prepare_custom_renderer_loading_world ()
+{
+	if (! is->current_config.enable_custom_rendering) return C3X_RENDERER_RESULT_OK;
+	Map * map = &p_bic_data->Map;
+	if (! ensure_custom_renderer_loaded () || ! is->custom_renderer_capture_world_topology ||
+	    ! custom_renderer_native_probe_on () || p_main_screen_form == NULL ||
+	    is->custom_renderer_draw_in_progress || is->custom_renderer_frame_active ||
+	    is->custom_renderer_loading_world_capture || is->custom_renderer_capture_only ||
+	    map->Tiles == NULL || map->Renderer.spotlight_on_city != NULL)
+		return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+	int viewer = ((*p_debug_mode_bits & 8) && ! is_online_game ()) ? 0 : p_main_screen_form->Player_CivID;
+	if (viewer < 0 || viewer >= 32) return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+	if (is->custom_renderer_seeded_viewer_epoch == is->custom_renderer_viewer_epoch &&
+	    is->custom_renderer_viewer_civ_id == viewer && is->custom_renderer_viewer_epoch != 0)
+		return C3X_RENDERER_RESULT_OK;
+	c3x_renderer_seed_world_fn prepare = (void *)(*p_GetProcAddress) (is->custom_renderer_module,
+		"c3x_renderer_prepare_world_loading");
+	if (prepare == NULL) return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+	if (is->custom_renderer_qpc_frequency.QuadPart <= 0 &&
+	    ! QueryPerformanceFrequency (&is->custom_renderer_qpc_frequency)) return C3X_RENDERER_RESULT_ERROR;
+	if (is->custom_renderer_viewer_civ_id != viewer || is->custom_renderer_viewer_epoch == 0) {
+		is->custom_renderer_viewer_civ_id = viewer;
+		is->custom_renderer_viewer_epoch = is->custom_renderer_viewer_epoch < 0x7fffffffffffffffLL ?
+			is->custom_renderer_viewer_epoch + 1 : 1;
+	}
+	if (is->custom_renderer_map_epoch == 0) is->custom_renderer_map_epoch = 1;
+	is->custom_renderer_world_audit_needed = true;
+	if (! capture_custom_renderer_world_topology ()) return C3X_RENDERER_RESULT_ERROR;
+	struct c3x_renderer_frame_v1 frame = {0};
+	frame.api_version = C3X_RENDERER_API_VERSION; frame.struct_size = sizeof frame;
+	frame.world_width_tiles = map->Width; frame.world_height_tiles = map->Height;
+	frame.world_wrap_x = (map->Flags & 1) != 0; frame.world_wrap_y = (map->Flags & 2) != 0;
+	frame.world_topology = is->custom_renderer_world_topology;
+	frame.world_topology_count = is->custom_renderer_world_topology_count;
+	frame.world_topology_revision = is->custom_renderer_world_topology_revision;
+	frame.hour = (is->current_config.day_night_cycle_mode != DNCM_OFF && ! is->day_night_cycle_unstarted) ?
+		clamp (0, 23, is->current_day_night_cycle) : 12;
+	frame.season = (is->current_config.seasonal_cycle_mode != SCM_OFF && ! is->seasonal_cycle_unstarted) ?
+		clamp (CS_SUMMER, CS_SPRING, is->current_seasonal_cycle) : CS_SUMMER;
+	struct c3x_renderer_camera_request_v1 request = {C3X_RENDERER_CAMERA_VIEW_VERSION, sizeof request, &frame};
+	request.identity.map_epoch = is->custom_renderer_map_epoch;
+	request.identity.viewer_epoch = is->custom_renderer_viewer_epoch;
+	request.identity.visibility_epoch = is->custom_renderer_visibility_revision;
+	request.identity.scene_epoch = frame.world_topology_revision;
+	HMODULE module = is->custom_renderer_module;
+	Main_Screen_Form * screen = p_main_screen_form;
+	void * map_tiles = map->Tiles;
+	int init_state = is->custom_renderer_init_state;
+	is->custom_renderer_loading_world_capture = true;
+	int result = prepare (&request);
+	is->custom_renderer_loading_world_capture = false;
+	if (! is->current_config.enable_custom_rendering || is->custom_renderer_module != module ||
+	    p_main_screen_form != screen || &p_bic_data->Map != map || map->Tiles != map_tiles ||
+	    is->custom_renderer_init_state != init_state || map->Renderer.spotlight_on_city != NULL ||
+	    ! custom_renderer_native_probe_on () ||
+	    (((*p_debug_mode_bits & 8) && ! is_online_game ()) ? 0 : screen->Player_CivID) != viewer ||
+	    is->custom_renderer_viewer_civ_id != viewer ||
+	    map->Width != frame.world_width_tiles || map->Height != frame.world_height_tiles ||
+	    ((map->Flags & 1) != 0) != frame.world_wrap_x || ((map->Flags & 2) != 0) != frame.world_wrap_y ||
+	    request.identity.map_epoch != is->custom_renderer_map_epoch ||
+	    request.identity.viewer_epoch != is->custom_renderer_viewer_epoch ||
+	    request.identity.visibility_epoch != is->custom_renderer_visibility_revision ||
+	    request.identity.scene_epoch != is->custom_renderer_world_topology_revision)
+		result = C3X_RENDERER_RESULT_SUPERSEDED;
+	if (result == C3X_RENDERER_RESULT_OK) is->custom_renderer_seeded_viewer_epoch = is->custom_renderer_viewer_epoch;
+	else if (result == C3X_RENDERER_RESULT_ERROR || result == C3X_RENDERER_RESULT_BAD_ARGUMENT ||
+	         result == C3X_RENDERER_RESULT_DEVICE_ERROR) is->custom_renderer_init_state = IS_INIT_FAILED;
+	log_custom_renderer_event ("loading-world-prepared", result);
+	return result;
+}
+
 // The first completed tile traversal certifies map/viewer/anchors while native
 // loading still owns initialization. The flag is never left set between calls.
 int
@@ -29570,7 +29686,9 @@ seed_custom_renderer_initial_world (struct c3x_renderer_camera_request_v1 const 
 	    request->identity.scene_epoch != is->custom_renderer_world_topology_revision)
 		return C3X_RENDERER_RESULT_BAD_ARGUMENT;
 	is->custom_renderer_initial_world_capture = true;
-	int result = is->custom_renderer_seed_world (request);
+	c3x_renderer_seed_world_fn require_changes = (void *)(*p_GetProcAddress) (
+		is->custom_renderer_module, "c3x_renderer_require_world_changes");
+	int result = require_changes != NULL ? require_changes (request) : is->custom_renderer_seed_world (request);
 	is->custom_renderer_initial_world_capture = false;
 	if (result == C3X_RENDERER_RESULT_OK)
 		is->custom_renderer_seeded_viewer_epoch = is->custom_renderer_viewer_epoch;
@@ -29626,21 +29744,50 @@ composite_custom_renderer_frame ()
 	// A new viewer (including debug reveal/hide) is the same scope boundary:
 	// do not flood the worker with unit/UI updates while it builds that scene.
 	// Ordinary redraws within the completed scope remain asynchronous.
+	HMODULE loading_module = is->custom_renderer_module;
 	if (resident_result == C3X_RENDERER_RESULT_PENDING &&
 	    is->custom_renderer_display_viewer_epoch != is->custom_renderer_viewer_epoch) {
 		void (WINAPI * sleep_ms) (DWORD) = (void *)(*p_GetProcAddress) (is->kernel32, "Sleep");
-		LARGE_INTEGER started, now; QueryPerformanceCounter (&started);
+		c3x_renderer_world_status_fn query_world = (void *)(*p_GetProcAddress) (
+			is->custom_renderer_module, "c3x_renderer_world_status");
+		LARGE_INTEGER progress, now; QueryPerformanceCounter (&progress);
 		log_custom_renderer_event ("first-map-wait", resident_result);
+		log_custom_renderer_event ("first-map-loading-active", (byte)p_main_screen_form->GUI.field_574[3]);
+		// Native loading retains ownership of its form and progress range.
 		do {
 			sleep_ms (5);
 			resident_result = is->custom_renderer_native_map (C3X_NATIVE_MAP_PREPARE, image, &request, &displayed);
 			QueryPerformanceCounter (&now);
-		} while (resident_result == C3X_RENDERER_RESULT_PENDING &&
-			now.QuadPart - started.QuadPart < 60 * is->custom_renderer_qpc_frequency.QuadPart);
-		if (resident_result == C3X_RENDERER_RESULT_PENDING) {
-			is->custom_renderer_native_map (C3X_NATIVE_MAP_CANCEL, image, NULL, NULL);
-			resident_result = C3X_RENDERER_RESULT_ERROR;
-		}
+			if (resident_result == C3X_RENDERER_RESULT_PENDING &&
+			    *(byte *)(p_main_screen_form->GUI.field_574 + 3) &&
+			    now.QuadPart - progress.QuadPart >= is->custom_renderer_qpc_frequency.QuadPart / 2) {
+				char text[100];
+				struct c3x_renderer_world_status_v1 status = {sizeof status};
+				if (query_world != NULL && query_world (&status) == C3X_RENDERER_RESULT_OK && status.regions > 0) {
+					snprintf (text, sizeof text, "Preparing renderer map regions: %u / %u", status.prepared_regions, status.regions);
+
+				} else snprintf (text, sizeof text, "Preparing renderer: required assets and first frame");
+				Main_GUI_label_loading_bar (&p_main_screen_form->GUI, __, 0, text);
+				// The native redraw must not invalidate borrowed capture/module state.
+				if (is->custom_renderer_module != loading_module ||
+				    ! is->current_config.enable_custom_rendering ||
+				    ! is->custom_renderer_draw_in_progress || ! is->custom_renderer_frame_active ||
+				    is->custom_renderer_capture_only || is->custom_renderer_capture_failed ||
+				    is->custom_renderer_target != &p_bic_data->Map.Renderer ||
+				    request.frame->tiles != is->custom_renderer_tiles ||
+				    request.frame->world_topology != is->custom_renderer_world_topology ||
+				    request.identity.map_epoch != is->custom_renderer_map_epoch ||
+				    request.identity.viewer_epoch != is->custom_renderer_viewer_epoch ||
+				    request.identity.visibility_epoch != is->custom_renderer_visibility_revision ||
+				    request.identity.scene_epoch != is->custom_renderer_world_topology_revision) {
+					if (is->custom_renderer_module == loading_module && is->custom_renderer_native_map != NULL)
+						is->custom_renderer_native_map (C3X_NATIVE_MAP_CANCEL, image, NULL, NULL);
+					resident_result = C3X_RENDERER_RESULT_ERROR;
+					break;
+				}
+				progress = now;
+			}
+		} while (resident_result == C3X_RENDERER_RESULT_PENDING);
 		log_custom_renderer_event ("first-map-ready", resident_result);
 	}
 	bool gpu_map = resident_result == C3X_RENDERER_RESULT_OK;
@@ -31950,6 +32097,11 @@ patch_Map_Renderer_m71_Draw_Tiles (Map_Renderer * this, int edx, int param_1, in
 		clear_tile_animation_pcx_matches_in_cache ();
 	}
 
+	if (is->custom_renderer_draw_in_progress) {
+		// Never re-enter the native tile plane while custom rendering owns it.
+		log_custom_renderer_event ("reentrant-map-draw", C3X_RENDERER_RESULT_ERROR);
+		return;
+	}
 	if (is->current_config.enable_custom_rendering &&
 	    is->custom_renderer_backend_healthy != NULL &&
 	    ! is->custom_renderer_backend_healthy ()) {
@@ -31966,11 +32118,6 @@ patch_Map_Renderer_m71_Draw_Tiles (Map_Renderer * this, int edx, int param_1, in
 			unload_custom_renderer ();
 		if (is->custom_renderer_native_image != NULL) return; // Failed ownership handoff: no stale native replay.
 		Map_Renderer_m71_Draw_Tiles (this, __, param_1, param_2, param_3);
-		return;
-	}
-	if (is->custom_renderer_draw_in_progress) {
-		// Never re-enter the native tile plane while custom rendering owns it.
-		log_custom_renderer_event ("reentrant-map-draw", C3X_RENDERER_RESULT_ERROR);
 		return;
 	}
 	if (! ensure_custom_renderer_loaded ()) {
@@ -32019,6 +32166,7 @@ patch_Map_Renderer_m71_Draw_Tiles (Map_Renderer * this, int edx, int param_1, in
 	is->custom_renderer_async_drawing = async_view;
 	is->custom_renderer_async_presented = false;
 
+	bool first_map_delivery = is->custom_renderer_presented_frames == 0;
 	is->custom_renderer_draw_in_progress = true;
 	if (! is->custom_renderer_redraw_pending)
 		is->custom_renderer_dirty_flags |= C3X_RENDERER_DIRTY_ALL;
@@ -32093,6 +32241,9 @@ patch_Map_Renderer_m71_Draw_Tiles (Map_Renderer * this, int edx, int param_1, in
 		log_custom_renderer_test_route_adopted (requested_view.camera_x, requested_view.camera_y, false);
 	}
 	is->custom_renderer_draw_in_progress = false;
+	if (first_map_delivery && is->custom_renderer_composited && is->custom_renderer_init_state == IS_OK &&
+	    is->custom_renderer_display_viewer_epoch == is->custom_renderer_viewer_epoch)
+		is->custom_renderer_first_front_pending = true;
 }
 
 struct named_tile_entry *
@@ -33209,6 +33360,13 @@ patch_Map_process_after_placing (Map * this, int edx, bool param_1)
 		set_up_ai_multi_city_start (this, is->current_config.ai_multi_city_start);
 
 	Map_process_after_placing (this, __, param_1);
+	if (is->current_config.enable_custom_rendering && is->custom_renderer_loading_players_ready && ! is->custom_renderer_loading_technology &&
+	    ! p_main_screen_form->is_now_loading_game && this == &p_bic_data->Map &&
+	    (! is_online_game () || p_bic_data->field_84C == 0) &&
+	    (is_online_game () || p_bic_data->field_BD8[5] == 0)) {
+		prepare_custom_renderer_loading_world ();
+		is->custom_renderer_loading_players_ready = false;
+	}
 }
 
 void __fastcall
@@ -34563,6 +34721,43 @@ patch_perform_interturn_in_main_loop ()
 		// start of the interturn or that saw an AI unit move or bombard during the interturn, excluding the last human player.
 		is->replay_for_players = (ai_unit_vis_before | (is->players_saw_ai_unit & *p_human_player_bits)) & ~last_human_player_bit;
 	}
+	if (is->current_config.enable_custom_rendering && p_main_screen_form != NULL &&
+	    is->custom_renderer_init_state == IS_OK && is->custom_renderer_capture_world_topology &&
+	    is->custom_renderer_native_map != NULL && is->custom_renderer_seed_world != NULL &&
+	    is->custom_renderer_module != NULL && p_bic_data->Map.Tiles != NULL &&
+	    is->custom_renderer_viewer_epoch != 0 && custom_renderer_native_probe_on () &&
+	    ! is->custom_renderer_draw_in_progress && ! is->custom_renderer_frame_active &&
+	    ! is->custom_renderer_capture_only) {
+		// Prepare changed known world facts while this interturn still owns
+		// control. A redraw request is not a completed native traversal; anchors
+		// and composition remain owned by the next genuine map draw.
+		HMODULE module = is->custom_renderer_module;
+		Main_Screen_Form * screen = p_main_screen_form;
+		Map * map = &p_bic_data->Map;
+		void * map_tiles = map->Tiles;
+		long long map_epoch = is->custom_renderer_map_epoch;
+		long long viewer_epoch = is->custom_renderer_viewer_epoch;
+		int viewer = is->custom_renderer_viewer_civ_id;
+		is->custom_renderer_display_viewer_epoch = 0;
+		is->custom_renderer_seeded_viewer_epoch = 0;
+		is->custom_renderer_dirty_flags |= C3X_RENDERER_DIRTY_SCENE;
+		is->custom_renderer_redraw_pending = true;
+		int result = prepare_custom_renderer_loading_world ();
+		// Preparation can retire this transaction. Never overwrite a replacement
+		// module/map/viewer or a caller's new initialization state.
+		if (! is->current_config.enable_custom_rendering || is->custom_renderer_module != module ||
+		    p_main_screen_form != screen || &p_bic_data->Map != map || map->Tiles != map_tiles ||
+		    is->custom_renderer_map_epoch != map_epoch || is->custom_renderer_viewer_epoch != viewer_epoch ||
+		    is->custom_renderer_viewer_civ_id != viewer || result == C3X_RENDERER_RESULT_SUPERSEDED ||
+		    (is->custom_renderer_init_state != IS_OK && is->custom_renderer_init_state != IS_INIT_FAILED)) {
+			log_custom_renderer_event ("required-interturn-preparation-retired", C3X_RENDERER_RESULT_SUPERSEDED);
+		} else if (result != C3X_RENDERER_RESULT_OK || is->custom_renderer_init_state != IS_OK ||
+		           is->custom_renderer_seeded_viewer_epoch != viewer_epoch) {
+			log_custom_renderer_event ("required-interturn-preparation-failed",
+				result == C3X_RENDERER_RESULT_OK ? C3X_RENDERER_RESULT_ERROR : result);
+			is->custom_renderer_init_state = IS_INIT_FAILED;
+		} else log_custom_renderer_event ("required-interturn-preparation-complete", C3X_RENDERER_RESULT_OK);
+	}
 }
 
 void __cdecl
@@ -34570,6 +34765,12 @@ patch_initialize_map_music (int civ_id, int era_id, bool param_3)
 {
 	if (! is->showing_hotseat_replay)
 		initialize_map_music (civ_id, era_id, param_3);
+	if (is->current_config.enable_custom_rendering && ! is->showing_hotseat_replay &&
+	    ! is->custom_renderer_loading_technology && p_main_screen_form != NULL &&
+	    ! p_main_screen_form->is_now_loading_game && is->custom_renderer_presented_frames == 0 &&
+	    is->custom_renderer_module != NULL && p_bic_data->Map.Tiles != NULL &&
+	    civ_id == p_main_screen_form->Player_CivID)
+		is->custom_renderer_loading_players_ready = true;
 }
 
 void __stdcall
@@ -34782,7 +34983,11 @@ patch_Leader_unlock_technology (Leader * this, int edx, int tech_id, bool param_
 	int * p_stack = (int *)&tech_id;
 	int ret_addr = p_stack[-1];
 
+	bool renderer_technology = is->custom_renderer_loading_technology;
+	if (is->current_config.enable_custom_rendering) is->custom_renderer_loading_technology = true;
 	Leader_unlock_technology (this, __, tech_id, param_2, param_3, param_4);
+	if (is->current_config.enable_custom_rendering) is->custom_renderer_loading_technology = renderer_technology;
+
 
 	// If this method was not called during game initialization
 	if ((ret_addr != ADDR_UNLOCK_TECH_AT_INIT_1) &&
@@ -38029,7 +38234,12 @@ patch_Leader_spawn_captured_unit (Leader * this, int edx, int type_id, int tile_
 void __fastcall
 patch_Leader_enter_new_era (Leader * this, int edx, bool param_1, bool no_online_sync)
 {
+	// Initial-era music runs before the remaining leaders have been initialized.
+	bool renderer_loading_guard = is->current_config.enable_custom_rendering;
+	bool renderer_technology = is->custom_renderer_loading_technology;
+	if (renderer_loading_guard) is->custom_renderer_loading_technology = true;
 	Leader_enter_new_era (this, __, param_1, no_online_sync);
+	if (renderer_loading_guard) is->custom_renderer_loading_technology = renderer_technology;
 	if (is->current_config.enable_custom_rendering) {
 		is->custom_renderer_world_audit_needed = true;
 		is->custom_renderer_dirty_flags |= C3X_RENDERER_DIRTY_SCENE;
@@ -38767,6 +38977,11 @@ patch_Map_place_scenario_things (Map * this)
 	if (is->current_config.enable_custom_animations && ! is->current_config.enable_custom_rendering)
 		rebuild_tile_animation_rule_match_cache ();
 	is->is_placing_scenario_things = false;
+	if (is->current_config.enable_custom_rendering && is->custom_renderer_loading_players_ready && ! is->custom_renderer_loading_technology &&
+	    ! p_main_screen_form->is_now_loading_game && this == &p_bic_data->Map && is_online_game ()) {
+		prepare_custom_renderer_loading_world ();
+		is->custom_renderer_loading_players_ready = false;
+	}
 }
 
 void
@@ -39379,6 +39594,7 @@ int __cdecl
 patch_move_game_data (byte * buffer, bool save_else_load)
 {
 	int tr = move_game_data (buffer, save_else_load);
+	bool renderer_restore_ok = tr > 0;
 	if (! save_else_load && is->current_config.enable_custom_animations && ! is->current_config.enable_custom_rendering)
 		reset_tile_animation_runtime_state ();
 
@@ -39401,7 +39617,10 @@ patch_move_game_data (byte * buffer, bool save_else_load)
 	}
 
 	// Check for a mod save data section and load it if present
-	MappedFile * save;
+	MappedFile * save = is->accessing_save_file;
+	if (is->current_config.enable_custom_rendering && ! save_else_load && save != NULL &&
+	    save->size >= 4 && match_save_segment_bookend ((byte *)((int)save->base_addr + save->size - 4)))
+		renderer_restore_ok = false; // Recognized extension must actually restore before capture.
 	int seg_size;
 	byte * seg;
 	if ((! save_else_load) &&
@@ -39409,7 +39628,7 @@ patch_move_game_data (byte * buffer, bool save_else_load)
 	    (save->size >= 8) &&
 	    match_save_segment_bookend ((byte *)((int)save->base_addr + save->size - 4)) &&
 	    ((seg_size = int_from_bytes ((byte *)((int)save->base_addr + save->size - 8))) > 0) &&
-	    (save->size >= seg_size + 12) &&
+	    (save->size >= 12 && seg_size <= save->size - 12) &&
 	    match_save_segment_bookend ((byte *)((int)save->base_addr + save->size - seg_size - 12)) &&
 	    ((seg = malloc (seg_size)) != NULL)) {
 		memcpy (seg, (void *)((int)save->base_addr + save->size - seg_size - 8), seg_size);
@@ -40171,12 +40390,14 @@ patch_move_game_data (byte * buffer, bool save_else_load)
 		}
 
 		if (error_chunk_name != NULL) {
+			renderer_restore_ok = false;
 			char s[200];
 			snprintf (s, sizeof s, "Failed to read mod save data. Error occured in chunk: %s", error_chunk_name);
 			s[(sizeof s) - 1] = '\0';
 			pop_up_in_game_error (s);
 		}
 
+		if (error_chunk_name == NULL && cursor == seg + seg_size) renderer_restore_ok = tr > 0;
 		free (seg);
 	}
 
@@ -40186,6 +40407,9 @@ patch_move_game_data (byte * buffer, bool save_else_load)
 	    (is->day_night_cycle_img_state != IS_INIT_FAILED))
 		reload_current_day_night_and_seasonal_images (&p_bic_data->Map.Renderer);
 
+	if (is->current_config.enable_custom_rendering && ! save_else_load && renderer_restore_ok &&
+	    p_main_screen_form != NULL && p_main_screen_form->is_now_loading_game)
+		prepare_custom_renderer_loading_world ();
 	return tr;
 }
 

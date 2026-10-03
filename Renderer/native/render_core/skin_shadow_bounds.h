@@ -8,9 +8,18 @@ namespace c3x_renderer { namespace render_core {
 struct SkinShadowBounds {
     struct Box { std::array<float,3> low{},high{}; bool used=false; };
     std::vector<Box> joints;
+    double weight_low=1,weight_high=1;bool known=false;
     void prepare(AnimationMesh const& mesh){
-        joints.assign(mesh.bones,{});
-        for(auto const& vertex:mesh.vertices)for(unsigned i=0;i<4;++i)if(vertex.weights[i]>0){
+        joints.assign(mesh.bones,{});weight_low=weight_high=1;known=mesh.bones&&!mesh.vertices.empty();
+        for(auto const& vertex:mesh.vertices){double total=0;
+            for(unsigned i=0;i<4;++i){auto w=vertex.weights[i];
+                if(!std::isfinite(w)||w<0||vertex.joints[i]>=joints.size())known=false;
+                total+=w;
+            }
+            for(float coordinate:vertex.source.position)if(!std::isfinite(coordinate))known=false;
+            if(!std::isfinite(total)||total<=0)known=false;
+            weight_low=std::min(weight_low,total);weight_high=std::max(weight_high,total);
+            for(unsigned i=0;i<4;++i)if(vertex.weights[i]>0&&vertex.joints[i]<joints.size()){
             auto& box=joints[vertex.joints[i]];
             for(unsigned axis=0;axis<3;++axis){
                 float p=vertex.source.position[axis];
@@ -18,7 +27,7 @@ struct SkinShadowBounds {
                 box.high[axis]=box.used?std::max(box.high[axis],p):p;
             }
             box.used=true;
-        }
+        }}
     }
     void append(float const* palette,float angle,float scale,float offset_z,
                 std::vector<UnitShadow::Point>& points)const{

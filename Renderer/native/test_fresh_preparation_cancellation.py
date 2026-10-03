@@ -54,9 +54,17 @@ def extract(source):
         raise ValueError('Production fresh preparation branch missing')
     branch = block_at(source, begin)
     capture_begin = source.index('bool complete=renderer_state.render(job_frame,output,-1,&camera_cancelled')
+    render_end_marker = '[this]{service_camera_preparation();});'
+    render_end = source.index(render_end_marker, capture_begin) + len(render_end_marker)
     marker='capture_gpu(ready,output,job_frame,job_camera_identity);'
     capture_end = source.index(marker,capture_begin)+len(marker)
-    capture = source[capture_begin:capture_end]
+    gate_begin = source.rfind('complete=complete && !camera_cancelled.load', render_end, capture_end)
+    if gate_begin < 0:
+        raise ValueError('Production completed GPU capture gate missing')
+    # Unit-source/loading-region owners have separate contracts. Execute the
+    # actual render call and final capture gate without importing those owners
+    # into this focused temporary-target/publication fixture.
+    capture = source[capture_begin:render_end] + '\n' + source[gate_begin:capture_end]
     guard_begin = source.index('if(gpu_ticket==camera_ticket && camera_result==C3X_RENDERER_RESULT_PENDING && !camera_cancelled.load', capture_end)
     guard = block_at(source, guard_begin)
     return branch, capture, guard
@@ -69,6 +77,7 @@ PRELUDE = r'''
 #include <cstdio>
 #include <memory>
 #include <functional>
+#include <stdexcept>
 #include <utility>
 #include <vector>
 using UINT=unsigned;
@@ -105,7 +114,7 @@ template<class T>void release(T*& value){if(value){value->Release();value=nullpt
 struct Frame {unsigned visible_animation_count=0,tile_count=0;int const* tiles=nullptr;};
 struct Output {unsigned version=0,size=0;bool filled=false;};
 struct Trace {int writes=0;void write(char const*,char const*,bool){++writes;}};
-enum class CancelAt {none,before,wave,texture,rtv,assets,meshes,draw};
+enum class CancelAt {none,before,wave,texture,rtv,selection,assets,meshes,draw,capture};
 struct Harness;
 struct Device {
     Harness* owner;
@@ -117,12 +126,18 @@ struct Coverage {int calls=0;bool capture(Frame const&){++calls;return true;}};
 struct Published {
     int identity=0;
     std::shared_ptr<int> lease;
-    void swap(Published& other){std::swap(identity,other.identity);lease.swap(other.lease);}
+    bool fail_swap=false;
+    void swap(Published& other){
+        if(fail_swap)throw std::runtime_error("publication refused");
+        std::swap(identity,other.identity);lease.swap(other.lease);
+    }
 };
 struct Harness {
     std::atomic<bool> camera_cancelled{false};
     CancelAt cancel_at=CancelAt::none;
     bool wave_ok=true,draw_ok=true,texture_ok=true,rtv_ok=true;
+    bool selection_ok=true,capture_ok=true;
+    int assets_result=C3X_RENDERER_RESULT_OK,meshes_result=C3X_RENDERER_RESULT_OK;
     bool fresh_scene_path=true,visibility_pass=true,fresh_path_failed=false;
     bool gpu_map_valid=false,cpu_output_stale=false;
     bool cached_request_continuous_redraw=false,cache_valid=false;
@@ -140,10 +155,15 @@ struct Harness {
     Texture* gpu_map_texture=nullptr;
     long long frame_geometry_ticks=0,frame_draw_ticks=0;
     char const* frame_cache_path="prior";
-    int waves=0,draws=0,fills=0,captures=0,assets=0,meshes=0;
+    int waves=0,draws=0,fills=0,captures=0,selections=0,assets=0,meshes=0,consumes=0;
+    std::uint64_t route_map_serial=0,gpu_serial=19;
     std::vector<int> fresh_unit_poses;
-    int prepare_frame_unit_assets(std::vector<int> const&){++assets;event(CancelAt::assets);return C3X_RENDERER_RESULT_OK;}
-    int c3x_renderer64_prepare_unit_meshes(){++meshes;event(CancelAt::meshes);return C3X_RENDERER_RESULT_OK;}
+    bool select_frame_units(Frame const&,std::vector<int> const&,std::vector<int>&,float){
+        ++selections;event(CancelAt::selection);return selection_ok;
+    }
+    int prepare_frame_unit_assets(std::vector<int> const&){++assets;event(CancelAt::assets);return assets_result;}
+    int c3x_renderer64_prepare_unit_meshes(){++meshes;event(CancelAt::meshes);return meshes_result;}
+    void consume_required_world_changes(unsigned,bool success){assert(success);++consumes;}
     // Resident data and the last completed map keep independent owners.
     std::shared_ptr<int> resident_lease=std::make_shared<int>(73);
     Published gpu_publication{41,std::make_shared<int>(41)};
@@ -157,7 +177,9 @@ struct Harness {
     bool c3x_renderer64_render_fresh(Frame const&,ID3D11RenderTargetView*){++draws;event(CancelAt::draw);return draw_ok;}
     bool fill_output(Frame const&,Output& output,unsigned,long long){++fills;output.filled=true;return true;}
     bool capture_gpu(Published& ready,Output const&,Frame const&,unsigned){
-        ++captures;ready={61,std::make_shared<int>(61)};return true;
+        ++captures;event(CancelAt::capture);
+        if(!capture_ok)return false;
+        ready={61,std::make_shared<int>(61)};return true;
     }
     void service_camera_preparation(){}
     bool render(Frame const& frame,Output& output,int,std::atomic<bool>* pending,unsigned=0,void const* =nullptr,unsigned=0,void const* =nullptr,std::function<void()> ={}){
@@ -208,6 +230,7 @@ void cancelled_case(CancelAt stage,bool wave_ok=true,bool draw_ok=true,bool text
     assert(h.gpu_publication.identity==41&&h.gpu_publication.lease==prior);
     assert(h.resident_lease==resident&&*resident==73);
     assert(h.camera_result==C3X_RENDERER_RESULT_PENDING);
+    assert(h.consumes==0);
     assert(ID3D11RenderTargetView::alive==0);
     assert(ID3D11RenderTargetView::releases-releases==h.owned_device.rtv_created);
     if(stage==CancelAt::before){
@@ -229,6 +252,9 @@ int main(){
     cancelled_case(CancelAt::rtv);
     cancelled_case(CancelAt::texture,true,true,false);
     cancelled_case(CancelAt::rtv,true,true,true,false);
+    cancelled_case(CancelAt::selection);
+    cancelled_case(CancelAt::assets);
+    cancelled_case(CancelAt::meshes);
     cancelled_case(CancelAt::draw,true,true);
     cancelled_case(CancelAt::draw,true,false);
     {
@@ -237,6 +263,8 @@ int main(){
         assert(h.gpu_map_valid&&h.cpu_output_stale&&!h.fresh_path_failed);
         assert(h.camera_ready.identity==61&&h.camera_result==C3X_RENDERER_RESULT_OK);
         assert(!h.camera_ready_prepared&&ID3D11RenderTargetView::alive==0);
+        assert(h.selections==1&&h.assets==1&&h.meshes==1&&h.consumes==1);
+        assert(h.route_map_serial==h.gpu_serial+1);
     }
     {
         Harness h;h.wave_ok=false;assert(!h.worker());
@@ -255,8 +283,36 @@ int main(){
         Harness h;h.rtv_ok=false;assert(!h.worker());
         assert(h.fresh_path_failed&&h.draws==0&&h.fills==0);
     }
+    // Real downstream refusal cannot publish or consume the required-world
+    // marker, even though the earlier draw itself completed successfully.
+    for(int failure=0;failure<4;++failure){
+        Harness h;auto prior=h.camera_ready.lease;
+        if(failure==0)h.selection_ok=false;
+        if(failure==1)h.assets_result=C3X_RENDERER_RESULT_ERROR;
+        if(failure==2)h.meshes_result=C3X_RENDERER_RESULT_ERROR;
+        if(failure==3)h.capture_ok=false;
+        assert(!h.worker());assert(h.camera_ready.identity==51&&h.camera_ready.lease==prior);
+        assert(h.camera_result==C3X_RENDERER_RESULT_ERROR&&h.consumes==0);
+        assert(ID3D11RenderTargetView::alive==0);
+    }
+    {
+        Harness h;h.camera_ready.fail_swap=true;auto prior=h.camera_ready.lease;
+        assert(h.worker()); // GPU capture completed; the publication swap failed.
+        assert(h.camera_result==C3X_RENDERER_RESULT_ERROR&&h.consumes==0);
+        assert(h.camera_ready.identity==51&&h.camera_ready.lease==prior);
+    }
+    for(int rejected_owner=0;rejected_owner<3;++rejected_owner){
+        Harness h;auto prior=h.camera_ready.lease;
+        if(rejected_owner==0)h.camera_ticket=h.gpu_ticket+1;
+        if(rejected_owner==1)h.cancel_at=CancelAt::capture;
+        if(rejected_owner==2)h.camera_result=C3X_RENDERER_RESULT_OK;
+        auto prior_result=h.camera_result;
+        assert(h.worker()); // Final owner gate must still reject adoption.
+        assert(h.captures==1&&h.camera_result==prior_result&&h.consumes==0);
+        assert(h.camera_ready.identity==51&&h.camera_ready.lease==prior);
+    }
     assert(Texture::alive==0&&ID3D11RenderTargetView::alive==0);
-    std::puts("fresh preparation cancellation: PASS (11 cancelled stages, success, 4 real failures)");
+    std::puts("fresh preparation cancellation: PASS (12 cancelled stages, success, 9 failures, 3 owner rejections)");
 }
 '''
 
@@ -267,6 +323,8 @@ class FreshPreparationCancellationTests(unittest.TestCase):
         branch, capture, guard = extract(source)
         code = PRELUDE + branch + MIDDLE + capture + '\nint result=complete?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_ERROR;\n' + guard + END
         print('production_branch_sha256=' + hashlib.sha256(branch.encode()).hexdigest())
+        print('production_capture_sha256=' + hashlib.sha256(capture.encode()).hexdigest())
+        print('production_publication_sha256=' + hashlib.sha256(guard.encode()).hexdigest())
         run_cpp(code)
 
 

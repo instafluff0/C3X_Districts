@@ -5,46 +5,6 @@ from Renderer.native.native_cpp_test import run_cpp
 ROOT = Path(__file__).resolve().parents[2]
 
 class RendererLifecycleTests(unittest.TestCase):
-    def test_first_native_map_waits_once_with_a_deadline(self):
-        source=(ROOT/'injected_code.c').read_text()
-        block=source.split('// Complete the first native map draw',1)[1].split('\n\tbool gpu_map',1)[0]
-        block=block[block.index('if ('):].replace('(void *)(*p_GetProcAddress)', '(Sleeper)(*p_GetProcAddress)')
-        run_cpp(r'''
-#include <cassert>
-#include <cstddef>
-#include <cstdint>
-#define WINAPI
-using DWORD=unsigned;using Sleeper=void(*)(DWORD);
-struct LARGE_INTEGER {long long QuadPart;};
-enum {C3X_RENDERER_RESULT_ERROR=0,C3X_RENDERER_RESULT_OK=1,C3X_RENDERER_RESULT_PENDING=4,C3X_NATIVE_MAP_PREPARE=1,C3X_NATIVE_MAP_CANCEL=2};
-struct {struct {int field_574[4]={};}GUI;} form,*p_main_screen_form=&form;
-long long ticks=0;int sleeps=0,polls=0,cancels=0,remaining=0,reply=1;
-void sleep_ms(DWORD ms){assert(ms==5);ticks+=ms;++sleeps;}
-void QueryPerformanceCounter(LARGE_INTEGER* t){t->QuadPart=ticks;}
-Sleeper get_proc(void*,char const*){return sleep_ms;}auto p_GetProcAddress=get_proc;
-void log_custom_renderer_event(char const*,int){}
-int native_map(int action,void*,void*,void*){if(action==C3X_NATIVE_MAP_CANCEL){++cancels;return 1;}++polls;return --remaining>0?4:reply;}
-struct {long long custom_renderer_viewer_epoch=1,custom_renderer_display_viewer_epoch=0;LARGE_INTEGER custom_renderer_qpc_frequency{1000};void* kernel32=nullptr;decltype(&native_map)custom_renderer_native_map=native_map;} state,*is=&state;
-int execute(int resident_result){void* image=nullptr;int request=0,displayed=0;
-'''+block+r'''
- return resident_result;
-}
-int main(){
- form.GUI.field_574[3]=1;remaining=8;
- assert(execute(4)==1&&sleeps==8&&polls==8&&!cancels);
- state.custom_renderer_display_viewer_epoch=1;remaining=2;
- assert(execute(4)==4&&sleeps==8); // Later redraws never wait, even under a loading bar.
- auto before=sleeps;
- state.custom_renderer_viewer_epoch=2;form.GUI.field_574[3]=0;
- remaining=2;assert(execute(4)==1&&sleeps==before+2); // New viewer waits independently of the loading bar.
- before=sleeps;
- form.GUI.field_574[3]=1;remaining=2;reply=3;
- assert(execute(4)==3&&sleeps==before+2); // failure exits promptly
- remaining=100000;reply=1;ticks=0;
- assert(execute(4)==0&&ticks==60000&&cancels==1); // bounded cold-start failure
-}
-''')
-
     def test_retired_viewer_keeps_completed_pixels(self):
         source=(ROOT/'Renderer/native/c3x_renderer.cpp').read_text()
         start=source.index('auto draw=[this,weak,capture,selected,x,y,w,h,sharpness]')

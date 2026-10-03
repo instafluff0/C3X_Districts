@@ -1043,6 +1043,11 @@ private:
     }
 public:
     RetainedComposition(ID3D11Device* d,ID3D11DeviceContext* c):device(d),context(c),replay(d,c,128u*1024u*1024u){replay.share_storage(storage);}
+    bool prepare_assets(std::function<bool()> cancelled={}){
+        if(!replay.prepare_assets(cancelled) || (cancelled && cancelled()))return false;
+        projected_layer.prepare_assets(device);
+        return !cancelled || !cancelled();
+    }
     ~RetainedComposition(){front={};images.clear();world_selection.reset();}
     void clear(){recent_batch.reset();recent_recipes={};recipe_cursor=0;recipe_counts={};collect_plan.clear();prepare_plan.clear();plan_counts={};batch_inventories=0;invalidate_plan();front={};images.clear();world_selection.reset();replay.clear_working();admitted=true;}
     void discard(){recent_batch.reset();recent_recipes={};recipe_cursor=0;recipe_counts={};collect_plan.clear();prepare_plan.clear();plan_counts={};batch_inventories=0;invalidate_plan();front={};images.clear();world_selection.reset();replay.clear_working();admitted=false;}

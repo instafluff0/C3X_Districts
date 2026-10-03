@@ -67,6 +67,7 @@ struct SandboxDirectUnits {
         Microsoft::WRL::ComPtr<ID3D11RenderTargetView> target;
         Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> view;
         c3x_renderer::UnitShadow fit{512,false};
+        c3x_renderer::render_core::UnitReflectionBounds reflection_bounds;
     };
     struct PreparedUnit {
         ScenePose instance;
@@ -77,6 +78,7 @@ struct SandboxDirectUnits {
         bool main=false,shadow=false,reflected=false;
         unsigned shadow_slot=UINT_MAX;
         c3x_renderer::UnitShadow fit{512,false};
+        c3x_renderer::render_core::UnitReflectionBounds reflection_bounds;
     };
     struct PaletteSlot {
         Microsoft::WRL::ComPtr<ID3D11Buffer> buffer;
@@ -87,6 +89,7 @@ struct SandboxDirectUnits {
     ShadowSlot working_shadow;
     c3x_renderer::render_core::FrameSampleCache<std::vector<std::uint64_t>,MaterialSample,256> material_samples;
     unsigned material_builds=0,material_reuses=0,shadow_contributors=0;
+    unsigned reflection_bounds_builds=0,reflection_bounds_reuses=0,reflection_bounds_rejected=0;
     unsigned material_buffer_builds=0,material_buffer_reuses=0,material_buffer_uploads=0,material_upload_fallbacks=0;
     std::vector<PaletteSlot> prepared_palettes;
     static constexpr unsigned palette_slot_limit=1024;
@@ -272,23 +275,30 @@ float4 PSShadow(Output i):SV_Target {
         }
         return SUCCEEDED(hr);
     }
-    bool prepare_mesh(unsigned index){
-        auto& bodies=renderer.unit_bodies;
-        if(index>=bodies.meshes.size())return false;
-        if(meshes.size()<bodies.meshes.size())meshes.resize(bodies.meshes.size());
-        auto& gpu=meshes[index];if(gpu.vertices){gpu.used=++mesh_serial;return true;}
-        auto const& mesh=bodies.meshes[index].animation;
-        if(!mesh||mesh->vertices.empty()||mesh->indices.empty()||mesh->palettes.empty())return false;
-        auto bytes=mesh->vertices.size()*sizeof(Vertex)+(mesh->indices.size()+mesh->palettes.size())*4;
-        constexpr std::size_t limit=192u*1024u*1024u;
+    bool reserve_mesh_bytes(std::size_t bytes){
+        auto const& bodies=renderer.unit_bodies;auto limit=bodies.source_gpu_limit;
         if(bytes>limit)return false;
         while(mesh_bytes>limit-bytes){
             unsigned victim=UINT_MAX;std::uint64_t oldest=UINT64_MAX;
             for(unsigned i=0;i<meshes.size();++i)if(meshes[i].bytes &&
+                (i>=bodies.meshes.size()||!bodies.meshes[i].source_pinned) &&
                 (i>=renderer.frame_mesh_leases.size()||!renderer.frame_mesh_leases[i]) && meshes[i].used<oldest){victim=i;oldest=meshes[i].used;}
             if(victim==UINT_MAX)return false;
             mesh_bytes-=meshes[victim].bytes;meshes[victim]=Mesh{};++mesh_evictions;
         }
+        return true;
+    }
+    bool prepare_mesh(unsigned index){
+        auto& bodies=renderer.unit_bodies;
+        if(index>=bodies.meshes.size())return false;
+        if(meshes.size()<bodies.meshes.size())meshes.resize(bodies.meshes.size());
+        auto& gpu=meshes[index];if(gpu.vertices){
+            if(!reserve_mesh_bytes(0))return false;
+            if(gpu.vertices){gpu.used=++mesh_serial;return true;}}
+        auto const& mesh=bodies.meshes[index].animation;
+        if(!mesh||mesh->vertices.empty()||mesh->indices.empty()||mesh->palettes.empty())return false;
+        auto bytes=mesh->vertices.size()*sizeof(Vertex)+(mesh->indices.size()+mesh->palettes.size())*4;
+        if(!reserve_mesh_bytes(bytes))return false;
         Mesh next;
         std::vector<Vertex> input(mesh->vertices.size());
         for(std::size_t n=0;n<input.size();++n){
@@ -324,6 +334,7 @@ float4 PSShadow(Output i):SV_Target {
 #ifdef C3X_RENDERER64_FRESH
     int prepare_frame_meshes(){
         if(!initialize())return C3X_RENDERER_RESULT_ERROR;
+        if(!reserve_mesh_bytes(0))return C3X_RENDERER_RESULT_ERROR;
         auto began=std::chrono::steady_clock::now();unsigned adopted=0;bool ready=true;
         for(unsigned i=0;i<renderer.frame_mesh_leases.size();++i)if(renderer.frame_mesh_leases[i]){
             if(i<meshes.size()&&meshes[i].vertices)continue;
@@ -730,6 +741,7 @@ float4 PSShadow(Output i):SV_Target {
         required_samples=part_samples=shadow_samples=shadow_reuses=shadow_overflow=0;
         main_contributors=reflection_contributors=shadow_contributors=palette_uploads=material_builds=material_reuses=0;
         material_buffer_builds=material_buffer_reuses=material_buffer_uploads=material_upload_fallbacks=0;
+        reflection_bounds_builds=reflection_bounds_reuses=reflection_bounds_rejected=0;
         if(plan.entries.empty())return true;
         if(plan.entries.size()>4096 || !initialize())return false;
         auto environment=c3x_renderer::evaluate_environment(visual_hour,frame.season);
@@ -880,18 +892,27 @@ float4 PSShadow(Output i):SV_Target {
                 if(shadow_key.size()*sizeof(shadow_key[0])<=64u*1024u)sample.shadow_slot=shared_shadows.select(shadow_key);
                 if(sample.shadow_slot==UINT_MAX)++shadow_overflow;
                 bool cached=sample.shadow_slot!=UINT_MAX && shared_shadows[sample.shadow_slot].prepared;
-                if(cached)sample.fit=shared_shadows[sample.shadow_slot].value.fit;
+                if(cached){auto const& slot=shared_shadows[sample.shadow_slot].value;
+                    sample.fit=slot.fit;sample.reflection_bounds=slot.reflection_bounds;++reflection_bounds_reuses;}
                 else {
                     shadow_points.clear();unsigned part_index=0;
                     for(auto const& part:action.parts){auto const& source=*bodies.meshes[part.mesh].animation;
                         auto const& p=sample.parts[part_index++];
                         auto* palette=p.blended?p.blended:source.palettes.data()+std::size_t(p.frame)*source.bones*16;
-                        meshes[part.mesh].shadow_bounds.append(palette,sample.angle,unit.scale,unit.offset_z,shadow_points);
+                        auto const& bounds=meshes[part.mesh].shadow_bounds;auto first=shadow_points.size();
+                        bounds.append(palette,sample.angle,unit.scale,unit.offset_z,shadow_points);
+                        sample.reflection_bounds.append(shadow_points,first,bounds.known,bounds.weight_low,bounds.weight_high,
+                            double(unit.offset_z)*unit.scale);
                     }
+                    ++reflection_bounds_builds;
                     if(!sample.fit.fit(shadow_points,light[0],light[1],true))return false;
                     if(sample.shadow_slot!=UINT_MAX){auto& cached_shadow=shared_shadows[sample.shadow_slot];auto& slot=cached_shadow.value;
-                        slot.fit=sample.fit;cached_shadow.prepared=true;}
+                        slot.fit=sample.fit;slot.reflection_bounds=sample.reflection_bounds;cached_shadow.prepared=true;}
                 }
+            }
+            if(sample.reflected&&!sample.reflection_bounds.overlaps(plan.view,pose.anchor_x,pose.anchor_y,
+                    pose.projection_scale,sample.ground_pixels)){
+                sample.reflected=false;--reflection_contributors;++reflection_bounds_rejected;
             }
             prepared_units.push_back(std::move(sample));
         }

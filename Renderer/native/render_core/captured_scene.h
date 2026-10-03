@@ -360,6 +360,17 @@ public:
         std::memset(tile.unit_type_name,0,sizeof(tile.unit_type_name));
         return tile;
     }
+    static c3x_renderer_tile_v1 object_inputs(c3x_renderer_tile_v1 tile) {
+        tile=content(tile);
+        // Territory is applied from the current occurrence during draw assembly.
+        // It still belongs to full appearance/raster identity, never object mesh.
+        tile.territory_edge_mask=tile.territory_color_rgb=0;
+        // Resources have a separate draw/animation owner. The CPU object compiler
+        // consumes routes, improvements and cities, never these resource facts.
+        tile.resource_id=tile.resource_class=0;
+        std::memset(tile.resource_name,0,sizeof(tile.resource_name));
+        return tile;
+    }
     bool begin(c3x_renderer_frame_v1 const& frame) {
         valid=false;
         if(frame.tile_count>occurrence_limit || (frame.tile_count && !frame.tiles))return false;

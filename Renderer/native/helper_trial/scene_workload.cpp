@@ -37,7 +37,7 @@ struct Core {
     c3x_renderer_benchmark_session_reset_v1_fn benchmark_reset=nullptr;
     c3x_renderer_render_fn render=nullptr;
     c3x_renderer_render_view_fn render_view=nullptr;
-    c3x_renderer_seed_world_fn seed_world=nullptr;
+    c3x_renderer_seed_world_fn seed_world=nullptr,seed_loading=nullptr;
     using GpuRender=int(*)(c3x_renderer_camera_request_v1 const*,c3x_renderer_gpu_frame_v1*,c3x_renderer_output_v1*);
     GpuRender gpu_render=nullptr;
     using CameraBegin=int(*)(c3x_renderer_camera_request_v1 const*,c3x_renderer_i64*);
@@ -77,9 +77,11 @@ struct Core {
     using WorldQuery=int(*)(c3x_renderer_world_page_v1*);
     using WorldSubmit=int(*)(c3x_renderer_world_page_v1 const*,int);
     using WorldStatus=int(*)(c3x_renderer_world_status_v1*);
+    using WorldArm=int(*)(c3x_renderer_camera_identity_v1 const*);
     WorldQuery world_query=nullptr;WorldSubmit world_submit=nullptr;
     WorldQuery world_delta_scope=nullptr;WorldSubmit world_delta_submit=nullptr;
     WorldStatus world_status=nullptr;
+    WorldArm world_arm=nullptr,world_loading=nullptr;
     using SetUnits=int(*)(int);
     SetUnits set_units=nullptr;
     using TrialClock=void(*)(std::int64_t,std::int64_t);
@@ -87,7 +89,7 @@ struct Core {
     using Shared=int(*)(c3x_renderer_i64,c3x_renderer_i64,DWORD,std::uint64_t*,unsigned*,unsigned*);
     Shared shared=nullptr,shared_raw=nullptr;bool verify_pixels=false;
     using PresentShared=int(*)(c3x_renderer_gpu_present_v1 const*,DWORD,std::uint64_t*,unsigned*,unsigned*);
-    PresentShared present_shared=nullptr;
+    PresentShared present_shared=nullptr,required_present_shared=nullptr;
     using VisualShared=int(*)(std::int64_t,std::int64_t,DWORD,std::uint64_t*,unsigned*,unsigned*);
     VisualShared visual_shared=nullptr;
     using PriorityFrontPending=int(*)();
@@ -105,6 +107,8 @@ struct Core {
         cadence_diagnostics=GetEnvironmentVariableA("C3X_RENDERER_TRACE",cadence_option,sizeof(cadence_option)) &&
             cadence_option[0]>='1' && cadence_option[0]<='9';
         render=reinterpret_cast<c3x_renderer_render_fn>(GetProcAddress(module,"c3x_renderer_render"));
+        seed_loading=reinterpret_cast<c3x_renderer_seed_world_fn>(GetProcAddress(module,"c3x_renderer_trial_seed_world_loading"));
+        world_loading=reinterpret_cast<WorldArm>(GetProcAddress(module,"c3x_renderer_trial_prepare_world_loading"));
         seed_world=reinterpret_cast<c3x_renderer_seed_world_fn>(GetProcAddress(module,"c3x_renderer_seed_world"));
         render_view=reinterpret_cast<c3x_renderer_render_view_fn>(GetProcAddress(module,"c3x_renderer_render_view"));
         gpu_render=reinterpret_cast<GpuRender>(GetProcAddress(module,"c3x_renderer_gpu_render"));
@@ -133,12 +137,14 @@ struct Core {
         world_delta_scope=reinterpret_cast<WorldQuery>(GetProcAddress(module,"c3x_renderer_trial_world_delta_scope"));
         world_delta_submit=reinterpret_cast<WorldSubmit>(GetProcAddress(module,"c3x_renderer_trial_world_delta_submit"));
         world_status=reinterpret_cast<WorldStatus>(GetProcAddress(module,"c3x_renderer_world_status"));
+        world_arm=reinterpret_cast<WorldArm>(GetProcAddress(module,"c3x_renderer_trial_arm_world_changes"));
         benchmark_reset=reinterpret_cast<c3x_renderer_benchmark_session_reset_v1_fn>(GetProcAddress(module,"c3x_renderer_benchmark_session_reset_v1"));
         set_units=reinterpret_cast<SetUnits>(GetProcAddress(module,"c3x_renderer_set_unit_rendering"));
         set_clock=reinterpret_cast<TrialClock>(GetProcAddress(module,"c3x_renderer_trial_set_clock"));
         shared=reinterpret_cast<Shared>(GetProcAddress(module,"c3x_renderer_trial_export_shared"));
         shared_raw=reinterpret_cast<Shared>(GetProcAddress(module,"c3x_renderer_trial_export_shared_raw"));
         present_shared=reinterpret_cast<PresentShared>(GetProcAddress(module,"c3x_renderer_trial_present_shared"));
+        required_present_shared=reinterpret_cast<PresentShared>(GetProcAddress(module,"c3x_renderer_trial_required_present_shared"));
         visual_shared=reinterpret_cast<VisualShared>(GetProcAddress(module,"c3x_renderer_trial_visual_shared"));
         priority_front_pending=reinterpret_cast<PriorityFrontPending>(GetProcAddress(module,"c3x_renderer_trial_priority_front_pending"));
         bind_surface=reinterpret_cast<BindSurface>(GetProcAddress(module,"c3x_renderer_trial_bind_surface"));
@@ -321,12 +327,13 @@ struct Core {
                 wire.code=unsigned(pack(present?path.c_str():nullptr));
                 direct_surface_bound=false;
                 ticket_ids.clear();image_ids.clear();
-            }else if(wire.kind==unsigned(Kind::scene)&&wire.subtype==4){
+            }else if(wire.kind==unsigned(Kind::scene)&&(wire.subtype==4||wire.subtype==5||wire.subtype==6)){
                 require(seed_world!=nullptr,"helper lacks world seed entry");
                 c3x_renderer_camera_identity_v1 identity={};c3x_renderer_camera_identity_v1_fields(in,identity);
                 Frame frame_value;frame(in,frame_value);in.done();
                 c3x_renderer_camera_request_v1 request={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(request),&frame_value.value,identity};
-                wire.code=unsigned(seed_world(&request));
+                auto seed=wire.subtype==6?seed_loading:seed_world;require(seed!=nullptr,"helper lacks loading seed entry");
+                wire.code=unsigned(seed(&request));
             }else if(wire.live&&wire.kind==unsigned(Kind::camera)&&wire.subtype==1){
                 c3x_renderer_camera_identity_v1 identity={};c3x_renderer_camera_identity_v1_fields(in,identity);
                 Frame frame_value;frame(in,frame_value);in.done();
@@ -411,6 +418,14 @@ struct Core {
                 for(auto& tile:tiles)c3x_inputs::c3x_renderer_tile_v1_fields(in,tile);
                 in.done();page.tiles=tiles.data();
                 wire.code=unsigned(world_delta_submit(&page,callback_result));
+            }else if(wire.live&&wire.kind==unsigned(Kind::world_page)&&wire.subtype==6){
+                require(world_arm!=nullptr,"helper lacks required world entry");
+                c3x_renderer_camera_identity_v1 identity={};c3x_renderer_camera_identity_v1_fields(in,identity);in.done();
+                wire.code=unsigned(world_arm(&identity));
+            }else if(wire.live&&wire.kind==unsigned(Kind::world_page)&&wire.subtype==7){
+                require(world_loading!=nullptr,"helper lacks loading preparation entry");
+                c3x_renderer_camera_identity_v1 identity={};c3x_renderer_camera_identity_v1_fields(in,identity);in.done();
+                wire.code=unsigned(world_loading(&identity));
             }else if(wire.kind==unsigned(Kind::scene)&&wire.subtype>=1&&wire.subtype<=3){
                 c3x_renderer_camera_identity_v1 identity={};if(wire.subtype!=1)c3x_renderer_camera_identity_v1_fields(in,identity);
                 Frame frame_value;frame(in,frame_value);in.done();
@@ -544,12 +559,16 @@ struct Core {
                     require(std::uint64_t(wire.width)*wire.height*4<=wire_capacity,"direct surface readback exceeded slot");
                     wire.reply_size=wire.width*wire.height*4;
                 }
-            }else if(wire.kind==unsigned(Kind::presentation)&&wire.subtype==0){
-                require(present_shared!=nullptr,"helper lacks final-image shared export");
+            }else if(wire.kind==unsigned(Kind::presentation)&&(wire.subtype==0||wire.subtype==3)){
+                bool required=wire.subtype==3;
+                auto present_entry=required?required_present_shared:present_shared;
+                require(present_entry!=nullptr,"helper lacks requested final-image shared export");
+                require(!required||direct_surface_bound,"required startup presentation has no direct surface");
                 c3x_renderer_gpu_present_v1 value={sizeof(value)};
                 in(value.action);in(value.ticket);in(value.image);in(value.width);in(value.height);
                 for(auto& x:value.area)in(x);auto owner=in.u32();in.done();
                 require(owner<=1,"invalid presentation role");
+                require(!required||(!value.action&&owner==1),"invalid required presentation role");
                 if(value.action)stop_direct_cadence();
                 if(!wire.live&&wire.expected_code!=C3X_RENDERER_RESULT_OK){
                     // Native admission rejected this offer before a renderer
@@ -560,7 +579,7 @@ struct Core {
                         value.ticket=found!=ticket_ids.end()?found->second:INT64_MAX;}
                     if(!wire.live&&value.image){auto found=image_ids.find(value.image);
                         value.image=found!=image_ids.end()?found->second:INT64_MAX;}
-                    wire.code=unsigned(present_shared(&value,wire.consumer_pid,
+                    wire.code=unsigned(present_entry(&value,wire.consumer_pid,
                         &wire.shared_handle,&wire.width,&wire.height));
                     if(value.action)direct_surface_bound=false;
                     else if(wire.code==C3X_RENDERER_RESULT_OK&&direct_surface_bound){

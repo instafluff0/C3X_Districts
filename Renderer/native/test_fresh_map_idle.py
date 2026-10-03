@@ -13,6 +13,9 @@ class FreshMapIdleTests(unittest.TestCase):
             "    // One preparation owner", 1)[0]
         callback = source.split("        if(fresh_map){", 1)[1].split(
             "\n        }\n#endif", 1)[0]
+        loading = source.split('} else if(command==Command::prepare_world_loading){', 1)[1].split(
+            '} else if (command == Command::require_world_changes)', 1)[0]
+        retirement = loading.split('#ifdef C3X_RENDERER64_FRESH', 1)[1].split('#endif', 1)[0]
         eligibility = function(source, "frame_has_resource_animation")
         run_cpp(r'''
 #include <algorithm>
@@ -53,11 +56,11 @@ int c3x_renderer64_prepare_unit_meshes(){++mesh_prepares;return C3X_RENDERER_RES
 bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const&,ID3D11RenderTargetView*,float){++renders;return true;}
 namespace c3x_gpu_images {struct RetainedComposition {
  struct SampledImage {
-  enum class Kind {unchanged,bgra,frozen,held};Kind kind=Kind::unchanged;
+  enum class Kind {unchanged,bgra,frozen,held};Kind kind=Kind::unchanged;std::uint64_t generation=0;
   static SampledImage frozen(){return {Kind::frozen};}
   static SampledImage held(){return {Kind::held};}
   struct Rect {int left,top,right,bottom;};
-  static SampledImage bgra(ID3D11Texture2D*,Rect,float,std::uint64_t=0){return {Kind::bgra};}
+  static SampledImage bgra(ID3D11Texture2D*,Rect,float,std::uint64_t generation=0){return {Kind::bgra,generation};}
  };
  struct Sample {
   std::function<SampledImage(long long,long long)> canonical;
@@ -74,7 +77,7 @@ struct RendererState {
  struct {std::uint64_t geometry=1,complete=1;} cached_signature;
  std::uint64_t tile_geometry_epoch=1;std::int64_t gpu_serial=0;unsigned device_generation=1;
  std::int64_t route_map_serial=0;
- std::uint64_t route_frame_sequence=0;
+ std::uint64_t route_frame_sequence=1;
  struct {int value=1;} geometry_viewport_settings;
  Device owned,*device=&owned;ID3D11Texture2D initial;ID3D11Texture2D* gpu_map_texture=&initial;
  struct {std::vector<Unit> units=std::vector<Unit>(1);} unit_bodies;
@@ -83,12 +86,13 @@ struct RendererState {
  bool water_scene_active=true,wave_ready=true,visibility_pass=true;
  std::vector<int> resource_animations;
  int resource_animation_for(c3x_renderer_tile_v1 const& tile)const{return tile.resource_id==101?0:-1;}
- bool assets_pending=false;
+ bool assets_pending=false,reject_selection=false;unsigned selections=0;
  // Contributor selection has separate executable geometry fixtures. This
  // adapter fixture supplies their visible-tile result to test ownership/idle.
  bool select_frame_units(c3x_renderer_frame_v1 const& frame,
   std::vector<UnitInstances::ScenePose> const& candidates,
   std::vector<UnitInstances::ScenePose>& selected,float){
+  ++selections;if(reject_selection)return false;
   selected.clear();for(auto const& pose:candidates)for(unsigned i=0;i<frame.tile_count;++i){
    auto const& tile=frame.tiles[i];if(tile.tile_x==pose.tile_x && tile.tile_y==pose.tile_y &&
      (tile.tile_flags&C3X_RENDERER_TILE_VISIBLE)){selected.push_back(pose);break;}
@@ -109,6 +113,7 @@ struct Worker {
  unsigned visual_map_samples=0;
  struct PreparedMapFrame {''' + prepared + r'''
  std::shared_ptr<PreparedMapFrame> prepared_map;
+ void retire_loading_view(){''' + retirement + r'''}
  c3x_gpu_images::RetainedComposition::Sample make(){
   using Sampled=c3x_gpu_images::RetainedComposition::SampledImage;
   auto capture=dynamic_inputs.capture(job_frame,job_camera_identity);
@@ -205,6 +210,26 @@ int main(){
  ++worker.renderer_state.cached_signature.complete;worker.gpu_publication.projection_matches=false;
  before=renders;step(Kind::unchanged,.75f);assert(renders==before);
  worker.gpu_publication.projection_matches=true;step(Kind::bgra,.75f);step(Kind::unchanged,.75f);
+ // Valid world preparation releases the only strong job owner. Its actual
+ // callbacks freeze without consulting the incompatible shared selection
+ // context, while the immutable capture and source-generation proof survive.
+ std::weak_ptr<Worker::PreparedMapFrame> retired=worker.prepared_map;
+ auto old=sample;assert(old.source_generation==1);
+ worker.retire_loading_view();assert(retired.expired()&&!worker.prepared_map);
+ worker.renderer_state.reject_selection=true;
+ auto selections=worker.renderer_state.selections;before=renders;assets=worker.renderer_state.asset_prepares;
+ step(Kind::frozen,.75f);
+ assert(worker.renderer_state.selections==selections && renders==before && worker.renderer_state.asset_prepares==assets);
+ assert(old.source_generation==1 && old(tick,1000).kind==Kind::frozen && old.projected(tick,1000,.75f).kind==Kind::frozen);
+ // A genuine subsequent foreground publication owns a new sampler. Actual
+ // selection errors still throw; retiring an old job never suppresses them.
+ worker.renderer_state.route_frame_sequence=2;sample=worker.make();++worker.renderer_state.gpu_serial;
+ bool failed=false;try{sample.prepare(tick,1000,.75f);}catch(std::runtime_error const& error){
+  failed=std::string(error.what())=="unit contribution selection failed";}
+ assert(failed && worker.renderer_state.selections==selections+1 && renders==before);
+ worker.renderer_state.reject_selection=false;step(Kind::bgra,.75f);
+ assert(sample.source_generation==2 && sample.projected(tick,1000,.75f).generation==2);
+ assert(old.projected(tick,1000,.75f).kind==Kind::frozen);
  // Capture retirement freezes the dependency; idleness alone never freezes it.
  worker.dynamic_inputs.invalidate();step(Kind::frozen,.75f);
  assert(imports==renders&&worker.visual_map_samples==renders);

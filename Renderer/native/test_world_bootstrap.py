@@ -1,8 +1,68 @@
 """Loading pages and native representative copies precede the first camera."""
 import unittest
+from pathlib import Path
 from Renderer.native.native_cpp_test import run_cpp
 
 class WorldBootstrapTests(unittest.TestCase):
+    def test_changed_world_pages_preserve_completed_regions_and_exact_required_marker(self):
+        source=(Path(__file__).parent/'c3x_renderer.cpp').read_text()
+        methods='    bool required_world_changes_for'+source.split('    bool required_world_changes_for',1)[1].split('    int reconcile_world()',1)[0]
+        arm=source.split('} else if (command == Command::require_world_changes) {',1)[1].split('} else if (command == Command::reset)',1)[0]
+        run_cpp(r'''
+#include "Renderer/native/render_core/world_input_capture.h"
+#include "Renderer/native/render_core/world_preparation_region.h"
+#include <cassert>
+using namespace c3x_renderer::render_core;
+struct Worker {
+ ScenePublication scene_changes;WorldInputCapture world_input;bool scene_changes_ok=true,required_world_changes=false;
+ c3x_renderer_camera_identity_v1 required_world_changes_identity={},job_required_world_identity={};
+'''+methods+r'''
+ int arm(c3x_renderer_camera_identity_v1 identity){job_required_world_identity=identity;int result=0;
+'''+arm+r'''
+ return result;}
+};
+int main(){
+ Worker w;CapturedScene scene;WorldPreparationSchedule schedule;
+ c3x_renderer_frame_v1 f{};f.world_width_tiles=f.world_height_tiles=64;f.tile_width=128;f.tile_height=64;
+ f.target_width=2240;f.target_height=1260;std::vector<unsigned> topology(2048,2|(2<<8));
+ f.world_topology=topology.data();f.world_topology_count=unsigned(topology.size());
+ c3x_renderer_camera_identity_v1 identity{1,1,1,1};assert(w.scene_changes.capture(f,identity));
+ bool changed=false;assert(w.scene_changes.apply(scene,changed));
+ assert(w.arm(identity)==C3X_RENDERER_RESULT_SUPERSEDED);
+ auto copy=[&](bool changed_city){
+  unsigned pages=0;while(w.world_input.needs_snapshot(*w.scene_changes.state())){
+   auto page=w.world_input.page(*w.scene_changes.state());page.count=std::min(128u,2048-page.first);
+   for(unsigned n=0;n<page.count;++n){auto index=page.first+n;auto& tile=page.tiles[n];tile={};
+    tile.tile_y=index/32;tile.tile_x=2*(index%32)+(tile.tile_y&1);tile.terrain_type=tile.real_terrain_type=2;
+    tile.city_id=changed_city && tile.tile_x==30 && tile.tile_y==30?7:-1;
+    tile.tile_flags=C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_EXPLORED|C3X_RENDERER_TILE_VISIBLE|
+      C3X_RENDERER_TILE_PREFETCH|C3X_RENDERER_TILE_TOPOLOGY_HALO;
+   }
+   assert(w.world_input.accept(page,w.scene_changes));std::vector<std::pair<int,int>> dirty;
+   assert(w.scene_changes.apply(scene,changed,&dirty));
+   for(auto const& tile:dirty)schedule.invalidate(f,tile.first,tile.second);
+   ++pages;if(pages==1)assert(w.arm(identity)==C3X_RENDERER_RESULT_SUPERSEDED);
+  }assert(pages==16 && w.world_input.passes==1 && !w.world_input.cursor);
+ };
+ copy(false);schedule.configure(f,scene.scope_sequence(),2,3,true,4);
+ while(!schedule.empty())schedule.finish(true);assert(schedule.completed==64);
+ assert(w.arm(identity)==C3X_RENDERER_RESULT_OK && w.required_world_changes_for(identity));
+ assert(!w.consume_required_world_changes(identity,false) && w.required_world_changes_for(identity));
+ auto wrong=identity;++wrong.scene_epoch;
+ assert(!w.consume_required_world_changes(wrong,true) && w.required_world_changes_for(identity));
+ assert(w.consume_required_world_changes(identity,true) && !w.required_world_changes_for(identity));
+ ++identity.scene_epoch;assert(w.scene_changes.capture(f,identity));assert(w.scene_changes.apply(scene,changed));
+ w.world_input.reset();copy(true);auto retained=schedule.completed;
+ assert(retained>0 && retained<64);schedule.configure(f,scene.scope_sequence(),2,3,true,4);
+ assert(schedule.completed==retained);auto pending=64-retained;unsigned rebuilt=0;
+ while(!schedule.empty()){schedule.finish(true);++rebuilt;}
+ assert(rebuilt==pending && schedule.completed==64 && !schedule.unavailable);
+ assert(w.arm(identity)==C3X_RENDERER_RESULT_OK && w.required_world_changes_for(identity));
+ assert(!w.consume_required_world_changes(identity,false) && w.required_world_changes_for(identity));
+ assert(w.consume_required_world_changes(identity,true));
+}
+''')
+
     def test_real_ordered_client_bootstraps_owned_pages_and_bodies_on_game_boundary(self):
         run_cpp(r'''
 #include "Renderer/sandbox/async_scene_client.h"
@@ -32,6 +92,9 @@ struct Fake {
   assert(state.cursor==3200&&state.units==1&&r.identity.map_epoch==identity.map_epoch);
   assert(records[3199].city_id==3199&&topology[0]==7);state.order.push_back(4);ticket=1;return C3X_RENDERER_RESULT_PENDING;}
  unsigned stats(){worker();return state.cursor;}
+ int arm_world_changes(c3x_renderer_camera_identity_v1 const& value){worker();
+  if(std::memcmp(&value,&identity,sizeof(value)))return C3X_RENDERER_RESULT_SUPERSEDED;
+  assert(state.cursor==3200 && state.units==1);state.order.push_back(5);return C3X_RENDERER_RESULT_OK;}
 };
 int main(){
  State state;state.game=std::this_thread::get_id();AsyncSceneClient<Fake> client(true,[](char const*){assert(false);},state);
@@ -51,6 +114,8 @@ int main(){
  assert(client.unit(unit,target,bounds)==1);std::strcpy(unit.unit_key,"reused-storage");
  long long ticket=0;assert(client.camera_begin(r,ticket)==C3X_RENDERER_RESULT_PENDING);assert(client.stats()==3200);
  assert(state.order.front()==1&&state.order.size()==28&&state.order[26]==3&&state.order.back()==4);
+ assert(client.arm_world_changes(r.identity)==C3X_RENDERER_RESULT_OK && state.units==1 && state.order.back()==5);
+ auto stale=r.identity;++stale.viewer_epoch;assert(client.arm_world_changes(stale)==C3X_RENDERER_RESULT_SUPERSEDED);
  // Native callback refusal never masquerades as completed initial capture.
  c3x_renderer_world_page_v1 p{};p.capacity=128;assert(client.world_seed_submit(p,C3X_RENDERER_RESULT_PENDING)==C3X_RENDERER_RESULT_PENDING);
 }
