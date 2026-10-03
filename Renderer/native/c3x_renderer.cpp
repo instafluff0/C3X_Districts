@@ -3000,7 +3000,16 @@ public:
 #ifdef C3X_RENDERER64_FRESH
         // The game candidate compiles shaders at runtime. Keep its accepted
         // shader sources paired with the DLL while Lab sources continue moving.
-        if(!shader_length)shader_root=fidelity_root+"/Renderer/packs/Renderer64CutoverControl";
+        // Prefer the prepared resident-submission runtime (the pinned pack plus
+        // generated resident vertex entries); without it the scene cannot draw.
+        if(!shader_length){
+            shader_root=fidelity_root+"/Renderer/packs/Renderer64ResidentRuntime";
+            char resident_probe[4*MAX_PATH];
+            if(!pack_path(shader_root.c_str(),"Renderer\\native\\source_fidelity\\instance_caster.hlsl",
+                    resident_probe,std::size(resident_probe)) ||
+               GetFileAttributesA(resident_probe)==INVALID_FILE_ATTRIBUTES)
+                shader_root=fidelity_root+"/Renderer/packs/Renderer64CutoverControl";
+        }
 #endif
         bool use_pickup = std::strcmp(requested_profile, "frozen") != 0;
         if (pickup_profile != use_pickup) reset();

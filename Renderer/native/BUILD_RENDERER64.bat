@@ -44,6 +44,8 @@ if not exist "..\packs\TerrainNormalized\natural_runtime\natural.bin" (
 rem Validate the runtime selected for evaluation before changing staged binaries.
 rem The same absolute override must be supplied to the evaluation game process.
 set "C3X_RENDERER_STAGE_SHADER_ROOT=%C3X_RENDERER_SHADER_SOURCE_ROOT%"
+rem The runtime prefers the prepared resident pack when the override is unset.
+if not defined C3X_RENDERER_STAGE_SHADER_ROOT if exist "%~dp0..\packs\Renderer64ResidentRuntime\Renderer\native\source_fidelity\instance_caster.hlsl" set "C3X_RENDERER_STAGE_SHADER_ROOT=%~dp0..\packs\Renderer64ResidentRuntime"
 if not defined C3X_RENDERER_STAGE_SHADER_ROOT set "C3X_RENDERER_STAGE_SHADER_ROOT=%~dp0..\packs\Renderer64CutoverControl"
 for %%I in ("%C3X_RENDERER_STAGE_SHADER_ROOT%") do set "C3X_RENDERER_STAGE_SHADER_ROOT=%%~fI"
 if not exist "%C3X_RENDERER_STAGE_SHADER_ROOT%\Renderer\native\city_fidelity\terrain.hlsl" (
@@ -90,8 +92,8 @@ set "C3X_STARTUP_RESULT=%errorlevel%"
 popd
 if not "%C3X_STARTUP_RESULT%"=="0" goto fail
 echo Renderer64 bridge, renderer DLL and helper staged together.
-echo Evaluation shader root: %C3X_RENDERER_STAGE_SHADER_ROOT%
-echo Keep C3X_RENDERER_SHADER_SOURCE_ROOT set to this absolute path when launching the evaluation game.
+echo Runtime shader root: %C3X_RENDERER_STAGE_SHADER_ROOT%
+if defined C3X_RENDERER_SHADER_SOURCE_ROOT echo Keep C3X_RENDERER_SHADER_SOURCE_ROOT set to this absolute path when launching the evaluation game.
 :done
 popd
 exit /b 0
@@ -110,7 +112,8 @@ if errorlevel 1 goto resident_entry_missing
 exit /b 0
 :resident_entry_missing
 echo Resident shader entry or input binding missing: %~1 / %~2. Refusing to stage incompatible binaries. 1>&2
-echo Prepare a separate candidate with Renderer/tools/prepare_resident_submission_shaders.py, then set C3X_RENDERER_SHADER_SOURCE_ROOT to its absolute path. 1>&2
+echo Prepare it with: python3 Renderer/tools/prepare_resident_submission_shaders.py --baseline Renderer/packs/Renderer64CutoverControl --out Renderer/packs/Renderer64ResidentRuntime 1>&2
+echo The game and this script use that pack by default; C3X_RENDERER_SHADER_SOURCE_ROOT remains an explicit override. 1>&2
 echo BUILD_RENDERER64.bat no-stage remains available for compile-only verification. 1>&2
 exit /b 1
 
