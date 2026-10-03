@@ -41,6 +41,9 @@ cbuffer Params:register(b0){uint first_tile,width,height,padding;};
 Texture2DArray<uint> inputs:register(t0);StructuredBuffer<Op> commands:register(t1);
 StructuredBuffer<Tile> tiles:register(t2);StructuredBuffer<uint> order:register(t3);
 RWTexture2D<uint> words:register(u0);RWTexture2D<uint> detail:register(u1);
+// Three R32_UINT slices keep typed UAV loads valid on D3D11.0 hardware.
+// Cache only pixels proved independent of BOTH changing before-images.
+RWTexture2DArray<uint> hud:register(u2);
 uint3 channels(uint v,uint mode){return uint3(v&31,(v>>5)&(mode==1?63:31),(v>>(mode==1?11:10))&31);}
 uint3 expanded_channels(uint3 q,uint mode){return (q<<uint3(3,mode==1?2:3,3))|(q>>uint3(2,mode==1?4:2,2));}
 uint3 expanded_native(uint v,uint mode){uint b=((v&31)<<3)|((v&31)>>2),r,g;
@@ -146,13 +149,48 @@ void apply(Op op,int2 at,inout uint native,inout uint full){
  if(op.kind==5){if(value==op.color)return;value=full_color(value,op.source[2]);}
  if(op.target)full=value;else native=value;
 }
+void dependencies(Op op,int2 at,uint native,uint full,inout bool dn,inout bool df){
+ bool source_dependent=((op.flags&4)!=0&&dn)||((op.flags&8)!=0&&df);
+ if(op.kind==7||op.kind==10||op.kind==11){bool depends=dn||df||source_dependent;dn=depends;df=depends;return;}
+ if(op.kind==8){if(op.target)df=df||source_dependent;else dn=dn||source_dependent;return;}
+ if(op.kind==3)return; // XOR depends only on its prior target.
+ uint value=op.kind==1?op.color:read_source(op,at,native,full);
+ bool assigned=op.kind==0||op.kind==1||op.kind==4;
+ if(op.kind==2)assigned=op.mode==2?(value&0xffffff)!=(op.color&0xffffff):value!=op.color;
+ if(op.kind==5)assigned=value!=op.color;
+ if(op.kind==6)assigned=(value&65536)!=0;
+ if(op.kind==9){
+  // Key tests on a changing source can themselves vary on the next frame.
+  if(source_dependent){bool depends=dn||df;dn=depends;if(op.flags&1)df=depends;return;}
+  if((value&65535)==op.color)return;
+  dn=false;
+  if((op.flags&1)&&!((op.flags&2)&&(op.flags&32)))df=false;
+  return;
+ }
+ bool depends=source_dependent;
+ // A conditional write sourced from a before-image may become a no-op.
+ if((op.kind==2||op.kind==5||op.kind==6)&&source_dependent){if(op.target)df=true;else dn=true;return;}
+ if(op.kind==1)depends=false;
+ if(assigned){if(op.target)df=depends;else dn=depends;}
+}
 [numthreads(8,8,1)]void main(uint3 group:SV_GroupID,uint3 thread:SV_GroupThreadID){
  Tile tile=tiles[first_tile+group.x];
  [loop]for(uint y=0;y<4;++y)[loop]for(uint x=0;x<4;++x){
   int2 at=int2(tile.x*32+thread.x+x*8,tile.y*32+thread.y+y*8);if(at.x>=int(width)||at.y>=int(height))continue;
-  uint native=words[at],full=detail[at];
-  for(uint n=0;n<tile.count;++n){Op op=commands[order[tile.offset+n]];if(all(at>=op.area.xy)&&all(at<op.area.zw))apply(op,at,native,full);}
+  uint classification=padding!=0?hud[int3(at,2)]:2;
+  if(classification==1){words[at]=hud[int3(at,0)];detail[at]=hud[int3(at,1)];continue;}
+  uint native=words[at],full=detail[at];bool dn=true,df=true;
+  for(uint n=0;n<tile.count;++n){Op op=commands[order[tile.offset+n]];if(all(at>=op.area.xy)&&all(at<op.area.zw)){
+   if(classification==0)dependencies(op,at,native,full,dn,df);
+   apply(op,at,native,full);
+  }}
   words[at]=native;detail[at]=full;
+  // Dependence classification is invariant for this immutable program:
+  // conditional writes from changing inputs never clear their dependence.
+  if(classification==0){
+   if(!dn && !df){hud[int3(at,0)]=native;hud[int3(at,1)]=full;hud[int3(at,2)]=1;}
+   else hud[int3(at,2)]=2;
+  }
  }
 })";
         Ptr<ID3DBlob> code,error;
@@ -167,8 +205,9 @@ public:
     struct Plan {
         Id words=0,detail=0;Format words_format=Format::rgb555;unsigned width=0,height=0;std::vector<Command> original;std::vector<Run> runs;
         MicrosoftTexture atlas;Ptr<ID3D11ShaderResourceView> atlas_view;
+        MicrosoftTexture hud;Ptr<ID3D11UnorderedAccessView> hud_write;
         Ptr<ID3D11Buffer> commands,tiles,order;Ptr<ID3D11ShaderResourceView> command_view,tile_view,order_view;
-        std::array<CompositionStorage::Lease,4> owned,physical;
+        std::array<CompositionStorage::Lease,5> owned,physical;
         std::vector<SourceKey> source_keys;std::vector<ID3D11Texture2D*> external_allocations;
         std::uint64_t bytes=0;unsigned spatial_commands=0,spatial_runs=0,fallback_commands=0;
         Plan()=default;Plan(Plan&&)=default;Plan& operator=(Plan&&)=default;
@@ -297,6 +336,21 @@ public:
         buffer(encoded,sizeof(GpuCommand),command_bytes,next.commands,next.command_view,1);
         buffer(tiles,sizeof(Tile),tile_bytes,next.tiles,next.tile_view,2);
         buffer(indices,sizeof(unsigned),index_bytes,next.order,next.order_view,3);
+        // Commands, placement and external operands belong to this immutable
+        // plan. Recompiling any of them discards the optional resolved HUD.
+        // Ordered interpreter boundaries cannot share a cache across runs.
+        char reference[8]={};
+        bool reference_hud=GetEnvironmentVariableA("C3X_RENDERER_HUD_CACHE_REFERENCE",reference,sizeof(reference))&&reference[0]=='1';
+        auto hud_bytes=std::uint64_t(w.width)*w.height*12;
+        if(!reference_hud && next.runs.size()==1 && next.runs[0].spatial && admit(next.bytes+hud_bytes)){
+            D3D11_TEXTURE2D_DESC td={};td.Width=w.width;td.Height=w.height;td.ArraySize=3;
+            td.MipLevels=td.SampleDesc.Count=1;td.Format=DXGI_FORMAT_R32_UINT;td.BindFlags=D3D11_BIND_UNORDERED_ACCESS;
+            if(SUCCEEDED(device->CreateTexture2D(&td,nullptr,&next.hud)) &&
+                    SUCCEEDED(device->CreateUnorderedAccessView(next.hud.Get(),nullptr,&next.hud_write))){
+                next.owned[4]=allocations.retain(next.hud.Get());next.physical[4]=physical.retain(next.hud.Get());
+                next.bytes+=hud_bytes;unsigned clear[4]={};context->ClearUnorderedAccessViewUint(next.hud_write.Get(),clear);
+            }else{next.hud_write.Reset();next.hud.Reset();}
+        }
         old=std::move(next);++compilations_;return true;
     }
     template<class Legacy> bool submit(Plan const& plan,Id words_id,Id detail_id,ID3D11UnorderedAccessView* words,ID3D11UnorderedAccessView* detail,Legacy legacy){
@@ -307,11 +361,11 @@ public:
                 for(auto id:ids){if(*id==plan.words)*id=words_id;else if(*id==plan.detail)*id=detail_id;}
                 if(!legacy(c))return false;}continue;}
             if(!run.tiles)continue;
-            unsigned params[4]={run.tile,plan.width,plan.height,0};context->UpdateSubresource(constants.Get(),0,nullptr,params,0,0);
+            unsigned params[4]={run.tile,plan.width,plan.height,plan.hud?1u:0u};context->UpdateSubresource(constants.Get(),0,nullptr,params,0,0);
             auto cb=constants.Get();ID3D11ShaderResourceView* reads[]={plan.atlas_view.Get(),plan.command_view.Get(),plan.tile_view.Get(),plan.order_view.Get()};
-            ID3D11UnorderedAccessView* writes[]={words,detail};context->CSSetConstantBuffers(0,1,&cb);context->CSSetShaderResources(0,4,reads);
-            context->CSSetUnorderedAccessViews(0,2,writes,nullptr);context->CSSetShader(shader.Get(),nullptr,0);context->Dispatch(run.tiles,1,1);
-            ID3D11ShaderResourceView* none[4]={};ID3D11UnorderedAccessView* no_writes[2]={};context->CSSetShaderResources(0,4,none);context->CSSetUnorderedAccessViews(0,2,no_writes,nullptr);
+            ID3D11UnorderedAccessView* writes[]={words,detail,plan.hud_write.Get()};context->CSSetConstantBuffers(0,1,&cb);context->CSSetShaderResources(0,4,reads);
+            context->CSSetUnorderedAccessViews(0,3,writes,nullptr);context->CSSetShader(shader.Get(),nullptr,0);context->Dispatch(run.tiles,1,1);
+            ID3D11ShaderResourceView* none[4]={};ID3D11UnorderedAccessView* no_writes[3]={};context->CSSetShaderResources(0,4,none);context->CSSetUnorderedAccessViews(0,3,no_writes,nullptr);
             ++dispatches_;commands_+=run.count;
         }return true;
     }

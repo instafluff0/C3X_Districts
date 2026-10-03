@@ -1,5 +1,16 @@
 # Civ III patch dependency ledger
 
+## Shader, progressive shadow and composition performance completion
+
+`required_user_action: []`. This renderer-only pass changes no Civ III hook,
+signature, supported-build address or bridge protocol. Existing
+`Map_Renderer_m71_Draw_Tiles`, `Map_Renderer_m19_Draw_Tile_by_XY_and_Flags`,
+`Units_Image_Data_advance_animations`, `Animator_update_display` and the JGL
+Graphsy presentation boundary retain their capture and ownership contracts.
+Terrain sampling, shadow page scheduling, water illumination retention and
+resolved HUD caching run in the existing renderer. Config-off behavior remains
+unchanged; no injected source was edited.
+
 ## Required RAM preparation and first completed presentation
 
 `required_user_action: []`. No patch-table edits, signatures or supported-build

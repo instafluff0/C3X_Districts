@@ -121,7 +121,12 @@ int main(){
 #include "Renderer/native/environment_runtime.h"
 bool cycle_enabled=false;
 unsigned GetEnvironmentVariableA(char const*,char* output,unsigned){if(cycle_enabled){output[0]='1';output[1]=0;return 1;}return 0;}
-namespace c3x_renderer {namespace render_core {enum {raster_environment};}}
+namespace c3x_renderer {namespace render_core {
+enum {raster_environment};
+// The extracted lighting test supplies each process configuration explicitly;
+// process-lifetime environment memoization is outside this clock contract.
+unsigned cached_environment(char const* name,char* output,unsigned size){return GetEnvironmentVariableA(name,output,size);}
+}}
 struct Pipeline {
  float visual_hour=0,previous_hour=-1;int previous_season=-1;
  unsigned lighting_revision=0;bool reflection_valid=true,reflected_terrain_material_valid=true;

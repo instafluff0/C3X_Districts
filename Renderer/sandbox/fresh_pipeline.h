@@ -3,6 +3,7 @@
 #include "pass_workload.h"
 #include "scroll_region.h"
 #include "static_raster_state.h"
+#include "terrain_material_fast.h"
 #include "../native/render_core/raster_contributors.h"
 #include "../native/render_core/process_environment.h"
 #include "../native/render_core/shadow_sampling_grid.h"
@@ -28,7 +29,9 @@ inline auto& sandbox_active_reflection() {
 // addressing from regional pages to the camera-framed field.
 struct SandboxVisualShaders {
     bool installed = false;
+    ID3D11SamplerState* shadow_comparison=nullptr;
     ID3D11PixelShader* water_surface = nullptr;
+    ID3D11PixelShader* water_lighting = nullptr;
     ID3D11PixelShader* river_surface = nullptr;
     ID3D11PixelShader* underlay = nullptr;
     ID3D11PixelShader* material_albedo = nullptr;
@@ -43,7 +46,9 @@ struct SandboxVisualShaders {
     ID3D11PixelShader* vegetation_depth[2] = {};
     ID3D11VertexShader* vegetation_instances[2] = {};
     ~SandboxVisualShaders() {
+        if(shadow_comparison)shadow_comparison->Release();
         if(water_surface) water_surface->Release();
+        if(water_lighting) water_lighting->Release();
         if(river_surface) river_surface->Release();
         if(underlay) underlay->Release();
         if(material_albedo) material_albedo->Release();
@@ -77,6 +82,7 @@ struct SandboxVisualShaders {
             braces += (shader[end] == '{') - (shader[end] == '}');
         if (braces) return false;
         shader.replace(start, end-start, R"(
+SamplerComparisonState SandboxShadowComparison : register(s15);
 // Only the shadow query uses a continuous occurrence near the map seam.
 // Material, water, local-light and canonical mesh coordinates stay unchanged.
 float3 sandbox_shadow_world(float3 world) {
@@ -95,6 +101,7 @@ float sandbox_shadow_load(Texture2DArray field,int2 cell) {
  if(any(local_page<0) || any(local_page>=int2(range.zw)))return -1e6;
  int logical=local_page.y*int(range.z)+local_page.x;
  int layer=int(pickup_pages[3+logical].x);
+ if(layer<0)return -1e6; // A pending page must never expose recycled atlas pixels.
  int2 local=cell-page*1024;
  return field.Load(int4(local,layer,0)).r;
 }
@@ -114,6 +121,25 @@ float c3x_paged_visibility(Texture2DArray field,float4 world,float3 normal,bool 
  float2 gradient=0;
  if(abs(determinant)>1e-12)gradient=float2(zx*uy.y-zy*ux.y,zy*ux.x-zx*uy.x)/determinant;
  int2 center=int2(floor(uv));float sum=0;
+#ifdef SANDBOX_FILTERED_SHADOW
+ // Four bilinear comparisons cover a 3x3 tent. Keep the exact per-texel
+ // receiver-plane correction on steep surfaces and across page boundaries.
+ int2 page=int2(floor(float2(center)/1024.));int2 local=center-page*1024;
+ float bias=water?.00060:texel*.35;
+ if(all(local>=1) && all(local<1023) && max(abs(gradient.x),abs(gradient.y))<bias*.25) {
+  float4 range=pickup_pages[0];int2 selected=page-int2(range.xy);
+  if(any(selected<0)||any(selected>=int2(range.zw)))return 1;
+  int layer=int(pickup_pages[3+selected.y*int(range.z)+selected.x].x);
+  if(layer<0)return 1;
+  [unroll]for(int j=0;j<2;++j)[unroll]for(int i=0;i<2;++i){
+   float2 delta=float2(i,j)-.5;
+   float2 location=float2(local)+.5+delta;
+   float receiver=z+dot(gradient,float2(center)+.5+delta-uv);
+   sum+=field.SampleCmpLevelZero(SandboxShadowComparison,float3(location/1024.,layer),receiver+bias);
+  }
+  return sum*.25;
+ }
+#endif
  [unroll]for(int y=-1;y<=1;y++)[unroll]for(int x=-1;x<=1;x++) {
   int2 sample=center+int2(x,y);
   float blocker=sandbox_shadow_load(field,sample);
@@ -123,6 +149,10 @@ float c3x_paged_visibility(Texture2DArray field,float4 world,float3 normal,bool 
  return sum/9;
 }
 )");
+        UINT support=0;char reference[8]={};
+        bool legacy=c3x_renderer::render_core::cached_environment("C3X_RENDERER_SHADOW_PCF_REFERENCE",reference,sizeof(reference)) && reference[0]=='1';
+        if(!legacy && SUCCEEDED(renderer.device->CheckFormatSupport(DXGI_FORMAT_R32_FLOAT,&support)) &&
+                (support&D3D11_FORMAT_SUPPORT_SHADER_SAMPLE_COMPARISON))shader.insert(0,"#define SANDBOX_FILTERED_SHADOW 1\n");
         return true;
     }
     static bool compile(char const* file, char const* entry, ID3D11PixelShader** output) {
@@ -144,6 +174,9 @@ float c3x_paged_visibility(Texture2DArray field,float4 world,float3 normal,bool 
         // turn small patches into isolated dark marks. Preserve the sculpted
         // terrain normal while softening only the material-scale response.
         if(renderer.city_profile && std::strcmp(file,"terrain.hlsl")==0){
+            char reference[8]={};
+            if(!(c3x_renderer::render_core::cached_environment("C3X_RENDERER_TERRAIN_MATERIAL_REFERENCE",reference,sizeof(reference))&&reference[0]=='1') &&
+                    !sandbox_terrain_material_fast(shader))return fail_source("terrain-material-fast-markers");
             auto replace=[&](char const* old_text,char const* new_text){
                 auto at=shader.find(old_text);
                 if(at==std::string::npos)return false;
@@ -189,6 +222,30 @@ float c3x_paged_visibility(Texture2DArray field,float4 world,float3 normal,bool 
             if(!variant)return fail_source("water-variant-missing");
             shader.append(std::istreambuf_iterator<char>(variant),
                 std::istreambuf_iterator<char>());
+            // Runtime-owned overlay works with inherited packs as well as
+            // newly prepared ones; never edit an ignored frozen shader pack.
+            auto light_begin=shader.find("    float shadow = 1;",shader.find("float4 ShadeWaterSurface("));
+            auto light_end=shader.find("    // 0 A.D. separates",light_begin);
+            auto surface=shader.find("float4 ShadeWaterSurface(");
+            if(light_begin==std::string::npos || light_end==std::string::npos || surface==std::string::npos)
+                return fail_source("water-lighting-markers");
+            shader.replace(light_begin,light_end-light_begin,
+                "    float4 illumination=water_view.z>.5 ? resource_base_texture_6.Load(int3(input.position.xy,0)) : SandboxWaterLighting(input);\n"
+                "    float shadow=illumination.a;float3 light=illumination.rgb;\n\n");
+            shader.insert(surface,R"(
+float4 SandboxWaterLighting(PixelInput input) {
+    float depth=max(0,input.hydrology_data.w);
+    float coastal_detail=1-smoothstep(.30,.39,depth);
+    float shadow=1;
+    if(coastal_detail>0)shadow=q6_receiver_visibility(input,float3(0,0,1),1);
+    shadow=lerp(1,shadow,coastal_detail);
+    return float4(frame_illumination(float3(0,0,1),shadow,1),shadow);
+}
+float4 PSWaterLighting(PixelInput input):SV_Target {
+    clip(-input.hydrology_data.x-.0001);
+    return SandboxWaterLighting(input);
+}
+)");
         }
         if(std::strcmp(entry,"PSSandboxVegetationDepth")==0 ||
            std::strcmp(entry,"PSSandboxReflectedVegetationDepth")==0)
@@ -375,6 +432,12 @@ float4 PSSandboxAquaticFeature(FeaturePixelInput input) : SV_Target {
     }
     bool install() {
         if (installed) return true;
+        if(!shadow_comparison){
+            D3D11_SAMPLER_DESC desc={};desc.Filter=D3D11_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT;
+            desc.AddressU=desc.AddressV=desc.AddressW=D3D11_TEXTURE_ADDRESS_CLAMP;
+            desc.ComparisonFunc=D3D11_COMPARISON_GREATER_EQUAL;desc.MaxLOD=D3D11_FLOAT32_MAX;
+            if(FAILED(renderer.device->CreateSamplerState(&desc,&shadow_comparison)))return false;
+        }
         struct Replacement {char const* file; char const* entry; ID3D11PixelShader** slot;};
         Replacement targets[] = {
             {"hydrology.hlsl", "PSIntegrated", &renderer.pixel_shader},
@@ -401,6 +464,7 @@ float4 PSSandboxAquaticFeature(FeaturePixelInput input) : SV_Target {
             }
         }
         if(!compile("water_surface.hlsl","PSWaterSurface",&water_surface) ||
+           !compile("water_surface.hlsl","PSWaterLighting",&water_lighting) ||
            !compile("water_surface.hlsl","PSRiverSurface",&river_surface))return false;
         if(!compile("hydrology.hlsl","PSSandboxUnderlay",&underlay))return false;
         if(!compile("hydrology.hlsl","PSSandboxMaterialAlbedo",&material_albedo) ||
@@ -592,6 +656,9 @@ struct SandboxSceneShadow {
             for(std::size_t i=0;i<size;++i){value^=bytes[i];value*=1099511628211ull;}};
         mix(sampling_grid.quality_span.data(),sizeof(float)*2);mix(renderer.shadow_basis.data(),sizeof(float)*12);
         mix(wrap.data(),sizeof(float)*4);mix(&scene,sizeof(scene));mix(&renderer.device_generation,sizeof(renderer.device_generation));
+        // Coarse previews may contain missing shadows. Completion invalidates
+        // them once, rather than restarting full-quality refinement per page.
+        mix(&atlas_complete,sizeof(atlas_complete));
         sampling_identity=value;
     }
     template<class T> static void drop(T*& pointer) {if (pointer) pointer->Release(); pointer=nullptr;}
@@ -1230,8 +1297,22 @@ struct SandboxSceneShadow {
         }
         float clear[4]={-1e6f,-1e6f,-1e6f,-1e6f};
         draws=0;
-        for(unsigned page_slot=0;page_slot<sampling_grid.pages();++page_slot){
+        unsigned page_budget=2;
+        char requested_pages[16]={};
+        if(c3x_renderer::render_core::cached_environment("C3X_RENDERER_SHADOW_PAGES_PER_FRAME",requested_pages,sizeof(requested_pages)))
+            page_budget=unsigned(std::clamp(std::atoi(requested_pages),1,int(Grid::max_pages)));
+        if(!proved || sandbox_perf_options().legacy)page_budget=Grid::max_pages;
+        std::array<unsigned,Grid::max_pages> page_order{};
+        for(unsigned i=0;i<sampling_grid.pages();++i)page_order[i]=i;
+        auto distance=[&](unsigned slot){auto p=sampling_grid.page(slot);
+            int dx=2*(p[0]-sampling_grid.low[0])+1-int(sampling_grid.count[0]);
+            int dy=2*(p[1]-sampling_grid.low[1])+1-int(sampling_grid.count[1]);return dx*dx+dy*dy;};
+        std::stable_sort(page_order.begin(),page_order.begin()+sampling_grid.pages(),[&](unsigned a,unsigned b){return distance(a)<distance(b);});
+        for(unsigned ordered=0;ordered<sampling_grid.pages();++ordered){
+        unsigned page_slot=page_order[ordered];
         if(page_contents.reused[page_slot])continue;
+        if(!page_budget)break;
+        --page_budget;
         auto* target=targets[page_contents.slots[page_slot]];
         context->ClearRenderTargetView(target,clear);work->clear(target);
         context->OMSetRenderTargets(1,&target,nullptr);
@@ -1301,6 +1382,7 @@ struct SandboxSceneShadow {
             }
         }
         if(!page_contents.complete_incremental(page_slot,proved))return false;
+        page_contents.reused[page_slot]=true;
         }
         context->OMSetRenderTargets(0,nullptr,nullptr);
         std::array<std::array<float,4>,64> table{};
@@ -1309,13 +1391,14 @@ struct SandboxSceneShadow {
         table[2]={sampling_grid.inverse_pitch(0),sampling_grid.inverse_pitch(1),
             sampling_grid.page_span(0),sampling_grid.page_span(1)};
         table[1]=wrap_query;
-        for(unsigned slot=0;slot<sampling_grid.pages();++slot)table[3+slot][0]=float(page_contents.slots[slot]);
+        for(unsigned slot=0;slot<sampling_grid.pages();++slot)
+            table[3+slot][0]=page_contents.reused[slot]?float(page_contents.slots[slot]):-1.f;
         wrap_basis=wrap_query;
         context->UpdateSubresource(renderer.source_shadow.table,0,nullptr,table.data(),0,0);work->upload_buffer(renderer.source_shadow.table);
         signature=scene;
         light_basis=renderer.shadow_basis;
         prepared_signature=membership;prepared_box={box[0],box[1],box[2],box[3]};prepared_light=renderer.shadow_basis;
-        atlas_complete=true;
+        atlas_complete=std::all_of(page_contents.reused.begin(),page_contents.reused.begin()+sampling_grid.pages(),[](bool complete){return complete;});
         ++builds;
         update_sampling_identity(scene,wrap_query);
         return true;
@@ -1401,6 +1484,10 @@ struct SandboxFreshPipeline {
     SandboxMaterialChannel reflected_terrain_normal,reflected_terrain_world,
         reflected_terrain_properties;
     SandboxMaterialChannel aquatic_scene;
+    SandboxMaterialChannel water_lighting;
+    bool capture_water_lighting=false,water_lighting_valid=false;
+    std::array<std::uint64_t,13> water_lighting_key{};
+    std::uint64_t water_lighting_builds=0,water_lighting_reuses=0;
     ID3D11Buffer* aquatic_bounds_buffer=nullptr;
     ID3D11BlendState* terrain_material_blend=nullptr;
     ID3D11DepthStencilState* aquatic_depth=nullptr;
@@ -2266,6 +2353,7 @@ struct SandboxFreshPipeline {
             ID3D11RenderTargetView* target,ID3D11DepthStencilView* depth,
             bool mirrored,float scale,bool default_materials=true) {
         auto* context=renderer.context;
+        context->PSSetSamplers(15,1,&visual.shadow_comparison);
         context->OMSetRenderTargets(1,&target,depth);
         context->OMSetDepthStencilState(renderer.depth_state,0);
         context->OMSetBlendState(renderer.blend_state,nullptr,0xffffffffu);
@@ -2517,6 +2605,12 @@ struct SandboxFreshPipeline {
             if(!(c3x_renderer::render_core::cached_environment("C3X_SANDBOX_WATER_FULL_SHADER",
                     full_water,sizeof(full_water)) && std::strcmp(full_water,"1")==0))
                 context->PSSetShader(visual.water_surface,nullptr,0);
+            if(capture_water_lighting){
+                context->PSSetShader(visual.water_lighting,nullptr,0);
+                context->OMSetBlendState(nullptr,nullptr,0xffffffffu);
+            }
+            ID3D11ShaderResourceView* lighting=capture_water_lighting?nullptr:water_lighting.view;
+            context->PSSetShaderResources(122,1,&lighting);
             // This source-material slot is unused by water. Its water variant
             // samples the animated marine layer beneath the surface.
             ID3D11ShaderResourceView* aquatic=
@@ -2925,6 +3019,7 @@ struct SandboxFreshPipeline {
         return zoom_destination()!=1.f && draw_serial-lane_drawn[1]<32;
     }
     bool static_refinement_pending(float zoom)const{
+        if(!shadow.atlas_complete)return true;
         unsigned lane=StaticRasters::lane_of(zoom);
         if(static_rasters.lane_refining(lane))return true;
         auto const& shown=static_rasters.states[static_rasters.front_slot[lane]];
@@ -3268,6 +3363,9 @@ struct SandboxFreshPipeline {
         // 0 means "do not refine this lane" (it is animating back to 1x).
         float goal=lane==0?1.f:(!previewable || settled)?zoom:(hint!=1.f?hint:0.f);
         double budget=previewable?refinement_budget(lane):-1.;
+        // Finish shadow pages before spending full-quality shading on pixels
+        // that would immediately need relighting. A bootstrap still displays.
+        if(previewable && !shadow.atlas_complete)budget=0;
         StaticRect limits={0,0,int(region_width_px),int(region_height_px)};
         auto clip_region=[&](StaticRect r){return StaticRect{std::max(r.left,limits.left),std::max(r.top,limits.top),
             std::min(r.right,limits.right),std::min(r.bottom,limits.bottom)};};
@@ -3315,9 +3413,7 @@ struct SandboxFreshPipeline {
                 if(!reset_slot(back_index,projection,settings))return -1;
                 needed=visible_rect(building,back_shift);
             }
-            double unbounded=-1.;
-            double& allowance=refine_restarts>8?unbounded:spend;
-            if(!extend_coverage(back_index,building,settings,needed,allowance,0,1.f,true))return -1;
+            if(!extend_coverage(back_index,building,settings,needed,spend,0,1.f,true))return -1;
             refine_worked=true;++refine_slices;
             if(!building.covered.contains(needed))return 0;
             building.valid=true;building.refining=false;building.stale=false;refine_restarts=0;
@@ -3582,6 +3678,7 @@ struct SandboxFreshPipeline {
         bool cold_setup=!visual.installed;LARGE_INTEGER setup[4]={};
         QueryPerformanceCounter(&setup[0]);
         if (!visual.install()) return fail("visual_setup");QueryPerformanceCounter(&setup[1]);
+        renderer.context->PSSetSamplers(15,1,&visual.shadow_comparison);
         if (!shadow.ensure()) return fail("shadow_setup");QueryPerformanceCounter(&setup[2]);
         unsigned w=unsigned(width)+8,h=unsigned(height)+8;
         if (!ensure_targets(w,h)) return fail("targets");QueryPerformanceCounter(&setup[3]);
@@ -3857,6 +3954,35 @@ struct SandboxFreshPipeline {
             water_diagnostic,sizeof(water_diagnostic)) &&
             std::strcmp(water_diagnostic,"1")==0;
         if (renderer.water_scene_active && !skip_water) {
+            // Cache lighting only once the view settles. During motion the
+            // direct shader avoids paying an extra preparation pass per frame.
+            // Every quantity affecting lighting/coverage is in this identity;
+            // animated normals, marine objects and reflections stay live.
+            auto bits=[](float value){std::uint32_t v=0;std::memcpy(&v,&value,4);return std::uint64_t(v);};
+            std::array<std::uint64_t,13> key={view_revision(),visibility_revision,renderer.device_generation,
+                renderer.content_revision,shadow.sampling_identity,shadow.page_contents.rebuilt,
+                lighting_revision,bits(visual_hour),std::uint64_t(previous_season),bits(projection_zoom),
+                bits(settings.translation[0]),bits(settings.translation[1]),(std::uint64_t(w)<<32)|h};
+            char direct_water[8]={};
+            bool reference=c3x_renderer::render_core::cached_environment("C3X_RENDERER_WATER_LIGHTING_REFERENCE",direct_water,sizeof(direct_water))&&direct_water[0]=='1';
+            bool eligible=!reference && scene_samples==1 && scene_scale==1 && shadow.atlas_complete &&
+                lane_still[StaticRasters::lane_of(projection_zoom)]>=3 &&
+                !(projection_zoom==1.f && canonical_hidden());
+            bool cached=eligible && water_lighting_valid && water_lighting_key==key;
+            if(eligible && !cached){
+                ID3D11ShaderResourceView* none=nullptr;context->PSSetShaderResources(122,1,&none);
+                water_lighting_valid=false;
+                if(water_lighting.ensure(renderer.device,w,h,DXGI_FORMAT_R16G16B16A16_FLOAT)){
+                    context->ClearRenderTargetView(water_lighting.target,dynamic_clear);work.clear(water_lighting.target);
+                    capture_water_lighting=true;
+                    bool drawn=draw_layer(water_visible,geometry_water,settings,full,water_lighting.target,nullptr,false,float(scene_scale));
+                    capture_water_lighting=false;context->OMSetRenderTargets(0,nullptr,nullptr);
+                    if(!drawn)return fail("water_lighting");
+                    water_lighting_key=key;water_lighting_valid=cached=true;++water_lighting_builds;
+                }
+            }else if(cached)++water_lighting_reuses;
+            aquatic_bounds[6]=cached?1.f:0.f;
+            context->UpdateSubresource(aquatic_bounds_buffer,0,nullptr,aquatic_bounds,0,0);work.upload_buffer(aquatic_bounds_buffer);
             if(!draw_scene(water_visible,settings,full,glow.linear.target,
                     glow.linear.depth,false,float(scene_scale)))return fail("water_scene");
         }
@@ -3956,6 +4082,7 @@ extern "C" __declspec(dllexport) void c3x_sandbox_fresh_metrics(double* phases,
             sandbox_fresh.reflected_terrain_properties.height*8+
         std::size_t(sandbox_fresh.aquatic_scene.width)*
             sandbox_fresh.aquatic_scene.height*4+
+        std::size_t(sandbox_fresh.water_lighting.width)*sandbox_fresh.water_lighting.height*8+
         sandbox_fresh.glow.linear.bytes()+
         sandbox_fresh.reflection.bytes()+sandbox_fresh.reflection_static.bytes()+
         sandbox_fresh.bloom.bytes()+sandbox_fresh.shadow.bytes();

@@ -6,11 +6,14 @@ the inherited build, the industry-standard remedy, what was implemented, the
 switches that restore the old behavior, and what remains. It supersedes the
 "no FPS tuning before the integration gate" guidance for the items below.
 
-The checkout was not run here (no Windows/D3D11 host). All three build
+The original overhaul was not run by its author (no Windows/D3D11 host). All three build
 products (x64 renderer DLL, x64 helper, x86 bridge) were syntax/semantics
 checked with mingw-w64 against a baseline of the unmodified tree: the only
 diagnostics are the same pre-existing GCC-vs-MSVC differences. Strict
 `-Wall -Wextra -Wshadow -Wconversion` reports nothing on changed lines.
+
+The completion pass below was built and checked on Windows/D3D11. Its checks
+establish correctness for the tested contracts, not a measured gameplay FPS gain.
 
 ## How a frame actually spends its time (before)
 
@@ -44,7 +47,8 @@ available — translated, resampled, or low resolution — at full frame rate,
 and rebuild full quality incrementally under a per-frame budget, swapping it
 in when complete (double-buffered progressive refinement, as in clipmaps,
 virtual texturing and Google-Maps-style tile LOD). Work is time-sliced so a
-frame never exceeds its vsync budget for background quality.
+background work can be reduced when frames miss the target. Pixel/page budgets
+are estimates; an expensive individual draw can still exceed a frame interval.
 
 **Implemented** (`sandbox/fresh_pipeline.h` `compose_static`,
 `sandbox/static_raster_state.h`, `native/render_core/linear_target.h`):
@@ -221,6 +225,78 @@ copy of every presented frame into a readback buffer now happens only for
 input replay (`C3X_RENDERER_RETAIN_DISPLAY`, set by `replay_inputs`) or after a
 readback request.
 
+## Completion pass: shader work, shadow preparation, water and HUD
+
+This pass changes `sandbox/fresh_pipeline.h`, `sandbox/terrain_material_fast.h`
+and `native/gpu_spatial_composition.h` as one connected implementation.
+
+- **Terrain texture work:** skip material families whose blend contribution is
+  exactly zero, and skip the six cliff texture samples when cliff exposure is
+  zero. Preserve all contributing grass/plains/tundra/desert/hill textures and
+  the authored color equations. Explicit texture gradients preserve mip selection
+  through the material branches. This reduces unnecessary fetches without a new
+  asset format, offline atlas conversion or different terrain art.
+- **Shadow filtering:** use four hardware bilinear comparisons on shallow
+  receiver gradients, retaining the nine individually corrected comparisons on
+  steep receivers and at page boundaries. Check R32_FLOAT comparison support;
+  unsupported devices retain the original filter. The small filter-kernel change
+  needs visual comparison. See Microsoft's [comparison sampling contract](https://learn.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-to-samplecmp).
+- **Distant-view shadow preparation:** draw at most two missing pages per scene
+  invocation, with center pages first. Already completed pages survive subsequent
+  invocations. Missing pages are explicitly unpublished and sample as unshadowed,
+  so recycled slices cannot cast shadows from an unrelated location. Keep visual
+  frames running while pages are pending; start full-quality scenery refinement
+  after shadow completion. Completion invalidates the temporary preview once.
+  Metadata/proof refusal retains the existing synchronous fallback.
+- **Refinement:** remove the emergency unbounded full redraw after eight
+  refinement restarts. Repeated camera input keeps its preview and bounded work.
+- **Water:** at a settled native-resolution view, retain water illumination and
+  shadow visibility in an HDR texture. Reuse it while camera/projection, visible
+  content, environment and shadow contents remain unchanged. Normals, Fresnel,
+  marine resources, reflections, specular and foam remain animated. During motion
+  use the direct shader, avoiding a new cache preparation pass on every camera
+  step. Unsupported sample/scale modes also use the direct path. The cache costs
+  eight bytes per guarded viewport pixel and introduces normal half-float storage
+  precision. It does not cache the complete animated water image.
+- **HUD:** retain exact resolved native-word/full-color pixels for a complete
+  pointwise HUD program. Conservative dependency tracking admits a pixel only
+  after both outputs cease to depend on the changing map before-images. Remaining
+  pixels execute the same ordered native operations. Classify dependence once
+  per program, including pixels that cannot be cached. Command/placement/source
+  recompilation clears the cache; programs containing interpreter boundaries
+  retain their existing execution. This is an exact packed-color cache, avoiding
+  the rounding differences of substituting ordinary alpha blending. Optional
+  allocation failure keeps the old path. Storage is twelve bytes per viewport
+  pixel, charged to existing budgets. Three R32_UINT slices use the baseline
+  [D3D11 typed UAV load formats](https://learn.microsoft.com/en-us/windows/win32/direct3d11/typed-unordered-access-view-loads).
+
+Shader adaptations run against the selected pack during runtime shader creation.
+No ignored art/shader pack, native patch table, gameplay state or reference image
+was edited. Existing C3X capture and presentation boundaries remain;
+`required_user_action: []`.
+
+### Verification and limits
+
+- Windows MSVC bridge, renderer and helper build; isolated startup check.
+- Nineteen affected runtime pixel-shader variants compile against the prepared
+  local pack on the VM, including water lighting and terrain/reflection variants.
+- GPU HUD comparisons exactly match the ordered compositor for RGB555 and RGB565
+  over six changing underlays. Each format's 256×192 fixture caches 28,900 pixels;
+  the other pixels remain dependent. Existing alias, source and target-rebinding
+  cases also pass. This is a correctness witness, not a HUD speed measurement.
+- Both shadow filters pass retained-versus-rebuilt GPU comparisons across camera,
+  caster, light, wrap, asset and device changes. Unpublished pages return fully lit
+  visibility rather than stale atlas values. These are comparisons within each
+  filter, not a claim that the two filters produce identical edges.
+- Host tests cover partial completion, caster replacement, invalidation, wrapping,
+  raster promotion and retained dependencies.
+
+Evidence is bounded to `Renderer/.cache/performance-completion/`. No game was
+launched or installed during this pass. Fullscreen late-game idle, scroll, zoom
+and jump latency, refinement settling time, water-cache visual parity and shadow
+edge quality still need a current-candidate gameplay/scene comparison. No new FPS
+number or 60 FPS guarantee is claimed.
+
 ## Switches (all default to the fast path)
 
 | Variable | Effect |
@@ -231,6 +307,11 @@ readback request.
 | `C3X_RENDERER_SHADOW_TIGHT_FIT=1` | Old per-view shadow fitting |
 | `C3X_RENDERER_LEGACY_CADENCE=1` | Old timer pacing, `Present(0)`, latency 1 |
 | `C3X_RENDERER_TRACE=2` | Restores per-frame trace records |
+| `C3X_RENDERER_TERRAIN_MATERIAL_REFERENCE=1` | Sample all original terrain material families |
+| `C3X_RENDERER_SHADOW_PCF_REFERENCE=1` | Original nine-comparison shadow filter |
+| `C3X_RENDERER_SHADOW_PAGES_PER_FRAME` | Missing-page budget per scene invocation, default 2, clamped to 1–25 |
+| `C3X_RENDERER_WATER_LIGHTING_REFERENCE=1` | Recompute water lighting per frame |
+| `C3X_RENDERER_HUD_CACHE_REFERENCE=1` | Execute all pointwise HUD pixels each frame |
 
 ## What to test
 
@@ -268,28 +349,21 @@ scrolling, refit on real extent change), `test_native_visual_cadence.py`
 (region-of-interest reuse/rebuild). Windows-only witness scripts that read
 `static_rasters` slot metrics still assume the old two-slot layout.
 
-## Remaining opportunities (ranked, not implemented here)
+## Remaining opportunities after the completion pass
 
-1. **Shader cost (the ~130 ms floor itself).** Runtime shaders come from the
-   pinned pack (`packs/Renderer64CutoverControl` or
-   `C3X_RENDERER_SHADER_SOURCE_ROOT`), not the repository copies, so they were
-   not edited. Highest-value changes: 9-tap PCF → 4-tap hardware
-   `SampleCmp` bilinear PCF; terrain material layers collapsed into packed
-   atlases (20–35 samples → ~10); hydrology's 4-tap height-to-normal → a
-   normal map; skip triplanar off steep slopes; depth-only prepass with
-   `EQUAL` testing for alpha-tested vegetation/decals to stop shading hidden
-   fragments. With progressive refinement this now buys *time to full
-   quality*, not frame rate.
+1. **Further shader work:** pack contributing height/specular channels, precompute
+   hydrology normals, and investigate depth prepasses where overdraw dominates.
+   The completion pass addresses unused terrain families, flat-ground cliff work
+   and shadow filtering; it does not repack assets or add a universal prepass.
+   Shader cost still affects motion, dynamic passes and time to full quality.
 2. **Near-water territory borders** still redraw per frame (see above).
-3. **Water** is fully shaded every frame. Cache the camera-independent part
-   (shore distance, depth, bed color, static reflection) in the retained
-   layer and evaluate only the animated normal/specular per frame, or shade
-   water at half resolution with a depth-aware upsample.
-4. **Retained composition** still walks the whole native graph each changed
-   frame; cache map-independent HUD as an alpha layer.
-7. **Shadow pages** for a new area (jump, destination zoom change) are drawn
-   in one frame; drawing them progressively would remove the remaining jump
-   hitch but needs page completeness in the static content key.
-5. **Game thread** still runs Civ III's full visible-map traversal for each
+3. **Water during motion:** lighting retention currently benefits settled views.
+   Wider world-space retention or depth-aware lower-resolution shading could
+   reduce moving-view cost if measurements still identify water as dominant.
+4. **Retained composition CPU traversal:** the new HUD cache avoids repeated GPU
+   pixel programs. It does not remove all CPU graph/dependency visits.
+5. **Shadow preparation:** drawing is incremental between pages. Caster selection,
+   instance preparation and one unusually expensive page can still cause a stall.
+6. **Game thread** still runs Civ III's full visible-map traversal for each
    native map draw (≈4 ms + ≈2.5 ms capture). Skip native rasterization when
    custom rendering owns the map and keep only the anchor/fact enumeration.

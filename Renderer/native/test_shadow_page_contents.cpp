@@ -29,6 +29,7 @@ struct Oracle {
  ComPtr<ID3D11VertexShader> caster_vs,screen_vs;ComPtr<ID3D11PixelShader> opaque,cutout,sample;
  ComPtr<ID3D11InputLayout> layout;ComPtr<ID3D11Buffer> settings,table,queries,vertices;
  ComPtr<ID3D11BlendState> maximum;ComPtr<ID3D11RasterizerState> raster;
+ ComPtr<ID3D11SamplerState> comparison;
  ComPtr<ID3D11Texture2D> mask,output,output_read;ComPtr<ID3D11ShaderResourceView> mask_view;
  ComPtr<ID3D11RenderTargetView> output_target;
  struct Field {Pages pages;ComPtr<ID3D11Texture2D> texture,read;ComPtr<ID3D11ShaderResourceView> view;
@@ -40,7 +41,7 @@ struct Oracle {
   if(FAILED(hr)&&errors)std::cerr<<static_cast<char const*>(errors->GetBufferPointer());checked(hr,entry);return result;
  }
  void buffer(ComPtr<ID3D11Buffer>& value,unsigned bytes,unsigned flags){D3D11_BUFFER_DESC desc{};desc.ByteWidth=bytes;desc.BindFlags=flags;checked(device->CreateBuffer(&desc,nullptr,&value),"buffer");}
- Oracle(){
+ Oracle(bool filtered=false){
   auto hr=D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_HARDWARE,nullptr,0,nullptr,0,D3D11_SDK_VERSION,&device,nullptr,&context);
   if(FAILED(hr))hr=D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_WARP,nullptr,0,nullptr,0,D3D11_SDK_VERSION,&device,nullptr,&context);checked(hr,"device");
   auto source=read("Renderer/native/environment_refresh/source_caster.hlsl");auto code=compile(source,"VS","vs_5_0");
@@ -52,13 +53,17 @@ struct Oracle {
    {"TEXCOORD",4,DXGI_FORMAT_R32G32B32A32_FLOAT,0,32,D3D11_INPUT_PER_VERTEX_DATA,0}};
   checked(device->CreateInputLayout(elements,5,code->GetBufferPointer(),code->GetBufferSize(),&layout),"layout");
   for(auto pair:{std::pair<char const*,ComPtr<ID3D11PixelShader>*>("PSOpaque",&opaque),{"PSCutout",&cutout}}){code=compile(source,pair.first,"ps_5_0");checked(device->CreatePixelShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,pair.second->GetAddressOf()),pair.first);}
-  auto header=read("Renderer/sandbox/fresh_pipeline.h");auto start=header.find("// Only the shadow query uses");auto end=header.find("\n)\");",start);check(start!=std::string::npos&&end!=std::string::npos,"production sampling source");
+  D3D11_SAMPLER_DESC sd={};sd.Filter=D3D11_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT;
+  sd.AddressU=sd.AddressV=sd.AddressW=D3D11_TEXTURE_ADDRESS_CLAMP;sd.ComparisonFunc=D3D11_COMPARISON_GREATER_EQUAL;sd.MaxLOD=D3D11_FLOAT32_MAX;
+  checked(device->CreateSamplerState(&sd,&comparison),"comparison sampler");
+  auto header=read("Renderer/sandbox/fresh_pipeline.h");auto start=header.find("SamplerComparisonState SandboxShadowComparison");auto end=header.find("\n)\");",start);check(start!=std::string::npos&&end!=std::string::npos,"production sampling source");
   auto sampling=header.substr(start,end-start);
   source="cbuffer Table:register(b0){float4 pickup_pages[64];};cbuffer Query:register(b1){float4 U,V,L;float4 domain;};Texture2DArray field:register(t0);\n"+sampling+R"(
 float4 ScreenVS(uint n:SV_VertexID):SV_POSITION {float2 p=float2((n<<1)&2,n&2);return float4(p*float2(2,-2)+float2(-1,1),0,1);}
 float SamplePS(float4 p:SV_POSITION):SV_TARGET {float2 xy=domain.xy+p.xy/128*domain.zw;
  return c3x_paged_visibility(field,float4(xy,.1,1),float3(0,0,1),false,U,V,L,float4(1,0,0,0));}
 )";
+  if(filtered)source.insert(0,"#define SANDBOX_FILTERED_SHADOW 1\n");
   code=compile(source,"ScreenVS","vs_5_0");checked(device->CreateVertexShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,&screen_vs),"screen VS");
   code=compile(source,"SamplePS","ps_5_0");checked(device->CreatePixelShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,&sample),"receiver PCF");
   buffer(settings,80,D3D11_BIND_CONSTANT_BUFFER);buffer(table,64*16,D3D11_BIND_CONSTANT_BUFFER);buffer(queries,64,D3D11_BIND_CONSTANT_BUFFER);buffer(vertices,6*48,D3D11_BIND_VERTEX_BUFFER);
@@ -99,7 +104,8 @@ float SamplePS(float4 p:SV_POSITION):SV_TARGET {float2 xy=domain.xy+p.xy/128*dom
  }
  std::vector<unsigned char> depth(Field& f,unsigned physical){context->CopySubresourceRegion(f.read.Get(),0,0,0,0,f.texture.Get(),physical,nullptr);D3D11_MAPPED_SUBRESOURCE mapped{};checked(context->Map(f.read.Get(),0,D3D11_MAP_READ,0,&mapped),"depth map");std::vector<unsigned char> pixels(Grid::page_texels*Grid::page_texels*4);
   for(unsigned y=0;y<Grid::page_texels;++y)std::memcpy(pixels.data()+std::size_t(y)*Grid::page_texels*4,static_cast<unsigned char const*>(mapped.pData)+std::size_t(y)*mapped.RowPitch,Grid::page_texels*4);context->Unmap(f.read.Get(),0);return pixels;}
- std::vector<unsigned char> receiver(Field& f,Grid const& g,std::array<float,4> wrap){std::array<std::array<float,4>,64> values{};values[0]={float(g.low[0]),float(g.low[1]),float(g.count[0]),float(g.count[1])};values[1]=wrap;values[2]={g.inverse_pitch(0),g.inverse_pitch(1),g.page_span(0),g.page_span(1)};for(unsigned i=0;i<g.pages();++i)values[3+i][0]=float(f.pages.slots[i]);context->UpdateSubresource(table.Get(),0,nullptr,values.data(),0,0);
+ std::vector<unsigned char> receiver(Field& f,Grid const& g,std::array<float,4> wrap,bool pending=false){std::array<std::array<float,4>,64> values{};values[0]={float(g.low[0]),float(g.low[1]),float(g.count[0]),float(g.count[1])};values[1]=wrap;values[2]={g.inverse_pitch(0),g.inverse_pitch(1),g.page_span(0),g.page_span(1)};for(unsigned i=0;i<g.pages();++i)values[3+i][0]=pending?-1.f:float(f.pages.slots[i]);context->UpdateSubresource(table.Get(),0,nullptr,values.data(),0,0);
+  auto* sampler=comparison.Get();context->PSSetSamplers(15,1,&sampler);
   float query[16]{};std::copy(basis.begin(),basis.end(),query);auto box=g.coverage();std::copy(box.begin(),box.end(),query+12);context->UpdateSubresource(queries.Get(),0,nullptr,query,0,0);
   context->OMSetBlendState(nullptr,nullptr,~0u);ID3D11RenderTargetView* target=output_target.Get();context->OMSetRenderTargets(1,&target,nullptr);D3D11_VIEWPORT vp{0,0,128,128,0,1};context->RSSetViewports(1,&vp);context->IASetInputLayout(nullptr);context->VSSetShader(screen_vs.Get(),nullptr,0);context->PSSetShader(sample.Get(),nullptr,0);ID3D11Buffer* cb[]={table.Get(),queries.Get()};context->PSSetConstantBuffers(0,2,cb);ID3D11ShaderResourceView* srv=f.view.Get();context->PSSetShaderResources(0,1,&srv);context->Draw(3,0);context->OMSetRenderTargets(0,nullptr,nullptr);srv=nullptr;context->PSSetShaderResources(0,1,&srv);
   context->CopyResource(output_read.Get(),output.Get());D3D11_MAPPED_SUBRESOURCE mapped{};checked(context->Map(output_read.Get(),0,D3D11_MAP_READ,0,&mapped),"receiver map");std::vector<unsigned char> pixels(128*128*4);for(unsigned y=0;y<128;++y)std::memcpy(pixels.data()+y*128*4,static_cast<unsigned char const*>(mapped.pData)+y*mapped.RowPitch,128*4);context->Unmap(output_read.Get(),0);return pixels;
@@ -112,7 +118,8 @@ float SamplePS(float4 p:SV_POSITION):SV_TARGET {float2 xy=domain.xy+p.xy/128*dom
  }
 };
 int main(){
- Oracle oracle;Oracle::Field warm,cold;oracle.field(warm);oracle.field(cold);Grid grid;grid.valid=true;grid.quality_span={40,40};grid.low={-1,-1};grid.count={2,2};
+ for(bool filtered:{false,true}){
+ Oracle oracle(filtered);Oracle::Field warm,cold;oracle.field(warm);oracle.field(cold);Grid grid;grid.valid=true;grid.quality_span={40,40};grid.low={-1,-1};grid.count={2,2};
  Pages::Context context={1,2,3,1};std::array<float,4> wrap{};
  std::vector<Caster> casters={{{-6,-6},{4,5},.6f,false,1},{{8,-4},{14,4},.9f,true,2}};
  auto phase=[&](char const* name,unsigned minimum_hits,unsigned maximum_hits){auto hits=warm.pages.hits,rebuilds=warm.pages.rebuilt;unsigned before=oracle.draws;
@@ -127,5 +134,9 @@ int main(){
  wrap={0,0,32,24};++context[19];phase("wrap",0,0);++context[1];phase("asset-config",0,0);++context[2];phase("device-generation",0,0);++context[0];phase("content-scope",0,0);
  grid.quality_span={48,48};++context[5];phase("current-quality",0,0);
  check(warm.pages.hits>0 && warm.pages.rebuilt<cold.pages.rebuilt,"structural reuse");
+ auto pending=oracle.receiver(warm,grid,wrap,true);
+ for(std::size_t i=0;i<pending.size();i+=4){float value;std::memcpy(&value,pending.data()+i,4);check(value==1.f,"pending pages cannot sample recycled shadows");}
+ std::cout<<"SHADOW_FILTER_PASS filtered="<<filtered<<" pending_pages_unshadowed=1\n";
  std::cout<<"SHADOW_PAGE_NATIVE_PASS compared_pixels="<<oracle.compared<<" projections="<<warm.pages.projections<<" projection_reuses="<<warm.pages.projection_reuses<<" page_tests="<<warm.pages.page_tests<<" contributor_edits="<<warm.pages.contributor_edits<<" retained_hits="<<warm.pages.hits<<" retained_rebuilds="<<warm.pages.rebuilt<<" forced_rebuilds="<<cold.pages.rebuilt<<"\n";
+}
 }

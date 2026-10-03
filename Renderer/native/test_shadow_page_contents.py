@@ -6,6 +6,36 @@ from Renderer.native.native_cpp_test import run_cpp
 
 
 class ShadowPageContentsTests(unittest.TestCase):
+    def test_partial_page_completion_survives_frames_and_rejects_changed_casters(self):
+        run_cpp(r'''
+#include "Renderer/native/render_core/shadow_page_contents.h"
+#include <cassert>
+using Grid=c3x_renderer::render_core::ShadowSamplingGrid;
+using Pages=c3x_renderer::render_core::ShadowPageContents<unsigned>;
+int main(){
+ Grid grid;grid.valid=true;grid.low={-2,-2};grid.count={5,5};grid.quality_span={40,40};
+ Pages pages;Pages::Context context={1,2,3};std::array<float,12> light{};
+ auto update=[&](unsigned caster){
+  pages.begin_incremental(grid,context,light);pages.mark(caster);
+  assert(pages.retire_missing([](auto){return true;}));
+  assert(pages.update(caster,grid,[]{return std::array<float,4>{-100,-100,100,100};},[](auto){return true;}));
+  assert(pages.finish_incremental(grid,true,[](auto){return true;}));
+ };
+ for(unsigned frame=0;frame<13;++frame){
+  update(1);unsigned complete=0,draws=0;
+  for(unsigned page=0;page<grid.pages();++page){
+   complete+=pages.reused[page];
+   if(!pages.reused[page]&&draws<2){pages.complete_incremental(page);++draws;}
+  }
+  assert(complete==std::min(frame*2,25u));assert(draws<=2);
+ }
+ update(1);for(unsigned page=0;page<grid.pages();++page)assert(pages.reused[page]);
+ update(2);for(unsigned page=0;page<grid.pages();++page)assert(!pages.reused[page]);
+ pages.complete_incremental(7);update(2);assert(pages.reused[7]);
+ ++context[2];update(2);for(unsigned page=0;page<grid.pages();++page)assert(!pages.reused[page]);
+}
+''')
+
     def test_exact_completed_pages_survive_shift_and_local_contributor_changes(self):
         run_cpp(r'''
 #include "Renderer/native/render_core/shadow_page_contents.h"
@@ -350,12 +380,13 @@ int main(){State state;State::Grid grid;std::array<float,4> wrap{};
 ''')
         body=source[source.index('        atlas_complete=false;',start):source.index('\n};',start)]
         self.assertLess(body.index('page_contents.complete_incremental('),body.index('prepared_signature=membership;'))
-        self.assertLess(body.index('UpdateSubresource(renderer.source_shadow.table'),body.index('atlas_complete=true;'))
+        self.assertLess(body.index('UpdateSubresource(renderer.source_shadow.table'),body.index('atlas_complete=std::all_of('))
 
     def test_production_sampling_uses_retained_physical_slots_and_asset_context(self):
         source=(ROOT/'Renderer/sandbox/fresh_pipeline.h').read_text()
         self.assertIn('int layer=int(pickup_pages[3+logical].x);',source)
-        self.assertIn('table[3+slot][0]=float(page_contents.slots[slot])',source)
+        self.assertIn('table[3+slot][0]=page_contents.reused[slot]?float(page_contents.slots[slot]):-1.f;',source)
+        self.assertIn('if(layer<0)return -1e6;',source)
         self.assertIn('auto* target=targets[page_contents.slots[page_slot]];',source)
         self.assertIn('if(page_contents.reused[page_slot])continue;',source)
         self.assertIn('Pages::Context page_context={renderer.topology_cache.scope_sequence(),renderer.content_revision,',source)

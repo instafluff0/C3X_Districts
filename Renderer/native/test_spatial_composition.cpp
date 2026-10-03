@@ -99,6 +99,29 @@ int test_spatial_composition(){
    require(b.submit_spatial(plan,new_words,new_detail),"new target pair rebound without source recompilation");
    exact(device.Get(),context.Get(),a,b,new_words,"rebound packed");exact(device.Get(),context.Get(),a,b,new_detail,"rebound detail");
    require(read(device.Get(),context.Get(),b.texture(words))==old_words,"old target reader immutable after pair rebinding");
+   // A complete pointwise HUD plan caches map-independent pixels. Change
+   // every underlay pixel between frames: keyed holes, blends and text must
+   // still exactly match the native interpreter, including 555/565 rounding.
+   auto hud_commands=commands;hud_commands.erase(hud_commands.begin()+173);
+   Compositor::SpatialPlan hud_plan;
+   require(b.compile_spatial(hud_plan,hud_commands.data(),hud_commands.size(),words,detail,64u*1024u*1024u),"HUD cache compile");
+   require(bool(hud_plan.hud)&&hud_plan.fallback_commands==0,"HUD cache admitted for pointwise plan");
+   for(unsigned frame=1;frame<=6;++frame){
+    values.resize(width*height);full_values.resize(values.size());
+    for(unsigned i=0;i<values.size();++i){values[i]=(i*739+frame*1709)&65535;full_values[i]=0xff000000u|((i*331+frame*1783)&0xffffff);}
+    upload(words,3000+frame,values);upload(detail,3000+frame,full_values);
+    require(a.submit(hud_commands.data(),hud_commands.size())&&b.submit_spatial(hud_plan,words,detail),"HUD over changing map");
+    exact(device.Get(),context.Get(),a,b,words,"cached HUD packed");exact(device.Get(),context.Get(),a,b,detail,"cached HUD detail");
+   }
+   D3D11_TEXTURE2D_DESC mask_desc={};hud_plan.hud->GetDesc(&mask_desc);
+   mask_desc.ArraySize=1;mask_desc.Usage=D3D11_USAGE_STAGING;mask_desc.BindFlags=0;mask_desc.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
+   ComPtr<ID3D11Texture2D> cached_mask;checked(device->CreateTexture2D(&mask_desc,nullptr,&cached_mask));
+   context->CopySubresourceRegion(cached_mask.Get(),0,0,0,0,hud_plan.hud.Get(),2,nullptr);
+   D3D11_MAPPED_SUBRESOURCE cached_pixels={};checked(context->Map(cached_mask.Get(),0,D3D11_MAP_READ,0,&cached_pixels));
+   unsigned resolved=0,dependent=0;for(unsigned y=0;y<height;++y){auto row=reinterpret_cast<unsigned const*>(static_cast<char const*>(cached_pixels.pData)+y*cached_pixels.RowPitch);
+    for(unsigned x=0;x<width;++x){resolved+=row[x]==1;dependent+=row[x]==2;}}
+   context->Unmap(cached_mask.Get(),0);require(resolved>0&&dependent>0&&resolved+dependent==width*height,"HUD and map dependence classified once");
+   std::printf("PASS HUD cache: format=%u cached_pixels=%u changing_underlays=6 exact=1\n",unsigned(format),resolved);
    // A fallback writer makes its later source mutable; it cannot be
    // captured into the immutable atlas before the write actually executes.
    auto scratch=create(width,height,format);
