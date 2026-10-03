@@ -210,23 +210,24 @@ the delivery evidence.
 
 ### Current qualification — October 3
 
-R5's host and native correctness witnesses remain valid for that frozen source.
-Its PROFILE=1 gameplay measurements included an expensive memory census and are
-diagnostic; they do not qualify ordinary performance. Detailed census now requires
-`C3X_RENDERER_MEMORY_CENSUS=1` together with profiling. Missing GPU/census rows
-remain unavailable.
+The reviewed navigation/composition/submission refactor passed 110 host contracts
+and seven native fixtures, including 657 GPU pixel oracles and rotating display
+targets. The original PROFILE=0/census-off gameplay routes completed 30/30 busy
+and 13/13 light requests with normal water effects. Exact paired workloads admit
+15 busy and 12 light endpoints; busy idle remains unmatched.
 
-The original PROFILE=0, census-off control/candidate baseline is sealed under
-`Renderer/.cache/memory-census-step/`. Light completed 13/13 requests and admits
-12 exact matched endpoints. Busy candidate failed the original acknowledgement
-bound at step 30; its complete performance qualification remains false. Exact
-pre-failure endpoints are descriptive only. The independent critical-path audit
-separates completion, native adoption and correct Present, and does not classify
-unobserved intermediate displayed movement.
+Light scrolling improved median native-input-to-correct-Present latency from
+243 to 130 ms; source presentation cadence rose from 14.57 to 26.38/s. Light idle
+was essentially flat (55.2 to 55.7/s), and zoom remained about 447 ms. Busy scroll
+latency improved from 3093 to 2868 ms while cadence fell from 6.77 to 6.27/s;
+matched jump/return latency regressed from 1541 to 2680 ms. These mixed results
+establish no broad FPS gain. Cadence includes prior/mixed sources; continuous
+distinct displayed motion, physical scanout and GPU durations remain unavailable.
 
-The integrated navigation/submission refactor is awaiting a complete source
-review before broad verification, staging or gameplay comparison. Existing normal
-effects, renderer ownership and the accepted runtime are preserved. Source/trio
-receipts, raw logs, selected endpoint images and cleanup inventories retain the
-baseline; unselected screenshots and completed compiler objects are deleted
-without archives. No measured improvement is claimed for untested source.
+Evidence is sealed under `Renderer/.cache/integrated-refactor-validation/`.
+The accepted runtime/settings were restored exactly. Compiler objects and surplus
+screenshots were deleted without archives; raw logs, source/trios, endpoint images
+and receipts remain. The comparison used the earlier worker hash phase; commit
+`69a75ace` preserves native initial worker phases and awaits its subsequent native
+build/visual check. Ordinary water still uses per-tile buffers; cross-tile spatial
+water batching is not implemented by contiguous same-buffer range joining.
