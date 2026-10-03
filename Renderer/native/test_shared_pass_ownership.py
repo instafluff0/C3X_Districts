@@ -146,16 +146,19 @@ int main(){
 using namespace c3x_renderer::render_core;
 struct CachedGeometryProof {
  std::uint64_t scope=1,assets=7;bool ground_semantics=false;
+ mutable RasterDependencyRevisions::Checkpoint validated_revision{};
  std::vector<std::pair<std::uint64_t,std::uint64_t>> appearance_dependencies,dependencies,coast_dependencies,world_dependencies;
  std::vector<std::pair<std::uint64_t,std::array<int,2>>> anchor_dependencies;
  int river_dependencies=0;
 };
 struct State {
+ RasterDependencyRevisions raster_dependency_revisions;
  CapturedScene topology_cache;unsigned content_revision=7;int shadow_tile_width=128,shadow_tile_height=64;
  std::vector<c3x_renderer_tile_v1> cached_tiles;
  unsigned tile_topology_signature(c3x_renderer_tile_v1 const& tile){return tile.road_mask+100;}
  struct World {unsigned node_revision(std::uint64_t){return 1;}World& world(){return *this;}unsigned at(std::uint64_t){return 2;}}world_coast;
  struct Natural {bool valid(int value){return value==0;}}natural;
+ State(){topology_cache.bind_raster_dependencies(&raster_dependency_revisions);}
 '''+validate+r'''
 };
 int main(){
@@ -191,7 +194,9 @@ int main(){
  assert(state.topology_cache.publish(b,changed));assert(state.raster_content_valid(proof));
  observed.push_back(b);observed[1].anchor_x=observed[0].anchor_x+128;observed[1].anchor_y=observed[0].anchor_y;
  submit();assert(state.raster_content_valid(proof));
- proof.river_dependencies=1;assert(!state.raster_content_valid(proof));
+ // Different immutable inputs need a fresh proof rather than its prior memo.
+ auto changed_proof=proof;changed_proof.river_dependencies=1;changed_proof.validated_revision={};
+ assert(!state.raster_content_valid(changed_proof));
  assert(state.raster_proof_rejections[2]==2 && state.raster_proof_rejections[5]==0 && state.raster_proof_rejections[6]==1);
  // A missing semantic dependency must cease validating as soon as the actual
  // producer publishes it, even before selected membership changes.

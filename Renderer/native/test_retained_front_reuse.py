@@ -117,15 +117,29 @@ int main(){
  for(unsigned y=0;y<4;++y)for(unsigned x=0;x<4;++x)assert(canvas->pixels[y*4+x]==(x<2?3u:2u));
  // An output-plane change cannot reuse an identical revision accidentally.
  right->output[1]=Texture(std::make_shared<Tex>(2,4));std::fill(right->output[1].p->pixels.begin(),right->output[1].p->pixels.end(),4);
- o.front.patches[1].output=1;o.work={};assert(o.assemble_front(image,damage)&&o.work.copied_pixels==16);
+ o.front.patches[1].output=1;++o.front_revision;o.work={};assert(o.assemble_front(image,damage)&&o.work.copied_pixels==8);
+ for(unsigned y=0;y<4;++y)for(unsigned x=0;x<4;++x)assert(canvas->pixels[y*4+x]==(x<2?3u:4u));
  // Same revision/area but a new owner is a different immutable source.
  auto replacement=std::make_shared<Owner::Node>();replacement->area=left->area;replacement->revision=left->revision;
  replacement->output[0]=Texture(std::make_shared<Tex>(2,4));std::fill(replacement->output[0].p->pixels.begin(),replacement->output[0].p->pixels.end(),5);
  std::weak_ptr<Owner::Node> retired=left;o.front.patches[0].node=replacement;left.reset();assert(retired.expired());
- o.work={};assert(o.assemble_front(image,damage)&&o.work.copied_pixels==16&&canvas->pixels[0]==5);
+ ++o.front_revision;o.work={};assert(o.assemble_front(image,damage)&&o.work.copied_pixels==8&&canvas->pixels[0]==5);
  // Prior display failure must retry a full display even if assembly is current.
  o.work={};assert(o.assemble_front(image,damage)&&!o.work.copies&&Owner::same_rect(damage,{0,0,4,4}));
- ++o.front_revision;o.work={};assert(o.assemble_front(image,damage)&&o.work.copied_pixels==16);
+ ++o.front_revision;o.work={};assert(o.assemble_front(image,damage)&&!o.work.copied_pixels);
+ // Reordering a complete partition changes traversal, not pixel ownership.
+ // Any fragment whose index no longer matches is conservatively recopied.
+ std::swap(o.front.patches[0],o.front.patches[1]);++o.front_revision;o.work={};
+ assert(o.assemble_front(image,damage)&&o.work.copied_pixels==16);
+ for(unsigned y=0;y<4;++y)for(unsigned x=0;x<4;++x)assert(canvas->pixels[y*4+x]==(x<2?5u:4u));
+ std::swap(o.front.patches[0],o.front.patches[1]);++o.front_revision;assert(o.assemble_front(image,damage));
+ // Splitting or merging one fragment leaves the unchanged half resident.
+ o.front.patches[1].area={2,0,4,2};o.front.patches.push_back({{2,2,4,4},right,1});
+ ++o.front_revision;o.work={};assert(o.assemble_front(image,damage)&&o.work.copied_pixels==8);
+ for(unsigned y=0;y<4;++y)for(unsigned x=0;x<4;++x)assert(canvas->pixels[y*4+x]==(x<2?5u:4u));
+ o.front.patches.pop_back();o.front.patches[1].area=right->area;
+ ++o.front_revision;o.work={};assert(o.assemble_front(image,damage)&&o.work.copied_pixels==8);
+ for(unsigned y=0;y<4;++y)for(unsigned x=0;x<4;++x)assert(canvas->pixels[y*4+x]==(x<2?5u:4u));
  // Sparse/nonpartitioned, missing output, and aliased source all fail closed.
  o.front.patches.pop_back();assert(!o.assemble_front(image,damage)&&!o.assembled_front);
  o.front.patches.push_back({right->area,right,1});o.front.partitioned=false;assert(!o.assemble_front(image,damage));o.front.partitioned=true;
@@ -156,6 +170,21 @@ int main(){
  assert(d.draw(3,1000,&display,&display,&buffer)==1);
  for(unsigned y=0;y<4;++y)for(unsigned x=0;x<4;++x)assert(display.pixels[y*4+x]==(x<2?3u:4u));assert(buffer.pixels==display.pixels);
  assert(d.draw(4,1000,&display,&display,&buffer)==2);
+ // Flip-model back buffers rotate. The next target does not necessarily hold
+ // the preceding complete frame, even when only one source fragment changed.
+ Tex rotated(4,4);std::fill(rotated.pixels.begin(),rotated.pixels.end(),99);
+ std::fill(a->output[0].p->pixels.begin(),a->output[0].p->pixels.end(),7);++a->revision;
+ assert(d.draw(5,1000,&rotated,&rotated,&buffer)==1);
+ for(unsigned y=0;y<4;++y)for(unsigned x=0;x<4;++x)
+  assert(rotated.pixels[y*4+x]==(x<2?7u:4u));
+ assert(buffer.pixels==rotated.pixels);
+ // The old target is stale in the other half on its next turn. Both halves
+ // must agree with the retained canvas after changing the right fragment.
+ std::fill(b->output[0].p->pixels.begin(),b->output[0].p->pixels.end(),8);++b->revision;
+ assert(d.draw(6,1000,&display,&display,&buffer)==1);
+ for(unsigned y=0;y<4;++y)for(unsigned x=0;x<4;++x)
+  assert(display.pixels[y*4+x]==(x<2?7u:8u));
+ assert(buffer.pixels==display.pixels);
 }
 ''')
 

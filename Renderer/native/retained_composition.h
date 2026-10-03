@@ -1092,13 +1092,18 @@ private:
             assembled_front=std::move(target.texture);front_owned=owned_storage.retain(assembled_front.Get());front_physical=storage.retain(assembled_front.Get());
             assembled_width=front.width;assembled_height=front.height;assembled_format=front.format;
         }
-        bool complete=assembled_revision!=front_revision||assembled_patches.size()!=front.patches.size();
-        if(!complete)for(std::size_t index=0;index<front.patches.size();++index){auto const& old=assembled_patches[index];auto const& patch=front.patches[index];
-            if(old.node.lock()!=patch.node||old.output!=patch.output||!same_rect(old.area,patch.area)){complete=true;break;}
-        }
+        // A native commit can replace one fragment while keeping the rest.
+        // The exact partition above proves nonoverlap and complete coverage;
+        // compare each fragment independently instead of recopying the whole
+        // canvas whenever its commit identity or another fragment changes.
+        bool complete=assembled_revision==0;
         damage={};std::uint64_t changed_pixels=0;
         for(std::size_t index=0;index<front.patches.size();++index){auto const& patch=front.patches[index];
-            if(!complete&&assembled_patches[index].revision==patch.node->revision)continue;
+            if(!complete&&index<assembled_patches.size()){
+                auto const& old=assembled_patches[index];
+                if(old.node.lock()==patch.node&&old.output==patch.output&&
+                   same_rect(old.area,patch.area)&&old.revision==patch.node->revision)continue;
+            }
             auto area=patch.area,source=patch.node->area;
             D3D11_BOX box={unsigned(area.left-source.left),unsigned(area.top-source.top),0,
                 unsigned(area.right-source.left),unsigned(area.bottom-source.top),1};
@@ -1375,7 +1380,11 @@ public:
         Id image=0;Rect damage=extent(front);
         if(!assemble_front(image,damage))image=assemble(front,ticks,frequency,0,{},true);
         bool ok=false;
-        try{ok=empty(damage)||replay.display(image,target,front.width,front.height,damage);}
+        // The live target is a flip-model swap-chain buffer, not the previous
+        // display. Its unchanged regions may be several frames old. Retain
+        // dirty-only assembly above, but transfer the complete coherent canvas
+        // on every changed frame; Present does not receive a damage history.
+        try{ok=replay.display(image,target,front.width,front.height,extent(front));}
         catch(...){assembled_revision=0;replay.recycle(image);throw;}replay.recycle(image);
         if(!ok)assembled_revision=0;
         // The caller publishes with Present or a keyed release followed by

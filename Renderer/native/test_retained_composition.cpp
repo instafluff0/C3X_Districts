@@ -1415,7 +1415,9 @@ int test_retained_composition(){
     // The assembled display is optional, never a native version. Animate the
     // map underneath a fixed panel, then change topology, restore a saved
     // image and exercise shifted self-copy and sparse/admission fallbacks.
-    for(auto format:{Format::rgb555,Format::rgb565,Format::bgra32}){
+    // Display accepts BGRA only. Native word surfaces are verified through
+    // sample() and paired HUD assembly above, before their display conversion.
+    for(auto format:{Format::bgra32}){
         auto live_owner=std::make_unique<Compositor>(device.Get(),context.Get());auto& live=*live_owner;
         auto fast_owner=std::make_unique<RetainedComposition>(device.Get(),context.Get());auto& fast=*fast_owner;
         auto oracle_owner=std::make_unique<RetainedComposition>(device.Get(),context.Get());auto& oracle=*oracle_owner;
@@ -1431,13 +1433,16 @@ int test_retained_composition(){
             retained->record({Kind::copy,screen,map,full,full});retained->record({Kind::fill,screen,0,panel,full,0,0,color});retained->commit(screen,full);}
         D3D11_TEXTURE2D_DESC desc={};desc.Width=w;desc.Height=h;desc.MipLevels=desc.ArraySize=desc.SampleDesc.Count=1;
         desc.Format=DXGI_FORMAT_B8G8R8A8_UNORM;desc.BindFlags=D3D11_BIND_RENDER_TARGET;
-        ComPtr<ID3D11Texture2D> display[2],buffer[2];ComPtr<ID3D11RenderTargetView> target[2];
-        for(unsigned i=0;i<2;++i){checked(device->CreateTexture2D(&desc,nullptr,&display[i]));checked(device->CreateTexture2D(&desc,nullptr,&buffer[i]));
+        ComPtr<ID3D11Texture2D> display[3],buffer[3];ComPtr<ID3D11RenderTargetView> target[3];
+        for(unsigned i=0;i<3;++i){checked(device->CreateTexture2D(&desc,nullptr,&display[i]));checked(device->CreateTexture2D(&desc,nullptr,&buffer[i]));
             checked(device->CreateRenderTargetView(display[i].Get(),nullptr,&target[i]));}
-        auto compare=[&](unsigned tick){assert(fast.draw(tick,1000,target[0].Get(),display[0].Get(),buffer[0].Get())==1);
+        // Alternate the fast path's targets as a flip swap chain does. Only
+        // the retained assembled canvas has the immediately previous frame.
+        auto compare=[&](unsigned tick){unsigned output=(tick&1)?0u:2u;
+            assert(fast.draw(tick,1000,target[output].Get(),display[output].Get(),buffer[output].Get())==1);
             assert(oracle.draw(tick,1000,target[1].Get(),display[1].Get(),buffer[1].Get())==1);
-            auto actual=retained_read(device.Get(),context.Get(),display[0].Get());
-            assert(actual==retained_read(device.Get(),context.Get(),display[1].Get())&&actual==retained_read(device.Get(),context.Get(),buffer[0].Get()));++checks;};
+            auto actual=retained_read(device.Get(),context.Get(),display[output].Get());
+            assert(actual==retained_read(device.Get(),context.Get(),display[1].Get())&&actual==retained_read(device.Get(),context.Get(),buffer[output].Get()));++checks;};
         assert(fast.draw(1,1000,nullptr,display[0].Get(),buffer[0].Get())==0);
         for(unsigned tick=1;tick<=8;++tick){if(tick>1)change_map(tick);compare(tick);
             if(tick>1){assert(fast.last_work().assembly_pixels==std::uint64_t(w)*h-48);
@@ -1459,7 +1464,7 @@ int test_retained_composition(){
         fast.destroy(pressure);
         for(auto retained:{&fast,&oracle}){retained->record({Kind::fill,sparse,0,{3,4,9,10},full,0,0,color});retained->commit(sparse,full);}compare(14);
         fast.clear();oracle.clear();assert(!fast.bytes()&&!fast.node_count()&&!oracle.bytes()&&!oracle.node_count());
-        std::printf("PASS retained damaged front: format=%u exact=14 failed_display_retry=1 unchanged_fixed_pixels=1 partial_commit=1 shifted_self_copy=1 saved_version=1 sparse_fallback=1 optional_admission_eviction=1 reset=1\n",unsigned(format));
+        std::printf("PASS retained damaged front: format=%u exact=14 rotating_targets=1 failed_display_retry=1 unchanged_fixed_pixels=1 partial_commit=1 shifted_self_copy=1 saved_version=1 sparse_fallback=1 optional_admission_eviction=1 reset=1\n",unsigned(format));
     }
     std::printf("PASS retained composition: %u exact GPU oracles, 120 independent clock frames, aliasing, paired 555/565/full color, UI versioning, partial publication, bounded overwrite and reset\n",checks);return 0;
 }
