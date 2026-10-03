@@ -482,8 +482,9 @@ typedef int (*c3x_renderer_render_view_fn)(struct c3x_renderer_camera_request_v1
 // before the first playable view. It does not authorize a draw or unit roster.
 typedef int (*c3x_renderer_seed_world_fn)(struct c3x_renderer_camera_request_v1 const *);
 // Optional loading-only entry: zero viewport/occurrences, real world facts and
-// copied topology. OK certifies all permitted region recipes in owned RAM;
-// it creates no display/front and captures no native unit instances.
+// copied topology. OK certifies all permitted region recipes in owned RAM and
+// completion of measured GPU admission; capacity-deferred geometry keeps its
+// RAM recipe. It creates no display/front or native unit instances.
 typedef int (*c3x_renderer_prepare_world_loading_fn)(struct c3x_renderer_camera_request_v1 const *);
 // Explicit changed-world caller boundary: synchronously copy/adopt fresh pages
 // and arm required region preparation. OK requires a successful synchronous

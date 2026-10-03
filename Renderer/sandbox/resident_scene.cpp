@@ -407,7 +407,7 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
             sandbox_direct_units.shadow_contributors,sandbox_direct_units.reflection_contributors);
         renderer.trace.write("fresh-unit-reflection-selection",detail,true);
         auto const& spans=sandbox_fresh.prepare_subspans;auto const& placements=renderer.shared_instances;
-        auto validation=sandbox_fresh.static_validation_counts();char validation_detail[1024];
+        auto validation=sandbox_fresh.static_validation_counts();char validation_detail[2048];
         sprintf_s(validation_detail,"raster_full=%llu raster_content=%llu raster_visibility=%llu raster_membership=%llu raster_regions=%llu raster_reuses=%llu raster_changes=%llu atlas_full=%llu atlas_content=%llu atlas_membership=%llu atlas_regions=%llu atlas_reuses=%llu receiver_visits=%llu receiver_builds=%llu receiver_reuses=%llu placement_probes=%llu placement_reuses=%llu raster_registrations=%llu raster_watches=%llu raster_source_expansions=%llu raster_source_reuses=%llu raster_append_ms=%.3f atlas_registrations=%llu atlas_watches=%llu atlas_source_expansions=%llu atlas_source_reuses=%llu atlas_append_ms=%.3f",
             validation.raster.full,validation.raster.content,validation.raster.visibility,validation.raster.membership,validation.raster.regions,validation.raster.reused,validation.raster.changes,
             validation.atlas.full,validation.atlas.content,validation.atlas.membership,validation.atlas.regions,validation.atlas.reused,
@@ -415,10 +415,14 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
             validation.raster.proof_registrations,validation.raster.dependency_watch_calls,validation.raster.source_expansions,validation.raster.source_reuses,validation.raster.append_ms,
             validation.atlas.proof_registrations,validation.atlas.dependency_watch_calls,validation.atlas.source_expansions,validation.atlas.source_reuses,validation.atlas.append_ms);
         renderer.trace.write("static-validation-counts",validation_detail,true);
-        sprintf_s(validation_detail,"caster_collections=%llu caster_reuses=%llu group_builds=%llu group_reuses=%llu body_placement_builds=%llu body_placement_reuses=%llu terrain_batch_builds=%llu terrain_batch_reuses=%llu page_reuses=%llu page_rebuilds=%llu page_refused=%llu latest_rebuild_draws=%llu",
+        sprintf_s(validation_detail,"caster_collections=%llu caster_reuses=%llu group_builds=%llu group_reuses=%llu body_placement_builds=%llu body_placement_reuses=%llu terrain_batch_builds=%llu terrain_batch_reuses=%llu page_reuses=%llu page_rebuilds=%llu page_refused=%llu latest_rebuild_draws=%llu projections=%llu projection_reuses=%llu page_tests=%llu contributor_edits=%llu instance_projections=%llu page_sorts=%llu draw_projections=%llu proof_bytes=%zu page_bytes=%zu producers=%zu dependency_sources=%zu",
             validation.caster_collections,validation.caster_reuses,validation.shadow_group_builds,validation.shadow_group_reuses,
             validation.body_placement_builds,validation.body_placement_reuses,validation.terrain_batch_builds,validation.terrain_batch_reuses,
-            validation.shadow_page_reuses,validation.shadow_page_rebuilds,validation.shadow_page_refused,validation.shadow_draws);
+            validation.shadow_page_reuses,validation.shadow_page_rebuilds,validation.shadow_page_refused,validation.shadow_draws,
+            validation.shadow_projections,validation.shadow_projection_reuses,validation.shadow_page_tests,validation.shadow_contributor_edits,
+            validation.shadow_instance_projections,validation.shadow_page_sorts,validation.shadow_draw_projections,
+            validation.shadow_proof_bytes,validation.shadow_page_bytes,
+            validation.shadow_producers,validation.shadow_dependency_sources);
         renderer.trace.write("fresh-shadow-retention",validation_detail,true);
         auto const& requirements=sandbox_fresh.body_requirements;
         sprintf_s(detail,"setup_resources_ms=%.3f capture_ms=%.3f raster_proof_ms=%.3f body_requirements_ms=%.3f city_shadow_ms=%.3f unit_selection_ms=%.3f unit_pose_ms=%.3f body_builds=%u body_reuses=%u body_visits=%u body_unique=%zu body_duplicates=%u coverage_probes=%u requirement_bytes=%zu unit_plan_reused=%u unit_reselected=%u range_reuses=%llu carry_visits=%llu carried_ranges=%llu packed_records=%llu gpu_copies=%llu copied_bytes=%llu allocated_bytes=%llu host_uploaded_bytes=%llu",

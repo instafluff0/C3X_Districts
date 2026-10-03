@@ -475,7 +475,7 @@ struct SandboxSceneShadow {
     ID3D11RasterizerState* raster = nullptr;
     struct InstanceGroup {
         using Instance=c3x_renderer::fidelity::MeshInstance;
-        struct Part {Shadow::Bounds bounds;unsigned first=0,count=0;};
+        struct Part {Shadow::Bounds bounds;unsigned first=0,count=0;std::array<float,4> projected{};};
         Shadow::Caster source;
         std::vector<Part> parts;
 
@@ -489,8 +489,9 @@ struct SandboxSceneShadow {
     std::vector<Shadow::Caster> caster_inputs;
     using Membership=c3x_renderer::render_core::SceneMembership<CachedVertexChunk,geometry_layer_count>;
     Membership::Lease caster_lease;
-    using AtlasInputs=c3x_renderer::render_core::RasterContributors<CachedGeometryProof,20>;
+    using AtlasInputs=c3x_renderer::render_core::ShadowCasterProofs<CachedGeometryProof>;
     AtlasInputs atlas_inputs;
+    std::uint64_t proof_membership_signature=~std::uint64_t(0);
     using Pages=c3x_renderer::render_core::ShadowPageContents<AtlasInputs::Key>;
     Pages page_contents;
     std::vector<Submission::Key> prepared_instances;
@@ -511,6 +512,9 @@ struct SandboxSceneShadow {
     Submission::CpuLease terrain_metadata;
     std::uint64_t terrain_batch_builds=0,terrain_batch_reuses=0;
     bool atlas_complete=false;
+    std::array<float,12> part_light_basis{};
+    std::uint64_t part_group_builds=0,instance_projections=0,draw_projections=0;
+    bool part_projection_valid=false;
     unsigned resolution=Grid::page_texels;
     bool ready=false;
     std::size_t production_field_bytes=0;
@@ -980,6 +984,12 @@ struct SandboxSceneShadow {
             views[0]=renderer.cliff_views[renderer.cliff_bundle.assets[layer-geometry_cliff0].texture_index];
         context->PSSetShaderResources(0,33,views.data());return true;
     }
+    bool shadow_metadata_admit(std::size_t proofs,std::size_t pages){
+        if(proofs>AtlasInputs::limit || pages>AtlasInputs::limit-proofs)return false;
+        auto bytes=proofs+pages;
+        if(page_metadata)return renderer.shared_instances.resize_metadata(page_metadata,bytes);
+        page_metadata=renderer.shared_instances.retain_metadata(bytes);return bool(page_metadata);
+    }
     AtlasInputs::Key caster_key(Shadow::Caster const& caster)const{
         auto bits=[](float value){std::uint32_t result;std::memcpy(&result,&value,sizeof(result));return std::uint64_t(result);};
         return {caster.content_generation,caster.version,(std::uint64_t(caster.layer)<<32)|caster.binding,
@@ -997,35 +1007,30 @@ struct SandboxSceneShadow {
     }
     bool atlas_dependencies(bool append){
 #ifdef C3X_RENDERER64_FRESH
-        auto exact=[&](){
-        if(!append && !atlas_inputs.valid([&](auto const& proof){return renderer.raster_content_valid(proof);},
-            [&](auto tile){auto record=renderer.topology_cache.retained(tile);return record?record->visibility_revision:0;}))return false;
-        bool valid=true;if(!append)atlas_inputs.begin_membership();
-        for(auto const& caster:caster_inputs){
-            ++atlas_inputs.validation_counts.membership;
-            auto p=Shadow::project(caster.bounds,caster.offset,renderer.shadow_basis);
-            if(p[2]<box[0] || p[3]<box[1] || p[0]>box[0]+box[2] || p[1]>box[1]+box[3])continue;
-            auto key=caster_key(caster);
-            if(!append){if(!atlas_inputs.visit_membership(key)){valid=false;++renderer.raster_proof_rejections[5];}continue;}
-            auto mesh=std::static_pointer_cast<CachedMeshGeneration>(caster_lease->content.get({0,caster.content_generation}));
-            auto tile=mesh?mesh->proof->tile:0;
-            auto observed=renderer.topology_cache.retained(tile);
-            bool new_proof=false;
-            valid=atlas_inputs.add(key,mesh?mesh->proof:nullptr,tile,observed?observed->visibility_revision:0,&new_proof) && valid;
-            if(new_proof)valid=renderer.watch_raster_dependencies(*mesh->proof,atlas_inputs)&&valid;
-        }
-        if(append)atlas_inputs.finish_dependencies();
-        else if(!atlas_inputs.exact_membership()){valid=false;++renderer.raster_proof_rejections[5];}
-        return valid;
-        };
-        if(append){auto begin=std::chrono::steady_clock::now();bool valid=exact();
-            atlas_inputs.validation_counts.append_ms+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count();return valid;}
-        AtlasInputs::ValidationKey key={caster_signature,renderer.topology_cache.scope_sequence(),renderer.content_revision,
+        std::array<std::uint64_t,4> context={renderer.topology_cache.scope_sequence(),renderer.content_revision,
             renderer.device_generation,unsigned(renderer.geometry_canonical_world)};
-        auto bits=[](float value){std::uint32_t result;std::memcpy(&result,&value,sizeof(result));return std::uint64_t(result);};
-        for(unsigned i=0;i<4;++i)key[5+i]=bits(box[i]);
-        for(unsigned i=0;i<renderer.shadow_basis.size();++i)key[9+i]=bits(renderer.shadow_basis[i]);
-        return atlas_inputs.validate(renderer.raster_dependency_revisions,key,exact);
+        if(append && (proof_membership_signature!=caster_signature || atlas_inputs.context!=context || !atlas_inputs.complete || !atlas_inputs.valid_all)){
+            if(atlas_inputs.context!=context)page_contents.clear();
+            auto begin=std::chrono::steady_clock::now();
+            try{
+                atlas_inputs.begin(context,renderer.raster_dependency_revisions,[&](auto bytes){return shadow_metadata_admit(bytes,page_contents.bytes());});
+                for(auto const& caster:caster_inputs)atlas_inputs.mark(caster.content_generation);
+                atlas_inputs.finish(false); // retire leaving producers; share charged input registrations with entering producers
+                for(auto const& caster:caster_inputs){
+                    auto mesh=std::static_pointer_cast<CachedMeshGeneration>(caster_lease->content.get({0,caster.content_generation}));
+                    auto tile=mesh&&mesh->proof?mesh->proof->tile:0;auto observed=renderer.topology_cache.retained(tile);
+                    if(!atlas_inputs.add(caster.content_generation,mesh?mesh->proof:nullptr,tile,observed?observed->visibility_revision:0,
+                        [&](auto const& proof,auto& owner){return renderer.watch_raster_dependencies(proof,owner);},
+                        [&](auto const& proof){return renderer.raster_content_valid(proof);}))break;
+                }
+                atlas_inputs.finish();proof_membership_signature=caster_signature;
+            }catch(...){atlas_inputs.complete=false;}
+            atlas_inputs.validation_counts.append_ms+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count();
+        }
+        if(proof_membership_signature!=caster_signature || atlas_inputs.context!=context)return false;
+        return atlas_inputs.validate(renderer.raster_dependency_revisions,
+            [&](auto const& proof){return renderer.raster_content_valid(proof);},
+            [&](auto tile){auto record=renderer.topology_cache.retained(tile);return record?record->visibility_revision:0;});
 #else
         return true;
 #endif
@@ -1096,12 +1101,39 @@ struct SandboxSceneShadow {
         if(!sampling_grid.covers(query_grid))sampling_grid=query_grid;
         auto coverage=sampling_grid.coverage();
         std::copy(coverage.begin(),coverage.end(),box);
-        atlas_inputs.clear();if(!atlas_dependencies(true))atlas_inputs.complete=false;
-        bool proved=atlas_dependencies(false);
+        bool dependency_proved=atlas_dependencies(true);
+        bool proved=dependency_proved;
+        Pages::Context page_context={renderer.topology_cache.scope_sequence(),renderer.content_revision,
+            renderer.device_generation,unsigned(renderer.geometry_canonical_world)};
+        auto bits=[](float value){std::uint32_t word=0;std::memcpy(&word,&value,4);return std::uint64_t(word);};
+        page_context[5]=bits(sampling_grid.quality_span[0]);page_context[6]=bits(sampling_grid.quality_span[1]);
+        for(unsigned i=0;i<renderer.shadow_basis.size();++i)page_context[7+i]=bits(renderer.shadow_basis[i]);
+        for(unsigned i=0;i<wrap_query.size();++i)page_context[19+i]=bits(wrap_query[i]);
+        if(proved)try{
+            page_contents.begin_incremental(sampling_grid,page_context,renderer.shadow_basis);
+            for(auto const& caster:caster_inputs)page_contents.mark(caster_key(caster));
+            proved=page_contents.retire_missing([&](auto bytes){return shadow_metadata_admit(atlas_inputs.bytes(),bytes);});
+            for(auto const& caster:caster_inputs){auto key=caster_key(caster);
+                if(!page_contents.update(key,sampling_grid,[&]{return Shadow::project(caster.bounds,caster.offset,renderer.shadow_basis);},
+                    [&](auto bytes){return shadow_metadata_admit(atlas_inputs.bytes(),bytes);})){proved=false;break;}}
+            if(proved)proved=page_contents.finish_incremental(sampling_grid,true,
+                [&](auto bytes){return shadow_metadata_admit(atlas_inputs.bytes(),bytes);});
+        }catch(...){proved=false;}
+        if(proved && !shadow_metadata_admit(atlas_inputs.bytes(),page_contents.bytes()))proved=false;
+        if(!proved){page_contents.clear();
+            // Optional projected page membership can fail while the exact
+            // current source dependencies remain fully validated. Keep those
+            // bounded registrations charged through the ordinary full redraw.
+            if(!dependency_proved || !shadow_metadata_admit(atlas_inputs.bytes(),page_contents.bytes())){
+                atlas_inputs.clear();proof_membership_signature=~std::uint64_t(0);page_metadata.reset();
+            }
+            ++page_contents.refused;
+            Pages::Inputs empty;page_contents.select(sampling_grid,page_context,empty,false);}
         casters.clear();
-        for(auto const& caster:caster_inputs){auto p=Shadow::project(caster.bounds,caster.offset,renderer.shadow_basis);
-            if(p[2]<box[0] || p[3]<box[1] || p[0]>box[0]+box[2] || p[1]>box[1]+box[3])continue;
-            casters.push_back(caster);
+        auto coverage_box=std::array<float,4>{box[0],box[1],box[2],box[3]};
+        for(auto const& caster:caster_inputs){auto cached=page_contents.projected(caster_key(caster));
+            auto p=cached?*cached:Shadow::project(caster.bounds,caster.offset,renderer.shadow_basis);
+            if(Pages::intersects(p,coverage_box))casters.push_back(caster);
         }
         std::vector<Submission::Key> placement_keys;
         for(auto const& caster:casters)if(caster.instances&&!caster.instances->empty())placement_keys.push_back(shared_caster_placement_key(caster));
@@ -1116,30 +1148,6 @@ struct SandboxSceneShadow {
         renderer.context->IASetVertexBuffers(0,2,empty_streams,empty_strides,empty_strides);
         renderer.context->IASetIndexBuffer(nullptr,DXGI_FORMAT_UNKNOWN,0);
         batch_terrain_casters();
-        Pages::Context page_context={renderer.topology_cache.scope_sequence(),renderer.content_revision,
-            renderer.device_generation,unsigned(renderer.geometry_canonical_world)};
-        auto bits=[](float value){std::uint32_t word=0;std::memcpy(&word,&value,4);return std::uint64_t(word);};
-        page_context[5]=bits(sampling_grid.quality_span[0]);page_context[6]=bits(sampling_grid.quality_span[1]);
-        for(unsigned i=0;i<renderer.shadow_basis.size();++i)page_context[7+i]=bits(renderer.shadow_basis[i]);
-        for(unsigned i=0;i<wrap_query.size();++i)page_context[19+i]=bits(wrap_query[i]);
-        Pages::Inputs page_inputs;
-        std::array<std::size_t,Grid::max_pages> page_counts{};std::size_t input_count=0;
-        auto intersects=[&](Shadow::Caster const& caster,unsigned slot){auto bounds=Shadow::project(caster.bounds,caster.offset,renderer.shadow_basis);
-            auto page=sampling_grid.page_box(slot);return !(bounds[2]<page[0]||bounds[0]>page[0]+page[2]||bounds[3]<page[1]||bounds[1]>page[1]+page[3]);};
-        if(proved){
-            for(auto const& caster:caster_inputs)for(unsigned slot=0;slot<sampling_grid.pages();++slot)if(intersects(caster,slot)){++page_counts[slot];++input_count;}
-            auto metadata=page_contents.bytes()+sizeof(page_inputs)+input_count*sizeof(AtlasInputs::Key)*2;
-            if(atlas_inputs.bytes()>AtlasInputs::limit || metadata>AtlasInputs::limit-atlas_inputs.bytes())proved=false;
-            else if(page_metadata){if(!renderer.shared_instances.resize_metadata(page_metadata,metadata))proved=false;}
-            else {page_metadata=renderer.shared_instances.retain_metadata(metadata);if(!page_metadata)proved=false;}
-            if(proved)try{
-                for(unsigned slot=0;slot<sampling_grid.pages();++slot)page_inputs[slot].reserve(page_counts[slot]);
-                for(auto const& caster:caster_inputs)for(unsigned slot=0;slot<sampling_grid.pages();++slot)if(intersects(caster,slot))page_inputs[slot].push_back(caster_key(caster));
-                for(unsigned slot=0;slot<sampling_grid.pages();++slot)std::sort(page_inputs[slot].begin(),page_inputs[slot].end());
-            }catch(...){proved=false;}
-        }
-        if(!proved){page_contents.clear();page_metadata.reset();++page_contents.refused;for(auto& input:page_inputs)std::vector<AtlasInputs::Key>().swap(input);}
-        page_contents.select(sampling_grid,page_context,page_inputs,proved);
         auto* context=renderer.context;
         std::array<ID3D11ShaderResourceView*,128> empty{};
         context->PSSetShaderResources(0,128,empty.data());
@@ -1149,6 +1157,18 @@ struct SandboxSceneShadow {
         D3D11_VIEWPORT viewport={0,0,float(resolution),float(resolution),0,1};context->RSSetViewports(1,&viewport);
         context->OMSetDepthStencilState(nullptr,0);
         context->OMSetBlendState(maximum,nullptr,0xffffffffu);
+        bool needs_draw=!std::all_of(page_contents.reused.begin(),page_contents.reused.begin()+sampling_grid.pages(),[](bool reused){return reused;});
+        auto draw_bounds_charge=needs_draw?renderer.shared_instances.retain_metadata(casters.size()*sizeof(std::array<float,4>)):Submission::CpuLease{};
+        std::vector<std::array<float,4>> draw_bounds;
+        if(draw_bounds_charge)try{
+            draw_bounds.reserve(casters.size());
+            for(auto const& caster:casters){auto cached=page_contents.projected(caster_key(caster));
+                draw_bounds.push_back(cached?*cached:Shadow::project(caster.bounds,caster.offset,renderer.shadow_basis));if(!cached)++draw_projections;}
+        }catch(...){std::vector<std::array<float,4>>().swap(draw_bounds);draw_bounds_charge.reset();}
+        if(needs_draw && (!part_projection_valid || part_group_builds!=group_builds || std::memcmp(part_light_basis.data(),renderer.shadow_basis.data(),sizeof(part_light_basis)))){
+            for(auto& group:instance_groups)for(auto& part:group.parts){part.projected=Shadow::project(part.bounds,zero,renderer.shadow_basis);++instance_projections;}
+            part_projection_valid=true;part_group_builds=group_builds;part_light_basis=renderer.shadow_basis;
+        }
         float clear[4]={-1e6f,-1e6f,-1e6f,-1e6f};
         draws=0;
         for(unsigned page_slot=0;page_slot<sampling_grid.pages();++page_slot){
@@ -1158,10 +1178,10 @@ struct SandboxSceneShadow {
         context->OMSetRenderTargets(1,&target,nullptr);
         auto page_box=sampling_grid.page_box(page_slot);
         auto page= sampling_grid.page(page_slot);
-        for (auto const& caster:casters) {
-            if(caster.instances)continue;
+        for (std::size_t caster_index=0;caster_index<casters.size();++caster_index) {
+            auto const& caster=casters[caster_index];if(caster.instances)continue;
             if(work->enabled)++work->row(caster.layer).tested_records;
-            auto bounds=Shadow::project(caster.bounds,caster.offset,renderer.shadow_basis);
+            auto bounds=draw_bounds.empty()?Shadow::project(caster.bounds,caster.offset,renderer.shadow_basis):draw_bounds[caster_index];if(draw_bounds.empty())++draw_projections;
             if(bounds[2]<page_box[0] || bounds[0]>page_box[0]+page_box[2] ||
                bounds[3]<page_box[1] || bounds[1]>page_box[1]+page_box[3])continue;
             if(work->enabled)++work->row(caster.layer).accepted_records;
@@ -1189,7 +1209,7 @@ struct SandboxSceneShadow {
             selected.clear();
             for(auto const& part:group.parts){
                 if(work->enabled){++work->row(group.source.layer).tested_records;work->row(group.source.layer).tested_instances+=part.count;}
-                auto bounds=Shadow::project(part.bounds,zero,renderer.shadow_basis);
+                auto const& bounds=part.projected;
                 if(bounds[2]<page_box[0] || bounds[0]>page_box[0]+page_box[2] ||
                    bounds[3]<page_box[1] || bounds[1]>page_box[1]+page_box[3])continue;
                 if(work->enabled){++work->row(group.source.layer).accepted_records;work->row(group.source.layer).accepted_instances+=part.count;}
@@ -1221,7 +1241,7 @@ struct SandboxSceneShadow {
                 ++draws;
             }
         }
-        if(!page_contents.complete(page_slot,sampling_grid,page_context,page_inputs[page_slot],proved))return false;
+        if(!page_contents.complete_incremental(page_slot,proved))return false;
         }
         context->OMSetRenderTargets(0,nullptr,nullptr);
         std::array<std::array<float,4>,64> table{};
@@ -1385,6 +1405,8 @@ struct SandboxFreshPipeline {
         std::uint64_t caster_collections=0,caster_reuses=0,shadow_group_builds=0,shadow_group_reuses=0;
         std::uint64_t body_placement_builds=0,body_placement_reuses=0,terrain_batch_builds=0,terrain_batch_reuses=0;
         std::uint64_t shadow_page_reuses=0,shadow_page_rebuilds=0,shadow_page_refused=0,shadow_draws=0;
+        std::uint64_t shadow_projections=0,shadow_projection_reuses=0,shadow_page_tests=0,shadow_contributor_edits=0,shadow_instance_projections=0,shadow_page_sorts=0,shadow_draw_projections=0;
+        std::size_t shadow_proof_bytes=0,shadow_page_bytes=0,shadow_producers=0,shadow_dependency_sources=0;
     };
     StaticValidationCounts static_validation_counts()const{
         StaticValidationCounts result;
@@ -1403,6 +1425,12 @@ struct SandboxFreshPipeline {
         result.terrain_batch_builds=shadow.terrain_batch_builds;result.terrain_batch_reuses=shadow.terrain_batch_reuses;
         result.shadow_page_reuses=shadow.page_contents.hits;result.shadow_page_rebuilds=shadow.page_contents.rebuilt;
         result.shadow_page_refused=shadow.page_contents.refused;result.shadow_draws=shadow.draws;
+        result.shadow_projections=shadow.page_contents.projections;result.shadow_projection_reuses=shadow.page_contents.projection_reuses;
+        result.shadow_page_tests=shadow.page_contents.page_tests;result.shadow_contributor_edits=shadow.page_contents.contributor_edits;
+        result.shadow_page_sorts=shadow.page_contents.page_sorts;result.shadow_draw_projections=shadow.draw_projections;
+        result.shadow_instance_projections=shadow.instance_projections;result.shadow_proof_bytes=shadow.atlas_inputs.bytes();
+        result.shadow_page_bytes=shadow.page_contents.bytes();result.shadow_producers=shadow.atlas_inputs.producers.size();
+        result.shadow_dependency_sources=shadow.atlas_inputs.sources.size();
         return result;
     }
     enum PrepareSpan {prepare_setup_resources,prepare_capture,prepare_raster_proof,

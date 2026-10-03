@@ -135,6 +135,21 @@ struct PreparedWorld {
     std::size_t bytes()const{return sizeof(*this)+gpu_bytes+
         (ground?ground->bytes():0)+(terrain?terrain->bytes():0)+(objects?objects->bytes():0);}
 };
+// Camera-free GPU allocation ranges, excluding shared terrain index grids and
+// shared rigid/forest source meshes (their existing owners are reserved once).
+// Uses the same four-byte alignment as ImmutableMeshUpload, without copying.
+inline std::size_t prepared_world_gpu_bytes(PreparedWorld const& result){
+    std::size_t bytes=0;
+    auto append=[&](auto const& mesh){if(mesh.empty())return;
+        bytes=((bytes+3u)&~std::size_t(3u))+mesh.vertices.size();
+        if(!mesh.shared_grid && !mesh.indices.empty())
+            bytes=((bytes+3u)&~std::size_t(3u))+mesh.indices.size();};
+    if(result.ground)for(unsigned i=0;i<6;++i)if(i!=2 && i!=3)append(result.ground->meshes[i]);
+    if(result.terrain)for(auto const& mesh:result.terrain->meshes)append(mesh);
+    if(result.objects){for(auto const& part:result.objects->layers)append(part.mesh);
+        for(auto const& part:result.objects->city)append(part.mesh);}
+    return bytes;
+}
 // Canonical full-detail world output has projection-independent inputs. Legacy
 // output keeps its exact zoom/extent identity; real detail lives in context. Camera anchors and
 // animation time are not content identity. Dependency proofs remain mandatory.

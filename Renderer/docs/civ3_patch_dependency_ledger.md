@@ -2415,3 +2415,10 @@ boundaries listed above. `Map_Renderer_m71_Draw_Tiles`,
 capture and insertion points. These changes stay inside `Renderer/`; no injected
 source, native signature, export or patch-table entry changes are required.
 `required_user_action: []`.
+
+Feasible GPU world admission uses the existing `patch_load_scenario` source
+preparation and valid-map/viewer completion boundaries. Stable shadow dependency
+registrations, projected occurrences and incremental page membership remain
+inside the renderer. Loading admission creates no viewport publication or native
+unit capture. No new patch capability or human patch-table action is required;
+`required_user_action: []`.

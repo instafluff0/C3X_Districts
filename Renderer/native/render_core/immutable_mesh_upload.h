@@ -16,13 +16,15 @@ public:
         if(!source || !bytes || offset>limit || bytes>limit-offset)throw std::length_error("content mesh upload");
         data.resize(offset+bytes);std::memcpy(data.data()+offset,source,bytes);return unsigned(offset);
     }
-    template<class Device,class Buffer> bool create(Device* device,Buffer** result)const{
+    template<class Device,class Buffer> bool create(Device* device,Buffer** result,long* failure=nullptr)const{
+        if(failure)*failure=0;
         if(data.empty())return true;
         D3D11_BUFFER_DESC desc={};desc.ByteWidth=unsigned(data.size());
         desc.Usage=D3D11_USAGE_IMMUTABLE;
         desc.BindFlags=D3D11_BIND_VERTEX_BUFFER|D3D11_BIND_INDEX_BUFFER;
         D3D11_SUBRESOURCE_DATA initial={};initial.pSysMem=data.data();
         auto hr=device->CreateBuffer(&desc,&initial,result);
+        if(failure)*failure=long(hr);
         if(FAILED(hr)){std::printf("MESH_ALLOCATION_FAILED bytes=%u hr=0x%08lx device_reason=0x%08lx\n",desc.ByteWidth,hr,device->GetDeviceRemovedReason());std::fflush(stdout);}
         return SUCCEEDED(hr);
     }

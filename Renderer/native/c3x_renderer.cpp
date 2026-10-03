@@ -93,6 +93,7 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
 #include "../lab/studies/borders/depth_export.h"
 #include "render_core/scene_surface.h"
 #include "render_core/frame_working_set.h"
+#include "render_core/shadow_sampling_grid.h"
 #include "render_core/coastal_waves.h"
 #include "render_core/indexed_wave_ribbon.h"
 #include "render_core/relief_query.h"
@@ -729,7 +730,7 @@ public:
     std::size_t frame_post_lanes=0;
     bool memory_pressured=false;
     ULONGLONG last_memory_control=0,last_unit_work=0;
-    std::size_t publication_working_bytes=0;
+    std::size_t publication_working_bytes=0,publication_capacity_bytes=0;
     // Includes the fixed fresh field and its still-owned production field.
     std::size_t fresh_shadow_working_bytes=0;
     std::size_t composition_working_bytes()const{
@@ -872,6 +873,52 @@ public:
     SceneTopology topology_cache;
     bool retained_world=true;
     bool loading_preparation=false,loading_world_only=false;
+    bool loading_gpu_residency=false,world_gpu_residency_ready=false;
+    bool world_gpu_capacity_refused=false,world_gpu_allocation_failed=false,world_gpu_allocation_pressure=false;
+    struct WorldGpuRecord {std::size_t required=0,charged=0;unsigned state=0;bool measured=false;};
+    // One required-loading receipt, released after its summary. These exact
+    // demand keys are diagnostics, not a second geometry/recipe store.
+    std::map<c3x_renderer::WorldPreparationKey,WorldGpuRecord> world_gpu_records;
+    std::vector<WorldGpuRecord*> world_gpu_current;
+    WorldGpuRecord& world_gpu_record(c3x_renderer::WorldPreparationKey const& key,std::size_t bytes=0,bool measured=true){
+        // At most two canonical component keys per admitted world fact; this
+        // receipt cannot retain generations beyond the current loading pass.
+        if(world_gpu_records.find(key)==world_gpu_records.end() &&
+           world_gpu_records.size()>=2*c3x_renderer::render_core::CapturedScene::record_limit)
+            throw std::length_error("world GPU receipt authority budget");
+        auto& record=world_gpu_records[key];if(measured){record.required=bytes;record.measured=true;}
+        if(std::find(world_gpu_current.begin(),world_gpu_current.end(),&record)==world_gpu_current.end())world_gpu_current.push_back(&record);
+        return record;
+    }
+    std::size_t world_owner_gpu_bytes(CachedTileGeometry const& owner)const{
+        std::unordered_set<ID3D11Buffer*> unique;
+        for(auto const& layer:owner.mesh->layers)for(auto const& chunk:layer){
+            if(chunk.instances || chunk.rigid_source)continue;
+            for(auto buffer:{chunk.buffer,chunk.indices})if(buffer){
+                bool shared=false;for(auto const& grid:terrain_patch_indices)if(grid.second==buffer){shared=true;break;}
+                if(!shared)unique.insert(buffer);
+            }
+        }
+        std::size_t bytes=0;for(auto buffer:unique){D3D11_BUFFER_DESC d{};buffer->GetDesc(&d);bytes+=d.ByteWidth;}return bytes;
+    }
+    void world_gpu_adopt(c3x_renderer::WorldPreparationKey const& key,CachedTileGeometry const& owner){
+        if(!loading_gpu_residency)return;
+        auto& record=world_gpu_record(key,world_owner_gpu_bytes(owner));record.charged=owner.byte_count;record.state=1;
+    }
+    void world_gpu_report(bool complete){
+        std::size_t required=0,admitted=0,deferred=0,charged=0,metadata=0;unsigned counts[5]={},unknown=0;
+        for(auto const& value:world_gpu_records){auto const& row=value.second;
+            required+=row.required;++counts[std::min(row.state,4u)];unknown+=!row.measured;
+            if(row.state==1){admitted+=row.required;charged+=row.charged;}else deferred+=row.required;
+            metadata+=sizeof(value)+96u+value.first.recipe.words.capacity()*sizeof(std::uint64_t);
+        }
+        metadata+=world_gpu_current.capacity()*sizeof(world_gpu_current[0]);
+        char detail[640];sprintf_s(detail,
+            "sweep_complete=%u fully_resident=%u unique_keys=%zu required_gpu_bytes=%zu admitted_gpu_bytes=%zu deferred_gpu_bytes=%zu admitted_owner_bytes=%zu capacity_keys=%u allocation_keys=%u source_keys=%u pending_keys=%u unknown_bytes_keys=%u receipt_bytes=%zu shared_index_bytes=%zu geometry_budget=%zu",
+            unsigned(complete),unsigned(complete && !unknown && counts[1]==world_gpu_records.size()),world_gpu_records.size(),required,admitted,deferred,charged,counts[2],counts[3],counts[4],counts[0],unknown,metadata,terrain_patch_index_bytes,tile_geometry_runtime_budget);
+        trace.write("world-gpu-residency",detail,true);
+        world_gpu_current.clear();world_gpu_records.clear();
+    }
     c3x_renderer::fidelity::PatchLayouts patch_layouts;
     c3x_renderer::fidelity::PatchDetail patch_detail;
     unsigned patch_pixels=0;
@@ -5661,6 +5708,7 @@ public:
     }
 
     void clear_tile_geometry_cache() {
+        world_gpu_residency_ready=false;world_gpu_records.clear();world_gpu_current.clear();
         sandbox_shadow_meshes.clear();
         residency_candidates.clear();
         natural_mesh_cache.clear();natural_mesh_cache_bytes=0;
@@ -5683,6 +5731,7 @@ public:
     bool make_tile_cache_room(std::size_t bytes) {
         while (tile_geometry_cache_bytes + retired_content->bytes.load() + terrain_patch_index_bytes + bytes > tile_geometry_runtime_budget ||
                tile_geometry_cache.size() >= tile_geometry_cache_capacity) {
+            if(loading_gpu_residency){world_gpu_capacity_refused=true;return false;}
             auto oldest = tile_geometry_cache.end();
             auto animation_priority = [&](CachedTileGeometry const& tile) {
                 // Static revisits can use their retained bitmap without meshes.
@@ -5726,12 +5775,12 @@ public:
                               ID3D11Buffer* prepared_buffer=nullptr, unsigned prepared_vertex_offset=0, bool prepared_indices=false, unsigned prepared_index_offset=0) {
         if(vertices.empty() && (!cached || cached->vertices.empty()) && (!prepared || prepared->empty()))return true;
         c3x_renderer::render_core::PreparedMesh local;
-        auto cancelled=[&]{return prefetch && foreground_pending->load(std::memory_order_relaxed);};
+        auto cancelled=[&]{return prefetch && foreground_pending && foreground_pending->load(std::memory_order_relaxed);};
         std::vector<Vertex> packed;std::vector<UINT> cached_indices;
         if(cached) {
             cached_indices=cached->indices;packed.resize(cached->vertices.size());
             for(std::size_t i=0;i<packed.size();++i){auto const& p=cached->vertices[i];auto& v=packed[i];
-                if(prefetch && (i&255u)==0 && foreground_pending->load(std::memory_order_relaxed))return false;
+                if(prefetch && (i&255u)==0 && cancelled())return false;
                 v.x=p[0];v.y=p[1];v.z=p[2];v.world_x=p[3];v.world_y=p[4];v.world_z=p[5];v.world_valid=p[6];
                 v.normal_x=p[7];v.normal_y=p[8];v.normal_z=p[9];v.u=p[10];v.v=p[11];
                 v.material_grass=p[12];v.material_plains=p[13];v.material_desert=p[14];v.material_marsh=p[15];
@@ -5772,6 +5821,7 @@ public:
         // that rejected background preparation before the main cache filled.
         std::size_t prefetch_limit=sizeof(void*)==8?tile_geometry_runtime_budget:64u*1024u*1024u;
         while (prefetch && prefetched_geometry_bytes + pending_bytes + chunk.byte_count + 3u > prefetch_limit) {
+            if(loading_gpu_residency){world_gpu_capacity_refused=true;return false;}
             auto oldest = tile_geometry_cache.end();
             for (auto it = tile_geometry_cache.begin(); it != tile_geometry_cache.end(); ++it)
                 if (it->second.prefetched && it->second.last_used < tile_geometry_epoch-1 &&
@@ -5784,7 +5834,7 @@ public:
             if (cache_evictions != 0xffffffffu) ++cache_evictions;
         }
         if (!make_tile_cache_room(chunk.byte_count+3u)) return false;
-        if (prefetch && foreground_pending->load(std::memory_order_relaxed)) return false;
+        if (cancelled()) return false;
         if(profiling && sampled_geometry_bucket!=tile_geometry_cache_bytes/(32u*1024u*1024u)){
             sampled_geometry_bucket=tile_geometry_cache_bytes/(32u*1024u*1024u);
             char detail[192];sprintf_s(detail,"gpu_request=%zu packed_bytes=%zu index_bytes=%zu prepared=%u",
@@ -5816,11 +5866,16 @@ public:
         }else if(shared_grid && shared!=terrain_patch_indices.end()){
             chunk.indices=shared->second;chunk.indices->AddRef();++frame_patch_index_reuses;
         }else if(shared_grid){
-            if(terrain_patch_index_bytes+index_bytes>4u*1024u*1024u || !make_tile_cache_room(chunk.byte_count+index_bytes))return false;
+            if(terrain_patch_index_bytes+index_bytes>4u*1024u*1024u){if(loading_gpu_residency)world_gpu_capacity_refused=true;return false;}
+            if(!make_tile_cache_room(chunk.byte_count+index_bytes))return false;
             D3D11_BUFFER_DESC desc={};desc.ByteWidth=static_cast<UINT>(index_bytes);
             desc.Usage=D3D11_USAGE_IMMUTABLE;desc.BindFlags=D3D11_BIND_INDEX_BUFFER;
             D3D11_SUBRESOURCE_DATA initial={};initial.pSysMem=mesh.indices.data();
-            if(FAILED(device->CreateBuffer(&desc,&initial,&chunk.indices)))return false;
+            auto hr=device->CreateBuffer(&desc,&initial,&chunk.indices);
+            if(FAILED(hr)){if(loading_gpu_residency){
+                if(hr==E_OUTOFMEMORY)world_gpu_capacity_refused=world_gpu_allocation_pressure=true;
+                else world_gpu_allocation_failed=true;
+            }return false;}
             try{terrain_patch_indices.emplace(shared_grid,chunk.indices);}catch(...){release(chunk.indices);throw;}
             chunk.indices->AddRef();terrain_patch_index_bytes+=index_bytes;frame_upload_bytes+=index_bytes;
         }else chunk.index_offset=upload.append(mesh.indices.data(),index_bytes);
@@ -7984,6 +8039,7 @@ public:
         if(!gpu_output_mode && cpu_output_stale){cache_valid=false;resource_pixel_signature=0;}
         if(gpu_output_mode)resource_pixel_signature=0; // finish/snapshot the demanded map, never return CPU cache bytes
         auto const& content_source=content_view?*content_view:frame;
+        if(loading_gpu_residency){world_gpu_current.clear();world_gpu_capacity_refused=world_gpu_allocation_failed=false;}
         if(content_view_width!=content_source.target_width || content_view_height!=content_source.target_height){
             cache_valid=false;geometry_cache.clear();clear_resource_backdrops();
         }
@@ -8168,6 +8224,26 @@ public:
                 std::size_t(content_memory.ullAvailPhys),std::size_t(content_memory.ullTotalPhys),
                 tile_geometry_cache_bytes,std::size_t(stored.resident_bytes),gpu_headroom,ceiling,requested_workers);
             tile_geometry_runtime_budget=residency.geometry;
+            if(world_gpu_residency_ready){
+                using Budget=c3x_renderer::render_core::FrameWorkingSet;
+                // Loading has no viewport. Reserve existing supported target
+                // envelopes, never render a fabricated view to allocate them.
+                auto attachments=Budget::scene_limit+Budget::unit_limit+Budget::mirror(2240,1260)+
+                    128u*Budget::mib+c3x_renderer::render_core::ShadowSamplingGrid::texture_bytes;
+                auto frame_owned=frame_working_bytes()-ordered_rigid_packets.gpu_bytes();
+                auto future=attachments>frame_owned?attachments-frame_owned:0;
+                future+=publication_capacity_bytes>publication_working_bytes?publication_capacity_bytes-publication_working_bytes:0;
+                // Session/RetainedComposition's existing live-image envelope.
+                auto composition_owned=gpu_composition?gpu_composition->allocation_bytes():0;
+                future+=256u*Budget::mib-std::min(256u*Budget::mib,composition_owned);
+                future+=OrderedRigidPackets::budget-std::min(OrderedRigidPackets::budget,ordered_rigid_packets.gpu_bytes());
+                future+=32u*Budget::mib-std::min(32u*Budget::mib,shared_instances.gpu_bytes());
+                auto owned=tile_geometry_cache_bytes+retired_content->bytes.load()+terrain_patch_index_bytes;
+                tile_geometry_runtime_budget=Budget::world_geometry(
+                    std::size_t(content_memory.ullAvailPhys),std::size_t(content_memory.ullTotalPhys),
+                    owned,measured_gpu && !world_gpu_allocation_pressure?gpu_headroom:0,
+                    future,ceiling,requested_workers,loading_gpu_residency);
+            }
             if(!world_backing.configure(residency.prepared,[](auto const& key){return key.recipe.words.capacity()*sizeof(std::uint64_t);}))
                 trace.write("world-ram-pressure","new admission frozen at live owned recipes",true);
             auto budget=c3x_renderer::render_core::FrameWorkingSet::content(
@@ -8179,6 +8255,10 @@ public:
             tile_geometry_runtime_budget=budget.geometry;
 #endif
             cpu_preparation_budget=world_preparation?budget.preparation:16u*1024u*1024u;
+        }else if(world_gpu_residency_ready){
+            // Missing physical authority freezes growth, never uses a prior
+            // optimistic measurement to allocate more optional world content.
+            tile_geometry_runtime_budget=tile_geometry_cache_bytes+retired_content->bytes.load()+terrain_patch_index_bytes;
         }
         if(cpu_terrain_workers!=requested_workers){terrain_preparation.clear();cpu_terrain_workers=requested_workers;}
         bool const cpu_terrain_enabled=cpu_terrain_workers && fidelity_profile && retained_world;
@@ -9120,6 +9200,7 @@ public:
                     auto input=make_world_job(tile,nodes);
                     auto add=[&](c3x_renderer::WorldPreparationKey const& key,c3x_renderer::WorldPreparationKind kind){
                         if(!unique.insert(key).second)return;
+                        if(loading_gpu_residency)world_gpu_record(key,0,false);
                         required.push_back(key);
                         if(backing_only)backing_keys.push_back(key);
                         if(std::binary_search(demanded_tiles.begin(),demanded_tiles.end(),coordinate_key(tile.tile_x,tile.tile_y)))needed.push_back(key);
@@ -9145,6 +9226,13 @@ public:
                         plan.ground_ready=!plan.ground_missing || world_queue.contains(plan.ground_key,[](auto const&){return true;});
                         plan.object_ready=world_queue.contains(plan.object_key,[](auto const&){return true;});
                     }else add(input.key,c3x_renderer::WorldPreparationKind::combined);
+                }
+                if(loading_gpu_residency && component_preparation){
+                    if(resident){
+                        auto key=c3x_renderer::object_world_preparation_key(expected,content_source,true,tile);
+                        world_gpu_adopt(key,*plan.ordinary);
+                        if(plan.ground)world_gpu_adopt(c3x_renderer::ground_world_preparation_key(plan.ground->ground_recipe),*plan.ground);
+                    }else if(plan.ground)world_gpu_adopt(plan.ground_key,*plan.ground);
                 }
             }
             // Construction order is independent of native occurrence/pass
@@ -9181,7 +9269,7 @@ public:
             world_queue.schedule(std::move(jobs),[this](auto const& input,auto const& stop,unsigned worker){
                 return compile_world_job(input,stop,worker);
             },cpu_terrain_workers,std::move(required),std::move(needed),cpu_preparation_budget,true);
-            if(backing_only){
+            if(backing_only && !loading_gpu_residency){
                 bool ready=true;
                 for(auto const& key:backing_keys){
                     auto result=world_queue.take(key,false,cancelled);
@@ -10307,7 +10395,7 @@ public:
             if(world_batch_enabled && !shared_hit){
                 auto begin=std::chrono::steady_clock::now();
                 if(!prepared_world)prepared_world=world_queue.take(world_ground_key,false,cancelled);
-                if(prepared_world && ((!prepared_world->upload_ready) ||
+                if(prepared_world && ((!prepared_world->upload_ready && !loading_gpu_residency) ||
                    (component_preparation && (prepared_world->kind!=c3x_renderer::WorldPreparationKind::ground ||
                     !prepared_world->ground || !prepared_world->terrain || prepared_world->objects)) ||
                    !world_result_valid(*prepared_world) ||
@@ -10315,6 +10403,7 @@ public:
                 world_join_ms+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count();
                 if(cancelled())return false;
                 if(prepared_world){
+                    if(loading_gpu_residency)world_gpu_record(world_ground_key,c3x_renderer::prepared_world_gpu_bytes(*prepared_world));
                     if(prepared_world->from_backing)++world_restored;else ++world_compiled;
                     world_ground_ms+=prepared_world->ground_ms;world_terrain_ms+=prepared_world->terrain_ms;
                     world_object_ms+=prepared_world->object_ms;world_upload_ms+=prepared_world->upload_ms;
@@ -10404,7 +10493,7 @@ public:
                 auto begin=std::chrono::steady_clock::now();
                 if(component_preparation){
                     if(!prepared_object_world)prepared_object_world=world_queue.take(world_plan->object_key,false,cancelled);
-                    if(prepared_object_world && (!prepared_object_world->upload_ready ||
+                    if(prepared_object_world && ((!prepared_object_world->upload_ready && !loading_gpu_residency) ||
                        prepared_object_world->kind!=c3x_renderer::WorldPreparationKind::objects ||
                        !prepared_object_world->objects || prepared_object_world->ground || prepared_object_world->terrain ||
                        !world_result_valid(*prepared_object_world) ||
@@ -10412,6 +10501,7 @@ public:
                     world_join_ms+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count();
                     if(cancelled())return false;
                     if(prepared_object_world){
+                        if(loading_gpu_residency)world_gpu_record(world_plan->object_key,c3x_renderer::prepared_world_gpu_bytes(*prepared_object_world));
                         if(prepared_object_world->from_backing)++world_restored;else ++world_compiled;
                         world_object_ms+=prepared_object_world->object_ms;
                         world_upload_ms+=prepared_object_world->upload_ms;
@@ -10432,7 +10522,7 @@ public:
                 object_join_ms+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count();
                 if(!prepared_objects || cancelled())return false;
                 if(prepared_objects->composition!=~0u && prepared_objects->composition>=cities.library.compositions.size())return false;
-                if(!prepared_objects->buffer &&
+                if(!prepared_objects->buffer && !loading_gpu_residency &&
                    (std::any_of(prepared_objects->layers.begin(),prepared_objects->layers.end(),[](auto const& part){return !part.mesh.empty();}) ||
                     std::any_of(prepared_objects->city.begin(),prepared_objects->city.end(),[](auto const& part){return !part.mesh.empty();})))return false;
                 if(std::any_of(prepared_objects->city.begin(),prepared_objects->city.end(),[](auto const& part){return !part.lighting;}))return false;
@@ -11095,7 +11185,7 @@ public:
                         std::vector<Vertex> empty;
                         if(!cache_geometry_layer(mesh_upload,empty,compiled.mesh->layers[layer],prewarming,compiled.byte_count,foreground_pending,
                             false,false,nullptr,nullptr,nullptr,nullptr,projection,&part.mesh,
-                            static_cast<ID3D11Buffer*>(prepared_objects->buffer.get()),part.vertex_offset,true,part.index_offset))return false;
+                            static_cast<ID3D11Buffer*>(prepared_objects->buffer.get()),part.vertex_offset,bool(prepared_objects->buffer),part.index_offset))return false;
                         compiled.byte_count+=compiled.mesh->layers[layer].back().byte_count;return true;
                     };
                     if(layer==geometry_city && !prepared_objects->city.empty()){
@@ -11123,7 +11213,7 @@ public:
                                 }else{
                                     if(!make_tile_cache_room(sizeof(CachedVertexChunk))){tile_geometry_cache_bytes-=compiled.byte_count;return false;}
                                     compiled.mesh->layers[layer].push_back(surface);
-                                    auto& range=compiled.mesh->layers[layer].back();range.buffer->AddRef();range.indices->AddRef();
+                                    auto& range=compiled.mesh->layers[layer].back();if(range.buffer)range.buffer->AddRef();if(range.indices)range.indices->AddRef();
                                     range.byte_count=sizeof(CachedVertexChunk);tile_geometry_cache_bytes+=range.byte_count;compiled.byte_count+=range.byte_count;
                                 }
                                 auto& range=compiled.mesh->layers[layer].back();range.index_count=draw.count;
@@ -11234,7 +11324,7 @@ public:
                         prepared_terrain && layer>=geometry_natural_terrain && layer<=geometry_natural_mountain?static_cast<ID3D11Buffer*>(prepared_terrain->vertex_buffer.get()):nullptr,
                         world_mesh?world_vertex_offset:
                         prepared_terrain && layer>=geometry_natural_terrain && layer<=geometry_natural_mountain?prepared_terrain->vertex_offset[layer-geometry_natural_terrain]:0u,
-                        world_mesh && !(prepared_terrain && layer>=geometry_natural_terrain && layer<=geometry_natural_mountain &&
+                        world_mesh && prepared_world->upload_ready && !(prepared_terrain && layer>=geometry_natural_terrain && layer<=geometry_natural_mountain &&
                             prepared_terrain->meshes[layer-geometry_natural_terrain].shared_grid),world_index_offset)) {
                     char detail[256];sprintf_s(detail,"tile=%d,%d layer=%u vertices=%u bytes=%llu cap=%llu built=%u reused=%u prewarming=%u",
                         tile.tile_x,tile.tile_y,unsigned(layer),unsigned(tile_layers[layer]->size()),
@@ -11255,16 +11345,22 @@ public:
             // of serially; this changes nothing about ordering, cancellation,
             // or the success/failure contract below, only wall-clock cost.
             ID3D11Buffer* allocations[2]={nullptr,nullptr};
-            bool create_ok[2]={true,true};
+            bool create_ok[2]={true,true};long allocation_result[2]={};
             bool second_owner_needed=mesh_uploads[0].size()>0 && mesh_uploads[1].size()>0;
             std::thread second_owner_thread;
             if(second_owner_needed)second_owner_thread=std::thread([&]{
-                create_ok[1]=mesh_uploads[1].create(device,&allocations[1]);
+                create_ok[1]=mesh_uploads[1].create(device,&allocations[1],&allocation_result[1]);
             });
-            if(mesh_uploads[0].size() && !mesh_uploads[0].create(device,&allocations[0]))create_ok[0]=false;
+            if(mesh_uploads[0].size() && !mesh_uploads[0].create(device,&allocations[0],&allocation_result[0]))create_ok[0]=false;
             if(second_owner_needed)second_owner_thread.join();
-            else if(mesh_uploads[1].size() && !mesh_uploads[1].create(device,&allocations[1]))create_ok[1]=false;
+            else if(mesh_uploads[1].size() && !mesh_uploads[1].create(device,&allocations[1],&allocation_result[1]))create_ok[1]=false;
             if((mesh_uploads[0].size() && !create_ok[0]) || (mesh_uploads[1].size() && !create_ok[1])){
+                if(loading_gpu_residency){
+                    if((create_ok[0] || allocation_result[0]==E_OUTOFMEMORY) &&
+                       (create_ok[1] || allocation_result[1]==E_OUTOFMEMORY))
+                        world_gpu_capacity_refused=world_gpu_allocation_pressure=true;
+                    else world_gpu_allocation_failed=true;
+                }
                 if(allocations[0])allocations[0]->Release();
                 if(allocations[1])allocations[1]->Release();
                 tile_geometry_cache_bytes-=compiled.byte_count;return false;
@@ -11388,6 +11484,7 @@ public:
                             inserted->second.binding=resident_content.bind(inserted->second,inserted->second.mesh);
                             if(!inserted->second.binding.generation)throw std::bad_alloc();
                             compiled.natural_content=inserted->second.binding;
+                            if(loading_gpu_residency)world_gpu_adopt(world_plan->ground_key,inserted->second);
                         }catch(...){tile_geometry_cache.erase(inserted);throw;}
                     }
                     catch(...){tile_geometry_cache_bytes-=compiled.byte_count+shared_bytes;return false;}
@@ -11415,6 +11512,7 @@ public:
             }
             // GPU chunks now own their AddRefs. Restore complete CPU payloads
             // for bounded optional persistence only after successful adoption.
+            if(loading_gpu_residency)world_gpu_adopt(world_plan->object_key,inserted->second);
             if(prepared_world){
                 prepared_world->ground=std::move(prepared_ground);
                 prepared_world->terrain=std::move(prepared_terrain);
@@ -12072,6 +12170,7 @@ RendererState renderer;
 // its ownership. Two publications may coexist briefly during commit, each at
 // most 32 MiB including ownership arrays. This is not a viewport cache.
 struct PublishedMapFrame {
+    static constexpr std::uint64_t budget=32u*1024u*1024u;
     struct Resident {
         // Opaque immutable storage keeps publication/content proofs independent
         // of D3D. Only the worker creates or submits the underlying texture.
@@ -12109,7 +12208,6 @@ struct PublishedMapFrame {
     bool capture(c3x_renderer_output_v1 const& source,int x,int y,
                  c3x_renderer_frame_v1 const* captured=nullptr,c3x_renderer_camera_identity_v1 const& epochs={},
                  Resident const* storage=nullptr,int offset_x=0,int offset_y=0) {
-        constexpr std::uint64_t budget=32u*1024u*1024u;
         if(source.width<=0 || source.height<=0 || source.width>8192 || source.height>8192 ||
            source.stride_bytes!=source.width*4 || (!source.bgra_pixels && (!storage || !storage->texture)) ||
            source.fallback_tile_count>8192 || source.replacement_tile_count>8192 ||
@@ -14294,6 +14392,38 @@ private:
             std::size_t(renderer_state.world_backing.statistics().bytes),renderer_state.tile_geometry_cache_bytes,
             std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count());
         renderer_state.trace.write("world-initialization",detail,true);
+        if(complete && loading_only && renderer_state.canonical_world_preparation){
+            // RAM completeness and feasible GPU residency have separate
+            // receipts. Reuse the same camera-free region/key/allocation path;
+            // this pass never draws/publishes a manufactured viewport.
+            struct ResidencyScope {RendererState& state;
+                ResidencyScope(RendererState& s):state(s){state.loading_gpu_residency=true;
+                    state.world_gpu_residency_ready=true;state.world_gpu_allocation_pressure=false;state.world_gpu_records.clear();}
+                ~ResidencyScope(){state.loading_gpu_residency=false;state.world_gpu_allocation_pressure=false;
+                    state.world_gpu_current.clear();state.world_gpu_records.clear();}
+            } residency(renderer_state);
+            auto regions=world_schedule.regions();
+            for(unsigned region=0;region<regions && complete;++region){
+                c3x_renderer::render_core::WorldPreparationRegion input;
+                if(!input.build(scene,frame,region,true)){complete=false;break;}
+                // One canonical core per demand attempt. A refused large core
+                // cannot strand later smaller content that still fits. Existing
+                // successful bindings and compact recipes survive each refusal.
+                for(auto index:input.selected){
+                    if(cancel && cancel->load(std::memory_order_relaxed)){complete=false;break;}
+                    c3x_renderer_output_v1 unused{};GpuOutputMode mode(renderer_state,true,true);
+                    auto signature=c3x_renderer::terrain_frame_signature(input.frame,renderer_state.content_revision,renderer_state.device_generation).complete;
+                    bool ok=renderer_state.render(input.frame,unused,int(index),cancel,signature,&index,1,&frame);
+                    if(!ok){
+                        unsigned reason=renderer_state.world_gpu_capacity_refused?2u:renderer_state.world_gpu_allocation_failed?3u:4u;
+                        for(auto* record:renderer_state.world_gpu_current)if(record->state!=1)record->state=reason;
+                        if(reason!=2){complete=false;break;}
+                    }
+                    if(service)service();
+                }
+            }
+            renderer_state.world_gpu_report(complete);
+        }
         return complete;
     }
 
@@ -15413,6 +15543,7 @@ private:
                 +(prepared_map?prepared_map->bytes():0)
 #endif
                 ;
+            renderer_state.publication_capacity_bytes=4u*PublishedMapFrame::budget+ahead_budget;
             renderer_state.preserve_process_headroom();
             // Adopt accepted content even when its camera ticket was cancelled.
             // No frame helpers are active here; observations/mesh leases remain

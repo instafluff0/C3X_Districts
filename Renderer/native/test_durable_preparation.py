@@ -4,6 +4,176 @@ from Renderer.native.native_cpp_test import run_cpp
 from Renderer.lab.platform import ROOT
 
 class DurablePreparationTests(unittest.TestCase):
+    def test_actual_world_reserves_charge_packets_and_publication_once(self):
+        source=(ROOT/'Renderer/native/c3x_renderer.cpp').read_text()
+        start=source.index('                auto attachments=Budget::scene_limit+')
+        budget=source[start:source.index('\n            }',start)]
+        run_cpp(r'''#include "Renderer/native/render_core/frame_working_set.h"
+#include "Renderer/native/render_core/shadow_sampling_grid.h"
+#include <atomic>
+#include <cassert>
+#include <memory>
+using Budget=c3x_renderer::render_core::FrameWorkingSet;
+struct OrderedRigidPackets {static constexpr std::size_t budget=64u*Budget::mib;};
+struct State {
+ std::size_t base=0,publication_capacity_bytes=160u*Budget::mib,publication_working_bytes=0;
+ std::size_t tile_geometry_cache_bytes=512u*Budget::mib,terrain_patch_index_bytes=0,tile_geometry_runtime_budget=0;
+ bool measured_gpu=true,world_gpu_allocation_pressure=false,loading_gpu_residency=true;
+ struct Packet {std::size_t bytes=0;std::size_t gpu_bytes()const{return bytes;}}ordered_rigid_packets,shared_instances;
+ struct Retired {std::atomic<std::size_t> bytes{0};};std::shared_ptr<Retired> retired_content=std::make_shared<Retired>();
+ struct Composition {std::size_t bytes=0;std::size_t allocation_bytes()const{return bytes;}};
+ std::shared_ptr<Composition> gpu_composition=std::make_shared<Composition>();
+ struct {std::size_t ullAvailPhys=12ull*1024*Budget::mib,ullTotalPhys=16ull*1024*Budget::mib;}content_memory;
+ std::size_t frame_working_bytes()const{return base+ordered_rigid_packets.bytes;}
+ std::size_t calculate(){std::size_t gpu_headroom=8ull*1024*Budget::mib,ceiling=gpu_headroom;unsigned requested_workers=4;
+''' + budget + r'''
+ return tile_geometry_runtime_budget;}
+};
+int main(){State s;auto empty=s.calculate();
+ // Existing packet bytes satisfy only their own missing reserve.
+ s.ordered_rigid_packets.bytes=32u*Budget::mib;auto packets=s.calculate();
+ assert(packets==empty+16u*Budget::mib);
+ s.publication_working_bytes=32u*Budget::mib;auto published=s.calculate();
+ assert(published==packets+16u*Budget::mib);
+ s.publication_working_bytes=320u*Budget::mib;auto full=s.calculate();
+ s.publication_working_bytes=640u*Budget::mib;assert(s.calculate()==full);
+ s.world_gpu_allocation_pressure=true;assert(s.calculate()==s.tile_geometry_cache_bytes);
+ s.world_gpu_allocation_pressure=false;s.content_memory.ullAvailPhys=0;s.loading_gpu_residency=false;
+ assert(s.calculate()<s.tile_geometry_cache_bytes);
+}
+''')
+
+    def test_actual_mesh_failures_classify_only_proven_out_of_memory(self):
+        source=(ROOT/'Renderer/native/c3x_renderer.cpp').read_text()
+        start=source.index('            ID3D11Buffer* allocations[2]={nullptr,nullptr};')
+        create=source[start:source.index('            for(unsigned owner=0;owner<2;',start)]
+        start=source.index('            auto hr=device->CreateBuffer(&desc,&initial,&chunk.indices);')
+        grid=source[start:source.index('            try{terrain_patch_indices.emplace',start)]
+        run_cpp(r'''#include <atomic>
+#include <array>
+#include <cassert>
+#include <cstdio>
+#include <thread>
+using HRESULT=long;
+constexpr HRESULT E_OUTOFMEMORY=-2147024882L,removed=-2147467259L;
+bool FAILED(HRESULT r){return r<0;}bool SUCCEEDED(HRESULT r){return r>=0;}
+struct D3D11_BUFFER_DESC {unsigned ByteWidth=0,Usage=0,BindFlags=0;};
+struct D3D11_SUBRESOURCE_DATA {void const* pSysMem=nullptr;};
+constexpr unsigned D3D11_USAGE_IMMUTABLE=1,D3D11_BIND_VERTEX_BUFFER=2,D3D11_BIND_INDEX_BUFFER=4;
+std::atomic<unsigned> live{0};
+struct ID3D11Buffer {ID3D11Buffer(){++live;}void Release(){--live;delete this;}};
+struct Device {HRESULT failure[2]={};
+ HRESULT CreateBuffer(D3D11_BUFFER_DESC const* d,D3D11_SUBRESOURCE_DATA const*,ID3D11Buffer** result){
+  auto hr=failure[d->ByteWidth/4-1];if(hr<0)return hr;*result=new ID3D11Buffer;return hr;}
+ HRESULT GetDeviceRemovedReason(){return removed;}};
+#include "Renderer/native/render_core/immutable_mesh_upload.h"
+struct State {Device instance,*device=&instance;
+ std::array<c3x_renderer::render_core::ImmutableMeshUpload,2> mesh_uploads;
+ bool loading_gpu_residency=true,world_gpu_capacity_refused=false,world_gpu_allocation_pressure=false,world_gpu_allocation_failed=false;
+ std::size_t tile_geometry_cache_bytes=100;struct {std::size_t byte_count=100;}compiled;
+ bool execute(){
+''' + create + r'''
+ for(auto buffer:allocations)if(buffer)buffer->Release();return true;}
+ bool grid(){D3D11_BUFFER_DESC desc{4};D3D11_SUBRESOURCE_DATA initial{};
+  struct {ID3D11Buffer* indices=nullptr;}chunk;
+''' + grid + r'''
+ chunk.indices->Release();return true;}
+};
+int main(){unsigned data[2]={1,2};
+ for(bool loading:{false,true})for(HRESULT first:{0L,E_OUTOFMEMORY,removed})
+ for(HRESULT second:{0L,E_OUTOFMEMORY,removed}){
+  State s;s.loading_gpu_residency=loading;s.instance.failure[0]=first;s.instance.failure[1]=second;
+  s.mesh_uploads[0].append(data,4);s.mesh_uploads[1].append(data,8);
+  auto okay=s.execute();assert(okay==(!first && !second) && !live);
+  auto capacity=loading && !okay && first!=removed && second!=removed;
+  assert(s.world_gpu_capacity_refused==capacity && s.world_gpu_allocation_pressure==capacity);
+  assert(s.world_gpu_allocation_failed==(loading && !okay && !capacity));
+  assert(s.tile_geometry_cache_bytes==(okay?100:0));
+ }
+ for(bool loading:{false,true})for(HRESULT failure:{0L,E_OUTOFMEMORY,removed}){
+  State s;s.loading_gpu_residency=loading;s.instance.failure[0]=failure;
+  assert(s.grid()==!failure && !live);
+  assert(s.world_gpu_capacity_refused==(loading && failure==E_OUTOFMEMORY));
+  assert(s.world_gpu_allocation_failed==(loading && failure==removed));
+ }
+ Device device;c3x_renderer::render_core::ImmutableMeshUpload empty;ID3D11Buffer* buffer=nullptr;long hr=99;
+ assert(empty.create(&device,&buffer,&hr) && !hr && !buffer);
+ c3x_renderer::render_core::ImmutableMeshUpload packed;packed.append(data,4);
+ assert(packed.create(&device,&buffer));buffer->Release();assert(!live);
+}
+''')
+
+    def test_actual_loading_admission_refuses_without_evicting_or_churning(self):
+        source=(ROOT/'Renderer/native/c3x_renderer.cpp').read_text()
+        start=source.index('    bool make_tile_cache_room(')
+        method=source[start:source.index('    bool cache_geometry_layer(',start)]
+        run_cpp(r'''#include <atomic>
+#include <cassert>
+#include <cstdio>
+#include <memory>
+#include <unordered_map>
+constexpr unsigned viewport_cache_capacity=8;
+template<std::size_t N,class... A>void sprintf_s(char(&b)[N],char const* f,A... a){std::snprintf(b,N,f,a...);}
+struct Cache {unsigned signature=0;std::size_t byte_count=0;bool prefetched=false;
+ std::uint64_t animation_epoch=0,last_used=0;};
+using CachedTileGeometry=Cache;
+struct State {
+ std::unordered_multimap<unsigned,Cache> tile_geometry_cache;
+ std::size_t tile_geometry_cache_bytes=0,prefetched_geometry_bytes=0,tile_geometry_runtime_budget=512;
+ std::size_t terrain_patch_index_bytes=4,tile_geometry_cache_capacity=16;
+ std::uint64_t tile_geometry_epoch=100;unsigned frame_tiles_evicted=0,cache_evictions=0,releases=0;
+ bool loading_gpu_residency=true,world_gpu_capacity_refused=false;
+ struct Retired {std::atomic<std::size_t> bytes{32};};std::shared_ptr<Retired> retired_content=std::make_shared<Retired>();
+ struct {void write(char const*,char const*,bool){}}trace;
+ struct {Cache* resolve(Cache* value){return value;}}resident_content;
+ struct Candidates {template<class M,class R,class F>Cache* next(M& map,R&,std::uint64_t,F){return map.empty()?nullptr:&map.begin()->second;}}residency_candidates;
+ void release_resident_content(Cache&){++releases;}
+''' + method + r'''};
+int main(){State s;for(unsigned i=0;i<3;++i)s.tile_geometry_cache.emplace(i,Cache{i,100,true});
+ s.tile_geometry_cache_bytes=s.prefetched_geometry_bytes=300;
+ assert(!s.make_tile_cache_room(180) && s.world_gpu_capacity_refused);
+ assert(s.tile_geometry_cache.size()==3 && s.tile_geometry_cache_bytes==300 && !s.releases && !s.frame_tiles_evicted);
+ s.world_gpu_capacity_refused=false;assert(s.make_tile_cache_room(64) && !s.world_gpu_capacity_refused);
+ s.tile_geometry_runtime_budget=128;
+ for(unsigned i=0;i<3;++i)assert(!s.make_tile_cache_room(0));
+ assert(s.tile_geometry_cache_bytes==300 && s.tile_geometry_cache.size()==3 && !s.releases);
+ // Foreground selected-content admission retains its existing eviction path.
+ s.loading_gpu_residency=false;assert(s.make_tile_cache_room(0));
+ assert(s.tile_geometry_cache_bytes==0 && s.tile_geometry_cache.empty() && s.releases==3 && s.frame_tiles_evicted==3);
+}
+''')
+
+    def test_completed_recipes_admit_measured_gpu_growth_without_duplicate_ram_reserve(self):
+        run_cpp(r'''#include "Renderer/native/render_core/frame_working_set.h"
+#include <cassert>
+using F=c3x_renderer::render_core::FrameWorkingSet;
+int main(){
+ auto owned=2ull*1024*F::mib,ceiling=8ull*1024*F::mib;
+ for(unsigned workers:{0u,1u,4u,6u,12u})for(unsigned free:{0u,128u,4096u,12288u})
+ for(unsigned adapter:{0u,512u,2048u,8192u})for(unsigned future:{0u,512u,1536u}){
+  auto available=std::size_t(free)*F::mib,headroom=std::size_t(adapter)*F::mib;
+  auto reserve=std::max(2048ull*F::mib,16ull*1024*F::mib/6)+512ull*F::mib+
+   std::max(2u,std::min(workers,6u)+1u)*16ull*F::mib+std::min(workers,6u)*48ull*F::mib;
+  auto result=F::world_geometry(available,16ull*1024*F::mib,owned,headroom,future*F::mib,ceiling,workers,true);
+  assert(result>=owned && result<=ceiling);
+  auto growth=result-owned,usable=available>reserve?available-reserve:0;
+  usable=usable>future*F::mib?usable-future*F::mib:0;
+  assert(2*growth<=usable);
+  auto gpu=headroom>future*F::mib?headroom-future*F::mib:0;
+  assert(growth<=gpu-gpu/5);
+  if(!adapter || free==0)assert(result==owned);
+ }
+ auto loaded=F::world_geometry(12ull*1024*F::mib,16ull*1024*F::mib,owned,8ull*1024*F::mib,0,ceiling,4,true);
+ auto preparing=F::residency(12ull*1024*F::mib,16ull*1024*F::mib,owned,200ull*F::mib,8ull*1024*F::mib,ceiling,4);
+ assert(loaded>preparing.geometry); // compact recipes already exist
+ auto shrunk=F::world_geometry(0,16ull*1024*F::mib,loaded,0,1536ull*F::mib,ceiling,4,true);
+ assert(shrunk==loaded); // no loading sweep eviction
+ auto foreground=F::world_geometry(0,16ull*1024*F::mib,loaded,0,1536ull*F::mib,ceiling,4,false);
+ auto old_pressure=F::residency(0,16ull*1024*F::mib,loaded,0,0,ceiling,4);
+ assert(foreground==old_pressure.geometry && foreground<loaded);
+}
+''')
+
     def test_measured_residency_balances_ram_gpu_and_pressure(self):
         run_cpp(r'''#include "Renderer/native/render_core/frame_working_set.h"
 #include <cassert>

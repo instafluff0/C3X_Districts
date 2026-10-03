@@ -41,6 +41,15 @@ struct RendererState {
  CapturedScene topology_cache;unsigned content_revision=1,device_generation=1;
  bool canonical_world_preparation=true,gpu_output_mode=false,pickup_profile=true,fidelity_profile=true;
  bool loading_preparation=false,loading_world_only=false;unsigned patch_pixels=0;
+ bool loading_gpu_residency=false,world_gpu_residency_ready=false;
+ bool world_gpu_capacity_refused=false,world_gpu_allocation_failed=false,world_gpu_allocation_pressure=false;
+ struct Record {unsigned state=0;};std::map<std::uint64_t,Record> world_gpu_records;
+ std::vector<Record*> world_gpu_current;
+ std::map<std::uint64_t,c3x_renderer_tile_v1> gpu_owners;
+ unsigned gpu_calls=0,gpu_uploads=0,gpu_reports=0,gpu_capacity=0,gpu_fail=0;
+ bool gpu_complete=false;
+ void world_gpu_report(bool complete){++gpu_reports;gpu_complete=complete;gpu_capacity=0;
+  for(auto const& row:world_gpu_records)gpu_capacity+=row.second.state==2;}
  WorldCoast world_coast;
  struct Natural {unsigned calls=0;std::int64_t revision=-1;
   void update_rivers(WorldTopology const& world,std::int64_t r){
@@ -60,7 +69,20 @@ struct RendererState {
   assert(world_coast.revision()==basis->world_topology_revision);
   assert(natural.revision==basis->world_topology_revision && cliff_query_scratch.revision==natural.revision);
   auto sample=world_coast.sample({4,4},[](auto,auto){},[](auto,auto){});
-  assert(std::isfinite(sample.distance));++calls;return int(calls)!=fail_call;
+  assert(std::isfinite(sample.distance));
+  if(loading_gpu_residency){
+   assert(count==1 && world_gpu_residency_ready);++gpu_calls;
+   auto const& tile=f.tiles[selected[0]];auto key=topology_cache.key(tile.tile_x,tile.tile_y);
+   auto& record=world_gpu_records[key];world_gpu_current={&record};
+   world_gpu_capacity_refused=world_gpu_allocation_failed=false;
+   if(gpu_fail==1 && tile.tile_x%4<2){world_gpu_capacity_refused=true;return false;}
+   if(gpu_fail==2){world_gpu_allocation_failed=true;return false;}
+   if(gpu_fail==3)return false;
+   auto facts=CapturedScene::content(tile);auto retained=gpu_owners.find(key);
+   if(retained==gpu_owners.end() || std::memcmp(&retained->second,&facts,sizeof(facts))){gpu_owners[key]=facts;++gpu_uploads;}
+   record.state=1;return true;
+  }
+  ++calls;return int(calls)!=fail_call;
  }
 };
 struct Harness {
@@ -121,6 +143,27 @@ int main(){
  h.renderer_state.fail_call=0;assert(h.prepare_required_world(h.scene_changes.state(),nullptr,true));
  assert(h.world_schedule.completed==4 && !h.world_schedule.unavailable && h.renderer_state.calls==5);
  assert(h.prepare_required_world(h.scene_changes.state(),nullptr,true) && h.renderer_state.calls==5);
+ assert(h.renderer_state.gpu_uploads==128 && h.renderer_state.gpu_complete);
+ auto uploads=h.renderer_state.gpu_uploads;
+ assert(h.prepare_required_world(h.scene_changes.state(),nullptr,true));
+ assert(h.renderer_state.gpu_uploads==uploads && !h.renderer_state.loading_gpu_residency);
+ // Optional capacity refusal keeps RAM completion and previously resident
+ // owners. The actual second pass visits later smaller cores after refusal.
+ h.renderer_state.gpu_owners.clear();h.renderer_state.gpu_fail=1;
+ assert(h.prepare_required_world(h.scene_changes.state(),nullptr,true));
+ assert(h.renderer_state.gpu_complete && h.renderer_state.gpu_capacity==64);
+ assert(h.renderer_state.gpu_owners.size()==64);
+ uploads=h.renderer_state.gpu_uploads;
+ assert(h.prepare_required_world(h.scene_changes.state(),nullptr,true));
+ assert(h.renderer_state.gpu_uploads==uploads); // repeated pressure never churns survivors
+ h.renderer_state.gpu_fail=0;assert(h.prepare_required_world(h.scene_changes.state(),nullptr,true));
+ assert(h.renderer_state.gpu_uploads==uploads+64 && h.renderer_state.gpu_owners.size()==128);
+ // Allocation/source failures remain explicit, with no GPU-complete receipt.
+ for(unsigned failure:{2u,3u}){h.renderer_state.gpu_fail=failure;
+  assert(!h.prepare_required_world(h.scene_changes.state(),nullptr,true));
+  assert(!h.renderer_state.gpu_complete && !h.renderer_state.loading_gpu_residency && h.renderer_state.world_gpu_records.empty());
+ }
+ h.renderer_state.gpu_fail=0;
  h.world_schedule.invalidate(valid,0,0);std::atomic<bool> cancel{true};
  assert(!h.prepare_required_world(h.scene_changes.state(),&cancel,true));
  assert(!h.world_schedule.empty() && !h.world_schedule.unavailable && h.renderer_state.calls==5);
@@ -159,6 +202,13 @@ int main(){
  assert(h.prepare_loading_command()==C3X_RENDERER_RESULT_OK && h.retired.expired());
  assert(h.world_schedule.completed==4 && !h.world_schedule.unavailable && !h.loading_regions);
  assert(!h.renderer_state.loading_preparation && !h.renderer_state.loading_world_only && !h.renderer_state.gpu_output_mode);
+ // The actual region/key traversal keeps unchanged copied generations, while
+ // a publication edit rearms its affected recipe region and replaces that core.
+ auto changed_core=h.renderer_state.topology_cache.world_view().current(h.renderer_state.topology_cache.key(0,0))->occurrence;
+ changed_core.has_effect=1;assert(h.renderer_state.topology_cache.publish(changed_core,changed) && changed);
+ h.world_schedule.invalidate(valid,0,0);uploads=h.renderer_state.gpu_uploads;
+ assert(h.prepare_required_world(h.scene_changes.state(),nullptr,true));
+ assert(h.renderer_state.gpu_uploads==uploads+1 && h.renderer_state.gpu_owners.size()==128);
 }
 ''')
 

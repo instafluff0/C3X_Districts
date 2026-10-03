@@ -53,6 +53,82 @@ int main(){
 }
 ''')
 
+    def test_incremental_proof_and_projection_work_witness(self):
+        witness=(ROOT/'Renderer/native/test_shadow_preparation.cpp').read_text()
+        projection=(ROOT/'Renderer/native/render_core/source_shadow.h').read_text()
+        start=projection.index('    static std::array<float,4> project(Bounds')
+        self.assertIn(projection[start:projection.index('    std::array<float,4> projected(',start)],witness)
+        run_cpp(witness)
+
+    def test_backing_decoder_distinct_river_owners_share_only_exact_watch_storage(self):
+        run_cpp(r'''
+using UINT=unsigned;
+#include "Renderer/native/world_backing_codec.h"
+#include "Renderer/native/render_core/shadow_page_contents.h"
+#include <cassert>
+#include <set>
+using namespace c3x_renderer;
+using R=render_core::RasterDependencyRevisions;
+using Proof=fidelity::NaturalWorld::CellContent;
+int main(){
+ PreparedWorld world;world.ground=std::make_unique<fidelity::PreparedGround>();
+ world.terrain=std::make_unique<fidelity::TerrainSurfaces>();world.objects=std::make_unique<objects::PreparedObjects>();
+ auto original=std::make_shared<fidelity::NaturalWorld::PageInputs>();
+ for(unsigned n=0;n<285;++n){original->values.emplace_back(n,7);original->flow.push_back(n%4);}
+ original->checked_revision=123;original->current=true;
+ for(int n=0;n<1049;++n){auto cell=std::make_shared<Proof>();cell->values={unsigned(n),7,99};cell->inputs=original;
+  world.ground->rivers.emplace(fidelity::NaturalWorld::CellKey{1,2,n,0},std::move(cell));}
+ auto encoded=WorldBackingCodec::encode(world);assert(!encoded.empty());
+ auto restored=WorldBackingCodec::decode(encoded);assert(restored&&restored->ground->rivers.size()==1049);
+ render_core::ShadowCasterProofs<Proof> proofs;R revisions;std::set<void const*> identities;
+ proofs.begin({1,2,3,1},revisions,[](auto bytes){return bytes<=16u*1024u*1024u;});
+ unsigned generation=0,checks=0;
+ auto exact=[&](Proof const& cell){++checks;return cell.inputs&&cell.inputs->values==original->values&&cell.inputs->flow==original->flow;};
+ for(auto const& item:restored->ground->rivers){auto const& cell=item.second;
+  assert(cell->inputs!=original&&identities.insert(cell->inputs.get()).second);
+  assert(!cell->inputs->current&&cell->inputs->checked_revision==-1&&!cell->inputs->checked_world);
+  ++generation;assert(proofs.add(generation,cell,generation,1,[](auto const& proof,auto& target){
+   return target.watch_source(proof.inputs,[&](auto const& source){
+    for(auto const& value:source.values)if(!target.watch(R::Domain::world,value.first)||!target.watch(R::Domain::flow,value.first))return false;return true;});},exact));
+ }
+ proofs.finish();assert(checks==1049&&proofs.sources.size()==1049&&proofs.dependency_lists.size()==1);
+ assert(proofs.dependency_lists.begin()->second.keys.size()==570&&proofs.dependency_lists.begin()->second.refs==1049);
+ assert(proofs.dependency_lists.begin()->second.keys.capacity()==1024&&proofs.bytes()<1024u*1024u);
+ auto checked=checks;revisions.touch(R::Domain::world,42);
+ assert(proofs.validate(revisions,exact,[](auto){return 1;})&&checks==checked+1049);
+ checked=checks;revisions.touch(R::Domain::flow,42);
+ assert(proofs.validate(revisions,exact,[](auto){return 1;})&&checks==checked+1049);
+ proofs.clear();assert(proofs.sources.empty()&&proofs.dependency_lists.empty()&&proofs.bytes()==sizeof(proofs));
+}
+''')
+
+    def test_shadow_proof_and_page_metadata_share_existing_joint_admission(self):
+        from Renderer.native.test_shared_instance_submission import GPU_STUB
+        source=(ROOT/'Renderer/sandbox/fresh_pipeline.h').read_text()
+        method=source[source.index('    bool shadow_metadata_admit('):source.index('    AtlasInputs::Key caster_key(')]
+        run_cpp(GPU_STUB+r'''
+#include "Renderer/native/render_core/shadow_page_contents.h"
+struct Proof {};
+struct State {using AtlasInputs=c3x_renderer::render_core::ShadowCasterProofs<Proof>;
+ struct {Owner shared_instances;}renderer;Owner::CpuLease page_metadata;
+ AtlasInputs atlas_inputs;c3x_renderer::render_core::ShadowPageContents<AtlasInputs::Key> page_contents;
+'''+method+r'''
+};
+int main(){State state;using R=c3x_renderer::render_core::RasterDependencyRevisions;R revisions;
+ auto pressure=state.renderer.shared_instances.retain_metadata(Owner::budget-2048);assert(pressure);
+ auto begin=[&]{state.atlas_inputs.begin({1,2,3,1},revisions,[&](auto bytes){return state.shadow_metadata_admit(bytes,state.page_contents.bytes());});};
+ auto proof=std::make_shared<Proof>();auto add=[&]{return state.atlas_inputs.add(1,proof,1,1,[](auto const&,auto& inputs){return inputs.watch(R::Domain::visibility,1);},[](auto const&){return true;});};
+ begin();assert(!add()&&state.atlas_inputs.producers.empty()&&!state.page_metadata);pressure.reset();begin();assert(add());state.atlas_inputs.finish();
+ auto& pages=state.page_contents;c3x_renderer::render_core::ShadowSamplingGrid grid;grid.valid=true;grid.low={0,0};grid.count={1,1};grid.quality_span={40,40};
+ pages.begin_incremental(grid,{1,2,3,1},{});assert(pages.update(State::AtlasInputs::Key{1},grid,[]{return std::array<float,4>{1,1,2,2};},
+  [&](auto bytes){return state.shadow_metadata_admit(state.atlas_inputs.bytes(),bytes);}));assert(pages.finish_incremental(grid,true,[](auto){return true;}));
+ assert(state.shadow_metadata_admit(state.atlas_inputs.bytes(),pages.bytes()));
+ assert(state.page_metadata->bytes()==state.atlas_inputs.bytes()+pages.bytes()+sizeof(Owner::CpuAllocation)&&state.renderer.shared_instances.bytes()==state.page_metadata->bytes());
+ auto old=state.page_metadata->bytes();assert(!state.shadow_metadata_admit(State::AtlasInputs::limit,1)&&state.page_metadata->bytes()==old);
+ state.atlas_inputs.clear();pages.clear();state.page_metadata.reset();assert(!state.renderer.shared_instances.bytes());
+}
+''')
+
     def test_production_region_batches_retain_unchanged_regions_and_reject_stale_capture_bytes(self):
         from Renderer.native.test_shared_instance_submission import GPU_STUB
         source=(ROOT/'Renderer/sandbox/fresh_pipeline.h').read_text()
@@ -143,6 +219,101 @@ int main(){ID3D11Device device;ID3D11DeviceContext context{&device};Renderer ren
 }
 ''')
 
+    def test_production_visibility_renewal_and_optional_page_refusal_preserve_exact_source_owners(self):
+        from Renderer.native.test_shared_instance_submission import GPU_STUB
+        source=(ROOT/'Renderer/sandbox/fresh_pipeline.h').read_text()
+        metadata=source[source.index('    bool shadow_metadata_admit('):source.index('    AtlasInputs::Key caster_key(')]
+        dependencies=source[source.index('    bool atlas_dependencies('):source.index('    std::array<std::uint64_t,9> receiver_identity(')]
+        fallback=source[source.index('        if(!proved){page_contents.clear();'):source.index('        casters.clear();',source.index('        if(!proved){page_contents.clear();'))]
+        run_cpp(GPU_STUB+r'''
+#include "Renderer/native/render_core/shadow_page_contents.h"
+#include <chrono>
+#include <map>
+#define C3X_RENDERER64_FRESH
+using R=c3x_renderer::render_core::RasterDependencyRevisions;
+struct Input {std::vector<unsigned> values;};
+struct CachedGeometryProof {std::uint64_t tile=1;unsigned value=7;std::weak_ptr<Input> input;};
+struct CachedMeshGeneration {std::shared_ptr<CachedGeometryProof> proof;};
+struct Membership {struct Content {std::map<std::uint64_t,std::shared_ptr<CachedMeshGeneration>> entries;
+ std::shared_ptr<void> get(std::array<std::uint64_t,2> key){auto i=entries.find(key[1]);return i==entries.end()?nullptr:i->second;}}content;};
+struct Renderer {
+ struct Tile {std::uint64_t visibility_revision=3;};
+ struct Topology {std::map<std::uint64_t,Tile> tiles;std::uint64_t scope=1;
+  Tile const* retained(std::uint64_t tile){auto i=tiles.find(tile);return i==tiles.end()?nullptr:&i->second;}
+  auto scope_sequence()const{return scope;}}topology_cache;
+ unsigned content_revision=2,device_generation=3,geometry_canonical_world=1,current=7,checks=0;
+ Owner shared_instances;R raster_dependency_revisions;
+ bool raster_content_valid(CachedGeometryProof const& proof){++checks;return proof.value==current;}
+ template<class Inputs>bool watch_raster_dependencies(CachedGeometryProof const& proof,Inputs& owner){
+  auto input=proof.input.lock();return owner.watch(R::Domain::visibility,proof.tile)&&owner.watch(R::Domain::semantic,proof.tile)&&
+   owner.watch_source(input,[&](auto const& source){for(auto id:source.values)if(!owner.watch(R::Domain::world,id))return false;return true;});
+ }
+};
+struct State {
+ using AtlasInputs=c3x_renderer::render_core::ShadowCasterProofs<CachedGeometryProof>;
+ using Pages=c3x_renderer::render_core::ShadowPageContents<AtlasInputs::Key>;
+ Renderer renderer;AtlasInputs atlas_inputs;Pages page_contents;Owner::CpuLease page_metadata;
+ std::uint64_t proof_membership_signature=~std::uint64_t(0),caster_signature=1;
+ struct Caster {std::uint64_t content_generation=1;};std::vector<Caster> caster_inputs{{1}};
+ std::shared_ptr<Membership> caster_lease=std::make_shared<Membership>();
+ c3x_renderer::render_core::ShadowSamplingGrid sampling_grid;
+'''+metadata+dependencies+r'''
+ void fallback(bool dependency_proved,bool proved){Pages::Context page_context{1,2,3,1};
+'''+fallback+r'''
+ }
+};
+int main(){
+ State state;state.renderer.topology_cache.tiles[1]={3};
+ auto input=std::make_shared<Input>();input->values={9,10,11};std::weak_ptr<Input> live=input;
+ auto mesh=std::make_shared<CachedMeshGeneration>();mesh->proof=std::make_shared<CachedGeometryProof>();mesh->proof->input=input;
+ state.caster_lease->content.entries[1]=mesh;
+ assert(state.atlas_dependencies(true)&&state.atlas_dependencies(false));
+ auto registrations=state.atlas_inputs.validation_counts.proof_registrations;
+ auto watches=state.atlas_inputs.validation_counts.dependency_watch_calls,expansions=state.atlas_inputs.validation_counts.source_expansions;
+ // A rejected whole-atlas visibility snapshot must enter actual registration
+ // renewal even when the caster membership and all exact owners are unchanged.
+ state.renderer.topology_cache.tiles[1].visibility_revision=4;
+ state.renderer.raster_dependency_revisions.touch(R::Domain::visibility,1);
+ assert(!state.atlas_dependencies(false)&&!state.atlas_inputs.valid_all);
+ auto checks=state.renderer.checks;assert(state.atlas_dependencies(true)&&state.renderer.checks==checks+1);
+ assert(state.atlas_inputs.producers.at(1).visibility==4&&state.atlas_inputs.valid_all);
+ assert(state.atlas_inputs.validation_counts.proof_registrations==registrations&&state.atlas_inputs.validation_counts.dependency_watch_calls==watches&&state.atlas_inputs.validation_counts.source_expansions==expansions);
+ input.reset();assert(!live.expired());
+ state.sampling_grid.valid=true;state.sampling_grid.low={0,0};state.sampling_grid.count={1,1};state.sampling_grid.quality_span={40,40};
+ auto& pages=state.page_contents;State::Pages::Context context{1,2,3,1};
+ pages.begin_incremental(state.sampling_grid,context,{});
+ auto admit=[&](auto bytes){return state.shadow_metadata_admit(state.atlas_inputs.bytes(),bytes);};
+ assert(pages.update(State::AtlasInputs::Key{1,1},state.sampling_grid,[]{return std::array<float,4>{1,1,2,2};},admit));
+ assert(pages.finish_incremental(state.sampling_grid,true,admit)&&pages.complete_incremental(0));
+ assert(state.shadow_metadata_admit(state.atlas_inputs.bytes(),pages.bytes()));
+ auto spare=Owner::budget-state.renderer.shared_instances.bytes();
+ auto pressure=state.renderer.shared_instances.retain_metadata(spare-sizeof(Owner::CpuAllocation)-128);assert(pressure);
+ assert(!pages.update(State::AtlasInputs::Key{1,2},state.sampling_grid,[]{return std::array<float,4>{1,1,2,2};},admit));
+ // Optional page failure invalidates every page; current exact dependencies
+ // and their strong source owners survive only under the minimum joint charge.
+ state.fallback(true,false);assert(pages.occurrences.empty()&&!pages.reused[0]&&!pages.pages[pages.slots[0]].valid);
+ assert(state.proof_membership_signature==state.caster_signature&&state.atlas_inputs.producers.size()==1&&state.atlas_inputs.sources.size()==1&&!live.expired());
+ assert(state.page_metadata&&state.page_metadata->bytes()==state.atlas_inputs.bytes()+pages.bytes()+sizeof(Owner::CpuAllocation));
+ assert(state.renderer.shared_instances.bytes()<=Owner::budget&&state.renderer.shared_instances.peak_bytes()<=Owner::budget);
+ for(unsigned n=0;n<100;++n)assert(state.atlas_dependencies(false));
+ assert(state.atlas_inputs.validation_counts.proof_registrations==registrations&&state.atlas_inputs.validation_counts.dependency_watch_calls==watches&&state.atlas_inputs.validation_counts.source_expansions==expansions);
+ pressure.reset();pages.begin_incremental(state.sampling_grid,context,{});
+ assert(pages.update(State::AtlasInputs::Key{1,2},state.sampling_grid,[]{return std::array<float,4>{1,1,2,2};},admit)&&pages.finish_incremental(state.sampling_grid,true,admit));
+ assert(!pages.reused[0]);
+ // A genuine content mismatch has no fallback proof authority. It clears
+ // registrations/charge and releases the last immutable source-owner pin.
+ state.renderer.current=8;state.renderer.raster_dependency_revisions.touch(R::Domain::semantic,1);
+ assert(!state.atlas_dependencies(false));state.fallback(false,false);
+ assert(state.atlas_inputs.producers.empty()&&state.atlas_inputs.sources.empty()&&live.expired()&&!state.page_metadata);
+ assert(state.proof_membership_signature==~std::uint64_t(0)&&!state.renderer.shared_instances.bytes());
+ // Even the empty retained owner may not bypass admission if the shared
+ // ledger is occupied entirely by a separate live owner.
+ auto full=state.renderer.shared_instances.retain_metadata(Owner::budget-sizeof(Owner::CpuAllocation));assert(full);
+ state.fallback(true,false);assert(!state.page_metadata&&state.atlas_inputs.producers.empty());full.reset();
+ assert(!state.renderer.shared_instances.bytes());
+}
+''')
+
     def test_production_whole_atlas_gate_rejects_incomplete_draw_and_retry(self):
         source=(ROOT/'Renderer/sandbox/fresh_pipeline.h').read_text()
         start=source.index('        if (atlas_complete && renderer.shared_instances.valid(shadow_front)')
@@ -178,7 +349,7 @@ int main(){State state;State::Grid grid;std::array<float,4> wrap{};
 }
 ''')
         body=source[source.index('        atlas_complete=false;',start):source.index('\n};',start)]
-        self.assertLess(body.index('page_contents.complete('),body.index('prepared_signature=membership;'))
+        self.assertLess(body.index('page_contents.complete_incremental('),body.index('prepared_signature=membership;'))
         self.assertLess(body.index('UpdateSubresource(renderer.source_shadow.table'),body.index('atlas_complete=true;'))
 
     def test_production_sampling_uses_retained_physical_slots_and_asset_context(self):

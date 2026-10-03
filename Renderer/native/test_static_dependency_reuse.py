@@ -458,7 +458,7 @@ int main(){State state;GeometryDrawView::Records records;records[0].resize(100);
         ])
         run_cpp(r'''
 #define C3X_RENDERER64_FRESH
-#include "Renderer/native/render_core/raster_contributors.h"
+#include "Renderer/native/render_core/shadow_page_contents.h"
 #include <cassert>
 #include <cstring>
 #include <vector>
@@ -472,7 +472,7 @@ struct Shadow {struct Caster {
   return {b.low[0]+offset[0],b.low[1]+offset[1],b.high[0]+offset[0],b.high[1]+offset[1]};}};
 struct CachedGeometryProof {unsigned tile=55,semantic=7;};
 struct CachedMeshGeneration {std::shared_ptr<CachedGeometryProof> proof=std::make_shared<CachedGeometryProof>();};
-struct State {using AtlasInputs=c3x_renderer::render_core::RasterContributors<CachedGeometryProof,20>;
+struct State {using AtlasInputs=c3x_renderer::render_core::ShadowCasterProofs<CachedGeometryProof>;
  struct Renderer {
   bool geometry_canonical_world=true;unsigned content_revision=7,device_generation=1,semantic=7,proof_visits=0,raster_proof_rejections[7]={};
   std::array<float,12> shadow_basis={};RasterDependencyRevisions raster_dependency_revisions;
@@ -485,7 +485,9 @@ struct State {using AtlasInputs=c3x_renderer::render_core::RasterContributors<Ca
  struct Content {std::shared_ptr<CachedMeshGeneration> mesh=std::make_shared<CachedMeshGeneration>();
   std::shared_ptr<void> get(std::array<std::uint64_t,2>)const{return mesh;}};
  struct Lease {Content content;};std::shared_ptr<Lease> caster_lease=std::make_shared<Lease>();
- AtlasInputs atlas_inputs;std::vector<Shadow::Caster> caster_inputs={Shadow::Caster{}};
+ AtlasInputs atlas_inputs;c3x_renderer::render_core::ShadowPageContents<AtlasInputs::Key> page_contents;
+ std::uint64_t proof_membership_signature=~std::uint64_t(0);bool shadow_metadata_admit(std::size_t,std::size_t){return true;}
+ std::vector<Shadow::Caster> caster_inputs={Shadow::Caster{}};
  std::uint64_t caster_signature=1;float box[4]={0,0,48,32};
 ''' + methods + r'''
 };
@@ -494,7 +496,7 @@ int main(){State state;assert(state.atlas_dependencies(true));assert(state.atlas
  for(unsigned i=0;i<1000;++i)assert(state.atlas_dependencies(false));
  assert(state.atlas_inputs.validation_counts.membership==counts.membership&&state.atlas_inputs.validation_counts.content==counts.content&&state.renderer.proof_visits==proofs);
  state.renderer.raster_dependency_revisions.touch(RasterDependencyRevisions::Domain::world,888);assert(state.atlas_dependencies(false));assert(state.renderer.proof_visits==proofs);
- for(unsigned i=0;i<12;++i){auto before=state.atlas_inputs.validation_counts.full;++state.renderer.shadow_basis[i];assert(state.atlas_dependencies(false));assert(state.atlas_inputs.validation_counts.full==before+1);}
+ for(unsigned i=0;i<12;++i){auto before=state.atlas_inputs.validation_counts.full;++state.renderer.shadow_basis[i];assert(state.atlas_dependencies(false));assert(state.atlas_inputs.validation_counts.full==before);}
  state.renderer.semantic=8;state.renderer.raster_dependency_revisions.touch(RasterDependencyRevisions::Domain::semantic,77);assert(!state.atlas_dependencies(false));
  state.renderer.semantic=7;state.renderer.raster_dependency_revisions.touch(RasterDependencyRevisions::Domain::semantic,77);assert(state.atlas_dependencies(false));
  ++state.caster_signature;++state.caster_inputs[0].index_offset;assert(!state.atlas_dependencies(false));
@@ -504,11 +506,16 @@ int main(){State state;assert(state.atlas_dependencies(true));assert(state.atlas
  auto extra=state.caster_inputs.front();++extra.index_offset;state.caster_inputs.push_back(extra);++state.caster_signature;
  assert(!state.atlas_dependencies(false));assert(state.atlas_dependencies(true));assert(state.atlas_dependencies(false));
  state.caster_inputs.push_back(state.caster_inputs.front());++state.caster_signature;
- assert(state.atlas_dependencies(false));state.caster_inputs.erase(state.caster_inputs.begin()+1);++state.caster_signature;
- assert(!state.atlas_dependencies(false));state.caster_inputs.push_back(extra);++state.caster_signature;
- assert(state.atlas_dependencies(false));auto saved=state.caster_inputs;state.caster_inputs.clear();++state.caster_signature;
- assert(!state.atlas_dependencies(false));state.caster_inputs=saved;++state.caster_signature;assert(state.atlas_dependencies(false));
+ assert(!state.atlas_dependencies(false));assert(state.atlas_dependencies(true));
+ state.caster_inputs.erase(state.caster_inputs.begin()+1);++state.caster_signature;
+ assert(!state.atlas_dependencies(false));assert(state.atlas_dependencies(true));
+ // A membership edit preserves the unchanged producer's dependency expansion.
+ assert(state.atlas_inputs.validation_counts.proof_registrations==2);
+ auto saved=state.caster_inputs;state.caster_inputs.clear();++state.caster_signature;
+ assert(!state.atlas_dependencies(false));assert(state.atlas_dependencies(true));assert(state.atlas_inputs.producers.empty());
+ state.caster_inputs=saved;++state.caster_signature;assert(!state.atlas_dependencies(false));assert(state.atlas_dependencies(true));
  ++state.renderer.topology_cache.record.visibility_revision;state.renderer.raster_dependency_revisions.touch(RasterDependencyRevisions::Domain::visibility,55);assert(!state.atlas_dependencies(false));
+ state.caster_lease->content.mesh->proof.reset();++state.caster_signature;assert(!state.atlas_dependencies(true));
 }
 ''')
 

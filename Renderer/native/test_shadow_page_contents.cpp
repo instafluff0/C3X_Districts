@@ -76,10 +76,15 @@ float SamplePS(float4 p:SV_POSITION):SV_TARGET {float2 xy=domain.xy+p.xy/128*dom
  std::array<float,4> projected(Caster const& c){std::array<float,4> p={1e9,1e9,-1e9,-1e9};
   for(unsigned corner=0;corner<4;++corner){float x=corner&1?c.high[0]:c.low[0],y=corner&2?c.high[1]:c.low[1];float u=x*basis[0]+y*basis[1]+c.z*basis[2],v=x*basis[4]+y*basis[5]+c.z*basis[6];p[0]=std::min(p[0],u);p[1]=std::min(p[1],v);p[2]=std::max(p[2],u);p[3]=std::max(p[3],v);}return p;}
  bool intersects(Caster const& c,Grid const& g,unsigned i){auto p=projected(c);auto b=g.page_box(i);return !(p[2]<b[0]||p[0]>b[0]+b[2]||p[3]<b[1]||p[1]>b[1]+b[3]);}
+ Key key(Caster const& c){Key value{c.generation,unsigned(c.cutout)};std::memcpy(value.data()+2,&c.low,sizeof(c.low));std::memcpy(value.data()+3,&c.high,sizeof(c.high));std::memcpy(value.data()+4,&c.z,4);return value;}
  Pages::Inputs proofs(Grid const& g,std::vector<Caster> const& casters){Pages::Inputs facts;for(unsigned i=0;i<g.pages();++i){
-  for(auto const& c:casters)if(intersects(c,g,i)){Key key{c.generation,unsigned(c.cutout)};std::memcpy(key.data()+2,&c.low,sizeof(c.low));std::memcpy(key.data()+3,&c.high,sizeof(c.high));std::memcpy(key.data()+4,&c.z,4);facts[i].push_back(key);}std::sort(facts[i].begin(),facts[i].end());}return facts;}
+  for(auto const& c:casters)if(intersects(c,g,i)){facts[i].push_back(key(c));}std::sort(facts[i].begin(),facts[i].end());}return facts;}
  void render(Field& f,Grid const& g,Pages::Context const& proof_context,std::vector<Caster> const& casters,bool forced){
-  if(forced)f.pages.clear();auto facts=proofs(g,casters);f.pages.select(g,proof_context,facts,true);
+  Pages::Inputs facts;
+  if(forced){f.pages.clear();facts=proofs(g,casters);f.pages.select(g,proof_context,facts,true);}
+  else {f.pages.begin_incremental(g,proof_context,basis);
+   for(auto const& c:casters)check(f.pages.update(key(c),g,[&]{return projected(c);},[](auto bytes){return bytes<=16u*1024u*1024u;}),"incremental admission");
+   check(f.pages.finish_incremental(g,true,[](auto){return true;}),"incremental membership");}
   ID3D11ShaderResourceView* empty=nullptr;context->PSSetShaderResources(0,1,&empty);context->VSSetShader(caster_vs.Get(),nullptr,0);context->IASetInputLayout(layout.Get());context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);context->RSSetState(raster.Get());context->OMSetDepthStencilState(nullptr,0);context->OMSetBlendState(maximum.Get(),nullptr,~0u);
   D3D11_VIEWPORT vp{0,0,float(Grid::page_texels),float(Grid::page_texels),0,1};context->RSSetViewports(1,&vp);ID3D11Buffer* cb=settings.Get();context->VSSetConstantBuffers(0,1,&cb);ID3D11ShaderResourceView* mask_resource=mask_view.Get();context->PSSetShaderResources(33,1,&mask_resource);
   for(unsigned i=0;i<g.pages();++i){if(f.pages.reused[i])continue;auto* target=f.targets[f.pages.slots[i]].Get();float clear[]={-1e6,-1e6,-1e6,-1e6};context->ClearRenderTargetView(target,clear);context->OMSetRenderTargets(1,&target,nullptr);++raster_pages;
@@ -87,7 +92,9 @@ float SamplePS(float4 p:SV_POSITION):SV_TARGET {float2 xy=domain.xy+p.xy/128*dom
     float values[20]{};std::copy(basis.begin(),basis.end(),values);for(unsigned k=0;k<3;++k){values[k]*=6/g.page_span(0);values[4+k]*=6/g.page_span(1);}auto coord=g.page(i);values[12]=float(coord[0]);values[13]=float(coord[1]);context->UpdateSubresource(settings.Get(),0,nullptr,values,0,0);
     float points[6][12]{};unsigned corners[]={0,1,2,2,1,3};for(unsigned n=0;n<6;++n){unsigned corner=corners[n];points[n][0]=corner&1?1.f:0.f;points[n][1]=corner&2?1.f:0.f;points[n][2]=40;points[n][3]=corner&1?c.high[0]:c.low[0];points[n][4]=corner&2?c.high[1]:c.low[1];points[n][5]=c.z;points[n][6]=1;points[n][7]=1;}
     context->UpdateSubresource(vertices.Get(),0,nullptr,points,0,0);ID3D11Buffer* stream=vertices.Get();UINT stride=48,offset=0;context->IASetVertexBuffers(0,1,&stream,&stride,&offset);context->PSSetShader(c.cutout?cutout.Get():opaque.Get(),nullptr,0);context->Draw(6,0);++draws;
-   }check(f.pages.complete(i,g,proof_context,facts[i]),"complete");
+   }check(forced?f.pages.complete(i,g,proof_context,facts[i]):f.pages.complete_incremental(i),"complete");
+   auto exact=forced?facts[i]:proofs(g,casters)[i];
+   check(f.pages.exact_inputs(f.pages.slots[i],exact),"compact membership resolves every exact caster key");
   }context->OMSetRenderTargets(0,nullptr,nullptr);
  }
  std::vector<unsigned char> depth(Field& f,unsigned physical){context->CopySubresourceRegion(f.read.Get(),0,0,0,0,f.texture.Get(),physical,nullptr);D3D11_MAPPED_SUBRESOURCE mapped{};checked(context->Map(f.read.Get(),0,D3D11_MAP_READ,0,&mapped),"depth map");std::vector<unsigned char> pixels(Grid::page_texels*Grid::page_texels*4);
@@ -120,5 +127,5 @@ int main(){
  wrap={0,0,32,24};++context[19];phase("wrap",0,0);++context[1];phase("asset-config",0,0);++context[2];phase("device-generation",0,0);++context[0];phase("content-scope",0,0);
  grid.quality_span={48,48};++context[5];phase("current-quality",0,0);
  check(warm.pages.hits>0 && warm.pages.rebuilt<cold.pages.rebuilt,"structural reuse");
- std::cout<<"SHADOW_PAGE_NATIVE_PASS compared_pixels="<<oracle.compared<<" retained_hits="<<warm.pages.hits<<" retained_rebuilds="<<warm.pages.rebuilt<<" forced_rebuilds="<<cold.pages.rebuilt<<"\n";
+ std::cout<<"SHADOW_PAGE_NATIVE_PASS compared_pixels="<<oracle.compared<<" projections="<<warm.pages.projections<<" projection_reuses="<<warm.pages.projection_reuses<<" page_tests="<<warm.pages.page_tests<<" contributor_edits="<<warm.pages.contributor_edits<<" retained_hits="<<warm.pages.hits<<" retained_rebuilds="<<warm.pages.rebuilt<<" forced_rebuilds="<<cold.pages.rebuilt<<"\n";
 }

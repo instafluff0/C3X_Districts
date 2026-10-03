@@ -24,7 +24,14 @@ pixel displacement redraws the static region from resident geometry; MSAA sample
 count does not change this pixel-group requirement.
 
 Known permitted world regions prepare through the same production compiler during
-loading, then continue on bounded worker turns. Canonical full-detail content uses
+loading, then continue on bounded worker turns. The existing valid-world loading
+boundary first completes camera-free RAM recipes, then admits their GPU buffers
+through the foreground canonical keys and allocation owners. Measured physical
+and adapter headroom reserve future targets, composition, units, shadows and
+publication overlap. Admission never evicts a surviving loading generation;
+capacity-deferred content keeps its RAM recipe. The byte receipt distinguishes a
+completed admission sweep from a fully resident world. Unchanged generations
+remain resident through changed-world preparation. Canonical full-detail content uses
 a fixed 128 by 64 tile basis and keys actual authority, assets and quality rather
 than target dimensions or camera coordinates. Legacy projection/detail remains a
 separate identity. Missing authority stays unavailable until native capture supplies
@@ -87,10 +94,32 @@ replacement union is admitted, while active readers keep their leases and charge
 | Rigid source buffers | 32 MiB GPU limit and 64 MiB joint staging/retained CPU/GPU limit, including retired pinned sources. |
 | Natural instance source buffers | Independent 32 MiB GPU and 64 MiB joint CPU/GPU limits with source deduplication staging and retired pins charged. |
 | Shared selected-index stream | 256 KiB GPU stream plus 512 KiB reserved CPU scratch, charged within the shared 32 MiB limit. Warm immutable selection plans also share that allowance. |
-| World geometry | 2 GiB x64 ceiling; 768 MiB x86 ceiling. Measured process and adapter headroom can reduce admission. Selected and retired readers remain charged. |
+| World geometry | Existing 8 GiB x64 safety ceiling; 768 MiB x86 ceiling. Measured process and adapter headroom determine actual admission; missing adapter measurements freeze optional loading growth. Selected and retired readers remain charged. |
 | Compiler recovery | Ready pool: at least two, at most seven 16 MiB slots. Future headroom reserve: 512 MiB plus the ready pool and up to six 48 MiB worker lanes. |
 | Prepared backing | 1 GiB physical session-file ceiling; 16 MiB raw/packed record ceiling. |
 | Fresh shadow field | 25 fixed 1024 by 1024 R32 pages: 100 MiB, plus the actual still-held production field (normally 128 MiB) and an 80-byte constant buffer. |
+
+Shadow producer registrations retain exact dependencies and shared immutable
+input owners across camera changes. The existing 4096-event journal selects
+revalidation; barriers, owner changes and overruns require the complete proof.
+Projected caster bounds retain generation, occurrence and light identity.
+Entering/leaving contributors update affected page vectors; unchanged pages do
+not rebuild or sort them. Proof and page metadata share the existing charged
+placement allowance, with a 16 MiB combined ceiling and direct draw fallback.
+Distinct immutable source owners remain pinned and independently validated; exactly
+equal normalized dependency lists share one charged allocation. Hashes select
+candidates, full equality authorizes sharing, and the last owner releases the list.
+Page vectors hold compact occurrence IDs; the retained occurrence map owns full
+exact caster keys. IDs never recycle while any completed page can refer to them,
+and vector replacement charges both old and new allocations during overlap.
+The current caster set renews captured visibility only with exact content and
+visibility revalidation. Optional page failure keeps validated dependencies when
+the minimum charged owner still fits and redraws the complete field; unproved
+or unchargeable dependencies clear.
+Unchanged frames retain the journal fast path. Up to sixteen changed entries use
+selective validation; broader journals use full exact content and visibility
+validation, avoiding repeated source-map searches. Barriers and overruns also
+require full validation.
 
 Shadow sampling derives from the current receiver extent and exact light/wrap
 facts before reuse. Global light-plane cells drive derivatives and all nine PCF
@@ -181,61 +210,45 @@ the delivery evidence.
 
 ### Current qualification — October 3
 
-The final candidate and R8 control use the same copied saves, route plans,
-normal effects, shader pack and instrumented injected executable. Busy commands
-complete 30/30 in each arm; exact required destination presentations are 28/29
-for control and 29/29 for candidate within the original windows. Control step 26
-remains late and unavailable. Only 17 destinations have identical copied workloads;
-busy idle also differs in reflected-unit workload, so its 15.1 → 16.8 successful
-Present returns/s is descriptive and does not qualify an idle gain.
+R5 is implemented and correctness-tested, but has not qualified as an overall
+performance improvement against `082c9962`. Original busy 30/30 and light 13/13
+steps completed with normal effects and identical 266-file shader caches. Exact
+Present/view/workload joins admit 21 busy and 12 light steps; busy idle workloads
+differ and cannot support a comparison. Earlier failed revisions remain evidence.
 
-| Strict matched population | Control → candidate Present returns/s | Mean correct-view latency (ms) |
-| --- | ---: | ---: |
-| Busy scroll, 6 destinations | 4.52 → 4.80 | 1731.24 → 1840.70 |
-| Busy zoom, 2 destinations | 5.03 → 4.44 | 894.92 → 1013.75 |
-| Light scroll, 4 destinations | 16.60 → 17.65 | 346.37 → 297.47 |
-| Light zoom, 3 destinations | 43.27 → 52.16 | 439.09 → 428.13 |
+| Matched correct-view latency | Control median / p95 | R5 median / p95 |
+| --- | --- | --- |
+| Busy scroll, 10 steps | 1,626 / 2,302 ms | 2,584 / 4,163 ms |
+| Busy zoom, 3 steps | 1,046 / 1,481 ms | 1,318 / 1,486 ms |
+| Light scroll, 4 steps | 334 / 370 ms | 400 / 545 ms |
+| Light zoom, 3 steps | 427 / 452 ms | 450 / 459 ms |
 
-Active cadence counts all successful source presentations between acceptance and
-first correct destination Present, including prior sources. It is separate from
-correct-view latency. Busy first-unshown jump worsens 4145.81 → 7681.54 ms; warm
-return improves 2132.32 → 1379.42 ms. The light guard joins all 12 required
-destinations and has identical idle workload: 51.8 → 54.0 Present returns/s.
-These single pairs show mixed navigation results; the performance target remains
-unmet. GPU timestamp samples are invalid, and physical scanout is unmeasured.
-Overlapping production, preparation and composition wall spans must not be summed.
+Busy first jump improves 4,768→3,417 ms and warm return 2,548→1,840 ms.
+Busy scroll Present-return cadence declines 4.79→3.41/s; light idle declines
+57.2→54.9/s. These are successful Present returns, not physical scanout.
+Ready-map time rises 80.99→111.77 seconds busy and 47.15→48.85 seconds light.
 
-Busy launcher readiness increases 89.06 → 166.75 seconds. The fresh-program span
-increases 0.48 → 70.28 seconds while 27 newly keyed generated shaders compile;
-this strongly identifies first-use shader compilation as most of that increase.
-Per-entry compile durations are unavailable. World initialization completes all
-289 regions in both arms, and explicit foreground component compiler counters and
-generated-world file I/O remain zero.
+The fitting 512-tile witness admits all 1,024 world keys before its first viewport:
+twelve destinations perform zero world compilation, restoration or upload.
+Placement uploads 463,168 bytes across those destinations, so the zero-total-upload gate
+remains failed. The busy sweep completes RAM recipes but defers 334,347,972 GPU
+bytes across 3,616 capacity-classified keys; it is partially resident. Its 85
+loading cache-refusal events are capacity-classified and do not count unique keys.
 
-The sole neutral R8 attribution diagnostic measures coverage/state/poses/local
-resource setup at 1.556 ms idle, inside an 11.571 ms enclosing setup span; most of
-that enclosing work remains unattributed. Candidate idle coverage checks average
-0.081 ms, with zero coverage builds, neighbor lookups, occurrence queries and
-legacy backdrop blocks. This explains eliminated work without assigning the whole
-setup span to visibility. Busy water still issues 2640 idle draws. The ordered
-packet owner still saturates its 64 MiB allowance: control/candidate cumulative
-refused admissions are 249,102/240,617, using existing fallback. They are neither
-unique misses nor dropped objects. Candidate shared placement peak is 32,700,284
-bytes within 33,554,432; no sampled cap violation or shadow-page refusal occurs.
-Warm shadow camera spans worsen despite page reuse. Added contributor-proof work
-is visible, but its individual causal cost is not isolated by these timers.
+All 18 host tests and native depth/PCF/fog oracles pass. Across sixteen fixed-pose
+iterations, retained CPU work totals 4.99 ms versus 57.96 ms forced rebuild.
+In matched busy scroll windows,
+sampled shadow CPU means fall 80.9→47.9 ms (33/32 observations), while overall
+latency regresses. These spans do not identify the cause of that regression.
+The single R3 query diagnostic measures roughly
+0.17 ms mean setup overhead in its eight-unit fixture; it does not explain the
+busy setup residual. GPU durations remain unavailable.
 
-Native retained/forced shadow depth and receiver PCF match exactly across
-50,528,256 samples. Fog covers 8,787,552 pixels with maximum RGB difference one
-LSB and exact alpha. These synthetic production-shader fixtures preserve their
-original thresholds; whole-game pixel acceptance remains open. Focused ownership,
-visibility, animation, placement, page-failure and camera contracts pass. No
-reference image, injected source or patch entry changes. The accepted executable,
-matching trio, inputs, saves, directory link, cursor and environment are restored;
-owned game/helper/collector processes and tasks are closed.
-
-Exact source/trio/shader bindings, raw captures, missing-window records, timing
-populations and retained image selections are sealed under
-`Renderer/.cache/retained-view-step/final-pair-analysis.json`; diagnostic attribution
-is `neutral-r8-attribution.json` alongside it. Historical qualification belongs to
-Git and its existing delivery receipts.
+The original accepted runtime is restored and verified. Keep it for play while
+Astra reviews the candidate. A separate fallback could redraw the full field on
+atlas misses while retaining validated proofs and unchanged-atlas reuse; that
+option needs qualification.
+Delivery delay, water batching and packet saturation remain follow-ups. Exact
+source/trio bindings, failed attempts, selected images and raw logs are under
+`Renderer/.cache/gpu-shadow-correction-step/`. Verified unselected images and
+completed compiler objects are deleted after seals; no archives are created.

@@ -4,6 +4,106 @@ from Renderer.native.native_cpp_test import ROOT, run_cpp
 
 
 class WorldComponentTests(unittest.TestCase):
+    def test_actual_gpu_receipt_deduplicates_exact_keys_and_distinguishes_partial_bytes(self):
+        source=(ROOT/'Renderer/native/c3x_renderer.cpp').read_text()
+        start=source.index('    struct WorldGpuRecord {')
+        record=source[start:source.index('    std::size_t world_owner_gpu_bytes(',start)]
+        start=source.index('    void world_gpu_report(')
+        report=source[start:source.index('    c3x_renderer::fidelity::PatchLayouts',start)]
+        run_cpp(r'''using UINT=unsigned;
+#include "Renderer/native/world_preparation.h"
+#include <cassert>
+#include <map>
+#include <string>
+template<std::size_t N,class... A>void sprintf_s(char(&b)[N],char const* f,A... a){std::snprintf(b,N,f,a...);}
+struct State {
+ struct {std::string last;void write(char const*,char const* message,bool){last=message;}}trace;
+ std::size_t terrain_patch_index_bytes=64,tile_geometry_runtime_budget=4096;
+''' + record + report + r'''
+};
+int main(){using namespace c3x_renderer;State s;WorldPreparationKey a,b,c,d;
+ a.identity[0]=1;b.identity[0]=2;c.identity[0]=3;d.identity[0]=4;
+ s.world_gpu_record(a,128).state=1;s.world_gpu_record(a,128).charged=192;
+ s.world_gpu_record(b,384).state=2;s.world_gpu_record(c,0).state=1;
+ s.world_gpu_record(d,0,false).state=4;s.world_gpu_report(false);
+ for(auto text:{"sweep_complete=0 ","fully_resident=0 ","unique_keys=4 ",
+   "required_gpu_bytes=512 ","admitted_gpu_bytes=128 ","deferred_gpu_bytes=384 ",
+   "admitted_owner_bytes=192 ","capacity_keys=1 ","source_keys=1 ","unknown_bytes_keys=1 "})
+  assert(s.trace.last.find(text)!=std::string::npos);
+ assert(s.world_gpu_records.empty() && s.world_gpu_current.empty());
+ // Zero-byte known owners and duplicate demand keys remain valid; an exact
+ // recipe collision is a distinct key, never a false admission proof.
+ b=a;b.recipe.words={1};s.world_gpu_record(a,0).state=1;s.world_gpu_record(b,16).state=1;
+ s.world_gpu_report(true);assert(s.trace.last.find("fully_resident=1 ")!=std::string::npos);
+ assert(s.trace.last.find("unique_keys=2 ")!=std::string::npos);
+ assert(s.trace.last.find("required_gpu_bytes=16 ")!=std::string::npos);
+}
+''')
+
+    def test_loading_gpu_byte_receipt_equals_actual_demand_packing(self):
+        source=(ROOT/'Renderer/native/c3x_renderer.cpp').read_text()
+        start=source.index('            begin=std::chrono::steady_clock::now();\n            c3x_renderer::render_core::ImmutableMeshUpload upload;')
+        end=source.index('    void defer_world_backing(',start)
+        upload=source[start:end].rsplit('        }',1)[0]
+        run_cpp(r'''
+using UINT=unsigned;
+#include "Renderer/native/world_preparation.h"
+#include <cassert>
+#include <atomic>
+struct D3D11_BUFFER_DESC {unsigned ByteWidth=0,Usage=0,BindFlags=0;};
+struct D3D11_SUBRESOURCE_DATA {void const* pSysMem=nullptr;};
+constexpr unsigned D3D11_USAGE_IMMUTABLE=1,D3D11_BIND_VERTEX_BUFFER=2,D3D11_BIND_INDEX_BUFFER=4;
+using HRESULT=long;
+bool FAILED(HRESULT value){return value<0;}bool SUCCEEDED(HRESULT value){return value>=0;}
+unsigned alive=0;
+struct ID3D11Buffer {std::vector<unsigned char> bytes;
+ ID3D11Buffer(){++alive;}void Release(){--alive;delete this;}};
+struct Device {bool fail=false;std::size_t allocated=0;
+ HRESULT CreateBuffer(D3D11_BUFFER_DESC const* desc,D3D11_SUBRESOURCE_DATA const* initial,ID3D11Buffer** result){
+  if(fail)return -1;auto buffer=new ID3D11Buffer;
+  auto first=static_cast<unsigned char const*>(initial->pSysMem);buffer->bytes.assign(first,first+desc->ByteWidth);
+  allocated+=desc->ByteWidth;*result=buffer;return 0;}
+ HRESULT GetDeviceRemovedReason(){return 0;}};
+#include "Renderer/native/render_core/immutable_mesh_upload.h"
+struct Harness {Device owned,*device=&owned;
+ std::atomic<std::uint64_t> world_pack_microseconds{0},world_create_microseconds{0},world_uploaded_bytes{0},world_uploads{0};
+ std::array<std::atomic<std::uint64_t>,2> world_component_uploads{};
+ std::array<std::atomic<std::uint64_t>,4> world_upload_layers{};
+ std::unique_ptr<c3x_renderer::PreparedWorld> pack(std::unique_ptr<c3x_renderer::PreparedWorld> result){
+  bool bounded=true;auto stop=[](){return false;};auto begin=std::chrono::steady_clock::now();
+  auto elapsed=[&](){return 0.;};
+''' + upload + r'''}
+};
+int main(){using namespace c3x_renderer;
+ auto mesh=[](unsigned count,bool shared){render_core::PreparedMesh value;
+  value.vertex_stride=4;value.index_stride=4;value.index_count=3;
+  value.vertices.assign(count,17);value.indices.assign(12,19);value.shared_grid=shared?7:0;return value;};
+ for(auto kind:{WorldPreparationKind::ground,WorldPreparationKind::objects,WorldPreparationKind::combined})
+ for(bool grid:{false,true}){
+  auto result=std::make_unique<PreparedWorld>();result->kind=kind;
+  if(world_preparation_needs_ground(kind)){
+   result->ground=std::make_unique<fidelity::PreparedGround>();result->terrain=std::make_unique<fidelity::TerrainSurfaces>();
+   for(unsigned i=0;i<6;++i)result->ground->meshes[i]=mesh(7+i,grid);
+   for(auto& value:result->terrain->meshes)value=mesh(13,grid);
+  }
+  if(world_preparation_needs_objects(kind)){
+   result->objects=std::make_unique<objects::PreparedObjects>();
+   for(auto& part:result->objects->layers)part.mesh=mesh(11,false);
+   objects::PreparedPart city;city.mesh=mesh(17,false);city.lighting=std::make_shared<city_fidelity::Lighting>();
+   result->objects->city.push_back(std::move(city));
+  }
+  auto required=prepared_world_gpu_bytes(*result);Harness h;
+  auto ready=h.pack(std::move(result));assert(ready && ready->upload_ready && ready->gpu_bytes==required);
+  assert(h.owned.allocated==required && h.world_uploaded_bytes==required && alive==1);
+  ready.reset();assert(!alive);
+ }
+ auto empty=std::make_unique<PreparedWorld>();empty->kind=WorldPreparationKind::objects;
+ empty->objects=std::make_unique<objects::PreparedObjects>();Harness h;
+ assert(!prepared_world_gpu_bytes(*empty));auto ready=h.pack(std::move(empty));
+ assert(ready && ready->upload_ready && !ready->buffer && !h.owned.allocated && !alive);
+}
+''')
+
     def test_actual_ground_layer_and_shadow_adoption_preserve_ordinary_caller(self):
         source=(ROOT/'Renderer/native/c3x_renderer.cpp').read_text()
         start=source.index('enum GeometryLayer :')
@@ -118,6 +218,8 @@ int main(){
  auto coordinate_key=[&](int x,int y){return topology_cache.key(x,y);};
  std::vector<std::uint64_t> demanded_tiles{coordinate_key(tile.tile_x,tile.tile_y)};
  bool backing_only=false,component_preparation=true,loading_preparation=false,batch_preparing=false;
+ bool loading_gpu_residency=true;std::set<WorldPreparationKey> receipt;
+ auto world_gpu_record=[&](WorldPreparationKey const& key,std::size_t,bool measured){assert(!measured);receipt.insert(key);};
  WorldPreparationInput input;input.ground.compile.tile=tile;
  input.ground.compile.world_ground=input.ground.compile.pickup_profile=input.ground.compile.fidelity_profile=true;
  input.ground.compile.ground=2;input.ground.compile.flat_grid=input.ground.compile.tile_ground_grid=8;
@@ -148,7 +250,7 @@ int main(){
   if(world_preparation_needs_objects(job.kind)){++object_calls;result->objects=std::make_unique<objects::PreparedObjects>();}
   return result;
  };
- auto reset=[&]{world_queue.clear();jobs.clear();required.clear();needed.clear();backing_keys.clear();unique.clear();plan={};ground_calls=object_calls=0;};
+ auto reset=[&]{world_queue.clear();jobs.clear();required.clear();needed.clear();backing_keys.clear();unique.clear();receipt.clear();plan={};ground_calls=object_calls=0;};
  auto dispatch=[&]{world_queue.schedule(std::move(jobs),compiler,1,required,needed,WorldPreparation::byte_limit,true);
   for(auto const& key:required){auto result=world_queue.take(key);assert(result && result->complete() && result->kind==key.kind());}
   world_queue.pause();};

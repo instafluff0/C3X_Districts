@@ -49,6 +49,29 @@ struct FrameWorkingSet {
         auto retained=geometry>shortfall/2?geometry-shortfall/2:0;
         return {std::min(ceiling,retained+geometry_growth),prepared+compact_growth};
     }
+    // After the required compact recipes exist, do not reserve another quarter
+    // of growth for duplicate recipes. Measurements already include live
+    // sources/recipes/targets. Only missing future attachments and compiler /
+    // publication overlap are reserved; each new GPU byte can need a driver
+    // backing byte too. A missing adapter measurement permits no new uploads.
+    static std::size_t world_geometry(std::size_t available,std::size_t physical,
+            std::size_t owned,std::size_t gpu_headroom,std::size_t future,
+            std::size_t ceiling,unsigned workers,bool loading){
+        auto lanes=std::min(workers,6u);
+        auto reserve=std::max(2048u*mib,physical/6)+512u*mib+
+            std::max(2u,lanes+1u)*16u*mib+lanes*48u*mib;
+        auto usable=available>reserve?available-reserve:0;
+        usable=usable>future?usable-future:0;
+        auto gpu=gpu_headroom>future?gpu_headroom-future:0;
+        auto growth=std::min(usable/2,gpu-gpu/5);
+        // Loading never evicts surviving content. Foreground still reduces
+        // its allowance under physical pressure, as the existing residency
+        // policy does; selected-content admission owns that fallback.
+        auto shortfall=available<reserve?reserve-available:0;
+        auto retained=loading?owned:owned>shortfall/2?owned-shortfall/2:0;
+        if(loading && retained>=ceiling)return retained;
+        return std::min(ceiling,retained+growth);
+    }
     static Content content(std::size_t available,std::size_t resident,std::size_t ceiling,unsigned workers){
         // Keep one ready slot beside every configured active lane. Reducing
         // this allowance under pressure serializes demanded compilation as soon
