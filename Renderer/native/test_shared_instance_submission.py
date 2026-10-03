@@ -58,6 +58,66 @@ using Owner=c3x_renderer::render_core::SharedInstanceSubmission;
 
 
 class SharedInstanceSubmissionTests(unittest.TestCase):
+    def test_optional_resource_charges_share_exact_cpu_gpu_budget_and_retirement(self):
+        run_cpp(GPU_STUB + r'''
+int main(){Owner owner,other;
+ auto first=owner.retain_metadata(128,1024);assert(first && owner.gpu_bytes()==1024);
+ auto overhead=owner.cpu_bytes()-128;assert(first->bytes()==128+overhead+1024);
+ auto pinned=first;auto second=owner.retain_metadata(256,4096);assert(second);
+ assert(owner.cpu_bytes()==384+2*overhead && owner.gpu_bytes()==5120);
+ assert(owner.resize_metadata(second,512,8192));
+ assert(owner.cpu_bytes()==640+2*overhead && owner.gpu_bytes()==9216);
+ auto before=owner.bytes(),cpu=owner.cpu_bytes(),gpu=owner.gpu_bytes();
+ assert(!owner.resize_metadata(second,Owner::budget,0));
+ assert(!owner.resize_metadata(second,0,Owner::budget));
+ assert(!owner.retain_metadata(0,Owner::budget) && !owner.retain_metadata(Owner::budget,0));
+ assert(!other.resize_metadata(first,1,1));
+ assert(owner.bytes()==before && owner.cpu_bytes()==cpu && owner.gpu_bytes()==gpu);
+ auto pressure=owner.retain_metadata(Owner::budget-owner.bytes()-overhead);assert(pressure);
+ assert(!owner.retain_metadata(0,1));assert(!owner.resize_metadata(second,513,8192));
+ pressure.reset();owner.clear();assert(owner.bytes()==before);
+ first.reset();assert(owner.gpu_bytes()==9216);pinned.reset();assert(owner.gpu_bytes()==8192);
+ second.reset();assert(!owner.bytes() && !owner.cpu_bytes() && !owner.gpu_bytes());
+ assert(owner.peak_bytes()<=Owner::budget);
+}
+''')
+
+    def test_independent_body_shadow_delta_bases_share_budget_without_generation_chains(self):
+        run_cpp(GPU_STUB + r'''
+int main(){
+ ID3D11Device device;ID3D11DeviceContext context{&device};Owner owner,other;
+ float projection[]={0,0,128,1260};Owner::Range range;Owner::Instance value;
+ auto source=std::make_shared<int>(1);Owner::RetainedSource proof;proof.source=source;proof.owner={4,9};
+ proof.canonical_source=Owner::Generation::source_key(source.get(),40);
+ auto make=[&](unsigned family,float x){auto builder=owner.begin_retained(Owner::Key{family},{},true);value.place[0]=x;
+  assert(owner.append(builder,Owner::Key{10},source.get(),&value,1,projection,0,0,0,40,range));
+  assert(owner.retain_source(builder,Owner::Key{10},proof));return owner.upload(builder,&device,&context);};
+ auto body=make(1,13),shadow=make(2,29);assert(body && shadow && owner.select(Owner::Key{2})==shadow);
+ // Both owners deliberately use the same placement key/source proof. Only
+ // the explicit base may decide which immutable GPU bytes are copied.
+ std::weak_ptr<Owner::Generation const> old_body=body;
+ auto builder=owner.begin_retained(Owner::Key{3},{},true,body);assert(builder && builder->copy_source==body);
+ assert(owner.reuse_range(builder,Owner::Key{10},1,proof,range));
+ auto next_body=owner.upload(builder,&device,&context);builder.reset();assert(next_body && !next_body->copy_source);
+ assert(next_body->buffer->data==body->buffer->data && next_body->buffer->data!=shadow->buffer->data);
+ body.reset();assert(old_body.expired());assert(owner.valid(shadow));
+ builder=owner.begin_retained(Owner::Key{4},{},true,shadow);assert(builder);
+ assert(owner.carry_forward(builder,[](auto const&){return true;}));
+ auto next_shadow=owner.upload(builder,&device,&context);builder.reset();assert(next_shadow && !next_shadow->copy_source);
+ assert(next_shadow->buffer->data==shadow->buffer->data && next_shadow->buffer->data!=next_body->buffer->data);
+ auto incorrect=proof;++incorrect.owner[1];builder=owner.begin_retained(Owner::Key{5},{},true,next_body);
+ assert(!owner.reuse_range(builder,Owner::Key{10},1,incorrect,range));builder.reset();
+ assert(!other.begin_retained(Owner::Key{1},{},true,next_body));
+ assert(!owner.begin_retained(Owner::Key{1},{},false,next_body));
+ auto pressure=owner.retain_metadata(Owner::budget-owner.bytes()-128);assert(pressure);
+ assert(!owner.begin_retained(Owner::Key{6},{},true,next_body));pressure.reset();
+ assert(owner.select(Owner::Key{4})==next_shadow && owner.valid(next_body));
+ assert(owner.bytes()<=Owner::budget && owner.peak_bytes()<=Owner::budget);
+ owner.clear();assert(!owner.begin_retained(Owner::Key{7},{},true,next_body));
+ next_body.reset();next_shadow.reset();shadow.reset();assert(!owner.bytes() && device.creates==device.freed);
+}
+''')
+
     def test_delta_replacement_packs_changed_only_and_preserves_indexed_old_bytes(self):
         run_cpp(GPU_STUB + r'''
 int main(){

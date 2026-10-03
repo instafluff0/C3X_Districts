@@ -5,6 +5,7 @@
 #include "static_raster_state.h"
 #include "../native/render_core/raster_contributors.h"
 #include "../native/render_core/shadow_sampling_grid.h"
+#include "../native/render_core/shadow_page_contents.h"
 #include "../native/render_core/body_placement_requirements.h"
 #include "../native/render_core/prepared_draw_parameters.h"
 #include "../native/render_core/submission_census.h"
@@ -91,7 +92,8 @@ float sandbox_shadow_load(Texture2DArray field,int2 cell) {
  int2 page=int2(floor(float2(cell)/1024.));
  int2 local_page=page-int2(range.xy);
  if(any(local_page<0) || any(local_page>=int2(range.zw)))return -1e6;
- int layer=local_page.y*int(range.z)+local_page.x;
+ int logical=local_page.y*int(range.z)+local_page.x;
+ int layer=int(pickup_pages[3+logical].x);
  int2 local=cell-page*1024;
  return field.Load(int4(local,layer,0)).r;
 }
@@ -479,8 +481,8 @@ struct SandboxSceneShadow {
 
     };
     using Submission=c3x_renderer::render_core::SharedInstanceSubmission;
-    Submission::Lease shared_front;
-    Submission::CpuLease shared_metadata;
+    Submission::Lease shared_front,shadow_front;
+    Submission::CpuLease shared_metadata,shadow_metadata,page_metadata;
     std::uint64_t submission_generation=0;
     std::vector<InstanceGroup> instance_groups;
     std::vector<Shadow::Caster> casters;
@@ -489,15 +491,33 @@ struct SandboxSceneShadow {
     Membership::Lease caster_lease;
     using AtlasInputs=c3x_renderer::render_core::RasterContributors<CachedGeometryProof,20>;
     AtlasInputs atlas_inputs;
+    using Pages=c3x_renderer::render_core::ShadowPageContents<AtlasInputs::Key>;
+    Pages page_contents;
+    std::vector<Submission::Key> prepared_instances;
+    std::uint64_t caster_collections=0,caster_reuses=0,group_builds=0,group_reuses=0,body_placement_builds=0,body_placement_reuses=0;
     std::uint64_t prepared_signature=~std::uint64_t(0);
     std::array<float,4> prepared_box{};
     std::array<float,12> prepared_light{};
-    std::vector<ID3D11Buffer*> patch_buffers;
+    struct TerrainBatch {
+        std::vector<AtlasInputs::Key> keys;
+        std::vector<Shadow::Caster> draws;
+        std::array<std::uint64_t,3> context{};
+        ID3D11Buffer *vertices=nullptr,*indices=nullptr;
+        std::size_t gpu_bytes=0;
+        Submission::CpuLease gpu_charge;
+        ~TerrainBatch(){if(vertices)vertices->Release();if(indices)indices->Release();}
+    };
+    std::map<std::tuple<int,int,unsigned>,std::unique_ptr<TerrainBatch>> terrain_batches;
+    Submission::CpuLease terrain_metadata;
+    std::uint64_t terrain_batch_builds=0,terrain_batch_reuses=0;
+    bool atlas_complete=false;
     unsigned resolution=Grid::page_texels;
     bool ready=false;
     std::size_t production_field_bytes=0;
-    std::size_t bytes()const{return (texture?Grid::texture_bytes:0)+(constants?80u:0)+production_field_bytes;}
-    std::size_t metadata_bytes()const{return sizeof(sampling_grid)+sizeof(targets);}
+    std::size_t bytes()const{std::size_t result=(texture?Grid::texture_bytes:0)+(constants?80u:0)+production_field_bytes;
+        for(auto const& batch:terrain_batches)result+=batch.second->gpu_bytes;return result;}
+    std::size_t metadata_bytes()const{std::size_t result=sizeof(sampling_grid)+sizeof(targets)+page_contents.bytes();
+        for(auto const& batch:terrain_batches)result+=sizeof(TerrainBatch)+96u+batch.second->keys.capacity()*sizeof(AtlasInputs::Key)+batch.second->draws.capacity()*sizeof(Shadow::Caster);return result;}
     ID3D11ShaderResourceView* production_view = nullptr;
     float box[4] = {};
     std::array<float,4> wrap_basis{};
@@ -516,8 +536,8 @@ struct SandboxSceneShadow {
         if(renderer.source_shadow.borrowed_view==view)renderer.source_shadow.borrowed_view=nullptr;
         renderer.fresh_shadow_working_bytes=0;
         drop(production_view);production_field_bytes=0;
-        shared_front.reset();
-        for(auto* buffer:patch_buffers)drop(buffer);
+        shared_front.reset();shadow_front.reset();
+        terrain_batches.clear();
         drop(texture); for(auto*& target:targets)drop(target); drop(view); drop(vertex); drop(instance_vertex); drop(rigid_vertex);
         drop(opaque); drop(cutout); drop(layout); drop(feature_layout); drop(natural_layout);
         drop(city_layout); drop(instance_layout); drop(constants); drop(maximum); drop(raster);
@@ -643,17 +663,17 @@ struct SandboxSceneShadow {
         UINT strides[]={0,0},offsets[]={0,0};
         renderer.context->IASetVertexBuffers(0,2,empty,strides,offsets);
         renderer.context->IASetIndexBuffer(nullptr,DXGI_FORMAT_UNKNOWN,0);
-        casters.clear();instance_groups.clear();
-        for(auto*& buffer:patch_buffers)drop(buffer);
-        patch_buffers.clear();
-        renderer.collect_shadow_casters(renderer.geometry_vertex_buffers,casters);
+        std::vector<Shadow::Caster> next;
+        renderer.collect_shadow_casters(renderer.geometry_vertex_buffers,next);++caster_collections;
         // collect_shadow_casters already includes cliffs. Their old extra
         // submission duplicated identical maximum-height samples.
         std::unordered_set<AtlasInputs::Key,AtlasInputs::Hash> unique;
-        casters.erase(std::remove_if(casters.begin(),casters.end(),[&](auto const& caster){
+        next.erase(std::remove_if(next.begin(),next.end(),[&](auto const& caster){
             return !unique.insert(caster_key(caster)).second;
-        }),casters.end());
-        caster_inputs=casters;
+        }),next.end());
+        bool same=next.size()==caster_inputs.size();
+        for(std::size_t i=0;same&&i<next.size();++i)same=caster_key(next[i])==caster_key(caster_inputs[i]);
+        if(same)++caster_reuses;else caster_inputs=std::move(next);
         caster_lease=renderer.geometry_vertex_buffers.publish();
         caster_signature=scene;
         return true;
@@ -687,38 +707,43 @@ struct SandboxSceneShadow {
         });return complete;
     }
     template<class BodyInputs,class RetireCompletedPlans> bool prepare_instances(BodyInputs const& inputs,RetireCompletedPlans const& retire_completed_plans,
-            Submission::Generation const* checked=nullptr,bool covered=false) {
-        // Close one body/reflection/shadow placement union before any pass.
+            Submission::Generation const* checked=nullptr,bool covered=false,bool shadow_only=false) {
+        // Body/reflection and shadow keep independent active leases under
+        // the same joint allowance; a page change cannot repack body values.
         // A serial identifies a new exact prepared caster selection; its input
         // equality is already checked by membership/box/light preparation.
+        auto& front=shadow_only?shadow_front:shared_front;
+        auto& front_metadata=shadow_only?shadow_metadata:shared_metadata;
         Submission::Key identity={caster_signature,renderer.device_generation,renderer.content_revision,
-            renderer.geometry_vertex_buffers.revision(),++submission_generation,0,0,1};
-        auto reused=renderer.shared_instances.find_covering([&](Submission::Generation const& candidate){
-            if(candidate.identity[1]!=renderer.device_generation || candidate.identity[2]!=renderer.content_revision)return false;
-            if(!(checked==&candidate?covered:body_placements_covered(candidate,inputs)))return false;
-            for(auto const& caster:casters)if(caster.instances && !caster.instances->empty()){
+            renderer.geometry_vertex_buffers.revision(),++submission_generation,0,0,unsigned(shadow_only)};
+        auto matches=[&](Submission::Generation const& candidate){
+            if(candidate.identity[1]!=renderer.device_generation || candidate.identity[2]!=renderer.content_revision || candidate.identity[7]!=unsigned(shadow_only))return false;
+            if(!shadow_only&&!(checked==&candidate?covered:body_placements_covered(candidate,inputs)))return false;
+            if(shadow_only)for(auto const& caster:casters)if(caster.instances && !caster.instances->empty()){
                 auto range=candidate.find(shared_caster_placement_key(caster));if(range.count!=caster.instances->size())return false;
             }return true;
-        });
+        };
+        auto reused=renderer.shared_instances.valid(front)&&matches(*front)?front:renderer.shared_instances.find_covering(matches);
+        if(reused&&!shadow_only){shared_front=std::move(reused);++body_placement_reuses;return true;}
         // Completed pass selections pin the old placement generation.
         // Retire them before charging a replacement, while preserving
         // the active union and any independently held consumer leases.
-        if(!reused)retire_completed_plans();
+        if(!reused&&!shadow_only)retire_completed_plans();
         if(!renderer.shared_instances.reserve_index_scratch())return false;
-        shared_metadata.reset();std::size_t parts=0;
-        for(auto const& caster:casters)if(caster.instances && !caster.instances->empty())++parts;
+        front_metadata.reset();std::size_t parts=0;
+        if(shadow_only)for(auto const& caster:casters)if(caster.instances && !caster.instances->empty())++parts;
         auto metadata=renderer.shared_instances.retain_metadata(parts*(sizeof(InstanceGroup)*2+sizeof(InstanceGroup::Part)*2+sizeof(std::array<std::uintptr_t,9>)+96u));
         if(!metadata)return false;
         // Packed placements own no draw sources. The current resident/caster
         // publications below each pass already own the actually bound meshes.
-        auto builder=reused?Submission::Builder{}:renderer.shared_instances.begin_retained(identity,{},true);
+        auto builder=reused?Submission::Builder{}:renderer.shared_instances.begin_retained(identity,{},true,renderer.shared_instances.valid(front)?front:Submission::Lease{});
         if(!reused && !builder)return false;
-        if(!reused && !append_body_placements(builder,inputs))return false;
+        if(!reused && !shadow_only && !append_body_placements(builder,inputs))return false;
         // Only the required current membership owns source meshes. Reusable
         // placement ranges retain weak, epoch-protected identities instead.
         std::map<std::uint64_t,c3x_renderer::render_core::ContentHandle> source_handles;
         Submission::CpuLease source_handle_metadata;
-        if(!reused){
+        if(!reused&&shadow_only){
             using SourceHandle=decltype(source_handles)::value_type;
             source_handle_metadata=renderer.shared_instances.retain_metadata(sizeof(source_handles)+
                 caster_lease->content.size()*(sizeof(SourceHandle)+64u));
@@ -738,7 +763,7 @@ struct SandboxSceneShadow {
             proof.canonical=canonical!=builder->sources.end() && canonical->second.first==range.first;
             return renderer.shared_instances.retain_source(builder,key,std::move(proof));
         };
-        if(!reused){bool retained=true;
+        if(!reused&&!shadow_only){bool retained=true;
             inputs.visit([&](unsigned,Submission::Key const& key,GeometryDrawRecord const& record,unsigned){
                 auto draw=GeometryDrawReference(record);auto const& mesh=draw.content();if(!retained || !draw.occurrence)return;
                 retained=retain_source(key,draw.occurrence->owner,
@@ -747,7 +772,7 @@ struct SandboxSceneShadow {
         }
         std::map<std::array<std::uintptr_t,9>,std::size_t> lookup;
         std::size_t total=0;
-        for(auto const& caster:casters){
+        if(shadow_only)for(auto const& caster:casters){
             if(!caster.instances || caster.instances->empty())continue;
             std::array<std::uintptr_t,9> key={reinterpret_cast<std::uintptr_t>(caster.vertices),
                 reinterpret_cast<std::uintptr_t>(caster.indices),caster.vertex_offset,caster.index_offset,caster.count,
@@ -792,9 +817,10 @@ struct SandboxSceneShadow {
                 renderer.raster_content_valid(*cached->mesh->proof);
         }))return false;
         auto uploads=renderer.shared_instances.uploads;auto bytes=renderer.shared_instances.uploaded_bytes;
-        shared_front=reused?reused:renderer.shared_instances.upload(builder,renderer.device,renderer.context);
-        if(!shared_front)return false;
-        shared_metadata=std::move(metadata);
+        front=reused?reused:renderer.shared_instances.upload(builder,renderer.device,renderer.context);
+        if(!front)return false;
+        front_metadata=std::move(metadata);
+        if(shadow_only)++group_builds;else ++body_placement_builds;
         renderer.frame_content_uploads+=renderer.shared_instances.uploads-uploads;
         renderer.frame_upload_bytes+=renderer.shared_instances.uploaded_bytes-bytes;
         work->upload(renderer.shared_instances.uploaded_bytes-bytes);
@@ -802,110 +828,128 @@ struct SandboxSceneShadow {
             casters.size(),instance_groups.size(),total,total*sizeof(unsigned));std::fflush(stdout);return true;
     }
     void batch_terrain_casters() {
+        auto terrain=[](unsigned layer){return layer==geometry_land || layer==geometry_natural_terrain || layer==geometry_natural_mountain;};
+        using RegionKey=std::tuple<int,int,unsigned>;
+        // Admit both the old active metadata and conservative new grouping
+        // scratch before constructing a map or growing a temporary vector.
+        std::size_t metadata=sizeof(terrain_batches)+casters.size()*sizeof(Shadow::Caster)*2;
+        for(auto const& batch:terrain_batches)metadata+=sizeof(TerrainBatch)+96u+
+            batch.second->keys.capacity()*sizeof(AtlasInputs::Key)+batch.second->draws.capacity()*sizeof(Shadow::Caster);
+        for(auto const& caster:casters)if(terrain(caster.layer))metadata+=sizeof(TerrainBatch)+96u+
+            (sizeof(AtlasInputs::Key)+sizeof(Shadow::Caster))*4+160u;
+        if(metadata>AtlasInputs::limit || (terrain_metadata?!renderer.shared_instances.resize_metadata(terrain_metadata,metadata):
+                !(terrain_metadata=renderer.shared_instances.retain_metadata(metadata)))){
+            terrain_batches.clear();terrain_metadata.reset();renderer.sandbox_shadow_meshes.clear();renderer.fresh_shadow_working_bytes=bytes();return;
+        }
+        std::map<RegionKey,std::vector<Shadow::Caster>> selected;
+        std::vector<Shadow::Caster> other;
+        for(auto const& caster:casters){
+            if(!terrain(caster.layer)){other.push_back(caster);continue;}
+            auto mesh=std::static_pointer_cast<CachedMeshGeneration>(caster_lease->content.get({0,caster.content_generation}));
+            auto tile=mesh&&mesh->proof?renderer.topology_cache.retained(mesh->proof->tile):nullptr;
+            if(!tile || !renderer.raster_content_valid(*mesh->proof)){other.push_back(caster);continue;}
+            selected[{tile->appearance.tile_x/8,tile->appearance.tile_y/8,caster.layer}].push_back(caster);
+        }
+        // No leaving camera generation remains strongly owned. Each active
+        // region is compared separately, including its exact wrapped ranges.
+        for(auto it=terrain_batches.begin();it!=terrain_batches.end();)
+            if(selected.find(it->first)==selected.end())it=terrain_batches.erase(it);else ++it;
+        std::array<std::uint64_t,3> context={renderer.topology_cache.scope_sequence(),renderer.content_revision,renderer.device_generation};
         auto& captured=renderer.sandbox_shadow_meshes;
-        if(captured.empty())return;
-        auto selected=[](unsigned layer){return layer==geometry_land ||
-            layer==geometry_natural_terrain || layer==geometry_natural_mountain;};
-        std::map<std::pair<unsigned,std::array<float,6>>,unsigned> prepared_bounds;
-        for(auto const& entry:captured){
-            auto const& mesh=entry.second;
-            prepared_bounds[{std::get<2>(entry.first),{mesh.world_low[0],mesh.world_low[1],mesh.world_low[2],
-                mesh.world_high[0],mesh.world_high[1],mesh.world_high[2]}}]++;
-        }
-        unsigned original=0;
-        bool matched=true;
-        for(auto const& caster:casters)if(selected(caster.layer) &&
-            caster.offset[0]==0 && caster.offset[1]==0){
-            ++original;
-            std::array<float,6> bounds={caster.bounds.low[0],caster.bounds.low[1],caster.bounds.low[2],
-                caster.bounds.high[0],caster.bounds.high[1],caster.bounds.high[2]};
-            auto found=prepared_bounds.find({caster.layer,bounds});
-            if(found==prepared_bounds.end() || !found->second)matched=false;
-            else --found->second;
-        }
-        for(auto const& entry:prepared_bounds)if(entry.second)matched=false;
-        if(original!=captured.size() || !matched){
-            std::printf("SANDBOX_TERRAIN_BATCH fallback captured=%zu resident=%u\n",captured.size(),original);
-            captured.clear();return;
-        }
-        struct Region {
-            std::vector<std::uint8_t> vertices;
-            std::vector<std::uint32_t> indices;
-            Shadow::Bounds bounds;
-            unsigned stride=0,layer=0;
-            bool filled=false;
+        // Optional CPU observations are not content proofs. Before first
+        // merging a region, prove its bytes against the actual resident ranges.
+        auto equal_buffer=[&](ID3D11Buffer* source,unsigned offset,std::vector<std::uint8_t> const& bytes){
+            if(!source)return false;D3D11_BUFFER_DESC desc{};source->GetDesc(&desc);
+            if(offset>desc.ByteWidth || bytes.size()>desc.ByteWidth-offset)return false;
+            desc.Usage=D3D11_USAGE_STAGING;desc.BindFlags=desc.MiscFlags=desc.StructureByteStride=0;desc.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
+            ID3D11Buffer* staging=nullptr;
+            if(FAILED(renderer.device->CreateBuffer(&desc,nullptr,&staging)))return false;
+            renderer.context->CopyResource(staging,source);++work->calls.copies;D3D11_MAPPED_SUBRESOURCE mapped{};
+            bool equal=false;if(SUCCEEDED(renderer.context->Map(staging,0,D3D11_MAP_READ,0,&mapped))){
+                equal=!std::memcmp(static_cast<std::uint8_t const*>(mapped.pData)+offset,bytes.data(),bytes.size());
+                renderer.context->Unmap(staging,0);
+            }staging->Release();return equal;
         };
-        std::map<std::tuple<int,int,unsigned>,Region> regions;
-        for(auto const& entry:captured){
-            auto const& mesh=entry.second;
-            if(!mesh.vertex_stride || (mesh.index_stride!=2 && mesh.index_stride!=4) ||
-                mesh.vertices.size()%mesh.vertex_stride ||
-                mesh.indices.size()!=std::size_t(mesh.index_count)*mesh.index_stride){
-                std::printf("SANDBOX_TERRAIN_BATCH fallback invalid mesh\n");captured.clear();return;
+        for(auto const& entry:selected){
+            std::vector<AtlasInputs::Key> keys;keys.reserve(entry.second.size());
+            for(auto const& caster:entry.second)keys.push_back(caster_key(caster));std::sort(keys.begin(),keys.end());
+            auto previous=terrain_batches.find(entry.first);
+            if(previous!=terrain_batches.end() && previous->second->context==context && previous->second->keys==keys){
+                other.insert(other.end(),previous->second->draws.begin(),previous->second->draws.end());++terrain_batch_reuses;continue;
             }
-            auto& region=regions[{std::get<0>(entry.first)/8,std::get<1>(entry.first)/8,
-                std::get<2>(entry.first)}];
-            if(region.stride && region.stride!=mesh.vertex_stride){
-                std::printf("SANDBOX_TERRAIN_BATCH fallback mixed vertex strides\n");captured.clear();return;
+            if(previous!=terrain_batches.end())terrain_batches.erase(previous);
+            auto batch=std::make_unique<TerrainBatch>();batch->keys=std::move(keys);batch->context=context;batch->draws=entry.second;
+            std::map<AtlasInputs::Key,Shadow::Caster> canonical;
+            std::set<std::array<float,3>> offsets;
+            for(auto caster:entry.second){offsets.insert({caster.offset[0],caster.offset[1],caster.offset[2]});
+                std::fill(std::begin(caster.offset),std::end(caster.offset),0.f);canonical.emplace(caster_key(caster),caster);}
+            std::vector<std::uint8_t> vertices;std::vector<std::uint32_t> indices;Shadow::Bounds bounds{};
+            unsigned stride=0;bool merge=!captured.empty(),filled=false;
+            std::size_t vertex_bytes=0,index_count=0,staging_bytes=0;
+            for(auto const& source:canonical){if(!merge)break;auto const& caster=source.second;
+                if(!caster.vertices || !caster.indices){merge=false;break;}
+                auto mesh=std::static_pointer_cast<CachedMeshGeneration>(caster_lease->content.get({0,caster.content_generation}));
+                auto tile=mesh&&mesh->proof?renderer.topology_cache.retained(mesh->proof->tile):nullptr;
+                auto cpu=tile?captured.find({tile->appearance.tile_x,tile->appearance.tile_y,caster.layer}):captured.end();
+                if(cpu==captured.end()){merge=false;break;}
+                if(cpu->second.vertices.size()>Submission::budget-vertex_bytes || cpu->second.index_count>Submission::budget/4-index_count){merge=false;break;}
+                vertex_bytes+=cpu->second.vertices.size();index_count+=cpu->second.index_count;
+                D3D11_BUFFER_DESC desc{};caster.vertices->GetDesc(&desc);staging_bytes=std::max(staging_bytes,std::size_t(desc.ByteWidth));
+                caster.indices->GetDesc(&desc);staging_bytes=std::max(staging_bytes,std::size_t(desc.ByteWidth));
             }
-            region.stride=mesh.vertex_stride;
-            region.layer=std::get<2>(entry.first);
-            auto base=region.vertices.size()/region.stride;
-            region.vertices.insert(region.vertices.end(),mesh.vertices.begin(),mesh.vertices.end());
-            for(unsigned i=0;i<mesh.index_count;++i){
-                std::uint32_t index=0;
-                std::memcpy(&index,mesh.indices.data()+std::size_t(i)*mesh.index_stride,mesh.index_stride);
-                region.indices.push_back(std::uint32_t(base+index));
+            auto merged_bytes=vertex_bytes+index_count*4u;
+            Submission::CpuLease scratch;
+            if(merge){
+                scratch=renderer.shared_instances.retain_metadata(merged_bytes,staging_bytes);
+                if(!scratch)merge=false;
+                else try{vertices.reserve(vertex_bytes);indices.reserve(index_count);}catch(...){merge=false;}
             }
-            for(int axis=0;axis<3;++axis){
-                if(!region.filled){region.bounds.low[axis]=mesh.world_low[axis];
-                    region.bounds.high[axis]=mesh.world_high[axis];}
-                else {region.bounds.low[axis]=std::min(region.bounds.low[axis],mesh.world_low[axis]);
-                    region.bounds.high[axis]=std::max(region.bounds.high[axis],mesh.world_high[axis]);}
-            }
-            region.filled=true;
-        }
-        auto dims=renderer.world_coast.world().dimensions();
-        std::vector<ID3D11Buffer*> created;
-        std::vector<Shadow::Caster> replacements;
-        bool okay=true;
-        for(auto const& entry:regions){
-            auto const& region=entry.second;
-            if(region.vertices.empty() || region.indices.empty() ||
-                region.vertices.size()>std::numeric_limits<UINT>::max() ||
-                region.indices.size()>std::numeric_limits<UINT>::max()/4u){okay=false;break;}
-            D3D11_BUFFER_DESC desc={};desc.Usage=D3D11_USAGE_IMMUTABLE;
-            desc.BindFlags=D3D11_BIND_VERTEX_BUFFER;desc.ByteWidth=UINT(region.vertices.size());
-            D3D11_SUBRESOURCE_DATA initial={region.vertices.data(),0,0};
-            ID3D11Buffer *vertices=nullptr,*indices=nullptr;
-            if(FAILED(renderer.device->CreateBuffer(&desc,&initial,&vertices))){okay=false;break;}
-            desc.BindFlags=D3D11_BIND_INDEX_BUFFER;desc.ByteWidth=UINT(region.indices.size()*4u);
-            initial.pSysMem=region.indices.data();
-            if(FAILED(renderer.device->CreateBuffer(&desc,&initial,&indices))){vertices->Release();okay=false;break;}
-            created.push_back(vertices);created.push_back(indices);
-            for(int wy=dims.wrap_y?-1:0;wy<=(dims.wrap_y?1:0);++wy)
-                for(int wx=dims.wrap_x?-1:0;wx<=(dims.wrap_x?1:0);++wx){
-                    Shadow::Caster caster;
-                    caster.vertices=vertices;caster.indices=indices;caster.count=UINT(region.indices.size());
-                    caster.stride=region.stride;caster.layer=region.layer;
-                    caster.index_format=DXGI_FORMAT_R32_UINT;caster.bounds=region.bounds;
-                    caster.offset[0]=float(wx*dims.width+wy*dims.height)*.5f;
-                    caster.offset[1]=float(wx*dims.width-wy*dims.height)*.5f;
-                    replacements.push_back(caster);
+            for(auto const& source:canonical){
+                if(!merge)break;auto const& caster=source.second;
+                auto mesh=std::static_pointer_cast<CachedMeshGeneration>(caster_lease->content.get({0,caster.content_generation}));
+                auto tile=mesh&&mesh->proof?renderer.topology_cache.retained(mesh->proof->tile):nullptr;
+                auto cpu=tile?captured.find({tile->appearance.tile_x,tile->appearance.tile_y,caster.layer}):captured.end();
+                if(cpu==captured.end()){merge=false;break;}auto const& content=cpu->second;
+                if(!content.vertex_stride || content.vertex_stride!=caster.stride || (stride&&stride!=caster.stride) ||
+                        (content.index_stride!=2 && content.index_stride!=4) || content.vertices.size()%content.vertex_stride ||
+                        content.index_count!=caster.count || content.indices.size()!=std::size_t(caster.count)*content.index_stride ||
+                        (caster.index_format==DXGI_FORMAT_R16_UINT?2u:caster.index_format==DXGI_FORMAT_R32_UINT?4u:0u)!=content.index_stride ||
+                        !equal_buffer(caster.vertices,caster.vertex_offset,content.vertices) || !equal_buffer(caster.indices,caster.index_offset,content.indices)){
+                    merge=false;break;
                 }
+                stride=caster.stride;auto base=vertices.size()/stride;
+                vertices.insert(vertices.end(),content.vertices.begin(),content.vertices.end());
+                for(unsigned i=0;i<content.index_count;++i){std::uint32_t index=0;
+                    std::memcpy(&index,content.indices.data()+std::size_t(i)*content.index_stride,content.index_stride);
+                    if(index>=content.vertices.size()/stride || base+index>std::numeric_limits<std::uint32_t>::max()){merge=false;break;}
+                    indices.push_back(std::uint32_t(base+index));
+                }
+                for(int axis=0;axis<3;++axis){bounds.low[axis]=filled?std::min(bounds.low[axis],caster.bounds.low[axis]):caster.bounds.low[axis];
+                    bounds.high[axis]=filled?std::max(bounds.high[axis],caster.bounds.high[axis]):caster.bounds.high[axis];}filled=true;
+            }
+            if(merge && !vertices.empty() && !indices.empty() && vertices.size()<=std::numeric_limits<UINT>::max() && indices.size()<=std::numeric_limits<UINT>::max()/4u){
+                batch->gpu_charge=renderer.shared_instances.retain_metadata(0,merged_bytes);
+                if(batch->gpu_charge){
+                D3D11_BUFFER_DESC desc{};desc.Usage=D3D11_USAGE_IMMUTABLE;desc.BindFlags=D3D11_BIND_VERTEX_BUFFER;desc.ByteWidth=UINT(vertices.size());
+                D3D11_SUBRESOURCE_DATA data{vertices.data(),0,0};
+                if(SUCCEEDED(renderer.device->CreateBuffer(&desc,&data,&batch->vertices))){
+                    ++renderer.frame_content_uploads;renderer.frame_upload_bytes+=vertices.size();work->upload(vertices.size(),std::get<2>(entry.first));
+                    desc.BindFlags=D3D11_BIND_INDEX_BUFFER;desc.ByteWidth=UINT(indices.size()*4u);data.pSysMem=indices.data();
+                    if(SUCCEEDED(renderer.device->CreateBuffer(&desc,&data,&batch->indices))){
+                        batch->draws.clear();batch->gpu_bytes=vertices.size()+indices.size()*4u;
+                        ++renderer.frame_content_uploads;renderer.frame_upload_bytes+=indices.size()*4u;work->upload(indices.size()*4u,std::get<2>(entry.first));
+                        for(auto const& offset:offsets){Shadow::Caster draw;draw.vertices=batch->vertices;draw.indices=batch->indices;
+                            draw.count=UINT(indices.size());draw.stride=stride;draw.layer=std::get<2>(entry.first);draw.index_format=DXGI_FORMAT_R32_UINT;
+                            draw.bounds=bounds;std::copy(offset.begin(),offset.end(),draw.offset);batch->draws.push_back(draw);}
+                    }else drop(batch->vertices);
+                }
+                }
+            }
+            if(!batch->gpu_bytes)batch->gpu_charge.reset();
+            other.insert(other.end(),batch->draws.begin(),batch->draws.end());terrain_batches.emplace(entry.first,std::move(batch));++terrain_batch_builds;
         }
-        captured.clear();
-        if(!okay){
-            for(auto* buffer:created)buffer->Release();
-            std::printf("SANDBOX_TERRAIN_BATCH fallback GPU allocation\n");return;
-        }
-        casters.erase(std::remove_if(casters.begin(),casters.end(),[&](Shadow::Caster const& caster){
-            return selected(caster.layer);
-        }),casters.end());
-        casters.insert(casters.end(),replacements.begin(),replacements.end());
-        patch_buffers=std::move(created);
-        std::printf("SANDBOX_TERRAIN_BATCH meshes=%u regions=%zu draws=%zu\n",
-            original,regions.size(),replacements.size());std::fflush(stdout);
+        captured.clear();casters=std::move(other);
+        renderer.fresh_shadow_working_bytes=bytes();
     }
     bool bind_cutout(unsigned layer) {
         auto* context=renderer.context;
@@ -1041,32 +1085,61 @@ struct SandboxSceneShadow {
         }
         receiver_revision=revision;
         bool body_covered=renderer.shared_instances.valid(shared_front) && inputs.covers(shared_front);
-        if (renderer.shared_instances.valid(shared_front) && prepared_signature==membership &&
+        if(body_covered)++body_placement_reuses;
+        if(!body_covered&&!prepare_instances(inputs,retire_completed_plans,shared_front.get(),false,false))return false;
+        if (atlas_complete && renderer.shared_instances.valid(shadow_front) && prepared_signature==membership &&
             signature==scene && wrap_basis==wrap_query &&
             light_basis==renderer.shadow_basis &&
-            sampling_grid.covers(query_grid) && atlas_dependencies(false) && body_covered){if(work->enabled)++work->row().reuses;return true;}
+            sampling_grid.covers(query_grid) && atlas_dependencies(false)){if(work->enabled)++work->row().reuses;return true;}
         if(work->enabled)++work->row().rebuilds;
-        sampling_grid=query_grid;
+        atlas_complete=false;
+        if(!sampling_grid.covers(query_grid))sampling_grid=query_grid;
         auto coverage=sampling_grid.coverage();
         std::copy(coverage.begin(),coverage.end(),box);
         atlas_inputs.clear();if(!atlas_dependencies(true))atlas_inputs.complete=false;
-        std::array<float,4> next_box={box[0],box[1],box[2],box[3]};
-        if(!renderer.shared_instances.valid(shared_front) || prepared_signature!=membership || prepared_box!=next_box || prepared_light!=renderer.shadow_basis ||
-                !body_covered){
-            instance_groups.clear();
-            ID3D11Buffer* empty[]={nullptr,nullptr};UINT cleared_strides[2]={};
-            renderer.context->IASetVertexBuffers(0,2,empty,cleared_strides,cleared_strides);
-            renderer.context->IASetIndexBuffer(nullptr,DXGI_FORMAT_UNKNOWN,0);
-            for(auto*& buffer:patch_buffers)drop(buffer);patch_buffers.clear();
-            casters.clear();
-            for(auto const& caster:caster_inputs){auto p=Shadow::project(caster.bounds,caster.offset,renderer.shadow_basis);
-                if(p[2]<box[0] || p[3]<box[1] || p[0]>box[0]+box[2] || p[1]>box[1]+box[3])continue;
-                casters.push_back(caster);
-            }
-            batch_terrain_casters();
-            if(!prepare_instances(inputs,retire_completed_plans,shared_front.get(),body_covered))return false;
-            prepared_signature=membership;prepared_box=next_box;prepared_light=renderer.shadow_basis;
+        bool proved=atlas_dependencies(false);
+        casters.clear();
+        for(auto const& caster:caster_inputs){auto p=Shadow::project(caster.bounds,caster.offset,renderer.shadow_basis);
+            if(p[2]<box[0] || p[3]<box[1] || p[0]>box[0]+box[2] || p[1]>box[1]+box[3])continue;
+            casters.push_back(caster);
         }
+        std::vector<Submission::Key> placement_keys;
+        for(auto const& caster:casters)if(caster.instances&&!caster.instances->empty())placement_keys.push_back(shared_caster_placement_key(caster));
+        std::sort(placement_keys.begin(),placement_keys.end());
+        if(!renderer.shared_instances.valid(shadow_front) || shadow_front->identity[1]!=renderer.device_generation ||
+                shadow_front->identity[2]!=renderer.content_revision || placement_keys!=prepared_instances){
+            std::vector<InstanceGroup>().swap(instance_groups);
+            if(!prepare_instances(inputs,retire_completed_plans,nullptr,false,true))return false;
+            prepared_instances=std::move(placement_keys);
+        }else ++group_reuses;
+        ID3D11Buffer* empty_streams[]={nullptr,nullptr};UINT empty_strides[2]={};
+        renderer.context->IASetVertexBuffers(0,2,empty_streams,empty_strides,empty_strides);
+        renderer.context->IASetIndexBuffer(nullptr,DXGI_FORMAT_UNKNOWN,0);
+        batch_terrain_casters();
+        Pages::Context page_context={renderer.topology_cache.scope_sequence(),renderer.content_revision,
+            renderer.device_generation,unsigned(renderer.geometry_canonical_world)};
+        auto bits=[](float value){std::uint32_t word=0;std::memcpy(&word,&value,4);return std::uint64_t(word);};
+        page_context[5]=bits(sampling_grid.quality_span[0]);page_context[6]=bits(sampling_grid.quality_span[1]);
+        for(unsigned i=0;i<renderer.shadow_basis.size();++i)page_context[7+i]=bits(renderer.shadow_basis[i]);
+        for(unsigned i=0;i<wrap_query.size();++i)page_context[19+i]=bits(wrap_query[i]);
+        Pages::Inputs page_inputs;
+        std::array<std::size_t,Grid::max_pages> page_counts{};std::size_t input_count=0;
+        auto intersects=[&](Shadow::Caster const& caster,unsigned slot){auto bounds=Shadow::project(caster.bounds,caster.offset,renderer.shadow_basis);
+            auto page=sampling_grid.page_box(slot);return !(bounds[2]<page[0]||bounds[0]>page[0]+page[2]||bounds[3]<page[1]||bounds[1]>page[1]+page[3]);};
+        if(proved){
+            for(auto const& caster:caster_inputs)for(unsigned slot=0;slot<sampling_grid.pages();++slot)if(intersects(caster,slot)){++page_counts[slot];++input_count;}
+            auto metadata=page_contents.bytes()+sizeof(page_inputs)+input_count*sizeof(AtlasInputs::Key)*2;
+            if(atlas_inputs.bytes()>AtlasInputs::limit || metadata>AtlasInputs::limit-atlas_inputs.bytes())proved=false;
+            else if(page_metadata){if(!renderer.shared_instances.resize_metadata(page_metadata,metadata))proved=false;}
+            else {page_metadata=renderer.shared_instances.retain_metadata(metadata);if(!page_metadata)proved=false;}
+            if(proved)try{
+                for(unsigned slot=0;slot<sampling_grid.pages();++slot)page_inputs[slot].reserve(page_counts[slot]);
+                for(auto const& caster:caster_inputs)for(unsigned slot=0;slot<sampling_grid.pages();++slot)if(intersects(caster,slot))page_inputs[slot].push_back(caster_key(caster));
+                for(unsigned slot=0;slot<sampling_grid.pages();++slot)std::sort(page_inputs[slot].begin(),page_inputs[slot].end());
+            }catch(...){proved=false;}
+        }
+        if(!proved){page_contents.clear();page_metadata.reset();++page_contents.refused;for(auto& input:page_inputs)std::vector<AtlasInputs::Key>().swap(input);}
+        page_contents.select(sampling_grid,page_context,page_inputs,proved);
         auto* context=renderer.context;
         std::array<ID3D11ShaderResourceView*,128> empty{};
         context->PSSetShaderResources(0,128,empty.data());
@@ -1079,7 +1152,8 @@ struct SandboxSceneShadow {
         float clear[4]={-1e6f,-1e6f,-1e6f,-1e6f};
         draws=0;
         for(unsigned page_slot=0;page_slot<sampling_grid.pages();++page_slot){
-        auto* target=targets[page_slot];
+        if(page_contents.reused[page_slot])continue;
+        auto* target=targets[page_contents.slots[page_slot]];
         context->ClearRenderTargetView(target,clear);work->clear(target);
         context->OMSetRenderTargets(1,&target,nullptr);
         auto page_box=sampling_grid.page_box(page_slot);
@@ -1134,11 +1208,11 @@ struct SandboxSceneShadow {
                 caster.layer:caster.binding)?cutout:opaque,nullptr,0);
             context->VSSetShader(caster.rigid?rigid_vertex:instance_vertex,nullptr,0);
             context->IASetInputLayout(instance_layout);
-            context->VSSetShaderResources(15,1,&shared_front->view);
+            context->VSSetShaderResources(15,1,&shadow_front->view);
             context->IASetIndexBuffer(caster.indices,caster.index_format,caster.index_offset);
             for(std::size_t begin=0;begin<selected.size();begin+=Submission::record_limit){
                 auto count=std::min(selected.size()-begin,std::size_t(Submission::record_limit));
-                if(!renderer.shared_instances.select_indices(renderer.device,context,shared_front,selected.data()+begin,unsigned(count)))return false;
+                if(!renderer.shared_instances.select_indices(renderer.device,context,shadow_front,selected.data()+begin,unsigned(count)))return false;
                 ID3D11Buffer* streams[]={caster.vertices,renderer.shared_instances.selection_buffer};
                 UINT strides[]={32,4},offsets[]={caster.vertex_offset,renderer.shared_instances.selection_offset};
                 context->IASetVertexBuffers(0,2,streams,strides,offsets);
@@ -1147,6 +1221,7 @@ struct SandboxSceneShadow {
                 ++draws;
             }
         }
+        if(!page_contents.complete(page_slot,sampling_grid,page_context,page_inputs[page_slot],proved))return false;
         }
         context->OMSetRenderTargets(0,nullptr,nullptr);
         std::array<std::array<float,4>,64> table{};
@@ -1155,10 +1230,13 @@ struct SandboxSceneShadow {
         table[2]={sampling_grid.inverse_pitch(0),sampling_grid.inverse_pitch(1),
             sampling_grid.page_span(0),sampling_grid.page_span(1)};
         table[1]=wrap_query;
+        for(unsigned slot=0;slot<sampling_grid.pages();++slot)table[3+slot][0]=float(page_contents.slots[slot]);
         wrap_basis=wrap_query;
         context->UpdateSubresource(renderer.source_shadow.table,0,nullptr,table.data(),0,0);work->upload_buffer(renderer.source_shadow.table);
         signature=scene;
         light_basis=renderer.shadow_basis;
+        prepared_signature=membership;prepared_box={box[0],box[1],box[2],box[3]};prepared_light=renderer.shadow_basis;
+        atlas_complete=true;
         ++builds;
         return true;
     }
@@ -1304,6 +1382,9 @@ struct SandboxFreshPipeline {
         RasterInputs::ValidationCounts raster;
         SandboxSceneShadow::AtlasInputs::ValidationCounts atlas;
         std::uint64_t receiver_visits=0,receiver_builds=0,receiver_reuses=0,placement_probes=0,placement_reuses=0;
+        std::uint64_t caster_collections=0,caster_reuses=0,shadow_group_builds=0,shadow_group_reuses=0;
+        std::uint64_t body_placement_builds=0,body_placement_reuses=0,terrain_batch_builds=0,terrain_batch_reuses=0;
+        std::uint64_t shadow_page_reuses=0,shadow_page_rebuilds=0,shadow_page_refused=0,shadow_draws=0;
     };
     StaticValidationCounts static_validation_counts()const{
         StaticValidationCounts result;
@@ -1316,6 +1397,12 @@ struct SandboxFreshPipeline {
         result.atlas=shadow.atlas_inputs.validation_counts;result.receiver_visits=shadow.receiver_visits;
         result.receiver_builds=shadow.receiver_builds;result.receiver_reuses=shadow.receiver_reuses;
         result.placement_probes=body_requirements.coverage_total_probes;result.placement_reuses=body_requirements.coverage_total_reuses;
+        result.caster_collections=shadow.caster_collections;result.caster_reuses=shadow.caster_reuses;
+        result.shadow_group_builds=shadow.group_builds;result.shadow_group_reuses=shadow.group_reuses;
+        result.body_placement_builds=shadow.body_placement_builds;result.body_placement_reuses=shadow.body_placement_reuses;
+        result.terrain_batch_builds=shadow.terrain_batch_builds;result.terrain_batch_reuses=shadow.terrain_batch_reuses;
+        result.shadow_page_reuses=shadow.page_contents.hits;result.shadow_page_rebuilds=shadow.page_contents.rebuilt;
+        result.shadow_page_refused=shadow.page_contents.refused;result.shadow_draws=shadow.draws;
         return result;
     }
     enum PrepareSpan {prepare_setup_resources,prepare_capture,prepare_raster_proof,

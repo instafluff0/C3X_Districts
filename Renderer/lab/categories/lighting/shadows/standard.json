@@ -16,7 +16,10 @@
     "Renderer/lab/shared/shaders/lighting/paged_shadow_v1.hlsl",
     "Renderer/lab/shared/shaders/lighting/shadow_policy.hlsl",
     "Renderer/native/render_core/skin_shadow_bounds.h",
-    "Renderer/sandbox/direct_units.h"
+    "Renderer/sandbox/direct_units.h",
+    "Renderer/sandbox/fresh_pipeline.h",
+    "Renderer/native/render_core/shared_instance_submission.h",
+    "Renderer/native/render_core/shadow_page_contents.h"
   ],
   "recipe": {
     "terrain": 2,
@@ -44,7 +47,10 @@
     "Renderer.native.test_unit_shadow",
     "Renderer.native.test_unit_animation_runtime",
     "Renderer.lab.test_shadow_fixture",
-    "Renderer.native.test_skin_shadow"
+    "Renderer.native.test_skin_shadow",
+    "Renderer.native.test_shadow_page_contents",
+    "Renderer.native.test_shadow_sampling_grid",
+    "Renderer.native.test_shared_instance_submission"
   ],
   "references": {
     "d3d11": [

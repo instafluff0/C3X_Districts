@@ -1030,6 +1030,10 @@ public:
     std::uint64_t resource_backdrop_epoch=0;
     std::size_t resource_backdrop_bytes=0;
     c3x_renderer_i64 resource_composite_ticks=0;
+    struct ResourcePreparation {
+        long long coverage=0,state=0,poses=0,setup=0;
+        unsigned facts=0,builds=0,map_records=0,neighbors=0,occurrences=0,occurrence_queries=0,occurrence_reuses=0,pose_samples=0,backdrop_blocks=0;
+    } resource_preparation;
     std::vector<std::uint32_t> resource_pixels;
     std::uint64_t resource_pixel_signature = 0;
     c3x_renderer_i64 resource_pixel_clock = -1;
@@ -1072,6 +1076,10 @@ public:
     std::shared_ptr<c3x_renderer::render_core::ResidentRetirement> retired_content=
         std::make_shared<c3x_renderer::render_core::ResidentRetirement>();
     c3x_renderer::render_core::SceneMembership<CachedVertexChunk,geometry_layer_count> geometry_vertex_buffers{retired_content};
+    // One current immutable membership proof, replaced before state updates.
+    decltype(geometry_vertex_buffers)::Lease resource_visibility_membership;
+    std::uint64_t resource_visibility_revision=0;
+    bool resource_visibility_enabled=false;
     struct SceneSubmission {
         struct Batch {
             GeometryDrawView::Records records;
@@ -1302,6 +1310,7 @@ public:
         return true;
     }
     void reset_resource_buffers() {
+        resource_visibility_membership.reset();visibility_coverage.invalidate();
         clear_resource_backdrops();
         for (auto & buffer : resource_buffers) {
             release(buffer.vertices);
@@ -4222,17 +4231,54 @@ public:
     bool compose_resource_animations(c3x_renderer_frame_v1 const & frame,
             bool pose_only=false) {
         resource_composite_ticks=0;
+        struct ResourceTiming {
+            RendererState& owner;LARGE_INTEGER last{};long long ticks[4]={};unsigned stage=3;
+            ResourceTiming(RendererState& s):owner(s){owner.resource_preparation={};QueryPerformanceCounter(&last);}
+            void phase(unsigned next){LARGE_INTEGER now{};QueryPerformanceCounter(&now);
+                ticks[stage]+=now.QuadPart-last.QuadPart;last=now;stage=next;}
+            ~ResourceTiming(){phase(3);auto& p=owner.resource_preparation;
+                p.coverage=ticks[0];p.state=ticks[1];p.poses=ticks[2];p.setup=ticks[3];
+                char detail[512];sprintf_s(detail,
+                    "coverage_ms=%.3f state_ms=%.3f poses_ms=%.3f setup_ms=%.3f facts=%u builds=%u map_records=%u neighbors=%u occurrences=%u occurrence_queries=%u occurrence_reuses=%u pose_samples=%u backdrop_blocks=%u",
+                    owner.trace.milliseconds(p.coverage),owner.trace.milliseconds(p.state),owner.trace.milliseconds(p.poses),owner.trace.milliseconds(p.setup),
+                    p.facts,p.builds,p.map_records,p.neighbors,p.occurrences,p.occurrence_queries,p.occurrence_reuses,p.pose_samples,p.backdrop_blocks);
+                owner.trace.write("resource-preparation",detail,true);
+            }
+        } timing(*this);
         // The fresh map needs current visibility even when it has no animated
         // resources. Its final GPU coverage and water state share this capture.
-        if(visibility_pass && !visibility_coverage.capture(frame))return false;
+        timing.phase(0);
+        if(visibility_pass){auto before=visibility_coverage.builds;
+            bool ok=false;
+            try{ok=visibility_coverage.capture(frame,topology_cache.scope_sequence(),topology_cache.visibility_sequence(),content_revision,device_generation);}
+            catch(...){resource_visibility_membership.reset();throw;}
+            resource_preparation.facts=visibility_coverage.fact_checks;
+            resource_preparation.builds=unsigned(visibility_coverage.builds-before);
+            resource_preparation.map_records=visibility_coverage.map_records;
+            resource_preparation.neighbors=visibility_coverage.neighbor_lookups;
+            if(!ok){resource_visibility_membership.reset();return false;}
+        }
+        timing.phase(1);
         // Visibility is deliberately absent from geometry identities. Refresh
         // occurrence samples without rebuilding/reuploading immutable meshes.
-        for(auto layer:{geometry_water,geometry_river}){
-            auto state=[&](auto const& item){return !visibility_pass || visibility_coverage.state(item.tile_x,item.tile_y)!=0;};
-            bool changed=false;
-            for(auto const& item:geometry_vertex_buffers[layer])changed=changed || item.water_visible!=state(item);
-            if(changed)for(auto& item:geometry_vertex_buffers.edit(layer))item.water_visible=state(item);
+        if(resource_visibility_membership && resource_visibility_membership->revision==geometry_vertex_buffers.revision() &&
+           resource_visibility_revision==visibility_coverage.revision && resource_visibility_enabled==visibility_pass){
+            resource_preparation.occurrence_reuses=1;
+        }else {
+            resource_visibility_membership.reset();
+            for(auto layer:{geometry_water,geometry_river}){
+                auto state=[&](auto const& item){++resource_preparation.occurrence_queries;
+                    return !visibility_pass || visibility_coverage.state(item.tile_x,item.tile_y)!=0;};
+                bool changed=false;
+                for(auto const& item:geometry_vertex_buffers[layer]){
+                    ++resource_preparation.occurrences;changed=changed || item.water_visible!=state(item);}
+                if(changed)for(auto& item:geometry_vertex_buffers.edit(layer)){
+                    ++resource_preparation.occurrences;item.water_visible=state(item);}
+            }
+            resource_visibility_membership=geometry_vertex_buffers.publish();
+            resource_visibility_revision=visibility_coverage.revision;resource_visibility_enabled=visibility_pass;
         }
+        timing.phase(3);
         if(pose_only && resource_anchors.empty()){
             sandbox_resource_poses={};sandbox_aquatic_resource_poses={};
             sandbox_pose_chunks={};return true;
@@ -4254,12 +4300,14 @@ public:
         std::vector<D3D11_RECT> rectangles;
         using c3x_renderer::render_core::RasterRegionAxis;
         using c3x_renderer::render_core::raster_anchor_phase;
-        bool anchored=world_backdrops && frame.tile_count!=0;
+        bool anchored=!pose_only && world_backdrops && frame.tile_count!=0;
         int anchor_x=anchored?frame.tiles[0].anchor_x:0,anchor_y=anchored?frame.tiles[0].anchor_y:0;
-        RasterRegionAxis backdrop_grid_x(width,anchored?raster_anchor_phase(anchor_x,frame.tiles[0].tile_x,frame.tile_width,128):0);
-        RasterRegionAxis backdrop_grid_y(height,anchored?raster_anchor_phase(anchor_y,frame.tiles[0].tile_y,frame.tile_height,128):0);
+        RasterRegionAxis backdrop_grid_x(pose_only?0:width,anchored?raster_anchor_phase(anchor_x,frame.tiles[0].tile_x,frame.tile_width,128):0);
+        RasterRegionAxis backdrop_grid_y(pose_only?0:height,anchored?raster_anchor_phase(anchor_y,frame.tiles[0].tile_y,frame.tile_height,128):0);
         std::vector<unsigned char> dirty_blocks(std::size_t(backdrop_grid_x.count)*backdrop_grid_y.count,0);
+        resource_preparation.backdrop_blocks=unsigned(dirty_blocks.size());
         auto dirty=[&](D3D11_RECT const& visible) {
+            if(pose_only)return;
             if(visible.left>=visible.right || visible.top>=visible.bottom)return;
             for(int y=backdrop_grid_y.at(visible.top);y<=backdrop_grid_y.at(visible.bottom-1);++y)
                 for(int x=backdrop_grid_x.at(visible.left);x<=backdrop_grid_x.at(visible.right-1);++x)
@@ -4280,6 +4328,7 @@ public:
         float projection=frame.tile_width/224.f,relief=projection*.82f;
         int dx=int(geometry_viewport_settings.translation[0]),dy=int(geometry_viewport_settings.translation[1]);
         auto ticks=clock*std::max<c3x_renderer_i64>(1,frame.presentation_frequency/(pose_only?60:15));
+        timing.phase(2);
         for (auto const & anchor:resource_anchors) {
             if (anchor.asset>=resource_animations.size()) return false;
             auto & animation=resource_animations[anchor.asset];
@@ -4293,6 +4342,7 @@ public:
             bool advances=visibility==2;
             double time=c3x_renderer::ambient_animation_time(advances?ticks:0,frame.presentation_frequency,
                 animation.mesh.duration,anchor.seed);
+            ++resource_preparation.pose_samples;
             if(city_profile) {
                 c3x_renderer::AnimationPose pose;
                 c3x_renderer::render_core::ResourceSourceBounds::Box posed_bounds;
@@ -4494,6 +4544,7 @@ public:
             aquatic_resource.push_back(animation.name=="fish" || animation.name=="whales");
             ++visible_resource_animations;if(advances)++moving_resources;
         }
+        timing.phase(3);
         if(pose_only){
             sandbox_resource_poses={};
             sandbox_aquatic_resource_poses={};
@@ -15405,7 +15456,11 @@ private:
                     state->sequence,state->configuration,scene_changes.applied,unsigned(changed),unsigned(scene_changes_ok),scene_changes.bytes(),scene_changes.peak,scene_changes.tiles_reused);
                 renderer_state.trace.write("scene-publication",detail,true);
             }
+            // A completed GPU camera owns the next publication boundary.
+            // Keep optional region compilation from rebuilding observations
+            // while that immutable ready front awaits its ordered adoption.
             if(!has_job && !stop_requested && !camera_pending && !camera_paused && scene_changes_ok &&
+               !(camera_gpu && camera_result==C3X_RENDERER_RESULT_OK && gpu_camera_front_ticket!=camera_ticket && camera_ready.resident.texture) &&
                renderer_state.world_preparation && renderer_state.cache_valid && (world_content_turn ||
                 (!ahead_pending() && !unit_preparation_pending() && !renderer_state.pixel_work_pending()))){
                 // Pressure reduces the geometry admission budget in render().

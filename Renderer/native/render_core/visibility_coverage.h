@@ -21,17 +21,43 @@ struct VisibilityCoverage {
     int width=0,height=0,tile_width=0,tile_height=0;
     std::map<std::pair<std::int64_t,std::int64_t>,unsigned> states;
     int world_width=0,world_height=0;bool wrap_x=false,wrap_y=false;
+    // One exact, bounded copy of coverage inputs. Cosmetic time and source
+    // pointers are absent; ordered native occurrences and classification stay.
+    struct InputTile {int x,y,anchor_x,anchor_y;unsigned flags;
+        bool matches(c3x_renderer_tile_v1 const& t)const{
+            return x==t.tile_x && y==t.tile_y && anchor_x==t.anchor_x && anchor_y==t.anchor_y && flags==t.tile_flags;
+        }};
+    std::vector<InputTile> input_tiles;
+    std::uint64_t input_scope=0,input_visibility=0,input_content=0,input_device=0;
+    c3x_renderer_i64 input_topology=0;
+    bool captured=false;
+    std::uint64_t captures=0,builds=0,reused=0,revision=0;
+    unsigned fact_checks=0,map_records=0,neighbor_lookups=0;
+    void invalidate(){captured=false;input_tiles.clear();}
     auto key(std::int64_t x,std::int64_t y)const {
         auto canonical=[](std::int64_t value,int extent,bool wraps){auto r=wraps&&extent>0?value%extent:value;return wraps&&r<0?r+extent:r;};
         return std::make_pair(canonical(x,world_width,wrap_x),canonical(y,world_height,wrap_y));
     }
     unsigned state(std::int64_t x,std::int64_t y)const{auto found=states.find(key(x,y));return found==states.end()?0:found->second;}
     static constexpr float feather=.18f,gray=.18f,fog_alpha=.5f;
-    bool capture(c3x_renderer_frame_v1 const& frame){
-        tiles.clear();states.clear();revealed.clear();
+    bool capture(c3x_renderer_frame_v1 const& frame,std::uint64_t scope=0,std::uint64_t visibility=0,
+                 std::uint64_t content=0,std::uint64_t device=0){
+        fact_checks=map_records=neighbor_lookups=0;
+        auto reject=[&]{invalidate();tiles.clear();states.clear();revealed.clear();return false;};
         if(frame.tile_count>8192 || (frame.tile_count&&!frame.tiles) ||
            frame.target_width<=0 || frame.target_height<=0 || frame.target_width>8192 || frame.target_height>8192 ||
-           frame.tile_width<=0 || frame.tile_height<=0 || frame.tile_width>4096 || frame.tile_height>4096)return false;
+           frame.tile_width<=0 || frame.tile_height<=0 || frame.tile_width>4096 || frame.tile_height>4096){
+            return reject();
+        }
+        bool same=captured && input_scope==scope && input_visibility==visibility &&
+            input_content==content && input_device==device && input_topology==frame.world_topology_revision &&
+            width==frame.target_width && height==frame.target_height && tile_width==frame.tile_width && tile_height==frame.tile_height &&
+            world_width==frame.world_width_tiles && world_height==frame.world_height_tiles &&
+            wrap_x==(frame.world_wrap_x!=0) && wrap_y==(frame.world_wrap_y!=0) && input_tiles.size()==frame.tile_count;
+        for(unsigned i=0;same && i<frame.tile_count;++i){++fact_checks;same=input_tiles[i].matches(frame.tiles[i]);}
+        if(same){++reused;return true;}
+        ++builds;invalidate();tiles.clear();states.clear();revealed.clear();
+        try {
         width=frame.target_width;height=frame.target_height;tile_width=frame.tile_width;tile_height=frame.tile_height;
         world_width=frame.world_width_tiles;world_height=frame.world_height_tiles;
         wrap_x=frame.world_wrap_x!=0;wrap_y=frame.world_wrap_y!=0;
@@ -40,13 +66,13 @@ struct VisibilityCoverage {
             auto flags=t.tile_flags;
             if(!(flags&(C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_TOPOLOGY_HALO)))continue;
             if(!(flags&C3X_RENDERER_TILE_VISIBILITY_KNOWN)){
-                if(flags&C3X_RENDERER_TILE_RENDER)return false;
+                if(flags&C3X_RENDERER_TILE_RENDER)return reject();
                 continue; // Unknown neighboring coverage stays black.
             }
-            if((flags&C3X_RENDERER_TILE_VISIBLE)&&!(flags&C3X_RENDERER_TILE_EXPLORED))return false;
+            if((flags&C3X_RENDERER_TILE_VISIBLE)&&!(flags&C3X_RENDERER_TILE_EXPLORED))return reject();
             unsigned state=(flags&C3X_RENDERER_TILE_VISIBLE)?2:(flags&C3X_RENDERER_TILE_EXPLORED)?1:0;
-            auto prior=states.emplace(key(t.tile_x,t.tile_y),state);
-            if(!prior.second&&prior.first->second!=state)return false;
+            ++map_records;auto prior=states.emplace(key(t.tile_x,t.tile_y),state);
+            if(!prior.second&&prior.first->second!=state)return reject();
         }
         for(unsigned i=0;i<frame.tile_count;++i){auto const& t=frame.tiles[i];
             if(!(t.tile_flags&C3X_RENDERER_TILE_RENDER))continue;
@@ -54,12 +80,13 @@ struct VisibilityCoverage {
                std::int64_t(t.anchor_y)+tile_height<=0 || t.anchor_y>=height)continue;
             unsigned cells=0;
             for(int v=-1;v<=1;++v)for(int u=-1;u<=1;++u){
+                ++neighbor_lookups;
                 auto found=states.find(key(std::int64_t(t.tile_x)+u-v,std::int64_t(t.tile_y)+u+v));
                 unsigned state=found==states.end()?0:found->second;
                 cells|=state<<(2*((v+1)*3+u+1));
             }
             auto prior=anchors.emplace(std::make_pair(t.anchor_x,t.anchor_y),cells);
-            if(!prior.second){if(prior.first->second!=cells)return false;continue;}
+            if(!prior.second){if(prior.first->second!=cells)return reject();continue;}
             // Include explored fog and neighbor feather support, including
             // fully visible tiles omitted from the fog draw list.
             if(cells)revealed.push_back({t.anchor_x,t.anchor_y,t.anchor_x+tile_width,t.anchor_y+tile_height});
@@ -67,7 +94,13 @@ struct VisibilityCoverage {
             if(cells==0x2aaaau)continue;
             tiles.push_back({float(t.anchor_x),float(t.anchor_y),cells,0});
         }
+        input_tiles.reserve(frame.tile_count);
+        for(unsigned i=0;i<frame.tile_count;++i){auto const& t=frame.tiles[i];
+            input_tiles.push_back({t.tile_x,t.tile_y,t.anchor_x,t.anchor_y,t.tile_flags});}
+        input_scope=scope;input_visibility=visibility;input_content=content;input_device=device;
+        input_topology=frame.world_topology_revision;captured=true;++captures;++revision;
         return true;
+        }catch(...){reject();throw;}
     }
     static float edge(float coordinate){
         float d=std::min(coordinate,1-coordinate),t=std::clamp(d/feather,0.f,1.f);

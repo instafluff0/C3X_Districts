@@ -1,14 +1,22 @@
 # Prepared resident submission
 
-The renderer retains generic source meshes and one immutable union of 64-byte
-placement records. Main, reflection and shadow passes borrow that union through
-four-byte selected indices; viewport, light/page and wrapped shadow offsets stay
+The renderer retains generic source meshes and immutable 64-byte placement
+records. Main and reflection share their active union; shadows retain a separate
+active placement lease within the same 32 MiB joint allowance. Passes borrow
+records through four-byte selected indices; viewport, light/page and wrapped shadow offsets stay
 in small pass constants. Exact source generation, version, material, projection
 and anchor facts authorize reuse. Traversal order remains separate from placement
 identity, so repeated occurrences still draw in their original order. Opaque
 grouping requires compatible bindings and independent coverage in both main and
 reflection passes; overlap, depth ties, alpha, decals and native ordering remain
 barriers.
+
+Owned visibility facts retain their exact ordered tile anchors, target, wrapping,
+map/viewer scope and visibility/content/device generations. Clock-only updates
+check those facts without rebuilding coverage maps or neighbor lookups. A protected
+membership observation retains water/river occurrence visibility until those
+inputs change. Animated poses keep advancing; explored fog freezes their time.
+The pose-only path skips unused legacy backdrop allocation and dirty tracking.
 
 Static raster translation must preserve both whole-pixel sampling and the
 two-by-two pixel groups used by terrain height derivatives. An odd projected
@@ -55,10 +63,10 @@ raw payloads are released after decoding, and GPU/payload eviction preserves bou
 Native visibility, wrapped anchors and authored/interrupted pose bounds remain part
 of selection.
 
-Only the current placement union is retained for reuse. Camera reassembly or
-lighting changes can borrow it when all required ranges already exist. A genuinely
-new range requires a replacement immutable union, including a copy of unchanged
-records. Required ranges have first claim; a replacement can then carry valid
+Only the active body/reflection and shadow placement leases are retained for
+reuse. Camera reassembly or lighting changes can borrow existing required ranges.
+A genuinely new range replaces its affected immutable union, including a copy
+of unchanged records. Required ranges have first claim; a replacement can then carry valid
 resident world ranges within an 8 MiB limit for the complete optional union.
 Packed CPU values, weak source identities and temporary source-handle metadata
 share the 32 MiB joint allowance. The existing resident slot, immutable generation
@@ -88,9 +96,14 @@ Shadow sampling derives from the current receiver extent and exact light/wrap
 facts before reuse. Global light-plane cells drive derivatives and all nine PCF
 taps; canonical page projection stays identical across physical slice changes.
 The current cold float span caps density, including its boundary rounding case.
-The fixed field reuses its physical allocation across camera rebases and quality
-changes. The host oracle verifies indexing and coverage; native pixel parity is
-qualified separately.
+The fixed field retains physical slices through a logical-to-physical page table.
+Exact ordered contributor proofs include current off-screen casters, additions and
+removals; light, wrapping, quality, asset configuration, scope and device changes
+invalidate affected contents. Canonical caster batches and shadow placement groups
+reuse unchanged sources independently of body/reflection placement. Optional merged
+buffers, metadata and staging share the existing charged allowance. Failed page
+updates cannot authorize a complete atlas. The native oracle compares retained
+and forced rebuild depth and receiver PCF bits.
 
 These are owner limits, not a total renderer memory budget. Prepared terrain,
 textures, scene targets, units and shadow fields have separate accounting. The
@@ -166,113 +179,63 @@ does not accept visual changes or replace reference images. This document record
 the implementation contract; measured results and native qualification belong to
 the delivery evidence.
 
-### Qualification and measurements
+### Current qualification — October 3
 
-The final oracle build and production build use the same 929 input hashes.
-Both native capacity cases execute at the full 2240 by 1260 guest desktop and
-pass their original guards. In the asynchronous case, all 32 camera steps build
-zero geometry; 24 upload zero geometry and eight upload a total 18,769,920 bytes.
-Ready adoption has median 312 ms, nearest-rank p95 516 ms and maximum 531 ms;
-maximum client poll is 3.057 ms. These are CPU/API adoption measurements. The
-shared submission's charged peak is 30,064,832 bytes against its 33,554,432-byte
-joint cap. They do not measure total process memory, physical VRAM or scanout.
+The final candidate and R8 control use the same copied saves, route plans,
+normal effects, shader pack and instrumented injected executable. Busy commands
+complete 30/30 in each arm; exact required destination presentations are 28/29
+for control and 29/29 for candidate within the original windows. Control step 26
+remains late and unavailable. Only 17 destinations have identical copied workloads;
+busy idle also differs in reflected-unit workload, so its 15.1 → 16.8 successful
+Present returns/s is descriptive and does not qualify an idle gain.
 
-The prepared-world fixture completes first visits, forced eviction/recovery,
-reversals and repeats. Cumulative compiler checkpoints remain unchanged across
-all 16 timed views; 3,267 contributor restore calls recover from prepared backing; this is not a
-count of unique contributors. Repeated
-views build and upload zero geometry. Request median/p95 are 72.368/93.560 ms for
-seven repeated views; outer desktop-completion median/p95 are 111.524/245.435 ms.
-First-view request median/p95 are 147.658/326.889 ms; prepared recovery request
-median/p95 are 505.349/732.505 ms. Zero compiler work does not eliminate those
-measured adoption stalls.
-The first repeat sweep grows resident geometry by zero bytes; reported virtual-address
-consumption growth is 4 KiB and then zero on the next sweep. This is a bounded
-memory plateau, not proof of physical driver allocation reclamation.
+| Strict matched population | Control → candidate Present returns/s | Mean correct-view latency (ms) |
+| --- | ---: | ---: |
+| Busy scroll, 6 destinations | 4.52 → 4.80 | 1731.24 → 1840.70 |
+| Busy zoom, 2 destinations | 5.03 → 4.44 | 894.92 → 1013.75 |
+| Light scroll, 4 destinations | 16.60 → 17.65 | 346.37 → 297.47 |
+| Light zoom, 3 destinations | 43.27 → 52.16 | 439.09 → 428.13 |
 
-The derivative-phase guard resolves the material dense shift-return mismatch:
-74,060 changed pixels previously become zero in all 11 collected dense color
-checks. A separate unchanged strict dense fixture still stops on one green
-channel difference of one value. Plain comparisons retain nine strict failures
-(maximum RGB difference seven); rebase and unseen cases are exact. Six world
-cold comparisons retain strict color failures; the largest changes 0.5698% of
-pixels. Root visual review of actual-size samples judged the remaining foliage and
-terrain shading differences immaterial under the user's allowance. This is a
-bounded visual judgment; the worst world comparison still has 16,083 changed
-pixels and maximum RGB difference 94.
-All original failures remain recorded. Pixel-perfect, semantic-alpha and direct
-depth-buffer parity remain unqualified; no reference or tolerance was changed.
+Active cadence counts all successful source presentations between acceptance and
+first correct destination Present, including prior sources. It is separate from
+correct-view latency. Busy first-unshown jump worsens 4145.81 → 7681.54 ms; warm
+return improves 2132.32 → 1379.42 ms. The light guard joins all 12 required
+destinations and has identical idle workload: 51.8 → 54.0 Present returns/s.
+These single pairs show mixed navigation results; the performance target remains
+unmet. GPU timestamp samples are invalid, and physical scanout is unmeasured.
+Overlapping production, preparation and composition wall spans must not be summed.
 
-Validated unchanged work now reuses canonical compiler output, source buffers,
-material/rig/self-shadow preparation and the same shared allocation's imported
-resource/master handle. Indexed wave/hill storage removes expanded corner
-duplication, and conservative pass selection avoids preparing unselected units.
-A covered placement union reuses its immutable data; replacement unions still
-copy/upload unchanged records. The measured live scroll upload totals are higher,
-so this is not a claim that all repeated uploads were removed. Required
-transparent/decal/native ordering, changing poses/lighting, two texture copies,
-Flush and Present remain. Adapter consolidation is the following assignment.
+Busy launcher readiness increases 89.06 → 166.75 seconds. The fresh-program span
+increases 0.48 → 70.28 seconds while 27 newly keyed generated shaders compile;
+this strongly identifies first-use shader compilation as most of that increase.
+Per-entry compile durations are unavailable. World initialization completes all
+289 regions in both arms, and explicit foreground component compiler counters and
+generated-world file I/O remain zero.
 
+The sole neutral R8 attribution diagnostic measures coverage/state/poses/local
+resource setup at 1.556 ms idle, inside an 11.571 ms enclosing setup span; most of
+that enclosing work remains unattributed. Candidate idle coverage checks average
+0.081 ms, with zero coverage builds, neighbor lookups, occurrence queries and
+legacy backdrop blocks. This explains eliminated work without assigning the whole
+setup span to visibility. Busy water still issues 2640 idle draws. The ordered
+packet owner still saturates its 64 MiB allowance: control/candidate cumulative
+refused admissions are 249,102/240,617, using existing fallback. They are neither
+unique misses nor dropped objects. Candidate shared placement peak is 32,700,284
+bytes within 33,554,432; no sampled cap violation or shadow-page refusal occurs.
+Warm shadow camera spans worsen despite page reuse. Added contributor-proof work
+is visible, but its individual causal cost is not isolated by these timers.
 
-Four real-save captures use 2240 by 1260, normal water/waves/reflections, a
-certified ready map and the same five-second settle/input schedule. Values below
-are descriptive successful presentation-counter increments per second; the
-input column includes the fixed one-second recovery window.
+Native retained/forced shadow depth and receiver PCF match exactly across
+50,528,256 samples. Fog covers 8,787,552 pixels with maximum RGB difference one
+LSB and exact alpha. These synthetic production-shader fixtures preserve their
+original thresholds; whole-game pixel acceptance remains open. Focused ownership,
+visibility, animation, placement, page-failure and camera contracts pass. No
+reference image, injected source or patch entry changes. The accepted executable,
+matching trio, inputs, saves, directory link, cursor and environment are restored;
+owned game/helper/collector processes and tasks are closed.
 
-| Run | Launcher ready, baseline → candidate (s) | Input/recovery rate | Settled tail rate |
-| --- | ---: | ---: | ---: |
-| Scroll 1 | 46.661 → 51.074 | 6.822 → 6.016 | 13.385 → 11.947 |
-| Scroll 2 | 50.732 → 50.002 | 7.462 → 6.040 | 14.220 → 11.024 |
-| Zoom 1 | 33.879 → 33.590 | 9.017 → 7.327 | 18.165 → 15.743 |
-| Zoom 2 | 31.496 → 32.510 | 8.652 → 7.575 | 18.954 → 15.895 |
-
-Ready render-span medians also increase: 22.128 → 34.155 ms and 22.501 →
-33.9575 ms for the scroll pairs; 52.4845 → 69.9005 ms and 21.858 → 62.1555 ms
-for the zoom pairs. These are CPU/API spans, not GPU duration.
-
-These captures show no presentation-rate gain. Posted inputs match, but actual
-native camera targets differ in both scroll pairs, and zoom 2 has seven baseline
-versus eight candidate width transitions. Only zoom 1 passes strict request
-metadata eligibility; even there the reported contributor workloads differ.
-All initial captures copy 77 records for 76 representatives. Ready main/pose/part
-counts remain 76/76/431, while reflections increase from 72 to 76; settled zoom
-main/reflection counts change from 76/48–49 to 74/73. These are literal prepared
-contributors, not a certified list of displayed unit IDs.
-
-Sparse input-phase frame events report 472 → 399 builds and 66,060,664 →
-90,495,312 upload bytes in scroll 1; scroll 2 reports 468 → 435 and
-66,003,160 → 94,158,576 bytes. They do not cover all background/init compiler
-work. Zoom has no such frame events. Exact correct-view latency, complete live
-compiler coverage, GPU timestamp duration and physical scanout remain unavailable.
-The preserved `0469689f`/`ea43e511` startup-overlapping measurements remain
-historical context, not a matched control for these ready-map windows. The
-end-to-end performance target remains unmet; 60 FPS is not demonstrated.
-
-Recorded host checks include the affected 130-test run (one skip), a later
-41-test ownership/submission run, and three final derivative/raster checks.
-These are separate recorded runs, not an aggregate unique-test count.
-The oracle and production builds share all 929 frozen inputs. A final test-only
-whitespace cleanup leaves compiled/runtime inputs unchanged. Runtime comparison
-finds 22,059 unchanged dependencies; thirteen intentional owned source/generated
-shader changes and two new owned shader files account for all differences.
-No other asset, configuration or save dependency changed.
-
-The required two completed interturns remain **failed and open**. The final
-bounded production run begins native turn 504 and completes none. At 58.420 s,
-a native text fallback requests CPU ownership of the full surface; the existing
-asynchronous image client rejects readback with `BAD_ARGUMENT` (action 5,
-result 2), and the session correctly stops publishing. This is an unsupported
-adapter ownership transition, not evidence of a device or keyed-mutex failure.
-The available trace does not identify which text-preparation refusal triggered
-the fallback, so a safe corrective change is not established. The readback
-prohibition and failure guards remain intact; adapter consolidation is deferred
-to the following assignment. Earlier guarded attempts and their failures remain
-recorded, including one missing-copy receipt whose zero launcher exit is invalid
-as a pass. The final original/disposable save hashes and exact INI restoration
-pass. Native capacity and navigation results do not qualify this interturn route.
-
-The evaluation is not installed as the accepted runtime. The prior accepted
-executable and matching Renderer64 trio are restored and hash-verified, the
-startup probe passes, and the owned game/helper/collector tasks are closed.
-Cursor, environment, configuration and save inputs are restored. No new Civ III
-patch symbol or user patch-table action is required.
+Exact source/trio/shader bindings, raw captures, missing-window records, timing
+populations and retained image selections are sealed under
+`Renderer/.cache/retained-view-step/final-pair-analysis.json`; diagnostic attribution
+is `neutral-r8-attribution.json` alongside it. Historical qualification belongs to
+Git and its existing delivery receipts.

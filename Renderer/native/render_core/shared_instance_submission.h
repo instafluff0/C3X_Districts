@@ -137,7 +137,7 @@ public:
         Charge charge;
         explicit CpuAllocation(std::shared_ptr<Ledger> ledger):charge(std::move(ledger)){}
     public:
-        std::size_t bytes()const{return charge.cpu;}
+        std::size_t bytes()const{return charge.cpu+charge.gpu;}
     };
     using CpuLease=std::shared_ptr<CpuAllocation const>;
 private:
@@ -176,9 +176,10 @@ public:
             return next;
         }catch(...){++rejected;return {};}
     }
-    Builder begin_retained(Key const& identity,std::shared_ptr<void const> content={},bool delta=false){
+    Builder begin_retained(Key const& identity,std::shared_ptr<void const> content={},bool delta=false,Lease base={}){
+        if(base && (!delta || !valid(base) || !base->retain_placements))return {};
         auto next=begin(identity,std::move(content));
-        if(next){next->retain_placements=true;next->delta=delta;}
+        if(next){next->retain_placements=true;next->delta=delta;next->copy_source=std::move(base);}
         return next;
     }
     bool append(Builder const& next,Key const& key,void const* source,
@@ -229,12 +230,13 @@ public:
     // The caller supplies its current resident/dependency proof. Equal source
     // pointers alone never authorize reuse after eviction or slot recycling.
     bool reuse_range(Builder const& next,Key const& key,unsigned count,RetainedSource const& proof,Range& range){
+        auto base=next&&next->copy_source?next->copy_source:current;
         if(!next || next->charge.ledger!=ledger || next->owner_epoch!=owner_epoch || next->complete || !next->delta ||
-                !valid(current) || !current->retain_placements || !count)return false;
+                !valid(base) || !base->retain_placements || !count)return false;
         auto source=proof.source.lock();if(!source || !proof.owner[1])return false;
-        auto old=current->find(key);if(old.count!=count || old.first>current->records || count>current->records-old.first)return false;
-        auto retained=current->retained_sources.find(old.first);
-        if(retained==current->retained_sources.end() || retained->second.owner!=proof.owner ||
+        auto old=base->find(key);if(old.count!=count || old.first>base->records || count>base->records-old.first)return false;
+        auto retained=base->retained_sources.find(old.first);
+        if(retained==base->retained_sources.end() || retained->second.owner!=proof.owner ||
                 retained->second.canonical_source!=proof.canonical_source || retained->second.source.lock()!=source)return false;
         if(auto present=next->find(key)){range=present;return present.count==count;}
         if(!copy_range(next,key,old,proof,false,range))return false;
@@ -242,7 +244,8 @@ public:
     }
 private:
     bool copy_range(Builder const& next,Key const& key,Range old,RetainedSource const& proof,bool optional,Range& range){
-        if(next->copy_source && next->copy_source!=current)return false;
+        auto base=next->copy_source?next->copy_source:current;
+        if(!valid(base))return false;
         if(next->ranges.size()==entry_limit || old.count>record_limit-next->records)return false;
         bool new_source=!next->sources.count(proof.canonical_source);
         auto copy_capacity=next->copies.capacity();
@@ -261,7 +264,7 @@ private:
             next->ranges.emplace(key,range);next->retained_sources.emplace(range.first,proof);
             if(new_source)next->sources.emplace(proof.canonical_source,range);
             if(merge_copy)next->copies.back().count+=old.count;
-            else next->copies.push_back({range.first,old.first,old.count});next->copy_source=current;
+            else next->copies.push_back({range.first,old.first,old.count});next->copy_source=base;
             next->records=records;return true;
         }catch(...){next->complete=true;++rejected;return false;}
     }
@@ -278,21 +281,23 @@ public:
     }
     // Required ranges must already be present. Useful resident world ranges
     // are optional and never displace the current request or defeat admission.
-    // There is one current immutable union, not a collection of camera views.
+    // Callers may retain separate active pass unions under this same ledger;
+    // the explicit base is released after upload and never forms a history.
     template<class Valid>bool carry_forward(Builder const& next,Valid valid_source){
         if(!next || next->charge.ledger!=ledger || next->owner_epoch!=owner_epoch || next->complete || !next->retain_placements)return false;
-        if(!valid(current) || !current->retain_placements || (!next->delta && current->placements.size()!=current->records))return true;
-        if(current->retained_sources.empty())return true;
+        auto base=next->copy_source?next->copy_source:current;
+        if(!valid(base) || !base->retain_placements || (!next->delta && base->placements.size()!=base->records))return true;
+        if(base->retained_sources.empty())return true;
         // Keep exact-key order: optional admission and canonical fallback must
         // select the same first eligible range as the previous representation.
-        for(auto const& entry:current->ranges){
+        for(auto const& entry:base->ranges){
             ++carry_visits;
-            auto retained=current->retained_sources.find(entry.second.first);
-            if(retained==current->retained_sources.end())continue;
+            auto retained=base->retained_sources.find(entry.second.first);
+            if(retained==base->retained_sources.end())continue;
             auto const& proof=retained->second;
             if(next->ranges.count(entry.first) || proof.source.expired() || !valid_source(proof))continue;
             auto range=entry.second;
-            if(!range || range.first>current->records || range.count>current->records-range.first)return false;
+            if(!range || range.first>base->records || range.count>base->records-range.first)return false;
             if(next->ranges.size()==entry_limit || range.count>record_limit-next->records)continue;
             if(next->delta){Range copied;
                 if(copy_range(next,entry.first,range,proof,true,copied))++carried_ranges;
@@ -316,8 +321,8 @@ public:
                 Range copied{next->records,range.count};
                 next->ranges.emplace(entry.first,copied);next->retained_sources.emplace(copied.first,proof);
                 if(new_source)next->sources.emplace(proof.canonical_source,copied);
-                next->staging.insert(next->staging.end(),current->placements.begin()+range.first,
-                    current->placements.begin()+range.first+range.count);
+                next->staging.insert(next->staging.end(),base->placements.begin()+range.first,
+                    base->placements.begin()+range.first+range.count);
                 next->records=records;++carried_ranges;packed_records+=range.count;
             }catch(...){next->complete=true;++rejected;return false;}
         }
@@ -402,16 +407,16 @@ public:
         return selection && selection->buffer && valid(selection->content);
     }
     bool reserve_index_scratch(){return reserve(selection_charge,record_limit*sizeof(unsigned)*2,selection_charge.gpu);}
-    CpuLease retain_metadata(std::size_t bytes){
-        if(bytes>budget-sizeof(CpuAllocation))return {};
+    CpuLease retain_metadata(std::size_t bytes,std::size_t gpu_bytes=0){
+        if(gpu_bytes>budget-sizeof(CpuAllocation) || bytes>budget-sizeof(CpuAllocation)-gpu_bytes)return {};
         try{std::shared_ptr<CpuAllocation> allocation(new CpuAllocation(ledger));
-            if(!reserve(allocation->charge,bytes+sizeof(CpuAllocation),0)){++rejected;return {};}
+            if(!reserve(allocation->charge,bytes+sizeof(CpuAllocation),gpu_bytes)){++rejected;return {};}
             return allocation;
         }catch(...){++rejected;return {};}
     }
-    bool resize_metadata(CpuLease const& allocation,std::size_t bytes){
-        if(!allocation || allocation->charge.ledger!=ledger || bytes>budget-sizeof(CpuAllocation))return false;
-        return const_cast<CpuAllocation*>(allocation.get())->charge.resize(bytes+sizeof(CpuAllocation),0);
+    bool resize_metadata(CpuLease const& allocation,std::size_t bytes,std::size_t gpu_bytes=0){
+        if(!allocation || allocation->charge.ledger!=ledger || gpu_bytes>budget-sizeof(CpuAllocation) || bytes>budget-sizeof(CpuAllocation)-gpu_bytes)return false;
+        return const_cast<CpuAllocation*>(allocation.get())->charge.resize(bytes+sizeof(CpuAllocation),gpu_bytes);
     }
     // Warm selection plans keep their four-byte indices. Their GPU storage,
     // caller cache-key metadata and temporary input scratch share the same

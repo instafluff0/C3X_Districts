@@ -139,12 +139,13 @@ int main(){
         validate="    std::array<unsigned,7> raster_proof_rejections{};\n"+source[start:end]
         run_cpp(r'''
 #include "Renderer/native/render_core/captured_scene.h"
+#include "Renderer/native/render_core/prepared_world_validity.h"
 #include <cassert>
 #include <array>
 #include <vector>
 using namespace c3x_renderer::render_core;
 struct CachedGeometryProof {
- std::uint64_t scope=1,assets=7;
+ std::uint64_t scope=1,assets=7;bool ground_semantics=false;
  std::vector<std::pair<std::uint64_t,std::uint64_t>> appearance_dependencies,dependencies,coast_dependencies,world_dependencies;
  std::vector<std::pair<std::uint64_t,std::array<int,2>>> anchor_dependencies;
  int river_dependencies=0;

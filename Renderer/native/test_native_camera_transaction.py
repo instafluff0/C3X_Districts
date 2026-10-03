@@ -5,6 +5,69 @@ from Renderer.native.native_cpp_test import run_cpp
 
 
 class NativeCameraTransactionTests(unittest.TestCase):
+    def test_exact_optional_guard_and_required_paths(self):
+        s=Path('Renderer/native/c3x_renderer.cpp').read_text()
+        begin=s.index('            if(!has_job && !stop_requested && !camera_pending && !camera_paused && scene_changes_ok &&\n               !(camera_gpu')
+        end=s.index('{',begin)
+        expression=s[begin:end].strip()[3:-1]
+        # Extract, rather than reproduce, the actual complete optional gate.
+        program='''#include <cassert>
+#include <cstring>
+#include <memory>
+struct Texture {};
+struct Topology {unsigned scope=7;unsigned scope_sequence()const{return scope;}};
+struct State {bool world_preparation=true,cache_valid=true;Topology topology_cache;bool pixel_work_pending()const{return false;}} renderer_state;
+bool has_job=false,stop_requested=false,camera_pending=false,camera_paused=false,scene_changes_ok=true;
+bool camera_gpu=false,world_content_turn=true,ready_ahead=false,ready_units=false;
+long long gpu_camera_front_ticket=1,camera_ticket=2;
+int camera_result=1;
+constexpr int C3X_RENDERER_RESULT_OK=1;
+struct {struct {std::shared_ptr<Texture> texture;}resident;}camera_ready;
+bool ahead_pending(){return ready_ahead;}bool unit_preparation_pending(){return ready_units;}
+bool optional(){return '''+expression+''';}
+'''
+        # Required initialization/authority routing cannot invoke the new predicate.
+        guard='!(camera_gpu && camera_result==C3X_RENDERER_RESULT_OK && gpu_camera_front_ticket!=camera_ticket && camera_ready.resident.texture)'
+        self.assertEqual(s.count(guard),1)
+        actual_required=s
+        loading=actual_required.index('prepare_required_world(state',actual_required.index('bool prepare_required_world(')+1)
+        self.assertNotIn(guard,actual_required[loading:loading+300])
+        begin=s.index('auto initial_world=world_input.passes')
+        initial=s[begin:s.index(';',begin)+1]
+        begin=s.index('                bool valid=scene_changes_ok',s.index('command==Command::prepare_world_loading'))
+        valid=s[begin:s.index(';',begin)+1].strip()
+        program+='''
+struct Identity {int value=7;}job_camera_identity,job_required_world_identity;
+struct Authority {bool topology=true;Identity identity;}authority;
+struct Scene {Authority* state(){return &authority;}}scene_changes;
+struct WorldInput {unsigned passes=1,cursor=0;}world_input;
+unsigned world_initialization_scope=7;bool authority_changed=false;
+bool required_world_changes_for(Identity const&){return authority_changed;}
+bool required_camera(){
+'''+initial+'''return initial_world!=nullptr;}
+bool required_loading(){auto state=scene_changes.state();
+'''+valid+'''return valid;}
+int main(){
+ assert(optional());camera_gpu=true;assert(optional()); // no ready owner
+ camera_ready.resident.texture=std::make_shared<Texture>();assert(!optional());
+ assert(required_loading());assert(!required_camera());
+ world_initialization_scope=0;assert(required_camera()); // first scope initialization
+ world_initialization_scope=7;authority_changed=true;assert(required_camera()); // changed copied authority
+ authority_changed=false;world_input.passes=0;assert(!required_loading()&&!required_camera());world_input.passes=1;
+ camera_result=0;assert(optional());camera_result=1;
+ gpu_camera_front_ticket=camera_ticket;assert(optional()); // adopted ready camera
+ gpu_camera_front_ticket=1;camera_gpu=false;assert(optional()); // CPU compatibility
+ camera_gpu=true;camera_ready.resident.texture.reset();assert(optional());
+ has_job=true;assert(!optional());has_job=false;camera_pending=true;assert(!optional());camera_pending=false;
+ camera_paused=true;assert(!optional());camera_paused=false;scene_changes_ok=false;assert(!optional());
+ scene_changes_ok=true;renderer_state.cache_valid=false;assert(!optional());
+ // Required paths remain directly eligible by their existing authority/loading
+ // checks, including while the optional ready-camera predicate is false.
+ renderer_state.cache_valid=true;camera_ready.resident.texture=std::make_shared<Texture>();assert(!optional());
+}
+'''
+        run_cpp(program)
+
     def test_pending_supersession_lifetime_and_explicit_commit(self):
         source=Path('Renderer/native/native_composition_owner.h').read_text()
         methods=source[source.index('    void clear_camera_capture()'):source.index('    void set_tactical(')]

@@ -415,6 +415,11 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
             validation.raster.proof_registrations,validation.raster.dependency_watch_calls,validation.raster.source_expansions,validation.raster.source_reuses,validation.raster.append_ms,
             validation.atlas.proof_registrations,validation.atlas.dependency_watch_calls,validation.atlas.source_expansions,validation.atlas.source_reuses,validation.atlas.append_ms);
         renderer.trace.write("static-validation-counts",validation_detail,true);
+        sprintf_s(validation_detail,"caster_collections=%llu caster_reuses=%llu group_builds=%llu group_reuses=%llu body_placement_builds=%llu body_placement_reuses=%llu terrain_batch_builds=%llu terrain_batch_reuses=%llu page_reuses=%llu page_rebuilds=%llu page_refused=%llu latest_rebuild_draws=%llu",
+            validation.caster_collections,validation.caster_reuses,validation.shadow_group_builds,validation.shadow_group_reuses,
+            validation.body_placement_builds,validation.body_placement_reuses,validation.terrain_batch_builds,validation.terrain_batch_reuses,
+            validation.shadow_page_reuses,validation.shadow_page_rebuilds,validation.shadow_page_refused,validation.shadow_draws);
+        renderer.trace.write("fresh-shadow-retention",validation_detail,true);
         auto const& requirements=sandbox_fresh.body_requirements;
         sprintf_s(detail,"setup_resources_ms=%.3f capture_ms=%.3f raster_proof_ms=%.3f body_requirements_ms=%.3f city_shadow_ms=%.3f unit_selection_ms=%.3f unit_pose_ms=%.3f body_builds=%u body_reuses=%u body_visits=%u body_unique=%zu body_duplicates=%u coverage_probes=%u requirement_bytes=%zu unit_plan_reused=%u unit_reselected=%u range_reuses=%llu carry_visits=%llu carried_ranges=%llu packed_records=%llu gpu_copies=%llu copied_bytes=%llu allocated_bytes=%llu host_uploaded_bytes=%llu",
             spans[0],spans[1],spans[2],spans[3],spans[4],spans[5],spans[6],

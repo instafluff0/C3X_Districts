@@ -2405,3 +2405,13 @@ executable object-only invalidation check. It reads CPU counters and synchronize
 queue statistics; production callers, presentation and native signatures remain
 unchanged. Current verification is recorded in
 [navigation preparation](navigation_preparation.md).
+
+## Retained visibility and shadow preparation
+
+Coverage reuse, independent shadow placement leases and retained light-space
+pages consume the existing captured scene, native anchors and map composition
+boundaries listed above. `Map_Renderer_m71_Draw_Tiles`,
+`Main_Screen_Form_move_camera` and the existing JGL image hooks remain the
+capture and insertion points. These changes stay inside `Renderer/`; no injected
+source, native signature, export or patch-table entry changes are required.
+`required_user_action: []`.
