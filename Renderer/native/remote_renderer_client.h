@@ -45,6 +45,18 @@ public:
     unsigned presented_zoom()const{return transport.presented_zoom();}
     void supersede_pending_camera(){transport.supersede_pending_camera();}
     void publication_pressure(std::size_t records){transport.publication_pressure(records);}
+    void prepare_camera_receipt(){transport.prepare_camera_receipt();}
+    bool camera_completion(c3x_renderer_i64 ticket,CameraOutput& result,int& code){
+        c3x_inputs::Bytes bytes;
+        if(!transport.camera_completion(ticket,bytes,code))return false;
+        if(code==C3X_RENDERER_RESULT_OK){
+            try{c3x_inputs::Reader reader{bytes};decode_camera(reader,result);
+                c3x_inputs::require(result.value.camera.ticket==ticket&&result.output.pixels.empty(),
+                    "remote GPU completion identity");}
+            catch(...){return false;} // Existing exact readiness RPC remains the fallback.
+        }
+        return true;
+    }
     c3x_helper_trial::SceneClient::Stats stats()const{return transport.stats();}
     static c3x_inputs::Bytes definition_input(char const* root,char const* fallback,char const* scenario,char const* custom){
         c3x_inputs::Writer input;

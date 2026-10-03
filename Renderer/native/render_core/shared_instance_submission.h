@@ -421,9 +421,15 @@ public:
     // Warm selection plans keep their four-byte indices. Their GPU storage,
     // caller cache-key metadata and temporary input scratch share the same
     // hard allowance with all pinned placement generations.
+    bool can_prepare_selection(unsigned count,std::size_t key_metadata_bytes=0)const{
+        if(!count || count>record_limit || key_metadata_bytes>budget-sizeof(IndexedSelection))return false;
+        auto needed=sizeof(IndexedSelection)+key_metadata_bytes+std::size_t(count)*sizeof(unsigned)*2;
+        return needed<=budget && ledger->bytes.load()<=budget-needed;
+    }
     SelectionLease prepare_selection(ID3D11Device* device,Lease const& content,
             unsigned const* values,unsigned count,std::size_t key_metadata_bytes=0){
         if(!device || !valid(content) || device!=content->device_cookie || !values || !count || count>record_limit)return {};
+        if(!can_prepare_selection(count,key_metadata_bytes)){++rejected;return {};}
         for(unsigned i=0;i<count;++i)if(values[i]>=content->records)return {};
         auto size=std::size_t(count)*sizeof(unsigned);
         if(key_metadata_bytes>budget-sizeof(IndexedSelection))return {};

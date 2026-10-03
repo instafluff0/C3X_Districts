@@ -1579,7 +1579,12 @@ struct SandboxFreshPipeline {
             for(std::size_t i=0;i<all_visible[layer].size();++i)
                 if(contributor_key(layer,prior_receivers[layer][i])!=contributor_key(layer,all_visible[layer][i])){same_receivers=false;break;}
         }
-        if(!same_receivers)++static_receiver_revision;
+        if(!same_receivers){
+#ifdef C3X_RENDERER64_FRESH
+            renderer.retire_ordered_rigid_packets(all_visible);
+#endif
+            ++static_receiver_revision;
+        }
         visibility_scene_key=scene_key;visibility_view_key=view_key;
         visibility_valid=true;++visibility_revision;
         return visible>0;
@@ -1941,7 +1946,7 @@ struct SandboxFreshPipeline {
             work.calls.copies+=renderer.ordered_rigid_packets.placement_copies-packet_copies;
             std::vector<unsigned> rigid;
             std::array<unsigned,c3x_renderer::render_core::DrawParameterStream::limit> rigid_offset{};
-            for(unsigned i=0;i<selected.size();++i){auto const& chunk=selected[i];if(!chunk.content().rigid_source)continue;
+            for(unsigned i=0;i<selected.size();++i){auto const& chunk=selected[i];if(!chunk.content().rigid_source || packets[i])continue;
                 auto range=shared_front->find(renderer.shared_instance_draw_key(unsigned(layer),chunk));
                 if(!range || range.count!=1)return renderer.reject_shared_instance_range(unsigned(layer),chunk,shared_front,range);
                 rigid_offset[i]=unsigned(rigid.size());rigid.push_back(range.first);}
@@ -1966,6 +1971,15 @@ struct SandboxFreshPipeline {
                     previous=settings;previous_valid=true;
                 }
                 if(packets[i]){
+                    // Generic fallback city pieces may follow a native city
+                    // material, which changes the pixel shader and samplers.
+                    if(layer==geometry_city){
+                        context->PSSetShader(mirrored?mirror.ps[1]:renderer.feature_pixel_shader,nullptr,0);
+                        context->PSSetShaderResources(116,4,renderer.city_emissive_views.data());
+                        context->PSSetShaderResources(124,4,renderer.city_base_views.data());
+                        ID3D11SamplerState* samplers[]={renderer.terrain_sampler,renderer.decal_sampler};
+                        context->PSSetSamplers(0,2,samplers);
+                    }
                     unsigned end=i+1;while(end<selected.size() && packets[end-1].contiguous(packets[end]))++end;
                     renderer.ordered_rigid_packets.issue(context,renderer.ordered_rigid_layout,
                         renderer.rigid_sources.resident_vertex[mirrored?1:0],packets.data()+i,end-i,
@@ -2011,14 +2025,29 @@ struct SandboxFreshPipeline {
                     context->VSSetShader(mirrored?mirror.vs[1]:renderer.feature_vertex_shader,nullptr,0);
                     i=end;continue;
                 }
+                // Native city emission interleaves a second pass after each
+                // body. Keep that boundary; all other compatible adjacent
+                // ranges can share one draw without changing primitive order.
+                bool city_emission=mesh.city_material!=0xffffffffu &&
+                    !renderer.cities.library.materials[mesh.city_material].ground &&
+                    (original_emission || renderer.cities.emits(mesh.city_material));
+                unsigned end=i+1,index_count=mesh.index_count;
+                auto index_stride=mesh.index_format==DXGI_FORMAT_R16_UINT?2u:4u;
+                if(!city_emission)for(;end<selected.size();++end){
+                    auto const& next=selected[end].content();
+                    if(packets[end] || next.index_count>UINT_MAX-index_count ||
+                            !c3x_renderer::render_core::compatible_ordered_index_range(
+                                selected[end-1],selected[end],values[end-1],values[end],index_stride))break;
+                    index_count+=next.index_count;
+                }
                 if(mesh.city_material!=0xffffffffu){
                     ID3D11SamplerState* samplers[]={renderer.natural_wrap,renderer.natural_clamp};
                     context->PSSetSamplers(0,2,samplers);
                     renderer.cities.bind(context,mesh.city_material,mesh.city_environment,
                         mesh.city_atlas,mirrored,false,stride==88);
-                    context->DrawIndexed(mesh.index_count,0,0);work.draw(mesh.index_count,1,unsigned(layer));++renderer.frame_draw_calls;
-                    if(!renderer.cities.library.materials[mesh.city_material].ground &&
-                       (original_emission || renderer.cities.emits(mesh.city_material))){
+                    context->DrawIndexed(index_count,0,0);work.draw(index_count,1,unsigned(layer));++renderer.frame_draw_calls;
+                    if(work.enabled)work.row(unsigned(layer)).submitted_instances+=end-i-1;
+                    if(city_emission){
                         if(original_emission)renderer.cities.bind(context,mesh.city_material,mesh.city_environment,
                             mesh.city_atlas,mirrored,true,stride==88);
                         else renderer.cities.bind_emission(context,mirrored);
@@ -2026,7 +2055,7 @@ struct SandboxFreshPipeline {
                     }
                     context->OMSetBlendState(renderer.blend_state,nullptr,0xffffffffu);
                     context->OMSetDepthStencilState(renderer.depth_state,0);
-                    ++i;continue;
+                    i=end;continue;
                 }
                 if(renderer.city_profile && layer==geometry_city){
                     context->IASetInputLayout(renderer.feature_input_layout);
@@ -2052,24 +2081,27 @@ struct SandboxFreshPipeline {
                     if(!renderer.water_scene_active || !chunk.water_visible() || mesh.visual_time>=0){
                         sample.time=0;sample.drift[0]=sample.drift[1]=sample.drift[2]=0;
                     }
-                    ++phase_constant_counts.water_records;
+                    phase_constant_counts.water_records+=end-i;
                     if(!last_water_valid || !same_water(sample,last_water)){
                         context->UpdateSubresource(renderer.water_frame,0,nullptr,&sample,0,0);work.upload_buffer(renderer.water_frame);
                         last_water=sample;last_water_valid=true;++phase_constant_counts.water_updates;
                     }else ++phase_constant_counts.water_hits;
+                    phase_constant_counts.water_hits+=end-i-1;
                     if(!water_bound){context->PSSetConstantBuffers(10,1,&renderer.water_frame);water_bound=true;}
                 }
                 if(layer==geometry_wave){
                     std::array<float,4> sample={mesh.visual_time<0?renderer.wave_time_seconds:mesh.visual_time,0,0,0};
                     bool same=last_wave_valid;
                     for(unsigned j=0;same && j<sample.size();++j)same=same_float(sample[j],last_wave[j]);
-                    ++phase_constant_counts.wave_records;
+                    phase_constant_counts.wave_records+=end-i;
                     if(!same){
                         context->UpdateSubresource(renderer.wave_frame,0,nullptr,sample.data(),0,0);work.upload_buffer(renderer.wave_frame);
                         last_wave=sample;last_wave_valid=true;++phase_constant_counts.wave_updates;
                     }else ++phase_constant_counts.wave_hits;
+                    phase_constant_counts.wave_hits+=end-i-1;
                 }
-                context->DrawIndexed(mesh.index_count,0,0);work.draw(mesh.index_count,1,unsigned(layer));++renderer.frame_draw_calls;
+                context->DrawIndexed(index_count,0,0);work.draw(index_count,1,unsigned(layer));++renderer.frame_draw_calls;
+                if(work.enabled)work.row(unsigned(layer)).submitted_instances+=end-i-1;
                 if(mesh.resource_instance){
                     context->IASetInputLayout(layer==geometry_shadow?
                         renderer.input_layout:renderer.feature_input_layout);
@@ -2078,7 +2110,7 @@ struct SandboxFreshPipeline {
                 }
                 if(mesh.animation_texture)context->PSSetShaderResources(116,1,
                     renderer.resource_texture_views.data());
-                ++i;
+                i=end;
             }
             selected.clear();return true;
         };
@@ -2191,16 +2223,26 @@ struct SandboxFreshPipeline {
         auto slot=admissible?instance_plans.select(key):UINT_MAX;
         if(slot!=UINT_MAX){
             auto& cached=instance_plans[slot];auto& plan=cached.value;
+            if(!cached.prepared){
+                // FrameSampleCache replaces the exact key but leaves its value
+                // alive. Retire that old index/front lease before admission.
+                instance_plan_bytes-=plan.bytes;plan={};cached.prepared=true;
+            }
             if(!cached.valid || !renderer.shared_instances.valid(plan.selection) || plan.selection->content!=shared_front){
-                std::vector<unsigned> prepared;prepared.reserve(count);
-                for(auto const* record:selected){auto draw=GeometryDrawReference(*record);auto range=shared_front->find(renderer.shared_instance_draw_key(unsigned(layer),draw));
-                    if(!range || range.count!=record->content().instances->size())return renderer.reject_shared_instance_range(unsigned(layer),draw,shared_front,range);
-                    for(unsigned i=0;i<range.count;++i)prepared.push_back(range.first+i);}
-                auto candidate=renderer.shared_instances.prepare_selection(renderer.device,shared_front,prepared.data(),unsigned(prepared.size()),
-                    key.capacity()*sizeof(key[0])+sizeof(typename decltype(instance_plans)::Entry));
-                if(candidate){instance_plan_bytes=instance_plan_bytes-plan.bytes+candidate->bytes();plan.selection=std::move(candidate);
-                    plan.bytes=plan.selection->bytes();plan.count=unsigned(count);cached.valid=true;++instance_plan_builds;work.upload(count*sizeof(unsigned),unsigned(layer));}
-                else cached.valid=false;
+                instance_plan_bytes-=plan.bytes;plan={};cached.valid=false;
+                auto metadata=key.capacity()*sizeof(key[0])+sizeof(typename decltype(instance_plans)::Entry);
+                // Unchanged capacity refusal goes directly to bounded index
+                // scratch. Do not repack/allocate a doomed immutable plan on
+                // every animation tick; released readers reopen admission.
+                if(renderer.shared_instances.can_prepare_selection(unsigned(count),metadata)){
+                    std::vector<unsigned> prepared;prepared.reserve(count);
+                    for(auto const* record:selected){auto draw=GeometryDrawReference(*record);auto range=shared_front->find(renderer.shared_instance_draw_key(unsigned(layer),draw));
+                        if(!range || range.count!=record->content().instances->size())return renderer.reject_shared_instance_range(unsigned(layer),draw,shared_front,range);
+                        for(unsigned i=0;i<range.count;++i)prepared.push_back(range.first+i);}
+                    auto candidate=renderer.shared_instances.prepare_selection(renderer.device,shared_front,prepared.data(),unsigned(prepared.size()),metadata);
+                    if(candidate){instance_plan_bytes+=candidate->bytes();plan.selection=std::move(candidate);
+                        plan.bytes=plan.selection->bytes();plan.count=unsigned(count);cached.valid=true;++instance_plan_builds;work.upload(count*sizeof(unsigned),unsigned(layer));}
+                }
             }else ++instance_plan_reuses;
             if(cached.valid){
                 context->IASetInputLayout(renderer.natural.resident_instance_layout);

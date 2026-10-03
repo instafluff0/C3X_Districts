@@ -8,6 +8,7 @@
 #include <vector>
 #include <atomic>
 #include "scene_wire.h"
+#include "../remote_scene_output.h"
 #include "../scene_projection.h"
 
 namespace c3x_helper_trial {
@@ -15,7 +16,7 @@ namespace c3x_helper_trial {
 // interleaved replay. Both payload and response contain values, never native
 // pointers; the helper owns the renderer DLL and all of its scene allocations.
 class SceneClient {
-    HANDLE mapping=nullptr,request=nullptr,response=nullptr,control=nullptr,image_completed=nullptr,process=nullptr;
+    HANDLE mapping=nullptr,request=nullptr,response=nullptr,control=nullptr,image_completed=nullptr,camera_mutex=nullptr,process=nullptr;
     Wire* wire=nullptr;
     unsigned sequence=0;
     std::atomic<std::int64_t> admitted_camera{0};
@@ -33,6 +34,7 @@ class SceneClient {
         if(wire){UnmapViewOfFile(wire);wire=nullptr;}
         if(response){CloseHandle(response);response=nullptr;}
         if(image_completed){CloseHandle(image_completed);image_completed=nullptr;}
+        if(camera_mutex){CloseHandle(camera_mutex);camera_mutex=nullptr;}
         if(control){CloseHandle(control);control=nullptr;}
         if(request){CloseHandle(request);request=nullptr;}
         if(mapping){CloseHandle(mapping);mapping=nullptr;}
@@ -46,6 +48,18 @@ public:
         if(wire)InterlockedExchange(reinterpret_cast<volatile LONG*>(&wire->native_queue_records),LONG(records));
     }
     void begin_image_receipt(){if(!ResetEvent(image_completed))throw std::runtime_error("image receipt reset failed");}
+    void prepare_camera_receipt(){
+        if(wire)InterlockedExchange(reinterpret_cast<volatile LONG*>(&wire->camera_receiver_thread),LONG(GetCurrentThreadId()));
+    }
+    bool camera_completion(std::int64_t ticket,std::vector<unsigned char>& bytes,int& code){
+        if(!wire||!camera_mutex||!alive()||!InterlockedCompareExchange(
+            reinterpret_cast<volatile LONG*>(&wire->camera_completion_available),0,0))return false;
+        auto acquired=WaitForSingleObject(camera_mutex,0);
+        if(acquired==WAIT_TIMEOUT){code=C3X_RENDERER_RESULT_PENDING;return true;}
+        if(acquired!=WAIT_OBJECT_0){if(acquired==WAIT_ABANDONED)ReleaseMutex(camera_mutex);return false;}
+        struct Unlock {HANDLE mutex;~Unlock(){ReleaseMutex(mutex);}} unlock{camera_mutex};
+        return c3x_remote_scene::snapshot_camera_completion(wire->camera_completion,ticket,bytes,code);
+    }
     void wait_image_receipt(){
         HANDLE ready[2]={image_completed,process};
         if(WaitForMultipleObjects(2,ready,FALSE,120000)!=WAIT_OBJECT_0)
@@ -68,7 +82,8 @@ public:
             response=CreateEventW(nullptr,FALSE,FALSE,name(base,L"_response").c_str());
             control=CreateEventW(nullptr,FALSE,FALSE,name(base,L"_control").c_str());
             image_completed=CreateEventW(nullptr,FALSE,FALSE,name(base,L"_images_complete").c_str());
-            if(!mapping||!request||!response||!control||!image_completed)throw std::runtime_error("x64 scene IPC creation failed");
+            camera_mutex=CreateMutexW(nullptr,FALSE,name(base,L"_camera_complete_mutex").c_str());
+            if(!mapping||!request||!response||!control||!image_completed||!camera_mutex)throw std::runtime_error("x64 scene IPC creation failed");
             wire=static_cast<Wire*>(MapViewOfFile(mapping,FILE_MAP_ALL_ACCESS,0,0,sizeof(Wire)));
             if(!wire)throw std::runtime_error("x64 scene IPC view failed");
             std::wstring command=L"\""+helper+L"\" --child \""+base+L"\" \""+dll+L"\" "+std::to_wstring(GetCurrentProcessId());

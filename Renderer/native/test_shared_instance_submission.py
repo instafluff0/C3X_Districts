@@ -58,6 +58,27 @@ using Owner=c3x_renderer::render_core::SharedInstanceSubmission;
 
 
 class SharedInstanceSubmissionTests(unittest.TestCase):
+    def test_immutable_selection_capacity_is_checked_before_repacking(self):
+        run_cpp(GPU_STUB + r'''
+int main(){
+ ID3D11Device device;Owner owner;Owner::Instance placement;float projection[4]={};Owner::Range range;
+ auto builder=owner.begin(Owner::Key{1});assert(owner.append(builder,Owner::Key{2},&placement,&placement,1,projection,0,0,0,40,range));
+ auto front=owner.upload(builder,&device);builder.reset();assert(front);
+ unsigned index=range.first;assert(owner.can_prepare_selection(1,128));
+ auto plan=owner.prepare_selection(&device,front,&index,1,128);assert(plan&&owner.valid(plan));
+ auto pressure=owner.retain_metadata(Owner::budget-owner.bytes()-sizeof(Owner::CpuAllocation)-64);assert(pressure);
+ auto creates=device.creates,uploads=owner.plan_uploads;auto bytes=owner.bytes();
+ for(unsigned repeat=0;repeat<32;++repeat){assert(!owner.can_prepare_selection(1,128));
+  assert(!owner.prepare_selection(&device,front,&index,1,128));}
+ assert(device.creates==creates&&owner.plan_uploads==uploads&&owner.bytes()==bytes);
+ pressure.reset();assert(owner.can_prepare_selection(1,128));
+ auto recovered=owner.prepare_selection(&device,front,&index,1,128);assert(recovered&&owner.plan_uploads==uploads+1);
+ assert(!owner.can_prepare_selection(0)&&!owner.can_prepare_selection(Owner::record_limit+1));
+ assert(!owner.can_prepare_selection(1,Owner::budget));
+ owner.clear();front.reset();plan.reset();recovered.reset();assert(!owner.bytes());
+}
+''')
+
     def test_optional_resource_charges_share_exact_cpu_gpu_budget_and_retirement(self):
         run_cpp(GPU_STUB + r'''
 int main(){Owner owner,other;

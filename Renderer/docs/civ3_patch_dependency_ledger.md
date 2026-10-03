@@ -2422,3 +2422,12 @@ registrations, projected occurrences and incremental page membership remain
 inside the renderer. Loading admission creates no viewport publication or native
 unit capture. No new patch capability or human patch-table action is required;
 `required_user_action: []`.
+
+The integrated navigation/submission refactor retains these capture boundaries,
+`Main_Screen_Form_move_camera`, and the existing JGL image hooks. Completion
+inspection uses a private renderer/helper export and the existing native camera
+wake message; only ordered adoption behind the old-ticket native operations
+retires a map. Resident proof reuse, packet selection and retained HUD/front
+assembly remain inside `Renderer/`. No injected source, Civ III signature,
+supported-build address or patch-table entry changes are required.
+`required_user_action: []`.

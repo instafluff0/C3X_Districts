@@ -84,6 +84,7 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
 #include "render_core/scene_membership.h"
 #include "render_core/foreground_selection.h"
 #include "render_core/canonical_membership_diff.h"
+#include "camera_completion.h"
 #include "render_core/draw_parameter_stream.h"
 #include "render_core/ordered_rigid_submission.h"
 #include "render_core/immutable_mesh_upload.h"
@@ -396,6 +397,9 @@ struct CachedGeometryProof {
     std::vector<std::pair<std::uint64_t,std::array<int,2>>> anchor_dependencies;
     std::uint64_t scope=0,assets=0,tile=0;
     bool ground_semantics=false;
+    // Render-owner memo only. Every authoritative dependency producer touches
+    // the existing revision stream; an edit or recovery runs the full proof.
+    mutable c3x_renderer::render_core::RasterDependencyRevisions::Checkpoint validated_revision{};
     c3x_renderer::render_core::ResidentRetirementToken retirement;
     std::size_t bytes()const{
         return sizeof(*this)+appearance_dependencies.capacity()*sizeof(appearance_dependencies[0])+
@@ -420,6 +424,7 @@ struct CachedTileGeometry {
     c3x_renderer_tile_v1 source_facts{};
     std::array<std::uint64_t,20> compile_context={};
     std::uint64_t validity_epoch=0,validity_world_sequence=0;
+    c3x_renderer::render_core::RasterDependencyRevisions::Checkpoint validity_revision{};
     int validity_anchor_x=0,validity_anchor_y=0;
     bool validity=false;
     // Bindings borrow the existing owner; eviction invalidates their generation.
@@ -6347,6 +6352,9 @@ public:
     bool raster_content_valid(CachedGeometryProof const& proof){
         auto reject=[&](unsigned reason){++raster_proof_rejections[reason];return false;};
         if(proof.scope!=topology_cache.scope_sequence() || proof.assets!=content_revision)return reject(0);
+        auto revision=raster_dependency_revisions.checkpoint();
+        if(proof.validated_revision.owner==revision.owner &&
+           proof.validated_revision.sequence==revision.sequence)return true;
         for(auto const& input:proof.appearance_dependencies)
             if(topology_cache.world_appearance_revision(input.first)!=input.second)return reject(1);
         for(auto const& input:proof.dependencies){
@@ -6362,7 +6370,9 @@ public:
         // tile_content_valid. Retained pixels compare the resulting immutable
         // generation and normalized occurrence in raster_dependencies. A later
         // prewarm camera's mutable observations cannot invalidate that view.
-        return natural.valid(proof.river_dependencies) || reject(6);
+        if(!natural.valid(proof.river_dependencies))return reject(6);
+        proof.validated_revision=revision;
+        return true;
     }
 
     bool ground_content_valid(CachedTileGeometry const& cached,c3x_renderer::GroundRecipeKey const& recipe){
@@ -6378,9 +6388,14 @@ public:
                 (!shared->ground_component || raster_content_valid(*shared->mesh->proof));
         }
         if(!valid){++frame_tile_invalid_shared;return false;} // Residency may change within a frame.
+        auto revision=raster_dependency_revisions.checkpoint();
         if(topology_cache.observation_sequence() && cached.validity_epoch==topology_cache.observation_sequence() &&
            cached.validity_world_sequence==topology_cache.world_input_sequence() &&
+           cached.validity_revision.owner==revision.owner && cached.validity_revision.sequence==revision.sequence &&
            cached.validity_anchor_x==tile.anchor_x && cached.validity_anchor_y==tile.anchor_y)return cached.validity;
+        if((cached.world_ground || cached.world_objects) && cached.anchor_dependencies.empty() &&
+           cached.validity_revision.owner==revision.owner &&
+           cached.validity_revision.sequence==revision.sequence)return cached.validity;
         // Source inputs are immutable during this frame's CPU read lease.
         // Preparation selection and view assembly share one complete proof.
         for(auto const& dependency:cached.appearance_dependencies)
@@ -6408,6 +6423,7 @@ public:
         cached.validity=valid && river_valid;
         cached.validity_epoch=topology_cache.observation_sequence();
         cached.validity_world_sequence=topology_cache.world_input_sequence();
+        cached.validity_revision=revision;
         cached.validity_anchor_x=tile.anchor_x;cached.validity_anchor_y=tile.anchor_y;
         return cached.validity;
     }
@@ -6671,31 +6687,44 @@ public:
         key[29]=(std::uint64_t(mesh.city_material)<<32)|std::uint32_t(mesh.source_tile_width);
         key[30]=reinterpret_cast<std::uintptr_t>(mesh.animation_texture);key[31]=reinterpret_cast<std::uintptr_t>(mesh.resource_instance);return key;
     }
+    void retire_ordered_rigid_packets(GeometryDrawView::Records const& records){
+        ordered_rigid_packets.select_scope({device_generation,content_revision,topology_cache.scope_sequence()});
+        if(!ordered_rigid_packets.page_count())return;
+        // Only already-admitted keys enter this temporary set, bounded by the
+        // packet entry cap. Camera selection never pins an obsolete front.
+        std::map<OrderedRigidKey,bool> live;
+        for(unsigned layer=0;layer<geometry_layer_count;++layer)
+            for(auto const& record:records[layer])if(record.content().rigid_source){
+                auto key=ordered_rigid_key(layer,GeometryDrawReference(record));
+                if(ordered_rigid_packets.contains(key))live.emplace(key,true);
+            }
+        ordered_rigid_packets.retire_missing([&](auto const& key){return live.count(key)!=0;});
+    }
 
     bool ordered_rigid_input(unsigned layer,GeometryDrawReference const& draw,
             c3x_renderer::render_core::SharedInstanceSubmission::Lease const& front,OrderedRigidPackets::Input& result)const{
-        if(layer!=geometry_farm && layer!=geometry_mine)return false;
+        if(layer!=geometry_route && (layer<geometry_feature || layer>geometry_site))return false;
         auto const& mesh=draw.content();
         if(!front || !mesh.rigid_source || mesh.animation_texture || mesh.resource_instance ||
                 mesh.city_material!=0xffffffffu || mesh.vertex_stride!=32 || mesh.vertex_offset ||
                 mesh.index_format!=DXGI_FORMAT_R32_UINT || mesh.projection_kind!=2 ||
                 !mesh.instances || mesh.instances->size()!=1)return false;
         auto range=front->find(shared_instance_draw_key(layer,draw));if(!range || range.count!=1)return false;
-        auto family=layer==geometry_farm?c3x_renderer::objects::farm_family:c3x_renderer::objects::mine_family;
-        auto const& bundle=layer==geometry_farm?farm_bundle:mine_bundle;
-        for(unsigned n=0;n<rigid_sources.meshes[family].size();++n){auto const& source=rigid_sources.meshes[family][n];
-            if(source.buffer!=mesh.buffer || mesh.indices!=source.buffer || source.count!=mesh.index_count || source.index_offset!=mesh.index_offset)continue;
-            if(n>=bundle.assets.size())return false;auto const& asset=bundle.assets[n];
-            if(asset.vertices.size()>UINT_MAX || asset.indices.size()!=mesh.index_count || asset.vertices.size()*32!=mesh.index_offset)return false;
-            result={ordered_rigid_key(layer,draw),asset.vertices.data(),unsigned(asset.vertices.size()),
-                asset.indices.data(),unsigned(asset.indices.size()),range.first};return true;
-        }return false;
+        c3x_renderer::FeatureBundle const* bundles[]={&bridge_bundle,&site_bundle,&mine_bundle,&farm_bundle,&city_bundle,&wall_bundle};
+        for(unsigned family=0;family<rigid_sources.meshes.size();++family)
+            for(unsigned n=0;n<rigid_sources.meshes[family].size();++n){auto const& source=rigid_sources.meshes[family][n];
+                if(source.buffer!=mesh.buffer || mesh.indices!=source.buffer || source.count!=mesh.index_count || source.index_offset!=mesh.index_offset)continue;
+                auto const& bundle=*bundles[family];if(n>=bundle.assets.size())return false;auto const& asset=bundle.assets[n];
+                if(asset.vertices.size()>UINT_MAX || asset.indices.size()!=mesh.index_count || asset.vertices.size()*32!=mesh.index_offset)return false;
+                result={ordered_rigid_key(layer,draw),asset.vertices.data(),unsigned(asset.vertices.size()),
+                    asset.indices.data(),unsigned(asset.indices.size()),range.first};return true;
+            }return false;
     }
 
     void prepare_ordered_rigid_packets(unsigned layer,std::vector<GeometryDrawReference> const& selected,
             c3x_renderer::render_core::SharedInstanceSubmission::Lease const& front,
             std::array<OrderedRigidPackets::Range,c3x_renderer::render_core::DrawParameterStream::limit>& ranges){
-        if((layer!=geometry_farm && layer!=geometry_mine) || !front || !ensure_ordered_rigid_layout())return;
+        if((layer!=geometry_route && (layer<geometry_feature || layer>geometry_site)) || !front || !ensure_ordered_rigid_layout())return;
         ordered_rigid_packets.select_scope({device_generation,content_revision,topology_cache.scope_sequence()});
         std::array<OrderedRigidPackets::Input,OrderedRigidPackets::record_limit> missing{};
         std::array<unsigned,OrderedRigidPackets::record_limit> ordinals{};unsigned count=0;std::size_t bytes=0;
@@ -6865,7 +6894,9 @@ public:
         bool streamed=draw_parameters.available(device,context);
         auto flush=[&](){
             if(selected.empty())return true;
-            if(streamed && !draw_parameters.upload(parameters.data(),unsigned(selected.size())))return false;
+            bool parameter_records=!shared_front;
+            for(auto const& draw:selected)parameter_records=parameter_records || !draw.content().rigid_source;
+            if(streamed && parameter_records && !draw_parameters.upload(parameters.data(),unsigned(selected.size())))return false;
             std::array<OrderedRigidPackets::Range,Parameters::limit> packets{};
             auto packet_uploads=ordered_rigid_packets.builds,packet_bytes=ordered_rigid_packets.uploaded_bytes;
             prepare_ordered_rigid_packets(unsigned(layer),selected,shared_front,packets);
@@ -6874,7 +6905,7 @@ public:
             std::vector<c3x_renderer::fidelity::MeshInstance> rigid_instances;
             std::vector<unsigned> rigid_indices;
             std::array<unsigned,Parameters::limit> rigid_offsets{};
-            for(unsigned i=0;i<selected.size();++i){auto const& chunk=selected[i];if(!chunk.content().rigid_source)continue;
+            for(unsigned i=0;i<selected.size();++i){auto const& chunk=selected[i];if(!chunk.content().rigid_source || packets[i])continue;
                 if(!chunk.content().instances || chunk.content().instances->size()!=1)return false;
                 if(shared_front){
                     auto range=shared_front->find(shared_instance_draw_key(unsigned(layer),chunk));
@@ -6977,6 +7008,11 @@ public:
                         ++frame_parameter_updates;previous=viewport_settings;first=false;
                     }
                     context->VSSetConstantBuffers(1,1,&viewport_settings_buffer);
+                    if(layer==geometry_city){
+                        context->PSSetShader(reflection_pass?reflection.ps[1]:feature_pixel_shader,nullptr,0);
+                        context->PSSetShaderResources(116,4,city_emissive_views.data());context->PSSetShaderResources(124,4,city_base_views.data());
+                        ID3D11SamplerState* samplers[]={terrain_sampler,decal_sampler};context->PSSetSamplers(0,2,samplers);
+                    }
                     unsigned end=i+1;while(end<selected.size() && packets[end-1].contiguous(packets[end]))++end;
                     ordered_rigid_packets.issue(context,ordered_rigid_layout,rigid_sources.resident_vertex[reflection_pass?1:0],
                         packets.data()+i,end-i,[&](unsigned,unsigned){++frame_draw_calls;});
@@ -8474,12 +8510,15 @@ public:
             std::uint64_t(canonical_world_content?4:(frame.tile_width>=96?8:0)+(draw_record_count<=512?0:draw_record_count<=768?1:draw_record_count<=2048?2:3))};
         int geometry_translation_x = 0;
         int geometry_translation_y = 0;
-        bool reuse_geometry = !prewarming && reuse_geometry_for_translation(
+        // Canonical membership already compares exact native content/order and
+        // owner proofs. Do not walk the same capture twice before that diff.
+        bool const canonical_selection=!prewarming && fresh_scene_path && canonical_world_content && geometry_cache.valid;
+        bool reuse_geometry = !canonical_selection && !prewarming && reuse_geometry_for_translation(
             frame, signature, selection,geometry_translation_x, geometry_translation_y);
         // The old bitmap path returned before this point for an identical
         // viewport. Fresh Renderer64 must still draw the advancing water clock,
         // so retain its unchanged scene records when the camera has not moved.
-        if(!reuse_geometry && fresh_scene_path && !prewarming &&
+        if(!reuse_geometry && !canonical_selection && fresh_scene_path && !prewarming &&
             (!pickup_profile || frame.world_topology_revision==geometry_world_revision))
             reuse_geometry=geometry_matches(geometry_cache,frame,signature,selection,
                 geometry_translation_x,geometry_translation_y,false);
@@ -11667,7 +11706,7 @@ public:
                     topology_cache.attach(frame.tiles[i],handle);
                 }else append_tile_geometry(*owner,occurrence,animated_view);
             }
-            if(incremental_membership){
+            if(incremental_membership && (membership_diff.entering || !membership_diff.ordered)){
                 std::unordered_map<std::uint64_t,unsigned> order;order.reserve(frame.tile_count);
                 for(unsigned i=0;i<frame.tile_count;++i)order.emplace(
                     c3x_renderer::render_core::CanonicalMembershipDiff::occurrence(frame.tiles[i].tile_x,frame.tiles[i].tile_y),i);
@@ -12663,6 +12702,12 @@ public:
         std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);
         return adopt_gpu_camera_locked(lock,ticket,view,metadata);
     }
+    int observe_camera_completion(c3x_renderer_camera_completion_fn observer,void* context){
+        std::lock_guard<std::mutex> calls(call_mutex);
+        std::lock_guard<std::mutex> lock(state_mutex);
+        camera_completion_observer=observer;camera_completion_context=context;
+        return C3X_RENDERER_RESULT_OK;
+    }
     int poll_gpu_camera_view(c3x_renderer_i64 ticket,c3x_renderer_gpu_camera_view_v1& view,bool inspect_only=false){
 #ifdef C3X_RENDERER64_FRESH
         // Renderer64 is reached only by the asynchronous transport consumer.
@@ -12684,19 +12729,7 @@ public:
 #endif
         c3x_renderer_gpu_camera_view_v1 next={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(next)};
         if(inspect_only){
-            if(ticket!=camera_ticket)return C3X_RENDERER_RESULT_SUPERSEDED;
-            if(camera_result!=C3X_RENDERER_RESULT_OK)return camera_result;
-            if(camera_active||!camera_ready.resident.texture)return C3X_RENDERER_RESULT_PENDING;
-            next.camera.version=C3X_RENDERER_CAMERA_VIEW_VERSION;next.camera.struct_size=sizeof(next.camera);
-            next.camera.ticket=ticket;next.camera.identity=camera_ready.identity;
-            next.camera.frame=camera_ready.frame;next.camera.output=camera_ready.output;
-            next.image={sizeof(next.image)};next.image.width=camera_ready.output.width;
-            next.image.height=camera_ready.output.height;next.image.device_generation=camera_ready.output.device_generation;
-            next.image.content_revision=camera_ready.output.content_revision;
-            next.image.presentation_time_ticks=camera_ready.frame.presentation_time_ticks;
-            next.image.prepared=unsigned(camera_ready_prepared);
-            next.pixel_phase_x=camera_ready.phase_x;next.pixel_phase_y=camera_ready.phase_y;
-            view=next;return C3X_RENDERER_RESULT_OK;
+            return camera_ready_view_locked(ticket,view);
         }
         int result=adopt_gpu_camera_locked(lock,ticket,next.image,next.camera.output,false);
         if(result==C3X_RENDERER_RESULT_OK){
@@ -12710,6 +12743,36 @@ public:
         return result;
     }
 private:
+    int camera_ready_view_locked(c3x_renderer_i64 ticket,c3x_renderer_gpu_camera_view_v1& view){
+        if(ticket!=camera_ticket)return C3X_RENDERER_RESULT_SUPERSEDED;
+        if(camera_result!=C3X_RENDERER_RESULT_OK)return camera_result;
+        if(camera_active||!camera_ready.resident.texture)return C3X_RENDERER_RESULT_PENDING;
+        c3x_renderer_gpu_camera_view_v1 next={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(next)};
+        next.camera.version=C3X_RENDERER_CAMERA_VIEW_VERSION;next.camera.struct_size=sizeof(next.camera);
+        next.camera.ticket=ticket;next.camera.identity=camera_ready.identity;
+        next.camera.frame=camera_ready.frame;next.camera.output=camera_ready.output;
+        next.image={sizeof(next.image)};next.image.width=camera_ready.output.width;
+        next.image.height=camera_ready.output.height;next.image.device_generation=camera_ready.output.device_generation;
+        next.image.content_revision=camera_ready.output.content_revision;
+        next.image.presentation_time_ticks=camera_ready.frame.presentation_time_ticks;
+        next.image.prepared=unsigned(camera_ready_prepared);
+        next.pixel_phase_x=camera_ready.phase_x;next.pixel_phase_y=camera_ready.phase_y;
+        view=next;return C3X_RENDERER_RESULT_OK;
+    }
+    void notify_camera_completion_locked(c3x_renderer_i64 ticket){
+        if(ticket<=0 || ticket!=camera_ticket || camera_result==C3X_RENDERER_RESULT_PENDING)return;
+        if(camera_gpu && camera_completion_observer){
+            // The state gate pins this borrowed descriptor until the observer
+            // copies it. Inspection never adopts or retires an image.
+            c3x_renderer_gpu_camera_view_v1 view={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(view)};
+            int result=camera_ready_view_locked(ticket,view);
+            try{camera_completion_observer(camera_completion_context,ticket,result,
+                result==C3X_RENDERER_RESULT_OK?&view:nullptr);}catch(...){}
+        }
+        if(camera_notify_thread && camera_notify_message)
+            PostThreadMessageA(camera_notify_thread,camera_notify_message,WPARAM(std::uint64_t(ticket)&0xffffffffu),
+                LPARAM(std::uint64_t(ticket)>>32));
+    }
     int begin_gpu_camera_locked(c3x_renderer_camera_request_v1 const& request,c3x_renderer_i64& ticket,bool fresh=false){
         auto const& frame=*request.frame;
         if(camera_gpu && camera_ticket>0 && (camera_result==C3X_RENDERER_RESULT_PENDING || camera_result==C3X_RENDERER_RESULT_OK)){
@@ -13614,6 +13677,7 @@ public:
         camera_ready.clear();
         camera_pending_tiles.clear();camera_pending_topology.clear();
         if(!camera_active)foreground_pending.store(false,std::memory_order_relaxed);
+        notify_camera_completion_locked(ticket);
         wake.notify_one();
         return C3X_RENDERER_RESULT_OK;
     }
@@ -14077,6 +14141,8 @@ private:
     int camera_result=C3X_RENDERER_RESULT_SUPERSEDED;
     bool camera_active=false,camera_pending=false,camera_paused=false;
     DWORD camera_notify_thread=0;UINT camera_notify_message=0;
+    c3x_renderer_camera_completion_fn camera_completion_observer=nullptr;
+    void* camera_completion_context=nullptr;
     bool camera_gpu=false,camera_ready_prepared=false;
     c3x_renderer_i64 gpu_camera_front_ticket=0;
     std::atomic<bool> camera_cancelled{false};
@@ -14195,6 +14261,7 @@ private:
         foreground_pending.store(false,std::memory_order_relaxed);
         camera_ready.clear();
         camera_pending_tiles.clear();camera_pending_topology.clear();
+        notify_camera_completion_locked(camera_ticket);
         wake.notify_one();
     }
 
@@ -15773,10 +15840,7 @@ private:
                     camera_active=false;foreground_pending.store(camera_pending,std::memory_order_relaxed);completed.notify_all();
                     // A completion message is only a wake hint. The caller must
                     // still poll its current ticket and validate the atomic view.
-                    if(gpu_ticket==camera_ticket && camera_result!=C3X_RENDERER_RESULT_PENDING &&
-                        camera_result!=C3X_RENDERER_RESULT_SUPERSEDED && camera_notify_thread && camera_notify_message)
-                        PostThreadMessageA(camera_notify_thread,camera_notify_message,WPARAM(std::uint64_t(gpu_ticket)&0xffffffffu),
-                            LPARAM(std::uint64_t(gpu_ticket)>>32));
+                    notify_camera_completion_locked(gpu_ticket);
                     lock.unlock();ready.clear();lock.lock();continue;
                 }
                 PublishedMapFrame prepared_camera;
@@ -16908,6 +16972,11 @@ extern "C" __declspec(dllexport) int c3x_renderer_trial_camera_ready(
     if(!view||view->version!=C3X_RENDERER_CAMERA_VIEW_VERSION||view->struct_size!=sizeof(*view))
         return C3X_RENDERER_RESULT_BAD_ARGUMENT;
     try{return get_renderer_worker().poll_gpu_camera_view(ticket,*view,true);}
+    catch(...){return C3X_RENDERER_RESULT_ERROR;}
+}
+extern "C" __declspec(dllexport) int c3x_renderer_trial_camera_completion(
+    c3x_renderer_camera_completion_fn observer,void* context){
+    try{return get_renderer_worker().observe_camera_completion(observer,context);}
     catch(...){return C3X_RENDERER_RESULT_ERROR;}
 }
 extern "C" __declspec(dllexport) int c3x_renderer_trial_world_submit(

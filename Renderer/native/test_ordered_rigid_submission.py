@@ -107,6 +107,7 @@ def production_planner_harness():
     methods = "\n".join(method(source, signature) for signature in (
         "    c3x_renderer::render_core::SharedInstanceSubmission::Key shared_instance_draw_key(",
         "    OrderedRigidKey ordered_rigid_key(",
+        "    void retire_ordered_rigid_packets(",
         "    bool ordered_rigid_input(",
         "    void prepare_ordered_rigid_packets("))
     return STUB + header.replace("#include <d3d11.h>", "") + r'''
@@ -122,11 +123,13 @@ struct SharedInstanceSubmission {
  using Lease=std::shared_ptr<Front>;
 };
 }}
-namespace c3x_renderer {namespace objects {enum {mine_family=0,farm_family=1};}}
-enum GeometryLayer {geometry_route=0,geometry_farm=1,geometry_mine=2,geometry_city=3};
+namespace c3x_renderer {namespace objects {enum {bridge_family,site_family,mine_family,farm_family,city_family,wall_family};}}
+enum GeometryLayer {geometry_route=0,geometry_feature,geometry_city,geometry_wall,geometry_mine,geometry_farm,geometry_site};
+constexpr unsigned geometry_layer_count=7;
 struct Vertex {float words[8];};
 struct Asset {std::vector<Vertex> vertices;std::vector<unsigned> indices;};
 struct Bundle {std::vector<Asset> assets;};
+namespace c3x_renderer {using FeatureBundle=::Bundle;}
 struct Mesh {
  struct Bounds {int left=0,top=0,right=100,bottom=100;}bounds;
  ID3D11Buffer *buffer=nullptr,*indices=nullptr,*resource_instance=nullptr;
@@ -137,7 +140,7 @@ struct Mesh {
  std::shared_ptr<std::vector<unsigned> const> instances=std::make_shared<std::vector<unsigned> const>(1,1);
  int translation_x=0,translation_y=0;float natural_projection[4]={0,0,128,256};
 };
-using GeometryDrawView=c3x_renderer::render_core::GeometryDrawView<Mesh,4>;
+using GeometryDrawView=c3x_renderer::render_core::GeometryDrawView<Mesh,7>;
 using GeometryDrawReference=GeometryDrawView::Reference;
 struct Planner {
  using OrderedRigidKey=std::array<std::uint64_t,32>;
@@ -148,8 +151,8 @@ struct Planner {
  std::uint64_t device_generation=1,content_revision=1;
  struct Topology {std::uint64_t scope=1;std::uint64_t scope_sequence()const{return scope;}}topology_cache;
  struct Rigid {struct Source {ID3D11Buffer* buffer;unsigned count,index_offset;};
-  std::array<std::vector<Source>,2> meshes;}rigid_sources;
- Bundle farm_bundle,mine_bundle;
+  std::array<std::vector<Source>,6> meshes;}rigid_sources;
+ Bundle bridge_bundle,site_bundle,farm_bundle,mine_bundle,city_bundle,wall_bundle;
  bool ensure_ordered_rigid_layout(){return true;}
 ''' + methods + r'''
 };
@@ -157,6 +160,111 @@ struct Planner {
 
 
 class OrderedRigidSubmissionTests(unittest.TestCase):
+    def test_membership_retirement_preserves_draw_leases_and_reopens_capacity(self):
+        run_cpp(harness() + r'''
+int main(){
+ {Fixture f;auto empty=f.owner.bytes();std::array<Owner::Input,2> inputs={f.input(1,0),f.input(2,1,true)};
+  auto page=f.owner.append(&f.device,&f.context,&f.source,8,inputs.data(),2);assert(page);page.reset();
+  auto held=f.owner.find(inputs[0].key);auto third=f.input(3,2);auto other=f.owner.append(&f.device,&f.context,&f.source,8,&third,1);assert(other);
+  auto reuses=f.owner.reuses;assert(f.owner.contains(inputs[0].key)&&!f.owner.contains(f.input(4,3).key));assert(f.owner.reuses==reuses);
+  auto full=f.owner.bytes();auto leased=held.page;
+  f.owner.retire_missing([](auto const& key){return key[0]!=1;});
+  assert(f.owner.page_count()==2&&!f.owner.find(inputs[0].key)&&f.owner.find(inputs[1].key));
+  f.owner.retire_missing([](auto const& key){return key[0]==3;});
+  assert(f.owner.page_count()==1&&f.owner.retired_entries==2&&!f.owner.find(inputs[1].key));
+  // An admitted command still owns its exact immutable resources and charge.
+  assert(f.owner.bytes()==full);auto expected=f.expected(inputs.data(),1);f.issue(&held,1);assert(f.context.primitives==expected);
+  held={};leased.reset();assert(f.owner.bytes()<full&&f.owner.bytes()>empty);
+  auto builds=f.owner.builds;auto cached=f.owner.find(third.key);
+  f.owner.retire_missing([](auto const& key){return key[0]==3;});
+  assert(f.owner.page_count()==1&&f.owner.builds==builds&&f.owner.retired_entries==2);
+  auto recovered=f.owner.append(&f.device,&f.context,&f.source,8,inputs.data(),2);assert(recovered);
+  assert(f.owner.page_count()==2&&f.owner.builds==builds+1);
+  cached={};other.reset();recovered.reset();f.owner.clear();assert(f.owner.bytes()==empty);
+ }assert(!live_buffers&&!live_views);
+}
+''')
+
+    def test_adjacent_index_batch_keeps_primitive_order_and_operand_boundaries(self):
+        run_cpp(harness() + r'''
+struct Parameters {float projection[4]={};float translation[2]={};};
+struct Chunk {
+ ID3D11Buffer* buffer=nullptr,*indices=nullptr,*resource_instance=nullptr;
+ ID3D11ShaderResourceView* animation_texture=nullptr;
+ unsigned vertex_stride=32,vertex_offset=0,index_offset=0,index_count=3,index_format=1,city_material=0xffffffffu;
+ bool rigid_source=false,city_environment=false;float city_atlas[4]={},visual_time=-1;
+};
+struct Draw {Chunk mesh;bool visible=true;Chunk const& content()const{return mesh;}bool water_visible()const{return visible;}};
+int main(){
+ ID3D11Buffer geometry;Draw a,b,c;a.mesh.buffer=a.mesh.indices=&geometry;b=a;c=a;
+ b.mesh.index_offset=12;c.mesh.index_offset=24;Parameters p;
+ auto joins=[&](Draw const& first,Draw const& next,Parameters const& x,Parameters const& y,unsigned stride=4){
+  return c3x_renderer::render_core::compatible_ordered_index_range(first,next,x,y,stride);};
+ assert(joins(a,b,p,p)&&joins(b,c,p,p));
+ // Actual ordered primitive interpretation is identical to separate ranges,
+ // including repeated vertices and arbitrary alpha/order-sensitive overlap.
+ std::vector<unsigned> indices={2,0,1,1,0,2,2,2,1},separate,joined;
+ for(auto const& draw:{a,b,c})for(unsigned i=0;i<draw.mesh.index_count;++i)separate.push_back(indices[draw.mesh.index_offset/4+i]);
+ for(unsigned i=0;i<a.mesh.index_count+b.mesh.index_count+c.mesh.index_count;++i)joined.push_back(indices[i]);
+ assert(separate==joined);
+ for(unsigned field=0;field<13;++field){auto changed=b;auto q=p;
+  switch(field){case 0:changed.mesh.buffer=nullptr;break;case 1:changed.mesh.indices=nullptr;break;
+   case 2:changed.mesh.vertex_stride=88;break;case 3:changed.mesh.vertex_offset=32;break;
+   case 4:changed.mesh.index_offset=24;break;case 5:changed.mesh.index_format=2;break;
+   case 6:changed.mesh.city_material=2;break;case 7:changed.mesh.city_environment=true;break;
+   case 8:changed.mesh.city_atlas[3]=.5f;break;case 9:changed.mesh.visual_time=0;break;
+   case 10:changed.visible=false;break;case 11:changed.mesh.rigid_source=true;break;
+   case 12:q.translation[0]=1;break;}
+  assert(!joins(a,changed,p,q));
+ }
+ auto changed=b;changed.mesh.animation_texture=reinterpret_cast<ID3D11ShaderResourceView*>(1);assert(!joins(a,changed,p,p));
+ changed=b;changed.mesh.resource_instance=&geometry;assert(!joins(a,changed,p,p));
+ b.mesh.index_offset=6;assert(joins(a,b,p,p,2)); // Same contract for 16-bit indices.
+ a.mesh.index_offset=0xfffffff8u;b.mesh.index_offset=4;assert(!joins(a,b,p,p)); // No offset wrap admission.
+}
+''')
+
+    def test_production_range_selection_preserves_city_emission_and_packet_barriers(self):
+        fresh = (ROOT / 'Renderer/sandbox/fresh_pipeline.h').read_text()
+        start = fresh.index('                bool city_emission=')
+        end = fresh.index('                if(mesh.city_material!=0xffffffffu){', start)
+        production = fresh[start:end]
+        run_cpp(harness() + r'''
+constexpr unsigned DXGI_FORMAT_R16_UINT=2;
+struct Parameters {float x=0;};
+struct Chunk {
+ ID3D11Buffer* buffer=nullptr,*indices=nullptr,*resource_instance=nullptr;
+ ID3D11ShaderResourceView* animation_texture=nullptr;
+ unsigned vertex_stride=32,vertex_offset=0,index_offset=0,index_count=3,index_format=1,city_material=0xffffffffu;
+ bool rigid_source=false,city_environment=false;float city_atlas[4]={},visual_time=-1;
+};
+struct Draw {Chunk mesh;bool visible=true;Chunk const& content()const{return mesh;}bool water_visible()const{return visible;}};
+struct Renderer {struct Cities {struct Material {bool ground=false;};
+ struct Library {std::vector<Material> materials{{}};}library;
+ bool emission=false;bool emits(unsigned)const{return emission;}}cities;}renderer;
+struct Result {unsigned end,count;bool emission;};
+Result select(std::vector<Draw> const& selected,std::array<Parameters,3> const& values,
+        std::array<bool,3> const& packets,bool original_emission){
+ unsigned i=0;auto const& mesh=selected[i].content();
+''' + production + r'''
+ return {end,index_count,city_emission};
+}
+int main(){
+ ID3D11Buffer geometry;std::vector<Draw> rows(3);std::array<Parameters,3> values{};std::array<bool,3> packets{};
+ for(unsigned n=0;n<3;++n){rows[n].mesh.buffer=rows[n].mesh.indices=&geometry;rows[n].mesh.index_offset=n*12;}
+ auto result=select(rows,values,packets,false);assert(result.end==3&&result.count==9&&!result.emission);
+ for(auto& row:rows)row.mesh.city_material=0;
+ renderer.cities.emission=true;result=select(rows,values,packets,false);assert(result.end==1&&result.count==3&&result.emission);
+ renderer.cities.emission=false;result=select(rows,values,packets,false);assert(result.end==3&&!result.emission);
+ result=select(rows,values,packets,true);assert(result.end==1&&result.emission);
+ renderer.cities.library.materials[0].ground=true;result=select(rows,values,packets,true);assert(result.end==3&&!result.emission);
+ packets[1]=true;assert(select(rows,values,packets,false).end==1);packets[1]=false;
+ values[1].x=1;assert(select(rows,values,packets,false).end==1);values[1].x=0;
+ rows[1].visible=false;assert(select(rows,values,packets,false).end==1);rows[1].visible=true;
+ rows[1].mesh.index_offset+=4;assert(select(rows,values,packets,false).end==1);
+}
+''')
+
     def test_actual_planner_capacity_misses_skip_front_search_and_preserve_cached_order(self):
         run_cpp(production_planner_harness() + r'''
 int main(){
@@ -220,6 +328,70 @@ int main(){
   assert(p.context_value.primitives==want&&p.context_value.draws==2);
   assert(p.ordered_rigid_packets.bytes()==p.ordered_rigid_packets.metadata_bytes()+p.ordered_rigid_packets.gpu_bytes());
   assert(p.ordered_rigid_packets.peak_bytes()<=Packets::budget);
+ }assert(!live_buffers&&!live_views);
+}
+''')
+
+    def test_actual_planner_uses_all_shared_source_families_with_ordered_ranges(self):
+        run_cpp(production_planner_harness() + r'''
+int main(){
+ {Planner p;ID3D11Buffer source;source.bytes.resize(8*64);std::array<ID3D11Buffer,6> meshes;
+  for(unsigned n=0;n<source.bytes.size();++n)source.bytes[n]=static_cast<unsigned char>(n);
+  std::array<Bundle*,6> bundles={&p.bridge_bundle,&p.site_bundle,&p.mine_bundle,&p.farm_bundle,&p.city_bundle,&p.wall_bundle};
+  std::array<unsigned,6> layers={geometry_route,geometry_site,geometry_mine,geometry_farm,geometry_city,geometry_wall};
+  using Shared=c3x_renderer::render_core::SharedInstanceSubmission;auto front=std::make_shared<Shared::Front>();front->buffer=&source;front->records=8;
+  for(unsigned family=0;family<6;++family){
+   Asset asset;asset.vertices.resize(4);asset.indices={2,0,1};
+   for(unsigned i=0;i<4;++i)for(unsigned w=0;w<8;++w)asset.vertices[i].words[w]=float(family*100+i*8+w);
+   bundles[family]->assets.push_back(asset);p.rigid_sources.meshes[family].push_back({&meshes[family],3,128});
+   Mesh mesh;mesh.buffer=mesh.indices=&meshes[family];mesh.index_count=3;mesh.instance_material=10.f+family;
+   GeometryDrawView::Record first(mesh),second(mesh);first.owner={family+1,family+10};second.owner=first.owner;second.translation_x=32;
+   front->ranges.emplace(p.shared_instance_draw_key(layers[family],first),Shared::Range{0,1});
+   front->ranges.emplace(p.shared_instance_draw_key(layers[family],second),Shared::Range{1,1});
+   std::vector<GeometryDrawReference> selected={first,second};std::array<Planner::OrderedRigidPackets::Range,256> ranges{};
+   p.prepare_ordered_rigid_packets(layers[family],selected,front,ranges);assert(ranges[0]&&ranges[1]&&ranges[0].contiguous(ranges[1]));
+   auto builds=p.ordered_rigid_packets.builds;auto copies=p.context_value.copies;
+   selected={second,first,second};ranges={};p.prepare_ordered_rigid_packets(layers[family],selected,front,ranges);
+   assert(ranges[0]&&ranges[1]&&ranges[2]&&p.ordered_rigid_packets.builds==builds&&p.context_value.copies==copies);
+   p.context_value.primitives.clear();p.ordered_rigid_packets.issue(p.context,nullptr,nullptr,ranges.data(),selected.size(),[](unsigned,unsigned){});
+   std::vector<Receipt> expected;
+   for(unsigned row:{1,0,1})for(auto index:asset.indices){Receipt receipt;std::memcpy(receipt.vertex.data(),&asset.vertices[index],32);
+    std::memcpy(receipt.placement.data(),source.bytes.data()+row*64,64);expected.push_back(receipt);}
+   assert(p.context_value.primitives==expected);
+   Planner::OrderedRigidPackets::Input invalid;mesh.city_material=0;assert(!p.ordered_rigid_input(layers[family],first,front,invalid));
+   mesh.city_material=0xffffffffu;mesh.animation_texture=reinterpret_cast<ID3D11ShaderResourceView*>(1);
+   assert(!p.ordered_rigid_input(layers[family],first,front,invalid));mesh.animation_texture=nullptr;
+   mesh.resource_instance=&source;assert(!p.ordered_rigid_input(layers[family],first,front,invalid));
+  }
+ }assert(!live_buffers&&!live_views);
+}
+''')
+
+    def test_actual_membership_retirement_selects_exact_main_and_reflection_occurrences(self):
+        run_cpp(production_planner_harness() + r'''
+int main(){
+ {Planner p;ID3D11Buffer source,mesh_buffer;source.bytes.resize(8*64);
+  p.ordered_rigid_packets.select_scope({1,1,1});Mesh mesh;mesh.buffer=mesh.indices=&mesh_buffer;
+  GeometryDrawView::Record main(mesh),mirror(mesh),missing(mesh),newcomer(mesh);
+  main.owner=mirror.owner=missing.owner=newcomer.owner={1,8};
+  main.translation_x=-6400;mirror.translation_x=6400;missing.translation_x=12800;newcomer.translation_x=25600;
+  std::array<Vertex,4> vertices{};std::array<unsigned,3> indices={2,0,1};
+  auto input=[&](GeometryDrawView::Record const& record,unsigned row){return Planner::OrderedRigidPackets::Input{
+   p.ordered_rigid_key(geometry_city,record),vertices.data(),unsigned(vertices.size()),indices.data(),unsigned(indices.size()),row};};
+  auto a=input(main,0),b=input(mirror,1),c=input(missing,2);std::array<Planner::OrderedRigidPackets::Input,3> inputs={a,b,c};
+  auto page=p.ordered_rigid_packets.append(p.device,p.context,&source,8,inputs.data(),3);assert(page);page.reset();
+  auto old=p.ordered_rigid_packets.find(c.key);GeometryDrawView::Records records;
+  records[geometry_city]={main,mirror,main,newcomer}; // Duplicate and unadmitted keys cannot add residency.
+  auto builds=p.ordered_rigid_packets.builds;auto bytes=p.ordered_rigid_packets.bytes();auto reuses=p.ordered_rigid_packets.reuses;
+  p.retire_ordered_rigid_packets(records);
+  assert(p.ordered_rigid_packets.contains(a.key)&&p.ordered_rigid_packets.contains(b.key)&&!p.ordered_rigid_packets.contains(c.key));
+  assert(!p.ordered_rigid_packets.contains(input(newcomer,3).key)&&p.ordered_rigid_packets.retired_entries==1);
+  assert(p.ordered_rigid_packets.builds==builds&&p.ordered_rigid_packets.reuses==reuses&&p.ordered_rigid_packets.bytes()==bytes);
+  // Erasing the last owners retires the page, but a previously admitted draw
+  // keeps its exact source/placement resources until that reader finishes.
+  records={};p.retire_ordered_rigid_packets(records);assert(!p.ordered_rigid_packets.page_count()&&p.ordered_rigid_packets.bytes()==bytes);
+  p.ordered_rigid_packets.issue(p.context,nullptr,nullptr,&old,1,[](unsigned,unsigned){});assert(p.context_value.primitives.size()==3);
+  old={};assert(p.ordered_rigid_packets.bytes()<bytes);
  }assert(!live_buffers&&!live_views);
 }
 ''')

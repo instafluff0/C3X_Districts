@@ -1,5 +1,6 @@
 #pragma once
 #include "input_recording/codec.h"
+#include "camera_completion.h"
 
 namespace c3x_remote_scene {
 // This is the process-boundary form of the complete map result. No ABI pointer,
@@ -79,6 +80,47 @@ inline void decode(c3x_inputs::Reader& in,Output& target){
          target.value.stride_bytes==target.value.width*4),"remote scene result pixel extent");
     target.pixels.resize(pixel_count);for(auto& item:target.pixels)in(item);
     in.done();target.bind();
+}
+inline void encode_camera(c3x_inputs::Writer& out,c3x_renderer_gpu_camera_view_v1 const& view){
+    out(view.camera.ticket);
+    auto identity=view.camera.identity;c3x_inputs::c3x_renderer_camera_identity_v1_fields(out,identity);
+    c3x_inputs::frame(out,view.camera.frame);encode(out,view.image,view.camera.output);
+    out(view.pixel_phase_x);out(view.pixel_phase_y);
+}
+inline void publish_camera_completion(CameraCompletionSlot& slot,c3x_renderer_i64 ticket,
+                                      int code,c3x_renderer_gpu_camera_view_v1 const* view)noexcept{
+    // The caller owns the completion mutex. Version zero means the consumer
+    // must use the existing readiness RPC, including allocation/size refusal.
+    slot.version=0;slot.ticket=ticket;slot.code=unsigned(code);slot.size=0;
+    try{
+        if(code==C3X_RENDERER_RESULT_OK){
+            c3x_inputs::require(view&&view->version==C3X_RENDERER_CAMERA_VIEW_VERSION&&view->struct_size==sizeof(*view)&&
+                view->camera.version==C3X_RENDERER_CAMERA_VIEW_VERSION&&view->camera.struct_size==sizeof(view->camera)&&
+                view->camera.ticket==ticket&&!view->camera.output.bgra_pixels,
+                "invalid GPU camera completion");
+            c3x_inputs::Writer out;encode_camera(out,*view);
+            c3x_inputs::require(out.bytes.size()<=camera_completion_capacity,"camera completion limit");
+            slot.size=unsigned(out.bytes.size());std::memcpy(slot.payload,out.bytes.data(),slot.size);
+        }
+        slot.version=camera_completion_version;
+    }catch(...){/* An unavailable inspection descriptor leaves ordered readiness usable. */}
+}
+inline bool snapshot_camera_completion(CameraCompletionSlot const& slot,c3x_renderer_i64 ticket,
+                                       c3x_inputs::Bytes& bytes,int& code){
+    if(slot.version!=camera_completion_version||slot.size>camera_completion_capacity)return false;
+    code=C3X_RENDERER_RESULT_PENDING;
+    if(slot.ticket!=ticket){
+        // Request serials survive worker recreation. A newer completed request
+        // proves supersession; an older slot cannot prove the new camera ready.
+        if(ticket>0&&slot.ticket>ticket)code=C3X_RENDERER_RESULT_SUPERSEDED;
+        return true;
+    }
+    if(slot.code>C3X_RENDERER_RESULT_BUSY)return false;
+    code=int(slot.code);
+    if(code==C3X_RENDERER_RESULT_OK){if(!slot.size)return false;
+        bytes.assign(slot.payload,slot.payload+slot.size);}
+    else if(slot.size)return false;
+    return true;
 }
 inline void decode_camera(c3x_inputs::Reader& in,CameraOutput& target){
     target={};target.value.camera.version=C3X_RENDERER_CAMERA_VIEW_VERSION;

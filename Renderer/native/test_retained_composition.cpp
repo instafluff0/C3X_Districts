@@ -1379,5 +1379,87 @@ int test_retained_composition(){
         fast.clear();oracle.clear();assert(!fast.bytes()&&!fast.node_count()&&!oracle.bytes()&&!oracle.node_count());
         std::printf("PASS owned native-image outputs: format=%u source_detail=%u paired_exact=12 keyed_holes=1 clipped=1 saved_reader=1 source_revision=1 alias_fallback=1 atomic_pair_refusal=1 reset=1\n",unsigned(format),unsigned(source_detail));
     }
+    // Fragmented pre-HUD worlds can assemble directly into the already
+    // admitted generation pair. Each saved reader still owns its before-image.
+    for(auto format:{Format::rgb555,Format::rgb565}){
+        auto live_owner=std::make_unique<Compositor>(device.Get(),context.Get());auto& live=*live_owner;
+        auto fast_owner=std::make_unique<RetainedComposition>(device.Get(),context.Get());auto& fast=*fast_owner;
+        auto oracle_owner=std::make_unique<RetainedComposition>(device.Get(),context.Get());auto& oracle=*oracle_owner;oracle.set_compiled_enabled(false);
+        auto create=[&](Format f){auto id=live.create(w,h,f);assert(id);fast.create(id,w,h,f);oracle.create(id,w,h,f);return id;};
+        auto base=create(format),base_color=create(Format::bgra32),words=create(format),detail=create(Format::bgra32),saved=create(format),saved_color=create(Format::bgra32);
+        RetainedComposition::Texture current[2];
+        auto update=[&](unsigned tick){for(unsigned output=0;output<2;++output){auto id=live.create(w,h,output?Format::bgra32:format);assert(id);std::vector<unsigned> pixels(w*h);
+            for(unsigned i=0;i<pixels.size();++i)pixels[i]=output?0xff000000u|((i*173+tick*977)&0xffffffu):(i*41+tick*29)&(format==Format::rgb555?32767u:65535u);
+            assert(live.upload(id,1,pixels.data(),pixels.size()));current[output]=live.texture(id);live.destroy(id);}};
+        update(1);auto zoom=std::make_shared<c3x_renderer::ZoomTransition>();Rect panel={0,0,8,6},ink={17,13,22,18};
+        std::vector<RetainedComposition::Placed> commands={{{Kind::fill,words,0,ink,full,0,0,0x1234},19,15},{{Kind::fill,detail,0,ink,full,0,0,0xff456789},19,15}};
+        for(auto retained:{&fast,&oracle}){
+            retained->source(base,current[0].Get(),[&](long long,long long){return current[0];},true,true);
+            retained->source(base_color,current[1].Get(),[&](long long,long long){return current[1];},true,true);
+            retained->record({Kind::copy,words,base,full,full});retained->record({Kind::copy,detail,base_color,full,full});
+            retained->record({Kind::fill,words,0,panel,full,0,0,0x0421});retained->record({Kind::fill,detail,0,panel,full,0,0,0xff708090});
+            retained->snapshot(saved,words);retained->snapshot(saved_color,detail);retained->placed_batch(words,detail,commands,zoom);
+        }
+        for(unsigned tick=1;tick<=6;++tick){if(tick>1)update(tick);
+            for(unsigned output=0;output<2;++output){auto image=output?detail:words;fast.commit(image,full);oracle.commit(image,full);
+                auto actual=retained_read(device.Get(),context.Get(),fast.sample(tick,1000).Get());
+                assert(actual==retained_read(device.Get(),context.Get(),oracle.sample(tick,1000).Get()));++checks;
+                if(!output)assert(oracle.last_work().copied_pixels-fast.last_work().copied_pixels==std::uint64_t(w)*h*2);
+            }
+        }
+        for(auto image:{saved,saved_color}){fast.commit(image,full);oracle.commit(image,full);
+            assert(retained_read(device.Get(),context.Get(),fast.sample(7,1000).Get())==retained_read(device.Get(),context.Get(),oracle.sample(7,1000).Get()));++checks;}
+        fast.clear();oracle.clear();assert(!fast.bytes()&&!fast.node_count()&&!oracle.bytes()&&!oracle.node_count());
+        std::printf("PASS direct HUD before-image assembly: format=%u exact=14 avoided_full_pair_copies=6 immutable_saved_inputs=1 reset=1\n",unsigned(format));
+    }
+    // The assembled display is optional, never a native version. Animate the
+    // map underneath a fixed panel, then change topology, restore a saved
+    // image and exercise shifted self-copy and sparse/admission fallbacks.
+    for(auto format:{Format::rgb555,Format::rgb565,Format::bgra32}){
+        auto live_owner=std::make_unique<Compositor>(device.Get(),context.Get());auto& live=*live_owner;
+        auto fast_owner=std::make_unique<RetainedComposition>(device.Get(),context.Get());auto& fast=*fast_owner;
+        auto oracle_owner=std::make_unique<RetainedComposition>(device.Get(),context.Get());auto& oracle=*oracle_owner;
+        oracle.set_compiled_enabled(false);
+        auto create=[&]{auto id=live.create(w,h,format);assert(id);fast.create(id,w,h,format);oracle.create(id,w,h,format);return id;};
+        auto map=create(),screen=create(),saved=create(),sparse=create();
+        RetainedComposition::Texture current;
+        auto change_map=[&](unsigned tick){auto id=live.create(w,h,format);assert(id);std::vector<unsigned> pixels(w*h);
+            for(unsigned i=0;i<pixels.size();++i)pixels[i]=format==Format::bgra32?0xff000000u|((i*711+tick*571)&0xffffffu):(i*31+tick*47)&(format==Format::rgb555?32767u:65535u);
+            assert(live.upload(id,1,pixels.data(),pixels.size()));current=live.texture(id);live.destroy(id);};
+        change_map(1);Rect panel={0,0,8,6};unsigned color=format==Format::bgra32?0xff718294u:0x1234u;
+        for(auto retained:{&fast,&oracle}){retained->source(map,current.Get(),[&](long long,long long){return current;},true,true);
+            retained->record({Kind::copy,screen,map,full,full});retained->record({Kind::fill,screen,0,panel,full,0,0,color});retained->commit(screen,full);}
+        D3D11_TEXTURE2D_DESC desc={};desc.Width=w;desc.Height=h;desc.MipLevels=desc.ArraySize=desc.SampleDesc.Count=1;
+        desc.Format=DXGI_FORMAT_B8G8R8A8_UNORM;desc.BindFlags=D3D11_BIND_RENDER_TARGET;
+        ComPtr<ID3D11Texture2D> display[2],buffer[2];ComPtr<ID3D11RenderTargetView> target[2];
+        for(unsigned i=0;i<2;++i){checked(device->CreateTexture2D(&desc,nullptr,&display[i]));checked(device->CreateTexture2D(&desc,nullptr,&buffer[i]));
+            checked(device->CreateRenderTargetView(display[i].Get(),nullptr,&target[i]));}
+        auto compare=[&](unsigned tick){assert(fast.draw(tick,1000,target[0].Get(),display[0].Get(),buffer[0].Get())==1);
+            assert(oracle.draw(tick,1000,target[1].Get(),display[1].Get(),buffer[1].Get())==1);
+            auto actual=retained_read(device.Get(),context.Get(),display[0].Get());
+            assert(actual==retained_read(device.Get(),context.Get(),display[1].Get())&&actual==retained_read(device.Get(),context.Get(),buffer[0].Get()));++checks;};
+        assert(fast.draw(1,1000,nullptr,display[0].Get(),buffer[0].Get())==0);
+        for(unsigned tick=1;tick<=8;++tick){if(tick>1)change_map(tick);compare(tick);
+            if(tick>1){assert(fast.last_work().assembly_pixels==std::uint64_t(w)*h-48);
+                assert(fast.last_work().copied_pixels<oracle.last_work().copied_pixels);}}
+        assert(fast.draw(9,1000,target[0].Get(),display[0].Get(),buffer[0].Get())==2);
+        for(auto retained:{&fast,&oracle}){retained->snapshot(saved,screen);Rect edit={11,8,17,13};
+            retained->record({Kind::fill,screen,0,edit,full,0,0,color^0x421});retained->commit(screen,edit);}
+        compare(10);
+        Command shifted={Kind::copy,screen,screen,{4,5,22,20},full,1,2};
+        for(auto retained:{&fast,&oracle}){retained->record(shifted);retained->commit(screen,full);}compare(11);
+        for(auto retained:{&fast,&oracle})retained->commit(saved,full);compare(12);
+        // A mandatory input charge may evict the optional front before its
+        // reserve rejects. Leave less than one canvas of available capacity.
+        constexpr Id pressure=900002;fast.create(pressure,1,1,Format::bgra32);auto before=fast.bytes();
+        RetainedComposition::Direct charge;charge.input_bytes=256u*1024u*1024u-before+1;
+        fast.record({Kind::fill,pressure,0,{0,0,1,1},{0,0,1,1}},std::move(charge));
+        assert(fast.bytes()==256u*1024u*1024u-std::uint64_t(w)*h*4+1);
+        for(auto retained:{&fast,&oracle}){Rect edit={2,2,3,3};retained->record({Kind::fill,saved,0,edit,full,0,0,color^0x842});retained->commit(saved,full);}compare(13);
+        fast.destroy(pressure);
+        for(auto retained:{&fast,&oracle}){retained->record({Kind::fill,sparse,0,{3,4,9,10},full,0,0,color});retained->commit(sparse,full);}compare(14);
+        fast.clear();oracle.clear();assert(!fast.bytes()&&!fast.node_count()&&!oracle.bytes()&&!oracle.node_count());
+        std::printf("PASS retained damaged front: format=%u exact=14 failed_display_retry=1 unchanged_fixed_pixels=1 partial_commit=1 shifted_self_copy=1 saved_version=1 sparse_fallback=1 optional_admission_eviction=1 reset=1\n",unsigned(format));
+    }
     std::printf("PASS retained composition: %u exact GPU oracles, 120 independent clock frames, aliasing, paired 555/565/full color, UI versioning, partial publication, bounded overwrite and reset\n",checks);return 0;
 }

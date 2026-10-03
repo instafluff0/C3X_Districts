@@ -1,8 +1,9 @@
 #pragma once
 #include <cstdint>
+#include "../camera_completion.h"
 
 namespace c3x_helper_trial {
-constexpr unsigned wire_magic=0x32483343,wire_version=13,wire_capacity=16*1024*1024;
+constexpr unsigned wire_magic=0x32483343,wire_version=14,wire_capacity=16*1024*1024;
 struct Wire {
     unsigned magic,version,sequence,kind,subtype,size,reply_size,status,code,shared_raw,expected_code,executed,live;
     unsigned width,height,rendered,fallback,hash[4],gpu_hash[4],gpu_hash_valid;
@@ -23,5 +24,10 @@ struct Wire {
     alignas(8) volatile std::int64_t obsolete_camera_through;
     char error[128];
     unsigned char payload[wire_capacity];
+    // Independent of the ordered request/reply slot. Its named mutex protects
+    // one immutable inspection result; overwriting it never adopts a GPU map.
+    alignas(4) volatile std::int32_t camera_receiver_thread;
+    alignas(4) volatile std::int32_t camera_completion_available;
+    c3x_remote_scene::CameraCompletionSlot camera_completion;
 };
 }

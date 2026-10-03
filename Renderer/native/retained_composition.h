@@ -112,6 +112,12 @@ private:
     std::uint64_t serial=0,frame=0,front_revision=0,drawn_revision=0;
     std::vector<std::uint64_t> drawn_dependencies;
     std::vector<std::uint64_t> pending_drawn_dependencies;
+    // One optional assembled front, never a native version or recipe input.
+    // Weak patch identities cannot keep a retired camera alive.
+    struct FrontPatch {Rect area{};std::weak_ptr<Node> node;unsigned output=0;std::uint64_t revision=0;};
+    Texture assembled_front;CompositionStorage::Lease front_owned,front_physical;
+    unsigned assembled_width=0,assembled_height=0;Format assembled_format=Format::bgra32;
+    std::uint64_t assembled_revision=0;std::vector<FrontPatch> assembled_patches;
     struct PlanNode {std::weak_ptr<Node> node;bool project=false;};
     struct PrepareNode {std::weak_ptr<Node> node;bool project=false;std::weak_ptr<c3x_renderer::ZoomTransition> scale;};
     std::vector<PlanNode> collect_plan;
@@ -191,7 +197,11 @@ private:
             direct_bytes-=p->direct.input_bytes;delete p;--nodes;});
     }
     std::uint64_t resident_bytes()const{return owned_storage.bytes()+direct_bytes+replay.spatial_bytes();}
+    void release_front(){assembled_patches.clear();assembled_front.Reset();front_owned={};front_physical={};assembled_width=assembled_height=0;assembled_revision=0;}
     void reserve(std::uint64_t bytes,char const* site){
+        if(bytes<=resident_budget-resident_bytes())return;
+        // Optional front reuse cannot displace an authoritative native output.
+        release_front();
         if(bytes<=resident_budget-resident_bytes())return;
         char line[384];std::snprintf(line,sizeof(line),
             "[C3X renderer] stage=retained-admission-rejected site=%s requested=%llu resident=%llu cap=%llu physical=%llu peak=%llu recipe_eligible=%llu recipe_probed=%llu recipe_reused=%llu\n",
@@ -680,9 +690,16 @@ private:
                     for(unsigned i=0;i<2;++i){
                         pair[i]=replay.attach_target_unrecorded(n->output[i].Get(),n->inputs[i].format);
                         if(!pair[i])throw std::runtime_error("retained HUD target admission");
-                        auto base=assemble(n->inputs[i],ticks,frequency,depth+1,{},true);
-                        context->CopyResource(n->output[i].Get(),replay.texture(base));replay.recycle(base);
-                        ++work.copies;work.copied_pixels+=bytes/4;
+                        // Complete detached before-images can assemble into
+                        // their admitted output directly. Sparse/aliased reads
+                        // retain the ordinary scratch path.
+                        auto base=assemble(n->inputs[i],ticks,frequency,depth+1,{},true,true,
+                            compiled_enabled?n->output[i].Get():nullptr);
+                        if(replay.texture(base)!=n->output[i].Get()){
+                            context->CopyResource(n->output[i].Get(),replay.texture(base));
+                            ++work.copies;work.copied_pixels+=bytes/4;
+                        }
+                        replay.recycle(base);
                     }
                     bool spatial=compiled_enabled&&bind_batch(*n,ticks,frequency,depth,pair,scale);
                     if(spatial){
@@ -943,7 +960,18 @@ private:
             for(auto const& input:original->inputs)for(auto const& part:input.patches)
                 original->map_dynamic|=part.node->map_dynamic;
         }else{
-            evaluate(original,ticks,frequency,depth+1);projected_output(*n,area);
+            evaluate(original,ticks,frequency,depth+1);
+            auto source_identity=static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(original->output[patch.output].Get()));
+            auto viewport=(std::uint64_t(width)<<32)|height;
+            auto source_origin=(std::uint64_t(unsigned(original->area.left))<<32)|unsigned(original->area.top);
+            // Independent overlays do not change merely because the live map
+            // below them advanced its clock. Zoom/source changes still redraw.
+            if(compiled_enabled&&n->output[0]&&same_rect(n->area,area)&&n->view_scale==scale&&
+               n->dependencies.size()==5&&n->dependencies[0]==original->revision&&n->dependencies[1]==patch.output&&n->dependencies[2]==source_identity&&
+               n->dependencies[3]==viewport&&n->dependencies[4]==source_origin){
+                n->seen=frame;return n;
+            }
+            projected_output(*n,area);
             auto texture=original->output[patch.output];
             if(texture){
                 auto source=replay.attach_source_unrecorded(texture.Get(),Format::bgra32);
@@ -951,6 +979,7 @@ private:
                     scale,float(width/2),float(height/2),-float(original->area.left),-float(original->area.top));}
                 catch(...){replay.recycle(source);throw;}replay.recycle(source);
             }else{unsigned zero[4]={};context->ClearUnorderedAccessViewUint(n->sample_target.write.Get(),zero);}
+            n->dependencies={original->revision,patch.output,source_identity,viewport,source_origin};
         }
         n->view_scale=scale;n->seen=frame;n->revision=++serial;return n;
     }
@@ -1016,6 +1045,9 @@ private:
         // persistent output. Its inputs never reference that selection, so
         // these copies cannot overwrite a source version. Sparse reads still
         // use cleared scratch; ordinary immutable native nodes are unchanged.
+        // A mutable selected owner may already share an input plane. Only a
+        // detached target can replace the intermediate assembly allocation.
+        if(destination)for(auto const& part:p.patches)if(part.node->output[part.output].Get()==destination){destination=nullptr;break;}
         Id out=destination&&base?replay.attach_source_unrecorded(destination,p.format):
             replay.create(region.right-region.left,region.bottom-region.top,p.format,initialize&&!base);
         if(!out)throw std::runtime_error("retained composition scratch budget");
@@ -1041,6 +1073,49 @@ private:
         }catch(...){replay.recycle(out);throw;}
         return out;
     }
+    bool assemble_front(Id& image,Rect& damage){
+        if(!compiled_enabled||!front.partitioned||front.patches.size()<2){release_front();return false;}
+        std::uint64_t covered=0;
+        for(auto const& patch:front.patches){auto area=intersect(patch.area,extent(front)),source=patch.node->area;
+            if(empty(area)||!same_rect(area,patch.area)||!patch.node->output[patch.output]||
+               source.left>area.left||source.top>area.top||source.right<area.right||source.bottom<area.bottom||
+               patch.node->output[patch.output].Get()==assembled_front.Get()){release_front();return false;}
+            covered+=std::uint64_t(area.right-area.left)*(area.bottom-area.top);
+        }
+        auto pixels=std::uint64_t(front.width)*front.height;
+        if(covered!=pixels){release_front();return false;} // sparse canvases keep cleared scratch
+        if(!assembled_front||assembled_width!=front.width||assembled_height!=front.height||assembled_format!=front.format){
+            release_front();auto used=resident_bytes();
+            if(used>resident_budget||pixels*4>resident_budget-used)return false;
+            auto id=replay.create(front.width,front.height,Format::bgra32,false);if(!id)return false;
+            auto target=replay.release_import_target(id);if(!target.texture)return false;
+            assembled_front=std::move(target.texture);front_owned=owned_storage.retain(assembled_front.Get());front_physical=storage.retain(assembled_front.Get());
+            assembled_width=front.width;assembled_height=front.height;assembled_format=front.format;
+        }
+        bool complete=assembled_revision!=front_revision||assembled_patches.size()!=front.patches.size();
+        if(!complete)for(std::size_t index=0;index<front.patches.size();++index){auto const& old=assembled_patches[index];auto const& patch=front.patches[index];
+            if(old.node.lock()!=patch.node||old.output!=patch.output||!same_rect(old.area,patch.area)){complete=true;break;}
+        }
+        damage={};std::uint64_t changed_pixels=0;
+        for(std::size_t index=0;index<front.patches.size();++index){auto const& patch=front.patches[index];
+            if(!complete&&assembled_patches[index].revision==patch.node->revision)continue;
+            auto area=patch.area,source=patch.node->area;
+            D3D11_BOX box={unsigned(area.left-source.left),unsigned(area.top-source.top),0,
+                unsigned(area.right-source.left),unsigned(area.bottom-source.top),1};
+            context->CopySubresourceRegion(assembled_front.Get(),0,area.left,area.top,0,patch.node->output[patch.output].Get(),0,&box);
+            damage=empty(damage)?area:Rect{std::min(damage.left,area.left),std::min(damage.top,area.top),std::max(damage.right,area.right),std::max(damage.bottom,area.bottom)};
+            ++work.copies;changed_pixels+=std::uint64_t(area.right-area.left)*(area.bottom-area.top);
+        }
+        if(changed_pixels){++work.assemblies;work.copied_pixels+=changed_pixels;work.assembly_pixels+=changed_pixels;}
+        assembled_patches.clear();assembled_patches.reserve(front.patches.size());
+        for(auto const& patch:front.patches)assembled_patches.push_back({patch.area,patch.node,patch.output,patch.node->revision});
+        assembled_revision=front_revision;
+        // An unsuccessful prior display may already have assembled these
+        // pixels. Retry the complete display rather than declaring it drawn.
+        if(empty(damage))damage=extent(front);
+        image=replay.attach_source_unrecorded(assembled_front.Get(),front.format);
+        if(!image){release_front();return false;}return true;
+    }
 public:
     RetainedComposition(ID3D11Device* d,ID3D11DeviceContext* c):device(d),context(c),replay(d,c,128u*1024u*1024u){replay.share_storage(storage);}
     bool prepare_assets(std::function<bool()> cancelled={}){
@@ -1049,12 +1124,12 @@ public:
         return !cancelled || !cancelled();
     }
     ~RetainedComposition(){front={};images.clear();world_selection.reset();}
-    void clear(){recent_batch.reset();recent_recipes={};recipe_cursor=0;recipe_counts={};collect_plan.clear();prepare_plan.clear();plan_counts={};batch_inventories=0;invalidate_plan();front={};images.clear();world_selection.reset();replay.clear_working();admitted=true;}
-    void discard(){recent_batch.reset();recent_recipes={};recipe_cursor=0;recipe_counts={};collect_plan.clear();prepare_plan.clear();plan_counts={};batch_inventories=0;invalidate_plan();front={};images.clear();world_selection.reset();replay.clear_working();admitted=false;}
-    void uncommit(){collect_plan.clear();prepare_plan.clear();invalidate_plan();front={};}
+    void clear(){release_front();recent_batch.reset();recent_recipes={};recipe_cursor=0;recipe_counts={};collect_plan.clear();prepare_plan.clear();plan_counts={};batch_inventories=0;invalidate_plan();front={};images.clear();world_selection.reset();replay.clear_working();admitted=true;}
+    void discard(){release_front();recent_batch.reset();recent_recipes={};recipe_cursor=0;recipe_counts={};collect_plan.clear();prepare_plan.clear();plan_counts={};batch_inventories=0;invalidate_plan();front={};images.clear();world_selection.reset();replay.clear_working();admitted=false;}
+    void uncommit(){release_front();collect_plan.clear();prepare_plan.clear();invalidate_plan();front={};}
     // The interpreter remains executable at the same clock for pixel oracles.
     // This switch changes execution only, never captured native semantics.
-    void set_compiled_enabled(bool value){compiled_enabled=value;invalidate_plan();}
+    void set_compiled_enabled(bool value){compiled_enabled=value;if(!value)release_front();invalidate_plan();}
     std::uint64_t bytes()const{return resident_bytes();}
     std::uint64_t allocation_bytes()const{return storage.bytes()+direct_bytes;}
     std::uint64_t allocation_peak()const{return storage.peak();}
@@ -1297,10 +1372,12 @@ public:
         auto& versions=pending_drawn_dependencies;versions.clear();
         for(auto const& part:front.patches){evaluate(part.node,ticks,frequency,0);versions.push_back(part.node->revision);}
         if(drawn_revision==front_revision&&versions==drawn_dependencies)return 2; // no new source sample
-        auto image=assemble(front,ticks,frequency,0,{},true);
+        Id image=0;Rect damage=extent(front);
+        if(!assemble_front(image,damage))image=assemble(front,ticks,frequency,0,{},true);
         bool ok=false;
-        try{ok=replay.display(image,target,front.width,front.height,extent(front));}
-        catch(...){replay.recycle(image);throw;}replay.recycle(image);
+        try{ok=empty(damage)||replay.display(image,target,front.width,front.height,damage);}
+        catch(...){assembled_revision=0;replay.recycle(image);throw;}replay.recycle(image);
+        if(!ok)assembled_revision=0;
         // The caller publishes with Present or a keyed release followed by
         // Flush. Keep the retained copy in that same submission batch.
         if(ok){context->CopyResource(buffer,display);drawn_revision=front_revision;drawn_dependencies.swap(versions);}return ok?1:0;

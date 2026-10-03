@@ -11,6 +11,7 @@ GPU_STUB = r'''
 #include <array>
 #include <cassert>
 #include <cmath>
+#include <climits>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -19,7 +20,7 @@ GPU_STUB = r'''
 using UINT=unsigned;using LONG=int;using HRESULT=int;
 constexpr int FALSE=0,D3D11_FEATURE_D3D11_OPTIONS=1,D3D11_USAGE_DYNAMIC=1,
  D3D11_USAGE_IMMUTABLE=2,D3D11_BIND_CONSTANT_BUFFER=4,D3D11_CPU_ACCESS_WRITE=8,
- D3D11_MAP_WRITE_DISCARD=1,D3D11_MAP_WRITE_NO_OVERWRITE=2;
+ D3D11_MAP_WRITE_DISCARD=1,D3D11_MAP_WRITE_NO_OVERWRITE=2,DXGI_FORMAT_R16_UINT=2;
 bool FAILED(HRESULT h){return h<0;}bool SUCCEEDED(HRESULT h){return h>=0;}
 #define __uuidof(...) 1
 #define C3X_RENDERER64_FRESH 1
@@ -95,12 +96,14 @@ def production_harness():
     prepared = (ROOT / "Renderer/native/render_core/prepared_draw_parameters.h").read_text()
     shared = (ROOT / "Renderer/native/render_core/shared_instance_submission.h").read_text()
     issue = method(fresh, "    bool issue_records(")
+    ordered = (ROOT / 'Renderer/native/render_core/ordered_rigid_submission.h').read_text()
+    adjacent = method(ordered, 'template<class Draw,class Parameters> bool compatible_ordered_index_range(')
     grouping = shared[shared.index("inline bool opaque_rigid_material("):shared.rindex("}}")]
     return GPU_STUB + stream.replace("#include <d3d11_1.h>", "") + prepared.replace("#include <d3d11_1.h>", "") + r'''
 #include "Renderer/native/render_core/geometry_draws.h"
 #include "Renderer/native/render_core/water_material_frame.h"
 namespace c3x_renderer {namespace render_core {
-''' + grouping + r'''
+''' + grouping + adjacent + r'''
 }}
 enum GeometryLayer:unsigned {geometry_underlay,geometry_bed,geometry_water,geometry_river,geometry_wave,geometry_city,geometry_shadow,geometry_layer_count};
 struct Mesh {
@@ -109,7 +112,7 @@ struct Mesh {
  ID3D11Buffer *buffer=nullptr,*indices=nullptr,*resource_instance=nullptr;
  int* animation_texture=nullptr;
  unsigned vertex_offset=0,index_offset=0,index_count=6,index_format=0,projection_kind=3,vertex_stride=32;
- unsigned city_material=0xffffffffu,city_environment=0,city_atlas=0;
+ unsigned city_material=0xffffffffu,city_environment=0;float city_atlas[4]={};
  float instance_material=8,visual_time=-1;bool rigid_source=false;
  int translation_x=0,translation_y=0;float natural_projection[4]={};
 };

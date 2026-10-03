@@ -13,7 +13,7 @@ def production_harness():
     cache_end = issue.index("        std::array<ViewportShaderSettings", cache_start)
     assert cache_end < issue.index("        auto flush=")
     phase_start = issue.index("                if(renderer.environment_profile && (layer==geometry_water")
-    phase_end = issue.index("                context->DrawIndexed(mesh.index_count", phase_start)
+    phase_end = issue.index("                context->DrawIndexed(index_count", phase_start)
     counts = method(source, "    struct PhaseConstantCounts {") + ";"
     return r'''
 #include <array>
@@ -51,25 +51,27 @@ struct Record {
  WaterMaterialFrame material;
  bool water_visible()const{return visible;}
 };
-void submit(std::vector<Record> const& records,int layer,unsigned flush_size){
+void submit(std::vector<Record> const& records,int layer,unsigned flush_size,unsigned range_size=1){
  auto* context=&context_value;
 ''' + issue[cache_start:cache_end] + r'''
  // The cache remains outside the actual production flush body. Execute that
  // production phase body with different boundaries and inspect every draw's
  // constants against an independent unoptimized submission oracle.
  for(unsigned first=0;first<records.size();first+=flush_size)
-  for(unsigned i=first;i<records.size()&&i<first+flush_size;++i){
+  for(unsigned i=first;i<records.size()&&i<first+flush_size;){
+   unsigned end=std::min<unsigned>(records.size(),std::min(first+flush_size,i+range_size));
    auto const& chunk=records[i];auto const& mesh=chunk.mesh;
    renderer.water_scene_active=chunk.active;renderer.water_material=chunk.material;
 ''' + issue[phase_start:phase_end] + r'''
-   if(layer==geometry_wave){
+   for(unsigned record=i;record<end;++record)if(layer==geometry_wave){
     std::array<float,4> expected={mesh.visual_time<0?renderer.wave_time_seconds:mesh.visual_time,0,0,0};
     assert(!std::memcmp(expected.data(),context->wave.data(),sizeof(expected)));
    }else{
-    WaterMaterialFrame expected=chunk.material;
-    if(!chunk.active||!chunk.visible||mesh.visual_time>=0){expected.time=0;for(auto& v:expected.drift)v=0;}
+    auto const& input=records[record];WaterMaterialFrame expected=input.material;
+    if(!input.active||!input.visible||input.mesh.visual_time>=0){expected.time=0;for(auto& v:expected.drift)v=0;}
     assert(!std::memcmp(&expected,&context->water,sizeof(expected)));
    }
+   i=end;
   }
 }
 Record animated(){Record r;r.material.time=19.75f;
@@ -80,6 +82,21 @@ void reset(){context_value={};work={};phase_constant_counts={};renderer={};}
 
 
 class PhaseConstantSubmissionTests(unittest.TestCase):
+    def test_joined_ranges_keep_live_phase_and_exact_contributor_counts(self):
+        run_cpp(production_harness() + r'''
+int main(){
+ for(unsigned range:{2u,7u,256u})for(unsigned flush:{7u,256u,4096u}){
+  reset();std::vector<Record> records(10000,animated());submit(records,geometry_water,flush,range);
+  assert(context_value.water_updates==1&&phase_constant_counts.water_records==10000&&phase_constant_counts.water_hits==9999);
+  reset();submit(records,geometry_wave,flush,range);
+  assert(context_value.wave_updates==1&&phase_constant_counts.wave_records==10000&&phase_constant_counts.wave_hits==9999);
+  renderer.wave_time_seconds+=.125f;submit(records,geometry_wave,flush,range);
+  assert(context_value.wave[0]==19.875f&&context_value.wave_updates==2);
+  assert(phase_constant_counts.wave_records==20000&&phase_constant_counts.wave_hits==19998);
+ }
+}
+''')
+
     def test_identical_records_reuse_upload_across_flushes_and_rebind_each_layer(self):
         run_cpp(production_harness() + r'''
 int main(){

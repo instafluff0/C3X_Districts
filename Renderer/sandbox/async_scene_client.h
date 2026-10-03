@@ -22,6 +22,7 @@ template<class Transport>class AsyncSceneClient {
     std::function<void(Id,Id,c3x_renderer_gpu_camera_view_v1 const&)> camera_adoption_observer;
     struct Camera {
         Id ticket=0;
+        std::atomic<Id> remote_ticket{0};
         std::mutex mutex;
         bool query=false,adopted=false; // local reservation; execution counted separately
         int code=C3X_RENDERER_RESULT_PENDING;
@@ -112,6 +113,17 @@ template<class Transport>class AsyncSceneClient {
         c3x_inputs::require(!output.bgra_pixels,"asynchronous map contains CPU pixels");
         result->output.bind();result->bind();return result;
     }
+    // Transport fixtures and older optional helpers retain ordered RPC
+    // inspection. The production helper supplies an independent ready slot.
+    template<class T>static auto prepare_receipt(T& value,int)->decltype(value.prepare_camera_receipt(),void()){
+        value.prepare_camera_receipt();
+    }
+    template<class T>static void prepare_receipt(T&,long){}
+    template<class T>static auto completion(T& value,Id ticket,CameraOutput& output,int& code,int)
+        ->decltype(value.camera_completion(ticket,output,code)){
+        return value.camera_completion(ticket,output,code);
+    }
+    template<class T>static bool completion(T&,Id,CameraOutput&,int&,long){return false;}
     int query_page(Page& slot,c3x_renderer_world_page_v1& result,bool delta){
         std::lock_guard<std::mutex> lock(slot.mutex);
         if(slot.ready){slot.ready=false;result=slot.value;return slot.code;}
@@ -213,6 +225,7 @@ public:
             result=camera->ticket;return C3X_RENDERER_RESULT_PENDING;
         }
         transport.supersede_pending_camera();
+        prepare_receipt(transport,0);
         auto slot=std::make_shared<Camera>();slot->ticket=++next_camera;
         auto frame=copy_frame(*request.frame);auto identity=request.identity;
         int code=post(sizeof(*frame)+frame->tiles.size()*sizeof(frame->tiles[0])+frame->topology.size()*4,
@@ -221,6 +234,7 @@ public:
                 Id actual=0;int accepted=transport.camera_begin(value,actual);
                 if(accepted!=C3X_RENDERER_RESULT_PENDING)require_result(accepted,"camera-begin");
                 worker_camera=slot->ticket;remote_camera=actual;
+                slot->remote_ticket.store(actual,std::memory_order_release);
             },1,"camera-begin"); // latest camera wins; reliable image/unit commands stay ordered
         if(code!=C3X_RENDERER_RESULT_OK)return code;
         camera=slot;published_frame=frame;published_identity=identity;
@@ -232,6 +246,25 @@ public:
         auto slot=camera;if(!slot||slot->ticket!=wanted)return C3X_RENDERER_RESULT_SUPERSEDED;
         std::lock_guard<std::mutex> lock(slot->mutex);
         if(slot->adopted){result=displayed->value;return C3X_RENDERER_RESULT_OK;}
+        bool mailbox=false;
+        if(!slot->ready&&slot->code==C3X_RENDERER_RESULT_PENDING){
+            auto remote=slot->remote_ticket.load(std::memory_order_acquire);
+            CameraOutput ready;int code=C3X_RENDERER_RESULT_PENDING;
+            mailbox=completion(transport,remote,ready,code,0);
+            if(mailbox&&!remote)code=C3X_RENDERER_RESULT_PENDING;
+            if(mailbox){
+                if(code==C3X_RENDERER_RESULT_OK){
+                    // GPU publications deliberately omit topology storage. Its
+                    // captured revision and exact ticket still bind the source.
+                    auto captured=published_frame?published_frame->value:c3x_renderer_frame_v1{};
+                    captured.world_topology=nullptr;captured.world_topology_count=0;
+                    if(!published_frame||!same_camera_source(ready.value.camera.frame,ready.value.camera.identity,
+                        captured,published_identity))return C3X_RENDERER_RESULT_SUPERSEDED;
+                    slot->ready=std::make_unique<CameraOutput>(std::move(ready));
+                }
+                slot->code=code;
+            }
+        }
         if(slot->ready){
             Id map=++next_image;
             // This command precedes every operation using the returned ticket.
@@ -245,7 +278,7 @@ public:
                 ticket_ids.clear();ticket_ids[wanted]=actual.image.ticket;
                 image_ids[map]=actual.image.map_image;worker_map=map;
                 adopted_cameras.fetch_add(1,std::memory_order_release);
-            });
+            },0,"camera-adopt");
             if(code!=C3X_RENDERER_RESULT_OK)return code;
             displayed=std::move(slot->ready);slot->adopted=true;
             displayed->output.gpu.ticket=wanted;displayed->output.gpu.map_image=map;
@@ -253,7 +286,7 @@ public:
             displayed->bind();result=displayed->value;return C3X_RENDERER_RESULT_OK;
         }
         if(slot->code!=C3X_RENDERER_RESULT_PENDING)return slot->code;
-        if(!slot->query){
+        if(!mailbox&&!slot->query){
             slot->query=true;
             int code=post(sizeof(Camera),[this,slot]{
                 c3x_renderer_gpu_camera_view_v1 value={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(value)};
@@ -261,7 +294,7 @@ public:
                 auto copied=ready==C3X_RENDERER_RESULT_OK?copy_view(value):nullptr;
                 std::lock_guard<std::mutex> finish(slot->mutex);
                 slot->code=ready;slot->ready=std::move(copied);slot->query=false;
-            });
+            },0,"camera-ready");
             if(code!=C3X_RENDERER_RESULT_OK)return code;
         }
         return C3X_RENDERER_RESULT_PENDING;

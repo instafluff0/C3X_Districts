@@ -44,6 +44,8 @@ struct Core {
     using CameraPoll=int(*)(c3x_renderer_i64,c3x_renderer_gpu_camera_view_v1*);
     using CameraCancel=int(*)(c3x_renderer_i64);
     CameraBegin camera_begin=nullptr;CameraPoll camera_poll=nullptr,camera_ready=nullptr;CameraCancel camera_cancel=nullptr;
+    c3x_renderer_observe_camera_completion_fn observe_camera_completion=nullptr;
+    Wire* completion_wire=nullptr;HANDLE completion_mutex=nullptr;UINT completion_message=0;bool completion_registered=false;
     using CameraSupersede=void(*)(std::int64_t);
     CameraSupersede camera_supersede=nullptr;
     HANDLE control_stop=nullptr;std::thread control_thread;
@@ -115,6 +117,8 @@ struct Core {
         camera_begin=reinterpret_cast<CameraBegin>(GetProcAddress(module,"c3x_renderer_gpu_camera_begin"));
         camera_poll=reinterpret_cast<CameraPoll>(GetProcAddress(module,"c3x_renderer_gpu_camera_poll_view"));
         camera_ready=reinterpret_cast<CameraPoll>(GetProcAddress(module,"c3x_renderer_trial_camera_ready"));
+        observe_camera_completion=reinterpret_cast<c3x_renderer_observe_camera_completion_fn>(
+            GetProcAddress(module,"c3x_renderer_trial_camera_completion"));
         camera_cancel=reinterpret_cast<CameraCancel>(GetProcAddress(module,"c3x_renderer_camera_cancel"));
         camera_supersede=reinterpret_cast<CameraSupersede>(GetProcAddress(module,"c3x_renderer_trial_camera_supersede"));
         definitions=reinterpret_cast<Definitions>(GetProcAddress(module,"c3x_renderer_set_definition_paths"));
@@ -158,13 +162,48 @@ struct Core {
                 return images(&request,&result,nullptr,0);
             });
         },[image_completed]{if(image_completed)SetEvent(image_completed);});}
-    ~Core(){if(control_stop)SetEvent(control_stop);if(control_thread.joinable())control_thread.join();
+    ~Core(){
+        // Unregister under the renderer's state gate before this context and
+        // its shared slot may disappear. No late callback reaches unmapped IPC.
+        if(completion_registered&&observe_camera_completion)observe_camera_completion(nullptr,nullptr);
+        if(control_stop)SetEvent(control_stop);if(control_thread.joinable())control_thread.join();
         if(control_stop)CloseHandle(control_stop);
         image_batches.reset();direct_cadence.stop();if(module){reset();auto trace_flush=reinterpret_cast<void(*)()>(GetProcAddress(module,"c3x_renderer_trial_trace_flush"));
         if(trace_flush)trace_flush();FreeLibrary(module);}}
-    void start_control(Wire& wire,HANDLE event,HANDLE parent){
+    void publish_camera(c3x_renderer_i64 ticket,int code,c3x_renderer_gpu_camera_view_v1 const* view)noexcept{
+        if(!completion_wire||!completion_mutex)return;
+        auto locked=WaitForSingleObject(completion_mutex,0);
+        if(locked==WAIT_OBJECT_0||locked==WAIT_ABANDONED){
+            c3x_remote_scene::publish_camera_completion(completion_wire->camera_completion,ticket,code,view);
+            bool available=completion_wire->camera_completion.version==c3x_remote_scene::camera_completion_version;
+            ReleaseMutex(completion_mutex);
+            InterlockedExchange(reinterpret_cast<volatile LONG*>(&completion_wire->camera_completion_available),available?1:0);
+        }else InterlockedExchange(reinterpret_cast<volatile LONG*>(&completion_wire->camera_completion_available),0);
+        // This wakes the existing native message pump only. The copied slot
+        // and current native lifetime, never this hint, authorize adoption.
+        auto receiver=InterlockedCompareExchange(reinterpret_cast<volatile LONG*>(&completion_wire->camera_receiver_thread),0,0);
+        if(receiver&&completion_message)PostThreadMessageA(DWORD(receiver),completion_message,
+            WPARAM(std::uint64_t(ticket)&0xffffffffu),LPARAM(std::uint64_t(ticket)>>32));
+    }
+    void register_camera_completion(){
+        if(completion_registered||!completion_wire||!observe_camera_completion)return;
+        publish_camera(0,C3X_RENDERER_RESULT_PENDING,nullptr);
+        auto code=observe_camera_completion([](void* owner,c3x_renderer_i64 ticket,int result,
+                                               c3x_renderer_gpu_camera_view_v1 const* view){
+            static_cast<Core*>(owner)->publish_camera(ticket,result,view);
+        },this);
+        completion_registered=code==C3X_RENDERER_RESULT_OK;
+        if(!completion_registered)InterlockedExchange(
+            reinterpret_cast<volatile LONG*>(&completion_wire->camera_completion_available),0);
+    }
+    void start_control(Wire& wire,HANDLE event,HANDLE parent,HANDLE camera_mutex=nullptr){
         require(camera_supersede!=nullptr,"helper lacks cancellation receipt entry");
         camera_supersede(0); // construct the worker on this ordered owner first
+        if(camera_mutex&&observe_camera_completion){
+            completion_wire=&wire;completion_mutex=camera_mutex;
+            completion_message=RegisterWindowMessageA("C3X.Renderer.CameraReady.v1");
+            register_camera_completion();
+        }
         if(!event)return; // legacy replay driver has no asynchronous producer
         control_stop=CreateEventW(nullptr,TRUE,FALSE,nullptr);
         require(control_stop!=nullptr,"helper control stop creation failed");
@@ -273,6 +312,12 @@ struct Core {
             bool retirement=wire.kind==unsigned(Kind::native_bridge)&&
                 (wire.subtype==6||wire.subtype==7||wire.subtype==8);
             if(retirement)lifetime.lock();
+            if(retirement&&completion_registered){
+                require(observe_camera_completion(nullptr,nullptr)==C3X_RENDERER_RESULT_OK,
+                    "camera completion retirement failed");
+                completion_registered=false;
+                InterlockedExchange(reinterpret_cast<volatile LONG*>(&wire.camera_completion_available),0);
+            }
             require(!image_batches->status().bytes||
                 (wire.kind==unsigned(Kind::image_commands)&&wire.subtype==2),
                 "reliable prefix requires image execution receipt");
@@ -335,6 +380,9 @@ struct Core {
                 auto seed=wire.subtype==6?seed_loading:seed_world;require(seed!=nullptr,"helper lacks loading seed entry");
                 wire.code=unsigned(seed(&request));
             }else if(wire.live&&wire.kind==unsigned(Kind::camera)&&wire.subtype==1){
+                // Reset may have destroyed/recreated the DLL worker. Rebind
+                // before accepting a camera; no old observer owns this lifetime.
+                register_camera_completion();
                 c3x_renderer_camera_identity_v1 identity={};c3x_renderer_camera_identity_v1_fields(in,identity);
                 Frame frame_value;frame(in,frame_value);in.done();
                 c3x_renderer_camera_request_v1 request={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(request),&frame_value.value,identity};
@@ -348,11 +396,7 @@ struct Core {
                 wire.code=unsigned(query(ticket,&view));
                 if(wire.code==C3X_RENDERER_RESULT_OK){
                     Writer response;
-                    response(view.camera.ticket);
-                    auto identity=view.camera.identity;c3x_renderer_camera_identity_v1_fields(response,identity);
-                    frame(response,view.camera.frame);
-                    c3x_remote_scene::encode(response,view.image,view.camera.output);
-                    response(view.pixel_phase_x);response(view.pixel_phase_y);
+                    c3x_remote_scene::encode_camera(response,view);
                     require(response.bytes.size()<=wire_capacity,"remote camera result exceeds slot");
                     wire.reply_size=unsigned(response.bytes.size());
                     std::memcpy(wire.payload,response.bytes.data(),wire.reply_size);
@@ -788,9 +832,10 @@ int wmain(int argc,wchar_t** argv){
         HANDLE response=OpenEventW(EVENT_MODIFY_STATE,FALSE,object_name(base,L"_response").c_str());
         HANDLE image_completed=OpenEventW(EVENT_MODIFY_STATE,FALSE,object_name(base,L"_images_complete").c_str());
         HANDLE control=OpenEventW(SYNCHRONIZE,FALSE,object_name(base,L"_control").c_str());
+        HANDLE camera_mutex=OpenMutexW(SYNCHRONIZE|MUTEX_MODIFY_STATE,FALSE,object_name(base,L"_camera_complete_mutex").c_str());
         require(mapping&&request&&response,"scene IPC objects missing");
         auto* wire=static_cast<Wire*>(MapViewOfFile(mapping,FILE_MAP_ALL_ACCESS,0,0,sizeof(Wire)));require(wire!=nullptr,"scene IPC map failed");
-        { Core core(argv[3],false,image_completed);core.start_control(*wire,control,parent.handle);require(SetEvent(response)!=FALSE,"helper ready signal failed");
+        { Core core(argv[3],false,image_completed);core.start_control(*wire,control,parent.handle,camera_mutex);require(SetEvent(response)!=FALSE,"helper ready signal failed");
         unsigned last=wire->sequence;
         HANDLE active[2]={request,parent.handle};
         while(WaitForMultipleObjects(2,active,FALSE,120000)==WAIT_OBJECT_0){
@@ -799,7 +844,7 @@ int wmain(int argc,wchar_t** argv){
             core.execute(*wire);require(SetEvent(response)!=FALSE,"helper response signal failed");
         }
         } // Stop/join visual callbacks before unmapping their shared counters.
-        UnmapViewOfFile(wire);if(image_completed)CloseHandle(image_completed);if(control)CloseHandle(control);CloseHandle(response);CloseHandle(request);CloseHandle(mapping);return 0;
+        UnmapViewOfFile(wire);if(camera_mutex)CloseHandle(camera_mutex);if(image_completed)CloseHandle(image_completed);if(control)CloseHandle(control);CloseHandle(response);CloseHandle(request);CloseHandle(mapping);return 0;
 #else
         require(argc>=5&&argc<=12,"driver usage: --local DLL CAPTURE REPORT | --remote DLL CAPTURE REPORT HELPER [--verify-pixels] [--raw-shared] [--crash-after N] [--reserve-mib N]");
         bool remote=std::wstring(argv[1])==L"--remote",verify_pixels=false,raw_shared=false;unsigned crash_after=0,reserve_mib=0;

@@ -89,6 +89,7 @@ void native_bind(int layer){
 ''' + blocks[0] + r'''
 }
 void fresh_bind(int layer){
+ unsigned i=0,end=1;
 ''' + phase_cache + blocks[1] + r'''
 }
 int main(){

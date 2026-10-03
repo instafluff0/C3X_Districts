@@ -182,6 +182,7 @@ int main(){
 #include <array>
 #include <vector>
 #include <cstddef>
+#include <memory>
 struct Resource {
  unsigned references=1,releases=0;
  void AddRef(){assert(references);++references;}
@@ -189,7 +190,7 @@ struct Resource {
 };
 using ID3D11ShaderResourceView=Resource;
 struct Stream {void clear(){}};
-struct Lease {void reset(){}};
+using Lease=std::shared_ptr<Resource>;
 struct SourceShadow {
  Resource* view=nullptr;Resource* borrowed_view=nullptr;
  Resource *instance_vertex=nullptr,*resident_instance_vertex=nullptr,*instance_layout=nullptr,*resident_instance_layout=nullptr,*rigid_vertex=nullptr,*resident_rigid_vertex=nullptr;
@@ -202,7 +203,8 @@ struct SourceShadow {
 struct Renderer {SourceShadow source_shadow;std::size_t fresh_shadow_working_bytes=0;} renderer;
 struct SandboxSceneShadow {
  Resource *production_view=nullptr,*texture=nullptr,*view=nullptr,*vertex=nullptr,*instance_vertex=nullptr,*rigid_vertex=nullptr,*opaque=nullptr,*cutout=nullptr,*layout=nullptr,*feature_layout=nullptr,*natural_layout=nullptr,*city_layout=nullptr,*instance_layout=nullptr,*constants=nullptr,*maximum=nullptr,*raster=nullptr;
- std::array<Resource*,25> targets{};std::vector<Resource*> patch_buffers;Lease shared_front;
+ std::array<Resource*,25> targets{};std::vector<Resource*> patch_buffers;Lease shared_front,shadow_front;
+ std::vector<Lease> terrain_batches;
  std::size_t production_field_bytes=0;
  template<class T> static void drop(T*& pointer){if(pointer)pointer->Release();pointer=nullptr;}
  void retain_source(){
@@ -211,19 +213,23 @@ struct SandboxSceneShadow {
 ''' + destructor + r'''
 };
 int main(){
- Resource original,fresh,current;
+ Resource original,fresh,current,body,caster,terrain;
  renderer.source_shadow.view=&original;
  {
   SandboxSceneShadow owner;owner.retain_source();owner.view=&fresh;
+  auto lease=[](Resource& value){return Lease(&value,[](Resource* pointer){pointer->Release();});};
+  owner.shared_front=lease(body);owner.shadow_front=lease(caster);owner.terrain_batches.push_back(lease(terrain));
   renderer.source_shadow.borrowed_view=&fresh;renderer.fresh_shadow_working_bytes=228;
   assert(renderer.source_shadow.sampled_view()==&fresh && original.references==2);
   // Reset clears the borrowed pointer, releasing only the original ownership.
   renderer.source_shadow.clear();assert(!renderer.source_shadow.sampled_view());
   assert(original.references==1 && fresh.references==1 && renderer.fresh_shadow_working_bytes==228);
+  assert(body.references==1&&caster.references==1&&terrain.references==1);
   // New device source ownership exists before the old FRESH owner is retired.
   renderer.source_shadow.view=&current;assert(renderer.source_shadow.sampled_view()==&current);
  }
  assert(!original.references && !fresh.references && current.references==1);
+ assert(!body.references&&!caster.references&&!terrain.references);
  assert(renderer.source_shadow.view==&current && !renderer.source_shadow.borrowed_view && !renderer.fresh_shadow_working_bytes);
  renderer.source_shadow.clear();assert(!current.references);
  Resource partial;

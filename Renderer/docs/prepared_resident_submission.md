@@ -210,45 +210,23 @@ the delivery evidence.
 
 ### Current qualification — October 3
 
-R5 is implemented and correctness-tested, but has not qualified as an overall
-performance improvement against `082c9962`. Original busy 30/30 and light 13/13
-steps completed with normal effects and identical 266-file shader caches. Exact
-Present/view/workload joins admit 21 busy and 12 light steps; busy idle workloads
-differ and cannot support a comparison. Earlier failed revisions remain evidence.
+R5's host and native correctness witnesses remain valid for that frozen source.
+Its PROFILE=1 gameplay measurements included an expensive memory census and are
+diagnostic; they do not qualify ordinary performance. Detailed census now requires
+`C3X_RENDERER_MEMORY_CENSUS=1` together with profiling. Missing GPU/census rows
+remain unavailable.
 
-| Matched correct-view latency | Control median / p95 | R5 median / p95 |
-| --- | --- | --- |
-| Busy scroll, 10 steps | 1,626 / 2,302 ms | 2,584 / 4,163 ms |
-| Busy zoom, 3 steps | 1,046 / 1,481 ms | 1,318 / 1,486 ms |
-| Light scroll, 4 steps | 334 / 370 ms | 400 / 545 ms |
-| Light zoom, 3 steps | 427 / 452 ms | 450 / 459 ms |
+The original PROFILE=0, census-off control/candidate baseline is sealed under
+`Renderer/.cache/memory-census-step/`. Light completed 13/13 requests and admits
+12 exact matched endpoints. Busy candidate failed the original acknowledgement
+bound at step 30; its complete performance qualification remains false. Exact
+pre-failure endpoints are descriptive only. The independent critical-path audit
+separates completion, native adoption and correct Present, and does not classify
+unobserved intermediate displayed movement.
 
-Busy first jump improves 4,768→3,417 ms and warm return 2,548→1,840 ms.
-Busy scroll Present-return cadence declines 4.79→3.41/s; light idle declines
-57.2→54.9/s. These are successful Present returns, not physical scanout.
-Ready-map time rises 80.99→111.77 seconds busy and 47.15→48.85 seconds light.
-
-The fitting 512-tile witness admits all 1,024 world keys before its first viewport:
-twelve destinations perform zero world compilation, restoration or upload.
-Placement uploads 463,168 bytes across those destinations, so the zero-total-upload gate
-remains failed. The busy sweep completes RAM recipes but defers 334,347,972 GPU
-bytes across 3,616 capacity-classified keys; it is partially resident. Its 85
-loading cache-refusal events are capacity-classified and do not count unique keys.
-
-All 18 host tests and native depth/PCF/fog oracles pass. Across sixteen fixed-pose
-iterations, retained CPU work totals 4.99 ms versus 57.96 ms forced rebuild.
-In matched busy scroll windows,
-sampled shadow CPU means fall 80.9→47.9 ms (33/32 observations), while overall
-latency regresses. These spans do not identify the cause of that regression.
-The single R3 query diagnostic measures roughly
-0.17 ms mean setup overhead in its eight-unit fixture; it does not explain the
-busy setup residual. GPU durations remain unavailable.
-
-The original accepted runtime is restored and verified. Keep it for play while
-Astra reviews the candidate. A separate fallback could redraw the full field on
-atlas misses while retaining validated proofs and unchanged-atlas reuse; that
-option needs qualification.
-Delivery delay, water batching and packet saturation remain follow-ups. Exact
-source/trio bindings, failed attempts, selected images and raw logs are under
-`Renderer/.cache/gpu-shadow-correction-step/`. Verified unselected images and
-completed compiler objects are deleted after seals; no archives are created.
+The integrated navigation/submission refactor is awaiting a complete source
+review before broad verification, staging or gameplay comparison. Existing normal
+effects, renderer ownership and the accepted runtime are preserved. Source/trio
+receipts, raw logs, selected endpoint images and cleanup inventories retain the
+baseline; unselected screenshots and completed compiler objects are deleted
+without archives. No measured improvement is claimed for untested source.

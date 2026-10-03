@@ -56,6 +56,7 @@ public:
         unsigned index_offset=0,selection_offset=0;
         std::vector<Item> items;
         std::uint64_t used=0;
+        unsigned mapped=0;
     private:
         friend class OrderedRigidSubmission;
         Charge charge;
@@ -86,23 +87,34 @@ private:
     std::size_t owner_bytes()const{return sizeof(*this)+sizeof(Ledger)+64;}
     bool room(std::size_t bytes,unsigned count)const{
         if(bytes>ledger->limit || count>entry_limit)return false;
-        // Capacity refusal preserves already prepared subranges. Cycling an
-        // oversized visible set through an LRU would repack it every request.
-        // Scope retirement is the only replacement boundary.
+        // Capacity refusal preserves already prepared subranges. Only exact
+        // membership retirement replaces them; an oversized unchanged view
+        // must not cycle through an LRU and repack every request.
         return ledger->bytes.load()<=ledger->limit-bytes && count<=entry_limit-entries.size();
     }
 public:
-    std::uint64_t builds=0,reuses=0,refusals=0,draws=0,drawn_records=0,uploaded_bytes=0,placement_copies=0;
+    std::uint64_t builds=0,reuses=0,refusals=0,draws=0,drawn_records=0,uploaded_bytes=0,placement_copies=0,retired_entries=0;
     OrderedRigidSubmission(){ledger->limit=budget-owner_bytes();}
     OrderedRigidSubmission(OrderedRigidSubmission const&)=delete;
     OrderedRigidSubmission& operator=(OrderedRigidSubmission const&)=delete;
     void select_scope(std::array<std::uint64_t,3> const& value){if(scope!=value){clear();scope=value;}}
     void clear(){entries.clear();pages=0;scope={};}
+    // Called when canonical membership changes, not on intervening visual
+    // ticks. Existing draw ranges are leases: removing an owner-map entry
+    // cannot free its resources or byte charge while a reader still uses it.
+    template<class Present> void retire_missing(Present present){
+        for(auto i=entries.begin();i!=entries.end();){
+            if(present(i->first)){++i;continue;}
+            if(!--i->second.page->mapped)--pages;
+            i=entries.erase(i);++retired_entries;
+        }
+    }
     std::size_t bytes()const{return owner_bytes()+ledger->bytes.load();}
     std::size_t gpu_bytes()const{return ledger->gpu.load();}
     std::size_t metadata_bytes()const{return owner_bytes()+ledger->cpu.load();}
     std::size_t peak_bytes()const{return owner_bytes()+ledger->peak.load();}
     unsigned page_count()const{return pages;}
+    bool contains(Key const& key)const{return entries.count(key)!=0;}
     bool can_append(std::size_t geometry_bytes,unsigned count)const{
         if(!count || count>record_limit || geometry_bytes>page_bytes_limit)return false;
         auto metadata=sizeof(Page)+64+count*(sizeof(Item)+node_bytes);
@@ -167,7 +179,7 @@ public:
             catch(...){for(auto const& item:page->items){auto found=entries.find(item.key);
                 if(found!=entries.end() && found->second.page==page)entries.erase(found);}throw;}
             if(!inserted)return refuse();
-            page->used=++serial;++pages;++builds;uploaded_bytes+=geometry_bytes;placement_copies+=count;
+            page->mapped=inserted;page->used=++serial;++pages;++builds;uploaded_bytes+=geometry_bytes;placement_copies+=count;
             return page;
         }catch(...){return refuse();}
     }
@@ -195,4 +207,21 @@ public:
         return n;
     }
 };
+
+// Join adjacent index ranges only when the complete draw operands agree.
+// No sorting is involved: the combined draw visits the original primitives
+// in their original order, including transparent water and foreground work.
+template<class Draw,class Parameters> bool compatible_ordered_index_range(
+        Draw const& a,Draw const& b,Parameters const& x,Parameters const& y,unsigned index_stride){
+    auto const& first=a.content();auto const& next=b.content();
+    return !first.rigid_source && !next.rigid_source && first.buffer==next.buffer &&
+        first.indices==next.indices && first.vertex_stride==next.vertex_stride &&
+        first.vertex_offset==next.vertex_offset && first.index_format==next.index_format &&
+        std::uint64_t(first.index_offset)+std::uint64_t(first.index_count)*index_stride==next.index_offset &&
+        first.animation_texture==next.animation_texture && first.resource_instance==next.resource_instance &&
+        first.city_material==next.city_material && first.city_environment==next.city_environment &&
+        !std::memcmp(first.city_atlas,next.city_atlas,sizeof(first.city_atlas)) &&
+        !std::memcmp(&first.visual_time,&next.visual_time,sizeof(first.visual_time)) &&
+        a.water_visible()==b.water_visible() && !std::memcmp(&x,&y,sizeof(x));
+}
 }}
