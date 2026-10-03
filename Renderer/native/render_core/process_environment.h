@@ -21,14 +21,15 @@ inline DWORD cached_environment(char const* name,char* buffer,DWORD size){
     for(auto const& entry:entries)if(entry.name==name){found=&entry;break;}
     if(!found){
         Entry entry;entry.name=name;
-        char small[256]={};
-        DWORD length=GetEnvironmentVariableA(name,small,DWORD(sizeof(small)));
-        if(length>=sizeof(small)){
-            std::string large(length,'\0');
-            length=GetEnvironmentVariableA(name,large.data(),length);
-            large.resize(length);entry.value=std::move(large);entry.present=true;
+        // Avoid the Windows SDK's lowercase type macros in local names.
+        char inline_value[256]={};
+        DWORD length=GetEnvironmentVariableA(name,inline_value,DWORD(sizeof(inline_value)));
+        if(length>=sizeof(inline_value)){
+            std::string heap_value(length,'\0');
+            length=GetEnvironmentVariableA(name,heap_value.data(),length);
+            heap_value.resize(length);entry.value=std::move(heap_value);entry.present=true;
         }else if(length || GetLastError()!=ERROR_ENVVAR_NOT_FOUND){
-            entry.value.assign(small,length);entry.present=length!=0;
+            entry.value.assign(inline_value,length);entry.present=length!=0;
         }
         entries.push_back(std::move(entry));found=&entries.back();
     }

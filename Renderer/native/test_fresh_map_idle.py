@@ -50,6 +50,7 @@ struct Device {
 struct LARGE_INTEGER {long long QuadPart=0;};
 void QueryPerformanceCounter(LARGE_INTEGER* value){value->QuadPart=1;}
 unsigned GetEnvironmentVariableA(char const*,char*,unsigned){return 0;}
+namespace c3x_renderer{namespace render_core{unsigned cached_environment(char const* n,char* b,unsigned s){return GetEnvironmentVariableA(n,b,s);}}}
 unsigned renders=0,mesh_prepares=0;
 std::uint64_t c3x_renderer64_unit_selection_revision(){return 1;}
 int c3x_renderer64_prepare_unit_meshes(){++mesh_prepares;return C3X_RENDERER_RESULT_OK;}
