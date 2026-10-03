@@ -54,6 +54,7 @@ bool c3x_renderer64_static_refinement_pending(float zoom);
 #include "gpu_composition_session.h"
 #include "gpu_visibility.h"
 #include "render_core/dynamic_scene_input.h"
+#include "render_core/process_environment.h"
 #include "gpu_native_presenter.h"
 #include "remote_renderer_backend.h"
 #include "visual_cadence.h"
@@ -12691,6 +12692,14 @@ public:
         trial_surface_handle=surface;trial_surface_width=width;trial_surface_height=height;
         return submit_locked(lock,Command::trial_bind_surface);
     }
+    // Retain a copy of each presented frame only for explicit pixel readback
+    // (input replay sets C3X_RENDERER_RETAIN_DISPLAY; a request also enables it).
+    std::atomic<bool> trial_surface_readback{false};
+    bool trial_retain_surface()const{
+        static bool requested=[]{char value[8]={};
+            return GetEnvironmentVariableA("C3X_RENDERER_RETAIN_DISPLAY",value,sizeof(value))&&value[0]=='1';}();
+        return requested||trial_surface_readback.load(std::memory_order_relaxed);
+    }
     static bool trial_legacy_cadence(){
         static bool legacy=[]{char value[8]={};
             return GetEnvironmentVariableA("C3X_RENDERER_LEGACY_CADENCE",value,sizeof(value))&&value[0]=='1';}();
@@ -12705,6 +12714,7 @@ public:
     }
     int trial_surface_pixels(unsigned* output,unsigned capacity,unsigned& width,unsigned& height){
         std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);
+        trial_surface_readback.store(true,std::memory_order_relaxed);
         int code=submit_locked(lock,Command::trial_surface_pixels);
         width=trial_width;height=trial_height;
         if(code!=C3X_RENDERER_RESULT_OK)return code;
@@ -14647,7 +14657,7 @@ private:
 #ifdef C3X_RENDERER64_FRESH
         if(fresh_map){
             char detail_option[32]={};float sharpness=.35f;
-            if(GetEnvironmentVariableA("C3X_RENDERER_SCENE_SHARPNESS",detail_option,sizeof(detail_option))){
+            if(c3x_renderer::render_core::cached_environment("C3X_RENDERER_SCENE_SHARPNESS",detail_option,sizeof(detail_option))){
                 float requested=float(std::atof(detail_option));
                 if(std::isfinite(requested))sharpness=std::clamp(requested,0.f,1.f);
             }
@@ -15007,7 +15017,7 @@ private:
                         if(session.publish(static_cast<ID3D11Texture2D*>(gpu_publication.resident.texture.get()),++renderer_state.gpu_serial,
                             gpu_publication.source_x,gpu_publication.source_y,gpu_metadata.width,gpu_metadata.height,std::move(map_sample))){
                             char route[8]={};
-                            if(GetEnvironmentVariableA("C3X_RENDERER_ROUTE_WITNESS",route,sizeof(route))&&route[0]=='1'){
+                            if(c3x_renderer::render_core::cached_environment("C3X_RENDERER_ROUTE_WITNESS",route,sizeof(route))&&route[0]=='1'){
                                 auto const& f=gpu_publication.frame;auto const& id=gpu_publication.identity;
                                 int ax=0,ay=0;if(f.tile_count&&f.tiles){ax=f.tiles[0].anchor_x-f.tiles[0].tile_x*f.tile_width/2;ay=f.tiles[0].anchor_y-f.tiles[0].tile_y*f.tile_height/2;}
                                 char detail[640];sprintf_s(detail,
@@ -15257,7 +15267,7 @@ private:
                 if(trial_surface_swap&&trial_surface_back&&trial_surface_view&&trial_surface_buffer&&renderer_state.gpu_composition&&visual_frequency>0){
                     LARGE_INTEGER started={},prepared={},sampled={},finished={};
                     char route[8]={};
-                    bool route_witness=GetEnvironmentVariableA("C3X_RENDERER_ROUTE_WITNESS",route,sizeof(route))&&route[0]=='1';
+                    bool route_witness=c3x_renderer::render_core::cached_environment("C3X_RENDERER_ROUTE_WITNESS",route,sizeof(route))&&route[0]=='1';
                     bool phase_probe=renderer_state.trace.level>=2||route_witness;
                     if(phase_probe)QueryPerformanceCounter(&started);
                     if(phase_probe)QueryPerformanceCounter(&prepared);
@@ -15268,7 +15278,7 @@ private:
                     bool presentation_ready=trial_surface_permit.ready();
                     if(!presentation_ready)trial_visual_permit_denials.fetch_add(1,std::memory_order_relaxed);
                     int drawn=presentation_ready?renderer_state.gpu_composition->visual_frame(visual_ticks,visual_frequency,
-                        trial_surface_view.Get(),trial_surface_back.Get(),trial_surface_buffer.Get()):0;
+                        trial_surface_view.Get(),trial_surface_back.Get(),trial_retain_surface()?trial_surface_buffer.Get():nullptr):0;
                     if(phase_probe)QueryPerformanceCounter(&sampled);
                     // New UI commits and animated map samples share this
                     // cadence. Unchanged static fronts have nothing to present.
@@ -17377,7 +17387,7 @@ extern "C" __declspec(dllexport) int c3x_renderer_native_navigation(int action,v
         if(!native_composition)return finish(C3X_RENDERER_RESULT_SUPERSEDED);
         int code=native_composition->navigate(action,image,*view,request);
         char witness[8]={};
-        if(GetEnvironmentVariableA("C3X_RENDERER_ROUTE_WITNESS",witness,sizeof(witness)) && !std::strcmp(witness,"1")){
+        if(c3x_renderer::render_core::cached_environment("C3X_RENDERER_ROUTE_WITNESS",witness,sizeof(witness)) && !std::strcmp(witness,"1")){
             bool source=action==C3X_NAV_POLL && code==C3X_RENDERER_RESULT_OK && native_composition->offered_navigation();
             bool demand=action==C3X_NAV_REQUEST && code==C3X_RENDERER_RESULT_PENDING && native_composition->requested_ticket()>0;
             if(source||demand){LARGE_INTEGER now={},frequency={};QueryPerformanceCounter(&now);QueryPerformanceFrequency(&frequency);

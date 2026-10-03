@@ -171,6 +171,56 @@ restores timer pacing, `Present(0)` and latency 1.
 `frame-preparation-ready` require `C3X_RENDERER_TRACE=2`. Aggregate and
 failure records are unchanged.
 
+## Second round (same day)
+
+**Runtime shader root.** The current build needs resident vertex entries
+that the pinned `Renderer64CutoverControl` pack lacks. Launching without
+`C3X_RENDERER_SHADER_SOURCE_ROOT` failed shader setup every frame (black map,
+overlay smearing). The runtime and `BUILD_RENDERER64.bat` now default to the
+local prepared pack `Renderer/packs/Renderer64ResidentRuntime` when present
+(generate it with `prepare_resident_submission_shaders.py --baseline
+Renderer/packs/Renderer64CutoverControl --out
+Renderer/packs/Renderer64ResidentRuntime`). `BUILD_RENDERER64.bat` is now CRLF:
+`cmd.exe` label lookup fails in LF-only batch files once offsets shift.
+
+**Dirty-rectangle repair (gameplay).** A local world change (fog reveal,
+road, irrigation, city growth, ownership) used to mark the whole retained
+raster stale and re-render it. The displayed raster now diffs its retained
+contributor proofs against the current contributors (added, removed, changed
+content or tile visibility), clears and redraws only those records' screen
+rectangles plus a 96 px shadow/light reach, then rebuilds its proofs. Broad
+changes (over 45% of the raster) still refine progressively. Industry analog:
+dirty-region invalidation in retained-mode UI and tile caches.
+
+**Water mirror reuse while scrolling.** The mirror key included the camera,
+so every scroll step re-rendered the reflected scene. The water pass samples
+the mirror at `screen + NativeReflectionTarget.zw`, so a camera-only change is
+an offset: while the camera moves (and within 160×96 display px) the mirror is
+reused with that offset; the exact mirror (with unit reflections) is redrawn
+once the camera is still for 150 ms.
+
+**Territory borders retained.** Every bordered tile's full terrain mesh was
+redrawn every frame. Borders not near water (conservative 2-tile test) are now
+drawn into the retained static raster with its strips (scissored, region
+margins); only near-water borders stay in the per-frame pass above animated
+water. Ownership is part of each contributor key, so changes repair the raster.
+
+**Shadow region keyed to the zoom destination.** Tracking the animating zoom
+refit the shadow field (a full page redraw plus refinement restart) at every
+ladder step crossed during one wheel notch. It now refits at most once per
+destination; during zoom-in the screen edges can lack dynamic-layer shadows for
+the ~166 ms animation.
+
+**Smaller jump bootstrap.** The low-resolution jump image covers the view plus
+a 128 px band instead of the whole guarded region (~25% less first-frame work).
+
+**Per-frame CPU trims.** Diagnostic `C3X_SANDBOX_*` switches were read with
+`GetEnvironmentVariableA` (process-wide lock and scan) per layer and per
+record; they are memoized (`render_core/process_environment.h`). The full-screen
+copy of every presented frame into a readback buffer now happens only for
+input replay (`C3X_RENDERER_RETAIN_DISPLAY`, set by `replay_inputs`) or after a
+readback request.
+
 ## Switches (all default to the fast path)
 
 | Variable | Effect |
@@ -230,17 +280,16 @@ scrolling, refit on real extent change), `test_native_visual_cadence.py`
    `EQUAL` testing for alpha-tested vegetation/decals to stop shading hidden
    fragments. With progressive refinement this now buys *time to full
    quality*, not frame rate.
-2. **Territory borders** redraw every bordered tile's full terrain mesh every
-   frame (one draw + constant update each, hundreds of draws in a developed
-   empire). Retain a border overlay keyed by camera/zoom/border revision and
-   composite it under units.
+2. **Near-water territory borders** still redraw per frame (see above).
 3. **Water** is fully shaded every frame. Cache the camera-independent part
    (shore distance, depth, bed color, static reflection) in the retained
    layer and evaluate only the animated normal/specular per frame, or shade
    water at half resolution with a depth-aware upsample.
-4. **Retained composition** still copies the full display into its retained
-   buffer every changed frame and walks the whole native graph; make the copy
-   demand-driven and cache map-independent HUD as an alpha layer.
+4. **Retained composition** still walks the whole native graph each changed
+   frame; cache map-independent HUD as an alpha layer.
+7. **Shadow pages** for a new area (jump, destination zoom change) are drawn
+   in one frame; drawing them progressively would remove the remaining jump
+   hitch but needs page completeness in the static content key.
 5. **Game thread** still runs Civ III's full visible-map traversal for each
    native map draw (≈4 ms + ≈2.5 ms capture). Skip native rasterization when
    custom rendering owns the map and keep only the anchor/fact enumeration.

@@ -101,7 +101,7 @@ float4 PS(P p,uint sample:SV_SampleIndex):SV_Target{
         b.BlendOp=b.BlendOpAlpha=D3D11_BLEND_OP_ADD;b.RenderTargetWriteMask=15;
         if(FAILED(device->CreateBlendState(&bd,&blend)))return false;
         D3D11_RASTERIZER_DESC rd={};rd.FillMode=D3D11_FILL_SOLID;rd.CullMode=D3D11_CULL_NONE;
-        rd.DepthClipEnable=TRUE;rd.MultisampleEnable=TRUE;
+        rd.DepthClipEnable=TRUE;rd.MultisampleEnable=TRUE;rd.ScissorEnable=TRUE;
         if(FAILED(device->CreateRasterizerState(&rd,&raster)))return false;
         D3D11_DEPTH_STENCIL_DESC ds={};ds.DepthEnable=FALSE;ds.DepthWriteMask=D3D11_DEPTH_WRITE_MASK_ZERO;
         if(FAILED(device->CreateDepthStencilState(&ds,&no_depth)))return false;
@@ -109,16 +109,21 @@ float4 PS(P p,uint sample:SV_SampleIndex):SV_Target{
     }
 public:
     template<class Records,class Settings,class Visible>
+    // Region targets (retained static rasters) pass their guard margins and the
+    // strip being written; scissoring keeps already covered pixels untouched.
     bool draw(ID3D11Device* device,ID3D11DeviceContext* context,Records const& records,
               Settings const& settings,render_core::LinearTarget& target,
-              unsigned width,unsigned height,float zoom,float scale,Visible visible){
+              unsigned width,unsigned height,float zoom,float scale,Visible visible,
+              float margin_x=0,float margin_y=0,D3D11_RECT const* scissor=nullptr){
         bool any=false;for(auto const& r:records)any|=r.territory_edges!=0;
         if(!any)return true;
         if(!target.depth_samples || !ensure(device,target.sample_count))return false;
         auto rt=target.target;context->OMSetRenderTargets(1,&rt,nullptr);
         context->OMSetDepthStencilState(no_depth.Get(),0);context->OMSetBlendState(blend.Get(),nullptr,~0u);
         context->RSSetState(raster.Get());D3D11_VIEWPORT vp={0,0,float(target.width),float(target.height),0,1};
-        SceneProjection(width,height,zoom).viewport(vp,4,0,0,scale);context->RSSetViewports(1,&vp);
+        SceneProjection(width,height,zoom).viewport(vp,4,margin_x,margin_y,scale);context->RSSetViewports(1,&vp);
+        D3D11_RECT clip=scissor?*scissor:D3D11_RECT{0,0,LONG(target.width),LONG(target.height)};
+        context->RSSetScissorRects(1,&clip);
         context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         context->VSSetShader(vertex.Get(),nullptr,0);context->PSSetShader(pixel.Get(),nullptr,0);
         auto cb=constants.Get();context->VSSetConstantBuffers(0,1,&cb);context->PSSetConstantBuffers(0,1,&cb);

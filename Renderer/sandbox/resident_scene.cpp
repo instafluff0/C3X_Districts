@@ -329,7 +329,7 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
     if(frame_trace)renderer.trace.write("fresh-callback","scene-ready",true);
     ++renderer.route_frame_sequence;
     char route[8]={};
-    if(GetEnvironmentVariableA("C3X_RENDERER_ROUTE_WITNESS",route,sizeof(route))&&route[0]=='1'){
+    if(c3x_renderer::render_core::cached_environment("C3X_RENDERER_ROUTE_WITNESS",route,sizeof(route))&&route[0]=='1'){
         std::uint64_t facts=14695981039346656037ull,poses=facts,ordered=facts,source=facts;
         auto hash=[](std::uint64_t& value,void const* data,std::size_t size){
             auto bytes=static_cast<unsigned char const*>(data);

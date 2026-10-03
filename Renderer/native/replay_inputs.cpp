@@ -49,6 +49,9 @@ void apply_settings(Reader& header){
         if(key.find("TRACE")==std::string::npos&&key.find("RECORD")==std::string::npos&&key!="C3X_RENDERER_MANUAL_VISUAL")SetEnvironmentVariableA(key.c_str(),value.c_str());}header.done();
 }
 int wmain(int argc,wchar_t** argv){
+    // Replay reads presented map pixels back; the helper (a child process)
+    // keeps its per-frame display copy only when this is set.
+    SetEnvironmentVariableA("C3X_RENDERER_RETAIN_DISPLAY","1");
     HMODULE module=nullptr;HWND window=nullptr;void* reservation=nullptr;int exit_code=0;
     try{
         require(argc>=4&&std::wstring(argv[1])==L"--development","usage: replay_inputs --development DLL INPUT_DIRECTORY [--frames DIR LAST | --range DIR FIRST LAST | --seconds DIR START END] [--timeline NEW_FILE] [--fingerprints NEW_FILE] [--trace NEW_FILE] [--allow-prefix] [--before-event N] [--compare-candidate [--pixel-audit]] [--performance NEW_FILE] [--reserve-mib N] [--watch] [--realtime NEW_FILE] [--x64-scene HELPER DLL NEW_REPORT] [--x64-primary HELPER DLL] [--direct-surface-trial]");

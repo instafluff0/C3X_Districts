@@ -1389,7 +1389,9 @@ public:
         if(!ok)assembled_revision=0;
         // The caller publishes with Present or a keyed release followed by
         // Flush. Keep the retained copy in that same submission batch.
-        if(ok){context->CopyResource(buffer,display);drawn_revision=front_revision;drawn_dependencies.swap(versions);}return ok?1:0;
+        // The retained copy only serves explicit readback (input replay and
+        // diagnostics); a null buffer skips a full-screen copy every frame.
+        if(ok){if(buffer)context->CopyResource(buffer,display);drawn_revision=front_revision;drawn_dependencies.swap(versions);}return ok?1:0;
     }
     double view_scale()const{return selected_view_scale;}
     Work last_work()const{return work;}
