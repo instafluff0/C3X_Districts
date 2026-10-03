@@ -32,7 +32,7 @@ if errorlevel 1 goto fail
 if not exist "build\renderer64\obj" mkdir "build\renderer64\obj"
 cl /nologo /std:c++17 /EHsc /O2 /W4 /WX /bigobj /DC3X_HELPER_TRIAL /DC3X_RENDERER64_FRESH %C3X_RENDERER_ORACLE_FLAGS% /LD ..\sandbox\resident_scene.cpp terrain_scene_runtime.cpp environment_runtime.cpp terrain_definition_runtime.cpp scene_export.cpp frame_scheduler.cpp /Fo:build\renderer64\obj\ /Fe:build\renderer64\C3XRenderer_x64.dll /link /DEF:c3x_renderer.def /IMPLIB:build\renderer64\C3XRenderer_x64.lib d3d11.lib d3dcompiler.lib dxgi.lib dcomp.lib gdi32.lib msimg32.lib user32.lib bcrypt.lib ole32.lib windowscodecs.lib
 if errorlevel 1 goto fail
-cl /nologo /std:c++17 /EHsc /O2 /W4 /WX /wd4191 helper_trial\scene_workload.cpp /Fo:build\renderer64\obj\scene_workload.obj /Fe:build\renderer64\C3XRendererHelper64.exe /link psapi.lib d3d11.lib dxgi.lib
+cl /nologo /std:c++17 /EHsc /O2 /W4 /WX /wd4191 helper_trial\scene_workload.cpp /Fo:build\renderer64\obj\scene_workload.obj /Fe:build\renderer64\C3XRendererHelper64.exe /link psapi.lib d3d11.lib dxgi.lib user32.lib
 if errorlevel 1 goto fail
 
 if /i "%~1"=="no-stage" goto done
