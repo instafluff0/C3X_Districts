@@ -699,7 +699,7 @@ public:
     std::size_t cpu_preparation_budget=16u*1024u*1024u;
     RendererTrace trace;
     c3x_renderer::render_core::GpuFrameTelemetry gpu_telemetry;
-    bool profiling=false;
+    bool profiling=false,detailed_memory_census=false;
     using AnimationGpu=c3x_renderer::render_core::GpuAnimationTelemetry;
     AnimationGpu animation_gpu;
     void poll_animation_gpu(){
@@ -792,7 +792,7 @@ public:
     }
     void memory_sample(char const* phase) {
         // Constant-cost live telemetry includes the game's address space. The
-        // detailed VirtualQuery/buffer walk below remains profiling-only.
+        // detailed VirtualQuery/buffer walk requires the profiling census opt-in.
         auto now=GetTickCount64();
         if(now-last_memory_status>=1000){
             MEMORYSTATUSEX memory={};memory.dwLength=sizeof(memory);
@@ -823,30 +823,37 @@ public:
             last_memory_status=now;
         }
         if(!profiling)return;
-        auto sample=c3x_renderer::render_core::AddressSpaceSample::capture();
-        std::size_t view_draw_bytes=sizeof(geometry_vertex_buffers);
-        for(auto const& layer:geometry_vertex_buffers)view_draw_bytes+=layer.capacity()*sizeof(GeometryDrawRecord);
-        char detail[640];sprintf_s(detail,
-            "phase=%s available_virtual=%llu largest_free_region=%llu committed_va=%llu reserved_va=%llu "
-            "gpu_geometry=%zu gpu_geometry_cap=%zu natural_cpu=%zu ground_cpu=%zu natural_cpu_cap=%zu "
-            "viewport_cpu=%zu viewport_cpu_cap=%zu backdrop_gpu=%zu backdrop_gpu_cap=%zu pixels_capacity=%zu scene_cpu=%zu content_bindings_cpu=%zu view_draw_cpu=%zu",
-            phase,sample.available,sample.largest,sample.committed,sample.reserved,
-            tile_geometry_cache_bytes,tile_geometry_cache_budget,natural_mesh_cache_bytes,ground_grid_cache_bytes,
-            natural_mesh_cache_budget,viewport_cache_bytes,viewport_cache_budget,resource_backdrop_bytes,
-            resource_backdrop_cache_budget,pixels.capacity()*sizeof(pixels[0]),topology_cache.bytes(),resident_content.bytes(),view_draw_bytes);
-        trace.write("memory-sample",detail,true);
+        char detail[640];
+        // Address-space and driver-buffer inventories scale with the retained
+        // world. Keep them out of ordinary frame profiling and cadence runs.
+        if(detailed_memory_census){
+            auto sample=c3x_renderer::render_core::AddressSpaceSample::capture();
+            std::size_t view_draw_bytes=sizeof(geometry_vertex_buffers);
+            for(auto const& layer:geometry_vertex_buffers)view_draw_bytes+=layer.capacity()*sizeof(GeometryDrawRecord);
+            sprintf_s(detail,
+                "phase=%s available_virtual=%llu largest_free_region=%llu committed_va=%llu reserved_va=%llu "
+                "gpu_geometry=%zu gpu_geometry_cap=%zu natural_cpu=%zu ground_cpu=%zu natural_cpu_cap=%zu "
+                "viewport_cpu=%zu viewport_cpu_cap=%zu backdrop_gpu=%zu backdrop_gpu_cap=%zu pixels_capacity=%zu scene_cpu=%zu content_bindings_cpu=%zu view_draw_cpu=%zu",
+                phase,sample.available,sample.largest,sample.committed,sample.reserved,
+                tile_geometry_cache_bytes,tile_geometry_cache_budget,natural_mesh_cache_bytes,ground_grid_cache_bytes,
+                natural_mesh_cache_budget,viewport_cache_bytes,viewport_cache_budget,resource_backdrop_bytes,
+                resource_backdrop_cache_budget,pixels.capacity()*sizeof(pixels[0]),topology_cache.bytes(),resident_content.bytes(),view_draw_bytes);
+            trace.write("memory-sample",detail,true);
+        }
         sprintf_s(detail,"linear_frame=%zu linear_block=%zu reflection=%zu glow=%zu region_reflection=%zu region_glow=%zu wave_geometry=%zu",
             linear_frame.bytes(),linear_block.bytes(),reflection.linear.bytes(),city_glow.linear.bytes(),
             region_reflection.linear.bytes(),region_glow.linear.bytes(),wave_geometry_bytes);
         trace.write("memory-linear-scratch",detail,true);
-        std::unordered_set<ID3D11Buffer*> allocations;
-        for(auto const& entry:tile_geometry_cache)for(auto const& layer:entry.second.mesh->layers)
-            for(auto const& chunk:layer){if(chunk.buffer)allocations.insert(chunk.buffer);if(chunk.indices)allocations.insert(chunk.indices);}
-        std::size_t allocation_bytes=0;
-        for(auto buffer:allocations){D3D11_BUFFER_DESC description{};buffer->GetDesc(&description);allocation_bytes+=description.ByteWidth;}
-        sprintf_s(detail,"phase=%s buffers=%zu allocation_bytes=%zu logical_bytes=%zu active_budget=%zu",
-            phase,allocations.size(),allocation_bytes,tile_geometry_cache_bytes,tile_geometry_runtime_budget);
-        trace.write("memory-world-buffers",detail,true);
+        if(detailed_memory_census){
+            std::unordered_set<ID3D11Buffer*> allocations;
+            for(auto const& entry:tile_geometry_cache)for(auto const& layer:entry.second.mesh->layers)
+                for(auto const& chunk:layer){if(chunk.buffer)allocations.insert(chunk.buffer);if(chunk.indices)allocations.insert(chunk.indices);}
+            std::size_t allocation_bytes=0;
+            for(auto buffer:allocations){D3D11_BUFFER_DESC description{};buffer->GetDesc(&description);allocation_bytes+=description.ByteWidth;}
+            sprintf_s(detail,"phase=%s buffers=%zu allocation_bytes=%zu logical_bytes=%zu active_budget=%zu",
+                phase,allocations.size(),allocation_bytes,tile_geometry_cache_bytes,tile_geometry_runtime_budget);
+            trace.write("memory-world-buffers",detail,true);
+        }
         auto preparation=world_preparation_queue.statistics();
         sprintf_s(detail,"input_bytes=%zu input_peak=%zu ready_bytes=%zu ready_peak=%zu preparation_cap=%zu active=%u scratch_reserve=%zu queue_metadata=%zu queue_metadata_peak_observed=%zu",
             world_input_memory->bytes.load(),world_input_memory->peak.load(),preparation.bytes,preparation.peak_bytes,cpu_preparation_budget,
@@ -8136,6 +8143,10 @@ public:
         char profile_option[8]={};
         profiling=GetEnvironmentVariableA("C3X_RENDERER_PROFILE",profile_option,sizeof(profile_option)) &&
             std::strcmp(profile_option,"1")==0;
+        char memory_census_option[8]={};
+        detailed_memory_census=profiling &&
+            GetEnvironmentVariableA("C3X_RENDERER_MEMORY_CENSUS",memory_census_option,sizeof(memory_census_option)) &&
+            std::strcmp(memory_census_option,"1")==0;
         frame_draw_calls=frame_parameter_updates=frame_bounds_tests=0;
         draw_parameters.uploads=draw_parameters.records=draw_parameters.discards=0;frame_content_uploads=frame_prepared_meshes=frame_foreground_meshes=0;frame_prepared_vertex_bytes=0;
         frame_pass_setups=frame_active_layers=0;

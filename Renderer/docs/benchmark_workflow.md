@@ -233,9 +233,13 @@ and counters:
   record sampling limits and retain the 512 MiB contiguous-headroom floor.
 
 Counters missing from current instrumentation are unmeasured, not zero. Normal
-production timing remains separate from costly profiling. `--profile` currently
-includes repeated address-space walks and resident-buffer enumeration inside
-requests; its latency is diagnostic, not ordinary production performance. Preserve source/binary,
+production timing remains separate from profiling. Use `C3X_RENDERER_PROFILE=0`
+for both cadence arms, retaining identical TRACE/ROUTE_WITNESS source evidence.
+With profiling enabled, expensive address-space and resident-buffer inventories
+require `C3X_RENDERER_MEMORY_CENSUS=1`; leaving census disabled retains ordinary
+phase/owner profiling. Missing optional census or GPU rows remain unavailable.
+Memory admission, live pressure checks and failure diagnostics remain active.
+Preserve source/binary,
 assets, clocks, memory limits and quality in comparisons. On this VM, rejected or
 unstable GPU timestamps cannot establish shader cost: use validated timing or
 bounded causal ablations and report uncertainty. `record_gpu_frame` exposes the
@@ -451,11 +455,11 @@ captured native-action cases. This count is separate from `--unit-count`, which
 controls the complete native-demand benchmark. Use `--visual-frames 120` for
 percentile evidence. `--tactical` adds route/marker/grid lifecycle witnesses.
 
-Use production runs without `--profile` for cadence. Detailed profiling performs
-whole-process address-space walks at several boundaries; the measured overhead
-can be tens of milliseconds per frame. Keep separate profiled memory/attribution
-runs and do not call removal of diagnostic overhead a renderer speedup. The
-native fixture's explicit memory samples still report address-space headroom.
+Use production runs without `--profile` for cadence. Opt-in memory census walks
+the address space and resident buffers at several boundaries and can add tens of
+milliseconds per frame. Keep census/attribution runs separate; removing diagnostic
+overhead does not establish a renderer algorithm speedup. The native fixture's
+explicit memory samples still report address-space headroom.
 
 `python3 -m Renderer.native.analyze_visual_frames <receipt-directory>` joins each
 visual request to its exact trace interval. Missing stages are unproved, not zero.
