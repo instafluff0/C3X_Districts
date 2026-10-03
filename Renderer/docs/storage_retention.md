@@ -8,26 +8,60 @@ representative visual evidence. Do not infer disposability from Git ignore rules
 Some historical snapshot assets share hard links with live packs; deleting a
 snapshot path does not necessarily reclaim the bytes reported by `du`.
 
+The default is to **delete unnecessary generated output**, not compress it or
+keep another archive. The user explicitly requested this after repeated disk
+exhaustion. Complete each experiment with a retention pass:
+
+- Keep the current candidate and matched control complete until the comparison
+  closes, plus any reproducer for an unresolved failure. Identify these paths
+  before cleaning up.
+- After closure, retain measurements, source/build identities, necessary replay
+  inputs and representative/event frames. Delete the remaining generated frame
+  sequence and obsolete compiler intermediates. A completed experiment does not
+  need every frame from every superseded candidate.
+- Delete closed guest capture copies once their complete host copies have been
+  verified by relative path, size and hash. Do this after each run rather than
+  waiting for the guest disk to fill. Keep the original input saves and required
+  replay journals.
+- Reuse immutable pack inputs. Avoid another source/pack tree per measurement.
+  Do not overwrite hard-linked source art or add hard links to editable files.
+- Bound recording duration and check free space on both host and guest before
+  capture. Maintain the 8 GiB reserve; an explicitly bounded recovery run may
+  use its documented lower threshold, followed immediately by duplicate cleanup.
+- Review exact paths before deletion, recheck file identities, exclude symlinks
+  and tracked inputs, and record deletions in a small local receipt. Age and Git
+  ignore status alone do not establish that a file is disposable.
+
+Unique historical inputs remain protected until their consumers and replacement
+coverage have been checked. An old summary is not a lossless replacement for a
+required replay journal. Conversely, obsolete generated output should not be
+kept indefinitely merely because a summary mentions it.
+
+## Legacy maintenance tool
+
 The preview-first tool `Renderer/native/maintain_storage.py` only selects old,
 unshared, untracked generated files beneath `Renderer/native/build` and
 `Renderer/lab/out`. It excludes current/latest candidates, promotion/rollback,
 verified/reference output, source and pack trees. Default minimum age is two days;
 age alone does not override those exclusions. It does not manage Git.
 
-- Old BMPs become `.bmp.gz`, with full decompressed SHA-256 verification before
+- Its legacy BMP action creates `.bmp.gz`, with full decompressed SHA-256 verification before
   removal of the original. Existing archives must match. Preserve originals when
   compression does not save space. This retains every selected image losslessly.
 - Old `.obj`, `.exp` and `.lib` compiler intermediates are removed. Rebuild the
   corresponding isolated candidate to recover them. DLLs, executables, source
   snapshots, logs and JSON receipts remain.
-- Recent candidates remain available. At the end of an optimization, designate
-  the current candidate and its comparison/rollback explicitly; archive old image
-  sequences and remove intermediates rather than another entire source/pack copy.
+- Recent candidates remain available. Its exclusions do not replace the explicit
+  current candidate/control ownership and completed-output retirement above.
 - Do not overwrite hard-linked source art or deduplicate editable files by adding
   hard links. Preserve unique historical inputs until their dependency/recovery
   contract has been established.
 
-## Preview and apply
+Do not use the legacy compression action for the user's delete-only cleanup.
+The commands below describe that tool for existing archives, not the default
+retention workflow.
+
+### Preview and apply
 
 From the repository root:
 
@@ -51,11 +85,37 @@ tools or direct image viewers may need restoration first:
 gzip -dk path/to/generated-image.bmp.gz
 ```
 
-Keep the archive, restore only needed images, and retain the existing 8 GiB free
-space reserve for evidence generation. Compression is maintenance, never part of
-timed rendering or a reason to recreate every archived frame.
+Restore only needed inputs from an existing archive. After checking its consumers,
+delete an archive of obsolete generated output; preserve required inputs first.
+Neither restoration nor cleanup belongs in timed rendering measurements.
 
 ## Explicit generated-output cleanup
+
+### October 2 recovery
+
+A reviewed delete-only cleanup removed 24.29 GiB of host allocations: repeated
+historical window frames, obsolete compiler intermediates and diagnostic
+recordings, an old raster/log archive, stale Git temporary packs, and two
+unreachable single-blob asset ZIPs. Required baseline inputs, recovery logs and
+113 changed historical asset files were preserved separately (0.446 GiB total),
+for a targeted net allocation reduction of 23.85 GiB. The host had 25.32 GiB
+free at completion; concurrent VM/build activity can change that figure.
+
+Both asset ZIPs were fully streamed and each payload checked with SHA-256
+against a live pack file or a preserved historical file before disposal. Fresh
+reachability checks covered five worktrees. Full Git integrity passed after
+deletion and refs were unchanged. The user explicitly approved retrying archive
+disposal after automatic review initially rejected it.
+
+Current candidate/control work, live packs, source, saves, rollback binaries and
+the complete unresolved R4 failure recording remain. Closed R2/R6 diagnostic
+prefixes were retired while their reports and change facts remain; their
+directories explicitly say raw replay is no longer available. Per-file plans,
+preservation checks and receipts are local under
+`Renderer/.cache/disk-cleanup-20261002/`; `final-cleanup-summary.json` summarizes
+the exact completed actions. No new compressed archive was created.
+
+### Earlier generated-output retirement
 
 At the user's request, a reviewed cleanup removed 5,079 generated files from
 `native/build`: redundant replay frame sequences, repeated diagnostic BMPs and
@@ -73,12 +133,21 @@ The ignored plan and deletion receipt are under
 
 Git is a separate maintenance operation, with no history rewrite or ref deletion.
 First check active Git processes and locks, run `git fsck --full --no-dangling`,
-and save ref identities. Remove only individually verified stale temporary files
-or unmatched indexes reported by Git, never a valid pack or an unknown lock.
+and save ref identities. Routine maintenance removes only individually verified
+stale temporary files or unmatched indexes reported by Git. Never remove a pack
+because of its size or remove an unknown lock.
 Use conservative repacking with pruning and reflog expiration disabled; verify
 integrity and unchanged refs afterward. Do not use `prune=now`, aggressive GC or
 delete `.git` contents based on size alone. Git metadata may require filesystem
 approval even though generated Renderer output is writable.
+
+Explicit disposal of an unwanted archive stored as an unreachable Git blob is a
+separate reviewed action. Identify its complete contents and retained live inputs;
+check every branch, stash, index and reflog, including linked worktrees. A pack
+may be removed only when every contained object has been individually established
+as disposable. Record exact object/file identities, recheck before deletion, and
+verify Git integrity and unchanged refs afterward. This does not authorize pruning
+unrelated unreachable commits or recovery history.
 
 ## Documentation retention
 
