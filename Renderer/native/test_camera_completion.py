@@ -153,6 +153,7 @@ int main(){Core helper;helper.register_camera_completion();
 #include <cassert>
 #include <condition_variable>
 #include <future>
+#include <chrono>
 #include <memory>
 #include <mutex>
 #include <vector>
