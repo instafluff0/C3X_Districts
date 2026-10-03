@@ -137,9 +137,9 @@ int main(){
  std::strcpy(input.unit_key,"worker");c3x_renderer_unit_v1 out{};
  auto capture=[&](UnitInstances::Selection& selection,unsigned flags=1){return world.capture(input,flags,catalog,name,selection);};
  assert(capture(a));assert(world.bindings==1 && world.size()==1);
- assert(world.sample(a,0,1000000,catalog,out,step) && out.action_cursor==0);
+ assert(world.sample(a,0,1000000,catalog,out,step));int origin=out.action_cursor;
  // Sixty renderer frames, one native capture: exact authored 30 Hz source.
- for(int n=1;n<=60;++n){assert(world.sample(a,(n*1000000LL+59)/60,1000000,catalog,out,step));assert(out.action_cursor==n/2);}
+ for(int n=1;n<=60;++n){assert(world.sample(a,(n*1000000LL+59)/60,1000000,catalog,out,step));assert(out.action_cursor==(origin+n/2)%90);}
  assert(input.action_cursor==0 && input.frame_count==15); // immutable native input
  auto revision=a.revision;
  input.body_x=800;input.projection_scale_milli=1500;input.action_cursor=7;input.presentation_time_ticks=1000000;

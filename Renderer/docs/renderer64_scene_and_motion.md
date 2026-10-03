@@ -74,6 +74,18 @@ actions, audio, combat outcomes, turn processing and path legality stay in
 Civ III. The native 66 ms callback retains any gameplay/action advancement;
 custom rendering suppresses only superseded native drawing.
 
+Looping worker animations initialize from their captured native cursor divided
+by the native frame count, then advance independently at the authored clip rate.
+A newly started native action at frame zero therefore begins at zero; an existing
+job keeps its native starting phase. Subsequent captures and camera changes do
+not reset the retained cycle. This applies to all seven work-animation slots
+(fortress, road, mine, irrigation, jungle/forest clearing and planting).
+The native worker setup `FUN_004068e0` already chooses `_rand() % frame_count`
+when initializing an off-screen work animation; its active-unit branch queues
+the animation, and `FLC_Animation::start` resets the cursor to zero. The existing
+`forward_custom_unit_body` capture supplies that cursor. No additional renderer
+randomization, game-state changes or patch-table entry is needed.
+
 ## Camera and animation handoff
 
 A prepared camera retains its native request timestamp for exact duplicate

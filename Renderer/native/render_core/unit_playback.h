@@ -74,9 +74,18 @@ public:
         auto old=std::find_if(instances.begin(),instances.end(),[&](auto const& s){return s.id==request.unit_id;});
         Instance state{};state.id=request.unit_id;state.action=request.action;
         std::memcpy(state.key,request.unit_key,64);state.frames=int(clip.frames)-1;
+        bool continuing=old!=instances.end() && old->action==request.action &&
+            !std::memcmp(old->key,request.unit_key,64) && old->frames==state.frames;
+        if(continuing)state=*old;
+        else if(work) {
+            // Civ III starts a newly ordered visible job at zero and already
+            // varies the native phase of work initialized off screen. Preserve
+            // that initial phase, then advance at the authored clip rate.
+            // Repeated native captures must not restart an established loop.
+            if(request.action_cursor<0 || request.frame_count<1 || request.frame_count>65536)return false;
+            state.seconds=double(request.action_cursor%request.frame_count)*clip.duration/request.frame_count;
+        }
         if(old!=instances.end()) {
-            if(old->action==request.action && !std::memcmp(old->key,request.unit_key,64) &&
-               old->frames==state.frames)state=*old;
             instances.erase(old);
         }
         double interval=1.0/15; // First observation: current native timer opportunity.
