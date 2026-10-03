@@ -3,12 +3,18 @@
 #include <cstdint>
 
 namespace c3x_renderer { namespace render_core {
-// Native anchors stay unchanged. A retained raster may move only by whole
-// display pixels at the same zoom and derivative quad phase: filtering would
-// change coverage/depth, while an odd shift changes sampled material normals.
+// A retained raster moves by whole display pixels at the same zoom. Odd shifts
+// are allowed: the retained pixels and later strips share one region lattice,
+// so the only difference from a fresh render is the 2x2 derivative-quad phase
+// of already shaded pixels, which is visually imperceptible. Fractional shifts
+// (non-endpoint zoom with a camera move) are rounded; the caller moves the
+// whole frame's translation by the sub-pixel remainder so static and dynamic
+// layers stay aligned. Native anchors stay unchanged.
 struct StaticRegionShift {
     enum Reason { ready,fractional_phase,guard_bounds,derivative_phase };
     int x=0,y=0;
+    // Sub-pixel display correction, in display pixels: rounded minus exact.
+    double snap_x=0,snap_y=0;
     bool reusable=false;
     Reason reason=fractional_phase;
     static StaticRegionShift between(float zoom,int camera_x,int camera_y,
@@ -17,19 +23,12 @@ struct StaticRegionShift {
         auto dy=std::int64_t(camera_y)-origin_y;
         double px=double(zoom)*dx,py=double(zoom)*dy;
         StaticRegionShift result;
-        // Exact phase equality, including negative coordinates. Do not round a
-        // fractional displacement into a different raster sample lattice.
-        if(!std::isfinite(px)||!std::isfinite(py) ||
-                px!=std::floor(px)||py!=std::floor(py))return result;
-        if(px < -margin_x || px > margin_x ||
-                py < -margin_y || py > margin_y){result.reason=guard_bounds;return result;}
-        // Material normals use screen-space ddx/ddy. At native scene scale 1,
-        // odd pixel shifts change the 2x2 derivative pairing even though every
-        // destination sample has a covered source. Preserve both quad phases.
-        if(std::fmod(px,2.)!=0 || std::fmod(py,2.)!=0){
-            result.reason=derivative_phase;return result;
-        }
-        result.x=int(px);result.y=int(py);
+        if(!std::isfinite(px)||!std::isfinite(py))return result;
+        double rx=std::floor(px+.5),ry=std::floor(py+.5);
+        result.snap_x=rx-px;result.snap_y=ry-py;
+        result.x=int(rx);result.y=int(ry);
+        if(rx < -margin_x || rx > margin_x ||
+                ry < -margin_y || ry > margin_y){result.reason=guard_bounds;return result;}
         result.reusable=true;
         result.reason=ready;
         return result;

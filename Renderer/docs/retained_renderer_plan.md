@@ -10,6 +10,14 @@ the former 1,326-line roadmap.
 
 ## Current state
 
+- **October 3 performance overhaul (untested build).** The retained static
+  layer now previews (whole-pixel shift, zoom resample, low-resolution jump
+  bootstrap) and refines full quality under a per-frame budget instead of
+  redrawing synchronously; shadows and city lights use a stable region of
+  interest; ambient frames are vsync-paced on the DXGI latency signal. See
+  [the overhaul note](performance_overhaul_20261003.md) for causes, switches
+  that restore the old paths, and the game test plan.
+
 - **Current focus: 50–60 FPS during idle, scrolling, zoom and map jumps.**
   The September 29 startup and camera-history fixes are staged. Native camera
   centering is preserved, speculative startup map draws are removed, and retired

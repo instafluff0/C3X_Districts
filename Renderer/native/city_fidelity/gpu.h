@@ -96,7 +96,11 @@ struct Gpu {
         context->OMSetBlendState(emission,nullptr,0xffffffffu);
         context->OMSetDepthStencilState(readonly_depth,0);
     }
+    // Incremented by every upload so a consumer can skip re-uploading an
+    // unchanged selection only while no other pass replaced the field.
+    std::uint64_t light_uploads=0;
     bool lights(ID3D11DeviceContext*context,std::vector<Lighting const*>const&cities){
+        ++light_uploads;
         return scene_lights.upload(context,cities,night,emissive_scale);
     }
 };

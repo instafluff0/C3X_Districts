@@ -10,32 +10,33 @@ class ScrollRegionTests(unittest.TestCase):
 #include "Renderer/native/scene_projection.h"
 #include <cassert>
 #include <climits>
+#include <cmath>
 struct Rect {int left,top,right,bottom;};
 int main(){
  using Shift=c3x_renderer::render_core::StaticRegionShift;
  for(float zoom:{1.f,1.25f,1.5f,3.f,1.1f})for(int width:{2240,2239}){
-  c3x_renderer::SceneProjection projection(width,1260,zoom);
   for(int origin:{0,-8192,8192})for(int dx=-400;dx<=400;++dx)
    for(int dy:{-208,-192,-128,-64,-33,-32,-3,-2,-1,0,1,2,3,32,33,64,128,192,208}){
     auto shift=Shift::between(zoom,origin+dx,origin+dy,origin,origin,320,192);
     double px=double(zoom)*dx,py=double(zoom)*dy;
-    bool phase=px==std::floor(px)&&py==std::floor(py);
-    bool fits=px>=-320&&px<=320&&py>=-192&&py<=192;
-    bool same_quad=std::fmod(px,2.)==0&&std::fmod(py,2.)==0;
-    assert(shift.reusable==(phase&&fits&&same_quad));
-    if(!shift.reusable){
-     auto reason=!phase?Shift::fractional_phase:!fits?Shift::guard_bounds:Shift::derivative_phase;
-     assert(shift.reason==reason);continue;
-    }
+    double rx=std::floor(px+.5),ry=std::floor(py+.5);
+    bool fits=rx>=-320&&rx<=320&&ry>=-192&&ry<=192;
+    // Odd and fractional displacements are reusable: the shift rounds to whole
+    // pixels and reports the sub-pixel snap the dynamic layers must follow.
+    assert(shift.reusable==fits);
+    if(!shift.reusable){assert(shift.reason==Shift::guard_bounds);continue;}
+    assert(shift.x==int(rx)&&shift.y==int(ry));
+    assert(std::abs(shift.snap_x)<=.5&&std::abs(shift.snap_y)<=.5);
+    assert(shift.snap_x==rx-px&&shift.snap_y==ry-py);
     auto needed=shift.needed<Rect>(width+8,1268,320,192);
     assert(needed.left>=0&&needed.top>=0&&needed.right<=width+648&&needed.bottom<=1652);
     assert(needed.right-needed.left==width+8&&needed.bottom-needed.top==1268);
-    // Geometry uses native anchors. Compare the actual projection against
-    // translating its retained samples; no reduced native tile size is used.
+    // Retained samples translated by the whole-pixel shift equal the exact
+    // projection displaced by the reported snap.
     for(float x:{-128.f,0.f,64.f,256.5f,1120.f,2240.f}){
      double projected=double(width/2)+(double(x)+dx-width/2)*zoom;
      double retained=double(width/2)+(double(x)-width/2)*zoom+shift.x;
-     assert(projected==retained);
+     assert(std::abs(projected+shift.snap_x-retained)<1e-6);
     }
     // Every output sample has a covered source, including all four corners.
     for(int x:{0,width+7})for(int y:{0,1267}){
@@ -47,13 +48,14 @@ int main(){
  assert(Shift::between(3,64,64,0,0,320,192).reusable);
  assert(!Shift::between(3,65,65,0,0,320,192).reusable);
  assert(Shift::between(1.25f,8,-8,0,0,320,192).reusable);
- assert(!Shift::between(1.25f,4,-4,0,0,320,192).reusable);
- assert(!Shift::between(1.25f,2,-2,0,0,320,192).reusable);
- assert(!Shift::between(1.1f,32,0,0,0,320,192).reusable);
- // A completed (-23,+11) camera followed by its original view must redraw;
- // whole-pixel coverage alone does not preserve shader derivative pairing.
- assert(!Shift::between(1.f,-2784,-1312,-2807,-1301,320,192).reusable);
- assert(!Shift::between(1.f,-2807,-1301,-2784,-1312,320,192).reusable);
+ assert(Shift::between(1.25f,4,-4,0,0,320,192).reusable);
+ auto half=Shift::between(1.25f,2,-2,0,0,320,192);
+ assert(half.reusable&&half.x==3&&half.snap_x==.5);
+ auto tenth=Shift::between(1.1f,32,0,0,0,320,192);
+ assert(tenth.reusable&&tenth.x==35&&std::abs(tenth.snap_x+.2)<1e-5);
+ // An odd (-23,+11) camera displacement reuses the retained raster.
+ assert(Shift::between(1.f,-2784,-1312,-2807,-1301,320,192).reusable);
+ assert(Shift::between(1.f,-2807,-1301,-2784,-1312,320,192).reusable);
  // Large jumps and equivalent/negative wraps must never overflow into reuse.
  assert(!Shift::between(3,INT_MAX,INT_MIN,INT_MIN,INT_MAX,320,192).reusable);
  for(int wrap:{-8192,8192})assert(!Shift::between(1.25f,wrap,0,0,0,320,192).reusable);

@@ -96,6 +96,8 @@ struct Core {
     VisualShared visual_shared=nullptr;
     using PriorityFrontPending=int(*)();
     PriorityFrontPending priority_front_pending=nullptr;
+    using VisualWait=int(*)(unsigned);
+    VisualWait visual_wait=nullptr;
     using BindSurface=int(*)(std::uint64_t,unsigned,unsigned);
     BindSurface bind_surface=nullptr;bool direct_surface_bound=false,direct_display_ready=false;
     Wire* telemetry=nullptr;
@@ -151,6 +153,10 @@ struct Core {
         required_present_shared=reinterpret_cast<PresentShared>(GetProcAddress(module,"c3x_renderer_trial_required_present_shared"));
         visual_shared=reinterpret_cast<VisualShared>(GetProcAddress(module,"c3x_renderer_trial_visual_shared"));
         priority_front_pending=reinterpret_cast<PriorityFrontPending>(GetProcAddress(module,"c3x_renderer_trial_priority_front_pending"));
+        // Pace ambient frames on the swap chain's frame-latency signal so each
+        // frame starts at a vsync-aligned opportunity (timer remains fallback).
+        visual_wait=reinterpret_cast<VisualWait>(GetProcAddress(module,"c3x_renderer_trial_visual_wait"));
+        if(visual_wait)direct_cadence.set_pacer([this](unsigned timeout){return visual_wait(timeout);});
         bind_surface=reinterpret_cast<BindSurface>(GetProcAddress(module,"c3x_renderer_trial_bind_surface"));
         surface_pixels=reinterpret_cast<SurfacePixels>(GetProcAddress(module,"c3x_renderer_trial_surface_pixels"));
         require(render&&render_view&&gpu_render&&camera_begin&&camera_poll&&camera_cancel&&definitions&&reset,"renderer DLL entries missing");

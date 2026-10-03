@@ -21,71 +21,71 @@ class ReflectionClosureTests(unittest.TestCase):
         fresh = (ROOT/'Renderer/sandbox/fresh_pipeline.h').read_text()
         cpp = (ROOT/'Renderer/native/c3x_renderer.cpp').read_text()
         key = method(cpp, '    c3x_renderer::render_core::SharedInstanceSubmission::Key shared_instance_draw_key(')
-        start = fresh.index('        std::array<std::uint64_t,4> body_scene=')
-        end = fresh.index('        auto retire_completed_instance_plans=', start)
-        production = fresh[start:end]
+        roi = method(fresh, '    bool update_roi(ViewportShaderSettings const& settings,int w,int h){')
         run_cpp(GPU_STUB + r'''
 #define C3X_RENDERER64_FRESH 1
 #include <chrono>
+#include <cstring>
 #include "Renderer/native/render_core/body_placement_requirements.h"
 using LONG=int;struct D3D11_RECT {LONG left,top,right,bottom;};
-struct Settings {float translation[2]={},inverse_size[2]={};};
+struct ViewportShaderSettings {float translation[2]={},inverse_size[2]={};};
 struct Mesh {std::array<int,4> bounds{};int translation_x=0,translation_y=0;float natural_projection[4]={};
  std::uint64_t version=1;std::shared_ptr<std::vector<Owner::Instance> const> instances;float instance_material=40;};
 using GeometryDrawView=c3x_renderer::render_core::GeometryDrawView<Mesh,2>;
 using GeometryDrawReference=GeometryDrawView::Reference;
 using GeometryDrawRecord=GeometryDrawView::Record;
-constexpr unsigned geometry_layer_count=2;
-struct Renderer {Owner shared_instances;bool water_scene_active=true;GeometryDrawView::Records geometry_vertex_buffers;
+constexpr unsigned geometry_layer_count=2,geometry_shadow=0;
+struct Renderer {Owner shared_instances;bool water_scene_active=true;unsigned content_revision=1;
+ struct Topology {std::uint64_t sequence=1;std::uint64_t visibility_sequence()const{return sequence;}} topology_cache;
  unsigned tests=0;
- bool chunk_intersects_region(GeometryDrawReference const& draw,Settings const&,D3D11_RECT clip,bool){++tests;
+ bool chunk_intersects_region(GeometryDrawReference const& draw,ViewportShaderSettings const&,D3D11_RECT clip,bool){++tests;
   return draw.bounds()[0]<clip.right && draw.bounds()[2]>clip.left;}
 ''' + key + r'''
 };
+struct StaticRasters {static unsigned lane_of(float zoom){return zoom==1.f?0u:1u;}};
 struct Harness {
- Renderer renderer;GeometryDrawView::Records all_visible,guard;
+ Renderer renderer;GeometryDrawView::Records all_visible,guard,roi_records,roi_shadow_records;
  c3x_renderer::render_core::BodyPlacementRequirements<Mesh> body_requirements;
- std::array<std::uint64_t,4> body_requirement_scene{};std::array<float,7> body_requirement_view{};
  bool body_requirements_valid=false;unsigned body_requirement_builds=0,body_requirement_reuses=0,body_requirement_visits=0;
- double body_requirement_ms=0;float projection_zoom=1,resident_basis_x=0,resident_basis_y=0;
- std::uint64_t membership=1,visibility_revision=1;unsigned queries=0;
- enum {prepare_body_requirements};void mark_prepare(unsigned){}
- struct Region {unsigned width=1200,height=900;}region;
- Region& static_region(){return region;}
- std::uint64_t view_revision(){return membership;}
- D3D11_RECT source_bounds(Settings const&,D3D11_RECT clip,bool){return clip;}
- template<class Visit>void contributors(Settings const&,D3D11_RECT,bool,Visit visit){++queries;
+ double body_requirement_ms=0;float projection_zoom=1;std::array<float,2> lane_projection{};
+ int camera_x=0,camera_y=0,wrap_pixels=0;
+ static constexpr int region_margin_x=320,region_margin_y=192,roi_quantum=128;
+ std::array<std::int64_t,10> roi_key{};std::uint64_t roi_revision=1,roi_receiver_check=0,static_receiver_revision=0,membership=1;
+ unsigned queries=0;
+ float zoom_destination()const{return 1.f;}
+ bool canonical_hidden()const{return false;}
+ std::uint64_t view_revision()const{return membership;}
+ template<class Visit>void contributors(ViewportShaderSettings const&,D3D11_RECT,bool,Visit visit){++queries;
   for(unsigned layer=0;layer<geometry_layer_count;++layer)for(auto const& draw:guard[layer])visit(layer,draw);}
- bool prepare(Settings region_settings){auto fail=[](char const*){return false;};
-''' + production + r'''
-  return body_inputs.entries.size()!=0;
- }
+''' + roi + r'''
 };
 int main(){
  Harness h;Mesh mesh;mesh.instances=std::make_shared<std::vector<Owner::Instance>>(3);mesh.bounds={0,0,100,100};
  GeometryDrawRecord original(mesh);original.owner={1,9};original.translation_x=-6400;
- h.renderer.geometry_vertex_buffers[1].push_back(original);
  auto main=original;main.translation_x=0;auto reflected=main;reflected.translation_x=6400;
- auto guarded=main;guarded.translation_x=12800;auto irrelevant=guarded;irrelevant.translation_x=25600;irrelevant.bounds={2000,0,2100,100};
+ auto guarded=main;guarded.translation_x=12800;auto irrelevant=guarded;irrelevant.translation_x=25600;irrelevant.bounds={4000,0,4100,100};
  auto aquatic=guarded;aquatic.translation_x=19200;aquatic.water_dependent=true;
- h.all_visible[1]={main,reflected,main};h.guard[1]={main,guarded,irrelevant,aquatic};Settings settings;
- assert(h.prepare(settings) && h.queries==1 && h.renderer.tests==3);
- assert(h.body_requirements.entries.size()==3 && h.body_requirements.visits==5 && h.body_requirements.duplicates==2);
+ h.all_visible[1]={main,reflected,main};h.guard[1]={main,guarded,irrelevant,aquatic};ViewportShaderSettings settings;
+ // One region-of-interest walk owns body placements for every lane.
+ assert(h.update_roi(settings,1000,800) && h.queries==1);
  auto has=[&](GeometryDrawRecord const& draw){auto expected=h.renderer.shared_instance_draw_key(1,GeometryDrawReference(draw));
   for(auto const& entry:h.body_requirements.entries)if(entry.key==expected)return true;return false;};
- assert(has(main) && has(reflected) && has(guarded) && !has(original) && !has(irrelevant) && !has(aquatic));
- // Unchanged canonical/display/camera requests reuse the prepared list:
- // no receiver query, key construction or extra metadata growth occurs.
- auto retained=h.renderer.shared_instances.bytes();assert(h.prepare(settings));
- assert(h.body_requirement_builds==1 && h.body_requirement_reuses==1 && h.queries==1 && h.renderer.tests==3);
- assert(h.renderer.shared_instances.bytes()==retained);
- // Changes irrelevant to the real consumers remain cheap until their
- // membership/view changes; guard/water classification rebuilds exactly once.
- ++irrelevant.ordinal;assert(h.prepare(settings) && h.queries==1);
- ++h.visibility_revision;assert(h.prepare(settings) && h.queries==2);
- settings.translation[0]=128;assert(h.prepare(settings) && h.queries==3);
- ++h.membership;assert(h.prepare(settings) && h.queries==4);
- h.renderer.water_scene_active=false;assert(h.prepare(settings) && h.queries==5 && has(aquatic));
+ assert(has(main) && has(reflected) && has(guarded) && has(aquatic) && !has(original) && !has(irrelevant));
+ assert(h.roi_records[1].size()==3 && h.roi_revision==2);
+ // Unchanged views and camera steps within the quantum reuse it exactly.
+ auto retained=h.renderer.shared_instances.bytes();
+ assert(h.update_roi(settings,1000,800) && h.queries==1 && h.body_requirement_reuses==1);
+ h.camera_x=100;h.camera_y=-1;h.camera_y=0;assert(h.update_roi(settings,1000,800) && h.queries==1);
+ assert(h.renderer.shared_instances.bytes()==retained && h.roi_revision==2);
+ // Crossing a quantum, membership or visibility changes rebuild exactly once.
+ h.camera_x=130;assert(h.update_roi(settings,1000,800) && h.queries==2 && h.roi_revision==3);
+ assert(h.update_roi(settings,1000,800) && h.queries==2);
+ ++h.membership;assert(h.update_roi(settings,1000,800) && h.queries==3);
+ ++h.renderer.topology_cache.sequence;assert(h.update_roi(settings,1000,800) && h.queries==4);
+ // A captured receiver inside the region does not rebuild; one outside does.
+ ++h.static_receiver_revision;assert(h.update_roi(settings,1000,800) && h.queries==4);
+ h.all_visible[1].push_back(irrelevant);++h.static_receiver_revision;
+ assert(h.update_roi(settings,1000,800) && h.queries==5 && has(irrelevant));
  // Contradictory counts under one exact key fail, and admission is charged
  // against the existing owner allowance rather than an independent cache.
  auto mutable_values=std::make_shared<std::vector<Owner::Instance>>(3);Mesh unstable=mesh;unstable.instances=mutable_values;

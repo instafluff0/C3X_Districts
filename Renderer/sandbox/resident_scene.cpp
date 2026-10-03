@@ -308,9 +308,16 @@ std::size_t c3x_renderer64_unit_source_meshes_ready(){
 std::size_t c3x_renderer64_unit_source_mesh_bytes(){
     c3x_renderer64_frame_device();return sandbox_direct_units.mesh_bytes;
 }
+bool c3x_renderer64_static_refinement_pending(float zoom){
+    c3x_renderer64_frame_device();
+    return sandbox_fresh.static_refinement_pending(zoom);
+}
 bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
         ID3D11RenderTargetView* target,float zoom) {
-    renderer.trace.write("fresh-callback","enter",true);
+    // Per-frame records cost OutputDebugString + formatting on every visual
+    // frame; keep them for the explicit detailed trace level only.
+    bool frame_trace=renderer.trace.level>=2;
+    if(frame_trace)renderer.trace.write("fresh-callback","enter",true);
     c3x_renderer64_frame_device();
     int camera_x=0,camera_y=0;
     if(frame.tile_count && frame.tiles) {
@@ -319,7 +326,7 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
         camera_y=first.anchor_y-first.tile_y*frame.tile_height/2;
     }
     if(!sandbox_fresh.draw(frame,camera_x,camera_y,0,0,0,0,false,zoom))return false;
-    renderer.trace.write("fresh-callback","scene-ready",true);
+    if(frame_trace)renderer.trace.write("fresh-callback","scene-ready",true);
     ++renderer.route_frame_sequence;
     char route[8]={};
     if(GetEnvironmentVariableA("C3X_RENDERER_ROUTE_WITNESS",route,sizeof(route))&&route[0]=='1'){
@@ -377,7 +384,7 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
     }
     // These passes share the immediate context. Resource dependencies are
     // ordered there; submit once at publication instead of flushing mid-frame.
-    if(renderer.trace.level) {
+    if(frame_trace) {
         char detail[1024];
         auto const& rejects=renderer.raster_proof_rejections;
         sprintf_s(detail,"prepare=%.3f reflection=%.3f static=%.3f water=%.3f units=%.3f reconstruct=%.3f shadow_builds=%u reflection_draws=%u static_draws=%u visible=%u culled=%u camera=%d,%d translation=%.1f,%.1f pose_samples=%u part_samples=%u self_shadow_samples=%u self_shadow_reuses=%u self_shadow_overflow=%u main_units=%u reflected_units=%u palette_uploads=%u instance_builds=%u instance_reuses=%u instance_bytes=%zu unit_preparation_gpu_bytes=%zu proof_rejects=%u,%u,%u,%u,%u,%u,%u",
@@ -517,7 +524,7 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
                 }
         }
     }
-    renderer.trace.write("fresh-callback",presented?"map-ready":"map-failed",true);
+    if(frame_trace || !presented)renderer.trace.write("fresh-callback",presented?"map-ready":"map-failed",true);
     return presented;
 }
 #endif

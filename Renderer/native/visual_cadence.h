@@ -17,6 +17,9 @@ class VisualCadence {
     std::mutex mutex;
     std::condition_variable wake;
     std::thread thread;
+    // Optional presentation pacer (e.g. a DXGI frame-latency wait). Returns 1
+    // when it granted a vsync-aligned opportunity; otherwise the timer runs.
+    std::function<int(unsigned)> pacer;
     bool enabled=false,stopping=false;
 #ifdef _WIN32
     HANDLE timer=nullptr,interrupt=nullptr;
@@ -39,6 +42,9 @@ public:
         if(interrupt)CloseHandle(interrupt);
 #endif
     }
+    void set_pacer(std::function<int(unsigned)> next){
+        std::lock_guard<std::mutex> lock(mutex);pacer=std::move(next);
+    }
     void enable(std::function<void()> callback){
         enable_retrying([callback=std::move(callback)]{callback();return false;});
     }
@@ -59,6 +65,15 @@ public:
                     if(stopping)break;
                     guard.unlock();bool retry=callback();guard.lock();
                     auto now=Clock::now();
+                    if(!retry && pacer && enabled && !stopping){
+                        // Start the next frame when the compositor can accept
+                        // it, not on a timer that beats against vsync.
+                        auto pace=pacer;
+                        auto timeout=unsigned(std::chrono::duration_cast<std::chrono::milliseconds>(period).count()*2+1);
+                        guard.unlock();int granted=pace(timeout);guard.lock();
+                        if(granted==1){next=Clock::now();continue;}
+                        now=Clock::now();
+                    }
                     // Keep the deadline across frames. Restarting the period
                     // after every late wake adds scheduler jitter to every
                     // frame and steadily lowers the achieved frame rate.

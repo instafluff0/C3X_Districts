@@ -23,7 +23,7 @@ No historical document supplies an additional queue or mandatory baseline campai
 
 | Area | References |
 | --- | --- |
-| Performance audit | [Current source, busy-scene risks, 0 A.D. comparison and priorities](performance_engineering_review.md), [earlier measured evidence](renderer_performance_audit.md) |
+| Performance audit | [October 3 overhaul: implemented fixes, switches and test plan](performance_overhaul_20261003.md), [current source, busy-scene risks, 0 A.D. comparison and priorities](performance_engineering_review.md), [earlier measured evidence](renderer_performance_audit.md) |
 | Complete workload recording | [Ten-minute input/replay contract](recorded_renderer_workload.md) |
 | Implemented visual frames | [Clock, retained composition and lifecycle](visual_frame_ownership.md) |
 | Native integration | [Workstreams](renderer_workstreams.md), [visible scene](visible_scene_contract.md), [configuration](renderer_config_spec.md), [patch ledger](civ3_patch_dependency_ledger.md) |

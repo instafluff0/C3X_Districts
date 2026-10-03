@@ -1,10 +1,14 @@
 #pragma once
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <stdexcept>
 #include "scene_projection.h"
 
 namespace c3x_renderer {
+// Latest requested map zoom. The retained static layer prepares its next
+// full-quality raster at this destination while the displayed zoom animates.
+inline std::atomic<float>& zoom_destination_hint(){static std::atomic<float> value{1.f};return value;}
 // Renderer-thread view state. Retargeting carries both position and velocity;
 // sampling depends on elapsed time, never on the number of frames submitted.
 // Native image versions and the gameplay camera are deliberately absent here.
@@ -37,11 +41,13 @@ public:
         if(!std::isfinite(scale)||scale<minimum||scale>maximum)
             throw std::invalid_argument("zoom target outside supported view");
         sample(ticks,frequency);destination=scale;
+        zoom_destination_hint().store(float(scale),std::memory_order_relaxed);
     }
     void reset(double scale=1.){
         if(!std::isfinite(scale)||scale<minimum||scale>maximum)
             throw std::invalid_argument("zoom reset outside supported view");
         position=destination=presented=scale;velocity=time=0.;initialized=false;
+        zoom_destination_hint().store(float(scale),std::memory_order_relaxed);
     }
     double current()const{return position;}
     double target()const{return destination;}

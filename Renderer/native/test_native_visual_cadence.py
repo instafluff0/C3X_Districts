@@ -26,6 +26,13 @@ int main(){
  for(unsigned n=0;n<1000;++n)assert(permit.ready()); // unchanged static front
  permit.presented();assert(!permit.ready());
  SetEvent(signal);assert(permit.ready());permit.reset();assert(!permit.ready());
+ // The cadence thread's blocking wait shares the same grants: a second
+ // acquisition is retained (counted), never lost, and spent by presentations.
+ auto latency=CreateEventW(nullptr,FALSE,FALSE,nullptr);assert(latency);
+ permit.reset(latency);assert(permit.wait(0)==0);
+ SetEvent(latency);assert(permit.wait(0)==1);assert(permit.wait(0)==2);assert(permit.ready());
+ permit.presented();assert(!permit.ready());
+ SetEvent(latency);assert(permit.wait(0)==1);permit.presented();assert(permit.wait(0)==0);
  auto replacement=CreateEventW(nullptr,FALSE,TRUE,nullptr);assert(replacement);
  permit.reset(replacement);assert(permit.ready());permit.presented();assert(!permit.ready());
 }
@@ -216,10 +223,12 @@ struct Session{
  Work visual_work(){return {};}
 };
 struct Swap{HRESULT result=S_OK;unsigned presents=0;
- HRESULT Present(unsigned sync,unsigned flags){assert(!sync&&!flags);++presents;return result;}
+ // Vsync-locked delivery: the cadence already holds a frame-latency grant.
+ HRESULT Present(unsigned sync,unsigned flags){assert(sync==1&&!flags);++presents;return result;}
 };
 struct Surface{void* Get(){return nullptr;}};
 struct Owner{
+ static bool trial_legacy_cadence(){return false;}
  enum class Command{trial_visual_shared,trial_required_visual_shared};
  Command command=Command::trial_visual_shared;
  struct Permit{bool admitted=false;unsigned polls=0,consumed=0;

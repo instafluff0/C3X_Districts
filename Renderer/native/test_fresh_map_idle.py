@@ -54,6 +54,8 @@ unsigned renders=0,mesh_prepares=0;
 std::uint64_t c3x_renderer64_unit_selection_revision(){return 1;}
 int c3x_renderer64_prepare_unit_meshes(){++mesh_prepares;return C3X_RENDERER_RESULT_OK;}
 bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const&,ID3D11RenderTargetView*,float){++renders;return true;}
+// Retained static refinement complete: idle frames depend only on scene facts.
+bool c3x_renderer64_static_refinement_pending(float){return false;}
 namespace c3x_gpu_images {struct RetainedComposition {
  struct SampledImage {
   enum class Kind {unchanged,bgra,frozen,held};Kind kind=Kind::unchanged;std::uint64_t generation=0;
@@ -101,7 +103,7 @@ struct RendererState {
  unsigned ambient_count()const{return moving_resources+visible_wave_animations+visible_water_animations;}
  int prepare_frame_unit_assets(std::vector<UnitInstances::ScenePose> const&){++asset_prepares;
   return assets_pending?C3X_RENDERER_RESULT_PENDING:C3X_RENDERER_RESULT_OK;}
- struct {LARGE_INTEGER frequency{1000};void write(char const*,char const*,bool){}double milliseconds(long long){return 0.;}} trace;
+ struct {int level=1;LARGE_INTEGER frequency{1000};void write(char const*,char const*,bool){}double milliseconds(long long){return 0.;}} trace;
 ''' + eligibility + r'''
 };
 struct Worker {

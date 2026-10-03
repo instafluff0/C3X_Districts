@@ -143,6 +143,94 @@ Output PS(float4 position:SV_Position,uint sample:SV_SampleIndex){
         inputs[0]=inputs[1]=nullptr;context->PSSetShaderResources(0,2,inputs);context->OMSetRenderTargets(0,nullptr,nullptr);return true;
     }
 };
+// Affine preview of retained static scenes (zoom in motion, jumps): bilinear
+// premultiplied color and nearest depth from a primary source, falling back
+// to a secondary source where the primary has no coverage, then clamping.
+// Single-sample targets only; multisampled scenes refine synchronously.
+struct LinearResample {
+    ID3D11VertexShader* vertex=nullptr;ID3D11PixelShader* pixel=nullptr;
+    ID3D11Buffer* settings=nullptr;ID3D11DepthStencilState* depth=nullptr;
+    ID3D11RasterizerState* rasterizer=nullptr;ID3D11SamplerState* sampler=nullptr;
+    bool failed=false;
+    struct Source {
+        ID3D11ShaderResourceView* color=nullptr;
+        ID3D11ShaderResourceView* depth=nullptr;
+        float map[4]={};      // source texel = destination pixel * map.xy + map.zw
+        float covered[4]={};  // usable source texel rectangle (already inset)
+        float size[2]={};     // source texture size in texels
+        float depth_shift=0;  // retained depth basis to current basis
+    };
+    template<class T>void release(T*& p){if(p)p->Release();p=nullptr;}
+    void reset(){release(vertex);release(pixel);release(settings);release(depth);release(rasterizer);release(sampler);failed=false;}
+    ~LinearResample(){reset();}
+    bool ensure(ID3D11Device* device){
+        if(pixel)return true;
+        if(failed||!device)return false;
+        char const* source=R"(
+Texture2D<float4> color0:register(t0);Texture2D<float> depth0:register(t1);
+Texture2D<float4> color1:register(t2);Texture2D<float> depth1:register(t3);
+SamplerState linear_clamp:register(s0);
+cbuffer Resample:register(b0){float4 map0;float4 covered0;float4 size0;float4 map1;float4 covered1;float4 size1;float4 options;};
+float4 VS(uint id:SV_VertexID):SV_Position{float2 p=float2((id<<1)&2,id&2);return float4(p*float2(2,-2)+float2(-1,1),0,1);}
+struct Output{float4 color:SV_Target;float depth:SV_Depth;};
+bool inside(float2 p,float4 r){return all(p>=r.xy)&&all(p<=r.zw);}
+Output fetch0(float2 p){Output o;o.color=color0.SampleLevel(linear_clamp,p*size0.zw,0);
+ float z=depth0.Load(int3(int2(floor(p)),0));o.depth=z<1?z+options.y:1;return o;}
+Output fetch1(float2 p){Output o;o.color=color1.SampleLevel(linear_clamp,p*size1.zw,0);
+ float z=depth1.Load(int3(int2(floor(p)),0));o.depth=z<1?z+options.z:1;return o;}
+Output PS(float4 position:SV_Position){
+ float2 p0=position.xy*map0.xy+map0.zw;
+ if(inside(p0,covered0))return fetch0(p0);
+ if(options.x>0){float2 p1=position.xy*map1.xy+map1.zw;if(inside(p1,covered1))return fetch1(p1);}
+ return fetch0(clamp(p0,covered0.xy,max(covered0.xy,covered0.zw)));
+})";
+        auto compile=[&](char const* entry,char const* target,ID3DBlob** blob){
+            ID3DBlob* errors=nullptr;HRESULT hr=D3DCompile(source,std::strlen(source),"static_resample",nullptr,nullptr,
+                entry,target,D3DCOMPILE_OPTIMIZATION_LEVEL3,0,blob,&errors);
+            if(errors){OutputDebugStringA(static_cast<char const*>(errors->GetBufferPointer()));errors->Release();}return hr;
+        };
+        ID3DBlob* blob=nullptr;HRESULT hr=compile("VS","vs_5_0",&blob);
+        if(SUCCEEDED(hr))hr=device->CreateVertexShader(blob->GetBufferPointer(),blob->GetBufferSize(),nullptr,&vertex);
+        release(blob);
+        if(SUCCEEDED(hr))hr=compile("PS","ps_5_0",&blob);
+        if(SUCCEEDED(hr))hr=device->CreatePixelShader(blob->GetBufferPointer(),blob->GetBufferSize(),nullptr,&pixel);
+        release(blob);
+        D3D11_BUFFER_DESC b={};b.ByteWidth=112;b.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
+        if(SUCCEEDED(hr))hr=device->CreateBuffer(&b,nullptr,&settings);
+        D3D11_DEPTH_STENCIL_DESC d={};d.DepthEnable=true;d.DepthWriteMask=D3D11_DEPTH_WRITE_MASK_ALL;d.DepthFunc=D3D11_COMPARISON_ALWAYS;
+        if(SUCCEEDED(hr))hr=device->CreateDepthStencilState(&d,&depth);
+        D3D11_RASTERIZER_DESC r={};r.FillMode=D3D11_FILL_SOLID;r.CullMode=D3D11_CULL_NONE;r.DepthClipEnable=true;
+        if(SUCCEEDED(hr))hr=device->CreateRasterizerState(&r,&rasterizer);
+        D3D11_SAMPLER_DESC sd={};sd.Filter=D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+        sd.AddressU=sd.AddressV=sd.AddressW=D3D11_TEXTURE_ADDRESS_CLAMP;sd.MaxLOD=D3D11_FLOAT32_MAX;
+        if(SUCCEEDED(hr))hr=device->CreateSamplerState(&sd,&sampler);
+        if(FAILED(hr)){reset();failed=true;return false;}
+        return true;
+    }
+    bool draw(ID3D11DeviceContext* context,LinearTarget const& target,Source const& primary,Source const* secondary){
+        if(!pixel||!target.target||!target.depth||target.sample_count!=1||!primary.color||!primary.depth)return false;
+        Source const& fallback=secondary&&secondary->color&&secondary->depth?*secondary:primary;
+        struct Constants{float map0[4],covered0[4],size0[4],map1[4],covered1[4],size1[4],options[4];} values={};
+        auto fill=[](Source const& s,float* map,float* covered,float* size){
+            std::copy(s.map,s.map+4,map);std::copy(s.covered,s.covered+4,covered);
+            size[0]=s.size[0];size[1]=s.size[1];size[2]=s.size[0]>0?1.f/s.size[0]:0.f;size[3]=s.size[1]>0?1.f/s.size[1]:0.f;
+        };
+        fill(primary,values.map0,values.covered0,values.size0);
+        fill(fallback,values.map1,values.covered1,values.size1);
+        values.options[0]=&fallback!=&primary?1.f:0.f;values.options[1]=primary.depth_shift;values.options[2]=fallback.depth_shift;
+        context->UpdateSubresource(settings,0,nullptr,&values,0,0);
+        context->OMSetRenderTargets(1,&target.target,target.depth);context->OMSetBlendState(nullptr,nullptr,0xffffffffu);
+        context->OMSetDepthStencilState(depth,0);context->RSSetState(rasterizer);
+        D3D11_VIEWPORT viewport={0,0,float(target.width),float(target.height),0,1};context->RSSetViewports(1,&viewport);
+        context->IASetInputLayout(nullptr);context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        context->VSSetShader(vertex,nullptr,0);context->PSSetShader(pixel,nullptr,0);context->PSSetConstantBuffers(0,1,&settings);
+        ID3D11ShaderResourceView* inputs[]={primary.color,primary.depth,fallback.color,fallback.depth};
+        context->PSSetShaderResources(0,4,inputs);context->PSSetSamplers(0,1,&sampler);
+        context->Draw(3,0);
+        ID3D11ShaderResourceView* empty[4]={};context->PSSetShaderResources(0,4,empty);
+        context->OMSetRenderTargets(0,nullptr,nullptr);return true;
+    }
+};
 struct LinearOutput {
     ID3D11VertexShader *vertex=nullptr;
     ID3D11PixelShader *pixel=nullptr;

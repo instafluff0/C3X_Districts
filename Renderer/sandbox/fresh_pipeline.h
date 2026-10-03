@@ -452,6 +452,28 @@ float4 PSSandboxAquaticFeature(FeaturePixelInput input) : SV_Target {
 // One light-space field for all receivers in the visible scene. The retained
 // renderer supplies caster meshes, cutout textures and the light basis; the
 // sandbox owns target selection, residency and the field's lifetime.
+// Performance policy switches, read once. Defaults are the fast paths; each
+// switch restores the previous behavior for A/B comparison and escape.
+struct SandboxPerfOptions {
+    bool legacy=false;          // C3X_RENDERER_STATIC_LEGACY=1: synchronous full-quality static redraws
+    float bootstrap_scale=.5f;  // C3X_RENDERER_BOOTSTRAP_SCALE: low-resolution first frame (0 disables)
+    double refine_pixels=0;     // C3X_RENDERER_REFINE_PIXELS: fixed per-frame refinement budget
+    bool shadow_tight=false;    // C3X_RENDERER_SHADOW_TIGHT_FIT=1: refit shadows to every view
+    SandboxPerfOptions(){
+        char value[32]{};
+        legacy=GetEnvironmentVariableA("C3X_RENDERER_STATIC_LEGACY",value,sizeof(value)) && value[0]=='1';
+        if(GetEnvironmentVariableA("C3X_RENDERER_BOOTSTRAP_SCALE",value,sizeof(value))){
+            float scale=float(std::atof(value));bootstrap_scale=std::isfinite(scale)?std::clamp(scale,0.f,1.f):.5f;
+            if(bootstrap_scale>0 && bootstrap_scale<.25f)bootstrap_scale=.25f;
+        }
+        if(GetEnvironmentVariableA("C3X_RENDERER_REFINE_PIXELS",value,sizeof(value))){
+            double pixels=std::atof(value);refine_pixels=std::isfinite(pixels)?std::max(0.,pixels):0.;
+        }
+        shadow_tight=GetEnvironmentVariableA("C3X_RENDERER_SHADOW_TIGHT_FIT",value,sizeof(value)) && value[0]=='1';
+    }
+};
+inline SandboxPerfOptions const& sandbox_perf_options(){static SandboxPerfOptions options;return options;}
+
 struct SandboxSceneShadow {
     using Shadow = c3x_renderer::render_core::SourceShadow;
     using Grid = c3x_renderer::render_core::ShadowSamplingGrid;
@@ -535,6 +557,42 @@ struct SandboxSceneShadow {
     bool receiver_grid_valid=false;
     std::uint64_t receiver_visits=0,receiver_builds=0,receiver_reuses=0;
     unsigned builds = 0, draws = 0;
+    // Identity of the shadow *sampling* (span, light, wrap, scene). Retained
+    // static pixels stay valid while it is unchanged, even when the page
+    // window slides and new pages are drawn for newly exposed receivers.
+    std::uint64_t sampling_identity=0;
+    // World-anchored density: the span only changes when the receiver extent
+    // leaves a hysteresis band, so scrolling never refits (and never redraws)
+    // every page. A tight per-view fit made each scroll step a full rebuild.
+    std::array<float,2> stable_span{};
+    std::array<float,12> stable_light{};
+    std::uint64_t span_refits=0;
+    bool configure_stable(Grid& grid,float const* needed){
+        if(sandbox_perf_options().shadow_tight)return grid.configure(needed,renderer.shadow_basis);
+        float bounds[4]={needed[0],needed[1],needed[2],needed[3]};
+        if(stable_light!=renderer.shadow_basis){stable_span={0,0};stable_light=renderer.shadow_basis;}
+        for(unsigned axis=0;axis<2;++axis){
+            float want=needed[axis+2]-needed[axis]+2*Grid::guard;
+            if(!std::isfinite(want) || !(want>0))return grid.configure(needed,renderer.shadow_basis);
+            if(!(stable_span[axis]>=want && stable_span[axis]<=want*1.45f)){
+                // Even spans are exact for configure(); 1.15x+2 stays inside the band.
+                stable_span[axis]=std::ceil(want*1.15f/2.f)*2.f;++span_refits;
+            }
+            // configure() derives exactly this (even) span from these bounds.
+            bounds[axis+2]=bounds[axis]+stable_span[axis]-2*Grid::guard;
+        }
+        if(grid.configure(bounds,renderer.shadow_basis))return true;
+        stable_span={0,0};
+        return grid.configure(needed,renderer.shadow_basis);
+    }
+    void update_sampling_identity(std::uint64_t scene,std::array<float,4> const& wrap){
+        std::uint64_t value=14695981039346656037ull;
+        auto mix=[&](void const* data,std::size_t size){auto bytes=static_cast<unsigned char const*>(data);
+            for(std::size_t i=0;i<size;++i){value^=bytes[i];value*=1099511628211ull;}};
+        mix(sampling_grid.quality_span.data(),sizeof(float)*2);mix(renderer.shadow_basis.data(),sizeof(float)*12);
+        mix(wrap.data(),sizeof(float)*4);mix(&scene,sizeof(scene));mix(&renderer.device_generation,sizeof(renderer.device_generation));
+        sampling_identity=value;
+    }
     template<class T> static void drop(T*& pointer) {if (pointer) pointer->Release(); pointer=nullptr;}
     ~SandboxSceneShadow() {
         if(renderer.source_shadow.borrowed_view==view)renderer.source_shadow.borrowed_view=nullptr;
@@ -1084,7 +1142,7 @@ struct SandboxSceneShadow {
                 any=true;
             }
         if (!any) return false;
-        if(!query_grid.configure(needed,renderer.shadow_basis))return false;
+        if(!configure_stable(query_grid,needed))return false;
         receiver_grid=query_grid;receiver_wrap=wrap_query;receiver_key=next_receiver_key;receiver_light=renderer.shadow_basis;
         receiver_grid_valid=true;++receiver_builds;
         }
@@ -1258,6 +1316,7 @@ struct SandboxSceneShadow {
         prepared_signature=membership;prepared_box={box[0],box[1],box[2],box[3]};prepared_light=renderer.shadow_basis;
         atlas_complete=true;
         ++builds;
+        update_sampling_identity(scene,wrap_query);
         return true;
     }
 };
@@ -1355,7 +1414,7 @@ struct SandboxFreshPipeline {
     using Membership=c3x_renderer::render_core::SceneMembership<CachedVertexChunk,geometry_layer_count>;
     Membership::Lease resident_lease;
     using RasterInputs=c3x_renderer::render_core::RasterContributors<CachedGeometryProof>;
-    std::array<RasterInputs,2> raster_inputs;
+    std::array<RasterInputs,4> raster_inputs;
     float resident_basis_x=0,resident_basis_y=0;
     std::vector<RasterInputs::Key> reflection_inputs;
     std::uint64_t static_receiver_revision=0;
@@ -1378,6 +1437,40 @@ struct SandboxFreshPipeline {
     // Zoom changes raster projection; completed scene pixels stay at 1:1.
     float display_zoom=1.f,projection_zoom=1.f;
     float reflection_scale=1;
+    // --- Retained static layer: preview, refinement and region of interest ---
+    using StaticState=c3x_renderer::render_core::StaticRasterState<c3x_renderer::render_core::LinearTarget>;
+    using StaticRect=StaticState::Rect;
+    // Low-resolution first image per lane, used only until refinement completes.
+    std::array<StaticState,2> bootstrap;
+    struct RasterOverride {ID3D11RenderTargetView* target=nullptr;unsigned width=0,height=0;float margin_x=0,margin_y=0;};
+    RasterOverride raster_override;
+    c3x_renderer::render_core::LinearResample static_resample;
+    std::array<std::uint64_t,12> restore_key{};
+    unsigned region_width_px=0,region_height_px=0;
+    double refine_pixels=600000;bool refine_worked=false;LARGE_INTEGER refine_last{};
+    // Per-lane zoom motion: transactions draw lane 0 at 1x between visual frames.
+    unsigned reflection_skips=0;std::array<float,2> lane_projection{};std::array<unsigned,2> lane_still{};
+    std::uint64_t draw_serial=0;std::array<std::uint64_t,2> lane_drawn{};
+    std::uint64_t preview_frames=0,refine_slices=0,refine_promotions=0,bootstrap_draws=0,recenter_copies=0;
+    // Consecutive refinement restarts without a promotion (content changing
+    // every frame); past a limit the refinement completes synchronously.
+    unsigned refine_restarts=0;
+    GeometryDrawView::Records roi_records,roi_shadow_records;
+    std::array<std::int64_t,10> roi_key{};
+    std::uint64_t roi_revision=1,roi_receiver_check=0;
+    static constexpr int roi_quantum=128;
+    struct ZoomScope {
+        SandboxFreshPipeline& owner;float previous;
+        ZoomScope(SandboxFreshPipeline& o,float zoom):owner(o),previous(o.projection_zoom){o.projection_zoom=zoom;}
+        ~ZoomScope(){owner.projection_zoom=previous;}
+        ZoomScope(ZoomScope const&)=delete;ZoomScope& operator=(ZoomScope const&)=delete;
+    };
+    struct TargetScope {
+        SandboxFreshPipeline& owner;RasterOverride previous;
+        TargetScope(SandboxFreshPipeline& o,RasterOverride next):owner(o),previous(o.raster_override){o.raster_override=next;}
+        ~TargetScope(){owner.raster_override=previous;}
+        TargetScope(TargetScope const&)=delete;TargetScope& operator=(TargetScope const&)=delete;
+    };
     unsigned depth_copies=0,cache_scrolls=0,cache_full_draws=0;
     c3x_renderer::TerritoryBorders territory_borders;
     unsigned reflection_reuses=0,reflection_draws=0;
@@ -1697,15 +1790,7 @@ struct SandboxFreshPipeline {
             aquatic_depth:renderer.depth_state,0);
         context->OMSetBlendState(renderer.blend_state,nullptr,0xffffffffu);
         context->RSSetState(renderer.rasterizer_state);
-        bool region_target=target==static_region().target ||
-            target==material_albedo.target || target==terrain_albedo.target;
-        D3D11_VIEWPORT viewport={0,0,float(mirrored?reflection.width:
-                region_target?static_region().width:glow.linear.width),
-            float(mirrored?reflection.height:
-                region_target?static_region().height:glow.linear.height),0,1};
-        c3x_renderer::SceneProjection(renderer.content_view_width,renderer.content_view_height,projection_zoom)
-            .viewport(viewport,mirrored?8.f:4.f,region_target?float(region_margin_x):0.f,
-                region_target?float(region_margin_y):0.f,scale);
+        D3D11_VIEWPORT viewport=target_viewport(target,mirrored,scale);
         context->RSSetViewports(1,&viewport);
         D3D11_RECT scissor={LONG(rect.left*scale),LONG(rect.top*scale),
             LONG(rect.right*scale),LONG(rect.bottom*scale)};
@@ -1766,6 +1851,28 @@ struct SandboxFreshPipeline {
                 poses[geometry_feature].size());std::fflush(stdout);return false;
         }
         return true;
+    }
+    bool region_target(ID3D11RenderTargetView* target)const{
+        if(!target)return false;
+        for(auto const& state:static_rasters.states)if(state.region.target==target)return true;
+        return target==material_albedo.target || target==terrain_albedo.target;
+    }
+    // Viewport of a static/scene target. Region slots carry the guard margins;
+    // an explicit override describes slots drawn at another raster scale.
+    D3D11_VIEWPORT target_viewport(ID3D11RenderTargetView* target,bool mirrored,float scale)const{
+        float width=0,height=0,margin_x=0,margin_y=0;
+        if(mirrored){width=float(reflection.width);height=float(reflection.height);}
+        else if(raster_override.target && target==raster_override.target){
+            width=float(raster_override.width);height=float(raster_override.height);
+            margin_x=raster_override.margin_x;margin_y=raster_override.margin_y;
+        }else if(region_target(target)){
+            width=float(region_width_px);height=float(region_height_px);
+            margin_x=float(region_margin_x);margin_y=float(region_margin_y);
+        }else{width=float(glow.linear.width);height=float(glow.linear.height);}
+        D3D11_VIEWPORT viewport={0,0,width,height,0,1};
+        c3x_renderer::SceneProjection(renderer.content_view_width,renderer.content_view_height,projection_zoom)
+            .viewport(viewport,mirrored?8.f:4.f,margin_x,margin_y,scale);
+        return viewport;
     }
     // Like CPatchRData::RenderBases, visible records are submitted from resident
     // buffers after the pass has bound its material variant. The producer owns
@@ -2148,15 +2255,7 @@ struct SandboxFreshPipeline {
         context->OMSetDepthStencilState(renderer.depth_state,0);
         context->OMSetBlendState(renderer.blend_state,nullptr,0xffffffffu);
         context->RSSetState(renderer.rasterizer_state);
-        bool region_target=target==static_region().target ||
-            target==material_albedo.target || target==terrain_albedo.target;
-        D3D11_VIEWPORT viewport={0,0,float(mirrored?reflection.width:
-                region_target?static_region().width:glow.linear.width),
-            float(mirrored?reflection.height:
-                region_target?static_region().height:glow.linear.height),0,1};
-        c3x_renderer::SceneProjection(renderer.content_view_width,renderer.content_view_height,projection_zoom)
-            .viewport(viewport,mirrored?8.f:4.f,region_target?float(region_margin_x):0.f,
-                region_target?float(region_margin_y):0.f,scale);
+        D3D11_VIEWPORT viewport=target_viewport(target,mirrored,scale);
         context->RSSetViewports(1,&viewport);
         D3D11_RECT scissor={LONG(rect.left*scale),LONG(rect.top*scale),
             LONG(rect.right*scale),LONG(rect.bottom*scale)};
@@ -2531,22 +2630,36 @@ struct SandboxFreshPipeline {
         glow.gain=renderer.city_glow.gain;
     }
     bool update_city_lights() {
+        // Lights come from the stable region of interest (the 1x region plus
+        // a light-reach margin), so every retained static pixel already saw
+        // every light that can reach it. A camera move that changes the set
+        // only adds/removes distant lights; it no longer invalidates rasters.
         std::vector<c3x_renderer::city_fidelity::Lighting const*> selected;
-        for(auto const& record:all_visible[geometry_city])
-            if(record.content().city_lighting){
-                auto* light=record.content().city_lighting.get();
-                if(std::find(selected.begin(),selected.end(),light)==selected.end())
-                    selected.push_back(light);
-            }
-        // Selected immutable generations own these light payloads. Changing the
-        // field can relight already covered pixels even if shadows still fit.
-        if(selected!=selected_lighting){
+        auto add=[&](GeometryDrawView::Records const& records){
+            for(auto const& record:records[geometry_city])
+                if(record.content().city_lighting){
+                    auto* light=record.content().city_lighting.get();
+                    if(std::find(selected.begin(),selected.end(),light)==selected.end())
+                        selected.push_back(light);
+                }
+        };
+        add(roi_records);add(all_visible);
+        if(sandbox_perf_options().legacy && selected!=selected_lighting){
             static_rasters.invalidate_all(c3x_renderer::render_core::raster_lights);
             ++lighting_revision;reflection_valid=false;reflected_terrain_material_valid=false;
         }
+        // The CPU light field is rebuilt on every upload; skip it while the
+        // selection, night factor and owner of the GPU field are unchanged.
+        if(!sandbox_perf_options().legacy && lights_uploaded && selected==selected_lighting &&
+                renderer.cities.light_uploads==lights_upload_serial &&
+                renderer.cities.night==lights_night && renderer.cities.emissive_scale==lights_emission)return true;
         selected_lighting=selected;
-        return renderer.cities.lights(renderer.context,selected);
+        lights_uploaded=renderer.cities.lights(renderer.context,selected);
+        lights_upload_serial=renderer.cities.light_uploads;
+        lights_night=renderer.cities.night;lights_emission=renderer.cities.emissive_scale;
+        return lights_uploaded;
     }
+    bool lights_uploaded=false;std::uint64_t lights_upload_serial=0;float lights_night=-1,lights_emission=-1;
     bool ensure_linear_target(c3x_renderer::render_core::LinearTarget& target,
             unsigned width,unsigned height,unsigned samples,bool resolved) {
         char reference[8]={};
@@ -2585,12 +2698,15 @@ struct SandboxFreshPipeline {
         unsigned reflection_height=unsigned((height+8)*reflection_scale);
         unsigned region_width=width+2*region_margin_x;
         unsigned region_height=height+2*region_margin_y;
+        auto previous_layout=static_rasters.layout;
         static_rasters.set_layout(width,height,scene_samples);
-        if(static_region().width!=region_width || static_region().height!=region_height ||
-                static_region().sample_count!=scene_samples)
-            static_rasters.invalidate(static_rasters.selected,c3x_renderer::render_core::raster_layout);
+        region_width_px=region_width*scene_scale;region_height_px=region_height*scene_scale;
+        if(previous_layout!=static_rasters.layout){
+            for(auto& image:bootstrap){image.region.reset();image.valid=false;image.covered={};}
+            restore_key={};
+        }
         if(static_cache.width!=width || static_cache.height!=height || static_cache.sample_count!=scene_samples)
-            static_rasters.begin_restore();
+            restore_key={};
         if(reflection.width!=reflection_width || reflection.height!=reflection_height){
             reflection_valid=false;
             reflected_terrain_material_valid=false;
@@ -2603,10 +2719,9 @@ struct SandboxFreshPipeline {
             if(FAILED(renderer.device->CreateBuffer(&bounds,nullptr,&aquatic_bounds_buffer)))
                 return false;
         }
+        // Region slots are allocated on first use (see reset_slot/recenter).
         if(!ensure_linear_target(static_cache,width*scene_scale,
                 height*scene_scale,scene_samples,true) ||
-           !ensure_linear_target(static_region(),region_width*scene_scale,
-                region_height*scene_scale,scene_samples,false) ||
            !static_restore.ensure(renderer.device,scene_samples))
             return false;
         if(scene_samples==1 &&
@@ -2646,7 +2761,7 @@ struct SandboxFreshPipeline {
             ViewportShaderSettings const& settings,D3D11_RECT rect)const{
         c3x_renderer::render_core::RasterScratchIdentity key;
         key.scene={reflection_revision,raster_scope(),
-            std::uint64_t(renderer.scene_depth_origin),lighting_revision,shadow.builds,
+            std::uint64_t(renderer.scene_depth_origin),lighting_revision,shadow.sampling_identity,
             std::uint64_t(camera_x),std::uint64_t(camera_y),reflection.width,
             reflection.height,scene_samples};
         key.view={projection_zoom,reflection_scale,settings.translation[0],
@@ -2763,6 +2878,497 @@ struct SandboxFreshPipeline {
         context->OMSetRenderTargets(0,nullptr,nullptr);
         context->CopyResource(static_region().depth_texture,material_albedo.depth_texture);work.copy(static_region().depth_texture,true);
     }
+    // =====================================================================
+    // Retained static layer. Static (camera-independent) terrain, relief,
+    // vegetation and cities are retained per zoom lane in world-anchored
+    // regions. A frame never waits for a full-quality redraw while a usable
+    // preview exists: whole-pixel translation first, then an affine
+    // resample of the previous raster (zoom), then a low-resolution
+    // bootstrap (jumps). Full quality is rebuilt in a back slot under a
+    // per-frame pixel budget and swapped in once its visible area is done.
+    // See docs/performance_overhaul_20261003.md.
+    // =====================================================================
+    void discard_static(){
+        static_rasters.discard_all(c3x_renderer::render_core::raster_error);
+        for(auto& image:bootstrap){image.valid=false;image.covered={};}
+        restore_key={};
+    }
+    c3x_renderer::render_core::StaticRasterKey static_key()const{
+        std::uint32_t hour=0;std::memcpy(&hour,&visual_hour,sizeof(hour));
+        return {raster_scope(),lighting_revision,(std::uint64_t(hour)<<32)|std::uint32_t(previous_season),
+            shadow.sampling_identity,std::uint64_t(renderer.water_scene_active),std::uint64_t(scene_samples)};
+    }
+    float zoom_destination()const{
+        float value=c3x_renderer::zoom_destination_hint().load(std::memory_order_relaxed);
+        if(!std::isfinite(value))return projection_zoom;
+        return std::clamp(value,c3x_renderer::SceneProjection::minimum,c3x_renderer::SceneProjection::maximum);
+    }
+    // Lane 0 is hidden only while a non-1x zoom is the destination *and* the
+    // display lane was drawn recently (a stale hint cannot starve lane 0).
+    bool canonical_hidden()const{
+        return zoom_destination()!=1.f && draw_serial-lane_drawn[1]<32;
+    }
+    bool static_refinement_pending(float zoom)const{
+        unsigned lane=StaticRasters::lane_of(zoom);
+        if(static_rasters.lane_refining(lane))return true;
+        auto const& shown=static_rasters.states[static_rasters.front_slot[lane]];
+        return !shown.valid || shown.stale || shown.projection!=zoom;
+    }
+    // Adaptive pixels-per-frame for refinement: shrink when frames run long,
+    // grow while they fit in the vsync interval. The budget is never applied
+    // to strips needed for the displayed image.
+    double refinement_budget(unsigned lane){
+        auto const& options=sandbox_perf_options();
+        if(options.legacy)return -1.;
+        // The canonical 1x raster is not displayed while another zoom is the
+        // destination; it refines at a reduced budget (and skips its mirror).
+        bool hidden=lane==0 && canonical_hidden();
+        LARGE_INTEGER now{},frequency{};QueryPerformanceCounter(&now);QueryPerformanceFrequency(&frequency);
+        if(refine_worked && refine_last.QuadPart && frequency.QuadPart>0){
+            double ms=double(now.QuadPart-refine_last.QuadPart)*1000./double(frequency.QuadPart);
+            if(ms<100.){if(ms>24.)refine_pixels*=.7;else if(ms<18.5)refine_pixels*=1.2;}
+        }
+        refine_pixels=std::clamp(refine_pixels,150000.,32000000.);
+        refine_last=now;refine_worked=false;
+        double pixels=options.refine_pixels>0?options.refine_pixels:refine_pixels;
+        // A hidden canonical raster still converges, at a quarter budget.
+        return hidden?pixels*.25:pixels;
+    }
+    ViewportShaderSettings slot_settings(StaticState const& slot,ViewportShaderSettings const& screen)const{
+        auto result=screen;
+        result.translation[0]+=float(region_margin_x-(camera_x-slot.camera_x));
+        result.translation[1]+=float(region_margin_y-(camera_y-slot.camera_y));
+        result.depth_translation=slot.depth_translation;
+        result.inverse_size[0]=1.f/float(region_width_px);result.inverse_size[1]=1.f/float(region_height_px);
+        return result;
+    }
+    // Draw one rectangle (full-resolution region pixels) of a slot from the
+    // resident world. `scale` < 1 rasterizes the same rectangle at low resolution.
+    bool write_slot(unsigned index,StaticState& slot,ViewportShaderSettings const& screen,
+            StaticRect strip,float scale,bool track_dependencies){
+        if(strip.empty())return true;
+        ZoomScope scope_zoom(*this,slot.projection);
+        TargetScope scope_target(*this,{slot.region.target,slot.region.width,slot.region.height,
+            float(region_margin_x),float(region_margin_y)});
+        auto slot_view=slot_settings(slot,screen);
+        D3D11_RECT rect={strip.left,strip.top,strip.right,strip.bottom};
+        GeometryDrawView::Records chosen{};
+        auto clip=source_bounds(slot_view,rect,false);
+        contributors(slot_view,clip,false,[&](unsigned layer,auto const& record){
+            if(renderer.water_scene_active && record.water_dependent)return;
+            if(renderer.chunk_intersects_region(GeometryDrawReference(record),slot_view,clip,false))
+                chosen[layer].push_back(record);
+        });
+        ++slot.revision;
+        if(!draw_scene(chosen,slot_view,rect,slot.region.target,slot.region.depth,false,scale))return false;
+        renderer.context->OMSetRenderTargets(0,nullptr,nullptr);
+        ++slot.metrics.strip_fills;++slot.metrics.reasons[c3x_renderer::render_core::raster_strip_fills];
+        if(track_dependencies && !raster_dependencies(raster_inputs[index],slot_view,rect,true))
+            raster_inputs[index].complete=false;
+        return true;
+    }
+    // Grow a slot's rectangular coverage toward `needed`. A negative budget
+    // is unbounded; otherwise strips stop once the pixel budget is spent.
+    bool extend_coverage(unsigned index,StaticState& slot,ViewportShaderSettings const& screen,
+            StaticRect needed,double& budget,int ahead,float scale,bool track_dependencies){
+        StaticRect limits={0,0,int(region_width_px),int(region_height_px)};
+        needed={std::max(needed.left,limits.left),std::max(needed.top,limits.top),
+            std::min(needed.right,limits.right),std::min(needed.bottom,limits.bottom)};
+        if(needed.empty())return true;
+        auto& area=slot.covered;
+        auto spend=[&](StaticRect strip){
+            if(!write_slot(index,slot,screen,strip,scale,track_dependencies))return false;
+            if(budget>=0)budget=std::max(0.,budget-double(strip.area()));
+            return true;
+        };
+        auto lines=[&](int extent){
+            if(budget<0)return INT_MAX/4;
+            return std::max(32,int(budget/double(std::max(1,extent))));
+        };
+        if(area.empty()){
+            int rows=std::min(needed.bottom-needed.top,lines(needed.right-needed.left));
+            StaticRect band={needed.left,needed.top,needed.right,needed.top+rows};
+            if(!spend(band))return false;
+            area=band;
+        }
+        for(int step=0;step<256 && budget!=0;++step){
+            if(needed.bottom>area.bottom){
+                int limit=std::min(limits.bottom,needed.bottom+ahead);
+                StaticRect strip={area.left,area.bottom,area.right,std::min(limit,area.bottom+lines(area.right-area.left))};
+                if(!spend(strip))return false;
+                area.bottom=strip.bottom;continue;
+            }
+            if(needed.top<area.top){
+                int limit=std::max(limits.top,needed.top-ahead);
+                StaticRect strip={area.left,std::max(limit,area.top-lines(area.right-area.left)),area.right,area.top};
+                if(!spend(strip))return false;
+                area.top=strip.top;continue;
+            }
+            if(needed.left<area.left){
+                int limit=std::max(limits.left,needed.left-ahead);
+                StaticRect strip={std::max(limit,area.left-lines(area.bottom-area.top)),area.top,area.left,area.bottom};
+                if(!spend(strip))return false;
+                area.left=strip.left;continue;
+            }
+            if(needed.right>area.right){
+                int limit=std::min(limits.right,needed.right+ahead);
+                StaticRect strip={area.right,area.top,std::min(limit,area.right+lines(area.bottom-area.top)),area.bottom};
+                if(!spend(strip))return false;
+                area.right=strip.right;continue;
+            }
+            break;
+        }
+        return true;
+    }
+    bool reset_slot(unsigned index,float projection,ViewportShaderSettings const& screen){
+        auto& slot=static_rasters.states[index];
+        if(!ensure_linear_target(slot.region,region_width_px,region_height_px,scene_samples,false))return false;
+        float clear[4]={};
+        renderer.context->ClearRenderTargetView(slot.region.target,clear);work.clear(slot.region.target);
+        renderer.context->ClearDepthStencilView(slot.region.depth,D3D11_CLEAR_DEPTH|D3D11_CLEAR_STENCIL,1,0);work.clear(slot.region.depth);
+        slot.camera_x=camera_x;slot.camera_y=camera_y;slot.projection=projection;slot.raster_scale=1;
+        slot.depth_translation=screen.depth_translation;slot.depth_origin=renderer.scene_depth_origin;
+        slot.translation={screen.translation[0],screen.translation[1]};
+        slot.key=static_key();slot.signature=raster_scope();slot.lighting_revision=lighting_revision;
+        slot.environment_hour=visual_hour;slot.environment_season=previous_season;slot.shadow_builds=shadow.builds;
+        slot.geometry_epoch=renderer.tile_geometry_epoch;
+        slot.covered={};slot.valid=false;slot.stale=false;slot.refining=true;++slot.revision;
+        raster_inputs[index].clear();
+        return true;
+    }
+    // Scrolling past the guard band keeps the overlapping pixels: copy them
+    // into the lane's other slot at the new anchor instead of redrawing all.
+    bool recenter(unsigned lane,ViewportShaderSettings const& screen,
+            c3x_renderer::render_core::StaticRegionShift& shift,int w,int h){
+        auto& source=static_rasters.front(lane);
+        unsigned destination_index=static_rasters.back_index(lane);
+        auto& destination=static_rasters.states[destination_index];
+        if(sandbox_perf_options().legacy || !source.valid || source.covered.empty() || destination.refining)return false;
+        if(std::abs(shift.snap_x)>1e-3 || std::abs(shift.snap_y)>1e-3)return false;
+        // New-slot pixel r samples old-slot pixel r-shift, so the old coverage
+        // lands at covered+shift in the new slot.
+        StaticRect moved={std::max(source.covered.left+shift.x,0),std::max(source.covered.top+shift.y,0),
+            std::min(source.covered.right+shift.x,int(region_width_px)),std::min(source.covered.bottom+shift.y,int(region_height_px))};
+        if(moved.area()*4<(long long)(w)*h)return false;
+        if(!ensure_linear_target(destination.region,region_width_px,region_height_px,scene_samples,false))return false;
+        if(!static_restore.draw(renderer.context,destination.region,source.region.samples,source.region.depth_samples,
+                shift.x,shift.y,{},nullptr,source.region.width,source.region.height,false,false,0,nullptr,1,0.f))return false;
+        renderer.context->OMSetRenderTargets(0,nullptr,nullptr);
+        work.draw(3);
+        destination.camera_x=camera_x;destination.camera_y=camera_y;
+        destination.projection=source.projection;destination.raster_scale=1;
+        destination.depth_translation=source.depth_translation;destination.depth_origin=source.depth_origin;
+        destination.translation=source.translation;destination.key=source.key;destination.signature=source.signature;
+        destination.lighting_revision=source.lighting_revision;destination.environment_hour=source.environment_hour;
+        destination.environment_season=source.environment_season;destination.shadow_builds=source.shadow_builds;
+        destination.geometry_epoch=source.geometry_epoch;
+        destination.covered=moved;destination.valid=true;destination.stale=source.stale;destination.refining=false;
+        ++destination.revision;
+        raster_inputs[destination_index].clear();
+        if(!destination.stale){
+            ZoomScope scope_zoom(*this,destination.projection);
+            if(!raster_dependencies(raster_inputs[destination_index],slot_settings(destination,screen),
+                    {moved.left,moved.top,moved.right,moved.bottom},true))
+                raster_inputs[destination_index].complete=false;
+        }
+        static_rasters.promote(lane);
+        ++recenter_copies;
+        shift=c3x_renderer::render_core::StaticRegionShift::between(destination.projection,camera_x,camera_y,
+            destination.camera_x,destination.camera_y,region_margin_x,region_margin_y);
+        return true;
+    }
+    // Low-resolution first image after a jump, at the current zoom and camera.
+    // Covers the whole region so it survives camera moves within the guard band.
+    bool render_bootstrap(unsigned lane,ViewportShaderSettings const& screen){
+        auto& image=bootstrap[lane];
+        float scale=sandbox_perf_options().bootstrap_scale;
+        unsigned image_width=std::max(1u,unsigned(std::ceil(float(region_width_px)*scale)));
+        unsigned image_height=std::max(1u,unsigned(std::ceil(float(region_height_px)*scale)));
+        if(!ensure_linear_target(image.region,image_width,image_height,1,false))return false;
+        float clear[4]={};
+        renderer.context->ClearRenderTargetView(image.region.target,clear);work.clear(image.region.target);
+        renderer.context->ClearDepthStencilView(image.region.depth,D3D11_CLEAR_DEPTH|D3D11_CLEAR_STENCIL,1,0);work.clear(image.region.depth);
+        image.camera_x=camera_x;image.camera_y=camera_y;image.projection=projection_zoom;image.raster_scale=scale;
+        image.depth_translation=screen.depth_translation;image.key=static_key();
+        image.covered={};image.valid=false;image.stale=false;image.refining=false;++image.revision;
+        // The whole region (guard margins included) at low resolution: the
+        // image stays usable while the camera moves within the guard band.
+        double unbounded=-1.;
+        StaticRect needed={0,0,int(region_width_px),int(region_height_px)};
+        if(!extend_coverage(0,image,screen,needed,unbounded,0,scale,false))return false;
+        image.valid=true;++bootstrap_draws;
+        return true;
+    }
+    // Affine map from static_cache pixels to a slot's texels and its coverage
+    // of the displayed screen: 2 complete, 1 partial, 0 none.
+    int resample_source(StaticState const& slot,int w,int h,ViewportShaderSettings const& screen,
+            c3x_renderer::render_core::LinearResample::Source& source)const{
+        float zoom=projection_zoom,q=slot.raster_scale,ratio=slot.projection/zoom;
+        float bx=float(renderer.content_view_width/2)+4,by=float(renderer.content_view_height/2)+4;
+        float ox=bx+float(region_margin_x)-bx*ratio+float(slot.camera_x-camera_x)*slot.projection;
+        float oy=by+float(region_margin_y)-by*ratio+float(slot.camera_y-camera_y)*slot.projection;
+        float left=ox,top=oy,right=float(w)*ratio+ox,bottom=float(h)*ratio+oy;
+        auto const& c=slot.covered;
+        source.color=slot.region.samples;source.depth=slot.region.depth_samples;
+        source.map[0]=source.map[1]=ratio*q;source.map[2]=ox*q;source.map[3]=oy*q;
+        source.covered[0]=float(c.left)*q+1;source.covered[1]=float(c.top)*q+1;
+        source.covered[2]=float(c.right)*q-1;source.covered[3]=float(c.bottom)*q-1;
+        source.size[0]=float(slot.region.width);source.size[1]=float(slot.region.height);
+        source.depth_shift=-(screen.depth_translation-slot.depth_translation)/16384.f;
+        if(!slot.valid || c.empty() || !source.color || !source.depth)return 0;
+        if(left>=float(c.left)+1 && top>=float(c.top)+1 && right<=float(c.right)-1 && bottom<=float(c.bottom)-1)return 2;
+        return left<float(c.right) && right>float(c.left) && top<float(c.bottom) && bottom>float(c.top)?1:0;
+    }
+    bool compose_static(ViewportShaderSettings& settings,int w,int h){
+        using Shift=c3x_renderer::render_core::StaticRegionShift;
+        auto const& options=sandbox_perf_options();
+        auto* context=renderer.context;
+        float zoom=projection_zoom;
+        unsigned lane=StaticRasters::lane_of(zoom);
+        static_rasters.select_lane(lane);
+        auto key=static_key();
+        float hint=zoom_destination();
+        bool previewable=!options.legacy && scene_samples==1 && static_resample.ensure(renderer.device);
+        bool settled=lane_still[lane]>=3;
+        // Lane 1 refines toward the zoom destination while the zoom animates;
+        // 0 means "do not refine this lane" (it is animating back to 1x).
+        float goal=lane==0?1.f:(!previewable || settled)?zoom:(hint!=1.f?hint:0.f);
+        double budget=previewable?refinement_budget(lane):-1.;
+        StaticRect limits={0,0,int(region_width_px),int(region_height_px)};
+        auto clip_region=[&](StaticRect r){return StaticRect{std::max(r.left,limits.left),std::max(r.top,limits.top),
+            std::min(r.right,limits.right),std::min(r.bottom,limits.bottom)};};
+        auto visible_rect=[&](StaticState const& slot,Shift& slot_shift){
+            slot_shift=Shift::between(slot.projection,camera_x,camera_y,slot.camera_x,slot.camera_y,region_margin_x,region_margin_y);
+            return clip_region(slot_shift.needed<StaticRect>(w,h,region_margin_x,region_margin_y));
+        };
+        unsigned front_index=static_rasters.front_slot[lane];
+        {
+            auto& displayed=static_rasters.states[front_index];
+            if(displayed.valid && !displayed.stale && displayed.key!=key)
+                static_rasters.invalidate(front_index,c3x_renderer::render_core::raster_environment);
+            else if(displayed.valid && !displayed.stale && !displayed.covered.empty()){
+                // Exact content proofs (journal fast path when nothing changed).
+                ZoomScope scope_zoom(*this,displayed.projection);
+                if(!raster_dependencies(raster_inputs[front_index],slot_settings(displayed,settings),
+                        {displayed.covered.left,displayed.covered.top,displayed.covered.right,displayed.covered.bottom},false))
+                    static_rasters.invalidate(front_index,c3x_renderer::render_core::raster_scene);
+            }
+        }
+        Shift shift{};bool shifted=false;
+        {
+            auto& displayed=static_rasters.states[front_index];
+            if(displayed.valid && displayed.projection==zoom){
+                visible_rect(displayed,shift);
+                if(!shift.reusable && recenter(lane,settings,shift,w,h))front_index=static_rasters.front_slot[lane];
+                shifted=shift.reusable;
+            }
+        }
+        // Builds the back slot under `spend`; promotes it once the visible
+        // area at `projection` is complete. Returns -1 on draw failure.
+        auto refine=[&](float projection,double& spend)->int{
+            unsigned back_index=static_rasters.back_index(lane);
+            auto& building=static_rasters.states[back_index];
+            Shift back_shift{};
+            bool restart=!building.refining || building.stale || building.key!=key || building.projection!=projection;
+            StaticRect needed{};
+            if(!restart){needed=visible_rect(building,back_shift);restart=!back_shift.reusable;}
+            if(restart){
+                if(building.refining && !building.covered.empty())++refine_restarts;
+                if(!reset_slot(back_index,projection,settings))return -1;
+                needed=visible_rect(building,back_shift);
+            }
+            double unbounded=-1.;
+            double& allowance=refine_restarts>8?unbounded:spend;
+            if(!extend_coverage(back_index,building,settings,needed,allowance,0,1.f,true))return -1;
+            refine_worked=true;++refine_slices;
+            if(!building.covered.contains(needed))return 0;
+            building.valid=true;building.refining=false;building.stale=false;refine_restarts=0;
+            ++building.metrics.full_draws;++cache_full_draws;++refine_promotions;
+            static_rasters.promote(lane);front_index=static_rasters.front_slot[lane];
+            auto& promoted=static_rasters.states[front_index];
+            shifted=false;
+            if(promoted.projection==zoom){visible_rect(promoted,shift);shifted=shift.reusable;}
+            return 1;
+        };
+        {
+            auto const& displayed=static_rasters.states[front_index];
+            bool fresh=displayed.fresh(key);
+            bool needs=goal>0 && (!(fresh && displayed.projection==goal) || (goal==zoom && !shifted));
+            if(!needs){
+                // The front became adequate again (zoom reversed, scrolled back):
+                // abandon the half-built back so nothing keeps requesting frames.
+                auto& abandoned=static_rasters.back(lane);
+                if(abandoned.refining){abandoned.refining=false;abandoned.stale=true;}
+            }
+            else if(budget!=0 && refine(goal,budget)<0)return false;
+        }
+        // Strips the displayed raster needs now. Small (scroll) gaps are drawn
+        // immediately; a large gap is filled progressively behind a preview.
+        if(shifted){
+            auto& displayed=static_rasters.states[front_index];
+            auto needed=clip_region(shift.needed<StaticRect>(w,h,region_margin_x,region_margin_y));
+            StaticRect overlap=clip_region({std::max(needed.left,displayed.covered.left),std::max(needed.top,displayed.covered.top),
+                std::min(needed.right,displayed.covered.right),std::min(needed.bottom,displayed.covered.bottom)});
+            long long missing=needed.area()-overlap.area();
+            if(missing>0){
+                bool progressive=previewable && missing*100>35LL*w*h;
+                double spend=progressive?std::max(budget,0.):-1.;
+                // With background guard fill, draw only what is visible now.
+                int ahead=previewable?0:128;
+                if(spend!=0 && !extend_coverage(front_index,displayed,settings,needed,spend,progressive?0:ahead,1.f,!displayed.stale))return false;
+                if(progressive){budget=spend;refine_worked=true;}
+                if(!displayed.covered.contains(needed))shifted=false;
+            }
+            // Background guard-band fill: grow a fresh raster toward its full
+            // region on otherwise quiet frames, so later scroll steps (and
+            // zoom-out previews) find their pixels already drawn.
+            if(shifted && previewable && budget>0 && displayed.fresh(key) && !static_rasters.lane_refining(lane) &&
+                    !displayed.covered.contains(limits)){
+                double spend=budget*.5;
+                if(!extend_coverage(front_index,displayed,settings,limits,spend,0,1.f,true))return false;
+                refine_worked=true;
+            }
+        }
+        // Without a preview path, finish the visible raster synchronously.
+        if(!shifted && (!previewable || options.bootstrap_scale<=0)){
+            auto const& displayed=static_rasters.states[front_index];
+            c3x_renderer::render_core::LinearResample::Source probe{};
+            bool covered=previewable && displayed.valid && resample_source(displayed,w,h,settings,probe)==2;
+            if(!covered){double unbounded=-1.;if(refine(zoom,unbounded)<0)return false;}
+        }
+        auto bits=[](float value){std::uint32_t result=0;std::memcpy(&result,&value,sizeof(result));return std::uint64_t(result);};
+        if(shifted){
+            auto& displayed=static_rasters.states[front_index];
+            std::array<std::uint64_t,12> next={1,front_index,displayed.revision,std::uint64_t(std::uint32_t(shift.x)),
+                std::uint64_t(std::uint32_t(shift.y)),bits(settings.depth_translation),bits(displayed.depth_translation),
+                std::uint64_t(displayed.region.width),bits(zoom),0,0,0};
+            if(next!=restore_key){
+                if(!static_restore.draw(context,static_cache,displayed.region.samples,
+                        displayed.region.depth_samples,shift.x-region_margin_x,
+                        shift.y-region_margin_y,{},nullptr,displayed.region.width,
+                        displayed.region.height,false,false,0,nullptr,1,
+                        -(settings.depth_translation-displayed.depth_translation)/16384.f))return false;
+                work.draw(3);if(work.enabled)work.row().target_pixels+=std::uint64_t(static_cache.width)*static_cache.height;
+                context->OMSetRenderTargets(0,nullptr,nullptr);
+                if(scene_samples==1){
+                    if(static_cache.resolved!=static_cache.color){context->CopyResource(static_cache.resolved,static_cache.color);work.copy(static_cache.resolved,true);}
+                }
+                else context->ResolveSubresource(static_cache.resolved,0,static_cache.color,0,
+                    DXGI_FORMAT_R16G16B16A16_FLOAT);
+                restore_key=next;++cache_scrolls;++displayed.metrics.restores;
+            }else ++displayed.metrics.reuses;
+            // Dynamic layers move with the whole-pixel static raster.
+            settings.translation[0]+=float(shift.snap_x/zoom);
+            settings.translation[1]+=float(shift.snap_y/zoom);
+            return true;
+        }
+        // Preview: resample the best retained rasters for this projection.
+        using Source=c3x_renderer::render_core::LinearResample::Source;
+        Source front_source{},home_source{},boot_source{};
+        auto& displayed=static_rasters.states[front_index];
+        auto& home=static_rasters.front(0);
+        auto& image=bootstrap[lane];
+        int front_cover=resample_source(displayed,w,h,settings,front_source);
+        int home_cover=lane==1?resample_source(home,w,h,settings,home_source):0;
+        int boot_cover=resample_source(image,w,h,settings,boot_source);
+        Source const* primary=nullptr;Source const* secondary=nullptr;
+        StaticState const* primary_slot=nullptr;StaticState const* secondary_slot=nullptr;
+        if(front_cover==2){primary=&front_source;primary_slot=&displayed;}
+        else if(front_cover==1 && home_cover==2){primary=&front_source;primary_slot=&displayed;secondary=&home_source;secondary_slot=&home;}
+        else if(home_cover==2){primary=&home_source;primary_slot=&home;}
+        else{
+            if(boot_cover<2){
+                if(!render_bootstrap(lane,settings))return false;
+                boot_cover=resample_source(image,w,h,settings,boot_source);
+                if(boot_cover==0)return false;
+            }
+            if(front_cover==1){primary=&front_source;primary_slot=&displayed;secondary=&boot_source;secondary_slot=&image;}
+            else{primary=&boot_source;primary_slot=&image;}
+        }
+        std::array<std::uint64_t,12> next={2,std::uint64_t(reinterpret_cast<std::uintptr_t>(primary_slot)),primary_slot->revision,
+            std::uint64_t(reinterpret_cast<std::uintptr_t>(secondary_slot)),secondary_slot?secondary_slot->revision:0,
+            bits(zoom),std::uint64_t(std::uint32_t(camera_x)),std::uint64_t(std::uint32_t(camera_y)),
+            bits(settings.depth_translation),0,0,0};
+        if(next!=restore_key){
+            if(!static_resample.draw(context,static_cache,*primary,secondary))return false;
+            work.draw(3);if(work.enabled)work.row().target_pixels+=std::uint64_t(static_cache.width)*static_cache.height;
+            restore_key=next;
+        }
+        ++preview_frames;
+        return true;
+    }
+    // Region of interest: the 1x region around a quantized camera. It owns
+    // body placements and city lights (superset of every lane's region) and,
+    // at the destination zoom, the shadow receivers. It changes only when the
+    // camera crosses a quantum, so scrolling does not refit shadows or lights.
+    bool update_roi(ViewportShaderSettings const& settings,int w,int h){
+        auto floor_to=[](int value,int quantum){return value>=0?value/quantum*quantum:-((-value+quantum-1)/quantum)*quantum;};
+        int qx=floor_to(camera_x,roi_quantum),qy=floor_to(camera_y,roi_quantum);
+        static constexpr float ladder[]={1.f,1.25f,1.5f,1.75f,2.f,2.5f,3.f};
+        // Lane-independent: hidden 1x transactions use the displayed lane's
+        // zoom so they cannot alternate the shadow field with visual frames.
+        float displayed_zoom=StaticRasters::lane_of(projection_zoom)==0 && canonical_hidden() &&
+            lane_projection[1]>=1.f?lane_projection[1]:projection_zoom;
+        float wanted=std::min(zoom_destination(),displayed_zoom),shadow_zoom=1.f;
+        for(float step:ladder)if(step<=wanted+1e-4f)shadow_zoom=step;
+        std::uint32_t zoom_bits=0;std::memcpy(&zoom_bits,&shadow_zoom,sizeof(zoom_bits));
+        std::uint64_t visibility_sequence=0;
+#ifdef C3X_RENDERER64_FRESH
+        visibility_sequence=renderer.topology_cache.visibility_sequence();
+#endif
+        std::array<std::int64_t,10> next_key={std::int64_t(view_revision()),std::int64_t(wrap_pixels),qx,qy,w,h,
+            std::int64_t(renderer.water_scene_active),std::int64_t(visibility_sequence),std::int64_t(zoom_bits),
+            std::int64_t(renderer.content_revision)};
+        auto roi=settings;
+        roi.translation[0]-=float(camera_x-qx);roi.translation[1]-=float(camera_y-qy);
+        int pad=roi_quantum;
+        D3D11_RECT body_clip={-2*region_margin_x-pad,-2*region_margin_y-pad,
+            w+2*region_margin_x+pad,h+2*region_margin_y+pad};
+        float half_x=(float(w)*.5f+2.f*region_margin_x)/shadow_zoom+float(pad);
+        float half_y=(float(h)*.5f+2.f*region_margin_y)/shadow_zoom+float(pad);
+        D3D11_RECT shadow_clip={LONG(std::floor(float(w)*.5f-half_x)),LONG(std::floor(float(h)*.5f-half_y)),
+            LONG(std::ceil(float(w)*.5f+half_x)),LONG(std::ceil(float(h)*.5f+half_y))};
+        bool escaped=false;
+        if(next_key==roi_key && body_requirements_valid && roi_receiver_check!=static_receiver_revision){
+            // A newly captured receiver outside the retained region forces a rebuild.
+            roi_receiver_check=static_receiver_revision;
+            for(unsigned layer=0;!escaped && layer<geometry_layer_count;++layer)
+                for(auto const& record:all_visible[layer])
+                    if(!renderer.chunk_intersects_region(GeometryDrawReference(record),roi,body_clip,false)){escaped=true;break;}
+        }
+        if(next_key==roi_key && body_requirements_valid && !escaped){++body_requirement_reuses;return true;}
+        auto started=std::chrono::steady_clock::now();
+        roi_records={};roi_shadow_records={};
+        body_requirements.clear();body_requirements_valid=false;
+        bool complete=true;
+        auto require=[&](unsigned layer,GeometryDrawReference const& reference){
+            if(complete && reference.content().instances && !reference.content().instances->empty())
+                complete=body_requirements.add(renderer.shared_instances,layer,reference,renderer.shared_instance_draw_key(layer,reference));
+        };
+#ifndef C3X_RENDERER64_FRESH
+        // Legacy consumers submit the original native ranges.
+        GeometryDrawView original=renderer.geometry_vertex_buffers;
+        for(unsigned layer=0;layer<geometry_layer_count;++layer)
+            for(auto const& reference:original[layer])require(layer,reference);
+#endif
+        for(unsigned layer=0;layer<geometry_layer_count;++layer)
+            for(auto const& record:all_visible[layer])require(layer,GeometryDrawReference(record));
+        contributors(roi,body_clip,false,[&](unsigned layer,auto const& record){
+            GeometryDrawReference reference(record);
+            if(!renderer.chunk_intersects_region(reference,roi,body_clip,false))return;
+            roi_records[layer].push_back(record);require(layer,reference);
+            if(renderer.chunk_intersects_region(reference,roi,shadow_clip,false))roi_shadow_records[layer].push_back(record);
+        });
+        if(!complete)return false;
+        bool any_receiver=false;
+        for(unsigned layer=0;layer<geometry_layer_count;++layer)
+            if(layer!=geometry_shadow && !roi_shadow_records[layer].empty())any_receiver=true;
+        if(!any_receiver)roi_shadow_records=all_visible;
+        roi_key=next_key;++roi_revision;body_requirements_valid=true;roi_receiver_check=static_receiver_revision;
+        ++body_requirement_builds;body_requirement_visits=body_requirements.visits;
+        body_requirement_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-started).count();
+        return true;
+    }
     bool reconstruct() {
         SandboxPassWorkload::Scope pass(work,SandboxPassWorkload::reconstruction);
         auto* context=renderer.context;
@@ -2787,7 +3393,7 @@ struct SandboxFreshPipeline {
         auto scroll_before=cache_scrolls,full_before=cache_full_draws;
 
         auto fail=[this](char const* stage){
-            static_rasters.invalidate_all(c3x_renderer::render_core::raster_error);
+            discard_static();
             reflection_valid=false;reflected_terrain_material_valid=false;
             renderer.trace.write("fresh-draw-failed",stage,true);
             std::printf("SANDBOX_DRAW_ERROR stage=%s\n",stage);
@@ -2807,11 +3413,19 @@ struct SandboxFreshPipeline {
         if (!renderer.device || !renderer.context || width<1 || height<1)return fail("viewport");
         if(!std::isfinite(next_zoom))return fail("projection");
         float zoom=std::clamp(next_zoom,c3x_renderer::SceneProjection::minimum,c3x_renderer::SceneProjection::maximum);
-        if(projection_zoom!=zoom){
+        // The mirror's key includes the projection; an animating zoom reuses
+        // it for a couple of frames instead of invalidating it outright.
+        if(sandbox_perf_options().legacy && projection_zoom!=zoom){
             reflection_valid=false;reflected_terrain_material_valid=false;
         }
+        {
+            unsigned zoom_lane=StaticRasters::lane_of(zoom);
+            if(lane_projection[zoom_lane]==zoom)++lane_still[zoom_lane];else lane_still[zoom_lane]=0;
+            lane_projection[zoom_lane]=zoom;lane_drawn[zoom_lane]=++draw_serial;
+        }
         projection_zoom=zoom;display_zoom=1.f;
-        auto& raster=static_rasters.select(projection_zoom);
+        static_rasters.select_lane(c3x_renderer::render_core::StaticRasterStates<
+            c3x_renderer::render_core::LinearTarget>::lane_of(projection_zoom));
 #ifdef C3X_RENDERER64_FRESH
         if(renderer.profiling){
             gpu_phases.poll(renderer.context,[&](GpuPhases::Sample const& sample){
@@ -2910,89 +3524,11 @@ struct SandboxFreshPipeline {
             frame.world_width_tiles*frame.tile_width/2:0;
         if (!capture(settings,reflected,int(w),int(h),next_wrap_pixels))return fail("visibility_capture");
         mark_prepare(prepare_capture);
-        auto region_shift=c3x_renderer::render_core::StaticRegionShift::between(
-            projection_zoom,camera_x,camera_y,current_raster().camera_x,current_raster().camera_y,
-            region_margin_x,region_margin_y);
-        bool recenter_region=!current_raster().valid ||
-            current_raster().signature!=raster_scope() ||
-            current_raster().lighting_revision!=lighting_revision ||
-            current_raster().environment_hour!=visual_hour ||
-            current_raster().environment_season!=previous_season ||
-            current_raster().depth_origin!=renderer.scene_depth_origin ||
-            settings.translation[0]!=current_raster().translation[0]+float(std::int64_t(camera_x)-current_raster().camera_x) ||
-            settings.translation[1]!=current_raster().translation[1]+float(std::int64_t(camera_y)-current_raster().camera_y) ||
-            !region_shift.reusable;
-#ifdef C3X_RENDERER64_FRESH
-        if(!recenter_region){
-            auto retained=settings;
-            retained.translation[0]+=float(region_margin_x-(camera_x-current_raster().camera_x));
-            retained.translation[1]+=float(region_margin_y-(camera_y-current_raster().camera_y));
-            retained.inverse_size[0]=1.f/static_region().width;retained.inverse_size[1]=1.f/static_region().height;
-            auto const& covered=current_raster().covered;
-            if(!raster_dependencies(raster_inputs[static_rasters.selected],retained,
-                    {covered.left,covered.top,covered.right,covered.bottom},false)){
-                recenter_region=true;++raster.metrics.reasons[c3x_renderer::render_core::raster_scene];
-            }
-        }
-#endif
-        if(recenter_region){
-            if(cache_full_draws){
-                // Existing phase counter includes fractional and derivative-quad lattice misses.
-                if(current_raster().valid && (region_shift.reason==c3x_renderer::render_core::StaticRegionShift::fractional_phase ||
-                    region_shift.reason==c3x_renderer::render_core::StaticRegionShift::derivative_phase))++raster.metrics.reasons[c3x_renderer::render_core::raster_fractional_phase];
-                if(current_raster().valid && region_shift.reason==c3x_renderer::render_core::StaticRegionShift::guard_bounds)++raster.metrics.reasons[c3x_renderer::render_core::raster_guard_bounds];
-                if(current_raster().depth_origin!=renderer.scene_depth_origin)++raster.metrics.reasons[c3x_renderer::render_core::raster_depth_origin];
-                if(settings.translation[0]!=current_raster().translation[0]+float(std::int64_t(camera_x)-current_raster().camera_x) ||
-                        settings.translation[1]!=current_raster().translation[1]+float(std::int64_t(camera_y)-current_raster().camera_y))++raster.metrics.reasons[c3x_renderer::render_core::raster_anchors];
-            }
-            current_raster().valid=false;
-            static_rasters.begin_restore();
-            current_raster().camera_x=camera_x;current_raster().camera_y=camera_y;
-        }
-        auto region_settings=settings;
-        region_settings.translation[0]+=float(region_margin_x-(camera_x-current_raster().camera_x));
-        region_settings.translation[1]+=float(region_margin_y-(camera_y-current_raster().camera_y));
-        // Captured world depth can stay constant while screen anchors move.
-        // Refill in the retained basis, then translate to the current basis.
-        region_settings.depth_translation=current_raster().valid?
-            current_raster().depth_translation:settings.depth_translation;
-        region_settings.inverse_size[0]=1.f/static_region().width;
-        region_settings.inverse_size[1]=1.f/static_region().height;
-        D3D11_RECT region_rect={region_margin_x,region_margin_y,
-            LONG(region_margin_x+w),LONG(region_margin_y+h)};
+        // One stable region of interest feeds shadow receivers, city lights and
+        // body placements (see update_roi). Camera steps inside it change none
+        // of them, so retained static pixels and shadow pages stay valid.
         mark_prepare(prepare_raster_proof);
-        std::array<std::uint64_t,4> body_scene={view_revision(),visibility_revision,
-            (std::uint64_t(static_region().width)<<32)|static_region().height,std::uint64_t(renderer.water_scene_active)};
-        std::array<float,7> body_view={region_settings.translation[0],region_settings.translation[1],
-            region_settings.inverse_size[0],region_settings.inverse_size[1],projection_zoom,resident_basis_x,resident_basis_y};
-        if(!body_requirements_valid || body_scene!=body_requirement_scene || body_view!=body_requirement_view){
-            auto started=std::chrono::steady_clock::now();body_requirements.clear();body_requirements_valid=false;
-            bool complete=true;
-            auto visit=[&](unsigned layer,GeometryDrawReference const& draw){
-                if(complete && draw.content().instances && !draw.content().instances->empty())
-                    complete=body_requirements.add(renderer.shared_instances,layer,draw,renderer.shared_instance_draw_key(layer,draw));
-            };
-#ifndef C3X_RENDERER64_FRESH
-            // Legacy consumers submit the original native ranges. Renderer64
-            // production uses the selected occurrences and guarded strips;
-            // its explicit CPU oracle prepares its own original-range union.
-            GeometryDrawView original=renderer.geometry_vertex_buffers;
-            for(unsigned layer=0;layer<geometry_layer_count;++layer)
-                for(auto const& draw:original[layer])visit(layer,draw);
-#endif
-            for(unsigned layer=0;layer<geometry_layer_count;++layer)
-                for(auto const& record:all_visible[layer])visit(layer,GeometryDrawReference(record));
-            auto clip=source_bounds(region_settings,{0,0,LONG(static_region().width),LONG(static_region().height)},false);
-            contributors(region_settings,clip,false,[&](unsigned layer,auto const& record){
-                if(renderer.water_scene_active && record.water_dependent)return;
-                auto draw=GeometryDrawReference(record);
-                if(renderer.chunk_intersects_region(draw,region_settings,clip,false))visit(layer,draw);
-            });
-            if(!complete)return fail("body_requirements");
-            body_requirement_scene=body_scene;body_requirement_view=body_view;body_requirements_valid=true;
-            ++body_requirement_builds;body_requirement_visits=body_requirements.visits;
-            body_requirement_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-started).count();
-        }else ++body_requirement_reuses;
+        if(!update_roi(settings,int(w),int(h)))return fail("body_requirements");
         auto const& body_inputs=body_requirements;
         mark_prepare(prepare_body_requirements);
         auto retire_completed_instance_plans=[&]{
@@ -3000,7 +3536,10 @@ struct SandboxFreshPipeline {
             instance_plans={};instance_plans.begin();instance_plan_bytes=0;
 #endif
         };
-        if(!update_city_lights() || !shadow.render(all_visible,raster_scope(),static_receiver_revision,view_revision(),body_inputs,retire_completed_instance_plans))return fail("lights_or_shadow");
+        bool tight_shadows=sandbox_perf_options().shadow_tight;
+        if(!update_city_lights() || !shadow.render(tight_shadows?all_visible:roi_shadow_records,raster_scope(),
+                tight_shadows?static_receiver_revision:roi_revision,view_revision(),body_inputs,retire_completed_instance_plans))
+            return fail("lights_or_shadow");
 #ifdef C3X_RENDERER64_FRESH
         if(shared_front!=shadow.shared_front){instance_plans={};instance_plans.begin();instance_plan_bytes=0;shared_front=shadow.shared_front;}
 #else
@@ -3043,6 +3582,15 @@ struct SandboxFreshPipeline {
         if (renderer.reflection.enabled && mirror.left<mirror.right && mirror.top<mirror.bottom) {
             auto key=reflection_writer(reflected,mirror);
             bool redraw=!reflection_valid || reflection_key!=key;
+            // While the zoom animates, the blurred mirror may lag up to two
+            // frames; scrolling and settled zoom still redraw it immediately.
+            unsigned mirror_lane=StaticRasters::lane_of(projection_zoom);
+            bool hidden=mirror_lane==0 && canonical_hidden();
+            if(redraw && reflection_valid && !sandbox_perf_options().legacy &&
+                    ((lane_still[mirror_lane]==0 && reflection_skips<2) || hidden)){
+                redraw=false;++reflection_skips;
+            }
+            else if(redraw)reflection_skips=0;
             if(!redraw){++reflection_reuses;if(work.enabled)++work.row().reuses;}
             else {
             if(work.enabled)++work.row().rebuilds;
@@ -3086,112 +3634,10 @@ struct SandboxFreshPipeline {
 #endif
         work.pass=SandboxPassWorkload::main_scene;
         auto* context=renderer.context;
-        bool const cache_ready=scene_scale==1 && current_raster().valid &&
-            current_raster().signature==raster_scope() &&
-            current_raster().shadow_builds==shadow.builds;
-        if(raster.metrics.full_draws && raster.shadow_builds!=shadow.builds)
-            ++raster.metrics.reasons[c3x_renderer::render_core::raster_shadow];
-        if(cache_ready)++raster.metrics.reuses;
-        if(work.enabled){if(cache_ready)++work.row().reuses;else ++work.row().rebuilds;}
-        if(!cache_ready){
-            // A light or scene change replaces the whole resident image at
-            // the current camera; its center is the first covered rectangle.
-            current_raster().camera_x=camera_x;current_raster().camera_y=camera_y;
-            region_settings.translation[0]=settings.translation[0]+region_margin_x;
-            region_settings.translation[1]=settings.translation[1]+region_margin_y;
-            region_settings.depth_translation=settings.depth_translation;
-            current_raster().depth_translation=settings.depth_translation;
-            current_raster().depth_origin=renderer.scene_depth_origin;
-            current_raster().translation={settings.translation[0],settings.translation[1]};
-            static_rasters.begin_write();
-            float clear[4]={};
-            context->ClearRenderTargetView(static_region().target,clear);work.clear(static_region().target);
-            context->ClearDepthStencilView(static_region().depth,
-                D3D11_CLEAR_DEPTH|D3D11_CLEAR_STENCIL,1,0);work.clear(static_region().depth);
-            if(!draw_scene(static_visible,region_settings,region_rect,
-                    static_region().target,static_region().depth,false,float(scene_scale)))return fail("static_scene");
-            current_raster().covered={region_rect.left,region_rect.top,region_rect.right,region_rect.bottom};
-            ++cache_full_draws;++raster.metrics.full_draws;
-            current_raster().signature=raster_scope();
-#ifdef C3X_RENDERER64_FRESH
-            auto& dependencies=raster_inputs[static_rasters.selected];dependencies.clear();
-            if(!raster_dependencies(dependencies,region_settings,region_rect,true))dependencies.complete=false;
-#endif
-            current_raster().shadow_builds=shadow.builds;
-            raster.geometry_epoch=renderer.tile_geometry_epoch;
-            raster.lighting_revision=lighting_revision;
-            raster.environment_hour=visual_hour;raster.environment_season=previous_season;
-            current_raster().valid=true;
-        }
-        if(cache_ready){
-            auto needed=region_shift.needed<D3D11_RECT>(int(w),int(h),
-                region_margin_x,region_margin_y);
-            auto fill_strip=[&](D3D11_RECT strip){
-                if(strip.left>=strip.right || strip.top>=strip.bottom)return true;
-                ++raster.metrics.reasons[c3x_renderer::render_core::raster_strip_fills];
-                ++raster.metrics.strip_fills;
-                static_rasters.begin_write();
-                GeometryDrawView::Records selected{};
-                auto clip=source_bounds(region_settings,strip,false);
-                contributors(region_settings,clip,false,[&](unsigned layer,auto const& record){
-                        if(renderer.water_scene_active && record.water_dependent)return;
-                        if(renderer.chunk_intersects_region(GeometryDrawReference(record),
-                                region_settings,clip,false))selected[layer].push_back(record);
-                    });
-                if(!draw_scene(selected,region_settings,strip,static_region().target,
-                    static_region().depth,false,float(scene_scale)))return false;
-#ifdef C3X_RENDERER64_FRESH
-                if(!raster_dependencies(raster_inputs[static_rasters.selected],region_settings,strip,true))
-                    raster_inputs[static_rasters.selected].complete=false;
-#endif
-                raster.valid=true;return true;
-            };
-            constexpr LONG ahead=128;
-            if(needed.left<current_raster().covered.left){
-                LONG left=std::max<LONG>(0,needed.left-ahead);
-                if(!fill_strip({left,current_raster().covered.top,current_raster().covered.left,
-                        current_raster().covered.bottom}))return fail("static_strip");
-                current_raster().covered.left=left;
-            }
-            if(needed.right>current_raster().covered.right){
-                LONG right=std::min<LONG>(LONG(static_region().width),needed.right+ahead);
-                if(!fill_strip({current_raster().covered.right,current_raster().covered.top,right,
-                        current_raster().covered.bottom}))return fail("static_strip");
-                current_raster().covered.right=right;
-            }
-            if(needed.top<current_raster().covered.top){
-                LONG top=std::max<LONG>(0,needed.top-ahead);
-                if(!fill_strip({current_raster().covered.left,top,current_raster().covered.right,
-                        current_raster().covered.top}))return fail("static_strip");
-                current_raster().covered.top=top;
-            }
-            if(needed.bottom>current_raster().covered.bottom){
-                LONG bottom=std::min<LONG>(LONG(static_region().height),needed.bottom+ahead);
-                if(!fill_strip({current_raster().covered.left,current_raster().covered.bottom,
-                        current_raster().covered.right,bottom}))return fail("static_strip");
-                current_raster().covered.bottom=bottom;
-            }
-        }
-        if(static_rasters.needs_restore(cache_ready,camera_x,camera_y,settings.depth_translation)){
-            static_rasters.begin_restore();
-            region_shift=c3x_renderer::render_core::StaticRegionShift::between(
-                projection_zoom,camera_x,camera_y,current_raster().camera_x,current_raster().camera_y,
-                region_margin_x,region_margin_y);
-            if(!static_restore.draw(context,static_cache,static_region().samples,
-                    static_region().depth_samples,region_shift.x-region_margin_x,
-                    region_shift.y-region_margin_y,{},nullptr,static_region().width,
-                    static_region().height,false,false,0,nullptr,1,
-                    -(settings.depth_translation-current_raster().depth_translation)/16384.f))return fail("static_restore");
-            work.draw(3);if(work.enabled)work.row().target_pixels+=std::uint64_t(static_cache.width)*static_cache.height;
-            context->OMSetRenderTargets(0,nullptr,nullptr);
-            if(scene_samples==1){
-                if(static_cache.resolved!=static_cache.color){context->CopyResource(static_cache.resolved,static_cache.color);work.copy(static_cache.resolved,true);}
-            }
-            else context->ResolveSubresource(static_cache.resolved,0,static_cache.color,0,
-                DXGI_FORMAT_R16G16B16A16_FLOAT);
-            if(cache_ready)++cache_scrolls;
-            static_rasters.restored(camera_x,camera_y,settings.depth_translation);
-        }
+        // Retained static layer: whole-pixel reuse, preview resampling and
+        // budgeted refinement (never a synchronous full redraw while a usable
+        // preview exists). May move `settings` by a sub-pixel snap.
+        if(!compose_static(settings,int(w),int(h)))return fail("static_layer");
         QueryPerformanceCounter(&ticks[3]);
 #ifdef C3X_RENDERER64_FRESH
         gpu_phases.pass_end(renderer.context);gpu_phases.pass_begin(renderer.context,GpuPhases::shadow);
@@ -3333,6 +3779,7 @@ extern "C" __declspec(dllexport) void c3x_sandbox_fresh_metrics(double* phases,
         sandbox_fresh.water_parameters.gpu_bytes()+
         sandbox_fresh.static_cache.bytes()+
         sandbox_fresh.static_rasters.bytes()+
+        sandbox_fresh.bootstrap[0].region.bytes()+sandbox_fresh.bootstrap[1].region.bytes()+
         sandbox_fresh.material_albedo.bytes()+
         std::size_t(sandbox_fresh.material_normal.width)*sandbox_fresh.material_normal.height*4+
         std::size_t(sandbox_fresh.material_world.width)*sandbox_fresh.material_world.height*8+
@@ -3398,7 +3845,9 @@ extern "C" __declspec(dllexport) void c3x_sandbox_combat_event(int serial,
 // Untimed witnesses can force an independent raster without rebuilding world
 // generations or rewinding animation. Ordinary production draws never call it.
 extern "C" __declspec(dllexport) void c3x_sandbox_scroll_cache_invalidate() {
-    sandbox_fresh.static_rasters.invalidate_all(c3x_renderer::render_core::raster_explicit_reset);
+    sandbox_fresh.static_rasters.discard_all(c3x_renderer::render_core::raster_explicit_reset);
+    for(auto& image:sandbox_fresh.bootstrap){image.valid=false;image.covered={};}
+    sandbox_fresh.restore_key={};
     sandbox_fresh.reflection_valid=false;
     sandbox_fresh.reflected_terrain_material_valid=false;
 }
@@ -3408,8 +3857,8 @@ extern "C" __declspec(dllexport) void c3x_sandbox_scroll_cache_metrics(unsigned*
     c3x_sandbox_cache_metrics(depth_copies,scrolls,full_draws,reflection_reuses,reflection_draws,pose_builds);
 }
 extern "C" __declspec(dllexport) void c3x_sandbox_scroll_reasons(unsigned* values) {
-    if(values)for(unsigned i=0;i<11;++i)values[i]=sandbox_fresh.static_rasters.states[0].metrics.reasons[i]+
-        sandbox_fresh.static_rasters.states[1].metrics.reasons[i];
+    if(values)for(unsigned i=0;i<11;++i){values[i]=0;
+        for(auto const& state:sandbox_fresh.static_rasters.states)values[i]+=state.metrics.reasons[i];}
 }
 
 extern "C" __declspec(dllexport) int c3x_sandbox_draw_fresh(

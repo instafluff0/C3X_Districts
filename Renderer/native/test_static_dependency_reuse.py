@@ -18,7 +18,7 @@ def method(source, signature):
 
 
 class StaticDependencyReuseTests(unittest.TestCase):
-    def test_production_capture_retires_both_rasters_only_after_draw_order_changes(self):
+    def test_production_capture_marks_rasters_stale_only_after_draw_order_changes(self):
         source = (ROOT / "Renderer/sandbox/fresh_pipeline.h").read_text()
         begin = source.index("    bool capture(ViewportShaderSettings const& settings,")
         begin = source.index("{", begin) + 1
@@ -39,22 +39,25 @@ struct Pipeline {
  }
 };
 int main(){
+ // An order change keeps every raster displayable as a preview but stale, so
+ // no slot is reused as fresh pixels; unchanged frames leave them untouched.
  Pipeline p;for(auto& state:p.static_rasters.states){state.valid=true;state.metrics.full_draws=1;}
- p.static_rasters.restored(0,0,0);p.capture_order();
- assert(p.static_rasters.states[0].valid && p.static_rasters.states[1].valid && p.static_rasters.writer.slot==0);
+ p.capture_order();
+ for(auto const& state:p.static_rasters.states)assert(state.valid && !state.stale);
  Chunk chunk;GeometryDrawRecord<Chunk> first(chunk),second(chunk);first.tile_x=2;second.tile_x=0;
  p.renderer.geometry_vertex_buffers.edit(0)={first,second};
  assert(p.renderer.geometry_vertex_buffers.order_occurrences([](auto const& draw){return draw.tile_x;}));
- p.capture_order();assert(!p.static_rasters.states[0].valid && !p.static_rasters.states[1].valid && p.static_rasters.writer.slot==2);
+ p.capture_order();
+ for(auto const& state:p.static_rasters.states)assert(state.valid && state.stale);
  auto revision=p.static_rasters.states[0].revision;
- for(auto& state:p.static_rasters.states)state.valid=true;p.static_rasters.restored(0,0,0);
+ for(auto& state:p.static_rasters.states)state.stale=false;
  for(unsigned i=0;i<1000;++i)p.capture_order();
- assert(p.static_rasters.states[0].valid && p.static_rasters.states[1].valid && p.static_rasters.states[0].revision==revision);
- assert(p.static_rasters.writer.slot==0 && p.static_rasters.states[0].metrics.reasons[raster_scene]==1);
+ for(auto const& state:p.static_rasters.states)assert(state.valid && !state.stale);
+ assert(p.static_rasters.states[0].revision==revision && p.static_rasters.states[0].metrics.reasons[raster_scene]==1);
  // Full reconstruction can supply the same keys in a different native order
  // without a boundary sort, so it retires order through clear as well.
  p.renderer.geometry_vertex_buffers.clear();p.capture_order();
- assert(!p.static_rasters.states[0].valid && !p.static_rasters.states[1].valid && p.static_rasters.writer.slot==2);
+ for(auto const& state:p.static_rasters.states)assert(state.stale);
  assert(p.static_rasters.states[0].metrics.reasons[raster_scene]==2);
 }
 ''')
@@ -405,6 +408,7 @@ int main(){State state;State::RasterInputs pixels;ViewportShaderSettings setting
     def test_production_receiver_grid_reuses_exact_static_view_and_light(self):
         source = (ROOT / "Renderer/sandbox/fresh_pipeline.h").read_text()
         identity = method(source, "    std::array<std::uint64_t,9> receiver_identity(")
+        stable = method(source, "    bool configure_stable(Grid& grid,float const* needed){")
         render = method(source, "    template<class BodyInputs,class RetireCompletedPlans> bool render(")
         coverage = render[render.index("        float needed[4]"):render.index("        receiver_revision=revision;")]
         run_cpp(r'''
@@ -415,6 +419,8 @@ int main(){State state;State::RasterInputs pixels;ViewportShaderSettings setting
 #include <limits>
 #include <cmath>
 constexpr unsigned geometry_layer_count=2,geometry_shadow=1;
+struct PerfOptions {bool shadow_tight=false;};
+PerfOptions& sandbox_perf_options(){static PerfOptions options;return options;}
 struct Shadow {struct Bounds {float low[3]={1,2,0},high[3]={2,3,4};};
  static std::array<float,4> project(Bounds const& b,float const* offset,std::array<float,12> const&){return {b.low[0]+offset[0],b.low[1]+offset[1],b.high[0]+offset[0],b.high[1]+offset[1]};}};
 struct Record {Shadow::Bounds bounds;int tile_x=2,tile_y=4;Record const& content()const{return *this;}Shadow::Bounds world_bounds=bounds;};
@@ -428,7 +434,8 @@ struct State {
  Grid receiver_grid;std::array<float,4> receiver_wrap{};std::array<std::uint64_t,9> receiver_key{};
  std::array<float,12> receiver_light{};bool receiver_grid_valid=false;
  std::uint64_t receiver_visits=0,receiver_builds=0,receiver_reuses=0;
-''' + identity + r'''
+ std::array<float,2> stable_span{};std::array<float,12> stable_light{};std::uint64_t span_refits=0;
+''' + identity + stable + r'''
  bool prepare(GeometryDrawView::Records const& receivers,std::uint64_t revision=1,std::uint64_t scene=1){
 ''' + coverage + r'''
  return true;}
@@ -448,6 +455,20 @@ int main(){State state;GeometryDrawView::Records records;records[0].resize(100);
  dirty([&]{state.renderer.geometry_canonical_world=false;});
  auto before=state.receiver_builds;assert(state.prepare(records,2));assert(state.receiver_builds==before+1);
  before=state.receiver_builds;assert(state.prepare(records,2,2));assert(state.receiver_builds==before+1);
+ // A scrolling receiver set rebuilds the window but keeps the sampling span,
+ // so retained static pixels and unchanged shadow pages stay valid.
+ auto span=state.receiver_grid.quality_span;auto refits=state.span_refits;
+ for(unsigned step=0;step<40;++step){
+  for(auto& record:records[0]){record.world_bounds.low[0]+=.25f;record.world_bounds.high[0]+=.25f;}
+  if(step%7==3)records[0].back().world_bounds.high[1]+=.05f;
+  assert(state.prepare(records,100+step,2));
+  assert(state.receiver_grid.quality_span==span);
+ }
+ assert(state.span_refits==refits);
+ // A genuinely larger receiver extent (zoom out) refits once.
+ for(auto& record:records[0])record.world_bounds.high[1]+=20.f;
+ assert(state.prepare(records,200,2));assert(state.span_refits==refits+1&&state.receiver_grid.quality_span!=span);
+ sandbox_perf_options().shadow_tight=true;assert(state.prepare(records,201,2));
 }
 ''')
 

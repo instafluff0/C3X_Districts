@@ -37,6 +37,8 @@ void c3x_renderer64_begin_unit_assets();
 bool c3x_renderer64_prepare_scene_assets();
 bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
     ID3D11RenderTargetView* target,float zoom=1.f);
+// True while the retained static layer for this zoom is still being refined.
+bool c3x_renderer64_static_refinement_pending(float zoom);
 #endif
 #include "terrain_scene_runtime.h"
 #include "object_compiler.h"
@@ -12680,6 +12682,18 @@ public:
         trial_surface_handle=surface;trial_surface_width=width;trial_surface_height=height;
         return submit_locked(lock,Command::trial_bind_surface);
     }
+    static bool trial_legacy_cadence(){
+        static bool legacy=[]{char value[8]={};
+            return GetEnvironmentVariableA("C3X_RENDERER_LEGACY_CADENCE",value,sizeof(value))&&value[0]=='1';}();
+        return legacy;
+    }
+    // Called by the helper cadence thread without the renderer gate: block
+    // until DXGI grants the next presentation (1), or report 0/2 for the
+    // timer fallback. Never touches the device or immediate context.
+    int trial_visual_wait(unsigned timeout_ms){
+        if(trial_legacy_cadence())return 0;
+        return trial_surface_permit.wait(timeout_ms);
+    }
     int trial_surface_pixels(unsigned* output,unsigned capacity,unsigned& width,unsigned& height){
         std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);
         int code=submit_locked(lock,Command::trial_surface_pixels);
@@ -14680,7 +14694,10 @@ private:
                 // Keep the sampler reachable for later ordered unit events,
                 // but unchanged invisible/static views need no GPU work. The
                 // completed pose proof stays intact until adoption succeeds.
-                if(!changed&&!job->pending_since&&!poses_changed&&!animated&&job->zoom==zoom)return;
+                // Progressive static refinement also needs visual frames until
+                // the full-quality raster replaces its preview.
+                if(!changed&&!job->pending_since&&!poses_changed&&!animated&&job->zoom==zoom&&
+                    !c3x_renderer64_static_refinement_pending(zoom))return;
                 if(!job->pending_since)job->pending_since=ticks;++job->turns;
                 auto ready=renderer_state.prepare_frame_unit_assets(poses);
                 if(ready==C3X_RENDERER_RESULT_OK)ready=c3x_renderer64_prepare_unit_meshes();
@@ -14714,7 +14731,7 @@ private:
                 job->poses=std::move(poses);job->unit_contribution_revision=contribution_revision;
                 job->zoom=zoom;job->completed_ticks=ticks;job->ready=true;++visual_map_samples;
                 job->source_generation=renderer_state.route_frame_sequence;
-                char detail[896];std::snprintf(detail,sizeof(detail),
+                if(renderer_state.trace.level>=2){char ready_detail[896];std::snprintf(ready_detail,sizeof(ready_detail),
                     "units=%zu turns=%lld age_ms=%.3f render_ms=%.3f bytes=%zu zoom=%.6f candidates_ms=%.3f selection_ms=%.3f assets_ms=%.3f target_ms=%.3f total_ms=%.3f begin=%lld end=%lld frequency=%lld source_serial=%lld source_generation=%llu candidate_end=%lld selection_end=%lld assets_end=%lld render_begin=%lld",
                     job->poses.size(),job->turns,frequency>0?double(ticks-job->pending_since)*1000/frequency:0.,
                     renderer_state.trace.milliseconds(end.QuadPart-begin.QuadPart),job->bytes(),zoom,
@@ -14725,7 +14742,8 @@ private:
                     renderer_state.trace.milliseconds(stages[4].QuadPart-stages[0].QuadPart),
                     stages[0].QuadPart,stages[4].QuadPart,renderer_state.trace.frequency.QuadPart,job->serial,
                     static_cast<unsigned long long>(job->source_generation),stages[1].QuadPart,stages[2].QuadPart,stages[3].QuadPart,begin.QuadPart);
-                renderer_state.trace.write("frame-preparation-ready",detail,true);job->pending_since=0;job->turns=0;
+                renderer_state.trace.write("frame-preparation-ready",ready_detail,true);}
+                job->pending_since=0;job->turns=0;
             };
             auto draw=[this,weak,capture,selected,x,y,w,h,sharpness](long long,long long,float zoom)->Sampled{
                 auto job=weak.lock();
@@ -15076,7 +15094,10 @@ private:
                     if(SUCCEEDED(hr)){
                         Microsoft::WRL::ComPtr<IDXGISwapChain2> latency;
                         hr=trial_surface_swap.As(&latency);
-                        if(SUCCEEDED(hr))hr=latency->SetMaximumFrameLatency(1);
+                        // Two queued frames let CPU preparation of frame N+1
+                        // overlap GPU work of frame N; the cadence thread waits
+                        // on this signal so frames start on vsync opportunities.
+                        if(SUCCEEDED(hr))hr=latency->SetMaximumFrameLatency(trial_legacy_cadence()?1:2);
                         if(SUCCEEDED(hr)){
                             auto signal=latency->GetFrameLatencyWaitableObject();
                             if(signal)trial_surface_permit.reset(signal);else hr=E_FAIL;
@@ -15246,7 +15267,10 @@ private:
                     // whose prior DXGI status did not certify successful delivery.
                     bool deliver=drawn==1||(command==Command::trial_required_visual_shared&&drawn==2&&
                         trial_front_pending.load(std::memory_order_acquire));
-                    HRESULT hr=deliver?trial_surface_swap->Present(0,0):S_OK;
+                    // Vsync-locked presentation: the cadence already holds a
+                    // frame-latency grant, so Present(1) does not block and
+                    // every rendered frame is displayed exactly once.
+                    HRESULT hr=deliver?trial_surface_swap->Present(trial_legacy_cadence()?0:1,0):S_OK;
                     if(phase_probe)QueryPerformanceCounter(&finished);
                     if(deliver&&hr==S_OK){
                         // The same worker owns commit and draw, so no newer
@@ -16920,6 +16944,9 @@ extern "C" __declspec(dllexport) int c3x_renderer_trial_visual_shared(
 }
 extern "C" __declspec(dllexport) int c3x_renderer_trial_priority_front_pending(){
     return get_renderer_worker().trial_priority_front_pending();
+}
+extern "C" __declspec(dllexport) int c3x_renderer_trial_visual_wait(unsigned timeout_ms){
+    return get_renderer_worker().trial_visual_wait(timeout_ms);
 }
 extern "C" __declspec(dllexport) int c3x_renderer_trial_bind_surface(
     std::uint64_t surface,unsigned width,unsigned height){
