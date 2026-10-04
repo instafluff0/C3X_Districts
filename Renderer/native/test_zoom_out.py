@@ -26,7 +26,7 @@ bool custom_renderer_zoom_enabled(){return state.current_config.enable_custom_re
  state.current_config.enable_custom_rendering_zoom&&!bic.Map.Renderer.spotlight_on_city;}
 RECT ''' + bounds + '\nvoid ' + layout + r'''
 int main(){Main_Screen_Form screen;
- for(int width:{64,80,96,112})for(int enabled:{0,1,2,3}){
+ for(int width:{64,80,96,112,128,160,192,224,256,320,384})for(int enabled:{0,1,2,3}){
   state.custom_renderer_zoom_target_width=width;
   state.current_config.enable_custom_rendering=enabled!=0;
   state.current_config.enable_custom_rendering_zoom=enabled!=1;
@@ -49,7 +49,7 @@ int main(){Main_Screen_Form screen;
  state.custom_renderer_zoom_target_width=64;bic.is_zoomed_out=true;screen.TileX_Min=91;
  assert(custom_renderer_capture_bounds(&screen).left==91);bic.is_zoomed_out=false;
  state.custom_renderer_zoom_target_width=128;screen.TileX_Min=91;
- assert(custom_renderer_capture_bounds(&screen).left==91);assert(screen.TileX_Min==91);
+ assert(custom_renderer_capture_bounds(&screen).left<91);assert(screen.TileX_Min==91);
 }
 ''')
 

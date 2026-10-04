@@ -70,50 +70,39 @@ int main(){Test p;std::array<std::vector<Record>,2> records;
 }
 ''')
 
-    def test_production_capture_marks_rasters_stale_only_after_draw_order_changes(self):
+    def test_scene_reassembly_preserves_pixels_until_local_order_proof(self):
         source = (ROOT / "Renderer/sandbox/fresh_pipeline.h").read_text()
-        begin = source.index("    bool capture(ViewportShaderSettings const& settings,")
-        begin = source.index("{", begin) + 1
-        end = source.index("        if (resident_signature!=view_revision() ||", begin)
+        body = method(source, "    bool capture(ViewportShaderSettings const& settings,")
+        # The production capture must leave local invalidation to its ordered
+        # raster proof, even when full assembly/sorting advances scene order.
+        self.assertNotIn("order_revision()", body)
+        self.assertNotIn("resident_order_revision", source)
         run_cpp(r'''
-#define C3X_RENDERER64_FRESH
-#include "Renderer/native/render_core/scene_membership.h"
-#include "Renderer/sandbox/static_raster_state.h"
+#include "Renderer/native/render_core/raster_contributors.h"
 #include <cassert>
 using namespace c3x_renderer::render_core;
-struct Chunk {struct Bounds {int left,top,right,bottom;} bounds{};int translation_x=0,translation_y=0;float natural_projection[4]={};};
-struct Target {};
-struct Pipeline {
- struct Renderer {SceneMembership<Chunk,2> geometry_vertex_buffers;} renderer;
- StaticRasterStates<Target> static_rasters;std::uint64_t resident_order_revision=0;
- std::array<StaticRasterState<Target>,2> bootstrap;
- void capture_order(){
-''' + source[begin:end] + r'''
- }
-};
+struct Proof{};
 int main(){
- // An order change retires every terrain preview before current dynamic
- // layers can be drawn over it; unchanged frames leave them untouched.
- Pipeline p;for(auto& state:p.static_rasters.states){state.valid=true;state.metrics.full_draws=1;}
- p.capture_order();
- for(auto const& state:p.static_rasters.states)assert(state.valid && !state.stale);
- Chunk chunk;GeometryDrawRecord<Chunk> first(chunk),second(chunk);first.tile_x=2;second.tile_x=0;
- p.renderer.geometry_vertex_buffers.edit(0)={first,second};
- assert(p.renderer.geometry_vertex_buffers.order_occurrences([](auto const& draw){return draw.tile_x;}));
- for(auto& image:p.bootstrap)image.valid=true;
- p.capture_order();
- for(auto const& state:p.static_rasters.states)assert(!state.valid && state.stale);
- for(auto const& image:p.bootstrap)assert(!image.valid);
- auto revision=p.static_rasters.states[0].revision;
- for(auto& state:p.static_rasters.states){state.stale=false;state.valid=true;}
- for(unsigned i=0;i<1000;++i)p.capture_order();
- for(auto const& state:p.static_rasters.states)assert(state.valid && !state.stale);
- assert(p.static_rasters.states[0].revision==revision && p.static_rasters.states[0].metrics.reasons[raster_scene]==1);
- // Full reconstruction can supply the same keys in a different native order
- // without a boundary sort, so it retires order through clear as well.
- p.renderer.geometry_vertex_buffers.clear();p.capture_order();
- for(auto const& state:p.static_rasters.states)assert(state.stale);
- assert(p.static_rasters.states[0].metrics.reasons[raster_scene]==2);
+ RasterContributors<Proof> pixels;auto proof=std::make_shared<Proof>();
+ RasterContributors<Proof>::Key a{},b{},c{},d{};a[0]=1;b[0]=2;c[0]=3;d[0]=4;
+ auto append=[&](std::initializer_list<decltype(a)> keys){pixels.begin_append();
+  for(auto const& key:keys)assert(pixels.add(key,proof,key[0],1));};
+ auto validate=[&](std::initializer_list<decltype(a)> keys){pixels.begin_membership();bool ok=true;
+  for(auto const& key:keys)ok=pixels.visit_membership(key)&&ok;return ok&&pixels.exact_membership();};
+ append({a,c});assert(validate({a,c}));
+ // An entering strip inserts new contributors between retained contributors.
+ append({a,b,c});assert(validate({a,b,c}));
+ // A disjoint strip does not constrain its order relative to old pixels.
+ append({d});assert(validate({d,a,b,c}));assert(validate({a,b,c,d}));
+ // Genuine overlap-order reversals are rejected, as are missing/new draws.
+ assert(!validate({a,c,b,d}));assert(!validate({c,a,b,d}));assert(!validate({a,b,c}));
+ // Removing an intermediate draw must not hide a reversal of its neighbors.
+ assert(!validate({a,c,d}));assert(pixels.remaining_order_preserved());
+ assert(!validate({c,a,d}));assert(!pixels.remaining_order_preserved());
+ assert(!validate({a,d}));assert(pixels.remaining_order_preserved());
+ pixels.clear();append({c,b,a});assert(validate({c,b,a}));assert(!validate({a,b,c}));
+ // Hundreds of camera recaptures neither grow metadata nor weaken order.
+ auto bytes=pixels.bytes();for(int i=0;i<1000;++i){assert(validate({c,b,a}));assert(pixels.bytes()==bytes);}
 }
 ''')
 
@@ -505,10 +494,10 @@ int main(){State state;State::RasterInputs pixels;ViewportShaderSettings setting
  assert(state.raster_dependencies(pixels,settings,region,true));assert(state.raster_dependencies(pixels,settings,region,false));
  visits=state.contributor_visits;for(unsigned i=0;i<1000;++i)assert(state.raster_dependencies(pixels,settings,region,false));
  assert(state.contributor_visits==visits);
- // Duplicate current keys cannot disguise a dropped retained contribution.
- state.records.push_back(state.records.front());++state.membership;
- assert(state.raster_dependencies(pixels,settings,region,true));assert(state.raster_dependencies(pixels,settings,region,false));
- assert(pixels.draws.size()==2);state.records.erase(state.records.begin()+1);++state.membership;
+ // Duplicate validation visits cannot disguise a dropped retained contribution.
+ state.records.insert(state.records.begin(),state.records.front());++state.membership;
+ assert(state.raster_dependencies(pixels,settings,region,false));
+ assert(pixels.draws.size()==2);state.records.pop_back();++state.membership;
  assert(!state.raster_dependencies(pixels,settings,region,false));
  state.records.push_back(extra);++state.membership;assert(state.raster_dependencies(pixels,settings,region,false));
  auto saved=state.records;state.records.clear();++state.membership;

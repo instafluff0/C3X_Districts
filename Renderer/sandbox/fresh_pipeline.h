@@ -521,14 +521,14 @@ float4 PSSandboxAquaticFeature(FeaturePixelInput input) : SV_Target {
 // switch restores the previous behavior for A/B comparison and escape.
 struct SandboxPerfOptions {
     bool legacy=false;          // C3X_RENDERER_STATIC_LEGACY=1: synchronous full-quality static redraws
-    float bootstrap_scale=.5f;  // C3X_RENDERER_BOOTSTRAP_SCALE: low-resolution first frame (0 disables)
+    float bootstrap_scale=1.f;  // Native-resolution fallback; reduced scale is diagnostic only (0 disables).
     double refine_pixels=0;     // C3X_RENDERER_REFINE_PIXELS: fixed per-frame refinement budget
     bool shadow_tight=false;    // C3X_RENDERER_SHADOW_TIGHT_FIT=1: refit shadows to every view
     SandboxPerfOptions(){
         char value[32]{};
         legacy=GetEnvironmentVariableA("C3X_RENDERER_STATIC_LEGACY",value,sizeof(value)) && value[0]=='1';
         if(GetEnvironmentVariableA("C3X_RENDERER_BOOTSTRAP_SCALE",value,sizeof(value))){
-            float scale=float(std::atof(value));bootstrap_scale=std::isfinite(scale)?std::clamp(scale,0.f,1.f):.5f;
+            float scale=float(std::atof(value));bootstrap_scale=std::isfinite(scale)?std::clamp(scale,0.f,1.f):1.f;
             if(bootstrap_scale>0 && bootstrap_scale<.25f)bootstrap_scale=.25f;
         }
         if(GetEnvironmentVariableA("C3X_RENDERER_REFINE_PIXELS",value,sizeof(value))){
@@ -656,9 +656,6 @@ struct SandboxSceneShadow {
             for(std::size_t i=0;i<size;++i){value^=bytes[i];value*=1099511628211ull;}};
         mix(sampling_grid.quality_span.data(),sizeof(float)*2);mix(renderer.shadow_basis.data(),sizeof(float)*12);
         mix(wrap.data(),sizeof(float)*4);mix(&scene,sizeof(scene));mix(&renderer.device_generation,sizeof(renderer.device_generation));
-        // Coarse previews may contain missing shadows. Completion invalidates
-        // them once, rather than restarting full-quality refinement per page.
-        mix(&atlas_complete,sizeof(atlas_complete));
         sampling_identity=value;
     }
     template<class T> static void drop(T*& pointer) {if (pointer) pointer->Release(); pointer=nullptr;}
@@ -1325,11 +1322,10 @@ struct SandboxSceneShadow {
         }
         float clear[4]={-1e6f,-1e6f,-1e6f,-1e6f};
         draws=0;
-        unsigned page_budget=2;
-        char requested_pages[16]={};
-        if(c3x_renderer::render_core::cached_environment("C3X_RENDERER_SHADOW_PAGES_PER_FRAME",requested_pages,sizeof(requested_pages)))
-            page_budget=unsigned(std::clamp(std::atoi(requested_pages),1,int(Grid::max_pages)));
-        if(!proved || sandbox_perf_options().legacy)page_budget=Grid::max_pages;
+        // A published terrain pixel must sample the completed shadow field.
+        // Exposing only two rebuilt pages made unchanged forests briefly lose
+        // their shadows after a reveal. Exact page proofs still reuse every
+        // unchanged page; finish the bounded dirty set before shading receivers.
         std::array<unsigned,Grid::max_pages> page_order{};
         for(unsigned i=0;i<sampling_grid.pages();++i)page_order[i]=i;
         auto distance=[&](unsigned slot){auto p=sampling_grid.page(slot);
@@ -1339,8 +1335,6 @@ struct SandboxSceneShadow {
         for(unsigned ordered=0;ordered<sampling_grid.pages();++ordered){
         unsigned page_slot=page_order[ordered];
         if(page_contents.reused[page_slot])continue;
-        if(!page_budget)break;
-        --page_budget;
         auto* target=targets[page_contents.slots[page_slot]];
         context->ClearRenderTargetView(target,clear);work->clear(target);
         context->OMSetRenderTargets(1,&target,nullptr);
@@ -1537,7 +1531,6 @@ struct SandboxFreshPipeline {
     std::uint64_t static_receiver_revision=0;
     std::uint64_t reflection_revision=0;
     std::uint64_t resident_signature=0;
-    std::uint64_t resident_order_revision=0;
     unsigned resident_builds=0;
     int wrap_pixels=0;
     bool visibility_valid=false;
@@ -1722,17 +1715,9 @@ struct SandboxFreshPipeline {
     }
     bool capture(ViewportShaderSettings const& settings,
             ViewportShaderSettings const& reflected,int width,int height,int next_wrap_pixels) {
-#ifdef C3X_RENDERER64_FRESH
-        // A set proof can certify additions/removals, but alpha pixels also
-        // depend on primitive order. Retire both pixel owners once after an
-        // actual boundary reorder; unchanged camera frames only compare epochs.
-        auto order=renderer.geometry_vertex_buffers.order_revision();
-        if(resident_order_revision!=order){
-            static_rasters.invalidate_all(c3x_renderer::render_core::raster_scene);
-            for(auto& image:bootstrap)image.valid=false;
-            resident_order_revision=order;
-        }
-#endif
+        // Raster proofs include the relative draw order of their contributors.
+        // Reassembling/sorting an entering strip must not discard the entire
+        // full-resolution viewport before those local proofs can be repaired.
         if (resident_signature!=view_revision() ||
                 wrap_pixels!=next_wrap_pixels) {
 #ifndef C3X_RENDERER64_FRESH
@@ -1881,7 +1866,7 @@ struct SandboxFreshPipeline {
         auto exact=[&](){
         if(!append && !inputs.valid([&](auto const& proof){return renderer.raster_content_valid(proof);},
                 [&](auto tile){auto record=renderer.topology_cache.retained(tile);return record?record->visibility_revision:0;}))return false;
-        bool valid=true;if(!append)inputs.begin_membership();auto clip=source_bounds(settings,rect,false);
+        bool valid=true;if(append)inputs.begin_append();else inputs.begin_membership();auto clip=source_bounds(settings,rect,false);
         contributors(settings,clip,false,[&](unsigned layer,auto const& record){
             ++inputs.validation_counts.membership;
             if(renderer.water_scene_active && record.water_dependent)return;
@@ -3237,6 +3222,7 @@ struct SandboxFreshPipeline {
         constexpr int reach=96;
         std::vector<StaticRect> dirty;
         std::unordered_set<RasterInputs::Key,RasterInputs::Hash> current;
+        inputs.begin_membership();
         bool overflow=false;
         auto mark=[&](RasterInputs::Key const& key){
             if(overflow)return;
@@ -3250,6 +3236,7 @@ struct SandboxFreshPipeline {
             if(renderer.water_scene_active && record.water_dependent)return;
             if(!renderer.chunk_intersects_region(GeometryDrawReference(record),view,clip,false))return;
             auto key=contributor_key(layer,record);current.insert(key);
+            inputs.visit_membership(key);
             bool changed=!inputs.contains(key);
             if(!changed){
                 auto tile=renderer.topology_cache.key(record.tile_x,record.tile_y);
@@ -3264,7 +3251,7 @@ struct SandboxFreshPipeline {
             if(changed)mark(key);
         });
         for(auto const& draw:inputs.draws)if(!current.count(draw.first))mark(draw.first);
-        if(overflow)return false;
+        if(overflow || !inputs.remaining_order_preserved())return false;
         // A changed dependency without a changed contributor cannot be located.
         if(dirty.empty())return false;
         // Merge overlapping rectangles; fall back to a bounding box when many.
@@ -3379,7 +3366,9 @@ struct SandboxFreshPipeline {
             destination.camera_x,destination.camera_y,region_margin_x,region_margin_y);
         return true;
     }
-    // Low-resolution first image after a jump, at the current zoom and camera.
+    // First image after a jump, at the current zoom and camera. Keep native
+    // pixel resolution by default: routine scene edits must never soften the
+    // entire viewport while shadows/full-quality lighting finish preparing.
     // Covers the view plus a 128 px band, so it survives small camera moves.
     bool render_bootstrap(unsigned lane,ViewportShaderSettings const& screen,int w,int h){
         auto& image=bootstrap[lane];
@@ -3390,7 +3379,11 @@ struct SandboxFreshPipeline {
         float clear[4]={};
         renderer.context->ClearRenderTargetView(image.region.target,clear);work.clear(image.region.target);
         renderer.context->ClearDepthStencilView(image.region.depth,D3D11_CLEAR_DEPTH|D3D11_CLEAR_STENCIL,1,0);work.clear(image.region.depth);
-        image.camera_x=camera_x;image.camera_y=camera_y;image.projection=projection_zoom;image.raster_scale=scale;
+        image.camera_x=camera_x;image.camera_y=camera_y;
+        // An outward destination covers every intermediate view. Preparing it
+        // once avoids repeated full-view draws and a resampled depth plane at
+        // the final zoom while its native-resolution refinement is pending.
+        image.projection=std::min(projection_zoom,zoom_destination());image.raster_scale=scale;
         image.depth_translation=screen.depth_translation;image.key=static_key();
         image.covered={};image.valid=false;image.stale=false;image.refining=false;++image.revision;
         constexpr int band=128;
@@ -3399,6 +3392,7 @@ struct SandboxFreshPipeline {
             std::min(int(region_width_px),region_margin_x+w+band),std::min(int(region_height_px),region_margin_y+h+band)};
         if(!extend_coverage(0,image,screen,needed,unbounded,0,scale,false))return false;
         auto& inputs=bootstrap_inputs[lane];inputs.clear();
+        ZoomScope scope_zoom(*this,image.projection);
         auto const& c=image.covered;
         if(!raster_dependencies(inputs,slot_settings(image,screen),{c.left,c.top,c.right,c.bottom},true))inputs.complete=false;
         image.valid=true;++bootstrap_draws;
@@ -3449,9 +3443,6 @@ struct SandboxFreshPipeline {
         // 0 means "do not refine this lane" (it is animating back to 1x).
         float goal=lane==0?1.f:(!previewable || settled)?zoom:(hint!=1.f?hint:0.f);
         double budget=previewable?refinement_budget(lane):-1.;
-        // Finish shadow pages before spending full-quality shading on pixels
-        // that would immediately need relighting. A bootstrap still displays.
-        if(previewable && !shadow.atlas_complete)budget=0;
         StaticRect limits={0,0,int(region_width_px),int(region_height_px)};
         auto clip_region=[&](StaticRect r){return StaticRect{std::max(r.left,limits.left),std::max(r.top,limits.top),
             std::min(r.right,limits.right),std::min(r.bottom,limits.bottom)};};
@@ -3603,6 +3594,15 @@ struct SandboxFreshPipeline {
             resample_source(home,w,h,settings,home_source):0;
         int boot_cover=static_pixels_current(image,bootstrap_inputs[lane],settings)?
             resample_source(image,w,h,settings,boot_source):0;
+        // Once zoom reaches its destination, a scene edit or camera move must
+        // not fall back to another zoom lane: upsampling its terrain softens
+        // every unchanged forest until refinement catches up. Keep affine
+        // previews only while the zoom is actually changing.
+        if(zoom==hint){
+            if(displayed.projection!=zoom)front_cover=0;
+            if(home.projection!=zoom)home_cover=0;
+            if(image.projection!=zoom)boot_cover=0;
+        }
         Source const* primary=nullptr;Source const* secondary=nullptr;
         StaticState const* primary_slot=nullptr;StaticState const* secondary_slot=nullptr;
         if(front_cover==2){primary=&front_source;primary_slot=&displayed;}

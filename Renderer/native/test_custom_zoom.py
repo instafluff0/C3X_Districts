@@ -509,7 +509,7 @@ int main(){
  assert(!advance_custom_renderer_zoom_from_key(&screen,'z',VK_Z));
  assert(state.custom_renderer_zoom_target_width==64&&state.custom_renderer_zoom_wheel_remainder==0);
  bic.Map.Renderer.spotlight_on_city=nullptr;
- assert(state.custom_renderer_dirty_flags==C3X_RENDERER_DIRTY_SCENE&&state.custom_renderer_redraw_pending&&redraws==0);
+ assert(state.custom_renderer_dirty_flags==0&&!state.custom_renderer_redraw_pending&&redraws==0);
  assert(screen.camera_x==3616&&screen.camera_y==394&&wheel_calls==4);
  assert(state.custom_renderer_zoom_translate_x_fp==0&&state.custom_renderer_zoom_translate_y_fp==0);
 }
@@ -541,7 +541,7 @@ int main(){
         source = (ROOT / "injected_code.c").read_text()
         handler = source.split("advance_custom_renderer_zoom (", 1)[1]
         handler = handler.split("patch_Main_Screen_Form_handle_key_down", 1)[0]
-        self.assertIn("if (levels[next] < 128 || levels[current] < 128)", handler)
+        self.assertNotIn("custom_renderer_dirty_flags", handler)
         self.assertIn("stage=zoom-target", handler)
         self.assertNotIn("Main_Screen_Form_move_camera", handler)
         self.assertNotIn("m73_call_m22_Draw", handler)

@@ -120,7 +120,7 @@ int main() {
  tiles[1].tile_x=100;tiles[2].tile_y=100;
  c3x_renderer_frame_v1 frame={};frame.tiles=tiles;frame.tile_count=3;
  frame.tile_width=128;frame.tile_height=64;frame.target_width=2240;frame.target_height=1192;
- frame.world_width_tiles=frame.world_height_tiles=100;frame.world_wrap_x=frame.world_wrap_y=1;
+ frame.world_width_tiles=frame.world_height_tiles=200;frame.world_wrap_x=frame.world_wrap_y=1;
  auto scope=wave_geometry_scope(frame,7,3);
  tiles[0].anchor_x=123;frame.hour=18;frame.season=3;frame.presentation_time_ticks=900;
  assert(wave_geometry_scope(frame,7,3)==scope);
@@ -135,6 +135,57 @@ int main() {
  frame.tile_width=64;assert(wave_geometry_scope(frame,7,3)!=scope);frame.tile_width=128;
  frame.world_wrap_y=0;assert(wave_geometry_scope(frame,7,3)!=scope);frame.world_wrap_y=1;
  assert(wave_geometry_scope(frame,8,3)!=scope && wave_geometry_scope(frame,7,4)!=scope);
+}
+''')
+
+    def test_wave_anchors_survive_wrap_and_wider_zoom_without_native_view_culling(self):
+        source=(ROOT/'Renderer/native/c3x_renderer.cpp').read_text()
+        begin=source.index('            for(auto const& anchor:entry.second){',source.index('    bool prepare_retained_wave_chunks('))
+        end=source.index('\n        }\n        if(trace.level',begin)
+        placement=source[begin:end]
+        run_cpp(r'''
+#include <cassert>
+#include <cstdio>
+#include <vector>
+#include "Renderer/native/c3x_renderer_api.h"
+#include "Renderer/native/render_core/wave_retention.h"
+struct Buffer{unsigned refs=1;void AddRef(){++refs;}};
+struct Chunk{int translation_x=0,translation_y=0;float visual_time=0;Buffer* buffer;Buffer* indices;};
+int main(){using namespace c3x_renderer::render_core;
+ c3x_renderer_tile_v1 tiles[5]{};
+ auto tile=[&](int i,int x,int y,int sx,int sy){auto& t=tiles[i];t.tile_flags=C3X_RENDERER_TILE_RENDER;t.tile_x=x;t.tile_y=y;t.anchor_x=sx;t.anchor_y=sy;};
+ // Actual starting view: first canonical x=52, shore x=9 displayed as x=69.
+ tile(0,52,8,-32,-44);tile(1,9,27,1056,564);
+ // Duplicate native observation and a second on-screen occurrence when wide.
+ tile(2,9,27,1056,564);tile(3,9,27,4896,564);
+ // Neighbour across the seam must resolve to the same cell and screen point.
+ tile(4,59,27,416,564);
+ c3x_renderer_frame_v1 frame{};frame.tiles=tiles;frame.tile_count=5;
+ frame.tile_width=128;frame.tile_height=64;frame.world_width_tiles=60;frame.world_height_tiles=60;frame.world_wrap_x=1;
+ auto cells=captured_wave_cells(frame,C3X_RENDERER_TILE_RENDER);
+ auto shore=cells.at({18,-9});assert(shore.size()==2);
+ assert(shore.count({1056,564})&&shore.count({4896,564}));
+ assert(cells.at({43,16}).count({416,564}));
+ assert(cells.at({14,-14}).count({480,596})); // native tile 0,28 adjacent to 59,27
+ // Use the production placement loop: both occurrence anchors survive until
+ // the current zoom's draw selector; canonical 1x bounds may not drop either.
+ Buffer vertices,indices;Chunk owner{0,0,0,&vertices,&indices};
+ std::pair<std::pair<int,int>,decltype(shore)> entry{{18,-9},shore};
+ for(int dx:{-512,0,711})for(int dy:{-256,0,121}){
+  std::vector<Chunk> wave_chunks;
+  for(int cell=0;cell<1;++cell){
+'''+placement+r'''
+  }
+  assert(wave_chunks.size()==2);
+  unsigned i=0;for(auto const& anchor:shore){auto const& c=wave_chunks[i++];
+   assert(c.translation_x+dx==anchor.first&&c.translation_y+dy==anchor.second&&c.visual_time<0);
+  }
+ }
+ // Vertical wrap uses the same canonical-cell/native-anchor separation.
+ frame.world_wrap_y=1;tile(0,9,59,100,100);frame.tile_count=1;
+ cells=captured_wave_cells(frame,C3X_RENDERER_TILE_RENDER);
+ assert(cells.at({5,5}).count({164,132})); // tile 10,0 immediately below 9,59
+ std::puts("PASS wave anchors: wrapped_start=1 duplicate_observation=1 repeated_world=1 vertical_seam=1 wide_zoom_no_cull=1");
 }
 ''')
 

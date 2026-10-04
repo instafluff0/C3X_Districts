@@ -861,6 +861,16 @@ public:
            command.clip.left>command.clip.right||command.clip.top>command.clip.bottom)return fallback();
         Rect selected={std::max({0,command.area.left,command.clip.left}),std::max({0,command.area.top,command.clip.top}),
             std::min({int(destination->width),command.area.right,command.clip.right}),std::min({int(destination->height),command.area.bottom,command.clip.bottom})};
+        if(input&&command.kind==Kind::copy){
+            // Native cursor saves can straddle any screen edge. BitBlt clips
+            // the source as well as the destination; no CPU readback is needed.
+            auto dx=std::int64_t(command.area.left)-command.source_x;
+            auto dy=std::int64_t(command.area.top)-command.source_y;
+            auto left=std::max<std::int64_t>(selected.left,dx),top=std::max<std::int64_t>(selected.top,dy);
+            auto right=std::min<std::int64_t>(selected.right,dx+input->width),bottom=std::min<std::int64_t>(selected.bottom,dy+input->height);
+            if(left>=right||top>=bottom){++counters.translated;return 1;}
+            command.clip=selected={int(left),int(top),int(right),int(bottom)};
+        }
         if(input&&command.kind!=Kind::native_image&&selected.left<selected.right&&selected.top<selected.bottom){
             auto x=std::int64_t(command.source_x)+selected.left-command.area.left,y=std::int64_t(command.source_y)+selected.top-command.area.top;
             if(x<0||y<0||x+selected.right-selected.left>input->width||y+selected.bottom-selected.top>input->height)return fallback();

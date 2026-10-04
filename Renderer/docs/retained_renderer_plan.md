@@ -10,6 +10,67 @@ the former 1,326-line roadmap.
 
 ## Current state
 
+
+- **October 4 cursor-edge, reveal and starting-shore fixes (live exploration passed).**
+  The interrupted run `20261004-140536` failed when a 32×32 cursor background
+  save crossed the source screen boundary, requested unsupported CPU readback,
+  and stopped the GPU image session. Native copies now clip both source and
+  destination, preserving untouched pixels. The actual JGL oracle fails before
+  the fix and passes after; a fast 324-case regression covers edges and corners.
+  Settled views also reject differently scaled cached terrain after a reveal.
+  A second live witness exposed missing tree shadows while only two atlas pages
+  per invocation were complete. Changed shadow pages now finish before shading
+  receivers; unchanged pages still reuse exact contents. The production
+  scheduling/table regression rejects the old behavior and covers 26 dirty-page
+  subset sizes.
+  Starting-shore waves were generated but misplaced and culled across the world
+  seam. They now retain native screen anchors for each captured occurrence,
+  canonicalize neighbor cells across either seam, and defer clipping until the
+  current zoom is known. The old placement fails the wrapped-start regression;
+  duplicate observations, repeated world copies and both seams pass afterward.
+  Final capture `20261004-150753` completes three planned moves plus the released
+  drag order, turn handoff, all four client edges and final scripted scrolling:
+  2,120 sampled frames, zero native failures, unchanged source save. Starting
+  waves draw immediately (three ribbons); after interturn, consecutive samples
+  show moving foam and the selected worker's ring without additional input.
+  The stationary-forest checker fails the old `20261004-142616` run (22.34 RGB
+  excursion) and passes the final run (0.80; threshold 12). Sampled navigation
+  passes: 1.75× settles in 0.283 seconds, maximum observed presentation pause
+  0.157 seconds. These are helper observations, not physical scanout FPS.
+  The transition category runs 215 tests with one optional skip; all executed
+  tests pass. Six coastal-geometry/capture-checker checks pass separately.
+  Matching-trio build, startup, staging and game-link hashes pass. No new
+  injected hook or reference replacement was needed for cursor/shadow/wave fixes.
+  Busy capture `20261004-151615` also passes with zero native failures and an
+  unchanged save: every outward level through 0.5×, reversal, 3×/1× returns,
+  scrolling and native Z. The four first outward transitions settle in
+  1.62–2.01 seconds; longest sampled presentation pause is 0.816 seconds, with
+  no observer gaps. This passes the coarse stall limits but is still noticeable
+  heavy-map latency, not a claim of fully smooth zoom. The reported 40-second
+  freeze was not reproduced. Wave motion/reflections remain enabled. Sampled
+  views retain the map and aligned labels throughout the reviewed sequence.
+  Evidence: `Renderer/.cache/navigation-quality-20261004/`.
+
+- **October 4 transition sharpness and zoom capture.** The fallback image now
+  uses native pixel resolution and prepares the outward destination scale once.
+  A scene assembly/sort no longer discards all terrain pixels; bounded per-strip
+  proofs preserve unchanged pixels while rejecting changed content, visibility
+  and overlap order. Local repair checks ordering through removed contributors.
+  World terrain, units and city labels use a stable capture envelope covering
+  0.5×, so zoom alone does not retire the live map sampler. Native no-op camera
+  clamps and pending same-view redraws keep the completed display identity;
+  actual camera/projection/viewer changes retain their coherence barriers.
+  No new patch-table entry, injected state or reference replacement is needed.
+  The transition category passes 193 tests (one optional skip). Its production
+  GPU checks preserve 442,368 one-pixel detail samples, reject all 12,288 samples
+  in the deliberately blurred control, and exercise 114 water/depth cases.
+  Five restored old behaviors fail the targeted regressions. The native compile
+  smoke test, matching-trio startup and installation checks pass.
+  `check_navigation_cadence.py` separately checks zoom completion and stalls;
+  missing observer samples yield `incomplete`, never a performance pass.
+  Evidence: `Renderer/.cache/navigation-quality-20261004/`. Live qualification
+  remains in progress; the reported 40-second zoom stall has not been reproduced.
+
 - **October 4 reveal and city transition coherence (staged for evaluation).**
   A changed scene could still select old terrain from the displayed zoom lane,
   the other cached lane, or the low-resolution bootstrap while water, rivers,

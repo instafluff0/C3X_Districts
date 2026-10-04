@@ -187,9 +187,9 @@ using uint=unsigned;
 struct RECT{int left,top,right,bottom;};
 struct Map_Renderer{int field_3E98[3]={0,0,0},field_3EA4=2240,field_3EA8=1260;};
 struct Map{int Width=100,Height=80,Flags=0;Map_Renderer Renderer;};
-struct Bic{Map Map;bool is_zoomed_out=false;}bic_data,*p_bic_data=&bic_data;
+struct Bic{Map Map;bool is_zoomed_out=false;int ScreenWidth=2240,ScreenHeight=1260;}bic_data,*p_bic_data=&bic_data;
 struct Main_Screen_Form{int camera_x=640,camera_y=320,TileX_Min=9,TileX_Max=46,TileY_Min=9,TileY_Max=50;}screen;
-struct{struct{bool enable_custom_rendering=true;}current_config;}state,*is=&state;
+struct{struct{bool enable_custom_rendering=true;}current_config;void* custom_renderer_hud_canvas=nullptr;}state,*is=&state;
 bool zoom=true;bool custom_renderer_zoom_enabled(){return zoom;}
 RECT visible{0,0,2240,1260};RECT custom_renderer_visible_map_rect(){return visible;}
 int wrap_horiz(Map*m,int x){return !(m->Flags&1)?x:x<0?x+m->Width:x>=m->Width?x-m->Width:x;}
@@ -204,6 +204,14 @@ int main(){
    assert(screen.TileX_Min==9&&screen.TileX_Max==46&&screen.TileY_Min==9&&screen.TileY_Max==50);
   }
  }
+ // Off-screen city labels are prepared for outward zoom without changing
+ // ordinary unit visibility, native traversal bounds, or centering rules.
+ bic_data.Map.Flags=0;visible={0,0,2240,1260};
+ assert(!patch_Main_Screen_Form_is_tile_on_screen(&screen,91,58,30,0,0));
+ state.custom_renderer_hud_canvas=&screen;
+ assert(patch_Main_Screen_Form_is_tile_on_screen(&screen,91,58,30,0,0));
+ assert(screen.TileX_Min==9&&screen.TileX_Max==46&&screen.TileY_Min==9&&screen.TileY_Max==50);
+ state.custom_renderer_hud_canvas=nullptr;
  // A unit inside the canonical capture but cropped off by zoom must recenter.
  visible={747,420,1493,840};bic_data.Map.Flags=0;
  assert(Main_Screen_Form_is_tile_on_screen(&screen,91,16,24,4,6));

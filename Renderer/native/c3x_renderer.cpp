@@ -4168,19 +4168,19 @@ public:
         if(!wave_ready || !frame.tile_count)return true;
         if(++retained_wave_epoch==0){reset_waves();retained_wave_scope=scope;retained_wave_epoch=1;}
         auto cells=captured_wave_cells(frame,C3X_RENDERER_TILE_RENDER);
-        auto anchor=frame.tiles;
-        for(unsigned i=0;i<frame.tile_count;++i)if(frame.tiles[i].tile_flags&C3X_RENDERER_TILE_RENDER){anchor=frame.tiles+i;break;}
         // Pin the complete requested set before any admission can evict cells.
         for(auto const& cell:cells){int c=cell.first.first,r=cell.first.second;
             if(visibility_pass&&!visibility_coverage.state(c+r,c-r))continue;
             auto found=retained_wave_cells.find(cell.first);
             if(found!=retained_wave_cells.end())found->second.used=retained_wave_epoch;}
+        unsigned visible_cells=0,ribbons=0;
         float hw=frame.tile_width*.5f,hh=frame.tile_height*.5f;
         int dx=int(geometry_viewport_settings.translation[0]),dy=int(geometry_viewport_settings.translation[1]);
         for(auto const& entry:cells) {
             int c=entry.first.first,r=entry.first.second;
             unsigned visibility=visibility_pass?visibility_coverage.state(c+r,c-r):2;
             if(!visibility)continue; // Black, never-explored coast needs no resident wave geometry.
+            ++visible_cells;
             auto found=retained_wave_cells.find(entry.first);
             if(found==retained_wave_cells.end()) {
                 RetainedWaveCell cell;cell.used=retained_wave_epoch;
@@ -4222,14 +4222,18 @@ public:
                 wave_geometry_bytes+=bytes;wave_upload_bytes+=bytes;++wave_cells_built;
             } else ++wave_cells_reused;
             auto const& owner=found->second.chunk;if(!owner.buffer)continue;
-            auto chunk=owner;chunk.visual_time=-1.f; // Explored shore motion uses the current cosmetic clock.
-            // Cell-local vertices stay immutable. Visible occurrences provide
-            // their authoritative screen transform through the existing buffer.
-            chunk.translation_x=anchor->anchor_x+(c+r-anchor->tile_x)*int(hw)-dx;
-            chunk.translation_y=anchor->anchor_y+(c-r-anchor->tile_y)*int(hh)-dy;
-            if(chunk.bounds.right+chunk.translation_x+dx<=0 || chunk.bounds.left+chunk.translation_x+dx>=width ||
-               chunk.bounds.bottom+chunk.translation_y+dy<=0 || chunk.bounds.top+chunk.translation_y+dy>=height)continue;
-            wave_chunks.push_back(chunk);chunk.buffer->AddRef();chunk.indices->AddRef();
+            ++ribbons;
+            for(auto const& anchor:entry.second){
+                auto chunk=owner;chunk.visual_time=-1.f;
+                chunk.translation_x=anchor.first-dx;
+                chunk.translation_y=anchor.second-dy;
+                wave_chunks.push_back(chunk);chunk.buffer->AddRef();chunk.indices->AddRef();
+            }
+        }
+        if(trace.level>=2){
+            char detail[256];sprintf_s(detail,"cells=%zu explored=%u ribbons=%u chunks=%zu bytes=%zu viewport=%d,%d",
+                cells.size(),visible_cells,ribbons,wave_chunks.size(),wave_geometry_bytes,width,height);
+            trace.write("wave-occurrences",detail,true);
         }
         wave_signature=cached_signature.complete;
         return true;

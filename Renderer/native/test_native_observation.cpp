@@ -31,6 +31,7 @@ struct State {
     bool custom_renderer_capture_failed=false,custom_renderer_composited=false;
     bool custom_renderer_draw_in_progress=false,custom_renderer_frame_active=false,custom_renderer_capture_only=false;
     long long custom_renderer_map_epoch=0,custom_renderer_viewer_epoch=0,custom_renderer_display_viewer_epoch=0;
+    struct {int camera_x=0,camera_y=0,native_width=128;} custom_renderer_display_view;
     HMODULE custom_renderer_module=nullptr;
     struct {bool enable_custom_rendering=true,enable_custom_rendering_zoom=false;int draw_lines_using_gdi_plus=LDO_NEVER;} current_config;
     LoadedConfig* loaded_config_names=&fixture_base_config;
@@ -48,11 +49,11 @@ struct State {
 #include "build/native_probe_state.h"
 };
 State state={};State* is=&state;
-struct Main_Screen_Form {bool is_now_loading_game=false;struct {Sprite* Cursor_Image=nullptr;PCX_Image Canvas;} Base_Data;
+struct Main_Screen_Form {int camera_x=0,camera_y=0;bool is_now_loading_game=false;struct {Sprite* Cursor_Image=nullptr;PCX_Image Canvas;} Base_Data;
     struct {struct {PCX_Image Canvas;} Data;} Units_Control;} main_screen_fixture;auto p_main_screen_form=&main_screen_fixture;
 void custom_renderer_zoom_transform_point(int*,int*){}
 unsigned player_bits=1;unsigned* p_player_bits=&player_bits;
-struct {struct {void* Tiles=nullptr;struct {void* spotlight_on_city=nullptr;} Renderer;} Map;} bic_fixture;
+struct {int ScreenWidth=2240,ScreenHeight=1192;bool is_zoomed_out=false;struct {void* Tiles=nullptr;struct {void* spotlight_on_city=nullptr;} Renderer;} Map;} bic_fixture;
 auto p_bic_data=&bic_fixture;
 auto p_GetModuleHandleA=&GetModuleHandleA;auto p_GetProcAddress=&GetProcAddress;
 auto p_OutputDebugStringA=&OutputDebugStringA;

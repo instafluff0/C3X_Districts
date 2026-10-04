@@ -37,8 +37,18 @@
     "Renderer.native.test_static_dependency_reuse",
     "Renderer.native.test_loading_view",
     "Renderer.native.test_native_view_identity",
+    "Renderer.native.test_camera_navigation",
+    "Renderer.native.test_custom_zoom",
+    "Renderer.native.test_zoom_out",
+    "Renderer.native.test_zoom_integration",
+    "Renderer.native.test_zoom_water_depth",
     "Renderer.native.test_unseen_boundary",
-    "Renderer.native.test_visibility"
+    "Renderer.native.test_visibility",
+    "Renderer.tools.test_check_navigation_cadence",
+    "Renderer.native.test_native_copy_clipping",
+    "Renderer.native.test_shadow_page_contents",
+    "Renderer.tools.test_check_reveal_fidelity",
+    "Renderer.native.test_animation_retention"
   ],
   "references": {
     "d3d11": [

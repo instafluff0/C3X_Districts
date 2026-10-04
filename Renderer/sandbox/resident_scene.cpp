@@ -425,6 +425,11 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
             validation.raster.proof_registrations,validation.raster.dependency_watch_calls,validation.raster.source_expansions,validation.raster.source_reuses,validation.raster.append_ms,
             validation.atlas.proof_registrations,validation.atlas.dependency_watch_calls,validation.atlas.source_expansions,validation.atlas.source_reuses,validation.atlas.append_ms);
         renderer.trace.write("static-validation-counts",validation_detail,true);
+        sprintf_s(validation_detail,"zoom=%.6f previews=%llu bootstraps=%llu bootstrap_scale=%.3f repairs=%llu repair_pixels=%llu promotions=%llu slices=%llu restarts=%u recenter_copies=%llu",
+            sandbox_fresh.projection_zoom,sandbox_fresh.preview_frames,sandbox_fresh.bootstrap_draws,sandbox_perf_options().bootstrap_scale,
+            sandbox_fresh.partial_repairs,sandbox_fresh.partial_repair_pixels,sandbox_fresh.refine_promotions,
+            sandbox_fresh.refine_slices,sandbox_fresh.refine_restarts,sandbox_fresh.recenter_copies);
+        renderer.trace.write("static-presentation",validation_detail,true);
         sprintf_s(validation_detail,"caster_collections=%llu caster_reuses=%llu group_builds=%llu group_reuses=%llu body_placement_builds=%llu body_placement_reuses=%llu terrain_batch_builds=%llu terrain_batch_reuses=%llu page_reuses=%llu page_rebuilds=%llu page_refused=%llu latest_rebuild_draws=%llu projections=%llu projection_reuses=%llu page_tests=%llu contributor_edits=%llu instance_projections=%llu page_sorts=%llu draw_projections=%llu proof_bytes=%zu page_bytes=%zu producers=%zu dependency_sources=%zu",
             validation.caster_collections,validation.caster_reuses,validation.shadow_group_builds,validation.shadow_group_reuses,
             validation.body_placement_builds,validation.body_placement_reuses,validation.terrain_batch_builds,validation.terrain_batch_reuses,
@@ -447,12 +452,12 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
         renderer.trace.write("fresh-prepare-work",detail,true);
         auto const& dynamic=sandbox_fresh.dynamic_subspans;auto const& calls=sandbox_fresh.dynamic_calls;
         auto const& constants=sandbox_fresh.phase_constant_counts;
-        sprintf_s(detail,"depth_setup_ms=%.3f aquatic_ms=%.3f water_scene_ms=%.3f resources_ms=%.3f waves_ms=%.3f depth_draws=%llu depth_copies=%llu depth_uploads=%llu aquatic_draws=%llu aquatic_copies=%llu aquatic_uploads=%llu water_draws=%llu water_copies=%llu water_uploads=%llu resource_draws=%llu resource_copies=%llu resource_uploads=%llu wave_draws=%llu wave_copies=%llu wave_uploads=%llu water_records=%llu water_constant_updates=%llu water_constant_hits=%llu wave_records=%llu wave_constant_updates=%llu wave_constant_hits=%llu",
+        sprintf_s(detail,"depth_setup_ms=%.3f aquatic_ms=%.3f water_scene_ms=%.3f resources_ms=%.3f waves_ms=%.3f depth_draws=%llu depth_copies=%llu depth_uploads=%llu aquatic_draws=%llu aquatic_copies=%llu aquatic_uploads=%llu water_draws=%llu water_copies=%llu water_uploads=%llu resource_draws=%llu resource_copies=%llu resource_uploads=%llu wave_draws=%llu wave_copies=%llu wave_uploads=%llu water_records=%llu water_constant_updates=%llu water_constant_hits=%llu wave_records=%llu wave_constant_updates=%llu wave_constant_hits=%llu wave_chunks=%zu wave_geometry_bytes=%zu",
             dynamic[0],dynamic[1],dynamic[2],dynamic[3],dynamic[4],
             calls[0].draws,calls[0].copies,calls[0].uploads,calls[1].draws,calls[1].copies,calls[1].uploads,
             calls[2].draws,calls[2].copies,calls[2].uploads,calls[3].draws,calls[3].copies,calls[3].uploads,
             calls[4].draws,calls[4].copies,calls[4].uploads,
-            constants.water_records,constants.water_updates,constants.water_hits,constants.wave_records,constants.wave_updates,constants.wave_hits);
+            constants.water_records,constants.water_updates,constants.water_hits,constants.wave_records,constants.wave_updates,constants.wave_hits,renderer.wave_chunks.size(),renderer.wave_geometry_bytes);
         renderer.trace.write("fresh-dynamic-work",detail,true);
         auto const& prepared=sandbox_fresh.water_parameters;
         sprintf_s(detail,"prepared_misses=%llu prepared_builds=%llu prepared_reuses=%llu prepared_fallbacks=%llu prepared_batches=%u prepared_records=%llu reused_records=%llu prepared_uploads=%llu prepared_bytes=%llu resident_bytes=%zu metadata_bytes=%zu cold_upload_ms=%.3f",

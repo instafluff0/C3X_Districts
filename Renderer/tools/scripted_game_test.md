@@ -29,6 +29,17 @@ checkout; no mapped drive or literal user home path is necessary.
 
 ## Installation without a popup
 
+For a profiled `zoom-out` capture, run
+`python3 Renderer/tools/check_navigation_cadence.py <capture-directory> --output <report.json>`.
+It checks target completion and sampled presentation stalls after input begins.
+Defaults are 3 seconds to settle and 1 second without progress; these are coarse
+regression ceilings, not smoothness or FPS targets. Missing observation intervals
+produce `incomplete`, never a pass. Rapidly superseded inputs are reported separately.
+Always combine this report with command/result validation and window review:
+successful helper presentations cannot prove that displayed terrain remained sharp.
+The `transitions` category runs the GPU pixel-detail, negative-control and
+intermediate-scene contracts; no reference image is silently updated.
+
 From an elevated PowerShell:
 
 ```powershell
@@ -78,6 +89,23 @@ diagnostics and can contain machine paths; do not commit them.
 save and leaves its selected settler idle. It requires a completed map and no
 renderer failures. Inspect the window samples for the automatic city-site
 overlays when that C3X setting is enabled, then confirm the reported cleanup.
+
+`-Scenario reveal-scroll -Seconds 240 -SampleHz 10 -MeasureCadence -ProfileRenderer`
+extends the fresh 4000 BC `research-turn` witness: found a city, zoom to 1.75×,
+move the worker and Scout through three reveals, finish the first turn, then
+hold a route to the bottom client edge and visit all four edges. It uses actual
+client dimensions for edge positions. Require all pointer commands, a live
+route, edge scrolling, three moves, one turn handoff and no renderer failures.
+Compare stationary forest detail before/after each move at the settled zoom;
+check consecutive edge frames for a missing map or accumulated city labels.
+For shoreline placement, include the initial wrapped starting view: the enabled
+wave pass must have visible ribbons before any camera movement, and sampled
+foam must change over time. A nonzero generated-ribbon count alone is not proof
+of visible waves. The occurrence-anchor regression covers both world seams and
+multiple copies of the same coast cell at wide zoom.
+Release the held route over the now-unrevealed center; any resulting order is
+confined to the disposable game. Escape opens the quit dialog and must not be
+used as a route-cancel key in this witness.
 
 `-Scenario unit-turn -Seconds 135 -SampleHz 10 -MeasureCadence -ProfileRenderer`
 uses an early save with a selected Scout, two traversable northern tiles, and
@@ -138,6 +166,15 @@ processes' private/working bytes and CPU time; the window witness also records
 the game's free address space and largest free region. Compare these with
 completed presentations and publication latency to distinguish memory pressure
 from a worker that stopped consuming commands.
+
+For the fixed 4000 BC `reveal-scroll` fixture at a 2240×1192 client size,
+`python3 -m Renderer.tools.check_reveal_fidelity CAPTURE --output REPORT.json`
+checks the stationary western forest from seconds 94–110, during the three
+1.75× moves. It requires Pillow. The sampled RGB deviation must remain near
+one of the stable endpoint images; the known missing-shadow flash fails this
+check. A changed camera, different viewport, missing interval or sampling gap
+reports `incomplete`. Pair it with the cadence checker and exact GPU tests;
+it does not certify unsampled frames or a different save.
 
 `-Scenario route-city -Seconds 260 -SampleHz 4 -MeasureCadence -ProfileRenderer`
 uses the preserved 3700 BC small-world witness (60 by 60, 2240 by 1260 client,

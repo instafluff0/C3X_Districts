@@ -91,6 +91,26 @@ Neither restoration nor cleanup belongs in timed rendering measurements.
 
 ## Explicit generated-output cleanup
 
+### October 4 recovery
+
+A delete-only pass removed 25,800 unnecessary generated files (16.56 GB):
+superseded window sequences, verbose renderer traces, compiler intermediates,
+and completed color/depth comparison outputs. Host free space increased from
+4.02 GB to 20.54 GB. No replacement archive was created.
+
+All tracked and uncommitted source, runtime packs, unique art, saves, input
+journals, staged/rollback binaries, the current failed research capture, and its
+light/busy controls remain. Changed-source and staged-binary hashes were
+verified unchanged. The VM was stopped and was not restarted; guest captures
+were not cleaned in this pass. Per-file deletion receipts are under
+`Renderer/.cache/disk-cleanup-20261004/`.
+
+Older retained result/timing receipts describe their original runs; most no
+longer have complete raw window sequences or verbose traces. First/last frames
+and existing contact sheets remain. Do not report those directories as complete
+recordings. New experiments must finish with the retention pass above instead
+of accumulating another full copy of each superseded capture.
+
 ### October 2 recovery
 
 A reviewed delete-only cleanup removed 24.29 GiB of host allocations: repeated
@@ -171,3 +191,10 @@ inputs and cliff-audit asset tree were preserved. The audit's 26,995 hard-linked
 files already share storage with live packs, so their apparent copied size is not
 fully reclaimable. Per-file receipts and restoration hashes are local under
 `Renderer/lab/out/maintenance/`; no renderer benchmark or game launch was run.
+
+Final October 4 verification kept bounded exploration and busy-zoom evidence,
+then removed verified duplicate guest captures and 84.7 MB of rebuildable
+compiler intermediates. Source saves, current binaries, regression witnesses,
+licensed inputs and reference images remain. Receipts are under
+`Renderer/.cache/navigation-quality-20261004/`; the final two captures include
+input hashes, full timing logs, reviewed contact sheets and analysis reports.

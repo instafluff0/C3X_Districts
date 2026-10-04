@@ -1,5 +1,22 @@
 # Civ III patch dependency ledger
 
+## Same-view redraw and outward zoom capture
+
+`required_user_action: []`. Existing `Main_Screen_Form_process_mouse_wheel`,
+key handling, `Main_Screen_Form_move_camera`, `Map_Renderer_m71_Draw_Tiles`,
+`Main_Screen_Form_is_tile_on_screen`, and city-HUD/coordinate hooks
+retain their signatures and supported-build addresses. No patch-table or
+injected-state entry is added. World terrain, units and HUD share a stable 0.5×
+capture envelope at every custom world zoom. Changing zoom therefore does not retire the live sampler.
+City-label visibility uses that envelope only during its existing lexical HUD
+scope; unit selection and centering still use the actual displayed viewport.
+A no-op bounds re-clamp and a pending same-view publication
+retain the completed display identity. Actual camera/projection changes,
+viewer changes, city transitions and first delivery retain their barriers.
+Config-off delegation and unrelated C3X behavior remain covered by executable
+tests. The camera fixture repeats twenty pending same-view redraws and rejects
+reuse after an actual camera change.
+
 
 ## Zoom-aware native camera rules
 

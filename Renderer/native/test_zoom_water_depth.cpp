@@ -63,7 +63,9 @@ struct Output{float4 color:SV_Target;float depth:SV_Depth;};
 Output Seed(float4 p:SV_Position){Output o;o.color=float4(1,0,0,1);
  o.depth=.5+dot(plane.xy,p.xy-extent.xy);
  if(extent.z==1&&p.x<extent.x)o.depth-=.02;
- if(extent.z==2&&p.x>=extent.x){o.depth=1;o.color=0;}return o;}
+ if(extent.z==2&&p.x>=extent.x){o.depth=1;o.color=0;}
+ if(extent.z==3){uint2 q=uint2(p.xy);o.color=float4((q.x+q.y)%2,q.x%3==0,q.y%5==0,1);o.depth=.5;}
+ return o;}
 Output Water(float4 p:SV_Position){Output o;o.color=float4(0,1,0,1);
  o.depth=.5+dot(plane.xy,p.xy*affine.xy+affine.zw-extent.xy)+plane.z-plane.w;return o;}
 )";
@@ -89,8 +91,9 @@ Output Water(float4 p:SV_Position){Output o;o.color=float4(0,1,0,1);
   context->OMSetRenderTargets(0,nullptr,nullptr);
  };
  unsigned cases=0,legacy_rejected=0,corrected_rejected=0,clear_checks=0,occluder_checks=0;
- for(float source_scale:{.5f,1.f})for(float zoom:{1.037f,1.125f,1.375f,1.75f,2.625f,3.f})
+ for(float source_scale:{.5f,1.f})for(float zoom:{.5f,.625f,.75f,.875f,1.037f,1.125f,1.375f,1.75f,2.625f,3.f})
  for(float shift:{-5.f/16384,5.f/16384})for(unsigned profile=0;profile<3;++profile){
+  if(source_scale==1.f&&zoom==.5f)continue; // This fixture has only a 2:1 source extent.
   float ratio=source_scale/zoom;
   values={{ratio,ratio,128-64*ratio+.17f,96-48*ratio-.29f},
       {.17f/(16384*source_scale),-1.f/(16384*source_scale),shift,.000006f*128/16384},{128,96,float(profile),0}};
@@ -130,6 +133,37 @@ Output Water(float4 p:SV_Position){Output o;o.color=float4(0,1,0,1);
  }
  require_water_depth(legacy_rejected>10000,"negative control did not reproduce water stripes");
  require_water_depth(corrected_rejected==0,"corrected depth still rejects visible water");
+ // Pixel-sharp terrain must survive an unchanged view and integer camera
+ // translations through both retained restore and fallback composition.
+ // One-pixel detail makes a half-resolution fallback fail deterministically.
+ values={{1,1,0,0},{0,0,0,0},{128,96,3,0}};draw(retained,seed.Get(),corrected.depth);
+ auto reference=water_depth_read<std::array<unsigned short,4>>(device.Get(),context.Get(),retained.color);
+ LinearRestore restore;require_water_depth(restore.ensure(device.Get(),1),"sharpness restore setup");
+ unsigned sharp_checks=0,blur_rejected=0;
+ for(int dx:{0,1,17,63})for(int dy:{0,1,19})for(unsigned mode=0;mode<3;++mode){
+  LinearResample::Source source;source.color=retained.samples;source.depth=retained.depth_samples;
+  source.map[0]=source.map[1]=1;source.map[2]=float(dx);source.map[3]=float(dy);
+  source.covered[2]=source.size[0]=256;source.covered[3]=source.size[1]=192;
+  if(mode==0)require_water_depth(restore.draw(context.Get(),actual,retained.samples,retained.depth_samples,
+      -dx,-dy,{},nullptr,256,192,false,false,0,nullptr,1),"sharpness restore");
+  else {auto primary=source;if(mode==2)primary.covered[2]=primary.covered[3]=0;
+   require_water_depth(corrected.draw(context.Get(),actual,primary,mode==2?&source:nullptr),"sharpness resample");}
+  auto pixels=water_depth_read<std::array<unsigned short,4>>(device.Get(),context.Get(),actual.color);
+  for(unsigned y=0;y<96;++y)for(unsigned x=0;x<128;++x){
+   require_water_depth(pixels[y*128+x]==reference[(y+dy)*256+x+dx],"stationary terrain lost pixel detail");++sharp_checks;
+  }
+ }
+ LinearTarget reduced;require_water_depth(reduced.ensure(device.Get(),128,96,true,false,1),"blur control target");
+ LinearResample::Source source;source.color=retained.samples;source.depth=retained.depth_samples;
+ source.map[0]=source.map[1]=2;source.covered[2]=source.size[0]=256;source.covered[3]=source.size[1]=192;
+ require_water_depth(corrected.draw(context.Get(),reduced,source,nullptr),"blur control downsample");
+ source.color=reduced.samples;source.depth=reduced.depth_samples;source.map[0]=source.map[1]=.5f;
+ source.covered[2]=source.size[0]=128;source.covered[3]=source.size[1]=96;
+ require_water_depth(corrected.draw(context.Get(),actual,source,nullptr),"blur control upsample");
+ auto blurred=water_depth_read<std::array<unsigned short,4>>(device.Get(),context.Get(),actual.color);
+ for(unsigned y=0;y<96;++y)for(unsigned x=0;x<128;++x)blur_rejected+=blurred[y*128+x]!=reference[y*256+x];
+ require_water_depth(blur_rejected>12000,"negative control did not detect reduced-resolution detail loss");
+ std::printf("PASS stationary detail: exact_pixel_checks=%u half_resolution_rejected=%u restore_primary_fallback=1\n",sharp_checks,blur_rejected);
  context->ClearState();
  std::printf("PASS zoom water depth: cases=%u legacy_rejected=%u corrected_rejected=%u clear_checks=%u occluder_checks=%u primary_and_fallback=1 half_resolution=1\n",
      cases,legacy_rejected,corrected_rejected,clear_checks,occluder_checks);return 0;

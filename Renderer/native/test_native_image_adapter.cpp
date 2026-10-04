@@ -790,11 +790,19 @@ int native_adapter_contract(char const* path,Backend& gpu,Id map=0,unsigned cons
         for(unsigned color:{2u,255u,0x80012345u,0xff002345u}){both_fill(2,{3,4,17,19},color);compare(2);}
         verify(backend.owns(target[2]),"palette and packed native fills preserve GPU ownership");
         verify(replace_storage(target[2])==0,"fresh config-off destination");both_fill(2,full,0x80000567);
-        RECT outside_source={-2,0,62,48};
-        verify(copy(ui,control[2],&outside_source,&full)==0,"native clipped-source control");
-        verify(reinterpret_cast<Copy>(ui->vtable[16])(ui,target[2],&outside_source,&full)==0,"queued adapter rejects unsupported source before skipping native draw");
-        compare(2,true);verify(!backend.owns(target[2]),"unsupported source bounds restore CPU before native copy");
-        verify(replace_storage(target[2])==0,"fresh config-off destination after source fallback");both_fill(2,full,0x80000567);
+        // Cursor background saves cross the screen edges during drag scrolling.
+        // Match JGL clipping while keeping both native and full-color images GPU-owned.
+        auto clipped_copy_reads=backend.stats().readbacks;
+        for(RECT from:std::array<RECT,8>{{{-2,0,62,48},{2,0,66,48},{0,-3,64,45},{0,3,64,51},
+                {-8,-6,56,42},{8,6,72,54},{-80,0,-16,48},{80,0,144,48}}}){
+            both_fill(2,full,0x80000567);
+            verify(copy(ui,control[2],&from,&full)==0,"native clipped-source control");
+            verify(reinterpret_cast<Copy>(ui->vtable[16])(ui,target[2],&from,&full)==0,"clipped-source transfer return");
+            verify(backend.owns(target[2])&&backend.stats().readbacks==clipped_copy_reads,
+                "edge cursor copy retains GPU ownership without readback");compare(2);
+        }
+        std::puts("PASS clipped-source edge copies: eight native pixel comparisons, zero readbacks");
+        verify(replace_storage(target[2])==0,"fresh config-off destination after source clipping");both_fill(2,full,0x80000567);
         // Config-off restores all remaining dirty images before returning to JGL.
         state.current_config.enable_custom_rendering=false;both_fill(2,{0,0,2,2},0x80000111);compare(2,true);
         verify(state.custom_renderer_native_image==nullptr,"config-off drains and unbinds backend");state.current_config.enable_custom_rendering=true;

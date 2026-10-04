@@ -19907,7 +19907,7 @@ custom_renderer_hud_layout_offset (int x, int y, int * dx, int * dy)
 {
     *dx = *dy = 0;
     if (! is->current_config.enable_custom_rendering || ! is->current_config.enable_custom_rendering_zoom ||
-        is->custom_renderer_zoom_target_width >= 128 || p_bic_data->Map.Renderer.spotlight_on_city != NULL) return;
+        p_bic_data->Map.Renderer.spotlight_on_city != NULL) return;
     int w = p_bic_data->ScreenWidth, h = p_bic_data->ScreenHeight;
     if (x < 256 || x > w - 256) *dx = w / 2 - x;
     if (y < 128 || y > h - 128) *dy = h / 2 - y;
@@ -23823,11 +23823,8 @@ advance_custom_renderer_zoom (Main_Screen_Form * this, int steps, bool wrap)
 	    is->custom_renderer_native_image (C3X_NATIVE_ZOOM_TARGET, NULL, NULL, NULL, NULL,
 		levels[next] * 65536 / 128) != 1) return true;
 	is->custom_renderer_zoom_target_width = levels[next];
-	if (levels[next] < 128 || levels[current] < 128) {
-		is->custom_renderer_dirty_flags |= C3X_RENDERER_DIRTY_SCENE;
-		is->custom_renderer_redraw_pending = true;
-		is->custom_renderer_unit_representatives_dirty = true;
-	}
+	// The world capture already covers the widest supported viewport.
+	// Zoom changes only presentation, never retires the live map sampler.
 	char message[192];
 	snprintf (message, sizeof message,
 		"[C3X renderer] stage=zoom-target old_width=%d new_width=%d capture_width=128 queued=1 combat=%d camera=%d,%d\n",
@@ -24021,8 +24018,8 @@ RECT
 custom_renderer_capture_bounds (Main_Screen_Form * screen)
 {
     RECT bounds = {screen->TileX_Min, screen->TileY_Min, screen->TileX_Max, screen->TileY_Max};
-    if (! custom_renderer_zoom_enabled () || is->custom_renderer_zoom_target_width >= 128 ||
-        p_bic_data->is_zoomed_out) return bounds;
+    // One stable envelope avoids recapturing/retiring the map on zoom changes.
+    if (! custom_renderer_zoom_enabled () || p_bic_data->is_zoomed_out) return bounds;
     int half_width = p_bic_data->is_zoomed_out ? 32 : 64, half_height = half_width / 2;
     int x = p_bic_data->ScreenWidth / 2, y = p_bic_data->ScreenHeight / 2;
     bounds.left = (screen->camera_x - x) / half_width - 2;
@@ -24066,6 +24063,14 @@ patch_Main_Screen_Form_is_tile_on_screen (Main_Screen_Form * this, int edx, int 
         return Main_Screen_Form_is_tile_on_screen (this, edx, x, y, margin_x, margin_y);
     Map_Renderer * renderer = &p_bic_data->Map.Renderer;
     RECT visible = custom_renderer_visible_map_rect ();
+    // Capture city labels for the same stable envelope as terrain and units.
+    // Selection/centering outside this lexical HUD scope still uses the view.
+    if (is->custom_renderer_hud_canvas != NULL) {
+        visible.left = -p_bic_data->ScreenWidth / 2;
+        visible.top = -p_bic_data->ScreenHeight / 2;
+        visible.right = p_bic_data->ScreenWidth - visible.left;
+        visible.bottom = p_bic_data->ScreenHeight - visible.top;
+    }
     int width = renderer->field_3EA4 - renderer->field_3E98[1];
     int height = renderer->field_3EA8 - renderer->field_3E98[2];
     if (width <= 0 || height <= 0)
@@ -24167,7 +24172,7 @@ patch_Main_Screen_Form_city_hud_coords (Main_Screen_Form * this, int edx, int ti
     // Native tile_to_screen_coords chooses a single half-world occurrence.
     // Use this frame's captured occurrence for a wider custom view, including
     // non-wrapping polar rows which the native helper can otherwise wrap away.
-    if (custom_renderer_zoom_enabled () && is->custom_renderer_zoom_target_width < 128) {
+    if (custom_renderer_zoom_enabled ()) {
         long long nearest = 0x7fffffffffffffffLL;
         for (int n = 0; n < is->custom_renderer_tile_count; n++) {
             struct c3x_renderer_tile_v1 const * tile = &is->custom_renderer_tiles[n];
@@ -29239,7 +29244,7 @@ capture_custom_renderer_world_page (struct c3x_renderer_world_page_v1 * page)
 void
 capture_custom_renderer_topology (int viewer, int visibility_mask)
 {
-    if (custom_renderer_zoom_enabled () && is->custom_renderer_zoom_target_width < 128) {
+    if (custom_renderer_zoom_enabled ()) {
         Main_Screen_Form * screen = p_main_screen_form;
         RECT bounds = custom_renderer_capture_bounds (screen);
         Map * map = &p_bic_data->Map;
@@ -29829,7 +29834,7 @@ bootstrap_custom_renderer_initial_units ()
 			    occurrence->tile_x == unit->Body.X && occurrence->tile_y == unit->Body.Y &&
 			    occurrence->anchor_x == anchor_x && occurrence->anchor_y == anchor_y) { anchored = true; break; }
 		}
-        if (! anchored && custom_renderer_zoom_enabled () && is->custom_renderer_zoom_target_width < 128) {
+        if (! anchored && custom_renderer_zoom_enabled ()) {
             for (int t = 0; t < is->custom_renderer_tile_count; t++) {
                 struct c3x_renderer_tile_v1 const * occurrence = &is->custom_renderer_tiles[t];
                 if ((occurrence->tile_flags & C3X_RENDERER_TILE_RENDER) &&
@@ -32410,9 +32415,12 @@ patch_Main_Screen_Form_move_camera (Main_Screen_Form * this, int edx, int x, int
     if (requested.camera_x != displayed.camera_x || requested.camera_y != displayed.camera_y)
         is->custom_renderer_unit_representatives_dirty = true;
     log_custom_renderer_test_route_resolved (requested.camera_x, requested.camera_y);
-    if (defer && requested.camera_x == displayed.camera_x && requested.camera_y == displayed.camera_y) {
-        // Native clamping at a map edge must not turn a no-op into another frame.
-        is->custom_renderer_navigation (C3X_NAV_DISCARD, ((PCX_Image *)renderer)->JGL.Image, &requested, NULL);
+    if (requested.camera_x == displayed.camera_x && requested.camera_y == displayed.camera_y &&
+        custom_renderer_same_projection (&requested, &displayed)) {
+        // A zoom re-clamp with a pending native redraw is still a camera no-op.
+        // Keep the completed display identity so that redraw can stay async;
+        // invalidating it here forced the game thread into first-map polling.
+        if (defer) is->custom_renderer_navigation (C3X_NAV_DISCARD, ((PCX_Image *)renderer)->JGL.Image, &requested, NULL);
         return;
     }
     if (defer && capture_custom_renderer_native_view (renderer, this->Player_CivID, &requested, true)) {
@@ -32707,7 +32715,13 @@ patch_Map_Renderer_m71_Draw_Tiles (Map_Renderer * this, int edx, int param_1, in
 	if (is->custom_renderer_async_presented)
 		is->custom_renderer_display_view = custom_renderer_native_view (this);
 	if (async_view) {
-		is->custom_renderer_display_valid = is->custom_renderer_async_presented;
+		// A pending same-view refresh still has a completed map on screen.
+		// Keep its identity; clearing it makes the next poll a blocking first map.
+		is->custom_renderer_display_valid = is->custom_renderer_async_presented ||
+			(is->custom_renderer_display_valid &&
+			 requested_view.camera_x == is->custom_renderer_display_view.camera_x &&
+			 requested_view.camera_y == is->custom_renderer_display_view.camera_y &&
+			 custom_renderer_same_projection (&requested_view, &is->custom_renderer_display_view));
 		if (is->custom_renderer_navigation == NULL)
 			capture_custom_renderer_native_view (this, param_1, &requested_view, false);
 	}
@@ -33373,7 +33387,7 @@ patch_Main_Screen_Form_draw_city_hud (Main_Screen_Form * this, int edx, PCX_Imag
 		is->custom_renderer_hud_canvas = canvas != NULL ? canvas->JGL.Image : this->Base_Data.Canvas.JGL.Image;
 	Main_Screen_Form_draw_city_hud (this, edx, canvas);
     if (this == p_main_screen_form && canvas != NULL && custom_renderer_zoom_enabled () &&
-        is->custom_renderer_zoom_target_width < 128 && ! is->combat_unit_display_override_active) {
+        ! is->combat_unit_display_override_active) {
         // Native Animator visits only its canonical viewport. Its newly exposed
         // outer representatives need the same fixed-size status capture here.
         int width = p_bic_data->is_zoomed_out ? 64 : 128;

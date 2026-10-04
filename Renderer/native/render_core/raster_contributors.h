@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <new>
 #include <chrono>
+#include <vector>
 #include "raster_dependency_revisions.h"
 
 namespace c3x_renderer { namespace render_core {
@@ -25,7 +26,15 @@ template<class Proof,std::size_t KeyWords=14> struct RasterContributors {
     }};
     // Slow complete validation marks the existing bounded entries. Counting
     // distinct visits rejects removed contributors without an idle-frame set.
-    std::unordered_map<Key,std::uint64_t,Hash> draws;
+    struct Draw {std::uint64_t epoch=0;std::uint32_t index=0;};
+    std::unordered_map<Key,Draw,Hash> draws;
+    // Each independently drawn strip contributes ordering constraints. Adding
+    // an unrelated strip may sort the scene again without changing any old
+    // pixel. Only a reversal of contributors that shared a strip rejects reuse.
+    std::vector<std::size_t> ranks;
+    std::unordered_set<std::uint64_t> order_edges;
+    std::uint32_t previous_draw=UINT32_MAX;
+    bool track_order=false;
     std::uint64_t membership_epoch=0;
     std::size_t membership_seen=0;
     std::unordered_map<std::uint64_t,std::shared_ptr<Proof const>> proofs;
@@ -40,27 +49,66 @@ template<class Proof,std::size_t KeyWords=14> struct RasterContributors {
     bool dependencies_complete=false,validated=false;
     static constexpr std::size_t limit=16u*1024u*1024u;
     bool complete=true;
-    std::size_t bytes()const{return draws.size()*(sizeof(Key)+sizeof(std::uint64_t)+48)+proofs.size()*64+visibility.size()*64+
+    std::size_t bytes()const{return draws.size()*(sizeof(Key)+sizeof(Draw)+48)+proofs.size()*64+visibility.size()*64+
         dependencies.size()*(sizeof(Revisions::Key)+48)+dependency_sources.size()*80+
+        ranks.capacity()*sizeof(std::size_t)+order_edges.size()*40+order_edges.bucket_count()*sizeof(void*)+
         (draws.bucket_count()+proofs.bucket_count()+visibility.bucket_count()+dependencies.bucket_count()+dependency_sources.bucket_count())*sizeof(void*);}
-    void clear(){draws.clear();proofs.clear();visibility.clear();dependencies.clear();dependency_sources.clear();complete=true;dependencies_complete=validated=false;membership_epoch=membership_seen=0;}
+    void clear(){draws.clear();ranks.clear();order_edges.clear();track_order=false;previous_draw=UINT32_MAX;
+        proofs.clear();visibility.clear();dependencies.clear();dependency_sources.clear();complete=true;dependencies_complete=validated=false;membership_epoch=membership_seen=0;}
+    void begin_append(){track_order=true;previous_draw=UINT32_MAX;}
     bool contains(Key const& key)const{return draws.count(key)!=0;}
     void begin_membership(){
         membership_seen=0;
-        if(++membership_epoch==0){for(auto& draw:draws)draw.second=0;membership_epoch=1;}
+        if(++membership_epoch==0){for(auto& draw:draws)draw.second.epoch=0;membership_epoch=1;}
     }
     bool visit_membership(Key const& key){
         if(!complete || !membership_epoch)return false;
         auto found=draws.find(key);if(found==draws.end())return false;
-        if(found->second!=membership_epoch){found->second=membership_epoch;++membership_seen;}
+        if(found->second.epoch!=membership_epoch){found->second.epoch=membership_epoch;
+            ranks[found->second.index]=membership_seen++;}
         return true;
     }
-    bool exact_membership()const{return complete && membership_epoch && membership_seen==draws.size();}
+    bool exact_membership()const{
+        if(!complete || !membership_epoch || membership_seen!=draws.size())return false;
+        for(auto edge:order_edges)if(ranks[edge>>32]>=ranks[std::uint32_t(edge)])return false;
+        return true;
+    }
+    // Local repair may replace/remove keys. Preserve constraints between the
+    // surviving draws, including paths through removed intermediate draws.
+    // Scratch is linear in the already bounded proof and used only for repair.
+    bool remaining_order_preserved()const{
+        if(!complete || !membership_epoch)return false;
+        struct Node {std::uint32_t incoming=0,head=UINT32_MAX;std::size_t rank=0,minimum=0;};
+        struct Edge {std::uint32_t to,next;};
+        std::vector<Node> nodes(draws.size());std::vector<Edge> edges;edges.reserve(order_edges.size());
+        for(auto const& draw:draws)if(draw.second.epoch==membership_epoch)
+            nodes[draw.second.index].rank=ranks[draw.second.index]+1;
+        for(auto edge:order_edges){auto from=std::uint32_t(edge>>32),to=std::uint32_t(edge);
+            ++nodes[to].incoming;edges.push_back({to,nodes[from].head});nodes[from].head=std::uint32_t(edges.size()-1);}
+        std::vector<std::uint32_t> ready;ready.reserve(nodes.size());
+        for(std::uint32_t i=0;i<nodes.size();++i)if(!nodes[i].incoming)ready.push_back(i);
+        for(std::size_t i=0;i<ready.size();++i){auto const& node=nodes[ready[i]];
+            if(node.rank && node.rank<node.minimum)return false;
+            auto minimum=node.rank?node.rank+1:node.minimum;
+            for(auto e=node.head;e!=UINT32_MAX;e=edges[e].next){auto& next=nodes[edges[e].to];
+                if(next.minimum<minimum)next.minimum=minimum;
+                if(!--next.incoming)ready.push_back(edges[e].to);}
+        }
+        return ready.size()==nodes.size();
+    }
     bool add(Key const& key,std::shared_ptr<Proof const> proof,std::uint64_t tile,std::uint64_t revision,bool* new_proof=nullptr){
         if(new_proof)*new_proof=false;
         if(!complete || !proof || bytes()>limit-1024){complete=false;return false;}
         validated=false;dependencies_complete=false;
-        draws.try_emplace(key,0);bool inserted=proofs.try_emplace(key[0],std::move(proof)).second;visibility[tile]=revision;
+        auto draw=draws.try_emplace(key,Draw{0,std::uint32_t(ranks.size())});
+        if(draw.second)ranks.push_back(0);
+        auto index=draw.first->second.index;
+        if(track_order){
+            if(previous_draw!=UINT32_MAX && previous_draw!=index)
+                order_edges.insert((std::uint64_t(previous_draw)<<32)|index);
+            previous_draw=index;
+        }
+        bool inserted=proofs.try_emplace(key[0],std::move(proof)).second;visibility[tile]=revision;
         complete=bytes()<=limit;if(inserted)++validation_counts.proof_registrations;
         if(new_proof)*new_proof=complete&&inserted;return complete;
     }

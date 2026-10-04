@@ -13,6 +13,41 @@ def function(source, name):
 
 
 class ZoomIntegrationTests(unittest.TestCase):
+    def test_zoom_reuses_the_prepared_capture_envelope(self):
+        body=function((ROOT/'injected_code.c').read_text(),'advance_custom_renderer_zoom')
+        run_cpp(r'''
+#include <cassert>
+#include <cstdio>
+#include <cstddef>
+#include "Renderer/native/c3x_renderer_api.h"
+#define ARRAY_LEN(a) (int(sizeof(a)/sizeof((a)[0])))
+struct Main_Screen_Form{bool is_now_loading_game=false;int camera_x=0,camera_y=0;}screen;
+struct{struct{struct{void* spotlight_on_city=nullptr;}Renderer;}Map;}bic,*p_bic_data=&bic;
+struct State{struct{bool enable_custom_rendering=true,enable_custom_rendering_zoom=true;}current_config;
+ int custom_renderer_zoom_target_width=128;unsigned custom_renderer_dirty_flags=0;
+ bool custom_renderer_redraw_pending=false,custom_renderer_unit_representatives_dirty=false,combat_unit_display_override_active=false;
+ c3x_renderer_native_image_fn custom_renderer_native_image=nullptr;}state,*is=&state;
+int players=1,*p_player_bits=&players;bool accept=true;unsigned calls=0,target=0;
+int native(int op,void*,void*,void const*,void const*,unsigned q){assert(op==C3X_NATIVE_ZOOM_TARGET);++calls;target=q;return accept?1:0;}
+void sync_custom_renderer_zoom_to_native(){} void debug(char const*){} auto p_OutputDebugStringA=debug;
+bool '''+body+r'''
+int main(){int levels[]={64,80,96,112,128,160,192,224,256,320,384};
+ for(int from=0;from<11;++from)for(int to=0;to<11;++to){state=State{};state.custom_renderer_native_image=native;
+  state.custom_renderer_zoom_target_width=levels[from];unsigned before=calls;
+  assert(advance_custom_renderer_zoom(&screen,to-from,false));
+  assert(state.custom_renderer_zoom_target_width==levels[to]&&calls==before+(to!=from));
+  bool capture=false;
+  assert(state.custom_renderer_redraw_pending==capture&&state.custom_renderer_unit_representatives_dirty==capture);
+  assert(state.custom_renderer_dirty_flags==(capture?C3X_RENDERER_DIRTY_SCENE:0));
+  if(to!=from)assert(target==unsigned(levels[to]*65536/128));
+ }
+ state=State{};state.custom_renderer_native_image=native;accept=false;
+ assert(advance_custom_renderer_zoom(&screen,-1,false));assert(state.custom_renderer_zoom_target_width==128&&!state.custom_renderer_dirty_flags);
+ state.current_config.enable_custom_rendering=false;unsigned before=calls;
+ assert(!advance_custom_renderer_zoom(&screen,-1,false)&&calls==before);
+}
+''')
+
     def test_bridge_target_and_helper_presented_range(self):
         owner=(ROOT/'Renderer/native/native_composition_owner.h').read_text()
         target=owner[owner.index('        if(op==C3X_NATIVE_ZOOM_TARGET){'):owner.index('        if(op==C3X_NATIVE_HUD_BEGIN||')]
@@ -174,6 +209,7 @@ void Main_Screen_Form_move_camera(Main_Screen_Form* value,int edx,int x,int y,in
  assert(value==&screen&&x==123&&y==456);++calls;last_edx=edx;}
 void move_custom_renderer_camera(Main_Screen_Form* p,int e,int x,int y,int r,bool b){Main_Screen_Form_move_camera(p,e,x,y,r,b);}
 struct custom_renderer_native_view custom_renderer_native_view(Map_Renderer*){return {};}
+bool custom_renderer_same_projection(struct custom_renderer_native_view const*,struct custom_renderer_native_view const*){return true;}
 bool capture_custom_renderer_native_view(Map_Renderer*,int,struct custom_renderer_native_view*,bool){return false;}
 void log_custom_renderer_test_route_resolved(int,int){}
 void apply_custom_renderer_native_view(struct custom_renderer_native_view*){assert(false);}

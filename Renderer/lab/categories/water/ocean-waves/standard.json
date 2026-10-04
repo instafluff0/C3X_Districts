@@ -34,7 +34,8 @@
     "Renderer.native.test_coastal_waves",
     "Renderer.lab.studies.waves.test_source",
     "Renderer.native.test_render_core",
-    "Renderer.lab.test_natural"
+    "Renderer.lab.test_natural",
+    "Renderer.native.test_animation_retention"
   ],
   "references": {
     "d3d11": []

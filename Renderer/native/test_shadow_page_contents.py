@@ -6,6 +6,56 @@ from Renderer.native.native_cpp_test import run_cpp
 
 
 class ShadowPageContentsTests(unittest.TestCase):
+    def test_production_page_publication_never_samples_unfinished_shadows(self):
+        # Execute the production page scheduling/completion/table code, replacing
+        # only GPU caster draws with a recognizable shadow value per page.
+        source=(ROOT/'Renderer/sandbox/fresh_pipeline.h').read_text()
+        schedule=source[source.index('        draws=0;',source.index('    template<class BodyInputs')):
+            source.index('        context->OMSetRenderTargets(0,nullptr,nullptr);',source.index('        draws=0;',source.index('    template<class BodyInputs')))]
+        draw_start=schedule.index('        auto* target=targets[')
+        draw_end=schedule.index('        if(!page_contents.complete_incremental(',draw_start)
+        schedule=schedule[:draw_start]+"        ++draws; pixels[page_contents.slots[page_slot]]=100+page_slot;\n"+schedule[draw_end:]
+        table=source[source.index('        std::array<std::array<float,4>,64> table{};',source.index('    template<class BodyInputs')):
+            source.index('        wrap_basis=wrap_query;',source.index('    template<class BodyInputs'))]
+        run_cpp(r'''
+#include "Renderer/native/render_core/shadow_page_contents.h"
+#include <cassert>
+#include <cstdlib>
+#include <cstdio>
+namespace c3x_renderer {namespace render_core {
+unsigned cached_environment(char const*,char*,unsigned){return 0;}
+}}
+struct Options{bool legacy=false;};Options sandbox_perf_options(){return {};}
+using Grid=c3x_renderer::render_core::ShadowSamplingGrid;
+using Pages=c3x_renderer::render_core::ShadowPageContents<unsigned>;
+int main(){unsigned cases=0;
+ for(unsigned missing=0;missing<=25;++missing){
+  Grid sampling_grid;sampling_grid.valid=true;sampling_grid.low={-2,-2};
+  sampling_grid.count={5,5};sampling_grid.quality_span={40,40};
+  Pages page_contents;Pages::Context context={1,2,3};Pages::Inputs inputs;
+  std::array<unsigned,25> pixels{};std::array<float,4> wrap_query{};
+  bool proved=true;unsigned draws=0;
+  for(unsigned i=0;i<25;++i)inputs[i].push_back(i);
+  page_contents.select(sampling_grid,context,inputs,true);
+  for(unsigned i=0;i<25;++i){assert(page_contents.complete(i,sampling_grid,context,inputs[i]));pixels[page_contents.slots[i]]=100+i;}
+  // A reveal, city edit or page-window shift may invalidate any subset.
+  for(unsigned i=0;i<missing;++i)inputs[(i*7)%25].push_back(99);
+  page_contents.select(sampling_grid,context,inputs,true);
+auto publish=[&]()->bool{
+'''+schedule+table+r'''
+  assert(draws==missing); // unchanged pages do no GPU work
+  for(unsigned i=0;i<25;++i){
+   int layer=int(table[3+i][0]);
+   // -1 samples unshadowed white in the real shader: the observed forest pop.
+   unsigned shaded=layer<0?255:pixels[layer];
+   assert(shaded==100+i);
+  }
+  return true;};assert(publish());++cases;
+ }
+ std::printf("PASS shadow publication: cases=%u complete_first_image=1 unchanged_pages_reused=1\n",cases);
+}
+''')
+
     def test_partial_page_completion_survives_frames_and_rejects_changed_casters(self):
         run_cpp(r'''
 #include "Renderer/native/render_core/shadow_page_contents.h"

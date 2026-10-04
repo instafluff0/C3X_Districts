@@ -15,6 +15,34 @@ diagnostics are the same pre-existing GCC-vs-MSVC differences. Strict
 The completion pass below was built and checked on Windows/D3D11. Its checks
 establish correctness for the tested contracts, not a measured gameplay FPS gain.
 
+## October 4 sharpness correction
+
+The earlier half-resolution bootstrap is no longer the default. It made
+whole-view transitions visibly soft during ordinary scene changes. Bootstrap
+images now use native pixel resolution and prepare the outward destination
+scale once, covering the intervening zoom frames. Scene assembly/sorting no longer
+blanket-invalidates retained pixels: bounded per-strip contributor proofs
+check membership, content, visibility and relative order. Local repair also
+rejects order changes among surviving contributors, including ordering through
+removed draws. Genuine changes still redraw or invalidate affected pixels.
+
+A second settled-view path still selected a differently scaled retained lane
+instead of the bootstrap. It now requires an exact projection match once the
+zoom reaches its target. Resampling remains available during an active zoom,
+without allowing a unit move/reveal to temporarily soften the whole viewport.
+The cursor's screen-edge background copy also now clips its source correctly;
+previously that ordinary pointer action attempted unsupported CPU readback and
+stopped native image composition. Native JGL pixel comparisons and a 324-case
+source clipping contract cover the correction.
+
+The transition category includes production GPU tests for exact one-pixel
+detail through restore and fallback composition, with a deliberately blurred
+half-resolution negative control. Native tests cover unchanged-camera pending
+redraws and all 121 zoom-ladder source/destination pairs. These complement the
+existing intermediate-scene and color/depth checks. They do not guarantee every
+human play sequence or certify live FPS. Current live findings are recorded in
+`retained_renderer_plan.md`.
+
 ## How a frame actually spends its time (before)
 
 | Situation | What happened | Approx. cost on the VM |
@@ -241,13 +269,11 @@ and `native/gpu_spatial_composition.h` as one connected implementation.
   steep receivers and at page boundaries. Check R32_FLOAT comparison support;
   unsupported devices retain the original filter. The small filter-kernel change
   needs visual comparison. See Microsoft's [comparison sampling contract](https://learn.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-to-samplecmp).
-- **Distant-view shadow preparation:** draw at most two missing pages per scene
-  invocation, with center pages first. Already completed pages survive subsequent
-  invocations. Missing pages are explicitly unpublished and sample as unshadowed,
-  so recycled slices cannot cast shadows from an unrelated location. Keep visual
-  frames running while pages are pending; start full-quality scenery refinement
-  after shadow completion. Completion invalidates the temporary preview once.
-  Metadata/proof refusal retains the existing synchronous fallback.
+- **Shadow publication:** exact proofs retain completed, unchanged pages. Finish
+  the changed pages (at most 25) before shading any receivers. Publishing two
+  pages at a time exposed unshadowed trees for several frames after a reveal;
+  that quality reduction and its budget override were removed. The production
+  scheduling/table regression checks every dirty-page count from zero to 25.
 - **Refinement:** remove the emergency unbounded full redraw after eight
   refinement restarts. Repeated camera input keeps its preview and bounded work.
 - **Water:** at a settled native-resolution view, retain water illumination and
@@ -390,14 +416,13 @@ oracles and asynchronous/live checks above passed; no injected source changed.
 | Variable | Effect |
 | --- | --- |
 | `C3X_RENDERER_STATIC_LEGACY=1` | Synchronous full-quality static redraws (old behavior, incl. light-set invalidation and zoom mirror invalidation) |
-| `C3X_RENDERER_BOOTSTRAP_SCALE` | Low-resolution first image after jumps (default `0.5`; `1` full resolution; `0` disables: jumps refine synchronously) |
+| `C3X_RENDERER_BOOTSTRAP_SCALE` | First image after jumps (default `1`, native pixel resolution; fractional values are diagnostic quality reductions; `0` disables: jumps refine synchronously) |
 | `C3X_RENDERER_REFINE_PIXELS` | Fixed refinement budget per frame instead of the adaptive one |
 | `C3X_RENDERER_SHADOW_TIGHT_FIT=1` | Old per-view shadow fitting |
 | `C3X_RENDERER_LEGACY_CADENCE=1` | Old timer pacing, `Present(0)`, latency 1 |
 | `C3X_RENDERER_TRACE=2` | Restores per-frame trace records |
 | `C3X_RENDERER_TERRAIN_MATERIAL_REFERENCE=1` | Sample all original terrain material families |
 | `C3X_RENDERER_SHADOW_PCF_REFERENCE=1` | Original nine-comparison shadow filter |
-| `C3X_RENDERER_SHADOW_PAGES_PER_FRAME` | Missing-page budget per scene invocation, default 2, clamped to 1–25 |
 | `C3X_RENDERER_WATER_LIGHTING_REFERENCE=1` | Recompute water lighting per frame |
 | `C3X_RENDERER_HUD_CACHE_REFERENCE=1` | Execute all pointwise HUD pixels each frame |
 

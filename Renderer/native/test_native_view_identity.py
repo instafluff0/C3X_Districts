@@ -432,7 +432,12 @@ int main(){
  assert(screen.camera_x==20);call();assert(displayed_x==20);
  patch_Main_Screen_Form_move_camera(&screen,0,screen.camera_x-32,0,1,false);
  assert(screen.camera_x==8180);call();assert(displayed_x==8180);
- unsigned before=begins;call(false);assert(!state.custom_renderer_display_valid && begins==before);
+ // A pending same-view publication must not turn the next poll into a
+ // first-map barrier. Repeat to cover the entire delayed refresh interval.
+ unsigned before=begins;
+ for(int n=0;n<20;++n){call(false);assert(state.custom_renderer_display_valid && begins==before);}
+ native_move(&screen,0,500,100,1,false);call(false);
+ assert(!state.custom_renderer_display_valid && begins==before);
  state.custom_renderer_async_enabled=false;call();assert(!state.custom_renderer_display_valid && !state.custom_renderer_camera_ticket);
  // Saved-game loading disables navigation, but the complete publication still
  // needs its camera identity when native startup clears the main canvas.
@@ -468,6 +473,11 @@ int main(){
  state.custom_renderer_navigation=navigation;state.custom_renderer_display_valid=true;
  state.custom_renderer_display_view=custom_renderer_native_view(&bic.Map.Renderer);
  unsigned no_op_captures=captures;
+ patch_Main_Screen_Form_move_camera(&screen,0,0,0,1,false);
+ assert(captures==no_op_captures&&!nav_pending&&state.custom_renderer_display_valid);
+ // Zoom bounds are re-clamped while a native map/HUD refresh is pending.
+ // The same camera must not become an invalid first-map transaction.
+ assert(screen.animator.fields[10]);
  patch_Main_Screen_Form_move_camera(&screen,0,0,0,1,false);
  assert(captures==no_op_captures&&!nav_pending&&state.custom_renderer_display_valid);
  screen.animator.fields[10]=0; // The stub marks dirty even for a native no-op.
