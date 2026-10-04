@@ -68,8 +68,8 @@ are estimates; an expensive individual draw can still exceed a frame interval.
   the overlapping pixels into the lane's other slot at the new anchor
   (one full-region shader copy) and draws only the newly exposed strips.
 - **Zoom preview.** While the zoom animates, the front raster (at its own
-  projection) is affinely resampled into the frame — bilinear color, nearest
-  depth — and the dynamic layers (water, waves, units, borders) render at the
+  projection) is affinely resampled into the frame — bilinear color and locally
+  reconstructed depth — and the dynamic layers (water, waves, units, borders) render at the
   true zoom against that depth. Missing coverage (zoom-out) falls back to the
   lane-0 1× raster, which covers every zoom ≥ 1×.
 - **Prefetch at the destination.** The zoom transition publishes its
@@ -296,6 +296,94 @@ launched or installed during this pass. Fullscreen late-game idle, scroll, zoom
 and jump latency, refinement settling time, water-cache visual parity and shadow
 edge quality still need a current-candidate gameplay/scene comparison. No new FPS
 number or 60 FPS guarantee is claimed.
+
+### Water stripes during zoom: depth reconstruction
+
+A live screenshot showed regular horizontal stripes through water during zoom.
+The preview resampler used the nearest old depth pixel while the water pass
+rendered at the current projection. Even a flat map plane has a screen-space
+depth slope: nearest sampling turns it into steps, making the water fail its
+depth test on alternating rows.
+
+`render_core/linear_target.h` now reconstructs depth at the fractional source
+coordinate using the smaller agreeing neighbor slope on each axis. This preserves
+planes, limits interpolation at depth discontinuities and keeps clear depth
+exactly 1. The settled whole-pixel restore path and animated water shader remain
+unchanged. Only preview composition adds four nearby depth reads; there is no
+extra geometry pass, target allocation or CPU/GPU synchronization.
+
+The standalone Windows GPU regression `test_zoom_water_depth` runs 72 cases:
+six intermediate zooms, full/half-resolution sources, positive/negative depth
+adjustments, both source slots, opaque silhouettes and empty areas, using the
+current water/underlay separation at a 128-pixel native tile width. The old
+nearest-depth control wrongly rejects 269,532 water pixels; reconstruction rejects
+zero eligible pixels, preserves 146,688 occluder checks and 148,224 clear-depth
+checks. This reproduces and fixes the depth failure in a controlled scene;
+confirmation against the reported live-game view is still pending. No new FPS
+measurement is implied.
+
+## Movement and reveal consistency repair
+
+A supplied movement recording shows terrain/city corruption from about 2.53 to
+2.87 seconds, followed by recovery and newly revealed scenery. Inspection found
+two concrete defects in the retained raster path:
+
+- Background refinement checked camera/environment identity but not the content
+  of bands drawn on preceding frames. A reveal, removal or appearance change
+  could therefore promote mixed scenery. It now validates the covered bands
+  before continuing; unaffected bands retain their work.
+- Local repair cleared the displayed raster before drawing all replacement
+  layers. A later mesh/instance draw failure left that damaged raster available
+  as the fallback preview. Repairs now use the lane's existing back target and
+  copy only completed dirty rectangles, including depth, after every draw
+  succeeds. Failed repairs preserve the displayed color and depth.
+
+`test_static_refinement_consistency` executes the production refinement and
+repair code with controlled content changes and late draw failures: ten cases
+across both zoom lanes and twelve repair cases across all four slots. Both
+regressions fail against the preceding implementation and pass with these fixes.
+The repair adds a GPU copy of the dirty rectangles only; it creates no additional
+full-screen target owner. The fresh live reveal check below passes; the exact
+city-bearing scene in the supplied recording has not been replayed.
+
+A subsequent disposable-game capture (`20261003-170210`) completed two inland
+moves and three zoom/text checks without logged renderer failures, but sampled
+frames still caught a brief return to the first unit's source position during
+the reveal. This isolated a third defect in retained composition: rebuilding a
+native view after its map sampler retired lost the map's projected classification
+and could return to the older canonical publication. The completed projected
+image now stays eligible through that handoff, including supported keyed native
+and unit overlays. Native UI changes still apply; retired callbacks stay retired.
+
+The earlier capture is diagnostic evidence only: the user reported possible
+concurrent play during testing. A fresh run after they closed Civ III supplies
+the final live evidence below.
+
+The extended `test_ready_frame_composition` GPU regression reproduces the rewind
+before the fix, both directly and through an overlay. It checks the repaired
+paths with ordinary and map sources, unchanged callback counts, current overlay
+pixels and preserved final-pose pixels. The retained compositor's 657 exact GPU
+oracles and the 80-camera lifetime checks also pass. The asynchronous native
+fixture passes 32 camera transitions and 24 pose changes with zero compositor
+errors. Its native hook stubs were updated for current presentation fields and
+an observer name collision; its bounded first-map allowance is now 120 seconds
+(the successful cold preparation took 43 seconds).
+
+Fresh disposable-game capture `20261003-173427` completed both inland moves,
+three zoom/text checks and all 13 posted commands. Review of 66 arrival/reveal
+samples found no return to the old unit position or damaged revealed tiles.
+The first unit remains at its destination through the replacement map handoff.
+The complete log has no renderer failure markers. Save/configuration cleanup
+and absence of remaining game/helper processes were verified. The matching
+bridge, renderer and helper are staged with candidate and game-link hashes
+checked. Local receipts and images are under
+`Renderer/.cache/movement-glitch-review/`. These sampled checks establish no FPS
+result or blanket gameplay acceptance.
+
+Validation limitation: two pre-existing `test_frame_publication` host fixtures
+still fail compilation because their worker stubs lack current completion and
+residency members. The focused regressions, transition category suite, GPU
+oracles and asynchronous/live checks above passed; no injected source changed.
 
 ## Switches (all default to the fast path)
 

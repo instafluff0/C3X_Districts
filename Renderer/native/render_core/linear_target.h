@@ -144,7 +144,7 @@ Output PS(float4 position:SV_Position,uint sample:SV_SampleIndex){
     }
 };
 // Affine preview of retained static scenes (zoom in motion, jumps): bilinear
-// premultiplied color and nearest depth from a primary source, falling back
+// premultiplied color and reconstructed depth from a primary source, falling back
 // to a secondary source where the primary has no coverage, then clamping.
 // Single-sample targets only; multisampled scenes refine synchronously.
 struct LinearResample {
@@ -174,10 +174,27 @@ cbuffer Resample:register(b0){float4 map0;float4 covered0;float4 size0;float4 ma
 float4 VS(uint id:SV_VertexID):SV_Position{float2 p=float2((id<<1)&2,id&2);return float4(p*float2(2,-2)+float2(-1,1),0,1);}
 struct Output{float4 color:SV_Target;float depth:SV_Depth;};
 bool inside(float2 p,float4 r){return all(p>=r.xy)&&all(p<=r.zw);}
+float depth_slope(float backward,float forward){
+ // Choose the smaller agreeing slope. A silhouette's depth jump must not
+ // be interpolated into its neighbor; clear pixels also stay clear.
+ return backward*forward>0?(abs(backward)<abs(forward)?backward:forward):0;
+}
+float retained_depth(Texture2D<float> field,float2 p,float2 size,float shift){
+ int2 at=int2(floor(p)),limit=int2(size)-1;
+ float z=field.Load(int3(at,0));if(z>=1)return 1;
+ float left=field.Load(int3(max(at-int2(1,0),0),0));
+ float right=field.Load(int3(min(at+int2(1,0),limit),0));
+ float top=field.Load(int3(max(at-int2(0,1),0),0));
+ float bottom=field.Load(int3(min(at+int2(0,1),limit),0));
+ float2 gradient=float2(depth_slope(z-left,right-z),depth_slope(z-top,bottom-z));
+ // Water draws at the current projection. Nearest depth makes the retained
+ // sloped ground plane a staircase and rejects alternating rows of water.
+ return z+dot(gradient,p-(float2(at)+.5))+shift;
+}
 Output fetch0(float2 p){Output o;o.color=color0.SampleLevel(linear_clamp,p*size0.zw,0);
- float z=depth0.Load(int3(int2(floor(p)),0));o.depth=z<1?z+options.y:1;return o;}
+ o.depth=retained_depth(depth0,p,size0.xy,options.y);return o;}
 Output fetch1(float2 p){Output o;o.color=color1.SampleLevel(linear_clamp,p*size1.zw,0);
- float z=depth1.Load(int3(int2(floor(p)),0));o.depth=z<1?z+options.z:1;return o;}
+ o.depth=retained_depth(depth1,p,size1.xy,options.z);return o;}
 Output PS(float4 position:SV_Position){
  float2 p0=position.xy*map0.xy+map0.zw;
  if(inside(p0,covered0))return fetch0(p0);

@@ -44,7 +44,7 @@ int native_adapter_contract(char const* path,Backend& gpu,Id map=0,unsigned cons
         auto ui=create(graph,nullptr,1);verify(init(ui,w,h,16,1)==0,"UI init");verify(fill(ui,&full,int(0x80000123u))==0,"UI clear");
         auto retained=get(ui,0,0);verify(retained!=nullptr,"retained UI pointer");release(ui,1);
         c3x_native_images::Adapter<Backend> backend(gpu,original[4],original[9]);adapter=&backend;
-        capture.write=log_line;state.custom_renderer_native_observe=observe;set_custom_renderer_native_probe(root);
+        observation_capture.write=log_line;state.custom_renderer_native_observe=observe;set_custom_renderer_native_probe(root);
         verify(state.custom_renderer_native_probe_active,"actual hook attach");
         verify(same_owner(),"hook attachment preserves the configured JGL owner");
         auto default_ui=create(graph,nullptr,1);

@@ -45,7 +45,7 @@ void __fastcall snapshot_test_release(void*,int,int){}
 int __fastcall unexpected_startup_native_transfer(void*,int,RECT*){return 917;}
 bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_frame_v1 frame,
                             c3x_renderer_gpu_present_fn present,unsigned const* map,int phase_x,int phase_y,c3x_renderer_native_image_fn live,c3x_renderer_render_view_fn render_view,c3x_renderer_camera_request_v1 const& demand,void (*reset)(),std::vector<NativeFrameSample> const& performance_frames){
-    state={};capture={};events.clear();lines.clear();
+    state={};observation_capture={};events.clear();lines.clear();
     // Static native pixel oracles explicitly suspend visual sampling. Dedicated
     // motion witnesses below enable the production clock and check live output.
     main_screen_fixture.is_now_loading_game=true;
@@ -95,7 +95,7 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
     verify(lifetime(C3X_NATIVE_MAP,root,0)!=0,"screen root lifetime came from actual bootstrap/init hook");
     c3x_renderer_native_observation observer_start={};observer_start.struct_size=sizeof(observer_start);
     observer_start.operation=C3X_NATIVE_VERIFY;observer_start.object=jgl;
-    capture.write=log_line;verify(capture.observe(&observer_start)!=0,"initialize independent test observer");
+    observation_capture.write=log_line;verify(observation_capture.observe(&observer_start)!=0,"initialize independent test observer");
     state.custom_renderer_native_observe=observe;
     JGL_Image* canvases[4];
     for(auto& canvas:canvases){canvas=create(graph,nullptr,1);verify(reinterpret_cast<Init>(canvas->vtable[1])(canvas,w,h,16,1)==0,"fresh native surface");
@@ -162,7 +162,9 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
         c3x_renderer_camera_view_v1 view={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(view)};
         LARGE_INTEGER frequency={},begin={},end={};QueryPerformanceFrequency(&frequency);QueryPerformanceCounter(&begin);
         int result=C3X_RENDERER_RESULT_PENDING;unsigned polls=0;
-        auto deadline=GetTickCount64()+30000;
+        // Cold production asset preparation can exceed thirty seconds on the
+        // VM. Keep startup bounded without timing out before the first map.
+        auto deadline=GetTickCount64()+120000;
         while(result==C3X_RENDERER_RESULT_PENDING && GetTickCount64()<deadline){
             result=map_view(C3X_NATIVE_MAP_PREPARE,canvases[0],&demand,&view);
             if(asynchronous&&polls==0&&result==C3X_RENDERER_RESULT_PENDING){
@@ -177,7 +179,7 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
                        !*reinterpret_cast<int*>(reinterpret_cast<char*>(canvases[1])+0x4c4),"cold unit acquires no DC leases");
                 // Let a background world query complete before adopting the
                 // ready camera, matching the failing live startup ordering.
-                auto capture_deadline=GetTickCount64()+30000;
+                auto capture_deadline=deadline;
                 while(!deferred_world_captures&&GetTickCount64()<capture_deadline){
                     MSG message={};while(PeekMessage(&message,nullptr,0,0,PM_REMOVE)){TranslateMessage(&message);DispatchMessage(&message);}
                     Sleep(1);
@@ -685,7 +687,7 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
             for(int yy=0;yy<ch;++yy)for(int xx=0;xx<cw;++xx){auto i=std::size_t(yy+sy)*w+xx+sx;seen[i]=1;
                 if(captured_pixels)(*captured_pixels)[i]=0xff000000u|(static_cast<unsigned*>(bits)[std::size_t(yy)*w+xx]&0xffffff);
                 else if((static_cast<unsigned*>(bits)[std::size_t(yy)*w+xx]&0xffffff)!=(pixels[i]&0xffffff)){
-                    if(!differences)std::fprintf(stderr,"display first mismatch capture=%u live=%u x=%d y=%d expected=%08x actual=%08x\n",capture_number,unsigned(live_active),xx+sx,yy+sy,pixels[i],static_cast<unsigned*>(bits)[std::size_t(yy)*w+xx]);++differences;mismatch.left=std::min(mismatch.left,LONG(xx+sx));mismatch.top=std::min(mismatch.top,LONG(yy+sy));
+                    if(!differences)std::fprintf(stderr,"display first mismatch observation_capture=%u live=%u x=%d y=%d expected=%08x actual=%08x\n",capture_number,unsigned(live_active),xx+sx,yy+sy,pixels[i],static_cast<unsigned*>(bits)[std::size_t(yy)*w+xx]);++differences;mismatch.left=std::min(mismatch.left,LONG(xx+sx));mismatch.top=std::min(mismatch.top,LONG(yy+sy));
                     mismatch.right=std::max(mismatch.right,LONG(xx+sx+1));mismatch.bottom=std::max(mismatch.bottom,LONG(yy+sy+1));}}
         }
         SelectObject(capture_dc,old);DeleteObject(bitmap);DeleteDC(capture_dc);ReleaseDC(nullptr,desktop);FreeLibrary(dwm);
@@ -1103,8 +1105,8 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
     state.custom_renderer_native_observe=observe; // Route this explicit observer-expiry fixture to its local counter.
     // Earlier rebinding deliberately switches observers inside a present. Start
     // this independent expiry case with a balanced local observation stack.
-    capture.depth=0;capture.presents=8191;capture.ended=false;last_transfer=full;patch_JGL_present_screen(&full);
-    verify(capture.ended&&state.custom_renderer_native_probe_active&&state.custom_renderer_native_image==live,"bounded diagnostics do not detach live presentation");
+    observation_capture.depth=0;observation_capture.presents=8191;observation_capture.ended=false;last_transfer=full;patch_JGL_present_screen(&full);
+    verify(observation_capture.ended&&state.custom_renderer_native_probe_active&&state.custom_renderer_native_image==live,"bounded diagnostics do not detach live presentation");
     expected=native_expected();capture_display(expected);
     // Leave newer CPU pixels outside a partial transfer deliberately unshown.
     // Config-off must restore the displayed image, not expose those newer pixels.

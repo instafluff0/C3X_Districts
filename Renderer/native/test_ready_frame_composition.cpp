@@ -18,7 +18,7 @@ int test_ready_frame_composition(){
     ComPtr<ID3D11Device> device;ComPtr<ID3D11DeviceContext> context;D3D_FEATURE_LEVEL level;
     checked(D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_HARDWARE,nullptr,0,nullptr,0,D3D11_SDK_VERSION,&device,&level,&context));
     constexpr unsigned w=48,h=32;Rect full={0,0,int(w),int(h)};
-    {
+    for(bool map_source:{false,true}){
         Compositor native(device.Get(),context.Get());RetainedComposition retained(device.Get(),context.Get());
         auto map=native.create(w,h,Format::bgra32),screen=native.create(w,h,Format::bgra32);
         std::vector<unsigned> pixels(w*h,0xff123456);assert(native.upload(map,1,pixels.data(),pixels.size()));
@@ -38,7 +38,7 @@ int test_ready_frame_composition(){
             ++prepared;ready=prepared>=3;
             if(ready){std::fill(pixels.begin(),pixels.end(),0xffabcdef);context->UpdateSubresource(texture.Get(),0,nullptr,pixels.data(),w*4,0);}
         };
-        retained.source(map,native.texture(map),source);
+        retained.source(map,native.texture(map),source,true,map_source);
         auto zoom=std::make_shared<c3x_renderer::ZoomTransition>();zoom->target(1.25,0,1000);
         retained.view(screen,map,zoom);
         Rect panel={0,0,8,6};retained.record({Kind::fill,screen,0,panel,full,0,0,0xff778899});retained.commit(screen,full);
@@ -52,7 +52,33 @@ int test_ready_frame_composition(){
         assert(image[16*w+24]==0xffabcdef);
         image=ready_read(device.Get(),context.Get(),retained.sample(5,1000).Get());
         assert(prepared==4&&sampled==4&&image[1]==0xff778899&&image[16*w+24]==0xffabcdef);
-        std::puts("PASS ready frame: pending preparation retains pixels, projected callback survives, native UI advances, retirement keeps completed front");
+        // Native world composition can be rebuilt while a replacement map is
+        // pending. The old source has already retired, but its projected pose
+        // is newer than its original canonical publication.
+        retained.view(screen,map,zoom);
+        retained.record({Kind::fill,screen,0,panel,full,0,0,0xff556677});retained.commit(screen,full);
+        image=ready_read(device.Get(),context.Get(),retained.sample(6,1000).Get());
+        if(image[16*w+24]!=0xffabcdef){std::puts("FAIL rebuilt native view rewound retired projected pose");return 1;}
+        assert(prepared==4&&sampled==4&&image[1]==0xff556677);
+        for(auto kind:{Kind::unit_over,Kind::native_image}){
+            auto words=native.create(w,h,Format::rgb555),detail=native.create(w,h,Format::bgra32);
+            auto ink=native.create(w,h,Format::bgra32),keys=native.create(w,h,Format::rgb555);
+            for(auto id:{words,keys})retained.create(id,w,h,Format::rgb555);
+            for(auto id:{detail,ink})retained.create(id,w,h,Format::bgra32);
+            std::vector<unsigned> overlay(w*h,0),packed(w*h,0x7c1f);
+            for(unsigned y=8;y<12;++y)for(unsigned x=8;x<12;++x){overlay[y*w+x]=0xff00ff00;packed[y*w+x]=0x03e0;}
+            assert(native.upload(ink,1,overlay.data(),overlay.size()));retained.source(ink,native.texture(ink));
+            assert(native.upload(keys,1,packed.data(),packed.size()));retained.source(keys,native.texture(keys));
+            retained.record({Kind::copy,detail,map,full,full});
+            retained.record({Kind::fill,words,0,full,full});
+            if(kind==Kind::unit_over)retained.record({kind,words,ink,full,full,0,0,0,words,detail,detail});
+            else retained.record({kind,words,keys,full,full,0,0,0x7c1f,words,detail,ink,int(w),int(h)});
+            retained.view(screen,detail,zoom);retained.commit(screen,full);
+            image=ready_read(device.Get(),context.Get(),retained.sample(7,1000).Get());
+            if(image[16*w+24]!=0xffabcdef){std::printf("FAIL native overlay kind=%u rewound retired projected pose\n",unsigned(kind));return 1;}
+            assert(prepared==4&&sampled==4&&image[10*w+10]==0xff00ff00);
+        }
+        std::puts("PASS ready frame: pending preparation retains pixels, native UI advances, rebuilt views and both overlay paths retain the final retired pose");
     }
     return 0;
 }

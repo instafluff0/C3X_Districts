@@ -18,12 +18,20 @@ struct Sprite {void** vtable;JGLSprite* jgl_sprite;};
 struct PCX_Image {struct {JGL_Image* Image;} JGL;};
 struct OpenGLRenderer;
 struct Unit; // Native capture keeps an opaque selected-unit identity.
-enum {LDO_NEVER,LDO_WINE,LDO_ALWAYS,IS_OK};
+enum {LDO_NEVER,LDO_WINE,LDO_ALWAYS,IS_OK,IS_INIT_FAILED};
 struct LoadedConfig {char const* name;LoadedConfig* next;};
 LoadedConfig fixture_file_config={"configured",nullptr},fixture_base_config={"(base)",&fixture_file_config};
 struct State {
     char const* mod_rel_dir=".";
     bool custom_renderer_modal=false,paused_for_popup=false,custom_renderer_trace_input=false;int saved_tile_count=-1;
+    // Map ownership is idle in this native-image fixture. Keep the real
+    // presentation hook's first-front guard and diagnostics compilable.
+    unsigned custom_renderer_presented_frames=0;
+    int custom_renderer_tile_count=0,custom_renderer_init_state=IS_OK,custom_renderer_viewer_civ_id=0;
+    bool custom_renderer_capture_failed=false,custom_renderer_composited=false;
+    bool custom_renderer_draw_in_progress=false,custom_renderer_frame_active=false,custom_renderer_capture_only=false;
+    long long custom_renderer_map_epoch=0,custom_renderer_viewer_epoch=0,custom_renderer_display_viewer_epoch=0;
+    HMODULE custom_renderer_module=nullptr;
     struct {bool enable_custom_rendering=true,enable_custom_rendering_zoom=false;int draw_lines_using_gdi_plus=LDO_NEVER;} current_config;
     LoadedConfig* loaded_config_names=&fixture_base_config;
     bool running_on_wine=false;unsigned ogl_color=0xffffffff;int ogl_line_width=1;bool ogl_line_stipple_enabled=false;
@@ -40,24 +48,24 @@ struct State {
 #include "build/native_probe_state.h"
 };
 State state={};State* is=&state;
-struct {bool is_now_loading_game=false;struct {Sprite* Cursor_Image=nullptr;PCX_Image Canvas;} Base_Data;
+struct Main_Screen_Form {bool is_now_loading_game=false;struct {Sprite* Cursor_Image=nullptr;PCX_Image Canvas;} Base_Data;
     struct {struct {PCX_Image Canvas;} Data;} Units_Control;} main_screen_fixture;auto p_main_screen_form=&main_screen_fixture;
 void custom_renderer_zoom_transform_point(int*,int*){}
 unsigned player_bits=1;unsigned* p_player_bits=&player_bits;
-struct {struct {struct {void* spotlight_on_city=nullptr;} Renderer;} Map;} bic_fixture;
+struct {struct {void* Tiles=nullptr;struct {void* spotlight_on_city=nullptr;} Renderer;} Map;} bic_fixture;
 auto p_bic_data=&bic_fixture;
 auto p_GetModuleHandleA=&GetModuleHandleA;auto p_GetProcAddress=&GetProcAddress;
 auto p_OutputDebugStringA=&OutputDebugStringA;
 PCX_Image screen;PCX_Image* screen_canvas=&screen;
 #define p_jgl_screen_canvas screen_canvas
 std::vector<c3x_renderer_native_observation> events;
-c3x_native_observation::Capture capture;
+c3x_native_observation::Capture observation_capture;
 std::vector<std::string> lines;
 void log_line(char const* line){lines.emplace_back(line);}
 c3x_renderer_native_observe_fn staged_observe=nullptr;
 int observe(c3x_renderer_native_observation const* event){events.push_back(*event);
     int external=staged_observe?staged_observe(event):1;
-    return capture.observe(event)&&external;
+    return observation_capture.observe(event)&&external;
 }
 void verify(bool result,char const* message){if(!result)throw std::runtime_error(message);}
 bool native_called=false;
@@ -107,7 +115,7 @@ int main(int argc,char** argv){
         HMODULE staged=nullptr;
         if(argc==3){staged=LoadLibraryA(argv[2]);verify(staged!=nullptr,"load staged observer DLL");
             staged_observe=reinterpret_cast<c3x_renderer_native_observe_fn>(GetProcAddress(staged,"c3x_renderer_native_observe"));verify(staged_observe!=nullptr,"staged observer export");}
-        capture.write=log_line;
+        observation_capture.write=log_line;
         verify(!c3x_native_observation::verified_module(GetModuleHandleA("kernel32.dll")),"unrecognized module rejected");
         HMODULE module=LoadLibraryA(argv[1]);verify(module!=nullptr,"load JGL");
         verify(c3x_native_observation::verified_module(module),"audited JGL hash");
@@ -126,7 +134,7 @@ int main(int argc,char** argv){
         auto root_table=a->vtable;void* fake[60];std::memcpy(fake,original,sizeof fake);a->vtable=fake;
         set_custom_renderer_native_probe(a);verify(!state.custom_renderer_native_probe_active,"unknown table rejected");a->vtable=root_table;
         set_custom_renderer_native_probe(a);verify(state.custom_renderer_native_probe_active,"attach actual injected hooks");
-        verify(capture.images.at(a).roles==1,"map root identity");
+        verify(observation_capture.images.at(a).roles==1,"map root identity");
         RECT full={0,0,64,48},clip={7,5,40,33};
         verify(reinterpret_cast<Fill>(a->vtable[17])(a,&full,int(0x80000000u))==0,"clear A");
         verify(reinterpret_cast<Clip>(a->vtable[13])(a,&clip)==0,"clip A");events.clear();
@@ -136,7 +144,7 @@ int main(int argc,char** argv){
         verify(reinterpret_cast<Clip>(a->vtable[13])(a,&full)==0,"unclip A");events.clear();
         verify(reinterpret_cast<Copy>(a->vtable[16])(a,b,&full,&full)==0,"copy A to B");GdiFlush();
         dc=0;for(auto const& e:events)if(e.operation==C3X_NATIVE_DC){++dc;verify(e.context==C3X_NATIVE_COPY,"copy access context");}
-        verify(dc==2 && capture.edge_count==1,"copy source and destination ownership");check_pixels(b);
+        verify(dc==2 && observation_capture.edge_count==1,"copy source and destination ownership");check_pixels(b);
         // Image draw uses its internal sprite helper; the separate sprite call tests the virtual hook.
         verify(reinterpret_cast<Fill>(b->vtable[17])(b,&full,int(0x80000000u))==0,"clear destination before image draw");
         events.clear();using Draw=int(__thiscall*)(JGL_Image*,JGL_Image*,int,int);
@@ -155,8 +163,8 @@ int main(int argc,char** argv){
         verify(seen_sprite,"sprite method observed");check_pixels(b);
         sprite.bits=nullptr;reinterpret_cast<void(__thiscall*)(JGLSprite*)>(base+0x7ed0)(&sprite);
         reinterpret_cast<Release>(a->vtable[9])(a,1);
-        auto id=capture.images.at(b).id;verify(reinterpret_cast<Init>(b->vtable[1])(b,64,48,16,1)==0,"reinitialize image");
-        verify(capture.images.at(b).id!=id,"new content lifetime on reinit");
+        auto id=observation_capture.images.at(b).id;verify(reinterpret_cast<Init>(b->vtable[1])(b,64,48,16,1)==0,"reinitialize image");
+        verify(observation_capture.images.at(b).id!=id,"new content lifetime on reinit");
         state.current_config.enable_custom_rendering=false;events.clear();foreign(a);verify(events.empty(),"config off passthrough");state.current_config.enable_custom_rendering=true;
         events.clear();HANDLE thread=CreateThread(nullptr,0,foreign,a,0,nullptr);verify(thread!=nullptr,"foreign thread");WaitForSingleObject(thread,INFINITE);CloseHandle(thread);
         verify(events.empty(),"no foreign-thread observer calls");
@@ -165,13 +173,13 @@ int main(int argc,char** argv){
         verify(!lines.empty(),"buffered diagnostics flush after native transfer");
         verify(lines.front().find("surface="+std::to_string(id)+" roles=0 copy=")!=std::string::npos,"retired image access counts survive until publication");
         verify(native_called&&events.size()==2&&events.front().operation==C3X_NATIVE_SCREEN&&events.back().operation==C3X_NATIVE_PRESENT,"native final transfer order");
-        verify(capture.images.at(b).roles==2,"screen identity");
-        reinterpret_cast<Destroy>(b->vtable[0])(b,1);verify(!capture.images.count(b),"destruction retires pointer");
+        verify(observation_capture.images.at(b).roles==2,"screen identity");
+        reinterpret_cast<Destroy>(b->vtable[0])(b,1);verify(!observation_capture.images.count(b),"destruction retires pointer");
         set_custom_renderer_native_probe(nullptr);
         verify(!state.custom_renderer_native_probe_active&&!std::memcmp(a->vtable,original,sizeof original)&&sprite_table[17]==original_sprite&&std::equal(original_blends,original_blends+3,sprite_table+20),"restore all slots");
         set_custom_renderer_native_probe(a);verify(state.custom_renderer_native_probe_active,"reattach");
-        screen.JGL.Image=a;capture.presents=8191;patch_JGL_present_screen(&full);
-        verify(capture.ended&&!state.custom_renderer_native_probe_active&&!std::memcmp(a->vtable,original,sizeof original),"budget exhaustion detaches hooks");
+        screen.JGL.Image=a;observation_capture.presents=8191;patch_JGL_present_screen(&full);
+        verify(observation_capture.ended&&!state.custom_renderer_native_probe_active&&!std::memcmp(a->vtable,original,sizeof original),"budget exhaustion detaches hooks");
         reinterpret_cast<Destroy>(a->vtable[0])(a,1);reinterpret_cast<void(__thiscall*)(void*,unsigned)>(gt[0])(graph,1);FreeLibrary(module);
         // Collector exhaustion is explicit; no false complete-coverage assertion.
         c3x_native_observation::Capture bounded;bounded.owner=GetCurrentThreadId();bounded.write=log_line;

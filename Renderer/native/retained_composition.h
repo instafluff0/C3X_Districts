@@ -865,15 +865,21 @@ private:
     bool projectable(Picture const& p,bool& scene,unsigned depth){
         if(depth>256||p.format!=Format::bgra32)return false;
         for(auto const& patch:p.patches){auto const& n=patch.node;
-            if(n->sample.projected){scene=true;continue;}
-            if(!n->map_dynamic)continue; // Immutable native overlay, same pixels and order.
+            // A native world-end can rebuild its view after camera preparation
+            // retires this source. Its completed projected image still owns
+            // the final pose; the canonical publication may be much older.
+            if(n->sample.projected||(n->retired&&n->projected)){scene=true;continue;}
+            if(!n->map_dynamic&&!n->operation)continue; // Immutable native overlay, same pixels and order.
             if(n->operation&&n->command.kind==Kind::native_image&&patch.output==1&&!n->direct.draw&&
                n->command.color<=65535&&n->inputs[1].width&&n->inputs[4].width&&
                n->inputs[1].format!=Format::bgra32&&n->inputs[4].format==Format::bgra32&&
                projectable(n->inputs[3],scene,depth+1))continue;
             if(!n->operation||n->command.kind!=Kind::unit_over||patch.output!=1||n->direct.draw||
                n->inputs[1].format!=Format::bgra32||
-               !projectable(n->inputs[3],scene,depth+1))return false;
+               !projectable(n->inputs[3],scene,depth+1)){
+                if(!n->map_dynamic)continue;
+                return false;
+            }
             // The overlay source must be independent of its world underlay.
             for(auto const& source:n->inputs[1].patches)if(source.node->map_dynamic)return false;
         }
@@ -905,6 +911,15 @@ private:
         if(n->seen==frame)return n;
         Rect area=project(original->area,scale,width,height);
         if(empty(area)){n->area=area;n->seen=frame;return n;}
+        bool retired_scene=false;
+        auto const& command=original->command;
+        bool supported_overlay=patch.output==1&&!original->direct.draw&&
+            ((command.kind==Kind::unit_over&&original->inputs[1].format==Format::bgra32)||
+             (command.kind==Kind::native_image&&command.color<=65535&&
+              original->inputs[1].width&&original->inputs[4].width&&
+              original->inputs[1].format!=Format::bgra32&&original->inputs[4].format==Format::bgra32));
+        bool retired_underlay=original->operation&&!original->map_dynamic&&supported_overlay&&
+            projectable(original->inputs[3],retired_scene,depth+1)&&retired_scene;
         if(original->sample.projected||original->retired){
             auto sampled=original->retired?SampledImage::frozen():original->sample.projected(ticks,frequency,scale);
             if(sampled.kind==SampledImage::Kind::frozen||sampled.kind==SampledImage::Kind::held){
@@ -938,7 +953,7 @@ private:
             if(!replay.import_bgra(n->sample_target,sampled.texture.Get(),sampled.area.left,sampled.area.top,sampled.sharpness))
                 throw std::runtime_error("projected scene import");
             n->publication=original->publication;n->source_generation=sampled.generation;n->map_source=original->map_source;
-        }else if(original->operation&&original->map_dynamic){
+        }else if(original->operation&&(original->map_dynamic||retired_underlay)){
             // Project the retained underlay recursively. Native image ordering
             // and version ownership are unchanged. For a keyed native image,
             // use its native words as a mask over its full-color source. The

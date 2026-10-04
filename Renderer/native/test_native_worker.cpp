@@ -24,7 +24,7 @@ bool async_native_contract(HMODULE module,c3x_renderer_frame_v1 const& frame){
 bool native_worker_contract(char const* path,c3x_renderer_gpu_images_fn images,c3x_renderer_gpu_frame_v1& view,c3x_renderer_gpu_render_fn render,c3x_renderer_gpu_present_fn present,c3x_renderer_camera_request_v1 const& request,
                             unsigned const* pixels,int phase_x,int phase_y,std::vector<NativeFrameSample> const& performance_frames){
     try{
-        state={};capture={};events.clear();lines.clear();
+        state={};observation_capture={};events.clear();lines.clear();
         HMODULE module=nullptr;verify(GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,reinterpret_cast<char const*>(images),&module)!=FALSE,"worker module");
         WorkerClient gpu(images,view);
         // The fresh scene intentionally has different pixels from the legacy

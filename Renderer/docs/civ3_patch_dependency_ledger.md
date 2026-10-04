@@ -1,5 +1,24 @@
 # Civ III patch dependency ledger
 
+## Movement and reveal raster consistency
+
+`required_user_action: []`. The retained raster repair, refinement and
+retired-view handoff fixes run in `Renderer/sandbox/fresh_pipeline.h` and
+`Renderer/native/retained_composition.h`. Existing `Unit_move`,
+`FLC_Animation_set_move_target`, `Map_Renderer_m71_Draw_Tiles`,
+`Map_Renderer_m19_Draw_Tile_by_XY_and_Flags` and the JGL Graphsy presentation
+boundary retain their current capture and ownership contracts. No injected
+source, patch-table entry, signature, supported-build address or wire protocol
+changes. Config-off continues through its existing native delegation.
+
+Local scenery repairs preserve the displayed color and depth until replacement
+layers finish. Progressive refinement revalidates previously drawn bands before
+promotion when movement reveals or changes their contributors. These changes
+do not alter native movement, unit timing or visibility authority. Rebuilt
+native views and their supported overlays retain a retired map's last projected
+pose while the next map is prepared, instead of returning to its older canonical
+publication.
+
 ## Shader, progressive shadow and composition performance completion
 
 `required_user_action: []`. This renderer-only pass changes no Civ III hook,

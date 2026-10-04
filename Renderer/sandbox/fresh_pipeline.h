@@ -3232,13 +3232,32 @@ struct SandboxFreshPipeline {
         }
         long long area=0;for(auto const& r:dirty)area+=r.area();
         if(area*100>c.area()*45)return false;
+        // Repair in the existing back target. A draw can reject a not-yet-ready
+        // mesh/instance range after earlier layers have succeeded; clearing the
+        // displayed target first would then expose holes as the stale preview.
+        unsigned patch_index=index^1u;
+        auto& patch=static_rasters.states[patch_index];
+        if(!ensure_linear_target(patch.region,region_width_px,region_height_px,scene_samples,false))return false;
+        patch.valid=false;patch.stale=true;patch.refining=false;patch.covered={};++patch.revision;
+        raster_inputs[patch_index].clear();
+        patch.camera_x=slot.camera_x;patch.camera_y=slot.camera_y;
+        patch.projection=slot.projection;patch.depth_translation=slot.depth_translation;
         for(auto const& r:dirty){
             D3D11_RECT rect={r.left,r.top,r.right,r.bottom};
-            if(!static_restore.draw(renderer.context,slot.region,nullptr,nullptr,0,0,{},nullptr,
-                    slot.region.width,slot.region.height,false,true,0,&rect))return false;
+            if(!static_restore.draw(renderer.context,patch.region,nullptr,nullptr,0,0,{},nullptr,
+                    patch.region.width,patch.region.height,false,true,0,&rect))return false;
             work.draw(3);
-            if(!write_slot(index,slot,screen,r,1.f,false))return false;
+            if(!write_slot(patch_index,patch,screen,r,1.f,false))return false;
         }
+        // All rectangles completed. Copy color and depth together, touching
+        // only the repaired pixels; no new full-screen scratch owner is needed.
+        for(auto const& r:dirty){
+            D3D11_RECT rect={r.left,r.top,r.right,r.bottom};
+            if(!static_restore.draw(renderer.context,slot.region,patch.region.samples,patch.region.depth_samples,
+                    0,0,{},nullptr,patch.region.width,patch.region.height,false,false,0,&rect,1))return false;
+            work.draw(3);
+        }
+        ++slot.revision;
         renderer.context->OMSetRenderTargets(0,nullptr,nullptr);
         inputs.clear();
         if(!raster_dependencies(inputs,view,covered,true))inputs.complete=false;
@@ -3408,6 +3427,16 @@ struct SandboxFreshPipeline {
             bool restart=!building.refining || building.stale || building.key!=key || building.projection!=projection;
             StaticRect needed{};
             if(!restart){needed=visible_rect(building,back_shift);restart=!back_shift.reusable;}
+            if(!restart && !building.covered.empty()){
+                // A reveal or city/terrain edit can arrive between budgeted
+                // bands without changing the environment key. Validate pixels
+                // already drawn before appending today's contributors; otherwise
+                // promotion briefly exposes a mixture of two world versions.
+                ZoomScope scope_zoom(*this,building.projection);
+                auto const& c=building.covered;
+                restart=!raster_dependencies(raster_inputs[back_index],slot_settings(building,settings),
+                    {c.left,c.top,c.right,c.bottom},false);
+            }
             if(restart){
                 if(building.refining && !building.covered.empty())++refine_restarts;
                 if(!reset_slot(back_index,projection,settings))return -1;
