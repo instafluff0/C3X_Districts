@@ -32,6 +32,11 @@
     "Renderer.native.source_fidelity.test_contract",
     "Renderer.native.test_render_core",
     "Renderer.native.test_static_refinement_consistency",
+    "Renderer.native.test_static_scene_transition",
+    "Renderer.native.test_static_raster_state",
+    "Renderer.native.test_static_dependency_reuse",
+    "Renderer.native.test_loading_view",
+    "Renderer.native.test_native_view_identity",
     "Renderer.native.test_unseen_boundary",
     "Renderer.native.test_visibility"
   ],

@@ -7,6 +7,85 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class LoadingViewTests(unittest.TestCase):
+    def test_changed_camera_or_native_projection_waits_before_overlay_paint(self):
+        source = (ROOT / 'injected_code.c').read_text()
+        start = source.index('\tbool changed_view =', source.index('composite_custom_renderer_frame ()'))
+        stop = source.index('\n\t\tvoid (WINAPI * sleep_ms)', start)
+        decision = source[start:stop]
+        run_cpp(r'''
+#include <cassert>
+#include <cstddef>
+#include <cstdio>
+using HMODULE=void*;
+constexpr int C3X_RENDERER_RESULT_PENDING=2;
+struct {int camera_x=20,camera_y=30;}screen,*p_main_screen_form=&screen;
+struct {bool is_zoomed_out=false;}bic,*p_bic_data=&bic;
+struct {struct{int camera_x=20,camera_y=30,native_width=128;}custom_renderer_display_view;
+ int custom_renderer_display_viewer_epoch=1,custom_renderer_viewer_epoch=1;
+ bool custom_renderer_display_valid=true;void* custom_renderer_module=nullptr;}state,*is=&state;
+bool waits(int resident_result){
+''' + decision + r'''
+ return true;
+ }return false;
+}
+int main(){
+ unsigned cases=0;
+ for(int ready=0;ready<2;++ready)for(int change=0;change<6;++change){
+  state={};screen={};bic={};
+  if(change==1)++screen.camera_x;
+  if(change==2)--screen.camera_y;
+  if(change==3)bic.is_zoomed_out=true;
+  if(change==4)++state.custom_renderer_viewer_epoch;
+  if(change==5)state.custom_renderer_display_valid=false;
+  assert(waits(ready?1:2)==(!ready&&change!=0));++cases;
+ }
+ // The return from city 0.5x must wait as well; a ready map never blocks.
+ state={};screen={};bic={};state.custom_renderer_display_view.native_width=64;
+ assert(waits(2)&&!waits(1));
+ // Deferred scroll still sees the displayed native camera and stays asynchronous.
+ state={};assert(!waits(2));
+ std::printf("PASS map/overlay boundary: cases=%u city_Z_entry_exit=1 deferred_scroll_async=1\n",cases);
+}
+''')
+
+    def test_city_repaint_keeps_completed_screen_until_matching_map(self):
+        source = (ROOT / 'injected_code.c').read_text()
+        begin = source.index('patch_JGL_Graphsy_present (void * graph, int edx, RECT * rect)\n{\n')
+        guard = source[begin:source.index('\t// The process-owned module', begin)]
+        run_cpp(r'''
+#include <cassert>
+#include <cstddef>
+#include <cstdio>
+constexpr int IS_OK=1;
+struct RECT {int left,top,right,bottom;};
+struct {int camera_x=12,camera_y=34;}screen,*p_main_screen_form=&screen;
+struct {bool is_zoomed_out=false;struct{struct{void* spotlight_on_city=&screen;}Renderer;}Map;}bic,*p_bic_data=&bic;
+struct {struct{bool enable_custom_rendering=true;}current_config;int custom_renderer_init_state=IS_OK;
+ int custom_renderer_presented_frames=1;struct{int camera_x=12,camera_y=34,native_width=128;}custom_renderer_display_view;}state,*is=&state;
+unsigned presented=0;
+int ''' + guard + r'''
+ assert(graph==&screen&&edx==17&&rect);++presented;return 917;
+}
+int main(){RECT rect{};unsigned cases=0;
+ for(int change=0;change<4;++change)for(int bypass=0;bypass<7;++bypass){
+  state={};screen={};bic={};p_main_screen_form=&screen;p_bic_data=&bic;
+  if(change==1)screen.camera_x++;if(change==2)screen.camera_y++;if(change==3)bic.is_zoomed_out=true;
+  if(bypass==1)state.current_config.enable_custom_rendering=false;
+  if(bypass==2)state.custom_renderer_init_state=0;
+  if(bypass==3)state.custom_renderer_presented_frames=0;
+  if(bypass==4)bic.Map.Renderer.spotlight_on_city=nullptr;
+  if(bypass==5)p_main_screen_form=nullptr;if(bypass==6)p_bic_data=nullptr;
+  auto before=presented;bool hold=change&&bypass==0;
+  assert(patch_JGL_Graphsy_present(&screen,17,&rect)==(hold?0:917));assert(presented==before+!hold);++cases;
+ }
+ state={};bic={};p_main_screen_form=&screen;p_bic_data=&bic;screen={};bic.is_zoomed_out=true;
+ assert(patch_JGL_Graphsy_present(&screen,17,&rect)==0);
+ state.custom_renderer_display_view.native_width=64;
+ assert(patch_JGL_Graphsy_present(&screen,17,&rect)==917); // exact map completes; no timer or new input needed
+ std::printf("PASS city repaint publication: cases=%u native_off_delegation=1 matching_map_releases=1\n",cases);
+}
+''')
+
     def test_loading_has_no_speculative_camera_or_progress_ui(self):
         source = (ROOT / 'injected_code.c').read_text()
         self.assertNotIn('prepare_custom_renderer_loading_view', source)

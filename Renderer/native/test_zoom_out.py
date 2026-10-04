@@ -168,7 +168,7 @@ struct Table{void(*m73_call_m22_Draw)(Base_Form*);};
 void draw(Base_Form*){++redraws;}Table table{draw};
 struct City_Form{City* CurrentCity=&city;struct{Table* vtable=&table;}Base;};
 struct Main_Screen_Form{int camera_x=0,camera_y=0;}screen,*p_main_screen_form=&screen;
-struct{bool is_zoomed_out=false;int ScreenWidth=2240,ScreenHeight=1260;}bic,*p_bic_data=&bic;
+struct{bool is_zoomed_out=false;int ScreenWidth=2240,ScreenHeight=1260;struct{int Width=60,Height=60;}Map;}bic,*p_bic_data=&bic;
 struct c3x_renderer_tile_v1{int tile_x=60,tile_y=40,anchor_x=0,anchor_y=0;}captured;
 struct{struct{bool enable_custom_rendering=true,toggle_zoom_with_z_on_city_screen=true;}current_config;
  bool custom_renderer_trace_input=false;int custom_renderer_zoom_target_width=64;
@@ -176,7 +176,13 @@ struct{struct{bool enable_custom_rendering=true,toggle_zoom_with_z_on_city_scree
 int get_city_screen_center_y(City* c){return c->Body.Y+2;}
 void Main_Screen_Form_bring_tile_into_view(Main_Screen_Form*,int,int,int,int,bool,bool){++moves;
  int width=bic.is_zoomed_out?64:128;captured.anchor_x=1120-width/2;captured.anchor_y=566-width/4;}
-void Main_Screen_Form_tile_to_screen_coords(Main_Screen_Form*,int,int,int,int*x,int*y){*x=*y=0;}
+void Main_Screen_Form_tile_to_screen_coords(Main_Screen_Form*,int,int,int,int*x,int*y){
+ int width=bic.is_zoomed_out?64:128;
+ *x=1120-width/2-bic.Map.Width*width/2;*y=566-width/4;
+ // The asynchronous capture may still have the preceding projection. It must
+ // never supply this diagnostic's current city anchor.
+ captured.anchor_x=-999;captured.anchor_y=-999;
+}
 int traces=0;void debug(char const* line){assert(std::strstr(line,"city_anchor=1120,566"));++traces;}auto p_OutputDebugStringA=debug;
 void City_Form_m82_handle_key_event(City_Form*,int,int,int){++native;}
 void invoke(City_Form* self,int virtual_key_code,int is_down){if(false){

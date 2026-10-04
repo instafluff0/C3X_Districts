@@ -2661,3 +2661,31 @@ whole-world minimap edges are inset inside the decorative frame during the
 native outline draw, then all temporary native fields are restored. Existing
 renderer-off delegation and unrelated C3X behavior are unchanged. Native city
 Z and configured automatic 0.5× city view retain the existing C3X hooks.
+
+
+## Coherent map and city transitions
+
+`required_user_action: []`. The existing `Map_Renderer_m71_Draw_Tiles` and
+map-composition insertion boundary complete a changed native camera/projection
+before Civ III paints overlays. An invalid native display (including a city
+screen handoff at the same camera) also requires completion. Deferred navigation
+keeps its existing asynchronous adoption. No new symbol, signature, supported-build address or
+patch-table entry is needed; renderer-off still delegates immediately.
+
+Static terrain previews now require current scene/visibility dependencies,
+including the other zoom lane and low-resolution bootstrap. Lighting-only
+refinement can retain a preview; scene edits cannot combine old ground with
+current water, rivers, borders or objects. The transition category runs the
+complete terrain-selection regression alongside dependency, repair, capture
+and native publication-boundary checks.
+
+The existing `City_Form_m82_handle_key_event` diagnostic now measures the current
+native city anchor, folded to the nearest map occurrence, instead of reading a
+possibly older asynchronous tile capture. This changes logging only.
+
+The existing JGL Graphsy vtable-41 presentation hook consumes intermediate city
+transfers while the native camera or tile width differs from the completed map.
+It resumes normal presentation on the first matching map, without another input
+or timer. The guard is renderer-only, excludes startup/failed initialization,
+and adds no injected state or patch symbol. Its executable regression checks
+28 combinations plus release after the matching projection completes.

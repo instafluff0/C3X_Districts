@@ -6,8 +6,8 @@ namespace c3x_renderer { namespace render_core {
 // Static (camera-independent) scene pixels are retained in world-anchored
 // regions. Each zoom lane (exact 1x canonical, and any other display zoom)
 // owns a front slot that is displayed and a back slot that is refined over
-// several frames. A stale front stays displayable as a preview while its
-// replacement is prepared; see docs/performance_overhaul_20261003.md.
+// several frames. A lighting-stale front stays displayable as a preview while its
+// replacement is prepared; scene edits require current pixels; see docs/performance_overhaul_20261003.md.
 enum StaticRasterReason : unsigned {
     raster_fractional_phase,raster_guard_bounds,raster_scene,raster_environment,
     raster_lights,raster_shadow,raster_depth_origin,raster_anchors,raster_strip_fills,
@@ -92,9 +92,11 @@ template<class Target> struct StaticRasterStates {
     void count(unsigned slot,StaticRasterReason reason){
         auto& state=states[slot];if(state.metrics.full_draws)++state.metrics.reasons[reason];
     }
-    // Content changed: keep pixels for preview, never for further reuse.
+    // Lighting may refine behind a preview. Changed geometry/visibility cannot
+    // be combined with current dynamic water, borders and objects.
     void invalidate(unsigned slot,StaticRasterReason reason){
         auto& state=states[slot];state.stale=true;++state.revision;count(slot,reason);
+        if(reason==raster_scene)state.valid=false;
     }
     void invalidate_all(StaticRasterReason reason){for(unsigned i=0;i<slot_count;++i)invalidate(i,reason);}
     // Pixels are unusable even as a preview (device error, resize, explicit reset).

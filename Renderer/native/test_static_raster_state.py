@@ -61,13 +61,18 @@ int main(){try{
    require(states.front(0).fresh(key),"lane 1 promotion must not disturb the canonical lane");
   }
   require(FakeTarget::allocated==3&&FakeTarget::live==3,"slots allocate once and are reused");
-  // Content changes keep pixels as a preview, never as reusable fresh pixels.
+  // Lighting changes keep pixels as a preview, never as reusable fresh pixels.
   auto revision=states.front(0).revision;
   states.invalidate_all(raster_environment);
   for(auto const& slot:states.states)require(!slot.fresh(key),"invalidated slots are not fresh");
   require(states.front(0).valid&&states.front(0).stale&&states.front(0).revision==revision+1,"stale slots stay displayable");
   complete(states.front(0),key,1.f);
   require(states.front(0).fresh(key)&&!states.front(0).fresh(other),"freshness requires the current content key");
+  // A scene edit cannot reuse even a complete old preview beneath new water.
+  auto pixels=states.front(0).region.id();
+  states.invalidate(states.front_slot[0],raster_scene);
+  require(!states.front(0).valid&&states.front(0).stale,"scene changes retire displayed pixels");
+  require(states.front(0).region.id()==pixels,"retiring pixels keeps the bounded allocation");
   // Refinement bookkeeping is per lane.
   states.back(1).refining=true;
   require(states.refining()&&states.lane_refining(1)&&!states.lane_refining(0),"refinement is tracked per lane");

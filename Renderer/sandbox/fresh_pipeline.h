@@ -1531,6 +1531,7 @@ struct SandboxFreshPipeline {
     Membership::Lease resident_lease;
     using RasterInputs=c3x_renderer::render_core::RasterContributors<CachedGeometryProof>;
     std::array<RasterInputs,4> raster_inputs;
+    std::array<RasterInputs,2> bootstrap_inputs;
     float resident_basis_x=0,resident_basis_y=0;
     std::vector<RasterInputs::Key> reflection_inputs;
     std::uint64_t static_receiver_revision=0;
@@ -1728,6 +1729,7 @@ struct SandboxFreshPipeline {
         auto order=renderer.geometry_vertex_buffers.order_revision();
         if(resident_order_revision!=order){
             static_rasters.invalidate_all(c3x_renderer::render_core::raster_scene);
+            for(auto& image:bootstrap)image.valid=false;
             resident_order_revision=order;
         }
 #endif
@@ -1735,6 +1737,7 @@ struct SandboxFreshPipeline {
                 wrap_pixels!=next_wrap_pixels) {
 #ifndef C3X_RENDERER64_FRESH
             static_rasters.invalidate_all(c3x_renderer::render_core::raster_scene);
+            for(auto& image:bootstrap)image.valid=false;
 #endif
             visibility_valid=false;
 #ifndef C3X_RENDERER64_FRESH
@@ -3395,6 +3398,9 @@ struct SandboxFreshPipeline {
         StaticRect needed={std::max(0,region_margin_x-band),std::max(0,region_margin_y-band),
             std::min(int(region_width_px),region_margin_x+w+band),std::min(int(region_height_px),region_margin_y+h+band)};
         if(!extend_coverage(0,image,screen,needed,unbounded,0,scale,false))return false;
+        auto& inputs=bootstrap_inputs[lane];inputs.clear();
+        auto const& c=image.covered;
+        if(!raster_dependencies(inputs,slot_settings(image,screen),{c.left,c.top,c.right,c.bottom},true))inputs.complete=false;
         image.valid=true;++bootstrap_draws;
         return true;
     }
@@ -3417,6 +3423,16 @@ struct SandboxFreshPipeline {
         if(!slot.valid || c.empty() || !source.color || !source.depth)return 0;
         if(left>=float(c.left)+1 && top>=float(c.top)+1 && right<=float(c.right)-1 && bottom<=float(c.bottom)-1)return 2;
         return left<float(c.right) && right>float(c.left) && top<float(c.bottom) && bottom>float(c.top)?1:0;
+    }
+    bool static_pixels_current(StaticState& slot,RasterInputs& inputs,ViewportShaderSettings const& screen){
+        if(!slot.valid || slot.covered.empty())return false;
+        ZoomScope scope_zoom(*this,slot.projection);
+        auto const& c=slot.covered;
+        if(!raster_dependencies(inputs,slot_settings(slot,screen),{c.left,c.top,c.right,c.bottom},false)){
+            slot.valid=false;slot.stale=true;++slot.revision;
+            return false;
+        }
+        return true;
     }
     bool compose_static(ViewportShaderSettings& settings,int w,int h){
         using Shift=c3x_renderer::render_core::StaticRegionShift;
@@ -3448,7 +3464,7 @@ struct SandboxFreshPipeline {
             auto& displayed=static_rasters.states[front_index];
             if(displayed.valid && !displayed.stale && displayed.key!=key)
                 static_rasters.invalidate(front_index,c3x_renderer::render_core::raster_environment);
-            else if(displayed.valid && !displayed.stale && !displayed.covered.empty()){
+            if(displayed.valid && !displayed.covered.empty()){
                 // Exact content proofs (journal fast path when nothing changed).
                 bool proven=false;
                 {
@@ -3583,8 +3599,10 @@ struct SandboxFreshPipeline {
         auto& home=static_rasters.front(0);
         auto& image=bootstrap[lane];
         int front_cover=resample_source(displayed,w,h,settings,front_source);
-        int home_cover=lane==1?resample_source(home,w,h,settings,home_source):0;
-        int boot_cover=resample_source(image,w,h,settings,boot_source);
+        int home_cover=lane==1 && static_pixels_current(home,raster_inputs[static_rasters.front_slot[0]],settings)?
+            resample_source(home,w,h,settings,home_source):0;
+        int boot_cover=static_pixels_current(image,bootstrap_inputs[lane],settings)?
+            resample_source(image,w,h,settings,boot_source):0;
         Source const* primary=nullptr;Source const* secondary=nullptr;
         StaticState const* primary_slot=nullptr;StaticState const* secondary_slot=nullptr;
         if(front_cover==2){primary=&front_source;primary_slot=&displayed;}

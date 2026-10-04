@@ -10,6 +10,33 @@ the former 1,326-line roadmap.
 
 ## Current state
 
+- **October 4 reveal and city transition coherence (staged for evaluation).**
+  A changed scene could still select old terrain from the displayed zoom lane,
+  the other cached lane, or the low-resolution bootstrap while water, rivers,
+  borders and objects used current facts. Every preview now validates its
+  geometry and visibility dependencies; invalid scene pixels cannot remain a
+  preview, even during simultaneous lighting changes. Native camera/projection
+  changes complete the map before UI painting. City presentation also holds
+  intermediate transfers until its camera and native tile width match that map.
+  No new hook, injected state, patch-table entry or reference image is needed.
+  The transition suite passes (one optional skip); the new selection test checks
+  512 intermediate color/depth states across four zooms, slow preparation,
+  reveal/hide, city edits and cached-lane returns. Four deliberately restored
+  old selection paths all fail. Five delayed native completions execute the
+  full polling path, and 28 city-presentation cases cover bypass and release.
+  The 663 retained GPU oracles, D3D visibility oracle, bridge/input checks and
+  approved injected compilation pass. Disposable capture `20261004-122927`
+  completes three moves, one research handoff and final scrolling; the revealed
+  footprint has no black interior holes in the 24 checked arrival samples.
+  Capture `20261004-124131` completes city founding, native 0.5×/1× and exit,
+  with identical city anchors and no renderer errors. City panels remain present
+  in all 310 sampled frames inside the city interval. Saves are unchanged,
+  owned processes/tasks are closed, and installed trio/source hashes match.
+  Evidence: `Renderer/.cache/visual-transitions-20261004/`. These are bounded
+  sampled checks, not an all-frame or long-session guarantee. Cold city 0.5×
+  preparation still takes roughly 3–4 seconds; this change preserves a coherent
+  completed view during that delay rather than qualifying its responsiveness.
+
 - **October 3–4 city interaction pressure and route previews (staged).** City
   build choices reproduced both multi-second queued UI work and a retained
   texture admission failure that stopped presentation. Image transport now

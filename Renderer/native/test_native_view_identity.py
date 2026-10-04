@@ -77,7 +77,9 @@ DWORD environment(char const*,char* value,DWORD capacity){
  if(!legacy_recovery || capacity<2)return 0;
  value[0]='1';value[1]=0;return 1;
 }
-void* lookup(void*,char const*){return reinterpret_cast<void*>(&environment);}
+unsigned sleeps=0;void sleep_fake(DWORD ms){assert(ms==5);++sleeps;}
+void* lookup(void*,char const* name){return std::strcmp(name,"Sleep")==0?
+ reinterpret_cast<void*>(&sleep_fake):reinterpret_cast<void*>(&environment);}
 auto p_GetProcAddress=&lookup;
 void log_custom_renderer_event(char const*,int){}
 constexpr int IS_OK=1;void notify_custom_renderer_unit_selection(bool){}
@@ -95,17 +97,19 @@ struct Vtable {int(*m49_Get_Square_RealType)(Tile*);int(*m50_Get_Square_BaseType
 struct Tile {Vtable* vtable;struct {int FOWStatus=0,Visibility=0,Fog_Of_War=0,V3=0,field_D0_Visibility=0;void* active_tile_effect=nullptr;}Body;int ground=2,base=2,river=0;};
 Vtable vtable{[](Tile*t){return t->ground;},[](Tile*t){return t->base;},[](Tile*t){return t->river;}};
 struct MapData{int Width=4,Height=4;int Renderer=0;};using Map=MapData;
-struct Bic {MapData Map;} bic;Bic* p_bic_data=&bic;
+struct Bic {MapData Map;bool is_zoomed_out=false;} bic;Bic* p_bic_data=&bic;
 Tile null_tile{&vtable};Tile* p_null_tile=&null_tile;
 std::vector<Tile> tiles(5000,Tile{&vtable});int absent=-1;
 Tile* tile_at(int x,int y){int at=(y*bic.Map.Width+x)/2;return at==absent?p_null_tile:&tiles.at(at);}
 unsigned modern_calls=0,legacy_calls=0,resident_calls=0;c3x_renderer_camera_identity_v1 received{};
 std::vector<int> order;
-int resident_result=C3X_RENDERER_RESULT_OK;bool probe=true;
+int resident_result=C3X_RENDERER_RESULT_OK,polls_until_ready=-1;bool probe=true;
 bool custom_renderer_native_probe_on(){return probe;}
 int resident(int action,void* image,c3x_renderer_camera_request_v1 const* r,c3x_renderer_camera_view_v1* v){
  v->frame.presentation_time_ticks=55;
- assert(action==C3X_NATIVE_MAP_PREPARE&&image&&r);order.push_back(3);++resident_calls;received=r->identity;return resident_result;
+ assert(action==C3X_NATIVE_MAP_PREPARE&&image&&r);order.push_back(3);++resident_calls;received=r->identity;
+ if(resident_result==C3X_RENDERER_RESULT_PENDING && polls_until_ready>=0 && polls_until_ready--==0)return C3X_RENDERER_RESULT_OK;
+ return resident_result;
 }
 int modern(c3x_renderer_camera_request_v1 const* r,c3x_renderer_output_v1*){
  assert(r->version==C3X_RENDERER_CAMERA_VIEW_VERSION && r->struct_size==sizeof(*r));order.push_back(4);received=r->identity;++modern_calls;return 7;
@@ -113,7 +117,7 @@ int modern(c3x_renderer_camera_request_v1 const* r,c3x_renderer_output_v1*){
 int legacy(c3x_renderer_frame_v1 const*,c3x_renderer_output_v1*){order.push_back(5);++legacy_calls;return 9;}
 using HMODULE=void*;using byte=unsigned char;
 constexpr int __=0;
-struct LoadingForm {struct GUIData {int field_574[4]{};}GUI;} form;auto p_main_screen_form=&form;
+struct LoadingForm {int camera_x=0,camera_y=0;struct GUIData {int field_574[4]{};}GUI;} form;auto p_main_screen_form=&form;
 void Main_GUI_label_loading_bar(LoadingForm::GUIData*,int,int,char const*){}
 struct State {
  struct {bool enable_custom_rendering=true;}current_config;
@@ -122,7 +126,8 @@ struct State {
  c3x_renderer_tile_v1* custom_renderer_tiles=nullptr;
  unsigned custom_renderer_presented_frames=1;
  void* kernel32=nullptr;
- bool custom_renderer_async_drawing=false;
+ bool custom_renderer_async_drawing=false,custom_renderer_display_valid=true;
+ struct {int camera_x=0,camera_y=0,native_width=128;}custom_renderer_display_view;
  c3x_renderer_camera_present_view_fn custom_renderer_camera_present=nullptr;
  long long custom_renderer_display_clock=0,custom_renderer_camera_ticket=0;
  c3x_renderer_render_view_fn custom_renderer_render_view=modern;
@@ -243,6 +248,19 @@ int main(){
  // Frozen/legacy profiles skip both initial helpers, preserving their dispatch.
  state.custom_renderer_capture_world_topology=false;order.clear();
  assert(demand()==C3X_RENDERER_RESULT_OK&&order==std::vector<int>{3});
+ // Execute the entire production prepare/poll loop, not just its condition.
+ for(int change=0;change<5;++change){
+  form.camera_x=form.camera_y=0;bic.is_zoomed_out=false;state.custom_renderer_display_valid=true;
+  state.custom_renderer_display_view={};state.custom_renderer_display_viewer_epoch=state.custom_renderer_viewer_epoch;
+  if(change==0)form.camera_x=64;if(change==1)form.camera_y=32;
+  if(change==2)bic.is_zoomed_out=true;if(change==3)state.custom_renderer_display_valid=false;
+  if(change==4)state.custom_renderer_display_viewer_epoch++;
+  resident_result=C3X_RENDERER_RESULT_PENDING;polls_until_ready=3;
+  auto calls=resident_calls,waits=sleeps;
+  assert(demand()==C3X_RENDERER_RESULT_OK&&resident_calls==calls+4&&sleeps==waits+3);
+  assert(state.custom_renderer_display_clock==55);
+ }
+ std::puts("PASS native map barrier: five delayed completions; same-view pending remains asynchronous");
  std::free(state.custom_renderer_world_topology);
 }
 ''')

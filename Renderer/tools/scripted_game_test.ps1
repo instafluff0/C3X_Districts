@@ -130,7 +130,7 @@ try {
     if ($ProfileRenderer) {
         $env:C3X_RENDERER_TRACE='2'
         $env:C3X_RENDERER_TRACE_BUFFERED='1'
-        if ($Scenario -in @('turn-scroll','unit-turn','research-turn','route-city','city-builds','zoom-out')) { $env:C3X_RENDERER_TRACE_MIB='64' }
+        if ($Scenario -in @('turn-scroll','unit-turn','research-turn','route-city','city-builds','zoom-out','city')) { $env:C3X_RENDERER_TRACE_MIB='64' }
         if ($Scenario -in @('turn-stress','debug-scroll','route-city','city-builds')) {
             # Preserve failure evidence even when a stalled helper must be killed.
             $env:C3X_RENDERER_TRACE_BUFFERED='0'

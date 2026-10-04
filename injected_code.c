@@ -20399,6 +20399,15 @@ log_custom_renderer_event (char const * stage, int result)
 int __fastcall
 patch_JGL_Graphsy_present (void * graph, int edx, RECT * rect)
 {
+	// City Z can present cleared panels before its deferred native map draw.
+	// Keep the completed screen until that same camera/projection is composited.
+	if (is->current_config.enable_custom_rendering && is->custom_renderer_init_state == IS_OK &&
+	    is->custom_renderer_presented_frames > 0 && p_main_screen_form != NULL && p_bic_data != NULL &&
+	    p_bic_data->Map.Renderer.spotlight_on_city != NULL &&
+	    (p_main_screen_form->camera_x != is->custom_renderer_display_view.camera_x ||
+	     p_main_screen_form->camera_y != is->custom_renderer_display_view.camera_y ||
+	     (p_bic_data->is_zoomed_out ? 64 : 128) != is->custom_renderer_display_view.native_width))
+		return 0;
 	// The process-owned module also presents configured UI before the first map
 	// and after a scene unload. Bind here, at native demand, without loading
 	// map assets or extending configuration ownership into the startup menus.
@@ -28008,15 +28017,17 @@ patch_City_Form_m82_handle_key_event (City_Form * this, int edx, int virtual_key
 			int width = p_bic_data->is_zoomed_out ? 64 : 128, x, y;
 			Main_Screen_Form_tile_to_screen_coords (p_main_screen_form, __,
 				this->CurrentCity->Body.X, this->CurrentCity->Body.Y, &x, &y);
-            // The native helper chooses the first half-world copy, which can
-            // be off screen at 0.5x. Trace the actual captured city occurrence.
-            int nearest = 0x7FFFFFFF;
-            for (int n = 0; n < is->custom_renderer_tile_count; n++) {
-                struct c3x_renderer_tile_v1 const * tile = &is->custom_renderer_tiles[n];
-                if (tile->tile_x != this->CurrentCity->Body.X || tile->tile_y != this->CurrentCity->Body.Y) continue;
-                int distance = int_abs (tile->anchor_x + width / 2 - p_bic_data->ScreenWidth / 2) +
-                    int_abs (tile->anchor_y + width / 4 - p_bic_data->ScreenHeight / 2);
-                if (distance < nearest) { nearest = distance; x = tile->anchor_x; y = tile->anchor_y; }
+            // Trace the current native projection, not a previous asynchronous
+            // capture. The helper can choose an off-screen wrapped occurrence.
+            int span_x = p_bic_data->Map.Width * width / 2;
+            int span_y = p_bic_data->Map.Height * width / 4;
+            if (span_x > 0) {
+                while (x + width / 2 < p_bic_data->ScreenWidth / 2 - span_x / 2) x += span_x;
+                while (x + width / 2 > p_bic_data->ScreenWidth / 2 + span_x / 2) x -= span_x;
+            }
+            if (span_y > 0) {
+                while (y + width / 4 < p_bic_data->ScreenHeight / 2 - span_y / 2) y += span_y;
+                while (y + width / 4 > p_bic_data->ScreenHeight / 2 + span_y / 2) y -= span_y;
             }
 			snprintf (line, sizeof line, "[C3X renderer] stage=city-native-zoom tile_width=%d city=%d camera=%d,%d city_anchor=%d,%d\n",
 				width, this->CurrentCity->Body.ID, p_main_screen_form->camera_x, p_main_screen_form->camera_y,
@@ -30044,10 +30055,16 @@ composite_custom_renderer_frame ()
 	// Complete the first native map draw before its canvas is handed to the UI.
 	// A new viewer (including debug reveal/hide) is the same scope boundary:
 	// do not flood the worker with unit/UI updates while it builds that scene.
-	// Ordinary redraws within the completed scope remain asynchronous.
+	// Native city/projection changes and exact camera jumps cannot paint their
+	// overlays over the previous map. Deferred scrolling already keeps the
+	// native camera at its completed view until navigation adopts the new one.
+	bool changed_view = ! is->custom_renderer_display_valid ||
+		p_main_screen_form->camera_x != is->custom_renderer_display_view.camera_x ||
+		p_main_screen_form->camera_y != is->custom_renderer_display_view.camera_y ||
+		(p_bic_data->is_zoomed_out ? 64 : 128) != is->custom_renderer_display_view.native_width;
 	HMODULE loading_module = is->custom_renderer_module;
 	if (resident_result == C3X_RENDERER_RESULT_PENDING &&
-	    is->custom_renderer_display_viewer_epoch != is->custom_renderer_viewer_epoch) {
+	    (is->custom_renderer_display_viewer_epoch != is->custom_renderer_viewer_epoch || changed_view)) {
 		void (WINAPI * sleep_ms) (DWORD) = (void *)(*p_GetProcAddress) (is->kernel32, "Sleep");
 		c3x_renderer_world_status_fn query_world = (void *)(*p_GetProcAddress) (
 			is->custom_renderer_module, "c3x_renderer_world_status");

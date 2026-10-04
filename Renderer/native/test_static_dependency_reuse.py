@@ -86,23 +86,26 @@ struct Target {};
 struct Pipeline {
  struct Renderer {SceneMembership<Chunk,2> geometry_vertex_buffers;} renderer;
  StaticRasterStates<Target> static_rasters;std::uint64_t resident_order_revision=0;
+ std::array<StaticRasterState<Target>,2> bootstrap;
  void capture_order(){
 ''' + source[begin:end] + r'''
  }
 };
 int main(){
- // An order change keeps every raster displayable as a preview but stale, so
- // no slot is reused as fresh pixels; unchanged frames leave them untouched.
+ // An order change retires every terrain preview before current dynamic
+ // layers can be drawn over it; unchanged frames leave them untouched.
  Pipeline p;for(auto& state:p.static_rasters.states){state.valid=true;state.metrics.full_draws=1;}
  p.capture_order();
  for(auto const& state:p.static_rasters.states)assert(state.valid && !state.stale);
  Chunk chunk;GeometryDrawRecord<Chunk> first(chunk),second(chunk);first.tile_x=2;second.tile_x=0;
  p.renderer.geometry_vertex_buffers.edit(0)={first,second};
  assert(p.renderer.geometry_vertex_buffers.order_occurrences([](auto const& draw){return draw.tile_x;}));
+ for(auto& image:p.bootstrap)image.valid=true;
  p.capture_order();
- for(auto const& state:p.static_rasters.states)assert(state.valid && state.stale);
+ for(auto const& state:p.static_rasters.states)assert(!state.valid && state.stale);
+ for(auto const& image:p.bootstrap)assert(!image.valid);
  auto revision=p.static_rasters.states[0].revision;
- for(auto& state:p.static_rasters.states)state.stale=false;
+ for(auto& state:p.static_rasters.states){state.stale=false;state.valid=true;}
  for(unsigned i=0;i<1000;++i)p.capture_order();
  for(auto const& state:p.static_rasters.states)assert(state.valid && !state.stale);
  assert(p.static_rasters.states[0].revision==revision && p.static_rasters.states[0].metrics.reasons[raster_scene]==1);
@@ -139,6 +142,7 @@ struct Pipeline {
   bool chunk_intersects_region(Record const&,ViewportShaderSettings const&,D3D11_RECT,bool){return !hidden;}
  }renderer;
  struct {void invalidate_all(unsigned){}}static_rasters;
+ struct Preview{bool valid=false;};std::array<Preview,2> bootstrap;
  struct Work {bool enabled=true;struct Counts{unsigned reuses=0,rebuilds=0,tested_records=0,accepted_records=0;};
  std::array<std::array<Counts,9>,1> counts;}work;
  struct RasterInputs{using Key=unsigned;};
