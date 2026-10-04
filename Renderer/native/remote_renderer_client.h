@@ -34,7 +34,7 @@ class Client {
             replay_override=clock->sample(ticks,frequency);
         }
         bool required_loading=(kind==unsigned(c3x_inputs::Kind::scene) && subtype==6) ||
-            (kind==unsigned(c3x_inputs::Kind::world_page) && subtype==7) ||
+            (kind==unsigned(c3x_inputs::Kind::world_page) && (subtype==7||subtype==8)) ||
             (kind==unsigned(c3x_inputs::Kind::native_bridge) && subtype==8);
         return transport.call_live(kind,subtype,bytes,count,shared_frame,raw_shared,ticks,frequency,replay_override,required_loading);
     }
@@ -185,8 +185,8 @@ public:
         return int(invoke(unsigned(c3x_inputs::Kind::camera),4,input.bytes.data(),
             unsigned(input.bytes.size())).code);
     }
-    int world_query(c3x_renderer_world_page_v1& page){
-        auto const& response=invoke(unsigned(c3x_inputs::Kind::world_page),1,nullptr,0);
+    int world_query(c3x_renderer_world_page_v1& page,bool required=false){
+        auto const& response=invoke(unsigned(c3x_inputs::Kind::world_page),required?8:1,nullptr,0);
         if(response.code!=C3X_RENDERER_RESULT_OK)return int(response.code);
         auto bytes=reply(response);c3x_inputs::Reader input{bytes};
         page={};page.struct_size=sizeof(page);page.frame.api_version=C3X_RENDERER_API_VERSION;

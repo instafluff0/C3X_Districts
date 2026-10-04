@@ -4037,6 +4037,15 @@ struct SandboxFreshPipeline {
                     glow.linear.depth,false,float(scene_scale)))return fail("coastal_waves");
         }
         mark_dynamic(dynamic_waves);
+        // World overlays finish before the foreground unit layer.
+        for(auto const* visible_scene:{&static_visible,&water_visible})
+          for(unsigned layer:{unsigned(geometry_underlay),unsigned(geometry_natural_terrain),
+                              unsigned(geometry_natural_mountain),unsigned(geometry_water)})
+            if(!territory_borders.draw(renderer.device,context,(*visible_scene)[layer],settings,glow.linear,
+                    renderer.content_view_width,renderer.content_view_height,projection_zoom,float(scene_scale),
+                    [&](auto const& r){return !border_static(r) &&
+                        renderer.chunk_intersects_region(GeometryDrawReference(r),settings,full,false);}))
+                return fail("territory_borders");
         QueryPerformanceCounter(&ticks[4]);
 #ifdef C3X_RENDERER64_FRESH
         gpu_phases.pass_end(renderer.context);gpu_phases.pass_begin(renderer.context,GpuPhases::body);
@@ -4053,14 +4062,6 @@ struct SandboxFreshPipeline {
 #ifdef C3X_RENDERER64_FRESH
         gpu_phases.pass_end(renderer.context);gpu_phases.pass_begin(renderer.context,GpuPhases::finish);
 #endif
-        for(auto const* visible_scene:{&static_visible,&water_visible})
-          for(unsigned layer:{unsigned(geometry_underlay),unsigned(geometry_natural_terrain),
-                              unsigned(geometry_natural_mountain),unsigned(geometry_water)})
-            if(!territory_borders.draw(renderer.device,context,(*visible_scene)[layer],settings,glow.linear,
-                    renderer.content_view_width,renderer.content_view_height,projection_zoom,float(scene_scale),
-                    [&](auto const& r){return !border_static(r) &&
-                        renderer.chunk_intersects_region(GeometryDrawReference(r),settings,full,false);}))
-                return fail("territory_borders");
         if(!reconstruct())return fail("reconstruct");
         renderer.context->OMSetRenderTargets(0,nullptr,nullptr);
         QueryPerformanceCounter(&ticks[6]);

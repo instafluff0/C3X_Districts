@@ -24,6 +24,7 @@ FUNCTIONS = (
     "patch_Animator_draw_map_unit_cursor",
     "bootstrap_custom_renderer_initial_units",
     "notify_custom_renderer_unit_selection",
+    "patch_Animator_update_display",
 )
 
 
@@ -132,6 +133,7 @@ typedef struct State {
     bool custom_renderer_unit_bootstrap, custom_renderer_unit_bootstrap_failed;
     bool custom_renderer_unit_representatives_dirty, custom_renderer_redraw_pending;
     int custom_renderer_unit_display_action;
+    bool custom_renderer_unit_cursor_visible, custom_renderer_loading_world_capture;
     unsigned custom_renderer_dirty_flags;
     unsigned custom_renderer_unit_bootstrap_copies;
     Unit *custom_renderer_unit_bootstrap_selected, *custom_renderer_unit_context;
@@ -167,6 +169,17 @@ static PCX_Image background;
 static PCX_Color_Table palette;
 static unsigned preferences, *p_preferences = &preferences;
 static unsigned debug_bits, *p_debug_mode_bits = &debug_bits;
+enum { C3X_NAV_POLL_TEST_UNUSED = 0 };
+static int update_calls, update_edx, update_redraws, navigation_calls;
+void Animator_update_display(Animator *animator, int edx) {
+    ++update_calls; update_edx=edx;
+    if (*(bool *)(animator->field_18E4 + 10)) {
+        ++update_redraws; *(bool *)(animator->field_18E4 + 10)=false;
+        state.custom_renderer_redraw_pending=false;
+    }
+}
+bool custom_renderer_camera_may_defer(Animator *animator) {return !*(bool *)(animator->field_18E4 + 10);}
+void settle_custom_renderer_navigation(int action) {++navigation_calls;}
 static unsigned owner_thread;
 static bool online, submission_success, palette_ready, producer_changes_member;
 static int tick_count, status_count, cursor_count, hud_scope_count, gui_count, marker_count;
@@ -672,7 +685,7 @@ void selection_refresh_case(void) {
 }
 void accepted_selection_case(void) {
     reset();state.custom_renderer_unit_display_action=screen.Mode_Action;
-    screen.Current_Unit=&units[0];native_selection_accepts=false;
+    screen.Current_Unit=&units[0];state.custom_renderer_unit_cursor_visible=true;native_selection_accepts=false;
     execute_native_selection_hook(&screen, &units[1], true);
     assert(native_selection_calls==1&&screen.Current_Unit==&units[0]);
     assert(!state.custom_renderer_unit_representatives_dirty&&!state.custom_renderer_redraw_pending);
@@ -690,6 +703,31 @@ void accepted_selection_case(void) {
     execute_native_selection_hook(&screen, &units[0], true);
     assert(native_selection_calls==5&&screen.Current_Unit==&units[0]);
     assert(!state.custom_renderer_unit_representatives_dirty&&!state.custom_renderer_redraw_pending);
+}
+void idle_turn_case(void) {
+    reset(); place(0,2,2); occurrence(0,2,2,14);
+    screen.Current_Unit=&units[0]; units[0].worker=true;
+    units[0].Body.Animation.summary.current_anim_type=AT_ROAD;
+    state.custom_renderer_unit_display_action=screen.Mode_Action;
+    screen.animator.field_18E4[12]=1;
+    assert(bootstrap_custom_renderer_initial_units()==C3X_RENDERER_RESULT_OK);
+    assert(!(draw_flags[0]&C3X_RENDERER_UNIT_CURSOR));
+    // Interturn may preserve selection and suppress its cursor until afterward.
+    state.custom_renderer_redraw_pending=true;
+    patch_Animator_update_display(&screen.animator,123);
+    assert(update_redraws==1&&!state.custom_renderer_redraw_pending);
+    screen.animator.field_18E4[12]=0;
+    patch_Animator_update_display(&screen.animator,123);
+    assert(update_redraws==2&&state.custom_renderer_unit_representatives_dirty);
+    assert(bootstrap_custom_renderer_initial_units()==C3X_RENDERER_RESULT_OK);
+    assert(draw_flags[draw_count-1]&C3X_RENDERER_UNIT_CURSOR);
+    assert(draws[draw_count-1].action==AT_FIDGET);
+    patch_Animator_update_display(&screen.animator,123);
+    assert(update_redraws==2); // steady idle does not request repeated map draws
+    state.current_config.enable_custom_rendering=false;
+    int old_navigation=navigation_calls;
+    patch_Animator_update_display(&screen.animator,456);
+    assert(update_edx==456&&navigation_calls==old_navigation);
 }
 void idle_worker_case(void) {
     // Ordinary draws and first-frame recapture must agree, without modifying
@@ -783,6 +821,7 @@ int main(int argc, char **argv) {
     else if (!strcmp(argv[1], "idle_worker")) idle_worker_case();
     else if (!strcmp(argv[1], "selection_refresh")) selection_refresh_case();
     else if (!strcmp(argv[1], "accepted_selection")) accepted_selection_case();
+    else if (!strcmp(argv[1], "idle_turn")) idle_turn_case();
     else assert(!"Unknown contract case");
     return 0;
 }
@@ -836,6 +875,9 @@ class InjectedUnitBootstrapTests(unittest.TestCase):
 
     def test_capture_failures_restore_scope_and_config_off_delegates(self):
         self.contract("failure_config")
+
+    def test_idle_interturn_and_cursor_enable_refresh_without_input(self):
+        self.contract("idle_turn")
 
     def test_actual_selection_hook_observes_native_acceptance_and_config_off(self):
         self.contract("accepted_selection")

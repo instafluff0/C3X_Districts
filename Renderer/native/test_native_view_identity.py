@@ -18,6 +18,7 @@ class NativeViewIdentityTests(unittest.TestCase):
 #include <cstring>
 struct State {
  struct {bool enable_custom_rendering=true;} current_config;
+ int custom_renderer_init_state=1;bool custom_renderer_redraw_pending=false,custom_renderer_loading_world_capture=false;
  bool custom_renderer_camera_exact=false,custom_renderer_unit_representatives_dirty=false;
  c3x_renderer_native_navigation_fn custom_renderer_navigation=nullptr;
  c3x_renderer_visual_clock_fn custom_renderer_visual_clock=nullptr;
@@ -58,6 +59,8 @@ int main() {
             '(DWORD (*)(char const *, char *, DWORD))(*p_GetProcAddress)')
         dispatch = dispatch.replace('(DWORD (*)(char const *, char *, DWORD))(*p_GetProcAddress) (is->kernel32, "Sleep")',
             '(void (*)(DWORD))(*p_GetProcAddress) (is->kernel32, "Sleep")')
+        dispatch = dispatch.replace('c3x_renderer_world_status_fn query_world = (DWORD (*)(char const *, char *, DWORD))',
+                                    'c3x_renderer_world_status_fn query_world = (c3x_renderer_world_status_fn)')
         run_cpp(r'''
 #include "Renderer/native/c3x_renderer_api.h"
 #include <cassert>
@@ -76,6 +79,7 @@ DWORD environment(char const*,char* value,DWORD capacity){
 void* lookup(void*,char const*){return reinterpret_cast<void*>(&environment);}
 auto p_GetProcAddress=&lookup;
 void log_custom_renderer_event(char const*,int){}
+constexpr int IS_OK=1;void notify_custom_renderer_unit_selection(bool){}
 struct LARGE_INTEGER {long long QuadPart=0;};
 void QueryPerformanceCounter(LARGE_INTEGER* p){p->QuadPart=1000;}
 void debug(char const*){} auto p_OutputDebugStringA=&debug;
@@ -89,7 +93,7 @@ struct Tile;
 struct Vtable {int(*m49_Get_Square_RealType)(Tile*);int(*m50_Get_Square_BaseType)(Tile*);int(*m37_Get_River_Code)(Tile*);};
 struct Tile {Vtable* vtable;struct {int FOWStatus=0,Visibility=0,Fog_Of_War=0,V3=0,field_D0_Visibility=0;void* active_tile_effect=nullptr;}Body;int ground=2,base=2,river=0;};
 Vtable vtable{[](Tile*t){return t->ground;},[](Tile*t){return t->base;},[](Tile*t){return t->river;}};
-struct MapData{int Width=4,Height=4;};using Map=MapData;
+struct MapData{int Width=4,Height=4;int Renderer=0;};using Map=MapData;
 struct Bic {MapData Map;} bic;Bic* p_bic_data=&bic;
 Tile null_tile{&vtable};Tile* p_null_tile=&null_tile;
 std::vector<Tile> tiles(5000,Tile{&vtable});int absent=-1;
@@ -106,8 +110,15 @@ int modern(c3x_renderer_camera_request_v1 const* r,c3x_renderer_output_v1*){
  assert(r->version==C3X_RENDERER_CAMERA_VIEW_VERSION && r->struct_size==sizeof(*r));order.push_back(4);received=r->identity;++modern_calls;return 7;
 }
 int legacy(c3x_renderer_frame_v1 const*,c3x_renderer_output_v1*){order.push_back(5);++legacy_calls;return 9;}
-struct LoadingForm {struct {int field_574[4]{};}GUI;} form;auto p_main_screen_form=&form;
+using HMODULE=void*;using byte=unsigned char;
+constexpr int __=0;
+struct LoadingForm {struct GUIData {int field_574[4]{};}GUI;} form;auto p_main_screen_form=&form;
+void Main_GUI_label_loading_bar(LoadingForm::GUIData*,int,int,char const*){}
 struct State {
+ struct {bool enable_custom_rendering=true;}current_config;
+ HMODULE custom_renderer_module=nullptr;void* custom_renderer_target=nullptr;
+ bool custom_renderer_draw_in_progress=false,custom_renderer_frame_active=false,custom_renderer_capture_only=false,custom_renderer_capture_failed=false;
+ c3x_renderer_tile_v1* custom_renderer_tiles=nullptr;
  unsigned custom_renderer_presented_frames=1;
  void* kernel32=nullptr;
  bool custom_renderer_async_drawing=false;
@@ -272,6 +283,7 @@ struct Clock {long long QuadPart=0;};
 
 struct State {
  struct {bool enable_custom_rendering=true;} current_config;
+ int custom_renderer_init_state=1;bool custom_renderer_redraw_pending=false,custom_renderer_loading_world_capture=false;
  bool custom_renderer_camera_exact=false,custom_renderer_unit_representatives_dirty=false;
  c3x_renderer_native_navigation_fn custom_renderer_navigation=nullptr;
  c3x_renderer_visual_clock_fn custom_renderer_visual_clock=nullptr;
@@ -296,6 +308,7 @@ unsigned debug_mode_bits=0;auto p_debug_mode_bits=&debug_mode_bits;
 bool online=false;bool is_online_game(){return online;}
 bool custom_renderer_zoom_enabled(){return !screen.is_now_loading_game;}
 void log_custom_renderer_event(char const*,int){}
+constexpr int IS_OK=1;void notify_custom_renderer_unit_selection(bool){}
 void sync_custom_renderer_zoom_to_native(){}
 void native_move(Main_Screen_Form* s,int,int x,int y,int,bool){
  s->camera_x=(x%8192+8192)%8192;s->camera_y=(y%4096+4096)%4096;
@@ -452,9 +465,9 @@ int main(){
  patch_Animator_update_display(&screen.animator,0);assert(overlay_x==1200);
  state.custom_renderer_display_valid=true;state.custom_renderer_display_view=custom_renderer_native_view(&bic.Map.Renderer);
  patch_Main_Screen_Form_move_camera(&screen,0,8260,-32,1,false);assert(nav_pending&&desired.camera_x==68&&desired.camera_y==4064);
- // Config-off keeps the queued native destination and resumes vanilla drawing.
+ // Config-off delegates immediately with no renderer navigation side effects.
  state.current_config.enable_custom_rendering=false;patch_Animator_update_display(&screen.animator,0);
- assert(!nav_pending&&screen.camera_x==68&&screen.camera_y==4064&&barriers==2);
+ assert(nav_pending&&screen.camera_x==1200&&screen.camera_y==320&&barriers==1);
  unsigned before=captures;patch_Main_Screen_Form_move_camera(&screen,0,200,100,1,false);
  assert(screen.camera_x==200&&captures==before);
  // Config-off observed before Animator still settles the normalized intent.

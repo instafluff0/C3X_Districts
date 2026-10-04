@@ -80,7 +80,7 @@ struct Core {
     using WorldSubmit=int(*)(c3x_renderer_world_page_v1 const*,int);
     using WorldStatus=int(*)(c3x_renderer_world_status_v1*);
     using WorldArm=int(*)(c3x_renderer_camera_identity_v1 const*);
-    WorldQuery world_query=nullptr;WorldSubmit world_submit=nullptr;
+    WorldQuery world_query=nullptr,world_seed_query=nullptr;WorldSubmit world_submit=nullptr;
     WorldQuery world_delta_scope=nullptr;WorldSubmit world_delta_submit=nullptr;
     WorldStatus world_status=nullptr;
     WorldArm world_arm=nullptr,world_loading=nullptr;
@@ -139,6 +139,7 @@ struct Core {
         unit_state=reinterpret_cast<c3x_renderer_unit_state_fn>(GetProcAddress(module,"c3x_renderer_unit_state"));
         tactical_gpu=reinterpret_cast<Tactical>(GetProcAddress(module,"c3x_renderer_trial_tactical"));
         world_query=reinterpret_cast<WorldQuery>(GetProcAddress(module,"c3x_renderer_trial_world_query"));
+        world_seed_query=reinterpret_cast<WorldQuery>(GetProcAddress(module,"c3x_renderer_trial_world_seed_query"));
         world_submit=reinterpret_cast<WorldSubmit>(GetProcAddress(module,"c3x_renderer_trial_world_submit"));
         world_delta_scope=reinterpret_cast<WorldQuery>(GetProcAddress(module,"c3x_renderer_trial_world_delta_scope"));
         world_delta_submit=reinterpret_cast<WorldSubmit>(GetProcAddress(module,"c3x_renderer_trial_world_delta_submit"));
@@ -409,10 +410,11 @@ struct Core {
                 }
             }else if(wire.live&&wire.kind==unsigned(Kind::camera)&&wire.subtype==4){
                 c3x_renderer_i64 ticket=0;in(ticket);in.done();wire.code=unsigned(camera_cancel(ticket));
-            }else if(wire.live&&wire.kind==unsigned(Kind::world_page)&&wire.subtype==1){
-                in.done();require(world_query!=nullptr,"helper lacks world query entry");
+            }else if(wire.live&&wire.kind==unsigned(Kind::world_page)&&(wire.subtype==1||wire.subtype==8)){
+                auto query=wire.subtype==8?world_seed_query:world_query;
+                in.done();require(query!=nullptr,"helper lacks world query entry");
                 c3x_renderer_world_page_v1 page={};page.struct_size=sizeof(page);
-                wire.code=unsigned(world_query(&page));
+                wire.code=unsigned(query(&page));
                 if(wire.code==C3X_RENDERER_RESULT_OK){
                     Writer response;response(page.first);response(page.capacity);
                     c3x_inputs::c3x_renderer_camera_identity_v1_fields(response,page.identity);

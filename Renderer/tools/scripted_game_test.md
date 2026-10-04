@@ -78,6 +78,29 @@ diagnostics and can contain machine paths; do not commit them.
 save and leaves its selected settler idle. It requires a completed map and no
 renderer failures. Inspect the window samples for the automatic city-site
 overlays when that C3X setting is enabled, then confirm the reported cleanup.
+
+`-Scenario unit-turn -Seconds 135 -SampleHz 10 -MeasureCadence -ProfileRenderer`
+uses an early save with a selected Scout, two traversable northern tiles, and
+one remaining idle unit. It moves north twice, skips the remaining unit and
+ends the turn, then leaves the game untouched for 26 seconds before one final
+scroll. Require two accepted moves, at least one completed/prepared turn, the
+final scroll and no renderer failures. Review consecutive movement samples for
+body/HUD travel together and the idle interval for the selection ring before
+any further input. The final scroll is a comparison, not a way to make the
+idle interval pass. Original saves and configuration use the same cleanup.
+
+`-Scenario turn-scroll -Seconds 205 -SampleHz 4 -MeasureCadence -ProfileRenderer`
+checks exploration followed by interturn and scrolling. Use an early save with
+an active two-move Scout, two traversable tiles to its north, and no blocking
+production/research choices over the next two turns. It pans 24 steps, moves
+north twice, skips remaining units across two turns, then pans the final eight
+steps. It requires two accepted moves, at least two turns with matching
+successful world preparations, all 32 camera commands, continued presentations,
+and no renderer failures. Review window samples between the first move and the
+second, immediately after interturn, and during the final pan for revealed
+terrain, automatic selection, animated units and HUD alignment. Delivery counts
+alone do not establish visible movement. Interturn preparation failures are
+included in every scenario's failure scan.
 `-Scenario site-toggle -Seconds 55 -SampleHz 10` opens C3X's L-key picker,
 chooses Off, then reopens it and chooses the player. Inspect samples before
 and after both choices; key delivery alone does not prove the displayed state.

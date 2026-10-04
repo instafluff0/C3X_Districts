@@ -10,6 +10,40 @@ the former 1,326-line roadmap.
 
 ## Current state
 
+- **October 3 unit redraw and layering follow-up (staged and tested).**
+  The native Animator now consumes pending renderer redraws without requiring
+  player input and recaptures cursor eligibility changes even when selection
+  keeps the same unit. Own-unit exploration admits the accepted travel segment
+  before destination sight catches up, while hidden foreign movement remains
+  excluded. Territory finishes before main unit bodies; shadows retain terrain
+  depth and bodies use an independent depth pass. Host regressions reproduce
+  both missing native updates against the previous injected code. The D3D11
+  overlap oracle and matching async bridge fixture pass, including unit
+  self-depth, reflected occlusion, fog, pose transitions and 32 camera adoptions.
+  The 135-second disposable `unit-turn` run shows both Scout bodies travelling
+  through intermediate positions, the new-turn ring before further input, and
+  aligned final scrolling with no native errors. The original save is unchanged.
+  The units category suite passes 162 tests with one skip; 32 focused host tests,
+  the depth oracle and injected compile smoke test also pass. These are bounded
+  checks, not long-session certification.
+  Evidence is under `Renderer/.cache/selection-motion-layering/`. Existing patch
+  symbols suffice; no patch-table changes or reference replacements are needed.
+
+- **October 3 interturn freeze repair (staged and tested).** Required world
+  paging now waits for the renderer's data locks instead of using an
+  opportunistic background query. The previous build reproduced an interturn
+  `PENDING` result that permanently disabled native renderer integration while
+  the HUD continued moving. The same disposable-save exploration/turn/scroll
+  sequence now completes two moves, two world preparations and 32 camera steps
+  without errors. Window evidence shows revealed terrain, automatic selection
+  before further input, an idle selected worker and aligned scrolling; the
+  original save is unchanged. Forty-six focused tests and the async GPU fixture
+  pass. The new busy-worker regression fails against the old query. Evidence is
+  under `Renderer/.cache/scroll-sight-turn/`; the repeatable `turn-scroll` scenario
+  is documented in [scripted testing](../tools/scripted_game_test.md). No injected
+  source or patch-table changes were needed. This bounded check does not certify
+  long-session performance.
+
 - **October 3 performance overhaul (untested build).** The retained static
   layer now previews (whole-pixel shift, zoom resample, low-resolution jump
   bootstrap) and refines full quality under a per-frame budget instead of

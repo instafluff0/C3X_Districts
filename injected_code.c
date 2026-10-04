@@ -28051,6 +28051,7 @@ unload_custom_renderer ()
 	is->custom_renderer_unit_bootstrap_copies = 0;
 	is->custom_renderer_unit_representatives_dirty = false;
 	is->custom_renderer_unit_display_action = -1;
+	is->custom_renderer_unit_cursor_visible = false;
 	is->custom_renderer_test_route_step = 0;
 	is->custom_renderer_test_route_adopted = false;
 	is->custom_renderer_test_route_resolving = false;
@@ -32077,9 +32078,21 @@ patch_Main_Screen_Form_move_camera (Main_Screen_Form * this, int edx, int x, int
 void __fastcall
 patch_Animator_update_display (Animator * this, int edx)
 {
-    if (this == &p_main_screen_form->animator)
-        settle_custom_renderer_navigation (is->current_config.enable_custom_rendering && custom_renderer_camera_may_defer (this) ?
+    if (! is->current_config.enable_custom_rendering) {
+        Animator_update_display (this, edx);
+        return;
+    }
+    if (p_main_screen_form != NULL && this == &p_main_screen_form->animator) {
+        notify_custom_renderer_unit_selection (false);
+        // Interturn preparation retires the displayed map's animation sampler.
+        // Translate its pending redraw into the native gate even when no input,
+        // camera change or different selected-unit pointer follows the turn.
+        if (is->custom_renderer_init_state == IS_OK && is->custom_renderer_redraw_pending &&
+            ! is->custom_renderer_loading_world_capture && this->field_18E4 != NULL)
+            *(bool *)(this->field_18E4 + 10) = true;
+        settle_custom_renderer_navigation (custom_renderer_camera_may_defer (this) ?
             C3X_NAV_POLL : C3X_NAV_BARRIER);
+    }
     // Always run the native director and UI, including the active player turn.
     Animator_update_display (this, __);
 }
@@ -48538,7 +48551,12 @@ notify_custom_renderer_unit_selection (bool changed)
 	int action = p_main_screen_form->Mode_Action;
 	bool action_changed = is->custom_renderer_unit_display_action != action;
 	is->custom_renderer_unit_display_action = action;
-	if (! changed && (! action_changed || ! is->current_config.enable_unit_counters)) return;
+	bool cursor = p_main_screen_form->Current_Unit != NULL &&
+		p_main_screen_form->animator.field_18E4 != NULL &&
+		(p_main_screen_form->animator.field_18E4[12] & 1) == 0;
+	bool cursor_changed = is->custom_renderer_unit_cursor_visible != cursor;
+	is->custom_renderer_unit_cursor_visible = cursor;
+	if (! changed && ! cursor_changed && (! action_changed || ! is->current_config.enable_unit_counters)) return;
 	is->custom_renderer_unit_representatives_dirty = true;
 	is->custom_renderer_dirty_flags |= C3X_RENDERER_DIRTY_SCENE;
 	is->custom_renderer_redraw_pending = true;
@@ -48663,7 +48681,10 @@ patch_FLC_Animation_set_move_target (FLC_Animation * this, int edx, int x, int y
 	    (move.old_x == move.new_x && move.old_y == move.new_y)) return;
 	move.action = AT_RUN;
 	move.source_visible = custom_renderer_tile_visible_at (move.old_x, move.old_y);
-	move.target_visible = custom_renderer_tile_visible_at (move.new_x, move.new_y);
+	// The accepted step precedes native sight revelation. Our own visible unit
+	// may enter that edge now; this admits its body, not hidden terrain or enemies.
+	move.target_visible = unit->Body.CivID == is->custom_renderer_viewer_civ_id ||
+		custom_renderer_tile_visible_at (move.new_x, move.new_y);
 	if (! move.source_visible || ! move.target_visible) return;
 	move.map_epoch = is->custom_renderer_map_epoch;
 	move.viewer_epoch = is->custom_renderer_viewer_epoch;

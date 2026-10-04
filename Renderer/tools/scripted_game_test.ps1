@@ -1,11 +1,13 @@
 # Bounded real-game renderer diagnostic, enabled only in the child environment.
 param([Parameter(Mandatory=$true)][string]$SaveFile, [string]$ConquestsDirectory,
       [ValidateRange(35,360)][int]$Seconds = 75,
-      [ValidateSet('scroll','interaction','lifecycle','combat','turn','mouse','zoom','hud','city','settler','site-toggle','debug','debug-scroll','newgame','turn-stress')][string]$Scenario = 'scroll',
+      [ValidateSet('scroll','interaction','lifecycle','combat','turn','mouse','zoom','hud','city','settler','site-toggle','debug','debug-scroll','newgame','turn-stress','turn-scroll','unit-turn')][string]$Scenario = 'scroll',
       [ValidatePattern('^[A-Za-z0-9_-]+$')][string]$UnitPack='UnitAnimationFidelity', [ValidateSet('melee','victory','retreat','bombard','army','air','capture')][string]$CombatCase='melee', [ValidateRange(1,10)][int]$SampleHz = 2,
       [switch]$ProfileRenderer, [switch]$MeasureCadence,
       [ValidateSet(0,1,2)][int]$SceneSamples=0, [ValidateRange(-1,1)][double]$SceneSharpness=-1)
 $ErrorActionPreference = 'Stop'
+if ($Scenario -eq 'unit-turn' -and $Seconds -lt 130) { throw 'unit-turn requires at least 130 seconds.' }
+if ($Scenario -eq 'turn-scroll' -and $Seconds -lt 200) { throw 'turn-scroll requires at least 200 seconds.' }
 $renderer = Split-Path $PSScriptRoot -Parent
 if (-not $ConquestsDirectory) { $ConquestsDirectory = $env:C3X_RENDERER_CIV3_CONQUESTS }
 if (-not $ConquestsDirectory) { $ConquestsDirectory = Join-Path ${env:ProgramFiles(x86)} 'GOG Galaxy\Games\Civilization III Complete\Conquests' }
@@ -118,6 +120,7 @@ try {
     if ($ProfileRenderer) {
         $env:C3X_RENDERER_TRACE='2'
         $env:C3X_RENDERER_TRACE_BUFFERED='1'
+        if ($Scenario -in @('turn-scroll','unit-turn')) { $env:C3X_RENDERER_TRACE_MIB='64' }
         if ($Scenario -in @('turn-stress','debug-scroll')) {
             # Preserve failure evidence even when a stalled helper must be killed.
             $env:C3X_RENDERER_TRACE_BUFFERED='0'
@@ -188,6 +191,26 @@ try {
     if ($Scenario -eq 'turn') {
         $interaction=@(@(36,32,'skip-first-unit'),@(39,32,'skip-second-unit'),@(42,13,'end-turn'),@(65,32,'skip-first-unit-next-turn'),@(68,32,'skip-second-unit-next-turn'),@(71,13,'end-second-turn'))
     }
+    if ($Scenario -eq 'unit-turn') {
+        # Leave the completed turn untouched until the final camera comparison.
+        $interaction=@(@(75,0x68,'scout-north-first'),@(78,0x68,'scout-north-second'),
+            @(90,32,'skip-remaining'),@(94,13,'finish-turn'),@(120,0x87,'scroll-after-idle-turn'))
+    }
+    if ($Scenario -eq 'turn-scroll') {
+        $interaction=@()
+        for($step=0;$step -lt 24;++$step){$interaction+=,@((70+$step),0x87,('scroll-'+$step))}
+        $interaction+=,@(112,0x68,'first-scout-move')
+        $interaction+=,@(124,0x68,'second-scout-move')
+        $interaction+=,@(136,32,'skip-remaining')
+        $interaction+=,@(140,32,'skip-second-remaining')
+        $interaction+=,@(144,32,'skip-third-remaining')
+        $interaction+=,@(148,13,'end-turn-one')
+        $interaction+=,@(162,32,'skip-next-unit')
+        $interaction+=,@(166,32,'skip-other-unit')
+        $interaction+=,@(170,32,'skip-last-unit')
+        $interaction+=,@(174,13,'end-turn-two')
+        for($step=0;$step -lt 8;++$step){$interaction+=,@((187+$step),0x87,('scroll-after-interturn-'+$step))}
+    }
     if ($Scenario -eq 'turn-stress') {
         $interaction=@()
         for ($turn=0; $turn -lt 8; ++$turn) {
@@ -226,10 +249,10 @@ try {
             # Two Enter presses select Load Game and accept the copied save.
             # The opt-in post-load hook dismisses the known welcome popup.
             $elapsed=([DateTime]::UtcNow-$started).TotalSeconds
-            if ($Scenario -in @('turn-stress','debug-scroll') -and $elapsed -ge $failureCheck) {
+            if ($Scenario -in @('turn-stress','debug-scroll','turn-scroll','unit-turn') -and $elapsed -ge $failureCheck) {
                 $failureCheck=$elapsed+5
                 $recent=Get-Content -LiteralPath (Join-Path $session 'renderer.log') -Tail 1000
-                if ($recent -match 'stage=async-publication-failed|stage=visual-failure|stage=native-operation-failed') {
+                if ($recent -match 'stage=async-publication-failed|stage=visual-failure|stage=native-operation-failed|stage=required-interturn-preparation-failed') {
                     Write-Host 'Renderer failure detected; preserving evidence and stopping the disposable test.'
                     break
                 }
@@ -378,6 +401,7 @@ if ($Scenario -in @('mouse','zoom')) {
 }
 $steps=@([regex]::Matches($log,'stage=scripted-game-scroll step=(\d+)') | ForEach-Object {[int]$_.Groups[1].Value})
 $turns=@([regex]::Matches($log,'stage=scripted-turn-end turn=(\d+)') | ForEach-Object {[int]$_.Groups[1].Value})
+$preparedTurns=[regex]::Matches($log,'stage=required-interturn-preparation-complete result=1').Count
 $moves=[regex]::Matches($log,'stage=motion-start[^\r\n]*result=1').Count
 $combatReady=[regex]::Matches($log,'stage=scripted-combat-ready').Count
 $combatFinished=[regex]::Matches($log,'stage=scripted-combat-end').Count
@@ -387,19 +411,21 @@ $cityAnchors=@([regex]::Matches($log,'stage=city-native-zoom[^\r\n]*city_anchor=
 $readyEvents=[regex]::Matches($log,'stage=render-done result=1').Count
 $loadingMaps=[regex]::Matches($log,'stage=loading-map-complete result=1').Count
 $unloadEvents=[regex]::Matches($log,'stage=scene-unloaded result=1').Count
-$errors=@($log -split "`n" | Where-Object {$_ -match 'stage=native-operation-failed|stage=async-publication-failed|budget exceeded|stage=visual-failure|stage=worker-error|stage=unit-publication-failed|stage=unit-animation-failed|stage=motion-start[^\r\n]*result=[0235]|stage=scene-unload-failed|stage=(?:first-map-ready|loading-map-complete) result=[02345]|stage=assets-prepared ready=0'})
+$errors=@($log -split "`n" | Where-Object {$_ -match 'stage=required-interturn-preparation-failed|stage=native-operation-failed|stage=async-publication-failed|budget exceeded|stage=visual-failure|stage=worker-error|stage=unit-publication-failed|stage=unit-animation-failed|stage=motion-start[^\r\n]*result=[0235]|stage=scene-unload-failed|stage=(?:first-map-ready|loading-map-complete) result=[02345]|stage=assets-prepared ready=0'})
 $debugReveals=([regex]::Matches($log,'stage=debug-reveal result=1')).Count
 $debugHides=([regex]::Matches($log,'stage=debug-hide result=1')).Count
 $windowResult=Join-Path $session 'window\finished.json'
 $windowEvidence=if (Test-Path -LiteralPath $windowResult) { Get-Content -LiteralPath $windowResult -Raw | ConvertFrom-Json } else { $null }
 $windowComplete=$null -ne $windowEvidence -and $windowEvidence.complete -and $windowEvidence.frames -gt 0
-[ordered]@{ scenario=$Scenario; debug_reveals=$debugReveals; debug_hides=$debugHides; scene_samples=$SceneSamples; scene_sharpness=$SceneSharpness; combat_case=$CombatCase; unit_pack=$UnitPack; mouse_commands=$mouseIndex; completed_turns=$turns; accepted_moves=$moves; interaction_commands=$interactionIndex; combat_ready=$combatReady; combat_finished=$combatFinished; map_text_events=$textEvents; city_zoom_widths=$cityZooms; city_anchors=$cityAnchors; posted_commands=$sent; load_requested=($log -match 'stage=scripted-game-load'); scroll_steps=$steps;
+[ordered]@{ scenario=$Scenario; debug_reveals=$debugReveals; debug_hides=$debugHides; scene_samples=$SceneSamples; scene_sharpness=$SceneSharpness; combat_case=$CombatCase; unit_pack=$UnitPack; mouse_commands=$mouseIndex; completed_turns=$turns; prepared_turns=$preparedTurns; accepted_moves=$moves; interaction_commands=$interactionIndex; combat_ready=$combatReady; combat_finished=$combatFinished; map_text_events=$textEvents; city_zoom_widths=$cityZooms; city_anchors=$cityAnchors; posted_commands=$sent; load_requested=($log -match 'stage=scripted-game-load'); scroll_steps=$steps;
     game_exited_early=$earlyExit; game_exit_code=$gameExitCode; first_map_ready=$readyEvents; loading_maps_ready=$loadingMaps; scenes_unloaded=$unloadEvents; native_failures=$errors; window_evidence=$windowEvidence; original_save_unchanged=$true; scope='Real Civ III diagnostic; window samples require visual review; not an FPS benchmark' } |
     ConvertTo-Json -Depth 4 | Set-Content (Join-Path $session 'result.json')
 Write-Host ('Scripted diagnostic saved: '+$session)
 if ($MeasureCadence -and $cadenceSamples.Count -lt 2) { Write-Error 'Insufficient renderer cadence samples; inspect cadence.json and the helper channel.'; exit 1 }
+if ($Scenario -eq 'unit-turn' -and ($turns.Count -lt 1 -or $preparedTurns -ne $turns.Count -or $moves -lt 2 -or $steps.Count -ne 1 -or $readyEvents -ne 1 -or $interactionIndex -ne $interaction.Count)) { Write-Error 'Incomplete unit movement or idle-turn coverage.'; exit 1 }
+if ($Scenario -eq 'turn-scroll' -and ($turns.Count -lt 2 -or $preparedTurns -ne $turns.Count -or $moves -lt 2 -or $steps.Count -ne 32 -or $interactionIndex -ne $interaction.Count)) { Write-Error 'Incomplete movement, interturn preparation or scrolling coverage.'; exit 1 }
 if ($Scenario -eq 'turn-stress' -and $moves -lt 8) { Write-Error 'Insufficient accepted unit movement; inspect the native movement records.'; exit 1 }
-if ($MeasureCadence -and $Scenario -in @('turn-stress','debug-scroll')) {
+if ($MeasureCadence -and $Scenario -in @('turn-stress','debug-scroll','turn-scroll','unit-turn')) {
     $tail=@($cadenceSamples | Where-Object { $_.elapsed_seconds -ge $cadenceSamples[-1].elapsed_seconds-10 })
     if ($tail.Count -lt 2 -or $tail[-1].frames -le $tail[0].frames) { Write-Error 'Renderer stopped presenting at the end of the stress run.'; exit 1 }
 }

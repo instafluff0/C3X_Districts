@@ -370,7 +370,7 @@ public:
         return enabled?publication.setup([this,identity]{return transport.prepare_world_loading(identity);}):transport.prepare_world_loading(identity);
     }
     int world_seed_query(c3x_renderer_world_page_v1& page){
-        return enabled?publication.setup([&]{return transport.world_query(page);}):transport.world_query(page);
+        return enabled?publication.setup([&]{return transport.world_query(page,true);}):transport.world_query(page,true);
     }
     int world_seed_submit(c3x_renderer_world_page_v1 const& page,int code){
         return enabled?publication.setup([&]{return transport.world_submit(page,code);}):transport.world_submit(page,code);

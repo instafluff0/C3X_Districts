@@ -13123,16 +13123,20 @@ public:
         if(accepted)wake.notify_one();return accepted?1:0;
     }
 #ifdef C3X_HELPER_TRIAL
-    int trial_world_query(c3x_renderer_world_page_v1& result){
-        std::unique_lock<std::mutex> calls(call_mutex,std::try_to_lock);
-        if(!calls.owns_lock())return C3X_RENDERER_RESULT_PENDING;
-        std::unique_lock<std::mutex> lock(state_mutex,std::try_to_lock);
-        if(!lock.owns_lock()||has_job||camera_pending||camera_active||camera_paused)
+    int trial_world_query(c3x_renderer_world_page_v1& result,bool required=false){
+        std::unique_lock<std::mutex> calls(call_mutex,std::defer_lock);
+        std::unique_lock<std::mutex> lock(state_mutex,std::defer_lock);
+        // Required loading/interturn pages join their ordered publication. A
+        // busy visual worker is not a failed world capture. This copies only
+        // paging metadata under the state lock; camera work owns immutable
+        // scene inputs and need not be cancelled or paused for the query.
+        if(required){calls.lock();lock.lock();}
+        else if(!calls.try_lock()||!lock.try_lock()||has_job||camera_pending||camera_active||camera_paused)
             return C3X_RENDERER_RESULT_PENDING;
         auto state=scene_changes.state();
         if(!state||!state->topology||!state->metadata.world_topology_count||
            state->metadata.world_topology_count>c3x_renderer::render_core::CapturedScene::record_limit)
-            return C3X_RENDERER_RESULT_PENDING;
+            return required?C3X_RENDERER_RESULT_SUPERSEDED:C3X_RENDERER_RESULT_PENDING;
         // The x86 bridge stops requesting pages after one pass. Keep explicit
         // queries usable by older recorded streams that contain later passes.
         result=world_input.page(*state);
@@ -17005,6 +17009,10 @@ extern "C" __declspec(dllexport) int c3x_renderer_trial_unit_pixels(
 extern "C" __declspec(dllexport) int c3x_renderer_trial_world_query(c3x_renderer_world_page_v1* page){
     if(!page||page->struct_size!=sizeof(*page))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
     return get_renderer_worker().trial_world_query(*page);
+}
+extern "C" __declspec(dllexport) int c3x_renderer_trial_world_seed_query(c3x_renderer_world_page_v1* page){
+    if(!page||page->struct_size!=sizeof(*page))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    return get_renderer_worker().trial_world_query(*page,true);
 }
 // Optional test-only transaction; callback may call direct fresh draw,
 // invalidation and witness capture, but never worker APIs or trace flushing.

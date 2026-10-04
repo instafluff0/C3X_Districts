@@ -131,7 +131,7 @@ int main(){
 #include <cstdio>
 #define __fastcall
 constexpr int __=0,AT_RUN=2;
-struct Unit{struct{int ID=7,X=10,Y=4;}Body;};
+struct Unit{struct{int ID=7,X=10,Y=4,CivID=2;}Body;};
 struct FLC_Animation{struct Unit* Unit;};
 struct LARGE_INTEGER{long long QuadPart;};
 struct {int Map;} bic,*p_bic_data=&bic;
@@ -139,10 +139,10 @@ int natives=0,events=0;FLC_Animation* original=nullptr;
 void FLC_Animation_set_pixel_target_with_offset(FLC_Animation* a,int edx,int x,int y){assert(edx==123&&x==768&&y==128);original=a;++natives;}
 int receive(c3x_renderer_unit_move_v1 const* v){assert(natives>events);assert(v->old_x==10&&v->old_y==4&&v->new_x==0&&v->new_y==4&&v->unit_id==7&&v->action==2);++events;return 1;}
 struct {struct{bool enable_custom_rendering=false;}current_config;c3x_renderer_unit_move_fn custom_renderer_unit_motion=receive;
- unsigned custom_renderer_map_epoch=2,custom_renderer_viewer_epoch=3;LARGE_INTEGER custom_renderer_qpc_frequency{1000};char custom_renderer_test_save[1]={};}state,*is=&state;
+ int custom_renderer_viewer_civ_id=2;unsigned custom_renderer_map_epoch=2,custom_renderer_viewer_epoch=3;LARGE_INTEGER custom_renderer_qpc_frequency{1000};char custom_renderer_test_save[1]={};}state,*is=&state;
 void wrap_tile_coords(int*,int* x,int* y){*x=(*x+12)%12;*y=(*y+12)%12;}
 bool Map_in_range(int*,int,int x,int y){return x>=0&&x<12&&y>=0&&y<12;}
-bool visible=true;bool custom_renderer_tile_visible_at(int,int){return visible;}
+bool visible=true,target_visible=true;bool custom_renderer_tile_visible_at(int x,int){return visible&&(x==10||target_visible);}
 bool QueryPerformanceCounter(LARGE_INTEGER* now){now->QuadPart=100;return true;}
 void debug(char const*){}auto p_OutputDebugStringA=debug;
 '''+wrapper+r'''
@@ -151,7 +151,12 @@ int main(){
  patch_FLC_Animation_set_move_target(&animation,123,768,128);assert(natives==1&&!events&&original==&animation);
  state.current_config.enable_custom_rendering=true;
  patch_FLC_Animation_set_move_target(&animation,123,768,128);assert(natives==2&&events==1);
- visible=false;patch_FLC_Animation_set_move_target(&animation,123,768,128);assert(natives==3&&events==1);
+ // Own exploration begins before native terrain sight catches up.
+ target_visible=false;patch_FLC_Animation_set_move_target(&animation,123,768,128);assert(natives==3&&events==2);
+ // The same step by a foreign unit cannot animate into hidden terrain.
+ unit.Body.CivID=3;patch_FLC_Animation_set_move_target(&animation,123,768,128);assert(natives==4&&events==2);
+ unit.Body.CivID=2;
+ visible=false;patch_FLC_Animation_set_move_target(&animation,123,768,128);assert(natives==5&&events==2);
 }
 ''')
 

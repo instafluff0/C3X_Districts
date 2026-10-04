@@ -241,8 +241,9 @@ int main(){
 
     def test_fresh_metadata_reports_actual_animation_demand(self):
         source = Path(__file__).with_name("c3x_renderer.cpp").read_text()
-        poll = source.split("int poll_gpu_camera_view(", 1)[1].split("if(inspect_only){", 1)[1].split(
-            "int result=adopt_gpu_camera_locked", 1)[0]
+        from Renderer.native.test_fresh_preparation_cancellation import block_at
+        start = source.index("int camera_ready_view_locked(")
+        poll = block_at(source, start)
         metadata = source.split("gpu_metadata.visible_animation_count=job_frame.visible_animation_count+", 1)[1].split(
             "gpu_metadata.clip_left=", 1)[0]
         run_cpp(r'''
@@ -256,11 +257,8 @@ struct Worker {
  c3x_renderer_frame_v1 job_frame{};
  struct {c3x_renderer_frame_v1 frame{};c3x_renderer_output_v1 output{};bool fresh=true;}gpu_publication;
  c3x_renderer_output_v1 gpu_metadata{};
- int inspect(long long ticket,c3x_renderer_gpu_camera_view_v1& view){
-  c3x_renderer_gpu_camera_view_v1 next={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(next)};
-  {''' + poll + r'''
-  return C3X_RENDERER_RESULT_PENDING;
- }
+ ''' + poll + r'''
+ int inspect(long long ticket,c3x_renderer_gpu_camera_view_v1& view){return camera_ready_view_locked(ticket,view);}
  void published(){gpu_metadata.visible_animation_count=job_frame.visible_animation_count+''' + metadata + r'''
  }
 };

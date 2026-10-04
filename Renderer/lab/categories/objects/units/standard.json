@@ -72,6 +72,7 @@
     "Renderer.native.test_retained_composition",
     "Renderer.native.test_ready_frame_composition",
     "Renderer.native.test_gpu_unit_scene",
+    "Renderer.native.test_unit_foreground_layer",
     "Renderer.native.test_unit_pose_transition",
     "Renderer.native.test_unit_motion",
     "Renderer.native.test_static_refinement_consistency",

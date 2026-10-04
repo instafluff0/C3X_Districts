@@ -1,5 +1,27 @@
 # Civ III patch dependency ledger
 
+## Idle turn selection, exploration motion and unit layering
+
+`required_user_action: []`. Existing `Animator_update_display`,
+`Main_Screen_Form_set_selected_unit`, `FLC_Animation_set_move_target`,
+`Unit_tick_anim`, `Animator_draw_unit_cursor` and `Map_Renderer_m71_Draw_Tiles`
+retain their signatures and supported-build addresses. No patch entries are
+added. The Animator hook delegates immediately with unchanged arguments when
+custom rendering is off; enabled updates translate a pending post-interturn
+redraw into the native dirty gate and recapture changes to cursor eligibility,
+even when the selected pointer is unchanged. World-loading capture remains a
+separate transaction. The accepted movement-target hook admits a visible owned
+unit's step before destination sight has caught up; foreign units still require
+both endpoints visible. This does not reveal terrain or change native movement.
+
+Renderer64 draws territory before units. Ground shadows keep world depth;
+main unit bodies use a cleared depth plane with ordinary self/other-unit depth
+and body stencil coverage for fog. Reflections retain world occlusion. The
+existing frame restore supplies terrain depth before the next dynamic pass.
+Executable tests cover an idle turn without input, selection eligibility,
+owned exploration versus hidden foreign movement, config-off delegation, and
+D3D11 foreground/self-depth behavior at one and four samples.
+
 ## Movement and reveal raster consistency
 
 `required_user_action: []`. The retained raster repair, refinement and
@@ -69,6 +91,14 @@ preparation contract recaptures permitted facts and completes changed RAM recipe
 before control returns; unchanged recipes remain reusable. Readiness is certified
 by the preparation result and seeded viewer epoch. The pending native redraw
 supplies later anchors and composition; requesting a draw is not readiness proof.
+Required page queries use the matching helper's
+`c3x_renderer_trial_world_seed_query` export (world-page wire subtype 8). They
+wait for call/state locks and copy paging metadata even while a camera is active;
+ordinary background queries still yield when busy. This prevents a transient
+`PENDING` response from failing interturn initialization. Page submissions still
+validate exact scope and authority; required preparation failures remain errors.
+This is a renderer DLL/helper change using the existing interturn hook, with
+`required_user_action: []` and no Civ III patch symbol or address changes.
 Validated world-only preparation retires the old foreground preparation owner
 before source setup or canonical recipes change shared view scratch. Its weak
 samplers freeze; retained native composition keeps the completed pixels and

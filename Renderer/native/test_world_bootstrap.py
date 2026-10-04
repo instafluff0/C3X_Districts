@@ -79,7 +79,7 @@ struct Fake {
  int seed_world_scope(c3x_renderer_camera_request_v1 const& r){worker();identity=r.identity;frame=*r.frame;
   assert(frame.tile_count==1&&frame.tiles[0].city_id==17);topology.assign(frame.world_topology,frame.world_topology+frame.world_topology_count);
   assert(topology.size()==3200&&topology[0]==7);records.resize(topology.size());state.order.push_back(1);return 1;}
- int world_query(c3x_renderer_world_page_v1& p){worker();p={};p.first=state.cursor;p.capacity=128;p.identity=identity;p.frame=frame;
+ int world_query(c3x_renderer_world_page_v1& p,bool required=false){assert(required);worker();p={};p.first=state.cursor;p.capacity=128;p.identity=identity;p.frame=frame;
   p.frame.tiles=nullptr;p.frame.tile_count=0;p.frame.world_topology=nullptr;p.frame.world_topology_count=0;return 1;}
  int world_submit(c3x_renderer_world_page_v1 const& p,int code){worker();if(code!=1)return code;
   assert(p.first==state.cursor&&p.count==128&&p.identity.map_epoch==identity.map_epoch);

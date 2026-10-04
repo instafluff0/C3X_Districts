@@ -943,7 +943,7 @@ float4 PSShadow(Output i):SV_Target {
             Target& scene,float scene_scale,float /*visual_hour*/,bool reflected,float zoom){
         SandboxPassWorkload::Scope pass(*work,reflected?SandboxPassWorkload::reflected_units:SandboxPassWorkload::units);
         // The map fog pass consumes this exact body coverage after tone mapping.
-        // Clearing just stencil preserves terrain depth and costs no readback.
+        // Keep terrain depth for projected shadows; bodies start their own depth pass.
         if(!reflected){renderer.context->ClearDepthStencilView(scene.depth,D3D11_CLEAR_STENCIL,1,0);work->clear(scene.depth);}
         if(visible.empty())return true;
         if(!initialize())return false;
@@ -996,12 +996,21 @@ float4 PSShadow(Output i):SV_Target {
         auto key_light=c3x_renderer::lighting::key_light(environment);
         context->UpdateSubresource(beauty,0,nullptr,prepared_beauty.data(),0,0);work->upload_buffer(beauty);
         ID3D11Buffer* bound_material=nullptr;
-        for(auto& prepared:prepared_units){
-            if(reflected?!prepared.reflected:!(prepared.main||prepared.shadow))continue;
+        // Ground shadows still test against terrain. Visible bodies then share
+        // a fresh depth plane, preserving self/other-unit occlusion while every
+        // world feature stays behind them. The next frame restores cached world
+        // depth before its dynamic passes; reflections keep their world depth.
+        for(int layer=reflected?1:0;layer<2;++layer){
+          if(!reflected && layer==1){
+            context->ClearDepthStencilView(scene.depth,D3D11_CLEAR_DEPTH|D3D11_CLEAR_STENCIL,1,0);
+            work->clear(scene.depth);
+          }
+          for(auto& prepared:prepared_units){
+            if(reflected?!prepared.reflected:layer==0?!prepared.shadow:!prepared.main)continue;
             auto const& instance=prepared.instance;auto const& unit=bodies.units[instance.unit];
             auto const& action=unit.actions[instance.action];auto const& pose=prepared.pose;
             float low=prepared.low,ground_pixels=prepared.ground_pixels,ground_depth=prepared.ground_depth,angle=prepared.angle;
-            if((prepared.main||prepared.reflected)&&!borrow_shadow(prepared,frame))return false;
+            if(layer==1&&!borrow_shadow(prepared,frame))return false;
             context->OMSetRenderTargets(1,&scene.target,scene.depth);
             context->OMSetDepthStencilState(body_depth,reflected?0:1);
             context->OMSetBlendState(nullptr,nullptr,~0u);
@@ -1046,7 +1055,7 @@ float4 PSShadow(Output i):SV_Target {
                 context->PSSetShaderResources(0,1,&bodies.textures[part.texture].view);
                 context->PSSetShaderResources(2,4,part_sample.textures.data());
                 context->PSSetSamplers(0,1,&samplers[part.address]);
-                if(!reflected&&prepared.shadow&&key_light.intensity>.001f){
+                if(layer==0&&key_light.intensity>.001f){
                     placement_values[16]=1;
                     placement_values[17]=-key_light.direction[0]/key_light.direction[2]*
                         c3x_renderer::lighting::object_height_to_world;
@@ -1062,12 +1071,13 @@ float4 PSShadow(Output i):SV_Target {
                     context->OMSetBlendState(nullptr,nullptr,0xffffffffu);
                     context->PSSetShader(pixel,nullptr,0);
                 }
-                if(reflected||prepared.main){
+                if(layer==1){
                     context->UpdateSubresource(placement,0,nullptr,placement_values,0,0);work->upload_buffer(placement);
                     context->DrawIndexed(UINT(source->indices.size()),0,0);work->draw(source->indices.size());
                     ++draws;
                 }
             }
+          }
         }
         if(!reflected)transitions.finish(frame.presentation_time_ticks);
         ID3D11ShaderResourceView* empty[6]={};context->PSSetShaderResources(0,6,empty);

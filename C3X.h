@@ -2689,6 +2689,7 @@ struct district_button_image_set {
 	bool custom_renderer_unit_bootstrap, custom_renderer_unit_bootstrap_failed;
 	bool custom_renderer_unit_representatives_dirty;
 	int custom_renderer_unit_display_action;
+	bool custom_renderer_unit_cursor_visible;
 	Unit * custom_renderer_unit_bootstrap_selected;
 	unsigned custom_renderer_unit_bootstrap_copies;
 	c3x_renderer_unit_move_fn custom_renderer_unit_move;
