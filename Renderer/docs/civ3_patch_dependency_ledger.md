@@ -2461,3 +2461,47 @@ retires a map. Resident proof reuse, packet selection and retained HUD/front
 assembly remain inside `Renderer/`. No injected source, Civ III signature,
 supported-build address or patch-table entry changes are required.
 `required_user_action: []`.
+
+## Unexplored edges and selected-unit refresh
+
+`required_user_action: []`. No new symbols or patch-table entries. Existing
+`Main_Screen_Form_set_selected_unit` retains its existing one-shot refresh after
+an accepted selection change. The existing `Unit_tick_anim` and unit-sprite capture hooks retain
+native cursor eligibility in the first copied view while suppressing native
+cursor/HUD drawing during that capture.
+
+For a selected worker with native `UnitState == 0`, a stale looping work action
+or default idle capture becomes the fidget presentation with a fresh cursor and
+no queued work action. Missing native fidget cadence/frames falls back to idle.
+Native unit state and animation storage are unchanged; actual work orders,
+movement, combat, one-shot construction and army member capture retain their
+native action. Renderer-off preserves native calls and unrelated C3X features.
+
+The final CPU/GPU visibility pass now keeps unseen cells opaque and feathers
+inside explored cells. Cardinal and diagonal coverage cannot expose clipped
+terrain or underlay across an unseen edge. Visible actor stencil protection and
+ordinary explored-fog blending remain. Existing native tile classification and
+`Map_Renderer_draw_fog` ownership are unchanged.
+
+Executable coverage includes every 3-state neighbor pattern, complete shared
+edges, the GPU/CPU pixel oracle, selection/reselection and cursor eligibility,
+worker actions/job state, bootstrap restoration, and configuration-off calls.
+
+Repeated selection in the live witness also exposed mandatory HUD-pair
+allocation failing while an optional shared artwork cache retained space.
+`RetainedComposition::reserve` now releases that cache after optional front
+reuse, before rejecting the required pair. Copied source pictures, compiled
+recipes and saved output generations survive; binding can rebuild the cache
+or use the existing bounded interpreter. The 256 MiB cap is unchanged. The
+GPU regression reproduces the former refusal and verifies new/saved pixels,
+shared-cache eviction, later rebinding and complete release without new hooks.
+
+Validation: transition/category checks, native capture/config-off contracts,
+the approved injection smoke test, 663 retained GPU pixel comparisons and
+ready-frame checks pass. The final matching trio passes the asynchronous
+32-camera/24-pose fixture. Disposable-save witness `20261003-182911` completes
+three turns and 13 interaction commands with 758 sampled window frames and no
+renderer failure; the original save is unchanged and owned processes are closed.
+Reviewed frames show opaque feathered shroud edges, turn-start rings before
+further input, and the selected worker idle after its road job. Local receipts
+and indexed visual evidence are under `Renderer/.cache/fog-selection-worker/`.

@@ -110,6 +110,13 @@ struct VisibilityCoverage {
         int x=u<.5f?-1:1,y=v<.5f?-1:1;
         auto value=[&](int dx,int dy){return float(((cells>>(2*((dy+1)*3+dx+1)))&3u)>=threshold);};
         float wx=edge(u),wy=edge(v);
+        // Unseen cells are opaque. Feather on the explored side, where terrain
+        // exists, and never expose a clipped mesh/underlay in an unseen neighbor.
+        if(threshold==1){
+            if(!value(0,0))return 0;
+            wx*=2;wy*=2;
+            return std::min({1-wx*(1-value(x,0)),1-wy*(1-value(0,y)),1-wx*wy*(1-value(x,y))});
+        }
         return (value(0,0)*(1-wx)+value(x,0)*wx)*(1-wy)+(value(0,y)*(1-wx)+value(x,y)*wx)*wy;
     }
     // Explicit CPU-output compatibility. Never darken retained source pixels.
@@ -122,7 +129,7 @@ struct VisibilityCoverage {
                 float dx=(x+.5f-tile.x)/tile_width*2-1,dy=(y+.5f-tile.y)/tile_height*2;
                 float u=(dx+dy)*.5f,v=(dy-dx)*.5f;
                 if(u<0 || v<0 || u>=1 || v>=1)continue;
-                float explored=coverage(tile.cells,u,v,1),visible=coverage(tile.cells,u,v,2);
+                float explored=coverage(tile.cells,u,v,1),visible=std::min(explored,coverage(tile.cells,u,v,2));
                 float fog=(explored-visible)*fog_alpha,scale=explored-fog;
                 auto index=std::size_t(y)*width+x;unsigned original=source[index],pixel=original&0xff000000u;
                 for(unsigned shift:{0u,8u,16u})pixel|=unsigned(std::clamp(std::nearbyint(((original>>shift)&255u)*scale+gray*255*fog),0.f,255.f))<<shift;

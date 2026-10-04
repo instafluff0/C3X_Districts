@@ -198,10 +198,20 @@ private:
     }
     std::uint64_t resident_bytes()const{return owned_storage.bytes()+direct_bytes+replay.spatial_bytes();}
     void release_front(){assembled_patches.clear();assembled_front.Reset();front_owned={};front_physical={};assembled_width=assembled_height=0;assembled_revision=0;}
-    void reserve(std::uint64_t bytes,char const* site){
+    void reserve(std::uint64_t bytes,char const* site,BatchPreparation* cache=nullptr){
         if(bytes<=resident_budget-resident_bytes())return;
         // Optional front reuse cannot displace an authoritative native output.
         release_front();
+        if(bytes<=resident_budget-resident_bytes())return;
+        if(cache){
+            // A shared HUD atlas is optional; immutable output pairs are not.
+            // Keep its recipe and source pictures so bind_batch can rebuild it
+            // or use the bounded interpreter after the required pair is admitted.
+            cache->spatial_plan={};cache->spatial_ready=cache->spatial_attempted=cache->batch_bound=false;
+            cache->binding_refused=false;
+            for(auto& view:cache->batch_views)view.texture.Reset();
+            for(auto& source:cache->batch_sources){source.texture.Reset();source.owned={};source.physical={};}
+        }
         if(bytes<=resident_budget-resident_bytes())return;
         char line[384];std::snprintf(line,sizeof(line),
             "[C3X renderer] stage=retained-admission-rejected site=%s requested=%llu resident=%llu cap=%llu physical=%llu peak=%llu recipe_eligible=%llu recipe_probed=%llu recipe_reused=%llu\n",
@@ -679,7 +689,7 @@ private:
                 // One pair per immutable HUD generation. Reserve both growths
                 // before initializing either result; old/new overlap counts.
                 auto bytes=std::uint64_t(n->inputs[0].width)*n->inputs[0].height*4;
-                reserve((!n->output[0]?bytes:0)+(!n->output[1]?bytes:0),"hud-pair");
+                reserve((!n->output[0]?bytes:0)+(!n->output[1]?bytes:0),"hud-pair",n->batch_preparation.get());
                 for(unsigned i=0;i<2;++i)if(!n->output[i]){
                     auto id=replay.create(n->inputs[i].width,n->inputs[i].height,Format::bgra32,false);
                     if(!id)throw std::runtime_error("retained HUD pair admission");

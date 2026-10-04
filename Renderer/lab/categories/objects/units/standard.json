@@ -76,7 +76,8 @@
     "Renderer.native.test_unit_motion",
     "Renderer.native.test_static_refinement_consistency",
     "Renderer.native.test_unit_combat",
-    "Renderer.native.test_skin_shadow"
+    "Renderer.native.test_skin_shadow",
+    "Renderer.native.test_injected_unit_bootstrap"
   ],
   "references": {
     "d3d11": [

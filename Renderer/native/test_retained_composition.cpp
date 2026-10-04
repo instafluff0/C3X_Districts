@@ -15,6 +15,7 @@ std::vector<unsigned> retained_read(ID3D11Device* d,ID3D11DeviceContext* c,ID3D1
     c->Unmap(read.Get(),0);return out;
 }
 int test_retained_composition(){
+    setvbuf(stdout,nullptr,_IONBF,0);setvbuf(stderr,nullptr,_IONBF,0);
     ComPtr<ID3D11Device> device;ComPtr<ID3D11DeviceContext> context;D3D_FEATURE_LEVEL level;
     checked(D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_HARDWARE,nullptr,0,nullptr,0,D3D11_SDK_VERSION,&device,&level,&context));
     constexpr unsigned w=48,h=32;Rect full={0,0,int(w),int(h)},part={5,3,38,26};unsigned checks=0;
@@ -1465,6 +1466,44 @@ int test_retained_composition(){
         for(auto retained:{&fast,&oracle}){retained->record({Kind::fill,sparse,0,{3,4,9,10},full,0,0,color});retained->commit(sparse,full);}compare(14);
         fast.clear();oracle.clear();assert(!fast.bytes()&&!fast.node_count()&&!oracle.bytes()&&!oracle.node_count());
         std::printf("PASS retained damaged front: format=%u exact=14 rotating_targets=1 failed_display_retry=1 unchanged_fixed_pixels=1 partial_commit=1 shifted_self_copy=1 saved_version=1 sparse_fallback=1 optional_admission_eviction=1 reset=1\n",unsigned(format));
+    }
+    // Cached sparse HUD artwork is optional. A fresh native output pair has
+    // priority under the same hard cap, including when another saved pair
+    // shares the compiled artwork. Keep both generations pixel-exact.
+    {
+        constexpr unsigned width=64,height=64;Rect bounds={0,0,width,height};
+        constexpr std::uint64_t plane=std::uint64_t(width)*height*4;
+        auto live_owner=std::make_unique<Compositor>(device.Get(),context.Get());
+        auto retained_owner=std::make_unique<RetainedComposition>(device.Get(),context.Get());
+        auto& live=*live_owner;auto& retained=*retained_owner;
+        auto make=[&](Format format){auto id=live.create(width,height,format);assert(id);retained.create(id,width,height,format);return id;};
+        auto base=make(Format::rgb555),base_color=make(Format::bgra32),art=make(Format::rgb555),
+            words=make(Format::rgb555),detail=make(Format::bgra32),saved=make(Format::rgb555),saved_color=make(Format::bgra32);
+        std::vector<unsigned> pixels(width*height,0x1234);
+        for(auto id:{base,base_color,art}){assert(live.upload(id,1,pixels.data(),pixels.size()));retained.source(id,live.texture(id));}
+        retained.record({Kind::fill,art,0,{7,9,37,41},bounds,0,0,0x0421}); // requires a private assembled source
+        auto zoom=std::make_shared<c3x_renderer::ZoomTransition>();
+        std::vector<RetainedComposition::Placed> batch={{{Kind::copy,words,art,bounds,bounds},32,32}};
+        auto publish=[&]{retained.snapshot(words,base);retained.snapshot(detail,base_color);retained.placed_batch(words,detail,batch,zoom);retained.commit(words,bounds);};
+        publish();auto expected=retained_read(device.Get(),context.Get(),retained.sample(1,1000).Get());
+        for(unsigned y=0;y<height;++y)for(unsigned x=0;x<width;++x)
+            assert(expected[y*width+x]==(x>=7&&x<37&&y>=9&&y<41?0x0421u:0x1234u));
+        retained.snapshot(saved,words);retained.snapshot(saved_color,detail);
+        constexpr Id pressure=900003;retained.create(pressure,1,1,Format::bgra32);
+        RetainedComposition::Direct charge;charge.input_bytes=256u*1024u*1024u-retained.bytes()-plane*2+plane/2;
+        retained.record({Kind::fill,pressure,0,{0,0,1,1},{0,0,1,1}},charge);
+        publish();RetainedComposition::Texture admitted;
+        try{admitted=retained.sample(2,1000);}catch(std::exception const& e){
+            std::fprintf(stderr,"FAIL mandatory HUD admission: %s\n",e.what());return 1;
+        }
+        assert(retained_read(device.Get(),context.Get(),admitted.Get())==expected);
+        assert(retained.bytes()<=256u*1024u*1024u);
+        retained.commit(detail,bounds);assert(retained_read(device.Get(),context.Get(),retained.sample(3,1000).Get())==pixels);
+        retained.commit(saved,bounds);assert(retained_read(device.Get(),context.Get(),retained.sample(4,1000).Get())==expected);
+        retained.commit(saved_color,bounds);assert(retained_read(device.Get(),context.Get(),retained.sample(5,1000).Get())==pixels);
+        retained.destroy(pressure);publish();assert(retained_read(device.Get(),context.Get(),retained.sample(6,1000).Get())==expected);
+        retained.clear();assert(!retained.bytes()&&!retained.node_count());checks+=6;
+        std::puts("PASS mandatory HUD admission: optional atlas evicted; shared saved pair exact; cache rebind; cap unchanged");
     }
     std::printf("PASS retained composition: %u exact GPU oracles, 120 independent clock frames, aliasing, paired 555/565/full color, UI versioning, partial publication, bounded overwrite and reset\n",checks);return 0;
 }

@@ -51,7 +51,7 @@ PRELUDE = r'''
 #define __fastcall
 #define __ 0
 enum { IS_UNINITED, IS_OK, IS_INIT_FAILED };
-enum { AT_DEFAULT = 1, AT_RUN = 2, AT_ATTACK1 = 3, AT_DEATH = 6, AT_PLANT = 18 };
+enum { AT_BLANK = 0, AT_DEFAULT = 1, AT_RUN = 2, AT_ATTACK1 = 3, AT_DEATH = 6, AT_FIDGET = 8, AT_FORTRESS = 11, AT_ROAD = 13, AT_PLANT = 18 };
 enum { DNCM_OFF, SCM_OFF = 0, CS_SUMMER = 0, CS_SPRING = 3, UTA_Army = 1 };
 typedef struct RECT { int left, top, right, bottom; } RECT;
 typedef struct LARGE_INTEGER { long long QuadPart; } LARGE_INTEGER;
@@ -64,7 +64,7 @@ typedef struct AnimationSummary {
 typedef struct Animation_Info { int *Frame_Counts; float *anim_frame_time_seconds; } Animation_Info;
 typedef struct Unit {
     struct {
-        int ID, UnitTypeID, X, Y, CivID, Damage, Container_Unit;
+        int ID, UnitTypeID, X, Y, CivID, Damage, Container_Unit, UnitState;
         int field_23D, field_233, Active, army_top_defender_id;
         bool always_on_top;
         void *field_234;
@@ -77,7 +77,7 @@ typedef struct Unit {
             bool field_111;
         } Animation;
     } Body;
-    bool army, visible;
+    bool army, visible, worker;
     char online_hidden;
 } Unit;
 typedef struct JGL_Image { int identity; } JGL_Image;
@@ -222,6 +222,7 @@ Unit *get_unit_ptr(int id) {
     for (int n = 0; n < 12; ++n) if (units[n].Body.ID == id) return &units[n];
     return NULL;
 }
+bool is_worker(Unit *unit) { return unit->worker; }
 int Unit_get_max_hp(Unit *unit) { (void)unit; return 4; }
 int clamp(int minimum, int maximum, int value) {
     return value < minimum ? minimum : value > maximum ? maximum : value;
@@ -336,9 +337,13 @@ void Unit_tick_anim(Unit *unit, int unused, PCX_Image *canvas, int offset_x, int
         int x = center_x - sprite->Width / (2 * divisor);
         int y = center_y - sprite->Height / (2 * divisor);
         PCX_Color_Table *active_palette = palette_ready ? &palette : NULL;
+        AnimationSummary before_draw = body->Body.Animation.summary;
+        int before_cursor = body->Body.Animation.field_FC;
         if (bic.is_zoomed_out)
             patch_Sprite_draw_unit_body_reduced(sprite, 0, &background, canvas, x, y, 1, 1, 2, "palette", active_palette);
         else patch_Sprite_draw_unit_body_normal(sprite, 0, &background, canvas, x, y, "palette", active_palette);
+        assert(memcmp(&body->Body.Animation.summary, &before_draw, sizeof before_draw) == 0);
+        assert(body->Body.Animation.field_FC == before_cursor);
         // Frame acquisition/native army drawing may alter temporary image state.
         // Deliberately perturb each saved field to exercise complete restoration.
         body->Body.Rect = (RECT){-900, -800, 900, 800};
@@ -574,7 +579,7 @@ void army_restore_case(void) {
     assert(animations[0].display_unit_id == 100 && animations[1].display_unit_id == 100);
     for (int n = 0; n < 2; ++n) {
         assert((draw_flags[n] & C3X_RENDERER_UNIT_SELECTED) != 0);
-        assert((draw_flags[n] & C3X_RENDERER_UNIT_CURSOR) == 0);
+        assert(draw_flags[n] & C3X_RENDERER_UNIT_CURSOR);
         assert(draws[n].display_color_rgb == 0x0c2238 && !strcmp(draws[n].unit_key, "PRTO_Archer"));
         assert(animations[n].cursor == 7 + n && animations[n].frame_seconds == .0625f);
     }
@@ -686,6 +691,45 @@ void accepted_selection_case(void) {
     assert(native_selection_calls==5&&screen.Current_Unit==&units[0]);
     assert(!state.custom_renderer_unit_representatives_dirty&&!state.custom_renderer_redraw_pending);
 }
+void idle_worker_case(void) {
+    // Ordinary draws and first-frame recapture must agree, without modifying
+    // native work orders, action cursors or queued actions.
+    for (int bootstrap = 0; bootstrap < 2; ++bootstrap)
+    for (int action = AT_DEFAULT; action <= AT_PLANT; ++action)
+    for (int condition = 0; condition < 6; ++condition) {
+        if (action == AT_FIDGET && condition == 4) continue; // Invalid native frame: readiness contract covers deferral.
+        reset(); place(0, 2, 2); occurrence(0, 2, 2, 14);
+        Unit *unit = &units[0]; unit->worker = condition != 1;
+        screen.Current_Unit = condition == 2 ? NULL : unit;
+        unit->Body.UnitState = condition == 3 ? 4 : 0;
+        unit->Body.Animation.summary.current_anim_type = action;
+        unit->Body.Animation.summary.queued_anim_type = AT_PLANT;
+        if (condition == 4) counts[AT_FIDGET] = 0;
+        if (condition == 5) frame_seconds[AT_FIDGET] = 0;
+        Unit before = *unit;
+        bool idle = condition != 1 && condition != 2 && condition != 3 &&
+            (action == AT_DEFAULT || action == AT_FORTRESS || action >= AT_ROAD);
+        int expected = idle ? (condition >= 4 ? AT_DEFAULT : AT_FIDGET) : action;
+        if (bootstrap) assert(bootstrap_custom_renderer_initial_units() == C3X_RENDERER_RESULT_OK);
+        else patch_Unit_tick_anim(unit, 0, &screen.Units_Control.Data.Canvas, 0, 0, true);
+        assert(draw_count == 1 && animation_count == 1);
+        assert(draws[0].action == expected && animations[0].visual.action == expected);
+        assert(draws[0].frame_count == counts[expected] && animations[0].frames == counts[expected]);
+        assert(draws[0].action_cursor == (idle ? 0 : before.Body.Animation.field_FC));
+        assert(draws[0].queued_action == (idle ? AT_BLANK : AT_PLANT));
+        assert(animations[0].frame_seconds == frame_seconds[expected]);
+        assert(unit->Body.UnitState == before.Body.UnitState);
+        if (bootstrap) { restored(&before, unit); clean_scope(screen.Current_Unit, 0x800u); }
+    }
+    for (int disabled = 0; disabled < 2; ++disabled) {
+        reset(); place(0, 2, 2); occurrence(0, 2, 2, 14); screen.Current_Unit = &units[0];
+        screen.animator.field_18E4[12] = disabled;
+        assert(bootstrap_custom_renderer_initial_units() == C3X_RENDERER_RESULT_OK);
+        assert(draw_flags[0] & C3X_RENDERER_UNIT_SELECTED);
+        assert(!!(draw_flags[0] & C3X_RENDERER_UNIT_CURSOR) == !disabled);
+        assert(cursor_count == 0); // Selection metadata is copied; native cursor is not redrawn.
+    }
+}
 void guards_case(void) {
     for (int condition = 0; condition < 15; ++condition) {
         reset(); place(0, 2, 2); occurrence(0, 2, 2, 14);
@@ -736,6 +780,7 @@ int main(int argc, char **argv) {
     else if (!strcmp(argv[1], "army_restore")) army_restore_case();
     else if (!strcmp(argv[1], "failure_config")) failure_config_case();
     else if (!strcmp(argv[1], "guards")) guards_case();
+    else if (!strcmp(argv[1], "idle_worker")) idle_worker_case();
     else if (!strcmp(argv[1], "selection_refresh")) selection_refresh_case();
     else if (!strcmp(argv[1], "accepted_selection")) accepted_selection_case();
     else assert(!"Unknown contract case");
@@ -797,6 +842,9 @@ class InjectedUnitBootstrapTests(unittest.TestCase):
 
     def test_selection_action_mode_and_camera_refresh_is_one_shot(self):
         self.contract("selection_refresh")
+
+    def test_selected_idle_worker_fidgets_and_bootstrap_keeps_cursor(self):
+        self.contract("idle_worker")
 
     def test_bootstrap_guards_and_bounded_top_list(self):
         self.contract("guards")

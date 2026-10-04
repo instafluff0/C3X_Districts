@@ -9,7 +9,9 @@
     "Renderer/lab/shared/shaders/relief/beauty_terrain.hlsl",
     "Renderer/native/city_fidelity/terrain.hlsl",
     "Renderer/native/source_fidelity/geometry.h",
-    "Renderer/native/render_core/terrain_query.h"
+    "Renderer/native/render_core/terrain_query.h",
+    "Renderer/native/render_core/visibility_coverage.h",
+    "Renderer/native/gpu_visibility.h"
   ],
   "recipe": {
     "terrain": 2,
@@ -29,7 +31,9 @@
   "tests": [
     "Renderer.native.source_fidelity.test_contract",
     "Renderer.native.test_render_core",
-    "Renderer.native.test_static_refinement_consistency"
+    "Renderer.native.test_static_refinement_consistency",
+    "Renderer.native.test_unseen_boundary",
+    "Renderer.native.test_visibility"
   ],
   "references": {
     "d3d11": [

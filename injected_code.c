@@ -28200,6 +28200,15 @@ forward_custom_unit_body (Sprite * sprite, PCX_Image * background, PCX_Image * c
 	if (info == NULL || info->Frame_Counts == NULL || action < AT_DEFAULT || action > AT_PLANT ||
 	    type < 0 || type >= p_bic_data->UnitTypeCount)
 		return false;
+	bool selected = display_unit == (is->custom_renderer_unit_bootstrap ?
+		is->custom_renderer_unit_bootstrap_selected : p_main_screen_form->Current_Unit);
+	// Selection after a completed/cancelled job can retain the native work frame.
+	// Normalize only the copied presentation; active jobs and directed actions stay native.
+	bool idle_worker = selected && unit == display_unit && unit->Body.UnitState == 0 && is_worker (unit) &&
+		(action == AT_DEFAULT || action == AT_FORTRESS || action >= AT_ROAD);
+	if (idle_worker)
+		action = info->Frame_Counts[AT_FIDGET] > 0 && info->anim_frame_time_seconds != NULL &&
+			info->anim_frame_time_seconds[AT_FIDGET] > 0 && info->anim_frame_time_seconds[AT_FIDGET] <= 10 ? AT_FIDGET : AT_DEFAULT;
 	// State must precede the body clock: a later observation would make this
 	// member's animation/capture stale against its own ordered state event.
 	if (unit != display_unit)
@@ -28208,9 +28217,9 @@ forward_custom_unit_body (Sprite * sprite, PCX_Image * background, PCX_Image * c
 	draw.struct_size = sizeof draw;
 	draw.unit_id = unit->Body.ID;
 	draw.action = action;
-	draw.queued_action = unit->Body.Animation.summary.queued_anim_type;
+	draw.queued_action = idle_worker ? AT_BLANK : unit->Body.Animation.summary.queued_anim_type;
 	draw.direction = unit->Body.Animation.summary.direction_2;
-	draw.action_cursor = unit->Body.Animation.field_FC;
+	draw.action_cursor = idle_worker ? 0 : unit->Body.Animation.field_FC;
 	draw.frame_count = info->Frame_Counts[action];
 	draw.body_x = x; draw.body_y = y;
 	draw.sprite_width = sprite->Width; draw.sprite_height = sprite->Height;
@@ -28258,10 +28267,9 @@ forward_custom_unit_body (Sprite * sprite, PCX_Image * background, PCX_Image * c
 	if (!(capture_custom_renderer_visibility (tile_at (display_unit->Body.X, display_unit->Body.Y),
 		p_main_screen_form->Player_CivID, display_unit->Body.X, display_unit->Body.Y) & C3X_RENDERER_TILE_VISIBLE))
 		flags |= C3X_RENDERER_UNIT_HIDDEN;
-	if (display_unit == (is->custom_renderer_unit_bootstrap ?
-	    is->custom_renderer_unit_bootstrap_selected : p_main_screen_form->Current_Unit)) {
+	if (selected) {
 		flags |= C3X_RENDERER_UNIT_SELECTED;
-		if (! is->custom_renderer_unit_bootstrap && (p_main_screen_form->animator.field_18E4[12] & 1) == 0)
+		if ((p_main_screen_form->animator.field_18E4[12] & 1) == 0)
 			flags |= C3X_RENDERER_UNIT_CURSOR;
 	}
 	if (is->custom_renderer_unit_visual != NULL) {

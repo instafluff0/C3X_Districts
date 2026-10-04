@@ -25,10 +25,12 @@ struct Summary {int current_anim_type=2,queued_anim_type=0,direction_2=3,pixel_l
 struct Animation {struct {void* Flic_Info;Sprite sprite;} Frame_1;Animation_Info* Animation_Info;Summary summary;int field_FC=7;};
 struct Rect {int left=20,top=30,right=45,bottom=55;};
 using RECT=Rect;
-struct Unit {struct {Rect Rect;int ID=42,UnitTypeID=0,X=2,Y=4,Damage=2;int army_top_defender_id=-1;Animation Animation;} Body;bool army=false,visible=true;};
+struct Unit {struct {Rect Rect;int ID=42,UnitTypeID=0,X=2,Y=4,Damage=2,UnitState=0;int army_top_defender_id=-1;Animation Animation;} Body;bool army=false,visible=true,worker=false;};
 struct UnitType {char Civilipedia_Entry[32]="PRTO_Archer";};
 struct Bic {int UnitTypeCount=1;UnitType* UnitTypes;bool is_zoomed_out=false;};
 struct State {int custom_renderer_native_operation=123;Unit* custom_renderer_unit_context=nullptr;PCX_Image* custom_renderer_unit_canvas=nullptr;
+ bool custom_renderer_unit_bootstrap=false,custom_renderer_unit_bootstrap_failed=false;
+ unsigned custom_renderer_unit_bootstrap_copies=0;Unit* custom_renderer_unit_bootstrap_selected=nullptr;
  char custom_renderer_test_save[1]={};int custom_renderer_test_step=0;
  c3x_renderer_unit_forget_fn custom_renderer_unit_forget=nullptr;
  c3x_renderer_unit_draw_background_fn custom_renderer_unit_draw=nullptr;
@@ -44,7 +46,7 @@ struct State {int custom_renderer_native_operation=123;Unit* custom_renderer_uni
  bool day_night_cycle_unstarted=false,seasonal_cycle_unstarted=false;int current_day_night_cycle=12,current_seasonal_cycle=0;
  c3x_renderer_visual_clock_fn custom_renderer_visual_clock=nullptr;
  LARGE_INTEGER custom_renderer_qpc_frequency={1000000},custom_renderer_animation_timestamp={},custom_renderer_animation_sample_at={};};
-constexpr int AT_DEFAULT=1,AT_RUN=2,AT_PLANT=18,DNCM_OFF=0,SCM_OFF=0,CS_SUMMER=0,CS_SPRING=3,IS_OK=1,UTA_Army=1;
+constexpr int AT_BLANK=0,AT_DEFAULT=1,AT_RUN=2,AT_FIDGET=8,AT_FORTRESS=11,AT_ROAD=13,AT_PLANT=18,DNCM_OFF=0,SCM_OFF=0,CS_SUMMER=0,CS_SPRING=3,IS_OK=1,UTA_Army=1;
 void debug_output(char const*){} auto p_OutputDebugStringA=debug_output;
 struct Screen {int Player_CivID=1;Unit* Current_Unit=nullptr;struct {int field_18E4[13]={};} animator;} screen;Screen* p_main_screen_form=&screen;
 unsigned playback_flags=0;
@@ -62,6 +64,7 @@ int capture_animation(c3x_renderer_unit_animation_v1 const* value){
  assert(value&&value->struct_size==sizeof(*value));captured_animation=*value;++animation_calls;
  return capture_visual(&value->visual);
 }
+bool is_worker(Unit* unit){return unit->worker;}
 int Unit_get_max_hp(Unit*){return 4;}
 int clamp(int a,int b,int v){return v<a?a:(v>b?b:v);}
 long long qpc=1000000;

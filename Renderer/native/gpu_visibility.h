@@ -48,11 +48,17 @@ float value(uint cells,int x,int y,uint threshold){return ((cells>>(2*((y+1)*3+x
 float coverage(uint cells,float2 uv,uint threshold){
  int2 direction=int2(uv.x<.5f?-1:1,uv.y<.5f?-1:1);
  float2 t=saturate(min(uv,1-uv)/response.x),w=.5f*(1-t*t*(3-2*t));
+ if(threshold==1){
+  if(!value(cells,0,0,1))return 0;
+  w*=2;
+  return min(min(1-w.x*(1-value(cells,direction.x,0,1)),1-w.y*(1-value(cells,0,direction.y,1))),
+             1-w.x*w.y*(1-value(cells,direction.x,direction.y,1)));
+ }
  return lerp(lerp(value(cells,0,0,threshold),value(cells,direction.x,0,threshold),w.x),
              lerp(value(cells,0,direction.y,threshold),value(cells,direction.x,direction.y,threshold),w.x),w.y);
 }
 float4 ps(V v):SV_Target{
- float explored=coverage(v.cells,v.uv,1),visible=coverage(v.cells,v.uv,2);
+ float explored=coverage(v.cells,v.uv,1),visible=min(explored,coverage(v.cells,v.uv,2));
  float fog=(explored-visible)*response.z;
  // Only depth-tested body fragments carry stencil 1. Ground, shadows,
  // cutout holes and terrain in front of a body retain ordinary map coverage.
