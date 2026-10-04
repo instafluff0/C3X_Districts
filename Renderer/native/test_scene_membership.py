@@ -1,5 +1,6 @@
 """Executable ownership contract for production's selected scene generations."""
 import unittest
+from pathlib import Path
 from Renderer.native.native_cpp_test import run_cpp
 
 class SceneMembershipTests(unittest.TestCase):
@@ -51,6 +52,49 @@ int main(){
  membership.clear();mesh.reset();assert(frees==0);
  old.reset();same.reset();assert(frees==0);
  updated.reset();assert(frees==1 && budget->bytes==0);
+}
+''')
+
+    def test_completed_fresh_selection_releases_old_meshes_before_next_view(self):
+        root = Path(__file__).resolve().parents[2]
+        source = (root / 'Renderer/sandbox/fresh_pipeline.h').read_text()
+        begin = source.index('    void retire_geometry_selection(){')
+        method = source[begin:source.index('    bool capture(', begin)]
+        run_cpp(r'''#include "Renderer/native/render_core/scene_membership.h"
+#include <cassert>
+#include <array>
+using namespace c3x_renderer::render_core;
+struct Chunk {struct Bounds {int left,top,right,bottom;} bounds{};int translation_x=0,translation_y=0;float natural_projection[4]={};};
+using Membership=SceneMembership<Chunk,2>;
+struct Pass {
+ Membership::Lease resident_lease;
+ std::vector<int> resident,static_visible,water_visible,reflection_visible,all_visible;
+ std::vector<int> roi_records,roi_shadow_records,selected_lighting,body_requirements;
+ bool body_requirements_valid=true,visibility_valid=true;std::uint64_t resident_signature=42;
+ struct Shadow {std::vector<int> casters,caster_inputs,instance_groups;Membership::Lease caster_lease;
+  std::uint64_t caster_signature=42,prepared_signature=42;} shadow;
+ std::array<int,4> completed_image{3,7,11,19};
+''' + method + r'''};
+int main(){
+ auto budget=std::make_shared<ResidentRetirement>();Membership membership(budget);Pass pass;
+ auto mesh=std::make_shared<int>(99);std::weak_ptr<int> weak=mesh;
+ assert(membership.retain({1,1},mesh));
+ pass.resident_lease=membership.publish();pass.shadow.caster_lease=membership.publish();
+ // An independent in-flight consumer must still retain its generation.
+ auto independent=membership.publish();mesh.reset();
+ pass.body_requirements={1};pass.all_visible={2};pass.shadow.caster_inputs={3};
+ pass.retire_geometry_selection();membership.clear();
+ assert(!weak.expired());assert((pass.completed_image==std::array<int,4>({3,7,11,19})));
+ assert(!pass.resident_lease && !pass.shadow.caster_lease && !pass.resident_signature);
+ assert(!pass.visibility_valid && !pass.body_requirements_valid);
+ assert(pass.body_requirements.empty() && pass.all_visible.empty() && pass.shadow.caster_inputs.empty());
+ independent.reset();assert(weak.expired() && !budget->bytes);
+ // The next scene uses the same bounded owner, with no accumulated leases.
+ for(unsigned i=0;i<1000;++i){
+  assert(membership.retain({1,i+2},std::make_shared<int>(i)));
+  pass.resident_lease=membership.publish();pass.shadow.caster_lease=membership.publish();
+  pass.retire_geometry_selection();membership.clear();assert(!budget->bytes);
+ }
 }
 ''')
 

@@ -38,7 +38,8 @@ class PreparedWorldPlacementUnionTests(unittest.TestCase):
             "    Submission::Key shared_caster_placement_key(",
             "    template<class BodyInputs> bool body_placements_covered(",
             "    template<class BodyInputs> bool append_body_placements(",
-            "    template<class BodyInputs,class RetireCompletedPlans> bool prepare_instances("])
+            "    template<class BodyInputs,class RetireCompletedPlans> bool prepare_instances(",
+            "    template<class BodyInputs,class RetireCompletedPlans> bool prepare_required_instances("])
         run_cpp_quiet(GPU_STUB + r'''
 #include <cstdio>
 #include "Renderer/native/render_core/scene_membership.h"
@@ -67,8 +68,10 @@ struct Caster {
 };
 struct Work {std::size_t bytes=0;void upload(std::size_t value){bytes+=value;}};
 struct Renderer {
+ struct {void write(char const*,char const*,bool){}}trace;
  Owner shared_instances;ID3D11Device* device=nullptr;ID3D11DeviceContext* context=nullptr;Membership geometry_vertex_buffers;
  c3x_renderer::render_core::ResidentContent<CachedTileGeometry> resident_content{32};
+ std::size_t fresh_shadow_working_bytes=0;
  unsigned device_generation=42,content_revision=7,frame_content_uploads=0;std::size_t frame_upload_bytes=0;
  bool raster_content_valid(CachedGeometryProof const& proof){return proof.valid;}
 ''' + key + r'''
@@ -78,9 +81,14 @@ struct Harness {
  struct Shadow {using Caster=::Caster;};
  struct InstanceGroup {Caster source;struct Part {Caster::Bounds bounds;unsigned first=0,count=0;};std::vector<Part> parts;};
  std::vector<Caster> casters;std::vector<InstanceGroup> instance_groups;
- Owner::Lease shared_front;Owner::CpuLease shared_metadata;Membership::Lease caster_lease;
+ Owner::Lease shared_front,shadow_front;Owner::CpuLease shared_metadata,shadow_metadata;
+ unsigned body_placement_reuses=0,body_placement_builds=0,group_builds=0;Membership::Lease caster_lease;
  std::uint64_t caster_signature=0,submission_generation=0;
- struct AtlasInputs {using Key=std::array<std::uint64_t,20>;};
+ struct AtlasInputs {using Key=std::array<std::uint64_t,20>;void clear(){}}atlas_inputs;
+ struct {void clear(){}} page_contents;
+ std::vector<Owner::CpuLease> terrain_batches;Owner::CpuLease terrain_metadata,page_metadata;
+ std::uint64_t proof_membership_signature=0;bool atlas_complete=true;
+ std::size_t bytes()const{return 0;}
 ''' + methods + r'''
 };
 int main(){
@@ -96,6 +104,7 @@ int main(){
   meshes[camera].natural_projection[2]=128;meshes[camera].natural_projection[3]=1260;
   handles[camera]=renderer.resident_content.bind(tiles[camera],tiles[camera].mesh);
  }
+ bool pressure=true,shadow_pressure=true;
  auto request=[&](unsigned camera){
   renderer.geometry_vertex_buffers.clear();assert(renderer.geometry_vertex_buffers.retain(handles[camera],tiles[camera].mesh));
   GeometryDrawRecord draw(meshes[camera]);draw.owner=handles[camera];draw.translation_x=int(camera*1234);draw.translation_y=int(camera*61);
@@ -105,13 +114,18 @@ int main(){
   harness.casters.push_back(caster);harness.instance_groups.clear();++harness.caster_signature;
   c3x_renderer::render_core::BodyPlacementRequirements<Mesh> inputs;
   assert(inputs.add(renderer.shared_instances,1,GeometryDrawReference(draw),renderer.shared_instance_draw_key(1,GeometryDrawReference(draw))));
+  if(pressure){harness.page_metadata=renderer.shared_instances.retain_metadata(Owner::budget-renderer.shared_instances.bytes()-1024u);
+   assert(harness.page_metadata);pressure=false;}
   // This fixture owns no cached per-pass selection plans. Count the actual
   // production retirement boundary; lease/cache retirement is covered by
   // test_instance_selection_retirement using the production callback.
   auto retire_completed_plans=[&]{++retire_completed_calls;};
-  renderer.frame_upload_bytes=0;assert(harness.prepare_instances(inputs,retire_completed_plans));
+  renderer.frame_upload_bytes=0;assert(harness.prepare_required_instances(inputs,retire_completed_plans));
+  if(shadow_pressure){harness.page_metadata=renderer.shared_instances.retain_metadata(Owner::budget-renderer.shared_instances.bytes()-1024u);
+   assert(harness.page_metadata);shadow_pressure=false;}
+  assert(harness.prepare_required_instances(inputs,retire_completed_plans,true));
   auto body=harness.shared_front->find(renderer.shared_instance_draw_key(1,GeometryDrawReference(draw)));
-  auto shadow=harness.shared_front->find(harness.shared_caster_placement_key(caster));
+  auto shadow=harness.shadow_front->find(harness.shared_caster_placement_key(caster));
   assert(body.count==counts[camera] && shadow.count==counts[camera]);
   Owner::Instance actual;std::memcpy(&actual,harness.shared_front->buffer->data.data()+body.first*64,64);
   assert(!std::memcmp(actual.place,meshes[camera].instances->front().place,sizeof(actual.place)));
@@ -130,17 +144,21 @@ int main(){
   assert(renderer.shared_instances.bytes()<=Owner::budget);
   return renderer.frame_upload_bytes;
  };
- assert(request(0)==64384);assert(request(1)==80768);assert(request(2)==66688);
+ // Optional shadow caches nearly fill the joint budget. The actual required
+ // placement path must evict them once and preserve exact body/shadow output.
+ assert(request(0)==64384);assert(!harness.page_metadata&&!harness.atlas_complete);
+assert(request(1)==80768);assert(request(2)==66688);
  // Each replacement uploads its new request only. The unchanged resident
  // ranges incur charged GPU copies, never another CPU placement packing.
  assert(renderer.shared_instances.copied_bytes>0 && renderer.shared_instances.carried_ranges==6);
  assert(renderer.shared_instances.packed_records==2*(503+631+521));
- assert(retire_completed_calls==3);
- assert(harness.shared_front->records==2*(503+631+521));
+ assert(retire_completed_calls==4);
+ assert(harness.shared_front->records==503+631+521);
+ assert(harness.shadow_front->records==503+631+521);
  auto uploads=renderer.shared_instances.uploads,creates=device.creates;auto plateau=renderer.shared_instances.bytes();
  for(unsigned sweep=0;sweep<1000;++sweep){for(unsigned camera=0;camera<3;++camera)assert(request(camera)==0);
   assert(renderer.shared_instances.uploads==uploads && device.creates==creates && renderer.shared_instances.bytes()==plateau);
-  assert(retire_completed_calls==3);}
+  assert(retire_completed_calls==4);}
  // A still-live retired mesh cannot pass the resident slot/generation proof.
  auto retired=tiles[0].mesh;auto old_handle=handles[0];renderer.resident_content.release(old_handle);
  tiles[0].mesh=std::make_shared<CachedMeshGeneration>();tiles[0].mesh->instances=meshes[0].instances;
@@ -157,7 +175,7 @@ int main(){
  // selection, never through carried weak placement entries.
  std::weak_ptr<CachedMeshGeneration> weak=tiles[1].mesh;
  renderer.resident_content.release(handles[1]);tiles[1].mesh.reset();assert(weak.expired());
- renderer.geometry_vertex_buffers.clear();harness.caster_lease.reset();harness.shared_front.reset();harness.shared_metadata.reset();
+ renderer.geometry_vertex_buffers.clear();harness.caster_lease.reset();harness.shared_front.reset();harness.shared_metadata.reset();harness.shadow_front.reset();harness.shadow_metadata.reset();
  renderer.shared_instances.clear();assert(!renderer.shared_instances.bytes());
  assert(device.freed==device.creates);
 }

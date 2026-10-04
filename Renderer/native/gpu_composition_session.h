@@ -21,7 +21,7 @@ class Session {
     double rendered_zoom=1.;
     Id fixed_words=0,fixed_detail=0;
     std::vector<Command> fixed_shadows;
-    struct Hud {Id canvas=0,detail=0;unsigned identity=0;int x=0,y=0;unsigned key=0,key_detail=0;
+    struct Hud {Id canvas=0,detail=0;unsigned identity=0;int x=0,y=0;unsigned key=0,key_detail=0;int layout_x=0,layout_y=0;
         std::vector<Command> draws;std::vector<Id> snapshots;};
     std::vector<Hud> hud;
     Id hud_canvas=0,hud_detail=0,next_snapshot=world_detail+4096;
@@ -95,6 +95,10 @@ class Session {
                 else if(draw.source==item.detail)draw.source=world_view_detail;
                 if(draw.background&&draw.kind!=Kind::native_text)draw.background=world_view_words;
                 if(draw.background_detail&&draw.kind!=Kind::native_image)draw.background_detail=world_view_detail;
+                draw.area={draw.area.left-item.layout_x,draw.area.top-item.layout_y,
+                    draw.area.right-item.layout_x,draw.area.bottom-item.layout_y};
+                draw.clip={draw.clip.left-item.layout_x,draw.clip.top-item.layout_y,
+                    draw.clip.right-item.layout_x,draw.clip.bottom-item.layout_y};
                 placed.push_back({draw,item.x,item.y});
             }
             layers.placed_batch(world_view_words,world_view_detail,placed,zoom);
@@ -302,7 +306,7 @@ public:
                         for(std::size_t i=hud.size();i-->0;)if(hud[i].canvas==c.destination&&hud[i].identity==c.color&&
                             (c.color||(hud[i].x==c.source_x&&hud[i].y==c.source_y)))erase_hud(i);
                         hud.push_back({c.destination,c.detail,c.color,c.source_x,c.source_y,unsigned(c.source_width)});
-                        auto& item=hud.back();unsigned k=item.key,r,g,b=((k&31)<<3)|((k&31)>>2);
+                        auto& item=hud.back();item.layout_x=c.area.left;item.layout_y=c.area.top;unsigned k=item.key,r,g,b=((k&31)<<3)|((k&31)>>2);
                         if(gpu.format(c.destination)==Format::rgb565){g=((k>>3)&252)|((k>>9)&3);r=((k>>8)&248)|((k>>13)&7);}
                         else{g=((k>>2)&248)|((k>>7)&7);r=((k>>7)&248)|((k>>12)&7);}
                         item.key_detail=0xff000000u|(r<<16)|(g<<8)|b;

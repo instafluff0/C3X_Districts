@@ -117,7 +117,7 @@ struct Owner {
  c3x_renderer_i64 camera_ticket=0;void* camera_image=nullptr;int camera_width=0,camera_height=0;
  c3x_renderer_frame_v1 camera_capture={};c3x_renderer_camera_identity_v1 camera_identity={};
  std::vector<c3x_renderer_tile_v1> camera_tiles;std::vector<c3x_renderer_u32> camera_topology;
- int route=0;void* route_image=nullptr;std::string route_text;
+ int route=0;void* route_image=nullptr;std::string route_text;struct{std::vector<int> points;}route_anchors;
  void* bits=nullptr;void* release=nullptr;void* pending=nullptr;
  Rect area;int phase_x=0,phase_y=0;
  std::unique_ptr<c3x_gpu_images::WorkerClient> client;
@@ -200,8 +200,16 @@ int main(){
  assert(owner.navigate(C3X_NAV_REQUEST,image,target,&request)==C3X_RENDERER_RESULT_PENDING);
  auto begun=next_ticket;frame.presentation_time_ticks+=10;
  assert(owner.navigate(C3X_NAV_REQUEST,image,target,&request)==C3X_RENDERER_RESULT_PENDING && next_ticket==begun);
+ // Different timer steps must not starve the pending frame. A deliberate
+ // camera jump retains ordinary supersession (exercised below).
+ for(int n=1;n<20;++n){auto moving=target;moving.camera_x+=n;
+  assert(owner.navigate(C3X_NAV_REQUEST_SCROLL,image,moving,&request)==C3X_RENDERER_RESULT_PENDING&&next_ticket==begun);}
+ ++request.identity.viewer_epoch;
+ assert(owner.navigate(C3X_NAV_REQUEST_SCROLL,image,target,&request)==C3X_RENDERER_RESULT_PENDING&&next_ticket>begun);
+ begun=next_ticket;target.camera_x=322;
+ assert(owner.navigate(C3X_NAV_REQUEST,image,target,&request)==C3X_RENDERER_RESULT_PENDING&&next_ticket>begun);
  for(int n=0;n<20;++n)assert(owner.navigate(C3X_NAV_POLL,image,displayed,nullptr)==C3X_RENDERER_RESULT_PENDING&&displayed.camera_x==0);
- ready=true;assert(owner.navigate(C3X_NAV_POLL,image,displayed,nullptr)==C3X_RENDERER_RESULT_OK && displayed.camera_x==320);
+ ready=true;assert(owner.navigate(C3X_NAV_POLL,image,displayed,nullptr)==C3X_RENDERER_RESULT_OK && displayed.camera_x==322);
  assert(owner.map(C3X_NATIVE_MAP_COMMIT,image,nullptr,nullptr)==C3X_RENDERER_RESULT_BAD_ARGUMENT); // Fresh capture is mandatory.
  c3x_renderer_output_v1 output{};
  assert(owner.map(C3X_NATIVE_MAP_PREPARE,image,&request,&output)==C3X_RENDERER_RESULT_OK&&output.clip_right==640);
@@ -305,6 +313,7 @@ int main(){
     def test_unload_and_shared_reset_barriers_do_not_fail_open(self):
         injected=Path('injected_code.c').read_text()
         unload='void unload_custom_renderer ()'+injected.split('void\nunload_custom_renderer ()',1)[1].split('\tis->custom_renderer_module = NULL;',1)[0]+'}'
+        unload=unload.replace('BOOL (WINAPI * kill_timer) (HWND, UINT_PTR) = (void *)(*p_GetProcAddress) (is->user32, "KillTimer");', 'auto kill_timer=test_kill_timer;')
         unload=unload.replace('(void *)(*p_GetProcAddress)', '(int (*)(void))(*p_GetProcAddress)')
         renderer=Path('Renderer/native/c3x_renderer.cpp').read_text()
         drain='bool drain_native_composition(){'+renderer.split('bool drain_native_composition(){',1)[1].split('\n}\nint remote_draw_cpu_unit',1)[0]+'\n}'
@@ -312,9 +321,17 @@ int main(){
 #include <cassert>
 #include <memory>
 #include <stdexcept>
+#include <cstdlib>
 #include "Renderer/native/gpu_frame_api.h"
 constexpr int IS_INIT_FAILED=2;
-bool fail=true;int drains=0,resets=0,frees=0,detaches=0,settled=-1;
+constexpr int __=0;
+int background_destroys=0;
+struct PCX_Image;
+void destroy_background(PCX_Image*,int,int){++background_destroys;}
+struct PCX_VTable {void(*destruct)(PCX_Image*,int,int)=destroy_background;} background_vtable;
+struct PCX_Image {PCX_VTable* vtable;};
+bool fail=true;int drains=0,resets=0,frees=0,detaches=0,settled=-1,kills=0;
+bool test_kill_timer(void*,unsigned id){assert(id==17);++kills;return true;}
 int image(int,void*,void*,void const*,void const*,unsigned){++drains;return fail?-1:0;}
 void reset(){++resets;}
 int end_scene(){++resets;return C3X_RENDERER_RESULT_OK;}
@@ -325,6 +342,10 @@ void settle_custom_renderer_navigation(int action){settled=action;}
 void set_custom_renderer_native_probe(void*){++detaches;}
 struct State {
  struct {bool enable_custom_rendering=false;}current_config;
+ unsigned custom_renderer_view_timer=17;struct{long long QuadPart=1;}custom_renderer_scroll_at;
+ double custom_renderer_scroll_x=1,custom_renderer_scroll_y=1;
+ PCX_Image* custom_renderer_combat_odds_background=nullptr;
+ bool combat_odds_hud_rect_drawn=true;void* combat_odds_hud_background_canvas=this;
  int custom_renderer_init_state=1;
  int custom_renderer_zoom_tile_width=192,custom_renderer_zoom_target_width=192,custom_renderer_zoom_wheel_remainder=80;
  void* custom_renderer_hud_canvas=this;
@@ -342,8 +363,15 @@ void OutputDebugStringA(char const*){}
 namespace c3x_inputs {struct Assets{bool enabled=false;};Assets& replay_assets(){static Assets a;return a;}}
 '''+drain+r'''
 int main(){
+ state.custom_renderer_combat_odds_background=(PCX_Image*)std::malloc(sizeof(PCX_Image));
+ state.custom_renderer_combat_odds_background->vtable=&background_vtable;
  unload_custom_renderer();assert(drains==1&&!resets&&!frees&&!detaches&&settled==C3X_NAV_BARRIER&&state.custom_renderer_init_state==IS_INIT_FAILED);
- fail=false;unload_custom_renderer();assert(drains==2&&resets==1&&frees==1&&detaches==1);
+ assert(background_destroys==1&&!state.custom_renderer_combat_odds_background&&
+        !state.combat_odds_hud_rect_drawn&&!state.combat_odds_hud_background_canvas);
+ assert(kills==1&&!state.custom_renderer_view_timer&&!state.custom_renderer_scroll_at.QuadPart&&
+        !state.custom_renderer_scroll_x&&!state.custom_renderer_scroll_y);
+ fail=false;unload_custom_renderer();assert(kills==1);assert(drains==2&&resets==1&&frees==1&&detaches==1);
+ assert(background_destroys==1);
  assert(state.custom_renderer_zoom_tile_width==0&&state.custom_renderer_zoom_target_width==128&&
         state.custom_renderer_zoom_wheel_remainder==0&&!state.custom_renderer_hud_canvas);
  state.current_config.enable_custom_rendering=true;unload_custom_renderer();assert(settled==C3X_NAV_DISCARD);

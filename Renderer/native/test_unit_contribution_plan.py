@@ -98,7 +98,7 @@ struct D3D11_BUFFER_DESC{unsigned ByteWidth=0,BindFlags=0,MiscFlags=0,StructureB
 struct D3D11_SUBRESOURCE_DATA{void const* pSysMem=nullptr;};
 struct D3D11_SHADER_RESOURCE_VIEW_DESC{int ViewDimension=0;struct{unsigned NumElements=0;}Buffer;};
 enum {D3D11_BIND_SHADER_RESOURCE=1,D3D11_RESOURCE_MISC_BUFFER_STRUCTURED=2,D3D11_SRV_DIMENSION_BUFFER=3,
- D3D11_CLEAR_STENCIL=4,D3D11_COMPARISON_ALWAYS=5,D3D11_STENCIL_OP_KEEP=6,D3D11_STENCIL_OP_REPLACE=7,
+ D3D11_CLEAR_DEPTH=16,D3D11_CLEAR_STENCIL=4,D3D11_COMPARISON_ALWAYS=5,D3D11_STENCIL_OP_KEEP=6,D3D11_STENCIL_OP_REPLACE=7,
  D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST=8,DXGI_FORMAT_R32_UINT=9,D3D11_USAGE_DEFAULT=10,D3D11_BIND_CONSTANT_BUFFER=11};
 struct ID3D11Buffer{unsigned references=1;bool heap=false,immutable=false;std::array<float,32> values{};
  static inline unsigned live_heap=0;
@@ -406,7 +406,8 @@ int main(){
  assert(ID3D11Buffer::live_heap==256);
  for(unsigned i=0;i<300;++i)assert(bool(direct.prepared_units[i].parts[0].material_buffer)==(i<256));
  Target target;assert(direct.draw_real(frame,poses,target,1,12,true,1));assert(direct.draw_real(frame,poses,target,1,12,false,1));
- assert(direct.material_upload_fallbacks==88&&renderer.context->bodies==600&&renderer.context->shadows==300);
+ // Uncached materials upload separately for reflection, ground shadow and body.
+ assert(direct.material_upload_fallbacks==132&&renderer.context->bodies==600&&renderer.context->shadows==300);
  for(unsigned pass=0;pass<2;++pass)for(unsigned i=0;i<300;++i)
   assert(renderer.context->body_materials[pass*300+i]==direct.prepared_units[i].parts[0].material);
  // Next frame may replace unpinned slots, reusing GPU buffers instead of allocating.
@@ -426,7 +427,7 @@ int main(){
  assert(direct.material_buffer_builds==0&&direct.material_buffer_uploads==0);
  Target target;auto bodies=renderer.context->bodies;
  assert(direct.draw_real(frame,poses,target,1,12,true,1));assert(direct.draw_real(frame,poses,target,1,12,false,1));
- assert(renderer.context->bodies==bodies+2&&direct.material_upload_fallbacks==2);
+ assert(renderer.context->bodies==bodies+2&&direct.material_upload_fallbacks==3);
  ++frame.presentation_time_ticks;assert(direct.prepare_real(frame,poses,12,plan));
  assert(direct.material_builds==0&&direct.material_buffer_builds==0);
  }

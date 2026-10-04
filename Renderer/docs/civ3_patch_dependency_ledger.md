@@ -1,5 +1,81 @@
 # Civ III patch dependency ledger
 
+
+## Zoom-aware native camera rules
+
+`required_user_action: []`. The user authorized patch-table changes for camera
+work. `Main_Screen_Form_is_tile_on_screen` changes from `define` to `inlead`,
+using its existing signature
+`bool (__fastcall *)(Main_Screen_Form *this, int edx, int x, int y, int margin_x, int margin_y)`
+and existing GOG/Steam/PCGames addresses `0x4E69F0` / `0x4EF460` / `0x4E6AB0`.
+The GOG entry bytes were checked against the installed unmodified executable.
+Only GOG receives live qualification here; the other addresses are unchanged
+from the existing symbol table. The hook calls native code with temporary visible
+bounds and proportional margins, then restores capture bounds. This corrects
+selection/animation centering at custom zoom without duplicating native parity,
+wrapping or selection policy. Renderer-off, custom-zoom-off and city spotlight
+immediately delegate with unchanged arguments.
+
+Existing `Main_Screen_Form_set_selected_unit` cancels a pending pan on selection
+change, even when native centering is unnecessary. `Animator_update_display`
+discards pending manual navigation throughout the existing `Fighter_fight`
+scope. The existing view timer respects that scope, GUI input disabling and the
+native directed-animation flag as well as its prior modal/interturn gates.
+The Animator hook polls only wheel and unmodified Z key-down messages during
+combat, because the native animation loop does not dispatch normal window input.
+It does not dispatch gameplay commands, clicks or timers. Modal and focus gates
+remain in place. Exact native centering remains immediate and can still move the camera
+to show the battle. All shared hooks preserve unrelated C3X features.
+
+`PCX_Image_create_and_init_jgl_image` changes from `ignore` to `define` at the
+existing GOG address `0x5FC710` (Steam/PCGames remain `0`, unavailable). Signature:
+`int (__fastcall *)(PCX_Image *, int edx, int width, int height, int bit_depth, int param_4, int param_5, int param_6)`.
+This is a callable native image constructor, not a new detour. The combat-odds
+HUD saves/restores its small background rectangle through the existing JGL GPU
+copy hooks; its previous per-pixel map read invalidated the live renderer after
+combat. The saved image is reused and released before renderer drain and during
+HUD teardown. Custom-off retains the original CPU pixel path; builds without
+this symbol retain their existing implementation.
+
+
+## Zoom-aware viewport and continuous edge scrolling
+
+`required_user_action: []`. The user authorized the CSV additions for this task.
+The existing `Main_Screen_Form_move_camera` inlead (GOG `0x4DF700`) keeps its
+signature. Its custom path uses the inverse **presented** viewport for
+non-wrapping camera limits, while native wrapping and full traversal bounds
+remain intact. City spotlight centering remains native.
+
+New audited entries (Steam/PCGames addresses remain `0`, unavailable):
+
+| Symbol | GOG address | Capability and signature |
+| --- | --- | --- |
+| `Main_Screen_Form_scroll_at_mouse` | `0x4DE430` | Inlead replacing the integer, 66 ms edge-step routine; `void (__fastcall *)(Main_Screen_Form *, int edx)` |
+| `Navigator_Data_draw_viewport` | `0x579FB0` | Inlead drawing the native minimap viewport rectangle; `void (__fastcall *)(Navigator_Data *, int edx)` |
+| `p_native_modal_depth` | `0xCAD3C8` | Read-only `int *`; native dialog stack depth incremented/decremented by `Base_Form::impl_m68_Show_Dialog` and checked by the native scroll timer |
+
+Both new inleads immediately delegate with unchanged arguments when custom
+rendering is off. If the visual timer cannot start, scrolling delegates too.
+Builds without the audited scroll hook never install the extra timer.
+The minimap hook temporarily supplies the visible tile extents only during the
+rectangle draw, then restores capture bounds; native seam splitting is reused.
+A separate 16 ms UI-thread timer accumulates elapsed-time pixel displacement
+with a quadratic edge-proximity speed curve and fractional remainders. It
+uses the existing camera/composition path; it does not change native animation
+or turn timer intervals. Native inhibition, game-ending and modal-depth flags
+join existing renderer modal/city/loading gates. Focus loss, stalls and leaving
+the edge discard residual motion. Teardown removes the timer before unloading.
+The native bridge distinguishes timer scroll requests from explicit camera
+jumps: an unchanged authority/projection lets a pending scroll frame complete.
+Explicit destinations and authority changes retain normal supersession.
+
+Tests: `test_camera_navigation`, `test_custom_zoom`, `test_zoom_integration`,
+`test_native_view_identity`, `test_native_camera_transaction`,
+`test_static_dependency_reuse`, `test_injected_unit_bootstrap`, and
+`test_scripted_game_input`. The `navigation` disposable-game scenario waits for
+the first completed map before testing both vertical limits, zoom-out clamping,
+wrapped horizontal scroll, and increasing edge proximity.
+
 ## Route-preview coordinates and city interaction pressure
 
 `required_user_action: []`. Existing
@@ -2567,3 +2643,21 @@ viewport must acquire a fresh sampler. Completed pixels and image aliases
 remain valid until ordered replacement. Clock-only repetition within the same
 prepared view still reuses its camera. Regression coverage exercises success,
 failure, supersession, old-image lifetime and synchronous delegation.
+
+
+## Outward zoom and native viewport alignment
+
+`required_user_action: []`. The eleven-level 0.5×–3× world ladder reuses existing
+wheel/key, `Main_Screen_Form_move_camera`, `Main_Screen_Form_is_tile_on_screen`,
+`Navigator_Data_draw_viewport`, map traversal and Animator capture hooks.
+`Main_Screen_Form_city_hud_coords`, `Main_Screen_Form_draw_city_hud`,
+`Unit_draw_map_status`, map-message, tile-text and sprite-marker wrappers retain
+fixed native HUD size when the visible world extends beyond the native canvas.
+No symbol, signature, supported-build address or patch-table change is needed.
+
+The wider capture envelope never changes native `TileX/Y_Min`, preserving the
+native screen-anchor origin. Whole-world visibility tests admit wrapped copies;
+whole-world minimap edges are inset inside the decorative frame during the
+native outline draw, then all temporary native fields are restored. Existing
+renderer-off delegation and unrelated C3X behavior are unchanged. Native city
+Z and configured automatic 0.5× city view retain the existing C3X hooks.

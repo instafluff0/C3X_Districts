@@ -928,11 +928,19 @@ private:
         }
         return true;
     }
-    Rect project(Rect r,float scale,unsigned width,unsigned height)const{
+    Rect project(Rect r,float scale,unsigned width,unsigned height,bool world=false)const{
         c3x_renderer::SceneProjection p(width,height,scale);
-        return intersect({int(std::lround(p.x(float(r.left)))),int(std::lround(p.y(float(r.top)))),
-            int(std::lround(p.x(float(r.right)))),int(std::lround(p.y(float(r.bottom))))},
-            {0,0,int(width),int(height)});
+        Rect result={int(std::lround(p.x(float(r.left)))),int(std::lround(p.y(float(r.top)))),
+            int(std::lround(p.x(float(r.right)))),int(std::lround(p.y(float(r.bottom))))};
+        // A freshly projected world still fills the display below 1x. Extend
+        // boundary pieces into the newly exposed area, preserving interior
+        // partition edges and independently projected native overlays.
+        if(world&&scale<1.f){
+            if(r.left<=0)result.left=0;if(r.top<=0)result.top=0;
+            if(r.right>=int(width))result.right=int(width);
+            if(r.bottom>=int(height))result.bottom=int(height);
+        }
+        return intersect(result,{0,0,int(width),int(height)});
     }
     void projected_output(Node& n,Rect area){
         unsigned w=unsigned(area.right-area.left),h=unsigned(area.bottom-area.top);
@@ -952,7 +960,7 @@ private:
         if(!original->projected)original->projected=node();
         auto n=original->projected;
         if(n->seen==frame)return n;
-        Rect area=project(original->area,scale,width,height);
+        Rect area=project(original->area,scale,width,height,original->map_source||original->map_dynamic||original->retired);
         if(empty(area)){n->area=area;n->seen=frame;return n;}
         bool retired_scene=false;
         auto const& command=original->command;
@@ -1045,7 +1053,7 @@ private:
             float scale,Rect region,unsigned width,unsigned height){
         std::vector<Patch> selected;
         for(auto const& patch:picture.patches){
-            auto area=intersect(project(patch.area,scale,width,height),region);if(empty(area))continue;
+            auto area=intersect(project(patch.area,scale,width,height,patch.node->map_source||patch.node->map_dynamic||patch.node->retired),region);if(empty(area))continue;
             auto n=evaluate_projected(patch,ticks,frequency,depth+1,scale,width,height);
             if(n->output[0])selected.push_back({intersect(area,n->area),n,0});
         }

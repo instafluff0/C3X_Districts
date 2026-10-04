@@ -52,7 +52,7 @@ def extract(source):
     begin = source.rfind('if (fresh_scene_path) {', 0, anchor)
     if begin < 0:
         raise ValueError('Production fresh preparation branch missing')
-    branch = block_at(source, begin)
+    branch = block_at(source, source.index("if(fresh_scene_path && fresh_path_failed){")) + "\n" + block_at(source, begin)
     capture_begin = source.index('bool complete=renderer_state.render(job_frame,output,-1,&camera_cancelled')
     render_end_marker = '[this]{service_camera_preparation();});'
     render_end = source.index(render_end_marker, capture_begin) + len(render_end_marker)
@@ -282,6 +282,20 @@ int main(){
     {
         Harness h;h.rtv_ok=false;assert(!h.worker());
         assert(h.fresh_path_failed&&h.draws==0&&h.fills==0);
+    }
+    // A failed request leaves the old publication intact and a subsequent
+    // request can recover through the same fresh path without restarting.
+    for(int failure=0;failure<4;++failure){
+        Harness h;auto prior=h.camera_ready.lease;
+        if(failure==0)h.wave_ok=false;
+        if(failure==1)h.texture_ok=false;
+        if(failure==2)h.rtv_ok=false;
+        if(failure==3)h.draw_ok=false;
+        assert(!h.worker()&&h.fresh_path_failed&&h.camera_ready.lease==prior);
+        h.wave_ok=h.texture_ok=h.rtv_ok=h.draw_ok=true;
+        ++h.gpu_ticket;h.camera_ticket=h.gpu_ticket;h.camera_result=C3X_RENDERER_RESULT_PENDING;
+        assert(h.worker()&&!h.fresh_path_failed&&h.camera_ready.identity==61);
+        assert(h.camera_result==C3X_RENDERER_RESULT_OK&&h.consumes==1);
     }
     // Real downstream refusal cannot publish or consume the required-world
     // marker, even though the earlier draw itself completed successfully.

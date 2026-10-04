@@ -7,7 +7,7 @@ from Renderer.native.native_cpp_test import run_cpp
 class ReflectionCoverageTests(unittest.TestCase):
     def test_every_visible_water_sample_remains_covered(self):
         source = (Path(__file__).resolve().parents[1] / 'sandbox/fresh_pipeline.h').read_text()
-        method = '    D3D11_RECT reflected_water_bounds(' + source.split('    D3D11_RECT reflected_water_bounds(', 1)[1].split('    bool issue_records(', 1)[0]
+        method = '    D3D11_RECT reflected_water_bounds(' + source.split('    D3D11_RECT reflected_water_bounds(', 1)[1].split('    ViewportShaderSettings clip_settings(', 1)[0]
         run_cpp(r'''
 #include "Renderer/native/scene_projection.h"
 #include <array>
@@ -28,7 +28,7 @@ struct Pipeline {
 int main(){
  Pipeline p;ViewportShaderSettings settings{{4,4}};
  auto empty=p.reflected_water_bounds(settings,2248,1268);assert(empty.left>=empty.right);
- for(float zoom:{1.f,1.125f,1.5f,2.f,2.75f,3.f})for(int wrap:{-6400,0,6400}){
+ for(float zoom:{.5f,.625f,.75f,.875f,1.f,1.125f,1.5f,2.f,2.75f,3.f})for(int wrap:{-6400,0,6400}){
   p.projection_zoom=zoom;
   p.water_visible[geometry_water]={{{50-wrap,80,750-wrap,360},wrap,0}};
   p.water_visible[geometry_river]={{{1000,590,1320,630},0,0}};

@@ -10,7 +10,7 @@ class SceneProjectionTests(unittest.TestCase):
 struct Viewport {float TopLeftX,TopLeftY,Width,Height;};
 struct Rect {int left,top,right,bottom;};
 int main(){
- for(unsigned width:{2240u,2239u})for(float scale:{1.f,1.125f,1.25f,1.5f,1.75f,2.f,2.5f,3.f}){
+ for(unsigned width:{2240u,2239u})for(float scale:{.5f,.625f,.75f,.875f,1.f,1.125f,1.25f,1.5f,1.75f,2.f,2.5f,3.f}){
   c3x_renderer::SceneProjection p(width,1260,scale);
   assert(p.x(float(width/2))==float(width/2));
   for(float guard:{4.f,8.f})for(float margin:{0.f,320.f}){
@@ -26,13 +26,16 @@ int main(){
     float top=p.y(float(y)-guard)+guard,bottom=p.y(float(y+1)-guard)+guard;
     if(bottom>display.top&&top<display.bottom)assert(y>=source.top&&y<source.bottom);
    }
-   assert(scale==1.f||source.right-source.left<int(width));
+   assert(scale<=1.f||source.right-source.left<int(width));
+   assert(scale>=1.f||source.right-source.left>int(width));
   }
   for(float guard:{4.f,8.f})for(float margin:{0.f,320.f})for(float raster:{1.f,.375f}){
    float extent=float(width)+2*guard+2*margin;
    Viewport v{0,0,extent*raster,(1260+2*guard)*raster};p.viewport(v,guard,margin,0,raster);
    for(float x:{0.f,200.25f,float(width/2),float(width)}){
-    float actual=v.TopLeftX+(x+guard+margin)/extent*v.Width;
+    float translation[2]={guard+margin,guard},inverse[2]={1.f/extent,1.f/(1260+2*guard)};
+    p.clip_transform(translation,inverse,guard,margin);
+    float actual=v.TopLeftX+(x+translation[0])*inverse[0]*v.Width;
     float expected=(p.x(x)+guard+margin)*raster;
     assert(std::abs(actual-expected)<.001f);
    }
@@ -77,7 +80,7 @@ int main(){try{
   auto zoom=std::make_shared<c3x_renderer::ZoomTransition>();
   retained.view(screen,detail,zoom,view_words);
   Rect panel={0,0,5,7};retained.record({Kind::fill,screen,0,panel,full,0,0,0xff16ab42});retained.commit(screen,full);
-  for(float scale:{1.f,1.125f,1.25f,1.5f,1.75f,2.f,2.5f,3.f,1.25f,1.f}){
+  for(float scale:{.5f,.625f,.75f,.875f,1.f,1.125f,1.25f,1.5f,1.75f,2.f,2.5f,3.f,1.25f,1.f}){
    zoom->reset(scale);auto output=retained_read(device.Get(),context.Get(),retained.sample(100+view_samples,1000).Get());
    assert(requested==scale&&normal_samples==0);
    for(unsigned x=6;x<w;++x)assert(output[x]==raster[x]);
@@ -87,7 +90,7 @@ int main(){try{
    unsigned below=raster[y*w+x]&255,expected=unsigned(std::round(128+below*(127.f/255)));
    assert(std::abs(int(output[y*w+x]&255)-int(expected))<=1);
   }
-  assert(view_samples==10&&normal_samples==0);
+  assert(view_samples==14&&normal_samples==0);
   assert(retained_read(device.Get(),context.Get(),gpu.texture(world))==canonical);
   // A newer camera may supersede this publication before its first display.
   // It must retain the old complete pixels until the new world is adopted.
@@ -96,7 +99,7 @@ int main(){try{
   RetainedComposition::Sample old=[](long long,long long){return RetainedComposition::SampledImage{};};
   old.projected=[](long long,long long,float){return RetainedComposition::SampledImage::frozen();};
   retired.source(world,gpu.texture(world),old,true,true);retired.view(screen,world,zoom);retired.commit(screen,full);
-  for(float scale:{1.f,1.5f,1.25f}){zoom->reset(scale);
+  for(float scale:{.5f,.625f,.75f,.875f,1.f,1.5f,1.25f}){zoom->reset(scale);
    auto preserved=retained_read(device.Get(),context.Get(),retired.sample(100,1000).Get());assert(preserved==canonical);
   }
   std::puts("PASS geometry projection: detail preserved, one scene sample, ordered overlay, fixed HUD, canonical image unchanged");
@@ -142,14 +145,14 @@ int main(){try{
   retained.record({Kind::native_image,words,route,full,full,0,0,key,0,detail,route_detail,int(w),int(h)});
   auto zoom=std::make_shared<c3x_renderer::ZoomTransition>();retained.view(screen,detail,zoom);
   retained.commit(screen,full);
-  for(float scale:{1.f,1.5f,2.f}){
+  for(float scale:{.5f,.625f,.75f,.875f,1.f,1.5f,2.f}){
    zoom->reset(scale);auto output=retained_read(device.Get(),context.Get(),retained.sample(100+projected,1000).Get());
    assert(output[4*w+8]==raster[4*w+8]); // map keeps one-pixel detail through the route
    c3x_renderer::SceneProjection p(w,h,scale);
    unsigned x=unsigned(p.x(38)),y=unsigned(p.y(24));
    assert((output[y*w+x]&0x00ffffff)==0x0000ff00);
   }
-  assert(projected==3&&canonical_samples==0);
+  assert(projected==7&&canonical_samples==0);
  }
  }catch(std::exception const& e){std::printf("FAIL keyed route projection: %s\n",e.what());return 1;}
 }

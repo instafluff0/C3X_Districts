@@ -1,9 +1,55 @@
 """Exercise production GPU borders against zoom, ownership and foreground depth."""
 import unittest
+from pathlib import Path
+from Renderer.native.test_fresh_shared_submission import method
 from Renderer.native.native_cpp_test import run_cpp
 
 
 class TerritoryBorderTests(unittest.TestCase):
+    def test_dynamic_border_culling_uses_displayed_source_extent(self):
+        source = (Path(__file__).resolve().parents[1] / "sandbox/fresh_pipeline.h").read_text()
+        bounds = method(source, "    D3D11_RECT source_bounds(")
+        begin = source.index("        auto border_clip=source_bounds(settings,full,false);")
+        block = source[begin:source.index("        QueryPerformanceCounter(&ticks[4]);", begin)]
+        run_cpp(r'''
+#include <cassert>
+#include <vector>
+#include <array>
+#include "Renderer/native/scene_projection.h"
+using LONG=int;struct D3D11_RECT{int left,top,right,bottom;};
+struct ViewportShaderSettings{float inverse_size[2]={1.f/2248,1.f/1268};};
+struct Record{int x,y;};using GeometryDrawReference=Record;
+enum {geometry_underlay,geometry_natural_terrain,geometry_natural_mountain,geometry_water};
+struct State {
+ struct Renderer{int device=0,content_view_width=2240,content_view_height=1260;
+  bool chunk_intersects_region(Record const& r,ViewportShaderSettings const&,D3D11_RECT const& rect,bool){
+   return r.x>=rect.left&&r.x<rect.right&&r.y>=rect.top&&r.y<rect.bottom;}
+ }renderer;int context=0;float projection_zoom=1,scene_scale=1;
+ struct{int linear=0;}glow;
+ std::array<std::vector<Record>,4> static_visible,water_visible;
+ struct Borders{unsigned accepted=0;
+  template<class Visible>bool draw(int,int,std::vector<Record> const& records,ViewportShaderSettings const&,int,int,int,float,float,Visible visible){
+   for(auto const& r:records)accepted+=visible(r);return true;}
+ }territory_borders;
+ bool border_static(Record const&){return false;}bool fail(char const*){return false;}
+''' + bounds + r'''
+ bool draw(){ViewportShaderSettings settings;D3D11_RECT full{0,0,2248,1268};
+''' + block + r'''
+ return true;}
+};
+int main(){for(float zoom:{.5f,.625f,.75f,.875f,1.f,1.5f,3.f}){
+ State s;s.projection_zoom=zoom;
+ for(unsigned layer=0;layer<4;++layer){
+  // Four complete border segments near the display edges. At outward zoom
+  // they lie beyond the original native viewport but remain visible.
+  for(auto p:std::vector<std::pair<float,float>>{{20,630},{2220,630},{1120,20},{1120,1240}}){
+   s.static_visible[layer].push_back({int(1120+(p.first-1120)/zoom)+4,int(630+(p.second-630)/zoom)+4});
+  }
+ }
+ assert(s.draw()&&s.territory_borders.accepted==16);
+}}
+''')
+
     def test_gpu_color_zoom_wrap_and_occlusion(self):
         run_cpp(r'''
 #define NOMINMAX
@@ -55,6 +101,10 @@ int main(){try{
   records[0].mesh.buffer=vb.Get();records[0].mesh.vertex_stride=92;
   assert(std::abs(hidden[3]/shown[3]-.34)<.002);
   auto zoomed=render(1,1.25f);assert(zoomed[3]>shown[3]*1.4&&zoomed[3]<shown[3]*1.7);
+  for(float z:{.5f,.625f,.75f,.875f}){
+   auto outward=render(1,z);auto expected=shown[3]*z*z;
+   assert(outward[3]>expected*.88&&outward[3]<expected*1.12);
+  }
   records[0].translation_x=16;auto moved=render(1,1);assert(std::abs(moved[3]-shown[3])<.01);
   assert(std::abs(moved[4]/moved[3]-shown[4]/shown[3]-16)<.01);
   records[0].territory_rgb=0xff2010;auto captured=render(1,1);assert(captured[0]>captured[1]*10);

@@ -278,6 +278,9 @@ bool c3x_renderer64_prepare_scene_assets(){
     renderer.trace.write("load-fresh-programs",detail,true);
     return ready;
 }
+void c3x_renderer64_retire_geometry_selection(){
+    sandbox_fresh.retire_geometry_selection();
+}
 void c3x_renderer64_begin_unit_assets(){
     c3x_renderer64_frame_device();
     // Completed fronts own pixels, not these borrowed per-pass palette leases.

@@ -522,6 +522,8 @@ float4 PSShadow(Output i):SV_Target {
                     float(frame_number),float(source->bones),std::cos(angle),std::sin(angle),
                     unit->scale,unit->offset_z,0,0,
                     reflected?2.f:0.f,0,0,part.cutout};
+                c3x_renderer::SceneProjection(frame.target_width,frame.target_height,zoom)
+                    .unit_placement(placement_values,reflected?8.f:4.f,scene_scale);
                 float values[32]={part.tint[0],part.tint[1],part.tint[2],part.mask};
                 for(unsigned axis=0;axis<3;++axis){
                     float color=float((0x205bddu>>(16-axis*8))&255)/255;
@@ -1037,6 +1039,8 @@ float4 PSShadow(Output i):SV_Target {
                     unit.scale,unit.offset_z,0,0,
                     reflected?2.f:0.f,0,0,part.cutout,
                     shadow_fit.left,shadow_fit.top,1/shadow_fit.width,1/shadow_fit.height,shadow_fit.dx,shadow_fit.dy};
+                c3x_renderer::SceneProjection(frame.target_width,frame.target_height,zoom)
+                    .unit_placement(placement_values,guard,scene_scale);
                 auto* material_constants=part_sample.material_buffer.Get();
                 if(!material_constants){
                     context->UpdateSubresource(material,0,nullptr,part_sample.material.data(),0,0);work->upload_buffer(material);

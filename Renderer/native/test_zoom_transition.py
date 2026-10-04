@@ -10,11 +10,12 @@ class ZoomTransitionTests(unittest.TestCase):
 #include <limits>
 using c3x_renderer::ZoomTransition;
 int main(){
- for(double target:{1.25,1.5,1.75,2.,2.5,3.}){
+ for(double target:{.5,.625,.75,.875,1.25,1.5,1.75,2.,2.5,3.}){
   ZoomTransition coarse,fine;coarse.target(target,1000,1000);fine.target(target,1000,1000);
   for(int t=1001;t<=1250;++t)fine.sample(t,1000);
   assert(std::abs(coarse.sample(1250,1000)-fine.current())<1.e-12);
-  assert(coarse.current()>target-.002&&coarse.current()<target);
+  assert(std::abs(coarse.current()-target)<.002);
+  assert(target<1.?coarse.current()>target:coarse.current()<target);
   assert(coarse.sample(1240,1000)==coarse.current()); // clock regression holds
   coarse.sample(100000,1000);assert(coarse.current()==target&&!coarse.moving());
  }
@@ -36,7 +37,7 @@ int main(){
  for(int t=1;t<=200;++t){a.target(1.5,t,1000);b.sample(t,1000);}
  assert(std::abs(a.current()-b.current())<1.e-12); // duplicate wheel endpoint does not restart
  zoom.reset();assert(zoom.current()==1.&&zoom.target()==1.&&zoom.last_presented()==1.&&!zoom.moving());
- for(double bad:{.99,3.01,std::numeric_limits<double>::quiet_NaN()}){
+ for(double bad:{.49,3.01,std::numeric_limits<double>::quiet_NaN()}){
   bool rejected=false;try{zoom.target(bad,0,1000);}catch(std::invalid_argument const&){rejected=true;}assert(rejected);
  }
  bool rejected=false;try{zoom.sample(0,0);}catch(std::invalid_argument const&){rejected=true;}assert(rejected);

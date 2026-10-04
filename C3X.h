@@ -2199,6 +2199,7 @@ struct injected_state {
 	int combat_odds_hud_drawn_left, combat_odds_hud_drawn_top,
 	    combat_odds_hud_drawn_w, combat_odds_hud_drawn_h;
 	bool combat_odds_hud_rect_drawn;
+	PCX_Image * custom_renderer_combat_odds_background;
 	unsigned short * combat_odds_hud_background_pixels;
 	int combat_odds_hud_background_pixel_capacity;
 	JGL_Image * combat_odds_hud_background_canvas;
@@ -2662,6 +2663,11 @@ struct district_button_image_set {
 	bool custom_renderer_async_enabled, custom_renderer_display_valid, custom_renderer_camera_exact;
 	bool custom_renderer_async_drawing, custom_renderer_capture_only, custom_renderer_async_presented;
 	bool custom_renderer_timer_running;
+	UINT_PTR custom_renderer_view_timer;
+	bool custom_renderer_view_timer_running, custom_renderer_scroll_request;
+	LARGE_INTEGER custom_renderer_scroll_at;
+	double custom_renderer_scroll_x, custom_renderer_scroll_y;
+	int custom_renderer_minimap_zoom;
 	// Opt-in scripted game diagnostics; inactive without the per-process save path.
 	bool custom_renderer_trace_input;
 	char custom_renderer_test_save[MAX_PATH];

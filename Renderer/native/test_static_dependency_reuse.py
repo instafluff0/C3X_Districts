@@ -18,6 +18,58 @@ def method(source, signature):
 
 
 class StaticDependencyReuseTests(unittest.TestCase):
+    def test_empty_shadow_receiver_extent_is_finite_and_can_resume(self):
+        source = (ROOT / 'Renderer/sandbox/fresh_pipeline.h').read_text()
+        body = method(source, '    template<class BodyInputs,class RetireCompletedPlans> bool render(')
+        body = body[body.index('{') + 1:body.index('        receiver_revision=revision;')]
+        run_cpp(r'''
+#include <array>
+#include <vector>
+#include <cstdint>
+#include <limits>
+#include <algorithm>
+#include <cmath>
+#include <cassert>
+constexpr unsigned geometry_layer_count=2,geometry_shadow=1;
+struct Bounds{float low[2]={10,20},high[2]={30,40};};
+struct Record{int tile_x=0,tile_y=0;struct Content{Bounds world_bounds;}value;
+ Content const& content()const{return value;}};
+struct Shadow{static std::array<float,4> project(Bounds const& b,float const*,std::array<float,12> const&){
+ return {b.low[0],b.low[1],b.high[0],b.high[1]};}};
+struct SandboxPassWorkload{enum{shadow};struct Scope{template<class T>Scope(T&,int){}};};
+struct Test {
+ struct Grid{std::array<float,4> bounds{};};
+ struct {bool geometry_canonical_world=false;std::array<float,12> shadow_basis{};
+  struct {struct World{struct Dims{bool wrap_x=false,wrap_y=false;int width=60,height=60;};
+   Dims dimensions()const{return {};}};World world()const{return {};}}world_coast;}renderer;
+ int workload=0;int* work=&workload;bool ready=true;
+ bool receiver_grid_valid=false;Grid receiver_grid;std::array<float,4> receiver_wrap{};
+ std::array<std::uint64_t,2> receiver_key{};std::array<float,12> receiver_light{};
+ unsigned receiver_reuses=0,receiver_builds=0,receiver_visits=0;
+ bool ensure(){return ready;}bool refresh_casters(std::uint64_t){return true;}
+ auto receiver_identity(std::uint64_t r,std::uint64_t s){return std::array<std::uint64_t,2>{r,s};}
+ bool configure_stable(Grid& grid,float const* needed){
+  for(int i=0;i<4;++i)assert(std::isfinite(needed[i]));
+  assert(needed[2]>needed[0]&&needed[3]>needed[1]);
+  std::copy(needed,needed+4,grid.bounds.begin());return true;}
+ bool receivers(std::array<std::vector<Record>,2> const& receivers,std::uint64_t revision){
+  std::uint64_t scene=1,membership=1;
+''' + body + r'''
+  return true;
+ }
+};
+int main(){Test p;std::array<std::vector<Record>,2> records;
+ assert(p.receivers(records,1)&&p.receiver_grid_valid&&p.receiver_builds==1);
+ assert((p.receiver_grid.bounds==std::array<float,4>{0,0,1,1}));
+ assert(p.receivers(records,1)&&p.receiver_reuses==1&&p.receiver_builds==1);
+ records[0].push_back({});assert(p.receivers(records,2)&&p.receiver_builds==2);
+ assert((p.receiver_grid.bounds==std::array<float,4>{10,20,30,40}));
+ records[0].clear();assert(p.receivers(records,3)&&p.receiver_builds==3);
+ assert((p.receiver_grid.bounds==std::array<float,4>{0,0,1,1}));
+ p.ready=false;assert(!p.receivers(records,4));
+}
+''')
+
     def test_production_capture_marks_rasters_stale_only_after_draw_order_changes(self):
         source = (ROOT / "Renderer/sandbox/fresh_pipeline.h").read_text()
         begin = source.index("    bool capture(ViewportShaderSettings const& settings,")
@@ -59,6 +111,66 @@ int main(){
  p.renderer.geometry_vertex_buffers.clear();p.capture_order();
  for(auto const& state:p.static_rasters.states)assert(state.stale);
  assert(p.static_rasters.states[0].metrics.reasons[raster_scene]==2);
+}
+''')
+
+    def test_empty_viewport_is_a_successful_selection_and_can_resume(self):
+        source = (ROOT / 'Renderer/sandbox/fresh_pipeline.h').read_text()
+        capture = method(source, '    bool capture(ViewportShaderSettings const& settings,')
+        run_cpp(r'''
+#include <array>
+#include <vector>
+#include <cstdint>
+#include <cassert>
+using LONG=int;
+struct D3D11_RECT{int left,top,right,bottom;};
+struct ViewportShaderSettings{float translation[2]={};};
+constexpr unsigned geometry_layer_count=9,geometry_underlay=0,geometry_bed=1,geometry_water=2,
+ geometry_river=3,geometry_route=4,geometry_shadow=5,geometry_wave=6;
+namespace c3x_renderer{namespace render_core{constexpr unsigned raster_scene=0,raster_classification=1;}}
+struct Record{unsigned id=1;bool water_dependent=false;struct Content{bool animation_texture=false;}value;
+ Content const& content()const{return value;}};
+Record const& GeometryDrawReference(Record const&r){return r;}
+struct SandboxPassWorkload{enum{selection,screen=0};};
+using Records=std::array<std::vector<Record>,geometry_layer_count>;
+struct Pipeline {
+ struct Renderer {Records geometry_vertex_buffers;bool water_scene_active=false,hidden=false;
+  struct{float height_pixels=0;}reflection;
+  bool chunk_intersects_region(Record const&,ViewportShaderSettings const&,D3D11_RECT,bool){return !hidden;}
+ }renderer;
+ struct {void invalidate_all(unsigned){}}static_rasters;
+ struct Work {bool enabled=true;struct Counts{unsigned reuses=0,rebuilds=0,tested_records=0,accepted_records=0;};
+ std::array<std::array<Counts,9>,1> counts;}work;
+ struct RasterInputs{using Key=unsigned;};
+ Records resident,static_visible,water_visible,reflection_visible,all_visible;
+ std::uint64_t resident_signature=0,visibility_revision=0,reflection_revision=0,static_receiver_revision=0;
+ bool visibility_valid=false,reflection_valid=false,reflected_terrain_material_valid=false,resident_water_scene=false;
+ int wrap_pixels=0;unsigned resident_builds=0,visible=0,culled=0,reflection_count=0;
+ float projection_zoom=1;
+ std::array<std::uint64_t,6> visibility_scene_key={};std::array<float,6> visibility_view_key={};
+ std::vector<unsigned> reflection_inputs;
+ unsigned contributor_key(unsigned layer,Record const&r){return layer*10+r.id;}
+ std::uint64_t view_revision()const{return 1;}
+ template<class Visit>void contributors(ViewportShaderSettings const&,D3D11_RECT,bool,Visit visit){
+  for(unsigned i=0;i<9;++i)for(auto&r:resident[i])visit(i,r);}
+ D3D11_RECT source_bounds(ViewportShaderSettings const&,D3D11_RECT r,bool){return r;}
+ D3D11_RECT reflected_water_bounds(ViewportShaderSettings const&,int w,int h){return {0,0,w,h};}
+'''+capture+r'''
+};
+int main(){Pipeline p;ViewportShaderSettings settings;
+ // A fresh entirely hidden/empty viewport is a successful capture and reuse.
+ assert(p.capture(settings,settings,2248,1268,3840)&&p.visible==0&&p.visibility_valid);
+ assert(p.capture(settings,settings,2248,1268,3840)&&p.visible==0&&p.visibility_revision==1);
+ Pipeline populated;populated.renderer.geometry_vertex_buffers[0].push_back({});
+ assert(populated.capture(settings,settings,2248,1268,3840)&&populated.visible==1);
+ populated.renderer.hidden=true;populated.projection_zoom=3;
+ assert(populated.capture(settings,settings,2248,1268,3840)&&populated.visible==0);
+ assert(populated.all_visible[0].empty()&&populated.static_visible[0].empty());
+ auto revision=populated.visibility_revision;
+ assert(populated.capture(settings,settings,2248,1268,3840)&&populated.visible==0&&populated.visibility_revision==revision);
+ populated.renderer.hidden=false;populated.projection_zoom=1;
+ assert(populated.capture(settings,settings,2248,1268,3840)&&populated.visible==1);
+ assert(populated.static_receiver_revision==3);
 }
 ''')
 

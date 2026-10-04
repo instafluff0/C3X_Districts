@@ -134,6 +134,8 @@ typedef struct State {
     bool custom_renderer_unit_representatives_dirty, custom_renderer_redraw_pending;
     int custom_renderer_unit_display_action;
     bool custom_renderer_unit_cursor_visible, custom_renderer_loading_world_capture;
+    bool combat_unit_display_override_active;
+    double custom_renderer_scroll_x, custom_renderer_scroll_y;
     unsigned custom_renderer_dirty_flags;
     unsigned custom_renderer_unit_bootstrap_copies;
     Unit *custom_renderer_unit_bootstrap_selected, *custom_renderer_unit_context;
@@ -148,7 +150,8 @@ typedef struct State {
     long long (*custom_renderer_visual_clock)(void);
     LARGE_INTEGER custom_renderer_qpc_frequency, custom_renderer_animation_timestamp;
     LARGE_INTEGER custom_renderer_animation_sample_at;
-    int custom_renderer_zoom_tile_width, custom_renderer_zoom_native_tile_width;
+    int custom_renderer_zoom_tile_width, custom_renderer_zoom_native_tile_width, custom_renderer_zoom_target_width;
+    long long custom_renderer_zoom_translate_x_fp, custom_renderer_zoom_translate_y_fp;
     bool day_night_cycle_unstarted, seasonal_cycle_unstarted;
     int current_day_night_cycle, current_seasonal_cycle, custom_renderer_test_step;
     char custom_renderer_test_save[1];
@@ -180,6 +183,7 @@ void Animator_update_display(Animator *animator, int edx) {
 }
 bool custom_renderer_camera_may_defer(Animator *animator) {return !*(bool *)(animator->field_18E4 + 10);}
 void settle_custom_renderer_navigation(int action) {++navigation_calls;}
+void poll_custom_renderer_combat_zoom(void) {}
 static unsigned owner_thread;
 static bool online, submission_success, palette_ready, producer_changes_member;
 static int tick_count, status_count, cursor_count, hud_scope_count, gui_count, marker_count;
@@ -248,6 +252,10 @@ void sync_custom_renderer_zoom_to_native(void) {}
 void custom_renderer_zoom_transform_point(int *x, int *y) {
     if (custom_renderer_zoom_enabled()) { *x = *x * 3 / 4 + 17; *y = *y * 3 / 4 - 11; }
 }
+void custom_renderer_hud_layout_offset(int x, int y, int *dx, int *dy) {*dx = *dy = 0;}
+RECT custom_renderer_capture_bounds(Main_Screen_Form *s) {return (RECT){s->TileX_Min,s->TileY_Min,s->TileX_Max,s->TileY_Max};}
+int custom_renderer_zoom_inverse_coordinate(int p, long long t) {return p;}
+
 int custom_renderer_hud_scope(JGL_Image *value, int x, int y, unsigned owner) {
     (void)value; (void)x; (void)y; (void)owner; ++hud_scope_count; return 1;
 }
@@ -690,8 +698,10 @@ void accepted_selection_case(void) {
     assert(native_selection_calls==1&&screen.Current_Unit==&units[0]);
     assert(!state.custom_renderer_unit_representatives_dirty&&!state.custom_renderer_redraw_pending);
     native_selection_accepts=true;
+    int prior_navigation=navigation_calls;state.custom_renderer_scroll_x=.9;state.custom_renderer_scroll_y=-.7;
     execute_native_selection_hook(&screen, &units[1], true);
     assert(native_selection_calls==2&&screen.Current_Unit==&units[1]);
+    assert(navigation_calls==prior_navigation+1&&state.custom_renderer_scroll_x==0.&&state.custom_renderer_scroll_y==0.);
     assert(state.custom_renderer_unit_representatives_dirty&&state.custom_renderer_redraw_pending);
     state.custom_renderer_unit_representatives_dirty=state.custom_renderer_redraw_pending=false;
     execute_native_selection_hook(&screen, &units[1], true);

@@ -38,12 +38,12 @@ struct Helper {struct Wire {volatile LONG presented_zoom_q16;} state{0};Wire* wi
 ''' + presented + r'''
 };
 int main(){Owner owner;Helper helper;
- for(unsigned scale:{65536u,81920u,98304u,104857u,114688u,131072u,163840u,196608u}){
+ for(unsigned scale:{32768u,40960u,49152u,57344u,65536u,81920u,98304u,104857u,114688u,131072u,163840u,196608u}){
   unsigned prior=transport.queued;assert(owner.operation(129,scale)==1);
   assert(transport.queued==prior+1&&transport.flushed==transport.queued&&transport.value==scale);
   helper.state.presented_zoom_q16=LONG(scale);assert(helper.presented_zoom()==scale);
  }
- for(unsigned bad:{0u,65535u,196609u,~0u}){
+ for(unsigned bad:{0u,32767u,196609u,~0u}){
   unsigned prior=transport.queued;assert(owner.operation(129,bad)==-1&&transport.queued==prior);
   helper.state.presented_zoom_q16=LONG(bad);assert(helper.presented_zoom()==65536);
  }
@@ -102,6 +102,7 @@ int native(int op,void* canvas,void*,void const* from,void const*,unsigned){
  auto anchor=static_cast<int const*>(from);assert(anchor[0]==210&&anchor[1]==86);active=true;++begins;return 1;
 }
 void MapMessage_draw(MapMessage*,int edx,PCX_Image* canvas,int shade){assert(edx==91&&shade==7&&canvas);++calls;}
+void custom_renderer_hud_layout_offset(int,int,int*x,int*y){*x=*y=0;}
 int '''+scope+r'''
 void '''+draw+r'''
 int main(){PCX_Image canvas;MapMessage message{};message.rect={180,70,236,84};state.custom_renderer_native_image=native;
@@ -171,6 +172,7 @@ int calls=0,last_edx=0,cancels=0;
 void cancel(long long){++cancels;}
 void Main_Screen_Form_move_camera(Main_Screen_Form* value,int edx,int x,int y,int,bool){
  assert(value==&screen&&x==123&&y==456);++calls;last_edx=edx;}
+void move_custom_renderer_camera(Main_Screen_Form* p,int e,int x,int y,int r,bool b){Main_Screen_Form_move_camera(p,e,x,y,r,b);}
 struct custom_renderer_native_view custom_renderer_native_view(Map_Renderer*){return {};}
 bool capture_custom_renderer_native_view(Map_Renderer*,int,struct custom_renderer_native_view*,bool){return false;}
 void log_custom_renderer_test_route_resolved(int,int){}
@@ -206,12 +208,12 @@ bool custom_renderer_zoom_enabled(){return enabled;}
 void sync_custom_renderer_zoom_to_native(){++syncs;}
 int custom_renderer_zoom_inverse_coordinate(int v,long long){return v;}
 void '''+body+r'''
-int main(){for(q=65536;q<=196608;q+=137)for(int px:{-120,0,517,1120,1720,2240})for(int py:{0,331,630,1100}){
+int main(){for(q=32768;q<=196608;q+=137)for(int px:{-120,0,517,1120,1720,2240})for(int py:{0,331,630,1100}){
  int x=int(std::round(1120+(px-1120)*q/65536.)),y=int(std::round(630+(py-630)*q/65536.));
  auto before=queries;custom_renderer_zoom_inverse_point(&x,&y);assert(queries==before+1&&std::abs(x-px)<=1&&std::abs(y-py)<=1);
  }
  enabled=false;int x=91,y=173,before=queries;custom_renderer_zoom_inverse_point(&x,&y);assert(x==91&&y==173&&queries==before);
- enabled=true;for(int value:{0,-1,65535,196609}){q=value;x=91;y=173;custom_renderer_zoom_inverse_point(&x,&y);assert(x==91&&y==173);}
+ enabled=true;for(int value:{0,-1,32767,196609}){q=value;x=91;y=173;custom_renderer_zoom_inverse_point(&x,&y);assert(x==91&&y==173);}
 }
 ''')
 

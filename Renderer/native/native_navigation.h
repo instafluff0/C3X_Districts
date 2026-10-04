@@ -35,7 +35,12 @@ public:
             a.native_width==b.native_width && a.translate_x==b.translate_x && a.translate_y==b.translate_y;
     }
     void clear(){ticket=0;destination=nullptr;offered=false;ready={};tiles.clear();topology.clear();captured={};}
-    template<class Owner> int request(Owner& owner,void* image,custom_renderer_native_view const& view,c3x_renderer_camera_request_v1 const& demand){
+    template<class Owner> int request(Owner& owner,void* image,custom_renderer_native_view const& view,c3x_renderer_camera_request_v1 const& demand,bool scroll=false){
+        // Timer-driven scroll can vary each tick. Finish its in-flight frame
+        // before admitting another; explicit camera requests still supersede.
+        if(scroll && active() && !offered && destination==image && same_projection(view,requested) &&
+           !std::memcmp(&identity,&demand.identity,sizeof(identity)))
+            return C3X_RENDERER_RESULT_PENDING;
         if(active()&&!offered&&destination==image && !std::memcmp(&requested,&view,sizeof(view))&&matches(demand))
             return C3X_RENDERER_RESULT_PENDING; // Repeated edge-scroll demand must not starve the worker.
         try {

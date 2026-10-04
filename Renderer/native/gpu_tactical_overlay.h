@@ -135,7 +135,13 @@ public:
         if(count>capacity){input.Reset();instances.Reset();capacity=std::max(64u,count);D3D11_BUFFER_DESC b={};b.ByteWidth=capacity*sizeof(Primitive);b.Usage=D3D11_USAGE_DYNAMIC;b.BindFlags=D3D11_BIND_SHADER_RESOURCE;b.CPUAccessFlags=D3D11_CPU_ACCESS_WRITE;b.MiscFlags=D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;b.StructureByteStride=sizeof(Primitive);
             check(d->CreateBuffer(&b,nullptr,&instances));check(d->CreateShaderResourceView(instances.Get(),nullptr,&input));}
         D3D11_MAPPED_SUBRESOURCE mapped={};check(c->Map(instances.Get(),0,D3D11_MAP_WRITE_DISCARD,0,&mapped));std::memcpy(mapped.pData,capture.primitives.data(),count*sizeof(Primitive));c->Unmap(instances.Get(),0);
-        float values[8]={float(area[0]),float(area[1]),float(w),float(h),cursor_phase(seconds),0,0,0};c->UpdateSubresource(params.Get(),0,nullptr,values,0,0);
+        float values[8]={float(area[0]),float(area[1]),float(w),float(h),cursor_phase(seconds),0,0,0};
+        if(zoom<1.f){
+            values[0]-=(float((w-unsigned(2*guard))/2)+guard)*(1.f/zoom-1.f);
+            values[1]-=(float((h-unsigned(2*guard))/2)+guard)*(1.f/zoom-1.f);
+            values[2]/=zoom;values[3]/=zoom;
+        }
+        c->UpdateSubresource(params.Get(),0,nullptr,values,0,0);
         c->OMSetRenderTargets(1,&rt,nullptr);c->OMSetBlendState(blend.Get(),nullptr,~0u);c->OMSetDepthStencilState(nullptr,0);c->RSSetState(raster.Get());D3D11_VIEWPORT vp={0,0,float(target_width),float(target_height),0,1};
         SceneProjection(w-unsigned(2*guard),h-unsigned(2*guard),zoom).viewport(vp,guard,0,0,float(target_width)/w);c->RSSetViewports(1,&vp);
         c->IASetInputLayout(nullptr);c->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);c->VSSetShader(vs.Get(),nullptr,0);c->PSSetShader(ps.Get(),nullptr,0);auto buffer=params.Get();c->VSSetConstantBuffers(0,1,&buffer);c->PSSetConstantBuffers(0,1,&buffer);

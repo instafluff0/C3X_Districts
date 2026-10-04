@@ -596,7 +596,7 @@ struct custom_renderer_native_view {
    POLL changes view only once ready, BARRIER returns the pending destination for
    an exact native redraw. DISCARD keeps the current native camera. No game
    pointers or callbacks enter the worker. Pending retains the displayed camera. */
-enum { C3X_NAV_REQUEST=0, C3X_NAV_POLL=1, C3X_NAV_BARRIER=2, C3X_NAV_DISCARD=3 };
+enum { C3X_NAV_REQUEST=0, C3X_NAV_POLL=1, C3X_NAV_BARRIER=2, C3X_NAV_DISCARD=3, C3X_NAV_REQUEST_SCROLL=4 };
 typedef int (*c3x_renderer_native_navigation_fn)(int action, void * image,
     struct custom_renderer_native_view * view, struct c3x_renderer_camera_request_v1 const * request);
 

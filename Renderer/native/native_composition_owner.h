@@ -142,7 +142,8 @@ public:
     }
     int navigate(int action,void* image,custom_renderer_native_view& view,c3x_renderer_camera_request_v1 const* request){
         check_thread();
-        if(action==C3X_NAV_REQUEST)return navigation.request(*this,image,view,*request);
+        if(action==C3X_NAV_REQUEST || action==C3X_NAV_REQUEST_SCROLL)
+            return navigation.request(*this,image,view,*request,action==C3X_NAV_REQUEST_SCROLL);
         return navigation.poll(*this,action,image,view);
     }
     void retire_image(int operation,void* image){
@@ -282,6 +283,7 @@ public:
                 auto anchor=static_cast<int const*>(from);
                 command.detail=adapter->display_image(image);command.destination=adapter->image(image);
                 command.source_x=anchor[0];command.source_y=anchor[1];command.color=color;
+                if(to){auto offset=static_cast<int const*>(to);command.area.left=offset[0];command.area.top=offset[1];}
                 command.source_width=int(adapter->transparency(image));
             }
             client->submit(&command,1);return 1;

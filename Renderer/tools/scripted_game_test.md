@@ -327,6 +327,26 @@ is the first subsequent renderer QPC and is labeled as such. Inspect the native
 action/HP log alongside the sheet. Ten sampled pictures per second cannot prove
 that every rendered frame was smooth or measure live FPS.
 
+## Camera rules and overlapping input
+
+`-Scenario camera -Seconds 110 -SampleHz 10 -MeasureCadence` uses the same
+empty east-neighbor prerequisites and disposable encounter as `combat`, but
+uses the existing automatic save-confirmation path. Its mouse timeline starts
+only after the native combat-ready marker. It combines right-edge scrolling
+with wheel zoom and rapid reversals, parks briefly for the native attack, then
+holds the edge and continues wheel input during the fight. It repeats combined
+input after combat and parks the cursor. A Z key-down during combat also checks
+keyboard zoom. The scenario does not save.
+
+Require all 17 mouse events, one prepared/completed fight, a native centering
+marker for combat, all four wheel changes plus Z accepted inside combat, no edge
+scroll events inside combat, successful window capture and no renderer failures.
+With cadence measurement, require actual 2x and 3x presentations during combat.
+Check the corresponding images too;
+queued zoom requests alone do not prove that combat zoom appeared. Cold loading
+and the unchanged source-save hash are recorded separately. The existing
+`unit-turn`/`research-turn` scenarios remain the automatic turn-selection tests.
+
 ## Combat diagnostic
 
 `-Scenario combat -Seconds 90 -SampleHz 10` loads the same disposable save
@@ -582,6 +602,38 @@ map. Notification drawing explicitly admits its canvas when eligible so its
 fixed lookup shadows can be replayed after world zoom. No map readback is
 allowed to satisfy this boundary.
 
+### Zoom bounds and continuous edge scrolling
+
+`-Scenario navigation -Seconds 120 -SampleHz 10 -MeasureCadence` uses the local
+3700 BC witness (60×60 map, 2240×1260 client). It waits for the first
+`render-done result=1` before starting the input sequence. It centers at the
+north edge, zooms to 3×, moves the cursor through three distances from that edge,
+zooms out, centers at the native southern edge, scrolls to its zoomed limit,
+crosses the horizontal seam, and
+returns to the revealed interior before zooming out again. No units move or turns advance. The explicit route
+environment variable is restored with the other per-child diagnostic settings.
+
+`minimap-view` records the scoped visible tile/pixel extents; `edge-scroll`
+records QPC, requested pixel displacement, resolved camera, and presented scale.
+Require all 13 mouse events, all four accepted/adopted route commands, no route refusal/native failure,
+unchanged save, and complete window capture. Compare the image sequence for
+terrain/HUD alignment and minimap size; events alone do not prove smooth output.
+The helper counter measures presentations, while QPC deltas measure camera
+updates. Neither is physical scanout FPS.
+
+### Outward zoom, outer HUD and full-world minimap
+
+`-Scenario zoom-out -Seconds 150 -SampleHz 4 -MeasureCadence` waits for the first
+completed map, then visits all four outward levels, rapidly reverses the wheel,
+zooms to 3×, returns to 0.5× and scrolls north and horizontally. It also exercises
+main-map Z and restores 1×. Use both an early-game and a populated late-game save.
+Require 15 mouse events, one key event, all requested endpoints, successful
+half-scale presentation and a completed camera handoff. Inspect window samples
+for terrain, bodies and fixed-size native HUD moving together, including objects
+outside the original 1× viewport. On a small map, no outline is required when the viewport covers the whole map;
+on a larger map, verify
+that the rectangle changes size with zoom. The source save must remain unchanged.
+
 ### Native HUD size during smooth zoom
 
 `-Scenario hud -Seconds 115` extends the interaction case with B and Enter on
@@ -598,7 +650,8 @@ do not prove that founding succeeded.
 
 ### Centered city view
 
-`-Scenario city -Seconds 88 -SampleHz 2 -MeasureCadence` founds a disposable
+`-Scenario city -Seconds 180 -SampleHz 2 -MeasureCadence` waits for the first
+completed map, then founds a disposable
 city, holds each native zoom for 16 seconds, sends wheel input and moves the
 pointer toward both screen edges, then closes the city view. The longer hold
 separates initial projection preparation from the completed view. It checks

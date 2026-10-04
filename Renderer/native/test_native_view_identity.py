@@ -19,7 +19,8 @@ class NativeViewIdentityTests(unittest.TestCase):
 struct State {
  struct {bool enable_custom_rendering=true;} current_config;
  int custom_renderer_init_state=1;bool custom_renderer_redraw_pending=false,custom_renderer_loading_world_capture=false;
- bool custom_renderer_camera_exact=false,custom_renderer_unit_representatives_dirty=false;
+ bool custom_renderer_camera_exact=false,custom_renderer_unit_representatives_dirty=false,custom_renderer_scroll_request=false;
+ bool combat_unit_display_override_active=false,custom_renderer_trace_input=false;
  c3x_renderer_native_navigation_fn custom_renderer_navigation=nullptr;
  c3x_renderer_visual_clock_fn custom_renderer_visual_clock=nullptr;
  bool custom_renderer_async_enabled=false;
@@ -249,6 +250,15 @@ int main(){
     def test_current_camera_publication_and_request_only_capture(self):
         source = (ROOT / 'injected_code.c').read_text()
         helpers = 'struct custom_renderer_native_view\ncustom_renderer_native_view' + source.split('struct custom_renderer_native_view\ncustom_renderer_native_view', 1)[1].split('void __fastcall\npatch_Map_Renderer_m71_Draw_Tiles', 1)[0]
+        # The navigation transaction fixture supplies a wrapped native camera;
+        # zoom clamping and the Win32 timer have their own executable fixture.
+        helpers = helpers.split('#ifdef Main_Screen_Form_scroll_at_mouse', 1)[0]
+        poll_begin = helpers.index('void\npoll_custom_renderer_combat_zoom ()')
+        poll_end = helpers.index('#ifdef Animator_update_display\nvoid __fastcall\npatch_Animator_update_display', poll_begin)
+        helpers = helpers[:poll_begin] + helpers[poll_end:]
+        begin = helpers.index('// Preserve native wrapping and city centering;')
+        end = helpers.index('#ifdef Main_Screen_Form_move_camera\nvoid __fastcall\npatch_Main_Screen_Form_move_camera', begin)
+        helpers = helpers[:begin] + helpers[end:]
         body = source.split('void __fastcall\npatch_Map_Renderer_m71_Draw_Tiles', 1)[1]
         start = '\tif (custom_renderer_zoom_enabled ()) sync_custom_renderer_zoom_to_native ();' + body.split('\tif (custom_renderer_zoom_enabled ()) sync_custom_renderer_zoom_to_native ();', 1)[1].split('\tis->custom_renderer_draw_in_progress = true;', 1)[0]
         finish = '\t// Keep the completed native view identity' + body.split('\t// Keep the completed native view identity', 1)[1].split('\tis->custom_renderer_frame_active = false;', 1)[0]
@@ -256,6 +266,7 @@ int main(){
 #include "Renderer/native/c3x_renderer_api.h"
 #include <cassert>
 #include <cstring>
+#include <cstdio>
 #include <algorithm>
 #define __fastcall
 #define __ 0
@@ -284,7 +295,8 @@ struct Clock {long long QuadPart=0;};
 struct State {
  struct {bool enable_custom_rendering=true;} current_config;
  int custom_renderer_init_state=1;bool custom_renderer_redraw_pending=false,custom_renderer_loading_world_capture=false;
- bool custom_renderer_camera_exact=false,custom_renderer_unit_representatives_dirty=false;
+ bool custom_renderer_camera_exact=false,custom_renderer_unit_representatives_dirty=false,custom_renderer_scroll_request=false;
+ bool combat_unit_display_override_active=false,custom_renderer_trace_input=false;
  c3x_renderer_native_navigation_fn custom_renderer_navigation=nullptr;
  c3x_renderer_visual_clock_fn custom_renderer_visual_clock=nullptr;
  bool custom_renderer_async_enabled=true,custom_renderer_display_valid=false;
@@ -308,13 +320,16 @@ unsigned debug_mode_bits=0;auto p_debug_mode_bits=&debug_mode_bits;
 bool online=false;bool is_online_game(){return online;}
 bool custom_renderer_zoom_enabled(){return !screen.is_now_loading_game;}
 void log_custom_renderer_event(char const*,int){}
-constexpr int IS_OK=1;void notify_custom_renderer_unit_selection(bool){}
+void debug(char const*){}auto p_OutputDebugStringA=debug;
+constexpr int IS_OK=1;void poll_custom_renderer_combat_zoom(){}
+void notify_custom_renderer_unit_selection(bool){}
 void sync_custom_renderer_zoom_to_native(){}
 void native_move(Main_Screen_Form* s,int,int x,int y,int,bool){
  s->camera_x=(x%8192+8192)%8192;s->camera_y=(y%4096+4096)%4096;
  s->TileX_Min=s->camera_x/64;s->TileX_Max=s->TileX_Min+20;
  s->TileY_Min=s->camera_y/32;s->TileY_Max=s->TileY_Min+20;
 }
+void move_custom_renderer_camera(Main_Screen_Form* s,int e,int x,int y,int r,bool b){native_move(s,e,x,y,r,b);}
 unsigned captures=0,begins=0,cancels=0;int queued_x=-1,poll_status=C3X_RENDERER_RESULT_PENDING;
 void capture(Map_Renderer* target,int,int viewer,int,int,Map_Renderer* output,void* clip,int x,int y,int flags){
  assert(state.custom_renderer_capture_only && !clip && x==-1 && y==-1 && flags==9 && output==target && viewer==((debug_mode_bits&8)&&!online?0:2));
@@ -465,6 +480,11 @@ int main(){
  patch_Animator_update_display(&screen.animator,0);assert(overlay_x==1200);
  state.custom_renderer_display_valid=true;state.custom_renderer_display_view=custom_renderer_native_view(&bic.Map.Renderer);
  patch_Main_Screen_Form_move_camera(&screen,0,8260,-32,1,false);assert(nav_pending&&desired.camera_x==68&&desired.camera_y==4064);
+ // Combat owns the displayed camera even between clips (empty native queue).
+ state.combat_unit_display_override_active=true;patch_Animator_update_display(&screen.animator,0);
+ assert(!nav_pending&&screen.camera_x==1200&&screen.camera_y==320);
+ state.combat_unit_display_override_active=false;screen.animator.fields[10]=0;
+ patch_Main_Screen_Form_move_camera(&screen,0,8260,-32,1,false);assert(nav_pending);
  // Config-off delegates immediately with no renderer navigation side effects.
  state.current_config.enable_custom_rendering=false;patch_Animator_update_display(&screen.animator,0);
  assert(nav_pending&&screen.camera_x==1200&&screen.camera_y==320&&barriers==1);

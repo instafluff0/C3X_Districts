@@ -20,7 +20,7 @@ def production_retirement():
     method = source[start:end]
     conditional = next(line.strip() for line in method.splitlines()
                        if "retire_completed_plans();" in line)
-    return callback + "\n auto& retire_completed_plans=retire_completed_instance_plans;\n", conditional
+    return callback + "\n auto& retire_completed_plans=retire_completed_instance_plans;bool shadow_only=false;\n", conditional
 
 
 PREAMBLE = GPU_STUB + r'''
@@ -122,13 +122,13 @@ int main(){
         begin = source.index("bool prepare_instances(")
         end = source.index("    void batch_terrain_casters()", begin)
         method = source[begin:end]
-        retire = method.index("if(!reused)retire_completed_plans();")
+        retire = method.index("if(!reused&&!shadow_only)retire_completed_plans();")
         self.assertLess(method.index("find_covering("), retire)
         for charge in ("reserve_index_scratch()", "retain_metadata(", "begin_retained("):
             self.assertLess(retire, method.index(charge))
         self.assertNotIn("shared_front.reset()", method)
         self.assertNotIn("shared_instances.clear()", method)
-        self.assertIn("prepare_instances(inputs,retire_completed_plans,shared_front.get(),body_covered)", source)
+        self.assertIn("prepare_required_instances(inputs,retire_completed_plans)", source)
         self.assertIn("body_inputs,retire_completed_instance_plans)", source)
 
 

@@ -68,7 +68,7 @@ public:
     unsigned presented_zoom()const{
         auto value=wire?unsigned(InterlockedCompareExchange(reinterpret_cast<volatile LONG*>(&wire->presented_zoom_q16),0,0)):0;
         return value>=c3x_renderer::SceneProjection::minimum_q16&&value<=c3x_renderer::SceneProjection::maximum_q16?
-            value:c3x_renderer::SceneProjection::minimum_q16;
+            value:65536u;
     }
     SceneClient(SceneClient const&)=delete;
     SceneClient& operator=(SceneClient const&)=delete;

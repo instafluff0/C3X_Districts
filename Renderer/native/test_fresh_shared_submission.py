@@ -25,6 +25,7 @@ class ReflectionClosureTests(unittest.TestCase):
         run_cpp(GPU_STUB + r'''
 #define C3X_RENDERER64_FRESH 1
 #include <chrono>
+#include "Renderer/native/scene_projection.h"
 #include <cstring>
 #include "Renderer/native/render_core/body_placement_requirements.h"
 using LONG=int;struct D3D11_RECT {LONG left,top,right,bottom;};
@@ -35,7 +36,7 @@ using GeometryDrawView=c3x_renderer::render_core::GeometryDrawView<Mesh,2>;
 using GeometryDrawReference=GeometryDrawView::Reference;
 using GeometryDrawRecord=GeometryDrawView::Record;
 constexpr unsigned geometry_layer_count=2,geometry_shadow=0;
-struct Renderer {Owner shared_instances;bool water_scene_active=true;unsigned content_revision=1;
+struct Renderer {Owner shared_instances;bool water_scene_active=true;unsigned content_revision=1,content_view_width=1000,content_view_height=800;
  struct Topology {std::uint64_t sequence=1;std::uint64_t visibility_sequence()const{return sequence;}} topology_cache;
  unsigned tests=0;
  bool chunk_intersects_region(GeometryDrawReference const& draw,ViewportShaderSettings const&,D3D11_RECT clip,bool){++tests;
@@ -50,7 +51,7 @@ struct Harness {
  double body_requirement_ms=0;float projection_zoom=1;std::array<float,2> lane_projection{};
  int camera_x=0,camera_y=0,wrap_pixels=0;
  static constexpr int region_margin_x=320,region_margin_y=192,roi_quantum=128;
- std::array<std::int64_t,10> roi_key{};std::uint64_t roi_revision=1,roi_receiver_check=0,static_receiver_revision=0,membership=1;
+ std::array<std::int64_t,11> roi_key{};std::uint64_t roi_revision=1,roi_receiver_check=0,static_receiver_revision=0,membership=1;
  unsigned queries=0;
  float zoom_destination()const{return 1.f;}
  bool canonical_hidden()const{return false;}

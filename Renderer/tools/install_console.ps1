@@ -2,7 +2,8 @@
 # Run elevated from the shared checkout beneath the installed Conquests folder.
 $ErrorActionPreference = 'Stop'
 $root = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
-if (Get-Process Civ3Conquests -ErrorAction SilentlyContinue) { throw 'Close Civ III before installing.' }
+# Windows may retain an exited crash record; only live processes own a session.
+if (Get-Process Civ3Conquests -ErrorAction SilentlyContinue | Where-Object { -not $_.HasExited }) { throw 'Close Civ III before installing.' }
 if ($root -notmatch '\\Conquests\\') { throw 'Use the shared checkout link beneath the installed Conquests directory.' }
 $build = Join-Path $root 'Renderer\native\build\console-install'
 New-Item -ItemType Directory -Force -Path $build | Out-Null

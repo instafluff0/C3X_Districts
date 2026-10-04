@@ -21,6 +21,12 @@ occurrences and occlusion at 1/2/4 samples. `capture_city_border_examples.py`
 produces standalone Renderer64 examples. Broad live-game regression is deferred
 while Lab systems are integrated.
 
+The dynamic pass culls receivers against the inverse displayed viewport, including
+0.5×, 0.625×, 0.75× and 0.875×. Using the unscaled native viewport omitted entire
+border receivers near the outer coast. GPU tests cover all four outward scales;
+GOG capture `20261004-112852` shows the formerly broken southern coastline as a
+continuous outline through the zoom/scroll sequence, with no renderer failures.
+
 ## Original Lab study
 
 `python3 Renderer/renderer.py lab borders` draws a city and terrain through the

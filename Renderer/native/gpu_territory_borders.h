@@ -133,6 +133,7 @@ public:
             auto const& chunk=r.content();
             float values[20]={settings.translation[0]+float(r.translation_x),settings.translation[1]+float(r.translation_y),
                 settings.inverse_size[0],settings.inverse_size[1]};
+            SceneProjection(width,height,zoom).clip_transform(values,values+2,4,margin_x,margin_y);
             std::copy(std::begin(r.natural_projection),std::end(r.natural_projection),values+4);
             for(unsigned j=0;j<3;++j){float s=float((r.territory_rgb>>(16-j*8))&255)/255.f;
                 values[8+j]=s<=.04045f?s/12.92f:std::pow((s+.055f)/1.055f,2.4f);}

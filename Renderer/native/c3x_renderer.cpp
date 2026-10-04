@@ -35,6 +35,7 @@ std::size_t c3x_renderer64_unit_source_meshes_ready();
 std::size_t c3x_renderer64_unit_source_mesh_bytes();
 void c3x_renderer64_begin_unit_assets();
 bool c3x_renderer64_prepare_scene_assets();
+void c3x_renderer64_retire_geometry_selection();
 bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
     ID3D11RenderTargetView* target,float zoom=1.f);
 // True while the retained static layer for this zoom is still being refined.
@@ -5772,9 +5773,9 @@ public:
             if (oldest == tile_geometry_cache.end()) {
                 std::size_t resident=0;
                 for(auto const& entry:tile_geometry_cache)resident+=entry.second.byte_count;
-                char detail[256];sprintf_s(detail,"requested=%zu tracked=%zu resident=%zu pending=%zu entries=%zu epoch=%llu",
+                char detail[320];sprintf_s(detail,"requested=%zu tracked=%zu resident=%zu pending=%zu entries=%zu retired=%zu cap=%zu epoch=%llu",
                     bytes,tile_geometry_cache_bytes,resident,tile_geometry_cache_bytes-resident,tile_geometry_cache.size(),
-                    static_cast<unsigned long long>(tile_geometry_epoch));
+                    retired_content->bytes.load(),tile_geometry_runtime_budget,static_cast<unsigned long long>(tile_geometry_epoch));
                 trace.write("tile-cache-budget",detail,true);
                 std::printf("MESH_ADMISSION_FAILED %s retired=%zu cap=%zu\n",detail,retired_content->bytes.load(),tile_geometry_runtime_budget);std::fflush(stdout);
                 return false;
@@ -8118,8 +8119,10 @@ public:
             return false;
         }
         if(fresh_scene_path && fresh_path_failed){
-            trace.write("fresh-path-required","previous fresh draw failed; explicit legacy control required for recovery",true);
-            return false;
+            // A refused preparation must not poison subsequent camera requests.
+            // Keep the last completed image until a new fresh draw succeeds.
+            trace.write("fresh-path-retry","retrying fresh preparation for the current request",true);
+            fresh_path_failed=false;
         }
         if(gpu_output_mode && !prewarming)
             trace.write("map-path",fresh_scene_path?"fresh":"explicit-legacy-or-unsupported",true);
@@ -8637,6 +8640,11 @@ public:
             resource_anchors.clear();
         }
         if (!reuse_geometry && !prewarming) {
+#ifdef C3X_RENDERER64_FRESH
+            // Completed native/visual fronts own pixels. Retire their borrowed
+            // pass selection before mutation/eviction can pin a second viewport.
+            c3x_renderer64_retire_geometry_selection();
+#endif
             if(incremental_membership){
                 material_submission={};static_submission={};wave_signature=0;region_contributors.clear();
                 auto keep=[&](auto const& draw){return retained_occurrences.count(
@@ -11868,7 +11876,7 @@ public:
             if(cancelled())return false;
             if(!drawn){
                 fresh_path_failed=true;
-                trace.write("fresh-path-required","scene draw failed; explicit legacy control required for recovery",true);
+                trace.write("fresh-path-required","scene draw failed; retaining the last completed view",true);
                 return false;
             }
             frame_geometry_ticks=draw_start.QuadPart-started.QuadPart;
@@ -17384,20 +17392,21 @@ extern "C" __declspec(dllexport) int c3x_renderer_native_camera_poll(void* image
 }
 extern "C" __declspec(dllexport) int c3x_renderer_native_navigation(int action,void* image,
     custom_renderer_native_view* view,c3x_renderer_camera_request_v1 const* request){
+    bool requesting=action==C3X_NAV_REQUEST || action==C3X_NAV_REQUEST_SCROLL;
     c3x_renderer_output_v1 check={C3X_RENDERER_API_VERSION,sizeof(check)};
-    if(!view || action<C3X_NAV_REQUEST || action>C3X_NAV_DISCARD ||
-        (action==C3X_NAV_REQUEST && (!request || request->version!=C3X_RENDERER_CAMERA_VIEW_VERSION ||
+    if(!view || action<C3X_NAV_REQUEST || action>C3X_NAV_REQUEST_SCROLL ||
+        (requesting && (!request || request->version!=C3X_RENDERER_CAMERA_VIEW_VERSION ||
          request->struct_size!=sizeof(*request) || !valid_frame(request->frame,&check))))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
     c3x_inputs::NativeCall input(5,[&](auto& out){out(action);out.u32(c3x_inputs::native_id(image));c3x_inputs::native_view(out,*view);c3x_inputs::native_request(out,request);});
     auto finish=[&](int code){return input.result(code,[&](auto& out){c3x_inputs::native_view(out,*view);});};
     try{
-        if(action==C3X_NAV_REQUEST && !ensure_native_composition(image))return finish(C3X_RENDERER_RESULT_BAD_ARGUMENT);
+        if(requesting && !ensure_native_composition(image))return finish(C3X_RENDERER_RESULT_BAD_ARGUMENT);
         if(!native_composition)return finish(C3X_RENDERER_RESULT_SUPERSEDED);
         int code=native_composition->navigate(action,image,*view,request);
         char witness[8]={};
         if(c3x_renderer::render_core::cached_environment("C3X_RENDERER_ROUTE_WITNESS",witness,sizeof(witness)) && !std::strcmp(witness,"1")){
             bool source=action==C3X_NAV_POLL && code==C3X_RENDERER_RESULT_OK && native_composition->offered_navigation();
-            bool demand=action==C3X_NAV_REQUEST && code==C3X_RENDERER_RESULT_PENDING && native_composition->requested_ticket()>0;
+            bool demand=requesting && code==C3X_RENDERER_RESULT_PENDING && native_composition->requested_ticket()>0;
             if(source||demand){LARGE_INTEGER now={},frequency={};QueryPerformanceCounter(&now);QueryPerformanceFrequency(&frequency);
                 char line[320];sprintf_s(line,
                     "[C3X renderer] stage=%s %s=%lld camera=%d,%d qpc=%lld frequency=%lld valid=1 genuine=1\n",
