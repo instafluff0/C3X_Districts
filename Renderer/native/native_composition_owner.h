@@ -33,9 +33,13 @@ class CompositionOwner {
     using Tactical=c3x_renderer::tactical::Input;
     std::function<int(Tactical const&,c3x_renderer_gpu_unit_v1 const&)> tactical;
     Tactical route;void* route_image=nullptr;c3x_renderer_tactical_view_v1 route_view={};
+    c3x_renderer::tactical::RouteAnchors route_anchors;
     std::array<float,2> destination={};std::string route_text;
     float projected(int v,bool y)const{return float(double(v)*route_view.tile_width/route_view.native_tile_width+
         double(y?route_view.translate_y_fp:route_view.translate_x_fp)/65536.);}
+    std::array<float,2> route_point(int x,int y)const{
+        return route_anchors.resolve(x,y,{projected(x,false),projected(y,true)},field(route_image,0x38),field(route_image,0x3c));
+    }
     int tactical_draw(void* image,Tactical const& capture,void* background=nullptr){
         if(capture.primitives.empty())return 1;
         if(!tactical)return 0;
@@ -155,7 +159,7 @@ public:
         if(!image || image==pending){pending=nullptr;navigation.clear();}
         if(!image || image==front_native)front_native=nullptr;
         if(!image || image==display_native)display_native=nullptr;
-        if(!image || image==route_image){route={};route_image=nullptr;route_text.clear();}
+        if(!image || image==route_image){route={};route_image=nullptr;route_text.clear();route_anchors.points.clear();}
     }
     bool defer_cold_stroke(void* image,void const* stroke){
         // The first copied camera frame has not created its GPU adapter yet.
@@ -326,11 +330,17 @@ public:
             if(!from||route_image||!tactical)return 0;
             route_view=*static_cast<c3x_renderer_tactical_view_v1 const*>(from);
             if(route_view.native_tile_width<=0||route_view.tile_width<64||route_view.tile_width>192)return 0;
+            route_anchors.assign(to,color);
             route={};route_text.clear();route_image=image;destination={};return 1;
         }
         if(route_image==image && op==C3X_NATIVE_LINE){
             auto p=static_cast<int const*>(from);if(!p)throw std::runtime_error("route endpoints missing");
-            route.line(projected(p[0],false),projected(p[1],true),projected(p[2],false),projected(p[3],true));return 1;
+            auto a=route_point(p[0],p[1]),b=route_point(p[2],p[3]);
+            if(trace_success){char line[256];std::snprintf(line,sizeof(line),
+                "[C3X renderer] stage=route-line native=%d,%d,%d,%d projected=%.2f,%.2f,%.2f,%.2f\n",
+                p[0],p[1],p[2],p[3],a[0],a[1],b[0],b[1]);
+                OutputDebugStringA(line);}
+            route.line(a[0],a[1],b[0],b[1]);return 1;
         }
         if(route_image==image && op==C3X_NATIVE_TEXT){
             if(!source||color>32)throw std::runtime_error("route text missing/oversized");
@@ -338,13 +348,13 @@ public:
         }
         if(op==C3X_NATIVE_TACTICAL_TARGET){
             if(!from||route_image!=image)return 0;auto p=static_cast<int const*>(from);
-            destination={projected(p[0],false),projected(p[1],true)};
+            destination=route_point(p[0],p[1]);
             route.ring(destination[0],destination[1],float(route_view.native_tile_width),false);return 1;
         }
         if(op==C3X_NATIVE_TACTICAL_ROUTE_END){
             if(image!=route_image)return 0;route_image=nullptr;
             if(!route_text.empty())route.label(destination[0],destination[1],route_text,20.f);
-            int result=tactical_draw(image,route,source);route={};route_text.clear();return result;
+            int result=tactical_draw(image,route,source);route={};route_text.clear();route_anchors.points.clear();return result;
         }
         if(op==C3X_NATIVE_TACTICAL_RING){
             // Resident units own their cursor in the same current scene, below

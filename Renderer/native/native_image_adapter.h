@@ -23,7 +23,9 @@ template<class Backend> class Adapter {
     Backend& gpu;
     c3x_renderer_native_lifetime_fn lifetime;
     void* get_bits;void* release_bits;DWORD thread=GetCurrentThreadId();
-    std::array<Image,32> images={};std::uint64_t cpu_bytes=0,source_age=0;
+    // City choosers reuse many tiny icon images beside a fullscreen canvas.
+    // Keep enough slots for that working set; the byte budget still bounds it.
+    std::array<Image,128> images={};std::uint64_t cpu_bytes=0,source_age=0;
     static constexpr std::uint64_t cpu_budget=64u*1024u*1024u;
     Counts counters;unsigned large_cpu_barrier_reports=0,copy_rejection_reports=0,sprite_rejection_reports=0,blend_rejection_reports=0,image_rejection_reports=0,lookup_rejection_reports=0,source_evictions=0,large_uploads=0;
     Id sprite_image=0;SpriteCache<Backend> sprites;
@@ -159,6 +161,7 @@ template<class Backend> class Adapter {
         ++counters.source_checks;
         std::vector<std::uint32_t> content;
         std::vector<std::uint16_t> captured;
+        Rect changed={0,0,int(image.width),int(image.height)};bool partial=false;
         {
             // Retained native pointers can change without another getter call.
             // Compare every visible word, in its native representation, before
@@ -168,14 +171,31 @@ template<class Backend> class Adapter {
             struct Lease {void* image;void* release;~Lease(){c3x_native_access::release_words(image,release);}} lease{image.native,release_bits};
             auto stride=field(image.native,0x40);
             auto count=std::size_t(image.width)*image.height;
-            bool same=image.cpu_uploaded&&image.cpu.size()==count;
-            for(unsigned y=0;same&&y<image.height;++y)
-                same=std::memcmp(image.cpu.data()+std::size_t(y)*image.width,bits+std::size_t(y)*stride,image.width*2)==0;
-            if(same){++counters.source_reuses;return true;}
-            content.resize(count);if(!image.owned)captured.resize(count);
+            if(!image.owned&&image.cpu_uploaded&&image.cpu.size()==count){
+                changed={int(image.width),int(image.height),0,0};
+                for(unsigned y=0;y<image.height;++y){
+                    auto old=image.cpu.data()+std::size_t(y)*image.width,row=bits+std::size_t(y)*stride;
+                    if(std::memcmp(old,row,image.width*2)==0)continue;
+                    unsigned left=0,right=image.width;
+                    while(old[left]==row[left])++left;
+                    while(old[right-1]==row[right-1])--right;
+                    changed={std::min(changed.left,int(left)),std::min(changed.top,int(y)),
+                        std::max(changed.right,int(right)),int(y+1)};
+                }
+                if(changed.right==0){++counters.source_reuses;return true;}
+                // A small UI edit must not upload another full-window canvas.
+                // Periodic full replacement bounds retained patch history even
+                // for scattered edits through an escaped native pixel pointer.
+                partial=image.revision%64!=0&&
+                    std::size_t(changed.right-changed.left)*(changed.bottom-changed.top)<count/2;
+            }
+            if(!partial)changed={0,0,int(image.width),int(image.height)};
+            auto width=unsigned(changed.right-changed.left);
+            content.resize(std::size_t(width)*(changed.bottom-changed.top));if(!image.owned)captured.resize(count);
             for(unsigned y=0;y<image.height;++y){
                 auto row=bits+std::size_t(y)*stride;auto offset=std::size_t(y)*image.width;
-                std::copy_n(row,image.width,content.data()+offset);
+                if(int(y)>=changed.top&&int(y)<changed.bottom)
+                    std::copy_n(row+changed.left,width,content.data()+std::size_t(y-changed.top)*width);
                 if(!image.owned)std::memcpy(captured.data()+offset,row,image.width*2);
             }
             counters.source_expanded_bytes+=content.size()*4;
@@ -183,7 +203,13 @@ template<class Backend> class Adapter {
         if(content.size()>=512u*512u&&++large_uploads<=8){char line[192];std::snprintf(line,sizeof(line),
             "[C3X renderer] stage=native-source-upload width=%u height=%u cached=%u revision=%llu evictions=%u\n",
             image.width,image.height,unsigned(image.cpu_uploaded),image.revision,source_evictions);OutputDebugStringA(line);}
-        if(!gpu.upload(image.gpu,image.revision+1,content.data(),content.size()))return false;
+        if(partial){
+            auto patch=gpu.create(unsigned(changed.right-changed.left),unsigned(changed.bottom-changed.top),image.format);
+            if(!patch)return false;
+            Command copy={Kind::copy,image.gpu,patch,changed,changed};
+            bool accepted=gpu.upload(patch,1,content.data(),content.size())&&gpu.submit(&copy,1);
+            gpu.destroy(patch);if(!accepted)return false;
+        }else if(!gpu.upload(image.gpu,image.revision+1,content.data(),content.size()))return false;
         ++image.revision;image.cpu_uploaded=true;
         cpu_bytes-=image.cpu.size()*2;image.cpu=std::move(captured);cpu_bytes+=image.cpu.size()*2;
         return true;

@@ -36,5 +36,15 @@ int main(){
         if(with_point)assert(operation.a[0]==-17&&operation.a[1]==35);
         if(with_result){*static_cast<unsigned*>(const_cast<void*>(operation.to))=0x7c1f;assert(operation.b[0]==0x7c1f);}
     }
+    for(unsigned count:{0u,2u}){
+        c3x_renderer_tactical_view_v1 projection={128,128,0,0};
+        int anchors[]={992,-948,992,972,928,-916,928,1004};Writer call;
+        native_operation_input(call,C3X_NATIVE_TACTICAL_ROUTE_BEGIN,nullptr,nullptr,&projection,count?anchors:nullptr,count);
+        Reader input{call.bytes};NativeOperationInput operation;operation.decode(input);input.done();
+        assert(operation.color==count&&operation.view.tile_width==128);
+        if(count){anchors[0]=0;auto copied=static_cast<int const*>(operation.to);
+            assert(copied[0]==992&&copied[1]==-948&&copied[7]==1004);}
+        else assert(operation.to==nullptr);
+    }
     std::cout<<"PASS native input dependencies: content references, missing/corrupt input rejection, complete navigation fields and form input points, capture failure preserves one lease/release; replay fails before native dereference\n";
 }

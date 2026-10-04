@@ -8,6 +8,27 @@
 #include <vector>
 
 namespace c3x_renderer::tactical {
+// Match native route pixels to the actual map draw occurrences. Civ III's
+// coordinate helper folds at half a world even when a tall/wide viewport shows
+// more of that world. The copied anchors preserve the native map's placement.
+struct RouteAnchors {
+    std::vector<std::array<int,4>> points;
+    void assign(void const* data,unsigned count){
+        if(count>8192 || (count&&!data))throw std::runtime_error("route anchor budget/input");
+        points.clear();
+        auto values=static_cast<int const*>(data);
+        for(unsigned n=0;n<count;++n)points.push_back({values[n*4],values[n*4+1],values[n*4+2],values[n*4+3]});
+    }
+    std::array<float,2> resolve(int x,int y,std::array<float,2> fallback,int width,int height)const{
+        double best=INFINITY;auto result=fallback;
+        for(auto const& p:points)if(p[0]==x&&p[1]==y){
+            double dx=double(p[2])-width*.5,dy=double(p[3])-height*.5;
+            double distance=dx*dx+dy*dy;
+            if(distance<best){best=distance;result={float(p[2]),float(p[3])};}
+        }
+        return result;
+    }
+};
 // The installed Civ III cursor FLC is 93x46 at normal map zoom. Its native
 // zoomed-out draw halves the frame; custom camera zoom does not resize it.
 inline float cursor_scale(float native_tile_width){return std::min(native_tile_width,128.f)/128.f;}

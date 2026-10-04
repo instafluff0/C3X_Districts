@@ -24074,7 +24074,24 @@ patch_Main_Screen_Form_update_in_go_to_mode (Main_Screen_Form * this, int edx)
 		view.translate_y_fp = is->custom_renderer_zoom_translate_y_fp;
 	}
 	JGL_Image * target = this->Units_Control.Data.Canvas.JGL.Image;
-	is->custom_renderer_native_image (C3X_NATIVE_TACTICAL_ROUTE_BEGIN, target, NULL, &view, NULL, 0);
+	// The native route helper folds at half the world size, even when the
+	// viewport contains tiles beyond that midpoint. Match its centers to the
+	// actual captured map anchors; leave pathfinding and game state native.
+	int * anchors = malloc (is->custom_renderer_tile_count * 4 * sizeof(int));
+	unsigned count = 0;
+	if (anchors != NULL) for (int n = 0; n < is->custom_renderer_tile_count; n++) {
+		struct c3x_renderer_tile_v1 * tile = &is->custom_renderer_tiles[n];
+		if (! (tile->tile_flags & C3X_RENDERER_TILE_RENDER)) continue;
+		int x, y;
+		Main_Screen_Form_tile_to_screen_coords (this, __, tile->tile_x, tile->tile_y, &x, &y);
+		anchors[4 * count] = x + view.native_tile_width / 2;
+		anchors[4 * count + 1] = y + view.native_tile_width / 4;
+		anchors[4 * count + 2] = tile->anchor_x + view.tile_width / 2;
+		anchors[4 * count + 3] = tile->anchor_y + view.tile_width / 4;
+		count++;
+	}
+	is->custom_renderer_native_image (C3X_NATIVE_TACTICAL_ROUTE_BEGIN, target, NULL, &view, anchors, count);
+	free (anchors);
 	Main_Screen_Form_update_in_go_to_mode (this, __);
 	is->custom_renderer_native_image (C3X_NATIVE_TACTICAL_ROUTE_END, target,
 		this->Base_Data.Canvas.JGL.Image, NULL, NULL, 0);

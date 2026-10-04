@@ -572,6 +572,9 @@ struct c3x_renderer_tactical_view_v1 {
     int tile_width, native_tile_width;
     c3x_renderer_i64 translate_x_fp, translate_y_fp;
 };
+/* ROUTE_BEGIN optionally supplies color <= 8192 copied anchor records in
+   destination_rect: native center x/y, captured display center x/y (four ints).
+   A zero count preserves the original projection-only capture contract. */
 typedef int (*c3x_renderer_native_image_fn)(int operation, void * image, void * source,
     void const * source_rect, void const * destination_rect, unsigned color);
 

@@ -1364,7 +1364,13 @@ int test_retained_composition(){
         // A new full pair cannot be partially admitted when only one plane's
         // capacity remains. Synthetic direct payload is an existing budget
         // charge, kept outside the front so no extra GPU allocations are used.
-        for(auto retained:{&fast,&oracle}){retained->select_world(screen,detail,base,base_color);
+        // Remove the earlier cold recipes: those are now valid eviction
+        // candidates. This case must exhaust non-evictable storage to exercise
+        // atomic refusal; the cold-form regression covers successful eviction.
+        for(auto retained:{&fast,&oracle}){
+            for(auto id:{screen,detail,saved,saved_color})retained->destroy(id);
+            retained->create(screen,w,h,format);retained->create(detail,w,h,Format::bgra32);
+            retained->select_world(screen,detail,base,base_color);
             retained->snapshot(checkpoint,screen);retained->snapshot(checkpoint_color,detail);}
         fast.commit(checkpoint,full);assert(retained_read(device.Get(),context.Get(),fast.sample(9,1000).Get())==words);
         auto stable_bytes=fast.bytes();constexpr Id pressure=900001;fast.create(pressure,1,1,Format::bgra32);

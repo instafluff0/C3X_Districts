@@ -18,6 +18,9 @@ recorder, visible Windows playback, measured controls and remaining qualificatio
 at recorded input speed with independently generated animation frames.
 [Short diagnostic capture](docs/short_diagnostic_capture.md) collects one brief
 gameplay session for calibration, with explicit stop and memory-pressure handling.
+[Gameplay profiling](docs/gameplay_profile.md), launched with
+`CAPTURE_GAMEPLAY.bat`, records ordinary play, city interaction and freezes with
+window samples, memory and logs without requiring an input-replay receipt.
 
 The current C3X checkout is the implementation authority. Lab renders and tests
 that code by category; Integration runs the affected current-code checks. Fixed

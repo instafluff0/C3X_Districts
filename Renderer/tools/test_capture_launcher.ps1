@@ -35,10 +35,30 @@ if (Test-OrphanCaptureCollector $collector $allowed $false) { throw 'GUI DebugVi
 $collector.Name = 'dbgviewcli64a.exe'
 $collector.CommandLine = $collector.CommandLine.Replace('Civ3Conquests', 'OtherGame')
 if (Test-OrphanCaptureCollector $collector $allowed $false) { throw 'Unrelated process filter was claimed' }
+$collector.CommandLine = '"dbgviewcli64a.exe" "--filter" "*C3X renderer*" "--log" "C:\Temp\C3XRendererCapture\20260922-054328-bc1624\renderer.log"'
+if (-not (Test-OrphanCaptureCollector $collector $allowed $false)) { throw 'Owned gameplay collector was not recognized' }
+if (Test-OrphanCaptureCollector $collector $allowed $true) { throw 'Active gameplay collector was claimed' }
+$collector.CommandLine = $collector.CommandLine.Replace('*C3X renderer*', '*')
+if (Test-OrphanCaptureCollector $collector $allowed $false) { throw 'Unfiltered debug collector was claimed' }
 $collector.CommandLine = $null
 if (Test-OrphanCaptureCollector $collector $allowed $false) { throw 'Unknown launch metadata was claimed' }
 if (Test-Path -LiteralPath $OutputDirectory) { throw 'Test directory must be new' }
 New-Item -ItemType Directory -Path $OutputDirectory | Out-Null
+$copy = $ast.FindAll({ param($node)
+    $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Copy-CaptureTree'
+}, $true)
+if ($copy.Count -ne 1) { throw 'Live trace snapshot copy is missing' }
+Invoke-Expression $copy[0].Extent.Text
+$liveDirectory = New-Item -ItemType Directory -Path (Join-Path $OutputDirectory 'live')
+$log = [IO.File]::Open((Join-Path $liveDirectory.FullName 'renderer.log'),
+    [IO.FileMode]::Create, [IO.FileAccess]::Write, [IO.FileShare]::Read)
+try {
+    $bytes = [Text.Encoding]::UTF8.GetBytes('trace from a still-running game')
+    $log.Write($bytes, 0, $bytes.Length); $log.Flush()
+    Copy-CaptureTree $liveDirectory.FullName (Join-Path $OutputDirectory 'snapshot')
+    $copied = [IO.File]::ReadAllText((Join-Path $OutputDirectory 'snapshot\renderer.log'))
+    if ($copied -ne 'trace from a still-running game') { throw 'Live log prefix was not preserved' }
+} finally { $log.Dispose() }
 $memoryTest = Join-Path $OutputDirectory 'memory.jsonl'
 if (Get-ShortCaptureStopReason $memoryTest) { throw 'Missing telemetry requested a stop' }
 '{"event":"process_memory","free_bytes":268435456}' | Set-Content -LiteralPath $memoryTest

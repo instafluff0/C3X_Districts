@@ -194,6 +194,8 @@ int main(){
 #include <cstdio>
 #include <cstring>
 #include <vector>
+#include "Renderer/native/gpu_image_commands.h"
+using namespace c3x_gpu_images;
 using namespace std::chrono_literals;
 struct Native {std::uint16_t words[4]={1,2,3,4};int stride=2;};
 std::atomic<unsigned> leases{0},reads{0};
@@ -203,10 +205,13 @@ namespace c3x_native_access {
  std::uint16_t* words(void* p,void*){++leases;++reads;return static_cast<Native*>(p)->words;}
  void release_words(void*,void*){--leases;}
 }
-struct Image {void* native;unsigned gpu=0,width=2,height=2;bool cpu_uploaded=false,owned=false;
+struct Image {void* native;unsigned gpu=0,width=2,height=2;bool cpu_uploaded=false,owned=false;Format format=Format::rgb555;
  std::vector<std::uint16_t> cpu=std::vector<std::uint16_t>(4);std::uint64_t revision=0;};
 struct Gpu {
  c3x_async::Publication& queue;std::vector<unsigned>& received;
+ Id create(unsigned,unsigned,Format){assert(false);return 0;}
+ bool submit(Command const*,unsigned){assert(false);return false;}
+ void destroy(Id){assert(false);}
  bool upload(unsigned,std::uint64_t,unsigned const* pixels,std::size_t count){
   assert(leases==0);
   return queue.post_group_wait<std::vector<unsigned>>(count*4,1,2,[&]{

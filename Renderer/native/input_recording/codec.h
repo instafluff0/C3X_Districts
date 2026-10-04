@@ -23,6 +23,19 @@ struct Writer {
     void operator()(std::int32_t n){u32(std::uint32_t(n));}
     void operator()(std::int64_t n){u64(std::uint64_t(n));}
     void operator()(float n){std::uint32_t bits;std::memcpy(&bits,&n,4);u32(bits);}
+    void pixels(unsigned const* values,std::size_t count){
+        static_assert(sizeof(unsigned)==4,"pixel word size");
+        require(count<=(payload_limit-bytes.size())/4,"input pixel payload limit");
+        if(!count)return;
+        require(values!=nullptr,"missing CPU image input");
+        reserve(count*4);auto at=bytes.size();bytes.resize(at+count*4);
+        // Same little-endian words as u32, with one extent check and allocation
+        // for a whole image. Fullscreen UI uploads contain millions of pixels.
+        unsigned endian=1;
+        if(*reinterpret_cast<unsigned char*>(&endian)==1)std::memcpy(bytes.data()+at,values,count*4);
+        else for(std::size_t n=0;n<count;++n)for(unsigned b=0;b<4;++b)
+            bytes[at+n*4+b]=static_cast<unsigned char>(values[n]>>(8*b));
+    }
     void string(char const* value,std::size_t maximum){
         if(!value){u32(UINT32_MAX);return;}
         std::size_t n=0;while(n<maximum&&value[n])++n;require(n<maximum,"unterminated input string");
@@ -39,6 +52,14 @@ struct Reader {
     void operator()(std::int32_t& n){auto bits=u32();std::memcpy(&n,&bits,4);}
     void operator()(std::int64_t& n){auto bits=u64();std::memcpy(&n,&bits,8);}
     void operator()(float& n){auto bits=u32();std::memcpy(&n,&bits,4);}
+    void pixels(unsigned* values,std::size_t count){
+        require(at<=bytes.size()&&count<=(bytes.size()-at)/4,"truncated input pixels");
+        if(!count)return;
+        require(values!=nullptr,"missing pixel destination");
+        unsigned endian=1;
+        if(*reinterpret_cast<unsigned char*>(&endian)==1){std::memcpy(values,bytes.data()+at,count*4);at+=count*4;}
+        else for(std::size_t n=0;n<count;++n)values[n]=u32();
+    }
     std::string string(std::size_t maximum,bool* present=nullptr){
         auto n=u32();if(present)*present=n!=UINT32_MAX;if(n==UINT32_MAX){require(present!=nullptr,"null required string");return {};}
         require(n<maximum,"input string limit");available(n);
@@ -214,7 +235,7 @@ inline void images(Writer& out,c3x_renderer_gpu_images_v1 const& v){
     require(v.struct_size==sizeof(v)&&v.pixel_count<=2240u*1260u&&v.command_count<=2048,"input image bounds");
     image_fields(out,v);
     if(v.action==C3X_GPU_UPLOAD){require(v.pixels||!v.pixel_count,"missing CPU image input");
-        out.reserve(std::size_t(v.pixel_count)*4);for(unsigned n=0;n<v.pixel_count;++n)out(v.pixels[n]);}
+        out.pixels(v.pixels,v.pixel_count);}
     out(v.command_count);require(v.commands||!v.command_count,"missing command input");
     for(unsigned n=0;n<v.command_count;++n)command_fields(out,v.commands[n]);
 }
@@ -226,7 +247,7 @@ struct Images {
 inline void images(Reader& in,Images& out){
     out.value={};image_fields(in,out.value);require(out.value.pixel_count<=2240u*1260u,"input image limit");
     out.pixels.clear();if(out.value.action==C3X_GPU_UPLOAD){in.available(std::size_t(out.value.pixel_count)*4);
-        out.pixels.resize(out.value.pixel_count);for(auto& x:out.pixels)in(x);}
+        out.pixels.resize(out.value.pixel_count);in.pixels(out.pixels.data(),out.pixels.size());}
     auto count=in.u32();require(count<=2048,"input command limit");out.commands.resize(count);
     for(auto& x:out.commands){x={};command_fields(in,x);}out.bind();
 }

@@ -5,6 +5,9 @@
 // File output requires an explicit standalone-verification override.
 // No tile loop performs I/O. QPC timestamps match injected capture logs.
 #include <cstdio>
+#ifdef _WIN32
+#include <share.h>
+#endif
 
 struct RendererTrace {
     std::mutex write_mutex;
@@ -33,8 +36,10 @@ struct RendererTrace {
         QueryPerformanceFrequency(&frequency);
         char path[MAX_PATH] = {};
         DWORD length = GetEnvironmentVariableA("C3X_RENDERER_TRACE_FILE", path, sizeof(path));
+        // A separate capture process must be able to save a finite log prefix
+        // while a stalled game still owns this writer. Other writers stay out.
         if (level && length > 0 && length < sizeof(path))
-            fopen_s(&file, path, "wb");
+            file = _fsopen(path, "wb", _SH_DENYWR);
         if(level) {
             FILETIME utc={};GetSystemTimeAsFileTime(&utc);
             std::uint64_t ticks=(std::uint64_t(utc.dwHighDateTime)<<32)|utc.dwLowDateTime;

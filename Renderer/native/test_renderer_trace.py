@@ -33,7 +33,8 @@ void QueryPerformanceCounter(LARGE_INTEGER* out){out->QuadPart=clock_ticks+=1000
 void GetSystemTimeAsFileTime(FILETIME* out){std::uint64_t ticks=116444736000000000ull+12340000ull;out->dwLowDateTime=std::uint32_t(ticks);out->dwHighDateTime=std::uint32_t(ticks>>32);}
 DWORD GetCurrentThreadId(){return 7;} DWORD GetCurrentProcessId(){return 8;}
 void OutputDebugStringA(char const* line){lines.emplace_back(line);}
-int fopen_s(FILE** out,char const* path,char const* mode){*out=std::fopen(path,mode);return *out?0:1;}
+constexpr int _SH_DENYWR=0x20;
+FILE* _fsopen(char const* path,char const* mode,int sharing){assert(sharing==_SH_DENYWR);return std::fopen(path,mode);}
 #include "Renderer/native/renderer_trace.h"
 int main(){
  RendererTrace trace;assert(lines.size()==1);

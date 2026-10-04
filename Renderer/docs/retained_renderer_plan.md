@@ -10,6 +10,46 @@ the former 1,326-line roadmap.
 
 ## Current state
 
+- **October 3–4 city interaction pressure and route previews (staged).** City
+  build choices reproduced both multi-second queued UI work and a retained
+  texture admission failure that stopped presentation. Image transport now
+  copies the unchanged little-endian pixel payload in bulk. Small CPU UI edits
+  upload only their changed rectangle, with periodic full replacement bounding
+  retained patch history. The native image slot table accommodates city icon
+  working sets without increasing its 64 MiB CPU pixel budget. Regenerable
+  composition outputs can be reclaimed between and within frames, while pins
+  protect current operands and targets; immutable uploads and retired views
+  remain exact. The retained ceiling stays at 256 MiB. Capture
+  `20261004-001156` completes all six build choices across 20 hover/select cycles,
+  with no failures and 439 presentations in its final 9.1-second idle interval.
+  Against the identical `20261003-234236` sequence, city image queue p95 falls
+  from 744 to 21 ms and maximum from 1,582 to 99 ms; median is 1.1 ms. Large
+  image batches during the 80–165-second city interval fall from 1,050 to zero.
+  These are diagnostic queue times, not input-to-display latency. The source
+  save is unchanged; test processes and the temporary task are closed.
+  The 663 GPU pixel oracles, four full-resolution/lifetime pressure cases and
+  29 focused host tests pass; the cache upload regression fails with the preceding
+  frame-protection rule. Partial source updates pass 150 GPU edits, exact saved
+  versions, failed-upload retries and the actual JGL adapter pixel suite,
+  including 192-source eviction stress and 64 reusable city icons with zero
+  repeat uploads across four cycles.
+  Ten input-coverage tests and five backpressure tests also pass.
+  The injected compile smoke test passes. The native
+  route coordinate helper's half-world fold is corrected using captured map
+  anchors: `20261003-225534` resolves y = -948 to the nearby y = 972 during
+  600 held-pointer updates and completes movement plus an interturn.
+  Evidence is under `Renderer/.cache/multi-turn-freeze/`. Existing patch
+  symbols suffice; no reference images were replaced. These bounded checks
+  do not certify an entire human play session.
+
+  [`CAPTURE_GAMEPLAY.bat`](gameplay_profile.md) records ordinary user play
+  without a replay journal. The separate collector saves window samples,
+  memory, timing and bounded rolling logs while the game remains open or
+  frozen. Renderer trace writers permit readers. Capture
+  `20261004-063212-cbe2de` verifies independent shutdown with 285 window
+  samples, 834 presentation records and no missing evidence; only the owned
+  disposable game was subsequently closed.
+
 - **October 3 idle animation after research (staged and tested).** The first
   turn with Enter accepting research reproduced a remaining freeze: native
   redraw ran, but the async bridge reused the old completed camera after world

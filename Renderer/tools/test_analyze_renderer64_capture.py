@@ -74,6 +74,28 @@ class Renderer64CaptureAnalysisTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Renderer64"):
                 analyze(session)
 
+    def test_gameplay_profile_reports_queue_without_requiring_a_journal(self):
+        with TemporaryDirectory() as temporary:
+            session = Path(temporary)
+            (session / "session.json").write_text(json.dumps({
+                "renderer_backend": "Renderer64 direct surface", "input_recording": False}))
+            (session / "renderer.log").write_text("\n".join((
+                "[C3X renderer] qpc=10 stage=publication-latency operation=images queue_ms=2400 service_ms=70",
+                "[C3X renderer] qpc=11 stage=publication-latency operation=images queue_ms=100 service_ms=2",
+                "[C3X renderer] qpc=12 stage=publication-latency operation=state queue_ms=12 service_ms=0.1",
+                "[C3X renderer] qpc=13 stage=retained-admission-rejected site=output requested=11289600 resident=260648900 cap=268435456")))
+            result = analyze(session)
+            self.assertFalse(result["journal_requested"])
+            self.assertNotIn("journal", result["missing"])
+            self.assertIn("helper_presentmon", result["missing"])
+            queue = result["pipeline"]["publication"]
+            self.assertEqual(queue["images"]["queue"]["max_ms"], 2400)
+            self.assertEqual(queue["images"]["service"]["median_ms"], 36)
+            self.assertEqual(queue["state"]["queue"]["count"], 1)
+            rejected = result["pipeline"]["retained_admission_rejections"]
+            self.assertEqual(len(rejected), 1)
+            self.assertEqual(rejected[0]["site"], "output")
+
 
 if __name__ == "__main__":
     unittest.main()

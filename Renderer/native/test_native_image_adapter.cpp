@@ -72,14 +72,14 @@ int native_adapter_contract(char const* path,Backend& gpu,Id map=0,unsigned cons
         // mirrors are disposable; real CPU pixels remain authoritative.
         std::vector<JGL_Image*> churn;
         auto before_churn=backend.stats().readbacks;
-        for(int n=0;n<48;++n){auto image=create(graph,nullptr,1);churn.push_back(image);
+        for(int n=0;n<192;++n){auto image=create(graph,nullptr,1);churn.push_back(image);
             verify(init(image,w,h,16,1)==0&&fill(image,&full,int(0x80000000u|unsigned(n)))==0,"CPU source churn init");
             verify(reinterpret_cast<Copy>(image->vtable[16])(image,target[0],&full,&full)==0&&backend.owns(target[0]),"CPU source churn preserves GPU destination");
         }
         verify(backend.stats().readbacks==before_churn,"CPU source cache eviction never drains owned maps");
         for(auto image:churn)reinterpret_cast<Destroy>(image->vtable[0])(image,1);
         verify(reinterpret_cast<Fill>(target[0]->vtable[17])(target[0],&full,int(0x80000000u))==0,"restore zero parity baseline after churn");
-        std::puts("PASS native CPU source churn: 48 sources, owned destination preserved, zero readbacks");
+        std::puts("PASS native CPU source churn: 192 sources, owned destination preserved, zero readbacks");
         auto compare=[&](int index,bool cpu=false){GdiFlush();auto expected=get(control[index],0,0);verify(expected!=nullptr,"oracle lease");
             std::vector<std::uint32_t> observed;
             if(cpu){auto bits=get(target[index],0,0);verify(bits!=nullptr,"restored native lease");auto stride=*reinterpret_cast<int*>(reinterpret_cast<char*>(target[index])+0x40);
@@ -837,10 +837,25 @@ int native_adapter_contract(char const* path,Backend& gpu,Id map=0,unsigned cons
                 }
                 verify(gpu.readback(backend.image(destination),observed.data(),observed.size()),"fullscreen measured completion");QueryPerformanceCounter(&ended);
                 verify(gpu.stats().uploads==uploads+(changed?8:0),"fullscreen content changes alone upload");
-                verify(backend.stats().source_expanded_bytes-expanded==std::uint64_t(changed?8:0)*width*height*4,"only changed sources allocate expanded upload pixels");
+                verify(backend.stats().source_expanded_bytes-expanded==std::uint64_t(changed?8:0)*4,"single-pixel edits upload only changed source pixels");
                 for(int y=0;y<height;++y)for(int x=0;x<width;++x)
                     verify(observed[std::size_t(y)*width+x]==held[y*stride+x],"fullscreen strided source exact pixels");
                 std::printf("PASS fullscreen CPU source width=%d changed=%u copies=96 uploads=%llu complete_ms=%.3f\n",width,unsigned(changed),gpu.stats().uploads-uploads,1000.*double(ended.QuadPart-began.QuadPart)/frequency.QuadPart);
+            }
+            if(width==2240){
+                // A city's small icons must not evict its unchanged fullscreen
+                // canvas merely because the old 32-entry table filled up.
+                std::vector<JGL_Image*> icons;RECT icon_area={0,0,14,28};
+                for(int n=0;n<64;++n){auto icon=create(graph,nullptr,1);icons.push_back(icon);
+                    verify(init(icon,14,28,16,1)==0&&fill(icon,&icon_area,int(0x80000123u))==0,"city icon source init");}
+                auto cycle=[&]{for(auto icon:icons)
+                    verify(reinterpret_cast<Copy>(icon->vtable[16])(icon,destination,&icon_area,&icon_area)==0,"city icon copy");
+                    transfer();};
+                cycle();uploads=gpu.stats().uploads;
+                for(unsigned n=0;n<4;++n)cycle();
+                verify(gpu.stats().uploads==uploads,"city icon working set and fullscreen source stay cached");
+                for(auto icon:icons)reinterpret_cast<Destroy>(icon->vtable[0])(icon,1);
+                std::puts("PASS city UI working set: 64 icons, four cycles, zero repeated uploads");
             }
             reinterpret_cast<Destroy>(destination->vtable[0])(destination,1);
             reinterpret_cast<Destroy>(source->vtable[0])(source,1);

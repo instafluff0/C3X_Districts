@@ -172,18 +172,21 @@ int main(){
         functions = source[source.index("int\ncustom_renderer_zoom_transform_coordinate"):source.index("// Temporary, event-bounded diagnosis")]
         start=functions.index('RECT * __fastcall\npatch_MapMessage_compute_rect')
         functions=functions[:start]+functions[functions.index('\n}\n',start)+3:]
-        functions = functions.replace("this", "screen")
+        functions = functions.replace("this", "screen").replace("int * anchors = malloc (", "int * anchors = (int*)malloc (")
         program = r'''
 #include <cstdint>
 #include <cassert>
 #include <cstdio>
 #include <cstddef>
+#include <cstdlib>
+#include <vector>
 #include "Renderer/native/c3x_renderer_api.h"
 #define __fastcall
 #define __cdecl
 #define __stdcall
 constexpr int __=0;
-struct State {bool custom_renderer_trace_input=false;
+struct State {int custom_renderer_tile_count=0;c3x_renderer_tile_v1* custom_renderer_tiles=nullptr;
+ bool custom_renderer_trace_input=false;
  bool custom_renderer_unit_bootstrap=false;
  struct {bool enable_custom_rendering=false;} current_config;
  c3x_renderer_native_image_fn custom_renderer_native_image=nullptr;
@@ -194,16 +197,19 @@ struct CityForm {struct {struct {int Status2=0;} Data;} Base;} city,*p_city_form
 using JGL_Image=void;
 struct Main_Screen_Form {int mouse_x=0,mouse_y=0;struct {struct {struct {struct {JGL_Image* Image=nullptr;} JGL;} Canvas;} Data;} Units_Control;struct {struct {struct {JGL_Image* Image=nullptr;} JGL;} Canvas;} Base_Data;} main_screen,*p_main_screen_form=&main_screen;
 struct Unit{};struct Animator{int field_18E4[32]{};};struct PCX_Image{struct {void* Image=nullptr;} JGL;};struct PCX_Color_Table{};
-void Main_Screen_Form_update_in_go_to_mode(Main_Screen_Form*,int){}
+int native_routes=0;
+void Main_Screen_Form_update_in_go_to_mode(Main_Screen_Form*,int){++native_routes;}
 void Main_Screen_Form_draw_route_cursor(int,int){}
 void debug(char const*){}auto p_OutputDebugStringA=debug;
 struct Sprite{int Width=95,Height=63;};
 struct Bic{bool is_zoomed_out=false;int ScreenWidth=2240,ScreenHeight=1260;} bic,*p_bic_data=&bic;
 int status_calls=0,cursor_calls=0,marker_calls=0,overlay_x=0,overlay_y=0;
-int ring_calls=0;
-int native_image(int op,void*,void*,void const* from,void const*,unsigned){
+int ring_calls=0,route_begins=0,route_ends=0,capable=1;std::vector<int> route_anchors;
+int native_image(int op,void*,void*,void const* from,void const* to,unsigned count){
  if(op==C3X_NATIVE_ZOOM_PRESENTED)return 65536;
- if(op==C3X_NATIVE_TACTICAL_CAPABLE)return 1;
+ if(op==C3X_NATIVE_TACTICAL_CAPABLE)return capable;
+ if(op==C3X_NATIVE_TACTICAL_ROUTE_BEGIN){++route_begins;auto a=(int const*)to;route_anchors.assign(a,a+4*count);return 1;}
+ if(op==C3X_NATIVE_TACTICAL_ROUTE_END){++route_ends;return 1;}
  assert(op==C3X_NATIVE_TACTICAL_RING);
  auto ring=static_cast<int const*>(from);assert(ring[2]==(bic.is_zoomed_out?64:128)&&ring[3]==1);
  overlay_x=ring[0];overlay_y=ring[1];++ring_calls;return 1;
@@ -286,6 +292,24 @@ int main(){
   assert(overlay_x==center_x-hw&&overlay_y==center_y-hh);enabled=true;
  }
  assert(ring_calls==84);
+ // Config-off and missing capability immediately delegate; captured anchor
+ // transport cannot affect native pathfinding or input ordering.
+ state.current_config.enable_custom_rendering=false;
+ patch_Main_Screen_Form_update_in_go_to_mode(&screen,0);
+ assert(native_routes==1&&route_begins==0);
+ state.current_config.enable_custom_rendering=true;capable=0;
+ patch_Main_Screen_Form_update_in_go_to_mode(&screen,0);
+ assert(native_routes==2&&route_begins==0);capable=1;
+ c3x_renderer_tile_v1 tiles[2]={};tiles[0].tile_flags=C3X_RENDERER_TILE_RENDER;
+ tiles[0].anchor_x=928;tiles[0].anchor_y=940; // native folded row vs actual map row
+ tiles[1].tile_flags=C3X_RENDERER_TILE_PREFETCH;
+ state.custom_renderer_tiles=tiles;state.custom_renderer_tile_count=2;
+ enabled=false;bic.is_zoomed_out=false;anchor_x=928;anchor_y=-980;
+ patch_Main_Screen_Form_update_in_go_to_mode(&screen,0);
+ assert(native_routes==3&&route_begins==1&&route_ends==1);
+ assert((route_anchors==std::vector<int>{992,-948,992,972}));
+ tiles[0].anchor_y=0;assert(route_anchors[3]==972); // copied before scratch release
+
 }
 '''
         run_cpp("#include <initializer_list>\n" + program)

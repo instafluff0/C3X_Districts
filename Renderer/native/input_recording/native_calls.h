@@ -25,7 +25,7 @@ inline void native_operation_input(Writer& out,int op,void* image,void* source,v
     else if(op==C3X_NATIVE_UNIT_DRAW){out.u32(from?1:0);if(from)unit(out,*static_cast<c3x_renderer_unit_v1 const*>(from));out.u32(to?1:0);}
     else if(op==C3X_NATIVE_HIT_PIXEL){native_rect(out,from,2);out.u32(to?1:0);}
     else if(op==C3X_NATIVE_TACTICAL_GRID){out.u32(from?1:0);if(from)frame(out,*static_cast<c3x_renderer_frame_v1 const*>(from));}
-    else if(op==C3X_NATIVE_TACTICAL_ROUTE_BEGIN){out.u32(from?1:0);if(from){auto& v=*static_cast<c3x_renderer_tactical_view_v1 const*>(from);out(v.tile_width);out(v.native_tile_width);out(v.translate_x_fp);out(v.translate_y_fp);}}
+    else if(op==C3X_NATIVE_TACTICAL_ROUTE_BEGIN){out.u32(from?1:0);if(from){auto& v=*static_cast<c3x_renderer_tactical_view_v1 const*>(from);out(v.tile_width);out(v.native_tile_width);out(v.translate_x_fp);out(v.translate_y_fp);}if(color){require(color<=8192&&to,"route anchor input");native_rect(out,to,4*color);}}
     else if(op==C3X_NATIVE_LOOKUP||op==C3X_NATIVE_SPRITE_LOOKUP||op==C3X_NATIVE_SPRITE_LOOKUP_OVER||op==C3X_NATIVE_SPRITE_LOOKUP_SCALED){out.u32(from?1:0);if(from){auto& p=*static_cast<c3x_renderer_native_lookup const*>(from);out.u32(native_id(p.palette));out(p.percent);out.u32(native_id(p.background));for(auto x:p.scale)out(x);native_table(out,p.table,op>=C3X_NATIVE_SPRITE_LOOKUP_OVER?31:16);}native_rect(out,to);}
     else if(op==C3X_NATIVE_SPRITE_STYLE){out.u32(from?1:0);if(from){auto& p=*static_cast<c3x_renderer_native_sprite_style const*>(from);out.u32(native_id(p.palette));out(p.color);out(p.mode);out(p.opacity);native_table(out,p.table,p.mode==3?4:16);}native_rect(out,to);}
     else if(op==C3X_NATIVE_SPRITE_BLEND){out.u32(from?1:0);if(from){auto& p=*static_cast<c3x_renderer_native_sprite_blend const*>(from);out.u32(native_id(p.alpha));out.u32(native_id(p.background));out.u32(native_id(p.palette));}native_rect(out,to);}
@@ -36,7 +36,7 @@ inline void native_operation_input(Writer& out,int op,void* image,void* source,v
 }
 struct NativeOperationInput {
     int operation=0;unsigned color=0;void* image=nullptr;void* source=nullptr;void const* from=nullptr;void const* to=nullptr;
-    std::array<int,7> a{};std::array<int,4> b{};std::string text;std::vector<unsigned short> table;
+    std::array<int,7> a{};std::array<int,4> b{};std::string text;std::vector<unsigned short> table;std::vector<int> route_anchors;
     c3x_renderer_unit_v1 actor{};Frame scene;c3x_renderer_tactical_view_v1 view{};c3x_renderer_native_lookup lookup{};c3x_renderer_native_sprite_style style{};c3x_renderer_native_sprite_blend blend{};
     static void* object(unsigned id){return reinterpret_cast<void*>(std::uintptr_t(id));}
     void rect(Reader& in,void const*& p,int* values,unsigned count=4){if(in.u32()){for(unsigned n=0;n<count;++n)in(values[n]);p=values;}}
@@ -46,7 +46,7 @@ struct NativeOperationInput {
         else if(op==C3X_NATIVE_UNIT_DRAW){if(in.u32()){unit(in,actor);from=&actor;}if(in.u32())to=b.data();}
         else if(op==C3X_NATIVE_HIT_PIXEL){rect(in,from,a.data(),2);if(in.u32())to=b.data();}
         else if(op==C3X_NATIVE_TACTICAL_GRID){if(in.u32()){frame(in,scene);from=&scene.value;}}
-        else if(op==C3X_NATIVE_TACTICAL_ROUTE_BEGIN){if(in.u32()){in(view.tile_width);in(view.native_tile_width);in(view.translate_x_fp);in(view.translate_y_fp);from=&view;}}
+        else if(op==C3X_NATIVE_TACTICAL_ROUTE_BEGIN){if(in.u32()){in(view.tile_width);in(view.native_tile_width);in(view.translate_x_fp);in(view.translate_y_fp);from=&view;}if(color){require(color<=8192,"route anchor count");route_anchors.resize(4*color);rect(in,to,route_anchors.data(),4*color);require(to!=nullptr,"route anchor data");}}
         else if(op==C3X_NATIVE_LOOKUP||op==C3X_NATIVE_SPRITE_LOOKUP||op==C3X_NATIVE_SPRITE_LOOKUP_OVER||op==C3X_NATIVE_SPRITE_LOOKUP_SCALED){if(in.u32()){lookup.palette=object(in.u32());in(lookup.percent);lookup.background=object(in.u32());for(auto& x:lookup.scale)in(x);words(in,lookup.table);from=&lookup;}rect(in,to,b.data());}
         else if(op==C3X_NATIVE_SPRITE_STYLE){if(in.u32()){style.palette=object(in.u32());in(style.color);in(style.mode);in(style.opacity);words(in,style.table);from=&style;}rect(in,to,b.data());}
         else if(op==C3X_NATIVE_SPRITE_BLEND){if(in.u32()){blend.alpha=object(in.u32());blend.background=object(in.u32());blend.palette=object(in.u32());from=&blend;}rect(in,to,b.data());}

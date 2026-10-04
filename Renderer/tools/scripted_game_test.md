@@ -138,6 +138,36 @@ processes' private/working bytes and CPU time; the window witness also records
 the game's free address space and largest free region. Compare these with
 completed presentations and publication latency to distinguish memory pressure
 from a worker that stopped consuming commands.
+
+`-Scenario route-city -Seconds 260 -SampleHz 4 -MeasureCadence -ProfileRenderer`
+uses the preserved 3700 BC small-world witness (60 by 60, 2240 by 1260 client,
+camera 2464,692; selected Warrior near tile 52,44, Scout near 52,52 and capital
+55,45). It holds a route destination in the lower explored area, sends 600
+pointer updates, releases the route, opens the capital and its production
+chooser, then sends 50 up/down choices at 0.4-second intervals. It accepts and
+closes the city before an idle tail. This is a fixture-specific destination
+drag; it does not select the Scout first. Check all 609 pointer events, 52 city
+commands, accepted movement, route-line traces, continued final presentations,
+no renderer failures and exact save/configuration cleanup. Review the images
+for the actual chooser and changed choices; command counts alone are not proof.
+Compare queue delay and image service time during city cycling as well as
+memory. A run that eventually recovers but retains seconds of queued UI work
+does not pass the responsiveness investigation. Native folded route endpoints
+must resolve to adjacent captured map anchors rather than crossing the screen.
+
+`-Scenario city-builds -Seconds 190 -SampleHz 4 -MeasureCadence -ProfileRenderer`
+uses the same capital without the preceding unit move. It opens the build list,
+hovers six rows, sends two wheel events, then selects items through 20 repeated
+hover/click cycles. The chooser stays open after selection; toggling the portrait
+between items would close it and miss alternating choices.
+Require all 96 mouse events, both closing commands, no
+renderer failures and continued presentations. Verify that the production
+portrait/name actually changes among Settler, Worker, Scout, Warrior, Barracks
+and Granary in the window evidence; arrow-key input does not establish this.
+
+For user-controlled play instead of a scripted fixture, use
+[`CAPTURE_GAMEPLAY.bat`](../docs/gameplay_profile.md). Its console can finish
+collecting evidence while the game remains frozen.
 Stress scenarios stop at the first recorded renderer failure and preserve their
 evidence. Detailed stress traces write to disk during the run because forced
 cleanup cannot flush a stalled helper's in-memory trace buffer.

@@ -1,10 +1,16 @@
 # Start ordinary gameplay with bounded, process-filtered diagnostics.
 # Portable Microsoft DebugView and Intel PresentMon live in ignored build data.
 param([switch]$CheckOnly, [switch]$NoReplayRecording, [switch]$ShortDiagnostic,
-      [switch]$Renderer64, [string]$ConquestsDirectory)
+      [switch]$Renderer64, [switch]$GameplayProfile, [string]$ConquestsDirectory)
 $ErrorActionPreference = 'Stop'
+if ($GameplayProfile) {
+    if ($ShortDiagnostic) { throw 'Choose gameplay profiling or replay input recording.' }
+    $Renderer64 = $true
+    $NoReplayRecording = $true
+}
+$windowRecording = $GameplayProfile -or -not $NoReplayRecording
 if ($ShortDiagnostic -and $NoReplayRecording) { throw 'ShortDiagnostic requires input recording.' }
-if ($Renderer64 -and -not $ShortDiagnostic) { throw 'Renderer64 recording currently requires ShortDiagnostic.' }
+if ($Renderer64 -and -not ($ShortDiagnostic -or $GameplayProfile)) { throw 'Renderer64 requires ShortDiagnostic or GameplayProfile.' }
 $renderer = Split-Path $PSScriptRoot -Parent
 $tools = Join-Path $renderer 'native\build\live-tools'
 $arm = $env:PROCESSOR_ARCHITECTURE -eq 'ARM64' -or $env:PROCESSOR_ARCHITEW6432 -eq 'ARM64'
@@ -37,6 +43,32 @@ function Quote-Arguments([string[]]$Values) {
     }) -join ' '
 }
 
+function Copy-CaptureTree([string]$Source, [string]$Destination) {
+    New-Item -ItemType Directory -Path $Destination -Force | Out-Null
+    foreach ($entry in Get-ChildItem -LiteralPath $Source) {
+        $target = Join-Path $Destination $entry.Name
+        if ($entry.PSIsContainer) { Copy-CaptureTree $entry.FullName $target; continue }
+        # The game may still hold its trace open, including during a freeze.
+        # Copy a finite prefix with compatible sharing instead of waiting for
+        # the game to exit or chasing bytes it appends after the stop request.
+        $inputStream = [IO.File]::Open($entry.FullName, [IO.FileMode]::Open,
+            [IO.FileAccess]::Read, ([IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete))
+        try {
+            $remaining = $inputStream.Length
+            $outputStream = [IO.File]::Create($target)
+            try {
+                $buffer = New-Object byte[] 1048576
+                while ($remaining -gt 0) {
+                    $read = $inputStream.Read($buffer, 0, [int][Math]::Min($remaining, $buffer.Length))
+                    if ($read -eq 0) { break }
+                    $outputStream.Write($buffer, 0, $read)
+                    $remaining -= $read
+                }
+            } finally { $outputStream.Dispose() }
+        } finally { $inputStream.Dispose() }
+    }
+}
+
 function Get-ElevatedPath([string]$Path) {
     # Mapped shares belong to the unelevated token. Keep the same file through
     # its UNC path instead of assuming the elevated token has that drive.
@@ -65,7 +97,8 @@ function Test-OrphanCaptureCollector($Collector, [string[]]$AllowedPaths, [bool]
     return (-not $ParentExists -and
         $Collector.Name -match '^dbgviewcli(64a?|)\.exe$' -and
         $Collector.ExecutablePath -and $AllowedPaths -contains $Collector.ExecutablePath -and
-        $Collector.CommandLine -match '"--process-filter"\s+"Civ3Conquests"' -and
+        ($Collector.CommandLine -match '"--process-filter"\s+"Civ3Conquests"' -or
+         $Collector.CommandLine -match '"--filter"\s+"\*C3X renderer\*"') -and
         $Collector.CommandLine -match '"--log"\s+"[^"\r\n]*\\C3XRendererCapture\\\d{8}-\d{6}-[0-9a-f]{6}\\renderer\.log"')
 }
 
@@ -85,6 +118,7 @@ if (-not $CheckOnly -and -not $elevated) {
     if ($NoReplayRecording) { $command += ' -NoReplayRecording' }
     if ($ShortDiagnostic) { $command += ' -ShortDiagnostic' }
     if ($Renderer64) { $command += ' -Renderer64' }
+    if ($GameplayProfile) { $command += ' -GameplayProfile' }
     $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($command))
     $arguments = @('-NoProfile','-ExecutionPolicy','Bypass','-EncodedCommand',$encoded)
     try {
@@ -104,7 +138,9 @@ $session = $null
 $saved = $null
 $result = 1
 try {
-    $required = @($game, $dll, $debug, $present, $witness, $inspect, $replay)
+    $required = @($game, $dll, $debug, $present)
+    if ($windowRecording) { $required += $witness }
+    if (-not $NoReplayRecording) { $required += @($inspect, $replay) }
     if ($Renderer64) { $required += @($renderer64Dll, $renderer64Helper) }
     foreach ($file in $required) {
         if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { throw "Required file is missing: $file" }
@@ -117,6 +153,9 @@ try {
         }
     }
     $volume = New-Object System.IO.DriveInfo([IO.Path]::GetPathRoot($env:TEMP))
+    if ($GameplayProfile -and $volume.AvailableFreeSpace -lt 3221225472) {
+        throw 'At least 3 GiB of local free disk space is required for gameplay window samples and logs.'
+    }
     if (-not $NoReplayRecording -and $volume.AvailableFreeSpace -lt 11811160064) {
         throw 'At least 11 GiB of local free disk space is required for the bounded input and window capture.'
     }
@@ -152,7 +191,10 @@ try {
         exit 0
     }
     if (Get-Process -Name Civ3Conquests -ErrorAction SilentlyContinue) {
-        throw 'Please close Civ III first, then double-click CAPTURE_GAME.bat again.'
+        throw 'Please close Civ III first, then run the capture launcher again.'
+    }
+    if ($Renderer64 -and (Get-Process -Name C3XRendererHelper64 -ErrorAction SilentlyContinue)) {
+        throw 'A Renderer64 helper is still running. Let the previous game finish closing before retrying.'
     }
     $modName = Split-Path (Split-Path $renderer -Parent) -Leaf
     $installedDebug = Join-Path $conquests ($modName + '\Renderer\native\build\live-tools\DebugView\' + $debugName)
@@ -191,14 +233,16 @@ try {
         presentmon_scope = if ($Renderer64) { 'Renderer64 helper presents; Civ III UI is observed in window samples' } else { 'Civ III presents' }
         presentmon_sha256 = (Get-FileHash -LiteralPath $present -Algorithm SHA256).Hash.ToLowerInvariant()
         debugview_sha256 = (Get-FileHash -LiteralPath $debug -Algorithm SHA256).Hash.ToLowerInvariant()
-        trace_level = 1; expensive_profiling = $false; limit_seconds = 900
+        trace_level = if ($GameplayProfile) { 2 } else { 1 }; expensive_profiling = $false; limit_seconds = 900
         game_exit_code = $null; result = 'starting'
-        input_recording = -not $NoReplayRecording; window_recording = -not $NoReplayRecording
+        input_recording = -not $NoReplayRecording; window_recording = $windowRecording
+        gameplay_profile = [bool]$GameplayProfile
         capture_host_elevated = $elevated
         game_launch = 'CreateProcess with inherited diagnostic environment'
         game_working_directory = $conquests
-        recording_scope = 'production renderer and native bridge inputs; correlated sampled window evidence'
-        recording_max_bytes = 8589934592; recording_max_seconds = 600
+        recording_scope = if ($GameplayProfile) { 'sampled game window, renderer logs, queue timing and process memory; no replay journal' }
+                          else { 'production renderer and native bridge inputs; correlated sampled window evidence' }
+        recording_max_bytes = if ($NoReplayRecording) { 0 } else { 8589934592 }; recording_max_seconds = if ($NoReplayRecording) { 0 } else { 600 }
         recording_duration_anchor = 'first successful GPU presentation'
         short_diagnostic = [bool]$ShortDiagnostic
         capture_stop_requested = $null
@@ -210,8 +254,9 @@ try {
         video_controllers = @(Get-CimInstance Win32_VideoController | Select-Object Name, DriverVersion, AdapterRAM)
     }
     $metadata | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $session 'session.json') -Encoding UTF8
-    $env:C3X_RENDERER_TRACE = '1'
+    $env:C3X_RENDERER_TRACE = [string]$metadata.trace_level
     $env:C3X_RENDERER_PROFILE = '0'
+    if ($GameplayProfile) { $env:C3X_RENDERER_TRACE_INPUT = '1' }
     $env:C3X_RENDERER_TRACE_BUFFERED = '0'
     # Keep renderer evidence even if the external debug collector stops before
     # gameplay begins. The DLL bounds this buffered file independently; it does
@@ -228,12 +273,23 @@ try {
         $frozen = New-Item -ItemType Directory -Path (Join-Path $session 'renderer64') -Force
         Copy-Item -LiteralPath $renderer64Dll, $renderer64Helper -Destination $frozen.FullName
     }
-    $replayTools = New-Item -ItemType Directory -Path (Join-Path $session 'replay-tools')
-    Copy-Item -LiteralPath $replay, $inspect -Destination $replayTools.FullName
-    Copy-Item -LiteralPath $qualification -Destination (Join-Path $session 'capture-build.json') -ErrorAction SilentlyContinue
+    if (-not $NoReplayRecording) {
+        $replayTools = New-Item -ItemType Directory -Path (Join-Path $session 'replay-tools')
+        Copy-Item -LiteralPath $replay, $inspect -Destination $replayTools.FullName
+        Copy-Item -LiteralPath $qualification -Destination (Join-Path $session 'capture-build.json') -ErrorAction SilentlyContinue
+    }
 
     $debugArgs = @('--accepteula','--no-banner','--no-kernel','--process-filter','Civ3Conquests',
         '--duration','900','--max-lines','500000','--log',(Join-Path $session 'renderer.log'),'--log-limit','64')
+    if ($GameplayProfile) {
+        # The helper owns rendering. Include its renderer messages as well as
+        # the game's bridge messages. A bounded rolling log keeps late stalls;
+        # a line-count stop would silently lose the rest of a busy session.
+        $debugArgs = @('--accepteula','--no-banner','--no-kernel','--filter','*C3X renderer*',
+            '--duration','900','--history','4096','--log',(Join-Path $session 'renderer.log'),
+            '--log-limit','256','--log-wrap')
+        $metadata.debug_log_policy = 'rolling 256 MiB; latest renderer messages; 4096-line collector history'
+    }
     $debugProcess = Start-Process -FilePath $debug -ArgumentList (Quote-Arguments $debugArgs) -PassThru -WindowStyle Hidden
     Start-Sleep -Milliseconds 500
     if ($debugProcess.HasExited) { throw 'Debug output collector stopped before the game started.' }
@@ -259,7 +315,12 @@ try {
     }
 
     Write-Host ''
-    if ($ShortDiagnostic) {
+    if ($GameplayProfile) {
+        Write-Host 'Play normally, including dragging routes and cycling city build choices.' -ForegroundColor Cyan
+        Write-Host 'After a slowdown or freeze, return here and press Enter to save the capture.'
+        Write-Host 'Game-window samples, memory, renderer logs and presentation timing are recorded for up to 15 minutes.'
+        Write-Host 'The collectors can stop while the game remains frozen. No replay journal is recorded.'
+    } elseif ($ShortDiagnostic) {
         Write-Host 'Play for 60-90 seconds, then return to this console and press Enter to save.' -ForegroundColor Cyan
         Write-Host 'Keep the game open until Capture saved appears. Then you may quit it.'
     } elseif ($NoReplayRecording) {
@@ -280,7 +341,7 @@ try {
     $gameProcess = [System.Diagnostics.Process]::Start($gameStart)
     $metadata.game_process_id = $gameProcess.Id
     $null = $gameProcess.Handle
-    if (-not $NoReplayRecording) {
+    if ($windowRecording) {
         $witnessArgs = @([string]$gameProcess.Id,(Join-Path $session 'window'), '900', '5', 'sampled-window-evidence')
         $witnessProcess = Start-Process -FilePath $witness -ArgumentList (Quote-Arguments $witnessArgs) -PassThru `
             -RedirectStandardOutput (Join-Path $session 'window.log') -RedirectStandardError (Join-Path $session 'window-errors.log')
@@ -305,6 +366,14 @@ try {
             }
         }
         if (-not $NoReplayRecording -and (Test-Path -LiteralPath (Join-Path $session 'inputs\finished.json'))) { break }
+        if ($GameplayProfile) {
+            $reason = Get-ShortCaptureStopReason (Join-Path $session 'window\timeline.jsonl')
+            if (-not [Console]::IsInputRedirected -and [Console]::KeyAvailable -and [Console]::ReadKey($true).Key -eq [ConsoleKey]::Enter) { $reason = 'user-finished' }
+            if ($witnessProcess.HasExited) { $reason = 'window-collector-ended' }
+            if ($volume.AvailableFreeSpace -lt 536870912) { $reason = 'low-disk-space' }
+            if (Test-Path -LiteralPath (Join-Path $session 'stop-profile.txt')) { $reason = 'requested' }
+            if ($reason) { $metadata.capture_stop_requested = $reason; break }
+        }
         if ($ShortDiagnostic -and -not $metadata.capture_stop_requested) {
             $reason = Get-ShortCaptureStopReason (Join-Path $session 'window\timeline.jsonl')
             if ([Console]::KeyAvailable -and [Console]::ReadKey($true).Key -eq [ConsoleKey]::Enter) { $reason = 'user-finished' }
@@ -389,7 +458,7 @@ try {
         }
         $metadata | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $session 'session.json') -Encoding UTF8
         New-Item -ItemType Directory -Path $saved -Force | Out-Null
-        Copy-Item -Path (Join-Path $session '*') -Destination $saved -Recurse -Force
+        Copy-CaptureTree $session $saved
         Write-Host ''
         Write-Host ('Capture saved: ' + $saved)
         Write-Host 'Tell Codex: Finished the capture. No upload or copy/paste needed.'

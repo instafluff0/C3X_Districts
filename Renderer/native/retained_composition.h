@@ -103,6 +103,15 @@ private:
         std::shared_ptr<Node> projected;
         std::uint64_t projected_frame=0,prepared_frame=0,prepared_projected_frame=0;
         bool projects_scene=false;
+        unsigned pins=0;
+    };
+    // Keep only current operands/targets resident. Completed intermediates may
+    // be rebuilt later in the same frame from their immutable dependencies.
+    struct Pins {
+        std::vector<std::shared_ptr<Node>> nodes;
+        void add(std::shared_ptr<Node> const& n){nodes.push_back(n);++n->pins;}
+        void add(Picture const& p){for(auto const& part:p.patches)add(part.node);}
+        ~Pins(){for(auto const& n:nodes)--n->pins;}
     };
     ID3D11Device* device;ID3D11DeviceContext* context;
     Compositor replay;
@@ -199,6 +208,7 @@ private:
     std::uint64_t resident_bytes()const{return owned_storage.bytes()+direct_bytes+replay.spatial_bytes();}
     void release_front(){assembled_patches.clear();assembled_front.Reset();front_owned={};front_physical={};assembled_width=assembled_height=0;assembled_revision=0;}
     void reserve(std::uint64_t bytes,char const* site,BatchPreparation* cache=nullptr){
+        if(bytes>resident_budget)throw std::runtime_error("retained composition texture budget");
         if(bytes<=resident_budget-resident_bytes())return;
         // Optional front reuse cannot displace an authoritative native output.
         release_front();
@@ -213,6 +223,25 @@ private:
             for(auto& source:cache->batch_sources){source.texture.Reset();source.owned={};source.physical={};}
         }
         if(bytes<=resident_budget-resident_bytes())return;
+        // Inactive native forms and save/restore canvases can keep complete
+        // recipes after their last presentation. Their derived textures are
+        // caches; immutable uploads, retired pixels and sampled scenes are not.
+        // Release cold results before refusing a new authoritative output.
+        std::vector<std::shared_ptr<Node>> pending;
+        std::unordered_set<Node*> visited;
+        for(auto const& image:images)for(auto const& patch:image.second.patches)pending.push_back(patch.node);
+        for(auto const& patch:front.patches)pending.push_back(patch.node);
+        while(!pending.empty()){
+            auto n=std::move(pending.back());pending.pop_back();
+            if(!visited.insert(n.get()).second)continue;
+            for(auto const& input:n->inputs)for(auto const& patch:input.patches)pending.push_back(patch.node);
+            for(auto const& draw:n->batch)for(auto const& input:draw.inputs)for(auto const& patch:input.patches)pending.push_back(patch.node);
+            if(!n->operation||n->retired||n->pins)continue;
+            for(unsigned i=0;i<2;++i){n->output_view[i].Reset();n->output[i].Reset();
+                n->owned_storage[i]={};n->storage[i]={};n->bytes[i]=0;n->borrowed_output[i]=false;}
+            n->seen=0;
+            if(bytes<=resident_budget-resident_bytes())return;
+        }
         char line[384];std::snprintf(line,sizeof(line),
             "[C3X renderer] stage=retained-admission-rejected site=%s requested=%llu resident=%llu cap=%llu physical=%llu peak=%llu recipe_eligible=%llu recipe_probed=%llu recipe_reused=%llu\n",
             site,bytes,resident_bytes(),resident_budget,storage.bytes(),storage.peak(),recipe_counts.eligible,recipe_counts.probed,recipe_counts.reused);OutputDebugStringA(line);
@@ -558,6 +587,10 @@ private:
     void evaluate(std::shared_ptr<Node> const& n,long long ticks,long long frequency,unsigned depth){
         if(n->seen==frame)return;
         if(depth>256)throw std::runtime_error("retained composition dependency depth");
+        Pins pinned;pinned.add(n);
+        for(auto const& p:n->inputs)pinned.add(p);
+        for(auto const& draw:n->batch)for(auto const& p:draw.inputs)pinned.add(p);
+        n->seen=frame;
         bool had_map=n->map_dynamic;
         if(n->sample){
             // The displayed scene is sampled at its projection below. Native
@@ -1033,6 +1066,7 @@ private:
         return out;
     }
     Id assemble(Picture const& p,long long ticks,long long frequency,unsigned depth,Rect region={},bool readonly=false,bool initialize=true,ID3D11Texture2D* destination=nullptr){
+        Pins pinned;pinned.add(p);
         // Evaluate children before reserving full-canvas scratch, so dependency
         // depth does not multiply the working-surface allocation.
         for(auto const& part:p.patches)evaluate(part.node,ticks,frequency,depth);
@@ -1398,6 +1432,7 @@ public:
     int draw(long long ticks,long long frequency,ID3D11RenderTargetView* target,ID3D11Texture2D* display,ID3D11Texture2D* buffer){
         work={};selected_view_scale=1.;
         if(!ready())return 0;++frame;
+        Pins pinned;pinned.add(front);
         prepare_front(ticks,frequency);
         auto& versions=pending_drawn_dependencies;versions.clear();
         for(auto const& part:front.patches){evaluate(part.node,ticks,frequency,0);versions.push_back(part.node->revision);}

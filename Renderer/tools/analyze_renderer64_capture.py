@@ -63,7 +63,8 @@ def duration(events, stage, field):
 
 def pipeline_profile(session):
     bridge, native = trace_profile(session / "renderer.log", {
-        "composite", "native-cpu-barrier", "native-copy-admission", "native-handoff"})
+        "composite", "native-cpu-barrier", "native-copy-admission", "native-handoff",
+        "publication-latency", "retained-admission-rejected"})
     helper, remote = trace_profile(session / "renderer-runtime.log.x64", {
         "direct-visual", "visual-frame", "visual-readiness", "trial-present-phase", "video-memory"})
     barriers = [event for event in native if event.get("stage") == "native-cpu-barrier"]
@@ -81,6 +82,14 @@ def pipeline_profile(session):
         "bridge_trace_available": bridge, "helper_trace_available": helper,
         "map_render_wait": duration(native, "composite", "render_wait_ms"),
         "native_handoff": duration(native, "native-handoff", "call_ms"),
+        "retained_admission_rejections": [e for e in native
+                                           if e.get("stage") == "retained-admission-rejected"],
+        "publication": {
+            operation: {
+                "queue": duration([e for e in native if e.get("operation") == operation], "publication-latency", "queue_ms"),
+                "service": duration([e for e in native if e.get("operation") == operation], "publication-latency", "service_ms")}
+            for operation in sorted({e.get("operation", "unknown") for e in native
+                                     if e.get("stage") == "publication-latency"})},
         "native_cpu_barriers": {
             "logged": len(barriers),
             "operations": {key: sum(e.get("operation") == key for e in barriers)
@@ -204,6 +213,7 @@ def analyze(session):
     native_memory = [row for row in window_events if row.get("event") == "process_memory"]
     return {"scope": "diagnostic; bridge call service and next helper present do not prove correct displayed-frame latency",
             "capture_result": metadata.get("result"),
+            "journal_requested": metadata.get("input_recording", True),
             "journal_complete": bool(report.get("complete") and report.get("verified_prefix")),
             "journal_calls": report.get("calls"), "families": families,
             "presentation": presentation,
@@ -212,7 +222,7 @@ def analyze(session):
             "civ3_private_peak_mib": max((row.get("private_bytes", 0) for row in native_memory), default=0) / 1048576,
             "civ3_min_free_mib": min((row.get("free_bytes", 0) for row in native_memory), default=0) / 1048576,
             "window_samples": sum("frame" in row for row in window_events),
-            "missing": [name for name, available in (("journal", timeline_path.is_file()),
+            "missing": [name for name, available in (("journal", timeline_path.is_file() or not metadata.get("input_recording", True)),
                        ("helper_presentmon", bool(helper_rows)),
                        ("helper_memory", bool(helper_memory)),
                        ("window", bool(native_memory))) if not available]}

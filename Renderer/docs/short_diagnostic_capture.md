@@ -1,5 +1,10 @@
 # Short gameplay diagnostic
 
+For ordinary play sessions and freezes, use the simpler
+[`CAPTURE_GAMEPLAY.bat` workflow](gameplay_profile.md). It collects window
+samples and profiling evidence without a replay journal. The workflow below
+requires a current replay qualification receipt.
+
 This is a 60–90-second Renderer64 calibration capture for unit travel and
 camera navigation. It records the actual staged 32-bit bridge, 64-bit DLL and
 helper. It is not ten-minute endurance qualification or live FPS acceptance.

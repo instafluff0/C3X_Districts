@@ -1,5 +1,25 @@
 # Civ III patch dependency ledger
 
+## Route-preview coordinates and city interaction pressure
+
+`required_user_action: []`. Existing
+`Main_Screen_Form_update_in_go_to_mode`, `Main_Screen_Form_tile_to_screen_coords`,
+`Main_Screen_Form_draw_route_cursor` and native JGL line/text hooks retain their
+signatures and supported-build addresses. No patch-table entries are added.
+The go-to hook copies native route centers paired with authoritative captured
+map anchors, correcting native half-world coordinate folding on tall viewports.
+Native pathfinding and movement remain unchanged; config-off and missing
+renderer capability immediately delegate to the original function.
+
+Renderer-only changes evict regenerable cold composition results under the
+existing texture cap and bulk-copy image pixels using the unchanged little-endian
+wire format. Small CPU-owned UI edits upload their changed rectangle through
+existing image/copy commands; periodic full replacement bounds patch history.
+The larger source slot table keeps the same CPU byte budget and ownership rules.
+Immutable uploads, retired views and active evaluation dependencies remain
+protected. Route recordings carry an optional counted anchor array;
+existing zero-count recordings retain their prior decoding contract.
+
 ## Idle turn selection, exploration motion and unit layering
 
 `required_user_action: []`. Existing `Animator_update_display`,
