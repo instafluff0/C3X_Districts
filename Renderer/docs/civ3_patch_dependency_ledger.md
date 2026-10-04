@@ -2535,3 +2535,15 @@ renderer failure; the original save is unchanged and owned processes are closed.
 Reviewed frames show opaque feathered shroud edges, turn-start rings before
 further input, and the selected worker idle after its road job. Local receipts
 and indexed visual evidence are under `Renderer/.cache/fog-selection-worker/`.
+
+## Camera reuse after interturn preparation
+
+`required_user_action: []`. The existing `Main_Screen_Form_perform_interturn`,
+`Animator_update_display` and `Map_Renderer_m71_Draw_Tiles` boundaries suffice;
+no injected source, signature, address or patch-table entry changes are needed.
+World preparation retires the helper's animation sampler. The asynchronous
+bridge now also retires its reusable camera receipt, so an unchanged next-turn
+viewport must acquire a fresh sampler. Completed pixels and image aliases
+remain valid until ordered replacement. Clock-only repetition within the same
+prepared view still reuses its camera. Regression coverage exercises success,
+failure, supersession, old-image lifetime and synchronous delegation.

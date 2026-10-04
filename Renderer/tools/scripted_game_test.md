@@ -89,6 +89,18 @@ body/HUD travel together and the idle interval for the selection ring before
 any further input. The final scroll is a comparison, not a way to make the
 idle interval pass. Original saves and configuration use the same cleanup.
 
+`-Scenario research-turn -Seconds 200 -SampleHz 4 -MeasureCadence -ProfileRenderer`
+reproduces the first-turn research dialog handoff. Use a 4000 BC save with the
+Settler selected, a Worker and Scout stacked on its tile, and two traversable
+northern tiles. It founds the capital, closes the city, moves the Worker north
+once and Scout north twice, ends the turn and accepts Bronze Working with Enter.
+No input follows for 70 seconds; the final scroll is only a comparison. Require
+three moves, exactly one completed/prepared turn, all nine commands, one scroll,
+and no failures. Review the idle interval for the automatically selected
+Worker's ring, fidget and changing shore waves before any scroll. Presentation
+counts alone cannot detect a completed image whose animation sampler retired.
+Use the 64 MiB trace to verify a fresh camera adoption after world preparation.
+
 `-Scenario turn-scroll -Seconds 205 -SampleHz 4 -MeasureCadence -ProfileRenderer`
 checks exploration followed by interturn and scrolling. Use an early save with
 an active two-move Scout, two traversable tiles to its north, and no blocking

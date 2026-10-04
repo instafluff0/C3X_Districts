@@ -10,6 +10,23 @@ the former 1,326-line roadmap.
 
 ## Current state
 
+- **October 3 idle animation after research (staged and tested).** The first
+  turn with Enter accepting research reproduced a remaining freeze: native
+  redraw ran, but the async bridge reused the old completed camera after world
+  preparation retired its animation sampler. The bridge now invalidates that
+  reuse while retaining completed pixels until a fresh camera is adopted.
+  Capture `20261003-211547` has identical map pixels and no ring across 28 idle
+  samples from 125–179 seconds. The same sequence in `20261003-213213` adopts a
+  new camera at 116.36 seconds, shows the selected Worker's ring, and has 28
+  distinct shoreline samples before the first subsequent input at 185 seconds.
+  All three moves, one turn and final scroll complete without renderer errors;
+  the disposable save is unchanged and owned game/helper processes are closed.
+  Twenty-three focused host tests and the matching GPU async fixture pass.
+  The regression fails against the previous bridge. The repeatable
+  `research-turn` scenario supplements the later-turn tests below; those did
+  not cover this first-turn handoff. Evidence is under
+  `Renderer/.cache/turn-start-resume/`. No injected or patch-table changes.
+
 - **October 3 unit redraw and layering follow-up (staged and tested).**
   The native Animator now consumes pending renderer redraws without requiring
   player input and recaptures cursor eligibility changes even when selection

@@ -5,6 +5,88 @@ from Renderer.native.native_cpp_test import run_cpp
 
 
 class AsyncPublicationTests(unittest.TestCase):
+    def test_world_preparation_retires_camera_reuse_but_preserves_displayed_images(self):
+        run_cpp(r'''
+#include "Renderer/sandbox/async_scene_client.h"
+#include <cassert>
+struct State {
+ int begins=0,adoptions=0,preparations=0,draws=0;
+ int preparation_result=C3X_RENDERER_RESULT_OK;
+ bool animating=false;long long current=0;
+};
+struct Fake {
+ State& state;c3x_renderer_frame_v1 frame={};
+ explicit Fake(State& value):state(value){}
+ bool alive()const{return true;}
+ void supersede_pending_camera(){}
+ void publication_pressure(std::size_t){}
+ int stats(){return 0;}
+ int camera_begin(c3x_renderer_camera_request_v1 const& request,long long& ticket){
+  frame=*request.frame;ticket=++state.begins;return C3X_RENDERER_RESULT_PENDING;
+ }
+ int camera_ready(long long ticket,c3x_renderer_gpu_camera_view_v1& view){
+  view={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(view)};
+  view.camera.frame=frame;view.camera.ticket=ticket;
+  view.camera.output={C3X_RENDERER_API_VERSION,sizeof(view.camera.output)};
+  view.image={sizeof(view.image)};return C3X_RENDERER_RESULT_OK;
+ }
+ int camera_poll(long long ticket,c3x_renderer_gpu_camera_view_v1& view){
+  camera_ready(ticket,view);view.image.ticket=100+ticket;view.image.map_image=1000+ticket;
+  state.current=ticket;++state.adoptions;state.animating=true;return C3X_RENDERER_RESULT_OK;
+ }
+ int prepare_world_loading(c3x_renderer_camera_identity_v1 const&){
+  ++state.preparations;state.animating=false;return state.preparation_result;
+ }
+ int images(c3x_renderer_gpu_images_v1 const& request,c3x_renderer_gpu_result_v1&,unsigned*,unsigned){
+  assert(request.ticket==100+state.current&&request.image==1000+state.current);
+  ++state.draws;return C3X_RENDERER_RESULT_OK;
+ }
+ int images_batch(std::vector<c3x_remote_scene::ImageBatch::Operation>& operations,
+                  std::vector<c3x_remote_scene::ImageBatch::Reply>& replies){
+  replies=c3x_remote_scene::ImageBatch::execute(operations,[&](auto const& request,auto& result){
+   return images(request,result,nullptr,0);
+  });return C3X_RENDERER_RESULT_OK;
+ }
+};
+int main(){
+ State state;c3x_remote_scene::AsyncSceneClient<Fake> client(true,[](char const*){assert(false);},state);
+ c3x_renderer_frame_v1 frame={C3X_RENDERER_API_VERSION,sizeof(frame)};frame.presentation_time_ticks=1;
+ c3x_renderer_camera_request_v1 request={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(request),&frame,{}};
+ c3x_renderer_gpu_camera_view_v1 view={};long long camera=0;
+ auto adopt=[&]{
+  client.stats();assert(client.camera_poll(camera,view)==C3X_RENDERER_RESULT_PENDING);
+  client.stats();assert(client.camera_poll(camera,view)==C3X_RENDERER_RESULT_OK);client.stats();
+ };
+ auto draw=[&](c3x_renderer_gpu_frame_v1 const& image){
+  c3x_renderer_gpu_images_v1 request={};request.struct_size=sizeof(request);
+  request.action=C3X_GPU_SUBMIT;request.ticket=image.ticket;request.image=image.map_image;
+  c3x_renderer_gpu_result_v1 result={};
+  assert(client.images(request,result,nullptr,0)==C3X_RENDERER_RESULT_OK);client.stats();
+ };
+ assert(client.camera_begin(request,camera)==C3X_RENDERER_RESULT_PENDING);adopt();
+ for(int result:{C3X_RENDERER_RESULT_OK,C3X_RENDERER_RESULT_ERROR,C3X_RENDERER_RESULT_SUPERSEDED}){
+  auto previous=camera;auto image=view.image;int begins=state.begins,adoptions=state.adoptions;
+  // Ordinary clock-only repetition must keep the current animated camera.
+  ++frame.presentation_time_ticks;++frame.visible_animation_count;
+  assert(client.camera_begin(request,camera)==C3X_RENDERER_RESULT_PENDING&&camera==previous);
+  assert(client.camera_poll(camera,view)==C3X_RENDERER_RESULT_OK);client.stats();
+  assert(state.begins==begins&&state.adoptions==adoptions&&state.animating);
+  state.preparation_result=result;
+  assert(client.prepare_world_loading(request.identity)==result&&!state.animating);
+  draw(image); // Completed native pixels and aliases survive world preparation.
+  assert(client.camera_poll(previous,view)==C3X_RENDERER_RESULT_SUPERSEDED);
+  assert(client.camera_begin(request,camera)==C3X_RENDERER_RESULT_PENDING&&camera!=previous);
+  draw(image); // Also survive a pending replacement, until ordered adoption.
+  adopt();assert(state.begins==begins+1&&state.adoptions==adoptions+1&&state.animating);
+ }
+ assert(state.preparations==3&&state.draws==6&&client.alive());
+ // The synchronous transport continues to return its actual preparation status.
+ State direct;c3x_remote_scene::AsyncSceneClient<Fake> sync(false,{},direct);
+ direct.preparation_result=C3X_RENDERER_RESULT_ERROR;
+ assert(sync.prepare_world_loading(request.identity)==C3X_RENDERER_RESULT_ERROR&&direct.preparations==1);
+}
+''')
+
     def test_busy_native_burst_has_independent_work_and_packet_bounds(self):
         run_cpp(r'''
 #include "Renderer/sandbox/async_publication.h"

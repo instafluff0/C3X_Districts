@@ -1,11 +1,12 @@
 # Bounded real-game renderer diagnostic, enabled only in the child environment.
 param([Parameter(Mandatory=$true)][string]$SaveFile, [string]$ConquestsDirectory,
       [ValidateRange(35,360)][int]$Seconds = 75,
-      [ValidateSet('scroll','interaction','lifecycle','combat','turn','mouse','zoom','hud','city','settler','site-toggle','debug','debug-scroll','newgame','turn-stress','turn-scroll','unit-turn')][string]$Scenario = 'scroll',
+      [ValidateSet('scroll','interaction','lifecycle','combat','turn','mouse','zoom','hud','city','settler','site-toggle','debug','debug-scroll','newgame','turn-stress','turn-scroll','unit-turn','research-turn')][string]$Scenario = 'scroll',
       [ValidatePattern('^[A-Za-z0-9_-]+$')][string]$UnitPack='UnitAnimationFidelity', [ValidateSet('melee','victory','retreat','bombard','army','air','capture')][string]$CombatCase='melee', [ValidateRange(1,10)][int]$SampleHz = 2,
       [switch]$ProfileRenderer, [switch]$MeasureCadence,
       [ValidateSet(0,1,2)][int]$SceneSamples=0, [ValidateRange(-1,1)][double]$SceneSharpness=-1)
 $ErrorActionPreference = 'Stop'
+if ($Scenario -eq 'research-turn' -and $Seconds -lt 200) { throw 'research-turn requires at least 200 seconds.' }
 if ($Scenario -eq 'unit-turn' -and $Seconds -lt 130) { throw 'unit-turn requires at least 130 seconds.' }
 if ($Scenario -eq 'turn-scroll' -and $Seconds -lt 200) { throw 'turn-scroll requires at least 200 seconds.' }
 $renderer = Split-Path $PSScriptRoot -Parent
@@ -120,7 +121,7 @@ try {
     if ($ProfileRenderer) {
         $env:C3X_RENDERER_TRACE='2'
         $env:C3X_RENDERER_TRACE_BUFFERED='1'
-        if ($Scenario -in @('turn-scroll','unit-turn')) { $env:C3X_RENDERER_TRACE_MIB='64' }
+        if ($Scenario -in @('turn-scroll','unit-turn','research-turn')) { $env:C3X_RENDERER_TRACE_MIB='64' }
         if ($Scenario -in @('turn-stress','debug-scroll')) {
             # Preserve failure evidence even when a stalled helper must be killed.
             $env:C3X_RENDERER_TRACE_BUFFERED='0'
@@ -191,6 +192,12 @@ try {
     if ($Scenario -eq 'turn') {
         $interaction=@(@(36,32,'skip-first-unit'),@(39,32,'skip-second-unit'),@(42,13,'end-turn'),@(65,32,'skip-first-unit-next-turn'),@(68,32,'skip-second-unit-next-turn'),@(71,13,'end-second-turn'))
     }
+    if ($Scenario -eq 'research-turn') {
+        # Reproduce the first-turn modal handoff, then leave all input idle for 70 seconds.
+        $interaction=@(@(60,66,'found-city'),@(64,13,'accept-name'),@(85,13,'close-city'),
+            @(95,0x68,'worker-north'),@(101,0x68,'scout-north-one'),@(105,0x68,'scout-north-two'),
+            @(110,13,'finish-first-turn'),@(115,13,'choose-bronze-working'),@(185,0x87,'scroll-after-idle-turn'))
+    }
     if ($Scenario -eq 'unit-turn') {
         # Leave the completed turn untouched until the final camera comparison.
         $interaction=@(@(75,0x68,'scout-north-first'),@(78,0x68,'scout-north-second'),
@@ -249,7 +256,7 @@ try {
             # Two Enter presses select Load Game and accept the copied save.
             # The opt-in post-load hook dismisses the known welcome popup.
             $elapsed=([DateTime]::UtcNow-$started).TotalSeconds
-            if ($Scenario -in @('turn-stress','debug-scroll','turn-scroll','unit-turn') -and $elapsed -ge $failureCheck) {
+            if ($Scenario -in @('turn-stress','debug-scroll','turn-scroll','unit-turn','research-turn') -and $elapsed -ge $failureCheck) {
                 $failureCheck=$elapsed+5
                 $recent=Get-Content -LiteralPath (Join-Path $session 'renderer.log') -Tail 1000
                 if ($recent -match 'stage=async-publication-failed|stage=visual-failure|stage=native-operation-failed|stage=required-interturn-preparation-failed') {
@@ -422,10 +429,11 @@ $windowComplete=$null -ne $windowEvidence -and $windowEvidence.complete -and $wi
     ConvertTo-Json -Depth 4 | Set-Content (Join-Path $session 'result.json')
 Write-Host ('Scripted diagnostic saved: '+$session)
 if ($MeasureCadence -and $cadenceSamples.Count -lt 2) { Write-Error 'Insufficient renderer cadence samples; inspect cadence.json and the helper channel.'; exit 1 }
+if ($Scenario -eq 'research-turn' -and ($turns.Count -ne 1 -or $preparedTurns -ne 1 -or $moves -ne 3 -or $steps.Count -ne 1 -or $readyEvents -ne 1 -or $interactionIndex -ne $interaction.Count)) { Write-Error 'Incomplete first-turn research and idle animation coverage.'; exit 1 }
 if ($Scenario -eq 'unit-turn' -and ($turns.Count -lt 1 -or $preparedTurns -ne $turns.Count -or $moves -lt 2 -or $steps.Count -ne 1 -or $readyEvents -ne 1 -or $interactionIndex -ne $interaction.Count)) { Write-Error 'Incomplete unit movement or idle-turn coverage.'; exit 1 }
 if ($Scenario -eq 'turn-scroll' -and ($turns.Count -lt 2 -or $preparedTurns -ne $turns.Count -or $moves -lt 2 -or $steps.Count -ne 32 -or $interactionIndex -ne $interaction.Count)) { Write-Error 'Incomplete movement, interturn preparation or scrolling coverage.'; exit 1 }
 if ($Scenario -eq 'turn-stress' -and $moves -lt 8) { Write-Error 'Insufficient accepted unit movement; inspect the native movement records.'; exit 1 }
-if ($MeasureCadence -and $Scenario -in @('turn-stress','debug-scroll','turn-scroll','unit-turn')) {
+if ($MeasureCadence -and $Scenario -in @('turn-stress','debug-scroll','turn-scroll','unit-turn','research-turn')) {
     $tail=@($cadenceSamples | Where-Object { $_.elapsed_seconds -ge $cadenceSamples[-1].elapsed_seconds-10 })
     if ($tail.Count -lt 2 -or $tail[-1].frames -le $tail[0].frames) { Write-Error 'Renderer stopped presenting at the end of the stress run.'; exit 1 }
 }

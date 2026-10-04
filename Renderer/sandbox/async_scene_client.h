@@ -367,6 +367,11 @@ public:
         }):transport.seed_world_scope(request,true);
     }
     int prepare_world_loading(c3x_renderer_camera_identity_v1 const& identity){
+        // World preparation retires the helper's animation sampler, even when
+        // the next visible scene is identical. It cannot reuse this camera's
+        // ready receipt. Keep displayed pixels and image aliases until ordered
+        // adoption of a fresh camera, including after a failed preparation.
+        if(enabled)camera.reset();
         return enabled?publication.setup([this,identity]{return transport.prepare_world_loading(identity);}):transport.prepare_world_loading(identity);
     }
     int world_seed_query(c3x_renderer_world_page_v1& page){
