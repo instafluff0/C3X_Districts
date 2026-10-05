@@ -46,6 +46,7 @@ class UnitPoseTransitions {
         int action=-1;
         long long started=0,ticks=-1,frequency=0;
         bool blending=false;
+        double duration=.12;
         unsigned sampled_frame=UINT32_MAX;std::uint64_t sampled_source=0;
         std::vector<JointPose> from,current;
         std::array<float,4096> palette{};
@@ -56,6 +57,7 @@ class UnitPoseTransitions {
         std::uint64_t incarnation=0;
         long long ticks=-1,started=0,frequency=0;
         float from=0,target=0,current=0;
+        double duration=.12;
     };
     std::map<int,Facing> facings;
 public:
@@ -86,8 +88,11 @@ public:
         }
         auto& s=found->second;
         float delta=std::remainder(target-s.target,6.28318530718f);
-        if(std::abs(delta)>1e-5f){s.from=s.current;s.target=s.from+std::remainder(target-s.from,6.28318530718f);s.started=ticks;}
-        float t=float(std::clamp(double(ticks-s.started)/frequency/.12,0.,1.));t=t*t*(3-2*t);
+        if(std::abs(delta)>1e-5f){
+            s.from=s.current;s.target=s.from+std::remainder(target-s.from,6.28318530718f);s.started=ticks;
+            s.duration=.12+.24*std::abs(s.target-s.from)/3.14159265359;
+        }
+        float t=float(std::clamp(double(ticks-s.started)/frequency/s.duration,0.,1.));t=t*t*(3-2*t);
         s.current=s.from+(s.target-s.from)*t;s.ticks=ticks;return s.current;
     }
     // A null palette uses the original immutable GPU frame, including legacy
@@ -111,14 +116,16 @@ public:
         if(!fresh&&source_identity&&state.sampled_source==source_identity&&state.sampled_frame==frame&&
                 state.action==action&&!state.blending){state.ticks=ticks;return nullptr;}
         bool changed=!fresh&&state.action!=action;
-        if(changed){state.from=state.current;state.started=ticks;state.blending=true;}
+        if(changed){
+            state.duration=state.action==2&&action==1?.20:std::min(.12,double(mesh.duration)*.2);
+            state.from=state.current;state.started=ticks;state.blending=true;
+        }
         state.incarnation=incarnation;state.action=action;state.ticks=ticks;state.frequency=frequency;
         state.current.assign(rig.poses.begin()+frame*count,rig.poses.begin()+(frame+1)*count);
         state.sampled_frame=frame;state.sampled_source=source_identity;
         // Destination time advances during the blend. A new interruption takes
         // the last displayed mixed pose as its source, not an old clip endpoint.
-        double duration=std::min(.12,double(mesh.duration)*.2);
-        float t=state.blending?float(std::clamp(double(ticks-state.started)/frequency/duration,0.,1.)):1.f;
+        float t=state.blending?float(std::clamp(double(ticks-state.started)/frequency/state.duration,0.,1.)):1.f;
         state.blending=t<1;
         if(!state.blending){state.from.clear();return nullptr;}
         t=t*t*(3-2*t);

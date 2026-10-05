@@ -187,7 +187,9 @@ int main(){
 #define __cdecl
 #define __stdcall
 constexpr int __=0;
-struct State {int custom_renderer_tile_count=0;c3x_renderer_tile_v1* custom_renderer_tiles=nullptr;
+struct Unit{struct {int ID=7;}Body;};
+#define ARRAY_LEN(a) (sizeof(a)/sizeof((a)[0]))
+struct State {Unit* custom_renderer_unit_context=nullptr;int custom_renderer_tile_count=0;c3x_renderer_tile_v1* custom_renderer_tiles=nullptr;
  bool custom_renderer_trace_input=false;
  bool custom_renderer_unit_bootstrap=false;
  struct {bool enable_custom_rendering=false;} current_config;
@@ -198,7 +200,7 @@ struct State {int custom_renderer_tile_count=0;c3x_renderer_tile_v1* custom_rend
 struct CityForm {struct {struct {int Status2=0;} Data;} Base;} city,*p_city_form=&city;
 using JGL_Image=void;
 struct Main_Screen_Form {int mouse_x=0,mouse_y=0;struct {struct {struct {struct {JGL_Image* Image=nullptr;} JGL;} Canvas;} Data;} Units_Control;struct {struct {struct {JGL_Image* Image=nullptr;} JGL;} Canvas;} Base_Data;} main_screen,*p_main_screen_form=&main_screen;
-struct Unit{};struct Animator{int field_18E4[32]{};};struct PCX_Image{struct {void* Image=nullptr;} JGL;};struct PCX_Color_Table{};
+struct Animator{int field_18E4[32]{};};struct PCX_Image{struct {void* Image=nullptr;} JGL;};struct PCX_Color_Table{};
 int native_routes=0;
 void Main_Screen_Form_update_in_go_to_mode(Main_Screen_Form*,int){++native_routes;}
 void Main_Screen_Form_draw_route_cursor(int,int){}
@@ -209,6 +211,7 @@ int status_calls=0,cursor_calls=0,marker_calls=0,overlay_x=0,overlay_y=0;
 int ring_calls=0,route_begins=0,route_ends=0,capable=1;std::vector<int> route_anchors;
 int native_image(int op,void*,void*,void const* from,void const* to,unsigned count){
  if(op==C3X_NATIVE_ZOOM_PRESENTED)return 65536;
+ if(op==C3X_NATIVE_PAN_PRESENTED)return 0;
  if(op==C3X_NATIVE_TACTICAL_CAPABLE)return capable;
  if(op==C3X_NATIVE_TACTICAL_ROUTE_BEGIN){++route_begins;auto a=(int const*)to;route_anchors.assign(a,a+4*count);return 1;}
  if(op==C3X_NATIVE_TACTICAL_ROUTE_END){++route_ends;return 1;}
@@ -216,7 +219,7 @@ int native_image(int op,void*,void*,void const* from,void const* to,unsigned cou
  auto ring=static_cast<int const*>(from);assert(ring[2]==(bic.is_zoomed_out?64:128)&&ring[3]==1);
  overlay_x=ring[0];overlay_y=ring[1];++ring_calls;return 1;
 }
-int custom_renderer_hud_scope(void*,int,int,unsigned){return 0;}
+int custom_renderer_hud_scope(void*,int,int,unsigned,int){return 0;}
 void custom_renderer_hud_layout_offset(int,int,int*x,int*y){*x=*y=0;}
 PCX_Image canvas;PCX_Color_Table palette;
 void Unit_draw_status(Unit*,int,PCX_Image* c,int x,int y,bool stack){

@@ -486,12 +486,13 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
             static_cast<unsigned long long>(pulled.refusals),static_cast<unsigned long long>(pulled.retired),
             static_cast<unsigned long long>(pulled.copied_bytes),pulled.bytes(),pulled.entry_count());
         renderer.trace.write("fresh-pulled-submission",detail,true);
-        sprintf_s(detail,"hits=%llu misses=%llu strips=%llu refusals=%llu miss_unshifted=%llu miss_revision=%llu miss_layer=%llu miss_last_layer=%u retired_mismatch=%llu retired_failure=%llu",
+        sprintf_s(detail,"hits=%llu misses=%llu strips=%llu refusals=%llu miss_unshifted=%llu miss_revision=%llu miss_layer=%llu miss_last_layer=%u retired_mismatch=%llu retired_failure=%llu preview_hits=%llu",
             static_cast<unsigned long long>(sandbox_fresh.overlay_hits),static_cast<unsigned long long>(sandbox_fresh.overlay_misses),
             static_cast<unsigned long long>(sandbox_fresh.overlay_strips),static_cast<unsigned long long>(sandbox_fresh.overlay_refusals),
             static_cast<unsigned long long>(sandbox_fresh.overlay_miss_unshifted),static_cast<unsigned long long>(sandbox_fresh.overlay_miss_revision),
             static_cast<unsigned long long>(sandbox_fresh.overlay_miss_layer),sandbox_fresh.overlay_miss_last_layer,
-            static_cast<unsigned long long>(sandbox_fresh.overlay_retired_mismatch),static_cast<unsigned long long>(sandbox_fresh.overlay_retired_failure));
+            static_cast<unsigned long long>(sandbox_fresh.overlay_retired_mismatch),static_cast<unsigned long long>(sandbox_fresh.overlay_retired_failure),
+            static_cast<unsigned long long>(sandbox_fresh.overlay_preview_hits));
         renderer.trace.write("fresh-overlay-layer",detail,true);
         auto const& packets=renderer.ordered_rigid_packets;
         sprintf_s(detail,"builds=%llu reuses=%llu refusals=%llu draws=%llu submitted_records=%llu uploaded_bytes=%llu placement_copies=%llu pages=%u resident_bytes=%zu metadata_bytes=%zu peak_bytes=%zu",
@@ -521,12 +522,15 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
     // existing GPU fog pass, including independent animation frames. Apply it
     // to this publication target, preserving the reusable HDR scene underneath.
     if(presented && renderer.visibility_pass){
+        auto visible=renderer.arrival_visibility.sample(frame,renderer.topology_cache.scope_sequence());
+        presented=renderer.arrival_coverage.capture(visible,renderer.topology_cache.scope_sequence(),
+            renderer.topology_cache.visibility_sequence(),renderer.content_revision,renderer.device_generation);
         Microsoft::WRL::ComPtr<ID3D11Resource> resource;
         Microsoft::WRL::ComPtr<ID3D11Texture2D> texture;
         target->GetResource(&resource);
-        presented=SUCCEEDED(resource.As(&texture)) &&
+        presented=presented && SUCCEEDED(resource.As(&texture)) &&
             renderer.visibility_gpu.apply(renderer.device,renderer.context,
-                texture.Get(),renderer.visibility_coverage,
+                texture.Get(),renderer.arrival_coverage,
                 sandbox_fresh.glow.linear.depth_texture,4,zoom);
     }
     if(!presented && !failed_step)failed_step="fog";

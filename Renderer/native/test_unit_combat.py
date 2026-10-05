@@ -48,6 +48,29 @@ int main(){
 }
 ''')
 
+    def test_same_combat_action_restarts_after_native_idle(self):
+        run_cpp(r'''
+#include "Renderer/native/render_core/unit_playback.h"
+#include <cassert>
+using namespace c3x_renderer::render_core;
+struct Clip {bool ambient=false,loop=false;double duration=1;unsigned frames=31;};
+int main(){
+ for(int action:{3,6,7,8,9,10,12}){
+  UnitPlayback player;Clip clip;c3x_renderer_unit_animation_v1 fact{};
+  fact.visual.unit_id=7;fact.visual.action=action;fact.visual.presentation_frequency=1000;
+  fact.frames=10;fact.frame_seconds=.1f;assert(player.observe(fact));
+  c3x_renderer_unit_v1 body{};body.unit_id=7;body.action=action;body.presentation_frequency=1000;
+  unsigned next=0;body.presentation_time_ticks=800;
+  assert(player.resolve(body,clip,false,next)&&body.action_cursor>50000);
+  fact.visual.action=1;fact.visual.presentation_time_ticks=1100;assert(player.observe(fact));
+  assert(!player.directed(7,action));
+  fact.visual.action=action;fact.visual.presentation_time_ticks=2000;fact.cursor=0;
+  assert(player.observe(fact));body.presentation_time_ticks=2000;
+  assert(player.resolve(body,clip,false,next)&&body.action_cursor==0&&next==1);
+ }
+}
+''')
+
     def test_all_one_shot_handoffs_keep_native_duration(self):
         run_cpp(r'''
 #include "Renderer/native/render_core/unit_playback.h"
@@ -186,7 +209,7 @@ int main(){
  auto moving=std::find_if(p.begin(),p.end(),[](auto const& pose){return pose.draw.unit_id==17;});
  assert(moving!=p.end()&&moving->draw.action==2);
  p=poses(600006);assert(p.size()==2); // independent source + destination selections
- capture(0,0,6,600007);p=poses(600007);assert(p.size()==1&&p[0].draw.unit_id==0);
+ capture(0,0,6,900007);p=poses(900007);assert(p.size()==1&&p[0].draw.unit_id==0);
  world.clear();assert(poses(700000).empty());
 }
 ''')

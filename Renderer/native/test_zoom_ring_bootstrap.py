@@ -41,6 +41,7 @@ struct Pipeline {
  struct{Context* context;int content_view_width=2240,content_view_height=1192;}renderer{&context};
  std::array<StaticState,2> bootstrap;std::array<StaticState const*,2> bootstrap_ring{};std::array<std::uint64_t,2> bootstrap_ring_revision{};
  std::array<std::array<std::uint64_t,6>,2> bootstrap_stamp{};
+ bool overlay_enabled()const{return true;}
  std::array<std::uint64_t,6> bootstrap_identity()const{return {};}
  Options options;Options const& sandbox_perf_options()const{return options;}
  struct Work{void clear(int*){}}work;

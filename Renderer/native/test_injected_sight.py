@@ -25,13 +25,15 @@ PRELUDE = r'''
 #define __cdecl
 #define SBORROW4(a,b) (((long long)(a)-(b)<INT_MIN)||((long long)(a)-(b)>INT_MAX))
 typedef struct LARGE_INTEGER { long long QuadPart; } LARGE_INTEGER;
-typedef struct Map { int Width, Height, Flags; } Map;
+typedef struct Map_Renderer {void *spotlight_on_city;} Map_Renderer;
+typedef struct Map { int Width, Height, Flags; Map_Renderer Renderer; } Map;
 typedef struct Unit { struct { int ID, X, Y, CivID;
     struct { struct { int current_anim_type; } summary; } Animation;
 } Body; } Unit;
 typedef struct Main_Screen_Form {
     int TileX_Min, TileX_Max, TileY_Min, TileY_Max;
     Unit *Current_Unit;
+    bool is_now_loading_game;int Player_CivID;
     struct { int *field_18E4; } animator;
 } Main_Screen_Form;
 typedef struct State {
@@ -40,6 +42,8 @@ typedef struct State {
     void *custom_renderer_city_site_grades;
     unsigned custom_renderer_city_site_grade_count, custom_renderer_dirty_flags;
     bool custom_renderer_redraw_pending, custom_renderer_world_audit_needed;
+    bool custom_renderer_display_valid,custom_renderer_draw_in_progress,custom_renderer_frame_active,custom_renderer_capture_only;
+    void *custom_renderer_native_map;
     long long custom_renderer_map_epoch, custom_renderer_viewer_epoch;
     LARGE_INTEGER custom_renderer_qpc_frequency;
     long long (*custom_renderer_visual_clock)(void);
@@ -53,6 +57,14 @@ static struct { Map Map; } bic, *p_bic_data = &bic;
 static Main_Screen_Form screen, *p_main_screen_form = &screen;
 static int animator_words[22], rings, configured_calls, legacy_calls, reconciles, movement_calls, states;
 static int last_rings, world_result;
+static int early_captures;
+struct custom_renderer_native_view custom_renderer_native_view(Map_Renderer *r) {
+    assert(r==&bic.Map.Renderer);return (struct custom_renderer_native_view){0};
+}
+bool capture_custom_renderer_native_view(Map_Renderer *r,int viewer,struct custom_renderer_native_view *v,int purpose) {
+    assert(r==&bic.Map.Renderer&&purpose==2&&v&&viewer==screen.Player_CivID);
+    assert(states>0&&configured_calls>0);++early_captures;return true;
+}
 static bool target_visible;
 static struct c3x_renderer_unit_move_v1 last_move;
 int calc_max_visibility_range(void) { return rings; }
@@ -81,7 +93,7 @@ int reconcile(void) { ++reconciles;return world_result; }
 int movement(struct c3x_renderer_unit_move_v1 const *event) { ++movement_calls;last_move=*event;return 1; }
 void reset(void) {
     memset(&state,0,sizeof state);memset(&screen,0,sizeof screen);memset(animator_words,0,sizeof animator_words);
-    bic.Map=(Map){100,80,0};screen.TileX_Min=22;screen.TileX_Max=26;screen.TileY_Min=10;screen.TileY_Max=14;
+    bic.Map=(Map){.Width=100,.Height=80,.Flags=0};screen.TileX_Min=22;screen.TileX_Max=26;screen.TileY_Min=10;screen.TileY_Max=14;
     screen.animator.field_18E4=animator_words;
     state.current_config.enable_custom_rendering=true;state.custom_renderer_viewer_civ_id=1;
     state.custom_renderer_map_epoch=4;state.custom_renderer_viewer_epoch=3;
@@ -89,7 +101,7 @@ void reset(void) {
     state.custom_renderer_world_move_sight=configured_move;state.custom_renderer_world_move=legacy_move;
     state.custom_renderer_world_reconcile=reconcile;state.custom_renderer_unit_move=movement;
     rings=3;world_result=1;target_visible=false;
-    configured_calls=legacy_calls=reconciles=movement_calls=states=0;
+    configured_calls=legacy_calls=reconciles=movement_calls=states=early_captures=0;
 }
 '''
 
@@ -117,6 +129,12 @@ void callback(void) {
     notify_custom_renderer_unit_move(&unit,6,12,false);
     assert(configured_calls==1&&last_rings==7&&movement_calls==0&&states==1);
     assert(state.custom_renderer_redraw_pending&&(state.custom_renderer_dirty_flags&C3X_RENDERER_DIRTY_SCENE));
+    state.custom_renderer_display_valid=true;state.custom_renderer_native_map=&state;
+    notify_custom_renderer_unit_move(&unit,6,12,false);assert(early_captures==1);
+    state.custom_renderer_draw_in_progress=true;
+    notify_custom_renderer_unit_move(&unit,6,12,false);assert(early_captures==1);
+    state.custom_renderer_draw_in_progress=false;state.current_config.enable_custom_rendering=false;
+    notify_custom_renderer_unit_move(&unit,6,12,false);assert(early_captures==1);
     reset();unit.Body.CivID=2;rings=7;
     notify_custom_renderer_unit_move(&unit,6,12,false);
     assert(configured_calls==0&&movement_calls==0&&states==1&&!state.custom_renderer_redraw_pending);

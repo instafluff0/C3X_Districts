@@ -3,6 +3,7 @@
 #include "gpu_image_compositor.h"
 #include "zoom_transition.h"
 #include "render_core/gpu_event_timeline.h"
+#include "render_core/unit_hud_anchors.h"
 #include "scene_projection.h"
 #include "gpu_projected_layer.h"
 #include <array>
@@ -21,11 +22,21 @@ public:
     struct Work {unsigned operations=0,assemblies=0,copies=0,selected_borrows=0,selected_owned=0,direct_native_images=0;
         std::uint64_t copied_pixels=0,assembly_pixels=0,avoided_copy_pixels=0;
         // CPU submission time per visual-frame phase (diagnostic only).
-        double prepare_ms=0,evaluate_ms=0,assemble_ms=0,display_ms=0;};
+        double prepare_ms=0,evaluate_ms=0,assemble_ms=0,display_ms=0;
+        std::array<LONGLONG,8> display_ticks{}; // per call inside the final display draw
+    };
     struct RecipeReuse {std::uint64_t eligible=0,probed=0,reused=0;};
     struct PlanReuse {std::uint64_t builds=0,reuses=0,source_binds=0,source_reuses=0,batch_builds=0,batch_reuses=0;std::size_t nodes=0;};
     using Texture=ComPtr<ID3D11Texture2D>;
-    struct Placed {Command command;int x=0,y=0;};
+    struct Placed {
+        Command command;int x=0,y=0;
+        std::shared_ptr<c3x_renderer::render_core::UnitHudAnchors> units;
+        int unit_id=-1;
+        c3x_renderer::render_core::UnitHudAnchors::Offset offset(unsigned width,unsigned height,double scale)const{
+            if(units&&unit_id>=0)return units->offset(unit_id,x,y,int(width),int(height),scale);
+            return {int(std::lround((x-int(width/2))*(scale-1.))),int(std::lround((y-int(height/2))*(scale-1.))),true};
+        }
+    };
     struct SampledImage {
         enum class Kind { unchanged, immutable, bgra, frozen, held };
         Kind kind=Kind::unchanged;Texture texture;Rect area{};float sharpness=0.f;
@@ -48,6 +59,7 @@ public:
         std::function<SampledImage(long long,long long)> canonical;
         std::function<SampledImage(long long,long long,float)> projected;
         std::function<void(long long,long long,float)> prepare;
+        std::shared_ptr<c3x_renderer::render_core::UnitHudAnchors> unit_anchors;
         std::uint64_t source_generation=0;
         Sample()=default;
         template<class F,typename std::enable_if<!std::is_same<typename std::decay<F>::type,Sample>::value,int>::type=0>
@@ -82,6 +94,7 @@ private:
         std::vector<std::array<unsigned,6>> batch_operands;
         std::vector<Command> batch_commands;
         std::vector<std::uint64_t> batch_offsets;
+        std::vector<bool> batch_visible;
         Compositor::SpatialPlan spatial_plan;
         std::uint64_t spatial_allowance=0,binding_allowance=0;
         bool batch_compiled=false,batch_bound=false,binding_refused=false,spatial_attempted=false,spatial_ready=false;
@@ -122,6 +135,11 @@ private:
     std::map<Id,Picture> images;
     Picture front;
     std::shared_ptr<Node> world_selection;
+    // Image-space camera step (Session's PanTransition). The selected world
+    // (map, world overlays and map-anchored HUD) is shifted by whole pixels;
+    // the previous selected world fills the trailing strip. Screen UI drawn
+    // above the selection is unaffected.
+    int pan_x=0,pan_y=0,pan_under_x=0,pan_under_y=0;Texture pan_under[2];
     std::uint64_t serial=0,frame=0,front_revision=0,drawn_revision=0;
     std::vector<std::uint64_t> drawn_dependencies;
     std::vector<std::uint64_t> pending_drawn_dependencies;
@@ -389,7 +407,7 @@ private:
         for(unsigned i=0;i<2;++i)if(old.width[i]!=next.inputs[i].width||old.height[i]!=next.inputs[i].height||old.formats[i]!=next.inputs[i].format)return false;
         for(std::size_t index=0;index<old.batch.size();++index){auto const& a=old.batch[index];auto const& b=next.batch[index];
             auto const& x=a.placed.command;auto const& y=b.placed.command;
-            if(a.placed.x!=b.placed.x||a.placed.y!=b.placed.y||x.kind!=y.kind||!same_rect(x.area,y.area)||
+            if(a.placed.x!=b.placed.x||a.placed.y!=b.placed.y||a.placed.units!=b.placed.units||a.placed.unit_id!=b.placed.unit_id||x.kind!=y.kind||!same_rect(x.area,y.area)||
                !same_rect(x.clip,y.clip)||x.source_x!=y.source_x||x.source_y!=y.source_y||x.color!=y.color||
                x.source_width!=y.source_width||x.source_height!=y.source_height)return false;
             Id left[6]={x.destination,x.source,x.background,x.detail,x.background_detail,x.program};
@@ -422,6 +440,7 @@ private:
         auto& b=*n.batch_preparation;
         if(b.batch_compiled)return;
         b.batch_operands.reserve(n.batch.size());b.batch_commands.reserve(n.batch.size());b.batch_offsets.resize(n.batch.size(),~std::uint64_t(0));
+        b.batch_visible.resize(n.batch.size());
         for(auto const& draw:n.batch){
             auto const& c=draw.placed.command;Id original[6]={c.destination,c.source,c.background,c.detail,c.background_detail,c.program};
             std::array<unsigned,6> operands={};
@@ -525,15 +544,15 @@ private:
         if(!b.spatial_ready&&allowance!=b.spatial_allowance)changed=true;
         for(std::size_t index=0;index<n.batch.size();++index){
             auto const& placed=n.batch[index].placed;
-            int dx=int(std::lround((placed.x-int(n.inputs[0].width/2))*(scale-1.)));
-            int dy=int(std::lround((placed.y-int(n.inputs[0].height/2))*(scale-1.)));
+            auto attachment=placed.offset(n.inputs[0].width,n.inputs[0].height,scale);
+            int dx=attachment.x,dy=attachment.y;
             auto offset=(std::uint64_t(unsigned(dx))<<32)|unsigned(dy);
-            if(offset!=b.batch_offsets[index])changed=true;
+            if(offset!=b.batch_offsets[index]||attachment.visible!=b.batch_visible[index])changed=true;
         }
         if(changed)for(std::size_t index=0;index<n.batch.size();++index){
             auto const& placed=n.batch[index].placed;
-            int dx=int(std::lround((placed.x-int(n.inputs[0].width/2))*(scale-1.)));
-            int dy=int(std::lround((placed.y-int(n.inputs[0].height/2))*(scale-1.)));
+            auto attachment=placed.offset(n.inputs[0].width,n.inputs[0].height,scale);
+            int dx=attachment.x,dy=attachment.y;
             auto offset=(std::uint64_t(unsigned(dx))<<32)|unsigned(dy);
             auto c=placed.command;Id ids[6]={};
             for(unsigned i=0;i<6;++i){auto binding=b.batch_operands[index][i];
@@ -542,7 +561,8 @@ private:
             c.destination=ids[0];c.source=ids[1];c.background=ids[2];c.detail=ids[3];c.background_detail=ids[4];c.program=ids[5];
             c.area={c.area.left+dx,c.area.top+dy,c.area.right+dx,c.area.bottom+dy};
             c.clip={c.clip.left+dx,c.clip.top+dy,c.clip.right+dx,c.clip.bottom+dy};
-            b.batch_commands[index]=c;b.batch_offsets[index]=offset;
+            if(!attachment.visible)c.clip={};
+            b.batch_commands[index]=c;b.batch_offsets[index]=offset;b.batch_visible[index]=attachment.visible;
         }
         if(changed){
             // Offset/zoom updates retain the atlas of immutable glyphs/tables.
@@ -633,7 +653,43 @@ private:
                 evaluate(patch.node,ticks,frequency,depth+1);versions.push_back(patch.node->revision);
                 n->map_dynamic|=patch.node->map_dynamic;
             }
-            if(!n->output[0]||versions!=n->dependencies){
+            bool panning=(pan_x||pan_y)&&pan_under[0]&&pan_under[1]&&n->output[0]&&n->output[1];
+            if(panning){
+                versions.push_back((std::uint64_t(unsigned(pan_x))<<32)|unsigned(pan_y));
+                versions.push_back((std::uint64_t(unsigned(pan_under_x))<<32)|unsigned(pan_under_y));
+                versions.push_back(std::uint64_t(reinterpret_cast<std::uintptr_t>(pan_under[0].Get())));
+            }
+            if(panning&&versions!=n->dependencies){
+                int w=n->area.right-n->area.left,h=n->area.bottom-n->area.top;
+                auto shifted=[&](ID3D11Texture2D* target,ID3D11Texture2D* source,int x,int y){
+                    int cw=w-std::abs(x),ch=h-std::abs(y);if(cw<=0||ch<=0)return;
+                    D3D11_BOX box={unsigned(std::max(0,-x)),unsigned(std::max(0,-y)),0,
+                        unsigned(std::max(0,-x)+cw),unsigned(std::max(0,-y)+ch),1};
+                    context->CopySubresourceRegion(target,0,unsigned(std::max(0,x)),unsigned(std::max(0,y)),0,source,0,&box);
+                    ++work.copies;work.copied_pixels+=std::uint64_t(cw)*ch;
+                };
+                for(unsigned i=0;i<2;++i){
+                    D3D11_TEXTURE2D_DESC desc={},under={};n->output[i]->GetDesc(&desc);pan_under[i]->GetDesc(&under);
+                    if(under.Width!=desc.Width||under.Height!=desc.Height||under.Format!=desc.Format){panning=false;break;}
+                }
+                if(panning){
+                    for(unsigned i=0;i<2;++i){
+                        if(n->borrowed_output[i]){
+                            reserve(std::uint64_t(w)*h*4,"selected-pan-output");
+                            D3D11_TEXTURE2D_DESC desc={};n->output[i]->GetDesc(&desc);
+                            Texture target;checked(device->CreateTexture2D(&desc,nullptr,&target));
+                            output(*n,i,std::move(target));n->borrowed_output[i]=false;
+                        }
+                        auto source=assemble(n->inputs[i],ticks,frequency,depth+1,{},true);
+                        try{
+                            shifted(n->output[i].Get(),pan_under[i].Get(),pan_under_x,pan_under_y);
+                            shifted(n->output[i].Get(),replay.texture(source),pan_x,pan_y);
+                        }catch(...){replay.recycle(source);throw;}replay.recycle(source);
+                    }
+                    n->dependencies.swap(versions);n->revision=++serial;
+                }
+            }
+            if(!panning&&(!n->output[0]||versions!=n->dependencies)){
                 for(unsigned i=0;i<2;++i){
                     if(compiled_enabled&&n->inputs[i].format==n->selected_format[i]&&exact_plane(n->inputs[i],n->area)){
                         auto const& patch=n->inputs[i].patches.front();
@@ -717,9 +773,9 @@ private:
             double scale=n->placement->sample(ticks,frequency);
             if(compiled_enabled){compile_batch(*n);for(auto const& source:n->batch_preparation->batch_sources)visit(source.picture);}
             for(auto const& draw:n->batch){
-                int dx=int(std::lround((draw.placed.x-int(n->inputs[0].width/2))*(scale-1.)));
-                int dy=int(std::lround((draw.placed.y-int(n->inputs[0].height/2))*(scale-1.)));
-                versions.push_back((std::uint64_t(unsigned(dx))<<32)|unsigned(dy));
+                auto attachment=draw.placed.offset(n->inputs[0].width,n->inputs[0].height,scale);
+                versions.push_back((std::uint64_t(unsigned(attachment.x))<<32)|unsigned(attachment.y));
+                versions.push_back(attachment.visible);
                 if(!compiled_enabled)for(auto const& input:draw.inputs)if(input.width)visit(input);
             }
             if((!n->output[0]||versions!=n->dependencies)&&!(had_map&&!n->map_dynamic&&n->output[0])){
@@ -776,12 +832,12 @@ private:
                             }
                             c.destination=ids[0];c.source=ids[1];c.background=ids[2];
                             c.detail=ids[3];c.background_detail=ids[4];c.program=ids[5];
-                            int dx=int(std::lround((draw.placed.x-int(n->inputs[0].width/2))*(scale-1.)));
-                            int dy=int(std::lround((draw.placed.y-int(n->inputs[0].height/2))*(scale-1.)));
+                            auto attachment=draw.placed.offset(n->inputs[0].width,n->inputs[0].height,scale);
+                            int dx=attachment.x,dy=attachment.y;
                             c.area={c.area.left+dx,c.area.top+dy,c.area.right+dx,c.area.bottom+dy};
                             c.clip={c.clip.left+dx,c.clip.top+dy,c.clip.right+dx,c.clip.bottom+dy};
                             ++work.operations;
-                            if(!replay.submit(&c,1))throw std::runtime_error("retained HUD operation rejected");
+                            if(attachment.visible&&!replay.submit(&c,1))throw std::runtime_error("retained HUD operation rejected");
                         }catch(...){for(unsigned i=0;i<6;++i)if(ids[i]&&ids[i]!=pair[0]&&ids[i]!=pair[1]&&
                             std::find(ids,ids+i,ids[i])==ids+i)replay.recycle(ids[i]);throw;}
                         for(unsigned i=0;i<6;++i)if(ids[i]&&ids[i]!=pair[0]&&ids[i]!=pair[1]&&
@@ -1286,6 +1342,22 @@ public:
     // every map underlay samples the latest complete world and map HUD. This
     // explicit live selection prevents stale labels without repainting or
     // erasing native panels that Civ III did not redraw this time.
+    void set_pan(int x,int y,int under_x,int under_y,Texture const* under){
+        pan_x=x;pan_y=y;pan_under_x=under_x;pan_under_y=under_y;
+        pan_under[0]=under?under[0]:Texture{};pan_under[1]=under?under[1]:Texture{};
+    }
+    // Copy the displayed world planes before a camera step replaces them.
+    bool copy_selected_world(Texture out[2]){
+        auto n=world_selection;if(!n||!n->output[0]||!n->output[1])return false;
+        for(unsigned i=0;i<2;++i){
+            D3D11_TEXTURE2D_DESC desc={},have={};n->output[i]->GetDesc(&desc);if(out[i])out[i]->GetDesc(&have);
+            if(!out[i]||have.Width!=desc.Width||have.Height!=desc.Height||have.Format!=desc.Format){
+                out[i].Reset();desc.MiscFlags=0;checked(device->CreateTexture2D(&desc,nullptr,&out[i]));
+            }
+            context->CopyResource(out[i].Get(),n->output[i].Get());
+        }
+        return true;
+    }
     void select_world(Id words,Id detail,Id source_words,Id source_detail){
         if(!admitted)return;
         auto const& source=images.at(source_detail);
@@ -1461,7 +1533,7 @@ public:
         // display. Its unchanged regions may be several frames old. Retain
         // dirty-only assembly above, but transfer the complete coherent canvas
         // on every changed frame; Present does not receive a damage history.
-        try{ok=replay.display(image,target,front.width,front.height,extent(front));}
+        try{ok=replay.display(image,target,front.width,front.height,extent(front),&work.display_ticks);}
         catch(...){assembled_revision=0;replay.recycle(image);throw;}replay.recycle(image);
         lap(work.display_ms);render_core_mark("compose_display");
         if(!ok)assembled_revision=0;

@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <map>
+#include <unordered_map>
 #include <memory>
 #include <functional>
 #include <iterator>
@@ -198,6 +199,16 @@ template<class Proof> struct ShadowCasterProofs {
 // Exact current caster proofs own no geometry or former camera generations.
 // The fixed atlas slices survive logical-grid movement; only completed pages
 // can be selected again. Sampling density/light/wrap/scope are explicit facts.
+// Exact occurrence keys are wide arrays; every camera step marks and updates
+// each current caster, so lookups are hashed rather than ordered.
+struct ShadowKeyHash {
+    std::size_t operator()(unsigned value)const{return std::hash<unsigned>()(value);}
+    template<std::size_t N> std::size_t operator()(std::array<std::uint64_t,N> const& key)const{
+        std::uint64_t hash=0x9e3779b97f4a7c15ull;
+        for(auto value:key){hash^=value;hash*=0xff51afd7ed558ccdull;hash^=hash>>32;}
+        return std::size_t(hash);
+    }
+};
 template<class Key> struct ShadowPageContents {
     using Grid=ShadowSamplingGrid;
     using Context=std::array<std::uint64_t,32>;
@@ -209,7 +220,7 @@ template<class Key> struct ShadowPageContents {
     std::array<bool,Grid::max_pages> reused{};
     std::uint64_t hits=0,rebuilt=0,refused=0;
     struct Occurrence {std::array<float,4> bounds{};std::uint64_t seen=0;std::uint32_t pages=0;OccurrenceId id=0;};
-    std::map<Key,Occurrence> occurrences;
+    std::unordered_map<Key,Occurrence,ShadowKeyHash> occurrences;
     OccurrenceId last_id=0;
     std::array<float,12> projection_light{};
     std::uint64_t epoch=0,projections=0,projection_reuses=0,page_tests=0,contributor_edits=0,page_sorts=0;
@@ -310,10 +321,13 @@ template<class Key> struct ShadowPageContents {
     bool exact_inputs(unsigned physical,std::vector<Key> const& inputs)const{
         auto const& ids=pages[physical].contributors;
         if(!pages[physical].sorted || ids.size()!=inputs.size())return false;
-        std::size_t next=0;
+        std::vector<Key const*> ordered;
         for(auto const& entry:occurrences){auto range=std::equal_range(ids.begin(),ids.end(),entry.second.id);
-            for(auto i=range.first;i!=range.second;++i){if(next==inputs.size() || inputs[next]!=entry.first)return false;++next;}}
-        return next==inputs.size();
+            for(auto i=range.first;i!=range.second;++i){if(ordered.size()==inputs.size())return false;ordered.push_back(&entry.first);}}
+        if(ordered.size()!=inputs.size())return false;
+        std::sort(ordered.begin(),ordered.end(),[](Key const* a,Key const* b){return *a<*b;});
+        for(std::size_t next=0;next<ordered.size();++next)if(inputs[next]!=*ordered[next])return false;
+        return true;
     }
     void prune_oracle_keys(){
         for(auto i=occurrences.begin();i!=occurrences.end();){bool used=false;

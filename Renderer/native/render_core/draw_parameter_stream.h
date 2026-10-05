@@ -44,5 +44,9 @@ struct DrawParameterStream {
         UINT first=(base+record)*(stride/16),count=stride/16;
         context->VSSetConstantBuffers1(slot,1,&buffer,&first,&count);
     }
+    void bind_pixel(unsigned slot,unsigned record){
+        UINT first=(base+record)*(stride/16),count=stride/16;
+        context->PSSetConstantBuffers1(slot,1,&buffer,&first,&count);
+    }
 };
 }}

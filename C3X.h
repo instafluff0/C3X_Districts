@@ -2668,6 +2668,7 @@ struct district_button_image_set {
 	LARGE_INTEGER custom_renderer_scroll_at;
 	double custom_renderer_scroll_x, custom_renderer_scroll_y;
 	int custom_renderer_minimap_zoom;
+	int custom_renderer_capture_cover; // zoom tile width the last capture envelope covers
 	// Opt-in scripted game diagnostics; inactive without the per-process save path.
 	bool custom_renderer_trace_input;
 	char custom_renderer_test_save[MAX_PATH];

@@ -171,7 +171,7 @@ struct Renderer{
 } renderer;
 struct SandboxPassWorkload{
  enum{reflected_units,units};struct Scope{Scope(SandboxPassWorkload&,int){}};
- template<class T>void clear(T*){}template<class T>void upload_buffer(T*){}void draw(std::size_t){}
+ template<class T>void clear(T*){}template<class T>void upload_buffer(T*){}void draw(std::size_t){}void upload(std::size_t){}
 };
 struct Direct{
  struct Vertex{char values[88];};
@@ -187,6 +187,12 @@ struct Direct{
  ID3D11Buffer* placement=&placement_value;ID3D11Buffer* material=&material_value;ID3D11Buffer* beauty=&beauty_value;
  ID3D11ShaderResourceView srv;ID3D11ShaderResourceView* unshadowed_view=&srv;void* samplers[4]={};
  SandboxPassWorkload work_value;SandboxPassWorkload* work=&work_value;
+ // Streamed part placements: one upload per unit, one bound record per body draw.
+ struct Stream{static constexpr unsigned stride=256;unsigned uploads=0,binds=0,records=0;
+  bool available(Device*,Context*){return true;}
+  template<class T>bool upload(T const*,unsigned count){++uploads;records=count;return count<=256;}
+  void bind(unsigned slot,unsigned record){assert(slot==2&&record<records);++binds;}void bind_pixel(unsigned,unsigned){}} placement_stream;
+ std::vector<std::array<float,28>> part_placements;
  bool initialize(){return true;}
  float unit_low_ground(c3x_renderer_frame_v1 const&,float,float){++ground_queries;return 0;}
  bool bind_palette(Mesh const&,float const*){return true;}
@@ -341,6 +347,7 @@ int main(){Direct direct;setup(direct);c3x_renderer_frame_v1 frame{};frame.targe
  auto fit=direct.prepared_units[0].shadow_slot;Target target;
  assert(direct.draw_real(frame,poses,target,1,12,true,1));assert(renderer.context->bodies==0&&direct.self_maps==0);
  assert(direct.draw_real(frame,poses,target,1,12,false,1));assert(renderer.context->bodies==1&&renderer.context->shadows==1&&direct.self_maps==1);
+ assert(direct.placement_stream.uploads>=2&&direct.placement_stream.binds>=2); // ground shadow and body records
  ++frame.presentation_time_ticks;assert(direct.prepare_real(frame,poses,12,plan));
  assert(direct.material_builds==0&&direct.material_reuses==2&&direct.prepared_units[0].shadow_slot==fit);
  assert(direct.draw_real(frame,poses,target,1,12,false,1));assert(direct.self_maps==1&&direct.shadow_reuses==1);

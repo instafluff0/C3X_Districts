@@ -10,8 +10,15 @@ grass/plains/desert/tundra mix. Plains and dune decals now sample coast coverage
 at their own vertices rather than copying their owner's center. `biomes` and
 `biomes-turned` show the same stepped coast across grassland, plains and desert
 on both map axes; `lowland` and `gameplay` retain beach/cliff controls. Matched
-before/after evidence lives under `lab/out/shorelines/blending/`. This candidate
-awaits visual acceptance; fixed references remain unchanged.
+before/after evidence lives under `lab/out/shorelines/blending/`.
+
+The gentler shoulder is retained as requested. The material follow-up keeps sand
+beneath the whole grass/plains handoff instead of exposing grass beneath fading
+grass. Stronger texture coverage produces small patches through that overlap;
+its effect vanishes near fully covered ground so it cannot open holes in the
+inland rise. Matched close and gameplay comparisons are under
+`blending/material-edge/`. This material candidate awaits visual acceptance;
+fixed references remain unchanged.
 
 The [coastal-wave study](../../../studies/waves/README.md) separately evaluates
 recovered source crests on lowland and rocky coasts. It is isolated, pending

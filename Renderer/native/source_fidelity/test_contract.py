@@ -94,6 +94,8 @@ int main() {
         float grain=g/100.f,previous=0;
         assert(coast_edge_coverage(0,grain)==0);
         assert(coast_edge_coverage(1,grain)==1);
+        assert(coast_edge_coverage(.999f,grain)>.99f);
+        assert(coast_edge_coverage(.001f,grain)<.01f);
         for(int c=0;c<=100;c++) {
             float coverage=c/100.f;
             float result=coast_edge_coverage(coverage,grain);
@@ -102,8 +104,10 @@ int main() {
             previous=result;
         }
     }
-    assert(coast_edge_coverage(.5f,0)<.5f);
-    assert(coast_edge_coverage(.5f,1)>.5f);
+    // Ordinary channel variation must expose both materials at the midpoint,
+    // rather than merely nudging an otherwise smooth line.
+    assert(coast_edge_coverage(.5f,.35f)<.25f);
+    assert(coast_edge_coverage(.5f,.65f)>.75f);
 }
 '''
         with tempfile.TemporaryDirectory() as directory:
@@ -113,11 +117,53 @@ int main() {
                            check=True,capture_output=True,text=True)
             subprocess.run([str(binary)],check=True,capture_output=True,text=True)
 
+    def test_beach_remains_under_partial_land_coverage(self):
+        shader=(LAB/'shaders/hydrology/scene_material_v1.hlsl').read_text()
+        ground=(HERE/'coast_join.h').read_text()
+        source='''
+#include <algorithm>
+#include <cassert>
+#include <cmath>
+float smoothstep(float a,float b,float x) {
+    float t=std::clamp((x-a)/(b-a),0.f,1.f);
+    return t*t*(3-2*t);
+}
+'''+function(ground,'coast_ramp')+function(ground,'coast_coverage')+function(shader,'q3_beach_coverage')+'''
+int main() {
+    for(int w=0;w<=50;w++) {
+        float width=w/100.f;
+        float low=0,high=width+1;
+        for(int i=0;i<24;i++) {
+            float middle=(low+high)*.5f;
+            if(coast_coverage(middle,width)<.5f)low=middle;else high=middle;
+        }
+        float middle=(low+high)*.5f;
+        assert(q3_beach_coverage(middle,width,.28f)>.9f);
+        for(int g=0;g<=100;g++) {
+            float grain=g/100.f,previous=1;
+            assert(q3_beach_coverage(-.25f,width,grain)==1);
+            assert(q3_beach_coverage(width+.5f,width,grain)==0);
+            for(int d=0;d<=100;d++) {
+                float result=q3_beach_coverage(d/100.f-.25f,width,grain);
+                assert(result>=0 && result<=previous);
+                previous=result;
+            }
+        }
+    }
+}
+'''
+        with tempfile.TemporaryDirectory() as directory:
+            cpp=Path(directory)/'beach.cpp';binary=Path(directory)/'beach'
+            cpp.write_text(source)
+            subprocess.run(['c++','-std=c++17',str(cpp),'-o',str(binary)],
+                           check=True,capture_output=True,text=True)
+            subprocess.run([str(binary)],check=True,capture_output=True,text=True)
+
     def test_shore_surface_helpers_survive_runtime_adaptation(self):
         selected=(LAB/'shaders/hydrology/scene_material_v1.hlsl').read_text()
         for provider in ('source_fidelity','city_fidelity','environment_refresh'):
             adapted=(HERE.parent/provider/'hydrology.hlsl').read_text()
-            for helper in ('q3_surface_grain','q3_margin_patch','q3_margin_visibility',
+            for helper in ('q3_beach_coverage','q3_surface_grain','q3_margin_patch','q3_margin_visibility',
                            'q3_margin_detail','q3_margin_normal'):
                 self.assertEqual(function(selected,helper),function(adapted,helper),
                                  provider+': '+helper)

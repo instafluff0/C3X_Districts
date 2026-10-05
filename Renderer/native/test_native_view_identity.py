@@ -309,8 +309,13 @@ struct Animator {int fields[32]{};int* field_18E4=fields;int Units2_Count=0;};
 struct Main_Screen_Form {struct {char field_574[4]{};}GUI;struct {PCX_Image Canvas{};}Base_Data;Animator animator;bool is_now_loading_game=false,turn_end_flag=false;int Player_CivID=2;int camera_x=0,camera_y=0,TileX_Min=0,TileX_Max=20,TileY_Min=0,TileY_Max=20;} screen;
 Main_Screen_Form* p_main_screen_form=&screen;
 struct Clock {long long QuadPart=0;};
+using CaptureFn=int(*)(void*,c3x_renderer_camera_request_v1 const*,long long*);
+CaptureFn early_capture=nullptr;
+CaptureFn get_capture(void*,char const*){return early_capture;}
+auto p_GetProcAddress=get_capture;
 
 struct State {
+ void* custom_renderer_module=nullptr;
  struct {bool enable_custom_rendering=true;} current_config;
  int custom_renderer_init_state=1;bool custom_renderer_redraw_pending=false,custom_renderer_loading_world_capture=false;
  bool custom_renderer_camera_exact=false,custom_renderer_unit_representatives_dirty=false,custom_renderer_scroll_request=false;
@@ -333,10 +338,12 @@ struct State {
  c3x_renderer_camera_begin_view_fn custom_renderer_camera_begin;
  c3x_renderer_camera_poll_view_fn custom_renderer_camera_poll;
  c3x_renderer_camera_cancel_fn custom_renderer_camera_cancel;
+ int custom_renderer_capture_cover=0,custom_renderer_zoom_target_width=128;
 } state;State* is=&state;
 unsigned debug_mode_bits=0;auto p_debug_mode_bits=&debug_mode_bits;
 bool online=false;bool is_online_game(){return online;}
 bool custom_renderer_zoom_enabled(){return !screen.is_now_loading_game;}
+int custom_renderer_capture_cover_width(bool){return 112;}
 void log_custom_renderer_event(char const*,int){}
 void debug(char const*){}auto p_OutputDebugStringA=debug;
 constexpr int IS_OK=1;void poll_custom_renderer_combat_zoom(){}
@@ -439,6 +446,14 @@ int main(){
  native_move(&screen,0,500,100,1,false);call(false);
  assert(!state.custom_renderer_display_valid && begins==before);
  state.custom_renderer_async_enabled=false;call();assert(!state.custom_renderer_display_valid && !state.custom_renderer_camera_ticket);
+ // The accepted movement sight capture bypasses the ambient rate gate and
+ // starts copied preparation without adopting a canvas or advancing animation.
+ state.custom_renderer_visible_animation_count=0;state.custom_renderer_camera_ticket=0;
+ early_capture=[](void* canvas,c3x_renderer_camera_request_v1 const* r,long long* ticket)->int{
+  assert(canvas==&image&&r->frame&&state.custom_renderer_capture_only);*ticket=99;return C3X_RENDERER_RESULT_PENDING;
+ };
+ assert(capture_custom_renderer_native_view(&bic.Map.Renderer,2,&state.custom_renderer_display_view,2));
+ assert(!state.custom_renderer_camera_ticket&&!state.custom_renderer_capture_only);
  // Saved-game loading disables navigation, but the complete publication still
  // needs its camera identity when native startup clears the main canvas.
  state.custom_renderer_async_enabled=true;screen.is_now_loading_game=true;

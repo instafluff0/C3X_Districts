@@ -183,6 +183,30 @@ int main(){
 }
 ''')
 
+    def test_camera_request_runs_ahead_of_queued_ui_but_not_state(self):
+        run_cpp(r'''
+#include "Renderer/sandbox/async_publication.h"
+#include <cassert>
+#include <cstring>
+#include <string>
+#include <vector>
+int main(){
+ std::promise<void> entered,release;auto held=release.get_future();std::vector<std::string> seen;
+ c3x_async::Publication queue({},1<<20,64);
+ auto ui=[](char const* label){return label&&(!std::strcmp(label,"images")||!std::strcmp(label,"present"));};
+ auto add=[&](char const* name,char const* label,unsigned key=0,bool (*passes)(char const*)=nullptr){
+  assert(queue.post(32,[&seen,name]{seen.push_back(name);},key,label,1,passes));};
+ assert(queue.post(32,[&]{entered.set_value();held.wait();}));entered.get_future().get();
+ add("fact","state");add("ui1","images");add("present1","present");
+ add("camera1","camera-begin",1,ui);  // ahead of queued UI, behind the fact
+ add("ui2","images");add("fact2","state");add("ui3","images");
+ add("camera2","camera-begin",1,ui);  // replaces camera1; stops at fact2
+ release.set_value();queue.stop();assert(queue.healthy());
+ assert((seen==std::vector<std::string>{"fact","ui1","present1","ui2","fact2","camera2","ui3"}));
+ assert(queue.status().superseded==1);
+}
+''')
+
     def test_ordered_ids_camera_adoption_and_owned_payloads(self):
         run_cpp(r'''
 #include "Renderer/sandbox/async_scene_client.h"

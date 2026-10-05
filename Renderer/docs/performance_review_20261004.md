@@ -55,6 +55,27 @@ in parentheses. Captures are kept in `.cache/perf-review-20261004/`.
 | Static work per zoom notch | 230–270 ms | 25–35 ms |
 | Camera job per 0.5× scroll step | ~1.3 s | 0.35–0.85 s |
 
+Production-like runs (trace 0, `smoothness.py`): presentations per second,
+then stalls of at least 100 ms and the longest stall. "Now" is two samples of
+the current build (run49 / run50).
+
+| Busy 1498 AD save | Original (base153213) | Static fixes (run39) | Now |
+| --- | --- | --- | --- |
+| Zoom-out notches | 11.9 · 32 · 518 ms | 16.5 · 31 · 514 ms | 19–22 · 21–24 · 330–360 ms |
+| 3× and back | 18.6 · 34 · 348 ms | 22.7 · 13 · 328 ms | 21–31 · 10–11 · 375 ms |
+| 0.5× jump | 15.8 · 5 · 529 ms | 35.0 · 2 · 189 ms | 32–36 · 3 · 156–174 ms |
+| 0.5× edge scroll | 13.1 · 41 · 776 ms | 23.9 · 37 · 390 ms | 24–26 · 30–34 · 330–410 ms |
+| Zoom back | 13.5 · 16 · 626 ms | 31.6 · 9 · 426 ms | 28–31 · 5–8 · 270–380 ms |
+| 1× idle | 17.8 · 23 · 266 ms | 36.2 · 5 · 186 ms | 35 · 1–3 · 190 ms |
+
+Run-to-run noise in this VM is large (3× and back moved from 21 to 31 between
+two runs of one build), so judge single segments by the profiled phase
+costs. With the map scene skipped (`C3X_SANDBOX_SKIP_SCENE=1`, run51) every
+segment presents ~49/s: composition and presentation alone take ~20 ms per
+frame, and the busy scene adds ~8 ms serially. Idle above ~35/s therefore
+needs a cheaper composition path (finding 5) or overlapping the scene with
+it; renderer CPU reductions alone no longer move it.
+
 On the light saves (the 4000 BC settler save and the 3700 BC 60×60 navigation
 witness), every zoom runs at 46–49 presentations/s, and map jumps and edge
 scrolling at 35–50/s. Camera jobs there take a median of 74 ms (p90 126 ms).
@@ -401,13 +422,323 @@ Remaining costs, from the latest busy traces:
   removed. Cheaper reflected submission (batching or LOD of reflected
   features below 1×) is the lever.
 - **Preview-frame water.** In preview frames during zoom refinement, every
-  water-dependent overlay is drawn live (35–67 ms), because the retained
-  overlay layer is composited only for whole-pixel shifts, not the preview's
-  affine resample.
+  water-dependent overlay was drawn live (35–67 ms), because the retained
+  overlay layer was composited only for whole-pixel shifts. Previews now
+  resample each source slot's retained overlay layer with the same mapping
+  (premultiplied, depth-tested) and skip the live overlays. Water-pass draws
+  at p90 fell from ~1,900 to ~480 per frame. Baking overlays into bootstrap
+  images instead was tried and removed: it made a 0.5× bootstrap about five
+  times slower (124 ms to 619 ms). Previews from a bootstrap keep live
+  overlays.
 - **World preparation on 0.5× camera jobs.** These prepare world regions
   for 350–850 ms. In this VM the geometry budget is capped by ~3 GB of free
   RAM, so the cache evicts on every step and rebuilds tiles. The repair path
   now absorbs those rebuilds locally.
+
+### 4k. Scroll pacing is set by camera steps, not frame rate (critical: scroll)
+
+**Evidence.** Frame rate during 0.5× edge scroll is 20–30 presents per second,
+yet the camera itself moves rarely. Visual frames keep showing the last
+completed camera; the camera changes only when a camera job finishes and Civ
+III draws its native pass (`native-handoff`). In the busy zoom-out scenario:
+- Edge-scroll ticks arrive every 0.4–1.0 s. Each tick is capped at 50 ms of
+  movement (169–180 px at 0.5×), so the view advances ~360 px/s instead of the
+  configured ~3,600 px/s.
+- Each step's native map pass takes 230–380 ms (`call_ms`). Native image and
+  state publications wait 200–400 ms in the helper's queue
+  (`publication-latency`), because one worker thread owns the camera job,
+  visual frames and native images.
+- Each camera job takes 450–900 ms: 180–370 ms of preparation (shadow pages
+  ~60 ms, world preparation of ~120 entering tiles, static rasters) plus
+  300–550 ms of service turns. Most turns are ambient visual frames; a few
+  take 60–260 ms each, apparently waiting on the GPU work the job just
+  queued.
+
+**Practice.** An RTS camera moves every frame; authoritative world data
+streams in behind it. Here every step serializes native redraw, publication
+and a full camera preparation.
+
+**Remedies, in order of leverage.**
+1. Cut camera-job work: shadow bookkeeping (4l) and city-light rebuilds
+   (4m) are done; world preparation of entering tiles can be prefetched in
+   the scroll direction while idle.
+2. Let visual frames follow the requested camera immediately. Retained
+   rasters already carry 320/192 px margins, which cover a 0.5× step. The
+   blocker is the replayed native HUD: map-anchored overlays (labels, flags,
+   borders, selection) must shift with the map until the native pass catches
+   up, while screen UI stays fixed. This needs the composition to separate
+   map-space from screen-space operations.
+3. Then the edge-scroll cap can follow real elapsed time without large jumps.
+
+### 4l. Shadow page rebuilds were bookkeeping, not drawing
+
+**Evidence.** New lap timings (`fresh-shadow-build`) on 0.5× scroll steps:
+refresh 11–13 ms, page proofs 21–29 ms, caster selection 10–16 ms, terrain
+grouping 3–6 ms, bounds 5–7 ms, and only 1–2 ms of draw submission for
+200–700 draws (~60 ms in total). About 27,500 caster inputs were each keyed
+four times per step (a 20-word exact key), with ordered-map lookups.
+
+**Remedy.** Exact keys are computed once per caster membership. Page
+occurrences use a hash map. The coverage filter records each caster's
+light-space bounds for the draw pass, tagged with the build that computed
+them, so terrain groups reused from an older build are recomputed. Proofs,
+page membership and draw order are unchanged
+(`test_shadow_page_contents`, `test_static_dependency_reuse`).
+
+**Result.** ~60 ms to ~45 ms per 0.5× scroll step (bounds 6 → 0.3 ms,
+selection 13 → 8 ms, proofs 25 → 17 ms). Refresh (~15 ms) and proofs still
+walk all ~27,500 inputs; an incremental caster membership keyed by entering
+and leaving tiles is the structural fix.
+
+### 4p. One constant upload per unit part
+
+**Evidence.** At 1× idle the unit passes issue ~1,050 body, ~355 reflected
+and ~116 shadow draws. Each part rewrote the placement constant buffer with
+`UpdateSubresource` before its draw (units 5.2 ms per frame).
+
+**Remedy.** A unit's part placements are computed together, uploaded with one
+mapped write to a `DrawParameterStream` and bound by offset to the vertex and
+pixel stages. The self-shadow sample, which still uses the placement buffer,
+gets it rebound first. Values, bindings and draw order are unchanged
+(`test_unit_contribution_plan`).
+
+**Result.** Profiled settled frames: units 5.2 → 2.9 ms at 1× and
+5.7 → 3.8 ms at 0.5×; reflected units 2.0 → 1.4 ms; the 1× scene render
+11.5 → 7.9 ms.
+
+### 4m. City-light index rebuilds stalled up to 190 ms
+
+**Evidence.** `fresh-city-lights` recorded a 187 ms rebuild when the light
+selection changed during zoom. The spatial index kept one vector per
+0.25-tile cell (up to 262,144 vectors for a wide selection) and tested every
+light against every blocker.
+
+**Remedy.** Flat per-cell counts and offsets, and blockers binned into the same
+cells so each light tests only nearby candidates (still with the exact
+original test, in increasing order). Records are identical to the original
+build, about 4× faster on the host (`test_light_index_flat_build`).
+
+### 4n. Mirror redraw submission
+
+**Evidence.** A mirror redraw on the busy save at 0.5× issues ~4,900 draws:
+city parts 2,430 (one per part, each with its own material binding), mines
+1,008 for 1,021 records, and farms 1,153 for 2,819 records.
+
+**Tried.**
+- *Receiver culling (kept).* The mirror is sampled only by water and aquatic
+  resources, and the water receivers already carry the distortion and
+  filtering guard. Records are now kept only when their reflected bounds
+  share a coarse cell with some receiver, not merely the union of all water
+  (`ReceiverCells`, `test_receiver_cells`). It is lossless, but this map
+  has rivers almost everywhere, so draws fell only ~3%.
+- *Mirror-order rigid packets (removed).* Mine and farm packets are built in
+  retained-strip order, so the mirror visits them out of order and splits
+  almost every record into its own draw. Separate mirror-order packets kept
+  the runs contiguous but raised ordered-packet memory from ~50 MB to
+  ~143 MB, which pushed the busy save past its geometry budget (4o).
+
+**Remaining lever.** Batched city parts (vertex pulling per material, as
+water does) and rigid packets packed once in canonical contributor order, so
+both passes see contiguous subsequences without duplicate geometry.
+
+### 4o. Busy-save memory headroom in the VM (risk)
+
+**Evidence.** The Windows VM has 14 GB. Free physical memory falls from ~11 GB
+to ~4.5 GB on the busy save. `FrameWorkingSet::world_geometry` reserves about
+2.9 GB of free RAM; when free memory dips below that, the tile-geometry cap
+falls under the tiles already resident (963 MB against 993 MB tracked). The
+entering tiles of the next camera step cannot be admitted and the whole camera
+job fails (`tile-cache-budget`, then `gpu-failure phase=camera`), so the view
+stops following the camera. This occurred once on an unchanged path (run41)
+and reliably once mirror packets added ~90 MB.
+
+**Practice.** Admission under pressure should degrade (evict or draw a
+coarser fallback for the entering edge), not fail the frame. Large derived
+caches (pulled water pages ~530 MB, ordered packets, unit preparation
+~600 MB) should share one memory governor.
+
+**Status.** Pending. Until then, renderer changes on this save must not add
+resident memory; giving the VM more RAM also widens the margin.
+
+### 4q. Retained rasters kept shadows from an older caster set (fixed)
+
+**Evidence.** Forests near a newly founded city showed no shadows until a unit
+moved, and then only near that unit. Retained raster pixels bake the shadow
+field they sampled, but a raster's validity covered only its own contributors
+and the field's sampling setup (span, light, wrap). In a 3× founding
+witness the city's reveal repaired 46% of the raster while the field still
+held the 32 old casters; 0.4 s later the field gained the 62 casters of the
+revealed tiles, and nothing marked the already drawn pixels. A unit move
+repaired only its own neighborhood.
+
+**Remedy.** Each shadow-caster refresh journals the screen footprints of the
+casters that entered or left, under a change serial. A retained slot records
+the serial its pixels reflect, carried through resets and recenter copies, and
+repairs newer footprints (with a 1.5-tile shadow reach) in the next frame that
+uses it, beside its contributor repairs. Wrapped copies share footprints;
+re-borrowing an unchanged set after geometry retirement journals nothing; a
+wholesale replacement raises a floor that refreshes older rasters completely
+(`test_shadow_change_journal`, `test_static_scene_transition`). In the same
+witness the next repair grew from 9% to 16% of the raster to include the new
+shadows.
+
+**Open.** After the city screen closes, visual map samples continued at 1×
+while the native zoom target stayed 3×; that zoom-state handoff needs its own
+check.
+
+### 4r. Scroll steps lost input and queued behind native UI (critical: scroll)
+
+This is the first stage of [camera-follow](camera_follow_and_hud_layer.md).
+At 0.5× on the busy save, the camera advanced 75 native px/s (run50).
+
+**Evidence**
+
+- **Ticks thrown away.** Ticks arriving during a camera job were captured
+  and then discarded, so each completed step carried a single tick.
+- **Frozen frames slowed the job.** Ambient frames inside a job only
+  re-present the frozen map. Yet each took 20–150 ms of the job's worker,
+  mostly waiting on the job's GPU work: 300–1,070 ms per job (run46).
+- **The request waited in the queue.** The camera request then waited
+  ~1 s in the bridge's publication queue (`camera-begin queue_ms=991`)
+  behind ~600 queued native UI image, tactical and present records
+  (run66). The job itself took ~530 ms.
+
+**Changes**
+
+1. **Held motion (`injected_code.c` scroll timer).** While a request is in
+   flight (new side-effect-free `C3X_NAV_PENDING` query), motion accumulates
+   instead of being captured and dropped.
+   - The next request carries all of it, clamped to 256×160 screen px so a
+     recenter stays a shift copy.
+   - The per-tick cap is 100 ms.
+   - The adoption pass keeps held motion; modal interruptions still discard
+     it.
+2. **In-job throttle.** Inside a camera job, ambient frames present at most
+   every 125 ms, unless a zoom is still animating.
+3. **Camera begin may overtake queued UI work.** It is inserted ahead of
+   queued UI image, tactical and present records, but never ahead of facts,
+   scene state or other camera commands.
+   - Those UI records use the displayed ticket, which only the later ordered
+     adoption retires.
+   - The worker already serves them at job checkpoints.
+
+**Tests:** `test_camera_navigation`, `test_native_camera_transaction`,
+`test_native_visual_cadence` and `test_async_publication`.
+
+**Results (trace 0, busy save).**
+
+| Run | Change | Native px/s | Step interval |
+| --- | --- | --- | --- |
+| run50 | before | 75 | 1.4–2.2 s |
+| run63 | held motion | 152 | 1.6–2.3 s |
+| run65 | plus in-job throttle | 175 | 1.6–2.1 s |
+| run67 | plus queue overtake | 250 | 1.0–1.8 s |
+
+- The native map pass also fell from 210–300 ms to 150–190 ms.
+- Zoom segments are unchanged within noise.
+- No renderer failures occurred, and sampled scroll frames keep labels,
+  borders and units registered on the moved map.
+- Scroll still advances in visible steps, now larger ones. Smooth
+  presentation between steps is stage C3/C4 of the design.
+
+### 4s. Closer zooms (1×–3×): jumps, capture envelope and presentation
+
+**Benchmark.** The `near` scenario (scripted test) covers:
+- 1× idle;
+- 1× edge scroll on both axes;
+- two far minimap jumps;
+- notches to 2× and a 2× scroll;
+- a 3× scroll and 3× idle;
+- notches back to 1×, then 1× idle.
+
+`.cache/perf-review-20261004/near.py` reports each segment from the
+input timestamps.
+
+**Far jumps broke rendering (critical, fixed).** On the busy save, the
+second far minimap jump left the display on the old camera for the rest of
+the session. Every later camera job failed `tile-cache-budget`:
+- 678 MB of retired geometry was never released.
+- The RAM-derived cap fell to the pinned working set.
+
+There were three causes:
+- **Oversized capture.** Every view captured the fixed 0.5× envelope
+  (~3,000 tiles, ~860 MB of geometry) at every zoom.
+- **Optional holder.** The shared instance submission kept an earlier view's
+  evicted geometry charged.
+- **Shrinking cap.** The cap shrank to the pinned set under VM RAM pressure.
+
+The changes:
+- **Admission reclaim.** Before refusing, admission releases the optional
+  holders once: shared instances, resource visibility and the fresh
+  selection (`tile-cache-reclaim`). Retired bytes fell from 768 MB to 4 MB.
+- **Zoom-adaptive envelope** (`custom_renderer_capture_cover_width`):
+  - It covers the view one notch beyond the zoom target: 0.875× at 1×, and
+    the native viewport at 1.25× and closer.
+  - Unit bootstrap and city-label HUD scopes use the same envelope.
+  - The cover is decided when a request or exact move captures. Adoption
+    and same-view redraws reuse it, so their captures still match the
+    pending request.
+  - A zoom-out target beyond the envelope recaptures at the same camera
+    while the transition runs.
+
+**Effects:**
+- Jumps take ~0.9–1.3 s instead of 2.3 s, and there are no more failures.
+- The native map pass after a step falls from 230–300 ms to 100–170 ms,
+  because it draws fewer city labels.
+
+**Trade-off.** A multi-notch zoom-out from 1× (for example 1× to 0.5× in one
+input) now recaptures ~2,000 tiles on the busy save. It takes 1–4 s, and outer
+tiles are missing until then. Single notches stay covered.
+
+**H1 (composition copies): measured, not the limiter.** The GPU event timeline
+puts composition evaluate, assemble and display at 0.07–0.1 ms each per frame.
+The display step's CPU time (7.4 ms mean, p90 19 ms) was `OMSetRenderTargets`
+waiting for the two-buffer flip swap chain's next back buffer. Three buffers
+remove that wait:
+
+| Segment | Before | After |
+| --- | --- | --- |
+| Busy 1× idle at the zoom-out location | 48 fps | 57 fps |
+| Busy 3× idle | 51 fps | 57–58 fps |
+
+1× idle in the dense jump area stays at 35–42 fps. That is CPU-bound in the
+scene render (units ~3 ms, water ~3 ms).
+
+**C3: image-space camera-step slides.**
+- **Slide.** A small published step (at most half the screen) is first shown
+  at the previous camera's position, then slides linearly to rest
+  (`PanTransition`).
+- **Duration.** The slide lasts 0.9 × the recent interval between steps,
+  so continuous scrolling chains into steady motion.
+- **What moves.** `select_world` shifts the whole world view (map, world
+  overlays and map-anchored HUD) by whole pixels. A copy of the previous
+  world view fills the trailing strip. Screen UI stays fixed.
+- **Picking** subtracts the presented slide (`C3X_NATIVE_PAN_PRESENTED`).
+- **In-job frames** are not throttled while a slide runs.
+- **Verification.** In 4 Hz samples a 168 px step spreads across
+  consecutive frames (140 + 28 px, then chained 88/36/104/28 px). Labels,
+  units and borders stay registered.
+
+**Results (trace 0).**
+
+| Segment | Busy, envelope only (run71) | Busy, final (run78) | Light (run80) |
+| --- | --- | --- | --- |
+| 1× idle | 37.7 fps | 41.7 fps | 59.9 fps |
+| 1× scroll | 22.7 fps · 168 px/s | 28.2 fps · 148 px/s | 57.6 fps · 2,040 px/s |
+| Minimap jump | 1.3 s / 0.9 s | 1.0 s / 0.8 s | 74 / 54 ms |
+| Zoom 1×→2× | 13.6 fps | 26.7 fps | 54.9 fps |
+| 2× scroll | 23.0 fps · 108 px/s | 34.4 fps · 122 px/s | 52.5 fps |
+| 3× scroll | 12.4 fps · 48 px/s | 19.5 fps · 62 px/s | 53.1 fps |
+| 3× idle | 48.8 fps | 57.7 fps | 60.0 fps |
+| Zoom 3×→1× | 22.1 fps | 19.9 fps | 51.7 fps |
+
+Scroll segments vary ±30% between identical runs in this VM.
+
+**Remaining at closer zooms (busy save):**
+- **3× scroll:** water-reflection redraws after each step (p90 ~140 ms).
+- **Far jumps:** ~1 s of synchronous preparation.
+- **Dense 1× idle:** CPU-bound scene render.
+- **Multi-notch zoom-out:** the recapture described above.
 
 ### Visual defects found during this review (pre-existing)
 

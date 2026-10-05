@@ -256,7 +256,7 @@ void custom_renderer_hud_layout_offset(int x, int y, int *dx, int *dy) {*dx = *d
 RECT custom_renderer_capture_bounds(Main_Screen_Form *s) {return (RECT){s->TileX_Min,s->TileY_Min,s->TileX_Max,s->TileY_Max};}
 int custom_renderer_zoom_inverse_coordinate(int p, long long t) {return p;}
 
-int custom_renderer_hud_scope(JGL_Image *value, int x, int y, unsigned owner) {
+int custom_renderer_hud_scope(JGL_Image *value, int x, int y, unsigned owner, int unit_id) {
     (void)value; (void)x; (void)y; (void)owner; ++hud_scope_count; return 1;
 }
 void Unit_draw_status(Unit *unit, int edx, PCX_Image *canvas, int x, int y, bool stack_marks) {

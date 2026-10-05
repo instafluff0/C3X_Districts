@@ -221,6 +221,7 @@ struct Session{
  void did_present(){++published;}
  std::uint64_t committed_revision()const{return 9;}
  unsigned presented_zoom(){return 81920;}
+ int presented_pan(){return 0;}
  std::pair<unsigned,unsigned> visual_publication(){return {7,8};}
  struct Work{unsigned operations=3,assemblies=1,copies=2,copied_pixels=64,assembly_pixels=32;
   unsigned selected_borrows=1,selected_owned=0,direct_native_images=1,avoided_copy_pixels=128;
@@ -249,7 +250,7 @@ struct Owner{
  static bool trial_retain_surface(){return true;}
  Surface trial_surface_view,trial_surface_back,trial_surface_buffer;
  std::unique_ptr<Swap> trial_surface_swap=std::make_unique<Swap>();
- std::atomic<unsigned> presented_zoom_q16{65536};unsigned route_present_index=0;
+ std::atomic<unsigned> presented_zoom_q16{65536};std::atomic<int> presented_pan_packed{0};unsigned route_present_index=0;
  std::atomic<bool> trial_front_pending{true};std::uint64_t trial_presented_front_revision=0;
  std::atomic<std::uint64_t> trial_visual_permit_denials{0};
  long long visual_ticks=17,visual_frequency=1000;
@@ -327,6 +328,7 @@ int main(){using namespace std::chrono;
     def test_direct_visual_busy_is_distinct_from_unchanged(self):
         source=(ROOT/'Renderer/native/c3x_renderer.cpp').read_text()
         body='    int trial_visual_shared('+source.split('    int trial_visual_shared(',1)[1].split('    int trial_priority_front_pending(',1)[0]
+        advance='    void advance_visual_clock(){'+source.split('    void advance_visual_clock(){',1)[1].split('    long long visual_clock()',1)[0]
         run_cpp(r'''
 #include <cassert>
 #include <atomic>
@@ -334,15 +336,30 @@ int main(){using namespace std::chrono;
 #include <chrono>
 #include <mutex>
 #include "Renderer/native/c3x_renderer_api.h"
+#include <cmath>
+#include <vector>
 using DWORD=unsigned;
-struct State{std::mutex call_mutex,state_mutex;DWORD trial_consumer_pid=0;
+struct LARGE_INTEGER{long long QuadPart=0;};long long counter=10000;
+bool QueryPerformanceCounter(LARGE_INTEGER* p){p->QuadPart=counter;return true;}
+bool QueryPerformanceFrequency(LARGE_INTEGER* p){p->QuadPart=1000;return true;}
+namespace c3x_inputs {
+ struct Clock{std::vector<std::pair<long long,long long>> values;void sample(long long&,long long&){};};
+ Clock* replay_clock(){return nullptr;}
+ struct Replay{bool enabled=false;};Replay& realtime_replay(){static Replay r;return r;}
+ enum class Kind{visual};unsigned parent_token(){return 0;}
+ struct Sink{template<class F>void emit(Kind,int,F const&){};};Sink& runtime(){static Sink s;return s;}
+}
+namespace c3x_renderer{std::atomic<float>& zoom_destination_hint(){static std::atomic<float> value{1.f};return value;}}
+struct State{std::mutex call_mutex,state_mutex;DWORD trial_consumer_pid=0;std::atomic<unsigned> presented_zoom_q16{65536};std::atomic<bool> trial_panning{false};
  std::atomic<std::uint64_t> trial_visual_call_busy{0},trial_visual_state_busy{0};
  std::uint64_t trial_handle=0;unsigned trial_width=0,trial_height=0,submits=0;
- long long visual_ticks=0,visual_frequency=0;int result=C3X_RENDERER_RESULT_PENDING;
+ bool visual_allowed=true,replay_clock_seeded=false;long long visual_ticks=0,visual_frequency=0,visual_last=100;int result=C3X_RENDERER_RESULT_PENDING;
+ bool camera_active=false;long long trial_job_presented=0;
+ struct {std::atomic<bool> completed_scene_retained{false};} renderer_state;
  enum class Command{trial_visual_shared};
  int submit_locked(std::unique_lock<std::mutex>&,Command){++submits;return result;}
  void drain_facts_locked(){}
-'''+body+r'''
+'''+advance+body+r'''
 };
 int main(){State state;std::uint64_t handle=0;unsigned w=0,h=0;
  for(auto* gate:{&state.call_mutex,&state.state_mutex}){
@@ -354,8 +371,28 @@ int main(){State state;std::uint64_t handle=0;unsigned w=0,h=0;
  }
  assert(state.trial_visual_call_busy==1&&state.trial_visual_state_busy==1);
  assert(state.trial_visual_shared(456,1000,0,handle,w,h)==C3X_RENDERER_RESULT_PENDING);
- assert(state.submits==1&&state.visual_ticks==456);
+ assert(state.submits==1&&state.visual_ticks==456&&state.visual_last==10000);
+ // An external frame replaces the wall-clock anchor too. A following camera
+ // call adds only 25 new ticks, not the 9,900 ticks since the older anchor.
+ counter+=25;state.advance_visual_clock();assert(state.visual_ticks==481);
  state.result=C3X_RENDERER_RESULT_OK;assert(state.trial_visual_shared(789,1000,0,handle,w,h)==C3X_RENDERER_RESULT_OK);
  assert(state.submits==2&&state.visual_ticks==789);
+ // Inside a camera job the frozen map re-presents native UI at most every
+ // 125 ms; the busy retry never submits work to the job's worker.
+ state.camera_active=true;assert(state.trial_visual_shared(1000,1000,0,handle,w,h)==C3X_RENDERER_RESULT_OK&&state.submits==3);
+ assert(state.trial_visual_shared(1100,1000,0,handle,w,h)==C3X_RENDERER_RESULT_BUSY&&state.submits==3&&state.visual_ticks==1000);
+ assert(state.trial_visual_shared(1125,1000,0,handle,w,h)==C3X_RENDERER_RESULT_OK&&state.submits==4);
+ // A consumer-owned required offer is never held; ordinary frames resume after the job.
+ assert(state.trial_visual_shared(1130,1000,7,handle,w,h)==C3X_RENDERER_RESULT_OK&&state.submits==5);
+ // A zoom still animating inside the job keeps every frame.
+ c3x_renderer::zoom_destination_hint()=.5f;
+ assert(state.trial_visual_shared(1135,1000,0,handle,w,h)==C3X_RENDERER_RESULT_OK&&state.submits==6);
+ state.presented_zoom_q16=32768;assert(state.trial_visual_shared(1136,1000,0,handle,w,h)==C3X_RENDERER_RESULT_BUSY&&state.submits==6);
+ // A retained renderable scene services animation at display cadence.
+ state.renderer_state.completed_scene_retained=true;
+ assert(state.trial_visual_shared(1137,1000,0,handle,w,h)==C3X_RENDERER_RESULT_OK&&state.submits==7);
+ state.renderer_state.completed_scene_retained=false;
+ state.submits=5;state.camera_active=false;assert(state.trial_visual_shared(1140,1000,0,handle,w,h)==C3X_RENDERER_RESULT_OK&&state.submits==6);
+ assert(state.trial_visual_shared(1145,1000,0,handle,w,h)==C3X_RENDERER_RESULT_OK&&state.submits==7);
 }
 ''')

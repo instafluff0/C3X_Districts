@@ -126,6 +126,7 @@ int main(){
         publication='struct PublishedMapFrame {'+source.split('struct PublishedMapFrame {',1)[1].split('// Cheap, deliberately provisional',1)[0]
         adopt='int adopt_gpu_camera_locked('+source.split('int adopt_gpu_camera_locked(',1)[1].split('\npublic:',1)[0]
         poll='int poll_gpu_camera_view('+source.split('int poll_gpu_camera_view(',1)[1].split('\nprivate:',1)[0]
+        ready='int camera_ready_view_locked('+source.split('int camera_ready_view_locked(',1)[1].split('    void notify_camera_completion_locked',1)[0]
         run_cpp(r'''
 #include <algorithm>
 #include <atomic>
@@ -147,6 +148,7 @@ struct Owner {
  std::atomic<bool> ahead_cancelled{false},foreground_pending{false};
  bool ahead_active=false,unit_pixels_active=false,has_job=false,camera_active=false;
  bool camera_gpu=true,camera_ready_prepared=false,camera_ready_area=false,gpu_reused=false,nearby_presented=false,fail=true;
+ bool camera_scene_complete=false;
  int camera_result=C3X_RENDERER_RESULT_OK,imports=0;
  long long visual_ticks=100,visual_frequency=1000;void advance_visual_clock(){}
  struct {int resumes=0;void resume_motion(long long,long long){++resumes;}} unit_instances;
@@ -161,7 +163,7 @@ struct Owner {
   gpu_view.presentation_time_ticks=gpu_publication.frame.presentation_time_ticks;
   gpu_metadata=gpu_publication.output;return C3X_RENDERER_RESULT_OK;
  }
-'''+adopt+poll+r'''
+'''+ready+adopt+poll+r'''
 };
 void capture(PublishedMapFrame& out,int city,int* released){
  c3x_renderer_tile_v1 tile{};tile.city_id=city;tile.anchor_x=13;
@@ -361,6 +363,7 @@ int main(){
 #include "Renderer/native/gpu_image_commands.h"
 #include "Renderer/native/tactical_overlay.h"
 #include "Renderer/native/render_core/scene_surface.h"
+#include "Renderer/native/camera_completion.h"
 #include <functional>
 // Recording is an observation seam; this scheduler fixture leaves it disabled.
 namespace c3x_inputs {
@@ -435,6 +438,7 @@ struct RetainedComposition {
 };
 struct Session {
  bool visual_ready(){return false;}bool visual_active(){return false;}
+ void camera_step(int,int){unexpected_gpu();}bool panning(){return unexpected_gpu();}
  std::uint64_t visual_bytes(){return 0;}std::size_t visual_nodes(){return 0;}std::size_t visual_sources(){return 0;}void stop_visuals(){}
  std::uint64_t visual_sample_allocations(){return 0;}std::uint64_t visual_sample_imports(){return 0;}
  template<class... T> int visual_frame(T...){return unexpected_gpu();}
@@ -466,6 +470,8 @@ unsigned GetEnvironmentVariableA(char const* name,char* out,std::size_t){
 template<std::size_t N,class... T> void sprintf_s(char (&buffer)[N],char const* format,T... args){std::snprintf(buffer,N,format,args...);}
 #endif
 namespace c3x_renderer {
+std::atomic<float>& zoom_destination_hint(){static std::atomic<float> value{1.f};return value;}
+namespace render_core {unsigned cached_environment(char const* name,char* out,unsigned size){return GetEnvironmentVariableA(name,out,size);}}
 struct UnitSceneSample {std::array<int,4> coverage;};
 struct Signature {std::uint64_t complete=0;};
 Signature terrain_frame_signature(c3x_renderer_frame_v1 const& f,long long,unsigned){
@@ -527,7 +533,7 @@ struct RendererState {
     std::vector<c3x_renderer::render_core::UnitInstances::ScenePose> fresh_unit_poses;
     char const* frame_cache_path="cold";
     void gpu_failure(char const*){} // Failure diagnostics do not initialize or mutate GPU ownership.
-    std::size_t publication_working_bytes=0;bool memory_pressured=false;void preserve_process_headroom(){}
+    std::size_t publication_working_bytes=0,publication_capacity_bytes=0;bool memory_pressured=false;void preserve_process_headroom(){}
     struct Scene : c3x_renderer::render_core::CapturedScene {std::uint64_t signature=0;} topology_cache;
     struct WorldStorage {
         struct Statistics {std::size_t bytes=0;};
@@ -543,6 +549,11 @@ struct RendererState {
     std::array<Terrain,14> terrain_textures;
     Trace trace;Bodies unit_bodies;bool unit_rendering_enabled=true,pickup_profile=false,cache_valid=false,profiling=false;
     bool loading_preparation=false,loading_world_only=false,unit_sources_ready=false;unsigned unit_source_device=0;
+    bool loading_gpu_residency=false,world_gpu_residency_ready=false,world_gpu_allocation_pressure=false;
+    bool world_gpu_capacity_refused=false,world_gpu_allocation_failed=false;
+    struct GpuRecord {unsigned state=0;};std::vector<GpuRecord> world_gpu_records;
+    std::vector<GpuRecord*> world_gpu_current;
+    void world_gpu_report(bool){unexpected_gpu();}
     bool initialize_device(){assert(native_transfer_test);return true;}
     bool prepare_world_sources(c3x_renderer_frame_v1 const&){return true;} // Source topology initialization is exercised by the loading-world fixture.
     Device owned_device;Context owned_context;Device* device=&owned_device;Context* context=&owned_context;
@@ -696,12 +707,14 @@ int main(){
         owner.reset_and_stop();
         assert(owner.poll_gpu_camera_view(fresh,view)==C3X_RENDERER_RESULT_SUPERSEDED);
     }
-    assert(camera_notifications==0); // cancelled/superseded work sends no ready hint
+    // Completion messages are wake hints for terminal results, including
+    // cancellation. The poll checks above remain the publication authority.
+    auto prior_notifications=camera_notifications.load();
     {
         RendererState notify_state;notify_state.scene_surface_requested=notify_state.city_profile=true;
         RendererWorker notifying(notify_state);c3x_renderer_camera_request_v1 request={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(request),&f,{1,2,3,4}};
         c3x_renderer_i64 ticket=0;assert(notifying.begin_gpu_camera(request,ticket,17,901)==C3X_RENDERER_RESULT_PENDING);
-        until([&]{return camera_notifications.load()==1;});
+        until([&]{return camera_notifications.load()==prior_notifications+1;});
         notifying.reset_and_stop();
     }
     assert(worker.render(f,out)==C3X_RENDERER_RESULT_OK);

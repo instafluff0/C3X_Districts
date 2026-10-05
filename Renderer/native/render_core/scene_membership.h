@@ -27,13 +27,16 @@ public:
 private:
     std::shared_ptr<ResidentRetirement> ledger;
     std::shared_ptr<Generation> selected;
-    std::uint64_t serial=0,order_serial=0;
+    // Forked completed/pending views must never reuse a generation identity.
+    // Both are mutated serially by the same render owner.
+    std::shared_ptr<std::uint64_t> serial=std::make_shared<std::uint64_t>(0);
+    std::uint64_t order_serial=0;
     void writable(){
-        if(!selected){selected=std::make_shared<Generation>(ledger);selected->revision=++serial;}
+        if(!selected){selected=std::make_shared<Generation>(ledger);selected->revision=++*serial;}
         else if(selected.use_count()>1){
             auto next=std::make_shared<Generation>(ledger);
             next->records=selected->records;next->content=selected->content;
-            next->revision=++serial;selected=std::move(next);
+            next->revision=++*serial;selected=std::move(next);
         }
     }
 public:
@@ -49,7 +52,7 @@ public:
             layer.erase(std::remove_if(layer.begin(),layer.end(),[&](auto const& draw){return !keep(draw);}),layer.end());
             changed=changed || layer.size()!=size;
         }
-        if(changed && selected->revision==revision)selected->revision=++serial;
+        if(changed && selected->revision==revision)selected->revision=++*serial;
         ResidentSelection retained(ledger);
         for(auto const& layer:selected->records)for(auto const& draw:layer){
             if(!retained.retain(draw.owner,selected->content.get(draw.owner)))throw std::bad_alloc();
@@ -65,7 +68,7 @@ public:
         auto revision=selected->revision;writable();
         for(auto& layer:selected->records)
             std::stable_sort(layer.begin(),layer.end(),before);
-        if(selected->revision==revision)selected->revision=++serial;
+        if(selected->revision==revision)selected->revision=++*serial;
         ++order_serial;return true;
     }
     auto& edit(std::size_t layer){writable();return selected->records[layer];}

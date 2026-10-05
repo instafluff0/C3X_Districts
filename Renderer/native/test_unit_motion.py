@@ -45,15 +45,18 @@ struct Fixture {
 };
 int main(){
  Fixture a;a.begin();
+ assert(a.world.travel_seconds_remaining()==0.); // unsampled travel cannot defer a reveal
  // Even a 10-second transport delay must display the source first.
  auto p=a.pose(10000000);assert(p.draw.body_x==1000&&p.draw.action==2&&p.cursor);
- p=a.pose(10200000);assert(p.draw.body_x==1045&&p.draw.action_cursor==200);
+ assert(a.world.travel_seconds_remaining()>.76&&a.world.travel_seconds_remaining()<.77);
+ p=a.pose(10200000);assert(p.draw.body_x==1027&&p.draw.action_cursor==120);
  // An early commit and destination idle capture cannot truncate travel.
  a.commit();a.state.tile_x=6;a.state.presentation_time_ticks=200;
  a.body.body_x=1000; // Native camera already recentered; scene camera has not.
  a.body.presentation_time_ticks=200;a.capture();
- p=a.pose(10300000);assert(p.draw.body_x==1068&&p.draw.action==2&&p.draw.action_cursor==300);
- p=a.pose(10600000);assert(p.draw.body_x==1128&&p.draw.action==1);
+ p=a.pose(10300000);assert(p.draw.body_x>=1049&&p.draw.body_x<=1050&&p.draw.action==2&&p.draw.action_cursor>=219&&p.draw.action_cursor<=220);
+ p=a.pose(10800000);assert(p.draw.body_x==1128&&p.draw.action==1);
+ assert(a.world.travel_seconds_remaining()==0.);
  // Capture can select another body before the mover ever gets an idle draw.
  // Confirmed arrival ends the segment and yields ownership to that new stack.
  Fixture sparse;sparse.begin();sparse.pose(0);
@@ -61,45 +64,69 @@ int main(){
  sparse.state.presentation_time_ticks=sparse.body.presentation_time_ticks=50;sparse.capture();
  sparse.commit();sparse.state.tile_x=6;sparse.state.presentation_time_ticks=200;
  assert(sparse.world.state(sparse.state));
- p=sparse.pose(600000);assert(p.draw.body_x==1128&&p.draw.action==1&&!p.travelling);
+ p=sparse.pose(800000);assert(p.draw.body_x==1128&&p.draw.action==1&&!p.travelling);
  assert(sparse.world.motion_count(7)==0);
  sparse.state.unit_id=sparse.body.unit_id=8;sparse.state.action=sparse.body.action=1;
  sparse.state.presentation_time_ticks=sparse.body.presentation_time_ticks=300;sparse.capture();
- p=sparse.pose(700000);assert(p.draw.unit_id==8);
+ p=sparse.pose(900000);assert(p.draw.unit_id==8);
  // A replacement camera can remain prepared while native composition catches
  // up. Hidden elapsed time cannot consume the rest of an accepted move.
  Fixture held;held.begin();held.pose(10000000);held.world.pause_motion(10300000);
- p=held.pose(10900000);assert(p.draw.body_x==1068&&p.draw.action_cursor==300);
+ assert(held.world.travel_seconds_remaining()==0.); // a frozen scene must be rebuilt immediately
+ p=held.pose(10900000);assert(p.draw.body_x>=1049&&p.draw.body_x<=1050&&p.draw.action_cursor>=219&&p.draw.action_cursor<=220);
+ assert(p.pose_ticks==10300000); // heading/joint blends hold with travel
  held.world.pause_motion(11000000); // supersession preserves the original pause
  held.commit();held.state.tile_x=6;held.state.presentation_time_ticks=200;
  held.body.presentation_time_ticks=200;held.capture();
  held.world.resume_motion(12000000,1000000);
- p=held.pose(12100000);assert(p.draw.body_x==1090&&p.draw.action==2&&p.draw.action_cursor==400);
- p=held.pose(12300000);assert(p.draw.body_x==1128&&p.draw.action==1);
+ p=held.pose(12100000);assert(p.draw.body_x==1072&&p.draw.action==2&&p.draw.action_cursor==320);
+ assert(p.pose_ticks==10400000); // adoption does not consume the blend
+ held.world.resume_motion(12200000,1000000); // later native import cannot pause/rebase it again
+ p=held.pose(12500000);assert(p.draw.body_x==1128&&p.draw.action==1);
  // Native intermediate body samples do not restart or accelerate playback.
  Fixture b;b.begin();b.pose(0);
  b.state.action=b.body.action=2;b.state.presentation_time_ticks=b.body.presentation_time_ticks=100;
  b.body.body_x=1110;b.body.action_cursor=14;b.capture();
- p=b.pose(200000);assert(p.draw.body_x==1045&&p.draw.action_cursor==200);
- p=b.pose(300000);assert(p.draw.body_x==1068&&p.draw.action_cursor==300);
+ p=b.pose(200000);assert(p.draw.body_x==1027&&p.draw.action_cursor==120);
+ p=b.pose(300000);assert(p.draw.body_x>=1049&&p.draw.body_x<=1050&&p.draw.action_cursor>=219&&p.draw.action_cursor<=220);
  // A delayed camera snapshot cannot rewind the live scene's clock.
- p=b.pose(100000);assert(p.draw.body_x==1068&&p.draw.action_cursor==300);
+ p=b.pose(100000);assert(p.draw.body_x>=1049&&p.draw.body_x<=1050&&p.draw.action_cursor>=219&&p.draw.action_cursor<=220);
  // Camera pan and zoom transform the same interpolated body and cursor anchor.
  b.tiles[0].anchor_x+=50;b.tiles[0].anchor_y+=30;
  b.frame.tile_width=192;b.frame.tile_height=96;
- p=b.pose(300000);assert(p.draw.body_x==1135&&p.draw.body_y==498&&p.draw.projection_scale_milli==1500&&p.cursor);
+ p=b.pose(300000);assert(p.draw.body_x==1108&&p.draw.body_y==498&&p.draw.projection_scale_milli==1500&&p.cursor);
  // Consecutive accepted steps preserve run phase across tile boundaries.
  constexpr long long origin=10250000;
  Fixture c;c.begin();c.pose(origin);c.commit();
- c.event.old_x=6;c.event.new_x=8;c.event.presentation_time_ticks=200;c.begin();c.commit();
- p=c.pose(origin+600000);assert(p.draw.body_x==1135&&p.draw.action_cursor==600);
- p=c.pose(origin+900000);assert(p.draw.body_x==1203&&p.draw.action_cursor==900);
+ c.event.old_x=6;c.event.new_x=8;c.event.presentation_time_ticks=200;c.begin();c.commit();c.pose(origin+300000);
+ auto arrivals=c.world.pending_arrivals();
+ assert(arrivals.size()==2&&arrivals[0].second==101&&arrivals[1].second==300); // native commits, not movement starts
+
+ p=c.pose(origin+600000);assert(p.draw.body_x==1115&&p.draw.action_cursor==509);
+ p=c.pose(origin+900000);assert(p.draw.body_x==1140&&p.draw.action_cursor==622);
+ // A next step arriving after a long native confirmation wait starts at
+ // the shared endpoint, faces its own direction and displays its full travel.
+ Fixture late;late.begin();late.pose(origin);
+ p=late.pose(origin+800000);assert(p.draw.body_x==1128&&p.draw.action==1&&p.draw.direction==2);
+ late.commit();late.event.old_x=6;late.event.new_x=6;late.event.new_y=2;
+ late.event.presentation_time_ticks=200;late.begin();late.commit();
+ p=late.pose(origin+1600000);assert(p.draw.body_x==1128&&p.draw.body_y==500&&p.draw.direction==8&&p.draw.action==1);
+ p=late.pose(origin+2100000);assert(p.draw.body_x==1128&&p.draw.body_y==480&&p.draw.direction==8);
+ // A visibility refresh freezes the same camera. A turn accepted during
+ // that refresh must retain its entire visible travel through adoption.
+ Fixture reveal;reveal.begin();reveal.pose(0);reveal.pose(800000);
+ reveal.world.pause_motion(800000);
+ reveal.commit();reveal.event.old_x=6;reveal.event.new_x=6;reveal.event.new_y=2;
+ reveal.event.presentation_time_ticks=200;reveal.begin();reveal.commit();
+ p=reveal.pose(1600000);assert(p.draw.body_x==1128&&p.draw.body_y==500&&p.draw.direction==8);
+ reveal.world.resume_motion(1800000,1000000);
+ p=reveal.pose(2300000);assert(p.draw.body_y==480&&p.draw.action==2);
  // Horizontal and vertical seam crossings choose a neighboring copy.
- Fixture w(10,4);w.begin();w.pose(0);p=w.pose(300000);assert(p.draw.body_x==1068);
- w.commit();w.event.old_x=0;w.event.new_x=2;w.event.presentation_time_ticks=200;w.begin();
- p=w.pose(600000);assert(p.draw.body_x==1135);
+ Fixture w(10,4);w.begin();w.pose(0);p=w.pose(300000);assert(p.draw.body_x>=1049&&p.draw.body_x<=1050);
+ w.commit();w.event.old_x=0;w.event.new_x=2;w.event.presentation_time_ticks=200;w.begin();w.pose(400000);
+ p=w.pose(800000);assert(p.draw.body_x==1129);
  Fixture v(4,10);v.event.new_x=4;v.event.new_y=0;v.begin();v.pose(0);
- p=v.pose(300000);assert(p.draw.body_x==1000&&p.draw.body_y==534);
+ p=v.pose(300000);assert(p.draw.body_x==1000&&p.draw.body_y==525);
  // All eight accepted directions override a stale SE body observation.
  int offsets[8][2]={{1,-1},{2,0},{1,1},{0,2},{-1,1},{-2,0},{-1,-1},{0,-2}};
  for(int direction=1;direction<=8;++direction){
@@ -157,6 +184,7 @@ int main(){
  unit.Body.CivID=3;patch_FLC_Animation_set_move_target(&animation,123,768,128);assert(natives==4&&events==2);
  unit.Body.CivID=2;
  visible=false;patch_FLC_Animation_set_move_target(&animation,123,768,128);assert(natives==5&&events==2);
+
 }
 ''')
 

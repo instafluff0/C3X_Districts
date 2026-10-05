@@ -1153,6 +1153,7 @@ int main(){
 using Handle=c3x_renderer::render_core::ContentHandle;
 #include <unordered_map>
 template<std::size_t N,class... A> int sprintf_s(char(&out)[N],char const*format,A...args){return std::snprintf(out,N,format,args...);}
+void c3x_renderer64_retire_geometry_selection(){}
 struct State {
     struct Item {std::size_t byte_count;unsigned last_used;bool prefetched;int buffers=0;std::uint64_t animation_epoch=0;Handle binding;int signature=0;std::shared_ptr<int> mesh=std::make_shared<int>(0);};
     using CachedTileGeometry=Item;
@@ -1168,6 +1169,7 @@ struct State {
     unsigned tile_geometry_epoch=3,frame_tiles_evicted=0,cache_evictions=0;
     void release_geometry_vertex_buffers(int&){}
     void release_resident_content(Item& owner){resident_content.release(owner.binding);}
+    struct {void clear(){}} shared_instances;std::shared_ptr<int> resource_visibility_membership;
 ''' + eviction + r'''
 };
 int main(){

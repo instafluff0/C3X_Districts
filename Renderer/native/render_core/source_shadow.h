@@ -58,6 +58,10 @@ public:
         std::vector<fidelity::MeshInstance> const* instances=nullptr;float instance_material=40;
         bool rigid=false;
         float offset[3]={};
+        // Light-space bounds and the shadow build that computed them.
+        std::array<float,4> projected{};std::uint64_t projected_serial=0;
+        // Screen footprint of the drawn occurrence in source pixels.
+        std::array<int,4> source{};
     };
     SourceShadow()=default;
     SourceShadow(SourceShadow const&)=delete;

@@ -123,6 +123,7 @@ struct Harness{
 struct Producer{
  ComPtr<ID3D11Texture2D>trial_display,trial_buffer;ComPtr<ID3D11RenderTargetView>trial_display_view;ComPtr<IDXGIKeyedMutex>trial_display_mutex;
  HANDLE trial_display_handle=0;unsigned trial_width=0,trial_height=0;std::uint64_t trial_handle=0;
+ std::atomic<bool> trial_front_pending{false};std::uint64_t trial_presented_front_revision=0;
  struct Request{int width=2240,height=1260,ticket=1,image=1,area[4]={0,0,2240,1260};}gpu_present;
  DWORD trial_consumer_pid=99;long long visual_ticks=1,visual_frequency=1000;bool visual_allowed=true;Session session;
  struct State{ID3D11Device1*device;ID3D11DeviceContext*context;Session*gpu_composition;Trace trace;}renderer_state;

@@ -57,6 +57,8 @@ template<class Target> struct StaticRasterState {
     std::int64_t depth_origin=0;
     std::uint64_t signature=0,geometry_epoch=0,lighting_revision=0,revision=0;
     unsigned shadow_builds=0;
+    // Shadow caster changes up to this serial are reflected in the pixels.
+    std::uint64_t shadow_serial=0;
     StaticRasterKey key{};
     // valid: covered pixels are displayable. stale: they no longer match the
     // current content key (or failed dependency validation) and are only a

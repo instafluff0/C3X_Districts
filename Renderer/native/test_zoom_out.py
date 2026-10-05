@@ -11,6 +11,7 @@ class ZoomOutTests(unittest.TestCase):
     def test_capture_and_hud_keep_outer_tiles_reachable(self):
         source = (ROOT / 'injected_code.c').read_text()
         bounds = function(source, 'custom_renderer_capture_bounds')
+        cover = function(source, 'custom_renderer_capture_cover_width')
         layout = function(source, 'custom_renderer_hud_layout_offset')
         run_cpp(r'''
 #include <cassert>
@@ -18,23 +19,37 @@ class ZoomOutTests(unittest.TestCase):
 #include "Renderer/native/scene_projection.h"
 struct RECT{int left,top,right,bottom;};
 struct Main_Screen_Form {int camera_x=2600,camera_y=800,TileX_Min=0,TileX_Max=0,TileY_Min=0,TileY_Max=0;};
+#define ARRAY_LEN(a) int(sizeof(a)/sizeof((a)[0]))
+constexpr int C3X_NATIVE_ZOOM_PRESENTED=130;int presented_q16=65536;
+int presented(int op,void*,void*,void const*,void const*,unsigned){return op==C3X_NATIVE_ZOOM_PRESENTED?presented_q16:0;}
 struct {struct{bool enable_custom_rendering=true,enable_custom_rendering_zoom=true;}current_config;
- int custom_renderer_zoom_target_width=128;}state,*is=&state;
+ int custom_renderer_zoom_target_width=128,custom_renderer_capture_cover=0;
+ int(*custom_renderer_native_image)(int,void*,void*,void const*,void const*,unsigned)=presented;}state,*is=&state;
 struct {struct{struct{void* spotlight_on_city=nullptr;}Renderer;}Map;
  bool is_zoomed_out=false;int ScreenWidth=2240,ScreenHeight=1260;}bic,*p_bic_data=&bic;
 bool custom_renderer_zoom_enabled(){return state.current_config.enable_custom_rendering&&
  state.current_config.enable_custom_rendering_zoom&&!bic.Map.Renderer.spotlight_on_city;}
-RECT ''' + bounds + '\nvoid ' + layout + r'''
+int ''' + cover + '\nRECT ' + bounds + '\nvoid ' + layout + r'''
 int main(){Main_Screen_Form screen;
  for(int width:{64,80,96,112,128,160,192,224,256,320,384})for(int enabled:{0,1,2,3}){
-  state.custom_renderer_zoom_target_width=width;
+  state.custom_renderer_zoom_target_width=width;state.custom_renderer_capture_cover=0;presented_q16=width*512;
   state.current_config.enable_custom_rendering=enabled!=0;
   state.current_config.enable_custom_rendering_zoom=enabled!=1;
   bic.Map.Renderer.spotlight_on_city=enabled==2?&screen:nullptr;
   screen.TileX_Min=91;auto captured=custom_renderer_capture_bounds(&screen);assert(screen.TileX_Min==91);
   if(enabled!=3){assert(screen.TileX_Min==91);int dx,dy;custom_renderer_hud_layout_offset(-800,1700,&dx,&dy);assert(!dx&&!dy);continue;}
-  for(int x:{-1120,0,2240,3360})assert((screen.camera_x+x)/64>=captured.left&&(screen.camera_x+x)/64<=captured.right);
-  for(int y:{-630,0,1260,1890})assert((screen.camera_y+y)/32>=captured.top&&(screen.camera_y+y)/32<=captured.bottom);
+  // The envelope covers the view one notch beyond the target (the native
+  // viewport at 1.25x and closer); the former fixed 0.5x envelope is the 0.5x case.
+  int c=state.custom_renderer_capture_cover;
+  assert(c==(width==64?64:width>128?128:width==80?64:width-16));
+  int ex=2240*64/c,ey=1260*64/c;
+  for(int x:{1120-ex,0,2240,1120+ex})assert((screen.camera_x+x)/64>=captured.left&&(screen.camera_x+x)/64<=captured.right);
+  for(int y:{630-ey,0,1260,630+ey})assert((screen.camera_y+y)/32>=captured.top&&(screen.camera_y+y)/32<=captured.bottom);
+  if(width==64)assert(ex==2240&&ey==1260);
+  if(width>=128)assert(captured.right-captured.left<(2240*2)/64);
+  // A wider presented transition keeps its wider capture.
+  state.custom_renderer_capture_cover=0;presented_q16=32768;custom_renderer_capture_bounds(&screen);
+  assert(state.custom_renderer_capture_cover==64);
   for(int x:{-800,0,800,2240,3000})for(int y:{-300,600,1700}){
    int dx,dy;custom_renderer_hud_layout_offset(x,y,&dx,&dy);
    assert(x+dx>=256&&x+dx<=1984&&y+dy>=128&&y+dy<=1132);

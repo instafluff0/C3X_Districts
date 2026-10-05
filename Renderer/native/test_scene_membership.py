@@ -37,6 +37,13 @@ int main(){
  SceneMembership<Chunk,2> membership(budget);Chunk first;unsigned frees=0;
  auto mesh=std::make_shared<Payload>();mesh->frees=&frees;
  assert(membership.retain({1,100},mesh));membership.edit(0).push_back(first);
+ // A completed and a pending branch can each detach without aliasing revisions.
+ auto completed=membership;
+ membership.edit(0)[0].translation_x=9;
+ completed.edit(0)[0].translation_x=3;
+ assert(completed.revision()!=membership.revision());
+ assert(completed[0][0].translation_x==3 && membership[0][0].translation_x==9);
+ completed.clear();membership.edit(0)[0].translation_x=0;
  auto old=membership.publish();auto same=membership.publish();
  assert(old==same && old->records[0].size()==1);
  auto version=old->revision;auto charge=budget->bytes.load();assert(charge>0);

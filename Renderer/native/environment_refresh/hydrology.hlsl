@@ -3072,6 +3072,12 @@ float3 q3_scene_bed(PixelInput input) {
  float3 tint=lerp(1.0.xxx,float3(.48,1.12,1.80),tint_strength);
  return color*clamp(.86+(height-.426)*.55,.65,1.1)*absorption*tint;
 }
+float q3_beach_coverage(float distance,float width,float grain) {
+ // Keep sand beneath the replacement ground's partial-coverage band. Ending
+ // the beach at width+.06 exposed grass beneath fading grass, hiding its
+ // texture breakup and leaving the beach's smooth contour as the visible edge.
+ return 1-smoothstep(width+.10,width+.26,distance+(grain-.28)*.24);
+}
 void q3_shore_material(PixelInput input,float2 world_position,inout float3 albedo,inout float3 material_normal) {
  float sd=input.hydrology_data.x,width=input.hydrology_data.y;
  float rocky=saturate(input.hydrology_data.z);
@@ -3082,7 +3088,7 @@ void q3_shore_material(PixelInput input,float2 world_position,inout float3 albed
   beach_base_texture.SampleBias(material_sampler,uv,3).a);
  float3 sand=beach.rgb*(1+beach_grain);
  float grain=dot(sand,float3(.2126,.7152,.0722));
- float blend=1-smoothstep(width*.25,width+.06,sd+(grain-.28)*.24);
+ float blend=q3_beach_coverage(sd,width,grain);
  // Desert already supplies a continuous sand surface. Replacing it with the
  // separate beach material created a flat, darker ribbon beside the desert's
  // fine ripples. Preserve that sand family through the wet edge; mixed biome

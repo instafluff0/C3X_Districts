@@ -120,6 +120,7 @@ public:
         return client.pack(path);}
     int set_units(int enabled){std::lock_guard<std::mutex> lock(gate);if(!enabled)unit_facts.clear();return client.set_units(enabled);}
     unsigned presented_zoom(){std::lock_guard<std::mutex> lock(gate);return client.presented_zoom();}
+    int presented_pan(){std::lock_guard<std::mutex> lock(gate);return client.presented_pan();}
     int visual_policy(unsigned policy){std::lock_guard<std::mutex> lock(gate);return client.visual_policy(policy);}
     int render(c3x_renderer_camera_request_v1 const& request,c3x_renderer_gpu_frame_v1& gpu,
                c3x_renderer_output_v1& output){

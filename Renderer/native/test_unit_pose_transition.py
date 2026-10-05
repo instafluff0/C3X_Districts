@@ -58,13 +58,22 @@ int main(){
  auto angle=owner.facing(7,2,0,1000,6.108652382f); // 350 degrees -> 10 degrees
  assert(std::abs(angle-6.108652382f)<1e-6);
  assert(std::abs(owner.facing(7,2,1,1000,.174532925f)-angle)<1e-6);
- assert(std::abs(owner.facing(7,2,61,1000,.174532925f)-6.283185307f)<1e-5);
- auto before=owner.facing(7,2,61,1000,.174532925f);
- assert(std::abs(owner.facing(7,2,62,1000,1.570796327f)-before)<1e-6);
+ assert(std::abs(owner.facing(7,2,74,1000,.174532925f)-6.283185307f)<.002);
+ auto before=owner.facing(7,2,74,1000,.174532925f);
+ assert(std::abs(owner.facing(7,2,75,1000,1.570796327f)-before)<1e-6);
  struct Visible{struct{int unit_id;}draw;std::uint64_t pose_identity;};
  owner.retain(std::vector<Visible>{});assert(owner.size()==0);
  assert(!owner.sample(7,2,6,600,1000,mesh,2)); // fog/reveal starts directly at current pose
  owner.clear();assert(owner.size()==0);
+ // Locomotion arrival settles over 200 ms, including a held presentation
+ // sample. All intermediate joints preserve the authored limb length.
+ assert(!owner.sample(7,3,2,1000,1000,mesh,1));
+ p=owner.sample(7,3,1,1010,1000,mesh,0);assert(p&&std::abs(p[29]-1)<1e-6);
+ p=owner.sample(7,3,1,1010,1000,mesh,0);assert(p&&std::abs(p[29]-1)<1e-6);
+ p=owner.sample(7,3,1,1110,1000,mesh,0);
+ assert(p&&std::abs(p[28]-std::sqrt(.5))<1e-5&&std::abs(p[29]-std::sqrt(.5))<1e-5);
+ assert(owner.sample(7,3,1,1209,1000,mesh,0));
+ assert(!owner.sample(7,3,1,1210,1000,mesh,0));
 }
 ''')
 

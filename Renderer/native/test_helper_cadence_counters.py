@@ -32,7 +32,7 @@ struct Owner{
  struct Batch{std::size_t bytes=0;bool ready=false;
   c3x_remote_scene::ImageBatchService::Status status(){return {1,bytes,0,0,ready,0,{}};}}batch;
  Batch* image_batches=&batch;
- struct{LONG presented_zoom_q16=0,visual_frames=0,native_queue_records=0;}values;
+ struct{LONG presented_zoom_q16=0,presented_pan=0,visual_frames=0,native_queue_records=0;}values;
  decltype(values)* telemetry=&values;
  std::function<int()> priority_front_pending;
  int code=C3X_RENDERER_RESULT_OK;

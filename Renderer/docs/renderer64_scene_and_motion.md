@@ -100,9 +100,24 @@ including a static one. The GPU regression advances eight poses, freezes the
 camera and repeats four native transfers; every transfer must preserve the
 last pose. The prior code fails that pixel comparison.
 
-Travel pauses for that interval and resumes on successful camera adoption. A
-superseding request keeps the original pause; failed adoption cannot consume
-undisplayed travel. The native request timestamp remains unchanged.
+Same-projection terrain preparation forks one bounded completed view. Geometry
+membership shares immutable meshes, with distinct revision identities for
+completed and pending branches. View dimensions, projection/depth, resource
+anchors, visibility proofs and wave-buffer leases stay paired with that
+membership. At cooperative preparation boundaries, the immediate-context owner
+can borrow the completed view, sample actors/HUD at the current clock, and
+restore the pending view on every exit. CPU compiler lanes continue using their
+immutable source jobs. The pending camera draws into a separate texture; it
+cannot overwrite the displayed frame.
+
+Cancelled preparation retains the completed view until a replacement succeeds.
+Map/viewer, content or device changes invalidate that lease. A single metadata
+fork is capped at 32 MiB (including retained wave buffers); immutable mesh
+retirement remains charged to the existing cache budget. Navigation and views
+without an eligible retained front keep the existing `held` fallback and
+bounded navigation clock allowance. A temporary hold never retires the sampler.
+Externally supplied display timestamps reset the local wall-clock anchor so a
+following camera call cannot count the same elapsed interval twice.
 
 World and visibility updates at the same camera continue sampling the newly
 prepared resident scene immediately. In particular, revealing terrain during a
@@ -127,7 +142,10 @@ or restart this travel. Full-tile movement remains owned by its accepted move
 segment. Wrapping and zoom use the same scene projection for both kinds.
 
 Attack clips advance on the visual clock at the copied native cycle duration.
-Repeated sparse captures do not restart a phase. Death, fortify and victory
+Repeated sparse captures do not restart a phase. A native return to idle or
+movement retires that directed clock, so repeating the same attack or bombard
+starts at its new native cursor instead of reusing a previous encounter's phase.
+Death, fortify and victory
 clamp at their last pose; native action changes and retirement control their
 handoff. The scene retains its last complete body while the new action's body
 capture arrives, while invalidating old native selection tokens. HP, visibility
@@ -149,12 +167,16 @@ fragments retain normal fog. No extra body pass or CPU map readback is needed.
 ### Joint and direction transitions
 
 The GPU unit owner blends from the last displayed local joint pose into the
-new action for at most 120 ms (20% of a shorter clip). Destination time keeps
+new action for at most 120 ms (20% of a shorter clip); run-to-idle settles over
+200 ms. Destination time keeps
 advancing. Local quaternions use shortest-arc interpolation; position and
 scale/shear are blended before the hierarchy is rebuilt. GPU vertex skinning
 and the ordinary immutable animation palettes remain the rendering path.
 Interrupted transitions start from the currently mixed pose. All passes reuse
 one sampled pose at the same visual timestamp.
+Travel, heading and local-joint transitions share a continuous presentation
+clock that excludes hidden map-preparation intervals. Adopting a prepared map
+cannot consume a turn or the run-to-idle blend while the old image is frozen.
 
 Optional generic `C3XRIG1` metadata follows the existing `C3XANM1/2` palettes:
 parent indices, explicit skin-to-joint mapping, inverse binds, a SHA-256 binding
@@ -171,7 +193,7 @@ captures, as attack/death already did. Native outcomes and retirement still
 control visibility; blending cannot extend a dead unit's gameplay lifetime.
 Fog loss, retirement, ID reuse, changed art and scene unload discard old state.
 
-Heading turns over 120 ms along the shortest angle. The live path now shares
+Heading turns along the shortest angle over 120–360 ms according to turn size. The live path now shares
 Lab's calibrated `yaw_offset + (native_direction % 8) * 45 degrees` mapping;
 its previous subtraction of one produced a 45-degree error. Accepted movement
 selects the travel direction even when the preceding standing pose faced
@@ -256,13 +278,19 @@ placement. Both use the copied tile center: the native target routine adds
 `(+64,+32)` at normal zoom. This avoids pairing a body captured after native
 camera recentering with a previous renderer camera. No per-unit camera binding
 is retained.
-Renderer64 starts the visual clock on its first scene sample, uses a uniform
-225 native map units/second pace, and loops the authored run clip. The catalog
+Renderer64 starts the visual clock on its first scene sample. It allows a
+120–360 ms turn before translating, accelerates for 160 ms to a cruise speed
+of 225 native map units/second, and decelerates over the final 240 ms. The
+authored run cycle follows distance travelled, including the slowdown. The catalog
 reads move timing from the 32-byte generic animation header during asset loading;
 older bindings record duration/frames only for ambient clips. Delayed
 transport therefore cannot consume the move before its first visible sample.
 The bounded queue retains up to eight neighboring steps and carries the same
-run-cycle origin across them. Tests use a nonzero clock origin to detect an
+accumulated run distance across them. A queued step records its first scene sample;
+it cannot inherit elapsed time from before it was available for presentation.
+An endpoint waiting for native confirmation holds an idle pose with its travel
+heading. A late continuation pauses the run phase for that wait, then starts
+at the shared endpoint. Tests use a nonzero clock origin to detect an
 accidental phase reset. The later `Unit_move` event confirms game state without truncating
 active travel. Once both confirmation and displayed travel finish, the segment
 ends even if native stack selection never sends that mover an idle body draw.
@@ -271,11 +299,40 @@ endpoint and yields to the latest native stack owner. The capture regression
 covers this missing final draw; waiting for it left the attacker running in place. Hiding, retirement, incompatible actions and unrelated position
 corrections clear the route. The selection ring uses the same sampled body.
 
+Newly copied visibility increases wait behind the committed movement segments
+whose native completion timestamps precede that capture's original timestamp. Visibility is admitted
+before terrain preparation, separately from display sampling: rendering an older
+completed view cannot erase that admission or attach it to a later queued move. The final GPU fog pass releases each pending
+reveal on visual arrival, after terrain preparation; native loss of sight
+applies immediately. The gate is bounded and clears across map/viewer scopes.
+No native visibility rules or gameplay movement are changed.
+Camera preparation services only already-waiting overlay commands, with an
+eight-command/one-millisecond batch limit. It does not wait for a producer to
+submit another overlay packet while the changed terrain is unfinished.
+Same-view reveal preparation starts immediately. The earlier 160 ms collection
+window is removed now that the completed scene can animate during preparation.
+Already-superseded camera tickets are rejected before they mutate view state.
+At explicit camera import, the fresh sampler updates the completed image to the
+current actor clock before publication. A terrain image prepared earlier cannot
+temporarily restore an older pose or fog state while native overlay packets
+finish arriving. Pending assets still preserve a complete image.
+
+The October 5 retained-view diagnostic confirms animation frames execute inside
+camera preparation, rather than holding a still image for the whole job. Its
+10 Hz window witness checks sampled terrain continuity; it does not certify
+every displayed frame or a frame-rate guarantee. Current candidate evidence is
+under `Renderer/.cache/smooth-scenes/`.
+
 This implements ordinary visible tile travel. Hidden-to-visible admission,
 combat/transport transitions, route overlays and the full action lifecycle
-still need their scoped live checks. Native status text/bars remain a separate
-map overlay integration concern; passing the travel clock tests does not
-certify those overlays.
+still need their scoped live checks. Native status text/bars and civilization
+markers retain their native drawing programs and pixel size. Their scoped
+captures now carry a stable unit ID; the retained compositor attaches them to
+the completed map's body center. Pending preparation cannot advance the HUD
+ahead of the image, and a retired camera retains its last completed anchors.
+Wrapped views select the nearest captured occurrence; absent bodies suppress
+their retained ink. Passing travel-clock tests alone does not certify those
+overlays; the GPU compositor regression covers movement, zoom and retirement.
 
 ## Surface and frame lifecycle
 

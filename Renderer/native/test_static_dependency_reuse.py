@@ -147,7 +147,9 @@ struct Pipeline {
  template<class Visit>void contributors(ViewportShaderSettings const&,D3D11_RECT,bool,Visit visit){
   for(unsigned i=0;i<9;++i)for(auto&r:resident[i])visit(i,r);}
  D3D11_RECT source_bounds(ViewportShaderSettings const&,D3D11_RECT r,bool){return r;}
- D3D11_RECT reflected_water_bounds(ViewportShaderSettings const&,int w,int h){return {0,0,w,h};}
+ D3D11_RECT reflected_water_bounds(ViewportShaderSettings const&,int w,int h,std::vector<D3D11_RECT>* =nullptr){return {0,0,w,h};}
+ void index_mirror_receivers(ViewportShaderSettings const&,D3D11_RECT,std::vector<D3D11_RECT> const&){}
+ bool reflection_reaches_water(Record const&,ViewportShaderSettings const&)const{return true;}
 '''+capture+r'''
 };
 int main(){Pipeline p;ViewportShaderSettings settings;

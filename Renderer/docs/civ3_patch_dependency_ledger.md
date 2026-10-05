@@ -1,5 +1,38 @@
 # Civ III patch dependency ledger
 
+## Held edge-scroll motion during camera jobs
+
+`required_user_action: []`.
+
+- **Existing symbols relied on:** `Main_Screen_Form_scroll_at_mouse`,
+  `Main_Screen_Form_move_camera` and `Animator_update_display`. Their
+  signatures and supported-build addresses are unchanged.
+- **What changes:** the renderer's own edge-scroll timer callback.
+  - It asks the bridge whether a navigation request is still in flight,
+    using the side-effect-free `C3X_NAV_PENDING`.
+  - While one is, it accumulates motion instead of capturing and
+    discarding it.
+- **Not added:** no patch-table entry and no injected-state field.
+- **Config-off:** the timer returns at once when custom rendering is off.
+
+## Zoom-adaptive capture envelope and slide picking
+
+`required_user_action: []`.
+
+- **Existing symbols relied on.** All keep their signatures and addresses:
+  - `Main_Screen_Form_move_camera`;
+  - `Main_Screen_Form_is_tile_on_screen` (the city-label HUD scope);
+  - `Main_Screen_Form_get_tile_coords_under_mouse`.
+- **Capture envelope.** It now covers one zoom notch beyond the target,
+  instead of the fixed 0.5× envelope. The cover is stored in one
+  injected-state field, `custom_renderer_capture_cover`.
+- **Recapture.** A no-op re-clamp now requests a same-camera recapture when
+  the zoom target leaves the covered envelope, and keeps in-flight requests.
+- **Picking.** The native pick subtracts the presented camera-step slide
+  (`C3X_NATIVE_PAN_PRESENTED`).
+- **Not added:** no patch-table entry.
+- **Config-off:** delegation is unchanged.
+
 ## Same-view redraw and outward zoom capture
 
 `required_user_action: []`. Existing `Main_Screen_Form_process_mouse_wheel`,
@@ -2306,6 +2339,17 @@ through its ordinary native sprite path.
 console installation and bounded automated game tests.
 
 ### Renderer-owned unit travel
+
+October 5 movement synchronization uses the existing `Unit_draw_map_status`
+and `Sprite_draw_map_unit_marker` call replacements plus the existing
+`Unit_tick_anim` capture context. The HUD transport copies the stable unit ID
+alongside the native attachment; Renderer64 moves the retained native ink with
+its completed body pose. The target hook and `Unit_move` remain the movement
+authorities. No patch symbols, signatures or addresses change.
+`required_user_action: []`. Renderer-off delegation remains unchanged.
+The renderer now adds turn/acceleration/deceleration time and gates copied
+visibility increases on visual arrival. These are presentation changes; native
+move completion and visibility rules remain intact.
 
 The accepted movement-target calls inside `Unit::animate_move` publish a copied
 source/destination event before native animation starts. Renderer64 owns the

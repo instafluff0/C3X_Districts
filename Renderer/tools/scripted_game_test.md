@@ -117,6 +117,14 @@ body/HUD travel together and the idle interval for the selection ring before
 any further input. The final scroll is a comparison, not a way to make the
 idle interval pass. Original saves and configuration use the same cleanup.
 
+`-Scenario unit-motion -Seconds 100 -SampleHz 10 -MeasureCadence -ProfileRenderer`
+uses a selected two-move Scout with traversable western and then northern
+tiles. It queues west and north 100 ms apart after startup, without advancing
+the turn. Require two admitted steps, both delivered commands, no renderer
+failures and unchanged input-save hash. Review the turn between steps, idle
+arrival, native status-dot attachment and exploration in consecutive window
+samples. This isolates consecutive movement from interturn and camera input.
+
 `-Scenario research-turn -Seconds 200 -SampleHz 4 -MeasureCadence -ProfileRenderer`
 reproduces the first-turn research dialog handoff. Use a 4000 BC save with the
 Settler selected, a Worker and Scout stacked on its tile, and two traversable

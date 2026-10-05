@@ -768,7 +768,9 @@ int test_retained_composition(){
         desc.Format=DXGI_FORMAT_B8G8R8A8_UNORM;desc.BindFlags=D3D11_BIND_SHADER_RESOURCE;
         D3D11_SUBRESOURCE_DATA initial={pixels.data(),w*4,0};ComPtr<ID3D11Texture2D> source;
         checked(device->CreateTexture2D(&desc,&initial,&source));
-        Session session(device.Get(),context.Get());assert(session.publish(source.Get(),1));
+        auto anchors=std::make_shared<c3x_renderer::render_core::UnitHudAnchors>();
+        anchors->anchors={{7,24,18}};RetainedComposition::Sample sampled;sampled.unit_anchors=anchors;
+        Session session(device.Get(),context.Get());assert(session.publish(source.Get(),1,0,0,0,0,sampled));
         c3x_renderer_gpu_images_v1 request={};request.struct_size=sizeof(request);request.ticket=1;
         c3x_renderer_gpu_result_v1 result={};
         auto create=[&](int format){request.action=C3X_GPU_CREATE;request.width=w;request.height=h;request.format=format;
@@ -788,7 +790,7 @@ int test_retained_composition(){
               {Kind::fill,units,0,marker,full,0,0,0x07e0},{Kind::fill,unit_detail,0,marker,full,0,0,0xff00ff00}});
         for(int y=marker.top;y<marker.bottom;++y)for(int x=marker.left;x<marker.right;++x)pixels[y*w+x]=0xff00ff00;
         Rect native_hud={22,14,27,17};
-        send({{Kind::hud_begin,units,0,{}, {},24,18,42,0,unit_detail,0,0x7c1f},
+        send({{Kind::hud_begin,units,0,{}, {},24,18,42,0,unit_detail,0,0x7c1f,8},
               {Kind::fill,units,0,native_hud,full,0,0,0xffff},{Kind::fill,unit_detail,0,native_hud,full,0,0,0xffffffff},
               {Kind::hud_end}});
         unsigned boundaries=0;auto boundary=[&]{++boundaries;send({{Kind::copy,screen,map_words,full,part},
@@ -807,6 +809,7 @@ int test_retained_composition(){
         boundary();QueryPerformanceCounter(&now);
         send({{Kind::zoom_target,0,0,{}, {},0,0,196608}});
         for(unsigned frame=1;frame<=16;++frame){
+            anchors->anchors={{7,24+int(frame/4),18-int(frame/8)}};
             auto tick=now.QuadPart+frequency.QuadPart*frame/60;
             assert(session.visual_frame(tick,frequency.QuadPart,target.Get(),display.Get(),buffer.Get())==1);
             unsigned prior=session.presented_zoom();
@@ -815,7 +818,7 @@ int test_retained_composition(){
             auto actual=retained_read(device.Get(),context.Get(),display.Get());
             for(unsigned y=0;y<h;++y)for(unsigned x=0;x<w;++x){
                 if(x<9&&y<7){assert(actual[y*w+x]==0xff17385a);continue;}
-                int hx=int(std::lround((24-int(w/2))*(scale-1))),hy=int(std::lround((18-int(h/2))*(scale-1)));
+                auto offset=anchors->offset(7,24,18,w,h,scale);int hx=offset.x,hy=offset.y;
                 if(int(x)>=native_hud.left+hx&&int(x)<native_hud.right+hx&&int(y)>=native_hud.top+hy&&int(y)<native_hud.bottom+hy){
                     if(actual[y*w+x]!=0xffffffff){
                         std::fprintf(stderr,"HUD mismatch frame=%u scale=%.8f pixel=%u,%u actual=%08x expected_rect=%d,%d,%d,%d\n",frame,scale,x,y,actual[y*w+x],native_hud.left+hx,native_hud.top+hy,native_hud.right+hx,native_hud.bottom+hy);
@@ -838,11 +841,26 @@ int test_retained_composition(){
             // screen as their world input or multiply its scale again.
             if(frame%3==0)boundary();
         }
+        // Retirement removes retained unit ink without a new native draw.
+        // (-1,-1) is a legitimate offset, not a hidden-attachment sentinel.
+        QueryPerformanceCounter(&now);
+        send({{Kind::zoom_target,0,0,{}, {},0,0,65536}});
+        anchors->anchors={{7,23,17}};
+        auto attached_result=session.visual_frame(now.QuadPart+frequency.QuadPart,frequency.QuadPart,target.Get(),display.Get(),buffer.Get());
+        if(attached_result!=1)throw std::runtime_error("negative-offset HUD did not redraw");
+        auto attached=retained_read(device.Get(),context.Get(),display.Get());
+        if(std::find(attached.begin(),attached.end(),0xffffffff)==attached.end())throw std::runtime_error("negative-offset HUD lost visible ink");
+        anchors->anchors.clear();
+        if(session.visual_frame(now.QuadPart+frequency.QuadPart,frequency.QuadPart,target.Get(),display.Get(),buffer.Get())!=1)
+            throw std::runtime_error("retired HUD did not redraw");
+        auto hidden=retained_read(device.Get(),context.Get(),display.Get());
+        assert(std::find(hidden.begin(),hidden.end(),0xffffffff)==hidden.end());
+        std::puts("PASS moving unit HUD: completed-pose attachment through 16 zoom frames, erased old ink and retirement");
         // A city repaint can arrive with a narrow native dirty rectangle.
         // The new map view retires every placement from the previous view,
         // including labels outside that native rectangle.
         send({{Kind::zoom_target,0,0,{}, {},0,0,98304}});
-        QueryPerformanceCounter(&now);
+        now.QuadPart+=frequency.QuadPart; // stay beyond the fixture's prior future sample
         assert(session.visual_frame(now.QuadPart+frequency.QuadPart,frequency.QuadPart,target.Get(),display.Get(),buffer.Get())==1);
         session.did_present();
         send({{Kind::copy,units,blank,full,full},

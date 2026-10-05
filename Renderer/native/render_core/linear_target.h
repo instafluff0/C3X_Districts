@@ -151,6 +151,8 @@ struct LinearResample {
     ID3D11VertexShader* vertex=nullptr;ID3D11PixelShader* pixel=nullptr;
     ID3D11Buffer* settings=nullptr;ID3D11DepthStencilState* depth=nullptr;
     ID3D11RasterizerState* rasterizer=nullptr;ID3D11SamplerState* sampler=nullptr;
+    // Retained near-water overlay layers composited with the same mapping.
+    ID3D11PixelShader* overlay_pixel=nullptr;ID3D11BlendState* over=nullptr;ID3D11DepthStencilState* nearer=nullptr;
     bool failed=false;
     struct Source {
         ID3D11ShaderResourceView* color=nullptr;
@@ -161,7 +163,8 @@ struct LinearResample {
         float depth_shift=0;  // retained depth basis to current basis
     };
     template<class T>void release(T*& p){if(p)p->Release();p=nullptr;}
-    void reset(){release(vertex);release(pixel);release(settings);release(depth);release(rasterizer);release(sampler);failed=false;}
+    void reset(){release(vertex);release(pixel);release(settings);release(depth);release(rasterizer);release(sampler);
+        release(overlay_pixel);release(over);release(nearer);failed=false;}
     ~LinearResample(){reset();}
     bool ensure(ID3D11Device* device){
         if(pixel)return true;
@@ -205,6 +208,19 @@ Output PS(float4 position:SV_Position){
  if(inside(p0,covered0))return fetch0(p0);
  if(options.x>0){float2 p1=position.xy*map1.xy+map1.zw;if(inside(p1,covered1))return fetch1(p1);}
  return fetch0(clamp(p0,covered0.xy,max(covered0.xy,covered0.zw)));
+}
+// A source's retained overlay layer (premultiplied color plus the depth it
+// tested against) over the resampled static image. Each pixel belongs to the
+// source PS takes it from; options.w flags which sources have a layer
+// (1 primary, 2 secondary); a source without one (its overlays are baked in)
+// contributes nothing here.
+Output PSOverlay(float4 position:SV_Position){
+ uint layers=uint(options.w);
+ float2 p0=position.xy*map0.xy+map0.zw;
+ if(inside(p0,covered0)){if((layers&1u)==0)discard;Output o=fetch0(p0);if(o.depth>=1)discard;return o;}
+ if(options.x>0){float2 p1=position.xy*map1.xy+map1.zw;
+  if(inside(p1,covered1)){if((layers&2u)==0)discard;Output o=fetch1(p1);if(o.depth>=1)discard;return o;}}
+ discard;Output none=(Output)0;return none;
 })";
         auto compile=[&](char const* entry,char const* target,ID3DBlob** blob){
             ID3DBlob* errors=nullptr;HRESULT hr=D3DCompile(source,std::strlen(source),"static_resample",nullptr,nullptr,
@@ -217,6 +233,16 @@ Output PS(float4 position:SV_Position){
         if(SUCCEEDED(hr))hr=compile("PS","ps_5_0",&blob);
         if(SUCCEEDED(hr))hr=device->CreatePixelShader(blob->GetBufferPointer(),blob->GetBufferSize(),nullptr,&pixel);
         release(blob);
+        if(SUCCEEDED(hr))hr=compile("PSOverlay","ps_5_0",&blob);
+        if(SUCCEEDED(hr))hr=device->CreatePixelShader(blob->GetBufferPointer(),blob->GetBufferSize(),nullptr,&overlay_pixel);
+        release(blob);
+        D3D11_BLEND_DESC blend_desc={};auto& rt=blend_desc.RenderTarget[0];
+        rt.BlendEnable=TRUE;rt.SrcBlend=rt.SrcBlendAlpha=D3D11_BLEND_ONE;rt.DestBlend=rt.DestBlendAlpha=D3D11_BLEND_INV_SRC_ALPHA;
+        rt.BlendOp=rt.BlendOpAlpha=D3D11_BLEND_OP_ADD;rt.RenderTargetWriteMask=D3D11_COLOR_WRITE_ENABLE_ALL;
+        if(SUCCEEDED(hr))hr=device->CreateBlendState(&blend_desc,&over);
+        D3D11_DEPTH_STENCIL_DESC nearer_desc={};nearer_desc.DepthEnable=true;nearer_desc.DepthWriteMask=D3D11_DEPTH_WRITE_MASK_ALL;
+        nearer_desc.DepthFunc=D3D11_COMPARISON_LESS_EQUAL;
+        if(SUCCEEDED(hr))hr=device->CreateDepthStencilState(&nearer_desc,&nearer);
         D3D11_BUFFER_DESC b={};b.ByteWidth=112;b.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
         if(SUCCEEDED(hr))hr=device->CreateBuffer(&b,nullptr,&settings);
         D3D11_DEPTH_STENCIL_DESC d={};d.DepthEnable=true;d.DepthWriteMask=D3D11_DEPTH_WRITE_MASK_ALL;d.DepthFunc=D3D11_COMPARISON_ALWAYS;
@@ -229,9 +255,14 @@ Output PS(float4 position:SV_Position){
         if(FAILED(hr)){reset();failed=true;return false;}
         return true;
     }
-    bool draw(ID3D11DeviceContext* context,LinearTarget const& target,Source const& primary,Source const* secondary){
-        if(!pixel||!target.target||!target.depth||target.sample_count!=1||!primary.color||!primary.depth)return false;
-        Source const& fallback=secondary&&secondary->color&&secondary->depth?*secondary:primary;
+    // `layers` selects PSOverlay: bit 0/1 mark the primary/secondary sources
+    // whose color/depth are retained overlay layers (premultiplied over,
+    // LESS_EQUAL depth). A source without a layer still claims its pixels.
+    bool draw(ID3D11DeviceContext* context,LinearTarget const& target,Source const& primary,Source const* secondary,int layers=-1){
+        bool overlay=layers>=0;
+        if(!pixel||!target.target||!target.depth||target.sample_count!=1)return false;
+        if(overlay?!overlay_pixel:(!primary.color||!primary.depth))return false;
+        Source const& fallback=secondary&&(overlay||(secondary->color&&secondary->depth))?*secondary:primary;
         struct Constants{float map0[4],covered0[4],size0[4],map1[4],covered1[4],size1[4],options[4];} values={};
         auto fill=[](Source const& s,float* map,float* covered,float* size){
             std::copy(s.map,s.map+4,map);std::copy(s.covered,s.covered+4,covered);
@@ -240,16 +271,18 @@ Output PS(float4 position:SV_Position){
         fill(primary,values.map0,values.covered0,values.size0);
         fill(fallback,values.map1,values.covered1,values.size1);
         values.options[0]=&fallback!=&primary?1.f:0.f;values.options[1]=primary.depth_shift;values.options[2]=fallback.depth_shift;
+        values.options[3]=overlay?float(layers):0.f;
         context->UpdateSubresource(settings,0,nullptr,&values,0,0);
-        context->OMSetRenderTargets(1,&target.target,target.depth);context->OMSetBlendState(nullptr,nullptr,0xffffffffu);
-        context->OMSetDepthStencilState(depth,0);context->RSSetState(rasterizer);
+        context->OMSetRenderTargets(1,&target.target,target.depth);context->OMSetBlendState(overlay?over:nullptr,nullptr,0xffffffffu);
+        context->OMSetDepthStencilState(overlay?nearer:depth,0);context->RSSetState(rasterizer);
         D3D11_VIEWPORT viewport={0,0,float(target.width),float(target.height),0,1};context->RSSetViewports(1,&viewport);
         context->IASetInputLayout(nullptr);context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-        context->VSSetShader(vertex,nullptr,0);context->PSSetShader(pixel,nullptr,0);context->PSSetConstantBuffers(0,1,&settings);
+        context->VSSetShader(vertex,nullptr,0);context->PSSetShader(overlay?overlay_pixel:pixel,nullptr,0);context->PSSetConstantBuffers(0,1,&settings);
         ID3D11ShaderResourceView* inputs[]={primary.color,primary.depth,fallback.color,fallback.depth};
         context->PSSetShaderResources(0,4,inputs);context->PSSetSamplers(0,1,&sampler);
         context->Draw(3,0);
         ID3D11ShaderResourceView* empty[4]={};context->PSSetShaderResources(0,4,empty);
+        if(overlay)context->OMSetBlendState(nullptr,nullptr,0xffffffffu);
         context->OMSetRenderTargets(0,nullptr,nullptr);return true;
     }
 };

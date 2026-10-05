@@ -1,5 +1,6 @@
 #pragma once
 #include "unit_playback.h"
+#include "unit_locomotion.h"
 #include <map>
 #include <cstdint>
 #include <cmath>
@@ -34,7 +35,8 @@ private:
         c3x_renderer_unit_move_v1 event{};
         Instance source{};
         int dx=0,dy=0;
-        long long started=-1,cycle_started=-1,frequency=0;
+        long long started=-1,available=-1,frequency=0,committed_at=-1;
+        double turn=0,cycle_distance=0;
         bool committed=false;
     };
     std::map<int,std::deque<Motion>> motions;
@@ -59,7 +61,7 @@ private:
     std::uint64_t serial=0,access=0;
     std::uint64_t scene_generation=0;
     long long scene_ticks=-1,scene_frequency=0;
-    long long motion_pause=-1;
+    long long motion_pause=-1,motion_held=0;
     // CPU identity metadata only. Shared meshes and completed poses retain
     // their existing independent budgets. Eviction invalidates old selections.
     std::size_t capacity;
@@ -93,10 +95,29 @@ public:
     std::uint64_t captures=0,reused=0,bindings=0,evictions=0;
     explicit UnitInstances(std::size_t limit=4096):capacity(limit){}
     std::size_t size()const{return instances.size();}
+    double travel_seconds_remaining()const{
+        if(motions.empty()||scene_frequency<=0||motion_pause>=0)return 0.;
+        double remaining=0.;
+        for(auto it=motions.begin();it!=motions.end();++it){
+            if(it->second.empty())return 0.;
+            auto const& motion=it->second.front();
+            if(motion.started<0||motion.frequency!=scene_frequency)return 0.;
+            double duration=motion.turn+UnitLocomotion::duration(std::hypot(double(motion.dx)*64.,double(motion.dy)*64.));
+            double left=duration-double(scene_ticks-motion_held-motion.started)/scene_frequency;
+            remaining=it==motions.begin()?left:std::min(remaining,left);
+        }
+        return std::max(0.,remaining);
+    }
     std::size_t motion_count(int id)const{auto found=motions.find(id);return found==motions.end()?0:found->second.size();}
     std::uint64_t generation()const{return scene_generation;}
+    std::vector<std::pair<int,long long>> pending_arrivals()const{
+        std::vector<std::pair<int,long long>> result;
+        for(auto const& item:motions)for(auto const& motion:item.second)
+            if(motion.committed)result.emplace_back(item.first,motion.committed_at);
+        return result;
+    }
     void forget(int id){pose_offsets.erase(id);motions.erase(id);instances.erase(id);observations.erase(id);accepted_moves.erase(id);accepted_spawns.erase(id);accepted_states.erase(id);playback.forget(id);++scene_generation;}
-    void clear(){pose_offsets.clear();motions.clear();instances.clear();observations.clear();accepted_moves.clear();accepted_spawns.clear();accepted_states.clear();playback.clear();scene_ticks=-1;scene_frequency=0;motion_pause=-1;++scene_generation;} // serial never reuses a token
+    void clear(){pose_offsets.clear();motions.clear();instances.clear();observations.clear();accepted_moves.clear();accepted_spawns.clear();accepted_states.clear();playback.clear();scene_ticks=-1;scene_frequency=0;motion_pause=-1;motion_held=0;++scene_generation;} // serial never reuses a token
 
     // Camera preparation freezes the displayed scene until ordered adoption.
     // That interval must not consume much travel that the player cannot yet
@@ -105,10 +126,7 @@ public:
     void pause_motion(long long ticks){if(motion_pause<0)motion_pause=std::max(ticks,scene_ticks);}
     void resume_motion(long long ticks,long long frequency){
         if(motion_pause<0)return;
-        auto held=std::max(0ll,ticks-motion_pause);
-        for(auto& pair:motions)for(auto& motion:pair.second)
-            if(motion.started>=0&&motion.frequency==frequency){motion.started+=held;motion.cycle_started+=held;}
-        for(auto& pair:pose_offsets)if(pair.second.frequency==frequency)pair.second.started+=held;
+        if(scene_frequency==frequency)motion_held+=std::max(0ll,ticks-motion_pause);
         motion_pause=-1;
     }
 
@@ -184,7 +202,9 @@ public:
             auto pending=std::find_if(motion->second.begin(),motion->second.end(),[&](auto const& m){
                 return !m.committed&&m.event.old_x==value.old_x&&m.event.old_y==value.old_y&&
                     m.event.new_x==value.new_x&&m.event.new_y==value.new_y;});
-            if(pending!=motion->second.end())pending->committed=true;
+            if(pending!=motion->second.end()){
+                pending->committed=true;pending->committed_at=value.presentation_time_ticks;
+            }
             else motions.erase(motion); // Teleport/correction cancels stale travel.
         }
         auto found=accepted_moves.find(value.unit_id);
@@ -225,6 +245,8 @@ public:
         if(queue.size()>=8)return false; // Bounded directed-action admission.
         Motion motion{};motion.event=value;motion.dx=dx;motion.dy=dy;
         motion.source=queue.empty()?found->second:queue.back().source;
+        auto heading=queue.empty()?found->second.occurrence.direction:UnitLocomotion::direction(queue.back().dx,queue.back().dy);
+        motion.turn=UnitLocomotion::turn(heading,UnitLocomotion::direction(dx,dy));
         motion.source.tile_x=value.old_x;motion.source.tile_y=value.old_y;
         queue.push_back(motion);++scene_generation;
         return true;
@@ -347,6 +369,7 @@ public:
         bool animated=false,cursor=false;
         int display_id=-1;
         std::uint64_t capture_order=0,pose_identity=0;
+        long long pose_ticks=-1;
         bool travelling=false;
     };
     template<class Catalog>
@@ -357,9 +380,10 @@ public:
         // Camera captures can arrive late. Their geometry may be new, but
         // sampling that view must never rewind the current visual scene.
         if(scene_frequency==frequency)ticks=std::max(ticks,scene_ticks);
+        else motion_held=0;
         scene_ticks=ticks;scene_frequency=frequency;
         // A hold may start in the future: travel continues until that point.
-        auto motion_ticks=motion_pause>=0?std::min(motion_pause,ticks):ticks;
+        auto motion_ticks=(motion_pause>=0?std::min(motion_pause,ticks):ticks)-motion_held;
         // One native capture supplies both visibility and ordered wrap
         // occurrences. Index it once for a busy scene; a few retained actors
         // use the allocation-free linear iterator over the same authority.
@@ -416,10 +440,14 @@ public:
             auto moving=motions.find(pair.first);
             if(moving!=motions.end()){
                 auto& queue=moving->second;
+                // A late native step has never been displayed. It cannot
+                // inherit elapsed time spent waiting at the preceding tile.
+                for(auto& next:queue)if(next.available<0){next.available=motion_ticks;next.frequency=frequency;}
                 while(!queue.empty()){
                     auto& next=queue.front();
-                    if(next.started<0){next.started=next.cycle_started=motion_ticks;next.frequency=frequency;}
-                    double duration=std::hypot(double(next.dx)*64.,double(next.dy)*64.)/225.;
+                    if(next.started<0){next.started=motion_ticks;next.frequency=frequency;}
+                    double distance=std::hypot(double(next.dx)*64.,double(next.dy)*64.);
+                    double duration=next.turn+UnitLocomotion::duration(distance);
                     bool finished=next.frequency==frequency&&double(motion_ticks-next.started)/frequency>=duration;
                     if(finished&&next.committed){
                         if(queue.size()==1){
@@ -429,6 +457,7 @@ public:
                             // without a later idle body sample.
                             auto& body=pair.second;
                             body.tile_x=next.event.new_x;body.tile_y=next.event.new_y;
+                            body.content.direction=body.occurrence.direction=UnitLocomotion::direction(next.dx,next.dy);
                             if(body.occurrence.action==2&&body.unit<catalog.size()){
                                 auto const& clips=catalog[body.unit].actions;
                                 auto idle=std::find_if(clips.begin(),clips.end(),[](auto const& c){return c.name=="idle";});
@@ -442,11 +471,11 @@ public:
                             body.revision=++serial;pose_offsets.erase(pair.first);
                         }
                         long long continuation=next.started+static_cast<long long>(duration*frequency);
-                        long long cycle_started=next.cycle_started;
+                        double cycle_distance=next.cycle_distance+distance;
                         queue.pop_front();
                         if(!queue.empty()){
-                            queue.front().started=continuation;
-                            queue.front().cycle_started=cycle_started;
+                            queue.front().started=std::max(continuation,queue.front().available);
+                            queue.front().cycle_distance=cycle_distance;
                             queue.front().frequency=frequency;
                         }
                         continue;
@@ -478,7 +507,7 @@ public:
                 selected.visual=observed->second.value;
                 selected.has_visual=true;
             }
-            ScenePose pose{};pose.pose_identity=item.pose_identity;
+            ScenePose pose{};pose.pose_identity=item.pose_identity;pose.pose_ticks=motion_ticks;
             double travel_x=0,travel_y=0;
             if(motion){
                 if(item.unit>=catalog.size())continue;
@@ -487,15 +516,24 @@ public:
                 if(clip==actions.end()||clip->duration<=0)continue;
                 pose.action=std::size_t(clip-actions.begin());
                 double seconds=motion->frequency==frequency?std::max(0.,double(motion_ticks-motion->started)/frequency):0.;
-                double duration=std::hypot(double(motion->dx)*64.,double(motion->dy)*64.)/225.;
-                double progress=std::min(1.,seconds/duration);
+                double distance=std::hypot(double(motion->dx)*64.,double(motion->dy)*64.);
+                double covered=UnitLocomotion::sample(seconds-motion->turn,distance);
+                double progress=covered/distance;
                 pose.draw=item.occurrence;pose.draw.action=2;
-                pose.draw.direction=motion->dx>0?(motion->dy<0?1:motion->dy>0?3:2):
-                    motion->dx<0?(motion->dy<0?7:motion->dy>0?5:6):(motion->dy>0?4:8);
+                pose.draw.direction=UnitLocomotion::direction(motion->dx,motion->dy);
                 travel_x=motion->dx*frame.tile_width*.5*progress;
                 travel_y=motion->dy*frame.tile_height*.5*progress;
                 pose.draw.frame_count=1000;
-                pose.draw.action_cursor=int(std::fmod(std::max(0.,double(motion_ticks-motion->cycle_started)/frequency),double(clip->duration))/clip->duration*1000.);
+                pose.draw.action_cursor=int(std::fmod((motion->cycle_distance+covered)/UnitLocomotion::speed,double(clip->duration))/clip->duration*1000.);
+                // Native confirmation may arrive after visible travel. Hold
+                // the accepted endpoint in idle instead of running in place.
+                if(progress>=1.||seconds<motion->turn){
+                    auto idle=std::find_if(actions.begin(),actions.end(),[](auto const& a){return a.name=="idle";});
+                    if(idle!=actions.end()){
+                        pose.action=std::size_t(idle-actions.begin());pose.draw.action=1;
+                        pose.draw.action_cursor=0;pose.draw.frame_count=1;
+                    }
+                }
                 pose.draw.presentation_time_ticks=ticks;pose.draw.presentation_frequency=frequency;
                 pose.predict=1;
             }else {

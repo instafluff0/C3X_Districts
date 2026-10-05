@@ -5,6 +5,7 @@
 #include "../native/scene_projection.h"
 #include "../native/render_core/skin_shadow_bounds.h"
 #include "../native/render_core/unit_contribution_plan.h"
+#include "../native/render_core/draw_parameter_stream.h"
 
 // 0 A.D.'s GPUSkinnedModelRenderer keeps mesh inputs resident and updates only
 // the animation palette for visible models. Here each authored frame is already
@@ -38,6 +39,10 @@ struct SandboxDirectUnits {
     ID3D11InputLayout* layout=nullptr;
     ID3D11DepthStencilState* visible_depth=nullptr;
     ID3D11Buffer *material=nullptr,*beauty=nullptr,*placement=nullptr;
+    // A unit's part placements are uploaded together and bound by offset;
+    // one UpdateSubresource per part dominated unit submission.
+    c3x_renderer::render_core::DrawParameterStream placement_stream;
+    std::vector<std::array<float,28>> part_placements;
     ID3D11Texture2D* unshadowed=nullptr;
     ID3D11ShaderResourceView* unshadowed_view=nullptr;
     ID3D11SamplerState* samplers[4]={};
@@ -158,7 +163,7 @@ struct SandboxDirectUnits {
     void* ground_field=nullptr;
     template<class T>static void drop(T*& p){if(p)p->Release();p=nullptr;}
     ~SandboxDirectUnits(){drop(vertex);drop(pixel);drop(shadow_pixel);drop(height_pixel);drop(layout);drop(visible_depth);drop(material);drop(beauty);
-        drop(placement);drop(unshadowed_view);drop(unshadowed);
+        drop(placement);placement_stream.clear();drop(unshadowed_view);drop(unshadowed);
         for(auto& sampler:samplers)drop(sampler);}
     c3x_renderer::UnitBodyRenderer::Unit const* unit_for(int subject){
         char const* keys[]={"PRTO_Warrior","PRTO_Archer","PRTO_Worker",
@@ -650,7 +655,7 @@ float4 PSShadow(Output i):SV_Target {
             else
 #endif
                 blended=transitions.sample(instance.draw.unit_id,instance.pose_identity,instance.draw.action,
-                    frame.presentation_time_ticks,frame.presentation_frequency,source,n);
+                    instance.pose_ticks>=0?instance.pose_ticks:frame.presentation_time_ticks,frame.presentation_frequency,source,n);
             auto* palette=blended?blended:source.palettes.data()+std::size_t(n)*source.bones*16;
             meshes[part.mesh].shadow_bounds.append(palette,angle,unit.scale,unit.offset_z,shadow_points);
         }
@@ -674,7 +679,7 @@ float4 PSShadow(Output i):SV_Target {
             else
 #endif
                 blended=transitions.sample(instance.draw.unit_id,instance.pose_identity,instance.draw.action,
-                    frame.presentation_time_ticks,frame.presentation_frequency,source,n);
+                    instance.pose_ticks>=0?instance.pose_ticks:frame.presentation_time_ticks,frame.presentation_frequency,source,n);
 #ifdef C3X_RENDERER64_FRESH
             if(prepared){auto* palette=prepared->parts[part_index-1].palette.Get();
                 if(!palette && blended){if(!bind_palette(gpu,blended))return false;++palette_uploads;}
@@ -823,7 +828,8 @@ float4 PSShadow(Output i):SV_Target {
             sample.ground_pixels=sample.low*frame.tile_width/224.f*.82f;
             sample.ground_depth=float(instance.tile_y)*frame.tile_height*.5f+renderer.geometry_viewport_settings.depth_translation+frame.tile_height*.5f+4.f;
             // Payloads and mesh buffers are admitted before this frame starts.
-            sample.angle=transitions.facing(draw.unit_id,instance.pose_identity,frame.presentation_time_ticks,
+            auto pose_ticks=instance.pose_ticks>=0?instance.pose_ticks:frame.presentation_time_ticks;
+            sample.angle=transitions.facing(draw.unit_id,instance.pose_identity,pose_ticks,
                 frame.presentation_frequency,c3x_renderer::native_unit_yaw(unit.yaw_offset,draw.direction));
             auto bits=[](float value){std::uint32_t result;std::memcpy(&result,&value,sizeof(result));return std::uint64_t(result);};
             auto& shadow_key=shadow_key_scratch;
@@ -835,7 +841,7 @@ float4 PSShadow(Output i):SV_Target {
                     !bodies.textures[part.texture].view || !bodies.meshes[part.mesh].animation || part.mesh>=meshes.size() || !meshes[part.mesh].vertices)return false;
                 auto const& source=*bodies.meshes[part.mesh].animation;
                 PartSample prepared;prepared.frame=std::min(source.frames-1,unsigned(std::floor(pose.phase*double(source.frames-1)+1e-7)));
-                prepared.blended=transitions.sample(draw.unit_id,instance.pose_identity,draw.action,frame.presentation_time_ticks,
+                prepared.blended=transitions.sample(draw.unit_id,instance.pose_identity,draw.action,pose_ticks,
                     frame.presentation_frequency,source,prepared.frame,std::uint64_t(part.mesh)+1);
                 prepared.palette=meshes[part.mesh].palette_view;
                 if(prepared.blended){
@@ -1024,6 +1030,8 @@ float4 PSShadow(Output i):SV_Target {
         auto key_light=c3x_renderer::lighting::key_light(environment);
         context->UpdateSubresource(beauty,0,nullptr,prepared_beauty.data(),0,0);work->upload_buffer(beauty);
         ID3D11Buffer* bound_material=nullptr;
+        bool const stream_ready=placement_stream.available(renderer.device,context);
+        bool placement_streamed=false;
         // Ground shadows still test against terrain. Visible bodies then share
         // a fresh depth plane, preserving self/other-unit occlusion while every
         // world feature stays behind them. The next frame restores cached world
@@ -1054,7 +1062,10 @@ float4 PSShadow(Output i):SV_Target {
             auto const& instance=prepared.instance;auto const& unit=bodies.units[instance.unit];
             auto const& action=unit.actions[instance.action];auto const& pose=prepared.pose;
             float low=prepared.low,ground_pixels=prepared.ground_pixels,ground_depth=prepared.ground_depth,angle=prepared.angle;
-            if(layer==1&&self_shadows){auto drawn=shadow_samples;if(!borrow_shadow(prepared,frame))return false;if(shadow_samples!=drawn)state_valid=false;}
+            if(layer==1&&self_shadows){
+                // draw_self_shadow updates and draws with the placement buffer.
+                if(placement_streamed){context->VSSetConstantBuffers(2,1,&placement);context->PSSetConstantBuffers(2,1,&placement);placement_streamed=false;}
+                auto drawn=shadow_samples;if(!borrow_shadow(prepared,frame))return false;if(shadow_samples!=drawn)state_valid=false;}
             if(!state_valid){
                 context->OMSetRenderTargets(1,&scene.target,scene.depth);
                 context->RSSetViewports(1,&viewport);context->RSSetScissorRects(1,&scissor);
@@ -1071,20 +1082,20 @@ float4 PSShadow(Output i):SV_Target {
             }
             auto* shadow_view=self_shadows&&(prepared.main||prepared.reflected)?self_shadow_view.Get():unshadowed_view;
             if(!known||shadow_view!=last_shadow_view){context->PSSetShaderResources(1,1,&shadow_view);last_shadow_view=shadow_view;}
-            unsigned part_index=0;
-            for(auto const& part:action.parts){
+            part_placements.resize(action.parts.size());
+            for(unsigned part_index=0;part_index<action.parts.size();++part_index){auto const& part=action.parts[part_index];
                 if(part.mesh>=bodies.meshes.size()||part.texture>=bodies.textures.size()||
                    !bodies.textures[part.texture].view)return false;
                 auto const& source=bodies.meshes[part.mesh].animation;
                 if(!source||!source->frames)return false;
-                auto& gpu=meshes[part.mesh];
-                auto const& part_sample=prepared.parts[part_index++];
+                auto const& part_sample=prepared.parts[part_index];
                 unsigned frame_number=part_sample.frame;auto* blended=part_sample.blended;
                 float scale=pose.projection_scale*scene_scale;
                 float guard=reflected?8.f:4.f;
                 // The ground point is Civ III's captured center. Sprite size
                 // and expanded dirty canvases must not move the resident mesh.
-                float placement_values[28]={float(pose.anchor_x+guard)/pose.projection_scale,
+                auto& placement_values=part_placements[part_index];
+                placement_values={float(pose.anchor_x+guard)/pose.projection_scale,
                     (float(pose.anchor_y+guard)+(reflected?ground_pixels:-ground_pixels))/pose.projection_scale,
                     float(scene.width),float(scene.height),scale,ground_depth+low*.0016f*frame.target_height,0,0,
                     float(blended?0:frame_number),float(source->bones),std::cos(angle),std::sin(angle),
@@ -1092,7 +1103,24 @@ float4 PSShadow(Output i):SV_Target {
                     reflected?2.f:0.f,0,0,part.cutout,
                     shadow_fit.left,shadow_fit.top,1/shadow_fit.width,1/shadow_fit.height,shadow_fit.dx,shadow_fit.dy};
                 c3x_renderer::SceneProjection(frame.target_width,frame.target_height,zoom)
-                    .unit_placement(placement_values,guard,scene_scale);
+                    .unit_placement(placement_values.data(),guard,scene_scale);
+                if(layer==0){
+                    placement_values[16]=1;
+                    placement_values[17]=-key_light.direction[0]/key_light.direction[2]*
+                        c3x_renderer::lighting::object_height_to_world;
+                    placement_values[18]=key_light.direction[1]/key_light.direction[2]*
+                        c3x_renderer::lighting::object_height_to_world;
+                }
+            }
+            bool streamed=stream_ready && !part_placements.empty() &&
+                placement_stream.upload(part_placements.data(),unsigned(part_placements.size()));
+            if(streamed)work->upload(part_placements.size()*placement_stream.stride);
+            else if(placement_streamed){context->VSSetConstantBuffers(2,1,&placement);context->PSSetConstantBuffers(2,1,&placement);placement_streamed=false;}
+            for(unsigned part_index=0;part_index<action.parts.size();++part_index){auto const& part=action.parts[part_index];
+                auto const& source=bodies.meshes[part.mesh].animation;
+                auto& gpu=meshes[part.mesh];
+                auto const& part_sample=prepared.parts[part_index];
+                auto* blended=part_sample.blended;
                 auto* material_constants=part_sample.material_buffer.Get();
                 if(!material_constants){
                     context->UpdateSubresource(material,0,nullptr,part_sample.material.data(),0,0);work->upload_buffer(material);
@@ -1119,20 +1147,16 @@ float4 PSShadow(Output i):SV_Target {
                 }
                 if(!known||samplers[part.address]!=last_sampler){context->PSSetSamplers(0,1,&samplers[part.address]);last_sampler=samplers[part.address];}
                 known=true;
-                if(layer==0){
-                    placement_values[16]=1;
-                    placement_values[17]=-key_light.direction[0]/key_light.direction[2]*
-                        c3x_renderer::lighting::object_height_to_world;
-                    placement_values[18]=key_light.direction[1]/key_light.direction[2]*
-                        c3x_renderer::lighting::object_height_to_world;
-                }
-                context->UpdateSubresource(placement,0,nullptr,placement_values,0,0);work->upload_buffer(placement);
+                if(streamed){placement_stream.bind(2,part_index);placement_stream.bind_pixel(2,part_index);placement_streamed=true;}
+                else{context->UpdateSubresource(placement,0,nullptr,part_placements[part_index].data(),0,0);work->upload_buffer(placement);}
                 context->DrawIndexed(UINT(source->indices.size()),0,0);work->draw(source->indices.size());
                 if(layer==1)++draws;
             }
           }
         }
-        if(!reflected)transitions.finish(frame.presentation_time_ticks);
+        if(!reflected)transitions.finish(!prepared_units.empty()&&prepared_units.front().instance.pose_ticks>=0?
+            prepared_units.front().instance.pose_ticks:frame.presentation_time_ticks);
+        if(placement_streamed){context->VSSetConstantBuffers(2,1,&placement);context->PSSetConstantBuffers(2,1,&placement);}
         ID3D11ShaderResourceView* empty[6]={};context->PSSetShaderResources(0,6,empty);
         context->VSSetShaderResources(0,1,empty);
         context->OMSetRenderTargets(0,nullptr,nullptr);

@@ -197,8 +197,14 @@ int main(){
  c3x_renderer_tile_v1 tile{};frame.tiles=&tile;frame.tile_count=1;
  unsigned topology[2]={1,2};frame.world_topology=topology;frame.world_topology_count=2;
  ready=false;
+ // The scroll timer's in-flight query never changes the view or the job.
+ custom_renderer_native_view probe{},untouched_probe{};
+ assert(owner.navigate(C3X_NAV_PENDING,image,probe,nullptr)==C3X_RENDERER_RESULT_OK);
  assert(owner.navigate(C3X_NAV_REQUEST,image,target,&request)==C3X_RENDERER_RESULT_PENDING);
- auto begun=next_ticket;frame.presentation_time_ticks+=10;
+ auto begun=next_ticket;
+ for(int n=0;n<5;++n)assert(owner.navigate(C3X_NAV_PENDING,image,probe,nullptr)==C3X_RENDERER_RESULT_PENDING&&
+     next_ticket==begun&&owner.navigation.active()&&!std::memcmp(&probe,&untouched_probe,sizeof(probe)));
+ frame.presentation_time_ticks+=10;
  assert(owner.navigate(C3X_NAV_REQUEST,image,target,&request)==C3X_RENDERER_RESULT_PENDING && next_ticket==begun);
  // Different timer steps must not starve the pending frame. A deliberate
  // camera jump retains ordinary supersession (exercised below).
@@ -210,6 +216,7 @@ int main(){
  assert(owner.navigate(C3X_NAV_REQUEST,image,target,&request)==C3X_RENDERER_RESULT_PENDING&&next_ticket>begun);
  for(int n=0;n<20;++n)assert(owner.navigate(C3X_NAV_POLL,image,displayed,nullptr)==C3X_RENDERER_RESULT_PENDING&&displayed.camera_x==0);
  ready=true;assert(owner.navigate(C3X_NAV_POLL,image,displayed,nullptr)==C3X_RENDERER_RESULT_OK && displayed.camera_x==322);
+ assert(owner.navigate(C3X_NAV_PENDING,image,probe,nullptr)==C3X_RENDERER_RESULT_OK&&owner.navigation.available());
  assert(owner.map(C3X_NATIVE_MAP_COMMIT,image,nullptr,nullptr)==C3X_RENDERER_RESULT_BAD_ARGUMENT); // Fresh capture is mandatory.
  c3x_renderer_output_v1 output{};
  assert(owner.map(C3X_NATIVE_MAP_PREPARE,image,&request,&output)==C3X_RENDERER_RESULT_OK&&output.clip_right==640);
@@ -292,6 +299,18 @@ int main(){
  assert(async.map(C3X_NATIVE_MAP_PREPARE,image,&async_request,&output)==C3X_RENDERER_RESULT_OK &&
         output.clip_right==640);
  assert(!async.defer_cold_stroke(other,&stroke));
+ assert(async.map(C3X_NATIVE_MAP_COMMIT,image,nullptr,nullptr)==C3X_RENDERER_RESULT_OK);
+ // A movement sight commit starts preparation without drawing or adopting.
+ // The later native redraw must poll that exact request, never supersede it.
+ ready=false;long long early=0;
+ assert(async.request_camera(image,async_request,early)==C3X_RENDERER_RESULT_PENDING);
+ assert(!async.pending&&early==async.camera_ticket);
+ auto early_serial=next_ticket;
+ async_frame.presentation_time_ticks+=100;
+ assert(async.map(C3X_NATIVE_MAP_PREPARE,image,&async_request,&output)==C3X_RENDERER_RESULT_PENDING);
+ assert(async.camera_ticket==early&&next_ticket==early_serial&&!async.pending);
+ ready=true;
+ assert(async.map(C3X_NATIVE_MAP_PREPARE,image,&async_request,&output)==C3X_RENDERER_RESULT_OK);
  assert(async.map(C3X_NATIVE_MAP_COMMIT,image,nullptr,nullptr)==C3X_RENDERER_RESULT_OK);
  // Real Civ III begins map redraws with unpresented native clear/HUD commands.
  // Publish that old-ticket batch without waiting before starting or polling

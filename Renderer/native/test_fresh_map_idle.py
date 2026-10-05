@@ -7,6 +7,41 @@ from Renderer.native.source_fidelity.prepare import function
 
 
 class FreshMapIdleTests(unittest.TestCase):
+    def test_camera_import_samples_current_pose_before_publishing(self):
+        source = Path(__file__).with_name("c3x_renderer.cpp").read_text()
+        refresh = source.split("// The native overlay stream may adopt this camera", 1)[1].split("#endif", 1)[0]
+        refresh = refresh[refresh.index("camera_scene_complete=true;"):]
+        run_cpp(r'''
+#include <cassert>
+#include <functional>
+struct Texture {};
+struct Worker {
+ bool camera_scene_complete=false;void retire_completed_scene(){}
+ long long visual_ticks=1000,visual_frequency=1000;
+ struct {long long resumed=0;void resume_motion(long long t,long long){resumed=t;}} unit_instances;
+ struct Frame {bool ready=false;struct {Texture value;Texture* Get(){return &value;}} front;} frame;
+ Frame* prepared_map=&frame;
+ Texture saved;
+ void advance_visual_clock(){visual_ticks=1500;}
+ Texture* adopt(bool resource_ready){
+  auto initial=&saved;
+  struct {std::function<void(long long,long long,float)> prepare;} map_sample;
+  map_sample.prepare=[&](long long t,long long f,float z){
+   assert(camera_scene_complete&&t==1500&&f==1000&&z==1.f);
+   assert(unit_instances.resumed==t);
+   frame.ready=resource_ready;
+  };
+''' + refresh + r'''
+  return initial;
+ }
+};
+int main(){
+ Worker worker;
+ assert(worker.adopt(true)==worker.frame.front.Get()); // never re-import the old pose
+ assert(worker.adopt(false)==&worker.saved); // pending assets retain a complete image
+}
+''')
+
     def test_retained_prepare_observes_visible_facts_before_gpu_work(self):
         source = Path(__file__).with_name("c3x_renderer.cpp").read_text()
         prepared = source.split("    struct PreparedMapFrame {", 1)[1].split(
@@ -29,7 +64,11 @@ class FreshMapIdleTests(unittest.TestCase):
 #include "Renderer/native/input_recording/codec.h"
 #include "Renderer/native/render_core/dynamic_scene_input.h"
 #include "Renderer/native/render_core/unit_instances.h"
+#include "Renderer/native/render_core/unit_hud_anchors.h"
+#include "Renderer/native/render_core/unit_arrival_visibility.h"
 #include "Renderer/native/render_core/water_material_frame.h"
+#include "Renderer/native/render_core/retained_scene_view.h"
+#include <optional>
 using namespace c3x_renderer::render_core;
 struct D3D11_TEXTURE2D_DESC {unsigned Width=128,Height=64;};
 struct ID3D11Texture2D {void GetDesc(D3D11_TEXTURE2D_DESC* d){*d={};}};
@@ -70,6 +109,7 @@ namespace c3x_gpu_images {struct RetainedComposition {
   std::function<SampledImage(long long,long long,float)> projected;
   std::function<void(long long,long long,float)> prepare;
   std::uint64_t source_generation=0;
+  std::shared_ptr<UnitHudAnchors> unit_anchors;
   template<class F>Sample(F f):canonical(std::move(f)){}
   SampledImage operator()(long long t,long long f){return canonical(t,f);}
  };
@@ -85,6 +125,7 @@ struct RendererState {
  Device owned,*device=&owned;ID3D11Texture2D initial;ID3D11Texture2D* gpu_map_texture=&initial;
  struct {std::vector<Unit> units=std::vector<Unit>(1);} unit_bodies;
  std::vector<UnitInstances::ScenePose> fresh_unit_poses;
+ UnitArrivalVisibility arrival_visibility;
  unsigned moving_resources=0,visible_wave_animations=0,visible_water_animations=0,asset_prepares=0;
  bool water_scene_active=true,wave_ready=true,visibility_pass=true;
  std::vector<int> resource_animations;
@@ -109,7 +150,14 @@ struct RendererState {
 };
 struct Worker {
  RendererState renderer_state;UnitInstances unit_instances;DynamicSceneInputs dynamic_inputs;
- bool camera_active=false;
+ bool camera_active=false,camera_scene_complete=true;
+ using View=RetainedSceneView<decltype(RendererState::cached_signature),std::uint64_t>;
+ std::optional<View> completed_scene;
+ bool completed_scene_usable()const{return bool(completed_scene);}
+ auto borrow_completed_scene(){return View::Borrow(
+  (camera_active||!camera_scene_complete)&&completed_scene?&*completed_scene:nullptr,
+  std::tie(renderer_state.cached_signature,renderer_state.tile_geometry_epoch));}
+ void retire_completed_scene(){completed_scene.reset();}
  c3x_renderer_frame_v1 job_frame{};c3x_renderer_camera_identity_v1 job_camera_identity{};
  struct Publication {bool projection_matches=true;bool matches_projection(c3x_renderer_frame_v1 const&,
   c3x_renderer_camera_identity_v1 const&)const{return projection_matches;}} gpu_publication;
@@ -203,6 +251,32 @@ int main(){
  move.source_visible=move.target_visible=1;move.presentation_frequency=1000;move.presentation_time_ticks=tick;
  assert(worker.unit_instances.begin_motion(move,100,100,false,false));
  step(Kind::bgra);assert(worker.prepared_map->poses[0].travelling);step(Kind::bgra);
+ // A reveal preparation holds the displayed pose, but must not permanently
+ // retire the retained callback while its ordered native import is pending.
+ auto held_pose=worker.prepared_map->poses[0].draw.body_x;before=renders;
+ worker.camera_active=true;worker.camera_scene_complete=false;worker.unit_instances.pause_motion(tick);
+ step(Kind::held);step(Kind::held);assert(renders==before);
+ // Cancelled scratch is not a completed scene, even between worker jobs.
+ worker.camera_active=false;
+ step(Kind::held);assert(renders==before);
+ step(Kind::held);assert(renders==before);
+ worker.camera_scene_complete=true;worker.unit_instances.resume_motion(tick,1000);
+ ++worker.renderer_state.cached_signature.complete;
+ step(Kind::bgra);assert(renders==before+1&&worker.prepared_map->poses[0].draw.body_x>held_pose);
+ // A retained completed view advances actors during preparation and through
+ // cancellation gaps, while partial signatures never become the frame input.
+ worker.completed_scene.emplace(std::tie(worker.renderer_state.cached_signature,worker.renderer_state.tile_geometry_epoch));
+ worker.camera_active=true;worker.camera_scene_complete=false;
+ auto completed_signature=worker.prepared_map->signature;
+ worker.renderer_state.cached_signature.complete+=100;
+ auto pending_signature=worker.renderer_state.cached_signature.complete;
+ before=renders;step(Kind::bgra);
+ assert(renders==before+1&&worker.prepared_map->signature==completed_signature);
+ assert(worker.renderer_state.cached_signature.complete==pending_signature);
+ worker.camera_active=false;step(Kind::bgra); // cancellation cannot expose scratch
+ assert(worker.prepared_map->signature==completed_signature);
+ worker.camera_scene_complete=true;worker.retire_completed_scene();step(Kind::bgra);
+ assert(worker.prepared_map->signature==pending_signature);
  worker.unit_instances.forget(7);step(Kind::bgra);
  worker.renderer_state.moving_resources=1;worker.renderer_state.resource_animations={1};tile.resource_id=101;
  ++worker.renderer_state.cached_signature.complete;step(Kind::bgra);step(Kind::bgra);

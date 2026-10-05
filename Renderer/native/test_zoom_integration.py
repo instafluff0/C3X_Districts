@@ -69,7 +69,7 @@ struct Client{unsigned queued=0,flushed=0,value=0;
 struct Owner {Client* client=&transport;int operation(int op,unsigned color){
 ''' + target + r'''
 return 0;}};
-struct Helper {struct Wire {volatile LONG presented_zoom_q16;} state{0};Wire* wire=&state;
+struct Helper {struct Wire {volatile LONG presented_zoom_q16,presented_pan;} state{0,0};Wire* wire=&state;
 ''' + presented + r'''
 };
 int main(){Owner owner;Helper helper;
@@ -129,11 +129,12 @@ struct State{struct{bool enable_custom_rendering=false,enable_custom_rendering_z
  c3x_renderer_native_image_fn custom_renderer_native_image=nullptr;}state,*is=&state;
 void debug(char const*){} auto p_OutputDebugStringA=debug;
 struct RECT{int left,top,right,bottom;};struct MapMessage{char padding[0x28];RECT rect;};
-bool probe=true,active=false;int begins=0,ends=0,calls=0;
+bool probe=true,active=false;int begins=0,ends=0,calls=0,unit_begins=0;
 bool custom_renderer_native_probe_on(){return probe;}
 int native(int op,void* canvas,void*,void const* from,void const*,unsigned){
  if(op==C3X_NATIVE_HUD_END){assert(active);active=false;++ends;return 1;}
- assert(op==C3X_NATIVE_HUD_BEGIN&&(canvas==&image||canvas==&map_image)&&!active);
+ assert((op==C3X_NATIVE_HUD_BEGIN||op==C3X_NATIVE_UNIT_HUD_BEGIN)&&(canvas==&image||canvas==&map_image)&&!active);
+ if(op==C3X_NATIVE_UNIT_HUD_BEGIN){assert(static_cast<int const*>(from)[2]==7);++unit_begins;}
  auto anchor=static_cast<int const*>(from);assert(anchor[0]==210&&anchor[1]==86);active=true;++begins;return 1;
 }
 void MapMessage_draw(MapMessage*,int edx,PCX_Image* canvas,int shade){assert(edx==91&&shade==7&&canvas);++calls;}
@@ -148,6 +149,11 @@ int main(){PCX_Image canvas;MapMessage message{};message.rect={180,70,236,84};st
  assert(calls==16&&begins==1&&message.rect.right-message.rect.left==56);
  bic.Map.Renderer.canvas.JGL.Image=&map_image;canvas.JGL.Image=&map_image;
  patch_MapMessage_draw(&message,91,&canvas,7);assert(calls==17&&begins==2&&begins==ends);
+ state.current_config.enable_custom_rendering_zoom=false;
+ assert(custom_renderer_hud_scope(&image,210,86,1,7)==1);
+ assert(custom_renderer_hud_scope(nullptr,0,0,0,-1)==1);
+ assert(unit_begins==1&&begins==ends&&!active);
+ assert(custom_renderer_hud_scope(&image,210,86,99,-1)==0);
 }
 ''')
 
@@ -192,7 +198,7 @@ int main(){for(int radius=2;radius<=5;++radius)for(int parity=0;parity<2;++parit
 #include <cassert>
 #include <cstddef>
 #define __ 0
-constexpr int C3X_NAV_DISCARD=1;
+constexpr int C3X_NAV_DISCARD=1,C3X_NAV_PENDING=5,C3X_RENDERER_RESULT_PENDING=4,C3X_NATIVE_ZOOM_PRESENTED=130;
 struct custom_renderer_native_view{int camera_x=0,camera_y=0;};
 struct PCX_Image{struct{void* Image=nullptr;}JGL;};
 struct Map_Renderer:PCX_Image{void* spotlight_on_city=nullptr;};
@@ -201,8 +207,12 @@ struct Main_Screen_Form{int Player_CivID=1,camera_x=0,camera_y=0;struct{char fie
 struct State{struct{bool enable_custom_rendering=true;}current_config;
  bool custom_renderer_camera_exact=false,custom_renderer_async_enabled=false,custom_renderer_display_valid=false,custom_renderer_unit_representatives_dirty=false;
  long long custom_renderer_camera_ticket=17;void(*custom_renderer_camera_cancel)(long long)=nullptr;
- void(*custom_renderer_navigation)(int,void*,struct custom_renderer_native_view*,void*)=nullptr;
+ int(*custom_renderer_navigation)(int,void*,struct custom_renderer_native_view*,void*)=nullptr;
+ int(*custom_renderer_native_image)(int,void*,void*,void const*,void const*,unsigned)=nullptr;
+ int custom_renderer_capture_cover=0,custom_renderer_zoom_target_width=128;
 }state,*is=&state;
+bool custom_renderer_zoom_enabled(){return false;}
+int custom_renderer_capture_cover_width(bool){return 112;}
 int calls=0,last_edx=0,cancels=0;
 void cancel(long long){++cancels;}
 void Main_Screen_Form_move_camera(Main_Screen_Form* value,int edx,int x,int y,int,bool){
@@ -235,9 +245,10 @@ int main(){state.custom_renderer_camera_cancel=cancel;bic.Map.Renderer.spotlight
 #include <cmath>
 #include <cstddef>
 #include "Renderer/native/c3x_renderer_api.h"
-bool enabled=true;int q=65536,queries=0,syncs=0;
-int native(int op,void*,void*,void const*,void const*,unsigned){assert(op==C3X_NATIVE_ZOOM_PRESENTED);++queries;return q;}
-struct State{c3x_renderer_native_image_fn custom_renderer_native_image=native;
+bool enabled=true;int q=65536,queries=0,syncs=0,pan=0;
+int native(int op,void*,void*,void const*,void const*,unsigned){
+ if(op==C3X_NATIVE_PAN_PRESENTED)return pan;assert(op==C3X_NATIVE_ZOOM_PRESENTED);++queries;return q;}
+struct State{struct{bool enable_custom_rendering=true;}current_config;c3x_renderer_native_image_fn custom_renderer_native_image=native;
  long long custom_renderer_zoom_translate_x_fp=0,custom_renderer_zoom_translate_y_fp=0;}state,*is=&state;
 struct Bic{int ScreenWidth=2240,ScreenHeight=1260;}bic,*p_bic_data=&bic;
 bool custom_renderer_zoom_enabled(){return enabled;}
@@ -250,6 +261,9 @@ int main(){for(q=32768;q<=196608;q+=137)for(int px:{-120,0,517,1120,1720,2240})f
  }
  enabled=false;int x=91,y=173,before=queries;custom_renderer_zoom_inverse_point(&x,&y);assert(x==91&&y==173&&queries==before);
  enabled=true;for(int value:{0,-1,32767,196609}){q=value;x=91;y=173;custom_renderer_zoom_inverse_point(&x,&y);assert(x==91&&y==173);}
+ // A sliding camera step shifts the shown world; picks undo it first.
+ q=65536;pan=int((unsigned(-37)&0xffffu)|(unsigned(52)<<16));x=500;y=400;custom_renderer_zoom_inverse_point(&x,&y);
+ assert(x==537&&y==348);pan=0;
 }
 ''')
 

@@ -93,8 +93,9 @@ template<class Transport>class AsyncSceneClient {
         }
         c3x_inputs::require(replies.size()==batch.operations.size(),"image batch lost reliable suffix");
     }
-    template<class Work>int post(std::size_t bytes,Work work,unsigned replace_key=0,char const* label=nullptr){
-        bool accepted=publication.post(bytes,std::move(work),replace_key,label?label:"state");
+    template<class Work>int post(std::size_t bytes,Work work,unsigned replace_key=0,char const* label=nullptr,
+                                 bool (*passes)(char const*)=nullptr){
+        bool accepted=publication.post(bytes,std::move(work),replace_key,label?label:"state",1,passes);
         transport.publication_pressure(publication.status().records);
         return accepted?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_DEVICE_ERROR;
     }
@@ -205,6 +206,7 @@ public:
     ~AsyncSceneClient(){publication.stop();}
     bool asynchronous()const{return enabled;}
     unsigned presented_zoom()const{return transport.presented_zoom();}
+    int presented_pan()const{return transport.presented_pan();}
     void observe_publication(std::function<void(char const*,double,double)> observer){
         publication.observe([this,observer=std::move(observer)](char const* label,double queued,double service){
             transport.publication_pressure(publication.status().records);
@@ -272,7 +274,12 @@ public:
                 if(accepted!=C3X_RENDERER_RESULT_PENDING)require_result(accepted,"camera-begin");
                 worker_camera=slot->ticket;remote_camera=actual;
                 slot->remote_ticket.store(actual,std::memory_order_release);
-            },1,"camera-begin"); // latest camera wins; reliable image/unit commands stay ordered
+            },1,"camera-begin",
+            // Latest camera wins. It may run ahead of queued native UI drawing:
+            // that work uses the displayed ticket, which only the later ordered
+            // adoption retires, and the worker serves it at job checkpoints.
+            // Facts, scene state and camera commands keep their order.
+            [](char const* label){return label&&(!std::strcmp(label,"images")||!std::strcmp(label,"tactical")||!std::strcmp(label,"present"));});
         if(code!=C3X_RENDERER_RESULT_OK)return code;
         camera=slot;published_frame=frame;published_identity=identity;
         result=slot->ticket;return C3X_RENDERER_RESULT_PENDING;

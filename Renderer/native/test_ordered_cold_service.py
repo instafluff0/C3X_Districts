@@ -25,13 +25,13 @@ LONG InterlockedCompareExchange(volatile LONG* p,LONG v,LONG match){auto old=*p;
 void OutputDebugStringA(char const*){}
 struct Owner{
  bool direct_surface_bound=true,direct_display_ready=true;
- long long pressure_present_ticks=0;
+ long long pressure_present_ticks=0;int (*priority_front_pending)()=nullptr;
  struct{std::function<bool()> offer;bool stopped=false;void disable(){stopped=true;}
   template<class F>void enable_retrying(F f){offer=f;}}direct_cadence;
  struct Batch{std::size_t bytes=0;bool ready=false;
   c3x_remote_scene::ImageBatchService::Status status(){return {1,bytes,0,0,ready,0,{}};}}batch;
  Batch* image_batches=&batch;
- struct{LONG presented_zoom_q16=0,visual_frames=0,native_queue_records=0;}values;
+ struct{LONG presented_zoom_q16=0,presented_pan=0,visual_frames=0,native_queue_records=0;}values;
  decltype(values)* telemetry=&values;
  std::function<int(long long,long long,unsigned,std::uint64_t*,unsigned*,unsigned*)> visual_shared;
  std::function<int(int,void*,void*,void*,void*,unsigned)> native_image;
@@ -192,8 +192,8 @@ int main(){Owner owner;
  owner.camera_obsolete_through=7;owner.service_camera_preparation();assert(owner.camera_cancelled);
  assert(owner.chunks.size()==20&&owner.draws==20);
  // A real producer offers consecutive operations only after each receipt. A
- // preparation boundary drains the admitted prefix, including the small gap
- // between receipts, instead of interleaving a tile upload with every request.
+ // preparation boundary services the already admitted prefix and returns to
+ // terrain preparation without waiting for the producer to offer more work.
  Owner burst;std::atomic<bool> entered{false},done{false};
  std::thread producer([&]{for(unsigned i=0;i<20;++i){
   std::unique_lock<std::mutex> lock(burst.state_mutex);burst.job_command=Owner::Command::gpu_images;
@@ -201,7 +201,7 @@ int main(){Owner owner;
   entered=true;burst.wake.notify_one();burst.completed.wait(lock,[&]{return burst.completed_job_sequence==sequence;});
  }done=true;});
  while(!entered)std::this_thread::yield();burst.service_camera_preparation();
- assert(burst.draws>1);while(!done){burst.service_camera_preparation();std::this_thread::yield();}
+ assert(burst.draws>=1&&burst.draws<=8);while(!done){burst.service_camera_preparation();std::this_thread::yield();}
  producer.join();assert(burst.draws==20&&burst.completed_job_sequence==20&&!burst.camera_cancelled);
 }
 ''')

@@ -70,6 +70,9 @@ public:
         return value>=c3x_renderer::SceneProjection::minimum_q16&&value<=c3x_renderer::SceneProjection::maximum_q16?
             value:65536u;
     }
+    int presented_pan()const{
+        return wire?int(InterlockedCompareExchange(reinterpret_cast<volatile LONG*>(&wire->presented_pan),0,0)):0;
+    }
     SceneClient(SceneClient const&)=delete;
     SceneClient& operator=(SceneClient const&)=delete;
     SceneClient(std::wstring const& helper,std::wstring const& dll){

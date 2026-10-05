@@ -115,7 +115,23 @@ public:
             client->flush();
         }
         c3x_renderer_i64 next=0;int result=camera_begin(&request,&next);
-        if(result==C3X_RENDERER_RESULT_PENDING){camera_ticket=next;camera_image=image;camera_width=request.frame->target_width;camera_height=request.frame->target_height;ticket=next;}
+        if(result==C3X_RENDERER_RESULT_PENDING){
+            camera_ticket=next;camera_image=image;camera_width=request.frame->target_width;camera_height=request.frame->target_height;ticket=next;
+            // Capture-only movement requests and ordinary redraws share the
+            // same copied identity. The next redraw polls this work instead
+            // of cancelling it merely because it was submitted before drawing.
+            try{
+                camera_capture=*request.frame;camera_identity=request.identity;
+                camera_tiles.clear();camera_topology.clear();
+                if(camera_capture.tile_count)camera_tiles.assign(request.frame->tiles,request.frame->tiles+camera_capture.tile_count);
+                if(camera_capture.world_topology_count)camera_topology.assign(request.frame->world_topology,
+                    request.frame->world_topology+camera_capture.world_topology_count);
+                camera_capture.tiles=nullptr;camera_capture.world_topology=nullptr;
+            }catch(...){
+                if(camera_cancel)camera_cancel(camera_ticket);
+                camera_ticket=0;camera_image=nullptr;clear_camera_capture();throw;
+            }
+        }
         return result;
     }
     int poll_camera(void* image,c3x_renderer_i64 ticket,c3x_renderer_gpu_camera_view_v1& view){
@@ -144,6 +160,8 @@ public:
         check_thread();
         if(action==C3X_NAV_REQUEST || action==C3X_NAV_REQUEST_SCROLL)
             return navigation.request(*this,image,view,*request,action==C3X_NAV_REQUEST_SCROLL);
+        if(action==C3X_NAV_PENDING)
+            return navigation.active()&&!navigation.available()?C3X_RENDERER_RESULT_PENDING:C3X_RENDERER_RESULT_OK;
         return navigation.poll(*this,action,image,view);
     }
     void retire_image(int operation,void* image){
@@ -239,18 +257,6 @@ public:
             int result=request_camera(image,*request,next);
             trace_map("begin",result,image,request);
             if(result!=C3X_RENDERER_RESULT_PENDING)return result;
-            try{
-                camera_capture=demand;camera_identity=request->identity;
-                if(demand.tile_count)camera_tiles.assign(demand.tiles,demand.tiles+demand.tile_count);
-                else camera_tiles.clear();
-                if(demand.world_topology_count)camera_topology.assign(demand.world_topology,
-                    demand.world_topology+demand.world_topology_count);
-                else camera_topology.clear();
-                camera_capture.tiles=nullptr;camera_capture.world_topology=nullptr;
-            }catch(...){
-                if(camera_cancel)camera_cancel(camera_ticket);
-                camera_ticket=0;camera_image=nullptr;clear_camera_capture();throw;
-            }
             return C3X_RENDERER_RESULT_PENDING;
         }
         if(client)client->flush();
@@ -276,13 +282,17 @@ public:
             Command command={Kind::zoom_target,0,0,{}, {},0,0,color};
             client->submit(&command,1);client->flush();return 1;
         }
-        if(op==C3X_NATIVE_HUD_BEGIN||op==C3X_NATIVE_HUD_END){
-            Command command={op==C3X_NATIVE_HUD_BEGIN?Kind::hud_begin:Kind::hud_end};
-            if(op==C3X_NATIVE_HUD_BEGIN){
+        if(op==C3X_NATIVE_HUD_BEGIN||op==C3X_NATIVE_HUD_END||op==C3X_NATIVE_UNIT_HUD_BEGIN){
+            Command command={op==C3X_NATIVE_HUD_END?Kind::hud_end:Kind::hud_begin};
+            if(op!=C3X_NATIVE_HUD_END){
                 if(!from||(!adapter->owns(image)&&!adapter->admit(image)))return 0;
                 auto anchor=static_cast<int const*>(from);
                 command.detail=adapter->display_image(image);command.destination=adapter->image(image);
                 command.source_x=anchor[0];command.source_y=anchor[1];command.color=color;
+                if(op==C3X_NATIVE_UNIT_HUD_BEGIN){
+                    if(anchor[2]<0||anchor[2]==INT_MAX)return -1;
+                    command.source_height=anchor[2]+1;
+                }
                 if(to){auto offset=static_cast<int const*>(to);command.area.left=offset[0];command.area.top=offset[1];}
                 command.source_width=int(adapter->transparency(image));
             }

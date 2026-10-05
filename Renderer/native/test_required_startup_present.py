@@ -68,7 +68,7 @@ struct Owner {
  long long gpu_camera_front_ticket=9;std::atomic<long long> camera_obsolete_through{0};
  bool trial_surface_swap=true;std::uint64_t trial_presented_front_revision=0;
  c3x_renderer_gpu_present_v1 gpu_present{};unsigned trial_consumer_pid=0,trial_width=0,trial_height=0;
- std::uint64_t trial_handle=0;long long visual_ticks=0,visual_frequency=0;
+ std::uint64_t trial_handle=0;long long visual_ticks=0,visual_frequency=0,visual_last=0;
  unsigned commits=0,attempts=0;int mode=0;
  enum class Command{trial_present_shared,trial_required_visual_shared};
  void advance_visual_clock(){}

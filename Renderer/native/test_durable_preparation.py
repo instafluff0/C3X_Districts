@@ -49,7 +49,8 @@ int main(){State s;auto empty=s.calculate();
         create=source[start:source.index('            for(unsigned owner=0;owner<2;',start)]
         start=source.index('            auto hr=device->CreateBuffer(&desc,&initial,&chunk.indices);')
         grid=source[start:source.index('            try{terrain_patch_indices.emplace',start)]
-        run_cpp(r'''#include <atomic>
+        run_cpp(r'''#define C3X_RENDERER64_FRESH 1
+#include <atomic>
 #include <array>
 #include <cassert>
 #include <cstdio>
@@ -107,13 +108,15 @@ int main(){unsigned data[2]={1,2};
         source=(ROOT/'Renderer/native/c3x_renderer.cpp').read_text()
         start=source.index('    bool make_tile_cache_room(')
         method=source[start:source.index('    bool cache_geometry_layer(',start)]
-        run_cpp(r'''#include <atomic>
+        run_cpp(r'''#define C3X_RENDERER64_FRESH 1
+#include <atomic>
 #include <cassert>
 #include <cstdio>
 #include <memory>
 #include <unordered_map>
 constexpr unsigned viewport_cache_capacity=8;
 template<std::size_t N,class... A>void sprintf_s(char(&b)[N],char const* f,A... a){std::snprintf(b,N,f,a...);}
+unsigned selection_retirements=0;void c3x_renderer64_retire_geometry_selection(){++selection_retirements;}
 struct Cache {unsigned signature=0;std::size_t byte_count=0;bool prefetched=false;
  std::uint64_t animation_epoch=0,last_used=0;};
 using CachedTileGeometry=Cache;
@@ -128,6 +131,8 @@ struct State {
  struct {Cache* resolve(Cache* value){return value;}}resident_content;
  struct Candidates {template<class M,class R,class F>Cache* next(M& map,R&,std::uint64_t,F){return map.empty()?nullptr:&map.begin()->second;}}residency_candidates;
  void release_resident_content(Cache&){++releases;}
+ struct Instances {State* owner;std::size_t held=0;void clear(){owner->retired_content->bytes-=held;held=0;}} shared_instances{this};
+ std::shared_ptr<int> resource_visibility_membership=std::make_shared<int>(0);
 ''' + method + r'''};
 int main(){State s;for(unsigned i=0;i<3;++i)s.tile_geometry_cache.emplace(i,Cache{i,100,true});
  s.tile_geometry_cache_bytes=s.prefetched_geometry_bytes=300;
@@ -140,6 +145,11 @@ int main(){State s;for(unsigned i=0;i<3;++i)s.tile_geometry_cache.emplace(i,Cach
  // Foreground selected-content admission retains its existing eviction path.
  s.loading_gpu_residency=false;assert(s.make_tile_cache_room(0));
  assert(s.tile_geometry_cache_bytes==0 && s.tile_geometry_cache.empty() && s.releases==3 && s.frame_tiles_evicted==3);
+ // An earlier view's evicted geometry held only by optional borrowers is
+ // reclaimed once before admission refuses; otherwise it would stay charged.
+ s.retired_content->bytes+=200;s.shared_instances.held=200;
+ assert(s.make_tile_cache_room(64) && s.retired_content->bytes==32 && selection_retirements==1 && !s.resource_visibility_membership);
+ s.retired_content->bytes+=200;assert(!s.make_tile_cache_room(64) && selection_retirements==2);
 }
 ''')
 

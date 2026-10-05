@@ -189,7 +189,7 @@ struct Map_Renderer{int field_3E98[3]={0,0,0},field_3EA4=2240,field_3EA8=1260;};
 struct Map{int Width=100,Height=80,Flags=0;Map_Renderer Renderer;};
 struct Bic{Map Map;bool is_zoomed_out=false;int ScreenWidth=2240,ScreenHeight=1260;}bic_data,*p_bic_data=&bic_data;
 struct Main_Screen_Form{int camera_x=640,camera_y=320,TileX_Min=9,TileX_Max=46,TileY_Min=9,TileY_Max=50;}screen;
-struct{struct{bool enable_custom_rendering=true;}current_config;void* custom_renderer_hud_canvas=nullptr;}state,*is=&state;
+struct{struct{bool enable_custom_rendering=true;}current_config;void* custom_renderer_hud_canvas=nullptr;int custom_renderer_capture_cover=64;}state,*is=&state;
 bool zoom=true;bool custom_renderer_zoom_enabled(){return zoom;}
 RECT visible{0,0,2240,1260};RECT custom_renderer_visible_map_rect(){return visible;}
 int wrap_horiz(Map*m,int x){return !(m->Flags&1)?x:x<0?x+m->Width:x>=m->Width?x-m->Width:x;}
@@ -211,6 +211,9 @@ int main(){
  state.custom_renderer_hud_canvas=&screen;
  assert(patch_Main_Screen_Form_is_tile_on_screen(&screen,91,58,30,0,0));
  assert(screen.TileX_Min==9&&screen.TileX_Max==46&&screen.TileY_Min==9&&screen.TileY_Max==50);
+ // Labels follow the captured envelope: a 1x-only capture keeps them in view.
+ state.custom_renderer_capture_cover=128;assert(!patch_Main_Screen_Form_is_tile_on_screen(&screen,91,58,30,0,0));
+ state.custom_renderer_capture_cover=64;
  state.custom_renderer_hud_canvas=nullptr;
  // A unit inside the canonical capture but cropped off by zoom must recenter.
  visible={747,420,1493,840};bic_data.Map.Flags=0;
@@ -260,7 +263,8 @@ int main(){
 using HWND=int;using UINT=unsigned;using UINT_PTR=unsigned;using DWORD=unsigned;
 struct LARGE_INTEGER{long long QuadPart=0;};struct POINT{int x,y;};struct RECT{int left,top,right,bottom;};
 void debug(char const*){}auto p_OutputDebugStringA=debug;
-constexpr int __=0,C3X_NATIVE_ZOOM_PRESENTED=130;
+constexpr int __=0,C3X_NATIVE_ZOOM_PRESENTED=130,C3X_NAV_PENDING=5,C3X_RENDERER_RESULT_PENDING=1;
+struct PCX_Image{struct{void* Image;}JGL;};struct custom_renderer_native_view{int camera_x;};
 struct Animator{int Units2_Count=0,field_18E4[20]={};};
 struct Base_Form;void gui_draw(Base_Form*);struct FormVtable{void(*m73_call_m22_Draw)(Base_Form*)=gui_draw;}vtable;
 struct Base_Form{FormVtable* vtable=&::vtable;};
@@ -282,7 +286,11 @@ struct State{struct{bool enable_custom_rendering=true;}current_config;
  bool custom_renderer_modal=false,paused_for_popup=false,custom_renderer_draw_in_progress=false;
  int custom_renderer_minimap_zoom=65536;
  int (*custom_renderer_native_image)(int,void*,void*,void const*,void const*,unsigned)=nullptr;
+ int (*custom_renderer_navigation)(int,void*,custom_renderer_native_view*,void const*)=nullptr;
 }state,*is=&state;
+bool in_flight=false;int pending_queries=0;
+int navigation(int action,void*,custom_renderer_native_view* view,void const* request){
+ assert(action==C3X_NAV_PENDING&&view&&!request);++pending_queries;return in_flight?C3X_RENDERER_RESULT_PENDING:0;}
 bool QueryPerformanceCounter(LARGE_INTEGER* p){p->QuadPart=now;return true;}
 bool custom_renderer_zoom_enabled(){return true;}
 int GetFocus(){return focus?1:0;}
@@ -296,15 +304,15 @@ int gui_draws=0;void gui_draw(Base_Form*){++gui_draws;}
 void ''' + body + r'''
 void tick(int us){now+=us;custom_renderer_view_timer(0,0,17,0);assert(!state.custom_renderer_view_timer_running);}
 void reset(){screen.camera_x=screen.camera_y=0;state.custom_renderer_scroll_x=state.custom_renderer_scroll_y=0;state.custom_renderer_scroll_at.QuadPart=now;}
-int main(){state.custom_renderer_native_image=query;
+int main(){state.custom_renderer_native_image=query;state.custom_renderer_navigation=navigation;
  for(int rate:{20,25,40,50,100}){reset();for(int n=0;n<rate;++n)tick(1000000/rate);assert(std::abs(screen.camera_x-900)<=1);}
  int prev=-1;for(int distance=31;distance>=0;--distance){cx=2239-distance;reset();for(int n=0;n<100;++n)tick(10000);assert(screen.camera_x>=prev);prev=screen.camera_x;}
  cx=0;reset();for(int n=0;n<100;++n)tick(10000);assert(std::abs(screen.camera_x+900)<=1);
  cx=2239;scale=196608;state.custom_renderer_minimap_zoom=scale;reset();for(int n=0;n<100;++n)tick(10000);assert(std::abs(screen.camera_x-300)<=1);
  cx=1000;cy=0;scale=65536;state.custom_renderer_minimap_zoom=scale;reset();for(int n=0;n<100;++n)tick(10000);assert(screen.camera_x==0&&std::abs(screen.camera_y+900)<=1);
  int before=moves;int old_y=screen.camera_y;tick(500000);
- assert(moves==before+1&&screen.camera_y==old_y-45); // late callbacks retain one capped step
- old_y=screen.camera_y;tick(3000000);assert(screen.camera_y==old_y-45);
+ assert(moves==before+1&&screen.camera_y==old_y-90); // late callbacks retain one capped step
+ old_y=screen.camera_y;tick(3000000);assert(screen.camera_y==old_y-90);
  state.custom_renderer_scroll_at.QuadPart=0;before=moves;tick(16000);assert(moves==before); // first sample establishes the clock
  for(int k=0;k<10;++k){reset();state.custom_renderer_modal=k==0;state.paused_for_popup=k==1;
   screen.is_now_loading_game=k==2;screen.turn_end_flag=k!=3;city.Base.Data.Status2=k==4;
@@ -322,6 +330,21 @@ int main(){state.custom_renderer_native_image=query;
  cx=2239;cy=630;reset();double expected=0.;
  for(int n=0;n<400;++n){scale=65536+(n<200?n:399-n)*655;expected+=9.*65536/scale;tick(10000);}
  assert(std::abs(screen.camera_x-expected)<1.1);
+ // Motion arriving while a camera job is in flight is held, not captured
+ // and discarded. The adoption pass keeps it; the next tick requests it all.
+ scale=65536;state.custom_renderer_minimap_zoom=scale;reset();in_flight=true;before=moves;drawn=draws;int asked=pending_queries;
+ for(int n=0;n<10;++n)tick(16000);
+ assert(moves==before&&draws==drawn+10&&pending_queries==asked+10&&screen.camera_x==0);
+ state.custom_renderer_draw_in_progress=true;tick(16000);state.custom_renderer_draw_in_progress=false;
+ in_flight=false;tick(16000);assert(moves==before+1&&screen.camera_x==158); // 11 ticks of 14.4 px
+ // Held motion is bounded by the retained-raster shift margin at the presented zoom.
+ reset();in_flight=true;for(int n=0;n<100;++n)tick(16000);in_flight=false;tick(16000);assert(screen.camera_x==256);
+ scale=32768;state.custom_renderer_minimap_zoom=scale;reset();in_flight=true;for(int n=0;n<100;++n)tick(16000);
+ in_flight=false;tick(16000);assert(screen.camera_x==512);
+ // Modal interruptions still discard held motion.
+ scale=65536;state.custom_renderer_minimap_zoom=scale;reset();in_flight=true;for(int n=0;n<10;++n)tick(16000);
+ state.custom_renderer_modal=true;tick(16000);state.custom_renderer_modal=false;in_flight=false;tick(16000);
+ assert(screen.camera_x==14);
 }
 ''')
 

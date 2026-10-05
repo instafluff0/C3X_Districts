@@ -71,7 +71,8 @@ struct LinearResample {
  // Settled views: native or minified (source texels per screen pixel >= 1), never magnified.
  bool require_native_scale=false;
  bool ensure(int){return true;}
- bool draw(Context*,Target& target,Source const& source,Source const* secondary){
+ bool draw(Context*,Target& target,Source const& source,Source const* secondary,int layers=-1){
+  if(layers>=0)return true; // overlay composite: no color/depth change in this model
   assert(source.color&&source.depth);
   if(require_native_scale){assert(source.map[0]>=1.f&&source.map[1]>=1.f);
    if(secondary)assert(secondary->map[0]>=1.f&&secondary->map[1]>=1.f);}
@@ -90,9 +91,14 @@ struct Pipeline {
  struct RasterInputs{int version=0;bool complete=true;void clear(){version=0;complete=true;}std::size_t bytes()const{return 0;}};
  std::array<RasterInputs,4> raster_inputs;std::array<RasterInputs,2> bootstrap_inputs;
  std::array<std::array<std::uint64_t,6>,2> bootstrap_stamp{};
+ bool restore_overlays=false,preview_overlays=false;
+ struct OverlaySlot{Target layer;std::uint64_t revision=~0ull;};std::array<OverlaySlot,4> overlay_slots;
+ bool overlay_enabled()const{return false;}
  std::array<std::uint64_t,6> bootstrap_identity()const{return {std::uint64_t(version),0,0,0,0,0};}
  Options options;Options const& sandbox_perf_options(){return options;}
- struct{bool atlas_complete=true;}shadow;
+ struct ShadowChange{std::uint64_t serial=0;std::array<int,4> source{};};
+ struct{bool atlas_complete=true;std::uint64_t change_serial=0,change_floor=0;std::vector<ShadowChange> shadow_changes;}shadow;
+ std::vector<std::array<int,4>> shadow_dirty;
  struct Work{bool enabled=false;struct Counts{std::uint64_t target_pixels=0;}counts;
   void draw(unsigned){}void clear(Plane*){}void copy(Plane*,bool){}Counts& row(){return counts;}}work;
  struct Restore{bool draw(Context*,Target& target,Plane* color,Plane* depth,int,int,std::vector<int>,void*,unsigned,unsigned,
@@ -102,7 +108,7 @@ struct Pipeline {
  struct OverlayFrame{bool valid=false;unsigned slot=0;int move_x=0,move_y=0;float depth_shift=0;} overlay_frame;
  double last_static_ms=0;bool static_preview=false;
  struct {unsigned lane=0;int reusable=-1,recenter=0,shifted=0,refine=0,sync=0,preview=0,front_cover=0,home_cover=0,boot_cover=0;
-  long long missing=0;int camera_x=0,camera_y=0,slot_x=0,slot_y=0;unsigned entry=0,home_entry=0;std::size_t input_bytes=0;double boot_draw_ms=0,boot_deps_ms=0;long long boot_area=0;} static_decision;
+  long long missing=0;int camera_x=0,camera_y=0,slot_x=0,slot_y=0;unsigned entry=0,home_entry=0,repair=0;std::size_t input_bytes=0;double boot_draw_ms=0,boot_deps_ms=0;long long boot_area=0;} static_decision;
  bool layout_reset=false;
  int camera_x=0,camera_y=0,region_margin_x=6,region_margin_y=6;
  unsigned region_width_px=16,region_height_px=16,scene_samples=1;
@@ -188,7 +194,18 @@ int main(){unsigned frames=0;
   // Another reveal while only bootstrap pixels can be displayed.
   p.available_budget=0;p.edit(1);p.check();++frames;p.edit(2);p.check();++frames;
  }
- std::printf("PASS semantic terrain transitions: intermediate_frames=%u zooms=4 repair_and_bootstrap=1 color_depth_coherent=1 cached_lane_return=1\n",frames);
+ // A shadow caster that enters the field after a repair changes baked
+ // pixels without changing any contributor proof; its journaled footprint
+ // repairs the retained raster once, then later frames prove again.
+ for(float zoom:{1.f,3.f}){
+  Pipeline p;p.projection_zoom=p.destination=zoom;p.edit(0);p.seed();p.allow_repair=true;p.check();
+  auto lane=StaticRasters::lane_of(zoom);auto repairs=p.repairs;
+  for(unsigned i=0;i<16;++i)p.world[i]+=50000;
+  p.shadow.shadow_changes.push_back({1,{0,0,8,8}});p.shadow.change_serial=1;
+  p.check();++frames;assert(p.repairs==repairs+1&&p.static_rasters.front(lane).shadow_serial==1);
+  p.check();++frames;assert(p.repairs==repairs+1);
+ }
+ std::printf("PASS semantic terrain transitions: intermediate_frames=%u zooms=4 repair_and_bootstrap=1 color_depth_coherent=1 cached_lane_return=1 shadow_journal_repair=1\n",frames);
 }
 ''')
 

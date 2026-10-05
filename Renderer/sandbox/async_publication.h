@@ -24,6 +24,7 @@ class Publication {
         unsigned replace_key=0,group_key=0;char const* label=nullptr;
         Clock::time_point posted;std::shared_ptr<void> group;bool reconciliation=false;
         std::function<void()> finished;
+        bool (*passes)(char const*)=nullptr; // queued tail labels this entry may run ahead of
     };
     mutable std::mutex mutex;std::condition_variable wake;std::deque<Entry> entries;
     std::size_t bytes=0,units=0,records=0,limit,count_limit,work_limit;
@@ -75,6 +76,10 @@ class Publication {
                        entries.back().records<join_records){
                         append(entries.back().group,next.group);entries.back().bytes+=next.bytes;
                         entries.back().units+=next.units;++entries.back().records;
+                    }else if(next.passes){
+                        auto at=entries.end();
+                        while(at!=entries.begin()&&!(at-1)->reconciliation&&next.passes((at-1)->label))--at;
+                        entries.insert(at,std::move(next));
                     }else entries.push_back(std::move(next));
                     // Every operation consumes budgets even when its container joins.
                     bytes+=size;units+=semantic;++records;
@@ -117,10 +122,12 @@ public:
         {std::lock_guard<std::mutex> lock(mutex);first=!fault.exchange(true,std::memory_order_acq_rel);}
         wake.notify_all();if(first&&report)report(reason);
     }
+    // An entry with `passes` is inserted ahead of the queued tail whose labels
+    // it accepts; everything else, and its own later posts, keep their order.
     bool post(std::size_t size,std::function<void()> work,unsigned replace_key=0,char const* label=nullptr,
-              std::size_t semantic_work=1){
+              std::size_t semantic_work=1,bool (*passes)(char const*)=nullptr){
         Entry entry;entry.bytes=size;entry.units=semantic_work;entry.work=std::move(work);
-        entry.replace_key=replace_key;entry.label=label;entry.posted=Clock::now();return admit(std::move(entry));
+        entry.replace_key=replace_key;entry.label=label;entry.posted=Clock::now();entry.passes=passes;return admit(std::move(entry));
     }
     template<class Group,class Work,class Append>bool post_group(std::size_t size,std::size_t semantic_work,
         unsigned key,std::shared_ptr<Group> group,Work work,Append append,std::size_t join_bytes,

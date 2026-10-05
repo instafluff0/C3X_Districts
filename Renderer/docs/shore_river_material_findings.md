@@ -65,9 +65,29 @@ feed native and retained scene builds; these remain C3X material choices.
 
 The `biomes` / `biomes-turned` Lab fixtures cover all three lowland families on
 both map axes. Matched current-checkout controls and candidate captures are under
-`Renderer/lab/out/shorelines/blending/`. The focused suite passes 150 tests with
-one optional skip. Executable ramp and decal regressions reject the old formulas.
-Visual acceptance and staging of this candidate are pending; no fixed reference
+`Renderer/lab/out/shorelines/blending/`. The user asked to retain the gentler
+shoulder while improving the actual sand/land material boundary.
+
+Layer-isolation renders confirmed that the underlay returned to grass before
+the replacement ground finished fading. Texture changes to the upper layer
+therefore often exposed another grass surface, leaving the smoother underlay
+boundary visible. `q3_beach_coverage` now retains sand through the middle of the
+ground fade and ends at `beach_width + .26`. Desert and rocky exclusions remain.
+The ground's detail perturbation increases from `1.8` to `8`, permitting small
+sand openings and land patches in the overlap. Multiplication by both coverage
+and uncovered fraction preserves the solid shoulder and sand-only endpoints.
+The rejected exponential-weight experiment exposed dark holes where almost
+opaque ground had already started rising; its endpoint regression is retained.
+
+The focused suite runs 154 tests with one optional skip. Executable coverage,
+overlap, ramp and decal checks cover the handoff. `blending/material-edge/`
+contains matched controls, shader snapshots, native completion receipts and the
+material review renders. The terrain-edit witness rebuilds 127 tiles, reuses
+260, and matches the cold render exactly (zero changed pixels, zero error).
+All reviewed native captures complete with zero fallback.
+These isolate the material change with a saved DLL;
+they do not certify concurrent renderer/injected changes or live gameplay.
+Visual acceptance of this material follow-up is pending; no fixed reference
 has been replaced.
 
 ## Repeatable check and review

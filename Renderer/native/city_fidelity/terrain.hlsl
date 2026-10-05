@@ -241,7 +241,10 @@ float surface_shape(float2 world) {
 // Keep the dry and wet endpoints fixed while source grain breaks up only
 // the material transition. This changes coverage, not the physical shoreline.
 float coast_edge_coverage(float coverage,float grain) {
-    return saturate(coverage+(grain-.5)*1.8*coverage*(1-coverage));
+    // Let ordinary detail expose sand or retain grass tufts. Keep the change
+    // proportional to both materials: nearly solid ground may already rise
+    // above the beach, so its coverage must remain nearly solid too.
+    return saturate(coverage+(grain-.5)*8*coverage*(1-coverage));
 }
 
 

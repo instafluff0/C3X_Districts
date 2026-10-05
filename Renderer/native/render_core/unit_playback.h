@@ -29,7 +29,13 @@ public:
     bool observe(c3x_renderer_unit_animation_v1 const& value){
         auto const& v=value.visual;
         bool directed=(v.action>=3&&v.action<=10)||v.action==12;
-        if(!directed)return true;
+        if(!directed){
+            // Idle/movement ends a directed action's lifecycle. A later attack
+            // or bombard with identical cadence must start a new clip, rather
+            // than inherit the previous encounter's elapsed phase/end pose.
+            actions.erase(std::remove_if(actions.begin(),actions.end(),[&](auto const& a){return a.id==v.unit_id;}),actions.end());
+            return true;
+        }
         if(value.frames<1||value.frames>4096||value.cursor<0||value.cursor>value.frames||
            !std::isfinite(value.frame_seconds)||value.frame_seconds<=0||value.frame_seconds>10||
            v.presentation_frequency<=0||v.presentation_time_ticks<0)return false;
