@@ -346,7 +346,9 @@ try {
         }
     }
     if ($Scenario -eq 'combat') {
-        $interaction=,@(28,13,'close-welcome')
+        # The opt-in native load hook dismisses this known popup when ready.
+        # No timed Enter can accidentally close a later game dialog.
+        $interaction=@()
     }
     if ($Scenario -eq 'lifecycle') {
         $interaction=@(@(42,81,'return-first-game-to-menu'),@(44,40,'select-quit'),@(45,13,'confirm-quit'),@(55,13,'load-again'),@(58,13,'accept-save'),@(100,0x86,'text-second-game'),@(105,81,'return-second-game-to-menu'),@(107,40,'select-second-quit'),@(108,13,'confirm-second-quit'))
@@ -554,6 +556,11 @@ $readyEvents=[regex]::Matches($log,'stage=render-done result=1').Count
 $loadingMaps=[regex]::Matches($log,'stage=loading-map-complete result=1').Count
 $unloadEvents=[regex]::Matches($log,'stage=scene-unloaded result=1').Count
 $errors=@($log -split "`n" | Where-Object {$_ -match 'stage=retained-admission-rejected|retained admission:|stage=required-interturn-preparation-failed|stage=native-operation-failed|stage=async-publication-failed|budget exceeded|stage=visual-failure|stage=worker-error|stage=unit-publication-failed|stage=unit-animation-failed|stage=motion-start[^\r\n]*result=[0235]|stage=scene-unload-failed|stage=(?:first-map-ready|loading-map-complete) result=[02345]|stage=assets-prepared ready=0'})
+# The helper owns camera/render errors; DebugView may not include its file trace.
+$corePath=Join-Path $session 'renderer-core.log.x64'
+if(Test-Path $corePath) {
+    $errors+=@(Get-Content $corePath | Where-Object {$_ -match 'stage=(fresh-draw-failed|camera-error|gpu-failure|worker-error|visual-failure|async-publication-failed)'})
+}
 $debugReveals=([regex]::Matches($log,'stage=debug-reveal result=1')).Count
 $debugHides=([regex]::Matches($log,'stage=debug-hide result=1')).Count
 $windowResult=Join-Path $session 'window\finished.json'

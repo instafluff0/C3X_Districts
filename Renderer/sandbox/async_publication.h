@@ -71,16 +71,17 @@ class Publication {
                 // gate reserves its exact capacity before any payload allocation.
                 if(prepare)prepare(next);
                 if(healthy()||next.reconciliation){
-                    if(append&&!entries.empty()&&entries.back().group_key==next.group_key&&
-                       entries.back().bytes+next.bytes<=join_bytes&&entries.back().units+next.units<=join_units&&
-                       entries.back().records<join_records){
-                        append(entries.back().group,next.group);entries.back().bytes+=next.bytes;
-                        entries.back().units+=next.units;++entries.back().records;
-                    }else if(next.passes){
-                        auto at=entries.end();
-                        while(at!=entries.begin()&&!(at-1)->reconciliation&&next.passes((at-1)->label))--at;
-                        entries.insert(at,std::move(next));
-                    }else entries.push_back(std::move(next));
+                    auto at=entries.end();
+                    if(next.passes)while(at!=entries.begin()&&!(at-1)->reconciliation&&next.passes((at-1)->label))--at;
+                    // A copied fact can join the preceding fact batch across
+                    // independent canvas work. Neither fact nor image order is
+                    // changed within its own stream; barriers remain barriers.
+                    if(append&&at!=entries.begin()&&(at-1)->group_key==next.group_key&&
+                       (at-1)->bytes+next.bytes<=join_bytes&&(at-1)->units+next.units<=join_units&&
+                       (at-1)->records<join_records){
+                        auto& prior=*(at-1);append(prior.group,next.group);prior.bytes+=next.bytes;
+                        prior.units+=next.units;++prior.records;
+                    }else entries.insert(at,std::move(next));
                     // Every operation consumes budgets even when its container joins.
                     bytes+=size;units+=semantic;++records;
                     peak_bytes=std::max(peak_bytes,bytes);peak_records=std::max(peak_records,records);peak_units=std::max(peak_units,units);
@@ -131,8 +132,8 @@ public:
     }
     template<class Group,class Work,class Append>bool post_group(std::size_t size,std::size_t semantic_work,
         unsigned key,std::shared_ptr<Group> group,Work work,Append append,std::size_t join_bytes,
-        std::size_t join_units,std::size_t join_records,char const* label){
-        Entry entry;entry.bytes=size;entry.units=semantic_work;entry.group_key=key;entry.group=group;
+        std::size_t join_units,std::size_t join_records,char const* label,bool (*passes)(char const*)=nullptr){
+        Entry entry;entry.bytes=size;entry.units=semantic_work;entry.group_key=key;entry.group=group;entry.passes=passes;
         entry.label=label;entry.posted=Clock::now();entry.work=[group,work]{work(*group);};
         return admit(std::move(entry),[append](auto const& target,auto const& incoming){append(*std::static_pointer_cast<Group>(target),*std::static_pointer_cast<Group>(incoming));},
             join_bytes,join_units,join_records);

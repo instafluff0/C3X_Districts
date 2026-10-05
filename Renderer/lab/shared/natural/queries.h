@@ -106,8 +106,25 @@ public:
             weights[t.base==2?0:1]+=(dx?tx:1-tx)*(dy?ty:1-ty);
         }
         if(weights[0]+weights[1]==0)return 0;
+        // Center interpolation alone leaves half the dry height at a wetland
+        // edge, including where the upper material fades to the flat marsh
+        // receiver. Keep the complete wet tile and warped material collar at
+        // the lowland datum, then resume rolling ground outside that collar.
+        // The .66 margin covers material_weights' .5-tile interpolation reach
+        // plus its .155-tile maximum warp on either axis. Chebyshev distance
+        // covers corner blends too. Only optional low relief is suppressed;
+        // authored hills/mountains and river carving retain their own queries.
+        float wet_distance=2.f;
+        int cell_x=int(std::floor(x)),cell_y=int(std::floor(y));
+        for(int wy=cell_y-2;wy<=cell_y+2;++wy)for(int wx=cell_x-2;wx<=cell_x+2;++wx){
+            auto wet=tile(wx,wy);
+            if(wet.present && (wet.real==9 || wet.real==4))
+                wet_distance=std::min(wet_distance,std::max(std::abs(x-(wx+.5f)),std::abs(y-(wy+.5f)))-.5f);
+        }
+        float lowland=coast_ramp((wet_distance-.66f)/1.34f);
+        if(lowland==0)return 0;
         auto s=shore(x,y);
-        float inland=coast_ramp((float(s.distance)-.25f)/.65f);
+        float inland=lowland*coast_ramp((float(s.distance)-.25f)/.65f);
         // Stored river bits identify topology edges, while the drawn channel
         // curves across neighboring tiles. Flatten against that same continuous
         // corridor so raised ground cannot cover or shadow alternating reaches.

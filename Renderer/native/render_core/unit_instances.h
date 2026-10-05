@@ -36,7 +36,8 @@ private:
         Instance source{};
         int dx=0,dy=0;
         long long started=-1,available=-1,frequency=0,committed_at=-1;
-        double turn=0,cycle_distance=0;
+        double turn=0,cycle_distance=0,start_x=0,start_y=0;
+        double distance()const{return std::hypot(double(dx)*64.-start_x,double(dy)*64.-start_y*2.);}
         bool committed=false;
     };
     std::map<int,std::deque<Motion>> motions;
@@ -102,7 +103,7 @@ public:
             if(it->second.empty())return 0.;
             auto const& motion=it->second.front();
             if(motion.started<0||motion.frequency!=scene_frequency)return 0.;
-            double duration=motion.turn+UnitLocomotion::duration(std::hypot(double(motion.dx)*64.,double(motion.dy)*64.));
+            double duration=motion.turn+UnitLocomotion::duration(motion.distance());
             double left=duration-double(scene_ticks-motion_held-motion.started)/scene_frequency;
             remaining=it==motions.begin()?left:std::min(remaining,left);
         }
@@ -153,6 +154,9 @@ public:
         }else{
             if(value.action!=1&&value.action!=2)motions.erase(value.unit_id);
             auto prior=accepted_states.find(value.unit_id);
+            if(prior!=accepted_states.end()&&motions.find(value.unit_id)==motions.end()&&
+               (prior->second.tile_x!=value.tile_x||prior->second.tile_y!=value.tile_y))
+                pose_offsets.erase(value.unit_id); // Position corrections do not inherit a combat stance.
             if(prior!=accepted_states.end()&&prior->second.action!=value.action&&motions.find(value.unit_id)==motions.end()){
                 // Invalidate old native selections atomically, but keep the
                 // complete scene body until its replacement capture arrives.
@@ -234,7 +238,6 @@ public:
         if(wrap_x){if(dx>width/2)dx-=width;else if(dx<-width/2)dx+=width;}
         if(wrap_y){if(dy>height/2)dy-=height;else if(dy<-height/2)dy+=height;}
         if((std::abs(dx)+std::abs(dy)!=2)||((dx+dy)&1))return false;
-        pose_offsets.erase(value.unit_id);
         auto& queue=motions[value.unit_id];
         if(!queue.empty()){
             auto const& previous=queue.back().event;
@@ -245,6 +248,14 @@ public:
         if(queue.size()>=8)return false; // Bounded directed-action admission.
         Motion motion{};motion.event=value;motion.dx=dx;motion.dy=dy;
         motion.source=queue.empty()?found->second:queue.back().source;
+        auto offset=pose_offsets.find(value.unit_id);
+        if(queue.empty()&&offset!=pose_offsets.end()){
+            // Victory advances from the displayed half-tile combat stance,
+            // never back through the original tile center.
+            auto current=offset->second.sample(scene_ticks-motion_held,scene_frequency);
+            motion.start_x=current.first;motion.start_y=current.second;
+        }
+        pose_offsets.erase(value.unit_id);
         auto heading=queue.empty()?found->second.occurrence.direction:UnitLocomotion::direction(queue.back().dx,queue.back().dy);
         motion.turn=UnitLocomotion::turn(heading,UnitLocomotion::direction(dx,dy));
         motion.source.tile_x=value.old_x;motion.source.tile_y=value.old_y;
@@ -400,10 +411,10 @@ public:
                 return (std::uint64_t(std::uint32_t(canonical(x,frame.world_width_tiles,frame.world_wrap_x!=0)))<<32)|
                     std::uint32_t(canonical(y,frame.world_height_tiles,frame.world_wrap_y!=0));
             }
-            bool visible(unsigned i)const{auto const& tile=frame.tiles[i];
-                return (tile.tile_flags&C3X_RENDERER_TILE_VISIBLE)&&
-                    (tile.tile_flags&(C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_PREFETCH));
-            }
+            bool captured(unsigned i)const{return frame.tiles[i].tile_flags&
+                (C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_PREFETCH);}
+            bool visible(unsigned i,bool accepted_move)const{return accepted_move||
+                (frame.tiles[i].tile_flags&C3X_RENDERER_TILE_VISIBLE);}
             std::size_t slot(std::uint64_t value)const{
                 // Mix both lattice coordinates before power-of-two masking.
                 auto hash=value;hash^=hash>>30;hash*=0xbf58476d1ce4e5b9ull;
@@ -421,17 +432,21 @@ public:
                     // linear iterator if the bounded metadata cannot fit.
                     std::vector<Bucket>().swap(table);std::vector<unsigned>().swap(links);return;
                 }
-                for(unsigned i=0;i<frame.tile_count;++i)if(visible(i)){
+                for(unsigned i=0;i<frame.tile_count;++i)if(captured(i)){
                     auto id=key(frame.tiles[i].tile_x,frame.tiles[i].tile_y);auto& bucket=table[slot(id)];
                     if(bucket.first==UINT_MAX){bucket.key=id;bucket.first=i;}
                     else links[bucket.last]=i;
                     bucket.last=i;
                 }
             }
-            unsigned next(std::uint64_t id,unsigned previous=UINT_MAX)const{
-                if(!table.empty())return previous==UINT_MAX?table[slot(id)].first:links[previous];
+            unsigned next(std::uint64_t id,bool accepted_move,unsigned previous=UINT_MAX)const{
+                if(!table.empty()){
+                    for(auto i=previous==UINT_MAX?table[slot(id)].first:links[previous];i!=UINT_MAX;i=links[i])
+                        if(visible(i,accepted_move))return i;
+                    return UINT_MAX;
+                }
                 for(unsigned i=previous==UINT_MAX?0:previous+1;i<frame.tile_count;++i)
-                    if(visible(i)&&key(frame.tiles[i].tile_x,frame.tiles[i].tile_y)==id)return i;
+                    if(captured(i)&&visible(i,accepted_move)&&key(frame.tiles[i].tile_x,frame.tiles[i].tile_y)==id)return i;
                 return UINT_MAX;
             }
         } occurrences(frame,instances.size()>4);
@@ -446,7 +461,7 @@ public:
                 while(!queue.empty()){
                     auto& next=queue.front();
                     if(next.started<0){next.started=motion_ticks;next.frequency=frequency;}
-                    double distance=std::hypot(double(next.dx)*64.,double(next.dy)*64.);
+                    double distance=next.distance();
                     double duration=next.turn+UnitLocomotion::duration(distance);
                     bool finished=next.frequency==frequency&&double(motion_ticks-next.started)/frequency>=duration;
                     if(finished&&next.committed){
@@ -492,7 +507,19 @@ public:
             if(!state||!state->visible||state->kind!=C3X_RENDERER_UNIT_STATE_OBSERVE||
                (!motion&&(state->tile_x!=item.tile_x||state->tile_y!=item.tile_y)))continue;
             auto occurrence_key=occurrences.key(item.tile_x,item.tile_y);
-            auto occurrence_index=occurrences.next(occurrence_key);
+            // Terrain preparation can retain a view captured before this
+            // accepted visible step. Its copied anchors remain authoritative
+            // even when its tile visibility has not caught up with the unit.
+            // Native hide/retirement above still removes the actor immediately.
+            auto committed=accepted_moves.find(pair.first);
+            auto after_capture=[&](c3x_renderer_unit_move_v1 const& event){
+                return event.presentation_frequency==frame.presentation_frequency&&
+                    event.presentation_time_ticks>frame.presentation_time_ticks;
+            };
+            bool accepted_move=motion?after_capture(motion->event):(committed!=accepted_moves.end()&&
+                committed->second.target_visible&&after_capture(committed->second)&&
+                occurrences.key(committed->second.new_x,committed->second.new_y)==occurrence_key);
+            auto occurrence_index=occurrences.next(occurrence_key,accepted_move);
             if(occurrence_index==UINT_MAX)continue;
             auto* occurrence=&frame.tiles[occurrence_index];
             Selection selected{};selected.id=pair.first;selected.revision=item.revision;
@@ -516,13 +543,13 @@ public:
                 if(clip==actions.end()||clip->duration<=0)continue;
                 pose.action=std::size_t(clip-actions.begin());
                 double seconds=motion->frequency==frequency?std::max(0.,double(motion_ticks-motion->started)/frequency):0.;
-                double distance=std::hypot(double(motion->dx)*64.,double(motion->dy)*64.);
+                double distance=motion->distance();
                 double covered=UnitLocomotion::sample(seconds-motion->turn,distance);
-                double progress=covered/distance;
+                double progress=distance>0?covered/distance:1.;
                 pose.draw=item.occurrence;pose.draw.action=2;
                 pose.draw.direction=UnitLocomotion::direction(motion->dx,motion->dy);
-                travel_x=motion->dx*frame.tile_width*.5*progress;
-                travel_y=motion->dy*frame.tile_height*.5*progress;
+                travel_x=(motion->start_x+(motion->dx*64.-motion->start_x)*progress)*frame.tile_width/128.;
+                travel_y=(motion->start_y+(motion->dy*32.-motion->start_y)*progress)*frame.tile_height/64.;
                 pose.draw.frame_count=1000;
                 pose.draw.action_cursor=int(std::fmod((motion->cycle_distance+covered)/UnitLocomotion::speed,double(clip->duration))/clip->duration*1000.);
                 // Native confirmation may arrive after visible travel. Hold
@@ -559,9 +586,10 @@ public:
                             value.to_x=target_x;value.to_y=target_y;
                             value.started=motion_ticks;value.frequency=frequency;
                         }
-                    }else if(!bounded&&offset!=pose_offsets.end()){
-                        pose_offsets.erase(offset);offset=pose_offsets.end();
                     }
+                    // A full-tile victory target can precede its accepted move
+                    // record. Keep the last bounded stance until that segment
+                    // takes ownership instead of snapping back to tile center.
                 }
                 if(offset!=pose_offsets.end()){
                     auto value=offset->second.sample(motion_ticks,frequency);
@@ -588,7 +616,7 @@ public:
             result.push_back(pose);
             // Each native captured wrap occurrence is a separate placement; all
             // borrow the same immutable asset and pose preparation identity.
-            for(auto i=occurrences.next(occurrence_key,occurrence_index);i!=UINT_MAX;i=occurrences.next(occurrence_key,i)){
+            for(auto i=occurrences.next(occurrence_key,accepted_move,occurrence_index);i!=UINT_MAX;i=occurrences.next(occurrence_key,accepted_move,i)){
                 auto const& tile=frame.tiles[i];
                 auto dx=std::int64_t(tile.anchor_x)-occurrence->anchor_x,dy=std::int64_t(tile.anchor_y)-occurrence->anchor_y;
                 auto x=std::int64_t(pose.draw.body_x)+dx,y=std::int64_t(pose.draw.body_y)+dy;

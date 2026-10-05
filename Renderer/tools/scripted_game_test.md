@@ -230,6 +230,13 @@ alone do not prove correct visible scrolling. Two-frame-per-second window
 sampling is visual evidence, not an FPS measurement. The native GPU fixture
 remains the independent controlled cadence check.
 
+The `combat` scenario uses the opt-in native load hook to dismiss its known
+confirmation at the actual load checkpoint. Asset preparation can exceed a
+fixed timer, and the debug collector may buffer its last lines while idle.
+The scenario then waits for combat preparation and attack acknowledgements;
+delivered keys alone cannot pass the scenario. All scenarios scan the helper
+trace as well as the native trace for render and camera failures.
+
 The optional `-Scenario interaction -Seconds 90` retains the native welcome
 dialog, dismisses it with Enter, cycles zoom through 192/160/128, sends one
 eastward unit movement key, then sends F1 and Escape. At each zoom it sends
@@ -480,6 +487,18 @@ The earlier `201515` army setup was invalid: `Unit_load_into_army` only updates
 bookkeeping. Use the existing `patch_Unit_load` boundary so native container and
 state fields are set too. F22 now retries until the start marker is observed;
 the injected one-shot guard prevents duplicate attacks.
+
+October 5 reruns under `Renderer/.cache/smooth-scenes/` cover melee defeat,
+an actual mounted retreat, bombardment, army defeat, and successful bombing.
+The victory review found a backward reset between the half-tile combat stance
+and the accepted advance. The corrected build's unprofiled `153154` capture
+keeps that stance and advances through the remaining distance. `153331` covers
+army victory, member return and group advance; `153509` covers bombing with
+two damage; `153646` covers civilian replacement, arrival and selection of the
+captured worker. Their 10 Hz contact sheets were reviewed through stable idle.
+All runs preserve the original save and report no renderer failures. Neither
+October air run triggered interception. These samples do not certify continuous
+flight, audio alignment or current-build interception.
 
 ## Turn and held-mouse regressions
 

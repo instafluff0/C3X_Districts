@@ -162,6 +162,67 @@ int main(){
 }
 ''')
 
+    def test_victory_advance_keeps_displayed_combat_stance(self):
+        run_cpp(r'''
+#include "Renderer/native/render_core/unit_instances.h"
+#include <cassert>
+#include <string>
+using namespace c3x_renderer::render_core;
+struct Clip {std::string name;bool ambient=true,loop=true;double duration=1;unsigned frames=31;};
+struct Unit {std::vector<std::string> keys={"warrior"};std::vector<Clip> actions={{"idle"},{"move",false,true},{"attack",false,true}};};
+int main(){
+ for(bool diagonal:{false,true}){
+  UnitInstances world;std::vector<Unit> catalog{Unit{}};
+  c3x_renderer_unit_state_v1 state{};state.struct_size=sizeof(state);state.unit_id=7;
+  state.kind=C3X_RENDERER_UNIT_STATE_OBSERVE;state.tile_x=state.tile_y=4;
+  state.action=1;state.visible=1;state.max_hp=3;state.presentation_frequency=1000000;
+  c3x_renderer_unit_v1 body{};body.struct_size=sizeof(body);body.unit_id=7;body.action=1;
+  body.frame_count=15;body.sprite_width=body.sprite_height=191;body.direction=diagonal?4:3;
+  body.projection_scale_milli=1000;body.presentation_frequency=1000000;std::strcpy(body.unit_key,"warrior");
+  c3x_renderer_unit_visual_v1 visual{};visual.struct_size=sizeof(visual);visual.unit_id=7;
+  visual.flags=1;visual.max_hp=3;visual.projection_scale_milli=1000;
+  visual.presentation_frequency=1000000;visual.target_x=320;visual.target_y=160;
+  auto capture=[&](long long ticks){
+   state.presentation_time_ticks=body.presentation_time_ticks=visual.presentation_time_ticks=ticks;
+   assert(world.state(state));assert(world.observe(visual));UnitInstances::Selection selected;
+   assert(world.capture(body,1,catalog,[](int a){return a==2?"move":a==3?"attack":"idle";},selected));
+  };
+  c3x_renderer_tile_v1 tiles[2]{};
+  int dx=diagonal?1:2,dy=diagonal?1:0;
+  for(int i=0;i<2;++i){auto& t=tiles[i];t.tile_x=4+i*dx;t.tile_y=4+i*dy;
+   t.anchor_x=1031+i*dx*64;t.anchor_y=563+i*dy*32;
+   t.tile_flags=C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_VISIBLE;}
+  c3x_renderer_frame_v1 frame{};frame.tiles=tiles;frame.tile_count=2;frame.tile_width=128;frame.tile_height=64;
+  frame.world_width_tiles=frame.world_height_tiles=12;
+  auto pose=[&](long long t){auto p=world.scene_poses(frame,t,1000000,catalog);assert(p.size()==1);return p[0].draw;};
+  capture(0);auto origin=pose(0);
+  visual.target_x+=dx*32;visual.target_y+=dy*16;capture(100);pose(100);
+  auto stance=pose(400100);assert(stance.body_x==origin.body_x+dx*32);
+  // Native victory targets the next tile before the accepted move arrives.
+  visual.target_x+=dx*32;visual.target_y+=dy*16;capture(500100);
+  auto held=pose(600100);assert(held.body_x==stance.body_x&&held.body_y==stance.body_y);
+  c3x_renderer_unit_move_v1 move{};move.struct_size=sizeof(move);move.unit_id=7;move.action=2;
+  move.old_x=move.old_y=4;move.new_x=4+dx;move.new_y=4+dy;
+  move.source_visible=move.target_visible=1;move.presentation_frequency=1000000;move.presentation_time_ticks=600101;
+  assert(world.begin_motion(move,12,12,false,false));
+  auto first=pose(600101);assert(first.body_x==held.body_x&&first.body_y==held.body_y);
+  move.presentation_time_ticks=600102;assert(world.move(move));
+  state.tile_x=4+dx;state.tile_y=4+dy;capture(600103);
+  auto previous=first;
+  for(long long t=610101;t<=2000101;t+=10000){
+   auto next=pose(t);assert(next.body_x>=previous.body_x&&next.body_y>=previous.body_y);
+   assert(next.body_x-previous.body_x<=3&&next.body_y-previous.body_y<=3);previous=next;
+  }
+  assert(previous.body_x==origin.body_x+dx*64&&previous.body_y==origin.body_y+dy*32);
+  // A native correction has no accepted travel and discards the old stance.
+  visual.target_x=(state.tile_x+1)*64+32;visual.target_y=(state.tile_y+1)*32;
+  capture(2100101);pose(2100101);pose(2500101);
+  state.tile_x=state.tile_y=4;visual.target_x=320;visual.target_y=160;capture(2600101);
+  auto corrected=pose(2600101);assert(corrected.body_x==origin.body_x&&corrected.body_y==origin.body_y);
+ }
+}
+''')
+
     def test_native_stack_groups_replace_stale_bodies_but_preserve_travel(self):
         run_cpp(r'''
 #include "Renderer/native/render_core/unit_instances.h"

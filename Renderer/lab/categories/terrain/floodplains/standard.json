@@ -15,7 +15,8 @@
     "Renderer/native/city_fidelity/terrain.hlsl",
     "Renderer/native/source_fidelity/geometry.h",
     "Renderer/native/source_fidelity/runtime.h",
-    "Renderer/native/render_core/terrain_query.h"
+    "Renderer/native/render_core/terrain_query.h",
+    "Renderer/lab/shared/natural/queries.h"
   ],
   "recipe": {
     "terrain": 4,
@@ -29,13 +30,15 @@
     ],
     "cases": [
       "detail",
-      "gameplay"
+      "gameplay",
+      "wetland-edge"
     ]
   },
   "tests": [
     "Renderer.native.source_fidelity.test_contract",
     "Renderer.lab.test_natural",
-    "Renderer.native.test_render_core"
+    "Renderer.native.test_render_core",
+    "Renderer.native.test_low_relief"
   ],
   "references": {
     "d3d11": [

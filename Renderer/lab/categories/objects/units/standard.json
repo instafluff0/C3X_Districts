@@ -8,6 +8,7 @@
   "implementation": [
     "Renderer/lab/shared/shaders/objects/beauty_objects.hlsl",
     "Renderer/native/c3x_renderer.cpp",
+    "Renderer/native/native_composition_owner.h",
     "Renderer/native/terrain_scene_runtime.cpp",
     "Renderer/native/animation_runtime.h",
     "Renderer/lab/studies/units/prepare.py",
@@ -36,7 +37,9 @@
     "Renderer/tools/asset_compiler/animation_rig.py",
     "Renderer/tools/asset_compiler/build_unit_animation_runtime.py",
     "Renderer/tools/asset_compiler/compile_compound_animation.py",
-    "Renderer/native/render_core/skin_shadow_bounds.h"
+    "Renderer/native/render_core/skin_shadow_bounds.h",
+    "Renderer/sandbox/async_scene_client.h",
+    "Renderer/sandbox/async_publication.h"
   ],
   "recipe": {
     "terrain": 2,
@@ -80,6 +83,9 @@
     "Renderer.native.test_unit_pose_transition",
     "Renderer.native.test_unit_motion",
     "Renderer.native.test_unit_arrival_visibility",
+    "Renderer.native.test_injected_sight",
+    "Renderer.native.test_native_camera_transaction",
+    "Renderer.native.test_native_view_identity",
     "Renderer.native.test_unit_hud",
     "Renderer.native.test_fresh_map_idle",
     "Renderer.native.test_retained_scene_view",
@@ -87,7 +93,10 @@
     "Renderer.native.test_static_refinement_consistency",
     "Renderer.native.test_unit_combat",
     "Renderer.native.test_skin_shadow",
-    "Renderer.native.test_injected_unit_bootstrap"
+    "Renderer.native.test_injected_unit_bootstrap",
+    "Renderer.native.test_async_publication",
+    "Renderer.native.test_async_image_backpressure",
+    "Renderer.native.test_ordered_cold_service"
   ],
   "references": {
     "d3d11": [

@@ -39,7 +39,7 @@ using DWORD=unsigned;using LPCSTR=char const*;using LPSTR=char*;
 using Env=DWORD(*)(LPCSTR,LPSTR,DWORD);
 struct Unit {struct {int X=42,Y=43;}Body;} unit;
 int messages=0,combats=0,routes=0,script_messages=0,script_parameters=0,fixture_refusals=0;
-bool combat_mode=false,route_mode=false,hud_mode=false;
+bool combat_mode=false,route_mode=false,hud_mode=false,interaction_mode=false;
 char const* fixture_message="NEWSCILEADER";DWORD fixture_message_length=12;
 void show_map_specific_text(int x,int y,char const* text,bool pause){assert(x==42&&y==43&&text&&!pause);++messages;}
 struct Main_Screen_Form {int field_2E194=0,camera_x=10,camera_y=20,Player_CivID=1;bool is_now_loading_game=false;Unit* Current_Unit=nullptr;
@@ -57,7 +57,7 @@ struct State {struct {bool enable_custom_rendering=false;} current_config;
  bool custom_renderer_display_valid=false;void* kernel32=nullptr;} state;auto is=&state;
 int env_calls=0,original_calls=0,moves=0;constexpr int __=0;
 int patch_show_popup(void*,int,int,int){return 81;}DWORD env_length=9;
-DWORD environment(LPCSTR key,LPSTR buffer,DWORD size){++env_calls;if(std::strcmp(key,"C3X_RENDERER_GAME_TEST_MODE")==0){if(combat_mode){std::strcpy(buffer,"combat");return 6;}if(route_mode){std::strcpy(buffer,"matched-route");return 13;}if(hud_mode){std::strcpy(buffer,"hud");return 3;}return 0;}
+DWORD environment(LPCSTR key,LPSTR buffer,DWORD size){++env_calls;if(std::strcmp(key,"C3X_RENDERER_GAME_TEST_MODE")==0){if(interaction_mode){std::strcpy(buffer,"interaction");return 11;}if(combat_mode){std::strcpy(buffer,"combat");return 6;}if(route_mode){std::strcpy(buffer,"matched-route");return 13;}if(hud_mode){std::strcpy(buffer,"hud");return 3;}return 0;}
  if(std::strcmp(key,"C3X_RENDERER_GAME_TEST_MESSAGE")==0){assert(size==32);std::strcpy(buffer,fixture_message);return fixture_message_length;}
  assert(std::strcmp(key,"C3X_RENDERER_GAME_TEST_SAVE")==0&&size==MAX_PATH);
  std::strcpy(buffer,"input.SAV");return env_length;}
@@ -84,6 +84,8 @@ int main(){
  env_length=0;assert(checkpoint()==17&&state.custom_renderer_test_step==0);
  env_length=MAX_PATH;assert(checkpoint()==17&&state.custom_renderer_test_step==0);
  env_length=9;assert(checkpoint()==0&&state.custom_renderer_test_step==1);
+ combat_mode=true;assert(checkpoint()==0);combat_mode=false;
+ interaction_mode=true;assert(checkpoint()==81);interaction_mode=false;
  state.custom_renderer_test_step=0;state.current_config.enable_custom_rendering=false;env_calls=0;
  assert(command(&form,19,0x87)==73&&env_calls==0);
  assert(command(&form,19,0x86)==73&&env_calls==0&&messages==0);

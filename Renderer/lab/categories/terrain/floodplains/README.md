@@ -2,6 +2,13 @@
 
 Current floodplain mapping, river relationship and retained production ground response.
 
+The `wetland-edge` case isolates floodplain-to-grassland/plains height without
+river carving. Shared optional low relief stays flat through the floodplain and
+its material collar, then resumes smoothly outside it. This avoids the raised
+rim produced by fading the dry height only at wetland tile centers. The ordinary
+detail/gameplay cases retain their rivers; the same join is exercised with marsh
+in the grassland category. Existing authored hill/mountain profiles are unchanged.
+
 `standard.json` identifies the shared implementation, dependencies, fixture recipe
 and focused regression tests. The current checkout is authoritative.
 Reference captures reproduce production using small synthetic diagnostic scenes;

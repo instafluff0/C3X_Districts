@@ -403,6 +403,13 @@ def scene(category, case, destination, *, world_size=32):
                 base, real = 2, 5
             if category == "transitions":
                 base = real = (2 if x < 16 else 1) if y < 16 else (0 if x < 16 else 3)
+            if category in ("grassland", "floodplains") and case == "wetland-edge":
+                # Isolate the low-ground join without hills or river carving:
+                # both dry biomes meet a stepped wetland on two map axes.
+                c, r = (x + y) // 2, (x - y) // 2
+                base = real = 2 if r < 0 else 1
+                if c < 16 + (r >= 1):
+                    base, real = (2, 9) if category == "grassland" else (4, 4)
             if category in ("shorelines", "seas-oceans", "ocean-waves"):
                 if category in ("shorelines", "ocean-waves"):
                     # Exercise the feature this category actually owns: cliffs
@@ -448,7 +455,7 @@ def scene(category, case, destination, *, world_size=32):
                     if (c, r) in jungles:
                         base, real = 2, 8
                 river = watershed_river.get((x, y), 0)
-            if category == "floodplains":
+            if category == "floodplains" and case != "wetland-edge":
                 # Opposite edge bits agree on the diagonal raw-coordinate chain.
                 river = 2 if x == y else 32 if x == y + 2 else 0
             if category == "resources" and case.startswith("water-"):

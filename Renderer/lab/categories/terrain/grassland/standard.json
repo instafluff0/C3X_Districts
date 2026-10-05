@@ -35,7 +35,8 @@
     ],
     "cases": [
       "detail",
-      "gameplay"
+      "gameplay",
+      "wetland-edge"
     ]
   },
   "tests": [

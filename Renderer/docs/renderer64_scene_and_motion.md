@@ -37,6 +37,11 @@ After an accepted `Unit_move`, the existing patch sends old/new tile
 coordinates; the registered game-thread callback copies only their bounded
 sight neighborhoods, compares native visibility bits with the existing capture
 cache, and sends only changed tile records into Renderer64's scene journal.
+That same move-completion notification also starts a copied viewport request,
+before Civ III's next redraw. The native composition owner retains its capture
+identity so a later redraw polls it rather than cancelling and restarting it.
+This preserves the first step's reveal while the following step is animating;
+no animation-director call, gameplay wait or invented visibility is added.
 A post-interturn audit re-arms one paged world reconciliation for changes
 without an explicit transition hook. Other-civ moves that enter visible tiles
 also request an exact view capture. They still need a stable-ID accepted motion
@@ -116,6 +121,9 @@ fork is capped at 32 MiB (including retained wave buffers); immutable mesh
 retirement remains charged to the existing cache budget. Navigation and views
 without an eligible retained front keep the existing `held` fallback and
 bounded navigation clock allowance. A temporary hold never retires the sampler.
+If demanded geometry cannot fit beside the retained front, the worker releases
+its optional mesh pins and retries once with motion held. The displayed texture
+survives this fallback; a second failure remains an error rather than a retry loop.
 Externally supplied display timestamps reset the local wall-clock anchor so a
 following camera call cannot count the same elapsed interval twice.
 
@@ -139,7 +147,11 @@ An in-tile target becomes an offset from the authoritative tile center. Renderer
 interpolates that offset, holds it through fortify/attack/death, and interpolates
 a confirmed return target. Repeated native intermediate positions cannot steer
 or restart this travel. Full-tile movement remains owned by its accepted move
-segment. Wrapping and zoom use the same scene projection for both kinds.
+segment. A victory target outside the current tile holds the last combat stance
+until that segment arrives. The segment starts at the last displayed offset and
+travels only the remaining distance; it must not reset through the source tile.
+Unrelated native position corrections discard the offset. Wrapping and zoom use
+the same scene projection for both kinds.
 
 Attack clips advance on the visual clock at the copied native cycle duration.
 Repeated sparse captures do not restart a phase. A native return to idle or
@@ -299,6 +311,14 @@ endpoint and yields to the latest native stack owner. The capture regression
 covers this missing final draw; waiting for it left the attacker running in place. Hiding, retirement, incompatible actions and unrelated position
 corrections clear the route. The selection ring uses the same sampled body.
 
+Confirmed visible movement can use the copied destination anchor while the
+completed terrain view still carries older sight bits. The same rule covers the
+next leg starting there; arrival must not remove the body, cursor or HUD anchors.
+The exception applies only to movement newer than that native capture; an
+animated map clock is not a new sight observation. A newer fog capture, native
+unit hiding and retirement still revoke admission. Both
+linear and indexed wrapped-occurrence paths have executable handoff coverage.
+
 Newly copied visibility increases wait behind the committed movement segments
 whose native completion timestamps precede that capture's original timestamp. Visibility is admitted
 before terrain preparation, separately from display sampling: rendering an older
@@ -309,6 +329,11 @@ No native visibility rules or gameplay movement are changed.
 Camera preparation services only already-waiting overlay commands, with an
 eight-command/one-millisecond batch limit. It does not wait for a producer to
 submit another overlay packet while the changed terrain is unfinished.
+Scene-only unit facts and sight deltas can pass queued native canvas packets
+in the asynchronous bridge and merge into ordered fact batches. This prevents
+the first reveal from expiring behind repeated drawing packets. Facts, scope
+changes and camera adoption retain their order; canvas-bound unit draws retain
+image create/use dependencies. Every reliable canvas packet still executes.
 Same-view reveal preparation starts immediately. The earlier 160 ms collection
 window is removed now that the completed scene can animate during preparation.
 Already-superseded camera tickets are rejected before they mutate view state.
@@ -318,10 +343,18 @@ temporarily restore an older pose or fog state while native overlay packets
 finish arriving. Pending assets still preserve a complete image.
 
 The October 5 retained-view diagnostic confirms animation frames execute inside
-camera preparation, rather than holding a still image for the whole job. Its
-10 Hz window witness checks sampled terrain continuity; it does not certify
-every displayed frame or a frame-rate guarantee. Current candidate evidence is
-under `Renderer/.cache/smooth-scenes/`.
+camera preparation, rather than holding a still image for the whole job. The
+current Scout witness keeps both actors through 225 pose preparations and all
+41 movement window samples. Its first and second terrain reveals are separate;
+the first appears before the northbound leg completes, about 0.2 seconds after
+the first displayed arrival. The final unprofiled `153835` repeat keeps the
+Scout in all 43 window samples, with separate reveals at 76.056 and 76.814
+seconds and no sampled terrain blackout. Its first reveal remains about 0.3
+seconds late. Native sight becomes available after the native travel wait;
+preparing its newly visible geometry still consumes part of the arrival window.
+These 10 Hz samples do not certify every displayed frame, zero reveal latency
+or a frame-rate guarantee. Candidate evidence is under
+`Renderer/.cache/smooth-scenes/`.
 
 This implements ordinary visible tile travel. Hidden-to-visible admission,
 combat/transport transitions, route overlays and the full action lifecycle

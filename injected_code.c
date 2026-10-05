@@ -35106,7 +35106,7 @@ patch_show_intro_after_load_popup (void * this, int edx, int param_1, int param_
 			(*p_OutputDebugStringA) ("[C3X renderer] stage=scripted-game-load ready=1\n");
             char mode[16] = {0};
             if (get_environment ("C3X_RENDERER_GAME_TEST_MODE", mode, sizeof mode) > 0 &&
-                (strcmp (mode, "interaction") == 0 || strcmp (mode, "combat") == 0))
+                strcmp (mode, "interaction") == 0)
                 return patch_show_popup (this, __, param_1, param_2);
 			return 0;
 		}

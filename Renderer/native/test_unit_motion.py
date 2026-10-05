@@ -69,6 +69,35 @@ int main(){
  sparse.state.unit_id=sparse.body.unit_id=8;sparse.state.action=sparse.body.action=1;
  sparse.state.presentation_time_ticks=sparse.body.presentation_time_ticks=300;sparse.capture();
  p=sparse.pose(900000);assert(p.draw.unit_id==8);
+ // Keep the body, cursor and marker anchor through arrival in a copied
+ // terrain view that predates native sight. Exercise both occurrence paths.
+ for(int extras:{0,5}){
+  Fixture fog;fog.frame.presentation_frequency=1000000;
+  for(int i=0;i<extras;++i){fog.state.unit_id=fog.body.unit_id=20+i;fog.capture();}
+  fog.state.unit_id=fog.body.unit_id=7;fog.capture();
+  fog.tiles[1].tile_flags=C3X_RENDERER_TILE_RENDER;
+  fog.begin();fog.world.scene_poses(fog.frame,0,1000000,fog.catalog);fog.commit();
+  fog.state.tile_x=6;fog.state.presentation_time_ticks=200;assert(fog.world.state(fog.state));
+  auto check=[&](long long ticks,int x){
+   auto poses=fog.world.scene_poses(fog.frame,ticks,1000000,fog.catalog);
+   auto scout=std::find_if(poses.begin(),poses.end(),[](auto const& pose){return pose.draw.unit_id==7;});
+   assert(scout!=poses.end()&&scout->draw.body_x==x&&scout->cursor);
+  };
+  check(800000,1128);check(900000,1128);
+  assert(fog.world.motion_count(7)==0&&fog.world.pending_arrivals().empty());
+  // A newer terrain capture can revoke sight even before another body/state
+  // callback. An old accepted move must not bypass that current fog.
+  auto current=fog.frame;current.presentation_time_ticks=201;
+  auto lost=fog.world.scene_poses(current,900001,1000000,fog.catalog);
+  assert(std::none_of(lost.begin(),lost.end(),[](auto const& pose){return pose.draw.unit_id==7;}));
+  // The next leg must not disappear just because its source is still fogged
+  // in the retained terrain. It starts at the previous rendered endpoint.
+  fog.event.old_x=6;fog.event.new_x=6;fog.event.new_y=2;
+  fog.event.presentation_time_ticks=300;fog.begin();check(1000000,1128);check(1100000,1128);
+  fog.state.visible=0;fog.state.presentation_time_ticks=400;assert(fog.world.state(fog.state));
+  auto hidden=fog.world.scene_poses(fog.frame,1200000,1000000,fog.catalog);
+  assert(std::none_of(hidden.begin(),hidden.end(),[](auto const& pose){return pose.draw.unit_id==7;}));
+ }
  // A replacement camera can remain prepared while native composition catches
  // up. Hidden elapsed time cannot consume the rest of an accepted move.
  Fixture held;held.begin();held.pose(10000000);held.world.pause_motion(10300000);

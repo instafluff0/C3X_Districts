@@ -5,6 +5,57 @@ from Renderer.native.native_cpp_test import run_cpp
 
 
 class LowReliefTests(unittest.TestCase):
+    def test_wetland_material_join_is_flat_before_dry_ground_rises(self):
+        run_cpp(r'''
+#include "Renderer/lab/shared/natural/queries.h"
+#include <cassert>
+#include <set>
+using namespace c3x_renderer;
+int main(){
+ fidelity::NaturalData natural;
+ for(auto& f:natural.low_relief.fields){f.width=f.height=2;f.amplitude=64;f.span=96;f.pixels={128,128,128,128};}
+ render_core::World dims{48,64,true,true};
+ const float full=64*128/255.f;
+ for(unsigned wet:{4u,9u})for(unsigned dry:{1u,2u})for(bool turn:{false,true}){
+  std::vector<unsigned> tiles(48*64/2,dry|(dry<<8));
+  // One actual wet tile, with every edge and corner surrounded by dry land.
+  const std::size_t wet_index=(12*48+12)/2;tiles[wet_index]=dry|(wet<<8);
+  render_core::WorldCoast coast;coast.update(dims,tiles.data(),tiles.size(),1);
+  std::set<std::size_t> observed;auto observe=[&](auto i,auto){observed.insert(i);};auto none=[](auto,auto){};
+  render_core::ExactPointCache<render_core::ShoreSample> scratch;
+  fidelity::SurfaceQueries query(coast,scratch,12,12,observe,none,true);
+  // Check both axes, including corners and the warped material fade outside
+  // the tile. Zero displacement prevents an upper layer exposing flat marsh.
+  for(float y=-.65f;y<=1.65f;y+=.05f)for(float x=11.35f;x<=13.65f;x+=.05f){
+   float h=query.low_height(natural,x,y);
+   if(wet==9 && query.weights(x,y)[3]>.001f)assert(h<.0001f);
+   if(x>=12&&x<=13&&y>=0&&y<=1)assert(h==0);
+  }
+  float previous=0;
+  for(float d=0;d<=2.5f;d+=.025f){
+   float x=turn?12.5f:13+d,y=turn?1+d:.5f;
+   float h=query.low_height(natural,x,y);
+   assert(h>=previous-.0001f && h<=full+.0001f);
+   if(d<=.65f)assert(h<.0001f);
+   if(d>=2)assert(std::abs(h-full)<.0001f);
+   assert(std::abs(h-query.low_height(natural,x+24,y+24))<.002f);
+   assert(std::abs(h-query.low_height(natural,x+32,y-32))<.002f);
+   previous=h;
+  }
+  // Removing the wetland restores the original dry field, even for an owner
+  // outside the old four-center interpolation neighborhood.
+  observed.clear();render_core::ExactPointCache<render_core::ShoreSample> outer_scratch;
+  fidelity::SurfaceQueries outer(coast,outer_scratch,14,14,observe,none,true);
+  float shoulder=outer.low_height(natural,14.25f,.5f);
+  assert(shoulder>0 && shoulder<full && observed.count(wet_index));
+  tiles[wet_index]=dry|(dry<<8);coast.update(dims,tiles.data(),tiles.size(),2);
+  render_core::ExactPointCache<render_core::ShoreSample> changed_scratch;
+  fidelity::SurfaceQueries changed(coast,changed_scratch,14,14,observe,none,true);
+  assert(std::abs(changed.low_height(natural,14.25f,.5f)-full)<.0001f);
+ }
+}
+''')
+
     def test_unit_ground_uses_captured_anchor_and_continuous_travel(self):
         source=(Path(__file__).resolve().parents[2]/'Renderer/sandbox/direct_units.h').read_text()
         methods=source[source.index('    float low_ground('):source.index('    template<class T>static void drop')]
@@ -122,7 +173,7 @@ int main(){
  };
  check(2|(2<<8),true);check(1|(1<<8),true); // both supported biomes
  check(0,false);check(11|(11<<8),false); // desert and water unchanged
- for(unsigned real:{4u,5u,6u,10u})check(2|(real<<8),false); // lowland and authored relief remain intact
+ for(unsigned real:{4u,5u,6u,9u,10u})check(2|(real<<8),false); // lowland and authored relief remain intact
  auto bad=data;bad.pop_back();assert(!natural.low_relief.load(bad));
  bad=data;float huge=100;std::memcpy(bad.data()+16,&huge,4);assert(!natural.low_relief.load(bad));
  bad=data;float nan=std::numeric_limits<float>::quiet_NaN();std::memcpy(bad.data()+20,&nan,4);assert(!natural.low_relief.load(bad));

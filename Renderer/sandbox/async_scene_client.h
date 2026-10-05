@@ -101,8 +101,9 @@ template<class Transport>class AsyncSceneClient {
     }
     // Copied unit facts arrive at hundreds per second. One synchronous IPC per
     // fact (~0.5 ms each in the VM) saturated this transport thread and backed
-    // up every later camera/image/present command. Consecutive facts join the
-    // queue tail into one ordered batch; each is encoded on this transport
+    // up every later camera/image/present command. Scene-only facts can pass
+    // queued canvas work and join their preceding ordered batch. Canvas-bound
+    // facts retain their image dependencies. Each is encoded on this transport
     // thread at send time (after earlier image identities resolve), and its
     // own result keeps its original strict/superseded acceptance rule.
     // Local fact identities; the real transport maps them to wire messages.
@@ -126,15 +127,18 @@ template<class Transport>class AsyncSceneClient {
             }
         }else (void)group;
     }
-    int post_fact(std::size_t bytes,PendingFact fact,std::function<void()> single){
+    static bool independent_canvas(char const* label){
+        return label&&(!std::strcmp(label,"images")||!std::strcmp(label,"tactical")||!std::strcmp(label,"present"));
+    }
+    int post_fact(std::size_t bytes,PendingFact fact,std::function<void()> single,bool scene_only=true){
         if constexpr(decltype(fact_batching<Transport>(0))::value){
             auto group=std::make_shared<FactGroup>();group->facts.push_back(std::move(fact));
             bool accepted=publication.post_group(bytes,1,3,group,[this](FactGroup& value){execute_facts(value);},
                 [](FactGroup& target,FactGroup& incoming){for(auto& f:incoming.facts)target.facts.push_back(std::move(f));},
-                std::size_t(512)*1024,std::size_t(4096),std::size_t(512),"state");
+                std::size_t(512)*1024,std::size_t(4096),std::size_t(512),"state",scene_only?independent_canvas:nullptr);
             transport.publication_pressure(publication.status().records);
             return accepted?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_DEVICE_ERROR;
-        }else{(void)fact;return post(bytes,std::move(single));}
+        }else{(void)fact;return post(bytes,std::move(single),0,"state",scene_only?independent_canvas:nullptr);}
     }
     static std::shared_ptr<c3x_inputs::Frame> copy_frame(c3x_renderer_frame_v1 const& source){
         auto result=std::make_shared<c3x_inputs::Frame>();result->value=source;
@@ -189,7 +193,7 @@ template<class Transport>class AsyncSceneClient {
             value.tiles=tiles->data();
             accept_state(delta?transport.world_delta_submit(value,code):transport.world_submit(value,code),
                 delta?"world-delta":"world-page");
-        });
+        },0,delta?"world-delta":"world-page",delta?independent_canvas:nullptr);
     }
     void clear(){
         image_ids.clear();ticket_ids.clear();worker_camera=remote_camera=worker_map=0;policy=0;
@@ -279,7 +283,7 @@ public:
             // that work uses the displayed ticket, which only the later ordered
             // adoption retires, and the worker serves it at job checkpoints.
             // Facts, scene state and camera commands keep their order.
-            [](char const* label){return label&&(!std::strcmp(label,"images")||!std::strcmp(label,"tactical")||!std::strcmp(label,"present"));});
+            independent_canvas);
         if(code!=C3X_RENDERER_RESULT_OK)return code;
         camera=slot;published_frame=frame;published_identity=identity;
         result=slot->ticket;return C3X_RENDERER_RESULT_PENDING;
@@ -381,7 +385,7 @@ public:
         bounds[0]=bounds[2]=value.body_x;bounds[1]=bounds[3]=value.body_y;
         return post_fact(sizeof(value)+sizeof(destination),{fact_unit,true,"unit-observation",
             [this,value,destination](c3x_inputs::Writer& out)mutable{target(destination);c3x_inputs::unit(out,value);c3x_inputs::target_fields(out,destination);}},
-            [this,value,destination]()mutable{target(destination);int unused[4]={};require_result(transport.unit(value,destination,unused),"unit-observation");});
+            [this,value,destination]()mutable{target(destination);int unused[4]={};require_result(transport.unit(value,destination,unused),"unit-observation");},destination.ticket==0);
     }
     void forget_unit(int id){
         if(!enabled){transport.forget_unit(id);return;}

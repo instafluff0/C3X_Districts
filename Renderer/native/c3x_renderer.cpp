@@ -14985,7 +14985,12 @@ private:
                 auto& frame=job->input;
                 frame.presentation_time_ticks=view.presentation_time_ticks;frame.presentation_frequency=view.presentation_frequency;
                 LARGE_INTEGER stages[5]={};QueryPerformanceCounter(&stages[0]);
-                auto candidates=unit_instances.scene_poses(frame,ticks,frequency,renderer_state.unit_bodies.units);
+                // Unit admission compares native capture time, not this animated
+                // map clock. A newer fog loss must override old accepted travel.
+                auto unit_frame=frame;auto native_capture=job->captured->frame();
+                unit_frame.presentation_time_ticks=native_capture.presentation_time_ticks;
+                unit_frame.presentation_frequency=native_capture.presentation_frequency;
+                auto candidates=unit_instances.scene_poses(unit_frame,ticks,frequency,renderer_state.unit_bodies.units);
                 renderer_state.arrival_visibility.pending=unit_instances.pending_arrivals();
                 QueryPerformanceCounter(&stages[1]);
                 decltype(candidates) poses;

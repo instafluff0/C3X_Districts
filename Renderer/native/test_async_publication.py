@@ -207,6 +207,34 @@ int main(){
 }
 ''')
 
+    def test_scene_facts_and_reveal_pass_canvas_backlog_without_losing_reliable_work(self):
+        run_cpp(r'''
+#include "Renderer/sandbox/async_publication.h"
+#include <cassert>
+#include <cstring>
+#include <vector>
+int main(){
+ std::promise<void> entered,release;auto held=release.get_future();std::vector<int> seen;
+ c3x_async::Publication queue({},1<<20,128);
+ assert(queue.post(1,[&]{entered.set_value();held.wait();}));entered.get_future().get();
+ auto ui=[](char const* label){return label&&!std::strcmp(label,"images");};
+ auto image=[&](int id){assert(queue.post(10,[&,id]{seen.push_back(id);},0,"images"));};
+ auto fact=[&](int id,bool independent){auto group=std::make_shared<std::vector<int>>(1,id);
+  assert(queue.post_group(10,1,3,group,[&](auto& values){seen.insert(seen.end(),values.begin(),values.end());},
+   [](auto& a,auto& b){a.insert(a.end(),b.begin(),b.end());},1000,100,100,"state",independent?ui:nullptr));};
+ image(100);fact(1,true);image(101);fact(2,true);image(102);
+ assert(queue.post(10,[&]{seen.push_back(3);},0,"world-delta",1,ui));
+ assert(queue.post(10,[&]{seen.push_back(4);},1,"camera-begin",1,ui));
+ // A canvas-bound fact retains the create/use dependency. Later scene-only
+ // facts may pass later images, but cannot jump this or the camera barrier.
+ image(103);fact(5,false);image(104);fact(6,true);
+ auto pending=queue.status();assert(pending.records==12&&pending.bytes==111);
+ release.set_value();queue.stop();
+ assert((seen==std::vector<int>{1,2,3,4,100,101,102,103,5,6,104}));
+ auto done=queue.status();assert(done.accepted==done.executed&&done.bytes==0&&done.records==0&&done.units==0);
+}
+''')
+
     def test_ordered_ids_camera_adoption_and_owned_payloads(self):
         run_cpp(r'''
 #include "Renderer/sandbox/async_scene_client.h"

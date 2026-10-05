@@ -2750,3 +2750,23 @@ It resumes normal presentation on the first matching map, without another input
 or timer. The guard is renderer-only, excludes startup/failed initialization,
 and adds no injected state or patch symbol. Its executable regression checks
 28 combinations plus release after the matching projection completes.
+
+
+## Per-step terrain preparation
+
+`required_user_action: []`. The existing `Unit_move` post-call notification now
+requests a copied native viewport immediately after the accepted move and sight
+neighborhood have been published. It reuses the existing
+`c3x_renderer_native_camera_request` DLL export and native tile traversal; the
+next ordinary map draw polls that same copied request. The capture neither
+re-enters the animation director nor draws/commits a native canvas. Loading,
+active capture/drawing and invalid displayed scopes retain the normal redraw
+fallback. Renderer-off returns before this work. No new patch-table symbol,
+signature or supported-build address is required.
+
+The existing `show_intro_after_load_popup` diagnostic now dismisses the known
+combat-fixture welcome popup at the load checkpoint, as other automatic
+scenarios already do. `interaction` keeps its popup for explicit UI coverage.
+The change requires the existing test-save environment and renderer enablement;
+ordinary gameplay and config-off delegation are unchanged. No patch entry is
+added or changed; `required_user_action: []`.
