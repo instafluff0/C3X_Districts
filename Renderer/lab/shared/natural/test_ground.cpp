@@ -16,6 +16,26 @@ int main() {
     assert(flat(.5f,.5f)==0 && isolated(.5f,.5f)==1);
     assert(isolated(0,.5f)==0 && isolated(1,.5f)==0);
     assert(joined(0,.5f)==1 && joined(1,.5f)==0);
+    // Land fades while the dry beach is still present, across the full range
+    // of lowland widths. No coverage leaks into water or beyond the old inland
+    // endpoint, and a continuous family mix retains the narrow desert edge.
+    for(float width:{.065f,.12f,.2f,.245f}) {
+        assert(coast_coverage(0,width)==0);
+        assert(coast_coverage(width+.221f,width)==1);
+        assert(coast_coverage(width+.02f,width)>.1f);
+        assert(coast_coverage(width+.02f,width)<.95f);
+        float previous=0;
+        for(unsigned i=0;i<=500;i++) {
+            float distance=i/1000.f;
+            float coverage=coast_coverage(distance,width);
+            assert(coverage>=previous && coverage<=1);previous=coverage;
+            for(float desert:{0.f,.25f,.5f,.75f,1.f}) {
+                float mixed=coverage*(1-desert)+desert_coast_coverage(distance)*desert;
+                assert(mixed>=0 && mixed<=1);
+                if(distance==0)assert(mixed==0);
+            }
+        }
+    }
     unsigned comparisons=0;
     for(float zoom:{64.f,128.f})for(float target:{480.f,640.f})for(int column:{-17,0,29}) {
         GroundProjection project{column,-5,zoom*.5f,zoom*.25f,zoom/224.f*.82f,target};

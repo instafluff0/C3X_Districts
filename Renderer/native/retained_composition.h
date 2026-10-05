@@ -1,6 +1,8 @@
 #pragma once
+#include <chrono>
 #include "gpu_image_compositor.h"
 #include "zoom_transition.h"
+#include "render_core/gpu_event_timeline.h"
 #include "scene_projection.h"
 #include "gpu_projected_layer.h"
 #include <array>
@@ -17,7 +19,9 @@ namespace c3x_gpu_images {
 class RetainedComposition {
 public:
     struct Work {unsigned operations=0,assemblies=0,copies=0,selected_borrows=0,selected_owned=0,direct_native_images=0;
-        std::uint64_t copied_pixels=0,assembly_pixels=0,avoided_copy_pixels=0;};
+        std::uint64_t copied_pixels=0,assembly_pixels=0,avoided_copy_pixels=0;
+        // CPU submission time per visual-frame phase (diagnostic only).
+        double prepare_ms=0,evaluate_ms=0,assemble_ms=0,display_ms=0;};
     struct RecipeReuse {std::uint64_t eligible=0,probed=0,reused=0;};
     struct PlanReuse {std::uint64_t builds=0,reuses=0,source_binds=0,source_reuses=0,batch_builds=0,batch_reuses=0;std::size_t nodes=0;};
     using Texture=ComPtr<ID3D11Texture2D>;
@@ -1440,13 +1444,18 @@ public:
     int draw(long long ticks,long long frequency,ID3D11RenderTargetView* target,ID3D11Texture2D* display,ID3D11Texture2D* buffer){
         work={};selected_view_scale=1.;
         if(!ready())return 0;++frame;
+        using PhaseClock=std::chrono::steady_clock;
+        auto phase=PhaseClock::now();
+        auto lap=[&](double& slot){auto now=PhaseClock::now();slot=std::chrono::duration<double,std::milli>(now-phase).count();phase=now;};
         Pins pinned;pinned.add(front);
-        prepare_front(ticks,frequency);
+        prepare_front(ticks,frequency);lap(work.prepare_ms);render_core_mark("compose_prepare");
         auto& versions=pending_drawn_dependencies;versions.clear();
         for(auto const& part:front.patches){evaluate(part.node,ticks,frequency,0);versions.push_back(part.node->revision);}
+        lap(work.evaluate_ms);render_core_mark("compose_evaluate");
         if(drawn_revision==front_revision&&versions==drawn_dependencies)return 2; // no new source sample
         Id image=0;Rect damage=extent(front);
         if(!assemble_front(image,damage))image=assemble(front,ticks,frequency,0,{},true);
+        lap(work.assemble_ms);render_core_mark("compose_assemble");
         bool ok=false;
         // The live target is a flip-model swap-chain buffer, not the previous
         // display. Its unchanged regions may be several frames old. Retain
@@ -1454,6 +1463,7 @@ public:
         // on every changed frame; Present does not receive a damage history.
         try{ok=replay.display(image,target,front.width,front.height,extent(front));}
         catch(...){assembled_revision=0;replay.recycle(image);throw;}replay.recycle(image);
+        lap(work.display_ms);render_core_mark("compose_display");
         if(!ok)assembled_revision=0;
         // The caller publishes with Present or a keyed release followed by
         // Flush. Keep the retained copy in that same submission batch.
@@ -1461,6 +1471,7 @@ public:
         // diagnostics); a null buffer skips a full-screen copy every frame.
         if(ok){if(buffer)context->CopyResource(buffer,display);drawn_revision=front_revision;drawn_dependencies.swap(versions);}return ok?1:0;
     }
+    void render_core_mark(char const* name){c3x_renderer::render_core::gpu_timeline().mark(context,name);}
     double view_scale()const{return selected_view_scale;}
     Work last_work()const{return work;}
     // Native completed-front identity; visual clock samples do not advance it.

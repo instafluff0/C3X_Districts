@@ -53,6 +53,7 @@ struct Session {long long ticket=41;std::uint64_t revision=7;bool ready=true;
  long long current_ticket(){return ticket;}std::uint64_t committed_revision(){return revision;}bool visual_ready(){return ready;}};
 struct Owner {
  std::mutex call_mutex,state_mutex;
+ void drain_facts_locked(){}
  struct {std::unique_ptr<Session> gpu_composition=std::make_unique<Session>();}renderer_state;
  PublishedMapFrame publication,gpu_publication;
  c3x_renderer::render_core::ScenePublication scene_changes;

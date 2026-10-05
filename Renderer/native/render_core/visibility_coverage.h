@@ -1,5 +1,6 @@
 #pragma once
 #include "../c3x_renderer_api.h"
+#include "../scene_projection.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -74,10 +75,24 @@ struct VisibilityCoverage {
             ++map_records;auto prior=states.emplace(key(t.tile_x,t.tile_y),state);
             if(!prior.second&&prior.first->second!=state)return reject();
         }
-        for(unsigned i=0;i<frame.tile_count;++i){auto const& t=frame.tiles[i];
+        // The GPU pass scales anchors about the view center for the current
+        // zoom, so below 1x tiles outside the canonical viewport are on screen
+        // too. Cover everything the widest outward zoom can show; culling at
+        // the 1x viewport left the outer ring unfogged when zoomed out.
+        auto reach=[](int extent,int size){double center=std::floor(extent*.5),scale=1./double(SceneProjection::minimum);
+            return std::make_pair(center-center*scale-size,center+(extent-center)*scale);};
+        auto reach_x=reach(width,tile_width),reach_y=reach(height,tile_height);
+        // The 1x viewport keeps its exact contract (conflicting duplicate
+        // anchors reject the capture). The outer ring is added afterwards and
+        // only skips a conflicting duplicate: rejecting there failed whole
+        // frames on maps whose wide captures repeat anchors.
+        for(int pass=0;pass<2;++pass)for(unsigned i=0;i<frame.tile_count;++i){auto const& t=frame.tiles[i];
             if(!(t.tile_flags&C3X_RENDERER_TILE_RENDER))continue;
-            if(std::int64_t(t.anchor_x)+tile_width<=0 || t.anchor_x>=width ||
-               std::int64_t(t.anchor_y)+tile_height<=0 || t.anchor_y>=height)continue;
+            bool inside=!(std::int64_t(t.anchor_x)+tile_width<=0 || t.anchor_x>=width ||
+                std::int64_t(t.anchor_y)+tile_height<=0 || t.anchor_y>=height);
+            if(inside!=(pass==0))continue;
+            if(double(t.anchor_x)<=reach_x.first || double(t.anchor_x)>=reach_x.second ||
+               double(t.anchor_y)<=reach_y.first || double(t.anchor_y)>=reach_y.second)continue;
             unsigned cells=0;
             for(int v=-1;v<=1;++v)for(int u=-1;u<=1;++u){
                 ++neighbor_lookups;
@@ -86,7 +101,7 @@ struct VisibilityCoverage {
                 cells|=state<<(2*((v+1)*3+u+1));
             }
             auto prior=anchors.emplace(std::make_pair(t.anchor_x,t.anchor_y),cells);
-            if(!prior.second){if(prior.first->second!=cells)return reject();continue;}
+            if(!prior.second){if(inside && prior.first->second!=cells)return reject();continue;}
             // Include explored fog and neighbor feather support, including
             // fully visible tiles omitted from the fog draw list.
             if(cells)revealed.push_back({t.anchor_x,t.anchor_y,t.anchor_x+tile_width,t.anchor_y+tile_height});

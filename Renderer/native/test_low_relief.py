@@ -12,7 +12,10 @@ class LowReliefTests(unittest.TestCase):
 #include "Renderer/lab/shared/natural/queries.h"
 #include "Renderer/native/c3x_renderer_api.h"
 #include <cassert>
-struct Renderer {c3x_renderer::fidelity::NaturalWorld natural;c3x_renderer::render_core::WorldCoast world_coast;} renderer;
+#include <cmath>
+#include <unordered_map>
+struct Renderer {c3x_renderer::fidelity::NaturalWorld natural;c3x_renderer::render_core::WorldCoast world_coast;
+ long long geometry_world_revision=1;std::uint64_t content_revision=1;} renderer;
 struct UnitGround {
 ''' + methods + r'''
 };

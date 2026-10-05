@@ -575,11 +575,14 @@ int main(){
 int main(){
  {Fixture f;std::vector<unsigned> many(1800000,0);std::vector<Owner::Lease> pins;
   auto geometry=std::size_t(4)*36+many.size()*4;
-  for(unsigned n=0;n<20;++n){auto input=f.input(n+1,0);input.indices=many.data();input.index_count=unsigned(many.size());
+  // Enough maximal pages to exceed the owner's charged budget, whatever that
+  // budget is (each page retains one geometry copy after staging).
+  unsigned const attempts=unsigned(Owner::budget/geometry)+2;
+  for(unsigned n=0;n<attempts;++n){auto input=f.input(n+1,0);input.indices=many.data();input.index_count=unsigned(many.size());
    auto page=f.owner.append(&f.device,&f.context,&f.source,8,&input,1);if(!page)break;pins.push_back(page);
    assert(f.owner.bytes()==f.owner.metadata_bytes()+f.owner.gpu_bytes());
    assert(f.owner.bytes()<=Owner::budget&&f.owner.peak_bytes()<=Owner::budget);}
-  assert(!pins.empty()&&pins.size()<20&&f.owner.refusals);
+  assert(!pins.empty()&&pins.size()<attempts&&f.owner.refusals);
   assert(!f.owner.can_append(geometry,1));auto creates=f.device.creates;
   auto refused=f.input(100,0);refused.indices=many.data();refused.index_count=unsigned(many.size());
   assert(!f.owner.append(&f.device,&f.context,&f.source,8,&refused,1)&&f.device.creates==creates);

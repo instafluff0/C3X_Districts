@@ -28,7 +28,7 @@ PREAMBLE = GPU_STUB + r'''
 #include "Renderer/native/render_core/frame_sample_cache.h"
 struct Plan {Owner::SelectionLease selection;};
 using Plans=c3x_renderer::render_core::FrameSampleCache<int,Plan,4>;
-static_assert(Owner::budget==32u*1024u*1024u,"The joint allowance must remain unchanged");
+static_assert(Owner::budget==256u*1024u*1024u,"The joint allowance must remain unchanged");
 '''
 
 

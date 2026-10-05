@@ -179,22 +179,27 @@ float depth_slope(float backward,float forward){
  // be interpolated into its neighbor; clear pixels also stay clear.
  return backward*forward>0?(abs(backward)<abs(forward)?backward:forward):0;
 }
-float retained_depth(Texture2D<float> field,float2 p,float2 size,float shift){
- int2 at=int2(floor(p)),limit=int2(size)-1;
+float retained_depth(Texture2D<float> field,float2 p,float2 size,float shift,float4 covered){
+ // Neighbors stay inside the source's drawn texels. Texels past a coverage
+ // edge hold cleared or stale depth from earlier use of the region; a slope
+ // taken across that edge moved one row in front of the live water, which
+ // then failed its depth test and showed dashed seabed lines mid-zoom.
+ int2 at=int2(floor(p));
+ int2 low=max(int2(covered.xy)-1,0),high=min(int2(covered.zw),int2(size)-1);
  float z=field.Load(int3(at,0));if(z>=1)return 1;
- float left=field.Load(int3(max(at-int2(1,0),0),0));
- float right=field.Load(int3(min(at+int2(1,0),limit),0));
- float top=field.Load(int3(max(at-int2(0,1),0),0));
- float bottom=field.Load(int3(min(at+int2(0,1),limit),0));
+ float left=field.Load(int3(max(at-int2(1,0),low),0));
+ float right=field.Load(int3(min(at+int2(1,0),high),0));
+ float top=field.Load(int3(max(at-int2(0,1),low),0));
+ float bottom=field.Load(int3(min(at+int2(0,1),high),0));
  float2 gradient=float2(depth_slope(z-left,right-z),depth_slope(z-top,bottom-z));
  // Water draws at the current projection. Nearest depth makes the retained
  // sloped ground plane a staircase and rejects alternating rows of water.
  return z+dot(gradient,p-(float2(at)+.5))+shift;
 }
 Output fetch0(float2 p){Output o;o.color=color0.SampleLevel(linear_clamp,p*size0.zw,0);
- o.depth=retained_depth(depth0,p,size0.xy,options.y);return o;}
+ o.depth=retained_depth(depth0,p,size0.xy,options.y,covered0);return o;}
 Output fetch1(float2 p){Output o;o.color=color1.SampleLevel(linear_clamp,p*size1.zw,0);
- o.depth=retained_depth(depth1,p,size1.xy,options.z);return o;}
+ o.depth=retained_depth(depth1,p,size1.xy,options.z,covered1);return o;}
 Output PS(float4 position:SV_Position){
  float2 p0=position.xy*map0.xy+map0.zw;
  if(inside(p0,covered0))return fetch0(p0);

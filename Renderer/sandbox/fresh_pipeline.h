@@ -11,6 +11,9 @@
 #include "../native/render_core/body_placement_requirements.h"
 #include "../native/render_core/prepared_draw_parameters.h"
 #include "../native/render_core/submission_census.h"
+#include "../native/render_core/pulled_mesh_pages.h"
+#include "../native/render_core/overlay_composite.h"
+#include "../native/render_core/gpu_event_timeline.h"
 #include <limits>
 #include <sstream>
 #include "../native/gpu_territory_borders.h"
@@ -45,7 +48,13 @@ struct SandboxVisualShaders {
     ID3D11PixelShader* aquatic_feature = nullptr;
     ID3D11PixelShader* vegetation_depth[2] = {};
     ID3D11VertexShader* vegetation_instances[2] = {};
+    // Vertex-pulled VSIntegrated/VSIntegratedFeature for batched non-rigid
+    // records; optional.
+    ID3D11VertexShader* pulled_vertex = nullptr;
+    ID3D11VertexShader* pulled_feature = nullptr;
     ~SandboxVisualShaders() {
+        if(pulled_vertex) pulled_vertex->Release();
+        if(pulled_feature) pulled_feature->Release();
         if(shadow_comparison)shadow_comparison->Release();
         if(water_surface) water_surface->Release();
         if(water_lighting) water_lighting->Release();
@@ -430,6 +439,115 @@ float4 PSSandboxAquaticFeature(FeaturePixelInput input) : SV_Target {
         if (code) code->Release();
         return SUCCEEDED(hr);
     }
+    // Build VSIntegratedPulled from the selected hydrology source: the same
+    // VSIntegrated body, fed from a page record and raw vertex/index bytes.
+    // Viewport occurrence terms are redirected to per-vertex statics after the
+    // C3XViewportSettings declaration; shared terms still come from b1.
+    // Any unexpected layout leaves batching disabled (ordinary path).
+    static bool compile_pulled_vertex(ID3D11VertexShader** output,ID3D11VertexShader** feature) {
+        auto shader=source("hydrology.hlsl");
+        auto cbuffer=shader.find("cbuffer C3XViewportSettings");
+        auto close=cbuffer==std::string::npos?cbuffer:shader.find("};",cbuffer);
+        auto layout=shader.find("struct IntegratedVertexInput");
+        auto body_begin=layout==std::string::npos?layout:shader.find('{',layout);
+        auto body_end=body_begin==std::string::npos?body_begin:shader.find("};",body_begin);
+        if(close==std::string::npos||body_end==std::string::npos||shader.find("PixelInput VSIntegrated(IntegratedVertexInput input)")==std::string::npos)return false;
+        struct Element {char const* semantic;unsigned index,offset;};
+        static Element const elements[]={{"POSITION",0,0},{"TEXCOORD",0,12},{"TEXCOORD",1,20},{"NORMAL",0,24},
+            {"TEXCOORD",2,36},{"TEXCOORD",3,44},{"TEXCOORD",4,52},{"TEXCOORD",5,56},{"TEXCOORD",6,60},{"TEXCOORD",7,64},
+            {"TEXCOORD",8,68},{"TEXCOORD",9,84},{"TEXCOORD",10,92},{"TEXCOORD",11,96},{"TEXCOORD",12,112},{"TEXCOORD",13,116},
+            {"TEXCOORD",14,120},{"TEXCOORD",15,136},{"TEXCOORD",16,152}};
+        std::string decode;
+        std::istringstream fields(shader.substr(body_begin+1,body_end-body_begin-1));
+        for(std::string line;std::getline(fields,line);){
+            auto colon=line.find(':');if(colon==std::string::npos)continue;
+            std::istringstream left(line.substr(0,colon));std::string type,name;left>>type>>name;
+            std::string semantic;for(char c:line.substr(colon+1))if(std::isalnum(static_cast<unsigned char>(c))||c=='_')semantic+=c;
+            if(type.empty()||name.empty()||semantic.empty())return false;
+            unsigned width=type=="float"?1:type=="float2"?2:type=="float3"?3:type=="float4"?4:0;
+            if(!width)return false;
+            auto digits=semantic.find_first_of("0123456789");
+            unsigned index=digits==std::string::npos?0:unsigned(std::stoul(semantic.substr(digits)));
+            auto base=semantic.substr(0,digits);
+            Element const* match=nullptr;
+            for(auto const& e:elements)if(base==e.semantic&&index==e.index)match=&e;
+            if(!match||match->offset+width*4>168)return false;
+            decode+="    input."+name+"=asfloat(c3x_pulled_vertices.Load"+(width>1?std::to_string(width):std::string())+
+                "(base+"+std::to_string(match->offset)+"u));\n";
+        }
+        if(decode.empty())return false;
+        shader.insert(close+2,R"(
+static float2 c3x_pulled_translation;
+static float c3x_pulled_depth_translation;
+static float c3x_pulled_kind;
+static float4 c3x_pulled_projection;
+#define c3x_viewport_translation c3x_pulled_translation
+#define c3x_viewport_depth_translation c3x_pulled_depth_translation
+#define c3x_viewport_translation_padding c3x_pulled_kind
+#define c3x_content_projection c3x_pulled_projection
+)");
+        shader+=R"(
+struct C3XPulledRecord {uint first,count,vertex_byte,index_byte;uint index16,stride,vertices,r1;float2 translation;float kind,r2;float4 projection;};
+StructuredBuffer<C3XPulledRecord> c3x_pulled_records : register(t60);
+ByteAddressBuffer c3x_pulled_vertices : register(t61);
+ByteAddressBuffer c3x_pulled_indices : register(t62);
+cbuffer C3XPulledBatch : register(b12) {
+    float2 c3x_pulled_base_translation;float c3x_pulled_depth_base;uint c3x_pulled_vertex_base;
+    uint c3x_pulled_record_first;uint c3x_pulled_record_last;uint2 c3x_pulled_batch_pad2;
+};
+// Draw(count,0) plus an explicit base: D3D11 SV_VertexID excludes
+// StartVertexLocation. Every raw load is clamped to its record, so no
+// inconsistency can read outside a page. Selects the occurrence terms and
+// returns the vertex's byte address.
+uint c3x_pulled_vertex_address(uint vertex) {
+    uint id=vertex+c3x_pulled_vertex_base;
+    uint lo=c3x_pulled_record_first,hi=c3x_pulled_record_last;
+    [loop] while(lo<hi){uint mid=(lo+hi+1)>>1;if(c3x_pulled_records[mid].first<=id)lo=mid;else hi=mid-1;}
+    C3XPulledRecord r=c3x_pulled_records[lo];
+    uint local=min(id-r.first,r.count-1),index;
+    if(r.index16!=0){uint address=r.index_byte+local*2;uint word=c3x_pulled_indices.Load(address&~3u);index=(address&2u)!=0?(word>>16):(word&0xffffu);}
+    else index=c3x_pulled_indices.Load(r.index_byte+local*4);
+    c3x_pulled_translation=c3x_pulled_base_translation+r.translation;
+    c3x_pulled_depth_translation=c3x_pulled_depth_base+r.translation.y;
+    c3x_pulled_kind=r.kind;
+    c3x_pulled_projection=r.projection;
+    return r.vertex_byte+min(index,r.vertices-1)*r.stride;
+}
+PixelInput VSIntegratedPulled(uint vertex : SV_VertexID) {
+    uint base=c3x_pulled_vertex_address(vertex);
+    IntegratedVertexInput input=(IntegratedVertexInput)0;
+)"+decode+R"(
+    return VSIntegrated(input);
+}
+)";
+        // The packed feature layout (feature_input_layout, 48 bytes) is fixed
+        // by the renderer; use it only when the source declares exactly it.
+        bool feature_layout=shader.find("struct PackedFeatureInput {\n float3 position:POSITION;float2 uv:TEXCOORD0;float3 normal:NORMAL;\n float material:TEXCOORD6;float3 world:TEXCOORD14;\n};")!=std::string::npos &&
+            shader.find("FeaturePixelInput VSIntegratedFeature(PackedFeatureInput packed)")!=std::string::npos;
+        if(feature_layout)shader+=R"(
+FeaturePixelInput VSIntegratedFeaturePulled(uint vertex : SV_VertexID) {
+    uint base=c3x_pulled_vertex_address(vertex);
+    PackedFeatureInput packed;
+    packed.position=asfloat(c3x_pulled_vertices.Load3(base));
+    packed.uv=asfloat(c3x_pulled_vertices.Load2(base+12u));
+    packed.normal=asfloat(c3x_pulled_vertices.Load3(base+20u));
+    packed.material=asfloat(c3x_pulled_vertices.Load(base+32u));
+    packed.world=asfloat(c3x_pulled_vertices.Load3(base+36u));
+    return VSIntegratedFeature(packed);
+}
+)";
+        auto compile=[&](char const* entry,ID3D11VertexShader** target){
+            Microsoft::WRL::ComPtr<ID3DBlob> code,errors;
+            HRESULT hr=D3DCompile(shader.data(),shader.size(),"fresh_pulled",nullptr,nullptr,entry,"vs_5_0",
+                D3DCOMPILE_OPTIMIZATION_LEVEL3,0,&code,&errors);
+            if(errors&&FAILED(hr))renderer.trace.write("fresh-pulled-shader",static_cast<char const*>(errors->GetBufferPointer()),true);
+            return SUCCEEDED(hr)&&SUCCEEDED(renderer.device->CreateVertexShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,target));
+        };
+        if(!compile("VSIntegratedPulled",output))return false;
+        if(feature_layout && !compile("VSIntegratedFeaturePulled",feature))
+            renderer.trace.write("fresh-pulled-shader","feature layout unavailable; feature records use per-record submission",true);
+        return true;
+    }
     bool install() {
         if (installed) return true;
         if(!shadow_comparison){
@@ -508,6 +626,10 @@ float4 PSSandboxAquaticFeature(FeaturePixelInput input) : SV_Target {
             if(errors)OutputDebugStringA(static_cast<char const*>(errors->GetBufferPointer()));
             if(FAILED(hr) || FAILED(renderer.device->CreateVertexShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,&vegetation_instances[i])))return false;
         }
+        char pulled_control[8]={};
+        if(!(c3x_renderer::render_core::cached_environment("C3X_RENDERER_PULLED_SUBMISSION",pulled_control,sizeof(pulled_control))&&
+             pulled_control[0]=='0') && !compile_pulled_vertex(&pulled_vertex,&pulled_feature))
+            renderer.trace.write("fresh-pulled-shader","unavailable; ordinary per-record submission",true);
 #endif
         installed = true;
         return true;
@@ -1340,6 +1462,14 @@ struct SandboxSceneShadow {
         context->OMSetRenderTargets(1,&target,nullptr);
         auto page_box=sampling_grid.page_box(page_slot);
         auto page= sampling_grid.page(page_slot);
+        // Consecutive casters share the page constants (the wrap offset is
+        // zero for all but wrapped copies) and usually their shaders, layout
+        // and buffers; re-issuing every state per draw dominated page rebuilds.
+        bool constants_set=false;std::array<float,3> last_offset{};
+        unsigned last_binding=~0u;bool last_cutout=false;ID3D11PixelShader* last_ps=nullptr;
+        ID3D11InputLayout* last_layout=nullptr;ID3D11Buffer* last_vertices=nullptr;UINT last_stride=0,last_vertex_offset=0;
+        ID3D11Buffer* last_indices=nullptr;DXGI_FORMAT last_format=DXGI_FORMAT_UNKNOWN;UINT last_index_offset=0;
+        context->VSSetShader(vertex,nullptr,0);
         for (std::size_t caster_index=0;caster_index<casters.size();++caster_index) {
             auto const& caster=casters[caster_index];if(caster.instances)continue;
             if(work->enabled)++work->row(caster.layer).tested_records;
@@ -1347,22 +1477,33 @@ struct SandboxSceneShadow {
             if(bounds[2]<page_box[0] || bounds[0]>page_box[0]+page_box[2] ||
                bounds[3]<page_box[1] || bounds[1]>page_box[1]+page_box[3])continue;
             if(work->enabled)++work->row(caster.layer).accepted_records;
-            float settings[20]={};
-            std::copy(renderer.shadow_basis.begin(),renderer.shadow_basis.end(),settings);
-            for (int i=0;i<3;++i) {
-                settings[i]*=6/page_box[2];settings[4+i]*=6/page_box[3];
-                settings[16+i]=caster.offset[i];
+            std::array<float,3> caster_offset{caster.offset[0],caster.offset[1],caster.offset[2]};
+            if(!constants_set || caster_offset!=last_offset){
+                float settings[20]={};
+                std::copy(renderer.shadow_basis.begin(),renderer.shadow_basis.end(),settings);
+                for (int i=0;i<3;++i) {
+                    settings[i]*=6/page_box[2];settings[4+i]*=6/page_box[3];
+                    settings[16+i]=caster.offset[i];
+                }
+                settings[12]=float(page[0]);settings[13]=float(page[1]);
+                context->UpdateSubresource(constants,0,nullptr,settings,0,0);work->upload_buffer(constants);
+                constants_set=true;last_offset=caster_offset;
             }
-            settings[12]=float(page[0]);settings[13]=float(page[1]);
-            context->UpdateSubresource(constants,0,nullptr,settings,0,0);work->upload_buffer(constants);
-            context->PSSetShader(bind_cutout(caster.binding==0xffffffffu?
-                caster.layer:caster.binding)?cutout:opaque,nullptr,0);
-            context->VSSetShader(vertex,nullptr,0);
-            context->IASetInputLayout(caster.stride==88?city_layout:
-                caster.stride==92?natural_layout:caster.stride==48?feature_layout:layout);
-            UINT stride=caster.stride,offset=caster.vertex_offset;
-            context->IASetVertexBuffers(0,1,&caster.vertices,&stride,&offset);
-            context->IASetIndexBuffer(caster.indices,caster.index_format,caster.index_offset);
+            unsigned binding=caster.binding==0xffffffffu?caster.layer:caster.binding;
+            if(binding!=last_binding){last_cutout=bind_cutout(binding);last_binding=binding;}
+            auto* pixel=last_cutout?cutout:opaque;
+            if(pixel!=last_ps){context->PSSetShader(pixel,nullptr,0);last_ps=pixel;}
+            auto* input=caster.stride==88?city_layout:caster.stride==92?natural_layout:caster.stride==48?feature_layout:layout;
+            if(input!=last_layout){context->IASetInputLayout(input);last_layout=input;}
+            if(caster.vertices!=last_vertices || caster.stride!=last_stride || caster.vertex_offset!=last_vertex_offset){
+                UINT stride=caster.stride,offset=caster.vertex_offset;
+                context->IASetVertexBuffers(0,1,&caster.vertices,&stride,&offset);
+                last_vertices=caster.vertices;last_stride=stride;last_vertex_offset=offset;
+            }
+            if(caster.indices!=last_indices || caster.index_format!=last_format || caster.index_offset!=last_index_offset){
+                context->IASetIndexBuffer(caster.indices,caster.index_format,caster.index_offset);
+                last_indices=caster.indices;last_format=caster.index_format;last_index_offset=caster.index_offset;
+            }
             context->DrawIndexed(caster.count,0,0);work->draw(caster.count,1,caster.layer);
             ++draws;
         }
@@ -1494,6 +1635,25 @@ struct SandboxFreshPipeline {
     c3x_renderer::render_core::LinearTarget static_cache;
     using StaticRasters=c3x_renderer::render_core::StaticRasterStates<c3x_renderer::render_core::LinearTarget>;
     StaticRasters static_rasters;
+    // Near-water static overlays (roads, improvements, features, cliffs and
+    // their shadows) retained beside each static slot; see
+    // write_overlay_strip. A layer is usable only while `revision` equals its
+    // slot's revision, so every slot mutation either updates it or retires it.
+    struct OverlaySlot {c3x_renderer::render_core::LinearTarget layer;std::uint64_t revision=~0ull;};
+    std::array<OverlaySlot,StaticRasters::slot_count> overlay_slots;
+    c3x_renderer::render_core::OverlayComposite overlay_composite;
+    ID3D11BlendState* overlay_depth_only=nullptr;
+    std::uint64_t overlay_device=~0ull,overlay_hits=0,overlay_misses=0,overlay_strips=0,overlay_refusals=0;
+    // Diagnostics: why a frame used the per-frame path, and why a layer retired.
+    std::uint64_t overlay_miss_unshifted=0,overlay_miss_revision=0,overlay_miss_layer=0,
+        overlay_retired_mismatch=0,overlay_retired_failure=0;unsigned overlay_miss_last_layer=~0u;
+    struct OverlayFrame {bool valid=false;unsigned slot=0;int move_x=0,move_y=0;float depth_shift=0;} overlay_frame;
+    // Zoom previews reconstruct static depth from a raster at another
+    // projection. Its small error at tile creases made live water fail the
+    // depth test along every tile row (dashed seabed lines mid-zoom), so the
+    // water pass is biased toward the camera while the static layer is a
+    // preview. Exact (restored) frames never use it.
+    bool static_preview=false;ID3D11RasterizerState* preview_water_raster=nullptr;std::uint64_t preview_raster_device=~0ull;
     // Slot selection is fixed for this synchronous draw. A resumable owner must
     // capture this slot address before its batches and hold it through retirement.
     auto& current_raster(){return static_rasters.current();}
@@ -1517,6 +1677,12 @@ struct SandboxFreshPipeline {
     c3x_renderer::render_core::DrawParameterStream parameters;
     using PreparedParameters=c3x_renderer::render_core::PreparedDrawParameters<ViewportShaderSettings,geometry_layer_count>;
     PreparedParameters water_parameters;
+    // Batched non-rigid records (water, river, bed, shore shadow, ground).
+    c3x_renderer::render_core::PulledMeshPages pulled_pages;
+    ID3D11Buffer* pulled_batch=nullptr;
+    std::uint64_t pulled_device=~0ull,pulled_draws=0,pulled_records=0,pulled_fallbacks=0;
+    std::vector<c3x_renderer::render_core::PulledMeshPages::Source> pulled_sources;
+    std::vector<c3x_renderer::render_core::PulledMeshPages::Range> pulled_ranges;
     c3x_renderer::render_core::SubmissionCensus<std::array<std::uint64_t,12>> submission_census;
     SandboxMirrorTarget reflection,reflection_static;
     GeometryDrawView::Records resident, static_visible, water_visible,
@@ -1525,8 +1691,10 @@ struct SandboxFreshPipeline {
     Membership::Lease resident_lease;
     using RasterInputs=c3x_renderer::render_core::RasterContributors<CachedGeometryProof>;
     std::array<RasterInputs,4> raster_inputs;
-    std::array<RasterInputs,2> bootstrap_inputs;
     float resident_basis_x=0,resident_basis_y=0;
+    // Tiles with records in resident_lease (contributor key word 2).
+    std::unordered_set<std::uint64_t> resident_tiles;
+    bool tile_resident(RasterInputs::Key const& key)const{return resident_tiles.count(key[2])!=0;}
     std::vector<RasterInputs::Key> reflection_inputs;
     std::uint64_t static_receiver_revision=0;
     std::uint64_t reflection_revision=0;
@@ -1552,12 +1720,38 @@ struct SandboxFreshPipeline {
     using StaticRect=StaticState::Rect;
     // Low-resolution first image per lane, used only until refinement completes.
     std::array<StaticState,2> bootstrap;
+    // A zoom-out bootstrap drawn only around the displayed raster it extends
+    // (render_bootstrap); usable only beside that exact raster revision.
+    std::array<StaticState const*,2> bootstrap_ring{};std::array<std::uint64_t,2> bootstrap_ring_revision{};
+    // Bootstraps are transient previews: any world, residency or asset change
+    // redraws them. Their draw costs 20-60 ms on a busy map; exact dependency
+    // registration for a whole view cost 170-640 ms.
+    std::array<std::array<std::uint64_t,6>,2> bootstrap_stamp{};
+    std::array<std::uint64_t,6> bootstrap_identity()const{
+#ifdef C3X_RENDERER64_FRESH
+        auto revision=renderer.raster_dependency_revisions.checkpoint();
+        return {std::uint64_t(reinterpret_cast<std::uintptr_t>(revision.owner)),revision.sequence,view_revision(),raster_scope(),
+            renderer.topology_cache.visibility_sequence(),std::uint64_t(renderer.device_generation)};
+#else
+        return {view_revision(),raster_scope(),0,0,0,0};
+#endif
+    }
     struct RasterOverride {ID3D11RenderTargetView* target=nullptr;unsigned width=0,height=0;float margin_x=0,margin_y=0;};
     RasterOverride raster_override;
     c3x_renderer::render_core::LinearResample static_resample;
     std::array<std::uint64_t,12> restore_key{};
     unsigned region_width_px=0,region_height_px=0;
     double refine_pixels=600000;bool refine_worked=false;LARGE_INTEGER refine_last{};
+    double last_static_ms=0; // static raster work (strips, previews, restore) in the previous frame
+    // Per-frame static composition decisions (profiling trace "static-compose").
+    struct StaticDecision {unsigned lane=0;int reusable=-1,recenter=0,shifted=0,refine=0,sync=0,preview=0,
+        front_cover=0,home_cover=0,boot_cover=0;long long missing=0;int camera_x=0,camera_y=0,slot_x=0,slot_y=0;
+        // entry: 1 valid, 2 stale, 4 key mismatch, 8 proven, 16 repaired, 32 inputs complete, 64 layout reset since last frame.
+        unsigned entry=0,home_entry=0;std::size_t input_bytes=0;
+        // repair: 1 incomplete, 2 overflow, 3 order, 4 unlocated, 5 too broad, 6 draw; dirty rects/area %.
+        unsigned repair=0,repair_rects=0,repair_percent=0,repair_changed=0,repair_reordered=0;
+        double boot_draw_ms=0,boot_deps_ms=0;long long boot_area=0;} static_decision;
+    bool layout_reset=false;
     // Per-lane zoom motion: transactions draw lane 0 at 1x between visual frames.
     unsigned reflection_skips=0;std::array<float,2> lane_projection{};std::array<unsigned,2> lane_still{};
     std::uint64_t draw_serial=0;std::array<std::uint64_t,2> lane_drawn{};
@@ -1630,6 +1824,7 @@ struct SandboxFreshPipeline {
         for(auto const& inputs:raster_inputs){auto const& counts=inputs.validation_counts;
             result.raster.full+=counts.full;result.raster.content+=counts.content;result.raster.visibility+=counts.visibility;
             result.raster.membership+=counts.membership;result.raster.regions+=counts.regions;result.raster.reused+=counts.reused;result.raster.changes+=counts.changes;
+            result.raster.visibility_rejects+=counts.visibility_rejects;
             result.raster.proof_registrations+=counts.proof_registrations;result.raster.dependency_watch_calls+=counts.dependency_watch_calls;
             result.raster.source_expansions+=counts.source_expansions;result.raster.source_reuses+=counts.source_reuses;result.raster.append_ms+=counts.append_ms;
         }
@@ -1691,6 +1886,9 @@ struct SandboxFreshPipeline {
 #endif
     }
     ~SandboxFreshPipeline() {
+        if(preview_water_raster)preview_water_raster->Release();
+        if(overlay_depth_only)overlay_depth_only->Release();
+        if(pulled_batch)pulled_batch->Release();
         if(aquatic_bounds_buffer)aquatic_bounds_buffer->Release();
         if(terrain_material_blend)terrain_material_blend->Release();
         if(aquatic_depth)aquatic_depth->Release();
@@ -1734,6 +1932,9 @@ struct SandboxFreshPipeline {
             // Wrapped occurrences are transformed on traversal; no second full
             // assembled array or per-occurrence COM/resource leases exist.
             resident_lease=renderer.geometry_vertex_buffers.publish();
+            resident_tiles.clear();
+            if(resident_lease)for(auto const& records:resident_lease->records)for(auto const& record:records)
+                resident_tiles.insert((std::uint64_t(std::uint32_t(record.tile_x))<<32)|std::uint32_t(record.tile_y));
             resident_basis_x=renderer.geometry_viewport_settings.translation[0]-camera_x;
             resident_basis_y=renderer.geometry_viewport_settings.translation[1]-camera_y;
             renderer.region_contributors.clear();
@@ -1867,22 +2068,25 @@ struct SandboxFreshPipeline {
         if(!append && !inputs.valid([&](auto const& proof){return renderer.raster_content_valid(proof);},
                 [&](auto tile){auto record=renderer.topology_cache.retained(tile);return record?record->visibility_revision:0;}))return false;
         bool valid=true;if(append)inputs.begin_append();else inputs.begin_membership();auto clip=source_bounds(settings,rect,false);
+        // Retained overlays make water-dependent records raster content.
+        bool const retain_overlays=overlay_enabled();
         contributors(settings,clip,false,[&](unsigned layer,auto const& record){
             ++inputs.validation_counts.membership;
-            if(renderer.water_scene_active && record.water_dependent)return;
+            if(renderer.water_scene_active && record.water_dependent && !retain_overlays)return;
             if(!renderer.chunk_intersects_region(GeometryDrawReference(record),settings,clip,false))return;
             auto key=contributor_key(layer,record);
             if(!append){if(!inputs.visit_membership(key)){valid=false;++renderer.raster_proof_rejections[5];}return;}
             auto mesh=std::static_pointer_cast<CachedMeshGeneration>(resident_lease->content.get(record.owner));
             auto tile=renderer.topology_cache.key(record.tile_x,record.tile_y);
             auto observed=renderer.topology_cache.retained(tile);
-            bool new_proof=false;
-            valid=inputs.add(key,mesh?mesh->proof:nullptr,tile,observed?observed->visibility_revision:0,&new_proof) && valid;
-            if(new_proof)valid=renderer.watch_raster_dependencies(*mesh->proof,inputs)&&valid;
-            valid=inputs.watch(RasterInputs::Revisions::Domain::visibility,tile)&&valid;
+            // No per-input watches: each new proof expanded ~3000 keys (river
+            // inputs per tile), so registering a whole view cost 150-650 ms.
+            // Proofs and visibility revisions are still checked exactly.
+            valid=inputs.add(key,mesh?mesh->proof:nullptr,tile,observed?observed->visibility_revision:0) && valid;
         });
         if(append)inputs.finish_dependencies();
-        else if(!inputs.exact_membership()){valid=false;++renderer.raster_proof_rejections[5];}
+        else if(!inputs.exact_membership() && !inputs.resident_membership([&](auto const& key){return tile_resident(key);})){
+            valid=false;++renderer.raster_proof_rejections[5];}
         return valid;
         };
         if(append){auto begin=std::chrono::steady_clock::now();bool valid=exact();
@@ -2050,6 +2254,11 @@ struct SandboxFreshPipeline {
         reflected.inverse_size[0]=1.f/(w+8);reflected.inverse_size[1]=1.f/(h+8);
         if(!capture(settings,reflected,w,h,frame.world_wrap_x?frame.world_width_tiles*frame.tile_width/2:0))return false;
         std::vector<D3D11_RECT> receivers;reflected_water_bounds(settings,w,h,&receivers);
+        // Level of detail below 0.8x: a unit is at most a few dozen pixels and
+        // its mirror image a few pixels, so units contribute no reflections
+        // there (no reflection preparation, draws or per-frame mirror copy).
+        // The static mirror of terrain, cities and features is unchanged.
+        if(projection_zoom<.8f)receivers.clear();
         char cycle[8]{};bool day_night=c3x_renderer::render_core::cached_environment("C3X_SANDBOX_DAY_NIGHT",cycle,sizeof(cycle)) && cycle[0]=='1';
         float hour=day_night?12.f+24.f*float(frame.presentation_time_ticks)/float(std::max<c3x_renderer_i64>(1,frame.presentation_frequency))/30.f:float(frame.hour);
         SandboxDirectUnits::ContributionPlan next;
@@ -2097,6 +2306,52 @@ struct SandboxFreshPipeline {
                 (1.f/settings.inverse_size[1]-renderer.content_view_height-2*guard)*.5f);
         return settings;
     }
+    // One vertex-pulled draw per resident page range for ordered non-rigid
+    // records. Per-occurrence translation, natural projection and kind come
+    // from page records; the shared viewport terms stay in b1. Returns false
+    // (ordinary per-record path) on any refusal.
+    bool draw_pulled(GeometryDrawReference const* records,unsigned count,GeometryLayer layer,
+            ViewportShaderSettings const& viewport,bool mirrored,bool feature){
+        auto* context=renderer.context;
+        if(!pulled_batch){
+            D3D11_BUFFER_DESC desc{};desc.ByteWidth=32;desc.Usage=D3D11_USAGE_DEFAULT;desc.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
+            if(FAILED(renderer.device->CreateBuffer(&desc,nullptr,&pulled_batch))){++pulled_fallbacks;return false;}
+        }
+        pulled_sources.resize(count);
+        for(unsigned n=0;n<count;++n){auto const& r=records[n];auto const& m=r.content();auto& source=pulled_sources[n];
+            source.buffer=m.buffer;source.indices=m.indices;source.version=m.version;
+            source.vertex_offset=m.vertex_offset;source.index_offset=m.index_offset;source.index_count=m.index_count;
+            source.vertex_count=m.vertex_count;source.stride=m.vertex_stride;source.index16=m.index_format==DXGI_FORMAT_R16_UINT;
+            source.tx=r.translation_x();source.ty=r.translation_y();source.kind=m.projection_kind;
+            std::copy(std::begin(r.natural_projection()),std::end(r.natural_projection()),source.projection);}
+        if(!pulled_pages.resolve(renderer.device,context,pulled_sources.data(),count,pulled_ranges)){++pulled_fallbacks;return false;}
+        auto base=viewport;base.padding=0;
+        if(renderer.pickup_profile)base.reserved[1]=layer==geometry_underlay?.5f:layer==geometry_bed?4.f:layer==geometry_water?5.f:0.f;
+        float depth_base=renderer.city_profile?viewport.depth_translation:viewport.translation[1];
+        base=clip_settings(base,mirrored);
+        context->UpdateSubresource(renderer.viewport_settings_buffer,0,nullptr,&base,0,0);work.upload_buffer(renderer.viewport_settings_buffer);
+        context->VSSetConstantBuffers(1,1,&renderer.viewport_settings_buffer);
+        context->IASetInputLayout(nullptr);
+        ID3D11Buffer* no_buffer=nullptr;UINT zero=0;context->IASetVertexBuffers(0,1,&no_buffer,&zero,&zero);
+        context->IASetIndexBuffer(nullptr,DXGI_FORMAT_R32_UINT,0);
+        context->VSSetShader(feature?visual.pulled_feature:visual.pulled_vertex,nullptr,0);
+        context->VSSetConstantBuffers(12,1,&pulled_batch);
+        for(auto const& range:pulled_ranges){
+            struct {float translation[2];float depth;std::uint32_t vertex_base,first,last,pad2[2];} batch{
+                {base.translation[0],base.translation[1]},depth_base,range.first_vertex,range.first_record,range.first_record+range.records-1,{0,0}};
+            context->UpdateSubresource(pulled_batch,0,nullptr,&batch,0,0);
+            ID3D11ShaderResourceView* views[]={range.page->record_view.Get(),range.page->vertex_view.Get(),range.page->index_view.Get()};
+            context->VSSetShaderResources(60,3,views);
+            context->Draw(range.vertices,0);
+            work.draw(range.vertices,1,unsigned(layer));++renderer.frame_draw_calls;
+            if(work.enabled)work.row(unsigned(layer)).submitted_instances+=range.records-1;
+            ++pulled_draws;pulled_records+=range.records;
+        }
+        ID3D11ShaderResourceView* no_views[3]={};context->VSSetShaderResources(60,3,no_views);
+        context->IASetInputLayout(feature?renderer.feature_input_layout:renderer.input_layout);
+        context->VSSetShader(feature?renderer.feature_vertex_shader:renderer.vertex_shader,nullptr,0);
+        return true;
+    }
     bool issue_records(GeometryDrawView::Records const& records,GeometryLayer layer,
             ViewportShaderSettings const& viewport,D3D11_RECT rect,bool mirrored) {
         auto* context=renderer.context;
@@ -2115,6 +2370,20 @@ struct SandboxFreshPipeline {
         }
 #endif
         bool prepared_hit=prepared_entry && prepared_entry->complete;
+        // Integrated-layout layers (168-byte vertices) and packed feature
+        // layers (48 bytes: features, mines, farms, sites, walls, cliffs)
+        // bind exactly one ordinary vertex shader per layer; cities keep
+        // per-record material state.
+        bool const pulled_feature_layer=layer!=geometry_city &&
+            ((layer>=geometry_feature && layer<=geometry_site) || (layer>=geometry_cliff0 && layer<=geometry_cliff7));
+        bool const pulled_layer=!mirrored && (pulled_feature_layer?visual.pulled_feature!=nullptr:
+            visual.pulled_vertex && (layer==geometry_underlay || layer==geometry_land || layer==geometry_bed ||
+            layer==geometry_water || layer==geometry_river || layer==geometry_shadow || layer==geometry_route));
+        unsigned const pulled_stride=pulled_feature_layer?48u:168u;
+        auto pulled_eligible=[pulled_stride](GeometryDrawReference const& record){auto const& m=record.content();
+            return !m.rigid_source && !m.animation_texture && !m.resource_instance && m.city_material==0xffffffffu &&
+                m.vertex_stride==pulled_stride && m.vertex_count && m.buffer && m.indices &&
+                (m.index_format==DXGI_FORMAT_R16_UINT || m.index_format==DXGI_FORMAT_R32_UINT);};
         char emission_control[8]={};
         bool original_emission=c3x_renderer::render_core::cached_environment("C3X_SANDBOX_CITY_SUBMISSION_REFERENCE",emission_control,sizeof(emission_control)) && emission_control[0]=='1';
         ViewportShaderSettings previous{};
@@ -2239,6 +2508,34 @@ struct SandboxFreshPipeline {
                     context->IASetInputLayout(renderer.feature_input_layout);
                     context->VSSetShader(mirrored?mirror.vs[1]:renderer.feature_vertex_shader,nullptr,0);
                     i=end;continue;
+                }
+                if(pulled_layer && pulled_eligible(selected[i])){
+                    // Contiguous eligible records share one vertex-pulled draw
+                    // per page range; fog-frozen water splits on its sample.
+                    unsigned end=i+1;auto water_sample=[&](GeometryDrawReference const& record){
+                        auto sample=renderer.water_material;
+                        if(!renderer.water_scene_active || !record.water_visible() || record.content().visual_time>=0){
+                            sample.time=0;sample.drift[0]=sample.drift[1]=sample.drift[2]=0;}
+                        return sample;};
+                    bool water_layer=renderer.environment_profile && (layer==geometry_water || layer==geometry_river);
+                    auto first_sample=water_sample(chunk);
+                    while(end<selected.size() && !packets[end] && pulled_eligible(selected[end]) &&
+                          (!water_layer || same_water(water_sample(selected[end]),first_sample)))++end;
+                    // A pulled run costs a fixed state switch; short runs are
+                    // cheaper as ordinary indexed draws.
+                    if(end-i>=8){
+                    if(water_layer){
+                        if(!last_water_valid || !same_water(first_sample,last_water)){
+                            context->UpdateSubresource(renderer.water_frame,0,nullptr,&first_sample,0,0);work.upload_buffer(renderer.water_frame);
+                            last_water=first_sample;last_water_valid=true;++phase_constant_counts.water_updates;
+                        }else ++phase_constant_counts.water_hits;
+                        if(!water_bound){context->PSSetConstantBuffers(10,1,&renderer.water_frame);water_bound=true;}
+                    }
+                    if(draw_pulled(selected.data()+i,end-i,layer,viewport,mirrored,pulled_feature_layer)){
+                        if(water_layer){phase_constant_counts.water_records+=end-i;phase_constant_counts.water_hits+=end-i-1;}
+                        previous_valid=false;i=end;continue;
+                    }
+                    }
                 }
                 UINT stride=mesh.vertex_stride,offset=mesh.vertex_offset;
                 context->IASetVertexBuffers(0,1,&mesh.buffer,&stride,&offset);
@@ -2851,6 +3148,8 @@ struct SandboxFreshPipeline {
         static_rasters.set_layout(width,height,scene_samples);
         region_width_px=region_width*scene_scale;region_height_px=region_height*scene_scale;
         if(previous_layout!=static_rasters.layout){
+            layout_reset=true;
+            for(auto& retained:overlay_slots){retained.layer.reset();retained.revision=~0ull;}
             for(auto& image:bootstrap){image.region.reset();image.valid=false;image.covered={};}
             restore_key={};
         }
@@ -3073,13 +3372,21 @@ struct SandboxFreshPipeline {
         // The canonical 1x raster is not displayed while another zoom is the
         // destination; it refines at a reduced budget (and skips its mirror).
         bool hidden=lane==0 && canonical_hidden();
-        LARGE_INTEGER now{},frequency{};QueryPerformanceCounter(&now);QueryPerformanceFrequency(&frequency);
-        if(refine_worked && refine_last.QuadPart && frequency.QuadPart>0){
-            double ms=double(now.QuadPart-refine_last.QuadPart)*1000./double(frequency.QuadPart);
-            if(ms<100.){if(ms>24.)refine_pixels*=.7;else if(ms<18.5)refine_pixels*=1.2;}
+        // Time-sliced refinement: steer the pixel budget by the static work
+        // actually spent last frame. The frame interval it used before mixed in
+        // GPU waits and ignored any frame over 100 ms, so a slow refinement
+        // (zooming out on a busy map) never shrank its own budget and kept
+        // frames at 2-10/s. C3X_RENDERER_STATIC_BUDGET_MS sets the target.
+        static double const target=[]{char value[16]={};double ms=8.;
+            if(c3x_renderer::render_core::cached_environment("C3X_RENDERER_STATIC_BUDGET_MS",value,sizeof(value))){
+                double parsed=std::atof(value);if(std::isfinite(parsed)&&parsed>0)ms=parsed;}
+            return ms;}();
+        if(refine_worked && last_static_ms>0){
+            if(last_static_ms>target)refine_pixels*=std::max(.35,target/last_static_ms);
+            else if(last_static_ms<target*.6)refine_pixels*=1.25;
         }
-        refine_pixels=std::clamp(refine_pixels,150000.,32000000.);
-        refine_last=now;refine_worked=false;
+        refine_pixels=std::clamp(refine_pixels,60000.,32000000.);
+        refine_worked=false;
         double pixels=options.refine_pixels>0?options.refine_pixels:refine_pixels;
         // A hidden canonical raster still converges, at a quarter budget.
         return hidden?pixels*.25:pixels;
@@ -3115,6 +3422,64 @@ struct SandboxFreshPipeline {
     }
     // Draw one rectangle (full-resolution region pixels) of a slot from the
     // resident world. `scale` < 1 rasterizes the same rectangle at low resolution.
+    // Retained near-water overlays. Water must animate under these records,
+    // so they used to be redrawn over it every frame (thousands of draws and
+    // ~1M triangles at 1x on a busy map). They are static; draw them once per
+    // static strip into a cleared premultiplied layer tested against the
+    // strip's static and water depth, and composite that layer over the live
+    // water. C3X_RENDERER_OVERLAY_CACHE=0 restores per-frame submission.
+    bool overlay_enabled()const{
+        char control[8]={};
+        if(c3x_renderer::render_core::cached_environment("C3X_RENDERER_OVERLAY_CACHE",control,sizeof(control)) && control[0]=='0')
+            return false;
+        return renderer.water_scene_active && scene_samples==1 && scene_scale==1 && !sandbox_perf_options().legacy;
+    }
+    static bool overlay_layer(unsigned layer){
+        return layer==geometry_shadow || layer==geometry_route || (layer>=geometry_feature && layer<=geometry_cliff7);
+    }
+    bool overlay_target(unsigned index){
+        if(overlay_device!=renderer.device_generation){
+            for(auto& slot:overlay_slots){slot.layer.reset();slot.revision=~0ull;}
+            overlay_composite.reset();
+            if(overlay_depth_only){overlay_depth_only->Release();overlay_depth_only=nullptr;}
+            overlay_device=renderer.device_generation;
+        }
+        if(!overlay_depth_only){
+            D3D11_BLEND_DESC desc={};desc.RenderTarget[0].RenderTargetWriteMask=0;
+            if(FAILED(renderer.device->CreateBlendState(&desc,&overlay_depth_only)))return false;
+        }
+        return overlay_composite.ensure(renderer.device) &&
+            ensure_linear_target(overlay_slots[index].layer,region_width_px,region_height_px,1,false);
+    }
+    // Draws one static strip's water-dependent records into the slot's layer:
+    // static depth and a transparent color first, then water/river depth
+    // without color (submerged parts stay hidden exactly as before), then the
+    // overlays in their ordinary order. Animated content refuses the layer.
+    bool write_overlay_strip(unsigned index,StaticState const& slot,ViewportShaderSettings const& view,D3D11_RECT rect,
+            GeometryDrawView::Records& records,float scale){
+        for(unsigned layer=0;layer<geometry_layer_count;++layer){
+            if(records[layer].empty())continue;
+            if(layer!=geometry_water && layer!=geometry_river && !overlay_layer(layer)){++overlay_refusals;return false;}
+            for(auto const& record:records[layer]){auto const& m=GeometryDrawReference(record).content();
+                if(m.animation_texture || m.resource_instance){++overlay_refusals;return false;}}
+        }
+        if(!overlay_target(index))return false;
+        auto& target=overlay_slots[index].layer;
+        if(!static_restore.draw(renderer.context,target,nullptr,slot.region.depth_samples,0,0,{},nullptr,
+                slot.region.width,slot.region.height,false,false,0,&rect,1))return false;
+        work.draw(3);
+        TargetScope scope_target(*this,{target.target,target.width,target.height,
+            float(region_margin_x),float(region_margin_y)});
+        GeometryDrawView::Records water{};
+        for(auto layer:{geometry_water,geometry_river}){water[layer].swap(records[layer]);}
+        auto* blend=renderer.blend_state;renderer.blend_state=overlay_depth_only;
+        bool drawn=draw_layer(water,geometry_water,view,rect,target.target,target.depth,false,scale) &&
+            draw_layer(water,geometry_river,view,rect,target.target,target.depth,false,scale);
+        renderer.blend_state=blend;
+        if(!drawn || !draw_scene(records,view,rect,target.target,target.depth,false,scale))return false;
+        renderer.context->OMSetRenderTargets(0,nullptr,nullptr);
+        ++overlay_strips;return true;
+    }
     bool write_slot(unsigned index,StaticState& slot,ViewportShaderSettings const& screen,
             StaticRect strip,float scale,bool track_dependencies){
         if(strip.empty())return true;
@@ -3123,17 +3488,32 @@ struct SandboxFreshPipeline {
             float(region_margin_x),float(region_margin_y)});
         auto slot_view=slot_settings(slot,screen);
         D3D11_RECT rect={strip.left,strip.top,strip.right,strip.bottom};
-        GeometryDrawView::Records chosen{};
+        GeometryDrawView::Records chosen{},overlays{};
+        // Bootstrap images reuse this writer with their own state and index 0;
+        // only actual static slots own a retained overlay layer.
+        bool const static_slot=index<overlay_slots.size() && &slot==&static_rasters.states[index];
+        bool const retain_overlays=static_slot && overlay_enabled();
         auto clip=source_bounds(slot_view,rect,false);
         contributors(slot_view,clip,false,[&](unsigned layer,auto const& record){
-            if(renderer.water_scene_active && record.water_dependent)return;
+            if(renderer.water_scene_active && record.water_dependent){
+                if(retain_overlays && renderer.chunk_intersects_region(GeometryDrawReference(record),slot_view,clip,false))
+                    overlays[layer].push_back(record);
+                return;
+            }
             if(renderer.chunk_intersects_region(GeometryDrawReference(record),slot_view,clip,false))
                 chosen[layer].push_back(record);
         });
-        ++slot.revision;
+        auto before=slot.revision;++slot.revision;
         if(!draw_scene(chosen,slot_view,rect,slot.region.target,slot.region.depth,false,scale))return false;
         renderer.context->OMSetRenderTargets(0,nullptr,nullptr);
         if(!draw_static_borders(slot.region,slot_view,rect,chosen,scale))return false;
+        if(static_slot){
+            auto& retained=overlay_slots[index];
+            bool matched=retain_overlays && retained.revision==before;
+            bool kept=matched && write_overlay_strip(index,slot,slot_view,rect,overlays,scale);
+            if(retain_overlays && !kept && retained.revision!=~0ull)++(matched?overlay_retired_failure:overlay_retired_mismatch);
+            retained.revision=kept?slot.revision:~0ull;
+        }
         ++slot.metrics.strip_fills;++slot.metrics.reasons[c3x_renderer::render_core::raster_strip_fills];
         if(track_dependencies && !raster_dependencies(raster_inputs[index],slot_view,rect,true))
             raster_inputs[index].complete=false;
@@ -3212,7 +3592,7 @@ struct SandboxFreshPipeline {
 #ifdef C3X_RENDERER64_FRESH
         if(sandbox_perf_options().legacy || slot.covered.empty())return false;
         auto& inputs=raster_inputs[index];
-        if(!inputs.complete || inputs.draws.empty())return false;
+        if(!inputs.complete || inputs.draws.empty()){static_decision.repair=1;return false;}
         ZoomScope scope_zoom(*this,slot.projection);
         auto view=slot_settings(slot,screen);
         auto const& c=slot.covered;
@@ -3222,18 +3602,21 @@ struct SandboxFreshPipeline {
         constexpr int reach=96;
         std::vector<StaticRect> dirty;
         std::unordered_set<RasterInputs::Key,RasterInputs::Hash> current;
+        std::vector<RasterInputs::Key> stale;
         inputs.begin_membership();
         bool overflow=false;
         auto mark=[&](RasterInputs::Key const& key){
+            if(inputs.contains(key))stale.push_back(key);
             if(overflow)return;
             auto r=key_region_rect(key,view,reach);
             r={std::max(r.left,c.left),std::max(r.top,c.top),std::min(r.right,c.right),std::min(r.bottom,c.bottom)};
             if(r.empty())return;
             dirty.push_back(r);if(dirty.size()>4096)overflow=true;
         };
+        bool const retain_overlays=overlay_enabled();
         contributors(view,clip,false,[&](unsigned layer,auto const& record){
             if(overflow)return;
-            if(renderer.water_scene_active && record.water_dependent)return;
+            if(renderer.water_scene_active && record.water_dependent && !retain_overlays)return;
             if(!renderer.chunk_intersects_region(GeometryDrawReference(record),view,clip,false))return;
             auto key=contributor_key(layer,record);current.insert(key);
             inputs.visit_membership(key);
@@ -3250,10 +3633,20 @@ struct SandboxFreshPipeline {
             }
             if(changed)mark(key);
         });
-        for(auto const& draw:inputs.draws)if(!current.count(draw.first))mark(draw.first);
-        if(overflow || !inputs.remaining_order_preserved())return false;
+        for(auto const& draw:inputs.draws)if(!current.count(draw.first) && tile_resident(draw.first))mark(draw.first);
+        // Lease order shifts as tiles move between the view and its halo;
+        // order matters only where draws overlap, inside each draw's region.
+        std::vector<std::uint32_t> reordered;
+        if(!overflow && !inputs.remaining_order_preserved(&reordered)){static_decision.repair=3;return false;}
+        if(!reordered.empty()){
+            std::sort(reordered.begin(),reordered.end());
+            for(auto const& draw:inputs.draws)
+                if(std::binary_search(reordered.begin(),reordered.end(),draw.second.index))mark(draw.first);
+        }
+        static_decision.repair_changed=unsigned(dirty.size());static_decision.repair_reordered=unsigned(reordered.size());
+        if(overflow){static_decision.repair=2;return false;}
         // A changed dependency without a changed contributor cannot be located.
-        if(dirty.empty())return false;
+        if(dirty.empty()){static_decision.repair=4;return false;}
         // Merge overlapping rectangles; fall back to a bounding box when many.
         bool merged=true;
         while(merged && dirty.size()>1){
@@ -3267,12 +3660,31 @@ struct SandboxFreshPipeline {
             }
         }
         if(dirty.size()>24){
-            StaticRect box=dirty.front();
-            for(auto const& r:dirty)box={std::min(box.left,r.left),std::min(box.top,r.top),std::max(box.right,r.right),std::max(box.bottom,r.bottom)};
-            dirty={box};
+            // Camera steps rebuild tiles along a whole edge of the resident
+            // region. A single bounding box of those bands covers most of the
+            // raster; cells keep the repair proportional to the changed area.
+            constexpr int cell=128;
+            int columns=(c.right-c.left+cell-1)/cell,rows=(c.bottom-c.top+cell-1)/cell;
+            std::vector<unsigned char> marked(std::size_t(std::max(0,columns))*std::size_t(std::max(0,rows)));
+            for(auto const& r:dirty)
+                for(int y=(r.top-c.top)/cell;y<=(r.bottom-1-c.top)/cell && y<rows;++y)
+                    for(int x=(r.left-c.left)/cell;x<=(r.right-1-c.left)/cell && x<columns;++x)marked[std::size_t(y)*columns+x]=1;
+            dirty.clear();
+            for(int y=0;y<rows;++y)for(int x=0;x<columns;){
+                if(!marked[std::size_t(y)*columns+x]){++x;continue;}
+                int end=x;while(end<columns && marked[std::size_t(y)*columns+end])++end;
+                StaticRect run={c.left+x*cell,c.top+y*cell,std::min(c.right,c.left+end*cell),std::min(c.bottom,c.top+(y+1)*cell)};
+                // Extend the previous row's identical run downward.
+                bool joined=false;
+                for(auto& r:dirty)if(r.left==run.left && r.right==run.right && r.bottom==run.top){r.bottom=run.bottom;joined=true;break;}
+                if(!joined)dirty.push_back(run);
+                x=end;
+            }
         }
         long long area=0;for(auto const& r:dirty)area+=r.area();
-        if(area*100>c.area()*45)return false;
+        static_decision.repair_rects=unsigned(dirty.size());static_decision.repair_percent=unsigned(area*100/std::max(1ll,c.area()));
+        if(area*100>c.area()*45){static_decision.repair=5;return false;}
+        static_decision.repair=6;
         // Repair in the existing back target. A draw can reject a not-yet-ready
         // mesh/instance range after earlier layers have succeeded; clearing the
         // displayed target first would then expose holes as the stale preview.
@@ -3283,13 +3695,23 @@ struct SandboxFreshPipeline {
         raster_inputs[patch_index].clear();
         patch.camera_x=slot.camera_x;patch.camera_y=slot.camera_y;
         patch.projection=slot.projection;patch.depth_translation=slot.depth_translation;
+        // The retained overlay layer is repaired in the same rectangles.
+        auto& repaired=overlay_slots[index];auto& patch_overlay=overlay_slots[patch_index];
+        bool overlays=retain_overlays && repaired.revision==slot.revision && overlay_target(patch_index);
+        patch_overlay.revision=overlays?patch.revision:~0ull;
         for(auto const& r:dirty){
             D3D11_RECT rect={r.left,r.top,r.right,r.bottom};
             if(!static_restore.draw(renderer.context,patch.region,nullptr,nullptr,0,0,{},nullptr,
                     patch.region.width,patch.region.height,false,true,0,&rect))return false;
             work.draw(3);
+            if(overlays && patch_overlay.revision==patch.revision){
+                if(!static_restore.draw(renderer.context,patch_overlay.layer,nullptr,nullptr,0,0,{},nullptr,
+                        patch_overlay.layer.width,patch_overlay.layer.height,false,true,0,&rect))return false;
+                work.draw(3);
+            }
             if(!write_slot(patch_index,patch,screen,r,1.f,false))return false;
         }
+        overlays=overlays && patch_overlay.revision==patch.revision;
         // All rectangles completed. Copy color and depth together, touching
         // only the repaired pixels; no new full-screen scratch owner is needed.
         for(auto const& r:dirty){
@@ -3297,11 +3719,21 @@ struct SandboxFreshPipeline {
             if(!static_restore.draw(renderer.context,slot.region,patch.region.samples,patch.region.depth_samples,
                     0,0,{},nullptr,patch.region.width,patch.region.height,false,false,0,&rect,1))return false;
             work.draw(3);
+            if(overlays){
+                if(!static_restore.draw(renderer.context,repaired.layer,patch_overlay.layer.samples,patch_overlay.layer.depth_samples,
+                        0,0,{},nullptr,patch_overlay.layer.width,patch_overlay.layer.height,false,false,0,&rect,1))return false;
+                work.draw(3);
+            }
         }
         ++slot.revision;
+        repaired.revision=overlays?slot.revision:~0ull;
         renderer.context->OMSetRenderTargets(0,nullptr,nullptr);
-        inputs.clear();
-        if(!raster_dependencies(inputs,view,covered,true))inputs.complete=false;
+        static_decision.repair=0;
+        // Re-register only the repaired regions (a full slot re-registration
+        // cost 150-300 ms per camera step on busy maps).
+        inputs.forget(stale);
+        for(auto const& r:dirty)
+            if(!raster_dependencies(inputs,view,{r.left,r.top,r.right,r.bottom},true)){inputs.complete=false;break;}
         ++partial_repairs;partial_repair_pixels+=std::uint64_t(area);
         refine_worked=true;
         return true;
@@ -3323,6 +3755,12 @@ struct SandboxFreshPipeline {
         slot.geometry_epoch=renderer.tile_geometry_epoch;
         slot.covered={};slot.valid=false;slot.stale=false;slot.refining=true;++slot.revision;
         raster_inputs[index].clear();
+        auto& retained=overlay_slots[index];retained.revision=~0ull;
+        if(overlay_enabled() && overlay_target(index)){
+            renderer.context->ClearRenderTargetView(retained.layer.target,clear);work.clear(retained.layer.target);
+            renderer.context->ClearDepthStencilView(retained.layer.depth,D3D11_CLEAR_DEPTH|D3D11_CLEAR_STENCIL,1,0);work.clear(retained.layer.depth);
+            retained.revision=slot.revision;
+        }
         return true;
     }
     // Scrolling past the guard band keeps the overlapping pixels: copy them
@@ -3330,21 +3768,42 @@ struct SandboxFreshPipeline {
     bool recenter(unsigned lane,ViewportShaderSettings const& screen,
             c3x_renderer::render_core::StaticRegionShift& shift,int w,int h){
         auto& source=static_rasters.front(lane);
+        unsigned source_index=static_rasters.front_slot[lane];
         unsigned destination_index=static_rasters.back_index(lane);
         auto& destination=static_rasters.states[destination_index];
-        if(sandbox_perf_options().legacy || !source.valid || source.covered.empty() || destination.refining)return false;
-        if(std::abs(shift.snap_x)>1e-3 || std::abs(shift.snap_y)>1e-3)return false;
+        if(sandbox_perf_options().legacy || !source.valid || source.covered.empty()){static_decision.recenter=-1;return false;}
+        if(destination.refining){static_decision.recenter=-2;return false;}
+        // The new slot must stay on the source's raster lattice. At a ladder
+        // zoom k/8 a camera move is rarely a whole number of raster pixels
+        // (an odd step at 0.5x is half a pixel), which used to refuse every
+        // recenter and fall back to previews plus a full progressive redraw
+        // while scrolling. Anchor the new slot at the nearest camera step
+        // whose raster shift is whole; the display path absorbs the small
+        // remainder exactly as for any retained slot.
+        int anchor_x=camera_x,anchor_y=camera_y;
+        if(std::abs(shift.snap_x)>1e-3 || std::abs(shift.snap_y)>1e-3){
+            double eighths=double(source.projection)*8.;long k=std::lround(eighths);
+            if(k<=0 || std::abs(eighths-double(k))>1e-4){static_decision.recenter=-3;return false;}
+            int lattice=1;while(lattice<8 && (k*lattice)%8)lattice*=2;
+            auto align=[lattice](int camera,int origin){
+                auto d=std::int64_t(camera)-origin,half=std::int64_t(lattice/2);
+                auto steps=(d>=0?d+half:d-half)/lattice;return int(origin+steps*lattice);};
+            anchor_x=align(camera_x,source.camera_x);anchor_y=align(camera_y,source.camera_y);
+            shift=c3x_renderer::render_core::StaticRegionShift::between(source.projection,anchor_x,anchor_y,
+                source.camera_x,source.camera_y,region_margin_x,region_margin_y);
+            if(std::abs(shift.snap_x)>1e-3 || std::abs(shift.snap_y)>1e-3)return false;
+        }
         // New-slot pixel r samples old-slot pixel r-shift, so the old coverage
         // lands at covered+shift in the new slot.
         StaticRect moved={std::max(source.covered.left+shift.x,0),std::max(source.covered.top+shift.y,0),
             std::min(source.covered.right+shift.x,int(region_width_px)),std::min(source.covered.bottom+shift.y,int(region_height_px))};
-        if(moved.area()*4<(long long)(w)*h)return false;
+        if(moved.area()*4<(long long)(w)*h){static_decision.recenter=-4;return false;}
         if(!ensure_linear_target(destination.region,region_width_px,region_height_px,scene_samples,false))return false;
         if(!static_restore.draw(renderer.context,destination.region,source.region.samples,source.region.depth_samples,
                 shift.x,shift.y,{},nullptr,source.region.width,source.region.height,false,false,0,nullptr,1,0.f))return false;
         renderer.context->OMSetRenderTargets(0,nullptr,nullptr);
         work.draw(3);
-        destination.camera_x=camera_x;destination.camera_y=camera_y;
+        destination.camera_x=anchor_x;destination.camera_y=anchor_y;
         destination.projection=source.projection;destination.raster_scale=1;
         destination.depth_translation=source.depth_translation;destination.depth_origin=source.depth_origin;
         destination.translation=source.translation;destination.key=source.key;destination.signature=source.signature;
@@ -3354,6 +3813,14 @@ struct SandboxFreshPipeline {
         destination.covered=moved;destination.valid=true;destination.stale=source.stale;destination.refining=false;
         ++destination.revision;
         raster_inputs[destination_index].clear();
+        {
+            auto& from=overlay_slots[source_index];auto& to=overlay_slots[destination_index];
+            bool kept=overlay_enabled() && from.revision==source.revision && overlay_target(destination_index) &&
+                static_restore.draw(renderer.context,to.layer,from.layer.samples,from.layer.depth_samples,
+                    shift.x,shift.y,{},nullptr,from.layer.width,from.layer.height,false,false,0,nullptr,1,0.f);
+            if(kept)work.draw(3);
+            to.revision=kept?destination.revision:~0ull;
+        }
         if(!destination.stale){
             ZoomScope scope_zoom(*this,destination.projection);
             if(!raster_dependencies(raster_inputs[destination_index],slot_settings(destination,screen),
@@ -3370,7 +3837,7 @@ struct SandboxFreshPipeline {
     // pixel resolution by default: routine scene edits must never soften the
     // entire viewport while shadows/full-quality lighting finish preparing.
     // Covers the view plus a 128 px band, so it survives small camera moves.
-    bool render_bootstrap(unsigned lane,ViewportShaderSettings const& screen,int w,int h){
+    bool render_bootstrap(unsigned lane,ViewportShaderSettings const& screen,int w,int h,StaticState const* ring=nullptr){
         auto& image=bootstrap[lane];
         float scale=sandbox_perf_options().bootstrap_scale;
         unsigned image_width=std::max(1u,unsigned(std::ceil(float(region_width_px)*scale)));
@@ -3390,11 +3857,36 @@ struct SandboxFreshPipeline {
         double unbounded=-1.;
         StaticRect needed={std::max(0,region_margin_x-band),std::max(0,region_margin_y-band),
             std::min(int(region_width_px),region_margin_x+w+band),std::min(int(region_height_px),region_margin_y+h+band)};
+        bootstrap_ring[lane]=nullptr;
+        if(ring && ring->valid && !ring->covered.empty()){
+            // Zooming out, the displayed raster still covers the inner view and
+            // the preview takes it wherever it covers, so a full-view draw
+            // (~270 ms at 0.5x on busy maps) is needed only for the exposed
+            // ring. Both rasters are world-anchored at this camera, so the hole
+            // holds for every frame of the zoom. Insets keep bilinear and
+            // depth taps on drawn texels.
+            float zoom=projection_zoom;
+            float cx=float(renderer.content_view_width/2)+4,cy=float(renderer.content_view_height/2)+4;
+            float rf=ring->projection/zoom,rb=image.projection/zoom;
+            float fx=cx+float(region_margin_x)-cx*rf+float(ring->camera_x-camera_x)*ring->projection;
+            float fy=cy+float(region_margin_y)-cy*rf+float(ring->camera_y-camera_y)*ring->projection;
+            float ox=cx+float(region_margin_x)-cx*rb,oy=cy+float(region_margin_y)-cy*rb;
+            auto const& c=ring->covered;constexpr float front_inset=4,ring_inset=3;
+            StaticRect hole={int(std::ceil((float(c.left)+front_inset-fx)/rf*rb+ox+ring_inset)),
+                int(std::ceil((float(c.top)+front_inset-fy)/rf*rb+oy+ring_inset)),
+                int(std::floor((float(c.right)-front_inset-fx)/rf*rb+ox-ring_inset)),
+                int(std::floor((float(c.bottom)-front_inset-fy)/rf*rb+oy-ring_inset))};
+            hole={std::max(hole.left,needed.left),std::max(hole.top,needed.top),
+                std::min(hole.right,needed.right),std::min(hole.bottom,needed.bottom)};
+            if(!hole.empty()){image.covered=hole;bootstrap_ring[lane]=ring;bootstrap_ring_revision[lane]=ring->revision;}
+        }
+        auto timed=std::chrono::steady_clock::now();auto hole_area=image.covered.area();
         if(!extend_coverage(0,image,screen,needed,unbounded,0,scale,false))return false;
-        auto& inputs=bootstrap_inputs[lane];inputs.clear();
-        ZoomScope scope_zoom(*this,image.projection);
-        auto const& c=image.covered;
-        if(!raster_dependencies(inputs,slot_settings(image,screen),{c.left,c.top,c.right,c.bottom},true))inputs.complete=false;
+        static_decision.boot_area=image.covered.area()-hole_area;
+        static_decision.boot_draw_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-timed).count();
+        timed=std::chrono::steady_clock::now();
+        bootstrap_stamp[lane]=bootstrap_identity();
+        static_decision.boot_deps_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-timed).count();
         image.valid=true;++bootstrap_draws;
         return true;
     }
@@ -3430,6 +3922,12 @@ struct SandboxFreshPipeline {
     }
     bool compose_static(ViewportShaderSettings& settings,int w,int h){
         using Shift=c3x_renderer::render_core::StaticRegionShift;
+        overlay_frame.valid=false;static_preview=false;static_decision={};
+        static_decision.camera_x=camera_x;static_decision.camera_y=camera_y;
+        struct StaticClock {double& out;std::chrono::steady_clock::time_point begin=std::chrono::steady_clock::now();
+            explicit StaticClock(double& o):out(o){}
+            ~StaticClock(){out=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count();}
+        } static_clock{last_static_ms};
         auto const& options=sandbox_perf_options();
         auto* context=renderer.context;
         float zoom=projection_zoom;
@@ -3453,6 +3951,9 @@ struct SandboxFreshPipeline {
         unsigned front_index=static_rasters.front_slot[lane];
         {
             auto& displayed=static_rasters.states[front_index];
+            static_decision.entry=(displayed.valid?1u:0u)|(displayed.stale?2u:0u)|(displayed.key!=key?4u:0u)|
+                (raster_inputs[front_index].complete?32u:0u)|(layout_reset?64u:0u);layout_reset=false;
+            static_decision.input_bytes=raster_inputs[front_index].bytes();
             if(displayed.valid && !displayed.stale && displayed.key!=key)
                 static_rasters.invalidate(front_index,c3x_renderer::render_core::raster_environment);
             if(displayed.valid && !displayed.covered.empty()){
@@ -3463,16 +3964,18 @@ struct SandboxFreshPipeline {
                     proven=raster_dependencies(raster_inputs[front_index],slot_settings(displayed,settings),
                         {displayed.covered.left,displayed.covered.top,displayed.covered.right,displayed.covered.bottom},false);
                 }
-                if(!proven && !repair_front(front_index,displayed,settings))
-                    static_rasters.invalidate(front_index,c3x_renderer::render_core::raster_scene);
+                if(proven)static_decision.entry|=8u;
+                else if(repair_front(front_index,displayed,settings))static_decision.entry|=16u;
+                else static_rasters.invalidate(front_index,c3x_renderer::render_core::raster_scene);
             }
         }
         Shift shift{};bool shifted=false;
         {
             auto& displayed=static_rasters.states[front_index];
+            static_decision.lane=lane;static_decision.slot_x=displayed.camera_x;static_decision.slot_y=displayed.camera_y;
             if(displayed.valid && displayed.projection==zoom){
-                visible_rect(displayed,shift);
-                if(!shift.reusable && recenter(lane,settings,shift,w,h))front_index=static_rasters.front_slot[lane];
+                visible_rect(displayed,shift);static_decision.reusable=shift.reusable?1:0;
+                if(!shift.reusable && recenter(lane,settings,shift,w,h)){front_index=static_rasters.front_slot[lane];static_decision.recenter=1;}
                 shifted=shift.reusable;
             }
         }
@@ -3521,7 +4024,7 @@ struct SandboxFreshPipeline {
                 auto& abandoned=static_rasters.back(lane);
                 if(abandoned.refining){abandoned.refining=false;abandoned.stale=true;}
             }
-            else if(budget!=0 && refine(goal,budget)<0)return false;
+            else if(budget!=0){static_decision.refine=1;if(refine(goal,budget)<0)return false;}
         }
         // Strips the displayed raster needs now. Small (scroll) gaps are drawn
         // immediately; a large gap is filled progressively behind a preview.
@@ -3530,12 +4033,15 @@ struct SandboxFreshPipeline {
             auto needed=clip_region(shift.needed<StaticRect>(w,h,region_margin_x,region_margin_y));
             StaticRect overlap=clip_region({std::max(needed.left,displayed.covered.left),std::max(needed.top,displayed.covered.top),
                 std::min(needed.right,displayed.covered.right),std::min(needed.bottom,displayed.covered.bottom)});
-            long long missing=needed.area()-overlap.area();
+            long long missing=needed.area()-overlap.area();static_decision.missing=missing;
             if(missing>0){
                 bool progressive=previewable && missing*100>35LL*w*h;
                 double spend=progressive?std::max(budget,0.):-1.;
-                // With background guard fill, draw only what is visible now.
-                int ahead=previewable?0:128;
+                // A strip costs roughly the records it crosses, whatever its
+                // height, so a scroll that exposes a few rows per frame paid
+                // nearly a full strip every frame. Draw a band ahead so most
+                // scroll frames need none; background guard fill continues.
+                int ahead=previewable?96:128;
                 if(spend!=0 && !extend_coverage(front_index,displayed,settings,needed,spend,progressive?0:ahead,1.f,!displayed.stale))return false;
                 if(progressive){budget=spend;refine_worked=true;}
                 if(!displayed.covered.contains(needed))shifted=false;
@@ -3555,7 +4061,7 @@ struct SandboxFreshPipeline {
             auto const& displayed=static_rasters.states[front_index];
             c3x_renderer::render_core::LinearResample::Source probe{};
             bool covered=previewable && displayed.valid && resample_source(displayed,w,h,settings,probe)==2;
-            if(!covered){double unbounded=-1.;if(refine(zoom,unbounded)<0)return false;}
+            if(!covered){static_decision.sync=1;double unbounded=-1.;if(refine(zoom,unbounded)<0)return false;}
         }
         auto bits=[](float value){std::uint32_t result=0;std::memcpy(&result,&value,sizeof(result));return std::uint64_t(result);};
         if(shifted){
@@ -3578,6 +4084,9 @@ struct SandboxFreshPipeline {
                     DXGI_FORMAT_R16G16B16A16_FLOAT);
                 restore_key=next;++cache_scrolls;++displayed.metrics.restores;
             }else ++displayed.metrics.reuses;
+            static_decision.shifted=1;
+            overlay_frame={true,front_index,shift.x-region_margin_x,shift.y-region_margin_y,
+                -(settings.depth_translation-displayed.depth_translation)/16384.f};
             // Dynamic layers move with the whole-pixel static raster.
             settings.translation[0]+=float(shift.snap_x/zoom);
             settings.translation[1]+=float(shift.snap_y/zoom);
@@ -3590,19 +4099,28 @@ struct SandboxFreshPipeline {
         auto& home=static_rasters.front(0);
         auto& image=bootstrap[lane];
         int front_cover=resample_source(displayed,w,h,settings,front_source);
+        if(lane==1)static_decision.home_entry=(home.valid?1u:0u)|(home.stale?2u:0u)|(home.key!=key?4u:0u)|
+            (raster_inputs[static_rasters.front_slot[0]].complete?32u:0u);
         int home_cover=lane==1 && static_pixels_current(home,raster_inputs[static_rasters.front_slot[0]],settings)?
             resample_source(home,w,h,settings,home_source):0;
-        int boot_cover=static_pixels_current(image,bootstrap_inputs[lane],settings)?
+        if(lane==1 && home.valid)static_decision.home_entry|=8u;
+        int boot_cover=image.valid && bootstrap_stamp[lane]==bootstrap_identity()?
             resample_source(image,w,h,settings,boot_source):0;
         // Once zoom reaches its destination, a scene edit or camera move must
-        // not fall back to another zoom lane: upsampling its terrain softens
-        // every unchanged forest until refinement catches up. Keep affine
-        // previews only while the zoom is actually changing.
+        // not fall back to an upsampled raster: magnifying terrain softens
+        // every unchanged forest until refinement catches up. A current raster
+        // at up to twice the resolution stays sharp when minified, so it is
+        // kept (as map tiles are) while the destination refines behind it.
         if(zoom==hint){
-            if(displayed.projection!=zoom)front_cover=0;
-            if(home.projection!=zoom)home_cover=0;
+            auto sharp=[&](StaticState const& slot){return slot.projection>=zoom && slot.projection<=2.f*zoom;};
+            if(!sharp(displayed))front_cover=0;
+            if(!sharp(home))home_cover=0;
             if(image.projection!=zoom)boot_cover=0;
         }
+        // A ring-only bootstrap has no pixels inside the raster it extends,
+        // which must remain the primary preview source.
+        StaticState const* ring=front_cover==1?&displayed:front_cover==0 && home_cover==1?&home:nullptr;
+        if(bootstrap_ring[lane] && !(bootstrap_ring[lane]==ring && bootstrap_ring_revision[lane]==ring->revision))boot_cover=0;
         Source const* primary=nullptr;Source const* secondary=nullptr;
         StaticState const* primary_slot=nullptr;StaticState const* secondary_slot=nullptr;
         if(front_cover==2){primary=&front_source;primary_slot=&displayed;}
@@ -3610,11 +4128,12 @@ struct SandboxFreshPipeline {
         else if(home_cover==2){primary=&home_source;primary_slot=&home;}
         else{
             if(boot_cover<2){
-                if(!render_bootstrap(lane,settings,w,h))return false;
+                if(!render_bootstrap(lane,settings,w,h,ring))return false;
                 boot_cover=resample_source(image,w,h,settings,boot_source);
                 if(boot_cover==0)return false;
             }
             if(front_cover==1){primary=&front_source;primary_slot=&displayed;secondary=&boot_source;secondary_slot=&image;}
+            else if(ring==&home){primary=&home_source;primary_slot=&home;secondary=&boot_source;secondary_slot=&image;}
             else{primary=&boot_source;primary_slot=&image;}
         }
         std::array<std::uint64_t,12> next={2,std::uint64_t(reinterpret_cast<std::uintptr_t>(primary_slot)),primary_slot->revision,
@@ -3626,7 +4145,8 @@ struct SandboxFreshPipeline {
             work.draw(3);if(work.enabled)work.row().target_pixels+=std::uint64_t(static_cache.width)*static_cache.height;
             restore_key=next;
         }
-        ++preview_frames;
+        ++preview_frames;static_preview=true;static_decision.preview=1;
+        static_decision.front_cover=front_cover;static_decision.home_cover=home_cover;static_decision.boot_cover=boot_cover;
         return true;
     }
     // Region of interest: the 1x region around a quantized camera. It owns
@@ -3722,6 +4242,8 @@ struct SandboxFreshPipeline {
             int unit_x,int unit_y,int incarnation,int viewer,bool unit_visible,
             float next_zoom) {
         work.begin();shadow.work=&work;sandbox_direct_units.work=&work;bloom.work=&work;
+        pulled_pages.begin_frame();
+        if(pulled_device!=renderer.device_generation){pulled_pages.clear();pulled_device=renderer.device_generation;}
         body_requirement_builds=body_requirement_reuses=body_requirement_visits=0;body_requirement_ms=0;
         body_requirements.coverage_probes=0;
         prepare_subspans={};dynamic_subspans={};dynamic_calls={};prepare_unit_plan_reused=prepare_unit_reselected=0;
@@ -3920,7 +4442,7 @@ struct SandboxFreshPipeline {
 #ifdef C3X_RENDERER64_FRESH
         if(!sandbox_direct_units.prepare_real(frame,unit_contribution_candidates,visual_hour,unit_contribution_plan))return fail("shared_unit_preparation");
 #endif
-        QueryPerformanceCounter(&ticks[1]);
+        QueryPerformanceCounter(&ticks[1]);c3x_renderer::render_core::gpu_timeline().mark(renderer.context,"scene_prepare");
         prepare_subspans[prepare_unit_pose]=double(ticks[1].QuadPart-prepare_previous.QuadPart)*1000/frequency.QuadPart;
 #ifdef C3X_RENDERER64_FRESH
         gpu_phases.pass_end(renderer.context);gpu_phases.pass_begin(renderer.context,GpuPhases::import);
@@ -3991,7 +4513,7 @@ struct SandboxFreshPipeline {
                     reflection_scale,next_zoom,visual_hour,true))return fail("reflected_units");
             reflection_dynamic_written=dynamic_reflection;
         }
-        QueryPerformanceCounter(&ticks[2]);
+        QueryPerformanceCounter(&ticks[2]);c3x_renderer::render_core::gpu_timeline().mark(renderer.context,"reflection");
 #ifdef C3X_RENDERER64_FRESH
         gpu_phases.pass_end(renderer.context);gpu_phases.pass_begin(renderer.context,GpuPhases::receivers);
 #endif
@@ -4001,7 +4523,13 @@ struct SandboxFreshPipeline {
         // budgeted refinement (never a synchronous full redraw while a usable
         // preview exists). May move `settings` by a sub-pixel snap.
         if(!compose_static(settings,int(w),int(h)))return fail("static_layer");
-        QueryPerformanceCounter(&ticks[3]);
+        if(renderer.trace.level>=2){auto const& d=static_decision;char detail[512];
+            sprintf_s(detail,"zoom=%.4f lane=%u camera=%d,%d slot=%d,%d reusable=%d recenter=%d shifted=%d refine=%d sync=%d preview=%d covers=%d,%d,%d missing=%lld static_ms=%.2f entry=%u home_entry=%u input_kb=%zu repair=%u changed=%u reordered=%u rects=%u percent=%u boot_draw_ms=%.1f boot_deps_ms=%.1f boot_kpx=%lld",
+                projection_zoom,d.lane,d.camera_x,d.camera_y,d.slot_x,d.slot_y,d.reusable,d.recenter,d.shifted,d.refine,d.sync,d.preview,
+                d.front_cover,d.home_cover,d.boot_cover,d.missing,last_static_ms,d.entry,d.home_entry,d.input_bytes/1024,
+                d.repair,d.repair_changed,d.repair_reordered,d.repair_rects,d.repair_percent,d.boot_draw_ms,d.boot_deps_ms,d.boot_area/1000);
+            renderer.trace.write("static-compose",detail,false);}
+        QueryPerformanceCounter(&ticks[3]);c3x_renderer::render_core::gpu_timeline().mark(renderer.context,"static");
 #ifdef C3X_RENDERER64_FRESH
         gpu_phases.pass_end(renderer.context);gpu_phases.pass_begin(renderer.context,GpuPhases::shadow);
 #endif
@@ -4090,8 +4618,51 @@ struct SandboxFreshPipeline {
             }else if(cached)++water_lighting_reuses;
             aquatic_bounds[6]=cached?1.f:0.f;
             context->UpdateSubresource(aquatic_bounds_buffer,0,nullptr,aquatic_bounds,0,0);work.upload_buffer(aquatic_bounds_buffer);
-            if(!draw_scene(water_visible,settings,full,glow.linear.target,
-                    glow.linear.depth,false,float(scene_scale)))return fail("water_scene");
+            // The frame's static pixels came from a slot whose retained overlay
+            // layer matches it: draw only the animated water live, then the
+            // layer, then anything after the overlays in scene order.
+            bool composited=false;
+            if(overlay_frame.valid && overlay_enabled()){
+                auto const& slot=static_rasters.states[overlay_frame.slot];
+                auto const& retained=overlay_slots[overlay_frame.slot];
+                bool covered=retained.revision==slot.revision && retained.layer.samples;
+                if(!covered)++overlay_miss_revision;
+                for(unsigned layer=0;covered && layer<geometry_layer_count;++layer)
+                    if(!water_visible[layer].empty() && layer!=geometry_water && layer!=geometry_river &&
+                       layer!=geometry_wave && !overlay_layer(layer)){covered=false;++overlay_miss_layer;overlay_miss_last_layer=layer;}
+                if(covered){
+                    if(!draw_layer(water_visible,geometry_water,settings,full,glow.linear.target,glow.linear.depth,false,float(scene_scale)) ||
+                       !draw_layer(water_visible,geometry_river,settings,full,glow.linear.target,glow.linear.depth,false,float(scene_scale)))
+                        return fail("water_scene");
+                    auto const& c=slot.covered;
+                    if(!overlay_composite.draw(context,glow.linear,retained.layer,overlay_frame.move_x,overlay_frame.move_y,
+                            {c.left,c.top,c.right,c.bottom},overlay_frame.depth_shift))return fail("water_overlay");
+                    work.draw(3);
+                    char wave_control[8]{};
+                    bool skip_scene_wave=c3x_renderer::render_core::cached_environment("C3X_SANDBOX_SKIP_WAVE",
+                        wave_control,sizeof(wave_control)) && std::strcmp(wave_control,"1")==0;
+                    if(!skip_scene_wave && !draw_layer(water_visible,geometry_wave,settings,full,glow.linear.target,
+                            glow.linear.depth,false,float(scene_scale)))return fail("water_scene");
+                    composited=true;++overlay_hits;
+                }
+            }
+            if(!composited){
+                ++overlay_misses;if(!overlay_frame.valid)++overlay_miss_unshifted;
+                if(static_preview && preview_raster_device!=renderer.device_generation){
+                    if(preview_water_raster){preview_water_raster->Release();preview_water_raster=nullptr;}
+                    D3D11_RASTERIZER_DESC desc={};renderer.rasterizer_state->GetDesc(&desc);
+                    // Four pixel-depth units (depth = 0.5 - pixels/16384) in D24 steps.
+                    desc.DepthBias=-INT(4.0*16777216.0/16384.0);
+                    if(SUCCEEDED(renderer.device->CreateRasterizerState(&desc,&preview_water_raster)))
+                        preview_raster_device=renderer.device_generation;
+                }
+                auto* raster=renderer.rasterizer_state;
+                if(static_preview && preview_water_raster)renderer.rasterizer_state=preview_water_raster;
+                bool drawn=draw_scene(water_visible,settings,full,glow.linear.target,
+                        glow.linear.depth,false,float(scene_scale));
+                renderer.rasterizer_state=raster;
+                if(!drawn)return fail("water_scene");
+            }
         }
         mark_dynamic(dynamic_water_scene);
         if(!draw_resource_poses(renderer.sandbox_resource_poses,settings,full,
@@ -4125,7 +4696,7 @@ struct SandboxFreshPipeline {
                     [&](auto const& r){return !border_static(r) &&
                         renderer.chunk_intersects_region(GeometryDrawReference(r),settings,border_clip,false);}))
                 return fail("territory_borders");
-        QueryPerformanceCounter(&ticks[4]);
+        QueryPerformanceCounter(&ticks[4]);c3x_renderer::render_core::gpu_timeline().mark(renderer.context,"water_dynamic");
 #ifdef C3X_RENDERER64_FRESH
         gpu_phases.pass_end(renderer.context);gpu_phases.pass_begin(renderer.context,GpuPhases::body);
 #endif
@@ -4137,13 +4708,13 @@ struct SandboxFreshPipeline {
             incarnation,viewer,unit_visible,camera_x,camera_y,glow.linear,
             float(scene_scale),next_zoom,visual_hour))
             return fail("direct_units");
-        QueryPerformanceCounter(&ticks[5]);
+        QueryPerformanceCounter(&ticks[5]);c3x_renderer::render_core::gpu_timeline().mark(renderer.context,"units");
 #ifdef C3X_RENDERER64_FRESH
         gpu_phases.pass_end(renderer.context);gpu_phases.pass_begin(renderer.context,GpuPhases::finish);
 #endif
         if(!reconstruct())return fail("reconstruct");
         renderer.context->OMSetRenderTargets(0,nullptr,nullptr);
-        QueryPerformanceCounter(&ticks[6]);
+        QueryPerformanceCounter(&ticks[6]);c3x_renderer::render_core::gpu_timeline().mark(renderer.context,"reconstruct");
 #ifdef C3X_RENDERER64_FRESH
         gpu_phases.pass_end(renderer.context);gpu_phases.end(renderer.context);
 #endif

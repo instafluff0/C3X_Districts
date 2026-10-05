@@ -98,6 +98,43 @@ template<class Transport>class AsyncSceneClient {
         transport.publication_pressure(publication.status().records);
         return accepted?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_DEVICE_ERROR;
     }
+    // Copied unit facts arrive at hundreds per second. One synchronous IPC per
+    // fact (~0.5 ms each in the VM) saturated this transport thread and backed
+    // up every later camera/image/present command. Consecutive facts join the
+    // queue tail into one ordered batch; each is encoded on this transport
+    // thread at send time (after earlier image identities resolve), and its
+    // own result keeps its original strict/superseded acceptance rule.
+    // Local fact identities; the real transport maps them to wire messages.
+    enum FactId:unsigned {fact_unit,fact_forget,fact_visual,fact_animation,fact_motion,fact_move,fact_spawn,fact_state};
+    struct PendingFact {unsigned id=0;bool strict=false;char const* operation="state";
+        std::function<void(c3x_inputs::Writer&)> write;};
+    struct FactGroup {std::vector<PendingFact> facts;};
+    template<class T>static auto fact_batching(int)->decltype(std::declval<T&>().facts(
+        std::declval<std::vector<typename T::Fact> const&>(),std::declval<std::vector<unsigned>&>()),std::true_type{});
+    template<class T>static std::false_type fact_batching(long);
+    void execute_facts(FactGroup& group){
+        if constexpr(decltype(fact_batching<Transport>(0))::value){
+            std::vector<typename Transport::Fact> wire;wire.reserve(group.facts.size());
+            for(auto& fact:group.facts){c3x_inputs::Writer out;fact.write(out);typename Transport::Fact next;
+                Transport::fact_route(fact.id,next.kind,next.subtype);next.bytes=std::move(out.bytes);wire.push_back(std::move(next));}
+            std::vector<unsigned> codes;
+            if(!transport.facts(wire,codes))throw std::runtime_error("asynchronous renderer unit-fact-batch failed");
+            for(std::size_t n=0;n<codes.size();++n){
+                if(group.facts[n].strict)require_result(int(codes[n]),group.facts[n].operation);
+                else accept_state(int(codes[n]),group.facts[n].operation);
+            }
+        }else (void)group;
+    }
+    int post_fact(std::size_t bytes,PendingFact fact,std::function<void()> single){
+        if constexpr(decltype(fact_batching<Transport>(0))::value){
+            auto group=std::make_shared<FactGroup>();group->facts.push_back(std::move(fact));
+            bool accepted=publication.post_group(bytes,1,3,group,[this](FactGroup& value){execute_facts(value);},
+                [](FactGroup& target,FactGroup& incoming){for(auto& f:incoming.facts)target.facts.push_back(std::move(f));},
+                std::size_t(512)*1024,std::size_t(4096),std::size_t(512),"state");
+            transport.publication_pressure(publication.status().records);
+            return accepted?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_DEVICE_ERROR;
+        }else{(void)fact;return post(bytes,std::move(single));}
+    }
     static std::shared_ptr<c3x_inputs::Frame> copy_frame(c3x_renderer_frame_v1 const& source){
         auto result=std::make_shared<c3x_inputs::Frame>();result->value=source;
         if(source.tile_count)result->tiles.assign(source.tiles,source.tiles+source.tile_count);
@@ -335,16 +372,33 @@ public:
         // Bodies live in the retained 3D scene. Native animation must not erase
         // or redraw their canvas while the renderer advances its own clock.
         bounds[0]=bounds[2]=value.body_x;bounds[1]=bounds[3]=value.body_y;
-        return post(sizeof(value)+sizeof(destination),[this,value,destination]()mutable{
-            target(destination);int unused[4]={};require_result(transport.unit(value,destination,unused),"unit-observation");});
+        return post_fact(sizeof(value)+sizeof(destination),{fact_unit,true,"unit-observation",
+            [this,value,destination](c3x_inputs::Writer& out)mutable{target(destination);c3x_inputs::unit(out,value);c3x_inputs::target_fields(out,destination);}},
+            [this,value,destination]()mutable{target(destination);int unused[4]={};require_result(transport.unit(value,destination,unused),"unit-observation");});
     }
-    void forget_unit(int id){if(enabled)post(sizeof(id),[this,id]{transport.forget_unit(id);});else transport.forget_unit(id);}
-    int unit_visual(c3x_renderer_unit_visual_v1 value){return enabled?post(sizeof(value),[this,value]{accept_state(transport.unit_visual(value),"unit-visual");}):transport.unit_visual(value);}
-    int unit_animation(c3x_renderer_unit_animation_v1 value){return enabled?post(sizeof(value),[this,value]{accept_state(transport.unit_animation(value),"unit-animation");}):transport.unit_animation(value);}
-    int unit_motion(c3x_renderer_unit_move_v1 value){return enabled?post(sizeof(value),[this,value]{accept_state(transport.unit_motion(value),"unit-motion");}):transport.unit_motion(value);}
-    int unit_move(c3x_renderer_unit_move_v1 value){return enabled?post(sizeof(value),[this,value]{accept_state(transport.unit_move(value),"unit-move");}):transport.unit_move(value);}
-    int unit_spawn(c3x_renderer_unit_spawn_v1 value){return enabled?post(sizeof(value),[this,value]{accept_state(transport.unit_spawn(value),"unit-spawn");}):transport.unit_spawn(value);}
-    int unit_state(c3x_renderer_unit_state_v1 value){return enabled?post(sizeof(value),[this,value]{accept_state(transport.unit_state(value),"unit-state");}):transport.unit_state(value);}
+    void forget_unit(int id){
+        if(!enabled){transport.forget_unit(id);return;}
+        post_fact(sizeof(id),{fact_forget,false,"unit-forget",
+            [id](c3x_inputs::Writer& out){out(std::int32_t(id));}},[this,id]{transport.forget_unit(id);});
+    }
+    int unit_visual(c3x_renderer_unit_visual_v1 value){return enabled?post_fact(sizeof(value),{fact_visual,false,"unit-visual",
+        [value](c3x_inputs::Writer& out)mutable{c3x_inputs::unit_visual_fields(out,value);}},
+        [this,value]{accept_state(transport.unit_visual(value),"unit-visual");}):transport.unit_visual(value);}
+    int unit_animation(c3x_renderer_unit_animation_v1 value){return enabled?post_fact(sizeof(value),{fact_animation,false,"unit-animation",
+        [value](c3x_inputs::Writer& out)mutable{c3x_inputs::unit_animation_fields(out,value);}},
+        [this,value]{accept_state(transport.unit_animation(value),"unit-animation");}):transport.unit_animation(value);}
+    int unit_motion(c3x_renderer_unit_move_v1 value){return enabled?post_fact(sizeof(value),{fact_motion,false,"unit-motion",
+        [value](c3x_inputs::Writer& out)mutable{c3x_inputs::unit_move_fields(out,value);}},
+        [this,value]{accept_state(transport.unit_motion(value),"unit-motion");}):transport.unit_motion(value);}
+    int unit_move(c3x_renderer_unit_move_v1 value){return enabled?post_fact(sizeof(value),{fact_move,false,"unit-move",
+        [value](c3x_inputs::Writer& out)mutable{c3x_inputs::unit_move_fields(out,value);}},
+        [this,value]{accept_state(transport.unit_move(value),"unit-move");}):transport.unit_move(value);}
+    int unit_spawn(c3x_renderer_unit_spawn_v1 value){return enabled?post_fact(sizeof(value),{fact_spawn,false,"unit-spawn",
+        [value](c3x_inputs::Writer& out)mutable{c3x_inputs::unit_spawn_fields(out,value);}},
+        [this,value]{accept_state(transport.unit_spawn(value),"unit-spawn");}):transport.unit_spawn(value);}
+    int unit_state(c3x_renderer_unit_state_v1 value){return enabled?post_fact(sizeof(value),{fact_state,false,"unit-state",
+        [value](c3x_inputs::Writer& out)mutable{c3x_inputs::unit_state_fields(out,value);}},
+        [this,value]{accept_state(transport.unit_state(value),"unit-state");}):transport.unit_state(value);}
     int tactical(c3x_renderer::tactical::Input capture,c3x_renderer_gpu_unit_v1 destination){
         if(!enabled)return transport.tactical(capture,destination);
         auto size=sizeof(destination)+capture.primitives.size()*sizeof(capture.primitives[0]);

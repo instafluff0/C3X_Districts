@@ -226,13 +226,13 @@ def require_current_candidate():
     raise CandidateBuildRequired("Candidate DLL does not match the current C++ inputs; run Renderer/renderer.py build")
 
 
-def ensure_candidate():
+def ensure_candidate(categories=None):
     """Reuse a verified candidate; build only when compiled inputs require it."""
     try:
         require_current_candidate()
     except CandidateBuildRequired:
         print("Rebuilding candidate for current compiled inputs; production is not staged", flush=True)
-        build_candidate()
+        build_candidate(categories)
         # A successful process alone is not evidence of a matching build.
         require_current_candidate()
 
@@ -416,6 +416,16 @@ def scene(category, case, destination, *, world_size=32):
                     else:
                         depth = x - shore
                         base = real = 11 if depth < 4 else 12 if depth < 10 else 13
+                    if category == "shorelines" and case.startswith("biomes"):
+                        # The same lowland coast across three land families and
+                        # both map axes exposes directional/material fade gaps.
+                        across, along = (y, x) if case == "biomes-turned" else (x, y)
+                        shore = 15 if 7 <= along < 14 else 11 if 23 <= along < 28 else 13
+                        if across < shore:
+                            base = real = 2 if along < 13 else 1 if along < 21 else 0
+                        else:
+                            depth = across - shore
+                            base = real = 11 if depth < 4 else 12 if depth < 10 else 13
                 else:
                     base = real = 2 if x < 13 else 11 if x < 17 else 12 if x < 23 else 13
                     if case == "detail":
@@ -488,8 +498,10 @@ def native_render(category, case, hour, zoom, output, *, behavior=None, center=(
         # The paired views inspect opposite ends of the same watershed instead
         # of wasting both captures on its middle reach.
         center = (8, 14) if case == "detail" else (21, 19)
-    if ((category == "shorelines" and case == "lowland") or category == "ocean-waves") and center == (16, 16):
+    if ((category == "shorelines" and case in ("lowland", "biomes")) or category == "ocean-waves") and center == (16, 16):
         center = (10, 18)
+    if category == "shorelines" and case == "biomes-turned" and center == (16, 16):
+        center = (18, 10)
     if category == "mountains" and case == "coastal" and center == (16, 16):
         center = (18, 18)
     output.mkdir(parents=True, exist_ok=True)
@@ -782,7 +794,7 @@ def render(category, *, selected_case=None):
         return render_unit_studio(cases=({"studio":"sizing", "studio-gameplay":"sizing-gameplay", "studio-move":"sizing-move"}[selected_case],),
                                   zooms=tuple(value["recipe"]["zooms"]))
     require_prepared([category])
-    ensure_candidate()
+    ensure_candidate([category])
     out = LAB / "out" / category
     outputs = []
     signature = category_signatures()[category]
@@ -1047,9 +1059,9 @@ def run_affected_tests(category):
     return sorted(modules)
 
 
-def build_candidate():
+def build_candidate(categories=None):
     from Renderer.lab.platform import native_command_result
-    prepare_sources()
+    prepare_sources(categories)
     staged = ROOT / "Renderer/bin/C3XRenderer.dll"
     before = checksum(staged) if staged.is_file() else None
     inputs = native_inputs()
@@ -1085,9 +1097,9 @@ def verify_integration_checks(category, *, build=False, full=False, renderer_onl
     selected = affected(category) if full else [category]
     prepare_sources(selected)
     if build:
-        build_candidate()
+        build_candidate(selected)
     else:
-        ensure_candidate()
+        ensure_candidate(selected)
     identity = implementation_identity()
     modules = run_tests(category, integration=True, full=full)
     from Renderer.lab.platform import changed_injected_sources, injected_compile_result

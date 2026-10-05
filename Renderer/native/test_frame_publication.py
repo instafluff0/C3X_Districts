@@ -154,6 +154,7 @@ struct Owner {
  c3x_renderer_gpu_frame_v1 gpu_view={sizeof(gpu_view)};
  c3x_renderer_output_v1 gpu_metadata={};
  void pause_ahead_locked(std::unique_lock<std::mutex>&,bool){}
+ void drain_facts_locked(){}
  int submit_locked(std::unique_lock<std::mutex>&,Command){
   ++imports;if(fail)return C3X_RENDERER_RESULT_ERROR;
   gpu_view.ticket=99;gpu_view.map_image=100;gpu_view.session=3;

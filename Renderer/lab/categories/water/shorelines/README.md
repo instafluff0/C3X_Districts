@@ -4,6 +4,15 @@ Current world-continuous shore contour, beaches, rocky shores, depth and relief
 join. Desert coasts carry the desert sand family to a narrow wet edge and into
 the submerged shelf instead of exposing a second dry-beach ribbon.
 
+The current Lab blending candidate begins the lowland fade within the dry sand,
+keeps the previous fully inland endpoint, and samples edge detail from the local
+grass/plains/desert/tundra mix. Plains and dune decals now sample coast coverage
+at their own vertices rather than copying their owner's center. `biomes` and
+`biomes-turned` show the same stepped coast across grassland, plains and desert
+on both map axes; `lowland` and `gameplay` retain beach/cliff controls. Matched
+before/after evidence lives under `lab/out/shorelines/blending/`. This candidate
+awaits visual acceptance; fixed references remain unchanged.
+
 The [coastal-wave study](../../../studies/waves/README.md) separately evaluates
 recovered source crests on lowland and rocky coasts. It is isolated, pending
 approval, and does not change the category's production appearance.

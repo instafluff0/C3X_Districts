@@ -62,6 +62,8 @@ struct Core {
     using Pack=int(*)(char const*);Pack pack=nullptr;
     using Reset=void(*)();Reset reset=nullptr;
     c3x_renderer_gpu_images_fn images=nullptr;
+    using ImageScope=int(*)(c3x_renderer_image_scope_body_fn,void*);
+    ImageScope image_scope=nullptr;
     std::unique_ptr<c3x_remote_scene::ImageBatchService> image_batches;
     c3x_renderer_native_image_fn native_image=nullptr;
     using GpuUnit=int(*)(c3x_renderer_unit_v1 const*,c3x_renderer_gpu_unit_v1 const*,int*);
@@ -161,10 +163,28 @@ struct Core {
         bind_surface=reinterpret_cast<BindSurface>(GetProcAddress(module,"c3x_renderer_trial_bind_surface"));
         surface_pixels=reinterpret_cast<SurfacePixels>(GetProcAddress(module,"c3x_renderer_trial_surface_pixels"));
         require(render&&render_view&&gpu_render&&camera_begin&&camera_poll&&camera_cancel&&definitions&&reset,"renderer DLL entries missing");
+        image_scope=reinterpret_cast<ImageScope>(GetProcAddress(module,"c3x_renderer_trial_gpu_images_scope"));
         image_batches=std::make_unique<c3x_remote_scene::ImageBatchService>([this](auto& work){
             char delay[16]={};
             if(GetEnvironmentVariableA("C3X_RENDERER_HELPER_IMAGE_DELAY_MS",delay,sizeof(delay)))
                 Sleep(DWORD(std::clamp(std::atoi(delay),0,250)));
+            if(image_scope){
+                // One renderer worker command executes the whole admitted batch.
+                struct Scope {std::vector<c3x_remote_scene::ImageBatch::Operation>* work;
+                    std::vector<c3x_remote_scene::ImageBatch::Reply> replies;std::string failure;bool entered=false;} scope{&work};
+                int code=image_scope([](void* context,void* worker,c3x_renderer_image_scope_execute_fn execute)->int{
+                    auto& state=*static_cast<Scope*>(context);state.entered=true;
+                    try{state.replies=c3x_remote_scene::ImageBatch::execute(*state.work,[&](auto const& request,auto& result){
+                        return execute(worker,&request,&result);});}
+                    catch(std::exception const& e){state.failure=e.what();}
+                    catch(...){state.failure="image batch scope failure";}
+                    return C3X_RENDERER_RESULT_OK;
+                },&scope);
+                if(!scope.failure.empty())throw std::runtime_error(scope.failure);
+                if(scope.entered)return scope.replies;
+                require(code!=C3X_RENDERER_RESULT_OK,"image batch scope skipped its body");
+                throw std::runtime_error("image batch scope unavailable: "+std::to_string(code));
+            }
             return c3x_remote_scene::ImageBatch::execute(work,[this](auto const& request,auto& result){
                 return images(&request,&result,nullptr,0);
             });
@@ -715,6 +735,54 @@ struct Core {
                 c3x_renderer_unit_state_v1 value={sizeof(value)};
                 c3x_inputs::unit_state_fields(in,value);in.done();
                 wire.code=unsigned(unit_state(&value));
+            }else if(wire.live&&wire.kind==unsigned(Kind::unit)&&wire.subtype==3){
+                // Ordered batch of copied unit facts: one IPC instead of one
+                // synchronous round trip per fact (~0.5 ms each in the VM).
+                // Each fact is decoded exactly as its single-message form.
+                auto count=in.u32();require(count&&count<=4096,"unit fact batch bound");
+                Writer response;response.u32(count);
+                for(unsigned n=0;n<count;++n){
+                    auto kind=in.u32(),subtype=in.u32(),length=in.u32();
+                    require(length<=bytes.size()-in.at,"unit fact batch payload");
+                    Bytes fact(bytes.begin()+std::ptrdiff_t(in.at),bytes.begin()+std::ptrdiff_t(in.at+length));in.at+=length;
+                    Reader item{fact};int code=C3X_RENDERER_RESULT_ERROR;
+                    if(kind==unsigned(Kind::unit)&&subtype==1){
+                        require(unit_gpu!=nullptr,"helper lacks GPU unit entry");
+                        c3x_renderer_unit_v1 value={};c3x_inputs::unit(item,value);
+                        c3x_renderer_gpu_unit_v1 target={};target.struct_size=sizeof(target);
+                        c3x_inputs::target_fields(item,target);item.done();int unused[4]={};
+                        code=unit_gpu(&value,&target,unused);
+                    }else if(kind==unsigned(Kind::unit_forget)&&subtype==0){
+                        require(unit_forget!=nullptr,"helper lacks unit retirement entry");
+                        int id=0;item(id);item.done();unit_forget(id);code=1;
+                    }else if(kind==unsigned(Kind::unit_visual)&&subtype==1){
+                        require(unit_animation!=nullptr,"helper lacks unit animation entry");
+                        c3x_renderer_unit_animation_v1 value={sizeof(value)};value.visual.struct_size=sizeof(value.visual);
+                        c3x_inputs::unit_animation_fields(item,value);item.done();code=unit_animation(&value);
+                    }else if(kind==unsigned(Kind::unit_visual)&&subtype==0){
+                        require(unit_visual!=nullptr,"helper lacks unit visual entry");
+                        c3x_renderer_unit_visual_v1 value={sizeof(value)};
+                        c3x_inputs::unit_visual_fields(item,value);item.done();code=unit_visual(&value);
+                    }else if(kind==unsigned(Kind::unit_move)&&subtype<=1){
+                        auto receiver=subtype==1?unit_motion:unit_move;
+                        require(receiver!=nullptr,"helper lacks unit move entry");
+                        c3x_renderer_unit_move_v1 value={sizeof(value)};
+                        c3x_inputs::unit_move_fields(item,value);item.done();code=receiver(&value);
+                    }else if(kind==unsigned(Kind::unit_spawn)&&subtype==0){
+                        require(unit_spawn!=nullptr,"helper lacks unit spawn entry");
+                        c3x_renderer_unit_spawn_v1 value={sizeof(value)};
+                        c3x_inputs::unit_spawn_fields(item,value);item.done();code=unit_spawn(&value);
+                    }else if(kind==unsigned(Kind::unit_state)&&subtype==0){
+                        require(unit_state!=nullptr,"helper lacks unit state entry");
+                        c3x_renderer_unit_state_v1 value={sizeof(value)};
+                        c3x_inputs::unit_state_fields(item,value);item.done();code=unit_state(&value);
+                    }else throw std::runtime_error("unsupported unit fact batch operation");
+                    response.u32(unsigned(code));
+                }
+                in.done();
+                require(response.bytes.size()<=wire_capacity,"unit fact batch reply limit");
+                wire.reply_size=unsigned(response.bytes.size());std::memcpy(wire.payload,response.bytes.data(),wire.reply_size);
+                wire.code=C3X_RENDERER_RESULT_OK;
             }else if(wire.live&&wire.kind==unsigned(Kind::tactical)&&wire.subtype==0){
                 require(tactical_gpu!=nullptr,"helper lacks tactical renderer entry");
                 c3x_renderer_gpu_unit_v1 target={sizeof(target)};c3x_inputs::target_fields(in,target);

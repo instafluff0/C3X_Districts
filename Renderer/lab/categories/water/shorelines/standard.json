@@ -44,7 +44,9 @@
     "cases": [
       "detail",
       "gameplay",
-      "lowland"
+      "lowland",
+      "biomes",
+      "biomes-turned"
     ]
   },
   "tests": [

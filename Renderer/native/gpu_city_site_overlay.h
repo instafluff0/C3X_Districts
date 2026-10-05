@@ -1,5 +1,6 @@
 #pragma once
 #include "render_core/city_site_overlay.h"
+#include "scene_projection.h"
 #include <d3d11.h>
 #include <d3dcompiler.h>
 #include <wrl/client.h>
@@ -31,7 +32,10 @@ public:
               unsigned actor_guard,float zoom){
         if(!input.capture(frame))return false;
         if(input.tiles.empty())return true;
-        if(!device||!context||!output||!actor_depth||zoom<1.f||zoom>3.f)return false;
+        // Anchors scale about the view center for every supported zoom; a 1x
+        // floor failed every zoomed-out frame while a settler showed sites.
+        if(!device||!context||!output||!actor_depth||
+           zoom<SceneProjection::minimum||zoom>SceneProjection::maximum)return false;
         D3D11_TEXTURE2D_DESC out_desc={},actor_desc={};output->GetDesc(&out_desc);actor_depth->GetDesc(&actor_desc);
         if(out_desc.Width!=unsigned(frame.target_width)||out_desc.Height!=unsigned(frame.target_height)||
            out_desc.Format!=DXGI_FORMAT_B8G8R8A8_UNORM||out_desc.SampleDesc.Count!=1||

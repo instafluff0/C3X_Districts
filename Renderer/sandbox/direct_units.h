@@ -98,6 +98,7 @@ struct SandboxDirectUnits {
     float prepared_light[2]={};
     decltype(c3x_renderer::evaluate_environment(12,0)) prepared_environment{};
     std::array<float,20> prepared_beauty{};
+    std::vector<std::uint64_t> shadow_key_scratch,material_key_scratch; // per-frame key storage reuse
 #endif
     // Texture aliases are borrowed slots; count each reachable allocation once.
     std::size_t gpu_preparation_bytes()const{
@@ -115,13 +116,32 @@ struct SandboxDirectUnits {
         return 0;
 #endif
     }
+    // Ground height under a body is a pure function of its world position and
+    // the authoritative terrain. Each query walks coast/shore/river fields and
+    // borrows the shared 16-page river corridor cache; issuing it for every unit
+    // on every frame cost ~10 ms at 1x and thrashed that cache at wide zoom.
+    // Positions are world-anchored (camera and zoom invariant) and quantized to
+    // 1/1024 tile (~0.1 px), far below the height field's resolution.
     float low_ground(float column,float row){
         if(renderer.natural.low_relief.fields[0].pixels.empty())return 0;
+        void* field=renderer.natural.low_relief.fields[0].pixels.data();
+        if(ground_topology!=renderer.geometry_world_revision||ground_content!=renderer.content_revision||
+           ground_field!=field||ground_heights.size()>=65536){
+            ground_heights.clear();ground_topology=renderer.geometry_world_revision;
+            ground_content=renderer.content_revision;ground_field=field;
+        }
+        auto qc=std::lround(double(column)*1024.),qr=std::lround(double(row)*1024.);
+        auto key=(std::uint64_t(std::uint32_t(qc))<<32)|std::uint32_t(qr);
+        auto found=ground_heights.find(key);
+        if(found!=ground_heights.end())return found->second;
+        column=float(double(qc)/1024.);row=float(double(qr)/1024.);
         c3x_renderer::render_core::ExactPointCache<c3x_renderer::render_core::ShoreSample> samples;
         auto ignore=[](auto,auto){};
         int c=int(std::floor(column)),r=int(std::floor(row));
         c3x_renderer::fidelity::SurfaceQueries query(renderer.world_coast,samples,c+r,c-r,ignore,ignore,true,&renderer.natural);
-        return query.low_height(renderer.natural,column,row);
+        float height=query.low_height(renderer.natural,column,row);
+        ground_heights.emplace(key,height);
+        return height;
     }
     float unit_low_ground(c3x_renderer_frame_v1 const& frame,float x,float y){
         if(renderer.natural.low_relief.fields[0].pixels.empty()||!frame.tile_count)return 0;
@@ -133,6 +153,9 @@ struct SandboxDirectUnits {
         return low_ground((tile.tile_x+tile.tile_y)*.5f+.5f+(dx+dy)*.5f,
             (tile.tile_x-tile.tile_y)*.5f+.5f+(dx-dy)*.5f);
     }
+    std::unordered_map<std::uint64_t,float> ground_heights;
+    std::int64_t ground_topology=-2;std::uint64_t ground_content=~0ull;
+    void* ground_field=nullptr;
     template<class T>static void drop(T*& p){if(p)p->Release();p=nullptr;}
     ~SandboxDirectUnits(){drop(vertex);drop(pixel);drop(shadow_pixel);drop(height_pixel);drop(layout);drop(visible_depth);drop(material);drop(beauty);
         drop(placement);drop(unshadowed_view);drop(unshadowed);
@@ -803,8 +826,10 @@ float4 PSShadow(Output i):SV_Target {
             sample.angle=transitions.facing(draw.unit_id,instance.pose_identity,frame.presentation_time_ticks,
                 frame.presentation_frequency,c3x_renderer::native_unit_yaw(unit.yaw_offset,draw.direction));
             auto bits=[](float value){std::uint32_t result;std::memcpy(&result,&value,sizeof(result));return std::uint64_t(result);};
-            std::vector<std::uint64_t> shadow_key={bodies.catalogue_generation,bits(unit.scale),bits(unit.offset_z),
-                bits(sample.angle),bits(light[0]),bits(light[1]),action.parts.size()};
+            auto& shadow_key=shadow_key_scratch;
+            shadow_key.assign({bodies.catalogue_generation,bits(unit.scale),bits(unit.offset_z),
+                bits(sample.angle),bits(light[0]),bits(light[1]),action.parts.size()});
+            sample.parts.reserve(action.parts.size());
             for(auto const& part:action.parts){
                 if(part.mesh>=bodies.meshes.size() || part.texture>=bodies.textures.size() ||
                     !bodies.textures[part.texture].view || !bodies.meshes[part.mesh].animation || part.mesh>=meshes.size() || !meshes[part.mesh].vertices)return false;
@@ -833,9 +858,10 @@ float4 PSShadow(Output i):SV_Target {
                     shadow_key.insert(shadow_key.end(),{part.mesh,part.texture,part.address,bits(part.cutout),prepared.frame,source.bones,std::uint64_t(prepared.blended!=nullptr)});
                     if(prepared.blended)for(unsigned i=0;i<source.bones*16;++i)shadow_key.push_back(bits(prepared.blended[i]));
                 }
-                std::vector<std::uint64_t> material_key={bodies.catalogue_generation,part.mesh,part.texture,part.address,
+                auto& material_key=material_key_scratch;
+                material_key.assign({bodies.catalogue_generation,part.mesh,part.texture,part.address,
                     draw.display_color_rgb,bits(part.tint[0]),bits(part.tint[1]),bits(part.tint[2]),bits(part.mask),bits(part.strength),
-                    bits(part.material_model),bits(part.cutout),bits(environment.sun_intensity),bits(environment.moon_intensity)};
+                    bits(part.material_model),bits(part.cutout),bits(environment.sun_intensity),bits(environment.moon_intensity)});
                 for(unsigned axis=0;axis<3;++axis)material_key.insert(material_key.end(),{bits(environment.sun_direction[axis]),
                     bits(environment.sun_color[axis]),bits(environment.moon_direction[axis]),bits(environment.moon_color[axis]),bits(environment.ambient_color[axis])});
                 for(auto texture:part.material_textures)material_key.push_back(texture);
@@ -1002,23 +1028,49 @@ float4 PSShadow(Output i):SV_Target {
         // a fresh depth plane, preserving self/other-unit occlusion while every
         // world feature stays behind them. The next frame restores cached world
         // depth before its dynamic passes; reflections keep their world depth.
+        // State is set once per layer and again only after a unit's own
+        // shadow sample re-renders (draw_self_shadow binds its own target and
+        // inputs). Per-part bindings skip values already bound; draw order and
+        // every draw's inputs are unchanged.
+        bool const shadow_light=key_light.intensity>.001f;
+        // Level of detail below 0.8x: a body is a few dozen pixels tall, so its
+        // 512x512 self-shadow map is not rendered or sampled (ground shadows
+        // are unchanged).
+        bool const self_shadows=zoom>=.8f;
         for(int layer=reflected?1:0;layer<2;++layer){
           if(!reflected && layer==1){
             context->ClearDepthStencilView(scene.depth,D3D11_CLEAR_DEPTH|D3D11_CLEAR_STENCIL,1,0);
             work->clear(scene.depth);
           }
+          if(layer==0&&!shadow_light)continue; // the ground-shadow layer draws nothing
+          bool state_valid=false;
+          // Each tracked binding is known only after this layer bound it.
+          ID3D11Buffer *last_vertices=nullptr,*last_indices=nullptr;
+          ID3D11ShaderResourceView *last_texture=nullptr,*last_shadow_view=nullptr,*last_palette=nullptr;
+          std::array<ID3D11ShaderResourceView*,4> last_extra{};void const* last_sampler=nullptr;
+          bool known=false,palette_known=false;
           for(auto& prepared:prepared_units){
             if(reflected?!prepared.reflected:layer==0?!prepared.shadow:!prepared.main)continue;
             auto const& instance=prepared.instance;auto const& unit=bodies.units[instance.unit];
             auto const& action=unit.actions[instance.action];auto const& pose=prepared.pose;
             float low=prepared.low,ground_pixels=prepared.ground_pixels,ground_depth=prepared.ground_depth,angle=prepared.angle;
-            if(layer==1&&!borrow_shadow(prepared,frame))return false;
-            context->OMSetRenderTargets(1,&scene.target,scene.depth);
-            context->OMSetDepthStencilState(body_depth,reflected?0:1);
-            context->OMSetBlendState(nullptr,nullptr,~0u);
-            context->RSSetViewports(1,&viewport);context->RSSetScissorRects(1,&scissor);
-            context->PSSetShader(pixel,nullptr,0);
-            auto* shadow_view=(prepared.main||prepared.reflected)?self_shadow_view.Get():unshadowed_view;context->PSSetShaderResources(1,1,&shadow_view);
+            if(layer==1&&self_shadows){auto drawn=shadow_samples;if(!borrow_shadow(prepared,frame))return false;if(shadow_samples!=drawn)state_valid=false;}
+            if(!state_valid){
+                context->OMSetRenderTargets(1,&scene.target,scene.depth);
+                context->RSSetViewports(1,&viewport);context->RSSetScissorRects(1,&scissor);
+                if(layer==0){
+                    context->OMSetDepthStencilState(renderer.natural.decal_depth,0);
+                    context->OMSetBlendState(renderer.blend_state,nullptr,0xffffffffu);
+                    context->PSSetShader(shadow_pixel,nullptr,0);
+                }else{
+                    context->OMSetDepthStencilState(body_depth,reflected?0:1);
+                    context->OMSetBlendState(nullptr,nullptr,~0u);
+                    context->PSSetShader(pixel,nullptr,0);
+                }
+                known=palette_known=false;bound_material=nullptr;state_valid=true;
+            }
+            auto* shadow_view=self_shadows&&(prepared.main||prepared.reflected)?self_shadow_view.Get():unshadowed_view;
+            if(!known||shadow_view!=last_shadow_view){context->PSSetShaderResources(1,1,&shadow_view);last_shadow_view=shadow_view;}
             unsigned part_index=0;
             for(auto const& part:action.parts){
                 if(part.mesh>=bodies.meshes.size()||part.texture>=bodies.textures.size()||
@@ -1049,37 +1101,34 @@ float4 PSShadow(Output i):SV_Target {
                 if(bound_material!=material_constants){
                     context->PSSetConstantBuffers(0,1,&material_constants);bound_material=material_constants;
                 }
-                ID3D11Buffer* static_vertices=gpu.vertices.Get();
-                UINT stride=sizeof(Vertex),offset=0;
-                context->IASetVertexBuffers(0,1,&static_vertices,&stride,&offset);
-                context->IASetIndexBuffer(gpu.indices.Get(),DXGI_FORMAT_R32_UINT,0);
+                if(!known||gpu.vertices.Get()!=last_vertices){
+                    ID3D11Buffer* static_vertices=gpu.vertices.Get();
+                    UINT stride=sizeof(Vertex),offset=0;
+                    context->IASetVertexBuffers(0,1,&static_vertices,&stride,&offset);last_vertices=static_vertices;
+                }
+                if(!known||gpu.indices.Get()!=last_indices){
+                    context->IASetIndexBuffer(gpu.indices.Get(),DXGI_FORMAT_R32_UINT,0);last_indices=gpu.indices.Get();
+                }
                 ID3D11ShaderResourceView* palette=part_sample.palette.Get();
-                if(!palette && blended){if(!bind_palette(gpu,blended))return false;++palette_uploads;}
-                else context->VSSetShaderResources(0,1,&palette);
-                context->PSSetShaderResources(0,1,&bodies.textures[part.texture].view);
-                context->PSSetShaderResources(2,4,part_sample.textures.data());
-                context->PSSetSamplers(0,1,&samplers[part.address]);
-                if(layer==0&&key_light.intensity>.001f){
+                if(!palette && blended){if(!bind_palette(gpu,blended))return false;++palette_uploads;palette_known=false;}
+                else if(!palette_known||palette!=last_palette){context->VSSetShaderResources(0,1,&palette);last_palette=palette;palette_known=true;}
+                auto* texture=bodies.textures[part.texture].view;
+                if(!known||texture!=last_texture){context->PSSetShaderResources(0,1,&texture);last_texture=texture;}
+                if(!known||last_extra!=part_sample.textures){
+                    auto extra=part_sample.textures;context->PSSetShaderResources(2,4,extra.data());last_extra=extra;
+                }
+                if(!known||samplers[part.address]!=last_sampler){context->PSSetSamplers(0,1,&samplers[part.address]);last_sampler=samplers[part.address];}
+                known=true;
+                if(layer==0){
                     placement_values[16]=1;
                     placement_values[17]=-key_light.direction[0]/key_light.direction[2]*
                         c3x_renderer::lighting::object_height_to_world;
                     placement_values[18]=key_light.direction[1]/key_light.direction[2]*
                         c3x_renderer::lighting::object_height_to_world;
-                    context->UpdateSubresource(placement,0,nullptr,placement_values,0,0);work->upload_buffer(placement);
-                    context->OMSetDepthStencilState(renderer.natural.decal_depth,0);
-                    context->OMSetBlendState(renderer.blend_state,nullptr,0xffffffffu);
-                    context->PSSetShader(shadow_pixel,nullptr,0);
-                    context->DrawIndexed(UINT(source->indices.size()),0,0);work->draw(source->indices.size());
-                    placement_values[16]=0;
-                    context->OMSetDepthStencilState(body_depth,reflected?0:1);
-                    context->OMSetBlendState(nullptr,nullptr,0xffffffffu);
-                    context->PSSetShader(pixel,nullptr,0);
                 }
-                if(layer==1){
-                    context->UpdateSubresource(placement,0,nullptr,placement_values,0,0);work->upload_buffer(placement);
-                    context->DrawIndexed(UINT(source->indices.size()),0,0);work->draw(source->indices.size());
-                    ++draws;
-                }
+                context->UpdateSubresource(placement,0,nullptr,placement_values,0,0);work->upload_buffer(placement);
+                context->DrawIndexed(UINT(source->indices.size()),0,0);work->draw(source->indices.size());
+                if(layer==1)++draws;
             }
           }
         }

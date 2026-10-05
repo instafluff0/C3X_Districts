@@ -20,10 +20,6 @@
             // is faded. The continuous grass material supplies this detail.
             unsigned density=biome==0 || sparse_desert?0u:
                 (biome==2?3u:biome==3?4u+random_u32(state)%3u:14u+random_u32(state)%9u);
-            auto owner_shore=shore_sample_at(float(nc)+.5f,float(nr)+.5f);
-            float owner_coverage=biome==2
-                ? desert_coast_coverage(float(owner_shore.distance))
-                : coast_coverage(float(owner_shore.distance),float(owner_shore.beach_width));
             for(unsigned ordinal=0;ordinal<density;ordinal++) {
                 if(cancelled())return false;
                 unsigned selected=random_u32(state)%total;SurfaceRecipe const*recipe=nullptr;
@@ -83,8 +79,15 @@
                         out.material_grass=0;out.material_plains=5+float(biome);
                         out.material_desert=decal_weight;out.material_marsh=0;
                         out.authored_relief_height=0;out.authored_relief_blend=0;
-                        out.base_terrain=-10+owner_coverage*source_weight;
-                        out.world_valid=1+coast_ramp((float(owner_shore.distance)-float(owner_shore.beach_width)-.10f)/.90f);
+                        // A decal can cross the coast even when its tile center
+                        // is inland. Match the ground at each actual vertex;
+                        // center coverage left fully opaque patch edges on sand.
+                        auto shore=shore_sample_at(world_x,world_y);
+                        float coverage=biome==2
+                            ? desert_coast_coverage(float(shore.distance))
+                            : coast_coverage(float(shore.distance),float(shore.beach_width));
+                        out.base_terrain=-10+coverage*source_weight;
+                        out.world_valid=1+coast_ramp((float(shore.distance)-float(shore.beach_width)-.10f)/.90f);
                         projected[corner]=out;
                     }
                     if(std::max({projected[0].material_desert,projected[1].material_desert,

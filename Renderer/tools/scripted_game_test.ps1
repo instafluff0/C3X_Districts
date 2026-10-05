@@ -4,7 +4,9 @@ param([Parameter(Mandatory=$true)][string]$SaveFile, [string]$ConquestsDirectory
       [ValidateSet('scroll','interaction','lifecycle','combat','turn','mouse','zoom','zoom-out','hud','city','settler','site-toggle','debug','debug-scroll','newgame','turn-stress','turn-scroll','unit-turn','research-turn','reveal-scroll','route-city','city-builds','navigation','camera')][string]$Scenario = 'scroll',
       [ValidatePattern('^[A-Za-z0-9_-]+$')][string]$UnitPack='UnitAnimationFidelity', [ValidateSet('melee','victory','retreat','bombard','army','air','capture')][string]$CombatCase='melee', [ValidateRange(1,10)][int]$SampleHz = 2,
       [switch]$ProfileRenderer, [switch]$MeasureCadence,
-      [ValidateSet(0,1,2)][int]$SceneSamples=0, [ValidateRange(-1,1)][double]$SceneSharpness=-1)
+      [ValidateSet(0,1,2)][int]$SceneSamples=0, [ValidateRange(-1,1)][double]$SceneSharpness=-1,
+      # Renderer diagnostics for the game child only, e.g. C3X_SANDBOX_PASS_COUNTS=1;C3X_RENDERER_PROFILE=1
+      [ValidatePattern('^$|^C3X_[A-Z0-9_]+=[A-Za-z0-9_.,-]*(;C3X_[A-Z0-9_]+=[A-Za-z0-9_.,-]*)*$')][string]$RendererOptions='')
 $ErrorActionPreference = 'Stop'
 if ($Scenario -eq 'camera' -and $Seconds -lt 100) { throw 'camera requires at least 100 seconds.' }
 if ($Scenario -in @('navigation','zoom-out') -and $Seconds -lt 120) { throw 'navigation requires at least 120 seconds.' }
@@ -97,6 +99,7 @@ $oldCombat=$env:C3X_RENDERER_GAME_TEST_COMBAT
 $oldPack=$env:C3X_RENDERER_UNIT_PACK
 $oldInputTrace=$env:C3X_RENDERER_TRACE_INPUT
 $traceEnvironment=@{}
+$optionEnvironment=@{}
 foreach ($key in @('C3X_RENDERER_TRACE','C3X_RENDERER_TRACE_BUFFERED','C3X_RENDERER_TRACE_FILE','C3X_RENDERER_TRACE_MIB','C3X_RENDERER_SCENE_SAMPLES','C3X_RENDERER_SCENE_SHARPNESS','C3X_RENDERER_GAME_TEST_ROUTE')) {
     $traceEnvironment[$key]=[Environment]::GetEnvironmentVariable($key)
 }
@@ -138,6 +141,13 @@ try {
         }
         $env:C3X_RENDERER_TRACE_FILE=Join-Path $session 'renderer-core.log'
     }
+    if ($RendererOptions) {
+        foreach ($pair in $RendererOptions.Split(';')) {
+            $key,$value=$pair.Split('=',2)
+            if (-not $optionEnvironment.ContainsKey($key)) { $optionEnvironment[$key]=[Environment]::GetEnvironmentVariable($key) }
+            [Environment]::SetEnvironmentVariable($key,$value)
+        }
+    }
     $start=New-Object System.Diagnostics.ProcessStartInfo
     $start.FileName=$game; $start.WorkingDirectory=$ConquestsDirectory; $start.UseShellExecute=$false
     $child=[System.Diagnostics.Process]::Start($start)
@@ -147,6 +157,7 @@ try {
     $env:C3X_RENDERER_UNIT_PACK=$oldPack
     $env:C3X_RENDERER_TRACE_INPUT=$oldInputTrace
     foreach ($key in $traceEnvironment.Keys) { [Environment]::SetEnvironmentVariable($key,$traceEnvironment[$key]) }
+    foreach ($key in $optionEnvironment.Keys) { [Environment]::SetEnvironmentVariable($key,$optionEnvironment[$key]) }
     Write-Host ('Scripted game PID='+$child.Id+' capture='+$session)
     $observer=Start-Process $witness -ArgumentList (Quote-Arguments @([string]$child.Id,(Join-Path $session 'window'),[string]$Seconds,[string]$SampleHz,'sampled-window-evidence')) -PassThru -WindowStyle Hidden -RedirectStandardError (Join-Path $session 'window-errors.log')
     $end=[DateTime]::UtcNow.AddSeconds($Seconds)
@@ -482,6 +493,7 @@ try {
     $env:C3X_RENDERER_UNIT_PACK=$oldPack
     $env:C3X_RENDERER_TRACE_INPUT=$oldInputTrace
     foreach ($key in $traceEnvironment.Keys) { [Environment]::SetEnvironmentVariable($key,$traceEnvironment[$key]) }
+    foreach ($key in $optionEnvironment.Keys) { [Environment]::SetEnvironmentVariable($key,$optionEnvironment[$key]) }
     if ($observer -and -not $observer.HasExited) {
         if (Test-Path (Join-Path $session 'window')) { Set-Content -LiteralPath (Join-Path $session 'window\stop.txt') -Value 'stop' }
         if (-not $observer.WaitForExit(5000)) { $observer.Kill(); $observer.WaitForExit() }

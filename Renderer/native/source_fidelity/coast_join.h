@@ -6,7 +6,11 @@ inline float coast_ramp(float value) {
     return value*value*(3-2*value);
 }
 inline float coast_coverage(float distance,float beach_width) {
-    return coast_ramp((distance-beach_width-.06f)/.16f);
+    // Begin within the dry sand instead of waiting until the beach material
+    // has already disappeared. Keep the inland endpoint before relief rises,
+    // and a sand-only optical edge even on the narrowest lowland beaches.
+    float start=std::max(.025f,beach_width-.10f);
+    return coast_ramp((distance-start)/(beach_width+.22f-start));
 }
 // Desert is already an authored sand surface. Keep it visible to the optical
 // coast instead of exposing the broad generic beach join used by vegetation.

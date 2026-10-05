@@ -11,17 +11,17 @@
 
 namespace c3x_renderer { namespace render_core {
 // Immutable selected placements, shared by main/reflection/shadow consumers.
-// Source mesh owners retain their existing independent 32 MiB limits; this
-// owner adds a 32 MiB joint CPU staging/metadata/GPU limit, including old pinned
-// generations. Thus rigid + natural sources + selected instances are bounded
-// by 96 MiB of logical source GPU buffers plus instance CPU/GPU storage, before
-// separately accounted source CPU packs, prepared terrain and scene targets.
+// Source mesh owners retain their existing independent limits; this owner adds
+// a 256 MiB joint CPU staging/metadata/GPU limit, including old pinned
+// generations. Wide zoom-out views on busy maps exceeded the former 32 MiB:
+// a refusal retires every optional shadow page and forces a full atlas rebuild
+// (~12k draws) on each camera step.
 class SharedInstanceSubmission {
 public:
     using Instance=fidelity::MeshInstance;
     // Full body/caster facts fit directly; no hash equality can admit a range.
     using Key=std::array<std::uint64_t,24>;
-    static constexpr std::size_t budget=32u*1024u*1024u;
+    static constexpr std::size_t budget=256u*1024u*1024u;
     static constexpr unsigned record_limit=65536,entry_limit=16384;
     struct Range {
         unsigned first=0,count=0;

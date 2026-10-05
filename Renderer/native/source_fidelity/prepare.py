@@ -41,10 +41,23 @@ def terrain_boundaries(s):
     s=s.replace('    float alpha = 1;', '''    // Retain the selected beach/water composition beneath this replacement.
     // The same coverage also clips its source-shadow caster triangles.
     float alpha = saturate(input.coast_coverage+10);
-    if (input.material.y < 1.5) {
-        float2 edge_uv=input.world.xy*Detail.x*2.05+float2(.31,.17);
-        float edge_height=GrassColor.Sample(Wrap,edge_uv).a;
-        float edge_mean=GrassColor.SampleBias(Wrap,edge_uv,3).a;
+    float2 edge_uv=input.world.xy*Detail.x*2.05+float2(.31,.17);
+    float2 plains_uv=float2(input.world.y,-input.world.x)*Detail.x*.91*2.05+float2(.63,.29);
+    float2 edge_dx=ddx(edge_uv),edge_dy=ddy(edge_uv);
+    float2 plains_dx=ddx(plains_uv),plains_dy=ddy(plains_uv);
+    // Only the partial-coverage margin needs detail. Explicit gradients keep
+    // its mip choice stable when neighboring pixels leave this branch.
+    if (input.material.y < 1.5 && alpha > 0 && alpha < 1) {
+        float desert=saturate(input.biome.y), tundra=saturate(input.material.w);
+        float plains=saturate(input.biome.x), grass=max(0,1-desert-tundra-plains);
+        float edge_height=GrassColor.SampleGrad(Wrap,edge_uv,edge_dx,edge_dy).a*grass+
+            PlainsColor.SampleGrad(Wrap,plains_uv,plains_dx,plains_dy).a*plains+
+            DesertColor.SampleGrad(Wrap,edge_uv,edge_dx,edge_dy).a*desert+
+            TundraColor.SampleGrad(Wrap,edge_uv,edge_dx,edge_dy).a*tundra;
+        float edge_mean=GrassColor.SampleGrad(Wrap,edge_uv,edge_dx*8,edge_dy*8).a*grass+
+            PlainsColor.SampleGrad(Wrap,plains_uv,plains_dx*8,plains_dy*8).a*plains+
+            DesertColor.SampleGrad(Wrap,edge_uv,edge_dx*8,edge_dy*8).a*desert+
+            TundraColor.SampleGrad(Wrap,edge_uv,edge_dx*8,edge_dy*8).a*tundra;
         float edge_grain=saturate(.5+(edge_height-edge_mean)*3);
         alpha=lerp(coast_edge_coverage(alpha,edge_grain),alpha,input.coast_inland);
     }

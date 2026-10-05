@@ -122,6 +122,12 @@ typedef int (*c3x_renderer_native_camera_poll_fn)(void * image,
    require a null readback pointer/capacity. Native GPU composition does not read
    back implicitly; this explicit barrier supports CPU fallback and the oracle. */
 typedef int (*c3x_renderer_gpu_images_fn)(struct c3x_renderer_gpu_images_v1 const*,struct c3x_renderer_gpu_result_v1*,unsigned* readback,unsigned capacity);
+/* Helper-only batched native image execution: the renderer calls the body on
+   its worker thread once per admitted batch; the body executes each operation
+   through the supplied callback, in order. */
+typedef int (*c3x_renderer_image_scope_execute_fn)(void* worker,struct c3x_renderer_gpu_images_v1 const* request,
+    struct c3x_renderer_gpu_result_v1* result);
+typedef int (*c3x_renderer_image_scope_body_fn)(void* context,void* worker,c3x_renderer_image_scope_execute_fn execute);
 
 typedef int (*c3x_renderer_gpu_present_fn)(struct c3x_renderer_gpu_present_v1 const*);
 

@@ -51,12 +51,14 @@ def transformed(relative, text):
         # enter the scope after each self-shadow pass has restored scene state.
         text=replace_once(text,'for(int index=0;index<4;++index){',
             'SandboxCausalRaster causal_raster(context);\n        for(int index=0;index<4;++index){')
-        text=replace_once(text,'auto* shadow_view=self_shadow_view.Get();context->PSSetShaderResources(1,1,&shadow_view);',
-            'auto* shadow_view=self_shadow_view.Get();context->PSSetShaderResources(1,1,&shadow_view);\n            SandboxCausalRaster causal_raster(context);')
-        # Exactly four scene draws; the height-atlas draw is deliberately intact.
+        bind='if(!known||shadow_view!=last_shadow_view){context->PSSetShaderResources(1,1,&shadow_view);last_shadow_view=shadow_view;}'
+        text=replace_once(text,bind,bind+'\n            SandboxCausalRaster causal_raster(context);')
+        # Exactly three scene draws (legacy shadow/body plus the resident
+        # body loop, which shares one site for its shadow and body layers);
+        # the height-atlas draw is deliberately intact.
         text,count=re.subn(r'context->DrawIndexed\(UINT\(source->indices.size\(\)\),0,0\);',
             r'if(sandbox_causal.issue())\g<0>',text)
-        if count!=4:raise ValueError('Unexpected unit draw sites')
+        if count!=3:raise ValueError('Unexpected unit draw sites')
         counts['unit_scene']=count
     return text,counts
 

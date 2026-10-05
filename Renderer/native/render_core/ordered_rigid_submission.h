@@ -15,8 +15,11 @@ namespace c3x_renderer { namespace render_core {
 // Packets own compact placement snapshots, never an old scene/front lease.
 template<class Key> class OrderedRigidSubmission {
 public:
-    static constexpr unsigned record_limit=256,entry_limit=16384;
-    static constexpr std::size_t budget=64u*1024u*1024u,page_bytes_limit=8u*1024u*1024u;
+    // Packets duplicate each occurrence's mesh in draw order, so one busy
+    // 1x view already needs ~64 MiB and 0.5x about four times that. A smaller
+    // owner refused most wide-view records into one draw each.
+    static constexpr unsigned record_limit=256,entry_limit=65536;
+    static constexpr std::size_t budget=512u*1024u*1024u,page_bytes_limit=8u*1024u*1024u;
     struct Input {
         Key key{};
         void const* vertices=nullptr;

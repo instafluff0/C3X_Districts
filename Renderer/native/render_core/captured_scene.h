@@ -288,7 +288,9 @@ public:
         }
         record.partial_flags|=partial|(full?C3X_RENDERER_TILE_PREFETCH:0u);
         auto flags=tile.tile_flags&C3X_RENDERER_TILE_VISIBILITY_BITS;
-        if(!record.visibility_revision || record.visibility_flags!=flags || record.visibility_mask!=tile.visibility_mask ||
+        // visibility_mask is a per-draw native argument, not tile state (see
+        // ScenePublication::capture); it never advances the revision.
+        if(!record.visibility_revision || record.visibility_flags!=flags ||
             record.tile_visibility!=tile.tile_visibility || record.fog_status!=tile.fog_status){
             if(serial==UINT64_MAX)return false;
             record.visibility_flags=flags;record.visibility_mask=tile.visibility_mask;
@@ -454,10 +456,10 @@ public:
             record.partial_flags|=partial|(full?C3X_RENDERER_TILE_PREFETCH:0u);
             auto flags=tile.tile_flags&C3X_RENDERER_TILE_VISIBILITY_BITS;
             bool visibility_changed=!record.visibility_revision || record.visibility_flags!=flags ||
-                record.visibility_mask!=tile.visibility_mask || record.tile_visibility!=tile.tile_visibility || record.fog_status!=tile.fog_status;
+                record.tile_visibility!=tile.tile_visibility || record.fog_status!=tile.fog_status;
             if(visibility_changed){
                 if(serial==UINT64_MAX)return false;
-                record.visibility_revision=++serial;++visibility_epoch;
+                    record.visibility_revision=++serial;++visibility_epoch;
                 touch_raster(RasterDependencyRevisions::Domain::visibility,id);
             }
             record.visibility_flags=tile.tile_flags&C3X_RENDERER_TILE_VISIBILITY_BITS;

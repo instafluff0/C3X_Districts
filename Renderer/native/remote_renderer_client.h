@@ -335,6 +335,27 @@ public:
         c3x_inputs::Writer input;c3x_inputs::unit_state_fields(input,value);
         return int(invoke(unsigned(c3x_inputs::Kind::unit_state),0,input.bytes.data(),unsigned(input.bytes.size())).code);
     }
+    // One ordered round trip for many copied unit facts. Each payload is the
+    // fact's single-message encoding; codes return in submission order.
+    struct Fact {unsigned kind=0,subtype=0;c3x_inputs::Bytes bytes;};
+    // AsyncSceneClient fact identities, in its FactId order.
+    static void fact_route(unsigned id,unsigned& kind,unsigned& subtype){
+        using K=c3x_inputs::Kind;
+        static constexpr struct {K kind;unsigned subtype;} routes[]={{K::unit,1},{K::unit_forget,0},{K::unit_visual,0},
+            {K::unit_visual,1},{K::unit_move,1},{K::unit_move,0},{K::unit_spawn,0},{K::unit_state,0}};
+        c3x_inputs::require(id<std::size(routes),"unit fact identity");
+        kind=unsigned(routes[id].kind);subtype=routes[id].subtype;
+    }
+    bool facts(std::vector<Fact> const& facts,std::vector<unsigned>& codes){
+        c3x_inputs::Writer input;input.u32(unsigned(facts.size()));
+        for(auto const& fact:facts){input.u32(fact.kind);input.u32(fact.subtype);input.u32(unsigned(fact.bytes.size()));
+            input.bytes.insert(input.bytes.end(),fact.bytes.begin(),fact.bytes.end());}
+        auto const& response=invoke(unsigned(c3x_inputs::Kind::unit),3,input.bytes.data(),unsigned(input.bytes.size()));
+        if(response.code!=C3X_RENDERER_RESULT_OK)return false;
+        auto bytes=reply(response);c3x_inputs::Reader reader{bytes};
+        auto count=reader.u32();c3x_inputs::require(count==facts.size(),"unit fact batch reply count");
+        codes.resize(count);for(auto& code:codes)code=reader.u32();reader.done();return true;
+    }
     int tactical(c3x_renderer::tactical::Input const& capture,c3x_renderer_gpu_unit_v1 const& target){
         c3x_inputs::Writer input;auto value=target;c3x_inputs::target_fields(input,value);
         c3x_inputs::tactical(input,capture);

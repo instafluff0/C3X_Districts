@@ -25,6 +25,7 @@
 #include <tuple>
 #include <unordered_map>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "c3x_renderer_api.h"
@@ -288,6 +289,7 @@ struct CachedVertexChunk {
     DXGI_FORMAT index_format = DXGI_FORMAT_R32_UINT;
     UINT vertex_stride = 120;
     UINT vertex_offset = 0, index_offset = 0;
+    UINT vertex_count = 0; // vertices at vertex_offset; zero when unknown (no pulled submission)
     std::size_t byte_count = 0;
     int translation_x = 0, translation_y = 0;
     D3D11_RECT bounds = {};
@@ -5837,6 +5839,7 @@ public:
         CachedVertexChunk chunk;
         chunk.projection_kind=projection_kind;chunk.source_tile_width=(projection_kind==2 || projection_kind==3)?128:shadow_tile_width;
         chunk.version=tile_geometry_version;chunk.vertex_stride=mesh.vertex_stride;
+        chunk.vertex_count=mesh.vertex_stride?UINT(mesh.vertices.size()/mesh.vertex_stride):0;
         chunk.bounds={mesh.bounds[0],mesh.bounds[1],mesh.bounds[2],mesh.bounds[3]};
         std::copy(mesh.world_low.begin(),mesh.world_low.end(),chunk.world_bounds.low);
         std::copy(mesh.world_high.begin(),mesh.world_high.end(),chunk.world_bounds.high);
@@ -11730,10 +11733,17 @@ public:
                     topology_cache.attach(frame.tiles[i],handle);
                 }else append_tile_geometry(*owner,occurrence,animated_view);
             }
-            if(incremental_membership && (membership_diff.entering || !membership_diff.ordered)){
-                std::unordered_map<std::uint64_t,unsigned> order;order.reserve(frame.tile_count);
+            if(!incremental_membership || membership_diff.entering || !membership_diff.ordered){
+                // Painter order by anchor (row, then column), not capture index:
+                // the capture lists the view before its halo, so a camera step
+                // moved tiles between the two and reordered unchanged records,
+                // which invalidated every retained raster. The camera offsets all
+                // anchors equally, so this order is stable across steps, and it
+                // equals the native on-screen draw order.
+                std::unordered_map<std::uint64_t,std::uint64_t> order;order.reserve(frame.tile_count);
                 for(unsigned i=0;i<frame.tile_count;++i)order.emplace(
-                    c3x_renderer::render_core::CanonicalMembershipDiff::occurrence(frame.tiles[i].tile_x,frame.tiles[i].tile_y),i);
+                    c3x_renderer::render_core::CanonicalMembershipDiff::occurrence(frame.tiles[i].tile_x,frame.tiles[i].tile_y),
+                    (std::uint64_t(std::uint32_t(frame.tiles[i].anchor_y)^0x80000000u)<<32)|(std::uint32_t(frame.tiles[i].anchor_x)^0x80000000u));
                 geometry_vertex_buffers.order_occurrences([&](auto const& draw){return order.at(
                     c3x_renderer::render_core::CanonicalMembershipDiff::occurrence(draw.tile_x,draw.tile_y));});
             }
@@ -12510,6 +12520,25 @@ struct CameraTerrainPreview {
 // ownership changes still take over synchronously. No backlog is accumulated.
 void CALLBACK renderer_world_timer(HWND,UINT,UINT_PTR,DWORD);
 
+// Shared ABI validation for native image requests (single or batched scope).
+inline bool c3x_renderer_gpu_images_valid(c3x_renderer_gpu_images_v1 const* request,c3x_renderer_gpu_result_v1 const* result,
+                                         unsigned const* readback,unsigned capacity){
+    constexpr unsigned max_pixels=2240u*1260u;
+    if(!request||request->struct_size!=sizeof(*request)||!result||result->struct_size!=sizeof(*result)||
+       request->ticket<=0||request->action<C3X_GPU_CREATE||request->action>C3X_GPU_READBACK||request->pixel_count>max_pixels||
+       request->command_count>2048||(request->command_count&&!request->commands)||
+       (request->action==C3X_GPU_UPLOAD&&(!request->pixels||!request->pixel_count))||
+       (request->action==C3X_GPU_READBACK?(!readback||capacity<request->pixel_count||!capacity):(readback||capacity)))return false;
+    bool upload=request->action==C3X_GPU_UPLOAD,submit=request->action==C3X_GPU_SUBMIT;
+    bool create=request->action==C3X_GPU_CREATE,read=request->action==C3X_GPU_READBACK;
+    if((create?(request->format<C3X_GPU_BGRA32||request->format>C3X_GPU_RGB565):request->format!=0)||
+       (!upload && request->pixels)||(!upload && request->revision)||
+       (!upload && !read && request->pixel_count)||
+       (request->command_count?(request->command_struct_size!=sizeof(c3x_renderer_gpu_command_v1)):(request->commands||request->command_struct_size||submit))||(create?(request->width<=0||request->height<=0||request->width>2240||request->height>1260||request->image!=0):(request->width||request->height))||
+       (!create && !submit && request->image<=0)||(read&&!request->pixel_count))return false;
+    return true;
+}
+
 class RendererWorker {
 public:
     explicit RendererWorker(RendererState & state) : renderer_state(state) {
@@ -12586,7 +12615,7 @@ public:
 
     int render_gpu(c3x_renderer_camera_request_v1 const& request,c3x_renderer_gpu_frame_v1& view,c3x_renderer_output_v1& metadata){
         LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
-        std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);
+        std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);drain_facts_locked();
         c3x_renderer_i64 ticket=0;
         int result=begin_gpu_camera_locked(request,ticket,true);
         if(result!=C3X_RENDERER_RESULT_PENDING)return result;
@@ -12620,7 +12649,7 @@ public:
     }
     int trial_present_shared(c3x_renderer_gpu_present_v1 const& request,DWORD consumer_pid,
                              std::uint64_t& handle,unsigned& width,unsigned& height){
-        std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);
+        std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);drain_facts_locked();
         gpu_present=request;trial_consumer_pid=consumer_pid;trial_handle=0;trial_width=trial_height=0;
         if(request.action==0&&(consumer_pid||trial_surface_swap))advance_visual_clock();
         int result=submit_locked(lock,Command::trial_present_shared);
@@ -12630,7 +12659,7 @@ public:
     // through Present. Optional cadence cannot replace its immutable front.
     int trial_required_present_shared(c3x_renderer_gpu_present_v1 const& request,DWORD consumer_pid,
                                      std::uint64_t& handle,unsigned& width,unsigned& height){
-        std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);
+        std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);drain_facts_locked();
         handle=0;width=height=0;
         auto* session=renderer_state.gpu_composition.get();
         // GPU adoption retires the CPU bitmap publication. Its identity is
@@ -12691,6 +12720,7 @@ public:
             trial_visual_state_busy.fetch_add(1,std::memory_order_relaxed);
             return C3X_RENDERER_RESULT_BUSY;
         }
+        drain_facts_locked(); // the frame samples every fact received before it
         trial_consumer_pid=consumer_pid;trial_handle=0;trial_width=trial_height=0;
         visual_ticks=ticks;visual_frequency=frequency;
         int result=submit_locked(lock,Command::trial_visual_shared);
@@ -12738,13 +12768,14 @@ public:
     int begin_gpu_camera(c3x_renderer_camera_request_v1 const& request,c3x_renderer_i64& ticket,
                          DWORD notify_thread=0,UINT notify_message=0){
         std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);
+        drain_facts_locked(); // The camera job snapshots unit poses from these facts.
         c3x_inputs::Call input(c3x_inputs::Kind::camera,1,[&](auto& out){c3x_inputs::c3x_renderer_camera_identity_v1_fields(out,request.identity);c3x_inputs::frame(out,*request.frame);});
         int result=begin_gpu_camera_locked(request,ticket);
         if(result==C3X_RENDERER_RESULT_PENDING){camera_notify_thread=notify_thread;camera_notify_message=notify_message;}
         return input.result(result,[&](auto& out){out(std::int64_t(result==C3X_RENDERER_RESULT_OK||result==C3X_RENDERER_RESULT_PENDING?ticket:0));});
     }
     int poll_gpu_camera(c3x_renderer_i64 ticket,c3x_renderer_gpu_frame_v1& view,c3x_renderer_output_v1& metadata){
-        std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);
+        std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);drain_facts_locked();
         return adopt_gpu_camera_locked(lock,ticket,view,metadata);
     }
     int observe_camera_completion(c3x_renderer_camera_completion_fn observer,void* context){
@@ -12772,6 +12803,9 @@ public:
         std::unique_lock<std::mutex> lock(state_mutex,std::try_to_lock);
         if(!lock.owns_lock())return C3X_RENDERER_RESULT_PENDING;
 #endif
+        // Facts received before this poll precede its adoption, as when each
+        // fact waited for the gate; later ones follow the completed adoption.
+        drain_facts_locked();
         c3x_renderer_gpu_camera_view_v1 next={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(next)};
         if(inspect_only){
             return camera_ready_view_locked(ticket,view);
@@ -12881,7 +12915,7 @@ public:
     }
     unsigned presented_zoom()const{return presented_zoom_q16.load(std::memory_order_acquire);}
     int images_gpu(c3x_renderer_gpu_images_v1 const& request,c3x_renderer_gpu_result_v1& result,unsigned* readback,unsigned capacity){
-        std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);
+        std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);drain_facts_locked();
         start_locked();
         if(camera_active){char detail[160];std::snprintf(detail,sizeof(detail),
             "action=%d commands=%u request_ticket=%lld camera_ticket=%lld",
@@ -12902,6 +12936,38 @@ public:
         return code;
     }
 
+#ifdef C3X_HELPER_TRIAL
+    // A whole admitted native image batch executes in one worker command:
+    // one gate acquisition, one camera pause and one worker hand-off instead
+    // of one per operation (up to 64 per batch). The helper's body resolves
+    // same-batch aliases and calls back for each operation on this thread.
+    c3x_renderer_image_scope_body_fn image_scope_body=nullptr;void* image_scope_context=nullptr;
+    int images_scope(c3x_renderer_image_scope_body_fn body,void* context){
+        std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);drain_facts_locked();
+        start_locked();
+        ForegroundCameraPause pause(*this,lock,"gpu-images");
+        image_scope_body=body;image_scope_context=context;
+        int code=submit_locked(lock,Command::gpu_images_scope);
+        image_scope_body=nullptr;image_scope_context=nullptr;return code;
+    }
+    static int image_scope_execute(void* worker,c3x_renderer_gpu_images_v1 const* request,c3x_renderer_gpu_result_v1* result){
+        if(!c3x_renderer_gpu_images_valid(request,result,nullptr,0)||request->action==C3X_GPU_READBACK)
+            return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        auto& owner=*static_cast<RendererWorker*>(worker);
+        owner.gpu_request=*request;owner.gpu_pixels.clear();owner.gpu_commands.clear();
+        if(request->action==C3X_GPU_UPLOAD)owner.gpu_pixels.assign(request->pixels,request->pixels+request->pixel_count);
+        for(unsigned n=0;n<request->command_count;++n){auto const& c=request->commands[n];
+            owner.gpu_commands.push_back({c3x_gpu_images::Kind(c.kind),std::uint64_t(c.destination),std::uint64_t(c.source),
+                {c.area[0],c.area[1],c.area[2],c.area[3]},{c.clip[0],c.clip[1],c.clip[2],c.clip[3]},c.source_x,c.source_y,c.color,std::uint64_t(c.background),std::uint64_t(c.detail),std::uint64_t(c.background_detail),c.source_width,c.source_height,std::uint64_t(c.program)});}
+        owner.gpu_request.pixels=nullptr;owner.gpu_request.commands=nullptr;
+        owner.gpu_result={sizeof(owner.gpu_result)};owner.gpu_readback.clear();
+        int code=C3X_RENDERER_RESULT_ERROR;
+        try{code=owner.renderer_state.gpu_composition?owner.renderer_state.gpu_composition->execute(
+            owner.gpu_request,owner.gpu_commands,owner.gpu_pixels,owner.gpu_result,owner.gpu_readback):C3X_RENDERER_RESULT_SUPERSEDED;}
+        catch(...){code=C3X_RENDERER_RESULT_ERROR;} // never unwind into the helper's callback frame
+        *result=owner.gpu_result;return code;
+    }
+#endif
     bool replay_display(std::vector<unsigned>& pixels,unsigned& width,unsigned& height){
         if(!c3x_inputs::replay_assets().enabled||c3x_inputs::runtime().active())return false;
         std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);
@@ -13270,7 +13336,7 @@ public:
         return input.result(result);
     }
     int present_gpu(c3x_renderer_gpu_present_v1 const& request){
-        std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);
+        std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);drain_facts_locked();
         c3x_inputs::Call input(c3x_inputs::Kind::presentation,0,[&](auto& out){
             out(std::int32_t(request.action));out(request.ticket);out(request.image);out(std::int32_t(request.width));out(std::int32_t(request.height));for(auto v:request.area)out(std::int32_t(v));
             out.u32(gpu_presenter.caller_thread()?1:0);});
@@ -13752,29 +13818,99 @@ public:
         return result;
     }
 
-    void forget_unit(int id) {
+    // Copied game facts never wait behind a frame. The ambient frame holds the
+    // call gate for its whole render; taking that gate per fact made the
+    // game's ordered transport convoy behind every frame (hundreds of unit
+    // observations per second, ~0.85 s queue latency on a busy map) and the
+    // helper then throttled presentation to drain it. A fact that finds the
+    // gate busy is copied into this inbox; every gate holder applies the inbox
+    // in arrival order before its own work, so causal order is unchanged.
+    // Deferred results are counted, not returned: superseded or invalid late
+    // facts are the same tolerated outcome as before, never a transport fault.
+    struct CapturedUnitBody {c3x_renderer_unit_v1 request;unsigned flags;};
+    struct ForgottenUnit {int id;};
+    struct AdmittedUnitMotion {c3x_renderer_unit_move_v1 value;};
+    using PendingUnitFact=std::variant<c3x_renderer_unit_visual_v1,c3x_renderer_unit_animation_v1,
+        AdmittedUnitMotion,c3x_renderer_unit_move_v1,c3x_renderer_unit_spawn_v1,c3x_renderer_unit_state_v1,
+        CapturedUnitBody,ForgottenUnit>;
+    std::mutex fact_mutex;
+    std::vector<PendingUnitFact> fact_inbox,fact_draining;
+    std::atomic<bool> facts_waiting{false};
+    unsigned long long facts_deferred=0,facts_late_rejected=0;
+    // Requires both gates, like every other unit-instance mutation.
+    void drain_facts_locked(){
+        if(!facts_waiting.load(std::memory_order_acquire))return;
+        {std::lock_guard<std::mutex> inbox(fact_mutex);fact_draining.swap(fact_inbox);
+            facts_waiting.store(false,std::memory_order_release);}
+        for(auto const& fact:fact_draining){
+            int code=std::visit([this](auto const& value){return apply_unit_fact_locked(value);},fact);
+            if(code!=C3X_RENDERER_RESULT_OK&&code!=C3X_RENDERER_RESULT_SUPERSEDED)++facts_late_rejected;
+        }
+        fact_draining.clear();
+    }
+    template<class Fact>int ingest_unit_fact(Fact const& fact){
+#ifdef C3X_RENDERER64_FRESH
+        std::unique_lock<std::mutex> call_guard(call_mutex,std::try_to_lock);
+        if(!call_guard.owns_lock()){
+            {std::lock_guard<std::mutex> inbox(fact_mutex);fact_inbox.emplace_back(fact);++facts_deferred;}
+            facts_waiting.store(true,std::memory_order_release);wake.notify_one();
+            return C3X_RENDERER_RESULT_OK;
+        }
+#else
         std::lock_guard<std::mutex> call_guard(call_mutex);
+#endif
         std::lock_guard<std::mutex> lock(state_mutex);
-        unit_instances.forget(id);unit_pixels_queue.forget(id);
+        drain_facts_locked();
+        return apply_unit_fact_locked(fact);
+    }
+    int apply_unit_fact_locked(ForgottenUnit const& value){
+        unit_instances.forget(value.id);unit_pixels_queue.forget(value.id);
         // In-flight poses are immutable shared content. They cannot publish
         // themselves or restore the retired instance's selection.
+        return C3X_RENDERER_RESULT_OK;
     }
-
-    int observe_unit_animation(c3x_renderer_unit_animation_v1 const& value){
-        std::lock_guard<std::mutex> call_guard(call_mutex);
-        std::lock_guard<std::mutex> lock(state_mutex);
+    int apply_unit_fact_locked(c3x_renderer_unit_animation_v1 const& value){
         return unit_instances.observe_animation(value)?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_BAD_ARGUMENT;
     }
-
-    int observe_unit(c3x_renderer_unit_visual_v1 const& value){
-        std::lock_guard<std::mutex> call_guard(call_mutex);
-        std::lock_guard<std::mutex> lock(state_mutex);
+    int apply_unit_fact_locked(c3x_renderer_unit_visual_v1 const& value){
         return unit_instances.observe(value)?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_BAD_ARGUMENT;
     }
+    // Renderer64 scene observation of a native body: identity, art and anchor.
+    int apply_unit_fact_locked(CapturedUnitBody const& value){
+        auto const& request=value.request;
+        if(!renderer_state.unit_rendering_enabled)return C3X_RENDERER_RESULT_ERROR;
+        if(value.flags&C3X_RENDERER_UNIT_HIDDEN){
+            if(!(value.flags&C3X_RENDERER_UNIT_STATE_CAPTURED))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+            unit_instances.forget(request.unit_id);unit_pixels_queue.forget(request.unit_id);
+            return C3X_RENDERER_RESULT_OK;
+        }
+        start_locked();
+        c3x_renderer::render_core::UnitInstances::Selection selection;
+        if(!unit_instances.capture(request,value.flags,renderer_state.unit_bodies.units,c3x_renderer::native_unit_action,selection)){
+            char detail[160];std::snprintf(detail,sizeof(detail),"id=%d key=%.63s action=%d reason=missing-or-invalid-3d-binding",
+                request.unit_id,request.unit_key,request.action);
+            renderer_state.trace.write("unit-capture-failed",detail,true);
+            return C3X_RENDERER_RESULT_ERROR;
+        }
+        if(renderer_state.trace.level>=2){
+            char detail[160];std::snprintf(detail,sizeof(detail),
+                "id=%d action=%d generation=%llu separate_raster=0 deferred=%llu late_rejected=%llu",
+                request.unit_id,request.action,static_cast<unsigned long long>(unit_instances.generation()),
+                facts_deferred,facts_late_rejected);
+            renderer_state.trace.write("fresh-unit-accepted",detail,true);
+        }
+        return C3X_RENDERER_RESULT_OK;
+    }
 
-    int begin_unit_motion(c3x_renderer_unit_move_v1 const& value){
-        std::lock_guard<std::mutex> call_guard(call_mutex);
-        std::lock_guard<std::mutex> lock(state_mutex);
+    void forget_unit(int id) {ingest_unit_fact(ForgottenUnit{id});}
+
+    int observe_unit_animation(c3x_renderer_unit_animation_v1 const& value){return ingest_unit_fact(value);}
+
+    int observe_unit(c3x_renderer_unit_visual_v1 const& value){return ingest_unit_fact(value);}
+
+    int begin_unit_motion(c3x_renderer_unit_move_v1 const& value){return ingest_unit_fact(AdmittedUnitMotion{value});}
+    int apply_unit_fact_locked(AdmittedUnitMotion const& admitted){
+        auto const& value=admitted.value;
         auto state=scene_changes.state();
         bool scoped=state&&state->identity.map_epoch==value.map_epoch&&
             state->identity.viewer_epoch==value.viewer_epoch;
@@ -13793,9 +13929,8 @@ public:
         return result;
     }
 
-    int accept_unit_move(c3x_renderer_unit_move_v1 const& value){
-        std::lock_guard<std::mutex> call_guard(call_mutex);
-        std::lock_guard<std::mutex> lock(state_mutex);
+    int accept_unit_move(c3x_renderer_unit_move_v1 const& value){return ingest_unit_fact(value);}
+    int apply_unit_fact_locked(c3x_renderer_unit_move_v1 const& value){
         auto state=scene_changes.state();
         if(!state||state->identity.map_epoch!=value.map_epoch||
            state->identity.viewer_epoch!=value.viewer_epoch)return C3X_RENDERER_RESULT_SUPERSEDED;
@@ -13804,9 +13939,8 @@ public:
         return C3X_RENDERER_RESULT_OK;
     }
 
-    int accept_unit_spawn(c3x_renderer_unit_spawn_v1 const& value){
-        std::lock_guard<std::mutex> call_guard(call_mutex);
-        std::lock_guard<std::mutex> lock(state_mutex);
+    int accept_unit_spawn(c3x_renderer_unit_spawn_v1 const& value){return ingest_unit_fact(value);}
+    int apply_unit_fact_locked(c3x_renderer_unit_spawn_v1 const& value){
         auto state=scene_changes.state();
         if(!state||state->identity.map_epoch!=value.map_epoch||
            state->identity.viewer_epoch!=value.viewer_epoch)return C3X_RENDERER_RESULT_SUPERSEDED;
@@ -13818,9 +13952,8 @@ public:
         return C3X_RENDERER_RESULT_OK;
     }
 
-    int accept_unit_state(c3x_renderer_unit_state_v1 const& value){
-        std::lock_guard<std::mutex> call_guard(call_mutex);
-        std::lock_guard<std::mutex> lock(state_mutex);
+    int accept_unit_state(c3x_renderer_unit_state_v1 const& value){return ingest_unit_fact(value);}
+    int apply_unit_fact_locked(c3x_renderer_unit_state_v1 const& value){
         auto state=scene_changes.state();
         if(!state||state->identity.map_epoch!=value.map_epoch||
            state->identity.viewer_epoch!=value.viewer_epoch)return C3X_RENDERER_RESULT_SUPERSEDED;
@@ -13833,7 +13966,7 @@ public:
                 "id=%d tile=%d,%d action=%d kind=%u ticks=%lld result=%d",
                 value.unit_id,value.tile_x,value.tile_y,value.action,value.kind,
                 static_cast<long long>(value.presentation_time_ticks),status);
-            renderer_state.trace.write("unit-state-skipped",detail,true);return status;
+            renderer_state.trace.write("unit-state-skipped",detail);return status;
         }
         auto prior=unit_instances.state_of(value.unit_id);
         bool changed=prior&&(prior->action!=value.action||prior->damage!=value.damage||
@@ -13850,7 +13983,7 @@ public:
     }
 
     int draw_tactical(c3x_renderer::tactical::Input const& capture,c3x_renderer_gpu_unit_v1 const& target){
-        std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);
+        std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);drain_facts_locked();
         c3x_inputs::Call input(c3x_inputs::Kind::tactical,0,[&](auto& out){c3x_inputs::target_fields(out,target);c3x_inputs::tactical(out,capture);});
         start_locked();ForegroundCameraPause pause(*this,lock,"tactical");
         tactical_input=capture;tactical_target=target;advance_visual_clock();
@@ -13859,15 +13992,22 @@ public:
     int draw_unit(c3x_renderer_unit_v1 const & request,HDC destination,HDC background=nullptr,int* bounds=nullptr,unsigned playback_flags=0,c3x_renderer_gpu_unit_v1 const* gpu_target=nullptr,
                   std::vector<std::uint32_t>* cpu_pixels=nullptr,int* cpu_width=nullptr,int* cpu_height=nullptr,
                   int* cpu_x=nullptr,int* cpu_y=nullptr) {
-        std::lock_guard<std::mutex> call_guard(call_mutex);
-        std::unique_lock<std::mutex> lock(state_mutex);
-        if(!renderer_state.unit_rendering_enabled)return C3X_RENDERER_RESULT_ERROR;
 #ifdef C3X_RENDERER64_FRESH
         char legacy_unit_control[8]{};
-        bool const legacy_unit=GetEnvironmentVariableA("C3X_RENDERER64_LEGACY",
+        bool const legacy_unit=c3x_renderer::render_core::cached_environment("C3X_RENDERER64_LEGACY",
             legacy_unit_control,sizeof(legacy_unit_control)) && !std::strcmp(legacy_unit_control,"1");
-        if(!legacy_unit&&!gpu_target)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        if(!legacy_unit){
+            if(!gpu_target)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+            // Observation is independent of GPU canvas admission and never
+            // touches scratch storage belonging to an active camera render.
+            if(bounds){bounds[0]=bounds[2]=request.body_x;bounds[1]=bounds[3]=request.body_y;}
+            return ingest_unit_fact(CapturedUnitBody{request,playback_flags});
+        }
 #endif
+        std::lock_guard<std::mutex> call_guard(call_mutex);
+        std::unique_lock<std::mutex> lock(state_mutex);
+        drain_facts_locked();
+        if(!renderer_state.unit_rendering_enabled)return C3X_RENDERER_RESULT_ERROR;
         if(playback_flags&C3X_RENDERER_UNIT_HIDDEN){
             if(!(playback_flags&C3X_RENDERER_UNIT_STATE_CAPTURED))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
             unit_instances.forget(request.unit_id);unit_pixels_queue.forget(request.unit_id);
@@ -13884,18 +14024,6 @@ public:
             renderer_state.trace.write("unit-capture-failed",detail,true);
             return C3X_RENDERER_RESULT_ERROR;
         }
-#ifdef C3X_RENDERER64_FRESH
-        if(!legacy_unit){
-            // Observation is independent of GPU canvas admission and never
-            // touches scratch storage belonging to an active camera render.
-            if(bounds){bounds[0]=bounds[2]=request.body_x;bounds[1]=bounds[3]=request.body_y;}
-            char detail[128];std::snprintf(detail,sizeof(detail),
-                "id=%d action=%d generation=%llu separate_raster=0",
-                request.unit_id,request.action,static_cast<unsigned long long>(unit_instances.generation()));
-            renderer_state.trace.write("fresh-unit-accepted",detail,true);
-            return C3X_RENDERER_RESULT_OK;
-        }
-#endif
         job_unit_selection=selection;
         if(gpu_target)advance_visual_clock();
         if(!unit_instances.sample(selection,gpu_target?visual_ticks:request.presentation_time_ticks,gpu_target?visual_frequency:request.presentation_frequency,
@@ -14057,6 +14185,7 @@ private:
         require_world_changes,
         prepare_world_loading,
 #ifdef C3X_HELPER_TRIAL
+        gpu_images_scope,
         trial_export_shared,
         trial_present_shared,
         trial_visual_shared,
@@ -14136,6 +14265,45 @@ private:
     std::uint64_t direct_visual_attempts=0;
     std::uint64_t route_present_index=0;
     std::atomic<std::uint64_t> trial_visual_call_busy{0},trial_visual_state_busy{0},trial_visual_permit_denials{0};
+    // CPU/GPU frame fence for ambient frames. The translated DXGI latency
+    // permit can grant a frame before the GPU has drained, and the frame then
+    // blocked inside its display draw while holding the renderer gate, so
+    // every image batch, fact batch and zoom command queued behind GPU work.
+    // A 1x1 staging copy follows each delivered frame; an ambient frame starts
+    // only when the copy from two frames back has completed (two frames in
+    // flight keep the GPU fed), otherwise it returns BUSY with the gate free.
+    Microsoft::WRL::ComPtr<ID3D11Texture2D> visual_fence_probe;
+    std::array<Microsoft::WRL::ComPtr<ID3D11Texture2D>,2> visual_fences;
+    std::array<bool,2> visual_fence_issued{};unsigned visual_fence_index=0;
+    ID3D11Device* visual_fence_device=nullptr;
+    std::atomic<std::uint64_t> visual_fence_denials{0};
+    void visual_fence_device_check(){
+        if(visual_fence_device==renderer_state.device)return;
+        visual_fence_probe.Reset();for(auto& fence:visual_fences)fence.Reset();
+        visual_fence_issued={};visual_fence_index=0;visual_fence_device=renderer_state.device;
+    }
+    bool visual_gpu_ready(){
+        visual_fence_device_check();
+        auto& fence=visual_fences[visual_fence_index];
+        if(!visual_fence_issued[visual_fence_index]||!fence||!renderer_state.context)return true;
+        D3D11_MAPPED_SUBRESOURCE mapped{};
+        HRESULT hr=renderer_state.context->Map(fence.Get(),0,D3D11_MAP_READ,D3D11_MAP_FLAG_DO_NOT_WAIT,&mapped);
+        if(hr==DXGI_ERROR_WAS_STILL_DRAWING)return false;
+        if(SUCCEEDED(hr))renderer_state.context->Unmap(fence.Get(),0);
+        visual_fence_issued[visual_fence_index]=false;return true;
+    }
+    void visual_fence_issue(){
+        visual_fence_device_check();
+        auto* device=renderer_state.device;if(!device||!renderer_state.context)return;
+        D3D11_TEXTURE2D_DESC desc{};desc.Width=desc.Height=desc.MipLevels=desc.ArraySize=1;
+        desc.Format=DXGI_FORMAT_R8G8B8A8_UNORM;desc.SampleDesc.Count=1;
+        if(!visual_fence_probe){desc.Usage=D3D11_USAGE_DEFAULT;if(FAILED(device->CreateTexture2D(&desc,nullptr,&visual_fence_probe)))return;}
+        auto& fence=visual_fences[visual_fence_index];
+        if(!fence){desc.Usage=D3D11_USAGE_STAGING;desc.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
+            if(FAILED(device->CreateTexture2D(&desc,nullptr,&fence)))return;}
+        renderer_state.context->CopyResource(fence.Get(),visual_fence_probe.Get());
+        visual_fence_issued[visual_fence_index]=true;visual_fence_index=(visual_fence_index+1)%unsigned(visual_fences.size());
+    }
 #endif
     c3x_renderer::render_core::DynamicSceneInputs dynamic_inputs;
     c3x_renderer::render_core::ScenePublication scene_changes;
@@ -15060,6 +15228,11 @@ private:
                         result,unsigned(gpu_reused),gpu_publication.frame.presentation_time_ticks,job_frame.presentation_time_ticks,gpu_publication.bytes());
                     renderer_state.trace.write("gpu-map-publication",detail,true);
                 }
+#ifdef C3X_HELPER_TRIAL
+            }else if(command==Command::gpu_images_scope){
+                result=image_scope_body?image_scope_body(image_scope_context,this,&RendererWorker::image_scope_execute):
+                    C3X_RENDERER_RESULT_BAD_ARGUMENT;
+#endif
             }else if(command==Command::gpu_images){
                 gpu_result={sizeof(gpu_result)};gpu_readback.clear();
                 if(input_display_readback)result=c3x_inputs::display_pixels(renderer_state.device,renderer_state.context,gpu_presenter.retained(),gpu_readback,input_display_width,input_display_height)?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_ERROR;
@@ -15293,8 +15466,15 @@ private:
                     // transfer to every ambient opportunity.
                     bool presentation_ready=trial_surface_permit.ready();
                     if(!presentation_ready)trial_visual_permit_denials.fetch_add(1,std::memory_order_relaxed);
+                    else if(command==Command::trial_visual_shared&&!visual_gpu_ready()){
+                        presentation_ready=false;visual_fence_denials.fetch_add(1,std::memory_order_relaxed);
+                    }
+                    auto& gpu_timeline=c3x_renderer::render_core::gpu_timeline();
+                    if(presentation_ready)gpu_timeline.begin(renderer_state.context);
                     int drawn=presentation_ready?renderer_state.gpu_composition->visual_frame(visual_ticks,visual_frequency,
                         trial_surface_view.Get(),trial_surface_back.Get(),trial_retain_surface()?trial_surface_buffer.Get():nullptr):0;
+                    if(presentation_ready&&gpu_timeline.enabled){auto summary=gpu_timeline.collect(renderer_state.context);
+                        if(!summary.empty())renderer_state.trace.write("gpu-event-timeline",summary.c_str(),true);}
                     if(phase_probe)QueryPerformanceCounter(&sampled);
                     // New UI commits and animated map samples share this
                     // cadence. Unchanged static fronts have nothing to present.
@@ -15306,6 +15486,7 @@ private:
                     // frame-latency grant, so Present(1) does not block and
                     // every rendered frame is displayed exactly once.
                     HRESULT hr=deliver?trial_surface_swap->Present(trial_legacy_cadence()?0:1,0):S_OK;
+                    if(deliver&&hr==S_OK)visual_fence_issue();
                     if(phase_probe)QueryPerformanceCounter(&finished);
                     if(deliver&&hr==S_OK){
                         // The same worker owns commit and draw, so no newer
@@ -15339,11 +15520,11 @@ private:
                         !presentation_ready?C3X_RENDERER_RESULT_BUSY:
                         deliver?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_PENDING;
                     if(result==C3X_RENDERER_RESULT_OK){trial_width=trial_surface_width;trial_height=trial_surface_height;}
-                    if(phase_probe && (++direct_visual_attempts<=3 || direct_visual_attempts%32==0 ||
+                    if(phase_probe && (++direct_visual_attempts<=3 || direct_visual_attempts%8==0 ||
                                        result==C3X_RENDERER_RESULT_DEVICE_ERROR)){
                         auto work=renderer_state.gpu_composition->visual_work();
-                        char detail[768];std::snprintf(detail,sizeof(detail),
-                            "drawn=%d result=%d prepare_ms=%.3f sample_ms=%.3f present_ms=%.3f total_ms=%.3f ready=%d nodes=%zu bytes=%llu operations=%u assemblies=%u copies=%u copied_pixels=%llu attempts=%llu assembly_pixels=%llu display_busy=%u call_gate_busy=%llu state_gate_busy=%llu dxgi_permit_denials=%llu",
+                        char detail[960];std::snprintf(detail,sizeof(detail),
+                            "drawn=%d result=%d prepare_ms=%.3f sample_ms=%.3f present_ms=%.3f total_ms=%.3f ready=%d nodes=%zu bytes=%llu operations=%u assemblies=%u copies=%u copied_pixels=%llu attempts=%llu assembly_pixels=%llu display_busy=%u call_gate_busy=%llu state_gate_busy=%llu dxgi_permit_denials=%llu compose_prepare_ms=%.3f compose_evaluate_ms=%.3f compose_assemble_ms=%.3f compose_display_ms=%.3f facts_deferred=%llu facts_late_rejected=%llu fence_denials=%llu",
                             drawn,result,renderer_state.trace.milliseconds(prepared.QuadPart-started.QuadPart),
                             renderer_state.trace.milliseconds(sampled.QuadPart-prepared.QuadPart),
                             renderer_state.trace.milliseconds(finished.QuadPart-sampled.QuadPart),
@@ -15355,7 +15536,9 @@ private:
                             static_cast<unsigned long long>(direct_visual_attempts),static_cast<unsigned long long>(work.assembly_pixels),unsigned(!presentation_ready),
                             static_cast<unsigned long long>(trial_visual_call_busy.load(std::memory_order_relaxed)),
                             static_cast<unsigned long long>(trial_visual_state_busy.load(std::memory_order_relaxed)),
-                            static_cast<unsigned long long>(trial_visual_permit_denials.load(std::memory_order_relaxed)));
+                            static_cast<unsigned long long>(trial_visual_permit_denials.load(std::memory_order_relaxed)),
+                            work.prepare_ms,work.evaluate_ms,work.assemble_ms,work.display_ms,facts_deferred,facts_late_rejected,
+                            static_cast<unsigned long long>(visual_fence_denials.load(std::memory_order_relaxed)));
                         renderer_state.trace.write("direct-visual",detail,true);
                         auto recipes=renderer_state.gpu_composition->visual_recipe_reuse();
                         std::snprintf(detail,sizeof(detail),"eligible=%llu probed=%llu reused=%llu bytes=%llu nodes=%zu",
@@ -15644,7 +15827,7 @@ private:
         auto command=job_command;
         bool independent=command==Command::gpu_images || command==Command::tactical
 #ifdef C3X_HELPER_TRIAL
-            || command==Command::trial_present_shared || command==Command::trial_visual_shared || command==Command::trial_required_visual_shared
+            || command==Command::gpu_images_scope || command==Command::trial_present_shared || command==Command::trial_visual_shared || command==Command::trial_required_visual_shared
 #endif
             ;
         if(!independent)return;
@@ -15671,7 +15854,20 @@ private:
 
     void run() {
         std::unique_lock<std::mutex> lock(state_mutex);
+        bool fact_gate_busy=false;
         for (;;) {
+#ifdef C3X_RENDERER64_FRESH
+            // A fact deferred during a short gate hold must not wait for an
+            // unrelated later call. Never block here: a gate holder may be
+            // waiting for this worker to complete its job.
+            if(!has_job && facts_waiting.load(std::memory_order_acquire)){
+                lock.unlock();
+                std::unique_lock<std::mutex> calls(call_mutex,std::try_to_lock);
+                lock.lock();
+                fact_gate_busy=!calls.owns_lock();
+                if(!fact_gate_busy)drain_facts_locked();
+            }else fact_gate_busy=false;
+#endif
             // Count simultaneous current/ready fronts and the next immutable
             // publication before optional work can consume cache headroom.
             renderer_state.publication_working_bytes=publication.bytes()+gpu_publication.bytes()+camera_ready.bytes()+ahead_bytes()+
@@ -15829,7 +16025,10 @@ private:
                 job_frame.tiles=job_tiles.empty()?nullptr:job_tiles.data();
                 job_frame.world_topology=job_world_topology.empty()?nullptr:job_world_topology.data();
                 if(camera_gpu){
-                    if(!gpu_publication.matches_projection(job_frame,job_camera_identity))unit_instances.pause_motion(visual_ticks);
+                    // Up to 125 ms of travel may elapse unseen; a back-to-back scroll
+                    // transaction stream otherwise held moving units almost still.
+                    if(!gpu_publication.matches_projection(job_frame,job_camera_identity))
+                        unit_instances.pause_motion(visual_ticks+(visual_frequency>0?visual_frequency/8:0));
                     snapshot_fresh_units(job_frame,visual_ticks,visual_frequency);
                 }
                 world_schedule.prioritize(job_frame);world_content_turn=true;
@@ -16041,7 +16240,9 @@ private:
                 }
                 continue;
             }
-            wake.wait(lock, [this] { return scene_changes.ready() || has_job || (camera_pending && !camera_paused) || (!camera_paused && (ahead_pending() || unit_preparation_pending())) || stop_requested; });
+            auto due=[this] { return scene_changes.ready() || has_job || (camera_pending && !camera_paused) || (!camera_paused && (ahead_pending() || unit_preparation_pending())) || stop_requested; };
+            if(fact_gate_busy){if(!wake.wait_for(lock,std::chrono::milliseconds(1),due))continue;}
+            else{wake.wait(lock,[&]{return due() || facts_waiting.load(std::memory_order_acquire);});if(!due())continue;}
             if(scene_changes.ready())continue;
             if(!has_job && !stop_requested && !camera_paused && (camera_pending || ahead_pending() || unit_preparation_pending()))continue;
             if (stop_requested && !has_job)
@@ -17112,19 +17313,8 @@ extern "C" __declspec(dllexport) int c3x_renderer_gpu_camera_poll_view(
 }
 extern "C" __declspec(dllexport) int c3x_renderer_gpu_images(
     c3x_renderer_gpu_images_v1 const* request,c3x_renderer_gpu_result_v1* result,unsigned* readback,unsigned capacity){
-    constexpr unsigned max_pixels=2240u*1260u;
-    if(!request||request->struct_size!=sizeof(*request)||!result||result->struct_size!=sizeof(*result)||
-       request->ticket<=0||request->action<C3X_GPU_CREATE||request->action>C3X_GPU_READBACK||request->pixel_count>max_pixels||
-       request->command_count>2048||(request->command_count&&!request->commands)||
-       (request->action==C3X_GPU_UPLOAD&&(!request->pixels||!request->pixel_count))||
-       (request->action==C3X_GPU_READBACK?(!readback||capacity<request->pixel_count||!capacity):(readback||capacity)))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
-    bool upload=request->action==C3X_GPU_UPLOAD,submit=request->action==C3X_GPU_SUBMIT;
-    bool create=request->action==C3X_GPU_CREATE,read=request->action==C3X_GPU_READBACK;
-    if((create?(request->format<C3X_GPU_BGRA32||request->format>C3X_GPU_RGB565):request->format!=0)||
-       (!upload && request->pixels)||(!upload && request->revision)||
-       (!upload && !read && request->pixel_count)||
-       (request->command_count?(request->command_struct_size!=sizeof(c3x_renderer_gpu_command_v1)):(request->commands||request->command_struct_size||submit))||(create?(request->width<=0||request->height<=0||request->width>2240||request->height>1260||request->image!=0):(request->width||request->height))||
-       (!create && !submit && request->image<=0)||(read&&!request->pixel_count))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    if(!c3x_renderer_gpu_images_valid(request,result,readback,capacity))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    bool read=request->action==C3X_GPU_READBACK;
     *result={sizeof(*result)};
     c3x_inputs::Call input(c3x_inputs::Kind::image_commands,0,[&](auto& out){c3x_inputs::images(out,*request);});
     try{int code=remote_renderer_requested()?remote_renderer_backend()->images(*request,*result,readback,capacity):
@@ -17136,6 +17326,13 @@ extern "C" __declspec(dllexport) int c3x_renderer_gpu_images(
     }
     catch(...){return input.result(C3X_RENDERER_RESULT_ERROR,[&](auto& out){out(std::int64_t(0));out.u32(0);out.u32(0);});}
 }
+#ifdef C3X_HELPER_TRIAL
+extern "C" __declspec(dllexport) int c3x_renderer_trial_gpu_images_scope(c3x_renderer_image_scope_body_fn body,void* context){
+    if(!body||remote_renderer_requested())return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    try{return get_renderer_worker().images_scope(body,context);}catch(...){return C3X_RENDERER_RESULT_ERROR;}
+}
+#endif
+
 
 // Native/UI thread owns DXGI window operations. The existing worker prepares
 // the complete retained display under the same serialized ownership boundary.

@@ -50,7 +50,7 @@ int main(){try{
  auto legacy=header.substr(begin,end-begin);
  begin=legacy.find("float retained_depth(");end=legacy.find("Output fetch0",begin);
  require_water_depth(begin!=std::string::npos&&end!=std::string::npos,"depth helper markers");
- legacy.replace(begin,end-begin,"float retained_depth(Texture2D<float> field,float2 p,float2 size,float shift){float z=field.Load(int3(int2(floor(p)),0));return z<1?z+shift:1;}\n");
+ legacy.replace(begin,end-begin,"float retained_depth(Texture2D<float> field,float2 p,float2 size,float shift,float4 covered){float z=field.Load(int3(int2(floor(p)),0));return z<1?z+shift:1;}\n");
  auto blob=water_depth_shader(legacy,"PS","ps_5_0");nearest.pixel->Release();nearest.pixel=nullptr;
  checked(device->CreatePixelShader(blob->GetBufferPointer(),blob->GetBufferSize(),nullptr,&nearest.pixel));
 

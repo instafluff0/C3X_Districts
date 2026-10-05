@@ -17,7 +17,7 @@ class RedrawCausal(unittest.TestCase):
         self.assertNotIn('Output PSMain(P input)',constants)
 
     def test_only_geometry_submission_changes(self):
-        for name,expected in (('fresh_pipeline.h',6),('direct_units.h',4)):
+        for name,expected in (('fresh_pipeline.h',8),('direct_units.h',3)):
             relative='Renderer/sandbox/'+name
             before=(ROOT/relative).read_text();after,counts=transformed(relative,before)
             self.assertEqual(sum(counts.values()),expected)

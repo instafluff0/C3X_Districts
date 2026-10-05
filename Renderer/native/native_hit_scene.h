@@ -298,14 +298,29 @@ public:
             if(i.value&&!i.value->draw&&!i.value->grid_columns&&!i.value->pixels&&i.value->constant==value)return;
             create(c.destination,i.width,i.height,i.format,value);return;
         }
+        // Capture source versions before changing any destination tiles,
+        // including overlapping copies within the same native image.
+        auto source=get(c.source),background=get(c.background),program=get(c.program);
+        // A large transfer (the per-tick fullscreen unit/HUD canvas onto the
+        // screen) is recorded as one deferred node. Eagerly splitting it into
+        // every 64-pixel region cost ~15 ms of game-thread allocation per
+        // native animation tick. sample() evaluates it directly, and retain()
+        // materializes region-local history only where a later draw or query
+        // reaches. Bounded depth keeps the region path's compaction authority.
+        auto covered=std::int64_t((bounds.right-1)/tile_size-bounds.left/tile_size+1)*
+            ((bounds.bottom-1)/tile_size-bounds.top/tile_size+1);
+        if(covered>=64&&i.value&&i.value->depth<12){
+            auto n=std::make_shared<Node>(budget);n->width=i.width;n->height=i.height;n->format=i.format;
+            n->draw=true;n->bounds=bounds;n->command=c;
+            n->source=source;n->background=background;n->program=program;n->prior=i.value;
+            for(auto const& ref:{n->prior,n->source,n->background,n->program})if(ref){n->depth=std::max(n->depth,ref->depth+1);n->payload_cost=std::min<std::size_t>(96u*1024u*1024u,n->payload_cost+ref->payload_cost);}
+            i.value=std::move(n);return;
+        }
         auto root=std::make_shared<Node>(budget);root->width=i.width;root->height=i.height;root->format=i.format;
         root->grid_columns=(int(i.width)+tile_size-1)/tile_size;
         int rows=(int(i.height)+tile_size-1)/tile_size;
         if(i.value->grid_columns)root->cells=i.value->cells;
         else root->cells.assign(root->grid_columns*rows,i.value);
-        // Capture source versions before changing any destination tiles,
-        // including overlapping copies within the same native image.
-        auto source=get(c.source),background=get(c.background),program=get(c.program);
         for(int ty=bounds.top/tile_size;ty<=(bounds.bottom-1)/tile_size;++ty)
         for(int tx=bounds.left/tile_size;tx<=(bounds.right-1)/tile_size;++tx){
             Rect tile={tx*tile_size,ty*tile_size,std::min((tx+1)*tile_size,int(i.width)),std::min((ty+1)*tile_size,int(i.height))};

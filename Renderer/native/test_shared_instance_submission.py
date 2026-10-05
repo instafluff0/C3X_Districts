@@ -398,7 +398,7 @@ int main(){
  assert(owner.plan_uploads==1 && owner.plan_uploaded_bytes==sizeof(order));
  assert(!owner.prepare_selection(&device,union_lease,order,4,Owner::budget) && owner.valid(plan));
  std::vector<Owner::SelectionLease> pressure;bool rejected=false;
- for(unsigned n=0;n<40;++n){auto next=owner.prepare_selection(&device,union_lease,order,4,1024u*1024u);
+ for(unsigned n=0;n<Owner::budget/(1024u*1024u)+8;++n){auto next=owner.prepare_selection(&device,union_lease,order,4,1024u*1024u);
   if(!next){rejected=true;break;}pressure.push_back(next);assert(owner.bytes()<=Owner::budget);}
  assert(rejected && pressure.size()>20 && owner.peak_bytes()<=Owner::budget);
  owner.clear();assert(!owner.valid(plan) && owner.bytes()>0);union_lease.reset();
@@ -557,7 +557,7 @@ int main(){
  complete.reset();recovered.reset();owner.clear();assert(!owner.bytes());
  std::vector<Owner::Instance> dense(Owner::record_limit);std::vector<Owner::Lease> pinned;
  bool pressure=false;
- for(unsigned n=0;n<12;++n){identity[0]=n+100;auto builder=owner.begin(identity);assert(builder);
+ for(unsigned n=0;n<Owner::budget/(Owner::record_limit*sizeof(Owner::Instance))+4;++n){identity[0]=n+100;auto builder=owner.begin(identity);assert(builder);
   if(!owner.append(builder,key,dense.data(),dense.data(),unsigned(dense.size()),projection,0,0,0,40,range)){pressure=true;break;}
   auto result=owner.upload(builder,&device);builder.reset();
   if(!result){pressure=true;break;}pinned.push_back(result);

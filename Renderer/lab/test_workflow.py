@@ -260,6 +260,20 @@ class FixtureTests(unittest.TestCase):
         rows = self.capture("resources", "water-gameplay").splitlines()[1:]
         self.assertTrue({2, 11, 12, 13}.issubset({int(row.split(",")[2]) for row in rows}))
 
+    def test_shoreline_biome_views_cover_the_same_coast_on_both_axes(self):
+        scenes=[]
+        for case in ("biomes", "biomes-turned"):
+            rows=[tuple(map(int,row.split(","))) for row in self.capture("shorelines",case).splitlines()[1:]]
+            tiles={(row[0],row[1]):row[2:] for row in rows}
+            self.assertEqual({row[2] for row in rows}, {0,1,2,11,12,13})
+            self.assertTrue(all(row[2]==row[3] for row in rows))
+            neighbors=((2,0),(-2,0)) if case=="biomes" else ((0,2),(0,-2))
+            coast={data[0] for (x,y),data in tiles.items() if data[0]<11 and
+                   any(tiles.get((x+dx,y+dy),(0,))[0]>=11 for dx,dy in neighbors)}
+            self.assertEqual(coast,{0,1,2})
+            scenes.append(tiles)
+        self.assertEqual(scenes[0],{(y,x):data for (x,y),data in scenes[1].items()})
+
     def test_river_fixture_is_a_complete_landscape_and_connected_watershed(self):
         rows = [tuple(map(int, row.split(",")))
                 for row in self.capture("rivers", "gameplay").splitlines()[1:]]
@@ -577,7 +591,7 @@ class InputFreshnessTests(unittest.TestCase):
             build.assert_not_called()
             current.side_effect = [renderer.CandidateBuildRequired("stale"), None]
             renderer.ensure_candidate()
-            build.assert_called_once_with()
+            build.assert_called_once_with(None)
             self.assertEqual(current.call_count, 3)
 
     def test_candidate_input_errors_do_not_trigger_a_build(self):
@@ -594,7 +608,7 @@ class InputFreshnessTests(unittest.TestCase):
              patch.object(renderer, "build_candidate") as build, patch("builtins.print"):
             with self.assertRaisesRegex(renderer.CandidateBuildRequired, "still stale"):
                 renderer.ensure_candidate()
-            build.assert_called_once_with()
+            build.assert_called_once_with(None)
         with patch.object(renderer, "require_current_candidate",
                           side_effect=renderer.CandidateBuildRequired("stale")), \
              patch.object(renderer, "build_candidate", side_effect=ValueError("compile failed")), \
@@ -609,11 +623,24 @@ class InputFreshnessTests(unittest.TestCase):
         with patch.object(renderer, "standard", return_value=value), \
              patch.object(renderer, "standard_path", return_value=self.lab / "standard.json"), \
              patch.object(renderer, "require_prepared", side_effect=lambda categories: events.append("prepared")), \
-             patch.object(renderer, "ensure_candidate", side_effect=lambda: events.append("candidate")), \
+             patch.object(renderer, "ensure_candidate", side_effect=lambda categories: events.append("candidate")) as build, \
              patch.object(renderer, "category_signatures", side_effect=lambda: events.append("identity") or {"grassland": "current"}), \
              patch.object(renderer, "native_render", return_value={}), patch("builtins.print"):
             renderer.render("grassland")
+            build.assert_called_once_with(["grassland"])
         self.assertEqual(events, ["prepared", "candidate", "identity", "identity"])
+
+    def test_category_rebuild_does_not_prepare_unrelated_art(self):
+        candidate=self.root/"Renderer/native/build/candidate/C3XRenderer.dll"
+        candidate.parent.mkdir(parents=True);candidate.write_bytes(b"candidate")
+        with patch.object(renderer,"require_current_candidate",side_effect=[renderer.CandidateBuildRequired("stale"),None]), \
+             patch.object(renderer,"prepare_sources") as prepare, \
+             patch.object(renderer,"native_inputs",return_value={}), \
+             patch.object(renderer,"ensure_preview_tool"), \
+             patch("Renderer.lab.platform.native_command_result",return_value={"status":"pass"}), \
+             patch("builtins.print"):
+            renderer.ensure_candidate(["shorelines"])
+        prepare.assert_called_once_with(["shorelines"])
 
 
 if __name__ == "__main__":

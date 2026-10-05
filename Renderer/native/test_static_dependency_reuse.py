@@ -464,9 +464,12 @@ struct State {
  float projection_zoom=1,resident_basis_x=0,resident_basis_y=0;int wrap_pixels=0;
  unsigned membership=1;mutable unsigned contributor_visits=0;std::vector<GeometryDrawRecord> records={GeometryDrawRecord{}};
  unsigned view_revision()const{return membership;}
+ bool overlays=false;bool overlay_enabled()const{return overlays;}
  D3D11_RECT source_bounds(ViewportShaderSettings const&,D3D11_RECT rect,bool)const{return rect;}
  template<class Visit>void contributors(ViewportShaderSettings const&,D3D11_RECT,bool,Visit visit)const{
   for(auto const& record:records){++contributor_visits;visit(0,record);}}
+ bool resident_all=true;
+ bool tile_resident(RasterInputs::Key const& key)const{return resident_all||key[2]==((std::uint64_t(2)<<32)|4);}
 ''' + methods + r'''
 };
 int main(){State state;State::RasterInputs pixels;ViewportShaderSettings settings;D3D11_RECT region={0,0,48,32};
@@ -474,7 +477,12 @@ int main(){State state;State::RasterInputs pixels;ViewportShaderSettings setting
  auto visits=state.contributor_visits,proofs=state.renderer.proof_visits,intersections=state.renderer.intersections;
  for(unsigned i=0;i<1000;++i)assert(state.raster_dependencies(pixels,settings,region,false));
  assert(state.contributor_visits==visits&&state.renderer.proof_visits==proofs&&state.renderer.intersections==intersections);
+ // An unrelated change keeps the pixels. Static rasters watch no input keys
+ // (registering them dominated strip cost), so it costs one complete proof;
+ // steady frames are free again afterwards.
  state.renderer.raster_dependency_revisions.touch(RasterDependencyRevisions::Domain::semantic,888);
+ assert(state.raster_dependencies(pixels,settings,region,false));assert(state.contributor_visits==visits+1);
+ visits=state.contributor_visits;proofs=state.renderer.proof_visits;
  assert(state.raster_dependencies(pixels,settings,region,false));assert(state.contributor_visits==visits);
  state.renderer.semantic=8;state.renderer.raster_dependency_revisions.touch(RasterDependencyRevisions::Domain::semantic,77);
  assert(!state.raster_dependencies(pixels,settings,region,false));assert(state.renderer.proof_visits==proofs+1);
@@ -503,6 +511,15 @@ int main(){State state;State::RasterInputs pixels;ViewportShaderSettings setting
  auto saved=state.records;state.records.clear();++state.membership;
  assert(!state.raster_dependencies(pixels,settings,region,false));
  state.records=saved;++state.membership;assert(state.raster_dependencies(pixels,settings,region,false));
+ // A camera step that changes residency, not the world: a contributor whose
+ // tile left the resident lease is unobservable rather than removed.
+ auto far=state.records.front();far.tile_x=6;far.ordinal=5;state.records.push_back(far);++state.membership;
+ pixels.clear();assert(state.raster_dependencies(pixels,settings,region,true));assert(state.raster_dependencies(pixels,settings,region,false));
+ state.records.pop_back();++state.membership;state.resident_all=false;
+ assert(state.raster_dependencies(pixels,settings,region,false));
+ // The same absence on a resident tile is a removal.
+ state.resident_all=true;++state.membership;assert(!state.raster_dependencies(pixels,settings,region,false));
+ state.records.push_back(far);++state.membership;assert(state.raster_dependencies(pixels,settings,region,false));
  // Local visibility is separately watched, even with otherwise valid content.
  ++state.renderer.topology_cache.record.visibility_revision;
  state.renderer.raster_dependency_revisions.touch(RasterDependencyRevisions::Domain::visibility,55);

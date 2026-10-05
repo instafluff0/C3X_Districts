@@ -46,6 +46,30 @@ The source channel contents and bindings are confirmed. Using alpha as a local
 contrast/normal/coverage field is a **C3X reconstruction**, not a recovered Civ VI
 shader equation or a claim that its alpha is ordinary surface transparency.
 
+## Consistent lowland blending (current Lab candidate)
+
+The replacement ground previously began its fade at `beach_width + .06` and
+finished only `.16` tile units later. The underlay's beach material already
+finished fading at that starting distance, leaving a narrow, regular handoff
+whose screen width varies with coast orientation. The new ground ramp begins at
+`max(.025, beach_width - .10)` and retains the old `beach_width + .22` inland
+endpoint. The optical edge stays sand-only, and relief still begins after the
+fade. Desert retains its separate narrow sand-family edge; rocky cliff coverage
+retains its existing early opaque ramp.
+
+Two additional inconsistencies are corrected: source edge detail no longer uses
+grass alpha for every biome, and plains/dune decals no longer carry tile-center
+coast coverage across their whole footprint. Per-vertex shore queries preserve
+ordinary dependency observation and caching. The same generic shared providers
+feed native and retained scene builds; these remain C3X material choices.
+
+The `biomes` / `biomes-turned` Lab fixtures cover all three lowland families on
+both map axes. Matched current-checkout controls and candidate captures are under
+`Renderer/lab/out/shorelines/blending/`. The focused suite passes 150 tests with
+one optional skip. Executable ramp and decal regressions reject the old formulas.
+Visual acceptance and staging of this candidate are pending; no fixed reference
+has been replaced.
+
 ## Repeatable check and review
 
 Run `Renderer/tools/asset_compiler/probe_water_material_channels.py` with

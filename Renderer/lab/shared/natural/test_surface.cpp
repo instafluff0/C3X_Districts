@@ -76,6 +76,29 @@ int main() {
         assert(emitted>0&&empty>0);
     }
     {
+        // Coastal decals straddle a changing shore inside one owner tile.
+        // Tile-center coverage cannot describe those vertices, including a
+        // submerged tip of an otherwise inland plains/desert patch.
+        unsigned partial=0,wet=0,dry=0;
+        auto coast=[](float x,float){return Shore{.2f+(x-3.5f)*1.5f,.15f};};
+        for(int real:{0,1})for(int coordinate=0;coordinate<32;coordinate++) {
+            Tile owner{coordinate,7,3,-4,real};
+            GroundProjection projection{3,-4,64,32,.4f,480};
+            auto weights=[&](float,float){std::array<float,5>w{};w[2-real]=1;return w;};
+            std::vector<MapVertex>out;
+            assert(emit_surface_decals(natural,owner,projection,lookup,height,coast,weights,
+                                       []{return false;},out));
+            for(auto const&v:out) {
+                auto s=coast(v.world_x,v.world_y);
+                float coverage=real==0?desert_coast_coverage(s.distance):coast_coverage(s.distance,s.beach_width);
+                assert(v.base_terrain==-10+coverage);
+                assert(v.world_valid==1+coast_ramp((s.distance-s.beach_width-.10f)/.90f));
+                if(coverage==0)wet++;else if(coverage==1)dry++;else partial++;
+            }
+        }
+        assert(partial>0 && wet>0 && dry>0);
+    }
+    {
         Tile owner{2,4,3,-4,2};GroundProjection projection{3,-4,64,32,.4f,480};
         auto weak=[](float,float){return std::array<float,5>{.01f,.99f,0,0,0};};
         std::vector<MapVertex>out;assert(emit_surface_decals(natural,owner,projection,lookup,height,shore,weak,[]{return false;},out));

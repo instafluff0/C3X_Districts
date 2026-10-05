@@ -37,7 +37,7 @@ struct State {
   void release_native(){++releases;}bool prepare(HWND,void*,int,int,bool){return true;}int present(){return 1;}}gpu_presenter;
  struct Cadence{unsigned enables=0,disables=0;template<class F>void enable(F){++enables;}void disable(){++disables;}}visual_cadence;
  enum class Command{gpu_present};
- void start_locked(){}void drain_camera_locked(std::unique_lock<std::mutex>&,bool){}
+ void start_locked(){}void drain_facts_locked(){}void drain_camera_locked(std::unique_lock<std::mutex>&,bool){}
  void stop_visual_delivery(){visual_delivery=false;}void advance_visual_clock(){}
  int visual_frame(bool){return 1;}
  int submit_locked(std::unique_lock<std::mutex>&,Command){if(explode)throw std::bad_alloc();return result;}

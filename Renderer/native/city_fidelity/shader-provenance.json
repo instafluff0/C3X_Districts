@@ -15,7 +15,7 @@
     "Renderer/native/render_core/rigid_caster.hlsl": "ada23a69492c65fe03c25a907ef4da42f2f0ea326cf6c0b5cb79384071a5b3aa",
     "Renderer/native/environment_refresh/hydrology.hlsl": "1ff7ea134e7f94bffa149f3e0136fbd1cdd721e3bcc2b0accc2f37106712de58",
     "Renderer/lab/shared/shaders/objects/resource_skinning.hlsl": "b11aa9a5dbefb8cac2145f425c9c671e35ff4c1ffa6608ea3d35234ba77280ee",
-    "Renderer/native/environment_refresh/terrain.hlsl": "31d024b414283e8bf99da181cad7037604e1f2cea054c14a9c06cf15b4b46c13",
+    "Renderer/native/environment_refresh/terrain.hlsl": "6b525aaa9d37003875518882a6706d3b12bddf587230d6613bf5e4fcfbe62076",
     "Renderer/native/environment_refresh/mountain.hlsl": "91170d1b2ae98381ea2012d75d1d14594ce68183c838bb2b70230974d9d1c398",
     "Renderer/native/environment_refresh/objects.hlsl": "db42d701a5606a3cfda5f28c736f68b4c755409e50c065b49ce9e55843cbb49f",
     "Renderer/lab/shared/shaders/common/hdr_glow_tiled.hlsl": "37495420a08faecabe803eae68302a831de663e01e7e0e1a8686aabab7d8af32",

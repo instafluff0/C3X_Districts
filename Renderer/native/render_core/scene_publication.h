@@ -95,7 +95,12 @@ public:
             auto normalize=[&](c3x_renderer_tile_v1 tile){
                 tile.tile_x=canonical(tile.tile_x,f.world_width_tiles,f.world_wrap_x!=0);
                 tile.tile_y=canonical(tile.tile_y,f.world_height_tiles,f.world_wrap_y!=0);
-                tile.anchor_x=tile.anchor_y=0;return tile;
+                // The native draw call's mask differs between on-screen, halo
+                // and world-page captures of the same tile (0/1/15) and no
+                // consumer reads it. Kept, it rewrote ~2k visibility revisions
+                // and world inputs per camera step, discarding every retained
+                // static raster and re-preparing world regions.
+                tile.anchor_x=tile.anchor_y=0;tile.visibility_mask=0;return tile;
             };
             bool same_tiles=scope && latest->tiles && latest->tiles->size()==f.tile_count;
             for(unsigned i=0;same_tiles && i<f.tile_count;++i){auto tile=normalize(f.tiles[i]);

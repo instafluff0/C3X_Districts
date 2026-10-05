@@ -31,7 +31,7 @@ using StaticState=StaticRasterState<Target>;using StaticRect=StaticState::Rect;
 struct ViewportShaderSettings {};
 struct Harness {
     StaticRasterStates<Target> static_rasters;
-    struct Inputs {bool complete=true;void clear(){complete=true;}};
+    struct Inputs {bool complete=true;void clear(){complete=true;}void forget(std::vector<int> const&){}};
     std::array<Inputs,4> raster_inputs;
     struct Context {void OMSetRenderTargets(int,void*,void*){}} context;
     struct Renderer {Context* context;} renderer{&context};
@@ -51,14 +51,26 @@ struct Harness {
     unsigned region_width_px=64,region_height_px=48,scene_samples=1;
     unsigned writes=0,fail_at=0,dependency_rebuilds=0,partial_repairs=0;
     std::uint64_t partial_repair_pixels=0;bool refine_worked=false;
+    struct {unsigned repair=0,repair_rects=0,repair_percent=0,repair_changed=0;} static_decision;
     bool ensure_linear_target(Target&,unsigned,unsigned,unsigned,bool){return true;}
-    bool write_slot(unsigned,StaticState& slot,ViewportShaderSettings const&,StaticRect r,float,bool){
-        ++writes;++slot.revision;
+    // Retained near-water overlay layers follow their slot's revision.
+    struct OverlaySlot {Target layer;std::uint64_t revision=~0ull;};
+    std::array<OverlaySlot,4> overlay_slots;bool overlay_mode=false;
+    bool overlay_target(unsigned){return true;}
+    bool write_slot(unsigned index,StaticState& slot,ViewportShaderSettings const&,StaticRect r,float,bool){
+        ++writes;auto before=slot.revision;++slot.revision;
         // Simulate an early terrain layer succeeding and a later city/mesh
         // layer refusing the draw. Its partial pixels must never be displayed.
         for(int y=r.top;y<r.bottom;++y)for(int x=r.left;x<r.right;++x){
             slot.region.colors[y*64+x]=22;slot.region.depths[y*64+x]=49;
         }
+        auto& overlay=overlay_slots[index];
+        if(overlay_mode&&overlay.revision==before){
+            for(int y=r.top;y<r.bottom;++y)for(int x=r.left;x<r.right;++x){
+                overlay.layer.colors[y*64+x]=33;overlay.layer.depths[y*64+x]=41;
+            }
+            overlay.revision=slot.revision;
+        }else overlay.revision=~0ull;
         return writes!=fail_at;
     }
     bool raster_dependencies(Inputs&,ViewportShaderSettings const&,D3D11_RECT,bool){++dependency_rebuilds;return true;}
@@ -66,30 +78,39 @@ struct Harness {
         auto& slot=static_rasters.states[index];auto& inputs=raster_inputs[index];
         auto const& c=slot.covered;ViewportShaderSettings view,screen;
         D3D11_RECT covered{c.left,c.top,c.right,c.bottom};
+        bool const retain_overlays=overlay_mode;std::vector<int> stale;
 ''' + repair[start:end] + r'''
     }
 };
 int main(){
     unsigned cases=0;
-    for(unsigned index=0;index<4;++index)for(unsigned fail:{2u,1u,0u}){
-        Harness h;auto& front=h.static_rasters.states[index];front.covered={0,0,64,48};
+    for(bool overlays:{false,true})for(unsigned index=0;index<4;++index)for(unsigned fail:{2u,1u,0u}){
+        Harness h;h.overlay_mode=overlays;auto& front=h.static_rasters.states[index];front.covered={0,0,64,48};
+        h.overlay_slots[index].revision=overlays?front.revision:~0ull;
+        auto original_overlay=h.overlay_slots[index].layer.colors;
         front.valid=true;front.camera_x=91;front.camera_y=-77;front.projection=2.f;front.depth_translation=-4096;
         auto& back=h.static_rasters.states[index^1u];back.valid=back.refining=true;back.covered=front.covered;
         auto original_color=front.region.colors,original_depth=front.region.depths;auto revision=front.revision;
         h.fail_at=fail;std::vector<StaticRect> dirty{{4,4,12,12},{22,26,36,35}};
         bool ok=h.repair(index,dirty);
         assert(ok==(fail==0));
+        auto const& overlay=h.overlay_slots[index];
         if(fail){
             assert(front.region.colors==original_color&&front.region.depths==original_depth);
             assert(front.revision==revision&&h.dependency_rebuilds==0&&h.partial_repairs==0);
+            assert(overlay.layer.colors==original_overlay&&overlay.revision==(overlays?revision:~0ull));
         }else{
             for(int y=0;y<48;++y)for(int x=0;x<64;++x){
                 bool changed=false;for(auto r:dirty)changed|=x>=r.left&&x<r.right&&y>=r.top&&y<r.bottom;
                 assert(front.region.colors[y*64+x]==(changed?22:11));
                 assert(front.region.depths[y*64+x]==(changed?49:97));
+                // The overlay layer is repaired in exactly the same pixels.
+                assert(overlay.layer.colors[y*64+x]==(overlays&&changed?33:11));
             }
-            assert(front.revision>revision&&h.dependency_rebuilds==1&&h.partial_repairs==1);
+            // Only the repaired rectangles are registered again.
+            assert(front.revision>revision&&h.dependency_rebuilds==dirty.size()&&h.partial_repairs==1);
             assert(h.partial_repair_pixels==190);
+            assert(overlay.revision==(overlays?front.revision:~0ull));
         }
         assert(!back.valid&&!back.refining&&back.covered.empty());
         assert(back.camera_x==front.camera_x&&back.camera_y==front.camera_y&&back.projection==front.projection&&back.depth_translation==front.depth_translation);

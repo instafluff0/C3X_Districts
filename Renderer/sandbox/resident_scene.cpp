@@ -405,6 +405,17 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
             sandbox_direct_units.gpu_preparation_bytes(),
             rejects[0],rejects[1],rejects[2],rejects[3],rejects[4],rejects[5],rejects[6]);
         renderer.trace.write("fresh-scene-phases",detail,true);
+        if(sandbox_fresh.work.enabled){
+            // Heavy passes only: per-layer draw calls (C3X_SANDBOX_PASS_COUNTS=1).
+            for(unsigned pass=0;pass<SandboxPassCounts::pass_count;++pass){
+                std::uint64_t total=0;for(auto const& row:sandbox_fresh.work.counts[pass])total+=row.draws;
+                if(total<100)continue;
+                std::string line="pass="+std::to_string(pass)+" draws="+std::to_string(total)+" layers=";
+                for(unsigned layer=0;layer<SandboxPassCounts::layers;++layer){auto const& row=sandbox_fresh.work.counts[pass][layer];
+                    if(row.draws)line+=std::to_string(layer)+":"+std::to_string(row.draws)+"/"+std::to_string(row.accepted_records)+",";}
+                renderer.trace.write("pass-census",line.c_str(),true);
+            }
+        }
         sprintf_s(detail,"part_samples=%u main_units=%u reflected_units=%u material_buffer_builds=%u material_buffer_reuses=%u material_buffer_uploads=%u material_upload_fallbacks=%u unit_preparation_gpu_bytes=%zu",
             sandbox_direct_units.part_samples,sandbox_direct_units.main_contributors,sandbox_direct_units.reflection_contributors,
             sandbox_direct_units.material_buffer_builds,sandbox_direct_units.material_buffer_reuses,
@@ -418,8 +429,8 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
         renderer.trace.write("fresh-unit-reflection-selection",detail,true);
         auto const& spans=sandbox_fresh.prepare_subspans;auto const& placements=renderer.shared_instances;
         auto validation=sandbox_fresh.static_validation_counts();char validation_detail[2048];
-        sprintf_s(validation_detail,"raster_full=%llu raster_content=%llu raster_visibility=%llu raster_membership=%llu raster_regions=%llu raster_reuses=%llu raster_changes=%llu atlas_full=%llu atlas_content=%llu atlas_membership=%llu atlas_regions=%llu atlas_reuses=%llu receiver_visits=%llu receiver_builds=%llu receiver_reuses=%llu placement_probes=%llu placement_reuses=%llu raster_registrations=%llu raster_watches=%llu raster_source_expansions=%llu raster_source_reuses=%llu raster_append_ms=%.3f atlas_registrations=%llu atlas_watches=%llu atlas_source_expansions=%llu atlas_source_reuses=%llu atlas_append_ms=%.3f",
-            validation.raster.full,validation.raster.content,validation.raster.visibility,validation.raster.membership,validation.raster.regions,validation.raster.reused,validation.raster.changes,
+        sprintf_s(validation_detail,"raster_full=%llu raster_content=%llu raster_visibility=%llu raster_membership=%llu raster_regions=%llu raster_reuses=%llu raster_changes=%llu raster_visibility_rejects=%llu atlas_full=%llu atlas_content=%llu atlas_membership=%llu atlas_regions=%llu atlas_reuses=%llu receiver_visits=%llu receiver_builds=%llu receiver_reuses=%llu placement_probes=%llu placement_reuses=%llu raster_registrations=%llu raster_watches=%llu raster_source_expansions=%llu raster_source_reuses=%llu raster_append_ms=%.3f atlas_registrations=%llu atlas_watches=%llu atlas_source_expansions=%llu atlas_source_reuses=%llu atlas_append_ms=%.3f",
+            validation.raster.full,validation.raster.content,validation.raster.visibility,validation.raster.membership,validation.raster.regions,validation.raster.reused,validation.raster.changes,validation.raster.visibility_rejects,
             validation.atlas.full,validation.atlas.content,validation.atlas.membership,validation.atlas.regions,validation.atlas.reused,
             validation.receiver_visits,validation.receiver_builds,validation.receiver_reuses,validation.placement_probes,validation.placement_reuses,
             validation.raster.proof_registrations,validation.raster.dependency_watch_calls,validation.raster.source_expansions,validation.raster.source_reuses,validation.raster.append_ms,
@@ -467,6 +478,21 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
             static_cast<unsigned long long>(prepared.uploads),static_cast<unsigned long long>(prepared.uploaded_bytes),
             prepared.gpu_bytes(),prepared.metadata_bytes(),prepared.cold_upload_ms);
         renderer.trace.write("fresh-water-submission",detail,true);
+        auto const& pulled=sandbox_fresh.pulled_pages;
+        sprintf_s(detail,"draws=%llu records=%llu fallbacks=%llu builds=%llu reuses=%llu rebuilds=%llu refusals=%llu retired=%llu copied_bytes=%llu resident_bytes=%zu entries=%zu",
+            static_cast<unsigned long long>(sandbox_fresh.pulled_draws),static_cast<unsigned long long>(sandbox_fresh.pulled_records),
+            static_cast<unsigned long long>(sandbox_fresh.pulled_fallbacks),static_cast<unsigned long long>(pulled.builds),
+            static_cast<unsigned long long>(pulled.reuses),static_cast<unsigned long long>(pulled.rebuilds),
+            static_cast<unsigned long long>(pulled.refusals),static_cast<unsigned long long>(pulled.retired),
+            static_cast<unsigned long long>(pulled.copied_bytes),pulled.bytes(),pulled.entry_count());
+        renderer.trace.write("fresh-pulled-submission",detail,true);
+        sprintf_s(detail,"hits=%llu misses=%llu strips=%llu refusals=%llu miss_unshifted=%llu miss_revision=%llu miss_layer=%llu miss_last_layer=%u retired_mismatch=%llu retired_failure=%llu",
+            static_cast<unsigned long long>(sandbox_fresh.overlay_hits),static_cast<unsigned long long>(sandbox_fresh.overlay_misses),
+            static_cast<unsigned long long>(sandbox_fresh.overlay_strips),static_cast<unsigned long long>(sandbox_fresh.overlay_refusals),
+            static_cast<unsigned long long>(sandbox_fresh.overlay_miss_unshifted),static_cast<unsigned long long>(sandbox_fresh.overlay_miss_revision),
+            static_cast<unsigned long long>(sandbox_fresh.overlay_miss_layer),sandbox_fresh.overlay_miss_last_layer,
+            static_cast<unsigned long long>(sandbox_fresh.overlay_retired_mismatch),static_cast<unsigned long long>(sandbox_fresh.overlay_retired_failure));
+        renderer.trace.write("fresh-overlay-layer",detail,true);
         auto const& packets=renderer.ordered_rigid_packets;
         sprintf_s(detail,"builds=%llu reuses=%llu refusals=%llu draws=%llu submitted_records=%llu uploaded_bytes=%llu placement_copies=%llu pages=%u resident_bytes=%zu metadata_bytes=%zu peak_bytes=%zu",
             static_cast<unsigned long long>(packets.builds),static_cast<unsigned long long>(packets.reuses),
@@ -481,6 +507,7 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
         renderer.trace.write("unit-asset-union-work",detail,true);
     }
     bool presented=sandbox_backbuffer_output.draw(target,frame.target_width,frame.target_height);
+    char const* failed_step=presented?nullptr:"output";
     if(presented){
         Microsoft::WRL::ComPtr<ID3D11Resource> resource;
         Microsoft::WRL::ComPtr<ID3D11Texture2D> texture;
@@ -489,6 +516,7 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
             sandbox_fresh.city_site_overlay.draw(renderer.device,renderer.context,
                 texture.Get(),frame,sandbox_fresh.glow.linear.depth_texture,4,zoom);
     }
+    if(!presented && !failed_step)failed_step="site_overlay";
     // The sandbox draws a fully visible scene. Game frames finish with the
     // existing GPU fog pass, including independent animation frames. Apply it
     // to this publication target, preserving the reusable HDR scene underneath.
@@ -501,6 +529,8 @@ bool c3x_renderer64_render_fresh(c3x_renderer_frame_v1 const& frame,
                 texture.Get(),renderer.visibility_coverage,
                 sandbox_fresh.glow.linear.depth_texture,4,zoom);
     }
+    if(!presented && !failed_step)failed_step="fog";
+    if(failed_step)renderer.trace.write("fresh-callback-failed-step",failed_step,true);
     if(presented && renderer.trace.level && sandbox_fresh.work.enabled){
         char census[8]{};
         bool requested=GetEnvironmentVariableA("C3X_RENDERER_SUBMISSION_CENSUS",census,sizeof(census)) && census[0]=='1';

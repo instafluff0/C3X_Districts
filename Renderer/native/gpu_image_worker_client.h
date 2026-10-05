@@ -5,6 +5,13 @@
 #include <vector>
 #include <stdexcept>
 #include <algorithm>
+#include <condition_variable>
+#include <deque>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <thread>
+#include <cstdio>
 namespace c3x_gpu_images {
 // Caller-thread transport only. No native pointers, leases or D3D objects enter
 // packets. Consecutive draws coalesce until a resource/CPU/frame boundary.
@@ -13,7 +20,77 @@ class WorkerClient {
     std::vector<c3x_renderer_gpu_command_v1> pending;
     c3x_renderer_gpu_result_v1 result={sizeof(result)};
     bool failed=false;std::uint64_t batches=0,calls=0;
-    std::unique_ptr<c3x_native_hit::Scene> hit_scene;
+    // The CPU input-coverage model answers rare native form hit tests, yet it
+    // must observe every native UI command in order. Building it on the game
+    // thread cost about a third of Civ III's UI thread on busy maps (thousands
+    // of commands per second, fullscreen transfers splitting into hundreds of
+    // regions). One ordered worker applies the identical model; a query waits
+    // for every earlier command. A bounded-model refusal skips only that
+    // command's coverage, as the inline model did, and is reported once.
+    class HitWorker {
+        struct Operation {unsigned kind=0;Id id=0;unsigned width=0,height=0;Format format=Format::rgb555;
+            std::vector<unsigned> pixels;Command command{};};
+        c3x_native_hit::Scene scene;
+        std::mutex mutex;std::condition_variable wake,idle,drained;
+        std::deque<Operation> queue;bool busy=false,stopping=false;std::uint64_t failures=0;
+        // Bounded backlog: a hit query waits for every earlier command, so an
+        // unbounded queue let Civ III's end-of-load UI burst stall the first
+        // hover/zoom query for ~7 s. Past the bound the producer waits until
+        // the backlog halves, which costs what inline processing did.
+        static constexpr std::size_t backlog_operations=256,backlog_bytes=64u*1024u*1024u;
+        std::size_t queued_bytes=0;
+        std::thread thread;
+        void apply(Operation& op){
+            if(op.kind==0)scene.create(op.id,op.width,op.height,op.format);
+            else if(op.kind==1)scene.destroy(op.id);
+            else if(op.kind==2)scene.upload(op.id,op.pixels.data(),op.pixels.size());
+            else scene.submit(op.command);
+        }
+        void run(){
+            std::unique_lock<std::mutex> lock(mutex);
+            for(;;){
+                wake.wait(lock,[&]{return stopping||!queue.empty();});
+                if(queue.empty()){if(stopping)return;continue;}
+                auto op=std::move(queue.front());queue.pop_front();busy=true;
+                queued_bytes-=op.pixels.size()*sizeof(unsigned);
+                if(queue.size()<=backlog_operations/2&&queued_bytes<=backlog_bytes/2)drained.notify_all();
+                lock.unlock();
+                std::string error;
+                try{apply(op);}catch(std::exception const& e){error=e.what();}catch(...){error="native input coverage failure";}
+                if(!error.empty()&&failures<4){char line[320];
+                    std::snprintf(line,sizeof(line),"[C3X renderer] stage=native-hit-scene-refused operation=%u detail=%s\n",op.kind,error.c_str());
+#ifdef _WIN32
+                    OutputDebugStringA(line);
+#else
+                    std::fputs(line,stderr);
+#endif
+                }
+                lock.lock();busy=false;failures+=!error.empty();
+                if(queue.empty())idle.notify_all();
+            }
+        }
+        void push(Operation&& op){
+            std::unique_lock<std::mutex> lock(mutex);
+            queued_bytes+=op.pixels.size()*sizeof(unsigned);
+            queue.push_back(std::move(op));wake.notify_one();
+            if(queue.size()>backlog_operations||queued_bytes>backlog_bytes)
+                drained.wait(lock,[&]{return stopping||(queue.size()<=backlog_operations/2&&queued_bytes<=backlog_bytes/2);});
+        }
+    public:
+        HitWorker():thread([this]{run();}){}
+        ~HitWorker(){{std::lock_guard<std::mutex> lock(mutex);stopping=true;}wake.notify_all();drained.notify_all();thread.join();}
+        HitWorker(HitWorker const&)=delete;HitWorker& operator=(HitWorker const&)=delete;
+        void create(Id id,unsigned width,unsigned height,Format format){Operation op;op.kind=0;op.id=id;op.width=width;op.height=height;op.format=format;push(std::move(op));}
+        void destroy(Id id){Operation op;op.kind=1;op.id=id;push(std::move(op));}
+        void upload(Id id,std::uint32_t const* pixels,std::size_t count){Operation op;op.kind=2;op.id=id;op.pixels.assign(pixels,pixels+count);push(std::move(op));}
+        void submit(Command const& command){Operation op;op.kind=3;op.command=command;push(std::move(op));}
+        bool pixel(Id id,int x,int y,unsigned& value){
+            std::unique_lock<std::mutex> lock(mutex);
+            idle.wait(lock,[&]{return queue.empty()&&!busy;});
+            return scene.pixel(id,x,y,value); // the worker cannot dequeue while this lock is held
+        }
+    };
+    std::unique_ptr<HitWorker> hit_scene;
     c3x_renderer_gpu_images_v1 request(int action,Id image=0)const{
         c3x_renderer_gpu_images_v1 r={};r.struct_size=sizeof(r);r.action=action;r.ticket=ticket;r.image=std::int64_t(image);return r;
     }
@@ -36,7 +113,7 @@ class WorkerClient {
 public:
     WorkerClient(c3x_renderer_gpu_images_fn fn,c3x_renderer_gpu_frame_v1 const& frame,bool input_coverage=false):execute(fn),ticket(frame.ticket),session(frame.session){
         if(!fn||ticket<=0||session<=0||frame.struct_size!=sizeof(frame))throw std::runtime_error("missing GPU image session");pending.reserve(2048);
-        if(input_coverage)hit_scene=std::make_unique<c3x_native_hit::Scene>();
+        if(input_coverage)hit_scene=std::make_unique<HitWorker>();
     }
     bool hit_pixel(Id id,int x,int y,unsigned& value)const{
         if(!hit_scene||!hit_scene->pixel(id,x,y,value))return false;
@@ -63,13 +140,17 @@ public:
     }
     bool destroy(Id id){if(failed)return false;run(request(C3X_GPU_DESTROY,id));if(hit_scene)hit_scene->destroy(id);return true;}
     bool upload(Id id,std::uint64_t revision,std::uint32_t const* pixels,std::size_t count){
-        if(count>2240u*1260u)return false;auto r=request(C3X_GPU_UPLOAD,id);r.revision=std::int64_t(revision);r.pixels=pixels;r.pixel_count=unsigned(count);run(r);if(hit_scene)hit_scene->upload(id,pixels,count);return true;
+        if(count>2240u*1260u)return false;auto r=request(C3X_GPU_UPLOAD,id);r.revision=std::int64_t(revision);r.pixels=pixels;r.pixel_count=unsigned(count);run(r);
+        if(hit_scene)hit_scene->upload(id,pixels,count);
+        return true;
     }
     bool submit(Command const* commands,std::size_t count){
         if(failed)throw std::runtime_error("GPU image session is no longer usable");
         if(!commands||!count||count>2048)return false;
         if(count+pending.size()>2048)flush();
-        for(std::size_t n=0;n<count;++n){auto const& c=commands[n];if(hit_scene&&c.kind<Kind::world_begin)hit_scene->submit(c);pending.push_back({int(c.kind),std::int64_t(c.destination),std::int64_t(c.source),
+        for(std::size_t n=0;n<count;++n){auto const& c=commands[n];
+            if(hit_scene&&c.kind<Kind::world_begin)hit_scene->submit(c);
+            pending.push_back({int(c.kind),std::int64_t(c.destination),std::int64_t(c.source),
             {c.area.left,c.area.top,c.area.right,c.area.bottom},{c.clip.left,c.clip.top,c.clip.right,c.clip.bottom},c.source_x,c.source_y,c.color,std::int64_t(c.background),std::int64_t(c.detail),std::int64_t(c.background_detail),c.source_width,c.source_height,std::int64_t(c.program)});}
         return true;
     }

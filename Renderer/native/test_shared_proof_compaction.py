@@ -8,7 +8,7 @@ ORDER_PROGRAM = GPU_STUB + r'''
 
 #include <cstdio>
 int main(){
- static_assert(Owner::budget==33554432 && Owner::record_limit==65536 && Owner::entry_limit==16384,"unchanged caps");
+ static_assert(Owner::budget==268435456 && Owner::record_limit==65536 && Owner::entry_limit==16384,"unchanged caps");
  ID3D11Device device;Owner owner;float projection[]={0,0,128,1260};Owner::Range range;
  std::array<std::shared_ptr<int>,3> sources={std::make_shared<int>(100),std::make_shared<int>(20),std::make_shared<int>(50)};
  std::array<Owner::Instance,3> values;unsigned keys[]={100,20,50};

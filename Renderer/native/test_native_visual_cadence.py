@@ -209,6 +209,10 @@ void QueryPerformanceCounter(LARGE_INTEGER* value){++value->QuadPart;}
 template<std::size_t N,class... Args>int sprintf_s(char (&buffer)[N],char const* format,Args... args){
  return std::snprintf(buffer,N,format,args...);
 }
+#include <string>
+// Profiling-only GPU timeline and frame fence (disabled here).
+namespace c3x_renderer{namespace render_core{struct Timeline{bool enabled=false;void begin(void*){}std::string collect(void*){return {};}};
+ inline Timeline& gpu_timeline(){static Timeline timeline;return timeline;}}}
 struct Session{
  int draw=1;unsigned samples=0,published=0;
  int visual_frame(long long ticks,long long frequency,void*,void*,void*){
@@ -219,7 +223,8 @@ struct Session{
  unsigned presented_zoom(){return 81920;}
  std::pair<unsigned,unsigned> visual_publication(){return {7,8};}
  struct Work{unsigned operations=3,assemblies=1,copies=2,copied_pixels=64,assembly_pixels=32;
-  unsigned selected_borrows=1,selected_owned=0,direct_native_images=1,avoided_copy_pixels=128;};
+  unsigned selected_borrows=1,selected_owned=0,direct_native_images=1,avoided_copy_pixels=128;
+  double prepare_ms=0,evaluate_ms=0,assemble_ms=0,display_ms=0;};
  Work visual_work(){return {};}
 };
 struct Swap{HRESULT result=S_OK;unsigned presents=0;
@@ -238,7 +243,10 @@ struct Owner{
   double milliseconds(long long ticks){return double(ticks);}
   void write(char const*,char const*,bool){++rows;}
  };
- struct{std::unique_ptr<Session> gpu_composition=std::make_unique<Session>();Trace trace;}renderer_state;
+ struct{std::unique_ptr<Session> gpu_composition=std::make_unique<Session>();Trace trace;void* context=nullptr;}renderer_state;
+ bool fence_ready=true;unsigned fences=0;std::atomic<std::uint64_t> visual_fence_denials{0};
+ bool visual_gpu_ready(){return fence_ready;}void visual_fence_issue(){++fences;}
+ static bool trial_retain_surface(){return true;}
  Surface trial_surface_view,trial_surface_back,trial_surface_buffer;
  std::unique_ptr<Swap> trial_surface_swap=std::make_unique<Swap>();
  std::atomic<unsigned> presented_zoom_q16{65536};unsigned route_present_index=0;
@@ -258,6 +266,10 @@ int main(){
  assert(denied.trial_surface_permit.polls==1&&!denied.renderer_state.gpu_composition->samples);
  assert(!denied.trial_surface_swap->presents&&!denied.trial_surface_permit.consumed);
  assert(denied.trial_front_pending&&denied.trial_presented_front_revision==0);
+ // The GPU is still two frames behind: keep the gate free, draw nothing.
+ Owner fenced;fenced.trial_surface_permit.admitted=true;fenced.fence_ready=false;
+ assert(fenced.offer()==C3X_RENDERER_RESULT_BUSY&&!fenced.renderer_state.gpu_composition->samples);
+ assert(fenced.visual_fence_denials==1&&!fenced.trial_surface_swap->presents&&!fenced.fences);
  assert(denied.trial_visual_permit_denials==1);
  assert(denied.presented_zoom_q16==65536&&!denied.route_present_index&&!denied.renderer_state.trace.rows);
  Owner noop;noop.trial_surface_permit.admitted=true;noop.renderer_state.gpu_composition->draw=0;
@@ -329,6 +341,7 @@ struct State{std::mutex call_mutex,state_mutex;DWORD trial_consumer_pid=0;
  long long visual_ticks=0,visual_frequency=0;int result=C3X_RENDERER_RESULT_PENDING;
  enum class Command{trial_visual_shared};
  int submit_locked(std::unique_lock<std::mutex>&,Command){++submits;return result;}
+ void drain_facts_locked(){}
 '''+body+r'''
 };
 int main(){State state;std::uint64_t handle=0;unsigned w=0,h=0;

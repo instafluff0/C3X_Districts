@@ -42,6 +42,7 @@ int main(){assert(SandboxPerfOptions{}.bootstrap_scale==1.f);
 #include "Renderer/sandbox/static_raster_state.h"
 #include "Renderer/sandbox/scroll_region.h"
 #include <algorithm>
+#include <chrono>
 #include <array>
 #include <cassert>
 #include <cstdio>
@@ -67,12 +68,13 @@ struct Context {
 namespace c3x_renderer{namespace render_core{
 struct LinearResample {
  struct Source{Plane* color=nullptr;Plane* depth=nullptr;float map[4]{},covered[4]{},size[2]{},depth_shift=0;};
+ // Settled views: native or minified (source texels per screen pixel >= 1), never magnified.
  bool require_native_scale=false;
  bool ensure(int){return true;}
  bool draw(Context*,Target& target,Source const& source,Source const* secondary){
   assert(source.color&&source.depth);
-  if(require_native_scale){assert(source.map[0]==1.f&&source.map[1]==1.f);
-   if(secondary)assert(secondary->map[0]==1.f&&secondary->map[1]==1.f);}
+  if(require_native_scale){assert(source.map[0]>=1.f&&source.map[1]>=1.f);
+   if(secondary)assert(secondary->map[0]>=1.f&&secondary->map[1]>=1.f);}
   target.colors=*source.color;target.depths=*source.depth;return true;
  }
 };}}
@@ -84,9 +86,11 @@ struct Options{bool legacy=false;float bootstrap_scale=1.f;};
 struct Pipeline {
  Context context;
  struct{Context* context;int device=1,content_view_width=4,content_view_height=4;std::int64_t scene_depth_origin=0;}renderer{&context};
- StaticRasters static_rasters;std::array<StaticState,2> bootstrap;
- struct RasterInputs{int version=0;bool complete=true;void clear(){version=0;complete=true;}};
+ StaticRasters static_rasters;std::array<StaticState,2> bootstrap;std::array<StaticState const*,2> bootstrap_ring{};std::array<std::uint64_t,2> bootstrap_ring_revision{};
+ struct RasterInputs{int version=0;bool complete=true;void clear(){version=0;complete=true;}std::size_t bytes()const{return 0;}};
  std::array<RasterInputs,4> raster_inputs;std::array<RasterInputs,2> bootstrap_inputs;
+ std::array<std::array<std::uint64_t,6>,2> bootstrap_stamp{};
+ std::array<std::uint64_t,6> bootstrap_identity()const{return {std::uint64_t(version),0,0,0,0,0};}
  Options options;Options const& sandbox_perf_options(){return options;}
  struct{bool atlas_complete=true;}shadow;
  struct Work{bool enabled=false;struct Counts{std::uint64_t target_pixels=0;}counts;
@@ -95,6 +99,11 @@ struct Pipeline {
   bool,bool,int,void*,int,float=0){target.colors=*color;target.depths=*depth;return true;}}static_restore;
  c3x_renderer::render_core::LinearResample static_resample;
  Target static_cache;std::array<std::uint64_t,12> restore_key{};
+ struct OverlayFrame{bool valid=false;unsigned slot=0;int move_x=0,move_y=0;float depth_shift=0;} overlay_frame;
+ double last_static_ms=0;bool static_preview=false;
+ struct {unsigned lane=0;int reusable=-1,recenter=0,shifted=0,refine=0,sync=0,preview=0,front_cover=0,home_cover=0,boot_cover=0;
+  long long missing=0;int camera_x=0,camera_y=0,slot_x=0,slot_y=0;unsigned entry=0,home_entry=0;std::size_t input_bytes=0;double boot_draw_ms=0,boot_deps_ms=0;long long boot_area=0;} static_decision;
+ bool layout_reset=false;
  int camera_x=0,camera_y=0,region_margin_x=6,region_margin_y=6;
  unsigned region_width_px=16,region_height_px=16,scene_samples=1;
  float projection_zoom=1,destination=0;std::array<unsigned,2> lane_still{{3,3}};
@@ -133,23 +142,28 @@ struct Pipeline {
  void seed(){for(unsigned i=0;i<4;++i){auto& s=static_rasters.states[i];
   s.valid=true;s.projection=i<2?1.f:projection_zoom;s.covered={0,0,16,16};paint(s);raster_inputs[i].version=version;}
   for(unsigned i=0;i<2;++i){auto& s=bootstrap[i];s.valid=true;s.projection=projection_zoom;s.covered={0,0,16,16};
-   paint(s);bootstrap_inputs[i].version=version;}
+   paint(s);bootstrap_inputs[i].version=version;bootstrap_stamp[i]=bootstrap_identity();}
  }
  void check(){ViewportShaderSettings settings;assert(compose_static(settings,4,4));
+  // Retained overlays may composite only from the slot this frame restored;
+  // a resampled preview never composites them (and biases live water).
+  assert(!overlay_frame.valid||(overlay_frame.slot<4&&static_rasters.states[overlay_frame.slot].valid));
+  assert(!(overlay_frame.valid&&static_preview));
   assert(static_cache.colors==world);
   for(unsigned i=0;i<16;++i)assert(static_cache.depths[i]==world[i]+1000);
  }
 };
 int main(){unsigned frames=0;
  // A reveal can finish the hidden canonical lane before the visible zoom lane.
- // Neither it nor an old zoom preview may soften a settled view during repair.
+ // Neither it nor an old zoom preview may soften (magnify) a settled view
+ // during repair; a current 1x raster may serve a zoomed-out view, minified.
  for(float zoom:{.5f,.625f,.75f,.875f,1.25f,1.5f,1.75f,2.f,2.5f,3.f}){
   Pipeline p;p.projection_zoom=p.destination=zoom;p.edit(0);p.seed();
   auto visible=StaticRasters::lane_of(zoom);
   p.static_rasters.front(visible).valid=false;
   p.bootstrap[visible].valid=false;p.available_budget=0;
   p.static_resample.require_native_scale=true;p.check();
-  assert(p.bootstrap[visible].valid&&p.bootstrap[visible].projection==zoom);
+  if(zoom>1.f)assert(p.bootstrap[visible].valid&&p.bootstrap[visible].projection==zoom);
  }
 
  // Outward bootstrap covers the destination before intermediate zoom frames.

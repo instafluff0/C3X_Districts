@@ -192,6 +192,7 @@ int main(){
 #include "Renderer/sandbox/async_publication.h"
 #include <cassert>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <vector>
 #include "Renderer/native/gpu_image_commands.h"

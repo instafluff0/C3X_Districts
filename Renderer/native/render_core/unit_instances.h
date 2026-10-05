@@ -99,7 +99,9 @@ public:
     void clear(){pose_offsets.clear();motions.clear();instances.clear();observations.clear();accepted_moves.clear();accepted_spawns.clear();accepted_states.clear();playback.clear();scene_ticks=-1;scene_frequency=0;motion_pause=-1;++scene_generation;} // serial never reuses a token
 
     // Camera preparation freezes the displayed scene until ordered adoption.
-    // That interval must not consume travel that the player cannot yet see.
+    // That interval must not consume much travel that the player cannot yet
+    // see. Callers may place the hold after a short allowance so ordinary
+    // scroll/recenter transactions do not put moving units in slow motion.
     void pause_motion(long long ticks){if(motion_pause<0)motion_pause=std::max(ticks,scene_ticks);}
     void resume_motion(long long ticks,long long frequency){
         if(motion_pause<0)return;
@@ -356,7 +358,8 @@ public:
         // sampling that view must never rewind the current visual scene.
         if(scene_frequency==frequency)ticks=std::max(ticks,scene_ticks);
         scene_ticks=ticks;scene_frequency=frequency;
-        auto motion_ticks=motion_pause>=0?motion_pause:ticks;
+        // A hold may start in the future: travel continues until that point.
+        auto motion_ticks=motion_pause>=0?std::min(motion_pause,ticks):ticks;
         // One native capture supplies both visibility and ordered wrap
         // occurrences. Index it once for a busy scene; a few retained actors
         // use the allocation-free linear iterator over the same authority.

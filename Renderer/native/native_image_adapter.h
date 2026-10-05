@@ -12,6 +12,8 @@
 #include <algorithm>
 #include <stdexcept>
 #include <climits>
+#include <chrono>
+#include <cstdlib>
 #include <cstdio>
 
 namespace c3x_native_images {
@@ -158,10 +160,16 @@ template<class Backend> class Adapter {
         }return nullptr;
     }
     bool refresh(Image& image){
-        ++counters.source_checks;
+        ++counters.source_checks;++refresh_profile.calls;
+        using ProfileClock=std::chrono::steady_clock;
+        auto began=ProfileClock::now(),compared=began,copied=began,submitted=began;
         std::vector<std::uint32_t> content;
         std::vector<std::uint16_t> captured;
         Rect changed={0,0,int(image.width),int(image.height)};bool partial=false;
+        // An existing same-size mirror differs from the native words only in
+        // the changed rows; update those in place instead of recopying the
+        // whole canvas (5+ MB per animation tick for fullscreen UI forms).
+        bool mirrored=false;Rect dirty=changed;
         {
             // Retained native pointers can change without another getter call.
             // Compare every visible word, in its native representation, before
@@ -182,38 +190,82 @@ template<class Backend> class Adapter {
                     changed={std::min(changed.left,int(left)),std::min(changed.top,int(y)),
                         std::max(changed.right,int(right)),int(y+1)};
                 }
-                if(changed.right==0){++counters.source_reuses;return true;}
+                compared=ProfileClock::now();
+                refresh_profile.compare_ms+=refresh_profile.ms(began,compared);
+                if(changed.right==0){++counters.source_reuses;++refresh_profile.unchanged;refresh_profile.report();return true;}
+                refresh_profile.changed_pixels+=std::uint64_t(changed.right-changed.left)*(changed.bottom-changed.top);
                 // A small UI edit must not upload another full-window canvas.
                 // Periodic full replacement bounds retained patch history even
                 // for scattered edits through an escaped native pixel pointer.
                 partial=image.revision%64!=0&&
                     std::size_t(changed.right-changed.left)*(changed.bottom-changed.top)<count/2;
+                mirrored=true;dirty=changed;
             }
             if(!partial)changed={0,0,int(image.width),int(image.height)};
             auto width=unsigned(changed.right-changed.left);
-            content.resize(std::size_t(width)*(changed.bottom-changed.top));if(!image.owned)captured.resize(count);
-            for(unsigned y=0;y<image.height;++y){
-                auto row=bits+std::size_t(y)*stride;auto offset=std::size_t(y)*image.width;
-                if(int(y)>=changed.top&&int(y)<changed.bottom)
-                    std::copy_n(row+changed.left,width,content.data()+std::size_t(y-changed.top)*width);
-                if(!image.owned)std::memcpy(captured.data()+offset,row,image.width*2);
+            content.resize(std::size_t(width)*(changed.bottom-changed.top));
+            if(!image.owned&&!mirrored)captured.resize(count);
+            for(unsigned y=unsigned(changed.top);y<unsigned(changed.bottom);++y)
+                std::copy_n(bits+std::size_t(y)*stride+changed.left,width,content.data()+std::size_t(y-changed.top)*width);
+            if(!image.owned){
+                if(mirrored)for(unsigned y=unsigned(dirty.top);y<unsigned(dirty.bottom);++y)
+                    std::memcpy(image.cpu.data()+std::size_t(y)*image.width,bits+std::size_t(y)*stride,image.width*2);
+                else for(unsigned y=0;y<image.height;++y)
+                    std::memcpy(captured.data()+std::size_t(y)*image.width,bits+std::size_t(y)*stride,image.width*2);
             }
             counters.source_expanded_bytes+=content.size()*4;
         } // Release the private native lease before dispatching to the worker.
-        if(content.size()>=512u*512u&&++large_uploads<=8){char line[192];std::snprintf(line,sizeof(line),
+        copied=ProfileClock::now();refresh_profile.copy_ms+=refresh_profile.ms(compared,copied);
+        if(content.size()>=512u*512u){++refresh_profile.large;if(++large_uploads<=8){char line[192];std::snprintf(line,sizeof(line),
             "[C3X renderer] stage=native-source-upload width=%u height=%u cached=%u revision=%llu evictions=%u\n",
-            image.width,image.height,unsigned(image.cpu_uploaded),image.revision,source_evictions);OutputDebugStringA(line);}
+            image.width,image.height,unsigned(image.cpu_uploaded),image.revision,source_evictions);OutputDebugStringA(line);}}
+        refresh_profile.uploaded_pixels+=content.size();++(partial?refresh_profile.partial:refresh_profile.full);
+        bool accepted=true;
         if(partial){
             auto patch=gpu.create(unsigned(changed.right-changed.left),unsigned(changed.bottom-changed.top),image.format);
-            if(!patch)return false;
             Command copy={Kind::copy,image.gpu,patch,changed,changed};
-            bool accepted=gpu.upload(patch,1,content.data(),content.size())&&gpu.submit(&copy,1);
-            gpu.destroy(patch);if(!accepted)return false;
-        }else if(!gpu.upload(image.gpu,image.revision+1,content.data(),content.size()))return false;
+            accepted=patch&&gpu.upload(patch,1,content.data(),content.size())&&gpu.submit(&copy,1);
+            if(patch)gpu.destroy(patch);
+        }else accepted=gpu.upload(image.gpu,image.revision+1,content.data(),content.size());
+        submitted=ProfileClock::now();
+        refresh_profile.submit_ms+=refresh_profile.ms(copied,submitted);
+        refresh_profile.max_ms=std::max(refresh_profile.max_ms,refresh_profile.ms(began,submitted));
+        if(!accepted){
+            // The mirror may already hold words the GPU never received.
+            if(mirrored)image.cpu_uploaded=false;
+            refresh_profile.report();return false;
+        }
         ++image.revision;image.cpu_uploaded=true;
-        cpu_bytes-=image.cpu.size()*2;image.cpu=std::move(captured);cpu_bytes+=image.cpu.size()*2;
+        if(!mirrored){cpu_bytes-=image.cpu.size()*2;image.cpu=std::move(captured);cpu_bytes+=image.cpu.size()*2;}
+        refresh_profile.report();
         return true;
     }
+    // Rate-limited game-thread cost summary for CPU canvases mirrored to the
+    // GPU, enabled only with the existing input-cost diagnostic switch.
+    struct RefreshProfile {
+        using Clock=std::chrono::steady_clock;
+        bool enabled=false;Clock::time_point reported=Clock::now();
+        std::uint64_t calls=0,unchanged=0,partial=0,full=0,changed_pixels=0,uploaded_pixels=0,large=0;
+        double compare_ms=0,copy_ms=0,submit_ms=0,max_ms=0;
+        RefreshProfile(){
+#ifdef _WIN32
+            char value[4]={};enabled=GetEnvironmentVariableA("C3X_RENDERER_TRACE_INPUT",value,sizeof(value))==1&&value[0]=='1';
+#else
+            auto value=std::getenv("C3X_RENDERER_TRACE_INPUT");enabled=value&&value[0]=='1';
+#endif
+        }
+        static double ms(Clock::time_point a,Clock::time_point b){return std::chrono::duration<double,std::milli>(b-a).count();}
+        void report(){
+            if(!enabled)return;auto now=Clock::now();
+            if(now-reported<std::chrono::seconds(2))return;
+            char line[400];std::snprintf(line,sizeof(line),
+                "[C3X renderer] stage=native-source-refresh calls=%llu unchanged=%llu partial=%llu full=%llu large=%llu changed_pixels=%llu uploaded_pixels=%llu compare_ms=%.1f copy_ms=%.1f submit_ms=%.1f max_ms=%.2f window_ms=%.0f\n",
+                (unsigned long long)calls,(unsigned long long)unchanged,(unsigned long long)partial,(unsigned long long)full,
+                (unsigned long long)large,(unsigned long long)changed_pixels,(unsigned long long)uploaded_pixels,
+                compare_ms,copy_ms,submit_ms,max_ms,ms(reported,now));
+            OutputDebugStringA(line);*this=RefreshProfile{};
+        }
+    } refresh_profile;
     // A native-format GPU mirror preserves exact CPU fallback words; only the
     // map/screen copy family also retains full-color pixels. Both change in one
     // validated submission, including native save/restore and partial copies.
