@@ -49321,6 +49321,10 @@ patch_FLC_Animation_set_move_target (FLC_Animation * this, int edx, int x, int y
 	    ! Map_in_range (&p_bic_data->Map, __, move.new_x, move.new_y) ||
 	    (move.old_x == move.new_x && move.old_y == move.new_y)) return;
 	move.action = AT_RUN;
+	// Native travel speed: the art's INI Fast Speed (Animation_Info +0x130)
+	// times this animation's float rate (+0x104, 1.0 when constructed).
+	if (this->Animation_Info != NULL)
+		move.speed = (int)(this->Animation_Info->field_98[38] * *(float *)&this->field_104 + 0.5f);
 	move.source_visible = custom_renderer_tile_visible_at (move.old_x, move.old_y);
 	// The accepted step precedes native sight revelation. Our own visible unit
 	// may enter that edge now; this admits its body, not hidden terrain or enemies.

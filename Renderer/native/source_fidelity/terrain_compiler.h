@@ -102,7 +102,7 @@ bool emit_terrain_surfaces(NaturalData const& natural,Assets const& assets,
     };
     auto dune=[](float,float){return 0.f;};
     auto activity=[&](int c,int r){auto const& world=world_coast.world();auto i=world.index(c,r);auto value=world.at(i);
-        if(i!=std::size_t(-1))observe_world(i,value);return value!=0xffffffffu && (value>>24)!=0?1.f:0.f;};
+        if(i!=std::size_t(-1))observe_world(i,value);return value!=0xffffffffu && ((value>>24)&1u)!=0?1.f:0.f;};
     int nc=(input.tile_x+input.tile_y)/2,nr=(input.tile_x-input.tile_y)/2;
     auto const& tile=input;int ground=input.ground;auto owner=lookup_natural(nc,nr);
     HillMaterialFootprint hill_material={owner.real==5,
@@ -148,6 +148,7 @@ bool emit_terrain_surfaces(NaturalData const& natural,Assets const& assets,
     auto patch_detail=input.detail;auto& patch_layouts=scratch.layouts;
     bool index_natural_grids=input.indexed;
     auto record_natural_phase=[](unsigned){}; // Worker CPU time is recorded by its queue.
+    auto hidden_taper_at=[&](float x,float y){return queries.hidden_taper(x,y);};
     #include "terrain_mesh_body.h"
     if(cancelled())return false;
     hill_decals.release_scratch();

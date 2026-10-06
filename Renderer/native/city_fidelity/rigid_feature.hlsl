@@ -1128,9 +1128,13 @@ float4 q6_raw_feature(FeaturePixelInput input)
     float resource_weight = step(20.5, input.material_index) *
         (1.0 - step(28.5, input.material_index)) *
         (1.0 - step(0.005, material_fraction));
+    // Pipeline-baked resource ground decals: soft source alpha over terrain,
+    // lit as flat ground, never shadow casters (caster cutout skips .25-.40).
+    float resource_decal_weight = step(0.325, material_fraction) *
+        (1.0 - step(0.385, material_fraction)) * source_decal_weight;
     float mine_weight = source_decal_weight *
         (1.0 - tile_object_weight) * (1.0 - infrastructure_weight) *
-        (1.0 - unit_weight);
+        (1.0 - unit_weight) * (1.0 - resource_decal_weight);
     float raised_infrastructure_weight = infrastructure_weight *
         (1.0 - step(0.25, material_fraction));
     float pollution_weight = step(0.295, material_fraction) *
@@ -1202,7 +1206,7 @@ float4 q6_raw_feature(FeaturePixelInput input)
         albedo = resource_base_texture_7.SampleBias(material_sampler, input.uv, resource_weight * -0.45).rgb;
     else { albedo=0; emissive=0; }
     float4 mine_sample = sample_reused_resource_slot(mine_slot, input.uv);
-    clip(lerp(1.0, mine_sample.a - 0.08,
+    clip(lerp(1.0, mine_sample.a - lerp(0.08, 0.004, resource_decal_weight),
               source_decal_weight * (1.0 - unit_weight)));
     float mine_emissive_code = floor(material_fraction * 100.0 + 0.5);
     if (mine_weight > 0.5 && mine_emissive_code > 1.5)
@@ -1350,6 +1354,7 @@ float4 q6_raw_feature(FeaturePixelInput input)
     float ground_alpha = lerp(1.0,
         lerp(crater_alpha, pollution_alpha, pollution_weight),
         ground_state_weight);
+    ground_alpha = lerp(ground_alpha, mine_sample.a, resource_decal_weight);
     return float4(display_color, ground_alpha);
 }
 
@@ -2783,6 +2788,16 @@ float3 project_world_content(float3 position, float3 world, float4 projection, f
     float base=(dx-dy+1)*width*.25;
     return float3((dx+dy)*width*.5,base-h*(width/224*.82),base+h*.0016*projection.w);
 }
+// Resource bodies (integer slots 21-28) and baked resource ground decals
+// (fraction .325-.385) take the natural terrain's height-depth basis, so the
+// part of a body standing on raised natural ground is not hidden beneath it.
+float resource_natural_depth(float3 projected, float world_z, float4 projection, float kind, float material) {
+    float f=frac(material);
+    if(projection.z==0 || kind<1.5 || kind>2.5 || material<20.5 || material>28.5 || !(f<.005 || abs(f-.355)<.03))
+        return projected.z;
+    float h=world_z*112-2.5;
+    return projected.y+h*(projection.z/224*.82)+h*.0016*projection.w;
+}
 
 
 struct IntegratedVertexInput
@@ -2884,7 +2899,7 @@ struct PackedFeatureInput {
 FeaturePixelInput VSIntegratedFeature(PackedFeatureInput packed)
 {
  IntegratedVertexInput input=(IntegratedVertexInput)0;
- input.position=project_world_content(packed.position,packed.world,c3x_content_projection,c3x_viewport_translation_padding);input.uv=packed.uv;input.geometry_normal=packed.normal;
+ input.position=project_world_content(packed.position,packed.world,c3x_content_projection,c3x_viewport_translation_padding);input.position.z=resource_natural_depth(input.position,packed.world.z,c3x_content_projection,c3x_viewport_translation_padding,packed.material);input.uv=packed.uv;input.geometry_normal=packed.normal;
  input.base_terrain=packed.material;input.q6_world=float4(packed.world,1);
     FeaturePixelInput output=(FeaturePixelInput)0;
     output.position = float4(translated_position(input),

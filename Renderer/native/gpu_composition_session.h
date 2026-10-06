@@ -38,6 +38,24 @@ class Session {
     std::shared_ptr<c3x_renderer::render_core::UnitHudAnchors> unit_anchors;
     Id hud_canvas=0,hud_detail=0,next_snapshot=world_detail+4096;
     void erase_hud(std::size_t at){for(auto id:hud[at].snapshots)layers.destroy(id);hud.erase(hud.begin()+at);}
+    // Native image execution cost, summarized every 2 s at trace level 2.
+    struct ExecuteProfile {
+        LARGE_INTEGER reported{},frequency{};std::uint64_t calls=0,commands=0,uploads=0,upload_pixels=0;
+        double submit_ms=0,record_ms=0,resource_ms=0,total_ms=0,max_ms=0;bool enabled=false;
+        ExecuteProfile(){char value[4]={};enabled=GetEnvironmentVariableA("C3X_RENDERER_TRACE",value,sizeof(value))==1&&value[0]=='2';
+            QueryPerformanceFrequency(&frequency);QueryPerformanceCounter(&reported);}
+        double since(LARGE_INTEGER& mark)const{LARGE_INTEGER now={};QueryPerformanceCounter(&now);
+            double ms=1000.*double(now.QuadPart-mark.QuadPart)/double(frequency.QuadPart);mark=now;return ms;}
+        void report(){
+            LARGE_INTEGER now={};QueryPerformanceCounter(&now);
+            if(now.QuadPart-reported.QuadPart<2*frequency.QuadPart)return;
+            char line[320];std::snprintf(line,sizeof(line),
+                "[C3X renderer] stage=native-image-execution calls=%llu commands=%llu uploads=%llu upload_pixels=%llu total_ms=%.1f submit_ms=%.1f record_ms=%.1f resource_ms=%.1f max_ms=%.2f window_ms=%.0f\n",
+                (unsigned long long)calls,(unsigned long long)commands,(unsigned long long)uploads,(unsigned long long)upload_pixels,
+                total_ms,submit_ms,record_ms,resource_ms,max_ms,1000.*double(now.QuadPart-reported.QuadPart)/double(frequency.QuadPart));
+            OutputDebugStringA(line);auto keep=enabled;auto rate=frequency;*this=ExecuteProfile{};enabled=keep;frequency=rate;reported=now;
+        }
+    } execute_profile;
     void record(Command const& command){
         if(!layers.accepting())return;
         if(hud_canvas&&(command.destination==hud_canvas||command.destination==hud_detail)){
@@ -315,6 +333,8 @@ public:
                 std::vector<unsigned> const& pixels,c3x_renderer_gpu_result_v1& result,std::vector<unsigned>& output){
         output.clear();result={sizeof(result)};
         if(!ticket||request.ticket!=ticket)return C3X_RENDERER_RESULT_SUPERSEDED;
+        auto& profile=execute_profile;LARGE_INTEGER began={},mark={};
+        if(profile.enabled){QueryPerformanceCounter(&began);mark=began;++profile.calls;profile.commands+=commands.size();}
         // Draws and the immediately following resource boundary share one
         // owner handoff. Submission order and explicit CPU readback stay exact.
         if(!commands.empty()){
@@ -344,12 +364,16 @@ public:
                     ++at;continue;
                 }
                 auto end=at+1;while(end<commands.size()&&commands[end].kind<Kind::world_begin)++end;
+                if(profile.enabled)profile.since(mark);
                 if(!gpu.submit(commands.data()+at,end-at))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+                if(profile.enabled)profile.submit_ms+=profile.since(mark);
                 for(;at<end;++at)try{record(commands[at]);}catch(std::exception const& e){
                     OutputDebugStringA("[C3X renderer] retained admission: ");OutputDebugStringA(e.what());OutputDebugStringA("\n");layers.discard();}
+                if(profile.enabled)profile.record_ms+=profile.since(mark);
             }
         }
         bool ok=false;Id image=Id(request.image);
+        if(profile.enabled){profile.since(mark);if(request.action==C3X_GPU_UPLOAD){++profile.uploads;profile.upload_pixels+=pixels.size();}}
         if(request.action==C3X_GPU_CREATE){image=gpu.create(request.width,request.height,request.format==C3X_GPU_RGB555?Format::rgb555:request.format==C3X_GPU_RGB565?Format::rgb565:Format::bgra32);ok=image!=0;if(ok)layers.create(image,request.width,request.height,request.format==C3X_GPU_RGB555?Format::rgb555:request.format==C3X_GPU_RGB565?Format::rgb565:Format::bgra32);}
         else if(request.action==C3X_GPU_UPLOAD){auto before=gpu.stats().uploads;ok=image!=map&&request.revision>0&&gpu.upload(image,request.revision,pixels.data(),pixels.size());
             if(ok&&gpu.stats().uploads!=before)try{layers.source(image,gpu.texture(image));}catch(std::exception const& e){OutputDebugStringA("[C3X renderer] retained admission: ");OutputDebugStringA(e.what());OutputDebugStringA("\n");layers.discard();}}
@@ -366,6 +390,8 @@ public:
             for(unsigned y=0;y<d.Height;++y)std::memcpy(output.data()+std::size_t(y)*d.Width,static_cast<char*>(data.pData)+std::size_t(y)*data.RowPitch,d.Width*4);
             context->Unmap(stage.Get(),0);++readbacks;ok=true;gpu.record_readback(image,output.data(),output.size());
         }
+        if(profile.enabled){profile.resource_ms+=profile.since(mark);auto total=profile.since(began);
+            profile.total_ms+=total;profile.max_ms=std::max(profile.max_ms,total);profile.report();}
         auto counts=gpu.stats();result.image=std::int64_t(image);result.pixel_count=unsigned(output.size());
         result.resident_bytes=std::int64_t(counts.resident_bytes);result.uploads=std::int64_t(counts.uploads);
         result.commands=std::int64_t(counts.commands);result.readbacks=std::int64_t(readbacks);

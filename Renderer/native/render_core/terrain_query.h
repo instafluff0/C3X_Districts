@@ -14,7 +14,22 @@ constexpr unsigned render_core_revision = 1;
 constexpr double mountain_scale = 1.30;
 constexpr double volcano_scale = 1.60;
 constexpr double volcano_footprint = .62 / volcano_scale;
-struct Tile { int base = 2, real = 2; bool present = false; };
+// hidden: the viewer has not explored this tile (ViewerTopology bit 25).
+struct Tile { int base = 2, real = 2; bool present = false, hidden = false; };
+// Revealed ground meets an unexplored tile at the 2.5 datum. No terrain is
+// drawn there and its fog is a flat diamond, so ground raised up to that edge
+// would expose the flat underlay below it (or a cut silhouette). Returns 1
+// beyond `width` tile units from every hidden cell.
+template<class Hidden> float hidden_taper(float x,float y,Hidden hidden,float width=.25f){
+    int c=int(std::floor(x)),r=int(std::floor(y));
+    float nearest=width;
+    for(int dr=-1;dr<=1;++dr)for(int dc=-1;dc<=1;++dc){
+        if(!hidden(c+dc,r+dr))continue;
+        float dx=dc<0?x-float(c):dc>0?float(c+1)-x:0.f,dy=dr<0?y-float(r):dr>0?float(r+1)-y:0.f;
+        nearest=std::min(nearest,std::sqrt(dx*dx+dy*dy));
+    }
+    float t=nearest/width;return t*t*(3-2*t);
+}
 struct World { int width = 100, height = 100; bool wrap_x = false, wrap_y = false; };
 struct Point {
     double x = 0, y = 0;

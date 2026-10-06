@@ -25,6 +25,7 @@ class ReflectionClosureTests(unittest.TestCase):
         run_cpp(GPU_STUB + r'''
 #define C3X_RENDERER64_FRESH 1
 #include <chrono>
+#include <climits>
 #include "Renderer/native/scene_projection.h"
 #include <cstring>
 #include "Renderer/native/render_core/body_placement_requirements.h"
@@ -53,6 +54,8 @@ struct Harness {
  static constexpr int region_margin_x=320,region_margin_y=192,roi_quantum=128;
  std::array<std::int64_t,11> roi_key{};std::uint64_t roi_revision=1,roi_receiver_check=0,static_receiver_revision=0,membership=1;
  unsigned queries=0;
+ struct StaticRect {int left=0,top=0,right=0,bottom=0;} shadow_field;
+ struct Options {bool shadow_tight=false;};Options sandbox_perf_options()const{return {};}
  float zoom_destination()const{return 1.f;}
  bool canonical_hidden()const{return false;}
  std::uint64_t view_revision()const{return membership;}
@@ -69,6 +72,8 @@ int main(){
  h.all_visible[1]={main,reflected,main};h.guard[1]={main,guarded,irrelevant,aquatic};ViewportShaderSettings settings;
  // One region-of-interest walk owns body placements for every lane.
  assert(h.update_roi(settings,1000,800) && h.queries==1);
+ // The receiver field is recorded in source pixels (screen minus translation).
+ assert(h.shadow_field.left<0 && h.shadow_field.right>1000 && h.shadow_field.top<0 && h.shadow_field.bottom>800);
  auto has=[&](GeometryDrawRecord const& draw){auto expected=h.renderer.shared_instance_draw_key(1,GeometryDrawReference(draw));
   for(auto const& entry:h.body_requirements.entries)if(entry.key==expected)return true;return false;};
  assert(has(main) && has(reflected) && has(guarded) && has(aquatic) && !has(original) && !has(irrelevant));

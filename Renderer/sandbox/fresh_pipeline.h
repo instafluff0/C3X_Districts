@@ -477,7 +477,9 @@ float4 PSSandboxAquaticFeature(FeaturePixelInput input) : SV_Target {
                 "(base+"+std::to_string(match->offset)+"u));\n";
         }
         if(decode.empty())return false;
-        shader.insert(close+2,R"(
+        // Shared by both pulled entries: redirect the occurrence terms after
+        // the viewport cbuffer, then load one page record per vertex.
+        std::string const redirect=R"(
 static float2 c3x_pulled_translation;
 static float c3x_pulled_depth_translation;
 static float c3x_pulled_kind;
@@ -486,8 +488,8 @@ static float4 c3x_pulled_projection;
 #define c3x_viewport_depth_translation c3x_pulled_depth_translation
 #define c3x_viewport_translation_padding c3x_pulled_kind
 #define c3x_content_projection c3x_pulled_projection
-)");
-        shader+=R"(
+)";
+        std::string const helpers=R"(
 struct C3XPulledRecord {uint first,count,vertex_byte,index_byte;uint index16,stride,vertices,r1;float2 translation;float kind,r2;float4 projection;};
 StructuredBuffer<C3XPulledRecord> c3x_pulled_records : register(t60);
 ByteAddressBuffer c3x_pulled_vertices : register(t61);
@@ -514,19 +516,32 @@ uint c3x_pulled_vertex_address(uint vertex) {
     c3x_pulled_projection=r.projection;
     return r.vertex_byte+min(index,r.vertices-1)*r.stride;
 }
-PixelInput VSIntegratedPulled(uint vertex : SV_VertexID) {
+)";
+        shader.insert(close+2,redirect);
+        shader+=helpers+R"(PixelInput VSIntegratedPulled(uint vertex : SV_VertexID) {
     uint base=c3x_pulled_vertex_address(vertex);
     IntegratedVertexInput input=(IntegratedVertexInput)0;
 )"+decode+R"(
     return VSIntegrated(input);
 }
 )";
-        // The packed feature layout (feature_input_layout, 48 bytes) is fixed
-        // by the renderer; use it only when the source declares exactly it.
-        bool feature_layout=shader.find("struct PackedFeatureInput {\n float3 position:POSITION;float2 uv:TEXCOORD0;float3 normal:NORMAL;\n float material:TEXCOORD6;float3 world:TEXCOORD14;\n};")!=std::string::npos &&
-            shader.find("FeaturePixelInput VSIntegratedFeature(PackedFeatureInput packed)")!=std::string::npos;
-        if(feature_layout)shader+=R"(
-FeaturePixelInput VSIntegratedFeaturePulled(uint vertex : SV_VertexID) {
+        // Feature records must keep the interpolant layout of the feature
+        // pixel shader. Its FeaturePixelInput carries city AO/tangent/emissive
+        // registers ahead of the five that hydrology's declares, so a feature
+        // vertex shader compiled from hydrology.hlsl linked by position and
+        // fed the pixel shader garbage UV, normal and material id (flat gray
+        // coastal rocks, unshaded wherever eight or more records batched).
+        // Compile it from the same feature source as the ordinary path; the
+        // packed 48-byte layout must still match exactly.
+        auto features=source("feature.hlsl");
+        auto feature_cbuffer=features.find("cbuffer C3XViewportSettings");
+        auto feature_close=feature_cbuffer==std::string::npos?feature_cbuffer:features.find("};",feature_cbuffer);
+        bool feature_layout=feature_close!=std::string::npos &&
+            features.find("struct PackedFeatureInput {\n float3 position:POSITION;float2 uv:TEXCOORD0;float3 normal:NORMAL;\n float material:TEXCOORD6;float3 world:TEXCOORD14;\n};")!=std::string::npos &&
+            features.find("FeaturePixelInput VSIntegratedFeature(PackedFeatureInput packed)")!=std::string::npos;
+        if(feature_layout){
+            features.insert(feature_close+2,redirect);
+            features+=helpers+R"(FeaturePixelInput VSIntegratedFeaturePulled(uint vertex : SV_VertexID) {
     uint base=c3x_pulled_vertex_address(vertex);
     PackedFeatureInput packed;
     packed.position=asfloat(c3x_pulled_vertices.Load3(base));
@@ -537,15 +552,16 @@ FeaturePixelInput VSIntegratedFeaturePulled(uint vertex : SV_VertexID) {
     return VSIntegratedFeature(packed);
 }
 )";
-        auto compile=[&](char const* entry,ID3D11VertexShader** target){
+        }
+        auto compile=[&](std::string const& text,char const* entry,ID3D11VertexShader** target){
             Microsoft::WRL::ComPtr<ID3DBlob> code,errors;
-            HRESULT hr=D3DCompile(shader.data(),shader.size(),"fresh_pulled",nullptr,nullptr,entry,"vs_5_0",
+            HRESULT hr=D3DCompile(text.data(),text.size(),"fresh_pulled",nullptr,nullptr,entry,"vs_5_0",
                 D3DCOMPILE_OPTIMIZATION_LEVEL3,0,&code,&errors);
             if(errors&&FAILED(hr))renderer.trace.write("fresh-pulled-shader",static_cast<char const*>(errors->GetBufferPointer()),true);
             return SUCCEEDED(hr)&&SUCCEEDED(renderer.device->CreateVertexShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,target));
         };
-        if(!compile("VSIntegratedPulled",output))return false;
-        if(feature_layout && !compile("VSIntegratedFeaturePulled",feature))
+        if(!compile(shader,"VSIntegratedPulled",output))return false;
+        if(feature_layout && !compile(features,"VSIntegratedFeaturePulled",feature))
             renderer.trace.write("fresh-pulled-shader","feature layout unavailable; feature records use per-record submission",true);
         return true;
     }
@@ -1350,6 +1366,15 @@ struct SandboxSceneShadow {
         return {revision,scene,renderer.content_revision,renderer.device_generation,unsigned(renderer.geometry_canonical_world),
             std::uint64_t(dims.width),std::uint64_t(dims.height),unsigned(dims.wrap_x),unsigned(dims.wrap_y)};
     }
+    // A complete atlas for exactly this scene and caster set is reused when its
+    // inputs are still current. While a camera job runs, ambient frames draw
+    // the borrowed completed view: an immutable snapshot whose casters the
+    // atlas was built from. The job has already applied newer topology, so
+    // validating against it failed and redrew every page on every frame
+    // after a unit move (25 pages, ~20 ms) until the job completed.
+    bool atlas_reusable(unsigned reuse_failures){
+        return !reuse_failures && (renderer.borrowed_scene_frame || atlas_dependencies(false));
+    }
     template<class BodyInputs,class RetireCompletedPlans> bool render(GeometryDrawView::Records const& receivers,std::uint64_t scene,std::uint64_t revision,std::uint64_t membership,BodyInputs const& inputs,RetireCompletedPlans const& retire_completed_plans) {
         SandboxPassWorkload::Scope pass(*work,SandboxPassWorkload::shadow);
         // Profiling laps: refresh, receivers, body placements, page proofs,
@@ -1357,6 +1382,7 @@ struct SandboxSceneShadow {
         std::array<double,8> laps{};auto lap_clock=std::chrono::steady_clock::now();
         auto lap=[&](unsigned slot){auto now=std::chrono::steady_clock::now();
             laps[slot]+=std::chrono::duration<double,std::milli>(now-lap_clock).count();lap_clock=now;};
+        if(!renderer.borrowed_scene_frame)renderer.borrowed_scene_stale=true;
         if (!ensure() || !refresh_casters(membership)) return false;
         lap(0);
         float needed[4]={std::numeric_limits<float>::max(),std::numeric_limits<float>::max(),
@@ -1410,10 +1436,12 @@ struct SandboxSceneShadow {
         bool body_covered=renderer.shared_instances.valid(shared_front) && inputs.covers(shared_front);
         if(body_covered)++body_placement_reuses;
         if(!body_covered&&!prepare_required_instances(inputs,retire_completed_plans))return false;
-        if (atlas_complete && renderer.shared_instances.valid(shadow_front) && prepared_signature==membership &&
-            signature==scene && wrap_basis==wrap_query &&
-            light_basis==renderer.shadow_basis &&
-            sampling_grid.covers(query_grid) && atlas_dependencies(false)){if(work->enabled)++work->row().reuses;return true;}
+        // Which reuse conditions failed (bit set = failed), for the trace below.
+        unsigned reuse_failures=unsigned(!atlas_complete)|unsigned(!renderer.shared_instances.valid(shadow_front))<<1|
+            unsigned(prepared_signature!=membership)<<2|unsigned(signature!=scene)<<3|unsigned(wrap_basis!=wrap_query)<<4|
+            unsigned(light_basis!=renderer.shadow_basis)<<5|unsigned(!sampling_grid.covers(query_grid))<<6;
+        if (atlas_reusable(reuse_failures)){if(work->enabled)++work->row().reuses;return true;}
+        if(!reuse_failures)reuse_failures=1u<<7;
         if(work->enabled)++work->row().rebuilds;
         lap(2);
         atlas_complete=false;
@@ -1421,7 +1449,7 @@ struct SandboxSceneShadow {
         auto coverage=sampling_grid.coverage();
         std::copy(coverage.begin(),coverage.end(),box);
         bool dependency_proved=atlas_dependencies(true);
-        bool proved=dependency_proved;
+        bool proved=dependency_proved;unsigned page_proof_stage=dependency_proved?0u:1u;
         Pages::Context page_context={renderer.topology_cache.scope_sequence(),renderer.content_revision,
             renderer.device_generation,unsigned(renderer.geometry_canonical_world)};
         auto bits=[](float value){std::uint32_t word=0;std::memcpy(&word,&value,4);return std::uint64_t(word);};
@@ -1434,11 +1462,12 @@ struct SandboxSceneShadow {
             page_contents.begin_incremental(sampling_grid,page_context,renderer.shadow_basis);
             for(auto const& key:input_keys)page_contents.mark(key);
             proved=page_contents.retire_missing([&](auto bytes){return shadow_metadata_admit(atlas_inputs.bytes(),bytes);});
+            if(!proved)page_proof_stage=2;
             for(std::size_t input=0;input<caster_inputs.size();++input){auto const& caster=caster_inputs[input];auto const& key=input_keys[input];
                 if(!page_contents.update(key,sampling_grid,[&]{return Shadow::project(caster.bounds,caster.offset,renderer.shadow_basis);},
-                    [&](auto bytes){return shadow_metadata_admit(atlas_inputs.bytes(),bytes);})){proved=false;break;}}
-            if(proved)proved=page_contents.finish_incremental(sampling_grid,true,
-                [&](auto bytes){return shadow_metadata_admit(atlas_inputs.bytes(),bytes);});
+                    [&](auto bytes){return shadow_metadata_admit(atlas_inputs.bytes(),bytes);})){proved=false;page_proof_stage=3;break;}}
+            if(proved){proved=page_contents.finish_incremental(sampling_grid,true,
+                [&](auto bytes){return shadow_metadata_admit(atlas_inputs.bytes(),bytes);});if(!proved)page_proof_stage=4;}
         }catch(...){proved=false;}
         if(proved && !shadow_metadata_admit(atlas_inputs.bytes(),page_contents.bytes()))proved=false;
         if(!proved){page_contents.clear();
@@ -1462,7 +1491,8 @@ struct SandboxSceneShadow {
         for(auto const& caster:casters)if(caster.instances&&!caster.instances->empty())placement_keys.push_back(shared_caster_placement_key(caster));
         std::sort(placement_keys.begin(),placement_keys.end());
         if(!renderer.shared_instances.valid(shadow_front) || shadow_front->identity[1]!=renderer.device_generation ||
-                shadow_front->identity[2]!=renderer.content_revision || placement_keys!=prepared_instances){
+                shadow_front->identity[2]!=renderer.content_revision || placement_keys!=prepared_instances ||
+                (instance_groups.empty() && !placement_keys.empty())){
             std::vector<InstanceGroup>().swap(instance_groups);
             if(!prepare_required_instances(inputs,retire_completed_plans,true))return false;
             prepared_instances=std::move(placement_keys);
@@ -1626,9 +1656,9 @@ struct SandboxSceneShadow {
         ++builds;
         update_sampling_identity(scene,wrap_query);
         lap(7);
-        char detail[320];sprintf_s(detail,"refresh_ms=%.2f receivers_ms=%.2f body_ms=%.2f proofs_ms=%.2f casters_ms=%.2f terrain_ms=%.2f bounds_ms=%.2f draw_ms=%.2f casters=%zu inputs=%zu pages=%u draws=%llu proved=%u",
+        char detail[384];sprintf_s(detail,"refresh_ms=%.2f receivers_ms=%.2f body_ms=%.2f proofs_ms=%.2f casters_ms=%.2f terrain_ms=%.2f bounds_ms=%.2f draw_ms=%.2f casters=%zu inputs=%zu pages=%u draws=%llu proved=%u reuse_failures=%u proof_stage=%u borrowed=%u",
             laps[0],laps[1],laps[2],laps[3],laps[4],laps[5],laps[6],laps[7],casters.size(),caster_inputs.size(),drawn_pages,
-            static_cast<unsigned long long>(draws),unsigned(proved));
+            static_cast<unsigned long long>(draws),unsigned(proved),reuse_failures,page_proof_stage,unsigned(renderer.borrowed_scene_frame));
         renderer.trace.write("fresh-shadow-build",detail);
         return true;
     }
@@ -1830,6 +1860,8 @@ struct SandboxFreshPipeline {
     // every frame); past a limit the refinement completes synchronously.
     unsigned refine_restarts=0;
     GeometryDrawView::Records roi_records,roi_shadow_records;
+    // Source-pixel rectangle whose receivers the shadow atlas covers.
+    StaticRect shadow_field{INT_MIN/4,INT_MIN/4,INT_MAX/4,INT_MAX/4};
     std::array<std::int64_t,11> roi_key{};
     std::uint64_t roi_revision=1,roi_receiver_check=0;
     static constexpr int roi_quantum=128;
@@ -1976,7 +2008,12 @@ struct SandboxFreshPipeline {
         resident={};static_visible={};water_visible={};reflection_visible={};all_visible={};
         roi_records={};roi_shadow_records={};selected_lighting.clear();
         body_requirements.clear();body_requirements_valid=false;
-        shadow.casters.clear();shadow.caster_inputs.clear();shadow.instance_groups.clear();
+        // The instance groups are the forests' only shadow submission. Drop
+        // their placement keys too: unchanged keys otherwise reused the empty
+        // groups, and every page drawn then lacked forest shadows while its
+        // proof still certified it (forests regained shadows only near later
+        // repairs, such as a selected unit).
+        shadow.casters.clear();shadow.caster_inputs.clear();shadow.instance_groups.clear();shadow.prepared_instances.clear();
         shadow.caster_signature=~std::uint64_t(0);shadow.prepared_signature=~std::uint64_t(0);
         shadow.caster_lease.reset();resident_lease.reset();
         resident_signature=0;visibility_valid=false;
@@ -3454,7 +3491,9 @@ struct SandboxFreshPipeline {
         unsigned lane=StaticRasters::lane_of(zoom);
         if(static_rasters.lane_refining(lane))return true;
         auto const& shown=static_rasters.states[static_rasters.front_slot[lane]];
-        return !shown.valid || shown.stale || shown.projection!=zoom;
+        // Journaled caster changes repair in the next drawn frame; do not let
+        // an idle display wait for an unrelated event to draw it.
+        return !shown.valid || shown.stale || shown.projection!=zoom || shown.shadow_serial<shadow.change_serial;
     }
     // Adaptive pixels-per-frame for refinement: shrink when frames run long,
     // grow while they fit in the vsync interval. The budget is never applied
@@ -3608,6 +3647,10 @@ struct SandboxFreshPipeline {
             retained.revision=kept?slot.revision:~0ull;
         }
         ++slot.metrics.strip_fills;++slot.metrics.reasons[c3x_renderer::render_core::raster_strip_fills];
+        if(static_slot && shadow_field.left!=INT_MIN/4){
+            auto const& f=shadow_field;
+            slot.unshadowed=slot.unshadowed.joined(strip.outside(source_region_rect(f.left,f.top,f.right,f.bottom,slot_view,0)));
+        }
         if(track_dependencies && !raster_dependencies(raster_inputs[index],slot_view,rect,true))
             raster_inputs[index].complete=false;
         return true;
@@ -3688,7 +3731,7 @@ struct SandboxFreshPipeline {
     }
     // Shadow footprints journaled since a slot was drawn (repair_front input).
     std::vector<std::array<int,4>> shadow_dirty;
-    bool repair_front(unsigned index,StaticState& slot,ViewportShaderSettings const& screen){
+    bool repair_front(unsigned index,StaticState& slot,ViewportShaderSettings const& screen,StaticRect ring=StaticRect()){
 #ifdef C3X_RENDERER64_FRESH
         if(sandbox_perf_options().legacy || slot.covered.empty())return false;
         auto& inputs=raster_inputs[index];
@@ -3750,6 +3793,8 @@ struct SandboxFreshPipeline {
             r={std::max(r.left,c.left),std::max(r.top,c.top),std::min(r.right,c.right),std::min(r.bottom,c.bottom)};
             if(!r.empty()){dirty.push_back(r);if(dirty.size()>4096)overflow=true;}
         }
+        ring=ring.clipped(c);
+        if(!ring.empty())dirty.push_back(ring);
         static_decision.repair_changed=unsigned(dirty.size());static_decision.repair_reordered=unsigned(reordered.size());
         if(overflow){static_decision.repair=2;return false;}
         // A changed dependency without a changed contributor cannot be located.
@@ -3798,7 +3843,7 @@ struct SandboxFreshPipeline {
         unsigned patch_index=index^1u;
         auto& patch=static_rasters.states[patch_index];
         if(!ensure_linear_target(patch.region,region_width_px,region_height_px,scene_samples,false))return false;
-        patch.valid=false;patch.stale=true;patch.refining=false;patch.covered={};++patch.revision;
+        patch.valid=false;patch.stale=true;patch.refining=false;patch.covered={};patch.unshadowed={};++patch.revision;
         raster_inputs[patch_index].clear();
         patch.camera_x=slot.camera_x;patch.camera_y=slot.camera_y;
         patch.projection=slot.projection;patch.depth_translation=slot.depth_translation;
@@ -3832,7 +3877,7 @@ struct SandboxFreshPipeline {
                 work.draw(3);
             }
         }
-        ++slot.revision;
+        ++slot.revision;slot.unshadowed=slot.unshadowed.joined(patch.unshadowed);
         repaired.revision=overlays?slot.revision:~0ull;
         renderer.context->OMSetRenderTargets(0,nullptr,nullptr);
         static_decision.repair=0;
@@ -3861,7 +3906,7 @@ struct SandboxFreshPipeline {
         slot.environment_hour=visual_hour;slot.environment_season=previous_season;slot.shadow_builds=shadow.builds;
         slot.shadow_serial=shadow.change_serial;
         slot.geometry_epoch=renderer.tile_geometry_epoch;
-        slot.covered={};slot.valid=false;slot.stale=false;slot.refining=true;++slot.revision;
+        slot.covered={};slot.unshadowed={};slot.valid=false;slot.stale=false;slot.refining=true;++slot.revision;
         raster_inputs[index].clear();
         auto& retained=overlay_slots[index];retained.revision=~0ull;
         if(overlay_enabled() && overlay_target(index)){
@@ -3920,6 +3965,8 @@ struct SandboxFreshPipeline {
         destination.shadow_serial=source.shadow_serial;
         destination.geometry_epoch=source.geometry_epoch;
         destination.covered=moved;destination.valid=true;destination.stale=source.stale;destination.refining=false;
+        auto const& u=source.unshadowed;
+        destination.unshadowed=StaticRect{u.left+shift.x,u.top+shift.y,u.right+shift.x,u.bottom+shift.y}.clipped(moved);
         ++destination.revision;
         raster_inputs[destination_index].clear();
         {
@@ -4069,23 +4116,54 @@ struct SandboxFreshPipeline {
                 static_rasters.invalidate(front_index,c3x_renderer::render_core::raster_environment);
             if(displayed.valid && !displayed.covered.empty()){
                 // Exact content proofs (journal fast path when nothing changed).
-                bool proven=false;
-                {
+                // The borrowed completed view (a camera job is running) is the
+                // snapshot this slot was drawn from. Topology the job has already
+                // applied does not change it; judging it by that topology
+                // repaired the same changed region on every frame after a move.
+                bool proven=renderer.borrowed_scene_frame;
+                if(!proven){
                     ZoomScope scope_zoom(*this,displayed.projection);
                     proven=raster_dependencies(raster_inputs[front_index],slot_settings(displayed,settings),
                         {displayed.covered.left,displayed.covered.top,displayed.covered.right,displayed.covered.bottom},false);
                 }
                 shadow_dirty.clear();
+                StaticRect field{},ring{};
                 if(!displayed.stale){
                     auto const& changes=shadow.shadow_changes;auto serial=displayed.shadow_serial;
                     auto first=std::upper_bound(changes.begin(),changes.end(),serial,
                         [](std::uint64_t value,auto const& change){return value<change.serial;});
-                    for(;first!=changes.end();++first)shadow_dirty.push_back(first->source);
+                    // Footprints are chunk coordinates. Draw records and raster
+                    // keys add the resident basis (and wrapped copies add one
+                    // map width), so convert them the same way before repair.
+                    int bx=int(resident_basis_x),by=int(resident_basis_y);
+                    for(;first!=changes.end();++first)for(int copy=-1;copy<=1;++copy){
+                        if(copy&&!wrap_pixels)continue;auto const& r=first->source;int wx=bx+copy*wrap_pixels;
+                        shadow_dirty.push_back({r[0]+wx,r[1]+by,r[2]+wx,r[3]+by});}
+                    // Pixels drawn while the receiver field was narrower (the
+                    // hidden canonical lane during a zoom-in, or a lane refined
+                    // toward a closer destination) sampled no shadow page.
+                    // Repair the part the current field covers.
+                    if(!displayed.unshadowed.empty() && shadow.atlas_complete && !(lane==0 && canonical_hidden())){
+                        ZoomScope scope_zoom(*this,displayed.projection);
+                        auto const& f=shadow_field;
+                        field=f.left==INT_MIN/4?displayed.covered:
+                            source_region_rect(f.left,f.top,f.right,f.bottom,slot_settings(displayed,settings),0);
+                        ring=displayed.unshadowed.clipped(field).clipped(displayed.covered);
+                    }
                 }
-                if(proven && shadow_dirty.empty()){static_decision.entry|=8u;displayed.shadow_serial=shadow.change_serial;}
-                else if(repair_front(front_index,displayed,settings)){static_decision.entry|=16u;displayed.shadow_serial=shadow.change_serial;}
+                if(!displayed.unshadowed.empty())static_decision.entry|=ring.empty()?128u:256u;
+                bool shadow_only=proven && shadow_dirty.empty();
+                if(shadow_only && ring.empty()){static_decision.entry|=8u;displayed.shadow_serial=shadow.change_serial;}
+                else if(shadow_only && ring.area()*100>displayed.covered.area()*45)
+                    static_rasters.invalidate(front_index,c3x_renderer::render_core::raster_shadow); // refine behind it
+                else if(repair_front(front_index,displayed,settings,ring)){static_decision.entry|=16u;displayed.shadow_serial=shadow.change_serial;
+                    // Bounds that still reach into the field cannot shrink; stop
+                    // tracking them rather than repairing on every frame.
+                    if(!ring.empty()){auto rest=displayed.unshadowed.outside(field);
+                        displayed.unshadowed=rest.clipped(field).empty()?rest:StaticRect{};}}
                 else if(proven && static_decision.repair==4)displayed.shadow_serial=shadow.change_serial; // footprints outside the slot
-                else static_rasters.invalidate(front_index,c3x_renderer::render_core::raster_scene);
+                else static_rasters.invalidate(front_index,shadow_only?c3x_renderer::render_core::raster_shadow:
+                    c3x_renderer::render_core::raster_scene);
                 shadow_dirty.clear();
             }
         }
@@ -4362,6 +4440,9 @@ struct SandboxFreshPipeline {
         for(unsigned layer=0;layer<geometry_layer_count;++layer)
             if(layer!=geometry_shadow && !roi_shadow_records[layer].empty())any_receiver=true;
         if(!any_receiver)roi_shadow_records=all_visible;
+        shadow_field=any_receiver && !sandbox_perf_options().shadow_tight?StaticRect{int(shadow_clip.left)-int(roi.translation[0]),int(shadow_clip.top)-int(roi.translation[1]),
+            int(shadow_clip.right)-int(roi.translation[0]),int(shadow_clip.bottom)-int(roi.translation[1])}:
+            StaticRect{INT_MIN/4,INT_MIN/4,INT_MAX/4,INT_MAX/4};
         roi_key=next_key;++roi_revision;body_requirements_valid=true;roi_receiver_check=static_receiver_revision;
         ++body_requirement_builds;body_requirement_visits=body_requirements.visits;
         body_requirement_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-started).count();
@@ -4667,10 +4748,11 @@ struct SandboxFreshPipeline {
         // preview exists). May move `settings` by a sub-pixel snap.
         if(!compose_static(settings,int(w),int(h)))return fail("static_layer");
         if(renderer.trace.level>=2){auto const& d=static_decision;char detail[512];
-            sprintf_s(detail,"zoom=%.4f lane=%u camera=%d,%d slot=%d,%d reusable=%d recenter=%d shifted=%d refine=%d sync=%d preview=%d covers=%d,%d,%d missing=%lld static_ms=%.2f entry=%u home_entry=%u input_kb=%zu repair=%u changed=%u reordered=%u rects=%u percent=%u boot_draw_ms=%.1f boot_deps_ms=%.1f boot_kpx=%lld",
+            sprintf_s(detail,"zoom=%.4f lane=%u camera=%d,%d slot=%d,%d reusable=%d recenter=%d shifted=%d refine=%d sync=%d preview=%d covers=%d,%d,%d missing=%lld static_ms=%.2f entry=%u home_entry=%u input_kb=%zu repair=%u changed=%u reordered=%u rects=%u percent=%u boot_draw_ms=%.1f boot_deps_ms=%.1f boot_kpx=%lld borrowed=%u",
                 projection_zoom,d.lane,d.camera_x,d.camera_y,d.slot_x,d.slot_y,d.reusable,d.recenter,d.shifted,d.refine,d.sync,d.preview,
                 d.front_cover,d.home_cover,d.boot_cover,d.missing,last_static_ms,d.entry,d.home_entry,d.input_bytes/1024,
-                d.repair,d.repair_changed,d.repair_reordered,d.repair_rects,d.repair_percent,d.boot_draw_ms,d.boot_deps_ms,d.boot_area/1000);
+                d.repair,d.repair_changed,d.repair_reordered,d.repair_rects,d.repair_percent,d.boot_draw_ms,d.boot_deps_ms,d.boot_area/1000,
+                unsigned(renderer.borrowed_scene_frame));
             renderer.trace.write("static-compose",detail,false);}
         QueryPerformanceCounter(&ticks[3]);c3x_renderer::render_core::gpu_timeline().mark(renderer.context,"static");
 #ifdef C3X_RENDERER64_FRESH

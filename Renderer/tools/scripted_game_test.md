@@ -500,6 +500,27 @@ All runs preserve the original save and report no renderer failures. Neither
 October air run triggered interception. These samples do not certify continuous
 flight, audio alignment or current-build interception.
 
+## Performance regression checks
+
+These read a copied capture on the Mac. Each was confirmed to fail on a
+capture from before its fix and to pass after it (performance review 4t, 4v).
+
+- `python3 Renderer/tools/check_borrowed_snapshot.py CAPTURE` needs
+  `-Scenario unit-turn -ProfileRenderer` (trace level 2). During camera jobs,
+  ambient frames draw the borrowed completed view. The check fails if they
+  redraw that snapshot's shadow atlas or repair its static raster against
+  topology the job has already applied. That redraw made water and units skip
+  after unit moves.
+- `python3 Renderer/tools/check_native_call_waits.py CAPTURE [limit_ms]`
+  covers scenarios that set input tracing (`near`, `zoom`, `reveal-scroll`).
+  It fails if any 2 s window spent more than 300 ms with Civ III's thread
+  blocked on the input-coverage worker. Before the fix this reached 940 ms
+  while scrolling; after it, the worst window was about 240 ms.
+
+Their logic is covered on the Mac by `test_borrowed_snapshot_reuse.py` and
+`test_hit_scene_fast_paths.py`, together with exact hit-test answers and
+mutation-checked counters for the coverage worker's fast paths.
+
 ## Turn and held-mouse regressions
 
 `-Scenario turn -Seconds 90` skips the two initial units and ends two turns in

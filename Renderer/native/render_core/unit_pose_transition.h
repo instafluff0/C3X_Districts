@@ -90,7 +90,7 @@ public:
         float delta=std::remainder(target-s.target,6.28318530718f);
         if(std::abs(delta)>1e-5f){
             s.from=s.current;s.target=s.from+std::remainder(target-s.from,6.28318530718f);s.started=ticks;
-            s.duration=.12+.24*std::abs(s.target-s.from)/3.14159265359;
+            s.duration=.06+.12*std::abs(s.target-s.from)/3.14159265359;
         }
         float t=float(std::clamp(double(ticks-s.started)/frequency/s.duration,0.,1.));t=t*t*(3-2*t);
         s.current=s.from+(s.target-s.from)*t;s.ticks=ticks;return s.current;

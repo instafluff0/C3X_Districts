@@ -36,7 +36,7 @@ private:
         Instance source{};
         int dx=0,dy=0;
         long long started=-1,available=-1,frequency=0,committed_at=-1;
-        double turn=0,cycle_distance=0,start_x=0,start_y=0;
+        double turn=0,cycle_distance=0,start_x=0,start_y=0,speed=UnitLocomotion::default_speed;
         double distance()const{return std::hypot(double(dx)*64.-start_x,double(dy)*64.-start_y*2.);}
         bool committed=false;
     };
@@ -103,7 +103,7 @@ public:
             if(it->second.empty())return 0.;
             auto const& motion=it->second.front();
             if(motion.started<0||motion.frequency!=scene_frequency)return 0.;
-            double duration=motion.turn+UnitLocomotion::duration(motion.distance());
+            double duration=motion.turn+UnitLocomotion::duration(motion.distance(),motion.speed);
             double left=duration-double(scene_ticks-motion_held-motion.started)/scene_frequency;
             remaining=it==motions.begin()?left:std::min(remaining,left);
         }
@@ -247,6 +247,7 @@ public:
         }
         if(queue.size()>=8)return false; // Bounded directed-action admission.
         Motion motion{};motion.event=value;motion.dx=dx;motion.dy=dy;
+        if(value.speed>0)motion.speed=value.speed;
         motion.source=queue.empty()?found->second:queue.back().source;
         auto offset=pose_offsets.find(value.unit_id);
         if(queue.empty()&&offset!=pose_offsets.end()){
@@ -462,7 +463,7 @@ public:
                     auto& next=queue.front();
                     if(next.started<0){next.started=motion_ticks;next.frequency=frequency;}
                     double distance=next.distance();
-                    double duration=next.turn+UnitLocomotion::duration(distance);
+                    double duration=next.turn+UnitLocomotion::duration(distance,next.speed);
                     bool finished=next.frequency==frequency&&double(motion_ticks-next.started)/frequency>=duration;
                     if(finished&&next.committed){
                         if(queue.size()==1){
@@ -544,14 +545,14 @@ public:
                 pose.action=std::size_t(clip-actions.begin());
                 double seconds=motion->frequency==frequency?std::max(0.,double(motion_ticks-motion->started)/frequency):0.;
                 double distance=motion->distance();
-                double covered=UnitLocomotion::sample(seconds-motion->turn,distance);
+                double covered=UnitLocomotion::sample(seconds-motion->turn,distance,motion->speed);
                 double progress=distance>0?covered/distance:1.;
                 pose.draw=item.occurrence;pose.draw.action=2;
                 pose.draw.direction=UnitLocomotion::direction(motion->dx,motion->dy);
                 travel_x=(motion->start_x+(motion->dx*64.-motion->start_x)*progress)*frame.tile_width/128.;
                 travel_y=(motion->start_y+(motion->dy*32.-motion->start_y)*progress)*frame.tile_height/64.;
                 pose.draw.frame_count=1000;
-                pose.draw.action_cursor=int(std::fmod((motion->cycle_distance+covered)/UnitLocomotion::speed,double(clip->duration))/clip->duration*1000.);
+                pose.draw.action_cursor=int(std::fmod((motion->cycle_distance+covered)/motion->speed,double(clip->duration))/clip->duration*1000.);
                 // Native confirmation may arrive after visible travel. Hold
                 // the accepted endpoint in idle instead of running in place.
                 if(progress>=1.||seconds<motion->turn){

@@ -101,15 +101,16 @@ bool load_feature_bundle(std::string const & path, FeatureBundle & output) {
     std::uint32_t version = 0, texture_count = 0, asset_count = 0, group_count = 0;
     if (!consume_u32(data, cursor, version) || !consume_u32(data, cursor, texture_count) ||
         !consume_u32(data, cursor, asset_count) || !consume_u32(data, cursor, group_count) ||
-        version != 1 || texture_count == 0 || texture_count > 32 || asset_count == 0 ||
-        asset_count > 256 || group_count == 0 || group_count > 16)
+        (version != 1 && version != 2) || texture_count == 0 || texture_count > 32 || asset_count == 0 ||
+        asset_count > 256 || (version == 1 && group_count == 0) || group_count > 16)
         return false;
+    auto pack_relative = [](std::string const & texture) {
+        return texture.find("..") == std::string::npos && texture.find(':') == std::string::npos &&
+            texture.front() != '/' && texture.front() != '\\';
+    };
     output.texture_paths.resize(texture_count);
     for (std::string & texture : output.texture_paths)
-        if (!consume_string(data, cursor, texture) ||
-            texture.find("..") != std::string::npos ||
-            texture.find(':') != std::string::npos ||
-            texture.front() == '/' || texture.front() == '\\')
+        if (!consume_string(data, cursor, texture) || !pack_relative(texture))
             return false;
     output.assets.resize(asset_count);
     for (FeatureAsset & asset : output.assets) {
@@ -153,7 +154,66 @@ bool load_feature_bundle(std::string const & path, FeatureBundle & output) {
                 return false;
         }
     }
+    if (version == 1)
+        return cursor == data.size();
+    // Version 2 appends baked compositions and their resource-name aliases.
+    std::uint32_t composition_count = 0, alias_count = 0;
+    auto finite = [](float value) { return std::isfinite(value) && std::abs(value) < 64.0f; };
+    if (!consume_u32(data, cursor, composition_count) || composition_count > 256)
+        return false;
+    output.compositions.resize(composition_count);
+    for (FeatureComposition & composition : output.compositions) {
+        std::uint32_t variant_count = 0;
+        if (!consume_string(data, cursor, composition.name) ||
+            !consume_u32(data, cursor, variant_count) || variant_count == 0 || variant_count > 16)
+            return false;
+        composition.variants.resize(variant_count);
+        for (auto & variant : composition.variants) {
+            std::uint32_t instance_count = 0;
+            if (!consume_u32(data, cursor, variant.terrain_mask) || variant.terrain_mask == 0 ||
+                !consume_u32(data, cursor, instance_count) || instance_count == 0 || instance_count > 256)
+                return false;
+            variant.instances.resize(instance_count);
+            for (FeatureComposition::Instance & item : variant.instances)
+                if (!consume_u32(data, cursor, item.asset) || item.asset >= asset_count ||
+                    !consume_float(data, cursor, item.u) || !consume_float(data, cursor, item.v) ||
+                    !consume_float(data, cursor, item.rotation) || !consume_float(data, cursor, item.scale) ||
+                    !consume_float(data, cursor, item.lift) || !consume_float(data, cursor, item.ground_fit) ||
+                    !finite(item.u) || !finite(item.v) || !finite(item.rotation) || !finite(item.lift) ||
+                    !(item.scale > 0.0f && item.scale < 16.0f) || !(item.ground_fit >= 0.0f && item.ground_fit < 1.0f))
+                    return false;
+        }
+    }
+    if (!consume_u32(data, cursor, alias_count) || alias_count > 1024)
+        return false;
+    output.composition_aliases.resize(alias_count);
+    for (auto & alias : output.composition_aliases)
+        if (!consume_string(data, cursor, alias.first) || !consume_u32(data, cursor, alias.second) ||
+            alias.second >= composition_count)
+            return false;
     return cursor == data.size();
+}
+
+FeatureComposition::Variant const & select_composition_variant(FeatureComposition const & composition,
+                                                               int real_terrain_type, std::uint32_t seed) {
+    std::uint32_t bit = real_terrain_type >= 0 && real_terrain_type < 32 ? 1u << real_terrain_type : 0u;
+    std::uint32_t matching = 0;
+    for (auto const & variant : composition.variants)
+        matching += (variant.terrain_mask & bit) != 0;
+    std::uint32_t pick = stable_hash(seed) % (matching ? matching : std::uint32_t(composition.variants.size()));
+    for (auto const & variant : composition.variants)
+        if ((!matching || (variant.terrain_mask & bit)) && pick-- == 0)
+            return variant;
+    return composition.variants.front();
+}
+
+FeatureComposition const * find_feature_composition(FeatureBundle const & bundle, char const * name) {
+    if (name == nullptr)
+        return nullptr;
+    for (auto const & alias : bundle.composition_aliases)
+        if (_stricmp(alias.first.c_str(), name) == 0)
+            return &bundle.compositions[alias.second];
+    return nullptr;
 }
 
 FeatureGroup const * find_feature_group(FeatureBundle const & bundle, char const * name) {

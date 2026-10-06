@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "c3x_renderer_api.h"
@@ -39,10 +40,24 @@ struct FeatureGroup {
     std::vector<FeaturePlacement> placements;
 };
 
+// Offline-baked tile composition: every model instance, including flat
+// "decal/" ground meshes, is already positioned (tile UV), rotated, scaled and
+// sunk by the asset pipeline. Instances draw in order (decals first). A
+// variant applies to the Civ III real terrain types in its mask; ground_fit
+// settles an instance on the lowest natural ground within that tile radius.
+struct FeatureComposition {
+    struct Instance {std::uint32_t asset = 0; float u = .5f, v = .5f, rotation = 0, scale = 1, lift = 0, ground_fit = 0;};
+    struct Variant {std::uint32_t terrain_mask = ~0u; std::vector<Instance> instances;};
+    std::string name;
+    std::vector<Variant> variants;
+};
+
 struct FeatureBundle {
     std::vector<std::string> texture_paths;
     std::vector<FeatureAsset> assets;
     std::vector<FeatureGroup> groups;
+    std::vector<FeatureComposition> compositions;
+    std::vector<std::pair<std::string, std::uint32_t>> composition_aliases;
 };
 
 struct TerrainFrameSignature {
@@ -57,6 +72,11 @@ struct TerrainFrameSignature {
 
 bool load_feature_bundle(std::string const & path, FeatureBundle & output);
 FeatureGroup const * find_feature_group(FeatureBundle const & bundle, char const * name);
+// Exact, case-insensitive match of a map resource name against baked aliases.
+FeatureComposition const * find_feature_composition(FeatureBundle const & bundle, char const * name);
+// Stable variant for a tile, preferring variants authored for its terrain.
+FeatureComposition::Variant const & select_composition_variant(FeatureComposition const & composition,
+                                                               int real_terrain_type, std::uint32_t seed);
 FeaturePlacement const * select_feature_placement(FeatureGroup const & group,
                                                   std::uint32_t seed);
 FeaturePlacement const * find_feature_placement_by_suffix(FeatureBundle const & bundle,

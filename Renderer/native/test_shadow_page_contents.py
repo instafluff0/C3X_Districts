@@ -396,9 +396,10 @@ int main(){
 
     def test_production_whole_atlas_gate_rejects_incomplete_draw_and_retry(self):
         source=(ROOT/'Renderer/sandbox/fresh_pipeline.h').read_text()
-        start=source.index('        if (atlas_complete && renderer.shared_instances.valid(shadow_front)')
+        start=source.index('        unsigned reuse_failures=unsigned(!atlas_complete)')
         end=source.index('        if(work->enabled)++work->row().rebuilds;',start)
         gate=source[start:end]
+        reusable=source[source.index('    bool atlas_reusable(unsigned reuse_failures){'):source.index('    template<class BodyInputs,class RetireCompletedPlans> bool render(')]
         run_cpp(r'''
 #include <array>
 #include <cassert>
@@ -409,11 +410,12 @@ struct State {
  std::uint64_t prepared_signature=3,signature=7;
  std::array<float,4> wrap_basis{};std::array<float,12> light_basis{};
  struct {struct {bool valid(std::shared_ptr<int> const& lease){return bool(lease);}}shared_instances;
-  std::array<float,12> shadow_basis{};}renderer;
+  std::array<float,12> shadow_basis{};bool borrowed_scene_frame=false;}renderer;
  struct Grid {bool covers(Grid const&)const{return true;}}sampling_grid;
  struct Work {bool enabled=false;struct {unsigned reuses=0;}count;auto& row(){return count;}}counts;
  Work* work=&counts;unsigned validations=0;
  bool atlas_dependencies(bool){++validations;return true;}
+'''+reusable+r'''
  bool reused(std::uint64_t membership,std::uint64_t scene,std::array<float,4> wrap_query,Grid query_grid){
 '''+gate+r'''
  return false;

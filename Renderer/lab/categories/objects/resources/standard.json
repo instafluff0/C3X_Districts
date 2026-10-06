@@ -23,7 +23,10 @@
       "detail",
       "gameplay",
       "water-detail",
-      "water-gameplay"
+      "water-gameplay",
+      "roster",
+      "relief",
+      "native-minerals"
     ]
   },
   "tests": [

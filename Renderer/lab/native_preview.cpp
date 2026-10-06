@@ -26,8 +26,26 @@ void lab_place_objects(std::vector<c3x_renderer_tile_v1>& tiles, int center_x, i
     if(!resources && !infrastructure && !shadows && !sites)return;
     char const*land[]={"Iron","Cattle","Horses","Wheat","Gold","Dyes"};
     char const*sea[]={"Fish","Whales"};
+    // Audit roster: "dx,dy,Name;..." supplied by the Lab dispatcher.
+    char roster[2048]={};
+    bool audit=resources && GetEnvironmentVariableA("C3X_LAB_RESOURCE_ROSTER",roster,sizeof(roster))>0;
     for(auto& tile:tiles) {
         int x=((tile.tile_x%map_width)+map_width)%map_width-center_x, y=tile.tile_y-center_y;
+        if(audit) {
+            int index=0;
+            for(char const* entry=roster;entry && *entry;++index) {
+                int dx=0,dy=0,used=0;
+                if(sscanf_s(entry,"%d,%d,%n",&dx,&dy,&used)==2 && dx==x && dy==y) {
+                    char const* end=std::strchr(entry+used,';');
+                    std::size_t length=std::min<std::size_t>(end?std::size_t(end-entry-used):std::strlen(entry+used),
+                        sizeof(tile.resource_name)-1);
+                    tile.resource_id=100+index;tile.resource_class=0;
+                    std::memcpy(tile.resource_name,entry+used,length);tile.resource_name[length]='\0';
+                }
+                entry=std::strchr(entry,';');if(entry)++entry;
+            }
+            continue;
+        }
         if(sites) {
             if(!camps && x==-2 && y==0)tile.improvement_flags|=C3X_RENDERER_IMPROVEMENT_GOODY_HUT;
             if(!huts && x==2 && y==0) {
@@ -78,6 +96,20 @@ bool lab_verify_objects(c3x_renderer_frame_v1 const& frame, c3x_renderer_output_
     if(!resources && !infrastructure && !shadows && !sites)return true;
     bool ok=output.replacement_tile_count==frame.tile_count && output.replacement_tile_flags;
     unsigned count=0,ownership=0;
+    char roster[8]={};
+    if(resources && GetEnvironmentVariableA("C3X_LAB_RESOURCE_ROSTER",roster,sizeof(roster))>0) {
+        // Census, not a gate: unreplaced resources keep their native sprite.
+        unsigned replaced=0;
+        for(unsigned i=0;i<frame.tile_count && ok;++i) {
+            auto const& tile=frame.tiles[i];
+            if(!(tile.tile_flags&C3X_RENDERER_TILE_RENDER) || tile.resource_id<0)continue;
+            bool custom=(output.replacement_tile_flags[i]&C3X_RENDERER_TILE_CUSTOM_RESOURCE_REPLACED)!=0;
+            std::printf("ROSTER %d,%d %s replaced=%d\n",tile.tile_x,tile.tile_y,tile.resource_name,custom?1:0);
+            ++count;replaced+=custom;
+        }
+        std::printf("%s category object study: resources roster=%u replaced=%u\n",ok?"PASS":"FAIL",count,replaced);
+        return ok;
+    }
     for(unsigned i=0;i<frame.tile_count && ok;++i) {
         auto const& tile=frame.tiles[i];
         if(!(tile.tile_flags&C3X_RENDERER_TILE_RENDER))continue;

@@ -680,11 +680,18 @@ private:
                             Texture target;checked(device->CreateTexture2D(&desc,nullptr,&target));
                             output(*n,i,std::move(target));n->borrowed_output[i]=false;
                         }
-                        auto source=assemble(n->inputs[i],ticks,frequency,depth+1,{},true);
+                        // An exact single-patch plane is its own assembly, as
+                        // in the resting selection below: slide straight from
+                        // it instead of re-assembling both planes every frame.
+                        Id source=0;ID3D11Texture2D* from=nullptr;
+                        if(compiled_enabled&&n->inputs[i].format==n->selected_format[i]&&exact_plane(n->inputs[i],n->area)){
+                            auto const& patch=n->inputs[i].patches.front();from=patch.node->output[patch.output].Get();
+                            ++work.selected_borrows;work.avoided_copy_pixels+=std::uint64_t(w)*h;
+                        }else{source=assemble(n->inputs[i],ticks,frequency,depth+1,{},true);from=replay.texture(source);}
                         try{
                             shifted(n->output[i].Get(),pan_under[i].Get(),pan_under_x,pan_under_y);
-                            shifted(n->output[i].Get(),replay.texture(source),pan_x,pan_y);
-                        }catch(...){replay.recycle(source);throw;}replay.recycle(source);
+                            shifted(n->output[i].Get(),from,pan_x,pan_y);
+                        }catch(...){if(source)replay.recycle(source);throw;}if(source)replay.recycle(source);
                     }
                     n->dependencies.swap(versions);n->revision=++serial;
                 }

@@ -133,8 +133,17 @@ public:
         return inland*(weights[0]*natural.low_relief.sample(0,x,y,world)+
             weights[1]*natural.low_relief.sample(1,x,y,world));
     }
+    // 1 except within a quarter tile of a tile the viewer has not explored.
+    float hidden_taper(float x,float y){
+        return render_core::hidden_taper(x,y,[&](int c,int r){return tile(c,r).hidden;});
+    }
     template<class Height>
     float height(NaturalData const& natural,Height pickup_height,float x,float y,float* support=nullptr) {
+        float h=terrain_height(natural,pickup_height,x,y,support),t=hidden_taper(x,y);
+        return t<1.f?2.5f+(h-2.5f)*t:h;
+    }
+    template<class Height>
+    float terrain_height(NaturalData const& natural,Height pickup_height,float x,float y,float* support=nullptr) {
         render_core::ShoreSample sample{};
         if(!skip_flat_shore)sample=shore(x,y);
         int c=int(std::floor(x)),r=int(std::floor(y));

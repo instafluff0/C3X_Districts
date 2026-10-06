@@ -83,6 +83,7 @@ bool c3x_renderer64_static_refinement_pending(float zoom);
 #include "color_quantization.h"
 #include "render_core/terrain_query.h"
 #include "render_core/world_coast.h"
+#include "render_core/viewer_topology.h"
 #include "render_core/captured_scene.h"
 #include "render_core/scene_publication.h"
 #include "render_core/geometry_draws.h"
@@ -557,6 +558,15 @@ public:
     bool gpu_output_mode=false,cpu_output_stale=false;
     bool geometry_canonical_world=false;
     std::atomic<bool> completed_scene_retained{false};
+    // Set while an ambient frame renders the completed view borrowed during a
+    // camera job. That view is an immutable snapshot, so its shadow atlas stays
+    // exact after the job publishes newer topology (FreshPipeline::atlas_reusable).
+    bool borrowed_scene_frame=false;
+    // Set when a frame other than a borrowed one draws shadows; cleared as a
+    // camera job starts. Inside a job that is the job's own render: the shared
+    // shadow and static state now hold its new scene, so the borrowed view
+    // cannot be drawn without redrawing both (and the adopted scene again).
+    bool borrowed_scene_stale=false;
 #ifdef C3X_RENDERER64_FRESH
     bool fresh_path_failed=false;
 #endif
@@ -974,6 +984,7 @@ public:
     std::array<float,12> shadow_basis{};
     int shadow_tile_width=128,shadow_tile_height=64;
     c3x_renderer::render_core::WorldCoast world_coast;
+    c3x_renderer::render_core::ViewerTopology viewer_topology;
     c3x_renderer_i64 geometry_world_revision = -1;
     float display_exposure = 1.0f;
     c3x_renderer::render_core::LinearTarget linear_frame, linear_block;
@@ -2583,7 +2594,7 @@ public:
 
         auto load_runtime_bundle = [&](std::string const & root, char const * filename,
                                        c3x_renderer::FeatureBundle & bundle,
-                                       auto & texture_bytes) {
+                                       auto & texture_bytes, bool allow_alpha = false) {
             std::string runtime_path = root + "\\" + filename;
             std::vector<std::uint8_t> runtime_bytes;
             if (!read_file(runtime_path.c_str(), runtime_bytes) ||
@@ -2594,7 +2605,9 @@ public:
             for (std::size_t index = 0; index < texture_bytes.size(); ++index)
                 if (!load_dds_bytes(root.c_str(), bundle.texture_paths[index].c_str(),
                                     texture_bytes[index], DXGI_FORMAT_BC1_UNORM_SRGB,
-                                    DXGI_FORMAT_BC1_UNORM))
+                                    DXGI_FORMAT_BC1_UNORM) &&
+                    !(allow_alpha && load_dds_bytes(root.c_str(), bundle.texture_paths[index].c_str(),
+                                    texture_bytes[index], DXGI_FORMAT_BC3_UNORM_SRGB)))
                     return false;
             return true;
         };
@@ -2602,9 +2615,14 @@ public:
         route_assets_ready = route_assets_ready && load_runtime_bundle(
             bridge_root, "bridge_runtime.bin", bridge_bundle, bridge_texture_dds);
 
-        std::string resource_root = packs_root + "\\ResourceNormalized";
+        // A Lab study may select a candidate resource pack; production uses the default.
+        char resource_pack[128]="ResourceNormalized",resource_path[4*MAX_PATH];
+        if(GetEnvironmentVariableA("C3X_RENDERER_RESOURCE_PACK",resource_pack,sizeof(resource_pack))>=sizeof(resource_pack) ||
+           !resource_pack[0] || !pack_path(packs_root.c_str(),resource_pack,resource_path,std::size(resource_path)))
+            strcpy_s(resource_pack,"ResourceNormalized");
+        std::string resource_root = packs_root + "\\" + resource_pack;
         resource_assets_ready = load_runtime_bundle(
-            resource_root, "resource_runtime.bin", resource_bundle, resource_texture_dds);
+            resource_root, "resource_runtime.bin", resource_bundle, resource_texture_dds, true);
 
         // Bind the catalog once. Payloads are resident only when needed.
         char unit_pack[128]="UnitAnimationFidelity",unit_root[4*MAX_PATH];
@@ -6134,7 +6152,7 @@ public:
         if(world_content){
             input.tile_width=128;input.tile_height=64;input.target_height=128;
         }
-        input.world_revision=frame.world_topology_revision;input.detail=patch_detail;
+        input.world_revision=world_coast.revision();input.detail=patch_detail;
         input.river_ready=river_assets_ready;input.skip_flat_shore=skip_shore;input.separate_relief=separate;input.indexed=indexed;input.retain_height=heights;
         input.key={std::uint64_t(tile.tile_x),std::uint64_t(tile.tile_y),std::uint64_t(tile.real_terrain_type)*32+unsigned(ground),
             std::uint64_t(input.tile_width),std::uint64_t(input.tile_height),std::uint64_t(input.target_height),std::uint64_t(content_revision),
@@ -7125,8 +7143,12 @@ public:
             std::vector<c3x_renderer::render_core::SourceShadow::Caster> & casters) {
         using Shadow=c3x_renderer::render_core::SourceShadow;
         auto dims=world_coast.world().dimensions();
+        // With the fidelity profile the land layer is only the marsh overlay,
+        // discarded outside its coverage in colour but opaque as a caster. Near
+        // a coast it sits just above the dipping natural beach, which casts on
+        // its own, and its contact darkening drew a hard band along the shore.
         for(unsigned layer=0;layer<geometry_layer_count;++layer)for(auto const& chunk:buffers[layer]) {
-            bool caster=layer==geometry_land || (layer>=geometry_feature && layer!=geometry_natural_decal);
+            bool caster=(layer==geometry_land && !fidelity_profile) || (layer>=geometry_feature && layer!=geometry_natural_decal);
             if(chunk.content().city_material!=0xffffffffu && cities.library.materials[chunk.content().city_material].ground)caster=false;
             if(!caster || chunk.content().animation_texture)continue;
             for(int wy=dims.wrap_y?-1:0;wy<=(dims.wrap_y?1:0);++wy)
@@ -8112,11 +8134,28 @@ public:
             return false;
         }
         LARGE_INTEGER begin = {}, end = {}; QueryPerformanceCounter(&begin);
+        // Hidden relief must not shape revealed neighbours (ViewerTopology).
+        // Query caches below follow world_coast.revision(), not the capture.
+        std::uint32_t const* topology=frame.world_topology;
+        c3x_renderer_i64 revision=frame.world_topology_revision;
+        bool masked_change=false;
+        if(topology_cache.matches_world(frame))try{
+            topology=viewer_topology.update(frame.world_topology,frame.world_topology_count,frame.world_width_tiles,
+                frame.world_height_tiles,frame.world_topology_revision,topology_cache.world_input_sequence(),
+                [&](auto mark){topology_cache.world_snapshot()->visit([&](auto const& input){
+                    mark(input.occurrence.tile_x,input.occurrence.tile_y,input.occurrence.tile_flags);});},&masked_change);
+            revision=viewer_topology.revision;
+        }catch(std::length_error const&){topology=frame.world_topology;revision=frame.world_topology_revision;}
         auto updated = world_coast.update({frame.world_width_tiles, frame.world_height_tiles,
-            frame.world_wrap_x != 0, frame.world_wrap_y != 0}, frame.world_topology,
-            frame.world_topology_count, frame.world_topology_revision);
-        if(fidelity_profile){natural.update_rivers(world_coast.world(),frame.world_topology_revision);
-            cliff_query_scratch.bind(natural,world_coast.world(),frame.world_topology_revision);}
+            frame.world_wrap_x != 0, frame.world_wrap_y != 0}, topology,
+            frame.world_topology_count, revision);
+        if(fidelity_profile){natural.update_rivers(world_coast.world(),revision);
+            cliff_query_scratch.bind(natural,world_coast.world(),revision);}
+        if(masked_change){
+            char detail[160];std::snprintf(detail,sizeof(detail),"captured=%lld revision=%lld hidden=%zu changes=%zu",
+                frame.world_topology_revision,revision,viewer_topology.hidden_tiles,updated.topology_changes);
+            trace.write("viewer-topology",detail,true);
+        }
         // Ground binds its private scratch under each scoped task lease.
         QueryPerformanceCounter(&end);
         if (updated.cells_built) {
@@ -9060,7 +9099,7 @@ public:
             std::copy(key_light,key_light+3,input.key_light);
             job.tile_width=canonical_world_content?128:frame.tile_width;job.tile_height=canonical_world_content?64:frame.tile_height;
             job.world_width=frame.world_width_tiles;job.world_height=frame.world_height_tiles;
-            job.wrap_x=frame.world_wrap_x!=0;job.wrap_y=frame.world_wrap_y!=0;job.topology_revision=frame.world_topology_revision;
+            job.wrap_x=frame.world_wrap_x!=0;job.wrap_y=frame.world_wrap_y!=0;job.topology_revision=world_coast.revision();
             job.skip_flat_shore=skip_flat_shore;job.separate_natural_relief=separate_natural_relief;
             job.nodes.reserve(nodes.size());for(auto node:nodes)job.nodes.push_back(*node);
             c3x_renderer::render_core::ExactPointCache<c3x_renderer::render_core::ShoreSample> samples;
@@ -9174,7 +9213,7 @@ public:
             projection.relief_projection_scale=float(frame.tile_width)/224.f*.82f;
             projection.feature_projection_scale=float(frame.tile_width)/224.f;
             projection.pickup_profile=true;projection.world_objects=true;
-            input.ground=ground_type(tile);input.world_revision=frame.world_topology_revision;
+            input.ground=ground_type(tile);input.world_revision=world_coast.revision();
             input.river_ready=river_assets_ready;input.skip_flat_shore=skip_flat_shore;
             input.separate_relief=separate_natural_relief;input.retain_height=retain_height_samples;
             input.route_ready=route_assets_ready;input.mine_ready=mine_assets_ready;input.farm_ready=farm_assets_ready;
@@ -10158,7 +10197,7 @@ public:
                 auto const & world = world_coast.world();
                 auto i = world.index(c,r); auto value = world.at(i);
                 if (i != std::size_t(-1)) observe_world(i,value);
-                return value != 0xffffffffu && (value >> 24) != 0 ? 1.0f : 0.0f;
+                return value != 0xffffffffu && ((value >> 24)&1u) != 0 ? 1.0f : 0.0f;
             };
             c3x_renderer::fidelity::ReliefSurface pickup_surface(world_coast.world().dimensions(),
                 (tile.tile_x+tile.tile_y)/2, (tile.tile_x-tile.tile_y)/2,
@@ -10179,6 +10218,37 @@ public:
                 auto value=retain_height_samples?natural_height_samples.get(u,v,compute):compute();
                 if(support)*support=value[1];
                 return value[0];
+            };
+            // Natural ground plus mountain faces, for baked resource bodies that may
+            // stand on (or beside) a mountain. Mirrors the mountain union in
+            // lab/shared/natural/relief_mesh_body.h: pieces, spans, scales, ridge.
+            int resource_c=(tile.tile_x+tile.tile_y)/2,resource_r=(tile.tile_x-tile.tile_y)/2;
+            auto resource_height_at=[&](float u,float v,float* support=nullptr){
+                float height=natural_height_at(u,v,support),displacement=0;
+                for(int dr=-1;dr<=1;++dr)for(int dc=-1;dc<=1;++dc){
+                    int pc=resource_c+dc,pr=resource_r+dr;auto owner=queries.natural_tile(pc,pr);
+                    if(owner.real!=6)continue;
+                    bool west=queries.natural_tile(pc-1,pr).real==6,east=queries.natural_tile(pc+1,pr).real==6;
+                    bool north=queries.natural_tile(pc,pr-1).real==6,south=queries.natural_tile(pc,pr+1).real==6;
+                    unsigned along_x=unsigned(west)+unsigned(east),along_y=unsigned(north)+unsigned(south);
+                    bool connected=along_x+along_y>0,turn=connected&&along_x==along_y,range_y=along_y>along_x;
+                    unsigned variant=c3x_renderer::fidelity::mountain_seed(owner)%5u;
+                    float cx=float(pc)+.5f+.09f*(int(east)-int(west)),cy=float(pr)+.5f+.09f*(int(south)-int(north));
+                    float long_span=(connected?(turn?2.08f:2.46f):1.85f)*1.08f;
+                    float cross_span=(connected?(turn?1.82f:1.34f):1.55f)*1.08f;
+                    float mu=.5f+(range_y?(v-cy)/long_span:(u-cx)/long_span);
+                    float mv=.5f-(range_y?(u-cx)/cross_span:(v-cy)/cross_span);
+                    if(mu<0||mu>1||mv<0||mv>1)continue;
+                    float h=natural.fields[natural.macro[variant][0]].sample(mu,mv);
+                    float blend=natural.fields[natural.macro[variant][1]].sample(mu,mv);
+                    float next=(connected?std::pow(std::max(0.f,h),.80f):h)*(connected?142.f:165.f)*.68f*
+                        c3x_renderer::fidelity::smooth01((blend-.28f)/.34f);
+                    if(next<=0)continue;
+                    if(displacement<=0)displacement=next;
+                    else{float high=std::max(displacement,next),ridge=std::max(0.f,10.f-std::abs(displacement-next));
+                        displacement=high+ridge*ridge/40.f;}
+                }
+                return height+displacement*queries.hidden_taper(u,v);
             };
             auto relief_at_world = [&](float world_u, float world_v) {
                 if (pickup_profile) {
@@ -10407,9 +10477,11 @@ public:
             object_projection.relief_projection_scale=relief_projection_scale;
             object_projection.feature_projection_scale=feature_projection_scale;
             auto append_feature_instance=[&](auto const& bundle,auto const& placement,float u,float v,float rotation,
-                    float scale,float material,float owner,bool shadow,std::vector<Vertex>& target){
+                    float scale,float material,float owner,bool shadow,std::vector<Vertex>& target,bool natural=false,float lift=0.f,
+                    float ground_fit=0.f){
                 c3x_renderer::objects::append_instance(object_projection,bundle,placement,u,v,rotation,scale,
-                    material,owner,shadow,&bundle==&site_bundle,relief_at_world,natural_height_at,target,shadow_vertices);
+                    material,owner,shadow,natural || &bundle==&site_bundle,relief_at_world,natural_height_at,target,shadow_vertices,
+                    nullptr,lift,ground_fit);
             };
             auto adopt_objects=[&](c3x_renderer::objects::Surfaces& result){
                 std::vector<Vertex>* layers[]={&route_vertices,&feature_vertices,&city_vertices,&wall_vertices,&mine_vertices,&farm_vertices,&site_vertices};
@@ -10970,6 +11042,19 @@ public:
                     anchor.ground=relief_at_world(anchor.world_u+anchor.u,anchor.world_v+1-anchor.v)[0];
                     tile_resource_anchors.push_back(anchor);
                 }
+            } else if (auto const * composition = tile.city_id < 0 && resource_assets_ready && tile.resource_id >= 0 ?
+                    c3x_renderer::find_feature_composition(resource_bundle, tile.resource_name) : nullptr) {
+                // Offline-baked layout: positions, scales, sink and decals come from the pack.
+                build_replacement[index] |= C3X_RENDERER_TILE_CUSTOM_RESOURCE_REPLACED;
+                auto const & variant = c3x_renderer::select_composition_variant(*composition,
+                    tile.real_terrain_type, tile.variant_seed * 131u + 17u);
+                for (auto const & item : variant.instances) {
+                    c3x_renderer::FeaturePlacement placement; placement.asset_index = item.asset;
+                    c3x_renderer::objects::append_instance(object_projection, resource_bundle, placement,
+                        item.u, item.v, item.rotation, item.scale, 21.0f, 0.0f, true, tile.terrain_type < 11,
+                        relief_at_world, resource_height_at, feature_vertices, shadow_vertices, nullptr,
+                        item.lift, item.ground_fit);
+                }
             } else if (tile.city_id < 0 && resource_assets_ready && tile.resource_id >= 0) {
                 std::string resource_name = tile.resource_name;
                 std::transform(resource_name.begin(), resource_name.end(), resource_name.begin(),
@@ -11082,7 +11167,7 @@ public:
                     auto const & world=world_coast.world();
                     auto i=world.index(c,r);auto value=world.at(i);
                     if(i!=std::size_t(-1))cliff_observe_world(i,value);
-                    return value!=0xffffffffu && (value>>24)!=0 ? 1.0f : 0.0f;
+                    return value!=0xffffffffu && ((value>>24)&1u)!=0 ? 1.0f : 0.0f;
                 };
                 c3x_renderer::fidelity::ReliefSurface cliff_pickup_surface(world_coast.world().dimensions(),
                     (tile.tile_x+tile.tile_y)/2,(tile.tile_x-tile.tile_y)/2,tile_center_shore.distance,
@@ -14332,6 +14417,10 @@ private:
     // A 1x1 staging copy follows each delivered frame; an ambient frame starts
     // only when the copy from two frames back has completed (two frames in
     // flight keep the GPU fed), otherwise it returns BUSY with the gate free.
+    // Parallels' D3D11 ignores DO_NOT_WAIT, so this map drains the GPU queue
+    // inside the gate (gate_ms, 3-7 ms per frame). A D3D11.3 fence is cheap
+    // but completes at submission there; the same wait then moved into the
+    // display bind and closer-zoom scroll lost 2-4 fps (performance review 4u).
     Microsoft::WRL::ComPtr<ID3D11Texture2D> visual_fence_probe;
     std::array<Microsoft::WRL::ComPtr<ID3D11Texture2D>,2> visual_fences;
     std::array<bool,2> visual_fence_issued{};unsigned visual_fence_index=0;
@@ -14897,9 +14986,11 @@ private:
     };
     std::unique_ptr<CompletedSceneView> completed_scene;
     bool completed_scene_usable()const{return completed_scene && completed_scene->valid(renderer_state);}
+    // Ambient frames draw the retained completed view while a camera job runs.
+    bool completed_scene_borrowable()const{return (camera_active || !camera_scene_complete) && completed_scene_usable();}
     auto borrow_completed_scene(){
         return CompletedSceneView::View::Borrow(
-            (camera_active || !camera_scene_complete) && completed_scene_usable()?&completed_scene->view:nullptr,
+            completed_scene_borrowable()?&completed_scene->view:nullptr,
             renderer_state.scene_view_fields());
     }
     void retire_completed_scene(){
@@ -14972,6 +15063,11 @@ private:
                     !capture->valid() || renderer_state.device_generation!=job->device_generation ||
                     renderer_state.gpu_serial!=job->serial)return;
                 auto completed_view=borrow_completed_scene();
+                struct BorrowedFrame {bool& flag;bool prior;~BorrowedFrame(){flag=prior;}}
+                    borrowed_frame{renderer_state.borrowed_scene_frame,renderer_state.borrowed_scene_frame};
+                renderer_state.borrowed_scene_frame=completed_scene_borrowable();
+                // Hold the last borrowed image for the rest of the job instead.
+                if(renderer_state.borrowed_scene_frame && renderer_state.borrowed_scene_stale)return;
                 c3x_renderer_frame_v1 view={};if(!selected->sample(ticks,frequency,origin,view))return;
                 bool changed=renderer_state.cached_signature.complete!=job->signature||renderer_state.tile_geometry_epoch!=job->epoch;
                 if(changed&&!gpu_publication.matches_projection(job_frame,job_camera_identity))return;
@@ -15620,8 +15716,10 @@ private:
                     }
                     auto& gpu_timeline=c3x_renderer::render_core::gpu_timeline();
                     if(presentation_ready)gpu_timeline.begin(renderer_state.context);
+                    LARGE_INTEGER gated={},framed={};if(phase_probe)QueryPerformanceCounter(&gated);
                     int drawn=presentation_ready?renderer_state.gpu_composition->visual_frame(visual_ticks,visual_frequency,
                         trial_surface_view.Get(),trial_surface_back.Get(),trial_retain_surface()?trial_surface_buffer.Get():nullptr):0;
+                    if(phase_probe)QueryPerformanceCounter(&framed);
                     if(presentation_ready&&gpu_timeline.enabled){auto summary=gpu_timeline.collect(renderer_state.context);
                         if(!summary.empty())renderer_state.trace.write("gpu-event-timeline",summary.c_str(),true);}
                     if(phase_probe)QueryPerformanceCounter(&sampled);
@@ -15695,6 +15793,9 @@ private:
                             for(unsigned i=0;i<8&&used<int(sizeof(detail))-12;++i){
                                 std::snprintf(detail+used,sizeof(detail)-used,"%s%.2f",i?",":"",renderer_state.trace.milliseconds(work.display_ticks[i]));
                                 used+=int(std::strlen(detail+used));}
+                            // Permit and GPU-fence checks, then the whole visual_frame call.
+                            if(used<int(sizeof(detail))-48)std::snprintf(detail+used,sizeof(detail)-used," gate_ms=%.3f frame_ms=%.3f",
+                                renderer_state.trace.milliseconds(gated.QuadPart-prepared.QuadPart),renderer_state.trace.milliseconds(framed.QuadPart-gated.QuadPart));
                         }
                         renderer_state.trace.write("direct-visual",detail,true);
                         auto recipes=renderer_state.gpu_composition->visual_recipe_reuse();
@@ -16192,7 +16293,7 @@ private:
                     if(gpu_publication.matches_projection(job_frame,job_camera_identity))retain_completed_scene();
                     else retire_completed_scene();
 #endif
-                    camera_scene_complete=false;
+                    camera_scene_complete=false;renderer_state.borrowed_scene_stale=false;
                     // Only a view without a renderable front holds travel.
                     // Navigation keeps its existing bounded allowance; ordinary
                     // reveal preparation continues sampling the completed view.

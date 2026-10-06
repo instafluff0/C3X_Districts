@@ -116,7 +116,7 @@ public:
     std::uint32_t at(std::size_t i) const { return i<values.size() ? values[i] : 0xffffffffu; }
     Tile tile(int column,int row) const {
         auto value=at(index(column,row));
-        return value==0xffffffffu ? Tile{} : Tile{int(value&255),int((value>>8)&255),true};
+        return value==0xffffffffu ? Tile{} : Tile{int(value&255),int((value>>8)&255),true,(value&(1u<<25))!=0};
     }
 };
 } }

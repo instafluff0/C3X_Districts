@@ -110,6 +110,31 @@ bounded capture script uses the production x64 DLL through the sandbox client;
 it does not operate Civ III or replace reference images. Full gameplay and FPS
 regression remains deferred until the requested Lab imports are combined.
 
+### Shoreline blending and wetland relief (October 5)
+
+The material follow-up from commit `25221b37` is now active in Renderer64.
+`q3_beach_coverage` keeps sand beneath the grass/plains partial-coverage band,
+and `coast_edge_coverage` uses the stronger texture breakup.
+
+- **How it was applied.** The commit's own diff for its nine runtime shader
+  copies was applied to the active `Renderer/packs/Renderer64ResidentRuntime`
+  pack, with no regeneration from the Lab.
+  - The coast, city-light and resident-submission layers are byte-preserved.
+  - `shoreline-overlay.json` in the pack records the patch hash, the changed
+    files and their before/after hashes.
+  - The prior pack is kept as `Renderer64ResidentRuntime-before-shoreline-20261005`.
+- **What else changed.** The gentler coastal shoulder (`coast_join.h`,
+  `surface_mesh_body.h`) and the wetland collar (`queries.h`, commit
+  `d43d4517`) are compiled into the x64 DLL, so they arrive with the rebuilt
+  trio.
+- **Shader verification.** All 19 runtime pixel entries compile against the
+  patched pack (`C3X_RENDERER_GPU_TESTS=1 python3 -m unittest
+  Renderer.native.test_runtime_shader_programs`).
+- **Staging.** The bridge, DLL and helper were staged with hashes matching the
+  build output.
+- **Game check.** Bounded `near` runs on the busy and light saves show no
+  failures or fallback. Coasts show the broken-up sand-to-grass edge.
+
 ### Coast verification and staging
 
 The matching bridge, x64 DLL, helper and two selected HLSL files are staged;

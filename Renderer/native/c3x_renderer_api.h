@@ -163,6 +163,7 @@ struct c3x_renderer_unit_animation_v1 {
 struct c3x_renderer_unit_move_v1 {
     c3x_renderer_u32 struct_size;
     c3x_renderer_i32 unit_id, old_x, old_y, new_x, new_y, action;
+    c3x_renderer_i32 speed; // Native travel in map units/second (INI Fast Speed); 0 uses 225.
     c3x_renderer_u32 source_visible, target_visible;
     c3x_renderer_i64 map_epoch, viewer_epoch;
     c3x_renderer_i64 presentation_time_ticks, presentation_frequency;

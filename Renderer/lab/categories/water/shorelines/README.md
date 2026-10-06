@@ -18,7 +18,9 @@ grass. Stronger texture coverage produces small patches through that overlap;
 its effect vanishes near fully covered ground so it cannot open holes in the
 inland rise. Matched close and gameplay comparisons are under
 `blending/material-edge/`. This material candidate awaits visual acceptance;
-fixed references remain unchanged.
+fixed references remain unchanged. It now runs in Renderer64: the commit's
+shader diff is applied to the active runtime pack, which keeps its other
+layers. See [runtime import notes](../../../../docs/lab_material_integration.md#shoreline-blending-and-wetland-relief-october-5).
 
 The [coastal-wave study](../../../studies/waves/README.md) separately evaluates
 recovered source crests on lowland and rocky coasts. It is isolated, pending

@@ -18,6 +18,7 @@ class LoadingWorldPreparationTests(unittest.TestCase):
 #include "Renderer/native/render_core/world_input_capture.h"
 #include "Renderer/native/render_core/world_preparation_region.h"
 #include "Renderer/native/render_core/world_coast.h"
+#include "Renderer/native/render_core/viewer_topology.h"
 #include <algorithm>
 #include <cassert>
 #include <atomic>
@@ -50,7 +51,7 @@ struct RendererState {
  bool gpu_complete=false;
  void world_gpu_report(bool complete){++gpu_reports;gpu_complete=complete;gpu_capacity=0;
   for(auto const& row:world_gpu_records)gpu_capacity+=row.second.state==2;}
- WorldCoast world_coast;
+ WorldCoast world_coast;ViewerTopology viewer_topology;
  struct Natural {unsigned calls=0;std::int64_t revision=-1;
   void update_rivers(WorldTopology const& world,std::int64_t r){
    assert(!world.empty());++calls;revision=r;}}natural;
@@ -93,6 +94,7 @@ struct Harness {
  c3x_renderer_camera_identity_v1 job_required_world_identity{1,2,4,3};
  std::shared_ptr<int> prepared_map;std::weak_ptr<int> retired;
  void retain(){prepared_map=std::make_shared<int>(1);retired=prepared_map;}
+ unsigned retired_scenes=0;void retire_completed_scene(){++retired_scenes;}
  bool prepare_loading_sources(){
   // The old view must lose its only preparation owner before source mutation.
   assert(retired.expired());++source_calls;

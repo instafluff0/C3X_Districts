@@ -31,6 +31,7 @@ class Backend {
     // Only changed authoritative unit facts need an IPC roundtrip. Native
     // redraw ticks can repeat the same action/HP for many visual frames.
     std::map<int,c3x_renderer_unit_state_v1> unit_facts;
+    bool trace_input=[]{char value[4]={};return GetEnvironmentVariableA("C3X_RENDERER_TRACE_INPUT",value,sizeof(value))==1&&value[0]=='1';}();
     bool detach_direct(bool paint_native,std::vector<unsigned>* retained=nullptr,
                        unsigned* retained_width=nullptr,unsigned* retained_height=nullptr){
         if(!direct_active)return true;
@@ -180,7 +181,16 @@ public:
     }
     int images(c3x_renderer_gpu_images_v1 const& request,c3x_renderer_gpu_result_v1& result,
                unsigned* pixels,unsigned capacity){
-        std::lock_guard<std::mutex> lock(gate);return client.images(request,result,pixels,capacity);
+        LARGE_INTEGER began={},locked={},done={},rate={};if(trace_input)QueryPerformanceCounter(&began);
+        std::lock_guard<std::mutex> lock(gate);if(trace_input)QueryPerformanceCounter(&locked);
+        int code=client.images(request,result,pixels,capacity);
+        if(trace_input){QueryPerformanceCounter(&done);QueryPerformanceFrequency(&rate);
+            double gate_ms=1000.*double(locked.QuadPart-began.QuadPart)/double(rate.QuadPart),
+                post_ms=1000.*double(done.QuadPart-locked.QuadPart)/double(rate.QuadPart);
+            if(gate_ms+post_ms>=4.){char line[256];std::snprintf(line,sizeof(line),
+                "[C3X renderer] qpc=%lld stage=native-images-wait gate_ms=%.2f post_ms=%.2f action=%d commands=%u pixels=%u\n",
+                done.QuadPart,gate_ms,post_ms,request.action,request.command_count,request.pixel_count);OutputDebugStringA(line);}}
+        return code;
     }
     int unit(c3x_renderer_unit_v1 const& unit,c3x_renderer_gpu_unit_v1 const& target,int* bounds){
         std::lock_guard<std::mutex> lock(gate);return client.unit(unit,target,bounds);

@@ -90,7 +90,17 @@ int main(){try{
   require(a.contains(b)&&!b.contains(a)&&a.contains(empty)&&empty.empty()&&a.area()==100&&empty.area()==0,"rect helpers");
  }
  require(FakeTarget::destroyed==4&&FakeTarget::live==0&&FakeTarget::charged==0,"destructor releases all owners exactly once");
- std::printf("PASS static raster lanes: lazy_slots=4 promotions=10 stale_preview=1 discard=1 layout_release=1\n");return 0;
+ // Unshadowed bounds: a ring around a central field keeps its full bounds,
+ // one side removed shrinks them, a covering field clears them.
+ {using R=StaticRasterState<FakeTarget>::Rect;R ring{0,0,100,100};
+  auto rest=ring.outside(R{20,20,80,80});
+  require(rest.left==0&&rest.top==0&&rest.right==100&&rest.bottom==100,"ring keeps bounds");
+  rest=ring.outside(R{-10,-10,110,60});
+  require(rest.left==0&&rest.top==60&&rest.right==100&&rest.bottom==100,"side removal shrinks bounds");
+  require(ring.outside(R{-1,-1,101,101}).empty()&&R{}.joined(ring).area()==ring.area(),"covering field clears bounds");
+  States lanes;lanes.states[0].unshadowed=ring;lanes.discard(0,raster_explicit_reset);
+  require(lanes.states[0].unshadowed.empty(),"discard clears unshadowed bounds");}
+ std::printf("PASS static raster lanes: lazy_slots=4 promotions=10 stale_preview=1 discard=1 layout_release=1 unshadowed_bounds=1\n");return 0;
  }catch(std::exception const& error){std::fprintf(stderr,"FAIL static raster lanes: %s\n",error.what());return 1;}}
 ''')
 

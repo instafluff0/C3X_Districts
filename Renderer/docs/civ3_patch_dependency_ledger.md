@@ -1,5 +1,19 @@
 # Civ III patch dependency ledger
 
+## Native unit travel speed
+
+`required_user_action: []`.
+
+- **Existing symbol relied on:** `FLC_Animation_set_move_target`, the
+  replacement call for `FLC_Animation_set_pixel_target_with_offset` in
+  `Unit::animate_move`. Signature and supported-build addresses are unchanged.
+- **What changes:** the move event now carries native travel speed. It reads
+  the art's INI `Fast Speed` from `Animation_Info + 0x130` (`field_98[38]`)
+  times the animation's float rate at `FLC_Animation + 0x104` (1.0 when
+  constructed), matching native travel in `FLC_Animation::FUN_00402990`.
+- **Not added:** no patch-table entry and no injected-state field.
+- **Config-off:** delegation is unchanged.
+
 ## Held edge-scroll motion during camera jobs
 
 `required_user_action: []`.

@@ -79,7 +79,7 @@ std::unique_ptr<PreparedGround> prepare_ground(GroundCompileInput const& ground_
     // pages, but reset every tile's point caches and dependency consumer.
     // SurfaceQueries clears shore samples when constructed below.
     ground_query_scratch.reset_tile();
-    ground_query_scratch.bind(natural,world_coast.world(),frame.world_topology_revision);
+    ground_query_scratch.bind(natural,world_coast.world(),world_coast.revision());
     // Owned, per-tile copies of the exact river nodes this compile
     // reads, instead of pointers into topology_cache.rivers (cleared
     // and rebuilt by the same per-frame pre-pass above whenever the
@@ -127,7 +127,7 @@ std::unique_ptr<PreparedGround> prepare_ground(GroundCompileInput const& ground_
         auto const & world=world_coast.world();
         auto i=world.index(c,r);auto value=world.at(i);
         if(i!=std::size_t(-1))ground_observe_world(i,value);
-        return value!=0xffffffffu && (value>>24)!=0 ? 1.0f : 0.0f;
+        return value!=0xffffffffu && ((value>>24)&1u)!=0 ? 1.0f : 0.0f;
     };
     c3x_renderer::fidelity::ReliefSurface<decltype(ground_world_lookup),decltype(pickup_source),decltype(ground_shore_sample_at),
         decltype(ground_pickup_river),decltype(pickup_dune),decltype(ground_pickup_activity)> ground_pickup_surface(world_coast.world().dimensions(),

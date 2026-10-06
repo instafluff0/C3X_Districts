@@ -10,7 +10,7 @@
 
 namespace c3x_inputs {
 using Bytes=std::vector<unsigned char>;
-constexpr std::uint32_t protocol_version=11;
+constexpr std::uint32_t protocol_version=12;
 constexpr std::size_t payload_limit=16u*1024u*1024u;
 inline void require(bool condition,char const* message){if(!condition)throw std::runtime_error(message);}
 struct Writer {
@@ -167,7 +167,7 @@ template<class IO,class Value>void unit_animation_fields(IO& io,Value& v){
     unit_visual_fields(io,v.visual);io(v.cursor);io(v.frames);io(v.frame_seconds);io(v.display_unit_id);
 }
 template<class IO,class Value>void unit_move_fields(IO& io,Value& v){
-    io(v.unit_id);io(v.old_x);io(v.old_y);io(v.new_x);io(v.new_y);io(v.action);
+    io(v.unit_id);io(v.old_x);io(v.old_y);io(v.new_x);io(v.new_y);io(v.action);io(v.speed);
     io(v.source_visible);io(v.target_visible);
     io(v.map_epoch);io(v.viewer_epoch);
     io(v.presentation_time_ticks);io(v.presentation_frequency);

@@ -78,7 +78,7 @@ struct Pass {
  std::vector<int> resident,static_visible,water_visible,reflection_visible,all_visible;
  std::vector<int> roi_records,roi_shadow_records,selected_lighting,body_requirements;
  bool body_requirements_valid=true,visibility_valid=true;std::uint64_t resident_signature=42;
- struct Shadow {std::vector<int> casters,caster_inputs,instance_groups;Membership::Lease caster_lease;
+ struct Shadow {std::vector<int> casters,caster_inputs,instance_groups,prepared_instances{7};Membership::Lease caster_lease;
   std::uint64_t caster_signature=42,prepared_signature=42;} shadow;
  std::array<int,4> completed_image{3,7,11,19};
 ''' + method + r'''};
@@ -94,6 +94,9 @@ int main(){
  assert(!weak.expired());assert((pass.completed_image==std::array<int,4>({3,7,11,19})));
  assert(!pass.resident_lease && !pass.shadow.caster_lease && !pass.resident_signature);
  assert(!pass.visibility_valid && !pass.body_requirements_valid);
+ // Forest instance groups and their placement keys retire together, so the
+ // next shadow build cannot reuse empty groups for unchanged forests.
+ assert(pass.shadow.instance_groups.empty() && pass.shadow.prepared_instances.empty());
  assert(pass.body_requirements.empty() && pass.all_visible.empty() && pass.shadow.caster_inputs.empty());
  independent.reset();assert(weak.expired() && !budget->bytes);
  // The next scene uses the same bounded owner, with no accumulated leases.

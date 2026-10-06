@@ -5,7 +5,7 @@
     "Renderer/lab/shared/shaders/hydrology/water_natural.hlsl": "1a8b69cffe50bcaaa103ef006008e7d7c3fbb11cdf1c825fa8418a5fb8e70394",
     "Renderer/native/source_fidelity/hydrology.hlsl": "d5f5e8ca4d2b75280450d976b8fb436816f9fbd2840912bd4363626807d2a46f",
     "Renderer/lab/shared/shaders/hydrology/coastal_waves.hlsl": "7dff9e6e6720024555e7ea9e9497178f4974de56fdb6638fb8de0df9457e27db",
-    "Renderer/native/render_core/terrain_scene.hlsl": "2a5f7e8550f3964b255d34e54f8f6bd4daaff1907715ea44f11a38591ec90067",
+    "Renderer/native/render_core/terrain_scene.hlsl": "5f3a5b8ec063013faf291b307ace6e75260b2586cf5e5e57147a1b75a03da067",
     "Renderer/lab/shared/shaders/lighting/shadow_policy.hlsl": "4be97debb20a78e7b7c8735365d51472b00bc05a63a992f0ae73604d42a60c1a",
     "Renderer/native/render_core/shadow_receiver.hlsl": "927b58bc3a77f8d947b54a279b1b2183ef52b01caddaf8e7d60d2484e37d9436",
     "Renderer/lab/shared/shaders/lighting/paged_shadow_v1.hlsl": "0314e3cadc09dab8d6098f6158e97e4da269afde783d8477722a7f3be70c495f",

@@ -108,7 +108,7 @@ inline void append_shadow(Projection const& input,FeatureAsset const& asset,floa
 template<class Relief,class Height>
 void append_instance(Projection const& input,FeatureBundle const& bundle,FeaturePlacement const& placement,
         float local_u,float local_v,float rotation,float scale,float material_offset,float owner_code,bool cast_shadow,
-        bool site,Relief relief_at_world,Height natural_height_at,std::vector<Vertex>& target,std::vector<Vertex>& shadows,std::vector<unsigned>* topology=nullptr){
+        bool site,Relief relief_at_world,Height natural_height_at,std::vector<Vertex>& target,std::vector<Vertex>& shadows,std::vector<unsigned>* topology=nullptr,float lift=0.f,float ground_fit=0.f){
     auto const& tile=input.tile;
     float left=input.left,top=input.top,half_w=input.half_w,half_h=input.half_h;
     float relief_projection_scale=input.relief_projection_scale,feature_projection_scale=input.feature_projection_scale;
@@ -124,6 +124,8 @@ void append_instance(Projection const& input,FeatureBundle const& bundle,Feature
     std::array<float, 3> ground_sample = relief_at_world(
         tile_world_u + local_u, tile_world_v + (1.0f - local_v));
     bool farm_asset=asset.id.rfind("farm_",0)==0;
+    // Pipeline-baked flat ground decal (soft alpha, terrain-conforming, no shadow).
+    bool ground_decal=asset.id.rfind("decal/",0)==0;
     bool terrain_wall=pickup_profile && asset.id.rfind("city/walls/",0)==0;
     float wall_source_floor=0.f;
     if(terrain_wall){
@@ -138,19 +140,25 @@ void append_instance(Projection const& input,FeatureBundle const& bundle,Feature
         return;
     if (farm_asset && asset.id.find(":tree:")!=std::string::npos && ground_sample[2]<.11f)
         return;
-    if(pickup_profile && site)
+    if(pickup_profile && site){
         ground_sample[0]=natural_height_at(
             tile_world_u+local_u,tile_world_v+1.f-local_v)-2.5f;
+        // Baked ground fit: settle on the lowest ground under the footprint, so
+        // a body on a slope sinks uphill rather than floating downhill.
+        if(ground_fit>0.f)for(int corner=0;corner<4;++corner)ground_sample[0]=std::min(ground_sample[0],
+            natural_height_at(tile_world_u+local_u+(corner&1?ground_fit:-ground_fit),
+                tile_world_v+1.f-local_v+(corner&2?ground_fit:-ground_fit))-2.5f);
+    }
     float center_x = left + half_w + (local_u - local_v) * half_w;
     float center_y = top + (local_u + local_v) * half_h -
         ground_sample[0] * relief_projection_scale;
-    if (cast_shadow)
+    if (cast_shadow && !ground_decal)
         append_object_shadow(asset, scale, center_x, center_y,
                              ground_sample[0] * relief_projection_scale);
     float cosine = std::cos(rotation);
     float sine = std::sin(rotation);
     bool farm_decal = false;
-    if (farm_asset && !asset.vertices.empty()) {
+    if ((farm_asset || ground_decal) && !asset.vertices.empty()) {
         farm_decal = true;
         float level = asset.vertices.front().position[2];
         for (auto const& vertex : asset.vertices)
@@ -163,11 +171,13 @@ void append_instance(Projection const& input,FeatureBundle const& bundle,Feature
         c3x_renderer::FeatureSourceVertex const & source = asset.vertices[vertex_index];
         float local_x = (source.position[0] * cosine - source.position[1] * sine) * scale;
         float local_y = (source.position[0] * sine + source.position[1] * cosine) * scale;
-        float local_z = source.position[2] * scale;
+        float local_z = source.position[2] * scale + lift; // baked sink/raise, tile units
         auto vertex_ground = farm_decal
             ? relief_at_world(tile_world_u + local_u + local_x,
                               tile_world_v + 1.0f - local_v - local_y)
             : ground_sample;
+        if(farm_decal && ground_decal && pickup_profile && site)vertex_ground[0]=natural_height_at(
+            tile_world_u+local_u+local_x,tile_world_v+1.f-local_v-local_y)-2.5f;
         if(terrain_wall)vertex_ground[0]=natural_height_at(
             tile_world_u+local_u+local_x,tile_world_v+1.f-local_v-local_y)-
             2.5f-wall_source_floor*(150.f/.82f)+.02f;
@@ -198,7 +208,7 @@ void append_instance(Projection const& input,FeatureBundle const& bundle,Feature
             normal_x, normal_y, source.normal[2],
             1.0f, 1.0f, 0.0f, 0.0f,
             0.0f, 0.0f,
-            static_cast<float>(asset.texture_index) + material_offset + owner_code,
+            static_cast<float>(asset.texture_index) + material_offset + owner_code + (ground_decal ? .35f : 0.f),
             0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
             0.0f, 0.0f, 1.0f,
             1000.0f, 0.0f, 1000.0f, 0.0f, -1.0f};

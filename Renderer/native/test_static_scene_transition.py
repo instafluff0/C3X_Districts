@@ -45,6 +45,7 @@ int main(){assert(SandboxPerfOptions{}.bootstrap_scale==1.f);
 #include <chrono>
 #include <array>
 #include <cassert>
+#include <climits>
 #include <cstdio>
 #include <cstring>
 #include <vector>
@@ -98,7 +99,7 @@ struct Pipeline {
  Options options;Options const& sandbox_perf_options(){return options;}
  struct ShadowChange{std::uint64_t serial=0;std::array<int,4> source{};};
  struct{bool atlas_complete=true;std::uint64_t change_serial=0,change_floor=0;std::vector<ShadowChange> shadow_changes;}shadow;
- std::vector<std::array<int,4>> shadow_dirty;
+ std::vector<std::array<int,4>> shadow_dirty,repaired_dirty;float resident_basis_x=0,resident_basis_y=0;int wrap_pixels=0;
  struct Work{bool enabled=false;struct Counts{std::uint64_t target_pixels=0;}counts;
   void draw(unsigned){}void clear(Plane*){}void copy(Plane*,bool){}Counts& row(){return counts;}}work;
  struct Restore{bool draw(Context*,Target& target,Plane* color,Plane* depth,int,int,std::vector<int>,void*,unsigned,unsigned,
@@ -126,8 +127,12 @@ struct Pipeline {
  }
  bool ensure_linear_target(Target&,unsigned,unsigned,unsigned,bool){return true;}
  void paint(StaticState& slot){slot.region.colors=world;for(unsigned i=0;i<16;++i)slot.region.depths[i]=world[i]+1000;}
- bool repair_front(unsigned index,StaticState& slot,ViewportShaderSettings const&){
-  if(!allow_repair)return false;paint(slot);raster_inputs[index].version=version;++slot.revision;++repairs;return true;
+ StaticRect shadow_field{INT_MIN/4,INT_MIN/4,INT_MAX/4,INT_MAX/4},repaired_ring;bool hidden=false;
+ bool canonical_hidden()const{return hidden;}
+ StaticRect source_region_rect(std::int64_t l,std::int64_t t,std::int64_t r,std::int64_t b,ViewportShaderSettings const&,int)const{
+  return {int(l),int(t),int(r),int(b)};}
+ bool repair_front(unsigned index,StaticState& slot,ViewportShaderSettings const&,StaticRect ring=StaticRect()){
+  repaired_dirty=shadow_dirty;repaired_ring=ring;if(!allow_repair)return false;paint(slot);raster_inputs[index].version=version;++slot.revision;++repairs;return true;
  }
  bool recenter(unsigned,ViewportShaderSettings const&,c3x_renderer::render_core::StaticRegionShift&,int,int){return false;}
  bool reset_slot(unsigned index,float zoom,ViewportShaderSettings const&){auto& s=static_rasters.states[index];
@@ -205,7 +210,32 @@ int main(){unsigned frames=0;
   p.check();++frames;assert(p.repairs==repairs+1&&p.static_rasters.front(lane).shadow_serial==1);
   p.check();++frames;assert(p.repairs==repairs+1);
  }
- std::printf("PASS semantic terrain transitions: intermediate_frames=%u zooms=4 repair_and_bootstrap=1 color_depth_coherent=1 cached_lane_return=1 shadow_journal_repair=1\n",frames);
+ // Footprints are chunk coordinates: repairs add the resident basis that
+ // draw records use, plus both wrapped copies on a wrapping map.
+ {Pipeline p;p.projection_zoom=p.destination=1.f;p.edit(0);p.seed();p.allow_repair=true;p.check();
+  p.resident_basis_x=-5280;p.resident_basis_y=-1900;p.wrap_pixels=7680;
+  for(unsigned i=0;i<16;++i)p.world[i]+=50000;
+  p.shadow.shadow_changes.push_back({1,{10,20,30,40}});p.shadow.change_serial=1;p.check();
+  assert(p.repaired_dirty.size()==3);
+  assert((p.repaired_dirty[0]==std::array<int,4>{10-5280-7680,20-1900,30-5280-7680,40-1900}));
+  assert((p.repaired_dirty[1]==std::array<int,4>{10-5280,20-1900,30-5280,40-1900}));
+  assert((p.repaired_dirty[2]==std::array<int,4>{10-5280+7680,20-1900,30-5280+7680,40-1900}));}
+ // Pixels drawn while the receiver field was narrower (the hidden canonical
+ // lane during a zoom-in) repair once the displayed lane's field covers
+ // them; a ring too broad to repair refines behind the current pixels.
+ {Pipeline p;p.projection_zoom=p.destination=1.f;p.edit(0);p.seed();p.allow_repair=true;p.check();
+  auto repairs=p.repairs;p.static_rasters.front(0).unshadowed={0,0,16,3};
+  p.shadow_field={0,8,16,16};p.check();assert(p.repairs==repairs); // still outside the field
+  p.shadow_field={-100,-100,100,100};p.hidden=true;p.check();assert(p.repairs==repairs); // field is the destination's
+  p.hidden=false;p.shadow.atlas_complete=false;p.check();assert(p.repairs==repairs); // pages not drawn yet
+  p.shadow.atlas_complete=true;for(unsigned i=0;i<16;++i)p.world[i]+=50000;
+  p.check();assert(p.repairs==repairs+1&&p.repaired_ring.top==0&&p.repaired_ring.bottom==3&&p.repaired_ring.right==16);
+  assert(p.static_rasters.front(0).unshadowed.empty());
+  p.check();assert(p.repairs==repairs+1);
+  p.static_rasters.front(0).unshadowed={0,0,16,16};for(unsigned i=0;i<16;++i)p.world[i]+=50000;
+  p.available_budget=500;p.check();assert(p.repairs==repairs+1);
+  assert(p.static_rasters.front(0).valid&&p.static_rasters.front(0).unshadowed.empty());}
+ std::printf("PASS semantic terrain transitions: intermediate_frames=%u zooms=4 repair_and_bootstrap=1 color_depth_coherent=1 cached_lane_return=1 shadow_journal_repair=1 unshadowed_ring=1\n",frames);
 }
 ''')
 

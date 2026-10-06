@@ -205,7 +205,7 @@ captures, as attack/death already did. Native outcomes and retirement still
 control visibility; blending cannot extend a dead unit's gameplay lifetime.
 Fog loss, retirement, ID reuse, changed art and scene unload discard old state.
 
-Heading turns along the shortest angle over 120–360 ms according to turn size. The live path now shares
+Heading turns along the shortest angle over 60–180 ms according to turn size. The live path now shares
 Lab's calibrated `yaw_offset + (native_direction % 8) * 45 degrees` mapping;
 its previous subtraction of one produced a 45-degree error. Accepted movement
 selects the travel direction even when the preceding standing pose faced
@@ -291,9 +291,13 @@ placement. Both use the copied tile center: the native target routine adds
 camera recentering with a previous renderer camera. No per-unit camera binding
 is retained.
 Renderer64 starts the visual clock on its first scene sample. It allows a
-120–360 ms turn before translating, accelerates for 160 ms to a cruise speed
-of 225 native map units/second, and decelerates over the final 240 ms. The
-authored run cycle follows distance travelled, including the slowdown. The catalog
+60–180 ms turn before translating. Travel then lasts exactly vanilla's
+constant-speed step: distance over the art's INI `Fast Speed`, which the move
+event copies from native `Animation_Info` (225 map units/second for every stock
+ground unit; the renderer uses 225 if an event carries none). It accelerates over the first 12% and
+decelerates over the final 20% of that time, so cruise runs about 19% faster
+than vanilla. The authored run cycle follows distance at native speed,
+including the slowdown. The catalog
 reads move timing from the 32-byte generic animation header during asset loading;
 older bindings record duration/frames only for ambient clips. Delayed
 transport therefore cannot consume the move before its first visible sample.

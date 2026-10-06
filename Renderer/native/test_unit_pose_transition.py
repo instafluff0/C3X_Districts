@@ -58,9 +58,9 @@ int main(){
  auto angle=owner.facing(7,2,0,1000,6.108652382f); // 350 degrees -> 10 degrees
  assert(std::abs(angle-6.108652382f)<1e-6);
  assert(std::abs(owner.facing(7,2,1,1000,.174532925f)-angle)<1e-6);
- assert(std::abs(owner.facing(7,2,74,1000,.174532925f)-6.283185307f)<.002);
- auto before=owner.facing(7,2,74,1000,.174532925f);
- assert(std::abs(owner.facing(7,2,75,1000,1.570796327f)-before)<1e-6);
+ assert(std::abs(owner.facing(7,2,38,1000,.174532925f)-6.283185307f)<.003);
+ auto before=owner.facing(7,2,38,1000,.174532925f);
+ assert(std::abs(owner.facing(7,2,39,1000,1.570796327f)-before)<1e-6);
  struct Visible{struct{int unit_id;}draw;std::uint64_t pose_identity;};
  owner.retain(std::vector<Visible>{});assert(owner.size()==0);
  assert(!owner.sample(7,2,6,600,1000,mesh,2)); // fog/reveal starts directly at current pose

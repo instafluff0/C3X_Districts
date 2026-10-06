@@ -13,7 +13,8 @@ def world_projection(source,read):
     source=source.replace('PixelInput VSIntegrated(IntegratedVertexInput input)\n{',
         'PixelInput VSIntegrated(IntegratedVertexInput input)\n{\n    input.position=project_world_content(input.position,input.q6_world.xyz,c3x_content_projection,c3x_viewport_translation_padding);')
     source=source.replace('input.position=packed.position;',
-        'input.position=project_world_content(packed.position,packed.world,c3x_content_projection,c3x_viewport_translation_padding);')
+        'input.position=project_world_content(packed.position,packed.world,c3x_content_projection,c3x_viewport_translation_padding);'
+        'input.position.z=resource_natural_depth(input.position,packed.world.z,c3x_content_projection,c3x_viewport_translation_padding,packed.material);')
     source=source.replace('i.position=p.position;',
         'i.position=project_world_content(p.position,p.world,c3x_content_projection,c3x_viewport_translation_padding);')
     for name in ('p','input'):

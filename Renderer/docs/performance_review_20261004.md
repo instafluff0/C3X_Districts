@@ -641,6 +641,74 @@ At 0.5× on the busy save, the camera advanced 75 native px/s (run50).
 - Scroll still advances in visible steps, now larger ones. Smooth
   presentation between steps is stage C3/C4 of the design.
 
+### 4r2. Gray coastal rocks and forests without shadows (fixed)
+
+**Gray rocks.** The batched ("pulled") feature vertex shader was compiled from
+`hydrology.hlsl`. Its `FeaturePixelInput` declares five interpolants, while the
+feature pixel shader's struct in `feature.hlsl` starts with four extra city
+AO/tangent/emissive registers. D3D11 links stage interpolants by register, so
+the silhouette survived but the UV, normal and material id were garbage.
+
+- **Effect:** flat, unlit gray rocks wherever eight or more cliff (or other
+  48-byte feature) records batched. Ordinary records looked correct, hence
+  "occasionally".
+- **Fix:** the pulled feature entry is now compiled from `feature.hlsl`, the
+  ordinary path's source. `test_runtime_shader_programs` (GPU-gated) builds
+  both pulled shaders from the active pack and reflects the feature vertex
+  outputs against the pixel inputs, register by register.
+
+**Forests without shadows.** Two defects:
+
+1. **Empty forest groups.** Retiring the geometry selection emptied the forest
+   instance groups, their only shadow submission, but kept their placement
+   keys.
+   - Unchanged keys then reused the empty groups.
+   - Every atlas page drawn in that state lacked forest shadows, while its
+     proof still certified it.
+   - Selecting a nearby unit repaired only that neighbourhood.
+   - The keys now retire with the groups, and missing groups always rebuild.
+2. **Journal coordinates.** 4q's journal footprints were in chunk coordinates,
+   but draw records and raster keys add the resident basis (≈ −camera).
+   - Repairs away from the map origin therefore missed the slot.
+   - Footprints now receive the current basis and both wrapped copies.
+   - A pending journal repair also counts as outstanding refinement, so an
+     idle display applies it without waiting for unrelated input.
+
+`test_scene_membership` and `test_static_scene_transition` cover both. A light
+save `forest-shadow` witness shows textured rocks and shadowed forests after
+the founding reveal.
+
+**Edge forests after a zoom (fixed).**
+- **Cause:** while the canonical 1× lane draws hidden behind a closer zoom, the
+  shadow receiver field follows the zoom destination. At 3× that field is
+  smaller than the 1× raster, so the ring outside it sampled no shadow page.
+  The sampling identity only refits outside its 1.15–1.45× band, so a
+  1.25× hint kept those pixels after returning to 1×.
+- **Fix:** each static slot records the bounds of pixels written outside the
+  field of their frame (`unshadowed`). Recentring shifts the bounds, and
+  repairs and resets keep them current.
+- **Repair:** once the displayed lane's field covers those pixels and the
+  atlas is complete, `compose_static` repairs that ring through
+  `repair_front`. A ring larger than the repair limit refines behind the
+  current pixels instead (`raster_shadow`). The hidden lane never repairs
+  against the destination field.
+- **Tests:** `test_static_scene_transition` and `test_static_raster_state`
+  cover the repair and the bounds; `test_overlay_slot_ownership` and
+  `test_fresh_shared_submission` cover recording.
+- **Cost:** `static-compose` entry bit 128 means bounds are recorded, and
+  bit 256 means a ring repair is due. In a profiled busy-save `near` run
+  (run90), no frame had a ring due. Only 15 hidden-lane frames carried
+  bounds, because returning from 2× or 3× refits the sampling and
+  redraws anyway. The repair is the fallback when no refit occurs.
+
+**Rejected: unique chunk versions.** Pulled pages key on the source buffer
+pointer, so a recycled buffer address could in principle serve stale
+vertices. Giving every chunk upload its own version broke the version
+stability that pulled pages, the caster journal and raster proofs rely on
+when the same prepared content is re-bound. On the busy save, 1× scroll fell
+to 17 fps and jumps took 2.3–2.5 s (run87). The change was reverted, and the
+pointer-reuse case stays theoretical.
+
 ### 4s. Closer zooms (1×–3×): jumps, capture envelope and presentation
 
 **Benchmark.** The `near` scenario (scripted test) covers:
@@ -706,10 +774,13 @@ scene render (units ~3 ms, water ~3 ms).
 
 **C3: image-space camera-step slides.**
 - **Slide.** A small published step (at most half the screen) is first shown
-  at the previous camera's position, then slides linearly to rest
-  (`PanTransition`).
-- **Duration.** The slide lasts 0.9 × the recent interval between steps,
-  so continuous scrolling chains into steady motion.
+  at the previous camera's position, then slides to rest (`PanTransition`).
+- **Easing.** An isolated step (a recentre, or a scroll's first step) eases
+  in and out over 0.3–0.55 s depending on distance. Steps that follow within
+  2 s cruise at constant speed for the recent step interval, with speed
+  carried across steps, and the last step of a scroll glides to rest on a
+  cubic ease-out (tail up to 0.45 s) instead of stopping dead.
+  `test_pan_transition.py` covers continuity, the glide and restarts.
 - **What moves.** `select_world` shifts the whole world view (map, world
   overlays and map-anchored HUD) by whole pixels. A copy of the previous
   world view fills the trailing strip. Screen UI stays fixed.
@@ -740,6 +811,132 @@ Scroll segments vary ±30% between identical runs in this VM.
 - **Dense 1× idle:** CPU-bound scene render.
 - **Multi-notch zoom-out:** the recapture described above.
 
+### 4t. Native UI input coverage blocked Civ III's thread (critical: closer-zoom scroll, new games)
+
+**Symptom.** On the user's 13-turn autosave, Civ III's thread spent 350–940 ms
+of every 2 s blocked during scroll. New games showed 25 hitches of 110–230 ms
+around unit moves and zoomed edge drags.
+
+**Cause.** Every native UI command is copied to an ordered worker that keeps
+the form hit-test model (`native_hit_scene.h`). When that worker fell 256
+commands behind, the producer waited until the backlog halved, for 30–45 ms
+each time. The renderer's GPU work and the helper transport were not involved:
+posting to the helper cost about 5 ms per 2 s.
+
+**Measuring.** The bridge now reports `native-call-waits` every 2 s with
+`C3X_RENDERER_TRACE_INPUT=1`: helper-call time, backlog waits and query
+waits. `C3X_RENDERER_HIT_TRACE=1` with a trace file writes the worker's exact
+operation stream next to it (`.hit`). `.cache/perf-review-20261004/hit_replay.cpp`
+replays a stream on the Mac or, as x86 in the VM, under the same emulation.
+It reports the cost per command kind and an answer hash over every touched
+canvas. A 200 s capture held 197k commands. They had cost 68 s of worker time
+in game and took 11.7 s in an isolated emulated replay.
+
+**Changes.** Each one keeps every hit-test answer identical: the replay hash
+is unchanged and so is the retained structure (node and byte counts).
+- **Liveness-aware payload bound.** Tiles were compacted (4,096 recursive
+  samples each) whenever their history referenced more than two tiles' worth
+  of pixels. That included still-current sprite sheets and text rasters, which
+  pin no extra memory. A single-upload source counts again once it is replaced
+  or destroyed. Re-uploaded sources (sprite preparation, minimap) always
+  count, and above 16 MB of retained values the original conservative bound
+  applies alone. Peak retained values went from 6.9 MB to 6.4 MB.
+- **Retention memo.** A tile's final history is marked minimal for its tile,
+  and so are upload cells. Later draws reuse it instead of re-walking up to 24
+  levels per tile. A source-grid lookup inside one tile skips the temporary
+  grid.
+- **Per-tick keyed transfer.** Civ III's full-screen unit/HUD canvas transfer
+  onto the screen (5,276 transfers, 93% of `native_image` time) builds
+  retain()'s result directly for each tile. Uniformly transparent tiles are
+  skipped, and whole-tile fills become one node.
+- **In-place grids.** A canvas grid nobody else references is updated in
+  place, not copied (about 650 cell references per small draw).
+- **Batched hand-off.** Commands are staged on Civ III's thread and published
+  in batches of up to 64, at each helper call and before any query. The
+  backlog bound is 512.
+
+**Results.** The emulated replay takes 3.7 s instead of 11.7 s. In game
+(trace 2, same save):
+
+| Segment | Before (run108) | After (run111) |
+| --- | --- | --- |
+| Backlog waits during scroll | 350–940 ms per 2 s | 0–60 ms (up to 196 ms at the first 1× steps) |
+| 1× scroll | 54.2 fps | 53.1 fps |
+| 2× scroll | 43.9 fps | 48.8 fps |
+| 3× scroll | 43.5 fps | 46.5 fps |
+| Minimap jumps | 47 / 108 ms | 71 / 65 ms |
+
+New game (`reveal-scroll`, trace 0): hitches of 100 ms or more fell from 25
+(run105) to 5–13 across five later runs, and mean presentation rose from 43.5
+to 45–46 fps. The count varies that much between identical builds. Every run
+also shows:
+- a 27 s window without presents over the end of the first turn and the idle
+  start map that follows;
+- 350 ms at the first zoomed edge scroll after that idle.
+
+The `reveal-scroll` route-line check needs trace level 1, so cadence-only
+runs report a coverage failure.
+
+**Remaining at 2×–3× scroll.** See 4u: the helper is GPU-bound there.
+
+### 4u. Closer-zoom scroll is GPU-bound in the VM (measured; two experiments rejected)
+
+**Where the helper frame goes.** `direct-visual` traces now split each
+ambient frame into `gate_ms` (presentation permit and GPU fence checks) and
+`frame_ms` (the whole `visual_frame` call). `native-image-execution`
+summarizes native UI execution every 2 s at trace level 2. On the user save
+(run115, trace 2):
+
+| Segment | Gate | Frame | Of which display bind |
+| --- | --- | --- | --- |
+| 1× idle | 3.8 ms | 5.3 ms | 1.4 ms |
+| 1× scroll | 6.6 ms | 7.4 ms | 2.7 ms |
+| 2× scroll | 10.1 ms | 7.7 ms | 4.9 ms |
+| 3× scroll | 5.7 ms | 6.7 ms | 3.9 ms |
+
+The compose timers account for the whole `frame_ms`. The rest is the gate.
+
+**Why the gate waits.** A standalone probe (`.cache/perf-review-20261004/fence_probe.cpp`)
+on this VM shows:
+- `Map(..., DO_NOT_WAIT)` on a staging copy never returns `WAS_STILL_DRAWING`.
+  It waits for all GPU work submitted before it, including work queued
+  after the copy (1.5 s for a 1.5 s burst).
+- Event queries report completion at submission.
+- D3D11.3 fences are supported and cost 0.01 ms to check, but complete long
+  before the work does.
+
+So the 4g fence drains the GPU queue inside the gate on every ambient frame.
+
+**Rejected: fence instead of the staging map.** The gate fell to 0 ms, but
+the same wait moved into the display bind (5–11 ms). 2× and 3× scroll lost
+2–4 fps and the first minimap jump doubled (run116 against run117). The CPU
+must wait for the GPU somewhere. Closer-zoom scroll here is GPU-bound: about
+3 ms of scene render per animated frame at idle, 5–6.5 ms while scrolling,
+plus 2.3–2.7 ms of slide composition and the camera-step renders.
+
+**Rejected: 30 Hz scene resampling during slides.** Scene renders were
+already rare while scrolling (camera steps hold the scene), so this saved
+about 8 ms/s of CPU and no measurable GPU. Fps stayed within noise and moving
+units would have stepped at 30 Hz.
+
+**Kept: slide planes borrow exact inputs.** A slide frame re-assembled both
+world planes before its two shifted copies, even when only the offset
+changed. An exact single-patch plane is now the copy source directly, as the
+resting selection already did. 2× slide frames fell from a median of 11.7 ms
+to 6.8 ms (run113 against run114); fps changes were within noise. An
+interleaved new-game A/B (runs 124–127) showed no stall effect either way.
+
+**Native UI batches on the helper.** Executing native UI costs 15–45 ms/s.
+The 245–305 ms/s counted as batch execution at 2×–3× is waiting for the render
+thread. Camera-step preparation runs 18–31 ms (median), and its longest
+stretch between service checkpoints is 11–17 ms (median) and 37–41 ms (p90).
+While a batch waits, the cadence skips frames (16–29 per second). The call
+gate then reports BUSY for frames until the batch's call returns.
+
+**Measurement note.** Trace-2 runs read 3–5 fps higher than trace-0 runs of
+the same build on the closer-zoom scroll segments. Compare runs only at the
+same trace level.
+
 ### Visual defects found during this review (pre-existing)
 
 The first two reproduce in the pre-change baseline capture at the same moments.
@@ -765,6 +962,78 @@ The first two reproduce in the pre-change baseline capture at the same moments.
   stopped with "failed a zoom-out camera preparation". The pass already
   scales anchors about the view center, so it now accepts the full
   `SceneProjection` range. The busy save showed no sites, which hid the bug.
+- **Hidden relief at the shroud edge.** Revealed tiles next to unexplored
+  hills or mountains rose toward them, which caused several problems:
+  - lit and shadowed bands, and stair-stepped dark edges against the flat
+    fog diamonds;
+  - a leak of hidden terrain.
+  - **Cause:** the world topology holds every tile's real terrain, and relief
+    queries read all eight neighbours.
+  - **Fix:** `ViewerTopology` gives the renderer's query topology the viewer's
+    knowledge. Unexplored land keeps its biome and river code but loses its
+    category (hills, mountains, forest, marsh, volcano) and its effect bit.
+    Water is unchanged, so coastlines are stable.
+  - **Reveals:** a reveal changes the per-tile values, and the existing
+    world-dependency proofs recompile the neighbouring tiles.
+  - **Revision:** query caches (rivers, cliffs, ground and object scratch) now
+    follow `world_coast.revision()`, which carries a serial for each masked
+    state.
+  - **Unaffected:** lab inputs without world records.
+  - **Tests:** `test_viewer_topology`.
+  - **In game:** on the light save it hid 253 tiles at load. The city
+    founding un-hid two of them (the revealed forest among them) in the
+    same frame, rebuilding 56 coast cells in 5 ms (run86). The 1498 AD busy
+    save hides nothing and pays nothing (run90).
+  - **Busy-save `near` afterwards (run89, quiet host):**
+    - 1× idle 40.7 fps;
+    - 1× scroll 26.8 fps at 236 px/s;
+    - jumps 1.05 s and 0.88 s;
+    - 1×→2× zoom 26.1 fps;
+    - 3× idle 53.9 fps.
+  - **2× and 3× scroll** reached 13.5 and 11.7 fps, below run78 but within
+    the spread of earlier runs (run81: 21.9 and 13.0).
+- **Hard dark band on coastal marsh near the shroud.** With the fidelity
+  profile, the land layer is built only for marsh tiles, as an overlay on the
+  natural surface. In colour its pixels are discarded outside the marsh
+  coverage, but it was submitted to the shadow field as an opaque caster over
+  the whole tile.
+  - **Effect:** near a coast, the natural beach dips just below that overlay.
+    The shader's tight contact rule (blocker 0.0039–0.024 above the receiver)
+    then forced 0.15 visibility on a stair-stepped band.
+  - **Why only at the shroud:** at an explored coast the neighbour's water
+    covers most of the band. At an unexplored coast nothing covers it.
+  - **Diagnosis:** with shadow reception off, the band is lit sand. Disabling
+    contact darkening, or removing land casters, also removes it, while rocks
+    and hill shadows are unchanged.
+  - **Fix:** the land layer no longer casts under the fidelity profile; the
+    natural surface beneath it already does (`test_zoom_mesh_cache`
+    submission casters, run96).
+- **Gray band along front edges facing unexplored tiles.** On screen-down
+  (front) edges whose neighbour is unexplored, a land tile showed a gray strip
+  between its terrain edge and the fog.
+  - **Cause:** the flat underlay is not terrain-conforming, while the terrain
+    surface is raised by relief and drawn higher on screen. The unexplored
+    neighbour's fog is a flat diamond at the datum, and an explored neighbour's
+    own raised surface normally covers the strip.
+  - **Rejected:** omitting the underlay near those edges exposed black holes
+    wherever the natural surface intentionally leaves the underlay visible
+    (ponds, beaches, rocks) and a cut terrain silhouette.
+  - **Fix:** `ViewerTopology` marks every unexplored tile with `hidden_bit`
+    (bit 25), which `WorldTopology::tile` reports as `Tile::hidden`. Effect
+    readers now test bit 24 alone.
+  - **Taper:** `SurfaceQueries::height`, mountain displacement (terrain and
+    road heights) and therefore objects use `hidden_taper`. Ground slopes to
+    the 2.5 datum within a quarter tile of an unexplored tile.
+  - **Exactness:** with no hidden neighbour the height is bit-identical, so
+    Lab scenes are unchanged (`test_natural`).
+  - **Reveal:** world dependencies recompile the tile when its neighbour is
+    revealed.
+  - **Result:** edges facing the fog are now clean feathered diamonds (run101,
+    `test_viewer_topology`).
+  - **Not a defect:** the dark-green lines seen along some explored tile
+    edges in the new-game captures are the C3X city-site overlay, which is
+    shown while a Settler is selected. They vanish once the city is founded
+    (run101 frame 100).
 - **Wide fog coverage hardened.** The outer ring added for zoomed-out fog
   now skips a conflicting duplicate anchor instead of rejecting the whole
   capture (which fails the frame). The 1× viewport keeps its exact contract

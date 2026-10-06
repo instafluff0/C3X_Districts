@@ -18,6 +18,7 @@ if(fidelity_profile) {
         return natural_height_at(x,y,support)+
             (river_terrain_near ? river_channel_cut(float(river_at(x,y))) : 0.f);
     };
+    auto hidden_taper_at=[&](float x,float y){return queries.hidden_taper(x,y);};
     // The page includes the authoritative halo needed by this complete tile
     // and its finite-difference collar. Bind it once: mountain tessellation
     // performs thousands of distance samples and must not re-enter the LRU for

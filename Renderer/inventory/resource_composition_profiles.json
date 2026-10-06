@@ -1,0 +1,149 @@
+{
+  "schema": "c3x.resource_composition_profiles.v0",
+  "purpose": "Offline art direction for baked resource tile compositions. The runtime consumes only the baked layouts; every size, count, sink and decal choice lives here or in the normalized source placements.",
+  "units": "Normalized source units are 12 Civ VI units; world_scale 0.12 would match Civ VI's own size (100 Civ VI units per tile, the unit-model calibration); 0.16 enlarges every outcrop uniformly for Civ III readability. Decal sizes are calibrated separately: the imported decal meshes are not trustworthy, so decal_world_scale is the half-size in tiles per unit of source decal scale. Layout positions are tile UV (0..1).",
+  "defaults": {
+    "variants": 4,
+    "world_scale": 0.16,
+    "count_scale": 1.0,
+    "sink": 0.3,
+    "clusters": 2,
+    "cluster_radius": 0.75,
+    "cluster_separation": 0.24,
+    "spacing": 0.8,
+    "decal_opacity": 1.0,
+    "decal_world_scale": 0.2,
+    "decal_lift": 0.01,
+    "ground_fit": 0.6,
+    "terrain_layouts": {
+      "flat": {
+        "terrains": [
+          "Desert",
+          "Plains",
+          "Grassland",
+          "Tundra",
+          "Flood Plain",
+          "Forest",
+          "Jungle",
+          "Marsh"
+        ],
+        "centre": [
+          0.5,
+          0.5
+        ],
+        "spread": 0.12,
+        "keep_inside": 0.3,
+        "arrangement": "random"
+      },
+      "hills": {
+        "terrains": [
+          "Hills"
+        ],
+        "centre": [
+          0.6,
+          0.6
+        ],
+        "spread": 0.06,
+        "keep_inside": 0.28,
+        "arrangement": "flank",
+        "sink": 0.35,
+        "note": "On the camera-facing shoulder, not the crown."
+      },
+      "mountains": {
+        "terrains": [
+          "Mountains",
+          "Volcano"
+        ],
+        "centre": [
+          0.8,
+          0.8
+        ],
+        "spread": 0.03,
+        "keep_inside": 0.14,
+        "arrangement": "flank",
+        "cluster_separation": 0.32,
+        "sink": 0.25,
+        "note": "Civ VI has no mountain resources. A smaller seam decal climbs the front face; scree clusters rest at the mountain's front foot on their centre height (a footprint minimum would bury them on the steep face).",
+        "layout_count_scale": 1.25,
+        "ground_fit": 0.0,
+        "decal_scale": 0.65,
+        "decal_offset": [
+          -0.07,
+          -0.07
+        ],
+        "scale": 1.15
+      }
+    }
+  },
+  "families": {
+    "mineral_outcrop": {
+      "description": "Rocks half-buried around Civ VI ground decals, as in the source diamond/iron/gold sets.",
+      "ancillary_policy": "omit_until_terrain_variants_recovered"
+    }
+  },
+  "resources": {
+    "iron": {
+      "source": "resource/iron",
+      "family": "mineral_outcrop"
+    },
+    "gold": {
+      "source": "resource/gold",
+      "family": "mineral_outcrop"
+    },
+    "diamonds": {
+      "source": "resource/diamonds",
+      "family": "mineral_outcrop"
+    },
+    "coal": {
+      "source": "resource/coal",
+      "family": "mineral_outcrop",
+      "decal_counts": {
+        "decal_01": 1,
+        "decal_02": 1
+      },
+      "note": "Civ VI disables coal decals (count 0); enabled so the outcrop has a ground mark."
+    },
+    "aluminum": {
+      "source": "resource/aluminum",
+      "family": "mineral_outcrop",
+      "decal_count_scale": 0.25
+    },
+    "uranium": {
+      "source": "resource/uranium",
+      "family": "mineral_outcrop"
+    },
+    "saltpeter": {
+      "source": "resource/saltpeter",
+      "family": "mineral_outcrop",
+      "count_scale": 0.45,
+      "sink": 0.2
+    }
+  },
+  "bindings": {
+    "iron": [
+      "Iron"
+    ],
+    "gold": [
+      "Gold"
+    ],
+    "diamonds": [
+      "Gems",
+      "Diamonds"
+    ],
+    "coal": [
+      "Coal"
+    ],
+    "aluminum": [
+      "Aluminum",
+      "Aluminium"
+    ],
+    "uranium": [
+      "Uranium"
+    ],
+    "saltpeter": [
+      "Saltpeter",
+      "Niter",
+      "Nitre"
+    ]
+  }
+}

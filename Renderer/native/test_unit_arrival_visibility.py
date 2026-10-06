@@ -77,14 +77,15 @@ int main(){
 #include <cassert>
 using namespace c3x_renderer::render_core;
 int main(){
- assert(UnitLocomotion::turn(6,8)>=.24); // west to north has a visible turn
+ assert(UnitLocomotion::turn(6,8)>=.12); // west to north has a visible turn
  assert(UnitLocomotion::turn(8,1)<UnitLocomotion::turn(8,4)); // shortest arc
- double end=UnitLocomotion::duration(128);
- assert(end>.75&&end<.8);
- double previous=0;
- for(int i=0;i<=1000;++i){double x=UnitLocomotion::sample(end*i/1000.,128);
-  assert(x>=previous&&x<=128);previous=x;}
- auto x=[](double t){return UnitLocomotion::sample(t,128);};
+ double end=UnitLocomotion::duration(128,225); // vanilla constant-speed travel time
+ assert(std::abs(end-128/225.)<1e-12&&UnitLocomotion::duration(128,450)==end/2);
+ double previous=0,peak=0;
+ for(int i=0;i<=1000;++i){double x=UnitLocomotion::sample(end*i/1000.,128,225);
+  assert(x>=previous&&x<=128);peak=std::max(peak,(x-previous)/(end/1000.));previous=x;}
+ assert(peak>225*1.18&&peak<225*1.2); // ramps are repaid by a slightly faster cruise
+ auto x=[](double t){return UnitLocomotion::sample(t,128,225);};
  assert(x(.04)<x(.08)-x(.04)); // successive early intervals accelerate
  assert(x(end)-x(end-.04)<x(end-.04)-x(end-.08)); // successive late intervals slow
  assert(x(-1)==0&&x(end+1)==128);

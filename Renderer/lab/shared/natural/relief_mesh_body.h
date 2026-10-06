@@ -87,7 +87,7 @@
                     auto sample=mountain_at(world_x,world_y);
                     auto shore=shore_sample_at(world_x,world_y);
                     float scale=coast_relief(float(shore.distance),float(shore.beach_width))*
-                        mountain_river_scale(world_x,world_y);
+                        mountain_river_scale(world_x,world_y)*hidden_taper_at(world_x,world_y);
                     float support=0;
                     surface_height[y*span+x]=height_natural(world_x,world_y,&support)+
                         sample.displacement*scale;
@@ -106,7 +106,7 @@
                     unsigned at=(y+1)*span+x+1;
                     float elevation=surface_height[at];
                     auto out=project_natural(world_x,world_y,elevation);
-                    float mountain_height=sample.displacement*coast_scale*river_scale;
+                    float mountain_height=sample.displacement*coast_scale*river_scale*hidden_taper_at(world_x,world_y);
                     out.world_valid=1+std::max(0.f,(elevation-mountain_height-2.5f)/112);
                     float n[]={-(surface_height[at+1]-surface_height[at-1])/(2*step*112),
                         (surface_height[at+span]-surface_height[at-span])/(2*step*112),1};normalize3(n);

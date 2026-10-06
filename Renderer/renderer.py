@@ -18,6 +18,7 @@ import uuid
 ROOT = Path(__file__).resolve().parent.parent
 LAB = ROOT / "Renderer/lab"
 sys.path.insert(0, str(ROOT))
+from Renderer.lab.studies.resources import roster as resource_roster
 
 
 def read(path):
@@ -462,6 +463,8 @@ def scene(category, case, destination, *, world_size=32):
                 base = real = 12 if x < 16 else 13
                 if case == "water-gameplay" and x < 12:
                     base = real = 2 if x < 10 else 11
+            if category == "resources" and case in resource_roster.CASES:
+                base, real = resource_roster.terrain(case, x - 16, y - 16, base, real)
             if category == "shadows":
                 # Stable adjacent systems, all under one captured environment.
                 # Keep the lower center flat for the native unit sprite API.
@@ -495,12 +498,14 @@ def scene(category, case, destination, *, world_size=32):
     destination.write_text(f"C3X_BIQ_TERRAIN_V3,{world_size},{world_size},{len(rows)}\n" + "\n".join(rows) + "\n")
 
 
-def native_render(category, case, hour, zoom, output, *, behavior=None, center=(16, 16), diagnostics=False, candidate=None, preview=None, shared_surface=None):
+def native_render(category, case, hour, zoom, output, *, behavior=None, center=(16, 16), diagnostics=False, candidate=None, preview=None, shared_surface=None, resource_pack=""):
     from Renderer.lab.platform import run_native_fixture
     if shared_surface is None:
         shared_surface = category in ("seas-oceans", "rivers")
     if behavior not in (None, "replay", "edits", "animation", "units", "visibility"):
         raise ValueError("Unknown native behavior check")
+    if resource_pack and not re.fullmatch(r"[A-Za-z0-9_]+", resource_pack):
+        raise ValueError("Resource pack must be a simple pack folder name")
     if category == "rivers" and center == (16, 16):
         # The paired views inspect opposite ends of the same watershed instead
         # of wasting both captures on its middle reach.
@@ -542,7 +547,7 @@ def native_render(category, case, hour, zoom, output, *, behavior=None, center=(
         "C3X_RENDERER_PREVIEW_REPLAY": "", "C3X_RENDERER_PREVIEW_MINIMAP": "",
         "C3X_RENDERER_PREVIEW_EDITS": "", "C3X_RENDERER_PREVIEW_ANIMATION": "",
         "C3X_RENDERER_PREVIEW_UNITS": "", "C3X_RENDERER_PREVIEW_VISIBILITY": "", "C3X_RENDERER_PREVIEW_SEASON": "0",
-        "C3X_RENDERER_UNIT_CASES": "", "C3X_RENDERER_UNIT_PACK": "",
+        "C3X_RENDERER_UNIT_CASES": "", "C3X_RENDERER_UNIT_PACK": "", "C3X_RENDERER_RESOURCE_PACK": resource_pack,
         "C3X_RENDERER_PREVIEW_ACTIVE_VOLCANO": "1" if category == "volcanoes" and case == "active" else "",
         "C3X_RENDERER_FIDELITY_SHADOW_CONTROL": "", "C3X_RENDERER_REFLECTION_CONTROL": "",
         "C3X_RENDERER_CITY_LIGHT_CONTROL": "", "C3X_RENDERER_CITY_GLOW_CONTROL": "",
@@ -555,6 +560,7 @@ def native_render(category, case, hour, zoom, output, *, behavior=None, center=(
         "C3X_RENDERER_WATER_MOTION": "1",
         "C3X_LAB_WATER_MOTION_STUDY": "1" if category in ("seas-oceans", "rivers") else "",
         "C3X_LAB_WATER_STUDY": "1" if case.startswith("water-") else "",
+        "C3X_LAB_RESOURCE_ROSTER": resource_roster.spec(case) if category == "resources" and case in resource_roster.CASES else "",
         "C3X_RENDERER_BORDER_MESH_PREFIX": "",
         "C3X_RENDERER_BORDER_MESH_SITE": "",
     }
@@ -603,6 +609,8 @@ def native_render(category, case, hour, zoom, output, *, behavior=None, center=(
     width, height = (960, 640) if behavior else (640, 480)
     if unit_sizing:
         width, height = 1200, 880
+    if category == "resources" and case in resource_roster.CASES:
+        width, height = resource_roster.viewport(case, zoom)
     command += (f' && {executable} "{windows(dll)}" ..\\.. '
                 f'..\\default.custom_rendering.txt "{windows(csv)}" "{windows(image)}" '
                 f'{width} {height} {center[0]} {center[1]} {zoom} {hour}')

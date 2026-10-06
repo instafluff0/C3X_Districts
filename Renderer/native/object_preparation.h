@@ -81,7 +81,7 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
     };
     auto dune=[](float,float){return 0.f;};
     auto activity=[&](int c,int r){auto const& world=world_coast.world();auto i=world.index(c,r);auto value=world.at(i);
-        if(i!=std::size_t(-1))observe_world(i,value);return value!=0xffffffffu && (value>>24)!=0?1.f:0.f;};
+        if(i!=std::size_t(-1))observe_world(i,value);return value!=0xffffffffu && ((value>>24)&1u)!=0?1.f:0.f;};
     int nc=(input.projection.tile.tile_x+input.projection.tile.tile_y)/2,nr=(input.projection.tile.tile_x-input.projection.tile.tile_y)/2;
     std::size_t height_queries=0;
     ReliefSurface pickup_surface(world_coast.world().dimensions(),nc,nr,
@@ -142,7 +142,7 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
         auto shore=queries.shore(x,y);
         float river_scale=input.river_ready?
             smooth01((float(scratch.rivers.river_sample({x,y}).distance)-6.f)/16.f):1.f;
-        return base+displacement*coast_relief(float(shore.distance),float(shore.beach_width))*river_scale;
+        return base+displacement*coast_relief(float(shore.distance),float(shore.beach_width))*river_scale*queries.hidden_taper(x,y);
     };
 
     auto relief=[&](float u,float v){auto s=pickup_surface.sample(u,v);

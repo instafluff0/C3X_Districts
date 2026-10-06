@@ -49,7 +49,28 @@ template<class Target> struct StaticRasterState {
         bool contains(Rect const& r)const{return r.empty() ||
             (left<=r.left && top<=r.top && right>=r.right && bottom>=r.bottom);}
         long long area()const{return empty()?0:(long long)(right-left)*(bottom-top);}
+        Rect clipped(Rect const& r)const{return {left>r.left?left:r.left,top>r.top?top:r.top,
+            right<r.right?right:r.right,bottom<r.bottom?bottom:r.bottom};}
+        Rect joined(Rect const& r)const{
+            if(r.empty())return *this;
+            if(empty())return r;
+            return {left<r.left?left:r.left,top<r.top?top:r.top,right>r.right?right:r.right,bottom>r.bottom?bottom:r.bottom};
+        }
+        // Bounding box of this rectangle minus `r`.
+        Rect outside(Rect const& r)const{
+            if(empty() || r.contains(*this))return {};
+            Rect i=clipped(r);
+            if(i.empty())return *this;
+            Rect const pieces[4]={{left,top,i.left,bottom},{i.right,top,right,bottom},
+                                  {i.left,top,i.right,i.top},{i.left,i.bottom,i.right,bottom}};
+            Rect result{};
+            for(Rect const& piece:pieces)result=result.joined(piece);
+            return result;
+        }
     } covered;
+    // Bounds of covered pixels drawn outside the shadow receiver field of
+    // their frame (they sampled no shadow page).
+    Rect unshadowed;
     float projection=0,depth_translation=0,environment_hour=-1;
     float raster_scale=1;
     int environment_season=-1,camera_x=0,camera_y=0;
@@ -104,7 +125,7 @@ template<class Target> struct StaticRasterStates {
     // Pixels are unusable even as a preview (device error, resize, explicit reset).
     void discard(unsigned slot,StaticRasterReason reason){
         auto& state=states[slot];count(slot,reason);
-        state.valid=false;state.stale=false;state.refining=false;state.covered={};++state.revision;
+        state.valid=false;state.stale=false;state.refining=false;state.covered={};state.unshadowed={};++state.revision;
     }
     void discard_all(StaticRasterReason reason){for(unsigned i=0;i<slot_count;++i)discard(i,reason);}
     void set_layout(unsigned width,unsigned height,unsigned samples){

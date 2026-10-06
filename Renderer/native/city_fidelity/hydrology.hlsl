@@ -3531,6 +3531,16 @@ float3 project_world_content(float3 position, float3 world, float4 projection, f
     float base=(dx-dy+1)*width*.25;
     return float3((dx+dy)*width*.5,base-h*(width/224*.82),base+h*.0016*projection.w);
 }
+// Resource bodies (integer slots 21-28) and baked resource ground decals
+// (fraction .325-.385) take the natural terrain's height-depth basis, so the
+// part of a body standing on raised natural ground is not hidden beneath it.
+float resource_natural_depth(float3 projected, float world_z, float4 projection, float kind, float material) {
+    float f=frac(material);
+    if(projection.z==0 || kind<1.5 || kind>2.5 || material<20.5 || material>28.5 || !(f<.005 || abs(f-.355)<.03))
+        return projected.z;
+    float h=world_z*112-2.5;
+    return projected.y+h*(projection.z/224*.82)+h*.0016*projection.w;
+}
 
 
 struct IntegratedVertexInput
@@ -3632,7 +3642,7 @@ struct PackedFeatureInput {
 FeaturePixelInput VSIntegratedFeature(PackedFeatureInput packed)
 {
  IntegratedVertexInput input=(IntegratedVertexInput)0;
- input.position=project_world_content(packed.position,packed.world,c3x_content_projection,c3x_viewport_translation_padding);input.uv=packed.uv;input.geometry_normal=packed.normal;
+ input.position=project_world_content(packed.position,packed.world,c3x_content_projection,c3x_viewport_translation_padding);input.position.z=resource_natural_depth(input.position,packed.world.z,c3x_content_projection,c3x_viewport_translation_padding,packed.material);input.uv=packed.uv;input.geometry_normal=packed.normal;
  input.base_terrain=packed.material;input.q6_world=float4(packed.world,1);
     FeaturePixelInput output;
     output.position = float4(translated_position(input),

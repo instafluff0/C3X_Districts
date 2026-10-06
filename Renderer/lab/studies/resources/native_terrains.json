@@ -1,0 +1,35 @@
+{
+  "schema": "c3x.lab.resource_native_terrains.v0",
+  "source": "Civilization Wiki 'List of resources in Civ3' (Conquests terrain allowances); the authoritative copy is the game's BIQ TERR resource bits",
+  "terrains": {
+    "Aluminum": ["Hills", "Tundra"],
+    "Coal": ["Hills", "Mountains", "Jungle"],
+    "Horses": ["Hills", "Grassland", "Plains"],
+    "Iron": ["Hills", "Mountains"],
+    "Oil": ["Tundra", "Desert"],
+    "Rubber": ["Jungle", "Forest"],
+    "Saltpeter": ["Hills", "Mountains", "Desert"],
+    "Uranium": ["Mountains", "Forest"],
+    "Dyes": ["Jungle", "Forest"],
+    "Furs": ["Tundra", "Forest"],
+    "Gems": ["Mountains", "Jungle"],
+    "Incense": ["Hills", "Desert"],
+    "Ivory": ["Forest", "Plains"],
+    "Silks": ["Forest", "Jungle"],
+    "Spices": ["Forest", "Jungle"],
+    "Wines": ["Grassland", "Plains", "Hills"],
+    "Cattle": ["Grassland", "Plains"],
+    "Fish": ["Coast", "Sea", "Marsh"],
+    "Game": ["Forest", "Tundra", "Marsh"],
+    "Gold": ["Mountains", "Hills"],
+    "Oasis": ["Desert"],
+    "Sugar": ["Hills", "Plains"],
+    "Tobacco": ["Hills", "Grassland"],
+    "Tropical Fruit": ["Jungle"],
+    "Whales": ["Sea"],
+    "Wheat": ["Grassland", "Plains", "Flood Plain"]
+  },
+  "batches": {
+    "minerals": ["Iron", "Gold", "Gems", "Coal", "Aluminum", "Uranium", "Saltpeter"]
+  }
+}

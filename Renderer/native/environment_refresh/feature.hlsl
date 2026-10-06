@@ -1041,9 +1041,13 @@ float4 q6_raw_feature(FeaturePixelInput input)
     float resource_weight = step(20.5, input.material_index) *
         (1.0 - step(28.5, input.material_index)) *
         (1.0 - step(0.005, material_fraction));
+    // Pipeline-baked resource ground decals: soft source alpha over terrain,
+    // lit as flat ground, never shadow casters (caster cutout skips .25-.40).
+    float resource_decal_weight = step(0.325, material_fraction) *
+        (1.0 - step(0.385, material_fraction)) * source_decal_weight;
     float mine_weight = source_decal_weight *
         (1.0 - tile_object_weight) * (1.0 - infrastructure_weight) *
-        (1.0 - unit_weight);
+        (1.0 - unit_weight) * (1.0 - resource_decal_weight);
     float raised_infrastructure_weight = infrastructure_weight *
         (1.0 - step(0.25, material_fraction));
     float pollution_weight = step(0.295, material_fraction) *
@@ -1134,7 +1138,7 @@ float4 q6_raw_feature(FeaturePixelInput input)
         emissive = resource_base_texture_3.Sample(material_sampler, input.uv).rgb;
     }
     float4 mine_sample = sample_reused_resource_slot(mine_slot, input.uv);
-    clip(lerp(1.0, mine_sample.a - 0.08,
+    clip(lerp(1.0, mine_sample.a - lerp(0.08, 0.004, resource_decal_weight),
               source_decal_weight * (1.0 - unit_weight)));
     float mine_emissive_code = floor(material_fraction * 100.0 + 0.5);
     if (mine_weight > 0.5 && mine_emissive_code > 1.5)
@@ -1282,6 +1286,7 @@ float4 q6_raw_feature(FeaturePixelInput input)
     float ground_alpha = lerp(1.0,
         lerp(crater_alpha, pollution_alpha, pollution_weight),
         ground_state_weight);
+    ground_alpha = lerp(ground_alpha, mine_sample.a, resource_decal_weight);
     return float4(display_color, ground_alpha);
 }
 

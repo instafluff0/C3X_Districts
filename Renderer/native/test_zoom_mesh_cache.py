@@ -316,7 +316,8 @@ namespace c3x_renderer {namespace render_core {struct SourceShadow {
  struct Bounds {float low[3]={1,2,3},high[3]={4,5,6};};
  struct Caster {int vertices=0,indices=0,count=0,index_format=0,stride=0;unsigned vertex_offset=0,index_offset=0;
   void const* instances=nullptr;float instance_material=40;bool rigid=false;
-  unsigned layer=0,version=0,binding=0;Bounds bounds;float offset[2]={};};
+  unsigned layer=0,version=0,binding=0;Bounds bounds;float offset[2]={};
+  std::uint64_t content_generation=0;std::array<int,4> source{};};
 };}}
 enum {geometry_land=1,geometry_feature=2,geometry_natural_decal=3,geometry_layer_count=5};
 struct CachedVertexChunk {
@@ -337,6 +338,7 @@ struct State {
  struct Coast {World* value;World const& world()const{return *value;}} world_coast{&world};
  struct Material {bool ground=false;};
  struct {struct {std::vector<Material> materials{{true},{false}};} library;} cities;
+ bool fidelity_profile=false;
 ''' + method + r'''
 };
 int main(){
@@ -378,6 +380,11 @@ int main(){
   buffers[1][0].version++;std::vector<C> next;s.collect_shadow_casters(buffers,next);
   assert(next[0].version==out[0].version+1);buffers[1][0].version--;
  }
+ // The fidelity land layer is only the marsh overlay; the natural surface casts.
+ s.dims.wrap_x=s.dims.wrap_y=false;s.fidelity_profile=true;
+ {std::vector<C> fidelity;s.collect_shadow_casters(buffers,fidelity);assert(fidelity.size()==3);
+  for(auto const& c:fidelity)assert(c.vertices!=101);}
+ s.fidelity_profile=false;
  for(auto& layer:buffers)layer.clear();std::vector<C> empty;s.collect_shadow_casters(buffers,empty);assert(empty.empty());
 }
 '''

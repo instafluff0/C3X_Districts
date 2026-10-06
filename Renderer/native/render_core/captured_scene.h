@@ -88,6 +88,9 @@ public:
         std::size_t bytes()const{
             auto size=charged;for(auto const& block:blocks)size+=block.second->charged;return size;
         }
+        template<class Visit> void visit(Visit&& visit)const{
+            for(auto const& block:blocks)for(auto const& value:block.second->values)visit(value.second);
+        }
     };
     class WorldView {
         std::shared_ptr<WorldSnapshot const> lease;

@@ -8,6 +8,7 @@ its material collar, then resumes smoothly outside it. This avoids the raised
 rim produced by fading the dry height only at wetland tile centers. The ordinary
 detail/gameplay cases retain their rivers; the same join is exercised with marsh
 in the grassland category. Existing authored hill/mountain profiles are unchanged.
+Renderer64 compiles this shared query directly; the staged build includes it.
 
 `standard.json` identifies the shared implementation, dependencies, fixture recipe
 and focused regression tests. The current checkout is authoritative.

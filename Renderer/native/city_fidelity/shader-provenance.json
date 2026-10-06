@@ -3,12 +3,12 @@
     "current-selected-city-recipes"
   ],
   "source_sha256": {
-    "Renderer/native/environment_refresh/feature.hlsl": "92b004074775bc254adce83a9be08b1b3cb8b66c842bfa8c6c39d4f9d18244c3",
+    "Renderer/native/environment_refresh/feature.hlsl": "f741bea17e98fa0c261a84afe2105dac700a599f64a3a2911806f994e67eeabb",
     "Renderer/lab/shared/shaders/lighting/local_facade_lights.hlsl": "264bd350d639f897924489c2773434b2f9e0af5cf37e8f3c7034764ae47bb2c3",
     "Renderer/lab/shared/shaders/objects/city_scene_material.hlsl": "1c046f48264666bb8f7a4f22f1f94cf6bf9839b4b50777ef4870e953c8b31405",
     "Renderer/lab/shared/shaders/lighting/city_environment.hlsl": "3707899aa52eadadf6de30f76f69bc3d7afd69bed96130b376410229dc8bcea9",
     "Renderer/lab/shared/shaders/objects/settlement_ground.hlsl": "a1e5c4cc49daf8c41bda6ec9bebb4bbff94fac4bc9da9dd693027c42718c42f4",
-    "Renderer/native/render_core/world_projection.hlsl": "5f30cecf1cab7189560c0d986e7c81483964a92148cbe9660772851d8272cdc3",
+    "Renderer/native/render_core/world_projection.hlsl": "cd854053e441f1500988083dd88ad9516d1f9c0baaca92f282953f3114488f5a",
     "Renderer/native/render_core/rigid_instance_geometry.hlsl": "a84ed7142d165614efc223d5105bf43f6c2dc6f3ed9380afda12eb76076d2469",
     "Renderer/lab/shared/shaders/objects/resident_instance.hlsl": "bc8c8c8930fb3e90b870ddff3d41d4e717f1624c839e33983e9e25d4e713bc6c",
     "Renderer/native/render_core/rigid_feature.hlsl": "25c70bfacbb4b15a2dd42c4b8d1c1a891b56a155ef079bc38f9be74b81e058db",

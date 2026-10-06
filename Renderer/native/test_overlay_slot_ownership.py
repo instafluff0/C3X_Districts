@@ -19,6 +19,7 @@ class OverlaySlotOwnershipTests(unittest.TestCase):
 #include "Renderer/sandbox/static_raster_state.h"
 #include <array>
 #include <cassert>
+#include <climits>
 #include <cstdint>
 #include <cstdio>
 #include <vector>
@@ -47,6 +48,9 @@ struct Harness {
     struct TargetScope {TargetScope(Harness&,std::array<long,5>){}};
     struct RasterInputs {bool complete=true;};std::array<RasterInputs,4> raster_inputs;
     bool overlay_enabled()const{return true;}
+    // Receiver field in source pixels; the slot view maps it unchanged here.
+    StaticRect shadow_field{0,0,64,24};
+    StaticRect source_region_rect(long l,long t,long r,long b,ViewportShaderSettings const&,int)const{return {int(l),int(t),int(r),int(b)};}
     ViewportShaderSettings slot_settings(StaticState const&,ViewportShaderSettings const&)const{return {};}
     D3D11_RECT source_bounds(ViewportShaderSettings const&,D3D11_RECT r,bool)const{return r;}
     template<class Visit>void contributors(ViewportShaderSettings const&,D3D11_RECT,bool,Visit visit)const{
@@ -73,6 +77,10 @@ int main(){
     assert(h.overlay_retired_mismatch==0&&h.overlay_retired_failure==0);
     // The slot remains extendable afterwards.
     assert(h.write_slot(0,slot,screen,{0,16,64,32},1.f,false));
+    // Strip pixels outside the shadow receiver field are recorded (bootstrap
+    // images are not static slots and record nothing).
+    assert((slot.unshadowed.left==0&&slot.unshadowed.top==24&&slot.unshadowed.right==64&&slot.unshadowed.bottom==32));
+    assert(h.bootstrap_image.unshadowed.empty());
     assert(h.overlay_writes==2&&retained.revision==slot.revision&&h.static_writes==3);
     std::printf("PASS retained overlay slot ownership: bootstrap_isolated=1 slot_extends=1\n");
 }

@@ -35,6 +35,7 @@ bool emit_relief_meshes(NaturalData const&natural,int real,Tile owner,GroundProj
     HillMaterialFootprint hill_material={owner.real==5,
         lookup_natural(nc-1,nr).real==5,lookup_natural(nc+1,nr).real==5,
         lookup_natural(nc,nr+1).real==5,lookup_natural(nc,nr-1).real==5};
+    auto hidden_taper_at=[](float,float){return 1.f;}; // Lab scenes are fully explored.
     #include "relief_mesh_body.h"
     if(real==5){
         std::vector<MapVertex> ground;
