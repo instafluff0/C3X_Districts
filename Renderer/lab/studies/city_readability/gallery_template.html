@@ -1,0 +1,112 @@
+<title>City Readability Review</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500;600&family=Literata:opsz,wght@7..72,400;7..72,600&family=IBM+Plex+Mono:wght@400&display=swap">
+<style>
+/* Layout: a map-review light table: thesis and measurements first, then wide before/after frames with a split slider. */
+:root {
+  --ground: #eef0ec;      /* light-table grey with a faint green, like map margins */
+  --panel: #ffffff;
+  --ink: #1d2422;
+  --muted: #59625e;
+  --rule: #cfd5cf;
+  --brass: #9a6a1c;       /* Civ III bronze UI trim */
+  --brass-soft: #f3e6cf;
+  --water: #2f6f86;
+  --display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --body: "Literata", Georgia, "Times New Roman", serif;
+  --data: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground: #151a19; --panel: #1d2422; --ink: #e7ebe6; --muted: #a3ada7; --rule: #323b38;
+    --brass: #d7a14c; --brass-soft: #3a2f1d; --water: #6fb3cc; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --ground: #151a19; --panel: #1d2422; --ink: #e7ebe6; --muted: #a3ada7; --rule: #323b38;
+  --brass: #d7a14c; --brass-soft: #3a2f1d; --water: #6fb3cc; color-scheme: dark;
+}
+body { background: var(--ground); color: var(--ink); font: 400 16px/1.6 var(--body); }
+.wrap { max-width: 1180px; margin: 0 auto; padding-inline: 20px; padding-block: 28px 64px; display: grid; gap: 40px; }
+header { display: grid; gap: 14px; }
+.eyebrow { font: 600 13px/1 var(--display); letter-spacing: .08em; text-transform: uppercase; color: var(--brass); }
+h1 { font: 600 clamp(28px, 4.2vw, 44px)/1.08 var(--display); margin: 0; text-wrap: balance; }
+h2 { font: 600 22px/1.2 var(--display); margin: 0 0 14px; text-wrap: balance; }
+h3 { font: 600 16px/1.3 var(--display); margin: 0 0 6px; letter-spacing: .02em; }
+p { margin: 0; max-width: 68ch; }
+.lede { font-size: 18px; color: var(--ink); }
+.muted { color: var(--muted); }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.fact { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 16px 18px; display: grid; gap: 8px; min-width: 0; }
+.fact ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+.table-scroll { overflow-x: auto; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; font: 400 14px/1.4 var(--data); font-variant-numeric: tabular-nums; }
+th, td { padding: 8px 12px; text-align: right; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; font-family: var(--display); }
+thead th { font: 600 12px/1.2 var(--display); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+tbody tr:last-child td { border-bottom: 0; }
+td.good { color: var(--water); font-weight: 600; }
+section { display: grid; gap: 4px; }
+.grid { display: grid; gap: 22px; }
+.grid.two { grid-template-columns: repeat(auto-fit, minmax(min(100%, 520px), 1fr)); }
+.compare { margin: 0; display: grid; gap: 8px; min-width: 0; }
+figcaption { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: baseline; }
+.tag { font: 600 14px/1.2 var(--display); text-transform: capitalize; letter-spacing: .02em; }
+.note { color: var(--muted); font-size: 14px; }
+.frame { position: relative; overflow: hidden; border-radius: 4px; border: 1px solid var(--rule); background: var(--panel); line-height: 0; }
+.frame img { display: block; width: 100%; height: auto; max-width: 100%; }
+.frame .after { position: absolute; inset: 0; clip-path: inset(0 0 0 var(--split)); }
+.frame::after { content: ""; position: absolute; top: 0; bottom: 0; left: var(--split); width: 2px; margin-left: -1px; background: var(--brass); box-shadow: 0 0 0 1px rgba(0,0,0,.25); pointer-events: none; }
+.side { position: absolute; top: 8px; font: 600 11px/1 var(--display); letter-spacing: .08em; text-transform: uppercase; color: #fff; background: rgba(20, 26, 24, .66); padding: 5px 7px; border-radius: 3px; }
+.side.left { left: 8px; } .side.right { right: 8px; }
+.slider input { width: 100%; accent-color: var(--brass); }
+.slider input:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.decisions { background: var(--brass-soft); border-radius: 6px; padding: 18px 20px; display: grid; gap: 10px; }
+.decisions ol { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 80ch; }
+code { font: 400 13px/1.4 var(--data); }
+</style>
+<div class="wrap">
+<header>
+  <div class="eyebrow">Renderer Lab · Cities · candidate pack v5</div>
+  <h1>Making Civ VI cities read like Civ III cities</h1>
+  <p class="lede">Production cities sat darker than the grass around them, covered under half of their footprint and stood on rivers and bridges. The candidate keeps every selected Civ VI building and texture and changes placement, ground and lighting response so each city reads as one bright block per tile.</p>
+  <p class="muted">Drag the slider in any frame: left is the current production pack, right is the candidate. All frames are standalone Lab renders through the production D3D11 renderer at noon, not live-game captures.</p>
+</header>
+<!--METRICS-->
+<div class="facts">
+  <div class="fact"><h3>Placement</h3><ul>
+    <li>Buildings grow about their own anchors until they nearly meet; Industrial and Modern grow first and largest.</li>
+    <li>Gaps are refilled with more of the same city's buildings.</li>
+    <li>Industrial cities gain smokestacks, a factory and a power plant; Modern cities gain towers, a water tower and a plant.</li>
+  </ul></div>
+  <div class="fact"><h3>Ground plate</h3><ul>
+    <li>A crisp plate under the buildings and lanes: packed earth, cobble, grey cobble or concrete by era.</li>
+    <li>It fades out over rivers, water and mountains.</li>
+  </ul></div>
+  <div class="fact"><h3>Site awareness</h3><ul>
+    <li>Outskirt buildings yield to rivers (bridges stay visible), water, mountains and steep slopes.</li>
+    <li>Forest closes in where a building yielded.</li>
+    <li>The palace, walls and civic centre always stay.</li>
+  </ul></div>
+  <div class="fact"><h3>Light response</h3><ul>
+    <li>Brighter, higher-contrast bodies with a highlight shoulder, so plaster and glass keep detail.</li>
+    <li>Night window light is unchanged.</li>
+  </ul></div>
+</div>
+<!--SECTIONS-->
+<div class="decisions">
+  <h2>Open choices before promotion</h2>
+  <!--DECISIONS-->
+</div>
+</div>
+<script>
+document.querySelectorAll('.compare').forEach(function (figure) {
+  var frame = figure.querySelector('.frame');
+  var range = figure.querySelector('input[type=range]');
+  function apply() { frame.style.setProperty('--split', range.value + '%'); }
+  range.addEventListener('input', apply);
+  apply();
+});
+</script>

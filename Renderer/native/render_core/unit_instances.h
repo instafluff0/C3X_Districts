@@ -269,7 +269,7 @@ public:
            value.presentation_frequency<=0||value.presentation_time_ticks<0||
            value.projection_scale_milli<=0||value.projection_scale_milli>4000||
            value.max_hp<=0||value.damage<0||value.damage>value.max_hp||
-           (value.flags&~15u)||!capacity)return false;
+           (value.flags&~31u)||!capacity)return false;
         if(newer_event(value.unit_id,value.presentation_time_ticks,value.presentation_frequency))return false;
         if(retired(value.unit_id))return false;
         if(value.flags&C3X_RENDERER_UNIT_HIDDEN){
@@ -296,7 +296,7 @@ public:
                  ActionName action_name,Selection& selected) {
         selected={};
         if(request.struct_size!=sizeof(request)||request.unit_key[63]||request.unit_id<0||
-           (flags&~15u)||!capacity)return false;
+           (flags&~31u)||!capacity)return false;
         if(newer_event(request.unit_id,request.presentation_time_ticks,request.presentation_frequency))return false;
         if(retired(request.unit_id))return false;
         if(flags&C3X_RENDERER_UNIT_HIDDEN){
@@ -378,7 +378,7 @@ public:
         int tile_x=0,tile_y=0;
         std::size_t unit=0,action=0;
         unsigned predict=0;
-        bool animated=false,cursor=false;
+        bool animated=false,cursor=false,owner_ring=false;
         int display_id=-1;
         std::uint64_t capture_order=0,pose_identity=0;
         long long pose_ticks=-1;
@@ -613,6 +613,7 @@ public:
             pose.display_id=item.display_id;pose.capture_order=item.used;pose.travelling=motion!=nullptr;
             pose.unit=item.unit;if(!motion)pose.action=item.action;
             pose.cursor=(pair.second.flags&C3X_RENDERER_UNIT_CURSOR)&&(pair.second.flags&C3X_RENDERER_UNIT_SELECTED);
+            pose.owner_ring=(pair.second.flags&C3X_RENDERER_UNIT_TEAM_DISC)!=0;
             pose.animated=pose.animated||motion||pose.cursor||animated(selected,catalog);
             result.push_back(pose);
             // Each native captured wrap occurrence is a separate placement; all

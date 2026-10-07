@@ -13,7 +13,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from Renderer.tools.asset_compiler import normalized_animation, normalized_pose_cache, normalized_skin
-from Renderer.tools.asset_compiler.school_orientation import align_school_payload, thin_school
+from Renderer.tools.asset_compiler.school_orientation import align_school_payload, face_motion, thin_school
 from Renderer.tools.asset_compiler.unit_model_extractor import SOURCE_UNITS_PER_TILE
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -254,6 +254,7 @@ def build(animated: Path, landmarks: Path, output: Path, *, consumed=None) -> di
     # swim paths, so the school keeps its footprint inside the tile.
     for key, (source, keep, body_scale) in {"fish.few": ("fish", 4, 3.0)}.items():
         payload, kept = thin_school((output / bindings[source]["mesh"]).read_bytes(), keep, body_scale)
+        payload = face_motion(payload)   # each fish faces the way it swims around the loop
         filename = f"clips/{key.replace('.', '_')}.bin"
         (output / filename).write_bytes(payload)
         total += len(payload)

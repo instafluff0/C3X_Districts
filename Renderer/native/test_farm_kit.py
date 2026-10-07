@@ -469,6 +469,351 @@ int main(){
 }
 ''')
 
+    def test_plots_follow_the_road_and_continue_across_tiles(self):
+        run_cpp(KIT + r'''
+#include <map>
+int main(){
+ Kit kit;
+ // Two plot shapes: a square field and a 2:1 band.
+ auto plot=[&](char const* id,float width){FeatureAsset asset=flat(id,0);
+  for(auto& vertex:asset.vertices)vertex.position[0]*=width;
+  kit.farm.assets.push_back(asset);return unsigned(kit.farm.assets.size()-1);};
+ FeatureGroup plots;plots.name="farm_kit:plots";
+ for(auto index:{plot("farm_kit:crop:plot0:e0",1),plot("farm_kit:crop:plot1:e0",2)}){
+  FeaturePlacement placement{};placement.asset_index=index;plots.placements.push_back(placement);}
+ kit.farm.groups.push_back(plots);
+ auto dry=[](float,float){return std::array<float,3>{0,0,1};};
+ auto lay=[&](int x,int y,objects::Route route){
+  c3x_renderer_tile_v1 tile{};tile.tile_x=x;tile.tile_y=y;tile.improvement_flags=C3X_RENDERER_IMPROVEMENT_IRRIGATION;
+  objects::Plan plan,routes;routes.routes.push_back(route);
+  assert(objects::select_improvements(tile,kit.assets,2,0,false,true,plan));
+  assert(plan.farm_plots);
+  objects::clear_farm(plan,routes,kit.assets,{});
+  objects::settle_farm_fields(plan,tile,kit.assets,dry);
+  std::vector<objects::Instance> fields;
+  for(auto const& instance:plan.instances)
+   if(kit.farm.assets[instance.asset].id.find(":crop:")!=std::string::npos){
+    assert(kit.farm.assets[instance.asset].id.find(":plot")!=std::string::npos); // no patchwork
+    fields.push_back(instance);}
+  assert(fields.size()>=4);
+  return fields;};
+ auto quarter=[](float angle){float t=std::fmod(std::fmod(angle,1.5707963f)+1.5707963f,1.5707963f);
+  return std::min(t,1.5707963f-t);};
+ // A road along the tile's u axis (an edge road) and a corner (diagonal) road.
+ for(auto const& field:lay(10,10,{0,.5f,1,.5f,0,false,false,false}))assert(quarter(field.rotation)<.02f);
+ for(auto const& field:lay(10,10,{0,0,1,1,0,false,false,false}))assert(std::abs(quarter(field.rotation)-.7854f)<.02f);
+ // The same road continuing into the edge neighbour (u+1): its strips run
+ // on at the same distances from the road, and each tile's plots end at its
+ // edge instead of being cut there.
+ std::map<long,int> strips;
+ for(int x:{10,11})for(auto const& field:lay(x,x,{0,.5f,1,.5f,0,false,false,false})){
+  strips[std::lround(field.v*1e4f)]|=x==10?1:2;
+  auto const& asset=kit.farm.assets[field.asset];
+  float width=asset.vertices.back().position[0]-asset.vertices.front().position[0];
+  float half=(std::abs(std::cos(field.rotation))*field.stretch*width+std::abs(std::sin(field.rotation)))*field.scale*.5f;
+  assert(field.u-half>-1e-3f && field.u+half<1.001f);
+ }
+ for(auto const& strip:strips)assert(strip.second==3);
+}
+''')
+
+    def test_plots_fill_each_area_between_routes_and_never_straddle_one(self):
+        # One direction for a whole tile let plots cross its routes (clipped
+        # to pieces on both sides) and left dense junctions patchy. Each area
+        # the routes leave open now lays its own plots along one of its
+        # routes, keeps them inside itself and fills it.
+        run_cpp(KIT + r'''
+int main(){
+ Kit kit;
+ auto plot=[&](char const* id,float width){FeatureAsset asset=flat(id,0);
+  for(auto& vertex:asset.vertices)vertex.position[0]*=width;
+  kit.farm.assets.push_back(asset);return unsigned(kit.farm.assets.size()-1);};
+ FeatureGroup plots;plots.name="farm_kit:plots";
+ for(auto index:{plot("farm_kit:crop:plot0:e0",1),plot("farm_kit:crop:plot1:e0",2)}){
+  FeaturePlacement placement{};placement.asset_index=index;plots.placements.push_back(placement);}
+ kit.farm.groups.push_back(plots);
+ auto dry=[](float,float){return std::array<float,3>{0,0,1};};
+ auto height=[](float,float){return 0.f;};
+ constexpr float pi=3.14159265f;
+ // A junction linking all eight neighbours splits the tile into eight wedges.
+ c3x_renderer_tile_v1 tile{};tile.tile_x=10;tile.tile_y=10;tile.improvement_flags=C3X_RENDERER_IMPROVEMENT_IRRIGATION;
+ objects::Plan plan,routes;
+ for(unsigned k=0;k<8;++k){float a=float(k)*pi/4,reach=k&1u?.5f*std::sqrt(2.f):.5f;
+  routes.routes.push_back({.5f,.5f,.5f+reach*std::cos(a),.5f+reach*std::sin(a),0,false,false,false});}
+ assert(objects::select_improvements(tile,kit.assets,2,0,false,true,plan));
+ objects::clear_farm(plan,routes,kit.assets,{});
+ objects::settle_farm_fields(plan,tile,kit.assets,dry);
+ auto p=projection();p.tile=tile;
+ auto wedge=[&](float u,float v){return unsigned(int(std::floor(std::atan2(v-.5f,u-.5f)/(pi/4)+8))%8);};
+ std::array<float,8> covered{},open{};
+ for(auto const& instance:plan.instances){
+  if(kit.farm.assets[instance.asset].id.find(":plot")==std::string::npos)continue;
+  // Along one of its wedge's roads (0 or 45 degrees, modulo a turn).
+  float turn=std::fmod(std::fmod(instance.rotation,pi/4)+pi/4,pi/4);
+  assert(std::min(turn,pi/4-turn)<.03f);
+  objects::Plan one=plan;one.instances={instance};
+  objects::Surfaces surfaces;objects::compile(one,p,kit.assets,dry,height,surfaces);
+  auto const& vertices=surfaces.layers[objects::farm_layer];
+  int first=-1;
+  for(std::size_t k=0;k+2<vertices.size();k+=3){
+   float u[3],v[3];
+   for(unsigned i=0;i<3;++i){u[i]=vertices[k+i].world_x-10.f;v[i]=1.f-vertices[k+i].world_y;}
+   unsigned here=wedge((u[0]+u[1]+u[2])/3,(v[0]+v[1]+v[2])/3);
+   assert(first<0 || unsigned(first)==here);first=int(here);
+   covered[here]+=std::abs((u[1]-u[0])*(v[2]-v[0])-(v[1]-v[0])*(u[2]-u[0]))*.5f;
+  }
+ }
+ for(int j=0;j<200;++j)for(int i=0;i<200;++i){float u=(float(i)+.5f)/200,v=(float(j)+.5f)/200;
+  if(plan.farm_clearing.at(u,v)>0)open[wedge(u,v)]+=1.f/40000;}
+ for(unsigned k=0;k<8;++k)assert(covered[k]>.8f*open[k]);
+}
+''')
+
+    def test_neighbouring_farms_join_the_plots_of_the_area_they_share(self):
+        # Each tile laid out its own part of an area its routes enclose, so
+        # one area showed as separate pieces (often at different angles)
+        # meeting at feathered tile edges. Farms in a small area now lay out
+        # the same plots and cut them exactly, unfeathered, at the edge they
+        # share; each draws its own part.
+        run_cpp(KIT + r'''
+#include <map>
+int main(){
+ Kit kit;
+ auto plot=[&](char const* id,float width){FeatureAsset asset=flat(id,0);
+  for(auto& vertex:asset.vertices)vertex.position[0]*=width;
+  kit.farm.assets.push_back(asset);return unsigned(kit.farm.assets.size()-1);};
+ FeatureGroup plots;plots.name="farm_kit:plots";
+ for(auto index:{plot("farm_kit:crop:plot0:e0",1),plot("farm_kit:crop:plot1:e0",2)}){
+  FeaturePlacement placement{};placement.asset_index=index;plots.placements.push_back(placement);}
+ kit.farm.groups.push_back(plots);
+ auto dry=[](float,float){return std::array<float,3>{0,0,1};};
+ auto height=[](float,float){return 0.f;};
+ // Farms with roads on world tiles (c,r), c and r in 0..3: every two
+ // neighbours link (Civ III), so the areas are the triangles between them.
+ std::map<std::pair<int,int>,c3x_renderer_tile_v1> world;
+ for(int c=0;c<4;++c)for(int r=0;r<4;++r){c3x_renderer_tile_v1 tile{};tile.tile_x=c+r;tile.tile_y=c-r;
+  tile.improvement_flags=C3X_RENDERER_IMPROVEMENT_IRRIGATION;tile.city_id=-1;tile.road_mask=1;world[{c,r}]=tile;}
+ struct Piece {objects::Instance instance;std::vector<objects::Vertex> vertices;};
+ auto lay=[&](int c,int r){
+  auto const& tile=world[{c,r}];
+  auto neighbour=[&](int dx,int dy)->c3x_renderer_tile_v1 const*{
+   int x=tile.tile_x+dx,y=tile.tile_y+dy;auto found=world.find({(x+y)/2,(x-y)/2});
+   return (x+y)%2==0 && found!=world.end()?&found->second:nullptr;};
+  objects::Plan plan,routes;
+  int const links[8][2]={{1,0},{-1,0},{0,-1},{0,1},{1,-1},{1,1},{-1,-1},{-1,1}};
+  for(auto const& link:links)if(world.count({c+link[0],r+link[1]}))
+   routes.routes.push_back({.5f,.5f,.5f+.5f*float(link[0]),.5f-.5f*float(link[1]),0,false,false,false});
+  assert(objects::select_improvements(tile,kit.assets,2,0,false,true,plan));
+  objects::clear_farm(plan,routes,kit.assets,{});
+  objects::settle_farm_fields(plan,tile,kit.assets,dry,neighbour);
+  auto p=projection();p.tile=tile;
+  std::vector<Piece> pieces;
+  for(auto const& instance:plan.instances){
+   if(kit.farm.assets[instance.asset].id.find(":plot")==std::string::npos || !(instance.region>>8))continue;
+   objects::Plan one=plan;one.instances={instance};
+   objects::Surfaces surfaces;objects::compile(one,p,kit.assets,dry,height,surfaces);
+   pieces.push_back({instance,surfaces.layers[objects::farm_layer]});
+  }
+  return pieces;};
+ // Tiles (1,1) and (2,1) share the edge at world x=2 (their u=1 and u=0).
+ auto left=lay(1,1),right=lay(2,1);
+ assert(!left.empty() && !right.empty());
+ unsigned joined=0;
+ for(auto const& a:left)for(auto const& b:right){
+  auto const& x=a.instance;auto const& y=b.instance;
+  if(std::abs(x.u-1.f-y.u)>1e-4f || std::abs(x.v-y.v)>1e-4f)continue;
+  // The same plot, placed by both farms.
+  assert(x.asset==y.asset && std::abs(x.rotation-y.rotation)<1e-5f && std::abs(x.scale-y.scale)<1e-5f &&
+   std::abs(x.stretch-y.stretch)<1e-5f);
+  // Unfeathered where it meets the shared edge away from routes: the full
+  // opacity code (.0134), not the cut's (.0131).
+  bool reaches_left=false,reaches_right=false;
+  for(auto const& vertex:a.vertices){assert(vertex.world_x<=2.0001f);
+   reaches_left=reaches_left || (vertex.world_x>1.9999f && vertex.base_terrain-std::floor(vertex.base_terrain)>.01335f);}
+  for(auto const& vertex:b.vertices){assert(vertex.world_x>=1.9999f);
+   reaches_right=reaches_right || (vertex.world_x<2.0001f && vertex.base_terrain-std::floor(vertex.base_terrain)>.01335f);}
+  joined+=reaches_left && reaches_right;
+ }
+ assert(joined>=1);
+}
+''')
+
+    def test_plots_stay_as_light_as_the_patchwork(self):
+        # Plots gridded 12x12 (288 triangles each, cells under .04 tile) and
+        # 1024 ground queries per farm for its water made the 1498 save scroll
+        # and jump visibly slower than the patchwork. Plots now use about the
+        # patchwork's .078-tile cells, and the water is sampled on a lattice.
+        import sys
+        sys.path.insert(0, str(ROOT))
+        from Renderer.tools.asset_compiler.build_farm_runtime import PLOTS, plot
+        triangles = []
+        for box in PLOTS:
+            mesh = plot(box)
+            ys = sorted({vertex["position"][1] for vertex in mesh["vertices"]})
+            # Cell height on a plot's longest layout (.5 tile) stays near .1.
+            self.assertLessEqual((ys[1] - ys[0]) * .5, .1)
+            triangles.append(len(mesh["topology"]["indices"]) // 3)
+        self.assertLessEqual(sum(triangles) / len(triangles), 100)
+        run_cpp(KIT + r'''
+int main(){
+ Kit kit;
+ FeatureAsset asset=flat("farm_kit:crop:plot0:e0",0);kit.farm.assets.push_back(asset);
+ FeatureGroup plots;plots.name="farm_kit:plots";
+ FeaturePlacement placement{};placement.asset_index=unsigned(kit.farm.assets.size()-1);plots.placements.push_back(placement);
+ kit.farm.groups.push_back(plots);
+ unsigned queries=0;
+ auto dry=[&](float,float){++queries;return std::array<float,3>{0,0,1};};
+ c3x_renderer_tile_v1 tile{};tile.tile_x=10;tile.tile_y=10;tile.improvement_flags=C3X_RENDERER_IMPROVEMENT_IRRIGATION;
+ objects::Plan plan,routes;routes.routes.push_back({0,.5f,1,.5f,0,false,false,false});
+ assert(objects::select_improvements(tile,kit.assets,2,0,false,true,plan));
+ objects::clear_farm(plan,routes,kit.assets,{});
+ objects::settle_farm_fields(plan,tile,kit.assets,dry);
+ assert(plan.instances.size()>1 && queries<=100);
+}
+''')
+
+    def test_farm_ground_spans_verges_joins_farms_and_eases_into_other_land(self):
+        # The grass ground under a farm (farm_kit:ground) runs under its route
+        # verges, continues unfeathered into a neighbouring farm, and eases
+        # into other land over a wide, irregular edge rather than the fields'
+        # narrow one.
+        run_cpp(KIT + r'''
+#include <map>
+int main(){
+ Kit kit;
+ auto add=[&](char const* id,char const* name){kit.farm.assets.push_back(flat(id,0));FeatureGroup group;group.name=name;
+  FeaturePlacement placement{};placement.asset_index=unsigned(kit.farm.assets.size()-1);
+  group.placements.push_back(placement);kit.farm.groups.push_back(group);};
+ add("farm_kit:crop:plot0:e0","farm_kit:plots");add("farm_kit:crop:ground:e0","farm_kit:ground");
+ auto dry=[](float,float){return std::array<float,3>{0,0,1};};
+ auto height=[](float,float){return 0.f;};
+ // Tile (1,1) farms; its u=1 neighbour (2,1) farms too, its u=0 one (0,1) not.
+ std::map<std::pair<int,int>,c3x_renderer_tile_v1> world;
+ for(int c=0;c<3;++c){c3x_renderer_tile_v1 t{};t.tile_x=c+1;t.tile_y=c-1;t.city_id=-1;t.terrain_type=2; // grassland
+  t.improvement_flags=c?C3X_RENDERER_IMPROVEMENT_IRRIGATION:0;world[{c,1}]=t;}
+ auto const& tile=world[{1,1}];
+ auto neighbour=[&](int dx,int dy)->c3x_renderer_tile_v1 const*{
+  int x=tile.tile_x+dx,y=tile.tile_y+dy;auto found=world.find({(x+y)/2,(x-y)/2});
+  return (x+y)%2==0 && found!=world.end()?&found->second:nullptr;};
+ objects::Plan plan,routes;routes.routes.push_back({0,.5f,1,.5f,0,false,false,false});
+ assert(objects::select_improvements(tile,kit.assets,2,0,false,true,plan));
+ objects::clear_farm(plan,routes,kit.assets,{});
+ objects::settle_farm_fields(plan,tile,kit.assets,dry,neighbour);
+ objects::Instance const* ground=nullptr;bool plot_first=false;
+ for(auto const& instance:plan.instances){auto const& id=kit.farm.assets[instance.asset].id;
+  if(id.find(":ground")!=std::string::npos)ground=&instance;
+  else if(id.find(":plot")!=std::string::npos && !ground)plot_first=true;}
+ assert(ground && !plot_first); // drawn before (under) the plots
+ objects::Plan one=plan;one.instances={*ground};
+ auto p=projection();p.tile=tile;
+ objects::Surfaces surfaces;objects::compile(one,p,kit.assets,dry,height,surfaces);
+ auto fade=[](objects::Vertex const& vertex){return (vertex.base_terrain-std::floor(vertex.base_terrain)-.0131f)/.0003f;};
+ bool on_verge=false,joined=false;
+ for(auto const& vertex:surfaces.layers[objects::farm_layer]){
+  // Tile (1,1) spans world x 1-2 (u) and y 1-2 (1-v).
+  float u=vertex.world_x-1.f,v=2.f-vertex.world_y;
+  on_verge=on_verge || std::abs(v-.5f)<.03f;                       // under the road's verge
+  // At the shared edge as strong as inside (grassland: its code is capped
+  // near .36-.5 by the ground's strength, never feathered toward 0 there).
+  if(u>.999f && std::abs(v-.5f)<.2f)joined=joined || fade(vertex)>.3f;
+  // Still easing in .1 tile from open land (the fields' own edge is opaque
+  // from .03 tile in).
+  if(u<.1f)assert(fade(vertex)<.51f);
+ }
+ assert(on_verge && joined);
+}
+''')
+
+    def test_farm_ground_strength_follows_terrain_and_meets_halfway(self):
+        # One green ground on every farm hid grassland, plains, desert and
+        # tundra. The ground's strength now follows the tile's terrain (desert
+        # weakest, grassland full) and two farms of different terrains meet
+        # halfway at their shared edge, so there is no step between them.
+        run_cpp(KIT + r'''
+#include <map>
+int main(){
+ Kit kit;
+ auto add=[&](char const* id,char const* name){kit.farm.assets.push_back(flat(id,0));FeatureGroup group;group.name=name;
+  FeaturePlacement placement{};placement.asset_index=unsigned(kit.farm.assets.size()-1);
+  group.placements.push_back(placement);kit.farm.groups.push_back(group);};
+ add("farm_kit:crop:plot0:e0","farm_kit:plots");add("farm_kit:crop:ground:e0","farm_kit:ground");
+ auto dry=[](float,float){return std::array<float,3>{0,0,1};};
+ auto height=[](float,float){return 0.f;};
+ // A desert farm (1,1) beside a grassland farm (2,1), between open land.
+ std::map<std::pair<int,int>,c3x_renderer_tile_v1> world;
+ for(int c=0;c<4;++c){c3x_renderer_tile_v1 t{};t.tile_x=c+1;t.tile_y=c-1;t.city_id=-1;t.terrain_type=c==1?0:2;
+  t.improvement_flags=c==1 || c==2?C3X_RENDERER_IMPROVEMENT_IRRIGATION:0;world[{c,1}]=t;}
+ auto ground=[&](int c){
+  auto const& tile=world[{c,1}];
+  auto neighbour=[&](int dx,int dy)->c3x_renderer_tile_v1 const*{
+   int x=tile.tile_x+dx,y=tile.tile_y+dy;auto found=world.find({(x+y)/2,(x-y)/2});
+   return (x+y)%2==0 && found!=world.end()?&found->second:nullptr;};
+  objects::Plan plan,routes;
+  assert(objects::select_improvements(tile,kit.assets,2,0,false,true,plan));
+  objects::clear_farm(plan,routes,kit.assets,{});
+  objects::settle_farm_fields(plan,tile,kit.assets,dry,neighbour);
+  objects::Plan one=plan;one.instances.clear();
+  for(auto const& instance:plan.instances)if(kit.farm.assets[instance.asset].id.find(":ground")!=std::string::npos)one.instances.push_back(instance);
+  auto p=projection();p.tile=tile;
+  objects::Surfaces surfaces;objects::compile(one,p,kit.assets,dry,height,surfaces);
+  return surfaces.layers[objects::farm_layer];};
+ auto fade=[](objects::Vertex const& vertex){return (vertex.base_terrain-std::floor(vertex.base_terrain)-.0131f)/.0003f;};
+ // Mean code in the middle of each tile, and along their shared edge (x=2).
+ auto mean=[&](std::vector<objects::Vertex> const& vertices,float x0,float x1){
+  float sum=0;int count=0;
+  for(auto const& vertex:vertices)if(vertex.world_x>=x0 && vertex.world_x<=x1 && vertex.world_y>1.3f && vertex.world_y<1.7f){
+   sum+=fade(vertex);++count;}
+  assert(count>0);return sum/float(count);};
+ auto desert=ground(1),grassland=ground(2);
+ float desert_middle=mean(desert,1.35f,1.65f),grassland_middle=mean(grassland,2.35f,2.65f);
+ assert(desert_middle<grassland_middle-.05f);
+ float desert_edge=mean(desert,1.99f,2.f),grassland_edge=mean(grassland,2.f,2.01f);
+ assert(std::abs(desert_edge-grassland_edge)<.03f);
+ // Its tint too (the normal's length, 1.1 + t: desert 1, grassland .25), met
+ // halfway; world_valid stays 1 for shadows.
+ auto tint=[&](std::vector<objects::Vertex> const& vertices,float x0,float x1){
+  float sum=0;int count=0;
+  for(auto const& vertex:vertices)if(vertex.world_x>=x0 && vertex.world_x<=x1 && vertex.world_y>1.3f && vertex.world_y<1.7f){
+   assert(vertex.world_valid==1.f);
+   sum+=std::sqrt(vertex.normal_x*vertex.normal_x+vertex.normal_y*vertex.normal_y+vertex.normal_z*vertex.normal_z)-1.1f;++count;}
+  assert(count>0);return sum/float(count);};
+ assert(std::abs(tint(desert,1.35f,1.5f)-1.f)<.02f && std::abs(tint(grassland,2.5f,2.65f)-.25f)<.02f);
+ assert(std::abs(tint(desert,1.99f,2.f)-.625f)<.03f && std::abs(tint(grassland,2.f,2.01f)-.625f)<.03f);
+}
+''')
+
+    def test_farm_terrain_tint_reaches_the_feature_shader(self):
+        # The tint was first carried in world_valid, which the compact feature
+        # vertex (48 bytes) drops, so the shader never saw it. It now rides in
+        # the normal's length, which that vertex keeps; the shader decodes it
+        # from there and normalizes the normal before any lighting.
+        run_cpp(r'''
+#include "Renderer/native/render_core/prepared_mesh.h"
+#include <cassert>
+#include <cmath>
+int main(){
+ using namespace c3x_renderer::render_core;
+ std::vector<Vertex> source(3);
+ for(unsigned i=0;i<3;++i){auto& v=source[i];v.x=float(i);v.y=float(i*i);v.base_terrain=24.0134f;
+  v.normal_z=1.1f+.65f;v.world_x=1.f+float(i);v.world_y=2.f;v.world_z=.03f;v.world_valid=1.f;}
+ PreparedMesh mesh;MeshFormat format;format.pickup=true;format.feature=true;
+ assert(prepare_mesh(source,nullptr,format,mesh,[]{return false;}));
+ assert(mesh.vertex_stride==48u);
+ for(unsigned i=0;i<3;++i){float fields[12];std::memcpy(fields,mesh.vertices.data()+i*48u,48u);
+  // x y z u v normal(3) material world(3)
+  assert(std::abs(std::sqrt(fields[5]*fields[5]+fields[6]*fields[6]+fields[7]*fields[7])-1.75f)<1e-6f);}
+}
+''')
+        shader = (ROOT / 'Renderer/native/render_core/terrain_scene.hlsl').read_text()
+        decode = shader[shader.index('float farm_kit_normal_length'):]
+        decode = decode[:decode.index('// Resource models cut out')]
+        self.assertIn('length(input.geometry_normal)', decode)
+        self.assertNotIn('q6_world', decode)
+        # Every use of the feature normal normalizes it first.
+        feature = shader[shader.index('float4 q6_raw_feature('):shader.index('float4 sample_road_source(')]
+        uses = feature.count('input.geometry_normal')
+        self.assertEqual(uses, feature.count('normalize(input.geometry_normal)') + 1)  # + the decode
+
     def test_farm_without_kit_keeps_its_previous_layout(self):
         run_cpp(KIT + r'''
 int main(){
@@ -496,7 +841,10 @@ int main(){
         shader = (native / 'rigid_feature.hlsl').read_text()
         depth = between(shader, ' float3 position=project_world_content(p.position,p.world,i.projection,2);',
                         ' return o;')
-        depth = '\n'.join(line for line in depth.splitlines() if 'o.position.xy=' not in line)
+        # Only the depth basis is under test: screen position and the
+        # shadow-receiver world point are left out.
+        depth = '\n'.join(line for line in depth.splitlines()
+                          if 'o.position.xy=' not in line and 'q6_world' not in line)
         run_cpp(r'''
 #include <cassert>
 #include <cmath>

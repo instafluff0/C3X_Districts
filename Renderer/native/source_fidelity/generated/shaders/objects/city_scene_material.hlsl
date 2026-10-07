@@ -57,8 +57,117 @@ float3 q8_city_direct_specular(float3 light,float3 radiance,float3 n,float3 geom
  return radiance*(distribution*fresnel*saturate(dot(n,light)));
 }
 #endif
+#ifdef Q8_CITY_LOOK
+// Pack-selected readability response for lit bodies: (gain, contrast,
+// saturation) offsets. Zero is the identity, so earlier packs are unchanged.
+// Contrast is a power about a dim linear pivot: sunlit faces brighten and
+// shaded faces deepen, as in Civ III's pre-lit city art.
+float3 q8_city_look(float3 lit,float3 look,float3 base,float pale) {
+ if(!any(look))return lit;
+ float3 weights=float3(.2126,.7152,.0722);
+ // Bright albedo (whitewash, white roofs, orange tile and thatch) already
+ // reads; it takes less of the lift so it keeps detail beside timber, brick
+ // and stone. The brightest channel catches saturated roofs as well as white.
+ look.xy*=1-pale*smoothstep(.2,.65,max(base.r,max(base.g,base.b)));
+ float luminance=max(dot(lit,weights),1e-5);
+ float target=.1*pow(luminance/.1,1+look.y)*(1+look.x);
+ // A soft shoulder keeps whitewash, plaster and glass detailed while darker
+ // timber, thatch and stone receive the full lift.
+ if(target>.42)target=.42+(target-.42)/(1+(target-.42)/.4);
+ lit*=target/luminance;
+ float grey=dot(lit,weights);
+ return max(0,grey+(lit-grey)*(1+look.z));
+}
+#endif
+#ifdef Q8_CITY_EMISSION_LOOK
+// Pack-selected window response: (shoulder, gain offset). Zero is the
+// identity. The shoulder keeps the brightest windows coloured instead of
+// clipping to white while dim windows keep their glow.
+float3 q8_city_emission(float3 emission,float2 look) {
+ if(!any(look))return emission;
+ emission*=1+look.y;
+ if(look.x<=0)return emission;
+ float luminance=max(dot(emission,float3(.2126,.7152,.0722)),1e-5);
+ return emission*(1/(1+luminance/look.x));
+}
+#endif
+#ifdef Q8_CITY_TIME
+// Procedural attached effects on camera-facing quads: flame (90), smoke (91)
+// and night light (92). p.uv is the quad coordinate (x -1..1 across, y 0..1
+// up); seed and strength ride in the auxiliary coordinates. The phase is a
+// pure function of the visual clock and the seed: no state, no catch-up.
+float q8_effect_hash(float n){return frac(sin(n)*43758.5453);}
+float q8_effect_noise(float2 x){
+ float2 i=floor(x),f=frac(x);f=f*f*(3-2*f);float n=i.x+i.y*57;
+ return lerp(lerp(q8_effect_hash(n),q8_effect_hash(n+1),f.x),lerp(q8_effect_hash(n+57),q8_effect_hash(n+58),f.x),f.y);
+}
+float4 q8_effect_over(float4 top,float4 under){
+ // Premultiplied "over", returned straight for q6_scene_output.
+ float a=top.a+under.a*(1-top.a);
+ return float4((top.rgb*top.a+under.rgb*under.a*(1-top.a))/max(a,1e-4),a);
+}
+float4 q8_city_effect(FeaturePixelInput p){
+ float kind=round(p.material_index-90),seed=p.city_ao_uv.x,strength=p.city_ao_uv.y;
+ float t=Q8_CITY_TIME+seed*17.31,night=saturate(environment_night_activation);
+ float2 q=p.uv;
+ // Quad units per pixel along each screen axis keep shapes round at any zoom.
+ float2 pixel=float2(max(abs(ddx(q.x)),1e-5),max(abs(ddy(q.y)),1e-5));
+ if(kind<.5){
+  float v=(q.y-.3)/.7,flicker=.85+.15*sin(t*11+seed*6.3)+.12*(q8_effect_noise(float2(t*6,seed*9))-.5);
+  float tip=.78*flicker,sway=(q8_effect_noise(float2(t*2.7+v*1.5,seed*5))-.5)*.4*saturate(v);
+  float radius=.55*pow(saturate(1-v/tip),.8)*sqrt(saturate(v*5+.05));
+  float body=saturate(1-abs(q.x-sway)/max(radius,1e-3))*step(0,v)*step(v,tip);
+  float core=smoothstep(.35,1,body);
+  // Kept near display range: brighter values bloom into a glow that hides
+  // the flame's shape.
+  float lift=(1.15+.45*night)*strength;
+  // By day a saturated orange core separates the flame from tan roofs; at
+  // night it whitens and the halo carries it.
+  float3 hot=lerp(float3(1,.66,.24),float3(1,.86,.48),night);
+  float4 flame=float4(lerp(float3(1,.3,.04),hot,core)*lift,saturate(body*2.2));
+  float2 h=float2(q.x,(q.y-.38)*1.6);
+  float4 halo=float4(float3(1,.5,.14)*lift*.6,exp(-dot(h,h)*5)*(.1+.16*night)*strength);
+  float4 result=q8_effect_over(flame,halo);
+  clip(result.a-.004);return result;
+ }
+ if(kind<1.5){
+  // Billowing plume: puffs leave the mouth continuously, rise along a
+  // wind-bent path, grow, erode and thin; a short stem keeps the plume on
+  // its chimney. Units are quad half-widths on both axes so puffs stay round
+  // at any zoom, and the upper-left of each puff is sunlit. At night the
+  // smoke darkens and the furnace lights its base.
+  float H=pixel.x/pixel.y,Y=q.y*H;
+  float wind=.45+.3*q8_effect_noise(float2(seed*3,t*.1));
+  float alpha=0,tone=0,weight=0;
+  [unroll]for(int k=0;k<9;k++){
+   float cycle=t/2.6+k/9.0,phase=frac(cycle);
+   float h=pow(phase,.85)*.82,r=.3+.55*h;
+   float2 c=float2(wind*pow(h,1.4)+(q8_effect_noise(float2(seed*7+k,floor(cycle)))-.5)*.25*h,h*H+r*.6);
+   float2 d=(float2(q.x,Y)-c)/r;
+   float erode=(.65*q8_effect_noise(float2(q.x*2.4+k*3.7+seed*11,Y*2.4-t*.8))
+    +.35*q8_effect_noise(float2(q.x*5.1+k,Y*5.1-t*1.3))-.5)*.7;
+   float a=smoothstep(1,.45,length(d)+erode)*smoothstep(0,.06,phase)*pow(1-phase,1.1)*.8;
+   alpha=1-(1-alpha)*(1-a);
+   tone+=(.13+.36*saturate(.5-.45*d.x+.55*d.y-erode)+.08*h)*a;weight+=a;
+  }
+  float stem=smoothstep(1,.35,abs(q.x-wind*pow(q.y,1.4))/(.18+.5*q.y))*smoothstep(.22,0,q.y)*smoothstep(0,.015,q.y)*.75;
+  alpha=saturate((1-(1-alpha)*(1-stem))*strength)*lerp(1,.75,night);
+  clip(alpha-.004);
+  float grey=saturate((tone+.22*stem)/max(weight+stem,1e-4))*lerp(1,.18,night);
+  float glow=exp(-q.y*14)*night*.7*strength;
+  return float4(grey+glow,grey*.98+glow*.42,grey*.96+glow*.12,alpha);
+ }
+ float2 g=float2(q.x,(q.y-.5)*2);
+ float glow=exp(-dot(g,g)*3)*night*strength;
+ clip(glow-.004);
+ return float4(float3(1,.72,.38)*(1.5+2*glow),saturate(glow*.85));
+}
+#endif
 Q6SceneOutput Q8_CITY_FEATURE_ENTRY(FeaturePixelInput p) {
  if(p.material_index<39.5)return Q8LegacyPSFeature(p);
+#ifdef Q8_CITY_TIME
+ if(p.material_index>=89.5 && p.material_index<99.5)return q6_scene_output(q8_city_effect(p));
+#endif
  if(p.material_index>=59.5 && p.material_index<69.5) {
   float4 ground=city_base_texture_0.Sample(decal_sampler,p.uv);
   float3 ground_normal=normalize(p.geometry_normal);
@@ -94,8 +203,13 @@ Q6SceneOutput Q8_CITY_FEATURE_ENTRY(FeaturePixelInput p) {
 #else
  float3 emission=resource_base_texture_0.Sample(decal_sampler,p.uv).rgb;
 #endif
- if(emission_only)
-  return q6_scene_output(float4(emission*environment_night_activation*environment_emissive_scale*Q8_CITY_EMISSIVE_GAIN,1));
+ if(emission_only) {
+  float3 glow=emission*environment_night_activation*environment_emissive_scale*Q8_CITY_EMISSIVE_GAIN;
+#ifdef Q8_CITY_EMISSION_LOOK
+  glow=q8_city_emission(glow,Q8_CITY_EMISSION_LOOK);
+#endif
+  return q6_scene_output(float4(glow,1));
+ }
  float3 n=normalize(p.geometry_normal);
 #if Q8_CITY_SOURCE_SURFACE
  float3 geometric=n;
@@ -148,6 +262,11 @@ Q6SceneOutput Q8_CITY_FEATURE_ENTRY(FeaturePixelInput p) {
   lit+=visibility*(q8_city_direct_specular(environment_sun_direction,environment_sun_color*environment_sun_intensity,n,geometric,tangent,bitangent,normal_xy,roughness,base,metalness)
        +q8_city_direct_specular(environment_moon_direction,environment_moon_color*environment_moon_intensity,n,geometric,tangent,bitangent,normal_xy,roughness,base,metalness));
  }
+#endif
+#ifdef Q8_CITY_LOOK
+ // The daylight response fades out at night so lit windows, not brightened
+ // moonlit walls, carry the city after dark.
+ lit=q8_city_look(lit,Q8_CITY_LOOK*(1-saturate(environment_night_activation)),base,Q8_CITY_LOOK_PALE);
 #endif
  if(!Q8_CITY_SEPARATE_EMISSION)
   lit+=emission*environment_night_activation*environment_emissive_scale*Q8_CITY_EMISSIVE_GAIN;

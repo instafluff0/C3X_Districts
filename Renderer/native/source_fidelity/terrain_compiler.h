@@ -7,6 +7,7 @@
 #include "../../lab/shared/natural/ground.h"
 #include "../../lab/shared/natural/hill_decals.h"
 #include "../../lab/shared/natural/canopy_clearing.h"
+#include "../../lab/shared/natural/mountain_shape.h"
 #include "../render_core/content_preparation.h"
 #include "../render_core/prepared_mesh.h"
 #include "../../lab/studies/borders/mesh_export.h"
@@ -95,6 +96,7 @@ bool emit_terrain_surfaces(NaturalData const& natural,Assets const& assets,
     SurfaceQueries queries(world_coast,scratch.shores,input.tile_x,input.tile_y,observe_world,observe_coast,input.skip_flat_shore,&scratch.rivers);
     auto world_lookup=[&](int c,int r){return queries.tile(c,r);};
     auto lookup_natural=[&](int c,int r){return queries.natural_tile(c,r);};
+    auto mountain_snow=[&](int c,int r){return queries.tile(c,r).snow;};
     auto shore_sample_at=[&](float x,float y){return queries.shore(x,y);};
     auto material_weights_for=[&](float x,float y){return queries.weights(x,y);};
     auto relief_sample=[&](int kind,unsigned variant,int channel,float u,float v){return relief_source(assets,true,kind,variant,channel,u,v);};

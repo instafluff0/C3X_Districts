@@ -29,6 +29,7 @@ struct Unit {struct {Rect Rect;int ID=42,UnitTypeID=0,X=2,Y=4,Damage=2,UnitState
 struct UnitType {char Civilipedia_Entry[32]="PRTO_Archer";};
 struct Bic {int UnitTypeCount=1;UnitType* UnitTypes;bool is_zoomed_out=false;};
 struct State {int custom_renderer_native_operation=123;Unit* custom_renderer_unit_context=nullptr;PCX_Image* custom_renderer_unit_canvas=nullptr;
+ bool custom_renderer_team_disc=false;
  bool custom_renderer_unit_bootstrap=false,custom_renderer_unit_bootstrap_failed=false;
  unsigned custom_renderer_unit_bootstrap_copies=0;Unit* custom_renderer_unit_bootstrap_selected=nullptr;
  char custom_renderer_test_save[1]={};int custom_renderer_test_step=0;
@@ -115,7 +116,10 @@ int translate_custom_renderer_native(int operation,JGL_Image* image,void* backgr
 }
 
 #define this self
-struct Tile{};Tile visibility_tile;bool tile_visible=true;
+enum {P_SHOW_TEAM_COLOR_DISC=0x800};unsigned preferences_word=0;unsigned* p_preferences=&preferences_word;
+bool native_disc_seen=false;int tile_city=-1;
+struct Tile;struct TileVtable{int(*m45_Get_City_ID)(Tile*);};int mock_city(Tile*){return tile_city;}TileVtable tile_vtable{mock_city};
+struct Tile{TileVtable* vtable=&tile_vtable;};Tile visibility_tile;bool tile_visible=true;
 Tile* tile_at(int,int){return &visibility_tile;}
 unsigned capture_custom_renderer_visibility(Tile*,int,int,int){return C3X_RENDERER_TILE_VISIBILITY_KNOWN|C3X_RENDERER_TILE_EXPLORED|(tile_visible?C3X_RENDERER_TILE_VISIBLE:0);}
 #include "build/unit_bridge_capture.h"
@@ -127,6 +131,7 @@ void __fastcall Unit_tick_anim(Unit* u,int,PCX_Image* canvas,int x,int y,bool st
  }
  else {assert(x==101 && y==202);}
  assert(status);if(!u->visible)return;
+ native_disc_seen=(*p_preferences&P_SHOW_TEAM_COLOR_DISC)!=0;
  u->Body.Rect={};
  calls.push_back(10);
  for(int child=0;child<(u->army && army_member?2:1);++child){
@@ -196,6 +201,15 @@ int main(){
  invoke();assert(captured.unit_id==84 && playback_flags==selected);
  assert(member.Body.Rect.left==20);
  army_member=nullptr;unit.army=false;screen.Current_Unit=nullptr;
+ // Civ III's team-colour disc preference becomes the 3D owner ring; the native
+ // 2D disc never reaches the unit canvas and the player's preference survives.
+ preferences_word=P_SHOW_TEAM_COLOR_DISC|0x2000;invoke();
+ assert(playback_flags==(C3X_RENDERER_UNIT_STATE_CAPTURED|C3X_RENDERER_UNIT_TEAM_DISC));
+ assert(!native_disc_seen && preferences_word==(P_SHOW_TEAM_COLOR_DISC|0x2000) && !state.custom_renderer_team_disc);
+ tile_city=7;invoke();assert(playback_flags==C3X_RENDERER_UNIT_STATE_CAPTURED);tile_city=-1; // as native: no disc on cities
+ state.current_config.enable_custom_rendering=false;invoke();assert(native_disc_seen); // config-off keeps vanilla's disc
+ state.current_config.enable_custom_rendering=true;preferences_word=0;invoke();
+ assert(playback_flags==C3X_RENDERER_UNIT_STATE_CAPTURED && !native_disc_seen);
  // UI portraits use these same native hooks, outside the map tick's canvas.
  // They must preserve native arguments/return values at every custom zoom.
  state.current_config.enable_custom_rendering_zoom=true;

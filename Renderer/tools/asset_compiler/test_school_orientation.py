@@ -2,7 +2,7 @@ import math
 import struct
 import unittest
 
-from Renderer.tools.asset_compiler.school_orientation import align_school_payload, body_components, thin_school
+from Renderer.tools.asset_compiler.school_orientation import align_school_payload, body_components, face_motion, thin_school
 
 
 class SchoolOrientationTests(unittest.TestCase):
@@ -105,6 +105,33 @@ class SchoolOrientationTests(unittest.TestCase):
                 self.assertAlmostEqual(centre[0], 5*source+moves[source][frame][0], places=5)
                 self.assertAlmostEqual(centre[1], moves[source][frame][1], places=5)
                 self.assertAlmostEqual(points[1][0]-points[0][0], .6, places=5)
+
+
+    def test_school_bodies_face_the_way_they_swim(self):
+        # One fish (head at +x) held at its aligned heading while it circles: it
+        # slid sideways and backwards around the loop. After face_motion its
+        # head points along its direction of travel in every sample.
+        frames = 24
+        payload = bytearray(struct.pack("<8s5If", b"C3XANM1\0", 1, 3, 3, 1, frames, 1))
+        for x, y in ((.1, 0), (-.1, .02), (-.1, -.02)):
+            payload.extend(struct.pack("<8f4I4f", x, y, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0))
+        payload.extend(struct.pack("<3I", 0, 1, 2))
+        for frame in range(frames):
+            angle = 2*math.pi*frame/frames
+            payload.extend(struct.pack("<16f", 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, math.cos(angle), math.sin(angle), 0, 1))
+        turned = face_motion(bytes(payload))
+        offset = 32 + 3*64 + 3*4
+        for frame in range(frames):
+            m = struct.unpack_from("<16f", turned, offset + frame*64)
+            skin = lambda x, y: (x*m[0] + y*m[4] + m[12], x*m[1] + y*m[5] + m[13])
+            head, tail = skin(.1, 0), skin(-.1, 0)
+            angle = 2*math.pi*frame/frames
+            travel = (-math.sin(angle), math.cos(angle))          # counter-clockwise tangent
+            facing = (head[0] - tail[0], head[1] - tail[1])
+            self.assertGreater(facing[0]*travel[0] + facing[1]*travel[1], .19)   # |facing| = .2, aligned
+            centroid = skin(-.1/3, 0)                                       # the body's own centre
+            self.assertAlmostEqual(centroid[0], math.cos(angle) - .1/3, places=5)   # its path is unchanged
+            self.assertAlmostEqual(centroid[1], math.sin(angle), places=5)
 
 
 if __name__ == "__main__":

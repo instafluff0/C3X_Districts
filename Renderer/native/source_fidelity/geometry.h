@@ -7,6 +7,7 @@ if(fidelity_profile) {
     auto lookup_natural=[&](int c,int r){
         return queries.natural_tile(c,r);
     };
+    auto mountain_snow=[&](int c,int r){return queries.tile(c,r).snow;};
     Tile owner=lookup_natural(nc,nr);
     HillMaterialFootprint hill_material={owner.real==5,
         lookup_natural(nc-1,nr).real==5,lookup_natural(nc+1,nr).real==5,
@@ -59,9 +60,16 @@ if(fidelity_profile) {
             auto it=ground_observations.current(observed_coordinate_key(c+r,c-r));if(!it)continue;
             auto const&city=it->occurrence;if(city.city_id<0)continue;
             if(auto composition=selected_city(city,c,r)){
-                for(auto const&i:composition->instances)buildings.push_back({
-                    float(c)+.5f+i.offset[0]+i.bounds[0],float(r)+.5f-i.offset[1]-i.bounds[3],
-                    float(c)+.5f+i.offset[0]+i.bounds[2],float(r)+.5f-i.offset[1]-i.bounds[1]});
+                for(auto const&i:composition->instances){
+                    BuildingBounds b={float(c)+.5f+i.offset[0]+i.bounds[0],float(r)+.5f-i.offset[1]-i.bounds[3],
+                        float(c)+.5f+i.offset[0]+i.bounds[2],float(r)+.5f-i.offset[1]-i.bounds[1]};
+                    // Only bodies reaching this tile's canopy can clip a tree; a
+                    // body that yielded to its site lets the stand close in.
+                    if(b.x1<float(nc)-1.f || b.x0>float(nc)+2.f || b.y1<float(nr)-1.f || b.y0>float(nr)+2.f)continue;
+                    if(c3x_renderer::city_fidelity::site_keeps(*composition,i,c,r,world_lookup,shore_sample_at,
+                            [&](float x,float y){return natural.river_sample({x,y}).distance;},height_natural))
+                        buildings.push_back(b);
+                }
                 continue;
             }
             unsigned size=unsigned(std::clamp(city.city_size,0,2)),culture=unsigned(std::max(0,city.city_culture_group));

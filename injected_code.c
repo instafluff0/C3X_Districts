@@ -28567,6 +28567,10 @@ forward_custom_unit_body (Sprite * sprite, PCX_Image * background, PCX_Image * c
 		if ((p_main_screen_form->animator.field_18E4[12] & 1) == 0)
 			flags |= C3X_RENDERER_UNIT_CURSOR;
 	}
+	// Like the native disc, the owner ring is not drawn on city tiles.
+	Tile * disc_tile = tile_at (display_unit->Body.X, display_unit->Body.Y);
+	if (is->custom_renderer_team_disc && disc_tile != NULL && disc_tile->vtable->m45_Get_City_ID (disc_tile) < 0)
+		flags |= C3X_RENDERER_UNIT_TEAM_DISC;
 	if (is->custom_renderer_unit_visual != NULL) {
 		struct c3x_renderer_unit_visual_v1 visual = {0};
 		visual.struct_size = sizeof visual;
@@ -28638,12 +28642,23 @@ patch_Unit_tick_anim (Unit * this, int edx, PCX_Image * canvas, int offset_x, in
 	}
 	Unit * previous_unit = is->custom_renderer_unit_context;
 	PCX_Image * previous_canvas = is->custom_renderer_unit_canvas;
+	bool previous_team_disc = is->custom_renderer_team_disc;
+	unsigned team_disc = *p_preferences & P_SHOW_TEAM_COLOR_DISC;
 	is->custom_renderer_unit_context = NULL;
 	is->custom_renderer_unit_canvas = canvas;
+	if (is->current_config.enable_custom_rendering) {
+		// The 3D scene draws the team-colour disc as an owner ring; keep the
+		// native 2D disc out of the unit canvas.
+		is->custom_renderer_team_disc = team_disc != 0;
+		*p_preferences &= ~P_SHOW_TEAM_COLOR_DISC;
+	}
 	if (is->current_config.enable_custom_rendering &&
 	    is->custom_renderer_unit_draw != NULL && is->custom_renderer_init_state == IS_OK)
 		is->custom_renderer_unit_context = this;
 	Unit_tick_anim (this, __, canvas, offset_x, offset_y, status);
+	if (is->current_config.enable_custom_rendering)
+		*p_preferences |= team_disc;
+	is->custom_renderer_team_disc = previous_team_disc;
 	is->custom_renderer_unit_context = previous_unit;
 	is->custom_renderer_unit_canvas = previous_canvas;
 }
@@ -29531,6 +29546,9 @@ capture_custom_renderer_world_topology ()
 				((unsigned int)(unsigned char)tile->vtable->m50_Get_Square_BaseType (tile) << 8) |
 				((unsigned int)(unsigned char)tile->vtable->m37_Get_River_Code (tile) << 16) |
 				((unsigned int)(tile->Body.active_tile_effect != NULL) << 24);
+			// Bit 26: Civ III's snow-capped mountain (as m29_Check_Mountain_Snowcap tests it).
+			if ((((value >> 8) & 255u) == SQ_Mountains) && ((tile->vtable->m43_Get_field_30 (tile) & 0x100000) != 0))
+				value |= 1u << 26;
 			int index = (y * map->Width + x) / 2;
 			if (observe_visibility) {
 				unsigned long long visibility = ((unsigned long long)(unsigned int)tile->Body.Fog_Of_War << 32) |
@@ -29903,8 +29921,10 @@ bootstrap_custom_renderer_initial_units ()
 		unsigned saved_preferences = *p_preferences;
 		// Preserve native city-body eligibility for the selected unit, while
 		// suppressing cursor, map marker, status and selected-unit GUI updates.
+		// patch_Unit_tick_anim keeps the native team disc out of the canvas and
+		// needs the player's actual preference for the owner ring.
 		screen->Current_Unit = NULL;
-		*p_preferences = (saved_preferences & ~0x800u) | (unit == selected ? 0x2000u : 0u);
+		*p_preferences = saved_preferences | (unit == selected ? 0x2000u : 0u);
 		patch_Unit_tick_anim (unit, __, &screen->Units_Control.Data.Canvas, offset_x, offset_y, false);
 		*p_preferences = saved_preferences;
 		screen->Current_Unit = selected;

@@ -87,7 +87,10 @@ float4 ShadeWaterSurface(PixelInput input) {
         float4 object = q3_object_reflection_texture.Sample(decal_sampler, distorted_uv);
         float inside = step(0, reflected_uv.x) * step(reflected_uv.x, 1) *
             step(0, reflected_uv.y) * step(reflected_uv.y, 1) * NativeReflection.w;
-        object_alpha = saturate(object.a) * inside * coastal_detail;
+        // Mirrored terrain adds color without coverage (rivers reflect only
+        // standing objects); the sea still reflects coastal land and cliffs.
+        float terrain_present = step(1e-6, max(object.r, max(object.g, object.b)));
+        object_alpha = saturate(max(object.a, terrain_present)) * inside * coastal_detail;
         reflected = lerp(reflected, object.rgb, object_alpha);
     }
     float reflection_strength = max(object_alpha, .4);

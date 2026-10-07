@@ -1,58 +1,10 @@
 // Shared statement body: retain the native x86 calling context and float rounding.
 // Included by the native tile compiler and the portable typed adapter in mesh.h.
     {
-        struct MountainPiece {unsigned height_field,blend_field;float center_x,center_y,long_span,cross_span,height_scale;bool connected,range_y;};
-        // Mountains Lab's lower shape; keep authored variants and ridge union.
-        constexpr float mountain_height_scale=.68f, mountain_span_scale=1.08f;
-        std::vector<MountainPiece> pieces;
-        for(int dr=-1;dr<=1;dr++)for(int dc=-1;dc<=1;dc++){
-            int pc=nc+dc,pr=nr+dr;Tile piece_owner=lookup_natural(pc,pr);
-            if(piece_owner.real!=6)continue;
-            bool west=lookup_natural(pc-1,pr).real==6,east=lookup_natural(pc+1,pr).real==6;
-            bool north=lookup_natural(pc,pr-1).real==6,south=lookup_natural(pc,pr+1).real==6;
-            unsigned along_x=unsigned(west)+unsigned(east),along_y=unsigned(north)+unsigned(south);
-            bool connected=along_x+along_y>0,turn=connected&&along_x==along_y;
-            unsigned variant=mountain_seed(piece_owner)%5u;
-            pieces.push_back({natural.macro[variant][0],natural.macro[variant][1],
-                float(pc)+.5f+.09f*(int(east)-int(west)),
-                float(pr)+.5f+.09f*(int(south)-int(north)),
-                (connected?(turn?2.08f:2.46f):1.85f)*mountain_span_scale,
-                (connected?(turn?1.82f:1.34f):1.55f)*mountain_span_scale,
-                (connected?142.f:165.f)*mountain_height_scale,connected,along_y>along_x});
-        }
-        struct MountainSample {float displacement=0,dominant=0,height=0,u=0,v=0;};
-        auto mountain_at=[&](float world_x,float world_y){
-            MountainSample result;
-            for(auto const&piece:pieces){
-                float source_x=piece.range_y?(world_y-piece.center_y)/piece.long_span:
-                    (world_x-piece.center_x)/piece.long_span;
-                float source_y=piece.range_y?(world_x-piece.center_x)/piece.cross_span:
-                    (world_y-piece.center_y)/piece.cross_span;
-                float u=.5f+source_x,v=.5f-source_y;
-                if(u<0||u>1||v<0||v>1)continue;
-                float h=natural.fields[piece.height_field].sample(u,v);
-                float blend=natural.fields[piece.blend_field].sample(u,v);
-                float shaped=piece.connected?std::pow(std::max(0.f,h),.80f):h;
-                // Keep the outer authored footprint flat and terrain-colored,
-                // then raise the mountain within its actual rocky body. The
-                // former early ramp made low-slope ground into a circular berm
-                // whose normals and contact shadow remained visible as a lip.
-                float displacement=shaped*piece.height_scale*smooth01((blend-.28f)/.34f);
-                if(displacement>result.dominant){
-                    result.dominant=displacement;result.height=h;result.u=u;result.v=v;
-                }
-                if(displacement>0){
-                    if(result.displacement<=0)result.displacement=displacement;
-                    else{
-                        float high=std::max(result.displacement,displacement);
-                        float ridge=std::max(0.f,10.f-std::abs(result.displacement-displacement));
-                        result.displacement=high+ridge*ridge/40.f;
-                    }
-                }
-            }
-            return result;
-        };
-        if(!pieces.empty()){
+        // One shared shape for the mesh, route surfaces and resource seating.
+        MountainShape const mountain_shape(natural,nc,nr,lookup_natural,mountain_snow);
+        auto mountain_at=[&](float world_x,float world_y){return mountain_shape.sample(natural,world_x,world_y);};
+        if(mountain_shape.count){
             unsigned const count=patch_detail.mountain+1,span=count+2;
             float const step=1/float(patch_detail.mountain);
             // A coarser haloed distance field is aligned in world space and is
@@ -79,12 +31,14 @@
             // authoritative height/shore/river query per point. Shared world
             // coordinates still produce identical patch-edge samples.
             std::vector<float> surface_height(span*span),surface_hill_support(span*span);
+            // The vertex grid reuses these exact halo-grid points' samples.
+            std::vector<MountainSample> mountain_samples(span*span);
             for(unsigned y=0;y<span;y++){
                 if(cancelled())return false;
                 for(unsigned x=0;x<span;x++){
                     float world_x=float(nc)+(int(x)-1)*step;
                     float world_y=float(nr)+1-(int(y)-1)*step;
-                    auto sample=mountain_at(world_x,world_y);
+                    auto sample=mountain_samples[y*span+x]=mountain_at(world_x,world_y);
                     auto shore=shore_sample_at(world_x,world_y);
                     float scale=coast_relief(float(shore.distance),float(shore.beach_width))*
                         mountain_river_scale(world_x,world_y)*hidden_taper_at(world_x,world_y);
@@ -99,7 +53,7 @@
                 if(cancelled())return false;
                 for(unsigned x=0;x<count;x++){
                     float world_x=float(nc)+x*step,world_y=float(nr)+1-y*step;
-                    auto sample=mountain_at(world_x,world_y);
+                    auto const& sample=mountain_samples[(y+1)*span+x+1];
                     auto shore=shore_sample_at(world_x,world_y);
                     float coast_scale=coast_relief(float(shore.distance),float(shore.beach_width));
                     float river_scale=mountain_river_scale(world_x,world_y);
@@ -125,7 +79,8 @@
                     }
                     out.normal_x=n[0];out.normal_y=n[1];out.normal_z=n[2];out.u=sample.u;out.v=sample.v;
                     out.material_grass=std::max(0.f,(elevation-2.5f)/112)*(1-flat_blend)+sample.height*flat_blend;
-                    out.material_plains=2;
+                    // 2..2.5 carries the dominant stamp's Civ III snow cap.
+                    out.material_plains=2+.5f*sample.snow*flat_blend;
                     // Mountain stone follows mountain rise in the shader;
                     // this channel exclusively marks hill-owned ground.
                     out.material_desert=surface_hill_support[at]*hill_material(world_x-float(nc),

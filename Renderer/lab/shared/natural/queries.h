@@ -161,6 +161,20 @@ public:
             for(unsigned i=0;i<entry.count;i++)natural.hill_height(entry.bodies[i],x,y,authored,s);
             if(support)*support=s;
         }else authored=natural.height(x,y,[&](int nc,int nr){return natural_tile(nc,nr);},support);
+        // Rivers run on tile edges but hill bodies reach across them. Keep a
+        // hill under a 1.4 units/pixel bank rising from the drawn water's edge
+        // (7.5 source pixels), joined by a smooth minimum, so it never stands
+        // over or shades the river. The route reads the raw NaturalData height,
+        // so this cannot move the river. The bank clears the tallest hill by
+        // 53 pixels, inside the corridor's exact distance reach.
+        if(authored>2.5f && rivers && rivers->river_world){
+            float rise=authored-2.5f,k=6.f;
+            float limit=1.4f*std::max(0.f,float(rivers->river_sample({x,y}).distance)-7.5f);
+            if(limit<rise+k){
+                float m=std::clamp(.5f+.5f*(limit-rise)/k,0.f,1.f);
+                authored=2.5f+std::max(0.f,limit+(rise-limit)*m-k*m*(1-m));
+            }
+        }
         float pickup=pickup_height(x,y);
         float low=low_height(natural,x,y);
         // Both coastal branches multiply displacement above the 2.5 datum.

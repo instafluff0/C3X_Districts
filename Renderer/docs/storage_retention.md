@@ -91,6 +91,20 @@ Neither restoration nor cleanup belongs in timed rendering measurements.
 
 ## Explicit generated-output cleanup
 
+### October 7 recovery
+
+At the user's request, every `Renderer/.cache` folder whose newest file predated
+October 7 was deleted (75 folders, 17.4 GB; host free space 18.8 to 36.1 GB). All
+123 `.SAV`/`.BIQ` inputs inside them were kept at their original paths, so the
+measurement saves remain. Folders active that day were untouched. Evidence paths
+cited by older docs and `measure_*.py` defaults, including the October 2 and
+October 4 receipt folders below, no longer exist. The local receipt is
+`Renderer/.cache/disk-cleanup-20261007/receipt.txt`.
+
+The VM image (113 GB) was already compact: TRIM returns freed guest blocks, and a
+full-scan compaction recovered only 0.3 GB. Guest C: free space mirrors host free
+space. Guest `%TEMP%` held about 4 GB; the growth had been host-side `.cache`.
+
 ### October 4 recovery
 
 A delete-only pass removed 25,800 unnecessary generated files (16.56 GB):

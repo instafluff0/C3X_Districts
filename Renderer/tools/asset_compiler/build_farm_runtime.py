@@ -136,7 +136,38 @@ def patchwork(pack: Path, atlas: str, size: float, smallest: int = 40, cover: bo
     return pieces
 
 
-def solid_texture(pack: Path, source: str) -> str:
+# Rectangular planted fields of the crop atlas (source pixels, 1024 square,
+# top-down), each with its soil fringe: the plots of a strip layout.
+PLOTS = (
+    (260, 528, 496, 764), (10, 58, 230, 266), (388, 284, 492, 500), (520, 112, 638, 346),
+    (666, 400, 882, 504), (766, 22, 1008, 132), (6, 682, 224, 1016), (914, 174, 1014, 500),
+    (260, 796, 590, 1014), (666, 534, 1000, 638),
+)
+
+
+def plot(box: tuple[int, int, int, int], rows: int = 5) -> dict:
+    """One rectangular field as a flat gridded decal: height 1, its source
+    aspect wide, centred; u follows +x and v follows +y as in the atlas.
+    Laid out .2-.5 tile on that side, five rows of square cells grid it
+    about as finely as the patchwork (.078 tile), which clips and drapes
+    closely enough at a fraction of a finer grid's triangles."""
+    x0, y0, x1, y1 = box
+    aspect = (x1 - x0) / (y1 - y0)
+    columns = max(2, round(rows * aspect))
+    vertices, indices = [], []
+    for y in range(rows + 1):
+        for x in range(columns + 1):
+            vertices.append({"position": [(x / columns - .5) * aspect, y / rows - .5, .002],
+                             "normal": [0.0, 0.0, 1.0],
+                             "uv0": [(x0 + (x1 - x0) * x / columns) / 1024, (y0 + (y1 - y0) * y / rows) / 1024]})
+    for y in range(rows):
+        for x in range(columns):
+            a = y * (columns + 1) + x
+            indices.extend((a, a + 1, a + columns + 2, a, a + columns + 2, a + columns + 1))
+    return {"vertices": vertices, "topology": {"indices": indices}}
+
+
+def solid_texture(pack: Path, source: str, target: str = "textures/farm/patchwork_solid.dds") -> str:
     """An opaque copy of a BC3 atlas: only its alpha blocks change (no colour
     recompression), so the colour filled under the source's transparent paths
     shows as grassy lanes between the fields on every terrain."""
@@ -145,7 +176,6 @@ def solid_texture(pack: Path, source: str) -> str:
         raise ValueError(f"Solid patchwork needs a BC3 DX10 atlas: {source}")
     for at in range(148, len(data) - 15, 16):
         data[at:at + 8] = b"\xff\xff\x00\x00\x00\x00\x00\x00"
-    target = "textures/farm/patchwork_solid.dds"
     (pack / target).parent.mkdir(parents=True, exist_ok=True)
     (pack / target).write_bytes(data)
     return target
@@ -246,8 +276,159 @@ def ripe_texture(pack: Path, source: str, fields: str, target: str = "textures/f
     return target
 
 
+def rgb565(rgb: tuple[float, float, float]) -> int:
+    r, g, b = (min(255, max(0, round(c))) for c in rgb)
+    return (r * 31 + 127) // 255 << 11 | (g * 63 + 127) // 255 << 5 | (b * 31 + 127) // 255
+
+
+def unpack565(c: int) -> tuple[int, int, int]:
+    return (c >> 11) * 255 // 31, (c >> 5 & 63) * 255 // 63, (c & 31) * 255 // 31
+
+
+def green_rgb(r: float, g: float, b: float, hue: float = 80.0, gain: float = 1.0,
+              pull: float = .6) -> tuple[float, float, float]:
+    """Crop green pulled toward a cooler, richer green (`pull` of the way, so
+    fields keep their natural variety); soil fringes and paths keep their
+    colour."""
+    h, s, v = colorsys.rgb_to_hsv(r / 255, g / 255, b / 255)
+    degrees = h * 360
+    if s < .05 or degrees < 40 or degrees > 190:
+        return r, g, b
+    degrees += (hue - degrees) * pull * min(1.0, (degrees - 40) / 12)
+    r, g, b = colorsys.hsv_to_rgb(degrees / 360, min(1.0, s * gain), v)
+    return r * 255, g * 255, b * 255
+
+
+# Row contrast kept per mip level: smaller mips (farther zooms) show slightly
+# calmer fields; a plot at 1x samples about mip 2-3, at 3x about mip 1, which
+# stays as crisp as the source.
+CALM = (1.0, 1.0, .92, .84, .76, .7, .7, .7, .7)
+
+
+def green_texture(pack: Path, source: str, target: str) -> str:
+    """A copy of the planted atlas with cooler, richer green fields whose rows
+    calm toward each field's mean colour on smaller mips. Only BC colour
+    endpoints change (alpha and indices are kept)."""
+    data = bytearray((pack / source).read_bytes())
+    labels = field_labels(bytes(data))
+    width = struct.unpack_from("<I", data, 16)[0]
+    mips = max(1, struct.unpack_from("<I", data, 28)[0])
+    blocks = width // 4
+    sums: dict[int, list[float]] = defaultdict(lambda: [0.0, 0.0, 0.0, 0.0])
+    for by in range(blocks):
+        for bx in range(blocks):
+            label = labels[by][bx]
+            if label:
+                for k in (8, 10):
+                    c = green_rgb(*unpack565(struct.unpack_from("<H", data, 148 + (by * blocks + bx) * 16 + k)[0]))
+                    total = sums[label]
+                    total[0] += c[0]; total[1] += c[1]; total[2] += c[2]; total[3] += 1
+    means = {label: (s[0] / s[3], s[1] / s[3], s[2] / s[3]) for label, s in sums.items()}
+    at = 148
+    for level in range(mips):
+        size = max(1, (width >> level) // 4)
+        calm = CALM[min(level, len(CALM) - 1)]
+        for by in range(size):
+            for bx in range(size):
+                label = labels[min(len(labels) - 1, by << level)][min(len(labels) - 1, bx << level)]
+                if label:
+                    mean = means[label]
+                    for k in (8, 10):
+                        c = green_rgb(*unpack565(struct.unpack_from("<H", data, at + k)[0]))
+                        struct.pack_into("<H", data, at + k, rgb565(tuple(m + (x - m) * calm for x, m in zip(c, mean))))
+                at += 16
+    (pack / target).parent.mkdir(parents=True, exist_ok=True)
+    (pack / target).write_bytes(data)
+    return target
+
+
+# The terrain's own grassland albedo, which the terrain samples once per tile
+# in world space; the farm ground reuses it at that scale, so it stays as
+# crisp as the ground around it.
+GRASS = Path("Renderer/packs/TerrainNormalized/textures/grassland_base_color.dds")
+
+
+def grass_ground_texture(pack: Path, target: str, mean: tuple[float, float, float],
+                         skip: int = 2, alpha: int = 107, detail: float = 1.8) -> str:
+    """The terrain's grassland albedo from its `skip`-th mip down (1024 texels
+    a tile: more than any zoom samples), its colour moved to `mean` (every
+    endpoint scaled per channel) and its detail's contrast raised `detail`
+    times (the grassland's own is faint beside the plains' speckle). Its alpha
+    107 draws it about 93% opaque (the field decal's alpha curve saturates at
+    .5), so a hint of the terrain beneath shows through."""
+    source = (Path(__file__).resolve().parents[3] / GRASS).read_bytes()
+    if source[84:88] != b"DX10" or struct.unpack_from("<I", source, 128)[0] not in (77, 78):
+        raise ValueError("Grass ground needs a BC3 DX10 albedo")
+    width = struct.unpack_from("<I", source, 16)[0]
+    mips = struct.unpack_from("<I", source, 28)[0]
+    offset = 148 + sum(max(1, (width >> level) // 4) ** 2 * 16 for level in range(skip))
+    body = bytearray(source[offset:])
+    # The source's mean colour, from its endpoints.
+    total, count = [0.0, 0.0, 0.0], 0
+    for at in range(0, len(body), 16 * 7):
+        for k in (8, 10):
+            c = unpack565(struct.unpack_from("<H", body, at + k)[0])
+            total = [s + x for s, x in zip(total, c)]
+            count += 1
+    source_mean = [s / count for s in total]
+    for at in range(0, len(body), 16):
+        body[at:at + 8] = bytes((alpha, alpha, 0, 0, 0, 0, 0, 0))
+        for k in (8, 10):
+            c = unpack565(struct.unpack_from("<H", body, at + k)[0])
+            struct.pack_into("<H", body, at + k, rgb565(tuple(
+                m * (1 + detail * (x - s) / max(1.0, s)) for x, s, m in zip(c, source_mean, mean))))
+    header = bytearray(source[:148])
+    struct.pack_into("<II", header, 12, width >> skip, width >> skip)
+    struct.pack_into("<I", header, 20, max(1, (width >> skip) // 4) ** 2 * 16)
+    struct.pack_into("<I", header, 28, mips - skip)
+    (pack / target).parent.mkdir(parents=True, exist_ok=True)
+    (pack / target).write_bytes(header + body)
+    return target
+
+
+def ditch_texture(pack: Path, header_source: str, target: str,
+                  water: tuple[int, int, int] = (92, 138, 158), light: tuple[int, int, int] = (150, 192, 206)) -> str:
+    """An irrigation ditch's water (BC3, the planted atlas's size, format and
+    mips): `water` at its banks, `light` along its middle (v .5), with a
+    faint ripple along it (u)."""
+    source = (pack / header_source).read_bytes()
+    width = struct.unpack_from("<I", source, 16)[0]
+    mips = max(1, struct.unpack_from("<I", source, 28)[0])
+    data = bytearray(source[:148])
+    for level in range(mips):
+        size = max(1, (width >> level) // 4)
+        for by in range(size):
+            v = (by * 4 + 2) / (size * 4)
+            middle = max(0.0, 1 - abs(v - .5) * 2) ** 1.5
+            for bx in range(size):
+                ripple = 1 + .04 * math.sin(2 * math.pi * 6 * (bx * 4 + 2) / (size * 4))
+                c = tuple((w + (l - w) * middle) * ripple for w, l in zip(water, light))
+                data.extend(b"\xff\xff\x00\x00\x00\x00\x00\x00")
+                data.extend(struct.pack("<HHI", rgb565(c), rgb565(c), 0))
+    (pack / target).parent.mkdir(parents=True, exist_ok=True)
+    (pack / target).write_bytes(data)
+    return target
+
+
+def flat_square(texture_v: tuple[float, float], columns: int, rows: int, z: float = 0.0) -> dict:
+    """A flat gridded unit square decal (x, y in -.5..5) mapping u 0-1 and v
+    over `texture_v`."""
+    vertices, indices = [], []
+    for y in range(rows + 1):
+        for x in range(columns + 1):
+            vertices.append({"position": [x / columns - .5, y / rows - .5, z], "normal": [0.0, 0.0, 1.0],
+                             "uv0": [x / columns, texture_v[0] + (texture_v[1] - texture_v[0]) * y / rows]})
+    for y in range(rows):
+        for x in range(columns):
+            a = y * (columns + 1) + x
+            indices.extend((a, a + 1, a + columns + 2, a, a + columns + 2, a + columns + 1))
+    return {"vertices": vertices, "topology": {"indices": indices}}
+
+
 def build(pack: Path, runtime_name: str = "farm_runtime.bin",
-          field_size: float = 3.3, ripe: tuple[str, ...] = ("Wheat",)) -> Path:
+          field_size: float = 3.3, ripe: tuple[str, ...] = ("Wheat",), plots: bool = False,
+          green: bool = False, underlay: tuple[int, int, int] | None = None, ditches: bool = False,
+          narrow: bool = False, sparse: bool = False, tag: str = "") -> Path:
     manifest = json.loads((pack / "manifest.json").read_text(encoding="utf-8"))
     catalog = json.loads(
         (pack / manifest["improvement_catalog"]).read_text(encoding="utf-8")
@@ -303,11 +484,24 @@ def build(pack: Path, runtime_name: str = "farm_runtime.bin",
     # The kit uses no tan, muddy or soil palettes. Slot 2 carries the opaque
     # patchwork for dense route networks; slots 1 and 3 the ripe copies of
     # both patchworks for resource kits.
+    # Derived textures are named by option; a Lab experiment's `tag` keeps it
+    # from overwriting the production pack's.
+    tagged = f"~{tag}" if tag else ""
+    suffix = ("~green" if green else "") + tagged
+    if green:
+        textures[0] = green_texture(pack, textures[0], f"textures/farm/patchwork_green{tagged}.dds")
     planted = textures[0]
-    textures[2] = solid_texture(pack, planted)
+    textures[2] = solid_texture(pack, planted, f"textures/farm/patchwork_solid{suffix}.dds")
     if ripe:
-        textures[1] = ripe_texture(pack, planted, planted)
-        textures[3] = ripe_texture(pack, textures[2], planted, "textures/farm/patchwork_ripe_solid.dds")
+        textures[1] = ripe_texture(pack, planted, planted, f"textures/farm/patchwork_ripe{suffix}.dds")
+        textures[3] = ripe_texture(pack, textures[2], planted, f"textures/farm/patchwork_ripe_solid{suffix}.dds")
+    if underlay or ditches:
+        if not plots:
+            raise ValueError("The ground and ditches replace slots 2-3 (the dense patchworks): plots only")
+        # Plots never place the dense patchworks: slot 2 carries the ditches'
+        # water and slot 3 the ground.
+        textures[2] = ditch_texture(pack, planted, f"textures/farm/ditch{tagged}.dds")
+        textures[3] = grass_ground_texture(pack, f"textures/farm/ground{tagged}.dds", underlay or (100, 124, 42))
     fields = patchwork(pack, planted, field_size)
     dense_fields = patchwork(pack, planted, field_size, cover=True)
     assets: list[bytes] = []
@@ -389,6 +583,39 @@ def build(pack: Path, runtime_name: str = "farm_runtime.bin",
                                         [(first_ripe + index, .71) for index in range(len(fields))]))
             groups.append(group_payload(f"farm_kit:{base}:dense" + (":crop" if crop else ""),
                                         [(first_ripe_dense + index, .71) for index in range(len(dense_fields))]))
+    if plots:
+        # Plot layout: rectangular fields in strips along the tile's routes,
+        # water or region instead of the patchwork ("farm_kit:plots").
+        first_plot = len(assets)
+        for index, box in enumerate(PLOTS):
+            assets.append(merged_asset(f"farm_kit:crop:plot{index}", 0, 0, [plot(box)]))
+        groups.append(group_payload("farm_kit:plots", [(first_plot + index, .3) for index in range(len(PLOTS))]))
+        if ripe:
+            first_ripe_plot = len(assets)
+            for index, box in enumerate(PLOTS):
+                assets.append(merged_asset(f"farm_kit:crop:ripeplot{index}", 1, 0, [plot(box)]))
+            for name in ripe:
+                groups.append(group_payload(f"farm_kit:{name.lower().split(':')[0]}:plots",
+                                            [(first_ripe_plot + index, .3) for index in range(len(PLOTS))]))
+            if underlay:
+                # A ground kit's farms ripen a few plots (the same kinds, in
+                # order) for variety.
+                groups.append(group_payload("farm_kit:plots:ripe",
+                                            [(first_ripe_plot + index, .3) for index in range(len(PLOTS))]))
+    if underlay:
+        # One grass ground decal per farm tile under its plots.
+        # Its texture lies as the terrain's grass does: (u, 1 - v) of the tile.
+        ground = flat_square((1.0, 0.0), 13, 13)
+        assets.append(merged_asset("farm_kit:crop:ground", 3, 0, [ground]))
+        groups.append(group_payload("farm_kit:ground", [(len(assets) - 1, .71)]))
+    if ditches:
+        # A unit irrigation ditch: its length is stretched, its width scaled.
+        assets.append(merged_asset("farm_kit:crop:ditch", 2, 0, [flat_square((0.0, 1.0), 12, 1, .004)]))
+        groups.append(group_payload("farm_kit:ditch", [(len(assets) - 1, .1)]))
+    # Marker groups: narrower route verges, sparser trees and farmhouses.
+    for flag, name in ((narrow, "farm_kit:narrow"), (sparse, "farm_kit:sparse")):
+        if flag:
+            groups.append(group_payload(name, grouped[0][:1]))
     output = bytearray(MAGIC)
     output.extend(struct.pack("<IIII", 1, len(textures), len(assets), len(groups)))
     for texture in textures:
@@ -411,12 +638,24 @@ def main() -> int:
                         help="runtime file name in the pack; Lab candidates use e.g. farm_runtime~kit.bin")
     parser.add_argument("--field-size", type=float, default=3.3,
                         help="patchwork side in tiles (larger means fewer, bigger fields per tile)")
+    parser.add_argument("--plots", action="store_true",
+                        help="lay farms out as rectangular plots in strips along routes and water")
     parser.add_argument("--ripe", nargs="*", default=["Wheat"],
                         help="resources whose farms grow ripe fields, e.g. Wheat (yard kept) or Wheat:crop (no yard)")
+    parser.add_argument("--green", action="store_true",
+                        help="cooler, richer green crops whose rows calm on smaller mips (farther zooms)")
+    parser.add_argument("--underlay", nargs="?", const="100,124,42", default=None,
+                        help="the terrain's grass, greener, under each farm (optional mean sRGB R,G,B)")
+    parser.add_argument("--ditches", action="store_true", help="sparse irrigation ditches along plot strips")
+    parser.add_argument("--narrow", action="store_true", help="narrower route verges in farmland")
+    parser.add_argument("--sparse", action="store_true", help="fewer trees and farmhouses")
+    parser.add_argument("--tag", default="", help="Lab experiments: suffix for derived texture names")
     args = parser.parse_args()
     if "/" in args.output or "\\" in args.output or not args.output.endswith(".bin"):
         parser.error("--output is a .bin file name inside the pack")
-    target = build(args.pack.resolve(), args.output, args.field_size, tuple(args.ripe))
+    underlay = tuple(int(part) for part in args.underlay.split(",")) if args.underlay else None
+    target = build(args.pack.resolve(), args.output, args.field_size, tuple(args.ripe), args.plots,
+                   args.green, underlay, args.ditches, args.narrow, args.sparse, args.tag)
     print(f"wrote {target} ({target.stat().st_size} bytes)")
     return 0
 

@@ -1,0 +1,18 @@
+{
+ "city-gameplay-industrial-z128": "Same map, roads, farms and river; only the city pack differs.",
+ "city-sites-industrial-z256-river-edge": "River on the city's own edges: outskirts yield and the bridge is visible again.",
+ "city-sites-industrial-z256-river-outskirts": "River through the outskirts.",
+ "city-sites-industrial-z256-coast": "Buildings and plate stop at the beach.",
+ "city-sites-industrial-z256-hills": "Hill site under a mountain range.",
+ "city-sites-industrial-z256-forest": "Forest and jungle clear around the grown city.",
+ "city-sites-industrial-z256-junction": "Capital at a road and railroad junction; routes run up to the plate.",
+ "city-gameplay-industrial-z256-metropolis": "Capital metropolis: larger blocks, three smokestacks, palace at the centre.",
+ "city-gameplay-industrial-z256-river-city": "Riverside city on the gameplay map.",
+ "city-ladder-european-z256-industrial-metropolis": "Larger industrial blocks; a stack rises at the back corner.",
+ "city-ladder-european-z256-modern-metropolis": "Towers and a water tower.",
+ "city-ladder-european-z256-ancient-metropolis": "Packed-earth plate.",
+ "city-ladder-european-z256-medieval-metropolis": "Cobble plate.",
+ "_decisions": "<ol>\n<li><strong>Contrast strength.</strong> The candidate is calibrated to Civ III's own sprite luminance (mean, deep shadows, bright highlights). A softer setting is one number in <code>style.json</code> if this reads too strong next to the terrain.</li>\n<li><strong>Industrial and Modern scale.</strong> Larger buildings claim room first and smaller neighbours give way, so late cities have fewer, bigger blocks. The alternative keeps every original building and only fills gaps.</li>\n<li><strong>Roads at the plate.</strong> Roads and rails currently run up to the plate and stop under it, as Civ III roads disappear under the city sprite. They could instead fade out just before the plate edge.</li>\n<li><strong>Flames, smoke and night lights.</strong> Civ VI places them as attachment points: all 47 palaces have torch or brazier flames (63 lit in the normal state), most city pieces have chimney smoke, and the new factory and power plant have furnace flames and stack smoke. The importer records them but the city pack drops them, and nothing draws them yet. Binding them and adding a small animated effect pass is the suggested next step.</li><li><strong>Units over cities.</strong> A small clear plaza at the tile centre would let a unit stand between buildings rather than on them.</li>\n<li><strong>Promotion path.</strong> Freeze today's production library as the input and make <code>recompose.py</code> the production city builder. That also repairs the stale <code>cities</code> asset job and <code>test_pickup</code>, which still point at intermediates an earlier cleanup removed.</li>\n</ol>",
+ "city-gameplay-industrial-z128-night": "Windows keep their colour instead of clipping to white; the daytime brightening fades out at night so lit windows carry the city.",
+ "city-gameplay-industrial-z64": "Civ III's zoomed-out map scale."
+}

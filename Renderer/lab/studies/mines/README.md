@@ -131,3 +131,28 @@ lower vertices; `test-biq-hill-small-full-vs-main-raised.png` is the current
 close-view witness. The earlier 0-lift and larger-scale sheets remain Lab
 diagnostics, not approved art. The new comparison is still isolated Lab work;
 it does not alter `test.biq`, the production pack, or a staged game DLL.
+
+## Civ VI kit and parts gallery
+
+`kit_gallery.py` imports every Civ VI mine and quarry kit, plus Gathering
+Storm's mountain tunnel, into the Lab-only `packs/MineKitSourcesLab`. It bakes
+them as resource compositions in `packs/MineKitCatalogLab` and renders them
+on grassland, hills and mountains through the production renderer. Each
+attached component is its own instance on the ground under its pivot, as
+Civ VI's "pivot height" places it. A parts set shows each entrance, building,
+headframe, spoil heap, cart and quarry piece alone, enlarged to a common
+footprint. The page is `Renderer/lab/out/mines/kits/gallery.html`.
+
+Findings:
+- Rise and Fall's mine kits are the base kits minus one sledge or ore cart.
+- At Civ VI's own size the 3D parts span about half a tile; Civ VI fills the
+  rest with ground decals.
+- Compound decals keep only atlas-wide UVs, so their stamps are left out.
+
+The roster batches are supplied in-process, so `resources/native_terrains.json`
+and production packs are unchanged.
+
+```sh
+python3 Renderer/lab/studies/mines/kit_gallery.py
+python3 Renderer/lab/studies/mines/kit_gallery.py --page-only
+```

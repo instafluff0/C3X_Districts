@@ -182,6 +182,20 @@ Executable tests cover an idle turn without input, selection eligibility,
 owned exploration versus hidden foreign movement, config-off delegation, and
 D3D11 foreground/self-depth behavior at one and four samples.
 
+## Team-colour disc
+
+`required_user_action: []`. Existing `Unit_tick_anim` (patched by
+`patch_Unit_tick_anim`) retains its signature and supported-build addresses; no
+patch entries are added. Civ III's `P_SHOW_TEAM_COLOR_DISC` preference (0x800)
+draws a civ-coloured ring from `Art/Cursor.pcx` under each unit off city tiles,
+inside `Unit::tick_anim`. With custom rendering on, the patch hides that bit
+from the native call (so no 2D disc reaches the unit canvas), restores the
+player's value afterwards, and the body capture sends
+`C3X_RENDERER_UNIT_TEAM_DISC` for units off city tiles. Renderer64 draws a
+soft owner-coloured disc in the tactical pass beneath the body. Config-off keeps
+the native disc unchanged. `test_unit_bridge.py` covers flag, suppression,
+city tiles and config-off.
+
 ## Movement and reveal raster consistency
 
 `required_user_action: []`. The retained raster repair, refinement and
@@ -1976,6 +1990,23 @@ infrastructure/source findings before extending a category.
   snow-covered pine forest on tundra.
 - **Not added:** no patch-table entry, injected-state field or new address.
 - **Config-off:** these capture functions run only for custom rendering.
+
+## Snow-capped mountains
+
+`required_user_action: []`.
+
+- **Existing symbols relied on:** `Tile::m50_Get_Square_BaseType` and
+  `Tile::m43_Get_field_30`, both already used by C3X (for example
+  `tile_has_snow_volcano`). The capture repeats the test of
+  `Tile::m29_Check_Mountain_Snowcap`: base type mountain and field_30 bit
+  0x100000 (BIQ C3C bonus 0x10).
+- **What changes:** the world-topology capture
+  (`custom_renderer_world_topology`) sets bit 26 for snow-capped mountains.
+  Renderer64 carries it into the mountain mesh and draws snow only there; bare
+  mountains stay rock. The viewer mask clears it with the other category bits
+  on unexplored tiles.
+- **Not added:** no patch-table entry, injected-state field or new address.
+- **Config-off:** the topology capture runs only for custom rendering.
 
 ## Goody huts and barbarian camps
 

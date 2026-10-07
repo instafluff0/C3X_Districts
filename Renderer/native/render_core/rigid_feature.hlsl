@@ -21,6 +21,12 @@ FeaturePixelInput VSSharedFeature(RigidInput i){
  // about 16 height units, the deck and arches lost to the river and only the
  // parapets showed.
  if(bridge)o.position.z=max(.001,o.position.z-.0255*c3x_viewport_reserved.x/16384.);
+ // A bridge rests on its lower bank, which is the waterline. Its authored
+ // piers and walls continue below that base; they are underwater, but the
+ // shallow carved channel no longer hides them. Carry the height above the
+ // base (2 + h/128, readable down to 64 units below; other features keep 1)
+ // so PSIntegratedFeature clips them.
+ if(bridge)o.q6_world.w=2+p.position.z/128;
  return o;
 }
 FeaturePixelInput VSSharedFeatureReflection(RigidInput i){

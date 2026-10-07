@@ -24,3 +24,12 @@ python3 Renderer/tools/capture_city_border_examples.py
 
 Outputs and hash receipts are under `Renderer/native/build/cities-borders/examples`.
 They are synthetic scenes, not live Civ III captures.
+
+## Readability candidate (Lab only)
+
+[The city readability study](../../../studies/city_readability/README.md) holds a
+Lab candidate: denser, larger bodies, era accents (smokestacks, towers), crisp era
+ground plates and a brighter, higher-contrast body response, plus version-5
+site awareness (bodies and plates yield to rivers, bridges, water, mountains and
+steep relief). It renders through `C3X_RENDERER_CITY_PACK`; the production pack
+and its output are unchanged until the user accepts the candidate.

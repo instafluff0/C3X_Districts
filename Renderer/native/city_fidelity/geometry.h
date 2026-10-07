@@ -9,7 +9,12 @@ auto selected_city=[&](c3x_renderer_tile_v1 const& record,int column,int row){
 if(auto composition=selected_city(tile,nc,nr)){
     if(!prepared_objects){
     c3x_renderer::city_fidelity::Surfaces city_result;
-    c3x_renderer::city_fidelity::compile(cities.library,*composition,nc,nr,height_natural,project_natural,city_result);
+    // Version-five packs let marked bodies yield to rivers, water and steep
+    // or mountain ground; the same test excludes them from forest clearing.
+    c3x_renderer::city_fidelity::compile(cities.library,*composition,nc,nr,height_natural,project_natural,city_result,
+        c3x_renderer::city_fidelity::ContinueCompilation{},false,
+        c3x_renderer::city_fidelity::site_filter(*composition,nc,nr,world_lookup,shore_sample_at,
+            [&](float x,float y){return natural.river_sample({x,y}).distance;},height_natural));
     city_chunks=std::move(city_result.chunks);
     for(auto const& chunk:city_chunks){if(chunk.terrain_conforming)++city_deformed_parts;else ++city_rigid_parts;}
     }

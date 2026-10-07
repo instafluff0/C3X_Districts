@@ -33,7 +33,9 @@ PreparedRigid prepare_rigid(Instance const& source,Projection const& input,Asset
     auto const& asset=assets[source.family].assets[source.asset];
     float u=float(input.tile.tile_x+input.tile.tile_y)*.5f,v=float(input.tile.tile_x-input.tile.tile_y)*.5f;
     float ground=relief(u+source.u,v+1-source.v)[0];
-    if(source.family==site_family)ground=height(u+source.u,v+1-source.v)-2.5f;
+    bool seated=source.family==site_family || source.family==mine_family ||
+        asset.id.rfind("route/tunnel/",0)==0;
+    if(seated)ground=height(u+source.u,v+1-source.v)-2.5f;
     // A farm kit's props stand on the rendered ground its fields drape on.
     if(drape)ground=std::max(ground,height(u+source.u,v+1-source.v)-2.5f);
     seat_route_bridge(input,asset,source.scale,source.rotation,u+source.u,v+1-source.v,relief,height,ground);
@@ -45,7 +47,7 @@ PreparedRigid prepare_rigid(Instance const& source,Projection const& input,Asset
     FeaturePlacement placement{};placement.asset_index=source.asset;
     std::vector<Vertex> vertices,shadows;std::vector<unsigned> indices;
     append_instance(input,assets[source.family],placement,source.u,source.v,source.rotation,source.scale,
-        source.material,source.owner,false,source.family==site_family,relief,height,vertices,shadows,&indices,
+        source.material,source.owner,false,seated,relief,height,vertices,shadows,&indices,
         0.f,0.f,drape);
     result.bounds={std::numeric_limits<int>::max(),std::numeric_limits<int>::max(),
         std::numeric_limits<int>::min(),std::numeric_limits<int>::min()};

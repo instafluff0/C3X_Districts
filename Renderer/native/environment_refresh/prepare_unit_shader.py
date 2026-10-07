@@ -49,6 +49,15 @@ float4 PS(Output i):SV_Target {
   float3 modulation=owner.w>.5?owner.rgb:tint.rgb;
   albedo=b.rgb*lerp(float3(1,1,1),modulation,b.a);
  }
+ // Lab readability look: Quality.y extra gain, .z extra saturation, .w Civ III
+ // style owner ramp over the owner mask. Zero (every current caller) keeps the
+ // authored response exactly.
+ if(Quality.w>0) {
+  float3 luma=float3(.2126,.7152,.0722);
+  float coverage=moon_color.w>.5?(owner.w>.5?b.a:0):mask*owner.w;
+  float3 ramp=saturate(owner.rgb*(dot(b.rgb*tint.rgb,luma)/max(dot(owner.rgb,luma),.03)));
+  albedo=lerp(albedo,ramp,saturate(coverage*Quality.w));
+ }
  float3 n=normalize(i.n);
  if(channels.w>.5) {
   float2 xy=normal_texture.Sample(sample_base,i.uv).rg*2-1;
@@ -59,11 +68,19 @@ float4 PS(Output i):SV_Target {
   int2 q=cell+int2(ox,oy);
   if(all(q>=0) && all(q<int(Quality.x)))occluded+=(shadow_map.Load(int3(q,0))>i.shadow.x+.006)?1.0/9:0;
  }
- if(moon_color.w>.5)return float4(unit_microfacet_response(i,albedo,n,1-occluded),1);
- float ao=channels.x>.5?lerp(.48,1,ambient_occlusion.Sample(sample_base,i.uv).r):1;
- float gloss=channels.y>.5?gloss_texture.Sample(sample_base,i.uv).r:.08;
- float3 emission=channels.z>.5?emissive_texture.Sample(sample_emission,i.uv).rgb:0;
- return float4(beauty_unit_response(albedo,n,ao,gloss,emission,1-occluded),1);
+ float3 radiance;
+ if(moon_color.w>.5)radiance=unit_microfacet_response(i,albedo,n,1-occluded);
+ else {
+  float ao=channels.x>.5?lerp(.48,1,ambient_occlusion.Sample(sample_base,i.uv).r):1;
+  float gloss=channels.y>.5?gloss_texture.Sample(sample_base,i.uv).r:.08;
+  float3 emission=channels.z>.5?emissive_texture.Sample(sample_emission,i.uv).rgb:0;
+  radiance=beauty_unit_response(albedo,n,ao,gloss,emission,1-occluded);
+ }
+ if(Quality.y>0||Quality.z>0) {
+  float l=dot(radiance,float3(.2126,.7152,.0722));
+  radiance=max(0,lerp(float3(l,l,l),radiance,1+Quality.z))*(1+Quality.y);
+ }
+ return float4(radiance,1);
 }
 '''
     target=HERE/'unit_shader.h';target.write_text('#pragma once\nnamespace c3x_renderer {\ninline char const* unit_material_shader(){return R"C3XUNIT('+body+')C3XUNIT";}\n}\n')

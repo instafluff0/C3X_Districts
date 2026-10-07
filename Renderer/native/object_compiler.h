@@ -5,6 +5,7 @@
 // boundary alone does not authorize concurrent access to its scratch.
 #include "terrain_scene_runtime.h"
 #include "../lab/shared/natural/vertex.h"
+#include "../lab/shared/natural/patterns.h"
 #include "scene_lighting.h"
 #include <algorithm>
 #include <array>
@@ -54,7 +55,7 @@ struct RoutePatterns {
     unsigned index(unsigned mask,int tile_x,int tile_y)const{
         unsigned variants=offsets.empty()?0u:unsigned(offsets.size()-1);
         if(mask!=255u || variants<=256u)return mask;
-        unsigned seed=c3x_renderer::stable_hash(unsigned(tile_x)*73856093u^unsigned(tile_y)*19349663u^0x5bd1e995u);
+        unsigned seed=c3x_renderer::patterns::feature_hash(unsigned(tile_x)*73856093u^unsigned(tile_y)*19349663u^0x5bd1e995u);
         return 255u+seed%(variants-255u);
     }
 };
@@ -70,6 +71,12 @@ struct Instance {
     Family family; unsigned asset; Layer layer;
     float u,v,rotation,scale,material,owner;
     bool shadow;
+    float stretch=1.f; // a farm plot's own x scale, so it fills its strip
+    // A farm plot's region (FarmClearing::regions), which clips it; flags:
+    // +0x100 joined (cut exactly at tile edges shared with farms), +0x200 clear
+    // of routes and yard (water and tile edges only), +0x400 under the plots
+    // (the farm ground: a wider, irregular feather into the land around it).
+    unsigned region=0;
 };
 struct Route {float u0,v0,u1,v1;unsigned style;bool railroad,bridge,reverse,bypass=false;float bridge_t=1.0f;bool bridge_structural=true;bool isolated=false;};
 // One centerline of the tile's road pattern. Bridge bit 0/1 marks a start/end
@@ -82,16 +89,55 @@ struct PatternRoute {unsigned line,style,bridges=0;std::vector<std::array<float,
     unsigned fords=0;           // start/end join crosses a river at a corner, without a bridge
     std::vector<std::uint8_t> wet; // points still over water after the bank move: they fade
     std::array<float,2> crossing{}; // start/end: bridged river's center past the join, along its axis
+    float bridge_half=0;            // the bridge's half length along its axis (0: default)
     std::vector<float> fade;        // per point: fades out as a mountain rises under the path
+    // Up to two bridges' straight approaches through this line (set by
+    // compile): the bridged join (u,v), the axis into the tile (u,v), the
+    // distance from the join along the network to the line's start and end,
+    // and to a point inside it (its distance along the line, or -1: none),
+    // and the approach's straight run from the join.
+    // [9]: the bridge's deck level (route ground units).
+    // [10],[11]: how far from the join the network is carried at the deck's
+    // level where its ground lies lower, and over how much more that fades.
+    std::array<std::array<float,12>,2> approach{};
+    static constexpr float approach_blend=.15f; // past the run, a path eases back onto its pattern within this
+    static constexpr float approach_level=.75f,approach_level_fade=.15f; // the river valley's floor, then its wall
+    float half_length()const{return bridge_half>0.f?bridge_half:.18f;}
 };
 // Ground a farm keeps open on its own tile, in tile-local (u,v): its routes
 // as capsules around their drawn centerlines and its resource's parts as
 // rounded boxes. at() is the signed distance from that ground (negative inside).
+// A plot kit also labels the open ground that routes split apart: regions
+// holds cells x cells labels (0 closed, 255 a scrap without fields), and
+// at() with a region is negative in every other region too.
 struct FarmClearing {
+    static constexpr int cells=32;
     std::vector<std::array<float,5>> paths; // u0,v0,u1,v1,half width
     std::vector<std::array<float,5>> boxes; // u0,v0,u1,v1,margin
     bool yard=true; // false when the farm plants its resource itself
-    float at(float u,float v)const{
+    std::vector<std::uint8_t> regions;
+    std::uint8_t shared=0; // tile edges (u=0, u=1, v=0, v=1) whose next tile is a farm
+    bool soft=false;       // a ground kit's farm: an irregular edge toward other land
+    // Its ground's strength from its terrain: this tile's, then its u=0, u=1,
+    // v=0 and v=1 neighbours' (where they are farms).
+    std::array<float,5> strength{{1.f,1.f,1.f,1.f,1.f}};
+    // Its ground's tint, the same way: tundra 0, grassland .25, flood plain .4,
+    // plains .65, desert 1 (terrain_scene.hlsl farm_kit_ground_tint).
+    std::array<float,5> tint{{.25f,.25f,.25f,.25f,.25f}};
+    float at(float u,float v,unsigned region=0)const{
+        float distance=open(u,v);
+        if(region && distance>0 && regions.size()==std::size_t(cells*cells)){
+            int i=int(std::floor(u*cells-.5f)),j=int(std::floor(v*cells-.5f));
+            bool own=false,other=false;
+            for(int k=0;k<4;++k){
+                unsigned label=regions[std::clamp(j+(k>>1),0,cells-1)*cells+std::clamp(i+(k&1),0,cells-1)];
+                own=own || label==region;other=other || label!=0;
+            }
+            if(other && !own)distance=-distance;
+        }
+        return distance;
+    }
+    float open(float u,float v)const{
         float distance=1.f;
         for(auto const& p:paths){
             float du=p[2]-p[0],dv=p[3]-p[1],length=du*du+dv*dv;
@@ -108,8 +154,10 @@ struct FarmClearing {
 };
 // farm_kit: the farm pack's kit (a "farm_kit" group) lays out this tile's farm.
 // farm_route_lines: the tile's route lines when they are in another plan.
+// farm_plots: the plot kit that settle_farm_fields lays out, if any.
 struct Plan {std::vector<Instance> instances;std::vector<Route> routes;std::vector<PatternRoute> patterns;
-    bool farm_kit=false;FarmClearing farm_clearing;unsigned farm_route_lines=0;};
+    bool farm_kit=false;FarmClearing farm_clearing;unsigned farm_route_lines=0;
+    FeatureGroup const* farm_plots=nullptr;};
 struct Surfaces {
     std::array<std::vector<Vertex>,layer_count> layers;
     std::array<std::vector<unsigned>,layer_count> indices;
@@ -200,28 +248,47 @@ inline void append_shadow(Projection const& input,FeatureAsset const& asset,floa
     shadow_vertices.insert(shadow_vertices.end(),
                            std::begin(triangles), std::end(triangles));
 }
-// A road or railroad bridge rests on the lower of its two banks. The authored
-// meshes put their deck ends at the base (z=0), so that end meets its bank
-// and the other end settles into a higher bank instead of floating over a
-// lower one. One seat keeps the shared rigid transform.
+// The level a road or railroad bridge's deck stands at (both in world u,v
+// around its center along its axis; reach: half its length). The river runs
+// in a valley, some 15 units below the land beyond about .6 tile from the
+// water. A deck on the valley floor sits that far below the paths coming over
+// the land, and on the map's fixed oblique view a straight path descending to
+// it is drawn bent into the deck's side. The deck stands at the top of the
+// lower bank instead (the highest route ground out to .75 on each side, the
+// lower of the two sides, at most 20 over its own ends' ground), and its
+// paths are carried level to it (see append_pattern_route), so they are
+// drawn straight through it. See seat_route_bridge.
+template<class Ground>
+float route_bridge_level(float world_u,float world_v,float axis_u,float axis_v,float reach,Ground ground){
+    float ends=1e9f,banks=1e9f;
+    for(float sign:{-1.f,1.f}){
+        auto at=[&](float out){return ground(world_u+axis_u*sign*out,world_v+axis_v*sign*out);};
+        float end=at(reach),bank=end;
+        for(float out:{.45f,.6f,.75f})if(out>reach)bank=std::max(bank,at(out));
+        ends=std::min(ends,end);banks=std::min(banks,bank);
+    }
+    return std::min(banks,ends+20.f);
+}
+// A road or railroad bridge rests at the top of the lower of its two banks
+// (see route_bridge_level). The authored meshes put their deck ends at the
+// base (z=0), so that end meets its bank and the other end settles into a
+// higher bank instead of floating over a lower one. One seat keeps the shared
+// rigid transform.
 template<class Relief,class Height>
 bool seat_route_bridge(Projection const& input,FeatureAsset const& asset,float scale,float rotation,
         float world_u,float world_v,Relief relief_at_world,Height natural_height_at,float& ground){
     if(!input.pickup_profile || asset.id.rfind("route/bridge/",0)!=0 || asset.vertices.empty())return false;
     float reach=0.f;
     for(auto const& source:asset.vertices)reach=std::max(reach,std::abs(source.position[0])*scale);
-    ground=1e9f;
-    for(float along:{-reach,reach}){
-        float u=world_u+std::cos(rotation)*along,v=world_v-std::sin(rotation)*along;
-        ground=std::min(ground,std::max(relief_at_world(u,v)[0],natural_height_at(u,v)-2.5f));
-    }
+    ground=route_bridge_level(world_u,world_v,std::cos(rotation),-std::sin(rotation),reach,
+        [&](float u,float v){return std::max(relief_at_world(u,v)[0],natural_height_at(u,v)-2.5f);});
     return true;
 }
 template<class Relief,class Height>
 void append_instance(Projection const& input,FeatureBundle const& bundle,FeaturePlacement const& placement,
         float local_u,float local_v,float rotation,float scale,float material_offset,float owner_code,bool cast_shadow,
         bool site,Relief relief_at_world,Height natural_height_at,std::vector<Vertex>& target,std::vector<Vertex>& shadows,std::vector<unsigned>* topology=nullptr,float lift=0.f,float ground_fit=0.f,
-        bool drape=false){
+        bool drape=false,float stretch=1.f,unsigned shared_edges=0,float feather=.06f,bool tint=false){
     auto const& tile=input.tile;
     float left=input.left,top=input.top,half_w=input.half_w,half_h=input.half_h;
     float relief_projection_scale=input.relief_projection_scale,feature_projection_scale=input.feature_projection_scale;
@@ -297,8 +364,8 @@ void append_instance(Projection const& input,FeatureBundle const& bundle,Feature
     std::vector<std::array<float,2>> farm_world(farm_decal ? asset.vertices.size() : 0);
     for (std::size_t vertex_index = 0; vertex_index < asset.vertices.size(); ++vertex_index) {
         c3x_renderer::FeatureSourceVertex const & source = asset.vertices[vertex_index];
-        float local_x = (source.position[0] * cosine - source.position[1] * sine) * scale;
-        float local_y = (source.position[0] * sine + source.position[1] * cosine) * scale;
+        float local_x = (source.position[0] * stretch * cosine - source.position[1] * sine) * scale;
+        float local_y = (source.position[0] * stretch * sine + source.position[1] * cosine) * scale;
         // baked sink/raise, tile units; a draped field sits a hair above the
         // ground (still below route strips) so it never z-fights the terrain
         float local_z = source.position[2] * scale + lift + (farm_decal && drape ? .016f : 0.f);
@@ -365,6 +432,12 @@ void append_instance(Projection const& input,FeatureBundle const& bundle,Feature
             }
             auto normal=c3x_renderer::lighting::object_normal(normal_x,normal_y,source.normal[2]);
             vertex.normal_x=normal[0];vertex.normal_y=normal[1];vertex.normal_z=normal[2];
+            // A ground kit's farm decals carry their terrain tint t (relief
+            // channel 1) as their normal's length, 1.1 + t: compact feature
+            // vertices keep the normal (not world_valid), and the shader
+            // normalizes it before any lighting.
+            if(tint && farm_decal){float length=1.1f+std::clamp(vertex_ground[1],0.f,1.f);
+                vertex.normal_x*=length;vertex.normal_y*=length;vertex.normal_z*=length;}
         }
     }
     if (farm_decal) {
@@ -417,9 +490,8 @@ void append_instance(Projection const& input,FeatureBundle const& bundle,Feature
             }
         }
         struct ShoreVertex { Vertex vertex; float distance; };
-        auto intersect=[](ShoreVertex const& a,ShoreVertex const& b){
-            float t=a.distance/(a.distance-b.distance);
-            ShoreVertex result{a.vertex,0};
+        auto blend=[](ShoreVertex const& a,ShoreVertex const& b,float t){
+            ShoreVertex result{a.vertex,a.distance+(b.distance-a.distance)*t};
             auto* output=reinterpret_cast<float*>(&result.vertex);
             auto const* from=reinterpret_cast<float const*>(&a.vertex);
             auto const* to=reinterpret_cast<float const*>(&b.vertex);
@@ -427,6 +499,8 @@ void append_instance(Projection const& input,FeatureBundle const& bundle,Feature
                 output[i]=from[i]+(to[i]-from[i])*t;
             return result;
         };
+        auto intersect=[&](ShoreVertex const& a,ShoreVertex const& b){
+            ShoreVertex result=blend(a,b,a.distance/(a.distance-b.distance));result.distance=0;return result;};
         std::size_t first_vertex=target.size(),first_index=topology?topology->size():0;
         // A kit field's part inside its tile (the .02 verge), measured
         // exactly: the tile edge alone decides whether it is a sliver.
@@ -434,6 +508,8 @@ void append_instance(Projection const& input,FeatureBundle const& bundle,Feature
         auto inside_tile=[&](std::array<std::array<float,2>,3> const& corners){
             std::vector<std::array<float,2>> polygon(corners.begin(),corners.end());
             for(unsigned side=0;side<4 && polygon.size()>=3;++side){
+                // An edge a joined plot shares with the next farm cuts no sliver.
+                if((shared_edges>>(side==0u?0u:side==1u?2u:side==2u?1u:3u))&1u)continue;
                 unsigned axis=side&1u;float limit=side<2u?.02f:.98f,sign=side<2u?1.f:-1.f;
                 std::vector<std::array<float,2>> next;
                 for(std::size_t k=0;k<polygon.size();++k){
@@ -454,11 +530,27 @@ void append_instance(Projection const& input,FeatureBundle const& bundle,Feature
             return area;
         };
         for(std::size_t triangle=0;triangle+2<asset.indices.size();triangle+=3){
-            std::array<ShoreVertex,4> polygon{};
+            std::array<ShoreVertex,8> polygon{};
             unsigned count=3;
             for(unsigned corner=0;corner<3;++corner){
                 auto index=asset.indices[triangle+corner];
                 polygon[corner]={transformed[index],farm_shore[index]};
+            }
+            // A joined plot's shared tile edges cut it exactly, unfeathered:
+            // the next farm draws the rest of it.
+            for(unsigned edge=0;edge<4 && count>=3;++edge){
+                if(!((shared_edges>>edge)&1u))continue;
+                auto side=[&](ShoreVertex const& point){
+                    float u=point.vertex.world_x-tile_world_u,v=tile_world_v+1.f-point.vertex.world_y;
+                    return edge==0u?u:edge==1u?1.f-u:edge==2u?v:1.f-v;};
+                std::array<ShoreVertex,8> next{};unsigned kept=0;
+                for(unsigned corner=0;corner<count;++corner){
+                    auto const& a=polygon[corner];auto const& b=polygon[(corner+1)%count];
+                    float da=side(a),db=side(b);
+                    if(da>=0)next[kept++]=a;
+                    if((da>=0)!=(db>=0))next[kept++]=blend(a,b,da/(da-db));
+                }
+                polygon=next;count=kept;
             }
             if(drape && pickup_profile){
                 std::array<std::array<float,2>,3> corners{};
@@ -468,7 +560,7 @@ void append_instance(Projection const& input,FeatureBundle const& bundle,Feature
                     (corners[1][1]-corners[0][1])*(corners[2][0]-corners[0][0]))*.5f;
                 edge_area+=inside_tile(corners);
             }
-            std::array<ShoreVertex,4> clipped{};
+            std::array<ShoreVertex,8> clipped{};
             unsigned kept=0;
             for(unsigned corner=0;corner<count;++corner){
                 auto const& a=polygon[corner];auto const& b=polygon[(corner+1)%count];
@@ -476,13 +568,13 @@ void append_instance(Projection const& input,FeatureBundle const& bundle,Feature
                 if(a_land)clipped[kept++]=a;
                 if(a_land!=b_land)clipped[kept++]=intersect(a,b);
             }
-            // A kit field carries its distance to the nearest cut (up to .06
-            // tile; linear, so it interpolates closely across a triangle) in
-            // its material's spare digits (.0131-.0134); the shader feathers
-            // the field into the ground over the first .03 tile.
+            // A kit field carries its distance to the nearest cut (up to
+            // `feather`, .06 tile; linear, so it interpolates closely across a
+            // triangle) in its material's spare digits (.0131-.0134); the
+            // shader feathers the field into the ground over half of it.
             if(drape)for(unsigned corner=0;corner<kept;++corner)
                 clipped[corner].vertex.base_terrain=static_cast<float>(asset.texture_index)+material_offset+owner_code-
-                    .0004f+.0003f*std::clamp(clipped[corner].distance/.06f,0.f,1.f);
+                    .0004f+.0003f*std::clamp(clipped[corner].distance/feather,0.f,1.f);
             for(unsigned corner=1;corner+1<kept;++corner){
                 if(drape){auto const& a=clipped[0].vertex;auto const& b=clipped[corner].vertex;auto const& c=clipped[corner+1].vertex;
                     kept_area+=std::abs((b.world_x-a.world_x)*(c.world_y-a.world_y)-(b.world_y-a.world_y)*(c.world_x-a.world_x))*.5f;}
@@ -499,7 +591,7 @@ void append_instance(Projection const& input,FeatureBundle const& bundle,Feature
         // and water leave only as crumbs. Fields between routes stay.
         if(drape && pickup_profile && kept_area>0 &&
            ((edge_area<full_area*.5f && (edge_area/std::hypot(high_u-low_u,high_v-low_v)<.07f || edge_area<.006f)) ||
-            kept_area<.004f)){
+            (kept_area<.004f && !shared_edges))){
             target.resize(first_vertex);
             if(topology)topology->resize(first_index);
         }
@@ -821,19 +913,18 @@ void append_route(Projection const& input,Route const& route,Relief relief_at_wo
 template<class Relief,class Height>
 void append_pattern_route(Projection const& input,RoutePatterns const& patterns,PatternRoute const& route,
         Relief relief_at_world,Height height_at_world,std::vector<Vertex>& route_vertices){
-    // A railroad (style 4) follows the same pattern as a road, a little wider
-    // so its sleepers and both rails read at gameplay zoom.
+    // A railroad (style 4) is only slightly wider than a road, so a dense
+    // network does not outweigh the roads beside it.
     bool railroad=route.style>=4u;
-    float stroke_across=railroad?5.f:3.5f,stroke_down=railroad?6.f:4.5f; // pixels at a 128-pixel tile
-    // Margin beyond the stroke: a road's worn shoulders, a railroad's wider
-    // dirt bed (Civ VI lays its rail pieces over a dirt road piece).
-    float fringe=railroad?2.f:1.5f;
+    float stroke_across=railroad?3.85f:3.5f,stroke_down=railroad?4.95f:4.5f; // pixels at a 128-pixel tile
+    // Margin beyond the stroke: a road's worn shoulders, a railroad's dirt
+    // bed (Civ VI lays its rail pieces over a dirt road piece).
+    float fringe=railroad?1.65f:1.5f;
     constexpr float piece_v=.94814090f,piece_core=.0156f;// tiled path center and opaque half-height
     // Piece units per tile along the path. The road piece keeps its texel
     // aspect; the rail strip (16 sleepers per unit, its stroke spanning 43.5
-    // of 256 texels across) keeps its sleepers square at a nominal stroke.
-    float texture_scale=railroad?1.98f:piece_core/.031f;
-    constexpr float bridge_reach=.2f;                    // a bridged path ends under the bridge's end
+    // of 256 texels across) keeps its sleepers square at its stroke.
+    float texture_scale=railroad?2.48f:piece_core/.031f;
     if(route.line>=patterns.lines.size())return;
     auto const& line=patterns.lines[route.line];
     auto const& tile=input.tile;
@@ -843,25 +934,10 @@ void append_pattern_route(Projection const& input,RoutePatterns const& patterns,
     std::size_t count=points.size();
     bool shared_start=line.start>=0 && (route.joins[0]!=0.f || route.joins[1]!=0.f);
     bool shared_end=line.end>=0 && (route.joins[2]!=0.f || route.joins[3]!=0.f);
-    // Both tiles at a shared join ease their path onto its shared axis, so
-    // the two halves pass through the join tangent to each other instead of
-    // meeting at a corner. An authored bridge lies square to its river edge:
-    // there the path runs fully onto the axis before it reaches the bridge.
-    for(unsigned side=0;side<2;++side){
-        if(!(side?shared_end:shared_start))continue;
-        bool bridged=route.bridges&(1u<<side);
-        float full=bridged?.24f:.04f,ease=bridged?.16f:.18f;
-        auto join_point=side?points.back():points.front();
-        float axis_u=route.joins[side*2],axis_v=route.joins[side*2+1];
-        for(auto& point:points){
-            float du=point[0]-join_point[0],dv=point[1]-join_point[1];
-            float weight=std::clamp((full+ease-std::hypot(du,dv))/ease,0.f,1.f);
-            weight=weight*weight*(3.f-2.f*weight);
-            float along=du*axis_u+dv*axis_v;
-            point[0]+=(join_point[0]+axis_u*along-point[0])*weight;
-            point[1]+=(join_point[1]+axis_v*along-point[1])*weight;
-        }
-    }
+    // A bridged path skips the stretch its bridge occupies, reaching a little
+    // under each end of the deck.
+    constexpr float bridge_overlap=.04f;
+    float half=route.half_length();
     // A path over water fades out over a few points toward the bank.
     std::vector<float> ford(count,0.f);
     if(route.wet.size()==count)for(std::size_t index=0;index<count;++index)
@@ -871,6 +947,134 @@ void append_pattern_route(Projection const& input,RoutePatterns const& patterns,
     // applies to a ford).
     if(route.fade.size()==count)for(std::size_t index=0;index<count;++index)
         ford[index]=std::max(ford[index],route.fade[index]);
+    // An authored bridge lies square to its river edge. Out of it the line
+    // into the join runs straight along the bridge axis, through the deck and
+    // a short clear stretch beyond (the straight run), then eases back onto
+    // its pattern (route.approach, from compile). Civ III rail patterns often
+    // fork just inside the edge: a line closer to the join along the network
+    // than the run's end is hidden up to there, and each part beyond starts
+    // at the run's end, moving back onto its pattern along its own length.
+    // So no path meets the deck from its side. A segment with a hidden end is
+    // not drawn.
+    // The same visible surface as railroads; pickup relief alone can sit
+    // well below the natural ground.
+    auto ground=[&](float world_u,float world_v){
+        return std::max(relief_at_world(world_u,world_v)[0],height_at_world(world_u,world_v)-2.5f);
+    };
+    std::vector<std::uint8_t> hidden(count,0u);
+    // Per point: how fully it is drawn at a bridge deck's level (see below), and that level.
+    std::vector<float> lift(count,0.f),level(count,-1e9f);
+    auto smooth=[](float x){x=std::clamp(x,0.f,1.f);return x*x*(3.f-2.f*x);};
+    for(auto const& approach:route.approach){
+        if(approach[2]==0.f && approach[3]==0.f)continue;
+        float run=approach[8];
+        bool into_join=approach[4]==0.f || approach[5]==0.f;
+        std::vector<float> arc(count,0.f);
+        for(std::size_t index=1;index<count;++index)
+            arc[index]=arc[index-1]+std::hypot(points[index][0]-points[index-1][0],points[index][1]-points[index-1][1]);
+        float total=arc.back();
+        auto walk_at=[&](float at){
+            float walk=std::min(approach[4]+at,approach[5]+total-at);
+            return approach[6]>=0.f?std::min(walk,approach[7]+std::abs(at-approach[6])):walk;
+        };
+        // Dense points so the path leaves the axis smoothly, with one exactly
+        // where a hidden stretch ends.
+        std::vector<std::array<float,2>> next;std::vector<float> next_ford,next_at,next_walk,next_lift,next_level;
+        std::vector<std::uint8_t> next_hidden,crossing;
+        float carried_lift=0.f,carried_level=-1e9f;
+        auto add=[&](std::array<float,2> point,float f,float at,float walk,bool hide,bool cross){
+            next.push_back(point);next_ford.push_back(f);next_at.push_back(at);next_walk.push_back(walk);
+            next_hidden.push_back(hide?1u:0u);crossing.push_back(cross?1u:0u);
+            next_lift.push_back(carried_lift);next_level.push_back(carried_level);
+        };
+        for(std::size_t index=0;index<count;++index){
+            unsigned pieces=index?std::max(1u,unsigned(std::ceil((arc[index]-arc[index-1])/.02f))):1u;
+            for(unsigned piece=1;piece<=pieces;++piece){
+                float t=index?float(piece)/float(pieces):1.f;
+                auto const& from=points[index?index-1:0];auto const& to=points[index];
+                std::array<float,2> point{from[0]+(to[0]-from[0])*t,from[1]+(to[1]-from[1])*t};
+                float at=index?arc[index-1]+(arc[index]-arc[index-1])*t:0.f,walk=walk_at(at);
+                float f=index?ford[index-1]+(ford[index]-ford[index-1])*t:ford[0];
+                bool was_hidden=index && piece<pieces?hidden[index-1] && hidden[index]:hidden[index]!=0u;
+                carried_lift=index?lift[index-1]+(lift[index]-lift[index-1])*t:lift[0];
+                carried_level=index?std::max(level[index-1],level[index]):level[0];
+                if(!next.empty() && !into_join && (next_walk.back()<run)!=(walk<run)){
+                    float cross=(run-next_walk.back())/(walk-next_walk.back());
+                    auto const& last=next.back();
+                    add({last[0]+(point[0]-last[0])*cross,last[1]+(point[1]-last[1])*cross},next_ford.back()+(f-next_ford.back())*cross,
+                        next_at.back()+(at-next_at.back())*cross,run,next_hidden.back() && was_hidden,true);
+                }
+                add(point,f,at,walk,was_hidden || (!into_join && walk<run),false);
+            }
+        }
+        std::array<float,2> run_end{approach[0]+approach[2]*run,approach[1]+approach[3]*run};
+        // How fully each point is carried at the deck's level (see vertex_at),
+        // by its distance from the join along the network.
+        for(std::size_t index=0;index<next.size();++index){
+            float walk=into_join?(approach[4]==0.f?next_at[index]:total-next_at[index]):next_walk[index];
+            float weight=smooth((approach[10]+approach[11]-walk)/std::max(approach[11],1e-3f));
+            if(weight>next_lift[index]){next_lift[index]=weight;next_level[index]=approach[9];}
+        }
+        if(into_join){
+            bool from_start=approach[4]==0.f;
+            // Its far end stays where the pattern's other lines meet it.
+            float blend=std::clamp(total-run-.02f,.04f,PatternRoute::approach_blend);
+            for(std::size_t index=0;index<next.size();++index){
+                float d=from_start?next_at[index]:total-next_at[index],weight=smooth((run+blend-d)/blend);
+                next[index][0]+=(approach[0]+approach[2]*d-next[index][0])*weight;
+                next[index][1]+=(approach[1]+approach[3]*d-next[index][1])*weight;
+            }
+            if(total<run){
+                if(from_start){next.push_back(run_end);next_ford.push_back(next_ford.back());next_hidden.push_back(0u);
+                    next_lift.push_back(1.f);next_level.push_back(approach[9]);}
+                else{next.insert(next.begin(),run_end);next_ford.insert(next_ford.begin(),next_ford.front());next_hidden.insert(next_hidden.begin(),0u);
+                    next_lift.insert(next_lift.begin(),1.f);next_level.insert(next_level.begin(),approach[9]);}
+            }
+        }else{
+            std::vector<std::array<float,2>> moved=next;
+            for(std::size_t index=0;index<next.size();++index){
+                // Hidden points lie along the axis, so a part's first tangent
+                // follows the run.
+                if(next_hidden[index]){moved[index]={approach[0]+approach[2]*next_walk[index],approach[1]+approach[3]*next_walk[index]};
+                    continue;}
+                if(!crossing[index])continue;
+                int step=index+1<next.size() && !next_hidden[index+1]?1:-1;
+                float reach=0.f;
+                for(std::ptrdiff_t at=std::ptrdiff_t(index);at>=0 && at<std::ptrdiff_t(next.size()) && !next_hidden[std::size_t(at)];at+=step)
+                    reach=std::abs(next_at[std::size_t(at)]-next_at[index]);
+                // The move fades out before the part's far end, which stays
+                // where the pattern's other lines meet it.
+                float length=std::min(PatternRoute::approach_blend,reach-.02f);
+                std::array<float,2> move{run_end[0]-next[index][0],run_end[1]-next[index][1]};
+                for(std::ptrdiff_t at=std::ptrdiff_t(index);at>=0 && at<std::ptrdiff_t(next.size()) && !next_hidden[std::size_t(at)];at+=step){
+                    float t=std::abs(next_at[std::size_t(at)]-next_at[index]);
+                    float weight=length>1e-4f?1.f-smooth(t/length):at==std::ptrdiff_t(index)?1.f:0.f;
+                    if(weight<=0.f)break;
+                    moved[std::size_t(at)][0]+=move[0]*weight;moved[std::size_t(at)][1]+=move[1]*weight;
+                }
+            }
+            next=std::move(moved);
+        }
+        points=std::move(next);ford=std::move(next_ford);hidden=std::move(next_hidden);count=points.size();
+        lift=std::move(next_lift);level=std::move(next_level);
+    }
+    // Both tiles at a shared join ease their path onto its shared axis, so
+    // the two halves pass through the join tangent to each other instead of
+    // meeting at a corner.
+    for(unsigned side=0;side<2;++side){
+        if(!(side?shared_end:shared_start) || (route.bridges&(1u<<side)))continue;
+        auto join_point=side?points.back():points.front();
+        float axis_u=route.joins[side*2],axis_v=route.joins[side*2+1];
+        float full=.04f,ease=.18f;
+        for(auto& point:points){
+            float du=point[0]-join_point[0],dv=point[1]-join_point[1];
+            float weight=std::clamp((full+ease-std::hypot(du,dv))/ease,0.f,1.f);
+            weight=weight*weight*(3.f-2.f*weight);
+            float along=du*axis_u+dv*axis_v;
+            point[0]+=(join_point[0]+axis_u*along-point[0])*weight;
+            point[1]+=(join_point[1]+axis_v*along-point[1])*weight;
+        }
+    }
     auto direction=[&](std::size_t index){
         if(index==0 && shared_start)return std::array<float,2>{-route.joins[0],-route.joins[1]};
         if(index+1==count && shared_end)return std::array<float,2>{route.joins[2],route.joins[3]};
@@ -896,22 +1100,34 @@ void append_pattern_route(Projection const& input,RoutePatterns const& patterns,
     for(std::size_t index=1;index<count;++index)
         distance[index]=distance[index-1]+std::hypot(points[index][0]-points[index-1][0],points[index][1]-points[index-1][1]);
     float length=distance.back();
-    // The bridge stands on the river's own crossing; its ends move with it.
-    float low=route.bridges&1u?bridge_reach-route.crossing[0]:0.f,
-        high=length-(route.bridges&2u?bridge_reach-route.crossing[1]:0.f);
-    if(length<.002f || high-low<.002f)return;
-    // The same visible surface as railroads; pickup relief alone can sit
-    // well below the natural ground.
-    auto ground=[&](float world_u,float world_v){
-        return std::max(relief_at_world(world_u,world_v)[0],height_at_world(world_u,world_v)-2.5f);
+    // The bridge stands on the river's own crossing, so it may sit past the
+    // join or inside this tile. Along the path's distance from a bridged join,
+    // the deck covers [-c-h, -c+h] (c: crossing outward, h: half length); the
+    // path skips that stretch, less the overlap, and keeps any part between
+    // the join and a bridge standing farther out.
+    if(length<.002f)return;
+    std::vector<std::array<float,2>> keep{{0.f,length}};
+    auto cut=[&](float a,float b){
+        if(b<=a)return;
+        std::vector<std::array<float,2>> next;
+        for(auto const& r:keep){
+            if(b<=r[0] || a>=r[1]){next.push_back(r);continue;}
+            if(a>r[0])next.push_back({r[0],a});
+            if(b<r[1])next.push_back({b,r[1]});
+        }
+        keep=std::move(next);
     };
-    unsigned seed=c3x_renderer::stable_hash(tile.variant_seed^route.line*0x9e3779b9u^
+    if(route.bridges&1u)cut(std::max(0.f,-route.crossing[0]-half+bridge_overlap),-route.crossing[0]+half-bridge_overlap);
+    if(route.bridges&2u)cut(length-(-route.crossing[1]+half-bridge_overlap),length-std::max(0.f,-route.crossing[1]-half+bridge_overlap));
+    keep.erase(std::remove_if(keep.begin(),keep.end(),[](auto const& r){return r[1]-r[0]<.002f;}),keep.end());
+    if(keep.empty())return;
+    unsigned seed=c3x_renderer::patterns::feature_hash(tile.variant_seed^route.line*0x9e3779b9u^
         unsigned(tile.tile_x)*73856093u^unsigned(tile.tile_y)*19349663u);
     // Anchor the piece at a shared join so both tiles meet on the same texel.
     auto texture=[&](float along){
         if(line.start>=0)return along*texture_scale;
         if(line.end>=0)return (length-along)*texture_scale;
-        return along*texture_scale+c3x_renderer::stable_random(seed);
+        return along*texture_scale+c3x_renderer::patterns::stable_random(seed);
     };
     float left=input.left,top=input.top,half_w=input.half_w,half_h=input.half_h;
     float relief_projection_scale=input.relief_projection_scale;
@@ -919,7 +1135,7 @@ void append_pattern_route(Projection const& input,RoutePatterns const& patterns,
     // 1 plains, 2 desert, 3 hills, 4 mountain, 5 marsh (Civ III square types).
     int real=tile.real_terrain_type,base=tile.terrain_type;
     float ground_kind=real==5?3.f:real==6 || real==10?4.f:real==9?5.f:base==1?1.f:base==0 || base==4?2.f:0.f;
-    struct Station {float u,v,normal_u,normal_v,core,ford,along,coordinate;};
+    struct Station {float u,v,normal_u,normal_v,core,ford,along,coordinate,lift,level;};
     auto station=[&](std::size_t index){
         auto tangent=direction(index);
         float normal_u=-tangent[1],normal_v=tangent[0];
@@ -941,13 +1157,18 @@ void append_pattern_route(Projection const& input,RoutePatterns const& patterns,
         // narrow it there (and widen a foreshortened back slope a little).
         core*=std::clamp(thickness(0.f)/std::max(thickness(1.f),1e-6f),.25f,1.4f);
         return Station{points[index][0],points[index][1],normal_u,normal_v,core,ford[index],
-            distance[index]/length,texture(distance[index])};
+            distance[index]/length,texture(distance[index]),lift[index],level[index]};
     };
     auto vertex_at=[&](Station const& s,float across){
         float route_u=s.u+s.normal_u*s.core*fringe*across;
         float route_v=s.v+s.normal_v*s.core*fringe*across;
         float world_u=tile_world_u+route_u,world_v=tile_world_v+1.f-route_v;
         float height=ground(world_u,world_v);
+        // Near a bridge the path is carried at its deck's level where its
+        // ground lies lower, like an embankment: route strips draw 6.5 units
+        // over their height, a deck's rails 2.5 over its base, so the path is
+        // drawn straight through the deck.
+        if(s.lift>0.f && s.level-4.f>height)height+=(s.level-4.f-height)*s.lift;
         constexpr float e=.01f;
         float slope_u=(ground(world_u+e,world_v)-ground(world_u-e,world_v))/(2*e);
         float slope_v=(ground(world_u,world_v+e)-ground(world_u,world_v-e))/(2*e);
@@ -990,6 +1211,7 @@ void append_pattern_route(Projection const& input,RoutePatterns const& patterns,
         s.normal_u=a.normal_u+(b.normal_u-a.normal_u)*t;s.normal_v=a.normal_v+(b.normal_v-a.normal_v)*t;
         float n=std::max(std::hypot(s.normal_u,s.normal_v),1e-6f);s.normal_u/=n;s.normal_v/=n;
         s.core=a.core+(b.core-a.core)*t;s.ford=a.ford+(b.ford-a.ford)*t;
+        s.lift=a.lift+(b.lift-a.lift)*t;s.level=std::max(a.level,b.level);
         s.along=a.along+(b.along-a.along)*t;s.coordinate=a.coordinate+(b.coordinate-a.coordinate)*t;
         return s;
     };
@@ -1025,8 +1247,10 @@ void append_pattern_route(Projection const& input,RoutePatterns const& patterns,
         Station next=station(index);
         auto next_pair=pair(next);
         float d0=distance[index-1],d1=distance[index];
-        if(d1>low && d0<high && d1>d0){
-            // The authored bridge deck carries the path over the river.
+        // The authored bridge deck carries the path over the river.
+        if(d1>d0 && !hidden[index-1] && !hidden[index])for(auto const& r:keep){
+            float low=r[0],high=r[1];
+            if(!(d1>low && d0<high))continue;
             Station a=previous,b=next;auto from=previous_pair,to=next_pair;
             if(d0<low){a=between(previous,next,(low-d0)/(d1-d0));from=pair(a);}
             if(d1>high){b=between(previous,next,(high-d0)/(d1-d0));to=pair(b);}
@@ -1034,6 +1258,58 @@ void append_pattern_route(Projection const& input,RoutePatterns const& patterns,
         }
         previous=next;previous_pair=next_pair;
     }
+}
+// A railroad runs through a mountain in a tunnel at ground level. It is
+// hidden where it lies in rock (rock: per point of the route's line, the
+// rail at least `foot` over the land with true rock close by) and, on a
+// mountain tile, from an edge it shares with a mountain neighbor (inside:
+// the line's start and end) until it reaches rock, so it never surfaces in
+// a saddle of a range; a line inside a range at both ends stays hidden.
+// Rock is a world-surface test, so neighboring tiles agree at their edges.
+// Where hidden rail meets shown rail, a portal (the group's placements: Civ
+// VI's portal entrance) stands at the mountain's foot, where the
+// rail rises `foot` over the land, turned toward the shown side, or at an
+// open tile edge where a range's tunnel ends. The shown rail ends there,
+// inside the arch.
+inline void tunnel_route(PatternRoute& route,RoutePatterns const& patterns,std::vector<float> const& rise,
+        std::vector<std::uint8_t> const& rock,float foot,std::array<bool,2> inside,FeatureGroup const& tunnel,
+        Plan& plan,std::vector<float>& fade){
+    constexpr float tunnel_scale=.7f; // as pattern bridges, 70% of the pack's calibrated scale
+    if(route.line>=patterns.lines.size() || tunnel.placements.empty())return;
+    auto const& line=patterns.lines[route.line];
+    unsigned count=line.count;
+    if(count<2 || rise.size()!=count || rock.size()!=count || fade.size()!=count)return;
+    if(route.points.size()!=count)
+        route.points.assign(patterns.points.begin()+line.first,patterns.points.begin()+line.first+count);
+    std::vector<std::uint8_t> hidden=rock,moved(count,0u);
+    bool through=inside[0] && inside[1];
+    for(unsigned side=0;side<2;++side)if(inside[side] && (side?line.end:line.start)>=0)
+        for(unsigned k=0;k<count;++k){unsigned index=side?count-1u-k:k;if(rock[index] && !through)break;hidden[index]=1u;}
+    auto const source=route.points;
+    // The meshes' facade stands just before their origin, their open end
+    // facing -y: (du,dv) points toward the shown side.
+    auto portal=[&](std::array<float,2> face,float du,float dv){
+        float rotation=std::atan2(du,-dv);
+        for(auto const& placement:tunnel.placements)
+            plan.instances.push_back({bridge_family,placement.asset_index,feature_layer,
+                face[0],face[1],rotation,placement.scale*tunnel_scale,13.f,0.f,true});
+    };
+    for(unsigned index=0;index+1<count;++index)if(hidden[index]!=hidden[index+1]){
+        unsigned shown=hidden[index]?index+1:index,covered=hidden[index]?index:index+1;
+        float t=std::clamp((foot-rise[shown])/std::max(rise[covered]-rise[shown],1e-3f),0.f,1.f);
+        auto const& a=source[shown];auto const& b=source[covered];
+        std::array<float,2> face{a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t};
+        portal(face,a[0]-b[0],a[1]-b[1]);
+        // Where two portals cross the same stretch, it keeps its own point.
+        if(!moved[covered])route.points[covered]=face;
+        moved[covered]=1u;
+    }
+    for(unsigned side=0;side<2;++side){
+        unsigned edge=side?count-1u:0u,next=side?count-2u:1u;
+        if((side?line.end:line.start)>=0 && !inside[side] && hidden[edge] && !rock[edge])
+            portal(source[edge],source[edge][0]-source[next][0],source[edge][1]-source[next][1]);
+    }
+    for(unsigned index=0;index<count;++index)fade[index]=hidden[index]?1.f:0.f;
 }
 template<class Lookup>
 void select_routes(c3x_renderer_tile_v1 const& tile,Assets const& assets,bool route_assets_ready,
@@ -1263,6 +1539,20 @@ void select_routes(c3x_renderer_tile_v1 const& tile,Assets const& assets,bool ro
                     float length=std::hypot(u,v);
                     if(length>1e-5f)axes[direction]={u/length,v/length};
                 }
+                // Pattern bridges are smaller than the source meshes' calibrated
+                // scale: they span the river onto both banks without dwarfing
+                // the narrow Civ III-width routes.
+                constexpr float pattern_bridge_scale=.7f;
+                unsigned style=static_cast<unsigned>(std::clamp(tile.route_style,0,3));
+                std::string group_name=std::string("bridge_")+(railroad?"railroad":style>=3u?"modern":style>=2u?"industrial":"medieval")+"_normal";
+                c3x_renderer::FeatureGroup const* bridge_group=c3x_renderer::find_feature_group(bridge_bundle,group_name.c_str());
+                float bridge_half=0.f;
+                if(bridge_group && !bridge_group->placements.empty()){
+                    auto const& placement=bridge_group->placements.front();
+                    if(placement.asset_index<bridge_bundle.assets.size())
+                        for(auto const& vertex:bridge_bundle.assets[placement.asset_index].vertices)
+                            bridge_half=std::max(bridge_half,std::abs(vertex.position[0])*placement.scale*pattern_bridge_scale);
+                }
                 if(draw){
                     for(unsigned index=set.offsets[own];index<set.offsets[own+1];++index){
                         auto const& line=set.lines[index];
@@ -1271,6 +1561,7 @@ void select_routes(c3x_renderer_tile_v1 const& tile,Assets const& assets,bool ro
                         unsigned crossings=(line.start>=0 && (fords>>line.start&1u)?1u:0u)|
                             (line.end>=0 && (fords>>line.end&1u)?2u:0u);
                         PatternRoute route{index,railroad?4u:0u,bridges,{},{},{},crossings};
+                        route.bridge_half=bridge_half;
                         if(line.start>=0){route.joins[0]=axes[line.start][0];route.joins[1]=axes[line.start][1];
                             route.open[0]=open[line.start][0];route.open[1]=open[line.start][1];}
                         if(line.end>=0){route.joins[2]=axes[line.end][0];route.joins[3]=axes[line.end][1];
@@ -1278,15 +1569,12 @@ void select_routes(c3x_renderer_tile_v1 const& tile,Assets const& assets,bool ro
                         plan.patterns.push_back(std::move(route));
                     }
                 }
-                unsigned style=static_cast<unsigned>(std::clamp(tile.route_style,0,3));
-                std::string group_name=std::string("bridge_")+(railroad?"railroad":style>=3u?"modern":style>=2u?"industrial":"medieval")+"_normal";
-                c3x_renderer::FeatureGroup const* bridge_group=c3x_renderer::find_feature_group(bridge_bundle,group_name.c_str());
                 for(int direction=0;direction<4;direction+=2){
                     if(!(bridge_mask>>direction&1u) || !bridge_group || bridge_group->placements.empty())continue;
                     auto const& placement=bridge_group->placements.front();
                     constexpr float join_u[4]={.5f,1.f,1.f,1.f},join_v[4]={0.f,0.f,.5f,1.f};
                     append_feature_instance(bridge_bundle,placement,join_u[direction],join_v[direction],
-                        std::atan2(axes[direction][1],axes[direction][0]),placement.scale,13.0f,0.0f,true,feature_vertices);
+                        std::atan2(axes[direction][1],axes[direction][0]),placement.scale*pattern_bridge_scale,13.0f,0.0f,true,feature_vertices);
                 }
             };
             // A road with no road link draws Civ III's mark unless a city or a
@@ -1499,6 +1787,12 @@ inline bool select_improvements(c3x_renderer_tile_v1 const& tile,Assets const& a
             float rotation = c3x_renderer::stable_random(
                 static_cast<std::uint32_t>(tile.tile_x * 71 + tile.tile_y * 113) +
                 era * 29u) * 0.48f - 0.24f;
+            // The mine stands on the visible ground (compile seats mines like
+            // sites): centred on flat land and a hill's crown, a little smaller
+            // on hills, and at a mountain's camera-facing foot, smaller again.
+            bool peak = tile.real_terrain_type == 6 || tile.real_terrain_type == 10;
+            float anchor = peak ? 0.78f : 0.5f;
+            float fit = peak ? 0.75f : tile.real_terrain_type == 5 ? 0.9f : 1.0f;
             for (std::size_t part = 0; part < group->placements.size(); ++part) {
                 c3x_renderer::FeaturePlacement const & placement =
                     group->placements[part];
@@ -1511,9 +1805,12 @@ inline bool select_improvements(c3x_renderer_tile_v1 const& tile,Assets const& a
                 if (marker != std::string::npos)
                     emissive_code = static_cast<unsigned>(std::strtoul(
                         asset.id.c_str() + marker + 2u, nullptr, 10));
+                // +.0035 marks the natural height-depth basis (as farm kit
+                // props), so the hill or mountain under the mine does not
+                // hide its lower half; the emissive code digit is unchanged.
                 append_feature_instance(mine_bundle, placement,
-                    0.5f, 0.5f, rotation, placement.scale, 21.0f,
-                    0.01f * static_cast<float>(emissive_code + 1u),
+                    anchor, anchor, rotation, placement.scale * fit, 21.0f,
+                    0.01f * static_cast<float>(emissive_code + 1u) + 0.0035f,
                     part == 0u, mine_vertices);
             }
         }
@@ -1556,8 +1853,9 @@ inline bool select_improvements(c3x_renderer_tile_v1 const& tile,Assets const& a
             bool dense=plan.patterns.size()+plan.routes.size()+plan.farm_route_lines>=3;
             auto kit_group=[&](std::string const& name){return c3x_renderer::find_feature_group(farm_bundle,name.c_str());};
             c3x_renderer::FeatureGroup const* fields=nullptr;
+            std::string name;
             if(tile.resource_id>=0 && tile.city_id<0){
-                std::string name="farm_kit:";
+                name="farm_kit:";
                 for(char letter:tile.resource_name){if(!letter)break;name+=letter>='A' && letter<='Z'?char(letter+32):letter;}
                 if(dense)fields=kit_group(name+":dense");
                 if(!fields)fields=kit_group(name);
@@ -1566,6 +1864,10 @@ inline bool select_improvements(c3x_renderer_tile_v1 const& tile,Assets const& a
             }
             if(!fields && dense)fields=kit_group("farm_kit:dense");
             if(!fields)fields=group;
+            // A plot kit ("farm_kit:plots", "farm_kit:<name>:plots") lays its
+            // rectangular fields in strips instead (settle_farm_fields).
+            if(!name.empty())plan.farm_plots=kit_group(name+":plots");
+            if(!plan.farm_plots)plan.farm_plots=kit_group("farm_kit:plots");
             // The crop pieces of the group (the fields of one patchwork) share
             // one placement; pieces that miss the tile are skipped.
             std::vector<unsigned> pieces;
@@ -1581,7 +1883,7 @@ inline bool select_improvements(c3x_renderer_tile_v1 const& tile,Assets const& a
                 }
             }
             float side=std::min(high_x-low_x,high_y-low_y);
-            if(!pieces.empty() && side>0){
+            if(!pieces.empty() && side>0 && !plan.farm_plots){
                 float size=std::max(1.5f,side*(1.f+.2f*c3x_renderer::stable_random(seed+11u)));
                 float rotation=6.28318530718f*c3x_renderer::stable_random(seed+13u);
                 // Any shift keeps the whole tile (half-diagonal .71) covered.
@@ -1606,6 +1908,8 @@ inline bool select_improvements(c3x_renderer_tile_v1 const& tile,Assets const& a
                 }
             }
         }
+        // A kit marked "farm_kit:sparse" plants fewer trees and farmhouses.
+        bool sparse=plan.farm_kit && c3x_renderer::find_feature_group(farm_bundle,"farm_kit:sparse");
         for (c3x_renderer::FeaturePlacement const & placement : group->placements) {
             if (placement.asset_index >= farm_bundle.assets.size())
                 return false;
@@ -1647,7 +1951,7 @@ inline bool select_improvements(c3x_renderer_tile_v1 const& tile,Assets const& a
                         scale,21.0f,.01f*float(emissive_code+1u),false,farm_vertices);
                 }
             } else if (tree_part) {
-                unsigned count=4u+((seed>>5)%3u);
+                unsigned count=(sparse?0u:4u)+((seed>>5)%3u);
                 for(unsigned slot=0;slot<count;++slot){
                     unsigned tree_seed=c3x_renderer::stable_hash(seed ^ ((slot+5u)*0x85ebca6bu));
                     float u=slot<4u?((slot&1u)?.81f:.19f):.5f;
@@ -1659,7 +1963,7 @@ inline bool select_improvements(c3x_renderer_tile_v1 const& tile,Assets const& a
                         float(tree_seed&3u)*1.57079632679f,scale,21.0f,
                         .01f*float(emissive_code+1u)+kit_code,true,farm_vertices);
                 }
-            } else if (building_part) {
+            } else if (building_part && !(sparse && ((seed>>9)&1u))) {
                 append_feature_instance(farm_bundle,placement,
                     .37f+float(seed&1u)*.20f,.38f+float((seed>>1)&1u)*.19f,
                     float((seed>>2)&3u)*1.57079632679f,1.45f,21.0f,
@@ -1682,6 +1986,8 @@ inline void clear_farm(Plan& plan,Plan const& routes,Assets const& assets,
     // the fields between the routes survive.
     float dense=std::clamp((float(routes.patterns.size()+routes.routes.size())-2.f)/8.f,0.f,1.f);
     float road=.095f-.05f*dense,rail=.12f-.06f*dense;
+    // A kit marked "farm_kit:narrow" keeps narrower verges in its farmland.
+    if(c3x_renderer::find_feature_group(assets[farm_family],"farm_kit:narrow")){road=.065f-.025f*dense;rail=.085f-.035f*dense;}
     constexpr float yard=.05f;
     auto& clearing=plan.farm_clearing;
     for(auto const& route:routes.patterns){
@@ -1700,23 +2006,465 @@ inline void clear_farm(Plan& plan,Plan const& routes,Assets const& assets,
     if(clearing.yard)for(auto const& box:resource)clearing.boxes.push_back({box[0],box[1],box[2],box[3],yard});
 }
 // A farm's relief: the clearance channel (dry land) also keeps out of the
-// kit's open ground, so fields and props go around routes and resources.
+// kit's open ground, so fields and props go around routes and resources. A
+// plot's relief also keeps it inside its own region; a joined plot (region
+// +0x100) does not feather at a tile edge a farm shares (append_instance cuts
+// it there exactly).
 template<class Relief>
-auto farm_relief(Plan const& plan,c3x_renderer_tile_v1 const& tile,Relief relief){
+auto farm_relief(Plan const& plan,c3x_renderer_tile_v1 const& tile,Relief relief,unsigned region=0){
     float world_u=float(tile.tile_x+tile.tile_y)*.5f,world_v=float(tile.tile_x-tile.tile_y)*.5f;
-    return [&clearing=plan.farm_clearing,kit=plan.farm_kit,relief,world_u,world_v](float x,float y){
+    return [&clearing=plan.farm_clearing,kit=plan.farm_kit,relief,world_u,world_v,region](float x,float y){
         auto sample=relief(x,y);
         float u=x-world_u,v=world_v+1.f-y;
         // A kit's patchwork stops at its tile's edge (feathering into it).
-        if(kit)sample[2]=std::min(sample[2],std::min(std::min(u,1.f-u),std::min(v,1.f-v)));
-        if(!clearing.paths.empty() || !clearing.boxes.empty())
-            sample[2]=std::min(sample[2],clearing.at(u,v));
+        if(kit){
+            unsigned shared=region&0x100u?clearing.shared:0u;
+            // With a ground kit, fields and props stop up to .04 tile short
+            // of other land, irregularly (fixed in world space), so the farm's
+            // outline frays into its ground's soft edge instead of a diamond.
+            float inset=clearing.soft && !(region&0x400u)?
+                .04f*(.5f+.25f*std::sin(x*6.1f+y*2.7f+.4f)+.25f*std::sin(y*5.7f-x*3.1f+2.2f)):0.f;
+            float edges[4]={u,1.f-u,v,1.f-v};
+            for(unsigned k=0;k<4;++k)if(!((shared>>k)&1u))
+                sample[2]=std::min(sample[2],edges[k]-((clearing.shared>>k)&1u?0.f:inset));
+            // ...and fade into other land and water over a wider band.
+            if(clearing.soft && !(region&0x400u))sample[2]*=.4f;
+        }
+        if(!(region&0x200u) && (!clearing.paths.empty() || !clearing.boxes.empty()))
+            sample[2]=std::min(sample[2],clearing.at(u,v,region&255u));
+        // The ground under a farm (0x400) eases into the land and water around
+        // it over a wide, irregular edge (fixed in world space, so farms
+        // agree), up to .1 tile inside its cut. Its strength follows its
+        // terrain (met halfway at a farm of another terrain) and varies gently;
+        // capping its distance code below the opaque level lets that much of
+        // the terrain show through (the shader's alpha is smoothstep(0,.5,code)).
+        // A ground kit's fields and ground carry their terrain tint in relief
+        // channel 1 (an authored height they never use), met halfway at a
+        // farm of another terrain like the ground's strength.
+        float strength=clearing.strength[0],tint=clearing.tint[0];
+        float sides[4]={u,1.f-u,v,1.f-v};
+        for(unsigned k=0;k<4;++k)if((clearing.shared>>k)&1u){
+            float meet=.5f*std::max(0.f,1.f-sides[k]/.35f);
+            strength+=(clearing.strength[k+1]-clearing.strength[0])*meet;
+            tint+=(clearing.tint[k+1]-clearing.tint[0])*meet;
+        }
+        if(clearing.soft)sample[1]=tint;
+        if(region&0x400u){
+            sample[2]-=.1f*(.5f+.25f*std::sin(x*4.7f+y*1.9f)+.25f*std::sin(y*5.3f-x*2.3f+1.7f));
+            strength*=.9f+.1f*(.5f+.25f*std::sin(x*2.3f+y*1.1f+.8f)+.25f*std::sin(y*2.7f-x*1.6f+2.9f));
+            strength=std::clamp(strength,.05f,1.f);
+            sample[2]=std::min(sample[2],.16f*(.5f-std::sin(std::asin(1.f-2.f*strength)/3.f)));
+        }
         return sample;
     };
 }
-template<class Source>
-void settle_farm_fields(Plan& plan,c3x_renderer_tile_v1 const& tile,Assets const& assets,Source source){
-    if(plan.farm_kit)return; // the kit's patchwork is clipped, not moved
+// A plot kit's layout. The tile's routes, yard and water split its open
+// ground into regions (FarmClearing::regions); each plot is clipped to its
+// region, so plots follow the routes' contours and never straddle one.
+// A region in a small area of the route network (below) takes that area's
+// plots, which every farm in the area lays out alike: they run on across
+// tile edges. Elsewhere a region lays strips along the route it borders
+// most, from that route's verge outwards (else along its shore or river,
+// else its map region's axis); strips along a route divide end to end into
+// whole plots, and in open ground a world lattice continues across tiles.
+// neighbour(dx,dy) is the tile at that raw offset (null when unknown).
+template<class Source,class Neighbour>
+void lay_out_farm_plots(Plan& plan,c3x_renderer_tile_v1 const& tile,Assets const& assets,Source water,Neighbour neighbour){
+    constexpr float pi=3.14159265359f,gap=.012f;
+    constexpr int n=FarmClearing::cells;
+    auto const& bundle=assets[farm_family];
+    // A ground kit's farms ripen a few plots ("farm_kit:plots:ripe": the same
+    // kinds, in order).
+    struct Plot {unsigned asset;float width,height;unsigned ripe;};
+    std::vector<Plot> plots;
+    auto const* ripe=c3x_renderer::find_feature_group(bundle,"farm_kit:plots:ripe");
+    for(auto const& placement:plan.farm_plots->placements){
+        if(placement.asset_index>=bundle.assets.size())continue;
+        float low_x=1e6f,high_x=-1e6f,low_y=1e6f,high_y=-1e6f;
+        for(auto const& vertex:bundle.assets[placement.asset_index].vertices){
+            low_x=std::min(low_x,vertex.position[0]);high_x=std::max(high_x,vertex.position[0]);
+            low_y=std::min(low_y,vertex.position[1]);high_y=std::max(high_y,vertex.position[1]);
+        }
+        std::size_t kind=std::size_t(&placement-plan.farm_plots->placements.data());
+        unsigned ripe_asset=ripe && kind<ripe->placements.size()?ripe->placements[kind].asset_index:placement.asset_index;
+        if(high_x>low_x && high_y>low_y)plots.push_back({placement.asset_index,high_x-low_x,high_y-low_y,ripe_asset});
+    }
+    if(plots.empty())return;
+    // A ground kit ("farm_kit:ground") lays one grass decal under the farm's
+    // plots, joined with the next farms and over its route verges.
+    if(auto const* ground=c3x_renderer::find_feature_group(bundle,"farm_kit:ground"))if(!ground->placements.empty()){
+        plan.instances.push_back({farm_family,ground->placements.front().asset_index,farm_layer,.5f,.5f,0.f,1.f,
+            21.f,.0135f,false,1.f,0x700u});
+        plan.farm_clearing.soft=true;
+    }
+    // A ditch kit ("farm_kit:ditch") adds sparse irrigation ditches between
+    // strips and along routes.
+    auto const* ditches=c3x_renderer::find_feature_group(bundle,"farm_kit:ditch");
+    unsigned ditch=ditches && !ditches->placements.empty()?ditches->placements.front().asset_index:~0u;
+    int c=(tile.tile_x+tile.tile_y)/2,r=(tile.tile_x-tile.tile_y)/2;
+    float world_u=float(tile.tile_x+tile.tile_y)*.5f,world_v=float(tile.tile_x-tile.tile_y)*.5f;
+    auto& clearing=plan.farm_clearing;
+    std::array<float,n> centre{};
+    for(int i=0;i<n;++i)centre[i]=(float(i)+.5f)/float(n);
+    // Regions: 4-connected open cells; a scrap under .012 tile gets no fields.
+    // The water clearance is smooth: sampled on a 9x9 lattice (a full ground
+    // query each) and interpolated for the cells.
+    std::vector<float> shore(n*n);
+    std::vector<std::uint8_t> open(n*n);
+    auto& labels=clearing.regions;labels.assign(n*n,0);
+    std::array<float,81> water_lattice{};
+    for(int k=0;k<81;++k)water_lattice[k]=std::min(water(world_u+float(k%9)/8.f,world_v+1.f-float(k/9)/8.f)[2],1.f);
+    for(int cell=0;cell<n*n;++cell){
+        float u=centre[cell%n],v=centre[cell/n];
+        float x=u*8.f,y=v*8.f;int i=std::min(int(x),7),j=std::min(int(y),7);float a=x-float(i),b=y-float(j);
+        shore[cell]=(water_lattice[j*9+i]*(1.f-a)+water_lattice[j*9+i+1]*a)*(1.f-b)+
+            (water_lattice[j*9+i+9]*(1.f-a)+water_lattice[j*9+i+10]*a)*b;
+        open[cell]=shore[cell]>0 && clearing.open(u,v)>0;
+    }
+    std::vector<std::vector<int>> regions;
+    for(int start=0;start<n*n;++start){
+        if(!open[start] || labels[start])continue;
+        auto label=std::uint8_t(regions.size()<254?regions.size()+1:255);
+        std::vector<int> cells{start};labels[start]=label;
+        for(std::size_t k=0;k<cells.size();++k){
+            int cell=cells[k],i=cell%n;
+            for(int next:{i>0?cell-1:-1,i+1<n?cell+1:-1,cell-n,cell+n})
+                if(next>=0 && next<n*n && open[next] && !labels[next]){labels[next]=label;cells.push_back(next);}
+        }
+        if(label==255 || float(cells.size())<.012f*float(n*n)){for(int cell:cells)labels[cell]=255;cells.clear();}
+        regions.push_back(std::move(cells));
+    }
+    // The terrain of the tile at world lattice (i,j) (i=c, j=-r), or -1.
+    auto terrain_at=[&](int i,int j){
+        if(i==c && j==-r)return tile.terrain_type;
+        auto const* found=neighbour((i-c)-(j+r),(i-c)+(j+r));
+        return found?found->terrain_type:-1;};
+    // A plot at (along, across) in world coordinates (c+u, v-r) turned by
+    // theta: the plot whose aspect best fits, with some variety (a turned plot
+    // runs its rows across its strip), stretched within a third to fill it.
+    // A few ripen: more on plains, fewer on tundra (by the terrain under the
+    // plot's centre, so farms sharing it agree).
+    auto emit=[&](float ac,float bc,float la,float lb,float theta,unsigned seed,unsigned region){
+        float ca=std::cos(theta),sa=std::sin(theta);
+        Plot const* best=nullptr;bool turned=false;float best_score=1e9f;
+        for(std::size_t kind=0;kind<plots.size();++kind)for(unsigned quarter=0;quarter<2;++quarter){
+            float aspect=quarter?plots[kind].height/plots[kind].width:plots[kind].width/plots[kind].height;
+            float score=std::abs(std::log(aspect*lb/la))+
+                .45f*c3x_renderer::stable_random(seed+unsigned(kind)*2u+quarter);
+            if(score<best_score){best_score=score;best=&plots[kind];turned=quarter!=0;}
+        }
+        float x=turned?lb:la,y=turned?la:lb;
+        float stretch=std::clamp(x/y*best->height/best->width,.75f,1.33f);
+        float scale=std::min(x/(best->width*stretch),y/best->height);
+        int under=ripe?terrain_at(int(std::floor(ac*ca-bc*sa)),int(std::floor(ac*sa+bc*ca))):-1;
+        float share=under==1?.12f:under==3?.02f:under==4?.06f:.05f;
+        unsigned asset=ripe && c3x_renderer::stable_random(seed^0x6a09e667u)<share?best->ripe:best->asset;
+        plan.instances.push_back({farm_family,asset,farm_layer,ac*ca-bc*sa-float(c),ac*sa+bc*ca+float(r),
+            theta+(turned?pi*.5f:0.f)+((seed>>9)&1u?pi:0.f),scale,21.f,.0135f,false,stretch,region});
+    };
+    // A ditch .02 wide centred at (along, across), its unit length stretched.
+    auto emit_ditch=[&](float ac,float bc,float length,float theta,unsigned region){
+        if(ditch==~0u || length<.08f)return;
+        float ca=std::cos(theta),sa=std::sin(theta);
+        plan.instances.push_back({farm_family,ditch,farm_layer,ac*ca-bc*sa-float(c),ac*sa+bc*ca+float(r),
+            theta,.02f,21.f,.0135f,false,length/.02f,region});
+    };
+    // Areas of the route network. Lattice point (i,j)=(c,-r) is a tile
+    // centre, at world (i+.5,j+.5); the square of centres from (i,j) splits
+    // along its diagonals (crossing at a tile corner) into four triangles
+    // {i,j,q}, q from its bottom side counterclockwise. Civ III links every
+    // two neighbours that both carry a route, along a side or a diagonal, so
+    // an area is the triangles no route separates. An area of up to 32
+    // triangles is laid out whole by every tile it touches.
+    int i0=c,j0=-r;
+    std::vector<std::pair<std::array<int,2>,c3x_renderer_tile_v1 const*>> known;
+    auto at_tile=[&](int i,int j)->c3x_renderer_tile_v1 const*{
+        if(i==i0 && j==j0)return &tile;
+        for(auto const& entry:known)if(entry.first[0]==i && entry.first[1]==j)return entry.second;
+        int di=i-i0,dj=j-j0;
+        known.push_back({{i,j},neighbour(di-dj,di+dj)});
+        return known.back().second;
+    };
+    auto routed=[&](std::array<int,2> const& k){auto const* t=at_tile(k[0],k[1]);return t && (t->road_mask || t->railroad_mask);};
+    auto corner=[](std::array<int,3> const& t,int k){k&=3;return std::array<int,2>{t[0]+(k==1 || k==2),t[1]+(k>=2)};};
+    // plots: (along, across, length, width, direction, seed, kind): kind 0 a
+    // plot, 1 a ditch between strips, 2 a ditch along the route.
+    struct Area {std::vector<std::array<int,3>> triangles;bool whole=true;std::vector<std::array<float,7>> plots;};
+    std::vector<Area> areas;
+    std::vector<std::pair<std::array<int,3>,unsigned>> area_of;
+    auto find_area=[&](std::array<int,3> const& t){
+        for(auto const& entry:area_of)if(entry.first==t)return int(entry.second);return -1;};
+    auto area_at=[&](std::array<int,3> const& start){
+        int found=find_area(start);
+        if(found>=0)return unsigned(found);
+        unsigned index=unsigned(areas.size());areas.emplace_back();
+        std::vector<std::array<int,3>> stack{start};area_of.push_back({start,index});
+        while(!stack.empty()){
+            auto t=stack.back();stack.pop_back();
+            if(areas[index].triangles.size()>=32){areas[index].whole=false;break;}
+            areas[index].triangles.push_back(t);
+            int q=t[2];
+            std::array<int,3> outer=q==0?std::array<int,3>{t[0],t[1]-1,2}:q==1?std::array<int,3>{t[0]+1,t[1],3}:
+                q==2?std::array<int,3>{t[0],t[1]+1,0}:std::array<int,3>{t[0]-1,t[1],1};
+            std::pair<std::array<int,3>,bool> next[3]={
+                {outer,routed(corner(t,q)) && routed(corner(t,q+1))},
+                {{t[0],t[1],(q+1)&3},routed(corner(t,q+1)) && routed(corner(t,q+3))},
+                {{t[0],t[1],(q+3)&3},routed(corner(t,q)) && routed(corner(t,q+2))}};
+            for(auto const& [triangle,blocked]:next)if(!blocked && find_area(triangle)<0){
+                area_of.push_back({triangle,index});stack.push_back(triangle);}
+        }
+        std::sort(areas[index].triangles.begin(),areas[index].triangles.end());
+        return index;
+    };
+    // A small area's plots, as (along, across, length, width, direction,
+    // seed): strips along its longest straight route (a side 1, a half
+    // diagonal .707), from a fixed verge outwards and evenly over its depth
+    // on each side, each divided end to end into whole plots.
+    auto lay_area=[&](Area& area){
+        std::vector<std::pair<std::array<int,2>,int>> lines; // (orientation, offset) -> length
+        auto add=[&](std::array<int,2> const& line,int length){
+            for(auto& entry:lines)if(entry.first==line){entry.second+=length;return;}
+            lines.push_back({line,length});};
+        std::vector<std::array<std::array<float,2>,3>> shapes;
+        for(auto const& t:area.triangles){
+            int q=t[2];
+            auto a=corner(t,q),b=corner(t,q+1);
+            shapes.push_back({{{float(a[0])+.5f,float(a[1])+.5f},{float(b[0])+.5f,float(b[1])+.5f},{float(t[0]+1),float(t[1]+1)}}});
+            auto diagonal=[&](int k){return k&1?std::array<int,2>{3,t[0]+t[1]+1}:std::array<int,2>{2,t[0]-t[1]};};
+            if(routed(a) && routed(b))add(q&1?std::array<int,2>{1,a[0]}:std::array<int,2>{0,a[1]},1000);
+            if(routed(b) && routed(corner(t,q+3)))add(diagonal(q+1),707);
+            if(routed(a) && routed(corner(t,q+2)))add(diagonal(q),707);
+        }
+        if(lines.empty()){area.whole=false;return;}
+        std::sort(lines.begin(),lines.end());
+        auto best=lines.front();
+        for(auto const& entry:lines)if(entry.second>best.second)best=entry;
+        int orientation=best.first[0];float offset=float(best.first[1])+.5f;
+        float theta=float(orientation==0?0.:orientation==1?.5*pi:orientation==2?.25*pi:.75*pi);
+        float ca=std::cos(theta),sa=std::sin(theta);
+        auto along=[&](std::array<float,2> const& p){return p[0]*ca+p[1]*sa;};
+        auto across=[&](std::array<float,2> const& p){return p[1]*ca-p[0]*sa;};
+        float line=across(orientation==0?std::array<float,2>{0,offset}:orientation==1?std::array<float,2>{offset,0}:
+            std::array<float,2>{offset,.5f});
+        unsigned key=c3x_renderer::stable_hash(unsigned(area.triangles.front()[0])*73856093u^
+            unsigned(area.triangles.front()[1])*19349663u^unsigned(area.triangles.front()[2])*83492791u);
+        constexpr float verge=.06f;
+        for(int side=-1;side<=1;side+=2){
+            float depth=0;
+            for(auto const& shape:shapes)for(auto const& p:shape)depth=std::max(depth,float(side)*(across(p)-line)-verge);
+            if(depth<.05f)continue;
+            int strips=std::max(1,int(std::lround(depth/.25f)));
+            for(int k=0;k<strips;++k){
+                float s0=line+float(side)*(verge+depth*float(k)/float(strips));
+                float s1=line+float(side)*(verge+depth*float(k+1)/float(strips));
+                if(s0>s1)std::swap(s0,s1);
+                // The area's extent along this strip: each triangle clipped to it.
+                float a0=1e6f,a1=-1e6f;
+                for(auto const& shape:shapes){
+                    std::vector<std::array<float,2>> polygon(shape.begin(),shape.end());
+                    for(int limit=0;limit<2 && !polygon.empty();++limit){
+                        std::vector<std::array<float,2>> kept;
+                        for(std::size_t e=0;e<polygon.size();++e){
+                            auto const& p=polygon[e];auto const& q2=polygon[(e+1)%polygon.size()];
+                            float dp=limit?s1-across(p):across(p)-s0,dq=limit?s1-across(q2):across(q2)-s0;
+                            if(dp>=0)kept.push_back(p);
+                            if((dp>=0)!=(dq>=0)){float f=dp/(dp-dq);kept.push_back({p[0]+(q2[0]-p[0])*f,p[1]+(q2[1]-p[1])*f});}
+                        }
+                        polygon.swap(kept);
+                    }
+                    for(auto const& p:polygon){a0=std::min(a0,along(p));a1=std::max(a1,along(p));}
+                }
+                if(a1-a0<.05f)continue;
+                unsigned band=c3x_renderer::stable_hash(key+unsigned((side+1)*64+k)*0x27d4eb2du);
+                // Ditches: along the route beside about a third of the first
+                // strips, and between strips at about a third of their edges.
+                if(k==0 && c3x_renderer::stable_random(band^0x51ed27u)<.35f)
+                    area.plots.push_back({(a0+a1)*.5f,line+float(side)*.055f,a1-a0-.04f,0.f,theta,0.f,2.f});
+                if(k>0 && c3x_renderer::stable_random(band^0x2545f491u)<.3f)
+                    area.plots.push_back({(a0+a1)*.5f,line+float(side)*(verge+depth*float(k)/float(strips)),
+                        a1-a0-.04f,0.f,theta,0.f,1.f});
+                float length=.26f+.24f*c3x_renderer::stable_random(band);
+                int count=std::max(1,int(std::lround((a1-a0)/(length+.08f))));
+                length=(a1-a0)/float(count);
+                auto stop=[&](int m){return a0+float(m)*length+(m>0 && m<count?
+                    (c3x_renderer::stable_random(band^unsigned(m)*0x9e3779b9u)-.5f)*.3f*length:0.f);};
+                for(int m=0;m<count;++m){
+                    float t0=stop(m),t1=stop(m+1);
+                    if(t1-t0-2*gap<.05f || s1-s0-2*gap<.04f)continue;
+                    area.plots.push_back({(t0+t1)*.5f,(s0+s1)*.5f,t1-t0-2*gap,s1-s0-2*gap,theta,
+                        float(c3x_renderer::stable_hash(band^unsigned(m)*0x85ebca6bu)&0xffffffu),0.f});
+                }
+            }
+        }
+    };
+    // Tile edges (u=0, u=1, v=0, v=1) where the next tile is a farm, which
+    // continues its area's plots.
+    auto farm=[&](int di,int dj){auto const* t=at_tile(i0+di,j0+dj);
+        return t && (t->improvement_flags&C3X_RENDERER_IMPROVEMENT_IRRIGATION) && t->city_id<0 && t->terrain_type<11;};
+    clearing.shared=std::uint8_t((farm(-1,0)?1u:0u)|(farm(1,0)?2u:0u)|(farm(0,-1)?4u:0u)|(farm(0,1)?8u:0u));
+    // The ground's strength by terrain: mostly opaque (its tint carries the
+    // terrain), letting a little of plains and tundra through and, on desert,
+    // plenty of sand.
+    auto strength=[&](int i,int j){int terrain=terrain_at(i,j);
+        return terrain==0?.45f:terrain==1?.92f:terrain==3?.88f:1.f;};
+    clearing.strength={{strength(i0,j0),strength(i0-1,j0),strength(i0+1,j0),strength(i0,j0-1),strength(i0,j0+1)}};
+    auto tint=[&](int i,int j){int terrain=terrain_at(i,j);
+        return terrain==0?1.f:terrain==1?.65f:terrain==3?0.f:terrain==4?.4f:.25f;};
+    clearing.tint={{tint(i0,j0),tint(i0-1,j0),tint(i0+1,j0),tint(i0,j0-1),tint(i0,j0+1)}};
+    unsigned map=c3x_renderer::stable_hash(unsigned(c>=0?c/3:(c-2)/3)*73856093u^unsigned(r>=0?r/3:(r-2)/3)*19349663u);
+    auto turn=[&](float a,float b){float d=std::fmod(std::abs(a-b),pi);return std::min(d,pi-d);};
+    for(std::size_t index=0;index<regions.size();++index){
+        auto const& cells=regions[index];
+        if(cells.empty())continue;
+        // The region's area: the one most of its cells lie in.
+        std::vector<std::pair<unsigned,unsigned>> votes;
+        for(int cell:cells){
+            float x=float(i0)+centre[cell%n]-.5f,y=float(j0)+centre[cell/n]-.5f;
+            int si=int(std::floor(x)),sj=int(std::floor(y));
+            float a=x-float(si),b=y-float(sj);
+            int q=b<std::min(a,1.f-a)?0:a>std::max(b,1.f-b)?1:b>std::max(a,1.f-a)?2:3;
+            unsigned area=area_at({si,sj,q});
+            bool counted=false;
+            for(auto& vote:votes)if(vote.first==area){++vote.second;counted=true;}
+            if(!counted)votes.push_back({area,1u});
+        }
+        auto chosen=*std::max_element(votes.begin(),votes.end(),[](auto const& x,auto const& y){
+            return x.second<y.second || (x.second==y.second && x.first>y.first);});
+        auto& area=areas[chosen.first];
+        if(area.whole && area.plots.empty())lay_area(area);
+        if(area.whole){
+            // Its area's plots that reach into the region, joined (0x100):
+            // their cut at a shared tile edge is hard, as the next farm
+            // draws the rest.
+            // Plots first, then the ditches over them.
+            for(int kind=0;kind<2;++kind)for(auto const& p:area.plots){
+                if((p[6]>.5f)!=(kind==1))continue;
+                float ca=std::cos(p[4]),sa=std::sin(p[4]);
+                bool inside=false;
+                for(int cell:cells){
+                    float x=float(i0)+centre[cell%n],y=float(j0)+centre[cell/n];
+                    float a=x*ca+y*sa-p[0],b=y*ca-x*sa-p[1];
+                    if(std::abs(a)<p[2]*.5f+.5f/float(n) && std::abs(b)<std::max(p[3],.06f)*.5f+.5f/float(n)){inside=true;break;}
+                }
+                if(!inside)continue;
+                if(kind==0)emit(p[0],p[1],p[2],p[3],p[4],unsigned(p[5]),unsigned(index+1)|0x100u);
+                else emit_ditch(p[0],p[1],p[2],p[4],unsigned(index+1)|(p[6]>1.5f?0x300u:0x100u));
+            }
+            continue;
+        }
+        // Cells at a route's verge: that route's direction, centerline point
+        // and half width.
+        struct Contact {float angle,u,v,half;};
+        std::vector<Contact> contacts;
+        float mean_u=0,mean_v=0,nearest=1.f,grad_u=0,grad_v=0;
+        for(int cell:cells){mean_u+=centre[cell%n];mean_v+=centre[cell/n];}
+        mean_u/=float(cells.size());mean_v/=float(cells.size());
+        for(int cell:cells){
+            float u=centre[cell%n],v=centre[cell/n],best=1.5f/float(n);
+            nearest=std::min(nearest,shore[cell]);grad_u+=(u-mean_u)*shore[cell];grad_v+=(v-mean_v)*shore[cell];
+            Contact contact{};bool found=false;
+            for(auto const& p:clearing.paths){
+                float du=p[2]-p[0],dv=p[3]-p[1],length=du*du+dv*dv;
+                if(length<1e-10f)continue;
+                float t=std::clamp(((u-p[0])*du+(v-p[1])*dv)/length,0.f,1.f),pu=p[0]+du*t,pv=p[1]+dv*t;
+                float distance=std::hypot(u-pu,v-pv)-p[4];
+                if(distance<best){best=distance;contact={std::atan2(dv,du),pu,pv,p[4]};found=true;}
+            }
+            if(found)contacts.push_back(contact);
+        }
+        // The route with the most verge (a direction shared within ~11 degrees).
+        std::size_t support=0;float theta=0;
+        for(auto const& candidate:contacts){
+            std::size_t count=0;
+            for(auto const& other:contacts)count+=turn(candidate.angle,other.angle)<.2f;
+            if(count>support){support=count;theta=candidate.angle;}
+        }
+        bool road=support>=4;
+        if(road){
+            float sum_x=0,sum_y=0;
+            for(auto const& contact:contacts)if(turn(theta,contact.angle)<.2f){
+                sum_x+=std::cos(2.f*contact.angle);sum_y+=std::sin(2.f*contact.angle);}
+            theta=.5f*std::atan2(sum_y,sum_x);
+        }else if(nearest<.35f && std::hypot(grad_u,grad_v)>1e-4f)theta=std::atan2(grad_v,grad_u)+pi*.5f;
+        else theta=float(map&1u)*pi*.5f+(c3x_renderer::stable_random(map+7u)-.5f)*.2f;
+        int degrees=int(std::lround(std::fmod(std::fmod(theta,pi)+pi,pi)*180.f/pi))%180;
+        theta=float(degrees)*pi/180.f;
+        float ca=std::cos(theta),sa=std::sin(theta);
+        // World coordinates sharing the tile-local axes are (c+u, v-r).
+        auto along=[&](float u,float v){return (float(c)+u)*ca+(v-float(r))*sa;};
+        auto across=[&](float u,float v){return (v-float(r))*ca-(float(c)+u)*sa;};
+        float low=1e6f,high=-1e6f;
+        for(int cell:cells){float b=across(centre[cell%n],centre[cell/n]);low=std::min(low,b);high=std::max(high,b);}
+        low-=.5f/float(n);high+=.5f/float(n);
+        // Strips: from the route's verge outwards on each side, evenly over
+        // the region's depth there; without a route, a world lattice.
+        struct Band {float s0,s1;unsigned key;float road_ditch=1e9f,inner_ditch=1e9f;};
+        std::vector<Band> bands;
+        unsigned lattice=c3x_renderer::stable_hash(unsigned(degrees+1)*0x9e3779b9u);
+        if(road){
+            float line=0,half=0,count=0;
+            for(auto const& contact:contacts)if(turn(theta,contact.angle)<.2f){
+                line+=across(contact.u,contact.v);half+=contact.half;count+=1.f;}
+            line/=count;half/=count;
+            for(int side=-1;side<=1;side+=2){
+                float verge=line+float(side)*half,depth=side>0?high-verge:verge-low;
+                if(depth<.05f)continue;
+                int strips=std::max(1,int(std::lround(depth/.25f)));
+                unsigned key=c3x_renderer::stable_hash(lattice^unsigned(std::lround(line*200.f))*0x27d4eb2du^unsigned(side+1)*0x165667b1u);
+                for(int k=0;k<strips;++k){
+                    float a=verge+float(side)*depth*float(k)/float(strips),b=verge+float(side)*depth*float(k+1)/float(strips);
+                    Band band{std::min(a,b),std::max(a,b),c3x_renderer::stable_hash(key+unsigned(k))};
+                    if(k==0 && c3x_renderer::stable_random(band.key^0x51ed27u)<.35f)band.road_ditch=line+float(side)*.055f;
+                    if(k>0 && c3x_renderer::stable_random(band.key^0x2545f491u)<.3f)band.inner_ditch=a;
+                    bands.push_back(band);
+                }
+            }
+        }else{
+            float pitch=.2f+.1f*c3x_renderer::stable_random(lattice);
+            auto edge=[&](int k){return float(k)*pitch+(c3x_renderer::stable_random(lattice^unsigned(k)*0x85ebca6bu)-.5f)*.06f;};
+            for(int k=int(std::floor(low/pitch))-1;k<=int(std::floor(high/pitch))+1;++k){
+                float s0=edge(k),s1=edge(k+1);
+                if(s1>low && s0<high)bands.push_back({s0,s1,c3x_renderer::stable_hash(lattice+unsigned(k)*0x27d4eb2du)});
+            }
+        }
+        for(auto const& band:bands){
+            float s0=band.s0,s1=band.s1,lb=s1-s0-2*gap;
+            if(lb<.04f)continue;
+            // The region's cells in this strip, by their place along it.
+            std::vector<float> places;
+            for(int cell:cells){float u=centre[cell%n],v=centre[cell/n],b=across(u,v);
+                if(b>s0 && b<s1)places.push_back(along(u,v));}
+            if(places.empty())continue;
+            auto [first,last]=std::minmax_element(places.begin(),places.end());
+            float a0=*first-.5f/float(n),a1=*last+.5f/float(n);
+            float length=.26f+.24f*c3x_renderer::stable_random(band.key),shift=length*c3x_renderer::stable_random(band.key+3u);
+            int first_plot=int(std::floor((a0-shift)/length))-1,last_plot=int(std::floor((a1-shift)/length))+1;
+            if(road){
+                last_plot=std::max(1,int(std::lround((a1-a0)/(length+.08f))));
+                length=(a1-a0)/float(last_plot);shift=a0;first_plot=0;--last_plot;
+            }
+            auto stop=[&](int m){
+                if(road && (m<=0 || m>last_plot))return float(m)*length+shift;
+                return float(m)*length+shift+(c3x_renderer::stable_random(band.key^unsigned(m)*0x9e3779b9u)-.5f)*(road?.3f*length:.08f);};
+            for(int m=first_plot;m<=last_plot;++m){
+                float t0=stop(m),t1=stop(m+1),la=t1-t0-2*gap;
+                if(t1<a0 || t0>a1 || la<.05f)continue;
+                // Skip a plot that would keep only crumbs of the region.
+                if(std::count_if(places.begin(),places.end(),[&](float a){return a>t0+gap && a<t1-gap;})<4)continue;
+                emit((t0+t1)*.5f,(s0+s1)*.5f,la,lb,theta,c3x_renderer::stable_hash(band.key^unsigned(m)*0x85ebca6bu),unsigned(index+1));
+            }
+            if(band.road_ditch<1e8f)emit_ditch((a0+a1)*.5f,band.road_ditch,a1-a0-.04f,theta,unsigned(index+1)|0x200u);
+            if(band.inner_ditch<1e8f)emit_ditch((a0+a1)*.5f,band.inner_ditch,a1-a0-.04f,theta,unsigned(index+1));
+        }
+    }
+}
+// neighbour(dx,dy): the tile at a raw offset, or null, for plots farms share.
+template<class Source,class Neighbour>
+void settle_farm_fields(Plan& plan,c3x_renderer_tile_v1 const& tile,Assets const& assets,Source source,Neighbour neighbour){
+    if(plan.farm_kit){ // the kit's patchwork is clipped, not moved; plots are laid out
+        if(plan.farm_plots)lay_out_farm_plots(plan,tile,assets,source,neighbour);
+        return;
+    }
     auto relief=farm_relief(plan,tile,source);
     constexpr std::array<float,7> scales{{1.f,.94f,.88f,.82f,.75f,.68f,.6f}};
     float world_u=float(tile.tile_x+tile.tile_y)*.5f;
@@ -1756,6 +2504,10 @@ void settle_farm_fields(Plan& plan,c3x_renderer_tile_v1 const& tile,Assets const
             }
         }
     }
+}
+template<class Source>
+void settle_farm_fields(Plan& plan,c3x_renderer_tile_v1 const& tile,Assets const& assets,Source source){
+    settle_farm_fields(plan,tile,assets,source,[](int,int){return static_cast<c3x_renderer_tile_v1 const*>(nullptr);});
 }
 template<class Source>
 void settle_farm_props(Plan& plan,c3x_renderer_tile_v1 const& tile,Assets const& assets,Source source){
@@ -1804,18 +2556,122 @@ template<class Relief,class Height>
 void compile(Plan const& plan,Projection const& input,Assets const& assets,Relief relief,Height height,Surfaces& output,bool indexed=false,
         std::vector<unsigned>* instance_counts=nullptr){
     for(auto const& route:plan.routes)append_route(input,route,relief,height,output.layers[route_layer]);
-    for(auto const& route:plan.patterns)if(auto const* patterns=assets.patterns_for(route.style))
+    // Each bridged join's straight approach (see append_pattern_route): the
+    // distance from the join along its network (road or railroad) to every
+    // line closer than the straight run's end, and the run. The run reaches
+    // a short way past the deck's end, less where the bridge stands deep
+    // inside the tile.
+    std::vector<PatternRoute> approached;
+    if(std::any_of(plan.patterns.begin(),plan.patterns.end(),[](PatternRoute const& route){return route.bridges!=0u;})){
+        approached=plan.patterns;
+        std::size_t total=plan.patterns.size();
+        auto line_of=[&](std::size_t i)->RoutePatterns::Line const*{
+            auto const* patterns=assets.patterns_for(plan.patterns[i].style);
+            return patterns && plan.patterns[i].line<patterns->lines.size()?&patterns->lines[plan.patterns[i].line]:nullptr;
+        };
+        auto points_of=[&](std::size_t i){
+            auto const& route=plan.patterns[i];auto const& line=*line_of(i);
+            return route.points.size()==line.count?route.points.data():assets.patterns_for(route.style)->points.data()+line.first;
+        };
+        auto end_of=[&](std::size_t i,unsigned k){return points_of(i)[k?line_of(i)->count-1u:0u];};
+        auto edge=[&](std::size_t i,unsigned k){return (k?line_of(i)->end:line_of(i)->start)>=0;};
+        auto meet=[&](std::array<float,2> const& a,std::array<float,2> const& b){return std::hypot(a[0]-b[0],a[1]-b[1])<1e-3f;};
+        std::vector<float> lengths(total,0.f);
+        for(std::size_t i=0;i<total;++i)if(auto const* line=line_of(i)){
+            auto const* points=points_of(i);
+            for(unsigned k=1;k<line->count;++k)lengths[i]+=std::hypot(points[k][0]-points[k-1][0],points[k][1]-points[k-1][1]);
+        }
+        for(std::size_t index=0;index<total;++index)for(unsigned side=0;side<2;++side){
+            auto const& route=plan.patterns[index];
+            if(!(route.bridges&(1u<<side)) || !line_of(index))continue;
+            bool railroad=route.style>=4u;
+            auto in_network=[&](std::size_t i){return line_of(i) && (plan.patterns[i].style>=4u)==railroad;};
+            // A loose end that stops just short of another line (the pattern
+            // importer leaves a few) joins it at its nearest point.
+            struct Link {std::size_t from;unsigned end;std::size_t to;float at,gap;};
+            std::vector<Link> links;
+            std::vector<float> inside(total,-1.f);
+            for(std::size_t i=0;i<total;++i)if(in_network(i))for(unsigned k=0;k<2;++k){
+                if(edge(i,k))continue;
+                auto node=end_of(i,k);
+                bool loose=true;
+                for(std::size_t j=0;j<total;++j)if(j!=i && in_network(j))for(unsigned m=0;m<2;++m)
+                    loose=loose && (edge(j,m) || !meet(end_of(j,m),node));
+                if(!loose)continue;
+                Link best{i,k,total,0.f,.06f};
+                for(std::size_t j=0;j<total;++j)if(j!=i && in_network(j)){
+                    auto const* points=points_of(j);float at=0.f;
+                    for(unsigned m=1;m<line_of(j)->count;++m){
+                        float du=points[m][0]-points[m-1][0],dv=points[m][1]-points[m-1][1],step=std::hypot(du,dv);
+                        float t=step>0.f?std::clamp(((node[0]-points[m-1][0])*du+(node[1]-points[m-1][1])*dv)/(step*step),0.f,1.f):0.f;
+                        float gap=std::hypot(points[m-1][0]+du*t-node[0],points[m-1][1]+dv*t-node[1]);
+                        if(gap<best.gap)best={i,k,j,at+step*t,gap};
+                        at+=step;
+                    }
+                }
+                if(best.to<total && inside[best.to]<0.f){inside[best.to]=best.at;links.push_back(best);}
+            }
+            // Distance along the network to each line's start, end and inner
+            // point; a tile edge other than the bridged join leads nowhere.
+            constexpr float unreached=1e9f;
+            std::vector<std::array<float,3>> walk(total,{unreached,unreached,unreached});
+            walk[index][side]=0.f;
+            for(unsigned pass=0;pass<4u*unsigned(total)+4u;++pass){
+                bool changed=false;
+                auto lower=[&](float& value,float candidate){if(candidate<value-1e-5f){value=candidate;changed=true;}};
+                for(std::size_t i=0;i<total;++i)if(in_network(i)){
+                    auto& w=walk[i];float length=lengths[i];
+                    lower(w[1],w[0]+length);lower(w[0],w[1]+length);
+                    if(inside[i]>=0.f){
+                        lower(w[2],w[0]+inside[i]);lower(w[2],w[1]+length-inside[i]);
+                        lower(w[0],w[2]+inside[i]);lower(w[1],w[2]+length-inside[i]);
+                    }
+                    for(unsigned k=0;k<2;++k)if(!edge(i,k))for(std::size_t j=0;j<total;++j)if(j!=i && in_network(j))
+                        for(unsigned m=0;m<2;++m)if(!edge(j,m) && meet(end_of(j,m),end_of(i,k))){lower(walk[j][m],w[k]);lower(w[k],walk[j][m]);}
+                }
+                for(auto const& link:links){
+                    lower(walk[link.to][2],walk[link.from][link.end]+link.gap);
+                    lower(walk[link.from][link.end],walk[link.to][2]+link.gap);
+                }
+                if(!changed)break;
+            }
+            float deck_end=std::max(0.f,route.half_length()-route.crossing[side]);
+            float run=deck_end+std::clamp(.40f-deck_end,.05f,.12f);
+            // Every other tile edge the network reaches keeps a drawn stretch
+            // and its own place (its neighbor draws the same point).
+            float edge_walk=1e9f;
+            for(std::size_t i=0;i<total;++i)if(in_network(i))for(unsigned k=0;k<2;++k)
+                if(edge(i,k) && !(i==index && k==side))edge_walk=std::min(edge_walk,walk[i][k]);
+            run=std::min(run,std::max(0.f,edge_walk-.08f));
+            float fade=PatternRoute::approach_level_fade;
+            float held=std::max(run,std::min(PatternRoute::approach_level,edge_walk-.02f-fade));
+            auto join=end_of(index,side);
+            // The bridge's deck level, as seat_route_bridge finds it.
+            float bu=-route.joins[side*2],bv=-route.joins[side*2+1],c=route.crossing[side];
+            float tu=float(input.tile.tile_x+input.tile.tile_y)*.5f,tv=float(input.tile.tile_x-input.tile.tile_y)*.5f;
+            float deck_level=route_bridge_level(tu+join[0]-bu*c,tv+1.f-(join[1]-bv*c),-bu,bv,route.half_length(),
+                [&](float u,float v){return std::max(relief(u,v)[0],height(u,v)-2.5f);});
+            for(std::size_t i=0;i<total;++i)if(in_network(i) && std::min({walk[i][0],walk[i][1],walk[i][2]})<std::max(run,held+fade))
+                for(auto& slot:approached[i].approach)if(slot[2]==0.f && slot[3]==0.f){
+                    slot={join[0],join[1],-route.joins[side*2],-route.joins[side*2+1],walk[i][0],walk[i][1],inside[i],walk[i][2],run,deck_level,held,fade};
+                    break;
+                }
+        }
+    }
+    for(auto const& route:approached.empty()?plan.patterns:approached)if(auto const* patterns=assets.patterns_for(route.style))
         append_pattern_route(input,*patterns,route,relief,height,output.layers[route_layer]);
-    auto farm=farm_relief(plan,input.tile,relief);
     for(auto const& instance:plan.instances){
         auto before=indexed?output.indices[instance.layer].size():output.layers[instance.layer].size();
         FeaturePlacement placement{};placement.asset_index=instance.asset;
         if(instance.family==farm_family)append_instance(input,assets[instance.family],placement,instance.u,instance.v,
             instance.rotation,instance.scale,instance.material,instance.owner,instance.shadow,false,
-            farm,height,output.layers[instance.layer],output.shadows,indexed?&output.indices[instance.layer]:nullptr,
-            0.f,0.f,plan.farm_kit);
+            farm_relief(plan,input.tile,relief,instance.region),height,output.layers[instance.layer],output.shadows,indexed?&output.indices[instance.layer]:nullptr,
+            instance.region&0x400u?-.004f:0.f,0.f,plan.farm_kit,instance.stretch,
+            instance.region&0x100u?plan.farm_clearing.shared:0u,instance.region&0x400u?.32f:.06f,
+            plan.farm_clearing.soft);
         else append_instance(input,assets[instance.family],placement,instance.u,instance.v,instance.rotation,
-            instance.scale,instance.material,instance.owner,instance.shadow,instance.family==site_family,
+            instance.scale,instance.material,instance.owner,instance.shadow,
+            instance.family==site_family || instance.family==mine_family,
             relief,height,output.layers[instance.layer],output.shadows,indexed?&output.indices[instance.layer]:nullptr);
         if(instance_counts)instance_counts->push_back(unsigned(
             (indexed?output.indices[instance.layer].size():output.layers[instance.layer].size())-before));

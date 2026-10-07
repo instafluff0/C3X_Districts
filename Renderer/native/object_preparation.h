@@ -18,7 +18,7 @@ struct PreparationInput {
 struct PreparedPart {
     render_core::PreparedMesh mesh;
     unsigned vertex_offset=0,index_offset=0,material=0;
-    bool environment=false,terrain_conforming=false;
+    bool environment=false,terrain_conforming=false,effect=false;
     std::array<float,4> atlas{};
     std::shared_ptr<city_fidelity::Lighting> lighting;
 };
@@ -95,59 +95,25 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
         auto value=input.retain_height?scratch.heights.get(x,y,compute):compute();
         if(support)*support=value[1];return value[0];
     };
-    struct MountainPiece {
-        unsigned height_field,blend_field;
-        float center_x,center_y,long_span,cross_span,height_scale;
-        bool connected,range_y;
-    };
-    std::array<MountainPiece,9> mountain_pieces{};
-    unsigned mountain_count=0;
     // Civ III draws routes over a mountain tile's lower art but never over
     // its peak. Routes follow the whole rendered mountain surface (so the rock
     // never cuts them along a ragged contour), and a pattern route fades out
     // between these heights above the natural ground as the mountain rises.
     constexpr float pattern_route_fade_start=35.f,pattern_route_fade_end=65.f;
+    // A railroad tunnel's entrance stands where the mountain's rock face
+    // begins: the rail risen this far over the land with rock (the fade's
+    // start) within reach (tiles), so the rock covers its bore.
+    constexpr float tunnel_foot=15.f,tunnel_reach=.2f;
+    // The rendered mesh's own shape (lab/shared/natural/mountain_shape.h),
+    // built only for route tiles, so routes lie on its rock.
+    MountainShape mountain_shape;
     if(input.projection.tile.road_mask || input.projection.tile.railroad_mask)
-        for(int dr=-1;dr<=1;++dr)for(int dc=-1;dc<=1;++dc){
-            int pc=nc+dc,pr=nr+dr;auto owner=lookup_natural(pc,pr);
-            if(owner.real!=6)continue;
-            bool west=lookup_natural(pc-1,pr).real==6,east=lookup_natural(pc+1,pr).real==6;
-            bool north=lookup_natural(pc,pr-1).real==6,south=lookup_natural(pc,pr+1).real==6;
-            unsigned along_x=unsigned(west)+unsigned(east),along_y=unsigned(north)+unsigned(south);
-            bool connected=along_x+along_y>0,turn=connected&&along_x==along_y;
-            unsigned variant=mountain_seed(owner)%5u;
-            // Same lower, wider body as the rendered mountain mesh
-            // (lab/shared/natural/relief_mesh_body.h), so routes lie on its rock.
-            constexpr float mountain_height_scale=.68f,mountain_span_scale=1.08f;
-            mountain_pieces[mountain_count++]={natural.macro[variant][0],natural.macro[variant][1],
-                float(pc)+.5f+.09f*(int(east)-int(west)),
-                float(pr)+.5f+.09f*(int(south)-int(north)),
-                (connected?(turn?2.08f:2.46f):1.85f)*mountain_span_scale,
-                (connected?(turn?1.82f:1.34f):1.55f)*mountain_span_scale,
-                (connected?142.f:165.f)*mountain_height_scale,connected,along_y>along_x};
-        }
+        mountain_shape=MountainShape(natural,nc,nr,lookup_natural,[](int,int){return false;});
+    unsigned const mountain_count=mountain_shape.count;
     auto route_height=[&](float x,float y){
         float base=height_natural(x,y);
         if(!mountain_count)return base;
-        float displacement=0;
-        for(unsigned index=0;index<mountain_count;++index){
-            auto const&piece=mountain_pieces[index];
-            float source_x=piece.range_y?(y-piece.center_y)/piece.long_span:
-                (x-piece.center_x)/piece.long_span;
-            float source_y=piece.range_y?(x-piece.center_x)/piece.cross_span:
-                (y-piece.center_y)/piece.cross_span;
-            float u=.5f+source_x,v=.5f-source_y;
-            if(u<0||u>1||v<0||v>1)continue;
-            float h=natural.fields[piece.height_field].sample(u,v);
-            float blend=natural.fields[piece.blend_field].sample(u,v);
-            float shaped=piece.connected?std::pow(std::max(0.f,h),.80f):h;
-            float next=shaped*piece.height_scale*smooth01((blend-.28f)/.34f);
-            if(next<=0)continue;
-            if(displacement<=0)displacement=next;
-            else {float high=std::max(displacement,next);
-                float ridge=std::max(0.f,10.f-std::abs(displacement-next));
-                displacement=high+ridge*ridge/40.f;}
-        }
+        float displacement=mountain_shape.sample(natural,x,y).displacement;
         if(displacement<=0)return base;
         auto shore=queries.shore(x,y);
         float river_scale=input.river_ready?
@@ -178,26 +144,52 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
         promote_river_crossings(tile,[&](float x,float y){
             return float(scratch.rivers.river_sample({x,y}).distance);
         },plan,&assets);
+    // A railroad running into a mountain enters a tunnel (tunnel_route);
+    // roads fade out as they climb. A rail line's end on an edge shared by
+    // two mountain tiles lies inside their range.
+    FeatureGroup const* tunnel=find_feature_group(assets[bridge_family],"tunnel_railroad");
+    constexpr int natural_offsets[8][2]={{0,1},{1,1},{1,0},{1,-1},{0,-1},{-1,-1},{-1,0},{-1,1}};
     if(mountain_count)for(auto& route:plan.patterns){
         auto const* set=assets.patterns_for(route.style);
         if(!set || route.line>=set->lines.size())continue;
         auto const& line=set->lines[route.line];
         float tile_u=float(tile.tile_x+tile.tile_y)*.5f,tile_v=float(tile.tile_x-tile.tile_y)*.5f;
-        std::vector<float> fade(line.count,0.f);bool any=false;
+        std::vector<float> fade(line.count,0.f),rise(line.count,0.f);bool any=false;
+        bool rail_tunnel=route.style>=4u && tunnel;
+        std::vector<std::uint8_t> rock(line.count,0u);
         for(unsigned index=0;index<line.count;++index){
-            auto const& point=route.points.size()==line.count?route.points[index]:set->points[line.first+index];
+            auto const point=route.points.size()==line.count?route.points[index]:set->points[line.first+index];
             float x=tile_u+point[0],y=tile_v+1.f-point[1];
-            float rise=route_height(x,y)-height_natural(x,y);
-            fade[index]=smooth01((rise-pattern_route_fade_start)/(pattern_route_fade_end-pattern_route_fade_start));
+            rise[index]=route_height(x,y)-height_natural(x,y);
+            fade[index]=smooth01((rise[index]-pattern_route_fade_start)/(pattern_route_fade_end-pattern_route_fade_start));
             any=any || fade[index]>0.f;
+            if(rail_tunnel && rise[index]>=tunnel_foot){
+                bool reached=rise[index]>=pattern_route_fade_start;
+                for(unsigned k=0;k<8u && !reached;++k){
+                    float a=float(k)*.7853982f,sx=x+tunnel_reach*std::cos(a),sy=y+tunnel_reach*std::sin(a);
+                    reached=route_height(sx,sy)-height_natural(sx,sy)>=pattern_route_fade_start;
+                }
+                rock[index]=reached;any=any || reached;
+            }
         }
-        if(any)route.fade=std::move(fade);
+        std::array<bool,2> inside{};
+        if(rail_tunnel && tile.real_terrain_type==6)for(unsigned side=0;side<2;++side){
+            int k=side?line.end:line.start;
+            if(k>=0 && k<8)inside[side]=lookup_natural(nc+natural_offsets[k][0],nr+natural_offsets[k][1]).real==6;
+        }
+        bool tunnelled=rail_tunnel && (any || inside[0] || inside[1]);
+        if(tunnelled)tunnel_route(route,*set,rise,rock,tunnel_foot,inside,*tunnel,plan,fade);
+        if(any || tunnelled)route.fade=std::move(fade);
     }
     unsigned sites=tile.improvement_flags&(C3X_RENDERER_IMPROVEMENT_GOODY_HUT|C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP);
     if(!select_improvements(tile,assets,input.ground,sites,input.mine_ready,input.farm_ready,plan))return {};
     if(input.farm_ready && (tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_IRRIGATION)){
         clear_farm(plan,plan,assets,input.farm_resource);
-        settle_farm_fields(plan,tile,assets,relief);
+        // A plot kit lays out the areas it shares with neighbouring farms:
+        // their routes and irrigation are dependencies, as the routes' are.
+        settle_farm_fields(plan,tile,assets,relief,[&](int dx,int dy)->c3x_renderer_tile_v1 const*{
+            auto key=observations.key(tile.tile_x+dx,tile.tile_y+dy);auto record=observations.current(key);
+            result->topology.emplace(key,record?record->semantic:0);return record?&record->occurrence:nullptr;});
         settle_farm_props(plan,tile,assets,relief);
     }
     result->instances=unsigned(plan.instances.size());result->routes=unsigned(plan.routes.size()+plan.patterns.size());
@@ -243,7 +235,10 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
             }
             if(shared_rigid_mesh(asset)){
                 result->draws.push_back({unsigned(instance.layer),0,0,unsigned(result->rigid.size())});
-                result->rigid.push_back(prepare_rigid(instance,input.projection,assets,relief,height_natural,
+                // A tunnel entrance stands on its rail.
+                bool tunnel_part=asset.id.rfind("route/tunnel/",0)==0;
+                result->rigid.push_back(prepare_rigid(instance,input.projection,assets,relief,
+                    [&](float x,float y){return tunnel_part?route_height(x,y):height_natural(x,y);},
                     plan.farm_kit && instance.family==farm_family));
             }else{
                 unsigned count=unsigned(asset.indices.size());
@@ -282,10 +277,15 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
         city_fidelity::Surfaces city;
         GroundProjection projection{nc,nr,input.projection.half_w,input.projection.half_h,
             input.projection.relief_projection_scale,float(input.projection.content_view_height)};
-        if(!city_fidelity::compile(library,*composition,nc,nr,height_natural,projection,city,stop,true))return {};
+        // Version-five packs let marked bodies yield to rivers, water and
+        // steep or mountain ground (the same test as the direct path).
+        if(!city_fidelity::compile(library,*composition,nc,nr,height_natural,projection,city,stop,true,
+                city_fidelity::site_filter(*composition,nc,nr,world_lookup,shore_sample_at,
+                    [&](float x,float y){return scratch.rivers.river_sample({x,y}).distance;},
+                    [&](float x,float y){return height_natural(x,y);})))return {};
         for(auto& chunk:city.chunks){
             PreparedPart part;part.material=chunk.material;part.environment=chunk.environment;
-            part.terrain_conforming=chunk.terrain_conforming;part.lighting=chunk.lighting;
+            part.terrain_conforming=chunk.terrain_conforming;part.lighting=chunk.lighting;part.effect=chunk.effect;
             std::copy(chunk.atlas,chunk.atlas+4,part.atlas.begin());
             render_core::MeshFormat format;format.projection_kind=4;format.city=true;
             if(!render_core::prepare_mesh(chunk.vertices,&chunk.indices,format,part.mesh,stop))return {};

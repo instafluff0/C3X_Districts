@@ -47,6 +47,8 @@ struct NaturalData {
     std::vector<SurfaceRecipe> surface_recipes;
     std::vector<SurfaceVertex> surface_vertices;
     unsigned terrain[31]={},floodplain[3]={},mountain[13]={},macro[5][2]={};
+    // Principal ridge direction of each macro stamp (radians; u right, v up).
+    float macro_axis[5]={};
     // The broadleaf contract: the pack's first 25 recipes, weighing 180.
     std::array<RecipeSet,forest_variety_count> forest_sets{{{0,25,180},{},{}}};
     std::string failure;
@@ -131,6 +133,19 @@ struct NaturalData {
         for(auto i:floodplain)if(i>=textures.size())return false;
         for(auto i:mountain)if(i>=textures.size())return false;
         for(auto const&r:macro)for(auto i:r)if(i>=fields.size()||fields[i].pixels.empty())return false;
+        // From height-squared second moments of the authored field, so any
+        // pack's stamps can be turned to follow a mountain range.
+        for(unsigned i=0;i<5;i++){
+            auto const& f=fields[macro[i][0]];double w=0,mx=0,my=0,xx=0,yy=0,xy=0;
+            for(unsigned y=0;y<f.height;y++)for(unsigned x=0;x<f.width;x++){
+                double h=f.pixels[std::size_t(y)*f.width+x]/255.,q=h*h;
+                double px=(x+.5)/f.width-.5,py=.5-(y+.5)/f.height;
+                w+=q;mx+=q*px;my+=q*py;xx+=q*px*px;yy+=q*py*py;xy+=q*px*py;
+            }
+            if(w<=0)continue;
+            mx/=w;my/=w;
+            macro_axis[i]=float(.5*std::atan2(2*(xy/w-mx*my),(xx/w-mx*mx)-(yy/w-my*my)));
+        }
         if(fields[terrain[14]].pixels.empty()||fields[terrain[30]].pixels.empty())return false;
         failure="materials";
         materials.resize(count[1]);for(auto&m:materials){if(!take(&m,sizeof(m)))return false;

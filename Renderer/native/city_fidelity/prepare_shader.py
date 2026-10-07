@@ -90,7 +90,7 @@ cbuffer NativeCityLights : register(b6) {
     # environment experiment merely because it binds a metalness channel.
     material=material.replace('if((channels&16)!=0)metalness=', 'if(CityMaterialFlags.x>.5 && (channels&16)!=0)metalness=')
     source+='''
-cbuffer CityMaterialFrame : register(b7) { float4 CityMaterialFlags; float4 CityAtlas; };
+cbuffer CityMaterialFrame : register(b7) { float4 CityMaterialFlags; float4 CityAtlas; float4 CityLight; };
 #define Q8_CITY_FEATURE_ENTRY PSNativeCityBody
 #define Q8_CITY_AUXILIARY_AO 1
 #define Q8_CITY_AO_STRENGTH 1
@@ -105,6 +105,10 @@ cbuffer CityMaterialFrame : register(b7) { float4 CityMaterialFlags; float4 City
 #define Q8_CITY_EMISSIVE_GAIN 8
 #define Q8_SETTLEMENT_GAIN 1
 #define Q8_SETTLEMENT_ATLAS CityAtlas
+#define Q8_CITY_LOOK CityMaterialFlags.yzw
+#define Q8_CITY_EMISSION_LOOK CityLight.xy
+#define Q8_CITY_LOOK_PALE CityLight.z
+#define Q8_CITY_TIME CityLight.w
 '''+environment+'\n'+read(LAB/'shaders/objects/settlement_ground.hlsl')+'\n'+material+'''
 // The cached 88-byte city vertex retains every consumed source channel. The
 // same semantics also accept the original 168-byte adapter input.

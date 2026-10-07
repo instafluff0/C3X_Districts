@@ -21,7 +21,8 @@
     "Renderer/native/c3x_renderer.cpp",
     "Renderer/native/render_core/water_material_frame.h",
     "Renderer/native/integrated_terrain.hlsl",
-    "Renderer/lab/studies/rivers/cases.py"
+    "Renderer/lab/studies/rivers/cases.py",
+    "Renderer/native/render_core/rigid_feature.hlsl"
   ],
   "recipe": {
     "terrain": 2,
@@ -45,7 +46,9 @@
     "Renderer.native.test_water_motion",
     "Renderer.native.test_river_depth",
     "Renderer.native.test_river_delta",
-    "Renderer.native.test_bridge_natural_depth"
+    "Renderer.native.test_bridge_natural_depth",
+    "Renderer.native.test_bridge_waterline",
+    "Renderer.native.test_river_rock_bridges"
   ],
   "references": {
     "d3d11": [

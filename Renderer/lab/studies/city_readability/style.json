@@ -1,0 +1,232 @@
+{
+  "schema": "c3x.lab.city_readability_style.v1",
+  "description": "Lab knobs for recomposing the compiled city library toward Civ III readability: larger, denser bodies, era accents and a crisp ground plate. Review data only; production packs are unchanged.",
+  "growth": {
+    "ancient": 1.25,
+    "medieval": 1.28,
+    "industrial": 1.6,
+    "modern": 1.75
+  },
+  "extent": [
+    0.46,
+    0.62,
+    0.74
+  ],
+  "gap": 0.006,
+  "infill": {
+    "step": 0.03,
+    "clear_center": 0.0,
+    "max_fraction": 0.45,
+    "reach": 0.2
+  },
+  "accents": {
+    "industrial": [
+      [
+        "industrial/stack",
+        "industrial/workshop"
+      ],
+      [
+        "industrial/factory",
+        "industrial/stack",
+        "industrial/stack"
+      ],
+      [
+        "industrial/factory",
+        "industrial/workshop",
+        "industrial/stack",
+        "industrial/stack",
+        "industrial/stack"
+      ]
+    ],
+    "modern": [
+      [
+        "modern/apartment_lg"
+      ],
+      [
+        "modern/hotel_lg",
+        "modern/apartment_lg",
+        "modern/water_tower"
+      ],
+      [
+        "modern/electronics",
+        "modern/hotel_lg",
+        "modern/apartment_lg",
+        "modern/hotel_lg",
+        "modern/water_tower"
+      ]
+    ]
+  },
+  "accent_width": {
+    "industrial/factory": 0.3,
+    "industrial/power_plant": 0.27,
+    "industrial/workshop": 0.2,
+    "modern/workshop": 0.2,
+    "modern/electronics": 0.3,
+    "modern/apartment_lg": 0.15,
+    "modern/hotel_lg": 0.17,
+    "industrial/stack": 0.17,
+    "modern/water_tower": 0.12,
+    "industrial/silo": 0.08
+  },
+  "accent_removal_limit": 5,
+  "paving": {
+    "margin": 0.04,
+    "feather": 0.016,
+    "lane": 0.026,
+    "plaza": 0.12,
+    "step": 0.02,
+    "noise": 0.012,
+    "period": 0.45
+  },
+  "ground": {
+    "ancient": {
+      "source": "TEXTURE_Decals_Parts_Ancient_01_B",
+      "crop": [
+        304,
+        261,
+        512,
+        460
+      ],
+      "opaque": true,
+      "gain": 1.45,
+      "saturation": 0.7
+    },
+    "medieval": {
+      "source": "TEXTURE_Decals_Parts_Classical_01_B",
+      "crop": [
+        304,
+        261,
+        512,
+        460
+      ],
+      "opaque": false,
+      "gain": 1.3,
+      "saturation": 0.75
+    },
+    "industrial": {
+      "source": "TEXTURE_Decals_Parts_Industrial_01_B",
+      "crop": [
+        304,
+        261,
+        512,
+        460
+      ],
+      "opaque": false,
+      "gain": 1.15,
+      "saturation": 0.45
+    },
+    "modern": {
+      "source": "TEXTURE_Decals_Parts_Modern_01_B",
+      "crop": [
+        304,
+        261,
+        512,
+        460
+      ],
+      "opaque": true,
+      "gain": 1.65,
+      "saturation": 0.5
+    }
+  },
+  "look": [
+    0.8,
+    1.2,
+    0,
+    2.5,
+    0.2,
+    1.0,
+    0,
+    0
+  ],
+  "growth_mode": {
+    "industrial": "priority",
+    "modern": "priority"
+  },
+  "light_intensity": 0.8,
+  "effects": {
+    "per_city": 24,
+    "accent/smoke": {
+      "width": 0.22,
+      "height": 0.85,
+      "strength": 0.75,
+      "priority": 0
+    },
+    "accent/flame": {
+      "width": 0.1,
+      "height": 0.17,
+      "strength": 1.2,
+      "priority": 0
+    },
+    "palace/flame": {
+      "width": 0.1,
+      "height": 0.18,
+      "strength": 1.1,
+      "priority": 1
+    },
+    "palace/smoke": {
+      "width": 0.12,
+      "height": 0.4,
+      "strength": 0.0,
+      "priority": 2
+    },
+    "flame": {
+      "width": 0.085,
+      "height": 0.14,
+      "strength": 1.0,
+      "priority": 2
+    },
+    "night_light": {
+      "width": 0.07,
+      "height": 0.07,
+      "strength": 0.8,
+      "priority": 3
+    },
+    "smoke": {
+      "width": 0.1,
+      "height": 0.32,
+      "strength": 0.35,
+      "priority": 4
+    },
+    "authored": {
+      "city/accent/industrial/stack": [
+        {
+          "kind": "smoke",
+          "height": 0.97
+        }
+      ]
+    }
+  },
+  "recolor": {
+    "city/walls/tsikhe/": {
+      "hue": [
+        8,
+        42
+      ],
+      "saturation": 0.5,
+      "target": [
+        158,
+        152,
+        134
+      ]
+    }
+  },
+  "palaces": {
+    "pack": "Renderer/packs/CityPalacesNormalized",
+    "replace": "city/palace/root/c9fb1862f0f18efe",
+    "choices": {
+      "american/*": "0d0c35f4a4c9651a",
+      "european/*": "5fce239f9d0ed6a1",
+      "roman/*": "80441a43509dfc22",
+      "middle_eastern/ancient": "c55a2797a1e95711",
+      "middle_eastern/*": "40bbc50520bb846d",
+      "asian/*": "c1e9631500667d16"
+    }
+  },
+  "capital_towers": {
+    "modern": [
+      0,
+      1,
+      2
+    ]
+  }
+}

@@ -28,9 +28,20 @@ struct Lighting {
     struct Box {float low[4],high[4];};
     std::vector<Box> blockers;
 };
+// Version-five instance flags. A site-optional body may yield to water, a
+// river channel, a mountain or steep relief at its footprint; earlier packs
+// carry no flags and keep every authored body.
+constexpr unsigned instance_site_optional=1u,instance_accent=2u,instance_tree=4u;
+// Version-five attached effect: a flame, smoke source or night light at a
+// model-space point. Width is in tile widths, height in world height units.
+enum EffectKind:unsigned {effect_flame=0,effect_smoke=1,effect_night_light=2,effect_kind_count};
+struct Effect {float position[3],kind,width,height,seed,intensity;};
+static_assert(sizeof(Effect)==32,"city effect wire contract");
 struct Instance {
     unsigned model=0,capital=0; float scale=1,yaw=0,offset[2]={},bounds[4]={};
+    unsigned flags=0;
     std::vector<Light> lights;
+    std::vector<Effect> effects;
 };
 struct PavingVertex { float x,y,coverage; };
 struct Paving {
@@ -40,6 +51,7 @@ struct Paving {
 struct Composition {
     unsigned culture=0,era=0,size=0,capital=0,environment=0;
     unsigned variant=0,walled=0,owns_walls=0,anchor_layout=0;
+    bool site_aware=false; // any body carries instance_site_optional
     std::string authority;
     float clearance[4]={}; // dry shore, height range, vegetation margin, river pixels
     std::vector<Instance> instances;
@@ -91,6 +103,12 @@ inline WorldInstance place(Instance const&i,float column,float row,float ground_
 }
 struct Library {
     std::vector<Material> materials; std::vector<Model> models; std::vector<Composition> compositions;
+    // Version-five response offsets: body gain, contrast, saturation; window
+    // shoulder and gain; pale-albedo damping (zero is the identity) and
+    // reserved fields. Earlier packs leave them zero.
+    float look[8]={};
+    // Version-five ground-flagged material drawing attached effect quads.
+    unsigned effect_material=~0u;
     std::size_t byte_count=0;
     bool complete_city_set()const{
         unsigned variants=0;
@@ -145,11 +163,17 @@ struct Library {
         // usable library or cause native city suppression.
         if(bytes.size()<20 || bytes.size()>128u*1024u*1024u ||
             (std::memcmp(bytes.data(),"C3XCITY2",8) && std::memcmp(bytes.data(),"C3XCITY3",8) &&
-             std::memcmp(bytes.data(),"C3XCITY4",8)))return false;
-        bool with_foundations=bytes[7]>='3',with_variants=bytes[7]=='4';
+             std::memcmp(bytes.data(),"C3XCITY4",8) && std::memcmp(bytes.data(),"C3XCITY5",8)))return false;
+        bool with_foundations=bytes[7]>='3',with_variants=bytes[7]>='4',with_flags=bytes[7]=='5';
         Library next;Reader r{bytes};
         unsigned nm=r.number(1024),nb=r.number(1024),nt=r.number(1024);
         if(!r.valid || !nm || !nb || !nt)return false;
+        if(with_flags){
+            if(!r.floats(next.look,8))return false;
+            for(float value:next.look)if(value<-1.f || value>4.f)return false;
+            next.effect_material=r.number();
+            if(next.effect_material!=~0u && next.effect_material>=nm)return false;
+        }
         next.materials.resize(nm);next.models.resize(nb);next.compositions.resize(nt);
         for(auto&m:next.materials){
             m.address=r.number(3);m.channels=r.number(63);m.ground=r.number(1);
@@ -179,8 +203,17 @@ struct Library {
             for(auto&i:t.instances){
                 i.model=r.number(nb-1);i.capital=r.number(1);
                 if(!r.floats(&i.scale,1) || !r.floats(&i.yaw,1) || !r.floats(i.offset,2) || !r.floats(i.bounds,4))return false;
+                if(with_flags)i.flags=r.number(7);
+                t.site_aware=t.site_aware || (i.flags&instance_site_optional)!=0;
                 if(i.scale<=0 || i.scale>100 || i.bounds[0]>=i.bounds[2] || i.bounds[1]>=i.bounds[3] || !r.records(i.lights,4))return false;
                 for(auto const&l:i.lights)if(l.range<=0 || l.range>1 || l.intensity<0)return false;
+                if(with_flags){
+                    if(!r.records(i.effects,16))return false;
+                    for(auto const&e:i.effects)
+                        if(e.kind<0 || e.kind>=float(effect_kind_count) || e.kind!=std::floor(e.kind) ||
+                           e.width<=0 || e.width>1 || e.height<=0 || e.height>2 || e.intensity<0 || e.intensity>8 ||
+                           next.effect_material==~0u)return false;
+                }
                 light_count+=unsigned(i.lights.size());capital_count+=i.capital;
             }
             if(light_count>128 || capital_count!=t.capital)return false;

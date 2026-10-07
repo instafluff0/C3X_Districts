@@ -2718,6 +2718,9 @@ struct district_button_image_set {
 	c3x_renderer_unit_animation_fn custom_renderer_unit_animation;
 	Unit * custom_renderer_unit_context;
 	PCX_Image * custom_renderer_unit_canvas;
+	// Civ III's team-colour disc preference for the unit being captured; the 3D
+	// scene draws it as an owner ring instead of the native 2D disc.
+	bool custom_renderer_team_disc;
 	c3x_renderer_export_scene_fn custom_renderer_export_scene;
 	c3x_renderer_schedule_fn custom_renderer_schedule;
 	c3x_renderer_reset_fn custom_renderer_reset;

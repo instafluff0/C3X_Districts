@@ -530,7 +530,10 @@ def _decode_component_attachment_values(
         or resource.get("root") not in ("Resource", "ResourceTags")
         or not resource.get("value")
         or values["TerrainFollowMode"] != "Pivot Height"
-        or values["Cull Mode"] not in ("OPTIONAL", "REQUIRED", "PERMANENT")
+        # NO_MTN_CORNER_PERM/OPT (the mountain tunnel's parts): permanent or
+        # optional, except where a mountain corner permutation culls them.
+        or values["Cull Mode"] not in ("OPTIONAL", "REQUIRED", "PERMANENT",
+                                       "NO_MTN_CORNER_PERM", "NO_MTN_CORNER_OPT")
     ):
         raise ValueError(
             "Compound component attachment uses an unsupported selection policy: "
@@ -604,7 +607,7 @@ def _decode_attachment_points(
         source_asset_absent = (
             component is not None
             and component["source_terminal"] is None
-            and component["runtime_selection"]["cull"] == "optional"
+            and component["runtime_selection"]["cull"] in ("optional", "no_mtn_corner_opt")
             and len(matches) != 1
         )
         if len(matches) != 1 and not (
@@ -1491,6 +1494,7 @@ def compile_compound_landmarks(
     pack: Path,
     report_path: Path,
     auxiliary_uvs: bool = False,
+    terrain_edit_policy: str = "reject",
 ) -> dict[str, Any]:
     mapping = load_mapping(mapping_path)
     try:
@@ -1535,6 +1539,7 @@ def compile_compound_landmarks(
                     asset_id,
                     float(package_mapping["source_units_per_tile"]),
                     texture_cache,
+                    terrain_edit_policy=terrain_edit_policy,
                     auxiliary_uvs=auxiliary_uvs,
                 )
             except (OSError, ValueError, KeyError, TypeError, struct.error) as exc:
@@ -1588,10 +1593,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--pack", type=Path, default=DEFAULT_PACK)
     parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
     parser.add_argument("--auxiliary-uvs", action="store_true")
+    # A terrain edit (a heightmap cut, as the mountain tunnel carries) is
+    # recorded unresolved and left to the renderer's own terrain surface.
+    parser.add_argument("--terrain-edits", choices=("reject", "preserve_unresolved"), default="reject")
     args = parser.parse_args(argv)
     try:
         report = compile_compound_landmarks(
-            args.assets_root, args.mapping, args.pack, args.report, args.auxiliary_uvs
+            args.assets_root, args.mapping, args.pack, args.report, args.auxiliary_uvs,
+            args.terrain_edits,
         )
     except (OSError, ValueError, KeyError, TypeError, struct.error) as exc:
         print(f"error: {exc}", file=sys.stderr)

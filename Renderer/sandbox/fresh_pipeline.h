@@ -1782,7 +1782,7 @@ struct SandboxFreshPipeline {
     c3x_renderer::render_core::SubmissionCensus<std::array<std::uint64_t,12>> submission_census;
     SandboxMirrorTarget reflection,reflection_static;
     GeometryDrawView::Records resident, static_visible, water_visible,
-        reflection_visible, all_visible;
+        reflection_visible, all_visible, effect_visible;
     using Membership=c3x_renderer::render_core::SceneMembership<CachedVertexChunk,geometry_layer_count>;
     Membership::Lease resident_lease;
     using RasterInputs=c3x_renderer::render_core::RasterContributors<CachedGeometryProof>;
@@ -1902,6 +1902,7 @@ struct SandboxFreshPipeline {
         return true;
     }
     bool reflected_terrain_material_valid=false;
+    bool mirror_mountain_coverage=false;
     bool reflection_valid=false;
     using Submission=c3x_renderer::render_core::SharedInstanceSubmission;
     Submission::Lease shared_front;
@@ -2005,7 +2006,7 @@ struct SandboxFreshPipeline {
     void retire_geometry_selection(){
         // Pass records borrow meshes; published images and raster proofs do not.
         // Clear borrowers before releasing their exact membership generations.
-        resident={};static_visible={};water_visible={};reflection_visible={};all_visible={};
+        resident={};static_visible={};water_visible={};reflection_visible={};all_visible={};effect_visible={};
         roi_records={};roi_shadow_records={};selected_lighting.clear();
         body_requirements.clear();body_requirements_valid=false;
         // The instance groups are the forests' only shadow submission. Drop
@@ -2071,7 +2072,7 @@ struct SandboxFreshPipeline {
         if(visibility_valid && scene_key==visibility_scene_key &&
                 view_key==visibility_view_key){if(work.enabled)++work.counts[SandboxPassWorkload::selection][SandboxPassWorkload::screen].reuses;return true;}
         if(work.enabled)++work.counts[SandboxPassWorkload::selection][SandboxPassWorkload::screen].rebuilds;
-        static_visible={};water_visible={};reflection_visible={};
+        static_visible={};water_visible={};reflection_visible={};effect_visible={};
         auto prior_receivers=std::move(all_visible);all_visible={};
         visible=culled=reflection_count=0;
         D3D11_RECT rect=source_bounds(settings,{0,0,width,height},false);
@@ -2080,12 +2081,17 @@ struct SandboxFreshPipeline {
                 if (!renderer.chunk_intersects_region(GeometryDrawReference(record),settings,rect,false)) {
                     ++culled;return;
                 }
+                // Attached city effects follow the visual clock: they leave
+                // the retained static layer and redraw with the dynamic pass.
                 auto& output=renderer.water_scene_active && record.water_dependent?
-                    water_visible:static_visible;
+                    water_visible:record.content().city_effect?effect_visible:static_visible;
                 if(work.enabled)++work.counts[SandboxPassWorkload::selection][layer].accepted_records;
                 output[layer].push_back(record);
                 all_visible[layer].push_back(record);++visible;
             });
+        // Visible attached effects keep visual frames coming (ambient_count).
+        renderer.visible_city_effects=unsigned(std::count_if(all_visible[geometry_city].begin(),
+            all_visible[geometry_city].end(),[](auto const& record){return record.content().city_effect;}));
         std::vector<D3D11_RECT> water_receivers;
         auto mirror=source_bounds(reflected,reflected_water_bounds(settings,width,height,&water_receivers),true);
         index_mirror_receivers(reflected,mirror,water_receivers);
@@ -2340,7 +2346,7 @@ struct SandboxFreshPipeline {
         return a.size()==b.size() && std::equal(a.begin(),a.end(),b.begin(),[](auto const& left,auto const& right){
             return !std::memcmp(&left.draw,&right.draw,sizeof(left.draw)) && left.pose_identity==right.pose_identity &&
                 left.tile_x==right.tile_x && left.tile_y==right.tile_y && left.unit==right.unit && left.action==right.action &&
-                left.cursor==right.cursor && left.predict==right.predict && left.animated==right.animated && left.travelling==right.travelling;
+                left.cursor==right.cursor && left.owner_ring==right.owner_ring && left.predict==right.predict && left.animated==right.animated && left.travelling==right.travelling;
         });
     }
     bool select_unit_contributors(c3x_renderer_frame_v1 const& frame,
@@ -2999,6 +3005,15 @@ struct SandboxFreshPipeline {
         bind_common(settings,rect,target,depth,mirrored,scale,layer<geometry_natural_terrain);
         auto* context=renderer.context;
         auto& mirror=sandbox_active_reflection();
+        // Mirrored ground (terrain, hills, decals, farm fields) adds color but
+        // no coverage: rivers reflect only the standing objects and mountains
+        // that do. The cached-terrain mirror adds mountain coverage separately.
+        if(mirrored && mirror_mountain_coverage && renderer.reflection_coverage_blend)
+            context->OMSetBlendState(renderer.reflection_coverage_blend,nullptr,0xffffffffu);
+        else if(mirrored && renderer.reflection_terrain_blend &&
+           (layer==geometry_farm || layer==geometry_natural_terrain ||
+            layer==geometry_natural_decal))
+            context->OMSetBlendState(renderer.reflection_terrain_blend,nullptr,0xffffffffu);
         if (layer>=geometry_natural_terrain) {
             unsigned provider=layer==geometry_natural_mountain?1:
                 layer>=geometry_natural_forest0?2:0;
@@ -3127,6 +3142,15 @@ struct SandboxFreshPipeline {
                 !draw(geometry_land)))return false;
         if(cached_terrain){
             if(!mirrored)relight_terrain(rect);
+            else if(renderer.reflection_coverage_blend){
+                // The relit mirror terrain is color only. Mountains then add
+                // their coverage (alpha only, at the same depth) so rivers
+                // reflect peaks but not the hills and ground around them.
+                mirror_mountain_coverage=true;
+                bool covered=draw(geometry_natural_mountain);
+                mirror_mountain_coverage=false;
+                if(!covered)return false;
+            }
         }else for(auto layer:{geometry_natural_terrain,geometry_natural_mountain,
                               geometry_natural_decal})
             if(!draw(layer))return false;
@@ -3382,7 +3406,11 @@ struct SandboxFreshPipeline {
         SandboxPassWorkload::Scope pass(work,SandboxPassWorkload::relight);
         auto* context=renderer.context;
         context->OMSetRenderTargets(1,&reflection_static.target,reflection_static.depth);
-        context->OMSetBlendState(renderer.blend_state,nullptr,0xffffffffu);
+        // Mirrored terrain adds color only. The mirror's alpha then counts the
+        // standing objects drawn next, which are all a river reflects; the sea
+        // also treats this terrain color as coverage.
+        context->OMSetBlendState(renderer.reflection_terrain_blend?renderer.reflection_terrain_blend:
+            renderer.blend_state,nullptr,0xffffffffu);
         context->OMSetDepthStencilState(renderer.depth_state,0);
         context->RSSetState(renderer.rasterizer_state);
         D3D11_VIEWPORT viewport={0,0,float(reflection_static.width),
@@ -4598,6 +4626,7 @@ struct SandboxFreshPipeline {
             float(camera_y)/frame.tile_height;
         renderer.water_time_seconds=renderer.water_material.time;
         renderer.wave_time_seconds=renderer.water_material.time;
+        renderer.cities.time=renderer.water_material.time; // attached city effects
         if(!renderer.compose_resource_animations(frame,true))return fail("resource_poses");
         mark_prepare(prepare_setup_resources);
         auto settings=renderer.geometry_viewport_settings;
@@ -4942,6 +4971,9 @@ struct SandboxFreshPipeline {
                     glow.linear.depth,false,float(scene_scale)))return fail("coastal_waves");
         }
         mark_dynamic(dynamic_waves);
+        // Flames, smoke and night lights above city bodies, below units.
+        if(!effect_visible[geometry_city].empty() && !draw_layer(effect_visible,geometry_city,settings,full,
+                glow.linear.target,glow.linear.depth,false,float(scene_scale)))return fail("city_effects");
         // World overlays finish before the foreground unit layer.
         auto border_clip=source_bounds(settings,full,false);
         for(auto const* visible_scene:{&static_visible,&water_visible})

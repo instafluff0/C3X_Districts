@@ -9,7 +9,11 @@ byte, including other features' overlays:
 - the `C3X_RIVER_NATURAL_DEPTH` define (natural height-depth basis for rivers);
 - `translated_depth`, whose river branch uses that basis and a small bias;
 - the `Q3_CONTINUOUS_RIVERS` branch of `q3_water_material` (ocean optics,
-  stream lines, banks).
+  stream lines, banks);
+- the bridge waterline: VSSharedFeature carries a bridge's height above its
+  base and PSIntegratedFeature clips the underwater piers and walls;
+- sea coverage of mirrored ground: mirror passes draw ground color-only (so
+  rivers reflect only standing objects) and the seas count that color.
 
 Whole regions are copied rather than diff hunks, so a river edit can never
 be split around unrelated nearby code. Review with --dry-run first. The
@@ -36,6 +40,17 @@ REGIONS = (
      "C3X_RIVER_NATURAL_DEPTH"),
     ("river_material", "#ifdef Q3_CONTINUOUS_RIVERS\n  float2 world=q3_source_world(input);",
      "#elif defined(Q3_STATIC_OPTICS_V2)", "stream_lines"),
+    # Bridge parts below the waterline (the bridge's base) stay underwater.
+    ("bridge_waterline_vertex", " if(bridge)o.position.z=max(.001,o.position.z-.0255*c3x_viewport_reserved.x/16384.);\n",
+     " return o;\n}", "q6_world.w=2+"),
+    ("bridge_waterline_pixel", "float4 PSIntegratedFeature(FeaturePixelInput input) : SV_TARGET\n{", "\n}\n",
+     "q6_world.w > 1.5"),
+    # Mirrored ground adds color only (rivers reflect standing objects); the
+    # sea counts that color as coverage so coastal land still reflects.
+    ("sea_ground_coverage", "        float4 object = q3_object_reflection_texture.Sample(decal_sampler, distorted_uv);\n",
+     "        reflected = lerp(reflected, object.rgb, object_alpha);", "terrain_present"),
+    ("natural_sea_ground_coverage", " float object_coverage=saturate(object.a)*inside;\n",
+     " sky=sky*(1-object_coverage)+object.rgb*inside;", "step(1e-6"),
 )
 
 

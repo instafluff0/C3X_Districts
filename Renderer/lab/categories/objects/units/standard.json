@@ -39,7 +39,15 @@
     "Renderer/tools/asset_compiler/compile_compound_animation.py",
     "Renderer/native/render_core/skin_shadow_bounds.h",
     "Renderer/sandbox/async_scene_client.h",
-    "Renderer/sandbox/async_publication.h"
+    "Renderer/sandbox/async_publication.h",
+    "Renderer/native/environment_refresh/prepare_units.py",
+    "Renderer/native/environment_refresh/unit_quality.json",
+    "Renderer/inventory/civ3_unit_sprite_sizes.json",
+    "Renderer/tools/asset_compiler/civ3_unit_sprites.py",
+    "Renderer/tools/asset_compiler/civ3_flc.py",
+    "Renderer/native/tactical_overlay.h",
+    "Renderer/native/gpu_tactical_overlay.h",
+    "Renderer/tools/asset_compiler/unit_owner_coverage.py"
   ],
   "recipe": {
     "terrain": 2,
@@ -96,7 +104,10 @@
     "Renderer.native.test_injected_unit_bootstrap",
     "Renderer.native.test_async_publication",
     "Renderer.native.test_async_image_backpressure",
-    "Renderer.native.test_ordered_cold_service"
+    "Renderer.native.test_ordered_cold_service",
+    "Renderer.native.test_unit_shadow_union",
+    "Renderer.native.test_tactical_overlay",
+    "Renderer.tools.asset_compiler.test_unit_owner_coverage"
   ],
   "references": {
     "d3d11": [

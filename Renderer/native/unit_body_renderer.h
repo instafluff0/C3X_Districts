@@ -47,6 +47,9 @@ public:
     std::vector<Mesh> meshes;
     std::vector<Texture> textures;
     std::vector<Unit> units;
+    // Pack-authored readability look: extra gain, extra saturation and owner
+    // ramp (bindings look_gain/look_saturation/look_owner); zeros are neutral.
+    float look[3]={};
     // Explicit loading admission allowances; the source union remains pinned
     // independently of the smaller current-frame action leases.
     std::size_t payload_limit=96u*1024u*1024u,source_gpu_limit=192u*1024u*1024u;
@@ -179,7 +182,7 @@ public:
         {std::lock_guard<std::recursive_mutex> guard(cache_mutex);cache.clear();cache_bytes=0;}pixels.clear();release(batch_readback);
     }
     ~UnitBodyRenderer() {reset_gpu();reset_blit();}
-    void clear() {reset_gpu();meshes.clear();textures.clear();units.clear();resident_bytes=0;payload_serial=0;contribution_bytes=0;
+    void clear() {reset_gpu();meshes.clear();textures.clear();units.clear();look[0]=look[1]=look[2]=0;resident_bytes=0;payload_serial=0;contribution_bytes=0;
         payload_limit=96u*1024u*1024u;source_gpu_limit=192u*1024u*1024u;source_admission=false;++contribution_sequence;++catalogue_generation;}
 
     // A completed pose is CPU-owned and needs neither the D3D context nor a
@@ -398,7 +401,7 @@ public:
         }
         beauty[3]=2.05f*(environment.sun_intensity+environment.moon_intensity)/(noon.sun_intensity+noon.moon_intensity);
         beauty[7]=1;beauty[11]=.62f;beauty[12]=.490290f;beauty[13]=-.735435f;beauty[14]=.469979f;
-        beauty[16]=float(shadow.extent);
+        beauty[16]=float(shadow.extent);beauty[17]=look[0];beauty[18]=look[1];beauty[19]=look[2];
         context->UpdateSubresource(beauty_frame,0,nullptr,beauty,0,0);
         context->PSSetConstantBuffers(1,1,&beauty_frame);context->PSSetSamplers(1,1,&samplers[3]);
         pose_ms+=elapsed();

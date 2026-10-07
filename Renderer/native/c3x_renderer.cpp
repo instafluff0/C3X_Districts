@@ -308,6 +308,7 @@ struct CachedVertexChunk {
     float visual_time=-1; // Optional wave sample; negative follows the visible clock.
     unsigned city_material=0xffffffffu;
     bool city_environment=false;
+    bool city_effect=false; // attached effect quads: per-frame layer, visual clock
     float city_atlas[4]={};
     std::shared_ptr<c3x_renderer::city_fidelity::Lighting> city_lighting;
     float natural_projection[4] = {};
@@ -993,6 +994,11 @@ public:
     c3x_renderer::render_core::LinearTarget linear_frame, linear_block;
     c3x_renderer::render_core::LinearOutput linear_output;
     ID3D11BlendState * blend_state = nullptr;
+    // Mirror passes draw ground (terrain, hills, farm fields) color only: the
+    // mirror's alpha then counts standing objects and mountains, which rivers
+    // reflect. The coverage state adds a mountain's alpha to that color.
+    ID3D11BlendState * reflection_terrain_blend = nullptr;
+    ID3D11BlendState * reflection_coverage_blend = nullptr;
     ID3D11DepthStencilState * depth_state = nullptr;
     ID3D11RasterizerState * rasterizer_state = nullptr;
     ID3D11SamplerState * natural_wrap = nullptr, *natural_clamp = nullptr;
@@ -1124,6 +1130,7 @@ public:
     std::uint64_t resource_pixel_signature = 0;
     c3x_renderer_i64 resource_pixel_clock = -1;
     unsigned visible_resource_animations = 0, visible_wave_animations = 0, moving_resources = 0;
+    unsigned visible_city_effects = 0; // fresh-path effect records in view
     float wave_time_seconds=0,water_time_seconds=0;
     c3x_renderer::render_core::WaterMaterialFrame water_material;
     bool water_motion=true,water_scene_active=false;
@@ -1139,7 +1146,7 @@ public:
     std::map<std::pair<int,int>,RetainedWaveCell> retained_wave_cells;
     std::uint64_t retained_wave_scope=0,retained_wave_epoch=0;
     unsigned wave_cells_built=0,wave_cells_reused=0;
-    unsigned ambient_count() const {return moving_resources+visible_wave_animations+visible_water_animations;}
+    unsigned ambient_count() const {return moving_resources+visible_wave_animations+visible_water_animations+visible_city_effects;}
     unsigned posed_count() const {return visible_resource_animations+unsigned(wave_chunks.size())+unsigned(water_scene_active);}
     void reset_waves() {
         for(auto& c:wave_chunks){release(c.buffer);release(c.indices);}wave_chunks.clear();
@@ -1307,7 +1314,7 @@ public:
         std::fill(resource_pixels.begin(),resource_pixels.end(),0);
         resource_pixel_signature = 0;
         resource_pixel_clock = -1;
-        moving_resources = visible_resource_animations = visible_wave_animations = 0;
+        moving_resources = visible_resource_animations = visible_wave_animations = visible_city_effects = 0;
         sandbox_resource_poses = {};
         sandbox_aquatic_resource_poses = {};
         sandbox_pose_chunks = {};
@@ -1517,6 +1524,8 @@ public:
         release(rasterizer_state);
         release(depth_state);
         release(blend_state);
+        release(reflection_terrain_blend);
+        release(reflection_coverage_blend);
         release(input_layout); release(feature_input_layout);
         release(resource_body_vertex_shader);release(resource_shadow_vertex_shader);release(resource_input_layout);
         release(terrain_settings_buffer);
@@ -1830,6 +1839,13 @@ public:
         blend.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
         if (SUCCEEDED(hr))
             hr = device->CreateBlendState(&blend, &blend_state);
+        blend.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_RED |
+            D3D11_COLOR_WRITE_ENABLE_GREEN | D3D11_COLOR_WRITE_ENABLE_BLUE;
+        if (SUCCEEDED(hr))
+            hr = device->CreateBlendState(&blend, &reflection_terrain_blend);
+        blend.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALPHA;
+        if (SUCCEEDED(hr))
+            hr = device->CreateBlendState(&blend, &reflection_coverage_blend);
 
         D3D11_DEPTH_STENCIL_DESC depth = {};
         depth.DepthEnable = TRUE;
@@ -3700,6 +3716,9 @@ public:
         if(!read_file((root+"\\bindings.json").c_str(),data))return false;
         float count=0;
         if(!json_number_after(data,"unit_count",0,count) || count<1 || count>128 || count!=int(count))return false;
+        char const* look_names[]={"look_gain","look_saturation","look_owner"};
+        for(unsigned i=0;i<3;++i){float value=0;json_number_after(data,look_names[i],0,value);
+            unit_bodies.look[i]=std::isfinite(value)?std::clamp(value,0.f,2.f):0.f;}
         std::unordered_map<std::string,unsigned> mesh_ids,texture_ids;
         for(int i=0;i<int(count);++i) {
             auto location=json_member_position(data,("unit"+std::to_string(i)).c_str());
@@ -4204,6 +4223,49 @@ public:
     // A tile's resource parts as world boxes (x0,y0,x1,y1,animated), with the
     // tile at natural lattice (c, r). Follows the tile compiler's placement
     // paths so vegetation can keep them clear.
+    // A composition carrying a "clearance/routes" marker (an oasis) makes room for
+    // the roads and railroads drawn through its tile: the layout moves toward the
+    // side farthest from every drawn route point and shrinks to fit the clear space
+    // (route_clearance_layout). Returns {shrink, du, dv}; {1, 0, 0} keeps the baked layout.
+    template<class Lookup> std::array<float,3> route_clearance(c3x_renderer_tile_v1 const & tile,
+            c3x_renderer::FeatureComposition::Variant const & variant,
+            c3x_renderer::objects::Assets const & assets, Lookup lookup) const {
+        std::array<float,3> layout{1.f, 0.f, 0.f};
+        if (!route_assets_ready || !(tile.road_mask || tile.railroad_mask)) return layout;
+        c3x_renderer::FeatureComposition::Instance const * marker = nullptr;
+        for (auto const & item : variant.instances)
+            if (item.asset < resource_bundle.assets.size() && resource_bundle.assets[item.asset].id == "clearance/routes")
+                marker = &item;
+        if (!marker) return layout;
+        c3x_renderer::objects::Plan plan;
+        c3x_renderer::objects::select_routes(tile, assets, route_assets_ready, true, lookup, plan);
+        std::vector<std::array<float,2>> points;
+        auto path = [&](float u0, float v0, float u1, float v1) {
+            unsigned steps = std::max(1u, unsigned(std::ceil(std::hypot(u1-u0, v1-v0)/.04f)));
+            for (unsigned i = 0; i <= steps; ++i) {float t = float(i)/float(steps); points.push_back({u0+(u1-u0)*t, v0+(v1-v0)*t});}
+        };
+        for (auto const & route : plan.patterns) {
+            auto const * set = assets.patterns_for(route.style);
+            if (!set || route.line >= set->lines.size()) continue;
+            auto const & line = set->lines[route.line];
+            auto point = [&](unsigned i) {return route.points.size() == line.count ? route.points[i] : set->points[line.first+i];};
+            for (unsigned i = 1; i < line.count; ++i) {auto a = point(i-1), b = point(i); path(a[0], a[1], b[0], b[1]);}
+        }
+        for (auto const & route : plan.routes) path(route.u0, route.v0, route.u1, route.v1);
+        if (points.empty()) return layout;
+        float radius = 0;   // the shrunken group's reach from the tile centre
+        for (auto const & item : variant.instances) {
+            if (&item == marker || item.asset >= resource_bundle.assets.size()) continue;
+            float extent = 0;
+            for (auto const & vertex : resource_bundle.assets[item.asset].vertices)
+                extent = std::max(extent, std::hypot(vertex.position[0], vertex.position[1]));
+            radius = std::max(radius, std::hypot(item.u-.5f, item.v-.5f) + extent*item.scale);
+        }
+        // Marker: scale = largest shrink, lift = smallest shrink, ground_fit = farthest move.
+        return c3x_renderer::render_core::route_clearance_layout(points, radius, marker->lift, marker->scale,
+            marker->ground_fit);
+    }
+
     template<class Part> void resource_footprint(c3x_renderer_tile_v1 const & tile, int c, int r, Part part) const {
         if (tile.city_id >= 0 || tile.resource_id < 0) return;
         float base_x = float(c), base_y = float(r) + 1;
@@ -7815,6 +7877,11 @@ public:
                     layer<=geometry_natural_decal?2:layer==geometry_natural_mountain?3:4;
                 context->VSSetShader(active_reflection.vs[provider],nullptr,0);
                 context->PSSetShader(active_reflection.ps[provider],nullptr,0);
+                // Mountains stay reflectable: a peak mirrored in the water reads well.
+                bool ground=layer==geometry_land || layer==geometry_farm || layer==geometry_natural_terrain ||
+                    layer==geometry_natural_decal;
+                context->OMSetBlendState(ground && reflection_terrain_blend?reflection_terrain_blend:blend_state,
+                    nullptr,0xffffffffu);
             }
             return draw_cached_geometry(layer, draw_inputs, rectangles, settings, cancellation,reflection_pass);
         };
@@ -9143,6 +9210,7 @@ public:
         frame_settings.water_specular = environment.water_specular;
         frame_settings.emissive_scale = environment.emissive_scale;
         cities.night=environment.night_activation;cities.emissive_scale=environment.emissive_scale;
+        cities.time=float(double(frame.presentation_time_ticks)/double(std::max<c3x_renderer_i64>(1,frame.presentation_frequency)));
         if(city_profile){
             char control[8]={};
             if(GetEnvironmentVariableA("C3X_RENDERER_CITY_LIGHT_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0)cities.night=0;
@@ -10519,35 +10587,18 @@ public:
                 return value[0];
             };
             // Natural ground plus mountain faces, for baked resource bodies that may
-            // stand on (or beside) a mountain. Mirrors the mountain union in
-            // lab/shared/natural/relief_mesh_body.h: pieces, spans, scales, ridge.
+            // stand on (or beside) a mountain: the rendered mesh's own shape
+            // (lab/shared/natural/mountain_shape.h).
             int resource_c=(tile.tile_x+tile.tile_y)/2,resource_r=(tile.tile_x-tile.tile_y)/2;
+            // Built on first use: tiles without a resource body read nothing.
+            c3x_renderer::fidelity::MountainShape resource_mountains;bool resource_mountains_ready=false;
             auto resource_height_at=[&](float u,float v,float* support=nullptr){
-                float height=natural_height_at(u,v,support),displacement=0;
-                for(int dr=-1;dr<=1;++dr)for(int dc=-1;dc<=1;++dc){
-                    int pc=resource_c+dc,pr=resource_r+dr;auto owner=queries.natural_tile(pc,pr);
-                    if(owner.real!=6)continue;
-                    bool west=queries.natural_tile(pc-1,pr).real==6,east=queries.natural_tile(pc+1,pr).real==6;
-                    bool north=queries.natural_tile(pc,pr-1).real==6,south=queries.natural_tile(pc,pr+1).real==6;
-                    unsigned along_x=unsigned(west)+unsigned(east),along_y=unsigned(north)+unsigned(south);
-                    bool connected=along_x+along_y>0,turn=connected&&along_x==along_y,range_y=along_y>along_x;
-                    unsigned variant=c3x_renderer::fidelity::mountain_seed(owner)%5u;
-                    float cx=float(pc)+.5f+.09f*(int(east)-int(west)),cy=float(pr)+.5f+.09f*(int(south)-int(north));
-                    float long_span=(connected?(turn?2.08f:2.46f):1.85f)*1.08f;
-                    float cross_span=(connected?(turn?1.82f:1.34f):1.55f)*1.08f;
-                    float mu=.5f+(range_y?(v-cy)/long_span:(u-cx)/long_span);
-                    float mv=.5f-(range_y?(u-cx)/cross_span:(v-cy)/cross_span);
-                    if(mu<0||mu>1||mv<0||mv>1)continue;
-                    float h=natural.fields[natural.macro[variant][0]].sample(mu,mv);
-                    float blend=natural.fields[natural.macro[variant][1]].sample(mu,mv);
-                    float next=(connected?std::pow(std::max(0.f,h),.80f):h)*(connected?142.f:165.f)*.68f*
-                        c3x_renderer::fidelity::smooth01((blend-.28f)/.34f);
-                    if(next<=0)continue;
-                    if(displacement<=0)displacement=next;
-                    else{float high=std::max(displacement,next),ridge=std::max(0.f,10.f-std::abs(displacement-next));
-                        displacement=high+ridge*ridge/40.f;}
-                }
-                return height+displacement*queries.hidden_taper(u,v);
+                float height=natural_height_at(u,v,support);
+                if(!resource_mountains_ready){resource_mountains_ready=true;
+                    resource_mountains=c3x_renderer::fidelity::MountainShape(natural,resource_c,resource_r,
+                        [&](int mc,int mr){return queries.natural_tile(mc,mr);},[](int,int){return false;});}
+                if(!resource_mountains.count)return height;
+                return height+resource_mountains.sample(natural,u,v).displacement*queries.hidden_taper(u,v);
             };
             auto relief_at_world = [&](float world_u, float world_v) {
                 if (pickup_profile) {
@@ -11213,6 +11264,11 @@ public:
                     float local_v = edge.north_edge ? 0.025f : along;
                     auto neighbor = ground_observations.current(
                         observed_coordinate_key(edge.neighbor_x, edge.neighbor_y));
+                    // Routes meeting across this edge put a bridge on it. Keep
+                    // its bank clear: a rock beside a bridge end reads as debris.
+                    if ((tile.road_mask || tile.railroad_mask) && neighbor != nullptr &&
+                        (neighbor->occurrence.road_mask || neighbor->occurrence.railroad_mask))
+                        continue;
                     if (ground_type(*owner) >= 11 && neighbor != nullptr &&
                         ground_type(neighbor->occurrence) < 11) {
                         owner_record=neighbor->occurrence;
@@ -11350,12 +11406,22 @@ public:
                 build_replacement[index] |= C3X_RENDERER_TILE_CUSTOM_RESOURCE_REPLACED;
                 auto const & variant = c3x_renderer::select_composition_variant(*composition,
                     tile.real_terrain_type, tile.variant_seed * 131u + 17u);
+                // Make room for routes crossing the tile (route_clearance): every piece
+                // shrinks about the tile centre and moves with the group.
+                auto layout = route_clearance(tile, variant, object_assets,
+                    [&](int x, int y) {return ground_observations.current(observed_coordinate_key(x, y));});
                 unsigned subject_index = 0;
-                for (auto const & item : variant.instances) {
+                for (auto const & baked : variant.instances) {
+                    auto item = baked;
+                    item.u = .5f + (baked.u-.5f)*layout[0] + layout[1];
+                    item.v = .5f + (baked.v-.5f)*layout[0] + layout[2];
+                    item.scale = baked.scale*layout[0]; item.lift = baked.lift*layout[0];
+                    item.ground_fit = baked.ground_fit*layout[0];
                     // "animated/<binding>" places that animated subject: the pack bakes its
                     // position, facing and size; it stands on the highest ground under its
                     // footprint so no part of the body is buried.
                     auto const & id = resource_bundle.assets[item.asset].id;
+                    if (id.rfind("clearance/", 0) == 0) continue;   // a layout rule, not a piece
                     if (id.rfind("animated/", 0) == 0) {
                         auto found = std::find_if(resource_animations.begin(), resource_animations.end(),
                             [&](auto const & animation) { return id.compare(9, std::string::npos, animation.name) == 0; });
@@ -11449,7 +11515,10 @@ public:
                         mine_assets_ready,farm_assets_ready,plan))return false;
                 if(farmed){
                     c3x_renderer::objects::clear_farm(plan,routes,object_assets,farm_resource_boxes(tile));
-                    c3x_renderer::objects::settle_farm_fields(plan,tile,object_assets,relief_at_world);
+                    c3x_renderer::objects::settle_farm_fields(plan,tile,object_assets,relief_at_world,
+                        [&](int dx,int dy)->c3x_renderer_tile_v1 const*{
+                            auto found=ground_observations.current(observed_coordinate_key(tile.tile_x+dx,tile.tile_y+dy));
+                            return found?&found->occurrence:nullptr;});
                     c3x_renderer::objects::settle_farm_props(plan,tile,object_assets,relief_at_world);
                 }
                 object_instances+=unsigned(plan.instances.size());object_routes+=unsigned(plan.routes.size());
@@ -11743,7 +11812,7 @@ public:
                             if(part.mesh.empty())continue;
                             if(!adopt(part,4)){tile_geometry_cache_bytes-=compiled.byte_count;return false;}
                             auto& chunk=compiled.mesh->layers[layer].back();chunk.city_material=part.material;chunk.city_environment=part.environment;
-                            std::copy(part.atlas.begin(),part.atlas.end(),chunk.city_atlas);chunk.city_lighting=part.lighting;
+                            std::copy(part.atlas.begin(),part.atlas.end(),chunk.city_atlas);chunk.city_lighting=part.lighting;chunk.city_effect=part.effect;
                         }
                         continue;
                     }
@@ -11814,7 +11883,7 @@ public:
                             tile_geometry_cache_bytes-=compiled.byte_count;return false;
                         }
                         auto&chunk=compiled.mesh->layers[layer].back();chunk.city_material=part.material;chunk.city_environment=part.environment;
-                        std::copy(part.atlas,part.atlas+4,chunk.city_atlas);chunk.city_lighting=part.lighting;compiled.byte_count+=chunk.byte_count;
+                        std::copy(part.atlas,part.atlas+4,chunk.city_atlas);chunk.city_lighting=part.lighting;chunk.city_effect=part.effect;compiled.byte_count+=chunk.byte_count;
                     }
                     city_chunks.clear();continue;
                 }
@@ -15447,10 +15516,11 @@ private:
                         right.presentation_time_ticks=right.presentation_frequency=0;
                         return !std::memcmp(&left,&right,sizeof(left))&&a.pose_identity==b.pose_identity&&
                             a.tile_x==b.tile_x&&a.tile_y==b.tile_y&&a.unit==b.unit&&a.action==b.action&&
-                            a.predict==b.predict&&a.cursor==b.cursor&&a.animated==b.animated&&
+                            a.predict==b.predict&&a.cursor==b.cursor&&a.owner_ring==b.owner_ring&&a.animated==b.animated&&
                             a.display_id==b.display_id&&a.travelling==b.travelling;
                     });
                 bool animated=(renderer_state.ambient_count()!=0&&renderer_state.frame_has_resource_animation(frame))||
+                    renderer_state.visible_city_effects!=0||
                     std::any_of(poses.begin(),poses.end(),
                     [](auto const& pose){return pose.animated||pose.travelling;});
                 // Keep the sampler reachable for later ordered unit events,
@@ -17618,7 +17688,7 @@ extern "C" __declspec(dllexport) int c3x_renderer_unit_draw_expanded(
 extern "C" __declspec(dllexport) int c3x_renderer_unit_draw_playback(
     c3x_renderer_unit_v1 const* unit,void* destination_hdc,void* background_hdc,int* bounds,unsigned flags) {
     if(!unit || unit->struct_size!=sizeof(*unit) || unit->unit_key[63]!=0 || !destination_hdc || !background_hdc || !bounds ||
-       !(flags&C3X_RENDERER_UNIT_STATE_CAPTURED) || (flags&~15u))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+       !(flags&C3X_RENDERER_UNIT_STATE_CAPTURED) || (flags&~31u))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
     if(!renderer_worker&&!remote_renderer_requested())return C3X_RENDERER_RESULT_ERROR;
     return c3x_inputs::cpu_unit(4,*unit,static_cast<HDC>(destination_hdc),static_cast<HDC>(background_hdc),bounds,flags,[&]{return remote_renderer_requested()?
         remote_draw_cpu_unit(*unit,static_cast<HDC>(destination_hdc),static_cast<HDC>(background_hdc),bounds,flags):
@@ -17852,7 +17922,7 @@ extern "C" __declspec(dllexport) int c3x_renderer_trial_unit_pixels(
     int* x,int* y,unsigned* width,unsigned* height,std::uint32_t* pixels,unsigned capacity){
     if(!unit||unit->struct_size!=sizeof(*unit)||unit->unit_key[63]!=0||
        !bounds||!x||!y||!width||!height||!pixels||capacity>1024u*1024u||
-       (flags&~15u)||(flags&&!(flags&C3X_RENDERER_UNIT_STATE_CAPTURED)))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+       (flags&~31u)||(flags&&!(flags&C3X_RENDERER_UNIT_STATE_CAPTURED)))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
     std::vector<std::uint32_t> body;int w=0,h=0;
     int code=get_renderer_worker().draw_unit(*unit,nullptr,nullptr,with_bounds?bounds:nullptr,
         flags,nullptr,&body,&w,&h,x,y);
@@ -17999,7 +18069,7 @@ int renderer_native_image_impl(int operation,void* image,void* source,void const
     if(operation==C3X_NATIVE_UNIT_DRAW&&remote_renderer_requested()){
         if(!from||!to)return -1;
         auto const& unit=*static_cast<c3x_renderer_unit_v1 const*>(from);
-        if(unit.struct_size!=sizeof(unit)||unit.unit_key[63]||(color&~15u))return -1;
+        if(unit.struct_size!=sizeof(unit)||unit.unit_key[63]||(color&~31u))return -1;
         c3x_renderer_gpu_unit_v1 capture={sizeof(capture)};capture.playback_flags=color;
         try{return remote_renderer_backend()->unit(unit,capture,
             const_cast<int*>(static_cast<int const*>(to)))==C3X_RENDERER_RESULT_OK?1:-1;}
@@ -18106,7 +18176,7 @@ extern "C" __declspec(dllexport) int c3x_renderer_gpu_unit(c3x_renderer_unit_v1 
         target->detail==0&&target->background_detail==0&&target->clip[0]==0&&target->clip[1]==0&&target->clip[2]==0&&target->clip[3]==0;
     if(!unit||unit->struct_size!=sizeof(*unit)||unit->unit_key[63]!=0||!target||target->struct_size!=sizeof(*target)||!bounds||
        (!capture&&(target->ticket<=0||target->destination<=0||target->background<=0))||target->detail<0||target->background_detail<0||
-       target->clip[0]>target->clip[2]||target->clip[1]>target->clip[3]||(target->playback_flags&~15u)||
+       target->clip[0]>target->clip[2]||target->clip[1]>target->clip[3]||(target->playback_flags&~31u)||
        unit->body_x<-32768||unit->body_x>32768||unit->body_y<-32768||unit->body_y>32768)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
     if(!renderer_worker&&!remote_renderer_requested())return C3X_RENDERER_RESULT_ERROR;
     c3x_inputs::Call input(c3x_inputs::Kind::unit,1,[&](auto& out){c3x_inputs::unit(out,*unit);c3x_inputs::target_fields(out,*target);});

@@ -505,6 +505,25 @@ void ground_material(P input, out float3 albedo, out float height_detail,
 #endif
 }
 
+// Accepted 2026-10-07 (mountains Lab, ranges study root-vb): rock texture
+// 1.8x finer for the smaller C3X mountains, crack contrast and grain at 45%,
+// rock 15% lighter, snow on gentler faces as a ridge dusting. A study may
+// predefine these to compare alternatives.
+#ifndef MTN_ROCK_SCALE
+#define MTN_ROCK_SCALE 1.8
+#endif
+#ifndef MTN_CREVICE
+#define MTN_CREVICE 0.45
+#endif
+#ifndef MTN_ROCK_TONE
+#define MTN_ROCK_TONE 1.15
+#endif
+#ifndef MTN_SNOW_SLOPE_LOW
+#define MTN_SNOW_SLOPE_LOW 0.45
+#endif
+#ifndef MTN_SNOW_SLOPE_HIGH
+#define MTN_SNOW_SLOPE_HIGH 0.8
+#endif
 
 // The scene-light adapter below replaces these regional declarations with
 // a growable GPU field while keeping the shared material equations.
@@ -648,42 +667,46 @@ Output shade(P input) {
         specular_map = lerp(ground_specular, 0.0, rock_detail_coverage);
     } else {
         float height = input.material.x;
-        float snow = smoothstep(0.62, 0.78, height) * smoothstep(0.02, 0.25, geometric.z);
+        float3 rock_world = input.world * MTN_ROCK_SCALE;
+        // Civ III marks some mountains snow-capped; the mesh carries that cap
+        // as material.y 2..2.5. Bare mountains keep plain rock throughout.
+        float snow_cap = saturate((input.material.y - 2) * 2);
+        float snow = smoothstep(0.62, 0.78, height) * smoothstep(MTN_SNOW_SLOPE_LOW, MTN_SNOW_SLOPE_HIGH, geometric.z) * snow_cap;
         // The top material contains patchy snow, not plain upper rock. Keep
         // both authored snow layers near the summit; ground coverage remains
         // tied to final rise independently of these source-height masks.
-        float top = smoothstep(0.52, 0.68, height) * (1 - snow);
+        float top = smoothstep(0.52, 0.68, height) * (1 - snow) * snow_cap;
         float base = 1 - top - snow;
         // Retain rocky feet; reduce added contrast continuously above them.
         // Captured volcanic material keeps its accepted inherited response.
         float upper_rock = smoothstep(.38,.75,mountain_rise) * mountain_material_weight(input);
-        float3 rock_albedo = triplanar(RockColor, input.world, geometric);
+        float3 rock_albedo = triplanar(RockColor, rock_world, geometric);
         float3 mountain_albedo = rock_albedo * base +
-                                 triplanar(TopColor, input.world, geometric) * top +
-                                 triplanar(SnowColor, input.world, geometric) * snow;
-        float rock_detail = triplanar_scalar(RockHeight, input.world, geometric);
+                                 triplanar(TopColor, rock_world, geometric) * top +
+                                 triplanar(SnowColor, rock_world, geometric) * snow;
+        float rock_detail = triplanar_scalar(RockHeight, rock_world, geometric);
         float layered_detail = rock_detail * base +
-                               triplanar_scalar(TopHeight, input.world, geometric) * top +
-                               triplanar_scalar(SnowHeight, input.world, geometric) * snow;
+                               triplanar_scalar(TopHeight, rock_world, geometric) * top +
+                               triplanar_scalar(SnowHeight, rock_world, geometric) * snow;
         // Snow softens the rock relief. Preserve other packs' authored upper
         // height channel; the local base/upper height pair happens to be equal.
         float mountain_detail = lerp(layered_detail, rock_detail, snow * 0.60);
         // Retain the fine source-height contribution without amplifying the
         // broad material plateaus into horizontal ledges. Crevice fill stays
         // independent of light direction and separate from normal strength.
-        float3 fine_world = input.world * 3.7 + float3(0.31, 0.17, 0.43);
+        float3 fine_world = rock_world * 3.7 + float3(0.31, 0.17, 0.43);
         float fine_rock = triplanar_scalar(RockHeight,
             fine_world, geometric);
-        float2 rock_gradient = triplanar_height_derivatives(RockHeight, input.world, geometric);
+        float2 rock_gradient = triplanar_height_derivatives(RockHeight, rock_world, geometric);
         float2 layered_gradient = rock_gradient * base +
-            triplanar_height_derivatives(TopHeight, input.world, geometric) * top +
-            triplanar_height_derivatives(SnowHeight, input.world, geometric) * snow;
+            triplanar_height_derivatives(TopHeight, rock_world, geometric) * top +
+            triplanar_height_derivatives(SnowHeight, rock_world, geometric) * snow;
         rock_derivatives = lerp(layered_gradient, rock_gradient, snow * 0.60) * 0.04;
         rock_derivatives += triplanar_height_derivatives(RockHeight, fine_world, geometric) * 0.12 * (1-snow);
 
         mountain_detail += (fine_rock - 0.5) * 0.12 * (1 - snow);
         float neighborhood = triplanar_neighborhood(RockHeight,
-            input.world, geometric).r;
+            rock_world, geometric).r;
         float fine_neighborhood = triplanar_neighborhood(RockHeight,
             fine_world, geometric).r;
         rock_crevice = lerp(rock_crevice_visibility(rock_detail, neighborhood) *
@@ -696,14 +719,15 @@ Output shade(P input) {
         float mean_luma = dot(mean_color, float3(0.2126, 0.7152, 0.0722));
         float grain = clamp(1 + 2.0 * (fine_luma - mean_luma) / max(mean_luma, 0.02), 0.50, 1.18);
         float rock_micro_relief = smoothstep(0.16, 0.84, rock_detail);
-        mountain_albedo *= lerp(lerp(0.82, 1.06, rock_micro_relief), 1.0, (upper_rock * .92) * (1-snow));
-        mountain_albedo *= lerp(1.0, grain, (1 - snow) * (1-(upper_rock * .92)));
-        rock_crevice = lerp(rock_crevice, 1.0, (upper_rock * .92));
+        mountain_albedo *= lerp(lerp(lerp(1.0, 0.82, MTN_CREVICE), lerp(1.0, 1.06, MTN_CREVICE), rock_micro_relief), 1.0, (upper_rock * .92) * (1-snow));
+        mountain_albedo *= lerp(1.0, grain, MTN_CREVICE * (1 - snow) * (1-(upper_rock * .92)));
+        mountain_albedo *= lerp(MTN_ROCK_TONE, 1.0, snow);
+        rock_crevice = lerp(lerp(1.0, rock_crevice, MTN_CREVICE), 1.0, (upper_rock * .92));
         albedo = lerp(ground_albedo, mountain_albedo, rock_albedo_coverage);
         height_detail = lerp(ground_height, mountain_detail, rock_detail_coverage);
-        float mountain_specular = triplanar_scalar(RockSpecular, input.world, geometric) * base +
-                                  triplanar_scalar(TopSpecular, input.world, geometric) * top +
-                                  triplanar_scalar(SnowSpecular, input.world, geometric) * snow;
+        float mountain_specular = triplanar_scalar(RockSpecular, rock_world, geometric) * base +
+                                  triplanar_scalar(TopSpecular, rock_world, geometric) * top +
+                                  triplanar_scalar(SnowSpecular, rock_world, geometric) * snow;
         specular_map = lerp(ground_specular, mountain_specular, rock_detail_coverage);
     }
     if (input.material.y > 1.5 && Quality.x > 0.5) {

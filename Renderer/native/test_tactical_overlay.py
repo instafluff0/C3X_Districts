@@ -22,6 +22,22 @@ int main(){using namespace c3x_renderer::tactical;Input a;a.line(-100,20,40,20);
  return 0;}
 ''')
 
+    def test_owner_disc_footprint_follows_projection(self):
+        # The approved soft disc for Civ III's P_SHOW_TEAM_COLOR_DISC: 30x15 at
+        # 128px tiles, fading out by 1.15 radii, inside the primitive bounds.
+        run_cpp(r'''
+#include "Renderer/native/tactical_overlay.h"
+#include <cassert>
+int main(){using namespace c3x_renderer::tactical;
+ Input a;a.owner_disc(10,20,128,{.8f,.1f,.1f,.45f});auto const& p=a.primitives[0];
+ assert(p.shape[0]==10&&p.shape[1]==20&&p.shape[2]==30.f&&p.shape[3]==15.f);
+ assert(p.style[0]==4.f&&p.color[3]==.45f&&!a.animated);
+ assert(p.bounds[0]<=10-30*1.15f&&p.bounds[2]>=10+30*1.15f&&p.bounds[1]<=20-15*1.15f&&p.bounds[3]>=20+15*1.15f);
+ Input b;b.owner_disc(0,0,192,{1,1,1,1});assert(b.primitives[0].shape[2]==45.f&&b.primitives[0].shape[3]==22.5f);
+ bool rejected=false;try{b.owner_disc(0,0,NAN,{1,1,1,1});}catch(...){rejected=true;}assert(rejected);
+ return 0;}
+''')
+
     def test_native_route_fold_uses_copied_map_anchors(self):
         run_cpp(r'''
 #include "Renderer/native/tactical_overlay.h"

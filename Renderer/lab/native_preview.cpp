@@ -25,9 +25,25 @@ void lab_place_objects(std::vector<c3x_renderer_tile_v1>& tiles, int center_x, i
     bool sites=std::strcmp(category,"huts-camps")==0 || huts || camps;
     // Forest/jungle cases: C3C BIQ bonus/overlay bits carried in the scene CSV
     // and a "dx,dy,Name;..." resource list, both supplied by the dispatcher.
-    char overlays[4]={},listed[1024]={};
+    char overlays[4]={},listed[1024]={},city_list[2048]={};
     if(GetEnvironmentVariableA("C3X_LAB_TILE_OVERLAYS",overlays,sizeof(overlays)) && overlays[0]) {
         GetEnvironmentVariableA("C3X_LAB_TILE_RESOURCES",listed,sizeof(listed));
+        // City cases: "dx,dy,culture,era,size,capital,walled;..." from the view centre.
+        GetEnvironmentVariableA("C3X_LAB_TILE_CITIES",city_list,sizeof(city_list));
+        int city_index=0;
+        for(char const* entry=city_list;entry && *entry;++city_index) {
+            int dx=0,dy=0,culture=0,era=0,size=0,capital=0,walled=0;
+            if(sscanf_s(entry,"%d,%d,%d,%d,%d,%d,%d",&dx,&dy,&culture,&era,&size,&capital,&walled)==7)
+                for(auto& tile:tiles)
+                    if(((tile.tile_x%map_width)+map_width)%map_width-center_x==dx && tile.tile_y-center_y==dy) {
+                        tile.city_id=1+city_index;tile.city_owner_id=1;
+                        tile.city_culture_group=std::clamp(culture,0,4);tile.city_era=std::clamp(era,0,3);
+                        tile.city_size=std::clamp(size,0,2);tile.city_population=size==0?4:size==1?9:16;
+                        tile.city_flags=(capital?C3X_RENDERER_CITY_CAPITAL:0)|(walled?C3X_RENDERER_CITY_WALLED:0);
+                        tile.road_mask=1;
+                    }
+            entry=std::strchr(entry,';');if(entry)++entry;
+        }
         for(auto& tile:tiles) {
             unsigned bits=tile.terrain_overlays;
             if(bits&3u){tile.road_mask=1;tile.railroad_mask=(bits&2u)?1u:0u;}
@@ -75,6 +91,13 @@ void lab_place_objects(std::vector<c3x_renderer_tile_v1>& tiles, int center_x, i
                         sizeof(tile.resource_name)-1);
                     tile.resource_id=100+index;tile.resource_class=0;
                     std::memcpy(tile.resource_name,entry+used,length);tile.resource_name[length]='\0';
+                    // "Name|road" or "Name|rail" also lays that route; "|road" alone is a bare route tile.
+                    if(char* bar=std::strchr(tile.resource_name,'|')){
+                        if(!std::strcmp(bar+1,"rail"))tile.road_mask=tile.railroad_mask=1;
+                        else if(!std::strcmp(bar+1,"road"))tile.road_mask=1;
+                        *bar='\0';
+                        if(!tile.resource_name[0])tile.resource_id=-1;
+                    }
                 }
                 entry=std::strchr(entry,';');if(entry)++entry;
             }
@@ -107,13 +130,15 @@ void lab_place_objects(std::vector<c3x_renderer_tile_v1>& tiles, int center_x, i
                 }
             }
         } else if(network) {
-            // Late-game density: most land carries a road, two rail corridors
-            // cross it (one bridging the river on a tile-diagonal edge), and
-            // the east side has reached a later era.
+            // Late-game density: most land carries a road, rail corridors
+            // cross it (one bridging the river on a tile-diagonal edge, one
+            // tunnelling through the small range at raw row 16, fixed to the
+            // range whatever the view center), and the east side has reached
+            // a later era.
             unsigned seed=unsigned(x*73856093)^unsigned(y*19349663);
             seed=(seed^(seed>>13))*0x5bd1e995u;seed^=seed>>15;
             bool dry=tile.real_terrain_type>=0 && tile.real_terrain_type<=8;
-            bool rail=y==6 || x-y==4 || x+y==-4;
+            bool rail=y==6 || x-y==4 || x+y==-4 || (y+center_y==16 && x+center_x>=18 && x+center_x<=30);
             if(dry && std::abs(x)<=16 && std::abs(y)<=22 && (seed%100<84 || rail)) {
                 tile.road_mask=1;tile.route_style=era_override>=0?era_override:x>4?2:0;
                 if(rail)tile.railroad_mask=1;

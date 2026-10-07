@@ -1,9 +1,29 @@
 # Mountains
 
 Five authored macro height/blend variants form a continuous relief surface.
-Connected mountains broaden along captured adjacency; shared-edge geometry and
-shadow coverage match. Grass, plains, tundra or desert climbs the lower slope
-before stone takes over. Terrain decals remain later.
+Grass, plains, tundra or desert climbs the lower slope before stone takes over.
+Terrain decals remain later.
+
+## Joined ranges, snow caps and shadows (accepted 2026-10-07)
+
+The user accepted the Lab result ("Looks good, I approve putting in the
+game"). One shared shape, `lab/shared/natural/mountain_shape.h`, serves the
+mesh, route surfaces and resource seating. Mountains join across all eight
+neighbours. Each authored stamp turns so its principal ridge follows the
+range, and a lower saddle stamp sits between adjacent pairs. A two-highest
+smooth maximum joins them, so a 3x3 block reads as one massif and corner-joined
+ranges no longer break into separate cones. Civ III's snow-capped flag
+(topology bit 26) alone decides snow; bare mountains stay rock. The material
+uses a finer rock texture, softer cracks, lighter stone and snow on gentler
+faces. Mountains cast ground shadows again; a caster cutoff had read the
+hill-support channel since commit 486f3a6a.
+
+Contracts: `test_mountain_shape.cpp` (shared halo agreement, corner joins,
+order independence, window reach), `test_mountain_shadow_caster.py`, the route
+shape contract in `test_object_compiler.py` and the unchanged mesh oracle in
+`test_mesh.cpp`. Study, tools and evidence:
+`Renderer/lab/studies/mountains/README.md` and `lab/out/mountains/ranges/`.
+Fixed reference images were not replaced.
 
 The shared mesh now uses the `lower` proposal (68% height, 108% spans).
 Its coordinated Renderer64 import with Terrain is recorded in

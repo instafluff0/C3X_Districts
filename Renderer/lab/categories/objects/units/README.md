@@ -31,8 +31,24 @@ for `PRTO_Settler`. The seven-action pack covers idle, run, fidget, run-stop,
 capture, founding and death. The backpack-to-pelvis socket is an offline visual
 calibration rather than confirmed source-engine attachment behavior.
 
-The opt-in `sizing`, `sizing-gameplay` and `sizing-move` cases compare a separate
-six-subject anatomy-sizing pack and 1x/2x material sampling. They use a larger
-diagnostic canvas and do not promote that pack or change production sizing.
-See [the study](../../../studies/units/README.md) for results and the long-weapon
-dirty-bounds requirement. The 192-pixel tile view is true 1.5x projection.
+Readability (user-accepted 2026-10-07, see the
+[unit readability study](../../../studies/unit_readability/README.md)):
+
+- Size: `unit_quality.json` `sizing` scales each unit so its idle silhouette
+  matches the area of its native Civ III DEFAULT sprite, read from
+  `Renderer/inventory/civ3_unit_sprite_sizes.json` (numbers only). Units without
+  a sprite take the median change of similar shapes. Regenerate the table for a
+  scenario's own art with `python3 -m Renderer.tools.asset_compiler.civ3_unit_sprites --scenario-root PATH`.
+- Look: `unit_quality.json` `look` (gain, saturation, owner ramp) is published
+  as `look_*` pack metadata and applied by the shared unit shader.
+- Shadow: one ground shadow per unit (stencil), at the shared dynamic-shadow
+  strength animated resources use.
+- Owner disc: Civ III's team-colour disc preference draws a soft owner-coloured
+  disc under units off city tiles (the user preferred it to a thin ring); see
+  the patch ledger.
+
+The Lab `units` category previews the sprite path. The live 3D path is rendered
+by the study's `sheet.py` fixture (`unit_sheet.cpp`, production `draw_real`).
+
+The older opt-in `sizing`, `sizing-gameplay` and `sizing-move` cases compare the
+six-subject anatomy-sizing study pack; see [that study](../../../studies/units/README.md).

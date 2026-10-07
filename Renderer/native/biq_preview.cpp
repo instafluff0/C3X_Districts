@@ -273,7 +273,9 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
     char activity[8]={};bool active=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_ACTIVE_VOLCANO",activity,sizeof(activity))!=0;
     std::vector<unsigned> world(std::size_t(map_width)*map_height/2,0);
     if(pickup)for(auto const& t:source_tiles)world[(std::size_t(t.y)*map_width+t.x)/2]=
-        unsigned(t.base)|(unsigned(t.real)<<8)|(t.river<<16)|(active && t.real==10 ? 1u<<24 : 0);
+        unsigned(t.base)|(unsigned(t.real)<<8)|(t.river<<16)|(active && t.real==10 ? 1u<<24 : 0)|
+        // BIQ bonus 0x10: Civ III's snow-capped mountain (game field_30 0x100000).
+        (t.real==6 && (t.bonus&0x10u) ? 1u<<26 : 0);
     QueryPerformanceCounter(&source_done);
     HMODULE module = shared_module ? shared_module : LoadLibraryA(argv[1]);
     QueryPerformanceCounter(&dll_done);
@@ -560,6 +562,10 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
     frame.tiles = tiles.data();
     frame.presentation_time_ticks = 1000000;
     frame.presentation_frequency = 1000000;
+    // Lab animation stills: an explicit visual-clock second for this frame.
+    char effect_time[24] = {};
+    if (GetEnvironmentVariableA("C3X_LAB_EFFECT_TIME", effect_time, sizeof(effect_time)))
+        frame.presentation_time_ticks = static_cast<c3x_renderer_i64>(std::atof(effect_time) * 1000000.0);
     frame.dirty_flags = C3X_RENDERER_DIRTY_ALL;
     frame.world_width_tiles = map_width;
     frame.world_height_tiles = map_height;

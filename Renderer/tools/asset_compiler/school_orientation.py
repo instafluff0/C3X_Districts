@@ -197,3 +197,52 @@ def thin_school(payload: bytes, keep: int, body_scale: float) -> tuple[bytes, li
         for joint in joints:
             result.extend(payload[palette_offset + (frame*bone_count + joint)*64:][:64])
     return bytes(result), list(chosen)
+
+
+def face_motion(payload: bytes, rest_speed: float = 1e-5) -> bytes:
+    """Turn each body of an aligned school (head along +X in every sample)
+    toward its direction of travel, sample by sample, about its own centroid.
+    Civ VI schools swim loops; held at one heading they slid sideways and
+    backwards around the loop. A body that pauses keeps its last heading.
+    """
+    magic, version, count, index_count, bone_count, frames, duration = struct.unpack_from("<8s5If", payload)
+    vertices = [list(struct.unpack_from("<8f4I4f", payload, 32 + i*64)) for i in range(count)]
+    indices = struct.unpack_from(f"<{index_count}I", payload, 32 + count*64)
+    palette_offset = 32 + count*64 + index_count*4
+    palettes = [[list(struct.unpack_from("<16f", payload, palette_offset + (frame*bone_count + joint)*64))
+                 for joint in range(bone_count)] for frame in range(frames)]
+    bodies = body_components({"vertices": [{"position": v[:3]} for v in vertices], "topology": {"indices": indices}})
+    owner = {}
+    for body, members in enumerate(bodies):
+        for i in members:
+            for joint, weight in zip(vertices[i][8:12], vertices[i][12:16]):
+                if weight > 0:
+                    if owner.setdefault(joint, body) != body:
+                        raise ValueError("school bodies share a palette; align the school first")
+    for body, members in enumerate(bodies):
+        sums = {}
+        for i in members:
+            for joint, weight in zip(vertices[i][8:12], vertices[i][12:16]):
+                if weight > 0:
+                    row = sums.setdefault(joint, [0., 0., 0., 0.])
+                    for axis, value in enumerate([*vertices[i][:3], 1.]):
+                        row[axis] += weight*value/len(members)
+        path = [[sum(sum(row[b]*palettes[frame][joint][b*4 + a] for b in range(4)) for joint, row in sums.items())
+                 for a in range(2)] for frame in range(frames)]
+        heading = 0.0
+        for frame in range(frames):
+            ahead, behind = path[(frame + 1) % frames], path[frame - 1]
+            vx, vy = ahead[0] - behind[0], ahead[1] - behind[1]
+            if math.hypot(vx, vy) > rest_speed:
+                heading = math.atan2(vy, vx)
+            c, s = math.cos(heading), math.sin(heading)
+            cx, cy = path[frame]
+            # Row vectors: move the centroid to the origin, rotate, move back.
+            turn = (c, s, 0, 0, -s, c, 0, 0, 0, 0, 1, 0, cx - cx*c + cy*s, cy - cx*s - cy*c, 0, 1)
+            for joint in sums:
+                palettes[frame][joint] = normalized_skin._multiply(palettes[frame][joint], turn)
+    result = bytearray(payload[:palette_offset])
+    for frame in range(frames):
+        for joint in range(bone_count):
+            result.extend(struct.pack("<16f", *palettes[frame][joint]))
+    return bytes(result)

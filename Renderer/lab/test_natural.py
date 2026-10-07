@@ -17,6 +17,9 @@ class NaturalInputs(unittest.TestCase):
     def test_mesh_emission_and_exclusion_queries(self):
         self.shared_probe("mesh", "248 scopes")
 
+    def test_mountain_shape_joins_ranges_and_agrees_on_edges(self):
+        self.shared_probe("mountain_shape", "shared halo samples agree")
+
     def test_canopy_clears_routes_resources_and_selects_varieties(self):
         self.shared_probe("canopy", "uncleared crowns hiding a road")
 

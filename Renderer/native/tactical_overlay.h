@@ -67,6 +67,13 @@ struct Input {
         append({{x-rx-5,y-ry-5,x+rx+5,y+ry+5},{x,y,rx,ry},{.97f,.98f,1.f,.94f},{1,1.8f,moving?1.f:0.f,0}});
         animated|=moving;
     }
+    // Civ III's team-colour disc preference: a soft owner-coloured disc under
+    // a unit, 30x15 at 128px, full colour.a inside .8 and fading out by 1.15.
+    void owner_disc(float x,float y,float native_tile_width,std::array<float,4> color){
+        if(!std::isfinite(native_tile_width)||native_tile_width<32||native_tile_width>512)throw std::runtime_error("tactical projection");
+        float scale=native_tile_width/128.f,rx=30.f*scale,ry=15.f*scale;
+        append({{x-rx*1.15f-2,y-ry*1.15f-2,x+rx*1.15f+2,y+ry*1.15f+2},{x,y,rx,ry},color,{4,0,0,0}});
+    }
     void native_line(float x0,float y0,float x1,float y1,int width,int dash,unsigned argb){
         // Native integer anchors, flat caps and caller-supplied opacity. Dash 1
         // is GL's factor-five 0xAAAA stipple; 2 is GDI+'s width-scaled Dash.

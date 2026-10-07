@@ -1,0 +1,1344 @@
+{
+ "method": "DEFAULT FLC first frame per direction; palette indices < 224; median over directions; lift = shadow (240-254) median row - body bottom row",
+ "schema": 1,
+ "tile_width": 128,
+ "units": {
+  "PRTO_AEGIS_Cruiser": {
+   "area": 1750.5,
+   "art": "AEGIS Cruiser",
+   "height": 60.5,
+   "lift": -8.5,
+   "width": 80.0
+  },
+  "PRTO_Abu": {
+   "area": 487.0,
+   "art": "King Arab",
+   "height": 47.5,
+   "lift": -7.0,
+   "width": 17.0
+  },
+  "PRTO_Aegis_Cruiser": {
+   "area": 1750.5,
+   "art": "Aegis Cruiser",
+   "height": 60.5,
+   "lift": -8.5,
+   "width": 80.0
+  },
+  "PRTO_Alexander": {
+   "area": 474.0,
+   "art": "King Greek",
+   "height": 45.0,
+   "lift": -7.0,
+   "width": 15.5
+  },
+  "PRTO_Ancient_Cavalry": {
+   "area": 1036.5,
+   "art": "Ancient Cavalry",
+   "height": 52.0,
+   "lift": -8.0,
+   "width": 41.0
+  },
+  "PRTO_Ansar_Warrior": {
+   "area": 907.5,
+   "art": "ansar warrior",
+   "height": 51.5,
+   "lift": -8.0,
+   "width": 39.5
+  },
+  "PRTO_Archer": {
+   "area": 431.0,
+   "art": "Archer",
+   "height": 42.0,
+   "lift": -4.0,
+   "width": 27.0
+  },
+  "PRTO_Army_Ancient_Times": {
+   "area": 724.5,
+   "art": "Army Ancient Times",
+   "height": 60.5,
+   "lift": -5.75,
+   "width": 24.5
+  },
+  "PRTO_Army_ERAS_Ancient_Times": {
+   "area": 724.5,
+   "art": "Army Ancient Times",
+   "height": 60.5,
+   "lift": -5.75,
+   "width": 24.5
+  },
+  "PRTO_Army_ERAS_Industrial_Age": {
+   "area": 664.5,
+   "art": "Army Industrial Ages",
+   "height": 57.0,
+   "lift": -6.0,
+   "width": 26.0
+  },
+  "PRTO_Army_ERAS_Middle_Ages": {
+   "area": 809.0,
+   "art": "Army Middle Ages",
+   "height": 59.0,
+   "lift": -4.0,
+   "width": 24.0
+  },
+  "PRTO_Army_ERAS_Modern_Era": {
+   "area": 679.5,
+   "art": "Army Modern Times",
+   "height": 57.0,
+   "lift": -5.0,
+   "width": 28.0
+  },
+  "PRTO_Army_Industrial_Ages": {
+   "area": 664.5,
+   "art": "Army Industrial Ages",
+   "height": 57.0,
+   "lift": -6.0,
+   "width": 26.0
+  },
+  "PRTO_Army_Middle_Ages": {
+   "area": 809.0,
+   "art": "Army Middle Ages",
+   "height": 59.0,
+   "lift": -4.0,
+   "width": 24.0
+  },
+  "PRTO_Army_Modern_Times": {
+   "area": 679.5,
+   "art": "Army Modern Times",
+   "height": 57.0,
+   "lift": -5.0,
+   "width": 28.0
+  },
+  "PRTO_Artillery": {
+   "area": 642.5,
+   "art": "Artillery",
+   "height": 32.0,
+   "lift": -6.0,
+   "width": 50.0
+  },
+  "PRTO_Battleship": {
+   "area": 2201.0,
+   "art": "Battleship",
+   "height": 57.5,
+   "lift": -13.5,
+   "width": 100.0
+  },
+  "PRTO_Berserk": {
+   "area": 461.0,
+   "art": "Berserk",
+   "height": 40.5,
+   "lift": -6.0,
+   "width": 28.5
+  },
+  "PRTO_Bismarck": {
+   "area": 450.5,
+   "art": "King German",
+   "height": 47.5,
+   "lift": -7.0,
+   "width": 18.0
+  },
+  "PRTO_Bomber": {
+   "area": 1436.5,
+   "art": "Bomber",
+   "height": 45.0,
+   "lift": 28.5,
+   "width": 81.0
+  },
+  "PRTO_Bowman": {
+   "area": 447.5,
+   "art": "Bowman",
+   "height": 44.0,
+   "lift": -4.5,
+   "width": 27.0
+  },
+  "PRTO_Brennus": {
+   "area": 524.0,
+   "art": "King Celtic",
+   "height": 46.0,
+   "lift": -7.0,
+   "width": 21.5
+  },
+  "PRTO_Caesar": {
+   "area": 511.0,
+   "art": "King Roman",
+   "height": 45.5,
+   "lift": -6.0,
+   "width": 19.0
+  },
+  "PRTO_Cannon": {
+   "area": 746.0,
+   "art": "Cannon",
+   "height": 38.0,
+   "lift": -5.25,
+   "width": 41.0
+  },
+  "PRTO_Caravel": {
+   "area": 1414.0,
+   "art": "Caravel",
+   "height": 55.0,
+   "lift": -3.5,
+   "width": 56.0
+  },
+  "PRTO_Carrack": {
+   "area": 2368.0,
+   "art": "Carrack",
+   "height": 81.0,
+   "lift": -10.5,
+   "width": 67.5
+  },
+  "PRTO_Carrier": {
+   "area": 3239.5,
+   "art": "Carrier",
+   "height": 64.0,
+   "lift": -13.5,
+   "width": 115.0
+  },
+  "PRTO_Catapult": {
+   "area": 1238.0,
+   "art": "Catapult",
+   "height": 48.5,
+   "lift": -5.5,
+   "width": 58.0
+  },
+  "PRTO_Catherine": {
+   "area": 861.0,
+   "art": "King Russian",
+   "height": 48.0,
+   "lift": -5.0,
+   "width": 27.0
+  },
+  "PRTO_Cavalry": {
+   "area": 1073.5,
+   "art": "Cavalry",
+   "height": 60.5,
+   "lift": -7.0,
+   "width": 41.0
+  },
+  "PRTO_Chariot": {
+   "area": 1358.0,
+   "art": "chariot",
+   "height": 74.5,
+   "lift": -9.5,
+   "width": 54.0
+  },
+  "PRTO_Charles_V": {
+   "area": 699.5,
+   "art": "King Austria",
+   "height": 48.5,
+   "lift": -8.5,
+   "width": 30.0
+  },
+  "PRTO_Chasquis_Scout": {
+   "area": 509.5,
+   "art": "Chasquis Scout",
+   "height": 49.0,
+   "lift": -9.0,
+   "width": 26.5
+  },
+  "PRTO_Cleopatra": {
+   "area": 439.0,
+   "art": "King Egyptian",
+   "height": 46.5,
+   "lift": -7.0,
+   "width": 29.0
+  },
+  "PRTO_Conquistador": {
+   "area": 1187.0,
+   "art": "Conquistador",
+   "height": 61.0,
+   "lift": -9.0,
+   "width": 46.0
+  },
+  "PRTO_Cossack": {
+   "area": 1073.5,
+   "art": "Cossack",
+   "height": 57.5,
+   "lift": -5.5,
+   "width": 41.0
+  },
+  "PRTO_Cruise_Missile": {
+   "area": 211.5,
+   "art": "Cruise Missile",
+   "height": 22.0,
+   "lift": 36.0,
+   "width": 35.0
+  },
+  "PRTO_Cruiser": {
+   "area": 1679.0,
+   "art": "Cruiser",
+   "height": 51.5,
+   "lift": -11.25,
+   "width": 84.5
+  },
+  "PRTO_Crusader": {
+   "area": 572.5,
+   "art": "Crusader",
+   "height": 45.0,
+   "lift": -8.5,
+   "width": 23.0
+  },
+  "PRTO_Curragh": {
+   "area": 477.5,
+   "art": "Curragh",
+   "height": 36.0,
+   "lift": -4.5,
+   "width": 31.0
+  },
+  "PRTO_Destroyer": {
+   "area": 1168.0,
+   "art": "Destroyer",
+   "height": 44.0,
+   "lift": -7.5,
+   "width": 72.5
+  },
+  "PRTO_Dromon": {
+   "area": 1077.0,
+   "art": "Dromon",
+   "height": 51.5,
+   "lift": -9.0,
+   "width": 45.0
+  },
+  "PRTO_Elizabeth": {
+   "area": 739.5,
+   "art": "King English",
+   "height": 49.0,
+   "lift": -8.5,
+   "width": 22.5
+  },
+  "PRTO_Enkidu_Warrior": {
+   "area": 628.5,
+   "art": "Enkidu Warrior",
+   "height": 50.0,
+   "lift": -7.5,
+   "width": 23.5
+  },
+  "PRTO_Enslaved_Worker": {
+   "area": 498.5,
+   "art": "Enslaved Worker",
+   "height": 46.0,
+   "lift": -10.0,
+   "width": 19.5
+  },
+  "PRTO_Explorer": {
+   "area": 408.0,
+   "art": "Explorer",
+   "height": 45.0,
+   "lift": -4.0,
+   "width": 19.5
+  },
+  "PRTO_F-15": {
+   "area": 1027.5,
+   "art": "F-15",
+   "height": 35.0,
+   "lift": 30.0,
+   "width": 60.0
+  },
+  "PRTO_Fighter": {
+   "area": 524.5,
+   "art": "Fighter",
+   "height": 29.0,
+   "lift": 23.0,
+   "width": 49.0
+  },
+  "PRTO_Flak": {
+   "area": 1977.5,
+   "art": "Flak",
+   "height": 61.0,
+   "lift": -16.0,
+   "width": 71.0
+  },
+  "PRTO_Frigate": {
+   "area": 2374.5,
+   "art": "Frigate",
+   "height": 69.0,
+   "lift": -3.5,
+   "width": 72.0
+  },
+  "PRTO_Galleon": {
+   "area": 2538.5,
+   "art": "Galleon",
+   "height": 68.5,
+   "lift": -4.0,
+   "width": 66.0
+  },
+  "PRTO_Galley": {
+   "area": 897.0,
+   "art": "Galley",
+   "height": 43.0,
+   "lift": -6.0,
+   "width": 43.0
+  },
+  "PRTO_Gallic_Swordsman": {
+   "area": 499.5,
+   "art": "gallic swordsman",
+   "height": 43.5,
+   "lift": -4.0,
+   "width": 32.5
+  },
+  "PRTO_Gandhi": {
+   "area": 457.5,
+   "art": "King Indian",
+   "height": 45.5,
+   "lift": -8.0,
+   "width": 20.0
+  },
+  "PRTO_Gilgamesh": {
+   "area": 553.0,
+   "art": "King Sumeria",
+   "height": 52.0,
+   "lift": -8.5,
+   "width": 24.5
+  },
+  "PRTO_Guerilla": {
+   "area": 408.5,
+   "art": "Guerilla",
+   "height": 50.0,
+   "lift": -7.0,
+   "width": 17.0
+  },
+  "PRTO_Hammurabi": {
+   "area": 620.5,
+   "art": "King Babylonian",
+   "height": 50.0,
+   "lift": -7.5,
+   "width": 17.5
+  },
+  "PRTO_Hannibal": {
+   "area": 452.0,
+   "art": "King Carthaginian",
+   "height": 43.0,
+   "lift": -7.0,
+   "width": 19.5
+  },
+  "PRTO_Helicopter": {
+   "area": 1020.5,
+   "art": "Helicopter",
+   "height": 43.0,
+   "lift": 36.5,
+   "width": 81.0
+  },
+  "PRTO_Henry": {
+   "area": 504.5,
+   "art": "King Portugal",
+   "height": 47.0,
+   "lift": -9.0,
+   "width": 20.5
+  },
+  "PRTO_Hiawatha": {
+   "area": 762.5,
+   "art": "King Iroquois",
+   "height": 59.5,
+   "lift": -9.5,
+   "width": 28.0
+  },
+  "PRTO_Holy_Relic": {
+   "area": 2172.0,
+   "art": "Holy Relic",
+   "height": 68.5,
+   "lift": -9.0,
+   "width": 76.0
+  },
+  "PRTO_Hoplite": {
+   "area": 579.0,
+   "art": "Hoplite",
+   "height": 49.0,
+   "lift": -4.5,
+   "width": 23.5
+  },
+  "PRTO_Horseman": {
+   "area": 944.5,
+   "art": "Horseman",
+   "height": 57.5,
+   "lift": -5.5,
+   "width": 40.5
+  },
+  "PRTO_Hussar": {
+   "area": 1009.5,
+   "art": "Hussar",
+   "height": 59.0,
+   "lift": -8.75,
+   "width": 39.0
+  },
+  "PRTO_Hwacha": {
+   "area": 1185.5,
+   "art": "Hwacha",
+   "height": 49.0,
+   "lift": -5.5,
+   "width": 49.5
+  },
+  "PRTO_ICBM": {
+   "area": 495.0,
+   "art": "ICBM",
+   "height": 64.0,
+   "lift": -4.0,
+   "width": 9.0
+  },
+  "PRTO_Immortals": {
+   "area": 437.5,
+   "art": "Immortals",
+   "height": 40.5,
+   "lift": -4.0,
+   "width": 22.5
+  },
+  "PRTO_Impi": {
+   "area": 655.0,
+   "art": "Impi",
+   "height": 46.0,
+   "lift": -4.0,
+   "width": 35.0
+  },
+  "PRTO_Infantry": {
+   "area": 453.0,
+   "art": "Infantry",
+   "height": 41.0,
+   "lift": -5.0,
+   "width": 27.0
+  },
+  "PRTO_Inquisitor": {
+   "area": 490.5,
+   "art": "Inquisitor",
+   "height": 42.0,
+   "lift": -6.5,
+   "width": 23.0
+  },
+  "PRTO_Ironclad": {
+   "area": 764.0,
+   "art": "Ironclad",
+   "height": 34.0,
+   "lift": -7.75,
+   "width": 59.0
+  },
+  "PRTO_Isabella": {
+   "area": 786.0,
+   "art": "King Spanish",
+   "height": 51.5,
+   "lift": -12.0,
+   "width": 31.0
+  },
+  "PRTO_Jaguar_Warrior": {
+   "area": 528.0,
+   "art": "Jaguar Warrior",
+   "height": 47.5,
+   "lift": -4.5,
+   "width": 29.5
+  },
+  "PRTO_Javelin_Thrower": {
+   "area": 747.0,
+   "art": "Javelin Thrower",
+   "height": 56.0,
+   "lift": -10.5,
+   "width": 36.0
+  },
+  "PRTO_Jet_Fighter": {
+   "area": 951.0,
+   "art": "Jet Fighter",
+   "height": 37.0,
+   "lift": 30.0,
+   "width": 65.0
+  },
+  "PRTO_Joan": {
+   "area": 542.0,
+   "art": "King French",
+   "height": 46.0,
+   "lift": -9.0,
+   "width": 23.5
+  },
+  "PRTO_Keshik": {
+   "area": 1003.0,
+   "art": "Keshik",
+   "height": 60.5,
+   "lift": -6.0,
+   "width": 38.0
+  },
+  "PRTO_King_American": {
+   "area": 460.5,
+   "art": "King American",
+   "height": 50.0,
+   "lift": -7.0,
+   "width": 15.5
+  },
+  "PRTO_King_Arab": {
+   "area": 487.0,
+   "art": "King Arab",
+   "height": 47.5,
+   "lift": -7.0,
+   "width": 17.0
+  },
+  "PRTO_King_Austria": {
+   "area": 699.5,
+   "art": "King Austria",
+   "height": 48.5,
+   "lift": -8.5,
+   "width": 30.0
+  },
+  "PRTO_King_Aztec": {
+   "area": 486.0,
+   "art": "King Aztec",
+   "height": 50.0,
+   "lift": -7.0,
+   "width": 16.5
+  },
+  "PRTO_King_Babylonian": {
+   "area": 620.5,
+   "art": "King Babylonian",
+   "height": 50.0,
+   "lift": -7.5,
+   "width": 17.5
+  },
+  "PRTO_King_Byzantines": {
+   "area": 481.5,
+   "art": "King Byzantines",
+   "height": 44.5,
+   "lift": -7.0,
+   "width": 15.0
+  },
+  "PRTO_King_Carthaginian": {
+   "area": 452.0,
+   "art": "King Carthaginian",
+   "height": 43.0,
+   "lift": -7.0,
+   "width": 19.5
+  },
+  "PRTO_King_Celtic": {
+   "area": 524.0,
+   "art": "King Celtic",
+   "height": 46.0,
+   "lift": -7.0,
+   "width": 21.5
+  },
+  "PRTO_King_Chinese": {
+   "area": 415.0,
+   "art": "King Chinese",
+   "height": 43.0,
+   "lift": -7.0,
+   "width": 14.5
+  },
+  "PRTO_King_Egyptian": {
+   "area": 439.0,
+   "art": "King Egyptian",
+   "height": 46.5,
+   "lift": -7.0,
+   "width": 29.0
+  },
+  "PRTO_King_English": {
+   "area": 739.5,
+   "art": "King English",
+   "height": 49.0,
+   "lift": -8.5,
+   "width": 22.5
+  },
+  "PRTO_King_French": {
+   "area": 542.0,
+   "art": "King French",
+   "height": 46.0,
+   "lift": -9.0,
+   "width": 23.5
+  },
+  "PRTO_King_German": {
+   "area": 450.5,
+   "art": "King German",
+   "height": 47.5,
+   "lift": -7.0,
+   "width": 18.0
+  },
+  "PRTO_King_Greek": {
+   "area": 474.0,
+   "art": "King Greek",
+   "height": 45.0,
+   "lift": -7.0,
+   "width": 15.5
+  },
+  "PRTO_King_Hatti": {
+   "area": 506.0,
+   "art": "King Hatti",
+   "height": 48.5,
+   "lift": -7.5,
+   "width": 18.5
+  },
+  "PRTO_King_Incan": {
+   "area": 686.5,
+   "art": "King Incan",
+   "height": 58.5,
+   "lift": -10.0,
+   "width": 30.0
+  },
+  "PRTO_King_Indian": {
+   "area": 457.5,
+   "art": "King Indian",
+   "height": 45.5,
+   "lift": -8.0,
+   "width": 20.0
+  },
+  "PRTO_King_Iroquois": {
+   "area": 762.5,
+   "art": "King Iroquois",
+   "height": 59.5,
+   "lift": -9.5,
+   "width": 28.0
+  },
+  "PRTO_King_Japanese": {
+   "area": 556.5,
+   "art": "King Japanese",
+   "height": 46.0,
+   "lift": -6.0,
+   "width": 19.5
+  },
+  "PRTO_King_Korean": {
+   "area": 532.5,
+   "art": "King Korean",
+   "height": 44.0,
+   "lift": -6.5,
+   "width": 17.5
+  },
+  "PRTO_King_Mayan": {
+   "area": 646.0,
+   "art": "King Mayan",
+   "height": 54.5,
+   "lift": -9.5,
+   "width": 21.0
+  },
+  "PRTO_King_Mongol": {
+   "area": 528.0,
+   "art": "King Mongol",
+   "height": 45.0,
+   "lift": -7.0,
+   "width": 22.0
+  },
+  "PRTO_King_Netherlands": {
+   "area": 989.5,
+   "art": "King Netherlands",
+   "height": 52.5,
+   "lift": -11.5,
+   "width": 42.5
+  },
+  "PRTO_King_Ottoman": {
+   "area": 570.5,
+   "art": "King Ottoman",
+   "height": 48.5,
+   "lift": -7.5,
+   "width": 17.5
+  },
+  "PRTO_King_Persian": {
+   "area": 448.0,
+   "art": "King Persian",
+   "height": 49.0,
+   "lift": -7.5,
+   "width": 15.0
+  },
+  "PRTO_King_Portugal": {
+   "area": 504.5,
+   "art": "King Portugal",
+   "height": 47.0,
+   "lift": -9.0,
+   "width": 20.5
+  },
+  "PRTO_King_Roman": {
+   "area": 511.0,
+   "art": "King Roman",
+   "height": 45.5,
+   "lift": -6.0,
+   "width": 19.0
+  },
+  "PRTO_King_Russian": {
+   "area": 861.0,
+   "art": "King Russian",
+   "height": 48.0,
+   "lift": -5.0,
+   "width": 27.0
+  },
+  "PRTO_King_Spanish": {
+   "area": 786.0,
+   "art": "King Spanish",
+   "height": 51.5,
+   "lift": -12.0,
+   "width": 31.0
+  },
+  "PRTO_King_Sumeria": {
+   "area": 553.0,
+   "art": "King Sumeria",
+   "height": 52.0,
+   "lift": -8.5,
+   "width": 24.5
+  },
+  "PRTO_King_Viking": {
+   "area": 622.5,
+   "art": "King Viking",
+   "height": 47.0,
+   "lift": -6.75,
+   "width": 26.0
+  },
+  "PRTO_King_Zulu": {
+   "area": 546.5,
+   "art": "King Zulu",
+   "height": 47.5,
+   "lift": -6.5,
+   "width": 26.0
+  },
+  "PRTO_Knight": {
+   "area": 1057.5,
+   "art": "Knight",
+   "height": 53.0,
+   "lift": -6.5,
+   "width": 43.5
+  },
+  "PRTO_Leader_Ancient_Times": {
+   "area": 635.0,
+   "art": "Leader Ancient Times",
+   "height": 49.0,
+   "lift": -4.0,
+   "width": 23.5
+  },
+  "PRTO_Leader_ERAS_Ancient_Times": {
+   "area": 635.0,
+   "art": "Leader Ancient Times",
+   "height": 49.0,
+   "lift": -4.0,
+   "width": 23.5
+  },
+  "PRTO_Leader_ERAS_Industrial_Age": {
+   "area": 441.5,
+   "art": "Leader Industrial Ages",
+   "height": 44.0,
+   "lift": -5.0,
+   "width": 18.0
+  },
+  "PRTO_Leader_ERAS_Middle_Ages": {
+   "area": 665.0,
+   "art": "Leader Middle Ages",
+   "height": 46.0,
+   "lift": -3.0,
+   "width": 32.5
+  },
+  "PRTO_Leader_ERAS_Modern_Era": {
+   "area": 443.0,
+   "art": "Leader Modern Times",
+   "height": 45.0,
+   "lift": -5.0,
+   "width": 21.5
+  },
+  "PRTO_Leader_Industrial_Ages": {
+   "area": 441.5,
+   "art": "Leader Industrial Ages",
+   "height": 44.0,
+   "lift": -5.0,
+   "width": 18.0
+  },
+  "PRTO_Leader_Middle_Ages": {
+   "area": 665.0,
+   "art": "Leader Middle Ages",
+   "height": 46.0,
+   "lift": -3.0,
+   "width": 32.5
+  },
+  "PRTO_Leader_Modern_Times": {
+   "area": 443.0,
+   "art": "Leader Modern Times",
+   "height": 45.0,
+   "lift": -5.0,
+   "width": 21.5
+  },
+  "PRTO_Leader_SCI": {
+   "area": 510.5,
+   "art": "SciLeader",
+   "height": 46.0,
+   "lift": -8.5,
+   "width": 21.5
+  },
+  "PRTO_Legionary": {
+   "area": 492.0,
+   "art": "Legionary",
+   "height": 44.0,
+   "lift": -4.0,
+   "width": 22.5
+  },
+  "PRTO_Libyan_Mercenary": {
+   "area": 539.5,
+   "art": "Libyan Mercenary",
+   "height": 57.5,
+   "lift": -8.75,
+   "width": 23.5
+  },
+  "PRTO_Lincoln": {
+   "area": 460.5,
+   "art": "King American",
+   "height": 50.0,
+   "lift": -7.0,
+   "width": 15.5
+  },
+  "PRTO_Longbowman": {
+   "area": 488.0,
+   "art": "Longbowman",
+   "height": 49.5,
+   "lift": -4.0,
+   "width": 21.5
+  },
+  "PRTO_Man-O-War": {
+   "area": 3082.5,
+   "art": "Man-O-War",
+   "height": 74.0,
+   "lift": -3.5,
+   "width": 82.5
+  },
+  "PRTO_Mao": {
+   "area": 415.0,
+   "art": "King Chinese",
+   "height": 43.0,
+   "lift": -7.0,
+   "width": 14.5
+  },
+  "PRTO_Marine": {
+   "area": 442.5,
+   "art": "Marine",
+   "height": 41.0,
+   "lift": -5.0,
+   "width": 24.0
+  },
+  "PRTO_Mech_Infantry": {
+   "area": 1891.0,
+   "art": "Mech Infantry",
+   "height": 48.5,
+   "lift": -3.0,
+   "width": 67.5
+  },
+  "PRTO_Medieval_Infantry": {
+   "area": 547.5,
+   "art": "Medieval Infantry",
+   "height": 42.5,
+   "lift": -5.5,
+   "width": 25.0
+  },
+  "PRTO_Mobile_SAM": {
+   "area": 1571.0,
+   "art": "Mobile SAM",
+   "height": 45.0,
+   "lift": -5.75,
+   "width": 57.5
+  },
+  "PRTO_Modern_Armor": {
+   "area": 1901.0,
+   "art": "Modern Armor",
+   "height": 49.5,
+   "lift": -2.0,
+   "width": 71.5
+  },
+  "PRTO_Montezuma": {
+   "area": 486.0,
+   "art": "King Aztec",
+   "height": 50.0,
+   "lift": -7.0,
+   "width": 16.5
+  },
+  "PRTO_Mounted_Warrior": {
+   "area": 1084.5,
+   "art": "Mounted Warrior",
+   "height": 58.0,
+   "lift": -6.0,
+   "width": 39.5
+  },
+  "PRTO_Mursilis": {
+   "area": 506.0,
+   "art": "King Hatti",
+   "height": 48.5,
+   "lift": -7.5,
+   "width": 18.5
+  },
+  "PRTO_Musketeer": {
+   "area": 513.0,
+   "art": "Musketeer",
+   "height": 46.5,
+   "lift": -4.0,
+   "width": 22.0
+  },
+  "PRTO_Musketman": {
+   "area": 459.0,
+   "art": "Musketman",
+   "height": 48.5,
+   "lift": -5.0,
+   "width": 20.5
+  },
+  "PRTO_NUKE": {
+   "area": 257.0,
+   "art": "Tactical Nuke",
+   "height": 48.0,
+   "lift": -3.0,
+   "width": 6.0
+  },
+  "PRTO_Ninja": {
+   "area": 398.0,
+   "art": "Ninja",
+   "height": 42.0,
+   "lift": -6.0,
+   "width": 26.5
+  },
+  "PRTO_Nuclear_Submarine": {
+   "area": 632.0,
+   "art": "Nuclear Submarine",
+   "height": 41.0,
+   "lift": 0.0,
+   "width": 63.0
+  },
+  "PRTO_Osman": {
+   "area": 570.5,
+   "art": "King Ottoman",
+   "height": 48.5,
+   "lift": -7.5,
+   "width": 17.5
+  },
+  "PRTO_Pachacuti": {
+   "area": 686.5,
+   "art": "King Incan",
+   "height": 58.5,
+   "lift": -10.0,
+   "width": 30.0
+  },
+  "PRTO_Panzer": {
+   "area": 2003.5,
+   "art": "Panzer",
+   "height": 47.0,
+   "lift": -4.0,
+   "width": 69.5
+  },
+  "PRTO_Paratrooper": {
+   "area": 405.0,
+   "art": "Paratrooper",
+   "height": 40.5,
+   "lift": -4.5,
+   "width": 20.0
+  },
+  "PRTO_Pikeman": {
+   "area": 494.5,
+   "art": "Pikeman",
+   "height": 55.0,
+   "lift": -4.5,
+   "width": 22.0
+  },
+  "PRTO_Princess": {
+   "area": 472.5,
+   "art": "Princess",
+   "height": 46.0,
+   "lift": -4.5,
+   "width": 18.5
+  },
+  "PRTO_Privateer": {
+   "area": 1724.0,
+   "art": "Privateer",
+   "height": 64.5,
+   "lift": -6.25,
+   "width": 64.0
+  },
+  "PRTO_Radar_Artillery": {
+   "area": 1604.5,
+   "art": "Radar Artillery",
+   "height": 43.5,
+   "lift": -3.0,
+   "width": 55.0
+  },
+  "PRTO_Ragnar": {
+   "area": 622.5,
+   "art": "King Viking",
+   "height": 47.0,
+   "lift": -6.75,
+   "width": 26.0
+  },
+  "PRTO_Rider": {
+   "area": 1059.0,
+   "art": "Rider",
+   "height": 54.5,
+   "lift": -6.0,
+   "width": 40.5
+  },
+  "PRTO_Rifleman": {
+   "area": 446.5,
+   "art": "Rifleman",
+   "height": 45.0,
+   "lift": -4.0,
+   "width": 21.0
+  },
+  "PRTO_Samurai": {
+   "area": 493.0,
+   "art": "Samurai",
+   "height": 41.5,
+   "lift": -3.5,
+   "width": 21.0
+  },
+  "PRTO_SciLeader": {
+   "area": 510.5,
+   "art": "SciLeader",
+   "height": 46.0,
+   "lift": -8.5,
+   "width": 21.5
+  },
+  "PRTO_Scout": {
+   "area": 383.0,
+   "art": "Scout",
+   "height": 41.0,
+   "lift": -4.0,
+   "width": 19.0
+  },
+  "PRTO_Settler": {
+   "area": 488.5,
+   "art": "Settler",
+   "height": 45.0,
+   "lift": -5.5,
+   "width": 24.0
+  },
+  "PRTO_Settler_ERAS_Industrial_Age": {
+   "area": 478.5,
+   "art": "Settler Modern Times",
+   "height": 43.5,
+   "lift": -5.0,
+   "width": 23.5
+  },
+  "PRTO_Settler_ERAS_Modern_Era": {
+   "area": 478.5,
+   "art": "Settler Modern Times",
+   "height": 43.5,
+   "lift": -5.0,
+   "width": 23.5
+  },
+  "PRTO_Settler_Modern_Times": {
+   "area": 478.5,
+   "art": "Settler Modern Times",
+   "height": 43.5,
+   "lift": -5.0,
+   "width": 23.5
+  },
+  "PRTO_Shaka": {
+   "area": 546.5,
+   "art": "King Zulu",
+   "height": 47.5,
+   "lift": -6.5,
+   "width": 26.0
+  },
+  "PRTO_Shogun": {
+   "area": 584.0,
+   "art": "Shogun",
+   "height": 47.5,
+   "lift": -6.25,
+   "width": 29.5
+  },
+  "PRTO_Sipahi": {
+   "area": 1011.5,
+   "art": "Sipahi",
+   "height": 55.0,
+   "lift": -7.0,
+   "width": 41.0
+  },
+  "PRTO_Smoke-Jaguar": {
+   "area": 646.0,
+   "art": "King Mayan",
+   "height": 54.5,
+   "lift": -9.5,
+   "width": 21.0
+  },
+  "PRTO_Spearman": {
+   "area": 516.0,
+   "art": "Spearman",
+   "height": 44.5,
+   "lift": -4.0,
+   "width": 24.5
+  },
+  "PRTO_Stealth_Bomber": {
+   "area": 1037.0,
+   "art": "Stealth Bomber",
+   "height": 38.0,
+   "lift": 28.0,
+   "width": 76.0
+  },
+  "PRTO_Stealth_Fighter": {
+   "area": 851.5,
+   "art": "Stealth Fighter",
+   "height": 30.0,
+   "lift": 30.0,
+   "width": 61.5
+  },
+  "PRTO_Submarine": {
+   "area": 760.5,
+   "art": "Submarine",
+   "height": 38.5,
+   "lift": -19.5,
+   "width": 63.0
+  },
+  "PRTO_Swiss_Mercenary": {
+   "area": 541.0,
+   "art": "Swiss Mercenary",
+   "height": 66.0,
+   "lift": -8.5,
+   "width": 20.0
+  },
+  "PRTO_Swordsman": {
+   "area": 471.5,
+   "art": "Swordsman",
+   "height": 44.5,
+   "lift": -4.0,
+   "width": 25.5
+  },
+  "PRTO_TOW_Infantry": {
+   "area": 1128.5,
+   "art": "TOW Infantry",
+   "height": 52.5,
+   "lift": -13.0,
+   "width": 49.5
+  },
+  "PRTO_Tactical_Nuke": {
+   "area": 257.0,
+   "art": "Tactical Nuke",
+   "height": 48.0,
+   "lift": -3.0,
+   "width": 6.0
+  },
+  "PRTO_Tank": {
+   "area": 1941.0,
+   "art": "Tank",
+   "height": 46.5,
+   "lift": -3.0,
+   "width": 64.0
+  },
+  "PRTO_Temujin": {
+   "area": 528.0,
+   "art": "King Mongol",
+   "height": 45.0,
+   "lift": -7.0,
+   "width": 22.0
+  },
+  "PRTO_The_King": {
+   "area": 532.5,
+   "art": "The King",
+   "height": 45.0,
+   "lift": -7.0,
+   "width": 27.0
+  },
+  "PRTO_Theodora": {
+   "area": 481.5,
+   "art": "King Byzantines",
+   "height": 44.5,
+   "lift": -7.0,
+   "width": 15.0
+  },
+  "PRTO_Three_Man_Chariot": {
+   "area": 2430.5,
+   "art": "Three Man Chariot",
+   "height": 76.5,
+   "lift": -11.5,
+   "width": 74.0
+  },
+  "PRTO_Tokugawa": {
+   "area": 556.5,
+   "art": "King Japanese",
+   "height": 46.0,
+   "lift": -6.0,
+   "width": 19.5
+  },
+  "PRTO_Transport": {
+   "area": 971.5,
+   "art": "Transport",
+   "height": 37.5,
+   "lift": -1.5,
+   "width": 52.5
+  },
+  "PRTO_Trebuchet": {
+   "area": 2232.5,
+   "art": "Trebuchet",
+   "height": 64.0,
+   "lift": -13.5,
+   "width": 73.0
+  },
+  "PRTO_WWII_Paratrooper": {
+   "area": 455.5,
+   "art": "WWII Paratrooper",
+   "height": 44.0,
+   "lift": -7.0,
+   "width": 20.5
+  },
+  "PRTO_Wang": {
+   "area": 532.5,
+   "art": "King Korean",
+   "height": 44.0,
+   "lift": -6.5,
+   "width": 17.5
+  },
+  "PRTO_War_Chariot": {
+   "area": 1774.5,
+   "art": "War Chariot",
+   "height": 69.0,
+   "lift": -9.5,
+   "width": 63.0
+  },
+  "PRTO_War_Elephant": {
+   "area": 2189.5,
+   "art": "War Elephant",
+   "height": 68.0,
+   "lift": -9.0,
+   "width": 59.5
+  },
+  "PRTO_Warrior": {
+   "area": 463.0,
+   "art": "Warrior",
+   "height": 40.0,
+   "lift": -5.0,
+   "width": 26.0
+  },
+  "PRTO_William_of_Orange": {
+   "area": 989.5,
+   "art": "King Netherlands",
+   "height": 52.5,
+   "lift": -11.5,
+   "width": 42.5
+  },
+  "PRTO_Worker": {
+   "area": 395.0,
+   "art": "Worker",
+   "height": 42.5,
+   "lift": -4.5,
+   "width": 26.0
+  },
+  "PRTO_Worker_ERAS_Industrial_Age": {
+   "area": 442.5,
+   "art": "Worker Modern Times",
+   "height": 41.5,
+   "lift": -4.0,
+   "width": 27.0
+  },
+  "PRTO_Worker_ERAS_Modern_Era": {
+   "area": 442.5,
+   "art": "Worker Modern Times",
+   "height": 41.5,
+   "lift": -4.0,
+   "width": 27.0
+  },
+  "PRTO_Worker_Modern_Times": {
+   "area": 442.5,
+   "art": "Worker Modern Times",
+   "height": 41.5,
+   "lift": -4.0,
+   "width": 27.0
+  },
+  "PRTO_Worker_SLAVE": {
+   "area": 498.5,
+   "art": "Enslaved Worker",
+   "height": 46.0,
+   "lift": -10.0,
+   "width": 19.5
+  },
+  "PRTO_Xerxes": {
+   "area": 448.0,
+   "art": "King Persian",
+   "height": 49.0,
+   "lift": -7.5,
+   "width": 15.0
+  },
+  "PRTO_chariot": {
+   "area": 1358.0,
+   "art": "chariot",
+   "height": 74.5,
+   "lift": -9.5,
+   "width": 54.0
+  },
+  "PRTO_warrior": {
+   "area": 463.0,
+   "art": "warrior",
+   "height": 40.0,
+   "lift": -5.0,
+   "width": 26.0
+  }
+ }
+}

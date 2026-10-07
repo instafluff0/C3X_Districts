@@ -30,7 +30,8 @@
       "native-plants",
       "native-animals",
       "native-specials",
-      "native-mountain-minerals"
+      "native-mountain-minerals",
+      "oasis-roads"
     ]
   },
   "tests": [
@@ -48,7 +49,8 @@
     "Renderer.tools.test_overlay_resource_shading",
     "Renderer.tools.asset_compiler.test_school_orientation",
     "Renderer.tools.asset_compiler.test_herd_spacing",
-    "Renderer.native.test_resource_decal_slope"
+    "Renderer.native.test_resource_decal_slope",
+    "Renderer.native.test_resource_route_clearance"
   ],
   "references": {
     "d3d11": [

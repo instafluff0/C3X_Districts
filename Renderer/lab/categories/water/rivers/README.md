@@ -37,6 +37,12 @@ for game integration.
 At the mouth, the river surface alpha now fades across the optical shore so
 the ocean remains visible under the last reach instead of a solid blue cap.
 
+The current river (accepted 2026-10-07; see `Renderer/lab/studies/rivers/`)
+sorts on the natural terrain depth basis and writes no depth, so banks never
+cover bridges, farms or routes. Its water uses the sea's optics (Fresnel sky,
+mirrored scene, sun and moon glare), drifting stream lines, a damp darkened
+waterline with gravel, and a small delta at each mouth.
+
 `standard.json` identifies the shared implementation, dependencies, fixture recipe
 and focused regression tests. The current checkout is authoritative.
 Reference captures reproduce production using small synthetic diagnostic scenes;

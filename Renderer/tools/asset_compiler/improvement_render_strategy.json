@@ -15,6 +15,12 @@
         "source_entries": ["IMP_Mine_IND", "IMP_Mine_IND_02", "IMP_Mine_IND_03"]
       }
     ],
+    "runtime_building": {
+      "source_entry": "IMP_MINE_ANC_Bld_C",
+      "scale": 1.2,
+      "facing_degrees": 135.0,
+      "note": "User choice 2026-10-07: Civ VI's Mine AN 03 main building (timber headframe and ore house), alone, for every era, at 1.2x Civ VI size (chosen after comparing 2.0x, 1.6x and 1.4x on the 1498 AD save). Its Civ VI front faces the C3X camera. The renderer seats it on the visible ground: 0.9x on hills, 0.75x at a mountain's camera-facing foot."
+    },
     "runtime": {
       "selection_seed": ["world_seed", "map_x", "map_y", "civ3_era"],
       "variant_policy": "stable_hash",

@@ -2,7 +2,11 @@ cbuffer Caster : register(b0) { float4 U;float4 V;float4 L;float4 page;float4 of
 struct Input { float2 uv:TEXCOORD0;float material:TEXCOORD1;float4 world:TEXCOORD2;float coverage:TEXCOORD3;float4 owner:TEXCOORD4; };
 struct Pixel { float4 position:SV_POSITION;float2 uv:TEXCOORD0;nointerpolation float material:TEXCOORD1;float depth:TEXCOORD2;float coverage:TEXCOORD3;float boundary:TEXCOORD4;float4 volcano:TEXCOORD5; };
 Pixel VS(Input i) { i.world.xyz+=offset.xyz;Pixel o;o.position=float4((dot(i.world.xyz,U.xyz)/6-page.x)*2-1,
- 1-(dot(i.world.xyz,V.xyz)/6-page.y)*2,.5,1);o.uv=i.uv;o.material=i.material;o.depth=dot(i.world.xyz,L.xyz);o.coverage=i.coverage;o.boundary=i.material;o.volcano=float4(i.owner.xy,i.owner.z,i.world.z);return o; }
+ 1-(dot(i.world.xyz,V.xyz)/6-page.y)*2,.5,1);o.uv=i.uv;o.material=i.material;o.depth=dot(i.world.xyz,L.xyz);o.coverage=i.coverage;o.boundary=i.material;
+ // The relief grid's coverage channel is hill support: hills cast by it.
+ // Mountains cast by their rise above the ground beneath (world.w = 1 +
+ // that ground), as the visible mountain shader measures it.
+ if(i.material>=42 && i.material<=43.001)o.boundary=i.world.z-max(0,i.world.w-1)-2.5/112;o.volcano=float4(i.owner.xy,i.owner.z,i.world.z);return o; }
 Texture2D source0:register(t0);
 Texture2D source1:register(t1);
 Texture2D source2:register(t2);
@@ -83,7 +87,7 @@ float PSCutout(Pixel i):SV_TARGET {
   // same coast/source-family coverage as the visible premultiplied pass.
   clip(i.material-42-.001);
   bool volcano_body=i.volcano.z>.5 && i.volcano.w>.045 && all(abs(i.volcano.xy)<.80);
-  if(!volcano_body)clip(smoothstep(.08,.72,i.coverage)-.45);return i.depth;
+  if(!volcano_body)clip(max(smoothstep(.08,.72,i.coverage)-.45,i.boundary-.012));return i.depth;
  }
  if(i.material>=40) {
   uint w,h;natural_opacity.GetDimensions(w,h);

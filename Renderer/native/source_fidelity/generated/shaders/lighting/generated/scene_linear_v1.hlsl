@@ -1238,13 +1238,13 @@ float4 q6_raw_main(PixelInput input)
             // earthy worn bed (its noise from that dirt piece) settles the
             // track into the ground; the ballast fades in over it, and the
             // sleepers and steel stand on the ballast. The railroad strip
-            // reaches two stroke widths, so it has its own geometry-edge cut.
+            // reaches 1.65 stroke widths, so it has its own geometry-edge cut.
             float edge = abs(across);
-            float rail_cut = saturate((1.95 - edge) / max(fwidth(edge), 0.0001) + 0.5) *
+            float rail_cut = saturate((1.60 - edge) / max(fwidth(edge), 0.0001) + 0.5) *
                 (1.0 - saturate(input.material_weights.z));
             float dirt_noise = road_base_texture_0.Sample(material_sampler,
                 float2(input.uv.x * 0.25, 0.948 + across * 0.012)).a;
-            float dirt_height = (1.0 - smoothstep(0.45, 1.90, edge)) * (0.55 + 0.90 * dirt_noise);
+            float dirt_height = (1.0 - smoothstep(0.45, 1.58, edge)) * (0.55 + 0.90 * dirt_noise);
             float dirt_cover = saturate((dirt_height - 0.50 * pattern_ground - 0.02) / 0.55);
             float ballast_cover = saturate((bed.a * (1.0 - smoothstep(0.55, 1.15, edge)) -
                                             0.35 * pattern_ground - 0.04) / 0.30);

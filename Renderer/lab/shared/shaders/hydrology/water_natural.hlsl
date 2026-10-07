@@ -88,6 +88,9 @@ float4 q3_natural_water(PixelInput input) {
  float4 object=q3_object_reflection_texture.Sample(decal_sampler,reflected_uv+distortion);
  float inside=step(0,reflected_uv.x)*step(reflected_uv.x,1)*step(0,reflected_uv.y)*step(reflected_uv.y,1);
  float object_coverage=saturate(object.a)*inside;
+ // Mirrored terrain adds color without coverage (rivers reflect only standing
+ // objects); the sea still reflects coastal land.
+ object_coverage=max(object_coverage,step(1e-6,max(object.r,max(object.g,object.b)))*inside);
  sky=sky*(1-object_coverage)+object.rgb*inside;
 #endif
  float2 world=q3_source_world(input)+Q3_NATURAL_COORD_SHIFT;

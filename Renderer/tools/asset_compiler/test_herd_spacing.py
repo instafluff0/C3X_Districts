@@ -1,4 +1,4 @@
-"""Members of a baked animal herd never touch and stay inside their tile.
+"""Members of a baked animal herd never touch, and every animal stays inside its tile.
 
 Herds face outward from their centre, so members placed too close meet at the
 hindquarters. Each member's footprint is swept over its whole clip (grazing
@@ -66,8 +66,8 @@ def herd_spacing(report, bindings):
                 margins.append(min(body.min(), 1 - body.max()))
                 for other in bodies[a + 1:]:
                     gaps.append(np.sqrt(((body[:, None] - other[None]) ** 2).sum(-1)).min())
-        if len(gaps):
-            result[name] = (min(gaps), min(margins))
+        if len(margins):
+            result[name] = (min(gaps) if gaps else float("inf"), min(margins))
     return result
 
 

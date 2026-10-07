@@ -16,6 +16,8 @@ struct Chunk {
     unsigned source_model=~0u,source_part=~0u;
     WorldInstance placement;
     bool terrain_conforming=false;
+    // Attached effect quads follow the visual clock and redraw per frame.
+    bool effect=false;
 };
 struct Surfaces {std::vector<Chunk> chunks;};
 template<class World,class Shore,class River,class Height>
@@ -80,16 +82,96 @@ Composition const* select(Library const& library,c3x_renderer_tile_v1 const& rec
     }
     return nullptr;
 }
+// A site-optional body (version-five packs) yields when its footprint reaches
+// water or a mountain tile, comes within clearance[3] source pixels of a river
+// centreline, within clearance[0] tiles of the shore, or spans more than
+// clearance[1] relief units. Bridges stand over river channels, so the river
+// clearance also keeps them open. Unflagged bodies are always kept.
+template<class World,class Shore,class River,class Height>
+bool site_keeps(Composition const& composition,Instance const& i,int nc,int nr,
+        World world_lookup,Shore shore_sample_at,River river_distance,Height height_natural){
+    if(!(i.flags&instance_site_optional))return true;
+    float cx=float(nc)+.5f+i.offset[0],cy=float(nr)+.5f-i.offset[1];
+    float x0=cx+i.bounds[0],x1=cx+i.bounds[2],y0=cy-i.bounds[3],y1=cy-i.bounds[1];
+    for(int row=int(std::floor(y0));row<=int(std::floor(y1));++row)
+        for(int column=int(std::floor(x0));column<=int(std::floor(x1));++column){
+            auto land=world_lookup(column,row);
+            if(land.base<0 || land.base>=11 || land.real==6 || land.real==10)return false;
+        }
+    unsigned across=std::clamp(unsigned(std::ceil((x1-x0)/.04f)),1u,12u);
+    unsigned deep=std::clamp(unsigned(std::ceil((y1-y0)/.04f)),1u,12u);
+    float low=1e9f,high=-1e9f;
+    for(unsigned b=0;b<=deep;++b)for(unsigned a=0;a<=across;++a){
+        float x=x0+(x1-x0)*float(a)/float(across),y=y0+(y1-y0)*float(b)/float(deep);
+        if(shore_sample_at(x,y).distance<composition.clearance[0])return false;
+        if(composition.clearance[3]>0 && river_distance(x,y)<composition.clearance[3])return false;
+        float h=height_natural(x,y);low=std::min(low,h);high=std::max(high,h);
+    }
+    return high-low<=composition.clearance[1];
+}
+// The ground plate of a site-aware composition fades out over water and
+// mountain tiles and toward the same shore and river clearances as its bodies.
+template<class World,class Shore,class River>
+float site_ground(Composition const& composition,float x,float y,World world_lookup,Shore shore_sample_at,River river_distance){
+    auto land=world_lookup(int(std::floor(x)),int(std::floor(y)));
+    if(land.base<0 || land.base>=11 || land.real==6 || land.real==10)return 0.f;
+    auto ramp=[](float value,float low,float high){
+        float t=std::clamp((value-low)/(high-low),0.f,1.f);return t*t*(3.f-2.f*t);};
+    float shore=float(shore_sample_at(x,y).distance);
+    float coverage=ramp(shore,composition.clearance[0],composition.clearance[0]+.06f);
+    if(composition.clearance[3]>0)
+        coverage=std::min(coverage,ramp(float(river_distance(x,y)),composition.clearance[3]-2.f,composition.clearance[3]+4.f));
+    return coverage;
+}
 struct ContinueCompilation {bool operator()()const{return false;}};
-template<class Height,class Project,class Stop=ContinueCompilation>
+// Packs before version five carry no site flags: every body and the complete
+// ground plate are kept.
+struct EverySite {
+    bool keep(Instance const&)const{return true;}
+    float ground(float,float)const{return 1.f;}
+};
+template<class World,class Shore,class River,class Height>
+struct SiteFilter {
+    Composition const& composition;int nc,nr;World world;Shore shore;River river;Height height;
+    // Most sites have no water or mountain within reach of the plate: one
+    // centre/neighbour test then spares a query per plate vertex.
+    mutable int clear=-1;
+    bool keep(Instance const& i)const{return site_keeps(composition,i,nc,nr,world,shore,river,height);}
+    float ground(float x,float y)const{
+        if(!composition.site_aware)return 1.f;
+        if(clear<0){
+            float cx=float(nc)+.5f,cy=float(nr)+.5f,reach=1.3f; // plate stays within ~0.9 tile per axis
+            clear=float(shore(cx,cy).distance)>composition.clearance[0]+reach+.06f &&
+                (composition.clearance[3]<=0 || float(river(cx,cy))>composition.clearance[3]+4.f+reach*64.f);
+            for(int r=nr-1;r<=nr+1 && clear;++r)for(int c=nc-1;c<=nc+1 && clear;++c){
+                auto land=world(c,r);
+                if(land.base<0 || land.base>=11 || land.real==6 || land.real==10)clear=0;
+            }
+        }
+        return clear?1.f:site_ground(composition,x,y,world,shore,river);
+    }
+};
+template<class World,class Shore,class River,class Height>
+SiteFilter<World,Shore,River,Height> site_filter(Composition const& composition,int nc,int nr,
+        World world,Shore shore,River river,Height height){
+    return {composition,nc,nr,world,shore,river,height};
+}
+template<class Height,class Project,class Stop=ContinueCompilation,class Site=EverySite>
 bool compile(Library const& library,Composition const& selected,int nc,int nr,
-        Height height_natural,Project project_natural,Surfaces& output,Stop stop={},bool indexed=false){
+        Height height_natural,Project project_natural,Surfaces& output,Stop stop={},bool indexed=false,Site site={}){
     auto composition=&selected;
     auto lighting=std::make_shared<Lighting>();
+    // Attached effects, in world space, become camera-facing quads after the
+    // bodies they belong to.
+    struct Anchor {float world[3];Effect effect;};
+    std::vector<Anchor> anchors;
     lighting->blockers.reserve(composition->instances.size());
     for(unsigned owner_index=0;owner_index<composition->instances.size();owner_index++){
         if(stop())return false;
         auto const&i=composition->instances[owner_index];auto const&m=library.models[i.model];
+        if(!site.keep(i))continue;
+        // Lights name their own body's blocker, so skipped bodies leave no gap.
+        unsigned const owner=unsigned(lighting->blockers.size());
         float center_x=float(nc)+.5f+i.offset[0],center_y=float(nr)+.5f-i.offset[1];
         float ground_center=height_natural(center_x,center_y);
         float x_low=center_x+i.bounds[0],x_high=center_x+i.bounds[2];
@@ -111,7 +193,8 @@ bool compile(Library const& library,Composition const& selected,int nc,int nr,
         float lowest_source=std::min(0.f,m.low[2]*i.scale/source_z_metric);
         auto placement=place(i,float(nc)+.5f,float(nr)+.5f,
                              terrace?ground_high-lowest_source+.02f:ground_center);
-        for(auto const&l:i.lights)lighting->lights.push_back(placement.light(l,owner_index));
+        for(auto const&l:i.lights)lighting->lights.push_back(placement.light(l,owner));
+        for(auto const&e:i.effects){Anchor a;placement.position(e.position,a.world);a.effect=e;anchors.push_back(a);}
         Lighting::Box b={{placement.x+i.bounds[0],-placement.y+i.bounds[1],
             placement.z*source_z_metric+std::max(0.f,m.low[2])*i.scale,0},
             {placement.x+i.bounds[2],-placement.y+i.bounds[3],placement.z*source_z_metric+m.high[2]*i.scale,0}};
@@ -245,13 +328,44 @@ bool compile(Library const& library,Composition const& selected,int nc,int nr,
             out.u=x/p.period[0];out.v=y/p.period[1];
             // A paving material with source normal detail uses a distinct
             // shader tag. The coverage still controls its feathered edge.
-            out.base_terrain=((library.materials[p.material].channels&2u)?64.f:62.f)+v.coverage;
+            out.base_terrain=((library.materials[p.material].channels&2u)?64.f:62.f)+v.coverage*site.ground(x,y);
             transformed.push_back(out);
         }
         if(indexed){chunk.vertices=std::move(transformed);chunk.indices.assign(p.indices.begin(),p.indices.end());}
         else for(unsigned vertex_index:p.indices)chunk.vertices.push_back(transformed[vertex_index]);
         // Paving precedes the source ground and bodies; depth is read-only.
         output.chunks.insert(output.chunks.begin(),std::move(chunk));
+    }
+    if(!anchors.empty() && library.effect_material<library.materials.size() &&
+       library.materials[library.effect_material].ground){
+        // Screen-aligned quads in world space: (+1,+1) in column/row moves
+        // only across the screen and height only up it, so every projection
+        // path places these exactly as it places the bodies. Read-only depth
+        // and the ground material keep them out of shadows and depth writes.
+        Chunk chunk;chunk.material=library.effect_material;chunk.lighting=lighting;chunk.terrain_conforming=true;
+        chunk.effect=true;
+        std::vector<fidelity::MapVertex> corners;
+        for(auto const& a:anchors){
+            auto const& e=a.effect;
+            float half=e.width*.5f,low=e.kind==float(effect_smoke)?0.f:-.5f*e.height,high=low+e.height;
+            float uv[4][2]={{-1,0},{1,0},{1,1},{-1,1}};
+            unsigned base=unsigned(corners.size());
+            for(auto const& c:uv){
+                float x=a.world[0]+c[0]*half,y=a.world[1]+c[0]*half,z=a.world[2]+(c[1]?high:low);
+                auto out=project_natural(x,y,z*112);
+                out.u=c[0];out.v=c[1];out.normal_x=out.normal_y=0;out.normal_z=1;
+                out.macro_u=e.seed;out.macro_v=e.intensity;
+                out.material_grass=1;out.material_plains=out.material_desert=out.material_marsh=0;
+                out.authored_relief_height=out.authored_relief_blend=0;
+                out.relief_owner_u=e.width;out.relief_owner_v=e.height;
+                out.base_terrain=90.f+e.kind;corners.push_back(out);
+            }
+            unsigned quad[]={base,base+1,base+2,base,base+2,base+3};
+            chunk.indices.insert(chunk.indices.end(),std::begin(quad),std::end(quad));
+        }
+        if(indexed)chunk.vertices=std::move(corners);
+        else {for(unsigned index:chunk.indices)chunk.vertices.push_back(corners[index]);chunk.indices.clear();}
+        output.chunks.push_back(std::move(chunk));
     }
     return !stop();
 }

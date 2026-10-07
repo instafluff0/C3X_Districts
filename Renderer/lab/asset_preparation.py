@@ -60,19 +60,20 @@ def jobs():
                 for p in (ROOT / "Renderer/lab/shared/cities").glob("*.py")}
 
     def city_sources():
+        # The readability builder recomposes the frozen pre-readability library
+        # (the retired recipe builder's intermediates no longer exist). Its
+        # receipt holds the full read closure: frozen library, style, accent
+        # and palace meshes, materials, textures and the ground cache.
         record = ROOT / "Renderer/lab/.cache/assets/cities.json"
         if record.exists():
-            # Full observed read closure, including meshes and catalog files,
-            # not only the older pack manifest's material/source-normal pins.
             sources = json.loads(record.read_text())["inputs"]
-        else:
-            sources = json.loads((ROOT / "Renderer/packs/CityCompositionRuntime/manifest.json").read_text())["source_sha256"]
-        from Renderer.tools.prepare_city_recipes import recipe_sources
-        sources={p:h for p,h in sources.items() if not p.startswith("Renderer/lab/out/cities/integration/")}
-        return dict(sources, **recipe_sources())
+            if "Renderer/packs/CityCompositionFrozen/city.bin" in sources:
+                return sources
+        from Renderer.lab.studies.city_readability.recompose import declared_sources
+        return dict(declared_sources(), **city_helpers())
 
     def build_cities(stage):
-        from Renderer.tools.prepare_city_recipes import build
+        from Renderer.lab.studies.city_readability.recompose import build
         _, consumed = build(stage / "Renderer/packs/CityCompositionRuntime", return_inputs=True)
         consumed.update(city_helpers())
         return consumed
@@ -157,7 +158,7 @@ def jobs():
          "Renderer/tools/asset_compiler/build_route_pattern_runtime.py"),
         ("natural", natural_sources, build_natural, "Renderer/native/source_fidelity/prepare.py"),
         ("hill-cliff", cliff_sources, build_cliffs, "Renderer/native/render_core/prepare_assets.py"),
-        ("cities", city_sources, build_cities, "Renderer/tools/prepare_city_recipes.py"),
+        ("cities", city_sources, build_cities, "Renderer/lab/studies/city_readability/recompose.py"),
         ("units", unit_sources, build_units, "Renderer/native/environment_refresh/prepare_units.py"),
         ("resources", lambda: resource_sources("resources"), build_resources,
          "Renderer/tools/asset_compiler/build_resource_compositions.py"),

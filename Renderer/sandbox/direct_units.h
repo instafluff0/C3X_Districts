@@ -38,6 +38,16 @@ struct SandboxDirectUnits {
     c3x_renderer::UnitShadow shadow_fit{512,false};
     ID3D11InputLayout* layout=nullptr;
     ID3D11DepthStencilState* visible_depth=nullptr;
+    // Ground shadows darken each pixel once, so overlapping parts and faces
+    // form one shadow at the shared dynamic-shadow strength.
+    ID3D11DepthStencilState* shadow_once=nullptr;
+    // The unit look comes from the pack; C3X_RENDERER_UNIT_LOOK=gain,saturation,
+    // owner overrides it for Lab comparisons.
+    float look[3]={};bool look_read=false,look_override=false;
+    // Owner discs answer Civ III's P_SHOW_TEAM_COLOR_DISC preference: the
+    // bridge marks eligible bodies (not on city tiles). C3X_RENDERER_UNIT_OWNER_RINGS=1
+    // forces them for Lab views, also skipping city tiles.
+    int owner_rings=-1;
     ID3D11Buffer *material=nullptr,*beauty=nullptr,*placement=nullptr;
     // A unit's part placements are uploaded together and bound by offset;
     // one UpdateSubresource per part dominated unit submission.
@@ -162,7 +172,7 @@ struct SandboxDirectUnits {
     std::int64_t ground_topology=-2;std::uint64_t ground_content=~0ull;
     void* ground_field=nullptr;
     template<class T>static void drop(T*& p){if(p)p->Release();p=nullptr;}
-    ~SandboxDirectUnits(){drop(vertex);drop(pixel);drop(shadow_pixel);drop(height_pixel);drop(layout);drop(visible_depth);drop(material);drop(beauty);
+    ~SandboxDirectUnits(){drop(vertex);drop(pixel);drop(shadow_pixel);drop(height_pixel);drop(layout);drop(visible_depth);drop(shadow_once);drop(material);drop(beauty);
         drop(placement);placement_stream.clear();drop(unshadowed_view);drop(unshadowed);
         for(auto& sampler:samplers)drop(sampler);}
     c3x_renderer::UnitBodyRenderer::Unit const* unit_for(int subject){
@@ -217,7 +227,9 @@ Output VS(Input i){
  float y=(position.x*s+position.y*c)*unit_scale;
  float z=(position.z+skin_shape.y)*unit_scale;
  if(pass_control.x>.5 && pass_control.x<1.5){
-  x+=z*pass_control.y;y+=z*pass_control.z;z=0;
+  // Below the ground/water plane a body is clipped from view (a floating
+  // hull); it shades from its own footprint instead of toward the light.
+  float above=max(z,0);x+=above*pass_control.y;y+=above*pass_control.z;z=0;
  }
  float2 local=float2((x-y)*64,(x+y)*32-z*(150.0*128/224));
  float2 pixel=(origin+local)*scale;
@@ -244,7 +256,7 @@ float PSHeight(Output i):SV_Target {
 }
 float4 PSShadow(Output i):SV_Target {
  if(pass_control.w>.5)clip(shadow_base.Sample(shadow_sampler,i.uv).a-.5);
- return float4(0,0,0,.28);
+ return float4(0,0,0,skin_shape.z>0?skin_shape.z:.28);
 })";
         ID3DBlob *vs=nullptr,*ps=nullptr,*shadow_ps=nullptr,*height_ps=nullptr,*errors=nullptr;
         HRESULT hr=D3DCompile(source,std::strlen(source),"sandbox_gpu_skin",nullptr,nullptr,
@@ -796,6 +808,11 @@ float4 PSShadow(Output i):SV_Target {
         beauty_values[7]=1;beauty_values[11]=.62f;
         beauty_values[12]=.490290f;beauty_values[13]=-.735435f;
         beauty_values[14]=.469979f;beauty_values[16]=float(shadow_fit.extent);
+        if(!look_read){char option[64]={};look_read=true;
+            look_override=GetEnvironmentVariableA("C3X_RENDERER_UNIT_LOOK",option,sizeof(option))&&
+               sscanf_s(option,"%f,%f,%f",&look[0],&look[1],&look[2])==3;
+            for(auto& value:look)value=look_override?std::clamp(value,0.f,2.f):0.f;}
+        std::copy_n(look_override?look:renderer.unit_bodies.look,3,beauty_values+17);
         std::copy(std::begin(beauty_values),std::end(beauty_values),prepared_beauty.begin());
         auto& bodies=renderer.unit_bodies;unsigned palette_slot=0;
         for(auto const& entry:plan.entries){
@@ -989,11 +1006,50 @@ float4 PSShadow(Output i):SV_Target {
             d.FrontFace.StencilPassOp=D3D11_STENCIL_OP_REPLACE;d.BackFace=d.FrontFace;
             if(FAILED(renderer.device->CreateDepthStencilState(&d,&visible_depth)))return false;
         }
+        if(!reflected&&!shadow_once){
+            // Stencil was cleared to zero above; the first shadow fragment at a
+            // pixel marks it and every later caster fragment there is rejected.
+            D3D11_DEPTH_STENCIL_DESC d={};renderer.natural.decal_depth->GetDesc(&d);
+            d.StencilEnable=TRUE;d.StencilReadMask=d.StencilWriteMask=0xff;
+            d.FrontFace.StencilFunc=D3D11_COMPARISON_EQUAL;
+            d.FrontFace.StencilFailOp=d.FrontFace.StencilDepthFailOp=D3D11_STENCIL_OP_KEEP;
+            d.FrontFace.StencilPassOp=D3D11_STENCIL_OP_INCR_SAT;d.BackFace=d.FrontFace;
+            if(FAILED(renderer.device->CreateDepthStencilState(&d,&shadow_once)))return false;
+        }
         auto* body_depth=reflected?renderer.depth_state:visible_depth;
         auto& bodies=renderer.unit_bodies;
         auto* context=renderer.context;
         if(!reflected){
             c3x_renderer::tactical::Input cursors;
+            if(owner_rings<0){char option[8]={};
+                owner_rings=GetEnvironmentVariableA("C3X_RENDERER_UNIT_OWNER_RINGS",option,sizeof(option))&&option[0]=='1';}
+            for(auto const& instance:visible)if(instance.owner_ring||owner_rings){
+                auto const& draw=instance.draw;bool city=false;
+                for(unsigned n=0;n<frame.tile_count&&!city&&!instance.owner_ring;++n)
+                    city=frame.tiles[n].tile_x==instance.tile_x&&frame.tiles[n].tile_y==instance.tile_y&&frame.tiles[n].city_id>=0;
+                if(city)continue;
+                int projection=draw.projection_scale_milli>0?draw.projection_scale_milli:(draw.reduced?500:1000);
+                int x=draw.body_x+int(std::int64_t(draw.sprite_width)*projection/2000);
+                int y=draw.body_y+int(std::int64_t(draw.sprite_height)*projection/2000);
+                float low=unit_low_ground(frame,float(x),float(y));
+                // Scene radiance that the shared output transfer (exposure,
+                // scene_display_srgb with filmic .5) shows as the owner colour.
+                float owner_display[3],radiance[3]={.2f,.2f,.2f};
+                for(unsigned axis=0;axis<3;++axis)owner_display[axis]=float((draw.display_color_rgb>>(16-axis*8))&255)/255;
+                float exposure=std::max(.05f,prepared_environment.exposure);
+                for(unsigned step=0;step<80;++step){
+                    float exposed[3],peak=0;
+                    for(unsigned axis=0;axis<3;++axis){exposed[axis]=std::max(0.f,radiance[axis]*exposure);peak=std::max(peak,exposed[axis]);}
+                    for(unsigned axis=0;axis<3;++axis){
+                        float f=std::min(exposed[axis]*.65f,64.f);f=std::clamp((f*(2.51f*f+.03f))/(f*(2.43f*f+.59f)+.14f),0.f,1.f);
+                        float v=exposed[axis]/(1+peak);v+=(f-v)*.5f;
+                        v=v<=.0031308f?v*12.92f:1.055f*std::pow(v,1/2.4f)-.055f;
+                        radiance[axis]*=std::clamp(owner_display[axis]/std::max(v,1e-5f),.5f,2.f);
+                    }
+                }
+                cursors.owner_disc(float(x+4),float(y+4)-low*frame.tile_width/224.f*.82f,128.f*projection/1000.f,
+                    {radiance[0],radiance[1],radiance[2],.45f});
+            }
             for(auto const& instance:visible)if(instance.cursor){
                 auto const& draw=instance.draw;
                 int projection=draw.projection_scale_milli>0?draw.projection_scale_milli:(draw.reduced?500:1000);
@@ -1070,7 +1126,7 @@ float4 PSShadow(Output i):SV_Target {
                 context->OMSetRenderTargets(1,&scene.target,scene.depth);
                 context->RSSetViewports(1,&viewport);context->RSSetScissorRects(1,&scissor);
                 if(layer==0){
-                    context->OMSetDepthStencilState(renderer.natural.decal_depth,0);
+                    context->OMSetDepthStencilState(shadow_once,0);
                     context->OMSetBlendState(renderer.blend_state,nullptr,0xffffffffu);
                     context->PSSetShader(shadow_pixel,nullptr,0);
                 }else{
@@ -1105,6 +1161,8 @@ float4 PSShadow(Output i):SV_Target {
                 c3x_renderer::SceneProjection(frame.target_width,frame.target_height,zoom)
                     .unit_placement(placement_values.data(),guard,scene_scale);
                 if(layer==0){
+                    // The shared dynamic-shadow policy animated resources use.
+                    placement_values[14]=environment.shadow_strength*c3x_renderer::lighting::c3x_dynamic_shadow_opacity;
                     placement_values[16]=1;
                     placement_values[17]=-key_light.direction[0]/key_light.direction[2]*
                         c3x_renderer::lighting::object_height_to_world;

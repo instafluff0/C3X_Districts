@@ -93,9 +93,10 @@ Memory allocate(void* p,std::size_t bytes){largest_request=std::max(largest_requ
 #define realloc allocate
 #define malloc(bytes) allocate(nullptr,bytes)
 struct Tile;
-struct Vtable {int(*m49_Get_Square_RealType)(Tile*);int(*m50_Get_Square_BaseType)(Tile*);int(*m37_Get_River_Code)(Tile*);};
-struct Tile {Vtable* vtable;struct {int FOWStatus=0,Visibility=0,Fog_Of_War=0,V3=0,field_D0_Visibility=0;void* active_tile_effect=nullptr;}Body;int ground=2,base=2,river=0;};
-Vtable vtable{[](Tile*t){return t->ground;},[](Tile*t){return t->base;},[](Tile*t){return t->river;}};
+struct Vtable {int(*m49_Get_Square_RealType)(Tile*);int(*m50_Get_Square_BaseType)(Tile*);int(*m37_Get_River_Code)(Tile*);int(*m43_Get_field_30)(Tile*);};
+constexpr int SQ_Mountains=6;
+struct Tile {Vtable* vtable;struct {int FOWStatus=0,Visibility=0,Fog_Of_War=0,V3=0,field_D0_Visibility=0;void* active_tile_effect=nullptr;}Body;int ground=2,base=2,river=0,field30=0;};
+Vtable vtable{[](Tile*t){return t->ground;},[](Tile*t){return t->base;},[](Tile*t){return t->river;},[](Tile*t){return t->field30;}};
 struct MapData{int Width=4,Height=4;int Renderer=0;};using Map=MapData;
 struct Bic {MapData Map;bool is_zoomed_out=false;} bic;Bic* p_bic_data=&bic;
 Tile null_tile{&vtable};Tile* p_null_tile=&null_tile;
@@ -185,6 +186,16 @@ int main(){
  tiles[6].Body.Fog_Of_War=32;state.custom_renderer_world_audit_needed=true;assert(capture_custom_renderer_world_topology());assert(state.custom_renderer_visibility_revision==++visibility);
  tiles[2].ground=4;state.custom_renderer_world_audit_needed=true;assert(capture_custom_renderer_world_topology());
  assert(state.custom_renderer_world_topology_revision==++topology && state.custom_renderer_visibility_revision==visibility);
+ // Civ III's snow-capped mountain (field_30 0x100000 on a mountain) is topology
+ // bit 26; a bare mountain or the same bit on other terrain is not.
+ tiles[3].base=6;tiles[3].field30=0x100000;tiles[4].base=6;tiles[5].field30=0x100000;
+ state.custom_renderer_world_audit_needed=true;assert(capture_custom_renderer_world_topology());
+ assert(state.custom_renderer_world_topology_revision==++topology);
+ assert((state.custom_renderer_world_topology[3]>>26&1u)==1 && (state.custom_renderer_world_topology[4]>>26&1u)==0 &&
+        (state.custom_renderer_world_topology[5]>>26&1u)==0);
+ tiles[3]=tiles[4]=tiles[5]=Tile{&vtable};
+ state.custom_renderer_world_audit_needed=true;assert(capture_custom_renderer_world_topology());
+ assert(state.custom_renderer_world_topology_revision==++topology);
  assert(demand()==C3X_RENDERER_RESULT_BAD_ARGUMENT && !modern_calls && !legacy_calls && state.custom_renderer_map_epoch==1);
  bic.Map={100,100};assert(capture_custom_renderer_world_topology());
  assert(state.custom_renderer_world_topology_count==5000 && largest_request==5000*sizeof(unsigned long long));

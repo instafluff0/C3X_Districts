@@ -2,6 +2,7 @@
 // Typed portable adapters around the same production statement bodies. Native
 // includes those bodies in its existing tile compiler to preserve x86 rounding.
 #include "data.h"
+#include "mountain_shape.h"
 #include "ground.h"
 #include "hill_decals.h"
 #include "canopy_clearing.h"
@@ -37,6 +38,7 @@ bool emit_relief_meshes(NaturalData const&natural,int real,Tile owner,GroundProj
         lookup_natural(nc-1,nr).real==5,lookup_natural(nc+1,nr).real==5,
         lookup_natural(nc,nr+1).real==5,lookup_natural(nc,nr-1).real==5};
     auto hidden_taper_at=[](float,float){return 1.f;}; // Lab scenes are fully explored.
+    auto mountain_snow=[](int,int){return false;};
     #include "relief_mesh_body.h"
     if(real==5){
         std::vector<MapVertex> ground;

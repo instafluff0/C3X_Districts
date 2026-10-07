@@ -1,6 +1,100 @@
 # Mountain material diagnosis
 
-## Current body-grain study (2026-09-12)
+## Volcano workover (2026-10-07, Lab candidate, not accepted)
+
+The user found volcanoes odd, too tall and missing lava, and accepted more
+uniform volcanoes in exchange for a Civ VI-like look. Work lives in the private
+tree `tree-volcano`; the checkout's volcano look is unchanged.
+
+- Volcanoes are stamps of `mountain_shape.h`, joined to neighbouring mountains
+  and volcanoes by the same saddles. The shape is a clean cone (concave flanks,
+  shallow crater, foot easing into the ground) carrying 55% of Civ VI's
+  terrain-element gullies about their radial mean (`NaturalData::volcano_trend`)
+  and its authored footprint. The element alone read as a lumpy, flat-topped
+  mound at Civ III scale. Rim about 124, mountains 112.
+- The spike next to another volcano was the retired ground provider: slot
+  family 1's analytic cone ignores the source fields, so `relief_query.h` raised
+  a second cone under the natural stamp. With separate natural relief the
+  provider now treats volcanoes as bare ground (`test_relief.cpp`).
+- Material: Civ VI's ash colour at element scale. Ash meets the ground through a
+  rise blend like mountain rock, over ground rather than grey stone. Activity
+  (topology bit 24, eruption bit 27) lights a crater pool; an eruption adds
+  the authored channels, hotter near the rim, broken by crust.
+- Lava: a pool of crust plates with glowing seams lights the crater (dim when
+  smoldering, bright when erupting) and its inner wall; an eruption adds narrow
+  flows from just below the rim, cooling downhill.
+- Still to do: the smoke plume (reusing the city session's procedural plume once
+  it is shared) and, in the game, the eruption bit and hiding Civ III's own
+  smoke and lava animation.
+- Review sheets: `volcanoes/volcano-review-{1-dormant,2-overview,3-lava}.jpg`
+  (labels `before`, `v3-dormant`, `v4-smoldering`, `v4-erupting`).
+- `sync` copies the checkout's generated shaders over the tree's, so `build`
+  now regenerates them from the private sources first; a render after `sync`
+  without regenerating paired the new mesh with the old volcano shader.
+
+```sh
+python3 Renderer/lab/studies/mountains/private_tree.py build volcano
+python3 Renderer/lab/studies/mountains/ranges.py --layout volcanoes render v2-erupting --tree volcano --state erupting --hour 21
+python3 Renderer/lab/studies/mountains/ranges.py --layout volcanoes review before v2-dormant --hours 12
+```
+
+## Joined ranges, Civ III snow caps and mountain shadows (2026-10-07, accepted)
+
+The user accepted the `root-vb` result for the game (snow as a ridge dusting,
+relief knob off). Its constants are now the shader defaults; the changes were
+merged from the private tree into the checkout, and
+`Renderer/tools/overlay_mountain_shading.py` copied the mountain and caster
+regions into the Renderer64 runtime pack (receipt `mountain-overlay.json`).
+
+The user asked for Civ VI-like mountains: crisp ridges and ranges that chain
+together. The five stamps we use are Civ VI's own `Mountain_Single` height
+fields, which already carry the branching ridge and gully structure; Civ VI's
+element set has no separate range pieces, so ranges come from overlapping
+single stamps.
+
+What changed:
+
+- `lab/shared/natural/mountain_shape.h`: one shape for the mesh, route surfaces
+  and resource seating (previously three copies). Mountains join across all
+  eight neighbours (corner neighbours used to stay separate cones). Each stamp
+  is stretched along its range and turned so its principal ridge
+  (`NaturalData::macro_axis`, from the field's height moments at load) follows
+  it, with a seeded mirror/half turn and better-mixed variant choice. A lower
+  saddle stamp sits between every adjacent pair, and an order-independent
+  smooth maximum of the two highest stamps joins them. Window bounds keep every
+  tile's shared edges and mesh halo identical (`test_mountain_shape.cpp`).
+- Civ III's snow-capped flag (game Tile field_30 0x100000, BIQ bonus 0x10)
+  travels as world-topology bit 26. The mesh carries the dominant stamp's cap
+  as `material.y` 2..2.5 and the shader draws snow and patchy-snow only there;
+  bare mountains stay rock.
+- Material constants (`MTN_*` in `beauty_mountain.hlsl`; a study may predefine
+  them): rock texture 1.8x finer, cracks and grain at 45%, rock 15% lighter,
+  snow on gentler faces (slope .45-.8). A rock-relief knob (less wrap and fill
+  on shadowed faces) was tried and dropped: once mountains cast shadows it made
+  little difference.
+- Mountain shadows: since commit 486f3a6a the relief grid's `material_desert`
+  carries hill support, and the caster's only cutoff read it, so hills cast but
+  mountains away from hills cast no ground shadow at all. The caster now keeps
+  a fragment when either the hill-support cutoff passes or the vertex rises
+  above its ground (rise as the visible shader measures it); the flat collar
+  still casts nothing. `test_mountain_shadow_caster.py` fails both on the old
+  rule (no mountain shadow) and on a rise-only rule (no hill shadow).
+
+Tools: `private_tree.py` copies the candidate DLL/preview include closure and
+the runtime shader tree to `lab/out/mountains/tree-NAME`, builds and
+regenerates there, and records owned edits with their checkout base, so other
+sessions' builds never see an unaccepted look. `ranges.py` renders one Lab
+case with an isolated peak, ranges along both diagonals and screen-horizontal,
+a zigzag, a 3x3 massif, foothills and snow-capped/bare mountains, through a
+pinned DLL or a private tree, and writes compare/review sheets:
+
+```sh
+python3 Renderer/lab/studies/mountains/private_tree.py build ranges
+python3 Renderer/lab/studies/mountains/ranges.py render after --tree ranges --hour 15
+python3 Renderer/lab/studies/mountains/ranges.py review before after --hours 9,12,15
+```
+
+## Body-grain study (2026-09-12)
 
 The user subsequently accepted the final `collar-triplanar` result and requested
 production use. The shared mountain shader now contains that treatment with

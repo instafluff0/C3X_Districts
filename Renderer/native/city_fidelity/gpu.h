@@ -11,7 +11,9 @@ struct Gpu {
     ID3D11InputLayout*layout=nullptr,*compact_layout=nullptr;ID3D11Buffer*material_frame=nullptr;
     ID3D11BlendState*emission=nullptr;ID3D11DepthStencilState*readonly_depth=nullptr;
     std::size_t texture_bytes=0;bool ready=false;
-    float night=0,emissive_scale=1;SceneLights scene_lights;
+    // Visual-clock seconds for attached effects; static layers keep the
+    // value they were drawn with.
+    float night=0,emissive_scale=1,time=0;SceneLights scene_lights;
     template<class T>void drop(T*&p){if(p)p->Release();p=nullptr;}
     void reset(){for(auto&p:vs)drop(p);for(auto&p:ps)drop(p);drop(layout);drop(compact_layout);drop(material_frame);scene_lights={};
         drop(emission);drop(readonly_depth);for(auto&p:textures)drop(p.second);textures.clear();materials.clear();
@@ -64,7 +66,7 @@ struct Gpu {
             }
             materials[m][c]=found->second;
         }
-        D3D11_BUFFER_DESC d={};d.ByteWidth=32;d.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
+        D3D11_BUFFER_DESC d={};d.ByteWidth=48;d.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
         HRESULT hr=device->CreateBuffer(&d,nullptr,&material_frame);
         D3D11_BLEND_DESC b={};auto&r=b.RenderTarget[0];r.BlendEnable=TRUE;
         r.SrcBlend=r.DestBlend=D3D11_BLEND_ONE;r.BlendOp=r.BlendOpAlpha=D3D11_BLEND_OP_ADD;
@@ -78,7 +80,12 @@ struct Gpu {
         auto const&m=materials[material];scene_lights.bind(context);
         context->IASetInputLayout(compact?compact_layout:layout);context->VSSetShader(vs[reflect?1:0],nullptr,0);
         context->PSSetShader(ps[(reflect?2:0)+(emit?1:0)],nullptr,0);
-        float values[]={environment?1.f:0.f,0,0,0,atlas[0],atlas[1],atlas[2],atlas[3]};
+        // y/z/w carry the pack's body response (gain, contrast, saturation)
+        // and the third row its window response (shoulder, gain) and the
+        // pale-albedo damping of the body response; packs before version
+        // five leave them zero, the identity.
+        float values[]={environment?1.f:0.f,library.look[0],library.look[1],library.look[2],atlas[0],atlas[1],atlas[2],atlas[3],
+            library.look[3],library.look[4],library.look[5],time};
         context->UpdateSubresource(material_frame,0,nullptr,values,0,0);context->PSSetConstantBuffers(7,1,&material_frame);
         context->PSSetShaderResources(124,1,m.data());
         ID3D11ShaderResourceView*extra[]={m[1],m[4],m[2],m[3],m[5],m[6]};context->PSSetShaderResources(116,6,extra);

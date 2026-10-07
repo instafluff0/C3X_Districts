@@ -49,15 +49,31 @@ struct Corridor {
         return .22*(radii[i%radii.size()]*(1-fraction)+radii[(i+1)%radii.size()]*fraction);
     }
 
+    // A cell's bucket holds every segment within bucket_reach tiles on either
+    // axis. A segment left out is then at least 57.24*bucket_reach screen
+    // pixels from the whole cell, so sampled distances are exact, and
+    // continuous across cells, out to that radius: 54 pixels covers low
+    // relief (52) and hill banks (53). River terrain detail keeps the cells
+    // within detail_reach.
+    static constexpr double bucket_reach=.95,detail_reach=.65;
     // narrow (screen pixels) is added to the distance, so a distributary
     // reads as a smaller channel with a smaller bank.
     void insert(P a,P b,int direction=0,double narrow=0) {
         P tangent=(b-a)*(direction/std::max(1e-12,hydro::length(b-a)));
-        for(int y=int(std::floor(std::min(a.y,b.y)-.65));y<=int(std::floor(std::max(a.y,b.y)+.65));++y)
-        for(int x=int(std::floor(std::min(a.x,b.x)-.65));x<=int(std::floor(std::max(a.x,b.x)+.65));++x)
+        for(int y=int(std::floor(std::min(a.y,b.y)-bucket_reach));y<=int(std::floor(std::max(a.y,b.y)+bucket_reach));++y)
+        for(int x=int(std::floor(std::min(a.x,b.x)-bucket_reach));x<=int(std::floor(std::max(a.x,b.x)+bucket_reach));++x)
             buckets[{x,y}].push_back({screen(a),screen(b),tangent,narrow});
     }
-    bool affects(int c,int r) const { return buckets.count({c,r}) || terminal_buckets.count({c,r}); }
+    bool affects(int c,int r) const {
+        if(terminal_buckets.count({c,r}))return true;
+        auto found=buckets.find({c,r});
+        if(found!=buckets.end())for(auto const& s:found->second) {
+            P a=from_screen(s.a),b=from_screen(s.b);
+            if(std::min(a.x,b.x)-detail_reach<c+1 && std::max(a.x,b.x)+detail_reach>=c &&
+               std::min(a.y,b.y)-detail_reach<r+1 && std::max(a.y,b.y)+detail_reach>=r)return true;
+        }
+        return false;
+    }
     bool bank_point(P query_point,double margin,double side,P& result) const {
         auto found=buckets.find({int(std::floor(query_point.x)),int(std::floor(query_point.y))});
         if(found==buckets.end())return false;

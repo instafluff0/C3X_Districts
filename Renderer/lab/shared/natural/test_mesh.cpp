@@ -19,52 +19,9 @@ bool reference_relief(NaturalData const&natural,int real,Tile owner,GroundProjec
         lookup_natural(nc,nr+1).real==5,lookup_natural(nc,nr-1).real==5};
     auto triangle=[](std::vector<Vertex>&out,Vertex const&a,Vertex const&b,Vertex const&c){out.push_back(a);out.push_back(b);out.push_back(c);};
     {
-        struct MountainPiece {unsigned height_field,blend_field;float center_x,center_y,long_span,cross_span,height_scale;bool connected,range_y;};
-        std::vector<MountainPiece> pieces;
-        for(int dr=-1;dr<=1;dr++)for(int dc=-1;dc<=1;dc++){
-            int pc=nc+dc,pr=nr+dr;Tile piece_owner=lookup_natural(pc,pr);
-            if(piece_owner.real!=6)continue;
-            bool west=lookup_natural(pc-1,pr).real==6,east=lookup_natural(pc+1,pr).real==6;
-            bool north=lookup_natural(pc,pr-1).real==6,south=lookup_natural(pc,pr+1).real==6;
-            unsigned along_x=unsigned(west)+unsigned(east),along_y=unsigned(north)+unsigned(south);
-            bool connected=along_x+along_y>0,turn=connected&&along_x==along_y;
-            unsigned variant=mountain_seed(piece_owner)%5u;
-            pieces.push_back({natural.macro[variant][0],natural.macro[variant][1],
-                float(pc)+.5f+.09f*(int(east)-int(west)),
-                float(pr)+.5f+.09f*(int(south)-int(north)),
-                (connected?(turn?2.08f:2.46f):1.85f)*1.08f,
-                (connected?(turn?1.82f:1.34f):1.55f)*1.08f,
-                (connected?142.f:165.f)*.68f,connected,along_y>along_x});
-        }
-        struct MountainSample {float displacement=0,dominant=0,height=0,u=0,v=0;};
-        auto mountain_at=[&](float world_x,float world_y){
-            MountainSample result;
-            for(auto const&piece:pieces){
-                float source_x=piece.range_y?(world_y-piece.center_y)/piece.long_span:
-                    (world_x-piece.center_x)/piece.long_span;
-                float source_y=piece.range_y?(world_x-piece.center_x)/piece.cross_span:
-                    (world_y-piece.center_y)/piece.cross_span;
-                float u=.5f+source_x,v=.5f-source_y;
-                if(u<0||u>1||v<0||v>1)continue;
-                float h=natural.fields[piece.height_field].sample(u,v);
-                float blend=natural.fields[piece.blend_field].sample(u,v);
-                float shaped=piece.connected?std::pow(std::max(0.f,h),.80f):h;
-                float displacement=shaped*piece.height_scale*smooth01((blend-.28f)/.34f);
-                if(displacement>result.dominant){
-                    result.dominant=displacement;result.height=h;result.u=u;result.v=v;
-                }
-                if(displacement>0){
-                    if(result.displacement<=0)result.displacement=displacement;
-                    else{
-                        float high=std::max(result.displacement,displacement);
-                        float ridge=std::max(0.f,10.f-std::abs(result.displacement-displacement));
-                        result.displacement=high+ridge*ridge/40.f;
-                    }
-                }
-            }
-            return result;
-        };
-        if(!pieces.empty()){
+        MountainShape const mountain_shape(natural,nc,nr,lookup_natural,[](int,int){return false;});
+        auto mountain_at=[&](float world_x,float world_y){return mountain_shape.sample(natural,world_x,world_y);};
+        if(mountain_shape.count){
             constexpr unsigned count=65,span=67;constexpr float step=1/64.f;
             constexpr unsigned river_count=19;
             std::array<float,river_count*river_count> river_scales;
@@ -126,7 +83,7 @@ bool reference_relief(NaturalData const&natural,int real,Tile owner,GroundProjec
                     }
                     out.normal_x=n[0];out.normal_y=n[1];out.normal_z=n[2];out.u=sample.u;out.v=sample.v;
                     out.material_grass=std::max(0.f,(elevation-2.5f)/112)*(1-flat_blend)+sample.height*flat_blend;
-                    out.material_plains=2;
+                    out.material_plains=2+.5f*sample.snow*flat_blend;
                     out.material_desert=surface_hill_support[at]*hill_material(world_x-float(nc),
                         float(nr)+1-world_y);
                     auto weights=material_weights_for(world_x,world_y);

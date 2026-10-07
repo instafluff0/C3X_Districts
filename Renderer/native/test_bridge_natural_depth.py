@@ -40,7 +40,8 @@ class BridgeNaturalDepthTests(unittest.TestCase):
         shader = (native / 'rigid_feature.hlsl').read_text()
         depth = between(shader, ' float3 position=project_world_content(p.position,p.world,i.projection,2);',
                         ' return o;')
-        depth = '\n'.join(line for line in depth.splitlines() if 'o.position.xy=' not in line)
+        depth = '\n'.join(line for line in depth.splitlines()
+                           if 'o.position.xy=' not in line and 'q6_world' not in line)
         # The generated hydrology shaders sort the river on the natural basis
         # (C3X_RIVER_NATURAL_DEPTH) with this layer bias.
         adapter = (ROOT / 'Renderer/native/integrated_terrain.hlsl').read_text()

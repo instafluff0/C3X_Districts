@@ -6,11 +6,125 @@ No unit name or role selects rendering behavior.
 Payloads are independent copies; generated output never aliases editable sources.
 """
 from pathlib import Path
-import argparse,hashlib,json,struct
+import argparse,hashlib,json,math,struct
+import numpy as np
 ROOT=Path(__file__).resolve().parents[3]
 PACKS=ROOT/'Renderer/packs'
+Z_PIXELS=150*128/224 # live unit vertex shader height metric
 def read(p):return json.loads(p.read_text())
 def digest(p):return hashlib.sha256(p.read_bytes()).hexdigest()
+def idle_geometry(blob):
+    """First-frame skinned positions and triangles of a C3XANM1/2 payload."""
+    version,n,ni,nb,nf=struct.unpack_from('<5I',blob,8);stride=88 if version==2 else 64
+    raw=np.frombuffer(blob,np.uint8,n*stride,32).reshape(n,stride)
+    position=raw[:,:12].copy().view('<f4').reshape(n,3);joints=raw[:,32:48].copy().view('<u4').reshape(n,4)
+    weights=raw[:,48:64].copy().view('<f4').reshape(n,4)
+    triangles=np.frombuffer(blob,'<u4',ni,32+n*stride).reshape(-1,3)
+    palette=np.frombuffer(blob,'<f4',nb*16,32+n*stride+ni*4).reshape(nb,4,4)
+    points=np.zeros((n,3))
+    for k in range(4):
+        m=palette[joints[:,k]]
+        points+=weights[:,k,None]*(position[:,0,None]*m[:,0,:3]+position[:,1,None]*m[:,1,:3]+position[:,2,None]*m[:,2,:3]+m[:,3,:3])
+    return points,triangles
+def silhouette(points,triangles,scale,offset,yaw,directions=range(8),supersample=2):
+    """Median above-ground projected area/height/width in 128px-tile pixels."""
+    rows=[]
+    for direction in directions:
+        angle=math.radians(yaw+direction*45);c,s=math.cos(angle),math.sin(angle)
+        x=(points[:,0]*c-points[:,1]*s)*scale;y=(points[:,0]*s+points[:,1]*c)*scale;z=(points[:,2]+offset)*scale
+        xs,ys=(x-y)*64*supersample,((x+y)*32-z*Z_PIXELS)*supersample
+        tris=triangles[(z[triangles]>=0).any(axis=1)]
+        x0,y0=int(np.floor(xs.min()))-1,int(np.floor(ys.min()))-1
+        w,h=int(np.ceil(xs.max()))-x0+2,int(np.ceil(ys.max()))-y0+2
+        mask=np.zeros((h,w),bool)
+        for a,b,t in tris:
+            ax,ay,bx,by,cx,cy=xs[a]-x0,ys[a]-y0,xs[b]-x0,ys[b]-y0,xs[t]-x0,ys[t]-y0
+            area=(bx-ax)*(cy-ay)-(by-ay)*(cx-ax)
+            if abs(area)<1e-9:continue
+            left,right=int(max(0,np.floor(min(ax,bx,cx)))),int(min(w-1,np.ceil(max(ax,bx,cx))))
+            top,bottom=int(max(0,np.floor(min(ay,by,cy)))),int(min(h-1,np.ceil(max(ay,by,cy))))
+            px,py=np.meshgrid(np.arange(left,right+1)+.5,np.arange(top,bottom+1)+.5)
+            u=((bx-px)*(cy-py)-(by-py)*(cx-px))/area;v=((cx-px)*(ay-py)-(cy-py)*(ax-px))/area
+            mask[top:bottom+1,left:right+1]|=(u>=0)&(v>=0)&(u+v<=1)&(u*z[a]+v*z[b]+(1-u-v)*z[t]>=0)
+        ys_,xs_=np.nonzero(mask)
+        if len(ys_):rows.append(((np.ptp(ys_)+1)/supersample,(np.ptp(xs_)+1)/supersample,mask.sum()/supersample**2))
+    if not rows:raise ValueError('unit has no visible idle silhouette')
+    height,width,area=(float(np.median(column)) for column in zip(*rows))
+    return {'height':height,'width':width,'area':area}
+def ground_skinned_bodies(bindings,target):
+    """Ground a skinned body that a small stray rigid primitive lifts.
+
+    A rigid (single-bone) primitive with under 5% of a unit's idle vertices
+    that reaches more than 10% of its height below the lowest skinned vertex is
+    a mis-bound attachment standing at the root origin, not the ground: the
+    skinned body then defines ground contact (the primitive is clipped below)."""
+    grounded=[]
+    for binding in bindings.values():
+        if not isinstance(binding,dict) or 'idle' not in binding:continue
+        idle=binding['idle'];skinned=[];rigid=[];heights=[]
+        for i in range(idle['part_count']):
+            blob=(target/idle['part'+str(i)]['mesh']).read_bytes()
+            z=idle_geometry(blob)[0][:,2]+binding['offset_z'];heights.append(z)
+            (skinned if struct.unpack_from('<I',blob,20)[0]>1 else rigid).append(z)
+        if not skinned or not rigid:continue
+        total=sum(len(z) for z in heights);span=float(np.ptp(np.concatenate(heights)))
+        floor=min(float(z.min()) for z in skinned)
+        stray=[z for z in rigid if len(z)<.05*total and float(z.min())<floor-.10*span]
+        if stray and floor>.02*span and all(float(z.min())>=floor-.03*span or len(z)<.05*total for z in rigid):
+            binding['offset_z']-=floor;binding['ground_policy']='skinned_body';grounded.append(binding['key0'])
+    return grounded
+def idle_extent(binding,target):
+    """Lowest and highest model-space z and the horizontal length of a binding's idle parts."""
+    idle=binding['idle'];points=np.concatenate([idle_geometry((target/idle['part'+str(i)]['mesh']).read_bytes())[0] for i in range(idle['part_count'])])
+    return float(points[:,2].min()),float(points[:,2].max()),float(max(np.ptp(points[:,0]),np.ptp(points[:,1])))
+def float_at_waterline(bindings,target,domains,afloat,draft):
+    """Units of a floating domain sit at their authored waterline, the model
+    origin, so the hull below it is clipped by the water plane. A model with
+    nothing below its origin takes the median waterline (fraction of idle
+    height) of authored hulls with a similar height/length, else `draft`."""
+    authored,pending=[],[]
+    for binding in bindings.values():
+        if not isinstance(binding,dict) or 'idle' not in binding or domains.get(binding['key0']) not in afloat:continue
+        low,high,length=idle_extent(binding,target);aspect=(high-low)/max(length,1e-9)
+        if low<0:
+            binding['offset_z']=0.0;binding['ground_policy']='authored_waterline'
+            authored.append((aspect,-low/(high-low)))
+        else:pending.append((binding,aspect,low,high))
+    for binding,aspect,low,high in pending:
+        near=[f for a,f in authored if abs(math.log(a/aspect))<math.log(1.25)] or [f for _,f in authored] or [draft]
+        binding['offset_z']=-(low+float(np.median(near))*(high-low));binding['ground_policy']='shape_neighbor_waterline'
+    return [binding['key0'] for binding in bindings.values() if isinstance(binding,dict) and binding.get('ground_policy') in ('authored_waterline','shape_neighbor_waterline')]
+def hover_flying_units(bindings,target,sprites,factor,minimum):
+    """A unit whose native sprite floats above its own shadow (aircraft,
+    missiles) keeps its lowest idle point that many pixels above the ground."""
+    hovering=[]
+    for binding in bindings.values():
+        if not isinstance(binding,dict) or 'idle' not in binding:continue
+        sprite=next((sprites[binding['key'+str(i)]] for i in range(binding['key_count']) if binding['key'+str(i)] in sprites),None)
+        if not sprite or sprite.get('lift',0)<minimum:continue
+        low,_,_=idle_extent(binding,target)
+        binding['offset_z']=sprite['lift']*factor/(Z_PIXELS*binding['scale'])-low
+        binding['hover_policy']='native_sprite_lift';hovering.append(binding['key0'])
+    return hovering
+def fit_sizes(bindings,target,sprites,factor):
+    """Match each idle silhouette to its native sprite's area. Units without a
+    sprite take the median change of measured units with a similar shape."""
+    measured,pending=[],[]
+    for binding in bindings.values():
+        if not isinstance(binding,dict) or 'idle' not in binding:continue
+        idle=binding['idle'];points,triangles=[],[];base=0
+        for i in range(idle['part_count']):
+            p,t=idle_geometry((target/idle['part'+str(i)]['mesh']).read_bytes());points.append(p);triangles.append(t+base);base+=len(p)
+        ours=silhouette(np.concatenate(points),np.concatenate(triangles),binding['scale'],binding['offset_z'],binding.get('yaw_offset',225.0))
+        sprite=next((sprites[binding['key'+str(i)]] for i in range(binding['key_count']) if binding['key'+str(i)] in sprites),None)
+        if sprite:
+            change=math.sqrt(sprite['area']/ours['area']);measured.append((ours['height']/ours['width'],change))
+            binding['scale']*=change*factor;binding['fit_policy']='native_sprite_area'
+        else:pending.append((binding,ours['height']/ours['width']))
+    for binding,aspect in pending:
+        near=[c for a,c in measured if abs(math.log(a/aspect))<math.log(1.25)] or [c for _,c in measured] or [1.0]
+        binding['scale']*=float(np.median(near))*factor;binding['fit_policy']='native_sprite_area_shape_neighbors'
+    return len(measured),len(pending)
 def build_pack(target=None, source=None):
     source=Path(source or PACKS/'UnitAnimationRuntime')
     target=Path(target or PACKS/'UnitAnimationFidelity').resolve()
@@ -139,11 +253,40 @@ def build_pack(target=None, source=None):
                     part['frame_authority']=str((frame_root/'frames.json').relative_to(ROOT))
                 modes[mode]=modes.get(mode,0)+1
     target.mkdir(parents=True,exist_ok=True)
+    grounded=ground_skinned_bodies(bindings,target)
+    waterline=quality.get('waterline');floated=None
+    if waterline:
+        # Recipe domains are pack metadata; procedural sources have no recipe.
+        domains={}
+        for unit in manifest['units'].values():
+            recipe=PACKS/unit['source_pack']/unit.get('source_recipe','')
+            if recipe.is_file():domains[unit['civ3_ids'][0]]=read(recipe).get('domain')
+        domains={binding['key0']:next((domains[binding['key'+str(i)]] for i in range(binding['key_count']) if binding['key'+str(i)] in domains),None)
+                 for binding in bindings.values() if isinstance(binding,dict) and 'idle' in binding}
+        floated=float_at_waterline(bindings,target,domains,set(waterline['domains']),float(waterline['draft']))
+    sizing=quality.get('sizing');fitted=None;sprites=None
+    if sizing:
+        # Floating hulls match the native sprite on their visible area.
+        sprites=read(ROOT/sizing['sprites'])['units']
+        fitted=fit_sizes(bindings,target,sprites,float(sizing.get('factor',1)))
+    hover=quality.get('hover');hovering=None
+    if hover:hovering=hover_flying_units(bindings,target,sprites or read(ROOT/hover['sprites'])['units'],float(hover['factor']),float(hover['minimum']))
+    garments=quality.get('owner_garments');painted=None
+    if garments:
+        # Units whose measured owner colour is too sparse tint one garment component.
+        from Renderer.tools.asset_compiler import unit_owner_coverage as coverage
+        sha(ROOT/'Renderer/tools/asset_compiler/unit_owner_coverage.py')
+        painted=coverage.paint_garments(bindings,target,coverage.components_by_binding(manifest,bindings),
+            float(garments['minimum']),float(garments['garment_share']),float(garments['target']),float(garments['strength']))
+    for name,value in (quality.get('look') or {}).items():
+        if name not in ('gain','saturation','owner') or not 0<=float(value)<=2:raise ValueError('unit look values are gain, saturation, owner in [0,2]')
+        bindings['look_'+name]=float(value)
     for name,data in [('manifest.json',manifest),('bindings.json',bindings)]:
         (target/name).write_text(json.dumps(data,indent=2,sort_keys=True)+'\n')
     evidence={'status':'pass','source_manifest_sha256':sha(source/'manifest.json'),'bindings_sha256':digest(target/'bindings.json'),
       'unit_count':len(manifest['units']),'native_keys':sum(v['key_count'] for v in bindings.values() if isinstance(v,dict)),
-      'address_mode_parts':modes,'normal_payloads':len(updates),'unchanged_palette_frames':poses,'source_sha256':pins,
+      'address_mode_parts':modes,'sizing':{'native_sprite':fitted[0],'shape_neighbors':fitted[1]} if fitted else None,'owner_garments':painted,'grounded':grounded,
+      'waterline':floated,'hover':hovering,'normal_payloads':len(updates),'unchanged_palette_frames':poses,'source_sha256':pins,
       'settings':{'msaa':4,'anisotropy':16,'mip_bias':0,'render_scale':'pack selected 1 or 4'},
       'limits':['Original generic assets preserve their authored normals; imported components use fingerprinted source octahedral normals.',
                 'Native environment, team colors, projection and working self-shadow visibility adapt the selected Lab material response; the isolated witness LUT is not applied to the native sprite.']}

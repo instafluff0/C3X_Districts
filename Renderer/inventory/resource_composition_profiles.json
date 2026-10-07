@@ -105,14 +105,14 @@
       "world_scale": 0.22,
       "count_scale": 0.25,
       "accent_scale": 0.0,
-      "herd": 2,
+      "herd": 1,
       "subject_scale": 0.3,
       "subject_radius": 0.08,
       "herd_spread": 1.3,
       "yaw_jitter": 0.3,
       "subject_fit": 0.0,
       "ancillary_policy": "omit; forest/jungle crowding is a separate later pass",
-      "note": "Animals stand upright at the ground height under their centre (subject_fit 0) and face outward from the herd's centre. Each herd's ring (subject_radius, herd_spread 1) keeps members at least 0.02 tile apart through the whole clip; sizes are 20% under the first approved set (user choice 2026-10-06).",
+      "note": "One animal per tile at the tile centre, upright on the ground under it, facing about southeast (yaw jitter). User choice 2026-10-07: a single, larger animal reads better than a small herd; sizes are 1.5x the spaced-herd sizes.",
       "facing": "outward"
     },
     "seep_patch": {
@@ -283,21 +283,18 @@
     "horses": {
       "source": "RESOURCE_HORSES",
       "family": "animal_herd",
-      "herd": 3,
-      "note": "Three horses in Civ VI's dark-brown coat (HorseA1, the model Civ VI uses for 13 of its 17 horses; user choice 2026-10-06), at 80% of the first approved size on a ring that keeps them apart.",
+      "herd": 1,
+      "note": "One dark-brown Civ VI horse (HorseA1, the coat Civ VI uses for 13 of its 17 horses).",
       "subjects": [
-        "horses",
-        "horses",
         "horses"
       ],
-      "subject_scale": 0.4,
-      "subject_radius": 0.14,
-      "herd_spread": 1.0
+      "subject_scale": 0.6,
+      "subject_radius": 0.14
     },
     "cattle": {
       "source": "RESOURCE_CATTLE",
       "family": "animal_herd",
-      "herd": 3,
+      "herd": 1,
       "piece_counts": {
         "res_cattle_cow01": 0,
         "res_cattle_cow02": 0,
@@ -305,19 +302,16 @@
         "res_cattle_bull02": 0
       },
       "subjects": [
-        "cattle",
-        "cattle.3",
         "cattle"
       ],
-      "note": "Three grazing black-and-white Civ VI cows.",
-      "subject_scale": 0.44,
-      "subject_radius": 0.13,
-      "herd_spread": 1.0
+      "note": "One black-and-white Civ VI cow.",
+      "subject_scale": 0.66,
+      "subject_radius": 0.13
     },
     "game": {
       "source": "RESOURCE_DEER",
       "family": "animal_herd",
-      "herd": 3,
+      "herd": 1,
       "piece_counts": {
         "res_deer_doe01": 0,
         "res_deer_doe02": 0,
@@ -326,15 +320,14 @@
       "subjects": [
         "game"
       ],
-      "note": "A small group of Civ VI deer (the other deer subjects need clip calibration first).",
-      "subject_scale": 0.32,
-      "subject_radius": 0.15,
-      "herd_spread": 1.0
+      "note": "One Civ VI deer.",
+      "subject_scale": 0.48,
+      "subject_radius": 0.15
     },
     "furs": {
       "source": "RESOURCE_FURS",
       "family": "animal_herd",
-      "herd": 2,
+      "herd": 1,
       "subject_radius": 0.11,
       "piece_counts": {
         "res_furs_fox_01": 0,
@@ -342,29 +335,26 @@
         "res_furs_fox_03": 0
       },
       "subjects": [
-        "furs",
-        "furs.2"
+        "furs"
       ],
-      "note": "A standing fox and a curled one, echoing Civ III's lying fur.",
-      "subject_scale": 0.28,
-      "herd_spread": 1.0
+      "note": "One standing Civ VI fox.",
+      "subject_scale": 0.42
     },
     "ivory": {
       "source": "RESOURCE_IVORY",
       "family": "animal_herd",
-      "herd": 2,
+      "herd": 1,
       "subject_radius": 0.13,
       "count_scale": 0.5,
       "piece_counts": {
         "res_elephant_01": 0,
         "res_elephant_02": 0
       },
-      "note": "Two Civ VI elephants among elephant grass.",
+      "note": "One Civ VI elephant among elephant grass.",
       "subjects": [
         "ivory"
       ],
-      "subject_scale": 0.36,
-      "herd_spread": 1.0
+      "subject_scale": 0.54
     },
     "oil": {
       "source": "RESOURCE_OIL",
@@ -425,7 +415,13 @@
           "scale_variation": 0.0
         }
       ],
-      "note": "Civ VI's oasis rock ring and plants around a generated pond."
+      "note": "Civ VI's oasis rock ring and plants around a generated pond.",
+      "route_clearance": {
+        "largest": 0.6,
+        "smallest": 0.35,
+        "shift": 0.32,
+        "note": "Where a road or railroad crosses the tile, the oasis moves up to 0.32 tile toward the side farthest from the routes and shrinks (60% to 35%) to fit the clear space."
+      }
     },
     "silks": {
       "family": "plant_patch",

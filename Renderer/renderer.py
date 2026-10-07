@@ -22,11 +22,12 @@ from Renderer.lab.studies.resources import roster as resource_roster
 from Renderer.lab.studies.vegetation import cases as vegetation_cases
 from Renderer.lab.studies.farms import cases as farm_cases
 from Renderer.lab.studies.rivers import cases as river_cases
+from Renderer.lab.studies.city_readability import cases as city_cases
 
 
 def lab_tile_cases(category, case):
     """The Lab case module that supplies BIQ object bits for this case, if any."""
-    for module in (vegetation_cases, farm_cases, river_cases):
+    for module in (vegetation_cases, farm_cases, river_cases, city_cases):
         if module.applies(category, case):
             return module
     return None
@@ -652,7 +653,8 @@ def native_render(category, case, hour, zoom, output, *, behavior=None, center=(
     if category == "resources" and case in resource_roster.CASES:
         width, height = resource_roster.viewport(case, zoom)
     if lab_tile_cases(category, case):
-        width, height = lab_tile_cases(category, case).viewport(zoom)
+        module = lab_tile_cases(category, case)
+        width, height = module.viewport_for(case, zoom) if hasattr(module, "viewport_for") else module.viewport(zoom)
     command += (f' && {executable} "{windows(dll)}" ..\\.. '
                 f'..\\default.custom_rendering.txt "{windows(csv)}" "{windows(image)}" '
                 f'{width} {height} {center[0]} {center[1]} {zoom} {hour}')

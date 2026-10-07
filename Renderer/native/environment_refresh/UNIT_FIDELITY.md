@@ -77,6 +77,16 @@ missing normal authority; that absence is a tracked build dependency.
   action cursor reuse, clipping, config-off path, explicit CPU 3D delivery and
   retained terrain. Texture diagnostics use debugger output, not game-file logging.
 
+## Readability metadata
+
+`unit_quality.json` may carry `sizing` and `look`. Sizing sets each binding's
+uniform scale from native sprite areas (`fit_policy` records the rule); look
+publishes `look_gain`, `look_saturation` and `look_owner`, which the shared unit
+shader applies after its authored response (zeros are neutral). Live ground
+shadows darken once per pixel at the shared dynamic-shadow strength. Bodies
+flagged `C3X_RENDERER_UNIT_TEAM_DISC` get a soft owner disc in the tactical pass,
+coloured so the shared output transfer shows the exact owner colour.
+
 ## Verification and limits
 
 `python3 Renderer/renderer.py test units` runs the selected preparation and

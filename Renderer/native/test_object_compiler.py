@@ -677,8 +677,9 @@ int main(){
   auto const& vr=ro.layers[objects::route_layer];auto const& va2=ra.layers[objects::route_layer];
   assert(!vr.empty() && !va2.empty()); // texture turns split the strips differently
   auto width=[](std::vector<objects::Vertex> const& v){return std::hypot(v[0].world_x-v[1].world_x,v[0].world_y-v[1].world_y);};
-  // A wider stroke plus a wider dirt bed (two stroke widths, not 1.5).
-  assert(width(va2)>1.6f*width(vr) && width(va2)<2.1f*width(vr));
+  // Only slightly wider than a road (stroke and dirt bed), so dense rail
+  // networks do not outweigh roads.
+  assert(width(va2)>1.1f*width(vr) && width(va2)<1.35f*width(vr));
   bool joined=false;
   for(auto const& v:va2){assert(v.base_terrain==4.f && v.material_marsh==1.f);joined=joined || std::abs(v.u)<1e-5f;}
   for(auto const& v:vr)assert(v.u>=.0299f);
@@ -879,13 +880,27 @@ int main(){
   span.id="route/bridge/railroad/normal";own[objects::bridge_family].assets={span};
   auto high_far=[&](float,float v){return std::array<float,3>{v>tile_v+1.f?40.f:0.f,0,0};};
   assert(std::abs(objects::prepare_rigid(plan.instances[0],projection,with,high_far,zero).instance.place[7])<.01f);
+  // A bridge shorter than its river's carved channel (about .17 tile from the
+  // water's center) rests on the banks beyond, not on the channel's slopes
+  // well below the paths climbing onto it.
+  {
+   FeatureAsset short_span{};short_span.id="route/bridge/railroad/normal";
+   short_span.vertices={{{-.156f,0,0},{0,0,1},{0,0}},{{.156f,0,0},{0,0,1},{0,0}},{{0,0,.05f},{0,0,1},{0,0}}};
+   short_span.indices={0,1,2};
+   own[objects::bridge_family].assets={short_span};
+   auto channel=[&](float,float v){return std::array<float,3>{std::abs(v-(tile_v+1.f))<.17f?-20.f:0.f,0,0};};
+   auto channel_height=[&](float u,float v){return channel(u,v)[0]+2.5f;};
+   assert(std::abs(objects::prepare_rigid(plan.instances[0],projection,with,channel,channel_height).instance.place[7])<.01f);
+   own[objects::bridge_family].assets={span};
+  }
   // The bridged road ends under the bridge's end; the deck carries it over.
   objects::Plan road;road.patterns.push_back(bridged.patterns[0]);
   objects::Surfaces strip;objects::compile(road,projection,assets,flat,zero,strip);
   auto const& r=strip.layers[objects::route_layer];assert(!r.empty());
   float nearest=1e9f;
   for(auto const& vertex:r)nearest=std::min(nearest,std::hypot(vertex.world_x-(tile_u+.5f),vertex.world_y-(tile_v+1.f)));
-  assert(nearest>.195f && nearest<.25f);
+  // Default half length .18, less the .04 overlap.
+  assert(nearest>.13f && nearest<.16f);
   // A rendered river meanders off the tile edge: here its water centers 0.1
   // tile past the NE join. The bridge stands on that water and the road
   // half shortens to end under its moved end.
@@ -897,19 +912,206 @@ int main(){
   assert(std::abs(meander.patterns[0].crossing[1]-.1f)<.011f);
   objects::Plan moved;moved.patterns=meander.patterns;
   objects::Surfaces shifted;objects::compile(moved,projection,with,flat,zero,shifted);
-  nearest=1e9f;
-  for(auto const& vertex:shifted.layers[objects::route_layer])
-   nearest=std::min(nearest,std::hypot(vertex.world_x-(tile_u+.5f),vertex.world_y-(tile_v+1.f)));
-  assert(nearest>.09f && nearest<.14f);
+  // Centerline ends: quads are {left0,right0,right1,left0,right1,left1}.
+  auto centerline_to_join=[&](std::vector<objects::Vertex> const& v){
+   float best=1e9f;
+   for(std::size_t i=0;i+5<v.size();i+=6)for(auto [a,b]:{std::pair<std::size_t,std::size_t>{i,i+1},{i+2,i+5}})
+    best=std::min(best,std::hypot((v[a].world_x+v[b].world_x)*.5f-(tile_u+.5f),(v[a].world_y+v[b].world_y)*.5f-(tile_v+1.f)));
+   return best;
+  };
+  nearest=centerline_to_join(shifted.layers[objects::route_layer]);
+  assert(nearest>.03f && nearest<.05f);
   // A hill bend pushes the water a quarter tile off the edge: the bridge
   // follows it, and this tile's half runs to the join under the bridge's end.
   objects::Plan bent=bridged;bent.instances[0].asset=0;
   objects::promote_river_crossings(tile,[&](float,float v){return std::abs(v-(tile_v+1.24f))*64.f;},bent,&with);
   assert(std::abs(bent.instances[0].v+.24f)<.011f && std::abs(bent.patterns[0].crossing[1]-.24f)<.011f);
+  // Water standing well inside this tile puts the bridge there: the road
+  // keeps its piece between the join and the bridge (the neighbor's road
+  // meets it at the join), skips the deck, and resumes beyond it.
+  {
+   objects::Plan inside=bridged;inside.instances[0].asset=0;
+   objects::promote_river_crossings(tile,[&](float,float v){return std::abs(v-(tile_v+1.f-.24f))*64.f;},inside,&with);
+   assert(std::abs(inside.patterns[0].crossing[1]+.24f)<.011f);
+   objects::Plan one;one.patterns.push_back(inside.patterns[0]);
+   objects::Surfaces out;objects::compile(one,projection,with,flat,zero,out);
+   auto const& v=out.layers[objects::route_layer];
+   bool on_deck=false;
+   for(std::size_t i=0;i+5<v.size();i+=6)for(auto [a,b]:{std::pair<std::size_t,std::size_t>{i,i+1},{i+2,i+5}}){
+    float d=std::hypot((v[a].world_x+v[b].world_x)*.5f-(tile_u+.5f),(v[a].world_y+v[b].world_y)*.5f-(tile_v+1.f));
+    on_deck=on_deck || (d>.12f && d<.36f);
+   }
+   assert(centerline_to_join(v)<.005f && !on_deck);
+  }
+  // Pattern bridges stand at 70% of the source meshes' calibrated scale.
+  {
+   FeatureAsset long_span{};long_span.id="route/bridge/medieval/normal";
+   long_span.vertices={{{-.25f,0,0},{0,0,1},{0,0}},{{.25f,0,0},{0,0,1},{0,0}},{{0,0,.05f},{0,0,1},{0,0}}};
+   long_span.indices={0,1,2};
+   auto own=bundles;own[objects::bridge_family].assets={long_span};
+   objects::Assets scaled=assets;for(unsigned f=0;f<own.size();++f)scaled.bundles[f]=&own[f];
+   tile.river_code=2;objects::Plan sized;objects::select_routes(tile,scaled,true,true,neighbors(1u,0u),sized);tile.river_code=0;
+   assert(sized.instances.size()==1 && std::abs(sized.instances[0].scale-.7f)<1e-5f);
+   assert(std::abs(sized.patterns[0].bridge_half-.175f)<1e-5f);
+  }
+  // The bridged approach runs straight along the bridge axis a short way
+  // past the deck's end, wherever the river puts the bridge: a path bent
+  // away from the axis still leaves the bridge straight, and the line's far
+  // end (the tile's junction) stays where the pattern puts it.
+  for(float c:{0.f,.12f,-.12f}){
+   objects::PatternRoute bent_line{patterns.offsets[1],0u,2u,{},{},{},0u};
+   bent_line.joins[2]=0.f;bent_line.joins[3]=-1.f;bent_line.crossing[1]=c;bent_line.bridge_half=.18f;
+   auto const& line=patterns.lines[bent_line.line];
+   bent_line.points.assign(patterns.points.begin()+line.first,patterns.points.begin()+line.first+line.count);
+   for(auto& point:bent_line.points)point[0]+=.6f*(.5f-point[1])*(point[1]);   // bow the path sideways
+   bent_line.points.back()={.5f,0.f};
+   objects::Plan one;one.patterns.push_back(bent_line);objects::Surfaces out;
+   objects::compile(one,projection,assets,flat,zero,out);auto const& v=out.layers[objects::route_layer];
+   // Every centerline point short of the straight run's end sits on the axis (u=.5).
+   float deck_end=std::max(0.f,.18f-c),run=deck_end+std::clamp(.40f-deck_end,.05f,.12f);
+   float worst=0;
+   for(std::size_t i=0;i+5<v.size();i+=6)for(auto [a,b]:{std::pair<std::size_t,std::size_t>{i,i+1},{i+2,i+5}}){
+    float u=(v[a].world_x+v[b].world_x)*.5f-tile_u,wv=(v[a].world_y+v[b].world_y)*.5f-tile_v;
+    float d=1.f-wv;   // local v: distance from the NE join along the axis
+    if(d<run-.01f)worst=std::max(worst,std::abs(u-.5f));
+   }
+   assert(worst<.003f);
+   // The far end (the tile centre, u=v=.5) is untouched.
+   auto const& first=v[0];auto const& second=v[1];
+   float cu=(first.world_x+second.world_x)*.5f-tile_u,cv=1.f-((first.world_y+second.world_y)*.5f-tile_v);
+   assert(std::hypot(cu-.5f,cv-.5f)<.045f);   // the unjoined end overhangs ~.039 by design
+  }
+  // Civ III rail patterns often fork just inside the edge, and a few leave
+  // a loose stub at the join short of the line it meets. Next to a bridge the
+  // whole network leaves it straight: the fork moves to the straight run's
+  // end, nothing is drawn on the deck, and the other tile edges stay put.
+  {
+   objects::RoutePatterns fork;
+   auto add=[&](std::vector<std::array<float,2>> const& p,int start,int end){
+    fork.lines.push_back({std::uint32_t(fork.points.size()),std::uint16_t(p.size()),std::int8_t(start),std::int8_t(end)});
+    fork.points.insert(fork.points.end(),p.begin(),p.end());
+   };
+   add({{.5f,0.f},{.51f,.05f},{.53f,.10f}},0,-1);                              // into the bridged join
+   add({{.53f,.10f},{.58f,.30f},{.55f,.60f},{.5f,1.f}},-1,4);                   // on to SW
+   add({{.53f,.10f},{.70f,.12f},{.85f,.06f},{1.f,0.f}},-1,1);                   // on to the E corner
+   add({{.5f,0.f},{.52f,.03f}},0,-1);                                          // a loose stub
+   add({{1.f,0.f},{.70f,.09f},{.52f,.07f},{.45f,.30f},{.48f,.65f},{.5f,1.f}},1,4); // passing it
+   objects::Assets forked=assets;forked.road_patterns=&fork;
+   float const sw[]={0.f,1.f},east[]={.70710678f,-.70710678f};
+   auto route=[&](unsigned line){
+    objects::PatternRoute r{line,0u,0u,{},{},{},0u};
+    auto const& l=fork.lines[line];
+    if(l.start==0){r.bridges=1u;r.joins[0]=0.f;r.joins[1]=-1.f;r.bridge_half=.18f;}
+    if(l.start==1){r.joins[0]=east[0];r.joins[1]=east[1];}
+    if(l.end==1){r.joins[2]=east[0];r.joins[3]=east[1];}
+    if(l.end==4){r.joins[2]=sw[0];r.joins[3]=sw[1];}
+    return r;
+   };
+   for(auto lines:{std::vector<unsigned>{0,1,2},std::vector<unsigned>{3,4}}){
+    objects::Plan plan;for(unsigned line:lines)plan.patterns.push_back(route(line));
+    objects::Surfaces out;objects::compile(plan,projection,forked,flat,zero,out);
+    auto const& v=out.layers[objects::route_layer];assert(!v.empty());
+    // Just past the deck's end (.14 from the join) only the axis is drawn.
+    float worst=0;bool on_deck=false,reach_sw=false,reach_east=false;
+    for(std::size_t i=0;i+5<v.size();i+=6)for(auto [a,b]:{std::pair<std::size_t,std::size_t>{i,i+1},{i+2,i+5}}){
+     float u=(v[a].world_x+v[b].world_x)*.5f-tile_u,d=1.f-((v[a].world_y+v[b].world_y)*.5f-tile_v);
+     if(d>.14f && d<.23f && std::abs(u-.5f)<.10f)worst=std::max(worst,std::abs(u-.5f));
+     on_deck=on_deck || (d>.01f && d<.13f && std::abs(u-.5f)<.04f);
+     reach_sw=reach_sw || std::hypot(u-.5f,d-1.f)<.012f;
+     reach_east=reach_east || std::hypot(u-1.f,d)<.012f;
+    }
+    assert(worst<.004f && !on_deck && reach_sw && reach_east);
+   }
+  }
+  // The river runs in a valley: the land climbs 15 units from .2 to .6 tile
+  // off the water. On the map's oblique view a path descending to a deck on
+  // the valley floor would be drawn bent into the deck's side. The deck
+  // stands at the top of the lower bank instead, and its path is carried
+  // level to it, so on screen the path continues the deck's own line (its
+  // rails 2.5 over the deck; route strips draw 6.5 over their height).
+  {
+   auto valley=[&](float,float v){float d=std::abs(tile_v+1.f-v);return 2.5f+15.f*std::clamp((d-.2f)/.4f,0.f,1.f);};
+   auto valley_relief=[&](float u,float v){return std::array<float,3>{valley(u,v)-2.5f,0,0};};
+   FeatureAsset truss{};truss.id="route/bridge/railroad/normal";
+   truss.vertices={{{-.156f,0,0},{0,0,1},{0,0}},{{.156f,0,0},{0,0,1},{0,0}},{{0,0,.05f},{0,0,1},{0,0}}};
+   truss.indices={0,1,2};
+   auto own=bundles;own[objects::bridge_family].assets={truss};
+   objects::Assets with=assets;for(unsigned f=0;f<own.size();++f)with.bundles[f]=&own[f];
+   objects::Instance bridge{objects::bridge_family,0u,objects::feature_layer,.5f,0.f,-1.5707963f,1.f,13.f,0.f,false};
+   float level=objects::prepare_rigid(bridge,projection,with,valley_relief,valley).instance.place[7];
+   assert(std::abs(level-15.f)<.01f);
+   objects::RoutePatterns through;
+   through.lines.push_back({0u,5u,std::int8_t(0),std::int8_t(4)});
+   through.points={{.5f,0.f},{.5f,.25f},{.5f,.5f},{.5f,.75f},{.5f,1.f}};
+   objects::Assets straight_through=with;straight_through.road_patterns=&through;
+   objects::PatternRoute line{0u,0u,1u,{},{},{},0u};
+   line.joins={0.f,-1.f,0.f,1.f};line.bridge_half=.156f;
+   objects::Plan one;one.patterns.push_back(line);objects::Surfaces out;
+   objects::compile(one,projection,straight_through,valley_relief,valley,out);auto const& v=out.layers[objects::route_layer];assert(!v.empty());
+   auto screen=[](float wu,float wv,float h){return std::array<float,2>{64*(wu+wv),32*(wu-wv+1)-h*(128.f/224*.82f)};};
+   auto a=screen(tile_u+.5f,tile_v+1.f,level+2.5f),b=screen(tile_u+.5f,tile_v+1.f-.3f,level+2.5f);
+   float dx=b[0]-a[0],dy=b[1]-a[1],length=std::hypot(dx,dy),worst=0;int measured=0;
+   for(std::size_t i=0;i+5<v.size();i+=6)for(auto [p,q]:{std::pair<std::size_t,std::size_t>{i,i+1},{i+2,i+5}}){
+    float wu=(v[p].world_x+v[q].world_x)*.5f,wv=(v[p].world_y+v[q].world_y)*.5f,wz=(v[p].world_z+v[q].world_z)*.5f;
+    float along=1.f-(wv-tile_v);if(along>.45f)continue; // the floor and lower wall, carried level
+    auto s=screen(wu,wv,wz*112-2.5f);
+    worst=std::max(worst,std::abs((s[0]-a[0])*dy-(s[1]-a[1])*dx)/length);++measured;
+   }
+   assert(measured>3 && worst<.35f);
+  }
   // On the edge itself nothing moves.
   objects::Plan centered=bridged;centered.instances[0].asset=0;
   objects::promote_river_crossings(tile,[&](float,float v){return std::abs(v-(tile_v+1.f))*64.f;},centered,&with);
   assert(std::abs(centered.instances[0].v)<1e-4f && std::abs(centered.patterns[0].crossing[1])<1e-4f);
+ }
+ // A railroad runs through a mountain in a tunnel at ground level: hidden
+ // in rock (at least the foot, 4 here, over the land with true rock close
+ // by) and from an edge two mountain tiles share until it reaches rock. A
+ // portal entrance stands at the foot where hidden rail meets shown
+ // rail, turned toward the shown side: a climb gets one, a ridge one on each
+ // side, a rail past a mountain's foot none, a range's saddle none (it got
+ // two, the rail surfacing between peaks), and a range's tunnel reaching an
+ // open edge one at that edge. Portals once stood up the mountain where the
+ // rail rose 35.
+ {
+  objects::RoutePatterns through;
+  through.lines.push_back({0u,5u,std::int8_t(4),std::int8_t(0)});
+  through.points={{.5f,1.f},{.5f,.75f},{.5f,.5f},{.5f,.25f},{.5f,0.f}};
+  FeatureGroup tunnel;tunnel.name="tunnel_railroad";
+  {FeaturePlacement p{};p.asset_index=0;p.scale=2;tunnel.placements.push_back(p);}
+  objects::PatternRoute rail;std::vector<float> fade;
+  auto run=[&](std::vector<float> rise,std::vector<std::uint8_t> rock,std::array<bool,2> inside){
+   objects::Plan plan;rail=objects::PatternRoute{0u,4u,0u,{},{},{},0u};fade.assign(5,.5f);
+   objects::tunnel_route(rail,through,rise,rock,4.f,inside,tunnel,plan,fade);return plan;};
+  // A climb from the start edge (v=1) toward the end edge.
+  auto plan=run({0.f,15.f,30.f,45.f,60.f},{0,1,1,1,1},{false,false});
+  assert(plan.instances.size()==1);
+  float face=1.f-.25f*4.f/15.f;
+  for(auto const& instance:plan.instances){
+   assert(instance.family==objects::bridge_family && std::abs(instance.u-.5f)<1e-4f && std::abs(instance.v-face)<1e-4f);
+   assert(std::abs(std::abs(instance.rotation)-3.1415927f)<1e-4f && std::abs(instance.scale-1.4f)<1e-4f);
+  }
+  assert(std::abs(rail.points[1][1]-face)<1e-4f);   // the rail ends at the face
+  assert(fade==std::vector<float>({0.f,1.f,1.f,1.f,1.f}));
+  // Past a mountain's foot, with no rock close by: shown.
+  plan=run({0.f,10.f,20.f,10.f,0.f},{0,0,0,0,0},{false,false});
+  assert(plan.instances.empty() && fade==std::vector<float>(5,0.f));
+  // Over a ridge, a portal on each side.
+  plan=run({0.f,30.f,60.f,30.f,0.f},{0,1,1,1,0},{false,false});
+  assert(plan.instances.size()==2);
+  assert(std::abs(plan.instances[0].v-(1.f-.25f*4.f/30.f))<1e-4f && std::abs(plan.instances[1].v-.25f*4.f/30.f)<1e-4f);
+  assert(fade==std::vector<float>({0.f,1.f,1.f,1.f,0.f}));
+  // Between two range neighbors through a low saddle: hidden, no portal.
+  plan=run({20.f,40.f,2.f,40.f,20.f},{1,1,0,1,1},{true,true});
+  assert(plan.instances.empty() && fade==std::vector<float>(5,1.f));
+  // From a range neighbor over a peak and down to an open edge.
+  plan=run({20.f,30.f,60.f,30.f,0.f},{1,1,1,1,0},{true,false});
+  assert(plan.instances.size()==1 && std::abs(plan.instances[0].v-.25f*4.f/30.f)<1e-4f);
+  assert(std::abs(plan.instances[0].rotation)<1e-4f); // turned toward the end edge (v=0)
+  assert(fade==std::vector<float>({1.f,1.f,1.f,1.f,0.f}));
+  // A low tile at a range's end: the tunnel reaches the open edge.
+  plan=run({2.f,2.f,2.f,2.f,2.f},{0,0,0,0,0},{true,false});
+  assert(plan.instances.size()==1 && std::abs(plan.instances[0].v)<1e-4f && fade==std::vector<float>(5,1.f));
  }
  // Without a pattern pack the existing segment roads remain unchanged.
  objects::Assets legacy=assets;legacy.road_patterns=nullptr;
@@ -1078,15 +1280,10 @@ def route_draws_are_decals(renderer_source, pipeline_source):
     import re
     retained = re.search(r"OMSetDepthStencilState\(natural\.decal_depth,0\);\s*bool routes_drawn=draw\(geometry_route\);",
                          renderer_source)
-    fresh = re.search(r"else if \(layer==geometry_route && renderer\.natural\.decal_depth\) \{[^}]*"
+    # Other decal-like layers (rivers) may share the route branch.
+    fresh = re.search(r"else if \(\(?[^)]*\blayer==geometry_route\b[^)]*\)? && renderer\.natural\.decal_depth\) \{[^}]*"
                       r"OMSetDepthStencilState\(renderer\.natural\.decal_depth,0\);", pipeline_source)
     return bool(retained and fresh)
-
-
-def mountain_scales(source):
-    import re
-    found = re.search(r"mountain_height_scale=([0-9.]+)f,\s*mountain_span_scale=([0-9.]+)f", source)
-    return (float(found.group(1)), float(found.group(2))) if found else None
 
 
 class RouteRegressionContractTests(unittest.TestCase):
@@ -1102,7 +1299,7 @@ class RouteRegressionContractTests(unittest.TestCase):
         self.assertIsNotNone(fade)
         self.assertTrue(20.0 <= float(fade.group(1)) < float(fade.group(2)) <= 90.0)
         self.assertNotIn("pattern_route_mountain_cap", source)
-        self.assertRegex(source, r"float rise=route_height\(x,y\)-height_natural\(x,y\);")
+        self.assertRegex(source, r"rise\[index\]=route_height\(x,y\)-height_natural\(x,y\);")
         self.assertRegex(source, r"if\(input\.projection\.tile\.road_mask \|\| input\.projection\.tile\.railroad_mask\)\n")
 
     def test_route_strips_never_write_depth(self):
@@ -1113,9 +1310,12 @@ class RouteRegressionContractTests(unittest.TestCase):
             (ROOT / "Renderer/sandbox/fresh_pipeline.h").read_text()))
 
     def test_route_mountain_shape_matches_rendered_mesh(self):
-        # Routes and objects sampled a stale, taller/narrower mountain than the
-        # mesh, floating or hiding paths on the rock.
-        mesh = mountain_scales((ROOT / "Renderer/lab/shared/natural/relief_mesh_body.h").read_text())
-        objects = mountain_scales((ROOT / "Renderer/native/object_preparation.h").read_text())
-        self.assertIsNotNone(mesh)
-        self.assertEqual(objects, mesh)
+        # Routes and objects sampled a stale, taller/narrower copy of the
+        # mountain rule, floating or hiding paths on the rock. The mesh, route
+        # surfaces and resource seating now build one shared shape.
+        for path in ("Renderer/lab/shared/natural/relief_mesh_body.h", "Renderer/native/object_preparation.h",
+                     "Renderer/native/c3x_renderer.cpp"):
+            source = (ROOT / path).read_text()
+            self.assertRegex(source, r"MountainShape\b[^;(]*\(natural,", path)
+            self.assertNotIn("struct MountainPiece", source, path)
+            self.assertNotIn("natural.macro[variant]", source, path)

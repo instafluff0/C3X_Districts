@@ -10,7 +10,10 @@ Cases:
 - relief: the same layout with every land resource on a hill;
 - native-BATCH: each resource of a review batch on every terrain it can occupy;
   'Name~label' rows are Lab-only alternate compositions of Name; batches
-  longer than BLOCK_ROWS wrap into further column blocks.
+  longer than BLOCK_ROWS wrap into further column blocks;
+- oasis-roads: oases on desert crossed by a straight road, an L junction, a
+  straight railroad and a crossroads, beside one without routes. Roster names
+  ending in "|road" or "|rail" give that tile a route ("|road" alone: no resource).
 """
 from __future__ import annotations
 
@@ -44,7 +47,26 @@ def native() -> dict:
 
 
 def cases() -> tuple[str, ...]:
-    return ("roster", "relief") + tuple("native-" + name for name in native()["batches"])
+    return ("roster", "relief", "oasis-roads") + tuple("native-" + name for name in native()["batches"])
+
+
+# Raw Civ III neighbour offsets: east-west (+-2, 0), north-south (0, +-2).
+OASIS_ROADS = (
+    ((-6, -4), "road", ((2, 0), (-2, 0))),                    # straight road
+    ((6, -4), "road", ((2, 0), (0, 2))),                      # L junction
+    ((-6, 4), "rail", ((2, 0), (-2, 0))),                     # straight railroad
+    ((6, 4), "road", ((2, 0), (-2, 0), (0, 2), (0, -2))),     # crossroads
+    ((0, 0), None, ()),                                       # no route
+)
+
+
+def oasis_roads() -> list[tuple[int, int, str]]:
+    """(dx, dy, roster name) for every tile of the oasis-roads case."""
+    entries = []
+    for (x, y), route, arms in OASIS_ROADS:
+        entries.append((x, y, "Oasis" + (f"|{route}" if route else "")))
+        entries += [(x + ax, y + ay, f"|{route}") for ax, ay in arms]
+    return entries
 
 
 CASES = cases()
@@ -91,11 +113,16 @@ def placements(case: str) -> list[tuple[int, int, str, str]]:
     """Resource placements as (dx, dy, resource, terrain label)."""
     if case.startswith("native-"):
         return list(native_layout(case))
+    if case == "oasis-roads":
+        return [(x, y, "Oasis", "Desert") for x, y, name in oasis_roads() if name.startswith("Oasis")]
     return [(x, y, m["civ3_name"], "Hills" if case == "relief" and y < WATER_EDGE else
              "Coast" if y >= WATER_EDGE else "Grassland") for x, y, m in layout()]
 
 
 def terrain(case: str, dx: int, dy: int, base: int, real: int) -> tuple[int, int]:
+    if case == "oasis-roads":
+        near = any(abs(dx - x) + abs(dy - y) <= 4 for (x, y), _, _ in OASIS_ROADS)
+        return TERRAIN["Desert"] if near else TERRAIN["Grassland"]
     if case.startswith("native-"):
         for x, y, _, label in native_layout(case):
             if (x, y) == (dx, dy):
@@ -110,6 +137,8 @@ def terrain(case: str, dx: int, dy: int, base: int, real: int) -> tuple[int, int
 
 def spec(case: str) -> str:
     """Compact environment value consumed by the native Lab preview."""
+    if case == "oasis-roads":
+        return ";".join(f"{x},{y},{name}" for x, y, name in oasis_roads())
     return ";".join(f"{x},{y},{name}" for x, y, name, _ in placements(case))
 
 
@@ -120,4 +149,6 @@ def viewport(case: str, zoom: int) -> tuple[int, int]:
             return (max(abs(x) for x, _, _, _ in native_layout(case)) + 3) * zoom, (BLOCK_ROWS + 2) * zoom
         columns = max(x for x, _, _, _ in native_layout(case)) // 4 + 2
         return max(6, 2 * columns + 1) * zoom, (rows + 2) * zoom
+    if case == "oasis-roads":
+        return 11 * zoom, 6 * zoom
     return 8 * zoom, 6 * zoom

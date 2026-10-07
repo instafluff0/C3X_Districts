@@ -739,6 +739,20 @@ float sample_masked_land_clutter_height(Texture2D height_atlas, Texture2D base_a
     return height * coverage;
 }
 
+// Farm kit ground tint by its terrain t (tundra 0, grassland .25, flood plain
+// .4, plains .65, desert 1; object_compiler.h): a per-channel recolour with
+// some desaturation at the ends, so the grass keeps its detail.
+float3 farm_kit_ground_tint(float3 albedo, float t)
+{
+    float3 tint = t < 0.25 ? lerp(float3(0.76, 0.90, 0.98), float3(1.0, 1.0, 1.0), t / 0.25) :
+        t < 0.4 ? lerp(float3(1.0, 1.0, 1.0), float3(0.78, 1.02, 0.66), (t - 0.25) / 0.15) :
+        t < 0.65 ? lerp(float3(0.78, 1.02, 0.66), float3(1.42, 1.14, 0.45), (t - 0.4) / 0.25) :
+        lerp(float3(1.42, 1.14, 0.45), float3(1.50, 1.30, 0.95), (t - 0.65) / 0.35);
+    float desaturate = t < 0.25 ? 0.55 * (1.0 - t / 0.25) : 0.5 * saturate((t - 0.65) / 0.35);
+    float3 tinted = albedo * tint;
+    return lerp(tinted, dot(tinted, float3(0.299, 0.587, 0.114)).xxx, desaturate);
+}
+
 float4 sample_reused_resource_slot(float slot, float2 uv)
 {
     float4 sampled = resource_base_texture_7.Sample(material_sampler, uv);
@@ -1143,6 +1157,19 @@ float4 q6_raw_feature(FeaturePixelInput input)
         emissive = resource_base_texture_3.Sample(material_sampler, input.uv).rgb;
     }
     float4 mine_sample = sample_reused_resource_slot(mine_slot, input.uv);
+    // A ground kit's farm ground (slot 3) and planted crops (slot 0) carry
+    // their terrain tint t as their normal's length (1.1 + t; plain decals 1):
+    // the ground fully, the crops partly.
+    float farm_kit_normal_length = length(input.geometry_normal);
+    if (farm_kit_field_weight > 0.5 && farm_kit_normal_length > 1.05)
+    {
+        float farm_kit_terrain = saturate(farm_kit_normal_length - 1.1);
+        if (mine_slot > 2.5 && mine_slot < 3.5)
+            albedo = farm_kit_ground_tint(albedo, farm_kit_terrain);
+        else if (mine_slot < 0.5) // crops: .7 of it, .35 on desert (fields stay green)
+            albedo = lerp(albedo, farm_kit_ground_tint(albedo, farm_kit_terrain),
+                0.7 - 0.35 * saturate((farm_kit_terrain - 0.65) / 0.35));
+    }
     // Resource models cut out by their slot alpha too (masked plant cards);
     // opaque BC1 slots sample alpha 1, so solid bodies are unaffected.
     clip(lerp(1.0, mine_sample.a - lerp(0.08, 0.004, saturate(resource_decal_weight + farm_kit_field_weight)),
@@ -2825,6 +2852,11 @@ FeaturePixelInput VSIntegratedFeature(PackedFeatureInput packed)
 
 float4 PSIntegratedFeature(FeaturePixelInput input) : SV_TARGET
 {
+#if defined(Q6_WORLD_SHADOWS) || defined(Q3_HYDROLOGY_DATA)
+    // Bridge parts below the bridge's base (its bank, the waterline) stay
+    // underwater; VSSharedFeature carries that height as w - 2.
+    if (input.q6_world.w > 1.5) clip(input.q6_world.w - 2.0 + 0.002);
+#endif
     return PSFeature(input).color;
 }
 

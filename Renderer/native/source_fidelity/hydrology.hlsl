@@ -1790,13 +1790,13 @@ float4 q6_raw_main(PixelInput input)
             // earthy worn bed (its noise from that dirt piece) settles the
             // track into the ground; the ballast fades in over it, and the
             // sleepers and steel stand on the ballast. The railroad strip
-            // reaches two stroke widths, so it has its own geometry-edge cut.
+            // reaches 1.65 stroke widths, so it has its own geometry-edge cut.
             float edge = abs(across);
-            float rail_cut = saturate((1.95 - edge) / max(fwidth(edge), 0.0001) + 0.5) *
+            float rail_cut = saturate((1.60 - edge) / max(fwidth(edge), 0.0001) + 0.5) *
                 (1.0 - saturate(input.material_weights.z));
             float dirt_noise = road_base_texture_0.Sample(material_sampler,
                 float2(input.uv.x * 0.25, 0.948 + across * 0.012)).a;
-            float dirt_height = (1.0 - smoothstep(0.45, 1.90, edge)) * (0.55 + 0.90 * dirt_noise);
+            float dirt_height = (1.0 - smoothstep(0.45, 1.58, edge)) * (0.55 + 0.90 * dirt_noise);
             float dirt_cover = saturate((dirt_height - 0.50 * pattern_ground - 0.02) / 0.55);
             float ballast_cover = saturate((bed.a * (1.0 - smoothstep(0.55, 1.15, edge)) -
                                             0.35 * pattern_ground - 0.04) / 0.30);
@@ -3446,8 +3446,10 @@ float4 q3_water_material(PixelInput input) {
    float spacing=lerp(2.5,1.8,rapids);
    float offset=abs(frac(across/spacing)-.5)*spacing;
    float lane=smoothstep(spacing*.5-.30-aa*.5,spacing*.5-.05,offset);
+   // A headwater pool is still water; its distance rings are not current.
    stream_lines=lane*dash*flowing*lerp(.22,.45,rapids)
-    *(1-smoothstep(water_width-2.0,water_width-.4,distance_pixels));
+    *(1-smoothstep(water_width-2.0,water_width-.4,distance_pixels))
+    *smoothstep(14,34,input.river_data.w);
   }
   float3 river_normal=normalize(float3(-lean*(.24+.16*rapids),1));
   float3 water_light=q6_receiver_illumination(input,river_normal,1,1);
@@ -3474,6 +3476,10 @@ float4 q3_water_material(PixelInput input) {
   // The mirror target reflects about the sea plane. Rivers keep the flat
   // datum, so the lookup moves by the river's own height above that plane;
   // a raised reach (unusual) would also mirror its own banks, so fade it.
+  // Mirrored ground adds color without coverage, so this alpha counts only
+  // standing objects (forests, jungles, units, buildings) and mountains: land
+  // and hills just above the sea plane would otherwise mirror onto the river
+  // beside them.
   float lift=max(0,input.q6_world.z-NativeReflection.z);
   float2 mirror_uv=(input.position.xy+NativeReflectionTarget.zw+
    float2(0,2*lift*NativeReflection.x))/Q3_REFLECTION_SIZE;
@@ -3483,9 +3489,13 @@ float4 q3_water_material(PixelInput input) {
   float inside=step(0,mirror_uv.x)*step(mirror_uv.x,1)*step(0,mirror_uv.y)*step(mirror_uv.y,1)
    *NativeReflection.w;
   mirrored_alpha=saturate(mirrored.a)*inside*(1-smoothstep(1.5,3.5,lift*112));
-  reflected=lerp(reflected,mirrored.rgb,mirrored_alpha);
+  // Keep some sky in the mirror image, so a shaded mountain face reads as a
+  // soft grey rather than near-black.
+  reflected=lerp(reflected,mirrored.rgb,mirrored_alpha*.75);
 #endif
-  float reflection=fresnel*max(mirrored_alpha,.4)*.68*land_bank;
+  // A mirrored object outweighs the water's own dark body; open sky keeps
+  // the old strength.
+  float reflection=fresnel*lerp(.272,.9,mirrored_alpha)*land_bank;
   // Open-sea glare strength, so a river shares the sea's sun path. The calm
   // surface keeps the glare a smooth sheen; ripple normals only break it up.
   float3 glint_normal=normalize(float3(-lean*(.08+.10*rapids),1));

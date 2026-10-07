@@ -21,7 +21,9 @@
     "Renderer/tools/asset_compiler/hill_height_import.py",
     "Renderer/native/city_fidelity/mountain.hlsl",
     "Renderer/native/city_fidelity/terrain.hlsl",
-    "Renderer/lab/shared/natural/hill_decals.h"
+    "Renderer/lab/shared/natural/hill_decals.h",
+    "Renderer/lab/shared/natural/queries.h",
+    "Renderer/lab/shared/hydrology/river_corridor.h"
   ],
   "recipe": {
     "terrain": 2,
@@ -43,7 +45,8 @@
     "Renderer.native.test_render_core",
     "Renderer.tools.asset_compiler.test_hill_height_import",
     "Renderer.native.test_hill_decals",
-    "Renderer.native.test_ground_tessellation"
+    "Renderer.native.test_ground_tessellation",
+    "Renderer.native.test_hill_river_banks"
   ],
   "references": {
     "d3d11": [

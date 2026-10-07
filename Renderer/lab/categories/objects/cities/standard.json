@@ -61,7 +61,9 @@
     "Renderer.native.test_city_lighting",
     "Renderer.tools.test_city_auxiliary_uv",
     "Renderer.native.test_light_spatial_index",
-    "Renderer.native.test_city_submission"
+    "Renderer.native.test_city_submission",
+    "Renderer.native.test_city_site",
+    "Renderer.lab.studies.city_readability.test_recompose"
   ],
   "references": {
     "d3d11": [

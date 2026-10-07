@@ -29,11 +29,45 @@ int main(){
  unsigned flags=C3X_RENDERER_UNIT_STATE_CAPTURED|C3X_RENDERER_UNIT_SELECTED|C3X_RENDERER_UNIT_CURSOR;
  assert(invoke(C3X_NATIVE_UNIT_DRAW,nullptr,nullptr,&unit,bounds,flags)==1);
  assert(remote.calls==1&&remote.flags==flags&&bounds[0]==123);
- assert(invoke(C3X_NATIVE_UNIT_DRAW,nullptr,nullptr,&unit,bounds,flags|16u)==-1);
+ // The team-colour disc preference travels with the body; unknown bits do not.
+ assert(invoke(C3X_NATIVE_UNIT_DRAW,nullptr,nullptr,&unit,bounds,flags|C3X_RENDERER_UNIT_TEAM_DISC)==1);
+ assert(remote.calls==2&&remote.flags==(flags|C3X_RENDERER_UNIT_TEAM_DISC));
+ assert(invoke(C3X_NATIVE_UNIT_DRAW,nullptr,nullptr,&unit,bounds,flags|32u)==-1);
  assert(invoke(C3X_NATIVE_UNIT_DRAW,nullptr,nullptr,nullptr,bounds,flags)==-1);
  unit.struct_size=0;
  assert(invoke(C3X_NATIVE_UNIT_DRAW,nullptr,nullptr,&unit,bounds,flags)==-1);
- assert(remote.calls==1);
+ assert(remote.calls==2);
+}
+''')
+
+    def test_team_disc_flag_becomes_owner_ring(self):
+        run_cpp(r'''
+#include "Renderer/native/render_core/unit_instances.h"
+#include <cassert>
+#include <string>
+using namespace c3x_renderer::render_core;
+struct Clip {std::string name="idle";bool ambient=true,loop=true;double duration=3;unsigned frames=91;};
+struct Unit {std::vector<std::string> keys={"settler"};std::vector<Clip> actions={Clip{}};};
+int main(){
+ UnitInstances world;std::vector<Unit> catalog(1);
+ c3x_renderer_tile_v1 tile{};tile.tile_x=4;tile.tile_y=4;
+ tile.tile_flags=C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_VISIBLE;
+ c3x_renderer_frame_v1 frame{};frame.tile_count=1;frame.tiles=&tile;frame.tile_width=128;frame.tile_height=64;
+ c3x_renderer_unit_state_v1 state{};state.struct_size=sizeof(state);state.unit_id=7;
+ state.kind=C3X_RENDERER_UNIT_STATE_OBSERVE;state.tile_x=state.tile_y=4;
+ state.action=1;state.max_hp=3;state.visible=1;state.presentation_frequency=60000;
+ c3x_renderer_unit_v1 body{};body.struct_size=sizeof(body);body.unit_id=7;body.action=1;
+ body.frame_count=15;body.sprite_width=body.sprite_height=191;body.projection_scale_milli=1000;
+ body.presentation_frequency=60000;std::strcpy(body.unit_key,"settler");
+ auto capture=[&](unsigned flags,long long ticks){body.presentation_time_ticks=state.presentation_time_ticks=ticks;
+  assert(world.state(state));UnitInstances::Selection selection;
+  return world.capture(body,flags,catalog,[](int){return "idle";},selection);};
+ assert(capture(C3X_RENDERER_UNIT_STATE_CAPTURED|C3X_RENDERER_UNIT_TEAM_DISC,1000));
+ auto poses=world.scene_poses(frame,1000,60000,catalog);
+ assert(poses.size()==1&&poses[0].owner_ring&&!poses[0].cursor);
+ assert(capture(C3X_RENDERER_UNIT_STATE_CAPTURED,2000)); // preference off or city tile
+ poses=world.scene_poses(frame,2000,60000,catalog);assert(poses.size()==1&&!poses[0].owner_ring);
+ assert(!capture(C3X_RENDERER_UNIT_STATE_CAPTURED|32u,3000));
 }
 ''')
 

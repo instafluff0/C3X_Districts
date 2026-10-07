@@ -584,8 +584,9 @@ def build(output: Path = OUTPUT, alternates: bool = True, catalog: str | None = 
             metas = [model(part, -float(ground or 0)) for part in parts]
             models[asset_id] = {"parts": parts, "radius": max(meta["radius"] for meta in metas),
                                 "height": max(meta["height"] for meta in metas), "texture": None, "masked": False}
-        if asset_id not in models and asset_id.startswith("animated/"):
-            # Placeholder naming an animated subject; the runtime places the skinned body.
+        if asset_id not in models and asset_id.startswith(("animated/", "clearance/")):
+            # Placeholder naming an animated subject (the runtime places the skinned
+            # body) or a layout rule ("clearance/routes"; the runtime draws nothing).
             models[asset_id] = {"texture": None, "masked": False, "vertices": [((0.0, 0.0, 0.0), (0.0, 0.0, 1.0),
                                 (0.0, 0.0))] * 3, "indices": [0, 1, 2], "radius": 0.0, "height": 0.0}
         if asset_id not in models:
@@ -734,8 +735,18 @@ def build(output: Path = OUTPUT, alternates: bool = True, catalog: str | None = 
                            **overrides.get(group_name.split("/")[0], {})}
             mask = sum(1 << TERRAIN_INDEX[terrain] for terrain in terrains)
             for variant in range(per_group):
-                variants.append((mask, bake_variant(f"{name}:{group_name}:{variant}", setting_for, pieces, decals,
-                                                    model=model, decal_cell_ids=decal_cell_ids, accent=accent)))
+                instances = bake_variant(f"{name}:{group_name}:{variant}", setting_for, pieces, decals,
+                                         model=model, decal_cell_ids=decal_cell_ids, accent=accent)
+                if profile.get("route_clearance"):
+                    # Where roads or railroads cross the tile the runtime moves the whole
+                    # layout up to "ground_fit" tiles toward the side farthest from the
+                    # drawn routes and shrinks it to fit, between "lift" and "scale".
+                    clearance = profile["route_clearance"]
+                    model("clearance/routes")
+                    instances.append({"model": "clearance/routes", "u": .5, "v": .5, "rotation": 0.0,
+                                      "scale": clearance["largest"], "lift": clearance["smallest"], "radius": 0.0,
+                                      "ground_fit": clearance["shift"]})
+                variants.append((mask, instances))
         compositions.append((name, variants))
         pieces, decals = selection(profile, base_set, base_set if decal_source is source else decal_set)
         report["resources"][name] = {"source": profile.get("source"), "models": len(pieces), "decals": len(decals),

@@ -16,7 +16,7 @@
     },
     {
       "path": "generated/shaders/hydrology/scene_material_v1.hlsl",
-      "sha256": "85e1b30a7819baeba7eae963cd8eac62784467c1b4e9522122647822b373e0aa"
+      "sha256": "7369e5b79457d8dedb3b0b45ceb011630fa53dd23e5df3211c2c6ce43210530d"
     },
     {
       "path": "generated/shaders/hydrology/water_effects.hlsl",
@@ -24,7 +24,7 @@
     },
     {
       "path": "generated/shaders/hydrology/water_natural.hlsl",
-      "sha256": "1a8b69cffe50bcaaa103ef006008e7d7c3fbb11cdf1c825fa8418a5fb8e70394"
+      "sha256": "2973e907e33289384c7c8ee256849567a7c5123b6e2995a6f3dd4f84c03018bd"
     },
     {
       "path": "generated/shaders/lighting/city_environment.hlsl",
@@ -36,7 +36,7 @@
     },
     {
       "path": "generated/shaders/lighting/generated/scene_linear_v1.hlsl",
-      "sha256": "7b4b517d4cc9cdeb012538f08d60bfe8decfa32ddf0a45d0c51346ad3e34c768"
+      "sha256": "8a1572495e1630b651ba02c353cd622164c564be3a4519cf48991cdbfb9765e8"
     },
     {
       "path": "generated/shaders/lighting/local_facade_lights.hlsl",
@@ -64,7 +64,7 @@
     },
     {
       "path": "generated/shaders/objects/city_scene_material.hlsl",
-      "sha256": "1c046f48264666bb8f7a4f22f1f94cf6bf9839b4b50777ef4870e953c8b31405"
+      "sha256": "a992ef1cdd5ee4b2833f5f663b733712234d92ef5f4118a3d47b2d9c2985e54c"
     },
     {
       "path": "generated/shaders/objects/instance_geometry.hlsl",
@@ -88,7 +88,7 @@
     },
     {
       "path": "generated/shaders/relief/beauty_mountain.hlsl",
-      "sha256": "36d516b68825f8cb6ae70c4042b54c0414cf6b489f80c5edd0248fa49009fa54"
+      "sha256": "eaade92af9da42c282bf6da5ff439ff5c9c7c12aa61eafab5e6fae8cd83a3322"
     },
     {
       "path": "generated/shaders/relief/beauty_terrain.hlsl",
@@ -132,7 +132,7 @@
     },
     {
       "path": "hydrology.hlsl",
-      "sha256": "baaaa670e4beb4b8e43025c449dc788b13ad45acc47b84a7473b02bb01e7b499"
+      "sha256": "72d37653e27b249bd12b00d5267531814ef5a9589b9a9a950353572604a70712"
     }
   ]
 }

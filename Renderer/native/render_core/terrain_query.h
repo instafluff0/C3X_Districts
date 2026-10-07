@@ -15,7 +15,8 @@ constexpr double mountain_scale = 1.30;
 constexpr double volcano_scale = 1.60;
 constexpr double volcano_footprint = .62 / volcano_scale;
 // hidden: the viewer has not explored this tile (ViewerTopology bit 25).
-struct Tile { int base = 2, real = 2; bool present = false, hidden = false; };
+// snow: Civ III's snow-capped mountain flag (topology bit 26).
+struct Tile { int base = 2, real = 2; bool present = false, hidden = false, snow = false; };
 // Revealed ground meets an unexplored tile at the 2.5 datum. No terrain is
 // drawn there and its fog is a flat diamond, so ground raised up to that edge
 // would expose the flat underlay below it (or a cut silhouette). Returns 1

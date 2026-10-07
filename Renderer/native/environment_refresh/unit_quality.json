@@ -38,5 +38,14 @@
       "minimum_canvas": 320,
       "sample_scale": 4
     }
+  },
+  "sizing": {
+    "sprites": "Renderer/inventory/civ3_unit_sprite_sizes.json",
+    "factor": 1.0
+  },
+  "look": {
+    "gain": 0.5,
+    "saturation": 0.25,
+    "owner": 1.0
   }
 }

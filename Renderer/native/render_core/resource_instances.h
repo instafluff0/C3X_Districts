@@ -1,5 +1,8 @@
 #pragma once
 #include "../animation_runtime.h"
+#include <algorithm>
+#include <array>
+#include <cmath>
 
 namespace c3x_renderer { namespace render_core {
 
@@ -68,6 +71,34 @@ inline void slope_resource_pose(unsigned bones,float a,float b,float c,float* ou
         for(unsigned row=0;row<4;++row)m[row*4+2]+=a*m[row*4]+b*m[row*4+1];
         m[14]+=c;
     }
+}
+
+// Where a layout makes room for routes (an oasis): {shrink, du, dv}. Sizes from
+// `largest` down to `smallest` of the group's full reach `radius` are tried; the
+// first that has a spot inside the tile (moving up to `reach` tiles) clear of
+// every drawn route point (tile-local u,v) by its reach plus a small margin is
+// used, at its clearest spot. Among equally clear spots, the one farthest from
+// the routes on average wins (the open corner between two arms, not along one).
+// If none fits, the smallest size takes its clearest spot.
+template<class Points>
+std::array<float,3> route_clearance_layout(Points const& points,float radius,float smallest,float largest,
+        float reach){
+    std::array<float,3> chosen{smallest,0.f,0.f};
+    for(int step=0;step<=8;++step){
+        float shrink=largest+(smallest-largest)*float(step)/8.f;
+        float room=std::max(0.f,.47f-radius*shrink),best=-1.f,best_mean=-1.f;
+        for(int k=-1;k<16;++k){
+            float angle=6.28318530718f*float(k)/16.f,distance=k<0?0.f:reach;
+            float du=std::clamp(std::cos(angle)*distance,-room,room),dv=std::clamp(std::sin(angle)*distance,-room,room);
+            float clearance=1e9f,mean=0.f;
+            for(auto const& p:points){float d=std::hypot(p[0]-.5f-du,p[1]-.5f-dv);clearance=std::min(clearance,d);mean+=d;}
+            mean/=float(std::max<std::size_t>(1,points.size()));
+            if(clearance>best+1e-3f || (clearance>best-1e-3f && mean>best_mean)){
+                best=std::max(best,clearance);best_mean=mean;chosen={shrink,du,dv};}
+        }
+        if(best-.04f>=radius*shrink)return chosen;
+    }
+    return chosen;
 }
 
 } }
