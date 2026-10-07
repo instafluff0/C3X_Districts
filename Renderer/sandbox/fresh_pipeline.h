@@ -3050,6 +3050,10 @@ struct SandboxFreshPipeline {
             context->PSSetShaderResources(0,3,renderer.wave_views.data());
             context->PSSetConstantBuffers(7,1,&renderer.wave_frame);
             context->OMSetDepthStencilState(renderer.natural.decal_depth,0);
+        } else if (layer==geometry_route && renderer.natural.decal_depth) {
+            // Routes are a surface decal: a translucent fringe must not write
+            // depth and reject another path's core where strips overlap.
+            context->OMSetDepthStencilState(renderer.natural.decal_depth,0);
         }
         if(mirrored) {
             unsigned provider=layer<geometry_feature?0:layer<geometry_natural_terrain?1:

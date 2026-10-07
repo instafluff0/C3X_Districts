@@ -1,4 +1,15 @@
-# Roads on `test.biq`
+# Roads
+
+## Civ III connection patterns (current candidate)
+
+`civ3_patterns.py` renders the infrastructure `network` fixture at overview,
+gameplay and close zooms through the current candidate; `--before` adds the
+same views with the pattern pack hidden (the unchanged segment roads in the
+same DLL) and writes `Renderer/lab/out/roads/patterns/compare.png`. Run it with
+a Python that has Pillow. `--center x,y` frames a close-up; `--no-river` drops
+the fixture river. See the infrastructure category README for the rule.
+
+## Segment roads on `test.biq` (historical study)
 
 Run `python3 Renderer/lab/studies/roads/test_biq.py` from the project root. The
 study exports the original BIQ to a local CSV, stamps a deterministic road

@@ -156,9 +156,15 @@ def source_preview(artdef: str, target: Path) -> bool:
     return False
 
 
-def collect(label: str, zooms=ZOOMS):
+def review_cases(resource_pack: str = "") -> tuple[str, ...]:
+    """Catalog cases need the catalog pack; every other case renders with any pack."""
+    catalog = resource_pack == "ResourceCatalogLab"
+    return tuple(case for case in roster.CASES if case.startswith("native-catalog-") == catalog)
+
+
+def collect(label: str, zooms=ZOOMS, cases=None):
     results = {}
-    for case in roster.CASES:
+    for case in cases or review_cases():
         for zoom in zooms:
             folder = OUT / label / f"{case}-z{zoom}"
             census = {}
@@ -170,17 +176,20 @@ def collect(label: str, zooms=ZOOMS):
     return results
 
 
-def render(label: str, zooms=ZOOMS, resource_pack: str = ""):
+def render(label: str, zooms=ZOOMS, resource_pack: str = "", cases=None):
     renderer.prepare_sources(["resources"])
+    from Renderer.tools.asset_compiler import build_resource_compositions as compositions
     if resource_pack == "ResourceCompositionLab":
-        from Renderer.tools.asset_compiler.build_resource_compositions import build as build_compositions
-        build_compositions()
+        compositions.build()
     renderer.ensure_candidate(["resources"])
-    for case in roster.CASES:
+    cases = cases or review_cases(resource_pack)
+    for case in cases:
+        if resource_pack == "ResourceCatalogLab":
+            compositions.build(compositions.CATALOG, catalog=case.removeprefix("native-catalog-"))
         for zoom in zooms:
             renderer.native_render("resources", case, 12, zoom, OUT / label / f"{case}-z{zoom}",
                                    resource_pack=resource_pack)
-    return collect(label, zooms)
+    return collect(label, zooms, cases)
 
 
 def gallery(label: str, results) -> Path:
@@ -196,7 +205,8 @@ def gallery(label: str, results) -> Path:
         census = results[(case, zooms[0])][1]
         rows = []
         for dx, dy, name, terrain in roster.placements(case):
-            mapping = by_name[name]
+            mapping = by_name.get(name.split("~")[0], {"civ3_icon_index": -1, "civ6_artdef": "", "match": "catalog",
+                                                         "confidence": ""})
             slug = re.sub(r"[^a-z]+", "-", f"{name} {terrain}".lower()).strip("-")
             sprite = sprites.get(mapping["civ3_icon_index"])
             if sprite:
@@ -211,7 +221,8 @@ def gallery(label: str, results) -> Path:
                 write_png(crops / f"{slug}-{case}-z{zoom}.png", *piece)
                 cells.append(f'<img src="crops/{slug}-{case}-z{zoom}.png" width="{256 if zoom == 256 else 144}">')
             status = "replaced" if census.get(name) else "native Civ III sprite"
-            census_rows[name] = (mapping, production_path(name), status)
+            if mapping["civ6_artdef"]:
+                census_rows[name] = (mapping, production_path(name), status)
             rows.append(f"<tr><td><b>{html.escape(name)}</b><br><small>{html.escape(terrain)} · {status}</small></td>"
                         + "".join(f"<td>{c}</td>" for c in cells) + "</tr>")
         heads = "".join(f"<th>{case} @ {zoom}</th>" for zoom in zooms)
@@ -234,11 +245,14 @@ def main() -> int:
     parser.add_argument("--zoom", type=int, action="append", help="Zoom levels (default 128 and 256)")
     parser.add_argument("--gallery-only", action="store_true", help="Rebuild the gallery from existing renders")
     parser.add_argument("--resource-pack", default="",
-                        help="Render with this pack instead of production (ResourceCompositionLab is rebuilt first)")
+                        help="Render with this pack instead of production (ResourceCompositionLab and "
+                             "ResourceCatalogLab are rebuilt first; the catalog pack renders the catalog cases)")
+    parser.add_argument("--case", action="append", help="Render only these cases")
     args = parser.parse_args()
     zooms = tuple(args.zoom or ZOOMS)
-    page = gallery(args.label, collect(args.label, zooms) if args.gallery_only else
-                   render(args.label, zooms, args.resource_pack))
+    cases = tuple(args.case or review_cases(args.resource_pack))
+    page = gallery(args.label, collect(args.label, zooms, cases) if args.gallery_only else
+                   render(args.label, zooms, args.resource_pack, cases))
     print(f"Wrote {page.relative_to(ROOT)}")
     return 0
 

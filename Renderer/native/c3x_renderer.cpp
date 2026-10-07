@@ -349,6 +349,8 @@ struct ResourceAnimation {
 struct ResourceAnchor {
     unsigned asset = 0, seed = 0;
     float u = .5f, v = .5f, world_u = 0, world_v = 0, ground = 0;
+    float yaw = 0, scale = 1;   // composition facing offset and size multiplier
+    float slope_x = 0, slope_y = 0;   // ground rise (tiles) per tile of local x/y under the body
     int anchor_x = 0, anchor_y = 0, tile_x = 0, tile_y = 0;
 };
 struct ResourceBackdrop {
@@ -703,6 +705,7 @@ public:
 #endif
     c3x_renderer::objects::RigidSourceGpu rigid_sources;
     c3x_renderer::render_core::SharedInstanceSubmission shared_instances;
+    std::uint64_t shared_instance_fallbacks=0; // rigid draws drawn from the explicit stream (first four traced)
     using OrderedRigidKey=std::array<std::uint64_t,32>;
     using OrderedRigidPackets=c3x_renderer::render_core::OrderedRigidSubmission<OrderedRigidKey>;
     OrderedRigidPackets ordered_rigid_packets;
@@ -1063,6 +1066,8 @@ public:
     std::array<std::vector<std::uint8_t>, 10> route_texture_dds;
     std::array<ID3D11ShaderResourceView *, 10> route_texture_views = {};
     c3x_renderer::FeatureBundle bridge_bundle;
+    c3x_renderer::objects::RoutePatterns road_patterns; // optional connection-mask centerlines
+    c3x_renderer::objects::RoutePatterns rail_patterns; // the railroad sheet's own centerlines
     std::array<std::vector<std::uint8_t>, 8> bridge_texture_dds;
     std::array<ID3D11ShaderResourceView *, 8> bridge_texture_views = {};
     c3x_renderer::FeatureBundle resource_bundle;
@@ -1184,6 +1189,9 @@ public:
     c3x_renderer::render_core::ResidencyCandidates residency_candidates;
     std::size_t tile_geometry_cache_bytes = 0, prefetched_geometry_bytes = 0;
     std::size_t tile_geometry_runtime_budget = tile_geometry_cache_budget;
+    // A foreground camera job's ceiling once nothing else is evictable; zero
+    // while prewarming or loading, and without a physical measurement.
+    std::size_t tile_geometry_required_budget = 0;
     // The large-map reduction protects the 32-bit recovery renderer's address
     // space. Renderer64 has its own process and retains the ordinary GPU tier.
     std::size_t large_world_geometry_budget = sizeof(void*)==8?
@@ -2091,6 +2099,8 @@ public:
             bridge_texture_dds[index].clear();
         }
         bridge_bundle = {};
+        road_patterns = {};
+        rail_patterns = {};
         for (std::size_t index = 0; index < resource_texture_views.size(); ++index) {
             release(resource_texture_views[index]);
             resource_texture_dds[index].clear();
@@ -2614,6 +2624,17 @@ public:
         std::string bridge_root = packs_root + "\\RouteDoodadsNormalized";
         route_assets_ready = route_assets_ready && load_runtime_bundle(
             bridge_root, "bridge_runtime.bin", bridge_bundle, bridge_texture_dds);
+        // Optional: roads follow per-mask centerlines when the pattern pack is
+        // present; otherwise the segment roads remain unchanged.
+        for (auto [patterns, name] : {std::pair{&road_patterns, "road_patterns.bin"},
+                                      std::pair{&rail_patterns, "railroad_patterns.bin"}}) {
+            std::vector<std::uint8_t> pattern_bytes;
+            std::string pattern_path = packs_root + "\\RoutePatternsRuntime\\" + name;
+            if (route_assets_ready && read_file(pattern_path.c_str(), pattern_bytes) &&
+                patterns->load(pattern_bytes.data(), pattern_bytes.size()))
+                mix_content_revision(pattern_bytes);
+            else *patterns = {};
+        }
 
         // A Lab study may select a candidate resource pack; production uses the default.
         char resource_pack[128]="ResourceNormalized",resource_path[4*MAX_PATH];
@@ -2637,7 +2658,16 @@ public:
             std::vector<std::uint8_t> definitions;
             if (read_file((root + "\\bindings.json").c_str(), definitions)) {
                 auto bindings = json_member_position(definitions, "bindings");
-                for (char const * name : {"horses","cattle","wheat","fish","whales","game","furs","ivory","bananas","rubber"}) {
+                std::vector<std::string> names = {"horses","cattle","wheat","fish","whales","game","furs","ivory","bananas","rubber"};
+                // Subjects that the active resource pack's compositions name ("animated/<binding>")
+                // load too; packs without compositions load exactly the primary bindings.
+                if (resource_assets_ready)
+                    for (auto const & asset : resource_bundle.assets)
+                        if (asset.id.rfind("animated/", 0) == 0 &&
+                            std::find(names.begin(), names.end(), asset.id.substr(9)) == names.end())
+                            names.push_back(asset.id.substr(9));
+                for (auto const & name_entry : names) {
+                    char const * name = name_entry.c_str();
                     auto record = json_member_position(definitions, name, bindings);
                     ResourceAnimation animation; animation.name = name;
                     std::string mesh_path, texture_path; float count = 0;
@@ -4153,6 +4183,10 @@ public:
 
     int resource_animation_for(c3x_renderer_tile_v1 const & tile) const {
         if (tile.city_id >= 0 || tile.resource_id < 0 || resource_animations.empty()) return -1;
+        // A baked composition bound to this exact name beats the animated
+        // presentation's substring match (e.g. a static wheat field over "wheat").
+        if (resource_assets_ready && c3x_renderer::find_feature_composition(resource_bundle, tile.resource_name))
+            return -1;
         std::string name(tile.resource_name, std::find(std::begin(tile.resource_name),std::end(tile.resource_name),'\0'));
         std::transform(name.begin(),name.end(),name.begin(),[](unsigned char c){return char(std::tolower(c));});
         for (unsigned i=0;i<resource_animations.size();++i)
@@ -4165,9 +4199,17 @@ public:
             if(c3x_renderer::render_core::water_scene_tile(frame.tiles[i],frame,visibility_pass))return true;
         if (resource_animations.empty()) return false;
         for (unsigned i=0;i<frame.tile_count;++i)
-            if ((frame.tiles[i].tile_flags&C3X_RENDERER_TILE_RENDER) && resource_animation_for(frame.tiles[i])>=0)
+            if ((frame.tiles[i].tile_flags&C3X_RENDERER_TILE_RENDER) &&
+                (resource_animation_for(frame.tiles[i])>=0 || animated_composition_for(frame.tiles[i])))
                 return true;
         return false;
+    }
+
+    // A baked composition that places animated subjects still needs ambient redraws.
+    bool animated_composition_for(c3x_renderer_tile_v1 const & tile) const {
+        if (tile.city_id >= 0 || tile.resource_id < 0 || !resource_assets_ready) return false;
+        auto const * composition = c3x_renderer::find_feature_composition(resource_bundle, tile.resource_name);
+        return composition && composition->animated;
     }
 
     bool can_prepare_ambient() const {
@@ -4460,7 +4502,8 @@ public:
                 c3x_renderer::render_core::ResourceSourceBounds::Box posed_bounds;
                 if(!c3x_renderer::sample_animation_pose(animation.mesh,time,true,pose) ||
                    !animation.source_bounds.posed(pose,animation.mesh.bones,posed_bounds))return false;
-                float cosine=std::cos(animation.yaw),sine=std::sin(animation.yaw);
+                float scale=animation.scale*anchor.scale;
+                float cosine=std::cos(animation.yaw+anchor.yaw),sine=std::sin(animation.yaw+anchor.yaw);
                 float center_x=anchor.anchor_x+half_w+(anchor.u-anchor.v)*half_w;
                 float center_y=anchor.anchor_y+(anchor.u+anchor.v)*half_h-anchor.ground*relief;
                 CachedVertexChunk chunk,shadow_chunk;
@@ -4471,8 +4514,8 @@ public:
                 for(unsigned c=0;c<8;++c){float source[3];
                     for(unsigned a=0;a<3;++a)source[a]=(c&(1u<<a))?posed_bounds.high[a]:posed_bounds.low[a];
                     float x=source[0]+animation.offset[0],y=source[1]+animation.offset[1];
-                    float lx=(x*cosine-y*sine)*animation.scale,ly=(x*sine+y*cosine)*animation.scale;
-                    float lz=(source[2]+animation.offset[2])*animation.scale-submersion,
+                    float lx=(x*cosine-y*sine)*scale,ly=(x*sine+y*cosine)*scale;
+                    float lz=(source[2]+animation.offset[2])*scale+anchor.slope_x*lx+anchor.slope_y*ly-submersion,
                         feature_height=lz*150.f/.82f;
                     float sx=center_x+(lx-ly)*half_w,sy=center_y+(lx+ly)*half_h-lz*150.f*projection;
                     auto cast=c3x_renderer::lighting::ground_offset(shadow_basis.data()+8,feature_height/112.f);
@@ -4523,12 +4566,17 @@ public:
                 D3D11_MAPPED_SUBRESOURCE mapped={};
                 if(FAILED(context->Map(pool.vertices,0,D3D11_MAP_WRITE_DISCARD,0,&mapped)))return false;
                 auto values=static_cast<float*>(mapped.pData);
-                float placement[]={cosine,sine,animation.scale,c3x_renderer::lighting::object_height_to_world,
-                    animation.offset[0],animation.offset[1],animation.offset[2]-submersion/animation.scale,anchor.ground,
+                float placement[]={cosine,sine,scale,c3x_renderer::lighting::object_height_to_world,
+                    animation.offset[0],animation.offset[1],animation.offset[2]-submersion/scale,anchor.ground,
                     center_x,center_y,anchor.world_u+anchor.u,anchor.world_v+1-anchor.v,
                     half_w,half_h,projection,float(content_view_height)};
                 std::copy(std::begin(placement),std::end(placement),values);
                 c3x_renderer::render_core::pack_resource_pose(pose,animation.mesh.bones,values);
+                {   // Tilt the posed body onto the ground plane (source units; see slope_resource_pose).
+                    float a=anchor.slope_x*cosine+anchor.slope_y*sine,b=anchor.slope_y*cosine-anchor.slope_x*sine;
+                    c3x_renderer::render_core::slope_resource_pose(animation.mesh.bones,a,b,
+                        a*animation.offset[0]+b*animation.offset[1],values);
+                }
                 context->Unmap(pool.vertices,0);uploaded+=bytes;
                 chunk.buffer=shadow_chunk.buffer=animation.vertices;
                 chunk.indices=shadow_chunk.indices=animation.indices;
@@ -4545,7 +4593,8 @@ public:
             }
             vertices.resize(posed.size());
             shadow_vertices.resize(posed.size());
-            float cosine=std::cos(animation.yaw),sine=std::sin(animation.yaw);
+            float scale=animation.scale*anchor.scale;
+            float cosine=std::cos(animation.yaw+anchor.yaw),sine=std::sin(animation.yaw+anchor.yaw);
             float center_x=anchor.anchor_x+half_w+(anchor.u-anchor.v)*half_w;
             float center_y=anchor.anchor_y+(anchor.u+anchor.v)*half_h-anchor.ground*relief;
             CachedVertexChunk chunk; chunk.bounds={LONG_MAX,LONG_MAX,LONG_MIN,LONG_MIN};
@@ -4554,12 +4603,13 @@ public:
             for (std::size_t i=0;i<posed.size();++i) {
                 auto const & source=posed[i];
                 float x=source.position[0]+animation.offset[0],y=source.position[1]+animation.offset[1];
-                float lx=(x*cosine-y*sine)*animation.scale,ly=(x*sine+y*cosine)*animation.scale;
-                float lz=(source.position[2]+animation.offset[2])*animation.scale;
+                float lx=(x*cosine-y*sine)*scale,ly=(x*sine+y*cosine)*scale;
+                float lz=(source.position[2]+animation.offset[2])*scale+anchor.slope_x*lx+anchor.slope_y*ly;
                 float feature_height=lz*150.f/.82f;
                 float sx=center_x+(lx-ly)*half_w,sy=center_y+(lx+ly)*half_h-lz*150.f*projection;
+                // Natural terrain depth basis, as VSResourceBody uses.
                 float depth=center_y+anchor.ground*relief+(lx+ly)*half_h+
-                    anchor.ground*relief*.75f+feature_height*.0012f*content_view_height;
+                    (anchor.ground+feature_height)*.0016f*content_view_height;
                 auto & v=vertices[i];
                 auto normal=c3x_renderer::lighting::object_normal(
                     source.normal[0]*cosine-source.normal[1]*sine,
@@ -5811,6 +5861,22 @@ public:
                 auto range=tile_geometry_cache.equal_range(candidate->signature);
                 for(auto it=range.first;it!=range.second;++it)if(&it->second==candidate){oldest=it;break;}
             }
+            if (oldest == tile_geometry_cache.end()) {
+                // Everything resident belongs to this camera job. Its required
+                // geometry may grow past the soft budget into the optional
+                // reserve: refusing it failed the job and left the map black
+                // for the session (performance review 4x). The reclaim below
+                // then runs only past this ceiling, not on every admission.
+                auto total=tile_geometry_cache_bytes+retired_content->bytes.load()+terrain_patch_index_bytes;
+                if(total+bytes<=tile_geometry_required_budget && tile_geometry_cache.size()<tile_geometry_cache_capacity){
+                    if(total<=tile_geometry_runtime_budget){
+                        char detail[192];sprintf_s(detail,"requested=%zu tracked=%zu budget=%zu required_budget=%zu epoch=%llu",
+                            bytes,total,tile_geometry_runtime_budget,tile_geometry_required_budget,static_cast<unsigned long long>(tile_geometry_epoch));
+                        trace.write("tile-cache-overflow",detail,true);
+                    }
+                    return true;
+                }
+            }
             if (oldest == tile_geometry_cache.end() && !reclaimed && retired_content->bytes.load()) {
                 // Optional borrowers can keep a whole earlier view's evicted
                 // geometry charged: after a far map jump that charge plus the
@@ -6239,7 +6305,8 @@ public:
             bool bounded=true;
             auto& ground_scratch=world_ground_scratch[worker];auto& surface_scratch=terrain_scratch[worker];
             auto const& source_coast=input.sources->topology->coast;auto const& ground_observations=*input.sources->observations;
-            c3x_renderer::objects::Assets object_assets{{&bridge_bundle,&site_bundle,&mine_bundle,&farm_bundle,&city_bundle,&wall_bundle}};
+            c3x_renderer::objects::Assets object_assets{{&bridge_bundle,&site_bundle,&mine_bundle,&farm_bundle,&city_bundle,&wall_bundle},road_patterns.lines.empty()?nullptr:&road_patterns,
+                rail_patterns.lines.empty()?nullptr:&rail_patterns};
             std::unique_ptr<c3x_renderer::PreparedWorld> result;
             auto restore_begin=std::chrono::steady_clock::now();
             auto component=input.kind==c3x_renderer::WorldPreparationKind::objects?1u:0u;
@@ -6965,9 +7032,6 @@ public:
         bool streamed=draw_parameters.available(device,context);
         auto flush=[&](){
             if(selected.empty())return true;
-            bool parameter_records=!shared_front;
-            for(auto const& draw:selected)parameter_records=parameter_records || !draw.content().rigid_source;
-            if(streamed && parameter_records && !draw_parameters.upload(parameters.data(),unsigned(selected.size())))return false;
             std::array<OrderedRigidPackets::Range,Parameters::limit> packets{};
             auto packet_uploads=ordered_rigid_packets.builds,packet_bytes=ordered_rigid_packets.uploaded_bytes;
             prepare_ordered_rigid_packets(unsigned(layer),selected,shared_front,packets);
@@ -6976,12 +7040,19 @@ public:
             std::vector<c3x_renderer::fidelity::MeshInstance> rigid_instances;
             std::vector<unsigned> rigid_indices;
             std::array<unsigned,Parameters::limit> rigid_offsets{};
+            // Draws found in the resident shared-instance union use it. A rigid
+            // draw outside that union (a dynamic-view bridge carries its own
+            // occurrence translation) uses the explicit instance stream instead
+            // of failing the whole frame.
+            std::array<bool,Parameters::limit> rigid_shared{};
             for(unsigned i=0;i<selected.size();++i){auto const& chunk=selected[i];if(!chunk.content().rigid_source || packets[i])continue;
                 if(!chunk.content().instances || chunk.content().instances->size()!=1)return false;
                 if(shared_front){
                     auto range=shared_front->find(shared_instance_draw_key(unsigned(layer),chunk));
-                    if(!range || range.count!=1)return reject_shared_instance_range(unsigned(layer),chunk,shared_front,range);
-                    rigid_offsets[i]=unsigned(rigid_indices.size());rigid_indices.push_back(range.first);continue;
+                    if(range && range.count==1){
+                        rigid_shared[i]=true;rigid_offsets[i]=unsigned(rigid_indices.size());rigid_indices.push_back(range.first);continue;
+                    }
+                    if(shared_instance_fallbacks++<4)reject_shared_instance_range(unsigned(layer),chunk,shared_front,range);
                 }
                 auto instance=chunk.content().instances->front();
                 std::copy(std::begin(chunk.natural_projection()),std::end(chunk.natural_projection()),instance.projection);
@@ -6989,13 +7060,18 @@ public:
                 instance.view[2]=parameters[i].depth_translation;instance.view[3]=chunk.content().instance_material;
                 rigid_offsets[i]=unsigned(rigid_instances.size());rigid_instances.push_back(instance);
             }
+            bool parameter_records=false;
+            for(unsigned i=0;i<selected.size();++i)parameter_records=parameter_records || !selected[i].content().rigid_source ||
+                (!packets[i] && !rigid_shared[i]);
+            if(streamed && parameter_records && !draw_parameters.upload(parameters.data(),unsigned(selected.size())))return false;
             if(!rigid_instances.empty() && !rigid_sources.stream.upload(device,context,rigid_instances))return false;
             if(!rigid_indices.empty()){
                 if(!shared_instances.select_indices(device,context,shared_front,rigid_indices.data(),unsigned(rigid_indices.size())))return false;
                 frame_upload_bytes+=rigid_indices.size()*sizeof(unsigned);context->VSSetShaderResources(15,1,&shared_front->view);
             }
             auto issue=[&](GeometryDrawReference const& chunk,ViewportShaderSettings const& settings,unsigned index,unsigned instances){
-                if(shared_front && chunk.content().rigid_source){
+                bool shared=shared_front && chunk.content().rigid_source && rigid_shared[index];
+                if(shared){
                     if(first || std::memcmp(&previous,&viewport_settings,sizeof(viewport_settings))!=0){
                         context->UpdateSubresource(viewport_settings_buffer,0,nullptr,&viewport_settings,0,0);
                         ++frame_parameter_updates;previous=viewport_settings;first=false;
@@ -7010,16 +7086,16 @@ public:
                 context->IASetVertexBuffers(0, 1, &chunk.content().buffer, &stride, &offset);
                 context->IASetIndexBuffer(chunk.content().indices, chunk.content().index_format, chunk.content().index_offset);
                 if(chunk.content().rigid_source){
-                    context->IASetInputLayout(shared_front?rigid_sources.resident_layout:rigid_sources.layout);
-                    context->VSSetShader(shared_front?rigid_sources.resident_vertex[reflection_pass?1:0]:rigid_sources.vertex[reflection_pass?1:0],nullptr,0);
+                    context->IASetInputLayout(shared?rigid_sources.resident_layout:rigid_sources.layout);
+                    context->VSSetShader(shared?rigid_sources.resident_vertex[reflection_pass?1:0]:rigid_sources.vertex[reflection_pass?1:0],nullptr,0);
                     if(layer==geometry_city){
                         context->PSSetShader(reflection_pass?reflection.ps[1]:feature_pixel_shader,nullptr,0);
                         context->PSSetShaderResources(116,4,city_emissive_views.data());context->PSSetShaderResources(124,4,city_base_views.data());
                         ID3D11SamplerState*samplers[]={terrain_sampler,decal_sampler};context->PSSetSamplers(0,2,samplers);
                     }
-                    ID3D11Buffer* streams[]={chunk.content().buffer,shared_front?shared_instances.selection_buffer:rigid_sources.stream.buffer};
-                    UINT strides[]={32,shared_front?4u:64u},offsets[]={chunk.content().vertex_offset,
-                        shared_front?shared_instances.selection_offset+rigid_offsets[index]*4:rigid_sources.stream.offset+rigid_offsets[index]*64};
+                    ID3D11Buffer* streams[]={chunk.content().buffer,shared?shared_instances.selection_buffer:rigid_sources.stream.buffer};
+                    UINT strides[]={32,shared?4u:64u},offsets[]={chunk.content().vertex_offset,
+                        shared?shared_instances.selection_offset+rigid_offsets[index]*4:rigid_sources.stream.offset+rigid_offsets[index]*64};
                     context->IASetVertexBuffers(0,2,streams,strides,offsets);
                     context->DrawIndexedInstanced(chunk.content().index_count,instances,0,0,0);++frame_draw_calls;
                     context->IASetInputLayout(feature_input_layout);
@@ -7098,7 +7174,7 @@ public:
                 // native ordering and alpha ordering are never sorted away.
                 if(first_chunk.rigid_source)for(;end<selected.size();++end){
                     auto const& next=selected[end].content();
-                    if(packets[end] || !next.rigid_source || next.buffer!=first_chunk.buffer || next.indices!=first_chunk.indices ||
+                    if(packets[end] || !next.rigid_source || rigid_shared[end]!=rigid_shared[i] || next.buffer!=first_chunk.buffer || next.indices!=first_chunk.indices ||
                        next.vertex_offset!=first_chunk.vertex_offset || next.index_offset!=first_chunk.index_offset ||
                        next.index_count!=first_chunk.index_count || next.index_format!=first_chunk.index_format ||
                        next.projection_kind!=first_chunk.projection_kind)break;
@@ -7714,10 +7790,18 @@ public:
             if (!draw(geometry_bed) ||
                 !draw(geometry_water) ||
                 !draw(geometry_river) ||
-                !draw(geometry_shadow) ||
-                !draw(geometry_route)) {
+                !draw(geometry_shadow)) {
                 return false;
             }
+            // Routes are a surface decal: a translucent fringe must not write
+            // depth and reject another path's core where strips overlap.
+            ID3D11DepthStencilState* route_previous=nullptr;UINT route_reference=0;
+            context->OMGetDepthStencilState(&route_previous,&route_reference);
+            if(natural.decal_depth)context->OMSetDepthStencilState(natural.decal_depth,0);
+            bool routes_drawn=draw(geometry_route);
+            context->OMSetDepthStencilState(route_previous,route_reference);
+            release(route_previous);
+            if(!routes_drawn)return false;
             if(!reflection_pass && wave_ready && !buffers[geometry_wave].empty()){
                 context->PSSetShader(wave_shader,nullptr,0);
                 context->PSSetShaderResources(0,3,wave_views.data());context->PSSetConstantBuffers(7,1,&wave_frame);
@@ -8346,6 +8430,7 @@ public:
         world_preparation=std::strcmp(preparation_option,"0")!=0 && (shared_scene_surface || loading_world_only);
         unsigned requested_workers=!cpu_option[0]?(world_preparation?4u:2u):std::strcmp(cpu_option,"6")==0?6u:std::strcmp(cpu_option,"4")==0?4u:std::strcmp(cpu_option,"2")==0?2u:std::strcmp(cpu_option,"1")==0?1u:0u;
         MEMORYSTATUSEX content_memory={};content_memory.dwLength=sizeof(content_memory);
+        tile_geometry_required_budget=0;
         if(GlobalMemoryStatusEx(&content_memory)){
             auto ceiling=world_preparation && frame.world_topology_count>8192u?
                 std::min(tile_geometry_cache_budget,large_world_geometry_budget):tile_geometry_cache_budget;
@@ -8391,6 +8476,11 @@ public:
                     std::size_t(content_memory.ullAvailPhys),std::size_t(content_memory.ullTotalPhys),
                     owned,measured_gpu && !world_gpu_allocation_pressure?gpu_headroom:0,
                     future,ceiling,requested_workers,loading_gpu_residency);
+                if(!prewarming && !loading_gpu_residency)
+                    tile_geometry_required_budget=std::max(tile_geometry_runtime_budget,Budget::required_geometry(
+                        std::size_t(content_memory.ullAvailPhys),std::size_t(content_memory.ullTotalPhys),
+                        owned,measured_gpu && !world_gpu_allocation_pressure?gpu_headroom:0,
+                        ceiling,requested_workers));
             }
             if(!world_backing.configure(residency.prepared,[](auto const& key){return key.recipe.words.capacity()*sizeof(std::uint64_t);}))
                 trace.write("world-ram-pressure","new admission frozen at live owned recipes",true);
@@ -9119,7 +9209,8 @@ public:
             input.shadow_grid=canonical_world_content?16:(frame.tile_width>=96 && draw_record_count<=512?16:8);
             return job;
         };
-        c3x_renderer::objects::Assets object_assets{{&bridge_bundle,&site_bundle,&mine_bundle,&farm_bundle,&city_bundle,&wall_bundle}};
+        c3x_renderer::objects::Assets object_assets{{&bridge_bundle,&site_bundle,&mine_bundle,&farm_bundle,&city_bundle,&wall_bundle},road_patterns.lines.empty()?nullptr:&road_patterns,
+                rail_patterns.lines.empty()?nullptr:&rail_patterns};
         bool const prepare_objects=fidelity_profile && world_objects;
         char object_control[8]={};
         bool const object_worker=prepare_objects && (!prewarming || world_preparation) &&
@@ -11048,7 +11139,41 @@ public:
                 build_replacement[index] |= C3X_RENDERER_TILE_CUSTOM_RESOURCE_REPLACED;
                 auto const & variant = c3x_renderer::select_composition_variant(*composition,
                     tile.real_terrain_type, tile.variant_seed * 131u + 17u);
+                unsigned subject_index = 0;
                 for (auto const & item : variant.instances) {
+                    // "animated/<binding>" places that animated subject: the pack bakes its
+                    // position, facing and size; it stands on the highest ground under its
+                    // footprint so no part of the body is buried.
+                    auto const & id = resource_bundle.assets[item.asset].id;
+                    if (id.rfind("animated/", 0) == 0) {
+                        auto found = std::find_if(resource_animations.begin(), resource_animations.end(),
+                            [&](auto const & animation) { return id.compare(9, std::string::npos, animation.name) == 0; });
+                        if (found == resource_animations.end()) continue;
+                        ResourceAnchor anchor; anchor.asset = unsigned(found - resource_animations.begin());
+                        anchor.seed = c3x_renderer::stable_hash(tile.variant_seed*83u + subject_index++*97u + 29u);
+                        anchor.u = item.u; anchor.v = item.v; anchor.yaw = item.rotation; anchor.scale = item.scale;
+                        anchor.world_u = float(tile.tile_x+tile.tile_y)*.5f;
+                        anchor.world_v = float(tile.tile_x-tile.tile_y)*.5f;
+                        float world_u = anchor.world_u+item.u, world_v = anchor.world_v+1-item.v;
+                        // The visible surface: the higher of the pickup relief (flat ground) and the
+                        // natural height with mountains (hills), as static objects are seated.
+                        auto surface = [&](float u, float v) {
+                            float relief = relief_at_world(u, v)[0];
+                            return pickup_profile ? std::max(relief, resource_height_at(u, v)-2.5f) : relief;
+                        };
+                        anchor.ground = surface(world_u, world_v);
+                        if (pickup_profile && item.ground_fit > 0) {
+                            // The body follows the ground plane under its footprint: local x runs
+                            // along world u and local y against world v; heights convert to tiles.
+                            float step = item.ground_fit, to_tiles = .82f/150.f;
+                            anchor.slope_x = (surface(world_u+step, world_v) - surface(world_u-step, world_v)) /
+                                (2*step) * to_tiles;
+                            anchor.slope_y = -(surface(world_u, world_v+step) - surface(world_u, world_v-step)) /
+                                (2*step) * to_tiles;
+                        }
+                        tile_resource_anchors.push_back(anchor);
+                        continue;
+                    }
                     c3x_renderer::FeaturePlacement placement; placement.asset_index = item.asset;
                     c3x_renderer::objects::append_instance(object_projection, resource_bundle, placement,
                         item.u, item.v, item.rotation, item.scale, 21.0f, 0.0f, true, tile.terrain_type < 11,

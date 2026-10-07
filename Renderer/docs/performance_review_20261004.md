@@ -937,6 +937,223 @@ gate then reports BUSY for frames until the batch's call returns.
 the same build on the closer-zoom scroll segments. Compare runs only at the
 same trace level.
 
+### 4v. Water and units skipped after unit moves (fixed)
+
+**Symptom.** In a user recording at a closer zoom, waves stepped and jumped
+when a scout moved one tile.
+
+**Cause.** A move starts a camera job for the changed scene. While it runs,
+ambient frames draw the borrowed completed view: an immutable snapshot of the
+scene before the move. Two snapshot caches were judged against live topology
+that the job had already updated:
+- the shadow atlas failed only its dependency check (`reuse_failures=128`),
+  so every frame redrew all 25 pages (683 draws, ~16 ms of proofs);
+- the static slot failed its dependency proof, so every frame repaired the
+  same 11% region again.
+
+Scene renders took 20–80 ms instead of 1–3 ms, and the animation updated at
+about 14 per second for the whole job.
+
+**Changes:**
+- `RendererState::borrowed_scene_frame` marks a frame that draws the borrowed
+  view.
+- Its atlas is reused when every other reuse condition already identifies this
+  exact scene and caster set (`FreshPipeline::atlas_reusable`).
+- Its displayed static slot counts as proven.
+- Once the job's own render has replaced the shared shadow and static state
+  (`borrowed_scene_stale`), the remaining borrowed frames hold their image
+  until adoption. Otherwise they would redraw the old snapshot, and the
+  adopted scene would redraw again.
+- Live views validate as before.
+
+**Results** (`unit-turn`, trace 2, user save, first move):
+
+| | Before (run129) | After (run132) |
+| --- | --- | --- |
+| Borrowed atlas redraws / static repairs | 6 / every frame | 0 / 0 |
+| Slowest scene render | 82 ms | 19 ms |
+| Animation interval through the job (p50 / max) | 44 / 234 ms | 19 / 77 ms |
+| Camera job | 417 ms | 273 ms |
+
+Frames during a job are still served at preparation checkpoints and wait for
+the job's GPU work (4u). That leaves occasional 40–80 ms intervals.
+
+**Regression checks.**
+- `test_borrowed_snapshot_reuse.py` covers the reuse rule (mutation-checked:
+  dropping the borrowed term fails it), the flag's scope, the static proof
+  and the hold.
+- `Renderer/tools/check_borrowed_snapshot.py` fails a traced `unit-turn`
+  capture with any borrowed redraw or repair. It fails run129 and passes
+  run132.
+- The 4t input-coverage fixes have `test_hit_scene_fast_paths.py`: exact
+  answers against a per-pixel model, plus counters. Each of five deliberate
+  breakages fails its intended test.
+- `Renderer/tools/check_native_call_waits.py` fails a traced `near` capture
+  with any 2 s window over 300 ms of game-thread waiting. It fails run108
+  (937 ms) and passes every later capture (at most 236 ms).
+- `Renderer/tools/scripted_game_test.md` lists both capture checks.
+
+### 4w. Rigid draws outside the shared-instance union failed the frame (fixed)
+
+**Symptom.** Reported by the roads session. Any authored bridge (a rigid
+feature instance) made a Lab render return C3X_RENDERER_RESULT_DEVICE_ERROR,
+with `shared-instance-range-missing layer=8` in the trace. This happened with
+the segment roads too.
+
+**Cause.** Since the 2026-10-02 shared pass submissions, the resident
+shared-instance union is built only from the frame's `geometry_vertex_buffers`.
+The dynamic scene pass (`submit(dynamic,{shadow,wave,feature})` through
+`submit_prepared_resource_region`) submits rigid feature draws from the
+separate `dynamic` view. A bridge there carries its own occurrence
+translation, so its key was never registered, and the rigid flush in
+`draw_cached_geometry` returned failure for the whole frame.
+
+**Change.** Such a draw uses the explicit instance stream, which is the path
+every rigid draw used before shared submission. Found draws keep their shared
+ranges, and a merged instanced run never mixes the two sources. Per-draw
+parameters are uploaded whenever any draw in the batch needs them. The first
+four misses are still traced (`shared-instance-range-missing`).
+
+**Checks.**
+- `test_rigid_shared_fallback.py` tests the flush's routing on the extracted
+  source. Restoring the old return-on-miss makes it fail.
+- `test_durable_preparation.py`'s rigid-batching test checks that a shared
+  draw never merges with an explicit-stream neighbor.
+- The roads session's `lab infrastructure --case network` fixture (a river on
+  the diagonal) renders with its bridges.
+
+### 4x. A camera job slightly over the geometry budget left the map black (fixed)
+
+**Symptom.** Reported by the roads session. On the 1498 AD save, a heavier
+road pack made the first camera job fail with `gpu-failure phase=camera`.
+`tile-cache-budget` showed `tracked=435,947,420 requested=87,951
+cap=436,006,339`. The helper never started another render, so the map stayed
+black for the whole session.
+
+**Causes.**
+- The world-residency sweep sized the geometry budget at 436 MB while loading.
+  How much loading admits varies a lot between runs of the same save: 158 MB
+  to 1.7 GB in the runs below.
+- At the first camera job, `FrameWorkingSet::world_geometry` allowed no growth.
+  Its `future` reserve covers attachments and optional caches that were not
+  yet allocated: the 512 MB ordered-rigid cap, composition and scene targets.
+  That reserve took all the usable memory above the physical floor. The VM
+  had 4.7 GB available out of 14 GiB.
+- The view needs about 785 MB at 1× on this save. Every resident entry
+  belonged to the job, so `make_tile_cache_room` had nothing to evict and
+  refused the admission. A single refusal fails the whole camera job.
+- Holding 1.2 GB of touched memory in the VM during a capture exposed a second
+  failure. Under a physical shortfall, the soft budget is recomputed each
+  frame as owned minus half the shortfall. Evicting does not promptly raise
+  the measured available memory, so the budget ratcheted below the
+  already-resident view every frame (646, 621, ... 270 MB). 42 of 47 camera
+  jobs failed (run135).
+
+**Change.**
+- Each foreground (non-prewarm, non-loading) camera job also gets a second
+  ceiling, `FrameWorkingSet::required_geometry`. It keeps the system floor
+  (`max(2 GiB, physical/6)` plus compile lanes) and adapter headroom. It
+  drops the optional `future` reserve and never shrinks below what is owned.
+- `make_tile_cache_room` still evicts older content first. Once nothing is
+  evictable, it admits required geometry up to that ceiling, and traces
+  `tile-cache-overflow` once per crossing. The retired-borrower reclaim runs
+  only past the ceiling. Placed before it, the reclaim repeated on every
+  admission while freeing nothing (17,381 traces in run136).
+- Loading, prewarming, prefetch and frames without a physical measurement
+  keep the single soft budget.
+
+**Results on the 1498 AD save** (`near`, trace level 2):
+
+| Run | Memory hold | Loading budget | Camera jobs ok |
+|---|---|---|---|
+| roads profile1, before | none | 436 MB | 0 of 1, then black |
+| run134, first version | none | 1.5 GB | 26 of 26 |
+| run135, first version | 1.2 GB | 158 MB | 5 of 47 |
+| run136, owned floor | 1.2 GB | 179 MB | 24 of 25 |
+| run137, final | 1.2 GB | 380 MB | 22 of 33 |
+| run138, final | none | 1.7 GB | 26 of 26 |
+
+In every hold run, the first job overflowed and rendered. The remaining
+failures came after zoom changes, with 2.55–3.0 GB available: below or near
+the 2.79 GB floor, where a new view did not fit. After each failure the next
+job recovered.
+
+**Remaining.**
+- Under physical pressure below the floor, a camera job still fails rather
+  than rendering with less cached geometry.
+- Nothing retries a failed first job, and there is no native fallback.
+- Separately, Civ III's thread waits longer on the input-coverage worker on
+  this save than on the user save. `check_native_call_waits.py` fails at
+  326–480 ms per window in every 1498 run, including the roads session's
+  capture from before this change. The user save passes at 170–206 ms.
+
+**Checks.**
+- `test_required_geometry_admission.py` runs the extracted
+  `make_tile_cache_room` with the real eviction order. It applies the budget
+  policies to the recorded numbers, including the run135 shortfall. Six
+  mutations make it fail:
+  - removing the overflow;
+  - overflowing before eviction;
+  - unbounding it;
+  - allowing it while prewarming;
+  - using the old policy;
+  - reclaiming first.
+- `Renderer/tools/check_camera_jobs.py CAPTURE` fails on any failed camera
+  job. It fails on roads profile1 and passes on run134 and run138.
+
+### 4y. Road bridges showed only their parapets (fixed)
+
+**Symptom.** The user reported floating bridges, and the roads session
+confirmed it in-game on the 1498 AD save. Bridges over rivers drew only their
+two parapet arcs and end posts, with no deck or arches. The Lab drew the same
+pack and mesh whole. Three different seat heights looked identical: everything
+lower than about 15 units above the water was missing.
+
+**Ruled out.**
+- Overlay cache: with `C3X_RENDERER_OVERLAY_CACHE=0` (run139), the same
+  bridges in the same view were still arcs only (near5 frame 131 vs run139
+  frame 188).
+- Alpha: for bridge materials, `q6_raw_feature` clips nothing and returns
+  alpha 1.
+- Culling: every rasterizer state is `CULL_NONE`.
+
+**Causes.** Both are depth against the river.
+- The river surface is ground layer kind 9 (`ground_compiler.h`).
+  `translated_depth` pulls kinds above 8.5 nearer by 0.025·`reserved.x`, about
+  30 depth units at a 1192-pixel view, so the river sorts over its bed and
+  banks. Natural surfaces gain about 1.9 depth units per unit of height (0.0016·w),
+  so any bridge part lower than about 16 units above the river lost to it.
+- `VSSharedFeature` also wrote depth on the feature basis
+  (`project_world_content` kind 2). That adds only about 0.35 per unit of
+  ground height and 1.43 per unit of object height, so raised rivers hid even
+  more. `resource_natural_depth` already gives resource bodies the natural
+  basis for this reason.
+
+**Change.** In `VSSharedFeature` (`render_core/rigid_feature.hlsl`), bridge
+materials 13–20 (road and railroad, normal and pillaged) take the natural height-depth basis and a layer bias of
+0.0255·`reserved.x`, slightly more than the river they span. Other rigid
+materials and the reflection variant are unchanged.
+- The generated `city_fidelity/rigid_feature.hlsl` was refreshed with
+  `Renderer.lab.preparation.prepare()`.
+- The two rigid shader files in `packs/Renderer64ResidentRuntime` were
+  patched on top of the route overlay. The originals are kept in
+  `Renderer64ResidentRuntime-before-bridge-depth-20261006`, with the receipt
+  in `bridge-depth-overlay.json`.
+- Trade-off: bridges now sort about 30 depth units (about one tile row at 1×)
+  nearer than terrain at the same height, as the river does. A crest directly
+  in front of a bridge may no longer cover it. None was seen in run140.
+
+**Checks.**
+- Run140 (`near`, 1498 AD): the same bridges draw whole, deck and arches, in
+  frame 138 (near5 frame 131's view) and frame 152.
+- `test_bridge_natural_depth.py` compiles the actual shader source as C++ with
+  a small vector shim: `rigid_point`, `project_world_content`, and the
+  `VSSharedFeature` depth lines. It reads the river bias from
+  `integrated_terrain.hlsl`. It requires two things at elevations 0, 12 and
+  40: a deck just above the river sorts in front of the biased river, and
+  raising the ground shifts bridge and river depth equally. Removing the bias,
+  removing the natural basis, or applying it to all materials makes it fail.
+
 ### Visual defects found during this review (pre-existing)
 
 The first two reproduce in the pre-change baseline capture at the same moments.

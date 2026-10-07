@@ -36,7 +36,7 @@
     },
     {
       "path": "generated/shaders/lighting/generated/scene_linear_v1.hlsl",
-      "sha256": "05e32f4ac0e2362bbb642725fa0280b9c334011bc0bc7625a34c915d8cb75e85"
+      "sha256": "7b4b517d4cc9cdeb012538f08d60bfe8decfa32ddf0a45d0c51346ad3e34c768"
     },
     {
       "path": "generated/shaders/lighting/local_facade_lights.hlsl",
@@ -76,7 +76,7 @@
     },
     {
       "path": "generated/shaders/objects/resource_skinning.hlsl",
-      "sha256": "b11aa9a5dbefb8cac2145f425c9c671e35ff4c1ffa6608ea3d35234ba77280ee"
+      "sha256": "3cc52355e30b80c3bf43aa4f3420f19e7f4b4d7d680306b88678bd190ded8dec"
     },
     {
       "path": "generated/shaders/objects/settlement_ground.hlsl",
@@ -132,7 +132,7 @@
     },
     {
       "path": "hydrology.hlsl",
-      "sha256": "d5f5e8ca4d2b75280450d976b8fb436816f9fbd2840912bd4363626807d2a46f"
+      "sha256": "3e0b663bf767732e5a13ca71a95e44ba36e9fc668cb894e10622380d462779de"
     }
   ]
 }

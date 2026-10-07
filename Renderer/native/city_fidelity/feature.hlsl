@@ -1206,8 +1206,10 @@ float4 q6_raw_feature(FeaturePixelInput input)
         albedo = resource_base_texture_7.SampleBias(material_sampler, input.uv, resource_weight * -0.45).rgb;
     else { albedo=0; emissive=0; }
     float4 mine_sample = sample_reused_resource_slot(mine_slot, input.uv);
+    // Resource models cut out by their slot alpha too (masked plant cards);
+    // opaque BC1 slots sample alpha 1, so solid bodies are unaffected.
     clip(lerp(1.0, mine_sample.a - lerp(0.08, 0.004, resource_decal_weight),
-              source_decal_weight * (1.0 - unit_weight)));
+              saturate(source_decal_weight * (1.0 - unit_weight) + resource_weight)));
     float mine_emissive_code = floor(material_fraction * 100.0 + 0.5);
     if (mine_weight > 0.5 && mine_emissive_code > 1.5)
         emissive = mine_emissive_code < 2.5

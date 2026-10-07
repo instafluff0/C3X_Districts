@@ -7,7 +7,18 @@ FeaturePixelInput VSSharedFeature(RigidInput i){
  FeaturePixelInput o=VSIntegratedFeature(packed);
  float3 position=project_world_content(p.position,p.world,i.projection,2);
  o.position.xy=(floor(position.xy*256+.5)/256+i.placement_view.xy)*c3x_inverse_viewport_size*float2(2,-2)+float2(-1,1);
+ // Bridges (materials 13-20: road and railroad, normal and pillaged) span rivers. Use the natural height-depth
+ // basis of the terrain and water beneath them, as resource_natural_depth does
+ // for resource bodies; the feature basis weights ground height far less.
+ bool bridge=i.projection.z!=0 && i.placement_view.w>12.5 && i.placement_view.w<20.5;
+ if(bridge){float h=p.world.z*112-2.5;
+  position.z=position.y+h*(i.projection.z/224*.82)+h*.0016*i.projection.w;}
  o.position.z=clamp(.5-(floor(position.z*256+.5)/256+i.placement_view.z)/16384.,.001,.999);
+ // The river surface (kind 9) sorts over its bed and banks 0.025*reserved.x
+ // nearer (translated_depth). A bridge spans it, so take slightly more: below
+ // about 16 height units, the deck and arches lost to the river and only the
+ // parapets showed.
+ if(bridge)o.position.z=max(.001,o.position.z-.0255*c3x_viewport_reserved.x/16384.);
  return o;
 }
 FeaturePixelInput VSSharedFeatureReflection(RigidInput i){

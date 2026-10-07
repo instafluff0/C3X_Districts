@@ -11,7 +11,8 @@ on grassland with Fish/Whales offshore; `relief` puts every land resource on a
 hill. Their native log lists `ROSTER ... replaced=0|1` as a census, not a gate:
 unreplaced resources keep Civ III's sprite in game but are blank in Lab.
 `native-minerals` places each mineral on every terrain Conquests allows it
-(`Renderer/lab/studies/resources/native_terrains.json`), including mountains.
+(`Renderer/lab/studies/resources/native_terrains.json`), including mountains;
+`native-minerals-alternates` shows Lab-only `Name~label` alternates beside them.
 `python3 Renderer/lab/studies/resources/audit.py --label NAME` renders every case at
 128 and 256 and writes per-resource crops beside the original Civ III sprite to
 `Renderer/lab/out/resources/audit/NAME/index.html`.
@@ -19,8 +20,11 @@ unreplaced resources keep Civ III's sprite in game but are blank in Lab.
 Reworked resources are previewed from a candidate pack before promotion:
 `--resource-pack ResourceCompositionLab` rebuilds it with
 `tools/asset_compiler/build_resource_compositions.py` and renders through the
-same production renderer (`C3X_RENDERER_RESOURCE_PACK`). Every size, count,
-sink, decal choice and terrain layout comes from
+same production renderer (`C3X_RENDERER_RESOURCE_PACK`). Its sources come from
+`tools/asset_compiler/resource_composition_sources.py`, which imports the Civ VI
+ArtDef entries the profiles name (Base and DLC), keeps each rock's authored
+burial and records terrain/feature variants. Every size, count, extra sink,
+decal choice and terrain layout comes from
 `Renderer/inventory/resource_composition_profiles.json`; the runtime only places
 baked instances, matches resource names by data aliases and picks a variant for
 the tile's terrain. Ground decals are flat `decal/` meshes with soft alpha;

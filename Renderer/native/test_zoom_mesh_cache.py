@@ -1173,6 +1173,7 @@ struct State {
     std::size_t terrain_patch_index_bytes=0;
     std::size_t tile_geometry_cache_bytes=60,prefetched_geometry_bytes=10;
     std::size_t tile_geometry_runtime_budget=100,tile_geometry_cache_capacity=2048;
+    std::size_t tile_geometry_required_budget=0;bool loading_gpu_residency=false,world_gpu_capacity_refused=false;
     unsigned tile_geometry_epoch=3,frame_tiles_evicted=0,cache_evictions=0;
     void release_geometry_vertex_buffers(int&){}
     void release_resident_content(Item& owner){resident_content.release(owner.binding);}

@@ -496,6 +496,428 @@ int main(){
 }
 ''', sources=("Renderer/native/terrain_scene_runtime.cpp",))
 
+    def test_road_patterns_follow_connection_masks_and_drape_terrain(self):
+        run_cpp(r'''
+#include "Renderer/native/rigid_object_instance.h"
+#include <cassert>
+#include <cstring>
+#include <map>
+#include <set>
+using namespace c3x_renderer;
+// Exact shared joins: NE, E, SE, S, SW, W, NW, N edge midpoints and corners.
+constexpr float join_u[8]={.5f,1,1,1,.5f,0,0,0},join_v[8]={0,0,.5f,1,1,1,.5f,0};
+// masks past 256 are variants of the full mask whose center moves, so each
+// variant leaves its joins in a different direction.
+std::vector<std::uint8_t> blob(bool corrupt=false,unsigned masks=256){
+ std::vector<std::uint32_t> offsets{0};std::vector<std::uint8_t> lines;std::vector<float> points;
+ auto line=[&](float a,float b,float c,float d,int start,int end){
+  std::uint32_t first=std::uint32_t(points.size()/2);std::uint16_t count=9;
+  for(int i=0;i<9;++i){points.push_back(a+(c-a)*i/8.f);points.push_back(b+(d-b)*i/8.f);}
+  std::uint8_t record[8];std::memcpy(record,&first,4);std::memcpy(record+4,&count,2);
+  record[6]=std::uint8_t(std::int8_t(start));record[7]=std::uint8_t(std::int8_t(end));
+  lines.insert(lines.end(),record,record+8);
+ };
+ for(unsigned index=0;index<masks;++index){
+  unsigned mask=std::min(index,255u);
+  float cu=.5f,cv=.5f;
+  if(index>255){cu+=.04f*float(int((index-255)%3)-1);cv+=.04f*float(int((index-255)/3%3)-1);}
+  if(!mask)line(.4f,.5f,.6f,.5f,-1,-1);
+  for(int d=0;d<8;++d)if(mask>>d&1)line(cu,cv,join_u[d],join_v[d],-1,d);
+  offsets.push_back(std::uint32_t(lines.size()/8));
+ }
+ std::vector<std::uint8_t> out(8+12);std::memcpy(out.data(),"C3XRPAT1",8);
+ std::uint32_t header[3]={masks,offsets.back(),std::uint32_t(points.size()/2)};std::memcpy(out.data()+8,header,12);
+ auto append=[&](void const* data,std::size_t size){auto p=static_cast<std::uint8_t const*>(data);out.insert(out.end(),p,p+size);};
+ append(offsets.data(),offsets.size()*4);append(lines.data(),lines.size());append(points.data(),points.size()*4);
+ if(corrupt)out[20+257*4+6]=9; // impossible join direction
+ return out;
+}
+int main(){
+ objects::RoutePatterns patterns;
+ auto data=blob();assert(patterns.load(data.data(),data.size()));
+ assert(patterns.offsets[255+1]-patterns.offsets[255]==8 && patterns.offsets[1]==1);
+ objects::RoutePatterns rejected;auto bad=blob(true);
+ assert(!rejected.load(bad.data(),bad.size()) && rejected.lines.empty());
+ assert(!rejected.load(data.data(),data.size()-4));
+ // A railroad sheet adds 16 variants of the full mask; a fully connected tile
+ // picks one by a stable hash of its position, every other mask is itself.
+ objects::RoutePatterns rail_set;auto rail_data=blob(false,272);
+ assert(rail_set.load(rail_data.data(),rail_data.size()) && rail_set.offsets.size()==273);
+ {
+  std::set<unsigned> picked;
+  for(int y=0;y<40;++y)for(int x=y&1;x<40;x+=2){
+   unsigned index=rail_set.index(255,x,y);assert(index>=255 && index<272 && index==rail_set.index(255,x,y));
+   picked.insert(index);assert(rail_set.index(17,x,y)==17 && patterns.index(255,x,y)==255);
+  }
+  assert(picked.size()>12);
+ }
+ std::array<FeatureBundle,objects::family_count> bundles;objects::Assets assets{};
+ for(unsigned f=0;f<bundles.size();++f)assets.bundles[f]=&bundles[f];
+ FeatureAsset asset{};asset.id="bridge";asset.vertices={{{0,0,0},{0,0,1},{0,0}}};asset.indices={0,0,0};
+ bundles[objects::bridge_family].assets.push_back(asset);
+ for(auto n:{"bridge_medieval_normal","bridge_railroad_normal"}){FeatureGroup g;g.name=n;FeaturePlacement p{};p.scale=1;g.placements.push_back(p);bundles[objects::bridge_family].groups.push_back(g);}
+ assets.road_patterns=&patterns;
+ struct Observation{c3x_renderer_tile_v1 occurrence;};
+ c3x_renderer_tile_v1 tile{};tile.tile_x=40;tile.tile_y=20;tile.road_mask=1;tile.city_id=-1;tile.route_style=1;
+ constexpr int offsets[8][2]={{1,-1},{2,0},{1,1},{0,2},{-1,1},{-2,0},{-1,-1},{0,-2}};
+ std::array<Observation,8> around{};
+ auto neighbors=[&](unsigned roads,unsigned rails){
+  for(int d=0;d<8;++d){around[d].occurrence=tile;around[d].occurrence.tile_x+=offsets[d][0];around[d].occurrence.tile_y+=offsets[d][1];
+   around[d].occurrence.road_mask=roads>>d&1;around[d].occurrence.railroad_mask=rails>>d&1;around[d].occurrence.river_code=0;}
+  return [&,roads](int x,int y)->Observation const*{
+   for(int d=0;d<8;++d)if(x==tile.tile_x+offsets[d][0] && y==tile.tile_y+offsets[d][1])return &around[d];return nullptr;};
+ };
+ // Bit k is neighbor k+1 in Civ III order; the tile draws that mask's pattern.
+ objects::Plan two;objects::select_routes(tile,assets,true,true,neighbors(3u,0u),two);
+ assert(two.routes.empty() && two.patterns.size()==2 && two.instances.empty());
+ // Roads keep one dirt look across eras (this tile's era is 1).
+ for(auto const& p:two.patterns)assert(p.style==0 && p.bridges==0 && p.line>=patterns.offsets[3] && p.line<patterns.offsets[4]);
+ // Both railroad tiles: the railroad owns that link and roads omit it. The
+ // railroad follows the same patterns on its own mask, as style 4.
+ tile.railroad_mask=1;
+ objects::Plan mixed;objects::select_routes(tile,assets,true,true,neighbors(3u,2u),mixed);
+ assert(mixed.routes.empty() && mixed.patterns.size()==2);
+ assert(mixed.patterns[0].style==0 && patterns.lines[mixed.patterns[0].line].end==0);
+ assert(mixed.patterns[1].style==4 && patterns.lines[mixed.patterns[1].line].end==1);
+ assert(mixed.patterns[1].line>=patterns.offsets[2] && mixed.patterns[1].line<patterns.offsets[3]);
+ objects::Plan rail_only;objects::select_routes(tile,assets,true,true,neighbors(3u,3u),rail_only);
+ assert(rail_only.routes.empty() && rail_only.patterns.size()==2);
+ for(auto const& p:rail_only.patterns)assert(p.style==4 && p.line>=patterns.offsets[3] && p.line<patterns.offsets[4]);
+ // A lone railroad draws the mask-zero mark (and no road) unless a city
+ // stands there.
+ objects::Plan lone;objects::select_routes(tile,assets,true,true,neighbors(0u,0u),lone);
+ assert(lone.patterns.size()==1 && lone.patterns[0].line==0 && lone.patterns[0].style==4);
+ tile.city_id=4;objects::Plan rail_city;objects::select_routes(tile,assets,true,true,neighbors(0u,0u),rail_city);
+ assert(rail_city.patterns.empty() && rail_city.routes.empty());tile.city_id=-1;
+ // With a railroad sheet, railroads draw its patterns (roads keep theirs).
+ {
+  objects::Assets railed=assets;railed.rail_patterns=&rail_set;
+  objects::Plan sheet;objects::select_routes(tile,railed,true,true,neighbors(3u,2u),sheet);
+  assert(sheet.patterns.size()==2 && sheet.patterns[1].style==4);
+  assert(sheet.patterns[0].line>=patterns.offsets[1] && sheet.patterns[0].line<patterns.offsets[2]);
+  assert(sheet.patterns[1].line>=rail_set.offsets[2] && sheet.patterns[1].line<rail_set.offsets[3]);
+  assert(railed.patterns_for(4)==&rail_set && railed.patterns_for(0)==&patterns && assets.patterns_for(4)==&patterns);
+ }
+ // A railroad over a tile-diagonal river edge gets the railroad bridge.
+ tile.river_code=2;objects::Plan rail_bridge;objects::select_routes(tile,assets,true,true,neighbors(1u,1u),rail_bridge);
+ assert(rail_bridge.patterns.size()==1 && rail_bridge.patterns[0].style==4 && rail_bridge.patterns[0].bridges==2u);
+ assert(rail_bridge.instances.size()==1 && rail_bridge.instances[0].u==.5f && rail_bridge.instances[0].v==0.f);
+ tile.river_code=0;
+ tile.railroad_mask=0;
+ // An isolated road keeps the mask-zero mark unless a city occupies the tile.
+ objects::Plan isolated;objects::select_routes(tile,assets,true,true,neighbors(0u,0u),isolated);
+ assert(isolated.patterns.size()==1 && isolated.patterns[0].line==0 && isolated.routes.empty());
+ tile.city_id=4;objects::Plan city;objects::select_routes(tile,assets,true,true,neighbors(0u,0u),city);
+ assert(city.patterns.empty() && city.routes.empty());
+ objects::Plan city_link;objects::select_routes(tile,assets,true,true,neighbors(1u,0u),city_link);
+ assert(city_link.patterns.size()==1);tile.city_id=-1;
+ objects::Plan disabled;objects::select_routes(tile,assets,true,false,neighbors(3u,0u),disabled);
+ assert(disabled.patterns.empty());
+ // A river on the NE edge bridges that join and places one authored arch.
+ tile.river_code=2;objects::Plan bridged;objects::select_routes(tile,assets,true,true,neighbors(1u,0u),bridged);
+ assert(bridged.patterns.size()==1 && bridged.patterns[0].bridges==2u && bridged.instances.size()==1);
+ // The authored bridge sits on the shared edge midpoint and follows the road.
+ assert(bridged.instances[0].u==.5f && bridged.instances[0].v==0.f);
+ assert(std::abs(bridged.instances[0].rotation+1.5707963f)<.01f);
+ tile.river_code=0;
+ objects::Projection projection;projection.tile=tile;projection.tile_width=128;projection.half_w=64;projection.half_h=32;
+ projection.pickup_profile=projection.world_objects=true;projection.relief_projection_scale=128.f/224*.82f;
+ auto flat=[](float,float){return std::array<float,3>{0,0,0};};auto zero=[](float,float){return 0.f;};
+ auto sloped=[](float u,float v){return std::array<float,3>{8*u+3*v,0,0};};
+ float tile_u=float(tile.tile_x+tile.tile_y)*.5f,tile_v=float(tile.tile_x-tile.tile_y)*.5f;
+ objects::Plan all;objects::select_routes(tile,assets,true,true,neighbors(255u,0u),all);assert(all.patterns.size()==8);
+ objects::Surfaces a,b;objects::compile(all,projection,assets,flat,zero,a);objects::compile(all,projection,assets,sloped,zero,b);
+ auto const& va=a.layers[objects::route_layer];auto const& vb=b.layers[objects::route_layer];
+ assert(!va.empty() && va.size()==vb.size() && va.size()%6==0);
+ bool slope_lit=false;
+ for(std::size_t i=0;i<va.size();++i){
+  assert(va[i].surface_kind==11 && va[i].base_terrain==0 && va[i].world_valid==1);
+  assert(va[i].u>=.0299f && va[i].u<=.9701f && va[i].macro_u==va[i].u);
+  assert(va[i].v>.90606654f && va[i].v<.99021526f);
+  assert(va[i].world_z<vb[i].world_z+1e-6f && va[i].y>=vb[i].y);
+  // Pattern roads select their own shading; nothing here fords.
+  assert(va[i].material_desert==0.f && va[i].material_marsh==1.f);
+  slope_lit=slope_lit || vb[i].normal_x<-.01f;
+ }
+ assert(slope_lit);
+ // A slope moves only the stroke's width, never its centerline: quads are
+ // {left0,right0,right1,left0,right1,left1}.
+ auto center=[](objects::Vertex const& a,objects::Vertex const& b){return std::array<float,2>{(a.world_x+b.world_x)*.5f,(a.world_y+b.world_y)*.5f};};
+ for(std::size_t i=0;i<va.size();i+=6){
+  auto fa=center(va[i],va[i+1]),fb=center(vb[i],vb[i+1]);
+  assert(std::abs(fa[0]-fb[0])<1e-5f && std::abs(fa[1]-fb[1])<1e-5f);
+ }
+ // A steep slope across a path keeps the flat stroke's screen thickness
+ // instead of stretching it down the face.
+ {
+  auto steep=[](float,float v){return std::array<float,3>{70*v,0,0};};
+  objects::Surfaces f,s;objects::compile(all,projection,assets,flat,zero,f);objects::compile(all,projection,assets,steep,zero,s);
+  auto const& vf=f.layers[objects::route_layer];auto const& vs=s.layers[objects::route_layer];
+  assert(vf.size()==vs.size());
+  auto thickness=[](std::vector<objects::Vertex> const& v,std::size_t i){
+   float ax=(v[i].x+v[i+1].x)*.5f,ay=(v[i].y+v[i+1].y)*.5f,bx=(v[i+2].x+v[i+5].x)*.5f,by=(v[i+2].y+v[i+5].y)*.5f;
+   float tx=bx-ax,ty=by-ay,nx=v[i+1].x-v[i].x,ny=v[i+1].y-v[i].y,length=std::hypot(tx,ty);
+   return length<1.f?-1.f:std::abs(nx*ty-ny*tx)/length;
+  };
+  float worst=1.f;std::size_t measured=0;
+  for(std::size_t i=0;i<vf.size();i+=6){
+   float a=thickness(vf,i),b=thickness(vs,i);
+   if(a<0 || b<0)continue;++measured;
+   worst=std::max(worst,std::max(a/b,b/a));
+  }
+  assert(measured>20 && worst<1.25f);
+ }
+ for(auto const& v:vb)assert(std::abs(v.world_z*112-9.f-std::max(-2.5f,8*v.world_x+3*v.world_y))<.05f);
+ // A railroad strip follows the same line a little wider, with its sleeper
+ // coordinate unwrapped (0 at the shared join) rather than mirrored.
+ {
+  objects::Plan road_line,rail_line;road_line.patterns.push_back(all.patterns[1]);
+  rail_line.patterns.push_back(all.patterns[1]);rail_line.patterns[0].style=4;
+  objects::Surfaces ro,ra;objects::compile(road_line,projection,assets,flat,zero,ro);objects::compile(rail_line,projection,assets,flat,zero,ra);
+  auto const& vr=ro.layers[objects::route_layer];auto const& va2=ra.layers[objects::route_layer];
+  assert(!vr.empty() && !va2.empty()); // texture turns split the strips differently
+  auto width=[](std::vector<objects::Vertex> const& v){return std::hypot(v[0].world_x-v[1].world_x,v[0].world_y-v[1].world_y);};
+  // A wider stroke plus a wider dirt bed (two stroke widths, not 1.5).
+  assert(width(va2)>1.6f*width(vr) && width(va2)<2.1f*width(vr));
+  bool joined=false;
+  for(auto const& v:va2){assert(v.base_terrain==4.f && v.material_marsh==1.f);joined=joined || std::abs(v.u)<1e-5f;}
+  for(auto const& v:vr)assert(v.u>=.0299f);
+  assert(joined);
+ }
+ // A per-point mountain fade dissolves the strip (the shader's fade weight).
+ {
+  objects::PatternRoute climbing=all.patterns[1];
+  auto const& line=patterns.lines[climbing.line];
+  climbing.fade.assign(line.count,0.f);climbing.fade.back()=1.f;
+  objects::Plan one;one.patterns.push_back(climbing);objects::Surfaces out;
+  objects::compile(one,projection,assets,flat,zero,out);auto const& v=out.layers[objects::route_layer];
+  assert(v.front().material_desert==0.f && v.back().material_desert>.99f);
+ }
+ // Near a shared join a path eases onto the join's shared axis, so the two
+ // halves meet tangent to each other instead of at a corner.
+ {
+  objects::PatternRoute bent{patterns.offsets[1],0u,0u,{},{},{},0u};   // mask 1: center to the NE join
+  bent.joins[2]=.5f;bent.joins[3]=-.8660254f;                        // shared axis 30 degrees off the line
+  objects::Plan one;one.patterns.push_back(bent);objects::Surfaces out;
+  objects::compile(one,projection,assets,flat,zero,out);auto const& v=out.layers[objects::route_layer];
+  // Centerline over the last quad: {left0,right0,right1,left0,right1,left1}.
+  std::size_t i=v.size()-6;
+  float ax=(v[i].world_x+v[i+1].world_x)*.5f,ay=(v[i].world_y+v[i+1].world_y)*.5f;
+  float bx=(v[i+2].world_x+v[i+5].world_x)*.5f,by=(v[i+2].world_y+v[i+5].world_y)*.5f;
+  float dx=bx-ax,dy=by-ay,length=std::hypot(dx,dy);
+  float along=(dx*.5f+dy*.8660254f)/length;   // world basis: (u,-v) of the tile-local axis
+  assert(along>std::cos(8.f*3.14159265f/180.f));
+ }
+ // The shader blends the track into its owner's ground material by height:
+ // each vertex names that material (0 grass ... 4 mountain, 5 marsh).
+ for(auto const& v:va)assert(v.surface_coordinate==2.f); // desert (square type 0)
+ {
+  objects::Projection rock=projection;rock.tile.real_terrain_type=6;rock.tile.terrain_type=2;
+  objects::Projection field=projection;field.tile.real_terrain_type=7;field.tile.terrain_type=1;
+  objects::Surfaces r,f;objects::compile(all,rock,assets,flat,zero,r);objects::compile(all,field,assets,flat,zero,f);
+  for(auto const& v:r.layers[objects::route_layer])assert(v.surface_coordinate==4.f);
+  for(auto const& v:f.layers[objects::route_layer])assert(v.surface_coordinate==1.f); // forest over plains
+ }
+ // Roads cross mountains on the rock surface, as Civ III draws them over it.
+ auto peak=[](float,float){return 150.f;};
+ objects::Surfaces over;objects::compile(all,projection,assets,flat,peak,over);
+ for(auto const& v:over.layers[objects::route_layer]){
+  assert(std::abs(v.world_z*112-9.f-147.5f)<.05f);
+  // A joined strip crosses into its neighbor; it must stay inside the
+  // shader's per-tile diamond test instead of pinching at the seam.
+  assert(v.material_grass==.5f && v.material_plains==.5f);
+ }
+ // Each end of a joined line lands on the neighbor's shared point; the east
+ // tile's west join is the same world position.
+ for(auto const& route:all.patterns){
+  objects::Plan one;one.patterns.push_back(route);objects::Surfaces out;objects::compile(one,projection,assets,flat,zero,out);
+  auto const& v=out.layers[objects::route_layer];auto const& last=v[v.size()-2];auto const& last_other=v[v.size()-1];
+  int d=patterns.lines[route.line].end;
+  float x=(last.world_x+last_other.world_x)*.5f,y=(last.world_y+last_other.world_y)*.5f;
+  // A joined end stops exactly on the shared point.
+  assert(std::hypot(x-(tile_u+join_u[d]),y-(tile_v+1-join_v[d]))<1e-4f);
+  // Screen stroke: a horizontal run is thinner in world units than a vertical one.
+  float width=std::hypot(v[0].world_x-v[1].world_x,v[0].world_y-v[1].world_y);
+  if(d==1)assert(width>.09f && width<.12f);   // east corner: runs across the screen
+  if(d==3)assert(width>.065f && width<.085f); // south corner: runs down the screen
+ }
+ // Adjacent tiles share one axis at their join, so both halves end on the
+ // same world vertices: no gap and no overlapping double coverage. Railroads
+ // (a rail on every tile, so no roads) meet the same way.
+ for(bool rails:{false,true}){
+  // Interior rail tiles are fully connected, so neighbors pick different
+  // variants; both sides of each join still agree on its axis.
+  objects::Assets world_assets=assets;if(rails)world_assets.rail_patterns=&rail_set;
+  auto const& world_set=rails?rail_set:patterns;
+  std::map<std::pair<int,int>,Observation> world;
+  for(int y=16;y<=24;++y)for(int x=34;x<=48;++x)if((x+y)%2==0){
+   c3x_renderer_tile_v1 occurrence=tile;occurrence.tile_x=x;occurrence.tile_y=y;
+   occurrence.road_mask=1;occurrence.railroad_mask=rails;occurrence.river_code=0;occurrence.city_id=-1;
+   world[{x,y}]=Observation{occurrence};
+  }
+  auto map_lookup=[&](int x,int y)->Observation const*{auto f=world.find({x,y});return f==world.end()?nullptr:&f->second;};
+  auto ends=[&](int x,int y,int join){
+   objects::Plan plan;objects::select_routes(world[{x,y}].occurrence,world_assets,true,true,map_lookup,plan);
+   objects::Projection p=projection;p.tile=world[{x,y}].occurrence;
+   for(auto const& route:plan.patterns){
+    auto const& line=world_set.lines[route.line];
+    assert(route.style==(rails?4u:0u));
+    if(line.start!=join && line.end!=join)continue;
+    objects::Plan one;one.patterns.push_back(route);objects::Surfaces out;
+    objects::compile(one,p,world_assets,flat,zero,out);auto const& v=out.layers[objects::route_layer];
+    bool at_end=line.end==join;
+    // First quad is {left0,right0,...}; last quad ends {...,right1,left1}.
+    auto const& a=at_end?v[v.size()-2]:v[0];auto const& b=at_end?v[v.size()-1]:v[1];
+    return std::array<float,4>{a.world_x,a.world_y,b.world_x,b.world_y};
+   }
+   assert(false);return std::array<float,4>{};
+  };
+  for(int d=0;d<8;++d){
+   auto mine=ends(40,20,d),theirs=ends(40+offsets[d][0],20+offsets[d][1],(d+4)&7);
+   bool same=std::abs(mine[0]-theirs[0])<1e-5f && std::abs(mine[1]-theirs[1])<1e-5f &&
+             std::abs(mine[2]-theirs[2])<1e-5f && std::abs(mine[3]-theirs[3])<1e-5f;
+   bool swapped=std::abs(mine[0]-theirs[2])<1e-5f && std::abs(mine[1]-theirs[3])<1e-5f &&
+                std::abs(mine[2]-theirs[0])<1e-5f && std::abs(mine[3]-theirs[1])<1e-5f;
+   assert(same || swapped);
+  }
+ }
+ // Bridges stand only on tile-diagonal river edges. A river through a shared
+ // corner that separates the linked tiles makes both halves ford (fade into
+ // each bank); a river that only touches the corner moves the join to the
+ // open bank instead.
+ {
+  std::map<std::pair<int,int>,Observation> world;
+  for(int y=16;y<=24;++y)for(int x=34;x<=48;++x)if((x+y)%2==0){
+   c3x_renderer_tile_v1 occurrence=tile;occurrence.tile_x=x;occurrence.tile_y=y;occurrence.city_id=-1;
+   occurrence.road_mask=0;occurrence.railroad_mask=0;occurrence.river_code=0;world[{x,y}]=Observation{occurrence};
+  }
+  auto map_lookup=[&](int x,int y)->Observation const*{auto f=world.find({x,y});return f==world.end()?nullptr:&f->second;};
+  auto& west=world[{40,20}].occurrence;auto& east=world[{42,20}].occurrence;
+  west.road_mask=east.road_mask=1;
+  auto plan_for=[&](c3x_renderer_tile_v1 const& t){objects::Plan p;objects::select_routes(t,assets,true,true,map_lookup,p);return p;};
+  west.river_code=2|8; // north-south through the east corner of the west tile
+  auto a=plan_for(west),b=plan_for(east);
+  assert(a.instances.empty() && b.instances.empty());
+  assert(a.patterns.size()==1 && a.patterns[0].bridges==0u && a.patterns[0].fords==2u);
+  assert(b.patterns.size()==1 && b.patterns[0].bridges==0u && b.patterns[0].fords==2u);
+  west.river_code=2;east.river_code=128; // both on the north side: the corner is only touched
+  a=plan_for(west);b=plan_for(east);
+  assert(a.instances.empty() && b.instances.empty() && a.patterns[0].bridges==0u && b.patterns[0].bridges==0u);
+  assert(a.patterns[0].fords==0u && b.patterns[0].fords==0u);
+  // Both tiles move their shared join the same way: toward the open south bank.
+  auto join_open=[&](objects::Plan const& p,int join){
+   for(auto const& r:p.patterns){auto const& l=patterns.lines[r.line];
+    if(l.end==join)return std::array<float,2>{r.open[2],r.open[3]};
+    if(l.start==join)return std::array<float,2>{r.open[0],r.open[1]};}
+   return std::array<float,2>{};};
+  auto ow=join_open(a,1),oe=join_open(b,5);
+  assert(std::abs(ow[0]-.7071068f)<1e-4f && std::abs(ow[1]-.7071068f)<1e-4f && ow==oe);
+  // Both diagonals of one corner cross the river: no bridge for either.
+  west.river_code=2|8;east.river_code=0;
+  auto& north=world[{41,19}].occurrence;auto& south=world[{41,21}].occurrence;
+  north.road_mask=south.road_mask=1;north.river_code=8;
+  auto n=plan_for(north);a=plan_for(west);
+  auto at_corner=[](objects::Plan const& p,float u,float v){unsigned c=0;
+   for(auto const& i:p.instances)c+=i.u==u && i.v==v;return c;};
+  assert(at_corner(a,1.f,0.f)==0 && at_corner(n,1.f,1.f)==0);
+  for(auto const& route:n.patterns){auto const& line=patterns.lines[route.line];
+   if(line.start==3)assert(route.fords&1u);if(line.end==3)assert(route.fords&2u);}
+ }
+ // A long path mirrors its tiled piece inside the atlas interior: it turns at
+ // both ends, never samples the outer columns, and is continuous between quads.
+ objects::RoutePatterns long_line=patterns;
+ for(auto& point:long_line.points)point[0]=point[0]*6.f-2.5f;
+ objects::Plan wrap;wrap.patterns.push_back(all.patterns[1]);objects::Surfaces wrapped;
+ objects::compile(wrap,projection,objects::Assets{assets.bundles,&long_line},flat,zero,wrapped);
+ auto const& wv=wrapped.layers[objects::route_layer];
+ bool low=false,high=false;
+ for(auto const& v:wv){assert(v.u>=.0299f && v.u<=.9701f && v.macro_u==v.u);low|=v.u<.04f;high|=v.u>.96f;}
+ for(std::size_t q=6;q<wv.size();q+=6)assert(std::abs(wv[q].u-wv[q-1].u)<1e-5f);
+ assert(low && high);
+ // Away from a bridge, points inside a river channel along a tile edge move
+ // toward the tile's center onto dry bank; a shared join off any bend stays.
+ auto edge_river=[&](float,float v){return std::abs(tile_v+1.f-v)*64.f;}; // along the NE edge
+ objects::Plan wet;wet.patterns.push_back(all.patterns[1]);
+ objects::promote_river_crossings(tile,edge_river,wet,&assets);
+ auto const& moved=wet.patterns[0].points;auto const& source=patterns.lines[all.patterns[1].line];
+ assert(moved.size()==source.count && wet.instances.empty());
+ for(unsigned i=0;i+1<moved.size();++i)assert(edge_river(0,tile_v+1.f-moved[i][1])>=10.9f);
+ assert(moved.back()==patterns.points[source.first+source.count-1]);
+ // The join left in the water fades into the bank; the moved points do not.
+ auto const& fade=wet.patterns[0].wet;
+ assert(fade.size()==source.count && fade.back() && !fade.front());
+ objects::Surfaces nudged;objects::compile(wet,projection,assets,flat,zero,nudged);
+ assert(!nudged.layers[objects::route_layer].empty());
+ // A bridged river join keeps its exact approach for the deck.
+ objects::Plan kept;kept.patterns.push_back(bridged.patterns[0]);
+ objects::promote_river_crossings(tile,[&](float,float v){return std::abs(tile_v+1.f-v)*64.f;},kept,&assets);
+ assert(kept.patterns[0].points.empty());
+ // A bridge rests on its lower bank: the authored deck ends sit at the mesh
+ // base, so that end meets its bank and the far end settles into the higher
+ // bank; no end floats. The seat is one rigid transform, identical for the
+ // shared instance and its bounds.
+ {
+  FeatureAsset span{};span.id="route/bridge/medieval/normal";
+  span.vertices={{{-.25f,0,.02f},{0,0,1},{0,0}},{{.25f,0,.02f},{0,0,1},{0,0}},{{0,0,.05f},{0,0,1},{0,0}}};
+  span.indices={0,1,2};
+  assert(objects::shared_rigid_mesh(span));
+  auto own=bundles;own[objects::bridge_family].assets={span};
+  objects::Assets with=assets;for(unsigned f=0;f<own.size();++f)with.bundles[f]=&own[f];
+  objects::Plan plan;plan.instances.push_back({objects::bridge_family,0u,objects::feature_layer,.5f,0.f,-1.5707963f,1.f,13.f,0.f,false});
+  for(bool high_neighbor:{true,false}){
+   // One bank (world v past this tile is the NE neighbor) stands 40 higher.
+   auto banks=[&](float,float v){return std::array<float,3>{(v>tile_v+1.f)==high_neighbor?40.f:0.f,0,0};};
+   objects::Surfaces out;objects::compile(plan,projection,with,banks,zero,out);
+   auto const& v=out.layers[objects::feature_layer];
+   assert(v.size()==3 && v[0].world_y<tile_v+1.f && v[1].world_y>tile_v+1.f);
+   // Both ends stand on the lower bank (world_z carries +2.5).
+   for(int i:{0,1})assert(std::abs(v[i].world_z*112-(2.5f+.02f*150.f/.82f))<.05f);
+   auto rigid=objects::prepare_rigid(plan.instances[0],projection,with,banks,zero);
+   assert(std::abs(rigid.instance.place[7])<.01f);
+  }
+  // A railroad bridge (a flat truss deck at its base) rests the same way.
+  span.id="route/bridge/railroad/normal";own[objects::bridge_family].assets={span};
+  auto high_far=[&](float,float v){return std::array<float,3>{v>tile_v+1.f?40.f:0.f,0,0};};
+  assert(std::abs(objects::prepare_rigid(plan.instances[0],projection,with,high_far,zero).instance.place[7])<.01f);
+  // The bridged road ends under the bridge's end; the deck carries it over.
+  objects::Plan road;road.patterns.push_back(bridged.patterns[0]);
+  objects::Surfaces strip;objects::compile(road,projection,assets,flat,zero,strip);
+  auto const& r=strip.layers[objects::route_layer];assert(!r.empty());
+  float nearest=1e9f;
+  for(auto const& vertex:r)nearest=std::min(nearest,std::hypot(vertex.world_x-(tile_u+.5f),vertex.world_y-(tile_v+1.f)));
+  assert(nearest>.195f && nearest<.25f);
+  // A rendered river meanders off the tile edge: here its water centers 0.1
+  // tile past the NE join. The bridge stands on that water and the road
+  // half shortens to end under its moved end.
+  span.id="route/bridge/medieval/normal";own[objects::bridge_family].assets={span};
+  objects::Plan meander=bridged;meander.instances[0].asset=0;
+  auto off_edge=[&](float,float v){return std::abs(v-(tile_v+1.1f))*64.f;};
+  objects::promote_river_crossings(tile,off_edge,meander,&with);
+  assert(std::abs(meander.instances[0].u-.5f)<1e-4f && std::abs(meander.instances[0].v+.1f)<.011f);
+  assert(std::abs(meander.patterns[0].crossing[1]-.1f)<.011f);
+  objects::Plan moved;moved.patterns=meander.patterns;
+  objects::Surfaces shifted;objects::compile(moved,projection,with,flat,zero,shifted);
+  nearest=1e9f;
+  for(auto const& vertex:shifted.layers[objects::route_layer])
+   nearest=std::min(nearest,std::hypot(vertex.world_x-(tile_u+.5f),vertex.world_y-(tile_v+1.f)));
+  assert(nearest>.09f && nearest<.14f);
+  // A hill bend pushes the water a quarter tile off the edge: the bridge
+  // follows it, and this tile's half runs to the join under the bridge's end.
+  objects::Plan bent=bridged;bent.instances[0].asset=0;
+  objects::promote_river_crossings(tile,[&](float,float v){return std::abs(v-(tile_v+1.24f))*64.f;},bent,&with);
+  assert(std::abs(bent.instances[0].v+.24f)<.011f && std::abs(bent.patterns[0].crossing[1]-.24f)<.011f);
+  // On the edge itself nothing moves.
+  objects::Plan centered=bridged;centered.instances[0].asset=0;
+  objects::promote_river_crossings(tile,[&](float,float v){return std::abs(v-(tile_v+1.f))*64.f;},centered,&with);
+  assert(std::abs(centered.instances[0].v)<1e-4f && std::abs(centered.patterns[0].crossing[1])<1e-4f);
+ }
+ // Without a pattern pack the existing segment roads remain unchanged.
+ objects::Assets legacy=assets;legacy.road_patterns=nullptr;
+ objects::Plan old;objects::select_routes(tile,legacy,true,true,neighbors(3u,0u),old);
+ assert(old.patterns.empty() && !old.routes.empty());
+}
+''', sources=("Renderer/native/terrain_scene_runtime.cpp",))
+
     def test_prepared_objects_private_queries_owned_capture_and_packed_parity(self):
         run_cpp(r'''
 #define NOMINMAX
@@ -646,3 +1068,54 @@ int main(){
  }
 }
 ''')
+
+
+ROOT = __import__("pathlib").Path(__file__).resolve().parents[2]
+
+
+def route_draws_are_decals(renderer_source, pipeline_source):
+    """Both map pipelines draw the route layer with the no-depth-write decal state."""
+    import re
+    retained = re.search(r"OMSetDepthStencilState\(natural\.decal_depth,0\);\s*bool routes_drawn=draw\(geometry_route\);",
+                         renderer_source)
+    fresh = re.search(r"else if \(layer==geometry_route && renderer\.natural\.decal_depth\) \{[^}]*"
+                      r"OMSetDepthStencilState\(renderer\.natural\.decal_depth,0\);", pipeline_source)
+    return bool(retained and fresh)
+
+
+def mountain_scales(source):
+    import re
+    found = re.search(r"mountain_height_scale=([0-9.]+)f,\s*mountain_span_scale=([0-9.]+)f", source)
+    return (float(found.group(1)), float(found.group(2))) if found else None
+
+
+class RouteRegressionContractTests(unittest.TestCase):
+    def test_pattern_routes_fade_on_mountains(self):
+        # Pattern roads once draped over mountain peaks as wide streaks, then
+        # vanished from mountain tiles entirely, then were capped at a foothill
+        # height so the rock cut them along a ragged contour. Civ III shows
+        # them on a mountain's foot but never over its top: routes follow the
+        # whole rendered mountain and fade out as it rises.
+        import re
+        source = (ROOT / "Renderer/native/object_preparation.h").read_text()
+        fade = re.search(r"pattern_route_fade_start=([0-9.]+)f,pattern_route_fade_end=([0-9.]+)f", source)
+        self.assertIsNotNone(fade)
+        self.assertTrue(20.0 <= float(fade.group(1)) < float(fade.group(2)) <= 90.0)
+        self.assertNotIn("pattern_route_mountain_cap", source)
+        self.assertRegex(source, r"float rise=route_height\(x,y\)-height_natural\(x,y\);")
+        self.assertRegex(source, r"if\(input\.projection\.tile\.road_mask \|\| input\.projection\.tile\.railroad_mask\)\n")
+
+    def test_route_strips_never_write_depth(self):
+        # Overlapping translucent road fringes once wrote depth and rejected
+        # another strip's core, leaving light cracks at joins and junctions.
+        self.assertTrue(route_draws_are_decals(
+            (ROOT / "Renderer/native/c3x_renderer.cpp").read_text(),
+            (ROOT / "Renderer/sandbox/fresh_pipeline.h").read_text()))
+
+    def test_route_mountain_shape_matches_rendered_mesh(self):
+        # Routes and objects sampled a stale, taller/narrower mountain than the
+        # mesh, floating or hiding paths on the rock.
+        mesh = mountain_scales((ROOT / "Renderer/lab/shared/natural/relief_mesh_body.h").read_text())
+        objects = mountain_scales((ROOT / "Renderer/native/object_preparation.h").read_text())
+        self.assertIsNotNone(mesh)
+        self.assertEqual(objects, mesh)

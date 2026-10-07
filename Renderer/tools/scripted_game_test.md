@@ -503,7 +503,8 @@ flight, audio alignment or current-build interception.
 ## Performance regression checks
 
 These read a copied capture on the Mac. Each was confirmed to fail on a
-capture from before its fix and to pass after it (performance review 4t, 4v).
+capture from before its fix and to pass after it (performance review 4t, 4v,
+4x).
 
 - `python3 Renderer/tools/check_borrowed_snapshot.py CAPTURE` needs
   `-Scenario unit-turn -ProfileRenderer` (trace level 2). During camera jobs,
@@ -517,9 +518,15 @@ capture from before its fix and to pass after it (performance review 4t, 4v).
   blocked on the input-coverage worker. Before the fix this reached 940 ms
   while scrolling; after it, the worst window was about 240 ms.
 
-Their logic is covered on the Mac by `test_borrowed_snapshot_reuse.py` and
-`test_hit_scene_fast_paths.py`, together with exact hit-test answers and
-mutation-checked counters for the coverage worker's fast paths.
+- `python3 Renderer/tools/check_camera_jobs.py CAPTURE` needs
+  `-ProfileRenderer`. It fails if any camera job failed. A failed job leaves
+  the map black or stale; on the 1498 AD save, a first job a few KB over the
+  geometry budget kept the map black for the session.
+
+Their logic is covered on the Mac by `test_borrowed_snapshot_reuse.py`,
+`test_hit_scene_fast_paths.py` and `test_required_geometry_admission.py`,
+together with exact hit-test answers and mutation-checked counters for the
+coverage worker's fast paths.
 
 ## Turn and held-mouse regressions
 

@@ -24,6 +24,12 @@ void lab_place_objects(std::vector<c3x_renderer_tile_v1>& tiles, int center_x, i
     bool huts=std::strcmp(category,"goody-huts")==0, camps=std::strcmp(category,"barbarian-camps")==0;
     bool sites=std::strcmp(category,"huts-camps")==0 || huts || camps;
     if(!resources && !infrastructure && !shadows && !sites)return;
+    char road_case[32]={};
+    GetEnvironmentVariableA("C3X_LAB_ROAD_CASE",road_case,sizeof(road_case));
+    bool network=infrastructure && std::strcmp(road_case,"network")==0;
+    char road_era[8]={};
+    int era_override=GetEnvironmentVariableA("C3X_LAB_ROAD_ERA",road_era,sizeof(road_era)) && road_era[0]?
+        std::clamp(std::atoi(road_era),0,3):-1;
     char const*land[]={"Iron","Cattle","Horses","Wheat","Gold","Dyes"};
     char const*sea[]={"Fish","Whales"};
     // Audit roster: "dx,dy,Name;..." supplied by the Lab dispatcher.
@@ -72,6 +78,23 @@ void lab_place_objects(std::vector<c3x_renderer_tile_v1>& tiles, int center_x, i
                     strcpy_s(tile.resource_name,water[0]?sea[i]:land[i]);
                 }
             }
+        } else if(network) {
+            // Late-game density: most land carries a road, two rail corridors
+            // cross it (one bridging the river on a tile-diagonal edge), and
+            // the east side has reached a later era.
+            unsigned seed=unsigned(x*73856093)^unsigned(y*19349663);
+            seed=(seed^(seed>>13))*0x5bd1e995u;seed^=seed>>15;
+            bool dry=tile.real_terrain_type>=0 && tile.real_terrain_type<=8;
+            bool rail=y==6 || x-y==4 || x+y==-4;
+            if(dry && std::abs(x)<=16 && std::abs(y)<=22 && (seed%100<84 || rail)) {
+                tile.road_mask=1;tile.route_style=era_override>=0?era_override:x>4?2:0;
+                if(rail)tile.railroad_mask=1;
+            }
+            if(x==-4 && y==-2 && dry){tile.road_mask=1;tile.city_id=1;tile.city_owner_id=1;tile.city_size=1;
+                tile.city_culture_group=0;tile.city_era=0;tile.city_flags=0;}
+            // The ownership witness also covers the improvements beside roads.
+            if(x==-2 && y==4)tile.improvement_flags=C3X_RENDERER_IMPROVEMENT_MINE;
+            if(x==4 && y==-4){tile.improvement_flags=C3X_RENDERER_IMPROVEMENT_IRRIGATION;tile.irrigation_mask=15;}
         } else {
             // Actual connected nodes: two horizontal runs joined by a branch.
             if((std::abs(y)==2 && x>=-6 && x<=6) || (x==0 && y>=-6 && y<=6)) {

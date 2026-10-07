@@ -132,6 +132,7 @@ def jobs():
         return build(stage / "Renderer/packs/TileSitesRuntime")
 
     from Renderer.tools.asset_compiler import build_wave_runtime as waves
+    from Renderer.tools.asset_compiler import build_route_pattern_runtime as route_patterns
     from Renderer.tools.asset_compiler import build_low_relief as low_relief
 
     return (
@@ -140,6 +141,8 @@ def jobs():
         ("coastal-waves", waves.sources, lambda stage: waves.build(stage / "Renderer/packs/CoastalWavesRuntime"),
          "Renderer/tools/asset_compiler/build_wave_runtime.py"),
         ("tile-sites", site_sources, build_sites, "Renderer/tools/asset_compiler/build_site_runtime.py"),
+        ("route-patterns", route_patterns.sources, lambda stage: route_patterns.build(stage / "Renderer/packs/RoutePatternsRuntime"),
+         "Renderer/tools/asset_compiler/build_route_pattern_runtime.py"),
         ("natural", natural_sources, build_natural, "Renderer/native/source_fidelity/prepare.py"),
         ("hill-cliff", cliff_sources, build_cliffs, "Renderer/native/render_core/prepare_assets.py"),
         ("cities", city_sources, build_cities, "Renderer/tools/prepare_city_recipes.py"),

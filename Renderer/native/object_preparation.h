@@ -100,6 +100,11 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
     };
     std::array<MountainPiece,9> mountain_pieces{};
     unsigned mountain_count=0;
+    // Civ III draws routes over a mountain tile's lower art but never over
+    // its peak. Routes follow the whole rendered mountain surface (so the rock
+    // never cuts them along a ragged contour), and a pattern route fades out
+    // between these heights above the natural ground as the mountain rises.
+    constexpr float pattern_route_fade_start=35.f,pattern_route_fade_end=65.f;
     if(input.projection.tile.road_mask || input.projection.tile.railroad_mask)
         for(int dr=-1;dr<=1;++dr)for(int dc=-1;dc<=1;++dc){
             int pc=nc+dc,pr=nr+dr;auto owner=lookup_natural(pc,pr);
@@ -109,12 +114,15 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
             unsigned along_x=unsigned(west)+unsigned(east),along_y=unsigned(north)+unsigned(south);
             bool connected=along_x+along_y>0,turn=connected&&along_x==along_y;
             unsigned variant=mountain_seed(owner)%5u;
+            // Same lower, wider body as the rendered mountain mesh
+            // (lab/shared/natural/relief_mesh_body.h), so routes lie on its rock.
+            constexpr float mountain_height_scale=.68f,mountain_span_scale=1.08f;
             mountain_pieces[mountain_count++]={natural.macro[variant][0],natural.macro[variant][1],
                 float(pc)+.5f+.09f*(int(east)-int(west)),
                 float(pr)+.5f+.09f*(int(south)-int(north)),
-                connected?(turn?2.08f:2.46f):1.85f,
-                connected?(turn?1.82f:1.34f):1.55f,
-                connected?142.f:165.f,connected,along_y>along_x};
+                (connected?(turn?2.08f:2.46f):1.85f)*mountain_span_scale,
+                (connected?(turn?1.82f:1.34f):1.55f)*mountain_span_scale,
+                (connected?142.f:165.f)*mountain_height_scale,connected,along_y>along_x};
         }
     auto route_height=[&](float x,float y){
         float base=height_natural(x,y);
@@ -167,19 +175,37 @@ std::unique_ptr<PreparedObjects> prepare(PreparationInput const& input,Assets co
     if(input.river_ready && input.route_ready && input.routes_enabled)
         promote_river_crossings(tile,[&](float x,float y){
             return float(scratch.rivers.river_sample({x,y}).distance);
-        },plan);
+        },plan,&assets);
+    if(mountain_count)for(auto& route:plan.patterns){
+        auto const* set=assets.patterns_for(route.style);
+        if(!set || route.line>=set->lines.size())continue;
+        auto const& line=set->lines[route.line];
+        float tile_u=float(tile.tile_x+tile.tile_y)*.5f,tile_v=float(tile.tile_x-tile.tile_y)*.5f;
+        std::vector<float> fade(line.count,0.f);bool any=false;
+        for(unsigned index=0;index<line.count;++index){
+            auto const& point=route.points.size()==line.count?route.points[index]:set->points[line.first+index];
+            float x=tile_u+point[0],y=tile_v+1.f-point[1];
+            float rise=route_height(x,y)-height_natural(x,y);
+            fade[index]=smooth01((rise-pattern_route_fade_start)/(pattern_route_fade_end-pattern_route_fade_start));
+            any=any || fade[index]>0.f;
+        }
+        if(any)route.fade=std::move(fade);
+    }
     unsigned sites=tile.improvement_flags&(C3X_RENDERER_IMPROVEMENT_GOODY_HUT|C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP);
     if(!select_improvements(tile,assets,input.ground,sites,input.mine_ready,input.farm_ready,plan))return {};
     if(input.farm_ready && (tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_IRRIGATION)){
         settle_farm_fields(plan,tile,assets,relief);
         settle_farm_props(plan,tile,assets,relief);
     }
-    result->instances=unsigned(plan.instances.size());result->routes=unsigned(plan.routes.size());
+    result->instances=unsigned(plan.instances.size());result->routes=unsigned(plan.routes.size()+plan.patterns.size());
     // Bound worker transients before expanded triangles are constructed. Large
     // valid packs can still use the same synchronous compiler on recovery.
     std::uint64_t raw_bytes=0;
     for(auto const& route:plan.routes)
         raw_bytes+=std::uint64_t(route.bridge?336u:192u)*sizeof(Vertex);
+    for(auto const& route:plan.patterns)if(auto const* patterns=assets.patterns_for(route.style))
+        if(route.line<patterns->lines.size())
+            raw_bytes+=(std::uint64_t(patterns->lines[route.line].count)*18u+24u)*sizeof(Vertex);
     for(auto const& instance:plan.instances){
         if(instance.asset>=assets[instance.family].assets.size())continue; // same absent-asset behavior as append_instance
         auto const& asset=assets[instance.family].assets[instance.asset];

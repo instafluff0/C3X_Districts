@@ -72,6 +72,19 @@ struct FrameWorkingSet {
         if(loading && retained>=ceiling)return retained;
         return std::min(ceiling,retained+growth);
     }
+    // Geometry the current camera job itself requires, once nothing older can
+    // be evicted. Refusing it frees nothing; it fails the job and leaves the
+    // map stale or black. Keep the system floor and active compile lanes, but
+    // not the optional future reserve, and never shrink below what is owned:
+    // the shortfall shrink above, reapplied each frame, otherwise falls below
+    // a view that is already resident.
+    static std::size_t required_geometry(std::size_t available,std::size_t physical,
+            std::size_t owned,std::size_t gpu_headroom,std::size_t ceiling,unsigned workers){
+        auto lanes=std::min(workers,6u);
+        auto floor=std::max(2048u*mib,physical/6)+std::max(2u,lanes+1u)*16u*mib+lanes*48u*mib;
+        auto usable=available>floor?available-floor:0;
+        return std::min(ceiling,owned+std::min(usable/2,gpu_headroom-gpu_headroom/5));
+    }
     static Content content(std::size_t available,std::size_t resident,std::size_t ceiling,unsigned workers){
         // Keep one ready slot beside every configured active lane. Reducing
         // this allowance under pressure serializes demanded compilation as soon

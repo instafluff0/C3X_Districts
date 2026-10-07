@@ -42,8 +42,11 @@ FeaturePixelInput VSResourceBody(ResourceVertex vertex) {
     precise float relief=resource_projection.z*.82;
     precise float sx=resource_anchor.x+(local.x-local.y)*resource_projection.x;
     precise float sy=resource_anchor.y+(local.x+local.y)*resource_projection.y-local.z*150.0*resource_projection.z;
+    // Natural terrain depth basis (as resource_natural_depth gives static resource
+    // bodies): a body point at the ground takes the terrain's own depth there, so
+    // raised ground no longer hides a ground-height band of legs and lowered heads.
     precise float depth=resource_anchor.y+resource_offset.w*relief+(local.x+local.y)*resource_projection.y+
-        resource_offset.w*relief*.75+feature_height*.0012*resource_projection.w;
+        (resource_offset.w+feature_height)*.0016*resource_projection.w;
     PackedFeatureInput packed;
     packed.position=float3(sx,sy,depth);packed.uv=vertex.uv;packed.normal=normal;packed.material=21;
     precise float3 world=float3(resource_anchor.z+local.x,resource_anchor.w-local.y,

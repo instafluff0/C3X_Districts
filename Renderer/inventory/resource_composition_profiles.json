@@ -1,18 +1,18 @@
 {
   "schema": "c3x.resource_composition_profiles.v0",
   "purpose": "Offline art direction for baked resource tile compositions. The runtime consumes only the baked layouts; every size, count, sink and decal choice lives here or in the normalized source placements.",
-  "units": "Normalized source units are 12 Civ VI units; world_scale 0.12 would match Civ VI's own size (100 Civ VI units per tile, the unit-model calibration); 0.16 enlarges every outcrop uniformly for Civ III readability. Decal sizes are calibrated separately: the imported decal meshes are not trustworthy, so decal_world_scale is the half-size in tiles per unit of source decal scale. Layout positions are tile UV (0..1).",
+  "units": "Normalized source units are 12 Civ VI units; world_scale 0.12 would match Civ VI's own size (100 Civ VI units per tile, the unit-model calibration); 0.24 doubles every outcrop for Civ III's far camera, where Civ VI's flat rocks would read as pebbles. Model burial is Civ VI's authored vertical origin (ResourceCompositionSources keeps it); sink is extra burial as a fraction of model height. Decal sizes are calibrated separately: decal_world_scale is the half-size in tiles per unit of source decal scale. Layout positions are tile UV (0..1). Animal subject_scale multiplies the animation pack's binding scale; at 0.5 a Civ VI horse is about a sixth of a tile long.",
   "defaults": {
     "variants": 4,
-    "world_scale": 0.16,
-    "count_scale": 1.0,
-    "sink": 0.3,
+    "world_scale": 0.24,
+    "count_scale": 0.55,
+    "sink": 0.0,
     "clusters": 2,
     "cluster_radius": 0.75,
     "cluster_separation": 0.24,
     "spacing": 0.8,
     "decal_opacity": 1.0,
-    "decal_world_scale": 0.2,
+    "decal_world_scale": 0.16,
     "decal_lift": 0.01,
     "ground_fit": 0.6,
     "terrain_layouts": {
@@ -31,7 +31,7 @@
           0.5,
           0.5
         ],
-        "spread": 0.12,
+        "spread": 0.04,
         "keep_inside": 0.3,
         "arrangement": "random"
       },
@@ -40,14 +40,16 @@
           "Hills"
         ],
         "centre": [
-          0.6,
-          0.6
+          0.55,
+          0.55
         ],
-        "spread": 0.06,
+        "spread": 0.02,
         "keep_inside": 0.28,
         "arrangement": "flank",
-        "sink": 0.35,
-        "note": "On the camera-facing shoulder, not the crown."
+        "cluster_separation": 0.2,
+        "sink": 0.05,
+        "decal_scale": 0.7,
+        "note": "Centred on the hill, a touch toward the camera; the two clusters sit side by side across the view so neither hides the other."
       },
       "mountains": {
         "terrains": [
@@ -58,65 +60,249 @@
           0.8,
           0.8
         ],
-        "spread": 0.03,
-        "keep_inside": 0.14,
+        "spread": 0.01,
+        "keep_inside": 0.05,
         "arrangement": "flank",
-        "cluster_separation": 0.32,
-        "sink": 0.25,
-        "note": "Civ VI has no mountain resources. A smaller seam decal climbs the front face; scree clusters rest at the mountain's front foot on their centre height (a footprint minimum would bury them on the steep face).",
-        "layout_count_scale": 1.25,
-        "ground_fit": 0.0,
-        "decal_scale": 0.65,
-        "decal_offset": [
-          -0.07,
-          -0.07
+        "clusters": 3,
+        "cluster_separation": 0.14,
+        "arc": 0.0,
+        "cluster_weights": [
+          0.3,
+          0.4,
+          0.3
         ],
-        "scale": 1.15
+        "cluster_scales": [
+          0.8,
+          1.0,
+          0.8
+        ],
+        "sink": 0.0,
+        "ground_fit": 0.0,
+        "decal_scale": 0.7,
+        "scale": 0.9,
+        "note": "Civ VI has no mountain resources. Three clusters, each on its own decal, spread side by side a little way up the mountain's lower front slope, just above the foot; the middle one is largest and carries the centre pile. The spread stays modest so the outer clusters stay in front of steeper mountains' flanks, and decals stay small because a round decal's upper half stretches tall on a steep face. Rocks rest on their centre height (a footprint minimum would bury them on the steep face)."
       }
-    }
+    },
+    "accent_scale": 0.6,
+    "cluster_weights": null,
+    "cluster_scales": null,
+    "planting": "scatter"
   },
   "families": {
     "mineral_outcrop": {
-      "description": "Rocks half-buried around Civ VI ground decals, as in the source diamond/iron/gold sets.",
-      "ancillary_policy": "omit_until_terrain_variants_recovered"
+      "description": "Civ VI rocks at their authored burial around Civ VI ground decals, as in the source diamond/iron/gold sets.",
+      "ancillary_policy": "omit; forest/jungle crowding is a separate later pass"
+    },
+    "plant_patch": {
+      "description": "Civ VI crop and plantation plants (alpha-masked cards cut out by their source opacity) with the boulders and shrubs Civ VI composes with them.",
+      "world_scale": 0.22,
+      "count_scale": 0.35,
+      "accent_scale": 0.0,
+      "ancillary_policy": "omit; forest/jungle crowding is a separate later pass"
+    },
+    "animal_herd": {
+      "description": "A small herd of the resource's animated Civ VI subject (skinned, ambient clip) sized to a Civ III tile (each animal roughly a sixth of a tile long), standing on the terrain and tilted to its slope, with the boulders and grass Civ VI sets around it.",
+      "world_scale": 0.22,
+      "count_scale": 0.25,
+      "accent_scale": 0.0,
+      "herd": 2,
+      "subject_scale": 0.3,
+      "subject_radius": 0.08,
+      "herd_spread": 1.3,
+      "yaw_jitter": 0.5,
+      "subject_fit": 0.6,
+      "ancillary_policy": "omit; forest/jungle crowding is a separate later pass",
+      "note": "subject_fit > 0 makes the posed body follow the ground plane under its footprint (a vertical shear: the body stays upright, heights follow the slope); 0 stands it at its centre height only."
     }
   },
   "resources": {
     "iron": {
-      "source": "resource/iron",
+      "source": "RESOURCE_IRON",
       "family": "mineral_outcrop"
     },
     "gold": {
-      "source": "resource/gold",
-      "family": "mineral_outcrop"
+      "source": "RESOURCE_GOLD",
+      "family": "mineral_outcrop",
+      "world_scale": 0.3,
+      "count_scale": 0.7,
+      "note": "Civ VI buries gold nuggets 40\u201358%; larger nuggets keep the gold readable from Civ III's camera."
     },
     "diamonds": {
-      "source": "resource/diamonds",
-      "family": "mineral_outcrop"
+      "source": "RESOURCE_DIAMONDS",
+      "family": "mineral_outcrop",
+      "accent_source": "RESOURCE_GYPSUM",
+      "accent_scale": 0.7,
+      "note": "Civ III gems are big white crystals; a Civ VI gypsum crystal cluster heads the diamond outcrop so it reads at 128."
     },
     "coal": {
-      "source": "resource/coal",
+      "source": "RESOURCE_COAL",
       "family": "mineral_outcrop",
-      "decal_counts": {
-        "decal_01": 1,
-        "decal_02": 1
-      },
-      "note": "Civ VI disables coal decals (count 0); enabled so the outcrop has a ground mark."
+      "note": "Civ VI disables coal decals; a black stain under black rocks merges into one blob."
     },
     "aluminum": {
-      "source": "resource/aluminum",
+      "source": "RESOURCE_SILVER",
       "family": "mineral_outcrop",
-      "decal_count_scale": 0.25
+      "note": "Civ III draws aluminum as a silver can. Civ VI's own RESOURCE_ALUMINUM is orange bauxite, which reads as copper or clay; Civ VI's silver ore reads as a pale light metal."
     },
     "uranium": {
-      "source": "resource/uranium",
+      "source": "RESOURCE_URANIUM",
       "family": "mineral_outcrop"
     },
     "saltpeter": {
-      "source": "resource/saltpeter",
+      "source": "RESOURCE_NITER",
       "family": "mineral_outcrop",
+      "decal_source": "RESOURCE_SALT",
+      "decal_count_scale": 0.34,
+      "count_scale": 0.3,
+      "note": "Civ VI niter has no decal; a salt crust from Civ VI salt flats marks the ground under the mounds."
+    },
+    "wheat": {
+      "source": "RESOURCE_WHEAT",
+      "family": "plant_patch"
+    },
+    "wines": {
+      "source": "RESOURCE_WINE",
+      "family": "plant_patch",
+      "count_scale": 0.5,
+      "layout_overrides": {
+        "*": {
+          "planting": "rows",
+          "rows": 3,
+          "row_spacing": 0.13,
+          "row_length": 0.42
+        }
+      },
+      "note": "Vines planted in rows read as a vineyard; a random scatter read as generic bushes.",
+      "world_scale": 0.15
+    },
+    "tobacco": {
+      "source": "RESOURCE_TOBACCO",
+      "family": "plant_patch",
       "count_scale": 0.45,
-      "sink": 0.2
+      "layout_overrides": {
+        "*": {
+          "planting": "rows",
+          "rows": 3,
+          "row_spacing": 0.12,
+          "row_length": 0.38
+        }
+      },
+      "world_scale": 0.17
+    },
+    "sugar": {
+      "source": "RESOURCE_SUGAR",
+      "family": "plant_patch",
+      "count_scale": 0.4,
+      "layout_overrides": {
+        "*": {
+          "planting": "rows",
+          "rows": 4,
+          "row_spacing": 0.09,
+          "row_length": 0.36
+        }
+      }
+    },
+    "spices": {
+      "source": "RESOURCE_SPICES",
+      "family": "plant_patch",
+      "count_scale": 0.6,
+      "world_scale": 0.26
+    },
+    "dyes": {
+      "source": "RESOURCE_DYES",
+      "family": "plant_patch",
+      "count_scale": 0.65,
+      "world_scale": 0.26
+    },
+    "incense": {
+      "source": "RESOURCE_INCENSE",
+      "family": "plant_patch"
+    },
+    "tropical_fruit": {
+      "source": "RESOURCE_BANANAS",
+      "family": "plant_patch",
+      "note": "Civ III's Tropical Fruit is a banana bunch; Civ VI bananas match it."
+    },
+    "horses": {
+      "source": "RESOURCE_HORSES",
+      "family": "animal_herd",
+      "herd": 3,
+      "note": "Civ VI scatters 17 horses over a hex; three read as a herd at Civ III's tile size.",
+      "subjects": [
+        "horses",
+        "horses.1",
+        "horses.2"
+      ],
+      "subject_scale": 0.5,
+      "subject_radius": 0.075
+    },
+    "cattle": {
+      "source": "RESOURCE_CATTLE",
+      "family": "animal_herd",
+      "herd": 3,
+      "piece_counts": {
+        "res_cattle_cow01": 0,
+        "res_cattle_cow02": 0,
+        "res_cattle_bull01": 0,
+        "res_cattle_bull02": 0
+      },
+      "subjects": [
+        "cattle",
+        "cattle.3",
+        "cattle.0"
+      ],
+      "note": "Two grazing Civ VI cows and a bull.",
+      "subject_scale": 0.55,
+      "subject_radius": 0.07
+    },
+    "game": {
+      "source": "RESOURCE_DEER",
+      "family": "animal_herd",
+      "herd": 3,
+      "piece_counts": {
+        "res_deer_doe01": 0,
+        "res_deer_doe02": 0,
+        "res_deer_buck01": 0
+      },
+      "subjects": [
+        "game"
+      ],
+      "note": "A small group of Civ VI deer (the other deer subjects need clip calibration first).",
+      "subject_scale": 0.4,
+      "subject_radius": 0.07
+    },
+    "furs": {
+      "source": "RESOURCE_FURS",
+      "family": "animal_herd",
+      "herd": 2,
+      "subject_radius": 0.05,
+      "piece_counts": {
+        "res_furs_fox_01": 0,
+        "res_furs_fox_02": 0,
+        "res_furs_fox_03": 0
+      },
+      "subjects": [
+        "furs",
+        "furs.2"
+      ],
+      "note": "A standing fox and a curled one, echoing Civ III's lying fur.",
+      "subject_scale": 0.35
+    },
+    "ivory": {
+      "source": "RESOURCE_IVORY",
+      "family": "animal_herd",
+      "herd": 2,
+      "subject_radius": 0.1,
+      "count_scale": 0.5,
+      "piece_counts": {
+        "res_elephant_01": 0,
+        "res_elephant_02": 0
+      },
+      "note": "Two Civ VI elephants among elephant grass.",
+      "subjects": [
+        "ivory"
+      ],
+      "subject_scale": 0.45
     }
   },
   "bindings": {
@@ -144,6 +330,417 @@
       "Saltpeter",
       "Niter",
       "Nitre"
+    ],
+    "wheat": [
+      "Wheat"
+    ],
+    "wines": [
+      "Wines",
+      "Wine"
+    ],
+    "tobacco": [
+      "Tobacco"
+    ],
+    "sugar": [
+      "Sugar"
+    ],
+    "spices": [
+      "Spices",
+      "Spice"
+    ],
+    "dyes": [
+      "Dyes",
+      "Dye"
+    ],
+    "incense": [
+      "Incense"
+    ],
+    "tropical_fruit": [
+      "Tropical Fruit",
+      "Bananas"
+    ],
+    "horses": [
+      "Horses"
+    ],
+    "cattle": [
+      "Cattle"
+    ],
+    "game": [
+      "Game"
+    ],
+    "furs": [
+      "Furs"
+    ],
+    "ivory": [
+      "Ivory"
     ]
+  },
+  "sources": "Each source is a Civ VI Resources.artdef entry, imported by tools/asset_compiler/resource_composition_sources.py. decal_source borrows another entry's ground decals; accent_source adds that entry's centre model. accent_scale places the source's centre model (Civ VI's authored pile), or accent_source's, at the first cluster's centre; 0 disables it.",
+  "alternates": {
+    "description": "Lab-only candidates baked beside the recommended composition as '<name>~<label>' (alias '<Binding>~<label>') for side-by-side review; promotion never includes them.",
+    "horses": {
+      "upright": {
+        "subject_fit": 0.0,
+        "note": "Strictly upright: each animal stands at the ground height under its centre, with no ground-following."
+      }
+    },
+    "cattle": {
+      "upright": {
+        "subject_fit": 0.0,
+        "note": "Strictly upright: each animal stands at the ground height under its centre, with no ground-following."
+      }
+    },
+    "game": {
+      "upright": {
+        "subject_fit": 0.0,
+        "note": "Strictly upright: each animal stands at the ground height under its centre, with no ground-following."
+      }
+    },
+    "furs": {
+      "upright": {
+        "subject_fit": 0.0,
+        "note": "Strictly upright: each animal stands at the ground height under its centre, with no ground-following."
+      }
+    },
+    "ivory": {
+      "upright": {
+        "subject_fit": 0.0,
+        "note": "Strictly upright: each animal stands at the ground height under its centre, with no ground-following."
+      }
+    }
+  },
+  "catalogs": {
+    "minerals": {
+      "description": "Lab-only reference: every Civ VI mineral with the mineral_outcrop family defaults and no per-resource tuning, baked into ResourceCatalogLab (one catalog per render) for side-by-side review. Never promoted.",
+      "family": "mineral_outcrop",
+      "entries": {
+        "Civ6 Iron": {
+          "source": "RESOURCE_IRON"
+        },
+        "Civ6 Gold": {
+          "source": "RESOURCE_GOLD"
+        },
+        "Civ6 Diamonds": {
+          "source": "RESOURCE_DIAMONDS"
+        },
+        "Civ6 Coal": {
+          "source": "RESOURCE_COAL"
+        },
+        "Civ6 Aluminum": {
+          "source": "RESOURCE_ALUMINUM"
+        },
+        "Civ6 Uranium": {
+          "source": "RESOURCE_URANIUM"
+        },
+        "Civ6 Niter": {
+          "source": "RESOURCE_NITER"
+        },
+        "Civ6 Silver": {
+          "source": "RESOURCE_SILVER"
+        },
+        "Civ6 Copper": {
+          "source": "RESOURCE_COPPER"
+        },
+        "Civ6 Jade": {
+          "source": "RESOURCE_JADE"
+        },
+        "Civ6 Marble": {
+          "source": "RESOURCE_MARBLE"
+        },
+        "Civ6 Stone": {
+          "source": "RESOURCE_STONE"
+        },
+        "Civ6 Gypsum": {
+          "source": "RESOURCE_GYPSUM"
+        },
+        "Civ6 Mercury": {
+          "source": "RESOURCE_MERCURY",
+          "piece_counts": {
+            "res_mercury_rock01": 2,
+            "res_mercury_rock02": 2,
+            "res_mercury_rock03": 2,
+            "res_mercury_rock04": 2
+          },
+          "note": "Civ VI mercury is mostly cinnabar models with two meshes each, which the importer does not take yet; its silvery rocks (count 0 in Civ VI) stand in."
+        },
+        "Civ6 Salt": {
+          "source": "RESOURCE_SALT",
+          "decal_count_scale": 0.34,
+          "note": "Civ VI salt is only ground decals (salt flats)."
+        },
+        "Civ6 Amber": {
+          "source": "RESOURCE_AMBER",
+          "note": "Rise and Fall / Gathering Storm."
+        }
+      }
+    },
+    "plants": {
+      "description": "Lab-only reference: every importable Civ VI crop and plantation with the plant_patch family defaults and no per-resource tuning. Honey (four mesh groups) and Silk (three models) need multi-part import; Maize has no clutter set.",
+      "family": "plant_patch",
+      "entries": {
+        "Civ6 Wheat": {
+          "source": "RESOURCE_WHEAT"
+        },
+        "Civ6 Rice": {
+          "source": "RESOURCE_RICE"
+        },
+        "Civ6 Cotton": {
+          "source": "RESOURCE_COTTON"
+        },
+        "Civ6 Citrus": {
+          "source": "RESOURCE_CITRUS"
+        },
+        "Civ6 Cocoa": {
+          "source": "RESOURCE_COCOA"
+        },
+        "Civ6 Coffee": {
+          "source": "RESOURCE_COFFEE"
+        },
+        "Civ6 Tea": {
+          "source": "RESOURCE_TEA"
+        },
+        "Civ6 Tobacco": {
+          "source": "RESOURCE_TOBACCO"
+        },
+        "Civ6 Sugar": {
+          "source": "RESOURCE_SUGAR"
+        },
+        "Civ6 Spices": {
+          "source": "RESOURCE_SPICES"
+        },
+        "Civ6 Dyes": {
+          "source": "RESOURCE_DYES"
+        },
+        "Civ6 Incense": {
+          "source": "RESOURCE_INCENSE"
+        },
+        "Civ6 Wine": {
+          "source": "RESOURCE_WINE"
+        },
+        "Civ6 Bananas": {
+          "source": "RESOURCE_BANANAS"
+        },
+        "Civ6 Olives": {
+          "source": "RESOURCE_OLIVES",
+          "note": "Rise and Fall / Gathering Storm."
+        }
+      }
+    },
+    "animals": {
+      "description": "Lab-only reference: every Civ VI animal subject and clip the animation pack exposes, one per tile with no dressing, to choose herd members. 'primary' is production's current binding.",
+      "family": "animal_herd",
+      "entries": {
+        "Civ6 Cattle primary": {
+          "source": "RESOURCE_CATTLE",
+          "subject": "cattle",
+          "herd": 1,
+          "static_pieces": false,
+          "yaw_jitter": 0.0
+        },
+        "Civ6 Cattle 0": {
+          "source": "RESOURCE_CATTLE",
+          "subject": "cattle.0",
+          "herd": 1,
+          "static_pieces": false,
+          "yaw_jitter": 0.0
+        },
+        "Civ6 Cattle 1": {
+          "source": "RESOURCE_CATTLE",
+          "subject": "cattle.1",
+          "herd": 1,
+          "static_pieces": false,
+          "yaw_jitter": 0.0
+        },
+        "Civ6 Cattle 3": {
+          "source": "RESOURCE_CATTLE",
+          "subject": "cattle.3",
+          "herd": 1,
+          "static_pieces": false,
+          "yaw_jitter": 0.0
+        },
+        "Civ6 Furs primary": {
+          "source": "RESOURCE_FURS",
+          "subject": "furs",
+          "herd": 1,
+          "static_pieces": false,
+          "yaw_jitter": 0.0
+        },
+        "Civ6 Furs 1": {
+          "source": "RESOURCE_FURS",
+          "subject": "furs.1",
+          "herd": 1,
+          "static_pieces": false,
+          "yaw_jitter": 0.0
+        },
+        "Civ6 Furs 2": {
+          "source": "RESOURCE_FURS",
+          "subject": "furs.2",
+          "herd": 1,
+          "static_pieces": false,
+          "yaw_jitter": 0.0
+        },
+        "Civ6 Game primary": {
+          "source": "RESOURCE_DEER",
+          "subject": "game",
+          "herd": 1,
+          "static_pieces": false,
+          "yaw_jitter": 0.0
+        },
+        "Civ6 Game 1": {
+          "source": "RESOURCE_DEER",
+          "subject": "game.1",
+          "herd": 1,
+          "static_pieces": false,
+          "yaw_jitter": 0.0
+        },
+        "Civ6 Game 2": {
+          "source": "RESOURCE_DEER",
+          "subject": "game.2",
+          "herd": 1,
+          "static_pieces": false,
+          "yaw_jitter": 0.0
+        },
+        "Civ6 Horses primary": {
+          "source": "RESOURCE_HORSES",
+          "subject": "horses",
+          "herd": 1,
+          "static_pieces": false,
+          "yaw_jitter": 0.0
+        },
+        "Civ6 Horses 1": {
+          "source": "RESOURCE_HORSES",
+          "subject": "horses.1",
+          "herd": 1,
+          "static_pieces": false,
+          "yaw_jitter": 0.0
+        },
+        "Civ6 Horses 2": {
+          "source": "RESOURCE_HORSES",
+          "subject": "horses.2",
+          "herd": 1,
+          "static_pieces": false,
+          "yaw_jitter": 0.0
+        },
+        "Civ6 Ivory primary": {
+          "source": "RESOURCE_IVORY",
+          "subject": "ivory",
+          "herd": 1,
+          "static_pieces": false,
+          "yaw_jitter": 0.0
+        },
+        "Civ6 Ivory 1": {
+          "source": "RESOURCE_IVORY",
+          "subject": "ivory.1",
+          "herd": 1,
+          "static_pieces": false,
+          "yaw_jitter": 0.0
+        }
+      }
+    },
+    "animal-scales": {
+      "description": "Lab-only diagnostic: one animal per tile at decreasing subject scales, upright, to locate where small bodies disappear.",
+      "family": "animal_herd",
+      "entries": {
+        "Scale Horse 1.0": {
+          "source": "RESOURCE_HORSES",
+          "subject": "horses",
+          "herd": 1,
+          "static_pieces": false,
+          "yaw_jitter": 0.0,
+          "subject_scale": 1.0,
+          "subject_fit": 0.0
+        },
+        "Scale Horse 0.6": {
+          "source": "RESOURCE_HORSES",
+          "subject": "horses",
+          "herd": 1,
+          "static_pieces": false,
+          "yaw_jitter": 0.0,
+          "subject_scale": 0.6,
+          "subject_fit": 0.0
+        },
+        "Scale Horse 0.32": {
+          "source": "RESOURCE_HORSES",
+          "subject": "horses",
+          "herd": 1,
+          "static_pieces": false,
+          "yaw_jitter": 0.0,
+          "subject_scale": 0.32,
+          "subject_fit": 0.0
+        },
+        "Scale Fox 1.0": {
+          "source": "RESOURCE_FURS",
+          "subject": "furs",
+          "herd": 1,
+          "static_pieces": false,
+          "yaw_jitter": 0.0,
+          "subject_scale": 1.0,
+          "subject_fit": 0.0
+        },
+        "Scale Fox 0.5": {
+          "source": "RESOURCE_FURS",
+          "subject": "furs",
+          "herd": 1,
+          "static_pieces": false,
+          "yaw_jitter": 0.0,
+          "subject_scale": 0.5,
+          "subject_fit": 0.0
+        },
+        "Scale Fox 0.17": {
+          "source": "RESOURCE_FURS",
+          "subject": "furs",
+          "herd": 1,
+          "static_pieces": false,
+          "yaw_jitter": 0.0,
+          "subject_scale": 0.17,
+          "subject_fit": 0.0
+        },
+        "Scale Deer 1.0": {
+          "source": "RESOURCE_DEER",
+          "subject": "game",
+          "herd": 1,
+          "static_pieces": false,
+          "yaw_jitter": 0.0,
+          "subject_scale": 1.0,
+          "subject_fit": 0.0
+        },
+        "Scale Deer 0.5": {
+          "source": "RESOURCE_DEER",
+          "subject": "game",
+          "herd": 1,
+          "static_pieces": false,
+          "yaw_jitter": 0.0,
+          "subject_scale": 0.5,
+          "subject_fit": 0.0
+        },
+        "Scale Deer 0.27": {
+          "source": "RESOURCE_DEER",
+          "subject": "game",
+          "herd": 1,
+          "static_pieces": false,
+          "yaw_jitter": 0.0,
+          "subject_scale": 0.27,
+          "subject_fit": 0.0
+        },
+        "Scale Cow 1.0": {
+          "source": "RESOURCE_CATTLE",
+          "subject": "cattle",
+          "herd": 1,
+          "static_pieces": false,
+          "yaw_jitter": 0.0,
+          "subject_scale": 1.0,
+          "subject_fit": 0.0
+        },
+        "Scale Cow 0.42": {
+          "source": "RESOURCE_CATTLE",
+          "subject": "cattle",
+          "herd": 1,
+          "static_pieces": false,
+          "yaw_jitter": 0.0,
+          "subject_scale": 0.42,
+          "subject_fit": 0.0
+        }
+      }
+    }
   }
 }

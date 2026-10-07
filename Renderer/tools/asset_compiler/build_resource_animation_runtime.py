@@ -216,34 +216,40 @@ def build(animated: Path, landmarks: Path, output: Path, *, consumed=None) -> di
     for resource, subjects in result["resources"].items():
         name = resource.split("/")[-1]
         selected = 2 if name == "cattle" else 0
-        subject = subjects[selected]
-        if len(subject["parts"]) != 1:
-            raise ValueError("primary resource requires one material part")
-        part = subject["parts"][0]
-        data = (output / part["mesh"]).read_bytes()
-        count = struct.unpack_from("<I", data, 12)[0]
-        vertices = [struct.unpack_from("<3f", data, 32+i*64) for i in range(count)]
-        low = [min(v[a] for v in vertices) for a in range(3)]
-        high = [max(v[a] for v in vertices) for a in range(3)]
-        span = [high[a]-low[a] for a in range(3)]
-        offset = [-(low[0]+high[0])*.5, -(low[1]+high[1])*.5, -low[2]]
-        instances = 1
-        if name in static_selections:
-            asset_id, old_scale, instances = static_selections[name]
-            old = read(pack_path(landmarks, original["assets"][asset_id]["mesh"]))
-            old_height = max(v["position"][2] for v in old["vertices"])-min(v["position"][2] for v in old["vertices"])
-            # Match the restrained gameplay footprint used by static resource
-            # bodies while preserving uniform XYZ scale and source proportions.
-            scale = old_scale*.72*old_height/span[2]
-        else:
-            scale = min(.65/max(span[0],span[1]), .65/span[2])*(.72/.78)
-        if name == "fish":
-            offset = [0, 0, .060]  # Preserve the approved school surface offset.
-        bindings[name] = {"mesh": part["mesh"], "texture": part["texture"],
-            "scale": scale, "count": instances, "offset_x": offset[0], "offset_y": offset[1],
-            "offset_z": offset[2], "yaw": -math.atan2(forward_y[name], 0 if forward_y[name] else 1),
-            "orientation_evidence": ("each_school_body_head_minus_tail_aligned_to_SE" if part.get("facing") else
-                                     "source_rest_bones; visual checkpoint pending")}
+        # The primary subject keeps the resource's name; every other source subject is
+        # addressable as "<name>.<index>" for compositions (the runtime loads those only
+        # when the active resource pack names them).
+        for index, subject in enumerate(subjects):
+            key = name if index == selected else f"{name}.{index}"
+            if len(subject["parts"]) != 1:
+                if index != selected:
+                    continue
+                raise ValueError("primary resource requires one material part")
+            part = subject["parts"][0]
+            data = (output / part["mesh"]).read_bytes()
+            count = struct.unpack_from("<I", data, 12)[0]
+            vertices = [struct.unpack_from("<3f", data, 32+i*64) for i in range(count)]
+            low = [min(v[a] for v in vertices) for a in range(3)]
+            high = [max(v[a] for v in vertices) for a in range(3)]
+            span = [high[a]-low[a] for a in range(3)]
+            offset = [-(low[0]+high[0])*.5, -(low[1]+high[1])*.5, -low[2]]
+            instances = 1
+            if name in static_selections:
+                asset_id, old_scale, instances = static_selections[name]
+                old = read(pack_path(landmarks, original["assets"][asset_id]["mesh"]))
+                old_height = max(v["position"][2] for v in old["vertices"])-min(v["position"][2] for v in old["vertices"])
+                # Match the restrained gameplay footprint used by static resource
+                # bodies while preserving uniform XYZ scale and source proportions.
+                scale = old_scale*.72*old_height/span[2]
+            else:
+                scale = min(.65/max(span[0],span[1]), .65/span[2])*(.72/.78)
+            if name == "fish":
+                offset = [0, 0, .060]  # Preserve the approved school surface offset.
+            bindings[key] = {"mesh": part["mesh"], "texture": part["texture"],
+                "scale": scale, "count": instances, "offset_x": offset[0], "offset_y": offset[1],
+                "offset_z": offset[2], "yaw": -math.atan2(forward_y[name], 0 if forward_y[name] else 1),
+                "orientation_evidence": ("each_school_body_head_minus_tail_aligned_to_SE" if part.get("facing") else
+                                         "source_rest_bones; visual checkpoint pending")}
     (output / "bindings.json").write_text(json.dumps({"schema": "c3x.resource_animation_bindings.v1",
         "bindings": bindings}, indent=2, sort_keys=True)+"\n")
     result["payload_bytes"] = total

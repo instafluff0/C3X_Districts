@@ -2,34 +2,244 @@
   "schema": "c3x.lab.resource_native_terrains.v0",
   "source": "Civilization Wiki 'List of resources in Civ3' (Conquests terrain allowances); the authoritative copy is the game's BIQ TERR resource bits",
   "terrains": {
-    "Aluminum": ["Hills", "Tundra"],
-    "Coal": ["Hills", "Mountains", "Jungle"],
-    "Horses": ["Hills", "Grassland", "Plains"],
-    "Iron": ["Hills", "Mountains"],
-    "Oil": ["Tundra", "Desert"],
-    "Rubber": ["Jungle", "Forest"],
-    "Saltpeter": ["Hills", "Mountains", "Desert"],
-    "Uranium": ["Mountains", "Forest"],
-    "Dyes": ["Jungle", "Forest"],
-    "Furs": ["Tundra", "Forest"],
-    "Gems": ["Mountains", "Jungle"],
-    "Incense": ["Hills", "Desert"],
-    "Ivory": ["Forest", "Plains"],
-    "Silks": ["Forest", "Jungle"],
-    "Spices": ["Forest", "Jungle"],
-    "Wines": ["Grassland", "Plains", "Hills"],
-    "Cattle": ["Grassland", "Plains"],
-    "Fish": ["Coast", "Sea", "Marsh"],
-    "Game": ["Forest", "Tundra", "Marsh"],
-    "Gold": ["Mountains", "Hills"],
-    "Oasis": ["Desert"],
-    "Sugar": ["Hills", "Plains"],
-    "Tobacco": ["Hills", "Grassland"],
-    "Tropical Fruit": ["Jungle"],
-    "Whales": ["Sea"],
-    "Wheat": ["Grassland", "Plains", "Flood Plain"]
+    "Aluminum": [
+      "Hills",
+      "Tundra"
+    ],
+    "Coal": [
+      "Hills",
+      "Mountains",
+      "Jungle"
+    ],
+    "Horses": [
+      "Hills",
+      "Grassland",
+      "Plains"
+    ],
+    "Iron": [
+      "Hills",
+      "Mountains"
+    ],
+    "Oil": [
+      "Tundra",
+      "Desert"
+    ],
+    "Rubber": [
+      "Jungle",
+      "Forest"
+    ],
+    "Saltpeter": [
+      "Hills",
+      "Mountains",
+      "Desert"
+    ],
+    "Uranium": [
+      "Mountains",
+      "Forest"
+    ],
+    "Dyes": [
+      "Jungle",
+      "Forest"
+    ],
+    "Furs": [
+      "Tundra",
+      "Forest"
+    ],
+    "Gems": [
+      "Mountains",
+      "Jungle"
+    ],
+    "Incense": [
+      "Hills",
+      "Desert"
+    ],
+    "Ivory": [
+      "Forest",
+      "Plains"
+    ],
+    "Silks": [
+      "Forest",
+      "Jungle"
+    ],
+    "Spices": [
+      "Forest",
+      "Jungle"
+    ],
+    "Wines": [
+      "Grassland",
+      "Plains",
+      "Hills"
+    ],
+    "Cattle": [
+      "Grassland",
+      "Plains"
+    ],
+    "Fish": [
+      "Coast",
+      "Sea",
+      "Marsh"
+    ],
+    "Game": [
+      "Forest",
+      "Tundra",
+      "Marsh"
+    ],
+    "Gold": [
+      "Mountains",
+      "Hills"
+    ],
+    "Oasis": [
+      "Desert"
+    ],
+    "Sugar": [
+      "Hills",
+      "Plains"
+    ],
+    "Tobacco": [
+      "Hills",
+      "Grassland"
+    ],
+    "Tropical Fruit": [
+      "Jungle"
+    ],
+    "Whales": [
+      "Sea"
+    ],
+    "Wheat": [
+      "Grassland",
+      "Plains",
+      "Flood Plain"
+    ]
   },
   "batches": {
-    "minerals": ["Iron", "Gold", "Gems", "Coal", "Aluminum", "Uranium", "Saltpeter"]
-  }
+    "minerals": [
+      "Iron",
+      "Gold",
+      "Gems",
+      "Coal",
+      "Aluminum",
+      "Uranium",
+      "Saltpeter"
+    ],
+    "catalog-minerals": [
+      "Civ6 Iron",
+      "Civ6 Gold",
+      "Civ6 Diamonds",
+      "Civ6 Coal",
+      "Civ6 Aluminum",
+      "Civ6 Uranium",
+      "Civ6 Niter",
+      "Civ6 Silver",
+      "Civ6 Copper",
+      "Civ6 Jade",
+      "Civ6 Marble",
+      "Civ6 Stone",
+      "Civ6 Gypsum",
+      "Civ6 Mercury",
+      "Civ6 Salt",
+      "Civ6 Amber"
+    ],
+    "catalog-plants": [
+      "Civ6 Wheat",
+      "Civ6 Rice",
+      "Civ6 Cotton",
+      "Civ6 Citrus",
+      "Civ6 Cocoa",
+      "Civ6 Coffee",
+      "Civ6 Tea",
+      "Civ6 Tobacco",
+      "Civ6 Sugar",
+      "Civ6 Spices",
+      "Civ6 Dyes",
+      "Civ6 Incense",
+      "Civ6 Wine",
+      "Civ6 Bananas",
+      "Civ6 Olives"
+    ],
+    "plants": [
+      "Wheat",
+      "Wines",
+      "Tobacco",
+      "Sugar",
+      "Spices",
+      "Dyes",
+      "Incense",
+      "Tropical Fruit"
+    ],
+    "animals": [
+      "Horses",
+      "Cattle",
+      "Game",
+      "Furs",
+      "Ivory"
+    ],
+    "catalog-animals": [
+      "Civ6 Cattle primary",
+      "Civ6 Cattle 0",
+      "Civ6 Cattle 1",
+      "Civ6 Cattle 3",
+      "Civ6 Furs primary",
+      "Civ6 Furs 1",
+      "Civ6 Furs 2",
+      "Civ6 Game primary",
+      "Civ6 Game 1",
+      "Civ6 Game 2",
+      "Civ6 Horses primary",
+      "Civ6 Horses 1",
+      "Civ6 Horses 2",
+      "Civ6 Ivory primary",
+      "Civ6 Ivory 1"
+    ],
+    "animals-upright": [
+      "Horses~upright",
+      "Cattle~upright",
+      "Game~upright",
+      "Furs~upright",
+      "Ivory~upright"
+    ],
+    "catalog-animal-scales": [
+      "Scale Horse 1.0",
+      "Scale Horse 0.6",
+      "Scale Horse 0.32",
+      "Scale Fox 1.0",
+      "Scale Fox 0.5",
+      "Scale Fox 0.17",
+      "Scale Deer 1.0",
+      "Scale Deer 0.5",
+      "Scale Deer 0.27",
+      "Scale Cow 1.0",
+      "Scale Cow 0.42"
+    ]
+  },
+  "batch_terrains": {
+    "catalog-minerals": [
+      "Grassland",
+      "Hills",
+      "Mountains"
+    ],
+    "catalog-plants": [
+      "Grassland",
+      "Plains",
+      "Hills"
+    ],
+    "plants": [
+      "Grassland"
+    ],
+    "animals": [
+      "Grassland"
+    ],
+    "catalog-animals": [
+      "Grassland",
+      "Hills"
+    ],
+    "animals-upright": [
+      "Grassland",
+      "Hills"
+    ],
+    "catalog-animal-scales": [
+      "Grassland"
+    ]
+  },
+  "alternates": "A 'Name~label' entry is a Lab-only alternate composition of Name, placed on Name's terrains after the batch's extra terrains.",
+  "catalog": "catalog-* batches show the profile's Lab reference catalog and render with the ResourceCatalogLab pack."
 }

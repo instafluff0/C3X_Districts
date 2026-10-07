@@ -2,12 +2,15 @@
 """Bake resource tile compositions (models + ground decals) into a generic pack.
 
 Art direction lives in Renderer/inventory/resource_composition_profiles.json.
-This builder turns those choices plus the normalized source placements into
+This builder turns those choices plus the imported source placement sets
+(ResourceCompositionSources, which keeps each model's authored burial) into
 deterministic per-variant layouts: each instance's tile position, rotation,
-final scale and sink. Ground decals become flat "decal/" mesh assets mapped to
-one atlas cell. Model textures are block-copied (no recompression) into BC1
-atlases so the whole pack fits the runtime's eight resource texture slots.
-The runtime only instantiates the baked records; it never sizes or scatters.
+final scale and extra sink. Source terrain variants become their own terrain
+masks when their placements differ. Ground decals become flat "decal/" mesh
+assets mapped to one atlas cell. Model textures are block-copied (no
+recompression) into BC1 atlases so the whole pack fits the runtime's eight
+resource texture slots. The runtime only instantiates the baked records; it
+never sizes or scatters.
 """
 from __future__ import annotations
 
@@ -24,16 +27,18 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
 from Renderer.tools.asset_compiler.build_resource_runtime import SELECTIONS, bundle_string, material_texture
+from Renderer.tools.asset_compiler import resource_composition_sources
 
 PROFILES = ROOT / "Renderer/inventory/resource_composition_profiles.json"
-SOURCE = ROOT / "Renderer/packs/ResourceNormalized"
-DECALS = ROOT / "Renderer/packs/DecalsNormalized"
+LEGACY = ROOT / "Renderer/packs/ResourceNormalized"
+SOURCES = resource_composition_sources.OUTPUT
 OUTPUT = ROOT / "Renderer/packs/ResourceCompositionLab"
+CATALOG = ROOT / "Renderer/packs/ResourceCatalogLab"
 MAGIC = b"C3XVEG1\0"
-ANCILLARY = ("decal", "boulder", "snow_boulder", "tree_pine", "jungle_clump", "shrub")
 TEXTURE_SLOTS = 8
 CELL = 512
 MODEL_ATLAS = (2048, 7, 8, 72, (71, 72))      # size, mips, block bytes, DXGI, accepted sources
+MASKED_ATLAS = (2048, 7, 16, 78, (77, 78))    # alpha-masked bodies (BC3: opacity + colour)
 DECAL_ATLAS = (1024, 8, 16, 78, (77, 78))
 DECAL_GRID = 16
 
@@ -42,17 +47,16 @@ def read(path: Path):
     return json.loads(path.read_text())
 
 
-def base_placements(record: dict) -> list[dict]:
-    """First occurrence of each authored placement; terrain-variant ancillaries are
-    omitted until their source conditions are recovered."""
-    seen, result = set(), []
-    for placement in record["placements"]:
-        key = (placement["asset"], placement.get("pack"), placement["count"], placement["scale"],
-               placement["scale_variation"])
-        if key not in seen:
-            seen.add(key)
-            result.append(placement)
-    return result
+def effective(placements: list[dict]) -> tuple:
+    """The placements a composition uses: ancillaries (trees, clumps) are omitted."""
+    return tuple(sorted((p["asset"], p["kind"], p["count"], p["scale"], p["scale_variation"], p["center"])
+                        for p in placements if p["kind"] != "ancillary"))
+
+
+# Generic source conditions mapped onto Civ III terrains.
+VARIANT_TERRAINS = {("forest", None): "Forest", ("jungle", None): "Jungle", ("marsh", None): "Marsh",
+                    ("flood_plain", None): "Flood Plain", (None, "tundra"): "Tundra", (None, "desert"): "Desert",
+                    (None, "plains"): "Plains", (None, "grass"): "Grassland"}
 
 
 def dds(path: Path) -> tuple[int, int, int, int, bytes]:
@@ -80,6 +84,67 @@ def mip_offsets(width: int, height: int, mips: int, block: int) -> list[tuple[in
     return result
 
 
+def write_dds(path: Path, width: int, mips: int, dxgi: int, block: int, levels: list[bytes]) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(dds_header(width, width, mips, dxgi, len(levels[0])) + b"".join(levels))
+    return path
+
+
+def levels_from(path: Path, block: int, size: int = 512) -> tuple[int, int, list[bytes]]:
+    """Square DDS mip levels starting at no larger than size (larger top mips are dropped)."""
+    width, height, mips, dxgi, payload = dds(path)
+    if width != height:
+        raise ValueError(f"Square texture required: {path.name}")
+    layout = mip_offsets(width, height, mips, block)
+    levels = [payload[offset:offset + bw * bh * block] for offset, bw, bh in layout]
+    skip = 0
+    while (width >> skip) > size:
+        skip += 1
+    return width >> skip, dxgi, levels[skip:]
+
+
+def fitted(path: Path, cache: Path) -> Path:
+    """A BC1 texture no larger than an atlas cell (top mips dropped, no recompression)."""
+    width = dds(path)[0]
+    if width <= CELL:
+        return path
+    size, dxgi, levels = levels_from(path, 8)
+    return write_dds(cache / f"fit_{path.parent.name}_{path.name}", size, len(levels), dxgi, 8, levels)
+
+
+def fully_opaque(opacity: Path, cutoff: int = 128) -> bool:
+    """True when every top-mip BC4 texel is at or above the cutoff (nothing to cut out)."""
+    width, height, _, _, payload = dds(opacity)
+    for offset in range(0, ((width + 3) // 4) * ((height + 3) // 4) * 8, 8):
+        a0, a1 = payload[offset], payload[offset + 1]
+        palette = [a0, a1] + ([((7 - k) * a0 + k * a1) // 7 for k in range(1, 7)] if a0 > a1 else
+                              [((5 - k) * a0 + k * a1) // 5 for k in range(1, 5)] + [0, 255])
+        bits = int.from_bytes(payload[offset + 2:offset + 8], "little")
+        if any(palette[(bits >> (3 * t)) & 7] < cutoff for t in range(16)):
+            return False
+    return True
+
+
+def masked(colour: Path, opacity: Path, cache: Path) -> Path:
+    """BC3 = the BC4 opacity block + the BC1 colour block, block by block (no
+    recompression). BC1 blocks in three-colour mode read as four-colour in BC3,
+    a slight shift on their interpolated texel; source cards use none transparent."""
+    size, dxgi, colour_levels = levels_from(colour, 8)
+    alpha_size, alpha_dxgi, alpha_levels = levels_from(opacity, 8)
+    if alpha_dxgi not in (80, 81) or dxgi not in (71, 72):
+        raise ValueError(f"Masked merge needs BC1 colour and BC4 opacity: {colour.name}")
+    while alpha_size > size:
+        alpha_size, alpha_levels = alpha_size >> 1, alpha_levels[1:]
+    while size > alpha_size:
+        size, colour_levels = size >> 1, colour_levels[1:]
+    levels = []
+    for colour_level, alpha_level in zip(colour_levels, alpha_levels):
+        if len(colour_level) != len(alpha_level):
+            raise ValueError(f"Opacity and colour mips differ: {colour.name}")
+        levels.append(b"".join(alpha_level[i:i + 8] + colour_level[i:i + 8] for i in range(0, len(colour_level), 8)))
+    return write_dds(cache / f"masked_{colour.name}", size, len(levels), 78 if dxgi == 72 else 77, 16, levels)
+
+
 def pack_atlases(textures: list[Path], kind: tuple, first: int = 0):
     """Block-copy compressed textures (no recompression) into atlases of 512
     cells; returns atlas DDS bytes and, per texture, (slot, u0, v0, uv extent)."""
@@ -91,14 +156,16 @@ def pack_atlases(textures: list[Path], kind: tuple, first: int = 0):
         blob = bytearray(layout[-1][0] + layout[-1][1] * layout[-1][2] * block)
         for slot, path in enumerate(textures[start:start + per_atlas]):
             width, height, mips, dxgi, payload = dds(path)
-            if dxgi not in accepted or width != height or width not in (256, 512) or \
-                    (width >> (levels - 1)) < 4 or mips < levels:
-                raise ValueError(f"Atlas source must be square 256/512 with enough mips: {path.name}")
+            full_chain = (width // 4).bit_length()   # mips down to one 4x4 block
+            if dxgi not in accepted or width != height or width not in (128, 256, 512) or \
+                    mips < min(levels, full_chain):
+                raise ValueError(f"Atlas source must be square 128-512 with a full mip chain: {path.name}")
             cx, cy = slot % (size // CELL), slot // (size // CELL)
             source = mip_offsets(width, height, mips, block)
             for level in range(levels):
                 origin, atlas_bw, _ = layout[level]
-                offset, bw, bh = source[level]
+                # A small source repeats its last 4x4 mip for the atlas's tiniest levels.
+                offset, bw, bh = source[min(level, len(source) - 1, full_chain - 1)]
                 base_x, base_y = cx * (CELL >> level) // 4, cy * (CELL >> level) // 4
                 for row in range(bh):
                     target = origin + ((base_y + row) * atlas_bw + base_x) * block
@@ -152,52 +219,116 @@ TERRAIN_INDEX = {"Desert": 0, "Plains": 1, "Grassland": 2, "Tundra": 3, "Flood P
                  "Mountains": 6, "Forest": 7, "Jungle": 8, "Marsh": 9, "Volcano": 10}
 
 
-def bake_variant(key: str, setting: dict, pieces: list, decals: list, *, model, decal_cell_ids) -> list[dict]:
-    """One deterministic layout: decal records first, then sunk model bodies."""
+def cluster_centres(setting: dict, rng: random.Random) -> list[tuple[float, float]]:
+    """Cluster centres around the layout centre. flank: side by side across the view
+    (the tile's u-v axis), centred, with outer clusters raised toward the tile centre
+    by arc (to hug a mountain's curved foot); random: scattered, then re-centred so
+    the group stays centred."""
+    centre, count, separation = setting["centre"], setting["clusters"], setting["cluster_separation"]
+    jitter = (rng.uniform(-1, 1) * setting["spread"], rng.uniform(-1, 1) * setting["spread"])
+    step = separation / math.sqrt(2)
+    if setting["arrangement"] == "flank":
+        rise = setting.get("arc", 0.0) * step
+        offsets = [((k - (count - 1) / 2) * step - abs(k - (count - 1) / 2) * rise,
+                    -(k - (count - 1) / 2) * step - abs(k - (count - 1) / 2) * rise) for k in range(count)]
+    else:
+        angles = [rng.uniform(0, 2 * math.pi) for _ in range(count - 1)]
+        offsets = [(0.0, 0.0)] + [(math.cos(a) * separation, math.sin(a) * separation) for a in angles]
+        mean = (sum(u for u, _ in offsets) / count, sum(v for _, v in offsets) / count)
+        offsets = [(u - mean[0], v - mean[1]) for u, v in offsets]
+    inside = setting["keep_inside"]
+    clamp = lambda value: min(1 - inside, max(inside, value))
+    return [(clamp(centre[0] + jitter[0] + du), clamp(centre[1] + jitter[1] + dv)) for du, dv in offsets]
+
+
+def bake_variant(key: str, setting: dict, pieces: list, decals: list, *, model, decal_cell_ids,
+                 accent: dict | None = None) -> list[dict]:
+    """One deterministic layout: decal records first, then an optional accent, then
+    the bodies at their authored burial. Each cluster's first decal lies directly
+    under it and its rocks spread over that decal's footprint."""
     rng = random.Random(int(hashlib.sha256(key.encode()).hexdigest()[:8], 16))
     inside = setting["keep_inside"]
     clamp = lambda value: min(1 - inside, max(inside, value))
-    centre = setting["centre"]
-    first = (clamp(centre[0] + rng.uniform(-1, 1) * setting["spread"]),
-             clamp(centre[1] + rng.uniform(-1, 1) * setting["spread"]))
-    centers = [first]
-    for _ in range(setting["clusters"] - 1):
-        if setting["arrangement"] == "flank":
-            # Side by side across the view (tile u-v axis), so neither hides the other.
-            sign = rng.choice((-1, 1)) * setting["cluster_separation"] / math.sqrt(2)
-            centers.append((clamp(first[0] + sign), clamp(first[1] - sign)))
-        else:
-            angle = rng.uniform(0, 2 * math.pi)
-            centers.append((clamp(first[0] + math.cos(angle) * setting["cluster_separation"]),
-                            clamp(first[1] + math.sin(angle) * setting["cluster_separation"])))
+    centers = cluster_centres(setting, rng)
+    footprints = setting.get("cluster_scales") or [1.0] * len(centers)
+    weights = setting.get("cluster_weights") or [1.0] * len(centers)
+    bounds = [sum(weights[:k + 1]) / sum(weights) for k in range(len(centers))]
     scale_factor = setting.get("scale", 1.0)
+    decal_scale = setting.get("decal_scale", 1.0)
     # Without a decal, a cluster spans the default decal footprint.
-    radii = [setting["decal_world_scale"] * scale_factor] * len(centers)
+    radii = [setting["decal_world_scale"] * scale_factor * decal_scale * f for f in footprints]
+    if decals and len(decals) < len(centers):
+        decals = (list(decals) * len(centers))[:len(centers)]   # every cluster gets a decal
     placed = []
     for index, placement in enumerate(decals):
         cells = decal_cell_ids(placement["asset"])
         cluster = index % len(centers)
-        size = setting["decal_world_scale"] * scale_factor * placement["scale"] * \
-            (1 + placement["scale_variation"] * rng.uniform(-1, 1))
+        size = setting["decal_world_scale"] * scale_factor * decal_scale * footprints[cluster] * \
+            placement["scale"] * (1 + placement["scale_variation"] * rng.uniform(-1, 1))
         radii[cluster] = size if index < len(centers) else max(radii[cluster], size)
-        size *= setting.get("decal_scale", 1.0)
         cx, cy = centers[cluster]
-        offset = setting.get("decal_offset", (0.0, 0.0))
+        nudge = .03 * footprints[cluster] if index >= len(centers) else 0.0
         placed.append({"decal": cells[rng.randrange(len(cells))],
-                       "u": cx + offset[0] + rng.uniform(-.03, .03), "v": cy + offset[1] + rng.uniform(-.03, .03),
+                       "u": cx + rng.uniform(-1, 1) * nudge, "v": cy + rng.uniform(-1, 1) * nudge,
                        "rotation": rng.uniform(0, 2 * math.pi), "scale": size,
                        "lift": setting["decal_lift"], "radius": 0.0, "ground_fit": 0.0})
+
+    def body(placement: dict, scale: float, u: float, v: float) -> dict:
+        meta = model(placement["asset"])
+        return {"model": placement["asset"], "u": u, "v": v, "rotation": rng.uniform(0, 2 * math.pi),
+                "scale": scale, "lift": -setting["sink"] * meta["height"] * scale,
+                "radius": meta["radius"] * scale, "ground_fit": meta["radius"] * scale * setting["ground_fit"]}
+    bodies = []
+    if accent is not None:
+        # The accent sits at the group's centre.
+        at = (sum(u for u, _ in centers) / len(centers), sum(v for _, v in centers) / len(centers))
+        bodies.append(body(accent, setting["world_scale"] * scale_factor * setting["accent_scale"] * accent["scale"],
+                           *at))
+    if setting.get("subject") or setting.get("subjects"):
+        # A small herd of the animated subject ("animated/<binding>"), grouped at
+        # the layout centre; the runtime stands each on the highest ground under
+        # its footprint (ground_fit) so no part of the body is buried.
+        herd, radius = setting["herd"], setting["subject_radius"]
+        subjects = setting.get("subjects") or [setting["subject"]]   # herd members cycle through these
+        for subject in subjects:
+            model("animated/" + subject)   # registers the placeholder asset
+        cx, cy = (sum(u for u, _ in centers) / len(centers), sum(v for _, v in centers) / len(centers))
+        start = rng.uniform(0, 2 * math.pi)
+        for index in range(herd):
+            angle = start + 2 * math.pi * index / herd + rng.uniform(-.3, .3)
+            distance = 0.0 if herd == 1 else radius * setting.get("herd_spread", 1.3)
+            scale = setting.get("subject_scale", 1.0) * (1 + rng.uniform(-.08, .08))
+            subject = subjects[index % len(subjects)]
+            bodies.append({"model": "animated/" + subject,
+                           "u": clamp(cx + math.cos(angle) * distance), "v": clamp(cy + math.sin(angle) * distance),
+                           "rotation": rng.uniform(-1, 1) * setting.get("yaw_jitter", 0.0), "scale": scale,
+                           "lift": 0.0, "radius": radius * scale,
+                           "ground_fit": radius * scale * setting.get("subject_fit", .6)})
     # The terrain layout may densify (scree) or thin the resource's own pieces.
     target = max(1, int(round(len(pieces) * setting.get("layout_count_scale", 1.0))))
+    if not pieces:
+        return placed + bodies
     order = (list(pieces) * (target // max(1, len(pieces)) + 1))[:target]
     rng.shuffle(order)
-    bodies = []
+    if setting.get("planting") == "rows":
+        # Planted rows (vineyards, plantations): parallel rows along the tile's u
+        # axis, which runs diagonally down-right on screen, centred on the layout.
+        rows, spacing, length = setting["rows"], setting["row_spacing"], setting["row_length"]
+        per_row = -(-len(order) // rows)
+        cx, cy = (sum(u for u, _ in centers) / len(centers), sum(v for _, v in centers) / len(centers))
+        for index, placement in enumerate(order):
+            row, slot = divmod(index, per_row)
+            along = ((slot + .5) / per_row - .5) * length + rng.uniform(-.15, .15) * length / per_row
+            across = (row - (rows - 1) / 2) * spacing + rng.uniform(-.1, .1) * spacing
+            scale = setting["world_scale"] * scale_factor * placement["scale"] * \
+                (1 + placement["scale_variation"] * rng.uniform(-1, 1))
+            bodies.append(body(placement, scale, clamp(cx + along), clamp(cy + across)))
+        return placed + bodies
     for index, placement in enumerate(order):
-        meta = model(placement["asset"])
         scale = setting["world_scale"] * scale_factor * placement["scale"] * \
             (1 + placement["scale_variation"] * rng.uniform(-1, 1))
-        radius = meta["radius"] * scale
-        cluster = index % len(centers)
+        radius = model(placement["asset"])["radius"] * scale
+        cluster = next(k for k, bound in enumerate(bounds) if (index + .5) / len(order) <= bound)
         cx, cy = centers[cluster]
         best = None
         for _ in range(40):
@@ -210,39 +341,52 @@ def bake_variant(key: str, setting: dict, pieces: list, decals: list, *, model, 
                 best = (clearance, u, v)
             if clearance >= 0:
                 break
-        bodies.append({"model": placement["asset"], "u": best[1], "v": best[2],
-                       "rotation": rng.uniform(0, 2 * math.pi), "scale": scale,
-                       "lift": -setting["sink"] * meta["height"] * scale, "radius": radius,
-                       "ground_fit": radius * setting["ground_fit"]})
+        bodies.append(body(placement, scale, best[1], best[2]))
     return placed + bodies
 
 
-def build(output: Path = OUTPUT) -> dict:
+def build(output: Path = OUTPUT, alternates: bool = True, catalog: str | None = None) -> dict:
+    """alternates=False bakes only the recommended compositions (promotion);
+    catalog names one of the profile's Lab reference catalogs to bake alone, without legacy groups."""
     profiles = read(PROFILES)
-    manifest = read(SOURCE / "manifest.json")
-    decal_manifest = read(DECALS / "manifest.json")
+    sources = resource_composition_sources.ensure(SOURCES, PROFILES)
+    legacy_manifest = read(LEGACY / "manifest.json")
     defaults = profiles["defaults"]
     models: dict[str, dict] = {}      # asset id -> mesh/meta, in first-use order
     decal_assets: dict[tuple[str, int], dict] = {}
     decal_textures: list[Path] = []
     compositions, report = [], {"schema": "c3x.resource_composition_report.v0", "resources": {}}
+    cache = SOURCES.parent / (SOURCES.name + "_merged")
 
     def model(asset_id: str, z_offset: float = 0.0) -> dict:
+        if asset_id not in models and asset_id.startswith("animated/"):
+            # Placeholder naming an animated subject; the runtime places the skinned body.
+            models[asset_id] = {"texture": None, "masked": False, "vertices": [((0.0, 0.0, 0.0), (0.0, 0.0, 1.0),
+                                (0.0, 0.0))] * 3, "indices": [0, 1, 2], "radius": 0.0, "height": 0.0}
         if asset_id not in models:
-            record = manifest["assets"][asset_id]
-            mesh = read(SOURCE / record["mesh"])
+            pack, records = (SOURCES, sources["assets"]) if asset_id.startswith("source/") else \
+                (LEGACY, legacy_manifest["assets"])
+            record = records[asset_id]
+            mesh = read(pack / record["mesh"])
             vertices = [([v["position"][0], v["position"][1], v["position"][2] + z_offset], v["normal"], v["uv0"])
                         for v in mesh["vertices"]]
             low = [min(v[0][a] for v in vertices) for a in range(3)]
             high = [max(v[0][a] for v in vertices) for a in range(3)]
-            models[asset_id] = {"texture": SOURCE / material_texture(read(SOURCE / record["material"])),
+            material = read(pack / record["material"])
+            colour = pack / material_texture(material)
+            opacity = material.get("opacity")
+            opacity = opacity.get("texture") if isinstance(opacity, dict) else opacity
+            if opacity and fully_opaque(pack / opacity):
+                opacity = None   # an all-opaque mask stays a BC1 body
+            texture = masked(colour, pack / opacity, cache) if opacity else fitted(colour, cache)
+            models[asset_id] = {"texture": texture, "masked": bool(opacity),
                                 "vertices": vertices, "indices": mesh["topology"]["indices"],
                                 "radius": max(high[0] - low[0], high[1] - low[1]) * .5, "height": high[2] - low[2]}
         return models[asset_id]
 
     def decal_cell_ids(asset_id: str) -> list[tuple[str, int]]:
-        definition = read(DECALS / decal_manifest["assets"][asset_id]["decal"])
-        texture = DECALS / definition["channels"]["base_color"]["texture"]
+        definition = read(SOURCES / sources["assets"][asset_id]["decal"])
+        texture = SOURCES / definition["channels"]["base_color"]["texture"]
         if texture not in decal_textures:
             decal_textures.append(texture)
         keys = []
@@ -252,39 +396,96 @@ def build(output: Path = OUTPUT) -> dict:
             keys.append(key)
         return keys
 
-    for name, setting in profiles["resources"].items():
-        profile = {**defaults, **profiles["families"].get(setting["family"], {}), **setting}
-        record = manifest["resources"][profile["source"]]
+    def selection(profile: dict, placements: list[dict], decal_placements: list[dict]):
         pieces, decals = [], []
-        for placement in base_placements(record):
-            short = placement["asset"].split("/")[-1]
-            if placement.get("pack") == "DecalsNormalized":
-                count = profile.get("decal_counts", {}).get(short, placement["count"])
-                decals += [placement] * max(0, int(round(count * profile.get("decal_count_scale", 1.0))))
-            elif not short.startswith(ANCILLARY) and placement["count"] > 0:
-                pieces += [placement] * max(1, int(round(placement["count"] * profile["count_scale"])))
-        variants = []
-        for layout_name, layout in profile["terrain_layouts"].items():
-            setting = {**profile, **layout}
-            mask = sum(1 << TERRAIN_INDEX[terrain] for terrain in layout["terrains"])
-            for variant in range(profile["variants"]):
-                variants.append((mask, bake_variant(f"{name}:{layout_name}:{variant}", setting, pieces, decals,
-                                                    model=model, decal_cell_ids=decal_cell_ids)))
-        compositions.append((name, variants))
-        report["resources"][name] = {"models": len(pieces), "decals": len(decals), "variants": len(variants)}
+        for placement in placements if profile.get("static_pieces", True) else ():
+            count = profile.get("piece_counts", {}).get((placement["asset"] or "").split("/")[-1], placement["count"])
+            imported = sources["assets"].get(placement["asset"] or "", {}).get("type") == "feature"
+            kinds = ("model", "accessory") if profile.get("accessories", True) else ("model",)
+            if placement["kind"] in kinds and imported and count > 0 and not placement["center"]:
+                pieces += [placement] * max(1, int(round(count * profile["count_scale"])))
+        for placement in decal_placements:
+            if placement["kind"] != "decal" or sources["assets"].get(placement["asset"], {}).get("type") != "decal":
+                continue
+            count = profile.get("decal_counts", {}).get(placement["asset"].split("/")[-1], placement["count"])
+            decals += [placement] * max(0, int(round(count * profile.get("decal_count_scale", 1.0))))
+        return pieces, decals
 
-    # Production's legacy static groups stay available for resources without a composition.
+    entries = [(name, setting) for name, setting in profiles["resources"].items()]
+    if catalog:
+        spec = profiles["catalogs"][catalog]
+        entries = [(name, {"family": spec["family"], **entry}) for name, entry in spec["entries"].items()]
+    elif alternates:
+        entries += [(f"{name}~{label}", {**profiles["resources"][name], **override})
+                    for name, labels in profiles.get("alternates", {}).items() if isinstance(labels, dict)
+                    for label, override in labels.items()]
+    for name, setting in entries:
+        profile = {**defaults, **profiles["families"].get(setting["family"], {}), **setting}
+        source = sources["sources"][profile["source"]]
+        decal_source = sources["sources"][profile.get("decal_source", profile["source"])]
+        # The accent is a centre model (Civ VI's authored pile) heading the outcrop.
+        accent = None
+        accent_from = profile.get("accent_source") or (profile["source"] if profile.get("accent_scale", 0) > 0 else None)
+        if accent_from:
+            options = sources["sources"][accent_from]
+            accent = next((p for p in options["sets"][options["base"]]["placements"]
+                           if p["kind"] == "model" and p["center"] and p["asset"] in sources["assets"]), None)
+        base_set = source["sets"][source["base"]]["placements"]
+        decal_set = decal_source["sets"][decal_source["base"]]["placements"]
+        # Terrains whose source variant changes the effective placements get their own sets.
+        overrides: dict[str, list[dict]] = {}
+        for variant in source["variants"]:
+            terrain = VARIANT_TERRAINS.get((variant["when"]["feature"], variant["when"]["terrain"]))
+            placements = source["sets"][variant["set"]]["placements"]
+            if terrain and not variant["when"]["hills"] and effective(placements) != effective(base_set):
+                overrides.setdefault(terrain, placements)
+        groups = []
+        for layout_name, layout in profile["terrain_layouts"].items():
+            groups.append((layout_name, layout, [t for t in layout["terrains"] if t not in overrides], base_set))
+            groups += [(f"{layout_name}/{t}", layout, [t], overrides[t]) for t in layout["terrains"] if t in overrides]
+        groups = [group for group in groups if group[2]]
+        # The runtime holds 16 variants per composition; terrain overrides share that budget.
+        per_group = min(profile["variants"], 16 // len(groups))
+        if per_group < 1:
+            raise ValueError(f"{name}: {len(groups)} terrain groups exceed the runtime limit of 16 variants")
+        variants = []
+        for group_name, layout, terrains, placements in groups:
+            own_decals = placements if decal_source is source else decal_set
+            pieces, decals = selection(profile, placements, own_decals)
+            # A resource may override any layout ("*" for all) after the layout's own values.
+            overrides = profile.get("layout_overrides", {})
+            setting_for = {**profile, **layout, **overrides.get("*", {}),
+                           **overrides.get(group_name.split("/")[0], {})}
+            mask = sum(1 << TERRAIN_INDEX[terrain] for terrain in terrains)
+            for variant in range(per_group):
+                variants.append((mask, bake_variant(f"{name}:{group_name}:{variant}", setting_for, pieces, decals,
+                                                    model=model, decal_cell_ids=decal_cell_ids, accent=accent)))
+        compositions.append((name, variants))
+        pieces, decals = selection(profile, base_set, base_set if decal_source is source else decal_set)
+        report["resources"][name] = {"source": profile["source"], "models": len(pieces), "decals": len(decals),
+                                     "variants": len(variants), "terrain_overrides": sorted(overrides)}
+
+    # Production's legacy static groups stay available for resources without a
+    # composition; a group whose name a composition alias covers is unreachable.
+    covered = [alias.lower() for values in profiles["bindings"].values() for alias in values]
     legacy = []
-    for name, asset_id, scale, count in SELECTIONS:
+    for name, asset_id, scale, count in () if catalog else SELECTIONS:
+        if any(name in alias for alias in covered):
+            continue
         legacy.append((name, asset_id, scale, count))
         model(asset_id, .060 if name == "fish" else 0.0)
 
-    # Textures: BC1 model atlases first, then each BC3 decal atlas, padded to the slot count.
-    sources = list(dict.fromkeys(meta["texture"] for meta in models.values()))
-    atlases, atlas_place = pack_atlases(sources, MODEL_ATLAS)
-    decal_atlases, decal_place = pack_atlases(decal_textures, DECAL_ATLAS, len(atlases))
-    atlases += decal_atlases
-    atlas_place.update(decal_place)
+    # Textures: BC1 model atlases, BC3 masked-model atlases, then BC3 decal
+    # atlases, padded to the slot count.
+    opaque = list(dict.fromkeys(meta["texture"] for meta in models.values() if not meta["masked"] and meta["texture"]))
+    cutout = list(dict.fromkeys(meta["texture"] for meta in models.values() if meta["masked"]))
+    atlases, atlas_place = pack_atlases(opaque, MODEL_ATLAS)
+    for textures, kind in ((cutout, MASKED_ATLAS), (decal_textures, DECAL_ATLAS)):
+        more, place = pack_atlases(textures, kind, len(atlases))
+        atlases += more
+        atlas_place.update(place)
+    if not atlases:   # only animated subjects: the bundle still needs one (unused) texture
+        atlases.append(dds_header(4, 4, 1, MODEL_ATLAS[3], 8) + bytes(8))
     slots = [f"textures/atlas_{i}.dds" for i in range(len(atlases))]
     if len(slots) > TEXTURE_SLOTS:
         raise ValueError(f"Composition pack needs {len(slots)} texture slots; the runtime binds {TEXTURE_SLOTS}")
@@ -292,7 +493,7 @@ def build(output: Path = OUTPUT) -> dict:
 
     assets, asset_index = [], {}
     for asset_id, meta in models.items():
-        atlas, u0, v0, extent = atlas_place[meta["texture"]]
+        atlas, u0, v0, extent = atlas_place[meta["texture"]] if meta["texture"] else (0, 0.0, 0.0, 1.0 / CELL)
         edge = .5 / (extent * MODEL_ATLAS[0])
         vertices = [(p, n, (u0 + min(1 - edge, max(edge, uv[0])) * extent, v0 + min(1 - edge, max(edge, uv[1])) * extent))
                     for p, n, uv in meta["vertices"]]
@@ -341,7 +542,9 @@ def build(output: Path = OUTPUT) -> dict:
                 blob.extend(struct.pack("<I6f", identifier, item["u"], item["v"], item["rotation"],
                                         item["scale"], item["lift"], item["ground_fit"]))
     names = [name for name, _ in compositions]
-    aliases = [(alias, names.index(name)) for name, values in profiles["bindings"].items() for alias in values]
+    aliases = [(name, index) for index, name in enumerate(names)] if catalog else \
+        [(alias + name[len(base):], names.index(name)) for name in names
+         for base in [name.split("~")[0]] for alias in profiles["bindings"].get(base, ())]
     blob.extend(struct.pack("<I", len(aliases)))
     for alias, index in aliases:
         blob.extend(bundle_string(alias))
@@ -364,8 +567,10 @@ def build(output: Path = OUTPUT) -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=OUTPUT)
+    parser.add_argument("--no-alternates", action="store_true", help="bake only the recommended compositions")
+    parser.add_argument("--catalog", help="bake this Lab reference catalog (e.g. minerals) into ResourceCatalogLab")
     args = parser.parse_args()
-    report = build(args.output)
+    report = build(CATALOG if args.catalog and args.output == OUTPUT else args.output, not args.no_alternates, args.catalog)
     print(json.dumps({"resources": report["resources"], "textures": report["textures"]}, indent=1))
     return 0
 

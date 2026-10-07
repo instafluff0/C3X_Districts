@@ -50,6 +50,7 @@ struct FeatureComposition {
     struct Variant {std::uint32_t terrain_mask = ~0u; std::vector<Instance> instances;};
     std::string name;
     std::vector<Variant> variants;
+    bool animated = false;   // some instance places an "animated/<binding>" subject
 };
 
 struct FeatureBundle {

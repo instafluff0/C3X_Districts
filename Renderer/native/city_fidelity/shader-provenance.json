@@ -3,7 +3,7 @@
     "current-selected-city-recipes"
   ],
   "source_sha256": {
-    "Renderer/native/environment_refresh/feature.hlsl": "f741bea17e98fa0c261a84afe2105dac700a599f64a3a2911806f994e67eeabb",
+    "Renderer/native/environment_refresh/feature.hlsl": "7ab1a5175cb42f512e2f7aa0495a1209d49db57accc5f79cce8f8039869d8e7e",
     "Renderer/lab/shared/shaders/lighting/local_facade_lights.hlsl": "264bd350d639f897924489c2773434b2f9e0af5cf37e8f3c7034764ae47bb2c3",
     "Renderer/lab/shared/shaders/objects/city_scene_material.hlsl": "1c046f48264666bb8f7a4f22f1f94cf6bf9839b4b50777ef4870e953c8b31405",
     "Renderer/lab/shared/shaders/lighting/city_environment.hlsl": "3707899aa52eadadf6de30f76f69bc3d7afd69bed96130b376410229dc8bcea9",
@@ -11,10 +11,10 @@
     "Renderer/native/render_core/world_projection.hlsl": "cd854053e441f1500988083dd88ad9516d1f9c0baaca92f282953f3114488f5a",
     "Renderer/native/render_core/rigid_instance_geometry.hlsl": "a84ed7142d165614efc223d5105bf43f6c2dc6f3ed9380afda12eb76076d2469",
     "Renderer/lab/shared/shaders/objects/resident_instance.hlsl": "bc8c8c8930fb3e90b870ddff3d41d4e717f1624c839e33983e9e25d4e713bc6c",
-    "Renderer/native/render_core/rigid_feature.hlsl": "25c70bfacbb4b15a2dd42c4b8d1c1a891b56a155ef079bc38f9be74b81e058db",
+    "Renderer/native/render_core/rigid_feature.hlsl": "9a7579fc6d345e8c4ad221fc78a952123d642fc5722c952c76797f6545be7007",
     "Renderer/native/render_core/rigid_caster.hlsl": "ada23a69492c65fe03c25a907ef4da42f2f0ea326cf6c0b5cb79384071a5b3aa",
-    "Renderer/native/environment_refresh/hydrology.hlsl": "661e690ea03dfad0e9eb3325d44ca2c3388dcbea87c396f96f474fb93484bc6f",
-    "Renderer/lab/shared/shaders/objects/resource_skinning.hlsl": "b11aa9a5dbefb8cac2145f425c9c671e35ff4c1ffa6608ea3d35234ba77280ee",
+    "Renderer/native/environment_refresh/hydrology.hlsl": "056cce6afee1ec742a376696d1fbd368957a22ddef054bd377d6dedfb393979b",
+    "Renderer/lab/shared/shaders/objects/resource_skinning.hlsl": "3cc52355e30b80c3bf43aa4f3420f19e7f4b4d7d680306b88678bd190ded8dec",
     "Renderer/native/environment_refresh/terrain.hlsl": "711bba18b7e5c527fa6a4ac27c06fa8120e36f529acc6bd1cfc03ee6d316435f",
     "Renderer/native/environment_refresh/mountain.hlsl": "91170d1b2ae98381ea2012d75d1d14594ce68183c838bb2b70230974d9d1c398",
     "Renderer/native/environment_refresh/objects.hlsl": "db42d701a5606a3cfda5f28c736f68b4c755409e50c065b49ce9e55843cbb49f",

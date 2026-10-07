@@ -9,7 +9,10 @@
     "Renderer/native/c3x_renderer.cpp",
     "Renderer/native/terrain_scene_runtime.cpp",
     "Renderer/native/object_compiler.h",
-    "Renderer/native/world_preparation.h"
+    "Renderer/native/rigid_object_instance.h",
+    "Renderer/native/world_preparation.h",
+    "Renderer/lab/shared/shaders/lighting/generated/scene_linear_v1.hlsl",
+    "Renderer/tools/asset_compiler/build_route_pattern_runtime.py"
   ],
   "recipe": {
     "terrain": 2,
@@ -23,7 +26,8 @@
     ],
     "cases": [
       "detail",
-      "gameplay"
+      "gameplay",
+      "network"
     ]
   },
   "tests": [

@@ -50,6 +50,15 @@ Renderer-only change does not need injected-code compilation or installation.
 Task-local builds, captures and receipts are under
 `Renderer/native/build/mountains-terrain/`. Fixed references remain unchanged.
 
+## Route shading
+
+Road and railroad shading (surface kind 11) is a branch shared by many
+runtime shaders. `Renderer/tools/overlay_route_shading.py` replaces only that
+branch in `Renderer/packs/Renderer64ResidentRuntime` with the current
+generated Lab branch; every other line keeps its bytes. It requires current
+shader preparation, keeps the previous pack as a dated
+`-before-routes-YYYYMMDD` sibling and records hashes in `route-overlay.json`.
+
 ## Verification and staging
 
 The matched bridge, x64 DLL, helper and selected shader files are staged.

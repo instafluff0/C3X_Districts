@@ -39,7 +39,7 @@ struct Shadow{static std::array<float,4> project(Bounds const& b,float const*,st
 struct SandboxPassWorkload{enum{shadow};struct Scope{template<class T>Scope(T&,int){}};};
 struct Test {
  struct Grid{std::array<float,4> bounds{};};
- struct {bool geometry_canonical_world=false;std::array<float,12> shadow_basis{};
+ struct {bool geometry_canonical_world=false,borrowed_scene_frame=false,borrowed_scene_stale=false;std::array<float,12> shadow_basis{};
   struct {struct World{struct Dims{bool wrap_x=false,wrap_y=false;int width=60,height=60;};
    Dims dimensions()const{return {};}};World world()const{return {};}}world_coast;}renderer;
  int workload=0;int* work=&workload;bool ready=true;

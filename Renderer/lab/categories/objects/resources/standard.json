@@ -26,13 +26,20 @@
       "water-gameplay",
       "roster",
       "relief",
-      "native-minerals"
+      "native-minerals",
+      "native-plants",
+      "native-animals"
     ]
   },
   "tests": [
     "Renderer.tools.asset_compiler.test_resource_animation_runtime",
+    "Renderer.tools.asset_compiler.test_resource_compositions",
     "Renderer.native.source_fidelity.test_contract",
     "Renderer.native.test_render_core",
+    "Renderer.native.test_resource_alpha_cutout",
+    "Renderer.native.test_resource_composition_priority",
+    "Renderer.native.test_animated_compositions",
+    "Renderer.native.test_resource_body_depth",
     "Renderer.native.test_resource_instances",
     "Renderer.native.test_scene_depth"
   ],

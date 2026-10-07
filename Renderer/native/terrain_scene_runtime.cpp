@@ -182,6 +182,8 @@ bool load_feature_bundle(std::string const & path, FeatureBundle & output) {
                     !finite(item.u) || !finite(item.v) || !finite(item.rotation) || !finite(item.lift) ||
                     !(item.scale > 0.0f && item.scale < 16.0f) || !(item.ground_fit >= 0.0f && item.ground_fit < 1.0f))
                     return false;
+                else if (output.assets[item.asset].id.rfind("animated/", 0) == 0)
+                    composition.animated = true;
         }
     }
     if (!consume_u32(data, cursor, alias_count) || alias_count > 1024)

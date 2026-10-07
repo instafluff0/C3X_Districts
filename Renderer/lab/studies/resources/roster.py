@@ -8,7 +8,9 @@ tile parity.
 Cases:
 - roster: all 26 resources on grassland (Fish/Whales offshore);
 - relief: the same layout with every land resource on a hill;
-- native-BATCH: each resource of a review batch on every terrain it can occupy.
+- native-BATCH: each resource of a review batch on every terrain it can occupy;
+  'Name~label' rows are Lab-only alternate compositions of Name; batches
+  longer than BLOCK_ROWS wrap into further column blocks.
 """
 from __future__ import annotations
 
@@ -58,16 +60,30 @@ def layout() -> list[tuple[int, int, dict]]:
     return cells
 
 
+# Rows beyond this wrap into another block of columns, keeping the batch on the 32-tile Lab map.
+BLOCK_ROWS = 8
+
+
 @lru_cache(maxsize=None)
 def native_layout(case: str) -> tuple[tuple[int, int, str, str], ...]:
     """(dx, dy, resource, terrain): one row per resource, one column per native
     terrain, two tiles apart so mountains and hills stay separate bodies."""
-    names = native()["batches"][case.removeprefix("native-")]
+    batch = case.removeprefix("native-")
+    names = native()["batches"][batch]
+    extra = native().get("batch_terrains", {}).get(batch, [])
+    terrains = {name: extra + [terrain for terrain in native()["terrains"].get(name.split("~")[0], [])
+                               if terrain not in extra] for name in names}
+    if len(names) <= BLOCK_ROWS:
+        return tuple((4 * column - 4, 4 * row - 2 * (len(names) - 1), name, terrain)
+                     for row, name in enumerate(names) for column, terrain in enumerate(terrains[name]))
+    width = max(len(values) for values in terrains.values()) + 1
+    blocks = -(-len(names) // BLOCK_ROWS)
     cells = []
-    for row, name in enumerate(names):
-        dy = 4 * row - 2 * (len(names) - 1)
-        for column, terrain in enumerate(native()["terrains"][name]):
-            cells.append((4 * column - 4, dy, name, terrain))
+    for index, name in enumerate(names):
+        block, row = divmod(index, BLOCK_ROWS)
+        for column, terrain in enumerate(terrains[name]):
+            cells.append((4 * (block * width + column) - 2 * (blocks * width - 2), 4 * row - 2 * (BLOCK_ROWS - 1),
+                          name, terrain))
     return tuple(cells)
 
 
@@ -100,5 +116,8 @@ def spec(case: str) -> str:
 def viewport(case: str, zoom: int) -> tuple[int, int]:
     if case.startswith("native-"):
         rows = len(native()["batches"][case.removeprefix("native-")])
-        return 6 * zoom, (rows + 2) * zoom
+        if rows > BLOCK_ROWS:
+            return (max(abs(x) for x, _, _, _ in native_layout(case)) + 3) * zoom, (BLOCK_ROWS + 2) * zoom
+        columns = max(x for x, _, _, _ in native_layout(case)) // 4 + 2
+        return max(6, 2 * columns + 1) * zoom, (rows + 2) * zoom
     return 8 * zoom, 6 * zoom

@@ -57,5 +57,17 @@ inline void pack_resource_pose(AnimationPose const& pose,unsigned bones,float* o
         for(unsigned c=0;c<3;++c){for(unsigned a=0;a<3;++a)dst[16+c*4+a]=pose.normals[b][c*3+a];dst[19+c*4]=0;}
     }
 }
+// Shear packed posed positions onto the ground plane under an animal:
+// source z += a*x + b*y + c, so its feet, and a head lowered to graze, follow
+// the terrain slope instead of sinking into rising ground. Rows are row vectors
+// (position = x*row0 + y*row1 + z*row2 + row3), so each row's z gains a*row.x +
+// b*row.y and the translation row also gains c.
+inline void slope_resource_pose(unsigned bones,float a,float b,float c,float* output){
+    if(a==0 && b==0 && c==0)return;
+    for(unsigned bone=0;bone<bones;++bone){float* m=output+16+bone*28;
+        for(unsigned row=0;row<4;++row)m[row*4+2]+=a*m[row*4]+b*m[row*4+1];
+        m[14]+=c;
+    }
+}
 
 } }

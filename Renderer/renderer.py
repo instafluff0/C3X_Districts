@@ -400,6 +400,18 @@ def scene(category, case, destination, *, world_size=32):
                     base, real = 2, 7
                 if (x, y) == (20, 10):
                     base, real = 2, 6
+            if category == "infrastructure" and case == "network":
+                # Dense late-game road context: grass/plains patches, hills,
+                # a small range, a wood and one river for authored bridges.
+                c, r = (x + y) // 2, (x - y) // 2
+                base = real = 1 if (c * 7 + r * 3) % 11 < 4 else 2
+                if (x * 5 + y * 3) % 13 == 0:
+                    real = 5
+                if (c, r) in ((20, 4), (21, 4), (21, 5), (22, 5), (19, 3)):
+                    base, real = 2, 6
+                if (c, r) in ((13, -2), (13, -1), (14, -1), (12, -1)):
+                    base, real = 2, 7
+                river = 2 if x == y else 32 if x == y + 2 else 0
             if category in ("huts-camps", "goody-huts", "barbarian-camps") and case == "gameplay" and (x, y) == ((18, 16) if category == "barbarian-camps" else (14, 16)):
                 base, real = 2, 5
             if category == "transitions":
@@ -560,6 +572,9 @@ def native_render(category, case, hour, zoom, output, *, behavior=None, center=(
         "C3X_RENDERER_WATER_MOTION": "1",
         "C3X_LAB_WATER_MOTION_STUDY": "1" if category in ("seas-oceans", "rivers") else "",
         "C3X_LAB_WATER_STUDY": "1" if case.startswith("water-") else "",
+        "C3X_LAB_ROAD_CASE": case if category == "infrastructure" else "",
+        # Optional era override for road/bridge review in the infrastructure fixture.
+        "C3X_LAB_ROAD_ERA": os.environ.get("C3X_LAB_ROAD_ERA", "") if category == "infrastructure" else "",
         "C3X_LAB_RESOURCE_ROSTER": resource_roster.spec(case) if category == "resources" and case in resource_roster.CASES else "",
         "C3X_RENDERER_BORDER_MESH_PREFIX": "",
         "C3X_RENDERER_BORDER_MESH_SITE": "",

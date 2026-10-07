@@ -1135,6 +1135,148 @@ float4 q6_raw_main(PixelInput input)
         clip(scene_width - input.material_weights.x);
         clip(scene_height - input.material_weights.y);
         float pillaged = step(0.5, input.real_terrain);
+        float3 route_normal = normalize(input.geometry_normal);
+        float3 route_light = l13a_layout > 0.5
+            ? q6_receiver_illumination(input, route_normal, 1.0, 1.0)
+            : (0.68 + 0.72 * saturate(dot(route_normal, frame_light_direction()))).xxx;
+        // Civ III pattern routes (fourth weight) blend into the ground the way
+        // the source route materials do: a strip's coverage alpha is its
+        // height, and it covers the owner tile's ground wherever it stands
+        // higher than that ground's own height map. A worn profile lowers
+        // that height toward the stroke edge (|x|=.575) and a wide blend lets
+        // grass clumps, pebbles and rock feather the shoulders, so a path
+        // settles into the ground like a source dirt road instead of ending
+        // on a hard line. The blended height also bends the lighting. The
+        // third weight fades a ford.
+        float pattern_ground = 0.0;
+        float pattern_stroke = 0.0;
+        float pattern_profile = 0.0;
+        if (input.material_weights.w > 0.5)
+        {
+#if defined(Q6_WORLD_SHADOWS) || defined(Q3_HYDROLOGY_DATA)
+            float2 ground_uv = input.q6_world.xy;
+#else
+            float2 ground_uv = input.macro_uv;
+#endif
+            // The owner tile's ground: 0 grass, 1 plains, 2 desert, 3 hills,
+            // 4 mountain, 5 marsh.
+            float ground_kind = input.surface_coordinate;
+            pattern_ground = ground_kind < 0.5
+                ? height_texture.Sample(material_sampler, ground_uv).r
+                : ground_kind < 1.5
+                ? plains_height_texture.Sample(material_sampler, ground_uv).r
+                : ground_kind < 2.5
+                ? desert_height_texture.Sample(material_sampler, ground_uv).r
+                : ground_kind < 3.5
+                ? authored_hill_texture.Sample(material_sampler, ground_uv).r
+                : ground_kind < 4.5
+                ? mountain_height_texture.Sample(material_sampler, ground_uv).r
+                : marsh_height_texture.Sample(material_sampler, ground_uv).r;
+            float edge = abs(input.shape_visibility.x) / 0.575;
+            // Only the strip's geometry edge (|x|=1.5 stroke widths) is cut;
+            // the profile has eased out well before it.
+            pattern_stroke = saturate((1.45 - edge) / max(fwidth(edge), 0.0001) + 0.5) *
+                (1.0 - saturate(input.material_weights.z));
+            pattern_profile = 1.0 - smoothstep(0.30, 1.30, edge);
+        }
+        if (railroad < 0.5 && input.material_weights.w > 0.5)
+        {
+            // A pattern road: one dirt piece across all eras.
+            float4 track = sample_road_source(input.uv, input.base_terrain, pillaged);
+            float4 center_track = sample_road_source(
+                input.macro_uv, input.base_terrain, pillaged);
+            float track_height = saturate(track.a / max(center_track.a, 0.05)) * pattern_profile;
+            float coverage = saturate((track_height - 0.45 * pattern_ground - 0.06) / 0.40);
+            float track_alpha = pattern_stroke * coverage;
+            clip(track_alpha - 0.01);
+            // Relief of the blended surface, from its screen-space slope. The
+            // track is a thin layer: the ground's own bumps (pebbles, rock)
+            // still shape its lighting and darken its crevices. Screen x
+            // runs along world u+v and screen y along u-v (half the rate),
+            // matching the world-basis geometry normal.
+            float surface_height = lerp(pattern_ground,
+                0.30 + 0.35 * track_height + 0.45 * pattern_ground, coverage);
+            float2 slope = float2(ddx(surface_height), ddy(surface_height)) * 1.6;
+            float3 track_normal = normalize(route_normal + float3(
+                -(2.0 * slope.x + slope.y), -(2.0 * slope.x - slope.y), 0.0));
+            float3 track_light = l13a_layout > 0.5
+                ? q6_receiver_illumination(input, track_normal, 1.0, 1.0)
+                : (0.68 + 0.72 * saturate(dot(track_normal, frame_light_direction()))).xxx;
+            // Worn dirt reads as a light, lightly saturated tan-brown against
+            // grass (about sRGB 190,155,108 as albedo), keeping the source
+            // piece's own light and dark variation and a little of its hue.
+            float3 worn = lerp(center_track.rgb, track.rgb, saturate(track.a * 2.5));
+            float worn_detail = clamp(dot(worn, float3(0.30, 0.59, 0.11)) /
+                max(dot(center_track.rgb, float3(0.30, 0.59, 0.11)), 0.02), 0.6, 1.4);
+            float3 track_albedo = lerp(float3(0.52, 0.33, 0.15) * worn_detail, worn * 1.3, 0.25) *
+                lerp(0.90, 1.06, pattern_ground);
+            return float4(frame_tone_map(track_albedo * track_light *
+                                         frame_output_exposure()), track_alpha);
+        }
+        if (railroad > 0.5 && input.material_weights.w > 0.5)
+        {
+            // A pattern railroad (Civ III's railroad patterns): the source
+            // ballast-and-sleeper strip under its two steel rails, both
+            // straight tileable strips of the railroad atlas, sampled across
+            // the stroke (kept inside each strip) and along an unwrapped
+            // coordinate (wrapping sampler, explicit gradients).
+            float across = input.shape_visibility.x / 0.575;
+            float strip_across = clamp(across, -1.45, 1.45) * 0.085;
+            float2 bed_uv = float2(input.uv.x, 0.8737 + strip_across);
+            float2 steel_uv = float2(input.uv.x, 0.3723 + strip_across);
+            float2 gradient_x = float2(ddx(input.uv.x), ddx(across) * 0.085);
+            float2 gradient_y = float2(ddy(input.uv.x), ddy(across) * 0.085);
+            float4 bed = lerp(
+                railroad_base_texture_0.SampleGrad(material_sampler, bed_uv, gradient_x, gradient_y),
+                railroad_base_texture_1.SampleGrad(material_sampler, bed_uv, gradient_x, gradient_y),
+                pillaged);
+            float4 steel = lerp(
+                railroad_base_texture_0.SampleGrad(material_sampler, steel_uv, gradient_x, gradient_y),
+                railroad_base_texture_1.SampleGrad(material_sampler, steel_uv, gradient_x, gradient_y),
+                pillaged);
+            // Civ VI lays its rail pieces over a dirt road piece: a wider,
+            // earthy worn bed (its noise from that dirt piece) settles the
+            // track into the ground; the ballast fades in over it, and the
+            // sleepers and steel stand on the ballast. The railroad strip
+            // reaches two stroke widths, so it has its own geometry-edge cut.
+            float edge = abs(across);
+            float rail_cut = saturate((1.95 - edge) / max(fwidth(edge), 0.0001) + 0.5) *
+                (1.0 - saturate(input.material_weights.z));
+            float dirt_noise = road_base_texture_0.Sample(material_sampler,
+                float2(input.uv.x * 0.25, 0.948 + across * 0.012)).a;
+            float dirt_height = (1.0 - smoothstep(0.45, 1.90, edge)) * (0.55 + 0.90 * dirt_noise);
+            float dirt_cover = saturate((dirt_height - 0.50 * pattern_ground - 0.02) / 0.55);
+            float ballast_cover = saturate((bed.a * (1.0 - smoothstep(0.55, 1.15, edge)) -
+                                            0.35 * pattern_ground - 0.04) / 0.30);
+            // Sleepers are the strip's brown wood over grey ballast.
+            float sleeper = saturate((bed.r - bed.b) * 5.0) * bed.a;
+            float3 dirt = float3(0.32, 0.20, 0.11) * lerp(0.90, 1.06, pattern_ground);
+            float3 ballast = lerp(lerp(dot(bed.rgb, float3(0.30, 0.59, 0.11)).xxx, bed.rgb, 0.8),
+                                  dirt * 1.5, 0.35) * lerp(0.92, 1.05, pattern_ground);
+            // Composite dirt, ballast, then steel ("over"), in albedo.
+            float3 layered = dirt * dirt_cover;
+            float cover = dirt_cover;
+            layered = ballast * ballast_cover + layered * (1.0 - ballast_cover);
+            cover = ballast_cover + cover * (1.0 - ballast_cover);
+            layered = steel.rgb * 1.08 * steel.a + layered * (1.0 - steel.a);
+            cover = steel.a + cover * (1.0 - steel.a);
+            float rail_alpha = rail_cut * cover;
+            clip(rail_alpha - 0.01);
+            float3 rail_albedo = layered / max(cover, 0.001);
+            float surface_height = lerp(pattern_ground,
+                0.25 + 0.20 * dirt_height + 0.40 * pattern_ground, dirt_cover);
+            surface_height = lerp(surface_height,
+                0.32 + 0.20 * bed.a + 0.20 * sleeper + 0.25 * pattern_ground, ballast_cover);
+            surface_height = lerp(surface_height, 1.0, steel.a);
+            float2 slope = float2(ddx(surface_height), ddy(surface_height)) * 2.0;
+            float3 rail_normal = normalize(route_normal + float3(
+                -(2.0 * slope.x + slope.y), -(2.0 * slope.x - slope.y), 0.0));
+            float3 rail_light = l13a_layout > 0.5
+                ? q6_receiver_illumination(input, rail_normal, 1.0, 1.0)
+                : (0.68 + 0.72 * saturate(dot(rail_normal, frame_light_direction()))).xxx;
+            return float4(frame_tone_map(rail_albedo * rail_light *
+                                         frame_output_exposure()), rail_alpha);
+        }
         float4 authored_route = railroad > 0.5
             ? sample_railroad_source(input.shape_visibility.y,
                                      input.shape_visibility.x, pillaged)
@@ -1165,12 +1307,8 @@ float4 q6_raw_main(PixelInput input)
         float center_weight = continuous_ribbon *
             (1.0 - smoothstep(0.02, 0.20, authored_route.a));
         float3 albedo = lerp(authored_route.rgb, center_route.rgb, center_weight);
-        float3 normal = normalize(input.geometry_normal);
-        float3 light = l13a_layout > 0.5
-            ? q6_receiver_illumination(input, normal, 1.0, 1.0)
-            : (0.68 + 0.72 * saturate(dot(normal, frame_light_direction()))).xxx;
         float3 display_color = (frame_tone_map(
-            albedo * light * frame_output_exposure()));
+            albedo * route_light * frame_output_exposure()));
         return float4(display_color, alpha);
     }
     if (roads_only > 0.5 || railroads_only > 0.5 || resources_only > 0.5 ||

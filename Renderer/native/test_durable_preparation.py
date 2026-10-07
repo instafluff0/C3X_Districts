@@ -18,7 +18,8 @@ struct OrderedRigidPackets {static constexpr std::size_t budget=64u*Budget::mib;
 struct State {
  std::size_t base=0,publication_capacity_bytes=160u*Budget::mib,publication_working_bytes=0;
  std::size_t tile_geometry_cache_bytes=512u*Budget::mib,terrain_patch_index_bytes=0,tile_geometry_runtime_budget=0;
- bool measured_gpu=true,world_gpu_allocation_pressure=false,loading_gpu_residency=true;
+ bool measured_gpu=true,world_gpu_allocation_pressure=false,loading_gpu_residency=true,prewarming=false;
+ std::size_t tile_geometry_required_budget=0;
  struct Packet {std::size_t bytes=0;std::size_t gpu_bytes()const{return bytes;}}ordered_rigid_packets,shared_instances;
  struct Retired {std::atomic<std::size_t> bytes{0};};std::shared_ptr<Retired> retired_content=std::make_shared<Retired>();
  struct Composition {std::size_t bytes=0;std::size_t allocation_bytes()const{return bytes;}};
@@ -30,6 +31,7 @@ struct State {
  return tile_geometry_runtime_budget;}
 };
 int main(){State s;auto empty=s.calculate();
+ assert(!s.tile_geometry_required_budget); // loading has no second ceiling
  // Existing packet bytes satisfy only their own missing reserve.
  s.ordered_rigid_packets.bytes=32u*Budget::mib;auto packets=s.calculate();
  assert(packets==empty+16u*Budget::mib);
@@ -125,7 +127,7 @@ struct State {
  std::size_t tile_geometry_cache_bytes=0,prefetched_geometry_bytes=0,tile_geometry_runtime_budget=512;
  std::size_t terrain_patch_index_bytes=4,tile_geometry_cache_capacity=16;
  std::uint64_t tile_geometry_epoch=100;unsigned frame_tiles_evicted=0,cache_evictions=0,releases=0;
- bool loading_gpu_residency=true,world_gpu_capacity_refused=false;
+ bool loading_gpu_residency=true,world_gpu_capacity_refused=false;std::size_t tile_geometry_required_budget=0;
  struct Retired {std::atomic<std::size_t> bytes{32};};std::shared_ptr<Retired> retired_content=std::make_shared<Retired>();
  struct {void write(char const*,char const*,bool){}}trace;
  struct {Cache* resolve(Cache* value){return value;}}resident_content;
@@ -334,9 +336,17 @@ int main(){
  std::vector<Draw> selected={{a},{a},{b},{a},{c},{c}};
  std::vector<bool> packets(selected.size(),false);
  std::vector<int> parameters={0,1,2,3,4,5};std::vector<unsigned> sizes,order;
+ std::vector<bool> rigid_shared(selected.size(),false);
  auto issue=[&](Draw const&,int first,unsigned index,unsigned count){assert(first==int(index));sizes.push_back(count);for(unsigned n=0;n<count;++n)order.push_back(index+n);};
+ auto run=[&]{sizes.clear();order.clear();
 '''+loop+r'''
+ };
+ run();
  assert((sizes==std::vector<unsigned>{2,1,1,2}));
+ assert((order==std::vector<unsigned>{0,1,2,3,4,5}));
+ // A shared-union draw never merges with an explicit-stream neighbor.
+ rigid_shared[1]=true;run();
+ assert((sizes==std::vector<unsigned>{1,1,1,1,2}));
  assert((order==std::vector<unsigned>{0,1,2,3,4,5}));
 }''')
 

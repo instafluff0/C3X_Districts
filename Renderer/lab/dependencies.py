@@ -12,6 +12,7 @@ def consumers(entries):
     return {
         "coastal-waves": set(entries), "natural": set(entries), "hill-cliff": set(entries), "low-relief": set(entries),
         "tile-sites": {"huts-camps", "goody-huts", "barbarian-camps", "shadows"} & entries.keys(),
+        "route-patterns": {"infrastructure"} & entries.keys(),
         "cities": objects | ({"cities"} & entries.keys()),
         "units": {"units", "animation", "shadows", "tactical-overlays"} & entries.keys(),
         "resources": objects | ({"resources", "animation", "huts-camps", "barbarian-camps"} & entries.keys()),
